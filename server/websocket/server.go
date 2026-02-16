@@ -49,7 +49,7 @@ func BuildSimulatedServer() *http.Server {
 	// 构建服务器地址
 	serverAddr := fmt.Sprintf(":%s", serverState.config.Port)
 	// 打印服务器端口
-	log.Printf("Lunar模块[WebSocket] : 来源请求 [POST] -> http://localhost:%v/", serverState.config.Port)
+	log.Printf("Lunar模块[WebSocket] : 代理请求 [POST] -> http://localhost:%v/", serverState.config.Port)
 	log.Printf("Lunar模块[WebSocket] : 持久连接 [GET] -> http://localhost:%v/ws", serverState.config.Port)
 	log.Printf("Lunar模块[WebSocket] : 健康检查 [GET] -> http://localhost:%v/health", serverState.config.Port)
 	// 创建服务器实例

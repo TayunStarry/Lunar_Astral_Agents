@@ -33,6 +33,7 @@ func ProcessImageURL(url string) string {
 		return ""
 	}
 	// 处理HTML实体
+	url = strings.ReplaceAll(url, "\u0026", "&")
 	url = strings.ReplaceAll(url, "&amp;", "&")
 	url = strings.ReplaceAll(url, "&lt;", "<")
 	url = strings.ReplaceAll(url, "&gt;", ">")
@@ -41,11 +42,3 @@ func ProcessImageURL(url string) string {
 	return url
 }
 
-// ExtractImageURL 从数据中提取图片URL并处理
-func ExtractImageURL(data map[string]any) string {
-	var imageURL string
-	if url, ok := data["url"].(string); ok {
-		imageURL = ProcessImageURL(url)
-	}
-	return imageURL
-}

@@ -2,7 +2,7 @@ package history
 
 import (
 	"nap_cat_bridging/internal/config"
-	"nap_cat_bridging/pkg/openai"
+	"nap_cat_bridging/internal/openai"
 )
 
 // Manager 消息历史管理器

@@ -1,19 +1,24 @@
 package core
 
 import (
-	"nap_cat_bridging/internal/config"
-	"nap_cat_bridging/internal/services/history"
-	"nap_cat_bridging/internal/services/message"
-	"nap_cat_bridging/pkg/openai"
-	"nap_cat_bridging/pkg/websocket"
+	"nap_cat_bridging/internal/config"    // 配置文件
+	"nap_cat_bridging/internal/history"   // 消息历史管理器
+	"nap_cat_bridging/internal/message"   // 消息处理器
+	"nap_cat_bridging/internal/openai"    // OpenAI 客户端
+	"nap_cat_bridging/internal/websocket" // WebSocket 客户端
 )
 
 // Application 应用程序结构
 type Application struct {
-	Config         *config.Config
-	WSClient       *websocket.Client
-	MessageHandler *message.Handler
-	OpenAIClient   *openai.Client
+	// 配置信息
+	Config *config.Config
+	// WebSocket 客户端
+	WSClient *websocket.Client
+	// 消息处理器
+	MessageProcessor *message.Processor
+	// OpenAI 客户端
+	OpenAIClient *openai.Client
+	// 消息历史管理器
 	HistoryManager *history.Manager
 }
 
@@ -29,7 +34,7 @@ func NewApplication() (*Application, error) {
 	wsClient := websocket.NewClient(cfg.NapCatWSServer, cfg.NapCatWSToken)
 
 	// 初始化消息处理器
-	messageHandler := message.NewHandler(cfg, wsClient)
+	messageHandler := message.NewProcessor(cfg, wsClient)
 
 	// 初始化OpenAI客户端
 	openAIClient := openai.NewClient(cfg)
@@ -38,11 +43,11 @@ func NewApplication() (*Application, error) {
 	historyManager := history.NewManager(cfg)
 
 	return &Application{
-		Config:         cfg,
-		WSClient:       wsClient,
-		MessageHandler: messageHandler,
-		OpenAIClient:   openAIClient,
-		HistoryManager: historyManager,
+		Config:           cfg,
+		WSClient:         wsClient,
+		MessageProcessor: messageHandler,
+		OpenAIClient:     openAIClient,
+		HistoryManager:   historyManager,
 	}, nil
 }
 

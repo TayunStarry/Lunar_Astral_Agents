@@ -8,42 +8,12 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"nap_cat_bridging/internal/config"
 )
 
-// Message OpenAI消息结构体
-type Message struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"`
-}
 
-// ImageContent OpenAI图片消息结构体
-type ImageContent struct {
-	Type     string            `json:"type"`
-	ImageURL map[string]string `json:"image_url"`
-}
-
-// Request OpenAI请求结构体
-type Request struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-}
-
-// Response OpenAI响应结构体
-type Response struct {
-	Choices []struct {
-		Message Message `json:"message"`
-	} `json:"choices"`
-}
-
-// Client OpenAI客户端
-type Client struct {
-	apiURL     string
-	token      string
-	model      string
-	maxContext int
-}
 
 // NewClient 创建新的OpenAI客户端
 func NewClient(cfg *config.Config) *Client {
@@ -73,7 +43,7 @@ func (c *Client) CallAPI(messages []Message) (string, error) {
 	requestJSON := strings.TrimSpace(buffer.String())
 
 	log.Printf("调用 OpenAI API 进行回复")
-	
+
 	if config.DisplayDebugMessage {
 		log.Printf("%s", requestJSON)
 	}
@@ -91,7 +61,9 @@ func (c *Client) CallAPI(messages []Message) (string, error) {
 	}
 
 	// 发送请求
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second, // 设置30秒超时
+	}
 	response, err := client.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("发送请求失败: %v", err)

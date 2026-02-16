@@ -117,6 +117,9 @@ func (c *Client) ReadMessage() ([]byte, error) {
 		return nil, fmt.Errorf("WebSocket连接未建立")
 	}
 
+	// 设置读取超时
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 	_, message, err := c.conn.ReadMessage()
 	if err != nil {
 		return nil, fmt.Errorf("读取消息失败: %v", err)

@@ -1,11 +1,10 @@
 package core
 
 import (
-	"log"
-	"strings"
-	"time"
-
-	"nap_cat_bridging/pkg/openai"
+	"log"                              // 日志记录
+	"nap_cat_bridging/internal/openai" // OpenAI 客户端
+	"strings"                          // 字符串处理
+	"time"                             // 时间处理
 )
 
 // MainLoop 执行主循环
@@ -27,14 +26,14 @@ func (app *Application) MainLoop() error {
 		}
 
 		// 尝试解析群成员列表响应
-		if err = app.MessageHandler.ParseGroupMemberListResponse(messageBytes); err == nil {
+		if err = app.MessageProcessor.ParseGroupMemberListResponse(messageBytes); err == nil {
 			// 成功解析群成员列表响应，继续循环
 			continue
 		}
 
 		// 尝试解析群列表响应
 		if !groupListReceived {
-			if err = app.MessageHandler.ParseGroupListResponse(messageBytes); err == nil {
+			if err = app.MessageProcessor.ParseGroupListResponse(messageBytes); err == nil {
 				groupListReceived = true
 
 				log.Printf("%s", strings.Repeat("-=", 28))
@@ -53,7 +52,7 @@ func (app *Application) MainLoop() error {
 		}
 
 		// 尝试处理群消息
-		groupID, messageContent, err := app.MessageHandler.HandleGroupMessage(messageBytes)
+		groupID, messageContent, err := app.MessageProcessor.HandleGroupMessage(messageBytes)
 		if err != nil {
 			// 不是群消息或处理失败，继续循环
 			continue
@@ -77,7 +76,7 @@ func (app *Application) MainLoop() error {
 		if err != nil {
 			log.Printf("调用OpenAI API失败: %v", err)
 			// 发送错误消息
-			app.MessageHandler.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
+			app.MessageProcessor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
 			continue
 		}
 
@@ -85,7 +84,7 @@ func (app *Application) MainLoop() error {
 		app.HistoryManager.AddMessage(groupID, app.createAssistantMessage(response))
 
 		// 发送群消息
-		if err := app.MessageHandler.SendGroupMsg(groupID, response); err != nil {
+		if err := app.MessageProcessor.SendGroupMsg(groupID, response); err != nil {
 			log.Printf("发送群消息失败: %v", err)
 		}
 	}

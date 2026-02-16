@@ -27,8 +27,10 @@ Lunar_Astral_Agents.code-workspace
 desktop.ini
 
 ## 临时文件
+subsystem/nap_cat_bridging/*.md
 *.tmp
 *.temp
+*.lnk
 
 ## 编译产物
 *.exe
