@@ -1,0 +1,158 @@
+/* 定义 Mermaid 图表容器的基础样式 */
+.mermaid-container {
+    margin: 15px 0;
+    padding: 15px;
+    min-width: 100%;
+    min-height: 100px;
+    background: var(--background-f2f7fa, #f8f9fa);
+    border: 1px solid var(--border-e1e6f0, #dee2e6);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    overflow: auto;
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: all 0.3s ease;
+}
+
+/* 激活状态样式 */
+.mermaid-container:active {
+    cursor: grabbing;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 深色模式适配 */
+.dark-mode .mermaid-container {
+    background: var(--background-f8f9fa, #2d3748);
+    border-color: var(--dark-border, #4a5568);
+}
+
+/* 错误提示样式 */
+.mermaid-error {
+    color: var(--status-dc3545, #e53e3e);
+    padding: 15px;
+    font-size: 0.95rem;
+    background: rgba(229, 62, 62, 0.1);
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.echarts-error {
+    color: var(--status-dc3545, #e53e3e);
+    padding: 15px;
+    font-size: 0.95rem;
+    background: rgba(229, 62, 62, 0.1);
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+/* SVG 基础样式 */
+.mermaid-container svg {
+    -webkit-user-select: none;
+    display: block;
+    margin: 0 auto;
+    overflow: visible !important;
+    touch-action: none;
+    user-select: none;
+    transform-origin: 0 0;
+    transition: transform 0.2s ease-out;
+}
+
+/* 甘特图专属样式 */
+svg[aria-roledescription="gantt"] {
+    font-family: 'Arial', sans-serif;
+    --gantt-bar: #4e79a7;
+    --gantt-milestone: #e15759;
+    --gantt-text: #333;
+
+    .bar {
+        fill: var(--gantt-bar);
+        stroke-width: 0;
+        -webkit-border-radius: 3px;
+        border-radius: 3px;
+        transition: fill 0.3s;
+    }
+
+    .milestone {
+        fill: var(--gantt-milestone);
+    }
+
+    text {
+        fill: var(--gantt-text);
+        font-size: 12px;
+    }
+}
+
+/* 状态图专属样式 */
+svg[aria-roledescription="stateDiagram"] {
+    .state {
+        rect {
+            fill: #86bcb6;
+            -webkit-border-radius: 8px;
+            border-radius: 8px;
+        }
+
+        &.start,
+        &.end {
+            rect {
+                fill: #ff9da7;
+            }
+        }
+    }
+
+    .transition {
+        stroke: #666;
+        marker-end: url(#arrowhead);
+    }
+}
+
+/* 时序图专属样式 */
+svg[aria-roledescription="sequence"] {
+    .actor {
+        stroke: #8cd7f8;
+        fill: #e6f7ff;
+    }
+
+    .messageLine0,
+    .messageLine1 {
+        stroke: #4e79a7;
+        stroke-width: 1.5px;
+    }
+
+    .activation0,
+    .activation1 {
+        fill: rgba(78, 121, 167, 0.1);
+    }
+}
+
+/* 流程图专属样式 */
+svg[aria-roledescription="flowchart"] {
+    .node rect {
+        fill: #f28e2c;
+        stroke: #d87d28;
+        stroke-width: 1.5px;
+        -webkit-border-radius: 6px;
+        border-radius: 6px;
+        filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.1));
+    }
+
+    .edgePath path {
+        stroke: #666;
+        stroke-width: 2px;
+    }
+
+    text {
+        font-family: 'Arial', sans-serif;
+        font-size: 14px;
+        fill: #333;
+        font-weight: 500;
+    }
+
+    .node.database rect {
+        fill: #59a14f;
+    }
+
+    .node.decision rect {
+        fill: #edc949;
+    }
+}

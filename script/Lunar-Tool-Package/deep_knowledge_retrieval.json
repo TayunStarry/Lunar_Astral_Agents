@@ -1,0 +1,20 @@
+{
+    "type": "function",
+    "function": {
+        "name": "deep_knowledge_retrieval",
+        "description": "深度检索全部历史记录中的相关知识。首次查询需提供描述，系统将返回分页结果，默认返回第一页。如需获取后续页面，请在后续调用中提供索引（从0开始）。若需新建查询，请将索引设为0。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "description": "检索相关知识的描述，用于首次查询"
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "页码索引（从0开始）。若不提供则默认为0（第一页）。若要新建查询，请设置为0。"
+                }
+            }
+        }
+    }
+}

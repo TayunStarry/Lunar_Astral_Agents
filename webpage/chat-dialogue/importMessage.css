@@ -1,0 +1,53 @@
+/* 定义消息容器的基础样式 */
+.message {
+	max-width: 85%;
+	min-width: 385px;
+	padding: 15px;
+	border-radius: 12px;
+	line-height: 1.5;
+	position: relative;
+	animation: slide-in-right 1.0s ease-in-out;
+}
+
+
+/* 定义消息头部样式 */
+.message-header {
+	user-select: none;
+	font-weight: 600;
+	font-size: 1.0rem;
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: 8px;
+	padding-bottom: 10px;
+	border-bottom: 5px solid var(--border-ced4e7);
+}
+
+.file-message {
+	min-width: 100%;
+	background: var(--background-fafafa);
+	color: var(--text-0f1e0f);
+	border: 5px dashed var(--status-6c9bcf);
+	font-size: 1.5rem;
+	margin: 0 auto;
+}
+
+.file-message.screenshot {
+	max-width: 1024px;
+	min-width: 256px;
+	width: 100%;
+}
+
+.user-message {
+	background: var(--background-fafafa);
+	color: var(--text-0f1e0f);
+	align-self: flex-end;
+	border: 3px solid var(--status-6c9bcf);
+}
+
+.assistant-message {
+	background: var(--background-fafafa);
+	color: var(--text-0f1e0f);
+	align-self: flex-start;
+	border: 3px solid var(--status-9d6bff);
+	animation: slide-in-left 0.75s ease-in-out
+}

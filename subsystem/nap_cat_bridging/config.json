@@ -1,0 +1,19 @@
+{
+	"napcat_ws_server": "ws://localhost:4567",
+	"napcat_ws_token": "ItlC2Nc1DfICVYq5",
+	"openai_api_url": "http://localhost:36794/v1/chat/completions",
+	"openai_api_token": "",
+	"openai_api_model": "Qwen3-Instruct",
+	"poll_interval": 10,
+	"listen_group_ids": [
+		262221051,
+		1022847485,
+		906314036
+	],
+	"trigger_keywords": [
+		"月之华",
+		"月华",
+		"3826713076"
+	],
+	"max_history_count": 30
+}

@@ -1,0 +1,26 @@
+{
+	"name": "lunar-astral-agents",
+	"version": "3.0.0",
+	"type": "module",
+	"description": "月华 - 您专属的本地智能 AI 少女助理",
+	"main": "index.html",
+	"scripts": {
+		"dev": "tsc && rollup ./deliverable/EntryAPI/code.js --file ./webpage/chat-dialogue/script.js",
+		"release.min": "tsc && rollup -c"
+	},
+	"keywords": [
+		"ai",
+		"chatbot",
+		"live2d",
+		"typescript"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@rollup/plugin-node-resolve": "^16.0.3",
+		"@rollup/plugin-terser": "^0.4.4",
+		"@types/node": "^20.0.0",
+		"rollup": "^4.55.1",
+		"typescript": "^5.0.0"
+	}
+}

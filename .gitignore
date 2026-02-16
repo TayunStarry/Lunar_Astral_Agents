@@ -1,0 +1,48 @@
+# Lunar-Astral-Agents
+
+## IDE / 编辑器
+.idea
+.vscode
+.gitee
+.trae
+.code-workspace
+
+## 项目缓存
+node_modules
+deliverable
+meme-images
+
+## 本地数据
+local_data/logs
+local_data/images
+local_data/resources/placeholder
+local_data/resources/images
+local_data/generated
+local_data/knowledge/20*
+local_data/knowledge/lunar_notes.json
+local_data/knowledge/continuous_memory.json
+
+## 系统文件
+Lunar_Astral_Agents.code-workspace
+desktop.ini
+
+## 临时文件
+*.tmp
+*.temp
+
+## 编译产物
+*.exe
+*.dll
+*.so
+*.a
+
+## 二进制 / 模型文件
+*.gguf
+*.safetensors
+
+## 压缩包
+*.7z
+*.7z.*
+*.db
+*.db-shm
+*.db-wal

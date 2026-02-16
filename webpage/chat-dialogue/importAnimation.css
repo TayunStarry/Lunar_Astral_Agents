@@ -1,0 +1,127 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+	transition: var(--transition);
+}
+
+html,
+body {
+	height: 100%;
+}
+
+body {
+	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+	color: var(--text-0f1e0f);
+	line-height: 1.6;
+	background: var(--border-ced4e7);
+	display: block;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.dark-mode body {
+	background: linear-gradient(135deg, #1a1b20 0%, #252632 100%);
+}
+
+/* 定义淡入动画，元素从不可见到可见*/
+@keyframes fadeIn {
+
+	/* 动画起始状态 */
+	from {
+		opacity: 0;
+	}
+
+	/* 动画结束状态 */
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes border-pulse {
+
+	0% {
+		border-color: transparent;
+	}
+
+	25% {
+		border-color: var(--status-ff6b9c);
+	}
+
+	50% {
+		border-color: transparent;
+	}
+
+	75% {
+		border-color: var(--status-ff6b9c);
+	}
+
+	100% {
+		border-color: transparent;
+	}
+}
+
+@keyframes slide-in-right {
+	0% {
+		transform: translateX(-200%) scaleX(1);
+		opacity: 0;
+	}
+
+	50% {
+		transform: translateX(12%) scaleX(0.75);
+	}
+
+	100% {
+		transform: translateX(0) scaleX(1);
+		opacity: 1;
+	}
+}
+
+@keyframes slide-in-left {
+	0% {
+		transform: translateX(200%) scaleX(1);
+		opacity: 0;
+	}
+
+	50% {
+		transform: translateX(-10%) scaleX(0.75);
+	}
+
+	100% {
+		transform: translateX(0) scaleX(1);
+		opacity: 1;
+	}
+}
+
+/* 定义从左向右移动的动画 */
+@keyframes slide-left-to-right {
+
+	/* 动画起始状态，元素位于左侧 */
+	0% {
+		transform: translateX(-100%);
+	}
+
+	/* 添加超调状态，元素稍微移动超过原位置 */
+	50% {
+		transform: translateX(15%);
+	}
+
+	/* 动画结束状态，元素回到原位置 */
+	100% {
+		transform: translateX(0);
+	}
+}
+
+@keyframes pulse {
+	0% {
+		opacity: 0.5;
+	}
+
+	50% {
+		opacity: 1;
+	}
+
+	100% {
+		opacity: 0.5;
+	}
+}

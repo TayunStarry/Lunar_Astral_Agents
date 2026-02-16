@@ -1,0 +1,401 @@
+.chat-container-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    background: none;
+    border-radius: 12px;
+    padding: 20px;
+    gap: 20px;
+    min-width: 500px;
+    overflow: hidden;
+    overflow-y: auto;
+    transition: var(--transition);
+}
+
+.chat-history-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    background: var(--background-f5f5f5);
+    border-radius: 15px;
+    border: 5px solid var(--border-e1e6f0);
+    padding: 20px;
+    gap: 20px;
+    overflow: hidden;
+    overflow-y: auto;
+    transition: var(--transition);
+}
+
+.chat-history-panel.render {
+    user-select: none;
+}
+
+/* 消息内容操作面板 */
+.message-actions-panel {
+    position: absolute;
+    opacity: 0;
+    transition: opacity 0.3s;
+    background: none;
+    border-radius: 4px;
+    padding: 2px;
+    z-index: 10;
+    transform: scale(1.5) translateY(-2px);
+}
+
+.message-actions-panel.top-align {
+    right: 30px;
+    top: 15px;
+}
+
+.message-actions-panel.bottom-align {
+    left: 30px;
+    bottom: 15px;
+}
+
+/* 聊天输入面板 */
+.chat-input-panel {
+    display: flex;
+    gap: 10px;
+    background: var(--background-f5f5f5);
+    border: 3px solid var(--border-e1e6f0);
+    border-radius: 15px;
+    padding: 15px;
+    flex-shrink: 0;
+    user-select: none;
+    align-items: flex-end;
+}
+
+.chat-input-panel textarea {
+    flex: 1;
+    min-height: 80px;
+    background: var(--background-fcfefb);
+    border: 3px solid var(--border-e1e6f0);
+    vertical-align: middle;
+    border-radius: 15px;
+    padding: 12px 15px;
+    font-size: 1rem;
+    color: var(--text-0f1e0f);
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: var(--border-transition);
+}
+
+.chat-input-panel textarea:hover {
+    border: 3px solid var(--status-ff6b9c);
+}
+
+.auto-resize-textarea {
+    resize: none;
+    overflow: auto;
+    min-height: 30px;
+    max-height: 500px;
+    transition: height 0.2s ease;
+}
+
+.config-header-panel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.config-panel-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.config-body-panel {
+    height: 80%;
+    margin-bottom: 20px;
+}
+
+.trouch-interaction {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    z-index: 2;
+    background: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.system-message {
+    font-weight: 800;
+    font-size: 1.2rem;
+    position: fixed;
+    top: 10%;
+    right: 20px;
+    z-index: 1000;
+    max-width: 50%;
+    color: whitesmoke;
+    background: rgba(0, 0, 0, 0.5);
+    border: 5px solid rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    padding: 15px 25px;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2), 0 5px 15px rgba(0, 0, 0, 0.3);
+    transform: translateX(200%);
+    transition: transform 0.4s ease-out;
+}
+
+.system-message.qrcode {
+    top: 20%;
+    right: unset;
+    left: 45%;
+    color: var(--text-0f1e0f);
+    background: var(--background-fafafa);
+    border: 5px solid var(--border-ced4e7);
+    transform: translateY(-400%);
+    position: fixed;
+    cursor: move;
+    user-select: none;
+}
+
+.system-message.config {
+    top: 20%;
+    background: var(--background-fafafa);
+    color: var(--text-0f1e0f);
+    max-width: 400px;
+    width: 400px;
+    height: 650px;
+    border: 5px solid var(--border-ced4e7);
+    transform: translateY(400%);
+    position: fixed;
+    cursor: move;
+    user-select: none;
+}
+
+.system-message.error {
+    border-color: var(--status-dc3545);
+}
+
+.system-message.success {
+    border-color: var(--status-218838);
+}
+
+.system-message.config.show {
+    transform: translateY(0);
+}
+
+.system-message.qrcode.show,
+.system-message.error.show,
+.system-message.success.show {
+    transform: translateX(0);
+}
+
+
+/* 配置区域网格布局 */
+.config-grid {
+    background: none;
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 20px;
+    overflow-y: auto;
+    /* Firefox */
+    scrollbar-width: none;
+    /* IE and Edge */
+    -ms-overflow-style: none;
+}
+
+/* 配置卡片样式 */
+.config-card {
+    background: var(--background-f5f5f5);
+    border: 3px solid var(--border-e1e6f0);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+    min-width: 300px;
+    user-select: none;
+    animation: slide-in-right 1.0s ease-in-out;
+}
+
+.config-card.left {
+    animation: slide-in-left 1.0s ease-in-out;
+}
+
+.config-card:hover {
+    border-color: var(--special-1e90ff);
+}
+
+.config-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--border-e1e6f0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-card h3 i {
+    color: var(--status-4a6fa5);
+}
+
+/* 配置区域分隔线 */
+.divider {
+    height: 1px;
+    background: var(--border-e1e6f0);
+    margin: 20px 0;
+}
+
+/* 横版布局面板 */
+.horizontal-layout-panel {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+.horizontal-layout-panel.live2d {
+    display: flex;
+    gap: 5px;
+    position: absolute;
+    z-index: 10;
+    right: 12px;
+    bottom: -8px;
+}
+
+/* 竖版布局面板 */
+.vertical-layout-panel {
+    display: flex;
+    gap: 5px;
+    flex-direction: column;
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+.vertical-layout-panel.live2d {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    z-index: 10;
+    left: 12px;
+    top: 10px;
+}
+
+.speech-prompt {
+    height: 150px;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.35);
+    resize: none;
+    border: 3px solid #ccc;
+}
+
+/* 拖放区域覆盖层样式，用于在文件拖放时显示提示信息 */
+.drop-zone-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-color: var(--background-f5f5f5);
+    color: var(--text-0f1e0f);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* 当拖放区域覆盖层的 style 属性包含 "display: flex" 时，设置透明度为 1 */
+.drop-zone-overlay[style*="display: flex"] {
+    opacity: 1;
+}
+
+.token-counter-panel {
+    position: absolute;
+    top: 55px;
+    right: 52px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.35);
+    color: black;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    -webkit-user-select: none;
+    user-select: none;
+    z-index: 100;
+}
+
+.image-just-drawn {
+    max-width: 350px;
+    min-width: 350px;
+    border-radius: 24px;
+    border: 4px solid var(--text-0f1e0f);
+}
+
+.labeled-image-container {
+    position: relative;
+    display: inline-block;
+}
+
+.labeled-image-container:before {
+    content: var(--image-label, "虚拟标签");
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.35);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 1000;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.gap-10px {
+    gap: 10px;
+}
+
+/* 内部元素居中 */
+.vertical-column-center-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#qrcodePanel {
+    animation: border-pulse 4s linear infinite;
+    border: 5px dashed white;
+    padding: 10px;
+}
+
+/* TODO: 截图界面 */
+.continuous-controls {
+    margin: 15px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.slider-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.slider-item label {
+    min-width: 60px;
+    font-size: 14px;
+    opacity: 1.4;
+    font-weight: bold;
+}
+
+.slider-value {
+    min-width: 40px;
+    font-size: 12px;
+    text-align: right;
+    font-family: monospace;
+}

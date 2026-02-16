@@ -1,0 +1,39 @@
+{
+    "type": "function",
+    "function": {
+        "name": "image_creation_sandbox",
+        "description": "这是一个带有历史记录功能的图像生成工具。每次调用时，会从保存的历史图片中随机选择一张作为参考进行图生图创作。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "图像生成的正向提示词，描述你希望生成的内容"
+                },
+                "negative_prompt": {
+                    "type": "string",
+                    "description": "负面提示词，描述你希望避免出现在图像中的内容"
+                },
+                "clear_cache": {
+                    "type": "boolean",
+                    "description": "是否清空历史图片缓存。设为true将从空白开始生成图片"
+                },
+                "strength": {
+                    "type": "number",
+                    "description": "参考图的影响强度，默认0.65。值越高越接近参考图",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "cfg_scale": {
+                    "type": "number",
+                    "description": "提示词遵循程度，默认1.0。值越高越严格遵循提示词",
+                    "minimum": 0,
+                    "maximum": 2
+                }
+            },
+            "required": [
+                "prompt"
+            ]
+        }
+    }
+}

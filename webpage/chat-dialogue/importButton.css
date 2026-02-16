@@ -1,0 +1,234 @@
+/* 聊天动作按钮基础样式 */
+.chat-action-button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: all 0.3s;
+}
+
+.execute-code-button {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.2rem;
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 10;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+/* 聊天动作按钮悬停样式 */
+.execute-code-button:hover,
+.chat-action-button:hover {
+    opacity: 1;
+    transform: translateY(3px) scale(1.5);
+}
+
+/* 聊天动作按钮伪元素样式 */
+.execute-code-button:after,
+.chat-action-button:after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    opacity: 0;
+    border-radius: 100%;
+    transform: scale(1, 1) translate(-50%);
+    transform-origin: 50% 50%;
+}
+
+.power-button {
+    color: var(--text-0f1e0f);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+    margin: 4px;
+    border-radius: 45%;
+    border: 3px solid var(--border-e1e6f0);
+    background: var(--background-fcfefb);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: var(--circular-button-transition);
+}
+
+.power-button:disabled {
+    border-color: rgb(140, 140, 140);
+    background: rgb(220, 220, 220);
+    color: rgb(80, 80, 80);
+    border-radius: 25%;
+}
+
+.power-button.clicking {
+    border-color: var(--status-ff6b9c);
+    border-radius: 10%;
+}
+
+.power-button:hover {
+    border-color: var(--status-9d6bff);
+}
+
+.power-button.live2d {
+    color: white;
+    opacity: 0;
+    font-size: 1.65rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: none;
+    border: 3px solid transparent;
+    transition: var(--rotate-border);
+}
+
+.power-button.live2d:hover {
+    background: transparent;
+    border-color: var(--status-9d6bff);
+}
+
+.power-button.live2d.clicking {
+    border: 3px solid var(--status-ff6b9c);
+    border-radius: 35%;
+    transform: rotate(360deg)
+}
+
+.power-button.live2d.activate {
+    border: 3px solid var(--status-20c997);
+}
+
+.trouch-interaction-button {
+    display: flex;
+    min-width: 100%;
+    flex-grow: 1;
+    box-sizing: border-box;
+    background: none;
+    border: none;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+/* 常规聊天模式聊天发送按钮基础样式 */
+.chat-input-button {
+    background: var(--background-fcfefb) !important;
+    color: var(--text-0f1e0f);
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    height: 80px;
+    border: 3px solid var(--border-e1e6f0);
+    border-radius: 20%;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: var(--border-transition);
+}
+
+.chat-input-button:hover {
+    border: 3px solid var(--status-ff6b9c);
+}
+
+.chat-input-button:disabled {
+    color: var(--status-dc3545);
+    border: 3px solid var(--status-dc3545);
+}
+
+.rectangle-button {
+    position: relative;
+    width: 100%;
+    height: 75px;
+    background: var(--background-fcfefb) !important;
+    color: var(--text-0f1e0f);
+    border-radius: 4px;
+    border: 5px solid var(--border-e1e6f0);
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 1.5rem;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: var(--border-transition);
+}
+
+.rectangle-button:hover {
+    border: 5px solid var(--special-1e90ff);
+}
+
+.rectangle-button.disable {
+    color: var(--status-dc3545);
+    border: 5px solid var(--status-dc3545);
+}
+
+.rectangle-button.red:hover {
+    border: 5px solid var(--status-dc3545);
+}
+
+.rectangle-button.pink:hover {
+    border: 5px solid var(--status-ff6b9c);
+}
+
+.rectangle-button.green:hover {
+    border: 5px solid var(--status-218838);
+}
+
+.rectangle-button.orange:hover {
+    border: 5px solid var(--status-fbbf24);
+}
+
+.rectangle-button.cyan:hover {
+    border: 5px solid var(--status-20c997);
+}
+
+.rectangle-button.blue:hover {
+    border: 5px solid var(--special-1e90ff);
+}
+
+.rectangle-button.speech:hover {
+    border: 5px solid var(--status-8a2be2);
+}
+
+.rectangle-button.speech:disabled {
+    color: var(--status-dc3545);
+    border: 5px solid var(--status-dc3545);
+}
+
+.rectangle-button.speech_mode_button:hover {
+    border: 5px solid var(--status-4a6fa5);
+}
+
+.rectangle-button.speech_mode_button.active {
+    border: 5px solid var(--status-9d6bff);
+}
+
+.rectangle-button.screenshot {
+    border: 5px solid var(--border-e1e6f0);
+}
+
+.rectangle-button.screenshot:hover {
+    border: 5px solid var(--status-8a2be2);
+}
+
+.rectangle-button.screenshot:disabled {
+    color: rgb(169, 169, 169);
+    background: rgb(105, 105, 105);
+    border: 5px solid rgb(128, 128, 128);
+}

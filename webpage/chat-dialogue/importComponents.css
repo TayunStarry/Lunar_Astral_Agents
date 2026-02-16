@@ -1,0 +1,104 @@
+label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: var(--text-0f1e0f);
+    font-size: 0.95rem;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-e1e6f0);
+    border-radius: 8px;
+    background: var(--background-fcfefb);
+    color: var(--text-0f1e0f);
+    font-size: 0.95rem;
+    font-family: inherit;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--status-4a6fa5);
+    box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.2);
+}
+
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px;
+    padding-right: 32px;
+}
+
+textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.think-block {
+    background-color: var(--background-f0f4f8);
+    border-left: 4px solid var(--border-d1e0f0);
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin: 10px 0;
+    position: relative;
+}
+
+.think-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--special-1e90ff);
+}
+
+.think-icon {
+    margin-right: 8px;
+}
+
+.think-content {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 3px dashed var(--border-d1e0f0);
+    color: var(--special-1e90ff);
+}
+
+.think-content.collapsed {
+    display: none;
+}
+
+.conclusion {
+    color: var(--text-0f1e0f);
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-e1e6f0);
+}
+
+.tts-support-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.tts-supported {
+    background: rgba(40, 167, 69, 0.1);
+    color: var(--status-218838);
+}
+
+.tts-not-supported {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--status-dc3545);
+}
