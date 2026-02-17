@@ -8,7 +8,7 @@ import (
 )
 
 // OpenAI V1 请求结构
-type OpenAIRequest struct {
+type AgentRequest struct {
 	// 模型名称，指定要使用的OpenAI模型
 	Model string `json:"model"`
 	// 消息列表，包含请求中的所有消息
@@ -26,7 +26,7 @@ type Message struct {
 }
 
 // OpenAI V1 响应结构
-type OpenAIResponse struct {
+type AgentResponse struct {
 	// 响应ID，用于唯一标识每个响应
 	ID string `json:"id"`
 	// 对象类型，固定为"chat.completion"
@@ -70,7 +70,7 @@ type RequestContext struct {
 	// 工具列表，包含请求中定义的工具
 	Tools []interface{}
 	// 响应通道，用于将处理后的响应发送回客户端
-	ResponseChannel chan OpenAIResponse
+	ResponseChannel chan AgentResponse
 	// 请求创建时间，用于过期请求清理
 	CreatedAt time.Time
 }

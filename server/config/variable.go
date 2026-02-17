@@ -46,9 +46,9 @@ var (
 
 var (
 	// InferEngine 推理引擎路径，用于图文推理
-	InferEngine = flag.String("infer-engine", "./subsystem/neural_engines/llama-server.exe", "推理引擎路径，用于图文推理")
+	InferEngine = flag.String("infer-engine", "./subsystem/engines/llama-server.exe", "推理引擎路径，用于图文推理")
 	// VisualEngine 绘图引擎路径，用于图像生成
-	VisualEngine = flag.String("visual-engine", "./subsystem/neural_engines/sd-cli.exe", "绘图引擎路径，用于图像生成")
+	VisualEngine = flag.String("visual-engine", "./subsystem/engines/sd-cli.exe", "绘图引擎路径，用于图像生成")
 	// ModelPort 模型服务的基础端口号，用于分配模型运行端口
 	ModelPort = flag.Int("model-port", *BasicPort+1, "模型服务的基础端口号，用于分配模型运行端口")
 	// AllowMultimodal 是否允许加载多模态模型进行推理

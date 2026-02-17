@@ -1,7 +1,7 @@
 {
     "embedding_model_path": null,
-    "multimodal_model_path": null,
-    "mmproj_model_path": null,
+    "multimodal_model_path": "models/Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf",
+    "mmproj_model_path": "models/Qwen3_VL_30B_A3B_mmproj_BF16.gguf",
     "diffusion_model_path": null,
     "variational_model_path": null,
     "prompt_refine_model_path": null

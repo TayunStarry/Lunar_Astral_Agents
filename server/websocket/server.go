@@ -3,17 +3,17 @@ package websocket
 // 导入必要的包
 import (
 	"Lunar-Astral-Agents/server/config" // 导入项目配置包，用于获取配置信息
+	"bytes"                             // 用于操作字节缓冲区
 	"encoding/json"                     // 用于JSON编码和解码
 	"fmt"                               // 用于格式化输出
+	"io"                                // 用于I/O操作，如读取和写入
 	"log"                               // 用于日志记录
-	"math/rand"                         // 用于生成随机数
 	"net/http"                          // 用于HTTP请求和响应
-	"net/http/httputil"
-	"net/url"
-	"slices" // 用于操作切片
-	"time"   // 用于时间操作，如时间戳
-
-	"golang.org/x/net/websocket" // 用于WebSocket连接
+	"net/http/httputil"                 // 用于HTTP请求和响应的调试工具
+	"net/url"                           // 用于URL解析和操作
+	"slices"                            // 用于操作切片
+	"strings"                           // 用于字符串操作
+	"time"                              // 用于时间操作，如时间戳
 )
 
 // 全局服务器状态
@@ -31,8 +31,6 @@ func init() {
 			CleanupInterval:    5 * time.Minute,
 		},
 	}
-	// 启动定期清理过期请求的goroutine
-	go cleanupExpiredRequests()
 }
 
 // BuildSimulatedServer 构建一个模拟的OpenAI V1格式服务器
@@ -40,17 +38,14 @@ func BuildSimulatedServer() *http.Server {
 	// 创建独立的ServeMux实例
 	mux := http.NewServeMux()
 	// 定义HTTP处理器
-	mux.HandleFunc("/v1/chat/", handleOpenAIRequest)
+	mux.HandleFunc("/v1/chat/", handleAgentRequest)
 	mux.HandleFunc("/health", handleHealthCheck)
-	// 添加WebSocket处理
-	mux.Handle("/ws", websocket.Handler(handleWebSocket))
 	// 添加默认代理处理
 	mux.HandleFunc("/", handleProxyRequest)
 	// 构建服务器地址
 	serverAddr := fmt.Sprintf(":%s", serverState.config.Port)
 	// 打印服务器端口
 	log.Printf("Lunar模块[WebSocket] : 代理请求 [POST] -> http://localhost:%v/", serverState.config.Port)
-	log.Printf("Lunar模块[WebSocket] : 持久连接 [GET] -> http://localhost:%v/ws", serverState.config.Port)
 	log.Printf("Lunar模块[WebSocket] : 健康检查 [GET] -> http://localhost:%v/health", serverState.config.Port)
 	// 创建服务器实例
 	server := &http.Server{
@@ -67,37 +62,8 @@ func BuildSimulatedServer() *http.Server {
 	return server
 }
 
-// 生成唯一请求ID
-func generateRequestID() string {
-	return fmt.Sprintf("req_%d_%d", time.Now().UnixNano(), rand.Intn(10000))
-}
-
-// 清理过期请求
-func cleanupExpiredRequests() {
-	for {
-		// 等待清理间隔
-		time.Sleep(serverState.config.CleanupInterval)
-		// 加锁以确保线程安全
-		serverState.mutex.Lock()
-		// 遍历所有请求上下文
-		currentTime := time.Now()
-		// 遍历所有请求上下文
-		for id, ctx := range serverState.requests {
-			// 检查请求是否过期
-			if currentTime.Sub(ctx.CreatedAt) > serverState.config.RequestTimeout {
-				// 清理过期请求
-				close(ctx.ResponseChannel)
-				delete(serverState.requests, id)
-				log.Printf("Lunar模块[WebSocket] -> 清理过期请求: %s\n", id)
-			}
-		}
-		// 解锁互斥锁
-		serverState.mutex.Unlock()
-	}
-}
-
 // 处理OpenAI V1格式请求
-func handleOpenAIRequest(w http.ResponseWriter, r *http.Request) {
+func handleAgentRequest(w http.ResponseWriter, r *http.Request) {
 	// 添加CORS头
 	setCORSHeaders(w, r)
 	// 处理预检请求
@@ -111,116 +77,69 @@ func handleOpenAIRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 定义解析请求体的结构体
-	var req OpenAIRequest
+	var req AgentRequest
 	// 解析请求体
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "请求体无效", http.StatusBadRequest)
 		return
 	}
-	// 生成请求ID
-	requestID := generateRequestID()
-	// 定义缓存消息的切片
-	cachedMessages := []Message{}
-	// 遍历缓存消息并过滤system消息
+	// 提取并预处理消息列表
+	var processedMessages []Message
+	// 过滤出非系统消息
 	for _, msg := range req.Messages {
 		if msg.Role != "system" {
-			cachedMessages = append(cachedMessages, msg)
+			processedMessages = append(processedMessages, msg)
 		}
 	}
-	// 创建请求上下文
-	responseChan := make(chan OpenAIResponse, 1)
-	// 定义请求上下文
-	requestCtx := &RequestContext{
-		ID:              requestID,
-		Messages:        cachedMessages,
-		Tools:           req.Tools,
-		ResponseChannel: responseChan,
-		CreatedAt:       time.Now(),
-	}
-	// 加锁以确保线程安全
-	serverState.mutex.Lock()
-	// 检查请求数量是否超过限制
-	if len(serverState.requests) >= serverState.config.MaxRequests {
-		// 解锁互斥锁
-		serverState.mutex.Unlock()
-		// 超过最大请求数，返回错误
-		http.Error(w, "请求数超过最大限制", http.StatusTooManyRequests)
+	// 提取最新一条消息用于向量化
+	var latestContent string
+	// 检查是否有有效消息
+	if len(processedMessages) == 0 {
+		http.Error(w, "请求中没有有效消息", http.StatusInternalServerError)
 		return
 	}
-	// 存储请求上下文
-	serverState.requests[requestID] = requestCtx
-	// 解锁互斥锁
-	serverState.mutex.Unlock()
-	// 通过WebSocket推送请求信息给客户端
-	requestData := map[string]any{
-		"id":       requestID,
-		"messages": cachedMessages,
-		"tools":    req.Tools,
+	// 提取最新一条消息内容
+	lastMsg := processedMessages[len(processedMessages)-1]
+	// 检查最新消息内容是否为字符串类型
+	if contentStr, ok := lastMsg.Content.(string); ok {
+		latestContent = contentStr
 	}
-	// 推送请求信息给客户端
-	err := pushMessageToWebSocket("new_request", requestData, requestID)
-	// 检查推送是否成功
+	// 获取动态系统提示词
+	systemPrompt, err := getDynamicSystemPrompt()
+	// 检查是否获取系统提示词失败
 	if err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 推送请求信息失败: %v\n", err)
+		http.Error(w, "获取系统提示词失败", http.StatusInternalServerError)
+		return
 	}
-	// 设置响应头
-	w.Header().Set("Content-Type", "application/json")
-	// 等待AI响应 或 触发超时响应
-	select {
-	// 等待AI响应
-	case response, ok := <-responseChan:
-		// 检查通道是否已关闭
-		if !ok {
-			http.Error(w, "请求超时", http.StatusRequestTimeout)
-			return
-		}
-		// 发送响应
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, "编码响应失败", http.StatusInternalServerError)
-			return
-		}
-		// 使用互斥锁 并 删除请求上下文
-		serverState.mutex.Lock()
-		delete(serverState.requests, requestID)
-		serverState.mutex.Unlock()
-	// 超时检测机制
-	case <-time.After(serverState.config.RequestTimeout):
-		// 超时处理
-		http.Error(w, "请求超时", http.StatusRequestTimeout)
-		// 使用互斥锁 并 删除请求上下文
-		serverState.mutex.Lock()
-		delete(serverState.requests, requestID)
-		serverState.mutex.Unlock()
-		// 日志记录超时请求
-		log.Printf("Lunar模块[WebSocket] -> 请求超时，ID: %s\n", requestID)
+	// 构建最终消息数组
+	finalMessages := []Message{}
+	// 添加系统提示词
+	finalMessages = append(finalMessages, Message{Role: "system", Content: systemPrompt})
+	// 获取知识消息
+	knowledgeMessages, err := getKnowledgeMessages(latestContent)
+	// 检查是否获取知识消息失败
+	if err != nil {
+		http.Error(w, "获取知识消息失败", http.StatusInternalServerError)
+		return
 	}
-}
-
-// 处理WebSocket消息，接收AI响应并返回给挂起请求
-func handleAIResponseFromWebSocket(aiResponse OpenAIResponse, requestID string) error {
-	// 使用互斥锁 并 查找请求上下文
-	serverState.mutex.Lock()
-	requestCtx, exists := serverState.requests[requestID]
-	serverState.mutex.Unlock()
-	// 检查请求上下文是否存在
-	if !exists {
-		return fmt.Errorf("Lunar模块[WebSocket] -> 未找到请求: %s", requestID)
+	// 添加知识消息序列和最新消息序列
+	finalMessages = append(finalMessages, append(knowledgeMessages, processedMessages...)...)
+	// 构建新的请求体
+	newReq := req
+	newReq.Messages = finalMessages
+	// 序列化新的请求体
+	jsonData, err := json.Marshal(newReq)
+	// 检查是否序列化请求失败
+	if err != nil {
+		http.Error(w, "序列化请求失败", http.StatusInternalServerError)
+		return
 	}
-	// 发送消息到挂起的请求
-	select {
-	// 发送AI响应到挂起的请求
-	case requestCtx.ResponseChannel <- aiResponse:
-		// 使用互斥锁 并 删除请求上下文
-		serverState.mutex.Lock()
-		delete(serverState.requests, requestID)
-		serverState.mutex.Unlock()
-
-	// 通道已满或已关闭
-	default:
-		return fmt.Errorf("Lunar模块[WebSocket] -> 未能向请求发送响应: %s", requestID)
-	}
-	// 返回成功
-	return nil
+	// 替换请求体
+	r.Body = io.NopCloser(bytes.NewBuffer(jsonData))
+	// 更新Content-Length头
+	r.ContentLength = int64(len(jsonData))
+	// 使用handleProxyRequest转发请求
+	handleProxyRequest(w, r)
 }
 
 // handleHealthCheck 处理健康检查请求
@@ -280,169 +199,137 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Max-Age", "86400")
 }
 
-// handleWebSocket 负责维护与客户端的 WebSocket 长连接：
-func handleWebSocket(ws *websocket.Conn) {
-	// 设置新的 WebSocket 连接
-	if !setupWebSocketConnection(ws) {
-		return
-	}
-	// 延迟函数：在函数退出时确保连接资源被正确释放
-	defer cleanupWebSocketConnection(ws)
-	// 定义用于接收客户端消息的结构体
-	var msg WSMessage
-	// 主循环：持续读取客户端 JSON 消息，保持心跳与业务处理
-	for {
-		// 阻塞读取，若返回错误则判定为连接断开，跳出循环
-		if err := websocket.JSON.Receive(ws, &msg); err != nil {
-			break
-		}
-		// 处理接收到的消息
-		handleWebSocketMessage(ws, msg)
-	}
-}
-
-// setupWebSocketConnection 设置新的 WebSocket 连接，包括关闭旧连接和发送欢迎消息
-func setupWebSocketConnection(ws *websocket.Conn) bool {
-	// 临界区：确保并发情况下仅保留最新 WebSocket 连接
-	serverState.wsMutex.Lock()
-	// 若已存在旧连接，先主动关闭，避免资源泄漏
-	if serverState.websocketConn != nil {
-		// 关闭旧连接，释放资源
-		if err := serverState.websocketConn.Close(); err != nil {
-			log.Printf("Lunar模块[WebSocket] -> 关闭旧连接失败: %v\n", err)
-		}
-	}
-	// 将新连接提升为“当前唯一合法连接”
-	serverState.websocketConn = ws
-	// 解锁WebSocket连接互斥锁，允许其他 goroutine 访问
-	serverState.wsMutex.Unlock()
-	// 连接建立后第一时间推送欢迎消息，告知客户端可开始通信
-	welcomeMsg := WSMessage{
-		Type: "connection_established",
-		Data: "WebSocket连接已成功建立",
-	}
-	// 若欢迎消息发送失败，说明连接已不可用，直接返回并结束 handler
-	if err := websocket.JSON.Send(ws, welcomeMsg); err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 发送欢迎消息失败: %v\n", err)
-		return false
-	}
-	// 若欢迎消息发送成功，返回 true 表示连接已成功设置
-	return true
-}
-
-// cleanupWebSocketConnection 清理 WebSocket 连接资源
-func cleanupWebSocketConnection(ws *websocket.Conn) {
-	// 临界区：确保并发情况下仅清理当前合法连接
-	serverState.wsMutex.Lock()
-	// 仅当当前连接仍是“合法连接”时才置空，防止并发覆盖
-	if serverState.websocketConn == ws {
-		serverState.websocketConn = nil
-	}
-	// 解锁WebSocket连接互斥锁，允许其他 goroutine 访问
-	serverState.wsMutex.Unlock()
-	// 关闭底层网络连接
-	ws.Close()
-}
-
-// handleWebSocketMessage 处理接收到的 WebSocket 消息
-func handleWebSocketMessage(ws *websocket.Conn, msg WSMessage) {
-	// 仅处理业务约定的 "ai_response" 类型，且必须携带 RequestID
-	if msg.Type == "ai_response" && msg.RequestID != "" {
-		// 处理 AI 响应消息
-		processAIResponse(ws, msg)
-	}
-}
-
-// processAIResponse 处理 AI 响应消息的具体逻辑
-func processAIResponse(ws *websocket.Conn, msg WSMessage) {
-	// 将 interface{} 类型断言为 map，确保后续序列化/反序列化安全
-	responseData, ok := msg.Data.(map[string]interface{})
-	if !ok {
-		log.Println("Lunar模块[WebSocket] -> AI响应数据格式无效")
-		return
-	}
-	// 定义 OpenAI V1 响应结构体，用于反序列化 AI 响应数据
-	var aiResponse OpenAIResponse
-	// 借助 JSON 中转，把 map 转为结构体，降低手动赋值出错概率
-	responseJSON, err := json.Marshal(responseData)
-	// 若序列化失败，记录日志并返回
+// 获取动态系统提示词
+func getDynamicSystemPrompt() (string, error) {
+	// 构建文件读取URL
+	fileURL := fmt.Sprintf("https://localhost:%d/read/resources/prompts/externalDialogue.md", *config.BasicPort)
+	// 发送HTTP GET请求
+	resp, err := http.Get(fileURL)
 	if err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 序列化AI响应数据失败: %v\n", err)
-		return
+		return "", fmt.Errorf("获取系统提示词文件失败: %w", err)
 	}
-	// 若反序列化失败，记录日志并返回
-	if err := json.Unmarshal(responseJSON, &aiResponse); err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 解析AI响应数据失败: %v\n", err)
-		return
+	defer resp.Body.Close()
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("获取系统提示词文件失败，状态码: %d", resp.StatusCode)
 	}
-	// 将 AI 回答转发给对应的 HTTP 请求，并依据结果向客户端回执
-	if err := handleAIResponseFromWebSocket(aiResponse, msg.RequestID); err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 处理AI响应失败: %v\n", err)
-		// 转发失败时，及时通知客户端，便于上层业务感知
-		sendErrorMessage(ws, err.Error(), msg.RequestID)
-	} else {
-		// 转发成功，回送「response_sent」确认，形成完整闭环
-		sendSuccessMessage(ws, "AI响应已成功发送", msg.RequestID)
+	// 读取文件内容
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("读取系统提示词文件内容失败: %w", err)
 	}
+	promptContent := string(body)
+	// 替换占位符
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)
+	promptContent = strings.ReplaceAll(promptContent, "{current-address}", "最终档案馆-[神之梦]档案室")
+	return promptContent, nil
 }
 
-// sendErrorMessage 发送错误消息到 WebSocket 客户端
-func sendErrorMessage(ws *websocket.Conn, errorMsg string, requestID string) {
-	// 定义错误消息结构体，符合业务协议
-	msg := WSMessage{
-		Type:      "error",
-		Data:      errorMsg,
-		RequestID: requestID,
+// 获取知识消息
+func getKnowledgeMessages(latestContent string) ([]Message, error) {
+	if latestContent == "" {
+		return []Message{}, nil
 	}
-	// 尝试发送错误消息，若失败则记录日志
-	if err := websocket.JSON.Send(ws, msg); err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 发送错误消息失败: %v\n", err)
+	// 获取嵌入向量
+	queryVector, err := getEmbeddingVector(latestContent)
+	if err != nil {
+		return []Message{}, fmt.Errorf("获取嵌入向量失败: %w", err)
 	}
+	// 限制向量长度为256
+	if len(queryVector) > 256 {
+		queryVector = queryVector[:256]
+	}
+	// 查询知识库
+	knowledgeEntries, err := queryKnowledgeBase(queryVector)
+	if err != nil {
+		return []Message{}, fmt.Errorf("查询知识库失败: %w", err)
+	}
+	// 构建知识消息
+	var knowledgeMessages []Message
+	for _, entry := range knowledgeEntries {
+		if content, ok := entry.Content.(string); ok && content != "" {
+			knowledgeMessages = append(knowledgeMessages, Message{
+				Role:    "system",
+				Content: content,
+			})
+		}
+	}
+	return knowledgeMessages, nil
 }
 
-// sendSuccessMessage 发送成功消息到 WebSocket 客户端
-func sendSuccessMessage(ws *websocket.Conn, successMsg string, requestID string) {
-	// 定义成功消息结构体，符合业务协议
-	msg := WSMessage{
-		Type:      "response_sent",
-		Data:      successMsg,
-		RequestID: requestID,
+// 获取嵌入向量
+func getEmbeddingVector(text string) ([]float64, error) {
+	// 构建嵌入请求
+	embeddingReq := map[string]interface{}{
+		"input": text,
+		"model": "system-embedding",
 	}
-	// 尝试发送成功消息，若失败则记录日志
-	if err := websocket.JSON.Send(ws, msg); err != nil {
-		log.Printf("Lunar模块[WebSocket] -> 发送成功消息失败: %v\n", err)
+	// 构建请求URL
+	embeddingURL := fmt.Sprintf("https://localhost:%d/v1/embeddings", *config.BasicPort)
+	// 发送HTTP POST请求
+	jsonData, err := json.Marshal(embeddingReq)
+	if err != nil {
+		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
 	}
+	resp, err := http.Post(embeddingURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("发送嵌入请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("获取嵌入向量失败，状态码: %d", resp.StatusCode)
+	}
+	// 解析响应
+	var embeddingResp struct {
+		Data []struct {
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&embeddingResp); err != nil {
+		return nil, fmt.Errorf("解析嵌入响应失败: %w", err)
+	}
+	// 提取嵌入向量
+	if len(embeddingResp.Data) == 0 {
+		return nil, fmt.Errorf("嵌入响应中无数据")
+	}
+	return embeddingResp.Data[0].Embedding, nil
 }
 
-// 推送消息到WebSocket客户端
-func pushMessageToWebSocket(messageType string, data interface{}, requestID string) error {
-	// 加锁，确保并发安全，防止多个goroutine同时操作WebSocket连接
-	serverState.wsMutex.Lock()
-	// 函数退出时解锁，保证锁一定会被释放
-	defer serverState.wsMutex.Unlock()
-	// 检查当前是否存在有效的WebSocket连接
-	if serverState.websocketConn == nil {
-		// 若无活动连接，返回错误提示
-		return fmt.Errorf("Lunar模块[WebSocket] -> 无活动WebSocket连接")
+// 查询知识库
+func queryKnowledgeBase(queryVector []float64) ([]Message, error) {
+	// 构建知识库查询请求
+	knowledgeReq := map[string]interface{}{
+		"filePath":    "knowledge/lunar_notes.json",
+		"queryVector": queryVector,
+		"topK":        10,
 	}
-	// 构造待发送的WebSocket消息结构体
-	msg := WSMessage{
-		Type:      messageType, // 消息类型
-		Data:      data,        // 消息数据
-		RequestID: requestID,   // 关联的请求ID
+	// 构建请求URL
+	knowledgeURL := fmt.Sprintf("https://localhost:%d/knowledge/query", *config.BasicPort)
+	// 发送HTTP POST请求
+	jsonData, err := json.Marshal(knowledgeReq)
+	if err != nil {
+		return nil, fmt.Errorf("序列化知识库查询请求失败: %w", err)
 	}
-	// 尝试通过WebSocket连接发送JSON格式的消息
-	if err := websocket.JSON.Send(serverState.websocketConn, msg); err != nil {
-		// 发送失败，可能连接已断开，将连接置空以便后续重连
-		serverState.websocketConn = nil
-		// 返回携带原始错误的格式化错误信息
-		return fmt.Errorf("Lunar模块[WebSocket] -> 发送消息失败: %w", err)
+	resp, err := http.Post(knowledgeURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("发送知识库查询请求失败: %w", err)
 	}
-	// 消息发送成功，返回nil表示无错误
-	return nil
+	defer resp.Body.Close()
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("查询知识库失败，状态码: %d", resp.StatusCode)
+	}
+	// 解析响应
+	var knowledgeEntries []Message
+	if err := json.NewDecoder(resp.Body).Decode(&knowledgeEntries); err != nil {
+		return nil, fmt.Errorf("解析知识库查询响应失败: %w", err)
+	}
+	return knowledgeEntries, nil
 }
 
-// handleProxyRequest 处理代理请求，将其他路径的请求转发到 https 服务器
+// 处理代理请求，将其他路径的请求转发到 https 服务器
 func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	// 添加CORS头
 	setCORSHeaders(w, r)

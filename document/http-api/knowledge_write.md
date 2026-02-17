@@ -23,7 +23,7 @@
 | `imageUrl`    | string    | 否   | 图片地址                             |
 | `deletable`   | boolean   | 否   | 是否可删除                           |
 | `uuid`        | string    | 是   | UUID，由客户端提供                   |
-| `embedVector` | []float64 | 否   | 嵌入向量，若不提供则由客户端后续生成 |
+| `embedVector` | []float64 | 否   | 嵌入向量，由客户端提供                 |
 
 ## 请求体示例
 

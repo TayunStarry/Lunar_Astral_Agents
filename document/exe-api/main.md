@@ -23,8 +23,8 @@ EXE API 提供了与 Lunar Astral Agents 可执行文件交互的能力，允许
 
 | 参数名称 | 类型 | 默认值 | 描述 |
 | -------- | ---- | ------ | ---- |
-| `-infer-engine` | string | `./subsystem/neural_engines/llama-server.exe` | 图文推理工具的路径 |
-| `-visual-engine` | string | `./subsystem/neural_engines/sd-cli.exe` | 绘图生成工具的路径 |
+| `-infer-engine` | string | `./subsystem/engines/llama-server.exe` | 图文推理工具的路径 |
+| `-visual-engine` | string | `./subsystem/engines/sd-cli.exe` | 绘图生成工具的路径 |
 | `-model-port` | int | 36790 | 模型服务的基础端口号，用于分配模型运行端口 |
 | `-allow-multimodal` | bool | true | 是否允许加载多模态模型进行推理 |
 
