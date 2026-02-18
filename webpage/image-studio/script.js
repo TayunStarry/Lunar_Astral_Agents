@@ -479,7 +479,7 @@ async function generateImage() {
 		showStatus('生成任务已提交，请等待处理', 'info', 2000);
 
 		// 开始轮询任务状态
-		pollTaskStatus();
+		waitForTaskCompletion();
 
 	} catch (error) {
 		console.error('生成失败:', error);
@@ -489,45 +489,66 @@ async function generateImage() {
 	}
 }
 
-// 轮询任务状态
-async function pollTaskStatus() {
+// 等待任务完成（使用新的 /generate/wait 接口）
+function waitForTaskCompletion() {
 	if (!currentTaskId) return;
 
 	try {
-		const response = await fetch(`/generate/status?task_id=${currentTaskId}`);
-		const status = await response.json();
+		// 创建 EventSource 连接
+		const eventSource = new EventSource(`/generate/wait?task_id=${currentTaskId}`);
 
-		if (status.status === 'completed') {
-			elements.taskMessage.textContent = '生成完成！';
-			showStatus(`图像生成完成！共${status.results?.length || 1}张`, 'success');
+		// 处理消息
+		eventSource.onmessage = function (event) {
+			try {
+				const data = JSON.parse(event.data);
 
-			setTimeout(() => {
+				if (data.status === 'completed') {
+					elements.taskMessage.textContent = '生成完成！';
+					showStatus(`图像生成完成！`, 'success');
+
+					setTimeout(() => {
+						elements.taskStatus.style.display = 'none';
+						elements.generateBtn.disabled = false;
+					}, 2000);
+
+					currentTaskId = null;
+					refreshFileList(); // 刷新文件列表
+					eventSource.close(); // 关闭连接
+				}
+				else if (data.status === 'failed') {
+					elements.taskMessage.textContent = '生成失败';
+					showStatus(`生成失败: ${data.error}`, 'error');
+					elements.taskStatus.style.display = 'none';
+					elements.generateBtn.disabled = false;
+					currentTaskId = null;
+					eventSource.close(); // 关闭连接
+				}
+			} catch (error) {
+				console.error('处理消息失败:', error);
+				showStatus('处理消息失败，请刷新页面重试', 'error');
 				elements.taskStatus.style.display = 'none';
 				elements.generateBtn.disabled = false;
-			}, 2000);
+				currentTaskId = null;
+				eventSource.close(); // 关闭连接
+			}
+		};
 
-			currentTaskId = null;
-			refreshFileList(); // 刷新文件列表
-		}
-		else if (status.status === 'failed') {
-			elements.taskMessage.textContent = '生成失败';
-			showStatus(`生成失败: ${status.error}`, 'error');
+		// 处理错误
+		eventSource.onerror = function (error) {
+			console.error('EventSource 错误:', error);
+			showStatus('连接失败，请刷新页面重试', 'error');
 			elements.taskStatus.style.display = 'none';
 			elements.generateBtn.disabled = false;
 			currentTaskId = null;
-		}
-		else if (status.status === 'running') {
-			elements.taskMessage.textContent = '生成处理中...';
-			// 继续轮询
-			setTimeout(pollTaskStatus, 1000);
-		}
-		else {
-			// 继续轮询
-			setTimeout(pollTaskStatus, 2000);
-		}
-	} catch (error) {
-		console.error('轮询任务状态失败:', error);
-		setTimeout(pollTaskStatus, 3000);
+			eventSource.close(); // 关闭连接
+		};
+	}
+	catch (error) {
+		console.error('创建 EventSource 失败:', error);
+		showStatus('创建连接失败，请刷新页面重试', 'error');
+		elements.taskStatus.style.display = 'none';
+		elements.generateBtn.disabled = false;
+		currentTaskId = null;
 	}
 }
 

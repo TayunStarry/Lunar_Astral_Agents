@@ -1,13 +1,13 @@
 package core
 
 import (
-	"encoding/json"                  // JSON 编码/解码
-	"fmt"                            // 格式化输出
-	"log"                            // 日志记录
-	"strings"                        // 字符串处理
-	"time"                           // 时间处理
-	"transponder/internal/openai"    // OpenAI 客户端
-	"transponder/internal/websocket" // WebSocket 客户端
+	"encoding/json"              // JSON 编码/解码
+	"fmt"                        // 格式化输出
+	"log"                        // 日志记录
+	"strings"                    // 字符串处理
+	"time"                       // 时间处理
+	"transponder/internal/agent" // Agent 客户端
+	"transponder/internal/utils" // 工具包
 )
 
 // MainLoop 执行主循环
@@ -29,14 +29,14 @@ func (class *Application) MainLoop() error {
 		}
 
 		// 尝试解析群成员列表响应
-		if err = class.MessageProcessor.ParseGroupMemberListResponse(messageBytes); err == nil {
+		if err = class.Processor.ParseGroupMemberListResponse(messageBytes); err == nil {
 			// 成功解析群成员列表响应，继续循环
 			continue
 		}
 
 		// 尝试解析群列表响应
 		if !groupListReceived {
-			if err = class.MessageProcessor.ParseGroupListResponse(messageBytes); err == nil {
+			if err = class.Processor.ParseGroupListResponse(messageBytes); err == nil {
 				groupListReceived = true
 
 				log.Printf("%s", strings.Repeat("-=", 28))
@@ -52,7 +52,7 @@ func (class *Application) MainLoop() error {
 		}
 
 		// 尝试处理群消息
-		groupID, messageContent, err := class.MessageProcessor.HandleGroupMessage(messageBytes)
+		groupID, messageContent, err := class.Processor.HandleGroupMessage(messageBytes)
 		if err != nil {
 			// 不是群消息或处理失败，继续循环
 			continue
@@ -73,28 +73,28 @@ func (class *Application) MainLoop() error {
 		if err != nil {
 			log.Printf("获取历史消息失败: %v", err)
 			// 发送错误消息
-			class.MessageProcessor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
+			class.Processor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
 			continue
 		}
 
-		// 调用OpenAI API
-		response, err := class.OpenAIClient.CallAPI(messages, class.MessageProcessor)
+		// 调用Agent API
+		response, err := class.AgentClient.CallAgent(messages, class.Processor, 0)
 		if err != nil {
-			log.Printf("调用OpenAI API失败: %v", err)
+			log.Printf("调用Agent API失败: %v", err)
 			// 发送错误消息
-			class.MessageProcessor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
+			class.Processor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
 			continue
 		}
 
 		// 发送群消息
-		if err := class.MessageProcessor.SendGroupMsg(groupID, response); err != nil {
+		if err := class.Processor.SendGroupMsg(groupID, response); err != nil {
 			log.Printf("发送群消息失败: %v", err)
 		}
 	}
 }
 
-// getMessageHistoryForOpenAI 获取群消息历史并转换为OpenAI消息格式
-func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]openai.Message, error) {
+// getMessageHistoryForOpenAI 获取群消息历史并转换为Agent消息格式
+func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]agent.Message, error) {
 	// 发送获取历史消息的请求
 	echo, err := class.WSClient.GetGroupMessageHistory(groupID)
 	if err != nil {
@@ -102,7 +102,7 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]openai.Me
 	}
 
 	// 等待并读取响应
-	var messages []openai.Message
+	var messages []agent.Message
 	responseReceived := false
 
 	// 读取响应，最多等待5秒
@@ -119,7 +119,7 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]openai.Me
 			}
 
 			// 解析响应
-			var response websocket.WSResponse
+			var response utils.WSResponse
 			if err := json.Unmarshal(messageBytes, &response); err != nil {
 				continue
 			}
@@ -128,36 +128,37 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]openai.Me
 			if !strings.Contains(response.Echo, echo) {
 				continue
 			}
-
 			// 解析群消息历史数据
-			if response.Status == "ok" && response.Data != nil {
-				if dataMap, ok := response.Data.(map[string]interface{}); ok {
-					if msgList, ok := dataMap["messages"].([]interface{}); ok {
-						// 遍历历史消息
-						for _, msgItem := range msgList {
-							if msg, ok := msgItem.(map[string]interface{}); ok {
-								// 提取发送者信息
-								senderName := ""
-								if sender, ok := msg["sender"].(map[string]interface{}); ok {
-									if nickname, ok := sender["nickname"].(string); ok {
-										senderName = nickname
-									}
-									if card, ok := sender["card"].(string); ok && card != "" {
-										senderName = card
-									}
-								}
-
-								// 提取消息内容
-								content := class.MessageProcessor.ProcessMessageContent(msg, groupID, senderName)
-
-								// 创建OpenAI消息
-								messages = append(messages, openai.Message{
-									Role:    "user",
-									Content: content,
-								})
-							}
-						}
+			if ok, msgList := class.getMessageHistoryValidity(response); ok {
+				// 遍历历史消息
+				for _, msgItem := range msgList {
+					if _, ok := msgItem.(map[string]any); !ok {
+						continue
 					}
+					// 提取发送者信息
+					senderName := ""
+					// 检查是否包含发送者信息
+					if _, ok := msgItem.(map[string]any)["sender"].(map[string]any); !ok {
+						continue
+					}
+					// 提取昵称作为发送者名称
+					if nickname, ok := msgItem.(map[string]any)["sender"].(map[string]any)["nickname"].(string); ok {
+						senderName = nickname
+					}
+					// 提取群名片作为发送者名称
+					if card, ok := msgItem.(map[string]any)["sender"].(map[string]any)["card"].(string); ok && card != "" {
+						senderName = card
+					}
+					// 提取消息角色
+					roleName := "user"
+					// 提取消息内容
+					content := class.Processor.ProcessMessageContent(msgItem.(map[string]any), groupID, senderName)
+					// 检查是否包含触发关键词
+					if class.Processor.ContainsTriggerKeyword(senderName) {
+						roleName = "assistant"
+					}
+					// 创建Agent消息
+					messages = append(messages, agent.Message{Role: roleName, Content: content})
 				}
 			}
 
@@ -168,12 +169,16 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]openai.Me
 	return messages, nil
 }
 
-// createUserMessage 创建用户消息
-func (class *Application) createUserMessage(content any) openai.Message {
-	return openai.CreateMessage("user", content)
-}
-
-// createAssistantMessage 创建助手消息
-func (class *Application) createAssistantMessage(content string) openai.Message {
-	return openai.CreateMessage("assistant", content)
+// getMessageHistoryValidity 解析历史数据有效性
+func (class *Application) getMessageHistoryValidity(response utils.WSResponse) (bool, []any) {
+	if response.Status != "ok" || response.Data == nil {
+		return false, nil
+	}
+	if _, ok := response.Data.(map[string]any); !ok {
+		return false, nil
+	}
+	if _, ok := response.Data.(map[string]any)["messages"].([]any); !ok {
+		return false, nil
+	}
+	return true, response.Data.(map[string]any)["messages"].([]any)
 }

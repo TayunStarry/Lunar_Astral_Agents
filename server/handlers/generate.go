@@ -36,9 +36,11 @@ type GenerateTask struct {
 }
 
 var (
-	taskQueue    = make(chan GenerateTask, 10)
-	taskStatus   = make(map[string]*GenerateTask)
-	taskStatusMu sync.RWMutex
+	taskQueue     = make(chan GenerateTask, 10)
+	taskStatus    = make(map[string]*GenerateTask)
+	taskStatusMu  sync.RWMutex
+	waitClients   = make(map[string]chan *GenerateTask)
+	waitClientsMu sync.RWMutex
 )
 
 // GenerateHandler 处理图像生成请求
@@ -285,43 +287,127 @@ func processTask(task GenerateTask) {
 		task.Status = "completed"
 		task.ResultPath = outputPath
 	}
-	taskStatus[taskID] = &task
+	completedTask := &task
+	taskStatus[taskID] = completedTask
 	taskStatusMu.Unlock()
+
+	// 通知等待的客户端
+	notifyWaitClients(taskID, completedTask)
 }
 
-// GenerateStatusHandler 获取任务状态
-func GenerateStatusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
-		http.Error(w, "不允许的请求方法", http.StatusMethodNotAllowed)
-		return
-	}
-	if !*config.AllowDiffusion {
-		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
-		return
-	}
-	taskID := r.URL.Query().Get("task_id")
-	if taskID == "" {
-		http.Error(w, "需要task_id参数", http.StatusBadRequest)
-		return
-	}
+// notifyWaitClients 通知等待的客户端任务完成
+func notifyWaitClients(taskID string, task *GenerateTask) {
+	waitClientsMu.RLock()
+	ch, exists := waitClients[taskID]
+	waitClientsMu.RUnlock()
 
-	taskStatusMu.RLock()
-	task, exists := taskStatus[taskID]
-	taskStatusMu.RUnlock()
+	if exists {
+		ch <- task
+		close(ch)
 
-	if !exists {
-		http.Error(w, "任务不存在", http.StatusNotFound)
-		return
+		waitClientsMu.Lock()
+		delete(waitClients, taskID)
+		waitClientsMu.Unlock()
 	}
+}
 
-	response := map[string]any{
-		"task_id": task.ID,
-		"status":  task.Status,
-		"created": task.CreatedAt,
-		"result":  task.ResultPath,
-		"error":   task.Error,
-	}
+// GenerateWaitHandler 处理WebSocket连接，等待任务完成
+func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != "GET" {
+        http.Error(w, "不允许的请求方法", http.StatusMethodNotAllowed)
+        return
+    }
+    if !*config.AllowDiffusion {
+        http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+    taskID := r.URL.Query().Get("task_id")
+    if taskID == "" {
+        http.Error(w, "需要task_id参数", http.StatusBadRequest)
+        return
+    }
+
+    // 检查任务是否已存在
+    taskStatusMu.RLock()
+    existingTask, exists := taskStatus[taskID]
+    taskStatusMu.RUnlock()
+
+    if !exists {
+        http.Error(w, "任务不存在", http.StatusNotFound)
+        return
+    }
+
+    // 如果任务已完成，直接返回结果
+    if existingTask.Status == "completed" || existingTask.Status == "failed" {
+        response := map[string]any{
+            "task_id": existingTask.ID,
+            "status":  existingTask.Status,
+            "result":  existingTask.ResultPath,
+            "error":   existingTask.Error,
+        }
+        if existingTask.Status == "completed" {
+            // 构建读取路径
+            relativePath := strings.TrimPrefix(existingTask.ResultPath, config.LocalDir)
+            relativePath = strings.TrimPrefix(relativePath, "\\")
+            readPath := "/read/" + relativePath
+            response["read_path"] = readPath
+        }
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(response)
+        return
+    }
+
+    // 创建通道用于等待任务完成
+    ch := make(chan *GenerateTask, 1)
+
+    // 注册客户端
+    waitClientsMu.Lock()
+    waitClients[taskID] = ch
+    waitClientsMu.Unlock()
+
+    // 设置响应头，使用服务器发送事件(SSE)模拟WebSocket
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+
+    // 发送一个空的事件来建立连接
+    fmt.Fprintf(w, "\n")
+    // 刷新响应
+    if flusher, ok := w.(http.Flusher); ok {
+        flusher.Flush()
+    }
+
+    // 等待任务完成，设置超时
+    select {
+    case completedTask := <-ch:
+        // 构建响应
+        response := map[string]any{
+            "task_id": completedTask.ID,
+            "status":  completedTask.Status,
+            "result":  completedTask.ResultPath,
+            "error":   completedTask.Error,
+        }
+
+        if completedTask.Status == "completed" {
+            // 构建读取路径
+            relativePath := strings.TrimPrefix(completedTask.ResultPath, config.LocalDir)
+            relativePath = strings.TrimPrefix(relativePath, "\\")
+            readPath := "/read/" + relativePath
+            response["read_path"] = readPath
+        }
+
+        // 发送响应
+        jsonData, _ := json.Marshal(response)
+        fmt.Fprintf(w, "data: %s\n\n", jsonData)
+
+        // 刷新响应
+        if flusher, ok := w.(http.Flusher); ok {
+            flusher.Flush()
+        }
+    case <-time.After(5 * time.Minute):
+        // 超时
+        http.Error(w, "任务处理超时", http.StatusRequestTimeout)
+        return
+    }
 }

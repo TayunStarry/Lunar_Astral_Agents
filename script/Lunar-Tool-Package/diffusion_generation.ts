@@ -54,62 +54,58 @@ async function createImageGeneration(args: ToolCallParameters, messageObject: Hi
     else return '图片生成失败，请向用户说明情况（例如：画笔暂时无法使用）';
 }
 
-/** 轮询查询图片生成状态 */
+/** 使用WebSocket等待图片生成完成 */
 async function searchImagesTask(taskId: string, messageObject: HistoryMessage): Promise<boolean> {
-    /**
-     * 轮询查询图片生成状态
-     *
-     * @param {function} resolve 轮询成功回调函数
-     *
-     * @returns {Promise<void>} 图片生成状态
-     */
-    async function poll(resolve: (value: boolean | PromiseLike<boolean>) => void): Promise<void> {
-        /** 查询图片生成状态 */
-        const statusInquiry = await fetch(`/generate/status?task_id=${taskId}`).then(res => res.json()) as TaskStatus;
-        // 检查任务状态
-        if (!statusInquiry) {
-            showSystemMessage(`图片绘制状态查询失败`, 'error');
-            resolve(false);
-            return;
-        }
-        // 判断任务状态
-        switch (statusInquiry.status) {
-            case 'completed':
-                /** 获取生成的图片列表 */
-                const fileList = await fetch(`/file_list/generated`).then(res => res.json()) as FileListItem[];
-                /** 排序文件列表, 取最新生成的图片 */
-                const imageUrl = '/read/' + fileList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())[0].path;
-                /** 创建一个新的音频元素用于播放提示音 */
-                const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
-                // 设置音量为最大
-                audio.volume = 1.0;
-                // 播放提示音, 失败时显示错误消息
-                audio.play().catch(() => showSystemMessage('播放提示音失败', 'error'));
-                /** 创建图片消息对象 */
-                const imageMessage = createImageMessage('assistant', '月华绘制的图片', imageUrl);
-                // 添加图片渲染到消息元素
-                addImageRendering(imageMessage);
-                // 存储图片URL到消息对象, 用于后续引用
-                messageObject.imageUrl = imageUrl;
-                resolve(true);
-                break;
-
-            case 'failed':
-                showSystemMessage(`图片绘制失败`, 'error');
+    function event(resolve: (value: boolean | PromiseLike<boolean>) => void) {
+        /** 创建EventSource连接到新的/generate/wait接口 */
+        const eventSource = new EventSource(`/generate/wait?task_id=${taskId}`);
+        // 处理接收到的消息
+        eventSource.onmessage = function (event) {
+            try {
+                // 解析接收到的消息数据
+                const data = JSON.parse(event.data);
+                // 检查任务状态
+                if (data.status === 'completed') {
+                    // 任务完成，使用返回的read_path
+                    const imageUrl = data.read_path;
+                    /** 创建一个新的音频元素用于播放提示音 */
+                    const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
+                    // 设置音量为最大
+                    audio.volume = 1.0;
+                    // 播放提示音, 失败时显示错误消息
+                    audio.play().catch(() => showSystemMessage('播放提示音失败', 'error'));
+                    /** 创建图片消息对象 */
+                    const imageMessage = createImageMessage('assistant', '月华绘制的图片', imageUrl);
+                    // 添加图片渲染到消息元素
+                    addImageRendering(imageMessage);
+                    // 存储图片URL到消息对象, 用于后续引用
+                    messageObject.imageUrl = imageUrl;
+                    // 关闭EventSource连接
+                    eventSource.close();
+                    resolve(true);
+                }
+                else if (data.status === 'failed') {
+                    // 任务失败
+                    showSystemMessage(`图片绘制失败`, 'error');
+                    // 关闭EventSource连接
+                    eventSource.close();
+                    resolve(false);
+                }
+            }
+            catch (error) {
+                console.error('处理消息失败:', error);
+                showSystemMessage(`处理消息失败`, 'error');
+                eventSource.close();
                 resolve(false);
-                break;
-
-            case 'running':
-                // 继续轮询
-                setTimeout(() => poll(resolve), 1000);
-                break;
-
-            default:
-                // 继续轮询
-                setTimeout(() => poll(resolve), 2000);
-                break;
-        }
+            }
+        };
+        // 处理错误
+        eventSource.onerror = function (error) {
+            console.error('EventSource错误:', error);
+            showSystemMessage(`图片绘制状态查询失败`, 'error');
+            eventSource.close();
+            resolve(false);
+        };
     }
-    // 使用Promise封装轮询过程
-    return new Promise<boolean>(resolve => poll(resolve));
+    return new Promise<boolean>(event);
 }

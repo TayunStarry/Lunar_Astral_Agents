@@ -41,4 +41,3 @@ func ProcessImageURL(url string) string {
 	url = strings.ReplaceAll(url, "&#39;", "'")
 	return url
 }
-

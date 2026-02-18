@@ -76,8 +76,8 @@ Lunar_Astral_Agents/
 | /v1/models          | GET    | 模型列表       | [document/http-api/model_list.md](document/http-api/model_list.md)                 |
 | /v1/chat/completions| POST   | 智能体交互     | [document/http-api/chat_completions.md](document/http-api/chat_completions.md)     |
 | /v1/embeddings      | POST   | 文本嵌入       | [document/http-api/embeddings.md](document/http-api/embeddings.md)                 |
-| /generate/status    | GET    | 绘图状态       | -                                                                                  |
-| /generate           | POST   | 图片生成       | [document/http-api/generate.md](document/http-api/generate.md)                     |
+| /generate           | POST   | 生成图片       | [document/http-api/generate.md](document/http-api/generate.md)                     |
+| /generate/wait      | GET    | 等待生成       | [document/http-api/generate_wait.md](document/http-api/generate_wait.md)           |
 | /knowledge/query    | POST   | 知识查询       | [document/http-api/knowledge_query.md](document/http-api/knowledge_query.md)       |
 | /knowledge/write    | POST   | 知识写入       | [document/http-api/knowledge_write.md](document/http-api/knowledge_write.md)       |
 | /knowledge/flush    | POST   | 知识刷新       | [document/http-api/knowledge_flush.md](document/http-api/knowledge_flush.md)       |

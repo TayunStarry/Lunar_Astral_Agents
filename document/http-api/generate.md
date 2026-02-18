@@ -81,5 +81,5 @@ fetch("/generate", {
 - 生成服务依赖于 Stable Diffusion 模型，需要足够的显存（建议 8GB+）
 - 生成过程可能需要较长时间，建议使用异步方式处理
 - 生成结果默认保存在 `local_data/generated/` 目录下
-- 可以通过 `/generate/status` 端点查询任务状态
+- 可以通过 `/generate/wait` 端点查询任务状态
 - 支持文生图和图生图两种模式

@@ -1,27 +1,26 @@
-package message
+package processor
 
 import (
 	"encoding/json"
 	"fmt"
 	"log"
-	status "transponder/internal/config"
-	"transponder/internal/utils"
-	"transponder/internal/websocket"
 	"strings"
+	"transponder/internal/setup"
+	"transponder/internal/utils"
 )
 
 // ValidateListenGroups 校验需要监听的群
-func (class *Processor) ValidateListenGroups() []int64 {
+func (class *Handle) ValidateListenGroups() []int64 {
 	validGroupIDs := make([]int64, 0)
 
 	// 如果没有配置需要监听的群，返回空切片
-	if len(class.config.ListenGroupIDs) == 0 {
+	if len(class.Config.ListenGroupIDs) == 0 {
 		log.Println("没有配置需要监听的群")
 		return validGroupIDs
 	}
 
 	// 遍历需要监听的群ID
-	for _, groupID := range class.config.ListenGroupIDs {
+	for _, groupID := range class.Config.ListenGroupIDs {
 		// 检查群是否在群列表中
 		found := false
 		for _, group := range class.groupInfos {
@@ -43,8 +42,8 @@ func (class *Processor) ValidateListenGroups() []int64 {
 }
 
 // ParseGroupListResponse 解析群列表响应
-func (class *Processor) ParseGroupListResponse(message []byte) error {
-	var response websocket.WSResponse
+func (class *Handle) ParseGroupListResponse(message []byte) error {
+	var response utils.WSResponse
 	if err := json.Unmarshal(message, &response); err != nil {
 		return fmt.Errorf("解析响应失败: %v", err)
 	}
@@ -57,7 +56,7 @@ func (class *Processor) ParseGroupListResponse(message []byte) error {
 	// 解析群列表数据
 	if response.Status == "ok" && response.Data != nil {
 		if groupList, ok := response.Data.([]interface{}); ok {
-			class.groupInfos = make([]status.GroupInfo, 0, len(groupList))
+			class.groupInfos = make([]setup.GroupInfo, 0, len(groupList))
 			for _, item := range groupList {
 				if group, ok := item.(map[string]interface{}); ok {
 					groupID := int64(utils.GetFloat64Value(group, "group_id"))
@@ -66,7 +65,7 @@ func (class *Processor) ParseGroupListResponse(message []byte) error {
 					maxMemberCount := int(utils.GetFloat64Value(group, "max_member_count"))
 
 					if groupID > 0 {
-						class.groupInfos = append(class.groupInfos, status.GroupInfo{
+						class.groupInfos = append(class.groupInfos, setup.GroupInfo{
 							GroupID:        groupID,
 							GroupName:      groupName,
 							MemberCount:    memberCount,
@@ -91,8 +90,8 @@ func (class *Processor) ParseGroupListResponse(message []byte) error {
 }
 
 // ParseGroupMemberListResponse 解析群成员列表响应
-func (class *Processor) ParseGroupMemberListResponse(message []byte) error {
-	var response websocket.WSResponse
+func (class *Handle) ParseGroupMemberListResponse(message []byte) error {
+	var response utils.WSResponse
 	if err := json.Unmarshal(message, &response); err != nil {
 		return fmt.Errorf("解析响应失败: %v", err)
 	}

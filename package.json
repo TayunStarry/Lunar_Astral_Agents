@@ -6,7 +6,8 @@
 	"main": "index.html",
 	"scripts": {
 		"dev": "tsc && rollup ./deliverable/EntryAPI/code.js --file ./webpage/chat-dialogue/script.js",
-		"release.min": "tsc && rollup -c"
+		"release.min": "tsc && rollup -c",
+		"run-generate-tool": "node script/run-generate-tool.js"
 	},
 	"keywords": [
 		"ai",

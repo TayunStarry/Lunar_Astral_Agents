@@ -219,6 +219,7 @@ func getDynamicSystemPrompt() (string, error) {
 		return "", fmt.Errorf("读取系统提示词文件内容失败: %w", err)
 	}
 	promptContent := string(body)
+	// log.Printf("原始系统提示词: %s", promptContent)
 	// 替换占位符
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)

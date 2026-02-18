@@ -6,7 +6,7 @@
 - **版本**：1.0.0
 - **作者**：[钛宇-星光阁](https://gitee.com/TayunStarry)
 - **更新日志**：
-  - 2026-01-24：创建初始版本
+  - 2026-02-18：创建初始版本
 
 ## 模块描述
 
@@ -109,7 +109,7 @@ subscriptionToolCall("image_creation_sandbox", async (args, messageElement, mess
     return result;
 });
 /** 提交图片生成任务 */
-async function createImageGeneration(args, _, imageUrl) {
+async function createImageGeneration(args, messageObject, imageUrl) {
     /** 定义图片生成数据 */
     const generateData = {
         prompt: args.prompt?.trim(),
@@ -137,7 +137,7 @@ async function createImageGeneration(args, _, imageUrl) {
     /** 获取图片生成任务ID */
     const TaskId = (await response.json()).task_id;
     // 轮询查询图片生成状态，等待结果
-    const isSuccess = await searchImagesTask(TaskId);
+    const isSuccess = await searchImagesTask(TaskId, messageObject);
     // 根据轮询结果返回相应消息
     if (isSuccess)
         return [
@@ -154,66 +154,60 @@ async function createImageGeneration(args, _, imageUrl) {
     else
         return '月华这次没能完成画作，画笔似乎不太听使唤。可以安慰用户说"创作偶尔也会遇到灵感枯竭的时候"，并邀请用户换个描述试试看。';
 }
-/** 轮询查询图片生成状态 */
-async function searchImagesTask(taskId) {
-    /**
-     * 轮询查询图片生成状态
-     *
-     * @param {function} resolve 轮询成功回调函数
-     *
-     * @returns {Promise<void>} 图片生成状态
-     */
-    async function poll(resolve) {
-        /** 查询图片生成状态 */
-        const statusInquiry = await fetch(`/generate/status?task_id=${taskId}`).then(res => res.json());
-        // 检查任务状态
-        if (!statusInquiry) {
-            showSystemMessage(`图片绘制状态查询失败`, 'error');
-            resolve(false);
-            return;
-        }
-        // 判断任务状态
-        switch (statusInquiry.status) {
-            case 'completed':
-                /** 获取生成的图片列表 */
-                const fileList = await fetch(`/file_list/generated`).then(res => res.json());
-                /** 排序文件列表, 取最新生成的图片 */
-                const imageUrl = '/read/' + fileList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())[0].path;
-                /** 创建一个新的音频元素用于播放提示音 */
-                const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
-                // 设置音量为最大
-                audio.volume = 1.0;
-                // 播放提示音, 失败时显示错误消息
-                audio.play().catch(() => showSystemMessage('播放提示音失败', 'error'));
-                /** 创建图片消息对象 */
-                const imageMessage = createImageMessage('assistant', '月华的新画作', imageUrl);
-                // 添加图片渲染到消息元素
-                addImageRendering(imageMessage);
-                // 添加到附件数组
-                OnlyData.toolAttachment.push({ image_url: OnlyData.fileServiceUrl + imageUrl, });
-                // 限制附件数量，保留最近10张
-                if (OnlyData.toolAttachment.length > 10) {
-                    OnlyData.toolAttachment = OnlyData.toolAttachment.slice(-10);
+/** 使用WebSocket等待图片生成完成 */
+async function searchImagesTask(taskId, messageObject) {
+    function event(resolve) {
+        /** 创建EventSource连接到新的/generate/wait接口 */
+        const eventSource = new EventSource(`/generate/wait?task_id=${taskId}`);
+        // 处理接收到的消息
+        eventSource.onmessage = function (event) {
+            try {
+                // 解析接收到的消息数据
+                const data = JSON.parse(event.data);
+                // 检查任务状态
+                if (data.status === 'completed') {
+                    // 任务完成，使用返回的read_path
+                    const imageUrl = data.read_path;
+                    /** 创建一个新的音频元素用于播放提示音 */
+                    const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
+                    // 设置音量为最大
+                    audio.volume = 1.0;
+                    // 播放提示音, 失败时显示错误消息
+                    audio.play().catch(() => showSystemMessage('播放提示音失败', 'error'));
+                    /** 创建图片消息对象 */
+                    const imageMessage = createImageMessage('assistant', '月华绘制的图片', imageUrl);
+                    // 添加图片渲染到消息元素
+                    addImageRendering(imageMessage);
+                    // 存储图片URL到消息对象, 用于后续引用
+                    messageObject.imageUrl = imageUrl;
+                    // 关闭EventSource连接
+                    eventSource.close();
+                    resolve(true);
                 }
-                resolve(true);
-                break;
-            case 'failed':
-                showSystemMessage(`图片绘制失败`, 'error');
+                else if (data.status === 'failed') {
+                    // 任务失败
+                    showSystemMessage(`图片绘制失败`, 'error');
+                    // 关闭EventSource连接
+                    eventSource.close();
+                    resolve(false);
+                }
+            }
+            catch (error) {
+                console.error('处理消息失败:', error);
+                showSystemMessage(`处理消息失败`, 'error');
+                eventSource.close();
                 resolve(false);
-                break;
-            case 'running':
-                // 继续轮询
-                setTimeout(() => poll(resolve), 1000);
-                break;
-            default:
-                // 继续轮询
-                setTimeout(() => poll(resolve), 2000);
-                break;
-        }
+            }
+        };
+        // 处理错误
+        eventSource.onerror = function (error) {
+            console.error('EventSource错误:', error);
+            showSystemMessage(`图片绘制状态查询失败`, 'error');
+            eventSource.close();
+            resolve(false);
+        };
     }
-    ;
-    // 使用Promise封装轮询过程
-    return new Promise(resolve => poll(resolve));
+    return new Promise(event);
 }
 
 ```

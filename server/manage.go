@@ -135,8 +135,8 @@ func registerHandlers() {
 		"/v1/models": handlers.AgentModelsHandler,
 		"/v1/":       handlers.AgentHandler,
 		// 图片生成相关接口
-		"/generate/status": handlers.GenerateStatusHandler,
 		"/generate":        handlers.GenerateHandler,
+		"/generate/wait":   handlers.GenerateWaitHandler,
 		// 知识库相关接口
 		"/knowledge/query":  handlers.KnowledgeQueryHandler,
 		"/knowledge/write":  handlers.KnowledgeWriteHandler,
