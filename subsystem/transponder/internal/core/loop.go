@@ -73,7 +73,7 @@ func (class *Application) MainLoop() error {
 		if err != nil {
 			log.Printf("获取历史消息失败: %v", err)
 			// 发送错误消息
-			class.Processor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
+			class.Processor.SendGroupMsg(groupID, class.Config.DefaultReply)
 			continue
 		}
 
@@ -82,7 +82,7 @@ func (class *Application) MainLoop() error {
 		if err != nil {
 			log.Printf("调用Agent API失败: %v", err)
 			// 发送错误消息
-			class.Processor.SendGroupMsg(groupID, "抱歉，处理请求失败，请稍后再试")
+			class.Processor.SendGroupMsg(groupID, class.Config.DefaultReply)
 			continue
 		}
 
@@ -161,11 +161,12 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]agent.Mes
 					messages = append(messages, agent.Message{Role: roleName, Content: content})
 				}
 			}
-
 			responseReceived = true
 		}
 	}
-
+	if len(messages) > 0 && messages[len(messages)-1].Role == "assistant" {
+		messages = append(messages, agent.Message{Role: "user", Content: "我的话说完了, 请你继续"})
+	}
 	return messages, nil
 }
 

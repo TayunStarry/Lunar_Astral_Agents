@@ -24,8 +24,7 @@ body {
 	background: linear-gradient(135deg, #1a1b20 0%, #252632 100%);
 }
 
-/* 定义淡入动画，元素从不可见到可见*/
-@keyframes fadeIn {
+@keyframes fade-in {
 
 	/* 动画起始状态 */
 	from {
@@ -35,6 +34,19 @@ body {
 	/* 动画结束状态 */
 	to {
 		opacity: 1;
+	}
+}
+
+@keyframes fade-out {
+
+	/* 动画起始状态 */
+	from {
+		opacity: 1;
+	}
+
+	/* 动画结束状态 */
+	to {
+		opacity: 0;
 	}
 }
 

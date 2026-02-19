@@ -174,7 +174,7 @@ export function autoScrollToBottom(container: HTMLElement, options: { threshold?
  *
  * @returns {boolean} 是否有工具调用
  */
-export async function handleToolCalls(state: EntryAPI.StreamProcessingState, messages: EntryAPI.PostMessage[], messageElement: HTMLElement, messageObject: EntryAPI.HistoryMessage): Promise<boolean> {
+export async function handleToolCalls(state: EntryAPI.ChatCache, messages: EntryAPI.PostMessage[], messageElement: HTMLElement, messageObject: EntryAPI.HistoryMessage): Promise<boolean> {
 	/** 工具调用标志 */
 	let hasToolCalls = false;
 	// 遍历所有工具调用
