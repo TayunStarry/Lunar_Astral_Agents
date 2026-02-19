@@ -6871,9 +6871,23 @@ async function convertUrl(toImage = false) {
     if (isLocalhost && !toImage)
         return '/v1';
     /** 从当前网址中提取主机名和端口号 */
-    const base = window.location.origin;
-    // 根据需求返回不同的URL
-    return toImage ? base : base + '/v1';
+    const baseURL = window.location.origin;
+    // 如果是图片请求且当前URL是HTTPS协议，则需要转换为HTTP协议
+    if (toImage && window.location.href.startsWith('https')) {
+        /** 从当前网址中提取主机名和端口号 */
+        const url = new URL(window.location.href);
+        /** 从当前URL中提取端口号的数字类型并增加进行偏移 */
+        const newPort = Number(url.port) + 5;
+        /** 构建新的HTTP URL字符串 */
+        const newUrl = 'http://' + url.hostname + ':' + newPort;
+        // 返回新的HTTP URL字符串
+        return newUrl;
+    }
+    // 如果是图片请求且当前URL不是HTTPS协议，则直接返回原始URL
+    else if (toImage)
+        return baseURL;
+    // 如果不是图片请求，则返回默认的/v1路径
+    return baseURL + '/v1';
 }
 /**
  * 处理键盘按下事件，禁用特定的快捷键组合，当触发这些快捷键时阻止默认行为并显示预设消息。
@@ -7308,158 +7322,6 @@ async function disableActiveMessage() {
 }
 
 /**
- * 处理流式响应数据
- *
- * @param {string} chunk - 解码后的流式数据块
- *
- * @param {EntryAPI.HistoryMessage} messageObject - 消息对象
- *
- * @param {HTMLElement} contentElement - 内容元素
- *
- * @param {EntryAPI.StreamProcessingState} state - 处理状态对象
- */
-function processStreamingData(chunk, messageObject, contentElement, state) {
-    // 遍历每一行数据
-    for (const line of chunk.split("\n").filter((line) => line.trim() !== "")) {
-        // 检查数据块是否包含有效数据
-        if (!line.startsWith("data: "))
-            continue;
-        /** 移除数据块前缀 */
-        const data = line.replace("data: ", "");
-        // 如果收到结束信号，退出循环
-        if (data === "[DONE]")
-            break;
-        /** 解析JSON数据 */
-        const jsonData = JSON.parse(data);
-        // 检查是否有工具调用
-        if (jsonData.choices?.[0]?.delta?.tool_calls) {
-            processToolCallData(jsonData.choices[0].delta.tool_calls, state);
-            return;
-        }
-        // 检查是否有结束的工具调用
-        if (jsonData.choices?.[0]?.finish_reason === "tool_calls") {
-            finalizeCurrentToolCall(state);
-            return;
-        }
-        // 检查是否有预测令牌数
-        if (jsonData.timings?.predicted_per_second && OnlyData.isDebugMode) {
-            updateTokenSpeed(jsonData.timings.predicted_per_second);
-        }
-        // 处理内容数据
-        processContentData(jsonData, messageObject, contentElement, state);
-    }
-    // 添加代码高亮
-    contentElement.querySelectorAll('pre code').forEach(block => window.hljs.highlightElement(block));
-}
-/**
- * 处理工具调用数据
- *
- * @param {any[]} toolCallChunks - 工具调用数据块
- *
- * @param {EntryAPI.StreamProcessingState} state - 处理状态对象
- */
-function processToolCallData(toolCallChunks, state) {
-    // 遍历工具调用数据块
-    for (const chunk of toolCallChunks) {
-        // 如果是一个新的工具调用
-        if (chunk.index !== state.currentToolCallIndex) {
-            // 如果之前有正在收集的工具调用，先保存它
-            if (state.currentToolCall !== null)
-                finalizeCurrentToolCall(state);
-            // 开始新的工具调用
-            state.currentToolCallIndex = chunk.index;
-            state.currentToolCall = { type: "function", function: { name: "", arguments: "" } };
-            state.currentFunctionArgs = "";
-            state.currentFunctionName = "";
-        }
-        // 累积工具调用的名称和参数
-        if (chunk.function?.name) {
-            state.currentFunctionName += chunk.function.name;
-        }
-        if (chunk.function?.arguments) {
-            state.currentFunctionArgs += chunk.function.arguments;
-        }
-        // 更新当前工具调用
-        if (state.currentToolCall) {
-            state.currentToolCall.function.name = state.currentFunctionName;
-            state.currentToolCall.function.arguments = state.currentFunctionArgs;
-        }
-    }
-}
-/**
- * 完成当前工具调用
- *
- * @param {EntryAPI.StreamProcessingState} state - 处理状态对象
- */
-function finalizeCurrentToolCall(state) {
-    // 如果当前有正在收集的工具调用
-    if (state.currentToolCall !== null) {
-        try {
-            state.currentToolCall.function.arguments = JSON.parse(state.currentFunctionArgs);
-        }
-        catch {
-            // 如果解析失败，传入原始字符串
-            state.currentToolCall.function.arguments = state.currentFunctionArgs;
-        }
-        state.toolCalls.push(state.currentToolCall);
-        // 重置变量
-        state.currentToolCall = null;
-        state.currentToolCallIndex = -1;
-        state.currentFunctionArgs = "";
-        state.currentFunctionName = "";
-    }
-}
-/**
- * 更新令牌速度显示
- *
- * @param {number} predictedPerSecond - 每秒预测令牌数
- */
-function updateTokenSpeed(predictedPerSecond) {
-    // 显示令牌速度显示
-    tokenCounterPanel.style.display = "block";
-    // 更新令牌速度显示
-    tokenCounterPanel.innerHTML = `${predictedPerSecond?.toFixed(2) || "N/A"} token/s`;
-}
-/**
- * 处理内容数据
- *
- * @param {any} jsonData - JSON数据
- *
- * @param {EntryAPI.HistoryMessage} messageObject - 消息对象
- *
- * @param {HTMLElement} contentElement - 内容元素
- *
- * @param {EntryAPI.StreamProcessingState} state - 处理状态对象
- */
-function processContentData(jsonData, messageObject, contentElement, state) {
-    /** 提取内容数据 */
-    const contentData = jsonData.choices?.[0]?.delta?.content;
-    /** 提取推理内容数据 */
-    const reasoningContentData = jsonData.choices?.[0]?.delta?.reasoning_content;
-    // 累积描述内容
-    if (contentData)
-        state.descriptionContent += contentData;
-    // 遍历所有模式，尝试匹配思考标签
-    for (const pattern of ThinkType) {
-        /** 匹配思考标签 */
-        const match = state.descriptionContent.match(pattern);
-        // 如果匹配成功，提取思考内容
-        if (!match)
-            continue;
-        // 更新预备的思考内容
-        state.thinkingContent += match[1].trim();
-        // 更新预备的描述内容
-        state.descriptionContent = match[2].trim();
-        // 匹配结束, 跳出循环
-        break;
-    }
-    // 提取独立的推理内容
-    if (reasoningContentData)
-        state.reasoningContent += reasoningContentData;
-    // 更新消息内容
-    updateMessageContent(messageObject, contentElement, state);
-}
-/**
  * 更新消息内容
  *
  * @param {EntryAPI.HistoryMessage} messageObject - 消息对象
@@ -7487,6 +7349,17 @@ function updateMessageContent(messageObject, contentElement, state) {
     contentElement.innerHTML = processThinkTags(messageObject.content);
 }
 /**
+ * 更新令牌速度显示
+ *
+ * @param {number} predictedPerSecond - 每秒预测令牌数
+ */
+function updateTokenSpeed(predictedPerSecond) {
+    // 显示令牌速度显示
+    tokenCounterPanel.style.display = "block";
+    // 更新令牌速度显示
+    tokenCounterPanel.innerHTML = `${predictedPerSecond?.toFixed(2) || "N/A"} token/s`;
+}
+/**
  * 发送请求并处理工具调用
  *
  * @param {EntryAPI.PostMessage[]} messages - 消息数组
@@ -7497,41 +7370,46 @@ function updateMessageContent(messageObject, contentElement, state) {
  *
  * @param {HTMLElement} contentElement - 内容元素
  *
+ * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
+ *
  * @returns {Promise<{ textContent: string }>}
  */
-async function sendRequestWithTools(messages, container, messageObject, contentElement, state) {
-    /** 向处理器模型发送请求并等待响应 */
-    const response = await new MultimodalRequest(messages, true, true).response;
+async function sendRequestWithTools(messages, container, messageObject, contentElement, cache) {
+    /** 向处理器模型发送请求并等待响应（禁用流式响应） */
+    const response = await new MultimodalRequest(messages, true, false).response;
     // 如果未能获得期望中的响应，则抛出错误
-    if (!response.ok || !response.body)
+    if (!response.ok)
         throw new Error(`API返回错误: ${response.status} ${response.statusText}`);
-    /** 获取响应流的读取器 */
-    const reader = response.body.getReader();
-    /** 创建文本解码器 */
-    const decoder = new TextDecoder();
-    // 循环处理流式返回的文本块
-    while (true) {
-        // 自动处理滚动行为
-        autoScrollToBottom(container, {});
-        // 读取数据块
-        const { value, done } = await reader.read();
-        // 如果传输完成，跳出循环
-        if (done)
-            break;
-        /** 解码数据块 */
-        const chunk = decoder.decode(value);
-        // 处理流式数据
-        processStreamingData(chunk, messageObject, contentElement, state);
+    /** 解析响应为JSON */
+    const jsonData = await response.json();
+    // 处理工具调用
+    if (jsonData.choices?.[0]?.message?.tool_calls) {
+        for (const toolCall of jsonData.choices[0].message.tool_calls) {
+            // 解析arguments字段
+            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+            // 记录工具调用
+            cache.toolCalls.push(toolCall);
+        }
     }
-    // 确保最后一个工具调用被保存
-    finalizeCurrentToolCall(state);
+    // 处理内容数据
+    if (jsonData.choices?.[0]?.message?.content) {
+        cache.descriptionContent = jsonData.choices[0].message.content;
+    }
+    // 处理推理内容数据
+    if (jsonData.choices?.[0]?.message?.reasoning_content) {
+        cache.reasoningContent = jsonData.choices[0].message.reasoning_content;
+    }
+    // 检查是否有预测令牌数
+    if (jsonData.timings?.predicted_per_second && OnlyData.isDebugMode) {
+        updateTokenSpeed(jsonData.timings.predicted_per_second);
+    }
     // 如果有工具调用，处理它们并重新发送请求
-    if (state.toolCalls.length > 0) {
+    if (cache.toolCalls.length > 0) {
         /** 处理工具调用 */
-        const hasProcessedToolCalls = await handleToolCalls(state, messages, contentElement, messageObject);
+        const hasProcessedToolCalls = await handleToolCalls(cache, messages, contentElement, messageObject);
         // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
         if (hasProcessedToolCalls)
-            return await sendRequestWithTools(messages, container, messageObject, contentElement, state);
+            return await sendRequestWithTools(messages, container, messageObject, contentElement, cache);
     }
     // 如果没有工具调用或工具调用处理完成，继续正常流程
     return { textContent: messageObject.content };
@@ -7560,6 +7438,22 @@ async function cleanupResources(contentElement, messageObject, messageElement) {
     disabledReleaseButton(false);
     // 清理中止控制器
     OnlyData.abortController = null;
+}
+/**
+ * 聊天缓存信息
+ *
+ * 用于缓存聊天过程中的状态，包括当前工具调用、当前工具调用索引、当前函数参数、当前函数名称、思考内容、描述内容、推理内容和工具调用数组。
+ */
+class CacheRocessing {
+    currentToolCall;
+    currentToolCallIndex = -1;
+    currentFunctionArgs;
+    currentFunctionName;
+    thinkingContent = "";
+    descriptionContent = "";
+    reasoningContent = "";
+    toolCalls = [];
+    constructor() { }
 }
 
 /** 最近保留的消息数量（不包括最后一条用户消息） */
@@ -7720,8 +7614,6 @@ async function getDefaultHistory(maxMessages, messageElement) {
  *
  * @param {string|undefined} promptMessage - 自定义提示消息，可选参数
  *
- * @param {HTMLElement|undefined} messageElement - 消息元素，可选参数
- *
  * @returns {Promise<Array>} 包含role和content属性的消息对象数组
  */
 async function createMessages(promptMessage, contentElement) {
@@ -7772,7 +7664,7 @@ async function createMessages(promptMessage, contentElement) {
     if (promptMessage)
         messages.push({ role: "user", content: promptMessage });
     // 输出消息数组
-    return messages;
+    return messages.filter(message => JSON.stringify(message.content).trim().length >= 2);
 }
 /**
  * 创建助手消息元素并渲染到页面，为后续接收API响应做准备
@@ -7861,27 +7753,16 @@ async function executeDialogueAndParse(container, promptMessage) {
     try {
         /** 构建消息数组 */
         const messages = await createMessages(promptMessage, contentElement);
-        /** 处理状态 */
-        const state = {
-            /** 累积所有工具调用的数组 */
-            toolCalls: [],
-            /** 当前正在累积的工具调用对象 */
-            currentToolCall: null,
-            /** 当前工具调用在流中的索引，用于识别是否属于同一次调用 */
-            currentToolCallIndex: -1,
-            /** 累积当前工具调用的参数字符串 */
-            currentFunctionArgs: "",
-            /** 累积当前工具调用的函数名 */
-            currentFunctionName: "",
-            /** 独立推理内容的字符串累积 */
-            reasoningContent: "",
-            /** 提取思考内容的字符串累积 */
-            thinkingContent: "",
-            /** 提取描述内容的字符串累积 */
-            descriptionContent: ""
-        };
+        /** 聊天缓存信息 */
+        const cache = new CacheRocessing();
+        // 延迟800毫秒添加隐藏类，实现消息淡入效果
+        setTimeout(() => messageElement.classList.add("message-hide"), 800);
+        // 渲染思考状态消息
+        contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
         /** 发送请求并处理工具调用 */
-        const result = await sendRequestWithTools(messages, container, messageObject, contentElement, state);
+        const result = await sendRequestWithTools(messages, container, messageObject, contentElement, cache);
+        // 更新消息内容
+        updateMessageContent(messageObject, contentElement, cache);
         // 如果启用了自动播放功能，播放语音
         if (OnlyData.autoPlaySpeech)
             playSpeechModel();
@@ -7898,7 +7779,14 @@ async function executeDialogueAndParse(container, promptMessage) {
         tracelessRenderMessage(`抱歉，请求处理时出错: ${error.message}`, container);
     }
     finally {
+        // 添加代码高亮
+        contentElement.querySelectorAll('pre code').forEach(block => window.hljs.highlightElement(block));
+        // 清理资源
         await cleanupResources(contentElement, messageObject, messageElement);
+        // 自动处理滚动行为
+        setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' }), 1000);
+        // 移除隐藏类，显示消息
+        messageElement.classList.remove("message-hide");
     }
 }
 /**
@@ -7958,9 +7846,8 @@ async function handleChatEndEvent(assistantMessage, messageElement) {
     // 解析提取的内容中的事件标签并执行对应的处理函数
     await parseEventTag(extractedContent, 500);
     // 若连续记忆模式已启用，则永久化对话历史中的所有消息
-    if (OnlyData.isContinuousMemory) {
+    if (OnlyData.isContinuousMemory)
         await controlContinuousMemory.run();
-    }
     // 若主动消息模式已启用，则在 1 分钟后触发主动延续对话的消息
     if (OnlyData.isActiveMessageMode) {
         /**
@@ -7980,17 +7867,6 @@ async function handleChatEndEvent(assistantMessage, messageElement) {
         OnlyData.isContinuousMemory = true;
         // 切换连续记忆模式按钮样式
         longTermMemoryButton.classList.add("clicking");
-    }
-    // 若对话历史长度大于等于 8，则启用主动消息模式
-    if (OnlyData.historyMessage.length >= 8 && !OnlyData.isActiveMessageMode) {
-        // 更新主动消息模式按钮图标为内存图标
-        activeMessageButton.innerHTML = '<i class="fas fa-comment-dots"></i>';
-        // 显示主动消息模式已启用的系统消息
-        showSystemMessage("启用< 主动消息模式 >", "success");
-        // 启用主动消息模式
-        OnlyData.isActiveMessageMode = true;
-        // 切换主动消息模式按钮样式
-        activeMessageButton.classList.add("clicking");
     }
 }
 /**
@@ -8880,4 +8756,4 @@ class OnlyData {
     static currentAddress = [];
 }
 
-export { AllowSpeechRecognition, CalculateMedian, CalculateModes, Clamp, ConstraintExecution, DataKeeperButton, DelayExecutionManager, DrawingTools, EmbeddingRequest, EmotionalState, EnableLunarToolPackageProtocol, FileToBase64, FileVaultButton, HistoryManager, ImageStudioButton, MultimodalRequest, OnlyData, RandomFloat, RandomFloor, ScreenshotCore, ThinkType, ToolSelector, activeMessageButton, addImageRendering, arrowTool, autoPlaySpeechButton, autoScrollToBottom, batchProcessingKnowledgeDelete, batchProcessingKnowledgeWrite, bindChatSend, bindCodeExecuteButtons, bindFoldingButton, bindMessageActionEvents, bindSlider, bodyTouchButton, calculateCosineSimilarity, canvas, canvasCtx, canvasWrapper, captureKnowledgeList, captureKnowledgeRanking, captureSceneButton, chartRedrawing, chatHistoryButton, chatHistoryContainerPanel, chatHistoryPanel, chatReleaseButton, chatWriteArea, circleTool, cleanTextForTTS, cleanupResources, colorOptions, continuousCaptureButton, continuousToggle, controlActiveMessage, controlContinuousMemory, convertToPostMessageFormat, createErrorLogFile, createImageMessage, createMessageElement, createMessageObject, createMessages, createSimpleRendering, createSimpleVisual, createStopButton, createUniqueLabel, customSpeechEngineButton, customSpeechEnginePanel, debugModeButton, delayExecutionMap, disabledReleaseButton, displayImportOverlay, displayNextSystemMessage, downloadSceneButton, dragElement, drawCanvas, drawCtx, drawTool, drawingTools, emotionStatusPanel, eraseAllConfigurePanel, executeDialogueAndParse, exportChatInteractionButton, exportChatInteractionWithFetch, externalDialogueButton, extractConclusion, fetchDocumentCallback, fetchLive2DSetting, fetchMarkdown, footTouchButton, functionControlButton, functionControlContainerPanel, generateCollectionRendering, generateEChartsChart, generateMermaidChart, generateQRCode, getEmotionState, getReleaseButtonsDisabledState, getUserMessage, handleChatEndEvent, handleToolCalls, headTouchButton, historyManager, importChatInteractionButton, importChatInteractionEvent, initAutoResizeTextareas, initLive2D, initRegionControls, initializeGameAI, inputFileButton, intervalSlider, intervalValueDisplay, knowledgeRanking, legTouchButton, lineTool, live2dContainer, live2dInputPanel, live2dReleaseButton, live2dStateDropdown, live2dWriteArea, loadChatHistory, loadSystemSpeechModel, loadSystemSpeechModelVoiceSelect, loadVideoCoverFrame, longTermMemoryButton, lunarNotesButton, lunarNotesContainerPanel, lunarNotesPanel, managerExchanges, matchEmotionalPatterns, messageSliceLength, messageSliceLengthSlider, noteReleaseButton, noteWriteArea, playCustomTTS, playSpeechModel, playSpeechModelButton, playSystemTTS, previewCanvas, previewCtx, processThinkTags, processVideoFile, qrcodeButton, qrcodeStatusPanel, queryFromDatabase, rectTool, refreshKnowledgePage, refreshNoteButton, regionHeightSlider, regionToggle, regionWidthSlider, regionXSlider, regionYSlider, registerToolFromMarkdown, reloadLive2DContainer, reloadMessageAndMarkdown, removeCodeComments, renderAllMessages, renderMessage, renderReleaseButton, renderWriteArea, renderingPagePlaceholders, saveFileWithFetch, saveImageToServer, scaleSlider, scaleValueDisplay, screenshotCore, screenshotReleaseButton, screenshotWriteArea, sendChatMessageToBackendModel, sendRequestWithTools, setEmotionState, setStateWithTimeout, shareScreenButton, shareScreenContainerPanel, showSystemMessage, simpleRenderingButton, simpleRenderingContainerPanel, simpleRenderingPanel, sizeOptions, smallScreenWidthThreshold, speechConfigContainerPanel, speechModelText, speechRecognitionExample, speechSpeedSlider, speechSpeedValue, speechVoiceDropdown, speechVolumeSlider, speechVolumeValue, splitTextToStrings, stopSpeechModel, stopSpeechModelButton, subscriptionToolCall, switchSpeechEngineMode, systemMessageQueue, systemMessageTimer, systemSpeechEngineButton, systemSpeechEnginePanel, systemStatusPanel, textTool, themeButton, toBtoaString, tokenCounterPanel, toolSelector, tracelessRenderMessage, triggerLive2DStateButton, ttsSupportIndicator, undoDrawButton, uniqueFinalMessages, uploadKnowledgeBase, voiceConfigureButton, voiceRecognitionButton, voiceReleaseButton };
+export { AllowSpeechRecognition, CacheRocessing, CalculateMedian, CalculateModes, Clamp, ConstraintExecution, DataKeeperButton, DelayExecutionManager, DrawingTools, EmbeddingRequest, EmotionalState, EnableLunarToolPackageProtocol, FileToBase64, FileVaultButton, HistoryManager, ImageStudioButton, MultimodalRequest, OnlyData, RandomFloat, RandomFloor, ScreenshotCore, ThinkType, ToolSelector, activeMessageButton, addImageRendering, arrowTool, autoPlaySpeechButton, autoScrollToBottom, batchProcessingKnowledgeDelete, batchProcessingKnowledgeWrite, bindChatSend, bindCodeExecuteButtons, bindFoldingButton, bindMessageActionEvents, bindSlider, bodyTouchButton, calculateCosineSimilarity, canvas, canvasCtx, canvasWrapper, captureKnowledgeList, captureKnowledgeRanking, captureSceneButton, chartRedrawing, chatHistoryButton, chatHistoryContainerPanel, chatHistoryPanel, chatReleaseButton, chatWriteArea, circleTool, cleanTextForTTS, cleanupResources, colorOptions, continuousCaptureButton, continuousToggle, controlActiveMessage, controlContinuousMemory, convertToPostMessageFormat, createErrorLogFile, createImageMessage, createMessageElement, createMessageObject, createMessages, createSimpleRendering, createSimpleVisual, createStopButton, createUniqueLabel, customSpeechEngineButton, customSpeechEnginePanel, debugModeButton, delayExecutionMap, disabledReleaseButton, displayImportOverlay, displayNextSystemMessage, downloadSceneButton, dragElement, drawCanvas, drawCtx, drawTool, drawingTools, emotionStatusPanel, eraseAllConfigurePanel, executeDialogueAndParse, exportChatInteractionButton, exportChatInteractionWithFetch, externalDialogueButton, extractConclusion, fetchDocumentCallback, fetchLive2DSetting, fetchMarkdown, footTouchButton, functionControlButton, functionControlContainerPanel, generateCollectionRendering, generateEChartsChart, generateMermaidChart, generateQRCode, getEmotionState, getReleaseButtonsDisabledState, getUserMessage, handleChatEndEvent, handleToolCalls, headTouchButton, historyManager, importChatInteractionButton, importChatInteractionEvent, initAutoResizeTextareas, initLive2D, initRegionControls, initializeGameAI, inputFileButton, intervalSlider, intervalValueDisplay, knowledgeRanking, legTouchButton, lineTool, live2dContainer, live2dInputPanel, live2dReleaseButton, live2dStateDropdown, live2dWriteArea, loadChatHistory, loadSystemSpeechModel, loadSystemSpeechModelVoiceSelect, loadVideoCoverFrame, longTermMemoryButton, lunarNotesButton, lunarNotesContainerPanel, lunarNotesPanel, managerExchanges, matchEmotionalPatterns, messageSliceLength, messageSliceLengthSlider, noteReleaseButton, noteWriteArea, playCustomTTS, playSpeechModel, playSpeechModelButton, playSystemTTS, previewCanvas, previewCtx, processThinkTags, processVideoFile, qrcodeButton, qrcodeStatusPanel, queryFromDatabase, rectTool, refreshKnowledgePage, refreshNoteButton, regionHeightSlider, regionToggle, regionWidthSlider, regionXSlider, regionYSlider, registerToolFromMarkdown, reloadLive2DContainer, reloadMessageAndMarkdown, removeCodeComments, renderAllMessages, renderMessage, renderReleaseButton, renderWriteArea, renderingPagePlaceholders, saveFileWithFetch, saveImageToServer, scaleSlider, scaleValueDisplay, screenshotCore, screenshotReleaseButton, screenshotWriteArea, sendChatMessageToBackendModel, sendRequestWithTools, setEmotionState, setStateWithTimeout, shareScreenButton, shareScreenContainerPanel, showSystemMessage, simpleRenderingButton, simpleRenderingContainerPanel, simpleRenderingPanel, sizeOptions, smallScreenWidthThreshold, speechConfigContainerPanel, speechModelText, speechRecognitionExample, speechSpeedSlider, speechSpeedValue, speechVoiceDropdown, speechVolumeSlider, speechVolumeValue, splitTextToStrings, stopSpeechModel, stopSpeechModelButton, subscriptionToolCall, switchSpeechEngineMode, systemMessageQueue, systemMessageTimer, systemSpeechEngineButton, systemSpeechEnginePanel, systemStatusPanel, textTool, themeButton, toBtoaString, tokenCounterPanel, toolSelector, tracelessRenderMessage, triggerLive2DStateButton, ttsSupportIndicator, undoDrawButton, uniqueFinalMessages, updateMessageContent, uploadKnowledgeBase, voiceConfigureButton, voiceRecognitionButton, voiceReleaseButton };

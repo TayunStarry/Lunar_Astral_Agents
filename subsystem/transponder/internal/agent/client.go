@@ -73,9 +73,9 @@ func (class *Client) CallAgent(messages []Message, processor *processor.Handle, 
 	if class.token != "" {
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", class.token))
 	}
-	// 发送请求 并 设置超时时间为30秒
+	// 发送请求 并 设置超时时间为120秒
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 120 * time.Second,
 	}
 	// 发送请求
 	response, err := client.Do(httpReq)

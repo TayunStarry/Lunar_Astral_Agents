@@ -1,12 +1,12 @@
 import * as EntryAPI from '../EntryAPI/code';
 /** 消息元素关联对象 */
 interface MessageElement {
-    /** 历史消息对象 */
-    messageObject: EntryAPI.HistoryMessage;
-    /** 消息元素的 DOM 节点，无则为 null */
-    messageElement: HTMLElement | null;
-    /** 内容元素的 DOM 节点，无则为 null */
-    contentElement: HTMLElement | null;
+	/** 历史消息对象 */
+	messageObject: EntryAPI.HistoryMessage;
+	/** 消息元素的 DOM 节点，无则为 null */
+	messageElement: HTMLElement | null;
+	/** 内容元素的 DOM 节点，无则为 null */
+	contentElement: HTMLElement | null;
 };
 
 /** 最近保留的消息数量（不包括最后一条用户消息） */
@@ -170,8 +170,6 @@ async function getDefaultHistory(maxMessages: number, messageElement?: HTMLEleme
  *
  * @param {string|undefined} promptMessage - 自定义提示消息，可选参数
  *
- * @param {HTMLElement|undefined} messageElement - 消息元素，可选参数
- *
  * @returns {Promise<Array>} 包含role和content属性的消息对象数组
  */
 export async function createMessages(promptMessage?: string, contentElement?: HTMLElement): Promise<EntryAPI.PostMessage[]> {
@@ -179,8 +177,8 @@ export async function createMessages(promptMessage?: string, contentElement?: HT
 	const messages: EntryAPI.PostMessage[] = await buildContextMessages(contentElement);
 	/** 查询当前地址 */
 	async function queryCurrentAddress(): Promise<string[]> {
-        // 如果当前地址已缓存，直接返回
-        if (EntryAPI.OnlyData.currentAddress.length > 0) return EntryAPI.OnlyData.currentAddress;
+		// 如果当前地址已缓存，直接返回
+		if (EntryAPI.OnlyData.currentAddress.length > 0) return EntryAPI.OnlyData.currentAddress;
 		/** 从IP地址查询位置信息 */
 		const addressRegion = await fetch('https://ipapi.co/json/')
 		// 检查响应状态
@@ -220,7 +218,7 @@ export async function createMessages(promptMessage?: string, contentElement?: HT
 	// 添加自定义提示消息
 	if (promptMessage) messages.push({ role: "user", content: promptMessage });
 	// 输出消息数组
-	return messages;
+	return messages.filter(message => JSON.stringify(message.content).trim().length >= 2);
 };
 
 /**
@@ -312,27 +310,16 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 	try {
 		/** 构建消息数组 */
 		const messages = await createMessages(promptMessage, contentElement);
-		/** 处理状态 */
-		const state: EntryAPI.StreamProcessingState = {
-			/** 累积所有工具调用的数组 */
-			toolCalls: [] as any[],
-			/** 当前正在累积的工具调用对象 */
-			currentToolCall: null as any,
-			/** 当前工具调用在流中的索引，用于识别是否属于同一次调用 */
-			currentToolCallIndex: -1,
-			/** 累积当前工具调用的参数字符串 */
-			currentFunctionArgs: "",
-			/** 累积当前工具调用的函数名 */
-			currentFunctionName: "",
-			/** 独立推理内容的字符串累积 */
-			reasoningContent: "",
-			/** 提取思考内容的字符串累积 */
-			thinkingContent: "",
-			/** 提取描述内容的字符串累积 */
-			descriptionContent: ""
-		};
+		/** 聊天缓存信息 */
+		const cache = new EntryAPI.CacheRocessing();
+		// 延迟800毫秒添加隐藏类，实现消息淡入效果
+		setTimeout(() => messageElement.classList.add("message-hide"), 800);
+		// 渲染思考状态消息
+		contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
 		/** 发送请求并处理工具调用 */
-		const result = await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, state);
+		const result = await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, cache);
+		// 更新消息内容
+		EntryAPI.updateMessageContent(messageObject, contentElement, cache);
 		// 如果启用了自动播放功能，播放语音
 		if (EntryAPI.OnlyData.autoPlaySpeech) EntryAPI.playSpeechModel();
 		// 执行聊天结束事件
@@ -347,7 +334,14 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 		EntryAPI.tracelessRenderMessage(`抱歉，请求处理时出错: ${error.message}`, container);
 	}
 	finally {
+		// 添加代码高亮
+		contentElement.querySelectorAll('pre code').forEach(block => (window as any).hljs.highlightElement(block));
+		// 清理资源
 		await EntryAPI.cleanupResources(contentElement, messageObject, messageElement);
+		// 自动处理滚动行为
+		setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' }), 1000);
+		// 移除隐藏类，显示消息
+		messageElement.classList.remove("message-hide")
 	}
 };
 
@@ -407,9 +401,7 @@ export async function handleChatEndEvent(assistantMessage: string, messageElemen
 	// 解析提取的内容中的事件标签并执行对应的处理函数
 	await parseEventTag(extractedContent, 500);
 	// 若连续记忆模式已启用，则永久化对话历史中的所有消息
-	if (EntryAPI.OnlyData.isContinuousMemory) {
-		await EntryAPI.controlContinuousMemory.run();
-	}
+	if (EntryAPI.OnlyData.isContinuousMemory) await EntryAPI.controlContinuousMemory.run();
 	// 若主动消息模式已启用，则在 1 分钟后触发主动延续对话的消息
 	if (EntryAPI.OnlyData.isActiveMessageMode) {
 		/**
@@ -429,17 +421,6 @@ export async function handleChatEndEvent(assistantMessage: string, messageElemen
 		EntryAPI.OnlyData.isContinuousMemory = true;
 		// 切换连续记忆模式按钮样式
 		EntryAPI.longTermMemoryButton.classList.add("clicking");
-	}
-	// 若对话历史长度大于等于 8，则启用主动消息模式
-	if (EntryAPI.OnlyData.historyMessage.length >= 8 && !EntryAPI.OnlyData.isActiveMessageMode) {
-		// 更新主动消息模式按钮图标为内存图标
-		EntryAPI.activeMessageButton.innerHTML = '<i class="fas fa-comment-dots"></i>';
-		// 显示主动消息模式已启用的系统消息
-		EntryAPI.showSystemMessage("启用< 主动消息模式 >", "success");
-		// 启用主动消息模式
-		EntryAPI.OnlyData.isActiveMessageMode = true;
-		// 切换主动消息模式按钮样式
-		EntryAPI.activeMessageButton.classList.add("clicking");
 	}
 };
 

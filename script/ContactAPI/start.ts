@@ -41,9 +41,22 @@ async function convertUrl(toImage: boolean = false): Promise<string> {
 	// 如果是localhost格式且不是图片请求，则直接返回/v1
 	if (isLocalhost && !toImage) return '/v1';
 	/** 从当前网址中提取主机名和端口号 */
-	const base = window.location.origin;
-	// 根据需求返回不同的URL
-	return toImage ? base : base + '/v1';
+	const baseURL = window.location.origin;
+	// 如果是图片请求且当前URL是HTTPS协议，则需要转换为HTTP协议
+	if (toImage && window.location.href.startsWith('https')) {
+		/** 从当前网址中提取主机名和端口号 */
+		const url = new URL(window.location.href)
+		/** 从当前URL中提取端口号的数字类型并增加进行偏移 */
+		const newPort = Number(url.port) + 5
+		/** 构建新的HTTP URL字符串 */
+		const newUrl = 'http://' + url.hostname + ':' + newPort
+		// 返回新的HTTP URL字符串
+		return newUrl;
+	}
+	// 如果是图片请求且当前URL不是HTTPS协议，则直接返回原始URL
+	else if (toImage) return baseURL;
+	// 如果不是图片请求，则返回默认的/v1路径
+	return baseURL + '/v1';
 };
 
 /**

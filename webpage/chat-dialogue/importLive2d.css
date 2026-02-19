@@ -11,7 +11,7 @@
 }
 
 #live2dCanvas {
-    animation: slide-left-to-right 2s ease, fadeIn 3s ease;
+    animation: slide-left-to-right 2s ease, fade-in 3s ease;
 }
 
 .live2d-container-panel {

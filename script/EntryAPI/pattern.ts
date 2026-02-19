@@ -158,7 +158,7 @@ export interface FunctionTool {
      */
     strict?: boolean;
     /** 预定义的参数值，用于工具调用时的默认参数 */
-    arguments?: Record<string, any> | string;
+    arguments?: Record<string, any>;
 }
 
 /** 单个工具调用定义 */
@@ -202,7 +202,7 @@ export interface Attachment {
 /**
  * 流式处理状态接口
  */
-export interface StreamProcessingState {
+export interface ChatCache {
     /** 累积所有工具调用的数组 */
     toolCalls: ToolCall[];
     /** 当前正在累积的工具调用对象，可能为 null */
