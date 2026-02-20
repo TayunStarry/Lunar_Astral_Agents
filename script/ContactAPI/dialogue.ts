@@ -69,11 +69,30 @@ export async function convertToPostMessageFormat(messages: EntryAPI.MixedMessage
 	 */
 	async function convertUrlToBase64(url: string): Promise<string> {
 		/** 从URL获取图片文件 */
-		const response = await fetch(url);
+		const response = await fetch('/proxy',
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ url })
+			}
+		);
 		/** 从响应中获取图片 Blob 对象 */
 		const blob = await response.blob();
-		// 将图片 Blob 对象转换为 Base64 编码字符串
-		return EntryAPI.FileToBase64(blob);
+		/** 创建 FormData 对象 */
+		const formData = new FormData();
+		/** 将图片 Blob 对象添加到 FormData 中 */
+		formData.append('image', blob);
+		/** 调用 /resize 接口处理图片转码 */
+		const resizeResponse = await fetch('/resize', {
+			method: 'POST',
+			body: formData
+		});
+		/** 解析响应数据 */
+		const resizeData = await resizeResponse.json();
+		/** 返回 base64 编码的图片数据 */
+		return resizeData.base64;
 	}
 	/**
 	 * 转换图片URL为完整格式
@@ -218,7 +237,12 @@ export async function createMessages(promptMessage?: string, contentElement?: HT
 	// 添加自定义提示消息
 	if (promptMessage) messages.push({ role: "user", content: promptMessage });
 	// 输出消息数组
-	return messages.filter(message => JSON.stringify(message.content).trim().length >= 2);
+	return messages.filter(
+		message => {
+			if (message.role === "assistant" && message.content == '') return false
+			return true
+		}
+	);
 };
 
 /**
@@ -301,6 +325,9 @@ async function createAssistantMessageElement(container: HTMLElement): Promise<Me
 export async function executeDialogueAndParse(container: HTMLElement, promptMessage?: string) {
 	// 生成助手消息元素关联对象
 	const { messageObject, messageElement, contentElement } = await createAssistantMessageElement(container);
+	/** 聊天缓存信息 */
+	const cache = new EntryAPI.CacheRocessing();
+	let tickID: NodeJS.Timeout = null;
 	// 检查消息元素是否存在
 	if (!contentElement) {
 		// 若内容元素不存在，清理资源并返回
@@ -310,22 +337,18 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 	try {
 		/** 构建消息数组 */
 		const messages = await createMessages(promptMessage, contentElement);
-		/** 聊天缓存信息 */
-		const cache = new EntryAPI.CacheRocessing();
-		// 延迟800毫秒添加隐藏类，实现消息淡入效果
-		setTimeout(() => messageElement.classList.add("message-hide"), 800);
+		// 延迟800毫秒添加隐藏类，实现消息淡出效果
+		tickID = setTimeout(() => messageElement.classList.add("message-hide"), 800);
 		// 渲染思考状态消息
 		contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
 		/** 发送请求并处理工具调用 */
-		const result = await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, cache);
-		// 更新消息内容
-		EntryAPI.updateMessageContent(messageObject, contentElement, cache);
-		// 如果启用了自动播放功能，播放语音
-		if (EntryAPI.OnlyData.autoPlaySpeech) EntryAPI.playSpeechModel();
-		// 执行聊天结束事件
-		await handleChatEndEvent(result.textContent, contentElement);
+		await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, cache);
+		// 移除隐藏类，显示消息
+		messageElement.classList.remove("message-hide")
 	}
 	catch (error) {
+		// 清除定时器
+		clearTimeout(tickID);
 		// 忽略中止错误
 		if (!(error instanceof Error) || error.name === "AbortError") return;
 		// 捕获异常并显示错误信息
@@ -334,14 +357,20 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 		EntryAPI.tracelessRenderMessage(`抱歉，请求处理时出错: ${error.message}`, container);
 	}
 	finally {
+		// 清除定时器
+		clearTimeout(tickID);
+		/** 获取更新后的消息内容 */
+		const content = EntryAPI.updateMessageContent(messageObject, contentElement, cache);
+		// 执行聊天结束事件
+		handleChatEndEvent(content, contentElement)
 		// 添加代码高亮
 		contentElement.querySelectorAll('pre code').forEach(block => (window as any).hljs.highlightElement(block));
 		// 清理资源
 		await EntryAPI.cleanupResources(contentElement, messageObject, messageElement);
-		// 自动处理滚动行为
-		setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' }), 1000);
-		// 移除隐藏类，显示消息
-		messageElement.classList.remove("message-hide")
+		// 如果启用了自动播放功能，播放语音
+		if (EntryAPI.OnlyData.autoPlaySpeech) EntryAPI.playSpeechModel();
+		// 执行页面滚动行为
+		container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
 	}
 };
 
@@ -398,8 +427,8 @@ export async function handleChatEndEvent(assistantMessage: string, messageElemen
 	else EntryAPI.generateCollectionRendering(messageElement);
 	// 绑定代码执行按钮
 	EntryAPI.bindCodeExecuteButtons(messageElement);
-	// 解析提取的内容中的事件标签并执行对应的处理函数
-	await parseEventTag(extractedContent, 500);
+	// 处理AI应答中可能存在的情绪表达
+	await dealingWithEmotionalExpression(extractedContent, 500);
 	// 若连续记忆模式已启用，则永久化对话历史中的所有消息
 	if (EntryAPI.OnlyData.isContinuousMemory) await EntryAPI.controlContinuousMemory.run();
 	// 若主动消息模式已启用，则在 1 分钟后触发主动延续对话的消息
@@ -424,31 +453,14 @@ export async function handleChatEndEvent(assistantMessage: string, messageElemen
 	}
 };
 
-/**
- * 解析输入内容中的事件标签，并根据标签调用对应的处理函数。
- *
- * 每个标签处理完成后，根据指定的延迟时间进行等待。
- *
- * @param {string} input - 待解析的输入内容，可能包含事件标签
- *
- * @param {number} [delayMs=10] - 处理标签后的延迟时间（毫秒），默认为 10 毫秒；若为 0 则不延迟
- */
-async function parseEventTag(input: string, delayMs: number = 10) {
-	/** 用于存储所有标签中的内容 */
-	let mergedIntel = '';
-	/** 构建正则表达式，用于匹配所有 <!--(.*?)--> 标签格式的内容（不考虑空格） */
-	const pattern = new RegExp(`<!--\s*(.*?)\s*-->`, 'g');
-	/** 用于存储正则匹配结果 */
-	let match: any[] | null;
-	// 循环匹配输入内容中的所有符合条件的标签
-	while ((match = pattern.exec(input)) !== null) {
-		// 提取标签中的信息并合并
-		mergedIntel += match[1];
-	}
+
+async function dealingWithEmotionalExpression(messageContent: string, delayMs: number = 10) {
+	/** 清理消息内容，移除所有事件标签 */
+	const premade = EntryAPI.cleanTextForTTS(messageContent.trim())
 	// 等待指定的延迟时间，确保视觉效果符合预期
 	await new Promise(resolve => setTimeout(resolve, delayMs));
-	// 如果匹配到标签内容，则调用情绪模式匹配
-	if (mergedIntel.trim().length > 0) EntryAPI.matchEmotionalPatterns(mergedIntel);
+	// 若清理后的消息内容长度大于 0 且不超过 100 个字符，则调用情绪模式匹配
+	if (premade.length > 0 && premade.length <= 100) EntryAPI.matchEmotionalPatterns(premade);
 	// 如果没有标签，则进入说话模式
 	else EntryAPI.setStateWithTimeout(EntryAPI.EmotionalState.SPEAKING);
 };

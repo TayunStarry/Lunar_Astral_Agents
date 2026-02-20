@@ -103,28 +103,12 @@ func CloseWebSocketServer() {
 
 // PrintServerPort 打印服务器端口
 func PrintServerPort(internalURL string) {
+	// 打印分割线
 	log.Printf("%s", strings.Repeat("-=", 28))
-	log.Printf("Lunar模块 : 前端文件 [POST] -> %v/", internalURL)
-	log.Printf("Lunar模块 : 文件保存 [POST] -> %v/save", internalURL)
-	log.Printf("Lunar模块 : 文件读取 [GET] -> %v/read", internalURL)
-	log.Printf("Lunar模块 : 文件列表 [POST] -> %v/file_list", internalURL)
-	log.Printf("Lunar模块 : 文件下载 [GET] -> %v/download", internalURL)
-	log.Printf("Lunar模块 : 文件删除 [DELETE] -> %v/delete", internalURL)
-	log.Printf("Lunar模块 : 文件归档 [POST] -> %v/archive", internalURL)
-	log.Printf("Lunar模块 : 模型列表 [GET] -> %v/v1/models", internalURL)
-	log.Printf("Lunar模块 : 模型交互 [POST] -> %v/v1/completions", internalURL)
-	log.Printf("Lunar模块 : 图片生成 [POST] -> %v/generate", internalURL)
-	log.Printf("Lunar模块 : 等待生成 [GET] -> %v/generate/wait", internalURL)
-	log.Printf("Lunar模块 : 知识查询 [POST] -> %v/knowledge/query", internalURL)
-	log.Printf("Lunar模块 : 知识写入 [POST] -> %v/knowledge/write", internalURL)
-	log.Printf("Lunar模块 : 知识刷新 [POST] -> %v/knowledge/flush", internalURL)
-	log.Printf("Lunar模块 : 知识删除 [POST] -> %v/knowledge/delete", internalURL)
-	log.Printf("Lunar模块 : 知识列表 [GET] -> %v/knowledge/list", internalURL)
-	log.Printf("Lunar模块 : 通用截图 [POST] -> %v/capture", internalURL)
-	log.Printf("Lunar模块 : 屏幕截图 [GET] -> %v/capture/display", internalURL)
-	log.Printf("Lunar模块 : 区域截图 [POST] -> %v/capture/region", internalURL)
-	log.Printf("Lunar模块 : 屏幕列表 [GET] -> %v/capture/displays", internalURL)
-	log.Printf("Lunar模块 : 视频切片 [POST] -> %v/extract/keyframes", internalURL)
-	log.Printf("Lunar模块 : 视频首帧 [POST] -> %v/extract/firstframe", internalURL)
-	log.Printf("Lunar模块 : 数据管理 [POST] -> %v/database", internalURL)
+	// 遍历所有系统端点并打印
+	for _, endpoint := range SystemEndpoints {
+		log.Printf("Lunar模块 : %s [%s]	-> %v%s", endpoint.Description, endpoint.Method, internalURL, endpoint.Path)
+	}
+	// 打印前端文件访问路径
+	log.Printf("Lunar模块 : 前端文件 [GET]	-> %v/", internalURL)
 }

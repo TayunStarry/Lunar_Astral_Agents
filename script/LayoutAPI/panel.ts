@@ -1,4 +1,8 @@
 /**
+ * 主容器面板元素
+ */
+export const mainContainerPanel = document.getElementById("mainContainerPanel") as HTMLElement;
+/**
  * 聊天历史记录容器面板元素
  */
 export const chatHistoryContainerPanel = document.getElementById("chatHistoryContainerPanel") as HTMLElement;

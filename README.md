@@ -86,8 +86,10 @@ Lunar_Astral_Agents/
 | /capture            | POST   | 通用截图       | [document/http-api/screenshot.md](document/http-api/screenshot.md)                 |
 | /capture/display/   | GET    | 屏幕截图       | -                                                                                  |
 | /capture/region     | POST   | 区域截图       | -                                                                                  |
+| /resize             | POST   | 图片缩放       | [document/http-api/resize.md](document/http-api/resize.md)                         |
 | /extract/keyframes  | POST   | 视频关键帧提取 | [document/http-api/extract_keyframes.md](document/http-api/extract_keyframes.md)   |
 | /extract/firstframe | POST   | 视频首帧提取   | [document/http-api/extract_firstframe.md](document/http-api/extract_firstframe.md) |
+| /proxy              | POST   | 代理请求       | [document/http-api/proxy.md](document/http-api/proxy.md)                           |
 | /database/          | POST   | 数据库操作     | [document/http-api/database.md](document/http-api/database.md)                     |
 
 ## 构建与运行

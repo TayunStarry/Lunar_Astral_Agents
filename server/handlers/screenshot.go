@@ -3,17 +3,18 @@ package handlers
 import (
 	"Lunar-Astral-Agents/server/config" // 导入项目配置包，用于获取配置信息
 	"bytes"                             // 字节操作包，用于处理字节数据
-	"encoding/json"                     // JSON编码/解码包，用于处理JSON数据
-	"fmt"                               // 格式化输出包，用于字符串格式化
-	"image"                             // 图像操作包，用于处理图像数据
-	"image/draw"                        // 图像绘制包，用于绘制图像
-	"image/jpeg"                        // JPEG图像编码/解码包，用于处理JPEG图像
-	"image/png"                         // PNG图像编码/解码包，用于处理PNG图像
-	"net/http"                          // HTTP协议包，用于处理HTTP请求/响应
-	"strconv"                           // 字符串转换包，用于字符串到数字的转换
-	"strings"                           // 字符串操作包，用于字符串处理
-	"sync"                              // 同步包，用于并发编程
-	"time"                              // 时间包，用于处理时间
+	"encoding/base64"
+	"encoding/json" // JSON编码/解码包，用于处理JSON数据
+	"fmt"           // 格式化输出包，用于字符串格式化
+	"image"         // 图像操作包，用于处理图像数据
+	"image/draw"    // 图像绘制包，用于绘制图像
+	"image/jpeg"    // JPEG图像编码/解码包，用于处理JPEG图像
+	"image/png"     // PNG图像编码/解码包，用于处理PNG图像
+	"net/http"      // HTTP协议包，用于处理HTTP请求/响应
+	"strconv"       // 字符串转换包，用于字符串到数字的转换
+	"strings"       // 字符串操作包，用于字符串处理
+	"sync"          // 同步包，用于并发编程
+	"time"          // 时间包，用于处理时间
 
 	"github.com/disintegration/imaging" // 图像处理库，用于图像缩放等操作
 	"github.com/kbinani/screenshot"     // 屏幕截图库，用于截取屏幕图像
@@ -465,4 +466,73 @@ func checkCaptureRateLimit() error {
 		return fmt.Errorf("截图过于频繁，请等待 %.1f 秒", float64(captureCooldown-timeSinceLastCapture)/float64(time.Second))
 	}
 	return nil
+}
+
+// 缩放图片到最大尺寸1080
+func resizeImageTo1080(img *image.RGBA) *image.RGBA {
+	return resizeToFit(img, 1080, 1080)
+}
+
+// 处理图片缩放请求
+func HandleResizeImage(w http.ResponseWriter, r *http.Request) {
+	// 只允许POST方法
+	if r.Method != "POST" {
+		http.Error(w, "只允许POST方法", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 解析multipart表单
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("获取文件失败: %v", err), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// 解码图片
+	img, format, err := image.Decode(file)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("解码图片失败: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// 转换为RGBA格式
+	rgbaImg := toRGBA(img)
+
+	// 缩放图片
+	resizedImg := resizeImageTo1080(rgbaImg)
+
+	// 编码缩放后的图片
+	buf := &bytes.Buffer{}
+	var contentType string
+	switch format {
+	case "jpeg":
+		contentType = "image/jpeg"
+		jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90})
+	case "png":
+		contentType = "image/png"
+		png.Encode(buf, resizedImg)
+	default:
+		contentType = "image/jpeg"
+		jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90})
+	}
+
+	// 生成base64编码
+	base64Data := base64.StdEncoding.EncodeToString(buf.Bytes())
+	base64WithHeader := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
+
+	// 构造响应
+	response := map[string]interface{}{
+		"image":  buf.Bytes(),
+		"base64": base64WithHeader,
+		"format": format,
+		"width":  resizedImg.Bounds().Dx(),
+		"height": resizedImg.Bounds().Dy(),
+	}
+
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 编码并返回响应
+	json.NewEncoder(w).Encode(response)
 }

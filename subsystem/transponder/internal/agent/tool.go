@@ -11,12 +11,12 @@ func GetTools() []Tool {
 	return []Tool{
 		{
 			Type: "function",
-			Function: FunctionDef{
+			Function: FunctionData{
 				Name:        "save_to_knowledge_base",
 				Description: "当你需要将一段给保存与记录下来时, 可调用该工具",
-				Parameters: ParameterDef{
+				Parameters: ParameterData{
 					Type: "object",
-					Properties: map[string]PropertyDef{
+					Properties: map[string]PropertyData{
 						"content": {
 							Type:        "string",
 							Description: "经过总结提炼的, 需要保存的内容",
@@ -28,12 +28,12 @@ func GetTools() []Tool {
 		},
 		{
 			Type: "function",
-			Function: FunctionDef{
+			Function: FunctionData{
 				Name:        "diffusion_generation",
 				Description: "根据文本描述生成图像。如需进行图像创作，请调用此函数。",
-				Parameters: ParameterDef{
+				Parameters: ParameterData{
 					Type: "object",
-					Properties: map[string]PropertyDef{
+					Properties: map[string]PropertyData{
 						"prompt": {
 							Type:        "string",
 							Description: "图像生成的正向描述文本",
@@ -63,7 +63,7 @@ func GetTools() []Tool {
 }
 
 // ExecuteTool 执行工具调用
-func ExecuteTool(toolCall ToolCall, processor *processor.Handle) (string, error) {
+func ExecuteTool(toolCall processor.ToolCall, processor *processor.Handle) (string, error) {
 	switch toolCall.Function.Name {
 	case "save_to_knowledge_base":
 		// 解析参数

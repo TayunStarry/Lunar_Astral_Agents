@@ -62,7 +62,7 @@
 	<!-- 主容器 - 包含所有界面元素 -->
 	<div class="container">
 		<!-- 主界面布局 -->
-		<div class="main-container-panel">
+		<div class="main-container-panel" id="mainContainerPanel">
 			<!-- Live2D模型交互面板 -->
 			<div class="live2d-container-panel">
 				<!-- Live2D模型容器 -->
@@ -92,17 +92,6 @@
 						<!-- 当前情绪状态文本 -->
 						<span>待机中</span>
 					</div>
-					<!--  Live2D 模型配置按钮面板 -->
-					<div class="horizontal-layout-panel live2d">
-						<!-- 连续记忆模式切换按钮 -->
-						<button class="power-button live2d" id="longTermMemoryButton" title="连续记忆">
-							<i class="fas fa-memory"></i>
-						</button>
-						<!-- 主动消息模式切换按钮 -->
-						<button class="power-button live2d" id="activeMessageButton" title="主动消息">
-							<i class="fas fa-comment-slash"></i>
-						</button>
-					</div>
 					<!-- 功能配置按钮面板 -->
 					<div class="vertical-layout-panel live2d">
 						<!-- 功能控制按钮 -->
@@ -121,13 +110,13 @@
 						<button class="power-button live2d" id="voiceReleaseButton" title="语音输入">
 							<i class="fas fa-microphone"></i>
 						</button>
-						<!-- 共享视觉按钮 -->
-						<button class="power-button live2d" id="shareScreenButton" title="共享视觉">
-							<i class="fas fa-camera"></i>
+						<!-- 连续记忆模式切换按钮 -->
+						<button class="power-button live2d" id="longTermMemoryButton" title="连续记忆">
+							<i class="fas fa-memory"></i>
 						</button>
-						<!-- 外部通讯按钮 -->
-						 <button class="power-button live2d" id="externalDialogueButton" title="外部通讯">
-							<i class="fas fa-exchange-alt"></i>
+						<!-- 主动消息模式切换按钮 -->
+						<button class="power-button live2d" id="activeMessageButton" title="主动消息">
+							<i class="fas fa-comment-slash"></i>
 						</button>
 					</div>
 				</div>
@@ -358,13 +347,16 @@
 					<!-- 水平布局面板，包含截图按钮和下载按钮 -->
 					<div class="horizontal-layout-panel">
 						<!-- 开始截图按钮，点击启动截图功能 -->
-						<button id="captureSceneButton" class="rectangle-button screenshot"><i class="fas fa-camera"></i>
+						<button id="captureSceneButton" class="rectangle-button screenshot"><i
+								class="fas fa-camera"></i>
 							捕捉画面</button>
 						<!-- 捕获屏幕按钮，初始禁用，用于捕获当前屏幕内容 -->
-						<button id="continuousCaptureButton" class="rectangle-button screenshot"><i class="fas fa-play"></i>
+						<button id="continuousCaptureButton" class="rectangle-button screenshot"><i
+								class="fas fa-play"></i>
 							持续捕捉</button>
 						<!-- 下载图片按钮，初始禁用，用于下载捕获的图片 -->
-						<button id="downloadSceneButton" class="rectangle-button screenshot"><i class="fas fa-download"></i>
+						<button id="downloadSceneButton" class="rectangle-button screenshot"><i
+								class="fas fa-download"></i>
 							下载图片</button>
 					</div>
 					<!-- 水平布局面板，包含各种绘图工具按钮 -->
@@ -500,6 +492,10 @@
 							<h2><i class="fas fa-server"></i> 知识展示</h2>
 						</div>
 						<div class="vertical-layout-panel">
+							<!-- 轻量渲染按钮，点击可打开[ 轻量渲染 ]功能页面 -->
+							<button class="rectangle-button blue" id="shareScreenButton">
+								<i class="fas fa-camera"></i> 打开 视觉共享
+							</button>
 							<!-- 轻量渲染按钮，点击可打开[ 轻量渲染 ]功能页面 -->
 							<button class="rectangle-button blue" id="simpleRenderingButton">
 								<i class="fas fa-palette"></i> 打开 轻量渲染

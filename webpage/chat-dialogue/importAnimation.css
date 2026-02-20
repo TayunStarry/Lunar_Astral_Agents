@@ -41,12 +41,22 @@ body {
 
 	/* 动画起始状态 */
 	from {
-		opacity: 1;
+		opacity: 1.0;
 	}
 
 	/* 动画结束状态 */
 	to {
-		opacity: 0;
+		opacity: 0.0;
+	}
+}
+
+@keyframes message-fade {
+	0% {
+		opacity: 1.0;
+	}
+
+	100% {
+		opacity: 0.35;
 	}
 }
 

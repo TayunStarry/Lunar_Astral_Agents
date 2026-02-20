@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -27,7 +28,7 @@ func (class *Handle) queryKnowledgeBase(queryVector []float64) (*KnowledgeMessag
 	}
 
 	// 构建完整的请求URL
-	requestURL := class.baseURL + "/knowledge/query"
+	requestURL := class.BaseURL + "/knowledge/query"
 	// 创建请求
 	req, err := http.NewRequest("POST", requestURL, strings.NewReader(string(body)))
 	if err != nil {
@@ -96,12 +97,13 @@ func (class *Handle) SaveToKnowledgeBase(content, filePath string) (string, erro
 	if err != nil {
 		return "生成嵌入向量失败", err
 	}
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	// 构建请求体
-	requestBody := map[string]interface{}{
+	requestBody := map[string]any{
 		"filePath": filePath,
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role":        "assistant",
-			"content":     content,
+			"content":     fmt.Sprintf("< %s > : %s", currentTime, content),
 			"isPrompt":    false,
 			"noRender":    false,
 			"imageUrl":    "",
@@ -118,7 +120,7 @@ func (class *Handle) SaveToKnowledgeBase(content, filePath string) (string, erro
 	}
 
 	// 发送POST请求到knowledge/write接口
-	req, err := http.NewRequest("POST", class.baseURL+"/knowledge/write", strings.NewReader(string(body)))
+	req, err := http.NewRequest("POST", class.BaseURL+"/knowledge/write", strings.NewReader(string(body)))
 	if err != nil {
 		return "创建请求失败", err
 	}
@@ -148,7 +150,7 @@ func (class *Handle) SaveToKnowledgeBase(content, filePath string) (string, erro
 	}
 
 	// 发送flush请求，确保内容写入文件
-	flushBody := map[string]interface{}{
+	flushBody := map[string]any{
 		"filePath": filePath,
 	}
 	flushJSON, err := json.Marshal(flushBody)
@@ -156,7 +158,7 @@ func (class *Handle) SaveToKnowledgeBase(content, filePath string) (string, erro
 		return "编码flush请求体失败", err
 	}
 
-	flushReq, err := http.NewRequest("POST", class.baseURL+"/knowledge/flush", strings.NewReader(string(flushJSON)))
+	flushReq, err := http.NewRequest("POST", class.BaseURL+"/knowledge/flush", strings.NewReader(string(flushJSON)))
 	if err != nil {
 		return "创建flush请求失败", err
 	}

@@ -10,7 +10,7 @@ const debounceDelay = 200;
 let resizeTimerId: NodeJS.Timeout | null = null;
 
 /** 小屏幕宽度阈值 */
-export const smallScreenWidthThreshold = 475;
+export const smallScreenWidthThreshold = 550;
 
 /**
  * 判断传入的 URL 对象是否为 localhost 格式的地址
