@@ -6687,7 +6687,7 @@ class MultimodalRequest {
             model: OnlyData.MultimodalName,
             messages,
             stream,
-            tools: OnlyData.toolCall,
+            tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',
         };
         // 如果禁用工具调用，则删除 tool_choice 和 tools 字段
