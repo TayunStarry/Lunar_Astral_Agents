@@ -108,184 +108,202 @@ func (class *Client) convertImageToBase64(imageURL string, handle *processor.Han
 	return defaultUrl, fmt.Errorf("响应中没有base64字段")
 }
 
-// CallAgent 调用Agent API
-func (class *Client) CallAgent(messages []processor.FusionMessage, handle *processor.Handle, depth int) (string, error) {
-	// 初始化助手回复内容
-	agentSpeech := handle.Config.DefaultReply
-	// 处理消息，将图片URL转换为base64
+// processMessages 处理消息，将图片URL转换为base64
+func (class *Client) processMessages(messages []processor.FusionMessage, handle *processor.Handle) []processor.MultimodalMessage {
 	processedMessages := make([]processor.MultimodalMessage, 0, len(messages))
-	// 遍历消息，处理图片URL
 	for _, msg := range messages {
-		// 检查消息是否为nil
 		if msg == nil {
 			continue
 		}
-		// 安全类型断言
 		if message, ok := msg.(processor.MultimodalMessage); ok {
-			// 初始化消息内容数组
 			processedContent := make(processor.ProcessResult, len(message.Content))
-			// 遍历消息内容，处理图片URL
 			for j, contentItem := range message.Content {
 				processedContent[j] = contentItem
 				if itemMap, ok := contentItem.(processor.ImageMessage); ok {
-					// 检查是否为image_url类型
 					if itemMap.Type != "image_url" {
 						continue
 					}
-					// 转换图片URL为base64
 					base64Str, err := class.convertImageToBase64(itemMap.ImageURL.URL, handle)
 					if err != nil {
 						log.Printf("转换图片URL失败: %v", err)
 						continue
 					}
-					// 创建新的内容项，将image_url替换为base64
 					processedContent[j] = processor.ImageMessage{Type: "image_url", ImageURL: processor.ImageURL{URL: base64Str}}
 				}
 			}
-			// 更新消息的content
 			message.Content = processedContent
-			// 并入处理后的消息
 			processedMessages = append(processedMessages, message)
 		}
 	}
-	// 创建请求
+	return processedMessages
+}
+
+// sendRequest 发送HTTP请求并返回响应体
+func (class *Client) sendRequest(processedMessages []processor.MultimodalMessage, ToolChoice string) ([]byte, error) {
+	// 创建请求结构体
 	request := Request{
 		Model:      class.model,
 		Messages:   make([]processor.FusionMessage, len(processedMessages)),
-		Tools:      GetTools(),
-		ToolChoice: "auto",
+		Tools:      GetTools(ToolChoice),
+		ToolChoice: ToolChoice,
 	}
-	// 将处理后的消息转换为FusionMessage
+	// 复制处理后的消息到请求结构体
 	for i, msg := range processedMessages {
 		request.Messages[i] = msg
 	}
-	// 序列化请求
+	// 序列化请求结构体为JSON字符串
 	buffer := &bytes.Buffer{}
 	// 创建JSON编码器
 	encoder := json.NewEncoder(buffer)
 	// 禁用HTML转义
 	encoder.SetEscapeHTML(false)
-	// 编码请求
+	// 编码请求结构体到JSON字符串
 	if err := encoder.Encode(request); err != nil {
-		return "", fmt.Errorf("序列化请求失败: %v", err)
+		return nil, fmt.Errorf("序列化请求失败: %v", err)
 	}
-	// 移除首尾空格
+	// 移除JSON字符串首尾空格
 	requestJSON := strings.TrimSpace(buffer.String())
-	// 打印API地址
+	// 打印请求JSON字符串
 	log.Printf("调用< %s >进行处理", class.agentURL)
-	// 判断是否显示调试信息
+	// 打印请求JSON字符串（调试用）
 	if setup.DisplayDebugMessage {
 		log.Printf("< OpenAI API 请求体 >:\n %s", requestJSON)
 	}
-	// 检查API URL是否为空
+	// 检查OpenAI API URL是否为空
 	if class.agentURL == "" {
-		return agentSpeech, fmt.Errorf("OpenAI API URL为空")
+		return nil, fmt.Errorf("OpenAI API URL为空")
 	}
-	// 创建HTTP请求
+	// 创建 HTTP POST 请求
 	httpReq, err := http.NewRequest("POST", class.agentURL, strings.NewReader(requestJSON))
-	// 检查请求是否成功
+	// 检查请求创建是否成功
 	if err != nil {
-		return agentSpeech, fmt.Errorf("创建HTTP请求失败: %v", err)
+		return nil, fmt.Errorf("创建HTTP请求失败: %v", err)
 	}
-	// 设置请求头
+	// 设置请求头 Content-Type 为 application/json
 	httpReq.Header.Set("Content-Type", "application/json")
-	// 设置Authorization头
+	// 设置请求头 Authorization 为 Bearer 令牌
 	if class.token != "" {
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", class.token))
 	}
-	// 发送请求 并 设置超时时间为120秒
+	// 创建 HTTP 客户端，设置超时为 120 秒
 	client := &http.Client{Timeout: 120 * time.Second}
-	// 发送请求
+	// 发送 HTTP 请求
 	response, err := client.Do(httpReq)
-	// 检查请求是否成功
+	// 检查响应发送是否成功
 	if err != nil {
-		return agentSpeech, fmt.Errorf("发送请求失败: %v", err)
+		return nil, fmt.Errorf("发送请求失败: %v", err)
 	}
-	// 关闭响应体
+	// 关闭响应体读取流
 	defer response.Body.Close()
-	// 读取响应
+	// 读取响应体内容
 	responseBody, err := io.ReadAll(response.Body)
-	// 检查响应状态码
+	// 检查响应读取是否成功
 	if err != nil {
-		return agentSpeech, fmt.Errorf("读取响应失败: %v", err)
+		return nil, fmt.Errorf("读取响应失败: %v", err)
 	}
-	// 检查响应状态码
+	// 检查响应状态码是否为 200 OK
 	if response.StatusCode != http.StatusOK {
 		log.Printf("OpenAI API返回错误状态码: %d, 响应内容: %s", response.StatusCode, string(responseBody))
-		return agentSpeech, fmt.Errorf("OpenAI API返回错误状态码: %d", response.StatusCode)
+		return nil, fmt.Errorf("OpenAI API返回错误状态码: %d", response.StatusCode)
 	}
-	// 解析响应
+	// 返回响应体内容
+	return responseBody, nil
+}
+
+// processResponse 处理响应，提取助手回复内容
+func (class *Client) processResponse(responseBody []byte, defaultReply string) (string, map[string]any, error) {
 	var openAIResponse Response
-	// 解析响应
 	if err := json.Unmarshal(responseBody, &openAIResponse); err != nil {
 		log.Printf("解析OpenAI API响应失败: %v, 响应内容: %s", err, string(responseBody))
-		return agentSpeech, fmt.Errorf("解析响应失败: %v", err)
+		return defaultReply, nil, fmt.Errorf("解析响应失败: %v", err)
 	}
-	// 检查是否有助手回复
 	if len(openAIResponse.Choices) == 0 {
-		return agentSpeech, nil
+		return defaultReply, nil, nil
 	}
-	// 提取助手回复内容
 	choice := openAIResponse.Choices[0]
-	// 检查是否有工具调用
-	if toolCalls, ok := choice.Message["tool_calls"].([]any); ok && len(toolCalls) > 0 {
-		// 执行工具调用
-		for _, toolCallItem := range toolCalls {
-			if toolCallMap, ok := toolCallItem.(map[string]any); ok {
-				if toolCallType, ok := toolCallMap["type"].(string); ok && toolCallType == "function" {
-					if functionMap, ok := toolCallMap["function"].(map[string]any); ok {
-						functionName := functionMap["name"].(string)
-						arguments := functionMap["arguments"].(string)
-						toolCallID := toolCallMap["id"].(string)
+	// 检查content字段是否存在
+	if contentVal, ok := choice.Message["content"].(string); ok {
+		// 剔除最开始出现的一对方括号及其内部的文本
+		agentSpeech := regexp.MustCompile(`^\[.*?\]:`).ReplaceAllString(contentVal, "")
+		// 去除首尾空格
+		agentSpeech = strings.TrimSpace(agentSpeech)
+		return agentSpeech, choice.Message, nil
+	}
+	// 如果content字段不存在，返回默认回复
+	return defaultReply, choice.Message, nil
+}
 
-						log.Printf("执行工具: %s, 深度: %d", functionName, depth)
-
-						// 创建ToolCall结构
-						toolCall := processor.ToolCall{
-							Type: "function",
-							ID:   toolCallID,
-							Function: processor.ToolCallFunction{
-								Name:      functionName,
-								Arguments: arguments,
-							},
-						}
-
-						// 执行工具
-						result, err := ExecuteTool(toolCall, handle)
-						if err != nil {
-							result = fmt.Sprintf("工具执行失败: %v", err)
-						}
-
-						// 检查工具调用ID是否为空
-						if toolCallID == "" || depth >= 2 {
-							return agentSpeech, nil
-						}
-
-						// 创建工具响应消息
-						toolResponse := processor.BaseMessage{
-							Role:       "tool",
-							Content:    result,
-							ToolCallID: toolCallID,
-							Name:       functionName,
-						}
-
-						// 将工具响应添加到消息列表
-						messages = append(messages, toolResponse)
+// handleToolCalls 处理工具调用
+func (class *Client) handleToolCalls(toolCalls []any, messages []processor.FusionMessage, handle *processor.Handle) ([]processor.FusionMessage, string, error) {
+	for _, toolCallItem := range toolCalls {
+		if toolCallMap, ok := toolCallItem.(map[string]any); ok {
+			if toolCallType, ok := toolCallMap["type"].(string); ok && toolCallType == "function" {
+				if functionMap, ok := toolCallMap["function"].(map[string]any); ok {
+					functionName := functionMap["name"].(string)
+					arguments := functionMap["arguments"].(string)
+					toolCallID := toolCallMap["id"].(string)
+					// 打印工具调用信息
+					log.Printf("执行工具: %s", functionName)
+					// 创建工具调用对象
+					toolCall := processor.ToolCall{
+						Type: "function",
+						ID:   toolCallID,
+						Function: processor.ToolCallFunction{
+							Name:      functionName,
+							Arguments: arguments,
+						},
 					}
+					// 执行工具调用
+					result, err := ExecuteTool(toolCall, handle)
+					// 检查是否有错误
+					if err != nil {
+						result = fmt.Sprintf("工具执行失败: %v", err)
+					}
+					// 创建工具响应消息
+					toolResponse := processor.BaseMessage{
+						Role:       "tool",
+						Content:    result,
+						ToolCallID: toolCallID,
+						Name:       functionName,
+					}
+					// 将工具响应消息添加到消息列表中
+					messages = append(messages, toolResponse)
 				}
 			}
 		}
+	}
+	return messages, "none", nil
+}
+
+// CallAgent 调用Agent API
+func (class *Client) CallAgent(messages []processor.FusionMessage, handle *processor.Handle, ToolChoice string) (string, error) {
+	// 初始化助手回复内容
+	agentSpeech := handle.Config.DefaultReply
+	// 处理消息，将图片URL转换为base64
+	processedMessages := class.processMessages(messages, handle)
+	// 发送请求并获取响应
+	responseBody, err := class.sendRequest(processedMessages, ToolChoice)
+	// 检查是否有错误
+	if err != nil {
+		return agentSpeech, err
+	}
+	// 解析响应
+	agentSpeech, message, err := class.processResponse(responseBody, handle.Config.DefaultReply)
+	// 检查是否有错误
+	if err != nil {
+		return agentSpeech, err
+	}
+	// 检查是否有工具调用
+	if toolCalls, ok := message["tool_calls"].([]any); ok && len(toolCalls) > 0 {
+		// 执行工具调用
+		messages, ToolChoice, err = class.handleToolCalls(toolCalls, messages, handle)
+		// 检查是否有错误
+		if err != nil {
+			return agentSpeech, err
+		}
 		// 递归调用API，继续处理工具响应
-		return class.CallAgent(messages, handle, depth+1)
+		return class.CallAgent(messages, handle, ToolChoice)
 	}
-	// 检查content字段是否存在
-	if contentVal, ok := choice.Message["content"].(string); ok {
-		agentSpeech = contentVal
-	}
-	// 剔除最开始出现的一对方括号及其内部的文本
-	agentSpeech = regexp.MustCompile(`^\[.*?\]:`).ReplaceAllString(agentSpeech, "")
-	// 去除首尾空格
-	agentSpeech = strings.TrimSpace(agentSpeech)
 	// 返回助手回复内容
 	return agentSpeech, nil
 }

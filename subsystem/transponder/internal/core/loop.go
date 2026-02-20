@@ -82,7 +82,7 @@ func (class *Application) MainLoop() error {
 		for i, msg := range messages {
 			fusionMessages[i] = msg
 		}
-		response, err := class.AgentClient.CallAgent(fusionMessages, class.Processor, 0)
+		response, err := class.AgentClient.CallAgent(fusionMessages, class.Processor, "auto")
 		if err != nil {
 			log.Printf("调用Agent API失败: %v", err)
 			// 发送错误消息

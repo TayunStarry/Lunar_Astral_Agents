@@ -7,7 +7,10 @@ import (
 )
 
 // GetTools 获取所有可用工具
-func GetTools() []Tool {
+func GetTools(ToolChoice string) []Tool {
+	if ToolChoice == "none" {
+		return []Tool{}
+	}
 	return []Tool{
 		{
 			Type: "function",
