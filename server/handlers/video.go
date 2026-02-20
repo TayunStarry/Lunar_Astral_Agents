@@ -469,14 +469,6 @@ func formatTime(seconds int) string {
 	return fmt.Sprintf("%02d:%02d:%02d", int(t.Hours()), int(t.Minutes())%60, int(t.Seconds())%60)
 }
 
-// min 获取两个整数的最小值
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // createKeyframeFile 创建关键帧文件并返回图像数据
 func createKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyFrame) (string, []byte, error) {
 	// 生成关键帧文件名

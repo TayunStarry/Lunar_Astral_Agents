@@ -94,8 +94,8 @@ export function loadChatHistory(jsonData: { history: EntryAPI.HistoryMessage[], 
 function chatHistoryPanelDragAfterEvent(event: DragEvent) {
 	// 阻止事件的默认行为，防止浏览器对文件进行默认处理
 	event.preventDefault();
-	// 移除聊天历史面板上的所有附加样式，恢复初始状态
-	EntryAPI.chatHistoryPanel.removeAttribute('style');
+	// 移除 Live2D 容器上的所有附加样式，恢复初始状态
+	EntryAPI.live2dContainer.removeAttribute('style');
 	// 隐藏文件导入覆盖层
 	EntryAPI.displayImportOverlay(EntryAPI.chatHistoryPanel, false);
 	/**
@@ -129,10 +129,8 @@ function chatHistoryPanelDragEvent(event: DragEvent) {
 		if (!EntryAPI.OnlyData.isFileDragging) {
 			// 标记有文件正在被拖拽
 			EntryAPI.OnlyData.isFileDragging = true;
-			// 为聊天历史面板添加边框脉冲动画
-			EntryAPI.chatHistoryPanel.style.animation = 'border-pulse 4.0s infinite';
-			// 为聊天历史面板添加模糊滤镜效果
-			//chatHistoryPanel.style.filter = 'blur(1px)';
+			// 为 Live2D 容器添加边框脉冲动画
+			EntryAPI.live2dContainer.style.animation = 'border-pulse 4.0s infinite';
 			// 显示文件导入覆盖层
 			EntryAPI.displayImportOverlay(EntryAPI.chatHistoryPanel, true);
 		}
@@ -147,8 +145,8 @@ function chatHistoryPanelDragEvent(event: DragEvent) {
 		if (!EntryAPI.chatHistoryPanel.contains(relatedTarget as Node)) {
 			// 标记没有文件正在被拖拽
 			EntryAPI.OnlyData.isFileDragging = false;
-			// 移除聊天历史面板上的所有样式，恢复初始状态
-			EntryAPI.chatHistoryPanel.removeAttribute('style');
+			// 移除 Live2D 容器上的所有样式，恢复初始状态
+			EntryAPI.live2dContainer.removeAttribute('style');
 			// 隐藏文件导入覆盖层
 			EntryAPI.displayImportOverlay(EntryAPI.chatHistoryPanel, false);
 		}
@@ -446,10 +444,10 @@ function readFileAsText(file: File) {
 };
 
 //* 监听输入框的拖拽离开事件，触发 chatHistoryPanelDragEvent 函数处理事件
-EntryAPI.chatHistoryPanel.addEventListener('dragleave', event => chatHistoryPanelDragEvent(event));
+EntryAPI.mainContainerPanel.addEventListener('dragleave', event => chatHistoryPanelDragEvent(event));
 //* 监听输入框的拖拽经过事件，触发 chatHistoryPanelDragEvent 函数处理事件
-EntryAPI.chatHistoryPanel.addEventListener('dragover', event => chatHistoryPanelDragEvent(event));
+EntryAPI.mainContainerPanel.addEventListener('dragover', event => chatHistoryPanelDragEvent(event));
 //* 监听输入框的拖拽放下事件，触发 chatHistoryPanelDragAfterEvent 函数处理事件
-EntryAPI.chatHistoryPanel.addEventListener('drop', event => chatHistoryPanelDragAfterEvent(event));
+EntryAPI.mainContainerPanel.addEventListener('drop', event => chatHistoryPanelDragAfterEvent(event));
 //* 监听文件输入按钮的点击事件，触发 inputFileButtonClickEvent 函数处理事件
 EntryAPI.inputFileButton.addEventListener('click', () => inputFileButtonClickEvent());

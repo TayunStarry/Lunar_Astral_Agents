@@ -122,49 +122,15 @@ func registerHandlers() {
 	httpMux = http.NewServeMux()
 	// 处理根路径请求，将请求路径中的前缀 "/" 去除后，使用文件服务器提供 Webpage 目录下的静态文件
 	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir("webpage"))))
-	// 注册所有API路径的处理函数
-	apiHandlers := map[string]http.HandlerFunc{
-		// 文件读写相关接口
-		"/save":       handlers.SaveHandler,
-		"/read/":      handlers.ReadHandler,
-		"/file_list/": handlers.FileListHandler,
-		"/download/":  handlers.DownloadHandler,
-		"/delete/":    handlers.DeleteHandler,
-		"/archive":    handlers.ArchiveHandler,
-		// 智能体相关接口
-		"/v1/models": handlers.AgentModelsHandler,
-		"/v1/":       handlers.AgentHandler,
-		// 图片生成相关接口
-		"/generate":        handlers.GenerateHandler,
-		"/generate/wait":   handlers.GenerateWaitHandler,
-		// 知识库相关接口
-		"/knowledge/query":  handlers.KnowledgeQueryHandler,
-		"/knowledge/write":  handlers.KnowledgeWriteHandler,
-		"/knowledge/flush":  handlers.KnowledgeFlushHandler,
-		"/knowledge/delete": handlers.KnowledgeDeleteHandler,
-		"/knowledge/list":   handlers.KnowledgeListHandler,
-		// 屏幕截图相关接口
-		"/capture":          handlers.HandleCapture,
-		"/capture/display/": handlers.HandleCaptureDisplay,
-		"/capture/region":   handlers.HandleCaptureRegion,
-		"/capture/displays": handlers.HandleGetDisplays,
-		// 视频处理相关接口
-		"/extract/keyframes":  handlers.ExtractKeyFramesHandler,
-		"/extract/firstframe": handlers.ExtractFirstFrameHandler,
-		// 数据库相关接口
-		"/database/": handlers.DatabaseHandler,
-		// 清理相关接口
-		"/cleanup/images": handlers.CleanupUnreferencedImagesHandler,
-	}
 	// 检查显存是否足够，若不足则禁用灵绘坊功能
 	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")
 	}
 	// 启动灵绘坊任务协处理器
 	handlers.StartTaskProcessor()
-	// 注册所有API路径的处理函数
-	for path, handler := range apiHandlers {
-		httpMux.HandleFunc(path, handler)
+	// 注册所有系统端点路径的处理函数
+	for _, endpoint := range SystemEndpoints {
+		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
 	}
 }
 

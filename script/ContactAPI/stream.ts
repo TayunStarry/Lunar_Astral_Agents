@@ -8,7 +8,7 @@ import * as EntryAPI from '../EntryAPI/code';
  * @param {HTMLElement} contentElement - 内容元素
  *
  */
-export function updateMessageContent(messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, state: EntryAPI.ChatCache) {
+export function updateMessageContent(messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, state: EntryAPI.ChatCache): string {
 	// 检查推理内容是否为空
 	if (state.reasoningContent.trim() !== "" || state.thinkingContent.trim() !== "") {
 		/** 新的思考标签内容 */
@@ -24,6 +24,7 @@ export function updateMessageContent(messageObject: EntryAPI.HistoryMessage, con
 	messageObject.content = messageObject.content.replace(/(?<![~\s])~(?![~\s])/g, ' ~ ');
 	// 处理内容更新，对内容中的思考标签进行处理
 	contentElement.innerHTML = EntryAPI.processThinkTags(messageObject.content);
+	return messageObject.content;
 }
 
 /**
@@ -50,16 +51,22 @@ function updateTokenSpeed(predictedPerSecond: number) {
  * @param {HTMLElement} contentElement - 内容元素
  *
  * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
- *
- * @returns {Promise<{ textContent: string }>}
  */
-export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], container: HTMLElement, messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, cache: EntryAPI.ChatCache): Promise<{ textContent: string; }> {
+export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], container: HTMLElement, messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, cache: EntryAPI.ChatCache) {
 	/** 向处理器模型发送请求并等待响应（禁用流式响应） */
 	const response = await new EntryAPI.MultimodalRequest(messages, true, false).response;
 	// 如果未能获得期望中的响应，则抛出错误
 	if (!response.ok) throw new Error(`API返回错误: ${response.status} ${response.statusText}`);
 	/** 解析响应为JSON */
 	const jsonData = await response.json();
+	// 处理推理内容数据
+	if (jsonData.choices?.[0]?.message?.reasoning_content && EntryAPI.OnlyData.isDebugMode) {
+		cache.reasoningContent = jsonData.choices[0].message.reasoning_content;
+	}
+	// 检查是否有预测令牌数
+	if (jsonData.timings?.predicted_per_second && EntryAPI.OnlyData.isDebugMode) {
+		updateTokenSpeed(jsonData.timings.predicted_per_second);
+	}
 	// 处理工具调用
 	if (jsonData.choices?.[0]?.message?.tool_calls) {
 		for (const toolCall of jsonData.choices[0].message.tool_calls) {
@@ -73,14 +80,6 @@ export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], con
 	if (jsonData.choices?.[0]?.message?.content) {
 		cache.descriptionContent = jsonData.choices[0].message.content;
 	}
-	// 处理推理内容数据
-	if (jsonData.choices?.[0]?.message?.reasoning_content) {
-		cache.reasoningContent = jsonData.choices[0].message.reasoning_content;
-	}
-	// 检查是否有预测令牌数
-	if (jsonData.timings?.predicted_per_second && EntryAPI.OnlyData.isDebugMode) {
-		updateTokenSpeed(jsonData.timings.predicted_per_second);
-	}
 	// 如果有工具调用，处理它们并重新发送请求
 	if (cache.toolCalls.length > 0) {
 		/** 处理工具调用 */
@@ -88,8 +87,6 @@ export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], con
 		// 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
 		if (hasProcessedToolCalls) return await sendRequestWithTools(messages, container, messageObject, contentElement, cache);
 	}
-	// 如果没有工具调用或工具调用处理完成，继续正常流程
-	return { textContent: messageObject.content };
 }
 
 /**

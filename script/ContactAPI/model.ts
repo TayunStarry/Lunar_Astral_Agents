@@ -36,7 +36,7 @@ export class MultimodalRequest {
             messages,
             stream,
             tools: EntryAPI.OnlyData.toolCall,
-            tool_choice: isIncludesTools ? 'auto' : (EntryAPI.OnlyData.isDebugMode ? 'required' : 'auto'),
+            tool_choice: isIncludesTools ? 'none' : 'auto',
         };
         // 如果禁用工具调用，则删除 tool_choice 和 tools 字段
         if (!enableTools) {

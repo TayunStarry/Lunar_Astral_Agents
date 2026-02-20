@@ -239,8 +239,8 @@ export async function matchEmotionalPatterns(text: string): Promise<void> {
 		const correctedEmotion = /害羞/.test(text) ? EntryAPI.EmotionalState.SHY : selectedEmotion;
 		// 更新 Live2D 模型情绪状态
 		EntryAPI.setStateWithTimeout(correctedEmotion);
-		// 50% 概率返回，不进入表情包匹配流程
-		if (Math.random() > 0.5) return;
+		// 15% 概率进入后续表情包匹配流程
+		if (Math.random() > 0.15) return;
 		/** 选中的表情包消息 */
 		const selectedMeme = (await captureKnowledgeRanking("knowledge/meme_model.json", embedVector))[EntryAPI.RandomFloor(0, 4)];
 		// 若该表情包无图片链接，则直接返回

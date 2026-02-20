@@ -22,7 +22,7 @@ func (class *Handle) getImageURL(data ImageObjectParameter) string {
 		imageURL = utils.ProcessImageURL(data.URL)
 	} else if data.File != "" {
 		// 如果只有文件路径，使用占位符
-		imageURL = class.baseURL + "/read/resources/placeholder/blank-02.png"
+		imageURL = class.BaseURL + "/read/resources/placeholder/blank-02.png"
 	}
 	return imageURL
 }
@@ -174,7 +174,7 @@ func (class *Handle) generateEmbedding(text string) ([]float64, error) {
 	}
 
 	// 构建完整的请求URL
-	requestURL := class.baseURL + "/v1/embeddings"
+	requestURL := class.BaseURL + "/v1/embeddings"
 	log.Printf("调用< %s >进行处理", requestURL)
 
 	// 创建请求
@@ -295,7 +295,7 @@ func (class *Handle) SendGroupMsg(groupID int64, content string) error {
 
 // SendGroupImageMsg 发送群图片消息
 func (class *Handle) SendGroupImageMsg(groupID int64, imageUrl string) error {
-	fullImageUrl := class.baseURL + imageUrl
+	fullImageUrl := class.BaseURL + imageUrl
 	log.Printf("发送图片URL: %s", fullImageUrl)
 
 	// 创建图片消息项

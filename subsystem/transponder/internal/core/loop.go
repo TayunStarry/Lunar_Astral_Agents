@@ -1,13 +1,13 @@
 package core
 
 import (
-	"encoding/json"              // JSON 编码/解码
-	"fmt"                        // 格式化输出
-	"log"                        // 日志记录
-	"strings"                    // 字符串处理
-	"time"                       // 时间处理
-	"transponder/internal/agent" // Agent 客户端
-	"transponder/internal/utils" // 工具包
+	"encoding/json"                  // JSON 编码/解码
+	"fmt"                            // 格式化输出
+	"log"                            // 日志记录
+	"strings"                        // 字符串处理
+	"time"                           // 时间处理
+	"transponder/internal/processor" // 消息处理器
+	"transponder/internal/utils"     // 工具包
 )
 
 // MainLoop 执行主循环
@@ -78,7 +78,11 @@ func (class *Application) MainLoop() error {
 		}
 
 		// 调用Agent API
-		response, err := class.AgentClient.CallAgent(messages, class.Processor, 0)
+		fusionMessages := make([]processor.FusionMessage, len(messages))
+		for i, msg := range messages {
+			fusionMessages[i] = msg
+		}
+		response, err := class.AgentClient.CallAgent(fusionMessages, class.Processor, 0)
 		if err != nil {
 			log.Printf("调用Agent API失败: %v", err)
 			// 发送错误消息
@@ -94,7 +98,7 @@ func (class *Application) MainLoop() error {
 }
 
 // getMessageHistoryForOpenAI 获取群消息历史并转换为Agent消息格式
-func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]agent.Message, error) {
+func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]processor.MultimodalMessage, error) {
 	// 发送获取历史消息的请求
 	echo, err := class.WSClient.GetGroupMessageHistory(groupID)
 	if err != nil {
@@ -102,7 +106,7 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]agent.Mes
 	}
 
 	// 等待并读取响应
-	var messages []agent.Message
+	var messages []processor.MultimodalMessage
 	responseReceived := false
 
 	// 读取响应，最多等待5秒
@@ -158,14 +162,14 @@ func (class *Application) getMessageHistoryForOpenAI(groupID int64) ([]agent.Mes
 						roleName = "assistant"
 					}
 					// 创建Agent消息
-					messages = append(messages, agent.Message{Role: roleName, Content: content})
+					messages = append(messages, processor.MultimodalMessage{Role: roleName, Content: content})
 				}
 			}
 			responseReceived = true
 		}
 	}
 	if len(messages) > 0 && messages[len(messages)-1].Role == "assistant" {
-		messages = append(messages, agent.Message{Role: "user", Content: "我的话说完了, 请你继续"})
+		messages = append(messages, processor.MultimodalMessage{Role: "user", Content: processor.ProcessResult{processor.TextMessage{Type: "text", Text: "我的话说完了, 请你继续"}}})
 	}
 	return messages, nil
 }

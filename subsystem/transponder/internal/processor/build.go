@@ -13,7 +13,7 @@ func NewHandle(config *setup.Config, wsClient *utils.Client) *Handle {
 		wsClient:       wsClient,
 		groupInfos:     make([]setup.GroupInfo, 0),
 		groupMembers:   make(map[int64]map[int64]string),
-		baseURL:        strings.TrimSuffix(config.OpenAIAPIUrl, "/v1/chat/completions"),
+		BaseURL:        strings.TrimSuffix(config.OpenAIAPIUrl, "/v1/chat/completions"),
 		currentGroupID: 0,
 	}
 }

@@ -14,7 +14,7 @@ import (
 // GenerateImage 生成图片
 func (class *Handle) GenerateImage(prompt, negativePrompt string, useReference bool, strength, cfgScale float64) (string, error) {
 	// 获取生成的图片列表
-	fileListURL := class.baseURL + "/file_list/generated"
+	fileListURL := class.BaseURL + "/file_list/generated"
 	fileListResp, err := http.Get(fileListURL)
 	if err != nil {
 		return "", fmt.Errorf("获取文件列表失败: %v", err)
@@ -70,7 +70,7 @@ func (class *Handle) GenerateImage(prompt, negativePrompt string, useReference b
 	}
 
 	// 发送POST请求
-	generateURL := class.baseURL + "/generate"
+	generateURL := class.BaseURL + "/generate"
 	req, err := http.NewRequest("POST", generateURL, strings.NewReader(string(body)))
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %v", err)
@@ -125,7 +125,7 @@ func (class *Handle) GenerateImage(prompt, negativePrompt string, useReference b
 // pollImageGenerationStatus 使用新的 /generate/wait 接口等待图片生成完成
 func (class *Handle) pollImageGenerationStatus(taskID string) (bool, string, error) {
 	// 构建 /generate/wait 接口的 URL
-	waitURL := class.baseURL + "/generate/wait?task_id=" + taskID
+	waitURL := class.BaseURL + "/generate/wait?task_id=" + taskID
 
 	// 创建 HTTP GET 请求
 	req, reqErr := http.NewRequest("GET", waitURL, nil)

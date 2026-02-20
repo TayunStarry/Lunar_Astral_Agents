@@ -21,7 +21,7 @@ func (class *Handle) ParseMessageResponse(data map[string]any) (map[string]any, 
 }
 
 // ProcessMessageContent 处理消息内容
-func (class *Handle) ProcessMessageContent(rawMsg map[string]any, groupID int64, senderName string) any {
+func (class *Handle) ProcessMessageContent(rawMsg map[string]any, groupID int64, senderName string) ProcessResult {
 	// 提取并转换消息内容
 	content := make(ProcessResult, 0)
 	// 添加发言人信息作为第一个文本元素
@@ -42,12 +42,12 @@ func (class *Handle) ProcessMessageContent(rawMsg map[string]any, groupID int64,
 	}
 	// 如果没有内容，返回空字符串
 	if len(content) == 0 {
-		return class.Config.DefaultReply
+		return ProcessResult{TextMessage{Type: "text", Text: class.Config.DefaultReply}}
 	}
 	// 如果只有一个文本消息，直接返回字符串
 	if len(content) == 1 {
 		if textMsg, ok := content[0].(TextMessage); ok {
-			return textMsg.Text
+			return ProcessResult{TextMessage{Type: "text", Text: textMsg.Text}}
 		}
 	}
 	return content

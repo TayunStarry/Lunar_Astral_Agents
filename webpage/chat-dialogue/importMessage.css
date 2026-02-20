@@ -51,6 +51,7 @@
 	border: 3px solid var(--status-9d6bff);
 	animation: slide-in-left 0.75s ease-in-out
 }
+
 .message-hide {
-	animation: fade-out 1s ease-in-out forwards;
+	animation: message-fade 2.0s ease-in-out forwards;
 }

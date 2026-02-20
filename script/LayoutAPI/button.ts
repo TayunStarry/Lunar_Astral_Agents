@@ -47,10 +47,6 @@ export const simpleRenderingButton = document.getElementById("simpleRenderingBut
  */
 export const shareScreenButton = document.getElementById("shareScreenButton") as HTMLButtonElement;
 /**
- * 对外交流按钮
- */
-export const externalDialogueButton = document.getElementById("externalDialogueButton") as HTMLButtonElement;
-/**
  * 月华笔记按钮
  */
 export const lunarNotesButton = document.getElementById("lunarNotesButton") as HTMLButtonElement;
@@ -312,20 +308,11 @@ simpleRenderingButton.addEventListener('click',
 shareScreenButton.addEventListener('click',
     function () {
         // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 共享视觉 >不可在小屏幕下使用", "error");
-        /**
-         * 获取文档中所有的配置面板按钮元素
-         */
-        const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-        // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-        configurePanelButton.forEach(button => button.classList.remove("clicking"));
+        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 视觉共享 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
-        // 若当前已显示轻量渲染面板
+        // 若当前已显示视觉共享面板
         if (EntryAPI.OnlyData.configurePanelOption === 'shareScreenButton') {
-            // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-camera"></i>';
-            this.classList.remove("clicking");
             // 显示对话和历史记录面板
             EntryAPI.chatHistoryContainerPanel.style.display = "flex";
             // 隐藏视觉共享面板
@@ -335,57 +322,12 @@ shareScreenButton.addEventListener('click',
             // 结束事件响应
             return;
         }
-        // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-eye"></i>';
-        this.classList.add("clicking");
         // 隐藏对话和历史记录面板
         EntryAPI.chatHistoryContainerPanel.style.display = "none";
         // 显示视觉共享面板
         EntryAPI.shareScreenContainerPanel.style.display = "flex";
         // 改变全局变量，表示当前显示视觉共享面板
         EntryAPI.OnlyData.configurePanelOption = 'shareScreenButton';
-        // 调用截图核心函数，截图当前屏幕
-        EntryAPI.screenshotCore.captureScreen()
-    }
-);
-//* 绑定 切换< 外部通讯 >面板 按钮点击事件
-externalDialogueButton.addEventListener('click',
-    async function () {
-        /** 获取文档中所有的配置面板按钮元素 */
-        const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-        // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-        configurePanelButton.forEach(button => button.classList.remove("clicking"));
-        // 清除所有配置面板的显示状态
-        EntryAPI.eraseAllConfigurePanel();
-        // 若当前已显示< 外部通讯 >面板
-        if (EntryAPI.OnlyData.configurePanelOption === 'externalDialogueButton') {
-            // 关闭WebSocket服务
-            EntryAPI.managerExchanges.close();
-            EntryAPI.showSystemMessage("关闭< 外部通讯 >", "success");
-            // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-exchange-alt"></i>';
-            this.classList.remove("clicking");
-            // 显示对话和历史记录面板
-            EntryAPI.chatHistoryContainerPanel.style.display = "flex";
-            // 改变全局变量，表示无配置面板显示
-            EntryAPI.OnlyData.configurePanelOption = 'any';
-            // 加载系统提示词
-            EntryAPI.OnlyData.systemPrompt = await EntryAPI.fetchMarkdown('/read/resources/prompts/systemPrompt.md');
-            // 结束事件响应
-            return;
-        }
-        // 启动WebSocket服务
-        EntryAPI.managerExchanges.start();
-        EntryAPI.showSystemMessage("开启< 外部通讯 >", "success");
-        // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-globe"></i>';
-        this.classList.add("clicking");
-        // 隐藏对话和历史记录面板
-        EntryAPI.chatHistoryContainerPanel.style.display = "none";
-        // 改变全局变量，表示当前显示对外交流面板
-        EntryAPI.OnlyData.configurePanelOption = 'externalDialogueButton';
-        // 加载系统提示词
-        EntryAPI.OnlyData.systemPrompt = await EntryAPI.fetchMarkdown('/read/resources/prompts/externalDialogue.md');
     }
 );
 //* 绑定 切换月华笔记面板 按钮点击事件
@@ -582,7 +524,7 @@ longTermMemoryButton.addEventListener('click',
         }
         else {
             // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-infinity"></i>';
+            this.innerHTML = '<i class="fas fa-brain"></i>';
             this.classList.add("clicking");
             // 改变全局变量
             EntryAPI.OnlyData.isContinuousMemory = true;
