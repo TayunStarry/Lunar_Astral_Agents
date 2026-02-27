@@ -6,9 +6,9 @@
 	"openai_api_model": "system-multimodal",
 	"poll_interval": 10,
 	"listen_group_ids": [
+		906314036,
 		262221051,
 		1022847485,
-		906314036,
 		710834920
 	],
 	"trigger_keywords": [

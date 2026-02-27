@@ -13,7 +13,20 @@ import (
 	"net/http/httputil"                 // 导入 httputil 包，提供 HTTP 协议的实用工具
 	"net/url"                           // 导入 url 包，用于解析和处理 URL
 	"strings"                           // 导入 strings 包，用于处理字符串
+	"sync"                              // 导入 sync 包，用于同步操作
 	"time"                              // 导入 time 包，用于处理时间
+)
+
+// 请求队列相关变量
+var (
+	// 最大队列长度
+	maxQueueLength = 3
+	// 当前正在处理的请求数
+	currentProcessing int
+	// 请求队列
+	requestQueue []chan struct{}
+	// 队列锁
+	queueMutex sync.Mutex
 )
 
 // AgentModelsHandler 处理获取模型列表的请求, 返回本地模型列表。
@@ -53,9 +66,48 @@ func AgentModelsHandler(w http.ResponseWriter, r *http.Request) {
 func AgentHandler(w http.ResponseWriter, r *http.Request) {
 	// 检查系统是否繁忙，如果已就绪的模型数量小于最大模型数量，返回系统繁忙响应
 	if config.ModelReady < config.MaxModelAmount {
-		serveBusyResponse(w, r)
+		serveBusyResponse(w)
 		return
 	}
+
+	// 队列控制
+	queueMutex.Lock()
+	// 检查当前处理状态和队列长度
+	if currentProcessing >= 1 {
+		// 如果队列长度超过最大值，返回系统繁忙
+		if len(requestQueue) >= maxQueueLength {
+			queueMutex.Unlock()
+			serveBusyResponse(w)
+			return
+		}
+		// 创建一个通道用于等待
+		waitChan := make(chan struct{})
+		// 将通道加入队列
+		requestQueue = append(requestQueue, waitChan)
+		queueMutex.Unlock()
+
+		// 等待前面的请求处理完成
+		<-waitChan
+	} else {
+		// 标记当前正在处理请求
+		currentProcessing = 1
+		queueMutex.Unlock()
+	}
+
+	// 处理完成后释放资源
+	defer func() {
+		queueMutex.Lock()
+		defer queueMutex.Unlock()
+		// 标记处理完成
+		currentProcessing = 0
+		// 如果队列不为空，通知下一个请求
+		if len(requestQueue) > 0 {
+			nextChan := requestQueue[0]
+			requestQueue = requestQueue[1:]
+			close(nextChan)
+		}
+	}()
+
 	// 从请求中提取模型名称
 	modelName := extractModelName(r)
 	// 如果未能提取到模型名称，返回 400 错误
@@ -77,9 +129,9 @@ func AgentHandler(w http.ResponseWriter, r *http.Request) {
 	proxyToPort(w, r, port)
 }
 
-// serveBusyResponse 根据请求路径返回“系统繁忙”响应
-func serveBusyResponse(w http.ResponseWriter, r *http.Request) {
-	// 构造系统繁忙的响应数据
+// serveBusyResponse 返回“系统繁忙”响应（OpenAI 格式）
+func serveBusyResponse(w http.ResponseWriter) {
+	// 构造系统繁忙的响应数据（OpenAI 格式）
 	response := map[string]any{
 		"choices": []map[string]any{
 			{
@@ -87,8 +139,9 @@ func serveBusyResponse(w http.ResponseWriter, r *http.Request) {
 				"finish_reason": "stop",
 				// 选择索引设为 0
 				"index": 0,
-				// 增量内容，提示用户系统繁忙
-				"delta": map[string]any{
+				// 消息内容，提示用户系统繁忙
+				"message": map[string]any{
+					"role":    "assistant",
 					"content": "请稍等哦, 月华现在正忙呢~~",
 				},
 			},
@@ -101,12 +154,8 @@ func serveBusyResponse(w http.ResponseWriter, r *http.Request) {
 		"model": "system-busy",
 		// 系统指纹，添加当前纳秒时间戳确保唯一性
 		"system_fingerprint": "busy-" + fmt.Sprintf("%d", time.Now().UnixNano()),
-		// 对象类型，标记为聊天完成块
-		"object": "chat.completion.chunk",
-		// 数据字段，包含嵌入向量
-		"data": []map[string]any{
-			{"embedding": []float64{}},
-		},
+		// 对象类型，标记为聊天完成
+		"object": "chat.completion",
 	}
 
 	// 将响应数据编码为 JSON 格式
@@ -117,33 +166,12 @@ func serveBusyResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查请求路径是否为聊天完成请求，若是则返回 SSE 格式
-	if strings.Contains(r.URL.Path, "/chat/completions") {
-		// 设置响应头，指定内容类型为 SSE 格式，使用 UTF-8 编码
-		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-		// 禁用缓存，确保每次请求都能获取最新响应
-		w.Header().Set("Cache-Control", "no-cache")
-		// 保持连接，确保 SSE 流式响应正常工作
-		w.Header().Set("Connection", "keep-alive")
-		// 写入 HTTP 状态码 200，表示请求成功
-		w.WriteHeader(http.StatusOK)
-		// 按照 SSE 格式写入响应数据
-		fmt.Fprintf(w, "data: %s\n\n", string(jsonData))
-		// 写入 [DONE] 标记，表示 SSE 流结束
-		fmt.Fprintf(w, "data: [DONE]\n\n")
-		// 检查响应写入器是否支持 Flush 方法
-		if flusher, ok := w.(http.Flusher); ok {
-			// 刷新缓冲区，确保数据立即发送给客户端
-			flusher.Flush()
-		}
-	} else {
-		// 对于其他请求，返回普通 JSON 格式
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		// 写入 HTTP 状态码 200，表示请求成功
-		w.WriteHeader(http.StatusOK)
-		// 直接写入 JSON 数据
-		w.Write(jsonData)
-	}
+	// 设置响应头，指定内容类型为 JSON 格式，使用 UTF-8 编码
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	// 写入 HTTP 状态码 200，表示请求成功
+	w.WriteHeader(http.StatusOK)
+	// 直接写入 JSON 数据
+	w.Write(jsonData)
 }
 
 // extractModelName 从请求体或 URL 路径中提取模型名称

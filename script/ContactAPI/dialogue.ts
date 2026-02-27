@@ -326,7 +326,8 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 	// 生成助手消息元素关联对象
 	const { messageObject, messageElement, contentElement } = await createAssistantMessageElement(container);
 	/** 聊天缓存信息 */
-	const cache = new EntryAPI.CacheRocessing();
+	const chatCache = new EntryAPI.CacheProcessing();
+	/** 定义定时器ID，用于后续清除定时器 */
 	let tickID: NodeJS.Timeout = null;
 	// 检查消息元素是否存在
 	if (!contentElement) {
@@ -342,7 +343,7 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 		// 渲染思考状态消息
 		contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
 		/** 发送请求并处理工具调用 */
-		await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, cache);
+		await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, chatCache, true);
 		// 移除隐藏类，显示消息
 		messageElement.classList.remove("message-hide")
 	}
@@ -360,7 +361,7 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 		// 清除定时器
 		clearTimeout(tickID);
 		/** 获取更新后的消息内容 */
-		const content = EntryAPI.updateMessageContent(messageObject, contentElement, cache);
+		const content = EntryAPI.updateMessageContent(messageObject, contentElement, chatCache);
 		// 执行聊天结束事件
 		handleChatEndEvent(content, contentElement)
 		// 添加代码高亮

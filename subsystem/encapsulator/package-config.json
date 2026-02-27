@@ -5,12 +5,9 @@
             "description": "用于发布纯前端的功能补丁更新",
             "sources": [
                 "../.././Lunar-Astral-Agents.exe",
-                "../.././webpage",
                 "../.././local_data/certs",
-                "../.././local_data/resources",
-                "../.././local_data/model_config.json",
-                "../.././local_data/knowledge/meme_model.json",
-                "../.././local_data/knowledge/emotional_model.json"
+                "../.././local_data/model_config.json"
+
             ]
         },
         "2": {
@@ -49,7 +46,7 @@
         "C:/Program Files (x86)/7-Zip/7z.exe"
     ],
     "defaults": {
-        "output_path": "./Lunar-Astral-Agents^2026-01-28",
+        "output_path": "./Lunar-Astral-Agents^2026-02-21",
         "part_size_mb": 2048,
         "compression_level": 9,
         "package_level": 2

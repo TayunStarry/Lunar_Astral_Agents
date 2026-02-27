@@ -49,14 +49,105 @@ function updateTokenSpeed(predictedPerSecond: number) {
  * @param {EntryAPI.HistoryMessage} messageObject - 消息对象
  *
  * @param {HTMLElement} contentElement - 内容元素
- *
+
  * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
+
+ * @param {boolean} [streaming=false] - 是否使用流式响应
+
+ * @returns {Promise<void>} - 无返回值
  */
-export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], container: HTMLElement, messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, cache: EntryAPI.ChatCache) {
-	/** 向处理器模型发送请求并等待响应（禁用流式响应） */
-	const response = await new EntryAPI.MultimodalRequest(messages, true, false).response;
+export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], container: HTMLElement, messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, cache: EntryAPI.ChatCache, streaming: boolean = false): Promise<void> {
+	/** 向处理器模型发送请求并等待响应 */
+	const response = await new EntryAPI.MultimodalRequest(messages, true, streaming).response;
 	// 如果未能获得期望中的响应，则抛出错误
 	if (!response.ok) throw new Error(`API返回错误: ${response.status} ${response.statusText}`);
+	// 处理流式响应
+	if (streaming) await processStreamingResponse(response, messageObject, contentElement, cache);
+	// 处理非流式响应
+	else await processNonStreamingResponse(response, cache);
+	// 如果有工具调用，处理它们并重新发送请求
+	if (cache.toolCalls.length > 0) {
+		/** 处理工具调用 */
+		const hasProcessedToolCalls = await EntryAPI.handleToolCalls(cache, messages, contentElement, messageObject);
+		// 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
+		if (hasProcessedToolCalls) return await sendRequestWithTools(messages, container, messageObject, contentElement, cache, streaming);
+	}
+}
+
+/**
+ * 处理流式响应
+ *
+ * @param {Response} response - API响应对象
+ *
+ * @param {EntryAPI.HistoryMessage} messageObject - 消息对象
+ *
+ * @param {HTMLElement} contentElement - 内容元素
+ *
+ * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
+ *
+ * @returns {Promise<void>} - 无返回值
+ */
+export async function processStreamingResponse(response: Response, messageObject: EntryAPI.HistoryMessage, contentElement: HTMLElement, cache: EntryAPI.ChatCache): Promise<void> {
+	/** 从响应体获取读取器 */
+	const reader = response.body.getReader();
+	/** 创建文本解码器 */
+	const decoder = new TextDecoder();
+	/** 累计内容 */
+	let accumulatedContent = '';
+	while (true) {
+		/** 读取数据块 */
+		const { done, value } = await reader.read();
+		// 检查是否完成读取
+		if (done) break;
+		/** 解码数据块 */
+		const chunk = decoder.decode(value, { stream: true });
+		/** 按行分割数据块 */
+		const lines = chunk.split('\n');
+		// 处理每一行数据
+		for (const line of lines) {
+			if (line.trim() === '' || line.trim() === 'data: [DONE]' || !line.startsWith('data: ')) continue;
+			const analysisData = JSON.parse(line.substring(6));
+			const choice = analysisData.choices[0];
+			// 处理令牌速度
+			if (analysisData.timings?.predicted_per_second && EntryAPI.OnlyData.isDebugMode) {
+				updateTokenSpeed(analysisData.timings.predicted_per_second);
+			}
+			// 处理推理内容
+			if (choice.message?.reasoning_content && EntryAPI.OnlyData.isDebugMode) {
+				cache.reasoningContent = choice.message.reasoning_content;
+			}
+			// 处理工具调用
+			if (choice.message?.tool_calls) {
+				for (const toolCall of choice.message.tool_calls) {
+					toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+					cache.toolCalls.push(toolCall);
+				}
+			}
+			// 处理内容增量
+			if (choice.delta?.content) {
+				accumulatedContent += choice.delta.content;
+				cache.descriptionContent = accumulatedContent;
+				// 实时更新消息内容
+				updateMessageContent(messageObject, contentElement, cache);
+			}
+			// 处理完成原因
+			if (choice.finish_reason) break;
+		}
+	}
+	// 关闭读取器
+	reader.releaseLock();
+}
+
+/**
+ * 处理非流式响应
+ *
+ * @param {Response} response - API响应对象
+ *
+ * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
+ *
+ * @returns {Promise<void>} - 无返回值
+ */
+export async function processNonStreamingResponse(response: Response, cache: EntryAPI.ChatCache): Promise<void> {
 	/** 解析响应为JSON */
 	const jsonData = await response.json();
 	// 处理推理内容数据
@@ -80,13 +171,6 @@ export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], con
 	if (jsonData.choices?.[0]?.message?.content) {
 		cache.descriptionContent = jsonData.choices[0].message.content;
 	}
-	// 如果有工具调用，处理它们并重新发送请求
-	if (cache.toolCalls.length > 0) {
-		/** 处理工具调用 */
-		const hasProcessedToolCalls = await EntryAPI.handleToolCalls(cache, messages, contentElement, messageObject);
-		// 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
-		if (hasProcessedToolCalls) return await sendRequestWithTools(messages, container, messageObject, contentElement, cache);
-	}
 }
 
 /**
@@ -97,8 +181,10 @@ export async function sendRequestWithTools(messages: EntryAPI.PostMessage[], con
  * @param {EntryAPI.HistoryMessage | undefined} messageObject - 消息对象
  *
  * @param {HTMLElement | null} messageElement - 消息元素
+ *
+ * @returns {Promise<void>} - 无返回值
  */
-export async function cleanupResources(contentElement: HTMLElement | null, messageObject?: EntryAPI.HistoryMessage, messageElement?: HTMLElement | null) {
+export async function cleanupResources(contentElement: HTMLElement | null, messageObject?: EntryAPI.HistoryMessage, messageElement?: HTMLElement | null): Promise<void> {
 	if (contentElement) {
 		// 为think区块添加折叠功能
 		(contentElement.querySelectorAll(".toggle_think_button") as NodeListOf<HTMLButtonElement>).forEach(EntryAPI.bindFoldingButton);
@@ -120,7 +206,7 @@ export async function cleanupResources(contentElement: HTMLElement | null, messa
  *
  * 用于缓存聊天过程中的状态，包括当前工具调用、当前工具调用索引、当前函数参数、当前函数名称、思考内容、描述内容、推理内容和工具调用数组。
  */
-export class CacheRocessing implements EntryAPI.ChatCache {
+export class CacheProcessing implements EntryAPI.ChatCache {
 	public currentToolCall: EntryAPI.ToolCall;
 	public currentToolCallIndex: number = -1;
 	public currentFunctionArgs: string;
