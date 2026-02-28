@@ -50,16 +50,6 @@ body {
 	}
 }
 
-@keyframes message-fade {
-	0% {
-		opacity: 1.0;
-	}
-
-	100% {
-		opacity: 0.35;
-	}
-}
-
 @keyframes border-pulse {
 
 	0% {

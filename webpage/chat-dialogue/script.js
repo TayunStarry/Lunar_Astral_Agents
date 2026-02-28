@@ -7324,24 +7324,118 @@ function updateTokenSpeed(predictedPerSecond) {
  * @returns {Promise<void>} - 无返回值
  */
 async function sendRequestWithTools(messages, container, messageObject, contentElement, cache, streaming = false) {
-    /** 向处理器模型发送请求并等待响应 */
-    const response = await new MultimodalRequest(messages, true, streaming).response;
-    // 如果未能获得期望中的响应，则抛出错误
-    if (!response.ok)
-        throw new Error(`API返回错误: ${response.status} ${response.statusText}`);
-    // 处理流式响应
-    if (streaming)
+    try {
+        /** 向处理器模型发送请求并等待响应 */
+        const response = await new MultimodalRequest(messages, true, streaming).response;
+        // 如果未能获得期望中的响应，则抛出错误
+        if (!response.ok)
+            throw new Error(`API返回错误: ${response.status} ${response.statusText}`);
+        // 默认按照流式响应进行处理
         await processStreamingResponse(response, messageObject, contentElement, cache);
-    // 处理非流式响应
-    else
-        await processNonStreamingResponse(response, cache);
-    // 如果有工具调用，处理它们并重新发送请求
-    if (cache.toolCalls.length > 0) {
-        /** 处理工具调用 */
-        const hasProcessedToolCalls = await handleToolCalls(cache, messages, contentElement, messageObject);
-        // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
-        if (hasProcessedToolCalls)
-            return await sendRequestWithTools(messages, container, messageObject, contentElement, cache, streaming);
+        // 如果有工具调用，处理它们并重新发送请求
+        if (cache.toolCalls.length > 0) {
+            /** 处理工具调用 */
+            const hasProcessedToolCalls = await handleToolCalls(cache, messages, contentElement, messageObject);
+            // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
+            if (hasProcessedToolCalls)
+                return await sendRequestWithTools(messages, container, messageObject, contentElement, cache, streaming);
+        }
+    }
+    catch (error) {
+        console.error('请求处理错误:', error);
+        // 显示错误信息给用户
+        messageObject.content = `错误: ${error instanceof Error ? error.message : String(error)}`;
+        updateMessageContent(messageObject, contentElement, cache);
+        // 清理资源
+        await cleanupResources(contentElement, messageObject);
+    }
+}
+/**
+ * 处理工具调用
+ */
+function processToolCalls(toolCalls, cache) {
+    for (const toolCall of toolCalls) {
+        try {
+            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+            cache.toolCalls.push(toolCall);
+        }
+        catch (parseError) {
+            console.error('工具调用参数解析错误:', parseError);
+        }
+    }
+}
+/**
+ * 处理单条流数据行
+ */
+async function processStreamLine(line, cache, messageObject, contentElement) {
+    if (line.trim() === '' || line.trim() === 'data: [DONE]')
+        return false;
+    if (!line.startsWith('data: ')) {
+        await processNonStreamingResponse(line, cache);
+        return true;
+    }
+    try {
+        const analysisData = JSON.parse(line.substring(6));
+        const choice = analysisData.choices?.[0];
+        if (!choice)
+            return false;
+        if (analysisData.timings?.predicted_per_second && OnlyData.isDebugMode) {
+            updateTokenSpeed(analysisData.timings.predicted_per_second);
+        }
+        if (choice.message?.reasoning_content && OnlyData.isDebugMode) {
+            cache.reasoningContent = choice.message.reasoning_content;
+        }
+        if (choice.message?.tool_calls) {
+            processToolCalls(choice.message.tool_calls, cache);
+        }
+        if (choice.delta?.content) {
+            cache.descriptionContent += choice.delta.content;
+            updateMessageContent(messageObject, contentElement, cache);
+        }
+        return !!choice.finish_reason;
+    }
+    catch (parseError) {
+        console.error('JSON解析错误:', parseError);
+        return false;
+    }
+}
+/**
+ * 读取流数据
+ */
+async function readStreamData(reader, decoder, cache, messageObject, contentElement) {
+    while (true) {
+        if (OnlyData.abortController?.signal.aborted)
+            return;
+        const { done, value } = await reader.read();
+        if (done)
+            break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+            const shouldBreak = await processStreamLine(line, cache, messageObject, contentElement);
+            if (shouldBreak)
+                break;
+        }
+    }
+}
+/**
+ * 处理流错误
+ */
+async function handleStreamError(error, messageObject, contentElement, cache) {
+    console.error('流式响应处理错误:', error);
+    messageObject.content = `错误: ${error instanceof Error ? error.message : String(error)}`;
+    updateMessageContent(messageObject, contentElement, cache);
+    await cleanupResources(contentElement, messageObject);
+}
+/**
+ * 释放读取器锁
+ */
+function releaseReaderLock(reader) {
+    try {
+        reader.releaseLock();
+    }
+    catch (releaseError) {
+        console.error('释放读取器锁失败:', releaseError);
     }
 }
 /**
@@ -7358,91 +7452,67 @@ async function sendRequestWithTools(messages, container, messageObject, contentE
  * @returns {Promise<void>} - 无返回值
  */
 async function processStreamingResponse(response, messageObject, contentElement, cache) {
-    /** 从响应体获取读取器 */
+    /** 获取响应体读取器 */
     const reader = response.body.getReader();
     /** 创建文本解码器 */
     const decoder = new TextDecoder();
-    /** 累计内容 */
-    let accumulatedContent = '';
-    while (true) {
-        /** 读取数据块 */
-        const { done, value } = await reader.read();
-        // 检查是否完成读取
-        if (done)
-            break;
-        /** 解码数据块 */
-        const chunk = decoder.decode(value, { stream: true });
-        /** 按行分割数据块 */
-        const lines = chunk.split('\n');
-        // 处理每一行数据
-        for (const line of lines) {
-            if (line.trim() === '' || line.trim() === 'data: [DONE]' || !line.startsWith('data: '))
-                continue;
-            const validData = line.substring(6);
-            const analysisData = JSON.parse(validData);
-            const choice = analysisData.choices[0];
-            // 处理令牌速度
-            if (analysisData.timings?.predicted_per_second && OnlyData.isDebugMode) {
-                updateTokenSpeed(analysisData.timings.predicted_per_second);
-            }
-            // 处理推理内容
-            if (choice.message?.reasoning_content && OnlyData.isDebugMode) {
-                cache.reasoningContent = choice.message.reasoning_content;
-            }
-            // 处理工具调用
-            if (choice.message?.tool_calls) {
-                for (const toolCall of choice.message.tool_calls) {
-                    toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-                    cache.toolCalls.push(toolCall);
-                }
-            }
-            // 处理内容增量
-            if (choice.delta?.content) {
-                accumulatedContent += choice.delta.content;
-                cache.descriptionContent = accumulatedContent;
-                // 实时更新消息内容
-                updateMessageContent(messageObject, contentElement, cache);
-            }
-            // 处理完成原因
-            if (choice.finish_reason)
-                break;
-        }
+    // 读取流数据
+    try {
+        await readStreamData(reader, decoder, cache, messageObject, contentElement);
     }
-    // 关闭读取器
-    reader.releaseLock();
+    // 处理流错误
+    catch (error) {
+        await handleStreamError(error, messageObject, contentElement, cache);
+        //throw error;
+    }
+    // 释放读取器锁
+    finally {
+        releaseReaderLock(reader);
+    }
 }
 /**
  * 处理非流式响应
  *
- * @param {Response} response - API响应对象
+ * @param {string} message - 非流式响应消息
  *
  * @param {EntryAPI.ChatCache} cache - 流处理状态缓存
  *
  * @returns {Promise<void>} - 无返回值
  */
-async function processNonStreamingResponse(response, cache) {
-    /** 解析响应为JSON */
-    const jsonData = await response.json();
-    // 处理推理内容数据
-    if (jsonData.choices?.[0]?.message?.reasoning_content && OnlyData.isDebugMode) {
-        cache.reasoningContent = jsonData.choices[0].message.reasoning_content;
-    }
-    // 检查是否有预测令牌数
-    if (jsonData.timings?.predicted_per_second && OnlyData.isDebugMode) {
-        updateTokenSpeed(jsonData.timings.predicted_per_second);
-    }
-    // 处理工具调用
-    if (jsonData.choices?.[0]?.message?.tool_calls) {
-        for (const toolCall of jsonData.choices[0].message.tool_calls) {
-            // 解析arguments字段
-            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-            // 记录工具调用
-            cache.toolCalls.push(toolCall);
+async function processNonStreamingResponse(message, cache) {
+    try {
+        /** 解析响应为JSON */
+        const jsonData = JSON.parse(message);
+        // 处理推理内容数据
+        if (jsonData.choices?.[0]?.message?.reasoning_content && OnlyData.isDebugMode) {
+            cache.reasoningContent = jsonData.choices[0].message.reasoning_content;
+        }
+        // 检查是否有预测令牌数
+        if (jsonData.timings?.predicted_per_second && OnlyData.isDebugMode) {
+            updateTokenSpeed(jsonData.timings.predicted_per_second);
+        }
+        // 处理工具调用
+        if (jsonData.choices?.[0]?.message?.tool_calls) {
+            for (const toolCall of jsonData.choices[0].message.tool_calls) {
+                try {
+                    // 解析arguments字段
+                    toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                    // 记录工具调用
+                    cache.toolCalls.push(toolCall);
+                }
+                catch (parseError) {
+                    console.error('工具调用参数解析错误:', parseError);
+                }
+            }
+        }
+        // 处理内容数据
+        if (jsonData.choices?.[0]?.message?.content) {
+            cache.descriptionContent = jsonData.choices[0].message.content;
         }
     }
-    // 处理内容数据
-    if (jsonData.choices?.[0]?.message?.content) {
-        cache.descriptionContent = jsonData.choices[0].message.content;
+    catch (error) {
+        console.error('非流式响应处理错误:', error);
+        //throw error;
     }
 }
 /**
@@ -7800,8 +7870,6 @@ async function executeDialogueAndParse(container, promptMessage) {
     const { messageObject, messageElement, contentElement } = await createAssistantMessageElement(container);
     /** 聊天缓存信息 */
     const chatCache = new CacheProcessing();
-    /** 定义定时器ID，用于后续清除定时器 */
-    let tickID = null;
     // 检查消息元素是否存在
     if (!contentElement) {
         // 若内容元素不存在，清理资源并返回
@@ -7811,18 +7879,17 @@ async function executeDialogueAndParse(container, promptMessage) {
     try {
         /** 构建消息数组 */
         const messages = await createMessages(promptMessage, contentElement);
-        // 延迟800毫秒添加隐藏类，实现消息淡出效果
-        tickID = setTimeout(() => messageElement.classList.add("message-hide"), 800);
-        // 渲染思考状态消息
+        // 渲染思考状态消息样式
         contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
+        messageElement.style.opacity = "0.35";
+        messageElement.style.transform = "scale(0.85)";
+        messageElement.style.transition = "all 1.0s ease-in-out";
         /** 发送请求并处理工具调用 */
-        await sendRequestWithTools(messages, container, messageObject, contentElement, chatCache, true);
-        // 移除隐藏类，显示消息
-        messageElement.classList.remove("message-hide");
+        await sendRequestWithTools(messages, container, messageObject, contentElement, chatCache);
+        // 重置消息元素样式
+        messageElement.removeAttribute("style");
     }
     catch (error) {
-        // 清除定时器
-        clearTimeout(tickID);
         // 忽略中止错误
         if (!(error instanceof Error) || error.name === "AbortError")
             return;
@@ -7832,8 +7899,6 @@ async function executeDialogueAndParse(container, promptMessage) {
         tracelessRenderMessage(`抱歉，请求处理时出错: ${error.message}`, container);
     }
     finally {
-        // 清除定时器
-        clearTimeout(tickID);
         /** 获取更新后的消息内容 */
         const content = updateMessageContent(messageObject, contentElement, chatCache);
         // 执行聊天结束事件
