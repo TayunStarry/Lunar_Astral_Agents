@@ -327,8 +327,6 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 	const { messageObject, messageElement, contentElement } = await createAssistantMessageElement(container);
 	/** 聊天缓存信息 */
 	const chatCache = new EntryAPI.CacheProcessing();
-	/** 定义定时器ID，用于后续清除定时器 */
-	let tickID: NodeJS.Timeout = null;
 	// 检查消息元素是否存在
 	if (!contentElement) {
 		// 若内容元素不存在，清理资源并返回
@@ -338,18 +336,17 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 	try {
 		/** 构建消息数组 */
 		const messages = await createMessages(promptMessage, contentElement);
-		// 延迟800毫秒添加隐藏类，实现消息淡出效果
-		tickID = setTimeout(() => messageElement.classList.add("message-hide"), 800);
-		// 渲染思考状态消息
+		// 渲染思考状态消息样式
 		contentElement.innerHTML = '<em><strong>月华正在输入中......</strong></em>';
+		messageElement.style.opacity = "0.35";
+		messageElement.style.transform = "scale(0.85)";
+		messageElement.style.transition = "all 1.0s ease-in-out";
 		/** 发送请求并处理工具调用 */
-		await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, chatCache, true);
-		// 移除隐藏类，显示消息
-		messageElement.classList.remove("message-hide")
+		await EntryAPI.sendRequestWithTools(messages, container, messageObject, contentElement, chatCache);
+		// 重置消息元素样式
+		messageElement.removeAttribute("style");
 	}
 	catch (error) {
-		// 清除定时器
-		clearTimeout(tickID);
 		// 忽略中止错误
 		if (!(error instanceof Error) || error.name === "AbortError") return;
 		// 捕获异常并显示错误信息
@@ -358,8 +355,6 @@ export async function executeDialogueAndParse(container: HTMLElement, promptMess
 		EntryAPI.tracelessRenderMessage(`抱歉，请求处理时出错: ${error.message}`, container);
 	}
 	finally {
-		// 清除定时器
-		clearTimeout(tickID);
 		/** 获取更新后的消息内容 */
 		const content = EntryAPI.updateMessageContent(messageObject, contentElement, chatCache);
 		// 执行聊天结束事件
