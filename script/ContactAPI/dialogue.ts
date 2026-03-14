@@ -125,10 +125,8 @@ export async function convertToPostMessageFormat(messages: EntryAPI.MixedMessage
 		else {
 			/** 转换图片URL为完整格式 */
 			let url = transformImageUrl(imageUrl);
-			/** 检查当前URL是否为localhost格式 */
-			const isLocalhost = EntryAPI.OnlyData.MultimodalUrl.startsWith("/v1");
-			/** 非localhost环境下，确保图片URL是base64格式 */
-			if (!isLocalhost && !url.startsWith("data:image")) url = await convertUrlToBase64(url);
+			// 确保图片URL是base64格式
+			if (!url.startsWith("data:image")) url = await convertUrlToBase64(url);
 			/** 构造多模态内容数组 */
 			const content: [EntryAPI.ImageContent, EntryAPI.TextContent] = [
 				{ type: "image_url", image_url: { url } },
@@ -189,11 +187,13 @@ async function getDefaultHistory(maxMessages: number, messageElement?: HTMLEleme
  *
  * @param {string|undefined} promptMessage - 自定义提示消息，可选参数
  *
+ * @param {HTMLElement|undefined} contentElement - 消息元素，可选参数
+ *
  * @returns {Promise<Array>} 包含role和content属性的消息对象数组
  */
 export async function createMessages(promptMessage?: string, contentElement?: HTMLElement): Promise<EntryAPI.PostMessage[]> {
 	/** 加载对话历史消息 */
-	const messages: EntryAPI.PostMessage[] = await buildContextMessages(contentElement);
+	const messages: EntryAPI.PostMessage[] = await convertToPostMessageFormat(structuredClone(EntryAPI.OnlyData.historyMessage), contentElement);
 	/** 查询当前地址 */
 	async function queryCurrentAddress(): Promise<string[]> {
 		// 如果当前地址已缓存，直接返回
