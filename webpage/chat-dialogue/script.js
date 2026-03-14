@@ -7559,49 +7559,6 @@ class CacheProcessing {
     constructor() { }
 }
 
-/** 最近保留的消息数量（不包括最后一条用户消息） */
-const keepRecentCount = 8;
-/** 最大上下文消息数 */
-const maxContextMessages = 24;
-/**
- * 构建上下文消息数组，包含排序后的早期消息、最近消息和最后一条用户消息
- *
- * @param {HTMLElement|undefined} contentElement - 消息元素，可选参数
- *
- * @returns {Promise<EntryAPI.PostMessage[]>} - 包含排序后的上下文消息数组的 Promise
- */
-async function buildContextMessages(contentElement) {
-    // 使用 structuredClone 进行深拷贝，避免后续操作污染原始数组
-    const availableHistory = structuredClone(OnlyData.historyMessage);
-    /** 无需进行排序的最近消息（保持原序） */
-    const recentMemories = availableHistory.slice(-keepRecentCount);
-    /** 从对话历史中倒序查找最近一条用户发出的消息 */
-    const lastUserMessage = availableHistory.slice().reverse().find(msg => msg.role === "user");
-    // 如果没有找到用户消息，返回默认历史
-    if (!lastUserMessage)
-        return await getDefaultHistory();
-    /** 当前用户消息的嵌入向量 */
-    const currentEmbedResponse = lastUserMessage.embedVector;
-    // 如果当前用户消息没有嵌入向量，返回默认历史
-    if (!currentEmbedResponse || currentEmbedResponse.length === 0)
-        return await getDefaultHistory(maxContextMessages, contentElement);
-    /** 解析知识库查询结果 */
-    const knowledgeResponseResult = await captureKnowledgeRanking("knowledge/lunar_notes.json", currentEmbedResponse);
-    /** 排序后的远期记忆 */
-    const remoteMemory = knowledgeRanking(availableHistory.slice(0, -keepRecentCount), currentEmbedResponse, keepRecentCount);
-    /** 最终的消息数组（知识库消息 + 远期记忆（相关性排序）+ 最近消息（保持原序）） */
-    const finalMessages = [...knowledgeResponseResult, ...remoteMemory, ...recentMemories];
-    /** 去重后的最终消息数组 */
-    const finalMessage = uniqueFinalMessages(finalMessages);
-    /** 将去重后的消息数组转换为 PostMessage 格式数组 */
-    const messages = (await convertToPostMessageFormat(finalMessage, contentElement)).filter(msg => msg.content);
-    // 如果是调试模式，添加调试信息
-    if (OnlyData.isDebugMode) {
-        await renderDebugInfo(messages, remoteMemory.length, recentMemories.length);
-    }
-    // 返回转换后的消息数组
-    return messages;
-}
 /**
  * 将内部消息格式转换为 PostMessage 格式
  *
@@ -7691,54 +7648,17 @@ async function convertToPostMessageFormat(messages, contentElement) {
     return processedMessages;
 }
 /**
- * 渲染调试信息
- *
- * @param {EntryAPI.PostMessage[]} messages - 最终的消息数组
- *
- * @param {number} sortedCount - 排序的消息数量
- *
- * @param {number} recentCount - 保持原序的最近消息数量
- */
-async function renderDebugInfo(messages, sortedCount, recentCount) {
-    /** 序列化消息数组 */
-    const messagesJson = JSON.stringify(messages, null, 2);
-    /** 调试信息 */
-    const debugInfo = [
-        `排序策略: 最近${recentCount}条保持原序, ${sortedCount}条按相似度排序`,
-        `总消息数: ${messages.length}`
-    ].join('\n');
-    /** 消息格式的修饰符 */
-    const modify = ['<think>\n```json\n', '\n```\n</think>'];
-    /** 渲染处理后的消息数组 */
-    const messageElement = await tracelessRenderMessage(modify[0] + messagesJson + modify[1] + debugInfo, chatHistoryPanel);
-    // 为think区块添加折叠功能
-    (messageElement?.querySelectorAll(".toggle_think_button")).forEach(bindFoldingButton);
-}
-/**
- * 获取默认的历史消息
- *
- * @param {number} maxMessages 最大消息数量
- *
- * @param {HTMLElement|undefined} messageElement - 消息元素，可选参数
- *
- * @returns {Promise<EntryAPI.PostMessage[]>} 默认的历史消息数组
- */
-async function getDefaultHistory(maxMessages, messageElement) {
-    /** 最后指定数量的历史消息数组 */
-    const lastMessages = OnlyData.historyMessage.slice(-24);
-    // 转换为 PostMessage 格式
-    return await convertToPostMessageFormat(lastMessages, messageElement);
-}
-/**
  * 创建与月华交互的消息数组
  *
  * @param {string|undefined} promptMessage - 自定义提示消息，可选参数
+ *
+ * @param {HTMLElement|undefined} contentElement - 消息元素，可选参数
  *
  * @returns {Promise<Array>} 包含role和content属性的消息对象数组
  */
 async function createMessages(promptMessage, contentElement) {
     /** 加载对话历史消息 */
-    const messages = await buildContextMessages(contentElement);
+    const messages = await convertToPostMessageFormat(structuredClone(OnlyData.historyMessage), contentElement);
     /** 查询当前地址 */
     async function queryCurrentAddress() {
         // 如果当前地址已缓存，直接返回
