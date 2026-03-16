@@ -9,6 +9,7 @@ import (
 	"log"                                  // 用于日志记录
 	"net/http"                             // 用于构建HTTP服务器
 	"strings"                              // 用于字符串操作
+	"time"                                 // 用于时间相关操作
 )
 
 // 全局变量
@@ -84,12 +85,51 @@ func startClientLoading() {
 	//clientUrl := fmt.Sprintf("https://localhost:%d", *config.BasicPort)
 	// 构建内部接口的 URL
 	internalURL := fmt.Sprintf("https://%s:%d", ip, *config.BasicPort)
-	// 检查是否非开发模式，如果不是开发模式，则自动打开浏览器访问服务器
-	if !*config.DevMode {
-		utils.OpenBrowser(internalURL)
+	// 检查是否使用 webview
+	if *config.UseWebView {
+		// 使用 webview 内嵌浏览器
+		if utils.IsWebViewSupported() {
+			go startWebViewBrowser(internalURL)
+		} else {
+			log.Printf("Webview[ERROR] -> 当前系统不支持 webview，回退到系统浏览器")
+			utils.OpenBrowser(internalURL)
+		}
+	} else {
+		// 检查是否非开发模式，如果不是开发模式，则自动打开浏览器访问服务器
+		if !*config.DevMode {
+			utils.OpenBrowser(internalURL)
+		}
 	}
 	// 打印服务器端口
 	PrintServerPort(internalURL)
+}
+
+// startWebViewBrowser 启动 webview 浏览器
+func startWebViewBrowser(url string) {
+	// 等待服务器启动完成
+	time.Sleep(1 * time.Second)
+
+	// 创建 webview 配置
+	webviewConfig := utils.WebViewConfig{
+		Title:     *config.WebViewTitle,
+		Width:     *config.WebViewWidth,
+		Height:    *config.WebViewHeight,
+		Resizable: *config.WebViewResizable,
+		Debug:     *config.WebViewDebug,
+	}
+
+	// 创建 webview 实例
+	w := utils.CreateWebView(webviewConfig)
+	if w == nil {
+		log.Printf("Webview[ERROR] -> 无法创建 webview 实例")
+		return
+	}
+
+	// 导航到指定 URL
+	utils.NavigateWebView(url)
+
+	// 运行 webview（阻塞）
+	utils.RunWebView()
 }
 
 // CloseWebSocketServer 关闭WebSocket服务器

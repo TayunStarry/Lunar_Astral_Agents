@@ -94,7 +94,24 @@ Lunar_Astral_Agents/
 
 ## 构建与运行
 
-### 构建项目
+### 构建 Webview 版本（需要 CGO）
+
+```bash
+# 为可执行文件添加图标
+rsrc -ico app.ico -o app.syso
+
+# 启用 CGO 并构建支持 webview 的版本
+set CGO_ENABLED=1
+go build -tags webview -o Lunar-Astral-Agents-webview.exe main.go
+```
+
+**注意**：webview 需要 CGO 支持，编译时需要满足以下条件：
+
+- **Windows**：需要安装 MinGW-w64 或 TDM-GCC
+- **macOS**：需要安装 Xcode 命令行工具
+- **Linux**：需要安装 GTK3 开发库 (`libgtk-3-dev`)
+
+### 构建普通版本
 
 ```bash
 # 为可执行文件添加图标
@@ -112,7 +129,26 @@ go build -o Lunar-Astral-Agents.exe main.go
 
 # 或使用go run直接运行
 go run main.go
+
+# 使用 webview 模式运行（需要 webview 版本）
+./Lunar-Astral-Agents-webview.exe --use-webview=true
+
+# 自定义 webview 窗口参数
+./Lunar-Astral-Agents-webview.exe --use-webview=true --webview-width=1920 --webview-height=1080 --webview-title="我的知识库"
 ```
+
+### 命令行参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--use-webview` | false | 是否使用 webview 内嵌浏览器 |
+| `--webview-title` | "月之华 - 知识库浏览器" | webview 窗口标题 |
+| `--webview-width` | 1280 | webview 窗口宽度 |
+| `--webview-height` | 720 | webview 窗口高度 |
+| `--webview-resizable` | true | webview 窗口是否可调整大小 |
+| `--webview-debug` | false | webview 调试模式 |
+| `--basic-port` | 36789 | 系统 Web 服务的监听端口 |
+| `--dev-mode` | false | 启用调试模式，显示详细日志且不自动打开 Web 界面 |
 
 ## OpenAI v1 协议端口
 
