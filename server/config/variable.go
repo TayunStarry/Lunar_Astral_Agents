@@ -24,7 +24,20 @@ var (
 )
 
 // ==================== 命令行参数配置 ====================
-
+var (
+	// UseWebView 是否使用 webview 内嵌浏览器
+	UseWebView = flag.Bool("use-webview", false, "是否使用 webview 内嵌浏览器")
+	// WebViewTitle webview 窗口标题
+	WebViewTitle = flag.String("webview-title", "月之华 - 知识库浏览器", "webview 窗口标题")
+	// WebViewWidth webview 窗口宽度
+	WebViewWidth = flag.Int("webview-width", 1280, "webview 窗口宽度")
+	// WebViewHeight webview 窗口高度
+	WebViewHeight = flag.Int("webview-height", 720, "webview 窗口高度")
+	// WebViewResizable webview 窗口是否可调整大小
+	WebViewResizable = flag.Bool("webview-resizable", true, "webview 窗口是否可调整大小")
+	// WebViewDebug webview 调试模式
+	WebViewDebug = flag.Bool("webview-debug", false, "webview 调试模式")
+)
 var (
 	// BasicPort 系统Web服务的监听端口，用户可通过此端口访问客户端界面
 	BasicPort = flag.Int("basic-port", 36789, "系统Web服务的监听端口，用户可通过此端口访问客户端界面")
@@ -36,6 +49,7 @@ var (
 	DevMode = flag.Bool("dev-mode", false, "启用调试模式，显示详细日志且不自动打开Web界面")
 	// ClearPort 启动时自动释放被占用的端口
 	ClearPort = flag.Bool("clear-port", true, "启动时自动释放被占用的端口")
+
 	// CertFile  证书文件路径，用于HTTPS加密通信
 	CertFile = flag.String("cert-file", LocalDir+"/certs/localhost.pem", "证书文件路径，用于HTTPS加密通信")
 	// KeyFile  私钥文件路径，用于HTTPS加密通信

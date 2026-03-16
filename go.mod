@@ -2,7 +2,10 @@ module Lunar-Astral-Agents
 
 go 1.24.4
 
-require github.com/disintegration/imaging v1.6.2
+require (
+	github.com/disintegration/imaging v1.6.2
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
+)
 
 require (
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
