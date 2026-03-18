@@ -26,6 +26,11 @@
     transition: var(--transition);
 }
 
+.chat-history-panel.control {
+    background: rgba(0, 0, 0, 0.2);
+    border: 5px solid rgba(0, 0, 0, 0.2);
+}
+
 .chat-history-panel.render {
     user-select: none;
 }

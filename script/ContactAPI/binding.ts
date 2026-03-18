@@ -162,8 +162,6 @@ export function bindCodeExecuteButtons(container: HTMLElement) {
 		async function createPageRender() {
 			// 清空简单渲染面板的内容，准备新的渲染
 			EntryAPI.simpleRenderingPanel.innerHTML = '';
-			// 显示聊天记录按钮
-			EntryAPI.chatHistoryButton.style.display = "flex";
 			/** 渲染消息元素 */
 			const messageElement = EntryAPI.renderMessage(await EntryAPI.createMessageObject("user", '', false, true, false, null, null), EntryAPI.simpleRenderingPanel);
 			/** 创建一个 iframe 元素，用于显示代码块内容 */

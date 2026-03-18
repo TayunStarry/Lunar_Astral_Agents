@@ -10,7 +10,7 @@ const debounceDelay = 200;
 let resizeTimerId: NodeJS.Timeout | null = null;
 
 /** 小屏幕宽度阈值 */
-export const smallScreenWidthThreshold = 550;
+export const smallScreenWidthThreshold = 654;
 
 /**
  * 判断传入的 URL 对象是否为 localhost 格式的地址
@@ -328,7 +328,6 @@ function dynamicOpacity() {
 	 */
 	function handleMouseMove(event: MouseEvent) {
 		// 遍历所有按钮
-		document.querySelectorAll('.power-button.live2d').forEach(button => buttonEvent(button, event));
 		document.querySelectorAll('.message-actions-panel').forEach(button => buttonEvent(button, event));
 	};
 	// 如果当前设备为触控设备（如手机、平板）
@@ -350,8 +349,12 @@ function dynamicOpacity() {
 function windowResizeEvent() {
 	// 检查窗口宽度是否大于小屏幕阈值，若是则直接返回，不执行后续操作
 	if (window.innerWidth > smallScreenWidthThreshold) {
-		// 隐藏 Live2D 输入面板
-		EntryAPI.live2dInputPanel.style.display = "none";
+		// 将 Live2D 容器面板移动到页面外面
+		EntryAPI.live2dContainerPanel.style.position = "fixed";
+		EntryAPI.live2dContainerPanel.style.left = "-9999px";
+		EntryAPI.live2dContainerPanel.style.top = "-9999px";
+		// 显示功能控制面板
+		EntryAPI.quickControlPanel.style.display = "flex";
 		/** 捕获所有配置面板 */
 		const configurePanels = document.querySelectorAll('.configure_panel') as NodeListOf<HTMLElement>;
 		/** 检查所有配置面板是否都为隐藏状态 */
@@ -366,8 +369,10 @@ function windowResizeEvent() {
 	EntryAPI.eraseAllConfigurePanel();
 	// 关闭配置面板选项
 	EntryAPI.OnlyData.configurePanelOption = "none";
-	// 显示 Live2D 输入面板
-	EntryAPI.live2dInputPanel.style.display = "flex";
+	// 移除 Live2D 容器面板的样式
+	EntryAPI.live2dContainerPanel.removeAttribute("style");
+	// 隐藏功能控制面板
+	EntryAPI.quickControlPanel.style.display = "none";
 	// 隐藏聊天历史容器面板
 	EntryAPI.chatHistoryContainerPanel.style.display = "none";
 	// 移除调试模式切换按钮的点击状态样式
@@ -432,8 +437,6 @@ function applySavedTheme() {
 
 //* 绑定 系统初始化事件
 document.addEventListener("DOMContentLoaded", systemInitializationEvent);
-//* 绑定 窗口大小调整事件
-document.addEventListener("DOMContentLoaded", windowResizeEvent);
 //* 绑定 窗口大小改变事件
 window.addEventListener('resize', () => resizeEvent());
 //* 添加 beforeunload 事件监听器，在页面即将卸载时取消所有延迟执行的任务，防止页面卸载后仍有未完成的定时任务

@@ -281,8 +281,6 @@ triggerLive2DStateButton.addEventListener("click",
 //* 绑定 切换轻量渲染面板 按钮点击事件
 simpleRenderingButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 轻量渲染 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 若当前已显示轻量渲染面板
@@ -307,8 +305,6 @@ simpleRenderingButton.addEventListener('click',
 //* 绑定 切换视觉共享面板 按钮点击事件
 shareScreenButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 视觉共享 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 若当前已显示视觉共享面板
@@ -326,6 +322,8 @@ shareScreenButton.addEventListener('click',
         EntryAPI.chatHistoryContainerPanel.style.display = "none";
         // 显示视觉共享面板
         EntryAPI.shareScreenContainerPanel.style.display = "flex";
+        // 开始截图
+        EntryAPI.screenshotCore.captureScreen();
         // 改变全局变量，表示当前显示视觉共享面板
         EntryAPI.OnlyData.configurePanelOption = 'shareScreenButton';
     }
@@ -333,8 +331,6 @@ shareScreenButton.addEventListener('click',
 //* 绑定 切换月华笔记面板 按钮点击事件
 lunarNotesButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 月华笔记 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 若当前已显示月华笔记面板
@@ -361,8 +357,6 @@ lunarNotesButton.addEventListener('click',
 //* 绑定 切换语音配置 按钮点击事件
 voiceConfigureButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 语音配置 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 若当前未显示系统配置
@@ -385,8 +379,6 @@ voiceConfigureButton.addEventListener('click',
 //* 绑定 功能控制面板 按钮点击事件
 functionControlButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 功能控制 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 若当前已显示功能控制面板
@@ -397,8 +389,6 @@ functionControlButton.addEventListener('click',
             EntryAPI.chatHistoryContainerPanel.style.display = "flex";
             // 隐藏功能控制面板
             EntryAPI.functionControlContainerPanel.style.display = "none";
-            // 隐藏聊天记录按钮
-            chatHistoryButton.style.display = "none";
             // 改变全局变量，表示无配置面板显示
             EntryAPI.OnlyData.configurePanelOption = 'any';
             // 结束事件响应
@@ -410,10 +400,6 @@ functionControlButton.addEventListener('click',
         EntryAPI.functionControlContainerPanel.style.display = "flex";
         // 隐藏对话和历史记录面板
         EntryAPI.chatHistoryContainerPanel.style.display = "none";
-        // 显示聊天记录按钮
-        chatHistoryButton.style.display = "flex";
-        // 变更聊天记录按钮透明度，使其可见
-        chatHistoryButton.style.opacity = "0.8";
         // 变更按钮样式, 添加点击中的样式类
         this.classList.add("clicking");
         // 改变全局变量，表示当前显示功能控制面板
@@ -423,8 +409,6 @@ functionControlButton.addEventListener('click',
 //* 绑定 聊天记录面板 按钮点击事件
 chatHistoryButton.addEventListener('click',
     function () {
-        // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-        if (window.innerWidth <= EntryAPI.smallScreenWidthThreshold) return EntryAPI.showSystemMessage("< 聊天记录 >不可在小屏幕下使用", "error");
         // 清除所有配置面板的显示状态
         EntryAPI.eraseAllConfigurePanel();
         // 显示对话和历史记录面板
@@ -433,8 +417,6 @@ chatHistoryButton.addEventListener('click',
         EntryAPI.functionControlContainerPanel.style.display = "none";
         // 改变全局变量，表示无配置面板显示
         EntryAPI.OnlyData.configurePanelOption = 'any';
-        // 隐藏聊天记录按钮
-        chatHistoryButton.style.display = "none";
     }
 );
 //* 绑定 自动播放 按钮点击事件
@@ -457,8 +439,6 @@ autoPlaySpeechButton.addEventListener('click',
             EntryAPI.showSystemMessage("启用< 消息自动朗读 >", "success");
 
         };
-        // 重载Live2D容器
-        EntryAPI.reloadLive2DContainer();
     }
 );
 //* 绑定 禁用语音识别自动发送 按钮点击事件
@@ -480,8 +460,6 @@ voiceRecognitionButton.addEventListener('click',
             EntryAPI.OnlyData.isDisableVoiceRecognition = true;
             EntryAPI.showSystemMessage("禁用< 语音识别并发送 >", "success");
         };
-        // 重载Live2D容器
-        EntryAPI.reloadLive2DContainer();
     }
 );
 //* 绑定 切换调试模式 按钮点击事件
@@ -501,8 +479,6 @@ debugModeButton.addEventListener('click',
             EntryAPI.OnlyData.isDebugMode = true;
             EntryAPI.showSystemMessage("启用< 调试模式 >", "success");
         };
-        // 重载Live2D容器
-        EntryAPI.reloadLive2DContainer();
     }
 );
 //* 绑定 切换连续记忆模式 按钮点击事件
@@ -530,8 +506,6 @@ longTermMemoryButton.addEventListener('click',
             EntryAPI.OnlyData.isContinuousMemory = true;
             EntryAPI.showSystemMessage("启用< 连续记忆模式 >", "success");
         };
-        // 重载Live2D容器
-        EntryAPI.reloadLive2DContainer();
     }
 );
 //* 绑定 切换主动消息模式 按钮点击事件
@@ -559,8 +533,6 @@ activeMessageButton.addEventListener('click',
             EntryAPI.OnlyData.isActiveMessageMode = true;
             EntryAPI.showSystemMessage("启用< 主动消息模式 >", "success");
         };
-        // 重载Live2D容器
-        EntryAPI.reloadLive2DContainer();
     }
 );
 //* 绑定 切换主题风格 按钮点击事件

@@ -418,7 +418,7 @@ export async function initLive2D() {
         // 异步加载当前指定的 Live2D 模型
         await loadModel();
         // 为窗口添加大小变化的监听事件，确保窗口大小改变时 Live2D 模型能正确显示
-        window.addEventListener('resize', () => reloadLive2DContainer());
+        window.addEventListener('resize', reloadLive2DContainer);
         // 设置初始状态为 IDLE
         setEmotionState(EmotionalState.IDLE);
         // 重新加载 Live2D 模型容器，确保模型在新容器尺寸下正确显示
@@ -433,7 +433,6 @@ export async function initLive2D() {
         }
     }
 };
-
 /**
  * 重新加载并调整 Live2D 模型容器
  *

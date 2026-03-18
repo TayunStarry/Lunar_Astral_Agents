@@ -12,7 +12,7 @@ export default [
 		output: [
 			{
 				// 指定输出文件路径
-				file: './webpage/chat-dialogue/script.js',
+				file: './webpage/script.js',
 				/*
 				 * 指定输出文件类型
 				 * rollup支持的格式有:
