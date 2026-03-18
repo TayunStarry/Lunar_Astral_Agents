@@ -1,10 +1,10 @@
 package llama
 
 import (
+	browser "Lunar-Astral-Agents/browser"  // 导入浏览器模块（如打开浏览器）
 	config "Lunar-Astral-Agents/parameter" // 导入项目配置模块（如路径、端口等）
-	utils "Lunar-Astral-Agents/utils"  // 导入工具函数（如打开浏览器）
-	"log"                               // 标准日志包，用于输出调试/错误信息
-	"os"                                // 提供操作系统相关功能（如文件操作）
+	"log"                                  // 标准日志包，用于输出调试/错误信息
+	"os"                                   // 提供操作系统相关功能（如文件操作）
 )
 
 /**
@@ -40,8 +40,8 @@ func CreateServers() {
 	if allEmpty {
 		log.Printf("GGUF模块[ERROR] -> 所有类型均未找到有效模型文件")
 		// 启动浏览器页面，辅助用户下载模型
-		utils.OpenBrowser("https://modelscope.cn/models/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/files")
-		utils.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
+		browser.OpenBrowser("https://modelscope.cn/models/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/files")
+		browser.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
 		return
 	}
 	// 使用获取到的模型路径启动不同类型的 GGUF 服务实例

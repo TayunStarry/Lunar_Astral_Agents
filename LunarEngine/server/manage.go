@@ -6,6 +6,7 @@ import (
 	llama "Lunar-Astral-Agents/reasoning/system"   // GGUF相关包
 	release "Lunar-Astral-Agents/release"          // 端口释放相关包
 	handlers "Lunar-Astral-Agents/server/handlers" // 处理API请求的包
+	utils "Lunar-Astral-Agents/utils"              // 地址查询相关包
 	"context"                                      // 用于处理请求上下文和超时
 	"encoding/json"                                // 用于JSON编码/解码
 	"flag"                                         // 用于解析命令行参数
@@ -56,6 +57,8 @@ func InitializeServer() {
 	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
 		log.Fatalf("Lunar模块[ERROR] -> %v", err)
 	}
+	// 查询当前地址信息
+	utils.QueryCurrentAddress()
 	// 注册HTTP处理器
 	registerHandlers()
 	// 创建GGUF服务器

@@ -10,5 +10,5 @@ var (
 	// MinPort 系统Web服务的最小监听端口，界定了系统Web服务的端口范围
 	MinPort = flag.Int("min-port", *BasicPort-5, "系统Web服务的最小监听端口，界定了系统Web服务的端口范围")
 	// ClearPort 启动时自动释放被占用的端口
-	ClearPort = flag.Bool("clear-port", true, "启动时自动释放被占用的端口")
+	ClearPort = flag.Bool("clear-port", false, "启动时自动释放被占用的端口")
 )

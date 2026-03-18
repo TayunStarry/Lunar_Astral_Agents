@@ -14,7 +14,7 @@ import (
 
 // GetDynamicSystemPrompt 获取动态系统提示词 - 直接读取文件
 func GetDynamicSystemPrompt() (string, error) {
-	filePath := filepath.Join(*config.LocalDir, "resources/prompts/externalDialogue.md")
+	filePath := filepath.Join(*config.LocalDir, "resources/prompts/systemPrompt.md")
 	body, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("读取系统提示词文件失败: %w", err)
@@ -22,13 +22,18 @@ func GetDynamicSystemPrompt() (string, error) {
 	promptContent := string(body)
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)
-	promptContent = strings.ReplaceAll(promptContent, "{current-address}", "最终档案馆-[神之梦]档案室")
+	address := config.ServerAddress
+	if len(address) < 2 {
+		address = []string{"江苏省", "南京市"}
+	}
+	addressStr := address[0] + "-" + address[1]
+	promptContent = strings.ReplaceAll(promptContent, "{current-address}", addressStr)
 	return promptContent, nil
 }
 
 // GetEmbeddingVector 获取嵌入向量
 func GetEmbeddingVector(text string) ([]float64, error) {
-	embeddingReq := map[string]interface{}{
+	embeddingReq := map[string]any{
 		"input": text,
 		"model": "system-embedding",
 	}
