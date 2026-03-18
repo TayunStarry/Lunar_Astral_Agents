@@ -14,6 +14,8 @@ var (
 	ModelReady = 0
 	// MaxModelAmount 表示系统支持的最大模型数量，0 可作为初始未设置值。
 	MaxModelAmount = 0
+	// ServerAddress 存储服务器的IP地址信息
+	ServerAddress = []string{}
 )
 
 // 模型服务映射与锁
