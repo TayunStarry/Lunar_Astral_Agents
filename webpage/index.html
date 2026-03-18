@@ -1,72 +1,588 @@
-<!-- 声明文档类型为 HTML5 -->
 <!DOCTYPE html>
-<!-- 根元素，设置页面语言为简体中文 -->
 <html lang="zh-CN">
 
-<!-- 文档头部，包含页面元数据 -->
-
 <head>
-    <!-- 设置文档字符编码为 UTF-8 -->
-    <meta charset="UTF-8">
-    <!-- 适配移动端设备，设置视口宽度为设备宽度，初始缩放比例为 1.0，最大缩放比例为 5.0 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <!-- 设置页面标题 -->
-    <title>『 月华 』正在等待与您聊天 ~ </title>
-    <!-- 定义页面的样式信息 -->
-    <style>
-        /**
-         * 引入 Font Awesome 6.4.0 图标库样式文件
-         */
-        @import url('/read/resources/external/fontAwesome/css/all.min.css');
-        /**
-         * 引入自定义的页面样式文件
-         */
-        @import url('./style.css');
-    </style>
+	<!-- 字符编码设置 - 使用UTF-8支持中文 -->
+	<meta charset="UTF-8">
+	<!-- 响应式视口设置 - 适配移动设备 -->
+	<meta name="viewport" content="width=device-width, minimum-scale=0.5, maximum-scale=0.8">
+	<!-- 页面标题 - 显示在浏览器标签页 -->
+	<title>『 星月智能 』月之华</title>
+	<!-- Markdown解析 - marked.js -->
+	<script src="/read/resources/external/marked.min.js"></script>
+	<!-- 图表库 - ECharts v5.4.3 -->
+	<script src="/read/resources/external/echarts.min.js"></script>
+	<!-- 流程图库 - Mermaid v10.5.0 -->
+	<script src="/read/resources/external/mermaid.min.js"></script>
+	<!-- 图标库 - Font Awesome 6.4.0 -->
+	<link rel="stylesheet" href="/read/resources/external/fontAwesome/css/all.min.css">
+	<!-- 代码高亮 - highlight.js v11.7.0 -->
+	<script src="/read/resources/external/highlight/highlight.min.js"></script>
+	<!-- 代码高亮样式 - GitHub风格 -->
+	<link rel="stylesheet" href="/read/resources/external/highlight/styles/github.css">
+	<!-- 引入Live2D -->
+	<script src="/read/resources/external/live2dcubismcore.min.js"></script>
+	<!-- 引入Pixi.js -->
+	<script src="/read/resources/external/pixi.5.3.12.min.js"></script>
+	<!-- 引入Pixi-Live2D -->
+	<script src="/read/resources/external/pixi-live2d-display-cubism4.min.js"></script>
+	<!-- 引入QRCode.js -->
+	<script src="/read/resources/external/qrcode.min.js"></script>
+	<!-- 引入KaTeX CSS样式文件，为数学公式提供渲染样式 -->
+	<link rel="stylesheet" href="/read/resources/external/katex/katex.min.css">
+	<!-- 引入KaTeX核心JS文件，提供数学公式渲染功能 -->
+	<script defer src="/read/resources/external/katex/katex.min.js"></script>
+	<!-- 引入KaTeX自动渲染插件，可自动识别并渲染页面中的数学公式 -->
+	<script defer src="/read/resources/external/katex/contrib/auto-render.min.js"></script>
+	<!-- 引入项目样式表 - 基础/布局/按钮/面板/响应式/组件样式 -->
+	<style>
+		@import url("./importVariables.css");
+		@import url("./importAnimation.css");
+		@import url("./importLayout.css");
+		@import url("./importComponents.css");
+		@import url("./importLive2d.css");
+		@import url("./importButton.css");
+		@import url("./importPanel.css");
+		@import url("./importMarkdown.css");
+		@import url("./importMermaid.css");
+		@import url("./importMessage.css");
+		@import url("./importScreenshot.css");
+		@import url("/read/resources/universal/multimedia_preview.css");
+	</style>
+	<!-- 引入项目脚本 -->
+	<script src="/read/resources/universal/multimedia_preview.js"></script>
+	<script src="./script.js" type="module"></script>
 </head>
 
-<!-- 页面主体，包含所有可见内容 -->
-
 <body>
-    <!-- 背景元素，用于设置页面背景样式 -->
-    <div class="background"></div>
-    <!-- 粒子效果容器，用于展示粒子动画 -->
-    <div class="particles-container" id="particlesContainer"></div>
-    <!-- 玻璃效果元素，用于添加玻璃质感样式 -->
-    <div class="glass-effect"></div>
-    <!-- 页面主要内容容器 -->
-    <div class="content">
-        <!-- Logo 及副标题容器 -->
-        <div class="logo-container">
-            <!-- 显示 Logo 名称 -->
-            <div class="logo"> 月华 </div>
-            <!-- 显示 Logo 副标题 -->
-            <div class="subtitle">您专属的本地智能 AI 少女助理</div>
-        </div>
-        <!-- 欢迎文本 -->
-        <h1 class="welcome-text">让我们一同认知世界吧!</h1>
-        <!-- 进度条容器 -->
-        <div class="progress-container">
-            <!-- 进度条主体 -->
-            <div class="progress-bar" id="progressBar">
-                <!-- 进度条发光效果 -->
-                <div class="progress-glow"></div>
-            </div>
-            <!-- 显示进度百分比 -->
-            <div class="progress-text" id="progressText">0%</div>
-        </div>
-        <!-- 进入主页按钮，初始状态为禁用 -->
-        <button class="enter-btn" id="enterBtn" disabled>
-            <!-- 按钮文本 -->
-            <span class="btn-text">进入主页</span>
-            <!-- 按钮发光效果 -->
-            <div class="btn-glow"></div>
-        </button>
-    </div>
-    <!-- 引入页面交互逻辑的 JavaScript 文件 -->
-    <script src="./script.js"> </script>
-</body>
+	<!-- 背景容器，用于设置页面整体背景样式 -->
+	<div class="background"></div>
+	<!-- 玻璃效果容器，用于实现页面的玻璃拟态效果 -->
+	<div class="glass-effect"></div>
+	<!-- 主容器 - 包含所有界面元素 -->
+	<div class="container">
+		<!-- 主界面布局 -->
+		<div class="main-container-panel" id="mainContainerPanel">
+			<!-- 功能控制按钮 -->
+			<div class="chat-container-panel" id="quickControlPanel" style="min-width: 120px; flex: 0;">
+				<div class="chat-history-panel control" style="align-items: center;">
+					<!-- 功能控制按钮 -->
+					<button class="power-button live2d" id="functionControlButton" title="功能控制">
+						<i class="fas fa-cog"></i>
+					</button>
+					<!-- 聊天记录按钮 -->
+					<button class="power-button live2d" id="chatHistoryButton" title="聊天记录" >
+						<i class="fas fa-scroll"></i>
+					</button>
+					<!-- 深色与浅色模式切换按钮 -->
+					<button class="power-button live2d" id="themeButton" title="切换主题">
+						<i class="fas fa-moon"></i>
+					</button>
+					<!-- 语音输入按钮 -->
+					<button class="power-button live2d" id="voiceReleaseButton" title="语音输入">
+						<i class="fas fa-microphone"></i>
+					</button>
+					<!-- 连续记忆模式切换按钮 -->
+					<button class="power-button live2d" id="longTermMemoryButton" title="连续记忆">
+						<i class="fas fa-memory"></i>
+					</button>
+					<!-- 主动消息模式切换按钮 -->
+					<button class="power-button live2d" id="activeMessageButton" title="主动消息">
+						<i class="fas fa-comment-slash"></i>
+					</button>
+				</div>
+			</div>
+			<!-- Live2D模型交互面板 -->
+			<div class="live2d-container-panel" id="live2dContainerPanel">
+				<!-- Live2D模型容器 -->
+				<div id="live2dContainer">
+					<!-- 触摸交互区域，用于触发 Live2D 模型的触摸反馈 -->
+					<div class="trouch-interaction">
+						<!-- 垂直布局面板，设置最小宽度和高度均为 75%，用于排列触摸交互按钮 -->
+						<div class="vertical-layout-panel" style="min-width: 55%; min-height: 75%;">
+							<!-- 头部触摸交互按钮，点击可触发 Live2D 模型头部的触摸反馈 -->
+							<button class="trouch-interaction-button" id="headTouchButton"></button>
+							<!-- 身体触摸交互按钮，点击可触发 Live2D 模型身体的触摸反馈 -->
+							<button class="trouch-interaction-button" id="bodyTouchButton"></button>
+							<!-- 腿部触摸交互按钮，点击可触发 Live2D 模型腿部的触摸反馈 -->
+							<button class="trouch-interaction-button" id="legTouchButton"></button>
+							<!-- 脚部触摸交互按钮，点击可触发 Live2D 模型脚部的触摸反馈 -->
+							<button class="trouch-interaction-button" id="footTouchButton"></button>
+						</div>
+					</div>
+					<!-- Live2D模型渲染画布 -->
+					<canvas id="live2dCanvas"></canvas>
+					<!-- 模型加载状态提示 -->
+					<div class="live2d-model-intel">加载中...</div>
+					<!-- 情绪状态面板 -->
+					<div class="emotion-status-panel" id="emotionStatusPanel">
+						<!-- 情绪状态指示器 -->
+						<div class="emotion-indicator"></div>
+						<!-- 当前情绪状态文本 -->
+						<span>待机中</span>
+					</div>
+					<!-- 功能配置按钮面板 -->
+					<div class="vertical-layout-panel live2d">
+					</div>
+				</div>
+				<!-- 角色交互模式的聊天输入面板 -->
+				<div class="chat-input-panel"id="live2dInputPanel">
+					<!-- 角色交互聊天输入框 -->
+					<textarea id="live2dWriteArea" placeholder="你今天想和月华聊聊什么？" class="auto-resize-textarea"></textarea>
+					<!-- 角色交互聊天发送按钮 -->
+					<button class="chat-input-button" id="live2dReleaseButton" title="发送消息">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+			<!-- 聊天记录面板, 用于展示您与月华的对话历史 -->
+			<div class="chat-container-panel" id="chatHistoryContainerPanel">
+				<!-- 模型回应计数器 -->
+				<div class="token-counter-panel" id="tokenCounterPanel" style="display: none;">0 token/s</div>
+				<!-- 聊天交互面板，用于展示聊天相关内容 -->
+				<div class="chat-history-panel" id="chatHistoryPanel"></div>
+				<!-- 包含聊天输入文本框和发送按钮的容器 -->
+				<div class="chat-input-panel">
+					<button class="chat-input-button" id="inputFileButton" title="上传文件">
+						<i class="fas fa-file-upload"></i>
+					</button>
+					<!-- 聊天输入文本框，用户可在此输入与月华聊天的内容，支持垂直调整大小 -->
+					<textarea id="chatWriteArea" placeholder="你今天想和月华聊聊什么？" class="auto-resize-textarea"></textarea>
+					<!-- 聊天发送按钮，点击后可发送输入框中的内容 -->
+					<button class="chat-input-button" id="chatReleaseButton" title="发送消息">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+			<!-- 语音配置面板，默认隐藏 -->
+			<div class="chat-container-panel configure_panel" id="speechConfigContainerPanel" style="display: none;">
+				<!-- 面板内容 -->
+				<div class="config-grid">
+					<!-- 配置卡片 : 语音识别配置 -->
+					<div class="config-card">
+						<!-- 配置卡片头部，显示语音识别标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-microphone-alt"></i> 语音识别配置</h2>
+						</div>
+						<!-- 垂直布局面板，包含TTS模式选择 -->
+						<div class="vertical-layout-panel">
+							<!-- TTS模式标签 -->
+							<div>TTS 模式：</div>
+							<!-- 水平布局面板，包含不同TTS模式按钮 -->
+							<div class="horizontal-layout-panel">
+								<!-- 自定义API模式按钮，默认激活 -->
+								<button class="rectangle-button speech_mode_button" id="customSpeechEngineButton"
+									disabled>
+									<i class="fas fa-plug"></i> 自定义API
+								</button>
+								<!-- 系统TTS模式按钮 -->
+								<button class="rectangle-button speech_mode_button" id="systemSpeechEngineButton">
+									<i class="fas fa-volume-up"></i> 系统TTS
+								</button>
+							</div>
+						</div>
+						<!-- 自定义API语音引擎配置面板 -->
+						<div class="vertical-layout-panel" id="customSpeechEnginePanel">
+							<!-- TTS API端点标签 -->
+							<label for="apiEndpointSpeechModel">TTS API 端点</label>
+							<!-- 输入TTS API端点的文本框，带有默认值和占位提示 -->
+							<input type="text" id="apiEndpointSpeechModel" value="http://127.0.0.1:7860/tts"
+								placeholder="输入TTS API端点">
+						</div>
+						<!-- 系统TTS语音引擎配置面板 -->
+						<div class="vertical-layout-panel" id="systemSpeechEnginePanel">
+							<!-- 系统TTS功能支持指示器 -->
+							<div id="ttsSupportIndicator" class="tts-support-indicator tts-supported">
+								<i class="fas fa-check-circle"></i>
+								<!-- 显示浏览器对系统TTS功能的支持状态 -->
+								<span>系统TTS功能可用</span>
+							</div>
+							<!-- 选择语音的下拉框 -->
+							<select id="speechVoiceDropdown" class="tts-voice-select">
+							</select>
+						</div>
+						<!-- 垂直布局面板，包含语音识别相关配置 -->
+						<div class="vertical-layout-panel">
+							<!-- 识别语言标签 -->
+							<label for="speechRecognitionLanguage" style="display: none;"> 识别语言</label>
+							<!-- 选择识别语言的下拉框 -->
+							<select id="speechRecognitionLanguage" class="down_selection_box" style="display: none;">
+								<option value="zh-CN">中文</option>
+								<option value="en-US">英语</option>
+							</select>
+							<div class="horizontal-layout-panel">
+								<!-- 禁用 语音识别 按钮 -->
+								<button class="rectangle-button speech" id="voiceRecognitionButton">
+									<i class="fas fa-microphone"></i> 禁用语音发送
+								</button>
+								<!-- 禁用 自动朗读 按钮 -->
+								<button class="rectangle-button speech" id="autoPlaySpeechButton">
+									<i class="fas fa-volume-up"></i> 禁用自动朗读
+								</button>
+							</div>
+						</div>
+					</div>
+					<!-- 配置卡片 : 语音播放控制 -->
+					<div class="config-card left">
+						<!-- 语音模型配置卡片头部，显示语音模型标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-microphone"></i> 语音播放控制</h2>
+						</div>
+						<div class="vertical-layout-panel">
+							<!-- 播放速度标签 -->
+							<label for="speechSpeedSlider"> 播放速度</label>
+							<!-- 输入播放速度数值的输入框，范围0.5-2，步长0.1，默认值1.0 -->
+							<input type="number" id="speechSpeedValue" min="0.5" max="2" step="0.1" value="1.0">
+							<!-- 垂直布局面板，包含播放速度滑动条 -->
+							<div class="vertical-layout-panel">
+								<!-- 播放速度滑动条，范围0.5-2，步长0.1，默认值1.0 -->
+								<input type="range" id="speechSpeedSlider" min="0.5" max="2" step="0.1" value="1.0">
+							</div>
+							<!-- 音量标签 -->
+							<label for="speechVolumeSlider"> 音量大小</label>
+							<!-- 输入音量数值的输入框，范围0-1，步长0.1，默认值1.0 -->
+							<input type="number" id="speechVolumeValue" min="0" max="1" step="0.1" value="1.0">
+							<!-- 垂直布局面板，包含音量滑动条 -->
+							<div class="vertical-layout-panel">
+								<!-- 音量滑动条，范围0-1，步长0.1，默认值1.0 -->
+								<input type="range" id="speechVolumeSlider" min="0" max="1" step="0.1" value="1.0">
+							</div>
+						</div>
+						<!-- 输入要转换为语音的文本的文本域，带有默认内容和占位提示 -->
+						<textarea class="speech-prompt" id="speechModelText"
+							placeholder="输入要转换为语音的文本...">今天下午3:45在群峦王座q12t3号的咖啡厅见！记得带hello world的宣传单, 我们讨论下关于2024年7月8日的活动安排～</textarea>
+						<div class="vertical-layout-panel">
+							<!-- 水平布局面板，包含播放和停止按钮 -->
+							<div class="horizontal-layout-panel">
+								<!-- 播放语音按钮 -->
+								<button class="rectangle-button speech" id="playSpeechModelButton">
+									<i class="fas fa-play"></i> 播放
+								</button>
+								<!-- 停止语音播放按钮 -->
+								<button class="rectangle-button speech" id="stopSpeechModelButton">
+									<i class="fas fa-stop"></i> 停止
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- 轻量渲染面板，默认隐藏，用于执行纯粹的图表渲染操作 -->
+			<div class="chat-container-panel configure_panel" id="simpleRenderingContainerPanel" style="display: none;">
+				<!-- 用于展示轻量渲染结果的区域 -->
+				<div class="chat-history-panel render" id="simpleRenderingPanel"></div>
+				<!-- 包含渲染输入文本框和发送按钮的容器 -->
+				<div class="chat-input-panel">
+					<!-- 渲染输入文本框，用户可在此输入消息拷贝或代码块 -->
+					<textarea id="renderWriteArea" placeholder="请输入需要渲染的 [ 消息拷贝 ] "
+						class="auto-resize-textarea"></textarea>
+					<!-- 渲染发送按钮，点击后可发送输入框中的内容进行渲染 -->
+					<button class="chat-input-button" id="renderReleaseButton" title="发送消息">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+			<!-- 共享视觉面板，默认隐藏，用于执行截图与标记操作 -->
+			<div class="chat-container-panel configure_panel" id="shareScreenContainerPanel" style="display: none;">
+				<!-- 面板内容 -->
+				<div class="chat-history-panel render" style="gap: 5px;">
+					<!-- 文件消息区域，用于放置画布和视频元素 -->
+					<div class="message file-message screenshot">
+						<!-- 画布包装器，包含三个不同功能的画布 -->
+						<div class="canvas-wrapper" id="canvasWrapper">
+							<!-- 基础画布 -->
+							<canvas id="canvas"></canvas>
+							<!-- 用于绘制操作的画布 -->
+							<canvas id="drawCanvas"></canvas>
+							<!-- 用于预览的画布 -->
+							<canvas id="previewCanvas"></canvas>
+						</div>
+					</div>
+					<!-- 截图参数控制区域 -->
+					<div class="continuous-controls">
+						<!-- X坐标滑块项：控制截图区域左上角横坐标 -->
+						<div class="slider-item">
+							<label>X坐标:</label>
+							<!-- 范围：0-3840，步长10，默认0 -->
+							<input type="range" id="regionX" min="0" max="3840" value="0" step="10">
+							<!-- 实时显示当前X坐标值 -->
+							<span class="slider-value">0</span>
+						</div>
+						<!-- Y坐标滑块项：控制截图区域左上角纵坐标 -->
+						<div class="slider-item">
+							<label>Y坐标:</label>
+							<!-- 范围：0-2160，步长10，默认0 -->
+							<input type="range" id="regionY" min="0" max="2160" value="0" step="10">
+							<!-- 实时显示当前Y坐标值 -->
+							<span class="slider-value">0</span>
+						</div>
+						<!-- 画面宽度滑块项：控制截图区域宽度 -->
+						<div class="slider-item">
+							<label>画面宽度:</label>
+							<!-- 范围：256-3840，步长16，默认1920 -->
+							<input type="range" id="regionWidth" min="256" max="3840" value="3840" step="8">
+							<!-- 实时显示当前宽度值 -->
+							<span class="slider-value">1920</span>
+						</div>
+						<!-- 画面高度滑块项：控制截图区域高度 -->
+						<div class="slider-item">
+							<label>画面高度:</label>
+							<!-- 范围：256-2160，步长16，默认1080 -->
+							<input type="range" id="regionHeight" min="256" max="2160" value="2160" step="8">
+							<!-- 实时显示当前高度值 -->
+							<span class="slider-value">1080</span>
+						</div>
+						<!-- 截图间隔滑块项：控制连续截图的时间间隔 -->
+						<div class="slider-item">
+							<label>截图间隔:</label>
+							<!-- 范围：500-5000毫秒，步长100，默认1000毫秒 -->
+							<input type="range" id="captureInterval" min="500" max="5000" value="1000" step="100">
+							<!-- 实时显示当前间隔值，带单位 -->
+							<span id="intervalValue" class="slider-value">1000ms</span>
+						</div>
+						<!-- 缩放比例滑块项：控制截图区域的缩放比例 -->
+						<div class="slider-item">
+							<label>缩放比例:</label>
+							<!-- 范围：0.1-3.0，步长0.1，默认1.0 -->
+							<input type="range" id="scaleSlider" min="0.1" max="3.0" value="1.0" step="0.1">
+							<!-- 实时显示当前缩放值 -->
+							<span id="scaleValue" class="slider-value">1.0x</span>
+						</div>
+					</div>
+					<!-- 水平布局面板，包含截图按钮和下载按钮 -->
+					<div class="horizontal-layout-panel">
+						<!-- 开始截图按钮，点击启动截图功能 -->
+						<button id="captureSceneButton" class="rectangle-button screenshot"><i
+								class="fas fa-camera"></i>
+							捕捉画面</button>
+						<!-- 捕获屏幕按钮，初始禁用，用于捕获当前屏幕内容 -->
+						<button id="continuousCaptureButton" class="rectangle-button screenshot"><i
+								class="fas fa-play"></i>
+							持续捕捉</button>
+						<!-- 下载图片按钮，初始禁用，用于下载捕获的图片 -->
+						<button id="downloadSceneButton" class="rectangle-button screenshot"><i
+								class="fas fa-download"></i>
+							下载图片</button>
+					</div>
+					<!-- 水平布局面板，包含各种绘图工具按钮 -->
+					<div class="horizontal-layout-panel">
+						<!-- 矩形工具按钮，点击可使用矩形绘制功能 -->
+						<button id="rectTool" class="power-button" title="矩形工具">
+							<i class="fas fa-vector-square"></i>
+						</button>
+						<!-- 绘制工具按钮，点击可使用自由绘制功能 -->
+						<button id="drawTool" class="power-button" title="绘制工具">
+							<i class="fas fa-pencil-alt"></i>
+						</button>
+						<!-- 直线工具按钮，点击可使用直线绘制功能 -->
+						<button id="lineTool" class="power-button" title="直线工具">
+							<i class="fas fa-grip-lines-vertical"></i>
+						</button>
+						<!-- 圆形工具按钮，点击可使用圆形绘制功能 -->
+						<button id="circleTool" class="power-button" title="圆形工具">
+							<i class="far fa-circle"></i>
+						</button>
+						<!-- 文本工具按钮，点击可使用文本添加功能 -->
+						<button id="textTool" class="power-button" title="文本工具">
+							<i class="fas fa-font"></i>
+						</button>
+						<!-- 箭头工具按钮，点击可使用箭头绘制功能 -->
+						<button id="arrowTool" class="power-button" title="箭头工具">
+							<i class="fas fa-long-arrow-alt-right"></i>
+						</button>
+						<!-- 撤销操作按钮，初始禁用，点击可撤销上一步操作 -->
+						<button id="undoDrawButton" class="power-button" title="撤销操作" disabled>
+							<i class="fas fa-undo"></i>
+						</button>
+					</div>
+					<!-- 水平布局面板，包含线条颜色选择器 -->
+					<div class="horizontal-layout-panel">
+						<!-- 红色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #e74c3c;" data-color="#e74c3c">
+						</div>
+						<!-- 蓝色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #3498db;" data-color="#3498db">
+						</div>
+						<!-- 绿色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #2ecc71;" data-color="#2ecc71">
+						</div>
+						<!-- 黄色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #f1c40f;" data-color="#f1c40f">
+						</div>
+						<!-- 紫色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #9b59b6;" data-color="#9b59b6">
+						</div>
+						<!-- 黑色线条颜色选择按钮 -->
+						<div class="line-color power-button" style="background-color: #000000;" data-color="#000000">
+						</div>
+					</div>
+					<!-- 水平布局面板，包含线条粗细选择器 -->
+					<div class="horizontal-layout-panel">
+						<!-- 细线条选择按钮，线条粗细为4 -->
+						<div class="line-size power-button" data-size="4">S</div>
+						<!-- 中等线条选择按钮，线条粗细为8 -->
+						<div class="line-size power-button" data-size="8">M</div>
+						<!-- 粗线条选择按钮，线条粗细为16 -->
+						<div class="line-size power-button" data-size="16">L</div>
+						<!-- 更粗线条选择按钮，线条粗细为24 -->
+						<div class="line-size power-button" data-size="24">XL</div>
+						<!-- 最粗线条选择按钮，线条粗细为32 -->
+						<div class="line-size power-button" data-size="32">XXL</div>
+					</div>
+				</div>
+				<!-- 包含共享视觉输入文本框和发送按钮的容器 -->
+				<div class="chat-input-panel">
+					<!-- 共享视觉输入文本框，用户可在此输入消息拷贝或代码块 -->
+					<textarea id="screenshotWriteArea" placeholder="关于这幅画面, 您想和月华讨论什么呢?"
+						class="auto-resize-textarea"></textarea>
+					<!-- 共享视觉发送按钮，点击后可发送输入框中的内容进行渲染 -->
+					<button class="chat-input-button" id="screenshotReleaseButton" title="发送消息">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+			<!-- 月华笔记面板，默认隐藏，用于执行知识库内容的显示与控制 -->
+			<div class="chat-container-panel configure_panel" id="lunarNotesContainerPanel" style="display: none;">
+				<div class="chat-history-panel render" id="lunarNotesPanel"></div>
 
-<!-- 文档结束标签 -->
+				<div class="chat-input-panel">
+					<button id="refreshNoteButton" class="chat-input-button" title="刷新知识库">
+						<i class="fas fa-sync"></i>
+					</button>
+					<textarea id="noteWriteArea" placeholder="您希望月华了解什么呢?" class="auto-resize-textarea"></textarea>
+					<button id="noteReleaseButton" class="chat-input-button" title="发送消息">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+			<!-- 功能控制面板，默认隐藏，用于提供系统设置和功能页面的快捷入口 -->
+			<div class="chat-container-panel configure_panel" id="functionControlContainerPanel" style="display: none;">
+				<!-- 配置网格布局容器，用于组织配置卡片 -->
+				<div class="config-grid">
+					<!-- 配置卡片 : 聊天参数管理 -->
+					<div class="config-card">
+						<!-- 数据管理配置卡片头部，显示标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-server"></i> 聊天管理</h2>
+						</div>
+						<!-- 垂直布局面板，包含模型参数配置 -->
+						<div class="vertical-layout-panel">
+							<!-- 上下文长度参数标签 -->
+							<label for="messageSliceLength">用户消息截断长度</label>
+							<!-- 上下文长度参数输入框，可输入数值，默认值4096 -->
+							<input type="number" id="messageSliceLength" value="4096">
+							<!-- 垂直布局面板，包含上下文长度参数滑动条 -->
+							<div class="vertical-layout-panel">
+								<!-- 上下文长度参数滑动条，范围512-16384，步长512，默认值4096 -->
+								<input type="range" id="messageSliceLengthSlider" min="512" max="16384" step="512"
+									value="4096">
+							</div>
+						</div>
+						<!-- 水平布局面板，包含导出聊天和导入聊天按钮 -->
+						<div class="horizontal-layout-panel">
+							<!-- 导出聊天按钮，点击可导出聊天记录 -->
+							<button class="rectangle-button orange" id="exportChatInteractionButton">
+								<i class="fas fa-file-export"></i> 导出 聊天记录
+							</button>
+							<!-- 导入聊天按钮，点击可导入聊天记录 -->
+							<button class="rectangle-button green" id="importChatInteractionButton">
+								<i class="fas fa-file-import"></i> 导入 聊天记录
+							</button>
+						</div>
+					</div>
+					<!-- 功能页面配置卡片 -->
+					<div class="config-card left">
+						<!-- 配置卡片头部，显示卡片标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-server"></i> 知识展示</h2>
+						</div>
+						<div class="vertical-layout-panel">
+							<!-- 轻量渲染按钮，点击可打开[ 轻量渲染 ]功能页面 -->
+							<button class="rectangle-button blue" id="shareScreenButton">
+								<i class="fas fa-camera"></i> 打开 视觉共享
+							</button>
+							<!-- 轻量渲染按钮，点击可打开[ 轻量渲染 ]功能页面 -->
+							<button class="rectangle-button blue" id="simpleRenderingButton">
+								<i class="fas fa-palette"></i> 打开 轻量渲染
+							</button>
+							<!-- 月华笔记按钮，点击可打开[ 月华笔记 ]功能页面 -->
+							<button class="rectangle-button orange" id="lunarNotesButton">
+								<i class="fas fa-graduation-cap"></i> 打开 月华笔记
+							</button>
+						</div>
+					</div>
+					<!-- 功能页面配置卡片 -->
+					<div class="config-card">
+						<!-- 配置卡片头部，显示卡片标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-server"></i> 系统设置</h2>
+						</div>
+						<div class="vertical-layout-panel">
+							<!-- 语音配置按钮，点击可打开[ 语音配置 ]功能页面 -->
+							<button class="rectangle-button speech" id="voiceConfigureButton">
+								<i class="fas fa-microphone"></i> 打开 语音配置
+							</button>
+							<!-- 调试模式按钮，点击可打开[ 调试模式 ]功能机制 -->
+							<button class="rectangle-button pink" id="debugModeButton">
+								<i class="fas fa-star-and-crescent"></i> 启用 调试模式
+							</button>
+							<!-- 二维码切换按钮，点击可打开[ 二维码连接 ]扫描页面 -->
+							<button class="rectangle-button red" id="qrcodeButton">
+								<i class="fas fa-qrcode"></i> 显示 远程连接
+							</button>
+						</div>
+					</div>
+					<!-- 功能页面配置卡片 -->
+					<div class="config-card left">
+						<!-- 配置卡片头部，显示卡片标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-server"></i> 扩展页面</h2>
+						</div>
+						<div class="vertical-layout-panel">
+							<!-- 点击可打开[ 文枢阁 ]功能页面 -->
+							<button class="rectangle-button green" id="FileVaultButton">
+								<i class="fas fa-folder-open"></i> 打开 文枢阁
+							</button>
+							<!-- 点击可打开[ 灵绘坊 ]功能页面 -->
+							<button class="rectangle-button cyan" id="ImageStudioButton">
+								<i class="fas fa-image"></i> 打开 灵绘坊
+							</button>
+							<!-- 点击可打开[ 智存库 ]功能页面 -->
+							<button class="rectangle-button blue" id="DataKeeperButton">
+								<i class="fas fa-database"></i> 打开 智存库
+							</button>
+						</div>
+					</div>
+					<!-- Live2D动作控制卡片 -->
+					<div class="config-card left" style="display: none;">
+						<!-- 配置卡片头部，显示卡片标题 -->
+						<div class="panel-header">
+							<h2><i class="fas fa-user"></i> Live2D 动作控制</h2>
+						</div>
+						<!-- 水平布局面板，包含Live2D模型状态选择下拉框和执行动作按钮 -->
+						<div class="horizontal-layout-panel gap-10px">
+							<!-- Live2D模型状态选择下拉框 -->
+							<select id="live2dStateDropdown" class="down_selection_box" title="Live2D模型状态选择">
+							</select>
+							<!-- 执行动作按钮，点击可触发选中的Live2D模型状态 -->
+							<button class="rectangle-button" id="triggerLive2DStateButton">
+								<i class="fas fa-play"></i> 执行动作
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- API状态显示区域 -->
+	<div class="system-message" id="systemStatusPanel"></div>
+	<!-- 二维码显示区域 -->
+	<div class="system-message qrcode" id="qrcodeStatusPanel">
+		<div class="vertical-layout-panel vertical-column-center-panel">
+			<div id="qrcodeStatusPanel-header"> 局域网设备访问地址 </div>
+			<div id="qrcodePanel"></div>
+		</div>
+	</div>
+</body>
 
 </html>

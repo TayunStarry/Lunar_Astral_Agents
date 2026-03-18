@@ -5,9 +5,10 @@ import (
 	config "Lunar-Astral-Agents/parameter"       // 导入配置包
 	"encoding/json"                              // 导入JSON编码/解码包
 	"fmt"                                        // 导入格式化输出包
-	"net/http"                                   // 导入HTTP包
-	"strings"                                    // 导入字符串操作包
-	"time"                                       // 导入时间包
+	"log"
+	"net/http" // 导入HTTP包
+	"strings"  // 导入字符串操作包
+	"time"     // 导入时间包
 )
 
 // GenerateHandler 处理图像生成请求
@@ -78,96 +79,105 @@ func StartTaskProcessor() {
 	execute.StartTaskProcessor()
 }
 
+// buildReadPath 构建文件读取路径
+func buildReadPath(resultPath string) string {
+	log.Printf("resultPath: %s", resultPath)
+	// 移除本地目录前缀，获取相对路径
+	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
+	// 移除Windows路径开头的反斜杠，确保路径格式统一
+	relativePath = strings.TrimPrefix(relativePath, "\\")
+	return "/read/" + relativePath
+}
+
+// buildTaskResponse 构建任务响应
+func buildTaskResponse(task *execute.GenerateTask) map[string]any {
+	response := map[string]any{
+		"task_id": task.ID,
+		"status":  task.Status,
+		"result":  task.ResultPath,
+		"error":   task.Error,
+	}
+	if task.Status == "completed" {
+		response["read_path"] = buildReadPath(task.ResultPath)
+	}
+	return response
+}
+
+// setupSSEHeaders 设置SSE响应头
+func setupSSEHeaders(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+}
+
+// sendSSEEvent 发送SSE事件
+func sendSSEEvent(w http.ResponseWriter, data any) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "data: %s\n\n", jsonData)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	return nil
+}
+
 // GenerateWaitHandler 处理WebSocket连接，等待任务完成
 func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
+	// 检查请求方法
 	if r.Method != "GET" {
 		http.Error(w, "不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// 检查灵绘坊功能是否启用
 	if !*config.AllowDiffusion {
 		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
 		return
 	}
 
+	// 获取并验证task_id参数
 	taskID := r.URL.Query().Get("task_id")
 	if taskID == "" {
 		http.Error(w, "需要task_id参数", http.StatusBadRequest)
 		return
 	}
 
-	// 检查任务是否已存在
-	existingTask, exists := execute.GetTaskStatus(taskID)
+	// 检查任务是否存在
+	task, exists := execute.GetTaskStatus(taskID)
 	if !exists {
 		http.Error(w, "任务不存在", http.StatusNotFound)
 		return
 	}
 
 	// 如果任务已完成，直接返回结果
-	if existingTask.Status == "completed" || existingTask.Status == "failed" {
-		response := map[string]any{
-			"task_id": existingTask.ID,
-			"status":  existingTask.Status,
-			"result":  existingTask.ResultPath,
-			"error":   existingTask.Error,
-		}
-		if existingTask.Status == "completed" {
-			// 构建读取路径
-			relativePath := strings.TrimPrefix(existingTask.ResultPath, *config.LocalDir)
-			relativePath = strings.TrimPrefix(relativePath, "\\")
-			readPath := "/read/" + relativePath
-			response["read_path"] = readPath
-		}
+	if task.Status == "completed" || task.Status == "failed" {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(buildTaskResponse(task))
 		return
 	}
 
-	// 注册客户端
+	// 注册客户端等待任务完成
 	ch := execute.RegisterWaitClient(taskID)
 
-	// 设置响应头，使用服务器发送事件(SSE)模拟WebSocket
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
+	// 设置SSE响应头
+	setupSSEHeaders(w)
 
-	// 发送一个空的事件来建立连接
+	// 发送空事件建立连接
 	fmt.Fprintf(w, "\n")
-	// 刷新响应
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
 	}
 
-	// 等待任务完成，设置超时
+	// 等待任务完成或超时
 	select {
 	case completedTask := <-ch:
-		// 构建响应
-		response := map[string]any{
-			"task_id": completedTask.ID,
-			"status":  completedTask.Status,
-			"result":  completedTask.ResultPath,
-			"error":   completedTask.Error,
-		}
-
-		if completedTask.Status == "completed" {
-			// 构建读取路径
-			relativePath := strings.TrimPrefix(completedTask.ResultPath, *config.LocalDir)
-			relativePath = strings.TrimPrefix(relativePath, "\\")
-			readPath := "/read/" + relativePath
-			response["read_path"] = readPath
-		}
-
-		// 发送响应
-		jsonData, _ := json.Marshal(response)
-		fmt.Fprintf(w, "data: %s\n\n", jsonData)
-
-		// 刷新响应
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
-		}
+		// 发送任务完成响应
+		sendSSEEvent(w, buildTaskResponse(completedTask))
 	case <-time.After(5 * time.Minute):
-		// 超时
+		// 超时处理
 		execute.RemoveWaitClient(taskID)
 		http.Error(w, "任务处理超时", http.StatusRequestTimeout)
-		return
 	}
 }

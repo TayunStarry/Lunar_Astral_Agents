@@ -3,7 +3,7 @@ package parameter
 import "flag"
 
 var (
-	LocalDir = flag.String("local-dir", "./local_data", "本地目录路径，用于存储资源文件")
+	LocalDir = flag.String("local-dir", "local_data", "本地目录路径，用于存储资源文件")
 	// CertFile  证书文件路径，用于HTTPS加密通信
 	CertFile = flag.String("cert-file", *LocalDir+"/certs/localhost.pem", "证书文件路径，用于HTTPS加密通信")
 	// KeyFile  私钥文件路径，用于HTTPS加密通信

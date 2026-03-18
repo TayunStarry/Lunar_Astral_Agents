@@ -66,6 +66,14 @@ export const tokenCounterPanel = document.getElementById("tokenCounterPanel") as
  * 情感状态面板元素
  */
 export const emotionStatusPanel = document.getElementById("emotionStatusPanel") as HTMLElement;
+/**
+ * Live2D 容器面板元素
+ */
+export const live2dContainerPanel = document.getElementById("live2dContainerPanel") as HTMLElement;
+/**
+ * 功能控制面板元素
+ */
+export const quickControlPanel = document.getElementById("quickControlPanel") as HTMLElement;
 
 import * as EntryAPI from '../EntryAPI/code';
 
@@ -88,7 +96,7 @@ export function eraseAllConfigurePanel() {
 	// 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
 	configurePanelButton.forEach(button => button.classList.remove("clicking"));
 	// 调用 reloadLive2DContainer 函数，重载Live2D容器
-	setTimeout(EntryAPI.reloadLive2DContainer, 500);
+	//setTimeout(EntryAPI.reloadLive2DContainer, 500);
 };
 
 /**
