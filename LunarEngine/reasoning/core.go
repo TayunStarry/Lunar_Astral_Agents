@@ -1,7 +1,7 @@
 package execute
 
 import (
-	"Lunar-Astral-Agents/parameter"
+	config "Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,13 +14,13 @@ func GetModels() []AgentModels {
 	// 用于存储模型信息的切片
 	models := []AgentModels{}
 	// 加读锁，防止并发修改模型端口映射
-	parameter.ModelMapMutex.RLock()
+	config.ModelMapMutex.RLock()
 	// 函数结束时解锁
-	defer parameter.ModelMapMutex.RUnlock()
+	defer config.ModelMapMutex.RUnlock()
 	// 存储模型名称的切片
 	var modelNames []string
 	// 遍历模型端口映射，获取所有模型名称
-	for modelName := range parameter.ModelPortMap {
+	for modelName := range config.ModelPortMap {
 		modelNames = append(modelNames, modelName)
 	}
 	// 遍历模型名称，构造模型信息
@@ -70,7 +70,7 @@ func GetBusyResponse() string {
 // ProcessAgentRequest 处理与模型相关的请求
 func ProcessAgentRequest(modelName string) (string, error) {
 	// 检查系统是否繁忙，如果已就绪的模型数量小于最大模型数量，返回系统繁忙响应
-	if parameter.ModelReady < parameter.MaxModelAmount {
+	if config.ModelReady < config.MaxModelAmount {
 		return GetBusyResponse(), fmt.Errorf("system_busy")
 	}
 	// 队列控制
@@ -126,58 +126,39 @@ func ProcessAgentRequest(modelName string) (string, error) {
 
 // ProcessAgentChatRequest 处理与模型相关的聊天请求
 func ProcessAgentChatRequest(req AgentRequest) (AgentRequest, error) {
-	// 提取并预处理消息列表
-	var processedMessages []Message
-	// 过滤出非系统消息
-	for _, msg := range req.Messages {
-		if msg.Role != "system" {
-			processedMessages = append(processedMessages, msg)
-		}
+	// 处理系统提示词
+	systemMessage, nonSystemMessages, err := ProcessSystemPrompt(req.Messages)
+	if err != nil {
+		return req, err
 	}
 	// 提取最新一条消息用于向量化
 	var latestContent string
 	// 检查是否有有效消息
-	if len(processedMessages) == 0 {
+	if len(nonSystemMessages) == 0 {
 		return req, fmt.Errorf("请求中没有有效消息")
 	}
 	// 提取最新一条消息内容
-	lastMsg := processedMessages[len(processedMessages)-1]
+	lastMsg := nonSystemMessages[len(nonSystemMessages)-1]
 	// 检查最新消息内容是否为字符串类型
 	if contentStr, ok := lastMsg.Content.(string); ok {
 		latestContent = contentStr
 	}
-	// 获取动态系统提示词
-	systemPrompt, err := GetDynamicSystemPrompt()
-	// 检查是否获取系统提示词失败
-	if err != nil {
-		return req, fmt.Errorf("获取系统提示词失败: %w", err)
-	}
 	// 构建最终消息数组
 	finalMessages := []Message{}
 	// 添加系统提示词
-	finalMessages = append(finalMessages, Message{Role: "system", Content: systemPrompt})
+	finalMessages = append(finalMessages, systemMessage)
 	// 获取知识消息
 	knowledgeMessages, err := GetKnowledgeMessages(latestContent)
 	// 检查是否获取知识消息失败
 	if err != nil {
 		return req, fmt.Errorf("获取知识消息失败: %w", err)
 	}
-	// 添加知识消息序列和最新消息序列
-	finalMessages = append(finalMessages, append(knowledgeMessages, processedMessages...)...)
+	// 添加知识消息
+	finalMessages = append(finalMessages, knowledgeMessages...)
+	// 添加非系统消息
+	finalMessages = append(finalMessages, nonSystemMessages...)
 	// 构建新的请求体
 	newReq := req
 	newReq.Messages = finalMessages
 	return newReq, nil
-}
-
-// GetModelPort 根据模型名称获取对应端口（加读锁）
-func GetModelPort(modelName string) (int, bool) {
-	// 加读锁，防止并发修改模型端口映射时出现数据竞争
-	parameter.ModelMapMutex.RLock()
-	// 函数结束时解锁，确保锁一定会被释放
-	defer parameter.ModelMapMutex.RUnlock()
-	// 从模型端口映射中查找指定模型的端口号
-	port, exists := parameter.ModelPortMap[modelName]
-	// 返回端口号和是否存在的标志
-	return port, exists
 }

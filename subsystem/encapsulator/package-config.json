@@ -46,9 +46,9 @@
         "C:/Program Files (x86)/7-Zip/7z.exe"
     ],
     "defaults": {
-        "output_path": "./Lunar-Astral-Agents^2026-02-21",
+        "output_path": "./Lunar-Astral-Agents^2026-03-20",
         "part_size_mb": 2048,
-        "compression_level": 9,
+        "compression_level": 5,
         "package_level": 2
     }
 }

@@ -13,7 +13,6 @@ import (
 )
 
 // startServerForModel 为指定模型启动服务进程。
-// 参数 modelType 表示模型类型，modelPath 表示模型文件路径，basePort 表示基础端口号。
 func startServerForModel(modelType, modelPath string, basePort int) {
 	// 从模型路径中提取模型名称
 	modelName := filepath.Base(modelPath)
@@ -109,36 +108,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 	go waitForProcessExit(cmd, modelType, port)
 }
 
-// openCmdPipe 函数用于为指定的命令创建标准输出和标准错误管道。
-// 参数 cmd 是要执行的命令对象。
-// 返回值为标准输出和标准错误的读取管道，若创建失败则返回 nil。
-func openCmdPipe(cmd *exec.Cmd) (io.ReadCloser, io.ReadCloser) {
-	// 为命令创建标准输出管道
-	stdout, err := cmd.StdoutPipe()
-	// 若创建标准输出管道失败，记录错误信息并返回 nil
-	if err != nil {
-		log.Printf("GGUF模块[ERROR] -> 创建标准输出管道失败: %v", err)
-		return nil, nil
-	}
-	// 为命令创建标准错误管道
-	stderr, err := cmd.StderrPipe()
-	// 若创建标准错误管道失败，记录错误信息并返回 nil
-	if err != nil {
-		log.Printf("GGUF模块[ERROR] -> 创建标准错误管道失败: %v", err)
-		return nil, nil
-	}
-	// 返回创建成功的标准输出和标准错误管道
-	return stdout, stderr
-}
-
 // createArgs 函数用于创建模型服务进程的命令行参数。
-// 参数 modelType 表示模型的类型，如 embedding、multimodal 等。
-// 参数 modelName 表示模型的名称。
-// 参数 modelPath 表示模型文件的路径。
-// 参数 port 表示模型服务进程监听的端口号。
-// 参数 contextLength 表示模型的上下文长度。
-// 参数 metaData 是模型的元数据，用于根据模型类型添加不同的参数。
-// 返回值是一个字符串切片，包含模型服务进程的命令行参数。
 func createArgs(modelType, modelName, modelPath string, port int, contextLength uint32, metaData map[string]any) []string {
 	// 初始化基础命令行参数
 	args := []string{}
@@ -174,11 +144,6 @@ func createArgs(modelType, modelName, modelPath string, port int, contextLength 
 }
 
 // executeMonitoring 函数用于监控模型服务进程的标准输出和标准错误流。
-// 通过扫描输出内容判断模型是否加载完成，同时处理可能出现的错误信息。
-// 参数 modelName 表示当前监控的模型名称。
-// 参数 stdout 是模型服务进程的标准输出流。
-// 参数 stderr 是模型服务进程的标准错误流。
-// 参数 modelLoaded 是一个通道，用于通知模型是否加载完成。
 func executeMonitoring(modelName string, stdout io.ReadCloser, stderr io.ReadCloser, modelLoaded chan bool) {
 	// 创建 逐行读取标准输出流扫描器 和 逐行读取标准错误流扫描器
 	stdoutScanner, stderrScanner := bufio.NewScanner(stdout), bufio.NewScanner(stderr)

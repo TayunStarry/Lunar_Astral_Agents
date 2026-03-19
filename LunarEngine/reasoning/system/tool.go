@@ -8,14 +8,7 @@ import (
 	"os/exec"                              // 执行外部命令（启动 GGUF 服务进程）
 )
 
-/**
- * @description: 注册模型端口到全局映射
- * @description: 会对模型类型添加 "system-" 前缀后作为键，端口号作为值存储到映射中
- * @description: 为保证并发安全，操作前会对映射加锁，操作完成后自动解锁
- * @param {string} modelType 模型的类型，如 "embedding", "reasoning", "visual" 等
- * @param {int} port 该模型对应的服务端口号
- * @return {*} 无返回值
- */
+// registerModelPort 函数用于注册模型端口到全局映射
 func registerModelPort(modelType string, port int) {
 	// 加锁，保证对全局映射的并发安全访问
 	config.ModelMapMutex.Lock()
@@ -25,13 +18,7 @@ func registerModelPort(modelType string, port int) {
 	config.ModelPortMap["system-"+modelType] = port
 }
 
-/**
- * @description: 等待命令对应的进程退出，并在进程异常退出时记录错误日志
- * @param {*exec.Cmd} cmd 要等待退出的命令对象
- * @param {string} modelType 模型类型，如 "embedding", "reasoning", "visual" 等
- * @param {int} port 该模型对应的服务端口号
- * @return {*} 无返回值
- */
+// waitForProcessExit 函数用于等待命令对应的进程退出，并在进程异常退出时记录错误日志
 func waitForProcessExit(cmd *exec.Cmd, modelType string, port int) {
 	// 等待命令对应的进程退出
 	if err := cmd.Wait(); err != nil {
@@ -40,11 +27,7 @@ func waitForProcessExit(cmd *exec.Cmd, modelType string, port int) {
 	}
 }
 
-/**
- * @description: 获取模型类型对应的端口号偏移量
- * @param {string} modelType 模型的类型，如 "embedding", "reasoning", "visual" 等
- * @return {int} 模型类型对应的端口号偏移量
- */
+// getPortOffset 函数用于获取模型类型对应的端口号偏移量
 func getPortOffset(modelType string) int {
 	// 根据不同的模型类型返回对应的端口偏移量
 	switch modelType {
