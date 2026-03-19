@@ -7,12 +7,7 @@ import (
 	"os"                                   // 提供操作系统相关功能（如文件操作）
 )
 
-/**
- * @description: 初始化配置，获取模型路径，并启动不同类型的 GGUF 服务实例
- * @description: 若配置初始化失败或未找到任何有效模型
- * @description: 输出相应日志并可能打开模型下载页面
- * @return {*}
- */
+// CreateServers 初始化配置，获取模型路径，并启动不同类型的 GGUF 服务实例
 func CreateServers() {
 	// 初始化配置，若初始化失败则直接返回
 	if !initConfig() {
@@ -48,6 +43,7 @@ func CreateServers() {
 	startServersWithTypes(modelPaths)
 }
 
+// initConfig 初始化配置，创建必要目录
 func initConfig() bool {
 	// 创建必要目录
 	dirs := []string{
@@ -67,11 +63,7 @@ func initConfig() bool {
 	return true
 }
 
-/**
- * @description: 为不同类型的模型启动对应的 GGUF 服务实例
- * @param {map[string]string} modelPaths 映射，键为模型类型，值为模型文件路径
- * @return {*}
- */
+// startServersWithTypes 为不同类型的模型启动对应的 GGUF 服务实例
 func startServersWithTypes(modelPaths map[string]string) {
 	// 从配置中获取基础端口号
 	basePort := *config.ModelPort

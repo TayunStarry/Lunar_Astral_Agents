@@ -13,11 +13,7 @@ import (
 	"strings"                               // 字符串处理（分割、去除空格等）
 )
 
-/**
- * @description: 获取当前系统中所有 GPU 的空闲显存（MB）
- * @return {uint64} 所有 GPU 空闲显存的总和（字节）
- * @return {error} 若操作过程中发生错误则返回相应的错误信息，否则返回 nil
- */
+// GetFreeMemory 函数用于获取当前系统中所有 GPU 的空闲显存（MB）
 func GetFreeMemory() (uint64, error) {
 	// 创建执行 nvidia-smi 命令的对象，查询空闲显存并以无表头、无单位的 CSV 格式输出
 	cmd := exec.Command("nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits")
@@ -43,14 +39,7 @@ func GetFreeMemory() (uint64, error) {
 	return freeMemMB * 1024 * 1024, nil
 }
 
-/**
- * @description: 获取模型文件的信息和可用显存
- * @param {string} modelPath 模型文件的完整路径
- * @param {string} modelName 模型文件的名称
- * @return {os.FileInfo} 模型文件的元数据信息
- * @return {uint64} 所有 GPU 空闲显存的总和（字节）
- * @return {error} 若操作过程中发生错误则返回相应的错误信息，否则返回 nil
- */
+// getFileInfoAndMemory 函数用于获取模型文件的信息和可用显存
 func getFileInfoAndMemory(modelPath, modelName string) (os.FileInfo, uint64, error) {
 	// 打印模型加载分隔符
 	log.Printf("%s", strings.Repeat("-=", 28))
@@ -75,15 +64,7 @@ func getFileInfoAndMemory(modelPath, modelName string) (os.FileInfo, uint64, err
 	return fileInfo, freeMem, nil
 }
 
-/**
- * @description: 根据模型元数据、文件大小和可用显存计算最大安全 GPU 加速层级
- * @param {map[string]any} metaData 模型元数据，包含模型结构和配置信息
- * @param {float64} fileSize 模型文件大小（字节）
- * @param {uint64} freeMem 可用显存大小（字节）
- * @return {int} totalLayers 模型总层数（从元数据中提取）
- * @return {int} maxSafeLayers 最大安全 GPU 加速层级（根据显存和模型大小计算）
- * @return {error} err 错误信息，若操作过程中无错误则返回 nil
- */
+// calculateMetadataLayers 函数用于根据模型元数据、文件大小和可用显存计算最大安全 GPU 加速层级
 func calculateMetadataLayers(metaData map[string]any, fileSize float64, freeMem uint64) (totalLayers, maxSafeLayers int, err error) {
 	// 从元数据中获取 .block_count 键对应的值
 	val, ok := metadata.FindFirstMetadataByKeySubstring(metaData, ".block_count").(uint32)
@@ -109,15 +90,7 @@ func calculateMetadataLayers(metaData map[string]any, fileSize float64, freeMem 
 	return totalLayers, safeLayers, nil
 }
 
-/**
- * @description: 获取模型文件的元数据信息和可用显存，计算最大安全 GPU 加速层级
- * @param {string} modelPath 模型文件的完整路径
- * @param {string} modelName 模型文件的名称
- * @param {map[string]any} metadata 模型元数据，包含模型结构和配置信息
- * @return {int} totalLayers 模型总层数（从元数据中提取）
- * @return {int} maxSafeLayers 最大安全 GPU 加速层级（根据显存和模型大小计算）
- * @return {error} err 错误信息，若操作过程中无错误则返回 nil
- */
+// getMetadataLayersAndMemory 函数用于获取模型文件的元数据信息和可用显存，计算最大安全 GPU 加速层级
 func getMetadataLayersAndMemory(modelPath, modelName string, metadata map[string]any) (totalLayers, maxSafeLayers int, err error) {
 	// 获取模型文件信息和可用显存
 	fileInfo, freeMem, err := getFileInfoAndMemory(modelPath, modelName)

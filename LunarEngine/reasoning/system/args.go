@@ -2,22 +2,13 @@ package llama
 
 import (
 	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"log"                               // 标准日志包，用于输出调试/错误信息
-	"math"                              // 数学函数（如取最小值）
-	"path/filepath"                     // 文件路径处理包，用于获取文件名
-	"strconv"                           // 字符串与数字之间的转换
+	"log"                                  // 标准日志包，用于输出调试/错误信息
+	"math"                                 // 数学函数（如取最小值）
+	"path/filepath"                        // 文件路径处理包，用于获取文件名
+	"strconv"                              // 字符串与数字之间的转换
 )
 
-/**
- * @description: 构建启动 GGUF 服务的基础命令行参数
- * @param {string} modelPath 模型文件的完整路径
- * @param {number} port 服务端口号
- * @param {uint32} contextLength 模型的上下文长度
- * @param {float64} maxToken 模型的最大token数
- * @param {float64} changeKeep 修改模型的保留token数
- * @param {float64} changeBatch 修改模型的token批处理块大小
- * @return {*} 包含基础命令行参数的字符串切片
- */
+// buildBaseArgs 构建启动 GGUF 服务的基础命令行参数
 func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, changeKeep, changeBatch float64) []string {
 	// 设置合理的上下文大小上限，考虑到性能与内存的平衡
 	ctxSize := int(math.Min(float64(contextLength), maxToken))
@@ -56,14 +47,7 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 	}
 }
 
-/**
- * @description: 为视觉模型添加特定的命令行参数
- * @param {*[]string} args 指向命令行参数字符串切片的指针，用于追加新参数
- * @param {string} modelPath 视觉模型文件的完整路径
- * @param {string} modelName 视觉模型文件的名称
- * @param {map[string]interface{}} metadata 模型的元数据映射
- * @return {bool} 表示参数添加是否成功
- */
+// MultimodalModelArgs 为视觉模态模型添加特定的命令行参数
 func MultimodalModelArgs(args *[]string, modelPath, modelName string, metadata map[string]any) bool {
 	// 获取多模态模型所需的 MMProj 文件路径
 	mmprojPath := *config.MmprojModel
@@ -91,14 +75,7 @@ func MultimodalModelArgs(args *[]string, modelPath, modelName string, metadata m
 	return true
 }
 
-/**
- * @description: 为默认类型模型添加特定的命令行参数
- * @param {*[]string} args 指向命令行参数字符串切片的指针，用于追加新参数
- * @param {string} modelPath 模型文件的完整路径
- * @param {string} modelName 模型文件的名称
- * @param {map[string]interface{}} metadata 模型的元数据映射
- * @return {bool} 表示参数添加是否成功
- */
+// DefaultModelArgs 为默认类型模型添加特定的命令行参数
 func DefaultModelArgs(args *[]string, modelPath, modelName string, metadata map[string]any) bool {
 	// 根据模型元数据、文件大小和可用显存计算块数量和最大安全 GPU 加速层级
 	totalLayers, maxSafeLayers, err := getMetadataLayersAndMemory(modelPath, modelName, metadata)

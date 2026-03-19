@@ -1,35 +1,12 @@
 package execute
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
+	config "Lunar-Astral-Agents/parameter" // 导入配置包，用于获取本地目录
+	"bytes"                                // 导入bytes包，用于处理字节流
+	"encoding/json"                        // 导入json包，用于解析JSON响应
+	"fmt"                                  // 导入fmt包，用于格式化输出
+	"net/http"                             // 导入net/http包，用于发送HTTP请求
 )
-
-// GetDynamicSystemPrompt 获取动态系统提示词 - 直接读取文件
-func GetDynamicSystemPrompt() (string, error) {
-	filePath := filepath.Join(*config.LocalDir, "resources/prompts/systemPrompt.md")
-	body, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", fmt.Errorf("读取系统提示词文件失败: %w", err)
-	}
-	promptContent := string(body)
-	currentTime := time.Now().Format("2006-01-02 15:04:05")
-	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)
-	address := config.ServerAddress
-	if len(address) < 2 {
-		address = []string{"江苏省", "南京市"}
-	}
-	addressStr := address[0] + "-" + address[1]
-	promptContent = strings.ReplaceAll(promptContent, "{current-address}", addressStr)
-	return promptContent, nil
-}
 
 // GetEmbeddingVector 获取嵌入向量
 func GetEmbeddingVector(text string) ([]float64, error) {
@@ -120,4 +97,16 @@ func GetKnowledgeMessages(latestContent string) ([]Message, error) {
 		}
 	}
 	return knowledgeMessages, nil
+}
+
+// GetModelPort 根据模型名称获取对应端口（加读锁）
+func GetModelPort(modelName string) (int, bool) {
+	// 加读锁，防止并发修改模型端口映射时出现数据竞争
+	config.ModelMapMutex.RLock()
+	// 函数结束时解锁，确保锁一定会被释放
+	defer config.ModelMapMutex.RUnlock()
+	// 从模型端口映射中查找指定模型的端口号
+	port, exists := config.ModelPortMap[modelName]
+	// 返回端口号和是否存在的标志
+	return port, exists
 }
