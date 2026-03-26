@@ -22,7 +22,7 @@ func Load() (*Config, error) {
 		defaultConfig := &Config{
 			NapCatWSServer:  "ws://localhost:20485",
 			NapCatWSToken:   "ItlC2Nc1DfICVYq5",
-			OpenAIAPIUrl:    "http://localhost:36794/v1/chat/completions",
+			OpenAIAPIUrl:    "http://localhost:36789/v1/chat/completions",
 			OpenAIAPIToken:  "",
 			OpenAIAPIModel:  "system-multimodal",
 			PollInterval:    10,

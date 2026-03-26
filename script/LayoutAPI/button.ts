@@ -417,6 +417,8 @@ chatHistoryButton.addEventListener('click',
         EntryAPI.functionControlContainerPanel.style.display = "none";
         // 改变全局变量，表示无配置面板显示
         EntryAPI.OnlyData.configurePanelOption = 'any';
+        // 变更按钮样式, 移除点击中的样式类
+        functionControlButton.classList.remove("clicking");
     }
 );
 //* 绑定 自动播放 按钮点击事件
@@ -467,14 +469,16 @@ debugModeButton.addEventListener('click',
     function () {
         if (EntryAPI.OnlyData.isDebugMode) {
             // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-star-and-crescent"></i> 启用 调试模式';
+            this.innerHTML = '<i class="fas fa-star-and-crescent"></i>';
+            debugModeButton.classList.remove("clicking");
             // 改变全局变量
             EntryAPI.OnlyData.isDebugMode = false;
             EntryAPI.showSystemMessage("禁用< 调试模式 >", "success");
         }
         else {
             // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-code"></i> 禁用 调试模式';
+            this.innerHTML = '<i class="fas fa-code"></i>';
+            debugModeButton.classList.add("clicking");
             // 改变全局变量
             EntryAPI.OnlyData.isDebugMode = true;
             EntryAPI.showSystemMessage("启用< 调试模式 >", "success");
@@ -484,12 +488,6 @@ debugModeButton.addEventListener('click',
 //* 绑定 切换连续记忆模式 按钮点击事件
 longTermMemoryButton.addEventListener('click',
     function () {
-        /**
-         * 获取文档中所有的配置面板按钮元素
-         */
-        const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-        // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-        configurePanelButton.forEach(button => button.classList.remove("clicking"));
         if (EntryAPI.OnlyData.isContinuousMemory) {
             // 变更按钮样式
             this.innerHTML = '<i class="fas fa-memory"></i>';
@@ -511,12 +509,6 @@ longTermMemoryButton.addEventListener('click',
 //* 绑定 切换主动消息模式 按钮点击事件
 activeMessageButton.addEventListener('click',
     function () {
-        /**
-         * 获取文档中所有的配置面板按钮元素
-         */
-        const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-        // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-        configurePanelButton.forEach(button => button.classList.remove("clicking"));
         if (EntryAPI.OnlyData.isActiveMessageMode) {
             // 变更按钮样式，使用无消息图标表示主动消息模式禁用状态
             this.innerHTML = '<i class="fas fa-comment-slash"></i>';
@@ -546,22 +538,12 @@ themeButton.addEventListener("click",
         const isDarkMode = document.documentElement.classList.contains("dark-mode");
         // 存储当前主题到本地存储中
         localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-        /**
-         * 获取文档中所有的配置面板按钮元素
-         */
-        const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-        // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-        configurePanelButton.forEach(button => button.classList.remove("clicking"));
         // 更新按钮图标
         if (isDarkMode) {
-            // 变更按钮样式
-            this.classList.add("clicking");
-            this.innerHTML = '<i class="fas fa-sun"></i>';
+            this.innerHTML = '<i class="fas fa-sun"></i> 切换 风格主题';
         }
         else {
-            // 变更按钮样式
-            this.classList.remove("clicking");
-            this.innerHTML = '<i class="fas fa-moon"></i>';
+            this.innerHTML = '<i class="fas fa-moon"></i> 切换 风格主题';
         };
     }
 );
@@ -571,13 +553,17 @@ qrcodeButton.addEventListener('click',
         // 如果二维码已经显示，则关闭它
         if (EntryAPI.qrcodeStatusPanel.className.includes('show')) {
             // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-qrcode"></i> 显示 远程连接';
+            this.innerHTML = '<i class="fas fa-qrcode"></i>';
+            // 变更按钮样式
+            this.classList.remove("clicking");
             // 设置系统状态面板的类名，移除显示类名
             EntryAPI.qrcodeStatusPanel.className = 'system-message qrcode';
         }
         else {
             // 变更按钮样式
-            this.innerHTML = '<i class="fas fa-network-wired"></i> 隐藏 远程连接';
+            this.innerHTML = '<i class="fas fa-network-wired"></i>';
+            // 变更按钮样式
+            this.classList.add("clicking");
             // 设置系统状态面板的类名，包含基础类名、消息类型类名和显示类名
             EntryAPI.qrcodeStatusPanel.className = 'system-message qrcode show';
             // 拖动配置面板

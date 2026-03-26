@@ -347,6 +347,10 @@ function dynamicOpacity() {
  * 当窗口宽度小于等于 SMALL_SCREEN_WIDTH_THRESHOLD 时，执行一系列界面布局调整操作
  */
 function windowResizeEvent() {
+	// 设置系统状态面板的类名，移除显示类名
+	EntryAPI.qrcodeStatusPanel.className = 'system-message qrcode';
+	// 变更按钮样式
+	EntryAPI.qrcodeButton.classList.remove("clicking");
 	// 检查窗口宽度是否大于小屏幕阈值，若是则直接返回，不执行后续操作
 	if (window.innerWidth > smallScreenWidthThreshold) {
 		// 将 Live2D 容器面板移动到页面外面
@@ -378,7 +382,7 @@ function windowResizeEvent() {
 	// 移除调试模式切换按钮的点击状态样式
 	EntryAPI.debugModeButton.classList.remove("clicking");
 	// 重置调试模式切换按钮的图标
-	EntryAPI.debugModeButton.innerHTML = '<i class="fas fa-star-and-crescent"></i> 启用 调试模式';
+	EntryAPI.debugModeButton.innerHTML = '<i class="fas fa-star-and-crescent"></i>';
 };
 
 /**
@@ -426,12 +430,10 @@ function applySavedTheme() {
 	const savedTheme = localStorage.getItem("theme");
 	// 如果之前保存的是暗色模式，则应用相应样式
 	if (savedTheme === "dark") {
-		// 添加点击中的样式类
-		EntryAPI.themeButton?.classList.add("clicking");
 		// 添加暗色模式类名以启用暗色主题样式
 		document.documentElement.classList.add("dark-mode");
 		// 修改按钮图标为太阳图标（表示当前为暗色模式）
-		if (EntryAPI.themeButton) EntryAPI.themeButton.innerHTML = '<i class="fas fa-sun"></i>';
+		if (EntryAPI.themeButton) EntryAPI.themeButton.innerHTML = '<i class="fas fa-sun"></i> 切换 风格主题';
 	}
 };
 

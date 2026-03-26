@@ -29,6 +29,15 @@
 .chat-history-panel.control {
     background: rgba(0, 0, 0, 0.2);
     border: 5px solid rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
+    /* Firefox */
+    scrollbar-width: none;
+    /* IE and Edge */
+    -ms-overflow-style: none;
+}
+
+.chat-history-panel.control::-webkit-scrollbar {
+    display: none;
 }
 
 .chat-history-panel.render {

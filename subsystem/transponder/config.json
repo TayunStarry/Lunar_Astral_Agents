@@ -1,7 +1,7 @@
 {
 	"napcat_ws_server": "ws://localhost:4567",
 	"napcat_ws_token": "ItlC2Nc1DfICVYq5",
-	"openai_api_url": "http://localhost:36794/v1/chat/completions",
+	"openai_api_url": "http://localhost:36789/v1/chat/completions",
 	"openai_api_token": "",
 	"openai_api_model": "system-multimodal",
 	"poll_interval": 10,

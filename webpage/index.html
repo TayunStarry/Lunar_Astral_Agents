@@ -65,18 +65,19 @@
 		<div class="main-container-panel" id="mainContainerPanel">
 			<!-- 功能控制按钮 -->
 			<div class="chat-container-panel" id="quickControlPanel" style="min-width: 120px; flex: 0;">
+				<!-- 功能控制按钮 -->
 				<div class="chat-history-panel control" style="align-items: center;">
+					<!-- 调试模式按钮，点击可打开[ 调试模式 ]功能机制 -->
+					<button class="power-button live2d" id="debugModeButton" title="启用 调试模式">
+						<i class="fas fa-star-and-crescent"></i>
+					</button>
 					<!-- 功能控制按钮 -->
 					<button class="power-button live2d" id="functionControlButton" title="功能控制">
 						<i class="fas fa-cog"></i>
 					</button>
 					<!-- 聊天记录按钮 -->
-					<button class="power-button live2d" id="chatHistoryButton" title="聊天记录" >
-						<i class="fas fa-scroll"></i>
-					</button>
-					<!-- 深色与浅色模式切换按钮 -->
-					<button class="power-button live2d" id="themeButton" title="切换主题">
-						<i class="fas fa-moon"></i>
+					<button class="power-button live2d" id="chatHistoryButton" title="聊天记录">
+						<i class="fas fa-home"></i>
 					</button>
 					<!-- 语音输入按钮 -->
 					<button class="power-button live2d" id="voiceReleaseButton" title="语音输入">
@@ -89,6 +90,22 @@
 					<!-- 主动消息模式切换按钮 -->
 					<button class="power-button live2d" id="activeMessageButton" title="主动消息">
 						<i class="fas fa-comment-slash"></i>
+					</button>
+					<!-- 点击可打开[ 文枢阁 ]功能页面 -->
+					<button class="power-button live2d" id="FileVaultButton" title="打开 文枢阁">
+						<i class="fas fa-folder-open"></i>
+					</button>
+					<!-- 点击可打开[ 灵绘坊 ]功能页面 -->
+					<button class="power-button live2d" id="ImageStudioButton" title="打开 灵绘坊">
+						<i class="fas fa-image"></i>
+					</button>
+					<!-- 点击可打开[ 智存库 ]功能页面 -->
+					<button class="power-button live2d" id="DataKeeperButton" title="打开 智存库">
+						<i class="fas fa-database"></i>
+					</button>
+					<!-- 二维码切换按钮，点击可打开[ 二维码连接 ]扫描页面 -->
+					<button class="power-button live2d" id="qrcodeButton" title="显示 远程连接">
+						<i class="fas fa-qrcode"></i>
 					</button>
 				</div>
 			</div>
@@ -126,7 +143,7 @@
 					</div>
 				</div>
 				<!-- 角色交互模式的聊天输入面板 -->
-				<div class="chat-input-panel"id="live2dInputPanel">
+				<div class="chat-input-panel" id="live2dInputPanel">
 					<!-- 角色交互聊天输入框 -->
 					<textarea id="live2dWriteArea" placeholder="你今天想和月华聊聊什么？" class="auto-resize-textarea"></textarea>
 					<!-- 角色交互聊天发送按钮 -->
@@ -518,17 +535,13 @@
 							<h2><i class="fas fa-server"></i> 系统设置</h2>
 						</div>
 						<div class="vertical-layout-panel">
+							<!-- 深色与浅色模式切换按钮 -->
+							<button class="rectangle-button speech" id="themeButton">
+								<i class="fas fa-moon"></i> 切换 风格主题
+							</button>
 							<!-- 语音配置按钮，点击可打开[ 语音配置 ]功能页面 -->
 							<button class="rectangle-button speech" id="voiceConfigureButton">
 								<i class="fas fa-microphone"></i> 打开 语音配置
-							</button>
-							<!-- 调试模式按钮，点击可打开[ 调试模式 ]功能机制 -->
-							<button class="rectangle-button pink" id="debugModeButton">
-								<i class="fas fa-star-and-crescent"></i> 启用 调试模式
-							</button>
-							<!-- 二维码切换按钮，点击可打开[ 二维码连接 ]扫描页面 -->
-							<button class="rectangle-button red" id="qrcodeButton">
-								<i class="fas fa-qrcode"></i> 显示 远程连接
 							</button>
 						</div>
 					</div>
@@ -539,18 +552,6 @@
 							<h2><i class="fas fa-server"></i> 扩展页面</h2>
 						</div>
 						<div class="vertical-layout-panel">
-							<!-- 点击可打开[ 文枢阁 ]功能页面 -->
-							<button class="rectangle-button green" id="FileVaultButton">
-								<i class="fas fa-folder-open"></i> 打开 文枢阁
-							</button>
-							<!-- 点击可打开[ 灵绘坊 ]功能页面 -->
-							<button class="rectangle-button cyan" id="ImageStudioButton">
-								<i class="fas fa-image"></i> 打开 灵绘坊
-							</button>
-							<!-- 点击可打开[ 智存库 ]功能页面 -->
-							<button class="rectangle-button blue" id="DataKeeperButton">
-								<i class="fas fa-database"></i> 打开 智存库
-							</button>
 						</div>
 					</div>
 					<!-- Live2D动作控制卡片 -->
