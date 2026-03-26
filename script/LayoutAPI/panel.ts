@@ -94,7 +94,7 @@ export function eraseAllConfigurePanel() {
 	// 遍历所有配置面板，将其显示状态设置为隐藏
 	configurePanel.forEach(panel => (panel as HTMLElement).style.display = 'none');
 	// 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-	configurePanelButton.forEach(button => button.classList.remove("clicking"));
+	//configurePanelButton.forEach(button => button.classList.remove("clicking"));
 	// 调用 reloadLive2DContainer 函数，重载Live2D容器
 	//setTimeout(EntryAPI.reloadLive2DContainer, 500);
 };

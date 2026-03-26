@@ -14,7 +14,7 @@ func GetEmbeddingVector(text string) ([]float64, error) {
 		"input": text,
 		"model": "system-embedding",
 	}
-	embeddingURL := fmt.Sprintf("https://localhost:%d/v1/embeddings", *config.BasicPort)
+	embeddingURL := fmt.Sprintf("http://localhost:%d/v1/embeddings", *config.BasicPort)
 	jsonData, err := json.Marshal(embeddingReq)
 	if err != nil {
 		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
@@ -47,7 +47,7 @@ func QueryKnowledgeBase(queryVector []float64) ([]Message, error) {
 		"topK":        10,
 	}
 	// 构建请求URL
-	knowledgeURL := fmt.Sprintf("https://localhost:%d/knowledge/query", *config.BasicPort)
+	knowledgeURL := fmt.Sprintf("http://localhost:%d/knowledge/query", *config.BasicPort)
 	// 发送HTTP POST请求
 	jsonData, err := json.Marshal(knowledgeReq)
 	if err != nil {

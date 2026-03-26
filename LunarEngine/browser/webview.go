@@ -1,6 +1,7 @@
 package browser
 
 import (
+	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
 	"log"
 	"os/exec"
 	"runtime"
@@ -13,15 +14,6 @@ var (
 	webviewMutex    sync.Mutex
 	webviewInstance webview.WebView
 )
-
-// WebViewConfig 包含创建 WebView 所需的基本配置
-type WebViewConfig struct {
-	Title     string
-	Width     int
-	Height    int
-	Resizable bool
-	Debug     bool
-}
 
 // OpenBrowser 在系统默认浏览器中打开指定 URL
 func OpenBrowser(url string) {
@@ -46,7 +38,7 @@ func OpenBrowser(url string) {
 }
 
 // CreateWebView 创建并返回一个 WebView 实例（单例模式）
-func CreateWebView(config WebViewConfig) webview.WebView {
+func CreateWebView() webview.WebView {
 	webviewMutex.Lock()
 	defer webviewMutex.Unlock()
 
@@ -54,21 +46,89 @@ func CreateWebView(config WebViewConfig) webview.WebView {
 		return webviewInstance
 	}
 
-	w := webview.New(config.Debug)
+	w := webview.New(*config.WebViewDebug)
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 WebView 实例")
 		return nil
 	}
 
-	w.SetTitle(config.Title)
-	w.SetSize(config.Width, config.Height, webview.HintNone)
+	w.SetTitle(*config.WebViewTitle)
+	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
 
-	if !config.Resizable {
-		w.SetSize(config.Width, config.Height, webview.HintFixed)
+	if !*config.WebViewResizable {
+		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
 	}
+
+	// 设置最小尺寸限制
+	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
+		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
+	}
+
+	// 禁用缓存
+	disableCache(w)
 
 	webviewInstance = w
 	return w
+}
+
+// disableCache 禁用 WebView 缓存
+func disableCache(w webview.WebView) {
+	// 注入 JavaScript 代码禁用缓存
+	w.Init(`
+		// 禁用浏览器缓存
+		window.addEventListener('load', function() {
+			// 清除现有缓存
+			if (window.caches) {
+				window.caches.keys().then(function(cacheNames) {
+					cacheNames.forEach(function(cacheName) {
+						window.caches.delete(cacheName);
+					});
+				});
+			}
+
+			// 重写 XMLHttpRequest 以禁用缓存
+			var originalXHR = XMLHttpRequest;
+			XMLHttpRequest = function() {
+				var xhr = new originalXHR();
+				xhr.open = function(method, url, async, user, password) {
+					// 添加随机参数以避免缓存
+					if (url.indexOf('?') === -1) {
+						url += '?t=' + Date.now();
+					} else {
+						url += '&t=' + Date.now();
+					}
+					originalXHR.prototype.open.call(this, method, url, async, user, password);
+					// 设置请求头禁用缓存
+					this.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+					this.setRequestHeader('Pragma', 'no-cache');
+					this.setRequestHeader('Expires', '0');
+				};
+				return xhr;
+			};
+
+			// 重写 fetch 以禁用缓存
+			var originalFetch = fetch;
+			fetch = function(url, options) {
+				// 添加随机参数以避免缓存
+				if (typeof url === 'string') {
+					if (url.indexOf('?') === -1) {
+						url += '?t=' + Date.now();
+					} else {
+						url += '&t=' + Date.now();
+					}
+				}
+
+				// 设置请求头禁用缓存
+				options = options || {};
+				options.headers = options.headers || {};
+				options.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+				options.headers['Pragma'] = 'no-cache';
+				options.headers['Expires'] = '0';
+
+				return originalFetch(url, options);
+			};
+		});
+	`)
 }
 
 // NavigateWebView 让当前 WebView 导航到指定 URL
@@ -105,6 +165,32 @@ func CloseWebView() {
 	}
 	webviewInstance.Terminate()
 	webviewInstance = nil
+}
+
+// SetWebViewSize 设置 WebView 窗口大小
+func SetWebViewSize(width, height int) {
+	webviewMutex.Lock()
+	defer webviewMutex.Unlock()
+
+	if webviewInstance == nil {
+		log.Printf("Webview[ERROR] -> WebView 未初始化")
+		return
+	}
+	webviewInstance.SetSize(width, height, webview.HintNone)
+}
+
+// SetWebViewPosition 设置 WebView 窗口位置
+func SetWebViewPosition(x, y int) {
+	webviewMutex.Lock()
+	defer webviewMutex.Unlock()
+
+	if webviewInstance == nil {
+		log.Printf("Webview[ERROR] -> WebView 未初始化")
+		return
+	}
+	// 注意：webview 库可能不直接支持设置位置
+	// 这里是一个占位函数，实际实现可能需要平台特定的代码
+	log.Printf("Webview[INFO] -> 设置位置功能需要平台特定实现")
 }
 
 // IsWebViewSupported 检查当前平台是否支持 WebView

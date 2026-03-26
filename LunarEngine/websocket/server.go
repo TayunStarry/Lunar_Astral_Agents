@@ -22,7 +22,7 @@ func init() {
 		requests: make(map[string]*RequestContext),
 		config: ServerConfig{
 			Port:               fmt.Sprintf("%d", *config.BasicPort+5),
-			CORSAllowedOrigins: []string{fmt.Sprintf("https://localhost:%d", *config.BasicPort)},
+			CORSAllowedOrigins: []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)},
 			RequestTimeout:     2 * time.Minute,
 			MaxRequests:        100,
 			CleanupInterval:    5 * time.Minute,
@@ -41,8 +41,8 @@ func BuildSimulatedServer() *http.Server {
 	// 构建服务器地址
 	serverAddr := fmt.Sprintf(":%s", serverState.config.Port)
 	// 打印服务器端口
-	log.Printf("Lunar模块[WebSocket] : 代理请求 [POST] -> http://localhost:%v/", serverState.config.Port)
-	log.Printf("Lunar模块[WebSocket] : 健康检查 [GET] -> http://localhost:%v/health", serverState.config.Port)
+	log.Printf("Lunar模块[WebSocket] : 代理请求 [POST] -> https://localhost:%v/", serverState.config.Port)
+	log.Printf("Lunar模块[WebSocket] : 健康检查 [GET] -> https://localhost:%v/health", serverState.config.Port)
 	// 创建服务器实例
 	server := &http.Server{
 		Addr:    serverAddr,
@@ -50,7 +50,7 @@ func BuildSimulatedServer() *http.Server {
 	}
 	// 启动服务器
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServeTLS(serverAddr, *config.CertFile, *config.KeyFile, mux); err != nil && err != http.ErrServerClosed {
 			log.Printf("Lunar模块[WebSocket][ERROR] -> 服务器启动失败: %v\n", err)
 		}
 	}()
@@ -115,7 +115,7 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Max-Age", "86400")
 }
 
-// 处理代理请求，将其他路径的请求转发到 https 服务器
+// 处理代理请求，将其他路径的请求转发到 http 服务器
 func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	// 添加CORS头
 	setCORSHeaders(w, r)
@@ -125,7 +125,7 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 目标服务器地址 - 构建本地HTTP服务器的URL
-	targetURL := fmt.Sprintf("https://localhost:%d", *config.BasicPort)
+	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 解析目标URL - 将字符串URL转换为url.URL对象
 	target, err := url.Parse(targetURL)
 	if err != nil {

@@ -2,9 +2,9 @@ package server
 
 // 导入必要的包
 import (
+	browser "Lunar-Astral-Agents/browser"     // 导入浏览器模块（如打开浏览器）
 	config "Lunar-Astral-Agents/parameter"    // 引入配置模块，用于获取模型路径等配置
 	utils "Lunar-Astral-Agents/utils"         // 工具函数包
-	browser "Lunar-Astral-Agents/browser"  // 导入浏览器模块（如打开浏览器）
 	websocket "Lunar-Astral-Agents/websocket" // WebSocket相关包
 	"fmt"                                     // 用于格式化输入输出
 	"log"                                     // 用于日志记录
@@ -54,8 +54,8 @@ func tryStartServerOnPort(server *http.Server) bool {
 	initializeServerComponents(server)
 	// 配置服务器监听地址
 	addr := fmt.Sprintf(":%d", *config.BasicPort)
-	// 启动HTTPS服务器 - 使用TLS证书提供安全访问
-	if err := http.ListenAndServeTLS(addr, *config.CertFile, *config.KeyFile, server.Handler); err != nil && err != http.ErrServerClosed {
+	// 启动HTTP服务器
+	if err := http.ListenAndServe(addr, server.Handler); err != nil && err != http.ErrServerClosed {
 		log.Printf("Lunar模块[ERROR] -> %v", err)
 		return false
 	}
@@ -83,9 +83,9 @@ func startClientLoading() {
 		return
 	}
 	// 构建客户端访问的 URL
-	//clientUrl := fmt.Sprintf("https://localhost:%d", *config.BasicPort)
+	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 构建内部接口的 URL
-	internalURL := fmt.Sprintf("https://%s:%d", ip, *config.BasicPort)
+	internalURL := fmt.Sprintf("http://%s:%d", ip, *config.BasicPort)
 	// 检查是否使用 webview
 	if *config.UseWebView {
 		// 使用 webview 内嵌浏览器
@@ -110,17 +110,8 @@ func startWebViewBrowser(url string) {
 	// 等待服务器启动完成
 	time.Sleep(1 * time.Second)
 
-	// 创建 webview 配置
-	webviewConfig := browser.WebViewConfig{
-		Title:     *config.WebViewTitle,
-		Width:     *config.WebViewWidth,
-		Height:    *config.WebViewHeight,
-		Resizable: *config.WebViewResizable,
-		Debug:     *config.WebViewDebug,
-	}
-
 	// 创建 webview 实例
-	w := browser.CreateWebView(webviewConfig)
+	w := browser.CreateWebView()
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 webview 实例")
 		return

@@ -51,4 +51,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/cleanup/images", Handler: handlers.CleanupUnreferencedImagesHandler, Method: "POST", Description: "清理图片"},
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问"},
+	// WebView 控制接口
+	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "WebView 控制"},
 }

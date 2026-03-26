@@ -324,7 +324,7 @@ function eraseAllConfigurePanel() {
     // 遍历所有配置面板，将其显示状态设置为隐藏
     configurePanel.forEach(panel => panel.style.display = 'none');
     // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-    configurePanelButton.forEach(button => button.classList.remove("clicking"));
+    //configurePanelButton.forEach(button => button.classList.remove("clicking"));
     // 调用 reloadLive2DContainer 函数，重载Live2D容器
     //setTimeout(EntryAPI.reloadLive2DContainer, 500);
 }
@@ -726,9 +726,6 @@ triggerLive2DStateButton.addEventListener("click", function () {
 });
 //* 绑定 切换轻量渲染面板 按钮点击事件
 simpleRenderingButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 轻量渲染 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 若当前已显示轻量渲染面板
@@ -751,9 +748,6 @@ simpleRenderingButton.addEventListener('click', function () {
 });
 //* 绑定 切换视觉共享面板 按钮点击事件
 shareScreenButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 视觉共享 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 若当前已显示视觉共享面板
@@ -778,9 +772,6 @@ shareScreenButton.addEventListener('click', function () {
 });
 //* 绑定 切换月华笔记面板 按钮点击事件
 lunarNotesButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 月华笔记 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 若当前已显示月华笔记面板
@@ -805,9 +796,6 @@ lunarNotesButton.addEventListener('click', function () {
 });
 //* 绑定 切换语音配置 按钮点击事件
 voiceConfigureButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 语音配置 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 若当前未显示系统配置
@@ -828,9 +816,6 @@ voiceConfigureButton.addEventListener('click', function () {
 });
 //* 绑定 功能控制面板 按钮点击事件
 functionControlButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 功能控制 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 若当前已显示功能控制面板
@@ -859,9 +844,6 @@ functionControlButton.addEventListener('click', function () {
 });
 //* 绑定 聊天记录面板 按钮点击事件
 chatHistoryButton.addEventListener('click', function () {
-    // 若当前屏幕宽度不足，显示错误提示并结束事件响应
-    if (window.innerWidth <= smallScreenWidthThreshold)
-        return showSystemMessage("< 聊天记录 >不可在小屏幕下使用", "error");
     // 清除所有配置面板的显示状态
     eraseAllConfigurePanel();
     // 显示对话和历史记录面板
@@ -870,6 +852,8 @@ chatHistoryButton.addEventListener('click', function () {
     functionControlContainerPanel.style.display = "none";
     // 改变全局变量，表示无配置面板显示
     OnlyData.configurePanelOption = 'any';
+    // 变更按钮样式, 移除点击中的样式类
+    functionControlButton.classList.remove("clicking");
 });
 //* 绑定 自动播放 按钮点击事件
 autoPlaySpeechButton.addEventListener('click', function () {
@@ -913,14 +897,16 @@ voiceRecognitionButton.addEventListener('click', function () {
 debugModeButton.addEventListener('click', function () {
     if (OnlyData.isDebugMode) {
         // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-star-and-crescent"></i> 启用 调试模式';
+        this.innerHTML = '<i class="fas fa-star-and-crescent"></i>';
+        debugModeButton.classList.remove("clicking");
         // 改变全局变量
         OnlyData.isDebugMode = false;
         showSystemMessage("禁用< 调试模式 >", "success");
     }
     else {
         // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-code"></i> 禁用 调试模式';
+        this.innerHTML = '<i class="fas fa-code"></i>';
+        debugModeButton.classList.add("clicking");
         // 改变全局变量
         OnlyData.isDebugMode = true;
         showSystemMessage("启用< 调试模式 >", "success");
@@ -928,12 +914,6 @@ debugModeButton.addEventListener('click', function () {
 });
 //* 绑定 切换连续记忆模式 按钮点击事件
 longTermMemoryButton.addEventListener('click', function () {
-    /**
-     * 获取文档中所有的配置面板按钮元素
-     */
-    const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-    // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-    configurePanelButton.forEach(button => button.classList.remove("clicking"));
     if (OnlyData.isContinuousMemory) {
         // 变更按钮样式
         this.innerHTML = '<i class="fas fa-memory"></i>';
@@ -953,12 +933,6 @@ longTermMemoryButton.addEventListener('click', function () {
 });
 //* 绑定 切换主动消息模式 按钮点击事件
 activeMessageButton.addEventListener('click', function () {
-    /**
-     * 获取文档中所有的配置面板按钮元素
-     */
-    const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-    // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-    configurePanelButton.forEach(button => button.classList.remove("clicking"));
     if (OnlyData.isActiveMessageMode) {
         // 变更按钮样式，使用无消息图标表示主动消息模式禁用状态
         this.innerHTML = '<i class="fas fa-comment-slash"></i>';
@@ -986,22 +960,12 @@ themeButton.addEventListener("click", function () {
     const isDarkMode = document.documentElement.classList.contains("dark-mode");
     // 存储当前主题到本地存储中
     localStorage.setItem("theme", isDarkMode ? "dark" : "light");
-    /**
-     * 获取文档中所有的配置面板按钮元素
-     */
-    const configurePanelButton = document.documentElement.querySelectorAll('.power-button.live2d');
-    // 遍历所有配置面板按钮，移除按钮上的点击中的样式类，恢复按钮初始样式
-    configurePanelButton.forEach(button => button.classList.remove("clicking"));
     // 更新按钮图标
     if (isDarkMode) {
-        // 变更按钮样式
-        this.classList.add("clicking");
-        this.innerHTML = '<i class="fas fa-sun"></i>';
+        this.innerHTML = '<i class="fas fa-sun"></i> 切换 风格主题';
     }
     else {
-        // 变更按钮样式
-        this.classList.remove("clicking");
-        this.innerHTML = '<i class="fas fa-moon"></i>';
+        this.innerHTML = '<i class="fas fa-moon"></i> 切换 风格主题';
     }
 });
 //* 绑定 二维码切换按钮 点击事件
@@ -1009,13 +973,17 @@ qrcodeButton.addEventListener('click', function () {
     // 如果二维码已经显示，则关闭它
     if (qrcodeStatusPanel.className.includes('show')) {
         // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-qrcode"></i> 显示 远程连接';
+        this.innerHTML = '<i class="fas fa-qrcode"></i>';
+        // 变更按钮样式
+        this.classList.remove("clicking");
         // 设置系统状态面板的类名，移除显示类名
         qrcodeStatusPanel.className = 'system-message qrcode';
     }
     else {
         // 变更按钮样式
-        this.innerHTML = '<i class="fas fa-network-wired"></i> 隐藏 远程连接';
+        this.innerHTML = '<i class="fas fa-network-wired"></i>';
+        // 变更按钮样式
+        this.classList.add("clicking");
         // 设置系统状态面板的类名，包含基础类名、消息类型类名和显示类名
         qrcodeStatusPanel.className = 'system-message qrcode show';
         // 拖动配置面板
@@ -7110,6 +7078,10 @@ function dynamicOpacity() {
  * 当窗口宽度小于等于 SMALL_SCREEN_WIDTH_THRESHOLD 时，执行一系列界面布局调整操作
  */
 function windowResizeEvent() {
+    // 设置系统状态面板的类名，移除显示类名
+    qrcodeStatusPanel.className = 'system-message qrcode';
+    // 变更按钮样式
+    qrcodeButton.classList.remove("clicking");
     // 检查窗口宽度是否大于小屏幕阈值，若是则直接返回，不执行后续操作
     if (window.innerWidth > smallScreenWidthThreshold) {
         // 将 Live2D 容器面板移动到页面外面
@@ -7142,7 +7114,7 @@ function windowResizeEvent() {
     // 移除调试模式切换按钮的点击状态样式
     debugModeButton.classList.remove("clicking");
     // 重置调试模式切换按钮的图标
-    debugModeButton.innerHTML = '<i class="fas fa-star-and-crescent"></i> 启用 调试模式';
+    debugModeButton.innerHTML = '<i class="fas fa-star-and-crescent"></i>';
 }
 /**
  * 窗口大小变化时的防抖处理函数
@@ -7185,13 +7157,11 @@ function applySavedTheme() {
     const savedTheme = localStorage.getItem("theme");
     // 如果之前保存的是暗色模式，则应用相应样式
     if (savedTheme === "dark") {
-        // 添加点击中的样式类
-        themeButton?.classList.add("clicking");
         // 添加暗色模式类名以启用暗色主题样式
         document.documentElement.classList.add("dark-mode");
         // 修改按钮图标为太阳图标（表示当前为暗色模式）
         if (themeButton)
-            themeButton.innerHTML = '<i class="fas fa-sun"></i>';
+            themeButton.innerHTML = '<i class="fas fa-sun"></i> 切换 风格主题';
     }
 }
 //* 绑定 系统初始化事件
