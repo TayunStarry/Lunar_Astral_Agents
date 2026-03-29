@@ -2,6 +2,7 @@ package server
 
 // 导入必要的包
 import (
+	files "Lunar-Astral-Agents/files"              // 引入文件模块，用于获取静态路径
 	config "Lunar-Astral-Agents/parameter"         // 引入配置模块，用于获取模型路径等配置
 	llama "Lunar-Astral-Agents/reasoning/system"   // GGUF相关包
 	release "Lunar-Astral-Agents/release"          // 端口释放相关包
@@ -123,8 +124,8 @@ func loadConfigureFile() {
 func registerHandlers() {
 	// 创建独立的ServeMux实例
 	httpMux = http.NewServeMux()
-	// 处理根路径请求，将请求路径中的前缀 "/" 去除后，使用文件服务器提供 Webpage 目录下的静态文件
-	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir("webpage"))))
+	// 处理根路径请求，使用嵌入的文件系统提供静态文件
+	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(files.GetFileSystem())))
 	// 检查显存是否足够，若不足则禁用灵绘坊功能
 	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")

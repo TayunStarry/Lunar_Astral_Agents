@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/browser"
+	"Lunar-Astral-Agents/utils"
 	"encoding/json"
 	"net/http"
 )
@@ -41,7 +41,7 @@ func WebViewControlHandler(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "set_size":
 		if req.Width > 0 && req.Height > 0 {
-			browser.SetWebViewSize(req.Width, req.Height)
+			utils.SetWebViewSize(req.Width, req.Height)
 			json.NewEncoder(w).Encode(WebViewControlResponse{
 				Success: true,
 				Message: "WebView size updated",
@@ -55,7 +55,7 @@ func WebViewControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "set_position":
-		browser.SetWebViewPosition(req.X, req.Y)
+		utils.SetWebViewPosition(req.X, req.Y)
 		json.NewEncoder(w).Encode(WebViewControlResponse{
 			Success: true,
 			Message: "WebView position updated (if supported)",
