@@ -3,6 +3,7 @@ package websocket
 // 导入必要的包
 import (
 	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	agent "Lunar-Astral-Agents/reasoning"  // 引入推理模块，用于获取模型路径等配置
 	"encoding/json"                        // 用于JSON编码和解码
 	"fmt"                                  // 用于格式化输出
 	"log"                                  // 用于日志记录
@@ -19,7 +20,7 @@ var serverState *ServerState
 // init 初始化服务器状态
 func init() {
 	serverState = &ServerState{
-		requests: make(map[string]*RequestContext),
+		requests: make(map[string]*agent.RequestContext),
 		config: ServerConfig{
 			Port:               fmt.Sprintf("%d", *config.BasicPort+5),
 			CORSAllowedOrigins: []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)},
