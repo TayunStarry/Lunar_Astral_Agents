@@ -1,4 +1,4 @@
-package browser
+package utils
 
 import (
 	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
@@ -64,71 +64,8 @@ func CreateWebView() webview.WebView {
 		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
 	}
 
-	// 禁用缓存
-	disableCache(w)
-
 	webviewInstance = w
 	return w
-}
-
-// disableCache 禁用 WebView 缓存
-func disableCache(w webview.WebView) {
-	// 注入 JavaScript 代码禁用缓存
-	w.Init(`
-		// 禁用浏览器缓存
-		window.addEventListener('load', function() {
-			// 清除现有缓存
-			if (window.caches) {
-				window.caches.keys().then(function(cacheNames) {
-					cacheNames.forEach(function(cacheName) {
-						window.caches.delete(cacheName);
-					});
-				});
-			}
-
-			// 重写 XMLHttpRequest 以禁用缓存
-			var originalXHR = XMLHttpRequest;
-			XMLHttpRequest = function() {
-				var xhr = new originalXHR();
-				xhr.open = function(method, url, async, user, password) {
-					// 添加随机参数以避免缓存
-					if (url.indexOf('?') === -1) {
-						url += '?t=' + Date.now();
-					} else {
-						url += '&t=' + Date.now();
-					}
-					originalXHR.prototype.open.call(this, method, url, async, user, password);
-					// 设置请求头禁用缓存
-					this.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-					this.setRequestHeader('Pragma', 'no-cache');
-					this.setRequestHeader('Expires', '0');
-				};
-				return xhr;
-			};
-
-			// 重写 fetch 以禁用缓存
-			var originalFetch = fetch;
-			fetch = function(url, options) {
-				// 添加随机参数以避免缓存
-				if (typeof url === 'string') {
-					if (url.indexOf('?') === -1) {
-						url += '?t=' + Date.now();
-					} else {
-						url += '&t=' + Date.now();
-					}
-				}
-
-				// 设置请求头禁用缓存
-				options = options || {};
-				options.headers = options.headers || {};
-				options.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
-				options.headers['Pragma'] = 'no-cache';
-				options.headers['Expires'] = '0';
-
-				return originalFetch(url, options);
-			};
-		});
-	`)
 }
 
 // NavigateWebView 让当前 WebView 导航到指定 URL

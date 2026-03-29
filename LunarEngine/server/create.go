@@ -2,7 +2,6 @@ package server
 
 // 导入必要的包
 import (
-	browser "Lunar-Astral-Agents/browser"     // 导入浏览器模块（如打开浏览器）
 	config "Lunar-Astral-Agents/parameter"    // 引入配置模块，用于获取模型路径等配置
 	utils "Lunar-Astral-Agents/utils"         // 工具函数包
 	websocket "Lunar-Astral-Agents/websocket" // WebSocket相关包
@@ -89,16 +88,16 @@ func startClientLoading() {
 	// 检查是否使用 webview
 	if *config.UseWebView {
 		// 使用 webview 内嵌浏览器
-		if browser.IsWebViewSupported() {
+		if utils.IsWebViewSupported() {
 			go startWebViewBrowser(internalURL)
 		} else {
 			log.Printf("Webview[ERROR] -> 当前系统不支持 webview，回退到系统浏览器")
-			browser.OpenBrowser(internalURL)
+			utils.OpenBrowser(internalURL)
 		}
 	} else {
 		// 检查是否非开发模式，如果不是开发模式，则自动打开浏览器访问服务器
 		if !*config.DevMode {
-			browser.OpenBrowser(internalURL)
+			utils.OpenBrowser(internalURL)
 		}
 	}
 	// 打印服务器端口
@@ -111,17 +110,17 @@ func startWebViewBrowser(url string) {
 	time.Sleep(1 * time.Second)
 
 	// 创建 webview 实例
-	w := browser.CreateWebView()
+	w := utils.CreateWebView()
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 webview 实例")
 		return
 	}
 
 	// 导航到指定 URL
-	browser.NavigateWebView(url)
+	utils.NavigateWebView(url)
 
 	// 运行 webview（阻塞）
-	browser.RunWebView()
+	utils.RunWebView()
 }
 
 // CloseWebSocketServer 关闭WebSocket服务器
