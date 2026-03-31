@@ -9,14 +9,12 @@ import (
 	handlers "Lunar-Astral-Agents/server/handlers" // 处理API请求的包
 	utils "Lunar-Astral-Agents/utils"              // 地址查询相关包
 	"context"                                      // 用于处理请求上下文和超时
-	"encoding/json"                                // 用于JSON编码/解码
 	"flag"                                         // 用于解析命令行参数
 	"log"                                          // 用于日志记录
 	"mime"                                         // 用于处理MIME类型
 	"net/http"                                     // 用于构建HTTP服务器
 	"os"                                           // 用于操作系统相关操作
 	"os/signal"                                    // 用于处理系统信号
-	"path/filepath"                                // 用于处理文件路径
 	"strings"                                      // 用于字符串操作
 	"syscall"                                      // 用于系统调用
 	"time"                                         // 用于时间相关操作
@@ -25,6 +23,7 @@ import (
 // httpMux 是HTTP服务器的ServeMux实例
 var httpMux *http.ServeMux
 
+// ModelConfig 定义模型配置的结构
 type ModelConfig struct {
 	// 嵌入模型路径
 	EmbeddingModelPath string `json:"embedding_model_path"`
@@ -64,60 +63,6 @@ func InitializeServer() {
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
-}
-
-// loadConfigureFile 加载配置文件
-func loadConfigureFile() {
-	// 获取当前可执行文件的路径
-	exePath, err := os.Executable()
-	// 若获取失败，打印错误日志并直接返回
-	if err != nil {
-		log.Printf("获取可执行文件路径失败: %v", err)
-		return
-	}
-	// 提取可执行文件所在的目录
-	exeDir := filepath.Dir(exePath)
-	// 拼接配置文件 model_config.json 的完整路径
-	configPath := filepath.Join(exeDir, *config.LocalDir, "model_config.json")
-	// 读取配置文件内容
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		// 若读取失败，打印错误日志并直接返回
-		log.Printf("读取配置文件失败 %s: %v", configPath, err)
-		return
-	}
-	// 创建 ModelConfig 结构体实例用于接收解析结果
-	parameter := &ModelConfig{}
-	// 将 JSON 数据解析到结构体中
-	if err := json.Unmarshal(data, parameter); err != nil {
-		// 若解析失败，打印错误日志并直接返回
-		log.Printf("解析配置文件失败: %v", err)
-		return
-	}
-	// 如果配置文件中 EmbeddingModelPath 字段非空，则更新全局配置
-	if parameter.EmbeddingModelPath != "" {
-		*config.EmbeddingModel = parameter.EmbeddingModelPath
-	}
-	// 如果配置文件中 MultimodalModelPath 字段非空，则更新全局配置
-	if parameter.MultimodalModelPath != "" {
-		*config.MultimodalModel = parameter.MultimodalModelPath
-	}
-	// 如果配置文件中 MmprojModelPath 字段非空，则更新全局配置
-	if parameter.MmprojModelPath != "" {
-		*config.MmprojModel = parameter.MmprojModelPath
-	}
-	// 如果配置文件中 DiffusionModelPath 字段非空，则更新全局配置
-	if parameter.DiffusionModelPath != "" {
-		*config.DiffusionModel = parameter.DiffusionModelPath
-	}
-	// 如果配置文件中 VariationalModelPath 字段非空，则更新全局配置
-	if parameter.VariationalModelPath != "" {
-		*config.VariationalModel = parameter.VariationalModelPath
-	}
-	// 如果配置文件中 PromptRefineModelPath 字段非空，则更新全局配置
-	if parameter.PromptRefineModelPath != "" {
-		*config.PromptModel = parameter.PromptRefineModelPath
-	}
 }
 
 // registerHandlers 注册所有HTTP请求处理器

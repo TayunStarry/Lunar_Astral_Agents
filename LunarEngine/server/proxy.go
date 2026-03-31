@@ -1,65 +1,58 @@
-package websocket
+package server
 
 // 导入必要的包
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	agent "Lunar-Astral-Agents/reasoning"  // 引入推理模块，用于获取模型路径等配置
+	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取证书路径、端口等配置
+	agent "Lunar-Astral-Agents/reasoning"  // 引入推理模块，用于请求上下文管理
 	"encoding/json"                        // 用于JSON编码和解码
 	"fmt"                                  // 用于格式化输出
 	"log"                                  // 用于日志记录
 	"net/http"                             // 用于HTTP请求和响应
-	"net/http/httputil"                    // 用于HTTP请求和响应的调试工具
+	"net/http/httputil"                    // 用于HTTP反向代理
 	"net/url"                              // 用于URL解析和操作
 	"slices"                               // 用于操作切片
+	"sync"                                 // 用于同步操作，如互斥锁
 	"time"                                 // 用于时间操作，如时间戳
 )
 
-// 全局服务器状态
-var serverState *ServerState
+// CORSAllowedOrigins 定义允许跨域访问的来源列表
+var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
 
-// init 初始化服务器状态
-func init() {
-	serverState = &ServerState{
-		requests: make(map[string]*agent.RequestContext),
-		config: ServerConfig{
-			Port:               fmt.Sprintf("%d", *config.BasicPort+5),
-			CORSAllowedOrigins: []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)},
-			RequestTimeout:     2 * time.Minute,
-			MaxRequests:        100,
-			CleanupInterval:    5 * time.Minute,
-		},
-	}
-}
+// 请求映射，键为请求ID，值为请求上下文
+var requests = make(map[string]*agent.RequestContext)
 
-// BuildSimulatedServer 构建一个模拟的OpenAI V1格式服务器
-func BuildSimulatedServer() *http.Server {
+// 互斥锁，用于保护请求映射的并发访问
+var serverMutex sync.RWMutex
+
+// BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
+func BuildTLSTerminationProxy() *http.Server {
 	// 创建独立的ServeMux实例
 	mux := http.NewServeMux()
-	// 定义HTTP处理器
+	// 注册健康检查处理器
 	mux.HandleFunc("/health", handleHealthCheck)
-	// 添加默认代理处理
-	mux.HandleFunc("/", handleProxyRequest)
+	// 注册反向代理处理器，将所有请求转发到HTTP后端
+	mux.HandleFunc("/", handleReverseProxy)
 	// 构建服务器地址
-	serverAddr := fmt.Sprintf(":%s", serverState.config.Port)
-	// 打印服务器端口
-	log.Printf("Lunar模块[WebSocket] : 代理请求 [POST] -> https://localhost:%v/", serverState.config.Port)
-	log.Printf("Lunar模块[WebSocket] : 健康检查 [GET] -> https://localhost:%v/health", serverState.config.Port)
+	serverAddr := fmt.Sprintf(":%d", *config.ProxyPort)
+	// 打印代理服务访问地址
+	log.Printf("Lunar模块[TLS代理] : 代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
+	log.Printf("Lunar模块[TLS代理] : 健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
 	// 创建服务器实例
 	server := &http.Server{
 		Addr:    serverAddr,
 		Handler: mux,
 	}
-	// 启动服务器
+	// 启动HTTPS服务器（在独立goroutine中运行）
 	go func() {
 		if err := http.ListenAndServeTLS(serverAddr, *config.CertFile, *config.KeyFile, mux); err != nil && err != http.ErrServerClosed {
-			log.Printf("Lunar模块[WebSocket][ERROR] -> 服务器启动失败: %v\n", err)
+			log.Printf("Lunar模块[TLS代理][ERROR] -> 服务器启动失败: %v\n", err)
 		}
 	}()
 	// 返回服务器实例
 	return server
 }
 
-// handleHealthCheck 处理健康检查请求
+// handleHealthCheck 用于监控系统状态和负载情况
 func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	// 添加CORS头，允许跨域访问
 	setCORSHeaders(w, r)
@@ -73,17 +66,16 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	// 使用互斥锁 并 读取挂起请求数量
-	serverState.mutex.RLock()
-	pendingRequests := len(serverState.requests)
-	serverState.mutex.RUnlock()
+	// 使用读锁获取当前挂起的请求数量
+	serverMutex.RLock()
+	pendingRequests := len(requests)
+	serverMutex.RUnlock()
 	// 构造健康检查响应数据
 	healthStatus := map[string]any{
-		"status":           "healthy",                      // 服务状态：健康
-		"timestamp":        time.Now(),                     // 当前时间戳
-		"pending_requests": pendingRequests,                // 当前挂起的请求数
-		"max_requests":     serverState.config.MaxRequests, // 最大允许请求数
-		"port":             serverState.config.Port,        // 服务监听端口
+		"status":           "healthy",         // 服务状态：健康
+		"timestamp":        time.Now(),        // 当前时间戳
+		"pending_requests": pendingRequests,   // 当前挂起的请求数
+		"port":             *config.ProxyPort, // 服务监听端口
 	}
 	// 设置响应头，指定返回JSON格式
 	w.Header().Set("Content-Type", "application/json")
@@ -95,18 +87,18 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// setCORSHeaders 设置跨域资源共享（CORS）响应头
+// setCORSHeaders 设置跨域资源共享（CORS）响应头，允许前端应用从不同的源访问API
 func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	// 从请求头中获取来源（Origin）
 	origin := r.Header.Get("Origin")
 	// 检查该来源是否在服务器允许的白名单中
-	allowed := slices.Contains(serverState.config.CORSAllowedOrigins, origin)
+	allowed := slices.Contains(CORSAllowedOrigins, origin)
 	// 如果来源被允许，则将其写回响应头，允许该来源跨域访问
 	if allowed {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 	} else {
 		// 否则使用白名单中的第一个来源作为默认值，避免暴露空值
-		w.Header().Set("Access-Control-Allow-Origin", serverState.config.CORSAllowedOrigins[0])
+		w.Header().Set("Access-Control-Allow-Origin", CORSAllowedOrigins[0])
 	}
 	// 设置允许的HTTP方法：POST、GET、OPTIONS
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
@@ -116,8 +108,8 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Max-Age", "86400")
 }
 
-// 处理代理请求，将其他路径的请求转发到 http 服务器
-func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
+// handleReverseProxy 处理反向代理请求，将HTTPS请求解密后转发给内部的HTTP服务器，并将响应返回给客户端， 实现TLS终止（TLS Termination）模式，让内部服务无需处理HTTPS
+func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 	// 添加CORS头
 	setCORSHeaders(w, r)
 	// 处理预检请求
@@ -125,7 +117,7 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	// 目标服务器地址 - 构建本地HTTP服务器的URL
+	// 目标服务器地址 - 内部HTTP服务器的URL
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 解析目标URL - 将字符串URL转换为url.URL对象
 	target, err := url.Parse(targetURL)
@@ -139,25 +131,25 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	proxy.Director = func(req *http.Request) {
 		// 保存原始URL用于日志 - 记录客户端请求的原始URL
 		originalURL := req.URL.String()
-		// 设置协议为后端服务器的协议
+		// 设置协议为后端服务器的协议（HTTP）
 		req.URL.Scheme = target.Scheme
 		// 设置主机为后端服务器的主机
 		req.URL.Host = target.Host
 		// 设置Host头为后端服务器的主机
 		req.Host = target.Host
-		// 指示原始请求使用HTTPS
+		// 指示原始请求使用HTTPS（用于后端服务识别原始协议）
 		req.Header.Set("X-Forwarded-Proto", "https")
 		// 指示原始请求的端口
-		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.BasicPort+5))
+		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.ProxyPort))
 		// 开发模式日志 - 记录请求转发详情
 		if *config.DevMode {
-			log.Printf("转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
+			log.Printf("[TLS代理] 转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
 		}
 	}
 	// 自定义错误处理器 - 处理代理过程中的错误
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		// 记录错误日志 - 输出详细的错误信息
-		log.Printf("代理错误: %v", err)
+		log.Printf("[TLS代理] 代理错误: %v", err)
 		// 设置错误响应头 - 返回JSON格式的错误信息
 		w.Header().Set("Content-Type", "application/json")
 		// 使用502状态码表示网关错误

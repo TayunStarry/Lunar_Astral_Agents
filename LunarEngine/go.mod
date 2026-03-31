@@ -23,5 +23,5 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/u2takey/ffmpeg-go v0.5.0
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
-	golang.org/x/net v0.50.0
+	//golang.org/x/net v0.50.0
 )

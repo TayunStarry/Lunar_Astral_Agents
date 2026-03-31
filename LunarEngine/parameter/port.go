@@ -9,6 +9,8 @@ var (
 	MaxPort = flag.Int("max-port", *BasicPort+15, "系统Web服务的最大监听端口，界定了系统Web服务的端口范围")
 	// MinPort 系统Web服务的最小监听端口，界定了系统Web服务的端口范围
 	MinPort = flag.Int("min-port", *BasicPort-5, "系统Web服务的最小监听端口，界定了系统Web服务的端口范围")
+	// ProxyPort 系统Web服务的代理监听口，界定了系统Web服务的端口范围
+	ProxyPort = flag.Int("proxy-port", *BasicPort+5, "系统Web服务的代理监听口，界定了系统Web服务的端口范围")
 	// ClearPort 启动时自动释放被占用的端口
 	ClearPort = flag.Bool("clear-port", false, "启动时自动释放被占用的端口")
 )

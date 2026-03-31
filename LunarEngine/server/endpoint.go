@@ -1,22 +1,26 @@
 package server
 
 import (
-	"Lunar-Astral-Agents/server/handlers"
-	"net/http"
+	"Lunar-Astral-Agents/server/handlers" // 导入处理器包
+	"net/http"                            // 导入HTTP包
 )
 
 // SystemEndpoint 定义系统端点的结构
 type SystemEndpoint struct {
-	Path        string           `json:"path"`
-	Handler     http.HandlerFunc `json:"handler"`
-	Method      string           `json:"method"`
-	Description string           `json:"description"`
+	// HTTP 访问路径
+	Path string `json:"path"`
+	// HTTP 方法处理器
+	Handler http.HandlerFunc `json:"handler"`
+	// HTTP 方法类型
+	Method string `json:"method"`
+	// 处理器功能描述
+	Description string `json:"description"`
 }
 
 // SystemEndpoints 存储所有系统端点配置
 var SystemEndpoints = []SystemEndpoint{
 	// 文件读写相关接口
-	{Path: "/delete/", Handler: handlers.DeleteHandler, Method: "DELE", Description: "文件删除"},
+	{Path: "/delete/", Handler: handlers.DeleteHandler, Method: "DELETE", Description: "文件删除"},
 	{Path: "/file_list/", Handler: handlers.FileListHandler, Method: "POST", Description: "文件列表"},
 	{Path: "/download/", Handler: handlers.DownloadHandler, Method: "GET", Description: "文件下载"},
 	{Path: "/archive", Handler: handlers.ArchiveHandler, Method: "POST", Description: "文件归档"},
@@ -52,5 +56,5 @@ var SystemEndpoints = []SystemEndpoint{
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问"},
 	// WebView 控制接口
-	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "WebView 控制"},
+	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "页面控制"},
 }
