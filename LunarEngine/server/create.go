@@ -4,7 +4,6 @@ package server
 import (
 	config "Lunar-Astral-Agents/parameter"    // 引入配置模块，用于获取模型路径等配置
 	utils "Lunar-Astral-Agents/utils"         // 工具函数包
-	websocket "Lunar-Astral-Agents/websocket" // WebSocket相关包
 	"fmt"                                     // 用于格式化输入输出
 	"log"                                     // 用于日志记录
 	"net/http"                                // 用于构建HTTP服务器
@@ -68,8 +67,8 @@ func initializeServerComponents(server *http.Server) {
 	server.Handler = utils.CORSMiddleware(httpMux)
 	// 启动客户端加载任务
 	go startClientLoading()
-	// 构建模拟服务器并保存实例
-	websocketServer = websocket.BuildSimulatedServer()
+	// 构建TLS终止代理服务器并保存实例
+	websocketServer = BuildTLSTerminationProxy()
 }
 
 // startClientLoading 启动客户端加载任务
