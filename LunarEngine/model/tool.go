@@ -1,11 +1,11 @@
-package execute
+package model
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 导入配置包，用于获取本地目录
-	"bytes"                                // 导入bytes包，用于处理字节流
-	"encoding/json"                        // 导入json包，用于解析JSON响应
-	"fmt"                                  // 导入fmt包，用于格式化输出
-	"net/http"                             // 导入net/http包，用于发送HTTP请求
+	"Lunar-Astral-Agents/parameter" // 导入配置包，用于获取本地目录
+	"bytes"                         // 导入bytes包，用于处理字节流
+	"encoding/json"                 // 导入json包，用于解析JSON响应
+	"fmt"                           // 导入fmt包，用于格式化输出
+	"net/http"                      // 导入net/http包，用于发送HTTP请求
 )
 
 // GetEmbeddingVector 获取嵌入向量
@@ -14,7 +14,7 @@ func GetEmbeddingVector(text string) ([]float64, error) {
 		"input": text,
 		"model": "system-embedding",
 	}
-	embeddingURL := fmt.Sprintf("http://localhost:%d/v1/embeddings", *config.BasicPort)
+	embeddingURL := fmt.Sprintf("http://localhost:%d/v1/embeddings", *parameter.BasicPort)
 	jsonData, err := json.Marshal(embeddingReq)
 	if err != nil {
 		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
@@ -47,7 +47,7 @@ func QueryKnowledgeBase(queryVector []float64) ([]Message, error) {
 		"topK":        10,
 	}
 	// 构建请求URL
-	knowledgeURL := fmt.Sprintf("http://localhost:%d/knowledge/query", *config.BasicPort)
+	knowledgeURL := fmt.Sprintf("http://localhost:%d/knowledge/query", *parameter.BasicPort)
 	// 发送HTTP POST请求
 	jsonData, err := json.Marshal(knowledgeReq)
 	if err != nil {
@@ -102,11 +102,11 @@ func GetKnowledgeMessages(latestContent string) ([]Message, error) {
 // GetModelPort 根据模型名称获取对应端口（加读锁）
 func GetModelPort(modelName string) (int, bool) {
 	// 加读锁，防止并发修改模型端口映射时出现数据竞争
-	config.ModelMapMutex.RLock()
+	parameter.ModelMapMutex.RLock()
 	// 函数结束时解锁，确保锁一定会被释放
-	defer config.ModelMapMutex.RUnlock()
+	defer parameter.ModelMapMutex.RUnlock()
 	// 从模型端口映射中查找指定模型的端口号
-	port, exists := config.ModelPortMap[modelName]
+	port, exists := parameter.ModelPortMap[modelName]
 	// 返回端口号和是否存在的标志
 	return port, exists
 }

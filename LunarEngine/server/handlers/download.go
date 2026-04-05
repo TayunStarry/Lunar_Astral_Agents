@@ -2,11 +2,11 @@ package handlers
 
 // 导入必要的包
 import (
-	execute "Lunar-Astral-Agents/files" // 导入执行模块
-	"fmt"                               // 导入fmt包，用于格式化输出
-	"net/http"                          // 导入net/http包，用于处理HTTP请求
-	"path/filepath"                     // 导入filepath包，用于处理文件路径
-	"strings"                           // 导入strings包，用于字符串操作
+	"Lunar-Astral-Agents/files" // 导入执行模块
+	"fmt"                       // 导入fmt包，用于格式化输出
+	"net/http"                  // 导入net/http包，用于处理HTTP请求
+	"path/filepath"             // 导入filepath包，用于处理文件路径
+	"strings"                   // 导入strings包，用于字符串操作
 )
 
 // DownloadHandler 处理文件下载请求
@@ -15,7 +15,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/download/")
 
 	// 执行下载操作
-	fullPath, fileSize, err := execute.GetFileInfo(filePath)
+	fullPath, fileSize, err := files.GetFileInfo(filePath)
 	if err != nil {
 		switch err.Error() {
 		case "未指定文件":

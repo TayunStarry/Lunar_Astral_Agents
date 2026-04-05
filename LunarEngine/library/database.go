@@ -1,7 +1,7 @@
 package library
 
 import (
-	config "Lunar-Astral-Agents/parameter"
+	"Lunar-Astral-Agents/parameter"
 	"database/sql"
 	"fmt"
 	"log"
@@ -97,12 +97,12 @@ type DatabaseRequest struct {
 
 // NewDatabase 创建新的数据库实例
 func NewDatabase() (*Database, error) {
-	db, err := initSQLite(*config.Database)
+	db, err := initSQLite(*parameter.Database)
 	if err != nil {
 		return nil, fmt.Errorf("初始化SQLite数据库失败: %v", err)
 	}
 
-	log.Printf("SQLite数据库连接成功: %s", *config.Database)
+	log.Printf("SQLite数据库连接成功: %s", *parameter.Database)
 
 	return &Database{
 		db: db,

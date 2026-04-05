@@ -3,19 +3,19 @@ package llama
 
 // 导入必要的包
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"log"                                  // 标准日志包，用于输出调试/错误信息
-	"os/exec"                              // 执行外部命令（启动 GGUF 服务进程）
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"log"                           // 标准日志包，用于输出调试/错误信息
+	"os/exec"                       // 执行外部命令（启动 GGUF 服务进程）
 )
 
 // registerModelPort 函数用于注册模型端口到全局映射
 func registerModelPort(modelType string, port int) {
 	// 加锁，保证对全局映射的并发安全访问
-	config.ModelMapMutex.Lock()
+	parameter.ModelMapMutex.Lock()
 	// 函数返回前自动解锁
-	defer config.ModelMapMutex.Unlock()
+	defer parameter.ModelMapMutex.Unlock()
 	// 将模型类型添加 "system-" 前缀后作为键，端口号作为值存储到全局映射中
-	config.ModelPortMap["system-"+modelType] = port
+	parameter.ModelPortMap["system-"+modelType] = port
 }
 
 // waitForProcessExit 函数用于等待命令对应的进程退出，并在进程异常退出时记录错误日志

@@ -2,10 +2,10 @@ package handlers
 
 // 导入必要的包
 import (
-	execute "Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
-	"encoding/json"                     // 导入json包，用于解析请求体
-	"net/http"                          // 导入net/http包，用于处理HTTP请求
-	"strings"                           // 导入strings包，用于字符串操作
+	"Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
+	"encoding/json"             // 导入json包，用于解析请求体
+	"net/http"                  // 导入net/http包，用于处理HTTP请求
+	"strings"                   // 导入strings包，用于字符串操作
 )
 
 // DeleteHandler 处理 DELETE 请求，用于删除指定路径下的文件或目录
@@ -18,7 +18,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/delete/" 前缀，获取要删除的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/delete/")
 	// 调用 execute 模块删除文件
-	fullPath, err := execute.DeleteFile(filePath)
+	fullPath, err := files.DeleteFile(filePath)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

@@ -1,11 +1,11 @@
 package release
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"fmt"                                  // 用于格式化输入输出
-	"log"                                  // 用于打印日志信息
-	"os/exec"                              // 用于执行外部命令
-	"strings"                              // 用于字符串操作
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"fmt"                           // 用于格式化输入输出
+	"log"                           // 用于打印日志信息
+	"os/exec"                       // 用于执行外部命令
+	"strings"                       // 用于字符串操作
 )
 
 // getProcessInfoPowerShell 通过 PowerShell 获取指定进程 ID 的进程名和命令行参数
@@ -52,7 +52,7 @@ func verifyPortsQuick() int {
 	// 记录仍被占用的端口数量
 	remaining := 0
 	// 遍历从 config.MinPort 到 config.MaxPort 的所有端口
-	for port := *config.MinPort; port <= *config.MaxPort; port++ {
+	for port := *parameter.MinPort; port <= *parameter.MaxPort; port++ {
 		// 检查端口是否被占用
 		if isPortInUse(port) {
 			// 若端口被占用，打印提示信息

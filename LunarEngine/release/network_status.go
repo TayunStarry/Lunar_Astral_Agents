@@ -1,11 +1,11 @@
 package release
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"log"                                  // 用于打印日志信息
-	"os/exec"                              // 用于执行外部命令
-	"strconv"                              // 用于字符串到整数的转换
-	"strings"                              // 用于字符串操作
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"log"                           // 用于打印日志信息
+	"os/exec"                       // 用于执行外部命令
+	"strconv"                       // 用于字符串到整数的转换
+	"strings"                       // 用于字符串操作
 )
 
 // getPortProcessesNetstat 使用 netstat 命令获取指定端口范围内的进程信息
@@ -57,7 +57,7 @@ func getPortProcessesNetstat() []ProcessInfo {
 		// 将端口号转换为整数
 		port, err := strconv.Atoi(parts[len(parts)-1])
 		// 检查端口号转换是否成功，以及是否在指定范围内
-		if err != nil || port < *config.MinPort || port > *config.MaxPort {
+		if err != nil || port < *parameter.MinPort || port > *parameter.MaxPort {
 			continue
 		}
 		// 将进程 ID 转换为整数

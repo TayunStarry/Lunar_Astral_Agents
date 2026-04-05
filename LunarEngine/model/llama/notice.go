@@ -1,12 +1,12 @@
 package llama
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 导入项目配置模块（如路径、端口等）
-	"bufio"                                // 缓冲 I/O 包，用于读取文件内容
-	"io"                                   // 输入输出包，用于读写数据
-	"log"                                  // 标准日志包，用于输出调试/错误信息
-	"os/exec"                              // 执行外部命令包，用于启动模型服务进程
-	"strings"                              // 字符串操作包，用于字符串处理
+	"Lunar-Astral-Agents/parameter" // 导入项目配置模块（如路径、端口等）
+	"bufio"                         // 缓冲 I/O 包，用于读取文件内容
+	"io"                            // 输入输出包，用于读写数据
+	"log"                           // 标准日志包，用于输出调试/错误信息
+	"os/exec"                       // 执行外部命令包，用于启动模型服务进程
+	"strings"                       // 字符串操作包，用于字符串处理
 )
 
 // openCmdPipe 函数用于为指定的命令创建标准输出和标准错误管道。
@@ -36,7 +36,7 @@ func openStdoutScanner(stdoutScanner *bufio.Scanner, modelLoaded chan bool) {
 		// 获取当前扫描到的行内容
 		line := stdoutScanner.Text()
 		// 当已就绪的模型数量达到最大限制，或者当前行包含 "load_backend:" 时，打印系统日志
-		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
+		if parameter.ModelReady >= parameter.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
 		// 检查输出行是否包含 "starting the main loop"，若包含则表示模型加载完成
@@ -54,7 +54,7 @@ func openStderrScanner(stderrScanner *bufio.Scanner, modelLoaded chan bool, mode
 		// 获取当前扫描到的行内容
 		line := stderrScanner.Text()
 		// 当已就绪的模型数量达到最大限制，或者当前行包含 "load_backend:" 时，打印系统日志
-		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
+		if parameter.ModelReady >= parameter.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
 		// 检查错误行是否包含 "starting the main loop"，若包含则表示模型加载完成

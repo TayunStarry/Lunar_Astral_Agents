@@ -2,13 +2,13 @@ package server
 
 // 导入必要的包
 import (
-	config "Lunar-Astral-Agents/parameter"    // 引入配置模块，用于获取模型路径等配置
-	utils "Lunar-Astral-Agents/utils"         // 工具函数包
-	"fmt"                                     // 用于格式化输入输出
-	"log"                                     // 用于日志记录
-	"net/http"                                // 用于构建HTTP服务器
-	"strings"                                 // 用于字符串操作
-	"time"                                    // 用于时间相关操作
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"Lunar-Astral-Agents/utils"     // 工具函数包
+	"fmt"                           // 用于格式化输入输出
+	"log"                           // 用于日志记录
+	"net/http"                      // 用于构建HTTP服务器
+	"strings"                       // 用于字符串操作
+	"time"                          // 用于时间相关操作
 )
 
 // 全局变量
@@ -41,7 +41,7 @@ func attemptServerStart(server *http.Server, maxAttempts int) bool {
 		if tryStartServerOnPort(server) {
 			return true
 		}
-		*config.BasicPort++
+		*parameter.BasicPort++
 	}
 	return false
 }
@@ -51,7 +51,7 @@ func tryStartServerOnPort(server *http.Server) bool {
 	// 服务器成功启动后的初始化工作
 	initializeServerComponents(server)
 	// 配置服务器监听地址
-	addr := fmt.Sprintf(":%d", *config.BasicPort)
+	addr := fmt.Sprintf(":%d", *parameter.BasicPort)
 	// 启动HTTP服务器
 	if err := http.ListenAndServe(addr, server.Handler); err != nil && err != http.ErrServerClosed {
 		log.Printf("Lunar模块[ERROR] -> %v", err)
@@ -83,9 +83,9 @@ func startClientLoading() {
 	// 构建客户端访问的 URL
 	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 构建内部接口的 URL
-	internalURL := fmt.Sprintf("http://%s:%d", ip, *config.BasicPort)
+	internalURL := fmt.Sprintf("http://%s:%d", ip, *parameter.BasicPort)
 	// 检查是否使用 webview
-	if *config.UseWebView {
+	if *parameter.UseWebView {
 		// 使用 webview 内嵌浏览器
 		if utils.IsWebViewSupported() {
 			go startWebViewBrowser(internalURL)
@@ -95,7 +95,7 @@ func startClientLoading() {
 		}
 	} else {
 		// 检查是否非开发模式，如果不是开发模式，则自动打开浏览器访问服务器
-		if !*config.DevMode {
+		if !*parameter.DevMode {
 			utils.OpenBrowser(internalURL)
 		}
 	}

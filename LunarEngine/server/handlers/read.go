@@ -2,11 +2,11 @@ package handlers
 
 // 导入必要的包
 import (
-	execute "Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
-	"io"                                // 导入io包，用于文件操作
-	"net/http"                          // 导入net/http包，用于处理HTTP请求
-	"strconv"                           // 导入strconv包，用于字符串和其他类型的转换
-	"strings"                           // 导入strings包，用于字符串操作
+	"Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
+	"io"                        // 导入io包，用于文件操作
+	"net/http"                  // 导入net/http包，用于处理HTTP请求
+	"strconv"                   // 导入strconv包，用于字符串和其他类型的转换
+	"strings"                   // 导入strings包，用于字符串操作
 )
 
 // ReadHandler 处理文件读取请求，从本地目录读取文件并返回给客户端
@@ -19,7 +19,7 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/read/" 前缀，获取实际的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/read/")
 	// 调用 execute 模块读取文件
-	file, size, mimeType, err := execute.ReadFile(filePath)
+	file, size, mimeType, err := files.ReadFile(filePath)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

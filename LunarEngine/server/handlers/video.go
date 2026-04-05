@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	execute "Lunar-Astral-Agents/image" // 导入执行模块，用于处理核心逻辑
-	"encoding/json"                     // 导入 encoding/json 包，用于 JSON 编码和解码
-	"fmt"                               // 导入 fmt 包，用于格式化输出
-	"io"                                // 导入 io 包，用于 IO 操作
-	"net/http"                          // 导入 net/http 包，用于 HTTP 服务器
-	"os"                                // 导入 os 包，用于操作系统交互
+	"Lunar-Astral-Agents/image" // 导入执行模块，用于处理核心逻辑
+	"encoding/json"             // 导入 encoding/json 包，用于 JSON 编码和解码
+	"fmt"                       // 导入 fmt 包，用于格式化输出
+	"io"                        // 导入 io 包，用于 IO 操作
+	"net/http"                  // 导入 net/http 包，用于 HTTP 服务器
+	"os"                        // 导入 os 包，用于操作系统交互
 )
 
 // ExtractKeyFramesHandler 用于处理 HTTP POST 请求，提取上传视频的关键帧。
@@ -31,7 +31,7 @@ func ExtractKeyFramesHandler(w http.ResponseWriter, r *http.Request) {
 	// 确保文件句柄及时关闭，防止泄露
 	defer file.Close()
 	// 检查文件格式是否支持
-	if !execute.IsSupportedVideoFormat(handler.Filename) {
+	if !image.IsSupportedVideoFormat(handler.Filename) {
 		http.Error(w, "ExtractKeyFrames请求[ERROR] -> 输入文件必须是支持的视频格式", http.StatusBadRequest)
 		return
 	}
@@ -60,7 +60,7 @@ func ExtractKeyFramesHandler(w http.ResponseWriter, r *http.Request) {
 	// 无论后续逻辑成败，均删除关键帧目录，防止磁盘堆积
 	defer os.RemoveAll(keyFrameDir)
 	// 调用核心函数提取关键帧，返回 []KeyFrame
-	keyFrames, err := execute.ExtractKeyFramesWithLocalCache(tempFileName, keyFrameDir)
+	keyFrames, err := image.ExtractKeyFramesWithLocalCache(tempFileName, keyFrameDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("ExtractKeyFrames请求[ERROR] -> 提取关键帧失败: %v", err), http.StatusInternalServerError)
 		return
@@ -103,7 +103,7 @@ func ExtractFirstFrameHandler(w http.ResponseWriter, r *http.Request) {
 	// 确保文件句柄及时关闭，防止泄露
 	defer file.Close()
 	// 检查文件格式是否支持
-	if !execute.IsSupportedVideoFormat(handler.Filename) {
+	if !image.IsSupportedVideoFormat(handler.Filename) {
 		http.Error(w, "ExtractFirstFrame请求[ERROR] -> 输入文件必须是支持的视频格式", http.StatusBadRequest)
 		return
 	}
@@ -124,7 +124,7 @@ func ExtractFirstFrameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 提取视频第一帧
-	firstFrame, err := execute.ExtractFirstFrame(tempFileName)
+	firstFrame, err := image.ExtractFirstFrame(tempFileName)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("ExtractFirstFrame请求[ERROR] -> 提取第一帧失败: %v", err), http.StatusInternalServerError)
 		return

@@ -1,6 +1,6 @@
 package files
 
-import "time"
+import "time" // 引入 time 包，用于操作时间_
 
 // FileInfo 文件信息结构体，用于存储文件和目录的相关信息
 type FileInfo struct {

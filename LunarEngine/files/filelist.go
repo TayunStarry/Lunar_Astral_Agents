@@ -1,12 +1,12 @@
 package files
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"fmt"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"fmt"                           // 格式化输出错误信息
+	"log"                           // 日志记录
+	"os"                            // 引入 os 包，用于操作文件系统
+	"path/filepath"                 // 引入 filepath 包，用于处理文件路径
+	"strings"                       // 引入 strings 包，用于操作字符串
 )
 
 // GetFileList 获取指定目录下的文件和子目录信息
@@ -16,9 +16,9 @@ func GetFileList(path string) ([]FileInfo, error) {
 		path = "."
 	}
 	// 拼接完整路径并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, path))
+	fullPath := filepath.Clean(filepath.Join(*parameter.LocalDir, path))
 	// 检查请求路径是否在允许的目录范围内，防止路径遍历攻击
-	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*parameter.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 	// 获取文件或目录的信息
@@ -47,7 +47,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 			continue
 		}
 		// 计算文件或目录相对于配置目录的相对路径
-		relPath, err := filepath.Rel(*config.LocalDir, filepath.Join(fullPath, file.Name()))
+		relPath, err := filepath.Rel(*parameter.LocalDir, filepath.Join(fullPath, file.Name()))
 		// 若计算失败，使用文件名作为相对路径
 		if err != nil {
 			relPath = file.Name()
@@ -62,7 +62,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 		})
 	}
 	// 记录文件列表请求日志
-	if *config.DevMode {
+	if *parameter.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 		log.Printf("%s", strings.Repeat("-=", 28))

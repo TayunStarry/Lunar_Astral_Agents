@@ -1,7 +1,7 @@
 package utils
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
 	"log"
 	"os/exec"
 	"runtime"
@@ -46,22 +46,22 @@ func CreateWebView() webview.WebView {
 		return webviewInstance
 	}
 
-	w := webview.New(*config.WebViewDebug)
+	w := webview.New(*parameter.WebViewDebug)
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 WebView 实例")
 		return nil
 	}
 
-	w.SetTitle(*config.WebViewTitle)
-	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
+	w.SetTitle(*parameter.WebViewTitle)
+	w.SetSize(*parameter.WebViewWidth, *parameter.WebViewHeight, webview.HintNone)
 
-	if !*config.WebViewResizable {
-		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
+	if !*parameter.WebViewResizable {
+		w.SetSize(*parameter.WebViewWidth, *parameter.WebViewHeight, webview.HintFixed)
 	}
 
 	// 设置最小尺寸限制
-	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
-		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
+	if *parameter.WebViewMinWidth > 0 && *parameter.WebViewMinHeight > 0 {
+		w.SetSize(*parameter.WebViewMinWidth, *parameter.WebViewMinHeight, webview.HintMin)
 	}
 
 	webviewInstance = w

@@ -1,11 +1,11 @@
 package llama
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"log"                                  // 标准日志包，用于输出调试/错误信息
-	"math"                                 // 数学函数（如取最小值）
-	"path/filepath"                        // 文件路径处理包，用于获取文件名
-	"strconv"                              // 字符串与数字之间的转换
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"log"                           // 标准日志包，用于输出调试/错误信息
+	"math"                          // 数学函数（如取最小值）
+	"path/filepath"                 // 文件路径处理包，用于获取文件名
+	"strconv"                       // 字符串与数字之间的转换
 )
 
 // buildBaseArgs 构建启动 GGUF 服务的基础命令行参数
@@ -50,7 +50,7 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 // MultimodalModelArgs 为视觉模态模型添加特定的命令行参数
 func MultimodalModelArgs(args *[]string, modelPath, modelName string, metadata map[string]any) bool {
 	// 获取多模态模型所需的 MMProj 文件路径
-	mmprojPath := *config.MmprojModel
+	mmprojPath := *parameter.MmprojModel
 	// 若未找到 MMProj 文件，记录错误日志并返回失败
 	if mmprojPath == "" {
 		log.Printf("GGUF模块[ERROR] -> 视觉模型需要 --mmproj 参数但未找到对应文件: %s", modelPath)

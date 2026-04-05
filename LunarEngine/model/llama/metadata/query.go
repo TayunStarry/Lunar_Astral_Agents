@@ -1,8 +1,6 @@
 package metadata
 
-import (
-	"strings"         // 导入字符串操作包，用于处理字符串
-)
+import "strings" // 导入字符串操作包，用于处理字符串
 
 // FindMetadataByKeySubstring 在元数据映射表中查找所有键名包含指定子字符串的条目。
 //

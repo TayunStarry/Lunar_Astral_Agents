@@ -2,10 +2,10 @@ package handlers
 
 // 导入必要的包
 import (
-	execute "Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
-	"encoding/json"                     // 导入json包，用于解析请求体
-	"net/http"                          // 导入net/http包，用于处理HTTP请求
-	"strconv"                           // 导入strconv包，用于字符串和其他类型的转换
+	"Lunar-Astral-Agents/files" // 导入执行模块，用于处理核心逻辑
+	"encoding/json"             // 导入json包，用于解析请求体
+	"net/http"                  // 导入net/http包，用于处理HTTP请求
+	"strconv"                   // 导入strconv包，用于字符串和其他类型的转换
 )
 
 // SaveHandler 处理文件保存的HTTP请求
@@ -18,7 +18,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求头中获取编码后的文件名
 	encodedName := r.Header.Get("X-File-Name")
 	// 调用 execute 模块解码文件名
-	fileName, err := execute.DecodeFileName(encodedName)
+	fileName, err := files.DecodeFileName(encodedName)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {
@@ -48,7 +48,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 调用 execute 模块保存文件
-	savedFileName, fullPath, err := execute.SaveFile(fileName, overwrite, r.Body)
+	savedFileName, fullPath, err := files.SaveFile(fileName, overwrite, r.Body)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

@@ -1,15 +1,15 @@
 package files
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"archive/zip"
-	"bytes"
-	"fmt"
-	"io"
-	"log"
-	"mime/multipart"
-	"path/filepath"
-	"strings"
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"archive/zip"                   // 引入 ZIP 包，用于压缩文件
+	"bytes"                         // 引入 bytes 包，用于操作字节切片
+	"fmt"                           // 格式化输出错误信息
+	"io"                            // 引入 io 包，用于操作输入输出流
+	"log"                           // 日志记录
+	"mime/multipart"                // 引入 multipart 包，用于处理 multipart/form-data 格式的 HTTP 请求
+	"path/filepath"                 // 引入 filepath 包，用于处理文件路径
+	"strings"                       // 引入 strings 包，用于操作字符串
 )
 
 // CreateZip 创建 ZIP 压缩文件并返回字节数据
@@ -62,7 +62,7 @@ func CreateZip(files []*multipart.FileHeader, zipName string) ([]byte, error) {
 		return nil, fmt.Errorf("关闭ZIP写入器失败: %w", err)
 	}
 	// 记录日志，包含创建的 ZIP 文件名和包含的文件数量
-	if *config.DevMode {
+	if *parameter.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Archive请求 -> 成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
 		log.Printf("%s", strings.Repeat("-=", 28))

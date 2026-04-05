@@ -1,13 +1,13 @@
 package files
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"fmt"                           // 格式化输出错误信息
+	"io"                            // 引入 io 包，用于操作输入输出流
+	"log"                           // 日志记录
+	"os"                            // 引入 os 包，用于操作文件系统
+	"path/filepath"                 // 引入 filepath 包，用于处理文件路径
+	"strings"                       // 引入 strings 包，用于操作字符串
 )
 
 // ReadFile 读取指定路径的文件内容
@@ -17,9 +17,9 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 		return nil, 0, "", fmt.Errorf("未指定文件路径")
 	}
 	// 拼接配置中的本地目录和请求的文件路径，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(*parameter.LocalDir, filePath))
 	// 检查拼接后的路径是否在配置的本地目录下
-	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*parameter.LocalDir)) {
 		return nil, 0, "", fmt.Errorf("访问被拒绝")
 	}
 	// 获取文件信息与错误内容
@@ -40,7 +40,7 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	ext := strings.ToLower(filepath.Ext(fullPath))
 	// 根据文件扩展名设置 Content-Type
 	mimeType := "application/octet-stream"
-	if mt, ok := config.MimeMap[ext]; ok {
+	if mt, ok := parameter.MimeMap[ext]; ok {
 		mimeType = mt
 	}
 	// 打开文件
@@ -50,7 +50,7 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 		return nil, 0, "", fmt.Errorf("打开文件失败")
 	}
 	// 记录读取成功日志
-	if *config.DevMode {
+	if *parameter.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Read请求 -> 成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 		log.Printf("%s", strings.Repeat("-=", 28))
