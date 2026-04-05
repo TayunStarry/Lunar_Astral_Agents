@@ -1,13 +1,13 @@
 package release
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"encoding/csv"                      // 导入 CSV 编码库，用于解析 PowerShell 命令的输出
-	"fmt"                               // 用于格式化输入输出
-	"log"                               // 用于打印日志信息
-	"os/exec"                           // 用于执行外部命令
-	"strconv"                           // 用于字符串和整数之间的转换
-	"strings"                           // 用于字符串操作
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"encoding/csv"                  // 导入 CSV 编码库，用于解析 PowerShell 命令的输出
+	"fmt"                           // 用于格式化输入输出
+	"log"                           // 用于打印日志信息
+	"os/exec"                       // 用于执行外部命令
+	"strconv"                       // 用于字符串和整数之间的转换
+	"strings"                       // 用于字符串操作
 )
 
 // commands 定义了用于查询指定端口范围 TCP 连接信息的 PowerShell 命令片段
@@ -27,8 +27,8 @@ var commands = []string{
 func getPortProcessesPowerShell() []ProcessInfo {
 	// 用于存储获取到的进程信息
 	var processes []ProcessInfo
-	// 拼接 PowerShell 命令，使用 config.MinPort 和 config.MaxPort 填充端口范围
-	psCmd := fmt.Sprintf(strings.Join(commands, "\n"), *config.MinPort, *config.MaxPort)
+	// 拼接 PowerShell 命令，使用 parameter.MinPort 和 config.MaxPort 填充端口范围
+	psCmd := fmt.Sprintf(strings.Join(commands, "\n"), *parameter.MinPort, *parameter.MaxPort)
 	// 创建执行 PowerShell 命令的命令对象
 	cmd := exec.Command("powershell", "-Command", psCmd)
 	// 执行命令并获取输出

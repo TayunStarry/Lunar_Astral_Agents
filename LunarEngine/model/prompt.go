@@ -1,17 +1,17 @@
-package execute
+package model
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 导入配置包，用于获取本地目录
-	"fmt"                                  // 导入fmt包，用于格式化输出
-	"os"                                   // 导入os包，用于读取文件
-	"path/filepath"                        // 导入filepath包，用于处理文件路径
-	"strings"                              // 导入strings包，用于字符串操作
-	"time"                                 // 导入time包，用于处理时间
+	"Lunar-Astral-Agents/parameter" // 导入配置包，用于获取本地目录
+	"fmt"                           // 导入fmt包，用于格式化输出
+	"os"                            // 导入os包，用于读取文件
+	"path/filepath"                 // 导入filepath包，用于处理文件路径
+	"strings"                       // 导入strings包，用于字符串操作
+	"time"                          // 导入time包，用于处理时间
 )
 
 // GetSystemPrompt 获取系统提示词
 func GetSystemPrompt() (string, error) {
-	filePath := filepath.Join(*config.LocalDir, "resources/prompts/systemPrompt.md")
+	filePath := filepath.Join(*parameter.LocalDir, "resources/prompts/systemPrompt.md")
 	body, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("读取系统提示词文件失败: %w", err)
@@ -19,7 +19,7 @@ func GetSystemPrompt() (string, error) {
 	promptContent := string(body)
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)
-	address := config.ServerAddress
+	address := parameter.ServerAddress
 	addressStr := address[0] + "-" + address[1]
 	promptContent = strings.ReplaceAll(promptContent, "{current-address}", addressStr)
 	return promptContent, nil

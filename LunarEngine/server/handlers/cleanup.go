@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	execute "Lunar-Astral-Agents/image" // 导入执行模块
-	"encoding/json"                     // 用于JSON编码/解码
-	"log"                               // 用于日志记录
-	"net/http"                          // 用于处理HTTP请求
+	"Lunar-Astral-Agents/image" // 导入执行模块
+	"encoding/json"             // 用于JSON编码/解码
+	"log"                       // 用于日志记录
+	"net/http"                  // 用于处理HTTP请求
 )
 
 // CleanupUnreferencedImagesHandler 清理未被引用的图片
@@ -16,7 +16,7 @@ func CleanupUnreferencedImagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行清理操作
-	result, err := execute.CleanupUnreferencedImages()
+	result, err := image.CleanupUnreferencedImages()
 	if err != nil {
 		http.Error(w, "Cleanup请求[ERROR] -> 清理失败: "+err.Error(), http.StatusInternalServerError)
 		return

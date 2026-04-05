@@ -3,15 +3,15 @@ package handlers
 
 // 导入所需的包
 import (
-	execute "Lunar-Astral-Agents/reasoning" // 导入执行模块，用于处理核心逻辑
-	"bytes"                                 // 导入 bytes 包，用于操作字节切片
-	"encoding/json"                         // 导入 json 包，用于 JSON 数据的编码和解码
-	"io"                                    // 导入 io 包，用于操作输入输出流
-	"net/http"                              // 导入 http 包，用于构建 HTTP 客户端和服务器
-	"net/http/httputil"                     // 导入 httputil 包，用于反向代理
-	"net/url"                               // 导入 url 包，用于解析和操作 URL
-	"strconv"                               // 导入 strconv 包，用于字符串和数值之间的转换
-	"strings"                               // 导入 strings 包，用于操作字符串
+	"Lunar-Astral-Agents/model" // 导入模型模块，用于处理核心逻辑
+	"bytes"                     // 导入 bytes 包，用于操作字节切片
+	"encoding/json"             // 导入 json 包，用于 JSON 数据的编码和解码
+	"io"                        // 导入 io 包，用于操作输入输出流
+	"net/http"                  // 导入 http 包，用于构建 HTTP 客户端和服务器
+	"net/http/httputil"         // 导入 httputil 包，用于反向代理
+	"net/url"                   // 导入 url 包，用于解析和操作 URL
+	"strconv"                   // 导入 strconv 包，用于字符串和数值之间的转换
+	"strings"                   // 导入 strings 包，用于操作字符串
 )
 
 // ExtractModelName 从请求体或 URL 路径中提取模型名称
@@ -76,8 +76,8 @@ func ProxyToPort(w http.ResponseWriter, r *http.Request, port int) {
 
 // AgentModelsHandler 处理获取模型列表的请求, 返回本地模型列表。
 func AgentModelsHandler(w http.ResponseWriter, r *http.Request) {
-	// 调用 execute 模块获取模型列表
-	models := execute.GetModels()
+	// 调用 model 模块获取模型列表
+	models := model.GetModels()
 	// 构造响应数据
 	response := map[string]any{
 		"object": "list",
@@ -93,8 +93,8 @@ func AgentModelsHandler(w http.ResponseWriter, r *http.Request) {
 func AgentHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求中提取模型名称
 	modelName := ExtractModelName(r)
-	// 调用 execute 模块处理请求
-	result, err := execute.ProcessAgentRequest(modelName)
+	// 调用 model 模块处理请求
+	result, err := model.ProcessAgentRequest(modelName)
 	if err != nil {
 		if err.Error() == "system_busy" {
 			// 返回系统繁忙响应
@@ -129,7 +129,7 @@ func AgentChatHandler(w http.ResponseWriter, r *http.Request) {
 	// 关闭原始请求体
 	r.Body.Close()
 	// 定义解析请求体的结构体
-	var req execute.AgentRequest
+	var req model.AgentRequest
 	// 从读取到的字节中解析请求体
 	if err = json.Unmarshal(bodyBytes, &req); err != nil {
 		http.Error(w, "请求体无效", http.StatusBadRequest)
@@ -138,8 +138,8 @@ func AgentChatHandler(w http.ResponseWriter, r *http.Request) {
 	// 恢复原始请求体，确保后续处理可以读取
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	r.ContentLength = int64(len(bodyBytes))
-	// 调用 execute 模块处理聊天请求
-	processedReq, err := execute.ProcessAgentChatRequest(req)
+	// 调用 model 模块处理聊天请求
+	processedReq, err := model.ProcessAgentChatRequest(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

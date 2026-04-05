@@ -2,22 +2,22 @@ package server
 
 // 导入必要的包
 import (
-	files "Lunar-Astral-Agents/files"              // 引入文件模块，用于获取静态路径
-	config "Lunar-Astral-Agents/parameter"         // 引入配置模块，用于获取模型路径等配置
-	llama "Lunar-Astral-Agents/reasoning/system"   // GGUF相关包
-	release "Lunar-Astral-Agents/release"          // 端口释放相关包
-	handlers "Lunar-Astral-Agents/server/handlers" // 处理API请求的包
-	utils "Lunar-Astral-Agents/utils"              // 地址查询相关包
-	"context"                                      // 用于处理请求上下文和超时
-	"flag"                                         // 用于解析命令行参数
-	"log"                                          // 用于日志记录
-	"mime"                                         // 用于处理MIME类型
-	"net/http"                                     // 用于构建HTTP服务器
-	"os"                                           // 用于操作系统相关操作
-	"os/signal"                                    // 用于处理系统信号
-	"strings"                                      // 用于字符串操作
-	"syscall"                                      // 用于系统调用
-	"time"                                         // 用于时间相关操作
+	"Lunar-Astral-Agents/files"           // 引入文件模块，用于获取静态路径
+	"Lunar-Astral-Agents/model/llama"     // GGUF相关包
+	"Lunar-Astral-Agents/parameter"       // 引入配置模块，用于获取模型路径等配置
+	"Lunar-Astral-Agents/release"         // 端口释放相关包
+	"Lunar-Astral-Agents/server/handlers" // 处理API请求的包
+	"Lunar-Astral-Agents/utils"           // 地址查询相关包
+	"context"                             // 用于处理请求上下文和超时
+	"flag"                                // 用于解析命令行参数
+	"log"                                 // 用于日志记录
+	"mime"                                // 用于处理MIME类型
+	"net/http"                            // 用于构建HTTP服务器
+	"os"                                  // 用于操作系统相关操作
+	"os/signal"                           // 用于处理系统信号
+	"strings"                             // 用于字符串操作
+	"syscall"                             // 用于系统调用
+	"time"                                // 用于时间相关操作
 )
 
 // httpMux 是HTTP服务器的ServeMux实例
@@ -46,15 +46,15 @@ func InitializeServer() {
 	// 加载配置文件
 	loadConfigureFile()
 	// 如果指定了端口释放选项，则执行端口释放
-	if *config.ClearPort {
+	if *parameter.ClearPort {
 		release.ExecutePortRelease()
 	}
 	// 设置MIME类型映射
-	for ext, mimeType := range config.MimeMap {
+	for ext, mimeType := range parameter.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
 	}
 	// 创建本地目录
-	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
+	if err := os.MkdirAll(*parameter.LocalDir, 0755); err != nil {
 		log.Fatalf("Lunar模块[ERROR] -> %v", err)
 	}
 	// 查询当前地址信息

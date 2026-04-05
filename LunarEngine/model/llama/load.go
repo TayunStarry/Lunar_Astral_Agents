@@ -1,15 +1,15 @@
 package llama
 
 import (
-	metadata "Lunar-Astral-Agents/metadata" // 导入元数据包，用于解析模型元数据
-	config "Lunar-Astral-Agents/parameter"  // 导入项目配置模块（如路径、端口等）
-	"bufio"                                 // 缓冲 I/O 包，用于读取文件内容
-	"context"                               // 上下文包，用于传递请求上下文信息
-	"io"                                    // I/O 包，用于处理输入输出流
-	"log"                                   // 标准日志包，用于输出调试/错误信息
-	"os/exec"                               // 执行外部命令（启动 GGUF 服务进程）
-	"path/filepath"                         // 处理文件路径（如通配符匹配 .gguf 文件）
-	"time"                                  // 时间包，用于处理时间相关操作
+	"Lunar-Astral-Agents/model/llama/metadata" // 导入元数据包，用于解析模型元数据
+	"Lunar-Astral-Agents/parameter"            // 导入项目配置模块（如路径、端口等）
+	"bufio"                                    // 缓冲 I/O 包，用于读取文件内容
+	"context"                                  // 上下文包，用于传递请求上下文信息
+	"io"                                       // I/O 包，用于处理输入输出流
+	"log"                                      // 标准日志包，用于输出调试/错误信息
+	"os/exec"                                  // 执行外部命令（启动 GGUF 服务进程）
+	"path/filepath"                            // 处理文件路径（如通配符匹配 .gguf 文件）
+	"time"                                     // 时间包，用于处理时间相关操作
 )
 
 // startServerForModel 为指定模型启动服务进程。
@@ -37,7 +37,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 		return
 	}
 	// 检查系统是否处于开发模式
-	if *config.DevMode {
+	if *parameter.DevMode {
 		// 若处于开发模式，显示模型的所有元数据，方便调试
 		metadata.DisplayAllMetadata(modelName, metaData)
 	}
@@ -51,7 +51,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 		return
 	}
 	// 创建执行模型服务进程的命令
-	cmd := exec.Command(*config.InferEngine, args...)
+	cmd := exec.Command(*parameter.InferEngine, args...)
 	// 打开命令的标准输出和标准错误管道
 	stdout, stderr := openCmdPipe(cmd)
 	if stdout == nil || stderr == nil {
@@ -84,7 +84,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 	case <-modelLoaded:
 		// 模型加载完成，记录成功信息并增加已就绪模型数量
 		log.Printf("GGUF模块 -> 模型[ %s ]成功加载并启动服务", modelName)
-		config.ModelReady++
+		parameter.ModelReady++
 
 	case err := <-processExited:
 		if err != nil {

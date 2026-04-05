@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	execute "Lunar-Astral-Agents/image"
+	"Lunar-Astral-Agents/image"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,7 +11,7 @@ import (
 
 // 处理截图请求
 func HandleCapture(w http.ResponseWriter, r *http.Request) {
-	var req execute.CaptureRequest
+	var req image.CaptureRequest
 
 	// 解析请求参数
 	if r.Method == "POST" {
@@ -29,7 +29,7 @@ func HandleCapture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := execute.CaptureScreenshot(req)
+	imgData, filename, contentType, err := image.CaptureScreenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -57,7 +57,7 @@ func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := execute.CaptureRequest{
+	req := image.CaptureRequest{
 		DisplayIndex: displayIndex,
 		Format:       r.URL.Query().Get("format"),
 		Scale:        r.URL.Query().Get("scale"),
@@ -65,7 +65,7 @@ func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := execute.CaptureScreenshot(req)
+	imgData, filename, contentType, err := image.CaptureScreenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -88,7 +88,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := execute.CaptureRequest{
+	req := image.CaptureRequest{
 		Region:  region,
 		Scale:   scale,
 		Format:  format,
@@ -96,7 +96,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := execute.CaptureScreenshot(req)
+	imgData, filename, contentType, err := image.CaptureScreenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,7 +109,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 
 // 获取所有显示器信息
 func HandleGetDisplays(w http.ResponseWriter, r *http.Request) {
-	displays := execute.GetDisplays()
+	displays := image.GetDisplays()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(displays)
@@ -141,7 +141,7 @@ func HandleResizeImage(w http.ResponseWriter, r *http.Request) {
 	imgData = imgData[:n]
 
 	// 执行图片缩放
-	response, err := execute.ResizeImage(imgData)
+	response, err := image.ResizeImage(imgData)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

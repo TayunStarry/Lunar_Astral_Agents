@@ -1,16 +1,16 @@
 package files
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"encoding/base64"               // 引入 base64 包，用于编码和解码 Base64 数据
+	"fmt"                           // 格式化输出错误信息
+	"io"                            // 引入 io 包，用于操作输入输出流
+	"log"                           // 日志记录
+	"os"                            // 引入 os 包，用于操作文件系统
+	"path/filepath"                 // 引入 filepath 包，用于处理文件路径
+	"strings"                       // 引入 strings 包，用于操作字符串
+	"sync"                          // 引入 sync 包，用于并发操作
+	"time"                          // 引入 time 包，用于操作时间__':
 )
 
 // SaveFile 保存文件到指定路径
@@ -24,7 +24,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		return "", "", fmt.Errorf("无效的文件名")
 	}
 	// 拼接文件的完整路径
-	fullPath := filepath.Join(*config.LocalDir, fileName)
+	fullPath := filepath.Join(*parameter.LocalDir, fileName)
 	// 创建文件所在的目录
 	if mkdirErr := os.MkdirAll(filepath.Dir(fullPath), 0755); mkdirErr != nil {
 		return "", "", fmt.Errorf("创建目录失败: %w", mkdirErr)
@@ -50,7 +50,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 			// 构建新的文件名，包含时间戳
 			fileName = filepath.Join(filepath.Dir(fileName), fmt.Sprintf("%s_%s%s", name, timestamp, ext))
 			// 更新文件的完整路径
-			fullPath = filepath.Join(*config.LocalDir, fileName)
+			fullPath = filepath.Join(*parameter.LocalDir, fileName)
 		}
 	}
 	// 创建文件
@@ -70,7 +70,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		log.Printf("Save请求[ERROR] -> 同步失败: %s, %v", fullPath, err)
 	}
 	// 记录保存成功日志
-	if *config.DevMode {
+	if *parameter.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 		log.Printf("%s", strings.Repeat("-=", 28))

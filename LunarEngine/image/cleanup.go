@@ -1,7 +1,7 @@
 package image
 
 import (
-	config "Lunar-Astral-Agents/parameter"
+	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"log"
 	"os"
@@ -71,7 +71,7 @@ func CollectReferencedImages() (map[string]bool, error) {
 	var mu sync.RWMutex
 
 	// 定义历史记录目录
-	knowledgeDir := filepath.Join(*config.LocalDir, "knowledge")
+	knowledgeDir := filepath.Join(*parameter.LocalDir, "knowledge")
 
 	// 递归扫描历史记录文件
 	err := filepath.Walk(knowledgeDir, func(path string, info os.FileInfo, err error) error {
@@ -120,7 +120,7 @@ func CollectAllImages() (map[string]bool, error) {
 	allImages := make(map[string]bool)
 
 	// 定义图片目录
-	imagesDir := filepath.Join(*config.LocalDir, "images")
+	imagesDir := filepath.Join(*parameter.LocalDir, "images")
 
 	// 递归扫描图片文件夹
 	err := filepath.Walk(imagesDir, func(path string, info os.FileInfo, err error) error {
@@ -146,7 +146,7 @@ func DeleteUnreferencedImages(referencedImages map[string]bool) (int, error) {
 	deletedCount := 0
 
 	// 定义图片目录
-	imagesDir := filepath.Join(*config.LocalDir, "images")
+	imagesDir := filepath.Join(*parameter.LocalDir, "images")
 
 	// 递归扫描图片文件夹，删除未引用的图片
 	err := filepath.Walk(imagesDir, func(path string, info os.FileInfo, err error) error {

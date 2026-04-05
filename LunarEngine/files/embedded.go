@@ -1,9 +1,9 @@
 package files
 
 import (
-	"embed"
-	"io/fs"
-	"net/http"
+	"embed"    // 引入 embed 包，用于嵌入静态资源
+	"io/fs"    // 引入 fs 包，用于操作文件系统
+	"net/http" // 引入 http 包，用于构建 HTTP 客户端和服务器
 )
 
 //go:embed assets/*

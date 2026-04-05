@@ -3,14 +3,14 @@ package llama
 
 // 导入所需的包
 import (
-	metadata "Lunar-Astral-Agents/metadata" // 导入元数据包，用于解析模型元数据
-	"fmt"                                   // 格式化输出错误信息
-	"log"                                   // 日志记录
-	"math"                                  // 提供数学函数（如 Max、Min、Floor 等）
-	"os"                                    // 操作系统相关函数（如文件操作、环境变量等）
-	"os/exec"                               // 执行系统命令（如 nvidia-smi）
-	"strconv"                               // 字符串与数字转换
-	"strings"                               // 字符串处理（分割、去除空格等）
+	"Lunar-Astral-Agents/model/llama/metadata" // 导入元数据包，用于解析模型元数据
+	"fmt"                                      // 格式化输出错误信息
+	"log"                                      // 日志记录
+	"math"                                     // 提供数学函数（如 Max、Min、Floor 等）
+	"os"                                       // 操作系统相关函数（如文件操作、环境变量等）
+	"os/exec"                                  // 执行系统命令（如 nvidia-smi）
+	"strconv"                                  // 字符串与数字转换
+	"strings"                                  // 字符串处理（分割、去除空格等）
 )
 
 // GetFreeMemory 函数用于获取当前系统中所有 GPU 的空闲显存（MB）

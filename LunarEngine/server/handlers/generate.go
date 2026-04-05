@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	execute "Lunar-Astral-Agents/image/generate" // 导入执行模块
-	config "Lunar-Astral-Agents/parameter"       // 导入配置包
-	"encoding/json"                              // 导入JSON编码/解码包
-	"fmt"                                        // 导入格式化输出包
+	"Lunar-Astral-Agents/image/generate" // 导入执行模块
+	"Lunar-Astral-Agents/parameter"      // 导入配置包
+	"encoding/json"                      // 导入JSON编码/解码包
+	"fmt"                                // 导入格式化输出包
 	"log"
 	"net/http" // 导入HTTP包
 	"strings"  // 导入字符串操作包
@@ -17,7 +17,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Generate服务 → 不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-	if !*config.AllowDiffusion {
+	if !*parameter.AllowDiffusion {
 		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
 		return
 	}
@@ -45,7 +45,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 创建任务
-	task, queuePos := execute.CreateGenerateTask(
+	task, queuePos := generate.CreateGenerateTask(
 		req.Prompt,
 		req.NegativePrompt,
 		req.BatchSize,
@@ -76,21 +76,21 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 
 // StartTaskProcessor 启动任务处理协程
 func StartTaskProcessor() {
-	execute.StartTaskProcessor()
+	generate.StartTaskProcessor()
 }
 
 // buildReadPath 构建文件读取路径
 func buildReadPath(resultPath string) string {
 	log.Printf("resultPath: %s", resultPath)
 	// 移除本地目录前缀，获取相对路径
-	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
+	relativePath := strings.TrimPrefix(resultPath, *parameter.LocalDir)
 	// 移除Windows路径开头的反斜杠，确保路径格式统一
 	relativePath = strings.TrimPrefix(relativePath, "\\")
 	return "/read/" + relativePath
 }
 
 // buildTaskResponse 构建任务响应
-func buildTaskResponse(task *execute.GenerateTask) map[string]any {
+func buildTaskResponse(task *generate.GenerateTask) map[string]any {
 	response := map[string]any{
 		"task_id": task.ID,
 		"status":  task.Status,
@@ -132,7 +132,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查灵绘坊功能是否启用
-	if !*config.AllowDiffusion {
+	if !*parameter.AllowDiffusion {
 		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
 		return
 	}
@@ -145,7 +145,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查任务是否存在
-	task, exists := execute.GetTaskStatus(taskID)
+	task, exists := generate.GetTaskStatus(taskID)
 	if !exists {
 		http.Error(w, "任务不存在", http.StatusNotFound)
 		return
@@ -159,7 +159,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 注册客户端等待任务完成
-	ch := execute.RegisterWaitClient(taskID)
+	ch := generate.RegisterWaitClient(taskID)
 
 	// 设置SSE响应头
 	setupSSEHeaders(w)
@@ -177,7 +177,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 		sendSSEEvent(w, buildTaskResponse(completedTask))
 	case <-time.After(5 * time.Minute):
 		// 超时处理
-		execute.RemoveWaitClient(taskID)
+		generate.RemoveWaitClient(taskID)
 		http.Error(w, "任务处理超时", http.StatusRequestTimeout)
 	}
 }

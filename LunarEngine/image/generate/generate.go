@@ -1,17 +1,15 @@
 package generate
 
 import (
-	config "Lunar-Astral-Agents/parameter"
-	"fmt"
-	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
-	"time"
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"fmt"                           // 格式化输出错误信息
+	"log"                           // 日志记录
+	"os"                            // 引入 os 包，用于操作文件系统
+	"os/exec"                       // 引入 exec 包，用于执行外部命令
+	"path/filepath"                 // 引入 filepath 包，用于处理文件路径
+	"strings"                       // 引入 strings 包，用于操作字符串
+	"time"                          // 引入 time 包，用于操作时间__':
 )
-
-
 
 // StartTaskProcessor 启动任务处理协程
 func StartTaskProcessor() {
@@ -72,16 +70,16 @@ func ProcessTask(task GenerateTask) {
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("generated_%s.png", timestamp)
-	outputPath := filepath.Join(*config.LocalDir, "generated", outputFilename)
+	outputPath := filepath.Join(*parameter.LocalDir, "generated", outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(*config.LocalDir, "generated"), 0755)
+	os.MkdirAll(filepath.Join(*parameter.LocalDir, "generated"), 0755)
 
 	// 构建命令参数
 	args := []string{
-		"--diffusion-model", *config.DiffusionModel,
-		"--vae", *config.VariationalModel,
-		"--llm", *config.PromptModel,
+		"--diffusion-model", *parameter.DiffusionModel,
+		"--vae", *parameter.VariationalModel,
+		"--llm", *parameter.PromptModel,
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
@@ -99,7 +97,7 @@ func ProcessTask(task GenerateTask) {
 
 	// 图生图参数
 	if task.InitImg != "" && task.InitImg != "null" {
-		initImgPath := filepath.Join(*config.LocalDir, task.InitImg)
+		initImgPath := filepath.Join(*parameter.LocalDir, task.InitImg)
 		if _, err := os.Stat(initImgPath); err == nil {
 			args = append(args, "--init-img", initImgPath)
 			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
@@ -115,13 +113,13 @@ func ProcessTask(task GenerateTask) {
 		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
 	}
 	// 多模态提示词模型
-	if *config.PromptMmprojModel != "" {
-		args = append(args, "--llm_vision", *config.PromptMmprojModel)
+	if *parameter.PromptMmprojModel != "" {
+		args = append(args, "--llm_vision", *parameter.PromptMmprojModel)
 	}
 
 	// 显示命令参数，正确分组
 	log.Printf("执行命令参数:")
-	log.Printf("  程序: %s", *config.VisualEngine)
+	log.Printf("  程序: %s", *parameter.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -151,7 +149,7 @@ func ProcessTask(task GenerateTask) {
 	log.Printf("%s", strings.Repeat("-=", 28))
 
 	// 执行命令
-	cmd := exec.Command(*config.VisualEngine, args...)
+	cmd := exec.Command(*parameter.VisualEngine, args...)
 
 	// 捕获标准输出和错误输出
 	stdout, _ := cmd.StdoutPipe()

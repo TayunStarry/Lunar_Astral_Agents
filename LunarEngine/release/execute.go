@@ -1,10 +1,10 @@
 package release
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
-	"log"                                  // 用于格式化输入输出
-	"strings"                              // 用于字符串操作
-	"time"                                 // 用于处理时间相关操作
+	"Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取模型路径等配置
+	"log"                           // 用于格式化输入输出
+	"strings"                       // 用于字符串操作
+	"time"                          // 用于处理时间相关操作
 )
 
 // ProcessInfo 结构体用于存储进程信息
@@ -24,12 +24,12 @@ func ExecutePortRelease() {
 	// 打印提示信息，表明开始执行端口释放操作
 	log.Printf("%s", strings.Repeat("-=", 28))
 	// 打印提示信息，表明开始扫描端口占用情况
-	log.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", *config.MinPort, *config.MaxPort)
+	log.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", *parameter.MinPort, *parameter.MaxPort)
 	// 获取指定端口范围内占用端口的进程列表
 	processes := getPortProcessesPowerShell()
 	// 如果没有发现占用端口的进程，打印提示信息并等待后返回
 	if len(processes) == 0 {
-		log.Printf("端口 %d 到 %d 上未发现任何进程占用\n", *config.MinPort, *config.MaxPort)
+		log.Printf("端口 %d 到 %d 上未发现任何进程占用\n", *parameter.MinPort, *parameter.MaxPort)
 		// 等待 100 毫秒，让系统有时间处理
 		time.Sleep(100 * time.Millisecond)
 		return

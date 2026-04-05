@@ -1,10 +1,10 @@
 package llama
 
 import (
-	config "Lunar-Astral-Agents/parameter" // 导入项目配置模块（如路径、端口等）
-	utils "Lunar-Astral-Agents/utils"      // 导入工具模块（如打开浏览器）
-	"log"                                  // 标准日志包，用于输出调试/错误信息
-	"os"                                   // 提供操作系统相关功能（如文件操作）
+	"Lunar-Astral-Agents/parameter" // 导入项目配置模块（如路径、端口等）
+	"Lunar-Astral-Agents/utils"     // 导入工具模块（如打开浏览器）
+	"log"                           // 标准日志包，用于输出调试/错误信息
+	"os"                            // 提供操作系统相关功能（如文件操作）
 )
 
 // CreateServers 初始化配置，获取模型路径，并启动不同类型的 GGUF 服务实例
@@ -16,11 +16,11 @@ func CreateServers() {
 	// 等待加载的模型队列
 	modelPaths := map[string]string{}
 	// 当配置允许加载推理模型时，将多模态模型加入待加载列表
-	if *config.AllowMultimodal {
-		modelPaths["multimodal"] = *config.MultimodalModel
+	if *parameter.AllowMultimodal {
+		modelPaths["multimodal"] = *parameter.MultimodalModel
 	}
 	// 将嵌入模型加入待加载列表
-	modelPaths["embedding"] = *config.EmbeddingModel
+	modelPaths["embedding"] = *parameter.EmbeddingModel
 	// 初始化标志位，用于判断是否所有模型路径都为空
 	allEmpty := true
 	// 若存在非空路径，则更新标志位并跳出循环
@@ -66,7 +66,7 @@ func initConfig() bool {
 // startServersWithTypes 为不同类型的模型启动对应的 GGUF 服务实例
 func startServersWithTypes(modelPaths map[string]string) {
 	// 从配置中获取基础端口号
-	basePort := *config.ModelPort
+	basePort := *parameter.ModelPort
 	// 遍历所有模型类型和对应的模型路径
 	for modelType, modelPath := range modelPaths {
 		// 若模型路径为空，记录警告日志并跳过当前循环
@@ -75,7 +75,7 @@ func startServersWithTypes(modelPaths map[string]string) {
 			continue
 		}
 		// 增加 最大模型数量
-		config.MaxModelAmount++
+		parameter.MaxModelAmount++
 		// 启动单个模型服务
 		startServerForModel(modelType, modelPath, basePort)
 	}

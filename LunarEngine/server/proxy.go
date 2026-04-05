@@ -2,8 +2,8 @@ package server
 
 // 导入必要的包
 import (
+	"Lunar-Astral-Agents/model"            // 引入模型模块，用于请求上下文管理
 	config "Lunar-Astral-Agents/parameter" // 引入配置模块，用于获取证书路径、端口等配置
-	agent "Lunar-Astral-Agents/reasoning"  // 引入推理模块，用于请求上下文管理
 	"encoding/json"                        // 用于JSON编码和解码
 	"fmt"                                  // 用于格式化输出
 	"log"                                  // 用于日志记录
@@ -19,7 +19,7 @@ import (
 var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
 
 // 请求映射，键为请求ID，值为请求上下文
-var requests = make(map[string]*agent.RequestContext)
+var requests = make(map[string]*model.RequestContext)
 
 // 互斥锁，用于保护请求映射的并发访问
 var serverMutex sync.RWMutex
