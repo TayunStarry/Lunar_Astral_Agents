@@ -2,7 +2,7 @@ package llama
 
 import (
 	"log"
-	"open-lunar/client"
+	"open-lunar/browser"
 	"open-lunar/parameter"
 	"os"
 )
@@ -35,8 +35,8 @@ func CreateServers() {
 	if allEmpty {
 		log.Printf("GGUF模块[ERROR] -> 所有类型均未找到有效模型文件")
 		// 启动浏览器页面，辅助用户下载模型
-		client.OpenBrowser("https://modelscope.cn/models/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/files")
-		client.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
+		browser.OpenBrowser("https://modelscope.cn/models/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/files")
+		browser.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
 		return
 	}
 	// 使用获取到的模型路径启动不同类型的 GGUF 服务实例
