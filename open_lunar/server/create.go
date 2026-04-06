@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"open-lunar/client"
+	"open-lunar/browser"
 	"open-lunar/parameter"
 	"strings"
 )
@@ -91,7 +91,7 @@ func PrintServerPort(internalURL string) {
 // startClientLoading 启动客户端加载任务
 func startClientLoading() {
 	// 获取本地 IP 地址
-	ip, err := client.GetLocalIP([]string{})
+	ip, err := browser.GetLocalIP([]string{})
 	// 处理获取 IP 地址失败的情况
 	if err != nil {
 		log.Printf("Lunar模块[ERROR] -> %v\n", err)
@@ -102,7 +102,7 @@ func startClientLoading() {
 	// 构建内部接口的 URL
 	internalURL := fmt.Sprintf("http://%s:%d", ip, *parameter.BasicPort)
 	// 打开浏览器访问内部接口
-	client.OpenBrowser(internalURL)
+	browser.OpenBrowser(internalURL)
 	// 打印服务器端口
 	PrintServerPort(internalURL)
 }
