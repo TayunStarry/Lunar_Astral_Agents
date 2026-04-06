@@ -6,7 +6,7 @@ import (
 )
 
 // DevMode 调试模式开关，用于开启调试日志
-var DevMode = flag.Bool("dev-mode", false, "启用调试模式，显示详细日志")
+var DevMode = flag.Bool("dev-mode", false, "启用调试模式, 显示详细日志")
 
 // 系统运行状态变量
 var (

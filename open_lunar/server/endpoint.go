@@ -1,21 +1,6 @@
 package server
 
-import (
-	"net/http"
-	"open-lunar/server/handlers"
-)
-
-// SystemEndpoint 定义系统端点的结构
-type SystemEndpoint struct {
-	// HTTP 访问路径
-	Path string `json:"path"`
-	// HTTP 方法处理器
-	Handler http.HandlerFunc `json:"handler"`
-	// HTTP 方法类型
-	Method string `json:"method"`
-	// 处理器功能描述
-	Description string `json:"description"`
-}
+import "open-lunar/server/handlers"
 
 // SystemEndpoints 存储所有系统端点配置
 var SystemEndpoints = []SystemEndpoint{

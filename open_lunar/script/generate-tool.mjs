@@ -162,7 +162,7 @@ async function main() {
 		/** 编译后的JS文件路径 */
 		const jsFilePath = path.join(deliverableDir, 'Lunar-Tool-Package', `${baseName}.js`);
 		/** 生成的LTP Markdown文件路径 */
-		const ltpFilePath = path.join('.', 'local_data', 'resources', 'package', `${baseName}.ltp.md`);
+		const ltpFilePath = path.join('..', 'local_data', 'resources', 'package', `${baseName}.ltp.md`);
 
 		// 检查必要的文件是否存在
 		checkFileExists(tsFilePath, 'TypeScript文件');

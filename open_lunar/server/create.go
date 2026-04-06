@@ -4,26 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/client"
 	"open-lunar/parameter"
-	"open-lunar/utils"
 	"strings"
-	"time"
 )
 
-// 全局变量
-var websocketServer *http.Server
-
-// StartServer 启动HTTP服务器
-func StartServer() *http.Server {
-	// 创建一个新的 HTTP 服务器实例
-	server := &http.Server{}
-	// 启动服务器监听
-	go startServerListener(server)
-	return server
-}
-
-// startServerListener 启动服务器监听循环
-func startServerListener(server *http.Server) {
+// StartServerListener 启动服务器监听循环
+func StartServerListener(server *http.Server) {
 	// 打印启动服务器的日志信息
 	log.Printf("%s", strings.Repeat("-=", 28))
 	// 定义最大尝试次数
@@ -36,7 +23,7 @@ func startServerListener(server *http.Server) {
 
 // attemptServerStart 尝试启动服务器，最多尝试指定次数
 func attemptServerStart(server *http.Server, maxAttempts int) bool {
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		if tryStartServerOnPort(server) {
 			return true
 		}
@@ -60,74 +47,33 @@ func tryStartServerOnPort(server *http.Server) bool {
 	return true
 }
 
+// CORSMiddleware CORS 中间件
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 设置 CORS 相关头信息，允许所有来源访问，支持多种 HTTP 方法和请求头
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// 处理 OPTIONS 请求，直接返回 200 状态码
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// 调用下一个处理器
+		next.ServeHTTP(w, r)
+	})
+}
+
 // initializeServerComponents 初始化服务器组件
 func initializeServerComponents(server *http.Server) {
 	// 为服务器添加 CORS 中间件
-	server.Handler = utils.CORSMiddleware(httpMux)
+	server.Handler = CORSMiddleware(httpMux)
 	// 启动客户端加载任务
 	go startClientLoading()
 	// 构建TLS终止代理服务器并保存实例
 	websocketServer = BuildTLSTerminationProxy()
-}
-
-// startClientLoading 启动客户端加载任务
-func startClientLoading() {
-	// 获取本地 IP 地址
-	ip, err := utils.GetLocalIP([]string{})
-	// 处理获取 IP 地址失败的情况
-	if err != nil {
-		log.Printf("Lunar模块[ERROR] -> %v\n", err)
-		return
-	}
-	// 构建客户端访问的 URL
-	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
-	// 构建内部接口的 URL
-	internalURL := fmt.Sprintf("http://%s:%d", ip, *parameter.BasicPort)
-	// 检查是否使用 webview
-	if *parameter.UseWebView {
-		// 使用 webview 内嵌浏览器
-		if utils.IsWebViewSupported() {
-			go startWebViewBrowser(internalURL)
-		} else {
-			log.Printf("Webview[ERROR] -> 当前系统不支持 webview，回退到系统浏览器")
-			utils.OpenBrowser(internalURL)
-		}
-	} else {
-		// 检查是否非开发模式，如果不是开发模式，则自动打开浏览器访问服务器
-		if !*parameter.DevMode {
-			utils.OpenBrowser(internalURL)
-		}
-	}
-	// 打印服务器端口
-	PrintServerPort(internalURL)
-}
-
-// startWebViewBrowser 启动 webview 浏览器
-func startWebViewBrowser(url string) {
-	// 等待服务器启动完成
-	time.Sleep(1 * time.Second)
-
-	// 创建 webview 实例
-	w := utils.CreateWebView()
-	if w == nil {
-		log.Printf("Webview[ERROR] -> 无法创建 webview 实例")
-		return
-	}
-
-	// 导航到指定 URL
-	utils.NavigateWebView(url)
-
-	// 运行 webview（阻塞）
-	utils.RunWebView()
-}
-
-// CloseWebSocketServer 关闭WebSocket服务器
-func CloseWebSocketServer() {
-	if websocketServer != nil {
-		log.Printf("Lunar模块[WebSocket] -> 关闭服务器")
-		websocketServer.Close()
-		websocketServer = nil
-	}
 }
 
 // PrintServerPort 打印服务器端口
@@ -140,4 +86,23 @@ func PrintServerPort(internalURL string) {
 	}
 	// 打印前端文件访问路径
 	log.Printf("Lunar模块 : 前端文件 [GET]	-> %v/", internalURL)
+}
+
+// startClientLoading 启动客户端加载任务
+func startClientLoading() {
+	// 获取本地 IP 地址
+	ip, err := client.GetLocalIP([]string{})
+	// 处理获取 IP 地址失败的情况
+	if err != nil {
+		log.Printf("Lunar模块[ERROR] -> %v\n", err)
+		return
+	}
+	// 构建客户端访问的 URL
+	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
+	// 构建内部接口的 URL
+	internalURL := fmt.Sprintf("http://%s:%d", ip, *parameter.BasicPort)
+	// 打开浏览器访问内部接口
+	client.OpenBrowser(internalURL)
+	// 打印服务器端口
+	PrintServerPort(internalURL)
 }

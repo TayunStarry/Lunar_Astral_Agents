@@ -3,8 +3,6 @@ package parameter
 import "flag"
 
 var (
-	// UseWebView 是否使用 webview 内嵌浏览器
-	UseWebView = flag.Bool("use-webview", true, "是否使用 webview 内嵌浏览器")
 	// WebViewTitle webview 窗口标题
 	WebViewTitle = flag.String("webview-title", "星月智能 - 月之华", "webview 窗口标题")
 	// WebViewWidth webview 窗口宽度
