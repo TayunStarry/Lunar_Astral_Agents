@@ -1,6 +1,6 @@
 package main
 
-import "Lunar-Astral-Agents/server"
+import "open-lunar/server"
 
 func main() {
 	// 初始化服务器

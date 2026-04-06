@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/library"
-	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/library"
+	"open-lunar/parameter"
 )
 
 // DatabaseHandler 统一的数据库处理器

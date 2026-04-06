@@ -1,10 +1,10 @@
 package model
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"log"
+	"open-lunar/parameter"
 	"strings"
 	"time"
 )

@@ -1,8 +1,8 @@
 package model
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"fmt"
+	"open-lunar/parameter"
 	"os"
 	"path/filepath"
 	"strings"

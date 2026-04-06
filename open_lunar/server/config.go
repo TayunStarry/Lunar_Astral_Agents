@@ -1,9 +1,9 @@
 package server
 
 import (
-	config "Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"log"
+	config "open-lunar/parameter"
 	"os"
 	"path/filepath"
 )

@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"log"
+	"open-lunar/parameter"
 	"os/exec"
 	"runtime"
 	"sync"

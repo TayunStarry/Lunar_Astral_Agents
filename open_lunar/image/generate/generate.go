@@ -1,9 +1,9 @@
 package generate
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"fmt"
 	"log"
+	"open-lunar/parameter"
 	"os"
 	"os/exec"
 	"path/filepath"

@@ -1,9 +1,9 @@
 package llama
 
 import (
-	"Lunar-Astral-Agents/parameter"
-	"Lunar-Astral-Agents/utils"
 	"log"
+	"open-lunar/parameter"
+	"open-lunar/utils"
 	"os"
 )
 

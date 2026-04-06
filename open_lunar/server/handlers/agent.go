@@ -2,13 +2,13 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/model"
 	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"open-lunar/model"
 	"strconv"
 	"strings"
 )

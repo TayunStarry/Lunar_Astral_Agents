@@ -1,11 +1,11 @@
 package server
 
 import (
-	"Lunar-Astral-Agents/parameter"
-	"Lunar-Astral-Agents/utils"
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/parameter"
+	"open-lunar/utils"
 	"strings"
 	"time"
 )

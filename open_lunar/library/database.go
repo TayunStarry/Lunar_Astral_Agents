@@ -1,10 +1,10 @@
 package library
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"database/sql"
 	"fmt"
 	"log"
+	"open-lunar/parameter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1036,7 +1036,7 @@ func buildWhereClause(filter map[string]interface{}) (string, []interface{}) {
 // sanitizeIdentifier 安全过滤标识符（表名、列名）
 func sanitizeIdentifier(name string) string {
 	// 移除危险字符
-	dangerousChars := []string{";" , "'", "\"", "\\", "--", "/*", "*/", "(", ")", "[", "]"}
+	dangerousChars := []string{";", "'", "\"", "\\", "--", "/*", "*/", "(", ")", "[", "]"}
 	for _, char := range dangerousChars {
 		name = strings.ReplaceAll(name, char, "")
 	}

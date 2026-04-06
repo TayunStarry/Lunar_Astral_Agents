@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/image"
 	"encoding/json"
 	"log"
 	"net/http"
+	"open-lunar/image"
 )
 
 // CleanupUnreferencedImagesHandler 清理未被引用的图片

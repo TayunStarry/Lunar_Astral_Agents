@@ -1,12 +1,12 @@
 package llama
 
 import (
-	"Lunar-Astral-Agents/model/llama/metadata"
-	"Lunar-Astral-Agents/parameter"
 	"bufio"
 	"context"
 	"io"
 	"log"
+	"open-lunar/model/llama/metadata"
+	"open-lunar/parameter"
 	"os/exec"
 	"path/filepath"
 	"time"
