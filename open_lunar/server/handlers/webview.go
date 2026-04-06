@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"open-lunar/utils"
+	"open-lunar/client"
 )
 
 // WebViewControlRequest WebView 控制请求结构
@@ -41,7 +41,7 @@ func WebViewControlHandler(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "set_size":
 		if req.Width > 0 && req.Height > 0 {
-			utils.SetWebViewSize(req.Width, req.Height)
+			client.SetWebViewSize(req.Width, req.Height)
 			json.NewEncoder(w).Encode(WebViewControlResponse{
 				Success: true,
 				Message: "WebView size updated",
@@ -55,7 +55,7 @@ func WebViewControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "set_position":
-		utils.SetWebViewPosition(req.X, req.Y)
+		client.SetWebViewPosition(req.X, req.Y)
 		json.NewEncoder(w).Encode(WebViewControlResponse{
 			Success: true,
 			Message: "WebView position updated (if supported)",

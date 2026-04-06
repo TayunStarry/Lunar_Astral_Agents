@@ -1,40 +1,31 @@
-package utils
+package client
 
 import (
 	"log"
 	"open-lunar/parameter"
-	"os/exec"
 	"runtime"
-	"sync"
+	"time"
 
 	webview "github.com/webview/webview_go"
 )
 
-var (
-	webviewMutex    sync.Mutex
-	webviewInstance webview.WebView
-)
+// StartWebViewBrowser 启动 webview 浏览器
+func StartWebViewBrowser(url string) {
+	// 等待服务器启动完成
+	time.Sleep(1 * time.Second)
 
-// OpenBrowser 在系统默认浏览器中打开指定 URL
-func OpenBrowser(url string) {
-	var cmd string
-	var args []string
-
-	switch runtime.GOOS {
-	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	default: // linux, freebsd, etc.
-		cmd = "xdg-open"
-		args = []string{url}
+	// 创建 webview 实例
+	w := CreateWebView()
+	if w == nil {
+		log.Printf("Webview[ERROR] -> 无法创建 webview 实例")
+		return
 	}
 
-	if err := exec.Command(cmd, args...).Start(); err != nil {
-		log.Printf("Web服务[ERROR] -> %v 建议手动访问: %s", err, url)
-	}
+	// 导航到指定 URL
+	NavigateWebView(url)
+
+	// 运行 webview（阻塞）
+	RunWebView()
 }
 
 // CreateWebView 创建并返回一个 WebView 实例（单例模式）

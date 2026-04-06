@@ -7,21 +7,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"open-lunar/model"
 	"open-lunar/parameter"
 	"slices"
-	"sync"
 	"time"
 )
-
-// CORSAllowedOrigins 定义允许跨域访问的来源列表
-var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *parameter.BasicPort)}
-
-// 请求映射，键为请求ID，值为请求上下文
-var requests = make(map[string]*model.RequestContext)
-
-// 互斥锁，用于保护请求映射的并发访问
-var serverMutex sync.RWMutex
 
 // BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
 func BuildTLSTerminationProxy() *http.Server {

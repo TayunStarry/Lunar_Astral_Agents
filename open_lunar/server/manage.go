@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"mime"
@@ -11,7 +12,6 @@ import (
 	"open-lunar/parameter"
 	"open-lunar/release"
 	"open-lunar/server/handlers"
-	"open-lunar/utils"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,23 +19,43 @@ import (
 	"time"
 )
 
-// httpMux 是HTTP服务器的ServeMux实例
-var httpMux *http.ServeMux
+// QueryCurrentAddress 查询当前地址信息
+func QueryCurrentAddress() []string {
+	// 如果当前地址已缓存，直接返回
+	if len(parameter.ServerAddress) > 0 {
+		return parameter.ServerAddress
+	}
 
-// ModelConfig 定义模型配置的结构
-type ModelConfig struct {
-	// 嵌入模型路径
-	EmbeddingModelPath string `json:"embedding_model_path"`
-	// 多模态模型路径
-	MultimodalModelPath string `json:"multimodal_model_path"`
-	// 多模态投影模型路径
-	MmprojModelPath string `json:"mmproj_model_path"`
-	// 扩散模型路径
-	DiffusionModelPath string `json:"diffusion_model_path"`
-	// 变分模型路径
-	VariationalModelPath string `json:"variational_model_path"`
-	// 提示精炼模型路径
-	PromptRefineModelPath string `json:"prompt_refine_model_path"`
+	// 从IP地址查询位置信息
+	resp, err := http.Get("https://ipapi.co/json/")
+	if err != nil {
+		log.Printf("获取位置失败: %v\n", err)
+		return []string{"江苏省", "南京市"}
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("获取位置失败: %s\n", resp.Status)
+		return []string{"江苏省", "南京市"}
+	}
+
+	// 解析JSON响应
+	var data IPInfo
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		log.Printf("解析位置信息失败: %v\n", err)
+		return []string{"江苏省", "南京市"}
+	}
+
+	// 确保省份和城市信息存在
+	if data.Region == "" || data.City == "" {
+		log.Println("获取位置失败: 省份或城市信息缺失")
+		return []string{"江苏省", "南京市"}
+	}
+
+	// 缓存当前地址
+	parameter.ServerAddress = []string{data.Region, data.City}
+	return parameter.ServerAddress
 }
 
 // InitializeServer 初始化服务器配置和组件
@@ -57,7 +77,7 @@ func InitializeServer() {
 		log.Fatalf("Lunar模块[ERROR] -> %v", err)
 	}
 	// 查询当前地址信息
-	utils.QueryCurrentAddress()
+	QueryCurrentAddress()
 	// 注册HTTP处理器
 	registerHandlers()
 	// 创建GGUF服务器
@@ -118,4 +138,13 @@ func shutdownServer(server *http.Server) {
 	}
 	// 打印服务器已安全关闭的信息
 	log.Println("Lunar模块 -> 已安全关闭")
+}
+
+// CloseWebSocketServer 关闭WebSocket服务器
+func CloseWebSocketServer() {
+	if websocketServer != nil {
+		log.Printf("Lunar模块[WebSocket] -> 关闭服务器")
+		websocketServer.Close()
+		websocketServer = nil
+	}
 }
