@@ -1,4 +1,4 @@
-module Lunar-Astral-Agents
+module open-lunar
 
 go 1.24.4
 

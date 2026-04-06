@@ -1,11 +1,11 @@
 package model
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"open-lunar/parameter"
 )
 
 // GetEmbeddingVector 获取嵌入向量

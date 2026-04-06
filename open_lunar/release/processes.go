@@ -1,10 +1,10 @@
 package release
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"encoding/csv"
 	"fmt"
 	"log"
+	"open-lunar/parameter"
 	"os/exec"
 	"strconv"
 	"strings"

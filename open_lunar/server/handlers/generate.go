@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/image/generate"
-	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/image/generate"
+	"open-lunar/parameter"
 	"strings"
 	"time"
 )

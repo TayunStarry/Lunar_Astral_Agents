@@ -1,9 +1,9 @@
 package release
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"fmt"
 	"log"
+	"open-lunar/parameter"
 	"os/exec"
 	"strings"
 )

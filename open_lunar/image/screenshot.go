@@ -1,7 +1,6 @@
 package image
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"open-lunar/parameter"
 	"strconv"
 	"strings"
 	"sync"

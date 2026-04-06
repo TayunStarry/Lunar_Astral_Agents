@@ -2,10 +2,10 @@
 package llama
 
 import (
-	"Lunar-Astral-Agents/model/llama/metadata"
 	"fmt"
 	"log"
 	"math"
+	"open-lunar/model/llama/metadata"
 	"os"
 	"os/exec"
 	"strconv"

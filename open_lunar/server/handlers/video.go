@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"Lunar-Astral-Agents/image"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"open-lunar/image"
 	"os"
 )
 

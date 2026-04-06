@@ -1,11 +1,11 @@
 package library
 
 import (
-	"Lunar-Astral-Agents/files"
-	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"math"
+	"open-lunar/files"
+	"open-lunar/parameter"
 	"os"
 	"path/filepath"
 	"strings"

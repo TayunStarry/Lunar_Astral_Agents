@@ -1,14 +1,14 @@
 package server
 
 import (
-	"Lunar-Astral-Agents/model"
-	"Lunar-Astral-Agents/parameter"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"open-lunar/model"
+	"open-lunar/parameter"
 	"slices"
 	"sync"
 	"time"
@@ -71,9 +71,9 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	serverMutex.RUnlock()
 	// 构造健康检查响应数据
 	healthStatus := map[string]any{
-		"status":           "healthy",         // 服务状态：健康
-		"timestamp":        time.Now(),        // 当前时间戳
-		"pending_requests": pendingRequests,   // 当前挂起的请求数
+		"status":           "healthy",            // 服务状态：健康
+		"timestamp":        time.Now(),           // 当前时间戳
+		"pending_requests": pendingRequests,      // 当前挂起的请求数
 		"port":             *parameter.ProxyPort, // 服务监听端口
 	}
 	// 设置响应头，指定返回JSON格式

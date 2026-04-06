@@ -1,17 +1,17 @@
 package server
 
 import (
-	"Lunar-Astral-Agents/files"
-	"Lunar-Astral-Agents/model/llama"
-	"Lunar-Astral-Agents/parameter"
-	"Lunar-Astral-Agents/release"
-	"Lunar-Astral-Agents/server/handlers"
-	"Lunar-Astral-Agents/utils"
 	"context"
 	"flag"
 	"log"
 	"mime"
 	"net/http"
+	"open-lunar/files"
+	"open-lunar/model/llama"
+	"open-lunar/parameter"
+	"open-lunar/release"
+	"open-lunar/server/handlers"
+	"open-lunar/utils"
 	"os"
 	"os/signal"
 	"strings"

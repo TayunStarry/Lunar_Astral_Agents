@@ -1,8 +1,8 @@
 package server
 
 import (
-	"Lunar-Astral-Agents/server/handlers"
 	"net/http"
+	"open-lunar/server/handlers"
 )
 
 // SystemEndpoint 定义系统端点的结构

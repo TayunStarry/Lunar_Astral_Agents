@@ -1,10 +1,10 @@
 package llama
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"bufio"
 	"io"
 	"log"
+	"open-lunar/parameter"
 	"os/exec"
 	"strings"
 )

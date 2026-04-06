@@ -1,8 +1,8 @@
 package release
 
 import (
-	"Lunar-Astral-Agents/parameter"
 	"log"
+	"open-lunar/parameter"
 	"strings"
 	"time"
 )
