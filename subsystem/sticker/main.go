@@ -25,7 +25,7 @@ const (
 	OptimizePrompt        = "我有一张图片，之前对它有过以下描述：\"%s\"。现在重新观察图片后，得到新的描述：\"%s\"。请你结合这两次描述，输出一个更加全面、准确、完善的逗号分隔的标签描述，保留有价值的信息，修正可能的错误，优化表达方式。"
 	MetaVersion           = "25.1230"
 	KnowledgeFileOnServer = "knowledge/meme_model.json"
-	DefaultImageDir       = "../../meme-images"
+	DefaultImageDir       = "./meme-images"
 )
 
 // InferencePayload 推理请求负载
