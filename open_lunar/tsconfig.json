@@ -14,7 +14,7 @@
 		// 模块解析策略
 		"moduleResolution": "node",
 		// 输出目录
-		"outDir": "./deliverable/",
+		"outDir": "../deliverable/",
 		// 源码根目录
 		"rootDir": "./script",
 		// 启用所有严格类型检查

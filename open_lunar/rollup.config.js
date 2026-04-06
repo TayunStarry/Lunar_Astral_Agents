@@ -7,12 +7,12 @@ export default [
 		// 定义外部依赖, 这些不会被rollup打包到最终的bundle中
 		external: [],
 		// 指定输入文件路径
-		input: './deliverable/EntryAPI/code.js',
+		input: '../deliverable/EntryAPI/code.js',
 		// 配置输出选项
 		output: [
 			{
 				// 指定输出文件路径
-				file: './webpage/script.js',
+				file: './files/assets/script.js',
 				/*
 				 * 指定输出文件类型
 				 * rollup支持的格式有:
