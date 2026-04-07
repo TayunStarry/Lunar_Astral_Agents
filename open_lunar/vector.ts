@@ -220,7 +220,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector[]} 立方体阵列向量数组, 包含所有可能的 (x, y, z) 组合, 其中每个坐标值都在 [-scope, +scope] 范围内
 	 */
-	public createCubeLattice(scope: number): VectorCase[] {
+	createCubeLattice(scope: number): VectorCase[] {
 		return VectorTool.createCubeLattice(scope, this);
 	}
 	/**
@@ -230,7 +230,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {boolean} 如果两个 Vector3 对象的 x、y 和 z 属性都相等, 则返回 true；否则返回 false
 	 */
-	public equals(vector: Vector3): boolean {
+	equals(vector: Vector3): boolean {
 		return VectorTool.equals(this, vector);
 	};
 	/**
@@ -240,7 +240,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 相加结果的新 Vector3 对象
 	 */
-	public add(vector: Vector3): VectorCase {
+	add(vector: Vector3): VectorCase {
 		return VectorTool.add(this, vector);
 	};
 	/**
@@ -250,7 +250,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 减法结果的新 Vector 对象
 	 */
-	public subtract(vector: Vector3): VectorCase {
+	subtract(vector: Vector3): VectorCase {
 		return VectorTool.subtract(this, vector);
 	};
 	/**
@@ -260,7 +260,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 缩放后的新 Vector 对象
 	 */
-	public multiply(scale: number): VectorCase {
+	multiply(scale: number): VectorCase {
 		return VectorTool.multiply(this, scale);
 	};
 	/**
@@ -270,7 +270,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {number} - 两个向量的点积结果
 	 */
-	public dot(vector: Vector3): number {
+	dot(vector: Vector3): number {
 		return VectorTool.dot(this, vector);
 	};
 	/**
@@ -280,7 +280,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 除法结果的新 Vector3 对象
 	 */
-	public division(divisor: number): VectorCase {
+	division(divisor: number): VectorCase {
 		return VectorTool.division(this, divisor);
 	};
 	/**
@@ -290,7 +290,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 两个向量的叉积结果
 	 */
-	public cross(vector: Vector3): VectorCase {
+	cross(vector: Vector3): VectorCase {
 		return VectorTool.cross(this, vector);
 	};
 	/**
@@ -298,7 +298,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} 当前 Vector 对象的副本
 	 */
-	public copy(): VectorCase {
+	copy(): VectorCase {
 		return VectorTool.copy(this);
 	};
 	/**
@@ -308,7 +308,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public above(steps?: number): VectorCase {
+	above(steps?: number): VectorCase {
 		return VectorTool.above(this, steps);
 	};
 	/**
@@ -318,7 +318,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public east(steps?: number): VectorCase {
+	east(steps?: number): VectorCase {
 		return VectorTool.east(this, steps);
 	}
 	/**
@@ -328,7 +328,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public north(steps?: number): VectorCase {
+	north(steps?: number): VectorCase {
 		return VectorTool.north(this, steps);
 	}
 	/**
@@ -336,7 +336,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {number} 向量的模
 	 */
-	public magnitude(): number {
+	magnitude(): number {
 		return VectorTool.magnitude(this);
 	}
 	/**
@@ -346,7 +346,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {number} - 两个向量之间的距离
 	 */
-	public distance(vector: Vector3): number {
+	distance(vector: Vector3): number {
 		return VectorTool.distance(this, vector);
 	}
 	/**
@@ -354,7 +354,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} 归一化的单位向量
 	 */
-	public normalize(): VectorCase {
+	normalize(): VectorCase {
 		return VectorTool.normalize(this);
 	}
 	/**
@@ -364,7 +364,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 取整后的新 Vector 对象
 	 */
-	public floor(decimals: number = 2): VectorCase {
+	floor(decimals: number = 2): VectorCase {
 		return VectorTool.floor(this, decimals);
 	}
 	/**
@@ -374,7 +374,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {string} - 向量的字符串表示
 	 */
-	public toString(options?: VectorStringOptions): string {
+	toString(options?: VectorStringOptions): string {
 		return VectorTool.toString(this, options);
 	}
 	/**
@@ -384,7 +384,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 计算后的新 Vector 对象
 	 */
-	public clamp(limits?: VectorLimits): VectorCase {
+	clamp(limits?: VectorLimits): VectorCase {
 		return VectorTool.clamp(this, limits);
 	}
 	/**
@@ -396,7 +396,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public lerp(vector: Vector3, time: number): VectorCase {
+	lerp(vector: Vector3, time: number): VectorCase {
 		return VectorTool.lerp(this, vector, time);
 	}
 	/**
@@ -408,7 +408,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public slerp(vector: Vector3, time: number): VectorCase {
+	slerp(vector: Vector3, time: number): VectorCase {
 		return VectorTool.slerp(this, vector, time);
 	}
 	/**
@@ -418,7 +418,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public max(vector: Vector3): VectorCase {
+	max(vector: Vector3): VectorCase {
 		return VectorTool.max(this, vector);
 	}
 	/**
@@ -428,7 +428,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public min(vector: Vector3): VectorCase {
+	min(vector: Vector3): VectorCase {
 		return VectorTool.min(this, vector);
 	}
 	/**
@@ -438,7 +438,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 计算后的 Vector 对象
 	 */
-	public rangeRandom(vector: Vector3): VectorCase {
+	rangeRandom(vector: Vector3): VectorCase {
 		return VectorTool.rangeRandom(this, vector);
 	};
 	/**
@@ -450,7 +450,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {Vector} - 计算后的 Vector 对象
 	 */
-	public random(range: number, offset: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase {
+	random(range: number, offset: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase {
 		return VectorTool.random(this, range, offset);
 	}
 	/**
@@ -460,7 +460,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 归一化后的差向量（从当前向量指向目标向量）
 	 */
-	public difference(target: Vector3): VectorCase {
+	difference(target: Vector3): VectorCase {
 		return VectorTool.difference(this, target);
 	}
 	/**
@@ -470,7 +470,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 指向方向的归一化三维向量
 	 */
-	public AngleToPlace(rotation: Vector2XY): VectorCase {
+	AngleToPlace(rotation: Vector2XY): VectorCase {
 		return VectorTool.AngleToPlace(rotation);
 	}
 	/**
@@ -480,7 +480,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 实体旋转角度（x 为俯仰角，y 为偏航角，z 为 0）
 	 */
-	public Vector3ToAngle(direction: Vector3): VectorCase {
+	Vector3ToAngle(direction: Vector3): VectorCase {
 		return VectorTool.Vector3ToAngle(direction);
 	}
 	/**
@@ -490,7 +490,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorDirections} - 包含前、后、左、右、上、下六个方向的向量对象
 	 */
-	public directions(front: Vector3): VectorDirections {
+	directions(front: Vector3): VectorDirections {
 		return VectorTool.directions(front);
 	}
 	/**
@@ -502,7 +502,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 计算后的偏移坐标
 	 */
-	public relativeOffset(front: Vector3, offset: VectorRelativeOffset): VectorCase {
+	relativeOffset(front: Vector3, offset: VectorRelativeOffset): VectorCase {
 		return VectorTool.relativeOffset(this, front, offset);
 	}
 	/**
@@ -516,7 +516,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 发射物的最佳速度向量
 	 */
-	public calculateLeadVelocity(targetPosition: Vector3, projectileSpeed: number, targetVelocity: Vector3): VectorCase {
+	calculateLeadVelocity(targetPosition: Vector3, projectileSpeed: number, targetVelocity: Vector3): VectorCase {
 		return VectorTool.calculateLeadVelocity(this, targetPosition, projectileSpeed, targetVelocity);
 	}
 	/**
@@ -528,7 +528,7 @@ class VectorCase extends VectorBase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 计算后的区块坐标
 	 */
-	public chunkLocation(Yzero: boolean = true, size: number = 16): VectorCase {
+	chunkLocation(Yzero: boolean = true, size: number = 16): VectorCase {
 		return VectorTool.chunkLocation(this, Yzero, size);
 	}
 }
@@ -545,7 +545,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector[]} 立方体阵列向量数组, 包含所有可能的 (x, y, z) 组合, 其中每个坐标值都在 [-scope, +scope] 范围内
 	 */
-	public static createCubeLattice(scope: number, vector: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase[] {
+	static createCubeLattice(scope: number, vector: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase[] {
 		/** 计算立方体的边长, 范围为 [-scope, +scope], 因此边长为 2 * scope + 1 */
 		const size: number = 2 * scope + 1;
 		/** 存储生成的向量数组 */
@@ -573,7 +573,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 相加结果的新 Vector3 对象
 	 */
-	public static add(vector1: Vector3, vector2: Vector3): VectorCase {
+	static add(vector1: Vector3, vector2: Vector3): VectorCase {
 		return new VectorCase(vector1.x + vector2.x, vector1.y + vector2.y, vector1.z + vector2.z);
 	};
 	/**
@@ -585,7 +585,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 减法结果的新 Vector 对象
 	 */
-	public static subtract(vector1: Vector3, vector2: Vector3): VectorCase {
+	static subtract(vector1: Vector3, vector2: Vector3): VectorCase {
 		return new VectorCase(vector1.x - vector2.x, vector1.y - vector2.y, vector1.z - vector2.z);
 	};
 	/**
@@ -597,7 +597,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 缩放后的新 Vector 对象
 	 */
-	public static multiply(vector: Vector3, scale: number): VectorCase {
+	static multiply(vector: Vector3, scale: number): VectorCase {
 		return new VectorCase(vector.x * scale, vector.y * scale, vector.z * scale);
 	};
 	/**
@@ -609,7 +609,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {boolean} - 如果两个 Vector3 对象的 x、y 和 z 属性都相等, 则返回 true；否则返回 false
 	 */
-	public static equals(vector1: Vector3, vector2: Vector3): boolean {
+	static equals(vector1: Vector3, vector2: Vector3): boolean {
 		return vector1.x === vector2.x && vector1.y === vector2.y && vector1.z === vector2.z;
 	};
 	/**
@@ -621,7 +621,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {number} - 两个向量的点积结果
 	 */
-	public static dot(vector1: Vector3, vector2: Vector3): number {
+	static dot(vector1: Vector3, vector2: Vector3): number {
 		return vector1.x * vector2.x + vector1.y * vector2.y + vector1.z * vector2.z;
 	};
 	/**
@@ -633,7 +633,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 两个向量的叉积结果
 	 */
-	public static cross(vector1: Vector3, vector2: Vector3): VectorCase {
+	static cross(vector1: Vector3, vector2: Vector3): VectorCase {
 		return new VectorCase(
 			vector1.y * vector2.z - vector1.z * vector2.y,
 			vector1.z * vector2.x - vector1.x * vector2.z,
@@ -649,7 +649,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorBase} - 除法结果的新 Vector3 对象
 	 */
-	public static division(vector: Vector3, divisor: number): VectorCase {
+	static division(vector: Vector3, divisor: number): VectorCase {
 		if (divisor === 0) return new VectorCase(vector.x, vector.y, vector.z);
 		return new VectorCase(vector.x / divisor, vector.y / divisor, vector.z / divisor);
 	};
@@ -660,7 +660,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 拷贝后的新 Vector 对象
 	 */
-	public static copy(vector: Vector3): VectorCase {
+	static copy(vector: Vector3): VectorCase {
 		return new VectorCase(vector.x, vector.y, vector.z);
 	};
 	/**
@@ -672,7 +672,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public static above(vector: Vector3, steps?: number): VectorCase {
+	static above(vector: Vector3, steps?: number): VectorCase {
 		/**
 		 * 获取偏移量
 		 */
@@ -687,7 +687,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public static east(vector: Vector3, steps?: number): VectorCase {
+	static east(vector: Vector3, steps?: number): VectorCase {
 		/**
 		 * 获取偏移量
 		 */
@@ -702,7 +702,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 偏移后的新的 Vector 对象
 	 */
-	public static north(vector: Vector3, steps?: number): VectorCase {
+	static north(vector: Vector3, steps?: number): VectorCase {
 		/** 获取偏移量 */
 		const offset = steps ?? 1;
 		// 返回当前 Vector3 对象与偏移量相加后的新 Vector3 对象
@@ -715,7 +715,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {number} - 向量的模
 	 */
-	public static magnitude(vector: Vector3): number {
+	static magnitude(vector: Vector3): number {
 		return Math.sqrt(vector.x ** 2 + vector.y ** 2 + vector.z ** 2);
 	};
 	/**
@@ -727,7 +727,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {number} - 两个向量之间的距离
 	 */
-	public static distance(start: Vector3, done: Vector3): number {
+	static distance(start: Vector3, done: Vector3): number {
 		return this.magnitude(this.subtract(start, done));
 	};
 	/**
@@ -737,7 +737,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public static normalize(vector: Vector3): VectorCase {
+	static normalize(vector: Vector3): VectorCase {
 		/**
 		 * * 计算向量模长
 		 */
@@ -753,7 +753,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 取整后的新 Vector 对象
 	 */
-	public static floor(vector: Vector3, decimals: number = 2): VectorCase {
+	static floor(vector: Vector3, decimals: number = 2): VectorCase {
 		/**
 		 * * 获取乘数
 		 */
@@ -773,7 +773,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {string} - 向量的字符串表示
 	 */
-	public static toString(vector: Vector3 | Vector2, options?: VectorStringOptions): string {
+	static toString(vector: Vector3 | Vector2, options?: VectorStringOptions): string {
 		// 默认小数位数
 		const decimals = options?.decimals ?? 2;
 		// 向量分隔字符串
@@ -802,7 +802,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 计算后的新 Vector 对象
 	 */
-	public static clamp(vector: Vector3, limits?: VectorLimits): VectorCase {
+	static clamp(vector: Vector3, limits?: VectorLimits): VectorCase {
 		return new VectorCase(
 			Clamp({ min: limits?.min?.x ?? Number.MIN_SAFE_INTEGER, max: limits?.max?.x ?? Number.MAX_SAFE_INTEGER }, vector.x),
 			Clamp({ min: limits?.min?.y ?? Number.MIN_SAFE_INTEGER, max: limits?.max?.y ?? Number.MAX_SAFE_INTEGER }, vector.y),
@@ -820,7 +820,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public static lerp(start: Vector3, done: Vector3, time: number): VectorCase {
+	static lerp(start: Vector3, done: Vector3, time: number): VectorCase {
 		return new VectorCase(
 			start.x + (done.x - start.x) * time,
 			start.y + (done.y - start.y) * time,
@@ -838,7 +838,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public static slerp(start: Vector3, done: Vector3, time: number): VectorCase {
+	static slerp(start: Vector3, done: Vector3, time: number): VectorCase {
 		/**
 		 * * 计算两个向量点积
 		 */
@@ -879,7 +879,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public static max(vector1: Vector3, vector2: Vector3): VectorCase {
+	static max(vector1: Vector3, vector2: Vector3): VectorCase {
 		return new VectorCase(Math.max(vector1.x, vector2.x), Math.max(vector1.y, vector2.y), Math.max(vector1.z, vector2.z));
 	};
 	/**
@@ -891,7 +891,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的向量对象
 	 */
-	public static min(vector1: Vector3, vector2: Vector3): VectorCase {
+	static min(vector1: Vector3, vector2: Vector3): VectorCase {
 		return new VectorCase(Math.min(vector1.x, vector2.x), Math.min(vector1.y, vector2.y), Math.min(vector1.z, vector2.z));
 	};
 	/**
@@ -903,7 +903,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 计算后的 Vector 对象
 	 */
-	public static rangeRandom(start: Vector3, done: Vector3): VectorCase {
+	static rangeRandom(start: Vector3, done: Vector3): VectorCase {
 		/** 计算向量最大值 */
 		const maxVector = VectorTool.max(start, done);
 		/** 计算向量最小值 */
@@ -926,7 +926,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector} - 计算后的 Vector 对象
 	 */
-	public static random(anchor: Vector3, range: number, offset: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase {
+	static random(anchor: Vector3, range: number, offset: Vector3 = VectorCase.CONSTANT_ZERO): VectorCase {
 		return this.add(anchor, { x: RandomFloat(-range, range), y: RandomFloat(-range, range), z: RandomFloat(-range, range) }).add(offset);
 	};
 	/**
@@ -938,7 +938,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 归一化后的差向量（从起始向量指向目标向量）
 	 */
-	public static difference(from: Vector3, to: Vector3): VectorCase {
+	static difference(from: Vector3, to: Vector3): VectorCase {
 		// 处理向量相等的情况
 		if (VectorTool.equals(from, to)) return VectorCase.CONSTANT_ZERO;
 		// 计算两个向量的差向量
@@ -953,7 +953,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 指向方向的归一化三维向量
 	 */
-	public static AngleToPlace(rotation: Vector2XY): VectorCase {
+	static AngleToPlace(rotation: Vector2XY): VectorCase {
 		// 转换俯仰角为弧度（取反）
 		const pitchRadians = -rotation.y * Math.PI / 180;
 		// 转换偏航角为弧度（取反）
@@ -976,7 +976,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector2XY} 实体旋转角度（pitch/x轴, yaw/y轴）
 	 */
-	public static Vector3ToAngle(direction: Vector3): VectorCase {
+	static Vector3ToAngle(direction: Vector3): VectorCase {
 		/**
 		 * 计算水平面投影长度
 		 */
@@ -1005,7 +1005,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorDirections} - 包含前、后、左、右、上、下六个方向的向量对象
 	 */
-	public static directions(front: Vector3): VectorDirections {
+	static directions(front: Vector3): VectorDirections {
 		// 定义常量向量
 		const sample: Vector3 = this.CONSTANT_UP;
 		// 计算后方方向向量
@@ -1032,7 +1032,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 计算后的偏移坐标
 	 */
-	public static relativeOffset(source: Vector3, front: Vector3, offset: VectorRelativeOffset): VectorCase {
+	static relativeOffset(source: Vector3, front: Vector3, offset: VectorRelativeOffset): VectorCase {
 		// 计算方向向量集
 		const directions = this.directions(front);
 		// 计算前方偏移量
@@ -1057,7 +1057,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {VectorCase} - 发射物的最佳速度向量
 	 */
-	public static calculateLeadVelocity(shooterPosition: Vector3, targetPosition: Vector3, projectileSpeed: number, targetVelocity: Vector3): VectorCase {
+	static calculateLeadVelocity(shooterPosition: Vector3, targetPosition: Vector3, projectileSpeed: number, targetVelocity: Vector3): VectorCase {
 		// 计算从发射者到目标的向量
 		const vecBA = this.subtract(targetPosition, shooterPosition);
 		// 计算归一化的方向向量
@@ -1088,7 +1088,7 @@ class VectorTool extends VectorCase implements Vector3 {
 	 *
 	 * @returns {Vector3} - 计算后的区块坐标
 	 */
-	public static chunkLocation(vector: Vector3, Yzero: boolean = true, size: number = 16): VectorCase {
+	static chunkLocation(vector: Vector3, Yzero: boolean = true, size: number = 16): VectorCase {
 		/**
 		 * * 计算 Y轴 的值
 		 */
