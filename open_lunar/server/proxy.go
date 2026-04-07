@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"slices"
 	"time"
 )
@@ -21,10 +21,10 @@ func BuildTLSTerminationProxy() *http.Server {
 	// 注册反向代理处理器，将所有请求转发到HTTP后端
 	mux.HandleFunc("/", handleReverseProxy)
 	// 构建服务器地址
-	serverAddr := fmt.Sprintf(":%d", *parameter.ProxyPort)
+	serverAddr := fmt.Sprintf(":%d", *config.ProxyPort)
 	// 打印代理服务访问地址
-	log.Printf("Lunar模块[TLS代理] : 代理请求 [POST] -> https://localhost:%v/", *parameter.ProxyPort)
-	log.Printf("Lunar模块[TLS代理] : 健康检查 [GET] -> https://localhost:%v/health", *parameter.ProxyPort)
+	log.Printf("Lunar模块[TLS代理] : 代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
+	log.Printf("Lunar模块[TLS代理] : 健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
 	// 创建服务器实例
 	server := &http.Server{
 		Addr:    serverAddr,
@@ -32,7 +32,7 @@ func BuildTLSTerminationProxy() *http.Server {
 	}
 	// 启动HTTPS服务器（在独立goroutine中运行）
 	go func() {
-		if err := http.ListenAndServeTLS(serverAddr, *parameter.CertFile, *parameter.KeyFile, mux); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServeTLS(serverAddr, *config.CertFile, *config.KeyFile, mux); err != nil && err != http.ErrServerClosed {
 			log.Printf("Lunar模块[TLS代理][ERROR] -> 服务器启动失败: %v\n", err)
 		}
 	}()
@@ -60,10 +60,10 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	serverMutex.RUnlock()
 	// 构造健康检查响应数据
 	healthStatus := map[string]any{
-		"status":           "healthy",            // 服务状态：健康
-		"timestamp":        time.Now(),           // 当前时间戳
-		"pending_requests": pendingRequests,      // 当前挂起的请求数
-		"port":             *parameter.ProxyPort, // 服务监听端口
+		"status":           "healthy",         // 服务状态：健康
+		"timestamp":        time.Now(),        // 当前时间戳
+		"pending_requests": pendingRequests,   // 当前挂起的请求数
+		"port":             *config.ProxyPort, // 服务监听端口
 	}
 	// 设置响应头，指定返回JSON格式
 	w.Header().Set("Content-Type", "application/json")
@@ -106,7 +106,7 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 目标服务器地址 - 内部HTTP服务器的URL
-	targetURL := fmt.Sprintf("http://localhost:%d", *parameter.BasicPort)
+	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 解析目标URL - 将字符串URL转换为url.URL对象
 	target, err := url.Parse(targetURL)
 	if err != nil {
@@ -128,9 +128,9 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		// 指示原始请求使用HTTPS（用于后端服务识别原始协议）
 		req.Header.Set("X-Forwarded-Proto", "https")
 		// 指示原始请求的端口
-		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *parameter.ProxyPort))
+		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.ProxyPort))
 		// 开发模式日志 - 记录请求转发详情
-		if *parameter.DevMode {
+		if *config.DevMode {
 			log.Printf("[TLS代理] 转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
 		}
 	}

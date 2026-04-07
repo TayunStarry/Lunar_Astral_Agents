@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"open-lunar/browser"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"strings"
 )
 
@@ -27,7 +27,7 @@ func attemptServerStart(server *http.Server, maxAttempts int) bool {
 		if tryStartServerOnPort(server) {
 			return true
 		}
-		*parameter.BasicPort++
+		*config.BasicPort++
 	}
 	return false
 }
@@ -37,7 +37,7 @@ func tryStartServerOnPort(server *http.Server) bool {
 	// 服务器成功启动后的初始化工作
 	initializeServerComponents(server)
 	// 配置服务器监听地址
-	addr := fmt.Sprintf(":%d", *parameter.BasicPort)
+	addr := fmt.Sprintf(":%d", *config.BasicPort)
 	// 启动HTTP服务器
 	if err := http.ListenAndServe(addr, server.Handler); err != nil && err != http.ErrServerClosed {
 		log.Printf("Lunar模块[ERROR] -> %v", err)
@@ -100,7 +100,7 @@ func startClientLoading() {
 	// 构建客户端访问的 URL
 	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 构建内部接口的 URL
-	internalURL := fmt.Sprintf("http://%s:%d", ip, *parameter.BasicPort)
+	internalURL := fmt.Sprintf("http://%s:%d", ip, *config.BasicPort)
 	// 打开浏览器访问内部接口
 	browser.OpenBrowser(internalURL)
 	// 打印服务器端口

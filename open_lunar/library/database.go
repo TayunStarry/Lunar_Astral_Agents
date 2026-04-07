@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,12 +97,12 @@ type DatabaseRequest struct {
 
 // NewDatabase 创建新的数据库实例
 func NewDatabase() (*Database, error) {
-	db, err := initSQLite(*parameter.Database)
+	db, err := initSQLite(*config.Database)
 	if err != nil {
 		return nil, fmt.Errorf("初始化SQLite数据库失败: %v", err)
 	}
 
-	log.Printf("SQLite数据库连接成功: %s", *parameter.Database)
+	log.Printf("SQLite数据库连接成功: %s", *config.Database)
 
 	return &Database{
 		db: db,

@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"path/filepath"
 	"strings"
 )
@@ -62,7 +62,7 @@ func CreateZip(files []*multipart.FileHeader, zipName string) ([]byte, error) {
 		return nil, fmt.Errorf("关闭ZIP写入器失败: %w", err)
 	}
 	// 记录日志，包含创建的 ZIP 文件名和包含的文件数量
-	if *parameter.DevMode {
+	if *config.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Archive请求 -> 成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
 		log.Printf("%s", strings.Repeat("-=", 28))

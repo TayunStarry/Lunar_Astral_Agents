@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -28,7 +28,7 @@ func getPortProcessesPowerShell() []ProcessInfo {
 	// 用于存储获取到的进程信息
 	var processes []ProcessInfo
 	// 拼接 PowerShell 命令，使用 parameter.MinPort 和 config.MaxPort 填充端口范围
-	psCmd := fmt.Sprintf(strings.Join(commands, "\n"), *parameter.MinPort, *parameter.MaxPort)
+	psCmd := fmt.Sprintf(strings.Join(commands, "\n"), *config.MinPort, *config.MaxPort)
 	// 创建执行 PowerShell 命令的命令对象
 	cmd := exec.Command("powershell", "-Command", psCmd)
 	// 执行命令并获取输出

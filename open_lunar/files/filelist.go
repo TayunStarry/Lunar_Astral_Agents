@@ -3,7 +3,7 @@ package files
 import (
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,9 +16,9 @@ func GetFileList(path string) ([]FileInfo, error) {
 		path = "."
 	}
 	// 拼接完整路径并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*parameter.LocalDir, path))
+	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, path))
 	// 检查请求路径是否在允许的目录范围内，防止路径遍历攻击
-	if !strings.HasPrefix(fullPath, filepath.Clean(*parameter.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 	// 获取文件或目录的信息
@@ -47,7 +47,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 			continue
 		}
 		// 计算文件或目录相对于配置目录的相对路径
-		relPath, err := filepath.Rel(*parameter.LocalDir, filepath.Join(fullPath, file.Name()))
+		relPath, err := filepath.Rel(*config.LocalDir, filepath.Join(fullPath, file.Name()))
 		// 若计算失败，使用文件名作为相对路径
 		if err != nil {
 			relPath = file.Name()
@@ -62,7 +62,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 		})
 	}
 	// 记录文件列表请求日志
-	if *parameter.DevMode {
+	if *config.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 		log.Printf("%s", strings.Repeat("-=", 28))

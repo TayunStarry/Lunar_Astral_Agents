@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/config"
 	"open-lunar/library"
-	"open-lunar/parameter"
 )
 
 // DatabaseHandler 统一的数据库处理器
@@ -37,7 +37,7 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录日志
-	if *parameter.DevMode {
+	if *config.DevMode {
 		log.Printf("数据库批量操作成功，执行 %d 个操作，耗时 %dms",
 			result.Operations, result.TotalTime)
 	}

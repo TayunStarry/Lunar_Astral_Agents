@@ -3,7 +3,7 @@ package release
 import (
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os/exec"
 	"strings"
 )
@@ -52,7 +52,7 @@ func verifyPortsQuick() int {
 	// 记录仍被占用的端口数量
 	remaining := 0
 	// 遍历从 config.MinPort 到 config.MaxPort 的所有端口
-	for port := *parameter.MinPort; port <= *parameter.MaxPort; port++ {
+	for port := *config.MinPort; port <= *config.MaxPort; port++ {
 		// 检查端口是否被占用
 		if isPortInUse(port) {
 			// 若端口被占用，打印提示信息

@@ -2,7 +2,7 @@ package release
 
 import (
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"strings"
 	"time"
 )
@@ -24,12 +24,12 @@ func ExecutePortRelease() {
 	// 打印提示信息，表明开始执行端口释放操作
 	log.Printf("%s", strings.Repeat("-=", 28))
 	// 打印提示信息，表明开始扫描端口占用情况
-	log.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", *parameter.MinPort, *parameter.MaxPort)
+	log.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", *config.MinPort, *config.MaxPort)
 	// 获取指定端口范围内占用端口的进程列表
 	processes := getPortProcessesPowerShell()
 	// 如果没有发现占用端口的进程，打印提示信息并等待后返回
 	if len(processes) == 0 {
-		log.Printf("端口 %d 到 %d 上未发现任何进程占用\n", *parameter.MinPort, *parameter.MaxPort)
+		log.Printf("端口 %d 到 %d 上未发现任何进程占用\n", *config.MinPort, *config.MaxPort)
 		// 等待 100 毫秒，让系统有时间处理
 		time.Sleep(100 * time.Millisecond)
 		return
