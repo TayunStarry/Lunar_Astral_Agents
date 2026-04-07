@@ -5,8 +5,8 @@ import (
 	"context"
 	"io"
 	"log"
+	"open-lunar/config"
 	"open-lunar/model/llama/metadata"
-	"open-lunar/parameter"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -37,7 +37,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 		return
 	}
 	// 检查系统是否处于开发模式
-	if *parameter.DevMode {
+	if *config.DevMode {
 		// 若处于开发模式，显示模型的所有元数据，方便调试
 		metadata.DisplayAllMetadata(modelName, metaData)
 	}
@@ -51,7 +51,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 		return
 	}
 	// 创建执行模型服务进程的命令
-	cmd := exec.Command(*parameter.InferEngine, args...)
+	cmd := exec.Command(*config.InferEngine, args...)
 	// 打开命令的标准输出和标准错误管道
 	stdout, stderr := openCmdPipe(cmd)
 	if stdout == nil || stderr == nil {
@@ -84,7 +84,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 	case <-modelLoaded:
 		// 模型加载完成，记录成功信息并增加已就绪模型数量
 		log.Printf("GGUF模块 -> 模型[ %s ]成功加载并启动服务", modelName)
-		parameter.ModelReady++
+		config.ModelReady++
 
 	case err := <-processExited:
 		if err != nil {

@@ -2,7 +2,7 @@ package release
 
 import (
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -57,7 +57,7 @@ func getPortProcessesNetstat() []ProcessInfo {
 		// 将端口号转换为整数
 		port, err := strconv.Atoi(parts[len(parts)-1])
 		// 检查端口号转换是否成功，以及是否在指定范围内
-		if err != nil || port < *parameter.MinPort || port > *parameter.MaxPort {
+		if err != nil || port < *config.MinPort || port > *config.MaxPort {
 			continue
 		}
 		// 将进程 ID 转换为整数

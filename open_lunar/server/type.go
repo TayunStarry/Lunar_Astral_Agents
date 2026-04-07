@@ -3,8 +3,8 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"open-lunar/config"
 	"open-lunar/model"
-	"open-lunar/parameter"
 	"sync"
 )
 
@@ -49,7 +49,7 @@ type ModelConfig struct {
 }
 
 // CORSAllowedOrigins 定义允许跨域访问的来源列表
-var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *parameter.BasicPort)}
+var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
 
 // 请求映射，键为请求ID，值为请求上下文
 var requests = make(map[string]*model.RequestContext)

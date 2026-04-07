@@ -7,9 +7,9 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"open-lunar/config"
 	"open-lunar/files"
 	"open-lunar/model/llama"
-	"open-lunar/parameter"
 	"open-lunar/release"
 	"open-lunar/server/handlers"
 	"os"
@@ -22,8 +22,8 @@ import (
 // QueryCurrentAddress 查询当前地址信息
 func QueryCurrentAddress() []string {
 	// 如果当前地址已缓存，直接返回
-	if len(parameter.ServerAddress) > 0 {
-		return parameter.ServerAddress
+	if len(config.ServerAddress) > 0 {
+		return config.ServerAddress
 	}
 
 	// 从IP地址查询位置信息
@@ -54,8 +54,8 @@ func QueryCurrentAddress() []string {
 	}
 
 	// 缓存当前地址
-	parameter.ServerAddress = []string{data.Region, data.City}
-	return parameter.ServerAddress
+	config.ServerAddress = []string{data.Region, data.City}
+	return config.ServerAddress
 }
 
 // InitializeServer 初始化服务器配置和组件
@@ -65,15 +65,15 @@ func InitializeServer() {
 	// 加载配置文件
 	loadConfigureFile()
 	// 如果指定了端口释放选项，则执行端口释放
-	if *parameter.ClearPort {
+	if *config.ClearPort {
 		release.ExecutePortRelease()
 	}
 	// 设置MIME类型映射
-	for ext, mimeType := range parameter.MimeMap {
+	for ext, mimeType := range config.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
 	}
 	// 创建本地目录
-	if err := os.MkdirAll(*parameter.LocalDir, 0755); err != nil {
+	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
 		log.Fatalf("Lunar模块[ERROR] -> %v", err)
 	}
 	// 查询当前地址信息

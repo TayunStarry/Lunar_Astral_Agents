@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"strings"
 	"time"
 )
@@ -14,13 +14,13 @@ func GetModels() []AgentModels {
 	// 用于存储模型信息的切片
 	models := []AgentModels{}
 	// 加读锁，防止并发修改模型端口映射
-	parameter.ModelMapMutex.RLock()
+	config.ModelMapMutex.RLock()
 	// 函数结束时解锁
-	defer parameter.ModelMapMutex.RUnlock()
+	defer config.ModelMapMutex.RUnlock()
 	// 存储模型名称的切片
 	var modelNames []string
 	// 遍历模型端口映射，获取所有模型名称
-	for modelName := range parameter.ModelPortMap {
+	for modelName := range config.ModelPortMap {
 		modelNames = append(modelNames, modelName)
 	}
 	// 遍历模型名称，构造模型信息
@@ -70,7 +70,7 @@ func GetBusyResponse() string {
 // ProcessAgentRequest 处理与模型相关的请求
 func ProcessAgentRequest(modelName string) (string, error) {
 	// 检查系统是否繁忙，如果已就绪的模型数量小于最大模型数量，返回系统繁忙响应
-	if parameter.ModelReady < parameter.MaxModelAmount {
+	if config.ModelReady < config.MaxModelAmount {
 		return GetBusyResponse(), fmt.Errorf("system_busy")
 	}
 	// 队列控制

@@ -2,7 +2,7 @@ package browser
 
 import (
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"runtime"
 	"time"
 
@@ -37,22 +37,22 @@ func CreateWebView() webview.WebView {
 		return webviewInstance
 	}
 
-	w := webview.New(*parameter.WebViewDebug)
+	w := webview.New(*config.WebViewDebug)
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 WebView 实例")
 		return nil
 	}
 
-	w.SetTitle(*parameter.WebViewTitle)
-	w.SetSize(*parameter.WebViewWidth, *parameter.WebViewHeight, webview.HintNone)
+	w.SetTitle(*config.WebViewTitle)
+	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
 
-	if !*parameter.WebViewResizable {
-		w.SetSize(*parameter.WebViewWidth, *parameter.WebViewHeight, webview.HintFixed)
+	if !*config.WebViewResizable {
+		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
 	}
 
 	// 设置最小尺寸限制
-	if *parameter.WebViewMinWidth > 0 && *parameter.WebViewMinHeight > 0 {
-		w.SetSize(*parameter.WebViewMinWidth, *parameter.WebViewMinHeight, webview.HintMin)
+	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
+		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
 	}
 
 	webviewInstance = w

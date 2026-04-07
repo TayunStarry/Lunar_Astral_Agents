@@ -3,7 +3,7 @@ package server
 import (
 	"encoding/json"
 	"log"
-	config "open-lunar/parameter"
+	config "open-lunar/config"
 	"os"
 	"path/filepath"
 )

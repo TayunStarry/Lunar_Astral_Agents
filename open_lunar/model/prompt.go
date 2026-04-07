@@ -2,7 +2,7 @@ package model
 
 import (
 	"fmt"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +11,7 @@ import (
 
 // GetSystemPrompt 获取系统提示词
 func GetSystemPrompt() (string, error) {
-	filePath := filepath.Join(*parameter.LocalDir, "resources/prompts/systemPrompt.md")
+	filePath := filepath.Join(*config.LocalDir, "resources/prompts/systemPrompt.md")
 	body, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("读取系统提示词文件失败: %w", err)
@@ -19,7 +19,7 @@ func GetSystemPrompt() (string, error) {
 	promptContent := string(body)
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 	promptContent = strings.ReplaceAll(promptContent, "{current-time}", currentTime)
-	address := parameter.ServerAddress
+	address := config.ServerAddress
 	addressStr := address[0] + "-" + address[1]
 	promptContent = strings.ReplaceAll(promptContent, "{current-address}", addressStr)
 	return promptContent, nil

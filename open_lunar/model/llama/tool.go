@@ -3,18 +3,18 @@ package llama
 
 import (
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os/exec"
 )
 
 // registerModelPort 函数用于注册模型端口到全局映射
 func registerModelPort(modelType string, port int) {
 	// 加锁，保证对全局映射的并发安全访问
-	parameter.ModelMapMutex.Lock()
+	config.ModelMapMutex.Lock()
 	// 函数返回前自动解锁
-	defer parameter.ModelMapMutex.Unlock()
+	defer config.ModelMapMutex.Unlock()
 	// 将模型类型添加 "system-" 前缀后作为键，端口号作为值存储到全局映射中
-	parameter.ModelPortMap["system-"+modelType] = port
+	config.ModelPortMap["system-"+modelType] = port
 }
 
 // waitForProcessExit 函数用于等待命令对应的进程退出，并在进程异常退出时记录错误日志

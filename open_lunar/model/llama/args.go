@@ -3,7 +3,7 @@ package llama
 import (
 	"log"
 	"math"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"path/filepath"
 	"strconv"
 )
@@ -50,7 +50,7 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 // MultimodalModelArgs 为视觉模态模型添加特定的命令行参数
 func MultimodalModelArgs(args *[]string, modelPath, modelName string, metadata map[string]any) bool {
 	// 获取多模态模型所需的 MMProj 文件路径
-	mmprojPath := *parameter.MmprojModel
+	mmprojPath := *config.MmprojModel
 	// 若未找到 MMProj 文件，记录错误日志并返回失败
 	if mmprojPath == "" {
 		log.Printf("GGUF模块[ERROR] -> 视觉模型需要 --mmproj 参数但未找到对应文件: %s", modelPath)

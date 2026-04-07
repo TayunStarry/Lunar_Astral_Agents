@@ -3,7 +3,7 @@ package llama
 import (
 	"log"
 	"open-lunar/browser"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 )
 
@@ -16,11 +16,11 @@ func CreateServers() {
 	// 等待加载的模型队列
 	modelPaths := map[string]string{}
 	// 当配置允许加载推理模型时，将多模态模型加入待加载列表
-	if *parameter.AllowMultimodal {
-		modelPaths["multimodal"] = *parameter.MultimodalModel
+	if *config.AllowMultimodal {
+		modelPaths["multimodal"] = *config.MultimodalModel
 	}
 	// 将嵌入模型加入待加载列表
-	modelPaths["embedding"] = *parameter.EmbeddingModel
+	modelPaths["embedding"] = *config.EmbeddingModel
 	// 初始化标志位，用于判断是否所有模型路径都为空
 	allEmpty := true
 	// 若存在非空路径，则更新标志位并跳出循环
@@ -66,7 +66,7 @@ func initConfig() bool {
 // startServersWithTypes 为不同类型的模型启动对应的 GGUF 服务实例
 func startServersWithTypes(modelPaths map[string]string) {
 	// 从配置中获取基础端口号
-	basePort := *parameter.ModelPort
+	basePort := *config.ModelPort
 	// 遍历所有模型类型和对应的模型路径
 	for modelType, modelPath := range modelPaths {
 		// 若模型路径为空，记录警告日志并跳过当前循环
@@ -75,7 +75,7 @@ func startServersWithTypes(modelPaths map[string]string) {
 			continue
 		}
 		// 增加 最大模型数量
-		parameter.MaxModelAmount++
+		config.MaxModelAmount++
 		// 启动单个模型服务
 		startServerForModel(modelType, modelPath, basePort)
 	}

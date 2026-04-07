@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"io"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os/exec"
 	"strings"
 )
@@ -36,7 +36,7 @@ func openStdoutScanner(stdoutScanner *bufio.Scanner, modelLoaded chan bool) {
 		// 获取当前扫描到的行内容
 		line := stdoutScanner.Text()
 		// 当已就绪的模型数量达到最大限制，或者当前行包含 "load_backend:" 时，打印系统日志
-		if parameter.ModelReady >= parameter.MaxModelAmount || strings.Contains(line, "load_backend:") {
+		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
 		// 检查输出行是否包含 "starting the main loop"，若包含则表示模型加载完成
@@ -54,7 +54,7 @@ func openStderrScanner(stderrScanner *bufio.Scanner, modelLoaded chan bool, mode
 		// 获取当前扫描到的行内容
 		line := stderrScanner.Text()
 		// 当已就绪的模型数量达到最大限制，或者当前行包含 "load_backend:" 时，打印系统日志
-		if parameter.ModelReady >= parameter.MaxModelAmount || strings.Contains(line, "load_backend:") {
+		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
 		// 检查错误行是否包含 "starting the main loop"，若包含则表示模型加载完成

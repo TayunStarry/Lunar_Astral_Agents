@@ -3,7 +3,7 @@ package generate
 import (
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,16 +70,16 @@ func ProcessTask(task GenerateTask) {
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("generated_%s.png", timestamp)
-	outputPath := filepath.Join(*parameter.LocalDir, "generated", outputFilename)
+	outputPath := filepath.Join(*config.LocalDir, "generated", outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(*parameter.LocalDir, "generated"), 0755)
+	os.MkdirAll(filepath.Join(*config.LocalDir, "generated"), 0755)
 
 	// 构建命令参数
 	args := []string{
-		"--diffusion-model", *parameter.DiffusionModel,
-		"--vae", *parameter.VariationalModel,
-		"--llm", *parameter.PromptModel,
+		"--diffusion-model", *config.DiffusionModel,
+		"--vae", *config.VariationalModel,
+		"--llm", *config.PromptModel,
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
@@ -97,7 +97,7 @@ func ProcessTask(task GenerateTask) {
 
 	// 图生图参数
 	if task.InitImg != "" && task.InitImg != "null" {
-		initImgPath := filepath.Join(*parameter.LocalDir, task.InitImg)
+		initImgPath := filepath.Join(*config.LocalDir, task.InitImg)
 		if _, err := os.Stat(initImgPath); err == nil {
 			args = append(args, "--init-img", initImgPath)
 			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
@@ -113,13 +113,13 @@ func ProcessTask(task GenerateTask) {
 		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
 	}
 	// 多模态提示词模型
-	if *parameter.PromptMmprojModel != "" {
-		args = append(args, "--llm_vision", *parameter.PromptMmprojModel)
+	if *config.PromptMmprojModel != "" {
+		args = append(args, "--llm_vision", *config.PromptMmprojModel)
 	}
 
 	// 显示命令参数，正确分组
 	log.Printf("执行命令参数:")
-	log.Printf("  程序: %s", *parameter.VisualEngine)
+	log.Printf("  程序: %s", *config.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -149,7 +149,7 @@ func ProcessTask(task GenerateTask) {
 	log.Printf("%s", strings.Repeat("-=", 28))
 
 	// 执行命令
-	cmd := exec.Command(*parameter.VisualEngine, args...)
+	cmd := exec.Command(*config.VisualEngine, args...)
 
 	// 捕获标准输出和错误输出
 	stdout, _ := cmd.StdoutPipe()

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"open-lunar/config"
 	"open-lunar/files"
-	"open-lunar/parameter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,8 +84,8 @@ func QueryKnowledge(filePath string, queryVector []float64, topK int) ([]Knowled
 	}
 
 	// 读取知识库文件
-	knowledgePath := filepath.Join(*parameter.LocalDir, filePath)
-	if !strings.HasPrefix(knowledgePath, filepath.Clean(*parameter.LocalDir)) {
+	knowledgePath := filepath.Join(*config.LocalDir, filePath)
+	if !strings.HasPrefix(knowledgePath, filepath.Clean(*config.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 
@@ -162,8 +162,8 @@ func WriteKnowledge(filePath string, message HistoryMessage) (bool, error) {
 	}
 
 	// 验证文件路径安全性
-	knowledgePath := filepath.Join(*parameter.LocalDir, filePath)
-	if !strings.HasPrefix(knowledgePath, filepath.Clean(*parameter.LocalDir)) {
+	knowledgePath := filepath.Join(*config.LocalDir, filePath)
+	if !strings.HasPrefix(knowledgePath, filepath.Clean(*config.LocalDir)) {
 		return false, fmt.Errorf("访问被拒绝")
 	}
 
@@ -205,8 +205,8 @@ func FlushKnowledge(filePath string) (map[string]interface{}, error) {
 	}
 
 	// 验证文件路径安全性
-	knowledgePath := filepath.Join(*parameter.LocalDir, filePath)
-	if !strings.HasPrefix(knowledgePath, filepath.Clean(*parameter.LocalDir)) {
+	knowledgePath := filepath.Join(*config.LocalDir, filePath)
+	if !strings.HasPrefix(knowledgePath, filepath.Clean(*config.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 
@@ -340,8 +340,8 @@ func ListKnowledge(filePath string) ([]HistoryMessage, error) {
 	}
 
 	// 验证文件路径安全性
-	knowledgePath := filepath.Join(*parameter.LocalDir, filePath)
-	if !strings.HasPrefix(knowledgePath, filepath.Clean(*parameter.LocalDir)) {
+	knowledgePath := filepath.Join(*config.LocalDir, filePath)
+	if !strings.HasPrefix(knowledgePath, filepath.Clean(*config.LocalDir)) {
 		return nil, fmt.Errorf("访问被拒绝")
 	}
 
@@ -401,8 +401,8 @@ func DeleteKnowledge(filePath string, uuid string) (bool, error) {
 	}
 
 	// 验证文件路径安全性
-	knowledgePath := filepath.Join(*parameter.LocalDir, filePath)
-	if !strings.HasPrefix(knowledgePath, filepath.Clean(*parameter.LocalDir)) {
+	knowledgePath := filepath.Join(*config.LocalDir, filePath)
+	if !strings.HasPrefix(knowledgePath, filepath.Clean(*config.LocalDir)) {
 		return false, fmt.Errorf("访问被拒绝")
 	}
 

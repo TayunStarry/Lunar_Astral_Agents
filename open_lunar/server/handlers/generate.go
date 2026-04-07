@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"open-lunar/config"
 	"open-lunar/image/generate"
-	"open-lunar/parameter"
 	"strings"
 	"time"
 )
@@ -17,7 +17,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Generate服务 → 不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-	if !*parameter.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
 		return
 	}
@@ -83,7 +83,7 @@ func StartTaskProcessor() {
 func buildReadPath(resultPath string) string {
 	log.Printf("resultPath: %s", resultPath)
 	// 移除本地目录前缀，获取相对路径
-	relativePath := strings.TrimPrefix(resultPath, *parameter.LocalDir)
+	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
 	// 移除Windows路径开头的反斜杠，确保路径格式统一
 	relativePath = strings.TrimPrefix(relativePath, "\\")
 	return "/read/" + relativePath
@@ -132,7 +132,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查灵绘坊功能是否启用
-	if !*parameter.AllowDiffusion {
+	if !*config.AllowDiffusion {
 		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
 		return
 	}

@@ -3,7 +3,7 @@ package files
 import (
 	"fmt"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,9 +16,9 @@ func DeleteFile(filePath string) (string, error) {
 		return "", fmt.Errorf("未指定文件")
 	}
 	// 将配置中的本地目录和请求的文件路径拼接，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*parameter.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
 	// 检查拼接后的完整路径是否在配置的本地目录下
-	if !strings.HasPrefix(fullPath, filepath.Clean(*parameter.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
 		return "", fmt.Errorf("访问被拒绝")
 	}
 	// 检查文件或目录是否存在
@@ -38,7 +38,7 @@ func DeleteFile(filePath string) (string, error) {
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
 	// 记录删除成功日志
-	if *parameter.DevMode {
+	if *config.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Delete请求 -> 成功删除: %s", fullPath)
 		log.Printf("%s", strings.Repeat("-=", 28))

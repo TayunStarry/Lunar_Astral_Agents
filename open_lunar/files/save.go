@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +24,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		return "", "", fmt.Errorf("无效的文件名")
 	}
 	// 拼接文件的完整路径
-	fullPath := filepath.Join(*parameter.LocalDir, fileName)
+	fullPath := filepath.Join(*config.LocalDir, fileName)
 	// 创建文件所在的目录
 	if mkdirErr := os.MkdirAll(filepath.Dir(fullPath), 0755); mkdirErr != nil {
 		return "", "", fmt.Errorf("创建目录失败: %w", mkdirErr)
@@ -50,7 +50,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 			// 构建新的文件名，包含时间戳
 			fileName = filepath.Join(filepath.Dir(fileName), fmt.Sprintf("%s_%s%s", name, timestamp, ext))
 			// 更新文件的完整路径
-			fullPath = filepath.Join(*parameter.LocalDir, fileName)
+			fullPath = filepath.Join(*config.LocalDir, fileName)
 		}
 	}
 	// 创建文件
@@ -70,7 +70,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		log.Printf("Save请求[ERROR] -> 同步失败: %s, %v", fullPath, err)
 	}
 	// 记录保存成功日志
-	if *parameter.DevMode {
+	if *config.DevMode {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 		log.Printf("%s", strings.Repeat("-=", 28))

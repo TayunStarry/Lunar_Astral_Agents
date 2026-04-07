@@ -8,7 +8,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
-	"open-lunar/parameter"
+	"open-lunar/config"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,10 +45,10 @@ func CaptureScreenshot(req CaptureRequest) ([]byte, string, string, error) {
 
 	// 使用默认值
 	if req.Format == "" {
-		req.Format = *parameter.Format
+		req.Format = *config.Format
 	}
 	if req.Quality == 0 {
-		req.Quality = *parameter.JPEGQuality
+		req.Quality = *config.JPEGQuality
 	}
 
 	var img *image.RGBA
@@ -346,7 +346,7 @@ func applyScale(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 	}
 
 	// 使用配置的最大尺寸限制
-	return resizeToFit(img, *parameter.MaxWidth, *parameter.MaxHeight), nil
+	return resizeToFit(img, *config.MaxWidth, *config.MaxHeight), nil
 }
 
 // 编码图片
@@ -354,7 +354,7 @@ func encodeImage(buf *bytes.Buffer, img *image.RGBA, format string, quality int)
 	switch strings.ToLower(format) {
 	case "jpg", "jpeg":
 		if quality < 1 || quality > 100 {
-			quality = *parameter.JPEGQuality // 默认质量
+			quality = *config.JPEGQuality // 默认质量
 		}
 		return jpeg.Encode(buf, img, &jpeg.Options{Quality: quality})
 	case "png":
