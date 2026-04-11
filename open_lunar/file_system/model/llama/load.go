@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 	"open-lunar/config"
-	"open-lunar/model/llama/metadata"
+	"open-lunar/file_system/model/llama/metadata"
 	"os/exec"
 	"path/filepath"
 	"time"

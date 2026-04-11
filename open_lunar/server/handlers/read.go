@@ -3,7 +3,7 @@ package handlers
 import (
 	"io"
 	"net/http"
-	"open-lunar/files"
+	"open-lunar/file_system"
 	"strconv"
 	"strings"
 )
@@ -18,7 +18,7 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/read/" 前缀，获取实际的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/read/")
 	// 调用 execute 模块读取文件
-	file, size, mimeType, err := files.ReadFile(filePath)
+	file, size, mimeType, err := file_system.ReadFile(filePath)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

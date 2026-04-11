@@ -1,4 +1,4 @@
-package files
+package file_system
 
 import (
 	"embed"
@@ -7,12 +7,12 @@ import (
 )
 
 //go:embed assets/*
-var embeddedFiles embed.FS
+var EmbeddedFiles embed.FS
 
 // GetFileSystem 返回嵌入的文件系统
 func GetFileSystem() http.FileSystem {
 	// 创建一个子文件系统，只包含assets目录下的内容
-	subFS, err := fs.Sub(embeddedFiles, "assets")
+	subFS, err := fs.Sub(EmbeddedFiles, "assets")
 	if err != nil {
 		panic(err)
 	}

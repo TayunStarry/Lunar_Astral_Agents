@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"open-lunar/config"
-	"open-lunar/image/generate"
+	"open-lunar/file_system/image/generate"
 	"strings"
 	"time"
 )

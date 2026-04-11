@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"open-lunar/config"
-	"open-lunar/library"
+	"open-lunar/file_system/memory"
 )
 
 // DatabaseHandler 统一的数据库处理器
@@ -18,14 +18,14 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 解析请求体
-	var req library.DatabaseRequest
+	var req memory.DatabaseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("数据库请求[ERROR] -> 解析请求失败: %v", err), http.StatusBadRequest)
 		return
 	}
 
 	// 执行批量操作
-	result := library.ExecuteDatabaseRequest(req)
+	result := memory.ExecuteDatabaseRequest(req)
 
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
