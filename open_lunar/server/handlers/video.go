@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"open-lunar/image"
+	"open-lunar/file_system/image"
 	"os"
 )
 

@@ -1,4 +1,4 @@
-package files
+package file_system
 
 import (
 	"encoding/base64"

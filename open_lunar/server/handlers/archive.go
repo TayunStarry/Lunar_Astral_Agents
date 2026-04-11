@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	execute "open-lunar/files"
+	"open-lunar/file_system"
 	"strings"
 )
 
@@ -49,7 +49,7 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 		zipName = "archive.zip"
 	}
 	// 调用 execute 模块创建 ZIP 文件
-	zipData, err := execute.CreateZip(files, zipName)
+	zipData, err := file_system.CreateZip(files, zipName)
 	if err != nil {
 		// 若创建失败，返回错误响应给客户端
 		http.Error(w, "Archive请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
@@ -93,7 +93,7 @@ func extractZip(w http.ResponseWriter, r *http.Request) {
 	// 函数结束时关闭文件，防止资源泄漏
 	defer file.Close()
 	// 调用 execute 模块解压 ZIP 文件
-	extractedFiles, _, err := execute.ExtractZip(file)
+	extractedFiles, _, err := file_system.ExtractZip(file)
 	if err != nil {
 		// 若解压失败，返回错误响应给客户端
 		http.Error(w, "Archive请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)

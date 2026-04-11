@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"open-lunar/library"
+	"open-lunar/file_system/memory"
 )
 
 // 定义请求和响应的数据结构
@@ -15,8 +15,8 @@ type KnowledgeQueryRequest struct {
 }
 
 type KnowledgeWriteRequest struct {
-	FilePath string                 `json:"filePath"`
-	Message  library.HistoryMessage `json:"message"`
+	FilePath string                `json:"filePath"`
+	Message  memory.HistoryMessage `json:"message"`
 }
 
 type KnowledgeDeleteRequest struct {
@@ -47,7 +47,7 @@ func KnowledgeQueryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用 execute 模块查询知识库
-	results, err := library.QueryKnowledge(req.FilePath, req.QueryVector, req.TopK)
+	results, err := memory.QueryKnowledge(req.FilePath, req.QueryVector, req.TopK)
 	if err != nil {
 		http.Error(w, "KnowledgeQuery请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return
@@ -80,7 +80,7 @@ func KnowledgeWriteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用 execute 模块写入知识库
-	hasDuplicate, err := library.WriteKnowledge(req.FilePath, req.Message)
+	hasDuplicate, err := memory.WriteKnowledge(req.FilePath, req.Message)
 	if err != nil {
 		http.Error(w, "KnowledgeWrite请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return
@@ -123,7 +123,7 @@ func KnowledgeFlushHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用 execute 模块刷新知识库
-	stats, err := library.FlushKnowledge(req.FilePath)
+	stats, err := memory.FlushKnowledge(req.FilePath)
 	if err != nil {
 		http.Error(w, "KnowledgeFlush请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return
@@ -160,7 +160,7 @@ func KnowledgeListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用 execute 模块列出知识库内容
-	results, err := library.ListKnowledge(req.FilePath)
+	results, err := memory.ListKnowledge(req.FilePath)
 	if err != nil {
 		http.Error(w, "KnowledgeList请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return
@@ -193,7 +193,7 @@ func KnowledgeDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 调用 execute 模块删除知识库条目
-	hasDuplicate, err := library.DeleteKnowledge(req.FilePath, req.UUID)
+	hasDuplicate, err := memory.DeleteKnowledge(req.FilePath, req.UUID)
 	if err != nil {
 		http.Error(w, "KnowledgeDelete请求[ERROR] -> "+err.Error(), http.StatusInternalServerError)
 		return

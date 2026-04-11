@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"open-lunar/image"
+	"open-lunar/file_system/image"
 )
 
 // CleanupUnreferencedImagesHandler 清理未被引用的图片

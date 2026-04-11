@@ -8,8 +8,8 @@ import (
 	"mime"
 	"net/http"
 	"open-lunar/config"
-	"open-lunar/files"
-	"open-lunar/model/llama"
+	"open-lunar/file_system"
+	"open-lunar/file_system/model/llama"
 	"open-lunar/release"
 	"open-lunar/server/handlers"
 	"os"
@@ -89,7 +89,7 @@ func registerHandlers() {
 	// 创建独立的ServeMux实例
 	httpMux = http.NewServeMux()
 	// 处理根路径请求，使用嵌入的文件系统提供静态文件
-	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(files.GetFileSystem())))
+	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(file_system.GetFileSystem())))
 	// 检查显存是否足够，若不足则禁用灵绘坊功能
 	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")

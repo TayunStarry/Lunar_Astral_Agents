@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"open-lunar/image"
+	"open-lunar/file_system/image"
 	"strconv"
 	"strings"
 )
