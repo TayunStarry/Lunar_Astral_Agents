@@ -1,4 +1,4 @@
-package handlers
+package image
 
 import (
 	"encoding/json"
