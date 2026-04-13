@@ -11,7 +11,7 @@ import (
 	"open-lunar/file_system"
 	"open-lunar/file_system/model/llama"
 	"open-lunar/release"
-	"open-lunar/server/handlers"
+	"open-lunar/server/handlers/file/image"
 	"os"
 	"os/signal"
 	"strings"
@@ -95,7 +95,7 @@ func registerHandlers() {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")
 	}
 	// 启动灵绘坊任务协处理器
-	handlers.StartTaskProcessor()
+	image.StartTaskProcessor()
 	// 注册所有系统端点路径的处理函数
 	for _, endpoint := range SystemEndpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
