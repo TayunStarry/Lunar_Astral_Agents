@@ -6,7 +6,7 @@ Set-Location -Path 'd:\Lunar_Astral_Agents'
 
 # 跳转为构建目录
 Write-Host 'Changing to build directory...'
-Set-Location -Path './open_lunar'
+Set-Location -Path './LunarCore'
 
 # 构建客户端脚本
 Write-Host 'Building client script (lunar)...'
