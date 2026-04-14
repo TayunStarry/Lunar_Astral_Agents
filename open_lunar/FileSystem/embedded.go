@@ -1,4 +1,4 @@
-package file_system
+package FileSystem
 
 import (
 	"embed"

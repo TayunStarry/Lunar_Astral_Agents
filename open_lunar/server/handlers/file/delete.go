@@ -1,9 +1,9 @@
 package file
 
 import (
+	"LunarCore/FileSystem"
 	"encoding/json"
 	"net/http"
-	"open-lunar/file_system"
 	"strings"
 )
 
@@ -17,7 +17,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/delete/" 前缀，获取要删除的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/delete/")
 	// 调用 execute 模块删除文件
-	fullPath, err := file_system.DeleteFile(filePath)
+	fullPath, err := FileSystem.DeleteFile(filePath)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

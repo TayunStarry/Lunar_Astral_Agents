@@ -1,10 +1,10 @@
 package image
 
 import (
+	"LunarCore/file_system/image"
 	"encoding/json"
 	"log"
 	"net/http"
-	"open-lunar/file_system/image"
 )
 
 // CleanupUnreferencedImagesHandler 清理未被引用的图片

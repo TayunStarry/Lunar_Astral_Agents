@@ -1,12 +1,12 @@
 package image
 
 import (
+	"LunarCore/config"
+	"LunarCore/file_system/image/generate"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"open-lunar/config"
-	"open-lunar/file_system/image/generate"
 	"strings"
 	"time"
 )

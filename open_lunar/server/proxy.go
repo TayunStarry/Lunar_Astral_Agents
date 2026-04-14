@@ -1,13 +1,13 @@
 package server
 
 import (
+	"LunarCore/config"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"open-lunar/config"
 	"slices"
 	"time"
 )

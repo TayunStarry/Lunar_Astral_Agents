@@ -1,9 +1,9 @@
 package llama
 
 import (
+	"LunarCore/config"
 	"log"
 	"math"
-	"open-lunar/config"
 	"path/filepath"
 	"strconv"
 )

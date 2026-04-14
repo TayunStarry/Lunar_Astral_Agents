@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"LunarCore/browser"
 	"encoding/json"
 	"net/http"
-	"open-lunar/browser"
 )
 
 // WebViewControlRequest WebView 控制请求结构

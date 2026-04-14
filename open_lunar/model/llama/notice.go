@@ -1,10 +1,10 @@
 package llama
 
 import (
+	"LunarCore/config"
 	"bufio"
 	"io"
 	"log"
-	"open-lunar/config"
 	"os/exec"
 	"strings"
 )

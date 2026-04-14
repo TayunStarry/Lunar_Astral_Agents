@@ -1,10 +1,10 @@
 package image
 
 import (
+	"LunarCore/file_system/image"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"open-lunar/file_system/image"
 	"strconv"
 	"strings"
 )

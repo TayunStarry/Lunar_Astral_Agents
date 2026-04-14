@@ -1,6 +1,7 @@
 package image
 
 import (
+	"LunarCore/config"
 	"bytes"
 	"encoding/base64"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
-	"open-lunar/config"
 	"strconv"
 	"strings"
 	"sync"

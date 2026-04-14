@@ -1,9 +1,9 @@
 package file
 
 import (
+	"LunarCore/FileSystem"
 	"encoding/json"
 	"net/http"
-	"open-lunar/file_system"
 	"strings"
 )
 
@@ -12,7 +12,7 @@ func FileListHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/file_list/" 前缀
 	path := strings.TrimPrefix(r.URL.Path, "/file_list/")
 	// 调用 execute 模块获取文件列表
-	fileList, err := file_system.GetFileList(path)
+	fileList, err := FileSystem.GetFileList(path)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

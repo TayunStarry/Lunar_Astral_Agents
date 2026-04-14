@@ -1,11 +1,11 @@
-package file_system
+package FileSystem
 
 import (
+	"LunarCore/config"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
-	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"

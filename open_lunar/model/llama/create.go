@@ -1,9 +1,9 @@
 package llama
 
 import (
+	"LunarCore/browser"
+	"LunarCore/config"
 	"log"
-	"open-lunar/browser"
-	"open-lunar/config"
 	"os"
 )
 

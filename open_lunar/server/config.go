@@ -1,9 +1,9 @@
 package server
 
 import (
+	config "LunarCore/config"
 	"encoding/json"
 	"log"
-	config "open-lunar/config"
 	"os"
 	"path/filepath"
 )

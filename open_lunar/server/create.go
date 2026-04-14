@@ -1,11 +1,11 @@
 package server
 
 import (
+	"LunarCore/browser"
+	"LunarCore/config"
 	"fmt"
 	"log"
 	"net/http"
-	"open-lunar/browser"
-	"open-lunar/config"
 	"strings"
 )
 

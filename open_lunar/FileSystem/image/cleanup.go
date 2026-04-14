@@ -1,9 +1,9 @@
 package image
 
 import (
+	"LunarCore/config"
 	"encoding/json"
 	"log"
-	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"

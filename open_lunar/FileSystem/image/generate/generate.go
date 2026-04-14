@@ -1,9 +1,9 @@
 package generate
 
 import (
+	"LunarCore/config"
 	"fmt"
 	"log"
-	"open-lunar/config"
 	"os"
 	"os/exec"
 	"path/filepath"
