@@ -1,8 +1,8 @@
 package browser
 
 import (
+	"LunarCore/config"
 	"log"
-	"open-lunar/config"
 	"runtime"
 	"time"
 

@@ -1,10 +1,10 @@
 package release
 
 import (
+	"LunarCore/config"
 	"encoding/csv"
 	"fmt"
 	"log"
-	"open-lunar/config"
 	"os/exec"
 	"strconv"
 	"strings"

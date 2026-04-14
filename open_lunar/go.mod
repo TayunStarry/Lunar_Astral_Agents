@@ -1,4 +1,4 @@
-module open-lunar
+module LunarCore
 
 go 1.24.4
 

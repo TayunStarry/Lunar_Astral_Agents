@@ -1,12 +1,12 @@
 package llama
 
 import (
+	"LunarCore/config"
+	"LunarCore/model/llama/metadata"
 	"bufio"
 	"context"
 	"io"
 	"log"
-	"open-lunar/config"
-	"open-lunar/file_system/model/llama/metadata"
 	"os/exec"
 	"path/filepath"
 	"time"

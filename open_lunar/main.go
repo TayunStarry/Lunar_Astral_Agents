@@ -1,8 +1,8 @@
 package main
 
 import (
+	"LunarCore/server"
 	"net/http"
-	"open-lunar/server"
 )
 
 func main() {

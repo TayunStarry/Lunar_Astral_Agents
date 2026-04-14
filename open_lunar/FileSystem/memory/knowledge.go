@@ -1,11 +1,11 @@
 package memory
 
 import (
+	"LunarCore/FileSystem"
+	"LunarCore/config"
 	"encoding/json"
 	"fmt"
 	"math"
-	"open-lunar/config"
-	"open-lunar/file_system"
 	"os"
 	"path/filepath"
 	"strings"
@@ -308,7 +308,7 @@ func FlushKnowledge(filePath string) (map[string]interface{}, error) {
 	}
 
 	// 写入文件
-	lock := file_system.GetFileLock(knowledgePath)
+	lock := FileSystem.GetFileLock(knowledgePath)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -498,7 +498,7 @@ func InitializeKnowledgeFile(filePath string) (HistoryDocument, error) {
 	}
 
 	// 获取文件锁
-	lock := file_system.GetFileLock(filePath)
+	lock := FileSystem.GetFileLock(filePath)
 	lock.Lock()
 	defer lock.Unlock()
 

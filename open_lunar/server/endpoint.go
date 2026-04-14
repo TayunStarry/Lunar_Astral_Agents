@@ -1,10 +1,10 @@
 package server
 
 import (
-	"open-lunar/server/handlers"
-	"open-lunar/server/handlers/file"
-	"open-lunar/server/handlers/file/image"
-	"open-lunar/server/handlers/file/memory"
+	"LunarCore/server/handlers"
+	"LunarCore/server/handlers/file"
+	"LunarCore/server/handlers/file/image"
+	"LunarCore/server/handlers/file/memory"
 )
 
 // SystemEndpoints 存储所有系统端点配置

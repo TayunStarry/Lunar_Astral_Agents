@@ -1,11 +1,11 @@
 package bridge
 
 import (
+	"LunarCore/FileSystem"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
-	"open-lunar/file_system"
 	"os"
 
 	"modernc.org/quickjs"
@@ -80,7 +80,7 @@ func CreateContext(path string) (*Context, error) {
 	}
 
 	// 直接使用嵌入式文件系统，创建子文件系统
-	subFS, err := fs.Sub(file_system.EmbeddedFiles, "assets")
+	subFS, err := fs.Sub(FileSystem.EmbeddedFiles, "assets")
 	if err != nil {
 		vm.Close()
 		return nil, fmt.Errorf("创建子文件系统失败: %v", err)

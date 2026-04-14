@@ -1,13 +1,13 @@
-package file_system
+package FileSystem
 
 import (
+	"LunarCore/config"
 	"archive/zip"
 	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
-	"open-lunar/config"
 	"path/filepath"
 	"strings"
 )

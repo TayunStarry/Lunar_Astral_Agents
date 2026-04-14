@@ -1,9 +1,9 @@
 package release
 
 import (
+	"LunarCore/config"
 	"fmt"
 	"log"
-	"open-lunar/config"
 	"os/exec"
 	"strings"
 )

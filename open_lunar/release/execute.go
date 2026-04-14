@@ -1,8 +1,8 @@
 package release
 
 import (
+	"LunarCore/config"
 	"log"
-	"open-lunar/config"
 	"strings"
 	"time"
 )

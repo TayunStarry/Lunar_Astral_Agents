@@ -1,11 +1,11 @@
 package model
 
 import (
+	"LunarCore/config"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"open-lunar/config"
 )
 
 // GetEmbeddingVector 获取嵌入向量

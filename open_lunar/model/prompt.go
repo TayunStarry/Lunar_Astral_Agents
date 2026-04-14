@@ -1,8 +1,8 @@
 package model
 
 import (
+	"LunarCore/config"
 	"fmt"
-	"open-lunar/config"
 	"os"
 	"path/filepath"
 	"strings"
