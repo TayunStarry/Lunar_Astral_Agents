@@ -200,9 +200,7 @@ export interface Attachment {
     image_url: string;
 }
 
-/**
- * 流式处理状态接口
- */
+/** 聊天缓存接口 */
 export interface ChatCache {
     /** 累积所有工具调用的数组 */
     toolCalls: ToolCall[];
