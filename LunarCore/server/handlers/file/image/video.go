@@ -1,7 +1,7 @@
 package image
 
 import (
-	"LunarCore/file_system/image"
+	"LunarCore/FileSystem/image"
 	"encoding/json"
 	"fmt"
 	"io"
