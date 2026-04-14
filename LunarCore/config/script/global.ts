@@ -51,6 +51,8 @@ export class OnlyData {
     ];
     /** 支持的视觉文件扩展名 */
     public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
+    /** 月华工具协议的哈希映射 */
+    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any>) => Promise<string>>();
     /** 获取 多模态模型 URL */
     public static get MultimodalUrl(): string {
         return OnlyData.customConfig.multimodalModelUrl || OnlyData.systemUrl;

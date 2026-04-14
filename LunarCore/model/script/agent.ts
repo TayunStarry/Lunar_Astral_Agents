@@ -9,7 +9,9 @@ import {
     ExtractKeyframesData,
     TextMessage,
     ImageContent,
-    TextContent
+    TextContent,
+    ChatCache,
+    ToolCall
 } from '../../config/index';
 
 import {
@@ -22,7 +24,9 @@ import {
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
 
-class data {
+/** 基础配置 */
+class BaseConfig {
+    /** 是否启用多模态 */
     protected isMultimodal: boolean = true;
     /** 是否启用流式响应 */
     protected stream: boolean = false;
@@ -31,14 +35,16 @@ class data {
     /** 消息列表 */
     protected messages: PostMessage[] = [];
     /** 中止信号 */
-    protected signal: AbortSignal | undefined = undefined;
+    public signal: AbortSignal | undefined = undefined;
     /** 系统提示 */
     protected systemPrompt: string = "你的名字叫做月华, 是一个女孩子";
     /** 私有化构造函数，防止外部实例化 */
     protected constructor() { }
 }
 
-class tool extends data {
+/** 提示词处理器 */
+class PromptProcessor extends BaseConfig {
+    /** 生成提示词 */
     protected async promptCompletion(): Promise<string> {
         /** 原始系统提示词 */
         const protoPrompt = await fetchMarkdown('/read/resources/prompts/systemPrompt.md');
@@ -57,6 +63,7 @@ class tool extends data {
             // 转换当前地址
             .replace(/{current-address}/g, address);
     }
+    /** 查询真实地址 */
     protected async realAddress(): Promise<string[]> {
         /** 从IP地址查询位置信息 */
         const addressRegion = await fetch('https://ipapi.co/json/')
@@ -75,6 +82,7 @@ class tool extends data {
         // 返回省份和城市
         return [province, city];
     }
+    /** 从消息中提取文本 */
     protected extractTextFromMessages(messages: PostMessage[]): string[] {
         return messages.map(message => {
             // 处理纯文本消息和工具响应消息
@@ -95,7 +103,9 @@ class tool extends data {
     }
 }
 
-class style extends tool {
+/** 模式配置 */
+class ModeConfig extends PromptProcessor {
+    /** 启用多模态 */
     public useMultimodal(prompt?: string): this {
         // 若提示词长度超过100，直接使用提示词
         if (prompt && prompt.length > 100) this.systemPrompt = prompt;
@@ -106,6 +116,7 @@ class style extends tool {
         // 返回当前实例
         return this;
     }
+    /** 启用嵌入模式 */
     public useEmbedding(): this {
         // 设置为嵌入模式   
         this.isMultimodal = false;
@@ -113,35 +124,44 @@ class style extends tool {
     }
 }
 
-class alter extends style {
+/** 配置修改器 */
+class ConfigModifier extends ModeConfig {
+    /** 设置流式响应 */
     public setStream(stream: boolean = false): this {
         this.stream = stream;
         return this;
     }
+    /** 设置工具调用 */
     public setEnableTools(enable: boolean = true): this {
         this.enableTools = enable;
         return this;
     }
+    /** 写入上下文 */
     public writeContext(context: PostMessage): this {
         if (this.messages.length > 30) this.messages.slice(-30).push(context);
         else this.messages.push(context);
         return this;
     }
-    public setContext(contexts: PostMessage[]): this {
+    /** 覆写上下文 */
+    public coverContext(contexts: PostMessage[]): this {
         this.messages = contexts;
         return this;
     }
+    /** 设置中止信号 */
     public setSignal(signal: AbortSignal): this {
         this.signal = signal;
         return this;
     }
 }
 
-class build extends alter {
+/** 模型构建器 */
+class ModelBuilder extends ConfigModifier {
+    /** 运行模型 */
     public get run(): Promise<Response> | Promise<number[]> {
         if (this.isMultimodal) return this.runMultimodal();
         else return this.runEmbedding();
     }
+    /** 运行多模态模型 */
     protected async runMultimodal(): Promise<Response> {
         /** 检查消息列表中是否包含工具调用消息 */
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
@@ -175,6 +195,7 @@ class build extends alter {
         // 发送请求并返回响应
         return fetch(OnlyData.MultimodalUrl + "/chat/completions", requestOption as any);
     }
+    /** 运行嵌入模型 */
     protected async runEmbedding(): Promise<number[]> {
         /** 剔除其他内容, 仅保留文本内容 */
         const validMessages = this.extractTextFromMessages(this.messages);
@@ -205,43 +226,65 @@ class build extends alter {
         // 截取嵌入向量的前 256 个元素，作为模型输入
         return jsonResponse.data[0].embedding.slice(0, 256);
     }
+    /** 构建模型响应实例 */
     public constructor() { super(); }
 }
 
-class LunarAgent {
+
+export class CreateCache implements ChatCache {
+    public currentToolCall: ToolCall | null = null;
+    public currentToolCallIndex: number = -1;
+    public currentFunctionArgs: string = "";
+    public currentFunctionName: string = "";
+    public thinkingContent: string = "";
+    public descriptionContent: string = "";
+    public toolCalls: ToolCall[] = [];
+    constructor() { }
+}
+
+class ProtoAgent {
     /** 构建计划 */
-    protected compilePlan: build = new build();
+    protected compilePlan: ModelBuilder = new ModelBuilder();
     /** 推理关键词 */
-    protected queryKeywords: build = new build();
+    protected queryKeywords: ModelBuilder = new ModelBuilder();
     /** 情感管理器 */
-    protected emotionManager: build = new build();
+    protected emotionManager: ModelBuilder = new ModelBuilder();
     /** 视频摘要 */
-    protected videoSummary: build = new build();
+    protected videoSummary: ModelBuilder = new ModelBuilder();
     /** 视频描述 */
-    protected videoDescription: build = new build();
+    protected videoDescription: ModelBuilder = new ModelBuilder();
     /** 聊天回复 */
-    protected chatReply: build = new build().useMultimodal();
+    protected chatReply: ModelBuilder = new ModelBuilder().useMultimodal();
     /** 嵌入向量 */
-    public embedding: build = new build().useEmbedding();
+    public embedding: ModelBuilder = new ModelBuilder().useEmbedding();
     /** 未读上下文 */
     protected unreadContext: PostMessage[] = [];
     /** 未读视频URL */
     protected unreadVideoUrl: string[] = [];
+    /** 最终应答 */
+    public finalResponse: string = "";
+    /** 响应速度 */
+    public responseSpeed: number = 0;
+    /** 默认应答 */
+    public defaultAnswer: string = "月华不知道哦";
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     constructor() {
-        // 初始化全部模型的系统提示词
+        // 初始化 全部模型 的 系统提示词
         fetchMarkdown('/read/resources/prompts/compilePlan.md').then(content => this.compilePlan.useMultimodal(content));
         fetchMarkdown('/read/resources/prompts/queryKeywords.md').then(content => this.queryKeywords.useMultimodal(content));
         fetchMarkdown('/read/resources/prompts/emotionManager.md').then(content => this.emotionManager.useMultimodal(content));
         fetchMarkdown('/read/resources/prompts/videoSummary.md').then(content => this.videoSummary.useMultimodal(content));
         fetchMarkdown('/read/resources/prompts/videoDescription.md').then(content => this.videoDescription.useMultimodal(content));
-        // 初始化 自定义配置文件
+        // 初始化 自定义配置 信息
         fetchDocumentCallback('resources/custom_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
         // TODO 初始化 工具调用配置
         // fetchDocumentCallback('resources/toolCall.json').then(content => OnlyData.toolCall = JSON.parse(content));
         // TODO 初始化 聊天记录
         // fetchDocumentCallback('resources/chatRecord.json')
     }
+}
+
+class VideoAnalysis extends ProtoAgent {
     /**
      * 处理视频文件
      *
@@ -304,7 +347,9 @@ class LunarAgent {
             videoSummary = summaryRequest?.choices?.[0]?.message?.content;
         }
         // 如果仅包含一个批处理片段，使用该片段作为总结
-        else videoSummary = sandboxMessages[0].text;
+        else if (sandboxMessages.length === 1) videoSummary = sandboxMessages[0].text;
+        // 否则使用默认应答
+        else videoSummary = this.defaultAnswer;
         // 将视频总结结果添加到消息数组
         if (videoSummary) this.unreadContext.push({ role: 'user', content: videoSummary });
         // 如果用户需求非空，添加到消息数组
@@ -312,6 +357,139 @@ class LunarAgent {
         // 缓存处理结果到数据库
         if (videoSummary) await savePromptToDatabase(videoUrl, videoSummary);
     }
+}
+
+class ChatMessage extends VideoAnalysis {
+    /** 处理聊天消息响应 */
+    protected async analyzeMessageResponse(message: string, cache: ChatCache): Promise<void> {
+        try {
+            /** 解析响应为JSON */
+            const jsonData = JSON.parse(message);
+            // 处理推理内容数据
+            if (jsonData.choices?.[0]?.message?.reasoning_content) {
+                cache.thinkingContent = jsonData.choices[0].message.reasoning_content;
+            }
+            // 检查是否有预测令牌数
+            if (jsonData.timings?.predicted_per_second) {
+                this.responseSpeed = jsonData.timings.predicted_per_second;
+            }
+            // 处理工具调用
+            if (jsonData.choices?.[0]?.message?.tool_calls) {
+                for (const toolCall of jsonData.choices[0].message.tool_calls) {
+                    try {
+                        // 解析arguments字段
+                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                        // 记录工具调用
+                        cache.toolCalls.push(toolCall);
+                    }
+                    catch (parseError) {
+                        console.error('工具调用参数解析错误:', parseError);
+                    }
+                }
+            }
+            // 处理内容数据
+            if (jsonData.choices?.[0]?.message?.content) {
+                cache.descriptionContent = jsonData.choices[0].message.content;
+            }
+        }
+        catch (error) {
+            console.error('非流式响应处理错误:', error);
+            //throw error;
+        }
+    }
+    /** 批量执行工具调用 */
+    protected async batchExecutionToolCall(state: ChatCache): Promise<boolean> {
+        /** 工具调用标志 */
+        let hasToolCalls = false;
+        // 遍历所有工具调用
+        for (const toolCall of state.toolCalls) {
+            // 仅处理函数类型的工具调用
+            if (toolCall.type !== "function") continue;
+            /** 工具函数名称 */
+            const functionName = toolCall.function.name;
+            /** 工具函数参数 */
+            const functionArgs = toolCall.function.arguments;
+            /** 查询对应的月华工具包 */
+            const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
+            // 检查是否有对应的工具包
+            if (!lunarToolPackage) {
+                this.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+                continue;
+            }
+            try {
+                /** 工具函数执行结果 */
+                const toolResult = await lunarToolPackage(functionArgs);
+                // 将工具响应添加到消息历史中
+                this.unreadContext.push({ role: "tool", content: toolResult, tool_call_id: toolCall.id });
+                // 标记有工具调用
+                hasToolCalls = true;
+            }
+            catch (error) {
+                // 将工具调用失败信息添加到消息历史中
+                this.unreadContext.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+            }
+        }
+        // 处理完所有工具调用后，清空状态
+        state.currentToolCallIndex = -1;
+        state.currentFunctionArgs = "";
+        state.currentFunctionName = "";
+        state.currentToolCall = null;
+        state.toolCalls = [];
+        // 标记有工具调用
+        return hasToolCalls;
+    };
+    /** 更新消息内容 */
+    protected updateMessageContent(state: ChatCache): string {
+        // 检查推理内容是否为空
+        if (state.thinkingContent.trim() !== "") {
+            /** 新的思考标签内容 */
+            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
+            // 修正复合描述内容
+            this.finalResponse = newThinkTag + state.descriptionContent;
+        }
+        // 修正简单描述内容
+        else this.finalResponse = state.descriptionContent;
+        // 检查消息内容是否为空
+        if (this.finalResponse.trim() === "") return this.defaultAnswer;
+        return this.finalResponse;
+    }
+    /** 发送请求并获取响应 */
+    protected async callMultimediaAndToolParsing(cache: ChatCache): Promise<void> {
+        try {
+            // 将未读上下文数组中的消息添加到处理器模型的上下文
+            this.unreadContext.forEach(context => this.chatReply.writeContext(context));
+            // 清空未读上下文数组
+            this.unreadContext = [];
+            /** 向处理器模型发送请求并等待响应 */
+            const response = await this.chatReply.run as Response;
+            // 如果未能获得期望中的响应，则抛出错误
+            if (!response.ok) {
+                this.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
+                return;
+            }
+            // 读取响应文本内容
+            const responseText = await response.text();
+            // 处理非流式响应
+            await this.analyzeMessageResponse(responseText, cache);
+            // 如果有工具调用，处理它们并重新发送请求
+            if (cache.toolCalls.length > 0) {
+                /** 处理工具调用 */
+                const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
+                // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
+                if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache);
+            }
+            this.updateMessageContent(cache);
+        }
+        catch (error) {
+            console.error('请求处理错误:', error);
+            this.updateMessageContent(cache);
+            this.chatReply.signal = undefined;
+        }
+    }
+}
+
+/** 月华智能体 */
+class LunarAgent extends ChatMessage {
     /**
      * 批量处理视频文件
      *
@@ -324,12 +502,26 @@ class LunarAgent {
         if (this.unreadVideoUrl.length === 0) return;
         //  遍历未读视频URL数组
         for (const videoUrl of this.unreadVideoUrl) {
-            // 处理视频文件
-            await this.analysisVideoFile(videoUrl, userNeeds || '');
-            // 等待1秒，避免对服务器造成过大压力
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+                // 处理视频文件
+                await this.analysisVideoFile(videoUrl, userNeeds || '');
+                // 等待1秒，避免对服务器造成过大压力
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            catch (error) { continue; }
         }
         // 清空未读视频URL数组
         this.unreadVideoUrl = [];
     }
+    /**
+     * 创建消息
+     *
+     * @returns {Promise<string>} - 最终应答
+     */
+    public async createChatMessage(): Promise<string> {
+        await this.callMultimediaAndToolParsing(new CreateCache());
+        return this.finalResponse;
+    }
 }
+
+export default LunarAgent;
