@@ -360,6 +360,21 @@ class VideoAnalysis extends ProtoAgent {
 }
 
 class ChatMessage extends VideoAnalysis {
+    /** 更新消息内容 */
+    protected updateMessageContent(state: ChatCache): string {
+        // 检查推理内容是否为空
+        if (state.thinkingContent.trim() !== "") {
+            /** 新的思考标签内容 */
+            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
+            // 修正复合描述内容
+            this.finalResponse = newThinkTag + state.descriptionContent;
+        }
+        // 修正简单描述内容
+        else this.finalResponse = state.descriptionContent;
+        // 检查消息内容是否为空
+        if (this.finalResponse.trim() === "") return this.defaultAnswer;
+        return this.finalResponse;
+    }
     /** 处理聊天消息响应 */
     protected async analyzeMessageResponse(message: string, cache: ChatCache): Promise<void> {
         try {
@@ -438,21 +453,6 @@ class ChatMessage extends VideoAnalysis {
         // 标记有工具调用
         return hasToolCalls;
     };
-    /** 更新消息内容 */
-    protected updateMessageContent(state: ChatCache): string {
-        // 检查推理内容是否为空
-        if (state.thinkingContent.trim() !== "") {
-            /** 新的思考标签内容 */
-            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
-            // 修正复合描述内容
-            this.finalResponse = newThinkTag + state.descriptionContent;
-        }
-        // 修正简单描述内容
-        else this.finalResponse = state.descriptionContent;
-        // 检查消息内容是否为空
-        if (this.finalResponse.trim() === "") return this.defaultAnswer;
-        return this.finalResponse;
-    }
     /** 发送请求并获取响应 */
     protected async callMultimediaAndToolParsing(cache: ChatCache): Promise<void> {
         try {
