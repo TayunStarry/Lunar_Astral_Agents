@@ -214,11 +214,9 @@ export interface ChatCache {
     currentFunctionArgs: string;
     /** 累积当前工具调用的函数名 */
     currentFunctionName: string;
-    /** 独立推理内容的字符串累积 */
-    reasoningContent: string;
-    /** 提取思考内容的字符串累积 */
+    /** 提取思考内容的字符串 */
     thinkingContent: string;
-    /** 提取描述内容的字符串累积 */
+    /** 提取描述内容的字符串 */
     descriptionContent: string;
 }
 
