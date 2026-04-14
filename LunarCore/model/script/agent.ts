@@ -230,18 +230,6 @@ class ModelBuilder extends ConfigModifier {
     public constructor() { super(); }
 }
 
-
-export class CreateCache implements ChatCache {
-    public currentToolCall: ToolCall | null = null;
-    public currentToolCallIndex: number = -1;
-    public currentFunctionArgs: string = "";
-    public currentFunctionName: string = "";
-    public thinkingContent: string = "";
-    public descriptionContent: string = "";
-    public toolCalls: ToolCall[] = [];
-    constructor() { }
-}
-
 class ProtoAgent {
     /** 构建计划 */
     protected compilePlan: ModelBuilder = new ModelBuilder();
@@ -390,6 +378,7 @@ class ChatMessage extends VideoAnalysis {
             }
             // 处理工具调用
             if (jsonData.choices?.[0]?.message?.tool_calls) {
+                // 遍历所有工具调用
                 for (const toolCall of jsonData.choices[0].message.tool_calls) {
                     try {
                         // 解析arguments字段
@@ -408,8 +397,7 @@ class ChatMessage extends VideoAnalysis {
             }
         }
         catch (error) {
-            console.error('非流式响应处理错误:', error);
-            //throw error;
+            console.error('聊天消息响应处理错误:', error);
         }
     }
     /** 批量执行工具调用 */
@@ -469,7 +457,7 @@ class ChatMessage extends VideoAnalysis {
             }
             // 读取响应文本内容
             const responseText = await response.text();
-            // 处理非流式响应
+            // 处理响应文本内容
             await this.analyzeMessageResponse(responseText, cache);
             // 如果有工具调用，处理它们并重新发送请求
             if (cache.toolCalls.length > 0) {
@@ -478,13 +466,13 @@ class ChatMessage extends VideoAnalysis {
                 // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
                 if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache);
             }
-            this.updateMessageContent(cache);
         }
         catch (error) {
             console.error('请求处理错误:', error);
-            this.updateMessageContent(cache);
             this.chatReply.signal = undefined;
         }
+        // 更新消息内容
+        this.updateMessageContent(cache);
     }
 }
 
@@ -519,7 +507,19 @@ class LunarAgent extends ChatMessage {
      * @returns {Promise<string>} - 最终应答
      */
     public async createChatMessage(): Promise<string> {
-        await this.callMultimediaAndToolParsing(new CreateCache());
+        /** 初始化聊天缓存 */
+        const cache: ChatCache = {
+            currentToolCallIndex: -1,
+            currentFunctionArgs: '',
+            currentFunctionName: '',
+            descriptionContent: '',
+            thinkingContent: '',
+            currentToolCall: null,
+            toolCalls: [],
+        };
+        // 发送请求并获取响应
+        await this.callMultimediaAndToolParsing(cache);
+        // 返回最终应答
         return this.finalResponse;
     }
 }
