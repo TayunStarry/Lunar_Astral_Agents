@@ -143,8 +143,8 @@ class ConfigModifier extends ModeConfig {
         return this;
     }
     /** 覆写上下文 */
-    public coverContext(contexts: PostMessage[]): this {
-        this.messages = contexts;
+    public coverContext(context: PostMessage[] | PostMessage): this {
+        this.messages = Array.isArray(context) ? context : [context];
         return this;
     }
     /** 设置中止信号 */
@@ -230,6 +230,7 @@ class ModelBuilder extends ConfigModifier {
     public constructor() { super(); }
 }
 
+/** 智能体原型 */
 class ProtoAgent {
     /** 构建计划 */
     protected compilePlan: ModelBuilder = new ModelBuilder();
@@ -272,6 +273,7 @@ class ProtoAgent {
     }
 }
 
+/** 视频分析智能体 */
 class VideoAnalysis extends ProtoAgent {
     /**
      * 处理视频文件
@@ -316,8 +318,8 @@ class VideoAnalysis extends ProtoAgent {
         for (let i = 0; i < frameMessages.length; i += 20) {
             /** 当前批次20张关键帧消息*/
             const batchFrames = frameMessages.slice(i, i + 20);
-            // 写入视频描述上下文
-            this.videoDescription.writeContext({ role: 'user', content: batchFrames });
+            // 覆写 视频描述模型 上下文
+            this.videoDescription.coverContext({ role: 'user', content: batchFrames });
             /** 调用模型进行画面总结 */
             const summaryRequest = await (await this.videoDescription.run as Response).json();
             /** 模型总结结果 */
@@ -327,8 +329,8 @@ class VideoAnalysis extends ProtoAgent {
         }
         // 判断是否包含多个批处理片段
         if (sandboxMessages.length > 1) {
-            // 写入视频摘要上下文
-            this.videoSummary.writeContext({ role: 'user', content: sandboxMessages });
+            // 覆写 视频摘要模型 上下文
+            this.videoSummary.coverContext({ role: 'user', content: sandboxMessages });
             /** 调用模型进行视频总结 */
             const summaryRequest = await (await this.videoSummary.run as Response).json();
             /** 模型视频总结结果 */
@@ -347,6 +349,7 @@ class VideoAnalysis extends ProtoAgent {
     }
 }
 
+/** 聊天消息智能体 */
 class ChatMessage extends VideoAnalysis {
     /** 更新消息内容 */
     protected updateMessageContent(state: ChatCache): string {
