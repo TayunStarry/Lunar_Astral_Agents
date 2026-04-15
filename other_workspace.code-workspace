@@ -1,0 +1,24 @@
+{
+	"folders": [
+		{
+			"name": "月之华-资料库存",
+			"path": "../月之华-资料库存"
+		},
+		{
+			"name": "TTS",
+			"path": "../TTS"
+		},
+		{
+			"name": "NapCat.Shell.Windows.OneKey",
+			"path": "../下载/NapCat.Shell.Windows.OneKey"
+		},
+		{
+			"name": "SillyTavern",
+			"path": "../SillyTavern"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "Lunar_Astral_Agents",
+		"npm-scripts.showStartNotification": false
+	}
+}
