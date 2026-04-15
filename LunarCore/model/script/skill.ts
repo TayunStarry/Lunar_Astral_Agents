@@ -1,24 +1,5 @@
-import {
-    OnlyData,
-    PostMessage,
-    InferencePayload,
-    MultimodalProtocol,
-    EmbeddingResponse,
-    PostMessageRole,
-    ExtractKeyframesResponse,
-    ExtractKeyframesData,
-    TextMessage,
-    ImageContent,
-    TextContent,
-    ChatCache,
-    ToolCall
-} from '../../config/index';
-import {
-    ExtractKeyFramesWithLocalCache,
-    fetchDocumentCallback,
-    getPromptFromDatabase,
-    savePromptToDatabase
-} from '../../FileSystem/index';
+import { OnlyData, ImageContent, TextContent, ChatCache, ExtractKeyFramesWithLocalCache } from '../../config/index';
+import { getPromptFromDatabase, savePromptToDatabase } from '../../FileSystem/index';
 import { ProtoAgent } from '../index';
 
 /** 视频分析智能体 */
@@ -208,7 +189,6 @@ class ChatMessage extends VideoAnalysis {
         }
         catch (error) {
             console.error('请求处理错误:', error);
-            this.chatReply.signal = undefined;
         }
         // 更新消息内容
         this.updateMessageContent(cache);
