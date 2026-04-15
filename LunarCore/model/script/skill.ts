@@ -14,6 +14,7 @@ import {
     ToolCall
 } from '../../config/index';
 import {
+    ExtractKeyFramesWithLocalCache,
     fetchDocumentCallback,
     getPromptFromDatabase,
     savePromptToDatabase
@@ -25,32 +26,24 @@ class VideoAnalysis extends ProtoAgent {
     /**
      * 处理视频文件
      *
-     * @param {File} videoFile - 视频文件对象
+     * @param {File} videoUrl - 视频文件对象
      * 
      * @param {string} userNeeds - 用户需求
      * 
      * @returns {Promise<void>} - 处理完成后的 Promise
      */
-    protected async analysisVideoFile(videoFile: File, userNeeds: string): Promise<void> {
+    protected async analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
         /** 检查是否已处理过该视频 */
-        const cachedPrompt = getPromptFromDatabase(videoFile.name);
+        const cachedPrompt = getPromptFromDatabase(videoUrl);
         // 如果视频已处理过，直接添加到未读上下文
         if (cachedPrompt) {
             this.unreadContext.push({ role: 'user', content: cachedPrompt });
             return;
         }
-        /** FormData 对象，用于上传视频文件 */
-        const formData = new FormData();
-        // 添加视频文件到 FormData
-        formData.append('video', videoFile, 'video.mp4');
         /** 关键帧提取API响应 */
-        const extractResponse = await fetch('/extract/keyframes', { method: 'POST', body: formData });
-        // 检查响应状态
-        if (!extractResponse.ok) throw new Error('提取关键帧失败');
-        /** 关键帧提取API响应数据 */
-        const result = await extractResponse.json() as ExtractKeyframesResponse;
-        /** 提取到的关键帧数组 */
-        const keyFrames = result.keyFrames || [];
+        const [keyFrames, error] = ExtractKeyFramesWithLocalCache(videoUrl, './cache');
+        // 检查提取关键帧是否成功
+        if (!keyFrames || keyFrames.length === 0 || error) throw new Error('提取关键帧失败');
         /** 沙箱消息数组 */
         const sandboxMessages: Array<TextContent> = [];
         /** 模型对视频总结结果 */
@@ -88,7 +81,7 @@ class VideoAnalysis extends ProtoAgent {
         // 如果用户需求非空，添加到消息数组
         if (userNeeds.trim().length > 0) this.unreadContext.push({ role: 'user', content: userNeeds });
         // 缓存处理结果到数据库
-        if (videoSummary) savePromptToDatabase(videoFile.name, videoSummary);
+        if (videoSummary) savePromptToDatabase(videoUrl, videoSummary);
     }
 }
 

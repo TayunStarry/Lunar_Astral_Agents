@@ -191,3 +191,28 @@ export declare function QueryCurrentAddress(): [string[], Error | null];
  * @returns {[any, Error | null]} 包含响应结果的元组，[响应结果, 错误信息]
  * */
 export declare function AgentProxy(url: string, requestBody: any, headers: any): [any, Error | null];
+
+/**
+ * 关键帧结构
+ */
+export interface KeyFrame {
+    /** 关键帧文件名 */
+    filePath: string;
+    /** 关键帧时间戳 */
+    timestamp: string;
+    /** 关键帧编号 */
+    frameNum: number;
+    /** 关键帧图像数据 */
+    data: string;
+}
+
+/**
+ * 提取视频关键帧
+ * 
+ * @param {string} inputFile 视频文件路径
+ * 
+ * @param {string} cacheDir 缓存目录
+ * 
+ * @returns {[KeyFrame[], Error | null]} 包含关键帧列表的元组，[关键帧列表, 错误信息]
+ * */
+export declare function ExtractKeyFramesWithLocalCache(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
