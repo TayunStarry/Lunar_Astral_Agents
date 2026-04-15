@@ -1,4 +1,4 @@
-import { calculateFileHash, saveFileWithFetch, toBtoaString } from '../index';
+import { calculateFileHash, SaveFile, ReadFile,GetFileList, toBtoaString } from '../index';
 
 /** 文件列表项属性 */
 export interface FileListItem {
@@ -15,38 +15,25 @@ export interface FileListItem {
 }
 
 /**
- * 异步从指定 URL 获取 Markdown 文件内容，并对内容进行格式化处理
+ * 同步从指定路径读取文件内容，并对内容进行格式化处理
  *
  * 支持控制是否移除换行符，最终会将多个连续空白字符替换为单个空格
  *
- * @param {string} url - Markdown 文件的 URL 地址
+ * @param {string} path - 文件的路径
  *
  * @param {boolean} [removeNewLines=false] - 是否剔除换行符，默认不剔除
  *
- * @returns {Promise<string>} - 解析并格式化后的 Markdown 文件内容
- *
- * @throws {Error} - 当网络请求失败时抛出错误
+ * @returns {string} - 解析并格式化后的文件内容
  */
-export async function fetchMarkdown(url: RequestInfo | URL, removeNewLines: boolean = false): Promise<string> {
-    /**
-     * 发送网络请求，获取指定 URL 的 Markdown 文件内容
-     */
-    const response = await fetch(url);
-    // 检查响应状态，判断请求是否成功
-    if (response.ok) {
-        /**
-         * 从响应中获取 Markdown 文件的字符串属性
-         */
-        const markdown = await response.text();
-        // 初始化处理后的 Markdown 内容
-        let processedMarkdown = markdown;
-        // 根据参数决定是否移除换行符
-        if (removeNewLines) processedMarkdown = processedMarkdown.replace(/[\r\n]+/g, '');
-        // 将多个连续的空格或制表符替换为单个空格，并返回处理结果
-        return processedMarkdown.replace(/[ \t]+/g, ' ');
-    }
-    // 请求失败时，返回空字符串，避免后续处理错误
-    else return '';
+export function getFileContent(path: string, removeNewLines: boolean = false): string {
+    /** 从磁盘读取文件内容 */
+    let [content, size, mimeType, err] = ReadFile(path);
+    // 检查读取是否成功
+    if (err) throw err;
+    // 根据参数决定是否移除换行符
+    if (removeNewLines) return String(content).replace(/[\r\n]+/g, '');
+    // 将多个连续的空格或制表符替换为单个空格，并返回处理结果
+    return String(content).replace(/[ \t]+/g, ' ');
 };
 
 /**
@@ -67,9 +54,9 @@ export async function saveImageToServer(file: File): Promise<string> {
         /** 将包含图片文件名的路径进行 Base64 编码，用于设置请求头中的文件名 */
         const base64FileName = toBtoaString('images/' + newFileName);
         /** 向服务器发送 POST 请求，尝试保存图片文件 */
-        const response = await fetch('/save', { method: 'POST', headers: { 'X-File-Name': base64FileName, 'X-Overwrite': 'true' }, body: file });
+        const [_, __, err] = SaveFile(base64FileName, true, file);
         // 检查响应是否成功，若失败则抛出错误
-        if (!response.ok) throw new Error('图片保存失败');
+        if (!err) throw err;
         // 保存成功，返回图片的读取路径
         return `/read/images/${newFileName}`;
     }
@@ -100,28 +87,26 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
     const applyCallback = callback ?? defaultCallback;
     /** 统一兜底逻辑：当文件不存在或读取失败时，保存默认内容并返回 */
     const fallback = async () => {
-        await saveFileWithFetch(initializeContent, url.toString(), true);
+        SaveFile(url.toString(), true, initializeContent)
         return applyCallback(initializeContent);
     };
     try {
         /** 拆分文件路径 */
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
-        const listRes = await fetch('/file_list/' + filePath.slice(0, -1).join('/'));
+        const [fileList, err1] = GetFileList(filePath.slice(0, -1).join('/'));
         // 检查文件列表响应是否成功
-        if (!listRes.ok) return await fallback();
-        /** 解析文件列表 JSON 数据 */
-        const fileList = await listRes.json() as FileListItem[];
+        if (!err1) return await fallback();
         /** 检查文件是否存在且不是目录 */
         const exists = fileList.some(item => item.name === filePath[filePath.length - 1] && !item.isDir);
         // 检查文件是否存在
         if (!exists) return await fallback();
         /** 读取文件内容 */
-        const contentRes = await fetch(`/read/${url.toString()}`);
+        const [content, size, mimeType, err2] = ReadFile(url.toString());
         // 检查文件内容响应是否成功
-        if (!contentRes.ok) return await fallback();
+        if (!err2) return await fallback();
         /** 解析文件内容为文本 */
-        const text = await contentRes.text();
+        const text = String(content);
         // 检查文件内容是否为空
         if (!text) return await fallback();
         // 执行回调函数处理文件内容
