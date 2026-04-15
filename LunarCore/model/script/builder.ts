@@ -1,5 +1,5 @@
-import { OnlyData, PostMessage, InferencePayload, MultimodalProtocol, EmbeddingResponse, } from '../../config/index';
-import { getFileContent, QueryCurrentAddress, AgentProxy } from '../../FileSystem/index';
+import { OnlyData, PostMessage, InferencePayload, QueryCurrentAddress, AgentProxy } from '../../config/index';
+import { getFileContent } from '../../FileSystem/index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -14,8 +14,6 @@ class BaseConfig {
     protected enableTools: boolean = true;
     /** 消息列表 */
     protected messages: PostMessage[] = [];
-    /** 中止信号 */
-    public signal: AbortSignal | undefined = undefined;
     /** 系统提示 */
     protected systemPrompt: string = "你的名字叫做月华, 是一个女孩子";
     /** 私有化构造函数，防止外部实例化 */
@@ -106,11 +104,6 @@ class ConfigModifier extends ModeConfig {
     /** 覆写上下文 */
     public coverContext(context: PostMessage[] | PostMessage): this {
         this.messages = Array.isArray(context) ? context : [context];
-        return this;
-    }
-    /** 设置中止信号 */
-    public setSignal(signal: AbortSignal): this {
-        this.signal = signal;
         return this;
     }
 }
