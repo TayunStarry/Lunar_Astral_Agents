@@ -2,9 +2,11 @@ package bridge
 
 import (
 	"LunarCore/FileSystem"
+	"LunarCore/FileSystem/image"
 	"LunarCore/FileSystem/memory"
 	"LunarCore/server"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -212,6 +214,28 @@ func AgentProxyAdapter(url string, requestBody map[string]any, headers map[strin
 	return responseJSON, nil
 }
 
+// ExtractKeyFramesWithLocalCacheAdapter 是ExtractKeyFramesWithLocalCache函数的适配器，用于处理来自TypeScript的调用
+func ExtractKeyFramesWithLocalCacheAdapter(inputFile string, cacheDir string) ([]map[string]any, error) {
+	// 调用原始的ExtractKeyFramesWithLocalCache函数
+	keyFrames, err := image.ExtractKeyFramesWithLocalCache(inputFile, cacheDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为TypeScript可以处理的格式
+	result := make([]map[string]any, len(keyFrames))
+	for i, frame := range keyFrames {
+		result[i] = map[string]any{
+			"filePath":  frame.FilePath,
+			"timestamp": frame.Timestamp,
+			"frameNum":  frame.FrameNum,
+			"data":      base64.StdEncoding.EncodeToString(frame.Data),
+		}
+	}
+
+	return result, nil
+}
+
 // register 注册函数到上下文
 func register(ctx *Context, name string, function any) {
 	err := ctx.Register(name, function, false)
@@ -232,4 +256,5 @@ func init() {
 	register(SystemContext, "ExecuteDatabaseRequest", ExecuteDatabaseRequestAdapter)
 	register(SystemContext, "QueryCurrentAddress", QueryCurrentAddressAdapter)
 	register(SystemContext, "AgentProxy", AgentProxyAdapter)
+	register(SystemContext, "ExtractKeyFramesWithLocalCache", ExtractKeyFramesWithLocalCacheAdapter)
 }

@@ -40,7 +40,7 @@ export class ProtoAgent {
     /** 未读上下文 */
     protected unreadContext: PostMessage[] = [];
     /** 未读视频文件 */
-    protected unreadVideoFiles: File[] = [];
+    protected unreadVideoUrl: string[] = [];
     /** 最终应答 */
     public finalResponse: string = "";
     /** 响应速度 */
@@ -75,19 +75,19 @@ class LunarAgent extends AgentSkill {
      */
     public async batchProcessVideoFiles(userNeeds?: string): Promise<void> {
         // 如果未读视频文件数组为空，直接返回
-        if (this.unreadVideoFiles.length === 0) return;
+        if (this.unreadVideoUrl.length === 0) return;
         //  遍历未读视频文件数组
-        for (const videoFile of this.unreadVideoFiles) {
+        for (const videoUrl of this.unreadVideoUrl) {
             try {
                 // 处理视频文件
-                await this.analysisVideoFile(videoFile, userNeeds || '');
+                await this.analysisVideoFile(videoUrl, userNeeds || '');
                 // 等待1秒，避免对服务器造成过大压力
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
             catch (error) { continue; }
         }
         // 清空未读视频文件数组
-        this.unreadVideoFiles = [];
+        this.unreadVideoUrl = [];
     }
     /**
      * 创建消息
