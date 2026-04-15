@@ -1,4 +1,4 @@
-import { Config, ToolCall } from '../../config/index';
+import { Config, ToolCall } from '../index';
 
 export class OnlyData {
     /** 当前配置面板选项 */

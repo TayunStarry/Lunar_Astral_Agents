@@ -1,4 +1,4 @@
-import { DatabaseOperation, DatabaseRequest, BatchResult, DataOperation, ExecuteDatabaseRequest } from '../index';
+import { DatabaseOperation, DatabaseRequest, BatchResult, DataOperation, ExecuteDatabaseRequest } from '../../config/index';
 
 /**
  * 向数据库查询数据

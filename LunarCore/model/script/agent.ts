@@ -1,12 +1,5 @@
-import {
-    OnlyData,
-    PostMessage,
-    ChatCache
-} from '../../config/index';
-import {
-    getFileContent,
-    fetchDocumentCallback,
-} from '../../FileSystem/index';
+import { getFileContent, fetchDocumentCallback } from '../../FileSystem/index';
+import { OnlyData, PostMessage, ChatCache } from '../../config/index';
 import { ModelBuilder, AgentSkill } from '../index';
 
 /** 智能体原型 */

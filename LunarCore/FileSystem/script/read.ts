@@ -1,4 +1,5 @@
-import { calculateFileHash, SaveFile, ReadFile,GetFileList, toBtoaString } from '../index';
+import { calculateFileHash, toBtoaString } from '../index';
+import { SaveFile, ReadFile, GetFileList } from '../../config/index'
 
 /** 文件列表项属性 */
 export interface FileListItem {
