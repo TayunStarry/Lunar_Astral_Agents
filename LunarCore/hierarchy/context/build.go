@@ -126,4 +126,5 @@ func init() {
 	system.Register("QueryCurrentAddress", QueryCurrentAddressAdapter, false)
 	system.Register("VideoKeyframeExtraction", VideoKeyframeExtractionAdapter, false)
 	system.Register("ProxyFetch", ProxyFetchAdapter, true)
+	system.Register("ResizeImage", ResizeImageAdapter, false)
 }

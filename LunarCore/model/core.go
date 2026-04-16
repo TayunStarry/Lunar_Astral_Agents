@@ -30,6 +30,18 @@ func GetModels() []AgentModels {
 	return models
 }
 
+// GetModelPort 根据模型名称获取对应端口（加读锁）
+func GetModelPort(modelName string) (int, bool) {
+	// 加读锁，防止并发修改模型端口映射时出现数据竞争
+	config.ModelMapMutex.RLock()
+	// 函数结束时解锁，确保锁一定会被释放
+	defer config.ModelMapMutex.RUnlock()
+	// 从模型端口映射中查找指定模型的端口号
+	port, exists := config.ModelPortMap[modelName]
+	// 返回端口号和是否存在的标志
+	return port, exists
+}
+
 // GetBusyResponse 返回“系统繁忙”响应（OpenAI 格式）
 func GetBusyResponse() string {
 	// 构造系统繁忙的响应数据（OpenAI 格式）
@@ -122,43 +134,4 @@ func ProcessAgentRequest(modelName string) (string, error) {
 	log.Printf("GGUF模块 -> 模型[ %s : %d ]", modelName, port)
 	// 这里不直接代理，而是返回端口信息，由handlers处理代理
 	return fmt.Sprintf("%d", port), nil
-}
-
-// ProcessAgentChatRequest 处理与模型相关的聊天请求
-func ProcessAgentChatRequest(req AgentRequest) (AgentRequest, error) {
-	// 处理系统提示词
-	systemMessage, nonSystemMessages, err := ProcessSystemPrompt(req.Messages)
-	if err != nil {
-		return req, err
-	}
-	// 提取最新一条消息用于向量化
-	var latestContent string
-	// 检查是否有有效消息
-	if len(nonSystemMessages) == 0 {
-		return req, fmt.Errorf("请求中没有有效消息")
-	}
-	// 提取最新一条消息内容
-	lastMsg := nonSystemMessages[len(nonSystemMessages)-1]
-	// 检查最新消息内容是否为字符串类型
-	if contentStr, ok := lastMsg.Content.(string); ok {
-		latestContent = contentStr
-	}
-	// 构建最终消息数组
-	finalMessages := []Message{}
-	// 添加系统提示词
-	finalMessages = append(finalMessages, systemMessage)
-	// 获取知识消息
-	knowledgeMessages, err := GetKnowledgeMessages(latestContent)
-	// 检查是否获取知识消息失败
-	if err != nil {
-		return req, fmt.Errorf("获取知识消息失败: %w", err)
-	}
-	// 添加知识消息
-	finalMessages = append(finalMessages, knowledgeMessages...)
-	// 添加非系统消息
-	finalMessages = append(finalMessages, nonSystemMessages...)
-	// 构建新的请求体
-	newReq := req
-	newReq.Messages = finalMessages
-	return newReq, nil
 }

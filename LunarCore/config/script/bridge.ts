@@ -1,4 +1,4 @@
-import { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig } from '../index';
+import { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult } from '../index';
 
 /**
  * 在磁盘中保存文件
@@ -66,3 +66,12 @@ export declare function VideoKeyframeExtraction(inputFile: string, cacheDir: str
  * @returns {Promise<[any, Error | null]>} 包含响应结果的元组，[响应结果, 错误信息]
  * */
 export declare function ProxyFetch(config: ProxyFetchConfig): Promise<[any, Error | null]>;
+
+/**
+ * 缩放图片
+ * 
+ * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据
+ * 
+ * @returns {[ResizeImageResult, Error | null]} 包含缩放结果的元组，[缩放结果, 错误信息]
+ * */
+export declare function ResizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResult, Error | null];

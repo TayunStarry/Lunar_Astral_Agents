@@ -41,7 +41,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/cleanup/images", Handler: image.CleanupUnreferencedImagesHandler, Method: "POST", Description: "清理图片"},
 	// 智能体相关接口
 	{Path: "/v1/models", Handler: handlers.AgentModelsHandler, Method: "GET", Description: "模型列表"},
-	{Path: "/v1/chat/", Handler: handlers.AgentChatHandler, Method: "POST", Description: "模型对话"},
 	{Path: "/v1/", Handler: handlers.AgentHandler, Method: "POST", Description: "模型交互"},
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问"},

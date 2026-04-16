@@ -31,3 +31,19 @@ export interface KeyFrame {
     /** 关键帧图像数据 */
     data: string;
 }
+
+/**
+ * 缩放图片结果接口
+ */
+export interface ResizeImageResult {
+    /** 缩放后的图片数据 */
+    image: Uint8Array;
+    /** 缩放后的图片base64编码 */
+    base64: string;
+    /** 图片格式 */
+    format: string;
+    /** 缩放后的图片宽度 */
+    width: number;
+    /** 缩放后的图片高度 */
+    height: number;
+}
