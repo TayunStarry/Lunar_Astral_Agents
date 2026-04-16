@@ -1,12 +1,6 @@
-import { Config, ToolCall } from '../index';
+import { Config, GetSystemUrl, ToolCall } from '../index';
 
 export class OnlyData {
-    /** 当前配置面板选项 */
-    public static configurePanelOption: string = 'any';
-    /** 系统URL */
-    public static systemUrl: string = '';
-    /** 文件服务URL */
-    public static fileServiceUrl: string = '';
     /** 系统默认 API 密钥 */
     private static systemKey = 'key-520-1314-2000-02-18';
     /** 默认的嵌入模型的名称 */
@@ -17,8 +11,6 @@ export class OnlyData {
     public static customConfig: Config = {};
     /** 工具调用配置 */
     public static toolCall: ToolCall[] = [];
-    /** 是否正在拖拽文件，初始值为 false */
-    public static isFileDragging: boolean = false;
     /** 支持的图片文件扩展名 */
     public static readonly imageFormatsExtensions: string[] = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
     /** 支持的视频文件扩展名 */
@@ -53,6 +45,14 @@ export class OnlyData {
     public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
     /** 月华工具协议的哈希映射 */
     public static lunarToolPackageMap = new Map<string, (args?: Record<string, any>) => Promise<string>>();
+    /** 系统URL */
+    public static get systemUrl(): string {
+        return GetSystemUrl()[0] + '/v1';
+    };
+    /** 文件服务URL */
+    public static get fileServiceUrl(): string {
+        return GetSystemUrl()[0];
+    };
     /** 获取 多模态模型 URL */
     public static get MultimodalUrl(): string {
         return OnlyData.customConfig.multimodalModelUrl || OnlyData.systemUrl;
@@ -77,9 +77,4 @@ export class OnlyData {
     public static get EmbeddingName(): string {
         return OnlyData.customConfig.embeddingModelName || OnlyData.modelEmbedingName;
     };
-    /** 设置 全局URL */
-    public static set globalUrl(url: string) {
-        OnlyData.systemUrl = url;
-        OnlyData.fileServiceUrl = url + '/v1';
-    }
 };

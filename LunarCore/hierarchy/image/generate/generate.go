@@ -2,6 +2,7 @@ package generate
 
 import (
 	"LunarCore/config"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -258,4 +259,55 @@ func RemoveWaitClient(taskID string) {
 	WaitClientsMu.Lock()
 	delete(WaitClients, taskID)
 	WaitClientsMu.Unlock()
+}
+
+// GenerateImage 生成图片并等待完成，返回图片路径和base64编码
+func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (map[string]interface{}, error) {
+	// 检查灵绘坊功能是否启用
+	if !*config.AllowDiffusion {
+		return nil, fmt.Errorf("灵绘坊功能未启用")
+	}
+
+	// 验证参数
+	if prompt == "" {
+		return nil, fmt.Errorf("提示词不能为空")
+	}
+
+	// 创建任务
+	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
+
+	if task == nil {
+		return nil, fmt.Errorf("任务队列已满")
+	}
+
+	// 注册等待客户端
+	ch := RegisterWaitClient(task.ID)
+
+	// 等待任务完成
+	completedTask := <-ch
+
+	// 检查任务状态
+	if completedTask.Status == "failed" {
+		return nil, fmt.Errorf("任务执行失败: %s", completedTask.Error)
+	}
+
+	// 读取生成的图片文件
+	imageData, err := os.ReadFile(completedTask.ResultPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取图片文件失败: %v", err)
+	}
+
+	// 生成base64编码
+	base64Data := base64.StdEncoding.EncodeToString(imageData)
+
+	// 构造返回结果
+	result := map[string]interface{}{
+		"path":   completedTask.ResultPath,
+		"base64": base64Data,
+		"width":  width,
+		"height": height,
+		"seed":   seed,
+	}
+
+	return result, nil
 }
