@@ -5,3 +5,4 @@ export * from './script/history';
 export * from './script/config';
 export * from './script/database';
 export * from './script/bridge';
+export * from './script/keyFrame';

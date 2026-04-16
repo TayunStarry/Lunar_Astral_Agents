@@ -1,4 +1,4 @@
-import { ToolCall } from '../index';
+import { AuthHeaders, ToolCall } from '../index';
 
 /** 全局系统配置项 */
 export interface Config {
@@ -20,12 +20,21 @@ export interface Config {
     userName?: string;
 }
 
-/** 鉴权请求头 - 用于 API 认证 */
-export interface AuthHeaders {
-    /** Bearer Token 授权头，格式: `Bearer ${token}` */
-    Authorization: `Bearer ${string}`;
-    /** 内容类型，固定为 JSON */
-    'Content-Type': 'application/json';
+/** 网络代理请求配置项 */
+export interface ProxyFetchConfig {
+    /** 请求 URL */
+    url: string;
+    /** 执行选项 */
+    execute: {
+        /** HTTP 方法, 默认为GET */
+        method?: string;
+        /** 是否允许跨域请求 */
+        crossDomain?: boolean;
+        /** 请求头 */
+        headers?: Record<string, string> | AuthHeaders;
+        /** 请求体 */
+        body?: any;
+    };
 }
 
 /** 聊天缓存接口 */

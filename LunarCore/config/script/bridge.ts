@@ -1,4 +1,4 @@
-import { KeyFrame, FileListItem, DatabaseRequest, BatchResult } from './type';
+import { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig } from '../index';
 
 /**
  * 在磁盘中保存文件
@@ -48,19 +48,6 @@ export declare function ExecuteDatabaseRequest(request: DatabaseRequest): [Batch
 export declare function QueryCurrentAddress(): [string[], Error | null];
 
 /**
- * 处理OpenAI API请求的代理
- * 
- * @param {string} url API URL
- * 
- * @param {any} requestBody 请求体
- * 
- * @param {any} headers 请求头
- * 
- * @returns {[any, Error | null]} 包含响应结果的元组，[响应结果, 错误信息]
- * */
-export declare function AgentProxy(url: string, requestBody: any, headers: any): [any, Error | null];
-
-/**
  * 提取视频关键帧
  * 
  * @param {string} inputFile 视频文件路径
@@ -69,4 +56,13 @@ export declare function AgentProxy(url: string, requestBody: any, headers: any):
  * 
  * @returns {[KeyFrame[], Error | null]} 包含关键帧列表的元组，[关键帧列表, 错误信息]
  * */
-export declare function ExtractKeyFramesWithLocalCache(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
+export declare function VideoKeyframeExtraction(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
+
+/**
+ * 网络请求代理函数
+ * 
+ * @param {ProxyFetchConfig} config 请求配置对象
+ * 
+ * @returns {Promise<[any, Error | null]>} 包含响应结果的元组，[响应结果, 错误信息]
+ * */
+export declare function ProxyFetch(config: ProxyFetchConfig): Promise<[any, Error | null]>;

@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, QueryCurrentAddress, AgentProxy } from '../../config/index';
+import { OnlyData, PostMessage, InferencePayload, QueryCurrentAddress, ModelProtocol, AuthHeaders, ProxyFetch } from '../../config/index';
 import { getFileContent } from '../../FileSystem/index';
 
 /** 当前的真实地址位置 */
@@ -133,14 +133,21 @@ export class ModelBuilder extends ConfigModifier {
             delete requestBody.tools;
         };
         /** 构建请求头 */
-        const headers = {
+        const headers: AuthHeaders = {
             Authorization: `Bearer ${encodeURIComponent(OnlyData.MultimodalKey)}`,
             "Content-Type": "application/json",
+        };
+        /** 构建模型请求 */
+        const modelRequest: ModelProtocol = {
+            method: "POST",
+            crossDomain: true,
+            headers,
+            body: JSON.stringify(requestBody)
         };
         /** 定义API端点 */
         const endpoint = "/chat/completions";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = AgentProxy(OnlyData.MultimodalUrl + endpoint, requestBody, headers);
+        const [result, error] = await ProxyFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 返回模型响应
@@ -157,14 +164,21 @@ export class ModelBuilder extends ConfigModifier {
             stream: this.stream,
         };
         /** 构建请求头 */
-        const headers = {
+        const headers: AuthHeaders = {
             Authorization: `Bearer ${encodeURIComponent(OnlyData.EmbeddingKey)}`,
             "Content-Type": "application/json",
+        };
+        /** 构建模型请求 */
+        const modelRequest: ModelProtocol = {
+            method: "POST",
+            crossDomain: true,
+            headers,
+            body: JSON.stringify(requestBody)
         };
         /** 定义API端点 */
         const endpoint = "/embeddings";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = AgentProxy(OnlyData.EmbeddingUrl + endpoint, requestBody, headers);
+        const [result, error] = await ProxyFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 截取嵌入向量的前 256 个元素，作为模型输入

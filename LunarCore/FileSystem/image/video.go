@@ -88,8 +88,8 @@ func ExtractFirstFrame(inputFile string) (KeyFrame, error) {
 	return firstFrame, nil
 }
 
-// ExtractKeyFramesWithLocalCache 提取视频关键帧并写入本地缓存
-func ExtractKeyFramesWithLocalCache(inputFile string, cacheDir string) ([]KeyFrame, error) {
+// VideoKeyframeExtraction 提取视频关键帧并写入本地缓存
+func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, error) {
 	// 初始化关键帧列表
 	var keyFrames []KeyFrame
 	// 存储前一帧图像，用于计算帧间差异
