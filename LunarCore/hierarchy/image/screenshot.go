@@ -129,7 +129,7 @@ func GetDisplays() []map[string]int {
 }
 
 // ResizeImage 缩放图片
-func ResizeImage(imgData []byte) (map[string]interface{}, error) {
+func ResizeImage(imgData []byte) (map[string]any, error) {
 	// 解码图片
 	img, format, err := image.Decode(bytes.NewReader(imgData))
 	if err != nil {
@@ -162,7 +162,7 @@ func ResizeImage(imgData []byte) (map[string]interface{}, error) {
 	base64WithHeader := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
 
 	// 构造响应
-	response := map[string]interface{}{
+	response := map[string]any{
 		"image":  buf.Bytes(),
 		"base64": base64WithHeader,
 		"format": format,

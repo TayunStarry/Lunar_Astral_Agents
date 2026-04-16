@@ -219,3 +219,43 @@ func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
 		"body":    responseJSON,
 	}, nil
 }
+
+// ResizeImageAdapter 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
+func ResizeImageAdapter(imgData any) (map[string]any, error) {
+	// 处理不同类型的图片数据
+	var bytesData []byte
+
+	switch data := imgData.(type) {
+	case string:
+		// 处理base64编码的图片
+		if strings.HasPrefix(data, "data:image/") {
+			// 移除base64头部
+			data = strings.Split(data, ",")[1]
+			var err error
+			bytesData, err = base64.StdEncoding.DecodeString(data)
+			if err != nil {
+				return nil, fmt.Errorf("解码base64图片失败: %v", err)
+			}
+		} else {
+			// 直接将字符串转换为字节数组
+			bytesData = []byte(data)
+		}
+	case []byte:
+		// 直接使用字节数组
+		bytesData = data
+	case map[string]any:
+		// 处理quickjs中转换为map的Blob/File类型
+		if buffer, ok := data["buffer"].([]byte); ok {
+			bytesData = buffer
+		} else if data, ok := data["data"].([]byte); ok {
+			bytesData = data
+		} else {
+			return nil, fmt.Errorf("不支持的 Blob/File 数据格式")
+		}
+	default:
+		return nil, fmt.Errorf("不支持的图片数据类型")
+	}
+
+	// 调用图片缩放函数
+	return image.ResizeImage(bytesData)
+}
