@@ -36,9 +36,9 @@ class VideoAnalysis extends ProtoAgent {
             /** 当前批次20张关键帧消息*/
             const batchFrames = frameMessages.slice(i, i + 20);
             // 覆写 视频描述模型 上下文
-            this.videoDescription.coverContext({ role: 'user', content: batchFrames });
+            this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
             /** 调用模型进行画面总结 */
-            const summaryRequest = await (await this.videoDescription.run as Response).json();
+            const summaryRequest = await (await this.descriptionRole.run as Response).json();
             /** 模型总结结果 */
             const summary = summaryRequest?.choices?.[0]?.message?.content;
             // 过滤空字符串和仅包含空格的字符串
@@ -47,9 +47,9 @@ class VideoAnalysis extends ProtoAgent {
         // 判断是否包含多个批处理片段
         if (sandboxMessages.length > 1) {
             // 覆写 视频摘要模型 上下文
-            this.videoSummary.coverContext({ role: 'user', content: sandboxMessages });
+            this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
             /** 调用模型进行视频总结 */
-            const summaryRequest = await (await this.videoSummary.run as Response).json();
+            const summaryRequest = await (await this.summaryRole.run as Response).json();
             /** 模型视频总结结果 */
             videoSummary = summaryRequest?.choices?.[0]?.message?.content;
         }
@@ -72,11 +72,11 @@ class ChatMessage extends VideoAnalysis {
     protected async callMultimediaAndToolParsing(cache: ChatCache): Promise<void> {
         try {
             // 将未读上下文数组中的消息添加到处理器模型的上下文
-            this.unreadContext.forEach(context => this.chatReply.writeContext(context));
+            this.unreadContext.forEach(context => this.chatRole.writeContext(context));
             // 清空未读上下文数组
             this.unreadContext = [];
             /** 向处理器模型发送请求并等待响应 */
-            const response = await this.chatReply.run as Response;
+            const response = await this.chatRole.run as Response;
             // 如果未能获得期望中的响应，则抛出错误
             if (!response.ok) {
                 this.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;

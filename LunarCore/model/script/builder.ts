@@ -23,9 +23,7 @@ class BaseConfig {
 /** 提示词处理器 */
 class PromptProcessor extends BaseConfig {
     /** 生成提示词 */
-    protected promptCompletion(): string {
-        /** 原始系统提示词 */
-        const protoPrompt = getFileContent('/read/resources/prompts/systemPrompt.md');
+    protected promptCompletion(prompt: string): string {
         /** 当前地址 */
         let address = "";
         // 若当前地址为空，查询真实地址
@@ -33,7 +31,7 @@ class PromptProcessor extends BaseConfig {
         // 否则使用缓存地址
         else address = currentAddress.join(' ');
         // 返回替换后的系统提示词
-        return protoPrompt
+        return prompt
             // 转换用户名称
             .replace(/{name}/g, OnlyData.customConfig.userName || "你")
             // 转换当前时间
@@ -65,11 +63,9 @@ class PromptProcessor extends BaseConfig {
 /** 模式配置 */
 class ModeConfig extends PromptProcessor {
     /** 启用多模态 */
-    public useMultimodal(prompt?: string): this {
-        // 若提示词长度超过100，直接使用提示词
-        if (prompt && prompt.length > 100) this.systemPrompt = prompt;
-        // 否则使用文件接口获取系统提示词
-        else this.systemPrompt = this.promptCompletion();
+    public useMultimodal(prompt: string): this {
+        // 补全系统提示词
+        this.systemPrompt = this.promptCompletion(prompt);
         // 设置为多模态模式
         this.isMultimodal = true;
         // 返回当前实例
