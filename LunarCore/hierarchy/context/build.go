@@ -124,7 +124,9 @@ func init() {
 	system.Register("GetFileList", GetFileListAdapter, false)
 	system.Register("ExecuteDatabaseRequest", ExecuteDatabaseRequestAdapter, false)
 	system.Register("QueryCurrentAddress", QueryCurrentAddressAdapter, false)
+	system.Register("GetSystemUrl", GetSystemUrlAdapter, false)
 	system.Register("VideoKeyframeExtraction", VideoKeyframeExtractionAdapter, false)
 	system.Register("ProxyFetch", ProxyFetchAdapter, true)
 	system.Register("ResizeImage", ResizeImageAdapter, false)
+	system.Register("GenerateImage", GenerateImageAdapter, true)
 }

@@ -47,3 +47,45 @@ export interface ResizeImageResult {
     /** 缩放后的图片高度 */
     height: number;
 }
+
+/**
+ * 图片生成参数接口
+ */
+export interface GenerateImageParams {
+    /** 提示词 */
+    prompt: string;
+    /** 负面提示词 */
+    negativePrompt?: string;
+    /** 批处理数量 */
+    batchSize?: number;
+    /** 图片宽度 */
+    width?: number;
+    /** 图片高度 */
+    height?: number;
+    /** 生成步数 */
+    steps?: number;
+    /** 图生图强度 */
+    strength?: number;
+    /** 提示词引导系数 */
+    cfgScale?: number;
+    /** 随机数种子 */
+    seed?: number;
+    /** 初始图片路径 */
+    initImg?: string;
+}
+
+/**
+ * 图片生成结果接口
+ */
+export interface GenerateImageResult {
+    /** 生成的图片路径 */
+    path: string;
+    /** 生成的图片base64编码 */
+    base64: string;
+    /** 图片宽度 */
+    width: number;
+    /** 图片高度 */
+    height: number;
+    /** 随机数种子 */
+    seed: number;
+}

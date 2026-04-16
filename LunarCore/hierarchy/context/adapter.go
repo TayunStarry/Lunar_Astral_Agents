@@ -1,8 +1,11 @@
 package context
 
 import (
+	"LunarCore/browser"
+	"LunarCore/config"
 	"LunarCore/hierarchy"
 	"LunarCore/hierarchy/image"
+	"LunarCore/hierarchy/image/generate"
 	"LunarCore/hierarchy/memory"
 	"LunarCore/server"
 	"bytes"
@@ -10,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -110,6 +114,16 @@ func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, erro
 // QueryCurrentAddressAdapter 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
 func QueryCurrentAddressAdapter() ([]string, error) {
 	return server.QueryCurrentAddress(), nil
+}
+
+// GetSystemUrlAdapter 适配TypeScript调用的系统URL获取功能，返回系统访问地址
+func GetSystemUrlAdapter() (string, error) {
+	ip, err := browser.GetLocalIP([]string{})
+	if err != nil {
+		log.Printf("获取本地IP失败: %v\n", err)
+		return fmt.Sprintf("http://localhost:%d", *config.BasicPort), nil
+	}
+	return fmt.Sprintf("http://%s:%d", ip, *config.BasicPort), nil
 }
 
 // VideoKeyframeExtractionAdapter 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
@@ -258,4 +272,61 @@ func ResizeImageAdapter(imgData any) (map[string]any, error) {
 
 	// 调用图片缩放函数
 	return image.ResizeImage(bytesData)
+}
+
+// GenerateImageAdapter 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
+func GenerateImageAdapter(params map[string]any) (map[string]any, error) {
+	// 提取参数
+	prompt, ok := params["prompt"].(string)
+	if !ok {
+		return nil, fmt.Errorf("提示词不能为空")
+	}
+
+	negativePrompt := ""
+	if np, ok := params["negativePrompt"].(string); ok {
+		negativePrompt = np
+	}
+
+	batchSize := 1
+	if bs, ok := params["batchSize"].(float64); ok {
+		batchSize = int(bs)
+	}
+
+	width := 512
+	if w, ok := params["width"].(float64); ok {
+		width = int(w)
+	}
+
+	height := 512
+	if h, ok := params["height"].(float64); ok {
+		height = int(h)
+	}
+
+	steps := 20
+	if s, ok := params["steps"].(float64); ok {
+		steps = int(s)
+	}
+
+	strength := 0.7
+	if st, ok := params["strength"].(float64); ok {
+		strength = st
+	}
+
+	cfgScale := 7.5
+	if cs, ok := params["cfgScale"].(float64); ok {
+		cfgScale = cs
+	}
+
+	seed := int64(0)
+	if sd, ok := params["seed"].(float64); ok {
+		seed = int64(sd)
+	}
+
+	initImg := ""
+	if ii, ok := params["initImg"].(string); ok {
+		initImg = ii
+	}
+
+	// 调用图片生成函数
+	return generate.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
 }

@@ -1,4 +1,4 @@
-import { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult } from '../index';
+import { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult } from '../index';
 
 /**
  * 在磁盘中保存文件
@@ -48,6 +48,13 @@ export declare function ExecuteDatabaseRequest(request: DatabaseRequest): [Batch
 export declare function QueryCurrentAddress(): [string[], Error | null];
 
 /**
+ * 获取系统访问URL
+ * 
+ * @returns {[string, Error | null]} 包含系统URL的元组，[系统URL, 错误信息]
+ * */
+export declare function GetSystemUrl(): [string, Error | null];
+
+/**
  * 提取视频关键帧
  * 
  * @param {string} inputFile 视频文件路径
@@ -75,3 +82,13 @@ export declare function ProxyFetch(config: ProxyFetchConfig): Promise<[any, Erro
  * @returns {[ResizeImageResult, Error | null]} 包含缩放结果的元组，[缩放结果, 错误信息]
  * */
 export declare function ResizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResult, Error | null];
+
+
+/**
+ * 生成图片
+ * 
+ * @param {GenerateImageParams} params 图片生成参数
+ * 
+ * @returns {Promise<[GenerateImageResult, Error | null]>} 包含生成结果的元组，[生成结果, 错误信息]
+ * */
+export declare function GenerateImage(params: GenerateImageParams): Promise<[GenerateImageResult, Error | null]>;
