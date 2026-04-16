@@ -1,5 +1,5 @@
 import { OnlyData, ImageContent, TextContent, ChatCache, VideoKeyframeExtraction } from '../../config/index';
-import { getPromptFromDatabase, savePromptToDatabase } from '../../FileSystem/index';
+import { getPromptFromDatabase, savePromptToDatabase } from '../../hierarchy/index';
 import { ProtoAgent } from '../index';
 
 /** 视频分析智能体 */

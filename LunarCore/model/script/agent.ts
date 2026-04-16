@@ -1,4 +1,4 @@
-import { getFileContent, fetchDocumentCallback } from '../../FileSystem/index';
+import { getFileContent, fetchDocumentCallback } from '../../hierarchy/index';
 import { OnlyData, PostMessage, ChatCache } from '../../config/index';
 import { ModelBuilder, AgentSkill } from '../index';
 

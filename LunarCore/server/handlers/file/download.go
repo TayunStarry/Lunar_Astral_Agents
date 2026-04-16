@@ -1,7 +1,7 @@
 package file
 
 import (
-	"LunarCore/FileSystem"
+	"LunarCore/hierarchy"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -14,7 +14,7 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	filePath := strings.TrimPrefix(r.URL.Path, "/download/")
 
 	// 执行下载操作
-	fullPath, fileSize, err := FileSystem.GetFileInfo(filePath)
+	fullPath, fileSize, err := hierarchy.GetFileInfo(filePath)
 	if err != nil {
 		switch err.Error() {
 		case "未指定文件":

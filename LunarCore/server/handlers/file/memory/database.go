@@ -2,7 +2,7 @@ package memory
 
 import (
 	"LunarCore/config"
-	"LunarCore/FileSystem/memory"
+	"LunarCore/hierarchy/memory"
 	"encoding/json"
 	"fmt"
 	"log"
