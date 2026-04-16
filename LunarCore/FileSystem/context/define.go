@@ -1,7 +1,8 @@
-package bridge
+package context
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"modernc.org/quickjs"
@@ -22,7 +23,7 @@ func (class *Context) Load(code string) (any, error) {
 }
 
 // LoadModule 加载 ES 模块
-func (class *Context) LoadModule(name, code string) error {
+func (class *Context) LoadModule(name, code string) *Context {
 	// 实现 ES 模块加载
 	moduleCode := fmt.Sprintf(`
 		(function() {
@@ -34,9 +35,10 @@ func (class *Context) LoadModule(name, code string) error {
 	`, code, name)
 	_, err := class.vm.Eval(moduleCode, quickjs.EvalGlobal)
 	if err != nil {
-		return fmt.Errorf("加载模块失败: %v", err)
+		log.Printf("加载模块 %s 失败: %v", name, err)
+		return class
 	}
-	return nil
+	return class
 }
 
 // Run 调用指定的 JS 函数 并 传入参数
@@ -75,19 +77,25 @@ func (class *Context) RunWithTimeout(name string, timeout time.Duration, args ..
 }
 
 // Register 注册 Go 函数到 JS 环境
-func (class *Context) Register(name string, function any, async bool) error {
-	return class.vm.RegisterFunc(name, function, async)
+func (class *Context) Register(name string, function any, async bool) *Context {
+	err := class.vm.RegisterFunc(name, function, async)
+	if err != nil {
+		log.Printf("注册 %s 函数失败: %v", name, err)
+		return class
+	}
+	return class
 }
 
 // SetGlobal 设置全局变量
-func (class *Context) SetGlobal(name string, value any) error {
+func (class *Context) SetGlobal(name string, value any) *Context {
 	// 使用 Eval 方法设置全局变量
 	setCode := fmt.Sprintf("globalThis.%s = %v", name, value)
 	_, err := class.vm.Eval(setCode, quickjs.EvalGlobal)
 	if err != nil {
-		return fmt.Errorf("设置全局变量失败: %v", err)
+		log.Printf("设置全局变量 %s 失败: %v", name, err)
+		return class
 	}
-	return nil
+	return class
 }
 
 // GetGlobal 获取全局变量
