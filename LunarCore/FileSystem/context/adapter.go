@@ -1,4 +1,4 @@
-package bridge
+package context
 
 import (
 	"LunarCore/FileSystem"
@@ -10,26 +10,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
 
-// SaveFileAdapter 是SaveFile函数的适配器，用于处理来自TypeScript的调用
+// SaveFileAdapter 适配TypeScript调用的文件保存功能，支持字符串、字节数组及Blob/File类型数据
 func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, string, error) {
-	// 处理不同类型的fileData
 	var reader io.Reader
 
 	switch data := fileData.(type) {
-
 	case string:
 		reader = strings.NewReader(data)
-
 	case []byte:
 		reader = bytes.NewReader(data)
-
 	case map[string]any:
-		// 处理 Blob 或 File 类型，它们在 quickjs 中会被转换为 map
+		// 处理quickjs中转换为map的Blob/File类型
 		if buffer, ok := data["buffer"].([]byte); ok {
 			reader = bytes.NewReader(buffer)
 		} else if data, ok := data["data"].([]byte); ok {
@@ -37,26 +32,21 @@ func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, str
 		} else {
 			return "", "", fmt.Errorf("不支持的 Blob/File 数据格式")
 		}
-
 	default:
-		// 处理其他类型，可能需要根据实际情况进行调整
 		return "", "", fmt.Errorf("不支持的文件数据类型")
 	}
 
-	// 调用原始的SaveFile函数
 	return FileSystem.SaveFile(fileName, overwrite, reader)
 }
 
-// ReadFileAdapter 是ReadFile函数的适配器，用于处理来自TypeScript的调用
+// ReadFileAdapter 适配TypeScript调用的文件读取功能，返回文件内容、大小和MIME类型
 func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
-	// 调用原始的ReadFile函数
 	file, size, mimeType, err := FileSystem.ReadFile(filePath)
 	if err != nil {
 		return nil, 0, "", err
 	}
 	defer file.Close()
 
-	// 读取文件内容
 	content, err := io.ReadAll(file)
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("读取文件内容失败")
@@ -65,15 +55,14 @@ func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
 	return content, size, mimeType, nil
 }
 
-// GetFileListAdapter 是GetFileList函数的适配器，用于处理来自TypeScript的调用
+// GetFileListAdapter 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
 func GetFileListAdapter(path string) ([]map[string]any, error) {
-	// 调用原始的GetFileList函数
 	fileList, err := FileSystem.GetFileList(path)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为TypeScript可以处理的格式
+	// 转换为TypeScript可处理的格式
 	result := make([]map[string]any, len(fileList))
 	for i, file := range fileList {
 		result[i] = map[string]any{
@@ -88,16 +77,15 @@ func GetFileListAdapter(path string) ([]map[string]any, error) {
 	return result, nil
 }
 
-// ExecuteDatabaseRequestAdapter 是ExecuteDatabaseRequest函数的适配器，用于处理来自TypeScript的调用
+// ExecuteDatabaseRequestAdapter 适配TypeScript调用的数据库操作功能，处理请求并转换结果格式
 func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, error) {
-	// 转换请求格式
+	// 构建数据库请求
 	dbRequest := memory.DatabaseRequest{
 		Transaction: request["transaction"].(bool),
 	}
 
 	// 转换操作列表
-	operations, ok := request["operations"].([]interface{})
-	if ok {
+	if operations, ok := request["operations"].([]interface{}); ok {
 		dbRequest.Operations = make([]interface{}, len(operations))
 		for i, op := range operations {
 			if opMap, ok := op.(map[string]any); ok {
@@ -106,10 +94,10 @@ func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, erro
 		}
 	}
 
-	// 调用原始的ExecuteDatabaseRequest函数
+	// 执行数据库操作
 	result := memory.ExecuteDatabaseRequest(dbRequest)
 
-	// 转换结果为TypeScript可以处理的格式
+	// 转换结果格式
 	return map[string]any{
 		"success":       result.Success,
 		"error":         result.Error,
@@ -119,22 +107,19 @@ func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, erro
 	}, nil
 }
 
-// QueryCurrentAddressAdapter 是QueryCurrentAddress函数的适配器，用于处理来自TypeScript的调用
+// QueryCurrentAddressAdapter 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
 func QueryCurrentAddressAdapter() ([]string, error) {
-	// 调用原始的QueryCurrentAddress函数
-	address := server.QueryCurrentAddress()
-	return address, nil
+	return server.QueryCurrentAddress(), nil
 }
 
-// VideoKeyframeExtractionAdapter 是VideoKeyframeExtraction函数的适配器，用于处理来自TypeScript的调用
+// VideoKeyframeExtractionAdapter 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
 func VideoKeyframeExtractionAdapter(inputFile string, cacheDir string) ([]map[string]any, error) {
-	// 调用原始的VideoKeyframeExtraction函数
 	keyFrames, err := image.VideoKeyframeExtraction(inputFile, cacheDir)
 	if err != nil {
 		return nil, err
 	}
 
-	// 转换为TypeScript可以处理的格式
+	// 转换为TypeScript可处理的格式
 	result := make([]map[string]any, len(keyFrames))
 	for i, frame := range keyFrames {
 		result[i] = map[string]any{
@@ -148,21 +133,21 @@ func VideoKeyframeExtractionAdapter(inputFile string, cacheDir string) ([]map[st
 	return result, nil
 }
 
-// ProxyFetchAdapter 是月华网络请求代理函数，用于处理来自TypeScript的调用
+// ProxyFetchAdapter 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
 func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
-	// 获取URL
+	// 解析URL
 	url, ok := config["url"].(string)
 	if !ok {
 		return nil, fmt.Errorf("无效的URL")
 	}
 
-	// 获取execute
+	// 解析执行配置
 	execute, ok := config["execute"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("无效的execute")
 	}
 
-	// 获取方法，默认为GET
+	// 确定HTTP方法
 	method := "GET"
 	if methodVal, ok := execute["method"].(string); ok {
 		method = methodVal
@@ -195,7 +180,6 @@ func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
 
 	// 处理跨域请求
 	if crossDomain, ok := execute["crossDomain"].(bool); ok && crossDomain {
-		// 设置跨域相关请求头
 		req.Header.Set("Origin", "*")
 		req.Header.Set("Access-Control-Allow-Origin", "*")
 		req.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -220,7 +204,7 @@ func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
 	var responseJSON map[string]any
 	err = json.Unmarshal(responseBody, &responseJSON)
 	if err != nil {
-		// 如果响应不是JSON，返回原始响应
+		// 非JSON响应返回原始内容
 		return map[string]any{
 			"status":  resp.StatusCode,
 			"headers": resp.Header,
@@ -228,33 +212,10 @@ func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
 		}, nil
 	}
 
-	// 返回解析后的响应
+	// 返回JSON响应
 	return map[string]any{
 		"status":  resp.StatusCode,
 		"headers": resp.Header,
 		"body":    responseJSON,
 	}, nil
-}
-
-// register 注册函数到上下文
-func register(ctx *Context, name string, function any, async bool) {
-	err := ctx.Register(name, function, async)
-	if err != nil {
-		log.Printf("注册 %s 函数失败: %v", name, err)
-	}
-}
-
-// init 初始化上下文，注册所有函数
-func init() {
-	var SystemContext, err = CreateContext("system.js")
-	if err != nil {
-		log.Fatalf("创建系统上下文失败: %v", err)
-	}
-	register(SystemContext, "SaveFile", SaveFileAdapter, false)
-	register(SystemContext, "ReadFile", ReadFileAdapter, false)
-	register(SystemContext, "GetFileList", GetFileListAdapter, false)
-	register(SystemContext, "ExecuteDatabaseRequest", ExecuteDatabaseRequestAdapter, false)
-	register(SystemContext, "QueryCurrentAddress", QueryCurrentAddressAdapter, false)
-	register(SystemContext, "VideoKeyframeExtraction", VideoKeyframeExtractionAdapter, false)
-	register(SystemContext, "ProxyFetch", ProxyFetchAdapter, true)
 }
