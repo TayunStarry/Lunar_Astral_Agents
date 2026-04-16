@@ -1,9 +1,27 @@
-/**
- * AI 智能体多模态交互协议 - 模型推理相关类型
- * 提供模型推理请求和响应的类型定义
- */
+/** 模型协议请求体 */
+export interface ModelProtocol {
+    /** HTTP 方法，固定为 POST */
+    method: 'POST';
+    /** 是否允许跨域请求 */
+    crossDomain: boolean;
+    /** 认证和内容类型头部 */
+    headers: AuthHeaders;
+    /**
+     * 推理请求负载（JSON 字符串格式）
+     * 包含模型参数、消息、工具定义等
+     */
+    body: string;
+    /** 可选的请求中止信号，用于取消请求 */
+    signal?: AbortSignal;
+}
 
-// ==================== 模型推理相关 ====================
+/** 鉴权请求头 - 用于 API 认证 */
+export interface AuthHeaders {
+    /** Bearer Token 授权头，格式: `Bearer ${token}` */
+    Authorization: `Bearer ${string}`;
+    /** 内容类型，固定为 JSON */
+    'Content-Type': 'application/json';
+}
 
 /** 模型推理请求负载 */
 export interface InferencePayload {

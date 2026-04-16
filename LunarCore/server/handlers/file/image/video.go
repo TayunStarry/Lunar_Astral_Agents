@@ -60,7 +60,7 @@ func ExtractKeyFramesHandler(w http.ResponseWriter, r *http.Request) {
 	// 无论后续逻辑成败，均删除关键帧目录，防止磁盘堆积
 	defer os.RemoveAll(keyFrameDir)
 	// 调用核心函数提取关键帧，返回 []KeyFrame
-	keyFrames, err := image.ExtractKeyFramesWithLocalCache(tempFileName, keyFrameDir)
+	keyFrames, err := image.VideoKeyframeExtraction(tempFileName, keyFrameDir)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("ExtractKeyFrames请求[ERROR] -> 提取关键帧失败: %v", err), http.StatusInternalServerError)
 		return

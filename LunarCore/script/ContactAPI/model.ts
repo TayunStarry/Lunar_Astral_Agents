@@ -46,7 +46,7 @@ export class MultimodalRequest {
         /**
          * 配置请求选项
          */
-        const requestOption: EntryAPI.MultimodalProtocol = {
+        const requestOption: EntryAPI.ModelProtocol = {
             method: "POST",
             crossDomain: true,
             headers: {
@@ -91,7 +91,7 @@ export class EmbeddingRequest {
         /**
          * 配置请求选项
          */
-        const requestOption: EntryAPI.MultimodalProtocol = {
+        const requestOption: EntryAPI.ModelProtocol = {
             method: "POST",
             crossDomain: true,
             headers: {

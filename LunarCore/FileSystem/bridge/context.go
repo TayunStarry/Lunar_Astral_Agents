@@ -126,24 +126,80 @@ func QueryCurrentAddressAdapter() ([]string, error) {
 	return address, nil
 }
 
-// AgentProxyAdapter 处理OpenAI API请求的代理
-func AgentProxyAdapter(url string, requestBody map[string]any, headers map[string]string) (map[string]any, error) {
-	// 将requestBody转换为JSON
-	requestBodyJSON, err := json.Marshal(requestBody)
+// VideoKeyframeExtractionAdapter 是VideoKeyframeExtraction函数的适配器，用于处理来自TypeScript的调用
+func VideoKeyframeExtractionAdapter(inputFile string, cacheDir string) ([]map[string]any, error) {
+	// 调用原始的VideoKeyframeExtraction函数
+	keyFrames, err := image.VideoKeyframeExtraction(inputFile, cacheDir)
 	if err != nil {
-		return nil, fmt.Errorf("请求体序列化失败: %v", err)
+		return nil, err
+	}
+
+	// 转换为TypeScript可以处理的格式
+	result := make([]map[string]any, len(keyFrames))
+	for i, frame := range keyFrames {
+		result[i] = map[string]any{
+			"filePath":  frame.FilePath,
+			"timestamp": frame.Timestamp,
+			"frameNum":  frame.FrameNum,
+			"data":      base64.StdEncoding.EncodeToString(frame.Data),
+		}
+	}
+
+	return result, nil
+}
+
+// ProxyFetchAdapter 是月华网络请求代理函数，用于处理来自TypeScript的调用
+func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
+	// 获取URL
+	url, ok := config["url"].(string)
+	if !ok {
+		return nil, fmt.Errorf("无效的URL")
+	}
+
+	// 获取execute
+	execute, ok := config["execute"].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("无效的execute")
+	}
+
+	// 获取方法，默认为GET
+	method := "GET"
+	if methodVal, ok := execute["method"].(string); ok {
+		method = methodVal
+	}
+
+	// 准备请求体
+	var body io.Reader
+	if bodyVal, ok := execute["body"]; ok {
+		bodyJSON, err := json.Marshal(bodyVal)
+		if err != nil {
+			return nil, fmt.Errorf("请求体序列化失败: %v", err)
+		}
+		body = bytes.NewBuffer(bodyJSON)
 	}
 
 	// 创建HTTP请求
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBodyJSON))
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
 
 	// 设置请求头
-	req.Header.Set("Content-Type", "application/json")
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	if headers, ok := execute["headers"].(map[string]any); ok {
+		for key, value := range headers {
+			if valueStr, ok := value.(string); ok {
+				req.Header.Set(key, valueStr)
+			}
+		}
+	}
+
+	// 处理跨域请求
+	if crossDomain, ok := execute["crossDomain"].(bool); ok && crossDomain {
+		// 设置跨域相关请求头
+		req.Header.Set("Origin", "*")
+		req.Header.Set("Access-Control-Allow-Origin", "*")
+		req.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		req.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	}
 
 	// 发送请求
@@ -164,37 +220,25 @@ func AgentProxyAdapter(url string, requestBody map[string]any, headers map[strin
 	var responseJSON map[string]any
 	err = json.Unmarshal(responseBody, &responseJSON)
 	if err != nil {
-		return nil, fmt.Errorf("响应解析失败: %v", err)
+		// 如果响应不是JSON，返回原始响应
+		return map[string]any{
+			"status":  resp.StatusCode,
+			"headers": resp.Header,
+			"body":    string(responseBody),
+		}, nil
 	}
 
-	return responseJSON, nil
-}
-
-// ExtractKeyFramesWithLocalCacheAdapter 是ExtractKeyFramesWithLocalCache函数的适配器，用于处理来自TypeScript的调用
-func ExtractKeyFramesWithLocalCacheAdapter(inputFile string, cacheDir string) ([]map[string]any, error) {
-	// 调用原始的ExtractKeyFramesWithLocalCache函数
-	keyFrames, err := image.ExtractKeyFramesWithLocalCache(inputFile, cacheDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// 转换为TypeScript可以处理的格式
-	result := make([]map[string]any, len(keyFrames))
-	for i, frame := range keyFrames {
-		result[i] = map[string]any{
-			"filePath":  frame.FilePath,
-			"timestamp": frame.Timestamp,
-			"frameNum":  frame.FrameNum,
-			"data":      base64.StdEncoding.EncodeToString(frame.Data),
-		}
-	}
-
-	return result, nil
+	// 返回解析后的响应
+	return map[string]any{
+		"status":  resp.StatusCode,
+		"headers": resp.Header,
+		"body":    responseJSON,
+	}, nil
 }
 
 // register 注册函数到上下文
-func register(ctx *Context, name string, function any) {
-	err := ctx.Register(name, function, false)
+func register(ctx *Context, name string, function any, async bool) {
+	err := ctx.Register(name, function, async)
 	if err != nil {
 		log.Printf("注册 %s 函数失败: %v", name, err)
 	}
@@ -206,11 +250,11 @@ func init() {
 	if err != nil {
 		log.Fatalf("创建系统上下文失败: %v", err)
 	}
-	register(SystemContext, "SaveFile", SaveFileAdapter)
-	register(SystemContext, "ReadFile", ReadFileAdapter)
-	register(SystemContext, "GetFileList", GetFileListAdapter)
-	register(SystemContext, "ExecuteDatabaseRequest", ExecuteDatabaseRequestAdapter)
-	register(SystemContext, "QueryCurrentAddress", QueryCurrentAddressAdapter)
-	register(SystemContext, "AgentProxy", AgentProxyAdapter)
-	register(SystemContext, "ExtractKeyFramesWithLocalCache", ExtractKeyFramesWithLocalCacheAdapter)
+	register(SystemContext, "SaveFile", SaveFileAdapter, false)
+	register(SystemContext, "ReadFile", ReadFileAdapter, false)
+	register(SystemContext, "GetFileList", GetFileListAdapter, false)
+	register(SystemContext, "ExecuteDatabaseRequest", ExecuteDatabaseRequestAdapter, false)
+	register(SystemContext, "QueryCurrentAddress", QueryCurrentAddressAdapter, false)
+	register(SystemContext, "VideoKeyframeExtraction", VideoKeyframeExtractionAdapter, false)
+	register(SystemContext, "ProxyFetch", ProxyFetchAdapter, true)
 }

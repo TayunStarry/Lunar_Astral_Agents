@@ -6,7 +6,7 @@
 // ==================== 核心协议 ====================
 
 /** 多模态协议请求体 - 标准化的模型调用接口 */
-export interface MultimodalProtocol {
+export interface ModelProtocol {
     /** HTTP 方法，固定为 POST */
     method: 'POST';
     /** 是否允许跨域请求 */

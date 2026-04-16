@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, TextContent, ChatCache, ExtractKeyFramesWithLocalCache } from '../../config/index';
+import { OnlyData, ImageContent, TextContent, ChatCache, VideoKeyframeExtraction } from '../../config/index';
 import { getPromptFromDatabase, savePromptToDatabase } from '../../FileSystem/index';
 import { ProtoAgent } from '../index';
 
@@ -22,7 +22,7 @@ class VideoAnalysis extends ProtoAgent {
             return;
         }
         /** 关键帧提取API响应 */
-        const [keyFrames, error] = ExtractKeyFramesWithLocalCache(videoUrl, './cache');
+        const [keyFrames, error] = VideoKeyframeExtraction(videoUrl, './cache');
         // 检查提取关键帧是否成功
         if (!keyFrames || keyFrames.length === 0 || error) throw new Error('提取关键帧失败');
         /** 沙箱消息数组 */
@@ -68,23 +68,40 @@ class VideoAnalysis extends ProtoAgent {
 
 /** 聊天消息智能体 */
 class ChatMessage extends VideoAnalysis {
-    /** 更新消息内容 */
-    protected updateMessageContent(state: ChatCache): string {
-        // 检查推理内容是否为空
-        if (state.thinkingContent.trim() !== "") {
-            /** 新的思考标签内容 */
-            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
-            // 修正复合描述内容
-            this.finalResponse = newThinkTag + state.descriptionContent;
+    /** 发送请求并获取响应 */
+    protected async callMultimediaAndToolParsing(cache: ChatCache): Promise<void> {
+        try {
+            // 将未读上下文数组中的消息添加到处理器模型的上下文
+            this.unreadContext.forEach(context => this.chatReply.writeContext(context));
+            // 清空未读上下文数组
+            this.unreadContext = [];
+            /** 向处理器模型发送请求并等待响应 */
+            const response = await this.chatReply.run as Response;
+            // 如果未能获得期望中的响应，则抛出错误
+            if (!response.ok) {
+                this.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
+                return;
+            }
+            // 读取响应文本内容
+            const responseText = await response.text();
+            // 处理响应文本内容
+            await this.analyzeMessageResponse(responseText, cache);
+            // 如果有工具调用，处理它们并重新发送请求
+            if (cache.toolCalls.length > 0) {
+                /** 处理工具调用 */
+                const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
+                // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
+                if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache);
+            }
         }
-        // 修正简单描述内容
-        else this.finalResponse = state.descriptionContent;
-        // 检查消息内容是否为空
-        if (this.finalResponse.trim() === "") return this.defaultAnswer;
-        return this.finalResponse;
+        catch (error) {
+            console.error('请求处理错误:', error);
+        }
+        // 更新消息内容
+        this.updateMessageContent(cache);
     }
     /** 处理聊天消息响应 */
-    protected async analyzeMessageResponse(message: string, cache: ChatCache): Promise<void> {
+    protected analyzeMessageResponse(message: string, cache: ChatCache): void {
         try {
             /** 解析响应为JSON */
             const jsonData = JSON.parse(message);
@@ -161,37 +178,20 @@ class ChatMessage extends VideoAnalysis {
         // 标记有工具调用
         return hasToolCalls;
     };
-    /** 发送请求并获取响应 */
-    protected async callMultimediaAndToolParsing(cache: ChatCache): Promise<void> {
-        try {
-            // 将未读上下文数组中的消息添加到处理器模型的上下文
-            this.unreadContext.forEach(context => this.chatReply.writeContext(context));
-            // 清空未读上下文数组
-            this.unreadContext = [];
-            /** 向处理器模型发送请求并等待响应 */
-            const response = await this.chatReply.run as Response;
-            // 如果未能获得期望中的响应，则抛出错误
-            if (!response.ok) {
-                this.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
-                return;
-            }
-            // 读取响应文本内容
-            const responseText = await response.text();
-            // 处理响应文本内容
-            await this.analyzeMessageResponse(responseText, cache);
-            // 如果有工具调用，处理它们并重新发送请求
-            if (cache.toolCalls.length > 0) {
-                /** 处理工具调用 */
-                const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
-                // 如果有处理过的工具调用，重新发送请求（包含工具调用结果）
-                if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache);
-            }
+    /** 更新消息内容 */
+    protected updateMessageContent(state: ChatCache): string {
+        // 检查推理内容是否为空
+        if (state.thinkingContent.trim() !== "") {
+            /** 新的思考标签内容 */
+            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
+            // 修正复合描述内容
+            this.finalResponse = newThinkTag + state.descriptionContent;
         }
-        catch (error) {
-            console.error('请求处理错误:', error);
-        }
-        // 更新消息内容
-        this.updateMessageContent(cache);
+        // 修正简单描述内容
+        else this.finalResponse = state.descriptionContent;
+        // 检查消息内容是否为空
+        if (this.finalResponse.trim() === "") return this.defaultAnswer;
+        return this.finalResponse;
     }
 }
 
