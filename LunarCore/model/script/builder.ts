@@ -1,5 +1,5 @@
 import { OnlyData, PostMessage, InferencePayload, QueryCurrentAddress, ModelProtocol, AuthHeaders, ProxyFetch } from '../../config/index';
-import { getFileContent } from '../../FileSystem/index';
+import { getFileContent } from '../../hierarchy/index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];

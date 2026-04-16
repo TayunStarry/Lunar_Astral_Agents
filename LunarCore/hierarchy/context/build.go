@@ -1,7 +1,7 @@
 package context
 
 import (
-	"LunarCore/FileSystem"
+	"LunarCore/hierarchy"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,7 +21,7 @@ func create(path string) (*Context, error) {
 	}
 
 	// 直接使用嵌入式文件系统，创建子文件系统
-	subFS, err := fs.Sub(FileSystem.EmbeddedFiles, "assets")
+	subFS, err := fs.Sub(hierarchy.EmbeddedFiles, "assets")
 	if err != nil {
 		vm.Close()
 		return nil, fmt.Errorf("创建子文件系统失败: %v", err)

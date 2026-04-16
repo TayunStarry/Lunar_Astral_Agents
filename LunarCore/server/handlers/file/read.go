@@ -1,7 +1,7 @@
 package file
 
 import (
-	"LunarCore/FileSystem"
+	"LunarCore/hierarchy"
 	"io"
 	"net/http"
 	"strconv"
@@ -18,7 +18,7 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求 URL 路径中去除 "/read/" 前缀，获取实际的文件路径
 	filePath := strings.TrimPrefix(r.URL.Path, "/read/")
 	// 调用 execute 模块读取文件
-	file, size, mimeType, err := FileSystem.ReadFile(filePath)
+	file, size, mimeType, err := hierarchy.ReadFile(filePath)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {

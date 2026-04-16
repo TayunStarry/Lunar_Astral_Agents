@@ -1,9 +1,9 @@
 package context
 
 import (
-	"LunarCore/FileSystem"
-	"LunarCore/FileSystem/image"
-	"LunarCore/FileSystem/memory"
+	"LunarCore/hierarchy"
+	"LunarCore/hierarchy/image"
+	"LunarCore/hierarchy/memory"
 	"LunarCore/server"
 	"bytes"
 	"encoding/base64"
@@ -36,12 +36,12 @@ func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, str
 		return "", "", fmt.Errorf("不支持的文件数据类型")
 	}
 
-	return FileSystem.SaveFile(fileName, overwrite, reader)
+	return hierarchy.SaveFile(fileName, overwrite, reader)
 }
 
 // ReadFileAdapter 适配TypeScript调用的文件读取功能，返回文件内容、大小和MIME类型
 func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
-	file, size, mimeType, err := FileSystem.ReadFile(filePath)
+	file, size, mimeType, err := hierarchy.ReadFile(filePath)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -57,7 +57,7 @@ func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
 
 // GetFileListAdapter 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
 func GetFileListAdapter(path string) ([]map[string]any, error) {
-	fileList, err := FileSystem.GetFileList(path)
+	fileList, err := hierarchy.GetFileList(path)
 	if err != nil {
 		return nil, err
 	}

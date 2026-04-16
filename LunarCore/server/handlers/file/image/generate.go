@@ -2,7 +2,7 @@ package image
 
 import (
 	"LunarCore/config"
-	"LunarCore/FileSystem/image/generate"
+	"LunarCore/hierarchy/image/generate"
 	"encoding/json"
 	"fmt"
 	"log"

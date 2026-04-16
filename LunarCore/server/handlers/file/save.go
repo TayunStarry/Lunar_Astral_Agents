@@ -1,7 +1,7 @@
 package file
 
 import (
-	"LunarCore/FileSystem"
+	"LunarCore/hierarchy"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -17,7 +17,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 	// 从请求头中获取编码后的文件名
 	encodedName := r.Header.Get("X-File-Name")
 	// 调用 execute 模块解码文件名
-	fileName, err := FileSystem.DecodeFileName(encodedName)
+	fileName, err := hierarchy.DecodeFileName(encodedName)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {
@@ -47,7 +47,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// 调用 execute 模块保存文件
-	savedFileName, fullPath, err := FileSystem.SaveFile(fileName, overwrite, r.Body)
+	savedFileName, fullPath, err := hierarchy.SaveFile(fileName, overwrite, r.Body)
 	if err != nil {
 		// 根据错误信息返回相应的HTTP错误
 		switch err.Error() {
