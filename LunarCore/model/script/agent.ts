@@ -1,61 +1,9 @@
 import { getFileContent, fetchDocumentCallback } from '../../hierarchy/index';
 import { OnlyData, PostMessage, ChatCache } from '../../config/index';
-import { ModelBuilder, AgentSkill } from '../index';
-
-/** 智能体原型 */
-export class ProtoAgent {
-    /** 构建计划 */
-    protected compilePlan: ModelBuilder = new ModelBuilder();
-    /** 推理关键词 */
-    protected queryKeywords: ModelBuilder = new ModelBuilder();
-    /** 情感管理器 */
-    protected emotionManager: ModelBuilder = new ModelBuilder();
-
-    /** 书记者角色(编写记忆) */
-    protected recorderRole: ModelBuilder = new ModelBuilder();
-    /** 摘要者角色(视频摘要) */
-    protected summaryRole: ModelBuilder = new ModelBuilder();
-    /** 描述者角色(视频描述) */
-    protected descriptionRole: ModelBuilder = new ModelBuilder();
-    /** 绘图师角色(图片生成) */
-    protected painterRole: ModelBuilder = new ModelBuilder();
-    /** 聊天者角色(用户交互) */
-    protected chatRole: ModelBuilder = new ModelBuilder();
-
-    /** 嵌入向量 */
-    public embedding: ModelBuilder = new ModelBuilder().useEmbedding();
-    /** 未读上下文 */
-    protected unreadContext: PostMessage[] = [];
-    /** 未读视频文件 */
-    protected unreadVideoUrl: string[] = [];
-    /** 最终应答 */
-    public finalResponse: string = "";
-    /** 响应速度 */
-    public responseSpeed: number = 0;
-    /** 默认应答 */
-    public defaultAnswer: string = "月华不知道哦";
-    /** 构建智能体 并 初始化各个子模型的系统提示词 */
-    protected constructor() {
-        // 初始化 全部模型 的 系统提示词
-        this.chatRole.useMultimodal(getFileContent('/read/resources/prompts/chatRole.md'));
-        this.painterRole.useMultimodal(getFileContent('/read/resources/prompts/painterRole.md'));
-        this.compilePlan.useMultimodal(getFileContent('/read/resources/prompts/compilePlan.md'));
-        this.queryKeywords.useMultimodal(getFileContent('/read/resources/prompts/queryKeywords.md'));
-        this.emotionManager.useMultimodal(getFileContent('/read/resources/prompts/emotionManager.md'));
-        this.recorderRole.useMultimodal(getFileContent('/read/resources/prompts/recorderRole.md'));
-        this.summaryRole.useMultimodal(getFileContent('/read/resources/prompts/summaryRole.md'));
-        this.descriptionRole.useMultimodal(getFileContent('/read/resources/prompts/descriptionRole.md'));
-        // 初始化 自定义配置 信息
-        fetchDocumentCallback('resources/custom_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
-        // TODO 初始化 工具调用配置
-        // fetchDocumentCallback('resources/toolCall.json').then(content => OnlyData.toolCall = JSON.parse(content));
-        // TODO 初始化 聊天记录
-        // fetchDocumentCallback('resources/chatRecord.json')
-    }
-}
+import { ModelBuilder, AgentDefine, ChatDialogueRole } from '../index';
 
 /** 月华智能体 */
-class LunarAgent extends AgentSkill {
+class LunarAgent extends AgentDefine {
     /**
      * 批量处理视频文件
      *
@@ -96,7 +44,7 @@ class LunarAgent extends AgentSkill {
             toolCalls: [],
         };
         // 发送请求并获取响应
-        await this.callMultimediaAndToolParsing(cache);
+        await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
         // 返回最终应答
         return this.finalResponse;
     }
