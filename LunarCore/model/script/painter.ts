@@ -1,6 +1,7 @@
 import { OnlyData, ImageContent, TextContent, ChatCache, VideoKeyframeExtraction, ProxyFetch, ResizeImage, ToolCall, PostMessage } from '../../config/index';
 import { fetchDocumentCallback, getFileContent, getPromptFromDatabase, savePromptToDatabase } from '../../hierarchy/index';
 import { ModelBuilder, ChatDialogueRole } from '../index';
+import { RandomFloor } from '../../math/index';
 
 export class PainterRole extends ModelBuilder {
     /** 默认表情提示 */
@@ -69,5 +70,14 @@ export class PainterRole extends ModelBuilder {
     public constructor() {
         super();
         this.useMultimodal(getFileContent('resources/prompts/painterRole.md'));
+    }
+    /** 获得写入了动作与表情的自我外观提示词 */
+    protected writeAppearancePrompt(expression?: string, posture?: string): string {
+        /** 当前表情提示词, 默认使用随机表情提示 */
+        const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+        /** 当前姿势提示词, 默认使用随机姿势提示 */
+        const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+        // 替换表情提示词与姿势提示词
+        return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture);
     }
 }

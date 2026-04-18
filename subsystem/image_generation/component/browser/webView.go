@@ -1,13 +1,15 @@
 package browser
 
 import (
-	"LunarCore/config"
+	"subsystem/component/config"
 	"log"
 	"runtime"
 	"time"
 
 	webview "github.com/webview/webview_go"
 )
+
+var WebViewDebug bool = true
 
 // StartWebViewBrowser 启动 webview 浏览器
 func StartWebViewBrowser(url string) {
@@ -50,6 +52,7 @@ func CreateWebView() webview.WebView {
 	if *config.WebViewMinWidth > 0 && *config.WebViewMinHeight > 0 {
 		w.SetSize(*config.WebViewMinWidth, *config.WebViewMinHeight, webview.HintMin)
 	}
+
 	if !*config.WebViewResizable {
 		w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintFixed)
 	}

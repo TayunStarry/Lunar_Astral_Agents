@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』灵绘坊</title>
+    <style>
+        @import url("/read/resources/external/fontAwesome/css/all.min.css");
+        @import url("/read/resources/universal/multimedia_preview.css");
+        @import url('./style.css');
+    </style>
+    <script src="/read/resources/universal/multimedia_preview.js"></script>
+    <script defer src="./script.js"></script>
+</head>
+
+<body>
+    <!-- 左侧：配置面板 -->
+    <div class="config-panel">
+        <h2>🎨 参数设置</h2>
+
+        <!-- 新增：预设选择区域 -->
+        <div class="preset-selector">
+            <h3>📚 预设配置</h3>
+            <div class="form-group">
+                <label for="preset-select">选择预设模板</label>
+                <select id="preset-select" class="form-control">
+                    <option value="">-- 请选择预设 --</option>
+                    <option value="anime">动漫人物</option>
+                    <option value="landscape">风景画</option>
+                    <option value="sci-fi">科幻世界</option>
+                    <option value="portrait">肖像画</option>
+                    <option value="fantasy">奇幻场景</option>
+                    <option value="architecture">建筑设计</option>
+                    <option value="cyberpunk">赛博朋克</option>
+                    <option value="watercolor">水彩插画</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="config-grid">
+            <div class="config-card">
+                <h3>📝 提示词设置</h3>
+                <div class="form-group">
+                    <label for="prompt">正面提示词</label>
+                    <textarea id="prompt" class="form-control" placeholder="描述你想要生成的图像内容"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="negative-prompt">负面提示词</label>
+                    <textarea id="negative-prompt" class="form-control" placeholder="描述你不希望在图像中出现的内容"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        上传参考图片
+                        <!-- 新增：清除参考图片按钮 -->
+                        <button type="button" id="clear-image-btn" class="clear-image-btn" style="display: none;">
+                            🗑️ 清除
+                        </button>
+                    </label>
+                    <div class="file-upload-area" id="upload-area">
+                        <div class="upload-icon">📁</div>
+                        <div class="preview-container">
+                            <img id="image-preview" class="image-preview" alt="图片预览"
+                                style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                        </div>
+                        <div class="upload-text">点击选择或拖拽图片</div>
+                        <div class="file-info">支持 JPG, PNG, WebP，最大 10MB</div>
+                        <input type="file" id="init-image" accept="image/*" style="display: none;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-card">
+                <h3>⚙️ 生成参数</h3>
+                <div class="form-group">
+                    <label for="strength">噪声强度: <span id="strength-value" class="range-value">0.15</span></label>
+                    <div class="range-group">
+                        <input type="range" id="strength" min="0.1" max="1.0" step="0.01" value="0.85">
+                    </div>
+                </div>
+                <div class="param-grid">
+                    <div class="form-group">
+                        <label for="batch-size">生成数量</label>
+                        <input type="number" id="batch-size" class="form-control" min="1" max="8" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="width">宽度: <span id="width-value" class="range-value">512</span></label>
+                        <div class="range-group">
+                            <input type="range" id="width" min="256" max="2048" step="64" value="512">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="height">高度: <span id="height-value" class="range-value">512</span></label>
+                        <div class="range-group">
+                            <input type="range" id="height" min="256" max="2048" step="64" value="512">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="steps">迭代步数</label>
+                        <input type="number" id="steps" class="form-control" min="1" max="100" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label for="cfg-scale">提示词权重</label>
+                        <input type="number" id="cfg-scale" class="form-control" min="0.1" max="3.0" step="0.1"
+                            value="1.0">
+                    </div>
+                    <div class="form-group">
+                        <label for="seed">随机种子</label>
+                        <input type="number" id="seed" class="form-control" min="0" max="999999999" value="0"
+                            placeholder="0表示随机">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button id="generate-btn" class="btn btn-primary">
+                <span> 开始生成 </span>
+            </button>
+            <button id="reset-btn" class="btn btn-secondary">
+                <span> 重置参数 </span>
+            </button>
+        </div>
+
+        <div id="task-status" class="task-status">
+            <div class="spinner"></div>
+            <div style="flex: 1;">
+                <div id="task-message">任务处理中...</div>
+                <div class="progress-bar" id="task-progress">
+                    <div class="progress-fill" id="task-progress-fill"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：文件列表 -->
+    <div class="file-list-panel">
+        <div class="panel-header">
+            <h2>📁 图片预览</h2>
+            <div class="header-actions">
+                <button id="refresh-btn" class="btn btn-secondary btn-icon" title="刷新列表">
+                    刷新
+                </button>
+                <button id="clear-all-btn" class="btn btn-danger btn-icon" title="清空所有">
+                    清空
+                </button>
+            </div>
+        </div>
+
+        <div id="file-grid" class="file-grid">
+            <!-- 文件卡片将通过JS动态插入 -->
+        </div>
+    </div>
+
+    <!-- 状态提示 -->
+    <div id="status-bar" class="status-bar">
+        <div id="status-message"></div>
+        <div class="progress-bar" id="status-progress">
+            <div class="progress-fill" id="status-progress-fill"></div>
+        </div>
+    </div>
+</body>
+
+</html>
