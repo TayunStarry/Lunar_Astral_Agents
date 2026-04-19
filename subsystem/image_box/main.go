@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -11,9 +12,18 @@ import (
 	"strings"
 )
 
+type Config struct {
+	ImageBox struct {
+		Input  []string `json:"input"`
+		Write  string   `json:"write"`
+		Output string   `json:"output"`
+	} `json:"image_box"`
+}
+
 type FileCombiner struct {
 	PNGTemplate string
 	OutputFile  string
+	InputFiles  []string
 	Excluded    map[string]bool
 }
 
@@ -23,32 +33,41 @@ func NewFileCombiner() *FileCombiner {
 	}
 }
 
+func LoadConfig(configPath string) (*Config, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	return &config, nil
+}
+
 func (fc *FileCombiner) Combine() error {
-	// 创建临时ZIP
 	zipData, err := fc.createZipInMemory()
 	if err != nil {
 		return fmt.Errorf("create zip: %w", err)
 	}
 
-	// 读取PNG文件
 	pngData, err := os.ReadFile(fc.PNGTemplate)
 	if err != nil {
 		return fmt.Errorf("read PNG: %w", err)
 	}
 
-	// 创建输出文件
 	output, err := os.Create(fc.OutputFile)
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
 	}
 	defer output.Close()
 
-	// 写入PNG数据
 	if _, err := output.Write(pngData); err != nil {
 		return fmt.Errorf("write PNG: %w", err)
 	}
 
-	// 写入ZIP数据
 	if _, err := output.Write(zipData); err != nil {
 		return fmt.Errorf("write ZIP: %w", err)
 	}
@@ -60,45 +79,43 @@ func (fc *FileCombiner) createZipInMemory() ([]byte, error) {
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
 
-	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+	for _, inputPath := range fc.InputFiles {
+		err := filepath.Walk(inputPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			relPath, err := filepath.Rel(".", path)
+			if err != nil {
+				return err
+			}
+
+			if fc.shouldExclude(relPath) {
+				return nil
+			}
+
+			zipEntry, err := writer.Create(relPath)
+			if err != nil {
+				return err
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(zipEntry, file)
 			return err
-		}
+		})
 
-		// 跳过目录
-		if info.IsDir() {
-			return nil
-		}
-
-		// 获取相对路径
-		relPath, err := filepath.Rel(".", path)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
-		// 检查是否排除
-		if fc.shouldExclude(relPath) {
-			return nil
-		}
-
-		// 添加到ZIP
-		zipEntry, err := writer.Create(relPath)
-		if err != nil {
-			return err
-		}
-
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		_, err = io.Copy(zipEntry, file)
-		return err
-	})
-
-	if err != nil {
-		return nil, err
 	}
 
 	writer.Close()
@@ -106,22 +123,18 @@ func (fc *FileCombiner) createZipInMemory() ([]byte, error) {
 }
 
 func (fc *FileCombiner) shouldExclude(path string) bool {
-	// 基本排除
 	if fc.Excluded[path] {
 		return true
 	}
 
-	// 排除输出文件
 	if path == fc.OutputFile {
 		return true
 	}
 
-	// 排除PNG模板
 	if path == fc.PNGTemplate {
 		return true
 	}
 
-	// 排除ZIP文件
 	if strings.HasSuffix(path, ".zip") {
 		return true
 	}
@@ -130,18 +143,38 @@ func (fc *FileCombiner) shouldExclude(path string) bool {
 }
 
 func main() {
-	fc := NewFileCombiner()
+	var inputFiles string
+	var writeFile string
+	var outputFile string
 
-	flag.StringVar(&fc.PNGTemplate, "png", "template.png", "PNG template file")
-	flag.StringVar(&fc.OutputFile, "output", "combined.png", "Output file")
+	flag.StringVar(&inputFiles, "input", "", "Input files (comma-separated)")
+	flag.StringVar(&writeFile, "write", "", "PNG template file")
+	flag.StringVar(&outputFile, "output", "", "Output file")
 	flag.Parse()
 
-	// 自动排除常见文件
+	fc := NewFileCombiner()
+
+	config, err := LoadConfig("./local_data/lunar_config.json")
+	if err == nil {
+		fc.PNGTemplate = config.ImageBox.Write
+		fc.OutputFile = config.ImageBox.Output
+		fc.InputFiles = config.ImageBox.Input
+	}
+
+	if inputFiles != "" {
+		fc.InputFiles = strings.Split(inputFiles, ",")
+	}
+	if writeFile != "" {
+		fc.PNGTemplate = writeFile
+	}
+	if outputFile != "" {
+		fc.OutputFile = outputFile
+	}
+
 	fc.Excluded[fc.PNGTemplate] = true
 	fc.Excluded[fc.OutputFile] = true
 	fc.Excluded[filepath.Base(os.Args[0])] = true
 
-	// 创建组合文件
 	if err := fc.Combine(); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)

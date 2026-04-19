@@ -17,3 +17,8 @@ Set-Location -Path '../../'
 Set-Location -Path './subsystem\qq_adapter'
 ./build.ps1
 Set-Location -Path '../../'
+
+# 构建image_box
+Set-Location -Path './subsystem\image_box'
+./build.ps1
+Set-Location -Path '../../'
