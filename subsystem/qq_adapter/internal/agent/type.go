@@ -1,6 +1,6 @@
 package agent
 
-import "QQAdapter/internal/processor"
+import "subsystem/internal/processor"
 
 // Request Agent请求结构体
 type Request struct {

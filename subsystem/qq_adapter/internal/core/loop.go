@@ -1,12 +1,12 @@
 package core
 
 import (
-	"QQAdapter/internal/processor" // 消息处理器
-	"QQAdapter/internal/utils"     // 工具包
 	"encoding/json"                // JSON 编码/解码
 	"fmt"                          // 格式化输出
 	"log"                          // 日志记录
 	"strings"                      // 字符串处理
+	"subsystem/internal/processor" // 消息处理器
+	"subsystem/internal/utils"     // 工具包
 	"time"                         // 时间处理
 )
 

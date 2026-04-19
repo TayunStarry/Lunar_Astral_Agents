@@ -1,13 +1,13 @@
 package processor
 
 import (
-	"QQAdapter/internal/setup"
-	"QQAdapter/internal/utils"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"strings"
+	"subsystem/internal/setup"
+	"subsystem/internal/utils"
 )
 
 // ParseMessageResponse 解析消息响应

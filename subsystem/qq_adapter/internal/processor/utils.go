@@ -1,8 +1,6 @@
 package processor
 
 import (
-	"QQAdapter/internal/setup"
-	"QQAdapter/internal/utils"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +9,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"subsystem/internal/setup"
+	"subsystem/internal/utils"
 )
 
 // getImageURL 获取图片URL
