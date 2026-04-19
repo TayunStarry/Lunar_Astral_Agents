@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"subsystem/internal/setup"     // 配置文件
+	"subsystem/component/setup"     // 配置文件
 	"bytes"                        // 用于处理字节缓冲区
 	"encoding/json"                // 用于JSON编码和解码
 	"fmt"                          // 格式化输出
@@ -11,7 +11,7 @@ import (
 	"net/http"                     // HTTP客户端
 	"regexp"                       // 用于正则表达式操作
 	"strings"                      // 字符串操作
-	"subsystem/internal/processor" // 核心处理器
+	"subsystem/component/processor" // 核心处理器
 	"time"                         // 时间操作
 )
 

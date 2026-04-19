@@ -1,10 +1,10 @@
 package core
 
 import (
-	"subsystem/internal/agent"     // OpenAI 客户端
-	"subsystem/internal/processor" // 核心处理器
-	"subsystem/internal/setup"     // 配置文件
-	"subsystem/internal/utils"     // 工具包
+	"subsystem/component/agent"     // OpenAI 客户端
+	"subsystem/component/processor" // 核心处理器
+	"subsystem/component/setup"     // 配置文件
+	"subsystem/component/utils"     // 工具包
 )
 
 // NewApplication 创建应用程序实例

@@ -1,4 +1,4 @@
-package internal
+package component
 // 导入必要的包
 import (
 	"fmt"  // 用于格式化输入输出

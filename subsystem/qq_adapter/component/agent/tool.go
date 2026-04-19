@@ -3,7 +3,7 @@ package agent
 import (
 	"encoding/json"                // 用于JSON编码和解码
 	"fmt"                          // 格式化输出
-	"subsystem/internal/processor" // 核心处理器
+	"subsystem/component/processor" // 核心处理器
 )
 
 // GetTools 获取所有可用工具

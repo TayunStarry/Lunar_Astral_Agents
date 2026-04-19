@@ -6,7 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"subsystem/internal/setup"
+	"subsystem/component/setup"
 	"time"
 )
 

@@ -5,8 +5,8 @@ import (
 	"fmt"                          // 格式化输出
 	"log"                          // 日志记录
 	"strings"                      // 字符串处理
-	"subsystem/internal/processor" // 消息处理器
-	"subsystem/internal/utils"     // 工具包
+	"subsystem/component/processor" // 消息处理器
+	"subsystem/component/utils"     // 工具包
 	"time"                         // 时间处理
 )
 

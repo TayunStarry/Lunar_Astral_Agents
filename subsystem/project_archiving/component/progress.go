@@ -1,4 +1,4 @@
-package internal
+package component
 
 import (
 	"bufio"   // 用于缓冲读取，提高效率

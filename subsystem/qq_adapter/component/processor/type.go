@@ -1,8 +1,8 @@
 package processor
 
 import (
-	"subsystem/internal/setup"
-	"subsystem/internal/utils"
+	"subsystem/component/setup"
+	"subsystem/component/utils"
 )
 
 // EmbeddingRequestBody 嵌入请求体结构
