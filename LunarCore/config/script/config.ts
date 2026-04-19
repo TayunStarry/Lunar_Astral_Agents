@@ -2,22 +2,23 @@ import { AuthHeaders, ToolCall } from '../index';
 
 /** 全局系统配置项 */
 export interface Config {
-    /** 文本嵌入服务接口地址 */
-    embeddingModelUrl?: string;
-    /** 文本嵌入模型名称 */
-    embeddingModelName?: string;
-    /** 文本嵌入服务 API 密钥 */
-    embeddingModelKey?: string;
-
-    /** 视觉理解服务接口地址 */
-    multimodalModelUrl?: string;
-    /** 视觉理解模型名称 */
-    multimodalModelName?: string;
-    /** 视觉理解服务 API 密钥 */
-    multimodalModelKey?: string;
-
-    /** 用户名 */
-    userName?: string;
+    /** 云配置 */
+    cloud: {
+        /** 视觉理解服务接口地址 */
+        multimodalModelUrl?: string;
+        /** 视觉理解模型名称 */
+        multimodalModelName?: string;
+        /** 视觉理解服务 API 密钥 */
+        multimodalModelKey?: string;
+        /** 用户名 */
+        userName?: string;
+        /** 文本嵌入服务接口地址 */
+        embeddingModelUrl?: string;
+        /** 文本嵌入模型名称 */
+        embeddingModelName?: string;
+        /** 文本嵌入服务 API 密钥 */
+        embeddingModelKey?: string;
+    };
 }
 
 /** 网络代理请求配置项 */

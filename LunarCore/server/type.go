@@ -34,20 +34,32 @@ var httpMux *http.ServeMux
 
 // ModelConfig 定义模型配置的结构
 type ModelConfig struct {
+	// 模型配置
 	Models struct {
 		// 嵌入模型路径
-		Embedding string `json:"embedding"`
+		EmbeddingModel string `json:"embedding_model"`
 		// 多模态模型路径
-		Multimodal string `json:"multimodal"`
+		MultimodalModel string `json:"multimodal_model"`
 		// 多模态投影模型路径
-		MultimodalMmproj string `json:"multimodal_mmproj"`
+		MmprojModel string `json:"mmproj_model"`
 		// 扩散模型路径
-		Diffusion string `json:"diffusion"`
+		DiffusionModel string `json:"diffusion_model"`
 		// 变分模型路径
-		Variational string `json:"variational"`
+		VariationalModel string `json:"variational_model"`
 		// 提示精炼模型路径
-		PromptRefine string `json:"prompt_refine"`
+		PromptRefineModel string `json:"prompt_refine_model"`
 	} `json:"models"`
+	// 服务器配置
+	Server struct {
+		// 是否为开发者模式
+		Developer bool `json:"developer"`
+		// 是否清除端口
+		ClearPort bool `json:"clear_port"`
+		// 是否允许加载扩散模型
+		AllowDiffusion bool `json:"allow_diffusion"`
+		// 是否允许加载多模态模型
+		AllowMultimodal bool `json:"allow_multimodal"`
+	} `json:"server"`
 }
 
 // CORSAllowedOrigins 定义允许跨域访问的来源列表

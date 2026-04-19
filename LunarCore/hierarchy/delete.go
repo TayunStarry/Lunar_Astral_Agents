@@ -38,7 +38,7 @@ func DeleteFile(filePath string) (string, error) {
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
 	// 记录删除成功日志
-	if *config.DevMode {
+	if *config.Developer {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Delete请求 -> 成功删除: %s", fullPath)
 		log.Printf("%s", strings.Repeat("-=", 28))

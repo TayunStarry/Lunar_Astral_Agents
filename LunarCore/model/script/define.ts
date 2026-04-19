@@ -44,7 +44,7 @@ export class AgentDefine {
         this.summaryRole.useMultimodal(getFileContent('resources/prompts/summaryRole.md'));
         this.descriptionRole.useMultimodal(getFileContent('resources/prompts/descriptionRole.md'));
         // 初始化 自定义配置 信息
-        fetchDocumentCallback('resources/custom_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
+        fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
         // TODO 初始化 工具调用配置
         // fetchDocumentCallback('resources/toolCall.json').then(content => OnlyData.toolCall = JSON.parse(content));
         // TODO 初始化 聊天记录

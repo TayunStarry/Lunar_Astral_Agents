@@ -80,7 +80,7 @@ func ProcessTask(task GenerateTask) {
 	args := []string{
 		"--diffusion-model", *config.DiffusionModel,
 		"--vae", *config.VariationalModel,
-		"--llm", *config.PromptModel,
+		"--llm", *config.PromptRefineModel,
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),

@@ -22,3 +22,8 @@ Set-Location -Path '../../'
 Set-Location -Path './subsystem\image_box'
 ./build.ps1
 Set-Location -Path '../../'
+
+# 构建project_archiving
+Set-Location -Path './subsystem\project_archiving'
+./build.ps1
+Set-Location -Path '../../'

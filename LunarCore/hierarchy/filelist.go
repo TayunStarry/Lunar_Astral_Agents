@@ -62,7 +62,7 @@ func GetFileList(path string) ([]FileInfo, error) {
 		})
 	}
 	// 记录文件列表请求日志
-	if *config.DevMode {
+	if *config.Developer {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 		log.Printf("%s", strings.Repeat("-=", 28))

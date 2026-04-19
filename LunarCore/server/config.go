@@ -36,28 +36,52 @@ func loadConfigureFile() {
 		log.Printf("解析配置文件失败: %v", err)
 		return
 	}
-	// 如果配置文件中 Embedding 字段非空，则更新全局配置
-	if parameter.Models.Embedding != "" {
-		*config.EmbeddingModel = parameter.Models.Embedding
+	// 如果配置文件中 EmbeddingModel 字段非空，则更新全局配置
+	if parameter.Models.EmbeddingModel != "" {
+		*config.EmbeddingModel = parameter.Models.EmbeddingModel
 	}
-	// 如果配置文件中 Multimodal 字段非空，则更新全局配置
-	if parameter.Models.Multimodal != "" {
-		*config.MultimodalModel = parameter.Models.Multimodal
+	// 如果配置文件中 MultimodalModel 字段非空，则更新全局配置
+	if parameter.Models.MultimodalModel != "" {
+		*config.MultimodalModel = parameter.Models.MultimodalModel
 	}
-	// 如果配置文件中 MultimodalMmproj 字段非空，则更新全局配置
-	if parameter.Models.MultimodalMmproj != "" {
-		*config.MmprojModel = parameter.Models.MultimodalMmproj
+	// 如果配置文件中 MmprojModel 字段非空，则更新全局配置
+	if parameter.Models.MmprojModel != "" {
+		*config.MmprojModel = parameter.Models.MmprojModel
 	}
-	// 如果配置文件中 Diffusion 字段非空，则更新全局配置
-	if parameter.Models.Diffusion != "" {
-		*config.DiffusionModel = parameter.Models.Diffusion
+	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
+	if parameter.Models.DiffusionModel != "" {
+		*config.DiffusionModel = parameter.Models.DiffusionModel
 	}
-	// 如果配置文件中 Variational 字段非空，则更新全局配置
-	if parameter.Models.Variational != "" {
-		*config.VariationalModel = parameter.Models.Variational
+	// 如果配置文件中 VariationalModel 字段非空，则更新全局配置
+	if parameter.Models.VariationalModel != "" {
+		*config.VariationalModel = parameter.Models.VariationalModel
 	}
-	// 如果配置文件中 PromptRefine 字段非空，则更新全局配置
-	if parameter.Models.PromptRefine != "" {
-		*config.PromptModel = parameter.Models.PromptRefine
+	// 如果配置文件中 PromptRefineModel 字段非空，则更新全局配置
+	if parameter.Models.PromptRefineModel != "" {
+		*config.PromptRefineModel = parameter.Models.PromptRefineModel
+	}
+	// 如果配置文件中 Developer 字段非空，则更新全局配置
+	if parameter.Server.Developer == true {
+		*config.Developer = true
+	} else {
+		*config.Developer = false
+	}
+	// 如果配置文件中 ClearPort 字段非空，则更新全局配置
+	if parameter.Server.ClearPort == true {
+		*config.ClearPort = true
+	} else {
+		*config.ClearPort = false
+	}
+	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
+	if parameter.Server.AllowDiffusion == true {
+		*config.AllowDiffusion = true
+	} else {
+		*config.AllowDiffusion = false
+	}
+	// 如果配置文件中 AllowMultimodal 字段非空，则更新全局配置
+	if parameter.Server.AllowMultimodal == true {
+		*config.AllowMultimodal = true
+	} else {
+		*config.AllowMultimodal = false
 	}
 }
