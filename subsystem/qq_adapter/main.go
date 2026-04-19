@@ -4,7 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"transponder/internal/core"
+	"QQAdapter/internal/core"
 )
 
 func main() {

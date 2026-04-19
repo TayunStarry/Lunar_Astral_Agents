@@ -1,13 +1,13 @@
 package processor
 
 import (
+	"QQAdapter/internal/setup"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
 	"time"
-	"transponder/internal/setup"
 )
 
 // universalCodeEscape 通用代码转义

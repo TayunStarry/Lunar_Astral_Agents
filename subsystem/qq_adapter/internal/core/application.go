@@ -1,10 +1,10 @@
 package core
 
 import (
-	"transponder/internal/agent"     // OpenAI 客户端
-	"transponder/internal/setup"    // 配置文件
-	"transponder/internal/processor" // 核心处理器
-	"transponder/internal/utils"     // 工具包
+	"QQAdapter/internal/agent"     // OpenAI 客户端
+	"QQAdapter/internal/processor" // 核心处理器
+	"QQAdapter/internal/setup"     // 配置文件
+	"QQAdapter/internal/utils"     // 工具包
 )
 
 // NewApplication 创建应用程序实例

@@ -1,13 +1,13 @@
 package core
 
 import (
-	"encoding/json"                  // JSON 编码/解码
-	"fmt"                            // 格式化输出
-	"log"                            // 日志记录
-	"strings"                        // 字符串处理
-	"time"                           // 时间处理
-	"transponder/internal/processor" // 消息处理器
-	"transponder/internal/utils"     // 工具包
+	"QQAdapter/internal/processor" // 消息处理器
+	"QQAdapter/internal/utils"     // 工具包
+	"encoding/json"                // JSON 编码/解码
+	"fmt"                          // 格式化输出
+	"log"                          // 日志记录
+	"strings"                      // 字符串处理
+	"time"                         // 时间处理
 )
 
 // MainLoop 执行主循环

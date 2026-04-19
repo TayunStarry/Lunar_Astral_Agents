@@ -9,7 +9,7 @@ import (
 
 var (
 	// DefaultConfigFile 默认配置文件路径
-	DefaultConfigFile = "config.json"
+	DefaultConfigFile = "adapter_config.json"
 	// DisplayDebugMessage 是否显示调试信息
 	DisplayDebugMessage = false
 )

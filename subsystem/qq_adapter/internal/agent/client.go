@@ -1,18 +1,18 @@
 package agent
 
 import (
-	"bytes"                          // 用于处理字节缓冲区
-	"encoding/json"                  // 用于JSON编码和解码
-	"fmt"                            // 格式化输出
-	"io"                             // 用于IO操作
-	"log"                            // 日志记录
-	"mime/multipart"                 // 用于处理multipart表单
-	"net/http"                       // HTTP客户端
-	"regexp"                         // 用于正则表达式操作
-	"strings"                        // 字符串操作
-	"time"                           // 时间操作
-	"transponder/internal/processor" // 核心处理器
-	"transponder/internal/setup"     // 配置文件
+	"QQAdapter/internal/processor" // 核心处理器
+	"QQAdapter/internal/setup"     // 配置文件
+	"bytes"                        // 用于处理字节缓冲区
+	"encoding/json"                // 用于JSON编码和解码
+	"fmt"                          // 格式化输出
+	"io"                           // 用于IO操作
+	"log"                          // 日志记录
+	"mime/multipart"               // 用于处理multipart表单
+	"net/http"                     // HTTP客户端
+	"regexp"                       // 用于正则表达式操作
+	"strings"                      // 字符串操作
+	"time"                         // 时间操作
 )
 
 // NewClient 创建新的OpenAI客户端

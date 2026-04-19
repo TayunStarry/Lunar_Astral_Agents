@@ -1,4 +1,4 @@
-module transponder
+module QQAdapter
 
 go 1.24.4
 
