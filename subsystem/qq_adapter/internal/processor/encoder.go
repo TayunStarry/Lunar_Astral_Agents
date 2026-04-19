@@ -1,12 +1,12 @@
 package processor
 
 import (
-	"QQAdapter/internal/setup"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
 	"strings"
+	"subsystem/internal/setup"
 	"time"
 )
 

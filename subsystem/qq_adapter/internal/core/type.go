@@ -1,10 +1,10 @@
 package core
 
 import (
-	"QQAdapter/internal/agent"     // Agent 客户端
-	"QQAdapter/internal/processor" // 核心处理器
-	"QQAdapter/internal/setup"     // 配置文件
-	"QQAdapter/internal/utils"     // 工具包
+	"subsystem/internal/agent"     // Agent 客户端
+	"subsystem/internal/processor" // 核心处理器
+	"subsystem/internal/setup"     // 配置文件
+	"subsystem/internal/utils"     // 工具包
 )
 
 // Application 应用程序结构

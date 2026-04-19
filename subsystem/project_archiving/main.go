@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"log"
-	code "encapsulator/internal"
+	code "subsystem/internal"
 )
 
 func main() {

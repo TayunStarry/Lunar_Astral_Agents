@@ -4,7 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"QQAdapter/internal/core"
+	"subsystem/internal/core"
 )
 
 func main() {

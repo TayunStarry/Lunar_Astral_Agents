@@ -16,7 +16,7 @@ var (
 
 // LunarConfig 综合配置结构体
 type LunarConfig struct {
-	QQAdapter Config `json:"qq_adapter"`
+	subsystem Config `json:"qq_adapter"`
 }
 
 // Load 加载配置文件
@@ -25,7 +25,7 @@ func Load() (*Config, error) {
 	if _, err := os.Stat(DefaultConfigFile); os.IsNotExist(err) {
 		// 创建默认配置文件
 		defaultConfig := &LunarConfig{
-			QQAdapter: Config{
+			subsystem: Config{
 				NapCatWSServer:  "ws://localhost:20485",
 				NapCatWSToken:   "ItlC2Nc1DfICVYq5",
 				OpenAIAPIUrl:    "http://localhost:36789/v1/chat/completions",
@@ -44,7 +44,7 @@ func Load() (*Config, error) {
 		// 显示创建默认配置文件信息
 		log.Printf("已创建默认配置文件 %s", DefaultConfigFile)
 		// 导出默认配置
-		return &defaultConfig.QQAdapter, nil
+		return &defaultConfig.subsystem, nil
 	}
 	// 读取配置文件
 	configJSON, err := os.ReadFile(DefaultConfigFile)
@@ -61,7 +61,7 @@ func Load() (*Config, error) {
 	// 显示读取配置文件信息
 	log.Printf("已读取配置文件 %s", DefaultConfigFile)
 	// 导出配置信息
-	return &lunarConfig.QQAdapter, nil
+	return &lunarConfig.subsystem, nil
 }
 
 // saveConfig 保存配置到文件
