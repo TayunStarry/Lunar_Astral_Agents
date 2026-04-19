@@ -1,3 +1,6 @@
+# 编译图标
+rsrc -ico icon.ico -o icon.syso
+
 # 启用CGO
 $env:CGO_ENABLED=1
 

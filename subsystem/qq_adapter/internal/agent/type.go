@@ -1,6 +1,6 @@
 package agent
 
-import "transponder/internal/processor"
+import "QQAdapter/internal/processor"
 
 // Request Agent请求结构体
 type Request struct {

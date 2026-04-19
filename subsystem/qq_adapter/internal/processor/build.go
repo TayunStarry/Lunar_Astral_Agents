@@ -1,9 +1,9 @@
 package processor
 
 import (
+	"QQAdapter/internal/setup"
+	"QQAdapter/internal/utils"
 	"strings"
-	"transponder/internal/setup"
-	"transponder/internal/utils"
 )
 
 // NewHandle 创建消息处理器

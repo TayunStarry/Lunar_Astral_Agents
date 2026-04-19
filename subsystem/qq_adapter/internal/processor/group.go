@@ -1,12 +1,12 @@
 package processor
 
 import (
+	"QQAdapter/internal/setup"
+	"QQAdapter/internal/utils"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
-	"transponder/internal/setup"
-	"transponder/internal/utils"
 )
 
 // ValidateListenGroups 校验需要监听的群

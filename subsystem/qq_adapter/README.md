@@ -1,8 +1,8 @@
-# Transponder 子系统文档
+# QQAdapter 子系统文档
 
 ## 1. 系统概述
 
-Transponder 是 Lunar Astral Agents 的核心转发子系统，主要负责处理和转发各种请求，协调不同模块之间的通信，是系统的中枢神经。
+QQAdapter 是 Lunar Astral Agents 的核心转发子系统，主要负责处理和转发各种请求，协调不同模块之间的通信，是系统的中枢神经。
 
 ## 2. 功能特点
 
@@ -18,7 +18,7 @@ Transponder 是 Lunar Astral Agents 的核心转发子系统，主要负责处�
 ### 3.1 目录结构
 
 ```
-transponder/
+QQAdapter/
 ├── main.go              # 主入口文件
 ├── config.json          # 配置文件
 ├── go.mod               # Go模块文件
@@ -104,7 +104,7 @@ transponder/
 
 ```bash
 # 直接运行
-./transponder.exe
+./QQAdapter.exe
 
 # 确保配置文件正确配置
 # 配置文件: config.json
@@ -112,14 +112,14 @@ transponder/
 
 ### 5.2 配置文件
 
-配置文件 `config.json` 包含了 Transponder 子系统的各种配置参数，如服务器地址、模型配置、路径设置等。
+配置文件 `config.json` 包含了 QQAdapter 子系统的各种配置参数，如服务器地址、模型配置、路径设置等。
 
 ### 5.3 操作流程
 
 1. **启动主服务器**：确保 Lunar Astral Agents 主服务器已启动
-2. **启动 Transponder**：运行 transponder 子系统
-3. **处理请求**：Transponder 会自动处理来自其他模块的请求
-4. **监控运行**：监控 Transponder 的运行状态和日志输出
+2. **启动 QQAdapter**：运行 QQAdapter 子系统
+3. **处理请求**：QQAdapter 会自动处理来自其他模块的请求
+4. **监控运行**：监控 QQAdapter 的运行状态和日志输出
 
 ## 6. 核心功能详解
 
@@ -200,7 +200,7 @@ transponder/
 
 ## 11. 日志系统
 
-Transponder 使用标准的 Go 日志系统，输出详细的运行信息和错误信息。日志内容包括：
+QQAdapter 使用标准的 Go 日志系统，输出详细的运行信息和错误信息。日志内容包括：
 
 - **启动信息**：系统启动时的初始化信息
 - **请求信息**：处理的请求类型和内容
@@ -248,7 +248,7 @@ Transponder 使用标准的 Go 日志系统，输出详细的运行信息和错�
 
 **流程**：
 1. 客户端发送文本请求
-2. Transponder 接收请求
+2. QQAdapter 接收请求
 3. 调用相应的模型进行处理
 4. 生成响应并返回给客户端
 
@@ -258,14 +258,14 @@ Transponder 使用标准的 Go 日志系统，输出详细的运行信息和错�
 
 **流程**：
 1. 客户端发送图文混合请求
-2. Transponder 接收请求
+2. QQAdapter 接收请求
 3. 调用多模态模型进行处理
 4. 可能需要查询知识库获取相关信息
 5. 生成响应并返回给客户端
 
 ## 16. 总结
 
-Transponder 是 Lunar Astral Agents 系统的核心转发子系统，负责协调不同模块之间的通信，处理各种请求，调用模型进行处理，是系统的中枢神经。通过合理配置和使用 Transponder，可以提高系统的整体性能和可靠性，确保系统能够高效处理各种请求和任务。
+QQAdapter 是 Lunar Astral Agents 系统的核心转发子系统，负责协调不同模块之间的通信，处理各种请求，调用模型进行处理，是系统的中枢神经。通过合理配置和使用 QQAdapter，可以提高系统的整体性能和可靠性，确保系统能够高效处理各种请求和任务。
 
 ## 17. 版本历史
 

@@ -1,8 +1,8 @@
 package processor
 
 import (
-	"transponder/internal/setup"
-	"transponder/internal/utils"
+	"QQAdapter/internal/setup"
+	"QQAdapter/internal/utils"
 )
 
 // EmbeddingRequestBody 嵌入请求体结构
