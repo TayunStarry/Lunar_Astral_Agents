@@ -16,14 +16,16 @@ type PackageLevelConfig struct {
 
 // PackageConfig 打包配置文件结构
 type PackageConfig struct {
-	PackageLevels map[string]PackageLevelConfig `json:"package_levels"`
-	SevenZipPaths []string                      `json:"sevenzip_paths"`
-	Defaults      struct {
-		OutputPath       string `json:"output_path"`
-		PartSizeMB       int    `json:"part_size_mb"`
-		CompressionLevel int    `json:"compression_level"`
-		PackageLevel     int    `json:"package_level"`
-	} `json:"defaults"`
+	ProjectArchiving struct {
+		PackageLevels map[string]PackageLevelConfig `json:"package_levels"`
+		SevenZipPaths []string                      `json:"sevenzip_paths"`
+		Defaults      struct {
+			OutputPath       string `json:"output_path"`
+			PartSizeMB       int    `json:"part_size_mb"`
+			CompressionLevel int    `json:"compression_level"`
+			PackageLevel     int    `json:"package_level"`
+		} `json:"defaults"`
+	} `json:"project_archiving"`
 }
 
 var packageConfig *PackageConfig
@@ -37,7 +39,7 @@ func LoadPackageConfig(configPath string) error {
 			return fmt.Errorf("获取可执行文件路径失败: %v", err)
 		}
 		exeDir := filepath.Dir(exePath)
-		configPath = filepath.Join(exeDir, "package-config.json")
+		configPath = filepath.Join(exeDir, "local_data/lunar_config.json")
 	}
 
 	// 读取配置文件
@@ -53,13 +55,13 @@ func LoadPackageConfig(configPath string) error {
 	}
 
 	// 验证配置
-	if len(config.PackageLevels) == 0 {
+	if len(config.ProjectArchiving.PackageLevels) == 0 {
 		return fmt.Errorf("配置文件中未定义打包级别")
 	}
 
-	if len(config.SevenZipPaths) == 0 {
+	if len(config.ProjectArchiving.SevenZipPaths) == 0 {
 		// 如果没有配置，使用默认路径
-		config.SevenZipPaths = []string{
+		config.ProjectArchiving.SevenZipPaths = []string{
 			"./7z/7z.exe",
 			"C:/Program Files/7-Zip/7z.exe",
 			"C:/Program Files (x86)/7-Zip/7z.exe",
@@ -87,7 +89,7 @@ func GetSourcesByLevel(level int) ([]string, error) {
 
 	// 将级别转换为字符串
 	levelKey := fmt.Sprintf("%d", level)
-	levelConfig, exists := config.PackageLevels[levelKey]
+	levelConfig, exists := config.ProjectArchiving.PackageLevels[levelKey]
 	if !exists {
 		return nil, fmt.Errorf("无效的打包级别: %d", level)
 	}
@@ -109,10 +111,10 @@ func GetDefaultConfig() (string, int, int, int) {
 		// 如果配置加载失败，返回硬编码的默认值
 		return "Lunar-Astral-Agents", 2048, 5, 3
 	}
-	return config.Defaults.OutputPath,
-		config.Defaults.PartSizeMB,
-		config.Defaults.CompressionLevel,
-		config.Defaults.PackageLevel
+	return config.ProjectArchiving.Defaults.OutputPath,
+		config.ProjectArchiving.Defaults.PartSizeMB,
+		config.ProjectArchiving.Defaults.CompressionLevel,
+		config.ProjectArchiving.Defaults.PackageLevel
 }
 
 // GetSevenZipPaths 获取7z路径列表
@@ -126,5 +128,5 @@ func GetSevenZipPaths() []string {
 			"C:/Program Files (x86)/7-Zip/7z.exe",
 		}
 	}
-	return config.SevenZipPaths
+	return config.ProjectArchiving.SevenZipPaths
 }

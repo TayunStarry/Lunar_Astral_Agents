@@ -70,7 +70,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		log.Printf("Save请求[ERROR] -> 同步失败: %s, %v", fullPath, err)
 	}
 	// 记录保存成功日志
-	if *config.DevMode {
+	if *config.Developer {
 		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 		log.Printf("%s", strings.Repeat("-=", 28))

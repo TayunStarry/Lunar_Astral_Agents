@@ -1,11 +1,26 @@
 {
 	"models": {
-		"multimodal_mmproj": null,
-		"multimodal": null,
-		"embedding": null,
-		"diffusion": null,
-		"variational": null,
-		"prompt_refine": null
+		"multimodal_model": null,
+		"mmproj_model": null,
+		"embedding_model": null,
+		"diffusion_model": null,
+		"variational_model": null,
+		"prompt_refine_model": null
+	},
+	"server": {
+		"developer": false,
+		"clear_port": false,
+		"allow_diffusion": true,
+		"allow_multimodal": true
+	},
+	"cloud": {
+		"multimodalModelUrl": null,
+		"multimodalModelName": null,
+		"multimodalModelKey": null,
+		"userName": null,
+		"embeddingModelUrl": null,
+		"embeddingModelName": null,
+		"embeddingModelKey": null
 	},
 	"image_box": {
 		"input": [
@@ -33,5 +48,58 @@
 			"3826713076"
 		],
 		"default_reply": "月华不知道哦~"
+	},
+	"project_archiving": {
+		"package_levels": {
+			"1": {
+				"name": "核心文件",
+				"description": "用于发布纯前端的功能补丁更新",
+				"sources": [
+					"../.././Lunar-Astral-Agents.exe",
+					"../.././local_data/certs",
+					"../.././local_data/model_config.json"
+				]
+			},
+			"2": {
+				"name": "核心文件 + 扩展程序",
+				"description": "用于发布包含扩展程序的完整可执行文件系统的功能更新",
+				"sources": [
+					"../.././Lunar-Astral-Agents.exe",
+					"../.././webpage",
+					"../.././local_data/certs",
+					"../.././local_data/resources",
+					"../.././local_data/model_config.json",
+					"../.././local_data/knowledge/meme_model.json",
+					"../.././local_data/knowledge/emotional_model.json",
+					"../.././subsystem"
+				]
+			},
+			"3": {
+				"name": "完整包",
+				"description": "用于发布包含所有文件的完整可执行文件系统的功能更新",
+				"sources": [
+					"../.././models",
+					"../.././Lunar-Astral-Agents.exe",
+					"../.././webpage",
+					"../.././local_data/certs",
+					"../.././local_data/resources",
+					"../.././local_data/model_config.json",
+					"../.././local_data/knowledge/meme_model.json",
+					"../.././local_data/knowledge/emotional_model.json",
+					"../.././subsystem"
+				]
+			}
+		},
+		"sevenzip_paths": [
+			"./subsystem/archive/7z.exe",
+			"C:/Program Files/7-Zip/7z.exe",
+			"C:/Program Files (x86)/7-Zip/7z.exe"
+		],
+		"defaults": {
+			"output_path": "./Lunar-Astral-Agents^2026-03-20",
+			"part_size_mb": 2048,
+			"compression_level": 5,
+			"package_level": 2
+		}
 	}
 }

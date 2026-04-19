@@ -33,7 +33,7 @@ class PromptProcessor extends BaseConfig {
         // 返回替换后的系统提示词
         return prompt
             // 转换用户名称
-            .replace(/{name}/g, OnlyData.customConfig.userName || "你")
+            .replace(/{name}/g, OnlyData.userName)
             // 转换当前时间
             .replace(/{current-time}/g, new Date().toLocaleString())
             // 转换当前地址

@@ -37,7 +37,7 @@ func startServerForModel(modelType, modelPath string, basePort int) {
 		return
 	}
 	// 检查系统是否处于开发模式
-	if *config.DevMode {
+	if *config.Developer {
 		// 若处于开发模式，显示模型的所有元数据，方便调试
 		metadata.DisplayAllMetadata(modelName, metaData)
 	}

@@ -8,7 +8,7 @@ export class OnlyData {
     /** 默认的多模态模型名称 */
     private static modelMultimodalName = "system-multimodal";
     /** 自定义配置项 */
-    public static customConfig: Config = {};
+    public static customConfig: Config = { cloud: {} };
     /** 工具调用配置 */
     public static toolCall: ToolCall[] = [];
     /** 支持的图片文件扩展名 */
@@ -55,26 +55,30 @@ export class OnlyData {
     };
     /** 获取 多模态模型 URL */
     public static get MultimodalUrl(): string {
-        return OnlyData.customConfig.multimodalModelUrl || OnlyData.systemUrl;
+        return OnlyData.customConfig.cloud.multimodalModelUrl || OnlyData.systemUrl;
     };
     /** 获取 多模态模型 API 密钥 */
     public static get MultimodalKey(): string {
-        return OnlyData.customConfig.multimodalModelKey || OnlyData.systemKey;
+        return OnlyData.customConfig.cloud.multimodalModelKey || OnlyData.systemKey;
     };
     /** 获取 多模态模型名称 */
     public static get MultimodalName(): string {
-        return OnlyData.customConfig.multimodalModelName || OnlyData.modelMultimodalName;
+        return OnlyData.customConfig.cloud.multimodalModelName || OnlyData.modelMultimodalName;
     };
     /** 获取 嵌入模型 URL */
     public static get EmbeddingUrl(): string {
-        return OnlyData.customConfig.embeddingModelUrl || OnlyData.systemUrl;
+        return OnlyData.customConfig.cloud.embeddingModelUrl || OnlyData.systemUrl;
     };
     /** 获取 嵌入模型 API 密钥 */
     public static get EmbeddingKey(): string {
-        return OnlyData.customConfig.embeddingModelKey || OnlyData.systemKey;
+        return OnlyData.customConfig.cloud.embeddingModelKey || OnlyData.systemKey;
     };
     /** 获取 嵌入模型名称 */
     public static get EmbeddingName(): string {
-        return OnlyData.customConfig.embeddingModelName || OnlyData.modelEmbedingName;
+        return OnlyData.customConfig.cloud.embeddingModelName || OnlyData.modelEmbedingName;
+    };
+    /** 获取 用户名 */
+    public static get userName(): string {
+        return OnlyData.customConfig.cloud.userName || "你";
     };
 };

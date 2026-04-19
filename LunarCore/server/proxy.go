@@ -130,7 +130,7 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		// 指示原始请求的端口
 		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.ProxyPort))
 		// 开发模式日志 - 记录请求转发详情
-		if *config.DevMode {
+		if *config.Developer {
 			log.Printf("[TLS代理] 转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
 		}
 	}
