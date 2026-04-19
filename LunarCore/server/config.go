@@ -19,8 +19,8 @@ func loadConfigureFile() {
 	}
 	// 提取可执行文件所在的目录
 	exeDir := filepath.Dir(exePath)
-	// 拼接配置文件 model_config.json 的完整路径
-	configPath := filepath.Join(exeDir, *config.LocalDir, "model_config.json")
+	// 拼接配置文件 lunar_config.json 的完整路径
+	configPath := filepath.Join(exeDir, *config.LocalDir, "lunar_config.json")
 	// 读取配置文件内容
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -36,28 +36,28 @@ func loadConfigureFile() {
 		log.Printf("解析配置文件失败: %v", err)
 		return
 	}
-	// 如果配置文件中 EmbeddingModelPath 字段非空，则更新全局配置
-	if parameter.EmbeddingModelPath != "" {
-		*config.EmbeddingModel = parameter.EmbeddingModelPath
+	// 如果配置文件中 Embedding 字段非空，则更新全局配置
+	if parameter.Models.Embedding != "" {
+		*config.EmbeddingModel = parameter.Models.Embedding
 	}
-	// 如果配置文件中 MultimodalModelPath 字段非空，则更新全局配置
-	if parameter.MultimodalModelPath != "" {
-		*config.MultimodalModel = parameter.MultimodalModelPath
+	// 如果配置文件中 Multimodal 字段非空，则更新全局配置
+	if parameter.Models.Multimodal != "" {
+		*config.MultimodalModel = parameter.Models.Multimodal
 	}
-	// 如果配置文件中 MmprojModelPath 字段非空，则更新全局配置
-	if parameter.MmprojModelPath != "" {
-		*config.MmprojModel = parameter.MmprojModelPath
+	// 如果配置文件中 MultimodalMmproj 字段非空，则更新全局配置
+	if parameter.Models.MultimodalMmproj != "" {
+		*config.MmprojModel = parameter.Models.MultimodalMmproj
 	}
-	// 如果配置文件中 DiffusionModelPath 字段非空，则更新全局配置
-	if parameter.DiffusionModelPath != "" {
-		*config.DiffusionModel = parameter.DiffusionModelPath
+	// 如果配置文件中 Diffusion 字段非空，则更新全局配置
+	if parameter.Models.Diffusion != "" {
+		*config.DiffusionModel = parameter.Models.Diffusion
 	}
-	// 如果配置文件中 VariationalModelPath 字段非空，则更新全局配置
-	if parameter.VariationalModelPath != "" {
-		*config.VariationalModel = parameter.VariationalModelPath
+	// 如果配置文件中 Variational 字段非空，则更新全局配置
+	if parameter.Models.Variational != "" {
+		*config.VariationalModel = parameter.Models.Variational
 	}
-	// 如果配置文件中 PromptRefineModelPath 字段非空，则更新全局配置
-	if parameter.PromptRefineModelPath != "" {
-		*config.PromptModel = parameter.PromptRefineModelPath
+	// 如果配置文件中 PromptRefine 字段非空，则更新全局配置
+	if parameter.Models.PromptRefine != "" {
+		*config.PromptModel = parameter.Models.PromptRefine
 	}
 }

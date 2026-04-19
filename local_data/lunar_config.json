@@ -1,0 +1,37 @@
+{
+	"models": {
+		"multimodal_mmproj": null,
+		"multimodal": null,
+		"embedding": null,
+		"diffusion": null,
+		"variational": null,
+		"prompt_refine": null
+	},
+	"image_box": {
+		"input": [
+			"./image.png"
+		],
+		"write": "./template.png",
+		"output": "./package.png"
+	},
+	"qq_adapter": {
+		"napcat_ws_server": "ws://localhost:4567",
+		"napcat_ws_token": "ItlC2Nc1DfICVYq5",
+		"openai_api_url": "http://localhost:36789/v1/chat/completions",
+		"openai_api_token": "",
+		"openai_api_model": "system-multimodal",
+		"poll_interval": 10,
+		"listen_group_ids": [
+			906314036,
+			262221051,
+			1022847485,
+			710834920
+		],
+		"trigger_keywords": [
+			"月之华",
+			"月华",
+			"3826713076"
+		],
+		"default_reply": "月华不知道哦~"
+	}
+}

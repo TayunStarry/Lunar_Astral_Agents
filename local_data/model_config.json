@@ -1,8 +1,0 @@
-{
-    "embedding_model_path": null,
-    "multimodal_model_path": null,
-    "mmproj_model_path": null,
-    "diffusion_model_path": null,
-    "variational_model_path": null,
-    "prompt_refine_model_path": null
-}
