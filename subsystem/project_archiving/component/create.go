@@ -1,4 +1,4 @@
-package internal
+package component
 
 import (
 	"fmt"           // 用于格式化输出

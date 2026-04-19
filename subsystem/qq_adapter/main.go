@@ -4,7 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"subsystem/internal/core"
+	"subsystem/component/core"
 )
 
 func main() {

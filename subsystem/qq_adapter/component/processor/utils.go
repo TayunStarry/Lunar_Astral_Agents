@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"subsystem/internal/setup"
-	"subsystem/internal/utils"
+	"subsystem/component/setup"
+	"subsystem/component/utils"
 )
 
 // getImageURL 获取图片URL

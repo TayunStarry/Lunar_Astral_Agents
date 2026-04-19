@@ -1,4 +1,4 @@
-package internal
+package component
 
 import (
 	"flag" // 用于解析命令行参数

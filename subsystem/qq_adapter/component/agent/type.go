@@ -1,6 +1,6 @@
 package agent
 
-import "subsystem/internal/processor"
+import "subsystem/component/processor"
 
 // Request Agent请求结构体
 type Request struct {

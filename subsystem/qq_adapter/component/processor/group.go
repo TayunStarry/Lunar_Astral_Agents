@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"subsystem/internal/setup"
-	"subsystem/internal/utils"
+	"subsystem/component/utils"
+	"subsystem/component/setup"
 )
 
 // ValidateListenGroups 校验需要监听的群

@@ -1,4 +1,4 @@
-package internal
+package component
 
 // 导入必要的包
 import (

@@ -2,8 +2,8 @@ package processor
 
 import (
 	"strings"
-	"subsystem/internal/setup"
-	"subsystem/internal/utils"
+	"subsystem/component/setup"
+	"subsystem/component/utils"
 )
 
 // NewHandle 创建消息处理器

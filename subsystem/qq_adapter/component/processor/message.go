@@ -6,8 +6,8 @@ import (
 	"log"
 	"math/rand"
 	"strings"
-	"subsystem/internal/setup"
-	"subsystem/internal/utils"
+	"subsystem/component/setup"
+	"subsystem/component/utils"
 )
 
 // ParseMessageResponse 解析消息响应
