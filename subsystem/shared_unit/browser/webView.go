@@ -1,7 +1,7 @@
 package browser
 
 import (
-	"subsystem/component/config"
+	"shared_unit/config"
 	"log"
 	"runtime"
 	"time"
