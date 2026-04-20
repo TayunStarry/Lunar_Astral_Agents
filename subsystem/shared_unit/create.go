@@ -1,11 +1,16 @@
 package shared_unit
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"os/signal"
 	"shared_unit/browser"
+	"syscall"
+	"time"
 )
 
 var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database"}
@@ -30,7 +35,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 	proxy := httputil.NewSingleHostReverseProxy(proxyURL)
 	// 主处理器，处理所有请求
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		if shouldProxy(path) {
 			proxy.ServeHTTP(w, r)
@@ -41,10 +46,40 @@ func StartServer(port int, root http.FileSystem, name string) error {
 
 	// 启动服务器
 	serverAddr := fmt.Sprintf(":%d", port)
+	server := &http.Server{
+		Addr:    serverAddr,
+		Handler: handler,
+	}
+
 	fmt.Printf("%s 正运行在 http://localhost%s\n", name, serverAddr)
 
 	// 打开浏览器访问前端
 	go browser.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
 
-	return http.ListenAndServe(serverAddr, nil)
+	// 启动服务器（非阻塞）
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("%s 运行失败: %v\n", name, err)
+		}
+	}()
+
+	// 等待中断信号以优雅地关闭服务器
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	fmt.Printf("%s 正在关闭...\n", name)
+
+	// 设置 5 秒的超时时间来关闭服务器
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("%s 关闭失败: %v\n", name, err)
+	}
+
+	// 关闭浏览器
+	browser.CloseWebView()
+	fmt.Printf("%s 已成功关闭\n", name)
+
+	return nil
 }
