@@ -6855,7 +6855,7 @@ async function systemInitializationEvent() {
     // 延迟 250 毫秒后初始化 Live2D
     setTimeout(initLive2D, 250);
     // 异步加载自定义配置文件
-    OnlyData.customConfig = await fetchDocumentCallback('resources/custom_config.json');
+    //OnlyData.customConfig = await fetchDocumentCallback('resources/custom_config.json');
     // 异步加载系统提示词
     OnlyData.systemPrompt = await fetchMarkdown('/read/resources/prompts/systemPrompt.md');
     // 异步加载图片描述提示词

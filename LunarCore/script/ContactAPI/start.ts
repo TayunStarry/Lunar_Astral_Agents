@@ -119,7 +119,7 @@ async function systemInitializationEvent() {
 	// 延迟 250 毫秒后初始化 Live2D
 	setTimeout(EntryAPI.initLive2D, 250);
 	// 异步加载自定义配置文件
-	EntryAPI.OnlyData.customConfig = await EntryAPI.fetchDocumentCallback('resources/custom_config.json');
+	//EntryAPI.OnlyData.customConfig = await EntryAPI.fetchDocumentCallback('resources/custom_config.json');
 	// 异步加载系统提示词
 	EntryAPI.OnlyData.systemPrompt = await EntryAPI.fetchMarkdown('/read/resources/prompts/systemPrompt.md');
 	// 异步加载图片描述提示词
