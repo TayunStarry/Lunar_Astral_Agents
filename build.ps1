@@ -27,3 +27,8 @@ Set-Location -Path '../../'
 Set-Location -Path './subsystem\project_archiving'
 ./build.ps1
 Set-Location -Path '../../'
+
+# 构建database_manager
+Set-Location -Path './subsystem\database_manager'
+./build.ps1
+Set-Location -Path '../../'
