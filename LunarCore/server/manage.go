@@ -90,6 +90,8 @@ func shutdownServer(server *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	// 确保在函数结束时取消上下文，释放资源
 	defer cancel()
+	// 关闭JavaScript运行时
+	AgentContext.CloseAgentContext()
 	// 关闭WebSocket服务器
 	CloseWebSocketServer()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时

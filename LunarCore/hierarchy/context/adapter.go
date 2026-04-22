@@ -15,7 +15,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // IPInfo 存储IP地址信息
@@ -25,7 +24,22 @@ type IPInfo struct {
 }
 
 // SaveFileAdapter 适配TypeScript调用的文件保存功能，支持字符串、字节数组及Blob/File类型数据
-func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, string, error) {
+func SaveFileAdapter(args ...any) (string, string, error) {
+	if len(args) < 3 {
+		return "", "", fmt.Errorf("参数不足")
+	}
+
+	fileName, ok := args[0].(string)
+	if !ok {
+		return "", "", fmt.Errorf("fileName必须是字符串")
+	}
+
+	overwrite, ok := args[1].(bool)
+	if !ok {
+		overwrite = false
+	}
+
+	fileData := args[2]
 	var reader io.Reader
 
 	switch data := fileData.(type) {
@@ -34,7 +48,7 @@ func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, str
 	case []byte:
 		reader = bytes.NewReader(data)
 	case map[string]any:
-		// 处理quickjs中转换为map的Blob/File类型
+		// 处理goja中转换为map的Blob/File类型
 		if buffer, ok := data["buffer"].([]byte); ok {
 			reader = bytes.NewReader(buffer)
 		} else if data, ok := data["data"].([]byte); ok {
@@ -50,7 +64,16 @@ func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, str
 }
 
 // ReadFileAdapter 适配TypeScript调用的文件读取功能，返回文件内容、大小和MIME类型
-func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
+func ReadFileAdapter(args ...any) ([]byte, int64, string, error) {
+	if len(args) < 1 {
+		return nil, 0, "", fmt.Errorf("参数不足")
+	}
+
+	filePath, ok := args[0].(string)
+	if !ok {
+		return nil, 0, "", fmt.Errorf("filePath必须是字符串")
+	}
+
 	file, size, mimeType, err := hierarchy.ReadFile(filePath)
 	if err != nil {
 		return nil, 0, "", err
@@ -66,7 +89,16 @@ func ReadFileAdapter(filePath string) ([]byte, int64, string, error) {
 }
 
 // GetFileListAdapter 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
-func GetFileListAdapter(path string) ([]map[string]any, error) {
+func GetFileListAdapter(args ...any) ([]map[string]any, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	path, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("path必须是字符串")
+	}
+
 	fileList, err := hierarchy.GetFileList(path)
 	if err != nil {
 		return nil, err
@@ -88,10 +120,21 @@ func GetFileListAdapter(path string) ([]map[string]any, error) {
 }
 
 // ExecuteDatabaseRequestAdapter 适配TypeScript调用的数据库操作功能，处理请求并转换结果格式
-func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, error) {
+func ExecuteDatabaseRequestAdapter(args ...any) (map[string]any, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	request, ok := args[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("request必须是对象")
+	}
+
 	// 构建数据库请求
-	dbRequest := memory.DatabaseRequest{
-		Transaction: request["transaction"].(bool),
+	dbRequest := memory.DatabaseRequest{}
+
+	if transaction, ok := request["transaction"].(bool); ok {
+		dbRequest.Transaction = transaction
 	}
 
 	// 转换操作列表
@@ -118,7 +161,7 @@ func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, erro
 }
 
 // QueryCurrentAddressAdapter 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
-func QueryCurrentAddressAdapter() ([]string, error) {
+func QueryCurrentAddressAdapter(args ...any) ([]string, error) {
 	// 如果当前地址已缓存，直接返回
 	if len(config.ServerAddress) > 0 {
 		return config.ServerAddress, nil
@@ -156,7 +199,7 @@ func QueryCurrentAddressAdapter() ([]string, error) {
 }
 
 // GetSystemUrlAdapter 适配TypeScript调用的系统URL获取功能，返回系统访问地址
-func GetSystemUrlAdapter() (string, error) {
+func GetSystemUrlAdapter(args ...any) (string, error) {
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
 		log.Printf("获取本地IP失败: %v\n", err)
@@ -166,7 +209,21 @@ func GetSystemUrlAdapter() (string, error) {
 }
 
 // VideoKeyframeExtractionAdapter 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
-func VideoKeyframeExtractionAdapter(inputFile string, cacheDir string) ([]map[string]any, error) {
+func VideoKeyframeExtractionAdapter(args ...any) ([]map[string]any, error) {
+	if len(args) < 2 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	inputFile, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("inputFile必须是字符串")
+	}
+
+	cacheDir, ok := args[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("cacheDir必须是字符串")
+	}
+
 	keyFrames, err := image.VideoKeyframeExtraction(inputFile, cacheDir)
 	if err != nil {
 		return nil, err
@@ -187,7 +244,16 @@ func VideoKeyframeExtractionAdapter(inputFile string, cacheDir string) ([]map[st
 }
 
 // ProxyFetchAdapter 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
-func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
+func ProxyFetchAdapter(args ...any) (map[string]any, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	config, ok := args[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("config必须是对象")
+	}
+
 	// 解析URL
 	url, ok := config["url"].(string)
 	if !ok {
@@ -274,7 +340,12 @@ func ProxyFetchAdapter(config map[string]any) (map[string]any, error) {
 }
 
 // ResizeImageAdapter 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
-func ResizeImageAdapter(imgData any) (map[string]any, error) {
+func ResizeImageAdapter(args ...any) (map[string]any, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	imgData := args[0]
 	// 处理不同类型的图片数据
 	var bytesData []byte
 
@@ -297,7 +368,7 @@ func ResizeImageAdapter(imgData any) (map[string]any, error) {
 		// 直接使用字节数组
 		bytesData = data
 	case map[string]any:
-		// 处理quickjs中转换为map的Blob/File类型
+		// 处理goja中转换为map的Blob/File类型
 		if buffer, ok := data["buffer"].([]byte); ok {
 			bytesData = buffer
 		} else if data, ok := data["data"].([]byte); ok {
@@ -314,7 +385,16 @@ func ResizeImageAdapter(imgData any) (map[string]any, error) {
 }
 
 // GenerateImageAdapter 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
-func GenerateImageAdapter(params map[string]any) (map[string]any, error) {
+func GenerateImageAdapter(args ...any) (map[string]any, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("参数不足")
+	}
+
+	params, ok := args[0].(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("params必须是对象")
+	}
+
 	// 提取参数
 	prompt, ok := params["prompt"].(string)
 	if !ok {
@@ -370,27 +450,14 @@ func GenerateImageAdapter(params map[string]any) (map[string]any, error) {
 	return generate.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
 }
 
-// WaiterAdapter 适配TypeScript调用的等待功能，等待指定毫秒数后返回true
-func WaiterAdapter(ms any) (bool, error) {
-	var duration int
-	switch m := ms.(type) {
-	case int:
-		duration = m
-	case int64:
-		duration = int(m)
-	case float64:
-		duration = int(m)
-	default:
-		return false, fmt.Errorf("无效的毫秒数参数")
-	}
-
-	// 等待指定毫秒数
-	time.Sleep(time.Duration(duration) * time.Millisecond)
-	return true, nil
-}
 
 // LogAdapter 适配TypeScript调用的日志打印功能，使用Go的log模块打印字符串
-func LogAdapter(message any) (any, error) {
+func LogAdapter(args ...any) (any, error) {
+	if len(args) < 1 {
+		return "", fmt.Errorf("参数不足")
+	}
+
+	message := args[0]
 	var msg string
 	switch m := message.(type) {
 	case string:
@@ -401,5 +468,5 @@ func LogAdapter(message any) (any, error) {
 
 	// 使用Go的log模块打印消息
 	log.Println(msg)
-	return true, nil
+	return msg, nil
 }
