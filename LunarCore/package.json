@@ -1,13 +1,20 @@
 {
-	"name": "LunarCore",
+	"name": "lunar-core",
 	"version": "4.0.0",
 	"type": "module",
 	"description": "月华 - 您专属的本地智能 AI 少女助理",
 	"main": "index.html",
 	"scripts": {
-		"lunar": "tsc && rollup ../deliverable/EntryAPI/code.js --file ./files/assets/script.js",
+		"lunar": "tsc && rollup ../deliverable/EntryAPI/code.js --file ./hierarchy/assets/script.js",
 		"release.min": "tsc && rollup -c",
-		"ltp": "node script/run-generate-tool.js"
+		"ltp": "node script/run-generate-tool.js",
+
+		"compile.server": "tsc ./model/index.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
+		"server.side":"npm run compile.server && rollup ../deliverable/model/index.js --file ./hierarchy/assets/system.js",
+
+		
+		"compile.aaa": "tsc ./model/script/text.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
+		"aaa.side":"npm run compile.aaa && rollup ../deliverable/model/script/text.js --file ./hierarchy/assets/system.js"
 	},
 	"keywords": [
 		"ai",

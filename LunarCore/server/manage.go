@@ -3,11 +3,11 @@ package server
 import (
 	"LunarCore/config"
 	"LunarCore/hierarchy"
+	AgentContext "LunarCore/hierarchy/context"
 	"LunarCore/model/llama"
 	"LunarCore/release"
 	"LunarCore/server/handlers/file/image"
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
 	"mime"
@@ -18,45 +18,6 @@ import (
 	"syscall"
 	"time"
 )
-
-// QueryCurrentAddress 查询当前地址信息
-func QueryCurrentAddress() []string {
-	// 如果当前地址已缓存，直接返回
-	if len(config.ServerAddress) > 0 {
-		return config.ServerAddress
-	}
-
-	// 从IP地址查询位置信息
-	resp, err := http.Get("https://ipapi.co/json/")
-	if err != nil {
-		log.Printf("获取位置失败: %v\n", err)
-		return []string{"江苏省", "南京市"}
-	}
-	defer resp.Body.Close()
-
-	// 检查响应状态
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("获取位置失败: %s\n", resp.Status)
-		return []string{"江苏省", "南京市"}
-	}
-
-	// 解析JSON响应
-	var data IPInfo
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		log.Printf("解析位置信息失败: %v\n", err)
-		return []string{"江苏省", "南京市"}
-	}
-
-	// 确保省份和城市信息存在
-	if data.Region == "" || data.City == "" {
-		log.Println("获取位置失败: 省份或城市信息缺失")
-		return []string{"江苏省", "南京市"}
-	}
-
-	// 缓存当前地址
-	config.ServerAddress = []string{data.Region, data.City}
-	return config.ServerAddress
-}
 
 // InitializeServer 初始化服务器配置和组件
 func InitializeServer() {
@@ -76,12 +37,12 @@ func InitializeServer() {
 	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
 		log.Fatalf("Lunar模块[ERROR] -> %v", err)
 	}
-	// 查询当前地址信息
-	QueryCurrentAddress()
 	// 注册HTTP处理器
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
+	// 运行智能上下文
+	AgentContext.RunAgentContext()
 }
 
 // registerHandlers 注册所有HTTP请求处理器

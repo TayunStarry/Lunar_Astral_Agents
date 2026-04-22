@@ -7,7 +7,6 @@ import (
 	"LunarCore/hierarchy/image"
 	"LunarCore/hierarchy/image/generate"
 	"LunarCore/hierarchy/memory"
-	"LunarCore/server"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -16,7 +15,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
+
+// IPInfo 存储IP地址信息
+type IPInfo struct {
+	Region string `json:"region"`
+	City   string `json:"city"`
+}
 
 // SaveFileAdapter 适配TypeScript调用的文件保存功能，支持字符串、字节数组及Blob/File类型数据
 func SaveFileAdapter(fileName string, overwrite bool, fileData any) (string, string, error) {
@@ -113,7 +119,40 @@ func ExecuteDatabaseRequestAdapter(request map[string]any) (map[string]any, erro
 
 // QueryCurrentAddressAdapter 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
 func QueryCurrentAddressAdapter() ([]string, error) {
-	return server.QueryCurrentAddress(), nil
+	// 如果当前地址已缓存，直接返回
+	if len(config.ServerAddress) > 0 {
+		return config.ServerAddress, nil
+	}
+
+	// 从IP地址查询位置信息
+	resp, err := http.Get("https://ipapi.co/json/")
+	if err != nil {
+		log.Printf("获取位置失败: %v\n", err)
+		return []string{"江苏省", "南京市"}, err
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("获取位置失败: %s\n", resp.Status)
+		return []string{"江苏省", "南京市"}, err
+	}
+
+	// 解析JSON响应
+	var data IPInfo
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		log.Printf("解析位置信息失败: %v\n", err)
+		return []string{"江苏省", "南京市"}, err
+	}
+
+	// 确保省份和城市信息存在
+	if data.Region == "" || data.City == "" {
+		log.Println("获取位置失败: 省份或城市信息缺失")
+		return []string{"江苏省", "南京市"}, err
+	}
+	// 缓存当前地址
+	config.ServerAddress = []string{data.Region, data.City}
+	return config.ServerAddress, nil
 }
 
 // GetSystemUrlAdapter 适配TypeScript调用的系统URL获取功能，返回系统访问地址
@@ -329,4 +368,38 @@ func GenerateImageAdapter(params map[string]any) (map[string]any, error) {
 
 	// 调用图片生成函数
 	return generate.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
+}
+
+// WaiterAdapter 适配TypeScript调用的等待功能，等待指定毫秒数后返回true
+func WaiterAdapter(ms any) (bool, error) {
+	var duration int
+	switch m := ms.(type) {
+	case int:
+		duration = m
+	case int64:
+		duration = int(m)
+	case float64:
+		duration = int(m)
+	default:
+		return false, fmt.Errorf("无效的毫秒数参数")
+	}
+
+	// 等待指定毫秒数
+	time.Sleep(time.Duration(duration) * time.Millisecond)
+	return true, nil
+}
+
+// LogAdapter 适配TypeScript调用的日志打印功能，使用Go的log模块打印字符串
+func LogAdapter(message any) (any, error) {
+	var msg string
+	switch m := message.(type) {
+	case string:
+		msg = m
+	default:
+		msg = fmt.Sprintf("%v", m)
+	}
+
+	// 使用Go的log模块打印消息
+	log.Println(msg)
+	return true, nil
 }
