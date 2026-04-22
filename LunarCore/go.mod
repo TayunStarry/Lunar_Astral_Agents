@@ -4,28 +4,24 @@ go 1.24.4
 
 require (
 	github.com/disintegration/imaging v1.6.2
+	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
+	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 )
 
 require (
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	modernc.org/libc v1.70.0 // indirect
-	modernc.org/libquickjs v0.12.4 // indirect
-	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.11.0 // indirect
-	modernc.org/quickjs v0.17.2 // indirect
+	golang.org/x/text v0.16.0 // indirect
 )
 
 require (

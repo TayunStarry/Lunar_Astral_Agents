@@ -72,6 +72,7 @@ class LunarAgent extends AgentDefine {
             // 等待1秒
             await new Promise(resolve => setTimeout(resolve, 1000));
             Log(this.finalResponse);
+            console.log(this.finalResponse);
         }
     }
 }
