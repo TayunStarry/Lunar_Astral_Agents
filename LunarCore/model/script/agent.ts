@@ -1,9 +1,11 @@
-import { getFileContent, fetchDocumentCallback } from '../../hierarchy/index';
-import { OnlyData, PostMessage, ChatCache } from '../../config/index';
-import { ModelBuilder, AgentDefine, ChatDialogueRole } from '../index';
+import { ChatCache, setTimeout, Log } from '../../config/index';
+import { RandomFloor } from '../../math/index';
+import { AgentDefine } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
+    /** 消息权重 */
+    protected messageWeight: number = 1;
     /**
      * 批量处理视频文件
      *
@@ -49,7 +51,38 @@ class LunarAgent extends AgentDefine {
         return this.finalResponse;
     }
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
-    public constructor() { super(); }
+    public constructor() { super(); this.thinkingChainProcess(); }
+    /** 思考链处理 */
+    protected async thinkingChainProcess() {
+        while (true) {
+            // 等待1秒
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            /** 消息长度 */
+            const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+            // 如果消息长度为0，且随机数小于等于消息权重，继续循环
+            if (messageLength === 0 && RandomFloor(0, 100) <= this.messageWeight) continue;
+            // 等待1秒
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 批量处理视频文件
+            await this.batchProcessVideoFiles();
+            // 等待1秒
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            // 创建消息
+            await this.createChatMessage();
+            // 等待1秒
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            Log(this.finalResponse);
+        }
+    }
 }
 
-export default LunarAgent;
+//export default LunarAgent;
+// 100ms 后执行 new LunarAgent()
+setTimeout(awakenAgent, 1000);
+function awakenAgent() {
+    const agent = new LunarAgent();
+    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
+    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
+    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
+}
+Log('awakenAgent');

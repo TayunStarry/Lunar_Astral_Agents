@@ -13,7 +13,6 @@ deliverable
 meme_images
 
 ## 本地数据
-local_data/logs
 local_data/images
 local_data/resources/placeholder
 local_data/resources/images
@@ -23,11 +22,9 @@ local_data/knowledge/lunar_notes.json
 local_data/knowledge/continuous_memory.json
 
 ## 系统文件
-Lunar_Astral_Agents.code-workspace
 desktop.ini
 
 ## 临时文件
-subsystem/nap_cat_bridging/*.md
 *.tmp
 *.temp
 *.lnk

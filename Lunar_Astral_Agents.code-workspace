@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"name": "Lunar_Astral_Agents",
+			"path": "."
+		},
+		{
+			"name": "models",
+			"path": "../Chat_AI_Case/lmstudio/models"
+		}
+	],
+	"settings": {
+		"powershell.cwd": "Lunar_Astral_Agents",
+		"npm-scripts.showStartNotification": false
+	}
+}

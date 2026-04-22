@@ -1,4 +1,4 @@
-import { Config, GetSystemUrl, ToolCall } from '../index';
+import { Config, ToolCall, GetSystemUrl } from '../index';
 
 export class OnlyData {
     /** 系统默认 API 密钥 */

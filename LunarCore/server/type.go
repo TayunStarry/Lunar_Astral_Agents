@@ -8,12 +8,6 @@ import (
 	"sync"
 )
 
-// IPInfo 存储IP地址信息
-type IPInfo struct {
-	Region string `json:"region"`
-	City   string `json:"city"`
-}
-
 // 全局变量
 var websocketServer *http.Server
 
