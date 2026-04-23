@@ -3,7 +3,7 @@ package server
 import (
 	"LunarCore/config"
 	"LunarCore/hierarchy"
-	AgentContext "LunarCore/hierarchy/context"
+	goja "LunarCore/context"
 	"LunarCore/model/llama"
 	"LunarCore/release"
 	"LunarCore/server/handlers/file/image"
@@ -42,7 +42,7 @@ func InitializeServer() {
 	// 创建GGUF服务器
 	llama.CreateServers()
 	// 运行智能上下文
-	AgentContext.RunAgentContext()
+	goja.RunAgentContext()
 }
 
 // registerHandlers 注册所有HTTP请求处理器
@@ -91,7 +91,7 @@ func shutdownServer(server *http.Server) {
 	// 确保在函数结束时取消上下文，释放资源
 	defer cancel()
 	// 关闭JavaScript运行时
-	AgentContext.CloseAgentContext()
+	goja.CloseAgentContext()
 	// 关闭WebSocket服务器
 	CloseWebSocketServer()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
