@@ -19,32 +19,31 @@ var (
 	runtimeMutex  sync.Mutex
 	runtimeCtx    context.Context
 	runtimeCancel context.CancelFunc
-	el            *eventloop.EventLoop
+	runtime       *eventloop.EventLoop
 )
 
 // registerAdaptersToRuntime 注册适配器函数到指定的JavaScript运行时环境
 func registerAdaptersToRuntime(vm *goja.Runtime) {
+	// 创建Adapters实例，用于存储JavaScript运行时实例
+	adapters := &Adapters{runtime: vm}
+
 	// 注册文件操作适配器
-	vm.Set("SaveFileAdapter", SaveFileAdapter)
-	vm.Set("ReadFileAdapter", ReadFileAdapter)
-	vm.Set("GetFileListAdapter", GetFileListAdapter)
+	vm.Set("shareFileSave", adapters.shareFileSave)
+	vm.Set("shareFileRead", adapters.shareFileRead)
+	vm.Set("shareFileList", adapters.shareFileList)
 
 	// 注册数据库操作适配器
-	vm.Set("ExecuteDatabaseRequestAdapter", ExecuteDatabaseRequestAdapter)
+	vm.Set("shareDatabase", adapters.shareDatabase)
 
 	// 注册网络操作适配器
-	vm.Set("QueryCurrentAddressAdapter", QueryCurrentAddressAdapter)
-	vm.Set("GetSystemUrlAdapter", GetSystemUrlAdapter)
-	vm.Set("ProxyFetchAdapter", ProxyFetchAdapter)
+	vm.Set("shareAddress", adapters.shareAddress)
+	vm.Set("shareCurrentUrl", adapters.shareCurrentUrl)
+	vm.Set("shareFetch", adapters.shareFetch)
 
 	// 注册图像处理适配器
-	vm.Set("VideoKeyframeExtractionAdapter", VideoKeyframeExtractionAdapter)
-	vm.Set("ResizeImageAdapter", ResizeImageAdapter)
-	vm.Set("GenerateImageAdapter", GenerateImageAdapter)
-
-	// 注册工具适配器
-	vm.Set("AdapterLog", LogAdapter)
-	// 注意：setTimeout/setInterval 等已由 eventloop 在 NewEventLoop 中自动注册
+	vm.Set("shareVideoKeyframe", adapters.shareVideoKeyframe)
+	vm.Set("shareResizeImage", adapters.shareResizeImage)
+	vm.Set("shareGenerateImage", adapters.shareGenerateImage)
 }
 
 // CreateAgentContext 创建并初始化JavaScript运行时环境
@@ -53,7 +52,7 @@ func CreateAgentContext() error {
 	defer runtimeMutex.Unlock()
 
 	// 如果运行时已存在，返回错误
-	if el != nil {
+	if runtime != nil {
 		return fmt.Errorf("JavaScript运行时已存在")
 	}
 
@@ -64,14 +63,14 @@ func CreateAgentContext() error {
 	registry := require.NewRegistry()
 
 	// 加载eventloop模块
-	el = eventloop.NewEventLoop(eventloop.WithRegistry(registry))
+	runtime = eventloop.NewEventLoop(eventloop.WithRegistry(registry))
 
 	// 启动eventloop
-	el.Start()
+	runtime.Start()
 
 	// 在eventloop中初始化运行时环境
 	done := make(chan error, 1)
-	el.RunOnLoop(func(vm *goja.Runtime) {
+	runtime.RunOnLoop(func(vm *goja.Runtime) {
 		// 加载console模块
 		console.Enable(vm)
 
@@ -98,7 +97,7 @@ func CreateAgentContext() error {
 func RunAgentContext() error {
 	runtimeMutex.Lock()
 	// 如果运行时不存在，先创建
-	if el == nil {
+	if runtime == nil {
 		runtimeMutex.Unlock()
 		if err := CreateAgentContext(); err != nil {
 			return fmt.Errorf("创建JavaScript运行时失败: %v", err)
@@ -115,7 +114,7 @@ func RunAgentContext() error {
 
 	systemJSContent := string(systemJS)
 	// 在eventloop中执行JavaScript代码
-	el.RunOnLoop(func(vm *goja.Runtime) {
+	runtime.RunOnLoop(func(vm *goja.Runtime) {
 		_, err = vm.RunString(systemJSContent)
 		if err != nil {
 			log.Printf("Lunar模块[JavaScript][ERROR] -> 执行system.js代码失败: %v", err)
@@ -133,12 +132,12 @@ func CloseAgentContext() {
 	defer runtimeMutex.Unlock()
 
 	// 如果运行时不存在，直接返回
-	if el == nil {
+	if runtime == nil {
 		return
 	}
 
 	// 停止eventloop
-	el.Stop()
+	runtime.Stop()
 
 	// 取消运行时上下文
 	if runtimeCancel != nil {
@@ -148,7 +147,7 @@ func CloseAgentContext() {
 	// 清空运行时引用
 	runtimeCtx = nil
 	runtimeCancel = nil
-	el = nil
+	runtime = nil
 
 	log.Println("Lunar模块[JavaScript] -> 运行时环境关闭成功")
 }
