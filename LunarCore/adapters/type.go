@@ -1,4 +1,4 @@
-package context
+package adapters
 
 import "github.com/dop251/goja"
 
