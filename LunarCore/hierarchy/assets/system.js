@@ -1,11 +1,11 @@
 
-AdapterLog('awakenAgent');
+console.log('awakenAgent');
 setTimeout(() => {
-    AdapterLog('awakenAgent-000');
+    console.debug('awakenAgent-000');
 }, 1000);
 setTimeout(() => {
-    AdapterLog('awakenAgent-001');
+    console.error('awakenAgent-001');
 }, 5000);
 setTimeout(() => {
-    AdapterLog('awakenAgent-002');
+    console.log('awakenAgent-002');
 }, 10000);

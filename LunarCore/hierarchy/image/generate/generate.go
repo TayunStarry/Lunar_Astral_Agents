@@ -301,7 +301,7 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 	base64Data := base64.StdEncoding.EncodeToString(imageData)
 
 	// 构造返回结果
-	result := map[string]interface{}{
+	result := map[string]any{
 		"path":   completedTask.ResultPath,
 		"base64": base64Data,
 		"width":  width,
