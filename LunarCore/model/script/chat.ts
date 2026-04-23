@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache } from '../../config/index';
+import { OnlyData, ChatCache, GOview } from '../../config/index';
 import { getFileContent } from '../../hierarchy/index';
 import { AgentDefine, ModelBuilder } from '../index';
 
@@ -134,6 +134,6 @@ export class ChatDialogueRole extends ModelBuilder {
     /** 构造函数 */
     public constructor() {
         super();
-        this.useMultimodal(getFileContent('resources/prompts/chatRole.md'));
+        this.useMultimodal(GOview('prompts/chatRole.md')[0]);
     }
 }

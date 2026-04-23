@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, TextContent, PostMessage, GOkeyframe, GOfetch, GOresize } from '../../config/index';
+import { OnlyData, ImageContent, TextContent, PostMessage, GOkeyframe, GOfetch, GOresize, GOview } from '../../config/index';
 import { fetchDocumentCallback, getFileContent, getPromptFromDatabase, savePromptToDatabase } from '../../hierarchy/index';
 import { ModelBuilder, ChatDialogueRole, PainterRole } from '../index';
 
@@ -37,12 +37,12 @@ export class AgentDefine {
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     protected constructor() {
         // 初始化 全部模型 的 系统提示词
-        this.compilePlan.useMultimodal(getFileContent('resources/prompts/compilePlan.md'));
-        this.queryKeywords.useMultimodal(getFileContent('resources/prompts/queryKeywords.md'));
-        this.emotionManager.useMultimodal(getFileContent('resources/prompts/emotionManager.md'));
-        this.recorderRole.useMultimodal(getFileContent('resources/prompts/recorderRole.md'));
-        this.summaryRole.useMultimodal(getFileContent('resources/prompts/summaryRole.md'));
-        this.descriptionRole.useMultimodal(getFileContent('resources/prompts/descriptionRole.md'));
+        this.compilePlan.useMultimodal(GOview('prompts/compilePlan.md')[0]);
+        this.queryKeywords.useMultimodal(GOview('prompts/queryKeywords.md')[0]);
+        this.emotionManager.useMultimodal(GOview('prompts/emotionManager.md')[0]);
+        this.recorderRole.useMultimodal(GOview('prompts/recorderRole.md')[0]);
+        this.summaryRole.useMultimodal(GOview('prompts/summaryRole.md')[0]);
+        this.descriptionRole.useMultimodal(GOview('prompts/descriptionRole.md')[0]);
         // 初始化 自定义配置 信息
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
         // TODO 初始化 工具调用配置

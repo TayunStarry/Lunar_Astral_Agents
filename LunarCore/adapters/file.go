@@ -3,6 +3,7 @@ package adapters
 import (
 	"LunarCore/hierarchy"
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
@@ -78,7 +79,10 @@ func (class *Adapters) shareFileRead(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, 0, "", fmt.Errorf("读取文件内容失败")})
 	}
 
-	return class.runtime.ToValue([]any{content, size, mimeType, nil})
+	// 将文件内容转换为base64编码
+	base64Content := base64.StdEncoding.EncodeToString(content)
+
+	return class.runtime.ToValue([]any{base64Content, size, mimeType, nil})
 }
 
 // shareFileList 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
@@ -111,4 +115,26 @@ func (class *Adapters) shareFileList(call goja.FunctionCall) goja.Value {
 	}
 
 	return class.runtime.ToValue([]any{result, nil})
+}
+
+// shareFileView 适配TypeScript调用读取嵌入式文件系统中的内容
+// assets是嵌入式文件系统的根目录，调用时只需传入相对于assets的文件路径
+// 返回值: [string, error] 文件内容和错误信息
+func (class *Adapters) shareFileView(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足")})
+	}
+
+	filePath, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("filePath必须是字符串")})
+	}
+
+	fullPath := "assets/" + filePath
+	content, err := hierarchy.EmbeddedFiles.ReadFile(fullPath)
+	if err != nil {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("读取嵌入式文件失败: %v", err)})
+	}
+
+	return class.runtime.ToValue([]any{string(content), nil})
 }

@@ -31,19 +31,21 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("shareFileSave", adapters.shareFileSave)
 	vm.Set("shareFileRead", adapters.shareFileRead)
 	vm.Set("shareFileList", adapters.shareFileList)
+	vm.Set("shareFileView", adapters.shareFileView)
 
 	// 注册数据库操作适配器
 	vm.Set("shareDatabase", adapters.shareDatabase)
 
 	// 注册网络操作适配器
+	vm.Set("shareLocalhost", adapters.shareLocalhost)
 	vm.Set("shareAddress", adapters.shareAddress)
-	vm.Set("shareCurrentUrl", adapters.shareCurrentUrl)
 	vm.Set("shareFetch", adapters.shareFetch)
 
 	// 注册图像处理适配器
 	vm.Set("shareVideoKeyframe", adapters.shareVideoKeyframe)
 	vm.Set("shareResizeImage", adapters.shareResizeImage)
 	vm.Set("shareGenerateImage", adapters.shareGenerateImage)
+	vm.Set("atob", adapters.atob)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境

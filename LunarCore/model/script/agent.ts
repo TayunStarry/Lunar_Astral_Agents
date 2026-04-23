@@ -53,7 +53,7 @@ class LunarAgent extends AgentDefine {
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     public constructor() { super(); }
     /** 思考链处理 */
-    protected async thinkingChainProcess() {
+    public async thinkingChainProcess() {
         while (true) {
             console.log('思考链处理');
             // 等待1秒
@@ -80,14 +80,14 @@ class LunarAgent extends AgentDefine {
 //export default LunarAgent;
 // 100ms 后执行 new LunarAgent()
 setTimeout(awakenAgent, 1000);
-function awakenAgent() {
+async function awakenAgent() {
     console.log('智能体系统已唤醒');
     const agent = new LunarAgent();
-    console.log('思考链处理0');
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
-    setTimeout(() => console.log(agent.unreadContext), 5000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 5000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
-    setTimeout(() => console.log(agent.unreadContext), 10000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 10000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
-    setTimeout(() => console.log(agent.unreadContext), 15000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 15000);
+    await agent.thinkingChainProcess();
 }

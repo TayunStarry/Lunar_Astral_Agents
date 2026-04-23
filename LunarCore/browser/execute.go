@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"LunarCore/config"
 	"fmt"
 	"log"
 	"net"
@@ -125,8 +126,8 @@ func GetLocalIP(preferredNetworks []string) (string, error) {
 	return "", fmt.Errorf("未找到可用的IP地址")
 }
 
-// OpenSystemBrowser 在系统默认浏览器中打开指定 URL
-func OpenSystemBrowser(url string) {
+// openSystemBrowser 在系统默认浏览器中打开指定 URL
+func openSystemBrowser(url string) {
 	var cmd string
 	var args []string
 
@@ -149,11 +150,16 @@ func OpenSystemBrowser(url string) {
 
 // OpenBrowser 使用浏览器打开指定 URL
 func OpenBrowser(url string) {
+	if !*config.AllowBrowser {
+		log.Printf("Web服务 -> 建议手动访问: %s", url)
+		return
+	}
+		
 	switch IsWebViewSupported() {
 	case true:
-		go StartWebViewBrowser(url)
+		go startWebViewBrowser(url)
 	case false:
-		log.Printf("Webview[ERROR] -> 当前系统不支持 webview, 回退到系统浏览器")
-		OpenSystemBrowser(url)
+		log.Printf("Web服务[ERROR] -> 当前系统不支持 webview, 回退到系统浏览器")
+		openSystemBrowser(url)
 	}
 }
