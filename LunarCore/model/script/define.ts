@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, TextContent, PostMessage, VideoKeyframeExtraction, ProxyFetch, ResizeImage } from '../../config/index';
+import { OnlyData, ImageContent, TextContent, PostMessage, GOkeyframe, GOfetch, GOresize } from '../../config/index';
 import { fetchDocumentCallback, getFileContent, getPromptFromDatabase, savePromptToDatabase } from '../../hierarchy/index';
 import { ModelBuilder, ChatDialogueRole, PainterRole } from '../index';
 
@@ -68,7 +68,7 @@ export class AgentDefine {
             return;
         }
         /** 关键帧提取API响应 */
-        const [keyFrames, error] = VideoKeyframeExtraction(videoUrl, './cache');
+        const [keyFrames, error] = GOkeyframe(videoUrl, './cache');
         // 检查提取关键帧是否成功
         if (!keyFrames || keyFrames.length === 0 || error) throw new Error('提取关键帧失败');
         /** 沙箱消息数组 */
@@ -130,7 +130,7 @@ export class AgentDefine {
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
                     // 获取图片文件内容
-                    const [response, error] = await ProxyFetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                    const [response, error] = GOfetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     // 检查请求是否成功
                     if (error) throw new Error('获取图片文件失败');
                     // 检查响应是否成功
@@ -138,7 +138,7 @@ export class AgentDefine {
                     /** 从响应中获取图片 Blob 对象 */
                     const blob = await response.blob();
                     /** 缩放图片 */
-                    const [resizedBlob, error1] = ResizeImage(blob);
+                    const [resizedBlob, error1] = GOresize(blob);
                     // 检查缩放是否成功
                     if (error1) throw new Error('缩放图片失败');
                     // 处理缩放后的图片文件

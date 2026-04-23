@@ -1,4 +1,4 @@
-import { Config, ToolCall, GetSystemUrl } from '../index';
+import { Config, ToolCall, GOcurrentUrl } from '../index';
 
 export class OnlyData {
     /** 系统默认 API 密钥 */
@@ -47,11 +47,11 @@ export class OnlyData {
     public static lunarToolPackageMap = new Map<string, (args?: Record<string, any>) => Promise<string>>();
     /** 系统URL */
     public static get systemUrl(): string {
-        return GetSystemUrl()[0] + '/v1';
+        return GOcurrentUrl()[0] + '/v1';
     };
     /** 文件服务URL */
     public static get fileServiceUrl(): string {
-        return GetSystemUrl()[0];
+        return GOcurrentUrl()[0];
     };
     /** 获取 多模态模型 URL */
     public static get MultimodalUrl(): string {

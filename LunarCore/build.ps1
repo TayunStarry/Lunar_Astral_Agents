@@ -7,6 +7,12 @@ $env:CGO_ENABLED=1
 # 编译客户端
 # npm run lunar
 
+# 编译 智能体系统
+npm run server.side
+
+# 删除不必要的export
+node removeExport.cjs
+
 # 编译LTP 1.0
 # npm run ltp
 

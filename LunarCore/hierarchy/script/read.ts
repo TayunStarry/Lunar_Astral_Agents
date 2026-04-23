@@ -1,5 +1,5 @@
 import { calculateFileHash, toBtoaString } from '../index';
-import { SaveFile, ReadFile, GetFileList } from '../../config/index';
+import { GOsave, GOread, GOlist } from '../../config/index';
 
 /** 文件列表项属性 */
 export interface FileListItem {
@@ -28,7 +28,7 @@ export interface FileListItem {
  */
 export function getFileContent(path: string, removeNewLines: boolean = false): string {
     /** 从磁盘读取文件内容 */
-    let [content, size, mimeType, err] = ReadFile(path);
+    let [content, size, mimeType, err] = GOread(path);
     // 检查读取是否成功
     if (err) throw err;
     // 根据参数决定是否移除换行符
@@ -55,7 +55,7 @@ export async function saveImageToServer(file: File): Promise<string> {
         /** 将包含图片文件名的路径进行 Base64 编码，用于设置请求头中的文件名 */
         const base64FileName = toBtoaString('images/' + newFileName);
         /** 向服务器发送 POST 请求，尝试保存图片文件 */
-        const [_, __, err] = SaveFile(base64FileName, true, file);
+        const [_, __, err] = GOsave(base64FileName, true, file);
         // 检查响应是否成功，若失败则抛出错误
         if (!err) throw err;
         // 保存成功，返回图片的读取路径
@@ -88,14 +88,14 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
     const applyCallback = callback ?? defaultCallback;
     /** 统一兜底逻辑：当文件不存在或读取失败时，保存默认内容并返回 */
     const fallback = async () => {
-        SaveFile(url.toString(), true, initializeContent)
+        GOsave(url.toString(), true, initializeContent)
         return applyCallback(initializeContent);
     };
     try {
         /** 拆分文件路径 */
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
-        const [fileList, err1] = GetFileList(filePath.slice(0, -1).join('/'));
+        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
         // 检查文件列表响应是否成功
         if (!err1) return await fallback();
         /** 检查文件是否存在且不是目录 */
@@ -103,7 +103,7 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
         // 检查文件是否存在
         if (!exists) return await fallback();
         /** 读取文件内容 */
-        const [content, size, mimeType, err2] = ReadFile(url.toString());
+        const [content, size, mimeType, err2] = GOread(url.toString());
         // 检查文件内容响应是否成功
         if (!err2) return await fallback();
         /** 解析文件内容为文本 */

@@ -1,4 +1,4 @@
-import { ChatCache, setTimeout, Log } from '../../config/index';
+import { ChatCache } from '../../config/index';
 import { RandomFloor } from '../../math/index';
 import { AgentDefine } from '../index';
 
@@ -51,10 +51,11 @@ class LunarAgent extends AgentDefine {
         return this.finalResponse;
     }
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
-    public constructor() { super(); this.thinkingChainProcess(); }
+    public constructor() { super(); }
     /** 思考链处理 */
     protected async thinkingChainProcess() {
         while (true) {
+            console.log('思考链处理');
             // 等待1秒
             await new Promise(resolve => setTimeout(resolve, 1000));
             /** 消息长度 */
@@ -71,7 +72,6 @@ class LunarAgent extends AgentDefine {
             await this.createChatMessage();
             // 等待1秒
             await new Promise(resolve => setTimeout(resolve, 1000));
-            Log(this.finalResponse);
             console.log(this.finalResponse);
         }
     }
@@ -81,9 +81,13 @@ class LunarAgent extends AgentDefine {
 // 100ms 后执行 new LunarAgent()
 setTimeout(awakenAgent, 1000);
 function awakenAgent() {
+    console.log('智能体系统已唤醒');
     const agent = new LunarAgent();
+    console.log('思考链处理0');
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
+    setTimeout(() => console.log(agent.unreadContext), 5000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
+    setTimeout(() => console.log(agent.unreadContext), 10000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
+    setTimeout(() => console.log(agent.unreadContext), 15000);
 }
-Log('awakenAgent');
