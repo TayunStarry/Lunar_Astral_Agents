@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, ProxyFetchConfig, QueryCurrentAddress, ProxyFetch } from '../../config/index';
+import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, GOaddress, GOfetch } from '../../config/index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -26,7 +26,7 @@ class PromptProcessor extends BaseConfig {
         /** 当前地址 */
         let address = "";
         // 若当前地址为空，查询真实地址
-        if (currentAddress.length === 0) address = (QueryCurrentAddress()[0]).join(' ');
+        if (currentAddress.length === 0) address = (GOaddress()[0]).join(' ');
         // 否则使用缓存地址
         else address = currentAddress.join(' ');
         // 返回替换后的系统提示词
@@ -142,7 +142,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/chat/completions";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = await ProxyFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = GOfetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 返回模型响应
@@ -173,7 +173,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/embeddings";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = await ProxyFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = GOfetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 截取嵌入向量的前 256 个元素，作为模型输入

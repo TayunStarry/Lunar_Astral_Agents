@@ -1,49 +1,38 @@
-function SaveFile(fileName, overwrite, fileData) {
-    return AdapterSaveFile(fileName, overwrite, fileData);
+function GOsave(fileName, overwrite, fileData) {
+    console.log('在磁盘中保存文件', fileName, overwrite, fileData);
+    return shareFileSave(fileName, overwrite, fileData);
 }
-function ReadFile(filePath) {
-    return AdapterReadFile(filePath);
+function GOread(filePath) {
+    console.log('从磁盘中读取文件', filePath);
+    return shareFileRead(filePath);
 }
-function GetFileList(path) {
-    return AdapterGetFileList(path);
+function GOlist(path) {
+    console.log('获取目录下所有文件列表', path);
+    return shareFileList(path);
 }
-function ExecuteDatabaseRequest(request) {
-    return AdapterExecuteDatabaseRequest(request);
+function GOdatabase(request) {
+    console.log('执行数据库请求', request);
+    return shareDatabase(request);
 }
-function QueryCurrentAddress() {
-    return AdapterQueryCurrentAddress();
+function GOaddress() {
+    console.log('获取当前地址信息');
+    return shareAddress();
 }
-function GetSystemUrl() {
-    return AdapterGetSystemUrl();
+function GOcurrentUrl() {
+    console.log('获取当前系统访问URL');
+    return shareCurrentUrl();
 }
-function VideoKeyframeExtraction(inputFile, cacheDir) {
-    return AdapterVideoKeyframeExtraction(inputFile, cacheDir);
+function GOkeyframe(inputFile, cacheDir) {
+    console.log('提取视频关键帧', inputFile, cacheDir);
+    return shareVideoKeyframe(inputFile, cacheDir);
 }
-function ProxyFetch(config) {
-    return AdapterProxyFetch(config);
+function GOfetch(config) {
+    console.log('网络请求', config);
+    return shareFetch(config);
 }
-function ResizeImage(imgData) {
-    return AdapterResizeImage(imgData);
-}
-const timers = new Map();
-let nextTimerId = 1;
-function setTimeout(callback, delay, ...args) {
-    const timerId = nextTimerId++;
-    let cancelled = false;
-    timers.set(timerId, () => {
-        cancelled = true;
-    });
-    (async () => {
-        await AdapterWaiter(delay);
-        if (!cancelled) {
-            callback(...args);
-        }
-        timers.delete(timerId);
-    })();
-    return timerId;
-}
-async function Log(message) {
-    return await AdapterLog(message);
+function GOresize(imgData) {
+    console.log('缩放图片');
+    return shareResizeImage(imgData);
 }
 
 class OnlyData {
@@ -72,11 +61,11 @@ class OnlyData {
     static visionExtensions = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
     static lunarToolPackageMap = new Map();
     static get systemUrl() {
-        return GetSystemUrl()[0] + '/v1';
+        return GOcurrentUrl()[0] + '/v1';
     }
     ;
     static get fileServiceUrl() {
-        return GetSystemUrl()[0];
+        return GOcurrentUrl()[0];
     }
     ;
     static get MultimodalUrl() {
@@ -122,7 +111,7 @@ class PromptProcessor extends BaseConfig {
     promptCompletion(prompt) {
         let address = "";
         if (currentAddress.length === 0)
-            address = (QueryCurrentAddress()[0]).join(' ');
+            address = (GOaddress()[0]).join(' ');
         else
             address = currentAddress.join(' ');
         return prompt
@@ -208,7 +197,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/chat/completions";
-        const [result, error] = await ProxyFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = GOfetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result;
@@ -231,7 +220,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/embeddings";
-        const [result, error] = await ProxyFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = GOfetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result.data[0].embedding.slice(0, 256);
@@ -240,7 +229,7 @@ class ModelBuilder extends ConfigModifier {
 }
 
 function getFileContent(path, removeNewLines = false) {
-    let [content, size, mimeType, err] = ReadFile(path);
+    let [content, size, mimeType, err] = GOread(path);
     if (err)
         throw err;
     if (removeNewLines)
@@ -251,18 +240,18 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
     const defaultCallback = (content) => JSON.parse(content);
     const applyCallback = defaultCallback;
     const fallback = async () => {
-        SaveFile(url.toString(), true, initializeContent);
+        GOsave(url.toString(), true, initializeContent);
         return applyCallback(initializeContent);
     };
     try {
         const filePath = url.toString().split(/[\/\\]/);
-        const [fileList, err1] = GetFileList(filePath.slice(0, -1).join('/'));
+        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
         if (!err1)
             return await fallback();
         const exists = fileList.some(item => item.name === filePath[filePath.length - 1] && !item.isDir);
         if (!exists)
             return await fallback();
-        const [content, size, mimeType, err2] = ReadFile(url.toString());
+        const [content, size, mimeType, err2] = GOread(url.toString());
         if (!err2)
             return await fallback();
         const text = String(content);
@@ -278,19 +267,19 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
 
 function queryFromDatabase(operations, createTableOperation) {
     const requestBody = { operations, transaction: false };
-    let [result, error] = ExecuteDatabaseRequest(requestBody);
+    let [result, error] = GOdatabase(requestBody);
     if (!error)
         throw new Error('数据库查询失败');
     if (!result.success || !result.results[0].success) {
         const errorMessage = result.error || result.results[0].error || '';
         if (errorMessage.includes('no such table') && createTableOperation) {
             const createTableRequest = { operations: [createTableOperation], transaction: false };
-            let [createTableResult, tableError] = ExecuteDatabaseRequest(createTableRequest);
+            let [createTableResult, tableError] = GOdatabase(createTableRequest);
             if (!tableError)
                 throw new Error('创建表失败');
             if (!createTableResult.success)
                 throw new Error('创建表失败');
-            [result, error] = ExecuteDatabaseRequest(requestBody);
+            [result, error] = GOdatabase(requestBody);
             if (!error)
                 throw new Error('数据库查询失败');
             if (!result.success || !result.results[0].success)
@@ -593,7 +582,7 @@ class AgentDefine {
             this.unreadContext.push({ role: 'user', content: cachedPrompt });
             return;
         }
-        const [keyFrames, error] = VideoKeyframeExtraction(videoUrl, './cache');
+        const [keyFrames, error] = GOkeyframe(videoUrl, './cache');
         if (!keyFrames || keyFrames.length === 0 || error)
             throw new Error('提取关键帧失败');
         const sandboxMessages = [];
@@ -634,13 +623,13 @@ class AgentDefine {
                     await this.analysisVideoFile(item.image_url.url, '');
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
-                    const [response, error] = await ProxyFetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                    const [response, error] = GOfetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     if (error)
                         throw new Error('获取图片文件失败');
                     if (!response.ok)
                         throw new Error(`获取图片文件失败: ${response.status} ${response.statusText}`);
                     const blob = await response.blob();
-                    const [resizedBlob, error1] = ResizeImage(blob);
+                    const [resizedBlob, error1] = GOresize(blob);
                     if (error1)
                         throw new Error('缩放图片失败');
                     item.image_url.url = resizedBlob.base64;
@@ -679,9 +668,10 @@ class LunarAgent extends AgentDefine {
         await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
         return this.finalResponse;
     }
-    constructor() { super(); this.thinkingChainProcess(); }
+    constructor() { super(); }
     async thinkingChainProcess() {
         while (true) {
+            console.log('思考链处理');
             await new Promise(resolve => setTimeout(resolve, 1000));
             const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
             if (messageLength === 0 && RandomFloor(0, 100) <= this.messageWeight)
@@ -691,18 +681,20 @@ class LunarAgent extends AgentDefine {
             await new Promise(resolve => setTimeout(resolve, 1000));
             await this.createChatMessage();
             await new Promise(resolve => setTimeout(resolve, 1000));
-            Log(this.finalResponse);
             console.log(this.finalResponse);
         }
     }
 }
 setTimeout(awakenAgent, 1000);
 function awakenAgent() {
+    console.log('智能体系统已唤醒');
     const agent = new LunarAgent();
+    console.log('思考链处理0');
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
+    setTimeout(() => console.log(agent.unreadContext), 5000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
+    setTimeout(() => console.log(agent.unreadContext), 10000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
+    setTimeout(() => console.log(agent.unreadContext), 15000);
 }
-Log('awakenAgent');
 
-export { AgentDefine, ChatDialogueRole, ModelBuilder, PainterRole };
