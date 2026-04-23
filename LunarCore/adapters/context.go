@@ -1,4 +1,4 @@
-package context
+package adapters
 
 import (
 	"LunarCore/hierarchy"
@@ -46,8 +46,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("shareGenerateImage", adapters.shareGenerateImage)
 }
 
-// CreateAgentContext 创建并初始化JavaScript运行时环境
-func CreateAgentContext() error {
+// createAgentContext 创建并初始化JavaScript运行时环境
+func createAgentContext() error {
 	runtimeMutex.Lock()
 	defer runtimeMutex.Unlock()
 
@@ -88,8 +88,6 @@ func CreateAgentContext() error {
 	if err != nil {
 		return err
 	}
-
-	log.Println("Lunar模块[JavaScript] -> 运行时环境创建成功")
 	return nil
 }
 
@@ -99,17 +97,17 @@ func RunAgentContext() error {
 	// 如果运行时不存在，先创建
 	if runtime == nil {
 		runtimeMutex.Unlock()
-		if err := CreateAgentContext(); err != nil {
-			return fmt.Errorf("创建JavaScript运行时失败: %v", err)
+		if err := createAgentContext(); err != nil {
+			return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> 创建运行时环境失败: %v", err)
 		}
 	} else {
 		runtimeMutex.Unlock()
 	}
 
-	// 从嵌入式文件系统中读取system.js文件
-	systemJS, err := hierarchy.EmbeddedFiles.ReadFile("assets/system.js")
+	// 从嵌入式文件系统中读取agentSystem.js文件
+	systemJS, err := hierarchy.EmbeddedFiles.ReadFile("assets/agentSystem.js")
 	if err != nil {
-		return fmt.Errorf("读取system.js文件失败: %v", err)
+		return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> 读取 agentSystem.js 失败: %v", err)
 	}
 
 	systemJSContent := string(systemJS)
@@ -117,11 +115,9 @@ func RunAgentContext() error {
 	runtime.RunOnLoop(func(vm *goja.Runtime) {
 		_, err = vm.RunString(systemJSContent)
 		if err != nil {
-			log.Printf("Lunar模块[JavaScript][ERROR] -> 执行system.js代码失败: %v", err)
+			log.Printf("Lunar模块[JavaScript][ERROR] -> 执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
-
-		log.Println("Lunar模块[JavaScript] -> system.js文件执行成功")
 	})
 	return nil
 }
@@ -148,6 +144,4 @@ func CloseAgentContext() {
 	runtimeCtx = nil
 	runtimeCancel = nil
 	runtime = nil
-
-	log.Println("Lunar模块[JavaScript] -> 运行时环境关闭成功")
 }

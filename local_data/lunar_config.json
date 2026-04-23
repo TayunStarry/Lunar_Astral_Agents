@@ -11,7 +11,7 @@
 		"developer": false,
 		"clear_port": false,
 		"allow_diffusion": true,
-		"allow_multimodal": false
+		"allow_multimodal": true
 	},
 	"cloud": {
 		"multimodalModelUrl": null,

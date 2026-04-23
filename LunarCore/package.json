@@ -8,13 +8,8 @@
 		"lunar": "tsc && rollup ../deliverable/EntryAPI/code.js --file ./hierarchy/assets/script.js",
 		"release.min": "tsc && rollup -c",
 		"ltp": "node script/run-generate-tool.js",
-
 		"compile.server": "tsc ./model/index.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
-		"server.side":"npm run compile.server && rollup ../deliverable/model/index.js --file ./hierarchy/assets/system.js",
-
-		
-		"compile.aaa": "tsc ./model/script/text.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
-		"aaa.side":"npm run compile.aaa && rollup ../deliverable/model/script/text.js --file ./hierarchy/assets/system.js"
+		"server.side": "npm run compile.server && rollup ../deliverable/model/index.js --file ./hierarchy/assets/agentSystem.js"
 	},
 	"keywords": [
 		"ai",
