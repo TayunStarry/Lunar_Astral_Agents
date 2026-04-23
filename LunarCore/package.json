@@ -21,8 +21,8 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@rollup/plugin-node-resolve": "^16.0.3",
-		"@rollup/plugin-terser": "^0.4.4",
-		"@types/node": "^20.0.0",
+		"@rollup/plugin-terser": "^1.0.0",
+		"@types/node": "^20.19.39",
 		"rollup": "^4.55.1",
 		"typescript": "^5.0.0"
 	}

@@ -26,7 +26,13 @@ class PromptProcessor extends BaseConfig {
         /** 当前地址 */
         let address = "";
         // 若当前地址为空，查询真实地址
-        if (currentAddress.length === 0) address = (GOaddress()[0]).join(' ');
+        if (currentAddress.length === 0) {
+            /** 查询真实地址 */
+            const addressResult = GOaddress();
+            // 设置当前地址
+            currentAddress = addressResult[0];
+            address = currentAddress.join(' ');
+        }
         // 否则使用缓存地址
         else address = currentAddress.join(' ');
         // 返回替换后的系统提示词

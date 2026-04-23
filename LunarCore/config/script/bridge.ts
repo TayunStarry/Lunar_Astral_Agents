@@ -22,13 +22,26 @@ declare function shareFileSave(fileName: string, overwrite: boolean, fileData: B
  * 
  * @param {string} filePath 文件路径
  * 
- * @returns {[Blob, number, string, Error | null]} 包含读取结果的元组，[文件内容, 文件大小, MIME类型, 错误信息]
+ * @returns {[string, number, string, Error | null]} 包含读取结果的元组，[文件内容(base64编码), 文件大小, MIME类型, 错误信息]
  * */
-export function GOread(filePath: string): [Blob, number, string, Error | null] {
+export function GOread(filePath: string): [string, number, string, Error | null] {
     console.log('从磁盘中读取文件', filePath);
     return shareFileRead(filePath);
 }
-declare function shareFileRead(filePath: string): [Blob, number, string, Error | null];
+declare function shareFileRead(filePath: string): [string, number, string, Error | null];
+
+/**
+ * 查看文件内容
+ * 
+ * @param {string} filePath 文件路径
+ * 
+ * @returns {[string, Error | null]} 包含文件内容的元组，[文件内容, 错误信息]
+ * */
+export function GOview(filePath: string): [string, Error | null] {
+    console.log('查看文件内容', filePath);
+    return shareFileView(filePath);
+}
+declare function shareFileView(filePath: string): [string, Error | null];
 
 /**
  * 获取指定目录下的所有文件列表
@@ -74,9 +87,9 @@ declare function shareAddress(): [string[], Error | null];
  * */
 export function GOcurrentUrl(): [string, Error | null] {
     console.log('获取当前系统访问URL');
-    return shareCurrentUrl();
+    return shareLocalhost();
 }
-declare function shareCurrentUrl(): [string, Error | null];
+declare function shareLocalhost(): [string, Error | null];
 
 /**
  * 提取视频关键帧
@@ -102,7 +115,7 @@ declare function shareVideoKeyframe(inputFile: string, cacheDir: string): [KeyFr
  * @returns {Promise<[any, Error | null]>} 包含响应结果的元组，[响应结果, 错误信息]
  * */
 export function GOfetch(config: ProxyFetchConfig): [any, Error | null] {
-    console.log('网络请求', config);
+    console.log('网络请求', JSON.stringify(config));
     return shareFetch(config);
 }
 declare function shareFetch(config: ProxyFetchConfig): [any, Error | null];

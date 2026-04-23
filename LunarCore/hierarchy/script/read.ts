@@ -31,10 +31,12 @@ export function getFileContent(path: string, removeNewLines: boolean = false): s
     let [content, size, mimeType, err] = GOread(path);
     // 检查读取是否成功
     if (err) throw err;
+    // 解码base64内容
+    const decodedContent = atob(String(content));
     // 根据参数决定是否移除换行符
-    if (removeNewLines) return String(content).replace(/[\r\n]+/g, '');
+    if (removeNewLines) return decodedContent.replace(/[\r\n]+/g, '');
     // 将多个连续的空格或制表符替换为单个空格，并返回处理结果
-    return String(content).replace(/[ \t]+/g, ' ');
+    return decodedContent.replace(/[ \t]+/g, ' ');
 };
 
 /**
@@ -96,18 +98,21 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
         const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
+        console.log(JSON.stringify(fileList), err1);
         // 检查文件列表响应是否成功
-        if (!err1) return await fallback();
+        if (err1) return await fallback();
         /** 检查文件是否存在且不是目录 */
-        const exists = fileList.some(item => item.name === filePath[filePath.length - 1] && !item.isDir);
+        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
+        console.log('检查文件是否存在且不是目录', exists);
         // 检查文件是否存在
         if (!exists) return await fallback();
         /** 读取文件内容 */
         const [content, size, mimeType, err2] = GOread(url.toString());
         // 检查文件内容响应是否成功
-        if (!err2) return await fallback();
+        if (err2) return await fallback();
         /** 解析文件内容为文本 */
-        const text = String(content);
+        const text = atob(String(content));
+        console.log('解析文件内容为文本', text);
         // 检查文件内容是否为空
         if (!text) return await fallback();
         // 执行回调函数处理文件内容

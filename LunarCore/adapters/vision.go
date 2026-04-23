@@ -166,3 +166,16 @@ func (class *Adapters) shareGenerateImage(call goja.FunctionCall) goja.Value {
 	}
 	return class.runtime.ToValue([]any{result, nil})
 }
+
+// atob 适配TypeScript调用的base64解码功能，处理base64编码的字符串并返回解码结果
+// 返回值: string 解码后的字符串
+func (class *Adapters) atob(call goja.FunctionCall) goja.Value {
+	input := call.Argument(0).String()
+
+	// Go 的标准 Base64 解码
+	decoded, err := base64.StdEncoding.DecodeString(input)
+	if err != nil {
+		panic(class.runtime.NewGoError(err))
+	}
+	return class.runtime.ToValue(string(decoded))
+}

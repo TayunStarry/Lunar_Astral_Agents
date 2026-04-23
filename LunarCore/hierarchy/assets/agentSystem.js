@@ -6,6 +6,10 @@ function GOread(filePath) {
     console.log('从磁盘中读取文件', filePath);
     return shareFileRead(filePath);
 }
+function GOview(filePath) {
+    console.log('查看文件内容', filePath);
+    return shareFileView(filePath);
+}
 function GOlist(path) {
     console.log('获取目录下所有文件列表', path);
     return shareFileList(path);
@@ -20,14 +24,14 @@ function GOaddress() {
 }
 function GOcurrentUrl() {
     console.log('获取当前系统访问URL');
-    return shareCurrentUrl();
+    return shareLocalhost();
 }
 function GOkeyframe(inputFile, cacheDir) {
     console.log('提取视频关键帧', inputFile, cacheDir);
     return shareVideoKeyframe(inputFile, cacheDir);
 }
 function GOfetch(config) {
-    console.log('网络请求', config);
+    console.log('网络请求', JSON.stringify(config));
     return shareFetch(config);
 }
 function GOresize(imgData) {
@@ -110,8 +114,11 @@ class BaseConfig {
 class PromptProcessor extends BaseConfig {
     promptCompletion(prompt) {
         let address = "";
-        if (currentAddress.length === 0)
-            address = (GOaddress()[0]).join(' ');
+        if (currentAddress.length === 0) {
+            const addressResult = GOaddress();
+            currentAddress = addressResult[0];
+            address = currentAddress.join(' ');
+        }
         else
             address = currentAddress.join(' ');
         return prompt
@@ -228,14 +235,207 @@ class ModelBuilder extends ConfigModifier {
     constructor() { super(); }
 }
 
-function getFileContent(path, removeNewLines = false) {
-    let [content, size, mimeType, err] = GOread(path);
-    if (err)
-        throw err;
-    if (removeNewLines)
-        return String(content).replace(/[\r\n]+/g, '');
-    return String(content).replace(/[ \t]+/g, ' ');
+class ChatDialogueRole extends ModelBuilder {
+    async callMultimediaAndToolParsing(cache, source) {
+        try {
+            await source.LiteImageFile();
+            source.unreadContext.forEach(context => this.writeContext(context));
+            source.unreadContext = [];
+            const response = await this.run;
+            if (!response.ok) {
+                source.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
+                return;
+            }
+            const responseText = await response.text();
+            this.analyzeMessageResponse(responseText, cache, source);
+            if (cache.toolCalls.length > 0) {
+                const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
+                if (hasProcessedToolCalls)
+                    return await this.callMultimediaAndToolParsing(cache, source);
+            }
+        }
+        catch (error) {
+            console.error('请求处理错误:', error);
+        }
+        this.updateMessageContent(cache, source);
+    }
+    analyzeMessageResponse(message, cache, source) {
+        try {
+            const jsonData = JSON.parse(message);
+            if (jsonData.choices?.[0]?.message?.reasoning_content) {
+                cache.thinkingContent = jsonData.choices[0].message.reasoning_content;
+            }
+            if (jsonData.timings?.predicted_per_second) {
+                source.responseSpeed = jsonData.timings.predicted_per_second;
+            }
+            if (jsonData.choices?.[0]?.message?.tool_calls) {
+                for (const toolCall of jsonData.choices[0].message.tool_calls) {
+                    try {
+                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                        cache.toolCalls.push(toolCall);
+                    }
+                    catch (parseError) {
+                        console.error('工具调用参数解析错误:', parseError);
+                    }
+                }
+            }
+            if (jsonData.choices?.[0]?.message?.content) {
+                cache.descriptionContent = jsonData.choices[0].message.content;
+            }
+        }
+        catch (error) {
+            console.error('聊天消息响应处理错误:', error);
+        }
+    }
+    async batchExecutionToolCall(state, source) {
+        let hasToolCalls = false;
+        for (const toolCall of state.toolCalls) {
+            if (toolCall.type !== "function")
+                continue;
+            const functionName = toolCall.function.name;
+            const functionArgs = toolCall.function.arguments;
+            const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
+            if (!lunarToolPackage) {
+                source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+                continue;
+            }
+            try {
+                const toolResult = await lunarToolPackage(functionArgs);
+                source.unreadContext.push({ role: "tool", content: toolResult, tool_call_id: toolCall.id });
+                hasToolCalls = true;
+            }
+            catch (error) {
+                source.unreadContext.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+            }
+        }
+        state.currentToolCallIndex = -1;
+        state.currentFunctionArgs = "";
+        state.currentFunctionName = "";
+        state.currentToolCall = null;
+        state.toolCalls = [];
+        return hasToolCalls;
+    }
+    ;
+    updateMessageContent(state, source) {
+        if (state.thinkingContent.trim() !== "") {
+            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
+            source.finalResponse = newThinkTag + state.descriptionContent;
+        }
+        else
+            source.finalResponse = state.descriptionContent;
+        if (source.finalResponse.trim() === "")
+            return source.defaultAnswer;
+        return source.finalResponse;
+    }
+    constructor() {
+        super();
+        this.useMultimodal(GOview('prompts/chatRole.md')[0]);
+    }
 }
+
+function RandomFloor(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+class PainterRole extends ModelBuilder {
+    defaultExpressionPrompt = [
+        '温柔的表情,开心的笑容,脸颊泛红',
+        '害羞的表情,抿嘴微笑,眼神躲闪',
+        '俏皮的表情,单眼眨眼,嘴角微微上扬,略带调皮的笑容',
+        '平静的表情,眼神略微向下看向一侧,嘴唇轻抿,无笑容,若有所思',
+        '惊讶的表情,双眼睁大,眉毛抬高,嘴巴微张成O形,脸颊泛红',
+        '非常开心的表情,双眼弯成月牙形,张大嘴巴欢笑,脸颊泛红明显',
+        '害羞的表情,眼神向下看,眉毛呈八字形,抿嘴微笑,脸颊大面积泛红',
+        '自信的表情,眼神直视前方,眉毛微微上扬,嘴角带有一抹浅笑,眼神明亮'
+    ];
+    defaultPosturePrompt = [
+        '一条腿轻轻抬起,俏皮姿势',
+        '双手背在身后,身体微微前倾,双脚并拢',
+        '一手插在外套口袋里,另一只手轻抬至脸颊旁比“V”字手势,身体略侧,双脚前后交叉站立',
+        '双手自然垂放于身前,手指轻轻交握,双肩微微内收,双脚并拢,站姿端正',
+        '手抬起至嘴前,十指轻轻触碰（做捂嘴状）,身体微微后仰,一条腿向后小半步,重心落在后脚',
+        '双手举过头顶比心或张开五指,一条腿向后踢起,身体微微前倾,脚尖离地呈跳跃瞬间',
+        '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
+        '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
+    ];
+    selfAppearancePrompt = GOview('prompts/selfAppearance.md')[0];
+    roleTool = [
+        {
+            type: "function",
+            function: {
+                name: "diffusion_generation",
+                description: "根据文本描述生成图像。如需进行图像创作,请调用此函数",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "prompt": {
+                            type: "string",
+                            description: "图像生成的正向描述文本"
+                        },
+                        "negative_prompt": {
+                            type: "string",
+                            description: "负面提示文本,用于排除图像中不希望出现的元素"
+                        },
+                        "use_reference": {
+                            type: "boolean",
+                            description: "是否使用上一次生成的图像作为参考,默认值为 false"
+                        },
+                        "strength": {
+                            type: "number",
+                            description: "参考图像的影响强度,取值范围为 0 到 1,默认值为 0.65"
+                        },
+                        "cfg_scale": {
+                            type: "number",
+                            description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                        }
+                    },
+                    required: [
+                        "prompt"
+                    ]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "self_portrait",
+                description: "生成自画像。调用此函数来创建自己的形象",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        "expression": {
+                            type: "string",
+                            description: "表情提示词,描述想要展现的表情"
+                        },
+                        "posture": {
+                            type: "string",
+                            description: "动作提示词,描述想要展现的姿势或动作"
+                        },
+                        "environment": {
+                            type: "string",
+                            description: "环境提示词,描述背景环境或场景"
+                        }
+                    },
+                    required: [
+                        "expression",
+                        "posture",
+                        "environment"
+                    ]
+                }
+            }
+        }
+    ];
+    constructor() {
+        super();
+        this.useMultimodal(GOview('prompts/painterRole.md')[0]);
+    }
+    writeAppearancePrompt(expression, posture) {
+        const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+        const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+        return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture);
+    }
+}
+
 async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
     const defaultCallback = (content) => JSON.parse(content);
     const applyCallback = defaultCallback;
@@ -246,15 +446,19 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
     try {
         const filePath = url.toString().split(/[\/\\]/);
         const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
-        if (!err1)
+        console.log(JSON.stringify(fileList), err1);
+        if (err1)
             return await fallback();
-        const exists = fileList.some(item => item.name === filePath[filePath.length - 1] && !item.isDir);
+        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
+        console.log('检查文件是否存在且不是目录', exists);
         if (!exists)
             return await fallback();
         const [content, size, mimeType, err2] = GOread(url.toString());
-        if (!err2)
+        console.log(content, size, mimeType, err2);
+        if (err2)
             return await fallback();
-        const text = String(content);
+        const text = atob(String(content));
+        console.log('解析文件内容为文本', text);
         if (!text)
             return await fallback();
         return applyCallback(text);
@@ -351,207 +555,6 @@ function savePromptToDatabase(key, prompt) {
     }
 }
 
-class ChatDialogueRole extends ModelBuilder {
-    async callMultimediaAndToolParsing(cache, source) {
-        try {
-            await source.LiteImageFile();
-            source.unreadContext.forEach(context => this.writeContext(context));
-            source.unreadContext = [];
-            const response = await this.run;
-            if (!response.ok) {
-                source.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
-                return;
-            }
-            const responseText = await response.text();
-            this.analyzeMessageResponse(responseText, cache, source);
-            if (cache.toolCalls.length > 0) {
-                const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
-                if (hasProcessedToolCalls)
-                    return await this.callMultimediaAndToolParsing(cache, source);
-            }
-        }
-        catch (error) {
-            console.error('请求处理错误:', error);
-        }
-        this.updateMessageContent(cache, source);
-    }
-    analyzeMessageResponse(message, cache, source) {
-        try {
-            const jsonData = JSON.parse(message);
-            if (jsonData.choices?.[0]?.message?.reasoning_content) {
-                cache.thinkingContent = jsonData.choices[0].message.reasoning_content;
-            }
-            if (jsonData.timings?.predicted_per_second) {
-                source.responseSpeed = jsonData.timings.predicted_per_second;
-            }
-            if (jsonData.choices?.[0]?.message?.tool_calls) {
-                for (const toolCall of jsonData.choices[0].message.tool_calls) {
-                    try {
-                        toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
-                        cache.toolCalls.push(toolCall);
-                    }
-                    catch (parseError) {
-                        console.error('工具调用参数解析错误:', parseError);
-                    }
-                }
-            }
-            if (jsonData.choices?.[0]?.message?.content) {
-                cache.descriptionContent = jsonData.choices[0].message.content;
-            }
-        }
-        catch (error) {
-            console.error('聊天消息响应处理错误:', error);
-        }
-    }
-    async batchExecutionToolCall(state, source) {
-        let hasToolCalls = false;
-        for (const toolCall of state.toolCalls) {
-            if (toolCall.type !== "function")
-                continue;
-            const functionName = toolCall.function.name;
-            const functionArgs = toolCall.function.arguments;
-            const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
-            if (!lunarToolPackage) {
-                source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
-                continue;
-            }
-            try {
-                const toolResult = await lunarToolPackage(functionArgs);
-                source.unreadContext.push({ role: "tool", content: toolResult, tool_call_id: toolCall.id });
-                hasToolCalls = true;
-            }
-            catch (error) {
-                source.unreadContext.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
-            }
-        }
-        state.currentToolCallIndex = -1;
-        state.currentFunctionArgs = "";
-        state.currentFunctionName = "";
-        state.currentToolCall = null;
-        state.toolCalls = [];
-        return hasToolCalls;
-    }
-    ;
-    updateMessageContent(state, source) {
-        if (state.thinkingContent.trim() !== "") {
-            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
-            source.finalResponse = newThinkTag + state.descriptionContent;
-        }
-        else
-            source.finalResponse = state.descriptionContent;
-        if (source.finalResponse.trim() === "")
-            return source.defaultAnswer;
-        return source.finalResponse;
-    }
-    constructor() {
-        super();
-        this.useMultimodal(getFileContent('resources/prompts/chatRole.md'));
-    }
-}
-
-function RandomFloor(min, max) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
-}
-
-class PainterRole extends ModelBuilder {
-    defaultExpressionPrompt = [
-        '温柔的表情,开心的笑容,脸颊泛红',
-        '害羞的表情,抿嘴微笑,眼神躲闪',
-        '俏皮的表情,单眼眨眼,嘴角微微上扬,略带调皮的笑容',
-        '平静的表情,眼神略微向下看向一侧,嘴唇轻抿,无笑容,若有所思',
-        '惊讶的表情,双眼睁大,眉毛抬高,嘴巴微张成O形,脸颊泛红',
-        '非常开心的表情,双眼弯成月牙形,张大嘴巴欢笑,脸颊泛红明显',
-        '害羞的表情,眼神向下看,眉毛呈八字形,抿嘴微笑,脸颊大面积泛红',
-        '自信的表情,眼神直视前方,眉毛微微上扬,嘴角带有一抹浅笑,眼神明亮'
-    ];
-    defaultPosturePrompt = [
-        '一条腿轻轻抬起,俏皮姿势',
-        '双手背在身后,身体微微前倾,双脚并拢',
-        '一手插在外套口袋里,另一只手轻抬至脸颊旁比“V”字手势,身体略侧,双脚前后交叉站立',
-        '双手自然垂放于身前,手指轻轻交握,双肩微微内收,双脚并拢,站姿端正',
-        '手抬起至嘴前,十指轻轻触碰（做捂嘴状）,身体微微后仰,一条腿向后小半步,重心落在后脚',
-        '双手举过头顶比心或张开五指,一条腿向后踢起,身体微微前倾,脚尖离地呈跳跃瞬间',
-        '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
-        '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
-    ];
-    selfAppearancePrompt = getFileContent('resources/prompts/selfAppearance.md');
-    roleTool = [
-        {
-            type: "function",
-            function: {
-                name: "diffusion_generation",
-                description: "根据文本描述生成图像。如需进行图像创作,请调用此函数",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        "prompt": {
-                            type: "string",
-                            description: "图像生成的正向描述文本"
-                        },
-                        "negative_prompt": {
-                            type: "string",
-                            description: "负面提示文本,用于排除图像中不希望出现的元素"
-                        },
-                        "use_reference": {
-                            type: "boolean",
-                            description: "是否使用上一次生成的图像作为参考,默认值为 false"
-                        },
-                        "strength": {
-                            type: "number",
-                            description: "参考图像的影响强度,取值范围为 0 到 1,默认值为 0.65"
-                        },
-                        "cfg_scale": {
-                            type: "number",
-                            description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
-                        }
-                    },
-                    required: [
-                        "prompt"
-                    ]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "self_portrait",
-                description: "生成自画像。调用此函数来创建自己的形象",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        "expression": {
-                            type: "string",
-                            description: "表情提示词,描述想要展现的表情"
-                        },
-                        "posture": {
-                            type: "string",
-                            description: "动作提示词,描述想要展现的姿势或动作"
-                        },
-                        "environment": {
-                            type: "string",
-                            description: "环境提示词,描述背景环境或场景"
-                        }
-                    },
-                    required: [
-                        "expression",
-                        "posture",
-                        "environment"
-                    ]
-                }
-            }
-        }
-    ];
-    constructor() {
-        super();
-        this.useMultimodal(getFileContent('resources/prompts/painterRole.md'));
-    }
-    writeAppearancePrompt(expression, posture) {
-        const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-        const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-        return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture);
-    }
-}
-
 class AgentDefine {
     compilePlan = new ModelBuilder();
     queryKeywords = new ModelBuilder();
@@ -568,12 +571,12 @@ class AgentDefine {
     responseSpeed = 0;
     defaultAnswer = "月华不知道哦";
     constructor() {
-        this.compilePlan.useMultimodal(getFileContent('resources/prompts/compilePlan.md'));
-        this.queryKeywords.useMultimodal(getFileContent('resources/prompts/queryKeywords.md'));
-        this.emotionManager.useMultimodal(getFileContent('resources/prompts/emotionManager.md'));
-        this.recorderRole.useMultimodal(getFileContent('resources/prompts/recorderRole.md'));
-        this.summaryRole.useMultimodal(getFileContent('resources/prompts/summaryRole.md'));
-        this.descriptionRole.useMultimodal(getFileContent('resources/prompts/descriptionRole.md'));
+        this.compilePlan.useMultimodal(GOview('prompts/compilePlan.md')[0]);
+        this.queryKeywords.useMultimodal(GOview('prompts/queryKeywords.md')[0]);
+        this.emotionManager.useMultimodal(GOview('prompts/emotionManager.md')[0]);
+        this.recorderRole.useMultimodal(GOview('prompts/recorderRole.md')[0]);
+        this.summaryRole.useMultimodal(GOview('prompts/summaryRole.md')[0]);
+        this.descriptionRole.useMultimodal(GOview('prompts/descriptionRole.md')[0]);
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
     }
     async analysisVideoFile(videoUrl, userNeeds) {
@@ -686,15 +689,15 @@ class LunarAgent extends AgentDefine {
     }
 }
 setTimeout(awakenAgent, 1000);
-function awakenAgent() {
+async function awakenAgent() {
     console.log('智能体系统已唤醒');
     const agent = new LunarAgent();
-    console.log('思考链处理0');
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
-    setTimeout(() => console.log(agent.unreadContext), 5000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 5000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
-    setTimeout(() => console.log(agent.unreadContext), 10000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 10000);
     setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
-    setTimeout(() => console.log(agent.unreadContext), 15000);
+    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 15000);
+    await agent.thinkingChainProcess();
 }
 

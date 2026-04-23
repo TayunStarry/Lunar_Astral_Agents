@@ -35,7 +35,7 @@ func CreateServers() {
 	if allEmpty {
 		log.Printf("GGUF模块[ERROR] -> 所有类型均未找到有效模型文件")
 		// 启动浏览器页面，辅助用户下载模型
-		browser.OpenBrowser("https://modelscope.cn/models/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/files")
+		browser.OpenBrowser("https://modelscope.cn/models/Jackrong/Qwopus3.5-9B-v3-GGUF/files")
 		browser.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
 		return
 	}

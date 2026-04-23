@@ -52,9 +52,9 @@ func (class *Adapters) shareAddress(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{config.ServerAddress, nil})
 }
 
-// shareCurrentUrl 适配TypeScript调用的系统URL获取功能，返回系统访问地址
+// shareLocalhost 适配TypeScript调用的系统URL获取功能，返回系统访问地址
 // 返回值: [string, error] 系统URL和错误信息
-func (class *Adapters) shareCurrentUrl(call goja.FunctionCall) goja.Value {
+func (class *Adapters) shareLocalhost(call goja.FunctionCall) goja.Value {
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
 		log.Printf("获取本地IP失败: %v\n", err)

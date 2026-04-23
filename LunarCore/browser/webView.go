@@ -9,8 +9,8 @@ import (
 	webview "github.com/webview/webview_go"
 )
 
-// StartWebViewBrowser 启动 webview 浏览器
-func StartWebViewBrowser(url string) {
+// startWebViewBrowser 启动 webview 浏览器
+func startWebViewBrowser(url string) {
 	// 等待服务器启动完成
 	time.Sleep(1 * time.Second)
 
