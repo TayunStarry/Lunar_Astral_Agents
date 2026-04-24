@@ -5,7 +5,6 @@
 	"description": "月华 - 您专属的本地智能 AI 少女助理",
 	"main": "index.html",
 	"scripts": {
-		"lunar": "tsc && rollup ../deliverable/EntryAPI/code.js --file ./hierarchy/assets/script.js",
 		"release.min": "tsc && rollup -c",
 		"ltp": "node script/run-generate-tool.js",
 		"compile.server": "tsc ./side/server/index.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
