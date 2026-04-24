@@ -1,4 +1,4 @@
-import { Config, ToolCall, GOcurrentUrl } from '../index';
+import { Config, ToolCall } from '../index';
 
 export class OnlyData {
     /** 系统默认 API 密钥 */
@@ -44,14 +44,14 @@ export class OnlyData {
     /** 支持的视觉文件扩展名 */
     public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
     /** 月华工具协议的哈希映射 */
-    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any>) => Promise<string>>();
+    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any> | string) => Promise<string>>();
     /** 系统URL */
     public static get systemUrl(): string {
-        return GOcurrentUrl()[0] + '/v1';
+        return url()[0] + '/v1';
     };
     /** 文件服务URL */
     public static get fileServiceUrl(): string {
-        return GOcurrentUrl()[0];
+        return url()[0];
     };
     /** 获取 多模态模型 URL */
     public static get MultimodalUrl(): string {

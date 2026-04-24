@@ -54,7 +54,7 @@ export interface FunctionTool {
      */
     strict?: boolean;
     /** 预定义的参数值，用于工具调用时的默认参数 */
-    arguments?: Record<string, any>;
+    arguments?: Record<string, any> | string;
 }
 
 /** 单个工具调用定义 */
