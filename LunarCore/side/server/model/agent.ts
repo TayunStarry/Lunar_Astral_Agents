@@ -1,6 +1,4 @@
-import { ChatCache } from '../../config/index';
-import { RandomFloor } from '../../math/index';
-import { AgentDefine } from '../index';
+import { ChatCache, RandomFloor, AgentDefine } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -60,8 +58,10 @@ class LunarAgent extends AgentDefine {
             await new Promise(resolve => setTimeout(resolve, 1000));
             /** 消息长度 */
             const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+            console.log(`消息长度: ${messageLength}`);
             // 如果消息长度为0，且随机数小于等于消息权重，继续循环
-            if (messageLength === 0 && RandomFloor(0, 100) <= this.messageWeight) continue;
+            //if (messageLength === 0 && RandomFloor(0, 100) <= this.messageWeight) continue;
+            if (messageLength === 0) continue;
             // 等待1秒
             await new Promise(resolve => setTimeout(resolve, 1000));
             // 批量处理视频文件

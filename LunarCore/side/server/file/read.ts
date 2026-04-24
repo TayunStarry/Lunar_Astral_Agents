@@ -1,19 +1,4 @@
 import { calculateFileHash, toBtoaString } from '../index';
-import { GOsave, GOread, GOlist } from '../../config/index';
-
-/** 文件列表项属性 */
-export interface FileListItem {
-    /** 文件或目录名称 */
-    name: string;
-    /** 文件大小（字节） */
-    size: number;
-    /** 是否为目录 */
-    isDir: boolean;
-    /** 最后修改时间，格式：YYYY-MM-DD HH:mm:ss */
-    lastModified: string;
-    /** 文件的完整路径 */
-    path: string;
-}
 
 /**
  * 同步从指定路径读取文件内容，并对内容进行格式化处理
@@ -28,7 +13,7 @@ export interface FileListItem {
  */
 export function getFileContent(path: string, removeNewLines: boolean = false): string {
     /** 从磁盘读取文件内容 */
-    let [content, size, mimeType, err] = GOread(path);
+    let [content, size, mimeType, err] = readFile(path);
     // 检查读取是否成功
     if (err) throw err;
     // 解码base64内容
@@ -57,7 +42,7 @@ export async function saveImageToServer(file: File): Promise<string> {
         /** 将包含图片文件名的路径进行 Base64 编码，用于设置请求头中的文件名 */
         const base64FileName = toBtoaString('images/' + newFileName);
         /** 向服务器发送 POST 请求，尝试保存图片文件 */
-        const [_, __, err] = GOsave(base64FileName, true, file);
+        const [_, __, err] = saveFile(base64FileName, true, file);
         // 检查响应是否成功，若失败则抛出错误
         if (!err) throw err;
         // 保存成功，返回图片的读取路径
@@ -90,24 +75,24 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
     const applyCallback = callback ?? defaultCallback;
     /** 统一兜底逻辑：当文件不存在或读取失败时，保存默认内容并返回 */
     const fallback = async () => {
-        GOsave(url.toString(), true, initializeContent)
+        saveFile(url.toString(), true, initializeContent)
         return applyCallback(initializeContent);
     };
     try {
         /** 拆分文件路径 */
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
-        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
-        console.log(JSON.stringify(fileList), err1);
+        const [list, err1] = fileList(filePath.slice(0, -1).join('/'));
+        console.log(JSON.stringify(list), err1);
         // 检查文件列表响应是否成功
         if (err1) return await fallback();
         /** 检查文件是否存在且不是目录 */
-        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
+        const exists = list.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
         console.log('检查文件是否存在且不是目录', exists);
         // 检查文件是否存在
         if (!exists) return await fallback();
         /** 读取文件内容 */
-        const [content, size, mimeType, err2] = GOread(url.toString());
+        const [content, size, mimeType, err2] = readFile(url.toString());
         // 检查文件内容响应是否成功
         if (err2) return await fallback();
         /** 解析文件内容为文本 */

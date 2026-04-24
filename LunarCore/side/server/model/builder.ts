@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, GOaddress, GOfetch } from '../../config/index';
+import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse } from '../index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -23,18 +23,18 @@ class BaseConfig {
 class PromptProcessor extends BaseConfig {
     /** 生成提示词 */
     protected promptCompletion(prompt: string): string {
-        /** 当前地址 */
-        let address = "";
+        /** 当前地址文本 */
+        let addressText = "";
         // 若当前地址为空，查询真实地址
         if (currentAddress.length === 0) {
             /** 查询真实地址 */
-            const addressResult = GOaddress();
+            const addressResult = address();
             // 设置当前地址
             currentAddress = addressResult[0];
-            address = currentAddress.join(' ');
+            addressText = currentAddress.join(' ');
         }
         // 否则使用缓存地址
-        else address = currentAddress.join(' ');
+        else addressText = currentAddress.join(' ');
         // 返回替换后的系统提示词
         return prompt
             // 转换用户名称
@@ -42,7 +42,7 @@ class PromptProcessor extends BaseConfig {
             // 转换当前时间
             .replace(/{current-time}/g, new Date().toLocaleString())
             // 转换当前地址
-            .replace(/{current-address}/g, address);
+            .replace(/{current-address}/g, addressText);
     }
     /** 从消息中提取文本 */
     protected extractTextFromMessages(messages: PostMessage[]): string[] {
@@ -112,12 +112,12 @@ class ConfigModifier extends ModeConfig {
 /** 模型构建器 */
 export class ModelBuilder extends ConfigModifier {
     /** 运行模型 */
-    public get run(): Promise<any> | Promise<number[]> {
+    public get run(): modelResponse | number[] {
         if (this.isMultimodal) return this.runMultimodal();
         else return this.runEmbedding();
     }
     /** 运行多模态模型 */
-    protected async runMultimodal(): Promise<any> {
+    protected runMultimodal(): modelResponse {
         /** 检查消息列表中是否包含工具调用消息 */
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         /** 构建发给推理模型的请求体 */
@@ -148,14 +148,14 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/chat/completions";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = GOfetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 返回模型响应
         return result;
     }
     /** 运行嵌入模型 */
-    protected async runEmbedding(): Promise<number[]> {
+    protected runEmbedding(): number[] {
         /** 剔除其他内容, 仅保留文本内容 */
         const validMessages = this.extractTextFromMessages(this.messages);
         /** 构建发给推理模型的请求体 */
@@ -179,7 +179,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/embeddings";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = GOfetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 截取嵌入向量的前 256 个元素，作为模型输入

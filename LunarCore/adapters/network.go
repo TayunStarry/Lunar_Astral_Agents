@@ -13,9 +13,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// shareAddress 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
+// address 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
 // 返回值: [Array<string>, error] 地址列表和错误信息
-func (class *Adapters) shareAddress(call goja.FunctionCall) goja.Value {
+func (class *Adapters) address(call goja.FunctionCall) goja.Value {
 	// 如果当前地址已缓存，直接返回
 	if len(config.ServerAddress) > 0 {
 		return class.runtime.ToValue([]any{config.ServerAddress, nil})
@@ -52,9 +52,9 @@ func (class *Adapters) shareAddress(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{config.ServerAddress, nil})
 }
 
-// shareLocalhost 适配TypeScript调用的系统URL获取功能，返回系统访问地址
+// url 适配TypeScript调用的系统URL获取功能，返回系统访问地址
 // 返回值: [string, error] 系统URL和错误信息
-func (class *Adapters) shareLocalhost(call goja.FunctionCall) goja.Value {
+func (class *Adapters) url(call goja.FunctionCall) goja.Value {
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
 		log.Printf("获取本地IP失败: %v\n", err)
@@ -63,9 +63,9 @@ func (class *Adapters) shareLocalhost(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *config.BasicPort), nil})
 }
 
-// shareFetch 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
+// syncFetch 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
 // 返回值: [Object, error] 网络响应和错误信息
-func (class *Adapters) shareFetch(call goja.FunctionCall) goja.Value {
+func (class *Adapters) syncFetch(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -96,11 +96,16 @@ func (class *Adapters) shareFetch(call goja.FunctionCall) goja.Value {
 	// 准备请求体
 	var body io.Reader
 	if bodyVal, ok := execute["body"]; ok {
-		bodyJSON, err := json.Marshal(bodyVal)
-		if err != nil {
-			return class.runtime.ToValue([]any{nil, fmt.Errorf("请求体序列化失败: %v", err)})
+		switch v := bodyVal.(type) {
+		case string:
+			body = bytes.NewBufferString(v)
+		default:
+			bodyJSON, err := json.Marshal(v)
+			if err != nil {
+				return class.runtime.ToValue([]any{nil, fmt.Errorf("请求体序列化失败: %v", err)})
+			}
+			body = bytes.NewBuffer(bodyJSON)
 		}
-		body = bytes.NewBuffer(bodyJSON)
 	}
 
 	// 创建HTTP请求

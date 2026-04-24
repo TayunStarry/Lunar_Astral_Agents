@@ -1,4 +1,4 @@
-import { DatabaseOperation, DatabaseRequest, BatchResult, DataOperation, GOdatabase } from '../../config/index';
+import { DatabaseOperation, DatabaseRequest, BatchResult, DataOperation } from '../index';
 
 /**
  * 向数据库查询数据
@@ -13,7 +13,7 @@ export function queryFromDatabase(operations: DatabaseOperation[], createTableOp
     /** 构建数据库查询请求体 */
     const requestBody: DatabaseRequest = { operations, transaction: false };
     /** 发送数据库查询请求 */
-    let [result, error] = GOdatabase(requestBody);
+    let [result, error] = database(requestBody);
     // 检查响应状态是否成功
     if (!error) throw new Error('数据库查询失败');
     // 检查查询结果是否有效
@@ -25,13 +25,13 @@ export function queryFromDatabase(operations: DatabaseOperation[], createTableOp
             /** 构建创建表请求体 */
             const createTableRequest: DatabaseRequest = { operations: [createTableOperation], transaction: false };
             /** 发送创建表请求 */
-            let [createTableResult, tableError] = GOdatabase(createTableRequest);
+            let [createTableResult, tableError] = database(createTableRequest);
             // 检查创建表响应状态是否成功
             if (!tableError) throw new Error('创建表失败');
             /** 检查创建表操作是否成功 */
             if (!createTableResult.success) throw new Error('创建表失败');
             // 重新执行原始查询操作
-            [result, error] = GOdatabase(requestBody);
+            [result, error] = database(requestBody);
             // 检查重新执行查询响应状态是否成功
             if (!error) throw new Error('数据库查询失败');
             // 检查重新执行查询操作是否成功

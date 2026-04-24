@@ -7,9 +7,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// shareDatabase 适配TypeScript调用的数据库操作功能，处理请求并转换结果格式
+// database 适配TypeScript调用的数据库操作功能，处理请求并转换结果格式
 // 返回值: [Object, error] 数据库操作结果和错误信息
-func (class *Adapters) shareDatabase(call goja.FunctionCall) goja.Value {
+func (class *Adapters) database(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}

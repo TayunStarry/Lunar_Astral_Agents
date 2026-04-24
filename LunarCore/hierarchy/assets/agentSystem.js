@@ -38,6 +38,10 @@ function GOresize(imgData) {
     console.log('缩放图片');
     return shareResizeImage(imgData);
 }
+function GOgenerate(params) {
+    console.log('生成图片', params);
+    return shareGenerateImage(params);
+}
 
 class OnlyData {
     static systemKey = 'key-520-1314-2000-02-18';
@@ -100,6 +104,414 @@ class OnlyData {
         return OnlyData.customConfig.cloud.userName || "你";
     }
     ;
+}
+
+const ThinkType = [
+    /<think>([\s\S]*?)<\/think>([\s\S]*)/,
+    /<\|thought_start\|>([\s\S]*?)<\|thought_end\|>([\s\S]*)/,
+];
+
+function Clamp({ min, max }, value) {
+    return Math.max(min, Math.min(max, value));
+}
+function RandomFloor(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
+function RandomFloat(min, max, length = 2) {
+    return Number((Math.random() * (max - min) + min).toFixed(length));
+}
+function CalculateMedian(numbers) {
+    const sortedNumbers = [...numbers].sort((a, b) => a - b);
+    const middleIndex = Math.floor(sortedNumbers.length / 2);
+    if (sortedNumbers.length % 2 === 0)
+        return (sortedNumbers[middleIndex - 1] + sortedNumbers[middleIndex]) / 2;
+    else
+        return sortedNumbers[middleIndex];
+}
+function CalculateModes(numbers) {
+    const frequencyMap = new Map();
+    let maxFrequency = 0;
+    const modes = [];
+    for (const number of numbers) {
+        const frequency = (frequencyMap.get(number) || 0) + 1;
+        frequencyMap.set(number, frequency);
+        if (frequency > maxFrequency)
+            maxFrequency = frequency;
+    }
+    frequencyMap.forEach((frequency, number) => {
+        if (frequency === maxFrequency)
+            modes.push(number);
+    });
+    return modes;
+}
+
+function getFileContent(path, removeNewLines = false) {
+    let [content, size, mimeType, err] = GOread(path);
+    if (err)
+        throw err;
+    const decodedContent = atob(String(content));
+    if (removeNewLines)
+        return decodedContent.replace(/[\r\n]+/g, '');
+    return decodedContent.replace(/[ \t]+/g, ' ');
+}
+async function saveImageToServer(file) {
+    try {
+        const fileHash = await calculateFileHash(file);
+        const fileExtension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+        const newFileName = `${fileHash}${fileExtension}`;
+        const base64FileName = toBtoaString('images/' + newFileName);
+        const [_, __, err] = GOsave(base64FileName, true, file);
+        if (!err)
+            throw err;
+        return `/read/images/${newFileName}`;
+    }
+    catch (error) {
+        if (!(error instanceof Error))
+            return '';
+        return `${error.name} | ${error.message} | ${error.stack}`;
+    }
+}
+async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
+    const defaultCallback = (content) => JSON.parse(content);
+    const applyCallback = callback ?? defaultCallback;
+    const fallback = async () => {
+        GOsave(url.toString(), true, initializeContent);
+        return applyCallback(initializeContent);
+    };
+    try {
+        const filePath = url.toString().split(/[\/\\]/);
+        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
+        console.log(JSON.stringify(fileList), err1);
+        if (err1)
+            return await fallback();
+        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
+        console.log('检查文件是否存在且不是目录', exists);
+        if (!exists)
+            return await fallback();
+        const [content, size, mimeType, err2] = GOread(url.toString());
+        if (err2)
+            return await fallback();
+        const text = atob(String(content));
+        console.log('解析文件内容为文本', text);
+        if (!text)
+            return await fallback();
+        return applyCallback(text);
+    }
+    catch (error) {
+        if (error instanceof Error)
+            return await fallback();
+    }
+}
+
+function splitTextToStrings(input, options = {}) {
+    const option = {
+        idealLen: options.idealLen ?? 1024,
+        pathPrefix: options.pathPrefix ?? "*标题> ",
+        pathOnNewLine: options.pathOnNewLine ?? true,
+        skipTitleOnly: options.skipTitleOnly ?? true,
+        includeOriginalTitle: options.includeOriginalTitle ?? false,
+    };
+    const text = (input ?? "").replace(/\r\n/g, "\n");
+    if (!text.trim())
+        return [];
+    const isMarkdown = looksLikeMarkdown(text);
+    if (!isMarkdown) {
+        return splitPlainText(text, option.idealLen);
+    }
+    return splitMarkdown(text, option);
+}
+function splitPlainText(text, idealLen) {
+    const results = [];
+    let currentIndex = 0;
+    const isPreferredBreak = (char) => char === "\n" ||
+        char === "。" ||
+        char === "；" ||
+        char === ";" ||
+        char === "." ||
+        char === "!" ||
+        char === "?" ||
+        char === "？" ||
+        char === "！" ||
+        char === "…" ||
+        char === "、" ||
+        char === ":" ||
+        char === "：";
+    while (currentIndex < text.length) {
+        const remainingLength = text.length - currentIndex;
+        if (remainingLength <= idealLen) {
+            const tailText = text.slice(currentIndex).trim();
+            if (tailText)
+                results.push(tailText);
+            break;
+        }
+        const endPosition = currentIndex + idealLen;
+        const backwardWindow = Math.min(idealLen, 256);
+        let cutPosition = -1;
+        for (let position = endPosition; position >= Math.max(currentIndex + 1, endPosition - backwardWindow); position--) {
+            const char = text[position - 1];
+            if (isPreferredBreak(char)) {
+                cutPosition = position;
+                break;
+            }
+        }
+        if (cutPosition === -1) {
+            for (let position = endPosition; position > currentIndex; position--) {
+                const char = text[position - 1];
+                if (isPreferredBreak(char)) {
+                    cutPosition = position;
+                    break;
+                }
+            }
+        }
+        if (cutPosition === -1 || cutPosition <= currentIndex)
+            cutPosition = endPosition;
+        const chunkText = text.slice(currentIndex, cutPosition).trim();
+        if (chunkText)
+            results.push(chunkText);
+        currentIndex = cutPosition;
+    }
+    return results;
+}
+function splitMarkdown(text, option) {
+    const sections = parseMarkdownSections(text);
+    if (sections.length === 0) {
+        return splitPlainText(text, option.idealLen);
+    }
+    const output = [];
+    for (const sec of sections) {
+        if (option.skipTitleOnly && sec.content.trim() === '') {
+            continue;
+        }
+        const header = formatPath(sec.path, option);
+        const body = option.includeOriginalTitle
+            ? (sec.title ? `#`.repeat(sec.level) + " " + sec.title + "\n" : "") + sec.content
+            : sec.content;
+        if (body.length <= option.idealLen) {
+            const piece = (header + body).trimEnd();
+            if (piece.trim())
+                output.push(piece);
+            continue;
+        }
+        const pieces = splitByNewlinePrefer(body, option.idealLen);
+        for (const current of pieces) {
+            const piece = (header + current).trimEnd();
+            if (piece.trim())
+                output.push(piece);
+        }
+    }
+    return output;
+}
+function parseMarkdownSections(text) {
+    const normalizedText = text.replace(/\r\n/g, "\n");
+    const lines = normalizedText.split("\n");
+    const headingRe = /^(#{1,6})\s+(.*)\s*$/;
+    const sections = [];
+    const stack = [];
+    const headingIdx = [];
+    for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+        const match = line.match(headingRe);
+        const isHeading = Boolean(match);
+        if (isHeading && match) {
+            headingIdx.push({ i: index, level: match[1].length, title: match[2].trim() });
+        }
+    }
+    if (headingIdx.length === 0)
+        return [];
+    for (let k = 0; k < headingIdx.length; k++) {
+        const cur = headingIdx[k];
+        const next = headingIdx[k + 1];
+        const startLine = cur.i;
+        const endLine = next ? next.i : lines.length;
+        while (stack.length && stack[stack.length - 1].level >= cur.level) {
+            stack.pop();
+        }
+        stack.push({ level: cur.level, title: cur.title });
+        const path = stack.map(s => s.title).join(" / ");
+        const contentLines = lines.slice(startLine + 1, endLine);
+        const content = contentLines.join("\n").trimEnd() + "\n";
+        sections.push({ level: cur.level, title: cur.title, content, path, });
+    }
+    return sections;
+}
+function splitByNewlinePrefer(text, idealLen) {
+    const result = [];
+    let buffer = "";
+    const flushBuffer = () => {
+        const trimmed = buffer.trimEnd();
+        if (trimmed.trim())
+            result.push(trimmed + "\n");
+        buffer = "";
+    };
+    const lines = text.replace(/\r\n/g, "\n").split("\n");
+    for (let index = 0; index < lines.length; index++) {
+        const currentLine = lines[index];
+        const appendStr = (buffer === "" ? "" : "\n") + currentLine;
+        if ((buffer + appendStr).length <= idealLen) {
+            buffer += appendStr;
+            continue;
+        }
+        if (buffer.trim().length > 0)
+            flushBuffer();
+        if (currentLine.length > idealLen) {
+            let offset = 0;
+            while (offset < currentLine.length) {
+                const segment = currentLine.slice(offset, offset + idealLen);
+                result.push(segment.trimEnd() + "\n");
+                offset += idealLen;
+            }
+        }
+        else {
+            buffer = currentLine;
+        }
+    }
+    if (buffer.trim().length > 0)
+        flushBuffer();
+    return result;
+}
+function formatPath(path, option) {
+    const wholePath = `${option.pathPrefix}${path}*\n`;
+    return option.pathOnNewLine ? wholePath : `${option.pathPrefix}${path}* `;
+}
+function looksLikeMarkdown(text) {
+    const hasHeading = /(^|\n)#{1,6}\s+\S/.test(text);
+    const hasFence = /(^|\n)```/.test(text);
+    const hasList = /(^|\n)\s*([-*+]|\d+\.)\s+\S/.test(text);
+    const hasQuote = /(^|\n)>\s+\S/.test(text);
+    const hasTable = /(^|\n)\s*\|.*\|/.test(text);
+    return hasHeading || hasFence || hasList || hasQuote || hasTable;
+}
+
+function toBtoaString(params) {
+    const encodedParams = encodeURIComponent(params);
+    const decodedParams = encodedParams.replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16)));
+    return btoa(decodedParams);
+}
+async function FileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            const base64String = event.target?.result;
+            if (!base64String)
+                throw new Error("文件转 Base64 失败: 空字符串");
+            resolve(base64String);
+        };
+        reader.onerror = function (error) {
+            reject(new Error(`文件转 Base64 失败: ${error.target.error?.code}`));
+        };
+        reader.readAsDataURL(file);
+    });
+}
+async function calculateFileHash(file) {
+    function process(resolve) {
+        const reader = new FileReader();
+        reader.onload = async function (e) {
+            try {
+                const arrayBuffer = e.target?.result;
+                const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const fullHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                const shortHash = fullHash.substring(0, 16);
+                resolve(shortHash);
+            }
+            catch {
+                resolve(toBtoaString(file.name).slice(-16));
+            }
+        };
+        reader.onerror = async (error) => {
+            if (!(error instanceof Error))
+                return;
+            resolve(`${error.name} | ${error.message} | ${error.stack}`);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+    return new Promise(process);
+}
+
+function queryFromDatabase(operations, createTableOperation) {
+    const requestBody = { operations, transaction: false };
+    let [result, error] = GOdatabase(requestBody);
+    if (!error)
+        throw new Error('数据库查询失败');
+    if (!result.success || !result.results[0].success) {
+        const errorMessage = result.error || result.results[0].error || '';
+        if (errorMessage.includes('no such table') && createTableOperation) {
+            const createTableRequest = { operations: [createTableOperation], transaction: false };
+            let [createTableResult, tableError] = GOdatabase(createTableRequest);
+            if (!tableError)
+                throw new Error('创建表失败');
+            if (!createTableResult.success)
+                throw new Error('创建表失败');
+            [result, error] = GOdatabase(requestBody);
+            if (!error)
+                throw new Error('数据库查询失败');
+            if (!result.success || !result.results[0].success)
+                throw new Error('数据库查询失败');
+        }
+        else
+            throw new Error('数据库查询失败');
+    }
+    return result;
+}
+function getPromptFromDatabase(key) {
+    try {
+        const operations = [
+            {
+                type: 'select',
+                table: 'KeyPrompt',
+                filter: {
+                    IndexKey: key
+                },
+                limit: 1
+            }
+        ];
+        const createTableOperation = {
+            type: 'create',
+            table: 'KeyPrompt',
+            definition: {
+                columns: [
+                    { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
+                    { name: "IndexKey", type: "TEXT" },
+                    { name: "Prompt", type: "TEXT" }
+                ]
+            }
+        };
+        const result = queryFromDatabase(operations, createTableOperation);
+        if (result.success && result.results[0].success && result.results[0].rows) {
+            return result.results[0].rows[0].Prompt;
+        }
+        return null;
+    }
+    catch (error) {
+        return null;
+    }
+}
+function savePromptToDatabase(key, prompt) {
+    try {
+        const existingPrompt = getPromptFromDatabase(key);
+        const operations = [];
+        if (existingPrompt)
+            operations.push({ type: 'update', table: 'KeyPrompt', data: { Prompt: prompt }, filter: { IndexKey: key } });
+        else
+            operations.push({ type: 'insert', table: 'KeyPrompt', data: { IndexKey: key, Prompt: prompt } });
+        const createTableOperation = {
+            type: 'create',
+            table: 'KeyPrompt',
+            definition: {
+                columns: [
+                    { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
+                    { name: "IndexKey", type: "TEXT" },
+                    { name: "Prompt", type: "TEXT" }
+                ]
+            }
+        };
+        const result = queryFromDatabase(operations, createTableOperation);
+        return result.success && result.results[0].success;
+    }
+    catch (error) {
+        console.error('向数据库存储提示词失败:', error);
+        return false;
+    }
 }
 
 let currentAddress = [];
@@ -180,7 +592,7 @@ class ModelBuilder extends ConfigModifier {
         else
             return this.runEmbedding();
     }
-    async runMultimodal() {
+    runMultimodal() {
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         const requestBody = {
             model: OnlyData.MultimodalName,
@@ -209,7 +621,7 @@ class ModelBuilder extends ConfigModifier {
             throw error;
         return result;
     }
-    async runEmbedding() {
+    runEmbedding() {
         const validMessages = this.extractTextFromMessages(this.messages);
         const requestBody = {
             model: OnlyData.EmbeddingName,
@@ -241,18 +653,14 @@ class ChatDialogueRole extends ModelBuilder {
             await source.LiteImageFile();
             source.unreadContext.forEach(context => this.writeContext(context));
             source.unreadContext = [];
-            const response = await this.run;
-            if (!response.ok) {
-                source.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
-                return;
-            }
-            const responseText = await response.text();
-            this.analyzeMessageResponse(responseText, cache, source);
+            const response = this.run;
+            this.analyzeMessageResponse(response.body, cache, source);
             if (cache.toolCalls.length > 0) {
                 const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
                 if (hasProcessedToolCalls)
                     return await this.callMultimediaAndToolParsing(cache, source);
             }
+            this.writeContext(response.body.choices?.[0]?.message);
         }
         catch (error) {
             console.error('请求处理错误:', error);
@@ -261,15 +669,14 @@ class ChatDialogueRole extends ModelBuilder {
     }
     analyzeMessageResponse(message, cache, source) {
         try {
-            const jsonData = JSON.parse(message);
-            if (jsonData.choices?.[0]?.message?.reasoning_content) {
-                cache.thinkingContent = jsonData.choices[0].message.reasoning_content;
+            if (message.choices?.[0]?.message?.reasoning_content) {
+                cache.thinkingContent = message.choices[0].message.reasoning_content;
             }
-            if (jsonData.timings?.predicted_per_second) {
-                source.responseSpeed = jsonData.timings.predicted_per_second;
+            if (message.timings?.predicted_per_second) {
+                source.responseSpeed = message.timings.predicted_per_second;
             }
-            if (jsonData.choices?.[0]?.message?.tool_calls) {
-                for (const toolCall of jsonData.choices[0].message.tool_calls) {
+            if (message.choices?.[0]?.message?.tool_calls) {
+                for (const toolCall of message.choices[0].message.tool_calls) {
                     try {
                         toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
                         cache.toolCalls.push(toolCall);
@@ -279,8 +686,8 @@ class ChatDialogueRole extends ModelBuilder {
                     }
                 }
             }
-            if (jsonData.choices?.[0]?.message?.content) {
-                cache.descriptionContent = jsonData.choices[0].message.content;
+            if (message.choices?.[0]?.message?.content) {
+                cache.descriptionContent = message.choices[0].message.content;
             }
         }
         catch (error) {
@@ -290,8 +697,6 @@ class ChatDialogueRole extends ModelBuilder {
     async batchExecutionToolCall(state, source) {
         let hasToolCalls = false;
         for (const toolCall of state.toolCalls) {
-            if (toolCall.type !== "function")
-                continue;
             const functionName = toolCall.function.name;
             const functionArgs = toolCall.function.arguments;
             const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
@@ -331,10 +736,6 @@ class ChatDialogueRole extends ModelBuilder {
         super();
         this.useMultimodal(GOview('prompts/chatRole.md')[0]);
     }
-}
-
-function RandomFloor(min, max) {
-    return Math.floor(Math.random() * (max - min + 1) + min);
 }
 
 class PainterRole extends ModelBuilder {
@@ -436,125 +837,6 @@ class PainterRole extends ModelBuilder {
     }
 }
 
-async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
-    const defaultCallback = (content) => JSON.parse(content);
-    const applyCallback = defaultCallback;
-    const fallback = async () => {
-        GOsave(url.toString(), true, initializeContent);
-        return applyCallback(initializeContent);
-    };
-    try {
-        const filePath = url.toString().split(/[\/\\]/);
-        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
-        console.log(JSON.stringify(fileList), err1);
-        if (err1)
-            return await fallback();
-        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
-        console.log('检查文件是否存在且不是目录', exists);
-        if (!exists)
-            return await fallback();
-        const [content, size, mimeType, err2] = GOread(url.toString());
-        console.log(content, size, mimeType, err2);
-        if (err2)
-            return await fallback();
-        const text = atob(String(content));
-        console.log('解析文件内容为文本', text);
-        if (!text)
-            return await fallback();
-        return applyCallback(text);
-    }
-    catch (error) {
-        if (error instanceof Error)
-            return await fallback();
-    }
-}
-
-function queryFromDatabase(operations, createTableOperation) {
-    const requestBody = { operations, transaction: false };
-    let [result, error] = GOdatabase(requestBody);
-    if (!error)
-        throw new Error('数据库查询失败');
-    if (!result.success || !result.results[0].success) {
-        const errorMessage = result.error || result.results[0].error || '';
-        if (errorMessage.includes('no such table') && createTableOperation) {
-            const createTableRequest = { operations: [createTableOperation], transaction: false };
-            let [createTableResult, tableError] = GOdatabase(createTableRequest);
-            if (!tableError)
-                throw new Error('创建表失败');
-            if (!createTableResult.success)
-                throw new Error('创建表失败');
-            [result, error] = GOdatabase(requestBody);
-            if (!error)
-                throw new Error('数据库查询失败');
-            if (!result.success || !result.results[0].success)
-                throw new Error('数据库查询失败');
-        }
-        else
-            throw new Error('数据库查询失败');
-    }
-    return result;
-}
-function getPromptFromDatabase(key) {
-    try {
-        const operations = [
-            {
-                type: 'select',
-                table: 'KeyPrompt',
-                filter: {
-                    IndexKey: key
-                },
-                limit: 1
-            }
-        ];
-        const createTableOperation = {
-            type: 'create',
-            table: 'KeyPrompt',
-            definition: {
-                columns: [
-                    { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-                    { name: "IndexKey", type: "TEXT" },
-                    { name: "Prompt", type: "TEXT" }
-                ]
-            }
-        };
-        const result = queryFromDatabase(operations, createTableOperation);
-        if (result.success && result.results[0].success && result.results[0].rows) {
-            return result.results[0].rows[0].Prompt;
-        }
-        return null;
-    }
-    catch (error) {
-        return null;
-    }
-}
-function savePromptToDatabase(key, prompt) {
-    try {
-        const existingPrompt = getPromptFromDatabase(key);
-        const operations = [];
-        if (existingPrompt)
-            operations.push({ type: 'update', table: 'KeyPrompt', data: { Prompt: prompt }, filter: { IndexKey: key } });
-        else
-            operations.push({ type: 'insert', table: 'KeyPrompt', data: { IndexKey: key, Prompt: prompt } });
-        const createTableOperation = {
-            type: 'create',
-            table: 'KeyPrompt',
-            definition: {
-                columns: [
-                    { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-                    { name: "IndexKey", type: "TEXT" },
-                    { name: "Prompt", type: "TEXT" }
-                ]
-            }
-        };
-        const result = queryFromDatabase(operations, createTableOperation);
-        return result.success && result.results[0].success;
-    }
-    catch (error) {
-        console.error('向数据库存储提示词失败:', error);
-        return false;
-    }
-}
-
 class AgentDefine {
     compilePlan = new ModelBuilder();
     queryKeywords = new ModelBuilder();
@@ -594,15 +876,15 @@ class AgentDefine {
         for (let i = 0; i < frameMessages.length; i += 20) {
             const batchFrames = frameMessages.slice(i, i + 20);
             this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
-            const summaryRequest = await (await this.descriptionRole.run).json();
-            const summary = summaryRequest?.choices?.[0]?.message?.content;
+            const summaryRequest = this.descriptionRole.run;
+            const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             if (summary && summary.trim().length > 0)
-                sandboxMessages.push(summary);
+                sandboxMessages.push({ type: 'text', text: summary });
         }
         if (sandboxMessages.length > 1) {
             this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
-            const summaryRequest = await (await this.summaryRole.run).json();
-            videoSummary = summaryRequest?.choices?.[0]?.message?.content;
+            const summaryRequest = this.summaryRole.run;
+            videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
         }
         else if (sandboxMessages.length === 1)
             videoSummary = sandboxMessages[0].text;
@@ -677,7 +959,8 @@ class LunarAgent extends AgentDefine {
             console.log('思考链处理');
             await new Promise(resolve => setTimeout(resolve, 1000));
             const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-            if (messageLength === 0 && RandomFloor(0, 100) <= this.messageWeight)
+            console.log(`消息长度: ${messageLength}`);
+            if (messageLength === 0)
                 continue;
             await new Promise(resolve => setTimeout(resolve, 1000));
             await this.batchProcessVideoFiles();

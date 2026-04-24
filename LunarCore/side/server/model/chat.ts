@@ -1,6 +1,4 @@
-import { OnlyData, ChatCache, GOview } from '../../config/index';
-import { getFileContent } from '../../hierarchy/index';
-import { AgentDefine, ModelBuilder } from '../index';
+import { OnlyData, ChatCache,  modelResponse, ModelResponseBody,  AgentDefine, ModelBuilder } from '../index';
 
 /** 聊天对话角色 */
 export class ChatDialogueRole extends ModelBuilder {
@@ -14,16 +12,9 @@ export class ChatDialogueRole extends ModelBuilder {
             // 清空未读上下文数组
             source.unreadContext = [];
             /** 向处理器模型发送请求并等待响应 */
-            const response = await this.run as Response;
-            // 如果未能获得期望中的响应,则抛出错误
-            if (!response.ok) {
-                source.finalResponse = `月华发现了一个错误: ${response.status} ${response.statusText}`;
-                return;
-            }
-            // 读取响应文本内容
-            const responseText = await response.text();
+            const response = this.run as modelResponse;
             // 处理响应文本内容
-            this.analyzeMessageResponse(responseText, cache, source);
+            this.analyzeMessageResponse(response.body, cache, source);
             // 如果有工具调用,处理它们并重新发送请求
             if (cache.toolCalls.length > 0) {
                 /** 处理工具调用 */
@@ -31,6 +22,8 @@ export class ChatDialogueRole extends ModelBuilder {
                 // 如果有处理过的工具调用,重新发送请求（包含工具调用结果）
                 if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache, source);
             }
+            // 在历史上下文中添加模型响应
+            this.writeContext(response.body.choices?.[0]?.message);
         }
         catch (error) {
             console.error('请求处理错误:', error);
@@ -39,22 +32,20 @@ export class ChatDialogueRole extends ModelBuilder {
         this.updateMessageContent(cache, source);
     }
     /** 处理聊天消息响应 */
-    protected analyzeMessageResponse(message: string, cache: ChatCache, source: AgentDefine): void {
+    protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {
         try {
-            /** 解析响应为JSON */
-            const jsonData = JSON.parse(message);
             // 处理推理内容数据
-            if (jsonData.choices?.[0]?.message?.reasoning_content) {
-                cache.thinkingContent = jsonData.choices[0].message.reasoning_content;
+            if (message.choices?.[0]?.message?.reasoning_content) {
+                cache.thinkingContent = message.choices[0].message.reasoning_content;
             }
             // 检查是否有预测令牌数
-            if (jsonData.timings?.predicted_per_second) {
-                source.responseSpeed = jsonData.timings.predicted_per_second;
+            if (message.timings?.predicted_per_second) {
+                source.responseSpeed = message.timings.predicted_per_second;
             }
             // 处理工具调用
-            if (jsonData.choices?.[0]?.message?.tool_calls) {
+            if (message.choices?.[0]?.message?.tool_calls) {
                 // 遍历所有工具调用
-                for (const toolCall of jsonData.choices[0].message.tool_calls) {
+                for (const toolCall of message.choices[0].message.tool_calls) {
                     try {
                         // 解析arguments字段
                         toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
@@ -67,8 +58,8 @@ export class ChatDialogueRole extends ModelBuilder {
                 }
             }
             // 处理内容数据
-            if (jsonData.choices?.[0]?.message?.content) {
-                cache.descriptionContent = jsonData.choices[0].message.content;
+            if (message.choices?.[0]?.message?.content) {
+                cache.descriptionContent = message.choices[0].message.content;
             }
         }
         catch (error) {
@@ -81,8 +72,6 @@ export class ChatDialogueRole extends ModelBuilder {
         let hasToolCalls = false;
         // 遍历所有工具调用
         for (const toolCall of state.toolCalls) {
-            // 仅处理函数类型的工具调用
-            if (toolCall.type !== "function") continue;
             /** 工具函数名称 */
             const functionName = toolCall.function.name;
             /** 工具函数参数 */
@@ -134,6 +123,6 @@ export class ChatDialogueRole extends ModelBuilder {
     /** 构造函数 */
     public constructor() {
         super();
-        this.useMultimodal(GOview('prompts/chatRole.md')[0]);
+        this.useMultimodal(fileView('prompts/chatRole.md')[0]);
     }
 }

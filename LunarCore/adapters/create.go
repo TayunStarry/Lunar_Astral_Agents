@@ -28,23 +28,25 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	adapters := &Adapters{runtime: vm}
 
 	// 注册文件操作适配器
-	vm.Set("shareFileSave", adapters.shareFileSave)
-	vm.Set("shareFileRead", adapters.shareFileRead)
-	vm.Set("shareFileList", adapters.shareFileList)
-	vm.Set("shareFileView", adapters.shareFileView)
+	vm.Set("saveFile", adapters.saveFile)
+	vm.Set("readFile", adapters.readFile)
+	vm.Set("fileView", adapters.fileView)
+	vm.Set("fileList", adapters.fileList)
 
 	// 注册数据库操作适配器
-	vm.Set("shareDatabase", adapters.shareDatabase)
+	vm.Set("database", adapters.database)
 
 	// 注册网络操作适配器
-	vm.Set("shareLocalhost", adapters.shareLocalhost)
-	vm.Set("shareAddress", adapters.shareAddress)
-	vm.Set("shareFetch", adapters.shareFetch)
+	vm.Set("url", adapters.url)
+	vm.Set("address", adapters.address)
+	vm.Set("syncFetch", adapters.syncFetch)
 
 	// 注册图像处理适配器
-	vm.Set("shareVideoKeyframe", adapters.shareVideoKeyframe)
-	vm.Set("shareResizeImage", adapters.shareResizeImage)
-	vm.Set("shareGenerateImage", adapters.shareGenerateImage)
+	vm.Set("keyframe", adapters.keyframe)
+	vm.Set("resizeImage", adapters.resizeImage)
+	vm.Set("generateImage", adapters.generateImage)
+
+	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
 }
 

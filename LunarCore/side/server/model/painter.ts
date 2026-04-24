@@ -1,7 +1,4 @@
-import { GOview, ToolCall } from '../../config/index';
-import { getFileContent } from '../../hierarchy/index';
-import { ModelBuilder } from '../index';
-import { RandomFloor } from '../../math/index';
+import { ToolCall,  RandomFloor, ModelBuilder } from '../index';
 
 export class PainterRole extends ModelBuilder {
 	/** 默认表情提示 */
@@ -27,7 +24,7 @@ export class PainterRole extends ModelBuilder {
 		'双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
 	]
 	/** 自我外观提示 */
-	protected selfAppearancePrompt = GOview('prompts/selfAppearance.md')[0]
+	protected selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0]
 	/** 绘画角色工具 */
 	protected roleTool: ToolCall[] = [
 		{
@@ -98,7 +95,7 @@ export class PainterRole extends ModelBuilder {
 	/** 构造函数 */
 	public constructor() {
 		super();
-		this.useMultimodal(GOview('prompts/painterRole.md')[0]);
+		this.useMultimodal(fileView('prompts/painterRole.md')[0]);
 	}
 	/** 获得写入了动作与表情的自我外观提示词 */
 	protected writeAppearancePrompt(expression?: string, posture?: string): string {

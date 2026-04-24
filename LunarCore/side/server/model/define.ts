@@ -1,6 +1,4 @@
-import { OnlyData, ImageContent, TextContent, PostMessage, GOkeyframe, GOfetch, GOresize, GOview } from '../../config/index';
-import { fetchDocumentCallback, getFileContent, getPromptFromDatabase, savePromptToDatabase } from '../../hierarchy/index';
-import { ModelBuilder, ChatDialogueRole, PainterRole } from '../index';
+import { OnlyData, ImageContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, ChatDialogueRole, PainterRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -37,12 +35,12 @@ export class AgentDefine {
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     protected constructor() {
         // 初始化 全部模型 的 系统提示词
-        this.compilePlan.useMultimodal(GOview('prompts/compilePlan.md')[0]);
-        this.queryKeywords.useMultimodal(GOview('prompts/queryKeywords.md')[0]);
-        this.emotionManager.useMultimodal(GOview('prompts/emotionManager.md')[0]);
-        this.recorderRole.useMultimodal(GOview('prompts/recorderRole.md')[0]);
-        this.summaryRole.useMultimodal(GOview('prompts/summaryRole.md')[0]);
-        this.descriptionRole.useMultimodal(GOview('prompts/descriptionRole.md')[0]);
+        this.compilePlan.useMultimodal(fileView('prompts/compilePlan.md')[0]);
+        this.queryKeywords.useMultimodal(fileView('prompts/queryKeywords.md')[0]);
+        this.emotionManager.useMultimodal(fileView('prompts/emotionManager.md')[0]);
+        this.recorderRole.useMultimodal(fileView('prompts/recorderRole.md')[0]);
+        this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
+        this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
         // 初始化 自定义配置 信息
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
         // TODO 初始化 工具调用配置
@@ -68,15 +66,15 @@ export class AgentDefine {
             return;
         }
         /** 关键帧提取API响应 */
-        const [keyFrames, error] = GOkeyframe(videoUrl, './cache');
+        const [images, error] = keyframe(videoUrl, './cache'); 
         // 检查提取关键帧是否成功
-        if (!keyFrames || keyFrames.length === 0 || error) throw new Error('提取关键帧失败');
+        if (!images || images.length === 0 || error) throw new Error('提取关键帧失败');
         /** 沙箱消息数组 */
         const sandboxMessages: Array<TextContent> = [];
         /** 模型对视频总结结果 */
         let videoSummary = '';
         /** 关键帧消息数组 */
-        const frameMessages: Array<ImageContent> = keyFrames.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
+        const frameMessages: Array<ImageContent> = images.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
         // 处理关键帧,每20张调用一次模型进行画面总结
         for (let i = 0; i < frameMessages.length; i += 20) {
             /** 当前批次20张关键帧消息*/
@@ -84,20 +82,20 @@ export class AgentDefine {
             // 覆写 视频描述模型 上下文
             this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
             /** 调用模型进行画面总结 */
-            const summaryRequest = await (await this.descriptionRole.run as Response).json();
+            const summaryRequest = this.descriptionRole.run as modelResponse;
             /** 模型总结结果 */
-            const summary = summaryRequest?.choices?.[0]?.message?.content;
+            const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             // 过滤空字符串和仅包含空格的字符串
-            if (summary && summary.trim().length > 0) sandboxMessages.push(summary);
+            if (summary && summary.trim().length > 0) sandboxMessages.push({ type: 'text', text: summary });
         }
         // 判断是否包含多个批处理片段
         if (sandboxMessages.length > 1) {
             // 覆写 视频摘要模型 上下文
             this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
             /** 调用模型进行视频总结 */
-            const summaryRequest = await (await this.summaryRole.run as Response).json();
+            const summaryRequest = this.summaryRole.run as modelResponse;
             /** 模型视频总结结果 */
-            videoSummary = summaryRequest?.choices?.[0]?.message?.content;
+            videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
         }
         // 如果仅包含一个批处理片段,使用该片段作为总结
         else if (sandboxMessages.length === 1) videoSummary = sandboxMessages[0].text;
@@ -130,7 +128,7 @@ export class AgentDefine {
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
                     // 获取图片文件内容
-                    const [response, error] = GOfetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                    const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     // 检查请求是否成功
                     if (error) throw new Error('获取图片文件失败');
                     // 检查响应是否成功
@@ -138,7 +136,7 @@ export class AgentDefine {
                     /** 从响应中获取图片 Blob 对象 */
                     const blob = await response.blob();
                     /** 缩放图片 */
-                    const [resizedBlob, error1] = GOresize(blob);
+                    const [resizedBlob, error1] = resizeImage(blob);
                     // 检查缩放是否成功
                     if (error1) throw new Error('缩放图片失败');
                     // 处理缩放后的图片文件

@@ -10,9 +10,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// shareVideoKeyframe 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
+// keyframe 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
 // 返回值: [Array<{filePath: string, timestamp: number, frameNum: number, data: string}>, error] 关键帧列表和错误信息
-func (class *Adapters) shareVideoKeyframe(call goja.FunctionCall) goja.Value {
+func (class *Adapters) keyframe(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -46,9 +46,9 @@ func (class *Adapters) shareVideoKeyframe(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
-// shareResizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
+// resizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
 // 返回值: [Object, error] 缩放结果和错误信息
-func (class *Adapters) shareResizeImage(call goja.FunctionCall) goja.Value {
+func (class *Adapters) resizeImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -96,9 +96,9 @@ func (class *Adapters) shareResizeImage(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
-// shareGenerateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
+// generateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
 // 返回值: [Object, error] 图片生成结果和错误信息
-func (class *Adapters) shareGenerateImage(call goja.FunctionCall) goja.Value {
+func (class *Adapters) generateImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
