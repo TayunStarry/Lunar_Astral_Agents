@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache,  modelResponse, ModelResponseBody,  AgentDefine, ModelBuilder } from '../index';
+import { OnlyData, ChatCache, modelResponse, ModelResponseBody, AgentDefine, ModelBuilder } from '../index';
 
 /** 聊天对话角色 */
 export class ChatDialogueRole extends ModelBuilder {
@@ -11,6 +11,8 @@ export class ChatDialogueRole extends ModelBuilder {
             source.unreadContext.forEach(context => this.writeContext(context));
             // 清空未读上下文数组
             source.unreadContext = [];
+            // 格式化历史消息
+            this.formatHistoricalMessages();
             /** 向处理器模型发送请求并等待响应 */
             const response = this.run as modelResponse;
             // 处理响应文本内容
@@ -30,6 +32,17 @@ export class ChatDialogueRole extends ModelBuilder {
         }
         // 更新消息内容
         this.updateMessageContent(cache, source);
+    }
+    /** 格式化历史消息 */
+    public formatHistoricalMessages() {
+        // 如果消息数组为空,则不处理
+        if (this.messages.length === 0) return;
+        /** 最新消息的角色 */
+        const latestRole = this.messages.slice(-1)[0].role;
+        // 如果最新消息是用户,则不处理
+        if (latestRole === 'user') return;
+        // 如果最新消息是模型,则添加提示
+        this.writeContext({ role: 'user', content: '关于之前聊过的话题, 你还有什么别的想法吗?' });
     }
     /** 处理聊天消息响应 */
     protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {

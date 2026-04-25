@@ -66,9 +66,9 @@ export class AgentDefine {
             return;
         }
         /** 关键帧提取API响应 */
-        const [images, error] = keyframe(videoUrl, './cache'); 
+        const [images, error] = keyframe(videoUrl, './cache');
         // 检查提取关键帧是否成功
-        if (!images || images.length === 0 || error) throw new Error('提取关键帧失败');
+        if (images.length === 0 || error) throw new Error('提取关键帧失败');
         /** 沙箱消息数组 */
         const sandboxMessages: Array<TextContent> = [];
         /** 模型对视频总结结果 */
@@ -125,6 +125,8 @@ export class AgentDefine {
                 if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                     // 处理视频文件
                     await this.analysisVideoFile(item.image_url.url, '');
+                    // 替换为默认图片
+                    item.image_url.url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
                     // 获取图片文件内容

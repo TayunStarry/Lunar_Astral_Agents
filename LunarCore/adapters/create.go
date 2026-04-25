@@ -48,6 +48,12 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
+
+	// 注册消息操作适配器
+	vm.Set("pullContext", adapters.pullContext)
+	//vm.Set("pushContext", adapters.pushContext)
+	vm.Set("pullVideoUrl", adapters.pullVideoUrl)
+	//vm.Set("pushContext", adapters.pushContext)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境

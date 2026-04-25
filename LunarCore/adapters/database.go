@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"LunarCore/hierarchy/memory"
+	"encoding/json"
 	"fmt"
 
 	"github.com/dop251/goja"
@@ -39,14 +40,8 @@ func (class *Adapters) database(call goja.FunctionCall) goja.Value {
 	// 执行数据库操作
 	result := memory.ExecuteDatabaseRequest(dbRequest)
 
-	// 转换结果格式
-	response := map[string]any{
-		"success":       result.Success,
-		"error":         result.Error,
-		"results":       result.Results,
-		"total_time_ms": result.TotalTime,
-		"operations":    result.Operations,
-	}
-
+	jsonData, _ := json.Marshal(result)
+	var response map[string]any
+	json.Unmarshal(jsonData, &response)
 	return class.runtime.ToValue([]any{response, nil})
 }

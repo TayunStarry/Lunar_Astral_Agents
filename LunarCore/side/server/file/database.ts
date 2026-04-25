@@ -15,7 +15,7 @@ export function queryFromDatabase(operations: DatabaseOperation[], createTableOp
     /** 发送数据库查询请求 */
     let [result, error] = database(requestBody);
     // 检查响应状态是否成功
-    if (!error) throw new Error('数据库查询失败');
+    if (error) throw new Error('数据库查询失败');
     // 检查查询结果是否有效
     if (!result.success || !result.results[0].success) {
         /** 提取错误信息 */
