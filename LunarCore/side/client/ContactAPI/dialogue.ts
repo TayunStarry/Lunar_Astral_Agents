@@ -28,7 +28,7 @@ async function buildContextMessages(contentElement?: HTMLElement): Promise<Entry
 	/** 无需进行排序的最近消息（保持原序） */
 	const recentMemories = availableHistory.slice(-keepRecentCount);
 	/** 从对话历史中倒序查找最近一条用户发出的消息 */
-	const lastUserMessage = availableHistory.slice().reverse().find(msg => msg.role === "user");
+	const lastUserMessage = availableHistory.reverse().find(msg => msg.role === "user");
 	// 如果没有找到用户消息，返回默认历史
 	if (!lastUserMessage) return await getDefaultHistory(maxContextMessages);
 	/** 当前用户消息的嵌入向量 */

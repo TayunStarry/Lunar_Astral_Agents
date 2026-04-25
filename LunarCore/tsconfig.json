@@ -16,7 +16,7 @@
 		// 输出目录
 		"outDir": "../deliverable/",
 		// 源码根目录
-		"rootDir": "./script",
+		"rootDir": "./side",
 		// 启用所有严格类型检查
 		"strict": false,
 		// 允许 ESModule 互操作
@@ -40,7 +40,7 @@
 	},
 	// 需要编译的文件列表
 	"include": [
-		"./script/EntryAPI/code.ts"
+		"./side/client/EntryAPI/code.ts"
 	],
 	// 排除的目录
 	"exclude": [

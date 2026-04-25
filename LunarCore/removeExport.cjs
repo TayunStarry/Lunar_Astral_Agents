@@ -9,7 +9,5 @@ const filteredLines = lines.filter(line => !/^\s*export\s*\{/.test(line));
 
 if (lines.length !== filteredLines.length) {
     fs.writeFileSync(targetFile, filteredLines.join('\n'), 'utf-8');
-    console.log('Removed export line from agentSystem.js');
-} else {
-    console.log('No export line found');
-}
+} 
+else console.log('No export line found');

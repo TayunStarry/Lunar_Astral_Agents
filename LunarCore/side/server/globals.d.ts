@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult } from './index';
+import type { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage } from './index';
 
 declare global {
     /**
@@ -91,4 +91,16 @@ declare global {
      * @returns {[GenerateImageResult, Error | null]} 包含生成图片结果的元组，[生成图片结果, 错误信息]
      */
     function generateImage(params: GenerateImageParams): [GenerateImageResult, Error | null];
+    /**
+     * 拉取上下文
+     * 
+     * @returns {MultimodalMessage[]} 上下文消息列表
+     */
+    function pullContext(): MultimodalMessage[];
+    /**
+     * 拉取视频URL
+     * 
+     * @returns {string[]} 视频URL列表
+     */
+    function pullVideoUrl(): string[];
 }

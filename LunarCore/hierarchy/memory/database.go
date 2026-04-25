@@ -23,11 +23,11 @@ type OperationResult struct {
 	Success      bool                     `json:"success"`
 	Error        string                   `json:"error,omitempty"`
 	Operation    string                   `json:"operation"`
-	Rows         []map[string]interface{} `json:"rows,omitempty"`
+	Rows         []map[string]any `json:"rows,omitempty"`
 	AffectedRows int64                    `json:"affected_rows,omitempty"`
 	LastInsertID int64                    `json:"last_insert_id,omitempty"`
 	Table        string                   `json:"table,omitempty"`
-	Structure    []map[string]interface{} `json:"structure,omitempty"`
+	Structure    []map[string]any `json:"structure,omitempty"`
 	Tables       []string                 `json:"tables,omitempty"`
 	Count        int64                    `json:"count,omitempty"`
 }
@@ -207,7 +207,7 @@ func (d *Database) ExecuteBatch(request DatabaseRequest) *BatchResult {
 
 		// 根据操作类型执行不同的操作
 		switch opType := op.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			// 解析操作类型
 			opMap := opType
 			operationType, _ := opMap["type"].(string)
@@ -271,7 +271,7 @@ func (d *Database) ExecuteBatch(request DatabaseRequest) *BatchResult {
 }
 
 // executeDataOperation 执行数据操作
-func (d *Database) executeDataOperation(op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *Database) executeDataOperation(op map[string]any, tx *sql.Tx) OperationResult {
 	opType, _ := op["type"].(string)
 	table, _ := op["table"].(string)
 
@@ -306,8 +306,8 @@ func (d *Database) executeDataOperation(op map[string]interface{}, tx *sql.Tx) O
 }
 
 // executeInsert 执行插入操作
-func (d *Database) executeInsert(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
-	data, _ := op["data"].(map[string]interface{})
+func (d *Database) executeInsert(table string, op map[string]any, tx *sql.Tx) OperationResult {
+	data, _ := op["data"].(map[string]any)
 	if len(data) == 0 {
 		return OperationResult{
 			Success:   false,
@@ -320,7 +320,7 @@ func (d *Database) executeInsert(table string, op map[string]interface{}, tx *sq
 	// 构建INSERT语句
 	var columns []string
 	var placeholders []string
-	var values []interface{}
+	var values []any
 
 	for column, value := range data {
 		columns = append(columns, sanitizeIdentifier(column))

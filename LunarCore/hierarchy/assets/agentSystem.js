@@ -1,48 +1,3 @@
-function GOsave(fileName, overwrite, fileData) {
-    console.log('在磁盘中保存文件', fileName, overwrite, fileData);
-    return shareFileSave(fileName, overwrite, fileData);
-}
-function GOread(filePath) {
-    console.log('从磁盘中读取文件', filePath);
-    return shareFileRead(filePath);
-}
-function GOview(filePath) {
-    console.log('查看文件内容', filePath);
-    return shareFileView(filePath);
-}
-function GOlist(path) {
-    console.log('获取目录下所有文件列表', path);
-    return shareFileList(path);
-}
-function GOdatabase(request) {
-    console.log('执行数据库请求', request);
-    return shareDatabase(request);
-}
-function GOaddress() {
-    console.log('获取当前地址信息');
-    return shareAddress();
-}
-function GOcurrentUrl() {
-    console.log('获取当前系统访问URL');
-    return shareLocalhost();
-}
-function GOkeyframe(inputFile, cacheDir) {
-    console.log('提取视频关键帧', inputFile, cacheDir);
-    return shareVideoKeyframe(inputFile, cacheDir);
-}
-function GOfetch(config) {
-    console.log('网络请求', JSON.stringify(config));
-    return shareFetch(config);
-}
-function GOresize(imgData) {
-    console.log('缩放图片');
-    return shareResizeImage(imgData);
-}
-function GOgenerate(params) {
-    console.log('生成图片', params);
-    return shareGenerateImage(params);
-}
-
 class OnlyData {
     static systemKey = 'key-520-1314-2000-02-18';
     static modelEmbedingName = "system-embedding";
@@ -69,11 +24,11 @@ class OnlyData {
     static visionExtensions = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
     static lunarToolPackageMap = new Map();
     static get systemUrl() {
-        return GOcurrentUrl()[0] + '/v1';
+        return url()[0] + '/v1';
     }
     ;
     static get fileServiceUrl() {
-        return GOcurrentUrl()[0];
+        return url()[0];
     }
     ;
     static get MultimodalUrl() {
@@ -146,7 +101,7 @@ function CalculateModes(numbers) {
 }
 
 function getFileContent(path, removeNewLines = false) {
-    let [content, size, mimeType, err] = GOread(path);
+    let [content, size, mimeType, err] = readFile(path);
     if (err)
         throw err;
     const decodedContent = atob(String(content));
@@ -160,7 +115,7 @@ async function saveImageToServer(file) {
         const fileExtension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
         const newFileName = `${fileHash}${fileExtension}`;
         const base64FileName = toBtoaString('images/' + newFileName);
-        const [_, __, err] = GOsave(base64FileName, true, file);
+        const [_, __, err] = saveFile(base64FileName, true, file);
         if (!err)
             throw err;
         return `/read/images/${newFileName}`;
@@ -175,24 +130,21 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
     const defaultCallback = (content) => JSON.parse(content);
     const applyCallback = callback ?? defaultCallback;
     const fallback = async () => {
-        GOsave(url.toString(), true, initializeContent);
+        saveFile(url.toString(), true, initializeContent);
         return applyCallback(initializeContent);
     };
     try {
         const filePath = url.toString().split(/[\/\\]/);
-        const [fileList, err1] = GOlist(filePath.slice(0, -1).join('/'));
-        console.log(JSON.stringify(fileList), err1);
+        const [list, err1] = fileList(filePath.slice(0, -1).join('/'));
         if (err1)
             return await fallback();
-        const exists = fileList.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
-        console.log('检查文件是否存在且不是目录', exists);
+        const exists = list.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
         if (!exists)
             return await fallback();
-        const [content, size, mimeType, err2] = GOread(url.toString());
+        const [content, size, mimeType, err2] = readFile(url.toString());
         if (err2)
             return await fallback();
         const text = atob(String(content));
-        console.log('解析文件内容为文本', text);
         if (!text)
             return await fallback();
         return applyCallback(text);
@@ -430,19 +382,19 @@ async function calculateFileHash(file) {
 
 function queryFromDatabase(operations, createTableOperation) {
     const requestBody = { operations, transaction: false };
-    let [result, error] = GOdatabase(requestBody);
-    if (!error)
+    let [result, error] = database(requestBody);
+    if (error)
         throw new Error('数据库查询失败');
     if (!result.success || !result.results[0].success) {
         const errorMessage = result.error || result.results[0].error || '';
         if (errorMessage.includes('no such table') && createTableOperation) {
             const createTableRequest = { operations: [createTableOperation], transaction: false };
-            let [createTableResult, tableError] = GOdatabase(createTableRequest);
+            let [createTableResult, tableError] = database(createTableRequest);
             if (!tableError)
                 throw new Error('创建表失败');
             if (!createTableResult.success)
                 throw new Error('创建表失败');
-            [result, error] = GOdatabase(requestBody);
+            [result, error] = database(requestBody);
             if (!error)
                 throw new Error('数据库查询失败');
             if (!result.success || !result.results[0].success)
@@ -525,18 +477,18 @@ class BaseConfig {
 }
 class PromptProcessor extends BaseConfig {
     promptCompletion(prompt) {
-        let address = "";
+        let addressText = "";
         if (currentAddress.length === 0) {
-            const addressResult = GOaddress();
+            const addressResult = address();
             currentAddress = addressResult[0];
-            address = currentAddress.join(' ');
+            addressText = currentAddress.join(' ');
         }
         else
-            address = currentAddress.join(' ');
+            addressText = currentAddress.join(' ');
         return prompt
             .replace(/{name}/g, OnlyData.userName)
             .replace(/{current-time}/g, new Date().toLocaleString())
-            .replace(/{current-address}/g, address);
+            .replace(/{current-address}/g, addressText);
     }
     extractTextFromMessages(messages) {
         return messages.map(message => {
@@ -616,7 +568,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/chat/completions";
-        const [result, error] = GOfetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result;
@@ -639,7 +591,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/embeddings";
-        const [result, error] = GOfetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result.data[0].embedding.slice(0, 256);
@@ -653,6 +605,7 @@ class ChatDialogueRole extends ModelBuilder {
             await source.LiteImageFile();
             source.unreadContext.forEach(context => this.writeContext(context));
             source.unreadContext = [];
+            this.formatHistoricalMessages();
             const response = this.run;
             this.analyzeMessageResponse(response.body, cache, source);
             if (cache.toolCalls.length > 0) {
@@ -666,6 +619,14 @@ class ChatDialogueRole extends ModelBuilder {
             console.error('请求处理错误:', error);
         }
         this.updateMessageContent(cache, source);
+    }
+    formatHistoricalMessages() {
+        if (this.messages.length === 0)
+            return;
+        const latestRole = this.messages.slice(-1)[0].role;
+        if (latestRole === 'user')
+            return;
+        this.writeContext({ role: 'user', content: '关于之前聊过的话题, 你还有什么别的想法吗?' });
     }
     analyzeMessageResponse(message, cache, source) {
         try {
@@ -734,7 +695,7 @@ class ChatDialogueRole extends ModelBuilder {
     }
     constructor() {
         super();
-        this.useMultimodal(GOview('prompts/chatRole.md')[0]);
+        this.useMultimodal(fileView('prompts/chatRole.md')[0]);
     }
 }
 
@@ -759,7 +720,7 @@ class PainterRole extends ModelBuilder {
         '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
         '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
     ];
-    selfAppearancePrompt = GOview('prompts/selfAppearance.md')[0];
+    selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
     roleTool = [
         {
             type: "function",
@@ -828,7 +789,7 @@ class PainterRole extends ModelBuilder {
     ];
     constructor() {
         super();
-        this.useMultimodal(GOview('prompts/painterRole.md')[0]);
+        this.useMultimodal(fileView('prompts/painterRole.md')[0]);
     }
     writeAppearancePrompt(expression, posture) {
         const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
@@ -853,12 +814,12 @@ class AgentDefine {
     responseSpeed = 0;
     defaultAnswer = "月华不知道哦";
     constructor() {
-        this.compilePlan.useMultimodal(GOview('prompts/compilePlan.md')[0]);
-        this.queryKeywords.useMultimodal(GOview('prompts/queryKeywords.md')[0]);
-        this.emotionManager.useMultimodal(GOview('prompts/emotionManager.md')[0]);
-        this.recorderRole.useMultimodal(GOview('prompts/recorderRole.md')[0]);
-        this.summaryRole.useMultimodal(GOview('prompts/summaryRole.md')[0]);
-        this.descriptionRole.useMultimodal(GOview('prompts/descriptionRole.md')[0]);
+        this.compilePlan.useMultimodal(fileView('prompts/compilePlan.md')[0]);
+        this.queryKeywords.useMultimodal(fileView('prompts/queryKeywords.md')[0]);
+        this.emotionManager.useMultimodal(fileView('prompts/emotionManager.md')[0]);
+        this.recorderRole.useMultimodal(fileView('prompts/recorderRole.md')[0]);
+        this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
+        this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
     }
     async analysisVideoFile(videoUrl, userNeeds) {
@@ -867,12 +828,12 @@ class AgentDefine {
             this.unreadContext.push({ role: 'user', content: cachedPrompt });
             return;
         }
-        const [keyFrames, error] = GOkeyframe(videoUrl, './cache');
-        if (!keyFrames || keyFrames.length === 0 || error)
+        const [images, error] = keyframe(videoUrl, './cache');
+        if (images.length === 0 || error)
             throw new Error('提取关键帧失败');
         const sandboxMessages = [];
         let videoSummary = '';
-        const frameMessages = keyFrames.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
+        const frameMessages = images.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
         for (let i = 0; i < frameMessages.length; i += 20) {
             const batchFrames = frameMessages.slice(i, i + 20);
             this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
@@ -906,15 +867,16 @@ class AgentDefine {
                     continue;
                 if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                     await this.analysisVideoFile(item.image_url.url, '');
+                    item.image_url.url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
-                    const [response, error] = GOfetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                    const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     if (error)
                         throw new Error('获取图片文件失败');
                     if (!response.ok)
                         throw new Error(`获取图片文件失败: ${response.status} ${response.statusText}`);
                     const blob = await response.blob();
-                    const [resizedBlob, error1] = GOresize(blob);
+                    const [resizedBlob, error1] = resizeImage(blob);
                     if (error1)
                         throw new Error('缩放图片失败');
                     item.image_url.url = resizedBlob.base64;
@@ -925,7 +887,7 @@ class AgentDefine {
 }
 
 class LunarAgent extends AgentDefine {
-    messageWeight = 1;
+    speakWeight = 1;
     async batchProcessVideoFiles(userNeeds) {
         if (this.unreadVideoUrl.length === 0)
             return;
@@ -951,17 +913,19 @@ class LunarAgent extends AgentDefine {
             toolCalls: [],
         };
         await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
+        this.speakWeight--;
         return this.finalResponse;
     }
-    constructor() { super(); }
+    constructor() { super(); this.thinkingChainProcess(); }
     async thinkingChainProcess() {
         while (true) {
-            console.log('思考链处理');
+            this.pullExternalMessages();
             await new Promise(resolve => setTimeout(resolve, 1000));
             const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-            console.log(`消息长度: ${messageLength}`);
-            if (messageLength === 0)
+            if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
+                await new Promise(resolve => setTimeout(resolve, 5000));
                 continue;
+            }
             await new Promise(resolve => setTimeout(resolve, 1000));
             await this.batchProcessVideoFiles();
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -970,17 +934,27 @@ class LunarAgent extends AgentDefine {
             console.log(this.finalResponse);
         }
     }
+    pullExternalMessages() {
+        pullContext().forEach(message => { this.writeMessage(message.role, message.content); });
+        pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
+    }
+    writeMessage(role, messages) {
+        this.unreadContext.push({ role, content: messages });
+        this.speakWeight += RandomFloor(1, 3);
+        messages.forEach(message => { if (message.type === 'text')
+            console.log(message.text); });
+    }
+    writeVideoUrl(videoUrl) {
+        console.log('写入视频文件:' + videoUrl);
+        this.unreadVideoUrl.push(videoUrl);
+        this.speakWeight += RandomFloor(1, 3);
+    }
+    async testMessageWrite(role, messages, timeout) {
+        await new Promise(resolve => setTimeout(resolve, timeout));
+        if (messages.length > 0)
+            this.writeMessage(role, messages);
+    }
 }
-setTimeout(awakenAgent, 1000);
-async function awakenAgent() {
-    console.log('智能体系统已唤醒');
-    const agent = new LunarAgent();
-    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你好' }), 5000);
-    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 5000);
-    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你叫什么名字' }), 10000);
-    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 10000);
-    setTimeout(() => agent.unreadContext.push({ role: 'user', content: '你的哥哥叫什么名字' }), 15000);
-    setTimeout(() => console.log(JSON.stringify(agent.unreadContext)), 15000);
-    await agent.thinkingChainProcess();
-}
+const AgentExample = new LunarAgent();
+AgentExample.testMessageWrite('user', [{ type: 'image_url', image_url: { url: url()[0] + '/read/images/YmJjY2FhLm1wNA==.mp4' } }], 1000);
 

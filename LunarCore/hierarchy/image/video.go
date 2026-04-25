@@ -1,6 +1,7 @@
 package image
 
 import (
+	"LunarCore/config"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -47,14 +48,15 @@ func IsSupportedVideoFormat(filename string) bool {
 
 // ExtractFirstFrame 提取视频的第一帧
 func ExtractFirstFrame(inputFile string) (KeyFrame, error) {
-	// 创建内存缓冲区
 	buf := new(bytes.Buffer)
-	// 定义ffmpeg输入参数，从视频开始处提取
 	kwargs1 := ffmpeg.KwArgs{"ss": "0"}
-	// 定义ffmpeg输出参数，指定提取一帧并编码为mjpeg格式
 	kwargs2 := ffmpeg.KwArgs{"vframes": 1, "an": "", "f": "image2pipe", "vcodec": "mjpeg"}
-	// 执行ffmpeg命令提取第一帧
-	err := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2).WithOutput(buf, os.Stderr).Run()
+
+	stream := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	}
+	err := stream.WithOutput(buf, os.Stderr).Run()
 	if err != nil {
 		return KeyFrame{}, fmt.Errorf("提取第一帧失败: %w", err)
 	}
@@ -381,13 +383,14 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 
 // ExtractKeyFrames 提取视频关键帧
 func ExtractKeyFrames(inputFile string, i int, buf *bytes.Buffer) error {
-	// 定义ffmpeg输入参数，指定提取关键帧的时间点
 	kwargs1 := ffmpeg.KwArgs{"ss": fmt.Sprintf("%d", i)}
-	// 定义ffmpeg输出参数，指定提取一帧并编码为mjpeg格式
 	kwargs2 := ffmpeg.KwArgs{"vframes": 1, "an": "", "f": "image2pipe", "vcodec": "mjpeg"}
-	// 执行ffmpeg命令提取关键帧
-	err := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2).WithOutput(buf, os.Stderr).Run()
-	// 返回提取关键帧的错误
+
+	stream := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	}
+	err := stream.WithOutput(buf, os.Stderr).Run()
 	return err
 }
 

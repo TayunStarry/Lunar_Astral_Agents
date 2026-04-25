@@ -1533,7 +1533,7 @@ function handleFile(file) {
     // 检查是否为图片文件或视频文件
     if (OnlyData.visionExtensions.includes(extension) || file.type.startsWith('image/') || file.type.startsWith('video/')) {
         // 检查文件大小是否超过 20 MB
-        if (file.size > 20 * 1024 * 1024)
+        if (file.size > 40 * 1024 * 1024)
             return showSystemMessage('图片太大了, 能给月华换一个吗?', 'error');
         // 处理图片文件或视频文件
         processImageFile(file);

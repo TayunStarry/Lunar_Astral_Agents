@@ -83,12 +83,10 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
         const [list, err1] = fileList(filePath.slice(0, -1).join('/'));
-        console.log(JSON.stringify(list), err1);
         // 检查文件列表响应是否成功
         if (err1) return await fallback();
         /** 检查文件是否存在且不是目录 */
         const exists = list.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
-        console.log('检查文件是否存在且不是目录', exists);
         // 检查文件是否存在
         if (!exists) return await fallback();
         /** 读取文件内容 */
@@ -97,7 +95,6 @@ export async function fetchDocumentCallback(url: RequestInfo | URL, initializeCo
         if (err2) return await fallback();
         /** 解析文件内容为文本 */
         const text = atob(String(content));
-        console.log('解析文件内容为文本', text);
         // 检查文件内容是否为空
         if (!text) return await fallback();
         // 执行回调函数处理文件内容
