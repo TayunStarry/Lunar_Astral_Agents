@@ -128,6 +128,7 @@ var (
 	config       Config
 	httpClient   = &http.Client{Timeout: 10 * time.Second}
 	groupMembers = make(map[int64]map[int64]string)
+	displayLogs  = false
 )
 
 func main() {
@@ -237,6 +238,9 @@ func fetchGroupMemberList(baseURL, token string, groupID int64) error {
 					if userID > 0 && nickname != "" {
 						groupMembers[groupID][userID] = nickname
 					}
+					if displayLogs {
+						log.Printf("群 %d 成员: %d - %s", groupID, userID, nickname)
+					}
 				}
 			}
 			log.Printf("群 %d 成员列表获取成功，共 %d 个成员", groupID, len(memberList))
@@ -288,7 +292,9 @@ func connectToNapcatWebSocket() {
 			break
 		}
 
-		log.Printf("收到 napcat_ws_server 消息: %s", message)
+		if displayLogs {
+			log.Printf("收到 napcat_ws_server 消息: %s", message)
+		}
 		handleNapcatMessage(message)
 	}
 }
@@ -313,8 +319,9 @@ func connectToLunarWebSocket() {
 			log.Printf("从 lunar_ws_server 读取消息失败: %v", err)
 			break
 		}
-
-		log.Printf("收到 lunar_ws_server 消息: %s", message)
+		if displayLogs {
+			log.Printf("收到 lunar_ws_server 消息: %s", message)
+		}
 		handleLunarMessage(message)
 	}
 }

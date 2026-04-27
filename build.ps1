@@ -13,8 +13,8 @@ Set-Location -Path './subsystem\file_explorer'
 ./build.ps1
 Set-Location -Path '../../'
 
-# 构建qq_adapter
-Set-Location -Path './subsystem\qq_adapter'
+# 构建bridge_adapter
+Set-Location -Path './subsystem\bridge_adapter'
 ./build.ps1
 Set-Location -Path '../../'
 
