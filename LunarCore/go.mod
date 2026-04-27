@@ -6,6 +6,7 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
+	github.com/gorilla/websocket v1.5.1
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 )
 
@@ -20,6 +21,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
+	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 )

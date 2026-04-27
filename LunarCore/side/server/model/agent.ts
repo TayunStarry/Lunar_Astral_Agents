@@ -55,40 +55,44 @@ class LunarAgent extends AgentDefine {
     /** 思考链处理 */
     protected async thinkingChainProcess() {
         while (true) {
-            // 拉取外部消息
-            this.pullExternalMessages();
-            // 等待1秒
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            /** 消息长度 */
-            const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-            // 如果消息长度为0，且随机数大于发言权重，继续循环
-            if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
-                // 等待5秒
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                // 使得发言权重增加或减少（范围：-5到5）
-                //this.speakWeight = Clamp({ min: 0, max: 100 }, this.speakWeight + RandomFloor(-5, 5));
-                // 进入下一次循环
-                continue;
+            try {
+                // 拉取外部消息
+                this.pullExternalMessages();
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                /** 消息长度 */
+                const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+                // 如果消息长度为0，且随机数大于发言权重，继续循环
+                if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
+                    // 等待5秒
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    // 使得发言权重增加或减少（范围：-5到5）
+                    //this.speakWeight = Clamp({ min: 0, max: 100 }, this.speakWeight + RandomFloor(-5, 5));
+                    // 进入下一次循环
+                    continue;
+                }
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                // 批量处理视频文件
+                await this.batchProcessVideoFiles();
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                // 创建消息
+                await this.createChatMessage();
+                // 等待1秒
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.log(this.finalResponse);
+                pushContext('response', this.finalResponse);
             }
-            // 等待1秒
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            // 批量处理视频文件
-            await this.batchProcessVideoFiles();
-            // 等待1秒
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            // 创建消息
-            await this.createChatMessage();
-            // 等待1秒
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log(this.finalResponse);
-            // 使用ws发送消息
-            // this.ws.send(JSON.stringify({ role: 'assistant', content: this.finalResponse }));
+            catch (error) {
+                if (error instanceof Error) console.error(error.message, ' || ', error.stack);
+            }
         }
     }
     /** 拉取外部消息 */
     protected pullExternalMessages() {
         // 合并消息
-        pullContext().forEach(message => { this.writeMessage(message.role, message.content); })
+        pullContext().forEach(message => this.writeMessage(message.role, message.content))
         // 合并视频URL
         pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); })
     }
@@ -98,6 +102,8 @@ class LunarAgent extends AgentDefine {
         this.unreadContext.push({ role, content: messages });
         // 增加随机的发言权重
         this.speakWeight += RandomFloor(1, 3);
+        // 如果消息是字符串，将其转换为文本消息
+        if (typeof messages === 'string') messages = [{ type: 'text', text: messages }];
         // 打印文本消息
         messages.forEach(message => { if (message.type === 'text') console.log(message.text); })
     }
@@ -123,4 +129,4 @@ const AgentExample = new LunarAgent();
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你叫什么名字' }]), 10000);
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你的哥哥叫什么名字' }]), 15000);
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你是一个智能体' }]), 20000);
-// AgentExample.testMessageWrite('user', [{ type: 'image_url', image_url: { url: url()[0] + '/read/images/YmJjY2FhLm1wNA==.mp4' } }], 1000);
+// AgentExample.testMessageWrite('user', [{ type: 'image_url', image_url: { url: url()[0] + '/read/images/YmJjY2FhLm1wNA==.mp4' } }], 25000);

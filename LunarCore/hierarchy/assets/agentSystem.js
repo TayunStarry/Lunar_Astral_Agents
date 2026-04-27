@@ -919,28 +919,37 @@ class LunarAgent extends AgentDefine {
     constructor() { super(); this.thinkingChainProcess(); }
     async thinkingChainProcess() {
         while (true) {
-            this.pullExternalMessages();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-            if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
-                await new Promise(resolve => setTimeout(resolve, 5000));
-                continue;
+            try {
+                this.pullExternalMessages();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+                if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    continue;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.batchProcessVideoFiles();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.createChatMessage();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.log(this.finalResponse);
+                pushContext('response', this.finalResponse);
             }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await this.batchProcessVideoFiles();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            await this.createChatMessage();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log(this.finalResponse);
+            catch (error) {
+                if (error instanceof Error)
+                    console.error(error.message, ' || ', error.stack);
+            }
         }
     }
     pullExternalMessages() {
-        pullContext().forEach(message => { this.writeMessage(message.role, message.content); });
+        pullContext().forEach(message => this.writeMessage(message.role, message.content));
         pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
     }
     writeMessage(role, messages) {
         this.unreadContext.push({ role, content: messages });
         this.speakWeight += RandomFloor(1, 3);
+        if (typeof messages === 'string')
+            messages = [{ type: 'text', text: messages }];
         messages.forEach(message => { if (message.type === 'text')
             console.log(message.text); });
     }
@@ -955,6 +964,5 @@ class LunarAgent extends AgentDefine {
             this.writeMessage(role, messages);
     }
 }
-const AgentExample = new LunarAgent();
-AgentExample.testMessageWrite('user', [{ type: 'image_url', image_url: { url: url()[0] + '/read/images/YmJjY2FhLm1wNA==.mp4' } }], 1000);
+new LunarAgent();
 

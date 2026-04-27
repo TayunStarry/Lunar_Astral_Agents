@@ -2,9 +2,46 @@ package adapters
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/dop251/goja"
 )
+
+var PushMessageFunc func(msgType string, data interface{})
+
+func init() {
+	PushMessageFunc = func(msgType string, data interface{}) {
+		log.Printf("Lunar模块[Adapters] -> PushMessageFunc 未初始化, 消息类型: %s", msgType)
+	}
+}
+
+type PushContextData struct {
+	Type    string      `json:"type"`
+	Content interface{} `json:"content"`
+}
+
+type PushImageData struct {
+	Type   string   `json:"type"`
+	Images []string `json:"images"`
+}
+
+func (class *Adapters) pushContext(msgType string, content interface{}) goja.Value {
+	data := PushContextData{
+		Type:    msgType,
+		Content: content,
+	}
+	PushMessageFunc("context", data)
+	return class.runtime.ToValue(true)
+}
+
+func (class *Adapters) pushImage(images []string) goja.Value {
+	data := PushImageData{
+		Type:   "image",
+		Images: images,
+	}
+	PushMessageFunc("image", data)
+	return class.runtime.ToValue(true)
+}
 
 // 未处理的上下文消息
 var UnreadContext = make([]PostMessage, 0)
