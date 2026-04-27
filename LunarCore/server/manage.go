@@ -41,7 +41,9 @@ func InitializeServer() {
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
-	// 运行智能上下文
+	// 启动WebSocket服务器
+	websocketServer = StartWebSocketServer()
+	// 运行智能体上下文
 	adapters.RunAgentContext()
 }
 

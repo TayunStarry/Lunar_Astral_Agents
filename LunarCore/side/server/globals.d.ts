@@ -103,4 +103,18 @@ declare global {
      * @returns {string[]} 视频URL列表
      */
     function pullVideoUrl(): string[];
+    /**
+     * 推送上下文
+     * 
+     * @param {string} msgType 消息类型
+     * 
+     * @param {*} data 消息数据
+     */
+    function pushContext(msgType: string, data: any): boolean;
+    /**
+     * 推送图片
+     * 
+     * @param {string[]} imageData 图片数据列表（base64编码）
+     */
+    function pushImage(imageData: string[]): boolean;
 }

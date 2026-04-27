@@ -144,6 +144,8 @@ func openSystemBrowser(url string) {
 	}
 
 	if err := exec.Command(cmd, args...).Start(); err != nil {
+		// 打印分隔符
+		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Web服务[ERROR] -> %v 建议手动访问: %s", err, url)
 	}
 }
@@ -151,10 +153,12 @@ func openSystemBrowser(url string) {
 // OpenBrowser 使用浏览器打开指定 URL
 func OpenBrowser(url string) {
 	if !*config.AllowBrowser {
+		// 打印分隔符
+		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Web服务 -> 建议手动访问: %s", url)
 		return
 	}
-		
+
 	switch IsWebViewSupported() {
 	case true:
 		go startWebViewBrowser(url)

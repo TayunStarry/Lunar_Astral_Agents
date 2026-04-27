@@ -44,6 +44,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/v1/", Handler: handlers.AgentHandler, Method: "POST", Description: "模型交互"},
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问"},
+	// 消息队列相关接口
+	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "批量消息写入"},
+	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "批量视频URL写入"},
 	// WebView 控制接口
 	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "页面控制"},
 }
