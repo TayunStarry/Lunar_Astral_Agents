@@ -955,8 +955,8 @@ const AgentExample = new LunarAgent();
 const message = [
     {
         type: 'text',
-        text: '你现在进入了一个qq群, 跟大家打个招呼吧?'
+        text: '你现在加入了一个QQ群，表现得自然一点，像老朋友一样打个招呼吧'
     }
 ];
-AgentExample.testMessageWrite('user', message, 500);
+AgentExample.testMessageWrite('user', message, 1000);
 
