@@ -905,24 +905,20 @@ class LunarAgent extends AgentDefine {
         this.speakWeight--;
         return this.finalResponse;
     }
-    constructor() { super(); this.thinkingChainProcess(); }
     async thinkingChainProcess() {
         while (true) {
             try {
-                this.pullExternalMessages();
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.pullExternalMessages();
                 const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-                if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
-                    await new Promise(resolve => setTimeout(resolve, 5000));
+                const messageType = messageLength === 0 ? 'response' : 'active';
+                if (messageLength === 0 && RandomFloor(15, 100) > this.speakWeight) {
+                    await new Promise(resolve => setTimeout(resolve, 10000));
                     continue;
                 }
-                await new Promise(resolve => setTimeout(resolve, 1000));
                 await this.batchProcessVideoFiles();
-                await new Promise(resolve => setTimeout(resolve, 1000));
                 await this.createChatMessage();
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                console.log(this.finalResponse);
-                pushContext('response', this.finalResponse);
+                pushContext(messageType, this.finalResponse);
             }
             catch (error) {
                 if (error instanceof Error)
@@ -930,9 +926,10 @@ class LunarAgent extends AgentDefine {
             }
         }
     }
-    pullExternalMessages() {
+    async pullExternalMessages() {
         pullContext().forEach(message => this.writeMessage(message.role, message.content));
         pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
     writeMessage(role, messages) {
         this.unreadContext.push({ role, content: messages });
@@ -952,6 +949,14 @@ class LunarAgent extends AgentDefine {
         if (messages.length > 0)
             this.writeMessage(role, messages);
     }
+    constructor() { super(); this.thinkingChainProcess(); }
 }
-new LunarAgent();
+const AgentExample = new LunarAgent();
+const message = [
+    {
+        type: 'text',
+        text: '你现在进入了一个qq群, 跟大家打个招呼吧?'
+    }
+];
+AgentExample.testMessageWrite('user', message, 500);
 
