@@ -18,5 +18,5 @@ var (
 	// WebViewDebug webview 调试模式
 	WebViewDebug = flag.Bool("webview-debug", true, "webview 调试模式")
 	// AllowBrowser 是否允许使用浏览器
-	AllowBrowser = flag.Bool("allow-browser", false, "是否允许使用浏览器")
+	AllowBrowser = flag.Bool("allow-browser", true, "是否允许使用浏览器")
 )
