@@ -27,11 +27,7 @@ class LunarAgent extends AgentDefine {
         // 清空未读视频文件数组
         this.unreadVideoUrl = [];
     }
-    /**
-     * 创建聊天消息
-     *
-     * @returns {Promise<string>} - 最终应答
-     */
+    /** 创建聊天消息 */
     public async createChatMessage(): Promise<string> {
         /** 初始化聊天缓存 */
         const cache: ChatCache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
@@ -42,39 +38,31 @@ class LunarAgent extends AgentDefine {
         // 返回最终应答
         return this.finalResponse;
     }
-    /** 构建智能体 并 初始化各个子模型的系统提示词 */
-    public constructor() { super(); this.thinkingChainProcess(); }
     /** 思考链处理 */
     protected async thinkingChainProcess() {
         while (true) {
             try {
                 // 拉取外部消息
-                this.pullExternalMessages();
-                // 等待1秒
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.pullExternalMessages();
                 /** 消息长度 */
                 const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+                /** 消息类型 */
+                const messageType = messageLength === 0 ? 'response' : 'active';
                 // 如果消息长度为0，且随机数大于发言权重，继续循环
-                if (messageLength === 0 && RandomFloor(0, 100) > this.speakWeight) {
-                    // 等待5秒
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    // 使得发言权重增加或减少（范围：-5到5）
-                    //this.speakWeight = Clamp({ min: 0, max: 100 }, this.speakWeight + RandomFloor(-5, 5));
+                if (messageLength === 0 && RandomFloor(15, 100) > this.speakWeight) {
+                    // 等待10秒
+                    await new Promise(resolve => setTimeout(resolve, 10000));
                     // 进入下一次循环
                     continue;
                 }
-                // 等待1秒
-                await new Promise(resolve => setTimeout(resolve, 1000));
                 // 批量处理视频文件
                 await this.batchProcessVideoFiles();
-                // 等待1秒
-                await new Promise(resolve => setTimeout(resolve, 1000));
                 // 创建消息
                 await this.createChatMessage();
                 // 等待1秒
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                console.log(this.finalResponse);
-                pushContext('response', this.finalResponse);
+                // 将消息推送至外部客户端
+                pushContext(messageType, this.finalResponse);
             }
             catch (error) {
                 if (error instanceof Error) console.error(error.message, ' || ', error.stack);
@@ -82,11 +70,13 @@ class LunarAgent extends AgentDefine {
         }
     }
     /** 拉取外部消息 */
-    protected pullExternalMessages() {
+    protected async pullExternalMessages() {
         // 合并消息
         pullContext().forEach(message => this.writeMessage(message.role, message.content))
         // 合并视频URL
         pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); })
+        // 等待1秒
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
     /** 写入消息 */
     public writeMessage(role: PostMessageRole, messages: Array<ImageContent | TextContent>) {
@@ -114,6 +104,8 @@ class LunarAgent extends AgentDefine {
         // 如果消息数组非空，写入消息
         if (messages.length > 0) this.writeMessage(role, messages);
     }
+    /** 构建智能体 并 初始化各个子模型的系统提示词 */
+    public constructor() { super(); this.thinkingChainProcess(); }
 }
 
 const AgentExample = new LunarAgent();
@@ -132,3 +124,10 @@ const AgentExample = new LunarAgent();
 //     }
 // ];
 // AgentExample.testMessageWrite('user', message, 5000);
+const message: Array<ImageContent | TextContent> = [
+    {
+        type: 'text',
+        text: '你现在加入了一个QQ群，表现得自然一点，像老朋友一样打个招呼吧'
+    }
+];
+AgentExample.testMessageWrite('user', message, 1000);
