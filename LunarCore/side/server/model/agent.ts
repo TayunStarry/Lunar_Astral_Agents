@@ -28,21 +28,13 @@ class LunarAgent extends AgentDefine {
         this.unreadVideoUrl = [];
     }
     /**
-     * 创建消息
+     * 创建聊天消息
      *
      * @returns {Promise<string>} - 最终应答
      */
     public async createChatMessage(): Promise<string> {
         /** 初始化聊天缓存 */
-        const cache: ChatCache = {
-            currentToolCallIndex: -1,
-            currentFunctionArgs: '',
-            currentFunctionName: '',
-            descriptionContent: '',
-            thinkingContent: '',
-            currentToolCall: null,
-            toolCalls: [],
-        };
+        const cache: ChatCache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         // 发送请求并获取响应
         await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
         // 减少发言权重
@@ -129,4 +121,14 @@ const AgentExample = new LunarAgent();
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你叫什么名字' }]), 10000);
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你的哥哥叫什么名字' }]), 15000);
 // setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你是一个智能体' }]), 20000);
-// AgentExample.testMessageWrite('user', [{ type: 'image_url', image_url: { url: url()[0] + '/read/images/YmJjY2FhLm1wNA==.mp4' } }], 25000);
+// const message: Array<ImageContent | TextContent> = [
+//     {
+//         type: 'image_url',
+//         image_url: { url: url()[0] + '/read/images/6b4029976c90a71e.jpg' }
+//     },
+//     {
+//         type: 'text',
+//         text: '描述一下这张图片的内容'
+//     }
+// ];
+// AgentExample.testMessageWrite('user', message, 5000);

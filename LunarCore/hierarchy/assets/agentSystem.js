@@ -626,7 +626,7 @@ class ChatDialogueRole extends ModelBuilder {
         const latestRole = this.messages.slice(-1)[0].role;
         if (latestRole === 'user')
             return;
-        this.writeContext({ role: 'user', content: '关于之前聊过的话题, 你还有什么别的想法吗?' });
+        this.writeContext({ role: 'user', content: '请继续之前的话题, 或优化一下之前的内容?' });
     }
     analyzeMessageResponse(message, cache, source) {
         try {
@@ -873,10 +873,7 @@ class AgentDefine {
                     const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     if (error)
                         throw new Error('获取图片文件失败');
-                    if (!response.ok)
-                        throw new Error(`获取图片文件失败: ${response.status} ${response.statusText}`);
-                    const blob = await response.blob();
-                    const [resizedBlob, error1] = resizeImage(blob);
+                    const [resizedBlob, error1] = resizeImage(response.body);
                     if (error1)
                         throw new Error('缩放图片失败');
                     item.image_url.url = resizedBlob.base64;

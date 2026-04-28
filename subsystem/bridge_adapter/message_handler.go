@@ -140,6 +140,17 @@ func HandleNapcatMessage(message []byte) {
 		return
 	}
 
+	// 将消息添加到缓存
+	cachedMsg := CachedMessage{
+		GroupID:   napcatMsg.GroupID,
+		UserID:    napcatMsg.UserID,
+		Content:   content,
+		HasImages: hasImages,
+	}
+	AddToMessageCache(cachedMsg)
+
+	log.Printf("消息已添加到缓存，当前缓存 %d 条消息", len(MessageCache))
+
 	// 检查是否包含触发关键词
 	var contentStr string
 	if str, ok := content.(string); ok {
@@ -158,49 +169,62 @@ func HandleNapcatMessage(message []byte) {
 	}
 
 	if !ContainsTriggerKeyword(contentStr) {
-		log.Printf("消息不包含触发关键词，跳过发送: %s", contentStr)
+		log.Printf("消息不包含触发关键词，仅缓存: %s", contentStr)
 		return
 	}
+
+	// 匹配关键词，发送所有缓存消息
+	log.Printf("检测到触发关键词，准备发送 %d 条缓存消息", len(MessageCache))
 
 	// 记录最新发送消息的群聊 ID
 	LastGroupID = napcatMsg.GroupID
 
-	// 获取发送者名称
-	senderName := GetUserName(napcatMsg.GroupID, napcatMsg.UserID)
-
-	// 构建 OpenAI 消息
-	var openAIMessages []OpenAIMessage
-	if hasImages {
-		// 如果有图片，需要将内容数组和发送者名称组合
-		contentArray, _ := content.([]map[string]interface{})
-		// 在开头添加发送者名称
-		withSender := append([]map[string]interface{}{
-			{
-				"type": "text",
-				"text": senderName + " : ",
-			},
-		}, contentArray...)
-		openAIMessages = []OpenAIMessage{
-			{
-				Role:    "user",
-				Content: withSender,
-			},
-		}
-	} else {
-		// 普通文本消息
-		finalContent := senderName + " : " + contentStr
-		openAIMessages = []OpenAIMessage{
-			{
-				Role:    "user",
-				Content: finalContent,
-			},
-		}
-	}
+	// 构建 OpenAI 消息数组
+	openAIMessages := BuildMessagesFromCache()
 
 	err = SendToLunarCore(openAIMessages)
 	if err != nil {
 		log.Printf("发送消息到 lunar_core 失败: %v", err)
+		return
 	}
+
+	// 发送成功后清除缓存
+	ClearMessageCache()
+	log.Printf("缓存消息已清除")
+}
+
+// BuildMessagesFromCache 从缓存构建 OpenAI 消息
+func BuildMessagesFromCache() []OpenAIMessage {
+	var openAIMessages []OpenAIMessage
+
+	for _, msg := range MessageCache {
+		senderName := GetUserName(msg.GroupID, msg.UserID)
+
+		if msg.HasImages {
+			// 如果有图片，构建数组格式
+			contentArray, _ := msg.Content.([]map[string]interface{})
+			withSender := append([]map[string]interface{}{
+				{
+					"type": "text",
+					"text": senderName + " : ",
+				},
+			}, contentArray...)
+			openAIMessages = append(openAIMessages, OpenAIMessage{
+				Role:    "user",
+				Content: withSender,
+			})
+		} else {
+			// 普通文本消息
+			contentStr, _ := msg.Content.(string)
+			finalContent := senderName + " : " + contentStr
+			openAIMessages = append(openAIMessages, OpenAIMessage{
+				Role:    "user",
+				Content: finalContent,
+			})
+		}
+	}
+
+	return openAIMessages
 }
 
 // HandleLunarMessage 处理 Lunar 消息
@@ -412,7 +436,7 @@ func ParseMessageSegments(segments []MessageSegment, groupID int64) (interface{}
 				} else {
 					contentStr += forwardPrefix
 				}
-				
+
 				// 添加转发消息内容
 				if forwardHasImages {
 					hasImages = true
