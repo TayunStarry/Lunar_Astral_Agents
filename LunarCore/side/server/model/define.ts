@@ -133,12 +133,8 @@ export class AgentDefine {
                     const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                     // 检查请求是否成功
                     if (error) throw new Error('获取图片文件失败');
-                    // 检查响应是否成功
-                    if (!response.ok) throw new Error(`获取图片文件失败: ${response.status} ${response.statusText}`);
-                    /** 从响应中获取图片 Blob 对象 */
-                    const blob = await response.blob();
                     /** 缩放图片 */
-                    const [resizedBlob, error1] = resizeImage(blob);
+                    const [resizedBlob, error1] = resizeImage(response.body);
                     // 检查缩放是否成功
                     if (error1) throw new Error('缩放图片失败');
                     // 处理缩放后的图片文件

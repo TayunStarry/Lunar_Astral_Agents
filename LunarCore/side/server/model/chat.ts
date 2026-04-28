@@ -41,8 +41,8 @@ export class ChatDialogueRole extends ModelBuilder {
         const latestRole = this.messages.slice(-1)[0].role;
         // 如果最新消息是用户,则不处理
         if (latestRole === 'user') return;
-        // 如果最新消息是模型,则添加提示
-        this.writeContext({ role: 'user', content: '关于之前聊过的话题, 你还有什么别的想法吗?' });
+        // 如果最新消息是模型,则添加提示消息
+        this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
     }
     /** 处理聊天消息响应 */
     protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {

@@ -7,11 +7,22 @@ import (
 	"strings"
 )
 
+const MaxMessageCache = 5 // 最大缓存消息数量
+
 var (
 	AppConfig    Config
 	GroupMembers = make(map[int64]map[int64]string)
-	LastGroupID  int64 // 记录最新发送消息的群聊 ID
+	LastGroupID  int64           // 记录最新发送消息的群聊 ID
+	MessageCache []CachedMessage // 消息缓存
 )
+
+// CachedMessage 缓存的消息结构
+type CachedMessage struct {
+	GroupID   int64
+	UserID    int64
+	Content   interface{} // 可以是 string 或 []map[string]interface{}
+	HasImages bool
+}
 
 // LoadConfig 加载配置文件
 func LoadConfig() {
@@ -64,6 +75,32 @@ func ContainsTriggerKeyword(message string) bool {
 	for _, keyword := range AppConfig.QQAdapter.TriggerKeywords {
 		if strings.Contains(message, keyword) {
 			return true
+		}
+	}
+	return false
+}
+
+// AddToMessageCache 添加消息到缓存
+func AddToMessageCache(msg CachedMessage) {
+	MessageCache = append(MessageCache, msg)
+	// 如果缓存超过最大数量，移除最旧的消息
+	if len(MessageCache) > MaxMessageCache {
+		MessageCache = MessageCache[1:]
+	}
+}
+
+// ClearMessageCache 清除消息缓存
+func ClearMessageCache() {
+	MessageCache = nil
+}
+
+// HasTriggerKeywordInCache 检查缓存中是否有包含触发关键词的消息
+func HasTriggerKeywordInCache() bool {
+	for _, msg := range MessageCache {
+		if str, ok := msg.Content.(string); ok {
+			if ContainsTriggerKeyword(str) {
+				return true
+			}
 		}
 	}
 	return false
