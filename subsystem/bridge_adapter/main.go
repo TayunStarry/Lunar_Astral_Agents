@@ -1,28 +1,30 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"bridge_adapter/pkg/config"
+	"bridge_adapter/pkg/logger"
+	"bridge_adapter/pkg/lunar"
+	"bridge_adapter/pkg/message"
+	"bridge_adapter/pkg/napcat"
 )
 
-// 主函数
 func main() {
-	// 加载配置
-	LoadConfig()
+	logger.Info("========== Bridge Adapter 启动 ==========")
 
-	// 启动群成员列表获取
-	go FetchGroupMembers()
+	config.LoadConfig()
 
-	// 启动 WebSocket 客户端
-	go ConnectToNapcatWebSocket()
-	go ConnectToLunarWebSocket()
+	go napcat.FetchGroupMembers()
 
-	// 等待中断信号
+	go napcat.ConnectToNapcatWebSocket(message.HandleNapcatMessage)
+	go lunar.ConnectToLunarWebSocket(lunar.HandleLunarMessage)
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("程序退出")
+	logger.Info("程序退出")
 }

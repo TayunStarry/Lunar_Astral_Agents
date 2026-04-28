@@ -626,7 +626,7 @@ class ChatDialogueRole extends ModelBuilder {
         const latestRole = this.messages.slice(-1)[0].role;
         if (latestRole === 'user')
             return;
-        this.writeContext({ role: 'user', content: '请继续之前的话题, 或优化一下之前的内容?' });
+        this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
     }
     analyzeMessageResponse(message, cache, source) {
         try {
@@ -900,15 +900,7 @@ class LunarAgent extends AgentDefine {
         this.unreadVideoUrl = [];
     }
     async createChatMessage() {
-        const cache = {
-            currentToolCallIndex: -1,
-            currentFunctionArgs: '',
-            currentFunctionName: '',
-            descriptionContent: '',
-            thinkingContent: '',
-            currentToolCall: null,
-            toolCalls: [],
-        };
+        const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
         this.speakWeight--;
         return this.finalResponse;
