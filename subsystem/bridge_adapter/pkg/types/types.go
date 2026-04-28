@@ -1,4 +1,4 @@
-package main
+package types
 
 import "encoding/json"
 
@@ -107,4 +107,11 @@ type NapcatWSResponse struct {
 
 type ForwardMessageResponse struct {
 	Messages []NapcatMessage `json:"messages"`
+}
+
+type CachedMessage struct {
+	GroupID   int64
+	UserID    int64
+	Content   interface{}
+	HasImages bool
 }
