@@ -48,6 +48,21 @@
     --bg-image: url('read/resources/placeholder/background.png');
 }
 
+/* ========== 全局隐藏滚动条 ========== */
+*,
+*::before,
+*::after {
+    -ms-overflow-style: none;
+    /* IE/Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+*::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari/Opera */
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -179,14 +194,24 @@ body {
     background: rgba(255, 255, 255, 0.08);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     flex-shrink: 0;
+    position: relative;
+    /* 为悬浮文件预览区提供定位父级 */
 }
 
+/* ========== 文件预览悬浮区 ========== */
 .file-preview-area {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    /* 紧贴输入区上方 */
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 0;
     min-height: 0;
+    z-index: 10;
+    /* 确保浮于其他元素之上 */
 }
 
 .file-preview-area:empty {
@@ -200,6 +225,22 @@ body {
     border-radius: 12px;
     overflow: hidden;
     background: rgba(0, 0, 0, 0.2);
+    animation: float 2.5s ease-in-out infinite;
+    will-change: transform;
+    /* 性能优化 */
+}
+
+/* 浮动微动效 */
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
 }
 
 .file-preview-item img,
@@ -320,7 +361,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.25);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     display: none;
@@ -333,17 +374,19 @@ body {
     display: flex;
 }
 
+/* 模态框容器：16:9 等比缩放，随视口自适应 */
 .modal-content {
-    width: 90%;
-    max-width: 560px;
-    max-height: 80vh;
-    /* 与主面板一致的玻璃质感 */
-    background: rgba(20, 20, 40, 0.55);
+    aspect-ratio: 9 / 16;
+    width: auto;
+    min-width: 85%;
+    max-width: 90%;
+    max-height: 90vh;
+    /* 玻璃质感 */
+    background: rgba(20, 20, 40, 0.25);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 32px;
-    /* 与主面板统一 */
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -367,10 +410,14 @@ body {
 
 /* 模态框关闭按钮的特定尺寸已在 .modal-close 中定义，此处不再重复背景等样式 */
 
+/* 模态框内部滚动区：同样应用玻璃质感 */
 .modal-body {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 /* 消息样式 */
