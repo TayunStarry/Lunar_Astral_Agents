@@ -31,11 +31,21 @@
     --glass-border: rgba(255, 255, 255, 0.25);
     --glass-blur: blur(14px);
 
+    /* 新增玻璃按钮变量 */
+    --btn-glass-bg: rgba(0, 0, 0, 0.25);
+    --btn-glass-border: rgba(255, 255, 255, 0.25);
+    --btn-glass-hover-bg: rgba(0, 0, 0, 0.45);
+    --btn-glass-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    --btn-glass-radius: 14px;
+
     /* 主题色 */
     --primary-color: #6c9bcf;
     --accent-color: #9d6bff;
     --error-color: #dc3545;
     --success-color: #20c997;
+
+    /* 背景图片（后期通过接口或配置动态替换） */
+    --bg-image: url('read/resources/placeholder/background.png');
 }
 
 * {
@@ -53,37 +63,14 @@ body {
 }
 
 body {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-image: var(--bg-image);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: #fff;
 }
 
-/* 动态背景层 */
-.background {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    z-index: -2;
-    animation: backgroundShift 20s ease infinite;
-}
-
-@keyframes backgroundShift {
-    0% {
-        filter: hue-rotate(0deg);
-    }
-
-    50% {
-        filter: hue-rotate(15deg);
-    }
-
-    100% {
-        filter: hue-rotate(0deg);
-    }
-}
-
-/* 全局玻璃层 */
+/* 全局玻璃层（对背景图片进行模糊） */
 .glass-effect {
     position: fixed;
     top: 0;
@@ -97,21 +84,24 @@ body {
     z-index: -1;
 }
 
-/* 外层容器：垂直居中，限制高度 */
+/* 外层容器：等比缩放，16:9 类手机比例（实际竖屏 9:16） */
 .container {
-    width: 100%;
+    aspect-ratio: 9 / 16;
+    max-height: 100vh;
+    max-width: 100vw;
     height: 100vh;
+    width: auto;
+    margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: 0;
 }
 
-/* 主面板：自适应高度，最大高度限制，超出可滚动 */
+/* 主面板：占满容器，内部 flex 列布局 */
 .main-container-panel {
     width: 100%;
-    max-width: 480px;
-    max-height: calc(100vh - 32px);
+    height: 100%;
     display: flex;
     flex-direction: column;
     background: rgba(255, 255, 255, 0.12);
@@ -120,56 +110,23 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 32px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     transition: var(--transition);
 }
 
-/* 控制条 */
-.control-panel {
-    display: flex;
-    justify-content: flex-start;
-    padding: 12px 16px;
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.06);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    flex-shrink: 0;
-}
-
-.control-button {
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    cursor: pointer;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.control-button:hover {
-    background: var(--accent-color);
-    transform: scale(1.1);
-}
-
-/* Live2D 展示区：固定宽高比，不随面板高度拉伸 */
+/* Live2D 展示区：占据剩余所有空间 */
 .live2d-wrapper {
-    flex-shrink: 0;
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px 16px;
-    background: transparent;
+    padding: 12px;
+    overflow: hidden;
 }
 
 .live2d-container {
     width: 100%;
-    aspect-ratio: 3 / 4;
-    max-height: 65vh;
-    /* 防止过高 */
+    height: 100%;
     position: relative;
     background: rgba(0, 0, 0, 0.08);
     border-radius: 24px;
@@ -183,11 +140,11 @@ body {
     display: block;
 }
 
+/* 信息标识移至左下角 */
 .live2d-model-intel {
     position: absolute;
+    left: 10px;
     bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
     padding: 6px 18px;
     background: rgba(0, 0, 0, 0.45);
     backdrop-filter: blur(8px);
@@ -287,62 +244,76 @@ body {
 .input-wrapper {
     display: flex;
     gap: 10px;
-    align-items: flex-end;
+    align-items: stretch;
 }
 
+/* ====================================
+   统一按钮设计规范（毛玻璃 + 深色半透明 + 边框）
+   ==================================== */
+.btn-glass {
+    background: var(--btn-glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 2px solid var(--btn-glass-border);
+    border-radius: var(--btn-glass-radius);
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 10px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: var(--btn-glass-shadow);
+    /* 取消可能出现的外发光 */
+    outline: none;
+}
+
+.btn-glass:hover {
+    background: var(--btn-glass-hover-bg);
+    border-color: rgba(255, 255, 255, 0.45);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.btn-glass:active {
+    transform: translateY(0);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+
+/* 输入框：圆角矩形 + 清晰边框 */
 .message-input {
     flex: 1;
     padding: 12px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 28px;
-    background: rgba(255, 255, 255, 0.8);
+    /* 稍深背景，提升对比度 */
+    background: rgba(255, 255, 255, 0.85);
+    /* 更明显的边框 */
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
     color: #1a1a2e;
     font-size: 15px;
     resize: none;
     max-height: 120px;
     outline: none;
     transition: var(--transition);
-    backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 .message-input:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.3);
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
 }
 
 .message-input::placeholder {
     color: #6c6c8a;
 }
 
-.send-button {
-    width: 48px;
-    height: 48px;
-    border: none;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-    color: white;
-    cursor: pointer;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    box-shadow: 0 4px 12px rgba(157, 107, 255, 0.3);
-}
-
-.send-button:hover {
-    transform: scale(1.08);
-    box-shadow: 0 6px 20px rgba(157, 107, 255, 0.5);
-}
-
-.send-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* 模态框 */
+/* ====================================
+   模态框风格统一（毛玻璃 + 圆角 + 统一按钮）
+   ==================================== */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -351,6 +322,7 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: none;
     align-items: center;
     justify-content: center;
@@ -365,14 +337,17 @@ body {
     width: 90%;
     max-width: 560px;
     max-height: 80vh;
-    background: rgba(20, 20, 40, 0.7);
+    /* 与主面板一致的玻璃质感 */
+    background: rgba(20, 20, 40, 0.55);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 32px;
+    /* 与主面板统一 */
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
 }
 
 .modal-header {
@@ -381,7 +356,7 @@ body {
     align-items: center;
     padding: 18px 24px;
     background: rgba(255, 255, 255, 0.08);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .modal-header h3 {
@@ -390,23 +365,7 @@ body {
     font-weight: 600;
 }
 
-.modal-close {
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    cursor: pointer;
-    transition: var(--transition);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal-close:hover {
-    background: var(--error-color);
-}
+/* 模态框关闭按钮的特定尺寸已在 .modal-close 中定义，此处不再重复背景等样式 */
 
 .modal-body {
     flex: 1;
@@ -618,7 +577,8 @@ body {
 /* 响应式微调 */
 @media (max-width: 500px) {
     .container {
-        padding: 8px;
+        height: 100vh;
+        max-width: 100vw;
     }
 
     .main-container-panel {
@@ -631,9 +591,5 @@ body {
 
     .message.assistant-message {
         margin-right: 10%;
-    }
-
-    .live2d-container {
-        max-height: 55vh;
     }
 }

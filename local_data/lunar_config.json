@@ -8,7 +8,7 @@
 		"prompt_refine_model": null
 	},
 	"server": {
-		"developer": false,
+		"developer": true,
 		"clear_port": false,
 		"allow_diffusion": true,
 		"allow_multimodal": true
