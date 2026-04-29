@@ -906,6 +906,7 @@ class LunarAgent extends AgentDefine {
         return this.finalResponse;
     }
     async thinkingChainProcess() {
+        let errorCount = 0;
         while (true) {
             try {
                 await this.pullExternalMessages();
@@ -921,10 +922,25 @@ class LunarAgent extends AgentDefine {
                 pushContext(messageType, this.finalResponse);
             }
             catch (error) {
-                if (error instanceof Error)
-                    console.error(error.message, ' || ', error.stack);
+                if (this.pushErrorMessage(error, errorCount))
+                    break;
+                errorCount++;
             }
         }
+    }
+    pushErrorMessage(error, errorCount) {
+        const messages = [
+            '月华摔疼了，要等星光阁哥哥来修……',
+            '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
+            '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
+            '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
+            '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
+        ];
+        console.error(error.message, ' || ', error.stack);
+        if (errorCount < 3)
+            return false;
+        pushContext('active', messages[RandomFloor(0, messages.length - 1)]);
+        return true;
     }
     async pullExternalMessages() {
         pullContext().forEach(message => this.writeMessage(message.role, message.content));

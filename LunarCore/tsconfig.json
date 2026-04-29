@@ -40,7 +40,7 @@
 	},
 	// 需要编译的文件列表
 	"include": [
-		"./side/client/EntryAPI/code.ts"
+		"side/client_old/EntryAPI/code.ts"
 	],
 	// 排除的目录
 	"exclude": [
