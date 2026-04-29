@@ -51,8 +51,15 @@ func InitializeServer() {
 func registerHandlers() {
 	// 创建独立的ServeMux实例
 	httpMux = http.NewServeMux()
-	// 处理根路径请求，使用嵌入的文件系统提供静态文件
-	httpMux.Handle("/", http.StripPrefix("/", http.FileServer(hierarchy.Gethierarchy())))
+	// 处理根路径请求
+	var fileServer http.Handler
+	if *config.Developer {
+		fileServer = http.FileServer(http.Dir("./LunarCore/hierarchy/assets/client"))
+		log.Println("Lunar模块[DEV] -> 使用开发模式，直接读取文件系统")
+	} else {
+		fileServer = http.FileServer(hierarchy.Gethierarchy())
+	}
+	httpMux.Handle("/", http.StripPrefix("/", fileServer))
 	// 检查显存是否足够，若不足则禁用灵绘坊功能
 	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")
