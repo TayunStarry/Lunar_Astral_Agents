@@ -263,9 +263,9 @@ func RemoveWaitClient(taskID string) {
 
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
 func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (map[string]interface{}, error) {
-	// 检查灵绘坊功能是否启用
+	// 检查是否允许使用扩散生成
 	if !*config.AllowDiffusion {
-		return nil, fmt.Errorf("灵绘坊功能未启用")
+		return nil, fmt.Errorf("未启用[扩散生成]功能")
 	}
 
 	// 验证参数

@@ -18,7 +18,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !*config.AllowDiffusion {
-		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
+		http.Error(w, "Generate服务 → 未启用[扩散生成]功能", http.StatusServiceUnavailable)
 		return
 	}
 	var req struct {
@@ -131,9 +131,9 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查灵绘坊功能是否启用
+	// 检查是否允许使用扩散生成
 	if !*config.AllowDiffusion {
-		http.Error(w, "Generate服务 → 灵绘坊功能未启用", http.StatusServiceUnavailable)
+		http.Error(w, "Generate服务 → 未启用[扩散生成]功能", http.StatusServiceUnavailable)
 		return
 	}
 

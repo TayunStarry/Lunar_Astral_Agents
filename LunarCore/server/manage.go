@@ -60,11 +60,11 @@ func registerHandlers() {
 		fileServer = http.FileServer(hierarchy.Gethierarchy())
 	}
 	httpMux.Handle("/", http.StripPrefix("/", fileServer))
-	// 检查显存是否足够，若不足则禁用灵绘坊功能
+	// 检查显存是否足够，若不足则禁用扩散生成功能
 	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
-		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[ 灵绘坊 ]功能")
+		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[扩散生成]功能")
 	}
-	// 启动灵绘坊任务协处理器
+	// 启动扩散生成任务协处理器
 	image.StartTaskProcessor()
 	// 注册所有系统端点路径的处理函数
 	for _, endpoint := range SystemEndpoints {
