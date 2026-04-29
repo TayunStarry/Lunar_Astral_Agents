@@ -17,7 +17,7 @@ func init() {
 
 type PushContextData struct {
 	Type    string      `json:"type"`
-	Content interface{} `json:"content"`
+	Content any `json:"content"`
 }
 
 type PushImageData struct {
@@ -25,7 +25,7 @@ type PushImageData struct {
 	Images []string `json:"images"`
 }
 
-func (class *Adapters) pushContext(msgType string, content interface{}) goja.Value {
+func (class *Adapters) pushContext(msgType string, content string) goja.Value {
 	data := PushContextData{
 		Type:    msgType,
 		Content: content,

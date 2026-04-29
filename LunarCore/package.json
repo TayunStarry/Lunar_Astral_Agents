@@ -8,7 +8,10 @@
 		"release.min": "tsc && rollup -c",
 		"ltp": "node script/run-generate-tool.js",
 		"compile.server": "tsc ./side/server/index.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
-		"server.side": "npm run compile.server && rollup ../deliverable/index.js --file ./hierarchy/assets/agentSystem.js"
+		"server.side": "npm run compile.server && rollup ../deliverable/index.js --file ./hierarchy/assets/agentSystem.js",
+		
+		"compile.client": "tsc ./side/client/index.ts --removeComments --moduleResolution node --target es2022 --outDir ../deliverable",
+		"client.side": "npm run compile.client && rollup ../deliverable/index.js --file ./hierarchy/assets/client/script.js"
 	},
 	"keywords": [
 		"ai",

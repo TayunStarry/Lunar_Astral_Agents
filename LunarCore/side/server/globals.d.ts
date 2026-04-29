@@ -108,9 +108,9 @@ declare global {
      * 
      * @param {string} msgType 消息类型
      * 
-     * @param {*} data 消息数据
+     * @param {string} data 消息内容
      */
-    function pushContext(msgType: string, data: any): boolean;
+    function pushContext(msgType: string, data: string): boolean;
     /**
      * 推送图片
      * 
