@@ -8,7 +8,7 @@ $env:CGO_ENABLED=1
 npm run server.side
 
 # 编译 客户端脚本
-npm run client.side
+# npm run client.side
 
 # 删除不必要的export
 node removeExport.cjs

@@ -129,8 +129,7 @@ export class ChatDialogueRole extends ModelBuilder {
         }
         // 修正简单描述内容
         else source.finalResponse = state.descriptionContent;
-        // 检查消息内容是否为空
-        if (source.finalResponse.trim() === "") return source.defaultAnswer;
+        // 返回修正后的消息内容
         return source.finalResponse;
     }
     /** 构造函数 */

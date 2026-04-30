@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, ChatDialogueRole, PainterRole } from '../index';
+import { OnlyData, ImageContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, ChatDialogueRole, PainterRole, RandomFloor } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -31,7 +31,13 @@ export class AgentDefine {
     /** 响应速度 */
     public responseSpeed: number = 0;
     /** 默认应答 */
-    public defaultAnswer: string = "月华不知道哦";
+    public defaultAnswers: Array<string> = [
+        '月华摔疼了，要等星光阁哥哥来修……',
+        '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
+        '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
+        '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
+        '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
+    ];
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     protected constructor() {
         // 初始化 全部模型 的 系统提示词
@@ -100,7 +106,7 @@ export class AgentDefine {
         // 如果仅包含一个批处理片段,使用该片段作为总结
         else if (sandboxMessages.length === 1) videoSummary = sandboxMessages[0].text;
         // 否则使用默认应答
-        else videoSummary = this.defaultAnswer;
+        else videoSummary = this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
         // 将视频总结结果添加到消息数组
         if (videoSummary) this.unreadContext.push({ role: 'user', content: videoSummary });
         // 如果用户需求非空,添加到消息数组

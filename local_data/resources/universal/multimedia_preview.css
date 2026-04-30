@@ -1,3 +1,4 @@
+/* multimedia_preview.css */
 /* 模态框样式 */
 .image-preview-modal {
     position: fixed;
@@ -17,8 +18,8 @@
 
 .image-preview-container {
     position: relative;
-    max-width: 90vw;
-    max-height: 90vh;
+    max-width: 100vw;
+    max-height: 100vh;
     width: 100%;
     height: 100%;
     display: flex;
@@ -58,55 +59,53 @@
     object-fit: contain;
 }
 
-/* 控制面板样式 */
+/* 控制面板样式 - 横板布局，位于底部 */
 .image-controls {
-    position: absolute;
-    top: 20px;
-    right: 20px;
+    position: fixed;
+    bottom: 20px;
+    /* 改为底部贴近边缘 */
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: rgba(0, 0, 0, 0.5);
-    padding: 15px;
-    border-radius: 12px;
-    backdrop-filter: blur(5px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    background: rgba(30, 30, 40, 0.5);
+    backdrop-filter: blur(8px);
+    padding: 10px 18px;
+    border-radius: 50px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 2100;
+    animation: scaleUp 0.2s ease;
 }
 
-.control-group {
+/* 按钮组容器 */
+.controls-row {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
 }
 
-.zoom-info {
-    color: white;
-    font-size: 12px;
-    text-align: center;
-    padding: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    width: 100%;
-}
-
+/* 所有按钮统一风格：1:1 圆角矩形，半透明 */
 .control-button {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.18);
     color: white;
     border: none;
-    width: 45px;
-    height: 45px;
-    border-radius: 8px;
-    font-size: 18px;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 20px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: all 0.2s ease;
+    backdrop-filter: blur(4px);
 }
 
 .control-button:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.3);
     transform: scale(1.05);
 }
 
@@ -114,36 +113,53 @@
     transform: scale(0.95);
 }
 
-.control-divider {
-    width: 100%;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.2);
-    margin: 5px 0;
-}
-
 .reset-button {
-    background: rgba(0, 150, 255, 0.7);
-    font-size: 14px;
+    background: rgba(0, 150, 255, 0.5);
 }
 
 .close-button {
-    background: rgba(255, 0, 0, 0.7);
-    font-size: 20px;
+    background: rgba(255, 80, 80, 0.5);
 }
 
-/* 底部信息栏 */
+/* 缩放信息圆形气泡 */
+.zoom-info {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(4px);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+/* 底部信息栏 → 改为顶部信息栏 */
 .image-info {
     position: fixed;
-    bottom: 0;
+    top: 20px;
+    /* 位于顶部 */
+    left: 50%;
+    transform: translateX(-50%);
     color: white;
     text-align: center;
-    font-size: 16px;
-    background: rgba(0, 0, 0, 0.753);
-    padding: 8px 16px;
-    border-radius: 20px 20px 0 0;
-    display: inline-block;
-    margin: 0 auto;
-    max-width: 80%;
+    font-size: 14px;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(5px);
+    padding: 8px 18px;
+    border-radius: 40px;
+    max-width: 85%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    z-index: 2100;
+    font-family: system-ui, -apple-system, sans-serif;
 }
 
 /* 动画 */
@@ -157,17 +173,42 @@
     }
 }
 
-/* 缩放动画 */
 @keyframes scaleUp {
     from {
-        transform: scale(0.95);
+        transform: translateX(-50%) scale(0.95);
+        opacity: 0;
     }
 
     to {
-        transform: scale(1);
+        transform: translateX(-50%) scale(1);
+        opacity: 1;
     }
 }
 
-.image-controls {
-    animation: scaleUp 0.2s ease;
+/* 响应式调整：小屏幕下缩小按钮尺寸 */
+@media (max-width: 640px) {
+    .control-button {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+
+    .zoom-info {
+        width: 40px;
+        height: 40px;
+        font-size: 12px;
+    }
+
+    .image-controls {
+        gap: 8px;
+        padding: 8px 14px;
+        bottom: 15px;
+        /* 底部距离缩小 */
+    }
+
+    .image-info {
+        font-size: 12px;
+        padding: 6px 14px;
+        top: 15px;
+    }
 }
