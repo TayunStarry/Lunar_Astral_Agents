@@ -13,6 +13,8 @@ export class ChatDialogueRole extends ModelBuilder {
             source.unreadContext = [];
             // 格式化历史消息
             this.formatHistoricalMessages();
+            // 替换系统提示词中的时间占位符
+            this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
             /** 向处理器模型发送请求并等待响应 */
             const response = this.run as modelResponse;
             // 处理响应文本内容
