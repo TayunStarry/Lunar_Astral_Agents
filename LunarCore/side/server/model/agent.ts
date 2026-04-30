@@ -62,8 +62,10 @@ class LunarAgent extends AgentDefine {
                 await this.createChatMessage();
                 // 等待1秒
                 await new Promise(resolve => setTimeout(resolve, 1000));
+                /** 消息响应 */
+                const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
                 // 将消息推送至外部客户端
-                pushContext(messageType, this.finalResponse);
+                pushContext(messageType, messageResponse);
             }
             catch (error) {
                 // 推送错误消息
@@ -75,20 +77,12 @@ class LunarAgent extends AgentDefine {
     }
     /** 推送错误消息 */
     protected pushErrorMessage(error: Error, errorCount: number): boolean {
-        /** 错误消息列表 */
-        const messages: Array<string> = [
-            '月华摔疼了，要等星光阁哥哥来修……',
-            '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
-            '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
-            '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
-            '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
-        ];
         // 打印错误信息
         console.error(error.message, ' || ', error.stack);
         // 如果错误次数小于3次，则继续循环
         if (errorCount < 3) return false;
         // 随机选择一个错误消息
-        pushContext('active', messages[RandomFloor(0, messages.length - 1)]);
+        pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]);
         // 终止思考链循环
         return true;
     }

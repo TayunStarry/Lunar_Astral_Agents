@@ -2,89 +2,86 @@
 <html lang="zh-CN">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, minimum-scale=0.5, maximum-scale=0.8">
-    <title>『 星月智能 - 月华 』</title>
-    <!-- Markdown解析 - marked.js -->
-    <script src="/read/resources/external/marked.min.js"></script>
-    <!-- 图表库 - ECharts v5.4.3 -->
-    <script src="/read/resources/external/echarts.min.js"></script>
-    <!-- 流程图库 - Mermaid v10.5.0 -->
-    <script src="/read/resources/external/mermaid.min.js"></script>
-    <!-- 图标库 - Font Awesome 6.4.0 -->
-    <link rel="stylesheet" href="/read/resources/external/fontAwesome/css/all.min.css">
-    <!-- 代码高亮 - highlight.js v11.7.0 -->
-    <script src="/read/resources/external/highlight/highlight.min.js"></script>
-    <!-- 代码高亮样式 - GitHub风格 -->
-    <link rel="stylesheet" href="/read/resources/external/highlight/styles/github.css">
-    <!-- 引入Live2D -->
-    <script src="/read/resources/external/live2dcubismcore.min.js"></script>
-    <!-- 引入Pixi.js -->
-    <script src="/read/resources/external/pixi.5.3.12.min.js"></script>
-    <!-- 引入Pixi-Live2D -->
-    <script src="/read/resources/external/pixi-live2d-display-cubism4.min.js"></script>
-    <!-- 引入QRCode.js -->
-    <script src="/read/resources/external/qrcode.min.js"></script>
-    <!-- 引入KaTeX CSS样式文件，为数学公式提供渲染样式 -->
-    <link rel="stylesheet" href="/read/resources/external/katex/katex.min.css">
-    <!-- 引入KaTeX核心JS文件，提供数学公式渲染功能 -->
-    <script defer src="/read/resources/external/katex/katex.min.js"></script>
-    <!-- 引入KaTeX自动渲染插件，可自动识别并渲染页面中的数学公式 -->
-    <script defer src="/read/resources/external/katex/contrib/auto-render.min.js"></script>
-    <!-- 引入项目样式表 - 基础/布局/按钮/面板/响应式/组件样式 -->
-    <link rel="stylesheet" href="./style.css">
-    <!-- 引入项目脚本 -->
-    <script src="./script.js" type="module"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, minimum-scale=0.5, maximum-scale=0.8">
+	<title>『 星月智能 - 月华 』</title>
+	<!-- Markdown解析 - marked.js -->
+	<script src="/read/resources/external/marked.min.js"></script>
+	<!-- 图表库 - ECharts v5.4.3 -->
+	<script src="/read/resources/external/echarts.min.js"></script>
+	<!-- 流程图库 - Mermaid v10.5.0 -->
+	<script src="/read/resources/external/mermaid.min.js"></script>
+	<!-- 图标库 - Font Awesome 6.4.0 -->
+	<link rel="stylesheet" href="/read/resources/external/fontAwesome/css/all.min.css">
+	<!-- 代码高亮 - highlight.js v11.7.0 -->
+	<script src="/read/resources/external/highlight/highlight.min.js"></script>
+	<!-- 代码高亮样式 - GitHub风格 -->
+	<link rel="stylesheet" href="/read/resources/external/highlight/styles/github.css">
+	<!-- 引入Live2D -->
+	<script src="/read/resources/external/live2dcubismcore.min.js"></script>
+	<!-- 引入Pixi.js -->
+	<script src="/read/resources/external/pixi.5.3.12.min.js"></script>
+	<!-- 引入Pixi-Live2D -->
+	<script src="/read/resources/external/pixi-live2d-display-cubism4.min.js"></script>
+	<!-- 引入QRCode.js -->
+	<script src="/read/resources/external/qrcode.min.js"></script>
+	<!-- 引入KaTeX CSS样式文件，为数学公式提供渲染样式 -->
+	<link rel="stylesheet" href="/read/resources/external/katex/katex.min.css">
+	<!-- 引入KaTeX核心JS文件，提供数学公式渲染功能 -->
+	<script defer src="/read/resources/external/katex/katex.min.js"></script>
+	<!-- 引入KaTeX自动渲染插件，可自动识别并渲染页面中的数学公式 -->
+	<script defer src="/read/resources/external/katex/contrib/auto-render.min.js"></script>
+	<style>
+		@import url("./style.css");
+		@import url("/read/resources/universal/multimedia_preview.css");
+	</style>
+	<!-- 引入项目脚本 -->
+	<script src="/read/resources/universal/multimedia_preview.js"></script>
+	<script src="./script.js" type="module"></script>
 </head>
 
 <body>
-    <!-- 毛玻璃叠加层（保留背景模糊） -->
-    <div class="glass-effect"></div>
-
-    <div class="container">
-        <div class="main-container-panel" id="mainContainerPanel">
-            <!-- 核心展示区：Live2D 模型（占据剩余空间） -->
-            <div class="live2d-wrapper" id="live2dWrapper">
-                <div class="live2d-container" id="live2dContainer">
-                    <canvas id="live2dCanvas"></canvas>
-                    <div class="live2d-model-intel" id="modelIntel">月之华</div>
-                </div>
-            </div>
-
-            <!-- 聊天记录条（默认隐藏） -->
-            <div class="chat-history-panel" id="chatHistoryPanel"></div>
-
-            <!-- 底部输入区 -->
-            <div class="input-container" id="inputContainer">
-                <div class="file-preview-area" id="filePreviewArea"></div>
-                <div class="input-wrapper">
-                    <button class="btn-glass" id="chatHistoryButton" title="聊天记录">
-                        <i class="fas fa-history"></i>
-                    </button>
-                    <textarea class="message-input" id="messageInput" placeholder="想和聊些什么吗？" rows="1"></textarea>
-                    <button class="btn-glass btn-send" id="sendButton">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 消息记录模态框 -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal-content" id="modalContent">
-            <div class="modal-header">
-                <h3>消息记录</h3>
-                <button class="modal-close btn-glass" id="modalClose">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body" id="modalBody"></div>
-        </div>
-    </div>
-
-    <!-- 错误提示条 -->
-    <div class="error-toast" id="errorToast"></div>
+	<!-- 毛玻璃叠加层（保留背景模糊） -->
+	<div class="glass-effect"></div>
+	<!-- 主容器 -->
+	<div class="container">
+		<div class="main-container-panel" id="mainContainerPanel">
+			<!-- 核心展示区：Live2D 模型 -->
+			<div class="live2d-wrapper" id="live2dWrapper">
+				<div class="live2d-container" id="live2dContainer">
+					<canvas id="live2dCanvas"></canvas>
+					<div class="live2d-model-intel" id="modelIntel">月之华</div>
+				</div>
+			</div>
+			<!-- 底部输入区 -->
+			<div class="input-container" id="inputContainer">
+				<div class="file-preview-area" id="filePreviewArea"></div>
+				<div class="input-wrapper">
+					<button class="btn-glass" id="chatHistoryButton" title="聊天记录">
+						<i class="fas fa-history"></i>
+					</button>
+					<textarea class="message-input" id="messageInput" placeholder="想要聊些什么吗？" rows="1"></textarea>
+					<button class="btn-glass btn-send" id="sendButton" title="消息发送">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- 消息记录模态框 -->
+	<div class="modal-overlay" id="modalOverlay">
+		<div class="modal-content" id="modalContent">
+			<div class="modal-header">
+				<h3>消息记录</h3>
+				<button class="modal-close btn-glass" id="modalClose">
+					<i class="fas fa-times"></i>
+				</button>
+			</div>
+			<div class="modal-body" id="modalBody"></div>
+		</div>
+	</div>
+	<!-- 错误提示条 -->
+	<div class="error-toast" id="errorToast"></div>
 </body>
 
 </html>
