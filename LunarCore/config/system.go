@@ -38,6 +38,8 @@ var MimeMap = map[string]string{
 	".js": "application/javascript",
 	// JSON 文件的 MIME 类型
 	".json": "application/json",
+	// VS Code 工作区配置文件，本质是 JSON 格式
+	".code-workspace": "application/json",
 	// PNG 图片文件的 MIME 类型
 	".png": "image/png",
 	// JPG 图片文件的 MIME 类型

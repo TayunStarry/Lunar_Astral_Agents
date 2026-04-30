@@ -56,7 +56,7 @@ class OnlyData {
     }
     ;
     static get userName() {
-        return OnlyData.customConfig.cloud.userName || "你";
+        return OnlyData.customConfig.cloud.userName || "阁下";
     }
     ;
 }
@@ -487,7 +487,6 @@ class PromptProcessor extends BaseConfig {
             addressText = currentAddress.join(' ');
         return prompt
             .replace(/{name}/g, OnlyData.userName)
-            .replace(/{current-time}/g, new Date().toLocaleString())
             .replace(/{current-address}/g, addressText);
     }
     extractTextFromMessages(messages) {
@@ -606,6 +605,7 @@ class ChatDialogueRole extends ModelBuilder {
             source.unreadContext.forEach(context => this.writeContext(context));
             source.unreadContext = [];
             this.formatHistoricalMessages();
+            this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
             const response = this.run;
             this.analyzeMessageResponse(response.body, cache, source);
             if (cache.toolCalls.length > 0) {

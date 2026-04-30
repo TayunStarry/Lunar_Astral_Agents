@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,9 +39,11 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	}
 	// 获取文件扩展名并转换为小写
 	ext := strings.ToLower(filepath.Ext(fullPath))
-	// 根据文件扩展名设置 Content-Type
+	// 获取 Content-Type：优先使用自定义映射，其次使用标准库自动识别，最后使用默认值
 	mimeType := "application/octet-stream"
 	if mt, ok := config.MimeMap[ext]; ok {
+		mimeType = mt
+	} else if mt := mime.TypeByExtension(ext); mt != "" {
 		mimeType = mt
 	}
 	// 打开文件

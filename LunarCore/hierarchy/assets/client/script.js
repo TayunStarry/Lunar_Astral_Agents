@@ -391,18 +391,33 @@ function isMediaFile(file) {
  * @returns {boolean}
  */
 function isTextFile(file) {
-	// 常见文本 MIME 类型
+	/** 常见文本 MIME 类型 */
 	const textMimeTypes = [
 		'text/plain', 'text/html', 'text/css', 'text/javascript', 'text/markdown',
 		'text/xml', 'text/csv', 'text/calendar', 'text/yaml', 'text/x-yaml',
 		'application/json', 'application/javascript', 'application/xml', 'application/yaml',
 		'application/typescript', 'application/x-httpd-php', 'application/rtf'
 	];
+	// 检查文件 MIME 类型是否在文本 MIME 类型列表中
 	if (textMimeTypes.includes(file.type)) return true;
-
-	// 根据扩展名判断（常用文本扩展名）
-	const textExtensions = /\.(txt|ini|log|cfg|conf|md|json|xml|yaml|yml|toml|js|ts|jsx|tsx|css|scss|html|htm|csv|sql|php|py|rb|java|c|cpp|h|hpp|sh|bash|ps1|bat|cmd|r|pl|lua|go|rs|swift|kt|dart|properties|gitignore|dockerignore|editorconfig)$/i;
-	return textExtensions.test(file.name);
+	/** 配置文件扩展名列表 */
+	const configExtensions = ['ini', 'cfg', 'conf', 'properties', 'gitignore', 'dockerignore', 'editorconfig', 'code-workspace'];
+	/** 数据文件扩展名列表 */
+	const dataExtensions = ['json', 'xml', 'yaml', 'yml', 'toml', 'csv'];
+	/** 文档文件扩展名列表 */
+	const docExtensions = ['txt', 'md', 'log'];
+	/** Web前端文件扩展名列表 */
+	const webExtensions = ['html', 'htm', 'css', 'scss', 'js', 'ts', 'jsx', 'tsx'];
+	/** 后端/脚本语言文件扩展名列表 */
+	const scriptExtensions = ['php', 'py', 'rb', 'pl', 'sh', 'bash', 'ps1', 'bat', 'cmd', 'r'];
+	/** 编译型语言文件扩展名列表 */
+	const compiledExtensions = ['java', 'c', 'cpp', 'h', 'hpp', 'go', 'rs', 'swift', 'kt', 'dart', 'lua', 'sql'];
+	/** 所有文本文件扩展名列表 */
+	const textExtensions = [...configExtensions, ...dataExtensions, ...docExtensions, ...webExtensions, ...scriptExtensions, ...compiledExtensions];
+	/** 文件扩展名 */
+	const fileExtension = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+	// 检查文件扩展名是否在文本文件扩展名列表中
+	return textExtensions.includes(fileExtension);
 }
 
 /**
@@ -462,6 +477,11 @@ async function getVideoThumbnail(file) {
 	}
 	return new Promise(execute);
 }
+/**
+ * 计算文件的SHA-256哈希值（16位）
+ * @param {File} file - 文件对象
+ * @returns {Promise<string>} - 文件的SHA-256哈希值（16位）
+ */
 async function calculateFileHash(file) {
 	/** 定义处理文件读取的异步函数 */
 	function process(resolve) {

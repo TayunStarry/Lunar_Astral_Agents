@@ -79,6 +79,6 @@ export class OnlyData {
     };
     /** 获取 用户名 */
     public static get userName(): string {
-        return OnlyData.customConfig.cloud.userName || "你";
+        return OnlyData.customConfig.cloud.userName || "阁下";
     };
 };

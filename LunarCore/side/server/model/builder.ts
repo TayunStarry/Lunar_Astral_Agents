@@ -39,8 +39,6 @@ class PromptProcessor extends BaseConfig {
         return prompt
             // 转换用户名称
             .replace(/{name}/g, OnlyData.userName)
-            // 转换当前时间
-            .replace(/{current-time}/g, new Date().toLocaleString())
             // 转换当前地址
             .replace(/{current-address}/g, addressText);
     }
