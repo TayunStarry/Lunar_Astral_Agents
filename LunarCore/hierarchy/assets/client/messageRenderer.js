@@ -186,29 +186,30 @@ export async function renderMessage(message, container) {
             mediaContainerItem.className = 'labeled-image-container';
             
             if (isVideoUrl(mediaUrl)) {
-                try {
-                    const thumbnail = await getVideoThumbnailFromUrl(mediaUrl);
-                    const img = document.createElement('img');
-                    img.src = thumbnail;
-                    img.className = 'image-just-drawn video-thumbnail';
-                    img.alt = '视频封面';
-                    img.style.cursor = 'pointer';
-                    img.onclick = () => window.open(mediaUrl, '_blank');
-                    
-                    const playIcon = document.createElement('div');
-                    playIcon.className = 'play-icon-overlay';
-                    playIcon.innerHTML = '<i class="fas fa-play"></i>';
-                    mediaContainerItem.appendChild(img);
-                    mediaContainerItem.appendChild(playIcon);
-                } catch (err) {
-                    console.warn('Failed to get video thumbnail:', err);
-                    const img = document.createElement('img');
-                    img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
-                    img.className = 'image-just-drawn';
-                    img.alt = '视频';
-                    mediaContainerItem.appendChild(img);
-                }
-            } else {
+                    try {
+                        const thumbnail = await getVideoThumbnailFromUrl(mediaUrl);
+                        const img = document.createElement('img');
+                        img.src = thumbnail;
+                        img.className = 'image-just-drawn video-thumbnail';
+                        img.alt = '视频封面';
+                        img.style.cursor = 'pointer';
+                        img.onclick = () => window.previewImage?.(mediaUrl, '视频');
+                        
+                        const playIcon = document.createElement('div');
+                        playIcon.className = 'play-icon-overlay';
+                        playIcon.innerHTML = '<i class="fas fa-play"></i>';
+                        mediaContainerItem.appendChild(img);
+                        mediaContainerItem.appendChild(playIcon);
+                    } catch (err) {
+                        console.warn('Failed to get video thumbnail:', err);
+                        const img = document.createElement('img');
+                        img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
+                        img.className = 'image-just-drawn';
+                        img.alt = '视频';
+                        img.onclick = () => window.previewImage?.(mediaUrl, '视频');
+                        mediaContainerItem.appendChild(img);
+                    }
+                } else {
                 const img = document.createElement('img');
                 img.src = mediaUrl;
                 img.className = 'image-just-drawn';
@@ -227,29 +228,30 @@ export async function renderMessage(message, container) {
         imgContainer.className = 'labeled-image-container';
         
         if (isVideoUrl(message.imageUrl)) {
-            try {
-                const thumbnail = await getVideoThumbnailFromUrl(message.imageUrl);
-                const img = document.createElement('img');
-                img.src = thumbnail;
-                img.className = 'image-just-drawn video-thumbnail';
-                img.alt = '视频封面';
-                img.style.cursor = 'pointer';
-                img.onclick = () => window.open(message.imageUrl, '_blank');
-                
-                const playIcon = document.createElement('div');
-                playIcon.className = 'play-icon-overlay';
-                playIcon.innerHTML = '<i class="fas fa-play"></i>';
-                imgContainer.appendChild(img);
-                imgContainer.appendChild(playIcon);
-            } catch (err) {
-                console.warn('Failed to get video thumbnail:', err);
-                const img = document.createElement('img');
-                img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
-                img.className = 'image-just-drawn';
-                img.alt = '视频';
-                imgContainer.appendChild(img);
-            }
-        } else {
+                    try {
+                        const thumbnail = await getVideoThumbnailFromUrl(message.imageUrl);
+                        const img = document.createElement('img');
+                        img.src = thumbnail;
+                        img.className = 'image-just-drawn video-thumbnail';
+                        img.alt = '视频封面';
+                        img.style.cursor = 'pointer';
+                        img.onclick = () => window.previewImage?.(message.imageUrl, '视频');
+                        
+                        const playIcon = document.createElement('div');
+                        playIcon.className = 'play-icon-overlay';
+                        playIcon.innerHTML = '<i class="fas fa-play"></i>';
+                        imgContainer.appendChild(img);
+                        imgContainer.appendChild(playIcon);
+                    } catch (err) {
+                        console.warn('Failed to get video thumbnail:', err);
+                        const img = document.createElement('img');
+                        img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
+                        img.className = 'image-just-drawn';
+                        img.alt = '视频';
+                        img.onclick = () => window.previewImage?.(message.imageUrl, '视频');
+                        imgContainer.appendChild(img);
+                    }
+                } else {
             const img = document.createElement('img');
             img.src = message.imageUrl;
             img.className = 'image-just-drawn';
