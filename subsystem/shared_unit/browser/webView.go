@@ -1,9 +1,9 @@
 package browser
 
 import (
-	"shared_unit/config"
 	"log"
 	"runtime"
+	"shared_unit/config"
 	"time"
 
 	webview "github.com/webview/webview_go"
@@ -28,6 +28,9 @@ func StartWebViewBrowser(url string) {
 
 	// 运行 webview（阻塞）
 	RunWebView()
+
+	// webview 关闭后，发送关闭信号
+	webviewClosedChan <- struct{}{}
 }
 
 // CreateWebView 创建并返回一个 WebView 实例（单例模式）
