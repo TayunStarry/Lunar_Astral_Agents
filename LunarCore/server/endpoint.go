@@ -49,4 +49,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "批量视频URL写入"},
 	// WebView 控制接口
 	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "页面控制"},
+	// TTS语音服务相关接口
+	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS语音服务代理"},
 }

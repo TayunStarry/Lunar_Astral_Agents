@@ -11,6 +11,8 @@ var (
 	MinPort = flag.Int("min-port", *BasicPort-5, "系统Web服务的最小监听端口, 边定了系统Web服务的端口范围")
 	// ProxyPort 系统Web服务的代理监听口，界定了系统Web服务的端口范围
 	ProxyPort = flag.Int("proxy-port", *BasicPort+5, "系统Web服务的代理监听口, 边定了系统Web服务的端口范围")
+	// TTSPort TTS语音服务的监听端口，用于语音生成等任务
+	TTSPort = flag.Int("tts-port", 7860, "TTS语音服务的监听端口, 用于语音生成等任务")
 	// ClearPort 启动时自动释放被占用的端口
 	ClearPort = flag.Bool("clear-port", false, "启动时自动释放被占用的端口")
 )
