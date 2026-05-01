@@ -484,6 +484,36 @@ body {
 	display: block;
 }
 
+.video-thumbnail {
+	position: relative;
+}
+
+.play-icon-overlay {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 48px;
+	height: 48px;
+	background: rgba(0, 0, 0, 0.6);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+}
+
+.play-icon-overlay:hover {
+	background: rgba(0, 0, 0, 0.8);
+	transform: translate(-50%, -50%) scale(1.1);
+}
+
+.play-icon-overlay i {
+	color: white;
+	font-size: 20px;
+	margin-left: 4px;
+}
+
 /* Markdown 内容 */
 .markdown-content {
 	color: white;

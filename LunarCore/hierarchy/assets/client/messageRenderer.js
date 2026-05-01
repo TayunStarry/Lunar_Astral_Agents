@@ -1,26 +1,12 @@
 import { randomBorderColor, escapeHtml, clearContainer } from './utils.js';
 import { EmotionalStateEnum } from './live2dManager.js';
 
-/**
- * 处理思考标签，将<think>转为可折叠的HTML
- *
- * @param {string} content - 原始内容
- *
- * @returns {string} - 处理后的HTML字符串
- */
 function processThinkTags(content) {
     return content
         .replace(/<think>/gi, '<details class="think-block"><summary class="toggle_think_button">思考过程</summary>')
         .replace(/<\/think>/gi, '</details>');
 }
 
-/**
- * 渲染Markdown内容
- *
- * @param {string} content - Markdown文本
- *
- * @returns {Promise<string>} - 渲染后的HTML字符串
- */
 async function renderMarkdown(content) {
     if (window.marked) {
         let html = await window.marked.parse(content);
@@ -30,11 +16,6 @@ async function renderMarkdown(content) {
     return escapeHtml(content);
 }
 
-/**
- * 代码高亮处理
- *
- * @param {HTMLElement} container - 包含代码块的容器
- */
 function highlightCode(container) {
     container.querySelectorAll('pre code').forEach((block) => {
         if (window.hljs) {
@@ -43,13 +24,6 @@ function highlightCode(container) {
     });
 }
 
-/**
- * 渲染Mermaid图表
- *
- * @param {HTMLElement} container - 包含Mermaid代码块的容器
- *
- * @returns {Promise<void>}
- */
 async function renderMermaid(container) {
     const mermaidBlocks = container.querySelectorAll('code.language-mermaid');
     for (const block of Array.from(mermaidBlocks)) {
@@ -106,11 +80,6 @@ async function renderMermaid(container) {
     }
 }
 
-/**
- * 渲染ECharts图表
- *
- * @param {HTMLElement} container - 包含ECharts占位符的容器
- */
 function renderECharts(container) {
     container.querySelectorAll('.echarts-placeholder').forEach(async (placeholder) => {
         try {
@@ -129,13 +98,6 @@ function renderECharts(container) {
     });
 }
 
-/**
- * 渲染数学公式（KaTeX）
- *
- * @param {HTMLElement} container - 包含数学公式的容器
- *
- * @returns {Promise<void>}
- */
 async function renderMath(container) {
     if (window.katex && window.renderMathInElement) {
         try {
@@ -154,13 +116,42 @@ async function renderMath(container) {
     }
 }
 
-/**
- * 创建消息DOM元素
- *
- * @param {Message} message - 消息对象
- *
- * @returns {HTMLElement} - 消息元素
- */
+async function getVideoThumbnailFromUrl(videoUrl) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.crossOrigin = 'anonymous';
+        video.onloadeddata = () => {
+            video.currentTime = 1;
+        };
+        video.onseeked = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 360;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg'));
+            } else {
+                reject(new Error('Failed to get video context'));
+            }
+            URL.revokeObjectURL(video.src);
+        };
+        video.onerror = () => {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Failed to load video'));
+        };
+        video.src = videoUrl;
+    });
+}
+
+function isVideoUrl(url) {
+    const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.flv'];
+    const lowerUrl = url.toLowerCase();
+    return videoExtensions.some(ext => lowerUrl.endsWith(ext));
+}
+
 function createMessageElement(message) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
@@ -183,48 +174,92 @@ function createMessageElement(message) {
     return messageElement;
 }
 
-/**
- * 渲染单条消息到容器
- *
- * @param {Message} message - 消息对象
- * @param {HTMLElement} container - 目标容器元素
- *
- * @returns {Promise<HTMLElement>} - 渲染后的消息元素
- */
 export async function renderMessage(message, container) {
     const messageElement = createMessageElement(message);
     const contentDiv = messageElement.querySelector('.message-content');
 
     if (message.imageUrls && message.imageUrls.length > 0) {
-        const imagesContainer = document.createElement('div');
-        imagesContainer.className = 'images-container';
-        for (const imageUrl of message.imageUrls) {
-            const imgContainer = document.createElement('div');
-            imgContainer.className = 'labeled-image-container';
+        const mediaContainer = document.createElement('div');
+        mediaContainer.className = 'images-container';
+        for (const mediaUrl of message.imageUrls) {
+            const mediaContainerItem = document.createElement('div');
+            mediaContainerItem.className = 'labeled-image-container';
+            
+            if (isVideoUrl(mediaUrl)) {
+                try {
+                    const thumbnail = await getVideoThumbnailFromUrl(mediaUrl);
+                    const img = document.createElement('img');
+                    img.src = thumbnail;
+                    img.className = 'image-just-drawn video-thumbnail';
+                    img.alt = '视频封面';
+                    img.style.cursor = 'pointer';
+                    img.onclick = () => window.open(mediaUrl, '_blank');
+                    
+                    const playIcon = document.createElement('div');
+                    playIcon.className = 'play-icon-overlay';
+                    playIcon.innerHTML = '<i class="fas fa-play"></i>';
+                    mediaContainerItem.appendChild(img);
+                    mediaContainerItem.appendChild(playIcon);
+                } catch (err) {
+                    console.warn('Failed to get video thumbnail:', err);
+                    const img = document.createElement('img');
+                    img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
+                    img.className = 'image-just-drawn';
+                    img.alt = '视频';
+                    mediaContainerItem.appendChild(img);
+                }
+            } else {
+                const img = document.createElement('img');
+                img.src = mediaUrl;
+                img.className = 'image-just-drawn';
+                img.alt = typeof message.content === 'string' ? message.content : '图片';
+                img.onerror = () => {
+                    img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
+                };
+                img.onclick = () => window.previewImage?.(mediaUrl, typeof message.content === 'string' ? message.content : '图片');
+                mediaContainerItem.appendChild(img);
+            }
+            mediaContainer.appendChild(mediaContainerItem);
+        }
+        contentDiv.appendChild(mediaContainer);
+    } else if (message.imageUrl) {
+        const imgContainer = document.createElement('div');
+        imgContainer.className = 'labeled-image-container';
+        
+        if (isVideoUrl(message.imageUrl)) {
+            try {
+                const thumbnail = await getVideoThumbnailFromUrl(message.imageUrl);
+                const img = document.createElement('img');
+                img.src = thumbnail;
+                img.className = 'image-just-drawn video-thumbnail';
+                img.alt = '视频封面';
+                img.style.cursor = 'pointer';
+                img.onclick = () => window.open(message.imageUrl, '_blank');
+                
+                const playIcon = document.createElement('div');
+                playIcon.className = 'play-icon-overlay';
+                playIcon.innerHTML = '<i class="fas fa-play"></i>';
+                imgContainer.appendChild(img);
+                imgContainer.appendChild(playIcon);
+            } catch (err) {
+                console.warn('Failed to get video thumbnail:', err);
+                const img = document.createElement('img');
+                img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
+                img.className = 'image-just-drawn';
+                img.alt = '视频';
+                imgContainer.appendChild(img);
+            }
+        } else {
             const img = document.createElement('img');
-            img.src = imageUrl;
+            img.src = message.imageUrl;
             img.className = 'image-just-drawn';
             img.alt = typeof message.content === 'string' ? message.content : '图片';
             img.onerror = () => {
                 img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
             };
-            img.onclick = () => window.previewImage?.(imageUrl, typeof message.content === 'string' ? message.content : '图片');
+            img.onclick = () => window.previewImage?.(message.imageUrl, typeof message.content === 'string' ? message.content : '图片');
             imgContainer.appendChild(img);
-            imagesContainer.appendChild(imgContainer);
         }
-        contentDiv.appendChild(imagesContainer);
-    } else if (message.imageUrl) {
-        const imgContainer = document.createElement('div');
-        imgContainer.className = 'labeled-image-container';
-        const img = document.createElement('img');
-        img.src = message.imageUrl;
-        img.className = 'image-just-drawn';
-        img.alt = typeof message.content === 'string' ? message.content : '图片';
-        img.onerror = () => {
-            img.src = `/read/resources/placeholder/blank-0${Math.floor(Math.random() * 3)}.png`;
-        };
-        img.onclick = () => window.previewImage?.(message.imageUrl, typeof message.content === 'string' ? message.content : '图片');
-        imgContainer.appendChild(img);
         contentDiv.appendChild(imgContainer);
     }
 
@@ -244,15 +279,6 @@ export async function renderMessage(message, container) {
     return messageElement;
 }
 
-/**
- * 渲染所有消息到容器
- *
- * @param {HTMLElement} container - 目标容器元素
- * @param {Message[]} messages - 消息数组
- * @param {boolean} [clearFirst=true] - 是否先清空容器
- *
- * @returns {Promise<void>}
- */
 export async function renderAllMessages(container, messages, clearFirst = true) {
     if (clearFirst) {
         clearContainer(container);
