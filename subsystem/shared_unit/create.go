@@ -63,11 +63,16 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		}
 	}()
 
-	// 等待中断信号以优雅地关闭服务器
+	// 等待中断信号或 webview 关闭信号以优雅地关闭服务器
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	fmt.Printf("%s 正在关闭...\n", name)
+
+	select {
+	case <-quit:
+		fmt.Printf("%s 接收到中断信号，正在关闭...\n", name)
+	case <-browser.WebViewClosed():
+		fmt.Printf("%s 检测到 WebView 关闭，正在关闭...\n", name)
+	}
 
 	// 设置 5 秒的超时时间来关闭服务器
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
