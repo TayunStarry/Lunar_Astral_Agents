@@ -5,7 +5,6 @@
 
 /* ---- CSS 自定义属性 ---- */
 :root {
-    /* 背景图片（占位图，可替换为任意图片URL） */
     --bg-image: url('/background');
 
     /* 玻璃面板 - 浅色半透明 */
@@ -1411,5 +1410,58 @@ input[type="radio"] {
         box-shadow: none !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
+    }
+}
+
+/* ---- 分页导航 ---- */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 10px 0;
+}
+
+.pagination .btn-pagination {
+    min-width: 36px;
+    height: 34px;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 6px;
+    background: rgba(30, 35, 48, 0.55);
+    color: #f0f2f5;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.pagination .btn-pagination:hover:not(:disabled) {
+    background: rgba(30, 35, 48, 0.72);
+    transform: translateY(-2px);
+}
+
+.pagination .btn-pagination:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(30, 35, 48, 0.3);
+}
+
+.pagination .btn-primary {
+    background: rgba(41, 85, 140, 0.65);
+    border-color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+}
+
+/* 移动端适配分页 */
+@media (max-width: 480px) {
+    .pagination .btn-pagination {
+        min-width: 32px;
+        height: 30px;
+        font-size: 12px;
+        padding: 5px 6px;
     }
 }

@@ -1,466 +1,378 @@
 class FileManager {
-	constructor() {
-		/** 当前路径，用于存储当前所在目录的路径 */
-		this.currentPath = '';
-		/** 选中的文件列表，用于存储用户选中的文件 */
-		this.selectedFiles = new Set();
-		/**
-		 * 当前文件列表，用于存储当前目录下的文件
-		 * @type {{name:string, path:string, isDir:boolean, size:number, lastModified:string}[]}
-		 */
-		this.files = [];
-		/** 是否正在搜索，用于判断当前是否在搜索文件 */
-		this.isSearching = false;
-		/** 搜索结果列表，用于存储搜索到的文件 */
-		this.searchResults = [];
-		/**
-		 * 所有文件列表，用于存储所有文件，避免重复请求
-		 * @type {{name:string, path:string, isDir:boolean, size:number, lastModified:string}[]}
-		 */
-		this.allFiles = [];
-		/** 当前显示的媒体索引，用于存储当前正在显示的媒体文件的索引 */
-		this.currentMediaIndex = 0;
-		/**
-		 * 当前显示的媒体文件列表，用于存储当前正在显示的媒体文件
-		 * @type {{name:string, path:string, isDir:boolean, size:number, lastModified:string}[]}
-		 */
-		this.currentMediaList = [];
-		// 初始化文件管理器
-		this.init();
-	}
-	/** 初始化文件管理器，绑定事件和加载文件列表 */
-	init() {
-		this.bindEvents();
-		this.loadFiles();
-	}
-	/** 绑定事件，为文件管理器添加交互功能 */
-	bindEvents() {
-		// 文件上传
-		document.getElementById('file-upload').addEventListener('change', (e) => this.handleFileUpload(e));
-		// ZIP文件上传解压
-		document.getElementById('zip-upload').addEventListener('change', (e) => this.handleZipUpload(e));
-		// 新建文件夹
-		document.getElementById('new-folder').addEventListener('click', () => this.createNewFolder());
-		// 批量删除
-		document.getElementById('batch-delete').addEventListener('click', () => this.batchDelete());
-		// 批量压缩
-		document.getElementById('batch-compress').addEventListener('click', () => this.batchCompress());
-		// 返回上级目录
-		document.getElementById('back-button').addEventListener('click', () => this.goBack());
-		// 二维码按钮
-		document.getElementById('qrcode-button').addEventListener('click', () => this.showQRCode());
-		// 文本预览模态框
-		document.getElementById('text-modal').addEventListener('click', (e) => this.closeTextModal(e));
-		// 二维码模态框
-		document.getElementById('qrcode-modal').addEventListener('click', (e) => this.closeQRCodeModal(e));
-		// 键盘事件
-		document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-		// 搜索事件
-		document.getElementById('search-input').addEventListener('input', (e) => this.handleSearch(e));
-		document.getElementById('search-clear').addEventListener('click', () => this.clearSearch());
-	}
-	/** 加载文件列表，从服务器获取当前目录下的文件 */
-	async loadFiles() {
-		try {
-			/** 从服务器获取当前目录下的文件列表 */
-			const response = await fetch(`/file_list/${this.currentPath}`);
-			// 如果响应状态码不是200，返回
-			if (!response.ok) return;
-			// 解析响应体为JSON格式
-			this.files = await response.json();
-			// 如果是搜索状态，返回
-			if (this.isSearching) return;
-			// 执行加载流程
-			this.updateFileGrid();
-			this.updateStats();
-			this.updateBreadcrumb();
+    constructor() {
+        this.currentPath = '';
+        this.selectedFiles = new Set();
+        this.files = [];
+        this.isSearching = false;
+        this.searchResults = [];
+        this.allFiles = [];
+        this.currentMediaIndex = 0;
+        this.currentMediaList = [];
+        this.currentPage = 1;       // 当前页码
+        this.pageSize = 10;         // 每页显示数量
+        this.init();
+    }
 
-		}
-		catch (error) {
-			this.showToast('加载文件失败', 'error');
-		}
-	}
-	/** 更新文件网格，根据当前状态显示文件列表 */
-	updateFileGrid() {
-		/** 文件网格元素，用于显示文件列表 */
-		const fileGrid = document.getElementById('file-grid');
-		// 清空文件网格
-		fileGrid.innerHTML = '';
-		/** 要显示的文件列表，根据搜索状态选择搜索结果或当前文件列表 */
-		const displayFiles = this.isSearching ? this.searchResults : this.files;
-		/** 排序后的文件列表，先显示目录，再按名称排序 */
-		const sortedFiles = [...displayFiles].sort(
-			(a, b) => {
-				if (a.isDir && !b.isDir) return -1;
-				if (!a.isDir && b.isDir) return 1;
-				return a.name.localeCompare(b.name);
-			}
-		);
-		// 更新当前显示的媒体文件列表，过滤出图片、视频和音频文件
-		this.currentMediaList = displayFiles.filter(file => !file.isDir && (this.isImageFile(file.name) || this.isVideoFile(file.name) || this.isAudioFile(file.name)));
-		// 遍历排序后的文件列表，创建文件卡片并添加到文件网格中
-		for (const file of sortedFiles) {
-			/** 文件卡片元素，用于显示文件信息 */
-			const fileCard = this.createFileCard(file);
-			// 将文件卡片添加到文件网格中
-			fileGrid.appendChild(fileCard);
-		}
-		// 如果是搜索状态，显示搜索结果统计
-		sortedFiles
-		// 如果是搜索状态，显示搜索结果统计
-		if (this.isSearching) this.updateSearchStats();
-		// 否则显示当前文件列表统计
-		else this.updateStats();
-	}
-	/** 更新搜索状态下的统计信息 */
-	updateSearchStats() {
-		/** 搜索结果统计元素，显示搜索结果中的文件和文件夹数量 */
-		const totalFilesElement = document.getElementById('total-files');
-		/** 搜索结果统计元素，显示搜索结果中的文件夹数量 */
-		const totalFoldersElement = document.getElementById('total-folders');
-		/** 搜索结果统计元素，显示搜索结果中的文件大小 */
-		const totalSizeElement = document.getElementById('total-size');
-		/** 搜索结果统计元素，显示搜索结果中的文件夹数量 */
-		const folders = this.searchResults.filter(f => f.isDir).length;
-		/** 搜索结果统计元素，显示搜索结果中的文件数量 */
-		const files = this.searchResults.filter(f => !f.isDir).length;
-		/** 搜索结果统计元素，显示搜索结果中的文件大小 */
-		const totalSize = this.searchResults.reduce((sum, file) => sum + file.size, 0);
-		/** 搜索结果统计元素，显示搜索结果中的文件大小 */
-		totalFilesElement.textContent = files;
-		/** 搜索结果统计元素，显示搜索结果中的文件夹数量 */
-		totalFoldersElement.textContent = folders;
-		/** 搜索结果统计元素，显示搜索结果中的文件大小 */
-		totalSizeElement.textContent = this.formatFileSize(totalSize);
-	}
-	/** 处理搜索输入 */
-	handleSearch(e) {
-		/** 搜索输入框元素，用户输入搜索查询 */
-		const query = e.target.value.trim();
-		/** 搜索清除按钮元素，点击清除搜索输入框 */
-		const searchClear = document.getElementById('search-clear');
-		// 如果搜索查询为空，清除搜索
-		if (!query) return this.clearSearch();
-		// 如果搜索查询非空，显示清除按钮并执行搜索
-		searchClear.style.display = 'block';
-		this.searchFiles(query);
-	}
-	/** 清除搜索 */
-	clearSearch() {
-		/** 搜索输入框元素，用户输入搜索查询 */
-		const searchInput = document.getElementById('search-input');
-		/** 搜索清除按钮元素，点击清除搜索输入框 */
-		const searchClear = document.getElementById('search-clear');
-		// 清空搜索输入框和清除按钮
-		searchInput.value = '';
-		searchClear.style.display = 'none';
-		this.isSearching = false;
-		this.searchResults = [];
-		this.updateFileGrid(true);
-		this.updateBreadcrumb();
-	}
-	/** 搜索文件 */
-	async searchFiles(query) {
-		// 如果搜索查询为空，清除搜索并返回
-		if (!query) return this.clearSearch();
-		// 如果搜索查询非空，显示搜索状态
-		this.isSearching = true;
-		this.showToast('正在搜索...', 'info');
-		try {
-			// 如果还没有加载过所有文件，先遍历所有文件
-			if (this.allFiles.length === 0) await this.traverseAllFiles();
-			// 在所有文件中搜索
-			this.searchResults = this.allFiles.filter(
-				file => {
-					return file.name.toLowerCase().includes(query.toLowerCase());
-				}
-			);
-			this.updateFileGrid();
-			this.updateBreadcrumb(true);
-			this.showToast(`找到 ${this.searchResults.length} 个结果`, 'success');
-		}
-		catch (error) {
-			this.showToast('搜索失败', 'error');
-			console.error('搜索失败:', error);
-		}
-	}
-	/** 基于广度优先遍历所有文件 */
-	async traverseAllFiles() {
-		// 清空所有文件列表
-		this.allFiles = [];
-		/** 用于广度优先遍历的队列，初始时包含根目录 */
-		const queue = [''];
-		// 遍历队列中的每个目录
-		while (queue.length > 0) {
-			/** 当前遍历的目录路径 */
-			const currentPath = queue.shift();
-			try {
-				/** 发送请求获取当前目录下的文件列表 */
-				const response = await fetch(`/file_list/${currentPath}`);
-				// 如果响应状态不是成功，跳过当前目录
-				if (!response.ok) continue;
-				/** 解析响应为 JSON 格式 */
-				const files = await response.json();
-				/** 将当前目录下的文件添加到所有文件列表中 */
-				this.allFiles.push(...files);
-				/** 过滤出当前目录下的子目录 */
-				const subDirs = files.filter(file => file.isDir);
-				/** 将当前目录下的子目录加入队列，用于后续遍历 */
-				for (const dir of subDirs) {
-					queue.push(dir.path);
-				}
-			}
-			catch (error) {
-				console.error('遍历文件失败:', error);
-			}
-		}
-	}
-	/** 创建文件卡片 */
-	createFileCard(file) {
-		/** 创建文件卡片元素 */
-		const card = document.createElement('div');
-		// 为文件卡片添加类名，用于样式化
-		card.className = 'file-card';
-		card.dataset.path = file.path;
-		/** 创建复选框 */
-		const checkbox = document.createElement('input');
-		// 为复选框添加类名，用于样式化
-		checkbox.type = 'checkbox';
-		checkbox.className = 'file-checkbox';
-		checkbox.checked = false;
-		// 为复选框添加事件监听器，用于切换文件选择状态
-		checkbox.addEventListener('change',
-			(e) => {
-				e.stopPropagation();
-				this.toggleFileSelection(file, checkbox.checked);
-			}
-		);
-		// 将复选框添加到文件卡片中
-		card.appendChild(checkbox);
-		//判断是否为目录
-		if (file.isDir) {
-			/** 创建目录图标 */
-			const icon = document.createElement('div');
-			// 为目录图标添加类名，用于样式化
-			icon.className = 'file-icon';
-			icon.innerHTML = '<i class="fas fa-folder"></i>';
-			card.appendChild(icon);
-		}
-		// 判断是否为图片文件
-		else if (this.isImageFile(file.name)) {
-			/** 创建图片渲染元素 */
-			const img = document.createElement('img');
-			img.className = 'file-thumbnail';
-			img.src = `/read/${file.path}`;
-			img.alt = file.name;
-			card.appendChild(img);
-		}
-		else {
-			/** 创建文件图标 */
-			const icon = document.createElement('div');
-			icon.className = 'file-icon';
-			icon.innerHTML = this.getFileIcon(file.name);
-			card.appendChild(icon);
-		}
-		/** 创建文件名元素 */
-		const name = document.createElement('div');
-		name.className = 'file-name';
-		name.textContent = file.name;
-		card.appendChild(name);
-		/** 创建文件元信息元素 */
-		const meta = document.createElement('div');
-		meta.className = 'file-meta';
-		meta.innerHTML = `
+    init() {
+        this.bindEvents();
+        this.loadFiles();
+    }
+
+    bindEvents() {
+        document.getElementById('file-upload').addEventListener('change', (e) => this.handleFileUpload(e));
+        document.getElementById('zip-upload').addEventListener('change', (e) => this.handleZipUpload(e));
+        document.getElementById('new-folder').addEventListener('click', () => this.createNewFolder());
+        document.getElementById('batch-delete').addEventListener('click', () => this.batchDelete());
+        document.getElementById('batch-compress').addEventListener('click', () => this.batchCompress());
+        document.getElementById('back-button').addEventListener('click', () => this.goBack());
+        document.getElementById('qrcode-button').addEventListener('click', () => this.showQRCode());
+        document.getElementById('text-modal').addEventListener('click', (e) => this.closeTextModal(e));
+        document.getElementById('qrcode-modal').addEventListener('click', (e) => this.closeQRCodeModal(e));
+        document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+        document.getElementById('search-input').addEventListener('input', (e) => this.handleSearch(e));
+        document.getElementById('search-clear').addEventListener('click', () => this.clearSearch());
+    }
+
+    async loadFiles() {
+        try {
+            const response = await fetch(`/file_list/${this.currentPath}`);
+            if (!response.ok) return;
+            this.files = await response.json();
+            if (this.isSearching) return;
+            this.currentPage = 1;        // 重置为第一页
+            this.updateFileGrid();
+            this.updateStats();
+            this.updateBreadcrumb();
+        } catch (error) {
+            this.showToast('加载文件失败', 'error');
+        }
+    }
+
+    updateFileGrid() {
+        const fileGrid = document.getElementById('file-grid');
+        fileGrid.innerHTML = '';
+
+        const displayFiles = this.isSearching ? this.searchResults : this.files;
+        const sortedFiles = [...displayFiles].sort((a, b) => {
+            if (a.isDir && !b.isDir) return -1;
+            if (!a.isDir && b.isDir) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        // 媒体预览列表基于全部结果
+        this.currentMediaList = displayFiles.filter(file => !file.isDir && (this.isImageFile(file.name) || this.isVideoFile(file.name) || this.isAudioFile(file.name)));
+
+        // 分页计算
+        const totalPages = Math.ceil(sortedFiles.length / this.pageSize);
+        if (this.currentPage > totalPages) this.currentPage = totalPages || 1;
+        const start = (this.currentPage - 1) * this.pageSize;
+        const pageFiles = sortedFiles.slice(start, start + this.pageSize);
+
+        // 渲染当前页
+        for (const file of pageFiles) {
+            const fileCard = this.createFileCard(file);
+            fileGrid.appendChild(fileCard);
+        }
+
+        this.renderPagination(totalPages);
+
+        if (this.isSearching) this.updateSearchStats();
+        else this.updateStats();
+    }
+
+    renderPagination(totalPages) {
+        const pagination = document.getElementById('pagination');
+        if (totalPages <= 1) {
+            pagination.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        html += `<button class="btn btn-small btn-pagination" data-page="prev" ${this.currentPage === 1 ? 'disabled' : ''}>‹ 上一页</button>`;
+
+        const maxPagesToShow = 7;
+        let startPage, endPage;
+        if (totalPages <= maxPagesToShow) {
+            startPage = 1;
+            endPage = totalPages;
+        } else {
+            if (this.currentPage <= 4) {
+                startPage = 1;
+                endPage = maxPagesToShow;
+            } else if (this.currentPage + 3 >= totalPages) {
+                startPage = totalPages - maxPagesToShow + 1;
+                endPage = totalPages;
+            } else {
+                startPage = this.currentPage - 3;
+                endPage = this.currentPage + 3;
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            html += `<button class="btn btn-small btn-pagination ${i === this.currentPage ? 'btn-primary' : ''}" data-page="${i}">${i}</button>`;
+        }
+
+        html += `<button class="btn btn-small btn-pagination" data-page="next" ${this.currentPage === totalPages ? 'disabled' : ''}>下一页 ›</button>`;
+
+        pagination.innerHTML = html;
+
+        pagination.querySelectorAll('.btn-pagination').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const page = btn.dataset.page;
+                if (page === 'prev') this.currentPage--;
+                else if (page === 'next') this.currentPage++;
+                else this.currentPage = parseInt(page);
+                this.updateFileGrid();
+            });
+        });
+    }
+
+    updateSearchStats() {
+        const totalFilesElement = document.getElementById('total-files');
+        const totalFoldersElement = document.getElementById('total-folders');
+        const totalSizeElement = document.getElementById('total-size');
+        const folders = this.searchResults.filter(f => f.isDir).length;
+        const files = this.searchResults.filter(f => !f.isDir).length;
+        const totalSize = this.searchResults.reduce((sum, file) => sum + file.size, 0);
+        totalFilesElement.textContent = files;
+        totalFoldersElement.textContent = folders;
+        totalSizeElement.textContent = this.formatFileSize(totalSize);
+    }
+
+    handleSearch(e) {
+        const query = e.target.value.trim();
+        const searchClear = document.getElementById('search-clear');
+        if (!query) return this.clearSearch();
+        searchClear.style.display = 'block';
+        this.searchFiles(query);
+    }
+
+    clearSearch() {
+        const searchInput = document.getElementById('search-input');
+        const searchClear = document.getElementById('search-clear');
+        searchInput.value = '';
+        searchClear.style.display = 'none';
+        this.isSearching = false;
+        this.searchResults = [];
+        this.currentPage = 1;
+        this.updateFileGrid();
+        this.updateBreadcrumb();
+    }
+
+    async searchFiles(query) {
+        if (!query) return this.clearSearch();
+        this.isSearching = true;
+        this.showToast('正在搜索...', 'info');
+        try {
+            if (this.allFiles.length === 0) await this.traverseAllFiles();
+            this.searchResults = this.allFiles.filter(file => file.name.toLowerCase().includes(query.toLowerCase()));
+            this.currentPage = 1;
+            this.updateFileGrid();
+            this.updateBreadcrumb(true);
+            this.showToast(`找到 ${this.searchResults.length} 个结果`, 'success');
+        } catch (error) {
+            this.showToast('搜索失败', 'error');
+            console.error('搜索失败:', error);
+        }
+    }
+
+    async traverseAllFiles() {
+        this.allFiles = [];
+        const queue = [''];
+        while (queue.length > 0) {
+            const currentPath = queue.shift();
+            try {
+                const response = await fetch(`/file_list/${currentPath}`);
+                if (!response.ok) continue;
+                const files = await response.json();
+                this.allFiles.push(...files);
+                const subDirs = files.filter(file => file.isDir);
+                for (const dir of subDirs) {
+                    queue.push(dir.path);
+                }
+            } catch (error) {
+                console.error('遍历文件失败:', error);
+            }
+        }
+    }
+
+    createFileCard(file) {
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        card.dataset.path = file.path;
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'file-checkbox';
+        checkbox.checked = false;
+        checkbox.addEventListener('change', (e) => {
+            e.stopPropagation();
+            this.toggleFileSelection(file, checkbox.checked);
+        });
+        card.appendChild(checkbox);
+
+        if (file.isDir) {
+            const icon = document.createElement('div');
+            icon.className = 'file-icon';
+            icon.innerHTML = '<i class="fas fa-folder"></i>';
+            card.appendChild(icon);
+        } else if (this.isImageFile(file.name)) {
+            const img = document.createElement('img');
+            img.className = 'file-thumbnail';
+            img.src = `/read/${file.path}`;
+            img.alt = file.name;
+            card.appendChild(img);
+        } else {
+            const icon = document.createElement('div');
+            icon.className = 'file-icon';
+            icon.innerHTML = this.getFileIcon(file.name);
+            card.appendChild(icon);
+        }
+
+        const name = document.createElement('div');
+        name.className = 'file-name';
+        name.textContent = file.name;
+        card.appendChild(name);
+
+        const meta = document.createElement('div');
+        meta.className = 'file-meta';
+        meta.innerHTML = `
             <div>大小: ${this.formatFileSize(file.size)}</div>
             <div>修改: ${this.formatDate(file.lastModified)}</div>
         `;
-		card.appendChild(meta);
-		/** 创建操作按钮容器 */
-		const actions = document.createElement('div');
-		actions.className = 'file-actions';
-		/** 创建重命名按钮 */
-		const renameBtn = document.createElement('button');
-		renameBtn.className = 'btn btn-small btn-info';
-		renameBtn.innerHTML = '<i class="fas fa-edit"></i>';
-		renameBtn.title = '重命名';
-		renameBtn.addEventListener('click',
-			(e) => {
-				e.stopPropagation();
-				this.renameFile(file);
-			}
-		);
-		actions.appendChild(renameBtn);
-		if (!file.isDir) {
-			/** 下载按钮 */
-			const downloadSceneButton = document.createElement('button');
-			downloadSceneButton.className = 'btn btn-small btn-secondary';
-			downloadSceneButton.innerHTML = '<i class="fas fa-download"></i>';
-			downloadSceneButton.title = '下载';
-			downloadSceneButton.addEventListener('click',
-				(e) => {
-					e.stopPropagation();
-					this.downloadFile(file);
-				}
-			);
-			// 下载按钮添加到操作按钮容器
-			actions.appendChild(downloadSceneButton);
-		}
-		/** 删除按钮 */
-		const deleteBtn = document.createElement('button');
-		deleteBtn.className = 'btn btn-small btn-danger';
-		deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-		deleteBtn.title = '删除';
-		deleteBtn.addEventListener('click',
-			(e) => {
-				e.stopPropagation();
-				this.deleteFile(file);
-			}
-		);
-		// 删除按钮添加到操作按钮容器
-		actions.appendChild(deleteBtn);
-		// 操作按钮容器添加到文件卡片
-		card.appendChild(actions);
-		// 卡片点击事件 - 只有点击的不是复选框时才执行
-		card.addEventListener('click',
-			(e) => {
-				// 检查点击的是否是复选框或其后代元素
-				if (!e.target.closest('.file-checkbox')) this.handleFileClick(file);
-			}
-		);
-		// 返回文件卡片元素
-		return card;
-	}
-	/**
-	 * 处理文件点击事件
-	 *
-	 * @param {File} file - 点击的文件对象
-	 */
-	handleFileClick(file) {
-		if (file.isDir) this.navigateToDirectory(file);
-		else {
-			// 如果是图片、视频或音频，调用previewImage函数
-			if (this.isImageFile(file.name) || this.isVideoFile(file.name) || this.isAudioFile(file.name)) {
-				/** 获取当前点击的媒体元素索引号 */
-				const mediaIndex = this.currentMediaList.findIndex(media => media.path === file.path);
-				// 记录当前预览的索引
-				this.currentMediaIndex = mediaIndex;
-				// 调用预览函数
-				previewImage(`/read/${file.path}`, file.name);
-			}
-			else if (this.isTextFile(file.name)) this.showTextModal(file);
-		}
-	}
-	/**
-	 * 导航到指定目录
-	 *
-	 * @param {File} directory - 要导航到的目录对象
-	 */
-	navigateToDirectory(directory) {
-		this.currentPath = directory.path;
-		this.selectedFiles.clear();
-		this.updateBatchActions();
-		this.loadFiles();
-	}
-	/**
-	 * 返回上级目录
-	 */
-	goBack() {
-		// 如果当前路径为空，直接返回
-		if (!this.currentPath) return;
-		/** 将文件路径分隔为数组 */
-		const pathParts = this.currentPath.split('\\');
-		// 移除最后一个部分（当前目录）
-		pathParts.pop();
-		// 重新组合路径
-		this.currentPath = pathParts.join('\\');
-		// 清空选中文件
-		this.selectedFiles.clear();
-		// 更新批量操作按钮状态
-		this.updateBatchActions();
-		// 加载当前目录的文件列表
-		this.loadFiles();
-	}
-	/**
-	 * 更新面包屑导航
-	 *
-	 * @param {boolean} isSearching - 是否为搜索状态
-	 */
-	updateBreadcrumb(isSearching = false) {
-		/** 获取返回按钮元素 */
-		const backButton = document.getElementById('back-button');
-		// 如果当前路径为空，隐藏返回按钮
-		backButton.style.display = this.currentPath ? 'inline-block' : 'none';
-		/** 获取面包屑导航元素 */
-		const breadcrumb = document.querySelector('.breadcrumb');
-		// 清空面包屑导航内容
-		breadcrumb.innerHTML = '';
-		// 重新添加返回按钮
-		breadcrumb.appendChild(backButton);
-		/** 创建根目录面包屑项 */
-		const rootItem = document.createElement('a');
-		// 为根目录面包屑项添加点击事件监听器
-		rootItem.className = 'breadcrumb-item';
-		rootItem.href = '#';
-		rootItem.dataset.path = '';
-		rootItem.innerHTML = '<i class="fas fa-home"></i> 根目录';
-		rootItem.addEventListener('click',
-			(e) => {
-				e.preventDefault();
-				this.clearSearch();
-				this.currentPath = '';
-				this.selectedFiles.clear();
-				this.updateBatchActions();
-				this.loadFiles();
-			}
-		);
-		// 添加根目录面包屑项到面包屑导航
-		breadcrumb.appendChild(rootItem);
-		// 搜索状态下的面包屑导航
-		if (isSearching) {
-			/** 创建搜索结果面包屑项 */
-			const searchItem = document.createElement('span');
-			// 为搜索结果面包屑项添加样式
-			searchItem.className = 'breadcrumb-item';
-			searchItem.innerHTML = '<i class="fas fa-search"></i> 搜索结果';
-			searchItem.style.color = '#3498db';
-			searchItem.style.fontWeight = '600';
-			// 添加搜索结果面包屑项到面包屑导航
-			breadcrumb.appendChild(searchItem);
-		}
-		// 非搜索状态下的面包屑导航
-		else if (this.currentPath) {
-			/** 将文件路径分隔为数组 */
-			const pathParts = this.currentPath.split(/[\\/]/);
-			/** 构建面包屑路径 */
-			let currentPath = '';
-			pathParts.forEach(
-				part => {
-					// 跳过空字符串
-					if (!part) return;
-					// 构建面包屑路径
-					currentPath += (currentPath ? '\\' : '') + part;
-					/** 创建面包屑项 */
-					const breadcrumbItem = document.createElement('a');
-					// 为面包屑项添加点击事件监听器
-					breadcrumbItem.className = 'breadcrumb-item';
-					breadcrumbItem.href = '#';
-					breadcrumbItem.dataset.path = currentPath;
-					breadcrumbItem.textContent = part;
-					breadcrumbItem.addEventListener('click',
-						(e) => {
-							e.preventDefault();
-							this.currentPath = breadcrumbItem.dataset.path;
-							this.selectedFiles.clear();
-							this.updateBatchActions();
-							this.loadFiles();
-						}
-					);
-					// 添加面包屑项到面包屑导航
-					breadcrumb.appendChild(breadcrumbItem);
-				}
-			);
-		}
-	}
+        card.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'file-actions';
+
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'btn btn-small btn-info';
+        renameBtn.innerHTML = '<i class="fas fa-edit"></i>';
+        renameBtn.title = '重命名';
+        renameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.renameFile(file);
+        });
+        actions.appendChild(renameBtn);
+
+        if (!file.isDir) {
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn btn-small btn-secondary';
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+            downloadBtn.title = '下载';
+            downloadBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.downloadFile(file);
+            });
+            actions.appendChild(downloadBtn);
+        }
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-small btn-danger';
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.title = '删除';
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteFile(file);
+        });
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(actions);
+
+        card.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-checkbox')) this.handleFileClick(file);
+        });
+
+        return card;
+    }
+
+    handleFileClick(file) {
+        if (file.isDir) this.navigateToDirectory(file);
+        else {
+            if (this.isImageFile(file.name) || this.isVideoFile(file.name) || this.isAudioFile(file.name)) {
+                const mediaIndex = this.currentMediaList.findIndex(media => media.path === file.path);
+                this.currentMediaIndex = mediaIndex;
+                previewImage(`/read/${file.path}`, file.name);
+            } else if (this.isTextFile(file.name)) {
+                this.showTextModal(file);
+            }
+        }
+    }
+
+    navigateToDirectory(directory) {
+        this.currentPath = directory.path;
+        this.selectedFiles.clear();
+        this.updateBatchActions();
+        this.currentPage = 1;
+        this.loadFiles();
+    }
+
+    goBack() {
+        if (!this.currentPath) return;
+        const pathParts = this.currentPath.split('\\');
+        pathParts.pop();
+        this.currentPath = pathParts.join('\\');
+        this.selectedFiles.clear();
+        this.updateBatchActions();
+        this.currentPage = 1;
+        this.loadFiles();
+    }
+
+    updateBreadcrumb(isSearching = false) {
+        const backButton = document.getElementById('back-button');
+        backButton.style.display = this.currentPath ? 'inline-block' : 'none';
+        const breadcrumb = document.querySelector('.breadcrumb');
+        breadcrumb.innerHTML = '';
+        breadcrumb.appendChild(backButton);
+
+        const rootItem = document.createElement('a');
+        rootItem.className = 'breadcrumb-item';
+        rootItem.href = '#';
+        rootItem.dataset.path = '';
+        rootItem.innerHTML = '<i class="fas fa-home"></i> 根目录';
+        rootItem.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.clearSearch();
+            this.currentPath = '';
+            this.selectedFiles.clear();
+            this.updateBatchActions();
+            this.currentPage = 1;
+            this.loadFiles();
+        });
+        breadcrumb.appendChild(rootItem);
+
+        if (isSearching) {
+            const searchItem = document.createElement('span');
+            searchItem.className = 'breadcrumb-item';
+            searchItem.innerHTML = '<i class="fas fa-search"></i> 搜索结果';
+            searchItem.style.color = '#3498db';
+            searchItem.style.fontWeight = '600';
+            breadcrumb.appendChild(searchItem);
+        } else if (this.currentPath) {
+            const pathParts = this.currentPath.split(/[\\/]/);
+            let currentPath = '';
+            pathParts.forEach(part => {
+                if (!part) return;
+                currentPath += (currentPath ? '\\' : '') + part;
+                const breadcrumbItem = document.createElement('a');
+                breadcrumbItem.className = 'breadcrumb-item';
+                breadcrumbItem.href = '#';
+                breadcrumbItem.dataset.path = currentPath;
+                breadcrumbItem.textContent = part;
+                breadcrumbItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.currentPath = breadcrumbItem.dataset.path;
+                    this.selectedFiles.clear();
+                    this.updateBatchActions();
+                    this.currentPage = 1;
+                    this.loadFiles();
+                });
+                breadcrumb.appendChild(breadcrumbItem);
+            });
+        }
+    }
+
+
 	/**
 	 * 处理文件上传
 	 *

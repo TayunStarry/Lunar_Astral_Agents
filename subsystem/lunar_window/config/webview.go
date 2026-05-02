@@ -4,7 +4,7 @@ import "flag"
 
 var (
 	// WebViewTitle webview 窗口标题
-	WebViewTitle = flag.String("webview-title", "文件浏览器", "webview 窗口标题")
+	WebViewTitle = flag.String("webview-title", "星月智能 -> 轻量级-神经网络-本地部署方案", "webview 窗口标题")
 	// WebViewWidth webview 窗口宽度
 	WebViewWidth = flag.Int("webview-width", 1540, "webview 窗口宽度")
 	// WebViewHeight webview 窗口高度
