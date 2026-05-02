@@ -15,12 +15,12 @@ meme_images
 ## 本地数据
 local_data/images
 local_data/document
+
 local_data/resources/placeholder
 local_data/resources/images
 local_data/generated
-local_data/knowledge/20*
-local_data/knowledge/lunar_notes.json
-local_data/knowledge/continuous_memory.json
+local_data/knowledge
+local_data/models
 
 ## 系统文件
 desktop.ini
