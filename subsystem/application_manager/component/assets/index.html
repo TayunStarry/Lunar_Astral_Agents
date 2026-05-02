@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星月管理器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="left-panel">
+            <div class="avatar-container">
+                <img src="./icon/agent_avatar.jpg" alt="AI Avatar">
+            </div>
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages"></div>
+                <div class="attachments-preview" id="attachmentsPreview"></div>
+                <div class="input-area">
+                    <textarea class="chat-input" id="chatInput" placeholder="输入消息..." rows="1"></textarea>
+                    <button class="send-btn" id="sendBtn">发送</button>
+                </div>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="header">
+                <h1>星月管理器</h1>
+            </div>
+            <div class="page-grid" id="pageGrid"></div>
+        </div>
+    </div>
+    <div class="drop-overlay" id="dropOverlay">
+        <div class="drop-content">
+            <p>拖放文件到此处</p>
+            <span>支持 .txt 文本文件和图片文件</span>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

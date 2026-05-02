@@ -1,19 +1,23 @@
-package shared_unit
+package lunar_window
 
 import (
 	"context"
 	"fmt"
+	"io"
+	"lunar_window/browser"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
-	"lunar_window/browser"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
 
-var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database"}
+var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database/", "/v1/"}
 
 func shouldProxy(path string) bool {
 	for _, prefix := range proxyPrefixes {
@@ -22,6 +26,112 @@ func shouldProxy(path string) bool {
 		}
 	}
 	return false
+}
+
+func getRandomBackgroundImage() (string, error) {
+	fs := GetResourceFS()
+	file, err := fs.Open("/")
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	var files []string
+	if stat.IsDir() {
+		entries, err := file.Readdir(-1)
+		if err != nil {
+			return "", err
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasPrefix(entry.Name(), "page_background") {
+				files = append(files, entry.Name())
+			}
+		}
+	}
+
+	if len(files) == 0 {
+		return "", fmt.Errorf("未找到 page_background 开头的图片文件")
+	}
+	randomIndex := rand.Intn(len(files))
+	return files[randomIndex], nil
+}
+
+func serveRandomBackground(w http.ResponseWriter, _ *http.Request) {
+	filename, err := getRandomBackgroundImage()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	fs := GetResourceFS()
+	file, err := fs.Open("/" + filename)
+	if err != nil {
+		http.Error(w, "无法打开文件: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	contentType := ""
+	switch ext {
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	case ".png":
+		contentType = "image/png"
+	case ".gif":
+		contentType = "image/gif"
+	case ".webp":
+		contentType = "image/webp"
+	case ".svg":
+		contentType = "image/svg+xml"
+	default:
+		contentType = "application/octet-stream"
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		http.Error(w, "无法获取文件信息: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
+	w.WriteHeader(http.StatusOK)
+
+	if _, err := copyBuffer(w, file); err != nil {
+		fmt.Printf("传输图片失败: %v\n", err)
+	}
+}
+
+func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
+	buf := make([]byte, 32*1024)
+	var written int64
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				return written, ew
+			}
+			if nr != nw {
+				return written, io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				er = nil
+			}
+			return written, er
+		}
+	}
 }
 
 // StartServer 启动文件浏览器服务
@@ -37,7 +147,9 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	// 主处理器，处理所有请求
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		if shouldProxy(path) {
+		if path == "/background" && r.Method == "GET" {
+			serveRandomBackground(w, r)
+		} else if shouldProxy(path) {
 			proxy.ServeHTTP(w, r)
 		} else {
 			fsHandler.ServeHTTP(w, r)

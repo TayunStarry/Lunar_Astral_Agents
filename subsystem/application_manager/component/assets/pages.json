@@ -1,0 +1,30 @@
+[
+	{
+		"id": "chat_deepseek",
+		"icon": "./icon/logos_deepseek-icon.png",
+		"title": "深度求索",
+		"description": "打开Deepseek模型的官方客户端",
+		"url": "https://chat.deepseek.com/a/chat/"
+	},
+	{
+		"id": "image_generation",
+		"icon": "./icon/image_generation-icon.png",
+		"title": "图像生成",
+		"description": "打开『 星月智能 』图像生成器",
+		"url": "/image_generation"
+	},
+	{
+		"id": "database_manager",
+		"icon": "./icon/database_manager-icon.png",
+		"title": "数据库管理",
+		"description": "打开『 星月智能 』数据库管理器",
+		"url": "/database_manager"
+	},
+	{
+		"id": "file_explorer",
+		"icon": "./icon/file_explorer-icon.png",
+		"title": "文件管理",
+		"description": "打开『 星月智能 』文件管理器",
+		"url": "/file_explorer"
+	}
+]

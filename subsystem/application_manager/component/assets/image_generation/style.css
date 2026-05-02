@@ -24,7 +24,7 @@
     --radius-sm: 10px;
     --radius-xs: 8px;
 
-    --bg-image: url('https://picsum.photos/1920/1080');
+    --bg-image: url('/background');
 }
 
 /* ========== 基础重置 ========== */

@@ -6,7 +6,7 @@
 /* ---- CSS 自定义属性 ---- */
 :root {
     /* 背景图片（占位图，可替换为任意图片URL） */
-    --bg-image: url('page_background.jpg');
+    --bg-image: url('/background');
 
     /* 玻璃面板 - 浅色半透明 */
     --glass-bg: rgba(255, 255, 255, 0.35);
