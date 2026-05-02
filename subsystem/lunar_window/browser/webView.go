@@ -3,7 +3,7 @@ package browser
 import (
 	"log"
 	"runtime"
-	"shared_unit/config"
+	"lunar_window/config"
 	"time"
 
 	webview "github.com/webview/webview_go"

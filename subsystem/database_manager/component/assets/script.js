@@ -1,3 +1,7 @@
+// ============================================================
+// 星月智能 · 智存库 — 主逻辑脚本 (Font Awesome 图标适配)
+// ============================================================
+
 // 全局变量
 let selectedTable = null;
 let tables = [];
@@ -7,10 +11,11 @@ const elements = {
     // 表相关
     tableList: document.getElementById('table-list'),
     tableDetails: document.getElementById('table-details'),
-    tablePreview: document.getElementById('table-preview'),
     previewContent: document.getElementById('preview-content'),
+    previewStatus: document.getElementById('preview-status'),
     refreshTablesBtn: document.getElementById('refresh-tables'),
     createTableBtn: document.getElementById('create-table'),
+    refreshPreviewBtn: document.getElementById('refresh-preview'),
 
     // 标签页
     tabBtns: document.querySelectorAll('.tab-btn'),
@@ -32,9 +37,6 @@ const elements = {
     updateFilter: document.getElementById('update-filter'),
     deleteFilter: document.getElementById('delete-filter'),
 
-    // 结果显示
-    resultContent: document.getElementById('result-content'),
-
     // 创建表对话框
     createTableDialog: document.getElementById('create-table-dialog'),
     newTableName: document.getElementById('new-table-name'),
@@ -42,7 +44,6 @@ const elements = {
     confirmCreateTableBtn: document.getElementById('confirm-create-table'),
     addColumnBtn: document.getElementById('add-column'),
     columnsContainer: document.getElementById('columns-container'),
-    generatedSql: document.getElementById('generated-sql'),
 
     // 确认对话框
     confirmDialog: document.getElementById('confirm-dialog'),
@@ -59,53 +60,63 @@ const elements = {
 // API基础URL
 const API_BASE = '/database/';
 
+// ============================================================
 // 初始化
+// ============================================================
 function init() {
     bindEvents();
     loadTables();
 
-    // 新增：绑定清除结果按钮
     const clearResultsBtn = document.getElementById('clear-results');
     if (clearResultsBtn) {
         clearResultsBtn.addEventListener('click', clearResults);
     }
 
-    // 新增：绑定表数量更新
+    if (elements.refreshPreviewBtn) {
+        elements.refreshPreviewBtn.addEventListener('click', refreshPreview);
+    }
+
     updateTableCount();
 }
 
-// 新增：清除结果功能
+// ============================================================
+// 清除结果
+// ============================================================
 function clearResults() {
-    elements.resultContent.innerHTML = `
+    elements.previewStatus.innerHTML = '';
+    elements.previewContent.innerHTML = `
         <div class="empty-state">
-            <div class="empty-icon">📈</div>
-            <h3>结果已清除</h3>
-            <p>执行操作后，新结果将显示在这里</p>
+            <div class="empty-icon"><i class="fa-solid fa-chart-line fa-2x"></i></div>
+            <h3>数据预览</h3>
+            <p>选择一个表后，将自动显示数据内容<br>执行操作后，结果也将显示在这里</p>
         </div>
     `;
 }
 
-// 修改：更新表列表时同时更新数量和预览
+// 刷新预览
+async function refreshPreview() {
+    if (!selectedTable) {
+        showStatusMessage('info', 'ℹ️ 请先选择一个表');
+        return;
+    }
+    await loadTablePreview(selectedTable);
+    switchToPreviewPage();
+}
+
+// ============================================================
+// 加载表列表
+// ============================================================
 async function loadTables() {
     try {
-        showLoading('加载表列表...');
-        elements.resultContent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; padding: 20px;"><div class="loading"></div> <span style="margin-left: 10px;">加载表列表...</span></div>';
+        showStatusMessage('info', '⏳ 正在加载表列表...');
 
         const response = await fetch(API_BASE, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'tables'
-                }]
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operations: [{ type: 'tables' }] })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP错误! 状态码: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP错误! 状态码: ${response.status}`);
 
         const result = await response.json();
 
@@ -114,27 +125,37 @@ async function loadTables() {
             renderTableList();
             updateTableCount();
 
-            // 如果有表且没有选中的表，自动选中第一个
             if (tables.length > 0 && !selectedTable) {
-                selectTable(tables[0]);
+                await selectTable(tables[0]);
             } else if (tables.length > 0 && selectedTable) {
-                // 如果当前有选中的表，重新加载其数据预览
-                await loadTableStructure(selectedTable);
-                await loadTablePreview(selectedTable);
+                if (!tables.includes(selectedTable)) {
+                    await selectTable(tables[0]);
+                } else {
+                    await loadTableStructure(selectedTable);
+                    await loadTablePreview(selectedTable);
+                }
+            } else if (tables.length === 0) {
+                selectedTable = null;
+                elements.tableDetails.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fa-solid fa-table fa-2x"></i></div>
+                        <h3>暂无数据表</h3>
+                        <p>点击"创建表"按钮来创建您的第一个表</p>
+                    </div>`;
+                clearResults();
+                document.getElementById('current-table-stats').textContent = '未选择表';
             }
 
-            showSuccess(`成功加载 ${tables.length} 个表`);
+            showStatusMessage('success', '✅ 成功加载 ' + tables.length + ' 个表');
         } else {
-            showError('加载表列表失败');
+            showStatusMessage('error', '❌ 加载表列表失败');
         }
     } catch (error) {
-        showError(`加载表列表时出错: ${error.message}`);
-    } finally {
-        hideLoading();
+        showStatusMessage('error', '❌ 加载表列表时出错: ' + error.message);
     }
 }
 
-// 新增：更新表数量显示
+// 更新表数量
 function updateTableCount() {
     const tableCountElement = document.getElementById('table-count');
     if (tableCountElement) {
@@ -142,75 +163,13 @@ function updateTableCount() {
     }
 }
 
-// 修改：选择表时更新统计信息
-async function selectTable(tableName) {
-    selectedTable = tableName;
-
-    // 更新UI
-    document.querySelectorAll('.table-item').forEach(item => {
-        item.classList.remove('selected');
-        if (item.dataset.tableName === tableName) {
-            item.classList.add('selected');
-        }
-    });
-
-    // 更新当前表统计信息
-    const statsElement = document.getElementById('current-table-stats');
-    if (statsElement) {
-        statsElement.textContent = `已选择: ${tableName}`;
-    }
-
-    // 加载表结构
-    await loadTableStructure(tableName);
-    // 加载表数据预览
-    await loadTablePreview(tableName);
-}
-
-// 绑定事件
-function bindEvents() {
-    // 刷新表列表
-    elements.refreshTablesBtn.addEventListener('click', loadTables);
-
-    // 创建表
-    elements.createTableBtn.addEventListener('click', showCreateTableDialog);
-    elements.cancelCreateTableBtn.addEventListener('click', hideCreateTableDialog);
-    elements.confirmCreateTableBtn.addEventListener('click', createTable);
-    elements.addColumnBtn.addEventListener('click', addColumn);
-
-    // 标签页切换
-    elements.tabBtns.forEach(btn => {
-        btn.addEventListener('click', switchTab);
-    });
-
-    // 数据操作
-    elements.executeSelectBtn.addEventListener('click', executeSelect);
-    elements.executeInsertBtn.addEventListener('click', executeInsert);
-    elements.executeUpdateBtn.addEventListener('click', executeUpdate);
-    elements.executeDeleteBtn.addEventListener('click', showDeleteConfirm);
-
-    // 确认对话框
-    elements.cancelConfirmBtn.addEventListener('click', hideConfirmDialog);
-    elements.confirmActionBtn.addEventListener('click', confirmDelete);
-
-    // 高级查询操作符说明
-    elements.showOperatorsBtn.addEventListener('click', showOperatorsDialog);
-    elements.closeOperatorsBtn.addEventListener('click', hideOperatorsDialog);
-
-    // 页面导航
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.addEventListener('click', switchPage);
-    });
-
-    // 表名变化时更新SQL语句
-    elements.newTableName.addEventListener('input', updateGeneratedSql);
-}
-
 // 渲染表列表
 function renderTableList() {
     elements.tableList.innerHTML = '';
 
     if (tables.length === 0) {
-        elements.tableList.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无表</p>';
+        elements.tableList.innerHTML =
+            '<p style="text-align:center;color:var(--text-on-glass-secondary);padding:20px;font-size:0.85rem;">暂无表</p>';
         return;
     }
 
@@ -220,15 +179,15 @@ function renderTableList() {
         tableItem.dataset.tableName = tableName;
 
         tableItem.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div class="table-name">${tableName}</div>
-                <button class="delete-table-btn" data-table="${tableName}" style="background: #ff4757; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.8em;">删除</button>
+                <button class="delete-table-btn" data-table="${tableName}"><i class="fa-solid fa-trash-can"></i> 删除</button>
             </div>
             <div class="table-stats">加载中...</div>
         `;
 
         tableItem.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('delete-table-btn')) {
+            if (!e.target.closest('.delete-table-btn')) {
                 selectTable(tableName);
             }
         });
@@ -240,8 +199,6 @@ function renderTableList() {
         });
 
         elements.tableList.appendChild(tableItem);
-
-        // 加载表统计信息
         loadTableStats(tableName, tableItem);
     });
 }
@@ -251,15 +208,8 @@ async function loadTableStats(tableName, tableItem) {
     try {
         const response = await fetch(API_BASE, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'count',
-                    table: tableName
-                }]
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operations: [{ type: 'count', table: tableName }] })
         });
 
         const result = await response.json();
@@ -267,155 +217,63 @@ async function loadTableStats(tableName, tableItem) {
         if (result.success && result.results.length > 0) {
             const count = result.results[0].count || 0;
             const statsElement = tableItem.querySelector('.table-stats');
-            statsElement.textContent = `${count} 条记录`;
+            if (statsElement) {
+                statsElement.textContent = `${count} 条记录`;
+            }
         }
     } catch (error) {
         console.error('加载表统计信息失败:', error);
+        const statsElement = tableItem.querySelector('.table-stats');
+        if (statsElement) statsElement.textContent = '—';
     }
 }
 
-// 加载表数据预览
-async function loadTablePreview(tableName) {
-    try {
-        // 检查必要的DOM元素是否存在
-        if (!elements.previewContent || !elements.tablePreview) {
-            console.warn('预览相关DOM元素不存在');
-            return;
+// ============================================================
+// 选择表（默认查看数据）
+// ============================================================
+async function selectTable(tableName) {
+    selectedTable = tableName;
+
+    document.querySelectorAll('.table-item').forEach(item => {
+        item.classList.remove('selected');
+        if (item.dataset.tableName === tableName) {
+            item.classList.add('selected');
         }
-
-        elements.previewContent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; padding: 20px;"><div class="loading"></div> <span style="margin-left: 10px;">加载数据预览...</span></div>';
-        elements.tablePreview.style.display = 'block';
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'select',
-                    table: tableName,
-                    limit: 10 // 只预览前10条数据
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success && result.results.length > 0) {
-            const selectResult = result.results[0];
-            renderTablePreview(selectResult);
-        } else {
-            elements.previewContent.innerHTML = '<p class="message info">预览数据为空</p>';
-        }
-    } catch (error) {
-        console.error('加载表数据预览失败:', error);
-        if (elements.previewContent) {
-            elements.previewContent.innerHTML = '<p class="message error">加载数据预览失败</p>';
-        }
-    }
-}
-
-// 处理换行符，将\n转换为<br>
-function handleNewlines(text) {
-    if (typeof text === 'string') {
-        return text.replace(/\n/g, '<br>');
-    }
-    return text;
-}
-
-// 渲染表数据预览
-function renderTablePreview(result) {
-    if (!elements.previewContent) {
-        console.warn('预览内容DOM元素不存在');
-        return;
-    }
-
-    if (!result.rows || result.rows.length === 0) {
-        elements.previewContent.innerHTML = '<p class="message info">预览数据为空</p>';
-        return;
-    }
-
-    // 获取列名，优先使用result.columns，如果不存在则从第一行数据中提取
-    const columns = result.columns || (result.rows.length > 0 ? Object.keys(result.rows[0]) : []);
-
-    let html = '<div class="preview-table-container"><table class="preview-table"><thead><tr>';
-
-    // 渲染表头
-    columns.forEach(column => {
-        html += `<th>${column}</th>`;
     });
 
-    html += '</tr></thead><tbody>';
+    const statsElement = document.getElementById('current-table-stats');
+    if (statsElement) {
+        statsElement.textContent = `已选择: ${tableName}`;
+    }
 
-    // 渲染数据行
-    result.rows.forEach(row => {
-        html += '<tr>';
-        columns.forEach(column => {
-            const value = row[column] !== null && row[column] !== undefined ? row[column] : '';
-            html += `<td>${handleNewlines(value)}</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-
-    elements.previewContent.innerHTML = `
-        <div class="message success">预览成功，显示前 ${result.rows.length} 条记录</div>
-        <div class="data-table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        ${columns.map(col => `<th>${col}</th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    ${result.rows.map(row => `
-                        <tr>
-                            ${columns.map(col => `<td>${handleNewlines(row[col] || '')}</td>`).join('')}
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
+    await loadTableStructure(tableName);
+    await loadTablePreview(tableName);
+    switchToPreviewPage();
 }
 
-// 显示高级查询操作符说明对话框
-function showOperatorsDialog() {
-    elements.operatorsDialog.classList.add('show');
+function switchToPreviewPage() {
+    const previewNavBtn = document.querySelector('.nav-btn[data-page="preview"]');
+    if (previewNavBtn) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        previewNavBtn.classList.add('active');
+        document.querySelectorAll('.app-page').forEach(p => p.classList.remove('active'));
+        const previewPage = document.querySelector('.app-page[data-page="preview"]');
+        if (previewPage) previewPage.classList.add('active');
+    }
 }
 
-// 隐藏高级查询操作符说明对话框
-function hideOperatorsDialog() {
-    elements.operatorsDialog.classList.remove('show');
-}
-
+// ============================================================
 // 加载表结构
+// ============================================================
 async function loadTableStructure(tableName) {
     try {
-        showLoading('加载表结构...');
-
         const response = await fetch(API_BASE, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'structure',
-                    table: tableName
-                }]
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operations: [{ type: 'structure', table: tableName }] })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const result = await response.json();
 
@@ -423,23 +281,21 @@ async function loadTableStructure(tableName) {
             const structure = result.results[0].structure || [];
             renderTableStructure(tableName, structure);
         } else {
-            showError('加载表结构失败');
+            elements.tableDetails.innerHTML = '<p class="message error">加载表结构失败</p>';
         }
     } catch (error) {
-        showError(`加载表结构时出错: ${error.message}`);
-    } finally {
-        hideLoading();
+        elements.tableDetails.innerHTML = `<p class="message error">加载表结构时出错: ${error.message}</p>`;
     }
 }
 
-// 渲染表结构
+// 渲染表结构 (使用 Font Awesome 图标)
 function renderTableStructure(tableName, structure) {
     elements.tableDetails.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h3>${tableName}</h3>
-            <div style="font-size: 0.9em; color: #666;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;flex-wrap:wrap;gap:0.5rem;">
+            <h3 style="margin:0;"><i class="fa-solid fa-table"></i> ${tableName}</h3>
+            <span style="font-size:0.8rem;color:var(--text-on-glass-secondary);background:rgba(255,255,255,0.25);padding:0.25rem 0.7rem;border-radius:999px;">
                 ${structure.length} 个字段
-            </div>
+            </span>
         </div>
         <div class="data-table-container">
             <table class="structure-table">
@@ -454,52 +310,442 @@ function renderTableStructure(tableName, structure) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${structure.map((column, index) => `
-                        <tr ${index % 2 === 0 ? 'style="background-color: #f9f9f9;"' : ''}>
-                            <td style="font-weight: 500;">${column.field}</td>
-                            <td>${column.type}</td>
-                            <td>${column.null}</td>
-                            <td>${column.key || '-'}</td>
-                            <td>${column.default || '-'}</td>
-                            <td>${column.extra || '-'}</td>
+                    ${structure.map(col => `
+                        <tr>
+                            <td style="font-weight:600;">${col.field}</td>
+                            <td>${col.type}</td>
+                            <td>${col.null}</td>
+                            <td>${col.key || '-'}</td>
+                            <td>${col.default || '-'}</td>
+                            <td>${col.extra || '-'}</td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
         </div>
-        <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
-            <p><strong>表结构说明：</strong></p>
-            <ul>
-                <li><strong>字段名：</strong>表中的列名</li>
-                <li><strong>数据类型：</strong>字段的数据类型</li>
-                <li><strong>是否为空：</strong>字段是否允许为空</li>
-                <li><strong>键类型：</strong>字段的键类型，如PRI（主键）</li>
-                <li><strong>默认值：</strong>字段的默认值</li>
-                <li><strong>额外属性：</strong>字段的额外属性，如AUTOINCREMENT</li>
-            </ul>
+    `;
+}
+
+// ============================================================
+// 加载数据预览
+// ============================================================
+async function loadTablePreview(tableName) {
+    try {
+        if (!elements.previewContent) return;
+
+        elements.previewContent.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;padding:30px;gap:10px;">
+                <div class="loading"></div>
+                <span style="color:var(--text-on-glass-secondary);">加载数据预览...</span>
+            </div>`;
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operations: [{
+                    type: 'select',
+                    table: tableName,
+                    limit: 100
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success && result.results.length > 0) {
+            const selectResult = result.results[0];
+            renderDataToPreview(selectResult, `✅ 预览成功，显示 ${selectResult.rows ? selectResult.rows.length : 0} 条记录`);
+        } else {
+            elements.previewContent.innerHTML = '<p class="message info">预览数据为空</p>';
+            showStatusMessage('info', 'ℹ️ 该表暂无数据');
+        }
+    } catch (error) {
+        console.error('加载表数据预览失败:', error);
+        elements.previewContent.innerHTML = '<p class="message error">加载数据预览失败</p>';
+        showStatusMessage('error', '❌ 加载预览失败: ' + error.message);
+    }
+}
+
+// ============================================================
+// 渲染数据到预览区
+// ============================================================
+function renderDataToPreview(result, statusMessage) {
+    if (!elements.previewContent) return;
+
+    if (statusMessage) {
+        showStatusMessage('success', statusMessage);
+    }
+
+    if (!result.rows || result.rows.length === 0) {
+        elements.previewContent.innerHTML = '<p class="message info">查询结果为空</p>';
+        return;
+    }
+
+    const columns = result.columns || (result.rows.length > 0 ? Object.keys(result.rows[0]) : []);
+
+    elements.previewContent.innerHTML = `
+        <div class="data-table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        ${columns.map(col => `<th>${col}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${result.rows.map(row => `
+                        <tr>
+                            ${columns.map(col => {
+                                const val = row[col];
+                                const display = val !== null && val !== undefined ? String(val) : '';
+                                return `<td>${escapeHtml(display)}</td>`;
+                            }).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
     `;
 }
 
-// 显示创建表对话框
-function showCreateTableDialog() {
-    elements.newTableName.value = '';
-    elements.generatedSql.value = '';
-
-    // 清空列容器，只保留默认列
-    elements.columnsContainer.innerHTML = '';
-    addColumn(true); // 添加默认列
-
-    elements.createTableDialog.classList.add('show');
-    updateGeneratedSql();
+function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, '<br>');
 }
 
-// 隐藏创建表对话框
+// ============================================================
+// 状态消息
+// ============================================================
+function showStatusMessage(type, message) {
+    if (!elements.previewStatus) return;
+    const typeClass = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
+    elements.previewStatus.innerHTML = `<div class="message ${typeClass}">${message}</div>`;
+    clearTimeout(elements._statusTimeout);
+    if (type === 'success') {
+        elements._statusTimeout = setTimeout(() => {
+            if (elements.previewStatus) elements.previewStatus.innerHTML = '';
+        }, 5000);
+    }
+}
+
+// ============================================================
+// 执行查询
+// ============================================================
+async function executeSelect() {
+    if (!selectedTable) {
+        showStatusMessage('error', '❌ 请先选择一个表');
+        switchToPreviewPage();
+        return;
+    }
+
+    try {
+        showStatusMessage('info', '⏳ 正在执行查询...');
+
+        let filter = {};
+        let order = [];
+
+        if (elements.selectFilter.value.trim()) {
+            try {
+                filter = JSON.parse(elements.selectFilter.value);
+            } catch (e) {
+                showStatusMessage('error', '❌ 过滤条件JSON格式错误');
+                switchToPreviewPage();
+                return;
+            }
+        }
+
+        if (elements.selectOrder.value.trim()) {
+            try {
+                order = JSON.parse(elements.selectOrder.value);
+            } catch (e) {
+                showStatusMessage('error', '❌ 排序JSON格式错误');
+                switchToPreviewPage();
+                return;
+            }
+        }
+
+        const limit = parseInt(elements.selectLimit.value) || 100;
+        const offset = parseInt(elements.selectOffset.value) || 0;
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operations: [{
+                    type: 'select',
+                    table: selectedTable,
+                    filter: filter,
+                    order: order,
+                    limit: limit,
+                    offset: offset
+                }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success && result.results.length > 0) {
+            const selectResult = result.results[0];
+            renderDataToPreview(selectResult,
+                `✅ 查询成功，找到 ${selectResult.rows ? selectResult.rows.length : 0} 条记录`);
+        } else {
+            showStatusMessage('error', `❌ 查询失败: ${result.error || '未知错误'}`);
+            elements.previewContent.innerHTML = '<p class="message error">查询失败</p>';
+        }
+    } catch (error) {
+        showStatusMessage('error', '❌ 查询时出错: ' + error.message);
+        elements.previewContent.innerHTML = `<p class="message error">${error.message}</p>`;
+    }
+    switchToPreviewPage();
+}
+
+// ============================================================
+// 执行插入
+// ============================================================
+async function executeInsert() {
+    if (!selectedTable) {
+        showStatusMessage('error', '❌ 请先选择一个表');
+        switchToPreviewPage();
+        return;
+    }
+
+    const dataStr = elements.insertData.value.trim();
+    if (!dataStr) {
+        showStatusMessage('error', '❌ 插入数据不能为空');
+        switchToPreviewPage();
+        return;
+    }
+
+    try {
+        const data = JSON.parse(dataStr);
+        showStatusMessage('info', '⏳ 正在执行插入...');
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operations: [{ type: 'insert', table: selectedTable, data: data }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success) {
+            showStatusMessage('success', '✅ 插入成功');
+            elements.insertData.value = '';
+            await loadTablePreview(selectedTable);
+            refreshTableStatsInList();
+        } else {
+            showStatusMessage('error', '❌ 插入失败: ' + result.error);
+        }
+    } catch (error) {
+        if (error instanceof SyntaxError) {
+            showStatusMessage('error', '❌ 插入数据JSON格式错误');
+        } else {
+            showStatusMessage('error', '❌ 插入时出错: ' + error.message);
+        }
+    }
+    switchToPreviewPage();
+}
+
+// ============================================================
+// 执行更新
+// ============================================================
+async function executeUpdate() {
+    if (!selectedTable) {
+        showStatusMessage('error', '❌ 请先选择一个表');
+        switchToPreviewPage();
+        return;
+    }
+
+    const dataStr = elements.updateData.value.trim();
+    const filterStr = elements.updateFilter.value.trim();
+
+    if (!dataStr) {
+        showStatusMessage('error', '❌ 更新数据不能为空');
+        switchToPreviewPage();
+        return;
+    }
+
+    try {
+        const data = JSON.parse(dataStr);
+        let filter = {};
+        if (filterStr) filter = JSON.parse(filterStr);
+
+        showStatusMessage('info', '⏳ 正在执行更新...');
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operations: [{ type: 'update', table: selectedTable, data: data, filter: filter }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success) {
+            showStatusMessage('success', '✅ 更新成功');
+            await loadTablePreview(selectedTable);
+            refreshTableStatsInList();
+        } else {
+            showStatusMessage('error', '❌ 更新失败: ' + result.error);
+        }
+    } catch (error) {
+        if (error instanceof SyntaxError) {
+            showStatusMessage('error', '❌ JSON格式错误');
+        } else {
+            showStatusMessage('error', '❌ 更新时出错: ' + error.message);
+        }
+    }
+    switchToPreviewPage();
+}
+
+// ============================================================
+// 删除确认
+// ============================================================
+function showDeleteConfirm() {
+    if (!selectedTable) {
+        showStatusMessage('error', '❌ 请先选择一个表');
+        switchToPreviewPage();
+        return;
+    }
+
+    const filterStr = elements.deleteFilter.value.trim();
+    if (!filterStr) {
+        showStatusMessage('error', '❌ 过滤条件不能为空');
+        switchToPreviewPage();
+        return;
+    }
+
+    elements.confirmMessage.textContent = `确定要删除 ${selectedTable} 表中符合条件的记录吗？此操作不可恢复！`;
+    elements.confirmDialog.classList.add('show');
+    elements.confirmActionBtn.onclick = confirmDelete;
+}
+
+function showDeleteTableConfirm(tableName) {
+    elements.confirmMessage.textContent = `确定要删除整个「${tableName}」表吗？此操作不可恢复！`;
+    elements.confirmDialog.classList.add('show');
+    elements.confirmActionBtn.onclick = () => confirmDeleteTable(tableName);
+}
+
+function hideConfirmDialog() {
+    elements.confirmDialog.classList.remove('show');
+}
+
+async function confirmDelete() {
+    const filterStr = elements.deleteFilter.value.trim();
+
+    try {
+        const filter = JSON.parse(filterStr);
+        showStatusMessage('info', '⏳ 正在执行删除...');
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                operations: [{ type: 'delete', table: selectedTable, filter: filter }]
+            })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success) {
+            showStatusMessage('success', '✅ 删除成功');
+            hideConfirmDialog();
+            await loadTablePreview(selectedTable);
+            refreshTableStatsInList();
+        } else {
+            showStatusMessage('error', '❌ 删除失败: ' + result.error);
+            hideConfirmDialog();
+        }
+    } catch (error) {
+        if (error instanceof SyntaxError) {
+            showStatusMessage('error', '❌ 过滤条件JSON格式错误');
+        } else {
+            showStatusMessage('error', '❌ 删除时出错: ' + error.message);
+        }
+        hideConfirmDialog();
+    }
+    switchToPreviewPage();
+}
+
+async function confirmDeleteTable(tableName) {
+    try {
+        showStatusMessage('info', '⏳ 正在删除表...');
+
+        const response = await fetch(API_BASE, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ operations: [{ type: 'drop', table: tableName }] })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const result = await response.json();
+
+        if (result.success) {
+            showStatusMessage('success', `✅ 表「${tableName}」删除成功`);
+            hideConfirmDialog();
+            if (selectedTable === tableName) {
+                selectedTable = null;
+                elements.tableDetails.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="fa-solid fa-table fa-2x"></i></div>
+                        <h3>请选择一个表查看详细信息</h3>
+                        <p>从左侧表列表中选择一个表</p>
+                    </div>`;
+                document.getElementById('current-table-stats').textContent = '未选择表';
+                clearResults();
+            }
+            await loadTables();
+        } else {
+            showStatusMessage('error', '❌ 删除表失败: ' + result.error);
+            hideConfirmDialog();
+        }
+    } catch (error) {
+        showStatusMessage('error', '❌ 删除表时出错: ' + error.message);
+        hideConfirmDialog();
+    }
+}
+
+function refreshTableStatsInList() {
+    const items = elements.tableList.querySelectorAll('.table-item');
+    items.forEach(item => {
+        const tableName = item.dataset.tableName;
+        if (tableName) loadTableStats(tableName, item);
+    });
+}
+
+// ============================================================
+// 创建表对话框
+// ============================================================
+function showCreateTableDialog() {
+    elements.newTableName.value = '';
+    elements.columnsContainer.innerHTML = '';
+    addColumn(true);
+    elements.createTableDialog.classList.add('show');
+}
+
 function hideCreateTableDialog() {
     elements.createTableDialog.classList.remove('show');
 }
 
-// 添加列
 function addColumn(isDefault = false) {
     const columns = elements.columnsContainer.children;
     const columnIndex = columns.length + 1;
@@ -510,17 +756,17 @@ function addColumn(isDefault = false) {
     columnItem.innerHTML = `
         <div class="column-header">
             <span>列 ${columnIndex}</span>
-            <button class="remove-column btn-danger">删除</button>
+            <button class="remove-column btn-glass btn-glass-danger btn-xs"><i class="fa-solid fa-trash-can"></i> 删除</button>
         </div>
         <div class="column-fields">
             <div class="form-row">
                 <div class="form-group">
                     <label>列名</label>
-                    <input type="text" class="column-name" value="${isDefault ? 'id' : ''}">
+                    <input type="text" class="column-name form-input glass-input" value="${isDefault ? 'id' : ''}">
                 </div>
                 <div class="form-group">
                     <label>数据类型</label>
-                    <select class="column-type">
+                    <select class="column-type form-input glass-input">
                         <option value="INTEGER" ${isDefault ? 'selected' : ''}>INTEGER</option>
                         <option value="TEXT">TEXT</option>
                         <option value="REAL">REAL</option>
@@ -546,120 +792,50 @@ function addColumn(isDefault = false) {
             </div>
             <div class="form-group">
                 <label>默认值</label>
-                <input type="text" class="column-default">
+                <input type="text" class="column-default form-input glass-input">
             </div>
         </div>
     `;
 
     elements.columnsContainer.appendChild(columnItem);
 
-    // 绑定删除列事件
     const removeBtn = columnItem.querySelector('.remove-column');
-    removeBtn.addEventListener('click', function () {
-        removeColumn(columnItem);
-    });
-
-    // 绑定列属性变化事件
-    const columnFields = columnItem.querySelectorAll('input, select');
-    columnFields.forEach(field => {
-        field.addEventListener('input', updateGeneratedSql);
-        field.addEventListener('change', updateGeneratedSql);
-    });
-
-    updateGeneratedSql();
+    removeBtn.addEventListener('click', () => removeColumn(columnItem));
 }
 
-// 删除列
 function removeColumn(columnItem) {
     if (elements.columnsContainer.children.length <= 1) {
-        showError('至少需要保留一列');
+        showStatusMessage('error', '❌ 至少需要保留一列');
         return;
     }
-
     columnItem.remove();
 
-    // 更新列序号
     const columns = elements.columnsContainer.children;
     for (let i = 0; i < columns.length; i++) {
         const header = columns[i].querySelector('.column-header span');
-        header.textContent = `列 ${i + 1}`;
+        if (header) header.textContent = `列 ${i + 1}`;
     }
-
-    updateGeneratedSql();
 }
 
-// 更新生成的SQL语句
-function updateGeneratedSql() {
-    const tableName = elements.newTableName.value.trim() || 'table_name';
-    const columns = elements.columnsContainer.children;
-
-    let columnsSql = [];
-
-    for (let i = 0; i < columns.length; i++) {
-        const columnItem = columns[i];
-        const name = columnItem.querySelector('.column-name').value.trim();
-        const type = columnItem.querySelector('.column-type').value;
-        const isPrimary = columnItem.querySelector('.column-primary').checked;
-        const isAutoinc = columnItem.querySelector('.column-autoinc').checked;
-        const isNotNull = columnItem.querySelector('.column-notnull').checked;
-        const defaultValue = columnItem.querySelector('.column-default').value.trim();
-
-        if (!name) continue;
-
-        let columnSql = `${name} ${type}`;
-
-        if (isNotNull) {
-            columnSql += ' NOT NULL';
-        }
-
-        if (defaultValue) {
-            if (type === 'TEXT' || type === 'TIMESTAMP') {
-                columnSql += ` DEFAULT '${defaultValue}'`;
-            } else {
-                columnSql += ` DEFAULT ${defaultValue}`;
-            }
-        }
-
-        if (isPrimary) {
-            columnSql += ' PRIMARY KEY';
-            if (isAutoinc) {
-                columnSql += ' AUTOINCREMENT';
-            }
-        }
-
-        columnsSql.push(columnSql);
-    }
-
-    if (columnsSql.length === 0) {
-        elements.generatedSql.value = '';
-        return;
-    }
-
-    const createSql = `CREATE TABLE ${tableName} (\n    ${columnsSql.join(',\n    ')}\n)`;
-    elements.generatedSql.value = createSql;
-}
-
-// 创建表
 async function createTable() {
     const tableName = elements.newTableName.value.trim();
 
     if (!tableName) {
-        showError('表名不能为空');
+        showStatusMessage('error', '❌ 表名不能为空');
         return;
     }
 
-    // 构建表定义
     const columns = elements.columnsContainer.children;
     const columnDefs = [];
 
     for (let i = 0; i < columns.length; i++) {
         const columnItem = columns[i];
-        const name = columnItem.querySelector('.column-name').value.trim();
-        const type = columnItem.querySelector('.column-type').value;
-        const isPrimary = columnItem.querySelector('.column-primary').checked;
-        const isAutoinc = columnItem.querySelector('.column-autoinc').checked;
-        const isNotNull = columnItem.querySelector('.column-notnull').checked;
-        const defaultValue = columnItem.querySelector('.column-default').value.trim();
+        const name = columnItem.querySelector('.column-name')?.value.trim();
+        const type = columnItem.querySelector('.column-type')?.value;
+        const isPrimary = columnItem.querySelector('.column-primary')?.checked;
+        const isAutoinc = columnItem.querySelector('.column-autoinc')?.checked;
+        const isNotNull = columnItem.querySelector('.column-notnull')?.checked;
+        const defaultValue = columnItem.querySelector('.column-default')?.value.trim();
 
         if (!name) continue;
 
@@ -672,60 +848,65 @@ async function createTable() {
         };
 
         if (defaultValue) {
-            columnDef.default = type === 'TEXT' || type === 'TIMESTAMP' ? defaultValue : isNaN(defaultValue) ? defaultValue : Number(defaultValue);
+            columnDef.default = (type === 'TEXT' || type === 'TIMESTAMP') ?
+                defaultValue :
+                isNaN(defaultValue) ? defaultValue : Number(defaultValue);
         }
 
         columnDefs.push(columnDef);
     }
 
     if (columnDefs.length === 0) {
-        showError('至少需要定义一个列');
+        showStatusMessage('error', '❌ 至少需要定义一个列');
         return;
     }
 
     try {
-        showLoading('创建表...');
+        showStatusMessage('info', '⏳ 正在创建表...');
 
         const response = await fetch(API_BASE, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 operations: [{
                     type: 'create',
                     table: tableName,
-                    definition: {
-                        columns: columnDefs
-                    }
+                    definition: { columns: columnDefs }
                 }]
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const result = await response.json();
 
         if (result.success) {
-            showSuccess('表创建成功');
+            showStatusMessage('success', `✅ 表「${tableName}」创建成功`);
             hideCreateTableDialog();
-            loadTables();
+            await loadTables();
         } else {
-            showError(`创建表失败: ${result.error}`);
+            showStatusMessage('error', '❌ 创建表失败: ' + result.error);
         }
     } catch (error) {
-        showError(`创建表时出错: ${error.message}`);
-    } finally {
-        hideLoading();
+        showStatusMessage('error', '❌ 创建表时出错: ' + error.message);
     }
 }
 
-// 切换标签页
-// 切换页面
+// ============================================================
+// 操作符说明对话框
+// ============================================================
+function showOperatorsDialog() {
+    elements.operatorsDialog.classList.add('show');
+}
+
+function hideOperatorsDialog() {
+    elements.operatorsDialog.classList.remove('show');
+}
+
+// ============================================================
+// 页面与标签页切换
+// ============================================================
 function switchPage(e) {
-    // 找到实际的导航按钮元素（可能点击的是子元素）
     let navBtn = e.target;
     while (navBtn && !navBtn.dataset.page) {
         navBtn = navBtn.parentElement;
@@ -733,32 +914,17 @@ function switchPage(e) {
     }
 
     const pageName = navBtn.dataset.page;
-    if (!pageName) {
-        console.warn('导航按钮缺少data-page属性');
-        return;
-    }
+    if (!pageName) return;
 
-    // 更新导航按钮状态
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
     navBtn.classList.add('active');
 
-    // 更新页面内容
-    document.querySelectorAll('.app-page').forEach(page => {
-        page.classList.remove('active');
-    });
+    document.querySelectorAll('.app-page').forEach(page => page.classList.remove('active'));
     const page = document.querySelector(`.app-page[data-page="${pageName}"]`);
-    if (page) {
-        page.classList.add('active');
-    } else {
-        console.warn(`找不到页面元素: ${pageName}`);
-    }
+    if (page) page.classList.add('active');
 }
 
-// 切换标签页
 function switchTab(e) {
-    // 找到实际的标签按钮元素（可能点击的是子元素）
     let tabBtn = e.target;
     while (tabBtn && !tabBtn.dataset.tab) {
         tabBtn = tabBtn.parentElement;
@@ -766,391 +932,51 @@ function switchTab(e) {
     }
 
     const tabName = tabBtn.dataset.tab;
-    if (!tabName) {
-        console.warn('标签按钮缺少data-tab属性');
-        return;
-    }
+    if (!tabName) return;
 
-    // 更新标签按钮状态
-    elements.tabBtns.forEach(btn => {
-        btn.classList.remove('active');
-    });
+    elements.tabBtns.forEach(btn => btn.classList.remove('active'));
     tabBtn.classList.add('active');
 
-    // 更新标签内容
-    elements.tabContents.forEach(content => {
-        content.classList.remove('active');
-    });
+    elements.tabContents.forEach(content => content.classList.remove('active'));
     const tabContent = document.getElementById(`${tabName}-content`);
-    if (tabContent) {
-        tabContent.classList.add('active');
-    } else {
-        console.warn(`找不到标签内容元素: ${tabName}-content`);
-    }
+    if (tabContent) tabContent.classList.add('active');
 }
 
-// 执行查询
-async function executeSelect() {
-    if (!selectedTable) {
-        showError('请先选择一个表');
-        return;
-    }
+// ============================================================
+// 事件绑定
+// ============================================================
+function bindEvents() {
+    elements.refreshTablesBtn.addEventListener('click', loadTables);
 
-    try {
-        showLoading('执行查询...');
+    elements.createTableBtn.addEventListener('click', showCreateTableDialog);
+    elements.cancelCreateTableBtn.addEventListener('click', hideCreateTableDialog);
+    elements.confirmCreateTableBtn.addEventListener('click', createTable);
+    elements.addColumnBtn.addEventListener('click', () => addColumn(false));
 
-        let filter = {};
-        let order = [];
+    elements.tabBtns.forEach(btn => btn.addEventListener('click', switchTab));
 
-        // 解析过滤条件
-        if (elements.selectFilter.value.trim()) {
-            try {
-                filter = JSON.parse(elements.selectFilter.value);
-            } catch (e) {
-                showError('过滤条件JSON格式错误');
-                return;
+    elements.executeSelectBtn.addEventListener('click', executeSelect);
+    elements.executeInsertBtn.addEventListener('click', executeInsert);
+    elements.executeUpdateBtn.addEventListener('click', executeUpdate);
+    elements.executeDeleteBtn.addEventListener('click', showDeleteConfirm);
+
+    elements.cancelConfirmBtn.addEventListener('click', hideConfirmDialog);
+
+    elements.showOperatorsBtn.addEventListener('click', showOperatorsDialog);
+    elements.closeOperatorsBtn.addEventListener('click', hideOperatorsDialog);
+
+    document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', switchPage));
+
+    document.querySelectorAll('.dialog').forEach(dialog => {
+        dialog.addEventListener('click', function (e) {
+            if (e.target === this) {
+                this.classList.remove('show');
             }
-        }
-
-        // 解析排序
-        if (elements.selectOrder.value.trim()) {
-            try {
-                order = JSON.parse(elements.selectOrder.value);
-            } catch (e) {
-                showError('排序JSON格式错误');
-                return;
-            }
-        }
-
-        const limit = parseInt(elements.selectLimit.value) || 100;
-        const offset = parseInt(elements.selectOffset.value) || 0;
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'select',
-                    table: selectedTable,
-                    filter: filter,
-                    order: order,
-                    limit: limit,
-                    offset: offset
-                }]
-            })
         });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success && result.results.length > 0) {
-            const selectResult = result.results[0];
-            renderSelectResult(selectResult);
-        } else {
-            showError(`查询失败: ${result.error}`);
-        }
-    } catch (error) {
-        showError(`查询时出错: ${error.message}`);
-    } finally {
-        hideLoading();
-    }
+    });
 }
 
-// 渲染查询结果
-function renderSelectResult(result) {
-    if (!result.rows || result.rows.length === 0) {
-        elements.resultContent.innerHTML = '<p class="message info">查询结果为空</p>';
-        return;
-    }
-
-    const columns = Object.keys(result.rows[0]);
-
-    elements.resultContent.innerHTML = `
-        <div class="message success">查询成功，找到 ${result.rows.length} 条记录</div>
-        <div class="data-table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        ${columns.map(col => `<th>${col}</th>`).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    ${result.rows.map(row => `
-                        <tr>
-                            ${columns.map(col => `<td>${handleNewlines(row[col] || '')}</td>`).join('')}
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        </div>
-    `;
-}
-
-// 执行插入
-async function executeInsert() {
-    if (!selectedTable) {
-        showError('请先选择一个表');
-        return;
-    }
-
-    const dataStr = elements.insertData.value.trim();
-    if (!dataStr) {
-        showError('插入数据不能为空');
-        return;
-    }
-
-    try {
-        const data = JSON.parse(dataStr);
-        showLoading('执行插入...');
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'insert',
-                    table: selectedTable,
-                    data: data
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            showSuccess('插入成功');
-            // 清空表单
-            elements.insertData.value = '';
-        } else {
-            showError(`插入失败: ${result.error}`);
-        }
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            showError('插入数据JSON格式错误');
-        } else {
-            showError(`插入时出错: ${error.message}`);
-        }
-    } finally {
-        hideLoading();
-    }
-}
-
-// 执行更新
-async function executeUpdate() {
-    if (!selectedTable) {
-        showError('请先选择一个表');
-        return;
-    }
-
-    const dataStr = elements.updateData.value.trim();
-    const filterStr = elements.updateFilter.value.trim();
-
-    if (!dataStr) {
-        showError('更新数据不能为空');
-        return;
-    }
-
-    try {
-        const data = JSON.parse(dataStr);
-        let filter = {};
-
-        if (filterStr) {
-            filter = JSON.parse(filterStr);
-        }
-
-        showLoading('执行更新...');
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'update',
-                    table: selectedTable,
-                    data: data,
-                    filter: filter
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            showSuccess('更新成功');
-        } else {
-            showError(`更新失败: ${result.error}`);
-        }
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            showError('JSON格式错误');
-        } else {
-            showError(`更新时出错: ${error.message}`);
-        }
-    } finally {
-        hideLoading();
-    }
-}
-
-// 显示删除确认对话框（记录）
-function showDeleteConfirm() {
-    if (!selectedTable) {
-        showError('请先选择一个表');
-        return;
-    }
-
-    const filterStr = elements.deleteFilter.value.trim();
-    if (!filterStr) {
-        showError('过滤条件不能为空');
-        return;
-    }
-
-    elements.confirmMessage.textContent = `确定要删除 ${selectedTable} 表中符合条件的记录吗？`;
-    elements.confirmDialog.classList.add('show');
-    elements.confirmActionBtn.onclick = confirmDelete;
-}
-
-// 显示删除表确认对话框
-function showDeleteTableConfirm(tableName) {
-    elements.confirmMessage.textContent = `确定要删除 ${tableName} 表吗？此操作不可恢复！`;
-    elements.confirmDialog.classList.add('show');
-    elements.confirmActionBtn.onclick = () => confirmDeleteTable(tableName);
-}
-
-// 隐藏确认对话框
-function hideConfirmDialog() {
-    elements.confirmDialog.classList.remove('show');
-}
-
-// 确认删除记录
-async function confirmDelete() {
-    const filterStr = elements.deleteFilter.value.trim();
-
-    try {
-        const filter = JSON.parse(filterStr);
-        showLoading('执行删除...');
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'delete',
-                    table: selectedTable,
-                    filter: filter
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            showSuccess('删除成功');
-            hideConfirmDialog();
-        } else {
-            showError(`删除失败: ${result.error}`);
-        }
-    } catch (error) {
-        if (error instanceof SyntaxError) {
-            showError('过滤条件JSON格式错误');
-        } else {
-            showError(`删除时出错: ${error.message}`);
-        }
-    } finally {
-        hideLoading();
-    }
-}
-
-// 确认删除表
-async function confirmDeleteTable(tableName) {
-    try {
-        showLoading('删除表...');
-
-        const response = await fetch(API_BASE, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                operations: [{
-                    type: 'drop',
-                    table: tableName
-                }]
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-            showSuccess('表删除成功');
-            hideConfirmDialog();
-            // 重新加载表列表
-            loadTables();
-            // 如果删除的是当前选中的表，清空选中状态
-            if (selectedTable === tableName) {
-                selectedTable = null;
-                elements.tableDetails.innerHTML = '<p>请选择一个表查看详细信息</p>';
-            }
-        } else {
-            showError(`删除表失败: ${result.error}`);
-        }
-    } catch (error) {
-        showError(`删除表时出错: ${error.message}`);
-    } finally {
-        hideLoading();
-    }
-}
-
-// 显示加载状态
-function showLoading(message) {
-    elements.resultContent.innerHTML = `<div style="display: flex; align-items: center; justify-content: center; padding: 40px;"><div class="loading"></div> <span style="margin-left: 10px;">${message}</span></div>`;
-}
-
-// 隐藏加载状态
-function hideLoading() {
-    // 加载状态会被后续的结果或错误消息替换
-}
-
-// 显示成功消息
-function showSuccess(message) {
-    elements.resultContent.innerHTML = `<div class="message success">${message}</div>`;
-}
-
-// 显示错误消息
-function showError(message) {
-    elements.resultContent.innerHTML = `<div class="message error">${message}</div>`;
-}
-
-// 显示结果
-function showResult(result) {
-    elements.resultContent.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
-}
-
-// 初始化应用
+// ============================================================
+// 启动
+// ============================================================
 init();

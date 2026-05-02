@@ -1093,7 +1093,7 @@ class FileManager {
 		/** 获取文本预览模态框元素 */
 		const modal = document.getElementById('text-modal');
 		// 检查点击事件目标是否为模态框本身或关闭按钮
-		if (event.target === modal || event.target.classList.contains('close')) {
+		if (event.target === modal || event.target.closest('.modal-close-btn') || event.target.classList.contains('close')) {
 			modal.classList.remove('show');
 		}
 	}
@@ -1255,7 +1255,7 @@ class FileManager {
 		/** 选择二维码模态框元素 */
 		const modal = document.getElementById('qrcode-modal');
 		// 点击模态框或关闭按钮时，关闭模态框
-		if (event.target === modal || event.target.classList.contains('close')) {
+		if (event.target === modal || event.target.closest('.modal-close-btn') || event.target.classList.contains('close')) {
 			modal.classList.remove('show');
 		}
 	}

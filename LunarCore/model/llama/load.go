@@ -119,10 +119,11 @@ func createArgs(modelType, modelName, modelPath string, port int, contextLength 
 		args = append(args, buildBaseArgs(modelPath, port, contextLength, 4096, 0, 0)...)
 		// 为文本嵌入模型添加启用嵌入机制
 		args = append(args, "--embeddings")
-		// 为默认类型模型添加特定参数，若添加失败则终止函数执行
-		if !DefaultModelArgs(&args, modelPath, modelName, metaData) {
-			return []string{}
-		}
+		// 向命令行参数中追加 GPU 加速层级参数
+		args = append(args, "--n-gpu-layers", "0")
+		// 记录加载模型的信息，包括 GPU 加速层级
+		log.Printf("GGUF模块 -> 加载嵌入模型 [ %s ]", modelName)
+		log.Printf("GGUF模块 -> 禁用GPU加速")
 
 	case "multimodal":
 		// 补全基础模型运行参数
