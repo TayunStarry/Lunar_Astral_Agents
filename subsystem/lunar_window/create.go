@@ -2,6 +2,7 @@ package lunar_window
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"lunar_window/browser"
@@ -10,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -17,7 +19,7 @@ import (
 	"time"
 )
 
-var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database/", "/v1/"}
+var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database/", "/v1/", "/load/"}
 
 func shouldProxy(path string) bool {
 	for _, prefix := range proxyPrefixes {
@@ -26,6 +28,112 @@ func shouldProxy(path string) bool {
 		}
 	}
 	return false
+}
+
+type LoadApplicationRequest struct {
+	Path string `json:"path"`
+}
+
+type LoadApplicationResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req LoadApplicationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Path == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(req.Path))
+	var cmd *exec.Cmd
+
+	execPath, err := os.Executable()
+	if err != nil {
+		http.Error(w, "Failed to get executable path", http.StatusInternalServerError)
+		return
+	}
+	execDir := filepath.Dir(execPath)
+
+	if strings.HasPrefix(req.Path, "/") {
+		req.Path = filepath.Join(execDir, req.Path[1:])
+	}
+
+	switch ext {
+	case ".exe":
+		cmd = exec.Command(req.Path)
+	case ".ps1":
+		cmd = exec.Command("powershell", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", req.Path)
+	case ".bat":
+		cmd = exec.Command("cmd", "/c", "start", "", req.Path)
+	default:
+		http.Error(w, "Unsupported file type: "+ext, http.StatusBadRequest)
+		return
+	}
+
+	if !filepath.IsAbs(req.Path) {
+		absPath, err := filepath.Abs(req.Path)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(LoadApplicationResponse{
+				Success: false,
+				Message: fmt.Sprintf("Failed to resolve absolute path: %v", err),
+			})
+			return
+		}
+		req.Path = absPath
+	}
+
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(LoadApplicationResponse{
+			Success: false,
+			Message: fmt.Sprintf("File not found: %s", req.Path),
+		})
+		return
+	}
+
+	cmd.Dir = filepath.Dir(req.Path)
+
+	if err := cmd.Start(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(LoadApplicationResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to start application: %v", err),
+		})
+		return
+	}
+
+	fmt.Printf("Application started: %s\n", req.Path)
+
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			fmt.Printf("Application %s exited with error: %v\n", req.Path, err)
+		} else {
+			fmt.Printf("Application %s exited successfully\n", req.Path)
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(LoadApplicationResponse{
+		Success: true,
+		Message: fmt.Sprintf("Application started: %s", req.Path),
+	})
 }
 
 func getRandomBackgroundImage() (string, error) {
@@ -149,6 +257,8 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		path := r.URL.Path
 		if path == "/background" && r.Method == "GET" {
 			serveRandomBackground(w, r)
+		} else if path == "/load/application" && r.Method == "POST" {
+			loadApplicationHandler(w, r)
 		} else if shouldProxy(path) {
 			proxy.ServeHTTP(w, r)
 		} else {

@@ -1,12 +1,5 @@
 [
 	{
-		"id": "chat_deepseek",
-		"icon": "./icon/logos_deepseek-icon.png",
-		"title": "深度求索",
-		"description": "打开Deepseek模型的官方客户端",
-		"url": "https://chat.deepseek.com/a/chat/"
-	},
-	{
 		"id": "image_generation",
 		"icon": "./icon/image_generation-icon.png",
 		"title": "图像生成",
@@ -26,5 +19,54 @@
 		"title": "文件管理",
 		"description": "打开『 星月智能 』文件管理器",
 		"url": "/file_explorer"
+	},
+	{
+		"id": "chat_deepseek",
+		"icon": "./icon/logos_deepseek-icon.png",
+		"title": "深度求索",
+		"description": "打开 DeepSeek 的官方客户端",
+		"url": "https://chat.deepseek.com/a/chat"
+	},
+	{
+		"id": "purchase_deepseek_api",
+		"icon": "./icon/purchase_deepseek-icon.png",
+		"title": "购买 DeepSeek API",
+		"description": "打开 DeepSeek 的 API 购买页面",
+		"url": "https://platform.deepseek.com/usage"
+	},
+	{
+		"id": "chat_qwen",
+		"icon": "./icon/logos_qwen-icon.png",
+		"title": "通义千问",
+		"description": "打开 Qwen 的官方客户端",
+		"url": "https://chat.qwen.ai/"
+	},
+	{
+		"id": "purchase_qwen_api",
+		"icon": "./icon/purchase_qwen-icon.png",
+		"title": "购买 Qwen API",
+		"description": "打开 Qwen 的 API 购买页面",
+		"url": "https://bailian.console.aliyun.com/cn-beijing#/home"
+	},
+	{
+		"id": "view_on_gitee",
+		"icon": "./icon/purchase_qwen-icon.png",
+		"title": "『 星月智能 』项目仓库",
+		"description": "打开 『 星月智能 』的Gitee项目仓库",
+		"url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
+	},
+	{
+		"id": "napcat_qq_adapter",
+		"icon": "./icon/napcat_qq_adapter-icon.png",
+		"title": "运行 NapCat QQ 适配器",
+		"description": "运行 NapCat QQ 适配器",
+		"path": "D:/NapCat.Shell.Windows.OneKey/NapCat.41785.Shell/napcat.bat"
+	},
+	{
+		"id": "qwen_TTS",
+		"icon": "./icon/qwen_TTS-icon.png",
+		"title": "运行 Qwen TTS",
+		"description": "运行 Qwen TTS",
+		"path": "/local_data/models/TTS/Qwen3/启动.bat"
 	}
 ]
