@@ -29,7 +29,7 @@ body {
     flex-shrink: 0;
 }
 
-/* 头像容器放大为正方形，宽度占满左侧面板内容区 */
+/* 头像容器：保持正方形，添加浮动动画 */
 .avatar-container {
     width: 100%;
     aspect-ratio: 1 / 1;
@@ -39,6 +39,21 @@ body {
     border: 3px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     background: rgba(0, 0, 0, 0.2);
+
+    /* 新增浮动动画 */
+    animation: floatAvatar 3.5s ease-in-out infinite;
+}
+
+@keyframes floatAvatar {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-12px);
+    }
 }
 
 .avatar-container img {
@@ -280,10 +295,14 @@ body {
     }
 }
 
+/* 右侧面板：改为列布局，仅页面网格可滚动 */
 .right-panel {
     flex: 1;
     padding: 30px 40px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* 禁止整个面板滚动 */
 }
 
 .header {
@@ -294,6 +313,8 @@ body {
     margin-bottom: 30px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     text-align: center;
+    flex-shrink: 0;
+    /* 固定高度，不参与滚动 */
 }
 
 .header h1 {
@@ -304,9 +325,15 @@ body {
 }
 
 .page-grid {
+    flex: 1;
+    /* 占据剩余空间 */
+    overflow-y: auto;
+    /* 网格内滚动 */
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 25px;
+    padding-right: 10px;
+    /* 为滚动条预留空间 */
 }
 
 /* 页面卡片强制 1:1 比例，图标作为绝对主角 */
@@ -403,4 +430,17 @@ body {
 .drop-content span {
     font-size: 14px;
     opacity: 0.7;
+}
+
+/* 隐藏全部滚动条，保留滚动功能 */
+* {
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE 10+ */
+}
+
+*::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Edge */
 }

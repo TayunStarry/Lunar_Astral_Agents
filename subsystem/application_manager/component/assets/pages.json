@@ -21,6 +21,27 @@
 		"url": "/file_explorer"
 	},
 	{
+		"id": "qwen_TTS",
+		"icon": "./icon/tts_qwen-icon.png",
+		"title": "运行 Qwen3 TTS",
+		"description": "运行 Qwen3 TTS 本地语音生成模型",
+		"path": "/local_data/models/TTS/Qwen3/启动.bat"
+	},
+	{
+		"id": "moss_nano_TTS",
+		"icon": "./icon/tts_moss_nano-icon.png",
+		"title": "运行 MOSS TTS Nano",
+		"description": "运行 MOSS TTS Nano 本地语音生成模型",
+		"path": "/local_data/models/TTS/MOSS-NANO/run.bat"
+	},
+	{
+		"id": "view_on_gitee",
+		"icon": "./icon/view_on_gitee-icon.png",
+		"title": "『 星月智能 』项目仓库",
+		"description": "打开 『 星月智能 』的 Gitee 项目仓库",
+		"url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
+	},
+	{
 		"id": "chat_deepseek",
 		"icon": "./icon/logos_deepseek-icon.png",
 		"title": "深度求索",
@@ -49,24 +70,10 @@
 		"url": "https://bailian.console.aliyun.com/cn-beijing#/home"
 	},
 	{
-		"id": "view_on_gitee",
-		"icon": "./icon/purchase_qwen-icon.png",
-		"title": "『 星月智能 』项目仓库",
-		"description": "打开 『 星月智能 』的Gitee项目仓库",
-		"url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
-	},
-	{
 		"id": "napcat_qq_adapter",
 		"icon": "./icon/napcat_qq_adapter-icon.png",
 		"title": "运行 NapCat QQ 适配器",
 		"description": "运行 NapCat QQ 适配器",
 		"path": "D:/NapCat.Shell.Windows.OneKey/NapCat.41785.Shell/napcat.bat"
-	},
-	{
-		"id": "qwen_TTS",
-		"icon": "./icon/qwen_TTS-icon.png",
-		"title": "运行 Qwen TTS",
-		"description": "运行 Qwen TTS",
-		"path": "/local_data/models/TTS/Qwen3/启动.bat"
 	}
 ]
