@@ -9,7 +9,7 @@
 			"path": "../Chat_AI_Case/lmstudio/models"
 		},
 		{
-			"path": "../TTS/MOSS-TTS-NANO"
+			"path": "../TTS"
 		}
 	],
 	"settings": {

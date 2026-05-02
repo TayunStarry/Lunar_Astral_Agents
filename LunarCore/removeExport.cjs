@@ -6,7 +6,7 @@ const path = require('path');
 /** 目标文件列表 */
 const targetFiles = [
     path.join(__dirname, 'hierarchy', 'assets', 'agentSystem.js'),
-    path.join(__dirname, 'hierarchy', 'assets', 'client', 'script.js')
+    //path.join(__dirname, 'hierarchy', 'assets', 'client', 'script.js')
 ];
 
 // 遍历目标文件列表

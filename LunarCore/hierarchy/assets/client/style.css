@@ -437,6 +437,31 @@ body {
 	font-size: 12px;
 	color: rgba(255, 255, 255, 0.7);
 	margin-bottom: 6px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.speaker-btn {
+	background: transparent;
+	border: none;
+	color: rgba(255, 255, 255, 0.6);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+	padding: 4px;
+	font-size: 14px;
+}
+
+.speaker-btn:hover {
+	color: white;
+	transform: scale(1.1);
+}
+
+.speaker-btn:active {
+	transform: scale(0.95);
 }
 
 .message-content {

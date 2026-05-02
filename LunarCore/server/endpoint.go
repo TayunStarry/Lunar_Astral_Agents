@@ -51,4 +51,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "页面控制"},
 	// TTS语音服务相关接口
 	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS语音服务代理"},
+	{Path: "/qwenapi/v1/models", Handler: handlers.TTSQwen3ProxyHandler, Method: "GET", Description: "Qwen3模型检测"},
+	{Path: "/qwenapi/v1/", Handler: handlers.TTSQwen3ProxyHandler, Method: "POST", Description: "Qwen3语音服务代理"},
 }

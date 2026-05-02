@@ -28,14 +28,14 @@ class LunarCoreApp {
     modalOverlay = null;
     modalBody = null;
     errorToast = null;
-    
+
     constructor() {
         this.initElements();
         this.initEventListeners();
         this.initWebSocket();
         this.initLive2D();
     }
-    
+
     initElements() {
         this.messageInput = document.getElementById('messageInput');
         this.sendButton = document.getElementById('sendButton');
@@ -43,14 +43,14 @@ class LunarCoreApp {
         this.modalOverlay = document.getElementById('modalOverlay');
         this.modalBody = document.getElementById('modalBody');
         this.errorToast = document.getElementById('errorToast');
-        
+
         document.getElementById('chatHistoryButton')?.addEventListener('click', () => this.toggleModal());
         document.getElementById('modalClose')?.addEventListener('click', () => this.toggleModal());
         this.modalOverlay?.addEventListener('click', (e) => {
             if (e.target === this.modalOverlay) this.toggleModal();
         });
     }
-    
+
     initEventListeners() {
         this.sendButton?.addEventListener('click', () => this.handleSend());
         this.messageInput?.addEventListener('keydown', (e) => {
@@ -62,7 +62,7 @@ class LunarCoreApp {
         this.messageInput?.addEventListener('input', () => { this.autoResizeTextarea(); });
         this.setupDragAndDrop();
     }
-    
+
     setupDragAndDrop() {
         const inputContainer = document.getElementById('mainContainerPanel');
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -85,7 +85,7 @@ class LunarCoreApp {
             }
         });
     }
-    
+
     async handleFileSelect(files) {
         for (const file of files) {
             const category = getFileCategory(file);
@@ -97,12 +97,12 @@ class LunarCoreApp {
             this.renderFilePreview(preview);
         }
     }
-    
+
     renderFilePreview(preview) {
         const item = document.createElement('div');
         item.className = 'file-preview-item';
         item.dataset.name = preview.name;
-        
+
         if (preview.type === 'image') {
             const img = document.createElement('img');
             img.src = preview.url;
@@ -126,21 +126,21 @@ class LunarCoreApp {
             icon.style.cssText = 'font-size: 24px; color: white; display: flex; align-items: center; justify-content: center; height: 100%;';
             item.appendChild(icon);
         }
-        
+
         const label = document.createElement('div');
         label.className = 'file-label';
         label.textContent = preview.name;
         item.appendChild(label);
-        
+
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-btn';
         removeBtn.innerHTML = '<i class="fas fa-times"></i>';
         removeBtn.onclick = () => this.removeFilePreview(preview, item);
         item.appendChild(removeBtn);
-        
+
         this.filePreviewArea?.appendChild(item);
     }
-    
+
     removeFilePreview(preview, item) {
         const index = this.filePreviews.indexOf(preview);
         if (index > -1) {
@@ -151,7 +151,7 @@ class LunarCoreApp {
         }
         item.remove();
     }
-    
+
     autoResizeTextarea() {
         if (this.messageInput) {
             this.messageInput.style.height = 'auto';
@@ -159,7 +159,7 @@ class LunarCoreApp {
             Live2D.reloadContainer();
         }
     }
-    
+
     initWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//localhost:36797/ws`;
@@ -177,14 +177,14 @@ class LunarCoreApp {
         });
         this.wsClient.connect();
     }
-    
+
     async handleWebSocketMessage(message) {
         switch (message.type) {
             case 'context':
                 if (message.data.type === 'response' || message.data.type === 'active') {
                     const content = message.data.content || '';
-                    TTS.generateAndPlay(content);
-                    await this.handleAssistantMessage(content);
+                    const audioBase64 = await TTS.generateAndPlay(content);
+                    await this.handleAssistantMessage(content, undefined, audioBase64);
                 }
                 break;
             case 'image':
@@ -200,7 +200,7 @@ class LunarCoreApp {
                         const blob = new Blob([ab], { type: mimeType });
                         const file = new File([blob], `assistant_${Date.now()}.jpg`, { type: 'image/jpeg' });
                         const fileUrl = `${window.location.origin}/read/${file.name}`;
-                        await this.handleAssistantMessage('', fileUrl);
+                        await this.handleAssistantMessage('', fileUrl, '');
                     }
                 }
                 break;
@@ -211,57 +211,58 @@ class LunarCoreApp {
                 break;
         }
     }
-    
-    async handleAssistantMessage(content, imageUrl) {
+
+    async handleAssistantMessage(content, imageUrl, audioBase64) {
         const assistantMessage = {
             role: 'assistant',
             content: content,
             imageUrl: imageUrl || undefined,
+            audioBase64: audioBase64 || undefined,
             timestamp: Date.now(),
         };
         this.historyMessages.push(assistantMessage);
-        
+
         if (this.isModalOpen) {
             await renderMessage(assistantMessage, this.modalBody);
         }
         this.setLoadingState(false);
         Live2D.setStateWithTimeout(EmotionalStateEnum.IDLE);
     }
-    
+
     async processFileUpload(preview) {
         const saveResult = await saveFile(preview.file, true);
         const fileUrl = `${window.location.origin}/read/${saveResult.filename}`;
         const category = getFileCategory(preview.file);
-        
-        return { 
-            fileUrl, 
-            category, 
+
+        return {
+            fileUrl,
+            category,
             fileName: preview.name,
             fileSize: preview.file.size
         };
     }
-    
+
     async handleSend() {
         const text = this.messageInput?.value.trim();
         const hasFiles = this.filePreviews.length > 0;
-        
+
         if (!text && !hasFiles) return;
-        
+
         this.setLoadingState(true);
         Live2D.setEmotionState(EmotionalStateEnum.AWAIT);
-        
+
         try {
             const openAIMessages = [];
             const contentBlocks = [];
             const uploadedFileUrls = [];
             const userContentParts = [];
-            
+
             const filePromises = this.filePreviews.map(preview => this.processFileUpload(preview));
             const fileResults = await Promise.all(filePromises);
-            
+
             for (const res of fileResults) {
                 uploadedFileUrls.push(res.fileUrl);
-                
+
                 if (res.category === 'text') {
                     const file = this.filePreviews.find(p => p.name === res.fileName)?.file;
                     if (file) {
@@ -295,14 +296,14 @@ class LunarCoreApp {
                     userContentParts.push(`[文件: ${res.fileName} (${fileSize})]`);
                 }
             }
-            
+
             if (text) {
                 contentBlocks.push({ type: 'text', text: text });
             }
-            
+
             const userContent = contentBlocks.length > 0 ? contentBlocks : text;
             openAIMessages.push({ role: 'user', content: userContent });
-            
+
             const userMessage = {
                 role: 'user',
                 content: text || (userContentParts.length > 0 ? userContentParts.join(' ') : ''),
@@ -312,13 +313,13 @@ class LunarCoreApp {
                 userMessage.imageUrls = uploadedFileUrls;
             }
             this.historyMessages.push(userMessage);
-            
+
             if (this.isModalOpen) {
                 await renderMessage(userMessage, this.modalBody);
             }
-            
+
             await sendMessages(openAIMessages);
-            
+
             this.messageInput.value = '';
             this.clearFilePreviews();
             this.autoResizeTextarea();
@@ -329,7 +330,7 @@ class LunarCoreApp {
             Live2D.setStateWithTimeout(EmotionalStateEnum.IDLE);
         }
     }
-    
+
     clearFilePreviews() {
         revokeAllFilePreviews(this.filePreviews);
         this.filePreviews = [];
@@ -337,7 +338,7 @@ class LunarCoreApp {
             this.filePreviewArea.innerHTML = '';
         }
     }
-    
+
     setLoadingState(loading) {
         this.isLoading = loading;
         if (this.sendButton) {
@@ -349,7 +350,7 @@ class LunarCoreApp {
             }
         }
     }
-    
+
     toggleModal() {
         this.isModalOpen = !this.isModalOpen;
         if (this.isModalOpen) {
@@ -362,7 +363,7 @@ class LunarCoreApp {
             this.modalOverlay?.classList.remove('visible');
         }
     }
-    
+
     showError(message) {
         if (this.errorToast) {
             this.errorToast.textContent = message;
@@ -372,7 +373,7 @@ class LunarCoreApp {
             }, 3000);
         }
     }
-    
+
     async initLive2D() {
         try {
             await Live2D.init();
