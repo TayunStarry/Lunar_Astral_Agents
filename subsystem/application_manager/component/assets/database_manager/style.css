@@ -87,12 +87,9 @@ body {
     position: fixed;
     inset: 0;
     z-index: -2;
-    background:
-        url('./starry_sky_background.jpg') center / cover no-repeat;
-    background-image:
-        url('./starry_sky_background.jpg'),
-        linear-gradient(160deg, #0f0c29 0%, #1a1a40 30%, #24243e 60%, #0d0d2b 100%);
-    filter: brightness(0.85) saturate(1.05);
+    background: url('/background') center / cover no-repeat;
+    filter: blur(8px);
+    transform: scale(1.1);
 }
 
 .bg-layer::after {
@@ -166,10 +163,12 @@ body {
 }
 
 @keyframes float {
+
     0%,
     100% {
         transform: translateY(0);
     }
+
     50% {
         transform: translateY(-6px);
     }
@@ -210,10 +209,12 @@ body {
 }
 
 @keyframes pulse-dot {
+
     0%,
     100% {
         box-shadow: 0 0 6px #4ade80;
     }
+
     50% {
         box-shadow: 0 0 18px #4ade80, 0 0 30px rgba(74, 222, 128, 0.5);
     }
@@ -576,6 +577,7 @@ body {
         opacity: 0;
         transform: translateY(12px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1024,6 +1026,7 @@ body {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -1055,6 +1058,7 @@ body {
         opacity: 0;
         transform: translateY(40px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1235,15 +1239,19 @@ body {
         grid-template-columns: 240px 1fr;
         gap: 0.5rem;
     }
+
     .form-grid {
         grid-template-columns: 1fr;
     }
+
     .app-header {
         padding: 0.7rem 1rem;
     }
+
     .logo-text h1 {
         font-size: 1.1rem;
     }
+
     .logo-icon {
         font-size: 1.8rem;
     }
@@ -1254,28 +1262,35 @@ body {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
     }
+
     .app-sidebar {
         max-height: 240px;
     }
+
     .header-content {
         flex-direction: column;
         align-items: flex-start;
     }
+
     .footer-content {
         flex-direction: column;
         text-align: center;
     }
+
     .dialog-content {
         width: 95%;
         max-height: 88vh;
         padding: 1.2rem;
     }
+
     .form-row {
         flex-direction: column;
     }
+
     .form-row .form-group {
         min-width: 100%;
     }
+
     .tabs-nav {
         flex-wrap: wrap;
     }
@@ -1285,13 +1300,16 @@ body {
     html {
         font-size: 13px;
     }
+
     .app-container {
         padding: 0.3rem;
         gap: 0.3rem;
     }
+
     .app-nav {
         flex-wrap: wrap;
     }
+
     .nav-btn {
         flex: 0 0 auto;
         font-size: 0.7rem;
