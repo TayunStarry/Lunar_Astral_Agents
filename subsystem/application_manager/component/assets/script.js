@@ -17,6 +17,9 @@ const pageGrid = document.getElementById('pageGrid');
 const dropOverlay = document.getElementById('dropOverlay');
 const attachmentsPreview = document.getElementById('attachmentsPreview');
 
+// 保存发送按钮默认图标内容
+const defaultSendBtnHTML = sendBtn.innerHTML;
+
 async function loadPages() {
     try {
         const response = await fetch('./pages.json');
@@ -69,10 +72,37 @@ function initTools() {
 }
 
 function openPage(page) {
-    addMessage('system', `已为您打开【${page.title}】`);
-    setTimeout(() => {
-        window.open(page.url, '_self');
-    }, 1000);
+    if (page.path) {
+        addMessage('system', `已为您启动【${page.title}】`);
+        loadApplication(page.path);
+    } else {
+        addMessage('system', `已为您打开【${page.title}】`);
+        setTimeout(() => {
+            window.open(page.url, '_self');
+        }, 1000);
+    }
+}
+
+async function loadApplication(path) {
+    try {
+        const response = await fetch('/load/application', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ path })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            addMessage('system', '应用程序启动成功！');
+        } else {
+            addMessage('system', `启动失败: ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Error loading application:', error);
+        addMessage('system', '启动应用程序时发生错误');
+    }
 }
 
 function addMessage(role, content) {
@@ -111,53 +141,45 @@ function renderMessage(message) {
     chatMessages.appendChild(div);
 }
 
+// 添加附件到待发送列表
 function addAttachment(file, dataUrl) {
-    const bubble = document.createElement('div');
-    bubble.className = 'attachment-bubble';
-
-    let icon = '📄';
-    if (file.type.startsWith('image/')) {
-        icon = '🖼️';
-    }
-
-    bubble.innerHTML = `
-        <span>${icon}</span>
-        <span title="${file.name}">${file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}</span>
-        <span class="remove-btn" data-id="${pendingAttachments.length}">✕</span>
-    `;
-
     pendingAttachments.push({ file, dataUrl });
-    attachmentsPreview.appendChild(bubble);
-
-    bubble.querySelector('.remove-btn').addEventListener('click', (e) => {
-        const idx = parseInt(e.target.dataset.id);
-        pendingAttachments.splice(idx, 1);
-        renderAttachments();
-    });
+    renderAttachments();
 }
 
+// 渲染附件气泡（图片显示缩略图，文本显示文件图标）
 function renderAttachments() {
     attachmentsPreview.innerHTML = '';
+
     pendingAttachments.forEach((att, idx) => {
         const bubble = document.createElement('div');
         bubble.className = 'attachment-bubble';
+        bubble.title = att.file.name;
 
-        let icon = '📄';
+        // 图片文件显示缩略图
         if (att.file.type.startsWith('image/')) {
-            icon = '🖼️';
+            const img = document.createElement('img');
+            img.src = att.dataUrl;
+            img.alt = '缩略图';
+            bubble.appendChild(img);
+        } else {
+            // 文本文件使用 Font Awesome 图标
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-file-alt';
+            bubble.appendChild(icon);
         }
 
-        bubble.innerHTML = `
-            <span>${icon}</span>
-            <span title="${att.file.name}">${file.name.length > 15 ? att.file.name.substring(0, 12) + '...' : att.file.name}</span>
-            <span class="remove-btn" data-id="${idx}">✕</span>
-        `;
-
-        bubble.querySelector('.remove-btn').addEventListener('click', (e) => {
+        // 删除按钮
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.dataset.id = idx;
+        removeBtn.addEventListener('click', (e) => {
             const removeIdx = parseInt(e.target.dataset.id);
             pendingAttachments.splice(removeIdx, 1);
             renderAttachments();
         });
+        bubble.appendChild(removeBtn);
 
         attachmentsPreview.appendChild(bubble);
     });
@@ -166,7 +188,6 @@ function renderAttachments() {
 async function handleSend() {
     const text = chatInput.value.trim();
     if (!text && pendingAttachments.length === 0) return;
-
     if (sendBtn.disabled) return;
 
     const content = [];
@@ -188,9 +209,10 @@ async function handleSend() {
     pendingAttachments = [];
     renderAttachments();
 
+    // 设置发送中状态
     sendBtn.disabled = true;
     sendBtn.classList.add('loading');
-    sendBtn.textContent = '';
+    sendBtn.innerHTML = '';   // 隐藏图标
 
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
 
@@ -223,6 +245,10 @@ async function handleSend() {
                     addMessage('assistant', assistantMessage.content || '好的，让我来帮您打开页面～');
                     openPage(page);
                 }
+            } else if (toolCall.function.name === 'load_application') {
+                const args = JSON.parse(toolCall.function.arguments);
+                addMessage('assistant', assistantMessage.content || '好的，让我来帮您启动应用～');
+                loadApplication(args.path);
             }
         } else {
             addMessage('assistant', assistantMessage.content);
@@ -231,9 +257,10 @@ async function handleSend() {
         console.error('Error:', error);
         addMessage('system', '请求失败，请稍后重试');
     } finally {
+        // 恢复发送按钮初始状态
         sendBtn.disabled = false;
         sendBtn.classList.remove('loading');
-        sendBtn.textContent = '发送';
+        sendBtn.innerHTML = defaultSendBtnHTML;
     }
 }
 
@@ -249,6 +276,7 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.addEventListener('click', handleSend);
 
+// 全局拖拽上传效果
 document.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropOverlay.classList.add('active');
@@ -286,6 +314,7 @@ document.addEventListener('drop', async (e) => {
     }
 });
 
+// 聊天区域也允许拖拽上传（阻止事件冒泡到全局）
 chatMessages.addEventListener('dragover', (e) => {
     e.preventDefault();
 });

@@ -29,14 +29,16 @@ body {
     flex-shrink: 0;
 }
 
+/* 头像容器放大为正方形，宽度占满左侧面板内容区 */
 .avatar-container {
-    width: 80px;
-    height: 80px;
+    width: 100%;
+    aspect-ratio: 1 / 1;
     border-radius: 16px;
     overflow: hidden;
     margin: 0 auto;
     border: 3px solid rgba(255, 255, 255, 0.3);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.2);
 }
 
 .avatar-container img {
@@ -152,9 +154,12 @@ body {
     padding: 12px 18px;
     color: #fff;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 18px;
     transition: all 0.2s;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -169,6 +174,10 @@ body {
 
 .send-btn.loading {
     position: relative;
+}
+
+.send-btn.loading i {
+    visibility: hidden;
 }
 
 .send-btn.loading::after {
@@ -186,7 +195,89 @@ body {
 }
 
 @keyframes spin {
-    to { transform: translate(-50%, -50%) rotate(360deg); }
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* 附件预览区（气泡容器） */
+.attachments-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+/* 附件正方形气泡，带浮动动画 */
+.attachment-bubble {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    animation: float 3s ease-in-out infinite;
+    transition: box-shadow 0.2s;
+}
+
+.attachment-bubble:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+.attachment-bubble img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.attachment-bubble i {
+    font-size: 28px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* 删除按钮（默认隐藏，悬停显示） */
+.remove-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    font-size: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+    line-height: 1;
+}
+
+.attachment-bubble:hover .remove-btn {
+    opacity: 1;
+}
+
+/* 浮动关键帧 */
+@keyframes float {
+    0% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-6px);
+    }
+
+    100% {
+        transform: translateY(0px);
+    }
 }
 
 .right-panel {
@@ -218,19 +309,22 @@ body {
     gap: 25px;
 }
 
+/* 页面卡片强制 1:1 比例，图标作为绝对主角 */
 .page-card {
+    aspect-ratio: 1 / 1;
     background: rgba(255, 255, 255, 0.25);
     backdrop-filter: blur(12px);
     border-radius: 16px;
-    padding: 25px 20px;
+    padding: 20px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     text-align: center;
-    gap: 15px;
+    gap: 8px;
 }
 
 .page-card:hover {
@@ -240,14 +334,15 @@ body {
 }
 
 .page-card .icon {
-    width: 64px;
-    height: 64px;
+    width: 65%;
+    aspect-ratio: 1 / 1;
     border-radius: 12px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.2);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .page-card .icon img {
@@ -257,14 +352,20 @@ body {
 }
 
 .page-card h3 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
+    margin: 0;
 }
 
 .page-card p {
-    font-size: 12px;
+    font-size: 11px;
     opacity: 0.8;
-    line-height: 1.4;
+    line-height: 1.3;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .drop-overlay {
@@ -302,38 +403,4 @@ body {
 .drop-content span {
     font-size: 14px;
     opacity: 0.7;
-}
-
-.attachments-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.attachment-bubble {
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 20px;
-    padding: 6px 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    max-width: 200px;
-}
-
-.attachment-bubble .remove-btn {
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
-
-.attachment-bubble .remove-btn:hover {
-    opacity: 1;
-}
-
-.attachment-bubble img {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
 }
