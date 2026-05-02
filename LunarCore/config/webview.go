@@ -15,8 +15,6 @@ var (
 	WebViewMinHeight = flag.Int("webview-min-height", 500, "webview 窗口最小高度")
 	// WebViewResizable webview 窗口是否可调整大小
 	WebViewResizable = flag.Bool("webview-resizable", true, "webview 窗口是否可调整大小")
-	// WebViewDebug webview 调试模式
-	WebViewDebug = flag.Bool("webview-debug", true, "webview 调试模式")
 	// AllowBrowser 是否允许使用浏览器
 	AllowBrowser = flag.Bool("allow-browser", true, "是否允许使用浏览器")
 )

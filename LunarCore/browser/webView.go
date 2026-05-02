@@ -36,8 +36,8 @@ func CreateWebView() webview.WebView {
 	if webviewInstance != nil {
 		return webviewInstance
 	}
-
-	w := webview.New(*config.WebViewDebug)
+	// 创建 WebView 实例
+	w := webview.New(*config.Developer)
 	if w == nil {
 		log.Printf("Webview[ERROR] -> 无法创建 WebView 实例")
 		return nil

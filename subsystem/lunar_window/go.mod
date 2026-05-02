@@ -1,4 +1,4 @@
-module shared_unit
+module lunar_window
 
 go 1.24.4
 

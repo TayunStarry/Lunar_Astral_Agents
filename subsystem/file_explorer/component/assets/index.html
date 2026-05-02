@@ -4,32 +4,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>『 星月智能 』文枢阁</title>
-    <!-- 导入层叠样式表 -->
+    <title>『 星月智能 』文件管理</title>
     <style>
         @import url("/read/resources/external/highlight/styles/github.css");
         @import url("/read/resources/external/fontAwesome/css/all.min.css");
         @import url("/read/resources/universal/multimedia_preview.css");
         @import url("styles.css");
     </style>
-    <!-- QRCode.js库 -->
-    <script src="/read/resources/external/qrcode.min.js"></script>
-    <!-- 代码高亮 - highlight.js v11.7.0 -->
-    <script src="/read/resources/external/highlight/highlight.min.js"></script>
-    <!-- 多媒体文件预览页面 -->
-    <script src="/read/resources/universal/multimedia_preview.js"></script>
-    <!-- 主脚本文件 -->
-    <script defer src="script.js"></script>
+    <script src="/read/resources/external/qrcode.min.js">
+    </script>
+    <script src="/read/resources/external/highlight/highlight.min.js">
+    </script>
+    <script src="/read/resources/universal/multimedia_preview.js">
+    </script>
+    <script defer src="script.js">
+    </script>
 </head>
 
 <body>
-    <!-- 主内容区 -->
+    <!-- 背景叠加层，增强玻璃质感 -->
+    <div class="bg-overlay"></div>
+    <!-- 背景图来源指示（可选装饰） -->
+    <div class="bg-credit">『 星月智能 』- 轻量级神经网络本地部署平台</div>
+
     <div class="container">
-        <!-- 头部导航 -->
         <header class="header">
-            <h1><i class="fas fa-folder-open"></i> 星月智能[ 文枢阁 ] 系统</h1>
+            <h1><i class="fas fa-folder-open"></i> 星月智能<small
+                    style="font-weight:300;font-size:0.7em;margin-left:6px;">文件管理</small></h1>
             <div class="header-actions">
-                <div class="search-section" style="margin-right: 15px;">
+                <div class="search-section">
                     <div class="search-box">
                         <input type="text" id="search-input" placeholder="搜索文件或文件夹..." class="search-input">
                         <button id="search-clear" class="search-clear" style="display: none;">
@@ -49,8 +52,7 @@
                     <button id="new-folder" class="btn btn-secondary">
                         <i class="fas fa-folder-plus"></i> 新建文件夹
                     </button>
-                    <!-- 二维码按钮 -->
-                    <button id="qrcode-button" class="btn btn-info" style="margin-left: auto;">
+                    <button id="qrcode-button" class="btn btn-accent">
                         <i class="fas fa-qrcode"></i> 二维码
                     </button>
                 </div>
@@ -64,9 +66,8 @@
                 </div>
             </div>
         </header>
-        <!-- 主内容区 -->
+
         <main class="file-manager">
-            <!-- 路径导航 -->
             <div class="breadcrumb">
                 <button id="back-button" class="btn btn-small btn-secondary" style="margin-right: 10px; display: none;">
                     <i class="fas fa-arrow-left"></i> 返回
@@ -75,26 +76,24 @@
                     <i class="fas fa-home"></i> 根目录
                 </a>
             </div>
-            <!-- 统计信息 -->
+
             <div class="stats-horizontal">
                 <div class="stat-item">
-                    <span class="stat-label">当前文件总数:</span>
+                    <span class="stat-label">当前文件总数</span>
                     <span id="total-files" class="stat-value">0</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">文件夹数量:</span>
+                    <span class="stat-label">文件夹数量</span>
                     <span id="total-folders" class="stat-value">0</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">当前层级大小:</span>
+                    <span class="stat-label">当前层级大小</span>
                     <span id="total-size" class="stat-value">0 B</span>
                 </div>
             </div>
-            <!-- 文件列表 -->
-            <div class="file-grid" id="file-grid">
-                <!-- 文件卡片将通过JavaScript动态生成 -->
-            </div>
-            <!-- 上传进度 -->
+
+            <div class="file-grid" id="file-grid"></div>
+
             <div class="upload-progress" id="upload-progress" style="display: none;">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
@@ -103,22 +102,22 @@
             </div>
         </main>
     </div>
+
     <!-- 文本文件预览模态框 -->
     <div class="modal" id="text-modal">
         <div class="modal-content text-modal-content">
-
-            <!-- 文件名/标题区 -->
+            <button class="modal-close-btn" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
             <div class="text-modal-header">
                 <h3 id="text-modal-title">文件预览</h3>
                 <div class="text-modal-header-info">
                     <span id="text-modal-file-info" class="text-modal-file-info">文件信息</span>
-                    <button id="text-modal-save" class="btn btn-primary" style="display: none;">
+                    <button id="text-modal-save" class="btn btn-primary btn-small" style="display: none;">
                         <i class="fas fa-save"></i> 保存
                     </button>
                 </div>
             </div>
-
-            <!-- 按钮/控制区 -->
             <div class="text-modal-controls">
                 <div class="text-modal-control-group">
                     <button id="text-modal-edit" class="btn btn-small btn-info">
@@ -132,23 +131,25 @@
                     </button>
                 </div>
             </div>
-
-            <!-- 文本显示/编辑区 -->
             <div class="text-modal-body">
                 <pre id="text-modal-content"></pre>
                 <textarea id="text-modal-editor" class="text-modal-editor"></textarea>
             </div>
         </div>
     </div>
+
     <!-- 二维码模态框 -->
     <div class="modal" id="qrcode-modal">
-        <div class="modal-content" style="text-align: center;">
-            <span class="close">&times;</span>
+        <div class="modal-content qrcode-modal-content">
+            <button class="modal-close-btn" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
             <h3>扫描二维码访问</h3>
-            <div id="qrcode-container" style="margin: 20px auto; width: 256px; height: 256px;"></div>
-            <p id="qrcode-url" style="word-break: break-all; margin: 10px 0;"></p>
+            <div id="qrcode-container"></div>
+            <p id="qrcode-url"></p>
         </div>
     </div>
+
     <!-- 错误提示 -->
     <div class="toast" id="toast"></div>
 </body>

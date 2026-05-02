@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"shared_unit/browser"
+	"lunar_window/browser"
 	"syscall"
 	"time"
 )

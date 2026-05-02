@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"shared_unit"
+	lunar_window "lunar_window"
 	"subsystem/component"
 )
 
@@ -12,7 +12,7 @@ func main() {
 	port := rand.Intn(30001) + 10000
 	name := "< 星月智能-蔷薇 > (文件管理)"
 	// 启动服务
-	if err := shared_unit.StartServer(port, component.Gethierarchy(), name); err != nil {
+	if err := lunar_window.StartServer(port, component.Gethierarchy(), name); err != nil {
 		fmt.Printf("%s 启动失败: %v\n", name, err)
 	}
 }
