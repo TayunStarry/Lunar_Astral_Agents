@@ -51,6 +51,7 @@ type LoadApplicationResponse struct {
 	Message string `json:"message"`
 }
 
+// loadApplicationHandler 处理加载应用的 HTTP 请求
 func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -148,6 +149,7 @@ func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getRandomBackgroundImage 从 resource 目录中随机选择一个背景图片文件名
 func getRandomBackgroundImage() (string, error) {
 	fs := GetResourceFS()
 	file, err := fs.Open("/")
@@ -181,6 +183,7 @@ func getRandomBackgroundImage() (string, error) {
 	return files[randomIndex], nil
 }
 
+// serveRandomBackground 服务随机选择的背景图片
 func serveRandomBackground(w http.ResponseWriter, _ *http.Request) {
 	filename, err := getRandomBackgroundImage()
 	if err != nil {
@@ -228,6 +231,7 @@ func serveRandomBackground(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// copyBuffer 复制缓冲区内容到目标入参
 func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 	buf := make([]byte, 32*1024)
 	var written int64
