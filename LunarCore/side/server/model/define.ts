@@ -10,15 +10,15 @@ export class AgentDefine {
     protected emotionManager: ModelBuilder = new ModelBuilder();
 
     /** 书记者角色(编写记忆) */
-    protected recorderRole: ModelBuilder = new ModelBuilder();
+    public recorderRole: ModelBuilder = new ModelBuilder();
     /** 摘要者角色(视频摘要) */
-    protected summaryRole: ModelBuilder = new ModelBuilder();
+    public summaryRole: ModelBuilder = new ModelBuilder();
     /** 描述者角色(视频描述) */
-    protected descriptionRole: ModelBuilder = new ModelBuilder();
+    public descriptionRole: ModelBuilder = new ModelBuilder();
     /** 绘图师角色(图片生成) */
-    protected painterRole: PainterRole = new PainterRole();
+    public painterRole: PainterRole = new PainterRole();
     /** 聊天者角色(用户交互) */
-    protected chatDialogueRole: ChatDialogueRole = new ChatDialogueRole();
+    public chatDialogueRole: ChatDialogueRole = new ChatDialogueRole();
 
     /** 嵌入向量 */
     public embedding: ModelBuilder = new ModelBuilder().useEmbedding();
