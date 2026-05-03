@@ -39,7 +39,7 @@
 		"icon": "./icon/tts_qwen-icon.png",
 		"title": "运行 Qwen3 TTS",
 		"description": "运行 Qwen3 TTS 本地语音生成模型",
-		"path": "/local_data/models/TTS/Qwen3/启动.bat"
+		"path": "/local_data/models/TTS/Qwen3/core/start-api.bat"
 	},
 	{
 		"id": "moss_nano_TTS",

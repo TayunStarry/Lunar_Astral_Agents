@@ -525,8 +525,8 @@ class ConfigModifier extends ModeConfig {
         return this;
     }
     writeContext(context) {
-        if (this.messages.length > 30)
-            this.messages.slice(-30).push(context);
+        if (this.messages.length > 20)
+            this.messages.slice(-20).push(context);
         else
             this.messages.push(context);
         return this;
@@ -604,7 +604,7 @@ class ChatDialogueRole extends ModelBuilder {
             await source.LiteImageFile();
             source.unreadContext.forEach(context => this.writeContext(context));
             source.unreadContext = [];
-            this.formatHistoricalMessages();
+            this.formatHistoricalMessages(source);
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
             const response = this.run;
             this.analyzeMessageResponse(response.body, cache, source);
@@ -620,9 +620,43 @@ class ChatDialogueRole extends ModelBuilder {
         }
         this.updateMessageContent(cache, source);
     }
-    formatHistoricalMessages() {
+    formatHistoricalMessages(source) {
         if (this.messages.length === 0)
             return;
+        const textMessageMap = new Set();
+        const textMessages = [];
+        const visionMessages = [];
+        const formatMessages = [];
+        for (const message of this.messages) {
+            if (typeof message.content === 'string')
+                textMessages.push(message);
+            else
+                for (let index = 0; index < message.content.length; index++) {
+                    const content = message.content[index];
+                    if (content.type == 'text')
+                        textMessages.push({ role: message.role, content: content.text });
+                    else
+                        visionMessages.push({ role: message.role, content: [content] });
+                }
+        }
+        for (const message of textMessages) {
+            if (typeof message.content !== 'string' || textMessageMap.has(message.content))
+                continue;
+            formatMessages.push(message);
+            textMessageMap.add(message.content);
+        }
+        if (visionMessages.length <= 10)
+            formatMessages.push(...visionMessages);
+        else
+            for (let i = 0; i < visionMessages.length; i += 10) {
+                const batchFrames = visionMessages.slice(i, i + 10);
+                source.descriptionRole.coverContext(batchFrames);
+                const summaryRequest = source.descriptionRole.run;
+                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+                if (summary && summary.trim().length > 0)
+                    formatMessages.push({ role: 'user', content: summary });
+            }
+        this.messages = formatMessages;
         const latestRole = this.messages.slice(-1)[0].role;
         if (latestRole === 'user')
             return;

@@ -1,5 +1,5 @@
-import { randomBorderColor, escapeHtml, clearContainer } from './utils.js';
-import { TTS } from './ttsManager.js';
+import { randomBorderColor, escapeHtml, clearContainer } from './util.js';
+import { TTS } from './tts.js';
 
 function processThinkTags(content) {
     return content

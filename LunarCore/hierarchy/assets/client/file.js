@@ -1,4 +1,4 @@
-import { encodeFilePath } from './utils.js';
+import { encodeFilePath } from './util.js';
 
 const ALLOWED_TEXT_EXTENSIONS = [
     'txt', 'md', 'json', 'xml', 'yaml', 'yml', 'toml', 'csv',
