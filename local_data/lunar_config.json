@@ -22,13 +22,6 @@
 		"embeddingModelName": null,
 		"embeddingModelKey": null
 	},
-	"image_box": {
-		"input": [
-			"./image.png"
-		],
-		"write": "./template.png",
-		"output": "./package.png"
-	},
 	"qq_adapter": {
 		"napcat_ws_server": "ws://localhost:4567",
 		"napcat_ws_token": "ItlC2Nc1DfICVYq5",
@@ -98,8 +91,5 @@
 			"compression_level": 5,
 			"package_level": 2
 		}
-	},
-	"nap_cat_shell": {
-		"napcat_win_boot_main_path": "D:\\下载\\NapCat.Shell.Windows.OneKey\\NapCat.41785.Shell\\NapCatWinBootMain.exe"
 	}
 }
