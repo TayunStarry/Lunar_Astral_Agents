@@ -3,32 +3,22 @@ Set-Location -Path './LunarCore'
 ./build.ps1
 Set-Location -Path '../'
 
-# 构建image_generation
-Set-Location -Path './subsystem\image_generation'
+# 构建 application_manager
+Set-Location -Path './subsystem\application_manager'
 ./build.ps1
 Set-Location -Path '../../'
 
-# 构建file_explorer
-Set-Location -Path './subsystem\file_explorer'
-./build.ps1
-Set-Location -Path '../../'
-
-# 构建bridge_adapter
+# 构建 bridge_adapter
 Set-Location -Path './subsystem\bridge_adapter'
 ./build.ps1
 Set-Location -Path '../../'
 
-# 构建image_box
+# 构建 image_box
 Set-Location -Path './subsystem\image_box'
 ./build.ps1
 Set-Location -Path '../../'
 
-# 构建project_archiving
+# 构建 project_archiving
 Set-Location -Path './subsystem\project_archiving'
-./build.ps1
-Set-Location -Path '../../'
-
-# 构建database_manager
-Set-Location -Path './subsystem\database_manager'
 ./build.ps1
 Set-Location -Path '../../'

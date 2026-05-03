@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache, modelResponse, ModelResponseBody, AgentDefine, ModelBuilder } from '../index';
+import { OnlyData, ChatCache, modelResponse, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage } from '../index';
 
 /** 聊天对话角色 */
 export class ChatDialogueRole extends ModelBuilder {
@@ -12,7 +12,7 @@ export class ChatDialogueRole extends ModelBuilder {
             // 清空未读上下文数组
             source.unreadContext = [];
             // 格式化历史消息
-            this.formatHistoricalMessages();
+            this.formatHistoricalMessages(source);
             // 替换系统提示词中的时间占位符
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
             /** 向处理器模型发送请求并等待响应 */
@@ -36,9 +36,57 @@ export class ChatDialogueRole extends ModelBuilder {
         this.updateMessageContent(cache, source);
     }
     /** 格式化历史消息 */
-    public formatHistoricalMessages() {
+    public formatHistoricalMessages(source: AgentDefine) {
         // 如果消息数组为空,则不处理
         if (this.messages.length === 0) return;
+        /** 用于查重的文本消息映射表 */
+        const textMessageMap = new Set<string>();
+        /** 文本消息数组 */
+        const textMessages: PostMessage[] = [];
+        /** 视觉消息数组 */
+        const visionMessages: PostMessage[] = [];
+        /** 格式化后的消息数组 */
+        const formatMessages: PostMessage[] = [];
+        // 遍历并规整化消息数组
+        for (const message of this.messages) {
+            // 如果消息内容为字符串,则直接添加到文本消息数组
+            if (typeof message.content === 'string') textMessages.push(message)
+            // 如果消息内容为数组,则遍历并添加到文本消息数组或视觉消息数组
+            else for (let index = 0; index < message.content.length; index++) {
+                /** 当前消息内容 */
+                const content = message.content[index];
+                // 如果消息内容为文本,则添加到文本消息数组
+                if (content.type == 'text') textMessages.push({ role: message.role, content: content.text })
+                // 如果消息内容为视觉,则添加到视觉消息数组
+                else visionMessages.push({ role: message.role, content: [content] })
+            }
+        }
+        // 遍历文本消息数组并去除重复消息
+        for (const message of textMessages) {
+            // 过滤掉无效的消息
+            if (typeof message.content !== 'string' || textMessageMap.has(message.content)) continue;
+            // 将提取出来的文本消息合并到格式化消息数组中
+            formatMessages.push(message);
+            // 将文本消息内容添加到映射表中
+            textMessageMap.add(message.content);
+        }
+        // 如果视觉消息数量小于等于10,则合并到格式化消息数组中
+        if (visionMessages.length <= 10) formatMessages.push(...visionMessages);
+        // 如果视觉消息数量大于10,则分批次处理
+        else for (let i = 0; i < visionMessages.length; i += 10) {
+            /** 截取当前批次的视觉消息（每批次最多10条） */
+            const batchFrames = visionMessages.slice(i, i + 10);
+            // 覆盖描述角色的上下文，传入当前批次的视觉消息
+            source.descriptionRole.coverContext(batchFrames);
+            /** 执行描述角色的模型运行，获取总结请求响应 */
+            const summaryRequest = source.descriptionRole.run as modelResponse;
+            /** 模型总结结果 */
+            const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+            // 过滤空字符串和仅包含空格的字符串
+            if (summary && summary.trim().length > 0) formatMessages.push({ role: 'user', content: summary });
+        }
+        // 覆写处理器模型的上下文为格式化后的消息数组
+        this.messages = formatMessages;
         /** 最新消息的角色 */
         const latestRole = this.messages.slice(-1)[0].role;
         // 如果最新消息是用户,则不处理
