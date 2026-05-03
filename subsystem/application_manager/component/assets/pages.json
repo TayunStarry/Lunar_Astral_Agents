@@ -28,6 +28,13 @@
 		"url": "/screenshot_manager"
 	},
 	{
+		"id": "message_rendering",
+		"icon": "./icon/message_rendering-icon.png",
+		"title": "消息渲染",
+		"description": "打开『 星月智能 』消息渲染器",
+		"url": "/message_rendering"
+	},
+	{
 		"id": "qwen_TTS",
 		"icon": "./icon/tts_qwen-icon.png",
 		"title": "运行 Qwen3 TTS",
