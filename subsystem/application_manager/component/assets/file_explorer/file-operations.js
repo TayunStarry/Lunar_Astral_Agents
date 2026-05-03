@@ -15,7 +15,12 @@ export async function loadFiles(currentPath) {
     try {
         const response = await fetch(`/file_list/${currentPath}`);
         if (!response.ok) throw new Error('加载文件失败');
-        return await response.json();
+        const files = await response.json();
+        // 确保返回的是数组
+        if (Array.isArray(files)) {
+            return files;
+        }
+        return [];
     } catch (error) {
         showToast('加载文件失败', 'error');
         console.error('加载文件失败:', error);
@@ -425,10 +430,13 @@ export async function traverseAllFiles(startPath = '') {
             const response = await fetch(`/file_list/${currentPath}`);
             if (!response.ok) continue;
             const files = await response.json();
-            allFiles.push(...files);
-            const subDirs = files.filter(file => file.isDir);
-            for (const dir of subDirs) {
-                queue.push(dir.path);
+            // 确保 files 是一个数组
+            if (Array.isArray(files)) {
+                allFiles.push(...files);
+                const subDirs = files.filter(file => file.isDir);
+                for (const dir of subDirs) {
+                    queue.push(dir.path);
+                }
             }
         } catch (error) {
             console.error('遍历文件失败:', error);

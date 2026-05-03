@@ -60,11 +60,11 @@ export function updateBreadcrumb(currentPath, isSearching = false, onNavigate) {
         searchItem.style.fontWeight = '600';
         breadcrumb.appendChild(searchItem);
     } else if (currentPath) {
-        const pathParts = currentPath.split(/[\\/]/);
+        const pathParts = currentPath.split('/');
         let currentPathBuilder = '';
         pathParts.forEach(part => {
             if (!part) return;
-            currentPathBuilder += (currentPathBuilder ? '\\' : '') + part;
+            currentPathBuilder += (currentPathBuilder ? '/' : '') + part;
             const breadcrumbItem = document.createElement('a');
             breadcrumbItem.className = 'breadcrumb-item';
             breadcrumbItem.href = '#';
@@ -72,7 +72,7 @@ export function updateBreadcrumb(currentPath, isSearching = false, onNavigate) {
             breadcrumbItem.textContent = part;
             breadcrumbItem.addEventListener('click', (e) => {
                 e.preventDefault();
-                onNavigate(currentPathBuilder, true);
+                onNavigate(e.currentTarget.dataset.path, true);
             });
             breadcrumb.appendChild(breadcrumbItem);
         });

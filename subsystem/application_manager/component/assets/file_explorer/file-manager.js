@@ -224,7 +224,8 @@ export class FileManager {
      * @param {Object} directory - 目录对象
      */
     navigateToDirectory(directory) {
-        this.currentPath = directory.path;
+        const normalizedPath = directory.path.replace(/\\/g, '/');
+        this.currentPath = normalizedPath;
         this.selectedFiles.clear();
         this.updateBatchActions();
         this.currentPage = 1;
@@ -237,9 +238,9 @@ export class FileManager {
     goBack() {
         if (!this.currentPath) return;
 
-        const pathParts = this.currentPath.split('\\');
+        const pathParts = this.currentPath.split('/');
         pathParts.pop();
-        this.currentPath = pathParts.join('\\');
+        this.currentPath = pathParts.join('/');
         this.selectedFiles.clear();
         this.updateBatchActions();
         this.currentPage = 1;
