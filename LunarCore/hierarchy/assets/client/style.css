@@ -29,7 +29,7 @@
 	/* 玻璃拟态 */
 	--glass-bg: rgba(255, 255, 255, 0.18);
 	--glass-border: rgba(255, 255, 255, 0.25);
-	--glass-blur: blur(14px);
+	--glass-blur: blur(5px);
 
 	/* 新增玻璃按钮变量 */
 	--btn-glass-bg: rgba(0, 0, 0, 0.25);
@@ -45,7 +45,7 @@
 	--success-color: #20c997;
 
 	/* 背景图片（后期通过接口或配置动态替换） */
-	--bg-image: url('read/resources/placeholder/background.png');
+	--bg-image: url('/background.png');
 }
 
 /* ========== 全局隐藏滚动条 ========== */
@@ -120,8 +120,8 @@ body {
 	display: flex;
 	flex-direction: column;
 	background: rgba(255, 255, 255, 0.12);
-	backdrop-filter: blur(18px);
-	-webkit-backdrop-filter: blur(18px);
+	backdrop-filter: blur(5px);
+	-webkit-backdrop-filter: blur(5px);
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: 32px;
 	box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
