@@ -19,7 +19,19 @@ import (
 	"time"
 )
 
-var proxyPrefixes = []string{"/delete/", "/file_list/", "/download/", "/archive", "/save", "/read/", "/generate", "/database/", "/v1/", "/load/"}
+var proxyPrefixes = []string{
+	"/delete/",
+	"/file_list/",
+	"/download/",
+	"/archive",
+	"/save",
+	"/read/",
+	"/generate",
+	"/database/",
+	"/v1/",
+	"/load/",
+	"/capture",
+	"/write/message"}
 
 func shouldProxy(path string) bool {
 	for _, prefix := range proxyPrefixes {

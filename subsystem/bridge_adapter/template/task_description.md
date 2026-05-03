@@ -394,7 +394,7 @@ curl --location --request POST '/send_group_msg' \
 
 ### 2. HTTP 接口 – 消息写入
 
-- **URL**: `POST /message/batch`
+- **URL**: `POST /write/message`
 - **说明**: 接收消息对象数组，写入 `adapters.UnreadContext` 队列。
 - **请求体**:
 
@@ -496,7 +496,7 @@ QQ客户端 <---> Napcat <---> 适配器 <---> lunar_core
 
 > 注意：适配器通常将 QQ 用户消息作为 `role: "user"` 发送；而 `lunar_core` 可能生成 `role: "assistant"` 的回复，此处仅展示格式示例。
 
-4. 将组装好的 JSON 通过 HTTP POST 发送到 `http://localhost:36789/message/batch`。
+4. 将组装好的 JSON 通过 HTTP POST 发送到 `http://localhost:36789/write/message`。
 
 ### 目标 2：实现 lunar_core → Napcat 的消息发送
 
@@ -519,7 +519,7 @@ QQ客户端 <---> Napcat <---> 适配器 <---> lunar_core
 - **图片处理**：Napcat 推送的图片带有 `url`，适配器可下载后转为 Base64 再发送给 `lunar_core`；反之，`lunar_core` 推送的 Base64 图片需还原为 Napcat 可识别的格式（如直接使用 `base64` 字段）。
 - **随机群发**：为避免固定群组导致负载不均，采用随机选择 `listen_group_ids` 中的群组。
 - **错误处理**：所有 HTTP/WebSocket 调用应有超时和重试机制，并记录日志。
-- **队列缓冲**：`/message/batch` 接口返回队列长度，适配器可据此控制发送速率，防止积压。
+- **队列缓冲**：`/write/message` 接口返回队列长度，适配器可据此控制发送速率，防止积压。
 
 ---
 
