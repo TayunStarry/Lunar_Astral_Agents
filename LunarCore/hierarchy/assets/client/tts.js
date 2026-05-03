@@ -201,24 +201,10 @@ class TTSManager {
 class Qwen3 extends TTSManager {
     constructor() {
         super();
-        this.refAudioBase64 = null;
         this.refText = "";
         this.modelReady = false;
     }
 
-    async loadRefAudio() {
-        try {
-            const response = await fetch('./lunar-template.wav');
-            if (!response.ok) throw new Error('Failed to load ref audio');
-            const arrayBuffer = await response.arrayBuffer();
-            const base64 = this.arrayBufferToBase64(arrayBuffer);
-            this.refAudioBase64 = base64;
-            return true;
-        } catch (err) {
-            console.error('Qwen3: 加载参考音频失败', err);
-            return false;
-        }
-    }
 
     arrayBufferToBase64(buffer) {
         const bytes = new Uint8Array(buffer);
@@ -231,7 +217,7 @@ class Qwen3 extends TTSManager {
 
     async checkModelAvailable() {
         try {
-            const res = await fetch('/qwenapi/v1/models');
+            const res = await fetch('/qwen_tts/models');
             return res.ok;
         } catch {
             return false;
@@ -241,16 +227,6 @@ class Qwen3 extends TTSManager {
     async generateAndPlay(text) {
         const processedText = this.cleanTextForTTS(text);
         if (!processedText) return null;
-
-        if (!this.refAudioBase64) {
-            await this.loadRefAudio();
-        }
-
-        if (!this.refAudioBase64) {
-            this.showError('参考音频加载失败');
-            return null;
-        }
-
         const requestBody = {
             // 模型名称，指定使用的TTS模型
             model_name: "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
@@ -283,24 +259,19 @@ class Qwen3 extends TTSManager {
             // 子说话人采样温度
             subtalker_temperature: 0.8,
             // 最大生成token数，0表示使用默认值
-            max_new_tokens: 75
+            max_new_tokens: 2048
         };
-
         try {
-            const apiUrl = '/qwenapi/v1/voice-clone';
-            const res = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
+            const apiUrl = '/qwen_tts/voice-clone';
+            const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
             if (!res.ok) throw new Error(`Qwen3 API 状态异常: ${res.status}`);
             const data = await res.json();
-            if (data.audio_files_base64 && data.audio_files_base64.length > 0) {
-                const arrayBuffer = this.base64ToArrayBuffer(data.audio_files_base64[0]);
+            if (data.audio_base64) {
+                const arrayBuffer = this.base64ToArrayBuffer(data.audio_base64);
                 this.playAudioBuffer(arrayBuffer);
-                return data.audio_files_base64[0];
+                return data.audio_base64;
             }
-            else console.warn('Qwen3: 响应中没有 audio_files_base64');
+            else console.warn('响应中没有 audio_base64');
         }
         catch (err) {
             console.error('Qwen3 TTS 请求失败:', err);
@@ -312,7 +283,7 @@ class Qwen3 extends TTSManager {
 
 async function initTTS() {
     try {
-        const res = await fetch('/qwenapi/v1/models');
+        const res = await fetch('/qwen_tts/models');
         if (res.ok) {
             return new Qwen3();
         }

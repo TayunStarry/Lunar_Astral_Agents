@@ -1,4 +1,4 @@
-import { fetchLive2DSetting } from './api.js';
+import { fetchLive2DSetting } from './fetch.js';
 
 // PIXI 相关全局变量
 let pixiJSExample = null;

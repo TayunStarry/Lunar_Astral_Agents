@@ -1,5 +1,5 @@
-import { WebSocketClient } from './websocket.js';
-import { randomBorderColor, clearContainer } from './utils.js';
+import { WebSocketClient } from './socket.js';
+import { randomBorderColor, clearContainer } from './util.js';
 import {
     createFilePreview,
     getFileCategory,
@@ -10,11 +10,11 @@ import {
     revokeAllFilePreviews,
     getVideoThumbnail,
     formatFileSize
-} from './fileUtils.js';
-import { saveFile, sendMessages } from './api.js';
-import { Live2D, EmotionalStateEnum } from './live2dManager.js';
-import { renderMessage, renderAllMessages } from './messageRenderer.js';
-import { TTS } from './ttsManager.js';
+} from './file.js';
+import { saveFile, sendMessages } from './fetch.js';
+import { Live2D, EmotionalStateEnum } from './live2d.js';
+import { renderMessage, renderAllMessages } from './chat.js';
+import { TTS } from './tts.js';
 
 class LunarCoreApp {
     wsClient = null;

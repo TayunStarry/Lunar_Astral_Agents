@@ -1,5 +1,5 @@
-import { calculateFileHash, getStoragePrefix } from './fileUtils.js';
-import { encodeFilePath } from './utils.js';
+import { calculateFileHash, getStoragePrefix } from './file.js';
+import { encodeFilePath } from './util.js';
 
 /**
  * 保存文件到服务器
