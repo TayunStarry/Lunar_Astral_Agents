@@ -21,6 +21,13 @@
 		"url": "/file_explorer"
 	},
 	{
+		"id": "screenshot_manager",
+		"icon": "./icon/screenshot_manager-icon.png",
+		"title": "截图管理",
+		"description": "打开『 星月智能 』截图管理器",
+		"url": "/screenshot_manager"
+	},
+	{
 		"id": "qwen_TTS",
 		"icon": "./icon/tts_qwen-icon.png",
 		"title": "运行 Qwen3 TTS",
