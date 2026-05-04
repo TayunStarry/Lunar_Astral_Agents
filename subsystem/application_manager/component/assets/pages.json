@@ -35,6 +35,13 @@
 		"url": "/message_rendering"
 	},
 	{
+		"id": "parameter_assistant",
+		"icon": "./icon/parameter_assistant-icon.png",
+		"title": "参数助手",
+		"description": "打开『 星月智能 』参数助手",
+		"url": "/parameter_assistant"
+	},
+	{
 		"id": "qwen_TTS",
 		"icon": "./icon/tts_qwen-icon.png",
 		"title": "运行 Qwen3 TTS",
