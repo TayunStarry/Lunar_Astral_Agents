@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>参数助手 - 月之华</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <div class="main-content">
+            <div class="config-section">
+                <div class="header">
+                    <h1>🌙 参数助手</h1>
+                    <div class="header-actions">
+                        <button id="saveBtn" class="btn btn-primary">保存配置</button>
+                        <button id="resetBtn" class="btn btn-secondary">重置</button>
+                    </div>
+                </div>
+                <div class="page-tabs" id="pageTabs">
+                    <button class="page-tab active" data-page="basic">基础配置</button>
+                    <button class="page-tab" data-page="qq">QQ适配器</button>
+                    <button class="page-tab" data-page="archive">项目归档</button>
+                </div>
+                <div class="page-content">
+                    <div class="page-panel active" id="panel-basic">
+                        <div class="config-grid horizontal-grid" id="grid-basic"></div>
+                    </div>
+                    <div class="page-panel" id="panel-qq">
+                        <div class="vertical-cards" id="grid-qq"></div>
+                    </div>
+                    <div class="page-panel" id="panel-archive">
+                        <div class="vertical-cards" id="grid-archive"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="ai-section">
+                <div class="ai-header">
+                    <div class="ai-avatar">✨</div>
+                    <h2>琉璃助手</h2>
+                </div>
+                <div class="ai-messages" id="aiMessages">
+                    <div class="message ai-message">
+                        <div class="message-avatar">璃</div>
+                        <div class="message-content">
+                            你好呀～我是琉璃！姐姐是月华，我来帮你修改配置文件哒！有什么问题尽管问我哦～😊
+                        </div>
+                    </div>
+                </div>
+                <div class="ai-input-container">
+                    <textarea id="aiInput" placeholder="问我关于配置的问题吧..."></textarea>
+                    <button id="aiSendBtn" class="btn btn-send">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="preview-modal" id="previewModal">
+        <div class="preview-modal-content">
+            <div class="preview-header">
+                <h3>🔧 配置变更预览</h3>
+                <button class="btn btn-small" id="closePreview">关闭</button>
+            </div>
+            <div class="preview-body">
+                <div class="preview-section">
+                    <h4>原配置</h4>
+                    <pre id="originalConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4>变更部分</h4>
+                    <pre id="changedConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4>合并后配置</h4>
+                    <pre id="mergedConfigPreview"></pre>
+                </div>
+            </div>
+            <div class="preview-footer">
+                <button class="btn" id="cancelChanges">取消变更</button>
+                <button class="btn btn-primary" id="applyChanges">应用变更</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

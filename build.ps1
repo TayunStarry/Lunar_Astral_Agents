@@ -13,11 +13,6 @@ Set-Location -Path './subsystem\bridge_adapter'
 ./build.ps1
 Set-Location -Path '../../'
 
-# 构建 image_box
-Set-Location -Path './subsystem\image_box'
-./build.ps1
-Set-Location -Path '../../'
-
 # 构建 project_archiving
 Set-Location -Path './subsystem\project_archiving'
 ./build.ps1
