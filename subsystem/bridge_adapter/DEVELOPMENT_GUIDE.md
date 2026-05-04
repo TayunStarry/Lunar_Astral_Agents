@@ -212,7 +212,7 @@ func ContainsTriggerKeyword(message string) bool {
         "napcat_ws_server": "ws://localhost:4567",      // Napcat WebSocket 地址
         "napcat_ws_token": "your_token_here",           // Napcat 认证令牌
         "lunar_core_url": "http://localhost:36789",     // lunar_core HTTP 地址
-        "lunar_ws_server": "ws://localhost:36797/ws",   // lunar_core WebSocket 地址
+        "lunar_ws_server": "ws://localhost:36789/ws",   // lunar_core WebSocket 地址
         "poll_interval": 10,                            // 轮询间隔（秒）
         "listen_group_ids": [123456789, 987654321],     // 监听的群组 ID 列表
         "trigger_keywords": ["月华", "月之华"],          // 触发关键词

@@ -60,6 +60,10 @@ func loadConfigureFile() {
 	if parameter.Models.PromptRefineModel != "" {
 		*config.PromptRefineModel = parameter.Models.PromptRefineModel
 	}
+	// 如果配置文件中 TTSUrl 字段非空，则更新全局配置
+	if parameter.Server.TTSUrl != "" {
+		*config.TTSUrl = parameter.Server.TTSUrl
+	}
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.Server.Developer == true {
 		*config.Developer = true

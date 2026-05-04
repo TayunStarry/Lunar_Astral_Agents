@@ -20,7 +20,7 @@ local_data/resources/placeholder
 local_data/resources/images
 local_data/generated
 local_data/knowledge
-local_data/models
+local_data/models/TTS
 
 ## 系统文件
 desktop.ini

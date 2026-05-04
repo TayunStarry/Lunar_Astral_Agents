@@ -41,8 +41,8 @@ func InitializeServer() {
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
-	// 启动WebSocket服务器
-	websocketServer = StartWebSocketServer()
+	// 注册WebSocket处理器
+	SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文
 	adapters.RunAgentContext()
 }
@@ -110,13 +110,4 @@ func shutdownServer(server *http.Server) {
 	}
 	// 打印服务器已安全关闭的信息
 	log.Println("Lunar模块 -> 已安全关闭")
-}
-
-// CloseWebSocketServer 关闭WebSocket服务器
-func CloseWebSocketServer() {
-	if websocketServer != nil {
-		log.Printf("Lunar模块[WebSocket] -> 关闭服务器")
-		websocketServer.Close()
-		websocketServer = nil
-	}
 }
