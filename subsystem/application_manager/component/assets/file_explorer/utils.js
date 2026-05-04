@@ -179,3 +179,38 @@ export function showToast(message, type = 'info') {
         toast.classList.remove('show');
     }, 3000);
 }
+
+/**
+ * 从视频 URL 获取视频缩略图 URL
+ * @param {string} videoUrl - 视频文件访问地址
+ * @returns {Promise<string>} 缩略图的 data URL
+ */
+export async function getVideoThumbnailFromUrl(videoUrl) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.muted = true;
+        video.crossOrigin = 'anonymous';
+        video.onloadeddata = () => {
+            video.currentTime = 1;
+        };
+        video.onseeked = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 360;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg'));
+            } else {
+                reject(new Error('Failed to get video context'));
+            }
+            URL.revokeObjectURL(video.src);
+        };
+        video.onerror = () => {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Failed to load video'));
+        };
+        video.src = videoUrl;
+    });
+}
