@@ -146,16 +146,55 @@ function renderEChartsInContainer(container) {
 async function renderMermaidInContainer(container) {
     if (typeof mermaid === 'undefined' || !mermaidInitialized) return;
     const blocks = container.querySelectorAll('code.language-mermaid');
-    for (let block of blocks) {
+    for (const block of Array.from(blocks)) {
+        const textContent = block.textContent || '';
+        if (textContent.length <= 20) continue;
+
+        let svg;
         try {
-            const id = `mermaid-${Date.now()}-${Math.random()}`;
-            const { svg } = await mermaid.render(id, block.textContent);
-            const wrap = document.createElement('div');
-            wrap.className = 'mermaid-container';
-            wrap.innerHTML = svg;
-            block.parentNode.replaceChild(wrap, block);
-        } catch (err) {
-            console.warn('mermaid渲染失败');
+            await mermaid.parse(textContent);
+            const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            ({ svg } = await mermaid.render(id, textContent));
+        } catch (e) {
+            console.error('Mermaid parse/render error:', e, '\nSource:', textContent);
+            continue; // 跳过此图表
+        }
+
+        // viewBox 调整，若出错则直接使用原始 svg
+        let finalSvg = svg;
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svg, 'image/svg+xml');
+            const svgEl = doc.documentElement;
+            const chartType = svgEl.getAttribute('aria-roledescription');
+            if (chartType === 'flowchart' || chartType === 'classDiagram') {
+                const vb = svgEl.getAttribute('viewBox');
+                if (vb) {
+                    const v = vb.split(/\s+/).map(parseFloat);
+                    if (v.length === 4 && v.every(n => !isNaN(n))) {
+                        if (chartType === 'flowchart') {
+                            v[0] *= 0.45; v[1] *= 0.45;
+                            v[2] *= 1.05; v[3] *= 1.05;
+                        } else {
+                            v[0] *= 0; v[1] *= 0.35;
+                            v[2] *= 1.05; v[3] *= 1.25;
+                        }
+                        svgEl.setAttribute('viewBox', v.join(' '));
+                    }
+                }
+                finalSvg = new XMLSerializer().serializeToString(svgEl);
+            }
+        } catch (adjustErr) {
+            console.warn('ViewBox adjust failed, using raw SVG:', adjustErr);
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mermaid-container';
+        wrapper.innerHTML = `<div style="width:100%; border:none; padding:0">${finalSvg}</div>`;
+        const parent = block.parentElement;
+        if (parent) {
+            parent.insertBefore(wrapper, block);
+            parent.removeChild(block);
         }
     }
 }

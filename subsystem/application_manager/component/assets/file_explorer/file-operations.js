@@ -119,7 +119,7 @@ export async function createNewFolder(currentPath, onComplete) {
         const blob = new Blob([''], { type: 'text/plain' });
         const file = new File([blob], tempFileName, { type: 'text/plain' });
 
-        await uploadFile(file, currentPath, () => {}, true);
+        await uploadFile(file, currentPath, () => { }, true);
         await fetch(`/delete/${fullPath}`, { method: 'DELETE' });
 
         showToast(`文件夹 "${folderName}" 创建成功`, 'success');
@@ -196,7 +196,7 @@ async function renameSingleFile(file, newName, currentPath) {
 
     await fetch(`/delete/${file.path}`, { method: 'DELETE' });
     const newFile = new File([content], newName, { type: content.type });
-    await uploadFile(newFile, currentPath, () => {}, true);
+    await uploadFile(newFile, currentPath, () => { }, true);
 }
 
 /**
@@ -233,7 +233,7 @@ async function createDirectory(dirName, currentPath) {
     const tempFileName = `${dirName}/.temp`;
     const blob = new Blob([''], { type: 'text/plain' });
     const file = new File([blob], tempFileName, { type: 'text/plain' });
-    await uploadFile(file, currentPath, () => {}, true);
+    await uploadFile(file, currentPath, () => { }, true);
     const fullPath = currentPath ? `${currentPath}/${tempFileName}` : tempFileName;
     await fetch(`/delete/${fullPath}`, { method: 'DELETE' });
 }
@@ -273,7 +273,7 @@ async function copySingleFile(file, targetPath, currentPath) {
     const fileName = targetPath.split('/').pop();
     const newFile = new File([fileBlob], fileName, { type: fileBlob.type });
     const targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
-    await uploadFile(newFile, targetDir || currentPath, () => {}, false);
+    await uploadFile(newFile, targetDir || currentPath, () => { }, false);
 }
 
 /**
@@ -380,12 +380,13 @@ export async function handleZipUpload(file, currentPath, onComplete) {
             const contentBytes = Uint8Array.from(atob(extractedFile.content), c => c.charCodeAt(0));
             const blob = new Blob([contentBytes]);
             const uploadFileObj = new File([blob], extractedFile.name, { type: getFileType(extractedFile.extension) });
-            await uploadFile(uploadFileObj, currentPath, () => {}, false);
+            await uploadFile(uploadFileObj, currentPath, () => { }, false);
         }
 
         showToast(`成功解压 ${result.total_files} 个文件`, 'success');
         onComplete();
-    } catch (error) {
+    }
+     catch (error) {
         showToast('解压失败', 'error');
         console.error('解压失败:', error);
     }
@@ -444,4 +445,38 @@ export async function traverseAllFiles(startPath = '') {
     }
 
     return allFiles;
+}
+
+/**
+ * 将搜索索引保存到根目录下的 file_query.index
+ * @param {Array} indexData - 文件/目录列表
+ * @returns {Promise<void>}
+ */
+export async function saveIndexToFile(indexData) {
+    try {
+        const jsonStr = JSON.stringify(indexData);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const file = new File([blob], 'file_query.index', { type: 'application/json' });
+        // 上传到根目录（currentPath 为空）
+        await uploadFile(file, '', () => { }, true);
+    } catch (error) {
+        console.error('保存索引文件失败:', error);
+    }
+}
+
+/**
+ * 从根目录加载 file_query.index
+ * @returns {Promise<Array|null>} 返回文件列表数组，若文件不存在或解析失败则返回 null
+ */
+export async function loadIndexFromFile() {
+    try {
+        const response = await fetch('/read/file_query.index');
+        if (!response.ok) return null;
+        const data = await response.json();
+        return Array.isArray(data) ? data : null;
+    }
+    catch (error) {
+        console.warn('读取索引文件失败，将重新构建索引:', error);
+        return null;
+    }
 }

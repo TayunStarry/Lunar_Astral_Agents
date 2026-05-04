@@ -1,4 +1,7 @@
 class TTSManager {
+    /** 是否允许加载 TTS 模型 */
+    allowLoading = true;
+    /** 初始化 TTS 管理器 */
     constructor() {
         this.audioContext = null;
         this.currentSource = null;
@@ -24,7 +27,7 @@ class TTSManager {
         // 增益节点，用于控制音量
         this.gainNode = null;
     }
-
+    /** 清理文本，移除特殊字符和空格 */
     cleanTextForTTS(text) {
         if (!text) return '';
         let processed = text;
@@ -44,8 +47,11 @@ class TTSManager {
         processed = processed.replace(/\s+/g, ' ');
         return processed.trim();
     }
-
+    /** 生成并播放文本的语音 */
     async generateAndPlay(text) {
+        // 检查是否允许加载模型
+        if (!this.allowLoading) return null;
+        /** 清理文本，移除特殊字符和空格 */
         const processedText = this.cleanTextForTTS(text);
         if (!processedText) return null;
         const formData = new FormData();
@@ -105,7 +111,7 @@ class TTSManager {
         }
         return null;
     }
-
+    /** 播放音频缓冲区 */
     playAudioBuffer(arrayBuffer) {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -161,7 +167,7 @@ class TTSManager {
             }
         );
     }
-
+    /** 将 Base64 字符串转换为 ArrayBuffer */
     base64ToArrayBuffer(base64) {
         const binaryString = atob(base64);
         const len = binaryString.length;
@@ -171,24 +177,22 @@ class TTSManager {
         }
         return bytes.buffer;
     }
-
+    /** 设置音频设置 */
     setAudioSetting(setting, value) {
         if (this.audioSettings.hasOwnProperty(setting)) {
             this.audioSettings[setting] = Math.max(0, Math.min(1, value));
         }
     }
-
+    /** 显示错误提示 */
     showError(message) {
         const errorToast = document.getElementById('errorToast');
-        if (errorToast) {
-            errorToast.textContent = message;
-            errorToast.classList.add('visible');
-            setTimeout(() => {
-                errorToast?.classList.remove('visible');
-            }, 3000);
-        }
+        if (!errorToast) return;
+        errorToast.textContent = message;
+        errorToast.classList.add('visible');
+        setTimeout(() => errorToast?.classList.remove('visible'), 3000);
+        this.allowLoading = false;
     }
-
+    /** 停止当前播放 */
     stop() {
         if (this.currentSource) {
             try {
@@ -198,33 +202,20 @@ class TTSManager {
         }
     }
 }
+
+/** Qwen3 TTS 管理器 */
 class Qwen3 extends TTSManager {
+    /** 初始化 Qwen3 TTS 管理器 */
     constructor() {
         super();
         this.refText = "";
         this.modelReady = false;
     }
-
-
-    arrayBufferToBase64(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary);
-    }
-
-    async checkModelAvailable() {
-        try {
-            const res = await fetch('/qwen_tts/models');
-            return res.ok;
-        } catch {
-            return false;
-        }
-    }
-
+    /** 生成并播放语音 */
     async generateAndPlay(text) {
+        // 检查是否允许加载模型
+        if (!this.allowLoading) return null;
+        /** 清理文本，移除特殊字符和空格 */
         const processedText = this.cleanTextForTTS(text);
         if (!processedText) return null;
         const requestBody = {
@@ -281,18 +272,16 @@ class Qwen3 extends TTSManager {
     }
 }
 
+/** 初始化 TTS 管理器 */
 async function initTTS() {
-    try {
-        const res = await fetch('/qwen_tts/models');
-        if (res.ok) {
-            return new Qwen3();
-        }
-    } catch { }
-    return new TTSManager();
+    /** 检获取 Qwen3 TTS 模型列表 */
+    const res = await fetch('/qwen_tts/models');
+    // 检查模型是否可用
+    if (res.ok) return new Qwen3();
+    // 如果模型不可用，返回默认 TTS 管理器
+    else return new TTSManager();
 }
 
 export let TTS;
 
-initTTS().then(instance => {
-    TTS = instance;
-});
+initTTS().then(instance => { TTS = instance; });

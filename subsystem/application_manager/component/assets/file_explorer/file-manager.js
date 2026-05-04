@@ -4,7 +4,7 @@
  */
 
 import { bindEvents } from './event-handler.js';
-import { loadFiles as loadFilesFromApi, traverseAllFiles } from './file-operations.js';
+import { loadFiles as loadFilesFromApi, traverseAllFiles, saveIndexToFile, loadIndexFromFile } from './file-operations.js';
 import {
     updateStats,
     updateBreadcrumb,
@@ -15,10 +15,10 @@ import {
 } from './ui-renderer.js';
 import { isImageFile, isVideoFile, isAudioFile, isTextFile, showToast } from './utils.js';
 import { showTextModal, handleKeyboardEvent } from './modal-handler.js';
-import { 
-    renameFile as renameFileApi, 
-    deleteFile as deleteFileApi, 
-    downloadFile as downloadFileApi 
+import {
+    renameFile as renameFileApi,
+    deleteFile as deleteFileApi,
+    downloadFile as downloadFileApi
 } from './file-operations.js';
 
 /**
@@ -57,8 +57,20 @@ export class FileManager {
     init() {
         bindEvents(this);
         this.loadFiles();
+        this.loadIndexIfExists();
     }
-
+    /** 尝试从本地索引文件加载 allFiles */
+    async loadIndexIfExists() {
+        try {
+            const cached = await loadIndexFromFile();
+            if (cached && Array.isArray(cached) && cached.length > 0) {
+                this.allFiles = cached;
+                showToast('✅ 已从本地索引文件加载' + cached.length + '条记录', 'info');
+            }
+        }
+        // 忽略错误，搜索时再重建
+        catch (error) { }
+    }
     /**
      * 加载文件列表
      */
@@ -182,7 +194,10 @@ export class FileManager {
 
         try {
             if (this.allFiles.length === 0) {
+                setTimeout(() => showToast('正在构建搜索索引，请稍后...', 'info'), 2000);
                 this.allFiles = await traverseAllFiles();
+                // 将索引保存到文件
+                saveIndexToFile(this.allFiles)
             }
 
             this.searchResults = this.allFiles.filter(

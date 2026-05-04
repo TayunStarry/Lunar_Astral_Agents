@@ -3,7 +3,7 @@
  * 负责文件管理器的所有 UI 渲染功能
  */
 
-import { formatFileSize, formatDate, getFileIcon, isImageFile } from './utils.js';
+import { formatFileSize, formatDate, getFileIcon, isImageFile, isVideoFile, getVideoThumbnailFromUrl } from './utils.js';
 
 /**
  * 更新统计信息
@@ -112,13 +112,34 @@ export function createFileCard(file, selectedFiles, onToggleSelection, onFileCli
         icon.className = 'file-icon';
         icon.innerHTML = '<i class="fas fa-folder"></i>';
         card.appendChild(icon);
-    } else if (isImageFile(file.name)) {
+    }
+    else if (isImageFile(file.name)) {
         const img = document.createElement('img');
         img.className = 'file-thumbnail';
         img.src = `/read/${file.path}`;
         img.alt = file.name;
         card.appendChild(img);
-    } else {
+    }
+    else if (isVideoFile(file.name)) {
+        const img = document.createElement('img');
+        img.className = 'file-thumbnail';
+        img.alt = file.name;
+        // 异步获取视频第一帧
+        getVideoThumbnailFromUrl(`/read/${file.path}`)
+            .then(thumbnailUrl => {
+                img.src = thumbnailUrl;
+            })
+            .catch(() => {
+                // 获取失败时回退为默认图标
+                card.removeChild(img);
+                const icon = document.createElement('div');
+                icon.className = 'file-icon';
+                icon.innerHTML = '<i class="fas fa-file-video"></i>';
+                card.insertBefore(icon, card.querySelector('.file-name'));
+            });
+        card.appendChild(img);
+    }
+    else {
         const icon = document.createElement('div');
         icon.className = 'file-icon';
         icon.innerHTML = getFileIcon(file.name);

@@ -1,16 +1,5 @@
 import { WebSocketClient } from './socket.js';
-import { randomBorderColor, clearContainer } from './util.js';
-import {
-    createFilePreview,
-    getFileCategory,
-    isAllowedTextFile,
-    isAllowedImageFile,
-    isAllowedVideoFile,
-    revokeFilePreview,
-    revokeAllFilePreviews,
-    getVideoThumbnail,
-    formatFileSize
-} from './file.js';
+import { createFilePreview, getFileCategory, revokeAllFilePreviews, getVideoThumbnail, formatFileSize } from './file.js';
 import { saveFile, sendMessages } from './fetch.js';
 import { Live2D, EmotionalStateEnum } from './live2d.js';
 import { renderMessage, renderAllMessages } from './chat.js';
@@ -368,9 +357,7 @@ class LunarCoreApp {
         if (this.errorToast) {
             this.errorToast.textContent = message;
             this.errorToast.classList.add('visible');
-            setTimeout(() => {
-                this.errorToast?.classList.remove('visible');
-            }, 3000);
+            setTimeout(() => {  this.errorToast?.classList.remove('visible'); }, 3000);
         }
     }
 
