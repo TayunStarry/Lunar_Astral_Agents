@@ -151,7 +151,7 @@ class LunarCoreApp {
 
     initWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//localhost:36797/ws`;
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         this.wsClient = new WebSocketClient(wsUrl);
         this.wsClient.onConnect(() => {
             console.log('WebSocket connected');

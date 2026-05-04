@@ -2,12 +2,9 @@ package server
 
 import (
 	"LunarCore/adapters"
-	"LunarCore/config"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -106,29 +103,20 @@ func (c *WSClient) writePump() {
 	}
 }
 
-func StartWebSocketServer() *http.Server {
+func SetupWebSocketHandler(mux *http.ServeMux) {
 	adapters.PushMessageFunc = BroadcastMessage
-
-	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", WSHandler)
+}
 
-	addr := fmt.Sprintf(":%d", *config.ProxyPort+3)
-	// 打印分隔符
-	log.Printf("%s", strings.Repeat("-=", 28))
-	log.Printf("Lunar模块[WebSocket] -> ws://localhost:%v/ws 已启动", *config.ProxyPort+3)
-
-	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+func CloseWebSocketServer() {
+	wsMutex.Lock()
+	defer wsMutex.Unlock()
+	for client := range wsClients {
+		client.conn.Close()
+		close(client.send)
+		delete(wsClients, client)
 	}
-
-	go func() {
-		if err := http.ListenAndServe(addr, mux); err != nil && err != http.ErrServerClosed {
-			log.Printf("Lunar模块[WebSocket][ERROR] -> 服务器启动失败: %v", err)
-		}
-	}()
-
-	return server
+	log.Printf("Lunar模块[WebSocket] -> 已关闭所有连接")
 }
 
 func BroadcastMessage(msgType string, data interface{}) {

@@ -72,20 +72,24 @@ func initializeServerComponents(server *http.Server) {
 	server.Handler = CORSMiddleware(httpMux)
 	// 启动客户端加载任务
 	go startClientLoading()
-	// 构建TLS终止代理服务器并保存实例
-	websocketServer = BuildTLSTerminationProxy()
+	// 构建TLS终止代理服务器
+	BuildTLSTerminationProxy()
 }
 
 // PrintServerPort 打印服务器端口
 func PrintServerPort(internalURL string) {
 	// 打印分割线
 	log.Printf("%s", strings.Repeat("-=", 28))
-	// 遍历所有系统端点并打印
-	// for _, endpoint := range SystemEndpoints {
-	// 	log.Printf("Lunar模块 : %s [%s]	-> %v%s", endpoint.Description, endpoint.Method, internalURL, endpoint.Path)
-	// }
-	// 打印前端文件访问路径
-	//log.Printf("Lunar模块 : 前端文件 [GET]	-> %v/", internalURL)
+	// 检查是否为开发模式
+	if *config.Developer == false {
+		// 遍历所有系统端点并打印
+		for _, endpoint := range SystemEndpoints {
+			log.Printf("Lunar模块 : %s [%s]	-> %v%s", endpoint.Description, endpoint.Method, internalURL, endpoint.Path)
+		}
+		// 打印前端文件访问路径
+		log.Printf("Lunar模块 : 前端文件 [GET]	-> %v/", internalURL)
+		log.Printf("Lunar模块 : 消息推送 [WebSocket]	-> %v/ws", internalURL)
+	}
 }
 
 // startClientLoading 启动客户端加载任务

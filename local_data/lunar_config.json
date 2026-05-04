@@ -8,6 +8,7 @@
 		"prompt_refine_model": null
 	},
 	"server": {
+		"tts_url": "http://localhost:7860",
 		"developer": true,
 		"clear_port": false,
 		"allow_diffusion": true,
@@ -26,7 +27,7 @@
 		"napcat_ws_server": "ws://localhost:4567",
 		"napcat_ws_token": "ItlC2Nc1DfICVYq5",
 		"lunar_core_url": "http://localhost:36789",
-		"lunar_ws_server": "ws://localhost:36797/ws",
+		"lunar_ws_server": "ws://localhost:36789/ws",
 		"poll_interval": 10,
 		"listen_group_ids": [
 			262221051

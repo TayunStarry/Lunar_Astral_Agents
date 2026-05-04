@@ -25,8 +25,6 @@ func TTSProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetURL := fmt.Sprintf("http://localhost:%d/api/generate", *config.TTSPort)
-
 	client := &http.Client{
 		Timeout: 120 * time.Second,
 	}
@@ -38,7 +36,7 @@ func TTSProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := http.NewRequest(r.Method, targetURL, bytes.NewBuffer(body))
+	req, err := http.NewRequest(r.Method, *config.TTSUrl+"/api/generate", bytes.NewBuffer(body))
 	if err != nil {
 		log.Printf("创建请求失败: %v", err)
 		http.Error(w, "Failed to create request", http.StatusInternalServerError)
@@ -89,7 +87,7 @@ func TTSQwen3ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	fullPath := r.URL.Path
 
 	if r.Method == "GET" {
-		targetURL := fmt.Sprintf("http://localhost:%d%s", *config.TTSPort, fullPath)
+		targetURL := fmt.Sprintf("%s%s", *config.TTSUrl, fullPath)
 
 		client := &http.Client{
 			Timeout: 30 * time.Second,
@@ -132,7 +130,7 @@ func TTSQwen3ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetURL := fmt.Sprintf("http://localhost:%d%s", *config.TTSPort, fullPath)
+	targetURL := fmt.Sprintf("%s%s", *config.TTSUrl, fullPath)
 	log.Printf("targetURL: %s", targetURL)
 	client := &http.Client{
 		Timeout: 120 * time.Second,

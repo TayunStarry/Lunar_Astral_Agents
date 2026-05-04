@@ -1,10 +1,7 @@
 // ---------- WebSocket 配置 ----------
-const WS_URL = (() => {
-    if (window.location.hostname && window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost') {
-        return `ws://${window.location.host}/ws`;
-    }
-    return 'ws://localhost:36797/ws';
-})();
+
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${protocol}//${window.location.host}/ws`;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1500;
 const USER_NAME = '你';
@@ -358,7 +355,7 @@ function handleWebSocketMessage(data) {
 function connectWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     try {
-        ws = new WebSocket(WS_URL);
+        ws = new WebSocket(wsUrl);
     } catch (err) {
         scheduleReconnect();
         return;
