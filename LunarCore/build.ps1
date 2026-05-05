@@ -14,4 +14,4 @@ npm run server.side
 node removeExport.cjs
 
 # 构建可执行文件
-go build -tags webview -ldflags="-s -w" -o ../Lunar-Astral-Agents.exe
+go build -tags webview -ldflags="-s -w" -o ../Luna_Astral.exe
