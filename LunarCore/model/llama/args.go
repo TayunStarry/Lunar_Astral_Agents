@@ -1,7 +1,7 @@
 package llama
 
 import (
-	"LunarCore/config"
+	"config"
 	"log"
 	"math"
 	"path/filepath"

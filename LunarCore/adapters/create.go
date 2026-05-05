@@ -24,8 +24,8 @@ var (
 
 // registerAdaptersToRuntime 注册适配器函数到指定的JavaScript运行时环境
 func registerAdaptersToRuntime(vm *goja.Runtime) {
-	// 创建Adapters实例，用于存储JavaScript运行时实例
-	adapters := &Adapters{runtime: vm}
+	// 创建Runtime实例，用于存储JavaScript运行时实例
+	adapters := &Runtime{runtime: vm}
 
 	// 注册文件操作适配器
 	vm.Set("saveFile", adapters.saveFile)

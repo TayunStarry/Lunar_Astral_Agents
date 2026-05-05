@@ -1,8 +1,8 @@
 package llama
 
 import (
-	"LunarCore/config"
 	"bufio"
+	"config"
 	"io"
 	"log"
 	"os/exec"

@@ -1,7 +1,7 @@
 package image
 
 import (
-	"LunarCore/config"
+	"config"
 	"bytes"
 	"encoding/json"
 	"fmt"

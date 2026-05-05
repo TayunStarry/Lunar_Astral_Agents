@@ -1,9 +1,9 @@
 package llama
 
 import (
-	"LunarCore/config"
 	"LunarCore/model/llama/metadata"
 	"bufio"
+	"config"
 	"context"
 	"io"
 	"log"

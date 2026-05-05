@@ -1,7 +1,7 @@
 package release
 
 import (
-	"LunarCore/config"
+	"config"
 	"fmt"
 	"log"
 	"os/exec"

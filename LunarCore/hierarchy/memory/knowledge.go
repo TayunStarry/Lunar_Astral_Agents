@@ -1,8 +1,8 @@
 package memory
 
 import (
-	"LunarCore/config"
-	"LunarCore/hierarchy"
+	storage "storage/module"
+	"config"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -308,7 +308,7 @@ func FlushKnowledge(filePath string) (map[string]interface{}, error) {
 	}
 
 	// 写入文件
-	lock := hierarchy.GetFileLock(knowledgePath)
+	lock := storage.GetFileLock(knowledgePath)
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -498,7 +498,7 @@ func InitializeKnowledgeFile(filePath string) (HistoryDocument, error) {
 	}
 
 	// 获取文件锁
-	lock := hierarchy.GetFileLock(filePath)
+	lock := storage.GetFileLock(filePath)
 	lock.Lock()
 	defer lock.Unlock()
 

@@ -1,7 +1,7 @@
 package browser
 
 import (
-	"LunarCore/config"
+	"config"
 	"fmt"
 	"log"
 	"net"

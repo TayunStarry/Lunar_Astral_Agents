@@ -2,7 +2,7 @@ package adapters
 
 import (
 	"LunarCore/browser"
-	"LunarCore/config"
+	"config"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,7 +15,7 @@ import (
 
 // address 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
 // 返回值: [Array<string>, error] 地址列表和错误信息
-func (class *Adapters) address(call goja.FunctionCall) goja.Value {
+func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	// 如果当前地址已缓存，直接返回
 	if len(config.ServerAddress) > 0 {
 		return class.runtime.ToValue([]any{config.ServerAddress, nil})
@@ -54,7 +54,7 @@ func (class *Adapters) address(call goja.FunctionCall) goja.Value {
 
 // url 适配TypeScript调用的系统URL获取功能，返回系统访问地址
 // 返回值: [string, error] 系统URL和错误信息
-func (class *Adapters) url(call goja.FunctionCall) goja.Value {
+func (class *Runtime) url(call goja.FunctionCall) goja.Value {
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
 		log.Printf("获取本地IP失败: %v\n", err)
@@ -65,7 +65,7 @@ func (class *Adapters) url(call goja.FunctionCall) goja.Value {
 
 // syncFetch 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应
 // 返回值: [Object, error] 网络响应和错误信息
-func (class *Adapters) syncFetch(call goja.FunctionCall) goja.Value {
+func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}

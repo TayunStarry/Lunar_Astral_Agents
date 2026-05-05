@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	storage "storage/module"
 	"LunarCore/hierarchy"
 	"bytes"
 	"encoding/base64"
@@ -13,7 +14,7 @@ import (
 
 // saveFile 适配TypeScript调用的文件保存功能，支持字符串、字节数组及Blob/File类型数据
 // 返回值: [string, string, error] 文件名、路径和错误信息
-func (class *Adapters) saveFile(call goja.FunctionCall) goja.Value {
+func (class *Runtime) saveFile(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
 		return class.runtime.ToValue([]any{"", "", fmt.Errorf("参数不足")})
 	}
@@ -49,7 +50,7 @@ func (class *Adapters) saveFile(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", "", fmt.Errorf("不支持的文件数据类型")})
 	}
 
-	fileName, path, err := hierarchy.SaveFile(fileName, overwrite, reader)
+	fileName, path, err := storage.SaveFile(fileName, overwrite, reader)
 	if err != nil {
 		return class.runtime.ToValue([]any{"", "", err})
 	}
@@ -58,7 +59,7 @@ func (class *Adapters) saveFile(call goja.FunctionCall) goja.Value {
 
 // readFile 适配TypeScript调用的文件读取功能，返回文件内容、大小和MIME类型
 // 返回值: [string, number, string, error] 文件内容、大小、MIME类型和错误信息
-func (class *Adapters) readFile(call goja.FunctionCall) goja.Value {
+func (class *Runtime) readFile(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, 0, "", fmt.Errorf("参数不足")})
 	}
@@ -68,7 +69,7 @@ func (class *Adapters) readFile(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, 0, "", fmt.Errorf("filePath必须是字符串")})
 	}
 
-	file, size, mimeType, err := hierarchy.ReadFile(filePath)
+	file, size, mimeType, err := storage.ReadFile(filePath)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, 0, "", err})
 	}
@@ -87,7 +88,7 @@ func (class *Adapters) readFile(call goja.FunctionCall) goja.Value {
 
 // fileList 适配TypeScript调用的文件列表获取功能，转换为TypeScript可处理的格式
 // 返回值: [Array<{name: string, size: number, isDir: boolean, lastModified: string, path: string}>, error] 文件列表和错误信息
-func (class *Adapters) fileList(call goja.FunctionCall) goja.Value {
+func (class *Runtime) fileList(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -97,7 +98,7 @@ func (class *Adapters) fileList(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("path必须是字符串")})
 	}
 
-	fileList, err := hierarchy.GetFileList(path)
+	fileList, err := storage.GetFileList(path)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}
@@ -120,7 +121,7 @@ func (class *Adapters) fileList(call goja.FunctionCall) goja.Value {
 // fileView 适配TypeScript调用读取嵌入式文件系统中的内容
 // assets是嵌入式文件系统的根目录，调用时只需传入相对于assets的文件路径
 // 返回值: [string, error] 文件内容和错误信息
-func (class *Adapters) fileView(call goja.FunctionCall) goja.Value {
+func (class *Runtime) fileView(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足")})
 	}

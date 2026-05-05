@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarCore/config"
+	"config"
 	"bytes"
 	"fmt"
 	"io"

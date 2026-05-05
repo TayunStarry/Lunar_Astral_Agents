@@ -1,9 +1,9 @@
 package module
 
 import (
-	"config"
 	"archive/zip"
 	"bytes"
+	"config"
 	"fmt"
 	"io"
 	"log"

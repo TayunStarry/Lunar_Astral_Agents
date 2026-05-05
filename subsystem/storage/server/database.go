@@ -2,11 +2,11 @@ package server
 
 import (
 	"config"
-	"storage/module"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"storage/module"
 )
 
 // DatabaseHandler 统一的数据库处理器
@@ -27,7 +27,7 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 	// 执行批量操作
 	result := module.ExecuteDatabaseRequest(req)
 
-	// 设置响应头
+	// 设置响应头，指定响应内容类型为 JSON
 	w.Header().Set("Content-Type", "application/json")
 
 	// 返回结果
@@ -38,7 +38,6 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 记录日志
 	if *config.Developer {
-		log.Printf("数据库批量操作成功，执行 %d 个操作，耗时 %dms",
-			result.Operations, result.TotalTime)
+		log.Printf("数据库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
 	}
 }

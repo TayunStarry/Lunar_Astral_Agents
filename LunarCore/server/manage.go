@@ -2,7 +2,7 @@ package server
 
 import (
 	"LunarCore/adapters"
-	"LunarCore/config"
+	"config"
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
 	"LunarCore/release"
