@@ -82,7 +82,7 @@
 			}
 		},
 		"sevenzip_paths": [
-			"./subsystem/archive/7z.exe",
+			"./local_data/archive/7z.exe",
 			"C:/Program Files/7-Zip/7z.exe",
 			"C:/Program Files (x86)/7-Zip/7z.exe"
 		],
