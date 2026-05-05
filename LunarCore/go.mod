@@ -7,7 +7,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.1
-	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
 
 require (
@@ -40,3 +40,7 @@ replace config => ../subsystem/config
 require storage v0.0.0
 
 replace storage => ../subsystem/storage
+
+require browser v0.0.0
+
+replace browser => ../subsystem/browser

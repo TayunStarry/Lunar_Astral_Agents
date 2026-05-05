@@ -13,8 +13,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-
-
 // NewDatabase 创建新的数据库实例
 func NewDatabase() (*Database, error) {
 	db, err := initSQLite(*config.Database)

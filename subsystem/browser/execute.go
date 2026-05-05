@@ -1,7 +1,6 @@
 package browser
 
 import (
-	"config"
 	"fmt"
 	"log"
 	"net"
@@ -126,8 +125,8 @@ func GetLocalIP(preferredNetworks []string) (string, error) {
 	return "", fmt.Errorf("未找到可用的IP地址")
 }
 
-// openSystemBrowser 在系统默认浏览器中打开指定 URL
-func openSystemBrowser(url string) {
+// OpenSystemBrowser 在系统默认浏览器中打开指定 URL
+func OpenSystemBrowser(url string) {
 	var cmd string
 	var args []string
 
@@ -144,26 +143,17 @@ func openSystemBrowser(url string) {
 	}
 
 	if err := exec.Command(cmd, args...).Start(); err != nil {
-		// 打印分隔符
-		log.Printf("%s", strings.Repeat("-=", 28))
 		log.Printf("Web服务[ERROR] -> %v 建议手动访问: %s", err, url)
 	}
 }
 
 // OpenBrowser 使用浏览器打开指定 URL
 func OpenBrowser(url string) {
-	if !*config.AllowBrowser {
-		// 打印分隔符
-		log.Printf("%s", strings.Repeat("-=", 28))
-		log.Printf("Web服务 -> 建议手动访问: %s", url)
-		return
-	}
-
 	switch IsWebViewSupported() {
 	case true:
-		go startWebViewBrowser(url)
+		go StartWebViewBrowser(url)
 	case false:
-		log.Printf("Web服务[ERROR] -> 当前系统不支持 webview, 回退到系统浏览器")
-		openSystemBrowser(url)
+		log.Printf("Webview[ERROR] -> 当前系统不支持 webview, 回退到系统浏览器")
+		OpenSystemBrowser(url)
 	}
 }
