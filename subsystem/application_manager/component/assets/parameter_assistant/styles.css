@@ -46,17 +46,18 @@ body {
     height: 100%;
 }
 
+/* 浅色玻璃面板 */
 .config-section {
     flex: 3;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border-radius: 20px;
-    border: 1px solid rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.5);
     padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     overflow: hidden;
 }
 
@@ -75,22 +76,24 @@ body {
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.4);
     color: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .page-tab:hover {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.6);
     color: #000;
 }
 
 .page-tab.active {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
+    background: rgba(102, 126, 234, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #fff;
-    border-color: rgba(102, 126, 234, 0.5);
+    border-color: rgba(102, 126, 234, 0.4);
 }
 
 .page-content {
@@ -122,10 +125,6 @@ body {
     max-height: none;
 }
 
-.page-panel.horizontal {
-    flex-direction: row;
-}
-
 .config-grid {
     display: grid;
     gap: 20px;
@@ -137,17 +136,18 @@ body {
     align-items: start;
 }
 
+/* 右侧助手面板 - 浅色玻璃 */
 .ai-section {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
     border-radius: 20px;
-    border: 1px solid rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.5);
     padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     min-width: 350px;
 }
 
@@ -168,6 +168,7 @@ body {
     gap: 10px;
 }
 
+/* ========== 统一深色玻璃按钮 ========== */
 .btn {
     padding: 10px 24px;
     border: none;
@@ -176,42 +177,70 @@ body {
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.55);
     color: #fff;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    line-height: 1;
 }
 
 .btn:hover {
+    background: rgba(0, 0, 0, 0.72);
     transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
 
 .btn:active {
     transform: translateY(0);
 }
 
+/* 主要操作按钮稍深一些，但保持玻璃风格 */
 .btn-primary {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8));
+    background: rgba(0, 0, 0, 0.65);
+    border-color: rgba(255, 255, 255, 0.35);
 }
 
-.btn-send {
-    flex-shrink: 0;
-    padding: 10px 20px;
-}
-
-.config-card {
-    background: rgba(255, 255, 255, 0.7);
+/* 小按钮（数组添加/删除等） */
+.btn-small {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* 发送按钮固定高度，与输入框对齐 */
+.btn-send {
+    flex-shrink: 0;
+    padding: 0 20px;
+    height: 44px;
+    /* 与输入框高度匹配 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 配置卡片 - 浅色玻璃 */
+.config-card {
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.6);
     padding: 20px;
     display: flex;
     flex-direction: column;
     height: fit-content;
     max-height: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
 .config-card.full-width {
@@ -248,9 +277,11 @@ body {
 .field-input {
     width: 100%;
     padding: 10px 14px;
-    border: 1px solid rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 0, 0, 0.15);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     color: #000;
     font-size: 14px;
     font-weight: normal;
@@ -259,12 +290,13 @@ body {
 
 .field-input:focus {
     outline: none;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
     border-color: rgba(102, 126, 234, 0.6);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
 .field-input::placeholder {
-    color: rgba(0, 0, 0, 0.5);
+    color: rgba(0, 0, 0, 0.45);
 }
 
 .field-switch {
@@ -309,11 +341,11 @@ body {
     border-radius: 50%;
 }
 
-input:checked + .slider {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 1), rgba(118, 75, 162, 1));
+input:checked+.slider {
+    background: rgba(102, 126, 234, 0.9);
 }
 
-input:checked + .slider:before {
+input:checked+.slider:before {
     transform: translateX(24px);
 }
 
@@ -333,30 +365,27 @@ input:checked + .slider:before {
     flex: 1;
 }
 
-.btn-small {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 8px;
-}
-
 .ai-header {
     display: flex;
     align-items: center;
     gap: 12px;
     margin-bottom: 15px;
     padding-bottom: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .ai-avatar {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8));
+    background: rgba(102, 126, 234, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 22px;
+    color: white;
 }
 
 .ai-header h2 {
@@ -385,6 +414,7 @@ input:checked + .slider:before {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -399,7 +429,9 @@ input:checked + .slider:before {
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8));
+    background: rgba(102, 126, 234, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -410,11 +442,16 @@ input:checked + .slider:before {
 }
 
 .user-message .message-avatar {
-    background: rgba(0, 0, 0, 0.15);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
+/* 消息气泡 - 通透玻璃 */
 .message-content {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     padding: 12px 16px;
     border-radius: 16px;
     color: #000;
@@ -423,28 +460,37 @@ input:checked + .slider:before {
     line-height: 1.6;
     max-width: 80%;
     word-wrap: break-word;
+    border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .user-message .message-content {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.6), rgba(118, 75, 162, 0.6));
+    background: rgba(102, 126, 234, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #fff;
+    border-color: rgba(255, 255, 255, 0.4);
 }
 
+/* 输入区域 */
 .ai-input-container {
     display: flex;
     gap: 10px;
     align-items: flex-end;
+    /* 按钮与输入框底部对齐 */
 }
 
 #aiInput {
     flex: 1;
-    min-height: 50px;
+    min-height: 44px;
+    /* 优化高度 */
     max-height: 120px;
     resize: none;
-    padding: 12px 16px;
-    border: 1px solid rgba(0, 0, 0, 0.3);
+    padding: 10px 16px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     color: #000;
     font-size: 14px;
     font-weight: normal;
@@ -453,19 +499,23 @@ input:checked + .slider:before {
 
 #aiInput:focus {
     outline: none;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(102, 126, 234, 0.6);
 }
 
 #aiInput::placeholder {
-    color: rgba(0, 0, 0, 0.5);
+    color: rgba(0, 0, 0, 0.45);
 }
 
+/* 子块样式 */
 .sub-section {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-radius: 12px;
     padding: 14px;
     margin-bottom: 10px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .sub-section-title {
@@ -485,11 +535,13 @@ input:checked + .slider:before {
 }
 
 .nested-card {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-radius: 10px;
     padding: 14px;
     margin-bottom: 12px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .nested-card-title {
@@ -530,6 +582,7 @@ select.field-input option {
     width: 100%;
 }
 
+/* 预览弹窗 */
 .preview-modal {
     display: none;
     position: fixed;
@@ -537,7 +590,9 @@ select.field-input option {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 1000;
     justify-content: center;
     align-items: center;
@@ -548,17 +603,17 @@ select.field-input option {
 }
 
 .preview-modal-content {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border-radius: 20px;
-    border: 1px solid rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.6);
     width: 90%;
     max-width: 1000px;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
 }
 
 .preview-header {
@@ -594,7 +649,9 @@ select.field-input option {
 }
 
 .preview-section pre {
-    background: rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 10px;
     padding: 15px;
@@ -612,4 +669,66 @@ select.field-input option {
     gap: 10px;
     padding: 20px;
     border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* 消息内容Markdown样式 */
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+    margin: 10px 0 5px 0;
+    font-weight: 600;
+}
+
+.message-content p {
+    margin: 5px 0;
+}
+
+.message-content code {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.message-content pre {
+    background: rgba(0, 0, 0, 0.08);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.message-content pre code {
+    background: transparent;
+    padding: 0;
+}
+
+.message-content ul,
+.message-content ol {
+    margin: 5px 0;
+    padding-left: 25px;
+}
+
+.message-content a {
+    color: #4a90e2;
+    text-decoration: underline;
+}
+
+.message-content blockquote {
+    border-left: 3px solid rgba(0, 0, 0, 0.2);
+    padding-left: 10px;
+    margin: 8px 0;
+    color: rgba(0, 0, 0, 0.7);
+}
+
+/* 图标间距 */
+.header h1 i,
+.header-actions i,
+.page-tab i,
+.preview-header i,
+.preview-section h4 i,
+.preview-footer i,
+.ai-avatar i,
+.ai-input-container i {
+    margin-right: 6px;
 }

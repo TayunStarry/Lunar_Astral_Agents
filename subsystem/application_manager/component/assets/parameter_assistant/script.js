@@ -50,11 +50,11 @@ let pendingConfigChanges = null;
 const MAX_CONTEXT_MESSAGES = 15;
 
 const cardIcons = {
-    'models': '🤖',
-    'server': '🖥️',
-    'cloud': '☁️',
-    'qq_adapter': '💬',
-    'project_archiving': '📦'
+    'models': '<i class="fas fa-robot"></i>',
+    'server': '<i class="fas fa-server"></i>',
+    'cloud': '<i class="fas fa-cloud"></i>',
+    'qq_adapter': '<i class="fab fa-qq"></i>',
+    'project_archiving': '<i class="fas fa-box"></i>'
 };
 
 function getLabel(key) {
@@ -321,7 +321,7 @@ function addUserMessage(content) {
     div.className = 'message user-message';
     div.innerHTML = `
         <div class="message-avatar">你</div>
-        <div class="message-content">${escapeHtml(content)}</div>
+        <div class="message-content">${marked.parse(escapeHtml(content))}</div>
     `;
     messagesDiv.appendChild(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -333,7 +333,7 @@ function addAiMessage(content) {
     div.className = 'message ai-message';
     div.innerHTML = `
         <div class="message-avatar">璃</div>
-        <div class="message-content">${escapeHtml(content)}</div>
+        <div class="message-content">${marked.parse(content)}</div>
     `;
     messagesDiv.appendChild(div);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -443,7 +443,7 @@ ${JSON.stringify(configData, null, 2)}
     } catch (error) {
         removeTypingIndicator();
         console.error('AI请求失败:', error);
-        addAiMessage('抱歉，我现在无法连接到服务器，请稍后再试哦～😢');
+        addAiMessage('抱歉，我现在无法连接到服务器，请稍后再试哦～<i class="fas fa-sad-tear"></i>');
     }
 }
 
@@ -509,7 +509,7 @@ function applyConfigChanges() {
     if (pendingConfigChanges) {
         configData = JSON.parse(JSON.stringify(pendingConfigChanges.merged));
         renderAllPages();
-        addAiMessage('好的！配置已经成功更新啦～✨');
+        addAiMessage('好的！配置已经成功更新啦～<i class="fas fa-sparkles"></i>');
     }
     closePreviewModal();
 }

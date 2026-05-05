@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>参数助手 - 月之华</title>
+    <link rel="stylesheet" href="/read/resources/external/fontAwesome/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,16 +13,16 @@
         <div class="main-content">
             <div class="config-section">
                 <div class="header">
-                    <h1>🌙 参数助手</h1>
+                    <h1><i class="fas fa-moon"></i> 参数助手</h1>
                     <div class="header-actions">
-                        <button id="saveBtn" class="btn btn-primary">保存配置</button>
-                        <button id="resetBtn" class="btn btn-secondary">重置</button>
+                        <button id="saveBtn" class="btn btn-primary"><i class="fas fa-save"></i> 保存配置</button>
+                        <button id="resetBtn" class="btn btn-secondary"><i class="fas fa-undo"></i> 重置</button>
                     </div>
                 </div>
                 <div class="page-tabs" id="pageTabs">
-                    <button class="page-tab active" data-page="basic">基础配置</button>
-                    <button class="page-tab" data-page="qq">QQ适配器</button>
-                    <button class="page-tab" data-page="archive">项目归档</button>
+                    <button class="page-tab active" data-page="basic"><i class="fas fa-sliders-h"></i> 基础配置</button>
+                    <button class="page-tab" data-page="qq"><i class="fab fa-qq"></i> QQ适配器</button>
+                    <button class="page-tab" data-page="archive"><i class="fas fa-file-archive"></i> 项目归档</button>
                 </div>
                 <div class="page-content">
                     <div class="page-panel active" id="panel-basic">
@@ -37,20 +38,20 @@
             </div>
             <div class="ai-section">
                 <div class="ai-header">
-                    <div class="ai-avatar">✨</div>
+                    <div class="ai-avatar"><i class="fas fa-magic"></i></div>
                     <h2>琉璃助手</h2>
                 </div>
                 <div class="ai-messages" id="aiMessages">
                     <div class="message ai-message">
                         <div class="message-avatar">璃</div>
                         <div class="message-content">
-                            你好呀～我是琉璃！姐姐是月华，我来帮你修改配置文件哒！有什么问题尽管问我哦～😊
+                            你好呀～我是琉璃！姐姐是月华，我来帮你修改配置文件哒！有什么问题尽管问我哦～<i class="fas fa-smile"></i>
                         </div>
                     </div>
                 </div>
                 <div class="ai-input-container">
                     <textarea id="aiInput" placeholder="问我关于配置的问题吧..."></textarea>
-                    <button id="aiSendBtn" class="btn btn-send">发送</button>
+                    <button id="aiSendBtn" class="btn btn-send"><i class="fas fa-paper-plane"></i></button>
                 </div>
             </div>
         </div>
@@ -59,29 +60,30 @@
     <div class="preview-modal" id="previewModal">
         <div class="preview-modal-content">
             <div class="preview-header">
-                <h3>🔧 配置变更预览</h3>
-                <button class="btn btn-small" id="closePreview">关闭</button>
+                <h3><i class="fas fa-wrench"></i> 配置变更预览</h3>
+                <button class="btn btn-small" id="closePreview"><i class="fas fa-times"></i> 关闭</button>
             </div>
             <div class="preview-body">
                 <div class="preview-section">
-                    <h4>原配置</h4>
+                    <h4><i class="fas fa-file"></i> 原配置</h4>
                     <pre id="originalConfigPreview"></pre>
                 </div>
                 <div class="preview-section">
-                    <h4>变更部分</h4>
+                    <h4><i class="fas fa-edit"></i> 变更部分</h4>
                     <pre id="changedConfigPreview"></pre>
                 </div>
                 <div class="preview-section">
-                    <h4>合并后配置</h4>
+                    <h4><i class="fas fa-code-branch"></i> 合并后配置</h4>
                     <pre id="mergedConfigPreview"></pre>
                 </div>
             </div>
             <div class="preview-footer">
-                <button class="btn" id="cancelChanges">取消变更</button>
-                <button class="btn btn-primary" id="applyChanges">应用变更</button>
+                <button class="btn" id="cancelChanges"><i class="fas fa-times-circle"></i> 取消变更</button>
+                <button class="btn btn-primary" id="applyChanges"><i class="fas fa-check-circle"></i> 应用变更</button>
             </div>
         </div>
     </div>
+    <script src="/read/resources/external/marked.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

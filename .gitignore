@@ -20,7 +20,10 @@ local_data/resources/placeholder
 local_data/resources/images
 local_data/generated
 local_data/knowledge
-local_data/models/TTS
+local_data/models/MOSS-NANO-TTS
+local_data/models/Qwen3-TTS/git
+local_data/models/Qwen3-TTS/python
+local_data/models/Qwen3-TTS/cache
 
 ## 系统文件
 desktop.ini
