@@ -30,10 +30,9 @@
 		"lunar_ws_server": "ws://localhost:36789/ws",
 		"poll_interval": 10,
 		"listen_group_ids": [
-			262221051
+			"262221051"
 		],
 		"trigger_keywords": [
-			"月之华",
 			"月华",
 			"3826713076"
 		],

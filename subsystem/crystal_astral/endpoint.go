@@ -13,8 +13,9 @@ type SystemEndpoint struct {
 }
 
 var SystemEndpoints = []SystemEndpoint{
-	{Path: "/background", Handler: serveRandomBackground, Method: "GET", Description: "随机背景图片"},
+	{Path: "/background", Handler: RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
 	{Path: "/load/application", Handler: loadApplicationHandler, Method: "POST", Description: "加载应用"},
+	{Path: "/icon/", Handler: iconHandler, Method: "GET", Description: "图标文件"},
 	{Path: "/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除"},
 	{Path: "/file_list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表"},
 	{Path: "/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载"},

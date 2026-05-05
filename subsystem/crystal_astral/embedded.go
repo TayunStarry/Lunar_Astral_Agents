@@ -6,8 +6,9 @@ import (
 	"net/http"
 )
 
+//go:embed icon/*
 //go:embed assets/*
-//go:embed resource/*
+//go:embed background/*
 var EmbeddedFiles embed.FS
 
 // Gethierarchy 返回嵌入的文件系统
@@ -20,9 +21,18 @@ func Gethierarchy() http.FileSystem {
 	return http.FS(subFS)
 }
 
-// GetResourceFS 返回包含背景图片所在的 resource 目录文件系统
-func GetResourceFS() http.FileSystem {
-	subFS, err := fs.Sub(EmbeddedFiles, "resource")
+// GetBackgroundFS 返回包含背景图片所在的 background 目录文件系统
+func GetBackgroundFS() http.FileSystem {
+	subFS, err := fs.Sub(EmbeddedFiles, "background")
+	if err != nil {
+		panic(err)
+	}
+	return http.FS(subFS)
+}
+
+// GetIconFS 返回包含图标文件的 icon 目录文件系统
+func GetIconFS() http.FileSystem {
+	subFS, err := fs.Sub(EmbeddedFiles, "icon")
 	if err != nil {
 		panic(err)
 	}

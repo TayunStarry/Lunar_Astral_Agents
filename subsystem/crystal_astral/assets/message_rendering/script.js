@@ -1,7 +1,7 @@
 // ---------- WebSocket 配置 ----------
 
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${protocol}//${window.location.host}/ws`;
+const wsUrl = `${protocol}//${window.location.hostname}:36789/ws`;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_BASE_DELAY = 1500;
 const USER_NAME = '你';

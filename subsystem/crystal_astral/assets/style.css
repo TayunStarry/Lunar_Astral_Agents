@@ -29,39 +29,6 @@ body {
     flex-shrink: 0;
 }
 
-/* 头像容器：保持正方形，添加浮动动画 */
-.avatar-container {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    border-radius: 16px;
-    overflow: hidden;
-    margin: 0 auto;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    background: rgba(0, 0, 0, 0.2);
-
-    /* 新增浮动动画 */
-    animation: floatAvatar 3.5s ease-in-out infinite;
-}
-
-@keyframes floatAvatar {
-
-    0%,
-    100% {
-        transform: translateY(0);
-    }
-
-    50% {
-        transform: translateY(-12px);
-    }
-}
-
-.avatar-container img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
 .chat-container {
     flex: 1;
     background: rgba(255, 255, 255, 0.25);
@@ -80,56 +47,98 @@ body {
     padding-right: 10px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
-.chat-messages::-webkit-scrollbar {
-    width: 6px;
+/* 消息行：头像 + 气泡 */
+.message-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
 }
 
-.chat-messages::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+/* 助手消息行靠左，正常顺序 */
+.message-row.assistant {
+    justify-content: flex-start;
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
+/* 用户消息行靠右，内部顺序通过JS调整（气泡在左，头像在右） */
+.message-row.user {
+    justify-content: flex-end;
 }
 
-.message {
-    max-width: 85%;
+/* 小头像（聊天软件风格） */
+.message-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.message-avatar.user-avatar {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.message-avatar.user-avatar i {
+    font-size: 18px;
+    color: #fff;
+    opacity: 0.9;
+}
+
+.message-avatar.ai-avatar {
+    background: transparent;
+}
+
+.message-avatar.ai-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 消息气泡 */
+.message-bubble {
+    max-width: 70%;
     padding: 10px 14px;
     border-radius: 12px;
     word-wrap: break-word;
     line-height: 1.5;
 }
 
-.message.user {
+.message-bubble.user {
     background: rgba(0, 0, 0, 0.45);
-    align-self: flex-end;
     border-bottom-right-radius: 4px;
 }
 
-.message.assistant {
+.message-bubble.assistant {
     background: rgba(100, 100, 255, 0.35);
-    align-self: flex-start;
     border-bottom-left-radius: 4px;
 }
 
+.message-bubble img {
+    max-width: 180px;
+    max-height: 180px;
+    border-radius: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+/* 系统消息（居中，无头像） */
 .message.system {
     background: rgba(50, 200, 100, 0.3);
     align-self: center;
     text-align: center;
     font-size: 0.85em;
-}
-
-.message img {
-    max-width: 200px;
-    max-height: 200px;
-    border-radius: 8px;
-    margin-top: 8px;
-    cursor: pointer;
+    max-width: 85%;
+    padding: 8px 14px;
+    border-radius: 12px;
+    word-wrap: break-word;
+    line-height: 1.5;
 }
 
 .input-area {
@@ -302,7 +311,6 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* 禁止整个面板滚动 */
 }
 
 .header {
@@ -314,7 +322,6 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.3);
     text-align: center;
     flex-shrink: 0;
-    /* 固定高度，不参与滚动 */
 }
 
 .header h1 {
@@ -326,17 +333,14 @@ body {
 
 .page-grid {
     flex: 1;
-    /* 占据剩余空间 */
     overflow-y: auto;
-    /* 网格内滚动 */
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 25px;
     padding-right: 10px;
-    /* 为滚动条预留空间 */
 }
 
-/* 页面卡片强制 1:1 比例，图标作为绝对主角 */
+/* 页面卡片强制 1:1 比例 */
 .page-card {
     aspect-ratio: 1 / 1;
     background: rgba(255, 255, 255, 0.25);
@@ -391,6 +395,7 @@ body {
     margin: 0;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -435,12 +440,9 @@ body {
 /* 隐藏全部滚动条，保留滚动功能 */
 * {
     scrollbar-width: none;
-    /* Firefox */
     -ms-overflow-style: none;
-    /* IE 10+ */
 }
 
 *::-webkit-scrollbar {
     display: none;
-    /* Chrome, Safari, Edge */
 }
