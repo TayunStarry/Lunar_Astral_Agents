@@ -129,10 +129,19 @@ function renderEChartsInContainer(container) {
             if (!config.series) config.series = [{ type: 'line', data: [12, 28, 35, 42] }];
             const chartDiv = document.createElement('div');
             chartDiv.className = 'echarts-container';
+            // 创建内部容器用于 ECharts
+            const innerDiv = document.createElement('div');
+            innerDiv.style.width = '100%';
+            innerDiv.style.height = '100%';
+            chartDiv.appendChild(innerDiv);
             block.parentNode.replaceChild(chartDiv, block);
-            const chart = echarts.init(chartDiv);
+            const chart = echarts.init(innerDiv);
             chart.setOption(config);
             chartDiv._echartsInstance = chart;
+            // 延迟调用 resize 确保 DOM 布局完成
+            setTimeout(() => {
+                chart.resize();
+            }, 100);
             window.addEventListener('resize', () => chart.resize());
         } catch (err) {
             console.warn('echarts渲染出错', err);
@@ -307,7 +316,7 @@ async function populateMessageContent(msgEl, content, role) {
         contentDiv.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 加载中...';
         const html = await renderContentAsync(content);
         contentDiv.innerHTML = html;
-
+        contentDiv.querySelectorAll('table').forEach(t => t.classList.add('markdown-table'));
         highlightCodeInContainer(contentDiv);
         renderEChartsInContainer(contentDiv);
         await renderMermaidInContainer(contentDiv);
