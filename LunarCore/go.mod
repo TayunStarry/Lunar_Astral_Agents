@@ -28,7 +28,7 @@ require (
 
 require (
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
-	github.com/mattn/go-sqlite3 v1.14.33
+	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 )
