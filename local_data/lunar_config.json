@@ -1,11 +1,11 @@
 {
 	"models": {
-		"multimodal_model": null,
-		"mmproj_model": null,
-		"embedding_model": null,
-		"diffusion_model": null,
-		"variational_model": null,
-		"prompt_refine_model": null
+		"multimodal_model": "./local_data/models/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
+		"mmproj_model": "./local_data/models/mmproj-Qwen3-VL-8B-Instruct-F16.gguf",
+		"embedding_model": "./local_data/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
+		"diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
+		"variational_model": "./local_data/models/diffusion_pytorch_model.safetensors",
+		"prompt_refine_model": "./local_data/models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 	},
 	"server": {
 		"tts_url": "http://localhost:7860",
