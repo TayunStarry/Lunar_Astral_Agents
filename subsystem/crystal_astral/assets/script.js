@@ -22,11 +22,8 @@ const defaultSendBtnHTML = sendBtn.innerHTML;
 
 // 扩展后的有效文件类型（文本类 + 图片类）
 const VALID_FILE_TYPES = [
-    // 图片
     'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-    // 纯文本
     'text/plain', 'text/csv', 'text/html', 'text/xml', 'text/css', 'text/javascript',
-    // 常见应用文本
     'application/json', 'application/xml', 'application/javascript', 'text/markdown'
 ];
 
@@ -85,8 +82,7 @@ function openPage(page) {
     if (page.path) {
         addMessage('system', `已为您启动【${page.title}】`);
         loadApplication(page.path);
-    }
-    else {
+    } else {
         addMessage('system', `已为您打开【${page.title}】`);
         setTimeout(() => { window.open(page.url, '_self'); }, 1000);
     }
@@ -94,62 +90,89 @@ function openPage(page) {
 
 async function loadApplication(path) {
     try {
-        const response = await fetch('/load/application',
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ path })
-            }
-        );
+        const response = await fetch('/load/application', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
         const data = await response.json();
         if (data.success) addMessage('system', '应用程序启动成功！');
         else addMessage('system', `启动失败: ${data.message}`);
-    }
-    catch (error) {
+    } catch (error) {
         console.error('Error loading application:', error);
         addMessage('system', '启动应用程序时发生错误');
     }
 }
 
 function addMessage(role, content) {
-    /** 定义消息对象 */
     const message = { role, content };
-    // 如果不是系统消息，添加到消息列表
     if (role !== 'system') messages.push(message);
-    // 如果消息列表超过 20 条，移除最早的消息
     if (messages.length > 20) {
         messages.shift();
         chatMessages.removeChild(chatMessages.firstChild);
     }
-    // 渲染消息
     renderMessage(message);
-    // 滚动到最新消息
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 function renderMessage(message) {
-    const div = document.createElement('div');
-    div.className = `message ${message.role}`;
+    // 系统消息：居中显示，无头像
+    if (message.role === 'system') {
+        const div = document.createElement('div');
+        div.className = 'message system';
+        div.textContent = message.content;
+        chatMessages.appendChild(div);
+        return;
+    }
+
+    // 用户 / AI 消息：带小头像的聊天行
+    const row = document.createElement('div');
+    row.className = `message-row ${message.role}`;
+
+    // --- 头像 ---
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    if (message.role === 'user') {
+        avatar.classList.add('user-avatar');
+        avatar.innerHTML = '<i class="fas fa-user"></i>';
+    } else {
+        avatar.classList.add('ai-avatar');
+        const img = document.createElement('img');
+        img.src = '/icon/agent_avatar.jpg';
+        img.alt = '琉璃';
+        avatar.appendChild(img);
+    }
+
+    // --- 气泡 ---
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble ${message.role}`;
 
     if (Array.isArray(message.content)) {
-        message.content.forEach(
-            item => {
-                if (item.type === 'text') div.appendChild(document.createTextNode(item.text));
-                else if (item.type === 'image_url') {
-                    const img = document.createElement('img');
-                    img.src = item.image_url.url;
-                    img.alt = 'Uploaded image';
-                    img.addEventListener('click', () => window.open(img.src, '_blank'));
-                    div.appendChild(img);
-                }
+        message.content.forEach(item => {
+            if (item.type === 'text') {
+                bubble.appendChild(document.createTextNode(item.text));
+            } else if (item.type === 'image_url') {
+                const img = document.createElement('img');
+                img.src = item.image_url.url;
+                img.alt = 'Uploaded image';
+                img.addEventListener('click', () => window.open(img.src, '_blank'));
+                bubble.appendChild(img);
             }
-        );
+        });
+    } else {
+        bubble.textContent = message.content;
     }
-    else div.textContent = message.content;
 
-    chatMessages.appendChild(div);
+    // 关键修复：用户消息行靠右显示，且头像在气泡右侧（因此先添加气泡，再添加头像）
+    if (message.role === 'user') {
+        row.appendChild(bubble);
+        row.appendChild(avatar);
+    } else {
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+    }
+
+    chatMessages.appendChild(row);
 }
 
 // 添加附件到待发送列表
@@ -158,41 +181,38 @@ function addAttachment(file, dataUrl) {
     renderAttachments();
 }
 
-// 渲染附件气泡（图片显示缩略图，文本显示文件图标）
+// 渲染附件气泡
 function renderAttachments() {
     attachmentsPreview.innerHTML = '';
+    pendingAttachments.forEach((att, idx) => {
+        const bubble = document.createElement('div');
+        bubble.className = 'attachment-bubble';
+        bubble.title = att.file.name;
 
-    pendingAttachments.forEach(
-        (att, idx) => {
-            const bubble = document.createElement('div');
-            bubble.className = 'attachment-bubble';
-            bubble.title = att.file.name;
-
-            // 图片文件显示缩略图
-            if (att.file.type.startsWith('image/')) {
-                const img = document.createElement('img');
-                img.src = att.dataUrl;
-                img.alt = '缩略图';
-                bubble.appendChild(img);
-            }
-            else {
-                // 文本文件使用 Font Awesome 图标
-                const icon = document.createElement('i');
-                icon.className = 'fas fa-file-alt';
-                bubble.appendChild(icon);
-            }
-
-            // 删除按钮
-            const removeBtn = document.createElement('span');
-            removeBtn.className = 'remove-btn';
-            removeBtn.innerHTML = '&times;';
-            removeBtn.dataset.id = idx;
-            removeBtn.addEventListener('click', (e) => { const removeIdx = parseInt(e.target.dataset.id); pendingAttachments.splice(removeIdx, 1); renderAttachments(); });
-            bubble.appendChild(removeBtn);
-
-            attachmentsPreview.appendChild(bubble);
+        if (att.file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = att.dataUrl;
+            img.alt = '缩略图';
+            bubble.appendChild(img);
+        } else {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-file-alt';
+            bubble.appendChild(icon);
         }
-    );
+
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'remove-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.dataset.id = idx;
+        removeBtn.addEventListener('click', (e) => {
+            const removeIdx = parseInt(e.target.dataset.id);
+            pendingAttachments.splice(removeIdx, 1);
+            renderAttachments();
+        });
+        bubble.appendChild(removeBtn);
+
+        attachmentsPreview.appendChild(bubble);
+    });
 }
 
 async function handleSend() {
@@ -210,7 +230,6 @@ async function handleSend() {
         if (att.file.type.startsWith('image/')) {
             content.push({ type: 'image_url', image_url: { url: att.dataUrl } });
         } else {
-            // 文本文件内容截取前 4096 个字符
             const truncatedText = att.dataUrl.substring(0, 4096);
             content.push({ type: 'text', text: truncatedText });
         }
@@ -224,20 +243,16 @@ async function handleSend() {
     // 设置发送中状态
     sendBtn.disabled = true;
     sendBtn.classList.add('loading');
-    sendBtn.innerHTML = '';   // 隐藏图标
+    sendBtn.innerHTML = '';
 
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
 
     try {
-        const response = await fetch('/v1/chat/completions',
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ model: 'system-multimodal', messages: allMessages, tools: window.tools })
-            }
-        );
+        const response = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'system-multimodal', messages: allMessages, tools: window.tools })
+        });
 
         if (!response.ok) throw new Error('Network response was not ok');
 
@@ -253,15 +268,13 @@ async function handleSend() {
                 addMessage('assistant', assistantMessage.content || '好的，让我来帮您打开页面～');
                 openPage(page);
             }
+        } else {
+            addMessage('assistant', assistantMessage.content);
         }
-        else addMessage('assistant', assistantMessage.content);
-    }
-    catch (error) {
+    } catch (error) {
         console.error('Error:', error);
         addMessage('system', '请求失败，请稍后重试');
-    }
-    finally {
-        // 恢复发送按钮初始状态
+    } finally {
         sendBtn.disabled = false;
         sendBtn.classList.remove('loading');
         sendBtn.innerHTML = defaultSendBtnHTML;
@@ -280,7 +293,7 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.addEventListener('click', handleSend);
 
-// 全局拖拽上传效果（使用扩展后的文件类型列表）
+// 全局拖拽上传
 document.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropOverlay.classList.add('active');
@@ -297,18 +310,14 @@ document.addEventListener('drop', async (e) => {
     dropOverlay.classList.remove('active');
 
     const files = Array.from(e.dataTransfer.files);
-
     for (const file of files) {
         if (!VALID_FILE_TYPES.includes(file.type)) {
             addMessage('system', `不支持的文件类型: ${file.name}`);
             continue;
         }
-
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                addAttachment(file, e.target.result);
-            };
+            reader.onload = (e) => { addAttachment(file, e.target.result); };
             reader.readAsDataURL(file);
         } else {
             const text = await file.text();
@@ -317,7 +326,7 @@ document.addEventListener('drop', async (e) => {
     }
 });
 
-// 聊天区域也允许拖拽上传（阻止事件冒泡到全局，同样使用扩展列表）
+// 聊天区域也允许拖拽上传
 chatMessages.addEventListener('dragover', (e) => {
     e.preventDefault();
 });
@@ -327,18 +336,14 @@ chatMessages.addEventListener('drop', async (e) => {
     e.stopPropagation();
 
     const files = Array.from(e.dataTransfer.files);
-
     for (const file of files) {
         if (!VALID_FILE_TYPES.includes(file.type)) {
             addMessage('system', `不支持的文件类型: ${file.name}`);
             continue;
         }
-
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                addAttachment(file, e.target.result);
-            };
+            reader.onload = (e) => { addAttachment(file, e.target.result); };
             reader.readAsDataURL(file);
         } else {
             const text = await file.text();

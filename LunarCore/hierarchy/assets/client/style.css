@@ -45,7 +45,7 @@
 	--success-color: #20c997;
 
 	/* 背景图片（后期通过接口或配置动态替换） */
-	--bg-image: url('/background.png');
+	--bg-image: url('/background.jpg');
 }
 
 /* ========== 全局隐藏滚动条 ========== */
