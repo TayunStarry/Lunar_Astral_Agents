@@ -20,8 +20,10 @@ import (
 	"time"
 )
 
+// proxyPrefixes 要代理的路径前缀
 var proxyPrefixes = []string{"/v1/", "/generate", "/capture", "/write/message"}
 
+// shouldProxy 判断是否需要代理路径
 func shouldProxy(path string) bool {
 	for _, prefix := range proxyPrefixes {
 		if len(path) >= len(prefix) && path[:len(prefix)] == prefix {
@@ -31,6 +33,7 @@ func shouldProxy(path string) bool {
 	return false
 }
 
+// getProxyHandler 获取代理处理程序
 func getProxyHandler() *httputil.ReverseProxy {
 	proxyURL, err := url.Parse("http://localhost:36789")
 	if err != nil {
@@ -38,15 +41,6 @@ func getProxyHandler() *httputil.ReverseProxy {
 		return nil
 	}
 	return httputil.NewSingleHostReverseProxy(proxyURL)
-}
-
-type LoadApplicationRequest struct {
-	Path string `json:"path"`
-}
-
-type LoadApplicationResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
 }
 
 // loadApplicationHandler 处理加载应用的 HTTP 请求
@@ -317,12 +311,8 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	return nil
 }
 
-type proxyAwareHandler struct {
-	fs          http.Handler
-	proxy       *httputil.ReverseProxy
-	shouldProxy func(string) bool
-}
-
+// ServeHTTP 处理 HTTP 请求
+// 根据路径判断是否需要通过代理转发
 func (h *proxyAwareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if h.shouldProxy(path) {
