@@ -1,7 +1,7 @@
 package image
 
 import (
-	"LunarCore/config"
+	"config"
 	"LunarCore/hierarchy/image/generate"
 	"encoding/json"
 	"fmt"

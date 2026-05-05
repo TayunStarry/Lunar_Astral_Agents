@@ -1,7 +1,7 @@
 package server
 
 import (
-	config "LunarCore/config"
+	"config"
 	"encoding/json"
 	"log"
 	"os"

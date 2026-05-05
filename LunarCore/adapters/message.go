@@ -25,7 +25,7 @@ type PushImageData struct {
 	Images []string `json:"images"`
 }
 
-func (class *Adapters) pushContext(msgType string, content string) goja.Value {
+func (class *Runtime) pushContext(msgType string, content string) goja.Value {
 	data := PushContextData{
 		Type:    msgType,
 		Content: content,
@@ -34,7 +34,7 @@ func (class *Adapters) pushContext(msgType string, content string) goja.Value {
 	return class.runtime.ToValue(true)
 }
 
-func (class *Adapters) pushImage(images []string) goja.Value {
+func (class *Runtime) pushImage(images []string) goja.Value {
 	data := PushImageData{
 		Type:   "image",
 		Images: images,
@@ -50,7 +50,7 @@ var UnreadContext = make([]PostMessage, 0)
 var UnreadVideoUrl = make([]string, 0)
 
 // pullContext 拉取上下文消息
-func (class *Adapters) pullContext() goja.Value {
+func (class *Runtime) pullContext() goja.Value {
 	// 如果未处理的上下文消息为空，返回空数组
 	if len(UnreadContext) == 0 {
 		return class.runtime.ToValue([]PostMessage{})
@@ -67,7 +67,7 @@ func (class *Adapters) pullContext() goja.Value {
 }
 
 // pullVideoUrl 拉取视频URL
-func (class *Adapters) pullVideoUrl() goja.Value {
+func (class *Runtime) pullVideoUrl() goja.Value {
 	// 如果未处理的视频URL为空，返回空数组
 	if len(UnreadVideoUrl) == 0 {
 		return class.runtime.ToValue([]string{})

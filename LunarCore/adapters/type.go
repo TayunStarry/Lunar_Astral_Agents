@@ -8,8 +8,8 @@ type IPInfo struct {
 	City   string `json:"city"`
 }
 
-// Adapters 存储JavaScript运行时实例，用于调用适配器函数
-type Adapters struct {
+// Runtime 存储JavaScript运行时实例，用于调用适配器函数
+type Runtime struct {
 	runtime *goja.Runtime
 }
 

@@ -12,7 +12,7 @@ import (
 
 // keyframe 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
 // 返回值: [Array<{filePath: string, timestamp: number, frameNum: number, data: string}>, error] 关键帧列表和错误信息
-func (class *Adapters) keyframe(call goja.FunctionCall) goja.Value {
+func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -48,7 +48,7 @@ func (class *Adapters) keyframe(call goja.FunctionCall) goja.Value {
 
 // resizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
 // 返回值: [Object, error] 缩放结果和错误信息
-func (class *Adapters) resizeImage(call goja.FunctionCall) goja.Value {
+func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -98,7 +98,7 @@ func (class *Adapters) resizeImage(call goja.FunctionCall) goja.Value {
 
 // generateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
 // 返回值: [Object, error] 图片生成结果和错误信息
-func (class *Adapters) generateImage(call goja.FunctionCall) goja.Value {
+func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -169,7 +169,7 @@ func (class *Adapters) generateImage(call goja.FunctionCall) goja.Value {
 
 // atob 适配TypeScript调用的base64解码功能，处理base64编码的字符串并返回解码结果
 // 返回值: string 解码后的字符串
-func (class *Adapters) atob(call goja.FunctionCall) goja.Value {
+func (class *Runtime) atob(call goja.FunctionCall) goja.Value {
 	input := call.Argument(0).String()
 
 	// Go 的标准 Base64 解码

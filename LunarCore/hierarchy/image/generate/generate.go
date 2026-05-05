@@ -1,7 +1,7 @@
 package generate
 
 import (
-	"LunarCore/config"
+	"config"
 	"encoding/base64"
 	"fmt"
 	"log"

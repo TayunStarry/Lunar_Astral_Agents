@@ -1,7 +1,7 @@
 package server
 
 import (
-	"LunarCore/config"
+	"config"
 	"LunarCore/model"
 	"fmt"
 	"net/http"

@@ -2,7 +2,7 @@
 package llama
 
 import (
-	"LunarCore/config"
+	"config"
 	"log"
 	"os/exec"
 )

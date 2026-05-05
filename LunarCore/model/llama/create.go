@@ -2,7 +2,7 @@ package llama
 
 import (
 	"LunarCore/browser"
-	"LunarCore/config"
+	"config"
 	"log"
 )
 
