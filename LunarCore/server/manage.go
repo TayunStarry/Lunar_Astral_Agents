@@ -5,7 +5,7 @@ import (
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
 	"LunarCore/release"
-	"LunarCore/server/handlers/file/image"
+	"LunarCore/server/handlers/image"
 	"config"
 	"context"
 	"flag"

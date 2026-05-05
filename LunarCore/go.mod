@@ -3,7 +3,7 @@ module LunarCore
 go 1.24.4
 
 require (
-	github.com/disintegration/imaging v1.6.2
+	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.1
@@ -27,7 +27,7 @@ require (
 )
 
 require (
-	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
+	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
 	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
@@ -44,3 +44,7 @@ replace storage => ../subsystem/storage
 require browser v0.0.0
 
 replace browser => ../subsystem/browser
+
+require screenshot v0.0.0
+
+replace screenshot => ../subsystem/screenshot

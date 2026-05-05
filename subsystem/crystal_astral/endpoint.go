@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"screenshot"
 	storage "storage/server"
 )
 
@@ -23,4 +24,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/save", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存"},
 	{Path: "/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取"},
 	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据管理"},
+	{Path: "/capture", Handler: screenshot.HandleScreenshot, Method: "POST", Description: "通用截图"},
+	{Path: "/capture/display/", Handler: screenshot.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
+	{Path: "/capture/region", Handler: screenshot.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
+	{Path: "/capture/displays", Handler: screenshot.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
+	{Path: "/resize", Handler: screenshot.HandleResizeImage, Method: "POST", Description: "图片缩放"},
 }

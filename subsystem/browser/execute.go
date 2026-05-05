@@ -127,6 +127,7 @@ func GetLocalIP(preferredNetworks []string) (string, error) {
 
 // OpenSystemBrowser 在系统默认浏览器中打开指定 URL
 func OpenSystemBrowser(url string) {
+	log.Printf("[OpenSystemBrowser] 使用系统浏览器打开: %s\n", url)
 	var cmd string
 	var args []string
 
@@ -137,7 +138,7 @@ func OpenSystemBrowser(url string) {
 	case "darwin":
 		cmd = "open"
 		args = []string{url}
-	default: // linux, freebsd, etc.
+	default:
 		cmd = "xdg-open"
 		args = []string{url}
 	}
@@ -149,11 +150,12 @@ func OpenSystemBrowser(url string) {
 
 // OpenBrowser 使用浏览器打开指定 URL
 func OpenBrowser(url string) {
-	switch IsWebViewSupported() {
-	case true:
-		go StartWebViewBrowser(url)
-	case false:
-		log.Printf("Webview[ERROR] -> 当前系统不支持 webview, 回退到系统浏览器")
+	log.Println("[OpenBrowser] 开始选择浏览器")
+	if !IsWebViewSupported() {
+		log.Println("[OpenBrowser] webview 不支持，回退到系统浏览器")
 		OpenSystemBrowser(url)
+		return
 	}
+	log.Println("[OpenBrowser] 启动 webview 专用线程")
+	go StartWebViewBrowser(url)
 }
