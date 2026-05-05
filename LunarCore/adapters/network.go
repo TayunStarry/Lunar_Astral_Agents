@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarCore/browser"
+	"browser"
 	"config"
 	"bytes"
 	"encoding/json"

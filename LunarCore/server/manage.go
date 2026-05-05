@@ -2,11 +2,11 @@ package server
 
 import (
 	"LunarCore/adapters"
-	"config"
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
 	"LunarCore/release"
 	"LunarCore/server/handlers/file/image"
+	"config"
 	"context"
 	"flag"
 	"log"
@@ -23,8 +23,6 @@ import (
 func InitializeServer() {
 	// 解析命令行参数
 	flag.Parse()
-	// 加载配置文件
-	loadConfigureFile()
 	// 如果指定了端口释放选项，则执行端口释放
 	if *config.ClearPort {
 		release.ExecutePortRelease()

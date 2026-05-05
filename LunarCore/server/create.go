@@ -1,7 +1,7 @@
 package server
 
 import (
-	"LunarCore/browser"
+	"browser"
 	"config"
 	"fmt"
 	"log"

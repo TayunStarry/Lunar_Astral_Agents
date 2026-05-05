@@ -18,3 +18,11 @@ var webviewMutex sync.Mutex
 
 // webviewInstance WebView 实例
 var webviewInstance webview.WebView
+
+// webviewClosedChan 用于通知 webview 已关闭
+var webviewClosedChan = make(chan struct{}, 1)
+
+// WebViewClosed 返回一个 channel，用于接收 webview 关闭事件
+func WebViewClosed() <-chan struct{} {
+	return webviewClosedChan
+}

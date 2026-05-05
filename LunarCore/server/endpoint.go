@@ -47,8 +47,6 @@ var SystemEndpoints = []SystemEndpoint{
 	// 消息队列相关接口
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "批量消息写入"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "批量视频URL写入"},
-	// WebView 控制接口
-	{Path: "/webview/control", Handler: handlers.WebViewControlHandler, Method: "POST", Description: "页面控制"},
 	// TTS语音服务相关接口
 	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS语音服务代理"},
 	{Path: "/qwen_tts/models", Handler: handlers.TTSQwen3ProxyHandler, Method: "GET", Description: "Qwen3模型检测"},
