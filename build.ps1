@@ -3,8 +3,8 @@ Set-Location -Path './LunarCore'
 ./build.ps1
 Set-Location -Path '../'
 
-# 构建 application_manager
-Set-Location -Path './subsystem\application_manager'
+# 构建 Crystal_Astral
+Set-Location -Path './subsystem\crystal_astral'
 ./build.ps1
 Set-Location -Path '../../'
 
