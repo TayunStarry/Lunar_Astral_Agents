@@ -113,6 +113,14 @@ function renderECharts(container) {
             placeholder.appendChild(chartContainer);
             const chart = window.echarts.init(chartContainer);
             chart.setOption(config);
+            // 保存图表实例以便后续清理
+            placeholder._echartsInstance = chart;
+            // 延迟调用 resize 确保 DOM 布局完成
+            setTimeout(() => {
+                chart.resize();
+            }, 100);
+            // 窗口大小变化时重新调整
+            window.addEventListener('resize', () => chart.resize());
         } catch (error) {
             console.error('ECharts rendering error:', error);
         }
