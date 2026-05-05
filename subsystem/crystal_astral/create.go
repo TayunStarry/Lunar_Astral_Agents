@@ -14,7 +14,7 @@ import (
 )
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/generate", "/capture", "/write/message"}
+var proxyPrefixes = []string{"/v1/", "/generate", "/write/message"}
 
 // shouldProxy 判断是否需要代理路径
 func shouldProxy(path string) bool {
