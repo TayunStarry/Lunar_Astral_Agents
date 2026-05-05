@@ -1,14 +1,15 @@
 package image
 
 import (
-	"config"
 	"bytes"
+	"config"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"os"
 	"path/filepath"
+	"screenshot"
 	"slices"
 	"strconv"
 	"strings"
@@ -44,50 +45,6 @@ type FrameData struct {
 func IsSupportedVideoFormat(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	return slices.Contains(supportedVideoFormats, ext)
-}
-
-// ExtractFirstFrame 提取视频的第一帧
-func ExtractFirstFrame(inputFile string) (KeyFrame, error) {
-	buf := new(bytes.Buffer)
-	kwargs1 := ffmpeg.KwArgs{"ss": "0"}
-	kwargs2 := ffmpeg.KwArgs{"vframes": 1, "an": "", "f": "image2pipe", "vcodec": "mjpeg"}
-
-	stream := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2)
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
-	}
-	err := stream.WithOutput(buf, os.Stderr).Run()
-	if err != nil {
-		return KeyFrame{}, fmt.Errorf("提取第一帧失败: %w", err)
-	}
-	// 检查缓冲区是否为空
-	if buf.Len() == 0 {
-		return KeyFrame{}, fmt.Errorf("提取的帧数据为空")
-	}
-	// 解码提取的JPEG图像
-	image, err := jpeg.Decode(buf)
-	if err != nil {
-		return KeyFrame{}, fmt.Errorf("解码图像失败: %w", err)
-	}
-	// 创建内存缓冲区用于编码
-	encodeBuf := new(bytes.Buffer)
-	// 优化JPEG编码参数，提高压缩质量和速度
-	opt := &jpeg.Options{
-		Quality: 85, // 设置适当的质量参数
-	}
-	// 将图像编码为JPEG格式并写入缓冲区
-	if err := jpeg.Encode(encodeBuf, image, opt); err != nil {
-		return KeyFrame{}, fmt.Errorf("编码图像失败: %w", err)
-	}
-	// 创建关键帧结构体
-	firstFrame := KeyFrame{
-		FilePath:  "first_frame.jpg",
-		Timestamp: "00:00:00",
-		FrameNum:  1,
-		Data:      encodeBuf.Bytes(),
-	}
-	// 返回第一帧数据
-	return firstFrame, nil
 }
 
 // VideoKeyframeExtraction 提取视频关键帧并写入本地缓存
@@ -341,9 +298,9 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 	// 构建完整的文件路径
 	framePath := filepath.Join(cacheDir, frameFileName)
 	// 将当前帧转换为RGBA格式，确保通道数为4
-	rgbaImage := toRGBA(currImage)
+	rgbaImage := screenshot.ToRGBA(currImage)
 	// 调整图像大小，确保宽高都不超过1024
-	resizedImage := resizeToFit(rgbaImage, 1024, 1024)
+	resizedImage := screenshot.ResizeToFit(rgbaImage, 1024, 1024)
 
 	// 创建内存缓冲区
 	buf := new(bytes.Buffer)

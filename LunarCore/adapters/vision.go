@@ -5,6 +5,7 @@ import (
 	"LunarCore/hierarchy/image/generate"
 	"encoding/base64"
 	"fmt"
+	"screenshot"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -89,7 +90,7 @@ func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片缩放函数
-	result, err := image.ResizeImage(bytesData)
+	result, err := screenshot.ResizeImage(bytesData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

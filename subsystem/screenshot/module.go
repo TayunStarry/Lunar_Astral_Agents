@@ -1,8 +1,8 @@
-package image
+package screenshot
 
 import (
-	"config"
 	"bytes"
+	"config"
 	"encoding/base64"
 	"fmt"
 	"image"
@@ -18,28 +18,13 @@ import (
 	"github.com/kbinani/screenshot"
 )
 
-// CaptureRequest 截图请求参数
-type CaptureRequest struct {
-	DisplayIndex int    `json:"display_index"` // -1表示所有显示器
-	Region       string `json:"region"`        // "x,y,width,height"
-	Scale        string `json:"scale"`         // "width,height" 或 "0.5"
-	Format       string `json:"format"`        // png, jpg, jpeg
-	Quality      int    `json:"quality"`       // JPEG质量 1-100
-}
-
 // 截图互斥锁
 var screenshotMutex sync.RWMutex
 
-// 最后截图时间和频率限制
-var (
-	lastCapture     time.Time               // 最后截图时间
-	captureCooldown = 50 * time.Millisecond // 最小截图间隔
-)
-
-// CaptureScreenshot 执行截图操作
-func CaptureScreenshot(req CaptureRequest) ([]byte, string, string, error) {
+// Screenshot 执行截图操作
+func Screenshot(req ScreenshotRequest) ([]byte, string, string, error) {
 	// 检查频率限制
-	if err := checkCaptureRateLimit(); err != nil {
+	if err := checkScreenshotRateLimit(); err != nil {
 		return nil, "", "", err
 	}
 
@@ -70,7 +55,7 @@ func CaptureScreenshot(req CaptureRequest) ([]byte, string, string, error) {
 		img, err = screenshot.CaptureDisplay(req.DisplayIndex)
 	} else if req.DisplayIndex == -1 && displayCount > 1 {
 		// 所有显示器拼接
-		img, err = captureAllDisplaysOptimized()
+		img, err = screenshotAllDisplaysOptimized()
 	} else {
 		// 默认第一个显示器
 		img, err = screenshot.CaptureDisplay(0)
@@ -137,7 +122,7 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 	}
 
 	// 转换为RGBA格式
-	rgbaImg := toRGBA(img)
+	rgbaImg := ToRGBA(img)
 
 	// 缩放图片
 	resizedImg := resizeImageTo1080(rgbaImg)
@@ -193,7 +178,7 @@ func parseRegion(regionStr string) (image.Rectangle, error) {
 }
 
 // 截取所有显示器并拼接（优化版）
-func captureAllDisplaysOptimized() (*image.RGBA, error) {
+func screenshotAllDisplaysOptimized() (*image.RGBA, error) {
 	n := screenshot.NumActiveDisplays()
 	if n == 0 {
 		return nil, fmt.Errorf("未找到显示器")
@@ -258,7 +243,7 @@ func captureAllDisplaysOptimized() (*image.RGBA, error) {
 }
 
 // 将 NRGBA 转换为 RGBA
-func toRGBA(img image.Image) *image.RGBA {
+func ToRGBA(img image.Image) *image.RGBA {
 	// 如果已经是 RGBA，直接返回
 	if rgba, ok := img.(*image.RGBA); ok {
 		return rgba
@@ -288,7 +273,7 @@ func resizeImage(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 		}
 
 		resized := imaging.Resize(img, width, height, imaging.Lanczos)
-		return toRGBA(resized), nil
+		return ToRGBA(resized), nil
 	}
 
 	// 否则是比例
@@ -311,11 +296,11 @@ func resizeImage(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 	}
 
 	resized := imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
-	return toRGBA(resized), nil
+	return ToRGBA(resized), nil
 }
 
 // 缩放到合适大小
-func resizeToFit(img *image.RGBA, maxWidth, maxHeight int) *image.RGBA {
+func ResizeToFit(img *image.RGBA, maxWidth, maxHeight int) *image.RGBA {
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
 
@@ -336,7 +321,7 @@ func resizeToFit(img *image.RGBA, maxWidth, maxHeight int) *image.RGBA {
 	}
 
 	resized := imaging.Resize(img, width, height, imaging.Lanczos)
-	return toRGBA(resized)
+	return ToRGBA(resized)
 }
 
 // 应用缩放处理
@@ -346,7 +331,7 @@ func applyScale(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 	}
 
 	// 使用配置的最大尺寸限制
-	return resizeToFit(img, *config.MaxWidth, *config.MaxHeight), nil
+	return ResizeToFit(img, *config.MaxWidth, *config.MaxHeight), nil
 }
 
 // 编码图片
@@ -377,7 +362,7 @@ func getContentType(format string) string {
 }
 
 // 检查截图频率限制
-func checkCaptureRateLimit() error {
+func checkScreenshotRateLimit() error {
 	screenshotMutex.RLock()
 	timeSinceLastCapture := time.Since(lastCapture)
 	screenshotMutex.RUnlock()
@@ -390,5 +375,5 @@ func checkCaptureRateLimit() error {
 
 // 缩放图片到最大尺寸1080
 func resizeImageTo1080(img *image.RGBA) *image.RGBA {
-	return resizeToFit(img, 1080, 1080)
+	return ResizeToFit(img, 1080, 1080)
 }

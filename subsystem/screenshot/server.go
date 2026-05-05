@@ -1,7 +1,6 @@
-package image
+package screenshot
 
 import (
-	"LunarCore/hierarchy/image"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,8 +9,8 @@ import (
 )
 
 // 处理截图请求
-func HandleCapture(w http.ResponseWriter, r *http.Request) {
-	var req image.CaptureRequest
+func HandleScreenshot(w http.ResponseWriter, r *http.Request) {
+	var req ScreenshotRequest
 
 	// 解析请求参数
 	if r.Method == "POST" {
@@ -29,7 +28,7 @@ func HandleCapture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := image.CaptureScreenshot(req)
+	imgData, filename, contentType, err := Screenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -44,7 +43,7 @@ func HandleCapture(w http.ResponseWriter, r *http.Request) {
 }
 
 // 截图特定显示器
-func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
+func HandleScreenshotDisplay(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 4 {
 		http.Error(w, "无效的URL", http.StatusBadRequest)
@@ -57,7 +56,7 @@ func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := image.CaptureRequest{
+	req := ScreenshotRequest{
 		DisplayIndex: displayIndex,
 		Format:       r.URL.Query().Get("format"),
 		Scale:        r.URL.Query().Get("scale"),
@@ -65,7 +64,7 @@ func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := image.CaptureScreenshot(req)
+	imgData, filename, contentType, err := Screenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -77,7 +76,7 @@ func HandleCaptureDisplay(w http.ResponseWriter, r *http.Request) {
 }
 
 // 处理区域截图
-func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
+func HandleScreenshotRegion(w http.ResponseWriter, r *http.Request) {
 	region := r.URL.Query().Get("region")
 	scale := r.URL.Query().Get("scale")
 	format := r.URL.Query().Get("format")
@@ -88,7 +87,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := image.CaptureRequest{
+	req := ScreenshotRequest{
 		Region:  region,
 		Scale:   scale,
 		Format:  format,
@@ -96,7 +95,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 执行截图
-	imgData, filename, contentType, err := image.CaptureScreenshot(req)
+	imgData, filename, contentType, err := Screenshot(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -109,7 +108,7 @@ func HandleCaptureRegion(w http.ResponseWriter, r *http.Request) {
 
 // 获取所有显示器信息
 func HandleGetDisplays(w http.ResponseWriter, r *http.Request) {
-	displays := image.GetDisplays()
+	displays := GetDisplays()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(displays)
@@ -141,7 +140,7 @@ func HandleResizeImage(w http.ResponseWriter, r *http.Request) {
 	imgData = imgData[:n]
 
 	// 执行图片缩放
-	response, err := image.ResizeImage(imgData)
+	response, err := ResizeImage(imgData)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

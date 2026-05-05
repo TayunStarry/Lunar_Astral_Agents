@@ -1,28 +1,31 @@
 package browser
 
 import (
-	"sync"
-
-	webview "github.com/webview/webview_go"
+    "sync"
+    webview "github.com/webview/webview_go"
 )
 
-// ipCandidate IP地址候选对象
 type ipCandidate struct {
-	IP        string
-	Priority  int
-	Interface string
+    IP        string
+    Priority  int
+    Interface string
 }
 
-// webviewMutex WebView 控制互斥锁
-var webviewMutex sync.Mutex
+var (
+    webviewMutex     sync.Mutex
+    webviewInstance  webview.WebView
+    webviewRunning   bool           // 标记是否有实例在运行
+    webviewCmdCh     = make(chan webviewCmd, 1)  // 向主线程发送命令
+    webviewClosedCh  = make(chan struct{}, 1)    // 外部关闭通知
+)
 
-// webviewInstance WebView 实例
-var webviewInstance webview.WebView
+// webviewCmd 控制命令类型
+type webviewCmd int
+const (
+    cmdQuit webviewCmd = iota
+)
 
-// webviewClosedChan 用于通知 webview 已关闭
-var webviewClosedChan = make(chan struct{}, 1)
-
-// WebViewClosed 返回一个 channel，用于接收 webview 关闭事件
+// WebViewClosed 返回一个 channel，当 webview 关闭时收到信号
 func WebViewClosed() <-chan struct{} {
-	return webviewClosedChan
+    return webviewClosedCh
 }
