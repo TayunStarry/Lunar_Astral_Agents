@@ -1,0 +1,4 @@
+[safe]
+	directory = *
+[core]
+	longpaths = true
