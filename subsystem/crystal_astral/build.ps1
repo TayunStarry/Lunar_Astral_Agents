@@ -5,4 +5,4 @@ rsrc -ico icon.ico -o icon.syso
 $env:CGO_ENABLED=1
 
 # 构建可执行文件
-go build -tags webview -ldflags="-s -w -H=windowsgui" -o ../../application_manager.exe
+go build -tags webview -ldflags="-s -w -H=windowsgui" -o ../../Crystal_Astral.exe
