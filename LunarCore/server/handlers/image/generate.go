@@ -5,7 +5,6 @@ import (
 	"LunarCore/hierarchy/image/generate"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -81,7 +80,6 @@ func StartTaskProcessor() {
 
 // buildReadPath 构建文件读取路径
 func buildReadPath(resultPath string) string {
-	log.Printf("resultPath: %s", resultPath)
 	// 移除本地目录前缀，获取相对路径
 	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
 	// 移除Windows路径开头的反斜杠，确保路径格式统一

@@ -477,6 +477,7 @@ body {
     transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
     display: flex;
     flex-direction: column;
+    max-width: 320px;
 }
 
 .file-card:hover {
