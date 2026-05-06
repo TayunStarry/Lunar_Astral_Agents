@@ -16,7 +16,7 @@ import (
 
 // getRandomBackgroundImage 从 background 目录中随机选择一个背景图片文件名
 func getRandomBackgroundImage() (string, error) {
-	backgroundDir := filepath.Join(*config.LocalDir, "background")
+	backgroundDir := filepath.Join(*config.LocalDir, "images/background")
 	entries, err := os.ReadDir(backgroundDir)
 	if err != nil {
 		return "", err
@@ -44,7 +44,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	backgroundDir := filepath.Join(*config.LocalDir, "background")
+	backgroundDir := filepath.Join(*config.LocalDir, "images/background")
 	filePath := filepath.Join(backgroundDir, filename)
 	file, err := os.Open(filePath)
 	if err != nil {
