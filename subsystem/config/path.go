@@ -9,5 +9,5 @@ var (
 	// KeyFile  私钥文件路径，用于HTTPS加密通信
 	KeyFile = flag.String("key-file", *LocalDir+"/certs/localhost-key.pem", "私钥文件路径, 用于HTTPS加密通信")
 	// Database  SQLite数据库文件路径，用于存储系统数据
-	Database = flag.String("database", *LocalDir+"/resources/SQLite.db", "SQLite数据库文件路径, 用于存储系统数据")
+	Database = flag.String("database", *LocalDir+"/lunar_index.db", "SQLite数据库文件路径, 用于存储系统数据")
 )

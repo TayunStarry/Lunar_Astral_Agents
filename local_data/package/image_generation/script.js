@@ -337,7 +337,7 @@ function resetParameters() {
 
 function refreshFileList() {
     // 可选音效
-    const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
+    const audio = new Audio('/read/audios/prompt-tone.mp3');
     audio.volume = 1.0;
     audio.play().catch(() => {});
     elements.refreshBtn.classList.add('spin');
