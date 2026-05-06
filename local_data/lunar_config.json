@@ -12,16 +12,14 @@
 		"developer": true,
 		"clear_port": false,
 		"allow_diffusion": true,
-		"allow_multimodal": true
+		"allow_multimodal": false
 	},
 	"cloud": {
-		"multimodalModelUrl": null,
-		"multimodalModelName": null,
-		"multimodalModelKey": null,
-		"userName": null,
-		"embeddingModelUrl": null,
-		"embeddingModelName": null,
-		"embeddingModelKey": null
+		"cloud_model_url": null,
+		"cloud_model_key": null,
+		"multimodal_model_name": null,
+		"embedding_model_name": null,
+		"user_name": null
 	},
 	"qq_adapter": {
 		"napcat_ws_server": "ws://localhost:4567",
@@ -42,7 +40,7 @@
 	"project_archiving": {
 		"package_levels": {
 			"1": {
-				"name": "核心文件",
+				"name": "打包预案-1",
 				"description": "用于发布纯前端的功能补丁更新",
 				"sources": [
 					"../.././Lunar-Astral-Agents.exe",

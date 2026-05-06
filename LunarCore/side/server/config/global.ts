@@ -1,12 +1,6 @@
 import { Config, ToolCall } from '../index';
 
 export class OnlyData {
-    /** 系统默认 API 密钥 */
-    private static systemKey = 'key-520-1314-2000-02-18';
-    /** 默认的嵌入模型的名称 */
-    private static modelEmbedingName = "system-embedding";
-    /** 默认的多模态模型名称 */
-    private static modelMultimodalName = "system-multimodal";
     /** 自定义配置项 */
     public static customConfig: Config = { cloud: {} };
     /** 工具调用配置 */
@@ -53,32 +47,20 @@ export class OnlyData {
     public static get fileServiceUrl(): string {
         return url()[0];
     };
-    /** 获取 多模态模型 URL */
-    public static get MultimodalUrl(): string {
-        return OnlyData.customConfig.cloud.multimodalModelUrl || OnlyData.systemUrl;
-    };
-    /** 获取 多模态模型 API 密钥 */
-    public static get MultimodalKey(): string {
-        return OnlyData.customConfig.cloud.multimodalModelKey || OnlyData.systemKey;
+    /** 获取 系统 API 密钥 */
+    public static get SystemKey(): string {
+        return OnlyData.customConfig.cloud.cloud_model_key || 'key-520-1314-2000-02-18';
     };
     /** 获取 多模态模型名称 */
     public static get MultimodalName(): string {
-        return OnlyData.customConfig.cloud.multimodalModelName || OnlyData.modelMultimodalName;
-    };
-    /** 获取 嵌入模型 URL */
-    public static get EmbeddingUrl(): string {
-        return OnlyData.customConfig.cloud.embeddingModelUrl || OnlyData.systemUrl;
-    };
-    /** 获取 嵌入模型 API 密钥 */
-    public static get EmbeddingKey(): string {
-        return OnlyData.customConfig.cloud.embeddingModelKey || OnlyData.systemKey;
+        return OnlyData.customConfig.cloud.multimodal_model_name || "system-multimodal";
     };
     /** 获取 嵌入模型名称 */
     public static get EmbeddingName(): string {
-        return OnlyData.customConfig.cloud.embeddingModelName || OnlyData.modelEmbedingName;
+        return OnlyData.customConfig.cloud.embedding_model_name || "system-embedding";
     };
     /** 获取 用户名 */
     public static get userName(): string {
-        return OnlyData.customConfig.cloud.userName || "阁下";
+        return OnlyData.customConfig.cloud.user_name || "阁下";
     };
 };

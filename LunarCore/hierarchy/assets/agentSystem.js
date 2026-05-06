@@ -1,7 +1,4 @@
 class OnlyData {
-    static systemKey = 'key-520-1314-2000-02-18';
-    static modelEmbedingName = "system-embedding";
-    static modelMultimodalName = "system-multimodal";
     static customConfig = { cloud: {} };
     static toolCall = [];
     static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -31,32 +28,20 @@ class OnlyData {
         return url()[0];
     }
     ;
-    static get MultimodalUrl() {
-        return OnlyData.customConfig.cloud.multimodalModelUrl || OnlyData.systemUrl;
-    }
-    ;
-    static get MultimodalKey() {
-        return OnlyData.customConfig.cloud.multimodalModelKey || OnlyData.systemKey;
+    static get SystemKey() {
+        return OnlyData.customConfig.cloud.cloud_model_key || 'key-520-1314-2000-02-18';
     }
     ;
     static get MultimodalName() {
-        return OnlyData.customConfig.cloud.multimodalModelName || OnlyData.modelMultimodalName;
-    }
-    ;
-    static get EmbeddingUrl() {
-        return OnlyData.customConfig.cloud.embeddingModelUrl || OnlyData.systemUrl;
-    }
-    ;
-    static get EmbeddingKey() {
-        return OnlyData.customConfig.cloud.embeddingModelKey || OnlyData.systemKey;
+        return OnlyData.customConfig.cloud.multimodal_model_name || "system-multimodal";
     }
     ;
     static get EmbeddingName() {
-        return OnlyData.customConfig.cloud.embeddingModelName || OnlyData.modelEmbedingName;
+        return OnlyData.customConfig.cloud.embedding_model_name || "system-embedding";
     }
     ;
     static get userName() {
-        return OnlyData.customConfig.cloud.userName || "阁下";
+        return OnlyData.customConfig.cloud.user_name || "阁下";
     }
     ;
 }
@@ -557,7 +542,7 @@ class ModelBuilder extends ConfigModifier {
             delete requestBody.tools;
         }
         const headers = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.MultimodalKey)}`,
+            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
             "Content-Type": "application/json",
         };
         const modelRequest = {
@@ -567,7 +552,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/chat/completions";
-        const [result, error] = syncFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result;
@@ -580,7 +565,7 @@ class ModelBuilder extends ConfigModifier {
             stream: this.stream,
         };
         const headers = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.EmbeddingKey)}`,
+            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
             "Content-Type": "application/json",
         };
         const modelRequest = {
@@ -590,7 +575,7 @@ class ModelBuilder extends ConfigModifier {
             body: JSON.stringify(requestBody)
         };
         const endpoint = "/embeddings";
-        const [result, error] = syncFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
         if (error)
             throw error;
         return result.data[0].embedding.slice(0, 256);

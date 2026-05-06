@@ -4,20 +4,16 @@ import { AuthHeaders, ToolCall } from '../index';
 export interface Config {
     /** 云配置 */
     cloud: {
-        /** 视觉理解服务接口地址 */
-        multimodalModelUrl?: string;
+        /** 云模型 URL */
+        cloud_model_url?: string;
+        /** 云模型 API 密钥 */
+        cloud_model_key?: string;
         /** 视觉理解模型名称 */
-        multimodalModelName?: string;
-        /** 视觉理解服务 API 密钥 */
-        multimodalModelKey?: string;
-        /** 用户名 */
-        userName?: string;
-        /** 文本嵌入服务接口地址 */
-        embeddingModelUrl?: string;
+        multimodal_model_name?: string;
         /** 文本嵌入模型名称 */
-        embeddingModelName?: string;
-        /** 文本嵌入服务 API 密钥 */
-        embeddingModelKey?: string;
+        embedding_model_name?: string;
+        /** 用户名 */
+        user_name?: string;
     };
 }
 

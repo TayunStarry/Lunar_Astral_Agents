@@ -15,13 +15,11 @@ const labelMap = {
     'clear_port': '清理端口',
     'allow_diffusion': '允许扩散',
     'allow_multimodal': '允许多模态',
-    'multimodalModelUrl': '多模态模型地址',
-    'multimodalModelName': '多模态模型名称',
-    'multimodalModelKey': '多模态模型密钥',
-    'userName': '用户名',
-    'embeddingModelUrl': '嵌入模型地址',
-    'embeddingModelName': '嵌入模型名称',
-    'embeddingModelKey': '嵌入模型密钥',
+    'cloud_model_url': '云端模型地址',
+    'cloud_model_key': '云端模型密钥',
+    'multimodal_model_name': '多模态模型名称',
+    'embedding_model_name': '嵌入模型名称',
+    'user_name': '用户名',
     'napcat_ws_server': 'Napcat WS服务器',
     'napcat_ws_token': 'Napcat WS令牌',
     'lunar_core_url': 'Lunar Core地址',
@@ -83,7 +81,7 @@ async function saveConfig() {
         collectConfig();
         const jsonString = JSON.stringify(configData, null, '\t');
         const blob = new Blob([jsonString], { type: 'application/json' });
-        
+
         const response = await fetch('/save', {
             method: 'POST',
             headers: {
@@ -92,7 +90,7 @@ async function saveConfig() {
             },
             body: blob
         });
-        
+
         if (!response.ok) throw new Error('保存配置失败');
         originalConfig = JSON.parse(JSON.stringify(configData));
         alert('保存成功！');
@@ -118,9 +116,9 @@ function renderAllPages() {
 function renderBasicPage() {
     const grid = document.getElementById('grid-basic');
     grid.innerHTML = '';
-    
+
     const sections = ['models', 'server', 'cloud'];
-    
+
     sections.forEach(key => {
         const card = createCard(key);
         grid.appendChild(card);
@@ -131,7 +129,7 @@ function renderBasicPage() {
 function renderQQPage() {
     const container = document.getElementById('grid-qq');
     container.innerHTML = '';
-    
+
     const card = createCard('qq_adapter');
     container.appendChild(card);
     renderSection(card.querySelector('.config-fields'), configData['qq_adapter'], 'qq_adapter');
@@ -140,7 +138,7 @@ function renderQQPage() {
 function renderArchivePage() {
     const container = document.getElementById('grid-archive');
     container.innerHTML = '';
-    
+
     const card = createCard('project_archiving');
     card.classList.add('full-width');
     container.appendChild(card);
@@ -160,11 +158,11 @@ function createCard(sectionKey) {
 
 function renderSection(container, data, path) {
     if (!data) return;
-    
+
     Object.keys(data).forEach(key => {
         const value = data[key];
         const fieldPath = path ? `${path}.${key}` : key;
-        
+
         if (typeof value === 'boolean') {
             container.appendChild(createSwitchField(key, value, fieldPath));
         } else if (typeof value === 'number') {
@@ -222,7 +220,7 @@ function createArrayField(key, value, path) {
         <div class="field-array" data-path="${path}">
         </div>
     `;
-    
+
     const arrayContainer = div.querySelector('.field-array');
     value.forEach((item, index) => {
         const itemDiv = document.createElement('div');
@@ -233,13 +231,13 @@ function createArrayField(key, value, path) {
         `;
         arrayContainer.appendChild(itemDiv);
     });
-    
+
     const addBtn = document.createElement('button');
     addBtn.className = 'btn btn-small';
     addBtn.textContent = '+ 添加';
     addBtn.onclick = () => addArrayItem(path);
     arrayContainer.appendChild(addBtn);
-    
+
     return div;
 }
 
@@ -262,9 +260,9 @@ function createObjectField(key, value, path) {
         <div class="sub-section-title">${getLabel(key)}</div>
         <div class="sub-fields"></div>
     `;
-    
+
     const subFields = div.querySelector('.sub-fields');
-    
+
     if (key === 'package_levels') {
         Object.keys(value).forEach(levelKey => {
             const levelData = value[levelKey];
@@ -277,7 +275,7 @@ function createObjectField(key, value, path) {
     } else {
         renderSection(subFields, value, path);
     }
-    
+
     return div;
 }
 
@@ -303,7 +301,7 @@ function collectConfig() {
     document.querySelectorAll('[data-path]').forEach(input => {
         const path = input.dataset.path;
         if (!path) return;
-        
+
         if (input.type === 'checkbox') {
             setValueByPath(path, input.checked);
         } else if (input.type === 'number') {
@@ -367,20 +365,20 @@ async function sendToAI() {
     const input = document.getElementById('aiInput');
     const content = input.value.trim();
     if (!content) return;
-    
+
     addUserMessage(content);
     input.value = '';
     addTypingIndicator();
-    
+
     aiMessages.push({ role: 'user', content: content });
-    
+
     if (aiMessages.length > MAX_CONTEXT_MESSAGES) {
         aiMessages = aiMessages.slice(-MAX_CONTEXT_MESSAGES);
     }
-    
+
     try {
         const apiUrl = `${window.location.origin}/v1/chat/completions`;
-        
+
         const systemPrompt = `你叫琉璃，一个温柔可爱、善解人意的少女助手。你的姐姐是月华。你的任务是辅助用户完成配置文件的定义和修改。
 你需要根据用户的问题，结合以下配置文件内容给出建议，并且可以建议如何修改配置。
 
@@ -397,37 +395,38 @@ ${JSON.stringify(configData, null, 2)}
 \`\`\`
 
 请用友好、活泼的语气回复，就像和朋友聊天一样。`;
-        
+
         const messages = [
             { role: 'system', content: systemPrompt },
             ...aiMessages
         ];
-        
+
+        const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'system-multimodal',
+                model: modelName,
                 messages: messages,
                 stream: false
             })
         });
-        
+
         if (!response.ok) throw new Error('AI请求失败');
-        
+
         const result = await response.json();
         let aiContent = result.choices[0].message.content;
-        
+
         removeTypingIndicator();
         addAiMessage(aiContent);
         aiMessages.push({ role: 'assistant', content: aiContent });
-        
+
         if (aiMessages.length > MAX_CONTEXT_MESSAGES) {
             aiMessages = aiMessages.slice(-MAX_CONTEXT_MESSAGES);
         }
-        
+
         const jsonMatch = aiContent.match(/```json([\s\S]*?)```/);
         if (jsonMatch) {
             try {
@@ -439,7 +438,7 @@ ${JSON.stringify(configData, null, 2)}
                 console.error('解析配置变更失败:', e);
             }
         }
-        
+
     } catch (error) {
         removeTypingIndicator();
         console.error('AI请求失败:', error);
@@ -449,7 +448,7 @@ ${JSON.stringify(configData, null, 2)}
 
 function deepMerge(target, source) {
     const result = { ...target };
-    
+
     for (const key in source) {
         if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
             if (!(key in target)) {
@@ -461,13 +460,13 @@ function deepMerge(target, source) {
             result[key] = source[key];
         }
     }
-    
+
     return result;
 }
 
 function getChangedConfig(original, modified) {
     const changes = {};
-    
+
     for (const key in modified) {
         if (!(key in original)) {
             changes[key] = modified[key];
@@ -480,7 +479,7 @@ function getChangedConfig(original, modified) {
             changes[key] = modified[key];
         }
     }
-    
+
     return changes;
 }
 
@@ -490,13 +489,13 @@ function showPreviewModal(original, modified, merged) {
         modified: modified,
         merged: merged
     };
-    
+
     const changed = getChangedConfig(original, modified);
-    
+
     document.getElementById('originalConfigPreview').textContent = JSON.stringify(original, null, 2);
     document.getElementById('changedConfigPreview').textContent = JSON.stringify(changed, null, 2);
     document.getElementById('mergedConfigPreview').textContent = JSON.stringify(merged, null, 2);
-    
+
     document.getElementById('previewModal').classList.add('active');
 }
 
@@ -518,7 +517,7 @@ function switchPage(pageName) {
     document.querySelectorAll('.page-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.page === pageName);
     });
-    
+
     document.querySelectorAll('.page-panel').forEach(panel => {
         panel.classList.toggle('active', panel.id === `panel-${pageName}`);
     });
@@ -526,28 +525,28 @@ function switchPage(pageName) {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
-    
+
     document.getElementById('saveBtn').addEventListener('click', saveConfig);
     document.getElementById('resetBtn').addEventListener('click', resetConfig);
     document.getElementById('aiSendBtn').addEventListener('click', sendToAI);
-    
+
     document.getElementById('aiInput').addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendToAI();
         }
     });
-    
+
     document.querySelectorAll('.page-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             switchPage(tab.dataset.page);
         });
     });
-    
+
     document.getElementById('closePreview').addEventListener('click', closePreviewModal);
     document.getElementById('cancelChanges').addEventListener('click', closePreviewModal);
     document.getElementById('applyChanges').addEventListener('click', applyConfigChanges);
-    
+
     document.getElementById('previewModal').addEventListener('click', (e) => {
         if (e.target.id === 'previewModal') {
             closePreviewModal();
