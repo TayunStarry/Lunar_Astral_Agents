@@ -455,7 +455,7 @@ function waitForTaskCompletion() {
 async function loadFileList() {
     try {
         elements.fileGrid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-        let allFiles = await getAllFilesRecursive('generated');
+        let allFiles = await getAllFilesRecursive('images/generated');
 
         if (allFiles.length === 0) {
             elements.fileGrid.innerHTML = `
@@ -483,7 +483,7 @@ async function loadFileList() {
             const sizeFormatted = formatFileSize(file.size);
             const dateFormatted = formatDate(file.lastModified);
             const path = file.path.replace(/\\/g, '/');
-            const relativePath = file.path.replace(/^generated[\\/]/, '');
+            const relativePath = file.path.replace(/^images\/generated[\\/]/, '');
             const displayPath = relativePath || file.name;
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
@@ -523,7 +523,7 @@ async function loadFileList() {
             </div>`;
     }
 }
-
+// 递归获取 images/generated 目录下的所有文件
 async function getAllFilesRecursive(dirPath) {
     try {
         const response = await fetch(`/file_list/${dirPath}`);
@@ -606,7 +606,7 @@ async function downloadFile(path, filename) {
 }
 
 async function deleteFile(path) {
-    if (!confirm(`确定要删除文件吗？\n${path.replace(/^generated[\\/]/, '')}`)) return;
+    if (!confirm(`确定要删除文件吗？\n${path.replace(/^images\/generated[\\/]/, '')}`)) return;
     try {
         showStatus('删除文件中...', 'info');
         const response = await fetch(`/delete/${path}`, { method: 'DELETE' });
@@ -627,7 +627,7 @@ async function clearAllFiles() {
     if (!confirm('⚠️ 确定要删除所有生成的文件吗？\n此操作不可恢复！')) return;
     try {
         showStatus('清空所有文件中...', 'info');
-        const response = await fetch('/delete/generated', { method: 'DELETE' });
+        const response = await fetch('/delete/images/generated', { method: 'DELETE' });
         if (response.ok) {
             showStatus('所有文件已清空', 'success');
             refreshFileList();

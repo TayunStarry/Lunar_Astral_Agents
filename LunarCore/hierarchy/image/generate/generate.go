@@ -70,11 +70,11 @@ func ProcessTask(task GenerateTask) {
 
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
-	outputFilename := fmt.Sprintf("generated_%s.png", timestamp)
-	outputPath := filepath.Join(*config.LocalDir, "generated", outputFilename)
+	outputFilename := fmt.Sprintf("%s.png", timestamp)
+	outputPath := filepath.Join(*config.LocalDir, "images/generated", outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(*config.LocalDir, "generated"), 0755)
+	os.MkdirAll(filepath.Join(*config.LocalDir, "images/generated"), 0755)
 
 	// 构建命令参数
 	args := []string{
