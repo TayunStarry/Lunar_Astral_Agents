@@ -60,7 +60,7 @@ export async function sendMessages(messages) {
  */
 export async function fetchLive2DSetting() {
     try {
-        const response = await fetch('/read/resources/live2d/setting.json');
+        const response = await fetch('/read/models/live2d/setting.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
