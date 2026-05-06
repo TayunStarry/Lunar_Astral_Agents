@@ -65,7 +65,7 @@ export function isTextFile(file) {
 }
 
 export function getStoragePrefix(file) {
-    return isMediaFile(file) ? 'images/' : 'document/';
+    return isMediaFile(file) ? 'images/' : 'documents/';
 }
 
 export function revokeFilePreview(preview) {

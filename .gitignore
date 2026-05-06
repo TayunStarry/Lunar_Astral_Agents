@@ -14,12 +14,7 @@ meme_images
 
 ## 本地数据
 local_data/images
-local_data/document
-
-local_data/resources/placeholder
-local_data/resources/images
-local_data/generated
-local_data/knowledge
+local_data/documents
 local_data/models/MOSS-NANO-TTS
 local_data/models/Qwen3-TTS/git
 local_data/models/Qwen3-TTS/python

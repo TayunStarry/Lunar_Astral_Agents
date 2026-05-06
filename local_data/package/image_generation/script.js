@@ -470,7 +470,7 @@ async function loadFileList() {
         if (allFiles.length < 8) {
             const missingCount = 8 - allFiles.length;
             for (let i = 0; i < missingCount; i++) {
-                const imageUrl = `resources/placeholder/blank-0${Math.floor(Math.random() * 4)}.png`;
+                const imageUrl = `images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.png`;
                 allFiles.push({ name: '*.png', path: imageUrl, size: 0, lastModified: new Date().toISOString(), isDir: false });
             }
         }
@@ -487,7 +487,7 @@ async function loadFileList() {
             const displayPath = relativePath || file.name;
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
-                ? `<img src="/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/read/resources/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/read/${path}', '${file.name}')">`
+                ? `<img src="/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/read/${path}', '${file.name}')">`
                 : `<div style="font-size: 48px; color: var(--primary-color); opacity: 0.3;">${fileIcon}</div>`;
 
             return `
