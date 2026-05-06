@@ -1,6 +1,7 @@
 package main
 
 import (
+	"config"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -15,28 +16,16 @@ import (
 
 // getRandomBackgroundImage 从 background 目录中随机选择一个背景图片文件名
 func getRandomBackgroundImage() (string, error) {
-	fs := GetBackgroundFS()
-	file, err := fs.Open("/")
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
+	backgroundDir := filepath.Join(*config.LocalDir, "background")
+	entries, err := os.ReadDir(backgroundDir)
 	if err != nil {
 		return "", err
 	}
 
 	var files []string
-	if stat.IsDir() {
-		entries, err := file.Readdir(-1)
-		if err != nil {
-			return "", err
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasPrefix(entry.Name(), "picture") {
-				files = append(files, entry.Name())
-			}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "picture") {
+			files = append(files, entry.Name())
 		}
 	}
 
@@ -55,8 +44,9 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	fs := GetBackgroundFS()
-	file, err := fs.Open("/" + filename)
+	backgroundDir := filepath.Join(*config.LocalDir, "background")
+	filePath := filepath.Join(backgroundDir, filename)
+	file, err := os.Open(filePath)
 	if err != nil {
 		http.Error(w, "无法打开文件: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -201,15 +191,4 @@ func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: fmt.Sprintf("Application started: %s", req.Path),
 	})
-}
-
-// iconHandler 处理图标文件请求
-func iconHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	fs := GetIconFS()
-	fileServer := http.FileServer(fs)
-	http.StripPrefix("/icon/", fileServer).ServeHTTP(w, r)
 }

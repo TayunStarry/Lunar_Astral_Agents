@@ -29,7 +29,7 @@ const VALID_FILE_TYPES = [
 
 async function loadPages() {
     try {
-        const response = await fetch('./pages.json');
+        const response = await fetch('/read/luner_package.json');
         pages = await response.json();
         renderPageGrid();
         initTools();
@@ -138,7 +138,7 @@ function renderMessage(message) {
     } else {
         avatar.classList.add('ai-avatar');
         const img = document.createElement('img');
-        img.src = '/icon/agent_avatar.jpg';
+        img.src = '/read/icon/agent_avatar.jpg';
         img.alt = '琉璃';
         avatar.appendChild(img);
     }
