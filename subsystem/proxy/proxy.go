@@ -1,16 +1,34 @@
-package server
+package proxy
 
 import (
+	"bytes"
 	"config"
+	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"slices"
+	"sync"
 	"time"
 )
+
+//go:embed certs/*
+var certsFS embed.FS
+
+// CORSAllowedOrigins 定义允许跨域访问的来源列表
+var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
+
+// 请求映射，键为请求ID，值为请求上下文
+var requests = make(map[string]*any)
+
+// 互斥锁，用于保护请求映射的并发访问
+var serverMutex sync.RWMutex
 
 // BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
 func BuildTLSTerminationProxy() *http.Server {
@@ -25,17 +43,46 @@ func BuildTLSTerminationProxy() *http.Server {
 	// 打印代理服务访问地址
 	log.Printf("Lunar模块[TLS代理] : 代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
 	log.Printf("Lunar模块[TLS代理] : 健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
+	
+	// 从嵌入式文件系统读取证书和密钥
+	certPEM, err := certsFS.ReadFile("certs/localhost.pem")
+	if err != nil {
+		log.Printf("Lunar模块[TLS代理][ERROR] -> 读取证书失败: %v\n", err)
+		return nil
+	}
+	keyPEM, err := certsFS.ReadFile("certs/localhost-key.pem")
+	if err != nil {
+		log.Printf("Lunar模块[TLS代理][ERROR] -> 读取私钥失败: %v\n", err)
+		return nil
+	}
+	
+	// 加载证书
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		log.Printf("Lunar模块[TLS代理][ERROR] -> 加载证书失败: %v\n", err)
+		return nil
+	}
+	
+	// 创建TLS配置
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	
 	// 创建服务器实例
 	server := &http.Server{
-		Addr:    serverAddr,
-		Handler: mux,
+		Addr:      serverAddr,
+		Handler:   mux,
+		TLSConfig: tlsConfig,
 	}
+	
 	// 启动HTTPS服务器（在独立goroutine中运行）
 	go func() {
-		if err := http.ListenAndServeTLS(serverAddr, *config.CertFile, *config.KeyFile, mux); err != nil && err != http.ErrServerClosed {
+		// 启动HTTPS服务器
+		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			log.Printf("Lunar模块[TLS代理][ERROR] -> 服务器启动失败: %v\n", err)
 		}
 	}()
+	
 	// 返回服务器实例
 	return server
 }
@@ -105,6 +152,13 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	
+	// 检查是否是WebSocket连接
+	if r.Header.Get("Upgrade") == "websocket" {
+		handleWebSocketProxy(w, r)
+		return
+	}
+	
 	// 目标服务器地址 - 内部HTTP服务器的URL
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 解析目标URL - 将字符串URL转换为url.URL对象
@@ -148,4 +202,74 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	// 执行代理请求 - 调用反向代理处理请求
 	proxy.ServeHTTP(w, r)
+}
+
+// handleWebSocketProxy 处理WebSocket代理，将WSS连接转发到内部WS服务
+func handleWebSocketProxy(w http.ResponseWriter, r *http.Request) {
+	// 连接到后端WebSocket服务器
+	targetAddr := fmt.Sprintf("localhost:%d", *config.BasicPort)
+	
+	// 建立到后端的连接
+	backendConn, err := net.Dial("tcp", targetAddr)
+	if err != nil {
+		log.Printf("[TLS代理] WebSocket连接后端失败: %v", err)
+		http.Error(w, "无法连接到后端WebSocket服务", http.StatusBadGateway)
+		return
+	}
+	defer backendConn.Close()
+	
+	// 获取客户端连接（劫持HTTP连接）
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		log.Printf("[TLS代理] 不支持Hijack接口")
+		http.Error(w, "不支持的协议升级", http.StatusInternalServerError)
+		return
+	}
+	
+	clientConn, clientBuf, err := hijacker.Hijack()
+	if err != nil {
+		log.Printf("[TLS代理] Hijack失败: %v", err)
+		http.Error(w, "连接劫持失败", http.StatusInternalServerError)
+		return
+	}
+	defer clientConn.Close()
+	
+	// 复制WebSocket升级请求到后端
+	var reqBuffer bytes.Buffer
+	r.Write(&reqBuffer)
+	backendConn.Write(reqBuffer.Bytes())
+	
+	// 创建双向数据转发
+	var wg sync.WaitGroup
+	wg.Add(2)
+	
+	// 从客户端转发到后端
+	go func() {
+		defer wg.Done()
+		io.Copy(backendConn, clientBuf)
+		io.Copy(backendConn, clientConn)
+	}()
+	
+	// 从后端转发到客户端
+	go func() {
+		defer wg.Done()
+		io.Copy(clientConn, backendConn)
+	}()
+	
+	// 等待连接结束
+	wg.Wait()
+	
+	if *config.Developer {
+		log.Printf("[TLS代理] WebSocket连接关闭")
+	}
+}
+
+// ReadCertFile 从嵌入式文件系统读取证书文件
+func ReadCertFile() ([]byte, error) {
+	return certsFS.ReadFile("certs/localhost.pem")
+}
+
+// ReadKeyFile 从嵌入式文件系统读取私钥文件
+func ReadKeyFile() ([]byte, error) {
+	return certsFS.ReadFile("certs/localhost-key.pem")
 }

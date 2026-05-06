@@ -72,8 +72,6 @@ func initializeServerComponents(server *http.Server) {
 	server.Handler = CORSMiddleware(httpMux)
 	// 启动客户端加载任务
 	go startClientLoading()
-	// 构建TLS终止代理服务器
-	BuildTLSTerminationProxy()
 }
 
 // PrintServerPort 打印服务器端口
