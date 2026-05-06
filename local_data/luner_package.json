@@ -42,14 +42,14 @@
         "url": "/read/package/parameter_assistant/index.html"
     },
     {
-        "id": "qwen_TTS",
+        "id": "qwen3_tts",
         "icon": "/read/images/icon/tts_qwen-icon.gif",
         "title": "运行 Qwen3 TTS",
         "description": "运行 Qwen3 TTS 本地语音生成模型",
         "path": "/local_data/models/Qwen3-TTS/core/start-api.bat"
     },
     {
-        "id": "moss_nano_TTS",
+        "id": "moss_nano_tts",
         "icon": "/read/images/icon/tts_moss_nano-icon.gif",
         "title": "运行 MOSS TTS Nano",
         "description": "运行 MOSS TTS Nano 本地语音生成模型",
