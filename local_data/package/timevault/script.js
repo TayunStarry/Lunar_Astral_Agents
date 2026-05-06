@@ -159,7 +159,7 @@ function updatePomodoroStatus() {
 
 // 使用随机按钮音效播放提示音
 function playAlertSound() {
-	const audio = new Audio(`/read/resources/audios/button-${RandomFloor(0, 11)}.mp3`);
+	const audio = new Audio(`/read/audios/button-${RandomFloor(0, 11)}.mp3`);
 	audio.volume = 1.0;
 	audio.play().catch(err => {
 		console.warn('音效播放失败:', err);
