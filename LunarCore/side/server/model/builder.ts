@@ -133,7 +133,7 @@ export class ModelBuilder extends ConfigModifier {
         };
         /** 构建请求头 */
         const headers: AuthHeaders = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.MultimodalKey)}`,
+            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
             "Content-Type": "application/json",
         };
         /** 构建模型请求 */
@@ -146,7 +146,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/chat/completions";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = syncFetch({ url: OnlyData.MultimodalUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 返回模型响应
@@ -164,7 +164,7 @@ export class ModelBuilder extends ConfigModifier {
         };
         /** 构建请求头 */
         const headers: AuthHeaders = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.EmbeddingKey)}`,
+            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
             "Content-Type": "application/json",
         };
         /** 构建模型请求 */
@@ -177,7 +177,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 定义API端点 */
         const endpoint = "/embeddings";
         /** 直接调用Go函数处理请求 */
-        const [result, error] = syncFetch({ url: OnlyData.EmbeddingUrl + endpoint, execute: modelRequest });
+        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
         // 抛出错误
         if (error) throw error;
         // 截取嵌入向量的前 256 个元素，作为模型输入

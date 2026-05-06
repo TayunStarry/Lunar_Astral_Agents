@@ -4,6 +4,7 @@ package handlers
 import (
 	"LunarCore/model"
 	"bytes"
+	"config"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -73,8 +74,23 @@ func ProxyToPort(w http.ResponseWriter, r *http.Request, port int) {
 	proxy.ServeHTTP(w, r)
 }
 
+// ProxyToCloud 将请求反向代理到云服务器
+func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse(*config.CloudModelUrl)
+	if err != nil {
+		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
+		return
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ServeHTTP(w, r)
+}
+
 // AgentModelsHandler 处理获取模型列表的请求, 返回本地模型列表。
 func AgentModelsHandler(w http.ResponseWriter, r *http.Request) {
+	if *config.CloudModelUrl != "" {
+		ProxyToCloud(w, r)
+		return
+	}
 	// 调用 model 模块获取模型列表
 	models := model.GetModels()
 	// 构造响应数据
@@ -90,6 +106,10 @@ func AgentModelsHandler(w http.ResponseWriter, r *http.Request) {
 
 // AgentHandler 处理与模型相关的请求, 返回模型输出。
 func AgentHandler(w http.ResponseWriter, r *http.Request) {
+	if *config.CloudModelUrl != "" {
+		ProxyToCloud(w, r)
+		return
+	}
 	// 从请求中提取模型名称
 	modelName := ExtractModelName(r)
 	// 调用 model 模块处理请求
@@ -105,14 +125,12 @@ func AgentHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
 	// 解析端口号并进行代理
 	port, err := strconv.Atoi(result)
 	if err != nil {
 		http.Error(w, "无效的端口号", http.StatusInternalServerError)
 		return
 	}
-
 	// 调用本地的代理函数
 	ProxyToPort(w, r, port)
 }

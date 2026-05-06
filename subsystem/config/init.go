@@ -37,6 +37,11 @@ type ModelConfig struct {
 		// 是否允许加载多模态模型
 		AllowMultimodal bool `json:"allow_multimodal"`
 	} `json:"server"`
+	// 云模型配置
+	Cloud struct {
+		// 云模型服务地址
+		CloudModelUrl string `json:"cloud_model_url"`
+	} `json:"cloud"`
 }
 
 // init 加载配置文件
@@ -94,6 +99,10 @@ func init() {
 	// 如果配置文件中 TTSUrl 字段非空，则更新全局配置
 	if parameter.Server.TTSUrl != "" {
 		*TTSUrl = parameter.Server.TTSUrl
+	}
+	// 如果配置文件中 CloudModelUrl 字段非空，则更新全局配置
+	if parameter.Cloud.CloudModelUrl != "" {
+		*CloudModelUrl = parameter.Cloud.CloudModelUrl
 	}
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.Server.Developer == true {

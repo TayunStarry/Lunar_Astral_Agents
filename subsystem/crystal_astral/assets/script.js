@@ -9,6 +9,7 @@ const SYSTEM_PROMPT = `你是一个叫做琉璃的女孩子，隶属于[星月�
 let pages = [];
 let messages = [];
 let pendingAttachments = [];
+let configData = {};
 
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
@@ -26,6 +27,17 @@ const VALID_FILE_TYPES = [
     'text/plain', 'text/csv', 'text/html', 'text/xml', 'text/css', 'text/javascript',
     'application/json', 'application/xml', 'application/javascript', 'text/markdown'
 ];
+
+async function loadConfig() {
+    try {
+        const response = await fetch('/read/lunar_config.json');
+        if (response.ok) {
+            configData = await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to load config:', error);
+    }
+}
 
 async function loadPages() {
     try {
@@ -248,10 +260,11 @@ async function handleSend() {
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
 
     try {
+        const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
         const response = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'system-multimodal', messages: allMessages, tools: window.tools })
+            body: JSON.stringify({ model: modelName, messages: allMessages, tools: window.tools })
         });
 
         if (!response.ok) throw new Error('Network response was not ok');
@@ -352,4 +365,5 @@ chatMessages.addEventListener('drop', async (e) => {
     }
 });
 
+loadConfig();
 loadPages();

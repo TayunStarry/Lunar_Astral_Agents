@@ -10,10 +10,12 @@ import (
 func CreateServers() {
 	// 等待加载的模型队列
 	modelPaths := map[string]string{}
-	// 当配置允许加载推理模型时，将多模态模型加入待加载列表
-	if *config.AllowMultimodal {
-		modelPaths["multimodal"] = *config.MultimodalModel
+	// 判断是否在配置中允许加载多模态模型
+	if *config.AllowMultimodal == false {
+		return
 	}
+	// 将多模态模型加入待加载列表
+	modelPaths["multimodal"] = *config.MultimodalModel
 	// 将嵌入模型加入待加载列表
 	modelPaths["embedding"] = *config.EmbeddingModel
 	// 初始化标志位，用于判断是否所有模型路径都为空
@@ -30,8 +32,11 @@ func CreateServers() {
 	if allEmpty {
 		log.Printf("GGUF模块[ERROR] -> 所有类型均未找到有效模型文件")
 		// 启动浏览器页面，辅助用户下载模型
-		browser.OpenBrowser("https://modelscope.cn/models/lmstudio-community/Qwen3.5-9B-GGUF/files")
-		browser.OpenBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
+		browser.OpenSystemBrowser("https://modelscope.cn/models/lmstudio-community/Qwen3.5-9B-GGUF/files")
+		browser.OpenSystemBrowser("https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B-GGUF/files")
+		browser.OpenSystemBrowser("https://modelscope.cn/models/unsloth/Z-Image-Turbo-GGUF/files")
+		browser.OpenSystemBrowser("https://modelscope.cn/models/unsloth/Qwen3-4B-Instruct-2507-GGUF/files")
+		browser.OpenSystemBrowser("https://modelscope.cn/models/Tongyi-MAI/Z-Image-Turbo/tree/master/vae")
 		return
 	}
 	// 使用获取到的模型路径启动不同类型的 GGUF 服务实例
