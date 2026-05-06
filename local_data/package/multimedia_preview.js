@@ -94,7 +94,7 @@ class MultimediaPreview {
 	 * @returns {Promise<void>}
 	 */
 	async initTemplateHTML() {
-		this.templateHTML = await fetch('/read/resources/universal/multimedia_preview.html').then(res => res.text());
+		this.templateHTML = await fetch('/read/package/multimedia_preview.html').then(res => res.text());
 	}
 	/**
 	 * 检测文件类型
