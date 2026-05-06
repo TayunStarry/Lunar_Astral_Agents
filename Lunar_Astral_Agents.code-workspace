@@ -7,12 +7,6 @@
 		{
 			"name": "models",
 			"path": "../Chat_AI_Case/lmstudio/models"
-		},
-		{
-			"path": "../月之华-资料库存/MD文档"
-		},
-		{
-			"path": "../月之华-资料库存/client_old"
 		}
 	],
 	"settings": {
