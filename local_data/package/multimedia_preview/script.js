@@ -136,7 +136,7 @@ class MultimediaPreview {
 			.replace(/{{y}}/g, '0')
 			.replace(/{{scalePercent}}/g, '100')
 			.replace(/{{filePath}}/g, path.replace(/^generated[/]/, ''))
-			.replace(/{{default-image}}/g, `/read/resources/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 5)}.png`);
+			.replace(/{{default-image}}/g, `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 5)}.png`);
 		// 创建模态框
 		this.modal = document.createElement('div');
 		this.modal.innerHTML = html;
