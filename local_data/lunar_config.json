@@ -12,7 +12,7 @@
 		"developer": true,
 		"clear_port": false,
 		"allow_diffusion": true,
-		"allow_multimodal": true
+		"allow_multimodal": false
 	},
 	"cloud": {
 		"cloud_model_url": null,

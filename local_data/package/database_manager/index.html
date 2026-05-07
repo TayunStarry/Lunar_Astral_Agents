@@ -5,16 +5,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 』数据管理</title>
-    <!-- Font Awesome 图标库 -->
-    <link rel="stylesheet" href="/read/package/fontAwesome/css/all.min.css">
-    <link rel="stylesheet" href="/read/package/database_manager/style.css">
-    <script defer src="/read/package/database_manager/script.js"></script>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/read/package/standard_dependency/styles.css">
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+    <!-- 标准脚本引用 -->
 </head>
 
 <body>
     <!-- 背景图层 -->
     <div class="bg-layer"></div>
-
     <!-- 应用容器 -->
     <div class="app-container">
         <!-- 头部区域 -->
@@ -150,7 +152,7 @@
                                                 </label>
                                                 <textarea id="select-filter" class="form-textarea glass-input"
                                                     placeholder='示例: {"id": 1} 或 {"age": {"$gt": 18}}'
-                                                rows="2"></textarea>
+                                                    rows="2"></textarea>
                                             </div>
                                             <div class="form-group">
                                                 <label class="form-label">
@@ -158,19 +160,21 @@
                                                 </label>
                                                 <textarea id="select-order" class="form-textarea glass-input"
                                                     placeholder='示例: [{"column": "id", "direction": "asc"}]'
-                                                rows="2"></textarea>
+                                                    rows="2"></textarea>
                                             </div>
                                             <div class="form-group">
                                                 <label class="form-label">
                                                     <i class="fa-solid fa-ruler"></i> 限制
                                                 </label>
-                                                <input type="number" id="select-limit" class="form-input glass-input" value="100" min="1" max="1000">
+                                                <input type="number" id="select-limit" class="form-input glass-input"
+                                                    value="100" min="1" max="1000">
                                             </div>
                                             <div class="form-group">
                                                 <label class="form-label">
                                                     <i class="fa-solid fa-location-dot"></i> 偏移
                                                 </label>
-                                                <input type="number" id="select-offset" class="form-input glass-input" value="0" min="0">
+                                                <input type="number" id="select-offset" class="form-input glass-input"
+                                                    value="0" min="0">
                                             </div>
                                         </div>
                                         <div class="form-actions">
@@ -189,7 +193,7 @@
                                             </label>
                                             <textarea id="insert-data" class="form-textarea glass-input"
                                                 placeholder='示例: {"name": "测试", "age": 25, "email": "test@example.com"}'
-                                            rows="4"></textarea>
+                                                rows="4"></textarea>
                                         </div>
                                         <div class="form-actions">
                                             <button id="execute-insert" class="btn-glass btn-glass-primary btn-lg">
@@ -208,7 +212,7 @@
                                                 </label>
                                                 <textarea id="update-data" class="form-textarea glass-input"
                                                     placeholder='示例: {"name": "新名称", "status": "active"}'
-                                                rows="3"></textarea>
+                                                    rows="3"></textarea>
                                             </div>
                                             <div class="form-group">
                                                 <label class="form-label">
@@ -217,7 +221,7 @@
                                                 </label>
                                                 <textarea id="update-filter" class="form-textarea glass-input"
                                                     placeholder='示例: {"id": 1} 或 {"status": "inactive"}'
-                                                rows="3"></textarea>
+                                                    rows="3"></textarea>
                                             </div>
                                         </div>
                                         <div class="form-actions">
@@ -294,7 +298,6 @@
             </div>
         </footer>
     </div>
-
     <!-- 创建表对话框 -->
     <div id="create-table-dialog" class="dialog">
         <div class="dialog-content glass-panel">
@@ -308,14 +311,16 @@
             <div class="form-group">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <label>列设置</label>
-                    <button id="add-column" class="btn-glass btn-glass-dark btn-sm"><i class="fa-solid fa-plus"></i> 添加列</button>
+                    <button id="add-column" class="btn-glass btn-glass-dark btn-sm"><i class="fa-solid fa-plus"></i>
+                        添加列</button>
                 </div>
                 <div id="columns-container">
                     <!-- 列设置将通过JS动态生成 -->
                     <div class="column-item">
                         <div class="column-header">
                             <span>列 1</span>
-                            <button class="remove-column btn-glass btn-glass-danger btn-xs"><i class="fa-solid fa-trash-can"></i> 删除</button>
+                            <button class="remove-column btn-glass btn-glass-danger btn-xs"><i
+                                    class="fa-solid fa-trash-can"></i> 删除</button>
                         </div>
                         <div class="column-fields">
                             <div class="form-row">
@@ -360,11 +365,11 @@
 
             <div class="dialog-buttons">
                 <button id="cancel-create-table" class="btn-glass btn-glass-dark">取消</button>
-                <button id="confirm-create-table" class="btn-glass btn-glass-primary btn-lg"><i class="fa-solid fa-plus"></i> 创建</button>
+                <button id="confirm-create-table" class="btn-glass btn-glass-primary btn-lg"><i
+                        class="fa-solid fa-plus"></i> 创建</button>
             </div>
         </div>
     </div>
-
     <!-- 确认对话框 -->
     <div id="confirm-dialog" class="dialog">
         <div class="dialog-content glass-panel dialog-sm">
@@ -372,11 +377,11 @@
             <p id="confirm-message">确定要执行此操作吗？</p>
             <div class="dialog-buttons">
                 <button id="cancel-confirm" class="btn-glass btn-glass-dark">取消</button>
-                <button id="confirm-action" class="btn-glass btn-glass-danger btn-lg"><i class="fa-solid fa-check"></i> 确认</button>
+                <button id="confirm-action" class="btn-glass btn-glass-danger btn-lg"><i class="fa-solid fa-check"></i>
+                    确认</button>
             </div>
         </div>
     </div>
-
     <!-- 高级查询操作符说明对话框 -->
     <div id="operators-dialog" class="dialog">
         <div class="dialog-content glass-panel">
@@ -391,23 +396,55 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>$eq</td><td>等于</td><td>{"age": {"$eq": 18}}</td></tr>
-                        <tr><td>$ne</td><td>不等于</td><td>{"age": {"$ne": 18}}</td></tr>
-                        <tr><td>$gt</td><td>大于</td><td>{"age": {"$gt": 18}}</td></tr>
-                        <tr><td>$gte</td><td>大于等于</td><td>{"age": {"$gte": 18}}</td></tr>
-                        <tr><td>$lt</td><td>小于</td><td>{"age": {"$lt": 18}}</td></tr>
-                        <tr><td>$lte</td><td>小于等于</td><td>{"age": {"$lte": 18}}</td></tr>
-                        <tr><td>$like</td><td>模糊匹配</td><td>{"name": {"$like": "%test%"}}</td></tr>
-                        <tr><td>$in</td><td>在数组中</td><td>{"age": {"$in": [18,20,22]}}</td></tr>
+                        <tr>
+                            <td>$eq</td>
+                            <td>等于</td>
+                            <td>{"age": {"$eq": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$ne</td>
+                            <td>不等于</td>
+                            <td>{"age": {"$ne": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$gt</td>
+                            <td>大于</td>
+                            <td>{"age": {"$gt": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$gte</td>
+                            <td>大于等于</td>
+                            <td>{"age": {"$gte": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$lt</td>
+                            <td>小于</td>
+                            <td>{"age": {"$lt": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$lte</td>
+                            <td>小于等于</td>
+                            <td>{"age": {"$lte": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$like</td>
+                            <td>模糊匹配</td>
+                            <td>{"name": {"$like": "%test%"}}</td>
+                        </tr>
+                        <tr>
+                            <td>$in</td>
+                            <td>在数组中</td>
+                            <td>{"age": {"$in": [18,20,22]}}</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
             <div class="dialog-buttons">
-                <button id="close-operators" class="btn-glass btn-glass-dark"><i class="fa-solid fa-xmark"></i> 关闭</button>
+                <button id="close-operators" class="btn-glass btn-glass-dark"><i class="fa-solid fa-xmark"></i>
+                    关闭</button>
             </div>
         </div>
     </div>
-
 </body>
 
 </html>
