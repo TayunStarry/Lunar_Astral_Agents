@@ -150,7 +150,7 @@ function renderMessage(message) {
     } else {
         avatar.classList.add('ai-avatar');
         const img = document.createElement('img');
-        img.src = '/read/images/icon/agent_avatar.jpg';
+        img.src = '/read/images/icon/agent_avatar.Webp';
         img.alt = '琉璃';
         avatar.appendChild(img);
     }

@@ -330,7 +330,7 @@ function addAiMessage(content) {
     const div = document.createElement('div');
     div.className = 'message ai-message';
     div.innerHTML = `
-        <div class="message-avatar"><img src="/read/images/icon/agent_avatar.jpg" alt="Agent Avatar"></div>
+        <div class="message-avatar"><img src="/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div>
         <div class="message-content">${marked.parse(content)}</div>
     `;
     messagesDiv.appendChild(div);
@@ -343,7 +343,7 @@ function addTypingIndicator() {
     div.className = 'message ai-message';
     div.id = 'typingIndicator';
     div.innerHTML = `
-        <div class="message-avatar"><img src="/read/images/icon/agent_avatar.jpg" alt="Agent Avatar"></div>
+        <div class="message-avatar"><img src="/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div>
         <div class="message-content">正在思考...<span class="typing-dots"></span></div>
     `;
     messagesDiv.appendChild(div);

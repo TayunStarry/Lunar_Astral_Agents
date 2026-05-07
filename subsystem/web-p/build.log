@@ -1,0 +1,19 @@
+[2026-05-07 22:14:19] [INFO] === Starting PNG to WebP Converter Build ===
+[2026-05-07 22:14:19] [INFO] Target: windows/amd64
+[2026-05-07 22:14:19] [INFO] Output: png2webp
+[2026-05-07 22:14:19] [INFO] Checking Go environment...
+[2026-05-07 22:14:19] [INFO] Go Version: go version go1.25.0 windows/amd64
+[2026-05-07 22:14:19] [INFO] Checking GCC compiler (required for CGO)...
+[2026-05-07 22:14:19] [INFO] Setting environment variables...
+[2026-05-07 22:14:19] [INFO] CGO_ENABLED = 1
+[2026-05-07 22:14:19] [INFO] GOOS = windows
+[2026-05-07 22:14:19] [INFO] GOARCH = amd64
+[2026-05-07 22:14:19] [INFO] Downloading dependencies...
+[2026-05-07 22:14:20] [INFO] Dependencies downloaded successfully
+[2026-05-07 22:14:20] [INFO] Updating go.sum...
+[2026-05-07 22:14:20] [INFO] Starting build...
+[2026-05-07 22:14:20] [INFO] Build command: go build -tags cgo -o png2webp.exe .
+[2026-05-07 22:14:52] [INFO] Build successful!
+[2026-05-07 22:14:52] [INFO] Output file: D:\Lunar_Astral_Agents\LunarCore\web-p\png2webp.exe
+[2026-05-07 22:14:52] [INFO] File size: 5911.19 KB
+[2026-05-07 22:14:52] [INFO] === Build Completed Successfully ===
