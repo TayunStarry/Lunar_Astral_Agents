@@ -470,7 +470,7 @@ async function loadFileList() {
         if (allFiles.length < 8) {
             const missingCount = 8 - allFiles.length;
             for (let i = 0; i < missingCount; i++) {
-                const imageUrl = `images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.png`;
+                const imageUrl = `images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
                 allFiles.push({ name: '*.png', path: imageUrl, size: 0, lastModified: new Date().toISOString(), isDir: false });
             }
         }
