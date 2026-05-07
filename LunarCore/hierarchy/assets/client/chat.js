@@ -244,7 +244,7 @@ export async function renderMessage(message, container) {
                 } catch (err) {
                     console.warn('Failed to get video thumbnail:', err);
                     const img = document.createElement('img');
-                    img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 3)}.png`;
+                    img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
                     img.className = 'image-just-drawn';
                     img.alt = '视频';
                     img.onclick = () => window.previewImage?.(mediaUrl, '视频');
@@ -256,7 +256,7 @@ export async function renderMessage(message, container) {
                 img.className = 'image-just-drawn';
                 img.alt = typeof message.content === 'string' ? message.content : '图片';
                 img.onerror = () => {
-                    img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 3)}.png`;
+                    img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
                 };
                 img.onclick = () => window.previewImage?.(mediaUrl, typeof message.content === 'string' ? message.content : '图片');
                 mediaContainerItem.appendChild(img);
@@ -286,7 +286,7 @@ export async function renderMessage(message, container) {
             } catch (err) {
                 console.warn('Failed to get video thumbnail:', err);
                 const img = document.createElement('img');
-                img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 3)}.png`;
+                img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
                 img.className = 'image-just-drawn';
                 img.alt = '视频';
                 img.onclick = () => window.previewImage?.(message.imageUrl, '视频');
@@ -298,7 +298,7 @@ export async function renderMessage(message, container) {
             img.className = 'image-just-drawn';
             img.alt = typeof message.content === 'string' ? message.content : '图片';
             img.onerror = () => {
-                img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 3)}.png`;
+                img.src = `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
             };
             img.onclick = () => window.previewImage?.(message.imageUrl, typeof message.content === 'string' ? message.content : '图片');
             imgContainer.appendChild(img);
