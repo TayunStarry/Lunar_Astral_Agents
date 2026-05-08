@@ -3,35 +3,35 @@
         "id": "image_generation",
         "icon": "/read/images/icon/image_generation.Webp",
         "title": "图像生成",
-        "description": "打开『 星月智能 』图像生成器",
+        "description": "打开『 星月智能 』图像生成",
         "url": "/read/package/image_generation/index.html"
     },
     {
         "id": "screenshot_manager",
         "icon": "/read/images/icon/screenshot_manager.Webp",
-        "title": "截图管理",
-        "description": "打开『 星月智能 』截图管理器",
+        "title": "截图标注",
+        "description": "打开『 星月智能 』截图标注",
         "url": "/read/package/screenshot_manager/index.html"
     },
     {
         "id": "message_rendering",
         "icon": "/read/images/icon/message_rendering.Webp",
         "title": "消息渲染",
-        "description": "打开『 星月智能 』消息渲染器",
+        "description": "打开『 星月智能 』消息渲染",
         "url": "/read/package/message_rendering/index.html"
     },
     {
         "id": "file_explorer",
         "icon": "/read/images/icon/file_explorer.Webp",
         "title": "文件管理",
-        "description": "打开『 星月智能 』文件管理器",
+        "description": "打开『 星月智能 』文件管理",
         "url": "/read/package/file_explorer/index.html"
     },
     {
         "id": "database_manager",
         "icon": "/read/images/icon/database_manager.Webp",
-        "title": "数据库管理",
-        "description": "打开『 星月智能 』数据库管理器",
+        "title": "数据管理",
+        "description": "打开『 星月智能 』数据管理",
         "url": "/read/package/database_manager/index.html"
     },
     {

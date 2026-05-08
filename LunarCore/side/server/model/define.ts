@@ -38,6 +38,10 @@ export class AgentDefine {
         '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
         '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
     ];
+    /** 随机默认应答 */
+    public get randomDefaultMessage(): string {
+        return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length)];
+    }
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     protected constructor() {
         // 初始化 全部模型 的 系统提示词
@@ -120,19 +124,21 @@ export class AgentDefine {
      * @returns {Promise<void>} - 处理完成后的 Promise
      */
     public async LiteImageFile(): Promise<void> {
+        // 遍历未读上下文数组中的每个消息
         for (let message of this.unreadContext) {
+            console.log(JSON.stringify(message));
             // 跳过纯文本消息
             if (typeof message.content === 'string') continue;
+            /** 新内容数组 */
+            const newContent: Array<ImageContent | TextContent> = [];
             // 遍历消息内容中的每个项
             for (let item of message.content) {
-                // 跳过文本项
-                if (item.type == 'text') continue;
+                // 如果是文本项,直接添加到新内容数组
+                if (item.type == 'text') newContent.push(item);
                 // 检查是否为支持的视频文件格式
-                if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                     // 处理视频文件
                     await this.analysisVideoFile(item.image_url.url, '');
-                    // 替换为默认图片
-                    item.image_url.url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
                     // 获取图片文件内容
@@ -143,10 +149,13 @@ export class AgentDefine {
                     const [resizedBlob, error1] = resizeImage(response.body);
                     // 检查缩放是否成功
                     if (error1) throw new Error('缩放图片失败');
-                    // 处理缩放后的图片文件
-                    item.image_url.url = resizedBlob.base64;
+                    // 添加到新内容数组
+                    newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
                 }
             }
+            // 替换消息内容
+            message.content = newContent;
+            console.log(JSON.stringify(message));
         }
     }
 }

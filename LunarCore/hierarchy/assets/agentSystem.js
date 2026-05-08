@@ -836,6 +836,9 @@ class AgentDefine {
         '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
         '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
     ];
+    get randomDefaultMessage() {
+        return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length)];
+    }
     constructor() {
         this.compilePlan.useMultimodal(fileView('prompts/compilePlan.md')[0]);
         this.queryKeywords.useMultimodal(fileView('prompts/queryKeywords.md')[0]);
@@ -883,14 +886,15 @@ class AgentDefine {
     }
     async LiteImageFile() {
         for (let message of this.unreadContext) {
+            console.log(JSON.stringify(message));
             if (typeof message.content === 'string')
                 continue;
+            const newContent = [];
             for (let item of message.content) {
                 if (item.type == 'text')
-                    continue;
-                if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                    newContent.push(item);
+                else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                     await this.analysisVideoFile(item.image_url.url, '');
-                    item.image_url.url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
                 }
                 else if (!item.image_url.url.startsWith("data:image")) {
                     const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
@@ -899,9 +903,11 @@ class AgentDefine {
                     const [resizedBlob, error1] = resizeImage(response.body);
                     if (error1)
                         throw new Error('缩放图片失败');
-                    item.image_url.url = resizedBlob.base64;
+                    newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
                 }
             }
+            message.content = newContent;
+            console.log(JSON.stringify(message));
         }
     }
 }
@@ -935,14 +941,16 @@ class LunarAgent extends AgentDefine {
                 await this.pullExternalMessages();
                 const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
                 const messageType = messageLength === 0 ? 'response' : 'active';
-                if (messageLength === 0 && RandomFloor(15, 100) > this.speakWeight) {
-                    await new Promise(resolve => setTimeout(resolve, 10000));
+                const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
+                if (messageLength === 0 && !allowSpeak) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     continue;
                 }
+                else if (messageLength == 0 && allowSpeak)
+                    this.speakWeight = 0;
                 await this.batchProcessVideoFiles();
                 await this.createChatMessage();
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
+                const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.randomDefaultMessage;
                 pushContext(messageType, messageResponse);
             }
             catch (error) {
