@@ -1,9 +1,9 @@
 ﻿<#
 .SYNOPSIS
-    Luna_Astral 跨平台构建脚本（自动化流程第一环）
+    Luna_Astral 构建脚本
 .DESCRIPTION
-    执行全面的环境检查、安装/验证依赖、编译前端资源，并构建 Go 可执行文件。
-    在总调度脚本中应最先执行；完成后 Crystal_Astral 可直接依赖已就绪的环境。
+    安装 npm 依赖、处理 Go 模块、编译前端资源并构建 Go 可执行文件。
+    支持独立编译，也可被主调度脚本调用（使用 -SkipCheck 跳过环境检查）。
 .PARAMETER TargetOS
     目标操作系统，可选值：windows, linux, darwin。默认 windows。
 .PARAMETER TargetArch
@@ -12,6 +12,8 @@
     跳过环境与依赖检查（仅当确认环境已就绪时使用）。
 .EXAMPLE
     .\build.ps1 -TargetOS linux -TargetArch arm64
+.EXAMPLE
+    .\build.ps1 -SkipCheck
 #>
 
 param(
@@ -24,7 +26,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ---------- 环境检查 ----------
+# ---------- 环境检查（仅在独立编译时执行）----------
 function Check-GoEnvironment {
     Write-Host "[Env] 检查 Go 环境..." -ForegroundColor Cyan
     $goCmd = Get-Command go -ErrorAction SilentlyContinue
@@ -97,10 +99,8 @@ function Invoke-GoDependencies {
     try {
         & go mod download 2>&1 | Out-Host
         if ($LASTEXITCODE -ne 0) {
-            # 本地 replace 模块缺失哈希时 download 也可能报错，仅警告而不中断
             Write-Warning "go mod download 返回非零退出码（常见于本地模块无哈希），已忽略。"
         }
-        # 不再运行 go mod verify，避免本地模块哈希校验失败中断构建
         Write-Host "  ✓ 已跳过 go mod verify（本地模块仅确认路径存在）" -ForegroundColor DarkGray
     }
     catch {
@@ -154,12 +154,10 @@ function Build-LunaAstral {
     Write-Host "`n========== 开始构建 Luna_Astral ==========" -ForegroundColor Magenta
     Write-Host "目标平台: $TargetOS / $TargetArch" -ForegroundColor Magenta
 
-    # 设置跨平台编译环境
     $env:GOOS = $TargetOS
     $env:GOARCH = $TargetArch
     $env:CGO_ENABLED = 1
 
-    # 图标资源处理（存在性检查）
     if ($TargetOS -eq "windows" -and (Test-Path "icon.ico")) {
         if (Test-Path "icon.syso") {
             Write-Host "[Icon] icon.syso 已存在，跳过图标编译。" -ForegroundColor DarkGray
@@ -175,7 +173,6 @@ function Build-LunaAstral {
         Write-Host "[Icon] 非 Windows 目标，跳过图标打包。" -ForegroundColor DarkGray
     }
 
-    # 前端编译
     Write-Host "[PreBuild] 编译服务端脚本..." -ForegroundColor Cyan
     $originalErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "SilentlyContinue"
@@ -183,8 +180,6 @@ function Build-LunaAstral {
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = $originalErrorAction
     if ($exitCode -ne 0) { throw "npm run server.side 失败。" }
-
-    Write-Host "[Info] 客户端脚本编译已跳过（npm run client.side 被注释）。如需启用请修改脚本。" -ForegroundColor DarkGray
 
     Write-Host "[PreBuild] 执行 removeExport.cjs..." -ForegroundColor Cyan
     if (Test-Path "removeExport.cjs") {
@@ -195,13 +190,11 @@ function Build-LunaAstral {
         Write-Warning "removeExport.cjs 未找到，跳过。"
     }
 
-    # 组装 ldflags
     $ldflags = "-s -w"
     if ($TargetOS -eq "windows") {
         $ldflags += " -H windowsgui"
     }
 
-    # 输出路径
     $binaryName = "Luna_Astral"
     if ($TargetOS -eq "windows") { $binaryName += ".exe" }
     $outputPath = "..\$binaryName"
@@ -211,6 +204,7 @@ function Build-LunaAstral {
         "build",
         "-tags", "webview",
         "-ldflags=$ldflags",
+        "-trimpath",
         "-o", $outputPath
     )
     & go $buildArgs 2>&1 | Out-Host
@@ -223,17 +217,18 @@ function Build-LunaAstral {
 # ---------- 主流程 ----------
 try {
     if (-not $SkipCheck) {
+        Write-Host "[LunarCore] 独立编译模式，执行完整环境检查..." -ForegroundColor Cyan
         Check-GoEnvironment
         Check-GCC
         Check-NodeEnvironment
         Check-NPM
-        Invoke-NpmInstall
-        Invoke-GoDependencies
-        Test-LocalReplacements
     }
     else {
-        Write-Host "[Skip] 跳过环境与依赖检查（假设已由前置流程完成）。" -ForegroundColor Yellow
+        Write-Host "[LunarCore] 由主调度脚本调用，跳过环境检查。" -ForegroundColor Yellow
     }
+    Invoke-NpmInstall
+    Invoke-GoDependencies
+    Test-LocalReplacements
     Build-LunaAstral
 }
 catch {

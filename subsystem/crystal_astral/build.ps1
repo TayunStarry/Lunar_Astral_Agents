@@ -1,9 +1,9 @@
 ﻿<#
 .SYNOPSIS
-    Crystal_Astral 跨平台构建脚本（本地模块友好版）
+    Crystal_Astral 构建脚本
 .DESCRIPTION
-    完全跳过哈希校验（go mod verify），仅验证 Go 命令可用和本地替换路径存在，
-    随后直接编译。适合所有依赖通过 replace 指向本地目录的项目。
+    处理 Go 模块、检查本地替换路径、编译图标并构建 Go 可执行文件。
+    支持独立编译，也可被主调度脚本调用（使用 -SkipCheck 跳过环境检查）。
 .PARAMETER TargetOS
     目标操作系统，可选值：windows, linux, darwin。默认 windows。
 .PARAMETER TargetArch
@@ -26,9 +26,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ---------- 轻量 Go 环境验证 ----------
+# ---------- 环境检查（仅在独立编译时执行）----------
 function Test-GoCommand {
-    Write-Host "[Verify] 检查 Go 命令是否可用..." -ForegroundColor Cyan
+    Write-Host "[Env] 检查 Go 命令是否可用..." -ForegroundColor Cyan
     $goCmd = Get-Command go -ErrorAction SilentlyContinue
     if (-not $goCmd) {
         throw "未找到 Go 命令。请确保 Go 已安装并加入 PATH。"
@@ -36,15 +36,14 @@ function Test-GoCommand {
     Write-Host "  ✓ Go 命令已就绪" -ForegroundColor Green
 }
 
-# ---------- 本地模块路径验证（不调用 go mod verify）----------
+# ---------- 本地模块路径检查 ----------
 function Test-LocalReplacements {
-    Write-Host "[Local] 检查本地模块路径..." -ForegroundColor Cyan
+    Write-Host "[Deps] 检查本地模块路径..." -ForegroundColor Cyan
     if (-not (Test-Path "go.mod")) {
         throw "未找到 go.mod，请在项目根目录运行此脚本。"
     }
 
     $modContent = Get-Content "go.mod" -Raw
-    # 匹配 replace 指令中的本地路径（相对/绝对）
     $pattern = 'replace\s+\S+\s+=>\s+(\.\.?[\\/][^\s]+|[a-zA-Z]:[\\/][^\s]+|/[^\s]+)'
     $matches = [regex]::Matches($modContent, $pattern)
 
@@ -55,7 +54,6 @@ function Test-LocalReplacements {
         if (-not (Test-Path $fullPath)) {
             throw "本地模块路径不存在: '$localPath' (解析为: $fullPath)。请检查 go.mod 的 replace 指令。"
         }
-        # 可选：检查路径下是否有 go.mod，确认是有效 Go 模块
         if (-not (Test-Path (Join-Path $fullPath "go.mod"))) {
             Write-Warning "本地模块路径 '$fullPath' 下未找到 go.mod，编译可能失败。"
         }
@@ -63,7 +61,25 @@ function Test-LocalReplacements {
     Write-Host "  ✓ 所有本地模块路径存在" -ForegroundColor Green
 }
 
-# ---------- 图标资源处理（存在性检查）----------
+function Invoke-GoDependencies {
+    Write-Host "[Deps] 下载/验证 Go 模块..." -ForegroundColor Cyan
+    if (-not (Test-Path "go.mod")) {
+        throw "未找到 go.mod，请在项目根目录运行此脚本。"
+    }
+    try {
+        & go mod download 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "go mod download 返回非零退出码（常见于本地模块无哈希），已忽略。"
+        }
+        Write-Host "  ✓ 已跳过 go mod verify（本地模块仅确认路径存在）" -ForegroundColor DarkGray
+    }
+    catch {
+        throw "Go 模块依赖处理失败: $_。请检查网络或运行 'go mod tidy'。"
+    }
+    Write-Host "  ✓ Go 模块依赖就绪" -ForegroundColor Green
+}
+
+# ---------- 图标资源处理 ----------
 function Build-IconIfNeeded {
     if ($TargetOS -ne "windows" -or -not (Test-Path "icon.ico")) {
         return
@@ -93,10 +109,8 @@ function Build-CrystalAstral {
     $env:GOARCH = $TargetArch
     $env:CGO_ENABLED = 1
 
-    # 图标（Windows）
     Build-IconIfNeeded
 
-    # 构建参数
     $ldflags = "-s -w"
     if ($TargetOS -eq "windows") {
         $ldflags += " -H windowsgui"
@@ -104,10 +118,9 @@ function Build-CrystalAstral {
 
     $binaryName = "Crystal_Astral"
     if ($TargetOS -eq "windows") { $binaryName += ".exe" }
-    # 根据实际需要调整输出路径，此处假设脚本位于 subsystem/crystal_astral 下
     $outputPath = "..\..\$binaryName"
 
-    Write-Host "[Build] 编译 Go 二进制（跳过哈希校验）..." -ForegroundColor Cyan
+    Write-Host "[Build] 编译 Go 二进制..." -ForegroundColor Cyan
     $buildArgs = @(
         "build",
         "-tags", "webview",
@@ -125,12 +138,14 @@ function Build-CrystalAstral {
 # ---------- 入口 ----------
 try {
     if (-not $SkipCheck) {
+        Write-Host "[Crystal_Astral] 独立编译模式，执行环境检查..." -ForegroundColor Cyan
         Test-GoCommand
-        Test-LocalReplacements   # 仅检查路径，不执行任何 go mod verify
     }
     else {
-        Write-Host "[Skip] 跳过所有检查，直接编译。" -ForegroundColor Yellow
+        Write-Host "[Crystal_Astral] 由主调度脚本调用，跳过环境检查。" -ForegroundColor Yellow
     }
+    Invoke-GoDependencies
+    Test-LocalReplacements
     Build-CrystalAstral
 }
 catch {
