@@ -25,6 +25,9 @@
     --radius-xs: 8px;
 
     --bg-image: url('/background');
+
+    --nav-height: 70px;
+    --bottom-bar-height: 70px;
 }
 
 /* ========== 基础重置 ========== */
@@ -45,17 +48,127 @@ body {
     bottom: 0;
     overflow: hidden;
     display: flex;
+    flex-direction: column;
     padding: 20px;
-    gap: 20px;
+    gap: 15px;
     backdrop-filter: blur(3px);
+}
+
+/* ========== 顶部导航 ========== */
+.top-nav-glass {
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 25px;
+    height: var(--nav-height);
+    flex-shrink: 0;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-brand .nav-icon {
+    font-size: 1.8rem;
+}
+
+.nav-brand h1 {
+    font-size: 1.4rem;
+    color: var(--text-medium);
+}
+
+.nav-tabs {
+    display: flex;
+    gap: 10px;
+}
+
+.nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--text-medium);
+    transition: all 0.3s ease;
+}
+
+.nav-tab i {
+    font-size: 1rem;
+}
+
+.nav-tab:hover {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(102, 126, 234, 0.3);
+}
+
+.nav-tab.active {
+    background: var(--btn-primary);
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* 导航栏任务状态 */
+.nav-task-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.nav-spinner {
+    width: 18px;
+    height: 18px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: var(--btn-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.nav-task-status span {
+    font-size: 0.9rem;
+    color: var(--text-medium);
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 /* ========== 主容器 ========== */
 .main-container {
+    flex: 1;
     display: flex;
-    width: 100%;
-    height: 100%;
-    gap: 20px;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 15px;
+}
+
+/* ========== 页面容器 ========== */
+.page {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.page.hidden {
+    display: none;
 }
 
 /* ========== 玻璃面板基础 ========== */
@@ -71,52 +184,126 @@ body {
     overflow: hidden;
 }
 
-/* 左侧配置面板 */
-.config-panel {
-    width: 420px;
-    min-width: 380px;
+/* ========== 内容面板（图片展示页） ========== */
+.content-panel {
+    flex: 1;
     padding: 25px;
 }
 
-.panel-header-inner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid rgba(102, 126, 234, 0.5);
-}
 
-.panel-header-inner h2 {
-    font-size: 1.5rem;
-}
 
-.btn-icon-only {
-    margin-left: auto;
-    background: none;
-    border: none;
-    color: var(--text-medium);
-    cursor: pointer;
-    font-size: 1.2rem;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-}
 
-.btn-icon-only:hover {
-    opacity: 1;
-}
 
-.config-scroll {
+/* ========== 设置面板 ========== */
+.settings-panel {
     flex: 1;
+    padding: 25px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    padding-right: 5px;
 }
 
-.config-scroll::-webkit-scrollbar {
-    display: none;
+.settings-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.settings-panel::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.settings-panel::-webkit-scrollbar-thumb {
+    background: rgba(102, 126, 234, 0.6);
+    border-radius: 3px;
+}
+
+/* 上部区域：三个卡片网格 */
+.settings-top-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 20px;
+    flex: 1;
+}
+
+.settings-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.settings-card h3 {
+    color: var(--text-medium);
+    margin-bottom: 14px;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.settings-card .glass-textarea {
+    flex: 1;
+    min-height: 150px;
+}
+
+.settings-card .form-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-card .upload-area-glass {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* 下部区域：参数配置 */
+.settings-bottom-section {
+    flex-shrink: 0;
+}
+
+/* 参数主卡片布局 */
+.params-main-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.params-layout {
+    display: flex;
+    gap: 25px;
+}
+
+/* 左侧：三个滑条 */
+.params-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.params-left .form-group {
+    margin-bottom: 0;
+}
+
+/* 右侧：两列输入框 */
+.params-right {
+    flex: 1;
+    display: flex;
+    gap: 20px;
+}
+
+.params-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.params-col .form-group {
+    margin-bottom: 0;
 }
 
 /* ========== 玻璃卡片 ========== */
@@ -142,6 +329,10 @@ body {
 /* ========== 表单元素 ========== */
 .form-group {
     margin-bottom: 16px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
 }
 
 .form-group label {
@@ -207,7 +398,7 @@ body {
     background: white;
     border-radius: 50%;
     border: 2px solid rgba(102, 126, 234, 0.8);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
     cursor: pointer;
 }
 
@@ -216,6 +407,17 @@ body {
     text-align: center;
     font-weight: 600;
     color: rgba(102, 126, 234, 0.9);
+}
+
+/* 参数网格 */
+.params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 15px;
+}
+
+.params-grid .form-group {
+    margin-bottom: 0;
 }
 
 /* 上传区域 */
@@ -236,9 +438,20 @@ body {
     background: rgba(255, 255, 255, 0.35);
 }
 
+.upload-preview-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .upload-preview-wrap img {
+    width: 100%;
+    height: 100%;
     max-width: 100%;
-    max-height: 180px;
+    max-height: 100%;
+    object-fit: contain;
     border-radius: 8px;
     margin-bottom: 8px;
 }
@@ -282,28 +495,23 @@ body {
     background: var(--btn-danger-hover);
 }
 
-/* 参数网格 */
-.param-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
-
-.param-grid .form-group {
-    margin-bottom: 0;
-}
-
-/* ========== 按钮区域 ========== */
-.action-buttons-glass {
+/* ========== 底部操作按钮组 ========== */
+.bottom-action-bar {
     display: flex;
     gap: 12px;
-    margin-top: 20px;
-    padding-top: 15px;
-    border-top: 1px solid var(--glass-border);
+    padding: 15px 20px;
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    flex-shrink: 0;
 }
 
-.btn-glass {
-    padding: 12px 18px;
+.bottom-action-bar .btn-glass {
+    flex: 1;
+    padding: 14px 18px;
     border: none;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -317,27 +525,52 @@ body {
     color: white;
     background: var(--btn-dark-bg);
     transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
-    flex: 1;
 }
 
-.btn-glass-primary {
+.bottom-action-bar .btn-glass-optimize {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.bottom-action-bar .btn-glass-optimize:hover:not(:disabled) {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.bottom-action-bar .btn-glass-optimize:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.bottom-action-bar .btn-glass-primary {
     background: var(--btn-primary);
 }
 
-.btn-glass-primary:hover:not(:disabled) {
+.bottom-action-bar .btn-glass-primary:hover:not(:disabled) {
     background: var(--btn-primary-hover);
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 }
 
-.btn-glass-secondary {
+.bottom-action-bar .btn-glass-secondary {
     background: var(--btn-dark-bg);
 }
 
-.btn-glass-secondary:hover:not(:disabled) {
+.bottom-action-bar .btn-glass-secondary:hover:not(:disabled) {
     background: var(--btn-dark-hover);
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.bottom-action-bar .btn-glass-danger {
+    background: var(--btn-danger-bg);
+}
+
+.bottom-action-bar .btn-glass-danger:hover:not(:disabled) {
+    background: var(--btn-danger-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(220, 53, 69, 0.3);
 }
 
 .btn-glass:disabled {
@@ -346,103 +579,7 @@ body {
     transform: none !important;
 }
 
-.btn-glass-icon {
-    background: var(--btn-dark-bg);
-    padding: 10px 18px;
-}
-
-.btn-glass-icon:hover {
-    background: var(--btn-dark-hover);
-}
-
-.btn-glass-danger-icon {
-    background: var(--btn-danger-bg);
-}
-
-.btn-glass-danger-icon:hover {
-    background: var(--btn-danger-hover);
-}
-
-/* 任务状态 */
-.task-status-glass {
-    margin-top: 18px;
-    padding: 14px;
-    background: var(--glass-bg-card);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--glass-border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.spinner-glass {
-    width: 22px;
-    height: 22px;
-    border: 3px solid rgba(255,255,255,0.3);
-    border-top-color: var(--btn-primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-.task-info {
-    flex: 1;
-}
-
-.progress-bar-glass {
-    height: 4px;
-    background: rgba(255,255,255,0.4);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 6px;
-}
-
-.progress-fill-glass {
-    height: 100%;
-    background: linear-gradient(90deg, var(--btn-primary), rgba(118,75,162,0.8));
-    width: 0%;
-    transition: width 0.3s ease;
-}
-
-/* ========== 右侧内容面板 ========== */
-.content-panel {
-    flex: 1;
-    padding: 25px;
-}
-
-.content-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid rgba(102, 126, 234, 0.5);
-}
-
-.content-title-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.content-title-group h2 {
-    font-size: 1.5rem;
-}
-
-.content-subtitle {
-    color: var(--text-light);
-    font-size: 0.95rem;
-}
-
-.header-actions-glass {
-    display: flex;
-    gap: 10px;
-}
-
-/* 文件网格 */
+/* ========== 文件网格 ========== */
 .file-grid-glass {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -457,7 +594,7 @@ body {
 }
 
 .file-grid-glass::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.2);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 3px;
 }
 
@@ -483,7 +620,7 @@ body {
 .file-card:hover {
     border-color: rgba(102, 126, 234, 0.6);
     transform: translateY(-4px);
-    box-shadow: 0 12px 28px rgba(0,0,0,0.15);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
 }
 
 .file-card-header {
@@ -509,7 +646,7 @@ body {
 
 .file-preview {
     aspect-ratio: 1/1;
-    background: rgba(255,255,255,0.25);
+    background: rgba(255, 255, 255, 0.25);
     border-radius: 8px;
     overflow: hidden;
     margin-bottom: 10px;
@@ -598,49 +735,152 @@ body {
 .spinner {
     width: 30px;
     height: 30px;
-    border: 3px solid rgba(255,255,255,0.3);
+    border: 3px solid rgba(255, 255, 255, 0.3);
     border-top-color: var(--btn-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
 
-/* 状态提示条 */
-.status-bar-glass {
+/* ========== 任务状态 ========== */
+.task-status-glass {
+    margin-top: 18px;
+    padding: 14px;
+    background: var(--glass-bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.spinner-glass {
+    width: 22px;
+    height: 22px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: var(--btn-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.task-info {
+    flex: 1;
+}
+
+.progress-bar-glass {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.progress-fill-glass {
+    height: 100%;
+    background: linear-gradient(90deg, var(--btn-primary), rgba(118, 75, 162, 0.8));
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+/* ========== 弹窗消息提示 ========== */
+.toast-container-glass {
     position: fixed;
-    bottom: 30px;
-    right: 30px;
+    top: calc(var(--nav-height) + 20px);
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1000;
+    max-width: 380px;
+}
+
+.toast-glass {
     background: var(--glass-bg-light);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-radius: var(--radius-sm);
-    padding: 14px 22px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    padding: 16px 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
     border: 1px solid var(--glass-border);
-    z-index: 1000;
-    min-width: 240px;
-    font-weight: 500;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    animation: toastSlideIn 0.3s ease;
 }
 
-/* 状态类型左边框颜色 */
-.status-bar-glass.status-success {
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.toast-glass.toast-exit {
+    animation: toastSlideOut 0.3s ease forwards;
+}
+
+@keyframes toastSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+}
+
+.toast-glass.toast-success {
     border-left: 5px solid #28a745;
 }
 
-.status-bar-glass.status-error {
+.toast-glass.toast-error {
     border-left: 5px solid #dc3545;
 }
 
-.status-bar-glass.status-info {
+.toast-glass.toast-info {
     border-left: 5px solid #667eea;
 }
 
-/* 移动端浮动按钮 */
+.toast-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    flex: 1;
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}
+
+/* ========== 移动端浮动按钮 ========== */
 .mobile-config-fab {
     position: fixed;
-    bottom: 24px;
+    bottom: 100px;
     left: 24px;
     width: 52px;
     height: 52px;
@@ -653,7 +893,7 @@ body {
     display: none;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
     cursor: pointer;
     transition: background 0.2s;
     z-index: 999;
@@ -663,8 +903,8 @@ body {
     background: var(--btn-dark-hover);
 }
 
-/* 响应式 */
-@media (max-width: 1600px) {
+/* ========== 响应式设计 ========== */
+@media (max-width: 1400px) {
     .file-grid-glass {
         grid-template-columns: repeat(3, 1fr);
     }
@@ -674,52 +914,143 @@ body {
     .file-grid-glass {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .settings-top-section {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .params-layout {
+        flex-direction: column;
+    }
+
+    .params-right {
+        flex-direction: column;
+    }
 }
 
 @media (max-width: 992px) {
-    body {
-        flex-direction: column;
+    .nav-brand h1 {
+        font-size: 1.2rem;
     }
-    .config-panel {
-        width: 100%;
-        min-width: auto;
-        height: 50vh;
+
+    .nav-tab span {
+        display: none;
     }
+
+    .nav-tab {
+        padding: 12px 16px;
+    }
+
     .file-grid-glass {
         grid-template-columns: repeat(3, 1fr);
     }
 }
 
 @media (max-width: 768px) {
+    body {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .top-nav-glass {
+        height: 60px;
+        padding: 0 15px;
+    }
+
+    .nav-brand h1 {
+        font-size: 1rem;
+    }
+
+    .nav-icon {
+        font-size: 1.4rem;
+    }
+
+    .nav-tabs {
+        gap: 6px;
+    }
+
+    .nav-tab {
+        padding: 10px 14px;
+    }
+
+    .nav-tab i {
+        font-size: 1.1rem;
+    }
+
     .file-grid-glass {
         grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
     }
-    .param-grid {
+
+    .settings-top-section {
         grid-template-columns: 1fr;
+        flex: none;
     }
+
+    .bottom-action-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 0;
+        padding: 12px 15px;
+        gap: 8px;
+        z-index: 100;
+        flex-wrap: wrap;
+    }
+
+    .bottom-action-bar .btn-glass {
+        padding: 12px 10px;
+        font-size: 12px;
+    }
+
+    .bottom-action-bar .btn-glass i {
+        display: none;
+    }
+
     .mobile-config-fab {
         display: flex;
+        bottom: 90px;
     }
-    .config-panel {
-        display: none;
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        right: 20px;
-        bottom: 80px;
-        z-index: 100;
-        height: auto;
+
+    .main-container {
+        padding-bottom: 80px;
     }
 }
 
 @media (max-width: 576px) {
     body {
-        padding: 10px;
+        padding: 8px;
     }
+
+    .nav-brand {
+        gap: 8px;
+    }
+
+    .nav-brand h1 {
+        font-size: 0.9rem;
+    }
+
+    .nav-icon {
+        font-size: 1.2rem;
+    }
+
     .file-grid-glass {
         grid-template-columns: 1fr;
     }
-    .action-buttons-glass {
-        flex-direction: column;
+
+    .bottom-action-bar .btn-glass {
+        flex: 1 1 calc(50% - 4px);
+    }
+
+    .toast-container-glass {
+        left: 10px;
+        right: 10px;
+        max-width: none;
+    }
+
+    .content-panel,
+    .settings-panel {
+        padding: 15px;
     }
 }

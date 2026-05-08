@@ -192,7 +192,7 @@ function Build-LunaAstral {
 
     $ldflags = "-s -w"
     if ($TargetOS -eq "windows") {
-        $ldflags += " -H windowsgui"
+       # $ldflags += " -H windowsgui"
     }
 
     $binaryName = "Luna_Astral"

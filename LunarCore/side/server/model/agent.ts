@@ -49,21 +49,23 @@ class LunarAgent extends AgentDefine {
                 const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
                 /** 消息类型 */
                 const messageType = messageLength === 0 ? 'response' : 'active';
-                // 如果消息长度为0，且随机数大于发言权重，继续循环
-                if (messageLength === 0 && RandomFloor(15, 100) > this.speakWeight) {
-                    // 等待10秒
-                    await new Promise(resolve => setTimeout(resolve, 10000));
+                /** 是否允许发言 */
+                const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
+                // 如果消息长度为0，且不允许发言，继续循环
+                if (messageLength === 0 && !allowSpeak) {
+                    // 等待1秒
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                     // 进入下一次循环
                     continue;
                 }
+                // 如果消息长度为0，且允许发言，重置发言权重
+                else if (messageLength == 0 && allowSpeak) this.speakWeight = 0;
                 // 批量处理视频文件
                 await this.batchProcessVideoFiles();
                 // 创建消息
                 await this.createChatMessage();
-                // 等待1秒
-                await new Promise(resolve => setTimeout(resolve, 1000));
                 /** 消息响应 */
-                const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
+                const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.randomDefaultMessage;
                 // 将消息推送至外部客户端
                 pushContext(messageType, messageResponse);
             }

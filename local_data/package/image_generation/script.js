@@ -1,106 +1,17 @@
 // 全局变量
 let currentTaskId = null;
 let uploadedImagePath = null;
+let currentImageBase64 = null;
+let currentPage = 'gallery';
 
-// 预设数据（保持不变）
-const presets = {
-    "anime": {
-        name: "动漫人物",
-        prompt: "可爱, 萌系风格, 白发绿眼少女, 动漫画风, 卡通形象, 高清",
-        negative_prompt: "模糊, 低质量, 变形, 畸形, 水印, 文字, 现实",
-        width: 512,
-        height: 768,
-        steps: 20,
-        cfg_scale: 1.0,
-        strength: 0.75,
-        batch_size: 1
-    },
-    "landscape": {
-        name: "风景画",
-        prompt: "壮丽的山脉, 日出, 云海, 湖泊, 极简主义, 油画风格",
-        negative_prompt: "人物, 建筑, 文字, 现代元素, 模糊",
-        width: 1024,
-        height: 512,
-        steps: 30,
-        cfg_scale: 1.5,
-        strength: 0.6,
-        batch_size: 1
-    },
-    "sci-fi": {
-        name: "科幻世界",
-        prompt: "未来的城市, 机器人, 太空站, 科幻元素, 赛博朋克, 高科技建筑",
-        negative_prompt: "模糊, 低质量, 变形, 畸形, 水印, 文字, 现实, 古代, 自然风景, 手绘",
-        width: 768,
-        height: 768,
-        steps: 35,
-        cfg_scale: 1.8,
-        strength: 0.7,
-        batch_size: 2
-    },
-    "portrait": {
-        name: "肖像画",
-        prompt: "专业肖像, 精致的面部特征, 戏剧性灯光, 高质量, 8k",
-        negative_prompt: "模糊, 低质量, 变形, 畸形, 水印, 文字, 卡通, 动漫",
-        width: 512,
-        height: 768,
-        steps: 28,
-        cfg_scale: 1.3,
-        strength: 0.65,
-        batch_size: 1
-    },
-    "fantasy": {
-        name: "奇幻场景",
-        prompt: "巨龙, 魔法城堡, 精灵, 幻想世界, 史诗级场景, 概念艺术",
-        negative_prompt: "现代, 科技, 现实, 照片, 低质量, 模糊",
-        width: 768,
-        height: 512,
-        steps: 32,
-        cfg_scale: 1.6,
-        strength: 0.7,
-        batch_size: 2
-    },
-    "architecture": {
-        name: "建筑设计",
-        prompt: "现代建筑, 极简主义设计, 玻璃幕墙, 几何形状, 建筑设计图",
-        negative_prompt: "杂乱, 破旧, 模糊, 低质量, 人物, 动物",
-        width: 768,
-        height: 512,
-        steps: 30,
-        cfg_scale: 1.4,
-        strength: 0.6,
-        batch_size: 1
-    },
-    "cyberpunk": {
-        name: "赛博朋克",
-        prompt: "霓虹灯, 雨夜街道, 高科技低生活, 未来都市, 亚洲风格城市景观",
-        negative_prompt: "白天, 自然光, 田园, 古典, 模糊, 低质量",
-        width: 768,
-        height: 768,
-        steps: 35,
-        cfg_scale: 1.7,
-        strength: 0.75,
-        batch_size: 2
-    },
-    "watercolor": {
-        name: "水彩插画",
-        prompt: "水彩画风格, 柔和色彩, 艺术感, 手绘质感, 梦幻效果",
-        negative_prompt: "照片写实, 3D渲染, 数字感, 生硬边缘, 模糊",
-        width: 768,
-        height: 768,
-        steps: 30,
-        cfg_scale: 1.3,
-        strength: 0.65,
-        batch_size: 1
-    }
-};
-
-// DOM元素（ID与原HTML保持一致）
+// DOM元素
 const elements = {
     prompt: document.getElementById('prompt'),
     negativePrompt: document.getElementById('negative-prompt'),
     initImage: document.getElementById('init-image'),
     uploadArea: document.getElementById('upload-area'),
     imagePreview: document.getElementById('image-preview'),
+    uploadPlaceholder: document.getElementById('upload-placeholder'),
     clearImageBtn: document.getElementById('clear-image-btn'),
     widthSlider: document.getElementById('width'),
     widthValue: document.getElementById('width-value'),
@@ -112,7 +23,7 @@ const elements = {
     batchSize: document.getElementById('batch-size'),
     cfgScale: document.getElementById('cfg-scale'),
     seed: document.getElementById('seed'),
-    presetSelect: document.getElementById('preset-select'),
+    optimizeBtn: document.getElementById('optimize-btn'),
     generateBtn: document.getElementById('generate-btn'),
     resetBtn: document.getElementById('reset-btn'),
     refreshBtn: document.getElementById('refresh-btn'),
@@ -120,17 +31,21 @@ const elements = {
     fileGrid: document.getElementById('file-grid'),
     taskStatus: document.getElementById('task-status'),
     taskMessage: document.getElementById('task-message'),
-    statusBar: document.getElementById('status-bar'),
-    statusMessage: document.getElementById('status-message'),
-    taskProgressFill: document.getElementById('task-progress-fill')
+    taskProgressFill: document.getElementById('task-progress-fill'),
+    toastContainer: document.getElementById('toast-container'),
+    mobileConfigFab: document.getElementById('mobile-config-fab')
 };
 
-// 初始化事件监听器
+// 导航相关元素
+const navTabs = document.querySelectorAll('.nav-tab');
+const pageGallery = document.getElementById('page-gallery');
+const pageSettings = document.getElementById('page-settings');
+
 function initEventListeners() {
     elements.widthSlider.addEventListener('input', updateWidthValue);
     elements.heightSlider.addEventListener('input', updateHeightValue);
     elements.strengthSlider.addEventListener('input', updateStrengthValue);
-    elements.presetSelect.addEventListener('change', loadPreset);
+    elements.optimizeBtn.addEventListener('click', optimizePromptAndParameters);
 
     elements.uploadArea.addEventListener('click', () => elements.initImage.click());
     elements.uploadArea.addEventListener('dragover', (e) => {
@@ -147,8 +62,16 @@ function initEventListeners() {
 
     elements.generateBtn.addEventListener('click', generateImage);
     elements.resetBtn.addEventListener('click', resetParameters);
-    elements.refreshBtn.addEventListener('click', refreshFileList);
+    elements.refreshBtn.addEventListener('click', refreshPage);
     elements.clearAllBtn.addEventListener('click', clearAllFiles);
+
+    navTabs.forEach(tab => {
+        tab.addEventListener('click', () => switchPage(tab.dataset.page));
+    });
+
+    elements.mobileConfigFab.addEventListener('click', () => {
+        switchPage('settings');
+    });
 
     updateWidthValue();
     updateHeightValue();
@@ -160,25 +83,24 @@ function initEventListeners() {
     document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 
-function loadPreset() {
-    const presetKey = elements.presetSelect.value;
-    if (!presetKey) return;
-    const preset = presets[presetKey];
-    if (!preset) return;
+function switchPage(page) {
+    currentPage = page;
 
-    elements.prompt.value = preset.prompt;
-    elements.negativePrompt.value = preset.negative_prompt;
-    elements.widthSlider.value = preset.width;
-    elements.heightSlider.value = preset.height;
-    elements.steps.value = preset.steps;
-    elements.cfgScale.value = preset.cfg_scale;
-    elements.strengthSlider.value = preset.strength;
-    elements.batchSize.value = preset.batch_size;
+    navTabs.forEach(tab => {
+        if (tab.dataset.page === page) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
 
-    updateWidthValue();
-    updateHeightValue();
-    updateStrengthValue();
-    showStatus(`已加载预设: ${preset.name}`, 'success', 2000);
+    if (page === 'gallery') {
+        pageGallery.classList.remove('hidden');
+        pageSettings.classList.add('hidden');
+    } else {
+        pageGallery.classList.add('hidden');
+        pageSettings.classList.remove('hidden');
+    }
 }
 
 async function loadDefaultPrompts() {
@@ -187,23 +109,21 @@ async function loadDefaultPrompts() {
         if (positiveResponse.ok) {
             const positiveText = await positiveResponse.text();
             const cleanPositive = positiveText.replace(/^\s*\/\/.*$/gm, '').trim();
-            elements.prompt.value = cleanPositive || presets.anime.prompt;
-        } else {
-            elements.prompt.value = presets.anime.prompt;
+            if (cleanPositive) {
+                elements.prompt.value = cleanPositive;
+            }
         }
 
         const negativeResponse = await fetch('negative_prompt.md');
         if (negativeResponse.ok) {
             const negativeText = await negativeResponse.text();
             const cleanNegative = negativeText.replace(/^\s*\/\/.*$/gm, '').trim();
-            elements.negativePrompt.value = cleanNegative || presets.anime.negative_prompt;
-        } else {
-            elements.negativePrompt.value = presets.anime.negative_prompt;
+            if (cleanNegative) {
+                elements.negativePrompt.value = cleanNegative;
+            }
         }
     } catch (error) {
-        console.log('使用预设提示词:', error);
-        elements.prompt.value = presets.anime.prompt;
-        elements.negativePrompt.value = presets.anime.negative_prompt;
+        console.log('使用默认提示词:', error);
     }
 }
 
@@ -212,10 +132,12 @@ function clearReferenceImage() {
         elements.initImage.value = '';
         elements.imagePreview.style.display = 'none';
         elements.imagePreview.src = '';
+        elements.uploadPlaceholder.style.display = 'flex';
         elements.clearImageBtn.style.display = 'none';
         uploadedImagePath = null;
+        currentImageBase64 = null;
         elements.uploadArea.style.borderColor = 'rgba(255,255,255,0.5)';
-        showStatus('参考图片已清除', 'info');
+        showToast('参考图片已清除', 'info');
     }
 }
 
@@ -241,7 +163,7 @@ async function handleDrop(e) {
             elements.initImage.files = e.dataTransfer.files;
             await handleImageSelect({ target: elements.initImage });
         } else {
-            showStatus('请选择图片文件', 'error');
+            showToast('请选择图片文件', 'error');
         }
     }
 }
@@ -250,19 +172,21 @@ async function handleImageSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-        showStatus('文件大小不能超过10MB', 'error');
+        showToast('文件大小不能超过10MB', 'error');
         return;
     }
     if (!file.type.startsWith('image/')) {
-        showStatus('请选择图片文件', 'error');
+        showToast('请选择图片文件', 'error');
         return;
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
         elements.imagePreview.src = event.target.result;
         elements.imagePreview.style.display = 'block';
+        elements.uploadPlaceholder.style.display = 'none';
         elements.clearImageBtn.style.display = 'inline-block';
+        currentImageBase64 = event.target.result;
     };
     reader.readAsDataURL(file);
     await uploadImage(file);
@@ -270,8 +194,7 @@ async function handleImageSelect(e) {
 
 async function uploadImage(file) {
     try {
-        showStatus('上传图片中...', 'info');
-        const fixedFileName = 'uploaded_image.' + (file.name.split('.').pop() || 'png');
+        const fixedFileName = 'images/uploaded_image.' + (file.name.split('.').pop() || 'png');
         const base64FileName = btoa(fixedFileName);
         const arrayBuffer = await file.arrayBuffer();
 
@@ -288,58 +211,72 @@ async function uploadImage(file) {
         if (!response.ok) throw new Error('上传失败: ' + response.statusText);
         const result = await response.json();
         uploadedImagePath = result.filename;
-        showStatus('图片上传成功', 'success');
+        showToast('图片上传成功', 'success');
     } catch (error) {
         console.error('上传失败:', error);
-        showStatus(`图片上传失败: ${error.message}`, 'error');
+        showToast(`图片上传失败: ${error.message}`, 'error');
     }
 }
 
-let statusTimeout = null;
+function showToast(message, type = 'info', duration = 3000) {
+    const toast = document.createElement('div');
+    toast.className = `toast-glass toast-${type}`;
 
-function showStatus(message, type = 'info', duration = 3000) {
-    elements.statusMessage.textContent = message;
-    // 使用新玻璃类名（与原JS兼容）
-    elements.statusBar.className = `status-bar-glass status-${type}`;
-    elements.statusBar.style.display = 'flex';
+    const iconMap = {
+        success: '<i class="fas fa-check-circle"></i>',
+        error: '<i class="fas fa-times-circle"></i>',
+        info: '<i class="fas fa-info-circle"></i>'
+    };
 
-    if (statusTimeout) clearTimeout(statusTimeout);
+    toast.innerHTML = `
+        <span class="toast-icon">${iconMap[type]}</span>
+        <span class="toast-message">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+    `;
+
+    elements.toastContainer.appendChild(toast);
+
     if (duration > 0) {
-        statusTimeout = setTimeout(() => {
-            elements.statusBar.style.display = 'none';
+        setTimeout(() => {
+            toast.classList.add('toast-exit');
+            setTimeout(() => toast.remove(), 300);
         }, duration);
     }
 }
 
 function resetParameters() {
     if (confirm('确定要重置所有参数吗？当前设置将会丢失。')) {
-        elements.presetSelect.value = '';
         loadDefaultPrompts();
-        elements.prompt.value = presets.anime.prompt;
-        elements.negativePrompt.value = presets.anime.negative_prompt;
         elements.initImage.value = '';
         elements.imagePreview.style.display = 'none';
-        elements.widthSlider.value = presets.anime.width;
-        elements.heightSlider.value = presets.anime.height;
-        elements.strengthSlider.value = presets.anime.strength;
-        elements.steps.value = presets.anime.steps;
-        elements.batchSize.value = presets.anime.batch_size;
-        elements.cfgScale.value = presets.anime.cfg_scale;
+        elements.imagePreview.src = '';
+        elements.uploadPlaceholder.style.display = 'flex';
+        elements.clearImageBtn.style.display = 'none';
+        elements.widthSlider.value = 512;
+        elements.heightSlider.value = 512;
+        elements.strengthSlider.value = 0.85;
+        elements.steps.value = 20;
+        elements.batchSize.value = 1;
+        elements.cfgScale.value = 1.0;
         elements.seed.value = 0;
 
         updateWidthValue();
         updateHeightValue();
         updateStrengthValue();
         uploadedImagePath = null;
-        showStatus('参数已重置', 'info');
+        currentImageBase64 = null;
+        showToast('参数已重置', 'info');
     }
 }
 
+function refreshPage() {
+    location.reload();
+}
+
 function refreshFileList() {
-    // 可选音效
     const audio = new Audio('/read/audios/prompt-tone.mp3');
     audio.volume = 1.0;
-    audio.play().catch(() => {});
+    audio.play().catch(() => { });
     elements.refreshBtn.classList.add('spin');
     loadFileList();
     setTimeout(() => {
@@ -363,11 +300,11 @@ async function generateImage() {
         };
 
         if (!generateData.prompt) {
-            showStatus('请输入提示词', 'error');
+            showToast('请输入提示词', 'error');
             return;
         }
         if (generateData.batch_size < 1 || generateData.batch_size > 8) {
-            showStatus('生成数量必须在1-8之间', 'error');
+            showToast('生成数量必须在1-8之间', 'error');
             return;
         }
 
@@ -389,11 +326,10 @@ async function generateImage() {
         const result = await response.json();
         currentTaskId = result.task_id;
         elements.taskMessage.textContent = `任务已排队 (位置: ${result.queue_pos})`;
-        showStatus('生成任务已提交，请等待处理', 'info', 2000);
         waitForTaskCompletion();
     } catch (error) {
         console.error('生成失败:', error);
-        showStatus(`生成失败: ${error.message}`, 'error');
+        showToast(`生成失败: ${error.message}`, 'error');
         elements.taskStatus.style.display = 'none';
         elements.generateBtn.disabled = false;
     }
@@ -409,7 +345,7 @@ function waitForTaskCompletion() {
                 const data = JSON.parse(event.data);
                 if (data.status === 'completed') {
                     elements.taskMessage.textContent = '生成完成！';
-                    showStatus('图像生成完成！', 'success');
+                    showToast('图像生成完成！', 'success');
                     setTimeout(() => {
                         elements.taskStatus.style.display = 'none';
                         elements.generateBtn.disabled = false;
@@ -419,7 +355,7 @@ function waitForTaskCompletion() {
                     eventSource.close();
                 } else if (data.status === 'failed') {
                     elements.taskMessage.textContent = '生成失败';
-                    showStatus(`生成失败: ${data.error}`, 'error');
+                    showToast(`生成失败: ${data.error}`, 'error');
                     elements.taskStatus.style.display = 'none';
                     elements.generateBtn.disabled = false;
                     currentTaskId = null;
@@ -427,7 +363,7 @@ function waitForTaskCompletion() {
                 }
             } catch (error) {
                 console.error('处理消息失败:', error);
-                showStatus('处理消息失败，请刷新页面重试', 'error');
+                showToast('处理消息失败，请刷新页面重试', 'error');
                 elements.taskStatus.style.display = 'none';
                 elements.generateBtn.disabled = false;
                 currentTaskId = null;
@@ -437,7 +373,7 @@ function waitForTaskCompletion() {
 
         eventSource.onerror = function (error) {
             console.error('EventSource 错误:', error);
-            showStatus('连接失败，请刷新页面重试', 'error');
+            showToast('连接失败，请刷新页面重试', 'error');
             elements.taskStatus.style.display = 'none';
             elements.generateBtn.disabled = false;
             currentTaskId = null;
@@ -445,7 +381,7 @@ function waitForTaskCompletion() {
         };
     } catch (error) {
         console.error('创建 EventSource 失败:', error);
-        showStatus('创建连接失败，请刷新页面重试', 'error');
+        showToast('创建连接失败，请刷新页面重试', 'error');
         elements.taskStatus.style.display = 'none';
         elements.generateBtn.disabled = false;
         currentTaskId = null;
@@ -460,7 +396,7 @@ async function loadFileList() {
         if (allFiles.length === 0) {
             elements.fileGrid.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon">📂</div>
+                    <div class="empty-state-icon"><i class="fas fa-folder-open"></i></div>
                     <p>还没有生成任何文件</p>
                     <p style="font-size: 0.9em; margin-top: 10px; color: #888;">点击"开始生成"按钮创建第一张图片</p>
                 </div>`;
@@ -516,14 +452,14 @@ async function loadFileList() {
         console.error('加载文件列表失败:', error);
         elements.fileGrid.innerHTML = `
             <div class="empty-state">
-                <div style="color: #dc3545; font-size: 36px;">❌</div>
+                <div style="color: #dc3545; font-size: 36px;"><i class="fas fa-exclamation-circle"></i></div>
                 <p style="color: #dc3545;">加载文件列表失败</p>
                 <p style="font-size: 0.9em; margin-top: 10px; color: #666;">${error.message}</p>
                 <button onclick="loadFileList()" class="btn-glass btn-glass-secondary" style="margin-top: 15px;">重试</button>
             </div>`;
     }
 }
-// 递归获取 images/generated 目录下的所有文件
+
 async function getAllFilesRecursive(dirPath) {
     try {
         const response = await fetch(`/file_list/${dirPath}`);
@@ -548,10 +484,10 @@ async function getAllFilesRecursive(dirPath) {
 function getFileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const iconMap = {
-        'png': '🖼️', 'jpg': '🖼️', 'jpeg': '🖼️', 'gif': '🖼️', 'bmp': '🖼️', 'webp': '🖼️',
-        'mp4': '🎬', 'webm': '🎬', 'ogg': '🎵', 'mov': '🎬', 'avi': '🎬', 'mkv': '🎬',
-        'flv': '🎬', 'wmv': '🎬', 'm4v': '🎬', 'mp3': '🎵', 'wav': '🎵', 'flac': '🎵',
-        'aac': '🎵', 'pdf': '📄', 'txt': '📝', 'json': '📋', 'default': '📄'
+        'png': '<i class="fas fa-image"></i>', 'jpg': '<i class="fas fa-image"></i>', 'jpeg': '<i class="fas fa-image"></i>', 'gif': '<i class="fas fa-image"></i>', 'bmp': '<i class="fas fa-image"></i>', 'webp': '<i class="fas fa-image"></i>',
+        'mp4': '<i class="fas fa-film"></i>', 'webm': '<i class="fas fa-film"></i>', 'ogg': '<i class="fas fa-music"></i>', 'mov': '<i class="fas fa-film"></i>', 'avi': '<i class="fas fa-film"></i>', 'mkv': '<i class="fas fa-film"></i>',
+        'flv': '<i class="fas fa-film"></i>', 'wmv': '<i class="fas fa-film"></i>', 'm4v': '<i class="fas fa-film"></i>', 'mp3': '<i class="fas fa-music"></i>', 'wav': '<i class="fas fa-music"></i>', 'flac': '<i class="fas fa-music"></i>',
+        'aac': '<i class="fas fa-music"></i>', 'pdf': '<i class="fas fa-file-pdf"></i>', 'txt': '<i class="fas fa-file-alt"></i>', 'json': '<i class="fas fa-file-code"></i>', 'default': '<i class="fas fa-file"></i>'
     };
     return iconMap[ext] || iconMap.default;
 }
@@ -590,17 +526,17 @@ function formatDate(dateString) {
 
 async function downloadFile(path, filename) {
     try {
-        showStatus('开始下载...', 'info');
+        showToast('开始下载...', 'info');
         const link = document.createElement('a');
         link.href = `/download/${path}`;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        showStatus('下载链接已打开', 'info');
+        showToast('下载链接已打开', 'info');
     } catch (error) {
         console.error('下载失败:', error);
-        showStatus(`下载失败: ${error.message}`, 'error');
+        showToast(`下载失败: ${error.message}`, 'error');
         window.open(`/download/${path}`, '_blank');
     }
 }
@@ -608,10 +544,9 @@ async function downloadFile(path, filename) {
 async function deleteFile(path) {
     if (!confirm(`确定要删除文件吗？\n${path.replace(/^images\/generated[\\/]/, '')}`)) return;
     try {
-        showStatus('删除文件中...', 'info');
         const response = await fetch(`/delete/${path}`, { method: 'DELETE' });
         if (response.ok) {
-            showStatus('文件删除成功', 'success');
+            showToast('文件删除成功', 'success');
             refreshFileList();
         } else {
             const errorText = await response.text();
@@ -619,17 +554,17 @@ async function deleteFile(path) {
         }
     } catch (error) {
         console.error('删除失败:', error);
-        showStatus(`删除失败: ${error.message}`, 'error');
+        showToast(`删除失败: ${error.message}`, 'error');
     }
 }
 
 async function clearAllFiles() {
-    if (!confirm('⚠️ 确定要删除所有生成的文件吗？\n此操作不可恢复！')) return;
+    if (!confirm('确定要删除所有生成的文件吗？\n此操作不可恢复！')) return;
     try {
-        showStatus('清空所有文件中...', 'info');
+        showToast('清空所有文件中...', 'info');
         const response = await fetch('/delete/images/generated', { method: 'DELETE' });
         if (response.ok) {
-            showStatus('所有文件已清空', 'success');
+            showToast('所有文件已清空', 'success');
             refreshFileList();
         } else {
             const errorText = await response.text();
@@ -637,7 +572,7 @@ async function clearAllFiles() {
         }
     } catch (error) {
         console.error('清空失败:', error);
-        showStatus(`清空失败: ${error.message}`, 'error');
+        showToast(`清空失败: ${error.message}`, 'error');
     }
 }
 
@@ -648,11 +583,295 @@ function handleKeyboardShortcuts(e) {
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'r' && !e.shiftKey) {
         e.preventDefault();
-        refreshFileList();
+        refreshPage();
     }
     if (e.key === 'Escape') {
-        const modal = document.querySelector('[style*="position: fixed"]');
-        if (modal) modal.remove();
+        const toasts = document.querySelectorAll('.toast-glass');
+        toasts.forEach(toast => {
+            toast.classList.add('toast-exit');
+            setTimeout(() => toast.remove(), 300);
+        });
+    }
+}
+
+async function optimizePromptAndParameters() {
+    const prompt = elements.prompt.value.trim();
+    if (!prompt) {
+        showToast('请先输入提示词', 'error');
+        return;
+    }
+
+    elements.optimizeBtn.disabled = true;
+    elements.optimizeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 优化中...';
+
+    try {
+        const messages = buildOptimizationMessages(prompt);
+        const result = await callMultimodalModel(messages);
+        applyOptimizationResult(result);
+        showToast('优化完成！', 'success');
+    } catch (error) {
+        console.error('优化失败:', error);
+        showToast(`优化失败: ${error.message}`, 'error');
+    } finally {
+        elements.optimizeBtn.disabled = false;
+        elements.optimizeBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> 智能优化';
+    }
+}
+
+function buildOptimizationMessages(prompt) {
+    const currentParams = {
+        width: parseInt(elements.widthSlider.value),
+        height: parseInt(elements.heightSlider.value),
+        steps: parseInt(elements.steps.value),
+        cfg_scale: parseFloat(elements.cfgScale.value),
+        strength: parseFloat(elements.strengthSlider.value),
+        batch_size: parseInt(elements.batchSize.value),
+        seed: elements.seed.value === '0' ? null : parseInt(elements.seed.value)
+    };
+
+    let userMessage = `请优化以下提示词和参数设置：
+
+正面提示词：
+${prompt}
+
+当前参数：
+- 宽度: ${currentParams.width}
+- 高度: ${currentParams.height}
+- 迭代步数: ${currentParams.steps}
+- 提示词权重: ${currentParams.cfg_scale}
+- 噪声强度: ${currentParams.strength}
+- 生成数量: ${currentParams.batch_size}
+${currentParams.seed ? `- 随机种子: ${currentParams.seed}` : ''}`;
+
+    if (currentImageBase64) {
+        userMessage += `
+
+参考图片：已提供（见附件）`;
+    }
+
+    userMessage += `
+
+请使用图像生成参数优化工具来优化这些设置，确保参数组合合理有效。`;
+
+    const messages = [
+        {
+            role: 'system',
+            content: `你是一个专业的AI图像生成专家。请帮助用户优化他们的提示词和生成参数。
+
+当用户提供提示词和参数时，你必须使用"image_generation_parameters"工具来返回优化后的结果。
+
+优化原则：
+1. 正面提示词：增强细节描述，保持风格一致性，适当添加质量标签
+2. 负面提示词：补充常见的质量问题，确保覆盖全面
+3. 参数调整：根据提示词复杂度调整步数和CFG，风景建议更高分辨率，人物建议适当降低强度
+4. 所有参数必须在有效范围内：width/height(256-2048), steps(1-100), cfg_scale(0.1-3.0), strength(0.1-1.0), batch_size(1-8)
+
+请始终使用工具返回结果，不要仅做文字描述。`
+        },
+        {
+            role: 'user',
+            content: userMessage
+        }
+    ];
+
+    if (currentImageBase64) {
+        messages[1] = {
+            role: 'user',
+            content: [
+                {
+                    type: 'text',
+                    text: userMessage
+                },
+                {
+                    type: 'image_url',
+                    image_url: {
+                        url: currentImageBase64
+                    }
+                }
+            ]
+        };
+    }
+
+    return messages;
+}
+
+async function callMultimodalModel(messages) {
+    const API_URL = '/v1/chat/completions';
+
+    const requestBody = {
+        model: 'system-multimodal',
+        messages: messages,
+        tools: [
+            {
+                type: 'function',
+                function: {
+                    name: 'image_generation_parameters',
+                    description: '优化图像生成提示词和参数设置',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            optimized_prompt: {
+                                type: 'string',
+                                description: '优化后的正面提示词'
+                            },
+                            optimized_negative_prompt: {
+                                type: 'string',
+                                description: '优化后的负面提示词'
+                            },
+                            width: {
+                                type: 'integer',
+                                description: '图像宽度 (256-2048)',
+                                minimum: 256,
+                                maximum: 2048
+                            },
+                            height: {
+                                type: 'integer',
+                                description: '图像高度 (256-2048)',
+                                minimum: 256,
+                                maximum: 2048
+                            },
+                            steps: {
+                                type: 'integer',
+                                description: '迭代步数 (1-100)',
+                                minimum: 1,
+                                maximum: 100
+                            },
+                            cfg_scale: {
+                                type: 'number',
+                                description: '提示词权重 (0.1-3.0)',
+                                minimum: 0.1,
+                                maximum: 3.0
+                            },
+                            strength: {
+                                type: 'number',
+                                description: '噪声强度/重绘幅度 (0.1-1.0)',
+                                minimum: 0.1,
+                                maximum: 1.0
+                            },
+                            batch_size: {
+                                type: 'integer',
+                                description: '生成数量 (1-8)',
+                                minimum: 1,
+                                maximum: 8
+                            },
+                            seed: {
+                                type: 'integer',
+                                description: '随机种子 (可选，不提供则随机)',
+                                minimum: 0
+                            }
+                        },
+                        required: ['optimized_prompt', 'optimized_negative_prompt', 'width', 'height', 'steps', 'cfg_scale', 'strength', 'batch_size']
+                    }
+                }
+            }
+        ],
+        tool_choice: {
+            type: 'function',
+            function: {
+                name: 'image_generation_parameters'
+            }
+        },
+        temperature: 0.7
+    };
+
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API调用失败: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.choices || !result.choices[0]) {
+        throw new Error('无效的API响应格式');
+    }
+
+    const message = result.choices[0].message;
+
+    if (message.tool_calls && message.tool_calls[0]) {
+        const toolCall = message.tool_calls[0];
+        if (toolCall.function && toolCall.function.arguments) {
+            try {
+                const args = JSON.parse(toolCall.function.arguments);
+                return {
+                    success: true,
+                    data: args
+                };
+            } catch (parseError) {
+                throw new Error('解析工具参数失败: ' + parseError.message);
+            }
+        }
+    }
+
+    if (message.content) {
+        try {
+            const jsonMatch = message.content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const args = JSON.parse(jsonMatch[0]);
+                return {
+                    success: true,
+                    data: args
+                };
+            }
+        } catch (parseError) {
+            console.log('尝试直接解析content:', parseError);
+        }
+    }
+
+    throw new Error('未获得有效的优化结果');
+}
+
+function applyOptimizationResult(result) {
+    if (!result.success || !result.data) {
+        throw new Error('优化结果格式无效');
+    }
+
+    const data = result.data;
+
+    if (data.optimized_prompt) {
+        elements.prompt.value = data.optimized_prompt;
+    }
+
+    if (data.optimized_negative_prompt) {
+        elements.negativePrompt.value = data.optimized_negative_prompt;
+    }
+
+    if (data.width && data.width >= 256 && data.width <= 2048) {
+        elements.widthSlider.value = data.width;
+        updateWidthValue();
+    }
+
+    if (data.height && data.height >= 256 && data.height <= 2048) {
+        elements.heightSlider.value = data.height;
+        updateHeightValue();
+    }
+
+    if (data.steps && data.steps >= 1 && data.steps <= 100) {
+        elements.steps.value = data.steps;
+    }
+
+    if (data.cfg_scale && data.cfg_scale >= 0.1 && data.cfg_scale <= 3.0) {
+        elements.cfgScale.value = data.cfg_scale;
+    }
+
+    if (data.strength && data.strength >= 0.1 && data.strength <= 1.0) {
+        elements.strengthSlider.value = data.strength;
+        updateStrengthValue();
+    }
+
+    if (data.batch_size && data.batch_size >= 1 && data.batch_size <= 8) {
+        elements.batchSize.value = data.batch_size;
+    }
+
+    if (data.seed && data.seed >= 0) {
+        elements.seed.value = data.seed;
     }
 }
 
