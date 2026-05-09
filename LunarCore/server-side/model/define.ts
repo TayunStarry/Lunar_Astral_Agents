@@ -126,7 +126,6 @@ export class AgentDefine {
     public async LiteImageFile(): Promise<void> {
         // 遍历未读上下文数组中的每个消息
         for (let message of this.unreadContext) {
-            console.log(JSON.stringify(message));
             // 跳过纯文本消息
             if (typeof message.content === 'string') continue;
             /** 新内容数组 */
@@ -155,7 +154,6 @@ export class AgentDefine {
             }
             // 替换消息内容
             message.content = newContent;
-            console.log(JSON.stringify(message));
         }
     }
 }

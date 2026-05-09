@@ -1,7 +1,7 @@
 {
 	"models": {
-		"multimodal_model": "./local_data/models/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
-		"mmproj_model": "./local_data/models/mmproj-Qwen3-VL-8B-Instruct-F16.gguf",
+		"multimodal_model": "./local_data/models/Qwen3.5-9B-Q4_K_M.gguf",
+		"mmproj_model": "./local_data/models/mmproj-Qwen3.5-9B-BF16.gguf",
 		"embedding_model": "./local_data/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
 		"diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
 		"variational_model": "./local_data/models/diffusion_pytorch_model.safetensors",
