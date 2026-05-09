@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Astral Agents (月华) - 项目文档</title>
+    <style>
+        :root {
+            --glass-light: rgba(255, 255, 255, 0.38);
+            --glass-light-hover: rgba(255, 255, 255, 0.52);
+            --glass-light-border: rgba(255, 255, 255, 0.55);
+            --glass-dark: rgba(28, 28, 40, 0.58);
+            --glass-dark-hover: rgba(35, 35, 55, 0.72);
+            --glass-dark-border: rgba(255, 255, 255, 0.14);
+            --glass-code: rgba(22, 22, 34, 0.68);
+            --glass-table-header: rgba(28, 28, 42, 0.65);
+            --glass-table-row: rgba(255, 255, 255, 0.25);
+            --glass-table-row-alt: rgba(255, 255, 255, 0.12);
+            --text-primary: #1a1a2e;
+            --text-secondary: #2d2d44;
+            --text-on-dark: #e8e8f0;
+            --text-on-dark-secondary: #c0c0d0;
+            --accent: #6c5ce7;
+            --accent-soft: #a29bfe;
+            --blur-amount: 18px;
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --shadow-glass: 0 8px 40px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-dark: 0 8px 40px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+            --transition: 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            font-size: 15px;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            color: var(--text-primary);
+            line-height: 1.7;
+            letter-spacing: 0.012em;
+            position: relative;
+            overflow-x: hidden;
+            background: #0f0f1a;
+        }
+
+        /* 全屏背景图 */
+        .bg-cover {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+        }
+
+        .bg-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            filter: brightness(1.05) saturate(0.9);
+        }
+
+        .bg-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background: linear-gradient(170deg,
+                    rgba(255, 255, 255, 0.35) 0%,
+                    rgba(240, 240, 255, 0.25) 30%,
+                    rgba(220, 225, 245, 0.30) 60%,
+                    rgba(200, 210, 240, 0.35) 100%);
+            pointer-events: none;
+        }
+
+        /* 顶部导航栏 - 深色玻璃风 */
+        .top-nav {
+            position: sticky;
+            top: 16px;
+            z-index: 100;
+            margin: 0 auto;
+            max-width: 1300px;
+            padding: 0 20px;
+        }
+
+        .top-nav-inner {
+            background: var(--glass-dark);
+            backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            border: 1px solid var(--glass-dark-border);
+            border-radius: var(--radius-lg);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            box-shadow: var(--shadow-dark);
+        }
+
+        .top-nav .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .top-nav .logo-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #c4b5fd, #a78bfa, #7c3aed);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+            flex-shrink: 0;
+        }
+
+        .top-nav .logo-text {
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: var(--text-on-dark);
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+        }
+
+        .top-nav .logo-sub {
+            font-weight: 400;
+            font-size: 0.8rem;
+            color: var(--text-on-dark-secondary);
+            letter-spacing: 0.04em;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .nav-btn {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 24px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            transition: var(--transition);
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+            background: var(--glass-dark);
+            backdrop-filter: blur(10px) saturate(150%);
+            -webkit-backdrop-filter: blur(10px) saturate(150%);
+            border: 1px solid var(--glass-dark-border);
+            color: var(--text-on-dark);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .nav-btn:hover {
+            background: var(--glass-dark-hover);
+            border-color: rgba(255, 255, 255, 0.28);
+            color: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+        }
+
+        .nav-btn.active {
+            background: rgba(108, 92, 231, 0.45);
+            border-color: rgba(162, 155, 254, 0.6);
+            color: #fff;
+        }
+
+        /* 主布局 */
+        .main-layout {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        /* 侧边栏目录 - 浅色玻璃风 */
+        .sidebar {
+            position: sticky;
+            top: 120px;
+            width: 240px;
+            flex-shrink: 0;
+            background: var(--glass-light);
+            backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            border: 1px solid var(--glass-light-border);
+            border-radius: var(--radius-lg);
+            padding: 20px 16px;
+            box-shadow: var(--shadow-glass);
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+            transition: var(--transition);
+            z-index: 50;
+        }
+
+        .sidebar h3 {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 14px;
+            letter-spacing: 0.04em;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(108, 92, 231, 0.25);
+        }
+
+        .sidebar a {
+            display: block;
+            padding: 7px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: var(--transition);
+            margin-bottom: 2px;
+            letter-spacing: 0.015em;
+            border: 1px solid transparent;
+        }
+
+        .sidebar a:hover {
+            background: rgba(255, 255, 255, 0.5);
+            color: var(--accent);
+            border-color: rgba(108, 92, 231, 0.2);
+        }
+
+        .sidebar a.sub {
+            padding-left: 22px;
+            font-size: 0.78rem;
+            color: #555;
+        }
+
+        /* 主内容区 - 浅色玻璃风 */
+        .content-area {
+            flex: 1;
+            min-width: 0;
+            background: var(--glass-light);
+            backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            -webkit-backdrop-filter: blur(var(--blur-amount)) saturate(180%);
+            border: 1px solid var(--glass-light-border);
+            border-radius: var(--radius-lg);
+            padding: 36px 40px;
+            box-shadow: var(--shadow-glass);
+            transition: var(--transition);
+        }
+
+        /* 排版 */
+        .content-area h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 6px;
+            letter-spacing: 0.03em;
+            background: linear-gradient(135deg, #4c1d95, #7c3aed, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .content-area h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 36px;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid rgba(108, 92, 231, 0.3);
+            letter-spacing: 0.025em;
+            color: #2d1b69;
+        }
+
+        .content-area h3 {
+            font-size: 1.2rem;
+            font-weight: 650;
+            margin-top: 26px;
+            margin-bottom: 10px;
+            color: #3b2086;
+            letter-spacing: 0.02em;
+        }
+
+        .content-area h4 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            color: #4a2d8f;
+        }
+
+        .content-area p {
+            margin-bottom: 12px;
+            color: #2d2d44;
+        }
+
+        .content-area strong {
+            color: #1a1a2e;
+            font-weight: 650;
+        }
+
+        .content-area ul,
+        .content-area ol {
+            margin: 8px 0 16px 20px;
+            color: #2d2d44;
+        }
+
+        .content-area li {
+            margin-bottom: 4px;
+        }
+
+        .content-area a {
+            color: #6c5ce7;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: var(--transition);
+        }
+
+        .content-area a:hover {
+            border-bottom-color: #6c5ce7;
+        }
+
+        .content-area blockquote {
+            border-left: 4px solid #a78bfa;
+            padding: 10px 18px;
+            margin: 16px 0;
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            color: #3b2086;
+            font-style: italic;
+        }
+
+        /* 代码块 - 深色玻璃风 */
+        .content-area pre {
+            background: var(--glass-code);
+            backdrop-filter: blur(10px) saturate(140%);
+            -webkit-backdrop-filter: blur(10px) saturate(140%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-md);
+            padding: 18px 22px;
+            overflow-x: auto;
+            margin: 14px 0;
+            font-size: 0.85rem;
+            line-height: 1.55;
+            color: #d4d4e8;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .content-area pre code {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+            background: none;
+            padding: 0;
+            color: #e2e2f0;
+            font-size: 0.84rem;
+        }
+
+        .content-area code {
+            background: rgba(108, 92, 231, 0.12);
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', 'Consolas', monospace;
+            font-size: 0.86em;
+            color: #5b3cc4;
+            letter-spacing: 0.01em;
+        }
+
+        .content-area pre code {
+            background: none;
+            padding: 0;
+            color: #e2e2f0;
+        }
+
+        /* 代码块语言标签 */
+        .code-label {
+            position: absolute;
+            top: 8px;
+            right: 14px;
+            font-size: 0.7rem;
+            color: rgba(200, 200, 220, 0.7);
+            letter-spacing: 0.05em;
+            pointer-events: none;
+        }
+
+        /* 表格 */
+        .content-area table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14px 0 20px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: 0 2px 14px rgba(0, 0, 0, 0.06);
+            font-size: 0.88rem;
+        }
+
+        .content-area thead th {
+            background: var(--glass-table-header);
+            backdrop-filter: blur(8px) saturate(150%);
+            -webkit-backdrop-filter: blur(8px) saturate(150%);
+            color: var(--text-on-dark);
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .content-area tbody td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            color: #2d2d44;
+        }
+
+        .content-area tbody tr {
+            background: var(--glass-table-row);
+            transition: var(--transition);
+        }
+
+        .content-area tbody tr:nth-child(even) {
+            background: var(--glass-table-row-alt);
+        }
+
+        .content-area tbody tr:hover {
+            background: rgba(255, 255, 255, 0.55);
+        }
+
+        /* 水平线 */
+        .content-area hr {
+            border: none;
+            border-top: 2px solid rgba(108, 92, 231, 0.2);
+            margin: 28px 0;
+        }
+
+        /* 架构图容器 */
+        .arch-diagram {
+            background: rgba(22, 22, 34, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            margin: 16px 0;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.75rem;
+            line-height: 1.35;
+            color: #c8c8e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            white-space: pre;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 标签/徽章 */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            margin: 2px 4px;
+            background: var(--glass-dark);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 1px solid var(--glass-dark-border);
+            color: var(--text-on-dark);
+        }
+
+        .badge.accent {
+            background: rgba(108, 92, 231, 0.4);
+            border-color: rgba(162, 155, 254, 0.5);
+            color: #fff;
+        }
+
+        /* 图片占位 */
+        .img-placeholder {
+            display: inline-block;
+            background: rgba(200, 200, 220, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 8px 14px;
+            font-size: 0.8rem;
+            color: #666;
+            border: 2px dashed rgba(150, 150, 180, 0.4);
+        }
+
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main-layout {
+                padding: 16px 12px 40px;
+            }
+
+            .content-area {
+                padding: 24px 20px;
+            }
+
+            .top-nav-inner {
+                padding: 10px 16px;
+                gap: 10px;
+            }
+
+            .nav-btn {
+                padding: 6px 12px;
+                font-size: 0.78rem;
+            }
+
+            .content-area h1 {
+                font-size: 1.6rem;
+            }
+
+            .content-area h2 {
+                font-size: 1.25rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .top-nav-inner {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .nav-links {
+                gap: 5px;
+            }
+
+            .nav-btn {
+                padding: 5px 10px;
+                font-size: 0.72rem;
+                border-radius: 18px;
+            }
+
+            .content-area {
+                padding: 16px 12px;
+                border-radius: var(--radius-md);
+            }
+
+            .content-area pre {
+                padding: 12px 14px;
+                font-size: 0.75rem;
+            }
+
+            .content-area table {
+                font-size: 0.75rem;
+            }
+
+            .content-area thead th,
+            .content-area tbody td {
+                padding: 7px 8px;
+            }
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(150, 150, 180, 0.4);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(150, 150, 180, 0.6);
+        }
+
+        /* 淡入动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .content-area {
+            animation: fadeInUp 0.55s ease-out;
+        }
+
+        .sidebar {
+            animation: fadeInUp 0.55s ease-out 0.1s both;
+        }
+
+        .top-nav {
+            animation: fadeInUp 0.5s ease-out 0.05s both;
+        }
+
+        /* 高亮提示框 */
+        .callout {
+            border-radius: var(--radius-md);
+            padding: 14px 18px;
+            margin: 16px 0;
+            border-left: 4px solid;
+            font-size: 0.9rem;
+        }
+
+        .callout.info {
+            background: rgba(108, 92, 231, 0.1);
+            border-color: #7c3aed;
+            color: #3b2086;
+        }
+
+        .callout.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: #f59e0b;
+            color: #7c5a00;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 全屏背景图 -->
+    <div class="bg-cover">
+        <img src="https://picsum.photos/id/1015/1920/1080" alt="背景图" loading="eager"
+            onerror="this.onerror=null; this.src='https://picsum.photos/1920/1080?random=1';">
+    </div>
+    <div class="bg-overlay"></div>
+
+    <!-- 顶部导航栏（深色玻璃风） -->
+    <nav class="top-nav">
+        <div class="top-nav-inner">
+            <div class="logo-area">
+                <div class="logo-icon">🌙</div>
+                <div>
+                    <div class="logo-text">Lunar Astral Agents</div>
+                    <div class="logo-sub">月华 · v4.0.0</div>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="#overview" class="nav-btn active">概述</a>
+                <a href="#architecture" class="nav-btn">架构</a>
+                <a href="#features" class="nav-btn">功能</a>
+                <a href="#api" class="nav-btn">API</a>
+                <a href="#config" class="nav-btn">配置</a>
+                <a href="#crystal" class="nav-btn">琉璃</a>
+                <a href="#install" class="nav-btn">安装</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主布局 -->
+    <div class="main-layout">
+        <!-- 侧边栏目录（浅色玻璃风） -->
+        <aside class="sidebar" id="sidebar">
+            <h3>📑 目录导航</h3>
+            <a href="#overview">项目概述</a>
+            <a href="#architecture" class="sub">技术架构</a>
+            <a href="#core-modules" class="sub">核心模块</a>
+            <a href="#subsystem-modules" class="sub">子系统模块</a>
+            <a href="#features">功能特性</a>
+            <a href="#ai-chat" class="sub">AI 对话系统</a>
+            <a href="#image-gen" class="sub">图像生成</a>
+            <a href="#tts" class="sub">TTS 语音合成</a>
+            <a href="#qq-integration" class="sub">QQ 集成</a>
+            <a href="#live2d" class="sub">Live2D 虚拟角色</a>
+            <a href="#crystal">琉璃 - 功能导航</a>
+            <a href="#crystal-api" class="sub">琉璃专属 API</a>
+            <a href="#config">环境配置</a>
+            <a href="#install">安装步骤</a>
+            <a href="#cli">CLI 参数详解</a>
+            <a href="#api">HTTP API 文档</a>
+            <a href="#websocket">WebSocket API</a>
+            <a href="#optimization">性能优化</a>
+            <a href="#limitations">已知限制</a>
+            <a href="#risks">潜在风险</a>
+            <a href="#directory">目录结构</a>
+        </aside>
+
+        <!-- 主内容区（浅色玻璃风） -->
+        <main class="content-area" id="main-content">
+
+            <!-- 项目概述 -->
+            <h1 id="overview">🌙 Lunar Astral Agents (月华)</h1>
+            <p style="margin-top:4px;">
+                <span class="badge accent">版本 4.0.0</span>
+                <span class="badge">MIT 许可证</span>
+                <span class="badge">Go 语言</span>
+            </p>
+            <p><strong>月华</strong> 是一个本地智能 AI 少女助理系统，基于 Go 语言开发，提供完整的 AI 对话、图像生成、语音合成等功能。该项目采用模块化架构设计，集成了
+                <code>llama.cpp</code> 推理引擎、Live2D 虚拟角色显示以及多种 AI 模型服务。</p>
+
+            <hr>
+
+            <!-- 系统架构 -->
+            <h2 id="architecture">🏗️ 技术架构</h2>
+            <h3 id="core-modules">核心模块说明</h3>
+            <h4>LunarCore (主服务器)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>模块</th>
+                        <th>路径</th>
+                        <th>功能描述</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>server</td>
+                        <td><code>LunarCore/server/</code></td>
+                        <td>HTTP 服务器核心，负责路由分发和请求处理</td>
+                    </tr>
+                    <tr>
+                        <td>handlers</td>
+                        <td><code>LunarCore/server/handlers/</code></td>
+                        <td>HTTP 请求处理器，包括 Agent、Message、Proxy、TTS 等</td>
+                    </tr>
+                    <tr>
+                        <td>model</td>
+                        <td><code>LunarCore/model/</code></td>
+                        <td>GGUF 模型管理，支持 llama.cpp 多模型部署</td>
+                    </tr>
+                    <tr>
+                        <td>adapters</td>
+                        <td><code>LunarCore/adapters/</code></td>
+                        <td>JavaScript 运行时适配器，用于 TypeScript 脚本执行</td>
+                    </tr>
+                    <tr>
+                        <td>control</td>
+                        <td><code>LunarCore/control/</code></td>
+                        <td>计划任务调度系统，支持延迟执行和速率限制</td>
+                    </tr>
+                    <tr>
+                        <td>hierarchy</td>
+                        <td><code>LunarCore/hierarchy/</code></td>
+                        <td>前端资源、内嵌资源管理</td>
+                    </tr>
+                    <tr>
+                        <td>release</td>
+                        <td><code>LunarCore/release/</code></td>
+                        <td>系统进程管理和端口释放</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4 id="subsystem-modules">子系统模块</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>子系统</th>
+                        <th>路径</th>
+                        <th>功能描述</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>config</td>
+                        <td><code>subsystem/config/</code></td>
+                        <td>集中配置管理，支持 JSON 配置加载和环境变量</td>
+                    </tr>
+                    <tr>
+                        <td>storage</td>
+                        <td><code>subsystem/storage/</code></td>
+                        <td>文件系统和数据库存储服务</td>
+                    </tr>
+                    <tr>
+                        <td>browser</td>
+                        <td><code>subsystem/browser/</code></td>
+                        <td>浏览器自动化，获取本地 IP 和打开浏览器</td>
+                    </tr>
+                    <tr>
+                        <td>screenshot</td>
+                        <td><code>subsystem/screenshot/</code></td>
+                        <td>截图服务模块</td>
+                    </tr>
+                    <tr>
+                        <td>bridge_adapter</td>
+                        <td><code>subsystem/bridge_adapter/</code></td>
+                        <td>QQ/NapCat 消息桥接适配器</td>
+                    </tr>
+                    <tr>
+                        <td>proxy</td>
+                        <td><code>subsystem/proxy/</code></td>
+                        <td>HTTP/HTTPS 代理服务器</td>
+                    </tr>
+                    <tr>
+                        <td>web-p</td>
+                        <td><code>subsystem/web-p/</code></td>
+                        <td>轻量级 Web 服务器</td>
+                    </tr>
+                    <tr>
+                        <td>crystal_astral</td>
+                        <td><code>subsystem/crystal_astral/</code></td>
+                        <td>琉璃 - 轻量级功能导航服务</td>
+                    </tr>
+                    <tr>
+                        <td>project_archiving</td>
+                        <td><code>subsystem/project_archiving/</code></td>
+                        <td>项目打包归档工具</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <hr>
+
+            <!-- 功能特性 -->
+            <h2 id="features">✨ 功能特性</h2>
+
+            <h3 id="ai-chat">1. AI 对话系统</h3>
+            <ul>
+                <li><strong>多模型支持</strong>: 支持嵌入模型、多模态视觉模型、扩散模型等多种 GGUF 格式模型</li>
+                <li><strong>实时响应</strong>: 基于 WebSocket 的实时消息推送</li>
+                <li><strong>上下文管理</strong>: 支持聊天历史记录和上下文窗口管理</li>
+                <li><strong>OpenAI 兼容 API</strong>: 提供与 OpenAI API 兼容的接口格式</li>
+            </ul>
+
+            <h3 id="image-gen">2. 图像生成</h3>
+            <ul>
+                <li><strong>扩散模型生成</strong>: 支持基于 stable-diffusion.cpp 的图像生成</li>
+                <li><strong>图生图模式</strong>: 支持以现有图像为基础生成新图像</li>
+                <li><strong>任务队列系统</strong>: 异步任务处理，支持多任务排队</li>
+                <li><strong>负面提示词</strong>: 支持负面提示词以优化生成效果</li>
+            </ul>
+
+            <h3 id="tts">3. TTS 语音合成</h3>
+            <ul>
+                <li><strong>Qwen3-TTS 集成</strong>: 支持 Qwen3 系列语音合成模型</li>
+                <li><strong>代理转发</strong>: 提供 TTS 请求代理服务</li>
+            </ul>
+
+            <h3 id="qq-integration">4. QQ 集成 (bridge_adapter)</h3>
+            <ul>
+                <li><strong>NapCat WebSocket 连接</strong>: 与 QQ NapCat 服务集成</li>
+                <li><strong>群组消息监听</strong>: 支持指定群组的触发词监听</li>
+                <li><strong>消息双向转发</strong>: 实现 QQ 与月华系统的消息互通</li>
+            </ul>
+
+            <h3 id="live2d">5. Live2D 虚拟角色</h3>
+            <ul>
+                <li><strong>实时渲染</strong>: 使用 Pixi.js 和 Live2D Cubism 4 渲染</li>
+                <li><strong>表情动作</strong>: 支持多种表情和动作切换</li>
+                <li><strong>桌面级渲染</strong>: 高性能 WebGL 渲染管线</li>
+            </ul>
+
+            <hr>
+
+            <!-- 琉璃 -->
+            <h2 id="crystal">💎 琉璃 - 轻量级功能导航</h2>
+            <p>琉璃是星月智能的领航员角色，是月华的妹妹，提供轻量级的功能导航服务。</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>属性</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>角色名称</td>
+                        <td>琉璃</td>
+                    </tr>
+                    <tr>
+                        <td>所属组织</td>
+                        <td>星月智能</td>
+                    </tr>
+                    <tr>
+                        <td>角色关系</td>
+                        <td>月华的妹妹</td>
+                    </tr>
+                    <tr>
+                        <td>职能定位</td>
+                        <td>领航员、管理员</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>系统提示词</h4>
+            <pre><code>你是一个叫做琉璃的女孩子，隶属于[星月智能]。
+                    你有一个叫做月华的姐姐。
+                    你是一个领航员和管理员，你要为用户答疑解惑并根据客户的需求打开对应的页面。
+                    单次对话长度**禁止超过 50 字符**。
+                保持轻松自然的交流氛围，允许话题跳跃与情感流露。</code></pre>
+
+            <h4>核心功能</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>功能</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>智能导航</td>
+                        <td>根据用户需求打开对应的功能页面</td>
+                    </tr>
+                    <tr>
+                        <td>页面卡片</td>
+                        <td>网格布局展示所有可用功能模块</td>
+                    </tr>
+                    <tr>
+                        <td>附件上传</td>
+                        <td>支持拖拽上传文本和图片文件</td>
+                    </tr>
+                    <tr>
+                        <td>随机背景</td>
+                        <td>动态更换界面背景图片</td>
+                    </tr>
+                    <tr>
+                        <td>应用启动</td>
+                        <td>可直接启动本地应用程序 (.exe, .ps1, .bat)</td>
+                    </tr>
+                    <tr>
+                        <td>代理转发</td>
+                        <td>将 AI 请求代理到主服务器处理</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>琉璃页面配置 (<code>luner_package.json</code>)</h4>
+            <pre><code>[
+                {
+                    "id": "image_generation",
+                    "icon": "/read/images/icon/image_generation.Webp",
+                    "title": "图像生成",
+                    "description": "打开『 星月智能 』图像生成",
+                    "url": "/read/package/image_generation/index.html"
+                },
+                {
+                    "id": "qwen3_tts",
+                    "icon": "/read/images/icon/tts_qwen.Webp",
+                    "title": "运行 Qwen3 TTS",
+                    "description": "运行 Qwen3 TTS 本地语音生成模型",
+                    "path": "/local_data/models/Qwen3-TTS/core/start-api.bat"
+                }
+            ]</code></pre>
+
+            <h4>代理规则</h4>
+            <p>琉璃会自动将以下路径的请求代理到 LunarCore 主服务器 (<code>localhost:36789</code>)：</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>前缀</th>
+                        <th>代理目标</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/v1/</code></td>
+                        <td>AI 对话接口</td>
+                    </tr>
+                    <tr>
+                        <td><code>/generate</code></td>
+                        <td>图像生成接口</td>
+                    </tr>
+                    <tr>
+                        <td><code>/write/message</code></td>
+                        <td>消息写入接口</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 id="crystal-api">琉璃专属 API</h3>
+            <h4>加载应用 - <code>POST /load/application</code></h4>
+            <pre><code>{
+                "path": "D:/NapCat.Shell.Windows.OneKey/NapCat.41785.Shell/napcat.bat"
+            }</code></pre>
+            <table>
+                <thead>
+                    <tr>
+                        <th>状态码</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>200</td>
+                        <td>应用启动成功</td>
+                    </tr>
+                    <tr>
+                        <td>400</td>
+                        <td>不支持的文件类型</td>
+                    </tr>
+                    <tr>
+                        <td>404</td>
+                        <td>文件不存在</td>
+                    </tr>
+                    <tr>
+                        <td>500</td>
+                        <td>启动失败</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>随机背景 - <code>GET /background</code></h4>
+            <p>获取随机背景图片，图片目录: <code>local_data/images/background/</code></p>
+
+            <h4>区域截图 - <code>POST /capture/region</code></h4>
+            <pre><code>{
+                "x": 100, "y": 100, "width": 800, "height": 600
+            }</code></pre>
+
+            <h4>图片缩放 - <code>POST /resize</code></h4>
+            <pre><code>{
+                "path": "local_data/images/sample.png",
+                "width": 512, "height": 512,
+                "keep_aspect_ratio": true
+            }</code></pre>
+
+            <hr>
+
+            <!-- 环境配置 -->
+            <h2 id="config">⚙️ 环境配置</h2>
+            <h3>系统要求</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>要求</th>
+                        <th>最低配置</th>
+                        <th>推荐配置</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>操作系统</td>
+                        <td>Windows 10+</td>
+                        <td>Windows 11</td>
+                    </tr>
+                    <tr>
+                        <td>Go 版本</td>
+                        <td>1.21+</td>
+                        <td>1.24+</td>
+                    </tr>
+                    <tr>
+                        <td>内存</td>
+                        <td>8GB</td>
+                        <td>16GB+</td>
+                    </tr>
+                    <tr>
+                        <td>显存</td>
+                        <td>4GB (GPU加速)</td>
+                        <td>8GB+ (GPU加速)</td>
+                    </tr>
+                    <tr>
+                        <td>磁盘空间</td>
+                        <td>10GB</td>
+                        <td>20GB+</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>模型文件要求</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>模型类型</th>
+                        <th>文件名</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>多模态模型</td>
+                        <td><code>Qwen3.5-9B-Q4_K_M.gguf</code></td>
+                        <td>主推理模型</td>
+                    </tr>
+                    <tr>
+                        <td>投影模型</td>
+                        <td><code>mmproj-Qwen3.5-9B-BF16.gguf</code></td>
+                        <td>多模态投影层</td>
+                    </tr>
+                    <tr>
+                        <td>嵌入模型</td>
+                        <td><code>Qwen3-Embedding-0.6B-Q8_0.gguf</code></td>
+                        <td>文本向量化</td>
+                    </tr>
+                    <tr>
+                        <td>扩散模型</td>
+                        <td><code>z_image_turbo-Q4_K.gguf</code></td>
+                        <td>图像生成</td>
+                    </tr>
+                    <tr>
+                        <td>变分模型</td>
+                        <td><code>diffusion_pytorch_model.safetensors</code></td>
+                        <td>VAE 模型</td>
+                    </tr>
+                    <tr>
+                        <td>提示词模型</td>
+                        <td><code>Qwen3-4B-Instruct-2507-Q4_K_M.gguf</code></td>
+                        <td>提示词优化</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <hr>
+
+            <!-- 安装步骤 -->
+            <h2 id="install">📦 安装步骤</h2>
+            <ol>
+                <li><strong>克隆项目</strong>: <code>git clone &lt;repository_url&gt;</code></li>
+                <li><strong>安装依赖</strong>: <code>cd LunarCore && go mod download && npm install</code></li>
+                <li><strong>准备模型文件</strong>: 将 GGUF 模型文件放置在 <code>local_data/models/</code> 目录下</li>
+                <li><strong>构建项目</strong>: <code>cd LunarCore && go build -o Lunar-Astral-Agents.exe .</code></li>
+                <li><strong>运行服务</strong>: <code>./Lunar-Astral-Agents.exe</code></li>
+            </ol>
+
+            <hr>
+
+            <!-- CLI 参数 -->
+            <h2 id="cli">🖥️ CLI 参数详解</h2>
+            <h3>系统参数</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>参数名</th>
+                        <th>数据类型</th>
+                        <th>默认值</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>-developer</code></td>
+                        <td>bool</td>
+                        <td><code>false</code></td>
+                        <td>启用调试模式</td>
+                    </tr>
+                    <tr>
+                        <td><code>-basic-port</code></td>
+                        <td>int</td>
+                        <td><code>36789</code></td>
+                        <td>系统 Web 服务监听端口</td>
+                    </tr>
+                    <tr>
+                        <td><code>-max-port</code></td>
+                        <td>int</td>
+                        <td><code>basic-port+15</code></td>
+                        <td>最大监听端口</td>
+                    </tr>
+                    <tr>
+                        <td><code>-min-port</code></td>
+                        <td>int</td>
+                        <td><code>basic-port-5</code></td>
+                        <td>最小监听端口</td>
+                    </tr>
+                    <tr>
+                        <td><code>-proxy-port</code></td>
+                        <td>int</td>
+                        <td><code>basic-port+5</code></td>
+                        <td>代理服务端口</td>
+                    </tr>
+                    <tr>
+                        <td><code>-clear-port</code></td>
+                        <td>bool</td>
+                        <td><code>false</code></td>
+                        <td>启动时自动释放被占用端口</td>
+                    </tr>
+                    <tr>
+                        <td><code>-local-dir</code></td>
+                        <td>string</td>
+                        <td><code>local_data</code></td>
+                        <td>本地目录路径</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>使用示例</h3>
+            <pre><code># 开发模式运行
+                ./Lunar-Astral-Agents.exe -developer
+
+                # 自定义端口
+                ./Lunar-Astral-Agents.exe -basic-port 8080 -model-port 8081
+
+                # 启用端口自动清理
+                ./Lunar-Astral-Agents.exe -clear-port
+
+                # 禁用多模态功能
+            ./Lunar-Astral-Agents.exe -allow-multimodal=false</code></pre>
+
+            <hr>
+
+            <!-- HTTP API -->
+            <h2 id="api">🔌 HTTP API 文档</h2>
+            <p><strong>Base URL</strong>: <code>http://localhost:{port}</code> (默认端口 36789) &nbsp;|&nbsp;
+                <strong>数据格式</strong>: JSON &nbsp;|&nbsp; <strong>字符编码</strong>: UTF-8</p>
+
+            <h3>1. 模型交互 API</h3>
+            <h4>获取可用模型列表 - <code>GET /v1/models</code></h4>
+            <pre><code>{
+                "object": "list",
+                "data": [
+                {"id": "multimodal", "object": "model", "owned_by": "organization_owner"},
+                {"id": "embedding", "object": "model", "owned_by": "organization_owner"}
+                ]
+            }</code></pre>
+
+            <h4>聊天补全 - <code>POST /v1/</code></h4>
+            <pre><code>{
+                "model": "multimodal",
+                "messages": [
+                {"role": "system", "content": "你是月华，一个可爱的AI少女助理。"},
+                {"role": "user", "content": "你好，月华！"}
+                ],
+                "temperature": 0.8,
+                "max_tokens": 2048,
+                "stream": false
+            }</code></pre>
+
+            <h3>2. 图像生成 API</h3>
+            <h4>创建图像生成任务 - <code>POST /generate</code></h4>
+            <pre><code>{
+                "prompt": "a cute cat sitting on a windowsill, sunset, anime style",
+                "negative_prompt": "low quality, blurry, ugly",
+                "batch_size": 1, "width": 512, "height": 512,
+                "steps": 20, "strength": 0.75, "cfg_scale": 7.5, "seed": 12345
+            }</code></pre>
+
+            <h3>3. TTS 语音服务 API</h3>
+            <ul>
+                <li><strong>TTS 代理</strong>: <code>POST /audio/generate</code> — 代理 TTS 请求到语音服务</li>
+                <li><strong>Qwen3 TTS 模型检测</strong>: <code>GET /qwen_tts/models</code></li>
+                <li><strong>Qwen3 TTS 请求代理</strong>: <code>POST /qwen_tts/</code></li>
+            </ul>
+
+            <h3>4. 代理访问 API</h3>
+            <h4>通用代理 - <code>POST /proxy</code></h4>
+            <pre><code>{
+                "url": "https://api.example.com/data",
+                "requestInit": {
+                "method": "POST",
+                "headers": {"Content-Type": "application/json", "Authorization": "Bearer token"},
+                "body": {"key": "value"},
+                "credentials": "omit"
+                }
+            }</code></pre>
+
+            <h3 id="websocket">WebSocket API</h3>
+            <p><strong>URL</strong>: <code>ws://localhost:{port}/ws</code></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>type</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>chat</code></td>
+                        <td>聊天消息</td>
+                    </tr>
+                    <tr>
+                        <td><code>image</code></td>
+                        <td>图像相关操作</td>
+                    </tr>
+                    <tr>
+                        <td><code>context</code></td>
+                        <td>上下文更新（服务器→客户端）</td>
+                    </tr>
+                    <tr>
+                        <td><code>error</code></td>
+                        <td>错误信息</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <hr>
+
+            <!-- 性能优化 -->
+            <h2 id="optimization">🚀 性能优化建议</h2>
+            <ol>
+                <li><strong>GPU 加速</strong>: 确保 NVIDIA GPU 驱动和 CUDA 已正确安装</li>
+                <li><strong>显存管理</strong>: 合理设置 <code>--n-gpu-layers</code> 参数，建议为模型总层数的 2/3</li>
+                <li><strong>上下文长度</strong>: 根据可用显存调整 <code>ctx-size</code> 参数，8192 是性能与效果的平衡点</li>
+                <li><strong>队列限制</strong>: 系统默认最大队列长度为 3</li>
+                <li><strong>分辨率选择</strong>: 较低分辨率 (512x512) 生成速度更快</li>
+                <li><strong>采样步数</strong>: 20-30 步是效果与速度的平衡点</li>
+            </ol>
+
+            <hr>
+
+            <!-- 已知限制 -->
+            <h2 id="limitations">⚠️ 已知限制</h2>
+            <div class="callout warning">
+                <strong>功能限制</strong>: 仅支持 GGUF 格式模型 · 主要针对 Windows 平台优化 · TTS 需要独立 Qwen3-TTS 服务 · QQ 集成需要 NapCat 服务
+            </div>
+            <div class="callout info">
+                <strong>性能限制</strong>: 默认单请求处理 · 多模型同时运行需约 12GB+ 显存 · 扩散生成队列容量有限
+            </div>
+
+            <hr>
+
+            <!-- 潜在风险 -->
+            <h2 id="risks">🛡️ 潜在风险</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>风险类型</th>
+                        <th>风险描述</th>
+                        <th>缓解措施</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>隐私风险</td>
+                        <td>对话数据存储在本地</td>
+                        <td>敏感场景使用本地部署</td>
+                    </tr>
+                    <tr>
+                        <td>资源耗尽</td>
+                        <td>恶意请求导致系统崩溃</td>
+                        <td>添加请求限流和认证</td>
+                    </tr>
+                    <tr>
+                        <td>模型安全</td>
+                        <td>生成不当内容</td>
+                        <td>添加内容过滤层</td>
+                    </tr>
+                    <tr>
+                        <td>端口冲突</td>
+                        <td>多实例运行导致端口冲突</td>
+                        <td>使用 <code>-clear-port</code> 参数</td>
+                    </tr>
+                    <tr>
+                        <td>内存泄漏</td>
+                        <td>长时间运行内存持续增长</td>
+                        <td>定期重启服务</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <hr>
+
+            <!-- 目录结构 -->
+            <h2 id="directory">📁 目录结构</h2>
+            <pre><code>Lunar_Astral_Agents/
+                ├── LunarCore/                    # 主程序目录
+                │   ├── main.go                   # 程序入口
+                │   ├── server/                   # HTTP 服务器
+                │   │   ├── handlers/             # 请求处理器
+                │   │   │   ├── agent.go          # AI 模型交互
+                │   │   │   ├── message.go        # 消息队列
+                │   │   │   ├── proxy.go          # 代理请求
+                │   │   │   ├── tts.go            # TTS 代理
+                │   │   │   └── image/            # 图像生成
+                │   ├── model/                    # 模型管理
+                │   │   └── llama/                # llama.cpp 集成
+                │   ├── adapters/                 # 运行时适配器
+                │   ├── control/                  # 任务调度
+                │   ├── hierarchy/                # 资源管理
+                │   └── release/                  # 系统发布
+                ├── subsystem/                    # 子系统模块
+                │   ├── config/                   # 配置管理
+                │   ├── storage/                  # 存储服务
+                │   ├── browser/                  # 浏览器自动化
+                │   ├── screenshot/               # 截图服务
+                │   ├── bridge_adapter/           # QQ 桥接
+                │   ├── proxy/                    # 代理服务
+                │   ├── crystal_astral/           # 琉璃
+                │   └── project_archiving/        # 项目归档
+                ├── local_data/                   # 本地数据
+                │   ├── models/                   # 模型文件
+                │   ├── audios/                   # 音频资源
+                │   └── lunar_config.json         # 主配置文件
+            └── README.md</code></pre>
+
+            <hr>
+            <p style="text-align:center; color:#6b6b80; font-size:0.85rem; margin-top:24px;">
+                📜 本项目基于 <strong>MIT 许可证</strong> 开源 &nbsp;|&nbsp; <em>Last updated: 2026-05-09</em>
+            </p>
+        </main>
+    </div>
+
+    <!-- 简单的JS：导航高亮 & 平滑滚动 -->
+    <script>
+        (function () {
+            const navBtns = document.querySelectorAll('.nav-btn');
+            const sidebarLinks = document.querySelectorAll('.sidebar a');
+
+            // 点击导航按钮滚动到对应区域
+            navBtns.forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const target = document.getElementById(targetId);
+                    if (target) {
+                        const offset = 100;
+                        const top = target.getBoundingClientRect().top + window.pageYOffset -
+                            offset;
+                        window.scrollTo({ top, behavior: 'smooth' });
+                    }
+                    // 更新活跃状态
+                    navBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+
+            // 侧边栏链接点击
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href').substring(1);
+                    const target = document.getElementById(targetId);
+                    if (target) {
+                        const offset = 100;
+                        const top = target.getBoundingClientRect().top + window.pageYOffset -
+                            offset;
+                        window.scrollTo({ top, behavior: 'smooth' });
+                    }
+                });
+            });
+
+            // 滚动时更新导航活跃状态
+            const sectionIds = [
+                'overview', 'architecture', 'features', 'ai-chat', 'image-gen', 'tts',
+                'qq-integration', 'live2d', 'crystal', 'crystal-api', 'config', 'install',
+                'cli', 'api', 'websocket', 'optimization', 'limitations', 'risks', 'directory'
+            ];
+
+            window.addEventListener('scroll', function () {
+                let currentSection = 'overview';
+                const scrollPos = window.scrollY + 130;
+                for (const id of sectionIds) {
+                    const el = document.getElementById(id);
+                    if (el && el.offsetTop <= scrollPos) {
+                        currentSection = id;
+                    }
+                }
+                // 映射到主导航
+                const navMapping = {
+                    'overview': '#overview',
+                    'architecture': '#architecture',
+                    'core-modules': '#architecture',
+                    'subsystem-modules': '#architecture',
+                    'features': '#features',
+                    'ai-chat': '#features',
+                    'image-gen': '#features',
+                    'tts': '#features',
+                    'qq-integration': '#features',
+                    'live2d': '#features',
+                    'crystal': '#crystal',
+                    'crystal-api': '#crystal',
+                    'config': '#config',
+                    'install': '#install',
+                    'cli': '#config',
+                    'api': '#api',
+                    'websocket': '#api',
+                    'optimization': '#optimization',
+                    'limitations': '#limitations',
+                    'risks': '#risks',
+                    'directory': '#directory',
+                };
+                const mappedHref = navMapping[currentSection] || '#overview';
+                navBtns.forEach(b => {
+                    b.classList.remove('active');
+                    if (b.getAttribute('href') === mappedHref) {
+                        b.classList.add('active');
+                    }
+                });
+            });
+
+            // 背景图加载失败时的备用方案
+            const bgImg = document.querySelector('.bg-cover img');
+            bgImg.addEventListener('error', function () {
+                const fallbackUrls = [
+                    'https://picsum.photos/1920/1080?random=2',
+                    'https://picsum.photos/1920/1080?random=3',
+                    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80',
+                ];
+                const currentSrc = bgImg.src;
+                const fallback = fallbackUrls.find(url => url !== currentSrc);
+                if (fallback && !bgImg.dataset.triedFallback) {
+                    bgImg.dataset.triedFallback = '1';
+                    bgImg.src = fallback;
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>
