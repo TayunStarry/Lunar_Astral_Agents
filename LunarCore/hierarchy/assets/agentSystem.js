@@ -886,7 +886,6 @@ class AgentDefine {
     }
     async LiteImageFile() {
         for (let message of this.unreadContext) {
-            console.log(JSON.stringify(message));
             if (typeof message.content === 'string')
                 continue;
             const newContent = [];

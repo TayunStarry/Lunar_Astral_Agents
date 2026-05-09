@@ -1,49 +1,49 @@
 {
-	// 编译选项配置
-	"compilerOptions": {
-		// 目标 ECMAScript 版本
-		"target": "ES2022",
-		// 模块系统
-		"module": "ESNext",
-		// 编译时包含的库文件
-		"lib": [
-			"ES2022",
-			"DOM",
-			"DOM.Iterable"
-		],
-		// 模块解析策略
-		"moduleResolution": "node",
-		// 输出目录
-		"outDir": "../deliverable/",
-		// 源码根目录
-		"rootDir": "./side",
-		// 启用所有严格类型检查
-		"strict": false,
-		// 允许 ESModule 互操作
-		"esModuleInterop": true,
-		// 跳过库文件检查
-		"skipLibCheck": true,
-		// 强制文件名大小写一致
-		"forceConsistentCasingInFileNames": true,
-		// 允许导入 JSON 模块
-		"resolveJsonModule": true,
-		// 允许编译 JS 文件
-		"allowJs": true,
-		// 同时检查 JS 文件
-		"checkJs": true,
-		// 生成声明文件
-		"declaration": false,
-		// 生成源码映射
-		"sourceMap": false,
-		// 删除注释
-		"removeComments": false,
-	},
-	// 需要编译的文件列表
-	"include": [
-		"side/server/index.ts"
-	],
-	// 排除的目录
-	"exclude": [
-		"node_modules"
-	]
+    // 编译选项配置
+    "compilerOptions": {
+        // 目标 ECMAScript 版本
+        "target": "ES2022",
+        // 模块系统
+        "module": "ESNext",
+        // 编译时包含的库文件
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        // 模块解析策略
+        "moduleResolution": "node",
+        // 输出目录
+        "outDir": "../deliverable/",
+        // 源码根目录
+        "rootDir": "./server-side",
+        // 启用所有严格类型检查
+        "strict": false,
+        // 允许 ESModule 互操作
+        "esModuleInterop": true,
+        // 跳过库文件检查
+        "skipLibCheck": true,
+        // 强制文件名大小写一致
+        "forceConsistentCasingInFileNames": true,
+        // 允许导入 JSON 模块
+        "resolveJsonModule": true,
+        // 允许编译 JS 文件
+        "allowJs": true,
+        // 同时检查 JS 文件
+        "checkJs": true,
+        // 生成声明文件
+        "declaration": false,
+        // 生成源码映射
+        "sourceMap": false,
+        // 删除注释
+        "removeComments": false,
+    },
+    // 需要编译的文件列表
+    "include": [
+        "./server-side/index.ts"
+    ],
+    // 排除的目录
+    "exclude": [
+        "node_modules"
+    ]
 }

@@ -44,6 +44,8 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 		"--flash-attn", "on",
 		// 启用上下文偏移功能，调整模型处理上下文的方式
 		"--context-shift",
+		// 设置推理推理预算，限制模型在推理时的计算资源
+		"--reasoning-budget", "768",
 	}
 }
 

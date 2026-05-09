@@ -232,9 +232,17 @@ func ParseLine(line string) (string, []string) {
 		case TokenVariable, TokenPointer, TokenNumber, TokenIdentifier:
 			args = append(args, token.Value)
 		case TokenOperator:
-			if len(args) > 0 {
-				args[len(args)-1] += token.Value
+		if len(args) > 0 {
+			prev := args[len(args)-1]
+			newVal := prev + token.Value
+			if newVal == ">=" || newVal == "<=" || newVal == "==" || newVal == "!=" {
+				args[len(args)-1] = newVal
+			} else {
+				args = append(args, token.Value)
 			}
+		} else {
+			args = append(args, token.Value)
+		}
 		}
 	}
 	
