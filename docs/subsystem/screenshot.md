@@ -208,5 +208,6 @@ type Display struct {
 ## 🔗 关联文档
 
 - [主项目README](../../README.md)
-- [琉璃智能体文档](../../docs/crystal_astral.md)
+- [星图·琉璃文档](../crystal_astral.md)
+- [星图·月华文档](../luna_astral.md)
 - [存储子系统文档](storage.md)

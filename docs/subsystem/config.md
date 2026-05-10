@@ -233,12 +233,13 @@ config.ModelPortMap["new-model"] = 8888
 config.ModelMapMutex.Unlock()
 ```
 
+Config子系统为整个星月智能提供配置管理支持，与[存储子系统](storage.md)协作管理系统数据，为[浏览器子系统](browser.md)提供WebView配置参数。
+
 ---
 
 ## 🔗 关联文档
 
 - [主项目README](../../README.md)
 - [星图·月华文档](../luna_astral.md)
-- [星图·琉璃文档](../crystal_astral.md)
 - [存储子系统文档](storage.md)
 - [浏览器子系统文档](browser.md)

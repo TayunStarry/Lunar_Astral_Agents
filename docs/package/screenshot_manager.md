@@ -154,4 +154,6 @@ interface Screenshot {
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [琉璃智能体文档](../crystal_astral.md)
+- [星图·琉璃文档](../crystal_astral.md)
+- [星图·月华文档](../luna_astral.md)
+- [主项目README](../README.md)

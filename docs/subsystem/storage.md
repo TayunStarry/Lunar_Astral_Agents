@@ -350,6 +350,8 @@ subsystem/storage/
 └── go.sum
 ```
 
+Storage子系统为星月智能提供数据持久化支持，[月华智能体](../luna_astral.md)和[琉璃智能体](../crystal_astral.md)都依赖此子系统进行文件和数据库操作。配置管理由[配置子系统](config.md)负责。
+
 ---
 
 ## 🔗 关联文档

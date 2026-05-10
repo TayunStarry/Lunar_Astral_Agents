@@ -210,4 +210,6 @@ main()
 ## 🔗 关联文档
 
 - [主项目README](../../README.md)
-- [LunarTick设计文档](LunarTick/编程语言设计文档.md)
+- [星图·月华文档](../luna_astral.md)
+- [星图·琉璃文档](../crystal_astral.md)
+- [LunarTick设计文档](../../subsystem/LunarTick/编程语言设计文档.md)
