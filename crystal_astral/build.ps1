@@ -118,7 +118,7 @@ function Build-CrystalAstral {
 
     $binaryName = "Crystal_Astral"
     if ($TargetOS -eq "windows") { $binaryName += ".exe" }
-    $outputPath = "..\..\$binaryName"
+    $outputPath = "..\$binaryName"
 
     Write-Host "[Build] 编译 Go 二进制..." -ForegroundColor Cyan
     $buildArgs = @(
