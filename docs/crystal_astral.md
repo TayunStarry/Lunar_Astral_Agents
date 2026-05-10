@@ -37,6 +37,20 @@
 
 ---
 
+## 🖼️ 界面预览
+
+![琉璃主页面](../image/琉璃-主页面.png)
+
+各个功能模块的详细界面截图，请参阅对应的[扩展包文档](package/index.md)：
+- **文件管理**：[File Explorer](package/file_explorer.md)
+- **数据管理**：[Database Manager](package/database_manager.md)
+- **图像生成**：[Image Generation](package/image_generation.md)
+- **截图功能**：[Screenshot Manager](package/screenshot_manager.md)
+- **参数管理**：[Parameter Assistant](package/parameter_assistant.md)
+- **消息渲染**：[Message Rendering](package/message_rendering.md)
+
+---
+
 ## 🏛️ 职能定位
 
 ### 扩展功能
@@ -406,18 +420,6 @@ crystal_astral.exe -port 8081
 - 随机背景切换
 - 背景图片管理
 - 主题适配
-
-### 界面预览
-
-![琉璃主页面](../image/琉璃-主页面.png)
-
-各个功能模块的详细界面截图，请参阅对应的[扩展包文档](package/index.md)：
-- **文件管理**：[File Explorer](package/file_explorer.md)
-- **数据管理**：[Database Manager](package/database_manager.md)
-- **图像生成**：[Image Generation](package/image_generation.md)
-- **截图功能**：[Screenshot Manager](package/screenshot_manager.md)
-- **参数管理**：[Parameter Assistant](package/parameter_assistant.md)
-- **消息渲染**：[Message Rendering](package/message_rendering.md)
 
 琉璃智能体作为星月智能的扩展智能体，与[月华智能体](luna_astral.md)协同工作，共同为用户提供完整的智能服务体验。
 
