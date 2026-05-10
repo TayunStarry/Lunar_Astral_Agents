@@ -218,7 +218,7 @@ Config子系统为整个星月智能提供配置管理支持，与[存储子系�
 
 ## 🔗 关联文档
 
-- [主项目README](../../README.md)
+- [根目录文档](../../README.md)
 - [星图·月华 文档](../luna_astral.md)
 - [存储子系统文档](storage.md)
 - [浏览器子系统文档](browser.md)

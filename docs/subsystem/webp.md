@@ -173,7 +173,7 @@ WebP子系统为星月智能提供高效的图像格式转换和压缩功能，�
 
 ## 🔗 关联文档
 
-- [主项目README](../../README.md)
+- [根目录文档](../../README.md)
 - [星图·月华 文档](../luna_astral.md)
 - [星图·琉璃 文档](../crystal_astral.md)
 - [存储子系统文档](storage.md)

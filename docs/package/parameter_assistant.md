@@ -151,7 +151,7 @@ interface Parameter {
 
 ---
 
-Parameter Assistant组件是[扩展包](../index.md)的一部分，由[月华智能体](../luna_astral.md)提供参数配置辅助功能支持。
+Parameter Assistant组件是[扩展包](../index.md)的一部分，为[星图·月华](../luna_astral.md)提供参数配置辅助功能支持。
 
 ---
 
@@ -159,4 +159,4 @@ Parameter Assistant组件是[扩展包](../index.md)的一部分，由[月华智
 
 - [扩展包总览](index.md)
 - [星图·月华 文档](../luna_astral.md)
-- [主项目README](../README.md)
+- [根目录文档](../../README.md)

@@ -167,4 +167,4 @@ Multimedia Preview组件是[扩展包](../index.md)的一部分，为[星图·�
 
 - [扩展包总览](index.md)
 - [星图·琉璃 文档](../crystal_astral.md)
-- [主项目README](../README.md)
+- [根目录文档](../../README.md)
