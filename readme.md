@@ -16,20 +16,32 @@ Lunar_Astral_Agents/
 ├── crystal_astral/       # 星图-琉璃 - 扩展智能体（妹妹）
 │   └── assets/           # 前端资源
 ├── subsystem/            # 通用子系统
-│   ├── storage/          # [数据存储子系统](docs/subsystem/storage.md)
-│   ├── config/           # [配置管理子系统](docs/subsystem/config.md)
-│   ├── browser/          # [浏览器集成子系统](docs/subsystem/browser.md)
-│   ├── screenshot/       # [截图子系统](docs/subsystem/screenshot.md)
-│   ├── LunarTick/        # [编程语言解释器](docs/subsystem/LunarTick.md)
-│   ├── project_archiving/# [项目归档子系统](docs/subsystem/project_archiving.md)
-│   ├── webp/             # [WebP图像处理](docs/subsystem/webp.md)
-│   ├── bridge_adapter/   # [桥接适配器](docs/subsystem/bridge_adapter.md)
-│   └── proxy/            # [代理子系统](docs/subsystem/proxy.md)
+│   ├── storage/          # 数据存储子系统
+│   ├── config/           # 配置管理子系统
+│   ├── browser/          # 浏览器集成子系统
+│   ├── screenshot/       # 截图子系统
+│   ├── LunarTick/        # 编程语言解释器
+│   ├── project_archiving/# 项目归档子系统
+│   ├── webp/             # WebP图像处理
+│   ├── bridge_adapter/   # 桥接适配器
+│   └── proxy/            # 代理子系统
 └── local_data/           # 本地数据目录
     ├── models/           # AI模型文件
-    ├── package/          # [扩展包](docs/package/index.md)
+    ├── package/          # 扩展包
     └── audios/           # 音频资源
 ```
+
+**子系统文档：**
+- [数据存储子系统](docs/subsystem/storage.md)
+- [配置管理子系统](docs/subsystem/config.md)
+- [浏览器集成子系统](docs/subsystem/browser.md)
+- [截图子系统](docs/subsystem/screenshot.md)
+- [编程语言解释器](docs/subsystem/LunarTick.md)
+- [项目归档子系统](docs/subsystem/project_archiving.md)
+- [WebP图像处理](docs/subsystem/webp.md)
+- [桥接适配器](docs/subsystem/bridge_adapter.md)
+- [代理子系统](docs/subsystem/proxy.md)
+- [扩展包](docs/package/index.md)
 
 ---
 
