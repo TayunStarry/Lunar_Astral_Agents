@@ -101,9 +101,9 @@ interface FileInfo {
 
 ## 🎨 界面预览
 
-![琉璃文件管理主页面](../image/琉璃-文件管理-主页面.png)
+![琉璃文件管理主页面](../../image/琉璃-文件管理-主页面.png)
 
-![琉璃文件管理文本编辑](../image/琉璃-文件管理-文本编辑.png)
+![琉璃文件管理文本编辑](../../image/琉璃-文件管理-文本编辑.png)
 
 - 左侧：目录树
 - 中间：文件列表
@@ -115,6 +115,6 @@ interface FileInfo {
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [星图·琉璃文档](../crystal_astral.md)
+- [星图·琉璃 文档](../crystal_astral.md)
 - [星图·月华 文档](../luna_astral.md)
 - [主项目README](../README.md)

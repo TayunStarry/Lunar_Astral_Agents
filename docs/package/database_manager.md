@@ -86,9 +86,9 @@ window.addEventListener('message', (event) => {
 
 ## 🎨 界面预览
 
-![琉璃数据管理主页面](../image/琉璃-数据管理-主页面.png)
+![琉璃数据管理主页面](../../image/琉璃-数据管理-主页面.png)
 
-![琉璃数据管理配置说明](../image/琉璃-数据管理-配置说明.png)
+![琉璃数据管理配置说明](../../image/琉璃-数据管理-配置说明.png)
 
 界面采用星月智能统一设计风格：
 - 深色主题背景
@@ -100,5 +100,5 @@ window.addEventListener('message', (event) => {
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [星图·琉璃文档](../crystal_astral.md)
+- [星图·琉璃 文档](../crystal_astral.md)
 - [主项目README](../README.md)
