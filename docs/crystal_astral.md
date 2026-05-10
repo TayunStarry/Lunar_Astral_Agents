@@ -1,6 +1,6 @@
 # 星图·琉璃 - 智能体技术文档
 
-> 💎 **琉璃**是星月智能的扩展智能体，一位优雅灵动的少女。她如同月华的姐妹，专注于应用管理与系统增强，为整个系统提供扩展支持能力。
+> 💎 **琉璃**是星月智能的扩展智能体，一位优雅灵动的少女。她是月华的妹妹，专注于应用管理与系统增强，为整个系统提供扩展支持能力。
 
 ---
 
@@ -12,8 +12,9 @@
 |------|------|
 | **名字** | 琉璃 |
 | **生日** | 6月16日 |
-| **身份** | 扩展服务助手，星月智能的第二位智能体 |
+| **身份** | 扩展服务助手，星月智能的第二位智能体（妹妹） |
 | **性格** | 优雅灵动、机敏聪慧、善解人意 |
+| **姐姐** | 月华 |
 
 ### 核心特质
 
@@ -47,9 +48,16 @@
 ### 包管理
 
 琉璃负责管理系统的扩展包：
-- 扩展包的安装与卸载
-- 包依赖管理
-- 版本更新检测
+
+| 包名 | 说明 | 文档 |
+|------|------|------|
+| [database_manager](package/database_manager.md) | 数据库管理器 | [文档](package/database_manager.md) |
+| [file_explorer](package/file_explorer.md) | 文件浏览器 | [文档](package/file_explorer.md) |
+| [screenshot_manager](package/screenshot_manager.md) | 截图管理器 | [文档](package/screenshot_manager.md) |
+| [multimedia_preview](package/multimedia_preview.md) | 多媒体预览 | [文档](package/multimedia_preview.md) |
+| [parameter_assistant](package/parameter_assistant.md) | 参数助手 | [文档](package/parameter_assistant.md) |
+
+详细扩展包文档请参阅：[扩展包总览](package/index.md)
 
 ### 简易分布式智能体架构
 
@@ -397,9 +405,28 @@ crystal_astral.exe -port 8081
 
 ---
 
+## 📦 扩展包文档
+
+琉璃通过扩展包提供丰富的UI组件和功能模块：
+
+| 包名 | 说明 | 文档 |
+|------|------|------|
+| [扩展包总览](package/index.md) | 扩展包目录与索引 | [查看](package/index.md) |
+| [数据库管理器](package/database_manager.md) | 数据库管理界面组件 | [查看](package/database_manager.md) |
+| [文件浏览器](package/file_explorer.md) | 文件浏览与管理界面 | [查看](package/file_explorer.md) |
+| [截图管理器](package/screenshot_manager.md) | 屏幕截图管理界面 | [查看](package/screenshot_manager.md) |
+| [多媒体预览](package/multimedia_preview.md) | 音视频内容预览 | [查看](package/multimedia_preview.md) |
+| [参数助手](package/parameter_assistant.md) | 参数配置辅助界面 | [查看](package/parameter_assistant.md) |
+| [消息渲染](package/message_rendering.md) | 富文本消息展示 | [查看](package/message_rendering.md) |
+| [图像生成](package/image_generation.md) | AI绘图界面与提示词 | [查看](package/image_generation.md) |
+
+---
+
 ## 🔗 关联文档
 
 - [主项目README](../README.md)
 - [星图·月华文档](luna_astral.md)
 - [存储子系统文档](subsystem/storage.md)
 - [配置子系统文档](subsystem/config.md)
+- [截图子系统文档](subsystem/screenshot.md)
+- [扩展包文档](package/index.md)
