@@ -4,19 +4,19 @@ go 1.24.4
 
 require config v0.0.0
 
-replace config => ../config
+replace config => ../subsystem/config
 
 require storage v0.0.0
 
-replace storage => ../storage
+replace storage => ../subsystem/storage
 
 require browser v0.0.0
 
-replace browser => ../browser
+replace browser => ../subsystem/browser
 
 require screenshot v0.0.0
 
-replace screenshot => ../screenshot
+replace screenshot => ../subsystem/screenshot
 
 require github.com/mattn/go-sqlite3 v1.14.33 // indirect
 

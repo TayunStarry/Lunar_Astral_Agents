@@ -107,19 +107,19 @@ try {
     Write-Host "✓ 所有环境检查通过`n" -ForegroundColor Green
 
     # 构建LunarCore（传递 -SkipCheck 参数）
-    Write-Host "---------- 构建 LunarCore ----------" -ForegroundColor Cyan
-    Set-Location -Path './LunarCore'
+    Write-Host "---------- 构建 Luna_Astral ----------" -ForegroundColor Cyan
+    Set-Location -Path './luna_astral'
     & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
-    if ($LASTEXITCODE -ne 0) { throw "LunarCore 构建失败" }
+    if ($LASTEXITCODE -ne 0) { throw "Luna_Astral 构建失败" }
     Set-Location -Path '../'
     Write-Host ""
 
     # 构建 Crystal_Astral（传递 -SkipCheck 参数）
     Write-Host "---------- 构建 Crystal_Astral ----------" -ForegroundColor Cyan
-    Set-Location -Path './subsystem\crystal_astral'
+    Set-Location -Path './crystal_astral'
     & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
     if ($LASTEXITCODE -ne 0) { throw "Crystal_Astral 构建失败" }
-    Set-Location -Path '../../'
+    Set-Location -Path '../'
     Write-Host ""
 
     # 构建 bridge_adapter（传递 -SkipCheck 参数）
