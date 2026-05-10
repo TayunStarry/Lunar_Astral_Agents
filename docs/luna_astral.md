@@ -14,7 +14,7 @@
 | **生日** | 2月18日 |
 | **身份** | 辅助书记员，隶属于星月智能（姐姐） |
 | **性格** | 乐观开朗、乐于助人、耐心细致、俏皮活泼 |
-| **妹妹** | 琉璃 |
+| **妹妹** | [琉璃](crystal_astral.md) |
 
 ### 核心特质
 
@@ -564,11 +564,16 @@ luna_astral.exe -port 8080
 - Live2D角色渲染
 - 聊天界面组件
 
+月华智能体的数据管理依赖[存储子系统](subsystem/storage.md)，配置管理由[配置子系统](subsystem/config.md)支持。有关项目整体架构的更多信息，请参阅[主项目README](../README.md)。
+
 ---
 
-## 🔗 关联文档
+## 📖 完整目录索引
 
-- [主项目README](../README.md)
-- [星图·琉璃文档](crystal_astral.md)
-- [存储子系统文档](subsystem/storage.md)
-- [配置子系统文档](subsystem/config.md)
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| **主项目README** | [../README.md](../README.md) | 项目总览 |
+| **星图·琉璃文档** | [crystal_astral.md](crystal_astral.md) | 琉璃智能体技术文档 |
+| **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明 |
+| **配置子系统文档** | [subsystem/config.md](subsystem/config.md) | 配置管理机制 |
+| **预留智能体文档** | [reserved_agents.md](reserved_agents.md) | 蔷薇智能体规划文档 |

@@ -32,8 +32,11 @@ archive/
 
 组件使用说明文档。
 
+Archive组件是[扩展包](../index.md)的一部分，为星月智能系统提供归档管理功能。
+
 ---
 
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
+- [主项目README](../README.md)

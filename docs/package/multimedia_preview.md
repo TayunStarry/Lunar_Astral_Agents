@@ -150,7 +150,12 @@ interface MediaInfo {
 
 ---
 
+Multimedia Preview组件是[扩展包](../index.md)的一部分，由[琉璃智能体](../crystal_astral.md)提供多媒体内容预览功能支持。
+
+---
+
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [琉璃智能体文档](../crystal_astral.md)
+- [星图·琉璃文档](../crystal_astral.md)
+- [主项目README](../README.md)

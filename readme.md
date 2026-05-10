@@ -16,18 +16,18 @@ Lunar_Astral_Agents/
 ├── crystal_astral/       # 星图-琉璃 - 扩展智能体（妹妹）
 │   └── assets/           # 前端资源
 ├── subsystem/            # 通用子系统
-│   ├── storage/          # 数据存储子系统
-│   ├── config/           # 配置管理子系统
-│   ├── browser/          # 浏览器集成子系统
-│   ├── screenshot/        # 截图子系统
-│   ├── LunarTick/        # 编程语言解释器
-│   ├── project_archiving/# 项目归档子系统
-│   ├── webp/             # WebP图像处理
-│   ├── bridge_adapter/   # 桥接适配器（预留）
-│   └── proxy/            # 代理子系统（预留）
+│   ├── storage/          # [数据存储子系统](docs/subsystem/storage.md)
+│   ├── config/           # [配置管理子系统](docs/subsystem/config.md)
+│   ├── browser/          # [浏览器集成子系统](docs/subsystem/browser.md)
+│   ├── screenshot/       # [截图子系统](docs/subsystem/screenshot.md)
+│   ├── LunarTick/        # [编程语言解释器](docs/subsystem/LunarTick.md)
+│   ├── project_archiving/# [项目归档子系统](docs/subsystem/project_archiving.md)
+│   ├── webp/             # [WebP图像处理](docs/subsystem/webp.md)
+│   ├── bridge_adapter/   # [桥接适配器](docs/subsystem/bridge_adapter.md)
+│   └── proxy/            # [代理子系统](docs/subsystem/proxy.md)
 └── local_data/           # 本地数据目录
     ├── models/           # AI模型文件
-    ├── package/          # 扩展包
+    ├── package/          # [扩展包](docs/package/index.md)
     └── audios/           # 音频资源
 ```
 
@@ -37,7 +37,7 @@ Lunar_Astral_Agents/
 
 ### 星图·月华 (luna_astral) - 姐姐
 
-> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。
+> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[月华智能体文档](docs/luna_astral.md)。
 
 **核心能力**：
 - 🧠 自然语言对话（支持多种LLM模型）
@@ -48,7 +48,7 @@ Lunar_Astral_Agents/
 
 ### 星图·琉璃 (crystal_astral) - 妹妹
 
-> 优雅灵动的扩展智能体，专注于应用管理与系统增强。她是月华的妹妹，为整个系统提供扩展支持能力。
+> 优雅灵动的扩展智能体，专注于应用管理与系统增强。她是月华的妹妹，为整个系统提供扩展支持能力。详细信息请参阅[琉璃智能体文档](docs/crystal_astral.md)。
 
 **核心能力**：
 - 🖼️ 动态背景管理
@@ -58,7 +58,7 @@ Lunar_Astral_Agents/
 
 ### 蔷薇 - 规划中
 
-> 星月智能的新姐妹，目前处于规划阶段。她将整合鉴权、代理和多应用适配等综合职能，成为系统的安全守护者和网络桥梁。
+> 星月智能的新姐妹，目前处于规划阶段。她将整合鉴权、代理和多应用适配等综合职能，成为系统的安全守护者和网络桥梁。详细规划请参阅[预留智能体文档](docs/reserved_agents.md)。
 
 **预计核心能力**：
 - 🔐 用户身份认证与授权管理
@@ -140,21 +140,6 @@ cd ..
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 📖 文档导航
-
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| **月华智能体文档** | [docs/luna_astral.md](docs/luna_astral.md) | 月华的完整技术文档 |
-| **琉璃智能体文档** | [docs/crystal_astral.md](docs/crystal_astral.md) | 琉璃的完整技术文档 |
-| **存储子系统文档** | [docs/subsystem/storage.md](docs/subsystem/storage.md) | 数据存储架构说明 |
-| **配置子系统文档** | [docs/subsystem/config.md](docs/subsystem/config.md) | 配置管理机制 |
-| **浏览器子系统文档** | [docs/subsystem/browser.md](docs/subsystem/browser.md) | 浏览器集成方案 |
-| **截图子系统文档** | [docs/subsystem/screenshot.md](docs/subsystem/screenshot.md) | 屏幕截图功能 |
-| **预留智能体文档** | [docs/reserved_agents.md](docs/reserved_agents.md) | 姐妹智能体规划 |
-| **扩展包文档** | [docs/package/index.md](docs/package/index.md) | 扩展包总览 |
 
 ---
 

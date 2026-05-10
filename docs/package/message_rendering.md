@@ -140,7 +140,12 @@ interface MessageContent {
 
 ---
 
+Message Rendering组件是[扩展包](../index.md)的一部分，由[月华智能体](../luna_astral.md)提供富文本消息渲染功能支持。
+
+---
+
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [月华智能体文档](../luna_astral.md)
+- [星图·月华文档](../luna_astral.md)
+- [主项目README](../README.md)
