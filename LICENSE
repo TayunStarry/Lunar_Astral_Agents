@@ -1,20 +1,19 @@
-
 Lunar Astral Agents Non-Commercial License
 Version 1.0, May 2026
 
-Copyright (C) 2025 钛宇-星光阁 (TayunStarry)
+Copyright (C) 2025-2026 钛宇-星光阁 (TayunStarry)
 
 ================================================================================
 
-ENGLISH VERSION
+                                  ENGLISH VERSION
 
 TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
 1. DEFINITIONS
 
    "Project" means the Lunar Astral Agents software and all related materials,
-   including but not limited to source code, documentation, and media files,
-   owned or controlled by the Author.
+   including but not limited to source code, documentation, media files, and
+   configuration files, owned or controlled by the Author.
 
    "Author" means 钛宇-星光阁 (TayunStarry), the original copyright holder.
 
@@ -22,8 +21,11 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    this License.
 
    "Commercial Use" means any use of the Project for profit-making purposes,
-   including but not limited to selling, licensing, or using the Project in
-   connection with paid services.
+   including but not limited to:
+   - Selling, licensing, or renting the Project or any derivative works
+   - Using the Project in connection with paid services or products
+   - Distributing the Project as part of a commercial offering
+   - Monetizing the Project through advertising, subscriptions, or donations
 
 2. GRANT OF RIGHTS
 
@@ -31,29 +33,38 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    grants You a worldwide, non-exclusive, royalty-free license to:
 
    (a) Reproduce: Make authorized copies and reprints of the Project
-       materials.
+       materials for non-commercial purposes.
 
-   (b) Modify: Create modified versions of the Project source code.
+   (b) Modify: Create modified versions of the Project source code, provided
+       that all modifications comply with the terms of this License.
 
    (c) Distribute: Distribute the original Project and any modified versions
-       thereof.
+       thereof, provided that recipients are bound by the same license terms.
+
+   (d) Use: Use the Project for non-commercial purposes, including personal,
+       educational, and research use.
 
 3. USAGE RESTRICTIONS
 
    (a) Prohibition on Commercial Use: You shall not use, reproduce, modify,
        or distribute the Project for any commercial purpose or in any
        profit-making activity without the express written permission of the
-       Author.
+       Author. Requests for commercial licensing may be submitted to the
+       Author through the official project channels.
 
    (b) Compliance: You must comply with all applicable laws and regulations
        when using, reproducing, modifying, or distributing the Project.
+
+   (c) No Warranty: The Project is provided "AS IS" without warranty of any
+       kind. See Section 5 for full details.
 
 4. ATTRIBUTION REQUIREMENTS
 
    When reproducing, modifying, or distributing the Project or any modified
    version thereof, You must:
 
-   (a) Preserve all original copyright notices and license terms.
+   (a) Preserve all original copyright notices and license terms in their
+       entirety.
 
    (b) Clearly display the original Project source information, including:
        - Repository Address: https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
@@ -79,13 +90,14 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
    SHALL THE AUTHOR BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL,
    SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR
-   INABILITY TO USE THE PROJECT.
+   INABILITY TO USE THE PROJECT, EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGES.
 
 7. TERMINATION
 
    This License shall automatically terminate if You violate any of its terms
    and conditions. Upon termination, You shall cease all use, reproduction,
-   modification, and distribution of the Project.
+   modification, and distribution of the Project and any derivative works.
 
 8. MISCELLANEOUS
 
@@ -93,50 +105,64 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
        between You and the Author regarding the use of the Project.
 
    (b) Governing Law: This License shall be governed by the laws of the
-       People's Republic of China.
+       People's Republic of China. Any disputes arising from or related to
+       this License shall be resolved in the courts of the People's Republic
+       of China.
 
    (c) Severability: If any provision of this License is held to be invalid
        or unenforceable, the remaining provisions shall remain in full force
        and effect.
 
+   (d) Amendments: This License may only be amended with the written consent
+       of the Author.
+
 ================================================================================
 
-中文版本
+                                  中文版本
 
-使用、复制和分发的条款与条件
+                           使用、复制和分发的条款与条件
 
 1. 定义
 
-   "项目"指 Lunar Astral Agents 软件及所有相关材料，包括但不限于源代码、文档和媒体文件，
-   由作者拥有或控制。
+   "项目"指 Lunar Astral Agents 软件及所有相关材料，包括但不限于源代码、文档、
+   媒体文件和配置文件，由作者拥有或控制。
 
    "作者"指 钛宇-星光阁 (TayunStarry)，即原始版权持有者。
 
    "您"指根据本许可证行使许可权限的任何个人或实体。
 
-   "商业用途"指将项目用于盈利目的的任何使用，包括但不限于出售、许可或在付费服务中使用本项目。
+   "商业用途"指将项目用于盈利目的的任何使用，包括但不限于：
+   - 出售、许可或出租项目或任何衍生作品
+   - 在付费服务或产品中使用项目
+   - 将项目作为商业产品的一部分进行分发
+   - 通过广告、订阅或捐赠将项目商业化
 
 2. 权利授予
 
    根据本许可证的条款和条件，作者特此授予您全球范围、非排他性、免版税的许可，以：
 
-   (a) 复制：制作项目材料的授权副本和重印本。
+   (a) 复制：制作项目材料的授权副本和重印本，仅限非商业用途。
 
-   (b) 修改：创建项目源代码的修改版本。
+   (b) 修改：创建项目源代码的修改版本，前提是所有修改均遵守本许可证的条款。
 
-   (c) 分发：分发原始项目及其任何修改版本。
+   (c) 分发：分发原始项目及其任何修改版本，前提是接收者受相同许可证条款的约束。
+
+   (d) 使用：将项目用于非商业目的，包括个人、教育和研究用途。
 
 3. 使用限制
 
-   (a) 禁止商业使用：未经作者书面明确许可，您不得将项目用于任何商业目的或任何盈利活动。
+   (a) 禁止商业使用：未经作者书面明确许可，您不得将项目用于任何商业目的或任何
+       盈利活动。商业许可请求可通过官方项目渠道提交给作者。
 
    (b) 合规性：使用、复制、修改或分发项目时，您必须遵守所有适用的法律法规。
+
+   (c) 无保证：项目按"原样"提供，不提供任何形式的保证。详见第5节。
 
 4. 署名要求
 
    在复制、修改或分发项目或其任何修改版本时，您必须：
 
-   (a) 保留所有原始版权声明和许可证条款。
+   (a) 完整保留所有原始版权声明和许可证条款。
 
    (b) 明确显示原始项目来源信息，包括：
        - 仓库地址：https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
@@ -154,21 +180,25 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 6. 责任限制
 
    在适用法律要求或书面协议另有约定的情况下，作者不对您因使用或无法使用本项目
-   而产生的任何损害承担责任，包括任何一般、特殊、偶然或间接损害。
+   而产生的任何损害承担责任，包括任何一般、特殊、偶然或间接损害，即使作者已被告知
+   可能发生此类损害。
 
 7. 终止
 
-   如果您违反本许可证的任何条款和条件，本许可证将自动终止。终止后，
-   您应停止所有使用、复制、修改和分发项目的行为。
+   如果您违反本许可证的任何条款和条件，本许可证将自动终止。终止后，您应停止
+   所有使用、复制、修改和分发项目及任何衍生作品的行为。
 
 8. 其他
 
    (a) 完整协议：本许可证构成您与作者之间关于项目使用的完整协议。
 
-   (b) 适用法律：本许可证受中华人民共和国法律管辖。
+   (b) 适用法律：本许可证受中华人民共和国法律管辖。任何因本许可证产生或与之相关的
+       争议应在中华人民共和国法院解决。
 
-   (c) 可分割性：如果本许可证的任何条款被认定为无效或不可执行，
-       其余条款应保持完全效力。
+   (c) 可分割性：如果本许可证的任何条款被认定为无效或不可执行，其余条款应保持
+       完全效力。
+
+   (d) 修改：本许可证仅可在获得作者书面同意的情况下进行修改。
 
 ================================================================================
 

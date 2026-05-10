@@ -111,8 +111,8 @@ Lunar_Astral_Agents/
 - **图片生成功能**（选择性启用）：GPU推理，需8GB及以上显存
 
 #### LLM模型配置
-- **禁用本地LLM推理时**：内存100MB以上
-  - ⚠️ 配置说明：必须在配置文件中正确设置云模型的API地址与对应的API密钥
+- **禁用本地LLM推理时**：内存1GB以上
+  - ⚠️ 配置说明：请在配置文件中正确设置云端模型的API地址与对应的API密钥
 - **启用本地LLM推理时**：
   - 推荐配置：内存32GB以上，显存12GB以上
   - 最低理想配置：内存16GB，显存8GB
@@ -159,15 +159,184 @@ cd ..
 
 欢迎贡献代码！请遵循以下规范：
 
-1. 代码风格：Go使用 `go fmt`，TypeScript使用 `prettier`
-2. 提交信息：遵循 [Conventional Commits](https://www.conventionalcommits.org/)
-3. PR流程：先创建Issue讨论，再提交PR
+### 代码风格规范
+
+#### Go 代码规范
+
+**文件命名**
+- 使用小写字母，单词之间用下划线分隔：`main.go`, `create.go`, `server_side.go`
+- 类型定义文件：`type.go`
+- 工具函数文件：`utils.go`, `helper.go`
+
+**命名约定**
+- **包名**：全部小写，无下划线，简洁且具描述性
+- **函数名**：帕斯卡命名法（PascalCase），动词开头
+  - 示例：`StartServer()`, `InitializeComponents()`, `GetLocalIP()`
+- **变量名**：驼峰命名法（camelCase）
+  - 示例：`server`, `config`, `httpMux`
+- **常量**：全部大写，单词之间用下划线分隔
+  - 示例：`MAX_ATTEMPTS`, `DEFAULT_PORT`
+- **接口名**：以 `er` 结尾
+  - 示例：`Handler`, `Reader`, `Writer`
+
+**代码格式**
+- 使用 `go fmt` 自动格式化
+- 每行不超过 120 字符
+- 使用 `gofmt` 检查格式
+- 注释使用 `//`，包级注释使用 `/* */`
+
+**最佳实践**
+- 错误处理：始终检查并正确处理错误
+- 日志记录：使用 `log.Printf()` 进行日志输出
+- 避免全局变量：优先使用参数传递
+- 函数单一职责：每个函数只做一件事
+
+#### TypeScript/JavaScript 代码规范
+
+**文件命名**
+- 使用小写字母，单词之间用下划线分隔：`index.ts`, `agent.ts`, `config.ts`
+- 工具函数文件：`utils.ts`, `helper.ts`
+
+**命名约定**
+- **类名**：帕斯卡命名法（PascalCase）
+  - 示例：`LunarAgent`, `AgentDefine`, `ChatCache`
+- **接口名**：帕斯卡命名法（PascalCase），以 `I` 前缀（可选）
+  - 示例：`Config`, `ProxyFetchConfig`, `TaskStatus`
+- **函数/方法名**：驼峰命名法（camelCase）
+  - 示例：`createChatMessage()`, `writeMessage()`, `pullExternalMessages()`
+- **变量/属性名**：驼峰命名法（camelCase）
+  - 示例：`speakWeight`, `unreadContext`, `finalResponse`
+- **常量**：全部大写，单词之间用下划线分隔
+  - 示例：`MAX_RETRY`, `DEFAULT_TIMEOUT`
+
+**代码格式**
+- 使用 `prettier` 自动格式化
+- 每行不超过 120 字符
+- 使用 TypeScript 严格模式
+- 接口和类型定义使用 JSDoc 风格注释
+
+**最佳实践**
+- 使用 `async/await` 处理异步操作
+- 使用 `interface` 定义数据结构
+- 合理使用 TypeScript 类型推断
+- 避免 `any` 类型，使用更具体的类型
+
+#### HTML/CSS 代码规范
+
+**文件命名**
+- 使用小写字母，单词之间用下划线分隔：`index.html`, `style.css`, `script.js`
+
+**命名约定**
+- **CSS 类名**：使用连字符分隔（kebab-case）
+  - 示例：`main-container`, `chat-message`, `btn-primary`
+- **HTML ID**：使用驼峰命名法或连字符分隔
+  - 示例：`chatContainer`, `userInput`
+
+### 提交信息规范
+
+遵循 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
+
+```
+<类型>(<范围>): <描述>
+
+<正文>
+
+<页脚>
+```
+
+**类型说明**
+
+| 类型 | 说明 |
+|------|------|
+| `feat` | 新增功能 |
+| `fix` | 修复 bug |
+| `docs` | 文档更新 |
+| `style` | 代码风格（不影响代码运行的变动） |
+| `refactor` | 代码重构（既不新增功能也不修复 bug） |
+| `test` | 测试相关 |
+| `chore` | 构建/依赖/工具更新 |
+
+**示例**
+
+```
+feat(server): 添加 WebSocket 消息推送功能
+
+实现了实时消息推送机制，支持客户端与服务端的双向通信。
+
+- 添加 WebSocket 服务端实现
+- 实现消息广播功能
+- 添加连接状态管理
+```
+
+### PR 流程
+
+1. **创建 Issue**：先在 GitHub/Gitee 上创建 Issue，描述要解决的问题或实现的功能
+2. **讨论方案**：与维护者和其他贡献者讨论实现方案
+3. **分支开发**：从 `main` 分支创建新分支，命名格式：`feature/<功能名>` 或 `fix/<bug描述>`
+4. **提交代码**：遵循代码风格规范和提交信息规范
+5. **创建 PR**：提交 Pull Request，关联相关 Issue
+6. **代码审查**：等待维护者审查，根据反馈进行修改
+7. **合并分支**：通过审查后，由维护者合并到主分支
+
+### 项目结构规范
+
+```
+├── module_name/           # 模块目录（小写，下划线分隔）
+│   ├── sub_module/        # 子模块目录
+│   ├── main.go            # 主入口文件
+│   ├── type.go            # 类型定义
+│   ├── create.go          # 创建/初始化相关
+│   └── handler.go         # 处理函数
+```
+
+### 构建流程
+
+本项目使用 PowerShell 脚本进行构建：
+
+```powershell
+# 完整构建
+.\build.ps1
+
+# 指定目标平台
+.\build.ps1 -TargetOS linux -TargetArch arm64
+```
+
+**环境要求**
+- Go >= 1.24
+- Node.js >= 20.x
+- GCC（CGO 支持）
+- rsrc 工具（图标嵌入）
 
 ---
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证。详见 [LICENSE](LICENSE) 文件。
+本项目采用 **Lunar Astral Agents Non-Commercial License**（星月智能非商业许可证）。
+
+### 许可证要点
+
+| 权限 | 允许 | 说明 |
+|------|------|------|
+| **复制** | ✅ | 制作项目材料的授权副本和重印本 |
+| **修改** | ✅ | 创建项目源代码的修改版本 |
+| **分发** | ✅ | 分发原始项目及其修改版本 |
+| **非商业使用** | ✅ | 个人、教育和研究用途 |
+| **商业使用** | ❌ | 禁止任何盈利目的的使用 |
+
+### 重要条款
+
+1. **禁止商业使用**：未经作者书面明确许可，不得将项目用于任何商业目的或盈利活动
+2. **署名要求**：复制、修改或分发时必须保留原始版权声明和许可证条款
+3. **免责声明**：项目按"原样"提供，不提供任何形式的保证
+4. **责任限制**：作者不对因使用或无法使用本项目而产生的任何损害承担责任
+
+### 联系方式
+
+- **仓库地址**: https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
+- **QQ群号**: 710834920
+- **作者信息**: 钛宇-星光阁 (TayunStarry)
+
+完整许可证文本请参阅 [LICENSE](LICENSE) 文件。
 
 ---
 
