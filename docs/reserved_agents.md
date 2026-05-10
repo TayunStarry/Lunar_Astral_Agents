@@ -202,5 +202,5 @@ subsystem/proxy/
 ## 🔗 关联文档
 
 - [主项目README](../README.md)
-- [星图·月华文档](luna_astral.md)
+- [星图·月华 文档](luna_astral.md)
 - [星图·琉璃文档](crystal_astral.md)
