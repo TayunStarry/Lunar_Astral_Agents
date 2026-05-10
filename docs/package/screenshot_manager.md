@@ -145,7 +145,7 @@ interface Screenshot {
 
 ## 🎨 界面预览
 
-![琉璃截图标注](../image/琉璃-截图标注.png)
+![琉璃截图标注](../../image/琉璃-截图标注.png)
 
 - 缩略图网格展示
 - 顶部工具栏
@@ -156,6 +156,6 @@ interface Screenshot {
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [星图·琉璃文档](../crystal_astral.md)
+- [星图·琉璃 文档](../crystal_astral.md)
 - [星图·月华 文档](../luna_astral.md)
 - [主项目README](../README.md)

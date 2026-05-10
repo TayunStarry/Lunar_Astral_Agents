@@ -28,10 +28,10 @@ var SystemEndpoints = []SystemEndpoint{
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问"},
 	// 消息队列相关接口
-	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "批量消息写入"},
-	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "批量视频URL写入"},
+	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入"},
+	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频写入"},
 	// TTS语音服务相关接口
-	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS语音服务代理"},
-	{Path: "/qwen_tts/models", Handler: handlers.TTSQwen3ProxyHandler, Method: "GET", Description: "Qwen3模型检测"},
-	{Path: "/qwen_tts/", Handler: handlers.TTSQwen3ProxyHandler, Method: "POST", Description: "Qwen3语音服务代理"},
+	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS代理"},
+	{Path: "/qwen_tts/models", Handler: handlers.TTSQwen3ProxyHandler, Method: "GET", Description: "TTS检测"},
+	{Path: "/qwen_tts/", Handler: handlers.TTSQwen3ProxyHandler, Method: "POST", Description: "TTS服务"},
 }

@@ -583,7 +583,7 @@ luna_astral.exe -port 8080
 | 文档 | 路径 | 说明 |
 |------|------|------|
 | **主项目README** | [../README.md](../README.md) | 项目总览 |
-| **星图·琉璃文档** | [crystal_astral.md](crystal_astral.md) | 琉璃智能体技术文档 |
+| **星图·琉璃 文档** | [crystal_astral.md](crystal_astral.md) | 琉璃智能体技术文档 |
 | **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明 |
 | **配置子系统文档** | [subsystem/config.md](subsystem/config.md) | 配置管理机制 |
 | **预留智能体文档** | [reserved_agents.md](reserved_agents.md) | 蔷薇智能体规划文档 |

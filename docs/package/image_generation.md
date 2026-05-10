@@ -143,9 +143,9 @@ blurry, worst quality, low quality, normal quality, jpeg artifacts
 
 ## 🎨 界面预览
 
-![琉璃图像生成参数配置](../image/琉璃-图像生成-参数配置.png)
+![琉璃图像生成参数配置](../../image/琉璃-图像生成-参数配置.png)
 
-![琉璃图像生成图片预览](../image/琉璃-图像生成-图片预览.png)
+![琉璃图像生成图片预览](../../image/琉璃-图像生成-图片预览.png)
 
 Image Generation组件是[扩展包](../index.md)的一部分，由[月华智能体](../luna_astral.md)提供AI图像生成功能支持。
 
