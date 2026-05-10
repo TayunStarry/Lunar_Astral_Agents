@@ -150,7 +150,7 @@ crystal_astral.exe -port 8081
 
 ### 3. 文件操作接口
 
-琉璃的文件操作功能基于[存储子系统](../subsystem/storage.md)实现：
+琉璃的文件操作功能基于[存储子系统](subsystem/storage.md)实现：
 
 #### GET /read/{file_path}
 
@@ -278,7 +278,7 @@ crystal_astral.exe -port 8081
 
 ### 5. 截图接口
 
-琉璃的截图功能基于[截图子系统](../subsystem/screenshot.md)实现：
+琉璃的截图功能基于[截图子系统](subsystem/screenshot.md)实现：
 
 #### POST /capture
 
@@ -426,7 +426,7 @@ crystal_astral.exe -port 8081
 ## 🔗 关联文档
 
 - [主项目README](../README.md)
-- [星图·月华文档](luna_astral.md)
+- [星图·月华 文档](luna_astral.md)
 - [预留智能体文档](reserved_agents.md)
 - [存储子系统文档](subsystem/storage.md)
 - [截图子系统文档](subsystem/screenshot.md)
