@@ -39,4 +39,4 @@ Archive组件是[扩展包](../index.md)的一部分，为星月智能系统提�
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [主项目README](../README.md)
+- [根目录文档](../../README.md)

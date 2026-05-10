@@ -582,7 +582,7 @@ luna_astral.exe -port 8080
 - Live2D角色渲染
 - 聊天界面组件
 
-月华智能体的数据管理依赖[存储子系统](subsystem/storage.md)，配置管理由[配置子系统](subsystem/config.md)支持。有关项目整体架构的更多信息，请参阅[主项目README](../README.md)。
+星图·月华的数据管理依赖[存储子系统](subsystem/storage.md)，配置管理由[配置子系统](subsystem/config.md)支持。有关项目整体架构的更多信息，请参阅[根目录文档](../README.md)。
 
 ---
 
@@ -590,7 +590,7 @@ luna_astral.exe -port 8080
 
 | 文档               | 路径                                         | 说明               |
 | ------------------ | -------------------------------------------- | ------------------ |
-| **主项目README**   | [../README.md](../README.md)                 | 项目总览           |
+| **根目录文档**   | [../README.md](../README.md)                 | 项目总览           |
 | **星图·琉璃 文档** | [crystal_astral.md](crystal_astral.md)       | 星图·琉璃 技术文档 |
 | **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明   |
 | **配置子系统文档** | [subsystem/config.md](subsystem/config.md)   | 配置管理机制       |

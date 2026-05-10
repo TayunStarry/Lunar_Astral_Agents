@@ -432,7 +432,7 @@ crystal_astral.exe -port 8081
 
 ## 🔗 关联文档
 
-- [主项目README](../README.md)
+- [根目录文档](../README.md)
 - [星图·月华 文档](luna_astral.md)
 - [星图·蔷薇 文档](reserved_agents.md)
 - [存储子系统文档](subsystem/storage.md)
