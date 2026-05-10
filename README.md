@@ -92,14 +92,14 @@ Lunar_Astral_Agents/
 - **操作系统**: Windows 10/11 (64位)
 
 #### 开发环境
-- **Go版本**: >= 1.21
+- **Go版本**: >= 1.24
 - **Node.js**: >= 20.x (用于TypeScript编译)
 
 #### 必须安装的运行时依赖
 - CUDA 12 或 13 版本
-- webview-runtime
-- ffmpeg-runtime
-- CUDA-toolkit
+- Microsoft Edge WebView2 Runtime
+- FFmpeg
+- CUDA Toolkit
 
 ### 运行时配置要求
 
