@@ -594,4 +594,4 @@ luna_astral.exe -port 8080
 | **星图·琉璃 文档** | [crystal_astral.md](crystal_astral.md)       | 星图·琉璃 技术文档 |
 | **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明   |
 | **配置子系统文档** | [subsystem/config.md](subsystem/config.md)   | 配置管理机制       |
-| **预留智能体文档** | [reserved_agents.md](reserved_agents.md)     | 星图·蔷薇 规划文档 |
+| **星图·蔷薇 文档** | [reserved_agents.md](reserved_agents.md)     | 星图·蔷薇 规划文档 |

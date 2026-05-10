@@ -117,5 +117,5 @@ subsystem/proxy/
 ## 🔗 关联文档
 
 - [主项目README](../../README.md)
-- [预留智能体文档](../reserved_agents.md)
+- [星图·蔷薇 文档](../reserved_agents.md)
 - [浏览器子系统文档](browser.md)
