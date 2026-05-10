@@ -96,10 +96,10 @@ Lunar_Astral_Agents/
 - **Node.js**: >= 20.x (用于TypeScript编译)
 
 #### 必须安装的运行时依赖
-- CUDA 12 或 13 版本
-- Microsoft Edge WebView2 Runtime
-- FFmpeg
-- CUDA Toolkit
+- [CUDA](https://developer.nvidia.com/cuda-downloads) 12 或 13 版本
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+- [FFmpeg](https://ffmpeg.org/download.html)
+- [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
 
 ### 运行时配置要求
 
