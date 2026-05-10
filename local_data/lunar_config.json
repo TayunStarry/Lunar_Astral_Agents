@@ -9,7 +9,7 @@
 	},
 	"server": {
 		"tts_url": "http://localhost:7860",
-		"developer": true,
+		"developer": false,
 		"clear_port": false,
 		"allow_diffusion": true,
 		"allow_multimodal": true
