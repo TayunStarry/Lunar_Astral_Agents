@@ -1,12 +1,5 @@
 [
     {
-        "id": "architecture",
-        "icon": "/read/images/icon/architecture.Webp",
-        "title": "系统架构",
-        "description": "打开『 星月智能 』系统架构",
-        "url": "/read/architecture.html"
-    },
-    {
         "id": "image_generation",
         "icon": "/read/images/icon/image_generation.Webp",
         "title": "图像生成",

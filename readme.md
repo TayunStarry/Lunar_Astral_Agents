@@ -6,12 +6,12 @@
 
 ```
 Lunar_Astral_Agents/
-├── luna_astral/          # 星图-月华 - 核心智能体（姐姐）
+├── luna_astral/          # 星图-月华 - 核心智能体
 │   ├── server/           # HTTP服务模块
 │   ├── model/            # 模型管理模块
 │   ├── hierarchy/        # 前端资源与JavaScript运行时环境
 │   └── server_side/      # TypeScript服务端逻辑
-├── crystal_astral/       # 星图-琉璃 - 扩展智能体（妹妹）
+├── crystal_astral/       # 星图-琉璃 - 扩展智能体
 │   └── assets/           # 前端资源
 ├── subsystem/            # 通用子系统
 │   ├── storage/          # 数据存储子系统
@@ -46,9 +46,9 @@ Lunar_Astral_Agents/
 
 ## 🎭 智能体介绍
 
-### 星图·月华 (luna_astral) - 姐姐
+### 星图·月华 (luna_astral) 
 
-> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[月华智能体文档](docs/luna_astral.md)。
+> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[星图·月华 文档](docs/luna_astral.md)。
 
 **核心能力**：
 
@@ -58,7 +58,7 @@ Lunar_Astral_Agents/
 - 📁 文件管理与数据库操作
 - 🎬 视频关键帧提取
 
-### 星图·琉璃 (crystal_astral) - 妹妹
+### 星图·琉璃 (crystal_astral) 
 
 > 优雅灵动的扩展智能体，专注于应用管理与系统增强。她是月华的妹妹，为整个系统提供扩展支持能力。详细信息请参阅[星图·琉璃 文档](docs/crystal_astral.md)。
 
@@ -71,7 +71,7 @@ Lunar_Astral_Agents/
 
 ### 蔷薇 - 规划中
 
-> 星月智能的新姐妹，目前处于规划阶段。她将整合鉴权、代理和多应用适配等综合职能，成为系统的安全守护者和网络桥梁。详细规划请参阅[预留智能体文档](docs/reserved_agents.md)。
+> 星月智能的新姐妹，目前处于规划阶段。她将整合鉴权、代理和多应用适配等综合职能，成为系统的安全守护者和网络桥梁。详细规划请参阅[星图·蔷薇 文档](docs/reserved_agents.md)。
 
 **预计核心能力**：
 
