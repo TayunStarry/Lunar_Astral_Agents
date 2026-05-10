@@ -10,13 +10,13 @@
 
 ### 基础信息
 
-| 属性 | 描述 |
-|------|------|
-| **名字** | 琉璃 |
-| **生日** | 2月13日 |
+| 属性     | 描述                                         |
+| -------- | -------------------------------------------- |
+| **名字** | 琉璃                                         |
+| **生日** | 2月13日                                      |
 | **身份** | 扩展服务助手，星月智能的第二位智能体（妹妹） |
-| **性格** | 优雅灵动、机敏聪慧、善解人意 |
-| **姐姐** | [月华](luna_astral.md) |
+| **性格** | 优雅灵动、机敏聪慧、善解人意                 |
+| **姐姐** | [月华](luna_astral.md)                       |
 
 ### 核心特质
 
@@ -42,6 +42,7 @@
 ![琉璃主页面](../image/琉璃-主页面.png)
 
 各个功能模块的详细界面截图，请参阅对应的[扩展包文档](package/index.md)：
+
 - **文件管理**：[File Explorer](package/file_explorer.md)
 - **数据管理**：[Database Manager](package/database_manager.md)
 - **图像生成**：[Image Generation](package/image_generation.md)
@@ -56,6 +57,7 @@
 ### 扩展功能
 
 作为扩展智能体，琉璃负责：
+
 - 系统扩展包管理
 - 快捷应用启动
 - 屏幕截图与图像处理
@@ -65,13 +67,13 @@
 
 琉璃负责管理系统的扩展包，详细扩展包文档请参阅[扩展包总览](package/index.md)。
 
-| 包名 | 说明 |
-|------|------|
-| **database_manager** | 数据库管理器 |
-| **file_explorer** | 文件浏览器 |
-| **screenshot_manager** | 截图管理器 |
-| **multimedia_preview** | 多媒体预览 |
-| **parameter_assistant** | 参数助手 |
+| 包名                    | 说明         |
+| ----------------------- | ------------ |
+| **database_manager**    | 数据库管理器 |
+| **file_explorer**       | 文件浏览器   |
+| **screenshot_manager**  | 截图管理器   |
+| **multimedia_preview**  | 多媒体预览   |
+| **parameter_assistant** | 参数助手     |
 
 ### 简易分布式智能体架构
 
@@ -113,10 +115,10 @@ crystal_astral.exe -port 8081
 
 ### 参数说明
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `-developer` | bool | 启用调试模式 | false |
-| `-port` | int | 指定服务端口 | 10000-40000随机 |
+| 参数         | 类型 | 说明         | 默认值          |
+| ------------ | ---- | ------------ | --------------- |
+| `-developer` | bool | 启用调试模式 | false           |
+| `-port`      | int  | 指定服务端口 | 10000-40000随机 |
 
 ---
 
@@ -145,6 +147,7 @@ crystal_astral.exe -port 8081
 **功能**：启动外部应用程序
 
 **请求体**：
+
 ```json
 {
   "path": "/tools/myapp.exe",
@@ -153,6 +156,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -177,6 +181,7 @@ crystal_astral.exe -port 8081
 **功能**：保存文件
 
 **请求体**：
+
 ```json
 {
   "path": "/config/settings.json",
@@ -186,6 +191,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -198,6 +204,7 @@ crystal_astral.exe -port 8081
 **功能**：获取文件列表
 
 **请求体**：
+
 ```json
 {
   "path": "/packages/",
@@ -206,6 +213,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -226,6 +234,7 @@ crystal_astral.exe -port 8081
 **功能**：删除文件或目录
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -244,6 +253,7 @@ crystal_astral.exe -port 8081
 **功能**：文件归档
 
 **请求体**：
+
 ```json
 {
   "source_path": "/data/files/",
@@ -252,6 +262,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -268,6 +279,7 @@ crystal_astral.exe -port 8081
 **功能**：数据库操作
 
 **请求体**：
+
 ```json
 {
   "action": "insert",
@@ -281,6 +293,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -299,6 +312,7 @@ crystal_astral.exe -port 8081
 **功能**：通用截图
 
 **请求体**：
+
 ```json
 {
   "format": "png",
@@ -324,6 +338,7 @@ crystal_astral.exe -port 8081
 **功能**：区域截图
 
 **请求体**：
+
 ```json
 {
   "x": 100,
@@ -341,6 +356,7 @@ crystal_astral.exe -port 8081
 **功能**：获取屏幕列表
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -370,6 +386,7 @@ crystal_astral.exe -port 8081
 **功能**：图片缩放
 
 **请求体**：
+
 ```json
 {
   "image_path": "/images/original.png",
@@ -380,6 +397,7 @@ crystal_astral.exe -port 8081
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -393,30 +411,34 @@ crystal_astral.exe -port 8081
 
 ### 模块架构
 
-| 模块 | 路径 | 职责 |
-|------|------|------|
-| **handler** | `handler.go` | HTTP请求处理 |
-| **endpoint** | `endpoint.go` | API端点定义 |
-| **assets** | `assets/` | 前端静态资源 |
+| 模块         | 路径          | 职责         |
+| ------------ | ------------- | ------------ |
+| **handler**  | `handler.go`  | HTTP请求处理 |
+| **endpoint** | `endpoint.go` | API端点定义  |
+| **assets**   | `assets/`     | 前端静态资源 |
 
 ### 核心功能说明
 
 #### 应用管理
+
 - 外部应用启动
 - 快捷方式管理
 - 应用状态监控
 
 #### 截图功能
+
 - 全屏截图
 - 区域截图
 - 多显示器支持
 
 #### 图片处理
+
 - 图片缩放
 - 格式转换
 - 质量调整
 
 #### 背景管理
+
 - 随机背景切换
 - 背景图片管理
 - 主题适配
