@@ -279,7 +279,7 @@
 | `-to`, `--timeout N` | 服务器读写超时（秒）（默认：`600`）。环境变量：`LLAMA_ARG_TIMEOUT` |
 | `--threads-http N` | 处理 HTTP 请求的线程数（默认：`-1`）。环境变量：`LLAMA_ARG_THREADS_HTTP` |
 | `--cache-prompt`, `--no-cache-prompt` | 是否启用提示词缓存（默认：启用）。环境变量：`LLAMA_ARG_CACHE_PROMPT` |
-| `--cache-reuse N` | 尝试通过 KV 移位重用缓存的最小块大小，需启用提示词缓存（默认：`0`）。参见 [卡片](https://ggml.ai/f0.png)。环境变量：`LLAMA_ARG_CACHE_REUSE` |
+| `--cache-reuse N` | 尝试通过 KV 移位重用缓存的最小块大小，需启用提示词缓存（默认：`0`）。参见 [卡片](https://ggml.ai/f0.webp)。环境变量：`LLAMA_ARG_CACHE_REUSE` |
 | `--metrics` | 启用 Prometheus 兼容的指标端点（默认：禁用）。环境变量：`LLAMA_ARG_ENDPOINT_METRICS` |
 | `--props` | 允许通过 POST /props 更改全局属性（默认：禁用）。环境变量：`LLAMA_ARG_ENDPOINT_PROPS` |
 | `--slots`, `--no-slots` | 是否暴露槽监控端点（默认：启用）。环境变量：`LLAMA_ARG_ENDPOINT_SLOTS` |
