@@ -10,13 +10,13 @@
 
 ### 基础信息
 
-| 属性 | 描述 |
-|------|------|
-| **名字** | 月华 |
-| **生日** | 2月18日 |
-| **身份** | 辅助书记员，隶属于星月智能（姐姐） |
+| 属性     | 描述                                   |
+| -------- | -------------------------------------- |
+| **名字** | 月华                                   |
+| **生日** | 2月18日                                |
+| **身份** | 辅助书记员，隶属于星月智能（姐姐）     |
 | **性格** | 乐观开朗、乐于助人、耐心细致、俏皮活泼 |
-| **妹妹** | [琉璃](crystal_astral.md) |
+| **妹妹** | [琉璃](crystal_astral.md)              |
 
 ### 核心特质
 
@@ -52,6 +52,7 @@
 ### 智能核心
 
 作为核心智能体，月华负责：
+
 - 自然语言理解与对话生成
 - 多模态交互（文字、图片、语音）
 - 复杂任务规划与执行
@@ -60,6 +61,7 @@
 ### 绘画核心
 
 月华具备强大的AI绘画能力：
+
 - Stable Diffusion图像生成
 - 视频关键帧提取与描述
 - 图像风格转换
@@ -108,11 +110,11 @@ luna_astral.exe -port 8080
 
 ### 参数说明
 
-| 参数 | 类型 | 说明 | 默认值 |
-|------|------|------|--------|
-| `-developer` | bool | 启用调试模式 | false |
-| `-port` | int | 指定服务端口 | 随机端口 |
-| `-model` | string | 指定默认模型 | 无 |
+| 参数         | 类型   | 说明         | 默认值   |
+| ------------ | ------ | ------------ | -------- |
+| `-developer` | bool   | 启用调试模式 | false    |
+| `-port`      | int    | 指定服务端口 | 随机端口 |
+| `-model`     | string | 指定默认模型 | 无       |
 
 ---
 
@@ -131,6 +133,7 @@ luna_astral.exe -port 8080
 **功能**：与AI模型进行对话交互
 
 **请求体**：
+
 ```json
 {
   "model": "qwen2-7b",
@@ -150,6 +153,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "id": "chatcmpl-abc123",
@@ -183,6 +187,7 @@ luna_astral.exe -port 8080
 **功能**：获取当前可用的模型列表
 
 **响应格式**：
+
 ```json
 {
   "object": "list",
@@ -212,6 +217,7 @@ luna_astral.exe -port 8080
 **功能**：使用Stable Diffusion生成图像
 
 **请求体**：
+
 ```json
 {
   "prompt": "beautiful anime girl with moon background, detailed, 4k",
@@ -226,6 +232,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -249,6 +256,7 @@ luna_astral.exe -port 8080
 | `task_id` | string | 任务ID |
 
 **响应格式**：
+
 ```json
 {
   "status": "completed",
@@ -266,6 +274,7 @@ luna_astral.exe -port 8080
 **功能**：从视频中提取关键帧
 
 **请求体**：
+
 ```json
 {
   "video_path": "/videos/input.mp4",
@@ -275,6 +284,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -302,6 +312,7 @@ luna_astral.exe -port 8080
 **功能**：保存文件
 
 **请求体**：
+
 ```json
 {
   "path": "/documents/note.txt",
@@ -311,6 +322,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -323,6 +335,7 @@ luna_astral.exe -port 8080
 **功能**：获取文件列表
 
 **请求体**：
+
 ```json
 {
   "path": "/documents/",
@@ -331,6 +344,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -351,6 +365,7 @@ luna_astral.exe -port 8080
 **功能**：删除文件或目录
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -373,6 +388,7 @@ luna_astral.exe -port 8080
 **功能**：数据库操作
 
 **请求体**：
+
 ```json
 {
   "action": "query",
@@ -385,6 +401,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -408,6 +425,7 @@ luna_astral.exe -port 8080
 **功能**：HTTP代理请求
 
 **请求体**：
+
 ```json
 {
   "url": "https://api.example.com/data",
@@ -421,6 +439,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "status": 200,
@@ -443,6 +462,7 @@ luna_astral.exe -port 8080
 **功能**：生成语音
 
 **请求体**：
+
 ```json
 {
   "text": "你好，我是月华",
@@ -459,6 +479,7 @@ luna_astral.exe -port 8080
 **功能**：获取Qwen3 TTS模型列表
 
 **响应格式**：
+
 ```json
 {
   "models": [
@@ -476,6 +497,7 @@ luna_astral.exe -port 8080
 **功能**：使用Qwen3 TTS生成语音
 
 **请求体**：
+
 ```json
 {
   "text": "Hello from Qwen TTS",
@@ -495,6 +517,7 @@ luna_astral.exe -port 8080
 **功能**：批量写入消息
 
 **请求体**：
+
 ```json
 {
   "messages": [
@@ -508,6 +531,7 @@ luna_astral.exe -port 8080
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -520,16 +544,15 @@ luna_astral.exe -port 8080
 **功能**：批量写入视频URL
 
 **请求体**：
+
 ```json
 {
-  "urls": [
-    "https://example.com/video1.mp4",
-    "https://example.com/video2.mp4"
-  ]
+  "urls": ["https://example.com/video1.mp4", "https://example.com/video2.mp4"]
 }
 ```
 
 **响应格式**：
+
 ```json
 {
   "success": true,
@@ -543,35 +566,39 @@ luna_astral.exe -port 8080
 
 ### 模块架构
 
-| 模块 | 路径 | 职责 |
-|------|------|------|
-| **server** | `server/` | HTTP服务与路由管理 |
-| **model** | `model/` | AI模型加载与推理 |
-| **adapters** | `adapters/` | 外部系统适配器 |
-| **hierarchy** | `hierarchy/` | 前端资源与Web界面 |
-| **release** | `release/` | 进程管理与系统控制 |
+| 模块            | 路径           | 职责                 |
+| --------------- | -------------- | -------------------- |
+| **server**      | `server/`      | HTTP服务与路由管理   |
+| **model**       | `model/`       | AI模型加载与推理     |
+| **adapters**    | `adapters/`    | 外部系统适配器       |
+| **hierarchy**   | `hierarchy/`   | 前端资源与Web界面    |
+| **release**     | `release/`     | 进程管理与系统控制   |
 | **server_side** | `server_side/` | 服务端TypeScript逻辑 |
-| **control** | `control/` | 流控与延迟管理 |
+| **control**     | `control/`     | 流控与延迟管理       |
 
 ### 核心模块说明
 
 #### server模块
+
 - HTTP服务器初始化与启动
 - WebSocket连接管理
 - API端点注册与路由
 
 #### model模块
+
 - LLM模型加载（llama.cpp）
 - 模型状态管理
 - 推理请求处理
 
 #### adapters模块
+
 - 文件系统适配
 - 数据库适配
 - 网络请求适配
 - 消息队列适配
 
 #### hierarchy模块
+
 - Web前端界面（HTML/CSS/JS）
 - Live2D角色渲染
 - 聊天界面组件
@@ -582,10 +609,10 @@ luna_astral.exe -port 8080
 
 ## 📖 完整目录索引
 
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| **主项目README** | [../README.md](../README.md) | 项目总览 |
-| **星图·琉璃 文档** | [crystal_astral.md](crystal_astral.md) | 琉璃智能体技术文档 |
-| **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明 |
-| **配置子系统文档** | [subsystem/config.md](subsystem/config.md) | 配置管理机制 |
-| **预留智能体文档** | [reserved_agents.md](reserved_agents.md) | 蔷薇智能体规划文档 |
+| 文档               | 路径                                         | 说明               |
+| ------------------ | -------------------------------------------- | ------------------ |
+| **主项目README**   | [../README.md](../README.md)                 | 项目总览           |
+| **星图·琉璃 文档** | [crystal_astral.md](crystal_astral.md)       | 琉璃智能体技术文档 |
+| **存储子系统文档** | [subsystem/storage.md](subsystem/storage.md) | 数据存储架构说明   |
+| **配置子系统文档** | [subsystem/config.md](subsystem/config.md)   | 配置管理机制       |
+| **预留智能体文档** | [reserved_agents.md](reserved_agents.md)     | 蔷薇智能体规划文档 |
