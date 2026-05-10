@@ -7,26 +7,29 @@
 ```
 Lunar_Astral_Agents/
 ├── luna_astral/          # 星图-月华 - 核心智能体
-│   ├── server/           # HTTP服务模块
-│   ├── model/            # 模型管理模块
-│   ├── hierarchy/        # 前端资源与JavaScript运行时环境
-│   └── server_side/      # TypeScript服务端逻辑
+│   ├── server/          # HTTP服务模块
+│   ├── model/           # 模型管理模块
+│   ├── adapters/        # JavaScript运行时环境（goja）与适配器函数
+│   ├── hierarchy/       # 前端资源（含agentSystem.js）
+│   ├── server_side/     # TypeScript服务端逻辑
+│   ├── control/         # 流程控制模块（延迟/限流/计划）
+│   └── release/         # 进程管理模块（端口释放/进程终止）
 ├── crystal_astral/       # 星图-琉璃 - 扩展智能体
-│   └── assets/           # 前端资源
+│   └── assets/          # 前端资源
 ├── subsystem/            # 通用子系统
-│   ├── storage/          # 数据存储子系统
-│   ├── config/           # 配置管理子系统
-│   ├── browser/          # 浏览器集成子系统
-│   ├── screenshot/       # 截图子系统
-│   ├── LunarTick/        # 编程语言解释器
+│   ├── storage/         # 数据存储子系统（含module/server双架构）
+│   ├── config/          # 配置管理子系统
+│   ├── browser/         # 浏览器集成子系统
+│   ├── screenshot/      # 截图子系统
+│   ├── LunarTick/       # 编程语言解释器
 │   ├── project_archiving/# 项目归档子系统
-│   ├── webp/             # WebP图像处理
-│   ├── bridge_adapter/   # 桥接适配器
-│   └── proxy/            # 代理子系统
-└── local_data/           # 本地数据目录
-    ├── models/           # AI模型文件
-    ├── package/          # 扩展包
-    └── audios/           # 音频资源
+│   ├── webp/            # WebP图像处理
+│   ├── bridge_adapter/  # 桥接适配器
+│   └── proxy/           # 代理子系统
+└── local_data/          # 本地数据目录
+    ├── models/          # AI模型文件
+    ├── package/         # 扩展包
+    └── audios/          # 音频资源
 ```
 
 **子系统文档：**
