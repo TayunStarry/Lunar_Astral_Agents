@@ -52,7 +52,7 @@ func registerHandlers() {
 	// 处理根路径请求
 	var fileServer http.Handler
 	if *config.Developer {
-		fileServer = http.FileServer(http.Dir("./LunarCore/hierarchy/assets/client"))
+		fileServer = http.FileServer(http.Dir("./luna_astral/hierarchy/assets/client"))
 		log.Println("Lunar模块[DEV] -> 使用开发模式，直接读取文件系统")
 	} else {
 		fileServer = http.FileServer(hierarchy.Gethierarchy())

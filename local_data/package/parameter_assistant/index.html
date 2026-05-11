@@ -20,6 +20,7 @@
     <div class="background"></div>
     <div class="container">
         <div class="main-content">
+            <!-- 左侧配置区 -->
             <div class="config-section">
                 <div class="header">
                     <h1><i class="fas fa-moon"></i>星月智能 · 参数助手</h1>
@@ -28,23 +29,16 @@
                         <button id="resetBtn" class="btn btn-secondary"><i class="fas fa-undo"></i> 重置</button>
                     </div>
                 </div>
-                <div class="page-tabs" id="pageTabs">
-                    <button class="page-tab active" data-page="basic"><i class="fas fa-sliders-h"></i> 基础配置</button>
-                    <button class="page-tab" data-page="qq"><i class="fab fa-qq"></i> QQ适配器</button>
-                    <button class="page-tab" data-page="archive"><i class="fas fa-file-archive"></i> 项目归档</button>
-                </div>
-                <div class="page-content">
-                    <div class="page-panel active" id="panel-basic">
-                        <div class="config-grid horizontal-grid" id="grid-basic"></div>
-                    </div>
-                    <div class="page-panel" id="panel-qq">
-                        <div class="vertical-cards" id="grid-qq"></div>
-                    </div>
-                    <div class="page-panel" id="panel-archive">
-                        <div class="vertical-cards" id="grid-archive"></div>
-                    </div>
+                <!-- 顶级对象导航 -->
+                <nav class="top-nav" id="topNav">
+                    <!-- 动态生成按钮 -->
+                </nav>
+                <!-- 页面容器 -->
+                <div class="page-container" id="pageContainer">
+                    <!-- 动态生成 config-page -->
                 </div>
             </div>
+            <!-- 右侧 AI 助手 -->
             <div class="ai-section">
                 <div class="ai-header">
                     <div class="ai-avatar"><i class="fas fa-magic"></i></div>
@@ -67,6 +61,7 @@
         </div>
     </div>
 
+    <!-- 预览变更弹窗（保留原功能） -->
     <div class="preview-modal" id="previewModal">
         <div class="preview-modal-content">
             <div class="preview-header">

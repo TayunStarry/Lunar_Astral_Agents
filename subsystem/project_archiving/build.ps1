@@ -69,7 +69,7 @@ function Build-ProjectArchiving {
 
     $ldflags = "-s -w"
     if ($TargetOS -eq "windows") {
-        $ldflags += " -H windowsgui"
+       #$ldflags += " -H windowsgui"
     }
 
     $binaryName = "project_archiving"

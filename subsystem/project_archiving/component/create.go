@@ -18,7 +18,6 @@ import (
 func scanDirectory(dir string, baseDir string) ([]string, error) {
 	var files []string
 
-	// 读取目录内容
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -26,9 +25,14 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 
 	for _, entry := range entries {
 		fullPath := filepath.Join(dir, entry.Name())
+		isDir := entry.IsDir()
 
-		if entry.IsDir() {
-			// 递归扫描子目录
+		if IsExcluded(entry.Name(), isDir) {
+			fmt.Printf("跳过排除项: %s\n", fullPath)
+			continue
+		}
+
+		if isDir {
 			subFiles, err := scanDirectory(fullPath, baseDir)
 			if err != nil {
 				fmt.Printf("WARNING: 无法扫描目录 %s: %v\n", fullPath, err)
@@ -36,17 +40,12 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 			}
 			files = append(files, subFiles...)
 		} else {
-			// 检查文件扩展名，排除.ts和.go文件
-			ext := filepath.Ext(entry.Name())
-			if ext != ".ts" && ext != ".go" {
-				// 计算相对路径
-				relPath, err := filepath.Rel(baseDir, fullPath)
-				if err != nil {
-					fmt.Printf("WARNING: 无法计算相对路径 %s: %v\n", fullPath, err)
-					continue
-				}
-				files = append(files, relPath)
+			relPath, err := filepath.Rel(baseDir, fullPath)
+			if err != nil {
+				fmt.Printf("WARNING: 无法计算相对路径 %s: %v\n", fullPath, err)
+				continue
 			}
+			files = append(files, relPath)
 		}
 	}
 
@@ -64,140 +63,105 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 // 返回:
 //   - 错误信息，如果操作过程中出现错误
 func createVolume(sevenZipPath string, sources []string, outBase string, partSizeMB int, compressionLevel int) error {
-	// 初始化绝对路径源文件列表
 	var absSources []string
-	// 遍历所有源文件，转换为绝对路径并检查文件是否存在
 	for _, src := range sources {
-		// 转换为绝对路径
 		absSrc, err := filepath.Abs(src)
-		// 检查转换是否成功
 		if err != nil {
 			fmt.Printf("WARNING: 无法获取绝对路径 %s: %v\n", src, err)
 			continue
 		}
-		// 检查文件是否存在
 		if !fileExists(absSrc) {
 			fmt.Printf("WARNING: %s 不存在，跳过\n", src)
 			continue
 		}
-		// 写入有效源文件到列表
 		absSources = append(absSources, absSrc)
 	}
-	// 如果没有有效的源文件，返回错误
 	if len(absSources) == 0 {
 		return fmt.Errorf("错误: 没有有效的源文件")
 	}
-	// 以第一个有效源文件的目录作为基准目录
 	baseDir := filepath.Dir(absSources[0])
 	fmt.Printf("基准目录: %s\n", baseDir)
-	// 检查基准目录是否存在
 	if !fileExists(baseDir) {
 		return fmt.Errorf("基准目录不存在: %s", baseDir)
 	}
-	// 初始化相对路径源文件列表
 	var relSources []string
-	// 遍历所有绝对路径源文件，计算相对于基准目录的相对路径
 	for _, src := range absSources {
-		// 检查是否为目录
 		if info, err := os.Stat(src); err == nil && info.IsDir() {
-			// 递归扫描目录，过滤文件
 			scannedFiles, err := scanDirectory(src, baseDir)
 			if err != nil {
 				fmt.Printf("WARNING: 无法扫描目录 %s: %v\n", src, err)
 				continue
 			}
-			// 追加扫描到的文件到列表
 			relSources = append(relSources, scannedFiles...)
 		} else {
-			// 检查文件扩展名，排除.ts和.go文件
-			ext := filepath.Ext(src)
-			if ext != ".ts" && ext != ".go" {
-				// 计算相对于基准目录的相对路径
+			fileName := filepath.Base(src)
+			if !IsExcluded(fileName, false) {
 				rel, err := filepath.Rel(baseDir, src)
-				// 检查计算是否成功
 				if err != nil {
 					fmt.Printf("WARNING: 无法计算相对路径 %s: %v，将使用绝对路径\n", src, err)
 					rel = src
 				}
-				// 写入有效相对路径源文件到列表
 				relSources = append(relSources, rel)
+			} else {
+				fmt.Printf("跳过排除文件: %s\n", src)
 			}
 		}
 	}
-	// 如果没有有效的源文件，返回错误
 	if len(relSources) == 0 {
 		return fmt.Errorf("错误: 没有有效的源文件")
 	}
-	// 获取输出压缩包的绝对路径
+	// 创建临时文件列表，避免Windows命令行参数过长的问题
+	listFile := filepath.Join(os.TempDir(), "7z_file_list.txt")
+	listContent := strings.Join(relSources, "\n")
+	if err := os.WriteFile(listFile, []byte(listContent), 0644); err != nil {
+		return fmt.Errorf("无法创建文件列表: %v", err)
+	}
+	defer os.Remove(listFile)
+	if *SystemDevMode {
+		fmt.Printf("文件列表: %s (包含 %d 个文件)\n", listFile, len(relSources))
+	}
+
 	out7z, err := filepath.Abs(outBase + ".7z")
-	// 检查输出路径解析是否成功
 	if err != nil {
 		return fmt.Errorf("无法解析输出路径: %v", err)
 	}
-	// 打印最终输出路径
 	fmt.Printf("输出文件: %s\n", out7z)
-	// 获取输出目录并创建（如果不存在）
 	outDir := filepath.Dir(out7z)
-	// 检查输出目录是否存在，不存在则创建
 	mkdirErr := os.MkdirAll(outDir, 0755)
-	// 检查目录创建是否成功
 	if mkdirErr != nil {
 		return fmt.Errorf("无法创建输出目录: %v", mkdirErr)
 	}
-	// 构建7-Zip命令参数
 	cmdArgs := []string{
-		// 添加文件到压缩包
 		"a",
-		// 设置分卷大小
 		fmt.Sprintf("-v%dm", partSizeMB),
-		// 设置压缩级别
 		fmt.Sprintf("-mx=%d", compressionLevel),
-		// 启用多线程压缩
 		"-mmt",
-		// 设置日志级别为1（显示进度）
 		"-bb1",
-		// 将进度信息输出到标准输出
 		"-bso1",
-		// 将进度信息显示在标准输出
 		"-bsp1",
-		// 输出压缩包路径
 		out7z,
-		// 追加所有有效相对路径源文件到命令参数
+		"@" + listFile,
 	}
-	// 追加所有有效相对路径源文件到命令参数
-	cmdArgs = append(cmdArgs, relSources...)
-	// 打印最终命令参数（仅在开发模式下）
 	if *SystemDevMode {
 		fmt.Printf("执行命令: %s %s\n", sevenZipPath, strings.Join(cmdArgs, " "))
 	}
-	// 创建命令对象
 	cmd := exec.Command(sevenZipPath, cmdArgs...)
-	// 设置命令的工作目录为基准目录
 	cmd.Dir = baseDir
-	// 获取命令的标准输出管道
 	stdout, err := cmd.StdoutPipe()
-	// 检查标准输出管道是否创建成功
 	if err != nil {
 		return fmt.Errorf("无法获取标准输出管道: %v", err)
 	}
-	// 获取命令的标准错误管道
 	stderr, err := cmd.StderrPipe()
-	// 检查标准错误管道是否创建成功
 	if err != nil {
 		return fmt.Errorf("无法获取标准错误管道: %v", err)
 	}
-	// 启动命令
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("启动命令失败: %v", err)
 	}
-	// 启动协程读取标准输出
 	go readOutput(stdout, false)
-	// 启动协程读取标准错误输出
 	go readOutput(stderr, true)
-	// 等待命令执行完成
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("7z命令执行失败: %v", err)
 	}
-	// 命令执行成功，返回 nil
 	return nil
 }

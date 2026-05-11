@@ -9,7 +9,7 @@
 	},
 	"server": {
 		"tts_url": "http://localhost:7860",
-		"developer": false,
+		"developer": true,
 		"clear_port": false,
 		"allow_diffusion": true,
 		"allow_multimodal": true
@@ -38,46 +38,51 @@
 		"default_reply": "月华不知道哦~"
 	},
 	"project_archiving": {
-		"package_levels": {
-			"1": {
-				"name": "打包预案-1",
-				"description": "用于发布纯前端的功能补丁更新",
-				"sources": [
-					"../.././Lunar-Astral-Agents.exe",
-					"../.././local_data/certs",
-					"../.././local_data/model_config.json"
-				]
-			},
-			"2": {
-				"name": "核心文件 + 扩展程序",
-				"description": "用于发布包含扩展程序的完整可执行文件系统的功能更新",
-				"sources": [
-					"../.././Lunar-Astral-Agents.exe",
-					"../.././webpage",
-					"../.././local_data/certs",
-					"../.././local_data/resources",
-					"../.././local_data/model_config.json",
-					"../.././local_data/knowledge/meme_model.json",
-					"../.././local_data/knowledge/emotional_model.json",
-					"../.././subsystem"
-				]
-			},
-			"3": {
-				"name": "完整包",
-				"description": "用于发布包含所有文件的完整可执行文件系统的功能更新",
-				"sources": [
-					"../.././models",
-					"../.././Lunar-Astral-Agents.exe",
-					"../.././webpage",
-					"../.././local_data/certs",
-					"../.././local_data/resources",
-					"../.././local_data/model_config.json",
-					"../.././local_data/knowledge/meme_model.json",
-					"../.././local_data/knowledge/emotional_model.json",
-					"../.././subsystem"
-				]
-			}
-		},
+		"plan-1": [
+			"./Crystal_Astral.exe",
+			"./Luna_Astral.exe",
+			"./local_data/lunar_package.json",
+			"./local_data/lunar_config.json",
+			"./local_data/package",
+			"./local_data/audios",
+			"./local_data/images/icon",
+			"./local_data/images/background",
+			"./local_data/images/placeholder"
+		],
+		"plan-2": [
+			"./Crystal_Astral.exe",
+			"./Luna_Astral.exe",
+			"./local_data/lunar_package.json",
+			"./local_data/lunar_config.json",
+			"./local_data/package",
+			"./local_data/audios",
+			"./local_data/images/icon",
+			"./local_data/images/background",
+			"./local_data/images/placeholder",
+			"./local_data/models"
+		],
+		"plan-3": [
+			"./Crystal_Astral.exe",
+			"./Luna_Astral.exe",
+			"./local_data/lunar_package.json",
+			"./local_data/lunar_config.json",
+			"./local_data/package",
+			"./local_data/audios",
+			"./local_data/images/icon",
+			"./local_data/images/background",
+			"./local_data/images/placeholder",
+			"./local_data/models",
+			"./crystal_astral",
+			"./luna_astral",
+			"./subsystem"
+		],
+		"exclude": [
+			"*.log",
+			"*.tmp",
+			"*.bak",
+			"*.pyc",
+			"*.pyo"
+		],
 		"sevenzip_paths": [
 			"./local_data/package/archive/7z.exe",
 			"C:/Program Files/7-Zip/7z.exe",
@@ -87,7 +92,7 @@
 			"output_path": "./Lunar-Astral-Agents^2026-03-20",
 			"part_size_mb": 2048,
 			"compression_level": 5,
-			"package_level": 2
+			"package_plan": "plan-2"
 		}
 	}
 }

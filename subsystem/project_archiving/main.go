@@ -33,9 +33,9 @@ func main() {
 	if !specified["compression_level"] {
 		*component.CompressionLevel = defaultCompress
 	}
-	// 若用户未指定 package_level，则使用默认值
-	if !specified["package_level"] {
-		*component.PackageLevel = defaultPackage
+	// 若用户未指定 package_plan，则使用默认值
+	if !specified["package_plan"] {
+		*component.PackagePlan = defaultPackage
 	}
 	// 若已设置输出路径且分卷大小不为零，则执行打包流程
 	if *component.OutputPath != "" && *component.PartSizeMB != 0 {

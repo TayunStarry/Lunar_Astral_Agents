@@ -43,9 +43,9 @@ func ExecutePackageProcess() {
 	fmt.Printf("输出基准: %s\n", *OutputPath)
 	fmt.Printf("分卷大小: %d MB\n", *PartSizeMB)
 	fmt.Printf("压缩级别: %d\n", *CompressionLevel)
-	fmt.Printf("打包级别: %d\n", *PackageLevel)
-	// 根据打包级别获取对应的源文件列表
-	sources, err := getSourcesByLevel(*PackageLevel)
+	fmt.Printf("打包计划: %s\n", *PackagePlan)
+	// 根据打包计划获取对应的源文件列表
+	sources, err := getSourcesByPlan(*PackagePlan)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		// 获取源文件列表失败，程序异常退出
