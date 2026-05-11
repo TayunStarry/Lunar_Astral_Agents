@@ -5,25 +5,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
-
-// PackageLevelConfig 打包级别的配置
-type PackageLevelConfig struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Sources     []string `json:"sources"`
-}
 
 // PackageConfig 打包配置文件结构
 type PackageConfig struct {
 	ProjectArchiving struct {
-		PackageLevels map[string]PackageLevelConfig `json:"package_levels"`
-		SevenZipPaths []string                      `json:"sevenzip_paths"`
+		Plans         map[string][]string `json:"-"`
+		Plan1         []string            `json:"plan-1"`
+		Plan2         []string            `json:"plan-2"`
+		Plan3         []string            `json:"plan-3"`
+		Exclude       []string            `json:"exclude"`
+		SevenZipPaths []string            `json:"sevenzip_paths"`
 		Defaults      struct {
 			OutputPath       string `json:"output_path"`
 			PartSizeMB       int    `json:"part_size_mb"`
 			CompressionLevel int    `json:"compression_level"`
-			PackageLevel     int    `json:"package_level"`
+			PackagePlan      string `json:"package_plan"`
 		} `json:"defaults"`
 	} `json:"project_archiving"`
 }
@@ -32,39 +30,49 @@ var packageConfig *PackageConfig
 
 // LoadPackageConfig 加载打包配置文件
 func LoadPackageConfig(configPath string) error {
-	// 如果未指定配置文件路径，使用默认路径
-	if configPath == "" {
-		exePath, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("获取可执行文件路径失败: %v", err)
-		}
-		exeDir := filepath.Dir(exePath)
-		configPath = filepath.Join(exeDir, "local_data/lunar_config.json")
-	}
-
-	// 读取配置文件
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("读取配置文件失败 %s: %v", configPath, err)
 	}
 
-	// 解析JSON
 	config := &PackageConfig{}
 	if err := json.Unmarshal(data, config); err != nil {
 		return fmt.Errorf("解析配置文件失败: %v", err)
 	}
 
-	// 验证配置
-	if len(config.ProjectArchiving.PackageLevels) == 0 {
-		return fmt.Errorf("配置文件中未定义打包级别")
+	config.ProjectArchiving.Plans = make(map[string][]string)
+	config.ProjectArchiving.Plans["plan-1"] = config.ProjectArchiving.Plan1
+	config.ProjectArchiving.Plans["plan-2"] = config.ProjectArchiving.Plan2
+	config.ProjectArchiving.Plans["plan-3"] = config.ProjectArchiving.Plan3
+
+	if len(config.ProjectArchiving.Plans) == 0 {
+		return fmt.Errorf("配置文件中未定义打包计划")
 	}
 
 	if len(config.ProjectArchiving.SevenZipPaths) == 0 {
-		// 如果没有配置，使用默认路径
 		config.ProjectArchiving.SevenZipPaths = []string{
 			"./7z/7z.exe",
 			"C:/Program Files/7-Zip/7z.exe",
 			"C:/Program Files (x86)/7-Zip/7z.exe",
+		}
+	}
+
+	if len(config.ProjectArchiving.Exclude) == 0 {
+		config.ProjectArchiving.Exclude = []string{
+			"*.log",
+			"*.tmp",
+			"*.bak",
+			".git/",
+			"node_modules/",
+			"__pycache__/",
+			"*.pyc",
+			"*.pyo",
+			"*.egg-info/",
+			"dist/",
+			"build/",
+			".DS_Store",
+			"*.ts",
+			"*.go",
 		}
 	}
 
@@ -80,48 +88,51 @@ func GetPackageConfig() (*PackageConfig, error) {
 	return packageConfig, nil
 }
 
-// GetSourcesByLevel 根据级别获取源文件列表（使用配置文件）
-func GetSourcesByLevel(level int) ([]string, error) {
+// GetSourcesByPlan 根据计划名称获取源文件列表（使用配置文件）
+func GetSourcesByPlan(plan string) ([]string, error) {
 	config, err := GetPackageConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// 将级别转换为字符串
-	levelKey := fmt.Sprintf("%d", level)
-	levelConfig, exists := config.ProjectArchiving.PackageLevels[levelKey]
+	sources, exists := config.ProjectArchiving.Plans[plan]
 	if !exists {
-		return nil, fmt.Errorf("无效的打包级别: %d", level)
+		return nil, fmt.Errorf("无效的打包计划: %s", plan)
 	}
 
-	fmt.Printf("打包级别 %d (%s): %s\n", level, levelConfig.Name, levelConfig.Description)
+	fmt.Printf("打包计划: %s\n", plan)
 	fmt.Println("包含以下文件:")
-	for i, src := range levelConfig.Sources {
+	for i, src := range sources {
 		fmt.Printf("  %d. %s\n", i+1, src)
+	}
+
+	if len(config.ProjectArchiving.Exclude) > 0 {
+		fmt.Println("\n排除规则:")
+		for i, pattern := range config.ProjectArchiving.Exclude {
+			fmt.Printf("  %d. %s\n", i+1, pattern)
+		}
 	}
 	fmt.Println()
 
-	return levelConfig.Sources, nil
+	return sources, nil
 }
 
 // GetDefaultConfig 获取默认配置
-func GetDefaultConfig() (string, int, int, int) {
+func GetDefaultConfig() (string, int, int, string) {
 	config, err := GetPackageConfig()
 	if err != nil {
-		// 如果配置加载失败，返回硬编码的默认值
-		return "Lunar-Astral-Agents", 2048, 5, 3
+		return "Lunar-Astral-Agents", 2048, 5, "plan-3"
 	}
 	return config.ProjectArchiving.Defaults.OutputPath,
 		config.ProjectArchiving.Defaults.PartSizeMB,
 		config.ProjectArchiving.Defaults.CompressionLevel,
-		config.ProjectArchiving.Defaults.PackageLevel
+		config.ProjectArchiving.Defaults.PackagePlan
 }
 
 // GetSevenZipPaths 获取7z路径列表
 func GetSevenZipPaths() []string {
 	config, err := GetPackageConfig()
 	if err != nil {
-		// 返回硬编码的默认路径
 		return []string{
 			"./archive/7z.exe",
 			"C:/Program Files/7-Zip/7z.exe",
@@ -129,4 +140,52 @@ func GetSevenZipPaths() []string {
 		}
 	}
 	return config.ProjectArchiving.SevenZipPaths
+}
+
+// GetExcludePatterns 获取排除模式列表
+func GetExcludePatterns() []string {
+	config, err := GetPackageConfig()
+	if err != nil {
+		return []string{
+			"*.log",
+			"*.tmp",
+			"*.bak",
+			".git/",
+			"node_modules/",
+			"__pycache__/",
+			"*.pyc",
+			"*.pyo",
+			"*.egg-info/",
+			"dist/",
+			"build/",
+			".DS_Store",
+			"*.ts",
+			"*.go",
+		}
+	}
+	return config.ProjectArchiving.Exclude
+}
+
+// IsExcluded 检查文件或目录是否应该被排除
+func IsExcluded(name string, isDir bool) bool {
+	patterns := GetExcludePatterns()
+	for _, pattern := range patterns {
+		isDirPattern := strings.HasSuffix(pattern, "/")
+		patternWithoutSlash := strings.TrimSuffix(pattern, "/")
+
+		if isDir && isDirPattern {
+			if matched, _ := filepath.Match(patternWithoutSlash, name); matched {
+				return true
+			}
+		} else if !isDir && !isDirPattern {
+			if matched, _ := filepath.Match(patternWithoutSlash, name); matched {
+				return true
+			}
+		} else if !isDirPattern {
+			if matched, _ := filepath.Match(patternWithoutSlash, name); matched {
+				return true
+			}
+		}
+	}
+	return false
 }

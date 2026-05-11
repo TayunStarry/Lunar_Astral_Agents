@@ -41,7 +41,7 @@ async function loadConfig() {
 
 async function loadPages() {
     try {
-        const response = await fetch('/read/luner_package.json');
+        const response = await fetch('/read/lunar_package.json');
         pages = await response.json();
         renderPageGrid();
         initTools();

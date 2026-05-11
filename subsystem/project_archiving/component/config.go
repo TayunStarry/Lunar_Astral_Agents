@@ -5,7 +5,7 @@ import (
 )
 
 var (
-	ConfigPath = flag.String("config", "", "打包配置文件路径")
+	ConfigPath = flag.String("config", "local_data/lunar_config.json", "打包配置文件路径")
 
 	SystemDevMode = flag.Bool("system_dev_mode", false, "是否使用调试模式")
 
@@ -15,8 +15,5 @@ var (
 
 	CompressionLevel = flag.Int("compression_level", 5, "压缩级别 (0-9) \n0表示不压缩，9表示固实压缩")
 
-	PackageLevel = flag.Int("package_level", 3, "打包级别 (1-3)\n"+
-		"  1: 核心文件 (可执行文件、网页、配置文件)\n"+
-		"  2: 级别1 + 扩展程序\n"+
-		"  3: 级别2 + 服务器文件 (所有文件)")
+	PackagePlan = flag.String("package_plan", "plan-3", "打包计划")
 )

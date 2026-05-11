@@ -33,7 +33,7 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 		// 基础温度
 		"--temp", "0.8",
 		// 动态温度范围
-		//"--dynatemp-range", "0.5",
+		"--dynatemp-range", "0.5",
 		// 重复惩罚
 		"--repeat-penalty", "1.2",
 		// 禁用 WebUI
@@ -44,8 +44,8 @@ func buildBaseArgs(modelPath string, port int, contextLength uint32, maxToken, c
 		"--flash-attn", "on",
 		// 启用上下文偏移功能，调整模型处理上下文的方式
 		"--context-shift",
-		// 设置推理推理预算，限制模型在推理时的计算资源
-		"--reasoning-budget", "768",
+		// 禁用模型思考功能
+		"--reasoning", "off",
 	}
 }
 

@@ -1,3 +1,4 @@
+/* ===== 全局重置 ===== */
 * {
     margin: 0;
     padding: 0;
@@ -15,10 +16,10 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
-    color: #000;
-    font-weight: bold;
+    color: #111;
+    font-weight: 500;
     height: 100vh;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 .background {
@@ -44,9 +45,10 @@ body {
     flex: 1;
     gap: 20px;
     height: 100%;
+    overflow: hidden;
 }
 
-/* 浅色玻璃面板 */
+/* ===== 左侧配置区 ===== */
 .config-section {
     flex: 3;
     display: flex;
@@ -61,253 +63,178 @@ body {
     overflow: hidden;
 }
 
-.page-tabs {
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.header h1 {
+    font-size: 26px;
+    color: #000;
+}
+
+/* 头部操作区按钮间距 */
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* 导航标签 */
+.top-nav {
     display: flex;
     gap: 10px;
     margin-bottom: 20px;
     flex-wrap: wrap;
 }
 
-.page-tab {
+.nav-tab {
     padding: 10px 20px;
     border: none;
-    border-radius: 12px;
+    border-radius: 13px;
     font-size: 14px;
-    font-weight: bold;
+    font-weight: 650;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: rgba(255, 255, 255, 0.4);
     color: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.6);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.03);
 }
 
-.page-tab:hover {
-    background: rgba(255, 255, 255, 0.6);
+.nav-tab:hover {
+    background: rgba(255, 255, 255, 0.65);
     color: #000;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
-.page-tab.active {
-    background: rgba(102, 126, 234, 0.75);
+.nav-tab.active {
+    background: rgba(115, 136, 234, 0.82);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     color: #fff;
-    border-color: rgba(102, 126, 234, 0.4);
+    border-color: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    font-weight: 700;
 }
 
-.page-content {
+/* 页面容器 */
+.page-container {
     flex: 1;
-    display: flex;
-    flex-direction: column;
+    position: relative;
     overflow: hidden;
-}
-
-.page-panel {
-    display: none;
-    flex: 1;
-    gap: 20px;
-}
-
-.page-panel.active {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    max-height: calc(100vh - 180px);
-}
-
-.page-panel.horizontal {
-    flex-direction: row;
-}
-
-.page-panel.horizontal.active {
-    overflow-y: visible;
-    max-height: none;
-}
-
-.config-grid {
-    display: grid;
-    gap: 20px;
-    flex: 1;
-}
-
-.config-grid.horizontal-grid {
-    grid-template-columns: repeat(3, 1fr);
-    align-items: start;
-}
-
-/* 右侧助手面板 - 浅色玻璃 */
-.ai-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    padding: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    min-width: 350px;
-}
-
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.header h1 {
-    font-size: 28px;
-    color: #000;
-}
-
-.header-actions {
-    display: flex;
-    gap: 10px;
-}
-
-/* ========== 统一深色玻璃按钮 ========== */
-.btn {
-    padding: 10px 24px;
-    border: none;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    line-height: 1;
-}
-
-.btn:hover {
-    background: rgba(0, 0, 0, 0.72);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-.btn:active {
-    transform: translateY(0);
-}
-
-/* 主要操作按钮稍深一些，但保持玻璃风格 */
-.btn-primary {
-    background: rgba(0, 0, 0, 0.65);
-    border-color: rgba(255, 255, 255, 0.35);
-}
-
-/* 小按钮（数组添加/删除等） */
-.btn-small {
-    padding: 6px 14px;
-    font-size: 12px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-/* 发送按钮固定高度，与输入框对齐 */
-.btn-send {
-    flex-shrink: 0;
-    padding: 0 20px;
-    height: 44px;
-    /* 与输入框高度匹配 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* 配置卡片 - 浅色玻璃 */
-.config-card {
-    background: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    height: fit-content;
-    max-height: none;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
 }
 
-.config-card.full-width {
+.config-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 5px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+}
+
+.config-page.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 气泡网格 */
+.bubble-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-content: flex-start;
+}
+
+/* 一级字段网格改为纵版排列 */
+.config-page>.bubble-grid {
+    flex-direction: column;
+    flex-wrap: nowrap;
+}
+
+/* 一级气泡占满宽度 */
+.config-page>.bubble-grid>.config-bubble {
     width: 100%;
 }
 
-.config-card h3 {
-    font-size: 18px;
-    color: #000;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* 嵌套对象内部网格保持原始弹性排列 */
+.bubble-grid.nested {
+    margin-top: 8px;
+    flex-direction: row;
+    flex-wrap: wrap;
 }
 
-.config-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+/* 玻璃气泡卡片 */
+.config-bubble {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    padding: 16px 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    min-width: 220px;
+    flex: 1 1 auto;
 }
 
-.field-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+.config-bubble:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
-.field-label {
+/* 气泡内标签 */
+.bubble-label {
+    display: block;
     font-size: 13px;
-    color: #000;
-    font-weight: bold;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
 }
 
-.field-input {
+/* 输入框统一样式 */
+.bubble-input {
     width: 100%;
     padding: 10px 14px;
     border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 10px;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     color: #000;
     font-size: 14px;
     font-weight: normal;
-    transition: all 0.3s ease;
+    transition: all 0.3s;
 }
 
-.field-input:focus {
+.bubble-input:focus {
     outline: none;
     background: rgba(255, 255, 255, 0.9);
     border-color: rgba(102, 126, 234, 0.6);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
 
-.field-input::placeholder {
-    color: rgba(0, 0, 0, 0.45);
+.bubble-input::placeholder {
+    color: rgba(0, 0, 0, 0.4);
 }
 
-.field-switch {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
+/* 开关组件 */
 .switch {
     position: relative;
-    width: 50px;
+    display: inline-block;
+    width: 46px;
     height: 26px;
 }
 
@@ -346,10 +273,26 @@ input:checked+.slider {
 }
 
 input:checked+.slider:before {
-    transform: translateX(24px);
+    transform: translateX(20px);
 }
 
-.field-array {
+/* 数组 / 对象区块 */
+.bubble-array,
+.bubble-object {
+    display: block;
+    width: 100%;
+}
+
+.array-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #333;
+}
+
+.array-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -361,8 +304,30 @@ input:checked+.slider:before {
     align-items: center;
 }
 
-.array-item input {
+.array-item .bubble-input {
     flex: 1;
+}
+
+.object-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+/* ===== 右侧 AI 助手 ===== */
+.ai-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    min-width: 320px;
 }
 
 .ai-header {
@@ -380,7 +345,6 @@ input:checked+.slider:before {
     border-radius: 50%;
     background: rgba(102, 126, 234, 0.8);
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -403,22 +367,96 @@ input:checked+.slider:before {
     margin-bottom: 15px;
 }
 
+/* AI 输入区一体化容器 */
+.ai-input-container {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 16px;
+    border: 1.5px solid rgba(0, 0, 0, 0.08);
+    padding: 7px 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.ai-input-container:focus-within {
+    border-color: rgba(102, 126, 234, 0.45);
+    box-shadow: 0 0 0 5px rgba(102, 126, 234, 0.08), 0 4px 18px rgba(102, 126, 234, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* AI 输入框 */
+#aiInput {
+    flex: 1;
+    min-height: 40px;
+    max-height: 50px;
+    resize: none;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1a1a1a;
+    box-sizing: border-box;
+    outline: none;
+    transition: background 0.3s ease;
+    line-height: 1.55;
+}
+
+#aiInput::placeholder {
+    color: rgba(0, 0, 0, 0.32);
+    font-weight: 400;
+}
+
+#aiInput:focus {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* 发送按钮 */
+.btn-send {
+    flex-shrink: 0;
+    padding: 0 22px;
+    max-width: 50px;
+    border-radius: 13px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(115, 136, 234, 0.8);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 3px 12px rgba(102, 126, 234, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: auto;
+    box-sizing: border-box;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-send:hover {
+    background: rgba(130, 150, 242, 0.9);
+    box-shadow: 0 6px 22px rgba(102, 126, 234, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.btn-send:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* 聊天消息 */
 .message {
     display: flex;
     gap: 10px;
     animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .user-message {
@@ -431,7 +469,6 @@ input:checked+.slider:before {
     border-radius: 50%;
     background: rgba(102, 126, 234, 0.8);
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -451,15 +488,11 @@ input:checked+.slider:before {
 
 .user-message .message-avatar {
     background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
 }
 
-/* 消息气泡 - 通透玻璃 */
 .message-content {
     background: rgba(255, 255, 255, 0.65);
     backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     padding: 12px 16px;
     border-radius: 16px;
     color: #000;
@@ -473,121 +506,8 @@ input:checked+.slider:before {
 
 .user-message .message-content {
     background: rgba(102, 126, 234, 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     color: #fff;
     border-color: rgba(255, 255, 255, 0.4);
-}
-
-/* 输入区域 */
-.ai-input-container {
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-    /* 按钮与输入框底部对齐 */
-}
-
-#aiInput {
-    flex: 1;
-    min-height: 44px;
-    /* 优化高度 */
-    max-height: 120px;
-    resize: none;
-    padding: 10px 16px;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    color: #000;
-    font-size: 14px;
-    font-weight: normal;
-    font-family: inherit;
-}
-
-#aiInput:focus {
-    outline: none;
-    background: rgba(255, 255, 255, 0.9);
-    border-color: rgba(102, 126, 234, 0.6);
-}
-
-#aiInput::placeholder {
-    color: rgba(0, 0, 0, 0.45);
-}
-
-/* 子块样式 */
-.sub-section {
-    background: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-}
-
-.sub-section-title {
-    font-size: 14px;
-    color: #000;
-    font-weight: bold;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.sub-section-title::before {
-    content: '▸';
-    font-size: 12px;
-    color: rgba(102, 126, 234, 0.8);
-}
-
-.nested-card {
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-}
-
-.nested-card-title {
-    font-size: 13px;
-    color: #000;
-    font-weight: bold;
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.nested-card-title::before {
-    content: '•';
-    color: rgba(118, 75, 162, 0.9);
-    font-size: 16px;
-}
-
-select.field-input {
-    cursor: pointer;
-}
-
-select.field-input option {
-    background: #333;
-    color: #fff;
-}
-
-.vertical-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    overflow-y: auto;
-    flex: 1;
-    padding-right: 5px;
-}
-
-.vertical-cards .config-card {
-    width: 100%;
 }
 
 /* 预览弹窗 */
@@ -600,7 +520,6 @@ select.field-input option {
     height: 100%;
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     z-index: 1000;
     justify-content: center;
     align-items: center;
@@ -613,7 +532,6 @@ select.field-input option {
 .preview-modal-content {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.6);
     width: 90%;
@@ -621,20 +539,13 @@ select.field-input option {
     max-height: 85vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
 }
 
 .preview-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     padding: 20px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.preview-header h3 {
-    margin: 0;
-    font-size: 22px;
 }
 
 .preview-body {
@@ -646,29 +557,13 @@ select.field-input option {
     gap: 20px;
 }
 
-.preview-section {
-    flex: 1;
-}
-
-.preview-section h4 {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    color: #333;
-}
-
 .preview-section pre {
     background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 10px;
     padding: 15px;
-    overflow-x: auto;
-    font-size: 12px;
-    line-height: 1.5;
-    margin: 0;
+    overflow: auto;
     max-height: 200px;
-    overflow-y: auto;
 }
 
 .preview-footer {
@@ -679,12 +574,165 @@ select.field-input option {
     border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* 消息内容Markdown样式 */
+/* ===== 全新统一按钮系统 ===== */
+/* --- 通用按钮基础 --- */
+.btn {
+    padding: 10px 24px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    letter-spacing: 0.01em;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.55);
+    color: #2d2d2d;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.75);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.7);
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transition: all 0.1s ease;
+}
+
+/* --- 主要按钮（紫色调） --- */
+.btn-primary {
+    background: rgba(115, 136, 234, 0.82);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 3px 14px rgba(102, 126, 234, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    font-weight: 650;
+}
+
+.btn-primary:hover {
+    background: rgba(125, 146, 240, 0.9);
+    box-shadow: 0 8px 26px rgba(102, 126, 234, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    border-color: rgba(255, 255, 255, 0.55);
+    color: #fff;
+}
+
+.btn-primary:active {
+    background: rgba(102, 120, 225, 0.9);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* --- 次要按钮 --- */
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    color: #3a3a3a;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    color: #1a1a1a;
+}
+
+/* --- 小按钮 --- */
+.btn-small {
+    padding: 7px 15px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 11px;
+    gap: 5px;
+    letter-spacing: 0.005em;
+}
+
+/* --- 数组内按钮 --- */
+.array-header .btn-small {
+    background: rgba(115, 136, 234, 0.28);
+    color: #4a5ab9;
+    border: 1px solid rgba(115, 136, 234, 0.25);
+    box-shadow: 0 1px 4px rgba(102, 126, 234, 0.08);
+    font-weight: 650;
+}
+
+.array-header .btn-small:hover {
+    background: rgba(115, 136, 234, 0.45);
+    color: #fff;
+    border-color: rgba(115, 136, 234, 0.4);
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.2);
+}
+
+.array-item .btn-small {
+    background: rgba(255, 140, 140, 0.25);
+    color: #c0392b;
+    border: 1px solid rgba(255, 140, 140, 0.22);
+    box-shadow: 0 1px 4px rgba(255, 100, 100, 0.06);
+    font-weight: 650;
+    min-width: 34px;
+    padding: 7px 10px;
+}
+
+.array-item .btn-small:hover {
+    background: rgba(255, 120, 120, 0.5);
+    color: #fff;
+    border-color: rgba(255, 120, 120, 0.4);
+    box-shadow: 0 4px 14px rgba(255, 100, 100, 0.2);
+}
+
+/* 预览弹窗内按钮 */
+.preview-footer .btn {
+    border-radius: 13px;
+}
+
+.preview-footer .btn-primary {
+    box-shadow: 0 3px 14px rgba(102, 126, 234, 0.28);
+}
+
+.preview-header .btn-small {
+    background: rgba(255, 255, 255, 0.5);
+    color: #555;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.preview-header .btn-small:hover {
+    background: rgba(255, 255, 255, 0.7);
+    color: #1a1a1a;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Markdown 消息内部样式 */
 .message-content h1,
 .message-content h2,
 .message-content h3 {
-    margin: 10px 0 5px 0;
-    font-weight: 600;
+    margin: 10px 0 5px;
 }
 
 .message-content p {
@@ -703,23 +751,15 @@ select.field-input option {
     padding: 12px;
     border-radius: 8px;
     overflow-x: auto;
-    margin: 8px 0;
-}
-
-.message-content pre code {
-    background: transparent;
-    padding: 0;
 }
 
 .message-content ul,
 .message-content ol {
-    margin: 5px 0;
-    padding-left: 25px;
+    margin: 5px 0 5px 20px;
 }
 
 .message-content a {
     color: #4a90e2;
-    text-decoration: underline;
 }
 
 .message-content blockquote {
@@ -731,12 +771,7 @@ select.field-input option {
 
 /* 图标间距 */
 .header h1 i,
-.header-actions i,
-.page-tab i,
-.preview-header i,
-.preview-section h4 i,
-.preview-footer i,
-.ai-avatar i,
-.ai-input-container i {
+.nav-tab i,
+.btn i {
     margin-right: 6px;
 }

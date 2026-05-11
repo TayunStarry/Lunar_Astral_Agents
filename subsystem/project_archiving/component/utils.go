@@ -1,9 +1,10 @@
 package component
+
 // 导入必要的包
 import (
 	"fmt"  // 用于格式化输入输出
-	"time" // 提供时间相关的功能
 	"io"   // 提供输入输出接口
+	"time" // 提供时间相关的功能
 )
 
 // formatDuration 格式化时间间隔
