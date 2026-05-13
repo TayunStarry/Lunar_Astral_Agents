@@ -1,205 +1,186 @@
-Lunar Astral Agents Non-Commercial License
-Version 1.0, May 2026
+# Lunar Astral Agents Non-Commercial License  
+## Version 1.1, May 2026
 
-Copyright (C) 2025-2026 钛宇-星光阁 (TayunStarry)
+**Copyright (C) 2025-2026 钛宇-星光阁 (TayunStarry)**
 
-================================================================================
+---
 
-                                  ENGLISH VERSION
+## ENGLISH VERSION
 
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+### TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-1. DEFINITIONS
+#### 1. DEFINITIONS
 
-   "Project" means the Lunar Astral Agents software and all related materials,
-   including but not limited to source code, documentation, media files, and
-   configuration files, owned or controlled by the Author.
+**“Project”** means the software known as “Lunar Astral Agents” and all related materials, including but not limited to source code, object code, documentation, media files, configuration files, and any associated design or reference materials, whether owned or controlled by the Author.
 
-   "Author" means 钛宇-星光阁 (TayunStarry), the original copyright holder.
+**“Author”** means the original copyright holder: 钛宇-星光阁 (TayunStarry).
 
-   "You" means any individual or entity exercising permissions granted under
-   this License.
+**“You”** means any individual or legal entity exercising permissions granted under this License.
 
-   "Commercial Use" means any use of the Project for profit-making purposes,
-   including but not limited to:
-   - Selling, licensing, or renting the Project or any derivative works
-   - Using the Project in connection with paid services or products
-   - Distributing the Project as part of a commercial offering
-   - Monetizing the Project through advertising, subscriptions, or donations
+**“Commercial Use”** means any use of the Project primarily intended for or directed toward commercial advantage or monetary compensation, including but not limited to:
+- Selling, licensing, sublicensing, renting, or otherwise commercially exploiting the Project or any Derivative Work;
+- Using the Project as a core component of any paid service, product, or subscription offering;
+- Distributing the Project bundled with any commercial product or service for a fee;
+- Monetizing the Project through advertising, sponsorships, or donations that are directly tied to the Project’s functionality or availability, except where such monetization is incidental and not based on the Project itself (e.g., generic website hosting ads with no direct relation to the Project).
 
-2. GRANT OF RIGHTS
+For the avoidance of doubt, use of the Project within a business entity solely for internal research, evaluation, or educational purposes without direct revenue generation does not constitute Commercial Use, unless the Project is used to deliver commercial services to third parties.
 
-   Subject to the terms and conditions of this License, the Author hereby
-   grants You a worldwide, non-exclusive, royalty-free license to:
+**“Derivative Work”** means any work that is based upon or derived from the Project, including modifications, enhancements, translations, or any other form in which the Project may be recast, transformed, or adapted.
 
-   (a) Reproduce: Make authorized copies and reprints of the Project
-       materials for non-commercial purposes.
+#### 2. GRANT OF RIGHTS
 
-   (b) Modify: Create modified versions of the Project source code, provided
-       that all modifications comply with the terms of this License.
+Subject to the terms and conditions of this License, the Author hereby grants You a worldwide, non-exclusive, royalty-free, non-sublicensable (except as necessary for distribution in accordance with Section 2(c)) license to:
 
-   (c) Distribute: Distribute the original Project and any modified versions
-       thereof, provided that recipients are bound by the same license terms.
+**(a) Reproduce:** Make authorized copies and reprints of the Project materials for Non-Commercial purposes only.
 
-   (d) Use: Use the Project for non-commercial purposes, including personal,
-       educational, and research use.
+**(b) Modify:** Create Derivative Works of the Project source code, provided that all modifications comply with the terms of this License.
 
-3. USAGE RESTRICTIONS
+**(c) Distribute:** Distribute the original Project and any Derivative Works, provided that:
+- Such distribution is for Non-Commercial purposes only;
+- The recipients receive the work under the terms of this License, and You make them aware of its terms; and
+- You include a copy of this License with every distribution.
 
-   (a) Prohibition on Commercial Use: You shall not use, reproduce, modify,
-       or distribute the Project for any commercial purpose or in any
-       profit-making activity without the express written permission of the
-       Author. Requests for commercial licensing may be submitted to the
-       Author through the official project channels.
+**(d) Use:** Use the Project for Non-Commercial purposes, including personal, educational, and research use.
 
-   (b) Compliance: You must comply with all applicable laws and regulations
-       when using, reproducing, modifying, or distributing the Project.
+#### 3. USAGE RESTRICTIONS
 
-   (c) No Warranty: The Project is provided "AS IS" without warranty of any
-       kind. See Section 5 for full details.
+**(a) Prohibition on Commercial Use:** You shall not use, reproduce, modify, or distribute the Project for any Commercial Use without the express prior written permission of the Author. Inquiries regarding commercial licensing may be directed to the Author through the official project channels.
 
-4. ATTRIBUTION REQUIREMENTS
+**(b) Compliance:** You must comply with all applicable international, national, and local laws and regulations in connection with Your use, reproduction, modification, and distribution of the Project.
 
-   When reproducing, modifying, or distributing the Project or any modified
-   version thereof, You must:
+**(c) No Implied Endorsement:** Nothing in this License shall be construed as granting You any right to use the Author’s name, logo, or trademarks in any manner that suggests endorsement or association, except as required for attribution under Section 4.
 
-   (a) Preserve all original copyright notices and license terms in their
-       entirety.
+#### 4. ATTRIBUTION REQUIREMENTS
 
-   (b) Clearly display the original Project source information, including:
-       - Repository Address: https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
-       - QQ Group Number: 710834920
-       - Author Information: 钛宇-星光阁 (TayunStarry)
+Whenever You reproduce, modify, or distribute the Project or any Derivative Work, You must:
 
-   (c) Ensure that the Author's name and attribution are prominently displayed
-       in a manner consistent with how other authors are credited in similar
-       works.
+**(a)** Preserve and reproduce all original copyright notices, this License, and all disclaimers in their entirety.
 
-5. DISCLAIMER OF WARRANTY
+**(b)** Clearly indicate the original Project source by providing, at a minimum, the following information:
+- Project name: Lunar Astral Agents
+- Author: 钛宇-星光阁 (TayunStarry)
+- Official repository: https://gitee.com/TayunStarry/Lunar-Astral-Agents
+  (If the URL changes, the most recent official address indicated by the Author should be used.)
 
-   THE PROJECT IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN
-   NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-   FROM, OUT OF OR IN CONNECTION WITH THE PROJECT OR THE USE OR OTHER DEALINGS
-   IN THE PROJECT.
+**(c)** If a Derivative Work is distributed, clearly state that it is a modified version and how it differs from the original Project, and retain attribution to the original Author in a manner substantially similar to how other authors are credited in comparable works.
 
-6. LIMITATION OF LIABILITY
+#### 5. PATENTS AND TRADEMARKS
 
-   IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
-   SHALL THE AUTHOR BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY GENERAL,
-   SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OR
-   INABILITY TO USE THE PROJECT, EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE
-   POSSIBILITY OF SUCH DAMAGES.
+**(a) Patent Non-Assertion:** This License does not grant You any rights under any patents held by the Author. To the extent the Author has the ability to do so, the Author agrees not to assert any patent claims against You for your Non-Commercial use of the Project as expressly permitted herein, provided that such use would otherwise infringe such patents.
 
-7. TERMINATION
+**(b) Trademarks:** This License does not grant any right to use the Author’s trademarks, service marks, trade names, or logos. Any use of such marks must be separately authorized in writing by the Author.
 
-   This License shall automatically terminate if You violate any of its terms
-   and conditions. Upon termination, You shall cease all use, reproduction,
-   modification, and distribution of the Project and any derivative works.
+#### 6. DISCLAIMER OF WARRANTY
 
-8. MISCELLANEOUS
+THE PROJECT IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROJECT IS WITH YOU. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM, OUT OF, OR IN CONNECTION WITH THE PROJECT OR ITS USE.
 
-   (a) Entire Agreement: This License constitutes the entire agreement
-       between You and the Author regarding the use of the Project.
+#### 7. LIMITATION OF LIABILITY
 
-   (b) Governing Law: This License shall be governed by the laws of the
-       People's Republic of China. Any disputes arising from or related to
-       this License shall be resolved in the courts of the People's Republic
-       of China.
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE AUTHOR BE LIABLE TO YOU FOR ANY SPECIAL, INCIDENTAL, INDIRECT, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES (INCLUDING, BUT NOT LIMITED TO, LOSS OF PROFITS, DATA, OR GOODWILL) ARISING OUT OF THE USE OR INABILITY TO USE THE PROJECT, EVEN IF THE AUTHOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. IN ANY CASE, THE AUTHOR’S TOTAL AGGREGATE LIABILITY FOR ANY CLAIMS UNDER THIS LICENSE SHALL NOT EXCEED THE AMOUNT YOU ACTUALLY PAID THE AUTHOR FOR THE PROJECT (WHICH, FOR NON-COMMERCIAL USE, IS ZERO).
 
-   (c) Severability: If any provision of this License is held to be invalid
-       or unenforceable, the remaining provisions shall remain in full force
-       and effect.
+#### 8. TERMINATION
 
-   (d) Amendments: This License may only be amended with the written consent
-       of the Author.
+This License shall automatically terminate if You violate any of its terms or conditions. Upon termination, You must immediately cease all use, reproduction, modification, and distribution of the Project and all Derivative Works. However, any sublicenses properly granted to recipients prior to termination in compliance with this License shall survive termination, provided those recipients remain in full compliance with the License terms. The disclaimers and limitations of liability shall survive termination.
 
-================================================================================
+#### 9. MISCELLANEOUS
 
-                                  中文版本
+**(a) Entire Agreement:** This License constitutes the entire agreement between You and the Author concerning the Project and supersedes all prior or contemporaneous communications, whether written or oral, relating to its subject matter.
 
-                           使用、复制和分发的条款与条件
+**(b) Governing Law and Dispute Resolution:** This License shall be governed by the laws of the People’s Republic of China, without regard to conflict of law principles. Any dispute arising from or in connection with this License shall first be attempted to be resolved through friendly negotiation. If no resolution is reached, the dispute shall be submitted to the competent court in the Author’s domicile.
 
-1. 定义
+**(c) Severability:** If any provision of this License is held to be invalid, illegal, or unenforceable, such provision shall be modified to the minimum extent necessary to make it enforceable, or if not possible, severed from this License, and the remaining provisions shall remain in full force and effect.
 
-   "项目"指 Lunar Astral Agents 软件及所有相关材料，包括但不限于源代码、文档、
-   媒体文件和配置文件，由作者拥有或控制。
+**(d) Amendments:** This License may only be amended by a written instrument signed by the Author. No other act, statement, or course of dealing shall modify this License.
 
-   "作者"指 钛宇-星光阁 (TayunStarry)，即原始版权持有者。
+---
 
-   "您"指根据本许可证行使许可权限的任何个人或实体。
+## 中文版本
 
-   "商业用途"指将项目用于盈利目的的任何使用，包括但不限于：
-   - 出售、许可或出租项目或任何衍生作品
-   - 在付费服务或产品中使用项目
-   - 将项目作为商业产品的一部分进行分发
-   - 通过广告、订阅或捐赠将项目商业化
+### 使用、复制和分发的条款与条件
 
-2. 权利授予
+#### 1. 定义
 
-   根据本许可证的条款和条件，作者特此授予您全球范围、非排他性、免版税的许可，以：
+**“项目”** 指名为 “Lunar Astral Agents” 的软件及其所有相关材料，包括但不限于源代码、目标代码、文档、媒体文件、配置文件以及任何相关的设计或参考资料，均由作者拥有或控制。
 
-   (a) 复制：制作项目材料的授权副本和重印本，仅限非商业用途。
+**“作者”** 指原始版权持有人：钛宇-星光阁 (TayunStarry)。
 
-   (b) 修改：创建项目源代码的修改版本，前提是所有修改均遵守本许可证的条款。
+**“您”** 指根据本许可证行使许可权限的任何个人或法人实体。
 
-   (c) 分发：分发原始项目及其任何修改版本，前提是接收者受相同许可证条款的约束。
+**“商业用途”** 指主要旨在获取商业利益或金钱报酬的任何项目使用行为，包括但不限于：
+- 销售、许可、分许可、出租或以其他方式商业性利用项目或任何衍生作品；
+- 将项目作为任何付费服务、产品或订阅产品的核心组成部分使用；
+- 将项目与任何以收费为目的的商业产品或服务捆绑分发；
+- 通过直接与项目功能或可用性相关的广告、赞助或捐赠获利，但纯属附带的、不依赖于项目本身的通用获利方式（例如与项目内容无直接关联的网站托管广告）除外。
 
-   (d) 使用：将项目用于非商业目的，包括个人、教育和研究用途。
+为避免疑义，企业实体内部仅为研究、评估或教育目的使用项目，且未由此直接产生收入的，不构成商业用途，但利用项目向第三方提供商业服务的不在此限。
 
-3. 使用限制
+**“衍生作品”** 指基于项目产生的任何作品，包括修改、增强、翻译或将项目重铸、转换或改编的任何其他形式。
 
-   (a) 禁止商业使用：未经作者书面明确许可，您不得将项目用于任何商业目的或任何
-       盈利活动。商业许可请求可通过官方项目渠道提交给作者。
+#### 2. 权利授予
 
-   (b) 合规性：使用、复制、修改或分发项目时，您必须遵守所有适用的法律法规。
+根据本许可证的条款和条件，作者特此授予您一项全球性的、非排他、免版税、不可分许可（但为按第2条(c)款进行分发所必需的除外）的许可，允许您：
 
-   (c) 无保证：项目按"原样"提供，不提供任何形式的保证。详见第5节。
+**(a) 复制：** 仅出于非商业目的制作项目的授权复制件或翻印件。
 
-4. 署名要求
+**(b) 修改：** 对项目源代码创建衍生作品，前提是所有修改均遵守本许可证条款。
 
-   在复制、修改或分发项目或其任何修改版本时，您必须：
+**(c) 分发：** 分发原始项目及任何衍生作品，前提是：
+- 此类分发仅出于非商业目的；
+- 接收方按本许可证条款获得该作品，且您已使接收方知悉相关条款；
+- 每次分发均附带本许可证的完整副本。
 
-   (a) 完整保留所有原始版权声明和许可证条款。
+**(d) 使用：** 将项目用于非商业目的，包括个人、教育和研究用途。
 
-   (b) 明确显示原始项目来源信息，包括：
-       - 仓库地址：https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
-       - QQ群号：710834920
-       - 作者信息：钛宇-星光阁 (TayunStarry)
+#### 3. 使用限制
 
-   (c) 确保作者姓名和署名以与其他作者在类似作品中的署名方式一致的方式显著展示。
+**(a) 禁止商业使用：** 未经作者事先书面明确许可，您不得将项目用于任何商业用途。商业许可咨询可通过官方项目渠道向作者提出。
 
-5. 免责声明
+**(b) 合规性：** 您在使用、复制、修改和分发项目时，必须遵守所有适用的国际、国内及地方法律法规。
 
-   本项目按"原样"提供，不提供任何形式的保证，明示或暗示，包括但不限于适销性、
-   特定用途适用性和非侵权性的默示保证。在任何情况下，作者均不对因使用或无法使用
-   本项目而产生的任何索赔、损害或其他责任承担责任，无论是合同诉讼、侵权行为或其他。
+**(c) 禁止暗示背书：** 本许可证中的任何内容均不得解释为授予您以任何暗示作者认可或关联的方式使用作者姓名、标识或商标的权利，但第4条要求的署名除外。
 
-6. 责任限制
+#### 4. 署名要求
 
-   在适用法律要求或书面协议另有约定的情况下，作者不对您因使用或无法使用本项目
-   而产生的任何损害承担责任，包括任何一般、特殊、偶然或间接损害，即使作者已被告知
-   可能发生此类损害。
+在复制、修改或分发项目或任何衍生作品时，您必须：
 
-7. 终止
+**(a)** 完整保留并复制所有原始版权声明、本许可证及所有免责声明。
 
-   如果您违反本许可证的任何条款和条件，本许可证将自动终止。终止后，您应停止
-   所有使用、复制、修改和分发项目及任何衍生作品的行为。
+**(b)** 明确标示原始项目来源，至少提供以下信息：
+- 项目名称：Lunar Astral Agents
+- 作者：钛宇-星光阁 (TayunStarry)
+- 官方仓库：https://gitee.com/TayunStarry/Lunar-Astral-Agents
+  （如该地址发生变更，应使用作者指明的最近期官方地址。）
 
-8. 其他
+**(c)** 分发衍生作品时，清晰声明其为修改版本，说明与原始项目的区别，并以与同类作品中其他作者署名方式基本一致的方式保留对原始作者的署名。
 
-   (a) 完整协议：本许可证构成您与作者之间关于项目使用的完整协议。
+#### 5. 专利与商标
 
-   (b) 适用法律：本许可证受中华人民共和国法律管辖。任何因本许可证产生或与之相关的
-       争议应在中华人民共和国法院解决。
+**(a) 专利不主张：** 本许可证不授予您任何在作者拥有的专利项下的权利。在作者有权处分的范围内，作者同意不就您根据本许可证明确允许的非商业使用向您主张专利侵权，但以该等使用本应构成侵权的为限。
 
-   (c) 可分割性：如果本许可证的任何条款被认定为无效或不可执行，其余条款应保持
-       完全效力。
+**(b) 商标：** 本许可证不授予使用作者商标、服务标志、商号或标识的任何权利。任何对上述标志的使用均须另行取得作者的书面授权。
 
-   (d) 修改：本许可证仅可在获得作者书面同意的情况下进行修改。
+#### 6. 免责声明
 
-================================================================================
+项目按“现状”提供，不作任何明示或默示的保证，包括但不限于对适销性、特定用途适用性、所有权及不侵权的默示保证。项目质量与性能的全部风险由您承担。在任何情况下，作者均不对因项目或其使用而产生的任何索赔、损害或其他责任负责。
 
-END OF LICENSE
+#### 7. 责任限制
+
+在适用法律允许的最大范围内，作者在任何情况下均不对您因使用或无法使用项目而产生的任何特殊、附带、间接、后果性、惩戒性或惩罚性损害赔偿（包括但不限于利润、数据或商誉的损失）承担责任，即使作者已被告知发生该等损害的可能性。无论如何，作者在本许可证项下就任何索赔所承担的累计赔偿责任总额不超过您为项目实际支付给作者的金额（就非商业使用而言，该金额为零）。
+
+#### 8. 终止
+
+若您违反本许可证的任何条款或条件，本许可证将自动终止。终止后，您必须立即停止对项目及所有衍生作品的一切使用、复制、修改和分发行为。但是，在终止前已按照本许可证合法授予接收方的分许可继续有效，前提是该等接收方完全遵守本许可证条款。免责声明和责任限制条款在终止后继续有效。
+
+#### 9. 其他
+
+**(a) 完整协议：** 本许可证构成您与作者就项目事宜达成的完整协议，并取代所有先前或同期就该主题进行的口头或书面沟通。
+
+**(b) 管辖法律与争议解决：** 本许可证受中华人民共和国法律管辖，排除其冲突法规则的适用。因本许可证产生或与之相关的任何争议，双方应首先尝试通过友好协商解决。协商不成的，任何一方可向作者住所地有管辖权的人民法院提起诉讼。
+
+**(c) 可分割性：** 若本许可证的任何条款被认定为无效、非法或不可执行，应对该条款进行最低限度的修改以使其可执行，若无法修改，则应将该条款从本许可证中分割，其余条款仍应保持完全有效。
+
+**(d) 修改：** 本许可证仅可由作者签署书面文件予以修改。任何其他行为、陈述或交易习惯均不得修改本许可证。
+
+---
+
+**LICENSE END / 许可证结束**

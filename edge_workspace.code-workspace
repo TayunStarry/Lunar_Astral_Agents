@@ -7,6 +7,12 @@
 		{
 			"name": "THE_OTHER_SHORE-Dream",
 			"path": "../THE_OTHER_SHORE-Dream"
+		},
+		{
+			"path": "C:/Users/196530/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_behavior_packs"
+		},
+		{
+			"path": "C:/Users/196530/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/development_resource_packs"
 		}
 	],
 	"settings": {
