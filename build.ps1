@@ -1,146 +1,139 @@
-﻿<#
-.SYNOPSIS
-    Lunar_Astral_Agents 整体构建调度脚本
-.DESCRIPTION
-    集中执行所有环境检查，然后依次调用各子系统的构建脚本，
-    确保环境检查仅执行一次，提升整体构建效率。
-.PARAMETER TargetOS
-    目标操作系统，可选值：windows, linux, darwin。默认 windows。
-.PARAMETER TargetArch
-    目标 CPU 架构，可选值：amd64, arm64。默认 amd64。
-.EXAMPLE
-    .\build.ps1 -TargetOS linux -TargetArch arm64
-#>
+﻿# Lunar Astral Agents - 统一构建脚本
+# 负责环境变量检查、依赖验证和统一调度编译
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
+    
     [ValidateSet("amd64", "arm64")]
     [string]$TargetArch = "amd64"
 )
 
 $ErrorActionPreference = "Stop"
+$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# ---------- 集中环境检查 ----------
-function Check-GoEnvironment {
-    Write-Host "[Env] 检查 Go 环境..." -ForegroundColor Cyan
-    $goCmd = Get-Command go -ErrorAction SilentlyContinue
-    if (-not $goCmd) {
-        throw "未找到 Go。请安装 Go 1.20 或更高版本：https://go.dev/dl/"
-    }
-    $goVersion = (go version | Select-String -Pattern "go(\d+\.\d+\.\d+)" | ForEach-Object { $_.Matches.Groups[1].Value })
-    if (-not $goVersion) {
-        throw "无法解析 Go 版本。请确保已安装 Go 1.20+。"
-    }
-    $minVersion = [version]"1.20.0"
-    if ([version]$goVersion -lt $minVersion) {
-        throw "Go 版本过低 ($goVersion)，需要 >= 1.20。请升级：https://go.dev/dl/"
-    }
-    Write-Host "  ✓ Go $goVersion" -ForegroundColor Green
+# ---------- 环境检查函数 ----------
+function Test-CommandExists {
+    param([string]$Command)
+    $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
 }
 
-function Check-GCC {
-    Write-Host "[Env] 检查 GCC (CGO 需要)..." -ForegroundColor Cyan
-    $gccCmd = Get-Command gcc -ErrorAction SilentlyContinue
-    if (-not $gccCmd) {
-        throw "未找到 GCC。CGO 需要 GCC，Windows 下请安装 MinGW-w64 或 TDM-GCC：https://www.mingw-w64.org/"
+function Check-GoEnvironment {
+    Write-Host "[检查] Go 编程环境..." -ForegroundColor Cyan
+    
+    if (-not (Test-CommandExists "go")) {
+        throw "未找到 Go 环境，请安装 Go (https://golang.org/dl/)"
     }
-    $gccOutput = & gcc --version 2>&1 | Select-Object -First 1
-    Write-Host "  ✓ GCC: $gccOutput" -ForegroundColor Green
+    
+    $goVersion = go version 2>&1
+    Write-Host "  ✓ $goVersion" -ForegroundColor Green
+    
+    if ($TargetOS -eq "windows") {
+        if (-not (Test-CommandExists "gcc")) {
+            throw "未找到 GCC 编译器，CGO 支持需要 GCC (请安装 MinGW-w64 或 TDM-GCC)"
+        }
+        $gccVersion = gcc --version 2>&1 | Select-Object -First 1
+        Write-Host "  ✓ $gccVersion" -ForegroundColor Green
+    }
 }
 
 function Check-NodeEnvironment {
-    Write-Host "[Env] 检查 Node.js..." -ForegroundColor Cyan
-    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $nodeCmd) {
-        throw "未找到 Node.js。请安装 Node.js 18+：https://nodejs.org/"
+    Write-Host "[检查] Node.js 运行时..." -ForegroundColor Cyan
+    
+    if (-not (Test-CommandExists "node")) {
+        throw "未找到 Node.js 运行时，请安装 Node.js (https://nodejs.org/)"
     }
-    $nodeVersion = & node --version
+    
+    $nodeVersion = node --version 2>&1
     Write-Host "  ✓ Node.js $nodeVersion" -ForegroundColor Green
 }
 
-function Check-NPM {
-    Write-Host "[Env] 检查 npm..." -ForegroundColor Cyan
-    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $npmCmd) {
-        throw "未找到 npm（通常随 Node.js 安装）。"
+function Check-NpmEnvironment {
+    Write-Host "[检查] npm 包管理器..." -ForegroundColor Cyan
+    
+    if (-not (Test-CommandExists "npm")) {
+        throw "未找到 npm 包管理器，请确保已安装 npm"
     }
-    $npmVersion = & npm --version
-    Write-Host "  ✓ npm v$npmVersion" -ForegroundColor Green
+    
+    $npmVersion = npm --version 2>&1
+    Write-Host "  ✓ npm $npmVersion" -ForegroundColor Green
 }
 
 function Check-RsrcTool {
-    Write-Host "[Env] 检查 rsrc 工具..." -ForegroundColor Cyan
-    $rsrcCmd = Get-Command rsrc -ErrorAction SilentlyContinue
-    if (-not $rsrcCmd) {
-        Write-Host "  rsrc 未安装，尝试自动安装..." -ForegroundColor Yellow
-        try {
-            & go install github.com/akavel/rsrc@latest 2>&1 | Out-Host
-            if ($LASTEXITCODE -ne 0) { throw }
-            $goPath = & go env GOPATH
-            $env:Path = "$goPath\bin;$env:Path"
+    if ($TargetOS -eq "windows") {
+        Write-Host "[检查] rsrc 图标编译工具..." -ForegroundColor Cyan
+        
+        if (-not (Test-CommandExists "rsrc")) {
+            throw "未找到 rsrc 工具，请安装 (go install github.com/akavel/rsrc@latest)"
         }
-        catch {
-            throw "安装 rsrc 失败: $_。请手动执行：go install github.com/akavel/rsrc@latest"
-        }
-        $rsrcCmd = Get-Command rsrc -ErrorAction SilentlyContinue
-        if (-not $rsrcCmd) {
-            throw "安装 rsrc 后仍未找到命令，请确保 %GOPATH%\bin 在 PATH 中。"
-        }
+        
+        Write-Host "  ✓ rsrc 工具已安装" -ForegroundColor Green
     }
-    Write-Host "  ✓ rsrc 工具可用" -ForegroundColor Green
 }
 
-# ---------- 主调度流程 ----------
+# ---------- 统一构建函数 ----------
+function Invoke-Build {
+    param(
+        [string]$Path,
+        [string]$Name
+    )
+    
+    Write-Host "`n========== 构建 $Name ==========" -ForegroundColor Magenta
+    
+    $buildScript = Join-Path $Path "build.ps1"
+    
+    if (-not (Test-Path $buildScript)) {
+        throw "未找到构建脚本: $buildScript"
+    }
+    
+    $originalLocation = Get-Location
+    Set-Location -Path $Path
+    
+    try {
+        & $buildScript -TargetOS $TargetOS -TargetArch $TargetArch
+    }
+    catch {
+        Set-Location -Path $originalLocation
+        throw "构建 $Name 失败: $_"
+    }
+    
+    Set-Location -Path $originalLocation
+    Write-Host "========== $Name 构建完成 ==========`n" -ForegroundColor Magenta
+}
+
+# ---------- 构建主流程 ----------
 try {
-    Write-Host "`n========== Lunar_Astral_Agents 整体构建 ==========" -ForegroundColor Magenta
-    Write-Host "目标平台: $TargetOS / $TargetArch" -ForegroundColor Magenta
-    Write-Host "==============================================`n" -ForegroundColor Magenta
-
-    # 集中执行所有环境检查
-    Write-Host "---------- 集中环境检查 ----------" -ForegroundColor Cyan
+    Write-Host "`n" -NoNewline
+    Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║   Lunar Astral Agents - 统一构建系统  ║" -ForegroundColor Cyan
+    Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "目标平台: $TargetOS / $TargetArch" -ForegroundColor Yellow
+    Write-Host ""
+    
+    # 阶段 1: 环境检查
+    Write-Host "--- 阶段 1: 环境与依赖检查 ---" -ForegroundColor Yellow
+    
     Check-GoEnvironment
-    Check-GCC
     Check-NodeEnvironment
-    Check-NPM
+    Check-NpmEnvironment
     Check-RsrcTool
-    Write-Host "✓ 所有环境检查通过`n" -ForegroundColor Green
-
-    # 构建LunarCore（传递 -SkipCheck 参数）
-    Write-Host "---------- 构建 Luna_Astral ----------" -ForegroundColor Cyan
-    Set-Location -Path './luna_astral'
-    & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
-    if ($LASTEXITCODE -ne 0) { throw "Luna_Astral 构建失败" }
-    Set-Location -Path '../'
+    
+    Write-Host "`n[OK] 所有环境检查通过！`n" -ForegroundColor Green
+    
+    # 阶段 2: 编译项目
+    Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
+    
+    Invoke-Build -Path "$ScriptRoot\luna_astral" -Name "Luna Astral"
+    Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
+    Invoke-Build -Path "$ScriptRoot\subsystem\bridge_adapter" -Name "Bridge Adapter"
+    Invoke-Build -Path "$ScriptRoot\subsystem\volume_archive" -Name "Volume Archive"
+    
+    Write-Host "`n" -NoNewline
+    Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Green
+    Write-Host "║        全部构建成功完成！              ║" -ForegroundColor Green
+    Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Green
     Write-Host ""
-
-    # 构建 Crystal_Astral（传递 -SkipCheck 参数）
-    Write-Host "---------- 构建 Crystal_Astral ----------" -ForegroundColor Cyan
-    Set-Location -Path './crystal_astral'
-    & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
-    if ($LASTEXITCODE -ne 0) { throw "Crystal_Astral 构建失败" }
-    Set-Location -Path '../'
-    Write-Host ""
-
-    # 构建 bridge_adapter（传递 -SkipCheck 参数）
-    Write-Host "---------- 构建 bridge_adapter ----------" -ForegroundColor Cyan
-    Set-Location -Path './subsystem\bridge_adapter'
-    & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
-    if ($LASTEXITCODE -ne 0) { throw "bridge_adapter 构建失败" }
-    Set-Location -Path '../../'
-    Write-Host ""
-
-    # 构建 project_archiving（传递 -SkipCheck 参数）
-    Write-Host "---------- 构建 project_archiving ----------" -ForegroundColor Cyan
-    Set-Location -Path './subsystem\project_archiving'
-    & .\build.ps1 -TargetOS $TargetOS -TargetArch $TargetArch -SkipCheck
-    if ($LASTEXITCODE -ne 0) { throw "project_archiving 构建失败" }
-    Set-Location -Path '../../'
-    Write-Host ""
-
-    Write-Host "==============================================" -ForegroundColor Magenta
-    Write-Host "✓ 所有模块构建成功！" -ForegroundColor Green
-    Write-Host "==============================================`n" -ForegroundColor Magenta
 }
 catch {
     Write-Host "`n[ERROR] 构建失败: $_" -ForegroundColor Red

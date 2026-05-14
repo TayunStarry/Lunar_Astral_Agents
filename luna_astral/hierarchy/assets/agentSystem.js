@@ -906,7 +906,6 @@ class AgentDefine {
                 }
             }
             message.content = newContent;
-            console.log(JSON.stringify(message));
         }
     }
 }
@@ -976,8 +975,10 @@ class LunarAgent extends AgentDefine {
         this.speakWeight += RandomFloor(1, 3);
         if (typeof messages === 'string')
             messages = [{ type: 'text', text: messages }];
-        messages.forEach(message => { if (message.type === 'text')
-            console.log(message.text); });
+        messages.forEach(message => {
+            if (message.type === 'text')
+                console.log(message.text);
+        });
     }
     writeVideoUrl(videoUrl) {
         console.log('写入视频文件:' + videoUrl);
