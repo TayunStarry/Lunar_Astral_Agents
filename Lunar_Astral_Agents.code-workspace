@@ -9,7 +9,13 @@
 			"path": "../Chat_AI_Case/lmstudio/models"
 		},
 		{
-			"path": "../月之华-资料库存/client_old"
+			"path": "../TTS/qwen3-tts.cpp-main"
+		},
+		{
+			"path": "../TTS/qwen3-tts.cpp"
+		},
+		{
+			"path": "../TTS/luna-tts"
 		}
 	],
 	"settings": {
