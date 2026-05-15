@@ -1,5 +1,5 @@
-﻿# volume_archive - 编译脚本
-# 由根目录脚本统一调用，仅处理项目编译
+﻿# bridge_adapter - 编译脚本
+# 由根目录脚本统一调用，仅处理图标编译和项目编译
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
@@ -10,22 +10,39 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# ---------- 图标资源处理 ----------
+function Build-IconIfNeeded {
+    if ($TargetOS -ne "windows" -or -not (Test-Path "icon.ico")) {
+        return
+    }
+
+    if (Test-Path "icon.syso") {
+        return
+    }
+
+    & rsrc -ico icon.ico -o icon.syso
+    if ($LASTEXITCODE -ne 0) { throw "rsrc 图标编译失败" }
+}
+
+# ---------- 编译主流程 ----------
 try {
     $env:GOOS = $TargetOS
     $env:GOARCH = $TargetArch
-    $env:CGO_ENABLED = 0
+    $env:CGO_ENABLED = 1
+
+    Build-IconIfNeeded
 
     $ldflags = "-s -w"
 
-    $outputName = "volume_archive.exe"
-    if ($TargetOS -ne "windows") {
-        $outputName = "volume_archive"
-    }
-    $outputPath = "..\..\$outputName"
+    $binaryName = "volume_archive.exe"
+    if ($TargetOS -ne "windows") { $binaryName = "volume_archive" }
+    $outputPath = "..\..\$binaryName"
 
     $buildArgs = @(
         "build",
-        "-ldflags", $ldflags,
+        "-tags", "webview",
+        "-ldflags=$ldflags",
+        "-trimpath",
         "-o", $outputPath
     )
     & go $buildArgs 2>&1 | Out-Host
