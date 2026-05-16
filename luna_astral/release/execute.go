@@ -3,7 +3,6 @@ package release
 import (
 	"config"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -21,8 +20,6 @@ type ProcessInfo struct {
 
 // ExecutePortRelease 函数用于执行端口释放操作，扫描指定范围内的端口，终止占用端口的进程，并验证端口释放情况
 func ExecutePortRelease() {
-	// 打印提示信息，表明开始执行端口释放操作
-	log.Printf("%s", strings.Repeat("-=", 28))
 	// 打印提示信息，表明开始扫描端口占用情况
 	log.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", *config.MinPort, *config.MaxPort)
 	// 获取指定端口范围内占用端口的进程列表

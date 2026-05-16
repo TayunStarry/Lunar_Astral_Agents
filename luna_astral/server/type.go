@@ -46,8 +46,6 @@ type ModelConfig struct {
 		Developer bool `json:"developer"`
 		// 是否清除端口
 		ClearPort bool `json:"clear_port"`
-		// TTS 服务地址
-		TTSUrl string `json:"tts_url"`
 		// 是否允许加载扩散模型
 		AllowDiffusion bool `json:"allow_diffusion"`
 		// 是否允许加载多模态模型

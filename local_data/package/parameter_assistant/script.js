@@ -11,7 +11,6 @@ const labelMap = {
     'diffusion_model': '扩散模型',
     'variational_model': '变分模型',
     'prompt_refine_model': '提示词精炼模型',
-    'tts_url': 'TTS服务地址',
     'developer': '开发者模式',
     'clear_port': '清理端口',
     'allow_diffusion': '允许扩散',

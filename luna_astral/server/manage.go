@@ -5,7 +5,6 @@ import (
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
 	"LunarCore/release"
-	//"LunarCore/server/handlers"
 	"LunarCore/server/handlers/image"
 	"config"
 	"context"
@@ -15,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -90,8 +88,6 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 
 // shutdownServer 优雅关闭服务器
 func shutdownServer(server *http.Server) {
-	// 打印分隔符
-	log.Printf("%s", strings.Repeat("-=", 28))
 	// 打印服务器正在关闭的信息
 	log.Println("Lunar模块 -> 正在关闭...")
 	// 创建一个带有 5 秒超时的上下文，用于控制服务器关闭的时间
@@ -102,8 +98,6 @@ func shutdownServer(server *http.Server) {
 	adapters.CloseAgentContext()
 	// 关闭WebSocket服务器
 	CloseWebSocketServer()
-	// 清理TTS临时文件
-	// handlers.CleanupTTSTempFiles()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序

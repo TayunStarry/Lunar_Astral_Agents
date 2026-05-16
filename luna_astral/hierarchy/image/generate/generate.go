@@ -63,9 +63,6 @@ func ProcessTask(task GenerateTask) {
 	task.Status = "running"
 	TaskStatus[taskID] = &task
 	TaskStatusMu.Unlock()
-
-	// 打印任务开始分隔线
-	log.Printf("%s", strings.Repeat("-=", 28))
 	log.Printf("开始处理任务: %s", taskID)
 
 	// 构建输出文件名
@@ -146,8 +143,6 @@ func ProcessTask(task GenerateTask) {
 			log.Printf("  参数: %s", current)
 		}
 	}
-
-	log.Printf("%s", strings.Repeat("-=", 28))
 
 	// 执行命令
 	cmd := exec.Command(*config.VisualEngine, args...)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -129,8 +128,6 @@ func ProcessAgentRequest(modelName string) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("无法找到模型: %s", modelName)
 	}
-	// 打印日志，记录当前处理的模型及对应端口
-	log.Printf("%s", strings.Repeat("-=", 28))
 	log.Printf("GGUF模块 -> 模型[ %s : %d ]", modelName, port)
 	// 这里不直接代理，而是返回端口信息，由handlers处理代理
 	return fmt.Sprintf("%d", port), nil
