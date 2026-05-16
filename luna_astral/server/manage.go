@@ -5,6 +5,7 @@ import (
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
 	"LunarCore/release"
+	//"LunarCore/server/handlers"
 	"LunarCore/server/handlers/image"
 	"config"
 	"context"
@@ -101,6 +102,8 @@ func shutdownServer(server *http.Server) {
 	adapters.CloseAgentContext()
 	// 关闭WebSocket服务器
 	CloseWebSocketServer()
+	// 清理TTS临时文件
+	// handlers.CleanupTTSTempFiles()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序

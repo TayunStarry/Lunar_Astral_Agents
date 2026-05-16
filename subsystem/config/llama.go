@@ -15,4 +15,6 @@ var (
 	MultimodalModel = flag.String("multimodal-model", *LocalDir+"/models/Qwen3.GGUF", "多模态推理模型路径，用于图文推理")
 	// PromptMmprojModel 多模态投影模型路径，用于图像与文本的联合编码
 	MmprojModel = flag.String("mmproj-model", *LocalDir+"/models/mmproj-Qwen3.GGUF", "多模态投影模型路径，用于图像与文本的联合编码")
+	// QwenTTSEngine Qwen3 TTS 推理引擎路径，用于文本转语音
+	QwenTTSEngine = flag.String("qwen-tts-engine", *LocalDir+"\\models\\qwen_tts.cpp\\qwen3-tts-cli.exe", "Qwen3 TTS 推理引擎路径，用于文本转语音")
 )

@@ -31,7 +31,5 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
 	// TTS语音服务相关接口
-	{Path: "/audio/generate", Handler: handlers.TTSProxyHandler, Method: "POST", Description: "TTS代理服务"},
-	{Path: "/qwen_tts/models", Handler: handlers.TTSQwen3ProxyHandler, Method: "GET", Description: "TTS模型检测"},
-	{Path: "/qwen_tts/", Handler: handlers.TTSQwen3ProxyHandler, Method: "POST", Description: "TTS语音服务"},
+	{Path: "/qwen_tts/", Handler: handlers.QwenTTSHandler, Method: "POST", Description: "TTS语音服务"},
 }

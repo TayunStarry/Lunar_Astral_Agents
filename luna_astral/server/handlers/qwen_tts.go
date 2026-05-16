@@ -1,0 +1,234 @@
+package handlers
+
+/*
+#cgo LDFLAGS: -L"D:/TTS/qwen3-tts.cpp-main/build" -L"D:/TTS/qwen3-tts.cpp-main/ggml/build/src" "D:/TTS/qwen3-tts.cpp-main/build/libqwen3tts.dll.a" -lqwen3_tts -ltts_transformer -ltext_tokenizer -laudio_tokenizer_encoder -laudio_tokenizer_decoder "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-base.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-cpu.a" -lstdc++ -lpthread
+#cgo CFLAGS: -I"D:/TTS/qwen3-tts.cpp-main/src" -I"D:/TTS/qwen3-tts.cpp-main/ggml/include"
+#include <stdlib.h>
+#include "qwen3tts_c_api.h"
+*/
+import "C"
+
+import (
+	"config"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+	"unsafe"
+)
+
+type TTSEngine struct {
+	handle     *C.Qwen3Tts
+	modelDir   string
+	refAudio   string
+	mu         sync.Mutex
+	languageID int32
+}
+
+var (
+	globalTTS *TTSEngine
+	ttsOnce   sync.Once
+)
+
+type TTSRequest struct {
+	Text string `json:"text"`
+}
+
+type TTSResponse struct {
+	Success bool   `json:"success"`
+	Audio   string `json:"audio,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+func initTTSEngine() {
+	ttsOnce.Do(func() {
+		modelDir := *config.LocalDir + "/models"
+		refAudio := *config.LocalDir + "/audios/lunar-template.wav"
+
+		cModelDir := C.CString(modelDir)
+		defer C.free(unsafe.Pointer(cModelDir))
+
+		handle := C.qwen3_tts_create(cModelDir, 4)
+		if handle == nil {
+			log.Printf("Qwen TTS 引擎初始化失败，模型目录: %s", modelDir)
+			return
+		}
+
+		globalTTS = &TTSEngine{
+			handle:     handle,
+			modelDir:   modelDir,
+			refAudio:   refAudio,
+			languageID: 2055,
+		}
+
+		log.Printf("Qwen TTS 引擎初始化成功")
+	})
+}
+
+func synthesizeText(text string) ([]float32, error) {
+	if globalTTS == nil || globalTTS.handle == nil {
+		initTTSEngine()
+		if globalTTS == nil || globalTTS.handle == nil {
+			return nil, fmt.Errorf("TTS 引擎未初始化")
+		}
+	}
+
+	globalTTS.mu.Lock()
+	defer globalTTS.mu.Unlock()
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cRefAudio := C.CString(globalTTS.refAudio)
+	defer C.free(unsafe.Pointer(cRefAudio))
+
+	var cParams C.Qwen3TtsParams
+	C.qwen3_tts_default_params(&cParams)
+	cParams.n_threads = 4
+	cParams.language_id = C.int32_t(globalTTS.languageID)
+
+	result := C.qwen3_tts_synthesize_with_voice_file(
+		globalTTS.handle,
+		cText,
+		cRefAudio,
+		&cParams,
+	)
+
+	if result == nil {
+		errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
+		return nil, fmt.Errorf("TTS 合成失败: %s", errStr)
+	}
+
+	defer C.qwen3_tts_free_audio(result)
+
+	nSamples := int(result.n_samples)
+	if nSamples == 0 {
+		return nil, fmt.Errorf("TTS 合成结果为空")
+	}
+
+	samples := make([]float32, nSamples)
+	cSamples := (*[1 << 30]C.float)(unsafe.Pointer(result.samples))[:nSamples:nSamples]
+	for i := 0; i < nSamples; i++ {
+		samples[i] = float32(cSamples[i])
+	}
+
+	return samples, nil
+}
+
+func encodePCMToWAV(samples []float32, sampleRate int) []byte {
+	numSamples := len(samples)
+	byteRate := sampleRate * 2
+	blockAlign := 2
+	dataSize := numSamples * 2
+	fileSize := 36 + dataSize
+
+	buf := make([]byte, 44+dataSize)
+
+	buf[0] = 'R'
+	buf[1] = 'I'
+	buf[2] = 'F'
+	buf[3] = 'F'
+	putUint32LE(buf[4:], uint32(fileSize))
+	buf[8] = 'W'
+	buf[9] = 'A'
+	buf[10] = 'V'
+	buf[11] = 'E'
+	buf[12] = 'f'
+	buf[13] = 'm'
+	buf[14] = 't'
+	buf[15] = ' '
+	putUint32LE(buf[16:], 16)
+	putUint16LE(buf[20:], 1)
+	putUint16LE(buf[22:], 1)
+	putUint32LE(buf[24:], uint32(sampleRate))
+	putUint32LE(buf[28:], uint32(byteRate))
+	putUint16LE(buf[32:], uint16(blockAlign))
+	putUint16LE(buf[34:], 16)
+	buf[36] = 'd'
+	buf[37] = 'a'
+	buf[38] = 't'
+	buf[39] = 'a'
+	putUint32LE(buf[40:], uint32(dataSize))
+
+	for i, sample := range samples {
+		val := max(min(int16(sample*32767.0), 32767), -32768)
+		offset := 44 + i*2
+		buf[offset] = byte(val)
+		buf[offset+1] = byte(val >> 8)
+	}
+
+	return buf
+}
+
+func putUint16LE(b []byte, v uint16) {
+	b[0] = byte(v)
+	b[1] = byte(v >> 8)
+}
+
+func putUint32LE(b []byte, v uint32) {
+	b[0] = byte(v)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v >> 16)
+	b[3] = byte(v >> 24)
+}
+
+func QwenTTSHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TTSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("解析TTS请求失败: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(TTSResponse{
+			Success: false,
+			Error:   "无效的请求格式",
+		})
+		return
+	}
+
+	if req.Text == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(TTSResponse{
+			Success: false,
+			Error:   "文本内容不能为空",
+		})
+		return
+	}
+
+	samples, err := synthesizeText(req.Text)
+	if err != nil {
+		log.Printf("TTS 合成失败: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(TTSResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	wavData := encodePCMToWAV(samples, 24000)
+	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
+
+	log.Printf("TTS 合成成功，文本: %s，采样数: %d", req.Text, len(samples))
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(TTSResponse{
+		Success: true,
+		Audio:   audioBase64,
+	})
+}

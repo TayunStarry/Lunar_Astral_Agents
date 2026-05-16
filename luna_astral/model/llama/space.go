@@ -77,8 +77,8 @@ func calculateMetadataLayers(metaData map[string]any, fileSize float64, freeMem 
 	if totalLayers == 0 {
 		return 0, 0, fmt.Errorf("GGUF模块[ERROR] -> 元数据[ block_count : GPU卸载层数 ]值为 0")
 	}
-	// 预留显存，默认 2GB
-	reserveMem := uint64(2 * 1024 * 1024 * 1024)
+	// 预留显存，默认 4GB
+	reserveMem := uint64(4 * 1024 * 1024 * 1024)
 	// 计算每层的大小，考虑激活值内存（1.75 倍）
 	layerSize := (fileSize / float64(totalLayers)) * 1.75
 	// 计算可用的层数，考虑显存预留
