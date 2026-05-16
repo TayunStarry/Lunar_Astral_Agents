@@ -42,26 +42,19 @@
         "url": "/read/package/parameter_assistant/index.html"
     },
     {
-        "id": "qwen3_tts",
-        "icon": "/read/images/icon/tts_qwen.Webp",
-        "title": "运行 Qwen3 TTS",
-        "description": "运行 Qwen3 TTS 本地语音生成模型",
-        "path": "/local_data/models/Qwen3-TTS/core/start-api.bat"
-    },
-    {
-        "id": "moss_nano_tts",
-        "icon": "/read/images/icon/tts_moss_nano.Webp",
-        "title": "运行 MOSS TTS Nano",
-        "description": "运行 MOSS TTS Nano 本地语音生成模型",
-        "path": "/local_data/models/MOSS-NANO-TTS/run.bat"
-    },
-    {
         "id": "view_on_gitee",
         "icon": "/read/images/icon/view_on_gitee.Webp",
-        "title": "『 星月智能 』项目仓库",
+        "title": "打开『 星月智能 』项目仓库",
         "description": "打开 『 星月智能 』的 Gitee 项目仓库",
         "url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
     },
+    {
+        "id": "qwen3_tts",
+        "icon": "/read/images/icon/tts_qwen.Webp",
+        "title": "语音合成",
+        "description": "打开『 星月智能 』语音合成",
+        "url": "/read/package/text_speech/index.html"
+        },
     {
         "id": "chat_deepseek",
         "icon": "/read/images/icon/logos_deepseek.Webp",
