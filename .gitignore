@@ -16,10 +16,6 @@ temp
 ## 本地数据
 local_data/images
 local_data/documents
-local_data/models/MOSS-NANO-TTS
-local_data/models/Qwen3-TTS/git
-local_data/models/Qwen3-TTS/python
-local_data/models/Qwen3-TTS/cache
 
 ## 系统文件
 desktop.ini

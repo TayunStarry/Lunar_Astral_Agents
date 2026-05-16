@@ -61,19 +61,15 @@
 			"./local_data/models"
 		],
 		"plan-3": [
-			"./Crystal_Astral.exe",
-			"./Luna_Astral.exe",
-			"./local_data/lunar_package.json",
-			"./local_data/lunar_config.json",
-			"./local_data/package",
-			"./local_data/audios",
-			"./local_data/images/icon",
-			"./local_data/images/background",
-			"./local_data/images/placeholder",
-			"./local_data/models",
-			"./crystal_astral",
-			"./luna_astral",
-			"./subsystem"
+			"simple_tts.exe",
+			"libgcc_s_seh-1.dll",
+			"libqwen3tts.dll",
+			"libstdc++-6.dll",
+			"libwinpthread-1.dll",
+			"vulkan-1.dll",
+			"local_data/audios/lunar-template.wav",
+			"local_data/models/qwen3-tts-0.6b-f16.gguf",
+			"local_data/models/qwen3-tts-tokenizer-f16.gguf"
 		],
 		"exclude": [
 			"*.log",
@@ -88,10 +84,10 @@
 			"C:/Program Files (x86)/7-Zip/7z.exe"
 		],
 		"defaults": {
-			"output_path": "./Lunar-Astral-Agents^2026-03-20",
+			"output_path": "./simple_tts",
 			"part_size_mb": 2048,
 			"compression_level": 5,
-			"package_plan": "plan-1"
+			"package_plan": "plan-3"
 		}
 	}
 }

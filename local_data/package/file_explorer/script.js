@@ -972,7 +972,7 @@ async function handleZipUpload(file, currentPath, onComplete) {
         showToast(`成功解压 ${result.total_files} 个文件`, 'success');
         onComplete();
     }
-     catch (error) {
+    catch (error) {
         showToast('解压失败', 'error');
         console.error('解压失败:', error);
     }
@@ -1045,7 +1045,8 @@ async function saveIndexToFile(indexData) {
         const file = new File([blob], 'file_query.index', { type: 'application/json' });
         // 上传到根目录（currentPath 为空）
         await uploadFile(file, '', () => { }, true);
-    } catch (error) {
+    }
+    catch (error) {
         console.error('保存索引文件失败:', error);
     }
 }
@@ -1223,7 +1224,7 @@ async function saveTextFile(file, content, currentPath) {
     try {
         const blob = new Blob([content], { type: 'text/plain' });
         const uploadFileObj = new File([blob], file.name, { type: 'text/plain' });
-        await uploadFile(uploadFileObj, currentPath, () => {}, true);
+        await uploadFile(uploadFileObj, currentPath, () => { }, true);
     } catch (error) {
         throw new Error('保存文件失败');
     }
@@ -1794,5 +1795,6 @@ class FileManager {
 document.addEventListener('DOMContentLoaded', () => {
     // 初始化文件管理器
     const fileManager = new FileManager();
+    //  TODO: 由于不在需要索引文件，所以停用索引加载功能
     fileManager.init();
 });
