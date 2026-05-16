@@ -32,6 +32,87 @@ var (
 	ttsOnce   sync.Once
 )
 
+const maxCacheSize = 5
+
+type cacheEntry struct {
+	audio string
+	ready chan struct{}
+}
+
+type TTSCache struct {
+	mu    sync.Mutex
+	items map[string]*cacheEntry
+	order []string
+}
+
+var ttsCache = &TTSCache{
+	items: make(map[string]*cacheEntry),
+	order: make([]string, 0, maxCacheSize),
+}
+
+func (c *TTSCache) Get(text string) (*cacheEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entry, exists := c.items[text]
+	if exists {
+		for i, t := range c.order {
+			if t == text {
+				c.order = append(c.order[:i], c.order[i+1:]...)
+				c.order = append(c.order, text)
+				break
+			}
+		}
+		return entry, true
+	}
+	return nil, false
+}
+
+func (c *TTSCache) GetOrSetPending(text string) (*cacheEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if entry, exists := c.items[text]; exists {
+		return entry, false
+	}
+
+	if len(c.order) >= maxCacheSize {
+		oldest := c.order[0]
+		delete(c.items, oldest)
+		c.order = c.order[1:]
+	}
+
+	entry := &cacheEntry{
+		ready: make(chan struct{}),
+	}
+	c.items[text] = entry
+	c.order = append(c.order, text)
+	return entry, true
+}
+
+func (c *TTSCache) Remove(text string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.items, text)
+	for i, t := range c.order {
+		if t == text {
+			c.order = append(c.order[:i], c.order[i+1:]...)
+			break
+		}
+	}
+}
+
+func (e *cacheEntry) MarkReady(audio string) {
+	e.audio = audio
+	close(e.ready)
+}
+
+func (e *cacheEntry) Wait() string {
+	<-e.ready
+	return e.audio
+}
+
 type TTSRequest struct {
 	Text string `json:"text"`
 }
@@ -210,9 +291,33 @@ func QwenTTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	entry, exists := ttsCache.Get(req.Text)
+	if exists {
+		audioBase64 := entry.Wait()
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(TTSResponse{
+			Success: true,
+			Audio:   audioBase64,
+		})
+		return
+	}
+
+	entry, isCreator := ttsCache.GetOrSetPending(req.Text)
+	if !isCreator {
+		audioBase64 := entry.Wait()
+		log.Printf("TTS 缓存等待，文本: %s", req.Text)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(TTSResponse{
+			Success: true,
+			Audio:   audioBase64,
+		})
+		return
+	}
+
 	samples, err := synthesizeText(req.Text)
 	if err != nil {
 		log.Printf("TTS 合成失败: %v", err)
+		ttsCache.Remove(req.Text)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(TTSResponse{
 			Success: false,
@@ -223,6 +328,8 @@ func QwenTTSHandler(w http.ResponseWriter, r *http.Request) {
 
 	wavData := encodePCMToWAV(samples, 24000)
 	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
+
+	entry.MarkReady(audioBase64)
 
 	log.Printf("TTS 合成成功，文本: %s，采样数: %d", req.Text, len(samples))
 

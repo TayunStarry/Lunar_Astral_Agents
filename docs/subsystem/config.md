@@ -123,7 +123,6 @@
   },
   "port": {
     "api_port": 0,
-    "tts_url": "http://localhost:5002"
   },
   "image": {
     "output_dir": "./images",

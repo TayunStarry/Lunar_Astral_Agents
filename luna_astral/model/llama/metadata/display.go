@@ -13,8 +13,6 @@ import (
 // 参数:
 //   - metadata: 元数据键值对的映射表（key 是字符串，value 是任意类型）
 func DisplayAllMetadata(modelName string, metadata map[string]any) {
-	// 打印分隔符，用于分隔不同的元数据输出
-	log.Printf("%s", strings.Repeat("-=", 28))
 	// 打印模型名称，用于标识当前输出的元数据来源
 	log.Printf("GGUF元数据 -> 模型[ %s ]", modelName)
 	// 遍历元数据映射表中的所有键值对
@@ -26,8 +24,6 @@ func DisplayAllMetadata(modelName string, metadata map[string]any) {
 		// 按照指定格式打印元数据的键、类型和值
 		log.Printf("%-40s %-20s = %s\n", key, typeStr, valueStr)
 	}
-	// 打印分隔符，用于分隔不同的元数据输出
-	log.Printf("%s", strings.Repeat("-=", 28))
 }
 
 // getTypeString 获取一个值的类型的字符串表示形式。

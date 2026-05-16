@@ -30,8 +30,6 @@ type ModelConfig struct {
 		Developer bool `json:"developer"`
 		// 是否清除端口
 		ClearPort bool `json:"clear_port"`
-		// TTS 服务地址
-		TTSUrl string `json:"tts_url"`
 		// 是否允许加载扩散模型
 		AllowDiffusion bool `json:"allow_diffusion"`
 		// 是否允许加载多模态模型
@@ -95,10 +93,6 @@ func init() {
 	// 如果配置文件中 PromptRefineModel 字段非空，则更新全局配置
 	if parameter.Models.PromptRefineModel != "" {
 		*PromptRefineModel = parameter.Models.PromptRefineModel
-	}
-	// 如果配置文件中 TTSUrl 字段非空，则更新全局配置
-	if parameter.Server.TTSUrl != "" {
-		*TTSUrl = parameter.Server.TTSUrl
 	}
 	// 如果配置文件中 CloudModelUrl 字段非空，则更新全局配置
 	if parameter.Cloud.CloudModelUrl != "" {

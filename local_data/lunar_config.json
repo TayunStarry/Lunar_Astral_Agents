@@ -8,7 +8,6 @@
 		"prompt_refine_model": "./local_data/models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 	},
 	"server": {
-		"tts_url": "http://localhost:7860",
 		"developer": false,
 		"clear_port": false,
 		"allow_diffusion": true,

@@ -40,8 +40,6 @@ func GetFreeMemory() (uint64, error) {
 
 // getFileInfoAndMemory 函数用于获取模型文件的信息和可用显存
 func getFileInfoAndMemory(modelPath, modelName string) (os.FileInfo, uint64, error) {
-	// 打印模型加载分隔符
-	log.Printf("%s", strings.Repeat("-=", 28))
 	// 获取模型文件的信息
 	fileInfo, err := os.Stat(modelPath)
 	// 若获取文件信息失败，记录错误日志并返回错误
@@ -51,7 +49,7 @@ func getFileInfoAndMemory(modelPath, modelName string) (os.FileInfo, uint64, err
 	}
 	// 获取可用显存大小
 	freeMem, err := GetFreeMemory()
-	// 若获取显存信息失败，记录错误日志并使用默认值 8GB
+	// 若获取显存信息失败，记录错误日志并使用默认值 2GB
 	if err != nil {
 		log.Printf("GGUF模块[ERROR] -> 显存检测失败，使用默认值 2GB: %v", err)
 		freeMem = 2 * 1024 * 1024 * 1024
@@ -77,8 +75,8 @@ func calculateMetadataLayers(metaData map[string]any, fileSize float64, freeMem 
 	if totalLayers == 0 {
 		return 0, 0, fmt.Errorf("GGUF模块[ERROR] -> 元数据[ block_count : GPU卸载层数 ]值为 0")
 	}
-	// 预留显存，默认 4GB
-	reserveMem := uint64(4 * 1024 * 1024 * 1024)
+	// 预留显存，默认 3GB
+	reserveMem := uint64(3 * 1024 * 1024 * 1024)
 	// 计算每层的大小，考虑激活值内存（1.75 倍）
 	layerSize := (fileSize / float64(totalLayers)) * 1.75
 	// 计算可用的层数，考虑显存预留
