@@ -1,1 +1,0 @@
-./qwen3-tts-cli.exe -m "../" -t "我们建议先创建一个干净的Python环境，然后以可编辑模式安装项目，使得moss-tts-nano命令在本地可用。下面的示例故意保持参数最少，依赖仓库默认设置。默认情况下，代码加载OpenMOSS-Team/MOSS-TTS-Nano和OpenMOSS-Team/MOSS-Audio-Tokenizer" -o "output.wav" -r ".\lunar-template.wav"

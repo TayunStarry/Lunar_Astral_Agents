@@ -30,7 +30,6 @@ desktop.ini
 *.lnk
 
 ## 编译产物
-*.exe
 *.dll
 *.so
 *.a
