@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple TTS - 文本转语音</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎵 Simple TTS</h1>
+            <p class="subtitle">文本转语音合成服务</p>
+            <div id="status-indicator" class="status-indicator offline">
+                <span class="dot"></span>
+                <span class="status-text">离线</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="section input-section">
+                <h2>📝 文本输入</h2>
+                <textarea id="text-input" placeholder="请输入要转换的文本..." rows="6"></textarea>
+                <div class="char-count">
+                    <span id="char-count">0</span> 字符
+                </div>
+            </section>
+
+            <section class="section audio-section">
+                <h2>🎤 参考音频</h2>
+                <div class="upload-area" id="upload-area">
+                    <input type="file" id="audio-upload" accept="audio/*" hidden>
+                    <div class="upload-content" id="upload-content">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <p>点击或拖拽上传参考音频</p>
+                        <span class="upload-hint">支持 WAV、MP3 格式</span>
+                    </div>
+                    <div class="file-info hidden" id="file-info">
+                        <span class="file-name" id="file-name"></span>
+                        <button class="btn btn-small btn-danger" id="remove-file">×</button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section control-section">
+                <button id="synthesize-btn" class="btn btn-primary btn-large">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    合成语音
+                </button>
+            </section>
+
+            <section class="section output-section">
+                <h2>🔊 音频播放</h2>
+                <div id="status-message" class="status-message"></div>
+                
+                <div class="audio-player hidden" id="audio-player-container">
+                    <audio id="audio-player" preload="auto"></audio>
+                    <div class="waveform" id="waveform"></div>
+                    <div class="player-controls">
+                        <button class="btn btn-icon" id="play-btn" title="播放">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon hidden" id="pause-btn" title="暂停">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon" id="stop-btn" title="停止">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 6h12v12H6z"/>
+                            </svg>
+                        </button>
+                        <div class="progress-container">
+                            <input type="range" id="progress-bar" class="progress-bar" min="0" max="100" value="0">
+                            <span class="time-display" id="time-display">0:00 / 0:00</span>
+                        </div>
+                        <div class="volume-control">
+                            <svg viewBox="0 0 24 24" fill="currentColor" class="volume-icon">
+                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                            </svg>
+                            <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="80">
+                        </div>
+                        <button class="btn btn-icon" id="download-btn" title="下载音频">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Powered by Qwen3-TTS &copy; 2026</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
