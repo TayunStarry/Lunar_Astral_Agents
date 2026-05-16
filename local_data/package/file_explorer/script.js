@@ -1039,10 +1039,13 @@ async function traverseAllFiles(startPath = '') {
  * @returns {Promise<void>}
  */
 async function saveIndexToFile(indexData) {
+    //  TODO: 由于不再需要索引文件，所以停用索引加载功能
+    if (true) return;
     try {
         const jsonStr = JSON.stringify(indexData);
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const file = new File([blob], 'file_query.index', { type: 'application/json' });
+        setTimeout(() => showToast('正在构建搜索索引，请稍后...', 'info'), 2000);
         // 上传到根目录（currentPath 为空）
         await uploadFile(file, '', () => { }, true);
     }
@@ -1625,7 +1628,6 @@ class FileManager {
 
         try {
             if (this.allFiles.length === 0) {
-                setTimeout(() => showToast('正在构建搜索索引，请稍后...', 'info'), 2000);
                 this.allFiles = await traverseAllFiles();
                 // 将索引保存到文件
                 saveIndexToFile(this.allFiles);
