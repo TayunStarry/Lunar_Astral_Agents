@@ -28,6 +28,4 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/capture/region", Handler: screenshot.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
 	{Path: "/capture/displays", Handler: screenshot.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
 	{Path: "/resize", Handler: screenshot.HandleResizeImage, Method: "POST", Description: "图片缩放"},
-	{Path: "/tts/", Handler: TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	{Path: "/upload/", Handler: UploadHandler, Method: "POST", Description: "参考音频上传"},
 }

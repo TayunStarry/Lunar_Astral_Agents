@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>『 星月智能 』星图-琉璃</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- 固定背景层，用于展示 '/background' 图片 -->
+    <div class="fixed-bg"></div>
+
+    <div class="app-container">
+        <!-- 主内容磨砂卡片 -->
+        <main class="glass-panel">
+            <!-- 品牌区域 -->
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M9 19V5l12 7-12 7z" />
+                        <path d="M5 19V5" />
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>星月智能 · 图片生成</h1>
+                    <p>即刻创造生动对话</p>
+                </div>
+            </div>
+
+            <!-- 双栏灵动区：文本输入 + 参考音频 -->
+            <div class="form-grid">
+                <!-- 左侧：文本输入卡片 -->
+                <div class="input-card glass-card">
+                    <div class="card-header">
+                        <span class="card-icon">📝</span>
+                        <h3>文本脚本</h3>
+                    </div>
+                    <div class="textarea-wrapper">
+                        <textarea id="text-input" placeholder="输入任意文字，让 AI 为您发声……（支持中英文混合）" rows="5"></textarea>
+                        <div class="char-counter">
+                            <span id="char-count">0</span> 字符
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：参考音频卡片 -->
+                <div class="upload-card glass-card">
+                    <div class="card-header">
+                        <span class="card-icon">🎤</span>
+                        <h3>音色参考 (可选)</h3>
+                    </div>
+                    <div class="upload-zone" id="upload-area">
+                        <input type="file" id="audio-upload" accept="audio/*" hidden>
+                        <!-- 未上传状态 -->
+                        <div class="upload-placeholder" id="upload-content">
+                            <div class="upload-icon-bg">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                                    <path d="M12 3v12m0 0-3-3m3 3 3-3M5 21h14" stroke-linecap="round" />
+                                    <rect x="4" y="14" width="16" height="3" rx="1" />
+                                </svg>
+                            </div>
+                            <p>拖拽或点击上传音频</p>
+                            <span class="hint">WAV / MP3，推荐清晰人声片段</span>
+                        </div>
+                        <!-- 已上传状态 -->
+                        <div class="upload-fileinfo hidden" id="file-info">
+                            <div class="file-detail">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+                                        stroke-width="1.5" />
+                                    <polyline points="13 2 13 9 20 9" stroke-width="1.5" />
+                                </svg>
+                                <span id="file-name" class="file-name"></span>
+                            </div>
+                            <button class="icon-btn remove-btn" id="remove-file" title="移除音频">✕</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 合成主控按钮 -->
+            <div class="action-center">
+                <button id="synthesize-btn" class="glow-button">
+                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <span>合成语音</span>
+                </button>
+            </div>
+
+            <!-- 状态消息气泡 -->
+            <div id="status-message" class="status-toast"></div>
+
+            <!-- 音频播放器区域（动态显示） -->
+            <div id="audio-player-container" class="player-section hidden">
+                <div class="glass-card player-card">
+                    <div class="player-header">
+                        <span class="player-badge">✨ 合成音频</span>
+                        <button id="download-btn" class="icon-btn download-icon" title="下载音频">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 3v12m-4-4 4 4 4-4" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- 动态波形条 (合成动画区) -->
+                    <div class="waveform-stage" id="waveform"></div>
+
+                    <!-- 音频核心控件 -->
+                    <audio id="audio-player" preload="auto"></audio>
+                    <div class="player-controls">
+                        <div class="playback-buttons">
+                            <button id="play-btn" class="ctrl-btn" title="播放">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                            </button>
+                            <button id="pause-btn" class="ctrl-btn hidden" title="暂停">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                                </svg>
+                            </button>
+                            <button id="stop-btn" class="ctrl-btn" title="停止">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 6h12v12H6z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="progress-area">
+                            <input type="range" id="progress-bar" class="glass-slider" min="0" max="100" value="0">
+                            <span id="time-display" class="time-label">0:00 / 0:00</span>
+                        </div>
+                        <div class="volume-wrap">
+                            <svg class="volume-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path
+                                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM16 3.5v2.05c2.5 1.12 4 3.53 4 6.45s-1.5 5.33-4 6.45v2.05c3.5-1.18 6-4.47 6-8.5s-2.5-7.32-6-8.5z" />
+                            </svg>
+                            <input type="range" id="volume-slider" class="glass-slider vol-slider" min="0" max="100"
+                                value="80">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 极简脚注 -->
+        <footer class="glass-footer">
+            <p>神经语音引擎 · 瞬时响应 · 沉浸创作</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
