@@ -995,7 +995,7 @@ qrcodeButton.addEventListener('click', function () {
  */
 function playButtonClickSound() {
     /** 随机选择一个按钮点击音效URL */
-    const audio = new Audio(`/read/resources/audios/button-${RandomFloor(0, 11)}.mp3`);
+    const audio = new Audio(`/read/audios/button-${RandomFloor(0, 11)}.mp3`);
     // 设置音频音量为最大
     audio.volume = 1.0;
     // 播放音频
@@ -2154,7 +2154,7 @@ function registerToolFromMarkdown(markdownContent) {
  */
 async function EnableLunarToolPackageProtocol() {
     /** 获取文件列表 */
-    const listRes = await fetch('/file_list/resources/package');
+    const listRes = await fetch('/file_list/package/different_lunar/package');
     // 检查文件列表响应是否成功
     if (!listRes.ok)
         return { success: false, message: `获取工具文件列表失败: ${listRes.status}` };
@@ -2163,7 +2163,7 @@ async function EnableLunarToolPackageProtocol() {
     /** 过滤出工具文件 */
     const toolFiles = fileList.filter(item => item.name.endsWith('.ltp.md') && !item.isDir);
     /** 批量注册工具 */
-    toolFiles.forEach(file => fetchMarkdown(`/read/resources/package/${file.name}`).then(content => registerToolFromMarkdown(content)));
+    toolFiles.forEach(file => fetchMarkdown(`/read/package/different_lunar/package/${file.name}`).then(content => registerToolFromMarkdown(content)));
     return { success: true, message: `已成功注册 ${toolFiles.length} 个工具` };
 }
 
@@ -4002,7 +4002,7 @@ async function allowChartRedrawing(type, message) {
     /**
      * 获取图表重绘的Markdown内容
      */
-    let markdown = await fetchMarkdown('/read/resources/prompts/chartRedrawing.md');
+    let markdown = await fetchMarkdown('/read/package/different_lunar/prompts/chartRedrawing.md');
     // 替换Markdown中的占位符
     markdown = markdown.replace(/{type}/g, type).replace(/{message}/g, message);
     // 若调试模式开启，则渲染< 动态提示词 >
@@ -4026,7 +4026,7 @@ async function prohibitChartRedrawing() {
     /**
      * 获取道歉消息的Markdown内容
      */
-    const markdown = await fetchMarkdown('/read/resources/prompts/apologyMessage.md');
+    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/apologyMessage.md');
     // 若调试模式开启，则渲染< 动态提示词 >
     if (OnlyData.isDebugMode) {
         /**
@@ -4115,7 +4115,7 @@ function reloadMessageAndMarkdown(assistantMessage, contentElement) {
  */
 async function renderingPagePlaceholders(container) {
     /** 加载随机的占位符图片 */
-    const imageUrl = `/read/resources/placeholder/blank-0${RandomFloor(0, 3)}.png`;
+    const imageUrl = `/read/images/placeholder/unknown_file_icon-0${RandomFloor(0, 4)}.webp`;
     /** 创建图片消息对象 */
     const imageMessage = createImageMessage('assistant', '', imageUrl);
     // 渲染占位符图片到内容元素
@@ -4172,7 +4172,7 @@ async function addImageRendering(message, container = chatHistoryPanel) {
         `class="image-just-drawn"`,
         `id="${message.imageUrl.replace(/\\/g, '/').split('/').pop().split('.')[0].trim()}"`,
         `style="border-color: var(${randomColorStyle()});"`,
-        `onerror="this.onerror=null; this.src='/read/resources/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'"`,
+        `onerror="this.onerror=null; this.src='/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 5)}.webp'"`,
         `onclick="previewImage('${message.imageUrl.replace(/\\/g, '/')}', '${message.content.trim() || '本地图片'}')"`,
     ].join(" ");
     // 设置消息元素的初始 HTML 结构
@@ -6835,7 +6835,7 @@ async function presetMessage() {
     // 更新上一次显示预设消息的时间戳为当前时间
     lastPresetMessageTime = now;
     /** 获取预设的 Markdown 消息内容 */
-    const markdown = await fetchMarkdown('/read/resources/prompts/prohibitMessage.md');
+    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/prohibitMessage.md');
     // 将预设消息添加到聊天历史记录并渲染到界面上
     renderMessage(await createMessageObject("assistant", markdown, false), chatHistoryPanel);
     // 若开启了自动语音播放功能，则播放预设消息的语音
@@ -6857,13 +6857,13 @@ async function systemInitializationEvent() {
     // 异步加载自定义配置文件
     //EntryAPI.OnlyData.customConfig = await EntryAPI.fetchDocumentCallback('resources/custom_config.json');
     // 异步加载系统提示词
-    OnlyData.systemPrompt = await fetchMarkdown('/read/resources/prompts/systemPrompt.md');
+    OnlyData.systemPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/systemPrompt.md');
     // 异步加载图片描述提示词
-    OnlyData.imagePrompt = await fetchMarkdown('/read/resources/prompts/imagePrompt.md');
+    OnlyData.imagePrompt = await fetchMarkdown('/read/package/different_lunar/prompts/imagePrompt.md');
     // 异步加载视频描述提示词
-    OnlyData.videoPrompt = await fetchMarkdown('/read/resources/prompts/videoPrompt.md');
+    OnlyData.videoPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/videoPrompt.md');
     // 异步加载视频总结提示词
-    OnlyData.videoSummaryPrompt = await fetchMarkdown('/read/resources/prompts/videoSummaryPrompt.md');
+    OnlyData.videoSummaryPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/videoSummaryPrompt.md');
     // 异步获取文件服务 API 端点
     OnlyData.fileServiceUrl = await convertUrl(true);
     // 异步获取系统URL
@@ -6922,7 +6922,7 @@ async function showDialogueContinuation(length) {
  */
 async function loadDemoMessage() {
     /** 获取演示消息 */
-    const markdown = await fetchMarkdown('/read/resources/prompts/demoMessage.md');
+    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/demoMessage.md');
     /** 创建助手消息对象 */
     const assistantMsgObj = await createMessageObject("assistant", '', false);
     // 为助手消息对象设置内容为演示消息
@@ -7207,7 +7207,7 @@ async function allowActiveMessage() {
     /**
      * 获取主动消息的Markdown内容
      */
-    const markdown = await fetchMarkdown('/read/resources/prompts/activeMessage.md');
+    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/activeMessage.md');
     // 若调试模式开启，则渲染< 动态提示词 >
     if (OnlyData.isDebugMode) {
         /**

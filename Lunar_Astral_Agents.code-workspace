@@ -12,9 +12,6 @@
 			"path": "../TTS/qwen3-tts.cpp-main"
 		},
 		{
-			"path": "../TTS/qwen3-tts.cpp"
-		},
-		{
 			"path": "../TTS/luna-tts"
 		}
 	],

@@ -123,7 +123,7 @@ func waitForShutdown(quit chan os.Signal) {
 }
 
 func shutdownServer() {
-	uploadDir := "./uploads"
+	uploadDir := "./local_data/audios"
 	if _, err := os.Stat(uploadDir); err == nil {
 		files, _ := filepath.Glob(filepath.Join(uploadDir, "ref_*"))
 		for _, f := range files {

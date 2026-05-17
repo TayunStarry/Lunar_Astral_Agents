@@ -57,6 +57,8 @@ func main() {
 		}
 	}
 
+	shutdownServer()
+
 	browser.CloseWebView()
 	log.Println("[SimpleTTS] 已成功关闭")
 }
