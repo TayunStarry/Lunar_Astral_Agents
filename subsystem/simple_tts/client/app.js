@@ -42,7 +42,11 @@ function init() {
 function setupEventListeners() {
     TEXT_INPUT.addEventListener('input', handleTextInput);
 
-    UPLOAD_AREA.addEventListener('click', () => AUDIO_UPLOAD.click());
+    UPLOAD_AREA.addEventListener('click', (e) => {
+        if (!e.target.closest('#remove-file') && !e.target.closest('#file-info')) {
+            AUDIO_UPLOAD.click();
+        }
+    });
     AUDIO_UPLOAD.addEventListener('change', handleFileSelect);
     UPLOAD_AREA.addEventListener('dragover', handleDragOver);
     UPLOAD_AREA.addEventListener('dragleave', handleDragLeave);
@@ -93,6 +97,14 @@ function handleFileSelect(e) {
 }
 
 async function uploadAudioFile(file) {
+    const validExts = ['.wav'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!validExts.includes(ext)) {
+        showStatus('仅支持 WAV 格式音频文件', 'error');
+        AUDIO_UPLOAD.value = '';
+        return;
+    }
+
     const formData = new FormData();
     formData.append('audio', file);
 
