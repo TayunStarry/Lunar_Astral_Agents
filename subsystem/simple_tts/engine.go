@@ -378,7 +378,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		ext = ".wav"
 	}
 
-	uploadDir := "./uploads"
+	uploadDir := "./local_data/audios"
 	os.MkdirAll(uploadDir, 0755)
 
 	tempPath := filepath.Join(uploadDir, "ref_"+fmt.Sprintf("%d", int(os.Getpid()))+ext)

@@ -24,8 +24,9 @@
                     </svg>
                 </div>
                 <div class="brand-text">
-                    <h1>星月智能 · 图片生成</h1>
-                    <p>即刻创造生动对话</p>
+                    <h1>星月智能 · 语音合成</h1>
+                    <!-- 状态消息气泡 -->
+                    <div id="status-message" class="status-toast"></div>
                 </div>
             </div>
 
@@ -35,10 +36,10 @@
                 <div class="input-card glass-card">
                     <div class="card-header">
                         <span class="card-icon">📝</span>
-                        <h3>文本脚本</h3>
+                        <h3>文本内容</h3>
                     </div>
                     <div class="textarea-wrapper">
-                        <textarea id="text-input" placeholder="输入任意文字，让 AI 为您发声……（支持中英文混合）" rows="5"></textarea>
+                        <textarea id="text-input" placeholder="输入任意文字，让 AI 为您发声……（支持中英文混合）"></textarea>
                         <div class="char-counter">
                             <span id="char-count">0</span> 字符
                         </div>
@@ -80,29 +81,12 @@
                 </div>
             </div>
 
-            <!-- 合成主控按钮 -->
-            <div class="action-center">
-                <button id="synthesize-btn" class="glow-button">
-                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <span>合成语音</span>
-                </button>
-            </div>
-
-            <!-- 状态消息气泡 -->
-            <div id="status-message" class="status-toast"></div>
-
             <!-- 音频播放器区域（动态显示） -->
-            <div id="audio-player-container" class="player-section hidden">
+            <div id="audio-player-container" class="player-section">
                 <div class="glass-card player-card">
-                    <div class="player-header">
-                        <span class="player-badge">✨ 合成音频</span>
-                        <button id="download-btn" class="icon-btn download-icon" title="下载音频">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 3v12m-4-4 4 4 4-4" />
-                            </svg>
-                        </button>
+                    <div class="card-header">
+                        <span class="card-icon">🔊</span>
+                        <h3>音频预览</h3>
                     </div>
 
                     <!-- 动态波形条 (合成动画区) -->
@@ -143,12 +127,24 @@
                     </div>
                 </div>
             </div>
-        </main>
 
-        <!-- 极简脚注 -->
-        <footer class="glass-footer">
-            <p>神经语音引擎 · 瞬时响应 · 沉浸创作</p>
-        </footer>
+            <!-- 合成主控按钮 -->
+            <div class="action-center">
+                <button id="synthesize-btn" class="glow-button">
+                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <span>合成语音</span>
+                </button>
+
+                <button id="download-btn" class="glow-button" title="下载音频">
+                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <span>下载音频</span>
+                </button>
+            </div>
+        </main>
     </div>
 
     <script src="app.js"></script>
