@@ -1,0 +1,254 @@
+/* 容器样式 */
+.container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 20px;
+    height: 100%;
+    overflow: hidden;
+}
+
+.background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('/read/resources/placeholder/background.png') center/cover no-repeat;
+    z-index: -2;
+    animation: backgroundAnimation 4s ease-in-out forwards;
+    filter: blur(0px) brightness(0.9) contrast(1.0);
+}
+
+.glass-effect {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--glass-bg);
+    backdrop-filter: blur(5px) saturate(180%);
+    -webkit-backdrop-filter: blur(5px) saturate(180%);
+    z-index: -1;
+    opacity: 0.7;
+}
+
+/* 主容器面板样式 */
+.main-container-panel {
+    display: flex;
+    flex: 1;
+    gap: 0px;
+    height: calc(100% - 80px);
+    overflow: auto;
+}
+
+/* 滑块轨道样式 - 美化版 */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(90deg,
+            var(--status-4a6fa5) 0%,
+            var(--background-f5f5f5) 0%);
+    border-radius: 10px;
+    outline: none;
+    cursor: pointer;
+    transition: all var(--transition);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    position: relative;
+}
+
+/* Firefox 轨道样式 */
+input[type="range"]::-moz-range-track {
+    width: 100%;
+    height: 8px;
+    background: var(--background-f5f5f5);
+    border-radius: 10px;
+    border: none;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Firefox 填充轨道 - 使用渐变 */
+input[type="range"]::-moz-range-progress {
+    height: 8px;
+    background: linear-gradient(90deg,
+            var(--status-4a6fa5),
+            var(--status-6c9bcf));
+    border-radius: 10px 0 0 10px;
+    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+/* Chrome/Safari/Edge 滑块按钮 - 美化版 */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg,
+            var(--background-fafafa) 0%,
+            #ffffff 100%);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow:
+        0 4px 12px rgba(74, 111, 165, 0.3),
+        0 0 0 3px var(--status-4a6fa5),
+        inset 0 1px 2px rgba(255, 255, 255, 0.8);
+    transition: all var(--transition);
+    border: none;
+    position: relative;
+    z-index: 2;
+}
+
+/* Firefox 滑块按钮 - 美化版 */
+input[type="range"]::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg,
+            var(--background-fafafa) 0%,
+            #ffffff 100%);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow:
+        0 4px 12px rgba(74, 111, 165, 0.3),
+        0 0 0 3px var(--status-4a6fa5),
+        inset 0 1px 2px rgba(255, 255, 255, 0.8);
+    transition: all var(--transition);
+    border: none;
+    position: relative;
+    z-index: 2;
+}
+
+/* 滑块悬停效果 */
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.15);
+    box-shadow:
+        0 6px 16px rgba(74, 111, 165, 0.4),
+        0 0 0 3px var(--status-6c9bcf),
+        inset 0 1px 2px rgba(255, 255, 255, 0.9);
+}
+
+/* 滑块激活状态 */
+input[type="range"]:active::-webkit-slider-thumb,
+input[type="range"]:active::-moz-range-thumb {
+    transform: scale(1.1);
+    box-shadow:
+        0 4px 14px rgba(58, 90, 138, 0.5),
+        0 0 0 3px var(--status-3a5a8a),
+        inset 0 1px 2px rgba(255, 255, 255, 0.7);
+    background: linear-gradient(135deg,
+            #f0f0f0 0%,
+            var(--background-fafafa) 100%);
+}
+
+/* 轨道悬停效果 - 更细腻 */
+input[type="range"]:hover {
+    background: linear-gradient(90deg,
+            var(--status-4a6fa5) 0%,
+            var(--background-969696) 0%);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+input[type="range"]:hover::-moz-range-track {
+    background: var(--background-969696);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 焦点状态 - 增加可访问性 */
+input[type="range"]:focus {
+    outline: 2px solid var(--status-6c9bcf);
+    outline-offset: 2px;
+}
+
+/* 禁用状态 */
+input[type="range"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb,
+input[type="range"]:disabled::-moz-range-thumb {
+    cursor: not-allowed;
+    transform: scale(1);
+    box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.2),
+        0 0 0 3px var(--background-969696);
+    background: var(--background-f5f5f5);
+}
+
+/* 动态进度条填充效果 - 仅Webkit */
+input[type="range"] {
+    background: linear-gradient(90deg,
+            var(--status-4a6fa5) 0% var(--progress, 0%),
+            var(--background-f5f5f5) var(--progress, 0%) 100%);
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--border-e1e6f0);
+    flex-shrink: 0;
+}
+
+/* 控制区域样式 */
+.controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+/* 聊天标题样式 */
+.chat-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--status-6c9bcf);
+    line-height: 1.2;
+}
+
+/* 聊天副标题样式 */
+.chat-subtitle {
+    font-size: 0.95rem;
+    opacity: 0.8;
+    color: whitesmoke;
+    margin-top: 2px;
+}
+
+/* 聊天图标样式 */
+.chat-icon {
+    font-size: 1.6rem;
+    color: whitesmoke;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(74, 111, 165, 0.15);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+}
+
+/* 只显示滑块，不显示轨道 */
+::-webkit-scrollbar {
+    width: 16px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    display: none;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--background-969696);
+    border-radius: 10px;
+    border: 3px solid var(--background-969696);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--background-f5f5f5);
+    transition: var(--transition);
+}

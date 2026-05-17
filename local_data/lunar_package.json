@@ -42,11 +42,11 @@
         "url": "/read/package/parameter_assistant/index.html"
     },
     {
-        "id": "qwen3_tts",
-        "icon": "/read/images/icon/tts_qwen.Webp",
-        "title": "语音合成",
-        "description": "打开『 星月智能 』语音合成",
-        "url": "/read/package/text_speech/index.html"
+        "id": "different_lunar",
+        "icon": "/read/images/icon/different_lunar.Webp",
+        "title": "前端版 月华",
+        "description": "打开『 星月智能 』前端版 月华",
+        "url": "/read/package/different_lunar/index.html"
     },
     {
         "id": "view_on_gitee",

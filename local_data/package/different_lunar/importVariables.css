@@ -1,0 +1,124 @@
+:root {
+   /*
+    ----------------------------------------
+       Status Colors (状态颜色)
+    ----------------------------------------
+    */
+   --status-218838: rgba(40, 167, 69, 1);
+   --status-3a5a8a: rgba(58, 90, 138, 1);
+   --status-4a6fa5: rgba(74, 111, 165, 1);
+   --status-6c9bcf: rgba(108, 155, 207, 1);
+   --status-8a2be2: rgba(138, 43, 226, 1);
+   --status-9d6bff: rgba(157, 107, 255, 1);
+   --status-dc3545: rgba(220, 53, 69, 1);
+   --status-fbbf24: rgba(255, 193, 7, 1);
+   --status-ffc107: rgba(33, 136, 56, 1);
+   --status-20c997: rgba(32, 201, 151, 1);
+   --status-ff6b9c: rgba(255, 107, 156, 1);
+
+   /*
+    ----------------------------------------
+       Background Colors (背景颜色)
+    ----------------------------------------
+    */
+   --background-fafafa: rgba(250, 250, 250, 0.85);
+   --background-f5f5f5: rgba(250, 250, 250, 0.35);
+   --background-969696: rgba(150, 150, 150, 0.35);
+   --background-fcfefb: rgba(252, 254, 251, 1);
+   --background-f2f7fa: rgba(242, 247, 250, 1);
+   --background-f8f9fa: rgba(248, 249, 250, 1);
+   --background-f0f4f8: rgba(240, 244, 248, 1);
+
+   /*
+    ----------------------------------------
+       Text & Syntax Colors (文本与语法高亮)
+    ----------------------------------------
+    */
+   --text-0f1e0f: rgba(15, 30, 15, 1);
+   --syntax-0b9946: rgba(11, 153, 70, 1);
+   --syntax-9e18c0: rgba(158, 24, 192, 1);
+
+   /*
+    ----------------------------------------
+       Border Colors (边框颜色)
+    ----------------------------------------
+    */
+   --border-e1e6f0: rgba(225, 230, 240, 1);
+   --border-ced4e7: rgba(206, 212, 231, 1);
+   --border-d1e0f0: rgba(209, 224, 240, 1);
+
+   /*
+    ----------------------------------------
+       Special & Accent Colors (特殊/强调色)
+    ----------------------------------------
+    */
+   --special-1e90ff: rgba(30, 144, 255, 1);
+
+   /*
+    ----------------------------------------
+       Transitions & Effects (过渡与阴影)
+    ----------------------------------------
+    */
+   --circular-button-transition: border-color 0.75s ease, border-radius 0.5s ease;
+   --rotate-border: transform 0.75s ease, border-color 0.75s ease;
+   --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+   --border-transition: border 0.75s ease;
+   --transition: all 0.45s ease;
+}
+
+.dark-mode {
+   /*
+    ----------------------------------------
+       Status Colors (状态颜色)
+    ----------------------------------------
+    */
+   --status-218838: rgba(52, 211, 153, 1);
+   --status-3a5a8a: rgba(74, 111, 165, 1);
+   --status-4a6fa5: rgba(90, 138, 192, 1);
+   --status-6c9bcf: rgba(122, 159, 199, 1);
+   --status-8a2be2: rgba(139, 92, 246, 1);
+   --status-9d6bff: rgba(147, 51, 234, 1);
+   --status-dc3545: rgba(244, 63, 94, 1);
+   --status-fbbf24: rgba(251, 191, 36, 1);
+   --status-ffc107: rgba(16, 185, 129, 1);
+   --status-20c997: rgba(16, 185, 129, 1);
+   --status-ff6b9c: rgba(255, 117, 160, 1);
+
+   /*
+    ----------------------------------------
+       Background Colors (背景颜色)
+    ----------------------------------------
+    */
+   --background-fafafa: rgba(38, 38, 42, 0.85);
+   --background-f5f5f5: rgba(35, 35, 45, 0.35);
+   --background-fcfefb: rgba(24, 24, 27, 1);
+   --background-f2f7fa: rgba(39, 39, 42, 1);
+   --background-f8f9fa: rgba(41, 37, 36, 1);
+   --background-f0f4f8: rgba(45, 80, 135, 0.75);
+   --background-16161A: rgba(22, 22, 26, 1);
+
+   /*
+    ----------------------------------------
+       Text & Syntax Colors (文本与语法高亮)
+    ----------------------------------------
+    */
+   --text-0f1e0f: rgba(244, 244, 245, 1);
+   --syntax-0b9946: rgba(45, 212, 191, 1);
+   --syntax-9e18c0: rgba(244, 114, 182, 1);
+
+   /*
+    ----------------------------------------
+       Border Colors (边框颜色)
+    ----------------------------------------
+    */
+   --border-e1e6f0: rgba(63, 63, 70, 1);
+   --border-ced4e7: rgba(63, 63, 70, 1);
+   --border-d1e0f0: rgba(51, 65, 85, 1);
+
+   /*
+    ----------------------------------------
+       Special & Accent Colors (特殊/强调色)
+    ----------------------------------------
+    */
+   --special-1e90ff: rgb(180, 207, 255);
+}
