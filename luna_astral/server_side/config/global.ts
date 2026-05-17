@@ -2,7 +2,7 @@ import { Config, ToolCall } from '../index';
 
 export class OnlyData {
     /** 自定义配置项 */
-    public static customConfig: Config = { cloud: {} };
+    public static customConfig: Config = { cloud: {}, server: {} };
     /** 工具调用配置 */
     public static toolCall: ToolCall[] = [];
     /** 支持的图片文件扩展名 */
@@ -61,6 +61,6 @@ export class OnlyData {
     };
     /** 获取 用户名 */
     public static get userName(): string {
-        return OnlyData.customConfig.cloud.user_name || "阁下";
+        return OnlyData.customConfig.server.user_name || "阁下";
     };
 };
