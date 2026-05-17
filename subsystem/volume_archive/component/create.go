@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func scanDirectory(dir string, baseDir string) ([]string, error) {
@@ -143,6 +144,22 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 	}
 
 	tracker := NewProgressTracker()
+	done := make(chan bool)
+
+	go func() {
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if !tracker.HasProgress {
+					tracker.displayPreparing()
+				}
+			}
+		}
+	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -157,6 +174,8 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		line := scanner.Text()
 		tracker.UpdateProgress(line)
 	}
+
+	close(done)
 
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("7z压缩过程失败: %v", err)

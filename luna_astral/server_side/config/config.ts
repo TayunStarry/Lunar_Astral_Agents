@@ -12,6 +12,8 @@ export interface Config {
         multimodal_model_name?: string;
         /** 文本嵌入模型名称 */
         embedding_model_name?: string;
+    };
+    server: {
         /** 用户名 */
         user_name?: string;
     };
