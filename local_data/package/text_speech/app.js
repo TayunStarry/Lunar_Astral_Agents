@@ -1,5 +1,6 @@
 const API_BASE = window.location.origin;
-const STATUS_INDICATOR = document.getElementById('status-indicator');
+
+// DOM 元素
 const TEXT_INPUT = document.getElementById('text-input');
 const CHAR_COUNT = document.getElementById('char-count');
 const UPLOAD_AREA = document.getElementById('upload-area');
@@ -21,55 +22,45 @@ const VOLUME_SLIDER = document.getElementById('volume-slider');
 const WAVEFORM = document.getElementById('waveform');
 const DOWNLOAD_BTN = document.getElementById('download-btn');
 
+// 状态变量
 let uploadedRefAudioPath = null;
-let audioContext = null;
 let animationId = null;
 let currentAudioBase64 = null;
 
+// 初始化 (已移除健康检查与轮询)
 function init() {
-    checkServerStatus();
     setupEventListeners();
     TEXT_INPUT.focus();
     DOWNLOAD_BTN.disabled = true;
-}
-
-async function checkServerStatus() {
-    try {
-        const response = await fetch(`${API_BASE}/health`, { method: 'GET' });
-        if (response.ok) {
-            STATUS_INDICATOR.className = 'status-indicator online';
-            STATUS_INDICATOR.querySelector('.status-text').textContent = '在线';
-        }
-    } catch (error) {
-        STATUS_INDICATOR.className = 'status-indicator offline';
-        STATUS_INDICATOR.querySelector('.status-text').textContent = '离线';
-    }
+    // 初始状态：播放按钮可见，暂停按钮隐藏
+    PLAY_BTN.classList.remove('hidden');
+    PAUSE_BTN.classList.add('hidden');
+    // 音量同步
+    if (AUDIO_PLAYER) AUDIO_PLAYER.volume = VOLUME_SLIDER.value / 100;
 }
 
 function setupEventListeners() {
     TEXT_INPUT.addEventListener('input', handleTextInput);
-    
+
     UPLOAD_AREA.addEventListener('click', () => AUDIO_UPLOAD.click());
     AUDIO_UPLOAD.addEventListener('change', handleFileSelect);
     UPLOAD_AREA.addEventListener('dragover', handleDragOver);
     UPLOAD_AREA.addEventListener('dragleave', handleDragLeave);
     UPLOAD_AREA.addEventListener('drop', handleDrop);
-    
+
     REMOVE_FILE_BTN.addEventListener('click', removeUploadedFile);
     SYNTHESIZE_BTN.addEventListener('click', synthesizeSpeech);
-    
+
     PLAY_BTN.addEventListener('click', playAudio);
     PAUSE_BTN.addEventListener('click', pauseAudio);
     STOP_BTN.addEventListener('click', stopAudio);
     PROGRESS_BAR.addEventListener('input', handleSeek);
     VOLUME_SLIDER.addEventListener('input', handleVolumeChange);
     DOWNLOAD_BTN.addEventListener('click', downloadAudio);
-    
+
     AUDIO_PLAYER.addEventListener('timeupdate', handleTimeUpdate);
     AUDIO_PLAYER.addEventListener('ended', handleAudioEnded);
     AUDIO_PLAYER.addEventListener('loadedmetadata', handleMetadataLoaded);
-    
-    AUDIO_PLAYER.volume = VOLUME_SLIDER.value / 100;
 }
 
 function handleTextInput() {
@@ -104,7 +95,7 @@ function handleFileSelect(e) {
 async function uploadAudioFile(file) {
     const formData = new FormData();
     formData.append('audio', file);
-    
+
     try {
         showStatus('正在上传音频...', 'info');
         const response = await fetch(`${API_BASE}/upload/`, {
@@ -112,18 +103,21 @@ async function uploadAudioFile(file) {
             body: formData
         });
         const result = await response.json();
-        
+
         if (result.success) {
             uploadedRefAudioPath = result.path;
             FILE_NAME.textContent = result.name;
             FILE_INFO.classList.remove('hidden');
             UPLOAD_CONTENT.classList.add('hidden');
-            showStatus('参考音频已上传', 'success');
+            showStatus('参考音频已就绪', 'success');
         } else {
-            showStatus('上传失败: ' + result.error, 'error');
+            showStatus('上传失败: ' + (result.error || '未知错误'), 'error');
+            // 上传失败时清空文件选择器，让用户可重试
+            AUDIO_UPLOAD.value = '';
         }
     } catch (error) {
         showStatus('上传失败: ' + error.message, 'error');
+        AUDIO_UPLOAD.value = '';
     }
 }
 
@@ -137,45 +131,40 @@ function removeUploadedFile(e) {
 
 async function synthesizeSpeech() {
     const text = TEXT_INPUT.value.trim();
-    
+
     if (!text) {
-        showStatus('请输入要合成的文本', 'error');
+        showStatus('请填写需要转换的文本', 'error');
         TEXT_INPUT.focus();
         return;
     }
-    
+
     SYNTHESIZE_BTN.disabled = true;
-    showStatus('正在合成语音，请稍候...', 'info');
+    showStatus('🎙️ 正在生成语音，请稍后...', 'info');
     startWaveformAnimation();
-    
+
     try {
-        const requestBody = {
-            text: text
-        };
-        
+        const requestBody = { text: text };
         if (uploadedRefAudioPath) {
             requestBody.ref_audio = uploadedRefAudioPath;
         }
-        
+
         const response = await fetch(`${API_BASE}/tts/`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
-        
+
         const result = await response.json();
-        
-        if (result.success) {
+
+        if (result.success && result.audio) {
             loadAudioFromBase64(result.audio);
-            showStatus('语音合成成功！', 'success');
+            showStatus('合成成功，点击播放', 'success');
             AUDIO_PLAYER_CONTAINER.classList.remove('hidden');
         } else {
-            showStatus('合成失败: ' + result.error, 'error');
+            showStatus('合成失败: ' + (result.error || '服务端错误'), 'error');
         }
     } catch (error) {
-        showStatus('合成失败: ' + error.message, 'error');
+        showStatus('网络错误: ' + error.message, 'error');
     } finally {
         SYNTHESIZE_BTN.disabled = false;
         stopWaveformAnimation();
@@ -192,12 +181,19 @@ function loadAudioFromBase64(base64Audio) {
 }
 
 function playAudio() {
+    if (!AUDIO_PLAYER.src) {
+        showStatus('没有可播放的音频', 'error');
+        return;
+    }
     AUDIO_PLAYER.play().then(() => {
         PLAY_BTN.classList.add('hidden');
         PAUSE_BTN.classList.remove('hidden');
     }).catch(error => {
         console.error('播放失败:', error);
-        showStatus('播放失败', 'error');
+        showStatus('播放失败，请重试', 'error');
+        // 播放失败时恢复按钮状态
+        PLAY_BTN.classList.remove('hidden');
+        PAUSE_BTN.classList.add('hidden');
     });
 }
 
@@ -221,16 +217,17 @@ function resetPlayerControls() {
 }
 
 function handleSeek() {
+    if (!AUDIO_PLAYER.duration || !isFinite(AUDIO_PLAYER.duration)) return;
     const seekTime = (PROGRESS_BAR.value / 100) * AUDIO_PLAYER.duration;
     AUDIO_PLAYER.currentTime = seekTime;
 }
 
 function handleVolumeChange() {
-    AUDIO_PLAYER.volume = VOLUME_SLIDER.value / 100;
+    if (AUDIO_PLAYER) AUDIO_PLAYER.volume = VOLUME_SLIDER.value / 100;
 }
 
 function handleTimeUpdate() {
-    if (AUDIO_PLAYER.duration) {
+    if (AUDIO_PLAYER.duration && isFinite(AUDIO_PLAYER.duration)) {
         const progress = (AUDIO_PLAYER.currentTime / AUDIO_PLAYER.duration) * 100;
         PROGRESS_BAR.value = progress;
         TIME_DISPLAY.textContent = `${formatTime(AUDIO_PLAYER.currentTime)} / ${formatTime(AUDIO_PLAYER.duration)}`;
@@ -238,7 +235,12 @@ function handleTimeUpdate() {
 }
 
 function handleMetadataLoaded() {
-    TIME_DISPLAY.textContent = `0:00 / ${formatTime(AUDIO_PLAYER.duration)}`;
+    if (AUDIO_PLAYER.duration && isFinite(AUDIO_PLAYER.duration)) {
+        TIME_DISPLAY.textContent = `0:00 / ${formatTime(AUDIO_PLAYER.duration)}`;
+    } else {
+        TIME_DISPLAY.textContent = '0:00 / 0:00';
+    }
+    PROGRESS_BAR.value = 0;
 }
 
 function handleAudioEnded() {
@@ -250,28 +252,31 @@ function downloadAudio() {
         showStatus('没有可下载的音频', 'error');
         return;
     }
-    
-    const byteCharacters = atob(currentAudioBase64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    try {
+        const byteCharacters = atob(currentAudioBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tts_${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showStatus('音频已保存', 'success');
+    } catch (err) {
+        console.error('下载失败', err);
+        showStatus('下载失败，音频数据异常', 'error');
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'audio/wav' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tts_${Date.now()}.wav`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showStatus('音频已下载', 'success');
 }
 
 function formatTime(seconds) {
+    if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -279,39 +284,36 @@ function formatTime(seconds) {
 
 function showStatus(message, type) {
     STATUS_MESSAGE.textContent = message;
-    STATUS_MESSAGE.className = `status-message ${type}`;
-    
+    STATUS_MESSAGE.className = `status-toast ${type}`;
     if (type !== 'info') {
         setTimeout(() => {
-            STATUS_MESSAGE.className = 'status-message';
-        }, 3000);
+            if (STATUS_MESSAGE.textContent === message) {
+                STATUS_MESSAGE.className = 'status-toast';
+            }
+        }, 2800);
     }
 }
 
 function startWaveformAnimation() {
     if (animationId) return;
-    
+    if (!WAVEFORM) return;
     WAVEFORM.innerHTML = '';
-    const barCount = 50;
-    
+    const barCount = 40;
     for (let i = 0; i < barCount; i++) {
         const bar = document.createElement('div');
         bar.className = 'waveform-bar';
-        bar.style.animationDelay = `${i * 0.05}s`;
-        bar.style.height = '8px';
+        bar.style.animationDelay = `${i * 0.04}s`;
+        bar.style.height = '6px';
         WAVEFORM.appendChild(bar);
     }
-    
     animationId = true;
 }
 
 function stopWaveformAnimation() {
     if (!animationId) return;
-    
-    WAVEFORM.innerHTML = '';
+    if (WAVEFORM) WAVEFORM.innerHTML = '';
     animationId = null;
 }
 
+// 启动应用
 document.addEventListener('DOMContentLoaded', init);
-
-setInterval(checkServerStatus, 5000);
