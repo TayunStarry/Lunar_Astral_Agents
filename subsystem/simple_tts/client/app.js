@@ -159,7 +159,6 @@ async function synthesizeSpeech() {
         if (result.success && result.audio) {
             loadAudioFromBase64(result.audio);
             showStatus('合成成功，点击播放', 'success');
-            AUDIO_PLAYER_CONTAINER.classList.remove('hidden');
         } else {
             showStatus('合成失败: ' + (result.error || '服务端错误'), 'error');
         }
@@ -284,12 +283,10 @@ function formatTime(seconds) {
 
 function showStatus(message, type) {
     STATUS_MESSAGE.textContent = message;
-    STATUS_MESSAGE.className = `status-toast ${type}`;
+    STATUS_MESSAGE.className = `status-toast ${type} show`;
     if (type !== 'info') {
         setTimeout(() => {
-            if (STATUS_MESSAGE.textContent === message) {
-                STATUS_MESSAGE.className = 'status-toast';
-            }
+            STATUS_MESSAGE.classList.remove('show');
         }, 2800);
     }
 }

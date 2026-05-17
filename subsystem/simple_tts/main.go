@@ -13,8 +13,8 @@ import (
 // reloadPageParameters 重新加载页面参数
 func reloadPageParameters() {
 	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
-	*config.WebViewWidth = 1200
-	*config.WebViewHeight = 920
+	*config.WebViewWidth = 640
+	*config.WebViewHeight = 890
 }
 
 // main 主函数
@@ -35,7 +35,6 @@ func main() {
 
 	if waitForServerReady(addr, 10) {
 		url := "http://localhost" + addr
-
 		reloadPageParameters()
 		browser.OpenBrowser(url)
 	}
