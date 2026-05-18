@@ -8,7 +8,7 @@ import (
 )
 
 // WebSocket 升级器，用于将HTTP连接升级为WebSocket连接
-var upgrader = websocket.Upgrader{
+var Upgrader = websocket.Upgrader{
 	// 读取缓冲区大小，用于接收客户端发送的消息
 	ReadBufferSize: 1024,
 	// 写入缓冲区大小，用于发送消息给客户端

@@ -49,3 +49,53 @@ type TTSResponse struct {
 	// Error 是请求失败时的错误信息。
 	Error string `json:"error,omitempty"`
 }
+
+// WSStreamRequest 是 WebSocket 流式 TTS 请求结构。
+type WSStreamRequest struct {
+	// Text 是要合成的文本。
+	Text string `json:"text"`
+	// RefAudio 是参考音频路径（可选）。
+	RefAudio string `json:"ref_audio,omitempty"`
+	// LanguageID 是语言标识符（可选）。
+	LanguageID int32 `json:"language_id,omitempty"`
+	// ChunkFrames 是每个块累积的帧数（可选）。
+	ChunkFrames int32 `json:"chunk_frames,omitempty"`
+}
+
+// WSStreamResponse 是 WebSocket 流式 TTS 响应结构。
+type WSStreamResponse struct {
+	// Type 是消息类型。
+	Type string `json:"type"`
+	// Audio 是 Base64 编码的 PCM16 音频数据。
+	Audio string `json:"audio,omitempty"`
+	// TotalSamples 是累计采样数。
+	TotalSamples int32 `json:"total_samples,omitempty"`
+	// SampleRate 是采样率。
+	SampleRate int32 `json:"sample_rate,omitempty"`
+	// IsFinal 表示是否为最终消息。
+	IsFinal bool `json:"is_final,omitempty"`
+	// Error 是错误信息。
+	Error string `json:"error,omitempty"`
+}
+
+// StreamPCMChunk 是流式 PCM 音频块结构。
+type StreamPCMChunk struct {
+	// Samples 是浮点采样数据。
+	Samples []float32
+	// SampleRate 是采样率。
+	SampleRate int32
+	// IsFinal 表示是否为最终块。
+	IsFinal bool
+}
+
+// StreamingContext 是流式合成的上下文结构。
+type StreamingContext struct {
+	// ch 是 PCM 音频块通道。
+	ch chan StreamPCMChunk
+	// done 是完成信号通道。
+	done chan struct{}
+	// err 是合成过程中的错误。
+	err error
+	// abort 是中止标志。
+	abort int32
+}

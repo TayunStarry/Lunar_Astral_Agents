@@ -49,6 +49,7 @@ var wsBroadcaster = make(chan WSMessage, 256)
 // SystemEndpoints 存储所有系统端点配置
 var SystemEndpoints = []SystemEndpoint{
 	// 文件读写相关接口
+	{Path: "/background", Handler: storage.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
 	{Path: "/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
 	{Path: "/file_list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表查询"},
 	{Path: "/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载操作"},
@@ -71,5 +72,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
 	// TTS语音服务相关接口
-	{Path: "/tts", Handler: tts.QwenTTSHandler, Method: "POST", Description: "TTS语音服务"},
+	{Path: "/tts", Handler: tts.QwenTTSHandler, Method: "POST", Description: "TTS语音合成服务"},
+	{Path: "/tts/stream", Handler: tts.QwenTTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
 }

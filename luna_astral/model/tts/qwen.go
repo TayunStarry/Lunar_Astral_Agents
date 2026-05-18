@@ -285,7 +285,7 @@ func QwenTTSHandler(w http.ResponseWriter, r *http.Request) {
 
 	entry.MarkReady(audioBase64)
 
-	log.Printf("TTS 合成成功，文本: %s，采样数: %d", req.Text, len(samples))
+	log.Printf("TTS 合成成功 [ 文本: %s ] 采样数: %d", req.Text, len(samples))
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(TTSResponse{
