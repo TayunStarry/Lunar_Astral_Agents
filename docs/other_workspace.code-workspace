@@ -7,17 +7,6 @@
 		{
 			"name": "TTS",
 			"path": "../TTS"
-		},
-		{
-			"name": "NapCat.Shell.Windows.OneKey",
-			"path": "../下载/NapCat.Shell.Windows.OneKey"
-		},
-		{
-			"name": "SillyTavern",
-			"path": "../SillyTavern"
-		},
-		{
-			"path": "C:/Users/196530/Downloads/YuTong2"
 		}
 	],
 	"settings": {

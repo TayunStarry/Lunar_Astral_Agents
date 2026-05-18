@@ -5,6 +5,9 @@ package main
 #cgo CFLAGS: -I"D:/TTS/qwen3-tts.cpp-main/src" -I"D:/TTS/qwen3-tts.cpp-main/ggml/include"
 #include <stdlib.h>
 #include "qwen3tts_c_api.h"
+
+//export streamPCMCallback
+extern int streamPCMCallback(float* samples, int32_t n_samples, int32_t sample_rate, int is_final, void* user_data);
 */
 import "C"
 
@@ -17,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -412,6 +416,124 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		"path":    absPath,
 		"name":    header.Filename,
 	})
+}
+
+type StreamPCMChunk struct {
+	Samples    []float32
+	SampleRate int32
+	IsFinal    bool
+}
+
+type streamingContext struct {
+	ch    chan StreamPCMChunk
+	done  chan struct{}
+	err   error
+	abort int32
+}
+
+var streamCtxMap = make(map[int32]*streamingContext)
+var streamCtxCounter int32
+
+//export streamPCMCallback
+func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_t, isFinal C.int, userData unsafe.Pointer) C.int {
+	ctxID := *(*C.int32_t)(userData)
+	ctxIDInt := int32(ctxID)
+
+	streamCtxMapMu.Lock()
+	ctx, exists := streamCtxMap[ctxIDInt]
+	streamCtxMapMu.Unlock()
+
+	if !exists {
+		return 1
+	}
+
+	if atomic.LoadInt32(&ctx.abort) != 0 {
+		return 1
+	}
+
+	n := int(nSamples)
+	chunk := StreamPCMChunk{
+		SampleRate: int32(sampleRate),
+		IsFinal:    isFinal != 0,
+	}
+
+	if n > 0 {
+		sampleSlice := (*[1 << 30]C.float)(unsafe.Pointer(samples))[:n:n]
+		chunk.Samples = make([]float32, n)
+		for i := 0; i < n; i++ {
+			chunk.Samples[i] = float32(sampleSlice[i])
+		}
+	}
+
+	select {
+	case ctx.ch <- chunk:
+		return 0
+	case <-ctx.done:
+		atomic.StoreInt32(&ctx.abort, 1)
+		return 1
+	}
+}
+
+var streamCtxMapMu sync.Mutex
+
+func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32) (int32, error) {
+	if globalTTS == nil || globalTTS.handle == nil {
+		return 0, fmt.Errorf("TTS 引擎未初始化")
+	}
+
+	if refAudio == "" {
+		refAudio = globalTTS.refAudio
+	}
+	if languageID == 0 {
+		languageID = globalTTS.languageID
+	}
+
+	streamCtxMapMu.Lock()
+	streamCtxCounter++
+	ctxID := streamCtxCounter
+	ctx := &streamingContext{
+		ch:   make(chan StreamPCMChunk, 4),
+		done: make(chan struct{}),
+	}
+	streamCtxMap[ctxID] = ctx
+	streamCtxMapMu.Unlock()
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cRefAudio := C.CString(refAudio)
+	defer C.free(unsafe.Pointer(cRefAudio))
+
+	var cParams C.Qwen3TtsParams
+	C.qwen3_tts_default_params(&cParams)
+	cParams.n_threads = 4
+	cParams.language_id = C.int32_t(languageID)
+
+	cCtxID := C.int32_t(ctxID)
+	cChunkFrames := C.int32_t(chunkFrames)
+
+	go func() {
+		result := C.qwen3_tts_synthesize_streaming(
+			globalTTS.handle,
+			cText,
+			cRefAudio,
+			&cParams,
+			C.qwen3_tts_stream_callback(C.streamPCMCallback),
+			unsafe.Pointer(&cCtxID),
+			cChunkFrames,
+		)
+
+		streamCtxMapMu.Lock()
+		defer streamCtxMapMu.Unlock()
+		delete(streamCtxMap, ctxID)
+
+		if result != 0 {
+			errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
+			ctx.err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
+		}
+		close(ctx.done)
+	}()
+
+	return ctxID, nil
 }
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
