@@ -45,7 +45,7 @@
 	--success-color: #20c997;
 
 	/* 背景图片 */
-	--bg-image: url('/background.webp');
+	--bg-image: url('/background');
 }
 
 /* ========== 全局隐藏滚动条 ========== */
