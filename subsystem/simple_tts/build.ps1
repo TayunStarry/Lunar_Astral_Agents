@@ -32,7 +32,7 @@ try {
 
     Build-IconIfNeeded
 
-    $ldflags = "-s -w"
+    $ldflags = "-s -w -H windowsgui"
 
     $binaryName = "simple_tts.exe"
     if ($TargetOS -ne "windows") { $binaryName = "simple_tts" }

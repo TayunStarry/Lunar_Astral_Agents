@@ -31,6 +31,7 @@ type Endpoint struct {
 
 var endpoints = []Endpoint{
 	{Path: "/tts/", Handler: TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
+	{Path: "/tts/stream", Handler: TTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
 	{Path: "/upload/", Handler: UploadHandler, Method: "POST", Description: "参考音频上传"},
 	{Path: "/health", Handler: HealthHandler, Method: "GET", Description: "健康检查"},
 }

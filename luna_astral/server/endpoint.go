@@ -32,4 +32,5 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
 	// TTS语音服务相关接口
 	{Path: "/qwen_tts/", Handler: handlers.QwenTTSHandler, Method: "POST", Description: "TTS语音服务"},
+	{Path: "/qwen_tts/stream", Handler: handlers.QwenTTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
 }
