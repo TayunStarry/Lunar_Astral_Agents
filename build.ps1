@@ -128,6 +128,7 @@ try {
     Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
     Invoke-Build -Path "$ScriptRoot\subsystem\bridge_adapter" -Name "Bridge Adapter"
     Invoke-Build -Path "$ScriptRoot\subsystem\volume_archive" -Name "Volume Archive"
+    Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts_lunar" -Name "Qwen3 TTS Lunar"
     
     Write-Host "`n" -NoNewline
     Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Green
