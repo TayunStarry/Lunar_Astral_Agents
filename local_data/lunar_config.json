@@ -9,7 +9,7 @@
 	},
 	"server": {
 		"user_name": null,
-		"developer": true,
+		"developer": false,
 		"clear_port": false,
 		"allow_diffusion": true,
 		"allow_multimodal": true
@@ -27,7 +27,7 @@
 		"lunar_ws_server": "ws://localhost:36789/ws",
 		"poll_interval": 10,
 		"listen_group_ids": [
-			262221051
+			"262221051"
 		],
 		"trigger_keywords": [
 			"月华",

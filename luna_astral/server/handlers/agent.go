@@ -1,4 +1,3 @@
-// package handlers 定义处理程序所在的包
 package handlers
 
 import (

@@ -1,11 +1,9 @@
 package server
 
 import (
-	"config"
-	"LunarCore/model"
-	"fmt"
 	"net/http"
-	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
 // SystemEndpoint 定义系统端点的结构
@@ -19,9 +17,6 @@ type SystemEndpoint struct {
 	// 处理器功能描述
 	Description string `json:"description"`
 }
-
-// httpMux 是HTTP服务器的ServeMux实例
-var httpMux *http.ServeMux
 
 // ModelConfig 定义模型配置的结构
 type ModelConfig struct {
@@ -53,11 +48,32 @@ type ModelConfig struct {
 	} `json:"server"`
 }
 
-// CORSAllowedOrigins 定义允许跨域访问的来源列表
-var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
+// WebSocket 客户端结构
+type WSClient struct {
+	// WebSocket 连接
+	conn *websocket.Conn
+	// 发送消息通道
+	send chan []byte
+	// 客户端引用
+	client *WSClient
+}
 
-// 请求映射，键为请求ID，值为请求上下文
-var requests = make(map[string]*model.RequestContext)
+// WebSocket 消息结构
+type WSMessage struct {
+	// 消息类型
+	Type string `json:"type"`
+	// 消息数据
+	Data any `json:"data,omitempty"`
+}
 
-// 互斥锁，用于保护请求映射的并发访问
-var serverMutex sync.RWMutex
+// WebSocket 响应结构
+type WSResponse struct {
+	// 响应类型
+	Type string `json:"type"`
+	// 响应数据
+	Data any `json:"data,omitempty"`
+	// 响应上下文
+	Context any `json:"context,omitempty"`
+	// 响应图片
+	Image any `json:"image,omitempty"`
+}

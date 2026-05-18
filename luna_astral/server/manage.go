@@ -4,8 +4,10 @@ import (
 	"LunarCore/adapters"
 	"LunarCore/hierarchy"
 	"LunarCore/model/llama"
+	"LunarCore/model/tts"
 	"LunarCore/release"
-	"LunarCore/server/handlers/image"
+	"LunarCore/server/handlers"
+	"LunarCore/websocket"
 	"config"
 	"context"
 	"flag"
@@ -38,8 +40,10 @@ func InitializeServer() {
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
+	// 初始化TTS引擎
+	tts.InitTTSEngine()
 	// 注册WebSocket处理器
-	SetupWebSocketHandler(httpMux)
+	websocket.SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文
 	adapters.RunAgentContext()
 }
@@ -62,7 +66,7 @@ func registerHandlers() {
 		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[扩散生成]功能")
 	}
 	// 启动扩散生成任务协处理器
-	image.StartTaskProcessor()
+	handlers.StartTaskProcessor()
 	// 注册所有系统端点路径的处理函数
 	for _, endpoint := range SystemEndpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
@@ -97,7 +101,7 @@ func shutdownServer(server *http.Server) {
 	// 关闭JavaScript运行时
 	adapters.CloseAgentContext()
 	// 关闭WebSocket服务器
-	CloseWebSocketServer()
+	websocket.CloseWebSocketServer()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序
