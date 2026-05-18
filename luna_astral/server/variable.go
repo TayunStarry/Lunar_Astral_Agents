@@ -1,0 +1,75 @@
+package server
+
+import (
+	"LunarCore/model"
+	"LunarCore/model/tts"
+	"LunarCore/server/handlers"
+	"config"
+	"fmt"
+	"net/http"
+	storage "storage/server"
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+// httpMux 是HTTP服务器的ServeMux实例
+var httpMux *http.ServeMux
+
+// CORSAllowedOrigins 定义允许跨域访问的来源列表
+var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
+
+// 请求映射，键为请求ID，值为请求上下文
+var requests = make(map[string]*model.RequestContext)
+
+// 互斥锁，用于保护请求映射的并发访问
+var serverMutex sync.RWMutex
+
+// WebSocket 升级器，用于将HTTP连接升级为WebSocket连接
+var upgrader = websocket.Upgrader{
+	// 读取缓冲区大小，用于接收客户端发送的消息
+	ReadBufferSize: 1024,
+	// 写入缓冲区大小，用于发送消息给客户端
+	WriteBufferSize: 1024,
+	// 检查请求来源是否在允许列表中
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+// WebSocket 客户端映射，键为客户端连接，值为true
+var wsClients = make(map[*WSClient]bool)
+
+// WebSocket 客户端互斥锁，用于保护客户端映射的并发访问
+var wsMutex sync.RWMutex
+
+// WebSocket 广播通道，用于发送消息给所有客户端
+var wsBroadcaster = make(chan WSMessage, 256)
+
+// SystemEndpoints 存储所有系统端点配置
+var SystemEndpoints = []SystemEndpoint{
+	// 文件读写相关接口
+	{Path: "/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
+	{Path: "/file_list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表查询"},
+	{Path: "/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载操作"},
+	{Path: "/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
+	{Path: "/save", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存操作"},
+	{Path: "/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
+	// 数据库相关接口
+	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据库管理"},
+	// 图片生成相关接口
+	{Path: "/generate", Handler: handlers.GenerateHandler, Method: "POST", Description: "图片生成服务"},
+	{Path: "/generate/wait", Handler: handlers.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
+	// 视频处理相关接口
+	{Path: "/extract/keyframes", Handler: handlers.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
+	// 智能体相关接口
+	{Path: "/v1/models", Handler: handlers.AgentModelsHandler, Method: "GET", Description: "模型列表查询"},
+	{Path: "/v1/", Handler: handlers.AgentHandler, Method: "POST", Description: "模型交互接口"},
+	// 代理请求接口
+	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
+	// 消息队列相关接口
+	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
+	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
+	// TTS语音服务相关接口
+	{Path: "/tts", Handler: tts.QwenTTSHandler, Method: "POST", Description: "TTS语音服务"},
+}

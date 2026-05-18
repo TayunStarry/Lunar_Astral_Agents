@@ -1,4 +1,4 @@
-package handlers
+package tts
 
 /*
 #cgo LDFLAGS: -L"D:/TTS/qwen3-tts.cpp-main/build" -L"D:/TTS/qwen3-tts.cpp-main/ggml/build/src" "D:/TTS/qwen3-tts.cpp-main/build/libqwen3tts.dll.a" -lqwen3_tts -ltts_transformer -ltext_tokenizer -laudio_tokenizer_encoder -laudio_tokenizer_decoder "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-base.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-cpu.a" -lstdc++ -lpthread
@@ -15,40 +15,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"runtime"
 	"unsafe"
 )
-
-type TTSEngine struct {
-	handle     *C.Qwen3Tts
-	modelDir   string
-	refAudio   string
-	mu         sync.Mutex
-	languageID int32
-}
-
-var (
-	globalTTS *TTSEngine
-	ttsOnce   sync.Once
-)
-
-const maxCacheSize = 5
-
-type cacheEntry struct {
-	audio string
-	ready chan struct{}
-}
-
-type TTSCache struct {
-	mu    sync.Mutex
-	items map[string]*cacheEntry
-	order []string
-}
-
-var ttsCache = &TTSCache{
-	items: make(map[string]*cacheEntry),
-	order: make([]string, 0, maxCacheSize),
-}
 
 func (c *TTSCache) Get(text string) (*cacheEntry, bool) {
 	c.mu.Lock()
@@ -113,17 +82,7 @@ func (e *cacheEntry) Wait() string {
 	return e.audio
 }
 
-type TTSRequest struct {
-	Text string `json:"text"`
-}
-
-type TTSResponse struct {
-	Success bool   `json:"success"`
-	Audio   string `json:"audio,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-func initTTSEngine() {
+func InitTTSEngine() {
 	ttsOnce.Do(func() {
 		modelDir := *config.LocalDir + "/models"
 		refAudio := *config.LocalDir + "/audios/lunar-template.wav"
@@ -131,7 +90,9 @@ func initTTSEngine() {
 		cModelDir := C.CString(modelDir)
 		defer C.free(unsafe.Pointer(cModelDir))
 
-		handle := C.qwen3_tts_create(cModelDir, 4)
+		nThreads := max(1, runtime.NumCPU()-1)
+
+		handle := C.qwen3_tts_create(cModelDir, C.int(nThreads))
 		if handle == nil {
 			log.Printf("Qwen TTS 引擎初始化失败，模型目录: %s", modelDir)
 			return
@@ -144,18 +105,11 @@ func initTTSEngine() {
 			languageID: 2055,
 		}
 
-		log.Printf("Qwen TTS 引擎初始化成功")
+		log.Printf("Qwen TTS 引擎初始化成功，使用线程数: %d", nThreads)
 	})
 }
 
 func synthesizeText(text string) ([]float32, error) {
-	if globalTTS == nil || globalTTS.handle == nil {
-		initTTSEngine()
-		if globalTTS == nil || globalTTS.handle == nil {
-			return nil, fmt.Errorf("TTS 引擎未初始化")
-		}
-	}
-
 	globalTTS.mu.Lock()
 	defer globalTTS.mu.Unlock()
 

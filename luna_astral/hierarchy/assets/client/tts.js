@@ -1,9 +1,6 @@
 class TTSManager {
     allowLoading = true;
     maxTextLength = 5000;
-    streamQueue = [];
-    isStreaming = false;
-    streamAbortController = null;
 
     constructor() {
         this.audioContext = null;
@@ -57,179 +54,37 @@ class TTSManager {
             return null;
         }
 
-        return await this.streamGenerateAndPlay(processedText);
-    }
-
-    async streamGenerateAndPlay(text) {
-        if (!this.allowLoading) return null;
-
         try {
-            if (this.streamAbortController) {
-                this.streamAbortController.abort();
-            }
-            this.streamAbortController = new AbortController();
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/qwen_tts/stream`;
-
-            return new Promise((resolve, reject) => {
-                const ws = new WebSocket(wsUrl);
-                const audioChunks = [];
-                let finalAudio = null;
-
-                ws.onopen = () => {
-                    ws.send(JSON.stringify({
-                        text: text,
-                        chunk_frames: 50
-                    }));
-                };
-
-                ws.onmessage = (event) => {
-                    try {
-                        const response = JSON.parse(event.data);
-
-                        if (response.type === 'audio_chunk') {
-                            audioChunks.push(response.audio);
-                            this.playPCMChunk(response.audio, response.sample_rate);
-                        } else if (response.type === 'final') {
-                            finalAudio = response.audio;
-                            this.isStreaming = false;
-                            this.processStreamQueue();
-                            ws.close();
-                            resolve(finalAudio);
-                        } else if (response.type === 'error') {
-                            this.isStreaming = false;
-                            this.showError(response.error || '流式TTS错误');
-                            this.processStreamQueue();
-                            ws.close();
-                            resolve(null);
-                        }
-                    } catch (e) {
-                        console.error('TTS: 解析WebSocket消息失败', e);
-                    }
-                };
-
-                ws.onerror = (error) => {
-                    console.error('TTS WebSocket错误:', error);
-                    this.isStreaming = false;
-                    this.showError('流式连接失败');
-                    this.processStreamQueue();
-                    resolve(null);
-                };
-
-                ws.onclose = () => {
-                    if (!finalAudio && audioChunks.length === 0) {
-                        this.isStreaming = false;
-                        this.processStreamQueue();
-                        resolve(null);
-                    }
-                };
+            const res = await fetch('/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: processedText })
             });
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => null);
+                const errorMsg = errorData?.error || errorData?.message || `请求失败 (${res.status})`;
+                throw new Error(errorMsg);
+            }
+
+            const data = await res.json();
+
+            if (!data.success) {
+                throw new Error(data.error || data.message || '语音生成失败');
+            }
+
+            if (!data.audio) {
+                throw new Error('响应中缺少音频数据');
+            }
+
+            const arrayBuffer = this.base64ToArrayBuffer(data.audio);
+            this.playAudioBuffer(arrayBuffer);
+            return data.audio;
         } catch (err) {
-            console.error('TTS 流式请求失败:', err);
-            this.isStreaming = false;
-            this.showError(err.message || '流式语音生成失败');
-            this.processStreamQueue();
+            console.error('TTS 请求失败:', err);
+            this.showError(err.message || '语音生成失败');
             return null;
         }
-    }
-
-    playPCMChunk(base64Data, sampleRate) {
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
-        }
-
-        const binaryString = atob(base64Data);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const pcmData = new Int16Array(bytes.buffer);
-        const float32Data = new Float32Array(pcmData.length);
-        for (let i = 0; i < pcmData.length; i++) {
-            float32Data[i] = pcmData[i] / 32768.0;
-        }
-
-        const audioBuffer = this.audioContext.createBuffer(1, float32Data.length, sampleRate);
-        audioBuffer.getChannelData(0).set(float32Data);
-
-        const source = this.audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.playbackRate.value = this.audioSettings.playbackSpeed;
-
-        const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 1.0;
-
-        const highpass = this.audioContext.createBiquadFilter();
-        highpass.type = 'highpass';
-        highpass.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
-        highpass.Q.value = 0.5;
-
-        const lowshelf = this.audioContext.createBiquadFilter();
-        lowshelf.type = 'lowshelf';
-        lowshelf.frequency.value = 200;
-        lowshelf.gain.value = -this.audioSettings.bassCut * 20;
-
-        const highshelf = this.audioContext.createBiquadFilter();
-        highshelf.type = 'highshelf';
-        highshelf.frequency.value = 3000;
-        highshelf.gain.value = this.audioSettings.trebleBoost * 15;
-
-        source.connect(highpass);
-        highpass.connect(lowshelf);
-        lowshelf.connect(highshelf);
-        highshelf.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
-
-        source.start();
-    }
-
-    queueStreamRequest(text, callback) {
-        this.streamQueue.push({ text, callback });
-        if (!this.isStreaming) {
-            this.processStreamQueue();
-        }
-    }
-
-    async processStreamQueue() {
-        if (this.streamQueue.length === 0) {
-            this.isStreaming = false;
-            return;
-        }
-
-        this.isStreaming = true;
-        const { text, callback } = this.streamQueue.shift();
-
-        const result = await this.streamGenerateAndPlay(text);
-        if (callback) {
-            callback(result);
-        }
-
-        this.processStreamQueue();
-    }
-
-    async generateAndPlay(text) {
-        if (!this.allowLoading) return null;
-
-        const processedText = this.cleanTextForTTS(text);
-        if (!processedText) {
-            console.warn('TTS: 清理后文本为空');
-            return null;
-        }
-
-        if (processedText.length > this.maxTextLength) {
-            console.warn(`TTS: 文本长度超过限制 (${processedText.length} > ${this.maxTextLength})`);
-            this.showError('文本过长，请缩短后重试');
-            return null;
-        }
-
-        return await this.streamGenerateAndPlay(processedText);
     }
 
     playAudioBuffer(arrayBuffer) {
@@ -320,12 +175,6 @@ class TTSManager {
             } catch (e) { }
             this.currentSource = null;
         }
-        if (this.streamAbortController) {
-            this.streamAbortController.abort();
-            this.streamAbortController = null;
-        }
-        this.streamQueue = [];
-        this.isStreaming = false;
     }
 }
 

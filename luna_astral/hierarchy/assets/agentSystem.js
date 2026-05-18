@@ -1,5 +1,5 @@
 class OnlyData {
-    static customConfig = { cloud: {} };
+    static customConfig = { cloud: {}, server: {} };
     static toolCall = [];
     static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
     static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
@@ -41,7 +41,7 @@ class OnlyData {
     }
     ;
     static get userName() {
-        return OnlyData.customConfig.cloud.user_name || "阁下";
+        return OnlyData.customConfig.server.user_name || "阁下";
     }
     ;
 }
