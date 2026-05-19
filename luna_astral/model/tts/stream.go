@@ -29,18 +29,9 @@ import (
 
 //export streamPCMCallback
 func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_t, isFinal C.int, userData unsafe.Pointer) C.int {
-	ctxID := *(*C.int32_t)(userData)
-	ctxIDInt := int32(ctxID)
+	entry := (*streamCacheEntry)(userData)
 
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxIDInt]
-	streamCtxMapMu.Unlock()
-
-	if !exists {
-		return 1
-	}
-
-	if atomic.LoadInt32(&ctx.abort) != 0 {
+	if atomic.LoadInt32(&entry.aborted) != 0 {
 		return 1
 	}
 
@@ -58,18 +49,78 @@ func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_
 		}
 	}
 
-	select {
-	case ctx.ch <- chunk:
-		return 0
-	case <-ctx.done:
-		atomic.StoreInt32(&ctx.abort, 1)
-		return 1
+	entry.mu.Lock()
+	if chunk.SampleRate != 0 {
+		entry.sampleRate = chunk.SampleRate
+	}
+
+	for i := len(entry.subscribers) - 1; i >= 0; i-- {
+		subCh := entry.subscribers[i]
+		select {
+		case subCh <- chunk:
+		default:
+			close(subCh)
+			entry.subscribers = append(entry.subscribers[:i], entry.subscribers[i+1:]...)
+		}
+	}
+	entry.mu.Unlock()
+
+	return 0
+}
+
+func getOrCreateStreamEntry(text, refAudio string, languageID int32, chunkFrames int32) (*streamCacheEntry, chan StreamPCMChunk, bool) {
+	streamCacheMu.Lock()
+	defer streamCacheMu.Unlock()
+
+	if entry, exists := streamCacheItems[text]; exists {
+		subCh := make(chan StreamPCMChunk, 4)
+		entry.mu.Lock()
+		entry.subscribers = append(entry.subscribers, subCh)
+		entry.mu.Unlock()
+		return entry, subCh, false
+	}
+
+	entry := &streamCacheEntry{
+		text:        text,
+		refAudio:    refAudio,
+		languageID:  languageID,
+		chunkFrames: chunkFrames,
+		done:        make(chan struct{}),
+	}
+
+	subCh := make(chan StreamPCMChunk, 4)
+	entry.subscribers = append(entry.subscribers, subCh)
+
+	streamCacheItems[text] = entry
+
+	return entry, subCh, true
+}
+
+func removeStreamEntry(text string) {
+	streamCacheMu.Lock()
+	defer streamCacheMu.Unlock()
+
+	if entry, ok := streamCacheItems[text]; ok {
+		entry.mu.Lock()
+		for _, subCh := range entry.subscribers {
+			select {
+			case <-subCh:
+			default:
+			}
+			close(subCh)
+		}
+		entry.mu.Unlock()
+		delete(streamCacheItems, text)
 	}
 }
 
-func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32) (int32, error) {
+func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32, entry *streamCacheEntry) {
 	if globalTTS == nil || globalTTS.handle == nil {
-		return 0, fmt.Errorf("TTS 引擎未初始化")
+		entry.mu.Lock()
+		entry.err = fmt.Errorf("TTS 引擎未初始化")
+		entry.mu.Unlock()
+		close(entry.done)
+		return
 	}
 
 	if refAudio == "" {
@@ -78,16 +129,6 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 	if languageID == 0 {
 		languageID = globalTTS.languageID
 	}
-
-	streamCtxMapMu.Lock()
-	streamCtxCounter++
-	ctxID := streamCtxCounter
-	ctx := &StreamingContext{
-		ch:   make(chan StreamPCMChunk, 4),
-		done: make(chan struct{}),
-	}
-	streamCtxMap[ctxID] = ctx
-	streamCtxMapMu.Unlock()
 
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
@@ -99,8 +140,7 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 	cParams.n_threads = 4
 	cParams.language_id = C.int32_t(languageID)
 
-	cCtxID := C.int32_t(ctxID)
-	cChunkFrames := C.int32_t(chunkFrames)
+	entryPtr := unsafe.Pointer(entry)
 
 	go func() {
 		result := C.qwen3_tts_synthesize_streaming(
@@ -109,22 +149,19 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 			cRefAudio,
 			&cParams,
 			C.qwen3_tts_stream_callback(C.streamPCMCallback),
-			unsafe.Pointer(&cCtxID),
-			cChunkFrames,
+			entryPtr,
+			C.int32_t(chunkFrames),
 		)
 
-		streamCtxMapMu.Lock()
-		defer streamCtxMapMu.Unlock()
-		delete(streamCtxMap, ctxID)
+		entry.mu.Lock()
+		defer entry.mu.Unlock()
+		defer close(entry.done)
 
 		if result != 0 {
 			errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
-			ctx.err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
+			entry.err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
 		}
-		close(ctx.done)
 	}()
-
-	return ctxID, nil
 }
 
 func float32ToPCM16(samples []float32) []byte {
@@ -173,25 +210,11 @@ func QwenTTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 		chunkFrames = 50
 	}
 
-	ctxID, err := synthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames)
-	if err != nil {
-		sendWSStreamResponse(conn, WSStreamResponse{
-			Type:  "error",
-			Error: err.Error(),
-		})
-		return
-	}
+	entry, subCh, isCreator := getOrCreateStreamEntry(req.Text, req.RefAudio, req.LanguageID, chunkFrames)
 
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxID]
-	streamCtxMapMu.Unlock()
-
-	if !exists {
-		sendWSStreamResponse(conn, WSStreamResponse{
-			Type:  "error",
-			Error: "流式上下文未找到",
-		})
-		return
+	if isCreator {
+		synthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames, entry)
+		defer removeStreamEntry(req.Text)
 	}
 
 	var totalSamples int32
@@ -201,7 +224,7 @@ func QwenTTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	for !done {
 		select {
-		case chunk, ok := <-ctx.ch:
+		case chunk, ok := <-subCh:
 			if !ok {
 				done = true
 				continue
@@ -236,12 +259,16 @@ func QwenTTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 				sendMu.Unlock()
 			}
 
-		case <-ctx.done:
-			if ctx.err != nil {
+		case <-entry.done:
+			entry.mu.Lock()
+			streamErr := entry.err
+			entry.mu.Unlock()
+
+			if streamErr != nil {
 				sendMu.Lock()
 				sendWSStreamResponse(conn, WSStreamResponse{
 					Type:  "error",
-					Error: ctx.err.Error(),
+					Error: streamErr.Error(),
 				})
 				sendMu.Unlock()
 			} else {
