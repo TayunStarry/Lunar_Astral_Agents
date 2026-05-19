@@ -88,14 +88,26 @@ type StreamPCMChunk struct {
 	IsFinal bool
 }
 
-// StreamingContext 是流式合成的上下文结构。
-type StreamingContext struct {
-	// ch 是 PCM 音频块通道。
-	ch chan StreamPCMChunk
-	// done 是完成信号通道。
+// streamCacheEntry 是流式缓存中的一个条目
+type streamCacheEntry struct {
+	// Text 是要合成的文本。
+	text string
+	// RefAudio 是参考音频路径（可选）。
+	refAudio string
+	// LanguageID 是语言标识符（可选）。
+	languageID int32
+	// ChunkFrames 是每个块累积的帧数（可选）。
+	chunkFrames int32
+	// Subscribers 是订阅者通道列表。
+	subscribers []chan StreamPCMChunk
+	// Done 是完成通道，用于通知订阅者请求已完成。
 	done chan struct{}
-	// err 是合成过程中的错误。
+	// Err 是请求失败时的错误信息。
 	err error
-	// abort 是中止标志。
-	abort int32
+	// SampleRate 是采样率。
+	sampleRate int32
+	// Mu 是互斥锁，用于保护缓存项的并发访问。
+	mu sync.Mutex
+	// Aborted 是一个整数，用于表示请求是否被取消。
+	aborted int32
 }

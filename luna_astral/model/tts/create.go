@@ -86,25 +86,20 @@ func InitTTSEngine() {
 	ttsOnce.Do(func() {
 		modelDir := *config.LocalDir + "/models"
 		refAudio := *config.LocalDir + "/audios/lunar-template.wav"
-
 		cModelDir := C.CString(modelDir)
 		defer C.free(unsafe.Pointer(cModelDir))
-
 		nThreads := max(1, runtime.NumCPU()-1)
-
-		handle := C.qwen3_tts_create(cModelDir, C.int(nThreads))
+		handle := C.qwen3_tts_create(cModelDir, C.int32_t(nThreads))
 		if handle == nil {
 			log.Printf("Qwen TTS 引擎初始化失败，模型目录: %s", modelDir)
 			return
 		}
-
 		globalTTS = &TTSEngine{
 			handle:     handle,
 			modelDir:   modelDir,
 			refAudio:   refAudio,
 			languageID: 2055,
 		}
-
 		log.Printf("Qwen TTS 引擎初始化成功，使用线程数: %d", nThreads)
 	})
 }

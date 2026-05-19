@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -134,8 +135,8 @@ func initTTSEngine(modelDir, refAudio string) {
 	ttsOnce.Do(func() {
 		cModelDir := C.CString(modelDir)
 		defer C.free(unsafe.Pointer(cModelDir))
-
-		handle := C.qwen3_tts_create(cModelDir, 4)
+		nThreads := max(1, runtime.NumCPU()-1)
+		handle := C.qwen3_tts_create(cModelDir, C.int32_t(nThreads))
 		if handle == nil {
 			log.Printf("Qwen TTS 引擎初始化失败，模型目录: %s", modelDir)
 			return
