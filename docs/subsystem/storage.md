@@ -328,13 +328,13 @@ subsystem/storage/
 └── go.sum
 ```
 
-Storage子系统为星月智能提供数据持久化支持，[星图·月华](../luna_astral.md)和[星图·琉璃](../crystal_astral.md)都依赖此子系统进行文件和数据库操作。配置管理由[配置子系统](config.md)负责。
+Storage子系统为星月智能提供数据持久化支持，[星图·月华](../lunar_astral.md)和[星图·琉璃](../crystal_astral.md)都依赖此子系统进行文件和数据库操作。配置管理由[配置子系统](config.md)负责。
 
 ---
 
 ## 🔗 关联文档
 
 - [根目录文档](../../README.md)
-- [星图·月华 文档](../luna_astral.md)
+- [星图·月华 文档](../lunar_astral.md)
 - [星图·琉璃 文档](../crystal_astral.md)
 - [配置子系统文档](config.md)

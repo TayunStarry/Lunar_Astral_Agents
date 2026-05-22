@@ -78,13 +78,13 @@
 
 ```powershell
 # 基本启动
-luna_astral.exe
+lunar_astral.exe
 
 # 调试模式启动
-luna_astral.exe -developer
+lunar_astral.exe -developer
 
 # 指定端口启动
-luna_astral.exe -port 8080
+lunar_astral.exe -port 8080
 ```
 
 ### 参数说明

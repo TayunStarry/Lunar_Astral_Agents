@@ -1,0 +1,36 @@
+﻿[ASR-HTTP] 2026/05/21 20:19:49 Received ASR request
+[ASR-HTTP] 2026/05/21 20:19:49 Processing audio file: tts_1779317073325.wav (183254 bytes)
+[ASR-HTTP] 2026/05/21 20:20:01 Transcription complete: Hello, I am Lunar. Welcome to Lunar Auto Agents. (confidence: 0.85)
+[ASR-HTTP] 2026/05/21 20:20:15 Received ASR request
+[ASR-HTTP] 2026/05/21 20:20:15 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:20:15 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:20:28 Received ASR request
+[ASR-HTTP] 2026/05/21 20:20:28 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:20:28 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:20:54 Received ASR request
+[ASR-HTTP] 2026/05/21 20:20:55 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:20:55 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:21:06 Received ASR request
+[ASR-HTTP] 2026/05/21 20:21:06 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:21:06 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:21:07 Received ASR request
+[ASR-HTTP] 2026/05/21 20:21:07 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:21:07 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:21:21 Received ASR request
+[ASR-HTTP] 2026/05/21 20:21:21 Processing audio file: 鐬崇灣鑷垜浠嬬粛.wav (664782 bytes)
+[ASR-HTTP] 2026/05/21 20:21:21 ASR transcription failed: transcription failed for uploads\鐬崇灣鑷垜浠嬬粛.wav
+[ASR-HTTP] 2026/05/21 20:21:29 Received ASR request
+[ASR-HTTP] 2026/05/21 20:21:29 Processing audio file: tts_1779317073325.wav (183254 bytes)
+[ASR-HTTP] 2026/05/21 20:21:38 Transcription complete: Hello, I am Lunar. Welcome to Lunar Auto Agents. (confidence: 0.85)
+[ASR-HTTP] 2026/05/21 20:21:53 Received ASR request
+[ASR-HTTP] 2026/05/21 20:21:53 Processing audio file: tts_1778939073063.wav (171734 bytes)
+[ASR-HTTP] 2026/05/21 20:22:03 Transcription complete: 閭ｇ瓑鎴戝紕瀹屽啀鐪嬬湅鍚э紝鎰熻鍩烘湰瑕佸ぇ鏀逛簡銆?(confidence: 0.75)
+[ASR-HTTP] 2026/05/21 20:22:18 Received ASR request
+[ASR-HTTP] 2026/05/21 20:22:18 Processing audio file: tts_1779021601819.wav (121814 bytes)
+[ASR-HTTP] 2026/05/21 20:22:26 Transcription complete: 涓€鍔犱簩鍔犱笁鍔犲洓鍔犱簲鍔犲叚鍔犱竷鍔犲叓銆?(confidence: 0.75)
+[ASR-HTTP] 2026/05/21 20:22:44 Received ASR request
+[ASR-HTTP] 2026/05/21 20:22:44 Processing audio file: output.wav (91094 bytes)
+[ASR-HTTP] 2026/05/21 20:22:50 Transcription complete: 鐤媯鐤媯鏄熸湡鍥涖€?(confidence: 0.75)
+[ASR-HTTP] 2026/05/21 20:22:53 Received ASR request
+[ASR-HTTP] 2026/05/21 20:22:53 Processing audio file: output.wav (91094 bytes)
+[ASR-HTTP] 2026/05/21 20:22:59 Transcription complete: 鐤媯鐤媯鏄熸湡鍥涖€?(confidence: 0.75)

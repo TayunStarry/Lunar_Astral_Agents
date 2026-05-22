@@ -149,12 +149,12 @@ blurry, worst quality, low quality, normal quality, jpeg artifacts
 
 ---
 
-Image Generation组件是[扩展包](../index.md)的一部分，由[星图·月华](../luna_astral.md)提供AI图像生成功能支持。
+Image Generation组件是[扩展包](../index.md)的一部分，由[星图·月华](../lunar_astral.md)提供AI图像生成功能支持。
 
 ---
 
 ## 🔗 关联文档
 
 - [扩展包总览](index.md)
-- [星图·月华 文档](../luna_astral.md)
+- [星图·月华 文档](../lunar_astral.md)
 - [根目录文档](../../README.md)

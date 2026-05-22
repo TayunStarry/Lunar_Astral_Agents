@@ -1,7 +1,7 @@
 package main
 
 /*
-#cgo LDFLAGS: -L"D:/TTS/qwen3-tts.cpp-main/build" -L"D:/TTS/qwen3-tts.cpp-main/ggml/build/src" "D:/TTS/qwen3-tts.cpp-main/build/libqwen3tts.dll.a" -lqwen3_tts -ltts_transformer -ltext_tokenizer -laudio_tokenizer_encoder -laudio_tokenizer_decoder "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-base.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-cpu.a" -lstdc++ -lpthread
+#cgo LDFLAGS: -L"D:/TTS/qwen3-tts.cpp-main/build" -L"D:/TTS/qwen3-tts.cpp-main/ggml/build/src" "D:/TTS/qwen3-tts.cpp-main/build/libqwen3tts.dll.a" -lqwen3_tts -ltts_transformer -ltext_tokenizer -laudio_tokenizer_encoder -laudio_tokenizer_decoder "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-base.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-cpu.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-vulkan/ggml-vulkan.a" "C:/VulkanSDK/1.4.350.0/Lib/libvulkan.dll.a" -lstdc++ -lpthread
 #cgo CFLAGS: -I"D:/TTS/qwen3-tts.cpp-main/src" -I"D:/TTS/qwen3-tts.cpp-main/ggml/include"
 #include <stdlib.h>
 #include "qwen3tts_c_api.h"
@@ -37,6 +37,123 @@ var (
 	globalTTS *TTSEngine
 	ttsOnce   sync.Once
 )
+
+type speakerEmbedCache struct {
+	mu         sync.Mutex
+	embeddings map[string][]float32 // refAudio path -> speaker embedding
+	cacheDir   string
+}
+
+var embedCache = &speakerEmbedCache{
+	embeddings: make(map[string][]float32),
+	cacheDir:   "./local_data/embed_cache",
+}
+
+func (c *speakerEmbedCache) init() {
+	os.MkdirAll(c.cacheDir, 0755)
+	c.loadFromDisk()
+}
+
+func (c *speakerEmbedCache) loadFromDisk() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	files, err := os.ReadDir(c.cacheDir)
+	if err != nil {
+		log.Printf("[EmbedCache] 加载磁盘缓存失败: %v", err)
+		return
+	}
+
+	loaded := 0
+	for _, f := range files {
+		if f.IsDir() || filepath.Ext(f.Name()) != ".bin" {
+			continue
+		}
+
+		filePath := filepath.Join(c.cacheDir, f.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Printf("[EmbedCache] 读取 %s 失败: %v", f.Name(), err)
+			continue
+		}
+
+		if len(data) < 8 || len(data)%4 != 0 {
+			log.Printf("[EmbedCache] 跳过无效文件: %s", f.Name())
+			continue
+		}
+
+		audioPathLen := int(data[0])<<24 | int(data[1])<<16 | int(data[2])<<8 | int(data[3])
+		if 4+audioPathLen+4 > len(data) {
+			log.Printf("[EmbedCache] 跳过损坏文件: %s", f.Name())
+			continue
+		}
+
+		audioPath := string(data[4 : 4+audioPathLen])
+		embedSize := int(data[4+audioPathLen])<<24 | int(data[4+audioPathLen+1])<<16 |
+			int(data[4+audioPathLen+2])<<8 | int(data[4+audioPathLen+3])
+
+		embedData := data[4+audioPathLen+4:]
+		if len(embedData) != embedSize*4 {
+			log.Printf("[EmbedCache] 跳过大小不匹配文件: %s", f.Name())
+			continue
+		}
+
+		embedding := make([]float32, embedSize)
+		for i := 0; i < embedSize; i++ {
+			bits := uint32(embedData[i*4])<<24 | uint32(embedData[i*4+1])<<16 |
+				uint32(embedData[i*4+2])<<8 | uint32(embedData[i*4+3])
+			embedding[i] = *(*float32)(unsafe.Pointer(&bits))
+		}
+
+		c.embeddings[audioPath] = embedding
+		loaded++
+	}
+
+	if loaded > 0 {
+		log.Printf("[EmbedCache] 从磁盘加载 %d 个 embedding", loaded)
+	}
+}
+
+func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	hash := fmt.Sprintf("%x", []byte(audioPath))
+	if len(hash) > 16 {
+		hash = hash[:16]
+	}
+	fileName := hash + ".bin"
+	filePath := filepath.Join(c.cacheDir, fileName)
+
+	audioPathBytes := []byte(audioPath)
+	buf := make([]byte, 4+len(audioPathBytes)+4+len(embedding)*4)
+
+	buf[0] = byte(len(audioPathBytes) >> 24)
+	buf[1] = byte(len(audioPathBytes) >> 16)
+	buf[2] = byte(len(audioPathBytes) >> 8)
+	buf[3] = byte(len(audioPathBytes))
+	copy(buf[4:], audioPathBytes)
+
+	off := 4 + len(audioPathBytes)
+	buf[off] = byte(len(embedding) >> 24)
+	buf[off+1] = byte(len(embedding) >> 16)
+	buf[off+2] = byte(len(embedding) >> 8)
+	buf[off+3] = byte(len(embedding))
+
+	off += 4
+	for _, v := range embedding {
+		bits := *(*uint32)(unsafe.Pointer(&v))
+		buf[off] = byte(bits >> 24)
+		buf[off+1] = byte(bits >> 16)
+		buf[off+2] = byte(bits >> 8)
+		buf[off+3] = byte(bits)
+		off += 4
+	}
+
+	if err := os.WriteFile(filePath, buf, 0644); err != nil {
+		log.Printf("[EmbedCache] 保存 %s 失败: %v", fileName, err)
+	}
+}
 
 const maxCacheSize = 5
 
@@ -149,8 +266,68 @@ func initTTSEngine(modelDir, refAudio string) {
 			languageID: 2055,
 		}
 
+		embedCache.init()
+
 		log.Printf("Qwen TTS 引擎初始化成功")
+
+		//go warmupTTSEngine(refAudio)
 	})
+}
+
+func warmupTTSEngine(refAudio string) {
+	log.Println("[Warmup] 开始预热TTS引擎，加载所有模型到内存...")
+
+	dummyText := "你好"
+	samples, err := synthesizeText(dummyText, refAudio, globalTTS.languageID)
+	if err != nil {
+		log.Printf("[Warmup] 预热合成失败（可忽略）: %v", err)
+		return
+	}
+
+	if len(samples) > 0 {
+		log.Printf("[Warmup] 预热成功，生成 %d 个采样点，所有模型已加载完成", len(samples))
+	} else {
+		log.Println("[Warmup] 预热完成")
+	}
+}
+
+func getOrExtractEmbedding(refAudio string) ([]float32, error) {
+	embedCache.mu.Lock()
+	if cached, ok := embedCache.embeddings[refAudio]; ok {
+		embedCache.mu.Unlock()
+		return cached, nil
+	}
+	embedCache.mu.Unlock()
+
+	cRefAudio := C.CString(refAudio)
+	defer C.free(unsafe.Pointer(cRefAudio))
+
+	const maxEmbedSize = 2048
+	embedBuf := make([]float32, maxEmbedSize)
+
+	embedSize := C.qwen3_tts_extract_embedding_file(
+		globalTTS.handle,
+		cRefAudio,
+		(*C.float)(unsafe.Pointer(&embedBuf[0])),
+		C.int32_t(maxEmbedSize),
+	)
+
+	if embedSize <= 0 {
+		errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
+		return nil, fmt.Errorf("提取 speaker embedding失败: %s", errStr)
+	}
+
+	embedding := make([]float32, embedSize)
+	copy(embedding, embedBuf[:embedSize])
+
+	embedCache.mu.Lock()
+	embedCache.embeddings[refAudio] = embedding
+	embedCache.mu.Unlock()
+
+	embedCache.saveToDisk(refAudio, embedding)
+
+	log.Printf("[EmbedCache] 已缓存参考音频 %s 的 embedding (size=%d)", refAudio, embedSize)
+	return embedding, nil
 }
 
 func synthesizeText(text, refAudio string, languageID int32) ([]float32, error) {
@@ -168,21 +345,24 @@ func synthesizeText(text, refAudio string, languageID int32) ([]float32, error) 
 	globalTTS.mu.Lock()
 	defer globalTTS.mu.Unlock()
 
+	embedding, err := getOrExtractEmbedding(refAudio)
+	if err != nil {
+		return nil, err
+	}
+
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
-	cRefAudio := C.CString(refAudio)
-	defer C.free(unsafe.Pointer(cRefAudio))
-
 	var cParams C.Qwen3TtsParams
 	C.qwen3_tts_default_params(&cParams)
-	cParams.n_threads = 4
+	cParams.n_threads = C.int32_t(max(1, runtime.NumCPU()-1))
 	cParams.language_id = C.int32_t(languageID)
 
-	result := C.qwen3_tts_synthesize_with_voice_file(
+	result := C.qwen3_tts_synthesize_with_embedding(
 		globalTTS.handle,
 		cText,
-		cRefAudio,
+		(*C.float)(unsafe.Pointer(&embedding[0])),
+		C.int32_t(len(embedding)),
 		&cParams,
 	)
 
@@ -506,7 +686,7 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 
 	var cParams C.Qwen3TtsParams
 	C.qwen3_tts_default_params(&cParams)
-	cParams.n_threads = 4
+	cParams.n_threads = C.int32_t(max(1, runtime.NumCPU()-1))
 	cParams.language_id = C.int32_t(languageID)
 
 	cCtxID := C.int32_t(ctxID)
