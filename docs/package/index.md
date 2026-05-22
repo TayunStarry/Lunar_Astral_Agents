@@ -77,5 +77,5 @@
 ## 🔗 关联文档
 
 - [星图·琉璃 文档](../crystal_astral.md)
-- [星图·月华 文档](../luna_astral.md)
+- [星图·月华 文档](../lunar_astral.md)
 - [根目录文档](../../README.md)

@@ -6,7 +6,7 @@
 
 ```
 Lunar_Astral_Agents/
-├── luna_astral/          # 星图-月华 - 核心智能体
+├── lunar_astral/          # 星图-月华 - 核心智能体
 │   ├── server/          # HTTP服务模块
 │   ├── model/           # 模型管理模块
 │   ├── adapters/        # JavaScript运行时环境（goja）与适配器函数
@@ -49,9 +49,9 @@ Lunar_Astral_Agents/
 
 ## 🎭 智能体介绍
 
-### 星图·月华 (luna_astral) 
+### 星图·月华 (lunar_astral) 
 
-> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[星图·月华 文档](docs/luna_astral.md)。
+> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[星图·月华 文档](docs/lunar_astral.md)。
 
 **核心能力**：
 
@@ -125,7 +125,7 @@ git clone https://github.com/LunarAstral/Lunar_Astral_Agents.git
 cd Lunar_Astral_Agents
 
 # 2. 构建月华智能体
-cd luna_astral
+cd lunar_astral
 .\build.ps1
 
 # 3. 构建星图·琉璃
@@ -141,7 +141,7 @@ cd ..
 
 ```powershell
 # 启动星图·月华核心服务
-.\luna_astral\luna_astral.exe
+.\lunar_astral\lunar_astral.exe
 
 # 启动星图·琉璃扩展服务（可选）
 .\crystal_astral\crystal_astral.exe

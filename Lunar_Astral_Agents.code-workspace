@@ -12,7 +12,7 @@
 			"path": "../TTS/qwen3-tts.cpp-main"
 		},
 		{
-			"path": "../TTS/luna-tts"
+			"path": "../TTS/qwen-asr-main"
 		}
 	],
 	"settings": {

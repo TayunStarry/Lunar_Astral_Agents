@@ -68,8 +68,8 @@ try {
     if ($exitCode -ne 0) { throw "removeExport.cjs 执行失败" }
 
     # 构建可执行文件
-    $binaryName = "Luna_Astral.exe"
-    if ($TargetOS -ne "windows") { $binaryName = "Luna_Astral" }
+    $binaryName = "Lunar_Astral.exe"
+    if ($TargetOS -ne "windows") { $binaryName = "Lunar_Astral" }
     $outputPath = "..\$binaryName"
 
     $ldflags = "-s -w"
