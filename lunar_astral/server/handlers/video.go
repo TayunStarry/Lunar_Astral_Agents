@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarCore/hierarchy/image"
+	"lunar_astral/hierarchy/image"
 	"encoding/json"
 	"fmt"
 	"io"

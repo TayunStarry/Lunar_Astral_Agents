@@ -1,21 +1,21 @@
 package server
 
 import (
-	"LunarCore/adapters"
-	"LunarCore/hierarchy"
-	"LunarCore/model/llama"
-	"LunarCore/model/tts"
-	"LunarCore/release"
-	"LunarCore/server/handlers"
-	"LunarCore/websocket"
 	"config"
 	"context"
 	"flag"
 	"log"
+	"lunar_astral/adapters"
+	"lunar_astral/hierarchy"
+	"lunar_astral/model/llama"
+	"lunar_astral/release"
+	"lunar_astral/server/handlers"
+	"lunar_astral/websocket"
 	"mime"
 	"net/http"
 	"os"
 	"os/signal"
+	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
 )
@@ -40,8 +40,11 @@ func InitializeServer() {
 	registerHandlers()
 	// 创建GGUF服务器
 	llama.CreateServers()
+	// 定义模型目录和参考音频文件路径
+	modelDir := *config.LocalDir + "/models"
+	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	// 初始化TTS引擎
-	tts.InitTTSEngine()
+	module.InitTTSEngine(modelDir, refAudio)
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文

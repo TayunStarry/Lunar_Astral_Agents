@@ -1,11 +1,11 @@
 package server
 
 import (
-	"LunarCore/model"
-	"LunarCore/model/tts"
-	"LunarCore/server/handlers"
 	"config"
 	"fmt"
+	"lunar_astral/model"
+	"lunar_astral/model/tts"
+	"lunar_astral/server/handlers"
 	"net/http"
 	storage "storage/server"
 	"sync"
@@ -71,7 +71,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// 消息队列相关接口
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
-	// TTS语音服务相关接口
-	{Path: "/tts", Handler: tts.QwenTTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	{Path: "/tts/stream", Handler: tts.QwenTTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
+	// TTS语音服务相关接口（含防重复合成机制）
+	{Path: "/tts", Handler: tts.TTSHandlerWrapper, Method: "POST", Description: "TTS语音合成服务"},
+	{Path: "/tts/stream", Handler: tts.TTSStreamHandlerWrapper, Method: "GET", Description: "TTS流式合成服务"},
 }

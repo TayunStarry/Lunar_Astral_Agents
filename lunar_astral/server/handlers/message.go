@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarCore/adapters"
+	"lunar_astral/adapters"
 	"encoding/json"
 	"io"
 	"net/http"

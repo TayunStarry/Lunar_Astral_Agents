@@ -7,14 +7,15 @@ import (
 	"flag"
 	"log"
 	"os"
+	"qwen3_tts_lunar/module"
 	"time"
 )
 
 // reloadPageParameters 重新加载页面参数
 func reloadPageParameters() {
 	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
-	*config.WebViewWidth = 640
-	*config.WebViewHeight = 890
+	*config.WebViewWidth = 1150
+	*config.WebViewHeight = 960
 }
 
 // main 主函数
@@ -28,7 +29,7 @@ func main() {
 		log.Printf("[SimpleTTS] 警告: 模型目录不存在: %s", modelDir)
 	}
 
-	initTTSEngine(modelDir, refAudio)
+	module.InitTTSEngine(modelDir, refAudio)
 
 	log.Printf("[SimpleTTS] 监听端口: %s", addr)
 	go startServer(addr)
