@@ -7,7 +7,7 @@ import (
 	"log"
 	"lunar_astral/adapters"
 	"lunar_astral/hierarchy"
-	"lunar_astral/model/llama"
+	"lunar_astral/model/llama_proxy"
 	"lunar_astral/release"
 	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
@@ -38,8 +38,8 @@ func InitializeServer() {
 	}
 	// 注册HTTP处理器
 	registerHandlers()
-	// 创建GGUF服务器
-	llama.CreateServers()
+	// 启动llama.cpp代理服务器
+	llama_proxy.Init()
 	// 定义模型目录和参考音频文件路径
 	modelDir := *config.LocalDir + "/models"
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
@@ -64,10 +64,6 @@ func registerHandlers() {
 		fileServer = http.FileServer(hierarchy.Gethierarchy())
 	}
 	httpMux.Handle("/", http.StripPrefix("/", fileServer))
-	// 检查显存是否足够，若不足则禁用扩散生成功能
-	if mem, err := llama.GetFreeMemory(); err == nil && mem < 8*1024*1024*1024 {
-		log.Printf("Generate服务[WARN] -> 可用显存低于8GB, 请慎用[扩散生成]功能")
-	}
 	// 启动扩散生成任务协处理器
 	handlers.StartTaskProcessor()
 	// 注册所有系统端点路径的处理函数
@@ -103,6 +99,8 @@ func shutdownServer(server *http.Server) {
 	defer cancel()
 	// 关闭JavaScript运行时
 	adapters.CloseAgentContext()
+	// 关闭llama.cpp服务器
+	llama_proxy.Close()
 	// 关闭WebSocket服务器
 	websocket.CloseWebSocketServer()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时

@@ -39,8 +39,8 @@ func openStdoutScanner(stdoutScanner *bufio.Scanner, modelLoaded chan bool) {
 		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
-		// 检查输出行是否包含 "starting the main loop"，若包含则表示模型加载完成
-		if strings.Contains(line, "starting the main loop") {
+		// 检查输出行是否包含 "server is listening"，若包含则表示模型加载完成
+		if strings.Contains(line, "server is listening") {
 			// 向通道发送信号，表示模型已加载完成
 			modelLoaded <- true
 		}
@@ -57,8 +57,8 @@ func openStderrScanner(stderrScanner *bufio.Scanner, modelLoaded chan bool, mode
 		if config.ModelReady >= config.MaxModelAmount || strings.Contains(line, "load_backend:") {
 			log.Printf("%s", line)
 		}
-		// 检查错误行是否包含 "starting the main loop"，若包含则表示模型加载完成
-		if strings.Contains(line, "starting the main loop") {
+		// 检查错误行是否包含 "server is listening"，若包含则表示模型加载完成
+		if strings.Contains(line, "server is listening") {
 			// 向通道发送信号，表示模型已加载完成
 			modelLoaded <- true
 		}

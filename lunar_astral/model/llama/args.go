@@ -69,6 +69,10 @@ func MultimodalModelArgs(args *[]string, modelPath, modelName string, metadata m
 	*args = append(*args, "--mmproj", mmprojPath)
 	// 向命令行参数中追加 GPU 加速层级参数
 	*args = append(*args, "--n-gpu-layers", strconv.Itoa(maxSafeLayers))
+	// 向命令行参数中追加模型规格类型参数
+	*args = append(*args, "--spec-type", "draft-mtp")
+	// 向命令行参数中追加多模态模型最大请求数量参数
+	*args = append(*args, "--spec-draft-n-max", "3")
 	// 记录加载视觉模型的信息，包括使用的 MMProj 文件路径和 GPU 加速层级
 	log.Printf("GGUF模块 -> 加载视觉模型 [ %s ]", modelName)
 	log.Printf("GGUF模块 -> 加载投影模型 [ %s ]", filepath.Base(mmprojPath))
