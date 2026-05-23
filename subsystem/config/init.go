@@ -11,12 +11,6 @@ import (
 type ModelConfig struct {
 	// 模型配置
 	Models struct {
-		// 嵌入模型路径
-		EmbeddingModel string `json:"embedding_model"`
-		// 多模态模型路径
-		MultimodalModel string `json:"multimodal_model"`
-		// 多模态投影模型路径
-		MmprojModel string `json:"mmproj_model"`
 		// 扩散模型路径
 		DiffusionModel string `json:"diffusion_model"`
 		// 变分模型路径
@@ -69,18 +63,6 @@ func init() {
 		// 若解析失败，打印错误日志并直接返回
 		log.Printf("解析配置文件失败: %v", err)
 		return
-	}
-	// 如果配置文件中 EmbeddingModel 字段非空，则更新全局配置
-	if parameter.Models.EmbeddingModel != "" {
-		*EmbeddingModel = parameter.Models.EmbeddingModel
-	}
-	// 如果配置文件中 MultimodalModel 字段非空，则更新全局配置
-	if parameter.Models.MultimodalModel != "" {
-		*MultimodalModel = parameter.Models.MultimodalModel
-	}
-	// 如果配置文件中 MmprojModel 字段非空，则更新全局配置
-	if parameter.Models.MmprojModel != "" {
-		*MmprojModel = parameter.Models.MmprojModel
 	}
 	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
 	if parameter.Models.DiffusionModel != "" {

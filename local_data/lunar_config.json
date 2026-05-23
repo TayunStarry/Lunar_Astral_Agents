@@ -1,8 +1,5 @@
 {
 	"models": {
-		"multimodal_model": "./local_data/models/Qwen3.5-9B-Q4_K_M.gguf",
-		"mmproj_model": "./local_data/models/mmproj-Qwen3.5-9B-BF16.gguf",
-		"embedding_model": "./local_data/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
 		"diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
 		"variational_model": "./local_data/models/diffusion_pytorch_model.safetensors",
 		"prompt_refine_model": "./local_data/models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
@@ -27,7 +24,7 @@
 		"lunar_ws_server": "ws://localhost:36789/ws",
 		"poll_interval": 10,
 		"listen_group_ids": [
-			"262221051"
+			262221051
 		],
 		"trigger_keywords": [
 			"月华",
@@ -41,7 +38,7 @@
 			"libdl.dll",
 			"libgcc_s_seh-1.dll",
 			"libgomp-1.dll",
-			"libqwen3tts.dll",
+			"qwen3tts.dll",
 			"libstdc++-6.dll",
 			"libwinpthread-1.dll",
 			"vulkan-1.dll",
@@ -60,7 +57,7 @@
 			"libdl.dll",
 			"libgcc_s_seh-1.dll",
 			"libgomp-1.dll",
-			"libqwen3tts.dll",
+			"qwen3tts.dll",
 			"libstdc++-6.dll",
 			"libwinpthread-1.dll",
 			"vulkan-1.dll",
@@ -80,7 +77,7 @@
 			"libdl.dll",
 			"libgcc_s_seh-1.dll",
 			"libgomp-1.dll",
-			"libqwen3tts.dll",
+			"qwen3tts.dll",
 			"libstdc++-6.dll",
 			"libwinpthread-1.dll",
 			"vulkan-1.dll",
@@ -103,7 +100,7 @@
 			"libdl.dll",
 			"libgcc_s_seh-1.dll",
 			"libgomp-1.dll",
-			"libqwen3tts.dll",
+			"qwen3tts.dll",
 			"libstdc++-6.dll",
 			"libwinpthread-1.dll",
 			"vulkan-1.dll",
