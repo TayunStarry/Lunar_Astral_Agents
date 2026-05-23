@@ -2,7 +2,7 @@
 package llama
 
 import (
-	"LunarCore/model/llama/metadata"
+	"lunar_astral/model/llama/metadata"
 	"fmt"
 	"log"
 	"math"

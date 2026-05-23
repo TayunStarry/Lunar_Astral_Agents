@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"config"
-	"LunarCore/hierarchy/image/generate"
+	"lunar_astral/hierarchy/image/generate"
 	"encoding/json"
 	"fmt"
 	"net/http"

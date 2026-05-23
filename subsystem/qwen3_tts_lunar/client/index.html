@@ -9,141 +9,368 @@
 </head>
 
 <body>
-    <!-- 固定背景层，用于展示 '/background' 图片 -->
     <div class="fixed-bg"></div>
 
-    <div class="app-container">
-        <!-- 主内容磨砂卡片 -->
-        <main class="glass-panel">
-            <!-- 品牌区域 -->
-            <div class="brand">
-                <div class="brand-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M9 19V5l12 7-12 7z" />
-                        <path d="M5 19V5" />
-                    </svg>
-                </div>
-                <div class="brand-text">
-                    <h1>星月智能 · 语音合成</h1>
-                    <!-- 状态消息气泡 -->
-                    <div id="status-message" class="status-toast"></div>
-                </div>
+    <header class="app-header">
+        <div class="brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 32 32" fill="none">
+                    <circle cx="16" cy="16" r="14" stroke="url(#brandGrad)" stroke-width="2" opacity="0.6" />
+                    <circle cx="16" cy="10" r="4" fill="url(#brandGrad)" opacity="0.9" />
+                    <path d="M8 24c2-4 4-6 8-6s6 2 8 6" stroke="url(#brandGrad)" stroke-width="2" stroke-linecap="round"
+                        opacity="0.7" />
+                    <defs>
+                        <linearGradient id="brandGrad" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#a78bfa" />
+                            <stop offset="100%" stop-color="#67e8f9" />
+                        </linearGradient>
+                    </defs>
+                </svg>
             </div>
+            <div class="brand-text">
+                <h1>星月智能 · 语音合成</h1>
+                <span class="brand-subtitle">Qwen3 TTS 轻量级合成引擎</span>
+            </div>
+        </div>
+        <div id="status-message" class="status-toast"></div>
+        <div class="action-center">
+            <button id="synthesize-btn" class="glow-button primary-btn">
+                <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
+                <span>合成语音</span>
+            </button>
+            <button id="stream-btn" class="glow-button stream-button">
+                <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+                </svg>
+                <span>流式输出</span>
+            </button>
+            <button id="download-btn" class="glow-button" title="下载音频">
+                <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                </svg>
+                <span>下载</span>
+            </button>
+        </div>
+    </header>
 
-            <!-- 双栏灵动区：文本输入 + 参考音频 -->
-            <div class="form-grid">
-                <!-- 左侧：文本输入卡片 -->
-                <div class="input-card glass-card">
+    <div class="app-container">
+        <main class="glass-panel">
+            <div class="cards-row">
+                <div class="card glass-card">
                     <div class="card-header">
-                        <span class="card-icon">📝</span>
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22"
+                                height="22">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                        </span>
                         <h3>文本内容</h3>
                     </div>
                     <div class="textarea-wrapper">
-                        <textarea id="text-input" placeholder="输入任意文字，让 AI 为您发声……（支持中英文混合）"></textarea>
+                        <textarea id="text-input" placeholder="输入任意文字，让 AI 为您发声……&#10;支持中英文混合，尽情发挥创意 ✨"></textarea>
                         <div class="char-counter">
-                            <span id="char-count">0</span> 字符
+                            <span id="char-count">0</span>&nbsp;字符
                         </div>
                     </div>
                 </div>
 
-                <!-- 右侧：参考音频卡片 -->
-                <div class="upload-card glass-card">
+                <div class="card glass-card">
                     <div class="card-header">
-                        <span class="card-icon">🎤</span>
-                        <h3>音色参考 (可选)</h3>
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22"
+                                height="22">
+                                <path d="M19 10c0 3.976-7 10-7 10S5 13.976 5 10a7 7 0 0 1 14 0z" />
+                                <circle cx="12" cy="10" r="2" />
+                            </svg>
+                        </span>
+                        <h3>音色参考</h3>
+                        <span class="card-badge">可选</span>
                     </div>
                     <div class="upload-zone" id="upload-area">
                         <input type="file" id="audio-upload" accept=".wav" hidden>
-                        <!-- 未上传状态 -->
                         <div class="upload-placeholder" id="upload-content">
                             <div class="upload-icon-bg">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                                    <path d="M12 3v12m0 0-3-3m3 3 3-3M5 21h14" stroke-linecap="round" />
-                                    <rect x="4" y="14" width="16" height="3" rx="1" />
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" width="48"
+                                    height="48">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
                                 </svg>
                             </div>
                             <p>拖拽或点击上传音频</p>
-                            <span class="hint">仅限 WAV 格式，推荐清晰人声片段</span>
+                            <span class="hint">WAV 格式 · 清晰人声片段</span>
                         </div>
-                        <!-- 已上传状态 -->
                         <div class="upload-fileinfo hidden" id="file-info">
                             <div class="file-detail">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20">
-                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
-                                        stroke-width="1.5" />
-                                    <polyline points="13 2 13 9 20 9" stroke-width="1.5" />
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="20" height="20"
+                                    stroke-width="1.5">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                    <polyline points="13 2 13 9 20 9" />
                                 </svg>
                                 <span id="file-name" class="file-name"></span>
                             </div>
-                            <button class="icon-btn remove-btn" id="remove-file" title="移除音频">✕</button>
+                            <button class="icon-btn remove-btn" id="remove-file" title="移除音频">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                                    height="16">
+                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
+            <div id="audio-player-container" class="card glass-card player-card">
+                <div class="card-header">
+                    <span class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22"
+                            height="22">
+                            <path d="M9 18V5l12-2v13" />
+                            <circle cx="6" cy="18" r="3" />
+                            <circle cx="18" cy="16" r="3" />
+                        </svg>
+                    </span>
+                    <h3>音频预览</h3>
+                    <span id="stream-badge" class="player-badge stream-badge hidden">● 流式传输中</span>
+                </div>
 
-            <!-- 音频播放器区域（动态显示） -->
-            <div id="audio-player-container" class="player-section">
-                <div class="glass-card player-card">
-                    <div class="card-header">
-                        <span class="card-icon">🔊</span>
-                        <h3>音频预览</h3>
-                    </div>
+                <div class="waveform-stage" id="waveform"></div>
 
-                    <!-- 动态波形条 (合成动画区) -->
-                    <div class="waveform-stage" id="waveform"></div>
+                <audio id="audio-player" preload="auto"></audio>
 
-                    <!-- 音频核心控件 -->
-                    <audio id="audio-player" preload="auto"></audio>
-                    <div class="player-controls">
-                        <div class="playback-buttons">
-                            <button id="play-btn" class="ctrl-btn" title="播放">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M8 5v14l11-7z" />
-                                </svg>
-                            </button>
-                            <button id="pause-btn" class="ctrl-btn hidden" title="暂停">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                                </svg>
-                            </button>
-                            <button id="stop-btn" class="ctrl-btn" title="停止">
-                                <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M6 6h12v12H6z" />
-                                </svg>
-                            </button>
-                        </div>
-                        <div class="progress-area">
-                            <input type="range" id="progress-bar" class="glass-slider" min="0" max="100" value="0">
-                            <span id="time-display" class="time-label">0:00 / 0:00</span>
-                        </div>
-                        <div class="volume-wrap">
-                            <svg class="volume-icon" viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM16 3.5v2.05c2.5 1.12 4 3.53 4 6.45s-1.5 5.33-4 6.45v2.05c3.5-1.18 6-4.47 6-8.5s-2.5-7.32-6-8.5z" />
+                <div class="player-controls">
+                    <div class="playback-left">
+                        <button id="play-pause-btn" class="ctrl-btn play-pause-btn" title="播放">
+                            <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5v14l11-7z" />
                             </svg>
-                            <input type="range" id="volume-slider" class="glass-slider vol-slider" min="0" max="100"
-                                value="80">
-                        </div>
+                            <svg class="icon-pause hidden" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                            </svg>
+                        </button>
+                        <button id="stop-btn" class="ctrl-btn" title="停止">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 6h12v12H6z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="progress-area">
+                        <input type="range" id="progress-bar" class="glass-slider progress-slider" min="0" max="100"
+                            value="0">
+                        <span id="time-display" class="time-label">0:00 / 0:00</span>
+                    </div>
+                    <div class="volume-wrap">
+                        <svg class="volume-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM16 3.5v2.05c2.5 1.12 4 3.53 4 6.45s-1.5 5.33-4 6.45v2.05c3.5-1.18 6-4.47 6-8.5s-2.5-7.32-6-8.5z" />
+                        </svg>
+                        <input type="range" id="volume-slider" class="glass-slider vol-slider" min="0" max="100"
+                            value="80">
                     </div>
                 </div>
             </div>
 
-            <!-- 合成主控按钮 -->
-            <div class="action-center">
-                <button id="synthesize-btn" class="glow-button">
-                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <span>合成语音</span>
-                </button>
-
-                <button id="download-btn" class="glow-button" title="下载音频">
-                    <svg class="btn-svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                    </svg>
-                    <span>下载音频</span>
-                </button>
+            <div class="card glass-card">
+                <div class="card-header">
+                    <span class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22"
+                            height="22">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                    </span>
+                    <h3>合成参数</h3>
+                </div>
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <label for="chunkframes-input">流式帧数</label>
+                        <input type="number" id="chunkframes-input" class="glass-input" placeholder="50" min="1"
+                            max="500" value="96">
+                        <span class="setting-hint">每帧传输间隔，越小延迟越低</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="temperature-input">温度</label>
+                        <div class="slider-row">
+                            <span class="slider-value" id="temperature-value">0.8</span>
+                            <input type="range" id="temperature-input" class="glass-slider" min="0.1" max="2" step="0.1"
+                                value="0.8">
+                        </div>
+                        <span class="setting-hint">控制生成随机性</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="topk-input">Top-K</label>
+                        <input type="number" id="topk-input" class="glass-input" placeholder="0 (默认)" min="0" value="0">
+                        <span class="setting-hint">采样候选Token数量</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="topp-input">Top-P</label>
+                        <div class="slider-row">
+                            <span class="slider-value" id="topp-value">0.9</span>
+                            <input type="range" id="topp-input" class="glass-slider" min="0.1" max="1" step="0.05"
+                                value="0.9">
+                        </div>
+                        <span class="setting-hint">核采样概率阈值</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="maxtokens-input">最大Token</label>
+                        <input type="number" id="maxtokens-input" class="glass-input" placeholder="0 (默认)" min="0"
+                            value="0">
+                        <span class="setting-hint">生成Token上限</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="repetition-input">重复惩罚</label>
+                        <div class="slider-row">
+                            <span class="slider-value" id="repetition-value">1.1</span>
+                            <input type="range" id="repetition-input" class="glass-slider" min="1" max="2" step="0.05"
+                                value="1.1">
+                        </div>
+                        <span class="setting-hint">抑制重复内容</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="threads-input">线程数</label>
+                        <input type="number" id="threads-input" class="glass-input" placeholder="0 (自动)" min="0"
+                            value="0">
+                        <span class="setting-hint">0 = 自动检测</span>
+                    </div>
+                </div>
             </div>
+
+            <div class="card glass-card">
+                <div class="card-header">
+                    <span class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22"
+                            height="22">
+                            <line x1="4" y1="21" x2="4" y2="14" />
+                            <line x1="4" y1="10" x2="4" y2="3" />
+                            <line x1="12" y1="21" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12" y2="3" />
+                            <line x1="20" y1="21" x2="20" y2="16" />
+                            <line x1="20" y1="12" x2="20" y2="3" />
+                            <line x1="1" y1="14" x2="7" y2="14" />
+                            <line x1="9" y1="8" x2="15" y2="8" />
+                            <line x1="17" y1="16" x2="23" y2="16" />
+                        </svg>
+                    </span>
+                    <h3>音频均衡器</h3>
+                </div>
+                <div class="eq-controls">
+                    <div class="eq-visualizer" id="eq-visualizer">
+                        <svg class="eq-svg" viewBox="0 0 100 240" preserveAspectRatio="none"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <rect class="eq-bar eq-bar-low" x="12" y="225" width="20" height="15" rx="4"
+                                id="eq-vis-low" />
+                            <rect class="eq-bar eq-bar-mid" x="40" y="225" width="20" height="15" rx="4"
+                                id="eq-vis-mid" />
+                            <rect class="eq-bar eq-bar-high" x="68" y="225" width="20" height="15" rx="4"
+                                id="eq-vis-high" />
+                            <rect class="eq-baseline" x="8" y="237" width="84" height="3" rx="1.5" />
+                        </svg>
+                    </div>
+                    <div class="eq-panels">
+                        <div class="eq-section">
+                            <div class="eq-section-header">
+                                <span class="eq-label">
+                                    <span class="eq-dot low-dot"></span>低频 200Hz
+                                </span>
+                                <div class="eq-mode-select">
+                                    <select id="eq-low-mode" class="eq-select">
+                                        <option value="boost">增强</option>
+                                        <option value="cut">削弱</option>
+                                    </select>
+                                    <select id="eq-low-multi" class="eq-select">
+                                        <option value="1">×1</option>
+                                        <option value="2">×2</option>
+                                        <option value="3" selected>×3</option>
+                                        <option value="5">×5</option>
+                                        <option value="10">×10</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="eq-slider-row">
+                                <span class="eq-max" id="eq-low-value">0dB</span>
+                                <div class="eq-slider-track">
+                                    <span class="eq-min">0dB</span>
+                                    <input type="range" id="eq-low-slider" class="glass-slider eq-slider" min="0"
+                                        max="12" step="0.5" value="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="eq-section">
+                            <div class="eq-section-header">
+                                <span class="eq-label">
+                                    <span class="eq-dot mid-dot"></span>中频 1kHz
+                                </span>
+                                <div class="eq-mode-select">
+                                    <select id="eq-mid-mode" class="eq-select">
+                                        <option value="boost">增强</option>
+                                        <option value="cut">削弱</option>
+                                    </select>
+                                    <select id="eq-mid-multi" class="eq-select">
+                                        <option value="1">×1</option>
+                                        <option value="2">×2</option>
+                                        <option value="3" selected>×3</option>
+                                        <option value="5">×5</option>
+                                        <option value="10">×10</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="eq-slider-row">
+                                <span class="eq-max" id="eq-mid-value">0dB</span>
+                                <div class="eq-slider-track">
+                                    <span class="eq-min">0dB</span>
+                                    <input type="range" id="eq-mid-slider" class="glass-slider eq-slider" min="0"
+                                        max="12" step="0.5" value="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="eq-section">
+                            <div class="eq-section-header">
+                                <span class="eq-label">
+                                    <span class="eq-dot high-dot"></span>高频 8kHz
+                                </span>
+                                <div class="eq-mode-select">
+                                    <select id="eq-high-mode" class="eq-select">
+                                        <option value="boost">增强</option>
+                                        <option value="cut">削弱</option>
+                                    </select>
+                                    <select id="eq-high-multi" class="eq-select">
+                                        <option value="1">×1</option>
+                                        <option value="2">×2</option>
+                                        <option value="3" selected>×3</option>
+                                        <option value="5">×5</option>
+                                        <option value="10">×10</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="eq-slider-row">
+                                <span class="eq-max" id="eq-high-value">0dB</span>
+                                <div class="eq-slider-track">
+                                    <span class="eq-min">0dB</span>
+                                    <input type="range" id="eq-high-slider" class="glass-slider eq-slider" min="0"
+                                        max="12" step="0.5" value="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button id="eq-reset-btn" class="eq-reset-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                                height="16">
+                                <path d="M1 4v6h6M23 20v-6h-6" />
+                                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                            </svg>
+                            重置均衡器
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 

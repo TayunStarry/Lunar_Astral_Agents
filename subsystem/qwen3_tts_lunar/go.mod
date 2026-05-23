@@ -1,4 +1,4 @@
-module simple_tts
+module qwen3_tts_lunar
 
 go 1.25.0
 

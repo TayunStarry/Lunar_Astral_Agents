@@ -1,4 +1,4 @@
-package main
+package module
 
 /*
 #cgo LDFLAGS: -L"D:/TTS/qwen3-tts.cpp-main/build" -L"D:/TTS/qwen3-tts.cpp-main/ggml/build/src" "D:/TTS/qwen3-tts.cpp-main/build/libqwen3tts.dll.a" -lqwen3_tts -ltts_transformer -ltext_tokenizer -laudio_tokenizer_encoder -laudio_tokenizer_decoder "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-base.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-cpu.a" "D:/TTS/qwen3-tts.cpp-main/ggml/build/src/ggml-vulkan/ggml-vulkan.a" "C:/VulkanSDK/1.4.350.0/Lib/libvulkan.dll.a" -lstdc++ -lpthread
@@ -12,6 +12,7 @@ extern int streamPCMCallback(float* samples, int32_t n_samples, int32_t sample_r
 import "C"
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -20,34 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sync"
-	"sync/atomic"
+	"time"
 	"unsafe"
 )
-
-type TTSEngine struct {
-	handle     *C.Qwen3Tts
-	modelDir   string
-	refAudio   string
-	mu         sync.Mutex
-	languageID int32
-}
-
-var (
-	globalTTS *TTSEngine
-	ttsOnce   sync.Once
-)
-
-type speakerEmbedCache struct {
-	mu         sync.Mutex
-	embeddings map[string][]float32 // refAudio path -> speaker embedding
-	cacheDir   string
-}
-
-var embedCache = &speakerEmbedCache{
-	embeddings: make(map[string][]float32),
-	cacheDir:   "./local_data/embed_cache",
-}
 
 func (c *speakerEmbedCache) init() {
 	os.MkdirAll(c.cacheDir, 0755)
@@ -92,11 +68,14 @@ func (c *speakerEmbedCache) loadFromDisk() {
 		embedSize := int(data[4+audioPathLen])<<24 | int(data[4+audioPathLen+1])<<16 |
 			int(data[4+audioPathLen+2])<<8 | int(data[4+audioPathLen+3])
 
-		embedData := data[4+audioPathLen+4:]
-		if len(embedData) != embedSize*4 {
+		embedDataStart := 4 + audioPathLen + 4
+		embedDataEnd := embedDataStart + embedSize*4
+		if len(data) < embedDataEnd {
 			log.Printf("[EmbedCache] 跳过大小不匹配文件: %s", f.Name())
 			continue
 		}
+
+		embedData := data[embedDataStart:embedDataEnd]
 
 		embedding := make([]float32, embedSize)
 		for i := 0; i < embedSize; i++ {
@@ -106,6 +85,17 @@ func (c *speakerEmbedCache) loadFromDisk() {
 		}
 
 		c.embeddings[audioPath] = embedding
+
+		if len(data) >= embedDataEnd+8 {
+			hashLenStart := embedDataEnd
+			hashLen := int(data[hashLenStart])<<24 | int(data[hashLenStart+1])<<16 |
+				int(data[hashLenStart+2])<<8 | int(data[hashLenStart+3])
+			if len(data) >= hashLenStart+4+hashLen {
+				fileHash := string(data[hashLenStart+4 : hashLenStart+4+hashLen])
+				c.fileHashes[audioPath] = fileHash
+			}
+		}
+
 		loaded++
 	}
 
@@ -116,7 +106,8 @@ func (c *speakerEmbedCache) loadFromDisk() {
 
 func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	fileHash, hasHash := c.fileHashes[audioPath]
+	c.mu.Unlock()
 
 	hash := fmt.Sprintf("%x", []byte(audioPath))
 	if len(hash) > 16 {
@@ -126,7 +117,13 @@ func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 	filePath := filepath.Join(c.cacheDir, fileName)
 
 	audioPathBytes := []byte(audioPath)
-	buf := make([]byte, 4+len(audioPathBytes)+4+len(embedding)*4)
+	hashBytes := []byte(fileHash)
+
+	bufSize := 4 + len(audioPathBytes) + 4 + len(embedding)*4
+	if hasHash {
+		bufSize += 4 + len(hashBytes)
+	}
+	buf := make([]byte, bufSize)
 
 	buf[0] = byte(len(audioPathBytes) >> 24)
 	buf[1] = byte(len(audioPathBytes) >> 16)
@@ -150,105 +147,20 @@ func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 		off += 4
 	}
 
+	if hasHash {
+		buf[off] = byte(len(hashBytes) >> 24)
+		buf[off+1] = byte(len(hashBytes) >> 16)
+		buf[off+2] = byte(len(hashBytes) >> 8)
+		buf[off+3] = byte(len(hashBytes))
+		copy(buf[off+4:], hashBytes)
+	}
+
 	if err := os.WriteFile(filePath, buf, 0644); err != nil {
 		log.Printf("[EmbedCache] 保存 %s 失败: %v", fileName, err)
 	}
 }
 
-const maxCacheSize = 5
-
-type cacheEntry struct {
-	audio string
-	ready chan struct{}
-}
-
-type TTSCache struct {
-	mu    sync.Mutex
-	items map[string]*cacheEntry
-	order []string
-}
-
-var ttsCache = &TTSCache{
-	items: make(map[string]*cacheEntry),
-	order: make([]string, 0, maxCacheSize),
-}
-
-func (c *TTSCache) Get(text string) (*cacheEntry, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	entry, exists := c.items[text]
-	if exists {
-		for i, t := range c.order {
-			if t == text {
-				c.order = append(c.order[:i], c.order[i+1:]...)
-				c.order = append(c.order, text)
-				break
-			}
-		}
-		return entry, true
-	}
-	return nil, false
-}
-
-func (c *TTSCache) GetOrSetPending(text string) (*cacheEntry, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if entry, exists := c.items[text]; exists {
-		return entry, false
-	}
-
-	if len(c.order) >= maxCacheSize {
-		oldest := c.order[0]
-		delete(c.items, oldest)
-		c.order = c.order[1:]
-	}
-
-	entry := &cacheEntry{
-		ready: make(chan struct{}),
-	}
-	c.items[text] = entry
-	c.order = append(c.order, text)
-	return entry, true
-}
-
-func (c *TTSCache) Remove(text string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	delete(c.items, text)
-	for i, t := range c.order {
-		if t == text {
-			c.order = append(c.order[:i], c.order[i+1:]...)
-			break
-		}
-	}
-}
-
-func (e *cacheEntry) MarkReady(audio string) {
-	e.audio = audio
-	close(e.ready)
-}
-
-func (e *cacheEntry) Wait() string {
-	<-e.ready
-	return e.audio
-}
-
-type TTSRequest struct {
-	Text       string `json:"text"`
-	RefAudio   string `json:"ref_audio,omitempty"`
-	LanguageID int32  `json:"language_id,omitempty"`
-}
-
-type TTSResponse struct {
-	Success bool   `json:"success"`
-	Audio   string `json:"audio,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-func initTTSEngine(modelDir, refAudio string) {
+func InitTTSEngine(modelDir, refAudio string) {
 	ttsOnce.Do(func() {
 		cModelDir := C.CString(modelDir)
 		defer C.free(unsafe.Pointer(cModelDir))
@@ -278,7 +190,8 @@ func warmupTTSEngine(refAudio string) {
 	log.Println("[Warmup] 开始预热TTS引擎，加载所有模型到内存...")
 
 	dummyText := "你好"
-	samples, err := synthesizeText(dummyText, refAudio, globalTTS.languageID)
+	nThreads := max(1, runtime.NumCPU()-1)
+	samples, err := synthesizeText(dummyText, refAudio, globalTTS.languageID, 0, 0, 0, 0, 0, int32(nThreads))
 	if err != nil {
 		log.Printf("[Warmup] 预热合成失败（可忽略）: %v", err)
 		return
@@ -291,11 +204,29 @@ func warmupTTSEngine(refAudio string) {
 	}
 }
 
+func computeFileHash(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", h)
+}
+
 func getOrExtractEmbedding(refAudio string) ([]float32, error) {
+	currentHash := computeFileHash(refAudio)
+	if currentHash == "" {
+		return nil, fmt.Errorf("无法读取参考音频文件: %s", refAudio)
+	}
+
 	embedCache.mu.Lock()
-	if cached, ok := embedCache.embeddings[refAudio]; ok {
+	cachedEmbedding, found := embedCache.embeddings[refAudio]
+	cachedHash, hasHash := embedCache.fileHashes[refAudio]
+
+	if found && hasHash && cachedHash == currentHash {
 		embedCache.mu.Unlock()
-		return cached, nil
+		log.Printf("[EmbedCache] 命中缓存: %s (hash=%s)", refAudio, currentHash[:16])
+		return cachedEmbedding, nil
 	}
 	embedCache.mu.Unlock()
 
@@ -305,6 +236,7 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 	const maxEmbedSize = 2048
 	embedBuf := make([]float32, maxEmbedSize)
 
+	log.Printf("[EmbedCache] 正在提取 speaker embedding: %s", refAudio)
 	embedSize := C.qwen3_tts_extract_embedding_file(
 		globalTTS.handle,
 		cRefAudio,
@@ -322,15 +254,16 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 
 	embedCache.mu.Lock()
 	embedCache.embeddings[refAudio] = embedding
+	embedCache.fileHashes[refAudio] = currentHash
 	embedCache.mu.Unlock()
 
 	embedCache.saveToDisk(refAudio, embedding)
 
-	log.Printf("[EmbedCache] 已缓存参考音频 %s 的 embedding (size=%d)", refAudio, embedSize)
+	log.Printf("[EmbedCache] 已缓存参考音频 %s 的 embedding (size=%d, hash=%s)", refAudio, embedSize, currentHash[:16])
 	return embedding, nil
 }
 
-func synthesizeText(text, refAudio string, languageID int32) ([]float32, error) {
+func synthesizeText(text, refAudio string, languageID int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) ([]float32, error) {
 	if globalTTS == nil || globalTTS.handle == nil {
 		return nil, fmt.Errorf("TTS 引擎未初始化")
 	}
@@ -355,8 +288,26 @@ func synthesizeText(text, refAudio string, languageID int32) ([]float32, error) 
 
 	var cParams C.Qwen3TtsParams
 	C.qwen3_tts_default_params(&cParams)
-	cParams.n_threads = C.int32_t(max(1, runtime.NumCPU()-1))
+	if threads <= 0 {
+		threads = int32(max(1, runtime.NumCPU()-1))
+	}
+	cParams.n_threads = C.int32_t(threads)
 	cParams.language_id = C.int32_t(languageID)
+	if temperature != 0 {
+		cParams.temperature = C.float(temperature)
+	}
+	if topK != 0 {
+		cParams.top_k = C.int32_t(topK)
+	}
+	if topP != 0 {
+		cParams.top_p = C.float(topP)
+	}
+	if maxTokens != 0 {
+		cParams.max_audio_tokens = C.int32_t(maxTokens)
+	}
+	if repetitionPenalty != 0 {
+		cParams.repetition_penalty = C.float(repetitionPenalty)
+	}
 
 	result := C.qwen3_tts_synthesize_with_embedding(
 		globalTTS.handle,
@@ -480,33 +431,9 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entry, exists := ttsCache.Get(req.Text)
-	if exists {
-		audioBase64 := entry.Wait()
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(TTSResponse{
-			Success: true,
-			Audio:   audioBase64,
-		})
-		return
-	}
-
-	entry, isCreator := ttsCache.GetOrSetPending(req.Text)
-	if !isCreator {
-		audioBase64 := entry.Wait()
-		log.Printf("TTS 缓存等待，文本: %s", req.Text)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(TTSResponse{
-			Success: true,
-			Audio:   audioBase64,
-		})
-		return
-	}
-
-	samples, err := synthesizeText(req.Text, req.RefAudio, req.LanguageID)
+	samples, err := synthesizeText(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
 	if err != nil {
 		log.Printf("TTS 合成失败: %v", err)
-		ttsCache.Remove(req.Text)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(TTSResponse{
 			Success: false,
@@ -517,8 +444,6 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 
 	wavData := encodePCMToWAV(samples, 24000)
 	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
-
-	entry.MarkReady(audioBase64)
 
 	log.Printf("TTS 合成成功，文本: %s，采样数: %d", req.Text, len(samples))
 
@@ -566,7 +491,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	uploadDir := "./local_data/audios"
 	os.MkdirAll(uploadDir, 0755)
 
-	tempPath := filepath.Join(uploadDir, "ref_"+fmt.Sprintf("%d", int(os.Getpid()))+ext)
+	tempPath := filepath.Join(uploadDir, "ref_"+fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())+ext)
 
 	outFile, err := os.Create(tempPath)
 	if err != nil {
@@ -599,22 +524,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type StreamPCMChunk struct {
-	Samples    []float32
-	SampleRate int32
-	IsFinal    bool
-}
-
-type streamingContext struct {
-	ch    chan StreamPCMChunk
-	done  chan struct{}
-	err   error
-	abort int32
-}
-
-var streamCtxMap = make(map[int32]*streamingContext)
-var streamCtxCounter int32
-
 //export streamPCMCallback
 func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_t, isFinal C.int, userData unsafe.Pointer) C.int {
 	ctxID := *(*C.int32_t)(userData)
@@ -628,7 +537,7 @@ func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_
 		return 1
 	}
 
-	if atomic.LoadInt32(&ctx.abort) != 0 {
+	if ctx.abort.Load() != 0 {
 		return 1
 	}
 
@@ -650,14 +559,12 @@ func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_
 	case ctx.ch <- chunk:
 		return 0
 	case <-ctx.done:
-		atomic.StoreInt32(&ctx.abort, 1)
+		ctx.abort.Store(1)
 		return 1
 	}
 }
 
-var streamCtxMapMu sync.Mutex
-
-func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32) (int32, error) {
+func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) (int32, error) {
 	if globalTTS == nil || globalTTS.handle == nil {
 		return 0, fmt.Errorf("TTS 引擎未初始化")
 	}
@@ -667,6 +574,15 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 	}
 	if languageID == 0 {
 		languageID = globalTTS.languageID
+	}
+
+	embedding, err := getOrExtractEmbedding(refAudio)
+	if err != nil {
+		return 0, err
+	}
+
+	if threads <= 0 {
+		threads = int32(max(1, runtime.NumCPU()-1))
 	}
 
 	streamCtxMapMu.Lock()
@@ -680,32 +596,54 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 	streamCtxMapMu.Unlock()
 
 	cText := C.CString(text)
-	defer C.free(unsafe.Pointer(cText))
-	cRefAudio := C.CString(refAudio)
-	defer C.free(unsafe.Pointer(cRefAudio))
+	cEmbedding := make([]C.float, len(embedding))
+	for i, v := range embedding {
+		cEmbedding[i] = C.float(v)
+	}
 
 	var cParams C.Qwen3TtsParams
 	C.qwen3_tts_default_params(&cParams)
-	cParams.n_threads = C.int32_t(max(1, runtime.NumCPU()-1))
+	cParams.n_threads = C.int32_t(threads)
 	cParams.language_id = C.int32_t(languageID)
+	if temperature != 0 {
+		cParams.temperature = C.float(temperature)
+	}
+	if topK != 0 {
+		cParams.top_k = C.int32_t(topK)
+	}
+	if topP != 0 {
+		cParams.top_p = C.float(topP)
+	}
+	if maxTokens != 0 {
+		cParams.max_audio_tokens = C.int32_t(maxTokens)
+	}
+	if repetitionPenalty != 0 {
+		cParams.repetition_penalty = C.float(repetitionPenalty)
+	}
 
-	cCtxID := C.int32_t(ctxID)
+	pCtxID := new(C.int32_t)
+	*pCtxID = C.int32_t(ctxID)
 	cChunkFrames := C.int32_t(chunkFrames)
 
 	go func() {
-		result := C.qwen3_tts_synthesize_streaming(
+		defer C.free(unsafe.Pointer(cText))
+
+		globalTTS.mu.Lock()
+		result := C.qwen3_tts_synthesize_streaming_with_embedding(
 			globalTTS.handle,
 			cText,
-			cRefAudio,
+			(*C.float)(unsafe.Pointer(&cEmbedding[0])),
+			C.int32_t(len(cEmbedding)),
 			&cParams,
 			C.qwen3_tts_stream_callback(C.streamPCMCallback),
-			unsafe.Pointer(&cCtxID),
+			unsafe.Pointer(pCtxID),
 			cChunkFrames,
 		)
+		globalTTS.mu.Unlock()
 
 		streamCtxMapMu.Lock()
-		defer streamCtxMapMu.Unlock()
 		delete(streamCtxMap, ctxID)
+		streamCtxMapMu.Unlock()
 
 		if result != 0 {
 			errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))

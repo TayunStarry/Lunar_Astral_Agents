@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarCore/model"
+	"lunar_astral/model"
 	"bytes"
 	"config"
 	"encoding/json"

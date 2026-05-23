@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
 )
@@ -30,10 +31,10 @@ type Endpoint struct {
 }
 
 var endpoints = []Endpoint{
-	{Path: "/tts/", Handler: TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	{Path: "/tts/stream", Handler: TTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
-	{Path: "/upload/", Handler: UploadHandler, Method: "POST", Description: "参考音频上传"},
-	{Path: "/health", Handler: HealthHandler, Method: "GET", Description: "健康检查"},
+	{Path: "/tts/", Handler: module.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
+	{Path: "/tts/stream", Handler: module.TTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
+	{Path: "/upload/", Handler: module.UploadHandler, Method: "POST", Description: "参考音频上传"},
+	{Path: "/health", Handler: module.HealthHandler, Method: "GET", Description: "健康检查"},
 }
 
 func registerHandlers() {
@@ -126,7 +127,7 @@ func waitForShutdown(quit chan os.Signal) {
 func shutdownServer() {
 	uploadDir := "./local_data/audios"
 	if _, err := os.Stat(uploadDir); err == nil {
-		files, _ := filepath.Glob(filepath.Join(uploadDir, "ref_*"))
+		files, _ := filepath.Glob(filepath.Join(uploadDir, "ref_*.*"))
 		for _, f := range files {
 			os.Remove(f)
 		}

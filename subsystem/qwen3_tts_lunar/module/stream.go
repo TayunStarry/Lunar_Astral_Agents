@@ -1,4 +1,4 @@
-package main
+package module
 
 import (
 	"encoding/base64"
@@ -11,30 +11,6 @@ import (
 
 	"github.com/gorilla/websocket"
 )
-
-var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 65536,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-type WSStreamRequest struct {
-	Text        string `json:"text"`
-	RefAudio    string `json:"ref_audio,omitempty"`
-	LanguageID  int32  `json:"language_id,omitempty"`
-	ChunkFrames int32  `json:"chunk_frames,omitempty"`
-}
-
-type WSStreamResponse struct {
-	Type         string `json:"type"`
-	Audio        string `json:"audio,omitempty"`
-	TotalSamples int32  `json:"total_samples,omitempty"`
-	SampleRate   int32  `json:"sample_rate,omitempty"`
-	IsFinal      bool   `json:"is_final,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
 
 func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
@@ -72,7 +48,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 		chunkFrames = 50
 	}
 
-	ctxID, err := synthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames)
+	ctxID, err := synthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
 	if err != nil {
 		sendWSResponse(conn, WSStreamResponse{
 			Type:  "error",
@@ -95,6 +71,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	var totalSamples int32
 	var sampleRate int32
+	var chunkIndex int32
 	var sendMu sync.Mutex
 	done := false
 
@@ -108,9 +85,27 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 			sampleRate = chunk.SampleRate
 			if chunk.IsFinal {
+				chunkIndex++
+				if len(chunk.Samples) > 0 {
+					pcmData := float32ToPCM16(chunk.Samples)
+					audioBase64 := base64.StdEncoding.EncodeToString(pcmData)
+					totalSamples += int32(len(chunk.Samples))
+					sendMu.Lock()
+					sendWSResponse(conn, WSStreamResponse{
+						Type:         "audio_chunk",
+						Audio:        audioBase64,
+						ChunkIndex:   chunkIndex,
+						TotalSamples: totalSamples,
+						SampleRate:   sampleRate,
+						IsFinal:      true,
+					})
+					sendMu.Unlock()
+				}
 				sendMu.Lock()
 				sendWSResponse(conn, WSStreamResponse{
 					Type:         "final",
+					ChunkIndex:   chunkIndex,
+					TotalChunks:  chunkIndex,
 					TotalSamples: totalSamples,
 					SampleRate:   sampleRate,
 					IsFinal:      true,
@@ -121,6 +116,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if len(chunk.Samples) > 0 {
+				chunkIndex++
 				pcmData := float32ToPCM16(chunk.Samples)
 				audioBase64 := base64.StdEncoding.EncodeToString(pcmData)
 				totalSamples += int32(len(chunk.Samples))
@@ -129,6 +125,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 				sendWSResponse(conn, WSStreamResponse{
 					Type:         "audio_chunk",
 					Audio:        audioBase64,
+					ChunkIndex:   chunkIndex,
 					TotalSamples: totalSamples,
 					SampleRate:   sampleRate,
 				})
@@ -147,6 +144,8 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 				sendMu.Lock()
 				sendWSResponse(conn, WSStreamResponse{
 					Type:         "final",
+					ChunkIndex:   chunkIndex,
+					TotalChunks:  chunkIndex,
 					TotalSamples: totalSamples,
 					SampleRate:   sampleRate,
 					IsFinal:      true,

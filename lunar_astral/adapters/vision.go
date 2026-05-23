@@ -1,8 +1,8 @@
 package adapters
 
 import (
-	"LunarCore/hierarchy/image"
-	"LunarCore/hierarchy/image/generate"
+	"lunar_astral/hierarchy/image"
+	"lunar_astral/hierarchy/image/generate"
 	"encoding/base64"
 	"fmt"
 	"screenshot"

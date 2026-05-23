@@ -32,7 +32,8 @@ try {
 
     Build-IconIfNeeded
 
-    $ldflags = "-s -w -H windowsgui"
+    $ldflags = "-s -w"
+    # $ldflags = "-s -w -H windowsgui"
 
     $binaryName = "Qwen3-TTS-Lunar.exe"
     if ($TargetOS -ne "windows") { $binaryName = "Qwen3-TTS-Lunar" }

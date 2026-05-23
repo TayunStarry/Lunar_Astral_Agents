@@ -1,7 +1,7 @@
 package llama
 
 import (
-	"LunarCore/model/llama/metadata"
+	"lunar_astral/model/llama/metadata"
 	"bufio"
 	"config"
 	"context"

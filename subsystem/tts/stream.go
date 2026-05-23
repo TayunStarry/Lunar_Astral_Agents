@@ -24,7 +24,7 @@ import (
 
 	gws "github.com/gorilla/websocket"
 
-	ws "LunarCore/websocket"
+	ws "lunar_astral/websocket"
 )
 
 //export streamPCMCallback

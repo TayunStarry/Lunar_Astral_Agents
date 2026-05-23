@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"LunarCore/adapters"
+	"lunar_astral/adapters"
 	"encoding/json"
 	"log"
 	"net/http"

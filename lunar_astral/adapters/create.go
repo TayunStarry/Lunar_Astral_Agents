@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarCore/hierarchy"
+	"lunar_astral/hierarchy"
 	"context"
 	"fmt"
 	"log"
