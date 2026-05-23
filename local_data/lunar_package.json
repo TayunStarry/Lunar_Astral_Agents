@@ -42,18 +42,18 @@
 		"url": "/read/package/parameter_assistant/index.html"
 	},
 	{
-		"id": "different_lunar",
-		"icon": "/read/images/icon/different_lunar.Webp",
-		"title": "不同模型",
-		"description": "打开『 星月智能 』不同模型",
-		"url": "/read/package/different_lunar/index.html"
-	},
-	{
 		"id": "view_on_gitee",
 		"icon": "/read/images/icon/view_on_gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",
 		"description": "打开 『 星月智能 』的 Gitee 项目仓库",
 		"url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
+	},
+	{
+		"id": "view_on_github",
+		"icon": "/read/images/icon/view_on_github.Webp",
+		"title": "打开『 星月智能 』项目仓库",
+		"description": "打开 『 星月智能 』的 GitHub 项目仓库",
+		"url": "https://github.com/TayunStarry/Lunar_Astral_Agents.git"
 	},
 	{
 		"id": "chat_deepseek",
