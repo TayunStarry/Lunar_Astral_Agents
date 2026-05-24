@@ -17,6 +17,8 @@ type ModelConfig struct {
 		VariationalModel string `json:"variational_model"`
 		// 提示精炼模型路径
 		PromptRefineModel string `json:"prompt_refine_model"`
+		// ASR模型路径
+		AsrModel string `json:"asr_model"`
 	} `json:"models"`
 	// 服务器配置
 	Server struct {
@@ -75,6 +77,10 @@ func init() {
 	// 如果配置文件中 PromptRefineModel 字段非空，则更新全局配置
 	if parameter.Models.PromptRefineModel != "" {
 		*PromptRefineModel = parameter.Models.PromptRefineModel
+	}
+	// 如果配置文件中 AsrModel 字段非空，则更新全局配置
+	if parameter.Models.AsrModel != "" {
+		*AsrModel = parameter.Models.AsrModel
 	}
 	// 如果配置文件中 CloudModelUrl 字段非空，则更新全局配置
 	if parameter.Cloud.CloudModelUrl != "" {

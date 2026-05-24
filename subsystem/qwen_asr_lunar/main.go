@@ -1,27 +1,27 @@
 package main
 
 import (
+	"browser"
+	"config"
+	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 //go:embed static
 var staticFiles embed.FS
 
-const (
-	defaultPort     = "35768"
-	defaultModelDir = "C:\\Users\\196530\\Downloads\\Qwen3-ASR-0.6B-0"
-	uploadDir       = "./uploads"
-)
-
 func main() {
-	port := getEnv("PORT", defaultPort)
-	modelDir := getEnv("MODEL_DIR", defaultModelDir)
+
+	port := getEnv("PORT", fmt.Sprintf("%d", *config.ModelPort+1))
+	modelDir := getEnv("MODEL_DIR", *config.AsrModel)
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	log.Printf("Qwen ASR Server starting...")
@@ -36,7 +36,7 @@ func main() {
 
 	log.Println("ASR engine loaded successfully")
 
-	handler := NewAsrHandler(asr, uploadDir)
+	handler := NewAsrHandler(asr, *config.LocalDir+"/audios")
 
 	mux := http.NewServeMux()
 	mux.Handle("/asr", handler)
@@ -62,11 +62,28 @@ func main() {
 		}
 	}()
 
+	url := fmt.Sprintf("http://localhost:%s", port)
+	log.Printf("Opening browser: %s", url)
+	browser.OpenBrowser(url)
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	log.Println("Shutting down server...")
+	select {
+	case <-quit:
+		log.Println("Signal received, shutting down server...")
+	case <-browser.WebViewClosed():
+		log.Println("WebView closed, shutting down server...")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	log.Println("Server stopped")
 }
 
 func getEnv(key, fallback string) string {
