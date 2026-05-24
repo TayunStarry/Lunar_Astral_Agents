@@ -167,6 +167,10 @@ void qwen_set_threads(int n);
 /* Get number of available CPU cores */
 int qwen_get_num_cpus(void);
 
+/* Parallel dispatch helper for encoder chunk processing */
+typedef void (*parallel_fn_t)(int tid, int n_threads, void *arg);
+void parallel_for(parallel_fn_t fn, void *arg);
+
 /* Global verbose flag */
 extern int qwen_verbose;
 

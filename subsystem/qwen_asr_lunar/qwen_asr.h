@@ -122,6 +122,21 @@ typedef struct {
     float *proj1_bias;         /* [d_model] */
     float *proj2_weight;       /* [output_dim, d_model] */
     float *proj2_bias;         /* [output_dim] */
+
+    /* Persistent forward-pass buffers (allocated once, reused) */
+    float *fwd_x;
+    float *fwd_x_norm;
+    float *fwd_q;
+    float *fwd_k;
+    float *fwd_v;
+    float *fwd_attn_out;
+    float *fwd_proj_out;
+    float *fwd_ffn_mid;
+    float *fwd_ffn_out;
+    float *fwd_proj_mid;
+    int fwd_cap_tokens;
+    int fwd_cap_ffn_dim;
+    int fwd_cap_proj_mid;
 } qwen_encoder_t;
 
 /* ========================================================================

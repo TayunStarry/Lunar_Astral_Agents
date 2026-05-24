@@ -29,6 +29,7 @@ desktop.ini
 *.dll
 *.so
 *.a
+*.log
 
 ## 二进制 / 模型文件
 *.gguf
