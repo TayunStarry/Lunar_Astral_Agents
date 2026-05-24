@@ -43,42 +43,42 @@
 	},
 	{
 		"id": "view_on_gitee",
-		"icon": "/read/images/icon/view_on_gitee.Webp",
+		"icon": "/read/images/icon/gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",
 		"description": "打开 『 星月智能 』的 Gitee 项目仓库",
 		"url": "https://gitee.com/TayunStarry/Lunar-Astral-Agents"
 	},
 	{
 		"id": "view_on_github",
-		"icon": "/read/images/icon/view_on_github.Webp",
+		"icon": "/read/images/icon/github.Webp",
 		"title": "打开『 星月智能 』项目仓库",
 		"description": "打开 『 星月智能 』的 GitHub 项目仓库",
 		"url": "https://github.com/TayunStarry/Lunar_Astral_Agents.git"
 	},
 	{
 		"id": "chat_deepseek",
-		"icon": "/read/images/icon/logos_deepseek.Webp",
+		"icon": "/read/images/icon/deepseek_chat.Webp",
 		"title": "深度求索",
 		"description": "打开 DeepSeek 的官方客户端",
 		"url": "https://chat.deepseek.com/a/chat"
 	},
 	{
 		"id": "purchase_deepseek_api",
-		"icon": "/read/images/icon/purchase_deepseek.Webp",
+		"icon": "/read/images/icon/deepseek_api.Webp",
 		"title": "购买 DeepSeek API",
 		"description": "打开 DeepSeek 的 API 购买页面",
 		"url": "https://platform.deepseek.com/usage"
 	},
 	{
 		"id": "chat_qwen",
-		"icon": "/read/images/icon/logos_qwen.Webp",
+		"icon": "/read/images/icon/qwen_chat.Webp",
 		"title": "通义千问",
 		"description": "打开 Qwen 的官方客户端",
 		"url": "https://chat.qwen.ai/"
 	},
 	{
 		"id": "purchase_qwen_api",
-		"icon": "/read/images/icon/purchase_qwen.Webp",
+		"icon": "/read/images/icon/qwen_api.Webp",
 		"title": "购买 Qwen API",
 		"description": "打开 Qwen 的 API 购买页面",
 		"url": "https://bailian.console.aliyun.com/cn-beijing#/home"

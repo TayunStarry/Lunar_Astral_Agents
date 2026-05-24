@@ -109,6 +109,21 @@
 			"local_data/lunar_config.json",
 			"local_data/audios/lunar-template.wav"
 		],
+		"plan-5": [
+			"libdl.dll",
+			"libgcc_s_seh-1.dll",
+			"libgomp-1.dll",
+			"qwen3tts.dll",
+			"libstdc++-6.dll",
+			"libwinpthread-1.dll",
+			"vulkan-1.dll",
+			"Qwen3-TTS-Lunar.exe",
+			"local_data/embed_cache",
+			"local_data/lunar_config.json",
+			"local_data/audios/lunar-template.wav",
+			"local_data/models/qwen3-tts-0.6b-f16.gguf",
+			"local_data/models/qwen3-tts-tokenizer-f16.gguf"
+		],
 		"exclude": [
 			"*.log",
 			"*.tmp",
@@ -122,10 +137,10 @@
 			"C:/Program Files (x86)/7-Zip/7z.exe"
 		],
 		"defaults": {
-			"output_path": "./Lunar_Astral_Agents-2026-05-17",
+			"output_path": "./Qwen3-TTS-Lunar-2026-05-24",
 			"part_size_mb": 2048,
 			"compression_level": 5,
-			"package_plan": "plan-4"
+			"package_plan": "plan-5"
 		}
 	}
 }
