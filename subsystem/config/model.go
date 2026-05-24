@@ -10,7 +10,7 @@ var (
 	// PromptMmprojModel 多模态投影模型路径，用于图像与文本的联合编码
 	MmprojModel = flag.String("mmproj-model", *LocalDir+"/models/mmproj-Qwen3.GGUF", "多模态投影模型路径, 用于图像与文本的联合编码")
 	// AsrModel ASR语音识别模型路径，用于语音识别
-	AsrModel = flag.String("asr-model", *LocalDir+"/models/Qwen3-ASR-0.6B.GGUF", "ASR模型路径, 用于语音识别")
+	AsrModel = flag.String("asr-model", *LocalDir+"/models/Qwen3-ASR-0.6B", "ASR模型路径, 用于语音识别")
 	// DiffusionModel 扩散模型路径，用于图像生成
 	DiffusionModel = flag.String("diffusion-model", *LocalDir+"/models/Qwen3.GGUF", "扩散模型路径, 用于图像生成")
 	// VariationalModel VAE模型路径，用于图像编码与解码

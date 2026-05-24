@@ -34,14 +34,7 @@ func New(modelDir string) (*QwenASR, error) {
 	}
 
 	numCPUs := C.qwen_get_num_cpus()
-	threads := numCPUs
-	if threads > 16 {
-		threads = 16
-	}
-	if threads > 8 {
-		threads = 8
-	}
-	C.qwen_set_threads(threads)
+	C.qwen_set_threads(C.int(numCPUs / 2))
 
 	return &QwenASR{
 		ctx:      ctx,

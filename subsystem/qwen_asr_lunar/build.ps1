@@ -11,10 +11,28 @@ $ErrorActionPreference = "Stop"
 Write-Host "=== Qwen ASR Server Build Script ===" -ForegroundColor Cyan
 Write-Host ""
 
-$PROJECT_DIR = $PSScriptRoot
-$OUTPUT_NAME = "asr_lunar.exe"
+# ---------- 图标资源处理 ----------
+function Build-IconIfNeeded {
+    if (-not (Test-Path "icon.ico")) {
+        return
+    }
 
-Write-Host "[1/5] Checking Go installation..." -ForegroundColor Yellow
+    if (Test-Path "icon.syso") {
+        return
+    }
+
+    & rsrc -ico icon.ico -o icon.syso
+    if ($LASTEXITCODE -ne 0) { throw "rsrc 图标编译失败" }
+}
+
+$PROJECT_DIR = $PSScriptRoot
+$OUTPUT_NAME = "Qwen_ASR_Lunar.exe"
+
+# 执行图标处理
+Set-Location $PROJECT_DIR
+Build-IconIfNeeded
+
+Write-Host "[1/6] Checking Go installation..." -ForegroundColor Yellow
 try {
     $goVersion = go version
     Write-Host "  Found: $goVersion" -ForegroundColor Green
@@ -24,7 +42,7 @@ try {
     exit 1
 }
 
-Write-Host "[2/5] Checking GCC installation (required for CGO)..." -ForegroundColor Yellow
+Write-Host "[3/6] Checking GCC installation (required for CGO)..." -ForegroundColor Yellow
 try {
     $gccVersion = gcc --version | Select-Object -First 1
     Write-Host "  Found: $gccVersion" -ForegroundColor Green
@@ -54,7 +72,7 @@ if ($Profile) {
 }
 
 if ($UseBLAS) {
-    Write-Host "[3/5] Detecting OpenBLAS..." -ForegroundColor Yellow
+    Write-Host "[4/6] Detecting OpenBLAS..." -ForegroundColor Yellow
     $blasFound = $false
     $blasLibPaths = @(
         "$PROJECT_DIR\openblas\lib\libopenblas.a",
@@ -80,11 +98,11 @@ if ($UseBLAS) {
         Write-Host "  Install: pacman -S mingw-w64-ucrt-x86_64-openblas (MSYS2)" -ForegroundColor Gray
     }
 } else {
-    Write-Host "[3/5] Building without BLAS acceleration" -ForegroundColor Yellow
+    Write-Host "[4/6] Building without BLAS acceleration" -ForegroundColor Yellow
     Write-Host "  To enable BLAS: .\build.ps1 -UseBLAS" -ForegroundColor Gray
 }
 
-Write-Host "[4/5] Building Go binary with CGO..." -ForegroundColor Yellow
+Write-Host "[5/6] Building Go binary with CGO..." -ForegroundColor Yellow
 Set-Location $PROJECT_DIR
 
 $env:CGO_CFLAGS = $cflags
@@ -102,25 +120,23 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-Write-Host "[5/5] Setting up runtime directory..." -ForegroundColor Yellow
-if (-not (Test-Path "$PROJECT_DIR\output")) {
-    New-Item -ItemType Directory -Path "$PROJECT_DIR\output" | Out-Null
+Write-Host "[6/6] Setting up runtime directory..." -ForegroundColor Yellow
+$RUNTIME_DIR = "d:\Lunar_Astral_Agents"
+if (-not (Test-Path $RUNTIME_DIR)) {
+    New-Item -ItemType Directory -Path $RUNTIME_DIR -Force | Out-Null
 }
-Copy-Item "$PROJECT_DIR\$OUTPUT_NAME" "$PROJECT_DIR\output\$OUTPUT_NAME" -Force
+Copy-Item "$PROJECT_DIR\$OUTPUT_NAME" "$RUNTIME_DIR\$OUTPUT_NAME" -Force
 if (Test-Path "$PROJECT_DIR\openblas\lib\libopenblas.dll") {
-    Copy-Item "$PROJECT_DIR\openblas\lib\libopenblas.dll" "$PROJECT_DIR\output\libopenblas.dll" -Force
-    Write-Host "  Copied OpenBLAS DLL to output" -ForegroundColor Green
-}
-if (Test-Path "$PROJECT_DIR\static") {
-    Copy-Item "$PROJECT_DIR\static" "$PROJECT_DIR\output\static" -Recurse -Force
+    Copy-Item "$PROJECT_DIR\openblas\lib\libopenblas.dll" "$RUNTIME_DIR\libopenblas.dll" -Force
+    Write-Host "  Copied OpenBLAS DLL to runtime" -ForegroundColor Green
 }
 Write-Host ""
-Write-Host "Output directory: $PROJECT_DIR\output" -ForegroundColor Cyan
-Write-Host "Executable: asr_lunar.exe" -ForegroundColor Cyan
+Write-Host "Runtime directory: $RUNTIME_DIR" -ForegroundColor Cyan
+Write-Host "Executable: $OUTPUT_NAME" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "To run the server:" -ForegroundColor Yellow
-Write-Host "  cd output" -ForegroundColor Gray
-Write-Host "  .\asr_lunar.exe" -ForegroundColor Gray
+Write-Host "  cd $RUNTIME_DIR" -ForegroundColor Gray
+Write-Host "  .\$OUTPUT_NAME" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Environment variables (optional):" -ForegroundColor Yellow
 Write-Host "  MODEL_DIR  - Model directory (default: C:\Users\196530\Downloads\Qwen3-ASR-0.6B-0)" -ForegroundColor Gray
