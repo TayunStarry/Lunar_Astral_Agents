@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 )
 
@@ -15,9 +14,9 @@ import (
 var staticFiles embed.FS
 
 const (
-	defaultPort    = "35768"
+	defaultPort     = "35768"
 	defaultModelDir = "C:\\Users\\196530\\Downloads\\Qwen3-ASR-0.6B-0"
-	uploadDir      = "./uploads"
+	uploadDir       = "./uploads"
 )
 
 func main() {

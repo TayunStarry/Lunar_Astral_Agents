@@ -199,6 +199,12 @@ qwen_ctx_t *qwen_load(const char *model_dir) {
     if (!ctx) return NULL;
     snprintf(ctx->model_dir, sizeof(ctx->model_dir), "%s", model_dir);
 
+    const char *verbose_env = getenv("QWEN_VERBOSE");
+    if (verbose_env) qwen_verbose = atoi(verbose_env);
+
+    const char *monitor_env = getenv("QWEN_MONITOR");
+    if (monitor_env) qwen_monitor = atoi(monitor_env);
+
     /* Open safetensors (multi-shard) */
     if (qwen_verbose >= 1)
         fprintf(stderr, "Loading model from %s\n", model_dir);
@@ -276,6 +282,20 @@ void qwen_free(qwen_ctx_t *ctx) {
     FREE0(ctx->encoder.ln_post_weight); FREE0(ctx->encoder.ln_post_bias);
     FREE0(ctx->encoder.proj1_weight); FREE0(ctx->encoder.proj1_bias);
     FREE0(ctx->encoder.proj2_weight); FREE0(ctx->encoder.proj2_bias);
+
+    FREE0(ctx->encoder.fwd_x);
+    FREE0(ctx->encoder.fwd_x_norm);
+    FREE0(ctx->encoder.fwd_q);
+    FREE0(ctx->encoder.fwd_k);
+    FREE0(ctx->encoder.fwd_v);
+    FREE0(ctx->encoder.fwd_attn_out);
+    FREE0(ctx->encoder.fwd_proj_out);
+    FREE0(ctx->encoder.fwd_ffn_mid);
+    FREE0(ctx->encoder.fwd_ffn_out);
+    FREE0(ctx->encoder.fwd_proj_mid);
+    ctx->encoder.fwd_cap_tokens = 0;
+    ctx->encoder.fwd_cap_ffn_dim = 0;
+    ctx->encoder.fwd_cap_proj_mid = 0;
 
     /* Decoder layers */
     for (int i = 0; i < ctx->config.dec_layers; i++) {

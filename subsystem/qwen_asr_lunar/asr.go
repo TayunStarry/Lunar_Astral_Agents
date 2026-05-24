@@ -1,9 +1,6 @@
 package main
 
 /*
-#cgo CFLAGS: -Wall -O3 -march=native -ffast-math
-#cgo LDFLAGS: -lm -lpthread
-
 #include "qwen_asr.h"
 #include "qwen_asr_audio.h"
 #include "qwen_asr_kernels.h"
@@ -12,6 +9,7 @@ package main
 import "C"
 import (
 	"fmt"
+	"os"
 	"sync"
 	"unsafe"
 )
@@ -23,6 +21,10 @@ type QwenASR struct {
 }
 
 func New(modelDir string) (*QwenASR, error) {
+	if os.Getenv("QWEN_BF16_CACHE_MB") == "" {
+		os.Setenv("QWEN_BF16_CACHE_MB", "1024")
+	}
+
 	cModelDir := C.CString(modelDir)
 	defer C.free(unsafe.Pointer(cModelDir))
 
@@ -30,6 +32,16 @@ func New(modelDir string) (*QwenASR, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("failed to load model from %s", modelDir)
 	}
+
+	numCPUs := C.qwen_get_num_cpus()
+	threads := numCPUs
+	if threads > 16 {
+		threads = 16
+	}
+	if threads > 8 {
+		threads = 8
+	}
+	C.qwen_set_threads(threads)
 
 	return &QwenASR{
 		ctx:      ctx,

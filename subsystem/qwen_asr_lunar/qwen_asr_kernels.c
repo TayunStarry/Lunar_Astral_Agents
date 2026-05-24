@@ -39,8 +39,6 @@
 
 #define QWEN_MAX_THREADS 16
 
-typedef void (*parallel_fn_t)(int tid, int n_threads, void *arg);
-
 static struct {
     pthread_t threads[QWEN_MAX_THREADS - 1];
     int tids[QWEN_MAX_THREADS - 1];
@@ -137,7 +135,7 @@ int qwen_get_num_cpus(void) {
 }
 
 /* Dispatch work to all threads; main thread is tid=0 */
-static void parallel_for(parallel_fn_t fn, void *arg) {
+void parallel_for(parallel_fn_t fn, void *arg) {
     if (tp.n_threads <= 1) {
         fn(0, 1, arg);
         return;
@@ -200,6 +198,40 @@ void qwen_matmul_t(float *C, const float *A, const float *B, int M, int K, int N
 #endif
 }
 
+#ifndef USE_BLAS
+typedef struct {
+    float *y;
+    const float *x;
+    const float *W;
+    const float *b;
+    int in_dim;
+    int out_dim;
+    int seq_len;
+} linear_task_t;
+
+static void linear_worker(int tid, int n_threads, void *arg) {
+    linear_task_t *t = (linear_task_t *)arg;
+    int chunk = (t->seq_len + n_threads - 1) / n_threads;
+    int s0 = tid * chunk;
+    int s1 = s0 + chunk;
+    if (s1 > t->seq_len) s1 = t->seq_len;
+    if (s0 >= s1) return;
+
+    for (int s = s0; s < s1; s++) {
+        const float *x_row = t->x + (size_t)s * t->in_dim;
+        float *y_row = t->y + (size_t)s * t->out_dim;
+        for (int o = 0; o < t->out_dim; o++) {
+            const float *w_row = t->W + (size_t)o * t->in_dim;
+            float sum = (t->b != NULL) ? t->b[o] : 0.0f;
+            for (int i = 0; i < t->in_dim; i++) {
+                sum += x_row[i] * w_row[i];
+            }
+            y_row[o] = sum;
+        }
+    }
+}
+#endif
+
 void qwen_linear(float *y, const float *x, const float *W, const float *b,
                  int seq_len, int in_dim, int out_dim) {
 #ifdef USE_BLAS
@@ -215,16 +247,21 @@ void qwen_linear(float *y, const float *x, const float *W, const float *b,
         }
     }
 #else
-    for (int s = 0; s < seq_len; s++) {
-        const float *x_row = x + s * in_dim;
-        float *y_row = y + s * out_dim;
-        for (int o = 0; o < out_dim; o++) {
-            const float *w_row = W + o * in_dim;
-            float sum = (b != NULL) ? b[o] : 0.0f;
-            for (int i = 0; i < in_dim; i++) {
-                sum += x_row[i] * w_row[i];
+    if (tp.n_threads > 1 && seq_len >= 4 && out_dim >= 256) {
+        linear_task_t task = { y, x, W, b, in_dim, out_dim, seq_len };
+        parallel_for(linear_worker, &task);
+    } else {
+        for (int s = 0; s < seq_len; s++) {
+            const float *x_row = x + (size_t)s * in_dim;
+            float *y_row = y + (size_t)s * out_dim;
+            for (int o = 0; o < out_dim; o++) {
+                const float *w_row = W + (size_t)o * in_dim;
+                float sum = (b != NULL) ? b[o] : 0.0f;
+                for (int i = 0; i < in_dim; i++) {
+                    sum += x_row[i] * w_row[i];
+                }
+                y_row[o] = sum;
             }
-            y_row[o] = sum;
         }
     }
 #endif
@@ -1007,11 +1044,76 @@ static inline void qwen_vec_scale_add(float *dst, const float *src, float correc
     qwen_vec_scale_add_impl(dst, src, correction, n);
 }
 
+typedef struct {
+    float *out;
+    const float *Q;
+    const float *K;
+    const float *V;
+    int hidden;
+    int head_dim;
+    float scale;
+    const int *window_starts;
+    int n_windows;
+    int head_start;
+    int head_end;
+} bidir_attn_task_t;
+
+static void bidir_attn_worker(int tid, int n_threads, void *arg) {
+    (void)tid;
+    bidir_attn_task_t *t = (bidir_attn_task_t *)arg;
+
+    for (int h = t->head_start; h < t->head_end; h++) {
+        for (int w = 0; w < t->n_windows; w++) {
+            int ws = t->window_starts[w];
+            int we = t->window_starts[w + 1];
+
+            for (int i = ws; i < we; i++) {
+                const float *q_row = t->Q + i * t->hidden + h * t->head_dim;
+                float *o_row = t->out + i * t->hidden + h * t->head_dim;
+
+                float max_score = -1e30f;
+                float sum_exp = 0.0f;
+                for (int d = 0; d < t->head_dim; d++) o_row[d] = 0.0f;
+
+                for (int j = ws; j < we; j++) {
+                    const float *k_row = t->K + j * t->hidden + h * t->head_dim;
+                    const float *v_row = t->V + j * t->hidden + h * t->head_dim;
+
+                    float score = qwen_dot_f32(q_row, k_row, t->head_dim) * t->scale;
+
+                    if (score > max_score) {
+                        float correction = expf(max_score - score);
+                        sum_exp = sum_exp * correction + 1.0f;
+                        qwen_vec_scale_add(o_row, v_row, correction, t->head_dim);
+                        max_score = score;
+                    } else {
+                        float wt = expf(score - max_score);
+                        sum_exp += wt;
+                        qwen_vec_axpy_inplace(o_row, v_row, wt, t->head_dim);
+                    }
+                }
+
+                if (sum_exp > 0.0f) {
+                    float inv_sum = 1.0f / sum_exp;
+                    qwen_vec_scale_inplace(o_row, inv_sum, t->head_dim);
+                }
+            }
+        }
+    }
+}
+
 void qwen_bidirectional_attention(float *out, const float *Q, const float *K,
                                    const float *V, int seq __attribute__((unused)),
                                    int n_heads, int head_dim, float scale,
                                    const int *window_starts, int n_windows) {
     int hidden = n_heads * head_dim;
+
+    if (tp.n_threads > 1 && n_heads >= 2) {
+        bidir_attn_task_t task = { out, Q, K, V, hidden, head_dim, scale,
+                                    window_starts, n_windows, 0, n_heads };
+        parallel_for(bidir_attn_worker, &task);
+        return;
+    }
 
     for (int h = 0; h < n_heads; h++) {
         for (int w = 0; w < n_windows; w++) {
@@ -1022,7 +1124,6 @@ void qwen_bidirectional_attention(float *out, const float *Q, const float *K,
                 const float *q_row = Q + i * hidden + h * head_dim;
                 float *o_row = out + i * hidden + h * head_dim;
 
-                /* Online softmax */
                 float max_score = -1e30f;
                 float sum_exp = 0.0f;
                 for (int d = 0; d < head_dim; d++) o_row[d] = 0.0f;
