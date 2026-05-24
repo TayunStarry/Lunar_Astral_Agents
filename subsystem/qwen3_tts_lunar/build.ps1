@@ -1,57 +1,191 @@
-﻿# bridge_adapter - 编译脚本
-# 由根目录脚本统一调用，仅处理图标编译和项目编译
-
+﻿# build.ps1 - Qwen3_TTS_Lunar Master Build Script
+# 3-stage build: GGML -> C++ -> Go
 param(
-    [ValidateSet("windows", "linux", "darwin")]
-    [string]$TargetOS = "windows",
-    [ValidateSet("amd64", "arm64")]
-    [string]$TargetArch = "amd64"
+    [ValidateSet("Debug", "Release")]
+    [string]$BuildType = "Release",
+
+    [switch]$Clean,
+
+    [switch]$SkipGGML,
+
+    [switch]$SkipCPP,
+
+    [switch]$SkipGo,
+
+    [int]$ParallelJobs = $env:NUMBER_OF_PROCESSORS,
+
+    [string]$OutputDir = ""
 )
 
 $ErrorActionPreference = "Stop"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# ---------- 图标资源处理 ----------
-function Build-IconIfNeeded {
-    if ($TargetOS -ne "windows" -or -not (Test-Path "icon.ico")) {
-        return
-    }
-
-    if (Test-Path "icon.syso") {
-        return
-    }
-
-    & rsrc -ico icon.ico -o icon.syso
-    if ($LASTEXITCODE -ne 0) { throw "rsrc 图标编译失败" }
+$BuildLogDir = Join-Path $ScriptDir "build_logs"
+if (-not (Test-Path $BuildLogDir)) {
+    New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
 }
 
-# ---------- 编译主流程 ----------
-try {
-    $env:GOOS = $TargetOS
-    $env:GOARCH = $TargetArch
-    $env:CGO_ENABLED = 1
+$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$LogFile = Join-Path $BuildLogDir "build_${Timestamp}.log"
 
-    Build-IconIfNeeded
+function Write-BuildLog {
+    param([string]$Message, [string]$Color = "White")
+    $timeStamp = Get-Date -Format "HH:mm:ss"
+    $logMessage = "[$timeStamp] $Message"
+    Write-Host $logMessage -ForegroundColor $Color
+    Add-Content -Path $LogFile -Value $logMessage
+}
 
-    $ldflags = "-s -w"
-    # $ldflags = "-s -w -H windowsgui"
+function Test-CommandExists {
+    param([string]$Command)
+    $null = Get-Command $Command -ErrorAction SilentlyContinue
+    return $?
+}
 
-    $binaryName = "Qwen3_TTS_Lunar.exe"
-    if ($TargetOS -ne "windows") { $binaryName = "Qwen3_TTS_Lunar" }
-    $outputPath = "..\..\$binaryName"
-
-    $buildArgs = @(
-        "build",
-        "-tags", "webview",
-        "-ldflags=$ldflags",
-        "-trimpath",
-        "-o", $outputPath
+function Invoke-BuildScript {
+    param(
+        [string]$ScriptPath,
+        [hashtable]$Arguments,
+        [string]$StepName
     )
-    & go $buildArgs 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { throw "Go build 失败" }
 
-    Write-Host "✓ Qwen3_TTS_Lunar 构建成功: $outputPath" -ForegroundColor Green
+    $argList = @()
+    foreach ($key in $Arguments.Keys) {
+        $val = $Arguments[$key]
+        if ($val -is [switch]) {
+            if ($val) { $argList += "-$key" }
+        } elseif ($val -is [bool]) {
+            if ($val) { $argList += "-$key" }
+        } else {
+            $argList += "-$key"
+            $argList += "$val"
+        }
+    }
+
+    Write-BuildLog ">> Calling: $ScriptPath $($argList -join ' ')" "DarkGray"
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @argList
+    if ($LASTEXITCODE -ne 0) {
+        throw "$StepName failed (exit code: $LASTEXITCODE)"
+    }
 }
-catch {
-    Write-Host "`n[ERROR] Qwen3_TTS_Lunar 构建失败: $_" -ForegroundColor Red
-    exit 1
+
+Write-BuildLog "========================================" "Cyan"
+Write-BuildLog "Qwen3_TTS_Lunar Build Start" "Cyan"
+Write-BuildLog "========================================" "Cyan"
+Write-BuildLog "Build Type: $BuildType" "White"
+Write-BuildLog "Log File:   $LogFile" "White"
+Write-BuildLog "========================================" "Cyan"
+
+Write-BuildLog "[Check] Verifying build environment..." "Yellow"
+
+if (Test-CommandExists "cmake") {
+    $cmakeVer = & cmake --version 2>&1 | Select-Object -First 1
+    Write-BuildLog "  [OK] $cmakeVer" "Green"
+} else {
+    Write-BuildLog "  [FAIL] cmake not found" "Red"
+    throw "cmake is required"
 }
+
+if (Test-CommandExists "go") {
+    $goVer = & go version 2>&1 | Select-Object -First 1
+    Write-BuildLog "  [OK] $goVer" "Green"
+} else {
+    Write-BuildLog "  [FAIL] go not found" "Red"
+    throw "go is required"
+}
+
+if (Test-CommandExists "gcc") {
+    $gccVer = & gcc --version 2>&1 | Select-Object -First 1
+    Write-BuildLog "  [OK] $gccVer" "Green"
+} else {
+    Write-BuildLog "  [FAIL] gcc not found" "Red"
+    throw "gcc is required (MinGW-w64 recommended)"
+}
+
+Write-BuildLog "[Check] Environment verification complete" "Green"
+
+$buildScriptArgs = @{
+    BuildType = $BuildType
+    Clean = $Clean
+    ParallelJobs = $ParallelJobs
+}
+
+if ($OutputDir) {
+    $buildScriptArgs.OutputDir = $OutputDir
+}
+
+if (-not $SkipGGML) {
+    Write-BuildLog "" "White"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "  Stage 1/3 : Build GGML Library" "Cyan"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "" "White"
+
+    $ggmlScript = Join-Path $ScriptDir "build_ggml.ps1"
+    Invoke-BuildScript -ScriptPath $ggmlScript -Arguments $buildScriptArgs -StepName "GGML Build"
+} else {
+    Write-BuildLog "[Stage 1/3] Skipped (-SkipGGML)" "Yellow"
+}
+
+if (-not $SkipCPP) {
+    Write-BuildLog "" "White"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "  Stage 2/3 : Build Qwen3-TTS C++ Library" "Cyan"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "" "White"
+
+    $cppScript = Join-Path $ScriptDir "build_cpp.ps1"
+    Invoke-BuildScript -ScriptPath $cppScript -Arguments $buildScriptArgs -StepName "C++ Build"
+} else {
+    Write-BuildLog "[Stage 2/3] Skipped (-SkipCPP)" "Yellow"
+}
+
+if (-not $SkipGo) {
+    Write-BuildLog "" "White"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "  Stage 3/3 : Build Go Application" "Cyan"
+    Write-BuildLog "============================================================" "Cyan"
+    Write-BuildLog "" "White"
+
+    Write-BuildLog "Running go build..." "Yellow"
+
+    Push-Location $ScriptDir
+
+    $env:CGO_ENABLED = "1"
+    $env:GOOS = "windows"
+    $env:GOARCH = "amd64"
+
+    $goBuildArgs = @("build", "-v", "-o", "Qwen3_TTS_Lunar.exe", "-ldflags", "-s -w -H windowsgui")
+    $goOutput = & go $goBuildArgs 2>&1 | ForEach-Object { "$_" }
+    $goExitCode = $LASTEXITCODE
+
+    foreach ($line in $goOutput) {
+        Add-Content -Path $LogFile -Value $line
+    }
+
+    if ($goExitCode -ne 0) {
+        Write-BuildLog "Go build FAILED (exit code: $goExitCode)" "Red"
+        $goOutput | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+        Pop-Location
+        throw "Go build failed"
+    }
+
+    $exePath = Join-Path $ScriptDir "Qwen3_TTS_Lunar.exe"
+    if (Test-Path $exePath) {
+        $exeSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
+        Write-BuildLog "  [OK] Qwen3_TTS_Lunar.exe ($exeSize MB)" "Green"
+    }
+
+    Pop-Location
+    Write-BuildLog "Go build completed" "Green"
+} else {
+    Write-BuildLog "[Stage 3/3] Skipped (-SkipGo)" "Yellow"
+}
+
+Write-BuildLog "" "White"
+Write-BuildLog "============================================================" "Green"
+Write-BuildLog "  BUILD SUCCESSFUL!" "Green"
+Write-BuildLog "============================================================" "Green"
+Write-BuildLog "Log file: $LogFile" "White"
+exit 0

@@ -12,6 +12,7 @@ node_modules
 deliverable
 meme_images
 temp
+local_data/embed_cache
 
 ## 本地数据
 local_data/images
@@ -19,17 +20,33 @@ local_data/documents
 
 ## 系统文件
 desktop.ini
+Thumbs.db
+.DS_Store
 
 ## 临时文件
 *.tmp
 *.temp
 *.lnk
 
-## 编译产物
+## Go / C++ 编译产物
+*.exe
+*.exe~
+*.syso
+*.obj
+*.o
+*.d
+*.lib
 *.dll
 *.so
 *.a
+*.exp
+*.ilk
+*.pdb
+*.dylib
 *.log
+
+## CMake / MSVC 构建目录
+**/build/
 
 ## 二进制 / 模型文件
 *.gguf
@@ -42,3 +59,13 @@ desktop.ini
 *.db-shm
 *.db-wal
 *.index
+
+## 安全敏感文件
+*.pem
+*.key
+*.crt
+.env
+.env.*
+
+## 本地预置工具例外
+!local_data/**/*.exe

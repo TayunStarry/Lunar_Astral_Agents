@@ -1,0 +1,16 @@
+LIBRARY qwen3tts
+EXPORTS
+    qwen3_tts_default_params
+    qwen3_tts_create
+    qwen3_tts_is_loaded
+    qwen3_tts_synthesize
+    qwen3_tts_sample_rate
+    qwen3_tts_free_audio
+    qwen3_tts_destroy
+    qwen3_tts_synthesize_with_voice_file
+    qwen3_tts_synthesize_with_voice_samples
+    qwen3_tts_extract_embedding_file
+    qwen3_tts_synthesize_with_embedding
+    qwen3_tts_synthesize_streaming
+    qwen3_tts_synthesize_streaming_with_embedding
+    qwen3_tts_get_error
