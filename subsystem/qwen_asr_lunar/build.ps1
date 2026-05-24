@@ -126,10 +126,6 @@ if (-not (Test-Path $RUNTIME_DIR)) {
     New-Item -ItemType Directory -Path $RUNTIME_DIR -Force | Out-Null
 }
 Copy-Item "$PROJECT_DIR\$OUTPUT_NAME" "$RUNTIME_DIR\$OUTPUT_NAME" -Force
-if (Test-Path "$PROJECT_DIR\openblas\lib\libopenblas.dll") {
-    Copy-Item "$PROJECT_DIR\openblas\lib\libopenblas.dll" "$RUNTIME_DIR\libopenblas.dll" -Force
-    Write-Host "  Copied OpenBLAS DLL to runtime" -ForegroundColor Green
-}
 Write-Host ""
 Write-Host "Runtime directory: $RUNTIME_DIR" -ForegroundColor Cyan
 Write-Host "Executable: $OUTPUT_NAME" -ForegroundColor Cyan
