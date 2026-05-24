@@ -1,7 +1,7 @@
 # Qwen ASR Server Build Script for Windows
 # Usage: .\build.ps1 [-UseBLAS] [-Release] [-Profile]
 param(
-    [switch]$UseBLAS = $false,
+    [switch]$UseBLAS = $true,
     [switch]$Release = $true,
     [switch]$Profile = $false
 )
@@ -37,12 +37,14 @@ try {
 $env:CGO_ENABLED = "1"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
+$env:CGO_LDFLAGS_ALLOW = "(-Wl,-flto|-Wl,--gc-sections|-fopenmp|-Wl,.*)"
 
 $cflags = "-Wall -O3 -march=native -mtune=native -ffast-math -ftree-vectorize -funroll-loops"
 $ldflags = "-lm -lpthread"
 
 if ($Release) {
     $cflags += " -ffunction-sections -fdata-sections"
+    $ldflags += " -Wl,--gc-sections"
 }
 
 if ($Profile) {
@@ -65,10 +67,10 @@ if ($UseBLAS) {
             Write-Host "  Found OpenBLAS: $path" -ForegroundColor Green
             $blasLibDir = Split-Path $path -Parent
             $blasBaseDir = Split-Path $blasLibDir -Parent
-            $cflags += " -DUSE_BLAS"
+            $cflags += " -DUSE_BLAS -fopenmp"
             $cflags += " -I$PROJECT_DIR\openblas\include"
             $ldflags += " -L$blasLibDir"
-            $ldflags += " -lopenblas"
+            $ldflags += " -lopenblas -fopenmp"
             $blasFound = $true
             break
         }

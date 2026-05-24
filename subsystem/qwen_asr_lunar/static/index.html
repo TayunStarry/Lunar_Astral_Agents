@@ -1,533 +1,1021 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>语音识别测试 - Qwen ASR</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwen ASR - 语音识别</title>
+<style>
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 40px 20px;
-            color: #e0e0e0;
-        }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background-attachment: fixed;
+  position: relative;
+  overflow: hidden;
+}
 
-        .container {
-            width: 100%;
-            max-width: 800px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            backdrop-filter: blur(10px);
-        }
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url('picture.webp') center/cover no-repeat;
+  opacity: 0.35;
+  z-index: 0;
+}
 
-        h1 {
-            text-align: center;
-            font-size: 2rem;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #00d2ff 0%, #7b2cbf 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
+.bg-decoration {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  z-index: 0;
+  pointer-events: none;
+}
 
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-            font-size: 0.9rem;
-        }
+.bg-decoration:nth-child(2) {
+  width: 450px; height: 450px;
+  background: radial-gradient(circle, #667eea, transparent);
+  top: -100px; right: -100px;
+  animation: floatA 20s ease-in-out infinite;
+}
 
-        .status-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            margin-bottom: 20px;
-            font-size: 0.85rem;
-        }
+.bg-decoration:nth-child(3) {
+  width: 350px; height: 350px;
+  background: radial-gradient(circle, #f093fb, transparent);
+  bottom: -80px; left: -80px;
+  animation: floatB 25s ease-in-out infinite;
+}
 
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #666;
-        }
+.bg-decoration:nth-child(4) {
+  width: 300px; height: 300px;
+  background: radial-gradient(circle, #4facfe, transparent);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: floatC 18s ease-in-out infinite;
+}
 
-        .status-dot.online {
-            background: #00ff88;
-            box-shadow: 0 0 10px #00ff88;
-        }
+@keyframes floatA {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(-60px, 40px) rotate(120deg); }
+  66% { transform: translate(30px, -30px) rotate(240deg); }
+}
 
-        .status-dot.offline {
-            background: #ff4444;
-            box-shadow: 0 0 10px #ff4444;
-        }
+@keyframes floatB {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(50px, -30px) rotate(-120deg); }
+  66% { transform: translate(-40px, 20px) rotate(-240deg); }
+}
 
-        .upload-area {
-            border: 2px dashed rgba(255, 255, 255, 0.2);
-            border-radius: 15px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-        }
+@keyframes floatC {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+  50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.3); }
+}
 
-        .upload-area:hover {
-            border-color: #00d2ff;
-            background: rgba(0, 210, 255, 0.05);
-        }
+.main-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 600px;
+  padding: 20px;
+}
 
-        .upload-area.drag-over {
-            border-color: #7b2cbf;
-            background: rgba(123, 44, 191, 0.1);
-        }
+.glass-card {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  padding: 40px 36px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.3s ease;
+}
 
-        .upload-icon {
-            font-size: 3rem;
-            margin-bottom: 10px;
-        }
+.header {
+  text-align: center;
+  margin-bottom: 36px;
+}
 
-        .upload-text {
-            font-size: 1.1rem;
-            margin-bottom: 5px;
-        }
+.header-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
 
-        .upload-hint {
-            font-size: 0.8rem;
-            color: #666;
-        }
+.header-icon svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 2;
+}
 
-        #fileInput {
-            display: none;
-        }
+.header h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
 
-        .file-info {
-            display: none;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            align-items: center;
-            gap: 15px;
-        }
+.header p {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+}
 
-        .file-info.show {
-            display: flex;
-        }
+.upload-zone {
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  padding: 32px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.03);
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
 
-        .file-icon {
-            font-size: 2rem;
-        }
+.upload-zone:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+}
 
-        .file-details {
-            flex: 1;
-        }
+.upload-zone.drag-over {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.01);
+}
 
-        .file-name {
-            font-weight: 500;
-            margin-bottom: 3px;
-            word-break: break-all;
-        }
+.upload-zone .upload-icon {
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
 
-        .file-size {
-            font-size: 0.8rem;
-            color: #888;
-        }
+.upload-zone .upload-icon svg {
+  width: 40px;
+  height: 40px;
+  stroke: rgba(255, 255, 255, 0.6);
+  fill: none;
+  stroke-width: 1.8;
+}
 
-        .remove-btn {
-            background: rgba(255, 68, 68, 0.2);
-            border: none;
-            color: #ff4444;
-            padding: 8px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+.upload-zone p {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
 
-        .remove-btn:hover {
-            background: rgba(255, 68, 68, 0.4);
-        }
+.upload-zone span {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+}
 
-        .btn {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.1rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-        }
+.upload-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
 
-        .btn-primary {
-            background: linear-gradient(90deg, #00d2ff 0%, #7b2cbf 100%);
-            color: white;
-        }
+.controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
 
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 210, 255, 0.3);
-        }
+.btn {
+  flex: 1;
+  padding: 13px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  letter-spacing: 0.3px;
+}
 
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+.btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
 
-        .result-area {
-            display: none;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
-        }
+.btn:active {
+  transform: translateY(0) scale(0.98);
+}
 
-        .result-area.show {
-            display: block;
-        }
+.btn.primary {
+  background: rgba(99, 126, 234, 0.35);
+  border-color: rgba(99, 126, 234, 0.4);
+}
 
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
+.btn.primary:hover {
+  background: rgba(99, 126, 234, 0.5);
+  border-color: rgba(99, 126, 234, 0.6);
+}
 
-        .result-title {
-            font-weight: 500;
-            color: #00d2ff;
-        }
+.btn.recording {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: pulse 1.5s ease-in-out infinite;
+}
 
-        .confidence-badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+}
 
-        .confidence-high {
-            background: rgba(0, 255, 136, 0.2);
-            color: #00ff88;
-        }
+.btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
 
-        .confidence-medium {
-            background: rgba(255, 193, 7, 0.2);
-            color: #ffc107;
-        }
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
 
-        .confidence-low {
-            background: rgba(255, 68, 68, 0.2);
-            color: #ff4444;
-        }
+.file-info {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
 
-        .result-text {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            font-size: 1.1rem;
-            line-height: 1.6;
-            min-height: 60px;
-            word-break: break-word;
-        }
+.file-info.visible {
+  display: flex;
+}
 
-        .error-text {
-            color: #ff4444;
-        }
+.file-info .file-name {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-        .audio-player {
-            width: 100%;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-        }
+.file-info .remove-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+}
 
-        audio {
-            width: 100%;
-            height: 40px;
-        }
+.file-info .remove-btn:hover {
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.08);
+}
 
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top-color: #00d2ff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 10px;
-        }
+.audio-player {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+.audio-player.visible {
+  display: flex;
+}
 
-        .log-area {
-            margin-top: 20px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            padding: 15px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 0.8rem;
-            color: #888;
-        }
+.play-btn {
+  background: rgba(99, 126, 234, 0.25);
+  border: 1px solid rgba(99, 126, 234, 0.3);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+}
 
-        .log-entry {
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
+.play-btn:hover {
+  background: rgba(99, 126, 234, 0.45);
+  border-color: rgba(99, 126, 234, 0.5);
+  transform: scale(1.05);
+}
 
-        .log-entry:last-child {
-            border-bottom: none;
-        }
+.play-btn:active {
+  transform: scale(0.95);
+}
 
-        .log-time {
-            color: #666;
-            margin-right: 10px;
-        }
+.play-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: rgba(255, 255, 255, 0.85);
+  stroke: none;
+}
 
-        .log-info {
-            color: #00d2ff;
-        }
+.audio-seek {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+  cursor: pointer;
+}
 
-        .log-success {
-            color: #00ff88;
-        }
+.audio-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
 
-        .log-error {
-            color: #ff4444;
-        }
-    </style>
+.audio-seek::-webkit-slider-thumb:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.2);
+}
+
+.audio-time {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+  text-align: right;
+}
+
+.status-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-bar.visible {
+  display: flex;
+}
+
+.status-bar.processing {
+  background: rgba(99, 126, 234, 0.12);
+  border: 1px solid rgba(99, 126, 234, 0.2);
+  color: rgba(180, 200, 255, 0.9);
+}
+
+.status-bar.success {
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: rgba(110, 231, 183, 0.9);
+}
+
+.status-bar.error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: rgba(252, 165, 165, 0.9);
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.recording-timer {
+  display: none;
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 28px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.8);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
+
+.recording-timer.visible {
+  display: block;
+}
+
+.results-section {
+  display: none;
+}
+
+.results-section.visible {
+  display: block;
+}
+
+.results-section .result-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 24px;
+  margin-top: 16px;
+}
+
+.result-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+
+.result-text {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.8;
+  word-break: break-word;
+}
+
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: rgba(110, 231, 183, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 14px;
+}
+
+.confidence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.8);
+}
+
+.footer {
+  text-align: center;
+  margin-top: 32px;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+@media (max-width: 640px) {
+  .main-container {
+    padding: 12px;
+  }
+
+  .glass-card {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+
+  .header h1 {
+    font-size: 19px;
+  }
+
+  .controls {
+    flex-direction: column;
+  }
+
+  .upload-zone {
+    padding: 24px 16px;
+  }
+
+  .result-text {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .main-container {
+    max-width: 520px;
+  }
+}
+
+@media (min-width: 1025px) {
+  .main-container {
+    max-width: 620px;
+  }
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>Qwen ASR 语音识别</h1>
-        <p class="subtitle">基于 Qwen3-ASR 模型的中文语音识别系统</p>
 
-        <div class="status-bar">
-            <div class="status-dot" id="statusDot"></div>
-            <span id="statusText">检查服务器连接...</span>
-        </div>
+<div class="bg-decoration"></div>
+<div class="bg-decoration"></div>
+<div class="bg-decoration"></div>
 
-        <div class="upload-area" id="uploadArea">
-            <div class="upload-icon">🎤</div>
-            <div class="upload-text">点击或拖拽上传 WAV 音频文件</div>
-            <div class="upload-hint">仅支持 WAV 格式，16kHz 采样率，16位 PCM</div>
-        </div>
-        <input type="file" id="fileInput" accept=".wav">
-
-        <div class="file-info" id="fileInfo">
-            <div class="file-icon">🎵</div>
-            <div class="file-details">
-                <div class="file-name" id="fileName">-</div>
-                <div class="file-size" id="fileSize">-</div>
-            </div>
-            <button class="remove-btn" id="removeBtn">移除</button>
-        </div>
-
-        <audio class="audio-player" id="audioPlayer" controls style="display: none;"></audio>
-
-        <button class="btn btn-primary" id="recognizeBtn" disabled>
-            开始语音识别
-        </button>
-
-        <div class="result-area" id="resultArea">
-            <div class="result-header">
-                <span class="result-title">识别结果</span>
-                <span class="confidence-badge" id="confidenceBadge">-</span>
-            </div>
-            <div class="result-text" id="resultText">-</div>
-        </div>
-
-        <div class="log-area" id="logArea">
-            <div class="log-entry">
-                <span class="log-time" id="initTime"></span>
-                <span class="log-info">系统初始化完成</span>
-            </div>
-        </div>
+<div class="main-container">
+  <div class="glass-card">
+    <div class="header">
+      <div class="header-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </div>
+      <h1>Qwen ASR 语音识别</h1>
+      <p>上传音频文件或直接录制，即可转写为文本</p>
     </div>
 
-    <script>
-        const API_BASE = window.location.origin;
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <p>点击上传或拖拽 WAV 音频文件</p>
+      <span>仅支持 WAV 格式</span>
+      <input type="file" id="fileInput" accept=".wav,audio/wav,audio/wave,audio/x-wav">
+    </div>
 
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('fileInput');
-        const fileInfo = document.getElementById('fileInfo');
-        const fileName = document.getElementById('fileName');
-        const fileSize = document.getElementById('fileSize');
-        const removeBtn = document.getElementById('removeBtn');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const recognizeBtn = document.getElementById('recognizeBtn');
-        const resultArea = document.getElementById('resultArea');
-        const resultText = document.getElementById('resultText');
-        const confidenceBadge = document.getElementById('confidenceBadge');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const logArea = document.getElementById('logArea');
+    <div class="file-info" id="fileInfo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2">
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+        <polyline points="13 2 13 9 20 9"/>
+      </svg>
+      <span class="file-name" id="fileName"></span>
+      <button class="remove-btn" id="removeFileBtn" title="移除文件">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
 
-        let selectedFile = null;
+    <div class="audio-player" id="audioPlayer">
+      <button class="play-btn" id="playBtn" title="播放/暂停">
+        <svg viewBox="0 0 24 24">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+      </button>
+      <input class="audio-seek" id="audioSeek" type="range" min="0" max="100" value="0" step="0.1">
+      <span class="audio-time" id="audioTime">00:00</span>
+    </div>
 
-        document.getElementById('initTime').textContent = new Date().toLocaleTimeString('zh-CN');
+    <div class="recording-timer" id="recordingTimer">00:00</div>
 
-        async function checkHealth() {
-            try {
-                const res = await fetch(`${API_BASE}/health`);
-                if (res.ok) {
-                    statusDot.className = 'status-dot online';
-                    statusText.textContent = '服务器已连接';
-                    addLog('success', '服务器连接成功');
-                } else {
-                    throw new Error('Health check failed');
-                }
-            } catch (e) {
-                statusDot.className = 'status-dot offline';
-                statusText.textContent = '服务器未连接';
-                addLog('error', '服务器连接失败，请检查服务是否启动');
-            }
+    <div class="controls">
+      <button class="btn primary" id="transcribeBtn" disabled>
+        <svg viewBox="0 0 24 24">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        开始转写
+      </button>
+      <button class="btn" id="recordBtn">
+        <svg viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="6"/>
+          <circle cx="12" cy="12" r="6"/>
+        </svg>
+        录制
+      </button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <div class="spinner" id="spinner"></div>
+      <span id="statusText"></span>
+    </div>
+
+    <div class="results-section" id="resultsSection">
+      <div class="result-card">
+        <div class="result-label">识别结果</div>
+        <div class="result-text" id="resultText"></div>
+        <div class="confidence-badge" id="confidenceBadge">
+          <span class="confidence-dot"></span>
+          <span id="confidenceText"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Powered by Qwen ASR Engine</div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var fileInput = document.getElementById('fileInput');
+  var uploadZone = document.getElementById('uploadZone');
+  var fileInfo = document.getElementById('fileInfo');
+  var fileName = document.getElementById('fileName');
+  var removeFileBtn = document.getElementById('removeFileBtn');
+  var transcribeBtn = document.getElementById('transcribeBtn');
+  var recordBtn = document.getElementById('recordBtn');
+  var statusBar = document.getElementById('statusBar');
+  var statusText = document.getElementById('statusText');
+  var spinner = document.getElementById('spinner');
+  var resultsSection = document.getElementById('resultsSection');
+  var resultText = document.getElementById('resultText');
+  var confidenceBadge = document.getElementById('confidenceBadge');
+  var confidenceText = document.getElementById('confidenceText');
+  var recordingTimer = document.getElementById('recordingTimer');
+
+  var selectedFile = null;
+  var mediaRecorder = null;
+  var audioChunks = [];
+  var isRecording = false;
+  var recordingStartTime = 0;
+  var timerInterval = null;
+
+  var audioPlayer = document.getElementById('audioPlayer');
+  var playBtn = document.getElementById('playBtn');
+  var audioSeek = document.getElementById('audioSeek');
+  var audioTime = document.getElementById('audioTime');
+  var audioObj = null;
+  var audioUrl = null;
+  var seekUpdateInterval = null;
+
+  uploadZone.addEventListener('click', function(e) {
+    if (e.target !== fileInput) {
+      fileInput.click();
+    }
+  });
+
+  uploadZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+
+  uploadZone.addEventListener('dragleave', function() {
+    uploadZone.classList.remove('drag-over');
+  });
+
+  uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    var files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFile(files[0]);
+    }
+  });
+
+  fileInput.addEventListener('change', function() {
+    if (fileInput.files.length > 0) {
+      handleFile(fileInput.files[0]);
+    }
+  });
+
+  removeFileBtn.addEventListener('click', function() {
+    clearFile();
+  });
+
+  function handleFile(file) {
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'wav') {
+      showStatus('仅支持 WAV 格式音频文件', 'error');
+      return;
+    }
+    stopAudio();
+    selectedFile = file;
+    fileName.textContent = file.name + ' (' + formatSize(file.size) + ')';
+    fileInfo.classList.add('visible');
+    transcribeBtn.disabled = false;
+    hideStatus();
+    initAudioPlayer(file);
+  }
+
+  function clearFile() {
+    stopAudio();
+    selectedFile = null;
+    fileInput.value = '';
+    fileInfo.classList.remove('visible');
+    transcribeBtn.disabled = true;
+    fileName.textContent = '';
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function initAudioPlayer(file) {
+    stopAudio();
+    audioUrl = URL.createObjectURL(file);
+    audioObj = new Audio(audioUrl);
+    audioObj.addEventListener('loadedmetadata', function() {
+      audioSeek.max = audioObj.duration;
+      audioSeek.value = 0;
+      audioTime.textContent = '00:00';
+    });
+    audioObj.addEventListener('timeupdate', function() {
+      if (!audioSeek.dragging) {
+        audioSeek.value = audioObj.currentTime;
+      }
+      audioTime.textContent = formatTime(audioObj.currentTime);
+    });
+    audioObj.addEventListener('ended', function() {
+      setPlayIcon(true);
+    });
+    audioObj.addEventListener('play', function() {
+      setPlayIcon(false);
+    });
+    audioObj.addEventListener('pause', function() {
+      setPlayIcon(true);
+    });
+    audioPlayer.classList.add('visible');
+    audioTime.textContent = '00:00';
+    audioSeek.value = 0;
+    setPlayIcon(true);
+  }
+
+  function stopAudio() {
+    if (audioObj) {
+      audioObj.pause();
+      audioObj.src = '';
+      audioObj = null;
+    }
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      audioUrl = null;
+    }
+    audioPlayer.classList.remove('visible');
+  }
+
+  function togglePlay() {
+    if (!audioObj) return;
+    if (audioObj.paused) {
+      audioObj.play();
+    } else {
+      audioObj.pause();
+    }
+  }
+
+  function setPlayIcon(paused) {
+    if (paused) {
+      playBtn.querySelector('svg').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+    } else {
+      playBtn.querySelector('svg').innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+    }
+  }
+
+  function formatTime(seconds) {
+    var m = Math.floor(seconds / 60);
+    var s = Math.floor(seconds % 60);
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  playBtn.addEventListener('click', togglePlay);
+
+  audioSeek.addEventListener('input', function() {
+    if (audioObj) {
+      audioObj.currentTime = parseFloat(audioSeek.value);
+      audioTime.textContent = formatTime(audioObj.currentTime);
+    }
+  });
+
+  audioSeek.addEventListener('mousedown', function() {
+    audioSeek.dragging = true;
+  });
+
+  audioSeek.addEventListener('mouseup', function() {
+    audioSeek.dragging = false;
+  });
+
+  transcribeBtn.addEventListener('click', function() {
+    if (!selectedFile) return;
+    transcribeAudio(selectedFile);
+  });
+
+  function transcribeAudio(file) {
+    showStatus('正在识别中...', 'processing');
+
+    var formData = new FormData();
+    formData.append('audio', file);
+
+    fetch('/asr', {
+      method: 'POST',
+      body: formData
+    })
+    .then(function(response) {
+      if (!response.ok) {
+        return response.json().then(function(data) {
+          throw new Error(data.error || '服务器错误 (' + response.status + ')');
+        });
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      if (data.status === 'success') {
+        showResult(data.text, data.confidence);
+        showStatus('识别完成', 'success');
+        setTimeout(function() { hideStatus(); }, 2500);
+      } else {
+        showStatus(data.error || '识别失败', 'error');
+      }
+    })
+    .catch(function(err) {
+      showStatus(err.message || '网络连接失败，请检查服务器', 'error');
+    });
+  }
+
+  recordBtn.addEventListener('click', function() {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  });
+
+  function startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showStatus('当前浏览器不支持录音功能', 'error');
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function(stream) {
+        audioChunks = [];
+
+        var mimeType = 'audio/webm';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+          mimeType = 'audio/wav';
         }
 
-        checkHealth();
+        mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
 
-        uploadArea.addEventListener('click', () => fileInput.click());
-
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('drag-over');
+        mediaRecorder.addEventListener('dataavailable', function(e) {
+          if (e.data.size > 0) {
+            audioChunks.push(e.data);
+          }
         });
 
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('drag-over');
+        mediaRecorder.addEventListener('stop', function() {
+          stream.getTracks().forEach(function(track) { track.stop(); });
+          processRecording();
         });
 
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('drag-over');
-            if (e.dataTransfer.files.length > 0) {
-                handleFile(e.dataTransfer.files[0]);
-            }
-        });
+        mediaRecorder.start();
+        isRecording = true;
+        recordingStartTime = Date.now();
+        recordBtn.classList.add('recording');
+        recordBtn.querySelector('svg').innerHTML = '<rect x="6" y="6" width="12" height="12" rx="2"/>';
+        recordBtn.childNodes[recordBtn.childNodes.length - 1].textContent = '停止';
+        transcribeBtn.disabled = true;
+        recordingTimer.classList.add('visible');
+        hideStatus();
+        hideResults();
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 200);
+      })
+      .catch(function(err) {
+        showStatus('无法访问麦克风: ' + err.message, 'error');
+      });
+  }
 
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                handleFile(fileInput.files[0]);
-            }
-        });
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+    }
+    isRecording = false;
+    recordBtn.classList.remove('recording');
+    recordBtn.querySelector('svg').innerHTML = '<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="6"/>';
+    recordBtn.childNodes[recordBtn.childNodes.length - 1].textContent = '录制';
+    recordingTimer.classList.remove('visible');
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    transcribeBtn.disabled = false;
+  }
 
-        function handleFile(file) {
-            if (!file.name.toLowerCase().endsWith('.wav')) {
-                alert('仅支持 WAV 格式文件');
-                addLog('error', '不支持的文件格式，请使用 WAV 格式');
-                return;
-            }
+  function updateTimer() {
+    var elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+    var mins = Math.floor(elapsed / 60);
+    var secs = elapsed % 60;
+    recordingTimer.textContent =
+      (mins < 10 ? '0' : '') + mins + ':' + (secs < 10 ? '0' : '') + secs;
+  }
 
-            selectedFile = file;
-            fileName.textContent = file.name;
-            fileSize.textContent = formatFileSize(file.size);
-            fileInfo.classList.add('show');
-            audioPlayer.style.display = 'block';
-            audioPlayer.src = URL.createObjectURL(file);
-            recognizeBtn.disabled = false;
-            resultArea.classList.remove('show');
-            addLog('info', `已选择文件: ${file.name} (${formatFileSize(file.size)})`);
-        }
+  function processRecording() {
+    if (audioChunks.length === 0) return;
 
-        removeBtn.addEventListener('click', () => {
-            selectedFile = null;
-            fileInput.value = '';
-            fileInfo.classList.remove('show');
-            audioPlayer.style.display = 'none';
-            audioPlayer.src = '';
-            recognizeBtn.disabled = true;
-            resultArea.classList.remove('show');
-            addLog('info', '已移除文件');
-        });
+    var blob = new Blob(audioChunks, { type: audioChunks[0].type });
+    var file = new File([blob], 'recording.wav', { type: 'audio/wav' });
+    selectedFile = file;
+    fileName.textContent = '录音文件 (' + formatSize(blob.size) + ')';
+    fileInfo.classList.add('visible');
+    transcribeBtn.disabled = false;
+  }
 
-        recognizeBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
+  function showStatus(msg, type) {
+    statusBar.className = 'status-bar visible ' + type;
+    statusText.textContent = msg;
+    if (type === 'processing') {
+      spinner.style.display = 'block';
+    } else {
+      spinner.style.display = 'none';
+    }
+  }
 
-            recognizeBtn.disabled = true;
-            recognizeBtn.innerHTML = '<span class="spinner"></span>识别中...';
-            resultArea.classList.remove('show');
-            addLog('info', '开始语音识别...');
+  function hideStatus() {
+    statusBar.classList.remove('visible', 'processing', 'success', 'error');
+  }
 
-            try {
-                const formData = new FormData();
-                formData.append('audio', selectedFile);
+  function showResult(text, confidence) {
+    resultText.textContent = text || '（无内容）';
+    var pct = Math.round((confidence || 0) * 100);
+    confidenceText.textContent = '置信度 ' + pct + '%';
+    resultsSection.classList.add('visible');
 
-                const startTime = Date.now();
-                const response = await fetch(`${API_BASE}/asr`, {
-                    method: 'POST',
-                    body: formData
-                });
+    if (pct >= 80) {
+      confidenceBadge.style.background = 'rgba(52, 211, 153, 0.12)';
+      confidenceBadge.style.borderColor = 'rgba(52, 211, 153, 0.2)';
+      confidenceBadge.style.color = 'rgba(110, 231, 183, 0.9)';
+    } else if (pct >= 60) {
+      confidenceBadge.style.background = 'rgba(251, 191, 36, 0.12)';
+      confidenceBadge.style.borderColor = 'rgba(251, 191, 36, 0.2)';
+      confidenceBadge.style.color = 'rgba(252, 211, 77, 0.9)';
+    } else {
+      confidenceBadge.style.background = 'rgba(239, 68, 68, 0.12)';
+      confidenceBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+      confidenceBadge.style.color = 'rgba(252, 165, 165, 0.9)';
+    }
+  }
 
-                const elapsed = Date.now() - startTime;
-                const data = await response.json();
+  function hideResults() {
+    resultsSection.classList.remove('visible');
+  }
 
-                if (response.ok && data.status === 'success') {
-                    addLog('success', `识别成功 (${elapsed}ms): ${data.text}`);
-                    resultText.textContent = data.text;
-                    resultText.classList.remove('error-text');
-
-                    const confidence = data.confidence * 100;
-                    confidenceBadge.textContent = `置信度: ${confidence.toFixed(0)}%`;
-                    confidenceBadge.className = 'confidence-badge ' +
-                        (confidence >= 80 ? 'confidence-high' :
-                         confidence >= 60 ? 'confidence-medium' : 'confidence-low');
-                } else {
-                    addLog('error', `识别失败: ${data.error}`);
-                    resultText.textContent = `错误: ${data.error}`;
-                    resultText.classList.add('error-text');
-                    confidenceBadge.textContent = '识别失败';
-                    confidenceBadge.className = 'confidence-badge confidence-low';
-                }
-
-                resultArea.classList.add('show');
-            } catch (e) {
-                addLog('error', `请求失败: ${e.message}`);
-                resultText.textContent = `请求失败: ${e.message}`;
-                resultText.classList.add('error-text');
-                confidenceBadge.textContent = '请求失败';
-                confidenceBadge.className = 'confidence-badge confidence-low';
-                resultArea.classList.add('show');
-            } finally {
-                recognizeBtn.disabled = false;
-                recognizeBtn.innerHTML = '开始语音识别';
-            }
-        });
-
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-        }
-
-        function addLog(type, message) {
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">${new Date().toLocaleTimeString('zh-CN')}</span><span class="log-${type}">${message}</span>`;
-            logArea.appendChild(entry);
-            logArea.scrollTop = logArea.scrollHeight;
-        }
-    </script>
+  fetch('/health')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === 'healthy') {
+        console.log('ASR 服务已连接');
+      }
+    })
+    .catch(function() {
+      console.log('等待服务就绪...');
+    });
+})();
+</script>
 </body>
 </html>
