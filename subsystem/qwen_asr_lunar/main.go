@@ -18,6 +18,13 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+// reloadPageParameters 重新加载页面参数
+func reloadPageParameters() {
+	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
+	*config.WebViewWidth = 648
+	*config.WebViewHeight = 960
+}
+
 func main() {
 
 	port := getEnv("PORT", fmt.Sprintf("%d", *config.ModelPort+1))
@@ -64,6 +71,7 @@ func main() {
 
 	url := fmt.Sprintf("http://localhost:%s", port)
 	log.Printf("Opening browser: %s", url)
+	reloadPageParameters()
 	browser.OpenBrowser(url)
 
 	quit := make(chan os.Signal, 1)

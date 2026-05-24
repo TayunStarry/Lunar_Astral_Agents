@@ -35,8 +35,8 @@ try {
     $ldflags = "-s -w"
     # $ldflags = "-s -w -H windowsgui"
 
-    $binaryName = "Qwen3-TTS-Lunar.exe"
-    if ($TargetOS -ne "windows") { $binaryName = "Qwen3-TTS-Lunar" }
+    $binaryName = "Qwen3_TTS_Lunar.exe"
+    if ($TargetOS -ne "windows") { $binaryName = "Qwen3_TTS_Lunar" }
     $outputPath = "..\..\$binaryName"
 
     $buildArgs = @(
@@ -49,9 +49,9 @@ try {
     & go $buildArgs 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Go build 失败" }
 
-    Write-Host "✓ Qwen3-TTS-Lunar 构建成功: $outputPath" -ForegroundColor Green
+    Write-Host "✓ Qwen3_TTS_Lunar 构建成功: $outputPath" -ForegroundColor Green
 }
 catch {
-    Write-Host "`n[ERROR] Qwen3-TTS-Lunar 构建失败: $_" -ForegroundColor Red
+    Write-Host "`n[ERROR] Qwen3_TTS_Lunar 构建失败: $_" -ForegroundColor Red
     exit 1
 }

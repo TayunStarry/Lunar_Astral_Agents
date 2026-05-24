@@ -43,6 +43,12 @@ func (h *AsrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch r.URL.Path {
+	case "/health":
+		h.handleHealth(w, r)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		h.sendJSON(w, http.StatusMethodNotAllowed, AsrResponse{
 			Status: "error",
@@ -54,8 +60,6 @@ func (h *AsrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/asr", "/asr/":
 		h.handleAsr(w, r)
-	case "/health":
-		h.handleHealth(w, r)
 	default:
 		h.sendJSON(w, http.StatusNotFound, AsrResponse{
 			Status: "error",
