@@ -1,124 +1,193 @@
-# stable-diffusion.cpp 命令行参数文档
+stable-diffusion.cpp version unknown, commit 3633072
+Usage: D:\Lunar_Astral_Agents\local_data\models\stable_diffusion.cpp\sd-cli.exe [options]
 
-## 基本用法
+CLI Options:
+  -o, --output <string>         path to write result image to. you can use printf-style %d format specifiers for image
+                                sequences (default: ./output.png) (eg. output_%03d.png). Single-file video outputs
+                                support .avi, .webm, and animated .webp
+  --image <string>              path to the image to inspect (for metadata mode)
+  --metadata-format <string>    metadata output format, one of [text, json] (default: text)
+  --preview-path <string>       path to write preview image to (default: ./preview.png). Multi-frame previews support
+                                .avi, .webm, and animated .webp
+  --preview-interval <int>      interval in denoising steps between consecutive updates of the image preview file
+                                (default is 1, meaning updating at every step)
+  --output-begin-idx <int>      starting index for output image sequence, must be non-negative (default 0 if specified
+                                %d in output path, 1 otherwise)
+  --canny                       apply canny preprocessor (edge detection)
+  --convert-name                convert tensor name (for convert mode)
+  -v, --verbose                 print extra info
+  --color                       colors the logging tags according to level
+  --taesd-preview-only          prevents usage of taesd for decoding the final image. (for use with --preview tae)
+  --preview-noisy               enables previewing noisy inputs of the models rather than the denoised outputs
+  --metadata-raw                include raw hex previews for unparsed metadata payloads
+  --metadata-brief              truncate long metadata text values in text output
+  --metadata-all                include structural/container entries such as IHDR, IDAT, and non-metadata JPEG segments
+  -M, --mode                    run mode, one of [img_gen, vid_gen, upscale, convert, metadata], default: img_gen
+  --preview                     preview method. must be one of the following [none, proj, tae, vae] (default is none)
+  -h, --help                    show this help message and exit
 
-```bash
-./bin/sd-cli [选项]
-```
+Context Options:
+  -m, --model <string>                     path to full model
+  --clip_l <string>                        path to the clip-l text encoder
+  --clip_g <string>                        path to the clip-g text encoder
+  --clip_vision <string>                   path to the clip-vision encoder
+  --t5xxl <string>                         path to the t5xxl text encoder
+  --llm <string>                           path to the llm text encoder. For example: (qwenvl2.5 for qwen-image,
+                                           mistral-small3.2 for flux2, ...)
+  --llm_vision <string>                    path to the llm vit
+  --qwen2vl <string>                       alias of --llm. Deprecated.
+  --qwen2vl_vision <string>                alias of --llm_vision. Deprecated.
+  --diffusion-model <string>               path to the standalone diffusion model
+  --high-noise-diffusion-model <string>    path to the standalone high noise diffusion model
+  --vae <string>                           path to standalone vae model
+  --taesd <string>                         path to taesd. Using Tiny AutoEncoder for fast decoding (low quality)
+  --tae <string>                           alias of --taesd
+  --control-net <string>                   path to control net model
+  --embd-dir <string>                      embeddings directory
+  --lora-model-dir <string>                lora model directory
+  --hires-upscalers-dir <string>           highres fix upscaler model directory
+  --tensor-type-rules <string>             weight type per tensor pattern (example: "^vae\.=f16,model\.=q8_0")
+  --photo-maker <string>                   path to PHOTOMAKER model
+  --upscale-model <string>                 path to esrgan model.
+  --backend <string>                       runtime backend assignment, e.g. cpu or clip=cpu,vae=cuda0,diffusion=vulkan0
+  --params-backend <string>                parameter backend assignment, e.g. cpu or diffusion=cpu,clip=cpu
+  -t, --threads <int>                      number of threads to use during computation (default: -1). If threads <= 0,
+                                           then threads will be set to the number of CPU physical cores    
+  --chroma-t5-mask-pad <int>               t5 mask pad size of chroma
+  --max-vram <float>                       maximum VRAM budget in GiB for graph-cut segmented execution. 0 disables
+                                           graph splitting; -1 auto-detects free VRAM minus 1 GiB
+  --force-sdxl-vae-conv-scale              force use of conv scale on sdxl vae
+  --offload-to-cpu                         place the weights in RAM to save VRAM, and automatically load them into VRAM
+                                           when needed
+  --mmap                                   whether to memory-map model
+  --control-net-cpu                        keep controlnet in cpu (for low vram)
+  --clip-on-cpu                            keep clip in cpu (for low vram)
+  --vae-on-cpu                             keep vae in cpu (for low vram)
+  --fa                                     use flash attention
+  --diffusion-fa                           use flash attention in the diffusion model only
+  --diffusion-conv-direct                  use ggml_conv2d_direct in the diffusion model
+  --vae-conv-direct                        use ggml_conv2d_direct in the vae model
+  --circular                               enable circular padding for convolutions
+  --circularx                              enable circular RoPE wrapping on x-axis (width) only
+  --circulary                              enable circular RoPE wrapping on y-axis (height) only
+  --chroma-disable-dit-mask                disable dit mask for chroma
+  --qwen-image-zero-cond-t                 enable zero_cond_t for qwen image
+  --chroma-enable-t5-mask                  enable t5 mask for chroma
+  --type                                   weight type (examples: f32, f16, q4_0, q4_1, q5_0, q5_1, q8_0, q2_K, q3_K,
+                                           q4_K). If not specified, the default is the type of the weight file
+  --rng                                    RNG, one of [std_default, cuda, cpu], default: cuda(sd-webui), cpu(comfyui)
+  --sampler-rng                            sampler RNG, one of [std_default, cuda, cpu]. If not specified, use --rng
+  --prediction                             prediction type override, one of [eps, v, edm_v, sd3_flow, flux_flow,
+                                           flux2_flow]
+  --lora-apply-mode                        the way to apply LoRA, one of [auto, immediately, at_runtime], default is
+                                           auto. In auto mode, if the model weights contain any quantized parameters,
+                                           the at_runtime mode will be used; otherwise, immediately will be used.The
+                                           immediately mode may have precision and compatibility issues with quantized
+                                           parameters, but it usually offers faster inference speed and, in some cases,
+                                           lower memory usage. The at_runtime mode, on the other hand, is exactly the
+                                           opposite.
 
-## CLI 选项
-
-| 选项                        | 描述                                                                   |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `-o, --output <字符串>`     | 结果图像的输出路径 (默认: `./output.png`)                              |
-| `--preview-path <字符串>`   | 预览图像的输出路径 (默认: `./preview.png`)                             |
-| `--preview-interval <整数>` | 在去噪步骤之间更新图像预览文件的间隔步数 (默认为 1，即每一步都更新)    |
-| `--canny`                   | 应用 canny 预处理器 (边缘检测)                                         |
-| `-v, --verbose`             | 打印额外信息                                                           |
-| `--color`                   | 根据日志级别为日志标签着色                                             |
-| `--taesd-preview-only`      | 禁止使用 taesd 解码最终图像 (与 `--preview tae` 一起使用)              |
-| `--preview-noisy`           | 启用预览模型的带噪输入，而不是去噪后的输出                             |
-| `-M, --mode`                | 运行模式，可选 `[img_gen, vid_gen, upscale, convert]`，默认: `img_gen` |
-| `--preview`                 | 预览方法。必须是以下之一 `[none, proj, tae, vae]` (默认为 `none`)      |
-| `-h, --help`                | 显示此帮助信息并退出                                                   |
-
-## 上下文选项
-
-| 选项                                    | 描述                                                                                                                                                                                                                                                                                                      |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-m, --model <字符串>`                  | 完整模型路径                                                                                                                                                                                                                                                                                              |
-| `--clip_l <字符串>`                     | clip-l 文本编码器路径                                                                                                                                                                                                                                                                                     |
-| `--clip_g <字符串>`                     | clip-g 文本编码器路径                                                                                                                                                                                                                                                                                     |
-| `--clip_vision <字符串>`                | clip-vision 编码器路径                                                                                                                                                                                                                                                                                    |
-| `--t5xxl <字符串>`                      | t5xxl 文本编码器路径                                                                                                                                                                                                                                                                                      |
-| `--llm <字符串>`                        | 大语言模型文本编码器路径。例如：`qwenvl2.5` 对应 `qwen-image`, `mistral-small3.2` 对应 `flux2`                                                                                                                                                                                                            |
-| `--llm_vision <字符串>`                 | 大语言模型视觉变换器路径                                                                                                                                                                                                                                                                                  |
-| `--qwen2vl <字符串>`                    | 同 `--llm`。已弃用。                                                                                                                                                                                                                                                                                      |
-| `--qwen2vl_vision <字符串>`             | 同 `--llm_vision`。已弃用。                                                                                                                                                                                                                                                                               |
-| `--diffusion-model <字符串>`            | 独立的扩散模型路径                                                                                                                                                                                                                                                                                        |
-| `--high-noise-diffusion-model <字符串>` | 独立的高噪声扩散模型路径                                                                                                                                                                                                                                                                                  |
-| `--vae <字符串>`                        | 独立的变分自编码器模型路径                                                                                                                                                                                                                                                                                |
-| `--taesd <字符串>`                      | taesd 路径。使用 Tiny AutoEncoder 进行快速解码 (质量较低)                                                                                                                                                                                                                                                 |
-| `--tae <字符串>`                        | 同 `--taesd`                                                                                                                                                                                                                                                                                              |
-| `--control-net <字符串>`                | 控制网络模型路径                                                                                                                                                                                                                                                                                          |
-| `--embd-dir <字符串>`                   | 嵌入向量目录                                                                                                                                                                                                                                                                                              |
-| `--lora-model-dir <字符串>`             | LoRA 模型目录                                                                                                                                                                                                                                                                                             |
-| `--tensor-type-rules <字符串>`          | 根据张量模式指定权重类型 (例如：`"^vae\.=f16,model\.=q8_0"`)                                                                                                                                                                                                                                              |
-| `--photo-maker <字符串>`                | PHOTOMAKER 模型路径                                                                                                                                                                                                                                                                                       |
-| `--upscale-model <字符串>`              | esrgan 超分模型路径                                                                                                                                                                                                                                                                                       |
-| `-t, --threads <整数>`                  | 计算时使用的线程数 (默认: -1)。如果线程数 <= 0，则线程数将设置为 CPU 物理核心数                                                                                                                                                                                                                           |
-| `--chroma-t5-mask-pad <整数>`           | chroma 的 t5 掩码填充大小                                                                                                                                                                                                                                                                                 |
-| `--vae-tile-overlap <浮点数>`           | VAE 分块处理时的重叠部分，以块大小的比例表示 (默认: 0.5)                                                                                                                                                                                                                                                  |
-| `--flow-shift <浮点数>`                 | 适用于 SD3.x 或 WAN 等 Flow 模型的偏移值 (默认: `auto`)                                                                                                                                                                                                                                                   |
-| `--vae-tiling`                          | 启用 VAE 分块处理以降低内存使用                                                                                                                                                                                                                                                                           |
-| `--force-sdxl-vae-conv-scale`           | 强制在 SDXL VAE 上使用 conv scale                                                                                                                                                                                                                                                                         |
-| `--offload-to-cpu`                      | 将权重放入 RAM 以节省 VRAM，并在需要时自动加载到 VRAM 中                                                                                                                                                                                                                                                  |
-| `--control-net-cpu`                     | 将 controlnet 保留在 CPU 中 (适用于低 VRAM)                                                                                                                                                                                                                                                               |
-| `--clip-on-cpu`                         | 将 clip 保留在 CPU 中 (适用于低 VRAM)                                                                                                                                                                                                                                                                     |
-| `--vae-on-cpu`                          | 将 vae 保留在 CPU 中 (适用于低 VRAM)                                                                                                                                                                                                                                                                      |
-| `--diffusion-fa`                        | 在扩散模型中使用 Flash Attention                                                                                                                                                                                                                                                                          |
-| `--diffusion-conv-direct`               | 在扩散模型中使用 ggml_conv2d_direct                                                                                                                                                                                                                                                                       |
-| `--vae-conv-direct`                     | 在 VAE 模型中使用 ggml_conv2d_direct                                                                                                                                                                                                                                                                      |
-| `--chroma-disable-dit-mask`             | 为 chroma 禁用 dit 掩码                                                                                                                                                                                                                                                                                   |
-| `--chroma-enable-t5-mask`               | 为 chroma 启用 t5 掩码                                                                                                                                                                                                                                                                                    |
-| `--type`                                | 权重类型 (示例: `f32, f16, q4_0, q4_1, q5_0, q5_1, q8_0, q2_K, q3_K, q4_K`)。若未指定，默认为权重文件的类型                                                                                                                                                                                               |
-| `--rng`                                 | RNG 类型，可选 `[std_default, cuda, cpu]`，默认: `cuda(sd-webui), cpu(comfyui)`                                                                                                                                                                                                                           |
-| `--sampler-rng`                         | 采样器 RNG 类型，可选 `[std_default, cuda, cpu]`。若未指定，则使用 `--rng` 的值                                                                                                                                                                                                                           |
-| `--prediction`                          | 预测类型覆盖，可选 `[eps, v, edm_v, sd3_flow, flux_flow, flux2_flow]`                                                                                                                                                                                                                                     |
-| `--lora-apply-mode`                     | LoRA 应用方式，可选 `[auto, immediately, at_runtime]`，默认为 `auto`。在 `auto` 模式下，如果模型权重包含任何量化参数，则使用 `at_runtime` 模式；否则使用 `immediately` 模式。`immediately` 模式可能存在量化参数的精度和兼容性问题，但通常推理速度更快，有时内存使用更低。而 `at_runtime` 模式则正好相反。 |
-| `--vae-tile-size`                       | VAE 分块处理的块大小，格式为 `[X]x[Y]` (默认: `32x32`)                                                                                                                                                                                                                                                    |
-| `--vae-relative-tile-size`              | VAE 分块处理的相对块大小，格式为 `[X]x[Y]`。如果 < 1，表示图像尺寸的比例；如果 >=1，表示每个维度的块数 (会覆盖 `--vae-tile-size`)                                                                                                                                                                         |
-
-## 生成选项
-
-| 选项                                     | 描述                                                                                                                                                                           |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `-p, --prompt <字符串>`                  | 要渲染的提示词                                                                                                                                                                 |
-| `-n, --negative-prompt <字符串>`         | 负面提示词 (默认: `""`)                                                                                                                                                        |
-| `-i, --init-img <字符串>`                | 初始图像路径                                                                                                                                                                   |
-| `--end-img <字符串>`                     | 结束图像路径，为 flf2v 所需                                                                                                                                                    |
-| `--mask <字符串>`                        | 遮罩图像路径                                                                                                                                                                   |
-| `--control-image <字符串>`               | 控制图像路径，用于 control net                                                                                                                                                 |
-| `--control-video <字符串>`               | 控制视频帧路径。必须是目录路径。其中的视频帧应作为图像按字典序 (字符顺序) 存储。例如，如果控制视频路径是 `frames`，则目录应包含 `00.png, 01.png, ...` 等图像。                 |
-| `--pm-id-images-dir <字符串>`            | PHOTOMAKER 输入 ID 图像目录路径                                                                                                                                                |
-| `--pm-id-embed-path <字符串>`            | PHOTOMAKER v2 ID 嵌入向量路径                                                                                                                                                  |
-| `-H, --height <整数>`                    | 图像高度，像素空间 (默认: `512`)                                                                                                                                               |
-| `-W, --width <整数>`                     | 图像宽度，像素空间 (默认: `512`)                                                                                                                                               |
-| `--steps <整数>`                         | 采样步数 (默认: `20`)                                                                                                                                                          |
-| `--high-noise-steps <整数>`              | (高噪声) 采样步数 (默认: `-1 = auto`)                                                                                                                                          |
-| `--clip-skip <整数>`                     | 忽略 CLIP 网络的最后几层；1 表示忽略 0 层，2 表示忽略 1 层 (默认: `-1`)。 <= 0 表示未指定，对于 SD1.x 将为 1，对于 SD2.x 将为 2                                                |
-| `-b, --batch-count <整数>`               | 批次数                                                                                                                                                                         |
-| `--video-frames <整数>`                  | 视频帧数 (默认: `1`)                                                                                                                                                           |
-| `--fps <整数>`                           | 帧率 (默认: `24`)                                                                                                                                                              |
-| `--timestep-shift <整数>`                | NitroFusion 模型的时间步长偏移量 (默认: `0`)。对于 NitroSD-Realism 推荐 N 约为 250，对于 NitroSD-Vibrant 推荐 500                                                              |
-| `--upscale-repeats <整数>`               | 运行 ESRGAN 超分模型的次数 (默认: `1`)                                                                                                                                         |
-| `--cfg-scale <浮点数>`                   | 无条件引导缩放系数 (默认: `7.0`)                                                                                                                                               |
-| `--img-cfg-scale <浮点数>`               | 用于修复或 instruct-pix2pix 模型的图像引导缩放系数 (默认: 与 `--cfg-scale` 相同)                                                                                               |
-| `--guidance <浮点数>`                    | 适用于具有引导输入的模型的蒸馏引导缩放系数 (默认: `3.5`)                                                                                                                       |
-| `--slg-scale <浮点数>`                   | 仅适用于 DiT 模型的跳跃层引导缩放系数 (默认: `0`)。0 表示禁用，对于 sd3.5 medium 模型，2.5 是一个不错的值                                                                      |
-| `--skip-layer-start <浮点数>`            | SLG 启用点 (默认: `0.01`)                                                                                                                                                      |
-| `--skip-layer-end <浮点数>`              | SLG 禁用点 (默认: `0.2`)                                                                                                                                                       |
-| `--eta <浮点数>`                         | DDIM 中的 eta 值，仅适用于 DDIM 和 TCD (默认: `0`)                                                                                                                             |
-| `--high-noise-cfg-scale <浮点数>`        | (高噪声) 无条件引导缩放系数 (默认: `7.0`)                                                                                                                                      |
-| `--high-noise-img-cfg-scale <浮点数>`    | (高噪声) 用于修复或 instruct-pix2pix 模型的图像引导缩放系数 (默认: 与 `--cfg-scale` 相同)                                                                                      |
-| `--high-noise-guidance <浮点数>`         | (高噪声) 适用于具有引导输入的模型的蒸馏引导缩放系数 (默认: `3.5`)                                                                                                              |
-| `--high-noise-slg-scale <浮点数>`        | (高噪声) 仅适用于 DiT 模型的跳跃层引导缩放系数 (默认: `0`)                                                                                                                     |
-| `--high-noise-skip-layer-start <浮点数>` | (高噪声) SLG 启用点 (默认: `0.01`)                                                                                                                                             |
-| `--high-noise-skip-layer-end <浮点数>`   | (高噪声) SLG 禁用点 (默认: `0.2`)                                                                                                                                              |
-| `--high-noise-eta <浮点数>`              | (高噪声) DDIM 中的 eta 值，仅适用于 DDIM 和 TCD (默认: `0`)                                                                                                                    |
-| `--strength <浮点数>`                    | 用于加噪/去噪的强度 (默认: `0.75`)                                                                                                                                             |
-| `--pm-style-strength <浮点数>`           | PHOTOMAKER 风格强度                                                                                                                                                            |
-| `--control-strength <浮点数>`            | 应用 Control Net 的强度 (默认: `0.9`)。1.0 对应于完全破坏初始图像的信息                                                                                                        |
-| `--moe-boundary <浮点数>`                | Wan2.2 MoE 模型的时间步长边界 (默认: `0.875`)。仅在 `--high-noise-steps` 设置为 `-1` 时启用                                                                                    |
-| `--vace-strength <浮点数>`               | wan vace 强度                                                                                                                                                                  |
-| `--increase-ref-index`                   | 根据引用图像的列出顺序自动增加其索引 (从 1 开始)                                                                                                                               |
-| `--disable-auto-resize-ref-image`        | 禁用引用图像的自动调整大小                                                                                                                                                     |
-| `-s, --seed`                             | RNG 种子 (默认: `42`，若 < 0 则使用随机种子)                                                                                                                                   |
-| `--sampling-method`                      | 采样方法，可选 `[euler, euler_a, heun, dpm2, dpm++2s_a, dpm++2m, dpm++2mv2, ipndm, ipndm_v, lcm, ddim_trailing, tcd]` (默认: Flux/SD3/Wan 为 `euler`，其他为 `euler_a`)        |
-| `--high-noise-sampling-method`           | (高噪声) 采样方法，可选 `[euler, euler_a, heun, dpm2, dpm++2s_a, dpm++2m, dpm++2mv2, ipndm, ipndm_v, lcm, ddim_trailing, tcd]` 默认: Flux/SD3/Wan 为 `euler`，其他为 `euler_a` |
-| `--scheduler`                            | 去噪器的 sigma 调度器，可选 `[discrete, karras, exponential, ays, gits, smoothstep, sgm_uniform, simple, kl_optimal, lcm]`，默认: `discrete`                                   |
-| `--sigmas`                               | 采样器的自定义 sigma 值，逗号分隔 (例如: `"14.61,7.8,3.5,0.0"`)                                                                                                                |
-| `--skip-layers`                          | 用于 SLG 步骤中要跳跃的层 (默认: `[7,8,9]`)                                                                                                                                    |
-| `--high-noise-skip-layers`               | (高噪声) 用于 SLG 步骤中要跳跃的层 (默认: `[7,8,9]`)                                                                                                                           |
-| `-r, --ref-image`                        | Flux Kontext 模型的参考图像 (可多次使用)                                                                                                                                       |
-| `--easycache`                            | 为 DiT 模型启用 EasyCache，可选的 `"threshold,start_percent,end_percent"` 参数 (默认: `0.2,0.15,0.95`)                                                                         |
+Generation Options:
+  -p, --prompt <string>                    the prompt to render
+  -n, --negative-prompt <string>           the negative prompt (default: "")
+  -i, --init-img <string>                  path to the init image
+  --end-img <string>                       path to the end image, required by flf2v
+  --mask <string>                          path to the mask image
+  --control-image <string>                 path to control image, control net
+  --control-video <string>                 path to control video frames, It must be a directory path. The video frames
+                                           inside should be stored as images in lexicographical (character) order. For
+                                           example, if the control video path is `frames`, the directory contain images
+                                           such as 00.png, 01.png, ... etc.
+  --pm-id-images-dir <string>              path to PHOTOMAKER input id images dir
+  --pm-id-embed-path <string>              path to PHOTOMAKER v2 id embed
+  --hires-upscaler <string>                highres fix upscaler, Lanczos, Nearest, Latent, Latent (nearest), Latent
+                                           (nearest-exact), Latent (antialiased), Latent (bicubic), Latent (bicubic
+                                           antialiased), or a model name under --hires-upscalers-dir (default: Latent)
+  --extra-sample-args <string>             extra sampler args, key=value list. Currently lcm supports noise_clip_std,
+                                           noise_scale_start, noise_scale_end
+  -H, --height <int>                       image height, in pixel space (default: 512)
+  -W, --width <int>                        image width, in pixel space (default: 512)
+  --steps <int>                            number of sample steps (default: 20)
+  --high-noise-steps <int>                 (high noise) number of sample steps (default: -1 = auto)        
+  --clip-skip <int>                        ignore last layers of CLIP network; 1 ignores none, 2 ignores one layer
+                                           (default: -1). <= 0 represents unspecified, will be 1 for SD1.x, 2 for SD2.x
+  -b, --batch-count <int>                  batch count
+  --video-frames <int>                     video frames (default: 1)
+  --fps <int>                              fps (default: 24)
+  --timestep-shift <int>                   shift timestep for NitroFusion models (default: 0). recommended N for
+                                           NitroSD-Realism around 250 and 500 for NitroSD-Vibrant
+  --upscale-repeats <int>                  Run the ESRGAN upscaler this many times (default: 1)
+  --upscale-tile-size <int>                tile size for ESRGAN upscaling (default: 128)
+  --hires-width <int>                      highres fix target width, 0 to use --hires-scale (default: 0)   
+  --hires-height <int>                     highres fix target height, 0 to use --hires-scale (default: 0)  
+  --hires-steps <int>                      highres fix second pass sample steps, 0 to reuse --steps (default: 0)
+  --hires-upscale-tile-size <int>          highres fix upscaler tile size, reserved for model-backed upscalers (default:
+                                           128)
+  --cfg-scale <float>                      unconditional guidance scale: (default: 7.0)
+  --img-cfg-scale <float>                  image guidance scale for inpaint or instruct-pix2pix models: (default: same
+                                           as --cfg-scale)
+  --guidance <float>                       distilled guidance scale for models with guidance input (default: 3.5)
+  --slg-scale <float>                      skip layer guidance (SLG) scale, only for DiT models: (default: 0). 0 means
+                                           disabled, a value of 2.5 is nice for sd3.5 medium
+  --skip-layer-start <float>               SLG enabling point (default: 0.01)
+  --skip-layer-end <float>                 SLG disabling point (default: 0.2)
+  --eta <float>                            noise multiplier (default: 0 for ddim_trailing, tcd, res_multistep and
+                                           res_2s; 1 for euler_a, er_sde and dpm++2s_a)
+  --flow-shift <float>                     shift value for Flow models like SD3.x or WAN (default: auto)   
+  --high-noise-cfg-scale <float>           (high noise) unconditional guidance scale: (default: 7.0)       
+  --high-noise-img-cfg-scale <float>       (high noise) image guidance scale for inpaint or instruct-pix2pix models
+                                           (default: same as --cfg-scale)
+  --high-noise-guidance <float>            (high noise) distilled guidance scale for models with guidance input
+                                           (default: 3.5)
+  --high-noise-slg-scale <float>           (high noise) skip layer guidance (SLG) scale, only for DiT models: (default:
+                                           0)
+  --high-noise-skip-layer-start <float>    (high noise) SLG enabling point (default: 0.01)
+  --high-noise-skip-layer-end <float>      (high noise) SLG disabling point (default: 0.2)
+  --high-noise-eta <float>                 (high noise) noise multiplier (default: 0 for ddim_trailing, tcd,
+                                           res_multistep and res_2s; 1 for euler_a, er_sde and dpm++2s_a)  
+  --strength <float>                       strength for noising/unnoising (default: 0.75)
+  --pm-style-strength <float>
+  --control-strength <float>               strength to apply Control Net (default: 0.9). 1.0 corresponds to full
+                                           destruction of information in init image
+  --moe-boundary <float>                   timestep boundary for Wan2.2 MoE model. (default: 0.875). Only enabled if
+                                           `--high-noise-steps` is set to -1
+  --vace-strength <float>                  wan vace strength
+  --vae-tile-overlap <float>               tile overlap for vae tiling, in fraction of tile size (default: 0.5)
+  --hires-scale <float>                    highres fix scale when target size is not set (default: 2.0)    
+  --hires-denoising-strength <float>       highres fix second pass denoising strength (default: 0.7)       
+  --increase-ref-index                     automatically increase the indices of references images based on the order
+                                           they are listed (starting with 1).
+  --disable-auto-resize-ref-image          disable auto resize of ref images
+  --disable-image-metadata                 do not embed generation metadata on image files
+  --vae-tiling                             process vae in tiles to reduce memory usage
+  --hires                                  enable highres fix
+  -s, --seed                               RNG seed (default: 42, use random seed for < 0)
+  --sampling-method                        sampling method, one of [euler, euler_a, heun, dpm2, dpm++2s_a, dpm++2m,
+                                           dpm++2mv2, ipndm, ipndm_v, lcm, ddim_trailing, tcd, res_multistep, res_2s,
+                                           er_sde, euler_cfg_pp, euler_a_cfg_pp](default: euler for Flux/SD3/Wan,
+                                           euler_a otherwise)
+  --high-noise-sampling-method             (high noise) sampling method, one of [euler, euler_a, heun, dpm2, dpm++2s_a,
+                                           dpm++2m, dpm++2mv2, ipndm, ipndm_v, lcm, ddim_trailing, tcd, res_multistep,
+                                           res_2s, er_sde, euler_cfg_pp, euler_a_cfg_pp] default: euler for
+                                           Flux/SD3/Wan, euler_a otherwise
+  --scheduler                              denoiser sigma scheduler, one of [discrete, karras, exponential, ays, gits,
+                                           smoothstep, sgm_uniform, simple, kl_optimal, lcm, bong_tangent], default:
+                                           discrete
+  --sigmas                                 custom sigma values for the sampler, comma-separated (e.g.,     
+                                           "14.61,7.8,3.5,0.0").
+  --skip-layers                            layers to skip for SLG steps (default: [7,8,9])
+  --high-noise-skip-layers                 (high noise) layers to skip for SLG steps (default: [7,8,9])    
+  -r, --ref-image                          reference image for Flux Kontext models (can be used multiple times)
+  --cache-mode                             caching method: 'easycache' (DiT), 'ucache' (UNET),
+                                           'dbcache'/'taylorseer'/'cache-dit' (DiT block-level), 'spectrum' (UNET/DiT
+                                           Chebyshev+Taylor forecasting)
+  --cache-option                           named cache params (key=value format, comma-separated). easycache/ucache:
+                                           threshold=,start=,end=,decay=,relative=,reset=; dbcache/taylorseer/cache-dit:
+                                           Fn=,Bn=,threshold=,warmup=; spectrum: w=,m=,lam=,window=,flex=,warmup=,stop=.
+                                           Examples: "threshold=0.25" or "threshold=1.5,reset=0"
+  --scm-mask                               SCM steps mask for cache-dit: comma-separated 0/1 (e.g.,        
+                                           "1,1,1,0,0,1,0,0,1,0") - 1=compute, 0=can cache
+  --scm-policy                             SCM policy: 'dynamic' (default) or 'static'
+  --vae-tile-size                          tile size for vae tiling, format [X]x[Y] (default: 32x32)       
+  --vae-relative-tile-size                 relative tile size for vae tiling, format [X]x[Y], in fraction of image size
+                                           if < 1, in number of tiles per dim if >=1 (overrides --vae-tile-size)
