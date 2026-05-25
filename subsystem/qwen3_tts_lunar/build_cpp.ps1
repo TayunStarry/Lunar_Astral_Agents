@@ -12,7 +12,9 @@ param(
 
     [int]$ParallelJobs = $env:NUMBER_OF_PROCESSORS,
 
-    [string]$OutputDir = ""
+    [string]$OutputDir = "",
+
+    [switch]$EnableLog
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -27,20 +29,24 @@ if (-not $OutputDir) {
     $CPP_BUILD_DIR = $OutputDir
 }
 
-$BuildLogDir = Join-Path $ScriptDir "build_logs"
-if (-not (Test-Path $BuildLogDir)) {
-    New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
-}
+if ($EnableLog) {
+    $BuildLogDir = Join-Path $ScriptDir "build_logs"
+    if (-not (Test-Path $BuildLogDir)) {
+        New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
+    }
 
-$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$LogFile = Join-Path $BuildLogDir "qwen3tts_build_${Timestamp}.log"
+    $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $LogFile = Join-Path $BuildLogDir "qwen3tts_build_${Timestamp}.log"
+}
 
 function log {
     param([string]$m, [string]$c = "White")
     $ts = Get-Date -Format "HH:mm:ss"
     $msg = "[$ts] $m"
     Write-Host $msg -ForegroundColor $c
-    Add-Content -Path $LogFile -Value $msg
+    if ($EnableLog) {
+        Add-Content -Path $LogFile -Value $msg
+    }
 }
 
 function has { param([string]$c) $null = Get-Command $c -ErrorAction SilentlyContinue; return $? }
@@ -86,7 +92,7 @@ function run-cmake {
     param([Parameter(ValueFromRemainingArguments=$true)][string[]]$ArgList)
     $output = & cmake @ArgList 2>&1
     $ec = $LASTEXITCODE
-    if ($output) {
+    if ($output -and $EnableLog) {
         $output | ForEach-Object { Add-Content -Path $LogFile -Value $_ }
     }
     return $ec

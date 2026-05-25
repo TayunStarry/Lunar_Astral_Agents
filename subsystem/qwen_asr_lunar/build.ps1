@@ -26,13 +26,13 @@ function Build-IconIfNeeded {
 }
 
 $PROJECT_DIR = $PSScriptRoot
-$OUTPUT_NAME = "Qwen_ASR_Lunar.exe"
+$OUTPUT_NAME = "../../Qwen_ASR_Lunar.exe"
 
 # 执行图标处理
 Set-Location $PROJECT_DIR
 Build-IconIfNeeded
 
-Write-Host "[1/6] Checking Go installation..." -ForegroundColor Yellow
+Write-Host "[1/5] Checking Go installation..." -ForegroundColor Yellow
 try {
     $goVersion = go version
     Write-Host "  Found: $goVersion" -ForegroundColor Green
@@ -42,7 +42,7 @@ try {
     exit 1
 }
 
-Write-Host "[3/6] Checking GCC installation (required for CGO)..." -ForegroundColor Yellow
+Write-Host "[2/5] Checking GCC installation (required for CGO)..." -ForegroundColor Yellow
 try {
     $gccVersion = gcc --version | Select-Object -First 1
     Write-Host "  Found: $gccVersion" -ForegroundColor Green
@@ -102,7 +102,7 @@ if ($UseBLAS) {
     Write-Host "  To enable BLAS: .\build.ps1 -UseBLAS" -ForegroundColor Gray
 }
 
-Write-Host "[5/6] Building Go binary with CGO..." -ForegroundColor Yellow
+Write-Host "[3/5] Building Go binary with CGO..." -ForegroundColor Yellow
 Set-Location $PROJECT_DIR
 
 $env:CGO_CFLAGS = $cflags
@@ -120,22 +120,20 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-Write-Host "[6/6] Setting up runtime directory..." -ForegroundColor Yellow
+Write-Host "[4/5] Setting up runtime directory..." -ForegroundColor Yellow
 $RUNTIME_DIR = "d:\Lunar_Astral_Agents"
 if (-not (Test-Path $RUNTIME_DIR)) {
     New-Item -ItemType Directory -Path $RUNTIME_DIR -Force | Out-Null
 }
-Copy-Item "$PROJECT_DIR\$OUTPUT_NAME" "$RUNTIME_DIR\$OUTPUT_NAME" -Force
 Write-Host ""
 Write-Host "Runtime directory: $RUNTIME_DIR" -ForegroundColor Cyan
-Write-Host "Executable: $OUTPUT_NAME" -ForegroundColor Cyan
+Write-Host "Executable: $RUNTIME_DIR\$OUTPUT_NAME" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "To run the server:" -ForegroundColor Yellow
 Write-Host "  cd $RUNTIME_DIR" -ForegroundColor Gray
 Write-Host "  .\$OUTPUT_NAME" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Environment variables (optional):" -ForegroundColor Yellow
-Write-Host "  MODEL_DIR  - Model directory (default: C:\Users\196530\Downloads\Qwen3-ASR-0.6B-0)" -ForegroundColor Gray
 Write-Host "  PORT       - Server port (default: 35768)" -ForegroundColor Gray
 Write-Host "  QWEN_VERBOSE=2 - Enable timing diagnostics" -ForegroundColor Gray
 Write-Host "  QWEN_BF16_CACHE_MB=1024 - BF16 cache size (default: 1024)" -ForegroundColor Gray
