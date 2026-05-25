@@ -12,7 +12,9 @@ param(
 
     [int]$ParallelJobs = $env:NUMBER_OF_PROCESSORS,
 
-    [string]$OutputDir = ""
+    [string]$OutputDir = "",
+
+    [switch]$EnableLog
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,20 +27,24 @@ if (-not $OutputDir) {
     $GGML_BUILD_DIR = $OutputDir
 }
 
-$BuildLogDir = Join-Path $ScriptDir "build_logs"
-if (-not (Test-Path $BuildLogDir)) {
-    New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
-}
+if ($EnableLog) {
+    $BuildLogDir = Join-Path $ScriptDir "build_logs"
+    if (-not (Test-Path $BuildLogDir)) {
+        New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
+    }
 
-$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$LogFile = Join-Path $BuildLogDir "ggml_build_${Timestamp}.log"
+    $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $LogFile = Join-Path $BuildLogDir "ggml_build_${Timestamp}.log"
+}
 
 function Write-BuildLog {
     param([string]$Message, [string]$Color = "White")
     $timeStamp = Get-Date -Format "HH:mm:ss"
     $logMessage = "[$timeStamp] $Message"
     Write-Host $logMessage -ForegroundColor $Color
-    Add-Content -Path $LogFile -Value $logMessage
+    if ($EnableLog) {
+        Add-Content -Path $LogFile -Value $logMessage
+    }
 }
 
 function Test-CommandExists {
@@ -191,8 +197,10 @@ function Build-GGML {
     $configureOutput = & cmake $cmakeConfigureArgs 2>&1
     $configureExitCode = $LASTEXITCODE
 
-    foreach ($line in $configureOutput) {
-        Add-Content -Path $LogFile -Value $line
+    if ($configureOutput -and $EnableLog) {
+        foreach ($line in $configureOutput) {
+            Add-Content -Path $LogFile -Value $line
+        }
     }
 
     if ($configureExitCode -ne 0) {
@@ -213,8 +221,10 @@ function Build-GGML {
     $buildOutput = & cmake $buildArgs 2>&1
     $buildExitCode = $LASTEXITCODE
 
-    foreach ($line in $buildOutput) {
-        Add-Content -Path $LogFile -Value $line
+    if ($buildOutput -and $EnableLog) {
+        foreach ($line in $buildOutput) {
+            Add-Content -Path $LogFile -Value $line
+        }
     }
 
     if ($buildExitCode -ne 0) {

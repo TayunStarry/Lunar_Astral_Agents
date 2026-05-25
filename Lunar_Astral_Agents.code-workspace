@@ -9,10 +9,7 @@
 			"path": "../Chat_AI_Case/lmstudio/models"
 		},
 		{
-			"path": "../TTS/qwen3-tts.cpp-main"
-		},
-		{
-			"path": "../TTS/qwen-asr-main"
+			"path": "../TTS/stable-diffusion.cpp-master"
 		}
 	],
 	"settings": {

@@ -12,6 +12,8 @@ param(
 
     [switch]$SkipGo,
 
+    [switch]$EnableLog,
+
     [int]$ParallelJobs = $env:NUMBER_OF_PROCESSORS,
 
     [string]$OutputDir = ""
@@ -20,20 +22,24 @@ param(
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-$BuildLogDir = Join-Path $ScriptDir "build_logs"
-if (-not (Test-Path $BuildLogDir)) {
-    New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
-}
+if ($EnableLog) {
+    $BuildLogDir = Join-Path $ScriptDir "build_logs"
+    if (-not (Test-Path $BuildLogDir)) {
+        New-Item -ItemType Directory -Path $BuildLogDir -Force | Out-Null
+    }
 
-$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$LogFile = Join-Path $BuildLogDir "build_${Timestamp}.log"
+    $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $LogFile = Join-Path $BuildLogDir "build_${Timestamp}.log"
+}
 
 function Write-BuildLog {
     param([string]$Message, [string]$Color = "White")
     $timeStamp = Get-Date -Format "HH:mm:ss"
     $logMessage = "[$timeStamp] $Message"
     Write-Host $logMessage -ForegroundColor $Color
-    Add-Content -Path $LogFile -Value $logMessage
+    if ($EnableLog) {
+        Add-Content -Path $LogFile -Value $logMessage
+    }
 }
 
 function Test-CommandExists {
@@ -70,11 +76,35 @@ function Invoke-BuildScript {
     }
 }
 
+function Build-IconIfNeeded {
+    $iconPath = Join-Path $ScriptDir "icon.ico"
+    $sysoPath = Join-Path $ScriptDir "icon.syso"
+
+    if (-not (Test-Path $iconPath)) {
+        return
+    }
+    if (Test-Path $sysoPath) {
+        return
+    }
+
+    Write-BuildLog "[Icon] Compiling icon resource..." "Yellow"
+    Push-Location $ScriptDir
+    & rsrc -ico icon.ico -o icon.syso
+    if ($LASTEXITCODE -ne 0) {
+        Pop-Location
+        throw "rsrc icon compilation failed"
+    }
+    Pop-Location
+    Write-BuildLog "  [OK] icon.syso generated" "Green"
+}
+
 Write-BuildLog "========================================" "Cyan"
 Write-BuildLog "Qwen3_TTS_Lunar Build Start" "Cyan"
 Write-BuildLog "========================================" "Cyan"
 Write-BuildLog "Build Type: $BuildType" "White"
-Write-BuildLog "Log File:   $LogFile" "White"
+if ($EnableLog) {
+    Write-BuildLog "Log File:   $LogFile" "White"
+}
 Write-BuildLog "========================================" "Cyan"
 
 Write-BuildLog "[Check] Verifying build environment..." "Yellow"
@@ -115,6 +145,10 @@ if ($OutputDir) {
     $buildScriptArgs.OutputDir = $OutputDir
 }
 
+if ($EnableLog) {
+    $buildScriptArgs.EnableLog = $true
+}
+
 if (-not $SkipGGML) {
     Write-BuildLog "" "White"
     Write-BuildLog "============================================================" "Cyan"
@@ -148,6 +182,8 @@ if (-not $SkipGo) {
     Write-BuildLog "============================================================" "Cyan"
     Write-BuildLog "" "White"
 
+    Build-IconIfNeeded
+
     Write-BuildLog "Running go build..." "Yellow"
 
     Push-Location $ScriptDir
@@ -156,17 +192,20 @@ if (-not $SkipGo) {
     $env:GOOS = "windows"
     $env:GOARCH = "amd64"
 
-    $goBuildArgs = @("build", "-v", "-o", "Qwen3_TTS_Lunar.exe", "-ldflags", "-s -w -H windowsgui")
-    $goOutput = & go $goBuildArgs 2>&1 | ForEach-Object { "$_" }
+    $goOutput = cmd /c "go build -v -o ..\..\Qwen3_TTS_Lunar.exe -ldflags ""-s -w -H windowsgui"" 2>&1"
     $goExitCode = $LASTEXITCODE
 
-    foreach ($line in $goOutput) {
-        Add-Content -Path $LogFile -Value $line
+    if ($goOutput -and $EnableLog) {
+        foreach ($line in ($goOutput -split "`r`n")) {
+            if ($line) {
+                Add-Content -Path $LogFile -Value $line
+            }
+        }
     }
 
     if ($goExitCode -ne 0) {
         Write-BuildLog "Go build FAILED (exit code: $goExitCode)" "Red"
-        $goOutput | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+        if ($goOutput) { Write-Host $goOutput -ForegroundColor Red }
         Pop-Location
         throw "Go build failed"
     }
@@ -187,5 +226,7 @@ Write-BuildLog "" "White"
 Write-BuildLog "============================================================" "Green"
 Write-BuildLog "  BUILD SUCCESSFUL!" "Green"
 Write-BuildLog "============================================================" "Green"
-Write-BuildLog "Log file: $LogFile" "White"
+if ($EnableLog) {
+    Write-BuildLog "Log file: $LogFile" "White"
+}
 exit 0
