@@ -13,6 +13,7 @@ deliverable
 meme_images
 temp
 local_data/embed_cache
+local_data/lunar_config.json
 
 ## 本地数据
 local_data/images

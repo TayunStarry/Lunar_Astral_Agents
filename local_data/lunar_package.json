@@ -49,6 +49,13 @@
 		"url": "/read/package/model_query/index.html"
 	},
 	{
+		"id": "different_lunar",
+		"icon": "/read/images/icon/different_lunar.Webp",
+		"title": "不同星月智能",
+		"description": "打开『 星月智能 』的不同星月智能",
+		"url": "/read/package/different_lunar/index.html"
+	},
+	{
 		"id": "view_on_gitee",
 		"icon": "/read/images/icon/gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",
