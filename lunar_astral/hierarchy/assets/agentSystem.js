@@ -846,7 +846,7 @@ class AgentDefine {
         this.recorderRole.useMultimodal(fileView('prompts/recorderRole.md')[0]);
         this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
         this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
-        fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
+        fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
     }
     async analysisVideoFile(videoUrl, userNeeds) {
         const cachedPrompt = getPromptFromDatabase(videoUrl);

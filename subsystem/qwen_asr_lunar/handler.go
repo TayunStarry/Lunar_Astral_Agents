@@ -7,8 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type AsrResponse struct {
@@ -92,17 +94,16 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	if !strings.HasSuffix(strings.ToLower(header.Filename), ".wav") {
-		h.logger.Printf("Unsupported file format: %s", header.Filename)
-		h.sendJSON(w, http.StatusBadRequest, AsrResponse{
-			Status:      "error",
-			Error:       "Only WAV format is supported",
-			AudioFormat: filepath.Ext(header.Filename),
+	audioData, err := io.ReadAll(file)
+	if err != nil {
+		h.logger.Printf("Failed to read audio data: %v", err)
+		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
+			Status: "error",
+			Error:  "Failed to read audio data",
 		})
 		return
 	}
 
-	tmpPath := filepath.Join(h.uploadDir, header.Filename)
 	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
 		h.logger.Printf("Failed to create upload dir: %v", err)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
@@ -112,21 +113,34 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outFile, err := os.Create(tmpPath)
-	if err != nil {
-		h.logger.Printf("Failed to create temp file: %v", err)
-		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
-			Status: "error",
-			Error:  "Server error",
-		})
-		return
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	tmpPath := filepath.Join(h.uploadDir, header.Filename)
+
+	var wavData []byte
+
+	if isValidWav(audioData) {
+		wavData = audioData
+	} else {
+		h.logger.Printf("Non-WAV format detected (filename: %s), converting to WAV", header.Filename)
+		srcExt := ext
+		if srcExt != ".webm" && srcExt != ".ogg" && srcExt != ".mp4" && srcExt != ".m4a" && srcExt != ".weba" {
+			srcExt = ".webm"
+		}
+		var err error
+		wavData, err = convertToWav(audioData, srcExt)
+		if err != nil {
+			h.logger.Printf("Failed to convert audio: %v", err)
+			h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
+				Status: "error",
+				Error:  fmt.Sprintf("Audio conversion failed: %v", err),
+			})
+			return
+		}
+		tmpPath = filepath.Join(h.uploadDir, "converted_"+header.Filename+".wav")
 	}
 
-	_, err = io.Copy(outFile, file)
-	outFile.Close()
-	if err != nil {
+	if err := os.WriteFile(tmpPath, wavData, 0644); err != nil {
 		h.logger.Printf("Failed to save audio file: %v", err)
-		os.Remove(tmpPath)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status: "error",
 			Error:  "Failed to save audio file",
@@ -135,7 +149,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(tmpPath)
 
-	h.logger.Printf("Processing audio file: %s (%d bytes)", header.Filename, header.Size)
+	h.logger.Printf("Processing audio file: %s (%d bytes, format=%s)", header.Filename, len(wavData), ext)
 
 	text, err := h.asr.TranscribeWavFile(tmpPath)
 	if err != nil {
@@ -143,7 +157,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status:      "error",
 			Error:       fmt.Sprintf("Transcription failed: %v", err),
-			AudioFormat: "wav",
+			AudioFormat: ext,
 		})
 		return
 	}
@@ -157,6 +171,65 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 		Text:        text,
 		AudioFormat: "wav",
 	})
+}
+
+func isValidWav(data []byte) bool {
+	if len(data) < 44 {
+		return false
+	}
+	return data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F' &&
+		data[8] == 'W' && data[9] == 'A' && data[10] == 'V' && data[11] == 'E'
+}
+
+func convertToWav(inputData []byte, srcExt string) ([]byte, error) {
+	tmpInput := filepath.Join(os.TempDir(), fmt.Sprintf("asr_input_%d%s", time.Now().UnixNano(), srcExt))
+	tmpOutput := filepath.Join(os.TempDir(), fmt.Sprintf("asr_output_%d.wav", time.Now().UnixNano()))
+
+	if err := os.WriteFile(tmpInput, inputData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write temp input: %w", err)
+	}
+	defer os.Remove(tmpInput)
+	defer os.Remove(tmpOutput)
+
+	ffmpegPath := findFfmpeg()
+	if ffmpegPath == "" {
+		return nil, fmt.Errorf("ffmpeg not found in PATH, required for audio conversion")
+	}
+
+	cmd := exec.Command(ffmpegPath,
+		"-i", tmpInput,
+		"-acodec", "pcm_s16le",
+		"-ar", "16000",
+		"-ac", "1",
+		"-y",
+		tmpOutput,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("ffmpeg conversion failed: %v, output: %s", err, string(output))
+	}
+
+	wavData, err := os.ReadFile(tmpOutput)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read converted WAV: %w", err)
+	}
+
+	return wavData, nil
+}
+
+func findFfmpeg() string {
+	if path, err := exec.LookPath("ffmpeg"); err == nil {
+		return path
+	}
+	commonPaths := []string{
+		`C:\ffmpeg\bin\ffmpeg.exe`,
+		`C:\Program Files\ffmpeg\bin\ffmpeg.exe`,
+	}
+	for _, path := range commonPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
 }
 
 func (h *AsrHandler) handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -13,9 +13,9 @@
 		"allow_multimodal": true
 	},
 	"cloud": {
-		"cloud_model_url": null,
-		"cloud_model_key": null,
-		"multimodal_model_name": null,
+		"cloud_model_url": "https://ark.cn-beijing.volces.com/api/v3",
+		"cloud_model_key": "ark-8c39d33e-1243-469f-b45a-78607c6c23bc-c1a0a",
+		"multimodal_model_name": "doubao-seed-1-6-251015",
 		"embedding_model_name": null
 	},
 	"qq_adapter": {

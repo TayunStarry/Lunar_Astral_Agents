@@ -42,6 +42,13 @@
 		"url": "/read/package/parameter_assistant/index.html"
 	},
 	{
+		"id": "model_query",
+		"icon": "/read/images/icon/model_query.Webp",
+		"title": "模型查询",
+		"description": "打开『 星月智能 』模型查询",
+		"url": "/read/package/model_query/index.html"
+	},
+	{
 		"id": "view_on_gitee",
 		"icon": "/read/images/icon/gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",

@@ -419,7 +419,7 @@ ${JSON.stringify(configData, null, 2)}
         const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
         const res = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${configData?.cloud?.cloud_model_key || ''}` },
             body: JSON.stringify({ model: modelName, messages, stream: false })
         });
         if (!res.ok) throw new Error('AI请求失败');
