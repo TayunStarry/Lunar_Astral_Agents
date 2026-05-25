@@ -52,7 +52,7 @@ export class AgentDefine {
         this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
         this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
         // 初始化 自定义配置 信息
-        fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = JSON.parse(content));
+        fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
         // TODO 初始化 工具调用配置
         // fetchDocumentCallback('resources/toolCall.json').then(content => OnlyData.toolCall = JSON.parse(content));
         // TODO 初始化 聊天记录

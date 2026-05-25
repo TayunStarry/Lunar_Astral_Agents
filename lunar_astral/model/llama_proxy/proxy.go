@@ -19,15 +19,16 @@ import (
 
 var (
 	serverProcess *exec.Cmd
-	serverPort    int
 	serverReady   = make(chan struct{}, 1)
 	readyOnce     sync.Once
 )
 
 // Init 初始化并启动 llama.cpp 服务器
 func Init() {
-	port := *config.ModelPort
-	serverPort = port
+	// 判断是否在配置中允许加载多模态模型
+	if *config.AllowMultimodal == false {
+		return
+	}
 
 	args := []string{
 		"--models-preset", "local_data/models/models.ini",
@@ -42,11 +43,11 @@ func Init() {
 		"--top-k", "20",
 		"--min-p", "0.0",
 		"--repeat_penalty", "1.0",
-		"--port", strconv.Itoa(port),
+		"--port", strconv.Itoa(*config.ModelPort),
 		"--reasoning", "off",
 	}
 
-	log.Printf("llama_proxy -> 正在启动 llama-server 端口: %d", port)
+	log.Printf("llama_proxy -> 正在启动 llama-server 端口: %d", *config.ModelPort)
 
 	cmd := exec.Command(*config.InferEngine, args...)
 
@@ -161,7 +162,11 @@ func waitForProcessExit(cmd *exec.Cmd) {
 
 // ProxyHandler 将所有请求代理到 llama.cpp 服务器
 func ProxyHandler(w http.ResponseWriter, r *http.Request) {
-	targetURL := fmt.Sprintf("http://localhost:%d", serverPort)
+	if *config.CloudModelUrl != "" {
+		ProxyToCloud(w, r)
+		return
+	}
+	targetURL := fmt.Sprintf("http://localhost:%d", *config.ModelPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "llama_proxy[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
@@ -173,6 +178,42 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("llama_proxy[ERROR] -> 代理错误: %v", err)
 		http.Error(w, "llama_proxy[ERROR] -> 代理失败", http.StatusBadGateway)
+	}
+
+	proxy.ServeHTTP(w, r)
+}
+
+// ProxyToCloud 将请求反向代理到云服务器
+func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse(*config.CloudModelUrl + "/chat/completions")
+	if err != nil {
+		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("llama_proxy -> 云服务器 URL: %s", target.String())
+
+	// 打印消息头中的密钥信息
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		log.Printf("llama_proxy -> Authorization 头: %s", authHeader)
+	}
+	if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
+		log.Printf("llama_proxy -> x-api-key 头: %s", apiKey)
+	}
+	if apiKey := r.Header.Get("api-key"); apiKey != "" {
+		log.Printf("llama_proxy -> api-key 头: %s", apiKey)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	// 自定义 Director 函数，强制将所有请求重定向到 /chat/completions
+	proxy.Director = func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = target.Path
+		req.URL.RawPath = ""
+		req.URL.RawQuery = ""
+		req.Host = target.Host
 	}
 
 	proxy.ServeHTTP(w, r)

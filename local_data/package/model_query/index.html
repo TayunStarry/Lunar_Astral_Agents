@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』星图-琉璃</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/read/package/standard_dependency/styles.css">
+    <!-- 标准脚本库 -->
+    <script src="/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+    <!-- 标准脚本引用 -->
+</head>
+
+<body>
+    <!-- 顶部导航 -->
+    <nav class="top-nav-glass">
+        <div class="nav-brand">
+            <i class="fas fa-cube nav-icon"></i>
+            <h1>星月智能 · 模型查询</h1>
+        </div>
+        <div class="nav-status">
+            <span id="connection-status" class="status-dot status-dot-inactive"></span>
+            <span id="status-text" class="status-text">未连接</span>
+        </div>
+    </nav>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 连接配置面板 -->
+        <div class="page" id="page-connection">
+            <main class="glass-panel connection-panel">
+                <div class="connection-form-section">
+                    <div class="glass-card">
+                        <h3><i class="fas fa-plug"></i> API 连接配置</h3>
+                        <div class="form-grid">
+                            <div class="form-group form-group-wide">
+                                <label for="api-base-url">
+                                    <i class="fas fa-link"></i> API 基础地址
+                                </label>
+                                <input type="url" id="api-base-url" class="glass-input" 
+                                    placeholder="例如: https://ark.cn-beijing.volces.com/api/v1"
+                                    value="https://ark.cn-beijing.volces.com/api/v1">
+                            </div>
+                            <div class="form-group form-group-wide">
+                                <label for="api-key">
+                                    <i class="fas fa-key"></i> API 密钥
+                                </label>
+                                <div class="input-with-action">
+                                    <input type="password" id="api-key" class="glass-input" 
+                                        placeholder="输入您的 API Key...">
+                                    <button type="button" id="toggle-key-visibility" class="btn-icon" title="显示/隐藏">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="request-timeout">
+                                    <i class="fas fa-clock"></i> 请求超时 (秒)
+                                </label>
+                                <input type="number" id="request-timeout" class="glass-input" 
+                                    min="5" max="120" value="30">
+                            </div>
+                            <div class="form-group">
+                                <label for="max-retries">
+                                    <i class="fas fa-redo"></i> 重试次数
+                                </label>
+                                <input type="number" id="max-retries" class="glass-input" 
+                                    min="0" max="5" value="1">
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="test-connection-btn" class="btn-glass btn-glass-primary">
+                                <i class="fas fa-paper-plane"></i> 测试连接
+                            </button>
+                            <button id="query-models-btn" class="btn-glass btn-glass-optimize">
+                                <i class="fas fa-search"></i> 查询模型
+                            </button>
+                            <button id="reset-form-btn" class="btn-glass btn-glass-secondary">
+                                <i class="fas fa-undo"></i> 重置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- 模型结果面板 -->
+        <div class="page hidden" id="page-results">
+            <main class="glass-panel results-panel">
+                <div class="results-header">
+                    <div class="results-info">
+                        <h3><i class="fas fa-list"></i> 可用模型列表</h3>
+                        <span id="model-count" class="model-count-badge">0 个模型</span>
+                    </div>
+                    <div class="results-actions">
+                        <button id="switch-to-chat-btn" class="btn-glass btn-glass-primary btn-sm">
+                            <i class="fas fa-comments"></i> 对话
+                        </button>
+                        <button id="filter-input-toggle" class="btn-glass btn-glass-dark btn-sm">
+                            <i class="fas fa-filter"></i> 筛选
+                        </button>
+                        <button id="export-json-btn" class="btn-glass btn-glass-dark btn-sm">
+                            <i class="fas fa-download"></i> 导出 JSON
+                        </button>
+                        <button id="back-to-connection-btn" class="btn-glass btn-glass-dark btn-sm">
+                            <i class="fas fa-arrow-left"></i> 返回
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 筛选栏 -->
+                <div class="filter-bar" id="filter-bar" style="display: none;">
+                    <div class="filter-group">
+                        <input type="text" id="model-search-input" class="glass-input" 
+                            placeholder="搜索模型名称或 ID...">
+                        <select id="model-owner-filter" class="glass-input">
+                            <option value="">全部所有者</option>
+                        </select>
+                        <select id="model-sort-select" class="glass-input">
+                            <option value="id-asc">ID 升序</option>
+                            <option value="id-desc">ID 降序</option>
+                            <option value="owner-asc">所有者升序</option>
+                            <option value="owner-desc">所有者降序</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 模型列表 -->
+                <div id="model-list-container" class="model-list-container">
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-cubes"></i></div>
+                        <p>暂无模型数据</p>
+                        <p style="font-size: 0.9em; margin-top: 10px; color: #888;">请先配置 API 连接并点击"查询模型"</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- AI 对话面板 -->
+        <div class="page hidden" id="page-chat">
+            <main class="glass-panel chat-panel">
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <h3><i class="fas fa-comments"></i> AI 对话</h3>
+                        <div class="chat-model-select-wrapper">
+                            <select id="chat-model-select" class="glass-input chat-model-select">
+                                <option value="">选择模型...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <button id="clear-chat-btn" class="btn-glass btn-glass-dark btn-sm">
+                            <i class="fas fa-trash"></i> 清空
+                        </button>
+                        <button id="back-to-models-btn" class="btn-glass btn-glass-dark btn-sm">
+                            <i class="fas fa-arrow-left"></i> 返回
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 聊天消息容器 -->
+                <div id="chat-messages-container" class="chat-messages-container">
+                    <div class="chat-welcome">
+                        <div class="chat-welcome-icon"><i class="fas fa-robot"></i></div>
+                        <h3>开始对话</h3>
+                        <p>选择一个模型，然后发送消息开始对话</p>
+                    </div>
+                </div>
+
+                <!-- 聊天输入区域 -->
+                <div class="chat-input-area">
+                    <textarea id="chat-input" class="glass-input chat-input" 
+                        placeholder="输入消息... (Ctrl+Enter 发送)" rows="3"></textarea>
+                    <button id="chat-send-btn" class="btn-glass btn-glass-primary chat-send-btn">
+                        <i class="fas fa-paper-plane"></i> 发送
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- 底部操作按钮组 -->
+    <div class="bottom-action-bar" id="bottom-action-bar">
+        <button id="quick-query-btn" class="btn-glass btn-glass-primary">
+            <i class="fas fa-search"></i> 快速查询
+        </button>
+        <button id="quick-test-btn" class="btn-glass btn-glass-secondary">
+            <i class="fas fa-paper-plane"></i> 快速测试
+        </button>
+        <button id="refresh-btn" class="btn-glass btn-glass-secondary">
+            <i class="fas fa-sync-alt"></i> 刷新页面
+        </button>
+    </div>
+
+    <!-- 弹窗消息提示容器 -->
+    <div id="toast-container" class="toast-container-glass"></div>
+</body>
+
+</html>

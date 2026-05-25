@@ -85,7 +85,6 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	}
 
 	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-
 	capture := &responseCapture{ResponseWriter: w, statusCode: 200}
 	module.TTSHandler(capture, r)
 

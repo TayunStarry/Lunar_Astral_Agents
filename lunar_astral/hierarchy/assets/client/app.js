@@ -172,6 +172,7 @@ class LunarCoreApp {
             case 'context':
                 if (message.data.type === 'response' || message.data.type === 'active') {
                     const content = message.data.content || '';
+                    console.log('content', content);
                     const audioBase64 = await TTS.generateAndPlay(content);
                     await this.handleAssistantMessage(content, undefined, audioBase64);
                 }
@@ -357,7 +358,7 @@ class LunarCoreApp {
         if (this.errorToast) {
             this.errorToast.textContent = message;
             this.errorToast.classList.add('visible');
-            setTimeout(() => {  this.errorToast?.classList.remove('visible'); }, 3000);
+            setTimeout(() => { this.errorToast?.classList.remove('visible'); }, 3000);
         }
     }
 

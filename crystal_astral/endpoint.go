@@ -28,4 +28,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/capture/region", Handler: screenshot.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
 	{Path: "/capture/displays", Handler: screenshot.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
 	{Path: "/resize", Handler: screenshot.HandleResizeImage, Method: "POST", Description: "图片缩放"},
+	{Path: "/api/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
+	{Path: "/api/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
 }
