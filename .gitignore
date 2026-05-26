@@ -67,4 +67,4 @@ Thumbs.db
 *.crt
 .env
 .env.*
-
+yara_flow
