@@ -68,5 +68,3 @@ Thumbs.db
 .env
 .env.*
 
-## 本地预置工具例外
-!local_data/**/*.exe

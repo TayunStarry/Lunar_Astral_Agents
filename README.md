@@ -1,347 +1,605 @@
-# 星月智能 - 本地部署桌面端智能体
+# 星月智能（Lunar Astral Agents）
 
-> 🌙 **星月智能**是一套基于 Go + TypeScript 构建的本地部署桌面端智能体系统，包含两位已实现的拟人化智能体——**月华**与**琉璃**，以及规划中的**蔷薇**，为用户提供自然语言交互、图像生成、文件管理等丰富功能。
+基于 **Go + TypeScript + C/C++** 的纯本地化桌面 AI 智能体平台，集成文本推理、图像生成、语音识别、语音合成等功能，采用纯客户端部署方案，无需任何 Python 环境。
 
-## 📁 项目结构
+---
+
+## 目录
+
+- [项目结构](#项目结构)
+- [环境要求](#环境要求)
+- [编译流程](#编译流程)
+- [系统架构](#系统架构)
+- [子系统导航](#子系统导航)
+- [常见问题](#常见问题)
+
+---
+
+## 项目结构
 
 ```
 Lunar_Astral_Agents/
-├── lunar_astral/          # 星图-月华 - 核心智能体
-│   ├── server/          # HTTP服务模块
-│   ├── model/           # 模型管理模块
-│   ├── adapters/        # JavaScript运行时环境（goja）与适配器函数
-│   ├── hierarchy/       # 前端资源（含agentSystem.js）
-│   ├── server_side/     # TypeScript服务端逻辑
-│   ├── control/         # 流程控制模块（延迟/限流/计划）
-│   └── release/         # 进程管理模块（端口释放/进程终止）
-├── crystal_astral/       # 星图-琉璃 - 扩展智能体
-│   └── assets/          # 前端资源
-├── subsystem/            # 通用子系统
-│   ├── storage/         # 数据存储子系统（含module/server双架构）
-│   ├── config/          # 配置管理子系统
-│   ├── browser/         # 浏览器集成子系统
-│   ├── screenshot/      # 截图子系统
-│   ├── LunarTick/       # 编程语言解释器
-│   ├── project_archiving/# 项目归档子系统
-│   ├── webp/            # WebP图像处理
-│   ├── bridge_adapter/  # 桥接适配器
-│   └── proxy/           # 代理子系统
-└── local_data/          # 本地数据目录
-    ├── models/          # AI模型文件
-    ├── package/         # 扩展包
-    └── audios/          # 音频资源
+│
+├── README.md                           ← 项目主文档（本文件）
+├── image/                              ← 项目图片资源目录
+│   ├── 月华-主页面.webp                ← 月华系统主界面截图
+│   ├── 月华-主界面-手机端.webp         ← 月华系统移动端界面
+│   ├── 月华-聊天记录.webp              ← 月华系统聊天记录界面
+│   ├── 星图-月华-人设图-1.webp         ← 月华角色人设图
+│   ├── 琉璃-主页面.webp                ← 琉璃系统主界面截图
+│   ├── 琉璃-参数管理-配置预览.webp     ← 琉璃配置预览界面
+│   ├── 琉璃-图像生成-参数配置.webp     ← 琉璃图像生成参数配置
+│   ├── 琉璃-图像生成-图片预览.webp     ← 琉璃图像生成预览
+│   ├── 琉璃-截图标注.webp              ← 琉璃截图标注界面
+│   ├── 琉璃-数据管理-主页面.webp       ← 琉璃数据管理界面
+│   ├── 琉璃-数据管理-配置说明.webp     ← 琉璃数据配置说明
+│   ├── 琉璃-文件管理-主页面.webp       ← 琉璃文件管理界面
+│   ├── 琉璃-文件管理-文本编辑.webp     ← 琉璃文本编辑界面
+│   ├── 琉璃-消息渲染.webp              ← 琉璃消息渲染界面
+│   ├── 星图-琉璃-人设图-0.webp         ← 琉璃角色人设图
+│   ├── 多媒体预览-图片0.webp           ← 多媒体图片预览
+│   ├── 多媒体预览-图片1.webp           ← 多媒体图片预览
+│   ├── 多媒体预览-视频.webp            ← 多媒体视频预览
+│   ├── 独立模块-语音合成-0.webp        ← 语音合成独立界面
+│   ├── 独立模块-语音合成-1.webp        ← 语音合成独立界面
+│   ├── 独立模块-语音识别-0.webp        ← 语音识别独立界面
+│   ├── 独立模块-语音识别-1.webp        ← 语音识别独立界面
+│   └── 旧版宣传图.jpg                  ← 旧版宣传图片
+│
+├── lunar_astral/                       ← 核心系统：星图·月华
+│   ├── README.md                       ← 月华系统文档
+│   ├── main.go                         ← 程序入口
+│   ├── go.mod                          ← Go 模块定义
+│   ├── build.ps1                       ← 编译脚本
+│   ├── icon.ico                        ← 应用图标
+│   ├── package.json                    ← Node.js 前端构建配置
+│   ├── rollup.config.js                ← 前端打包配置
+│   ├── tsconfig.json                   ← TypeScript 配置
+│   ├── removeExport.cjs                ← 构建后处理脚本
+│   ├── adapters/                       ← Go↔JS 适配器层（CGO 桥接）
+│   │   ├── type.go                     ← 类型定义
+│   │   ├── create.go                   ← JS 运行时创建
+│   │   ├── database.go                 ← 数据库适配
+│   │   ├── file.go                     ← 文件系统适配
+│   │   ├── message.go                  ← 消息处理适配
+│   │   ├── network.go                  ← 网络请求适配
+│   │   └── vision.go                   ← 视觉处理适配
+│   ├── model/                          ← 模型服务层
+│   │   ├── type.go                     ← 模型类型定义
+│   │   ├── core.go                     ← 核心模型逻辑
+│   │   ├── variable.go                 ← 模型变量
+│   │   ├── llama_proxy/                ← llama.cpp 代理
+│   │   │   └── proxy.go                ← 代理核心实现
+│   │   └── tts/                        ← TTS 语音合成引擎
+│   │       ├── type.go                 ← TTS 类型定义
+│   │       ├── entry.go                ← TTS 入口
+│   │       ├── cache.go                ← 音频缓存
+│   │       ├── capture.go              ← 音频捕获
+│   │       ├── variable.go             ← TTS 变量
+│   │       ├── wrapper.go              ← TTS 封装
+│   │       └── writer.go               ← 音频写入
+│   ├── server/                         ← HTTP 服务器层
+│   │   ├── type.go                     ← 服务器类型定义
+│   │   ├── create.go                   ← 服务器创建与启动
+│   │   ├── manage.go                   ← 服务器管理
+│   │   ├── variable.go                 ← 端点与变量
+│   │   └── handlers/                   ← HTTP 请求处理器
+│   │       ├── type.go                 ← 处理器类型
+│   │       ├── generate.go             ← 图像生成处理
+│   │       ├── message.go              ← 消息处理
+│   │       ├── proxy.go                ← 代理转发处理
+│   │       └── video.go                ← 视频处理
+│   ├── release/                        ← 进程/端口管理
+│   │   ├── execute.go                  ← 命令执行
+│   │   ├── kill.go                     ← 进程终止
+│   │   ├── network_status.go           ← 网络状态监控
+│   │   ├── processes.go                ← 进程列表
+│   │   └── query.go                    ← 查询功能
+│   ├── hierarchy/                      ← 前端资源与脚本
+│   │   ├── embedded.go                 ← Go embed 资源嵌入
+│   │   ├── image/                      ← 图像生成模块
+│   │   │   ├── generate/               ← 图像生成
+│   │   │   │   ├── generate.go         ← 生成逻辑
+│   │   │   │   └── type.go             ← 生成类型
+│   │   │   └── video.go                ← 视频工具
+│   │   └── assets/                     ← 前端资源
+│   │       ├── agentSystem.js          ← 智能体系统核心 JS
+│   │       ├── prompts/                ← AI 提示词模板
+│   │       │   ├── chatRole.md         ← 聊天角色设定
+│   │       │   ├── descriptionRole.md  ← 描述角色设定
+│   │       │   ├── emotionManager.md   ← 情绪管理设定
+│   │       │   ├── imagePrompt.md      ← 图像生成提示
+│   │       │   ├── painterRole.md      ← 画师角色设定
+│   │       │   ├── queryKeywords.md    ← 关键词查询
+│   │       │   ├── recorderRole.md     ← 记录角色设定
+│   │       │   ├── selfAppearance.md   ← 角色外观设定
+│   │       │   └── summaryRole.md      ← 摘要角色设定
+│   │       └── client/                 ← 前端客户端
+│   │           ├── index.html          ← 主页面
+│   │           ├── app.js              ← 主应用逻辑
+│   │           ├── chat.js             ← 聊天模块
+│   │           ├── fetch.js            ← 网络请求
+│   │           ├── file.js             ← 文件处理
+│   │           ├── live2d.js           ← Live2D 角色渲染
+│   │           ├── socket.js           ← WebSocket 通信
+│   │           ├── style.css           ← 样式表
+│   │           ├── tts.js              ← 语音合成前端
+│   │           ├── util.js             ← 工具函数
+│   │           └── favicon.ico         ← 网站图标
+│   ├── websocket/                      ← WebSocket 通信层
+│   │   ├── type.go                     ← WebSocket 类型
+│   │   ├── variable.go                 ← WebSocket 变量
+│   │   └── websocket.go                ← WebSocket 核心
+│   └── model/                          ←（同上，模型服务层）
+│
+├── crystal_astral/                     ← 扩展系统：星图·琉璃
+│   ├── README.md                       ← 琉璃系统文档
+│   ├── main.go                         ← 程序入口
+│   ├── go.mod                          ← Go 模块定义
+│   ├── create.go                       ← 服务器创建
+│   ├── embedded.go                     ← 资源嵌入
+│   ├── endpoint.go                     ← API 端点定义
+│   ├── handler.go                      ← 请求处理
+│   ├── type.go                         ← 类型定义
+│   ├── build.ps1                       ← 编译脚本
+│   ├── icon.ico                        ← 应用图标
+│   └── assets/                         ← 前端资源
+│       ├── index.html                  ← 主页面
+│       ├── script.js                   ← 应用逻辑
+│       ├── style.css                   ← 样式表
+│       └── favicon.ico                 ← 网站图标
+│
+├── subsystem/                          ← 可复用子系统模块
+│   ├── config/                         ← 子系统：配置管理
+│   │   ├── README.md                   ← 配置模块文档
+│   │   ├── go.mod                      ← 模块定义
+│   │   ├── init.go                     ← 配置初始化入口
+│   │   ├── allow.go                    ← 功能开关
+│   │   ├── engine.go                   ← 外部引擎配置
+│   │   ├── image.go                    ← 图像参数
+│   │   ├── model.go                    ← 模型路径
+│   │   ├── path.go                     ← 路径配置
+│   │   ├── port.go                     ← 端口配置
+│   │   ├── system.go                   ← 运行时状态
+│   │   └── webview.go                  ← WebView 窗口配置
+│   │
+│   ├── browser/                        ← 子系统：网页前端启动
+│   │   ├── README.md                   ← 浏览器模块文档
+│   │   ├── go.mod                      ← 模块定义
+│   │   ├── execute.go                  ← IP 发现与启动
+│   │   ├── type.go                     ← 类型与状态
+│   │   └── webView.go                  ← WebView 窗口管理
+│   │
+│   ├── storage/                        ← 子系统：文件管理
+│   │   ├── README.md                   ← 存储模块文档
+│   │   ├── go.mod                      ← 模块定义
+│   │   ├── module/                     ← 核心逻辑层
+│   │   │   ├── type.go                 ← 数据结构
+│   │   │   ├── save.go                 ← 文件保存
+│   │   │   ├── read.go                 ← 文件读取
+│   │   │   ├── delete.go               ← 文件删除
+│   │   │   ├── download.go             ← 文件下载
+│   │   │   ├── filelist.go             ← 文件列表
+│   │   │   ├── archive.go              ← ZIP 压缩/解压
+│   │   │   ├── background.go           ← 随机背景图
+│   │   │   └── database.go             ← SQLite 数据库
+│   │   └── server/                     ← HTTP 服务层
+│   │       ├── save.go                 ← 保存接口
+│   │       ├── read.go                 ← 读取接口
+│   │       ├── delete.go               ← 删除接口
+│   │       ├── download.go             ← 下载接口
+│   │       ├── filelist.go             ← 文件列表接口
+│   │       ├── archive.go              ← 归档接口
+│   │       ├── background.go           ← 背景图接口
+│   │       └── database.go             ← 数据库接口
+│   │
+│   ├── screenshot/                     ← 子系统：屏幕截图
+│   │   ├── README.md                   ← 截图模块文档
+│   │   ├── go.mod                      ← 模块定义
+│   │   ├── type.go                     ← 类型定义
+│   │   ├── module.go                   ← 核心逻辑
+│   │   └── server.go                   ← HTTP 服务
+│   │
+│   ├── qwen3_tts_lunar/               ← 独立系统：语音合成
+│   │   ├── README.md                   ← TTS 模块文档
+│   │   ├── main.go                     ← 程序入口
+│   │   ├── go.mod                      ← 模块定义
+│   │   ├── server.go                   ← HTTP 服务
+│   │   ├── build.ps1                   ← 编译脚本
+│   │   ├── build_cpp.ps1               ← C++ 编译脚本
+│   │   ├── build_ggml.ps1              ← GGML 编译脚本
+│   │   ├── icon.ico                    ← 应用图标
+│   │   ├── module/                     ← Go 逻辑层
+│   │   │   ├── generate.go             ← 语音生成
+│   │   │   ├── variable.go             ← 变量定义
+│   │   │   └── stream.go               ← 流式处理
+│   │   ├── client/                     ← 前端界面
+│   │   │   ├── index.html              ← 主页面
+│   │   │   ├── app.js                  ← 应用逻辑
+│   │   │   ├── style.css               ← 样式表
+│   │   │   ├── picture.webp            ← 背景图
+│   │   │   └── favicon.ico             ← 图标
+│   │   └── cpp/                        ← C++ 推理引擎
+│   │       ├── CMakeLists.txt          ← CMake 构建
+│   │       ├── src/                    ← 引擎源码
+│   │       │   ├── qwen3_tts.cpp/h     ← TTS 主引擎
+│   │       │   ├── qwen3tts_c_api.cpp/h ← C API 接口
+│   │       │   ├── tts_transformer.cpp/h ← Transformer 层
+│   │       │   ├── audio_tokenizer_*.cpp/h ← 音频分词器
+│   │       │   ├── gguf_loader.cpp/h   ← GGUF 模型加载
+│   │       │   ├── text_tokenizer.cpp/h ← 文本分词
+│   │       │   ├── main.cpp            ← 独立可执行文件入口
+│   │       │   ├── coreml_*.cpp/h      ← Apple CoreML 加速
+│   │       │   └── qwen3tts.def        ← Windows DLL 导出
+│   │       └── ggml/                   ← GGML 张量计算库
+│   │
+│   └── qwen_asr_lunar/                ← 独立系统：语音识别
+│       ├── README.md                   ← ASR 模块文档
+│       ├── main.go                     ← 程序入口
+│       ├── go.mod                      ← 模块定义
+│       ├── asr.go                      ← Go↔C 桥接层
+│       ├── handler.go                  ← HTTP 处理
+│       ├── build.ps1                   ← 编译脚本
+│       ├── icon.ico                    ← 应用图标
+│       ├── static/                     ← 前端界面
+│       │   ├── index.html              ← 主页面
+│       │   ├── app.js                  ← 应用逻辑
+│       │   ├── style.css               ← 样式表
+│       │   ├── picture.webp            ← 背景图
+│       │   └── favicon.ico             ← 图标
+│       ├── openblas/                   ← OpenBLAS 线性代数库
+│       │   └── include/                ← C 头文件
+│       └── C 推理源码                   ← 纯 C 推理引擎
+│           ├── qwen_asr.h/c            ← 主入口与管线
+│           ├── qwen_asr_audio.h/c      ← 音频预处理
+│           ├── qwen_asr_encoder.c      ← 编码器实现
+│           ├── qwen_asr_decoder.c      ← 解码器实现
+│           ├── qwen_asr_tokenizer.h/c  ← GPT-2 BPE 分词
+│           ├── qwen_asr_safetensors.h/c ← SafeTensors 加载
+│           ├── qwen_asr_kernels.h/c    ← 数学核心分发
+│           ├── qwen_asr_kernels_avx.c  ← x86 SIMD 优化
+│           ├── qwen_asr_kernels_neon.c ← ARM NEON 优化
+│           └── qwen_asr_kernels_generic.c ← 通用实现
+│
+└── .trae/                              ← 项目规则配置
+    └── rules/                          ← 代码规范
+        └── git-commit-message.md       ← Git 提交规范
 ```
 
-**子系统文档：**
+### 层级关系说明
 
-- [数据存储子系统](docs/subsystem/storage.md)
-- [配置管理子系统](docs/subsystem/config.md)
-- [浏览器集成子系统](docs/subsystem/browser.md)
-- [截图子系统](docs/subsystem/screenshot.md)
-- [编程语言解释器](docs/subsystem/LunarTick.md)
-- [项目归档子系统](docs/subsystem/project_archiving.md)
-- [WebP图像处理](docs/subsystem/webp.md)
-- [桥接适配器](docs/subsystem/bridge_adapter.md)
-- [代理子系统](docs/subsystem/proxy.md)
-- [扩展包](docs/package/index.md)
-
----
-
-## 🎭 智能体介绍
-
-### 星图·月华 (lunar_astral) 
-
-> 俏皮可爱的邻家少女，隶属于星月智能的核心智能体。她拥有温暖耐心的性格，擅长处理复杂任务，是您最可靠的AI伙伴。月华是琉璃的姐姐。详细信息请参阅[星图·月华 文档](docs/lunar_astral.md)。
-
-**核心能力**：
-
-- 🧠 自然语言对话（支持多种LLM模型）
-- 🎨 AI图像生成（Stable Diffusion）
-- 🔊 TTS语音合成（Qwen3-TTS）
-- 📁 文件管理与数据库操作
-- 🎬 视频关键帧提取
-
-### 星图·琉璃 (crystal_astral) 
-
-> 优雅灵动的扩展智能体，专注于应用管理与系统增强。她是月华的妹妹，为整个系统提供扩展支持能力。详细信息请参阅[星图·琉璃 文档](docs/crystal_astral.md)。
-
-**核心能力**：
-
-- 🖼️ 动态背景管理
-- 🚀 应用快捷启动
-- 📷 屏幕截图功能
-- 📐 图片缩放处理
-
-### 蔷薇 - 规划中
-
-> 星月智能的新姐妹，目前处于规划阶段。她将整合鉴权、代理和多应用适配等综合职能，成为系统的安全守护者和网络桥梁。详细规划请参阅[星图·蔷薇 文档](docs/reserved_agents.md)。
-
-**预计核心能力**：
-
-- 🔐 用户身份认证与授权管理
-- 🌐 统一API网关与请求代理
-- 🔄 多应用适配与协议转换
+```
+星月智能平台 (Lunar Astral Agents)
+│
+├── 核心系统: 星图·月华 (lunar_astral)
+│   ├── 依赖: config, browser, storage, screenshot, qwen3_tts_lunar
+│   ├── 功能: AI 对话、Live2D 角色、TTS 语音、图像生成
+│   └── 入口: LunarAgent.exe
+│
+├── 扩展系统: 星图·琉璃 (crystal_astral)
+│   ├── 依赖: config, browser, storage, screenshot
+│   ├── 功能: 文件管理、数据库管理、截图标注、AI 代理
+│   └── 入口: CrystalAstral.exe
+│
+├── 独立系统: 语音合成 (qwen3_tts_lunar)
+│   ├── 依赖: C++ GGML 引擎
+│   ├── 功能: Qwen3-TTS 文本转语音
+│   └── 入口: Qwen3_TTS_Lunar.exe
+│
+├── 独立系统: 语音识别 (qwen_asr_lunar)
+│   ├── 依赖: 纯 C 引擎 + OpenBLAS
+│   ├── 功能: Qwen3-ASR 语音转文本
+│   └── 入口: Qwen_ASR_Lunar.exe
+│
+└── 公共子系统 (subsystem/)
+    ├── config      → 全局配置中枢
+    ├── browser     → WebView 窗口 + 本地 IP 发现
+    ├── storage     → 文件存储 + SQLite 数据库
+    └── screenshot  → 屏幕截图 + 图片缩放
+```
 
 ---
 
-## 🚀 快速开始
+## 环境要求
 
-### 环境要求
+### 操作系统支持
 
-#### 操作系统支持
-- **操作系统**: Windows 10/11 (64位)
+| 系统 | 版本 | 架构 | 状态 |
+|------|------|------|------|
+| Windows 10 | 21H2 及以上 | x64 | ✅ 支持 |
+| Windows 11 | 所有版本 | x64 | ✅ 支持 |
+| Windows 10/11 | 32 位 | x86 | ❌ 不支持 |
+| Linux | 任意版本 | 任意 | ❌ 不支持 |
+| macOS | 任意版本 | 任意 | ❌ 不支持 |
 
-#### 开发环境
-- **Go版本**: >= 1.24
-- **Node.js**: >= 20.x (用于TypeScript编译)
+### 开发环境
 
-#### 必须安装的运行时依赖
-- [CUDA](https://developer.nvidia.com/cuda-downloads) 12 或 13 版本
-- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-- [FFmpeg](https://ffmpeg.org/download.html)
-- [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
+| 工具 | 最低版本 | 用途 | 安装指南 |
+|------|---------|------|---------|
+| Go | ≥ 1.25.0 | Go 后端编译 | [go.dev/dl](https://go.dev/dl/) |
+| Node.js | ≥ 20.x | TypeScript 前端编译 | [nodejs.org](https://nodejs.org/en/download/) |
+| GCC (MinGW-w64) | ≥ 8.1.0 | C/C++ 编译（ASR/TTS） | [mingw-w64.org](https://www.mingw.org/mingw64) |
+| CMake | ≥ 3.29.0 | C++ 项目构建（TTS） | [cmake.org](https://cmake.org/download/) |
 
-### 运行时配置要求
-
-#### TTS语音合成配置
-- **Qwen TTS**（选择性启用）：GPU推理，需4GB显存
-- **MOSS TTS**（选择性启用）：CPU推理，需2GB内存
-
-#### 图像生成配置
-- **图片生成功能**（选择性启用）：GPU推理，需8GB及以上显存
-
-#### LLM模型配置
-- **禁用本地LLM推理时**：内存1GB以上
-  - ⚠️ 配置说明：请在配置文件中正确设置云端模型的API地址与对应的API密钥
-- **启用本地LLM推理时**：
-  - 推荐配置：内存32GB以上，显存12GB以上
-  - 最低理想配置：内存16GB，显存8GB
-
-### 安装步骤
+#### 验证方法
 
 ```powershell
-# 1. 克隆项目
-git clone https://github.com/LunarAstral/Lunar_Astral_Agents.git
-cd Lunar_Astral_Agents
+# Go 版本验证
+go version
+# 期望输出: go version go1.25.x windows/amd64
 
-# 2. 构建月华智能体
-cd lunar_astral
-.\build.ps1
+# Node.js 版本验证
+node --version
+# 期望输出: v20.x.x 或更高
 
-# 3. 构建星图·琉璃
-cd ../crystal_astral
-.\build.ps1
+# GCC 版本验证
+gcc --version
+# 期望输出: gcc (MinGW-W64 ...) 8.1.0 或更高
 
-# 4. 返回根目录运行
-cd ..
-.\build.ps1
+# CMake 版本验证
+cmake --version
+# 期望输出: cmake version 3.29.0 或更高
 ```
 
-### 运行方式
+### 运行时依赖
+
+| 依赖项 | 版本要求 | 用途 | 下载链接 |
+|--------|---------|------|---------|
+| CUDA Toolkit | 12.x 或 13.x | GPU 加速推理 | [developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads) |
+| NVIDIA CUDA 驱动 | 与 CUDA 版本匹配 | GPU 驱动支持 | [developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads) |
+| WebView2 Runtime | ≥ 109.0 | 桌面嵌入式浏览器 | [developer.microsoft.com/en-us/microsoft-edge/webview2/](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) |
+| FFmpeg | ≥ 5.0.0 | 音频/视频格式转换 | [ffmpeg.org/download.html](https://ffmpeg.org/download.html) |
+| Vulkan SDK | ≥ 1.3 | GPU 推理加速 | [lunarg.com/sdk-downloads/vulkan-sdk](https://www.lunarg.com/sdk-downloads/vulkan-sdk) |
+
+#### 验证方法
 
 ```powershell
-# 启动星图·月华核心服务
-.\lunar_astral\lunar_astral.exe
+# CUDA 验证
+nvidia-smi
+# 期望输出: 显示 CUDA 版本 12.x 或 13.x
 
-# 启动星图·琉璃扩展服务（可选）
-.\crystal_astral\crystal_astral.exe
+# WebView2 验证
+reg query "HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" /v pv 2>nul
+# 有输出表示已安装
+
+# FFmpeg 验证
+ffmpeg -version
+# 期望输出: ffmpeg version 5.0.0 或更高
+
+# Vulkan 验证
+vulkaninfo --summary
+# 期望输出: 显示 Vulkan Instance Version 1.3 或更高
 ```
+
+> **注意**：FFmpeg 需要添加到系统环境变量 `PATH` 中，或在 `lunar_config.json` 中配置自定义路径。
 
 ---
 
-## 🏗️ 系统架构
+## 编译流程
 
-![架构图](image/架构图-整体架构.webp)
+### 前置准备
 
----
+1. 确保已安装所有[开发环境](#开发环境)中的工具
+2. 确保已安装所有[运行时依赖](#运行时依赖)
+3. 将本仓库克隆到本地（避免路径中包含中文或空格）
 
-## 🤝 贡献指南
+### 编译步骤
 
-欢迎贡献代码！请遵循以下规范：
-
-### 代码风格规范
-
-#### Go 代码规范
-
-**文件命名**
-- 使用小写字母，单词之间用下划线分隔：`main.go`, `create.go`, `server_side.go`
-- 类型定义文件：`type.go`
-- 工具函数文件：`utils.go`, `helper.go`
-
-**命名约定**
-- **包名**：全部小写，无下划线，简洁且具描述性
-- **函数名**：帕斯卡命名法（PascalCase），动词开头
-  - 示例：`StartServer()`, `InitializeComponents()`, `GetLocalIP()`
-- **变量名**：驼峰命名法（camelCase）
-  - 示例：`server`, `config`, `httpMux`
-- **常量**：全部大写，单词之间用下划线分隔
-  - 示例：`MAX_ATTEMPTS`, `DEFAULT_PORT`
-- **接口名**：以 `er` 结尾
-  - 示例：`Handler`, `Reader`, `Writer`
-
-**代码格式**
-- 使用 `go fmt` 自动格式化
-- 每行不超过 120 字符
-- 使用 `gofmt` 检查格式
-- 注释使用 `//`，包级注释使用 `/* */`
-
-**最佳实践**
-- 错误处理：始终检查并正确处理错误
-- 日志记录：使用 `log.Printf()` 进行日志输出
-- 避免全局变量：优先使用参数传递
-- 函数单一职责：每个函数只做一件事
-
-#### TypeScript/JavaScript 代码规范
-
-**文件命名**
-- 使用小写字母，单词之间用下划线分隔：`index.ts`, `agent.ts`, `config.ts`
-- 工具函数文件：`utils.ts`, `helper.ts`
-
-**命名约定**
-- **类名**：帕斯卡命名法（PascalCase）
-  - 示例：`LunarAgent`, `AgentDefine`, `ChatCache`
-- **接口名**：帕斯卡命名法（PascalCase），以 `I` 前缀（可选）
-  - 示例：`Config`, `ProxyFetchConfig`, `TaskStatus`
-- **函数/方法名**：驼峰命名法（camelCase）
-  - 示例：`createChatMessage()`, `writeMessage()`, `pullExternalMessages()`
-- **变量/属性名**：驼峰命名法（camelCase）
-  - 示例：`speakWeight`, `unreadContext`, `finalResponse`
-- **常量**：全部大写，单词之间用下划线分隔
-  - 示例：`MAX_RETRY`, `DEFAULT_TIMEOUT`
-
-**代码格式**
-- 使用 `prettier` 自动格式化
-- 每行不超过 120 字符
-- 使用 TypeScript 严格模式
-- 接口和类型定义使用 JSDoc 风格注释
-
-**最佳实践**
-- 使用 `async/await` 处理异步操作
-- 使用 `interface` 定义数据结构
-- 合理使用 TypeScript 类型推断
-- 避免 `any` 类型，使用更具体的类型
-
-#### HTML/CSS 代码规范
-
-**文件命名**
-- 使用小写字母，单词之间用下划线分隔：`index.html`, `style.css`, `script.js`
-
-**命名约定**
-- **CSS 类名**：使用连字符分隔（kebab-case）
-  - 示例：`main-container`, `chat-message`, `btn-primary`
-- **HTML ID**：使用驼峰命名法或连字符分隔
-  - 示例：`chatContainer`, `userInput`
-
-### 提交信息规范
-
-遵循 [Conventional Commits](https://www.conventionalcommits.org/) 格式：
-
-```
-<类型>(<范围>): <描述>
-
-<正文>
-
-<页脚>
-```
-
-**类型说明**
-
-| 类型 | 说明 |
-|------|------|
-| `feat` | 新增功能 |
-| `fix` | 修复 bug |
-| `docs` | 文档更新 |
-| `style` | 代码风格（不影响代码运行的变动） |
-| `refactor` | 代码重构（既不新增功能也不修复 bug） |
-| `test` | 测试相关 |
-| `chore` | 构建/依赖/工具更新 |
-
-**示例**
-
-```
-feat(server): 添加 WebSocket 消息推送功能
-
-实现了实时消息推送机制，支持客户端与服务端的双向通信。
-
-- 添加 WebSocket 服务端实现
-- 实现消息广播功能
-- 添加连接状态管理
-```
-
-### PR 流程
-
-1. **创建 Issue**：先在 GitHub/Gitee 上创建 Issue，描述要解决的问题或实现的功能
-2. **讨论方案**：与维护者和其他贡献者讨论实现方案
-3. **分支开发**：从 `main` 分支创建新分支，命名格式：`feature/<功能名>` 或 `fix/<bug描述>`
-4. **提交代码**：遵循代码风格规范和提交信息规范
-5. **创建 PR**：提交 Pull Request，关联相关 Issue
-6. **代码审查**：等待维护者审查，根据反馈进行修改
-7. **合并分支**：通过审查后，由维护者合并到主分支
-
-### 项目结构规范
-
-```
-├── module_name/           # 模块目录（小写，下划线分隔）
-│   ├── sub_module/        # 子模块目录
-│   ├── main.go            # 主入口文件
-│   ├── type.go            # 类型定义
-│   ├── create.go          # 创建/初始化相关
-│   └── handler.go         # 处理函数
-```
-
-### 构建流程
-
-本项目使用 PowerShell 脚本进行构建：
+#### 第一步：编译前端资源（可选，仅开发模式需要）
 
 ```powershell
-# 完整构建
-.\build.ps1
+# 进入月华前端目录
+cd d:\Lunar_Astral_Agents\lunar_astral
 
-# 指定目标平台
-.\build.ps1 -TargetOS linux -TargetArch arm64
+# 安装 Node.js 依赖
+npm install
+
+# 编译 TypeScript → JavaScript
+npx tsc
+
+# 打包前端资源
+npx rollup -c
 ```
 
-**环境要求**
-- Go >= 1.24
-- Node.js >= 20.x
-- GCC（CGO 支持）
-- rsrc 工具（图标嵌入）
+> 生产模式使用 `embed` 嵌入已编译的前端资源，无需此步骤。
+
+#### 第二步：编译 C++ 推理引擎（TTS）
+
+```powershell
+# 进入 TTS C++ 源码目录
+cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
+
+# 编译 GGML 库
+.\build_ggml.ps1
+
+# 编译 TTS 引擎 + Go 集成
+.\build_cpp.ps1
+```
+
+#### 第三步：编译各子系统
+
+```powershell
+cd d:\Lunar_Astral_Agents
+
+# 编译语音识别系统
+cd subsystem\qwen_asr_lunar
+.\build.ps1
+
+# 编译语音合成系统
+cd ..\qwen3_tts_lunar
+.\build.ps1
+
+# 编译核心系统——月华
+cd ..\..\lunar_astral
+.\build.ps1
+
+# 编译扩展系统——琉璃
+cd ..\crystal_astral
+.\build.ps1
+```
+
+### 编译输出
+
+所有编译产物默认输出到项目根目录：
+
+| 文件 | 所属系统 | 说明 |
+|------|---------|------|
+| `LunarAgent.exe` | 星图·月华 | AI 桌面智能体主程序 |
+| `CrystalAstral.exe` | 星图·琉璃 | 工具集扩展程序 |
+| `Qwen_ASR_Lunar.exe` | 语音识别 | 独立语音识别程序 |
+| `Qwen3_TTS_Lunar.exe` | 语音合成 | 独立语音合成程序 |
+
+### 编译参数说明
+
+| 参数 | 适用模块 | 说明 |
+|------|---------|------|
+| `CGO_ENABLED=1` | ASR | 启用 CGO（调用 C 推理引擎） |
+| `GOARCH=amd64` | 全部 | 指定目标架构为 64 位 |
+| `-ldflags="-s -w"` | 全部 | 去除调试符号和 DWARF 信息 |
+| `-O3 -march=native` | ASR | GCC 最高优化 + 本机指令集 |
+| `-ffast-math` | ASR | 快速数学优化 |
+| `-funroll-loops` | ASR | 循环展开优化 |
+| `-DUSE_BLAS` | ASR（可选） | 启用 OpenBLAS 加速 |
+
+### 编译验证
+
+```powershell
+# 检查编译产物是否存在
+Test-Path d:\Lunar_Astral_Agents\LunarAgent.exe   # 应返回 True
+Test-Path d:\Lunar_Astral_Agents\CrystalAstral.exe # 应返回 True
+Test-Path d:\Lunar_Astral_Agents\Qwen_ASR_Lunar.exe # 应返回 True
+
+# 检查文件大小（应大于 10MB）
+Get-Item d:\Lunar_Astral_Agents\LunarAgent.exe | Select-Object Length
+```
+
+### 常见编译错误
+
+| 错误信息 | 原因 | 解决方案 |
+|---------|------|---------|
+| `go: go.mod file indicates go 1.25, but maximum version is 1.xx` | Go 版本过低 | 升级 Go 到 1.25 或更高版本 |
+| `cannot find module for path config` | 未设置 Go workspace | 在项目根目录执行 `go work init` 并添加各个模块 |
+| `gcc: command not found` | GCC 未安装 | 安装 MinGW-w64 并确保 `gcc` 在 PATH 中 |
+| `CMake Error: Could not find cmake version 3.29` | CMake 版本过低 | 升级 CMake 到 3.29 以上 |
+| `undefined reference to cblas_sgemm` | OpenBLAS 未正确链接 | 检查 OpenBLAS 头文件和库文件路径 |
+| `CGO_ENABLED=0` 时 C 代码编译失败 | CGO 未启用 | 确保执行 `$env:CGO_ENABLED=1` |
 
 ---
 
-## 📄 许可证
+## 系统架构
 
-本项目采用 **Lunar Astral Agents Non-Commercial License**（星月智能非商业许可证）。
+### 整体架构图
 
-### 许可证要点
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      星月智能平台                             │
+│                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐                   │
+│  │  星图·月华        │  │  星图·琉璃        │                  │
+│  │  (AI 桌面智能体)   │  │  (工具集扩展程序)  │                 │
+│  │                  │  │                  │                  │
+│  │  · AI 对话角色   │  │  · 文件管理      │                  │
+│  │  · Live2D 展示   │  │  · 数据库管理    │                  │
+│  │  · TTS 语音合成  │  │  · 截图标注      │                  │
+│  │  · 图像生成     │  │  · AI 代理转发   │                  │
+│  │  · WebSocket    │  │  · 应用加载器    │                  │
+│  └────────┬────────┘  └────────┬────────┘                   │
+│           │                    │                             │
+│           └────────┬───────────┘                             │
+│                    │                                         │
+│  ┌─────────────────┼─────────────────────────────┐          │
+│  │          公共子系统 (subsystem)                 │          │
+│  │                                                │          │
+│  │  ┌──────────┐ ┌─────────┐ ┌──────────┐        │          │
+│  │  │ config   │ │ browser │ │ storage  │        │          │
+│  │  │ 配置管理  │ │ 网页前端 │ │ 文件管理  │        │          │
+│  │  └──────────┘ └─────────┘ └──────────┘        │          │
+│  │  ┌──────────┐ ┌──────────────────┐            │          │
+│  │  │screenshot│ │ 独立 AI 引擎      │            │          │
+│  │  │屏幕截图   │ │ TTS · ASR        │            │          │
+│  │  └──────────┘ └──────────────────┘            │          │
+│  └───────────────────────────────────────────────┘          │
+│                                                              │
+│  ┌──────────────────────────────────────────────────┐      │
+│  │              外部推理引擎                          │      │
+│  │  ┌──────────────┐ ┌──────────────┐                │      │
+│  │  │ llama.cpp    │ │ stable-      │                │      │
+│  │  │ (GGUF 推理)   │ │ diffusion.cpp│               │      │
+│  │  └──────────────┘ └──────────────┘                │      │
+│  └──────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-| 权限 | 允许 | 说明 |
+### 数据流概要
+
+```
+用户输入 (前端界面)
+    │
+    ├─→ HTTP API → llm_proxy → llama-server.exe → GGUF 模型推理
+    │                                          ↓
+    │                                    推理结果返回
+    │                                          ↓
+    ├─→ JS 智能体 (goja 运行时) → 角色逻辑处理 → 生成回复
+    │                                          ↓
+    ├─→ TTS 引擎 → WAV 音频合成
+    │
+    └─→ WebSocket 推送 → 前端实时渲染 (Markdown/Mermaid/ECharts/Live2D)
+```
+
+### 技术栈总览
+
+| 层级 | 技术 | 说明 |
 |------|------|------|
-| **复制** | ✅ | 制作项目材料的授权副本和重印本 |
-| **修改** | ✅ | 创建项目源代码的修改版本 |
-| **分发** | ✅ | 分发原始项目及其修改版本 |
-| **非商业使用** | ✅ | 个人、教育和研究用途 |
-| **商业使用** | ❌ | 禁止任何盈利目的的使用 |
-
-### 重要条款
-
-1. **禁止商业使用**：未经作者书面明确许可，不得将项目用于任何商业目的或盈利活动
-2. **署名要求**：复制、修改或分发时必须保留原始版权声明和许可证条款
-3. **免责声明**：项目按"原样"提供，不提供任何形式的保证
-4. **责任限制**：作者不对因使用或无法使用本项目而产生的任何损害承担责任
-
-### 联系方式
-
-- **仓库地址**: https://gitee.com/TayunStarry/Lunar-Astral-Agents/tree/master
-- **QQ群号**: 710834920
-- **作者信息**: 钛宇-星光阁 (TayunStarry)
-
-完整许可证文本请参阅 [LICENSE](LICENSE) 文件。
+| 前端 UI | HTML5 + CSS3 + JavaScript | 嵌入式 WebView 桌面界面 |
+| AI 智能体 | TypeScript (goja 运行时) | 在 Go 进程中运行的 JS 智能体 |
+| 后端服务 | Go 1.25 | HTTP API + WebSocket + 业务逻辑 |
+| 图像生成 | stable-diffusion.cpp | 外部 SD 推理引擎 |
+| 文本推理 | llama.cpp (llama-server) | 外部 GGUF 模型推理 |
+| 语音合成 | C++ GGML 引擎 | Qwen3-TTS 模型推理 |
+| 语音识别 | 纯 C 引擎 + OpenBLAS | Qwen3-ASR 模型推理 |
+| 数据存储 | SQLite (go-sqlite3) | 本地嵌入式数据库 |
 
 ---
 
-## 🌙 关于星月智能
+## 子系统导航
 
-星月智能致力于打造本地化、私有化的AI智能体系统，让每个用户都能拥有自己的专属AI伙伴。月华、琉璃与蔷薇（规划中）三位姐妹，将陪伴您探索无限可能。
+| 子系统 | 文档链接 | 功能概要 |
+|--------|---------|---------|
+| 星图·月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心系统，含对话角色、Live2D、TTS |
+| 星图·琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统，含文件/数据库管理、截图标注 |
+| 配置管理 | [subsystem/config/README.md](subsystem/config/README.md) | 全局配置中枢，命令行参数 + JSON 双层配置 |
+| 网页前端 | [subsystem/browser/README.md](subsystem/browser/README.md) | WebView 窗口管理 + 本地 IP 自动发现 |
+| 文件管理 | [subsystem/storage/README.md](subsystem/storage/README.md) | 文件 CRUD + SQLite 数据库 + ZIP 归档 |
+| 屏幕截图 | [subsystem/screenshot/README.md](subsystem/screenshot/README.md) | 多显示器截图 + 区域截图 + 图片缩放 |
+| 语音合成 | [subsystem/qwen3_tts_lunar/README.md](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS 文本转语音引擎 |
+| 语音识别 | [subsystem/qwen_asr_lunar/README.md](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR 语音转文本引擎 |
 
-> _"在星空中寻找答案，在月光下创造美好"_ 🌙✨
+---
+
+## 常见问题
+
+### Q: 项目需要 Python 环境吗？
+
+不需要。本项目的设计理念是「零 Python 依赖」。所有 AI 模型推理均由纯 C/C++ 或 Go 实现的本地引擎完成。
+
+### Q: 可以离线使用吗？
+
+完全支持离线使用。所有模型文件均为本地 GGUF 格式，推理过程不需要网络连接。
+
+### Q: 支持哪些 GPU？
+
+通过 llama.cpp 和 stable-diffusion.cpp 支持 NVIDIA CUDA GPU。Vulkan 后端也可用于兼容的 GPU。
+
+### Q: 前端如何修改？
+
+月华系统的前端位于 `lunar_astral/hierarchy/assets/client/` 和 `lunar_astral/server_side/`，修改后需重新编译 TypeScript（`npx tsc && npx rollup -c`）。
+
+### Q: 如何添加新的 AI 模型？
+
+将 GGUF 格式的模型文件放入 `{LocalDir}/models/` 目录，并在 `lunar_config.json` 中配置模型路径即可。
+
+---
+
+## 许可证
+
+本项目仅限个人学习与研究使用，未经授权不得用于商业用途。
