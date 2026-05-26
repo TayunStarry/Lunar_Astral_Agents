@@ -7,7 +7,7 @@ import (
 	"log"
 	"lunar_astral/adapters"
 	"lunar_astral/hierarchy"
-	"lunar_astral/model/llama_proxy"
+	"lunar_astral/model/llama"
 	"lunar_astral/release"
 	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
@@ -39,7 +39,7 @@ func InitializeServer() {
 	// 注册HTTP处理器
 	registerHandlers()
 	// 启动llama.cpp代理服务器
-	llama_proxy.Init()
+	llama.Init()
 	// 定义模型目录和参考音频文件路径
 	modelDir := *config.LocalDir + "/models"
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
@@ -100,7 +100,7 @@ func shutdownServer(server *http.Server) {
 	// 关闭JavaScript运行时
 	adapters.CloseAgentContext()
 	// 关闭llama.cpp服务器
-	llama_proxy.Close()
+	llama.Close()
 	// 关闭WebSocket服务器
 	websocket.CloseWebSocketServer()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时

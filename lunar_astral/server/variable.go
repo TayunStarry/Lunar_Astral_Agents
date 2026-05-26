@@ -4,7 +4,7 @@ import (
 	"config"
 	"fmt"
 	"lunar_astral/model"
-	"lunar_astral/model/llama_proxy"
+	"lunar_astral/model/llama"
 	"lunar_astral/model/tts"
 	"lunar_astral/server/handlers"
 	"net/http"
@@ -65,7 +65,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// 视频处理相关接口
 	{Path: "/extract/keyframes", Handler: handlers.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
 	// 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法）
-	{Path: "/v1/", Handler: llama_proxy.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
+	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
 	// 代理请求接口
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 	// 消息队列相关接口

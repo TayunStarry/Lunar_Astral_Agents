@@ -68,7 +68,7 @@ Lunar_Astral_Agents/
 │   │   ├── type.go                     ← 模型类型定义
 │   │   ├── core.go                     ← 核心模型逻辑
 │   │   ├── variable.go                 ← 模型变量
-│   │   ├── llama_proxy/                ← llama.cpp 代理
+│   │   ├── llama/                ← llama.cpp 代理
 │   │   │   └── proxy.go                ← 代理核心实现
 │   │   └── tts/                        ← TTS 语音合成引擎
 │   │       ├── type.go                 ← TTS 类型定义
