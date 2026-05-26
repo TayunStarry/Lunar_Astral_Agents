@@ -91,7 +91,7 @@ lunar_astral/
 │   ├── type.go              ← 模型/任务结构体
 │   ├── core.go              ← 模型列表、端口映射、请求队列
 │   ├── variable.go          ← 并发控制变量
-│   ├── llama_proxy/         ← llama.cpp 代理
+│   ├── llama/         ← llama.cpp 代理
 │   │   └── proxy.go         ← llama-server 启动/监控/代理/云服务回退
 │   └── tts/                 ← TTS 语音合成引擎
 │       ├── entry.go         ← TTS 合成入口
@@ -148,7 +148,7 @@ main.go
   │   ├── 按 ext→MIME 注册映射
   │   ├── 创建本地数据目录
   │   ├── registerHandlers()     ← 注册所有 HTTP 路由
-  │   ├── llama_proxy.Init()     ← 启动 llama-server + 等待就绪
+  │   ├── llama.Init()     ← 启动 llama-server + 等待就绪
   │   ├── module.InitTTSEngine() ← 初始化 TTS 引擎
   │   ├── websocket.Setup...()   ← 注册 /ws 端点
   │   └── adapters.RunAgentContext()
@@ -175,7 +175,7 @@ main.go
      │                              │ 拉取上下文    调用 LLM API   │
      │                    ┌─────────▼────────┐         ┌──────────▼──────┐
      │                    │   模型代理层       │ ←────── │  llama-server  │
-     │                    │  llama_proxy      │         │  (GGUF 推理)    │
+     │                    │  llama      │         │  (GGUF 推理)    │
      │                    └─────────┬────────┘         └─────────────────┘
      │                              │
      │    WebSocket 推送            │ TTS 合成
@@ -230,7 +230,7 @@ Go↔JavaScript 双向桥接层，基于 [goja](https://github.com/dop251/goja) 
 
 **JS 智能体核心**：`agentSystem.js` 由 `server_side/` 目录下的 TypeScript 代码编译而来，包含 AI 角色管理、对话流控制、工具调用等功能。
 
-### 2. 模型代理层（model/llama_proxy/）
+### 2. 模型代理层（model/llama/）
 
 管理 `llama-server.exe` 进程的生命周期。
 
@@ -388,7 +388,7 @@ npx rollup -c                   # 打包为单文件
 1. 检查 `llama-server.exe` 文件是否存在（默认路径：`{LocalDir}/models/llama.cpp/llama-server.exe`）
 2. 确认模型文件（`models.ini`）配置正确
 3. 检查端口是否被占用（默认 36790）
-4. 查看控制台输出中的 `llama_proxy` 日志
+4. 查看控制台输出中的 `llama` 日志
 
 ### Q: 如何在浏览器中打开而非 WebView？
 

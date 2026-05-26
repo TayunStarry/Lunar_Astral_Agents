@@ -351,7 +351,8 @@ AI 模型权属归相应模型提供方所有。使用前请确认遵守对应�
 |------|------|------|
 | [llama.cpp](https://github.com/ggerganov/llama.cpp) | GGUF 模型推理引擎 | MIT |
 | [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) | 扩散模型推理 | MIT |
-| [Qwen3-ASR](https://github.com/antirez/qwen-asr) | 语音识别模型 | MIT |
+| [qwen3-tts.cpp](https://github.com/predict-woo/qwen3-tts.cpp) | 文本转语音模型 | MIT |
+| [qwen3-asr](https://github.com/antirez/qwen-asr) | 语音识别模型 | MIT |
 | [GGML](https://github.com/ggerganov/ggml) | 张量计算库 | MIT |
 | [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) | 嵌入式浏览器 | Microsoft |
 | [Live2D](https://www.live2d.com/) | 角色渲染引擎 | Live2D |

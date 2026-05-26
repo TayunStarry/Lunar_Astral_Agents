@@ -1,4 +1,4 @@
-package llama_proxy
+package llama
 
 import (
 	"bufio"
@@ -18,9 +18,12 @@ import (
 )
 
 var (
+	// serverProcess 是 llama.cpp 服务器的进程 它负责处理模型推理和生成文本
 	serverProcess *exec.Cmd
-	serverReady   = make(chan struct{}, 1)
-	readyOnce     sync.Once
+	// serverReady 是一个通道 用于通知调用方 llama.cpp 服务器已启动并准备就绪
+	serverReady = make(chan struct{}, 1)
+	// readyOnce 是一个 sync.Once 实例 用于确保 llama.cpp 服务器只启动一次
+	readyOnce sync.Once
 )
 
 // Init 初始化并启动 llama.cpp 服务器
@@ -47,24 +50,24 @@ func Init() {
 		"--reasoning", "off",
 	}
 
-	log.Printf("llama_proxy -> 正在启动 llama-server 端口: %d", *config.ModelPort)
+	log.Printf("llama -> 正在启动 llama-server 端口: %d", *config.ModelPort)
 
 	cmd := exec.Command(*config.InferEngine, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("llama_proxy[ERROR] -> 创建标准输出管道失败: %v", err)
+		log.Printf("llama[ERROR] -> 创建标准输出管道失败: %v", err)
 		return
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Printf("llama_proxy[ERROR] -> 创建标准错误管道失败: %v", err)
+		log.Printf("llama[ERROR] -> 创建标准错误管道失败: %v", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("llama_proxy[ERROR] -> 启动 llama-server 失败: %v", err)
+		log.Printf("llama[ERROR] -> 启动 llama-server 失败: %v", err)
 		return
 	}
 
@@ -77,11 +80,11 @@ func Init() {
 
 	select {
 	case <-serverReady:
-		log.Printf("llama_proxy -> llama-server 已成功启动并准备就绪")
+		log.Printf("llama -> llama-server 已成功启动并准备就绪")
 	case <-ctx.Done():
-		log.Printf("llama_proxy[ERROR] -> llama-server 启动超时")
+		log.Printf("llama[ERROR] -> llama-server 启动超时")
 		if err := cmd.Process.Kill(); err != nil {
-			log.Printf("llama_proxy[ERROR] -> 终止 llama-server 进程失败: %v", err)
+			log.Printf("llama[ERROR] -> 终止 llama-server 进程失败: %v", err)
 		}
 		return
 	}
@@ -95,13 +98,13 @@ func Close() {
 		return
 	}
 
-	log.Printf("llama_proxy -> 正在关闭 llama-server...")
+	log.Printf("llama -> 正在关闭 llama-server...")
 
 	if err := serverProcess.Process.Signal(nil); err == nil {
 		if err := serverProcess.Process.Kill(); err != nil {
-			log.Printf("llama_proxy[ERROR] -> 终止 llama-server 进程失败: %v", err)
+			log.Printf("llama[ERROR] -> 终止 llama-server 进程失败: %v", err)
 		} else {
-			log.Printf("llama_proxy -> llama-server 已终止")
+			log.Printf("llama -> llama-server 已终止")
 		}
 	}
 }
@@ -114,7 +117,7 @@ func monitorOutput(stdout io.ReadCloser, stderr io.ReadCloser) {
 		for stdoutScanner.Scan() {
 			line := stdoutScanner.Text()
 			if *config.Developer {
-				log.Printf("llama_proxy[STDOUT] -> %s", line)
+				log.Printf("llama[STDOUT] -> %s", line)
 			}
 			checkReadySignal(line)
 		}
@@ -124,7 +127,7 @@ func monitorOutput(stdout io.ReadCloser, stderr io.ReadCloser) {
 		for stderrScanner.Scan() {
 			line := stderrScanner.Text()
 			if *config.Developer {
-				log.Printf("llama_proxy[STDERR] -> %s", line)
+				log.Printf("llama[STDERR] -> %s", line)
 			}
 			checkReadySignal(line)
 		}
@@ -153,10 +156,10 @@ func checkReadySignal(line string) {
 func waitForProcessExit(cmd *exec.Cmd) {
 	if err := cmd.Wait(); err != nil {
 		if !strings.Contains(err.Error(), "signal: killed") {
-			log.Printf("llama_proxy[ERROR] -> llama-server 进程异常退出: %v", err)
+			log.Printf("llama[ERROR] -> llama-server 进程异常退出: %v", err)
 		}
 	} else {
-		log.Printf("llama_proxy -> llama-server 进程正常退出")
+		log.Printf("llama -> llama-server 进程正常退出")
 	}
 }
 
@@ -169,15 +172,15 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.ModelPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
-		http.Error(w, "llama_proxy[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
+		http.Error(w, "llama[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
 		return
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("llama_proxy[ERROR] -> 代理错误: %v", err)
-		http.Error(w, "llama_proxy[ERROR] -> 代理失败", http.StatusBadGateway)
+		log.Printf("llama[ERROR] -> 代理错误: %v", err)
+		http.Error(w, "llama[ERROR] -> 代理失败", http.StatusBadGateway)
 	}
 
 	proxy.ServeHTTP(w, r)
@@ -191,17 +194,17 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("llama_proxy -> 云服务器 URL: %s", target.String())
+	log.Printf("llama -> 云服务器 URL: %s", target.String())
 
 	// 打印消息头中的密钥信息
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		log.Printf("llama_proxy -> Authorization 头: %s", authHeader)
+		log.Printf("llama -> Authorization 头: %s", authHeader)
 	}
 	if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
-		log.Printf("llama_proxy -> x-api-key 头: %s", apiKey)
+		log.Printf("llama -> x-api-key 头: %s", apiKey)
 	}
 	if apiKey := r.Header.Get("api-key"); apiKey != "" {
-		log.Printf("llama_proxy -> api-key 头: %s", apiKey)
+		log.Printf("llama -> api-key 头: %s", apiKey)
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
