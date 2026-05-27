@@ -16,7 +16,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"logger"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -162,7 +162,7 @@ func (c *speakerEmbedCache) loadFromDisk() {
 
 	files, err := os.ReadDir(c.cacheDir)
 	if err != nil {
-		log.Printf("[EmbedCache] 加载磁盘缓存失败: %v", err)
+		logger.SubError("QWEN-TTS", "EmbedCache", "加载磁盘缓存失败: %v", err)
 		return
 	}
 
@@ -175,18 +175,18 @@ func (c *speakerEmbedCache) loadFromDisk() {
 		filePath := filepath.Join(c.cacheDir, f.Name())
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			log.Printf("[EmbedCache] 读取 %s 失败: %v", f.Name(), err)
+			logger.SubError("QWEN-TTS", "EmbedCache", "读取 %s 失败: %v", f.Name(), err)
 			continue
 		}
 
 		if len(data) < 8 || len(data)%4 != 0 {
-			log.Printf("[EmbedCache] 跳过无效文件: %s", f.Name())
+			logger.SubError("QWEN-TTS", "EmbedCache", "跳过无效文件: %s", f.Name())
 			continue
 		}
 
 		audioPathLen := int(data[0])<<24 | int(data[1])<<16 | int(data[2])<<8 | int(data[3])
 		if 4+audioPathLen+4 > len(data) {
-			log.Printf("[EmbedCache] 跳过损坏文件: %s", f.Name())
+			logger.SubError("QWEN-TTS", "EmbedCache", "跳过损坏文件: %s", f.Name())
 			continue
 		}
 
@@ -197,7 +197,7 @@ func (c *speakerEmbedCache) loadFromDisk() {
 		embedDataStart := 4 + audioPathLen + 4
 		embedDataEnd := embedDataStart + embedSize*4
 		if len(data) < embedDataEnd {
-			log.Printf("[EmbedCache] 跳过大小不匹配文件: %s", f.Name())
+			logger.SubError("QWEN-TTS", "EmbedCache", "跳过大小不匹配文件: %s", f.Name())
 			continue
 		}
 
@@ -226,7 +226,7 @@ func (c *speakerEmbedCache) loadFromDisk() {
 	}
 
 	if loaded > 0 {
-		log.Printf("[EmbedCache] 从磁盘加载 %d 个 embedding", loaded)
+		logger.SubInfo("QWEN-TTS", "EmbedCache", "从磁盘加载 %d 个 embedding", loaded)
 	}
 }
 
@@ -282,7 +282,7 @@ func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 	}
 
 	if err := os.WriteFile(filePath, buf, 0644); err != nil {
-		log.Printf("[EmbedCache] 保存 %s 失败: %v", fileName, err)
+		logger.SubError("QWEN-TTS", "EmbedCache", "保存 %s 失败: %v", fileName, err)
 	}
 }
 
@@ -293,7 +293,7 @@ func InitTTSEngine(modelDir, refAudio string) {
 		nThreads := max(1, runtime.NumCPU()-1)
 		handle := C.qwen3_tts_create(cModelDir, C.int32_t(nThreads))
 		if handle == nil {
-			log.Printf("Qwen TTS 引擎初始化失败，模型目录: %s", modelDir)
+			logger.Error("QWEN-TTS", "引擎初始化失败，模型目录: %s", modelDir)
 			return
 		}
 
@@ -306,27 +306,27 @@ func InitTTSEngine(modelDir, refAudio string) {
 
 		embedCache.init()
 
-		log.Printf("Qwen TTS 引擎初始化成功")
+		logger.Info("QWEN-TTS", "引擎初始化成功")
 
 		//go warmupTTSEngine(refAudio)
 	})
 }
 
 func warmupTTSEngine(refAudio string) {
-	log.Println("[Warmup] 开始预热TTS引擎，加载所有模型到内存...")
+	logger.Info("QWEN-TTS", "开始预热TTS引擎，加载所有模型到内存...")
 
 	dummyText := "你好"
 	nThreads := max(1, runtime.NumCPU()-1)
 	samples, err := synthesizeText(dummyText, refAudio, globalTTS.languageID, 0, 0, 0, 0, 0, int32(nThreads))
 	if err != nil {
-		log.Printf("[Warmup] 预热合成失败（可忽略）: %v", err)
+		logger.Info("QWEN-TTS", "预热合成失败(可忽略): %v", err)
 		return
 	}
 
 	if len(samples) > 0 {
-		log.Printf("[Warmup] 预热成功，生成 %d 个采样点，所有模型已加载完成", len(samples))
+		logger.Info("QWEN-TTS", "预热成功，生成 %d 个采样点，所有模型已加载完成", len(samples))
 	} else {
-		log.Println("[Warmup] 预热完成")
+		logger.Info("QWEN-TTS", "预热完成")
 	}
 }
 
@@ -351,7 +351,7 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 
 	if found && hasHash && cachedHash == currentHash {
 		embedCache.mu.Unlock()
-		log.Printf("[EmbedCache] 命中缓存: %s (hash=%s)", refAudio, currentHash[:16])
+		logger.SubInfo("QWEN-TTS", "EmbedCache", "命中缓存: %s (hash=%s)", refAudio, currentHash[:16])
 		return cachedEmbedding, nil
 	}
 	embedCache.mu.Unlock()
@@ -362,7 +362,7 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 	const maxEmbedSize = 2048
 	embedBuf := make([]float32, maxEmbedSize)
 
-	log.Printf("[EmbedCache] 正在提取 speaker embedding: %s", refAudio)
+	logger.SubInfo("QWEN-TTS", "EmbedCache", "正在提取 speaker embedding: %s", refAudio)
 	embedSize := C.qwen3_tts_extract_embedding_file(
 		globalTTS.handle,
 		cRefAudio,
@@ -385,7 +385,7 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 
 	embedCache.saveToDisk(refAudio, embedding)
 
-	log.Printf("[EmbedCache] 已缓存参考音频 %s 的 embedding (size=%d, hash=%s)", refAudio, embedSize, currentHash[:16])
+	logger.SubInfo("QWEN-TTS", "EmbedCache", "已缓存参考音频 %s 的 embedding (embedding大小=%d, hash=%s)", refAudio, embedSize, currentHash[:16])
 	return embedding, nil
 }
 
@@ -539,7 +539,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req TTSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("解析TTS请求失败: %v", err)
+		logger.Error("QWEN-TTS", "解析TTS请求失败: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(TTSResponse{
 			Success: false,
@@ -559,7 +559,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 
 	samples, err := synthesizeText(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
 	if err != nil {
-		log.Printf("TTS 合成失败: %v", err)
+		logger.Error("QWEN-TTS", "合成失败: [%s] %v", req.Text, err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(TTSResponse{
 			Success: false,
@@ -571,7 +571,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 	wavData := encodePCMToWAV(samples, 24000)
 	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
 
-	log.Printf("TTS 合成成功，文本: %s，采样数: %d", req.Text, len(samples))
+	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(TTSResponse{
@@ -599,7 +599,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("audio")
 	if err != nil {
-		log.Printf("解析上传文件失败: %v", err)
+		logger.Error("QWEN-TTS", "解析上传文件失败: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -621,7 +621,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	outFile, err := os.Create(tempPath)
 	if err != nil {
-		log.Printf("创建文件失败: %v", err)
+		logger.Error("QWEN-TTS", "创建文件失败: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,

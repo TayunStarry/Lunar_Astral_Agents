@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+	"logger"
 	"os"
 	"path/filepath"
 )
@@ -38,17 +39,17 @@ func GetBaseDir(sources []string) (string, error) {
 }
 
 func PrintInfo(format string, args ...interface{}) {
-	fmt.Printf(format, args...)
+	logger.Info("VolumeArchive", format, args...)
 }
 
 func PrintWarning(format string, args ...interface{}) {
-	fmt.Printf("[警告] "+format, args...)
+	logger.Error("VolumeArchive", format, args...)
 }
 
 func PrintError(format string, args ...interface{}) {
-	fmt.Printf("[错误] "+format, args...)
+	logger.Error("VolumeArchive", format, args...)
 }
 
 func PrintSuccess(format string, args ...interface{}) {
-	fmt.Printf("[成功] "+format, args...)
+	logger.Info("VolumeArchive", format, args...)
 }

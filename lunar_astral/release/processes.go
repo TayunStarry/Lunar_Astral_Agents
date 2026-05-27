@@ -4,7 +4,7 @@ import (
 	"config"
 	"encoding/csv"
 	"fmt"
-	"log"
+	"logger"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -35,7 +35,7 @@ func getPortProcessesPowerShell() []ProcessInfo {
 	output, err := cmd.Output()
 	if err != nil {
 		// 命令执行失败，打印错误信息并调用备用方法
-		log.Printf("PowerShell 命令执行失败: %v\n", err)
+		logger.Error("LunarCore", "PowerShell 命令执行失败: %v", err)
 		return getPortProcessesNetstat()
 	}
 	// 创建 CSV 读取器，用于解析 PowerShell 命令的输出
@@ -44,8 +44,8 @@ func getPortProcessesPowerShell() []ProcessInfo {
 	records, err := reader.ReadAll()
 	if err != nil {
 		// 解析失败，打印错误信息和输出内容，并调用备用方法
-		log.Printf("解析 PowerShell 输出失败: %v\n", err)
-		log.Printf("输出内容: %q\n", string(output))
+		logger.Error("LunarCore", "解析 PowerShell 输出失败: %v", err)
+		logger.Error("LunarCore", "输出内容: %q", string(output))
 		return getPortProcessesNetstat()
 	}
 	// 如果记录数量少于 2 条（通常第一条是表头），说明没有有效数据，直接返回空列表

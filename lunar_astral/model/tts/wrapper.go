@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"io"
-	"log"
+	"logger"
 	"net/http"
 
 	"qwen3_tts_lunar/module"
@@ -43,7 +43,7 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 
 	var req module.TTSRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Printf("[TTSWrap] 解析TTS请求失败: %v", err)
+		logger.Error("TTSModel", "解析TTS请求失败: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(module.TTSResponse{
 			Success: false,
@@ -75,7 +75,7 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	entry, isCreator := ttsWrapperCache.GetOrSetPending(req.Text)
 	if !isCreator {
 		audioBase64 := entry.Wait()
-		log.Printf("[TTSWrap] 缓存命中（等待中），文本: %s", req.Text)
+		logger.Info("TTSModel", "缓存命中(等待中)，文本: %s", req.Text)
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(module.TTSResponse{
 			Success: true,
@@ -98,20 +98,20 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 
 	ttsWrapperCache.Remove(req.Text)
 	entry.MarkReady("")
-	log.Printf("[TTSWrap] TTS合成失败，文本: %s", req.Text)
+	logger.Error("TTSModel", "TTS合成失败，文本: %s", req.Text)
 }
 
 func TTSStreamHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	conn, err := ttsStreamUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[TTSStreamWrap] WebSocket升级失败: %v", err)
+		logger.SubError("TTSModel", "Stream", "WebSocket升级失败: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		log.Printf("[TTSStreamWrap] 读取请求失败: %v", err)
+		logger.SubError("TTSModel", "Stream", "读取请求失败: %v", err)
 		return
 	}
 
@@ -140,7 +140,7 @@ func TTSStreamHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	entry, isCreator := ttsWrapperCache.GetOrSetPending(req.Text)
 	if !isCreator {
 		audioBase64 := entry.Wait()
-		log.Printf("[TTSStreamWrap] 缓存命中（等待中），文本: %s", req.Text)
+		logger.SubInfo("TTSModel", "Stream", "缓存命中(等待中)，文本: %s", req.Text)
 		if audioBase64 == "" {
 			sendStreamWrapError(conn, "TTS合成失败")
 			return
@@ -164,7 +164,7 @@ func TTSStreamHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		log.Printf("[TTSStreamWrap] 内部合成失败，文本: %s", req.Text)
+		logger.SubError("TTSModel", "Stream", "内部合成失败，文本: %s", req.Text)
 		ttsWrapperCache.Remove(req.Text)
 		entry.MarkReady("")
 	}()
@@ -184,7 +184,7 @@ func sendStreamWrapError(conn *websocket.Conn, errMsg string) {
 	}
 	data, _ := json.Marshal(resp)
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		log.Printf("[TTSStreamWrap] 发送错误消息失败: %v", err)
+		logger.SubError("TTSModel", "Stream", "发送错误消息失败: %v", err)
 	}
 }
 

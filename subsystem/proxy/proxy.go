@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -32,57 +32,53 @@ var serverMutex sync.RWMutex
 
 // BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
 func BuildTLSTerminationProxy() *http.Server {
-	// 创建独立的ServeMux实例
+	logger.SetDevMode(*config.Developer)
 	mux := http.NewServeMux()
-	// 注册健康检查处理器
 	mux.HandleFunc("/health", handleHealthCheck)
-	// 注册反向代理处理器，将所有请求转发到HTTP后端
 	mux.HandleFunc("/", handleReverseProxy)
-	// 构建服务器地址
 	serverAddr := fmt.Sprintf(":%d", *config.ProxyPort)
-	// 打印代理服务访问地址
-	log.Printf("Lunar模块[TLS代理] : 代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
-	log.Printf("Lunar模块[TLS代理] : 健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
-	
+	logger.Info("ProxySvr", "代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
+	logger.Info("ProxySvr", "健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
+
 	// 从嵌入式文件系统读取证书和密钥
 	certPEM, err := certsFS.ReadFile("certs/localhost.pem")
 	if err != nil {
-		log.Printf("Lunar模块[TLS代理][ERROR] -> 读取证书失败: %v\n", err)
+		logger.Error("ProxySvr", "读取证书失败: %v", err)
 		return nil
 	}
 	keyPEM, err := certsFS.ReadFile("certs/localhost-key.pem")
 	if err != nil {
-		log.Printf("Lunar模块[TLS代理][ERROR] -> 读取私钥失败: %v\n", err)
+		logger.Error("ProxySvr", "读取私钥失败: %v", err)
 		return nil
 	}
-	
+
 	// 加载证书
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
-		log.Printf("Lunar模块[TLS代理][ERROR] -> 加载证书失败: %v\n", err)
+		logger.Error("ProxySvr", "加载证书失败: %v", err)
 		return nil
 	}
-	
+
 	// 创建TLS配置
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
-	
+
 	// 创建服务器实例
 	server := &http.Server{
 		Addr:      serverAddr,
 		Handler:   mux,
 		TLSConfig: tlsConfig,
 	}
-	
+
 	// 启动HTTPS服务器（在独立goroutine中运行）
 	go func() {
 		// 启动HTTPS服务器
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			log.Printf("Lunar模块[TLS代理][ERROR] -> 服务器启动失败: %v\n", err)
+			logger.Error("ProxySvr", "服务器启动失败: %v", err)
 		}
 	}()
-	
+
 	// 返回服务器实例
 	return server
 }
@@ -152,13 +148,13 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	
+
 	// 检查是否是WebSocket连接
 	if r.Header.Get("Upgrade") == "websocket" {
 		handleWebSocketProxy(w, r)
 		return
 	}
-	
+
 	// 目标服务器地址 - 内部HTTP服务器的URL
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
 	// 解析目标URL - 将字符串URL转换为url.URL对象
@@ -183,15 +179,12 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Forwarded-Proto", "https")
 		// 指示原始请求的端口
 		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.ProxyPort))
-		// 开发模式日志 - 记录请求转发详情
-		if *config.Developer {
-			log.Printf("[TLS代理] 转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
-		}
+		logger.Info("ProxySvr", "转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
 	}
 	// 自定义错误处理器 - 处理代理过程中的错误
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		// 记录错误日志 - 输出详细的错误信息
-		log.Printf("[TLS代理] 代理错误: %v", err)
+		logger.Error("ProxySvr", "代理错误: %v", err)
 		// 设置错误响应头 - 返回JSON格式的错误信息
 		w.Header().Set("Content-Type", "application/json")
 		// 使用502状态码表示网关错误
@@ -208,60 +201,58 @@ func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
 func handleWebSocketProxy(w http.ResponseWriter, r *http.Request) {
 	// 连接到后端WebSocket服务器
 	targetAddr := fmt.Sprintf("localhost:%d", *config.BasicPort)
-	
+
 	// 建立到后端的连接
 	backendConn, err := net.Dial("tcp", targetAddr)
 	if err != nil {
-		log.Printf("[TLS代理] WebSocket连接后端失败: %v", err)
+		logger.Error("ProxySvr", "WebSocket连接后端失败: %v", err)
 		http.Error(w, "无法连接到后端WebSocket服务", http.StatusBadGateway)
 		return
 	}
 	defer backendConn.Close()
-	
+
 	// 获取客户端连接（劫持HTTP连接）
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		log.Printf("[TLS代理] 不支持Hijack接口")
+		logger.Error("ProxySvr", "不支持Hijack接口")
 		http.Error(w, "不支持的协议升级", http.StatusInternalServerError)
 		return
 	}
-	
+
 	clientConn, clientBuf, err := hijacker.Hijack()
 	if err != nil {
-		log.Printf("[TLS代理] Hijack失败: %v", err)
+		logger.Error("ProxySvr", "Hijack失败: %v", err)
 		http.Error(w, "连接劫持失败", http.StatusInternalServerError)
 		return
 	}
 	defer clientConn.Close()
-	
+
 	// 复制WebSocket升级请求到后端
 	var reqBuffer bytes.Buffer
 	r.Write(&reqBuffer)
 	backendConn.Write(reqBuffer.Bytes())
-	
+
 	// 创建双向数据转发
 	var wg sync.WaitGroup
 	wg.Add(2)
-	
+
 	// 从客户端转发到后端
 	go func() {
 		defer wg.Done()
 		io.Copy(backendConn, clientBuf)
 		io.Copy(backendConn, clientConn)
 	}()
-	
+
 	// 从后端转发到客户端
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, backendConn)
 	}()
-	
+
 	// 等待连接结束
 	wg.Wait()
-	
-	if *config.Developer {
-		log.Printf("[TLS代理] WebSocket连接关闭")
-	}
+
+	logger.Info("ProxySvr", "WebSocket连接关闭")
 }
 
 // ReadCertFile 从嵌入式文件系统读取证书文件

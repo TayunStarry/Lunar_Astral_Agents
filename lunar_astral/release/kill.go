@@ -2,7 +2,7 @@ package release
 
 import (
 	"fmt"
-	"log"
+	"logger"
 	"os/exec"
 	"strconv"
 	"time"
@@ -17,7 +17,7 @@ func killProcesses(processes []ProcessInfo) (int, error) {
 	// 遍历进程信息列表
 	for _, proc := range processes {
 		// 打印正在终止的进程信息
-		log.Printf("正在终止进程: PID %d (%s) - 占用端口 %d\n", proc.PID, proc.Name, proc.Port)
+		logger.Info("LunarCore", "正在终止进程: PID %d (%s) - 占用端口 %d", proc.PID, proc.Name, proc.Port)
 		// 创建用于终止指定 PID 进程的命令，/f 表示强制终止
 		cmd := exec.Command("taskkill", "/f", "/pid", strconv.Itoa(proc.PID))
 		// 执行命令以终止进程
@@ -25,14 +25,14 @@ func killProcesses(processes []ProcessInfo) (int, error) {
 		// 检查命令执行是否出错
 		if err != nil {
 			// 打印终止失败的信息
-			log.Printf("   无法终止进程 %d: %v\n", proc.PID, err)
+			logger.Error("LunarCore", "无法终止进程 %d: %v", proc.PID, err)
 			// 返回当前已终止的进程数量和错误信息
 			return killed, fmt.Errorf("终止进程 %d 失败: %v", proc.PID, err)
 		} else {
 			// 终止成功，增加计数
 			killed++
 			// 打印终止成功的信息
-			log.Printf("   成功终止进程 %d\n", proc.PID)
+			logger.Info("LunarCore", "成功终止进程 %d", proc.PID)
 		}
 		// 每个进程终止后暂停 100 毫秒，避免操作过于频繁
 		time.Sleep(100 * time.Millisecond)

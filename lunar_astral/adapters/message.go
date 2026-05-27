@@ -2,7 +2,7 @@ package adapters
 
 import (
 	"encoding/json"
-	"log"
+	"logger"
 
 	"github.com/dop251/goja"
 )
@@ -11,7 +11,7 @@ var PushMessageFunc func(msgType string, data interface{})
 
 func init() {
 	PushMessageFunc = func(msgType string, data interface{}) {
-		log.Printf("Lunar模块[Adapters] -> PushMessageFunc 未初始化, 消息类型: %s", msgType)
+		logger.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"logger"
 	"os"
 	"path/filepath"
 	"screenshot"
@@ -96,13 +97,13 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 				// 处理提取失败的情况
 				if err != nil {
 					// 继续处理下一帧，不返回错误
-					fmt.Printf("警告: 提取帧失败 %d 秒: %v\n", timestamp, err)
+					logger.Error("LunarCore", "提取帧失败 %d 秒: %v", timestamp, err)
 					resultChan <- FrameData{Error: err}
 					continue
 				}
 				// 检查缓冲区是否为空
 				if buf.Len() == 0 {
-					fmt.Printf("警告: 提取的帧数据为空 %d 秒\n", timestamp)
+					logger.Error("LunarCore", "提取的帧数据为空 %d 秒", timestamp)
 					resultChan <- FrameData{Error: fmt.Errorf("提取的帧数据为空")}
 					continue
 				}
@@ -111,7 +112,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 				// 处理解码失败的情况
 				if err != nil {
 					// 继续处理下一帧，不返回错误
-					fmt.Printf("警告: 解码图像失败: %v\n", err)
+					logger.Error("LunarCore", "解码图像失败: %v", err)
 					resultChan <- FrameData{Error: err}
 					continue
 				}
@@ -169,7 +170,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, cacheDir, keyFrames)
 			// 处理创建关键帧文件失败的情况
 			if err != nil {
-				fmt.Printf("警告: 创建关键帧文件失败: %v\n", err)
+				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
 				continue
 			}
 			// 格式化时间戳
@@ -182,7 +183,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, cacheDir, keyFrames)
 			// 处理创建关键帧文件失败的情况
 			if err != nil {
-				fmt.Printf("警告: 创建关键帧文件失败: %v\n", err)
+				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
 				continue
 			}
 			// 格式化时间戳
@@ -311,7 +312,7 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 	// 将调整后的图像编码为JPEG格式并写入缓冲区
 	if err := jpeg.Encode(buf, resizedImage, opt); err != nil {
 		// 继续处理下一帧，不返回错误
-		fmt.Printf("警告: 编码图像失败: %v\n", err)
+		logger.Error("LunarCore", "编码图像失败: %v", err)
 		return frameFileName, nil, err
 	}
 
@@ -320,7 +321,7 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 	frameFile, err := os.Create(framePath)
 	if err != nil {
 		// 继续处理下一帧，不返回错误
-		fmt.Printf("警告: 创建关键帧文件失败: %v\n", err)
+		logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
 		// 即使文件创建失败，也返回内存中的图像数据
 		return frameFileName, buf.Bytes(), nil
 	}
@@ -329,7 +330,7 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 	// 将缓冲区内容写入文件
 	if _, err := frameFile.Write(buf.Bytes()); err != nil {
 		// 继续处理下一帧，不返回错误
-		fmt.Printf("警告: 写入关键帧文件失败: %v\n", err)
+		logger.Error("LunarCore", "写入关键帧文件失败: %v", err)
 		// 即使写入失败，也返回内存中的图像数据
 		return frameFileName, buf.Bytes(), nil
 	}

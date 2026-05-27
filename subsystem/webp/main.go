@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/png"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,12 +13,13 @@ import (
 )
 
 func main() {
-	fmt.Println("=== PNG to WebP Converter ===")
-	fmt.Println("Scanning current directory for PNG files...")
+	logger.SetDevMode(true)
+	logger.Info("WebPConv", "=== PNG to WebP Converter ===")
+	logger.Info("WebPConv", "Scanning current directory for PNG files...")
 
 	currentDir, err := os.Getwd()
 	if err != nil {
-		fmt.Printf("Error: Failed to get current directory: %v\n", err)
+		logger.Error("WebPConv", "Failed to get current directory: %v", err)
 		os.Exit(1)
 	}
 
@@ -33,41 +35,41 @@ func main() {
 	})
 
 	if err != nil {
-		fmt.Printf("Error: Failed to scan directory: %v\n", err)
+		logger.Error("WebPConv", "Failed to scan directory: %v", err)
 		os.Exit(1)
 	}
 
 	if len(pngFiles) == 0 {
-		fmt.Println("No PNG files found in the current directory.")
+		logger.Info("WebPConv", "No PNG files found in the current directory.")
 		return
 	}
 
-	fmt.Printf("Found %d PNG file(s):\n", len(pngFiles))
+	logger.Info("WebPConv", "Found %d PNG file(s)", len(pngFiles))
 	for _, f := range pngFiles {
-		fmt.Printf("  - %s\n", filepath.Base(f))
+		logger.Info("WebPConv", "  - %s", filepath.Base(f))
 	}
 
-	fmt.Println("\nStarting conversion...")
+	logger.Info("WebPConv", "Starting conversion...")
 	successCount := 0
 	failCount := 0
 
 	for _, pngPath := range pngFiles {
 		webpPath := strings.TrimSuffix(pngPath, filepath.Ext(pngPath)) + ".webp"
-		
-		fmt.Printf("\nConverting: %s -> %s\n", filepath.Base(pngPath), filepath.Base(webpPath))
+
+		logger.Info("WebPConv", "Converting: %s -> %s", filepath.Base(pngPath), filepath.Base(webpPath))
 
 		err := convertPNGToWebP(pngPath, webpPath, 90)
 		if err != nil {
-			fmt.Printf("  FAILED: %v\n", err)
+			logger.Error("WebPConv", "FAILED: %v", err)
 			failCount++
 		} else {
-			fmt.Println("  SUCCESS")
+			logger.Info("WebPConv", "SUCCESS")
 			successCount++
 		}
 	}
 
-	fmt.Println("\n=== Conversion Complete ===")
-	fmt.Printf("Success: %d | Failed: %d\n", successCount, failCount)
+	logger.Info("WebPConv", "=== Conversion Complete ===")
+	logger.Info("WebPConv", "Success: %d | Failed: %d", successCount, failCount)
 
 	if failCount > 0 {
 		os.Exit(1)

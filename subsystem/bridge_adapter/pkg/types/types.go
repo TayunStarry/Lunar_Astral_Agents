@@ -1,21 +1,59 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strconv"
+)
 
 type Config struct {
 	QQAdapter QQAdapter `json:"qq_adapter"`
 }
 
 type QQAdapter struct {
-	DisplayLogs     bool      `json:"display_logs"`
-	NapcatWsServer  string   `json:"napcat_ws_server"`
-	NapcatWsToken   string   `json:"napcat_ws_token"`
-	LunarCoreUrl    string   `json:"lunar_core_url"`
-	LunarWsServer   string   `json:"lunar_ws_server"`
-	ListenGroupIds  []int64  `json:"listen_group_ids"`
-	PollInterval    int      `json:"poll_interval"`
-	TriggerKeywords []string `json:"trigger_keywords"`
-	DefaultReply    string   `json:"default_reply"`
+	DisplayLogs     bool       `json:"display_logs"`
+	NapcatWsServer  string     `json:"napcat_ws_server"`
+	NapcatWsToken   string     `json:"napcat_ws_token"`
+	LunarCoreUrl    string     `json:"lunar_core_url"`
+	LunarWsServer   string     `json:"lunar_ws_server"`
+	ListenGroupIds  Int64Slice `json:"listen_group_ids"`
+	PollInterval    int        `json:"poll_interval"`
+	TriggerKeywords []string   `json:"trigger_keywords"`
+	DefaultReply    string     `json:"default_reply"`
+}
+
+type Int64Slice []int64
+
+func (s *Int64Slice) UnmarshalJSON(data []byte) error {
+	var nums []int64
+	if err := json.Unmarshal(data, &nums); err == nil {
+		*s = nums
+		return nil
+	}
+
+	var raw []interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("解析 listen_group_ids 失败: %v", err)
+	}
+
+	for _, v := range raw {
+		switch val := v.(type) {
+		case float64:
+			*s = append(*s, int64(val))
+		case string:
+			parsed, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[警告] listen_group_ids 中的值 '%s' 无法转换为有效群号，已跳过\n", val)
+				continue
+			}
+			*s = append(*s, parsed)
+		default:
+			fmt.Fprintf(os.Stderr, "[警告] listen_group_ids 中包含不支持的数据类型 %T，已跳过\n", v)
+		}
+	}
+
+	return nil
 }
 
 type NapcatMessage struct {

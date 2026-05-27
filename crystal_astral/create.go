@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"logger"
 	"net/http"
 	"os"
 	"os/signal"
@@ -81,13 +82,14 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		Handler: httpMux,
 	}
 
-	fmt.Printf("%s 正运行在 http://localhost%s\n", name, serverAddr)
+	logger.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
 	reloadPageParameters()
+	logger.SetDevMode(*config.Developer)
 	go browser.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("%s 运行失败: %v\n", name, err)
+			logger.Error("CrystalAstral", "%s 运行失败: %v", name, err)
 		}
 	}()
 
@@ -96,20 +98,20 @@ func StartServer(port int, root http.FileSystem, name string) error {
 
 	select {
 	case <-quit:
-		fmt.Printf("%s 接收到中断信号，正在关闭...\n", name)
+		logger.Info("CrystalAstral", "%s 接收到中断信号，正在关闭...", name)
 	case <-browser.WebViewClosed():
-		fmt.Printf("%s 检测到 WebView 关闭，正在关闭...\n", name)
+		logger.Info("CrystalAstral", "%s 检测到 WebView 关闭，正在关闭...", name)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		fmt.Printf("%s 关闭失败: %v\n", name, err)
+		logger.Error("CrystalAstral", "%s 关闭失败: %v", name, err)
 	}
 
 	browser.CloseWebView()
-	fmt.Printf("%s 已成功关闭\n", name)
+	logger.Info("CrystalAstral", "%s 已成功关闭", name)
 
 	return nil
 }

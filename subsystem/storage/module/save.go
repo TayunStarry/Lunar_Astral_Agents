@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,12 +67,9 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 	}
 	// 同步文件内容到磁盘
 	if err := file.Sync(); err != nil {
-		log.Printf("Save请求[ERROR] -> 同步失败: %s, %v", fullPath, err)
+		logger.Error("Storage", "Save请求 -> 同步失败: %s, %v", fullPath, err)
 	}
-	// 记录保存成功日志
-	if *config.Developer {
-		log.Printf("Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
-	}
+	logger.Info("Storage", "Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 	return fileName, fullPath, nil
 }
 

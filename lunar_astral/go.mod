@@ -51,3 +51,7 @@ replace screenshot => ../subsystem/screenshot
 require qwen3_tts_lunar v0.0.0
 
 replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
+
+require logger v0.0.0
+
+replace logger => ../subsystem/logger

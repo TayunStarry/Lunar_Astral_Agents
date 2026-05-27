@@ -2,8 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"log"
+	"logger"
 	"os"
 	"os/signal"
 	"syscall"
@@ -28,7 +27,7 @@ func main() {
 	case "standalone":
 		runStandaloneMode(interp, *file)
 	default:
-		fmt.Printf("未知模式: %s\n", *mode)
+		logger.Error("LunarTick", "未知模式: %s", *mode)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -36,14 +35,15 @@ func main() {
 
 // runServerMode 服务器模式 - 启动 WebSocket 服务器
 func runServerMode(interp *Interpreter, addr string) {
-	log.Println("LunarTick WebSocket Server Mode")
-	log.Printf("Tick interval: %dms", 100)
-	log.Printf("WebSocket address: %s", addr)
+	logger.SetDevMode(false)
+	logger.Info("LunarTick", "LunarTick WebSocket Server Mode")
+	logger.Info("LunarTick", "Tick interval: %dms", 100)
+	logger.Info("LunarTick", "WebSocket address: %s", addr)
 
 	// 创建并启动 WebSocket 服务器
 	wsServer := NewWebSocketServer(interp, addr)
 	if err := wsServer.Start(); err != nil {
-		log.Fatalf("Failed to start WebSocket server: %v", err)
+		logger.Fatal("LunarTick", "Failed to start WebSocket server: %v", err)
 	}
 	defer wsServer.Stop()
 
@@ -53,20 +53,21 @@ func runServerMode(interp *Interpreter, addr string) {
 
 // runStandaloneMode 独立模式 - 执行脚本文件
 func runStandaloneMode(interp *Interpreter, filename string) {
-	log.Println("LunarTick Standalone Mode")
+	logger.SetDevMode(true)
+	logger.Info("LunarTick", "LunarTick Standalone Mode")
 
 	// 如果提供了文件，加载并执行
 	if filename != "" {
 		content, err := os.ReadFile(filename)
 		if err != nil {
-			log.Fatalf("Failed to read file: %v", err)
+			logger.Fatal("LunarTick", "Failed to read file: %v", err)
 		}
-		
+
 		interp.LoadMarkdown(string(content))
-		log.Printf("Loaded script from: %s", filename)
+		logger.Info("LunarTick", "Loaded script from: %s", filename)
 	} else {
 		// 默认示例
-		log.Println("No script file provided. Running example...")
+		logger.Info("LunarTick", "No script file provided. Running example...")
 		exampleCode := `
 ` + "```LunarTick" + `
 @log "Hello, LunarTick!"
@@ -96,12 +97,12 @@ func waitForShutdown(interp *Interpreter, wsServer *WebSocketServer) {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	<-sigChan
-	log.Println("\nShutting down...")
+	logger.Info("LunarTick", "Shutting down...")
 
 	if wsServer != nil {
 		wsServer.Stop()
 	}
 	interp.Stop()
 
-	log.Println("Goodbye!")
+	logger.Info("LunarTick", "Goodbye!")
 }

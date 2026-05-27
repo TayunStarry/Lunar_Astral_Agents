@@ -8,3 +8,7 @@ require (
 	config v0.0.0-00010101000000-000000000000
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 )
+
+require logger v0.0.0
+
+replace logger => ../logger

@@ -3,7 +3,7 @@ package release
 import (
 	"config"
 	"fmt"
-	"log"
+	"logger"
 	"os/exec"
 	"strings"
 )
@@ -56,11 +56,11 @@ func verifyPortsQuick() int {
 		// 检查端口是否被占用
 		if isPortInUse(port) {
 			// 若端口被占用，打印提示信息
-			log.Printf("   端口 %d 仍被占用\n", port)
+			logger.Info("LunarCore", "   端口 %d 仍被占用", port)
 			remaining++
 		} else {
 			// 若端口未被占用，打印提示信息
-			log.Printf("   端口 %d 已释放\n", port)
+			logger.Info("LunarCore", "   端口 %d 已释放", port)
 		}
 	}
 	return remaining

@@ -4,7 +4,7 @@ import (
 	"config"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"mime"
 	"os"
 	"path/filepath"
@@ -52,9 +52,6 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("打开文件失败")
 	}
-	// 记录读取成功日志
-	if *config.Developer {
-		log.Printf("Read请求 -> 成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
-	}
+	logger.Info("Storage", "Read请求 -> 成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 	return file, fileInfo.Size(), mimeType, nil
 }

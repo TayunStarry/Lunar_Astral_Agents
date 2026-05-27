@@ -3,8 +3,7 @@ package server
 import (
 	"config"
 	"context"
-	"flag"
-	"log"
+	"logger"
 	"lunar_astral/adapters"
 	"lunar_astral/hierarchy"
 	"lunar_astral/model/llama"
@@ -22,19 +21,19 @@ import (
 
 // InitializeServer 初始化服务器配置和组件
 func InitializeServer() {
-	// 解析命令行参数
-	flag.Parse()
 	// 如果指定了端口释放选项，则执行端口释放
 	if *config.ClearPort {
 		release.ExecutePortRelease()
 	}
+	// 设置日志开发模式
+	logger.SetDevMode(*config.Developer)
 	// 设置MIME类型映射
 	for ext, mimeType := range config.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
 	}
 	// 创建本地目录
 	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
-		log.Fatalf("Lunar模块[ERROR] -> %v", err)
+		logger.Fatal("LunarCore", "%v", err)
 	}
 	// 注册HTTP处理器
 	registerHandlers()
@@ -59,7 +58,7 @@ func registerHandlers() {
 	var fileServer http.Handler
 	if *config.Developer {
 		fileServer = http.FileServer(http.Dir("./lunar_astral/hierarchy/assets/client"))
-		log.Println("Lunar模块[DEV] -> 使用开发模式，直接读取文件系统")
+		logger.Info("LunarCore", "使用开发模式，直接读取文件系统")
 	} else {
 		fileServer = http.FileServer(hierarchy.Gethierarchy())
 	}
@@ -92,7 +91,7 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 // shutdownServer 优雅关闭服务器
 func shutdownServer(server *http.Server) {
 	// 打印服务器正在关闭的信息
-	log.Println("Lunar模块 -> 正在关闭...")
+	logger.Info("LunarCore", "正在关闭...")
 	// 创建一个带有 5 秒超时的上下文，用于控制服务器关闭的时间
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	// 确保在函数结束时取消上下文，释放资源
@@ -106,8 +105,8 @@ func shutdownServer(server *http.Server) {
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序
-		log.Fatalf("Lunar模块[ERROR] -> %v", err)
+		logger.Fatal("LunarCore", "%v", err)
 	}
 	// 打印服务器已安全关闭的信息
-	log.Println("Lunar模块 -> 已安全关闭")
+	logger.Info("LunarCore", "已安全关闭")
 }

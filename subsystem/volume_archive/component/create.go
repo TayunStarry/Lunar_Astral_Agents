@@ -3,6 +3,7 @@ package component
 import (
 	"bufio"
 	"fmt"
+	"logger"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,21 +24,21 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 		isDir := entry.IsDir()
 
 		if IsExcluded(entry.Name(), isDir) {
-			fmt.Printf("跳过排除项: %s\n", fullPath)
+			logger.Info("VolumeArchive", "跳过排除项: %s", fullPath)
 			continue
 		}
 
 		if isDir {
 			subFiles, err := scanDirectory(fullPath, baseDir)
 			if err != nil {
-				fmt.Printf("WARNING: 无法扫描目录 %s: %v\n", fullPath, err)
+				logger.Error("VolumeArchive", "无法扫描目录 %s: %v", fullPath, err)
 				continue
 			}
 			files = append(files, subFiles...)
 		} else {
 			relPath, err := filepath.Rel(baseDir, fullPath)
 			if err != nil {
-				fmt.Printf("WARNING: 无法计算相对路径 %s: %v\n", fullPath, err)
+				logger.Error("VolumeArchive", "无法计算相对路径 %s: %v", fullPath, err)
 				continue
 			}
 			files = append(files, relPath)

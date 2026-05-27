@@ -1,18 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"logger"
+	"math"
+	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"math"
-	"strconv"
-	"encoding/json"
-	"bytes"
-	"os"
-	"runtime"
 	"unicode"
 )
 
@@ -47,7 +48,7 @@ func NewInterpreter() *Interpreter {
 func (i *Interpreter) SetTickInterval(ms int) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	
+
 	if ms < 10 {
 		ms = 10
 	}
@@ -83,7 +84,7 @@ func (i *Interpreter) log(content string) {
 
 // error 输出错误
 func (i *Interpreter) error(content string) {
-	fmt.Printf("[ERROR] %s\n", content)
+	logger.Error("LunarTick", "%s", content)
 	i.sendMessage(MsgError, content)
 }
 
@@ -98,7 +99,7 @@ func (i *Interpreter) LoadMarkdown(md string) {
 	lines := strings.Split(md, "\n")
 	inCodeBlock := false
 	var currentBlock []string
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```LunarTick") {
@@ -121,11 +122,11 @@ func (i *Interpreter) LoadJSON(jsonData []byte) error {
 	if err := json.Unmarshal(jsonData, &blocks); err != nil {
 		return err
 	}
-	
+
 	for _, block := range blocks {
 		i.LoadBlock(block)
 	}
-	
+
 	return nil
 }
 
@@ -139,7 +140,7 @@ func (i *Interpreter) LoadBlock(lines []string) {
 			nonEmptyLines = append(nonEmptyLines, line)
 		}
 	}
-	
+
 	if len(nonEmptyLines) > 0 {
 		firstLine := strings.TrimSpace(nonEmptyLines[0])
 		if strings.HasPrefix(firstLine, "@lazy") {
@@ -153,7 +154,7 @@ func (i *Interpreter) LoadBlock(lines []string) {
 			return
 		}
 	}
-	
+
 	// 正常代码块，加入就绪列表
 	block := &CodeBlock{
 		ID:    i.generateBlockID(),
@@ -168,7 +169,7 @@ func (i *Interpreter) LoadBlock(lines []string) {
 func (i *Interpreter) Inject(lines []string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	
+
 	// 检查是否是 @lazy 块
 	var nonEmptyLines []string
 	for _, line := range lines {
@@ -177,7 +178,7 @@ func (i *Interpreter) Inject(lines []string) {
 			nonEmptyLines = append(nonEmptyLines, line)
 		}
 	}
-	
+
 	if len(nonEmptyLines) > 0 {
 		firstLine := strings.TrimSpace(nonEmptyLines[0])
 		if strings.HasPrefix(firstLine, "@lazy") {
@@ -191,7 +192,7 @@ func (i *Interpreter) Inject(lines []string) {
 			return
 		}
 	}
-	
+
 	// 正常代码块，加入待注入列表
 	block := &CodeBlock{
 		ID:    i.generateBlockID(),
@@ -206,7 +207,7 @@ func (i *Interpreter) Inject(lines []string) {
 func (i *Interpreter) Invoke(pointerName string) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	
+
 	if ptr, ok := i.pointers.Get(pointerName); ok {
 		if ptr.Type == PointerClass {
 			block := &CodeBlock{
@@ -234,7 +235,7 @@ func (i *Interpreter) Start() {
 	i.currentTick = 0
 	i.stopCh = make(chan struct{})
 	i.mu.Unlock()
-	
+
 	i.wg.Add(1)
 	go i.tickLoop()
 }
@@ -249,17 +250,17 @@ func (i *Interpreter) Stop() {
 	i.running = false
 	close(i.stopCh)
 	i.mu.Unlock()
-	
+
 	i.wg.Wait()
 }
 
 // tickLoop tick 循环
 func (i *Interpreter) tickLoop() {
 	defer i.wg.Done()
-	
+
 	ticker := time.NewTicker(i.tickInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-i.stopCh:
@@ -274,16 +275,16 @@ func (i *Interpreter) tickLoop() {
 func (i *Interpreter) doTick() {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	
+
 	i.currentTick++
 	i.variables.Set("#TICK", strconv.FormatInt(i.currentTick, 10))
-	
+
 	// 1. 注入待处理的代码块
 	if len(i.pendingBlocks) > 0 {
 		i.blocks = append(i.blocks, i.pendingBlocks...)
 		i.pendingBlocks = nil
 	}
-	
+
 	// 检查是否有活跃代码块
 	hasActiveBlocks := false
 	for _, block := range i.blocks {
@@ -292,25 +293,25 @@ func (i *Interpreter) doTick() {
 			break
 		}
 	}
-	
+
 	if !hasActiveBlocks && len(i.pendingBlocks) == 0 {
 		return
 	}
-	
+
 	// 2. 执行就绪的代码块
 	for _, block := range i.blocks {
 		if block.State == StateReady {
 			i.executeBlock(block)
 		}
 	}
-	
+
 	// 3. 检查等待条件，唤醒就绪的代码块
 	for _, block := range i.blocks {
 		if block.State == StateWaiting {
 			i.checkWaitCondition(block)
 		}
 	}
-	
+
 	// 4. 清理已终止的代码块
 	var activeBlocks []*CodeBlock
 	for _, block := range i.blocks {
@@ -328,34 +329,34 @@ func (i *Interpreter) executeBlock(block *CodeBlock) {
 		i.handleBlockError(block, "Timeout exceeded")
 		return
 	}
-	
+
 	// 找到下一条有效指令
 	for block.PC < len(block.Lines) {
 		line := block.Lines[block.PC]
 		trimmed := strings.TrimSpace(line)
-		
+
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
 			block.PC++
 			continue
 		}
-		
+
 		// 执行指令
 		if err := i.executeInstruction(block, line); err != nil {
 			i.handleBlockError(block, err.Error())
 			return
 		}
-		
+
 		block.PC++
-		
+
 		// 检查是否进入等待状态
 		if block.State == StateWaiting {
 			return
 		}
-		
+
 		// 每个 tick 只执行一条指令
 		break
 	}
-	
+
 	// 检查是否执行完毕
 	if block.PC >= len(block.Lines) {
 		block.State = StateTerminated
@@ -369,10 +370,10 @@ func (i *Interpreter) handleBlockError(block *CodeBlock, errMsg string) {
 		if block.RetryConfig.ErrorVar != "" {
 			i.variables.Add(block.RetryConfig.ErrorVar, errMsg+"\n")
 		}
-		
+
 		block.RetryConfig.CurrentRetry++
 		i.log(fmt.Sprintf("Retrying block %s (%d/%d)", block.ID, block.RetryConfig.CurrentRetry, block.RetryConfig.MaxRetries))
-		
+
 		// 冷却后重试
 		block.PC = 0
 		block.Lines = block.RetryConfig.OriginalLines
@@ -482,7 +483,7 @@ func (i *Interpreter) executeInstruction(block *CodeBlock, line string) error {
 			return fmt.Errorf("unknown directive: %s", directive)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -491,7 +492,7 @@ func (i *Interpreter) executeLog(args []string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	
+
 	content := i.evalExpression(strings.Join(args, " "))
 	i.log(content)
 	return nil
@@ -516,7 +517,7 @@ func (i *Interpreter) executeAdd(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("ADD requires at least 2 arguments")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	expr := strings.Join(args[1:], " ")
 	value := i.evalExpression(expr)
@@ -529,7 +530,7 @@ func (i *Interpreter) executeWrt(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("WRT requires at least 2 arguments")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	expr := strings.Join(args[1:], " ")
 	value := i.evalExpression(expr)
@@ -542,7 +543,7 @@ func (i *Interpreter) executeRon(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("RON requires at least 2 arguments")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	expr := strings.Join(args[1:], " ")
 	value := i.evalExpression(expr)
@@ -555,7 +556,7 @@ func (i *Interpreter) executeUnl(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("UNL requires at least 2 arguments")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	expr := strings.Join(args[1:], " ")
 	value := i.evalExpression(expr)
@@ -568,7 +569,7 @@ func (i *Interpreter) executeWait(block *CodeBlock, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("@wait requires a variable argument")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	block.State = StateWaiting
 	block.WaitCond = WaitCondition{
@@ -583,12 +584,12 @@ func (i *Interpreter) executeSleep(block *CodeBlock, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("@sleep requires milliseconds argument")
 	}
-	
+
 	ms, err := strconv.Atoi(args[0])
 	if err != nil {
 		return err
 	}
-	
+
 	block.State = StateWaiting
 	block.WaitCond = WaitCondition{
 		Type:       WaitSleep,
@@ -602,18 +603,18 @@ func (i *Interpreter) executeRun(block *CodeBlock, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("@run requires a command")
 	}
-	
+
 	cmdName := args[0]
 	cmdArgs := args[1:]
-	
+
 	// 评估参数中的变量
 	for idx, arg := range cmdArgs {
 		cmdArgs[idx] = i.evalExpression(arg)
 	}
-	
+
 	cmd := exec.Command(cmdName, cmdArgs...)
 	exitCh := make(chan int, 1)
-	
+
 	go func() {
 		err := cmd.Run()
 		if err != nil {
@@ -626,13 +627,13 @@ func (i *Interpreter) executeRun(block *CodeBlock, args []string) error {
 			exitCh <- 0
 		}
 	}()
-	
+
 	block.State = StateWaiting
 	block.WaitCond = WaitCondition{
 		Type:          WaitProcess,
 		ProcessExitCh: exitCh,
 	}
-	
+
 	return nil
 }
 
@@ -641,35 +642,35 @@ func (i *Interpreter) executeCatch(block *CodeBlock, args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@catch requires variable and substring")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	substr := i.evalExpression(args[1])
-	
+
 	// 查找下一行的 @run
 	if block.PC+1 >= len(block.Lines) {
 		return fmt.Errorf("@catch must be followed by @run")
 	}
-	
+
 	nextLine := strings.TrimSpace(block.Lines[block.PC+1])
 	if !strings.HasPrefix(nextLine, "@run") {
 		return fmt.Errorf("@catch must be followed by @run")
 	}
-	
+
 	// 跳过 @run 行
 	block.PC++
-	
+
 	// 执行 @run（非阻塞）
 	_, runArgs := ParseLine(nextLine)
 	if len(runArgs) < 1 {
 		return fmt.Errorf("@run requires a command")
 	}
-	
+
 	cmdName := runArgs[0]
 	cmdArgs := runArgs[1:]
 	for idx, arg := range cmdArgs {
 		cmdArgs[idx] = i.evalExpression(arg)
 	}
-	
+
 	cmd := exec.Command(cmdName, cmdArgs...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -679,11 +680,11 @@ func (i *Interpreter) executeCatch(block *CodeBlock, args []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	
+
 	// 监听输出
 	go func() {
 		buf := make([]byte, 1024)
@@ -705,7 +706,7 @@ func (i *Interpreter) executeCatch(block *CodeBlock, args []string) error {
 			}
 		}
 	}()
-	
+
 	go func() {
 		buf := make([]byte, 1024)
 		for {
@@ -726,7 +727,7 @@ func (i *Interpreter) executeCatch(block *CodeBlock, args []string) error {
 			}
 		}
 	}()
-	
+
 	// 等待进程结束作为后备
 	exitCh := make(chan int, 1)
 	go func() {
@@ -740,13 +741,13 @@ func (i *Interpreter) executeCatch(block *CodeBlock, args []string) error {
 		}
 		i.mu.Unlock()
 	}()
-	
+
 	block.State = StateWaiting
 	block.WaitCond = WaitCondition{
 		Type:          WaitProcess,
 		ProcessExitCh: exitCh,
 	}
-	
+
 	return nil
 }
 
@@ -755,13 +756,13 @@ func (i *Interpreter) executeIf(args []string) error {
 	if len(args) < 4 {
 		return fmt.Errorf("@if requires condition ? truePointer : falsePointer")
 	}
-	
+
 	// 解析条件表达式
 	var condition string
 	var truePtr string
 	var falsePtr string
 	mode := 0 // 0: condition, 1: truePtr, 2: falsePtr
-	
+
 	for _, arg := range args {
 		if arg == "?" {
 			mode = 1
@@ -778,17 +779,17 @@ func (i *Interpreter) executeIf(args []string) error {
 			}
 		}
 	}
-	
+
 	condition = strings.TrimSpace(condition)
 	result := i.evalCondition(condition)
-	
+
 	var targetPtr string
 	if result {
 		targetPtr = truePtr
 	} else {
 		targetPtr = falsePtr
 	}
-	
+
 	if targetPtr != "" {
 		if ptr, ok := i.pointers.Get(targetPtr); ok && ptr.Type == PointerClass {
 			block := &CodeBlock{
@@ -800,7 +801,7 @@ func (i *Interpreter) executeIf(args []string) error {
 			i.pendingBlocks = append(i.pendingBlocks, block)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -809,11 +810,11 @@ func (i *Interpreter) executeCycle(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@cycle requires condition and pointer")
 	}
-	
+
 	var condition string
 	var pointerName string
 	foundArrow := false
-	
+
 	for _, arg := range args {
 		if !foundArrow && arg != "" {
 			if strings.HasPrefix(arg, "*") {
@@ -824,9 +825,9 @@ func (i *Interpreter) executeCycle(args []string) error {
 			}
 		}
 	}
-	
+
 	condition = strings.TrimSpace(condition)
-	
+
 	if i.evalCondition(condition) && pointerName != "" {
 		if ptr, ok := i.pointers.Get(pointerName); ok && ptr.Type == PointerClass {
 			block := &CodeBlock{
@@ -838,7 +839,7 @@ func (i *Interpreter) executeCycle(args []string) error {
 			i.pendingBlocks = append(i.pendingBlocks, block)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -847,10 +848,10 @@ func (i *Interpreter) executeBuild(block *CodeBlock, args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@build requires pointer name and type")
 	}
-	
+
 	pointerName := strings.TrimPrefix(args[0], "*")
 	buildType := args[1]
-	
+
 	if buildType == "class" {
 		// 收集除 @build 和 @def 外的所有行
 		var lines []string
@@ -869,7 +870,7 @@ func (i *Interpreter) executeBuild(block *CodeBlock, args []string) error {
 		i.pointers.SetSnapshot(pointerName, snapshot)
 		i.log(fmt.Sprintf("Created snapshot %s at tick %d", pointerName, i.currentTick))
 	}
-	
+
 	return nil
 }
 
@@ -878,7 +879,7 @@ func (i *Interpreter) executeDef(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("@def requires a pointer name")
 	}
-	
+
 	pointerName := strings.TrimPrefix(args[0], "*")
 	// 定义空指针
 	i.pointers.SetClass(pointerName, nil)
@@ -890,12 +891,12 @@ func (i *Interpreter) executeLimit(block *CodeBlock, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("@limit requires milliseconds")
 	}
-	
+
 	ms, err := strconv.Atoi(args[0])
 	if err != nil {
 		return err
 	}
-	
+
 	limitTime := time.Now().Add(time.Duration(ms) * time.Millisecond)
 	block.LimitTime = &limitTime
 	return nil
@@ -906,13 +907,13 @@ func (i *Interpreter) executeWrite(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@write requires path and content variables")
 	}
-	
+
 	pathVar := strings.TrimPrefix(args[0], "#")
 	contentVar := strings.TrimPrefix(args[1], "#")
-	
+
 	path := i.variables.Get(pathVar)
 	content := i.variables.Get(contentVar)
-	
+
 	return os.WriteFile(path, []byte(content), 0644)
 }
 
@@ -921,16 +922,16 @@ func (i *Interpreter) executeRead(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@read requires path and target variables")
 	}
-	
+
 	pathVar := strings.TrimPrefix(args[0], "#")
 	targetVar := strings.TrimPrefix(args[1], "#")
-	
+
 	path := i.variables.Get(pathVar)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	
+
 	i.variables.Set(targetVar, string(data))
 	return nil
 }
@@ -970,19 +971,19 @@ func (i *Interpreter) executeRetry(block *CodeBlock, args []string) error {
 	if len(args) < 3 {
 		return fmt.Errorf("@retry requires cooldown, max retries, and error variable")
 	}
-	
+
 	cooldown, err := strconv.Atoi(args[0])
 	if err != nil {
 		return err
 	}
-	
+
 	maxRetries, err := strconv.Atoi(args[1])
 	if err != nil {
 		return err
 	}
-	
+
 	errorVar := strings.TrimPrefix(args[2], "#")
-	
+
 	block.RetryConfig = &RetryConfig{
 		CooldownMs:    cooldown,
 		MaxRetries:    maxRetries,
@@ -990,7 +991,7 @@ func (i *Interpreter) executeRetry(block *CodeBlock, args []string) error {
 		CurrentRetry:  0,
 		OriginalLines: append([]string{}, block.Lines...),
 	}
-	
+
 	return nil
 }
 
@@ -999,18 +1000,18 @@ func (i *Interpreter) executeFilter(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@filter requires variable and regex")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	pattern := i.evalExpression(args[1])
-	
+
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return err
 	}
-	
+
 	input := i.variables.Get(varName)
 	matches := re.FindStringSubmatch(input)
-	
+
 	if len(matches) > 1 {
 		i.variables.Set(varName, matches[1])
 	} else if len(matches) > 0 {
@@ -1018,7 +1019,7 @@ func (i *Interpreter) executeFilter(args []string) error {
 	} else {
 		i.variables.Set(varName, "")
 	}
-	
+
 	return nil
 }
 
@@ -1027,16 +1028,16 @@ func (i *Interpreter) executeMath(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("@math requires variable and expression")
 	}
-	
+
 	varName := strings.TrimPrefix(args[0], "#")
 	expr := strings.Join(args[1:], " ")
 	expr = i.evalExpression(expr)
-	
+
 	result, err := i.calculateMath(expr)
 	if err != nil {
 		return err
 	}
-	
+
 	i.variables.Set(varName, fmt.Sprintf("%g", result))
 	return nil
 }
@@ -1046,7 +1047,7 @@ func (i *Interpreter) calculateMath(expr string) (float64, error) {
 	// 简单的数学计算（支持 +-*/()）
 	// 实际项目中可以使用更完善的数学表达式库
 	expr = strings.ReplaceAll(expr, " ", "")
-	
+
 	// 处理 int()
 	intRegex := regexp.MustCompile(`int\(([^)]+)\)`)
 	for {
@@ -1060,7 +1061,7 @@ func (i *Interpreter) calculateMath(expr string) (float64, error) {
 		}
 		expr = strings.Replace(expr, matches[0], fmt.Sprintf("%g", math.Floor(inner)), 1)
 	}
-	
+
 	// 简单的计算器实现
 	return i.simpleCalc(expr)
 }
@@ -1080,16 +1081,16 @@ func (i *Interpreter) simpleCalc(expr string) (float64, error) {
 		}
 		expr = expr[:start] + fmt.Sprintf("%g", val) + expr[end+1:]
 	}
-	
+
 	// 处理乘除
 	for {
 		mulIdx := strings.Index(expr, "*")
 		divIdx := strings.Index(expr, "/")
-		
+
 		if mulIdx == -1 && divIdx == -1 {
 			break
 		}
-		
+
 		var idx int
 		var op string
 		if mulIdx != -1 && (divIdx == -1 || mulIdx < divIdx) {
@@ -1099,10 +1100,10 @@ func (i *Interpreter) simpleCalc(expr string) (float64, error) {
 			idx = divIdx
 			op = "/"
 		}
-		
+
 		left, leftEnd := i.parseNumber(expr, idx, -1)
 		right, rightStart := i.parseNumber(expr, idx, 1)
-		
+
 		var result float64
 		if op == "*" {
 			result = left * right
@@ -1112,15 +1113,15 @@ func (i *Interpreter) simpleCalc(expr string) (float64, error) {
 			}
 			result = left / right
 		}
-		
+
 		expr = expr[:leftEnd+1] + fmt.Sprintf("%g", result) + expr[rightStart:]
 	}
-	
+
 	// 处理加减
 	result := 0.0
 	sign := 1.0
 	num := ""
-	
+
 	for _, r := range expr {
 		if r == '+' || r == '-' {
 			if num != "" {
@@ -1137,19 +1138,19 @@ func (i *Interpreter) simpleCalc(expr string) (float64, error) {
 			num += string(r)
 		}
 	}
-	
+
 	if num != "" {
 		val, _ := strconv.ParseFloat(num, 64)
 		result += sign * val
 	}
-	
+
 	return result, nil
 }
 
 func (i *Interpreter) parseNumber(expr string, opIdx, direction int) (float64, int) {
 	start := opIdx + direction
 	end := start
-	
+
 	for start >= 0 && start < len(expr) {
 		if direction < 0 {
 			// 向左找
@@ -1172,7 +1173,7 @@ func (i *Interpreter) parseNumber(expr string, opIdx, direction int) (float64, i
 			}
 		}
 	}
-	
+
 	if direction < 0 {
 		start = max(0, start)
 		numStr := expr[start:opIdx]
@@ -1214,7 +1215,7 @@ func (i *Interpreter) evalExpression(expr string) string {
 	var result bytes.Buffer
 	var currentVar bytes.Buffer
 	inVar := false
-	
+
 	for _, r := range expr {
 		if r == '#' && !inVar {
 			inVar = true
@@ -1234,12 +1235,12 @@ func (i *Interpreter) evalExpression(expr string) string {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	if inVar {
 		varName := strings.TrimPrefix(currentVar.String(), "#")
 		result.WriteString(i.variables.Get(varName))
 	}
-	
+
 	return result.String()
 }
 
@@ -1247,14 +1248,14 @@ func (i *Interpreter) evalExpression(expr string) string {
 func (i *Interpreter) evalCondition(expr string) bool {
 	expr = i.evalExpression(expr)
 	expr = strings.TrimSpace(expr)
-	
+
 	if expr == "" || expr == "false" {
 		return false
 	}
 	if expr == "true" {
 		return true
 	}
-	
+
 	// 简单比较
 	if strings.Contains(expr, "==") {
 		parts := strings.Split(expr, "==")
@@ -1288,7 +1289,7 @@ func (i *Interpreter) evalCondition(expr string) bool {
 		b, _ := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
 		return a < b
 	}
-	
+
 	// 逻辑与
 	if strings.Contains(expr, "&&") {
 		parts := strings.Split(expr, "&&")
@@ -1299,7 +1300,7 @@ func (i *Interpreter) evalCondition(expr string) bool {
 		}
 		return true
 	}
-	
+
 	// 逻辑或
 	if strings.Contains(expr, "||") {
 		parts := strings.Split(expr, "||")
@@ -1310,12 +1311,12 @@ func (i *Interpreter) evalCondition(expr string) bool {
 		}
 		return false
 	}
-	
+
 	// 非
 	if strings.HasPrefix(expr, "!") {
 		return !i.evalCondition(strings.TrimPrefix(expr, "!"))
 	}
-	
+
 	// 默认非空为 true
 	return true
 }

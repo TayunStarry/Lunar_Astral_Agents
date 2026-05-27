@@ -4,44 +4,31 @@ import (
 	"browser"
 	"config"
 	"fmt"
-	"log"
+	"logger"
+	"net"
 	"net/http"
 )
 
 // StartServerListener 启动服务器监听循环
 func StartServerListener(server *http.Server) {
-	// 定义最大尝试次数
-	const maxAttempts = 10
-	// 尝试启动服务器
-	if !attemptServerStart(server, maxAttempts) {
-		log.Fatalf("Lunar模块[ERROR] -> 无可用端口")
-	}
-}
-
-// attemptServerStart 尝试启动服务器，最多尝试指定次数
-func attemptServerStart(server *http.Server, maxAttempts int) bool {
-	for range maxAttempts {
-		if tryStartServerOnPort(server) {
-			return true
-		}
-		*config.BasicPort++
-	}
-	return false
-}
-
-// tryStartServerOnPort 尝试在指定端口上启动服务器
-func tryStartServerOnPort(server *http.Server) bool {
-	// 服务器成功启动后的初始化工作
-	initializeServerComponents(server)
-	// 配置服务器监听地址
+	// 为服务器添加 CORS 中间件
+	server.Handler = CORSMiddleware(httpMux)
+	//拼接服务器监听地址
 	addr := fmt.Sprintf(":%d", *config.BasicPort)
-	// 启动HTTP服务器
-	if err := http.ListenAndServe(addr, server.Handler); err != nil && err != http.ErrServerClosed {
-		log.Printf("Lunar模块[ERROR] -> %v", err)
-		return false
+	// 监听指定端口
+	listener, err := net.Listen("tcp", addr)
+	// 处理监听失败的情况
+	if err != nil {
+		logger.Fatal("LunarCore", "端口 %d 已被占用, 无法启动服务器, 请检查端口号配置", *config.BasicPort)
 	}
-	// 返回成功启动服务器
-	return true
+	// 关闭监听器
+	defer listener.Close()
+	// 启动客户端加载任务
+	go startClientLoading()
+	// 启动服务器监听循环
+	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+		logger.Fatal("LunarCore", "服务器运行失败: %v", err)
+	}
 }
 
 // CORSMiddleware CORS 中间件
@@ -63,21 +50,13 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// initializeServerComponents 初始化服务器组件
-func initializeServerComponents(server *http.Server) {
-	// 为服务器添加 CORS 中间件
-	server.Handler = CORSMiddleware(httpMux)
-	// 启动客户端加载任务
-	go startClientLoading()
-}
-
 // startClientLoading 启动客户端加载任务
 func startClientLoading() {
 	// 获取本地 IP 地址
 	ip, err := browser.GetLocalIP([]string{})
 	// 处理获取 IP 地址失败的情况
 	if err != nil {
-		log.Printf("Lunar模块[ERROR] -> %v\n", err)
+		logger.Error("LunarCore", "%v", err)
 		return
 	}
 	// 构建客户端访问的 URL

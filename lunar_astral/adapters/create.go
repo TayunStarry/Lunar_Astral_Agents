@@ -1,10 +1,10 @@
 package adapters
 
 import (
-	"lunar_astral/hierarchy"
 	"context"
 	"fmt"
-	"log"
+	"logger"
+	"lunar_astral/hierarchy"
 	"sync"
 
 	"github.com/dop251/goja"
@@ -125,7 +125,7 @@ func RunAgentContext() error {
 	runtime.RunOnLoop(func(vm *goja.Runtime) {
 		_, err = vm.RunString(systemJSContent)
 		if err != nil {
-			log.Printf("Lunar模块[JavaScript][ERROR] -> 执行 agentSystem.js 代码失败: %v", err)
+			logger.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
 	})
