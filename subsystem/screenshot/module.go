@@ -9,6 +9,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"logger"
 	"strconv"
 	"strings"
 	"sync"
@@ -221,7 +222,7 @@ func screenshotAllDisplaysOptimized() (*image.RGBA, error) {
 		displayImg, err := screenshot.CaptureDisplay(i)
 		if err != nil {
 			// 记录错误但继续处理其他显示器
-			fmt.Printf("截取显示器 %d 失败: %v\n", i, err)
+			logger.Error("Screenshot", "截取显示器 %d 失败: %v", i, err)
 			continue
 		}
 

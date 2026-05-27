@@ -1,9 +1,15 @@
 package module
 
 import (
+	"config"
 	"database/sql"
+	"logger"
 	"time"
 )
+
+func init() {
+	logger.SetDevMode(*config.Developer)
+}
 
 // FileInfo 文件信息结构体，用于存储文件和目录的相关信息
 type FileInfo struct {

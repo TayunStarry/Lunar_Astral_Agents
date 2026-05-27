@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"flag"
 	"log"
 	"os"
 	"path/filepath"
@@ -40,11 +41,13 @@ type ModelConfig struct {
 
 // init 加载配置文件
 func init() {
+	// 解析命令行参数
+	flag.Parse()
 	// 获取当前可执行文件的路径
 	exePath, err := os.Executable()
 	// 若获取失败，打印错误日志并直接返回
 	if err != nil {
-		log.Printf("获取可执行文件路径失败: %v", err)
+		log.Printf("[Config][ERROR] -> 获取可执行文件路径失败: %v", err)
 		return
 	}
 	// 提取可执行文件所在的目录
@@ -55,7 +58,7 @@ func init() {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		// 若读取失败，打印错误日志并直接返回
-		log.Printf("读取配置文件失败 %s: %v", configPath, err)
+		log.Printf("[Config][ERROR] -> 读取配置文件失败 %s: %v", configPath, err)
 		return
 	}
 	// 创建 ModelConfig 结构体实例用于接收解析结果
@@ -63,7 +66,7 @@ func init() {
 	// 将 JSON 数据解析到结构体中
 	if err := json.Unmarshal(data, parameter); err != nil {
 		// 若解析失败，打印错误日志并直接返回
-		log.Printf("解析配置文件失败: %v", err)
+		log.Printf("[Config][ERROR] -> 解析配置文件失败: %v", err)
 		return
 	}
 	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置

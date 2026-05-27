@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"log"
+	"logger"
 	"math"
 	"net/http"
 	"sync"
@@ -15,14 +15,14 @@ import (
 func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[WSStream] 升级WebSocket失败: %v", err)
+		logger.SubError("QWEN-TTS", "WSStream", "升级WebSocket失败: %v", err)
 		return
 	}
 	defer conn.Close()
 
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		log.Printf("[WSStream] 读取请求失败: %v", err)
+		logger.SubError("QWEN-TTS", "WSStream", "读取请求失败: %v", err)
 		return
 	}
 
@@ -160,12 +160,12 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 func sendWSResponse(conn *websocket.Conn, resp WSStreamResponse) {
 	data, err := json.Marshal(resp)
 	if err != nil {
-		log.Printf("[WSStream] 序列化响应失败: %v", err)
+		logger.SubError("QWEN-TTS", "WSStream", "序列化响应失败: %v", err)
 		return
 	}
 
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		log.Printf("[WSStream] 发送WebSocket消息失败: %v", err)
+		logger.SubError("QWEN-TTS", "WSStream", "发送WebSocket消息失败: %v", err)
 	}
 }
 

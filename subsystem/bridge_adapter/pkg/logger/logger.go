@@ -1,10 +1,8 @@
 package logger
 
 import (
-	"fmt"
-	"log"
+	centrallog "logger"
 	"os"
-	"time"
 )
 
 type LogLevel int
@@ -16,70 +14,44 @@ const (
 	ERROR
 )
 
-var (
-	logLevel  = INFO
-	logWriter = os.Stdout
-	logger    = log.New(logWriter, "", 0)
-)
+var logLevel = INFO
+
+func init() {
+	centrallog.SetDevMode(true)
+}
 
 func SetLogLevel(level LogLevel) {
 	logLevel = level
 }
 
 func SetLogWriter(writer *os.File) {
-	logWriter = writer
-	logger = log.New(logWriter, "", 0)
-}
-
-func getTimestamp() string {
-	return time.Now().Format("2006-01-02 15:04:05.000")
-}
-
-func getLevelPrefix(level LogLevel) string {
-	switch level {
-	case DEBUG:
-		return "[DEBUG]"
-	case INFO:
-		return "[INFO ]"
-	case WARN:
-		return "[WARN ]"
-	case ERROR:
-		return "[ERROR]"
-	default:
-		return "[INFO ]"
-	}
+	centrallog.SetOutput(writer)
 }
 
 func Debug(format string, v ...interface{}) {
 	if logLevel <= DEBUG {
-		msg := fmt.Sprintf(format, v...)
-		logger.Printf("%s %s %s\n", getTimestamp(), getLevelPrefix(DEBUG), msg)
+		centrallog.Info("BridgeAdapter", format, v...)
 	}
 }
 
 func Info(format string, v ...interface{}) {
 	if logLevel <= INFO {
-		msg := fmt.Sprintf(format, v...)
-		logger.Printf("%s %s %s\n", getTimestamp(), getLevelPrefix(INFO), msg)
+		centrallog.Info("BridgeAdapter", format, v...)
 	}
 }
 
 func Warn(format string, v ...interface{}) {
 	if logLevel <= WARN {
-		msg := fmt.Sprintf(format, v...)
-		logger.Printf("%s %s %s\n", getTimestamp(), getLevelPrefix(WARN), msg)
+		centrallog.Error("BridgeAdapter", format, v...)
 	}
 }
 
 func Error(format string, v ...interface{}) {
 	if logLevel <= ERROR {
-		msg := fmt.Sprintf(format, v...)
-		logger.Printf("%s %s %s\n", getTimestamp(), getLevelPrefix(ERROR), msg)
+		centrallog.Error("BridgeAdapter", format, v...)
 	}
 }
 
 func Fatal(format string, v ...interface{}) {
-	msg := fmt.Sprintf(format, v...)
-	logger.Printf("%s %s %s\n", getTimestamp(), getLevelPrefix(ERROR), msg)
-	os.Exit(1)
+	centrallog.Fatal("BridgeAdapter", format, v...)
 }

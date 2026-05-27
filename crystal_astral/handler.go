@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"logger"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -19,7 +20,7 @@ import (
 func getProxyHandler() *httputil.ReverseProxy {
 	proxyURL, err := url.Parse("http://localhost:36789")
 	if err != nil {
-		fmt.Printf("解析代理 URL 失败: %v\n", err)
+		logger.Error("CrystalAstral", "解析代理 URL 失败: %v", err)
 		return nil
 	}
 	return httputil.NewSingleHostReverseProxy(proxyURL)
@@ -105,13 +106,13 @@ func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Application started: %s\n", req.Path)
+	logger.Info("CrystalAstral", "Application started: %s", req.Path)
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			fmt.Printf("Application %s exited with error: %v\n", req.Path, err)
+			logger.Error("CrystalAstral", "Application %s exited with error: %v", req.Path, err)
 		} else {
-			fmt.Printf("Application %s exited successfully\n", req.Path)
+			logger.Info("CrystalAstral", "Application %s exited successfully", req.Path)
 		}
 	}()
 

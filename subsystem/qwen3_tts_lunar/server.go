@@ -4,7 +4,7 @@ import (
 	"embed"
 	"io"
 	"io/fs"
-	"log"
+	"logger"
 	"net"
 	"net/http"
 	"os"
@@ -44,15 +44,15 @@ func registerHandlers() {
 	if err == nil {
 		fileServer := http.FileServer(http.FS(clientFS))
 		httpMux.Handle("/", http.StripPrefix("/", fileServer))
-		log.Println("[Server] 使用嵌入的客户端文件")
+		logger.Info("QWEN-TTS", "使用嵌入的客户端文件")
 	} else {
 		assetsDir := "./client"
 		if _, err := os.Stat(assetsDir); err == nil {
 			fileServer := http.FileServer(http.Dir(assetsDir))
 			httpMux.Handle("/", http.StripPrefix("/", fileServer))
-			log.Println("[Server] 使用本地文件系统客户端文件")
+			logger.Info("QWEN-TTS", "使用本地文件系统客户端文件")
 		} else {
-			log.Println("[Server] 警告: 未找到客户端文件目录")
+			logger.Error("QWEN-TTS", "未找到客户端文件目录")
 			httpMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
 				w.WriteHeader(http.StatusNotFound)
@@ -63,7 +63,7 @@ func registerHandlers() {
 
 	for _, endpoint := range endpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
-		log.Printf("[Server] 注册端点: %s [%s] - %s", endpoint.Path, endpoint.Method, endpoint.Description)
+		logger.Info("QWEN-TTS", "注册端点: %s [%s] - %s", endpoint.Path, endpoint.Method, endpoint.Description)
 	}
 }
 
@@ -78,15 +78,15 @@ func startServer(addr string) {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	log.Printf("[Server] HTTP服务器启动于 http://%s", addr)
+	logger.Info("QWEN-TTS", "HTTP服务器启动于 http://%s", addr)
 
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("[Server] 服务器启动失败: %v", err)
+		logger.Fatal("QWEN-TTS", "服务器启动失败: %v", err)
 	}
 }
 
 func waitForServerReady(addr string, timeoutSeconds int) bool {
-	log.Printf("[Server] 等待服务就绪: %s (最多 %d 秒)", addr, timeoutSeconds)
+	logger.Info("QWEN-TTS", "等待服务就绪: %s (最多 %d 秒)", addr, timeoutSeconds)
 
 	target := addr
 	if target[0] == ':' {
@@ -97,13 +97,13 @@ func waitForServerReady(addr string, timeoutSeconds int) bool {
 		conn, err := net.DialTimeout("tcp", target, 500*time.Millisecond)
 		if err == nil {
 			conn.Close()
-			log.Println("[Server] 服务已就绪")
+			logger.Info("QWEN-TTS", "服务已就绪")
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	log.Println("[Server] 服务就绪超时")
+	logger.Error("QWEN-TTS", "服务就绪超时")
 	return false
 }
 
@@ -115,13 +115,13 @@ func setupSignalHandling() chan os.Signal {
 
 func waitForShutdown(quit chan os.Signal) {
 	<-quit
-	log.Println("[Server] 正在关闭...")
+	logger.Info("QWEN-TTS", "正在关闭...")
 
 	if httpServer != nil {
 		shutdownServer()
 	}
 
-	log.Println("[Server] 已安全关闭")
+	logger.Info("QWEN-TTS", "已安全关闭")
 }
 
 func shutdownServer() {
@@ -131,6 +131,6 @@ func shutdownServer() {
 		for _, f := range files {
 			os.Remove(f)
 		}
-		log.Println("[Server] 清理临时上传文件")
+		logger.Info("QWEN-TTS", "清理临时上传文件")
 	}
 }

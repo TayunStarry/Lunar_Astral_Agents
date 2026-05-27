@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -50,24 +50,24 @@ func Init() {
 		"--reasoning", "off",
 	}
 
-	log.Printf("llama -> 正在启动 llama-server 端口: %d", *config.ModelPort)
+	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *config.ModelPort)
 
 	cmd := exec.Command(*config.InferEngine, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("llama[ERROR] -> 创建标准输出管道失败: %v", err)
+		logger.Error("LlamaProxy", "创建标准输出管道失败: %v", err)
 		return
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Printf("llama[ERROR] -> 创建标准错误管道失败: %v", err)
+		logger.Error("LlamaProxy", "创建标准错误管道失败: %v", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("llama[ERROR] -> 启动 llama-server 失败: %v", err)
+		logger.Error("LlamaProxy", "启动 llama-server 失败: %v", err)
 		return
 	}
 
@@ -80,11 +80,11 @@ func Init() {
 
 	select {
 	case <-serverReady:
-		log.Printf("llama -> llama-server 已成功启动并准备就绪")
+		logger.Info("LlamaProxy", "llama-server 已成功启动并准备就绪")
 	case <-ctx.Done():
-		log.Printf("llama[ERROR] -> llama-server 启动超时")
+		logger.Error("LlamaProxy", "llama-server 启动超时")
 		if err := cmd.Process.Kill(); err != nil {
-			log.Printf("llama[ERROR] -> 终止 llama-server 进程失败: %v", err)
+			logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
 		}
 		return
 	}
@@ -98,13 +98,13 @@ func Close() {
 		return
 	}
 
-	log.Printf("llama -> 正在关闭 llama-server...")
+	logger.Info("LlamaProxy", "正在关闭 llama-server...")
 
 	if err := serverProcess.Process.Signal(nil); err == nil {
 		if err := serverProcess.Process.Kill(); err != nil {
-			log.Printf("llama[ERROR] -> 终止 llama-server 进程失败: %v", err)
+			logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
 		} else {
-			log.Printf("llama -> llama-server 已终止")
+			logger.Info("LlamaProxy", "llama-server 已终止")
 		}
 	}
 }
@@ -117,7 +117,7 @@ func monitorOutput(stdout io.ReadCloser, stderr io.ReadCloser) {
 		for stdoutScanner.Scan() {
 			line := stdoutScanner.Text()
 			if *config.Developer {
-				log.Printf("llama[STDOUT] -> %s", line)
+				logger.Info("LlamaProxy", "[STDOUT] %s", line)
 			}
 			checkReadySignal(line)
 		}
@@ -127,7 +127,7 @@ func monitorOutput(stdout io.ReadCloser, stderr io.ReadCloser) {
 		for stderrScanner.Scan() {
 			line := stderrScanner.Text()
 			if *config.Developer {
-				log.Printf("llama[STDERR] -> %s", line)
+				logger.Info("LlamaProxy", "[STDERR] %s", line)
 			}
 			checkReadySignal(line)
 		}
@@ -156,19 +156,34 @@ func checkReadySignal(line string) {
 func waitForProcessExit(cmd *exec.Cmd) {
 	if err := cmd.Wait(); err != nil {
 		if !strings.Contains(err.Error(), "signal: killed") {
-			log.Printf("llama[ERROR] -> llama-server 进程异常退出: %v", err)
+			logger.Error("LlamaProxy", "llama-server 进程异常退出: %v", err)
 		}
 	} else {
-		log.Printf("llama -> llama-server 进程正常退出")
+		logger.Info("LlamaProxy", "llama-server 进程正常退出")
 	}
 }
 
 // ProxyHandler 将所有请求代理到 llama.cpp 服务器
 func ProxyHandler(w http.ResponseWriter, r *http.Request) {
+	if isEmbeddingRequest(r) {
+		proxyToLocal(w, r)
+		return
+	}
 	if *config.CloudModelUrl != "" {
 		ProxyToCloud(w, r)
 		return
 	}
+	proxyToLocal(w, r)
+}
+
+// isEmbeddingRequest 检测请求是否为 embedding 模型请求
+func isEmbeddingRequest(r *http.Request) bool {
+	path := strings.ToLower(r.URL.Path)
+	return strings.Contains(path, "/embeddings") || strings.Contains(path, "/embedding")
+}
+
+// proxyToLocal 将请求反向代理到本地 llama.cpp 服务器
+func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.ModelPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
@@ -179,7 +194,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("llama[ERROR] -> 代理错误: %v", err)
+		logger.Error("LlamaProxy", "代理错误: %v", err)
 		http.Error(w, "llama[ERROR] -> 代理失败", http.StatusBadGateway)
 	}
 
@@ -193,22 +208,7 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
 		return
 	}
-
-	log.Printf("llama -> 云服务器 URL: %s", target.String())
-
-	// 打印消息头中的密钥信息
-	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		log.Printf("llama -> Authorization 头: %s", authHeader)
-	}
-	if apiKey := r.Header.Get("x-api-key"); apiKey != "" {
-		log.Printf("llama -> x-api-key 头: %s", apiKey)
-	}
-	if apiKey := r.Header.Get("api-key"); apiKey != "" {
-		log.Printf("llama -> api-key 头: %s", apiKey)
-	}
-
 	proxy := httputil.NewSingleHostReverseProxy(target)
-
 	// 自定义 Director 函数，强制将所有请求重定向到 /chat/completions
 	proxy.Director = func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
@@ -218,6 +218,5 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		req.URL.RawQuery = ""
 		req.Host = target.Host
 	}
-
 	proxy.ServeHTTP(w, r)
 }

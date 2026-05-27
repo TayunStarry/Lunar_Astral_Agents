@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"net/http"
 	"strings"
 	"time"
@@ -28,7 +28,7 @@ func handleProxyRequest(req ProxyRequest) ([]byte, string, error) {
 	if req.RequestInit.Body != nil {
 		bodyBytes, err := json.Marshal(req.RequestInit.Body)
 		if err != nil {
-			log.Printf("序列化请求体失败: %v", err)
+			logger.Error("LunarCore", "序列化请求体失败: %v", err)
 			return nil, "", fmt.Errorf("Invalid request body")
 		}
 		reqBody = bytes.NewBuffer(bodyBytes)
@@ -43,7 +43,7 @@ func handleProxyRequest(req ProxyRequest) ([]byte, string, error) {
 	// 创建请求
 	httpReq, err := http.NewRequest(method, req.URL, reqBody)
 	if err != nil {
-		log.Printf("创建请求失败: %v", err)
+		logger.Error("LunarCore", "创建请求失败: %v", err)
 		return nil, "", fmt.Errorf("Failed to create request")
 	}
 
@@ -57,7 +57,7 @@ func handleProxyRequest(req ProxyRequest) ([]byte, string, error) {
 	// 发送请求
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		log.Printf("发送请求失败: %v", err)
+		logger.Error("LunarCore", "发送请求失败: %v", err)
 		return nil, "", fmt.Errorf("Failed to send request")
 	}
 	defer resp.Body.Close()
@@ -65,7 +65,7 @@ func handleProxyRequest(req ProxyRequest) ([]byte, string, error) {
 	// 读取响应体
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("读取响应体失败: %v", err)
+		logger.Error("LunarCore", "读取响应体失败: %v", err)
 		return nil, "", fmt.Errorf("Failed to read response")
 	}
 
@@ -94,7 +94,7 @@ func handleProxyRequest(req ProxyRequest) ([]byte, string, error) {
 	// 编码响应
 	jsonResp, err := json.Marshal(response)
 	if err != nil {
-		log.Printf("编码响应失败: %v", err)
+		logger.Error("LunarCore", "编码响应失败: %v", err)
 		return nil, "", fmt.Errorf("Failed to encode response")
 	}
 
@@ -124,7 +124,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// 解析请求体
 	var proxyReq ProxyRequest
 	if err := json.NewDecoder(r.Body).Decode(&proxyReq); err != nil {
-		log.Printf("解析代理请求失败: %v", err)
+		logger.Error("LunarCore", "解析代理请求失败: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

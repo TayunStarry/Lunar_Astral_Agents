@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"logger"
 	"os"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 )
 
 func main() {
+	logger.SetDevMode(true)
 	configPath := flag.String("config", "local_data/lunar_config.json", "配置文件路径")
 	outputPath := flag.String("output_path", "", "输出文件基础名称")
 	partSizeMB := flag.Int("part_size_mb", 0, "分卷大小（MB）")
@@ -28,12 +30,12 @@ func main() {
 	}
 
 	if err := applyDefaults(params); err != nil {
-		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+		logger.Error("VolumeArchive", "错误: %v", err)
 		os.Exit(1)
 	}
 
 	if err := component.Execute(params); err != nil {
-		fmt.Fprintf(os.Stderr, "执行失败: %v\n", err)
+		logger.Error("VolumeArchive", "执行失败: %v", err)
 		os.Exit(1)
 	}
 }

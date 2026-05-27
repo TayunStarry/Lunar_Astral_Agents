@@ -2,12 +2,12 @@ package adapters
 
 import (
 	"browser"
-	"config"
 	"bytes"
+	"config"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"logger"
 	"net/http"
 
 	"github.com/dop251/goja"
@@ -24,27 +24,27 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	// 从IP地址查询位置信息
 	resp, err := http.Get("https://ipapi.co/json/")
 	if err != nil {
-		log.Printf("获取位置失败: %v\n", err)
+		logger.Error("LunarCore", "获取位置失败: %v", err)
 		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("获取位置失败: %s\n", resp.Status)
+		logger.Error("LunarCore", "获取位置失败: %s", resp.Status)
 		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
 	}
 
 	// 解析JSON响应
 	var data IPInfo
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		log.Printf("解析位置信息失败: %v\n", err)
+		logger.Error("LunarCore", "解析位置信息失败: %v", err)
 		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
 	}
 
 	// 确保省份和城市信息存在
 	if data.Region == "" || data.City == "" {
-		log.Println("获取位置失败: 省份或城市信息缺失")
+		logger.Error("LunarCore", "获取位置失败: 省份或城市信息缺失")
 		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
 	}
 	// 缓存当前地址
@@ -57,7 +57,7 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 func (class *Runtime) url(call goja.FunctionCall) goja.Value {
 	ip, err := browser.GetLocalIP([]string{})
 	if err != nil {
-		log.Printf("获取本地IP失败: %v\n", err)
+		logger.Error("LunarCore", "获取本地IP失败: %v", err)
 		return class.runtime.ToValue([]any{fmt.Sprintf("http://localhost:%d", *config.BasicPort), nil})
 	}
 	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *config.BasicPort), nil})

@@ -3,7 +3,7 @@ package module
 import (
 	"config"
 	"fmt"
-	"log"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,10 +38,7 @@ func GetFileInfo(filePath string) (string, int64, error) {
 		return "", 0, fmt.Errorf("无法下载目录")
 	}
 
-	// 记录下载成功日志
-	if *config.Developer {
-		log.Printf("Download请求 -> 成功下载: %s, 大小: %d 字节", fullPath, fileInfo.Size())
-	}
+	logger.Info("Storage", "Download请求 -> 成功下载: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 
 	return fullPath, fileInfo.Size(), nil
 }

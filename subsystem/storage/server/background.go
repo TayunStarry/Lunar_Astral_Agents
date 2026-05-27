@@ -3,6 +3,7 @@ package server
 import (
 	"config"
 	"fmt"
+	"logger"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -55,6 +56,6 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := module.CopyBuffer(w, file); err != nil {
-		fmt.Printf("传输图片失败: %v\n", err)
+		logger.Error("Storage", "传输图片失败: %v", err)
 	}
 }

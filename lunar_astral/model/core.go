@@ -4,7 +4,7 @@ import (
 	"config"
 	"encoding/json"
 	"fmt"
-	"log"
+	"logger"
 	"time"
 )
 
@@ -128,7 +128,7 @@ func ProcessAgentRequest(modelName string) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("无法找到模型: %s", modelName)
 	}
-	log.Printf("GGUF模块 -> 模型[ %s : %d ]", modelName, port)
+	logger.Info("LunarCore", "模型[%s : %d]", modelName, port)
 	// 这里不直接代理，而是返回端口信息，由handlers处理代理
 	return fmt.Sprintf("%d", port), nil
 }

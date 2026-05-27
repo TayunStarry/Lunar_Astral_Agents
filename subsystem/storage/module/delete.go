@@ -3,7 +3,7 @@ package module
 import (
 	"config"
 	"fmt"
-	"log"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,9 +37,6 @@ func DeleteFile(filePath string) (string, error) {
 	}
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
-	// 记录删除成功日志
-	if *config.Developer {
-		log.Printf("Delete请求 -> 成功删除: %s", fullPath)
-	}
+	logger.Info("Storage", "Delete请求 -> 成功删除: %s", fullPath)
 	return fullPath, nil
 }

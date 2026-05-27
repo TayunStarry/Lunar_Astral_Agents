@@ -1,6 +1,14 @@
 package screenshot
 
-import "time"
+import (
+	"config"
+	"logger"
+	"time"
+)
+
+func init() {
+	logger.SetDevMode(*config.Developer)
+}
 
 // ScreenshotRequest 截图请求参数
 type ScreenshotRequest struct {

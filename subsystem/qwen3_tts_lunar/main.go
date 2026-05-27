@@ -5,7 +5,7 @@ import (
 	"config"
 	"context"
 	"flag"
-	"log"
+	"logger"
 	"os"
 	"qwen3_tts_lunar/module"
 	"time"
@@ -25,13 +25,15 @@ func main() {
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	flag.Parse()
 
+	logger.SetDevMode(*config.Developer)
+
 	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
-		log.Printf("[SimpleTTS] 警告: 模型目录不存在: %s", modelDir)
+		logger.Error("QWEN-TTS", "模型目录不存在: %s", modelDir)
 	}
 
 	module.InitTTSEngine(modelDir, refAudio)
 
-	log.Printf("[SimpleTTS] 监听端口: %s", addr)
+	logger.Info("QWEN-TTS", "监听端口: %s", addr)
 	go startServer(addr)
 
 	if waitForServerReady(addr, 10) {
@@ -44,9 +46,9 @@ func main() {
 
 	select {
 	case <-quit:
-		log.Println("[SimpleTTS] 接收到中断信号，正在关闭...")
+		logger.Info("QWEN-TTS", "接收到中断信号，正在关闭...")
 	case <-browser.WebViewClosed():
-		log.Println("[SimpleTTS] 检测到 WebView 关闭，正在关闭...")
+		logger.Info("QWEN-TTS", "检测到 WebView 关闭，正在关闭...")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -54,12 +56,12 @@ func main() {
 
 	if httpServer != nil {
 		if err := httpServer.Shutdown(ctx); err != nil {
-			log.Printf("[SimpleTTS] 关闭失败: %v\n", err)
+			logger.Error("QWEN-TTS", "关闭失败: %v", err)
 		}
 	}
 
 	shutdownServer()
 
 	browser.CloseWebView()
-	log.Println("[SimpleTTS] 已成功关闭")
+	logger.Info("QWEN-TTS", "已成功关闭")
 }

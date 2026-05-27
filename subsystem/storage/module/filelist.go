@@ -3,7 +3,7 @@ package module
 import (
 	"config"
 	"fmt"
-	"log"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,9 +61,6 @@ func GetFileList(path string) ([]FileInfo, error) {
 			Path:         relPath,
 		})
 	}
-	// 记录文件列表请求日志
-	if *config.Developer {
-		log.Printf("FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
-	}
+	logger.Info("Storage", "FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 	return fileList, nil
 }

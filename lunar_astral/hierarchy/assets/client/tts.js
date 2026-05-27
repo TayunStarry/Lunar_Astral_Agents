@@ -23,6 +23,7 @@ class TTSManager {
         if (!text) return '';
         let processed = text;
         processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        processed = processed.replace(/```[a-zA-Z][a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
         processed = processed.replace(/```[\s\S]*?```/g, '');
         processed = processed.replace(/`[^`]*`/g, '');
         processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');

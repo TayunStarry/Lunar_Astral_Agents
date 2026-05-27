@@ -58,6 +58,7 @@ try {
     $env:CGO_ENABLED = 1
     $env:GOOS = $TargetOS
     $env:GOARCH = $TargetArch
+    $env:CGO_CFLAGS = "-w"
 
     # 编译服务端脚本
     $exitCode = Invoke-NativeCommand { npm run server.side }

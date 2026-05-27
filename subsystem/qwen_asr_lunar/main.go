@@ -7,7 +7,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"log"
+	"logger"
 	"net/http"
 	"os"
 	"os/signal"
@@ -30,18 +30,19 @@ func main() {
 	port := getEnv("PORT", fmt.Sprintf("%d", *config.ModelPort+1))
 	modelDir := getEnv("MODEL_DIR", *config.AsrModel)
 
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
-	log.Printf("Qwen ASR Server starting...")
-	log.Printf("Model directory: %s", modelDir)
-	log.Printf("Server will listen on port: %s", port)
+	logger.SetDevMode(*config.Developer)
+
+	logger.Info("ASREngine", "ASR Server 启动中...")
+	logger.Info("ASREngine", "模型目录: %s", modelDir)
+	logger.Info("ASREngine", "监听端口: %s", port)
 
 	asr, err := New(modelDir)
 	if err != nil {
-		log.Fatalf("Failed to initialize ASR engine: %v", err)
+		logger.Fatal("ASREngine", "ASR引擎初始化失败: %v", err)
 	}
 	defer asr.Close()
 
-	log.Println("ASR engine loaded successfully")
+	logger.Info("ASREngine", "ASR引擎加载成功")
 
 	handler := NewAsrHandler(asr, *config.LocalDir+"/audios")
 
@@ -59,18 +60,18 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("HTTP server listening on http://localhost:%s", port)
-		log.Printf("ASR endpoint: http://localhost:%s/asr", port)
-		log.Printf("Health check: http://localhost:%s/health", port)
-		log.Printf("Test page: http://localhost:%s/", port)
+		logger.Info("ASREngine", "HTTP服务监听于 http://localhost:%s", port)
+		logger.Info("ASREngine", "ASR端点: http://localhost:%s/asr", port)
+		logger.Info("ASREngine", "健康检查: http://localhost:%s/health", port)
+		logger.Info("ASREngine", "测试页面: http://localhost:%s/", port)
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			logger.Fatal("ASREngine", "服务器错误: %v", err)
 		}
 	}()
 
 	url := fmt.Sprintf("http://localhost:%s", port)
-	log.Printf("Opening browser: %s", url)
+	logger.Info("ASREngine", "打开浏览器: %s", url)
 	reloadPageParameters()
 	browser.OpenBrowser(url)
 
@@ -79,19 +80,19 @@ func main() {
 
 	select {
 	case <-quit:
-		log.Println("Signal received, shutting down server...")
+		logger.Info("ASREngine", "接收到信号，正在关闭服务器...")
 	case <-browser.WebViewClosed():
-		log.Println("WebView closed, shutting down server...")
+		logger.Info("ASREngine", "WebView已关闭，正在关闭服务器...")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Printf("Server shutdown error: %v", err)
+		logger.Error("ASREngine", "服务器关闭错误: %v", err)
 	}
 
-	log.Println("Server stopped")
+	logger.Info("ASREngine", "服务器已停止")
 }
 
 func getEnv(key, fallback string) string {
@@ -103,7 +104,7 @@ func getEnv(key, fallback string) string {
 
 func logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
+		logger.Info("ASREngine", "[%s] %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
 }

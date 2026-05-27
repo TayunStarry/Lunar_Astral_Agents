@@ -1,10 +1,9 @@
 package server
 
 import (
-	"config"
 	"encoding/json"
 	"fmt"
-	"log"
+	"logger"
 	"net/http"
 	"storage/module"
 )
@@ -36,8 +35,5 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 记录日志
-	if *config.Developer {
-		log.Printf("数据库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
-	}
+	logger.Info("Storage", "数据库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
 }

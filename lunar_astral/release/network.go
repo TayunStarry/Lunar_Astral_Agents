@@ -2,7 +2,7 @@ package release
 
 import (
 	"config"
-	"log"
+	"logger"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -20,7 +20,7 @@ func getPortProcessesNetstat() []ProcessInfo {
 	// 检查命令执行是否出错
 	if err != nil {
 		// 打印错误信息
-		log.Printf("netstat 命令执行失败: %v\n", err)
+		logger.Error("LunarCore", "netstat 命令执行失败: %v", err)
 		// 出错时返回空切片
 		return processes
 	}

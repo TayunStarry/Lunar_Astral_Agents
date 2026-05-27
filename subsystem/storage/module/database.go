@@ -4,7 +4,7 @@ import (
 	"config"
 	"database/sql"
 	"fmt"
-	"log"
+	"logger"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +20,7 @@ func NewDatabase() (*Database, error) {
 		return nil, fmt.Errorf("初始化SQLite数据库失败: %v", err)
 	}
 
-	log.Printf("SQLite数据库连接成功: %s", *config.Database)
+	logger.Info("Storage", "SQLite数据库连接成功: %s", *config.Database)
 
 	return &Database{
 		db: db,
@@ -57,18 +57,18 @@ func initSQLite(dbPath string) (*sql.DB, error) {
 	// 设置优化选项
 	_, err = db.Exec("PRAGMA synchronous = NORMAL")
 	if err != nil {
-		log.Printf("设置SQLite同步模式失败: %v", err)
+		logger.Error("Storage", "设置SQLite同步模式失败: %v", err)
 	}
 
 	_, err = db.Exec("PRAGMA cache_size = 10000")
 	if err != nil {
-		log.Printf("设置SQLite缓存大小失败: %v", err)
+		logger.Error("Storage", "设置SQLite缓存大小失败: %v", err)
 	}
 
 	// 启用外键约束
 	_, err = db.Exec("PRAGMA foreign_keys = ON")
 	if err != nil {
-		log.Printf("启用外键约束失败: %v", err)
+		logger.Error("Storage", "启用外键约束失败: %v", err)
 	}
 
 	return db, nil
@@ -979,7 +979,7 @@ func InitDatabase() {
 	var err error
 	dbInstance, err = NewDatabase()
 	if err != nil {
-		log.Printf("初始化全局数据库实例失败: %v", err)
+		logger.Error("Storage", "初始化全局数据库实例失败: %v", err)
 	}
 }
 

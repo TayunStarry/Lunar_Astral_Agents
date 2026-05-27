@@ -605,6 +605,7 @@ class ChatDialogueRole extends ModelBuilder {
         }
         this.updateMessageContent(cache, source);
     }
+    static MAX_TEXT_LENGTH = 512;
     formatHistoricalMessages(source) {
         if (this.messages.length === 0)
             return;
@@ -618,7 +619,7 @@ class ChatDialogueRole extends ModelBuilder {
             else
                 for (let index = 0; index < message.content.length; index++) {
                     const content = message.content[index];
-                    if (content.type == 'text')
+                    if (content.type === 'text')
                         textMessages.push({ role: message.role, content: content.text });
                     else
                         visionMessages.push({ role: message.role, content: [content] });
@@ -630,8 +631,9 @@ class ChatDialogueRole extends ModelBuilder {
             formatMessages.push(message);
             textMessageMap.add(message.content);
         }
-        if (visionMessages.length <= 10)
+        if (visionMessages.length <= 10) {
             formatMessages.push(...visionMessages);
+        }
         else
             for (let i = 0; i < visionMessages.length; i += 10) {
                 const batchFrames = visionMessages.slice(i, i + 10);
@@ -641,8 +643,21 @@ class ChatDialogueRole extends ModelBuilder {
                 if (summary && summary.trim().length > 0)
                     formatMessages.push({ role: 'user', content: summary });
             }
+        for (let i = 0; i < formatMessages.length; i++) {
+            const msg = formatMessages[i];
+            if (typeof msg.content === 'string' && msg.content.length > ChatDialogueRole.MAX_TEXT_LENGTH) {
+                const chunks = [];
+                for (let j = 0; j < msg.content.length; j += ChatDialogueRole.MAX_TEXT_LENGTH) {
+                    chunks.push({ role: msg.role, content: msg.content.slice(j, j + ChatDialogueRole.MAX_TEXT_LENGTH) });
+                }
+                formatMessages.splice(i, 1, ...chunks);
+                i += chunks.length - 1;
+            }
+        }
         this.messages = formatMessages;
-        const latestRole = this.messages.slice(-1)[0].role;
+        if (this.messages.length === 0)
+            return;
+        const latestRole = this.messages[this.messages.length - 1].role;
         if (latestRole === 'user')
             return;
         this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
@@ -703,8 +718,9 @@ class ChatDialogueRole extends ModelBuilder {
     ;
     updateMessageContent(state, source) {
         if (state.thinkingContent.trim() !== "") {
-            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>';
-            source.finalResponse = newThinkTag + state.descriptionContent;
+            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
+            source.finalResponse = state.descriptionContent;
+            console.log(newThinkTag);
         }
         else
             source.finalResponse = state.descriptionContent;

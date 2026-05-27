@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"logger"
 	"net/http"
 	"sync"
 
@@ -14,12 +14,10 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// 允许所有来源，生产环境应限制
 		return true
 	},
 }
 
-// WebSocketServer WebSocket 服务器
 type WebSocketServer struct {
 	interpreter *Interpreter
 	clients     map[*websocket.Conn]bool
@@ -28,7 +26,6 @@ type WebSocketServer struct {
 	running     bool
 }
 
-// NewWebSocketServer 创建 WebSocket 服务器
 func NewWebSocketServer(interpreter *Interpreter, addr string) *WebSocketServer {
 	return &WebSocketServer{
 		interpreter: interpreter,
@@ -37,7 +34,6 @@ func NewWebSocketServer(interpreter *Interpreter, addr string) *WebSocketServer 
 	}
 }
 
-// Start 启动 WebSocket 服务器
 func (s *WebSocketServer) Start() error {
 	if s.running {
 		return fmt.Errorf("server already running")
@@ -47,20 +43,23 @@ func (s *WebSocketServer) Start() error {
 	http.HandleFunc("/", s.handleIndex)
 
 	s.running = true
-	log.Printf("WebSocket server starting on %s", s.addr)
+	logger.Info("LunarTick", "WebSocket server starting on %s", s.addr)
 	go func() {
 		if err := http.ListenAndServe(s.addr, nil); err != nil && s.running {
-			log.Printf("WebSocket server error: %v", err)
+			logger.Error("LunarTick", "WebSocket server error: %v", err)
+		}
+	}()
+	go func() {
+		if err := http.ListenAndServe(s.addr, nil); err != nil && s.running {
+			logger.Error("LunarTick", "WebSocket server error: %v", err)
 		}
 	}()
 
-	// 启动消息广播 goroutine
 	go s.broadcastMessages()
 
 	return nil
 }
 
-// Stop 停止 WebSocket 服务器
 func (s *WebSocketServer) Stop() {
 	s.running = false
 	s.clientsMu.Lock()
@@ -71,7 +70,6 @@ func (s *WebSocketServer) Stop() {
 	s.clientsMu.Unlock()
 }
 
-// handleIndex 处理根路径请求
 func (s *WebSocketServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`<!DOCTYPE html>
 <html>
@@ -85,11 +83,10 @@ func (s *WebSocketServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 </html>`))
 }
 
-// handleWebSocket 处理 WebSocket 连接
 func (s *WebSocketServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		logger.Error("LunarTick", "WebSocket upgrade error: %v", err)
 		return
 	}
 	defer conn.Close()
@@ -98,13 +95,12 @@ func (s *WebSocketServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	s.clients[conn] = true
 	s.clientsMu.Unlock()
 
-	log.Printf("New WebSocket client connected")
+	logger.Info("LunarTick", "New WebSocket client connected")
 
-	// 接收消息
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
+			logger.Error("LunarTick", "WebSocket read error: %v", err)
 			s.clientsMu.Lock()
 			delete(s.clients, conn)
 			s.clientsMu.Unlock()
@@ -115,7 +111,6 @@ func (s *WebSocketServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// handleMessage 处理接收到的消息
 func (s *WebSocketServer) handleMessage(conn *websocket.Conn, message []byte) {
 	var req WSRequest
 	if err := json.Unmarshal(message, &req); err != nil {
@@ -141,22 +136,10 @@ func (s *WebSocketServer) handleMessage(conn *websocket.Conn, message []byte) {
 			return
 		}
 		s.interpreter.Invoke(invokeData.PointerName)
-		s.sendSuccess(conn, fmt.Sprintf("Pointer %s invoked", invokeData.PointerName))
-
-	case "start":
-		s.interpreter.Start()
-		s.sendSuccess(conn, "Interpreter started")
-
-	case "stop":
-		s.interpreter.Stop()
-		s.sendSuccess(conn, "Interpreter stopped")
-
-	default:
 		s.sendError(conn, fmt.Sprintf("Unknown message type: %s", req.Type))
 	}
 }
 
-// sendSuccess 发送成功消息
 func (s *WebSocketServer) sendSuccess(conn *websocket.Conn, message string) {
 	response := map[string]interface{}{
 		"type":    "success",
@@ -166,7 +149,6 @@ func (s *WebSocketServer) sendSuccess(conn *websocket.Conn, message string) {
 	conn.WriteMessage(websocket.TextMessage, data)
 }
 
-// sendError 发送错误消息
 func (s *WebSocketServer) sendError(conn *websocket.Conn, message string) {
 	response := map[string]interface{}{
 		"type":    "error",
@@ -176,7 +158,6 @@ func (s *WebSocketServer) sendError(conn *websocket.Conn, message string) {
 	conn.WriteMessage(websocket.TextMessage, data)
 }
 
-// broadcastMessages 广播解释器的消息
 func (s *WebSocketServer) broadcastMessages() {
 	msgChan := s.interpreter.GetMessageChannel()
 	for {
