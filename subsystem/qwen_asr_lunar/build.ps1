@@ -111,7 +111,7 @@ $env:CGO_LDFLAGS = $ldflags
 Write-Host "  CFLAGS: $cflags" -ForegroundColor DarkGray
 Write-Host "  LDFLAGS: $ldflags" -ForegroundColor DarkGray
 
-go build -o $OUTPUT_NAME -ldflags="-s -w" .
+go build -o $OUTPUT_NAME -ldflags="-s -w -H windowsgui" .
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  Build successful: $OUTPUT_NAME" -ForegroundColor Green

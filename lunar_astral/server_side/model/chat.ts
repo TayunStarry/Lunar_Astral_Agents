@@ -40,67 +40,61 @@ export class ChatDialogueRole extends ModelBuilder {
 
     /** 格式化历史消息 */
     public formatHistoricalMessages(source: AgentDefine) {
-        // 如果历史消息为空,直接返回
+        // 如果消息数组为空,则不处理
         if (this.messages.length === 0) return;
-        /** 文本消息去重集合 */
+        /** 用于查重的文本消息映射表 */
         const textMessageMap = new Set<string>();
-        /** 文本消息数组,用于存储去重后的文本消息 */
+        /** 文本消息数组 */
         const textMessages: PostMessage[] = [];
-        /** 视觉消息数组,用于存储视觉消息 */
+        /** 视觉消息数组 */
         const visionMessages: PostMessage[] = [];
         /** 格式化后的消息数组 */
         const formatMessages: PostMessage[] = [];
-        // 遍历历史消息,将文本消息和视觉消息分别存储到对应的数组中
+        // 遍历并规整化消息数组
         for (const message of this.messages) {
             // 如果消息内容为字符串,则直接添加到文本消息数组
-            if (typeof message.content === 'string') textMessages.push(message);
-            // 如果消息内容为数组,则遍历数组,将每个元素添加到对应的数组中
+            if (typeof message.content === 'string') textMessages.push(message)
+            // 如果消息内容为数组,则遍历并添加到文本消息数组或视觉消息数组
             else for (let index = 0; index < message.content.length; index++) {
                 /** 当前消息内容 */
                 const content = message.content[index];
-                // 如果当前消息内容为文本,则添加到文本消息数组
-                if (content.type === 'text') textMessages.push({ role: message.role, content: content.text });
-                // 如果当前消息内容为视觉,则添加到视觉消息数组
-                else visionMessages.push({ role: message.role, content: [content] });
+                // 如果消息内容为文本,则添加到文本消息数组
+                if (content.type == 'text') textMessages.push({ role: message.role, content: content.text })
+                // 如果消息内容为视觉,则添加到视觉消息数组
+                else visionMessages.push({ role: message.role, content: [content] })
             }
         }
-
+        // 遍历文本消息数组并去除重复消息
         for (const message of textMessages) {
+            // 过滤掉无效的消息
             if (typeof message.content !== 'string' || textMessageMap.has(message.content)) continue;
+            // 将提取出来的文本消息合并到格式化消息数组中
             formatMessages.push(message);
+            // 将文本消息内容添加到映射表中
             textMessageMap.add(message.content);
         }
-
-        if (visionMessages.length <= 10) {
-            formatMessages.push(...visionMessages);
-        }
+        // 如果视觉消息数量小于等于10,则合并到格式化消息数组中
+        if (visionMessages.length <= 10) formatMessages.push(...visionMessages);
+        // 如果视觉消息数量大于10,则分批次处理
         else for (let i = 0; i < visionMessages.length; i += 10) {
+            /** 截取当前批次的视觉消息（每批次最多10条） */
             const batchFrames = visionMessages.slice(i, i + 10);
+            // 覆盖描述角色的上下文，传入当前批次的视觉消息
             source.descriptionRole.coverContext(batchFrames);
+            /** 执行描述角色的模型运行，获取总结请求响应 */
             const summaryRequest = source.descriptionRole.run as modelResponse;
+            /** 模型总结结果 */
             const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+            // 过滤空字符串和仅包含空格的字符串
             if (summary && summary.trim().length > 0) formatMessages.push({ role: 'user', content: summary });
         }
-
-        for (let i = 0; i < formatMessages.length; i++) {
-            const msg = formatMessages[i];
-            if (typeof msg.content === 'string' && msg.content.length > ChatDialogueRole.MAX_TEXT_LENGTH) {
-                const chunks: PostMessage[] = [];
-                for (let j = 0; j < msg.content.length; j += ChatDialogueRole.MAX_TEXT_LENGTH) {
-                    chunks.push({ role: msg.role, content: msg.content.slice(j, j + ChatDialogueRole.MAX_TEXT_LENGTH) });
-                }
-                formatMessages.splice(i, 1, ...chunks);
-                i += chunks.length - 1;
-            }
-        }
-
+        // 覆写处理器模型的上下文为格式化后的消息数组
         this.messages = formatMessages;
-
-        if (this.messages.length === 0) return;
-
-        const latestRole = this.messages[this.messages.length - 1].role;
+        /** 最新消息的角色 */
+        const latestRole = this.messages.slice(-1)[0].role;
+        // 如果最新消息是用户,则不处理
         if (latestRole === 'user') return;
-
+        // 如果最新消息是模型,则添加提示消息
         this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
     }
     /** 处理聊天消息响应 */

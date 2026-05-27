@@ -52,6 +52,6 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("打开文件失败")
 	}
-	logger.Info("Storage", "Read请求 -> 成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
+	logger.SubInfo("Storage", "Read", "成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 	return file, fileInfo.Size(), mimeType, nil
 }
