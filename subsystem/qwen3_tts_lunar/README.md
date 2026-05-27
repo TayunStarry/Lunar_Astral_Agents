@@ -218,15 +218,27 @@ GGML 库通过条件编译支持多种 GPU 加速后端：
 
 ```powershell
 cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
-
-# 第一步：编译 GGML 库
-.\build_ggml.ps1
-
-# 第二步：编译 C++ 引擎 + Go 程序
-.\build_cpp.ps1
-
-# 最终编译（含 Go 服务层）
 .\build.ps1
+```
+
+`build.ps1` 是**一站式构建入口**，自动按顺序完成三个阶段：
+
+| 阶段 | 内容 | 内部脚本 |
+|------|------|---------|
+| Stage 1 | 编译 GGML 张量计算库 | `build_ggml.ps1` |
+| Stage 2 | 编译 Qwen3-TTS C++ 推理引擎 | `build_cpp.ps1` |
+| Stage 3 | 编译 Go 服务层 | `go build` |
+
+> `build_ggml.ps1` 和 `build_cpp.ps1` 是内部实现细节，由 `build.ps1` 自动调用，无需手动执行。
+
+可选参数：
+
+```powershell
+.\build.ps1 -SkipGGML        # 跳过 GGML 编译（已编译过时使用）
+.\build.ps1 -SkipCPP         # 跳过 C++ 编译
+.\build.ps1 -SkipGo          # 跳过 Go 编译
+.\build.ps1 -Clean           # 清理后重新编译
+.\build.ps1 -BuildType Debug # Debug 模式编译
 ```
 
 编译产物：`d:\Lunar_Astral_Agents\Qwen3_TTS_Lunar.exe`

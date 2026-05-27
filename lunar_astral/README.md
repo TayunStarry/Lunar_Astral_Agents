@@ -329,28 +329,23 @@ TTS 底层由 [Qwen3-TTS 独立引擎](../subsystem/qwen3_tts_lunar/README.md) �
 
 ```powershell
 cd d:\Lunar_Astral_Agents\lunar_astral
-
-# 安装前端依赖并编译（仅开发模式）
-npm install
-npx tsc
-npx rollup -c
-
-# 编译 Go 程序
 .\build.ps1
 ```
 
-编译产物：`d:\Lunar_Astral_Agents\LunarAgent.exe`
+`build.ps1` 是自包含脚本，内部自动完成图标编译、前端 TypeScript 编译打包（`npm run server.side`）、export 清理及 Go 编译。
+
+编译产物：`d:\Lunar_Astral_Agents\Lunar_Astral.exe`
 
 ### 运行
 
 ```powershell
 # 直接运行
-.\LunarAgent.exe
+.\Lunar_Astral.exe
 
 # 可选命令行参数
-.\LunarAgent.exe -developer           # 开发模式（直接读取文件系统）
-.\LunarAgent.exe -clear-port          # 清理端口后启动
-.\LunarAgent.exe -basic-port 36800    # 指定基础端口
+.\Lunar_Astral.exe -developer           # 开发模式（直接读取文件系统）
+.\Lunar_Astral.exe -clear-port          # 清理端口后启动
+.\Lunar_Astral.exe -basic-port 36800    # 指定基础端口
 ```
 
 ---
@@ -371,13 +366,7 @@ npx rollup -c
 
 ### Q: JS 智能体代码在哪里修改？
 
-智能体源代码位于 `server_side/` 目录（TypeScript），编译后生成 `hierarchy/assets/agentSystem.js`。修改流程：
-
-```powershell
-cd d:\Lunar_Astral_Agents\lunar_astral
-npx tsc                         # 编译 TypeScript
-npx rollup -c                   # 打包为单文件
-```
+智能体源代码位于 `server_side/` 目录（TypeScript），编译后生成 `hierarchy/assets/agentSystem.js`。修改后重新执行 `.\build.ps1` 即可自动完成编译打包。
 
 ### Q: 如何切换语言模型？
 

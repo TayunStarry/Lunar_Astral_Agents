@@ -274,12 +274,12 @@ Lunar_Astral_Agents/
 ├── 核心系统: 星图·月华 (lunar_astral)
 │   ├── 依赖: config, browser, storage, screenshot, qwen3_tts_lunar
 │   ├── 功能: AI 对话、Live2D 角色、TTS 语音、图像生成
-│   └── 入口: LunarAgent.exe
+│   └── 入口: Lunar_Astral.exe
 │
 ├── 扩展系统: 星图·琉璃 (crystal_astral)
 │   ├── 依赖: config, browser, storage, screenshot
 │   ├── 功能: 文件管理、数据库管理、截图标注、AI 代理
-│   └── 入口: CrystalAstral.exe
+│   └── 入口: Crystal_Astral.exe
 │
 ├── 独立系统: 语音合成 (qwen3_tts_lunar)
 │   ├── 依赖: C++ GGML 引擎
@@ -385,58 +385,37 @@ vulkaninfo --summary
 
 ### 编译步骤
 
-#### 第一步：编译前端资源（可选，仅开发模式需要）
-
-```powershell
-# 进入月华前端目录
-cd d:\Lunar_Astral_Agents\lunar_astral
-
-# 安装 Node.js 依赖
-npm install
-
-# 编译 TypeScript → JavaScript
-npx tsc
-
-# 打包前端资源
-npx rollup -c
-```
-
-> 生产模式使用 `embed` 嵌入已编译的前端资源，无需此步骤。
-
-#### 第二步：编译 C++ 推理引擎（TTS）
-
-```powershell
-# 进入 TTS C++ 源码目录
-cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
-
-# 编译 GGML 库
-.\build_ggml.ps1
-
-# 编译 TTS 引擎 + Go 集成
-.\build_cpp.ps1
-```
-
-#### 第三步：编译各子系统
+#### 方式一：一键编译全部（推荐）
 
 ```powershell
 cd d:\Lunar_Astral_Agents
-
-# 编译语音识别系统
-cd subsystem\qwen_asr_lunar
 .\build.ps1
+```
 
-# 编译语音合成系统
-cd ..\qwen3_tts_lunar
-.\build.ps1
+根目录的 `build.ps1` 是**统一构建入口**，自动完成环境检查后按顺序编译所有子系统：
+月华 → 琉璃 → 桥接适配器 → 卷归档 → 语音合成。每个子系统的 `build.ps1` 均为自包含脚本，内部已处理所有前置步骤（前端编译、GGML 库构建、C++ 引擎编译等）。
 
-# 编译核心系统——月华
-cd ..\..\lunar_astral
+#### 方式二：单独编译某个子系统
+
+```powershell
+# 编译核心系统——月华（含前端 TypeScript 编译）
+cd d:\Lunar_Astral_Agents\lunar_astral
 .\build.ps1
 
 # 编译扩展系统——琉璃
-cd ..\crystal_astral
+cd d:\Lunar_Astral_Agents\crystal_astral
+.\build.ps1
+
+# 编译语音识别
+cd d:\Lunar_Astral_Agents\subsystem\qwen_asr_lunar
+.\build.ps1
+
+# 编译语音合成（含 GGML + C++ 引擎 + Go 服务）
+cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
 .\build.ps1
 ```
+
+> 各子系统的 `build.ps1` 均为自包含脚本，无需手动执行 `npm install`、`build_ggml.ps1`、`build_cpp.ps1` 等前置步骤，它们已在脚本内部自动处理。
 
 ### 编译输出
 
@@ -444,33 +423,34 @@ cd ..\crystal_astral
 
 | 文件 | 所属系统 | 说明 |
 |------|---------|------|
-| `LunarAgent.exe` | 星图·月华 | AI 桌面智能体主程序 |
-| `CrystalAstral.exe` | 星图·琉璃 | 工具集扩展程序 |
+| `Lunar_Astral.exe` | 星图·月华 | AI 桌面智能体主程序 |
+| `Crystal_Astral.exe` | 星图·琉璃 | 工具集扩展程序 |
 | `Qwen_ASR_Lunar.exe` | 语音识别 | 独立语音识别程序 |
 | `Qwen3_TTS_Lunar.exe` | 语音合成 | 独立语音合成程序 |
 
 ### 编译参数说明
 
+各模块的编译参数已内置于各自的 `build.ps1` 脚本中，无需手动设置。常见编译标志如下（供高级用户参考）：
+
 | 参数 | 适用模块 | 说明 |
 |------|---------|------|
-| `CGO_ENABLED=1` | ASR | 启用 CGO（调用 C 推理引擎） |
+| `CGO_ENABLED=1` | ASR、TTS、月华、琉璃 | 启用 CGO（调用 C/C++ 推理引擎） |
 | `GOARCH=amd64` | 全部 | 指定目标架构为 64 位 |
-| `-ldflags="-s -w"` | 全部 | 去除调试符号和 DWARF 信息 |
+| `-tags webview` | 月华、琉璃 | 启用 WebView 桌面窗口支持 |
+| `-ldflags="-s -w"` | 全部 | 去除调试符号和 DWARF 信息以减小体积 |
 | `-O3 -march=native` | ASR | GCC 最高优化 + 本机指令集 |
-| `-ffast-math` | ASR | 快速数学优化 |
-| `-funroll-loops` | ASR | 循环展开优化 |
 | `-DUSE_BLAS` | ASR（可选） | 启用 OpenBLAS 加速 |
 
 ### 编译验证
 
 ```powershell
 # 检查编译产物是否存在
-Test-Path d:\Lunar_Astral_Agents\LunarAgent.exe   # 应返回 True
-Test-Path d:\Lunar_Astral_Agents\CrystalAstral.exe # 应返回 True
-Test-Path d:\Lunar_Astral_Agents\Qwen_ASR_Lunar.exe # 应返回 True
+Test-Path d:\Lunar_Astral_Agents\Lunar_Astral.exe   # 应返回 True
+Test-Path d:\Lunar_Astral_Agents\Crystal_Astral.exe # 应返回 True
+Test-Path d:\Lunar_Astral_Agents\Qwen_ASR_Lunar.exe  # 应返回 True
 
 # 检查文件大小（应大于 10MB）
-Get-Item d:\Lunar_Astral_Agents\LunarAgent.exe | Select-Object Length
+Get-Item d:\Lunar_Astral_Agents\Lunar_Astral.exe | Select-Object Length
 ```
 
 ### 常见编译错误
@@ -592,7 +572,7 @@ Get-Item d:\Lunar_Astral_Agents\LunarAgent.exe | Select-Object Length
 
 ### Q: 前端如何修改？
 
-月华系统的前端位于 `lunar_astral/hierarchy/assets/client/` 和 `lunar_astral/server_side/`，修改后需重新编译 TypeScript（`npx tsc && npx rollup -c`）。
+月华系统的前端位于 `lunar_astral/hierarchy/assets/client/` 和 `lunar_astral/server_side/`，修改后重新执行 `lunar_astral\build.ps1` 即可（脚本内部自动处理 TypeScript 编译与打包）。
 
 ### Q: 如何添加新的 AI 模型？
 
