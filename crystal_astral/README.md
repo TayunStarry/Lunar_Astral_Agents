@@ -310,13 +310,13 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 .\build.ps1
 ```
 
-编译产物：`d:\Lunar_Astral_Agents\CrystalAstral.exe`
+编译产物：`d:\Lunar_Astral_Agents\Crystal_Astral.exe`
 
 ### 运行
 
 ```powershell
 # 直接运行
-.\CrystalAstral.exe
+.\Crystal_Astral.exe
 
 # 琉璃会在 10000~40000 之间随机选择端口
 # 窗口会自动以 WebView 形式打开（1540×1050）

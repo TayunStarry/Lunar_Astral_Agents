@@ -198,16 +198,16 @@ MinPort          ModelPort         ProxyPort        MaxPort
 
 ```powershell
 # 指定基础端口启动
-.\LunarAgent.exe -basic-port 36800
+.\Lunar_Astral.exe -basic-port 36800
 
 # 开发模式（直接读取文件系统）
-.\LunarAgent.exe -developer
+.\Lunar_Astral.exe -developer
 
 # 禁用多模态模型
-.\LunarAgent.exe -allow-multimodal=false
+.\Lunar_Astral.exe -allow-multimodal=false
 
 # 清理端口后启动
-.\LunarAgent.exe -clear-port
+.\Lunar_Astral.exe -clear-port
 ```
 
 ### lunar_config.json 示例

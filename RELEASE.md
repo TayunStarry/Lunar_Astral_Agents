@@ -269,7 +269,7 @@ Lunar_Astral_Agents-v2026.05.26/
 
 ## 编译指南
 
-如果您需要从源码自行编译，请参考以下步骤：
+如果您需要从源码自行编译，请参考以下步骤。
 
 ### 开发环境
 
@@ -282,27 +282,32 @@ Lunar_Astral_Agents-v2026.05.26/
 
 ### 编译命令
 
+#### 一键编译全部（推荐）
+
 ```powershell
-# 1. 编译前端（仅开发模式需要）
+cd d:\Lunar_Astral_Agents
+.\build.ps1
+```
+
+根目录的 `build.ps1` 是统一构建入口，自动检查环境（Go / Node.js / npm / GCC / rsrc）后按顺序编译所有子系统。每个子系统的 `build.ps1` 均为自包含脚本，内部已处理所有前置步骤。
+
+#### 单独编译某个子系统
+
+```powershell
+# 编译月华核心系统（含前端 TypeScript 编译）
 cd lunar_astral
-npm install && npx tsc && npx rollup -c
-
-# 2. 编译 C++ 引擎
-cd ..\subsystem\qwen3_tts_lunar
-.\build_ggml.ps1
-.\build_cpp.ps1
-
-# 3. 编译各 Go 模块
-cd ..\qwen_asr_lunar
 .\build.ps1
 
-cd ..\qwen3_tts_lunar
+# 编译琉璃扩展系统
+cd crystal_astral
 .\build.ps1
 
-cd ..\..\lunar_astral
+# 编译语音识别
+cd subsystem\qwen_asr_lunar
 .\build.ps1
 
-cd ..\crystal_astral
+# 编译语音合成（含 GGML + C++ 引擎 + Go 服务）
+cd subsystem\qwen3_tts_lunar
 .\build.ps1
 ```
 
