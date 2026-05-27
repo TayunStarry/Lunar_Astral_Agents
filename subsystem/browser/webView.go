@@ -13,10 +13,10 @@ import (
 
 // waitForServer 轮询等待 HTTP 服务就绪，最多等待 10 秒
 func waitForServer(rawURL string) {
-	logger.Info("Browser", "waitForServer: 开始等待服务器就绪")
+	logger.SubInfo("Browser", "waitForServer", "开始等待服务器就绪")
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		logger.Error("Browser", "waitForServer: URL解析失败 %v, 跳过等待", err)
+		logger.SubError("Browser", "waitForServer", "URL解析失败 %v, 跳过等待", err)
 		return
 	}
 	addr := u.Host
@@ -27,7 +27,7 @@ func waitForServer(rawURL string) {
 			addr += ":80"
 		}
 	}
-	logger.Info("Browser", "waitForServer: 检测目标地址 %s", addr)
+	logger.SubInfo("Browser", "waitForServer", "检测目标地址 %s", addr)
 
 	timeout := time.After(10 * time.Second)
 	ticker := time.NewTicker(300 * time.Millisecond)
@@ -36,16 +36,16 @@ func waitForServer(rawURL string) {
 	for {
 		select {
 		case <-timeout:
-			logger.Error("Browser", "waitForServer: 超时(10s)未检测到服务，继续启动 webview")
+			logger.SubError("Browser", "waitForServer", "超时(10s)未检测到服务，继续启动 webview")
 			return
 		case <-ticker.C:
 			conn, err := net.DialTimeout("tcp", addr, 500*time.Millisecond)
 			if err == nil {
 				conn.Close()
-				logger.Info("Browser", "waitForServer: 服务已就绪")
+				logger.SubInfo("Browser", "waitForServer", "服务已就绪")
 				return
 			}
-			logger.Info("Browser", "waitForServer: 连接失败 %v, 继续等待", err)
+			logger.SubInfo("Browser", "waitForServer", "连接失败 %v, 继续等待", err)
 		}
 	}
 }
@@ -115,18 +115,18 @@ func createWebView() webview.WebView {
 	defer webviewMutex.Unlock()
 
 	if webviewInstance != nil {
-		logger.Info("Browser", "createWebView: 返回已有实例")
+		logger.SubInfo("Browser", "createWebView", "返回已有实例")
 		return webviewInstance
 	}
 
-	logger.Info("Browser", "createWebView: 调用 webview.New")
+	logger.SubInfo("Browser", "createWebView", "调用 webview.New")
 	w := webview.New(*config.Developer)
 	if w == nil {
-		logger.Error("Browser", "createWebView: webview.New 返回 nil")
+		logger.SubError("Browser", "createWebView", "webview.New 返回 nil")
 		return nil
 	}
 
-	logger.Info("Browser", "createWebView: 设置窗口标题和尺寸")
+	logger.SubInfo("Browser", "createWebView", "设置窗口标题和尺寸")
 	w.SetTitle(*config.WebViewTitle)
 	w.SetSize(*config.WebViewWidth, *config.WebViewHeight, webview.HintNone)
 
@@ -139,7 +139,7 @@ func createWebView() webview.WebView {
 	}
 
 	webviewInstance = w
-	logger.Info("Browser", "createWebView: 实例创建成功")
+	logger.SubInfo("Browser", "createWebView", "实例创建成功")
 	return w
 }
 
@@ -149,16 +149,16 @@ func navigateWebView(url string) {
 	defer webviewMutex.Unlock()
 
 	if webviewInstance == nil {
-		logger.Error("Browser", "navigateWebView: 实例为 nil，无法导航")
+		logger.SubError("Browser", "navigateWebView", "实例为 nil，无法导航")
 		return
 	}
 	webviewInstance.Navigate(url)
-	logger.Info("Browser", "navigateWebView: 导航调用完成")
+	logger.SubInfo("Browser", "navigateWebView", "导航调用完成")
 }
 
 // CloseWebView 安全关闭 webview（从任意 goroutine 调用）
 func CloseWebView() {
-	logger.Info("Browser", "CloseWebView: 收到关闭请求")
+	logger.SubInfo("Browser", "CloseWebView", "收到关闭请求")
 	webviewMutex.Lock()
 	w := webviewInstance
 	webviewInstance = nil
@@ -166,7 +166,7 @@ func CloseWebView() {
 	webviewMutex.Unlock()
 
 	if w != nil {
-		logger.Info("Browser", "CloseWebView: 向主线程发送 Terminate")
+		logger.SubInfo("Browser", "CloseWebView", "向主线程发送 Terminate")
 		select {
 		case webviewCmdCh <- cmdQuit:
 		default:

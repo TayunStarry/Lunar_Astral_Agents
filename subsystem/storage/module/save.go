@@ -67,9 +67,9 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 	}
 	// 同步文件内容到磁盘
 	if err := file.Sync(); err != nil {
-		logger.Error("Storage", "Save请求 -> 同步失败: %s, %v", fullPath, err)
+		logger.SubError("Storage", "Save", "同步失败: %s, %v", fullPath, err)
 	}
-	logger.Info("Storage", "Save请求 -> 成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
+	logger.SubInfo("Storage", "Save", "成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 	return fileName, fullPath, nil
 }
 

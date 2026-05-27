@@ -37,6 +37,6 @@ func DeleteFile(filePath string) (string, error) {
 	}
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
-	logger.Info("Storage", "Delete请求 -> 成功删除: %s", fullPath)
+	logger.SubInfo("Storage", "Delete", "成功删除: %s", fullPath)
 	return fullPath, nil
 }

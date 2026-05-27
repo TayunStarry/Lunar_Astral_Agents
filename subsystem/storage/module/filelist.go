@@ -61,6 +61,6 @@ func GetFileList(path string) ([]FileInfo, error) {
 			Path:         relPath,
 		})
 	}
-	logger.Info("Storage", "FileList请求 -> 成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
+	logger.SubInfo("Storage", "FileList", "成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 	return fileList, nil
 }

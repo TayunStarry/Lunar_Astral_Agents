@@ -60,7 +60,7 @@ func CreateZip(files []*multipart.FileHeader, zipName string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("关闭ZIP写入器失败: %w", err)
 	}
-	logger.Info("Storage", "Archive请求 -> 成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
+	logger.SubInfo("Storage", "Archive", "成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
 	// 从缓冲区获取 ZIP 文件的字节数据
 	return zipBuffer.Bytes(), nil
 }
