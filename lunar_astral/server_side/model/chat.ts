@@ -107,6 +107,7 @@ export class ChatDialogueRole extends ModelBuilder {
             // 检查是否有预测令牌数
             if (message.timings?.predicted_per_second) {
                 source.responseSpeed = message.timings.predicted_per_second;
+                console.log(`预测令牌数: ${message.timings.predicted_per_second}`);
             }
             // 处理工具调用
             if (message.choices?.[0]?.message?.tool_calls) {

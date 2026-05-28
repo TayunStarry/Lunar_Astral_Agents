@@ -10,6 +10,9 @@
 		},
 		{
 			"path": "../TTS/stable-diffusion.cpp-master"
+		},
+		{
+			"path": "../月之华-资料库存/llama"
 		}
 	],
 	"settings": {

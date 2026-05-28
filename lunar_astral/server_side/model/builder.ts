@@ -96,7 +96,10 @@ class ConfigModifier extends ModeConfig {
     }
     /** 写入上下文 */
     public writeContext(context: PostMessage): this {
-        if (this.messages.length > 20) this.messages.slice(-20).push(context);
+        if (this.messages.length > 20) {
+            this.messages = this.messages.slice(-20);
+            this.messages.push(context);
+        }
         else this.messages.push(context);
         return this;
     }

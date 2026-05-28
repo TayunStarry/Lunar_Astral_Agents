@@ -510,8 +510,10 @@ class ConfigModifier extends ModeConfig {
         return this;
     }
     writeContext(context) {
-        if (this.messages.length > 20)
-            this.messages.slice(-20).push(context);
+        if (this.messages.length > 20) {
+            this.messages = this.messages.slice(-20);
+            this.messages.push(context);
+        }
         else
             this.messages.push(context);
         return this;
@@ -537,6 +539,7 @@ class ModelBuilder extends ConfigModifier {
             tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',
         };
+        console.log(JSON.stringify(requestBody.messages));
         if (!this.enableTools || !isIncludesTools) {
             delete requestBody.tool_choice;
             delete requestBody.tools;
@@ -655,6 +658,7 @@ class ChatDialogueRole extends ModelBuilder {
             }
             if (message.timings?.predicted_per_second) {
                 source.responseSpeed = message.timings.predicted_per_second;
+                console.log(`预测令牌数: ${message.timings.predicted_per_second}`);
             }
             if (message.choices?.[0]?.message?.tool_calls) {
                 for (const toolCall of message.choices[0].message.tool_calls) {
