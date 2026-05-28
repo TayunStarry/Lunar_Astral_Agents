@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,20 +35,46 @@ func Init() {
 	}
 
 	args := []string{
+		// 模型预设配置文件路径
 		"--models-preset", "local_data/models/models.ini",
-		"--spec-type", "draft-mtp",
-		"--spec-draft-n-max", "5",
-		"--n-gpu-layers", "999",
+		// GPU层数：尽可能多地将层卸载到GPU
+		"--gpu-layers", "all",
+		// 启用Flash Attention注意力机制优化
 		"--flash-attn", "on",
+		// 上下文窗口大小：16K tokens
 		"--ctx-size", "16384",
-		"--temp", "0.6",
+		// 温度参数：控制生成文本的随机性
+		"--temp", "1.0",
+		// 核采样阈值：保留累积概率95%的候选词
 		"--top-p", "0.95",
+		// 存在惩罚：不惩罚已出现的词
 		"--presence-penalty", "0.0",
+		// Top-K采样：只考虑概率最高的20个词
 		"--top-k", "20",
+		// 最小概率阈值：不设置下限
 		"--min-p", "0.0",
+		// 重复惩罚系数：1.0表示无惩罚
 		"--repeat_penalty", "1.0",
+		// 服务器监听端口
 		"--port", strconv.Itoa(*config.ModelPort),
+		// 推理模式：自动选择最合适的推理模式
 		"--reasoning", "off",
+		// 并行请求处理数
+		"--parallel", "1",
+		// 批处理大小
+		"--batch-size", "2048",
+		// 微批处理大小
+		"--ubatch-size", "512",
+		// 使用的CPU线程数
+		"--threads", strconv.Itoa(runtime.NumCPU()),
+		// K缓存量化类型：8位量化
+		"--cache-type-k", "q8_0",
+		// V缓存量化类型：8位量化
+		"--cache-type-v", "q8_0",
+		// 不启动UI界面
+		"--no-ui",
+		// 空闲等待300秒后休眠服务器
+		"--sleep-idle-seconds", "300",
 	}
 
 	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *config.ModelPort)
@@ -109,29 +136,30 @@ func Close() {
 	}
 }
 
+// monitorOutput 监听 llama.cpp 服务器的标准输出和标准错误输出
 func monitorOutput(stdout io.ReadCloser, stderr io.ReadCloser) {
-	stdoutScanner := bufio.NewScanner(stdout)
-	stderrScanner := bufio.NewScanner(stderr)
+	go readOutput(stdout, "STDOUT")
+	go readOutput(stderr, "STDERR")
+}
 
-	go func() {
-		for stdoutScanner.Scan() {
-			line := stdoutScanner.Text()
-			if *config.Developer {
-				logger.Info("LlamaProxy", "[STDOUT] %s", line)
+// readOutput 读取并处理 llama.cpp 服务器的标准输出和标准错误输出
+func readOutput(reader io.ReadCloser, prefix string) {
+	defer reader.Close()
+	scanner := bufio.NewReader(reader)
+	for {
+		line, err := scanner.ReadString('\n')
+		if err != nil {
+			if err != io.EOF {
+				logger.Error("LlamaProxy", "[%s] 读取失败: %v", prefix, err)
 			}
-			checkReadySignal(line)
+			return
 		}
-	}()
-
-	go func() {
-		for stderrScanner.Scan() {
-			line := stderrScanner.Text()
-			if *config.Developer {
-				logger.Info("LlamaProxy", "[STDERR] %s", line)
-			}
-			checkReadySignal(line)
+		line = strings.TrimSpace(line)
+		if *config.Developer {
+			logger.Info("LlamaProxy", "[%s] %s", prefix, line)
 		}
-	}()
+		checkReadySignal(line)
+	}
 }
 
 func checkReadySignal(line string) {
