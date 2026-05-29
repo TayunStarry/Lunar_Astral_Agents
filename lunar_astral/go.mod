@@ -52,6 +52,9 @@ require qwen3_tts_lunar v0.0.0
 
 replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
 
-require logger v0.0.0
+require (
+	github.com/philippgille/chromem-go v0.7.0
+	logger v0.0.0
+)
 
 replace logger => ../subsystem/logger

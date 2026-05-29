@@ -162,6 +162,7 @@ func readOutput(reader io.ReadCloser, prefix string) {
 	}
 }
 
+// checkReadySignal 检查 llama.cpp 服务器是否已启动并准备就绪
 func checkReadySignal(line string) {
 	readySignals := []string{
 		"starting the main loop",
@@ -181,6 +182,7 @@ func checkReadySignal(line string) {
 	}
 }
 
+// waitForProcessExit 等待 llama.cpp 服务器进程退出
 func waitForProcessExit(cmd *exec.Cmd) {
 	if err := cmd.Wait(); err != nil {
 		if !strings.Contains(err.Error(), "signal: killed") {

@@ -117,4 +117,36 @@ declare global {
      * @param {string[]} imageData 图片数据列表（base64编码）
      */
     function pushImage(imageData: string[]): boolean;
+    /**
+     * 初始化 chromem-go 向量数据库
+     * 
+     * @param {string} baseURL 嵌入模型服务的基础URL (e.g. http://localhost:36789/v1)
+     * 
+     * @param {string} apiKey API密钥
+     * 
+     * @param {string} modelName 嵌入模型名称
+     * 
+     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
+     */
+    function chromemInit(baseURL: string, apiKey: string, modelName: string): [boolean, Error | null];
+    /**
+     * 向 chromem-go 向量数据库添加消息
+     * 
+     * @param {string} role 消息角色 (user/assistant/system/tool)
+     * 
+     * @param {string} content 消息文本内容
+     * 
+     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
+     */
+    function chromemAdd(role: string, content: string): [boolean, Error | null];
+    /**
+     * 从 chromem-go 向量数据库查询相关消息
+     * 
+     * @param {string} queryText 查询文本
+     * 
+     * @param {number} topK 返回的最相关结果数量
+     * 
+     * @returns {[Array<{role: string, content: string}>, Error | null]} 包含查询结果的元组
+     */
+    function chromemQuery(queryText: string, topK: number): [Array<{ role: string, content: string }>, Error | null];
 }
