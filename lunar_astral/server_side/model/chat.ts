@@ -15,6 +15,8 @@ export class ChatDialogueRole extends ModelBuilder {
             this.formatHistoricalMessages(source);
             // 替换系统提示词中的时间占位符
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
+            // 从 chromem-go 查询相关历史消息作为 RAG 上下文
+            this.queryRagMessages();
             /** 向处理器模型发送请求并等待响应 */
             const response = this.run(this.ragMessages);
             // 处理响应文本内容
