@@ -13,10 +13,21 @@ class BaseConfig {
     protected enableTools: boolean = true;
     /** 消息列表 */
     protected messages: PostMessage[] = [];
+    /** RAG消息列表 */
+    protected ragMessages: PostMessage[] = [];
     /** 系统提示 */
     protected systemPrompt: string = "你的名字叫做月华, 是一个女孩子";
+    /** chromem是否已初始化 */
+    protected static chromemReady: boolean = false;
     /** 私有化构造函数，防止外部实例化 */
     protected constructor() { }
+    /** 初始化chromem-go向量数据库 */
+    protected static initChromem(): void {
+        if (BaseConfig.chromemReady) return;
+        const [ok, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+        if (err) console.error('chromem 初始化失败:', err);
+        else BaseConfig.chromemReady = true;
+    }
 }
 
 /** 提示词处理器 */
@@ -97,11 +108,24 @@ class ConfigModifier extends ModeConfig {
     /** 写入上下文 */
     public writeContext(context: PostMessage): this {
         if (this.messages.length > 20) {
+            const discarded = this.messages.slice(0, this.messages.length - 20);
             this.messages = this.messages.slice(-20);
             this.messages.push(context);
+            this.persistDiscardedMessages(discarded);
         }
         else this.messages.push(context);
         return this;
+    }
+    /** 将被抛弃的消息持久化到 chromem-go */
+    private persistDiscardedMessages(discarded: PostMessage[]): void {
+        if (!BaseConfig.chromemReady) BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady) return;
+        for (const message of discarded) {
+            const content = typeof message.content === 'string'
+                ? message.content
+                : JSON.stringify(message.content);
+            chromemAdd(message.role, content);
+        }
     }
     /** 覆写上下文 */
     public coverContext(context: PostMessage[] | PostMessage): this {
@@ -117,6 +141,32 @@ export class ModelBuilder extends ConfigModifier {
         if (this.isMultimodal) return this.runMultimodal();
         else return this.runEmbedding();
     }
+    /** 从 chromem-go 查询相关消息并填充 ragMessages */
+    public queryRagMessages(): this {
+        const latestUserMessage = this.getLatestUserMessageContent();
+        if (!latestUserMessage) return this;
+        if (!BaseConfig.chromemReady) BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady) return this;
+        const [results, error] = chromemQuery(latestUserMessage, 10);
+        if (error) {
+            console.error('chromem 查询失败:', error);
+            return this;
+        }
+        if (results && results.length > 0) {
+            this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as 'user' | 'assistant' | 'system' | 'tool', content: r.content, }));
+        }
+        return this;
+    }
+    /** 获取最新的用户消息内容作为查询条件 */
+    private getLatestUserMessageContent(): string | null {
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+            const message = this.messages[i];
+            if (message.role === 'user' && typeof message.content === 'string') {
+                return message.content;
+            }
+        }
+        return null;
+    }
     /** 运行多模态模型 */
     protected runMultimodal(): modelResponse {
         /** 检查消息列表中是否包含工具调用消息 */
@@ -124,7 +174,7 @@ export class ModelBuilder extends ConfigModifier {
         /** 构建发给推理模型的请求体 */
         const requestBody: InferencePayload = {
             model: OnlyData.MultimodalName,
-            messages: [{ role: 'system', content: this.systemPrompt }, ...this.messages],
+            messages: [{ role: 'system', content: this.systemPrompt }, ...this.ragMessages, ...this.messages],
             stream: this.stream,
             tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',

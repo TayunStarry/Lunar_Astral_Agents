@@ -457,8 +457,19 @@ class BaseConfig {
     stream = false;
     enableTools = true;
     messages = [];
+    ragMessages = [];
     systemPrompt = "你的名字叫做月华, 是一个女孩子";
+    static chromemReady = false;
     constructor() { }
+    static initChromem() {
+        if (BaseConfig.chromemReady)
+            return;
+        const [ok, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+        if (err)
+            console.error('chromem 初始化失败:', err);
+        else
+            BaseConfig.chromemReady = true;
+    }
 }
 class PromptProcessor extends BaseConfig {
     promptCompletion(prompt) {
@@ -511,12 +522,26 @@ class ConfigModifier extends ModeConfig {
     }
     writeContext(context) {
         if (this.messages.length > 20) {
+            const discarded = this.messages.slice(0, this.messages.length - 20);
             this.messages = this.messages.slice(-20);
             this.messages.push(context);
+            this.persistDiscardedMessages(discarded);
         }
         else
             this.messages.push(context);
         return this;
+    }
+    persistDiscardedMessages(discarded) {
+        if (!BaseConfig.chromemReady)
+            BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady)
+            return;
+        for (const message of discarded) {
+            const content = typeof message.content === 'string'
+                ? message.content
+                : JSON.stringify(message.content);
+            chromemAdd(message.role, content);
+        }
     }
     coverContext(context) {
         this.messages = Array.isArray(context) ? context : [context];
@@ -530,16 +555,45 @@ class ModelBuilder extends ConfigModifier {
         else
             return this.runEmbedding();
     }
+    queryRagMessages() {
+        const latestUserMessage = this.getLatestUserMessageContent();
+        if (!latestUserMessage)
+            return this;
+        if (!BaseConfig.chromemReady)
+            BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady)
+            return this;
+        const [results, error] = chromemQuery(latestUserMessage, 10);
+        if (error) {
+            console.error('chromem 查询失败:', error);
+            return this;
+        }
+        if (results && results.length > 0) {
+            this.ragMessages = results.map((r) => ({
+                role: r.role,
+                content: r.content,
+            }));
+        }
+        return this;
+    }
+    getLatestUserMessageContent() {
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+            const message = this.messages[i];
+            if (message.role === 'user' && typeof message.content === 'string') {
+                return message.content;
+            }
+        }
+        return null;
+    }
     runMultimodal() {
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         const requestBody = {
             model: OnlyData.MultimodalName,
-            messages: [{ role: 'system', content: this.systemPrompt }, ...this.messages],
+            messages: [{ role: 'system', content: this.systemPrompt }, ...this.ragMessages, ...this.messages],
             stream: this.stream,
             tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',
         };
-        console.log(JSON.stringify(requestBody.messages));
         if (!this.enableTools || !isIncludesTools) {
             delete requestBody.tool_choice;
             delete requestBody.tools;

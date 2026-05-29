@@ -54,6 +54,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("pullContext", adapters.pullContext)
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
+
+	// 注册chromem-go向量数据库适配器
+	vm.Set("chromemInit", adapters.chromemInit)
+	vm.Set("chromemAdd", adapters.chromemAdd)
+	vm.Set("chromemQuery", adapters.chromemQuery)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境
