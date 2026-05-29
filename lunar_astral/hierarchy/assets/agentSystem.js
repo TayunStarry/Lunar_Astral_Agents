@@ -453,7 +453,6 @@ function savePromptToDatabase(key, prompt) {
 
 let currentAddress = [];
 class BaseConfig {
-    isMultimodal = true;
     stream = false;
     enableTools = true;
     messages = [];
@@ -500,18 +499,7 @@ class PromptProcessor extends BaseConfig {
         }).filter(text => text.trim() !== '');
     }
 }
-class ModeConfig extends PromptProcessor {
-    useMultimodal(prompt) {
-        this.systemPrompt = this.promptCompletion(prompt);
-        this.isMultimodal = true;
-        return this;
-    }
-    useEmbedding() {
-        this.isMultimodal = false;
-        return this;
-    }
-}
-class ConfigModifier extends ModeConfig {
+class ConfigModifier extends PromptProcessor {
     setStream(stream = false) {
         this.stream = stream;
         return this;
@@ -550,42 +538,6 @@ class ConfigModifier extends ModeConfig {
 }
 class ModelBuilder extends ConfigModifier {
     get run() {
-        if (this.isMultimodal)
-            return this.runMultimodal();
-        else
-            return this.runEmbedding();
-    }
-    queryRagMessages() {
-        const latestUserMessage = this.getLatestUserMessageContent();
-        if (!latestUserMessage)
-            return this;
-        if (!BaseConfig.chromemReady)
-            BaseConfig.initChromem();
-        if (!BaseConfig.chromemReady)
-            return this;
-        const [results, error] = chromemQuery(latestUserMessage, 10);
-        if (error) {
-            console.error('chromem 查询失败:', error);
-            return this;
-        }
-        if (results && results.length > 0) {
-            this.ragMessages = results.map((r) => ({
-                role: r.role,
-                content: r.content,
-            }));
-        }
-        return this;
-    }
-    getLatestUserMessageContent() {
-        for (let i = this.messages.length - 1; i >= 0; i--) {
-            const message = this.messages[i];
-            if (message.role === 'user' && typeof message.content === 'string') {
-                return message.content;
-            }
-        }
-        return null;
-    }
-    runMultimodal() {
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         const requestBody = {
             model: OnlyData.MultimodalName,
@@ -614,30 +566,38 @@ class ModelBuilder extends ConfigModifier {
             throw error;
         return result;
     }
-    runEmbedding() {
-        const validMessages = this.extractTextFromMessages(this.messages);
-        const requestBody = {
-            model: OnlyData.EmbeddingName,
-            input: validMessages,
-            stream: this.stream,
-        };
-        const headers = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
-            "Content-Type": "application/json",
-        };
-        const modelRequest = {
-            method: "POST",
-            crossDomain: true,
-            headers,
-            body: JSON.stringify(requestBody)
-        };
-        const endpoint = "/embeddings";
-        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
-        if (error)
-            throw error;
-        return result.data[0].embedding.slice(0, 256);
+    queryRagMessages() {
+        const latestUserMessage = this.getLatestUserMessageContent();
+        if (!latestUserMessage)
+            return this;
+        if (!BaseConfig.chromemReady)
+            BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady)
+            return this;
+        const [results, error] = chromemQuery(latestUserMessage, 10);
+        if (error) {
+            console.error('chromem 查询失败:', error);
+            return this;
+        }
+        if (results && results.length > 0) {
+            this.ragMessages = results.map((r) => ({ role: r.role, content: r.content, }));
+            this.ragMessages.forEach((message) => { console.log("ragMessages: ", message.role, message.content); });
+        }
+        return this;
     }
-    constructor() { super(); }
+    getLatestUserMessageContent() {
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+            const message = this.messages[i];
+            if (message.role === 'user' && typeof message.content === 'string') {
+                return message.content;
+            }
+        }
+        return null;
+    }
+    constructor(prompt) {
+        super();
+        this.systemPrompt = this.promptCompletion(prompt);
+    }
 }
 
 class ChatDialogueRole extends ModelBuilder {
@@ -771,8 +731,7 @@ class ChatDialogueRole extends ModelBuilder {
         return source.finalResponse;
     }
     constructor() {
-        super();
-        this.useMultimodal(fileView('prompts/chatRole.md')[0]);
+        super(fileView('prompts/chatRole.md')[0]);
     }
 }
 
@@ -865,8 +824,7 @@ class PainterRole extends ModelBuilder {
         }
     ];
     constructor() {
-        super();
-        this.useMultimodal(fileView('prompts/painterRole.md')[0]);
+        super(fileView('prompts/painterRole.md')[0]);
     }
     writeAppearancePrompt(expression, posture) {
         const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
@@ -876,15 +834,14 @@ class PainterRole extends ModelBuilder {
 }
 
 class AgentDefine {
-    compilePlan = new ModelBuilder();
-    queryKeywords = new ModelBuilder();
-    emotionManager = new ModelBuilder();
-    recorderRole = new ModelBuilder();
-    summaryRole = new ModelBuilder();
-    descriptionRole = new ModelBuilder();
-    painterRole = new PainterRole();
+    compilePlan = new ModelBuilder(fileView('prompts/compilePlan.md')[0]);
+    queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
+    emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
+    recorderRole = new ModelBuilder(fileView('prompts/recorderRole.md')[0]);
+    summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
+    descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     chatDialogueRole = new ChatDialogueRole();
-    embedding = new ModelBuilder().useEmbedding();
+    painterRole = new PainterRole();
     unreadContext = [];
     unreadVideoUrl = [];
     finalResponse = "";
@@ -900,12 +857,6 @@ class AgentDefine {
         return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length)];
     }
     constructor() {
-        this.compilePlan.useMultimodal(fileView('prompts/compilePlan.md')[0]);
-        this.queryKeywords.useMultimodal(fileView('prompts/queryKeywords.md')[0]);
-        this.emotionManager.useMultimodal(fileView('prompts/emotionManager.md')[0]);
-        this.recorderRole.useMultimodal(fileView('prompts/recorderRole.md')[0]);
-        this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
-        this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
     }
     async analysisVideoFile(videoUrl, userNeeds) {

@@ -3,25 +3,23 @@ import { OnlyData, ImageContent, TextContent, PostMessage, modelResponse, fetchD
 /** 智能体定义 */
 export class AgentDefine {
     /** 构建计划 */
-    protected compilePlan: ModelBuilder = new ModelBuilder();
+    protected compilePlan: ModelBuilder = new ModelBuilder(fileView('prompts/compilePlan.md')[0]);
     /** 推理关键词 */
-    protected queryKeywords: ModelBuilder = new ModelBuilder();
+    protected queryKeywords: ModelBuilder = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
     /** 情感管理器 */
-    protected emotionManager: ModelBuilder = new ModelBuilder();
+    protected emotionManager: ModelBuilder = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
 
     /** 书记者角色(编写记忆) */
-    public recorderRole: ModelBuilder = new ModelBuilder();
+    public recorderRole: ModelBuilder = new ModelBuilder(fileView('prompts/recorderRole.md')[0]);
     /** 摘要者角色(视频摘要) */
-    public summaryRole: ModelBuilder = new ModelBuilder();
+    public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
     /** 描述者角色(视频描述) */
-    public descriptionRole: ModelBuilder = new ModelBuilder();
-    /** 绘图师角色(图片生成) */
-    public painterRole: PainterRole = new PainterRole();
+    public descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     /** 聊天者角色(用户交互) */
     public chatDialogueRole: ChatDialogueRole = new ChatDialogueRole();
+    /** 绘图师角色(图片生成) */
+    public painterRole: PainterRole = new PainterRole();
 
-    /** 嵌入向量 */
-    public embedding: ModelBuilder = new ModelBuilder().useEmbedding();
     /** 未读上下文 */
     public unreadContext: PostMessage[] = [];
     /** 未读视频文件 */
@@ -44,13 +42,6 @@ export class AgentDefine {
     }
     /** 构建智能体 并 初始化各个子模型的系统提示词 */
     protected constructor() {
-        // 初始化 全部模型 的 系统提示词
-        this.compilePlan.useMultimodal(fileView('prompts/compilePlan.md')[0]);
-        this.queryKeywords.useMultimodal(fileView('prompts/queryKeywords.md')[0]);
-        this.emotionManager.useMultimodal(fileView('prompts/emotionManager.md')[0]);
-        this.recorderRole.useMultimodal(fileView('prompts/recorderRole.md')[0]);
-        this.summaryRole.useMultimodal(fileView('prompts/summaryRole.md')[0]);
-        this.descriptionRole.useMultimodal(fileView('prompts/descriptionRole.md')[0]);
         // 初始化 自定义配置 信息
         fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
         // TODO 初始化 工具调用配置
