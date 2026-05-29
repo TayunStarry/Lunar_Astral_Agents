@@ -157,25 +157,34 @@ export class ModelBuilder extends ConfigModifier {
     }
     /** 从 chromem-go 查询相关消息并填充 ragMessages */
     public queryRagMessages(): this {
+        /** 获取最新的用户消息内容作为查询条件 */
         const latestUserMessage = this.getLatestUserMessageContent();
+        // 如果没有最新的用户消息，直接返回
         if (!latestUserMessage) return this;
+        // 初始化 chromem-go
         if (!BaseConfig.chromemReady) BaseConfig.initChromem();
+        // 如果初始化失败，直接返回
         if (!BaseConfig.chromemReady) return this;
+        /** 查询 chromem-go 相关消息 */
         const [results, error] = chromemQuery(latestUserMessage, 10);
+        // 如果查询失败，直接返回
         if (error) {
             console.error('chromem 查询失败:', error);
             return this;
         }
+        // 如果查询结果为空，直接返回
         if (results && results.length > 0) {
             this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as PostMessageRole, content: r.content, }));
-            this.ragMessages.forEach((message) => { console.log("ragMessages: ", message.role, message.content); });
         }
         return this;
     }
     /** 获取最新的用户消息内容作为查询条件 */
     private getLatestUserMessageContent(): string | null {
+        // 从消息列表的末尾开始遍历，找到最新的用户消息
         for (let i = this.messages.length - 1; i >= 0; i--) {
+            /** 检查当前消息是否为用户消息 */
             const message = this.messages[i];
+            // 如果是用户消息，直接返回其内容
             if (message.role === 'user' && typeof message.content === 'string') {
                 return message.content;
             }

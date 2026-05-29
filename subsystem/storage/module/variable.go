@@ -1,0 +1,22 @@
+package module
+
+import (
+	"sync"
+	
+	chromem "github.com/philippgille/chromem-go"
+)
+
+// db 是 chromem 数据库实例
+var db *chromem.DB
+
+// collection 是 chromem 数据库中的集合实例
+var collection *chromem.Collection
+
+// initOnce 是初始化一次的 sync.Once 实例
+var initOnce sync.Once
+
+// initErr 是初始化 chromem 数据库时的错误
+var initErr error
+
+// messageIDCounter 是消息ID计数器 用于生成唯一的消息ID
+var messageIDCounter int

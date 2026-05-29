@@ -92,12 +92,24 @@ type TableOperation struct {
 
 // InfoOperation 信息操作
 type InfoOperation struct {
-	Type  string `json:"type"` // tables, structure, count
+	// Type 信息操作类型
+	Type string `json:"type"` // tables, structure, count
+	// Table 表名
 	Table string `json:"table,omitempty"`
 }
 
 // DatabaseRequest 数据库请求
 type DatabaseRequest struct {
-	Operations  []interface{} `json:"operations"` // 可以是DataOperation, TableOperation, InfoOperation
-	Transaction bool          `json:"transaction,omitempty"`
+	// Operations 数据库操作列表
+	Operations []interface{} `json:"operations"` // 可以是DataOperation, TableOperation, InfoOperation
+	// Transaction 是否开启事务
+	Transaction bool `json:"transaction,omitempty"`
+}
+
+// chromemMessage 表示 chromem-go 中的消息结构
+type chromemMessage struct {
+	// Role 消息角色，例如 "user" 或 "assistant"
+	Role string `json:"role"`
+	// Content 消息内容
+	Content string `json:"content"`
 }
