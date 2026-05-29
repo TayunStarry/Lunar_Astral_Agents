@@ -539,11 +539,11 @@ class ConfigModifier extends PromptProcessor {
     }
 }
 class ModelBuilder extends ConfigModifier {
-    get run() {
+    run(appendContext) {
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         const requestBody = {
             model: OnlyData.MultimodalName,
-            messages: [{ role: 'system', content: this.systemPrompt }, ...this.ragMessages, ...this.messages],
+            messages: [{ role: 'system', content: this.systemPrompt }, ...appendContext, ...this.messages],
             stream: this.stream,
             tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',
@@ -610,7 +610,7 @@ class ChatDialogueRole extends ModelBuilder {
             source.unreadContext = [];
             this.formatHistoricalMessages(source);
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
-            const response = this.run;
+            const response = this.run(this.ragMessages);
             this.analyzeMessageResponse(response.body, cache, source);
             if (cache.toolCalls.length > 0) {
                 const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
@@ -656,7 +656,7 @@ class ChatDialogueRole extends ModelBuilder {
             for (let i = 0; i < visionMessages.length; i += 10) {
                 const batchFrames = visionMessages.slice(i, i + 10);
                 source.descriptionRole.coverContext(batchFrames);
-                const summaryRequest = source.descriptionRole.run;
+                const summaryRequest = source.descriptionRole.run([]);
                 const summary = summaryRequest.body?.choices?.[0]?.message?.content;
                 if (summary && summary.trim().length > 0)
                     formatMessages.push({ role: 'user', content: summary });
@@ -876,14 +876,14 @@ class AgentDefine {
         for (let i = 0; i < frameMessages.length; i += 20) {
             const batchFrames = frameMessages.slice(i, i + 20);
             this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
-            const summaryRequest = this.descriptionRole.run;
+            const summaryRequest = this.descriptionRole.run([]);
             const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             if (summary && summary.trim().length > 0)
                 sandboxMessages.push({ type: 'text', text: summary });
         }
         if (sandboxMessages.length > 1) {
             this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
-            const summaryRequest = this.summaryRole.run;
+            const summaryRequest = this.summaryRole.run([]);
             videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
         }
         else if (sandboxMessages.length === 1)

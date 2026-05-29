@@ -57,7 +57,7 @@ func Init() {
 		"--repeat_penalty", "1.0",
 		// 服务器监听端口
 		"--port", strconv.Itoa(*config.ModelPort),
-		// 推理模式：自动选择最合适的推理模式
+		// 推理模式: 关闭推理模式
 		"--reasoning", "off",
 		// 并行请求处理数
 		"--parallel", "1",
@@ -73,8 +73,8 @@ func Init() {
 		"--cache-type-v", "q8_0",
 		// 不启动UI界面
 		"--no-ui",
-		// 空闲等待300秒后休眠服务器
-		"--sleep-idle-seconds", "300",
+		// 空闲等待900秒后休眠服务器
+		"--sleep-idle-seconds", "900",
 	}
 
 	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *config.ModelPort)
