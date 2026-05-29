@@ -104,6 +104,14 @@ func QueryMessages(ctx context.Context, queryText string, topK int) ([]string, e
 		topK = 10
 	}
 
+	docCount := collection.Count()
+	if topK > docCount {
+		topK = docCount
+	}
+	if topK == 0 {
+		return []string{}, nil
+	}
+
 	results, err := collection.Query(ctx, queryText, topK, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("chromem 查询消息失败: %v", err)
@@ -137,6 +145,14 @@ func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) (
 
 	if topK <= 0 {
 		topK = 10
+	}
+
+	docCount := collection.Count()
+	if topK > docCount {
+		topK = docCount
+	}
+	if topK == 0 {
+		return []map[string]string{}, nil
 	}
 
 	results, err := collection.Query(ctx, queryText, topK, nil, nil)
