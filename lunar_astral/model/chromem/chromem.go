@@ -1,11 +1,13 @@
 package chromem
 
 import (
+	"config"
 	"context"
 	"encoding/json"
 	"fmt"
 	"logger"
-	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,18 +29,6 @@ type chromemMessage struct {
 	Content string `json:"content"`
 }
 
-type embeddingRequest struct {
-	Model  string   `json:"model"`
-	Input  []string `json:"input"`
-	Stream bool     `json:"stream"`
-}
-
-type embeddingResponse struct {
-	Data []struct {
-		Embedding []float64 `json:"embedding"`
-	} `json:"data"`
-}
-
 // createEmbeddingFunc 创建 chromem 嵌入函数
 func createEmbeddingFunc(baseURL string, apiKey string, modelName string) chromem.EmbeddingFunc {
 	return chromem.NewEmbeddingFuncOpenAICompat(baseURL, apiKey, modelName, nil)
@@ -47,18 +37,28 @@ func createEmbeddingFunc(baseURL string, apiKey string, modelName string) chrome
 // Init 初始化 chromem 数据库
 func Init(baseURL string, apiKey string, modelName string) error {
 	initOnce.Do(func() {
-		db = chromem.NewDB()
+		dbDir := filepath.Join(*config.LocalDir, "chromem")
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			initErr = fmt.Errorf("chromem 创建数据目录失败: %v", err)
+			return
+		}
+
+		var err error
+		db, err = chromem.NewPersistentDB(dbDir, true)
+		if err != nil {
+			initErr = fmt.Errorf("chromem 创建持久化数据库失败: %v", err)
+			return
+		}
 
 		embeddingFunc := createEmbeddingFunc(baseURL, apiKey, modelName)
 
-		var err error
-		collection, err = db.CreateCollection("lunar_messages", nil, embeddingFunc)
+		collection, err = db.GetOrCreateCollection("lunar_messages", nil, embeddingFunc)
 		if err != nil {
 			initErr = fmt.Errorf("chromem 创建集合失败: %v", err)
 			return
 		}
 
-		logger.Info("LunarCore", "chromem-go 初始化完成, 集合: lunar_messages, 模型: %s", modelName)
+		logger.Info("LunarCore", "chromem-go 初始化完成, 持久化路径: %s, 模型: %s", dbDir, modelName)
 	})
 	return initErr
 }
@@ -162,31 +162,4 @@ func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) (
 // IsInitialized 检查 chromem 数据库是否已初始化
 func IsInitialized() bool {
 	return collection != nil
-}
-
-// doEmbeddingRequest 执行 chromem 嵌入请求
-func doEmbeddingRequest(baseURL string, apiKey string, modelName string, text string) (*http.Response, error) {
-	reqBody := embeddingRequest{
-		Model:  modelName,
-		Input:  []string{text},
-		Stream: false,
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	url := strings.TrimRight(baseURL, "/") + "/embeddings"
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(jsonBody)))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{}
-	return client.Do(req)
 }

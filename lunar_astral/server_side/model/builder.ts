@@ -5,8 +5,6 @@ let currentAddress: string[] = [];
 
 /** 基础配置 */
 class BaseConfig {
-    /** 是否启用多模态 */
-    protected isMultimodal: boolean = true;
     /** 是否启用流式响应 */
     protected stream: boolean = false;
     /** 是否启用工具调用 */
@@ -24,7 +22,7 @@ class BaseConfig {
     /** 初始化chromem-go向量数据库 */
     protected static initChromem(): void {
         if (BaseConfig.chromemReady) return;
-        const [ok, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+        const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
         if (err) console.error('chromem 初始化失败:', err);
         else BaseConfig.chromemReady = true;
     }
@@ -74,27 +72,8 @@ class PromptProcessor extends BaseConfig {
     }
 }
 
-/** 模式配置 */
-class ModeConfig extends PromptProcessor {
-    /** 启用多模态 */
-    public useMultimodal(prompt: string): this {
-        // 补全系统提示词
-        this.systemPrompt = this.promptCompletion(prompt);
-        // 设置为多模态模式
-        this.isMultimodal = true;
-        // 返回当前实例
-        return this;
-    }
-    /** 启用嵌入模式 */
-    public useEmbedding(): this {
-        // 设置为嵌入模式   
-        this.isMultimodal = false;
-        return this;
-    }
-}
-
 /** 配置修改器 */
-class ConfigModifier extends ModeConfig {
+class ConfigModifier extends PromptProcessor {
     /** 设置流式响应 */
     public setStream(stream: boolean = false): this {
         this.stream = stream;
@@ -137,38 +116,7 @@ class ConfigModifier extends ModeConfig {
 /** 模型构建器 */
 export class ModelBuilder extends ConfigModifier {
     /** 运行模型 */
-    public get run(): modelResponse | number[] {
-        if (this.isMultimodal) return this.runMultimodal();
-        else return this.runEmbedding();
-    }
-    /** 从 chromem-go 查询相关消息并填充 ragMessages */
-    public queryRagMessages(): this {
-        const latestUserMessage = this.getLatestUserMessageContent();
-        if (!latestUserMessage) return this;
-        if (!BaseConfig.chromemReady) BaseConfig.initChromem();
-        if (!BaseConfig.chromemReady) return this;
-        const [results, error] = chromemQuery(latestUserMessage, 10);
-        if (error) {
-            console.error('chromem 查询失败:', error);
-            return this;
-        }
-        if (results && results.length > 0) {
-            this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as 'user' | 'assistant' | 'system' | 'tool', content: r.content, }));
-        }
-        return this;
-    }
-    /** 获取最新的用户消息内容作为查询条件 */
-    private getLatestUserMessageContent(): string | null {
-        for (let i = this.messages.length - 1; i >= 0; i--) {
-            const message = this.messages[i];
-            if (message.role === 'user' && typeof message.content === 'string') {
-                return message.content;
-            }
-        }
-        return null;
-    }
-    /** 运行多模态模型 */
-    protected runMultimodal(): modelResponse {
+    public get run(): modelResponse {
         /** 检查消息列表中是否包含工具调用消息 */
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         /** 构建发给推理模型的请求体 */
@@ -205,37 +153,37 @@ export class ModelBuilder extends ConfigModifier {
         // 返回模型响应
         return result;
     }
-    /** 运行嵌入模型 */
-    protected runEmbedding(): number[] {
-        /** 剔除其他内容, 仅保留文本内容 */
-        const validMessages = this.extractTextFromMessages(this.messages);
-        /** 构建发给推理模型的请求体 */
-        const requestBody: InferencePayload = {
-            model: OnlyData.EmbeddingName,
-            input: validMessages,
-            stream: this.stream,
-        };
-        /** 构建请求头 */
-        const headers: AuthHeaders = {
-            Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
-            "Content-Type": "application/json",
-        };
-        /** 构建模型请求 */
-        const modelRequest: ModelProtocol = {
-            method: "POST",
-            crossDomain: true,
-            headers,
-            body: JSON.stringify(requestBody)
-        };
-        /** 定义API端点 */
-        const endpoint = "/embeddings";
-        /** 直接调用Go函数处理请求 */
-        const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
-        // 抛出错误
-        if (error) throw error;
-        // 截取嵌入向量的前 256 个元素，作为模型输入
-        return result.data[0].embedding.slice(0, 256);
+    /** 从 chromem-go 查询相关消息并填充 ragMessages */
+    public queryRagMessages(): this {
+        const latestUserMessage = this.getLatestUserMessageContent();
+        if (!latestUserMessage) return this;
+        if (!BaseConfig.chromemReady) BaseConfig.initChromem();
+        if (!BaseConfig.chromemReady) return this;
+        const [results, error] = chromemQuery(latestUserMessage, 10);
+        if (error) {
+            console.error('chromem 查询失败:', error);
+            return this;
+        }
+        if (results && results.length > 0) {
+            this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as 'user' | 'assistant' | 'system' | 'tool', content: r.content, }));
+            this.ragMessages.forEach((message) => { console.log("ragMessages: ", message.role, message.content); });
+        }
+        return this;
+    }
+    /** 获取最新的用户消息内容作为查询条件 */
+    private getLatestUserMessageContent(): string | null {
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+            const message = this.messages[i];
+            if (message.role === 'user' && typeof message.content === 'string') {
+                return message.content;
+            }
+        }
+        return null;
     }
     /** 构建模型响应实例 */
-    public constructor() { super(); }
+    public constructor(prompt: string) {
+        super();
+        // 补全系统提示词
+        this.systemPrompt = this.promptCompletion(prompt);
+    }
 }

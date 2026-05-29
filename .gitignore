@@ -18,6 +18,7 @@ local_data/lunar_config.json
 ## 本地数据
 local_data/images
 local_data/documents
+local_data/chromem
 
 ## 系统文件
 desktop.ini

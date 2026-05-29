@@ -191,7 +191,6 @@ export class ChatDialogueRole extends ModelBuilder {
     }
     /** 构造函数 */
     public constructor() {
-        super();
-        this.useMultimodal(fileView('prompts/chatRole.md')[0]);
+        super(fileView('prompts/chatRole.md')[0]);
     }
 }

@@ -94,8 +94,7 @@ export class PainterRole extends ModelBuilder {
 	]
 	/** 构造函数 */
 	public constructor() {
-		super();
-		this.useMultimodal(fileView('prompts/painterRole.md')[0]);
+		super(fileView('prompts/painterRole.md')[0]);
 	}
 	/** 获得写入了动作与表情的自我外观提示词 */
 	protected writeAppearancePrompt(expression?: string, posture?: string): string {
