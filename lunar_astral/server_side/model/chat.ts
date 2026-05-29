@@ -16,7 +16,7 @@ export class ChatDialogueRole extends ModelBuilder {
             // 替换系统提示词中的时间占位符
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
             /** 向处理器模型发送请求并等待响应 */
-            const response = this.run as modelResponse;
+            const response = this.run(this.ragMessages);
             // 处理响应文本内容
             this.analyzeMessageResponse(response.body, cache, source);
             // 如果有工具调用,处理它们并重新发送请求
@@ -82,7 +82,7 @@ export class ChatDialogueRole extends ModelBuilder {
             // 覆盖描述角色的上下文，传入当前批次的视觉消息
             source.descriptionRole.coverContext(batchFrames);
             /** 执行描述角色的模型运行，获取总结请求响应 */
-            const summaryRequest = source.descriptionRole.run as modelResponse;
+            const summaryRequest = source.descriptionRole.run([]);
             /** 模型总结结果 */
             const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             // 过滤空字符串和仅包含空格的字符串

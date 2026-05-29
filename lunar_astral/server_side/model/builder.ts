@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse } from '../index';
+import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole } from '../index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -117,14 +117,14 @@ class ConfigModifier extends PromptProcessor {
 
 /** 模型构建器 */
 export class ModelBuilder extends ConfigModifier {
-    /** 运行模型 */
-    public get run(): modelResponse {
+    /** 运行模型，可输入额外的上下文补充 */
+    public run(appendContext: PostMessage[]): modelResponse {
         /** 检查消息列表中是否包含工具调用消息 */
         const isIncludesTools = this.messages.some((message) => message.role === 'tool');
         /** 构建发给推理模型的请求体 */
         const requestBody: InferencePayload = {
             model: OnlyData.MultimodalName,
-            messages: [{ role: 'system', content: this.systemPrompt }, ...this.ragMessages, ...this.messages],
+            messages: [{ role: 'system', content: this.systemPrompt }, ...appendContext, ...this.messages],
             stream: this.stream,
             tools: isIncludesTools ? [] : OnlyData.toolCall,
             tool_choice: isIncludesTools ? 'none' : 'auto',
@@ -167,7 +167,7 @@ export class ModelBuilder extends ConfigModifier {
             return this;
         }
         if (results && results.length > 0) {
-            this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as 'user' | 'assistant' | 'system' | 'tool', content: r.content, }));
+            this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as PostMessageRole, content: r.content, }));
             this.ragMessages.forEach((message) => { console.log("ragMessages: ", message.role, message.content); });
         }
         return this;

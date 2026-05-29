@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"logger"
 	"lunar_astral/model/chromem"
@@ -77,21 +76,19 @@ func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 	topK := int(call.Argument(1).ToInteger())
 
 	ctx := context.Background()
-	results, err := chromem.QueryMessages(ctx, queryText, topK)
+	messages, err := chromem.QueryMessagesWithContent(ctx, queryText, topK)
 	if err != nil {
 		logger.Error("LunarCore", "chromem 查询消息失败: %v", err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	jsonResults, err := json.Marshal(results)
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("序列化查询结果失败: %v", err)})
+	resultObjs := make([]map[string]string, 0, len(messages))
+	for _, msg := range messages {
+		resultObjs = append(resultObjs, map[string]string{
+			"role":    msg["role"],
+			"content": msg["content"],
+		})
 	}
 
-	var parsedResults []any
-	if err := json.Unmarshal(jsonResults, &parsedResults); err != nil {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("反序列化查询结果失败: %v", err)})
-	}
-
-	return class.runtime.ToValue([]any{parsedResults, nil})
+	return class.runtime.ToValue([]any{resultObjs, nil})
 }
