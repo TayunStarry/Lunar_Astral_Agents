@@ -90,9 +90,11 @@ class ConfigModifier extends PromptProcessor {
             const discarded = this.messages.slice(0, this.messages.length - 20);
             this.messages = this.messages.slice(-20);
             this.messages.push(context);
+            console.log(JSON.stringify(discarded));
             this.persistDiscardedMessages(discarded);
         }
         else this.messages.push(context);
+        console.log(this.messages.length);
         return this;
     }
     /** 将被抛弃的消息持久化到 chromem-go */
