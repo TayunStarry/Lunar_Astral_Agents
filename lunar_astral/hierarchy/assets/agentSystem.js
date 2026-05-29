@@ -610,6 +610,7 @@ class ChatDialogueRole extends ModelBuilder {
             source.unreadContext = [];
             this.formatHistoricalMessages(source);
             this.systemPrompt = this.systemPrompt.replace(/{current-time}/g, new Date().toLocaleString());
+            this.queryRagMessages();
             const response = this.run(this.ragMessages);
             this.analyzeMessageResponse(response.body, cache, source);
             if (cache.toolCalls.length > 0) {
