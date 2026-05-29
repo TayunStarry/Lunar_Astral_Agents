@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"logger"
-	"lunar_astral/model/chromem"
+	"storage/module"
 
 	"github.com/dop251/goja"
 )
 
+// chromemInit 初始化 chromem-go
 func (class *Runtime) chromemInit(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemInit 参数不足")})
@@ -29,7 +30,7 @@ func (class *Runtime) chromemInit(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("modelName 必须是字符串")})
 	}
 
-	err := chromem.Init(baseURL, apiKey, modelName)
+	err := module.Init(baseURL, apiKey, modelName)
 	if err != nil {
 		logger.Error("LunarCore", "chromem 初始化失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
@@ -38,6 +39,7 @@ func (class *Runtime) chromemInit(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
+// chromemAdd 添加消息到 chromem-go
 func (class *Runtime) chromemAdd(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemAdd 参数不足")})
@@ -54,7 +56,7 @@ func (class *Runtime) chromemAdd(call goja.FunctionCall) goja.Value {
 	}
 
 	ctx := context.Background()
-	err := chromem.AddMessage(ctx, role, content)
+	err := module.AddMessage(ctx, role, content)
 	if err != nil {
 		logger.Error("LunarCore", "chromem 添加消息失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
@@ -63,6 +65,7 @@ func (class *Runtime) chromemAdd(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
+// chromemQuery 查询 chromem-go 相关消息
 func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemQuery 参数不足")})
@@ -76,7 +79,7 @@ func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 	topK := int(call.Argument(1).ToInteger())
 
 	ctx := context.Background()
-	messages, err := chromem.QueryMessagesWithContent(ctx, queryText, topK)
+	messages, err := module.QueryMessagesWithContent(ctx, queryText, topK)
 	if err != nil {
 		logger.Error("LunarCore", "chromem 查询消息失败: %v", err)
 		return class.runtime.ToValue([]any{nil, err})

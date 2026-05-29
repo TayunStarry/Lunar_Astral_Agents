@@ -1,4 +1,4 @@
-package chromem
+package module
 
 import (
 	"config"
@@ -10,24 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	chromem "github.com/philippgille/chromem-go"
 )
-
-var (
-	db         *chromem.DB
-	collection *chromem.Collection
-	initOnce   sync.Once
-	initErr    error
-)
-
-var messageIDCounter int
-
-type chromemMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
 
 // createEmbeddingFunc 创建 chromem 嵌入函数
 func createEmbeddingFunc(baseURL string, apiKey string, modelName string) chromem.EmbeddingFunc {

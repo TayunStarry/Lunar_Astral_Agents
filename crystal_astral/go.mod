@@ -2,23 +2,13 @@ module crystal_astral
 
 go 1.24.4
 
-require config v0.0.0
-
-replace config => ../subsystem/config
-
-require storage v0.0.0
-
-replace storage => ../subsystem/storage
-
-require browser v0.0.0
-
-replace browser => ../subsystem/browser
-
-require screenshot v0.0.0
-
-replace screenshot => ../subsystem/screenshot
-
-require github.com/mattn/go-sqlite3 v1.14.33 // indirect
+require (
+	browser v0.0.0
+	config v0.0.0
+	logger v0.0.0
+	screenshot v0.0.0
+	storage v0.0.0
+)
 
 require (
 	github.com/disintegration/imaging v1.6.2 // indirect
@@ -27,11 +17,18 @@ require (
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
+	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-require logger v0.0.0
+replace config => ../subsystem/config
+
+replace storage => ../subsystem/storage
+
+replace browser => ../subsystem/browser
+
+replace screenshot => ../subsystem/screenshot
 
 replace logger => ../subsystem/logger
