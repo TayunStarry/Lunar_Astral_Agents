@@ -17,9 +17,9 @@ type Engine struct {
 
 func NewEngine(tickInterval time.Duration) *Engine {
 	return &Engine{
-		ticker:   NewTicker(tickInterval),
-		interval: tickInterval,
-		maxStats: 100,
+		ticker:    NewTicker(tickInterval),
+		interval:  tickInterval,
+		maxStats:  100,
 	}
 }
 

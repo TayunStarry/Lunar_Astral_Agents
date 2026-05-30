@@ -14,7 +14,11 @@ param(
 
     [string]$OutputDir = "",
 
-    [switch]$EnableLog
+    [switch]$EnableLog,
+
+    [switch]$EnableVulkan,
+
+    [string]$DllOutputDir = ""
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -75,6 +79,9 @@ function comp-info {
 
 function ggml-ok {
     $libs = @("src\ggml.a", "src\ggml-base.a", "src\ggml-cpu.a")
+    if ($EnableVulkan) {
+        $libs += "src\ggml-vulkan\ggml-vulkan.a"
+    }
     foreach ($l in $libs) {
         if (-not (Test-Path (Join-Path $GGML_BUILD_DIR $l))) { return $false }
     }
@@ -108,6 +115,14 @@ try {
     log "Parallel:    $ParallelJobs"
     log "GGML Dir:    $GGML_BUILD_DIR"
     log "Log File:    $LogFile"
+    if ($DllOutputDir) {
+        log "DLL Out Dir: $DllOutputDir"
+    }
+    if ($EnableVulkan) {
+        log "Vulkan GPU:  ENABLED" "Green"
+    } else {
+        log "Vulkan GPU:  DISABLED" "Yellow"
+    }
     log "========================================" "Cyan"
 
     if (-not $SkipGGML) {
@@ -151,6 +166,15 @@ try {
         "-DQWEN3_TTS_TIMING=OFF"
     )
 
+    if ($DllOutputDir) {
+        $dllOutAbs = [System.IO.Path]::GetFullPath($DllOutputDir)
+        if (-not (Test-Path $dllOutAbs)) {
+            New-Item -ItemType Directory -Path $dllOutAbs -Force | Out-Null
+        }
+        $cmakeConfigArgs += "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$dllOutAbs"
+        log "DLL runtime output directory: $dllOutAbs" "Green"
+    }
+
     if ($ci.Type -eq "MinGW") {
         $cmakeConfigArgs += "-DCMAKE_C_COMPILER=$($ci.GCC.Source)"
         $cmakeConfigArgs += "-DCMAKE_CXX_COMPILER=$($ci.GPP.Source)"
@@ -184,6 +208,14 @@ try {
     }
     foreach ($f in $implibs) {
         log "  IMPLIB: $($f.Name) ($([math]::Round($f.Length/1KB,1)) KB)" "White"
+    }
+
+    if ($DllOutputDir) {
+        $dllOutAbs = [System.IO.Path]::GetFullPath($DllOutputDir)
+        $targetDlls = Get-ChildItem -Path $dllOutAbs -Filter "qwen3tts.dll" -ErrorAction SilentlyContinue
+        foreach ($f in $targetDlls) {
+            log "  DLL_OUT: $($f.FullName) ($([math]::Round($f.Length/1KB,1)) KB)" "Green"
+        }
     }
 
     log "========================================" "Cyan"

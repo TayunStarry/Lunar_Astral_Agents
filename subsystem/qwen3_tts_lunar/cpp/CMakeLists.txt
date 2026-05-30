@@ -38,6 +38,13 @@ function(link_ggml_libs target)
         Threads::Threads
         OpenMP::OpenMP_CXX
     )
+    if(EXISTS "${GGML_LIB_DIR}/ggml-vulkan/ggml-vulkan.a")
+        find_package(Vulkan REQUIRED)
+        target_link_libraries(${target} PUBLIC
+            "${GGML_LIB_DIR}/ggml-vulkan/ggml-vulkan.a"
+            Vulkan::Vulkan
+        )
+    endif()
 endfunction()
 
 add_library(text_tokenizer STATIC

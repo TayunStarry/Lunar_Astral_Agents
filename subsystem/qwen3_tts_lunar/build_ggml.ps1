@@ -14,7 +14,11 @@ param(
 
     [string]$OutputDir = "",
 
-    [switch]$EnableLog
+    [switch]$EnableLog,
+
+    [switch]$EnableVulkan,
+
+    [string]$DllOutputDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -118,6 +122,42 @@ function Get-CompilerInfo {
     return $info
 }
 
+function Test-VulkanSDK {
+    $vulkanSDK = $env:VULKAN_SDK
+    if ($vulkanSDK -and (Test-Path $vulkanSDK)) {
+        Write-BuildLog "Vulkan SDK found: $vulkanSDK" "Green"
+        return $true
+    }
+
+    $vulkanSDK64 = ${env:VK_SDK_PATH}
+    if ($vulkanSDK64 -and (Test-Path $vulkanSDK64)) {
+        $env:VULKAN_SDK = $vulkanSDK64
+        Write-BuildLog "Vulkan SDK found: $vulkanSDK64" "Green"
+        return $true
+    }
+
+    $commonPaths = @(
+        "C:\VulkanSDK",
+        "${env:ProgramFiles}\VulkanSDK",
+        "${env:LOCALAPPDATA}\VulkanSDK"
+    )
+    foreach ($p in $commonPaths) {
+        if (Test-Path $p) {
+            $env:VULKAN_SDK = $p
+            Write-BuildLog "Vulkan SDK found: $p" "Green"
+            return $true
+        }
+    }
+
+    if (Test-CommandExists "glslc") {
+        Write-BuildLog "Vulkan SDK found (via glslc in PATH)" "Green"
+        return $true
+    }
+
+    Write-BuildLog "Vulkan SDK not found - Vulkan acceleration will be disabled" "Yellow"
+    return $false
+}
+
 function Build-GGML {
     Write-BuildLog "========================================" "Cyan"
     Write-BuildLog "GGML Library Build Start" "Cyan"
@@ -162,6 +202,13 @@ function Build-GGML {
         Write-BuildLog "Build directory exists, performing incremental build" "Green"
     }
 
+    $vulkanEnabled = $false
+    if ($EnableVulkan) {
+        $vulkanEnabled = Test-VulkanSDK
+    } else {
+        Write-BuildLog "Vulkan acceleration disabled (-EnableVulkan:`$false)" "Yellow"
+    }
+
     $buildTypeUpper = $BuildType.ToUpper()
     $cmakeConfigureArgs = @(
         "-S", $GGML_SRC_DIR,
@@ -175,7 +222,6 @@ function Build-GGML {
         "-DGGML_NATIVE=ON",
         "-DGGML_OPENMP=ON",
         "-DGGML_CUDA=OFF",
-        "-DGGML_VULKAN=OFF",
         "-DGGML_METAL=OFF",
         "-DGGML_BLAS=OFF",
         "-DGGML_BACKEND_DL=OFF",
@@ -186,6 +232,14 @@ function Build-GGML {
         "-DGGML_LTO=OFF",
         "-DGGML_CCACHE=OFF"
     )
+
+    if ($vulkanEnabled) {
+        $cmakeConfigureArgs += "-DGGML_VULKAN=ON"
+        Write-BuildLog "GGML Vulkan GPU acceleration: ENABLED" "Green"
+    } else {
+        $cmakeConfigureArgs += "-DGGML_VULKAN=OFF"
+        Write-BuildLog "GGML Vulkan GPU acceleration: DISABLED" "Yellow"
+    }
 
     if ($compilerInfo.Type -eq "MinGW") {
         $cmakeConfigureArgs += "-DCMAKE_C_COMPILER=$($compilerInfo.GCC)"

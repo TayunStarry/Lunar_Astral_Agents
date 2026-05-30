@@ -16,7 +16,11 @@ param(
 
     [int]$ParallelJobs = $env:NUMBER_OF_PROCESSORS,
 
-    [string]$OutputDir = ""
+    [string]$OutputDir = "",
+
+    [switch]$EnableVulkan = $true,
+
+    [string]$DllOutputDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,8 +63,6 @@ function Invoke-BuildScript {
     foreach ($key in $Arguments.Keys) {
         $val = $Arguments[$key]
         if ($val -is [switch]) {
-            if ($val) { $argList += "-$key" }
-        } elseif ($val -is [bool]) {
             if ($val) { $argList += "-$key" }
         } else {
             $argList += "-$key"
@@ -105,6 +107,12 @@ Write-BuildLog "Build Type: $BuildType" "White"
 if ($EnableLog) {
     Write-BuildLog "Log File:   $LogFile" "White"
 }
+Write-BuildLog "DLL Out Dir: $DllOutputDir" "White"
+if ($EnableVulkan) {
+    Write-BuildLog "Vulkan GPU:  ENABLED" "Green"
+} else {
+    Write-BuildLog "Vulkan GPU:  DISABLED" "Yellow"
+}
 Write-BuildLog "========================================" "Cyan"
 
 Write-BuildLog "[Check] Verifying build environment..." "Yellow"
@@ -135,6 +143,12 @@ if (Test-CommandExists "gcc") {
 
 Write-BuildLog "[Check] Environment verification complete" "Green"
 
+$goExeOutDir = Join-Path (Resolve-Path (Join-Path $ScriptDir "..\..")) ""
+if (-not $DllOutputDir) {
+    $DllOutputDir = $goExeOutDir
+}
+$DllOutputDir = [System.IO.Path]::GetFullPath($DllOutputDir)
+
 $buildScriptArgs = @{
     BuildType = $BuildType
     Clean = $Clean
@@ -146,7 +160,15 @@ if ($OutputDir) {
 }
 
 if ($EnableLog) {
-    $buildScriptArgs.EnableLog = $true
+    $buildScriptArgs.EnableLog = $EnableLog
+}
+
+if ($EnableVulkan) {
+    $buildScriptArgs.EnableVulkan = $EnableVulkan
+}
+
+if ($DllOutputDir) {
+    $buildScriptArgs.DllOutputDir = $DllOutputDir
 }
 
 if (-not $SkipGGML) {
@@ -214,6 +236,14 @@ if (-not $SkipGo) {
     if (Test-Path $exePath) {
         $exeSize = [math]::Round((Get-Item $exePath).Length / 1MB, 2)
         Write-BuildLog "  [OK] Qwen3_TTS_Lunar.exe ($exeSize MB)" "Green"
+    }
+
+    $targetDll = Join-Path $DllOutputDir "qwen3tts.dll"
+    if (Test-Path $targetDll) {
+        $dllSize = [math]::Round((Get-Item $targetDll).Length / 1MB, 2)
+        Write-BuildLog "  [OK] qwen3tts.dll -> $targetDll ($dllSize MB)" "Green"
+    } else {
+        Write-BuildLog "  [WARN] qwen3tts.dll not found at $targetDll" "Yellow"
     }
 
     Pop-Location

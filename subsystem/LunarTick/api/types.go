@@ -6,8 +6,8 @@ type RunRequest struct {
 }
 
 type RunResponse struct {
-	BlockID string `json:"block_id"`
-	Status  string `json:"status"`
+	BlockID  string `json:"block_id"`
+	Status   string `json:"status"`
 }
 
 type InjectRequest struct {
@@ -28,14 +28,14 @@ type InvokeResponse struct {
 }
 
 type StatusResponse struct {
-	Running       bool              `json:"running"`
-	Suspended     bool              `json:"suspended"`
-	TickNumber    int               `json:"tick_number"`
-	ReadyBlocks   int               `json:"ready_blocks"`
-	WaitingBlocks int               `json:"waiting_blocks"`
-	Variables     map[string]string `json:"variables"`
-	Pointers      []string          `json:"pointers"`
-	Errors        []ErrorEntry      `json:"errors,omitempty"`
+	Running      bool              `json:"running"`
+	Suspended    bool              `json:"suspended"`
+	TickNumber   int               `json:"tick_number"`
+	ReadyBlocks  int               `json:"ready_blocks"`
+	WaitingBlocks int              `json:"waiting_blocks"`
+	Variables    map[string]string `json:"variables"`
+	Pointers     []string          `json:"pointers"`
+	Errors       []ErrorEntry      `json:"errors,omitempty"`
 }
 
 type ErrorEntry struct {

@@ -21,7 +21,9 @@
 #include <filesystem>
 
 #ifdef _WIN32
-    #define NOMINMAX
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
     #include <windows.h>
     #include <direct.h> // For _mkdir on Windows
 #else

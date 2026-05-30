@@ -15,6 +15,7 @@ temp
 local_data/embed_cache
 local_data/lunar_config.json
 yara_flow
+qwen3_tts_lunar_musa
 
 ## 本地数据
 local_data/images
