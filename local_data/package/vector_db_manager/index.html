@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』星图-向量检索</title>
+    <link rel="stylesheet" href="/read/package/standard_dependency/styles.css">
+    <link rel="stylesheet" href="/read/package/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="script.js"></script>
+</head>
+
+<body>
+    <div class="bg-layer"></div>
+
+    <div class="app-wrapper">
+        <header class="app-header glass-card">
+            <div class="header-left">
+                <div class="logo-icon"><i class="fa-solid fa-brain"></i></div>
+                <div class="logo-text">
+                    <h1>星月智能 · 向量检索</h1>
+                    <p class="subtitle">语义搜索与向量数据库管理</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="header-stat-item">
+                    <i class="fa-solid fa-file-lines"></i>
+                    <span class="header-stat-value" id="hdr-count">--</span>
+                    <span class="header-stat-label">文档</span>
+                </div>
+                <div class="header-stat-item">
+                    <div class="status-dot" id="hdr-status-dot"></div>
+                    <span class="header-stat-label" id="hdr-status-label">检测中...</span>
+                </div>
+                <button id="refresh-stats" class="btn-icon" title="刷新">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <section class="glass-card init-card" id="init-card" style="display:none;">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-plug"></i> 初始化向量数据库</h2>
+                </div>
+                <div class="card-body init-form-body">
+                    <div class="init-form-row">
+                        <div class="form-group flex-2">
+                            <label class="form-label"><i class="fa-solid fa-link"></i> API 地址</label>
+                            <input type="text" id="init-base-url" class="form-input"
+                                placeholder="http://localhost:1234/v1">
+                        </div>
+                        <div class="form-group flex-2">
+                            <label class="form-label"><i class="fa-solid fa-microchip"></i> 模型名称</label>
+                            <input type="text" id="init-model-name" class="form-input"
+                                placeholder="text-embedding-3-small">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label class="form-label"><i class="fa-solid fa-key"></i> Key(可选)</label>
+                            <input type="password" id="init-api-key" class="form-input" placeholder="sk-...">
+                        </div>
+                    </div>
+                    <button id="btn-init" class="btn-primary btn-init-inline">
+                        <i class="fa-solid fa-bolt"></i> 初始化连接
+                    </button>
+                    <p class="init-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        支持自动补全 http:// 前缀。常见地址：LM Studio <code>http://localhost:1234/v1</code>、Ollama <code>http://localhost:11434/v1</code>、DeepSeek <code>https://api.deepseek.com/v1</code>
+                    </p>
+                </div>
+            </section>
+
+            <section class="glass-card toolbar-card">
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="search-input" class="search-input"
+                            placeholder="输入关键词搜索文档...（留空显示全部）">
+                        <button id="btn-search" class="btn-search">搜索</button>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button id="btn-show-add" class="btn-primary btn-sm">
+                            <i class="fa-solid fa-plus"></i> 添加文档
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="glass-card add-panel" id="add-panel" style="display:none;">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fa-solid fa-plus-circle"></i> 添加新文档</h2>
+                    <button id="btn-close-add" class="btn-icon" title="关闭">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="form-row">
+                        <div class="form-group" style="flex:0 0 160px;">
+                            <label class="form-label"><i class="fa-solid fa-user-tag"></i> 角色</label>
+                            <select id="add-role" class="form-select">
+                                <option value="user">用户 (user)</option>
+                                <option value="assistant">助手 (assistant)</option>
+                                <option value="system">系统 (system)</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label class="form-label"><i class="fa-solid fa-pen-to-square"></i> 文档内容</label>
+                            <textarea id="add-content" class="form-textarea" rows="3"
+                                placeholder="输入要向量化存储的文档内容..."></textarea>
+                        </div>
+                    </div>
+                    <button id="btn-add" class="btn-primary">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> 添加到向量库
+                    </button>
+                </div>
+            </section>
+
+            <div id="doc-list-container">
+                <div class="doc-list-empty" id="doc-empty" style="display:none;">
+                    <div class="empty-icon"><i class="fa-solid fa-inbox"></i></div>
+                    <p>暂无文档，点击「添加文档」开始</p>
+                </div>
+
+                <div class="doc-list" id="doc-list"></div>
+            </div>
+
+            <div class="pagination-bar" id="pagination" style="display:none;">
+                <button id="btn-prev" class="btn-page" disabled>
+                    <i class="fa-solid fa-chevron-left"></i> 上一页
+                </button>
+                <span class="page-info" id="page-info">第 1 页 / 共 1 页</span>
+                <button id="btn-next" class="btn-page" disabled>
+                    下一页 <i class="fa-solid fa-chevron-right"></i>
+                </button>
+            </div>
+        </main>
+
+        <footer class="app-footer glass-card">
+            <p class="copyright">© 2026 星月智能 · 向量检索 v1.0</p>
+            <div class="footer-info">
+                <span class="footer-badge"><i class="fa-solid fa-microchip"></i> chromem-go</span>
+                <span class="footer-badge"><i class="fa-solid fa-database"></i> 向量存储</span>
+            </div>
+        </footer>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+</body>
+
+</html>

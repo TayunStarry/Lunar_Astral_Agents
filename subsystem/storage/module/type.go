@@ -113,3 +113,10 @@ type chromemMessage struct {
 	// Content 消息内容
 	Content string `json:"content"`
 }
+
+// DocumentEntry 文档条目 — 用于前端分页列表
+type DocumentEntry struct {
+	ID      string `json:"id"`
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}

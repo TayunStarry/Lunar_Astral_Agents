@@ -35,6 +35,13 @@
 		"url": "/read/package/database_manager/index.html"
 	},
 	{
+		"id": "vector_db_manager",
+		"icon": "/read/images/icon/vector_db_manager.Webp",
+		"title": "向量检索",
+		"description": "打开『 星月智能 』向量检索",
+		"url": "/read/package/vector_db_manager/index.html"
+	},
+	{
 		"id": "parameter_assistant",
 		"icon": "/read/images/icon/parameter_assistant.Webp",
 		"title": "参数助手",

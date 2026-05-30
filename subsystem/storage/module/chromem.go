@@ -160,7 +160,96 @@ func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) (
 	return messages, nil
 }
 
+// DeleteMessage 从 chromem 数据库中删除指定消息
+func DeleteMessage(ctx context.Context, id string) error {
+	if collection == nil {
+		return fmt.Errorf("chromem 未初始化, 请先调用 Init")
+	}
+
+	if err := collection.Delete(ctx, nil, nil, id); err != nil {
+		return fmt.Errorf("chromem 删除消息失败: %v", err)
+	}
+
+	documentEntriesMu.Lock()
+	for i, entry := range documentEntries {
+		if entry.ID == id {
+			documentEntries = append(documentEntries[:i], documentEntries[i+1:]...)
+			break
+		}
+	}
+	documentEntriesMu.Unlock()
+
+	return nil
+}
+
+// AddMessageWithID 添加消息并返回生成的消息 ID
+func AddMessageWithID(ctx context.Context, role string, content string) (string, error) {
+	if collection == nil {
+		return "", fmt.Errorf("chromem 未初始化, 请先调用 Init")
+	}
+
+	if strings.TrimSpace(content) == "" {
+		return "", fmt.Errorf("消息内容不能为空")
+	}
+
+	messageIDCounter++
+	id := fmt.Sprintf("msg-%d", messageIDCounter)
+
+	metadata := map[string]string{
+		"role": role,
+	}
+
+	doc := chromem.Document{
+		ID:       id,
+		Metadata: metadata,
+		Content:  content,
+	}
+
+	err := collection.AddDocuments(ctx, []chromem.Document{doc}, runtime.NumCPU())
+	if err != nil {
+		return "", fmt.Errorf("chromem 添加消息失败: %v", err)
+	}
+
+	documentEntriesMu.Lock()
+	documentEntries = append(documentEntries, DocumentEntry{ID: id, Role: role, Content: content})
+	documentEntriesMu.Unlock()
+
+	return id, nil
+}
+
+// GetCollectionCount 获取集合中的文档数量
+func GetCollectionCount() int {
+	if collection == nil {
+		return 0
+	}
+	return collection.Count()
+}
+
 // IsInitialized 检查 chromem 数据库是否已初始化
 func IsInitialized() bool {
 	return collection != nil
+}
+
+// GetDocuments 获取分页文档列表
+func GetDocuments(offset int, limit int) ([]DocumentEntry, int) {
+	documentEntriesMu.RLock()
+	defer documentEntriesMu.RUnlock()
+
+	total := len(documentEntries)
+
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return []DocumentEntry{}, total
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	entries := make([]DocumentEntry, end-offset)
+	copy(entries, documentEntries[offset:end])
+	return entries, total
 }

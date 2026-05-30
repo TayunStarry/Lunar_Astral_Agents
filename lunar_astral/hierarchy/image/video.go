@@ -10,6 +10,7 @@ import (
 	"logger"
 	"os"
 	"path/filepath"
+	"runtime"
 	"screenshot"
 	"slices"
 	"strconv"
@@ -74,10 +75,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 	}
 
 	// 设置工作池大小，根据CPU核心数调整
-	workerCount := 4
-	if frameCount < workerCount {
-		workerCount = frameCount
-	}
+	workerCount := min(frameCount, runtime.NumCPU())
 
 	// 创建任务通道和结果通道
 	taskChan := make(chan int, frameCount)
