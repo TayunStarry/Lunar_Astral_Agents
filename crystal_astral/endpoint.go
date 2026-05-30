@@ -6,13 +6,19 @@ import (
 	storage "storage/server"
 )
 
+// SystemEndpoint 系统端点
 type SystemEndpoint struct {
-	Path        string
-	Handler     http.HandlerFunc
-	Method      string
+	// Path 端点路径
+	Path string
+	// Handler 处理函数
+	Handler http.HandlerFunc
+	// Method 请求方法
+	Method string
+	// Description 描述端点的功能
 	Description string
 }
 
+// SystemEndpoints 系统端点列表
 var SystemEndpoints = []SystemEndpoint{
 	{Path: "/load/application", Handler: loadApplicationHandler, Method: "POST", Description: "加载应用"},
 	{Path: "/background", Handler: storage.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
