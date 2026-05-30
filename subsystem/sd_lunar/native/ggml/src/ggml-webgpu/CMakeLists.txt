@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
 
-find_package(Python3 REQUIRED)
-
 # Shader locations
 set(SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/wgsl-shaders")
 set(SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -13,16 +11,15 @@ message(STATUS "Shader output dir: ${SHADER_OUTPUT_DIR}")
 # Find all WGSL files
 file(GLOB WGSL_SHADER_FILES "${SHADER_DIR}/*.wgsl")
 
-# Generate the header using a Python script
+# Generate the header using a PowerShell script
 add_custom_command(
     OUTPUT ${SHADER_HEADER}
     COMMAND ${CMAKE_COMMAND} -E echo "Embedding WGSL shaders to ggml-wgsl-shaders.hpp"
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUTPUT_DIR}
-    COMMAND ${CMAKE_COMMAND} -E env PYTHONIOENCODING=utf-8
-        ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/wgsl-shaders/embed_wgsl.py
-            --input_dir "${SHADER_DIR}"
-            --output_file "${SHADER_HEADER}"
-    DEPENDS ${WGSL_SHADER_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/wgsl-shaders/embed_wgsl.py
+    COMMAND powershell -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/wgsl-shaders/embed_wgsl.ps1
+            -input_dir "${SHADER_DIR}"
+            -output_file "${SHADER_HEADER}"
+    DEPENDS ${WGSL_SHADER_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/wgsl-shaders/embed_wgsl.ps1
     VERBATIM
 )
 
