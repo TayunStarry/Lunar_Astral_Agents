@@ -55,7 +55,9 @@ DispatchLoaderDynamic & ggml_vk_default_dispatcher();
 #include <thread>
 
 #if defined(_MSC_VER)
+# ifndef NOMINMAX
 # define NOMINMAX 1
+# endif
 # include <windows.h>
 # define YIELD() YieldProcessor()
 #elif defined(__clang__) || defined(__GNUC__)

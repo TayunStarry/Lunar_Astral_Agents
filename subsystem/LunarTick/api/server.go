@@ -12,9 +12,9 @@ import (
 )
 
 type Server struct {
-	eng     *engine.Engine
-	httpSrv *http.Server
-	port    int
+	eng      *engine.Engine
+	httpSrv  *http.Server
+	port     int
 }
 
 func NewServer(eng *engine.Engine, port int) *Server {
