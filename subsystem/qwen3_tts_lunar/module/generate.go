@@ -290,7 +290,7 @@ func InitTTSEngine(modelDir, refAudio string) {
 	ttsOnce.Do(func() {
 		cModelDir := C.CString(modelDir)
 		defer C.free(unsafe.Pointer(cModelDir))
-		nThreads := max(1, runtime.NumCPU()-1)
+		nThreads := max(4, runtime.NumCPU()/2)
 		handle := C.qwen3_tts_create(cModelDir, C.int32_t(nThreads))
 		if handle == nil {
 			logger.Error("QWEN-TTS", "引擎初始化失败，模型目录: %s", modelDir)
@@ -307,27 +307,7 @@ func InitTTSEngine(modelDir, refAudio string) {
 		embedCache.init()
 
 		logger.Info("QWEN-TTS", "引擎初始化成功")
-
-		//go warmupTTSEngine(refAudio)
 	})
-}
-
-func warmupTTSEngine(refAudio string) {
-	logger.Info("QWEN-TTS", "开始预热TTS引擎，加载所有模型到内存...")
-
-	dummyText := "你好"
-	nThreads := max(1, runtime.NumCPU()-1)
-	samples, err := synthesizeText(dummyText, refAudio, globalTTS.languageID, 0, 0, 0, 0, 0, int32(nThreads))
-	if err != nil {
-		logger.Info("QWEN-TTS", "预热合成失败(可忽略): %v", err)
-		return
-	}
-
-	if len(samples) > 0 {
-		logger.Info("QWEN-TTS", "预热成功，生成 %d 个采样点，所有模型已加载完成", len(samples))
-	} else {
-		logger.Info("QWEN-TTS", "预热完成")
-	}
 }
 
 func computeFileHash(path string) string {

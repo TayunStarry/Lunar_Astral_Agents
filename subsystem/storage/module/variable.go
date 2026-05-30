@@ -2,7 +2,7 @@ package module
 
 import (
 	"sync"
-	
+
 	chromem "github.com/philippgille/chromem-go"
 )
 
@@ -20,3 +20,9 @@ var initErr error
 
 // messageIDCounter 是消息ID计数器 用于生成唯一的消息ID
 var messageIDCounter int
+
+// documentEntries 内存中的文档列表 — 按插入顺序排列，用于前端分页浏览
+var documentEntries []DocumentEntry
+
+// documentEntriesMu 保护 documentEntries 的读写锁
+var documentEntriesMu sync.RWMutex
