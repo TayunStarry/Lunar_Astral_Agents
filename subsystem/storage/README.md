@@ -75,7 +75,7 @@ storage/
                        │
 ┌──────────────────────▼──────────────────────────┐
 │          业务逻辑层（module/）                     │
-│  文件操作: Save/Read/Delete/Download/List/Archive │
+│  文件操作: Save/file/read/file/delete/file/download/List/file/archive │
 │  数据库: CRUD/Table/Info + 事务 + 批量             │
 │  安全机制: 路径防越权 / 文件名校验 / 并发文件锁      │
 └──────────────────────┬──────────────────────────┘
@@ -201,13 +201,13 @@ type BatchResult struct {
 
 | 方法 | 路径 | 功能 | 特殊 Header/参数 |
 |------|------|------|-----------------|
-| POST | `/save/` | 保存文件 | `X-File-Name`(Base64), `X-Overwrite` |
-| GET | `/read/{path}` | 读取文件 | - |
-| DELETE | `/delete/{path}` | 删除文件/目录 | - |
-| GET | `/download/{path}` | 下载文件 | - |
-| POST | `/file_list/{path}` | 列出目录 | - |
-| POST | `/archive/` | 创建 ZIP | multipart: `files`, `zip_name` |
-| PUT | `/archive/` | 解压 ZIP | multipart: `zip_file` |
+| POST | `/file/write/` | 保存文件 | `X-File-Name`(Base64), `X-Overwrite` |
+| GET | `/file/read/{path}` | 读取文件 | - |
+| DELETE | `/file/delete/{path}` | 删除文件/目录 | - |
+| GET | `/file/download/{path}` | 下载文件 | - |
+| POST | `/file/list/{path}` | 列出目录 | - |
+| POST | `/file/archive/` | 创建 ZIP | multipart: `files`, `zip_name` |
+| PUT | `/file/archive/` | 解压 ZIP | multipart: `zip_file` |
 | GET | `/background/` | 随机背景图 | - |
 | POST | `/database/` | 数据库批量操作 | JSON body（见下方） |
 
@@ -251,9 +251,9 @@ type BatchResult struct {
 ### 文件保存请求格式
 
 ```
-POST /save/
+POST /file/write/
 Headers:
-  X-File-Name: <Base64 编码的文件名>
+  X-File-Name: <Base64 编码的文件名>  
   X-Overwrite: true/false (可选)
 Body: <原始文件字节流>
 ```
@@ -300,12 +300,12 @@ func main() {
 
 ```bash
 # 保存文件
-curl -X POST http://localhost:36789/save/ \
+curl -X POST http://localhost:36789/file/write/ \
   -H "X-File-Name: $(echo -n 'example.txt' | base64)" \
   --data-binary @example.txt
 
 # 读取文件
-curl http://localhost:36789/read/example.txt
+curl http://localhost:36789/file/read/example.txt
 
 # 数据库操作
 curl -X POST http://localhost:36789/database/ \

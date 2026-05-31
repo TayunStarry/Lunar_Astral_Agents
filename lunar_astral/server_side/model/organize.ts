@@ -104,7 +104,7 @@ export class OrganizeRole extends ModelBuilder {
 		}
 	}
 
-	public queryHistoricalRecords(queryText: string, topK: number = 10): PostMessage[] {
+	public queryHistoricalRecords(queryText: string, topK: number = 10): (PostMessage & { id: string })[] {
 		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
 		if (!BaseConfig.chromemReady) return [];
 
@@ -116,7 +116,8 @@ export class OrganizeRole extends ModelBuilder {
 
 		if (!results || results.length === 0) return [];
 
-		return results.map((r: { role: string; content: string }) => ({
+		return results.map((r: { id: string; role: string; content: string }) => ({
+			id: r.id,
 			role: r.role as PostMessage['role'],
 			content: r.content
 		}));

@@ -189,7 +189,7 @@ class LunarCoreApp {
                         }
                         const blob = new Blob([ab], { type: mimeType });
                         const file = new File([blob], `assistant_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                        const fileUrl = `${window.location.origin}/read/${file.name}`;
+                        const fileUrl = `${window.location.origin}/file/read/${file.name}`;
                         await this.handleAssistantMessage('', fileUrl, '');
                     }
                 }
@@ -221,7 +221,7 @@ class LunarCoreApp {
 
     async processFileUpload(preview) {
         const saveResult = await saveFile(preview.file, true);
-        const fileUrl = `${window.location.origin}/read/${saveResult.filename}`;
+        const fileUrl = `${window.location.origin}/file/read/${saveResult.filename}`;
         const category = getFileCategory(preview.file);
 
         return {

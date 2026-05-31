@@ -46,7 +46,7 @@ export async function saveImageToServer(file: File): Promise<string> {
         // 检查响应是否成功，若失败则抛出错误
         if (!err) throw err;
         // 保存成功，返回图片的读取路径
-        return `/read/images/${newFileName}`;
+        return `/file/read/images/${newFileName}`;
     }
     catch (error) {
         if (!(error instanceof Error)) return '';

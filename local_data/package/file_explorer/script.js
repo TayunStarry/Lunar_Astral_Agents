@@ -332,7 +332,7 @@ function createFileCard(file, selectedFiles, onToggleSelection, onFileClick, onR
     else if (isImageFile(file.name)) {
         const img = document.createElement('img');
         img.className = 'file-thumbnail';
-        img.src = `/read/${file.path}`;
+        img.src = `/file/read/${file.path}`;
         img.alt = file.name;
         card.appendChild(img);
     }
@@ -341,7 +341,7 @@ function createFileCard(file, selectedFiles, onToggleSelection, onFileClick, onR
         img.className = 'file-thumbnail';
         img.alt = file.name;
         // 异步获取视频第一帧
-        getVideoThumbnailFromUrl(`/read/${file.path}`)
+        getVideoThumbnailFromUrl(`/file/read/${file.path}`)
             .then(thumbnailUrl => {
                 img.src = thumbnailUrl;
             })
@@ -599,7 +599,7 @@ function updateUploadProgress(progress, show) {
  */
 async function loadFiles(currentPath) {
     try {
-        const response = await fetch(`/file_list/${currentPath}`);
+        const response = await fetch(`/file/list/${currentPath}`);
         if (!response.ok) throw new Error('加载文件失败');
         const files = await response.json();
         // 确保返回的是数组
@@ -648,7 +648,7 @@ async function uploadFile(file, currentPath, onProgress, overwrite = true) {
         xhr.addEventListener('error', () => reject(new Error('上传失败')));
         xhr.addEventListener('timeout', () => reject(new Error('上传超时')));
 
-        xhr.open('POST', '/save');
+        xhr.open('POST', '/file/write');
         xhr.setRequestHeader('X-File-Name', encodeFileName(fullPath));
         xhr.setRequestHeader('X-Overwrite', overwrite.toString());
         xhr.send(file);
@@ -706,7 +706,7 @@ async function createNewFolder(currentPath, onComplete) {
         const file = new File([blob], tempFileName, { type: 'text/plain' });
 
         await uploadFile(file, currentPath, () => { }, true);
-        await fetch(`/delete/${fullPath}`, { method: 'DELETE' });
+        await fetch(`/file/delete/${fullPath}`, { method: 'DELETE' });
 
         showToast(`文件夹 "${folderName}" 创建成功`, 'success');
         onComplete();
@@ -727,7 +727,7 @@ async function deleteFile(file, onComplete) {
     }
 
     try {
-        const response = await fetch(`/delete/${file.path}`, { method: 'DELETE' });
+        const response = await fetch(`/file/delete/${file.path}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('删除失败');
 
         showToast('删除成功', 'success');
@@ -776,11 +776,11 @@ async function renameFile(file, currentPath, onComplete) {
  * @returns {Promise} - 重命名操作后的 Promise 对象
  */
 async function renameSingleFile(file, newName, currentPath) {
-    const response = await fetch(`/read/${file.path}`);
+    const response = await fetch(`/file/read/${file.path}`);
     if (!response.ok) throw new Error('读取文件失败');
     const content = await response.blob();
 
-    await fetch(`/delete/${file.path}`, { method: 'DELETE' });
+    await fetch(`/file/delete/${file.path}`, { method: 'DELETE' });
     const newFile = new File([content], newName, { type: content.type });
     await uploadFile(newFile, currentPath, () => { }, true);
 }
@@ -795,7 +795,7 @@ async function renameSingleFile(file, newName, currentPath) {
 async function renameDirectory(directory, newName, currentPath) {
     await createDirectory(newName, currentPath);
     await copyDirectoryContent(directory.path, newName, currentPath);
-    await fetch(`/delete/${directory.path}`, { method: 'DELETE' });
+    await fetch(`/file/delete/${directory.path}`, { method: 'DELETE' });
 }
 
 /**
@@ -804,7 +804,7 @@ async function renameDirectory(directory, newName, currentPath) {
  * @returns {Promise<Array>} - 目录内容的 Promise 对象
  */
 async function getDirectoryContent(dirPath) {
-    const response = await fetch(`/file_list/${dirPath}`);
+    const response = await fetch(`/file/list/${dirPath}`);
     if (!response.ok) throw new Error('读取目录失败');
     return await response.json();
 }
@@ -821,7 +821,7 @@ async function createDirectory(dirName, currentPath) {
     const file = new File([blob], tempFileName, { type: 'text/plain' });
     await uploadFile(file, currentPath, () => { }, true);
     const fullPath = currentPath ? `${currentPath}/${tempFileName}` : tempFileName;
-    await fetch(`/delete/${fullPath}`, { method: 'DELETE' });
+    await fetch(`/file/delete/${fullPath}`, { method: 'DELETE' });
 }
 
 /**
@@ -853,7 +853,7 @@ async function copyDirectoryContent(sourceDirPath, targetDirName, currentPath) {
  * @returns {Promise} - 复制文件后的 Promise 对象
  */
 async function copySingleFile(file, targetPath, currentPath) {
-    const fileResponse = await fetch(`/read/${file.path}`);
+    const fileResponse = await fetch(`/file/read/${file.path}`);
     if (!fileResponse.ok) return;
     const fileBlob = await fileResponse.blob();
     const fileName = targetPath.split('/').pop();
@@ -877,7 +877,7 @@ async function batchDelete(selectedFiles, onComplete) {
     try {
         let deletedCount = 0;
         for (const filePath of selectedFiles) {
-            const response = await fetch(`/delete/${filePath}`, { method: 'DELETE' });
+            const response = await fetch(`/file/delete/${filePath}`, { method: 'DELETE' });
             if (response.ok) deletedCount++;
         }
 
@@ -906,7 +906,7 @@ async function batchCompress(files, selectedFiles) {
 
         for (const fileObj of selectedFileObjects) {
             if (fileObj.isDir) continue;
-            const response = await fetch(`/read/${fileObj.path}`);
+            const response = await fetch(`/file/read/${fileObj.path}`);
             const blob = await response.blob();
             const file = new File([blob], fileObj.name, { type: blob.type });
             formData.append('files', file);
@@ -915,7 +915,7 @@ async function batchCompress(files, selectedFiles) {
         const zipName = `压缩文件_${new Date().getTime()}.zip`;
         formData.append('zip_name', zipName);
 
-        const response = await fetch('/archive', {
+        const response = await fetch('/file/archive', {
             method: 'POST',
             body: formData
         });
@@ -952,7 +952,7 @@ async function handleZipUpload(file, currentPath, onComplete) {
         const formData = new FormData();
         formData.append('zip_file', file);
 
-        const response = await fetch('/archive', {
+        const response = await fetch('/file/archive', {
             method: 'PUT',
             body: formData
         });
@@ -984,7 +984,7 @@ async function handleZipUpload(file, currentPath, onComplete) {
  */
 async function downloadFile(file) {
     try {
-        const response = await fetch(`/download/${file.path}`);
+        const response = await fetch(`/file/download/${file.path}`);
         if (!response.ok) throw new Error('下载失败');
 
         const blob = await response.blob();
@@ -1014,7 +1014,7 @@ async function traverseAllFiles(startPath = '') {
     while (queue.length > 0) {
         const currentPath = queue.shift();
         try {
-            const response = await fetch(`/file_list/${currentPath}`);
+            const response = await fetch(`/file/list/${currentPath}`);
             if (!response.ok) continue;
             const files = await response.json();
             // 确保 files 是一个数组
@@ -1060,7 +1060,7 @@ async function saveIndexToFile(indexData) {
  */
 async function loadIndexFromFile() {
     try {
-        const response = await fetch('/read/file_query.index');
+        const response = await fetch('/file/read/file_query.index');
         if (!response.ok) return null;
         const data = await response.json();
         return Array.isArray(data) ? data : null;
@@ -1091,7 +1091,7 @@ let currentEditFile = null;
  */
 async function showTextModal(file, currentPath, onSave) {
     try {
-        const response = await fetch(`/read/${file.path}`);
+        const response = await fetch(`/file/read/${file.path}`);
         if (!response.ok) throw new Error('读取文件失败');
         const content = await response.text();
 
@@ -1155,7 +1155,7 @@ async function showTextModal(file, currentPath, onSave) {
         // 下载按钮点击事件
         modalDownload.onclick = () => {
             const link = document.createElement('a');
-            link.href = `/download/${file.path}`;
+            link.href = `/file/download/${file.path}`;
             link.download = file.name;
             document.body.appendChild(link);
             link.click();
@@ -1345,13 +1345,13 @@ function handleKeyboardEvent(event, currentMediaList, currentMediaIndex, onMedia
                     imagePreview.style.display = 'block';
                     videoPreview.style.display = 'none';
                     imagePreview.alt = file.name;
-                    imagePreview.src = `/read/${file.path}`;
+                    imagePreview.src = `/file/read/${file.path}`;
                 } else {
                     imageDragContainer.style.display = 'none';
                     imagePreview.style.display = 'none';
                     videoPreview.style.display = 'block';
                     videoPreview.alt = file.name;
-                    videoPreview.src = `/read/${file.path}`;
+                    videoPreview.src = `/file/read/${file.path}`;
                 }
                 imageInfo.style.display = 'none';
             };
@@ -1658,7 +1658,7 @@ class FileManager {
             if (isImageFile(file.name) || isVideoFile(file.name) || isAudioFile(file.name)) {
                 const mediaIndex = this.currentMediaList.findIndex(media => media.path === file.path);
                 this.currentMediaIndex = mediaIndex;
-                previewImage(`/read/${file.path}`, file.name);
+                previewImage(`/file/read/${file.path}`, file.name);
             } else if (isTextFile(file.name)) {
                 showTextModal(file, this.currentPath, async () => {
                     await this.loadFiles();

@@ -15,8 +15,8 @@ func ReadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Read请求[ERROR] -> 不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-	// 从请求 URL 路径中去除 "/read/" 前缀，获取实际的文件路径
-	filePath := strings.TrimPrefix(r.URL.Path, "/read/")
+	// 从请求 URL 路径中去除 "/file/read/" 前缀，获取实际的文件路径
+	filePath := strings.TrimPrefix(r.URL.Path, "/file/read/")
 	// 调用 execute 模块读取文件
 	file, size, mimeType, err := module.ReadFile(filePath)
 	if err != nil {

@@ -138,7 +138,7 @@ const AgentExample = new LunarAgent();
 // const message: Array<ImageContent | TextContent> = [
 //     {
 //         type: 'image_url',
-//         image_url: { url: url()[0] + '/read/images/6b4029976c90a71e.jpg' }
+//         image_url: { url: url()[0] + '/file/read/images/6b4029976c90a71e.jpg' }
 //     },
 //     {
 //         type: 'text',

@@ -23,12 +23,12 @@ func GetSourcesByPlan(planName string) ([]string, error) {
 	for _, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			PrintWarning("无法解析路径 %s: %v\n", path, err)
+			PrintWarning("无法解析路径 %s: %v", path, err)
 			continue
 		}
 
 		if !fileExists(absPath) {
-			PrintWarning("路径不存在: %s (%s)\n", path, absPath)
+			PrintWarning("路径不存在: %s (%s)", path, absPath)
 			continue
 		}
 

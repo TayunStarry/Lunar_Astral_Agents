@@ -51,12 +51,12 @@ var wsBroadcaster = make(chan WSMessage, 256)
 var SystemEndpoints = []SystemEndpoint{
 	// 文件读写相关接口
 	{Path: "/background", Handler: storage.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
-	{Path: "/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
-	{Path: "/file_list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表查询"},
-	{Path: "/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载操作"},
-	{Path: "/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
-	{Path: "/save", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存操作"},
-	{Path: "/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
+	{Path: "/file/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
+	{Path: "/file/list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表查询"},
+	{Path: "/file/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载操作"},
+	{Path: "/file/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
+	{Path: "/file/write", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存操作"},
+	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
 	// 数据库相关接口
 	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据库管理"},
 	// 图片生成相关接口

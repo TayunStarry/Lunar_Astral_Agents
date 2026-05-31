@@ -17,7 +17,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: url('/read/images/background/picture (5).webp') center/cover no-repeat;
+    background: url('/file/read/images/background/picture (5).webp') center/cover no-repeat;
     z-index: -2;
     animation: backgroundAnimation 4s ease-in-out forwards;
     filter: blur(0px) brightness(0.9) contrast(1.0);
