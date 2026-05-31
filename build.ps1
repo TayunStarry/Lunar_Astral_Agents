@@ -130,6 +130,7 @@ try {
     Invoke-Build -Path "$ScriptRoot\subsystem\qwen_asr_lunar" -Name "Qwen ASR Lunar"
     Invoke-Build -Path "$ScriptRoot\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
+    Invoke-Build -Path "$ScriptRoot\subsystem\sd_lunar" -Name "SD Lunar"
     
     Write-Host "`n" -NoNewline
     Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Green

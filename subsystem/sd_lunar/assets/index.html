@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SD Lunar - 图像生成测试系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <h1 class="title">SD Lunar</h1>
+            <p class="subtitle">Stable Diffusion 图像生成能力测试系统</p>
+            <div class="status-bar">
+                <span id="engineStatus" class="status-badge">⚪ 等待配置加载</span>
+                <span id="gpuStatus" class="status-badge">⚪ GPU状态未知</span>
+            </div>
+        </header>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="txt2img">文字生成图像</button>
+            <button class="tab-btn" data-tab="img2img">图像引导生成</button>
+        </div>
+
+        <main class="main-content">
+            <section id="txt2img-panel" class="panel active">
+                <form id="txt2img-form" class="generation-form">
+                    <div class="form-row full">
+                        <label for="t-prompt">正向提示词</label>
+                        <textarea id="t-prompt" rows="3" placeholder="描述你想要生成的图像内容..." required></textarea>
+                    </div>
+                    <div class="form-row full">
+                        <label for="t-negative">负面提示词</label>
+                        <textarea id="t-negative" rows="2" placeholder="描述你不希望在图像中出现的内容..."></textarea>
+                    </div>
+                    <div class="params-grid">
+                        <div class="form-row">
+                            <label for="t-width">宽度</label>
+                            <input type="number" id="t-width" value="512" min="64" max="2048" step="64">
+                        </div>
+                        <div class="form-row">
+                            <label for="t-height">高度</label>
+                            <input type="number" id="t-height" value="512" min="64" max="2048" step="64">
+                        </div>
+                        <div class="form-row">
+                            <label for="t-steps">采样步数: <span class="slider-val" id="t-steps-val">20</span></label>
+                            <input type="range" id="t-steps" value="20" min="1" max="150" step="1">
+                        </div>
+                        <div class="form-row">
+                            <label for="t-cfg">CFG 引导: <span class="slider-val" id="t-cfg-val">7.0</span></label>
+                            <input type="range" id="t-cfg" value="7.0" min="1.0" max="30.0" step="0.5">
+                        </div>
+                        <div class="form-row">
+                            <label for="t-seed">随机种子 (0=随机)</label>
+                            <input type="number" id="t-seed" value="0" min="0" max="9999999999">
+                        </div>
+                        <div class="form-row">
+                            <label for="t-batch">批量大小</label>
+                            <input type="number" id="t-batch" value="1" min="1" max="8">
+                        </div>
+                    </div>
+                    <div class="form-row full vulkan-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="t-vulkan" checked>
+                            <span class="switch-track">
+                                <span class="switch-thumb"></span>
+                            </span>
+                            Vulkan GPU 加速推理
+                        </label>
+                    </div>
+                    <button type="submit" class="generate-btn">开始生成</button>
+                </form>
+            </section>
+
+            <section id="img2img-panel" class="panel">
+                <form id="img2img-form" class="generation-form">
+                    <div class="form-row full">
+                        <label>初始图像</label>
+                        <div class="image-upload-area" id="upload-area">
+                            <input type="file" id="i-init-img" accept="image/*" class="file-input">
+                            <div class="upload-placeholder" id="upload-placeholder">
+                                <span class="upload-icon">+</span>
+                                <p>点击或拖拽上传初始图像</p>
+                            </div>
+                            <img id="upload-preview" class="upload-preview" alt="初始图像预览">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <label for="i-prompt">正向提示词</label>
+                        <textarea id="i-prompt" rows="3" placeholder="描述你想要生成的图像内容..." required></textarea>
+                    </div>
+                    <div class="form-row full">
+                        <label for="i-negative">负面提示词</label>
+                        <textarea id="i-negative" rows="2" placeholder="描述你不希望在图像中出现的内容..."></textarea>
+                    </div>
+                    <div class="params-grid">
+                        <div class="form-row">
+                            <label for="i-strength">降噪强度: <span class="slider-val" id="i-strength-val">0.75</span></label>
+                            <input type="range" id="i-strength" value="0.75" min="0.01" max="1.0" step="0.01">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-width">宽度</label>
+                            <input type="number" id="i-width" value="512" min="64" max="2048" step="64">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-height">高度</label>
+                            <input type="number" id="i-height" value="512" min="64" max="2048" step="64">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-steps">采样步数: <span class="slider-val" id="i-steps-val">20</span></label>
+                            <input type="range" id="i-steps" value="20" min="1" max="150" step="1">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-cfg">CFG 引导: <span class="slider-val" id="i-cfg-val">7.0</span></label>
+                            <input type="range" id="i-cfg" value="7.0" min="1.0" max="30.0" step="0.5">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-seed">随机种子 (0=随机)</label>
+                            <input type="number" id="i-seed" value="0" min="0" max="9999999999">
+                        </div>
+                        <div class="form-row">
+                            <label for="i-batch">批量大小</label>
+                            <input type="number" id="i-batch" value="1" min="1" max="8">
+                        </div>
+                    </div>
+                    <div class="form-row full vulkan-row">
+                        <label class="switch-label">
+                            <input type="checkbox" id="i-vulkan" checked>
+                            <span class="switch-track">
+                                <span class="switch-thumb"></span>
+                            </span>
+                            Vulkan GPU 加速推理
+                        </label>
+                    </div>
+                    <button type="submit" class="generate-btn">开始生成</button>
+                </form>
+            </section>
+
+            <section class="results-section">
+                <h2 class="results-title">生成结果</h2>
+                <div class="progress-bar-container" id="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                    <span class="progress-text" id="progress-text"></span>
+                </div>
+                <div class="results-grid" id="results-grid">
+                    <div class="empty-results">
+                        <p>等待生成图像...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

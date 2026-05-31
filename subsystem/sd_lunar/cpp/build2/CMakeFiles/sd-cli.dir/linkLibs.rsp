@@ -1,0 +1,1 @@
+ "libstable-diffusion.a" ggml/src/ggml.a "ggml/src/ggml-cpu.a" D:/mingw64/lib/libgomp.dll.a "D:/mingw64/x86_64-w64-mingw32/lib/libmingwthrd.a" "ggml/src/ggml-vulkan/ggml-vulkan.a" "ggml/src/ggml-base.a" "C:/VulkanSDK/1.4.350.0/Lib/vulkan-1.lib" -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

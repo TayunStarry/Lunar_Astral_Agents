@@ -1,0 +1,13 @@
+# Target labels
+ vulkan-shaders-gen
+# Source files and their labels
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/CMakeFiles/vulkan-shaders-gen
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/CMakeFiles/vulkan-shaders-gen.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/CMakeFiles/vulkan-shaders-gen-complete.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-build.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-configure.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-download.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-install.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-mkdir.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-patch.rule
+D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-stamp/vulkan-shaders-gen-update.rule

@@ -1,136 +1,221 @@
-# ============================================================
-# sd_lunar 构建脚本
-# 1. 使用 CMake 编译 native/ 目录下的 C/C++ 静态库
-# 2. 使用 Go CGO 编译 Go 模块并链接静态库
-# ============================================================
+# SD Lunar - Build Script
+# GCC toolchain configuration, Go module dependencies and project compilation
 
 param(
-    [switch]$Clean,
-    [switch]$Release,
-    [switch]$CPUOnly,
-    [string]$OutputName = "sd_lunar.exe"
+    [ValidateSet("windows", "linux", "darwin")]
+    [string]$TargetOS = "windows",
+    [ValidateSet("amd64", "arm64")]
+    [string]$TargetArch = "amd64"
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $ScriptDir
+$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  sd_lunar 构建脚本 - 月华出品 ^_^" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host ""
+function Test-CommandExists {
+    param([string]$Command)
+    $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
+}
 
-$NativeDir = Join-Path $ScriptDir "native"
-$BuildDir = Join-Path $NativeDir "build"
+function Check-GCCToolchain {
+    Write-Host "[Check] MinGW-w64 GCC Compiler Toolchain..." -ForegroundColor Cyan
 
-if ($Clean) {
-    Write-Host "[清理] 正在清理构建产物..." -ForegroundColor Yellow
-    if (Test-Path $BuildDir) {
-        Remove-Item -Recurse -Force $BuildDir
-        Write-Host "[清理] 已删除 CMake 构建目录" -ForegroundColor Green
+    if ($TargetOS -eq "windows") {
+        if (-not (Test-CommandExists "gcc")) {
+            throw "GCC compiler not found, CGO support requires GCC (install MinGW-w64 or TDM-GCC)"
+        }
+
+        $gccVersion = gcc --version 2>&1 | Select-Object -First 1
+        Write-Host "  / $gccVersion" -ForegroundColor Green
+
+        $gccTarget = gcc -dumpmachine 2>&1
+        Write-Host "  / Target: $gccTarget" -ForegroundColor Green
+
+        if (-not (Test-CommandExists "g++")) {
+            Write-Host "  ! g++ compiler not found, C++ compilation may be limited" -ForegroundColor Yellow
+        } else {
+            $gppVersion = g++ --version 2>&1 | Select-Object -First 1
+            Write-Host "  / g++: $gppVersion" -ForegroundColor Green
+        }
     }
-    Remove-Item -Force -ErrorAction SilentlyContinue $OutputName
-    Remove-Item -Force -ErrorAction SilentlyContinue "*.exp"
-    Remove-Item -Force -ErrorAction SilentlyContinue "*.lib"
-    Write-Host "[清理] 构建产物清理完成" -ForegroundColor Green
-    Write-Host ""
 }
 
-Write-Host "[步骤 1/2] 编译 C/C++ 原生静态库..." -ForegroundColor Cyan
-Write-Host ""
+function Check-GoEnvironment {
+    Write-Host "[Check] Go Environment..." -ForegroundColor Cyan
 
-if (-not (Test-Path $BuildDir)) {
-    New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
+    if (-not (Test-CommandExists "go")) {
+        throw "Go environment not found, install Go (https://golang.org/dl/)"
+    }
+
+    $goVersion = go version 2>&1
+    Write-Host "  / $goVersion" -ForegroundColor Green
 }
 
-Push-Location $BuildDir
-
-if ($Release) {
-    $cmakeBuildType = "Release"
-} else {
-    $cmakeBuildType = "Release"
-}
-
-try {
-    $cmakeArgs = @(
-        "..",
-        "-DCMAKE_BUILD_TYPE=$cmakeBuildType",
-        "-G", "Visual Studio 17 2022"
+function Invoke-NativeCommand {
+    param(
+        [scriptblock]$ScriptBlock
     )
 
-    if ($CPUOnly) {
-        $cmakeArgs += "-DSD_VULKAN=OFF"
-        Write-Host "[CMake] Vulkan 已禁用 (CPU Only 模式)" -ForegroundColor Yellow
-    } else {
-        Write-Host "[CMake] Vulkan GPU 加速已启用" -ForegroundColor Green
-    }
+    $originalEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
 
-    Write-Host "[CMake] 配置中: cmake $($cmakeArgs -join ' ')" -ForegroundColor Gray
-    $cmakeConfig = Start-Process -FilePath "cmake" -ArgumentList $cmakeArgs -NoNewWindow -Wait -PassThru
-    if ($cmakeConfig.ExitCode -ne 0) {
-        Write-Host "[错误] CMake 配置失败 (退出码: $($cmakeConfig.ExitCode))" -ForegroundColor Red
-        Write-Host "[提示] 请检查是否安装了 CMake 和 Visual Studio 2022" -ForegroundColor Yellow
-        Pop-Location
-        exit 1
+    try {
+        & $ScriptBlock 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) {
+                Write-Host $_.Exception.Message -ForegroundColor DarkYellow
+            } else {
+                Write-Host $_
+            }
+        }
+        return $LASTEXITCODE
     }
-
-    Write-Host "[CMake] 编译中..." -ForegroundColor Gray
-    $cmakeBuild = Start-Process -FilePath "cmake" -ArgumentList @("--build", ".", "--config", $cmakeBuildType) -NoNewWindow -Wait -PassThru
-    if ($cmakeBuild.ExitCode -ne 0) {
-        Write-Host "[错误] CMake 编译失败 (退出码: $($cmakeBuild.ExitCode))" -ForegroundColor Red
-        Pop-Location
-        exit 1
+    finally {
+        $ErrorActionPreference = $originalEAP
     }
-
-    Write-Host "[CMake] 原生静态库编译成功!" -ForegroundColor Green
-} finally {
-    Pop-Location
 }
 
-Write-Host ""
-Write-Host "[步骤 2/2] 编译 Go CGO 模块..." -ForegroundColor Cyan
-Write-Host ""
+function Build-IconIfNeeded {
+    if ($TargetOS -ne "windows" -or -not (Test-Path (Join-Path $ScriptRoot "icon.ico"))) {
+        return
+    }
 
-$env:CGO_ENABLED = "1"
+    if (Test-Path (Join-Path $ScriptRoot "icon.syso")) {
+        return
+    }
 
-Push-Location $ScriptDir
+    Set-Location $ScriptRoot
+    & rsrc -ico icon.ico -o icon.syso
+    if ($LASTEXITCODE -ne 0) { throw "rsrc icon compilation failed" }
+}
 
 try {
-    if ($Release) {
-        $ldFlags = "-s -w"
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host "  SD Lunar - Image Gen Test System Build" -ForegroundColor Magenta
+    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "Target: $TargetOS / $TargetArch" -ForegroundColor Yellow
+    Write-Host "Project: $ScriptRoot" -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Host "--- Stage 1: Environment Check ---" -ForegroundColor Yellow
+    Check-GoEnvironment
+    Check-GCCToolchain
+
+    Write-Host ""
+    Write-Host "--- Stage 2: C++ Build (GGML + sd-cli) ---" -ForegroundColor Yellow
+
+    Set-Location $ScriptRoot
+
+    $ggmlBuildScript = Join-Path $ScriptRoot "build_ggml.ps1"
+    if (Test-Path $ggmlBuildScript) {
+        Write-Host "  Pre-building GGML library with Vulkan..." -ForegroundColor Cyan
+        & powershell -ExecutionPolicy Bypass -File $ggmlBuildScript
+        if ($LASTEXITCODE -ne 0) { throw "GGML pre-build failed" }
     } else {
-        $ldFlags = ""
+        Write-Host "  ! build_ggml.ps1 not found, using existing build_ggml" -ForegroundColor Yellow
     }
 
-    $goArgs = @("build")
-    if ($ldFlags) {
-        $goArgs += "-ldflags=$ldFlags"
+    $cppBuildDir = Join-Path $ScriptRoot "cpp\build"
+    $sdCliExe = Join-Path $cppBuildDir "bin\sd-cli.exe"
+
+    if (-not (Test-Path $sdCliExe)) {
+        Write-Host "  Building sd-cli..." -ForegroundColor Cyan
+        New-Item -ItemType Directory -Path $cppBuildDir -Force | Out-Null
+
+        $ggmlBuildDir = Join-Path $ScriptRoot "cpp\build_ggml"
+        $cmakeArgs = @(
+            "-S", (Join-Path $ScriptRoot "cpp"),
+            "-B", $cppBuildDir,
+            "-G", "MinGW Makefiles",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DSD_VULKAN=ON",
+            "-DGGML_BUILD_DIR=$ggmlBuildDir",
+            "-DCMAKE_C_COMPILER=gcc",
+            "-DCMAKE_CXX_COMPILER=g++"
+        )
+        $exitCode = Invoke-NativeCommand { cmake @cmakeArgs }
+        if ($exitCode -ne 0) { throw "CMake configure failed" }
+
+        $exitCode = Invoke-NativeCommand { mingw32-make -j4 -C $cppBuildDir sd-cli }
+        if ($exitCode -ne 0) { throw "sd-cli build failed" }
+    } else {
+        Write-Host "  / sd-cli.exe already built, skipping" -ForegroundColor Green
     }
-    $goArgs += @("-v", "-o", $OutputName, ".")
 
-    Write-Host "[Go] go $($goArgs -join ' ')" -ForegroundColor Gray
-
-    $goBuild = Start-Process -FilePath "go" -ArgumentList $goArgs -NoNewWindow -Wait -PassThru
-
-    if ($goBuild.ExitCode -ne 0) {
-        Write-Host "[错误] Go 编译失败 (退出码: $($goBuild.ExitCode))" -ForegroundColor Red
-        exit 1
+    if (Test-Path $sdCliExe) {
+        $sdCliSize = [math]::Round((Get-Item $sdCliExe).Length / 1MB, 2)
+        Write-Host "  / sd-cli.exe: $sdCliSize MB" -ForegroundColor Green
     }
 
     Write-Host ""
-    Write-Host "============================================" -ForegroundColor Green
-    Write-Host "  构建成功! 输出: $OutputName" -ForegroundColor Green
-    Write-Host "============================================" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "运行方式:" -ForegroundColor Cyan
-    Write-Host "  .\$OutputName" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "API接口:" -ForegroundColor Cyan
-    Write-Host "  POST /api/v1/txt2img  - 文生图" -ForegroundColor Gray
-    Write-Host "  POST /api/v1/img2img  - 图生图" -ForegroundColor Gray
-    Write-Host "  GET  /api/v1/status   - 状态查询" -ForegroundColor Gray
-    Write-Host "  GET  /api/v1/ping     - 健康检查" -ForegroundColor Gray
+    Write-Host "--- Stage 3: Go Dependencies ---" -ForegroundColor Yellow
 
-} finally {
-    Pop-Location
+    $exitCode = Invoke-NativeCommand { go mod tidy }
+    if ($exitCode -ne 0) {
+        Write-Host "  ! go mod tidy had warnings, continuing build..." -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "--- Stage 4: Compile Go Executable ---" -ForegroundColor Yellow
+
+    $env:CGO_ENABLED = 1
+    $env:GOOS = $TargetOS
+    $env:GOARCH = $TargetArch
+
+    if ($TargetOS -eq "windows") {
+        $env:CC = "gcc"
+        $env:CXX = "g++"
+    }
+
+    Build-IconIfNeeded
+
+    $binaryName = "SD_Lunar.exe"
+    if ($TargetOS -ne "windows") { $binaryName = "SD_Lunar" }
+    $outputPath = Join-Path (Split-Path (Split-Path $ScriptRoot -Parent) -Parent) $binaryName
+
+    $ldflags_arg = "-s -w -H windowsgui"
+    if ($TargetOS -ne "windows") {
+        $ldflags_arg = "-s -w"
+    }
+
+    Write-Host "  Output: $outputPath" -ForegroundColor Cyan
+    Write-Host "  Flags: CGO_ENABLED=1 GOOS=$TargetOS GOARCH=$TargetArch" -ForegroundColor Cyan
+    Write-Host ""
+
+    $buildArgs = @(
+        "build",
+        "-tags", "webview",
+        "-ldflags=$ldflags_arg",
+        "-trimpath",
+        "-o", $outputPath
+    )
+
+    $exitCode = Invoke-NativeCommand { go $buildArgs }
+    if ($exitCode -ne 0) { throw "Go build failed" }
+
+    if (Test-Path $outputPath) {
+        $fileInfo = Get-Item $outputPath
+        $sizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
+        Write-Host ""
+        Write-Host "  / SD_Lunar build SUCCESS!" -ForegroundColor Green
+        Write-Host "  / Output: $outputPath" -ForegroundColor Green
+        Write-Host "  / Size: $sizeMB MB" -ForegroundColor Green
+    } else {
+        Write-Host "  ! WARNING: Output file not found" -ForegroundColor Red
+    }
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "  SD Lunar Build Complete" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+}
+catch {
+    Write-Host ""
+    Write-Host "[ERROR] SD Lunar build failed: $_" -ForegroundColor Red
+    Write-Host ""
+    exit 1
+}
+finally {
+    Set-Location $ScriptRoot
 }
