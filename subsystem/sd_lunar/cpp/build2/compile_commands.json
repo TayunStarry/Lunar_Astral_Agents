@@ -1,0 +1,1244 @@
+[
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\convert.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\convert.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/convert.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/convert.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\ggml_extend_backend.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\ggml_extend_backend.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/ggml_extend_backend.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/ggml_extend_backend.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\ggml_graph_cut.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\ggml_graph_cut.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/ggml_graph_cut.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/ggml_graph_cut.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\guidance.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\guidance.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/guidance.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/guidance.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\main.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\main.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/main.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/main.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model_io\\gguf_io.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model_io\\gguf_io.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model_io/gguf_io.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model_io/gguf_io.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model_io\\pickle_io.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model_io\\pickle_io.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model_io/pickle_io.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model_io/pickle_io.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model_io\\safetensors_io.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model_io\\safetensors_io.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model_io/safetensors_io.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model_io/safetensors_io.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model_io\\torch_legacy_io.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model_io\\torch_legacy_io.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model_io/torch_legacy_io.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model_io/torch_legacy_io.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\model_io\\torch_zip_io.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\model_io\\torch_zip_io.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/model_io/torch_zip_io.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/model_io/torch_zip_io.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\name_conversion.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\name_conversion.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/name_conversion.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/name_conversion.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\sample-cache.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\sample-cache.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/sample-cache.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/sample-cache.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\stable-diffusion.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\stable-diffusion.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/stable-diffusion.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/stable-diffusion.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\bpe_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\bpe_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/bpe_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/bpe_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\clip_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\clip_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/clip_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/clip_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\gemma_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\gemma_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/gemma_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/gemma_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\mistral_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\mistral_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/mistral_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/mistral_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\qwen2_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\qwen2_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/qwen2_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/qwen2_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\t5_unigram_tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\t5_unigram_tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/t5_unigram_tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/t5_unigram_tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\tokenize_util.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\tokenize_util.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/tokenize_util.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/tokenize_util.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\tokenizer.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\tokenizer.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/tokenizer.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/tokenizer.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\tokenizers\\vocab\\vocab.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\tokenizers\\vocab\\vocab.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/tokenizers/vocab/vocab.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/tokenizers/vocab/vocab.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\upscaler.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\upscaler.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/upscaler.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/upscaler.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\util.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\util.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/util.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/util.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -DSDCPP_BUILD_COMMIT=unknown -DSDCPP_BUILD_VERSION=local @CMakeFiles/stable-diffusion.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\stable-diffusion.dir\\src\\version.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\version.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/version.cpp",
+  "output": "CMakeFiles/stable-diffusion.dir/src/version.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/sd-cli.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -o CMakeFiles\\sd-cli.dir\\src\\main.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\src\\main.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/src/main.cpp",
+  "output": "CMakeFiles/sd-cli.dir/src/main.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml.c",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-alloc.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-alloc.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-alloc.c",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-alloc.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-backend.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend-meta.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend-meta.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend-meta.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-opt.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-opt.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-opt.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-opt.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-threading.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-threading.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-threading.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-threading.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-quants.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-quants.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-quants.c",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/ggml-quants.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"8c44926\\\" -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\gguf.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\gguf.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/gguf.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-base.dir/gguf.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\ggml-cpu.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\ggml-cpu.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/ggml-cpu.c",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\ggml-cpu.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\ggml-cpu.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/ggml-cpu.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\repack.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\repack.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/repack.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/repack.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\hbm.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\hbm.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/hbm.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/hbm.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\quants.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\quants.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/quants.c",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/quants.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\traits.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\traits.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/traits.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/traits.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\amx\\amx.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\amx\\amx.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/amx/amx.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/amx.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\amx\\mmq.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\amx\\mmq.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/amx/mmq.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/mmq.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\binary-ops.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\binary-ops.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/binary-ops.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/binary-ops.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\unary-ops.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\unary-ops.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/unary-ops.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/unary-ops.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\vec.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\vec.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/vec.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/vec.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\ops.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\ops.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/ops.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ops.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\arch\\x86\\quants.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\arch\\x86\\quants.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/arch/x86/quants.c",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/quants.c.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU_REPACK -DGGML_USE_OPENMP -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-cpu.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -march=native -fopenmp -o CMakeFiles\\ggml-cpu.dir\\ggml-cpu\\arch\\x86\\repack.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-cpu\\arch\\x86\\repack.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-cpu/arch/x86/repack.cpp",
+  "output": "ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/repack.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml.dir\\ggml-backend-dl.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend-dl.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend-dl.cpp",
+  "output": "ggml/src/CMakeFiles/ggml.dir/ggml-backend-dl.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_USE_CPU -DGGML_USE_VULKAN -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml.dir\\ggml-backend-reg.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend-reg.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend-reg.cpp",
+  "output": "ggml/src/CMakeFiles/ggml.dir/ggml-backend-reg.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\ggml-vulkan.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-vulkan\\ggml-vulkan.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-vulkan/ggml-vulkan.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/ggml-vulkan.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\abs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\abs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/abs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/abs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\acc.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\acc.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/acc.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/acc.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\add.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\add.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/add.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/add.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\add1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\add1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/add1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/add1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\add_id.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\add_id.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/add_id.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/add_id.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\arange.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\arange.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/arange.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/arange.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\argmax.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\argmax.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/argmax.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/argmax.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\argsort.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\argsort.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/argsort.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/argsort.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\argsort_large.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\argsort_large.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/argsort_large.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/argsort_large.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\ceil.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\ceil.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/ceil.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/ceil.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\clamp.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\clamp.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/clamp.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/clamp.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\concat.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\concat.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/concat.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/concat.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\contig_copy.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\contig_copy.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/contig_copy.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/contig_copy.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\conv2d_dw.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\conv2d_dw.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/conv2d_dw.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/conv2d_dw.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\conv2d_mm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\conv2d_mm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/conv2d_mm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/conv2d_mm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\conv_transpose_1d.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\conv_transpose_1d.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/conv_transpose_1d.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/conv_transpose_1d.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\copy.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\copy.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/copy.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/copy.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\copy_from_quant.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\copy_from_quant.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/copy_from_quant.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/copy_from_quant.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\copy_to_quant.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\copy_to_quant.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/copy_to_quant.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/copy_to_quant.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\copy_transpose.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\copy_transpose.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/copy_transpose.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/copy_transpose.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\cos.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\cos.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/cos.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/cos.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\count_equal.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\count_equal.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/count_equal.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/count_equal.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\count_experts.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\count_experts.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/count_experts.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/count_experts.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\cumsum.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\cumsum.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/cumsum.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/cumsum.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\cumsum_multipass1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\cumsum_multipass1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/cumsum_multipass1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/cumsum_multipass1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\cumsum_multipass2.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\cumsum_multipass2.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/cumsum_multipass2.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/cumsum_multipass2.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_f32.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_f32.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_f32.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_f32.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq1_m.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq1_m.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq1_m.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq1_m.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq1_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq1_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq1_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq1_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq2_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq2_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq2_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq2_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq2_xs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq2_xs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq2_xs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq2_xs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq2_xxs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq2_xxs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq2_xxs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq2_xxs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq3_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq3_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq3_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq3_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq3_xxs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq3_xxs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq3_xxs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq3_xxs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq4_nl.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq4_nl.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq4_nl.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq4_nl.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_iq4_xs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_iq4_xs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_iq4_xs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_iq4_xs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_mxfp4.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_mxfp4.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_mxfp4.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_mxfp4.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_nvfp4.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_nvfp4.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_nvfp4.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_nvfp4.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q1_0.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q1_0.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q1_0.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q1_0.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q2_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q2_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q2_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q2_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q3_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q3_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q3_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q3_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q4_0.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q4_0.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q4_0.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q4_0.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q4_1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q4_1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q4_1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q4_1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q4_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q4_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q4_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q4_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q5_0.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q5_0.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q5_0.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q5_0.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q5_1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q5_1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q5_1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q5_1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q5_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q5_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q5_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q5_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q6_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q6_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q6_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q6_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\dequant_q8_0.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\dequant_q8_0.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/dequant_q8_0.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/dequant_q8_0.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\diag.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\diag.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/diag.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/diag.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\diag_mask_inf.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\diag_mask_inf.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/diag_mask_inf.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/diag_mask_inf.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\div.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\div.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/div.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/div.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\elu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\elu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/elu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/elu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\exp.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\exp.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/exp.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/exp.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\fill.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\fill.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/fill.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/fill.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\flash_attn.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\flash_attn.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/flash_attn.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/flash_attn.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\flash_attn_cm1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\flash_attn_cm1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/flash_attn_cm1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/flash_attn_cm1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\flash_attn_cm2.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\flash_attn_cm2.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/flash_attn_cm2.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/flash_attn_cm2.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\flash_attn_mask_opt.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\flash_attn_mask_opt.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/flash_attn_mask_opt.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/flash_attn_mask_opt.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\flash_attn_split_k_reduce.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\flash_attn_split_k_reduce.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/flash_attn_split_k_reduce.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/flash_attn_split_k_reduce.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\floor.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\floor.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/floor.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/floor.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\gated_delta_net.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\gated_delta_net.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/gated_delta_net.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/gated_delta_net.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\geglu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\geglu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/geglu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/geglu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\geglu_erf.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\geglu_erf.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/geglu_erf.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/geglu_erf.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\geglu_quick.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\geglu_quick.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/geglu_quick.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/geglu_quick.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\gelu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\gelu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/gelu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/gelu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\gelu_erf.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\gelu_erf.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/gelu_erf.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/gelu_erf.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\gelu_quick.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\gelu_quick.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/gelu_quick.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/gelu_quick.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\get_rows.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\get_rows.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/get_rows.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/get_rows.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\get_rows_quant.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\get_rows_quant.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/get_rows_quant.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/get_rows_quant.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\group_norm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\group_norm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/group_norm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/group_norm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\hardsigmoid.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\hardsigmoid.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/hardsigmoid.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/hardsigmoid.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\hardswish.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\hardswish.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/hardswish.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/hardswish.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\im2col.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\im2col.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/im2col.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/im2col.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\im2col_3d.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\im2col_3d.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/im2col_3d.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/im2col_3d.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\l2_norm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\l2_norm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/l2_norm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/l2_norm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\leaky_relu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\leaky_relu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/leaky_relu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/leaky_relu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\log.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\log.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/log.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/log.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_split_k_reduce.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_split_k_reduce.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_split_k_reduce.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_split_k_reduce.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq1_m.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq1_m.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq1_m.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq1_m.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq1_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq1_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq1_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq1_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq2_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq2_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq2_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq2_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq2_xs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq2_xs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq2_xs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq2_xs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq2_xxs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq2_xxs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq2_xxs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq2_xxs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq3_s.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq3_s.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq3_s.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq3_s.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_iq3_xxs.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_iq3_xxs.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_iq3_xxs.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_iq3_xxs.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_nc.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_nc.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_nc.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_nc.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_p021.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_p021.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_p021.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_p021.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_q2_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_q2_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_q2_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_q2_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_q3_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_q3_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_q3_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_q3_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_q4_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_q4_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_q4_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_q4_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_q5_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_q5_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_q5_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_q5_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vec_q6_k.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vec_q6_k.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vec_q6_k.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vec_q6_k.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mat_vecq.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mat_vecq.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mat_vecq.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mat_vecq.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mm_cm2.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mm_cm2.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mm_cm2.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mm_cm2.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\mul_mmq.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\mul_mmq.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/mul_mmq.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/mul_mmq.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\multi_add.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\multi_add.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/multi_add.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/multi_add.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\neg.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\neg.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/neg.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/neg.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\norm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\norm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/norm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/norm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\opt_step_adamw.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\opt_step_adamw.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/opt_step_adamw.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/opt_step_adamw.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\opt_step_sgd.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\opt_step_sgd.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/opt_step_sgd.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/opt_step_sgd.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\pad.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\pad.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/pad.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/pad.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\pool2d.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\pool2d.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/pool2d.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/pool2d.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\quantize_q8_1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\quantize_q8_1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/quantize_q8_1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/quantize_q8_1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\reglu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\reglu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/reglu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/reglu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\relu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\relu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/relu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/relu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\repeat.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\repeat.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/repeat.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/repeat.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\repeat_back.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\repeat_back.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/repeat_back.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/repeat_back.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rms_norm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rms_norm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rms_norm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rms_norm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rms_norm_back.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rms_norm_back.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rms_norm_back.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rms_norm_back.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rms_norm_partials.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rms_norm_partials.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rms_norm_partials.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rms_norm_partials.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\roll.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\roll.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/roll.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/roll.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rope_multi.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rope_multi.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rope_multi.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rope_multi.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rope_neox.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rope_neox.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rope_neox.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rope_neox.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rope_norm.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rope_norm.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rope_norm.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rope_norm.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\rope_vision.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\rope_vision.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/rope_vision.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/rope_vision.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\round.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\round.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/round.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/round.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\scale.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\scale.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/scale.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/scale.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sgn.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sgn.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sgn.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sgn.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sigmoid.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sigmoid.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sigmoid.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sigmoid.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\silu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\silu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/silu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/silu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\silu_back.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\silu_back.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/silu_back.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/silu_back.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sin.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sin.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sin.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sin.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\soft_max.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\soft_max.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/soft_max.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/soft_max.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\soft_max_back.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\soft_max_back.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/soft_max_back.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/soft_max_back.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\soft_max_large1.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\soft_max_large1.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/soft_max_large1.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/soft_max_large1.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\soft_max_large2.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\soft_max_large2.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/soft_max_large2.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/soft_max_large2.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\soft_max_large3.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\soft_max_large3.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/soft_max_large3.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/soft_max_large3.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\softplus.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\softplus.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/softplus.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/softplus.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\solve_tri.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\solve_tri.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/solve_tri.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/solve_tri.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sqrt.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sqrt.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sqrt.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sqrt.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\square.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\square.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/square.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/square.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\ssm_conv.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\ssm_conv.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/ssm_conv.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/ssm_conv.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\ssm_scan.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\ssm_scan.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/ssm_scan.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/ssm_scan.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\step.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\step.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/step.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/step.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sub.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sub.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sub.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sub.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\sum_rows.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\sum_rows.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/sum_rows.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/sum_rows.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\swiglu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\swiglu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/swiglu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/swiglu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\swiglu_oai.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\swiglu_oai.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/swiglu_oai.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/swiglu_oai.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\tanh.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\tanh.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/tanh.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/tanh.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\timestep_embedding.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\timestep_embedding.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/timestep_embedding.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/timestep_embedding.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\topk_argsort.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\topk_argsort.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/topk_argsort.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/topk_argsort.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\topk_moe.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\topk_moe.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/topk_moe.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/topk_moe.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\topk_nary_search.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\topk_nary_search.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/topk_nary_search.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/topk_nary_search.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\tri.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\tri.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/tri.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/tri.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\trunc.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\trunc.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/trunc.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/trunc.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\upscale.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\upscale.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/upscale.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/upscale.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\wkv6.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\wkv6.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/wkv6.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/wkv6.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\wkv7.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\wkv7.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/wkv7.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/wkv7.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_MAX_NAME=128 -DGGML_SCHED_MAX_COPIES=4 -DGGML_VULKAN_BFLOAT16_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT2_GLSLC_SUPPORT -DGGML_VULKAN_COOPMAT_GLSLC_SUPPORT -DGGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-vulkan.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-vulkan.dir\\xielu.comp.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\build2\\ggml\\src\\ggml-vulkan\\xielu.comp.cpp",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/xielu.comp.cpp",
+  "output": "ggml/src/ggml-vulkan/CMakeFiles/ggml-vulkan.dir/xielu.comp.cpp.obj"
+},
+{
+  "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/thirdparty",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_MAX_NAME=128 -DNOMINMAX -D_CRT_SECURE_NO_WARNINGS @CMakeFiles/zip.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -o CMakeFiles\\zip.dir\\zip.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\thirdparty\\zip.c",
+  "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/thirdparty/zip.c",
+  "output": "thirdparty/CMakeFiles/zip.dir/zip.c.obj"
+}
+]

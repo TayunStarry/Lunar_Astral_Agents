@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build2/ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
