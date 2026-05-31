@@ -1,55 +1,55 @@
 [
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.c",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.c",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml.c",
   "output": "src/CMakeFiles/ggml-base.dir/ggml.c.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/ggml.cpp.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-alloc.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-alloc.c",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-alloc.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-alloc.c",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-alloc.c",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-alloc.c.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-backend.cpp.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend-meta.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend-meta.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-backend-meta.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-backend-meta.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-backend-meta.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-opt.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-opt.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-opt.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-opt.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-opt.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-opt.cpp.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-threading.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-threading.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\ggml-threading.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-threading.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-threading.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-threading.cpp.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-quants.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-quants.c",
+  "command": "D:\\mingw64\\bin\\gcc.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_C.rsp -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion -o CMakeFiles\\ggml-base.dir\\ggml-quants.c.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\ggml-quants.c",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/ggml-quants.c",
   "output": "src/CMakeFiles/ggml-base.dir/ggml-quants.c.obj"
 },
 {
   "directory": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/build_ggml/src",
-  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"184a341\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\gguf.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\gguf.cpp",
+  "command": "D:\\mingw64\\bin\\g++.exe -DGGML_COMMIT=\\\"ac6ff12\\\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\\\"0.12.0\\\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600 @CMakeFiles/ggml-base.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++17 -Wmissing-declarations -Wmissing-noreturn -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wno-array-bounds -Wextra-semi -o CMakeFiles\\ggml-base.dir\\gguf.cpp.obj -c D:\\Lunar_Astral_Agents\\subsystem\\sd_lunar\\cpp\\ggml\\src\\gguf.cpp",
   "file": "D:/Lunar_Astral_Agents/subsystem/sd_lunar/cpp/ggml/src/gguf.cpp",
   "output": "src/CMakeFiles/ggml-base.dir/gguf.cpp.obj"
 },

@@ -173,7 +173,7 @@ try {
     if ($TargetOS -ne "windows") { $binaryName = "SD_Lunar" }
     $outputPath = Join-Path (Split-Path (Split-Path $ScriptRoot -Parent) -Parent) $binaryName
 
-    $ldflags_arg = "-s -w -H windowsgui"
+    $ldflags_arg = "-s -w"
     if ($TargetOS -ne "windows") {
         $ldflags_arg = "-s -w"
     }
