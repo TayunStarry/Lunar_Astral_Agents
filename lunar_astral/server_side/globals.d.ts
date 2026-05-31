@@ -146,7 +146,15 @@ declare global {
      * 
      * @param {number} topK 返回的最相关结果数量
      * 
-     * @returns {[Array<{role: string, content: string}>, Error | null]} 包含查询结果的元组
+     * @returns {[Array<{id: string, role: string, content: string}>, Error | null]} 包含查询结果的元组
      */
-    function chromemQuery(queryText: string, topK: number): [Array<{ role: string, content: string }>, Error | null];
+    function chromemQuery(queryText: string, topK: number): [Array<{ id: string, role: string, content: string }>, Error | null];
+    /**
+     * 从 chromem-go 向量数据库删除指定消息
+     * 
+     * @param {string} id 要删除的消息ID
+     * 
+     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
+     */
+    function chromemDelete(id: string): [boolean, Error | null];
 }

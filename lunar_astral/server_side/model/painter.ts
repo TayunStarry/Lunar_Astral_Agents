@@ -1,4 +1,4 @@
-import { ToolCall,  RandomFloor, ModelBuilder } from '../index';
+import { ToolCall, RandomFloor, ModelBuilder } from '../index';
 
 export class PainterRole extends ModelBuilder {
 	/** 默认表情提示 */

@@ -18,7 +18,8 @@ export * from './file/encoder';
 export * from './file/database';
 
 export * from './model/builder';
-export * from './model/chat';
+export * from './model/dialogue';
 export * from './model/painter';
+export * from './model/organize';
 export * from './model/define';
 export * from './model/agent';

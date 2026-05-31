@@ -32,6 +32,8 @@ type chromemResponse struct {
 type chromemStatsData struct {
 	DocumentCount int  `json:"document_count"`
 	Initialized   bool `json:"initialized"`
+	EntryCount    int  `json:"entry_count"`
+	SyncMismatch  bool `json:"sync_mismatch"`
 }
 
 type chromemMessageData struct {
@@ -41,10 +43,10 @@ type chromemMessageData struct {
 }
 
 type chromemQueryData struct {
-	Query    string               `json:"query"`
-	TopK     int                  `json:"top_k"`
-	Results  []chromemMessageData `json:"results"`
-	TotalFound int                `json:"total_found"`
+	Query      string               `json:"query"`
+	TopK       int                  `json:"top_k"`
+	Results    []chromemMessageData `json:"results"`
+	TotalFound int                  `json:"total_found"`
 }
 
 func writeChromemJSON(w http.ResponseWriter, statusCode int, resp chromemResponse) {
@@ -173,6 +175,7 @@ func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
 	results := make([]chromemMessageData, 0, len(messages))
 	for _, msg := range messages {
 		results = append(results, chromemMessageData{
+			ID:      msg["id"],
 			Role:    msg["role"],
 			Content: msg["content"],
 		})
@@ -247,14 +250,18 @@ func ChromemStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 	count := module.GetCollectionCount()
 	initialized := module.IsInitialized()
+	entryCount := module.GetEntryCount()
+	mismatch := module.HasSyncMismatch()
 
-	logger.Info("Storage", "chromem 统计信息: 文档数=%d, 已初始化=%v", count, initialized)
+	logger.Info("Storage", "chromem 统计信息: 文档数=%d, 已初始化=%v, 条目数=%d, 不同步=%v", count, initialized, entryCount, mismatch)
 
 	writeChromemJSON(w, http.StatusOK, chromemResponse{
 		Success: true,
 		Data: chromemStatsData{
 			DocumentCount: count,
 			Initialized:   initialized,
+			EntryCount:    entryCount,
+			SyncMismatch:  mismatch,
 		},
 	})
 }
@@ -377,6 +384,44 @@ func ChromemDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 			"total":     total,
 			"offset":    offset,
 			"limit":     limit,
+		},
+	})
+}
+
+func ChromemRebuildHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeChromemJSON(w, http.StatusMethodNotAllowed, chromemResponse{
+			Success: false,
+			Error:   "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST",
+		})
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeChromemJSON(w, http.StatusServiceUnavailable, chromemResponse{
+			Success: false,
+			Error:   "向量数据库请求[ERROR] -> chromem 未初始化",
+		})
+		return
+	}
+
+	ctx := context.Background()
+	count, err := module.RebuildEntries(ctx)
+	if err != nil {
+		writeChromemJSON(w, http.StatusInternalServerError, chromemResponse{
+			Success: false,
+			Error:   fmt.Sprintf("向量数据库请求[ERROR] -> 重建条目失败: %v", err),
+		})
+		return
+	}
+
+	logger.Info("Storage", "chromem rebuild 完成, 重建 %d 条文档条目", count)
+
+	writeChromemJSON(w, http.StatusOK, chromemResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"rebuilt": count,
+			"message": fmt.Sprintf("成功重建 %d 条文档条目", count),
 		},
 	})
 }
