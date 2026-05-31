@@ -38,6 +38,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/chromem/messages", Handler: storage.ChromemMessagesHandler, Method: "POST", Description: "向量数据库消息管理"},
 	{Path: "/chromem/stats", Handler: storage.ChromemStatsHandler, Method: "GET", Description: "向量数据库统计信息"},
 	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
+	{Path: "/chromem/rebuild", Handler: storage.ChromemRebuildHandler, Method: "POST", Description: "重建向量数据库文档索引"},
 	{Path: "/api/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/api/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
 }

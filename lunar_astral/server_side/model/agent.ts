@@ -1,4 +1,4 @@
-import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, Clamp } from '../index';
+import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, Clamp, OnlyData } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -32,7 +32,7 @@ class LunarAgent extends AgentDefine {
         /** 初始化聊天缓存 */
         const cache: ChatCache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         // 发送请求并获取响应
-        await this.chatDialogueRole.callMultimediaAndToolParsing(cache, this);
+        await this.dialogueRole.callMultimediaAndToolParsing(cache, this);
         // 减少发言权重
         this.speakWeight--;
         // 返回最终应答
@@ -68,6 +68,9 @@ class LunarAgent extends AgentDefine {
                 const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.randomDefaultMessage;
                 // 将消息推送至外部客户端
                 pushContext(messageType, messageResponse);
+                if (OnlyData.unreadRecords.length > 10) {
+                    setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
+                }
             }
             catch (error) {
                 // 推送错误消息

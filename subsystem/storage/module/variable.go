@@ -26,3 +26,6 @@ var documentEntries []DocumentEntry
 
 // documentEntriesMu 保护 documentEntries 的读写锁
 var documentEntriesMu sync.RWMutex
+
+// entriesFilePath entries.json 持久化文件路径
+var entriesFilePath string

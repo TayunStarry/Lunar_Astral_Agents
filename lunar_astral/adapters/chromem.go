@@ -88,10 +88,32 @@ func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 	resultObjs := make([]map[string]string, 0, len(messages))
 	for _, msg := range messages {
 		resultObjs = append(resultObjs, map[string]string{
+			"id":      msg["id"],
 			"role":    msg["role"],
 			"content": msg["content"],
 		})
 	}
 
 	return class.runtime.ToValue([]any{resultObjs, nil})
+}
+
+// chromemDelete 从 chromem-go 删除指定消息
+func (class *Runtime) chromemDelete(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemDelete 参数不足")})
+	}
+
+	id, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("id 必须是字符串")})
+	}
+
+	ctx := context.Background()
+	err := module.DeleteMessage(ctx, id)
+	if err != nil {
+		logger.Error("LunarCore", "chromem 删除消息失败: %v", err)
+		return class.runtime.ToValue([]any{false, err})
+	}
+
+	return class.runtime.ToValue([]any{true, nil})
 }

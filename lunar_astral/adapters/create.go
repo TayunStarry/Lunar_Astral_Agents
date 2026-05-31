@@ -59,6 +59,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("chromemInit", adapters.chromemInit)
 	vm.Set("chromemAdd", adapters.chromemAdd)
 	vm.Set("chromemQuery", adapters.chromemQuery)
+	vm.Set("chromemDelete", adapters.chromemDelete)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境
