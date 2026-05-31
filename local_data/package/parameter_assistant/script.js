@@ -71,7 +71,7 @@ function setValueByPath(path, value) {
 /* ========== 数据加载与保存 ========== */
 async function loadConfig() {
     try {
-        const res = await fetch('/read/lunar_config.json');
+        const res = await fetch('/file/read/lunar_config.json');
         if (!res.ok) throw new Error('加载配置失败');
         configData = await res.json();
         originalConfig = JSON.parse(JSON.stringify(configData));
@@ -87,7 +87,7 @@ async function saveConfig() {
         collectConfig();
         const jsonString = JSON.stringify(configData, null, '\t');
         const blob = new Blob([jsonString], { type: 'application/json' });
-        const res = await fetch('/save', {
+        const res = await fetch('/file/write', {
             method: 'POST',
             headers: {
                 'X-File-Name': encodeFileName('lunar_config.json'),
@@ -354,7 +354,7 @@ function addAiMessage(content) {
     const container = document.getElementById('aiMessages');
     const div = document.createElement('div');
     div.className = 'message ai-message';
-    div.innerHTML = `<div class="message-avatar"><img src="/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">${marked.parse(content)}</div>`;
+    div.innerHTML = `<div class="message-avatar"><img src="/file/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">${marked.parse(content)}</div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
@@ -364,7 +364,7 @@ function addTypingIndicator() {
     const div = document.createElement('div');
     div.className = 'message ai-message';
     div.id = 'typingIndicator';
-    div.innerHTML = `<div class="message-avatar"><img src="/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">正在思考...<span class="typing-dots"></span></div>`;
+    div.innerHTML = `<div class="message-avatar"><img src="/file/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">正在思考...<span class="typing-dots"></span></div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }

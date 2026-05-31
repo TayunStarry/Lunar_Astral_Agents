@@ -995,7 +995,7 @@ qrcodeButton.addEventListener('click', function () {
  */
 function playButtonClickSound() {
     /** 随机选择一个按钮点击音效URL */
-    const audio = new Audio(`/read/audios/button-${RandomFloor(0, 11)}.mp3`);
+    const audio = new Audio(`/file/read/audios/button-${RandomFloor(0, 11)}.mp3`);
     // 设置音频音量为最大
     audio.volume = 1.0;
     // 播放音频
@@ -1716,8 +1716,8 @@ async function processZipFile(file) {
         const formData = new FormData();
         // 将ZIP文件添加到FormData对象中
         formData.append('zip_file', file);
-        /** 发送PUT请求到 '/archive' 端点，上传ZIP文件 */
-        const response = await fetch('/archive', { method: 'PUT', body: formData });
+        /** 发送PUT请求到 '/file/archive' 端点，上传ZIP文件 */
+        const response = await fetch('/file/archive', { method: 'PUT', body: formData });
         // 检查响应状态是否正常，若不正常则显示错误消息并终止函数
         if (!response.ok)
             return showSystemMessage(`HTTP ${response.status}: ${response.statusText}`, 'error');
@@ -1822,7 +1822,7 @@ async function saveFileWithFetch(fileData, fileName, overwrite = false) {
         /**
          * 发起 POST 请求，将文件数据保存到服务器
          */
-        const response = await fetch('/save', {
+        const response = await fetch('/file/write', {
             method: 'POST',
             // 设置请求头，包含编码后的文件名和是否覆盖的标志
             headers: {
@@ -1982,12 +1982,12 @@ async function saveImageToServer(file) {
         /** 将包含图片文件名的路径进行 Base64 编码，用于设置请求头中的文件名 */
         const base64FileName = toBtoaString('images/' + newFileName);
         /** 向服务器发送 POST 请求，尝试保存图片文件 */
-        const response = await fetch('/save', { method: 'POST', headers: { 'X-File-Name': base64FileName, 'X-Overwrite': 'true' }, body: file });
+        const response = await fetch('/file/write', { method: 'POST', headers: { 'X-File-Name': base64FileName, 'X-Overwrite': 'true' }, body: file });
         // 检查响应是否成功，若失败则抛出错误
         if (!response.ok)
             throw new Error('图片保存失败');
         // 保存成功，返回图片的读取路径
-        return `/read/images/${newFileName}`;
+        return `/file/read/images/${newFileName}`;
     }
     catch (error) {
         if (!(error instanceof Error))
@@ -2071,7 +2071,7 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
         /** 拆分文件路径 */
         const filePath = url.toString().split(/[\/\\]/);
         /** 获取文件列表 */
-        const listRes = await fetch('/file_list/' + filePath.slice(0, -1).join('/'));
+        const listRes = await fetch('/file/list/' + filePath.slice(0, -1).join('/'));
         // 检查文件列表响应是否成功
         if (!listRes.ok)
             return await fallback();
@@ -2083,7 +2083,7 @@ async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
         if (!exists)
             return await fallback();
         /** 读取文件内容 */
-        const contentRes = await fetch(`/read/${url.toString()}`);
+        const contentRes = await fetch(`/file/read/${url.toString()}`);
         // 检查文件内容响应是否成功
         if (!contentRes.ok)
             return await fallback();
@@ -2154,7 +2154,7 @@ function registerToolFromMarkdown(markdownContent) {
  */
 async function EnableLunarToolPackageProtocol() {
     /** 获取文件列表 */
-    const listRes = await fetch('/file_list/package/different_lunar/package');
+    const listRes = await fetch('/file/list/package/different_lunar/package');
     // 检查文件列表响应是否成功
     if (!listRes.ok)
         return { success: false, message: `获取工具文件列表失败: ${listRes.status}` };
@@ -2163,7 +2163,7 @@ async function EnableLunarToolPackageProtocol() {
     /** 过滤出工具文件 */
     const toolFiles = fileList.filter(item => item.name.endsWith('.ltp.md') && !item.isDir);
     /** 批量注册工具 */
-    toolFiles.forEach(file => fetchMarkdown(`/read/package/different_lunar/package/${file.name}`).then(content => registerToolFromMarkdown(content)));
+    toolFiles.forEach(file => fetchMarkdown(`/file/read/package/different_lunar/package/${file.name}`).then(content => registerToolFromMarkdown(content)));
     return { success: true, message: `已成功注册 ${toolFiles.length} 个工具` };
 }
 
@@ -4002,7 +4002,7 @@ async function allowChartRedrawing(type, message) {
     /**
      * 获取图表重绘的Markdown内容
      */
-    let markdown = await fetchMarkdown('/read/package/different_lunar/prompts/chartRedrawing.md');
+    let markdown = await fetchMarkdown('/file/read/package/different_lunar/prompts/chartRedrawing.md');
     // 替换Markdown中的占位符
     markdown = markdown.replace(/{type}/g, type).replace(/{message}/g, message);
     // 若调试模式开启，则渲染< 动态提示词 >
@@ -4026,7 +4026,7 @@ async function prohibitChartRedrawing() {
     /**
      * 获取道歉消息的Markdown内容
      */
-    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/apologyMessage.md');
+    const markdown = await fetchMarkdown('/file/read/package/different_lunar/prompts/apologyMessage.md');
     // 若调试模式开启，则渲染< 动态提示词 >
     if (OnlyData.isDebugMode) {
         /**
@@ -4115,7 +4115,7 @@ function reloadMessageAndMarkdown(assistantMessage, contentElement) {
  */
 async function renderingPagePlaceholders(container) {
     /** 加载随机的占位符图片 */
-    const imageUrl = `/read/images/placeholder/unknown_file_icon-0${RandomFloor(0, 4)}.webp`;
+    const imageUrl = `/file/read/images/placeholder/unknown_file_icon-0${RandomFloor(0, 4)}.webp`;
     /** 创建图片消息对象 */
     const imageMessage = createImageMessage('assistant', '', imageUrl);
     // 渲染占位符图片到内容元素
@@ -4172,7 +4172,7 @@ async function addImageRendering(message, container = chatHistoryPanel) {
         `class="image-just-drawn"`,
         `id="${message.imageUrl.replace(/\\/g, '/').split('/').pop().split('.')[0].trim()}"`,
         `style="border-color: var(${randomColorStyle()});"`,
-        `onerror="this.onerror=null; this.src='/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 5)}.webp'"`,
+        `onerror="this.onerror=null; this.src='/file/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 5)}.webp'"`,
         `onclick="previewImage('${message.imageUrl.replace(/\\/g, '/')}', '${message.content.trim() || '本地图片'}')"`,
     ].join(" ");
     // 设置消息元素的初始 HTML 结构
@@ -4827,7 +4827,7 @@ async function fetchLive2DSetting() {
          * 发起网络请求，获取 Live2D 模型的配置文件
          * 配置文件路径为 '../models/setting.json'
          */
-        const response = await fetch('/read/models/live2d/setting.json');
+        const response = await fetch('/file/read/models/live2d/setting.json');
         // 检查响应状态，若请求失败则抛出包含状态码的错误信息
         if (!response.ok)
             throw new Error(`HTTP 错误！状态码: ${response.status}`);
@@ -6835,7 +6835,7 @@ async function presetMessage() {
     // 更新上一次显示预设消息的时间戳为当前时间
     lastPresetMessageTime = now;
     /** 获取预设的 Markdown 消息内容 */
-    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/prohibitMessage.md');
+    const markdown = await fetchMarkdown('/file/read/package/different_lunar/prompts/prohibitMessage.md');
     // 将预设消息添加到聊天历史记录并渲染到界面上
     renderMessage(await createMessageObject("assistant", markdown, false), chatHistoryPanel);
     // 若开启了自动语音播放功能，则播放预设消息的语音
@@ -6857,13 +6857,13 @@ async function systemInitializationEvent() {
     // 异步加载自定义配置文件
     //EntryAPI.OnlyData.customConfig = await EntryAPI.fetchDocumentCallback('resources/custom_config.json');
     // 异步加载系统提示词
-    OnlyData.systemPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/systemPrompt.md');
+    OnlyData.systemPrompt = await fetchMarkdown('/file/read/package/different_lunar/prompts/systemPrompt.md');
     // 异步加载图片描述提示词
-    OnlyData.imagePrompt = await fetchMarkdown('/read/package/different_lunar/prompts/imagePrompt.md');
+    OnlyData.imagePrompt = await fetchMarkdown('/file/read/package/different_lunar/prompts/imagePrompt.md');
     // 异步加载视频描述提示词
-    OnlyData.videoPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/videoPrompt.md');
+    OnlyData.videoPrompt = await fetchMarkdown('/file/read/package/different_lunar/prompts/videoPrompt.md');
     // 异步加载视频总结提示词
-    OnlyData.videoSummaryPrompt = await fetchMarkdown('/read/package/different_lunar/prompts/videoSummaryPrompt.md');
+    OnlyData.videoSummaryPrompt = await fetchMarkdown('/file/read/package/different_lunar/prompts/videoSummaryPrompt.md');
     // 异步获取文件服务 API 端点
     OnlyData.fileServiceUrl = await convertUrl(true);
     // 异步获取系统URL
@@ -6922,7 +6922,7 @@ async function showDialogueContinuation(length) {
  */
 async function loadDemoMessage() {
     /** 获取演示消息 */
-    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/demoMessage.md');
+    const markdown = await fetchMarkdown('/file/read/package/different_lunar/prompts/demoMessage.md');
     /** 创建助手消息对象 */
     const assistantMsgObj = await createMessageObject("assistant", '', false);
     // 为助手消息对象设置内容为演示消息
@@ -7207,7 +7207,7 @@ async function allowActiveMessage() {
     /**
      * 获取主动消息的Markdown内容
      */
-    const markdown = await fetchMarkdown('/read/package/different_lunar/prompts/activeMessage.md');
+    const markdown = await fetchMarkdown('/file/read/package/different_lunar/prompts/activeMessage.md');
     // 若调试模式开启，则渲染< 动态提示词 >
     if (OnlyData.isDebugMode) {
         /**

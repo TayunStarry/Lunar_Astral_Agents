@@ -10,8 +10,8 @@ import (
 
 // DownloadHandler 处理文件下载请求
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
-	// 从请求 URL 路径中去除 "/download/" 前缀，获取实际文件路径
-	filePath := strings.TrimPrefix(r.URL.Path, "/download/")
+	// 从请求 URL 路径中去除 "/file/download/" 前缀，获取实际文件路径
+	filePath := strings.TrimPrefix(r.URL.Path, "/file/download/")
 
 	// 执行下载操作
 	fullPath, fileSize, err := module.GetFileInfo(filePath)

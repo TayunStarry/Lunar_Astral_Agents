@@ -104,7 +104,7 @@ async function saveImageToServer(file) {
         const [_, __, err] = saveFile(base64FileName, true, file);
         if (!err)
             throw err;
-        return `/read/images/${newFileName}`;
+        return `/file/read/images/${newFileName}`;
     }
     catch (error) {
         if (!(error instanceof Error))
@@ -935,6 +935,7 @@ class OrganizeRole extends ModelBuilder {
         if (!results || results.length === 0)
             return [];
         return results.map((r) => ({
+            id: r.id,
             role: r.role,
             content: r.content
         }));

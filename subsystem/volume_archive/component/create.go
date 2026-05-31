@@ -49,8 +49,8 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 }
 
 func createVolume(sources []string, outputPath string, partSizeMB int, compressionLevel int) error {
-	PrintInfo("开始创建分卷压缩包...\n")
-	PrintInfo("源文件数量: %d\n", len(sources))
+	PrintInfo("开始创建分卷压缩包...")
+	PrintInfo("源文件数量: %d", len(sources))
 
 	var absSources []string
 	for _, src := range sources {
@@ -69,7 +69,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		return fmt.Errorf("无法确定基准目录: %v", err)
 	}
 
-	PrintInfo("基准目录: %s\n", baseDir)
+	PrintInfo("基准目录: %s", baseDir)
 
 	var relSources []string
 	for _, absPath := range absSources {
@@ -81,7 +81,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		if info.IsDir() {
 			dirFiles, err := scanDirectory(absPath, baseDir)
 			if err != nil {
-				PrintWarning("扫描目录失败 %s: %v\n", absPath, err)
+				PrintWarning("扫描目录失败 %s: %v", absPath, err)
 				continue
 			}
 			relSources = append(relSources, dirFiles...)
@@ -98,7 +98,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		return fmt.Errorf("没有找到有效的文件")
 	}
 
-	PrintInfo("有效文件数量: %d\n", len(relSources))
+	PrintInfo("有效文件数量: %d", len(relSources))
 
 	listFile := filepath.Join(os.TempDir(), "7z_file_list.txt")
 	listContent := strings.Join(relSources, "\n")
@@ -111,7 +111,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 	if err != nil {
 		return fmt.Errorf("查找7z工具失败: %v", err)
 	}
-	PrintInfo("使用7z工具: %s\n", sevenZPath)
+	PrintInfo("使用7z工具: %s", sevenZPath)
 
 	out7z := outputPath + ".7z"
 	cmdArgs := []string{
@@ -126,7 +126,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		"@" + listFile,
 	}
 
-	PrintInfo("开始压缩...\n")
+	PrintInfo("开始压缩...")
 	cmd := exec.Command(sevenZPath, cmdArgs...)
 	cmd.Dir = baseDir
 
@@ -182,6 +182,6 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		return fmt.Errorf("7z压缩过程失败: %v", err)
 	}
 
-	PrintSuccess("压缩完成！输出文件: %s\n", out7z)
+	PrintSuccess("压缩完成！输出文件: %s", out7z)
 	return nil
 }

@@ -198,7 +198,7 @@ async function uploadImage(file) {
         const base64FileName = btoa(fixedFileName);
         const arrayBuffer = await file.arrayBuffer();
 
-        const response = await fetch('/save', {
+        const response = await fetch('/file/write', {
             method: 'POST',
             headers: {
                 'X-File-Name': base64FileName,
@@ -274,7 +274,7 @@ function refreshPage() {
 }
 
 function refreshFileList() {
-    const audio = new Audio('/read/audios/prompt-tone.mp3');
+    const audio = new Audio('/file/read/audios/prompt-tone.mp3');
     audio.volume = 1.0;
     audio.play().catch(() => { });
     elements.refreshBtn.classList.add('spin');
@@ -423,7 +423,7 @@ async function loadFileList() {
             const displayPath = relativePath || file.name;
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
-                ? `<img src="/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/read/${path}', '${file.name}')">`
+                ? `<img src="/file/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/file/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/file/read/${path}', '${file.name}')">`
                 : `<div style="font-size: 48px; color: var(--primary-color); opacity: 0.3;">${fileIcon}</div>`;
 
             return `
@@ -462,7 +462,7 @@ async function loadFileList() {
 
 async function getAllFilesRecursive(dirPath) {
     try {
-        const response = await fetch(`/file_list/${dirPath}`);
+        const response = await fetch(`/file/list/${dirPath}`);
         if (!response.ok) throw new Error(`获取目录 ${dirPath} 失败: ${response.status}`);
         const items = await response.json();
         const allFiles = [];
@@ -528,7 +528,7 @@ async function downloadFile(path, filename) {
     try {
         showToast('开始下载...', 'info');
         const link = document.createElement('a');
-        link.href = `/download/${path}`;
+        link.href = `/file/download/${path}`;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -537,14 +537,14 @@ async function downloadFile(path, filename) {
     } catch (error) {
         console.error('下载失败:', error);
         showToast(`下载失败: ${error.message}`, 'error');
-        window.open(`/download/${path}`, '_blank');
+        window.open(`/file/download/${path}`, '_blank');
     }
 }
 
 async function deleteFile(path) {
     if (!confirm(`确定要删除文件吗？\n${path.replace(/^images\/generated[\\/]/, '')}`)) return;
     try {
-        const response = await fetch(`/delete/${path}`, { method: 'DELETE' });
+        const response = await fetch(`/file/delete/${path}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('文件删除成功', 'success');
             refreshFileList();
@@ -562,7 +562,7 @@ async function clearAllFiles() {
     if (!confirm('确定要删除所有生成的文件吗？\n此操作不可恢复！')) return;
     try {
         showToast('清空所有文件中...', 'info');
-        const response = await fetch('/delete/images/generated', { method: 'DELETE' });
+        const response = await fetch('/file/delete/images/generated', { method: 'DELETE' });
         if (response.ok) {
             showToast('所有文件已清空', 'success');
             refreshFileList();

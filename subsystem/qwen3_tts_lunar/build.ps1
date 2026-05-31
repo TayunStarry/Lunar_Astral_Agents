@@ -214,7 +214,7 @@ if (-not $SkipGo) {
     $env:GOOS = "windows"
     $env:GOARCH = "amd64"
 
-    $goOutput = cmd /c "go build -v -o ..\..\Qwen3_TTS_Lunar.exe -ldflags ""-s -w"" 2>&1"
+    $goOutput = cmd /c "go build -v -o ..\..\Qwen3_TTS_Lunar.exe -ldflags ""-s -w -H windowsgui"" 2>&1"
     $goExitCode = $LASTEXITCODE
 
     if ($goOutput -and $EnableLog) {

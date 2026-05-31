@@ -99,7 +99,7 @@ subscriptionToolCall("diffusion_generation", async (args, messageElement, messag
 /** 提交图片生成任务 */
 async function createImageGeneration(args, messageObject) {
     /** 获取生成的图片列表 */
-    const fileList = await fetch(`/file_list/generated`).then(res => res.json());
+    const fileList = await fetch(`/file/list/generated`).then(res => res.json());
     /** 排序文件列表, 取最新生成的图片 */
     const imageUrl = fileList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())[0]?.path;
     /** 定义图片生成数据 */
@@ -159,11 +159,11 @@ async function searchImagesTask(taskId, messageObject) {
         switch (statusInquiry.status) {
             case 'completed':
                 /** 获取生成的图片列表 */
-                const fileList = await fetch(`/file_list/generated`).then(res => res.json());
+                const fileList = await fetch(`/file/list/generated`).then(res => res.json());
                 /** 排序文件列表, 取最新生成的图片 */
-                const imageUrl = '/read/' + fileList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())[0].path;
+                const imageUrl = '/file/read/' + fileList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())[0].path;
                 /** 创建一个新的音频元素用于播放提示音 */
-                const audio = new Audio('/read/resources/audios/prompt-tone.mp3');
+                const audio = new Audio('/file/read/resources/audios/prompt-tone.mp3');
                 // 设置音量为最大
                 audio.volume = 1.0;
                 // 播放提示音, 失败时显示错误消息

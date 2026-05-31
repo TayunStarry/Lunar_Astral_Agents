@@ -9,8 +9,8 @@ import (
 
 // FileListHandler 处理文件列表请求，返回指定目录下的文件和子目录信息
 func FileListHandler(w http.ResponseWriter, r *http.Request) {
-	// 从请求 URL 路径中去除 "/file_list/" 前缀
-	path := strings.TrimPrefix(r.URL.Path, "/file_list/")
+	// 从请求 URL 路径中去除 "/file/list/" 前缀
+	path := strings.TrimPrefix(r.URL.Path, "/file/list/")
 	// 调用 execute 模块获取文件列表
 	fileList, err := module.GetFileList(path)
 	if err != nil {

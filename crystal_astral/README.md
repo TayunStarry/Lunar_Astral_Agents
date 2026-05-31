@@ -143,12 +143,12 @@ main.go
 var SystemEndpoints = []SystemEndpoint{
     {"/load/application",  loadApplicationHandler,  "POST",  "加载应用"},
     {"/background",        RandomBackgroundHandler,  "GET",   "随机背景图片"},
-    {"/delete/",           DeleteHandler,            "DELETE","文件删除"},
-    {"/file_list/",        FileListHandler,          "POST",  "文件列表"},
-    {"/download/",         DownloadHandler,          "GET",   "文件下载"},
-    {"/archive",           ArchiveHandler,           "POST",  "文件归档"},
-    {"/save",              SaveHandler,              "POST",  "文件保存"},
-    {"/read/",             ReadHandler,              "GET",   "文件读取"},
+    {"/file/delete/",           DeleteHandler,            "DELETE","文件删除"},
+    {"/file/list/",        FileListHandler,          "POST",  "文件列表"},
+    {"/file/download/",         DownloadHandler,          "GET",   "文件下载"},
+    {"/file/archive",           ArchiveHandler,           "POST",  "文件归档"},
+    {"/file/write",              SaveHandler,              "POST",  "文件保存"},
+    {"/file/read/",             ReadHandler,              "GET",   "文件读取"},
     {"/database/",         DatabaseHandler,          "POST",  "数据管理"},
     {"/capture",           HandleScreenshot,         "POST",  "通用截图"},
     {"/capture/display/",  HandleScreenshotDisplay,  "GET",   "屏幕截图"},
@@ -239,19 +239,19 @@ var SystemEndpoints = []SystemEndpoint{
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/save` | 保存文件（Header: `X-File-Name` Base64 编码） |
-| GET  | `/read/{path}` | 读取文件内容 |
-| DELETE | `/delete/{path}` | 删除文件或目录 |
-| GET  | `/download/{path}` | 下载文件 |
-| POST | `/file_list/{path}` | 列出目录内容 |
-| POST | `/archive` | 创建或解压 ZIP 归档 |
+| POST | `/file/write` | 保存文件（Header: `X-File-Name` Base64 编码） |
+| GET  | `/file/read/{path}` | 读取文件内容 |
+| DELETE | `/file/delete/{path}` | 删除文件或目录 |
+| GET  | `/file/download/{path}` | 下载文件 |
+| POST | `/file/list/{path}` | 列出目录内容 |
+| POST | `/file/archive` | 创建或解压 ZIP 归档 |
 | GET  | `/background` | 获取随机背景图片 |
 
 ### 数据库管理
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/database/` | 批量数据库操作（insert/update/delete/select/create/drop/truncate/info） |
+| POST | `/database/` | 批量数据库操作（insert/update/file/delete/select/create/drop/truncate/info） |
 
 ```json
 // 请求示例

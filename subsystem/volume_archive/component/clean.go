@@ -7,14 +7,14 @@ import (
 )
 
 func cleanOldParts(outBase string) {
-	PrintInfo("清理旧分卷文件...\n")
+	PrintInfo("清理旧分卷文件...")
 
 	dirName := filepath.Dir(outBase)
 	baseName := filepath.Base(outBase)
 
 	entries, err := os.ReadDir(dirName)
 	if err != nil {
-		PrintWarning("无法读取目录 %s: %v\n", dirName, err)
+		PrintWarning("无法读取目录 %s: %v", dirName, err)
 		return
 	}
 
@@ -29,9 +29,9 @@ func cleanOldParts(outBase string) {
 
 		if strings.HasPrefix(fname, baseName) && strings.Contains(fname, ".7z.") {
 			if err := os.Remove(fullPath); err != nil {
-				PrintWarning("无法删除旧分卷 %s: %v\n", fullPath, err)
+				PrintWarning("无法删除旧分卷 %s: %v", fullPath, err)
 			} else {
-				PrintInfo("已删除: %s\n", fname)
+				PrintInfo("已删除: %s", fname)
 				cleaned++
 			}
 		}
@@ -40,16 +40,16 @@ func cleanOldParts(outBase string) {
 	full7z := filepath.Join(dirName, baseName+".7z")
 	if fileExists(full7z) {
 		if err := os.Remove(full7z); err != nil {
-			PrintWarning("无法删除完整压缩包 %s: %v\n", full7z, err)
+			PrintWarning("无法删除完整压缩包 %s: %v", full7z, err)
 		} else {
-			PrintInfo("已删除: %s.7z\n", baseName)
+			PrintInfo("已删除: %s.7z", baseName)
 			cleaned++
 		}
 	}
 
 	if cleaned > 0 {
-		PrintInfo("共清理 %d 个旧文件\n", cleaned)
+		PrintInfo("共清理 %d 个旧文件", cleaned)
 	} else {
-		PrintInfo("没有需要清理的旧文件\n")
+		PrintInfo("没有需要清理的旧文件")
 	}
 }

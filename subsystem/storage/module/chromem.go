@@ -76,6 +76,12 @@ func AddMessage(ctx context.Context, role string, content string) error {
 		return fmt.Errorf("chromem 添加消息失败: %v", err)
 	}
 
+	documentEntriesMu.Lock()
+	documentEntries = append(documentEntries, DocumentEntry{ID: id, Role: role, Content: content})
+	documentEntriesMu.Unlock()
+
+	saveEntriesToFile()
+
 	return nil
 }
 
@@ -179,6 +185,8 @@ func DeleteMessage(ctx context.Context, id string) error {
 		}
 	}
 	documentEntriesMu.Unlock()
+
+	saveEntriesToFile()
 
 	return nil
 }

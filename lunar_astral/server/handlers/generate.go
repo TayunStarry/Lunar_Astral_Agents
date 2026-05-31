@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"config"
-	"lunar_astral/hierarchy/image/generate"
 	"encoding/json"
 	"fmt"
+	"lunar_astral/hierarchy/image/generate"
 	"net/http"
 	"strings"
 	"time"
@@ -84,7 +84,7 @@ func buildReadPath(resultPath string) string {
 	relativePath := strings.TrimPrefix(resultPath, *config.LocalDir)
 	// 移除Windows路径开头的反斜杠，确保路径格式统一
 	relativePath = strings.TrimPrefix(relativePath, "\\")
-	return "/read/" + relativePath
+	return "/file/read/" + relativePath
 }
 
 // buildTaskResponse 构建任务响应

@@ -22,25 +22,25 @@ async function loadScriptDependencies(urls) {
 /** 脚本依赖列表 */
 const scriptDependencies = [
     // Markdown解析库
-    '/read/package/marked.min.js',
+    '/file/read/package/marked.min.js',
     // ECharts 库
-    '/read/package/echarts.min.js',
+    '/file/read/package/echarts.min.js',
     // 代码高亮库
-    '/read/package/highlight/highlight.min.js',
+    '/file/read/package/highlight/highlight.min.js',
     // Live2D Cubism 核心库
-    '/read/package/live2dcubismcore.min.js',
+    '/file/read/package/live2dcubismcore.min.js',
     // Pixi.js 库
-    '/read/package/pixi.5.3.12.min.js',
+    '/file/read/package/pixi.5.3.12.min.js',
     // Pixi.js 库 Live2D Cubism 插件
-    '/read/package/pixi-live2d-display-cubism4.min.js',
+    '/file/read/package/pixi-live2d-display-cubism4.min.js',
     // 二维码库
-    '/read/package/qrcode.min.js',
+    '/file/read/package/qrcode.min.js',
     // Katex 数学公式渲染 库
-    '/read/package/katex/katex.min.js',
+    '/file/read/package/katex/katex.min.js',
     // Katex 数学公式渲染 库 自动渲染插件
-    '/read/package/katex/contrib/auto-render.min.js',
+    '/file/read/package/katex/contrib/auto-render.min.js',
     // 多媒体预览 库
-    '/read/package/multimedia_preview/script.js',
+    '/file/read/package/multimedia_preview/script.js',
 ];
 
 // 加载脚本依赖列表

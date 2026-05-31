@@ -14,7 +14,7 @@ export async function saveFile(file, overwrite = false) {
     const newFileName = `${fileHash}${fileExtension}`;
     const encodedFileName = encodeFilePath(prefix + newFileName);
 
-    const response = await fetch('/save', {
+    const response = await fetch('/file/write', {
         method: 'POST',
         headers: {
             'X-File-Name': encodedFileName,
@@ -60,7 +60,7 @@ export async function sendMessages(messages) {
  */
 export async function fetchLive2DSetting() {
     try {
-        const response = await fetch('/read/models/live2d/setting.json');
+        const response = await fetch('/file/read/models/live2d/setting.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }

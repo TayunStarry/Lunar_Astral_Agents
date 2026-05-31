@@ -94,7 +94,7 @@ class MultimediaPreview {
 	 * @returns {Promise<void>}
 	 */
 	async initTemplateHTML() {
-		this.templateHTML = await fetch('/read/package/multimedia_preview/index.html').then(res => res.text());
+		this.templateHTML = await fetch('/file/read/package/multimedia_preview/index.html').then(res => res.text());
 	}
 	/**
 	 * 检测文件类型
@@ -136,7 +136,7 @@ class MultimediaPreview {
 			.replace(/{{y}}/g, '0')
 			.replace(/{{scalePercent}}/g, '100')
 			.replace(/{{filePath}}/g, path.replace(/^generated[/]/, ''))
-			.replace(/{{default-image}}/g, `/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`);
+			.replace(/{{default-image}}/g, `/file/read/images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`);
 		// 创建模态框
 		this.modal = document.createElement('div');
 		this.modal.innerHTML = html;

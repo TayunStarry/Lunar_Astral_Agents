@@ -14,8 +14,8 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Delete请求[ERROR] -> 不允许的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-	// 从请求 URL 路径中去除 "/delete/" 前缀，获取要删除的文件路径
-	filePath := strings.TrimPrefix(r.URL.Path, "/delete/")
+	// 从请求 URL 路径中去除 "/file/delete/" 前缀，获取要删除的文件路径
+	filePath := strings.TrimPrefix(r.URL.Path, "/file/delete/")
 	// 调用 execute 模块删除文件
 	fullPath, err := module.DeleteFile(filePath)
 	if err != nil {
