@@ -3,13 +3,13 @@
 
 # compile C with D:/mingw64/bin/gcc.exe
 # compile CXX with D:/mingw64/bin/g++.exe
-C_DEFINES = -DGGML_COMMIT=\"184a341\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\"0.12.0\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600
+C_DEFINES = -DGGML_COMMIT=\"ac6ff12\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\"0.12.0\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600
 
 C_INCLUDES = @CMakeFiles/ggml-base.dir/includes_C.rsp
 
 C_FLAGS = -O3 -DNDEBUG -std=gnu11 -Wshadow -Wstrict-prototypes -Wpointer-arith -Wmissing-prototypes -Werror=implicit-int -Werror=implicit-function-declaration -Wall -Wextra -Wpedantic -Wcast-qual -Wno-unused-function -Wdouble-promotion
 
-CXX_DEFINES = -DGGML_COMMIT=\"184a341\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\"0.12.0\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600
+CXX_DEFINES = -DGGML_COMMIT=\"ac6ff12\" -DGGML_SCHED_MAX_COPIES=4 -DGGML_VERSION=\"0.12.0\" -D_CRT_SECURE_NO_WARNINGS -D_XOPEN_SOURCE=600
 
 CXX_INCLUDES = @CMakeFiles/ggml-base.dir/includes_CXX.rsp
 
