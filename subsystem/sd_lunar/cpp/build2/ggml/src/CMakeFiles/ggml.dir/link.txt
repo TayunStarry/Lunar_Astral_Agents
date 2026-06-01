@@ -1,2 +1,0 @@
-D:\mingw64\bin\ar.exe qc ggml.a "CMakeFiles/ggml.dir/ggml-backend-dl.cpp.obj" "CMakeFiles/ggml.dir/ggml-backend-reg.cpp.obj"
-D:\mingw64\bin\ranlib.exe ggml.a

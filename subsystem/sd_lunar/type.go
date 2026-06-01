@@ -83,11 +83,11 @@ type Img2ImgRequest struct {
 
 // GenerateResponse 生成响应结构体
 type GenerateResponse struct {
-	Success  bool        `json:"success"`
-	TaskID   string      `json:"task_id,omitempty"`
-	Message  string      `json:"message,omitempty"`
-	Data     interface{} `json:"data,omitempty"`
-	Error    string      `json:"error,omitempty"`
+	Success bool        `json:"success"`
+	TaskID  string      `json:"task_id,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
 }
 
 var (
