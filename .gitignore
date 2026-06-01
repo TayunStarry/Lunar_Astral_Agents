@@ -1,26 +1,29 @@
 # Lunar-Astral-Agents
 
 ## IDE / 编辑器
-.idea
-.vscode
-.gitee
-.trae
-.code-workspace
+.idea/
+.vscode/
+.gitee/
+.trae/
+*.code-workspace
 
 ## 项目缓存
-node_modules
-deliverable
-meme_images
-temp
-local_data/embed_cache
+node_modules/
+local_data/embed_cache/
 local_data/lunar_config.json
-yara_flow
-qwen3_tts_lunar_musa
+subsystem/bridge_adapter/local_data/lunar_config.json
+subsystem/volume_archive/local_data/lunar_config.json
 
-## 本地数据
-local_data/images
-local_data/documents
-local_data/chromem
+## Go 测试产物
+coverage
+coverage.out
+*.test.exe
+
+## 本地数据（运行时生成）
+local_data/images/
+local_data/documents/
+local_data/chromem/
+local_data/audios/
 
 ## 系统文件
 desktop.ini
@@ -32,10 +35,12 @@ Thumbs.db
 *.temp
 *.lnk
 
-## Go / C++ 编译产物
+## Go 编译产物
 *.exe
 *.exe~
 *.syso
+
+## C/C++ 对象文件
 *.obj
 *.o
 *.d
@@ -47,19 +52,11 @@ Thumbs.db
 *.ilk
 *.pdb
 *.dylib
-*.log
-
-## C++ 头文件（vocab/ggml等大型头文件）
-**/vocab/*.hpp
-**/ggml/src/**/*.hpp
-**/thirdparty/*.hpp
 
 ## CMake / MSVC 构建目录
 **/build/
-**/build_*
+**/build_*/
 **/build-*/
-build*/
-build-*/
 
 ## Vulkan / GPU 编译产物
 *.spv
@@ -71,10 +68,14 @@ build-*/
 
 ## 压缩包
 *.7z
-*.7z.*
+*.zip
+
+## 数据库文件
 *.db
 *.db-shm
 *.db-wal
+
+## 索引文件
 *.index
 
 ## 安全敏感文件
@@ -83,3 +84,16 @@ build-*/
 *.crt
 .env
 .env.*
+
+## 日志文件
+*.log
+
+## TypeScript 编译产物
+*.js.map
+*.d.ts.map
+
+## C++ 第三方库头文件（大型依赖）
+**/thirdparty/*.h
+**/thirdparty/*.hpp
+**/vocab/*.hpp
+**/ggml/src/**/*.hpp
