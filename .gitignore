@@ -49,6 +49,11 @@ Thumbs.db
 *.dylib
 *.log
 
+## C++ 头文件（vocab/ggml等大型头文件）
+**/vocab/*.hpp
+**/ggml/src/**/*.hpp
+**/thirdparty/*.hpp
+
 ## CMake / MSVC 构建目录
 **/build/
 **/build_*
