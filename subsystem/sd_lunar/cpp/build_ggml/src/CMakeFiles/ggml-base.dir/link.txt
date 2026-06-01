@@ -1,2 +1,0 @@
-D:\mingw64\bin\ar.exe qc ggml-base.a "CMakeFiles/ggml-base.dir/ggml.c.obj" "CMakeFiles/ggml-base.dir/ggml.cpp.obj" "CMakeFiles/ggml-base.dir/ggml-alloc.c.obj" "CMakeFiles/ggml-base.dir/ggml-backend.cpp.obj" "CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.obj" "CMakeFiles/ggml-base.dir/ggml-opt.cpp.obj" "CMakeFiles/ggml-base.dir/ggml-threading.cpp.obj" "CMakeFiles/ggml-base.dir/ggml-quants.c.obj" "CMakeFiles/ggml-base.dir/gguf.cpp.obj"
-D:\mingw64\bin\ranlib.exe ggml-base.a
