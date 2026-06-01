@@ -51,6 +51,7 @@ Thumbs.db
 
 ## CMake / MSVC 构建目录
 **/build/
+build*/
 
 ## 二进制 / 模型文件
 *.gguf
