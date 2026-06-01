@@ -51,7 +51,14 @@ Thumbs.db
 
 ## CMake / MSVC 构建目录
 **/build/
+**/build_*
+**/build-*/
 build*/
+build-*/
+
+## Vulkan / GPU 编译产物
+*.spv
+*.comp.cpp
 
 ## 二进制 / 模型文件
 *.gguf
