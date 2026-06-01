@@ -130,14 +130,24 @@ export class OrganizeRole extends ModelBuilder {
 	}
 
 	private buildOrganizePrompt(records: PostMessage[]): string {
+		const now = new Date();
 		const recordTexts = records.map((msg, idx) => {
 			const content = typeof msg.content === 'string'
 				? msg.content
 				: JSON.stringify(msg.content);
 			const preview = content.length > 300 ? content.slice(0, 300) + '...' : content;
-			return `[记录${idx + 1}] 角色:${msg.role} | 内容:${preview}`;
+			const timestamp = now.toLocaleString('zh-CN', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hour12: false
+			});
+			return `[记录${idx + 1}] 时间:${timestamp} | 角色:${msg.role} | 内容:${preview}`;
 		});
-		return `请整理以下 ${records.length} 条对话记录:\n\n${recordTexts.join('\n')}\n\n请按照流程操作：先查询已有档案，再生成结构化描述，最后存储到向量数据库。完成后请输出整理报告。`;
+		return `请整理以下 ${records.length} 条对话记录:\n\n${recordTexts.join('\n')}\n\n请按照流程操作：先查询已有档案，再生成结构化描述，最后存储到向量数据库。每条记录必须严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}。完成后请输出整理报告。`;
 	}
 
 	private executeOrganizeLoop(): void {
@@ -266,13 +276,34 @@ export class OrganizeRole extends ModelBuilder {
 			}
 		}
 
-		const [result, error] = chromemAdd('system', content.trim());
+		const finalContent = this.ensureTimestampInRecord(content.trim());
+		const [result, error] = chromemAdd('system', finalContent);
 		if (error) {
 			console.error('[编纂者] chromem 存储失败:', error);
 			return `向量数据库存储失败: ${error}`;
 		}
 
 		return result ? '记录已成功存储到向量数据库' : '存储操作已完成但未返回确认信息';
+	}
+
+	private ensureTimestampInRecord(content: string): string {
+		const timestampRegex = /^\[([^\]]+)\]/;
+		if (timestampRegex.test(content)) {
+			return content;
+		}
+
+		const now = new Date();
+		const timestamp = now.toLocaleString('zh-CN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: false
+		});
+
+		return `[${timestamp}] ${content}`;
 	}
 
 	private organizeModelRun(): modelResponse {
