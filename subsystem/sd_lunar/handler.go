@@ -558,7 +558,7 @@ func processTask(task GenerateTask) {
 
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("%s_%s.png", taskID, timestamp)
-	outputDir := filepath.Join(*config.LocalDir, "sd_output")
+	outputDir := filepath.Join(*config.LocalDir, "images/generated")
 	os.MkdirAll(outputDir, 0755)
 	outputPath := filepath.Join(outputDir, outputFilename)
 

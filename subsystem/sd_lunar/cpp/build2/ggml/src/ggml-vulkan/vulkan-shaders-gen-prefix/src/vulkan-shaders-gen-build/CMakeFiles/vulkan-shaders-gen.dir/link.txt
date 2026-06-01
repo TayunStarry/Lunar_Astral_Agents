@@ -1,3 +1,0 @@
-D:\mingw64\bin\cmake.exe -E rm -f CMakeFiles\vulkan-shaders-gen.dir/objects.a
-D:\mingw64\bin\ar.exe qc CMakeFiles\vulkan-shaders-gen.dir/objects.a @CMakeFiles\vulkan-shaders-gen.dir\objects1.rsp
-D:\mingw64\bin\c++.exe -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles\vulkan-shaders-gen.dir/objects.a -Wl,--no-whole-archive -o vulkan-shaders-gen.exe -Wl,--out-implib,libvulkan-shaders-gen.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\vulkan-shaders-gen.dir\linkLibs.rsp
