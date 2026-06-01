@@ -18,7 +18,7 @@
 		"typescript"
 	],
 	"author": "",
-	"license": "MIT",
+	"license": "SEE LICENSE IN LICENSE",
 	"devDependencies": {
 		"@rollup/plugin-node-resolve": "^16.0.3",
 		"@rollup/plugin-terser": "^1.0.0",
