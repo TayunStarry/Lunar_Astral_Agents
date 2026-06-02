@@ -57,8 +57,8 @@ func Init() {
 		"--repeat_penalty", "1.0",
 		// 服务器监听端口
 		"--port", strconv.Itoa(*config.ModelPort),
-		// 推理模式: 关闭推理模式
-		"--reasoning", "off",
+		// 推理模式: 自动推理
+		"--reasoning", "auto",
 		// 并行请求处理数
 		"--parallel", "1",
 		// 批处理大小

@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	chromem "github.com/philippgille/chromem-go"
 	_ "github.com/mattn/go-sqlite3"
+	chromem "github.com/philippgille/chromem-go"
 )
 
 type UnifiedDB struct {
@@ -1349,7 +1349,9 @@ func RebuildEntries(ctx context.Context) (int, error) {
 
 func Init(baseURL string, apiKey string, modelName string) error {
 	if Unified == nil {
-		return fmt.Errorf("统一数据库未初始化, 请先调用 InitUnifiedDB")
+		if err := InitUnifiedDB(*config.SQLDBPath, *config.VectorDBDir); err != nil {
+			return err
+		}
 	}
 	return Unified.VectorInit(baseURL, apiKey, modelName)
 }

@@ -60,13 +60,9 @@ try {
     $env:GOARCH = $TargetArch
     $env:CGO_CFLAGS = "-w"
 
-    # 编译服务端脚本
+    # 编译服务端脚本 
     $exitCode = Invoke-NativeCommand { npm run server.side }
     if ($exitCode -ne 0) { throw "npm server.side 执行失败" }
-
-    # 删除不必要的export
-    $exitCode = Invoke-NativeCommand { node removeExport.cjs }
-    if ($exitCode -ne 0) { throw "removeExport.cjs 执行失败" }
 
     # 构建可执行文件
     $binaryName = "Lunar_Astral.exe"

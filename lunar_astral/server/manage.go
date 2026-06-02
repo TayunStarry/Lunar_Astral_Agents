@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
 )
@@ -39,11 +38,6 @@ func InitializeServer() {
 	registerHandlers()
 	// 启动llama.cpp代理服务器
 	llama.Init()
-	// 定义模型目录和参考音频文件路径
-	modelDir := *config.LocalDir + "/models"
-	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
-	// 初始化TTS引擎
-	module.InitTTSEngine(modelDir, refAudio)
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文

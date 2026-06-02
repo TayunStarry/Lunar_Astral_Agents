@@ -22,7 +22,9 @@ export default [
 				 * 'iife' - 一个自动执行的功能, 适合作为<script>标签, 将脚本保存为文件
 				 * 'umd' - 通用模块定义, 以对 CommonJS, AMD 和浏览器全局变量的工作进行兼容
 				 */
-				format: 'es',
+				format: 'iife',
+				// IIFE 格式需要全局变量名, 用于包裹所有导出
+				name: 'agentSystem',
 				// 启用源码映射
 				sourcemap: false,
 				/*

@@ -9,7 +9,7 @@
 		"ltp": "node script/run-generate-tool.js",
 
 		"compile.server": "tsc ./server_side/index.ts --removeComments --moduleResolution node --target es2022 --outDir ./node_modules/deliverable",
-		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/index.js --file ./hierarchy/assets/agentSystem.js"
+		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/index.js --file ./hierarchy/assets/agentSystem.js --format iife --name agentSystem"
 	},
 	"keywords": [
 		"ai",

@@ -2,19 +2,29 @@ package tts
 
 import (
 	"bytes"
+	"config"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"io"
 	"logger"
 	"net/http"
-
 	"qwen3_tts_lunar/module"
 
 	"github.com/gorilla/websocket"
 )
 
+func loadModel() {
+	// 定义模型目录和参考音频文件路径
+	modelDir := *config.LocalDir + "/models"
+	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
+	// 初始化TTS引擎
+	module.InitTTSEngine(modelDir, refAudio)
+}
+
+// TTSHandlerWrapper 处理TTS请求
 func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
+	loadModel()
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -101,7 +111,9 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	logger.Error("TTSModel", "TTS合成失败，文本: %s", req.Text)
 }
 
+// TTSStreamHandlerWrapper 处理TTS流请求
 func TTSStreamHandlerWrapper(w http.ResponseWriter, r *http.Request) {
+	loadModel()
 	conn, err := ttsStreamUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.SubError("TTSModel", "Stream", "WebSocket升级失败: %v", err)
