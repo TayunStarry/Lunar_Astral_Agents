@@ -2,7 +2,6 @@ package module
 
 import (
 	"config"
-	"database/sql"
 	"logger"
 	"time"
 )
@@ -18,11 +17,6 @@ type FileInfo struct {
 	IsDir        bool      `json:"isDir"`        // 是否为目录
 	LastModified time.Time `json:"lastModified"` // 最后修改时间
 	Path         string    `json:"path"`         // 相对于配置目录的相对路径
-}
-
-// Database 数据库封装结构
-type Database struct {
-	db *sql.DB
 }
 
 // OperationResult 单个操作结果
@@ -70,32 +64,6 @@ type IndexDefinition struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
 	Unique  bool     `json:"unique,omitempty"`
-}
-
-// DataOperation 数据操作
-type DataOperation struct {
-	Type   string                 `json:"type"` // insert, update, delete, select
-	Table  string                 `json:"table"`
-	Data   map[string]interface{} `json:"data,omitempty"`   // insert/update
-	Filter map[string]interface{} `json:"filter,omitempty"` // where条件
-	Limit  int                    `json:"limit,omitempty"`
-	Offset int                    `json:"offset,omitempty"`
-	Order  []map[string]string    `json:"order,omitempty"` // [{column: "id", direction: "asc"}]
-}
-
-// TableOperation 表操作
-type TableOperation struct {
-	Type       string           `json:"type"` // create, drop, truncate
-	Table      string           `json:"table,omitempty"`
-	Definition *TableDefinition `json:"definition,omitempty"`
-}
-
-// InfoOperation 信息操作
-type InfoOperation struct {
-	// Type 信息操作类型
-	Type string `json:"type"` // tables, structure, count
-	// Table 表名
-	Table string `json:"table,omitempty"`
 }
 
 // DatabaseRequest 数据库请求

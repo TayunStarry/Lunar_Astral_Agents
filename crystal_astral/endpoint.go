@@ -19,6 +19,7 @@ type SystemEndpoint struct {
 }
 
 // SystemEndpoints 系统端点列表
+
 var SystemEndpoints = []SystemEndpoint{
 	{Path: "/load/application", Handler: loadApplicationHandler, Method: "POST", Description: "加载应用"},
 	{Path: "/background", Handler: storage.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
