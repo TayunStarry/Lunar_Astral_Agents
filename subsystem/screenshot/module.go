@@ -3,6 +3,7 @@ package screenshot
 import (
 	"bytes"
 	"config"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"image"
@@ -10,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"logger"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -114,49 +116,207 @@ func GetDisplays() []map[string]int {
 	return displays
 }
 
-// ResizeImage 缩放图片
+// ResizeImage 图片预处理：格式验证、非JPG/PNG转码、等比例缩放到1024、编码输出
+// 仅输出JPG或PNG格式的base64数据
 func ResizeImage(imgData []byte) (map[string]any, error) {
-	// 解码图片
-	img, format, err := image.Decode(bytes.NewReader(imgData))
+	// 1. 输入验证
+	if len(imgData) == 0 {
+		logger.Error("Screenshot", "ResizeImage: 图片数据为空")
+		return nil, fmt.Errorf("图片数据为空")
+	}
+	const maxImageSize = 50 * 1024 * 1024 // 50MB
+	if len(imgData) > maxImageSize {
+		logger.Error("Screenshot", "ResizeImage: 图片数据过大: %d bytes", len(imgData))
+		return nil, fmt.Errorf("图片数据过大，超过50MB限制")
+	}
+
+	logger.Info("Screenshot", "ResizeImage: 开始处理，原始大小=%d bytes", len(imgData))
+
+	// 2. 文件头格式检测
+	originalFormat := detectImageFormat(imgData)
+	logger.Info("Screenshot", "ResizeImage: 检测到原始格式=%s", originalFormat)
+
+	var processedData []byte
+
+	// 3. 格式处理：已支持格式直接使用，否则FFmpeg转码
+	switch originalFormat {
+	case "jpeg", "png":
+		processedData = imgData
+	default:
+		logger.Info("Screenshot", "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
+		converted, err := convertImageWithFFmpeg(imgData)
+		if err != nil {
+			logger.Error("Screenshot", "ResizeImage: FFmpeg转码失败: %v", err)
+			return nil, fmt.Errorf("FFmpeg转码失败（原始格式=%s）: %v", originalFormat, err)
+		}
+		processedData = converted
+		logger.Info("Screenshot", "ResizeImage: FFmpeg转码完成，转换后大小=%d bytes", len(processedData))
+	}
+
+	// 4. 解码图片
+	img, format, err := image.Decode(bytes.NewReader(processedData))
 	if err != nil {
+		logger.Error("Screenshot", "ResizeImage: 解码失败: %v", err)
 		return nil, fmt.Errorf("解码图片失败: %v", err)
 	}
 
-	// 转换为RGBA格式
-	rgbaImg := ToRGBA(img)
-
-	// 缩放图片
-	resizedImg := resizeImageTo1080(rgbaImg)
-
-	// 编码缩放后的图片
-	buf := &bytes.Buffer{}
-	var contentType string
-	switch format {
-	case "jpeg":
-		contentType = "image/jpeg"
-		jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90})
-	case "png":
-		contentType = "image/png"
-		png.Encode(buf, resizedImg)
-	default:
-		contentType = "image/jpeg"
-		jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90})
+	// 5. 尺寸验证
+	bounds := img.Bounds()
+	oriWidth, oriHeight := bounds.Dx(), bounds.Dy()
+	if oriWidth <= 0 || oriHeight <= 0 {
+		return nil, fmt.Errorf("图片尺寸无效: %dx%d", oriWidth, oriHeight)
+	}
+	if oriWidth > 16384 || oriHeight > 16384 {
+		logger.Error("Screenshot", "ResizeImage: 图片尺寸异常: %dx%d", oriWidth, oriHeight)
+		return nil, fmt.Errorf("图片尺寸异常（%dx%d），超过16384px限制", oriWidth, oriHeight)
 	}
 
-	// 生成base64编码
+	// 6. 转换为RGBA并等比例缩放到1024
+	rgbaImg := ToRGBA(img)
+	resizedImg := resizeToMax1024(rgbaImg)
+
+	newWidth := resizedImg.Bounds().Dx()
+	newHeight := resizedImg.Bounds().Dy()
+	logger.Info("Screenshot", "ResizeImage: 缩放完成 %dx%d -> %dx%d", oriWidth, oriHeight, newWidth, newHeight)
+
+	// 7. 编码输出（严格限制仅PNG/JPG）
+	buf := &bytes.Buffer{}
+	var contentType, outputFormat string
+
+	switch format {
+	case "jpeg":
+		outputFormat = "jpeg"
+		contentType = "image/jpeg"
+		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
+			logger.Error("Screenshot", "ResizeImage: JPEG编码失败: %v", err)
+			return nil, fmt.Errorf("JPEG编码失败: %v", err)
+		}
+	case "png":
+		outputFormat = "png"
+		contentType = "image/png"
+		if err := png.Encode(buf, resizedImg); err != nil {
+			logger.Error("Screenshot", "ResizeImage: PNG编码失败: %v", err)
+			return nil, fmt.Errorf("PNG编码失败: %v", err)
+		}
+	default:
+		// 兜底：非预期格式统一输出为JPEG
+		logger.Info("Screenshot", "ResizeImage: 非标准解码格式(%s)，兜底输出JPEG", format)
+		outputFormat = "jpeg"
+		contentType = "image/jpeg"
+		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
+			logger.Error("Screenshot", "ResizeImage: JPEG兜底编码失败: %v", err)
+			return nil, fmt.Errorf("JPEG编码失败: %v", err)
+		}
+	}
+
+	// 8. 生成base64
 	base64Data := base64.StdEncoding.EncodeToString(buf.Bytes())
 	base64WithHeader := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
 
-	// 构造响应
+	// 9. 构造响应
 	response := map[string]any{
 		"image":  buf.Bytes(),
 		"base64": base64WithHeader,
-		"format": format,
-		"width":  resizedImg.Bounds().Dx(),
-		"height": resizedImg.Bounds().Dy(),
+		"format": outputFormat,
+		"width":  newWidth,
+		"height": newHeight,
 	}
 
+	logger.Info("Screenshot", "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+		outputFormat, newWidth, newHeight, len(buf.Bytes()))
 	return response, nil
+}
+
+// detectImageFormat 通过文件头魔数检测图片格式
+func detectImageFormat(data []byte) string {
+	if len(data) < 12 {
+		return "unknown"
+	}
+
+	// JPEG: FF D8 FF
+	if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+		return "jpeg"
+	}
+
+	// PNG: 89 50 4E 47 0D 0A 1A 0A
+	if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+		data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A {
+		return "png"
+	}
+
+	// GIF: 47 49 46 38 (GIF8)
+	if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x38 {
+		return "gif"
+	}
+
+	// BMP: 42 4D
+	if data[0] == 0x42 && data[1] == 0x4D {
+		return "bmp"
+	}
+
+	// WebP: 52 49 46 46 ... 57 45 42 50 (RIFF....WEBP)
+	if len(data) >= 12 &&
+		data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+		data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
+		return "webp"
+	}
+
+	// TIFF (little-endian): 49 49 2A 00
+	if data[0] == 0x49 && data[1] == 0x49 && data[2] == 0x2A && data[3] == 0x00 {
+		return "tiff"
+	}
+
+	// TIFF (big-endian): 4D 4D 00 2A
+	if data[0] == 0x4D && data[1] == 0x4D && data[2] == 0x00 && data[3] == 0x2A {
+		return "tiff"
+	}
+
+	return "unknown"
+}
+
+// convertImageWithFFmpeg 使用FFmpeg将非JPG/PNG图片转换为PNG
+// 通过管道输入/输出，避免临时文件，并设置30秒超时
+func convertImageWithFFmpeg(input []byte) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	ffmpegPath := "ffmpeg"
+	if *config.FfmpegPath != "" {
+		ffmpegPath = *config.FfmpegPath
+	}
+
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-i", "pipe:0",
+		"-f", "image2",
+		"-vcodec", "png",
+		"-pix_fmt", "rgba",
+		"pipe:1",
+	)
+
+	buf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	cmd.Stdin = bytes.NewReader(input)
+	cmd.Stdout = buf
+	cmd.Stderr = errBuf
+
+	err := cmd.Run()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("FFmpeg转码超时（30秒）")
+		}
+		return nil, fmt.Errorf("FFmpeg转码失败: %v, stderr: %s", err, errBuf.String())
+	}
+
+	if buf.Len() == 0 {
+		return nil, fmt.Errorf("FFmpeg转码输出为空")
+	}
+
+	return buf.Bytes(), nil
+}
+
+// resizeToMax1024 等比例缩放图片，长宽均不超过1024像素
+func resizeToMax1024(img *image.RGBA) *image.RGBA {
+	return ResizeToFit(img, 1024, 1024)
 }
 
 // 解析区域字符串
@@ -309,16 +469,23 @@ func ResizeToFit(img *image.RGBA, maxWidth, maxHeight int) *image.RGBA {
 		return img
 	}
 
-	ratio := float64(width) / float64(height)
-
-	if width > maxWidth {
-		width = maxWidth
-		height = int(float64(width) / ratio)
+	// 使用单一比例因子，一次到位等比例缩放，避免二次修正导致的长宽比失真
+	wRatio := float64(maxWidth) / float64(width)
+	hRatio := float64(maxHeight) / float64(height)
+	scale := wRatio
+	if hRatio < wRatio {
+		scale = hRatio
 	}
 
+	width = int(float64(width)*scale + 0.5)
+	height = int(float64(height)*scale + 0.5)
+
+	// 最终 clamp，防止浮点舍入导致超出限制
+	if width > maxWidth {
+		width = maxWidth
+	}
 	if height > maxHeight {
 		height = maxHeight
-		width = int(float64(height) * ratio)
 	}
 
 	resized := imaging.Resize(img, width, height, imaging.Lanczos)
@@ -372,9 +539,4 @@ func checkScreenshotRateLimit() error {
 		return fmt.Errorf("截图过于频繁，请等待 %.1f 秒", float64(captureCooldown-timeSinceLastCapture)/float64(time.Second))
 	}
 	return nil
-}
-
-// 缩放图片到最大尺寸1080
-func resizeImageTo1080(img *image.RGBA) *image.RGBA {
-	return ResizeToFit(img, 1080, 1080)
 }
