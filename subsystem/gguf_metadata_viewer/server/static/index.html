@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GGUF 元数据查看器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GGUF 模型元数据查看器</h1>
+            <p class="subtitle">将 .gguf 模型文件拖入下方区域即可查看元信息</p>
+        </header>
+
+        <main>
+            <!-- 拖放区域 -->
+            <div id="drop-zone" class="drop-zone">
+                <div class="drop-zone-content">
+                    <svg class="upload-icon" viewBox="0 0 24 24" width="64" height="64">
+                        <path fill="currentColor" d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                    </svg>
+                    <p class="drop-text">拖放 GGUF 模型文件到此处</p>
+                    <p class="drop-hint">或点击下方按钮选择文件</p>
+                    <label for="file-input" class="file-btn">选择文件</label>
+                    <input type="file" id="file-input" accept=".gguf" hidden>
+                </div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在解析模型文件...</p>
+            </div>
+
+            <!-- 错误信息 -->
+            <div id="error-msg" class="error-msg" style="display: none;"></div>
+
+            <!-- 元数据显示 -->
+            <div id="result" class="result" style="display: none;">
+                <!-- 摘要卡片 -->
+                <section class="summary-section">
+                    <h2>模型摘要</h2>
+                    <div id="summary-cards" class="summary-cards"></div>
+                </section>
+
+                <!-- 完整元数据表 -->
+                <section class="metadata-section">
+                    <h2>完整元数据 (<span id="metadata-count">0</span> 项)</h2>
+                    <div class="table-wrapper">
+                        <table id="metadata-table">
+                            <thead>
+                                <tr>
+                                    <th>键名</th>
+                                    <th>值</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metadata-body"></tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <footer>
+            <p>星月智能 - 月之华 | GGUF Metadata Viewer</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -16,7 +16,7 @@ import (
 
 func loadModel() {
 	// 定义模型目录和参考音频文件路径
-	modelDir := *config.LocalDir + "/models"
+	modelDir := *config.LocalDir + "/models/Qwen3-TTS"
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	// 初始化TTS引擎
 	module.InitTTSEngine(modelDir, refAudio)

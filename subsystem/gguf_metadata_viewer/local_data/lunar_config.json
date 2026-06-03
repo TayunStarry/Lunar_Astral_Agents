@@ -1,0 +1,22 @@
+{
+    "qq_adapter": {
+        "napcat_ws_server": "ws://localhost:4567",
+        "napcat_ws_token": "ItlC2Nc1DfICVYq5",
+        "lunar_core_url": "http://localhost:36789",
+        "lunar_ws_server": "ws://localhost:36789/ws",
+        "poll_interval": 10,
+        "listen_group_ids": [
+            906314036,
+            262221051,
+            1022847485,
+            710834920
+        ],
+        "trigger_keywords": [
+            "月之华",
+            "月华",
+            "3826713076"
+        ],
+        "display_logs": true,
+        "default_reply": "月华不知道哦~"
+    }
+}

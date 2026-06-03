@@ -21,7 +21,7 @@ func reloadPageParameters() {
 // main 主函数
 func main() {
 	addr := ":36365"
-	modelDir := *config.LocalDir + "/models"
+	modelDir := *config.LocalDir + "/models/Qwen3-TTS"
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	flag.Parse()
 
