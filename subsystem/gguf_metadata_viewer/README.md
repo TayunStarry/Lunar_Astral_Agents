@@ -8,7 +8,7 @@
 
 | 功能 | 说明 |
 |------|------|
-| **文件拖放** | 支持将 .gguf 文件直接拖入窗口或点击选择 |
+| **路径选择** | 通过系统原生文件对话框选择 .gguf 文件，仅传递路径 |
 | **元数据解析** | 解析 GGUF 二进制格式的所有键值对 |
 | **前端展示** | 摘要卡片 + 可搜索过滤的完整元数据表 |
 | **终端日志** | 元数据同步输出到控制台（使用 config 子系统控制） |
@@ -138,11 +138,13 @@ go build -ldflags="-s -w" -o gguf_metadata_viewer.exe .
 ## 使用指南
 
 1. **启动程序**：运行 `gguf_metadata_viewer.exe`，弹出嵌入式浏览器窗口
-2. **加载模型**：
-   - 方式一：从文件管理器将 `.gguf` 文件拖入窗口的虚线区域
-   - 方式二：点击"选择文件"按钮，浏览并选择文件
+2. **选择模型**：
+   - 方式一：将 `.gguf` 文件从文件管理器拖入窗口虚线区域，触发系统文件对话框
+   - 方式二：点击"选择文件"按钮，弹出系统文件对话框浏览并选择文件
+   - 仅将文件路径传递给后端，后端直接读取本地文件，无文件上传
 3. **查看结果**：
-   - 顶部展示**模型摘要卡片**（名称、架构、量化方式等关键参数）
+   - 顶部显示**文件路径**栏
+   - 接下来展示**模型摘要卡片**（名称、架构、量化方式等关键参数）
    - 下方展示**完整元数据表**（所有键值对，按键名排序）
    - 使用搜索框可按关键字过滤元数据条目
 4. **终端日志**：使用 `-developer` 模式时，终端同步打印完整的元数据列表
@@ -157,14 +159,18 @@ go build -ldflags="-s -w" -o gguf_metadata_viewer.exe .
 核心设计原则：**仅读取 header，跳过 tensor 数据**。GGUF 文件结构为 `[Header(元数据)] → [Tensor Info] → [Tensor Data]`，元数据部分是完整的键值对集合，解析完即可停止读取。
 
 ```
-用户拖入 .gguf 文件
+用户点击/拖放 .gguf 文件
     │
     ▼
-前端 FormData 上传 → POST /api/upload
+前端 POST /api/open-file-dialog  →  后端调用 PowerShell 系统文件对话框
+    │                              （返回选中文件的本地路径）
     │
     ▼
-服务端接收 → gguf.ParseMetadataFromReader(io.Reader)  ← 直接从上传流解析
-    │                                            （无需写入磁盘）
+前端 POST /api/analyze-path  →  传递 {"filePath": "C:\\...\\model.gguf"}
+    │
+    ▼
+服务端 gguf.ParseMetadata(filePath)  ←  后端直接打开本地文件读取
+    │                              （前端不接触文件数据，零上传）
     ├── 读取 4B 魔数 (GGUF 0x46554747)
     ├── 检测字节序 (小端/大端)
     ├── 读取 4B 版本号 (v1/v2/v3+)
@@ -181,7 +187,7 @@ go build -ldflags="-s -w" -o gguf_metadata_viewer.exe .
 同时打印到终端日志（Developer 模式）
 ```
 
-> **关键优势**：20GB 的 GGUF 文件与 200MB 的文件解析速度完全相同，因为只读取 header。无需磁盘暂存，无需等待完整上传，无文件大小限制。
+> **关键优势**：20GB 的 GGUF 文件与 200MB 的文件解析速度完全相同，因为只读取 header。前端仅传递文件路径字符串，后端通过路径直接读取本地文件，零网络传输开销。
 
 ### 元数据摘要提取
 
@@ -203,13 +209,30 @@ go build -ldflags="-s -w" -o gguf_metadata_viewer.exe .
 
 > 注：带 `*` 的键会自动匹配 `llama.*` 和 `qwen2.*` 等不同架构前缀。
 
+### API 端点
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/open-file-dialog` | POST | 弹出系统原生文件对话框，返回用户选中的文件路径 |
+| `/api/analyze-path` | POST | 接收 `{"filePath": "..."}` ，后端直接读取并解析 GGUF 元数据 |
+
+**请求/响应示例：**
+
+```
+POST /api/open-file-dialog
+  → { "success": true, "filePath": "C:\\models\\qwen2-7b.Q4_K_M.gguf", "fileName": "qwen2-7b.Q4_K_M.gguf" }
+
+POST /api/analyze-path    Body: {"filePath": "C:\\models\\qwen2-7b.Q4_K_M.gguf"}
+  → { "success": true, "filename": "...", "filePath": "...", "summary": {...}, "metadata": {...}, "count": 42 }
+```
+
 ### 架构设计原则
 
+- **路径传递，零上传**：前端仅传递文件路径字符串，后端通过路径直接读取本地文件。即使 30GB 模型文件，网络传输开销也仅为几十字节的路径 JSON
 - **流式解析**：`ParseMetadataFromReader(io.Reader)` 接受任意数据源（文件/网络流/管道），仅读取 header，跳过 tensor data
 - **无文件大小限制**：解析性能与模型文件大小无关，100MB 到 30GB 均秒级完成
 - **分层清晰**：解析层（gguf/decode.go）仅处理二进制格式，服务层（server/server.go）负责 HTTP 和格式化，前端层（static/）负责交互
 - **错误处理**：每层均有完善的错误捕获、日志输出和用户反馈
-- **零磁盘开销**：上传文件直接从 multipart 流解析，无需磁盘暂存
 - **前后端分离**：前端通过 REST API 与后端通信，可独立测试
 
 ---
@@ -246,11 +269,21 @@ go build -o gguf_metadata_viewer.exe .
 **检查**：
 1. 确认文件的魔数是 `GGUF`（十六进制 `47 47 55 46`）
 2. 文件是否完整（未损坏）
+3. 文件路径是否可访问（无权限问题）
+4. 查看终端日志中的具体错误信息
+
+### Q: 文件对话框无法弹出
+
+**原因**：系统文件对话框通过 PowerShell 调用，需要 Windows 环境。
+
+**解决**：
+1. 确认操作系统为 Windows 10/11
+2. 确认 PowerShell 可用（`powershell -Command "echo test"` 可正常执行）
 3. 查看终端日志中的具体错误信息
 
 ### Q: 如何解析多个模型文件
 
-每次拖放新的文件即可，界面会自动刷新显示当前文件的信息。
+每次点击/拖放选择新的文件即可，界面会自动刷新显示当前文件的信息。
 
 ---
 

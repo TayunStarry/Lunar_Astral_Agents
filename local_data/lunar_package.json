@@ -49,20 +49,6 @@
 		"url": "/file/read/package/parameter_assistant/index.html"
 	},
 	{
-		"id": "model_query",
-		"icon": "/file/read/images/icon/model_query.Webp",
-		"title": "模型查询",
-		"description": "打开『 星月智能 』模型查询",
-		"url": "/file/read/package/model_query/index.html"
-	},
-	{
-		"id": "different_lunar",
-		"icon": "/file/read/images/icon/different_lunar.Webp",
-		"title": "不同星月智能",
-		"description": "打开『 星月智能 』的不同星月智能",
-		"url": "/file/read/package/different_lunar/index.html"
-	},
-	{
 		"id": "view_on_gitee",
 		"icon": "/file/read/images/icon/gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",
