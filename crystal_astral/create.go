@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"storage/module"
 	"syscall"
 	"time"
 )
@@ -63,6 +64,10 @@ func reloadPageParameters() {
 
 // StartServer 启动服务器
 func StartServer(port int, root http.FileSystem, name string) error {
+	// 初始化统一数据库(SQL + 向量数据库基础)
+	if err := module.InitUnifiedDB(*config.SQLDBPath, *config.VectorDBDir); err != nil {
+		logger.Warn("CrystalAstral", "数据库初始化失败: %v (不影响服务启动)", err)
+	}
 	httpMux := http.NewServeMux()
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {

@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache, modelResponse, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage } from '../index';
+import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage } from '../index';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {

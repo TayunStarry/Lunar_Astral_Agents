@@ -37,12 +37,8 @@ func Init() {
 	args := []string{
 		// 模型预设配置文件路径
 		"--models-preset", "local_data/models/models.ini",
-		// GPU层数：尽可能多地将层卸载到GPU
-		"--gpu-layers", "all",
 		// 启用Flash Attention注意力机制优化
 		"--flash-attn", "on",
-		// 上下文窗口大小：16K tokens
-		"--ctx-size", "16384",
 		// 温度参数：控制生成文本的随机性
 		"--temp", "1.0",
 		// 核采样阈值：保留累积概率95%的候选词
@@ -57,8 +53,6 @@ func Init() {
 		"--repeat_penalty", "1.0",
 		// 服务器监听端口
 		"--port", strconv.Itoa(*config.ModelPort),
-		// 推理模式: 自动推理
-		"--reasoning", "auto",
 		// 并行请求处理数
 		"--parallel", "1",
 		// 批处理大小
