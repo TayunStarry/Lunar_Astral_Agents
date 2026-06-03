@@ -149,7 +149,7 @@ const AgentExample = new LunarAgent();
 const message: Array<ImageContent | TextContent> = [
     {
         type: 'text',
-        text: '像与老朋友见面一样，打个招呼吧'
+        text: '你好呀~'
     }
 ];
 AgentExample.testMessageWrite('user', message, 1500);
