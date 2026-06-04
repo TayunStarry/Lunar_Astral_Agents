@@ -71,6 +71,22 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 禁用缓存时，直接合成不经过缓存
+	if req.DisableCache {
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		capture := &responseCapture{ResponseWriter: w, statusCode: 200}
+		module.TTSHandler(capture, r)
+
+		if capture.statusCode == http.StatusOK {
+			var resp module.TTSResponse
+			if err := json.Unmarshal(capture.body.Bytes(), &resp); err == nil && resp.Success {
+				return
+			}
+		}
+		logger.Error("TTSModel", "TTS合成失败，文本: %s", req.Text)
+		return
+	}
+
 	entry, exists := ttsWrapperCache.Get(req.Text)
 	if exists {
 		audioBase64 := entry.Wait()
@@ -101,12 +117,16 @@ func TTSHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 	if capture.statusCode == http.StatusOK {
 		var resp module.TTSResponse
 		if err := json.Unmarshal(capture.body.Bytes(), &resp); err == nil && resp.Success {
-			entry.MarkReady(resp.Audio)
+			if !req.DisableCache {
+				entry.MarkReady(resp.Audio)
+			}
 			return
 		}
 	}
 
-	ttsWrapperCache.Remove(req.Text)
+	if !req.DisableCache {
+		ttsWrapperCache.Remove(req.Text)
+	}
 	entry.MarkReady("")
 	logger.Error("TTSModel", "TTS合成失败，文本: %s", req.Text)
 }
@@ -138,6 +158,27 @@ func TTSStreamHandlerWrapper(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 禁用缓存时，直接同步合成
+	if req.DisableCache {
+		reqBody, _ := json.Marshal(module.TTSRequest{Text: req.Text})
+		httpReq, _ := http.NewRequest("POST", "/tts", bytes.NewReader(reqBody))
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		mockWriter := &ttsMockWriter{statusCode: 200}
+		module.TTSHandler(mockWriter, httpReq)
+
+		if mockWriter.statusCode == http.StatusOK {
+			var ttsResp module.TTSResponse
+			if err := json.Unmarshal(mockWriter.body.Bytes(), &ttsResp); err == nil && ttsResp.Success {
+				streamWAVToWebSocket(conn, ttsResp.Audio)
+				return
+			}
+		}
+		sendStreamWrapError(conn, "TTS合成失败")
+		return
+	}
+
+	// 检查缓存
 	entry, exists := ttsWrapperCache.Get(req.Text)
 	if exists {
 		audioBase64 := entry.Wait()

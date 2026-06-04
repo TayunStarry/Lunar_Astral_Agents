@@ -49,6 +49,13 @@
 		"url": "/file/read/package/parameter_assistant/index.html"
 	},
 	{
+		"id": "qwen3_tts",
+		"icon": "/file/read/images/icon/qwen3_tts.Webp",
+		"title": "语音合成",
+		"description": "打开『 星月智能 』语音合成",
+		"url": "/file/read/package/qwen3_tts/index.html"
+	},
+	{
 		"id": "view_on_gitee",
 		"icon": "/file/read/images/icon/gitee.Webp",
 		"title": "打开『 星月智能 』项目仓库",

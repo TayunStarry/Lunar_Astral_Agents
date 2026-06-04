@@ -95,6 +95,8 @@ type TTSRequest struct {
 	RepetitionPenalty float32 `json:"repetition_penalty,omitempty"`
 	// Threads 用于设置线程数
 	Threads int32 `json:"threads,omitempty"`
+	// DisableCache 用于禁用缓存映射机制
+	DisableCache bool `json:"disable_cache,omitempty"`
 }
 
 // TTSResponse 用于存储TTS响应
@@ -129,6 +131,8 @@ type WSStreamRequest struct {
 	RepetitionPenalty float32 `json:"repetition_penalty,omitempty"`
 	// Threads 用于设置线程数
 	Threads int32 `json:"threads,omitempty"`
+	// DisableCache 用于禁用缓存映射机制
+	DisableCache bool `json:"disable_cache,omitempty"`
 }
 
 // WSStreamResponse 用于存储WebSocket流响应
