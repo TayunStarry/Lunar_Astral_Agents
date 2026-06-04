@@ -558,6 +558,9 @@ var agentSystem = (function (exports) {
                 throw error;
             return result;
         }
+        get contextMessages() {
+            return this.messages;
+        }
         queryRagMessages() {
             const latestUserMessage = this.getLatestUserMessageContent();
             if (!latestUserMessage)
@@ -741,9 +744,9 @@ var agentSystem = (function (exports) {
         defaultPosturePrompt = [
             '一条腿轻轻抬起,俏皮姿势',
             '双手背在身后,身体微微前倾,双脚并拢',
-            '一手插在外套口袋里,另一只手轻抬至脸颊旁比“V”字手势,身体略侧,双脚前后交叉站立',
+            '一手插在外套口袋里,另一只手轻抬至脸颊旁比\u201cV\u201d字手势,身体略侧,双脚前后交叉站立',
             '双手自然垂放于身前,手指轻轻交握,双肩微微内收,双脚并拢,站姿端正',
-            '手抬起至嘴前,十指轻轻触碰（做捂嘴状）,身体微微后仰,一条腿向后小半步,重心落在后脚',
+            '手抬起至嘴前,十指轻轻触碰\uff08做捂嘴状\uff09,身体微微后仰,一条腿向后小半步,重心落在后脚',
             '双手举过头顶比心或张开五指,一条腿向后踢起,身体微微前倾,脚尖离地呈跳跃瞬间',
             '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
@@ -818,10 +821,330 @@ var agentSystem = (function (exports) {
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
         }
-        writeAppearancePrompt(expression, posture) {
+        writeAppearancePrompt(expression, posture, environment) {
             const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
             const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture);
+            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{environment}', environment || '');
+        }
+        async checkImageGenerationNeed(dialogueMessages) {
+            try {
+                const recentTexts = this.extractRecentTexts(dialogueMessages, 5);
+                if (recentTexts.length === 0) {
+                    console.log('[画家] 没有可用的对话文本，跳过图片生成检查');
+                    return false;
+                }
+                const hasImageKeyword = this.matchImageGenerationKeywords(recentTexts);
+                if (!hasImageKeyword) {
+                    console.log('[画家] 关键词预筛选未命中，跳过图片生成');
+                    return false;
+                }
+                console.log('[画家] 关键词预筛选命中，进行 LLM 精确意图判断...');
+                const intentConfirmed = await this.confirmImageGenerationIntent(recentTexts);
+                if (intentConfirmed) {
+                    console.log('[画家] LLM 确认存在图片生成需求');
+                }
+                else {
+                    console.log('[画家] LLM 判定无需生成图片');
+                }
+                return intentConfirmed;
+            }
+            catch (error) {
+                console.error('[画家] 图片生成需求检测失败:', error);
+                return false;
+            }
+        }
+        extractRecentTexts(messages, count) {
+            const recentMessages = messages.slice(-count);
+            const texts = [];
+            for (const message of recentMessages) {
+                if (typeof message.content === 'string') {
+                    texts.push(message.content);
+                }
+                else if (Array.isArray(message.content)) {
+                    for (const item of message.content) {
+                        if (item.type === 'text') {
+                            texts.push(item.text);
+                        }
+                    }
+                }
+            }
+            return texts;
+        }
+        matchImageGenerationKeywords(texts) {
+            const imageKeywords = [
+                /画(?:一(?:张|幅|个))?/,
+                /生成(?:一(?:张|幅|个))?.*(?:图|画|图片|图像)/,
+                /图片/,
+                /绘画/,
+                /画图/,
+                /自画像/,
+                /画像/,
+                /绘制/,
+                /创作.*(?:图|画)/,
+                /帮我.*画/,
+                /给我.*画/,
+                /来(?:一(?:张|幅|个))?.*(?:图|画)/,
+                /draw/,
+                /paint/,
+                /image|picture|portrait/,
+                /generate.*image/,
+                /create.*(?:image|picture)/,
+                /插图/,
+                /插画/,
+                /(?:做|弄|整)(?:一(?:张|幅|个))?.*(?:图|画)/,
+            ];
+            for (const text of texts) {
+                for (const keyword of imageKeywords) {
+                    if (keyword.test(text)) {
+                        console.log(`[画家] 关键词匹配命中: "${keyword}" 在文本 "${text.slice(0, 50)}..."`);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        async confirmImageGenerationIntent(texts) {
+            try {
+                const intentPrompt = `请分析以下对话内容，判断用户是否明确表达了生成图片、绘制图像、创作画作的意图。
+仅当用户明确请求生成图片时才返回 true，否则返回 false。
+请仅返回 true 或 false，不要包含其他内容。
+
+对话内容：
+${texts.map((t, i) => `[${i + 1}] ${t}`).join('\n')}`;
+                this.coverContext({ role: 'user', content: intentPrompt });
+                this.runtimeMessages = [];
+                const response = this.intentAnalysisRun();
+                const result = response.body?.choices?.[0]?.message?.content?.trim().toLowerCase() || '';
+                console.log(`[画家] LLM 意图分析原始结果: "${result}"`);
+                return result.includes('true');
+            }
+            catch (error) {
+                console.error('[画家] LLM 意图分析失败，回退到关键词匹配结果:', error);
+                return true;
+            }
+        }
+        intentAnalysisRun() {
+            const requestBody = {
+                model: OnlyData.MultimodalName,
+                messages: [
+                    { role: 'system', content: '你是一个意图分析助手，仅返回 true 或 false。' },
+                    ...this.messages,
+                    ...this.runtimeMessages
+                ],
+                stream: false,
+                tool_choice: 'none',
+            };
+            const headers = {
+                Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
+                'Content-Type': 'application/json',
+            };
+            const modelRequest = {
+                method: 'POST',
+                crossDomain: true,
+                headers,
+                body: JSON.stringify(requestBody)
+            };
+            const endpoint = '/chat/completions';
+            const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
+            if (error)
+                throw error;
+            return result;
+        }
+        async executePaintingTask(dialogueMessages, finalResponse) {
+            console.log('[画家] 开始执行绘画任务...');
+            try {
+                this.buildPaintingContext(dialogueMessages, finalResponse);
+                this.runtimeMessages = [
+                    { role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }
+                ];
+                this.executePaintingLoop();
+                console.log('[画家] 绘画任务执行完成');
+            }
+            catch (error) {
+                console.error('[画家] 绘画任务执行失败:', error);
+                throw error;
+            }
+        }
+        buildPaintingContext(dialogueMessages, finalResponse) {
+            const dialogueTexts = this.extractRecentTexts(dialogueMessages, 10);
+            const paintingContext = `请根据以下对话内容，判断是否需要生成图片，并选择合适的绘画模式：
+
+【对话历史】
+${dialogueTexts.map((t, i) => `[${i + 1}] ${t}`).join('\n')}
+
+【智能体最终回复】
+${finalResponse}
+
+请分析对话内容：
+1. 判断用户是否明确请求了图片生成
+2. 如果是，提取必要的绘画参数（主题、风格、色彩、构图等）
+3. 选择正确的绘画模式：
+   - 如果用户请求生成月华自己的形象（自画像、自己的照片、自己的样子等），使用 self_portrait 工具
+   - 如果用户请求生成其他内容的图像，使用 diffusion_generation 工具
+
+如果不需要生成图片，请直接回复无需生成图片。`;
+            this.coverContext({ role: 'user', content: paintingContext });
+        }
+        painterModelRun() {
+            const requestBody = {
+                model: OnlyData.MultimodalName,
+                messages: [
+                    { role: 'system', content: this.systemPrompt },
+                    ...this.messages,
+                    ...this.runtimeMessages
+                ],
+                stream: false,
+                tools: this.roleTool,
+                tool_choice: 'auto',
+            };
+            const headers = {
+                Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
+                'Content-Type': 'application/json',
+            };
+            const modelRequest = {
+                method: 'POST',
+                crossDomain: true,
+                headers,
+                body: JSON.stringify(requestBody)
+            };
+            const endpoint = '/chat/completions';
+            const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
+            if (error)
+                throw error;
+            return result;
+        }
+        executePaintingLoop() {
+            const MAX_ITERATIONS = 3;
+            for (let i = 0; i < MAX_ITERATIONS; i++) {
+                console.log(`[画家] 第 ${i + 1} 轮绘画推理`);
+                let response;
+                try {
+                    response = this.painterModelRun();
+                }
+                catch (error) {
+                    console.error(`[画家] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log('[画家] 模型返回空结果，结束绘画循环');
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0) {
+                    const replyContent = choice.message?.content || '';
+                    console.log(`[画家] 模型完成绘画分析: ${replyContent.slice(0, 200)}`);
+                    if (replyContent) {
+                        this.writeContext(choice.message);
+                    }
+                    break;
+                }
+                console.log(`[画家] 第 ${i + 1} 轮检测到 ${toolCalls.length} 个工具调用`);
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    console.log(`[画家] 执行工具: ${toolCall.function.name}`);
+                    const result = this.executePaintingTool(toolCall);
+                    this.writeContext({
+                        role: 'tool',
+                        content: result,
+                        tool_call_id: toolCall.id
+                    });
+                }
+            }
+        }
+        executePaintingTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            console.log(`[画家] 工具参数:`, JSON.stringify(args, null, 2));
+            switch (funcName) {
+                case 'diffusion_generation':
+                    return this.handleDiffusionGeneration(args);
+                case 'self_portrait':
+                    return this.handleSelfPortrait(args);
+                default:
+                    console.warn(`[画家] 未知工具: ${funcName}`);
+                    return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
+            }
+        }
+        handleDiffusionGeneration(args) {
+            try {
+                const prompt = args.prompt || '';
+                if (!prompt.trim()) {
+                    return '扩散生成失败：正向提示词不能为空';
+                }
+                console.log(`[画家] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
+                const imageParams = {
+                    prompt: prompt,
+                    negativePrompt: args.negative_prompt || '',
+                    strength: args.strength ?? 0.65,
+                    cfgScale: args.cfg_scale ?? 1.0,
+                };
+                if (args.use_reference) {
+                    console.log('[画家] 使用参考图像模式');
+                }
+                console.log('[画家] 调用图像生成引擎...');
+                const [result, error] = generateImage(imageParams);
+                if (error) {
+                    console.error('[画家] 图像生成失败:', error);
+                    return `扩散图像生成失败: ${error}`;
+                }
+                if (!result || !result.base64) {
+                    return '扩散图像生成失败：引擎返回空结果';
+                }
+                console.log(`[画家] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
+                const pushSuccess = pushImage([result.base64]);
+                if (!pushSuccess) {
+                    console.warn('[画家] 推送图片到前端失败');
+                }
+                return `扩散图像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+            }
+            catch (error) {
+                console.error('[画家] 扩散生成处理异常:', error);
+                return `扩散图像生成异常: ${error}`;
+            }
+        }
+        handleSelfPortrait(args) {
+            try {
+                const expression = args.expression || '';
+                const posture = args.posture || '';
+                const environment = args.environment || '';
+                console.log(`[画家] 自画像生成 - 表情: "${expression}", 姿势: "${posture}", 环境: "${environment}"`);
+                const fullPrompt = this.writeAppearancePrompt(expression, posture, environment);
+                console.log(`[画家] 自画像完整提示词长度: ${fullPrompt.length} 字符`);
+                const imageParams = {
+                    prompt: fullPrompt,
+                    negativePrompt: '低质量,模糊,畸形,多只手,多只脚,坏手,坏脚,NSFW',
+                    cfgScale: 1.0,
+                };
+                console.log('[画家] 调用图像生成引擎生成自画像...');
+                const [result, error] = generateImage(imageParams);
+                if (error) {
+                    console.error('[画家] 自画像生成失败:', error);
+                    return `自画像生成失败: ${error}`;
+                }
+                if (!result || !result.base64) {
+                    return '自画像生成失败：引擎返回空结果';
+                }
+                console.log(`[画家] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
+                const pushSuccess = pushImage([result.base64]);
+                if (!pushSuccess) {
+                    console.warn('[画家] 推送自画像到前端失败');
+                }
+                return `自画像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+            }
+            catch (error) {
+                console.error('[画家] 自画像生成处理异常:', error);
+                return `自画像生成异常: ${error}`;
+            }
         }
     }
 
@@ -1259,6 +1582,9 @@ var agentSystem = (function (exports) {
                     pushContext(messageType, messageResponse);
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
+                    }
+                    if (await this.painterRole.checkImageGenerationNeed(this.dialogueRole.contextMessages)) {
+                        await this.painterRole.executePaintingTask(this.dialogueRole.contextMessages, messageResponse);
                     }
                 }
                 catch (error) {

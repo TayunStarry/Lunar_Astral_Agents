@@ -143,6 +143,10 @@ export class ModelBuilder extends ConfigModifier {
 		// 返回模型响应
 		return result;
 	}
+	/** 获取对话消息列表（只读） */
+	public get contextMessages(): PostMessage[] {
+		return this.messages;
+	}
 	/** 从 chromem-go 查询相关消息并填充 ragMessages */
 	public queryRagMessages(): this {
 		/** 获取最新的用户消息内容作为查询条件 */

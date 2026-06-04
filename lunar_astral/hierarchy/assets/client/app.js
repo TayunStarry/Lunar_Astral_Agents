@@ -162,47 +162,36 @@ class LunarCoreApp {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const wsUrl = `${protocol}//${window.location.host}/ws`;
 		this.wsClient = new WebSocketClient(wsUrl);
-		this.wsClient.onConnect(() => {
-			console.log('WebSocket connected');
-			this.setLoadingState(false);
-		});
-		this.wsClient.onMessage((message) => {
-			this.handleWebSocketMessage(message);
-		});
-		this.wsClient.onError((error) => {
-			console.error('WebSocket error:', error);
-			this.showError('连接错误，请刷新页面');
-		});
+		this.wsClient.onConnect(() => { console.log('WebSocket connected'); this.setLoadingState(false); });
+		this.wsClient.onMessage((message) => this.handleWebSocketMessage(message));
+		this.wsClient.onError((error) => { console.error('WebSocket error:', error); this.showError('连接错误，请刷新页面'); });
 		this.wsClient.connect();
 	}
 
 	async handleWebSocketMessage(message) {
 		switch (message.type) {
 			case 'context':
+				// 判断是否为响应或活动消息
 				if (message.data.type === 'response' || message.data.type === 'active') {
+					/** 获取消息的文本内容 */
 					const content = message.data.content || '';
-					console.log('content', content);
+					/** 生成并播放语音 */
 					const audioBase64 = await TTS.generateAndPlay(content);
+					// 渲染消息到历史记录
 					await this.handleAssistantMessage(content, undefined, audioBase64);
 				}
 				break;
+
 			case 'image':
-				if (message.data.images) {
-					for (const imageBase64 of message.data.images) {
-						const byteString = atob(imageBase64);
-						const mimeType = 'image/jpeg';
-						const ab = new ArrayBuffer(byteString.length);
-						const ia = new Uint8Array(ab);
-						for (let i = 0; i < byteString.length; i++) {
-							ia[i] = byteString.charCodeAt(i);
-						}
-						const blob = new Blob([ab], { type: mimeType });
-						const file = new File([blob], `assistant_${Date.now()}.jpg`, { type: 'image/jpeg' });
-						const fileUrl = `${window.location.origin}/file/read/${file.name}`;
-						await this.handleAssistantMessage('', fileUrl, '');
-					}
+				// 判断是否有图片信息
+				if (!message.data.images) break;
+				// 遍历图片信息，执行图片渲染
+				for (const imageBase64 of message.data.images) {
+					// 渲染图片到历史记录
+					await this.handleAssistantMessage('', 'data:image/jpeg;base64,' + imageBase64, '');
 				}
 				break;
+
 			case 'error':
 				this.showError(message.data.content || '发生错误');
 				this.setLoadingState(false);
