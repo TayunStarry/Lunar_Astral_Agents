@@ -168,6 +168,87 @@ body {
 	font-size: 12px;
 	white-space: nowrap;
 	letter-spacing: 0.5px;
+	pointer-events: none;
+	/* 不阻挡触摸事件穿透到触摸层 */
+}
+
+/* ========== 触摸交互区域 ========== */
+.touch-interaction {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 10;
+	background: transparent;
+	cursor: pointer;
+	/* 允许触摸事件穿透到canvas，但可被JS捕获 */
+	pointer-events: auto;
+	-webkit-tap-highlight-color: transparent;
+	/* 去除移动端默认点击高亮 */
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+/* 触摸涟漪反馈动画 */
+.touch-ripple {
+	position: absolute;
+	width: 0;
+	height: 0;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(157, 107, 255, 0.5) 0%, rgba(157, 107, 255, 0.1) 60%, transparent 70%);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+	/* 不阻挡后续触摸事件 */
+	opacity: 0;
+	transition: none;
+}
+
+.touch-ripple.active {
+	animation: touch-ripple-expand 0.6s ease-out forwards;
+}
+
+@keyframes touch-ripple-expand {
+	0% {
+		width: 0;
+		height: 0;
+		opacity: 1;
+	}
+
+	100% {
+		width: 350px;
+		height: 350px;
+		opacity: 0;
+	}
+}
+
+/* 触摸交互区域的微光呼吸动画（提示用户可交互） */
+.touch-interaction::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 60px;
+	height: 60px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(157, 107, 255, 0.15) 0%, transparent 70%);
+	pointer-events: none;
+	animation: touch-glow-pulse 3s ease-in-out infinite;
+}
+
+@keyframes touch-glow-pulse {
+
+	0%,
+	100% {
+		transform: translate(-50%, -50%) scale(0.8);
+		opacity: 0.3;
+	}
+
+	50% {
+		transform: translate(-50%, -50%) scale(1.4);
+		opacity: 0.8;
+	}
 }
 
 /* 输入区域 */

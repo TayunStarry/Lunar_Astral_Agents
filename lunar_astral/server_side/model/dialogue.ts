@@ -14,7 +14,7 @@ export class DialogueRole extends ModelBuilder {
 			// 格式化历史消息
 			this.formatHistoricalMessages(source);
 			// 添加当前时间到运行时消息列表
-			this.runtimeMessages = [{ role: "user", content: `当前时间: ${new Date().toLocaleString()}` }];
+			this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
 			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
@@ -37,9 +37,6 @@ export class DialogueRole extends ModelBuilder {
 		// 更新消息内容
 		this.updateMessageContent(cache, source);
 	}
-	/** 文本消息最大长度阈值 */
-	private static readonly MAX_TEXT_LENGTH = 512;
-
 	/** 格式化历史消息 */
 	public formatHistoricalMessages(source: AgentDefine) {
 		// 如果消息数组为空,则不处理

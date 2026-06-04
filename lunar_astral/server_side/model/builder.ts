@@ -112,7 +112,7 @@ export class ModelBuilder extends ConfigModifier {
 		/** 构建发给推理模型的请求体 */
 		const requestBody: InferencePayload = {
 			model: OnlyData.MultimodalName,
-			messages: [{ role: 'system', content: this.systemPrompt }, ...appendContext, ...this.messages, ...this.runtimeMessages],
+			messages: [{ role: 'system', content: this.systemPrompt }, ...this.messages.slice(0, -1), ...appendContext, ...this.runtimeMessages, ...this.messages.slice(-1)],
 			stream: this.stream,
 			tools: isIncludesTools ? [] : OnlyData.toolCall,
 			tool_choice: isIncludesTools ? 'none' : 'auto',

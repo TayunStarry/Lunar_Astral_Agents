@@ -533,7 +533,7 @@ var agentSystem = (function (exports) {
             const isIncludesTools = this.messages.some((message) => message.role === 'tool');
             const requestBody = {
                 model: OnlyData.MultimodalName,
-                messages: [{ role: 'system', content: this.systemPrompt }, ...appendContext, ...this.messages, ...this.runtimeMessages],
+                messages: [{ role: 'system', content: this.systemPrompt }, ...this.messages.slice(0, -1), ...appendContext, ...this.runtimeMessages, ...this.messages.slice(-1)],
                 stream: this.stream,
                 tools: isIncludesTools ? [] : OnlyData.toolCall,
                 tool_choice: isIncludesTools ? 'none' : 'auto',
@@ -599,7 +599,7 @@ var agentSystem = (function (exports) {
                 source.unreadContext.forEach(context => this.writeContext(context));
                 source.unreadContext = [];
                 this.formatHistoricalMessages(source);
-                this.runtimeMessages = [{ role: "user", content: `当前时间: ${new Date().toLocaleString()}` }];
+                this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
                 const response = this.run(this.ragMessages);
                 this.analyzeMessageResponse(response.body, cache, source);
@@ -615,7 +615,6 @@ var agentSystem = (function (exports) {
             }
             this.updateMessageContent(cache, source);
         }
-        static MAX_TEXT_LENGTH = 512;
         formatHistoricalMessages(source) {
             if (this.messages.length === 0)
                 return;
