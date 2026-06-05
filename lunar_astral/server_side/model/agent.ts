@@ -64,6 +64,8 @@ class LunarAgent extends AgentDefine {
 				else if (messageLength == 0 && allowSpeak) this.speakWeight = 0;
 				// 批量处理视频文件
 				await this.batchProcessVideoFiles();
+				// 如果包含图像生成关键词，调用画家角色执行绘画循环
+				this.painterRole.createImageRendering(this);
 				// 创建消息
 				await this.createChatMessage();
 				/** 消息响应 */
@@ -73,10 +75,6 @@ class LunarAgent extends AgentDefine {
 				// 如果未读记录数超过10条，调用编纂者组织历史记录
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
-				}
-				// 根据情况调用图片生成智能体
-				if (await this.painterRole.checkImageGenerationNeed(this.dialogueRole.contextMessages)) {
-					await this.painterRole.executePaintingTask(this.dialogueRole.contextMessages, messageResponse);
 				}
 			}
 			catch (error) {

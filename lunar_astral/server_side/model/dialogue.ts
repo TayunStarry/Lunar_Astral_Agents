@@ -18,7 +18,7 @@ export class DialogueRole extends ModelBuilder {
 			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
-			const response = this.run(this.ragMessages);
+			const response = this.run(this.ragMessages, []);
 			// 处理响应文本内容
 			this.analyzeMessageResponse(response.body, cache, source);
 			// 如果有工具调用,处理它们并重新发送请求
@@ -81,7 +81,7 @@ export class DialogueRole extends ModelBuilder {
 			// 覆盖描述角色的上下文，传入当前批次的视觉消息
 			source.descriptionRole.coverContext(batchFrames);
 			/** 执行描述角色的模型运行，获取总结请求响应 */
-			const summaryRequest = source.descriptionRole.run([]);
+			const summaryRequest = source.descriptionRole.run([], []);
 			/** 模型总结结果 */
 			const summary = summaryRequest.body?.choices?.[0]?.message?.content;
 			// 过滤空字符串和仅包含空格的字符串
@@ -92,7 +92,7 @@ export class DialogueRole extends ModelBuilder {
 		/** 最新消息的角色 */
 		const latestRole = this.messages.slice(-1)[0].role;
 		// 如果最新消息是用户,则不处理
-		if (latestRole === 'user') return;
+		if (latestRole === 'user' || latestRole === 'assistant') return;
 		// 如果最新消息是模型,则添加提示消息
 		this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
 	}
@@ -103,10 +103,10 @@ export class DialogueRole extends ModelBuilder {
 			if (message.choices?.[0]?.message?.reasoning_content) {
 				cache.thinkingContent = message.choices[0].message.reasoning_content;
 			}
-			// 检查是否有预测令牌数
+			// 检查是否有词元生成速度数据
 			if (message.timings?.predicted_per_second) {
 				source.responseSpeed = message.timings.predicted_per_second;
-				console.log(`预测令牌数: ${message.timings.predicted_per_second}`);
+				console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
 			}
 			// 处理工具调用
 			if (message.choices?.[0]?.message?.tool_calls) {

@@ -18,9 +18,7 @@ export interface ExtractKeyframesData {
     data: string;
 };
 
-/**
- * 关键帧结构
- */
+/** 关键帧结构 */
 export interface KeyFrame {
     /** 关键帧文件名 */
     filePath: string;
@@ -32,9 +30,7 @@ export interface KeyFrame {
     data: string;
 }
 
-/**
- * 缩放图片结果接口
- */
+/** 缩放图片结果接口 */
 export interface ResizeImageResult {
     /** 缩放后的图片数据 */
     image: Uint8Array;
@@ -48,9 +44,7 @@ export interface ResizeImageResult {
     height: number;
 }
 
-/**
- * 图片生成参数接口
- */
+/** 图片生成参数接口 */
 export interface GenerateImageParams {
     /** 提示词 */
     prompt: string;
@@ -74,9 +68,7 @@ export interface GenerateImageParams {
     initImg?: string;
 }
 
-/**
- * 图片生成结果接口
- */
+/** 图片生成结果接口 */
 export interface GenerateImageResult {
     /** 生成的图片路径 */
     path: string;
@@ -88,4 +80,32 @@ export interface GenerateImageResult {
     height: number;
     /** 随机数种子 */
     seed: number;
+}
+
+/** 扩散生成工具 - 参数接口 */
+export interface DiffusionGenerationParams {
+    /** 提示词 */
+    prompt: string;
+    /** 负面提示词 */
+    negative_prompt?: string;
+    /** 是否使用参考图片 */
+    use_reference?: boolean;
+    /** 图生图强度 */
+    strength?: number;
+    /** 提示词引导系数 */
+    cfg_scale?: number;
+}
+
+/** 自拍工具 - 参数接口 */
+export interface SelfPortraitParams {
+    /** 表情描述 */
+    expression: string;
+    /** 姿势描述 */
+    posture: string;
+    /** 环境描述 */
+    environment: string;
+    /** 负面提示词 */
+    negative_prompt?: string;
+    /** 提示词引导系数 */
+    cfg_scale?: number;
 }

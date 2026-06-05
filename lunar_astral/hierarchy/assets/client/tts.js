@@ -156,14 +156,31 @@ class TTSManager {
             const wsUrl = `${protocol}//${window.location.host}/tts/stream`;
             const ws = new WebSocket(wsUrl);
 
-            const pcmChunks = [];
+            const chunkQueue = [];
+            const allPCMChunks = [];
             let sampleRate = 24000;
             let resolved = false;
+            let isPlaying = false;
+            let streamEnded = false;
 
             const finalize = (result) => {
                 if (resolved) return;
                 resolved = true;
                 resolve(result);
+            };
+
+            const playNext = () => {
+                if (chunkQueue.length === 0) {
+                    isPlaying = false;
+                    if (streamEnded) {
+                        const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
+                        finalize(wavBase64);
+                    }
+                    return;
+                }
+                isPlaying = true;
+                const { pcmData, sr } = chunkQueue.shift();
+                this.playPCMChunk(pcmData, sr, () => playNext());
             };
 
             ws.onopen = () => {
@@ -183,28 +200,21 @@ class TTSManager {
 
                     if (msg.type === 'audio_chunk' && msg.audio) {
                         const pcmBuffer = this.base64ToArrayBuffer(msg.audio);
-                        pcmChunks.push(new Int16Array(pcmBuffer));
+                        const pcmData = new Int16Array(pcmBuffer);
                         if (msg.sample_rate) sampleRate = msg.sample_rate;
+
+                        allPCMChunks.push(pcmData);
+                        chunkQueue.push({ pcmData, sr: sampleRate });
+                        if (!isPlaying) playNext();
                     }
 
                     if (msg.type === 'final' || (msg.type === 'audio_chunk' && msg.is_final)) {
                         ws.close();
-                        if (pcmChunks.length === 0) {
-                            this.showError('未收到音频数据');
-                            finalize(null);
-                            return;
+                        streamEnded = true;
+                        if (!isPlaying && chunkQueue.length === 0) {
+                            const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
+                            finalize(wavBase64);
                         }
-
-                        const totalLength = pcmChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                        const mergedPCM = new Int16Array(totalLength);
-                        let offset = 0;
-                        for (const chunk of pcmChunks) {
-                            mergedPCM.set(chunk, offset);
-                            offset += chunk.length;
-                        }
-
-                        this.playPCMBuffer(mergedPCM, sampleRate);
-                        finalize(true);
                     }
                 } catch (err) {
                     console.error('TTS 流式消息处理失败:', err);
@@ -219,11 +229,107 @@ class TTSManager {
 
             ws.onclose = () => {
                 if (!resolved) {
-                    this.showError('流式连接意外关闭');
-                    finalize(null);
+                    streamEnded = true;
+                    if (!isPlaying && chunkQueue.length === 0) {
+                        const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
+                        finalize(wavBase64);
+                    }
                 }
             };
         });
+    }
+
+    encodePCMToWAVBase64(pcmChunks, sampleRate) {
+        const totalLength = pcmChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const mergedPCM = new Int16Array(totalLength);
+        let offset = 0;
+        for (const chunk of pcmChunks) {
+            mergedPCM.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        const numSamples = mergedPCM.length;
+        const dataSize = numSamples * 2;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+
+        const writeString = (offset, str) => {
+            for (let i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        };
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, dataSize, true);
+
+        for (let i = 0; i < numSamples; i++) {
+            view.setInt16(44 + i * 2, mergedPCM[i], true);
+        }
+
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
+    playPCMChunk(pcmData, sampleRate, onEnded) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const audioBuffer = this.audioContext.createBuffer(1, pcmData.length, sampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+        for (let i = 0; i < pcmData.length; i++) {
+            channelData[i] = pcmData[i] / 32768.0;
+        }
+
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.playbackRate.value = this.audioSettings.playbackSpeed;
+
+        this.gainNode = this.audioContext.createGain();
+        this.gainNode.gain.value = 1.0;
+
+        this.noiseGateFilter = this.audioContext.createBiquadFilter();
+        this.noiseGateFilter.type = 'highpass';
+        this.noiseGateFilter.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
+        this.noiseGateFilter.Q.value = 0.5;
+
+        this.lowShelfFilter = this.audioContext.createBiquadFilter();
+        this.lowShelfFilter.type = 'lowshelf';
+        this.lowShelfFilter.frequency.value = 200;
+        this.lowShelfFilter.gain.value = -this.audioSettings.bassCut * 20;
+
+        this.highShelfFilter = this.audioContext.createBiquadFilter();
+        this.highShelfFilter.type = 'highshelf';
+        this.highShelfFilter.frequency.value = 3000;
+        this.highShelfFilter.gain.value = this.audioSettings.trebleBoost * 15;
+
+        source.connect(this.noiseGateFilter);
+        this.noiseGateFilter.connect(this.lowShelfFilter);
+        this.lowShelfFilter.connect(this.highShelfFilter);
+        this.highShelfFilter.connect(this.gainNode);
+        this.gainNode.connect(this.audioContext.destination);
+
+        this.currentSource = source;
+        source.onended = () => {
+            this.currentSource = null;
+            if (onEnded) onEnded();
+        };
+        source.start();
     }
 
     playPCMBuffer(pcmData, sampleRate) {

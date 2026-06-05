@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
 )
@@ -38,6 +39,8 @@ func InitializeServer() {
 	registerHandlers()
 	// 启动llama.cpp代理服务器
 	llama.Init()
+	// 初始化TTS语音合成引擎
+	initTTSEngine()
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文
@@ -80,6 +83,13 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 	<-quit
 	// 执行服务器关闭流程
 	shutdownServer(server)
+}
+
+// initTTSEngine 初始化TTS语音合成引擎
+func initTTSEngine() {
+	modelDir := *config.LocalDir + "/models/Qwen3-TTS"
+	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
+	module.InitTTSEngine(modelDir, refAudio)
 }
 
 // shutdownServer 优雅关闭服务器

@@ -3,8 +3,6 @@ import { Config, PostMessage, ToolCall } from '../index';
 export class OnlyData {
     /** 自定义配置项 */
     public static customConfig: Config = { cloud: {}, server: {} };
-    /** 工具调用配置 */
-    public static toolCall: ToolCall[] = [];
     /** 未读记录列表 */
     public static unreadRecords: PostMessage[] = [];
     /** 支持的图片文件扩展名 */

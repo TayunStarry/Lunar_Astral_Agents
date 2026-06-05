@@ -83,7 +83,7 @@ export class AgentDefine {
 			// 覆写 视频描述模型 上下文
 			this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
 			/** 调用模型进行画面总结 */
-			const summaryRequest = this.descriptionRole.run([]);
+			const summaryRequest = this.descriptionRole.run([], []);
 			/** 模型总结结果 */
 			const summary = summaryRequest.body?.choices?.[0]?.message?.content;
 			// 过滤空字符串和仅包含空格的字符串
@@ -94,7 +94,7 @@ export class AgentDefine {
 			// 覆写 视频摘要模型 上下文
 			this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
 			/** 调用模型进行视频总结 */
-			const summaryRequest = this.summaryRole.run([]);
+			const summaryRequest = this.summaryRole.run([], []);
 			/** 模型视频总结结果 */
 			videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
 		}

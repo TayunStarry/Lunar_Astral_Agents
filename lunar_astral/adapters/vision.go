@@ -140,12 +140,12 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		steps = int(s)
 	}
 
-	strength := 0.7
+	strength := 0.75
 	if st, ok := params["strength"].(float64); ok {
 		strength = st
 	}
 
-	cfgScale := 7.5
+	cfgScale := 1.0
 	if cs, ok := params["cfgScale"].(float64); ok {
 		cfgScale = cs
 	}

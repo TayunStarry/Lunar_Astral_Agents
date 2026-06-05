@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole } from '../index';
+import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole, ToolCall } from '../index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -10,7 +10,7 @@ export class BaseConfig {
 	/** 是否启用工具调用 */
 	protected enableTools: boolean = true;
 	/** 消息列表 */
-	protected messages: PostMessage[] = [];
+	public messages: PostMessage[] = [];
 	/** RAG消息列表 */
 	protected ragMessages: PostMessage[] = [];
 	/** 运行时消息列表 */
@@ -106,19 +106,30 @@ class ConfigModifier extends PromptProcessor {
 /** 模型构建器 */
 export class ModelBuilder extends ConfigModifier {
 	/** 运行模型，可输入额外的上下文补充 */
-	public run(appendContext: PostMessage[]): modelResponse {
-		/** 检查消息列表中是否包含工具调用消息 */
-		const isIncludesTools = this.messages.some((message) => message.role === 'tool');
+	public run(appendContext: PostMessage[], toolCall: ToolCall[]): modelResponse {
+		/** 模型请求体消息列表 */
+		const messages = [
+			// 系统提示词
+			{ role: 'system', content: this.systemPrompt },
+			// 追加的上下文(rag消息)
+			...appendContext,
+			// 早期历史消息
+			...this.messages.slice(0, -1),
+			// 运行时消息
+			...this.runtimeMessages,
+			// 最新消息
+			...this.messages.slice(-1)
+		];
 		/** 构建发给推理模型的请求体 */
-		const requestBody: InferencePayload = {
+		const requestBody = {
 			model: OnlyData.MultimodalName,
-			messages: [{ role: 'system', content: this.systemPrompt }, ...this.messages.slice(0, -1), ...appendContext, ...this.runtimeMessages, ...this.messages.slice(-1)],
+			messages: messages,
 			stream: this.stream,
-			tools: isIncludesTools ? [] : OnlyData.toolCall,
-			tool_choice: isIncludesTools ? 'none' : 'auto',
+			tools: toolCall,
+			tool_choice: 'auto',
 		};
-		// 如果禁用工具调用，则删除 tool_choice 和 tools 字段
-		if (!this.enableTools || !isIncludesTools) {
+		// 如果禁用工具调用或没有工具调用，删除 tool_choice 和 tools 字段
+		if (!this.enableTools || toolCall.length === 0) {
 			delete requestBody.tool_choice;
 			delete requestBody.tools;
 		};
@@ -142,10 +153,6 @@ export class ModelBuilder extends ConfigModifier {
 		if (error) throw error;
 		// 返回模型响应
 		return result;
-	}
-	/** 获取对话消息列表（只读） */
-	public get contextMessages(): PostMessage[] {
-		return this.messages;
 	}
 	/** 从 chromem-go 查询相关消息并填充 ragMessages */
 	public queryRagMessages(): this {

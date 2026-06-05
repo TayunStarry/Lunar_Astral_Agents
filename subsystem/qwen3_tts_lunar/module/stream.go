@@ -48,7 +48,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 		chunkFrames = 50
 	}
 
-	ctxID, err := synthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
+	ctxID, err := SynthesizeTextStreaming(req.Text, req.RefAudio, req.LanguageID, chunkFrames, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
 	if err != nil {
 		sendWSResponse(conn, WSStreamResponse{
 			Type:  "error",
@@ -77,7 +77,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 	for !done {
 		select {
-		case chunk, ok := <-ctx.ch:
+		case chunk, ok := <-ctx.Ch:
 			if !ok {
 				done = true
 				continue
@@ -87,7 +87,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 			if chunk.IsFinal {
 				chunkIndex++
 				if len(chunk.Samples) > 0 {
-					pcmData := float32ToPCM16(chunk.Samples)
+					pcmData := Float32ToPCM16(chunk.Samples)
 					audioBase64 := base64.StdEncoding.EncodeToString(pcmData)
 					totalSamples += int32(len(chunk.Samples))
 					sendMu.Lock()
@@ -117,7 +117,7 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 
 			if len(chunk.Samples) > 0 {
 				chunkIndex++
-				pcmData := float32ToPCM16(chunk.Samples)
+				pcmData := Float32ToPCM16(chunk.Samples)
 				audioBase64 := base64.StdEncoding.EncodeToString(pcmData)
 				totalSamples += int32(len(chunk.Samples))
 
@@ -132,12 +132,12 @@ func TTSStreamHandler(w http.ResponseWriter, r *http.Request) {
 				sendMu.Unlock()
 			}
 
-		case <-ctx.done:
-			if ctx.err != nil {
+		case <-ctx.Done:
+			if ctx.Err != nil {
 				sendMu.Lock()
 				sendWSResponse(conn, WSStreamResponse{
 					Type:  "error",
-					Error: ctx.err.Error(),
+					Error: ctx.Err.Error(),
 				})
 				sendMu.Unlock()
 			} else {
@@ -169,7 +169,7 @@ func sendWSResponse(conn *websocket.Conn, resp WSStreamResponse) {
 	}
 }
 
-func float32ToPCM16(samples []float32) []byte {
+func Float32ToPCM16(samples []float32) []byte {
 	buf := make([]byte, len(samples)*2)
 	for i, s := range samples {
 		val := int16(math.Max(-32768, math.Min(32767, float64(s*32767.0))))

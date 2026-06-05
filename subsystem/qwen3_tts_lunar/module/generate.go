@@ -65,12 +65,12 @@ type StreamPCMChunk struct {
 
 // streamingContext 用于存储流式上下文
 type streamingContext struct {
-	// ch 用于存储PCM音频数据的通道
-	ch chan StreamPCMChunk
-	// done 用于存储流式上下文是否完成的通道
-	done chan struct{}
-	// err 用于存储流式上下文的错误信息
-	err error
+	// Ch 用于存储PCM音频数据的通道
+	Ch chan StreamPCMChunk
+	// Done 用于存储流式上下文是否完成的通道
+	Done chan struct{}
+	// Err 用于存储流式上下文的错误信息
+	Err error
 	// abort 用于存储流式上下文是否被取消
 	abort atomic.Int32
 }
@@ -373,7 +373,7 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 	return embedding, nil
 }
 
-func synthesizeText(text, refAudio string, languageID int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) ([]float32, error) {
+func SynthesizeText(text, refAudio string, languageID int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) ([]float32, error) {
 	if globalTTS == nil || globalTTS.handle == nil {
 		return nil, fmt.Errorf("TTS 引擎未初始化")
 	}
@@ -448,7 +448,7 @@ func synthesizeText(text, refAudio string, languageID int32, temperature float32
 	return samples, nil
 }
 
-func encodePCMToWAV(samples []float32, sampleRate int) []byte {
+func EncodePCMToWAV(samples []float32, sampleRate int) []byte {
 	numSamples := len(samples)
 	byteRate := sampleRate * 2
 	blockAlign := 2
@@ -541,7 +541,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	samples, err := synthesizeText(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
+	samples, err := SynthesizeText(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
 	if err != nil {
 		logger.Error("QWEN-TTS", "合成失败: [%s] %v", req.Text, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -552,7 +552,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wavData := encodePCMToWAV(samples, 24000)
+	wavData := EncodePCMToWAV(samples, 24000)
 	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
 
 	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
@@ -666,15 +666,15 @@ func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_
 	}
 
 	select {
-	case ctx.ch <- chunk:
+	case ctx.Ch <- chunk:
 		return 0
-	case <-ctx.done:
+	case <-ctx.Done:
 		ctx.abort.Store(1)
 		return 1
 	}
 }
 
-func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) (int32, error) {
+func SynthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) (int32, error) {
 	if globalTTS == nil || globalTTS.handle == nil {
 		return 0, fmt.Errorf("TTS 引擎未初始化")
 	}
@@ -699,8 +699,8 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 	streamCtxCounter++
 	ctxID := streamCtxCounter
 	ctx := &streamingContext{
-		ch:   make(chan StreamPCMChunk, 4),
-		done: make(chan struct{}),
+		Ch:   make(chan StreamPCMChunk, 4),
+		Done: make(chan struct{}),
 	}
 	streamCtxMap[ctxID] = ctx
 	streamCtxMapMu.Unlock()
@@ -757,12 +757,41 @@ func synthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrame
 
 		if result != 0 {
 			errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
-			ctx.err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
+			ctx.Err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
 		}
-		close(ctx.done)
+		close(ctx.Done)
 	}()
 
 	return ctxID, nil
+}
+
+// AbortStreamContext 中止指定流式上下文的合成操作
+func AbortStreamContext(ctxID int32) {
+	streamCtxMapMu.Lock()
+	ctx, exists := streamCtxMap[ctxID]
+	streamCtxMapMu.Unlock()
+	if exists {
+		ctx.abort.Store(1)
+	}
+}
+
+// GetStreamChannel 获取指定流式上下文的音频通道和完成信号
+func GetStreamChannel(ctxID int32) (<-chan StreamPCMChunk, <-chan struct{}, error) {
+	streamCtxMapMu.Lock()
+	ctx, exists := streamCtxMap[ctxID]
+	streamCtxMapMu.Unlock()
+	if !exists {
+		return nil, nil, fmt.Errorf("流式上下文未找到")
+	}
+	return ctx.Ch, ctx.Done, nil
+}
+
+// GetStreamContext 获取指定流式上下文，用于检查错误等
+func GetStreamContext(ctxID int32) (*streamingContext, bool) {
+	streamCtxMapMu.Lock()
+	ctx, exists := streamCtxMap[ctxID]
+	streamCtxMapMu.Unlock()
+	return ctx, exists
 }
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
