@@ -657,10 +657,6 @@ var agentSystem = (function (exports) {
                         formatMessages.push({ role: 'user', content: summary });
                 }
             this.messages = formatMessages;
-            const latestRole = this.messages.slice(-1)[0].role;
-            if (latestRole === 'user' || latestRole === 'assistant')
-                return;
-            this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
         }
         analyzeMessageResponse(message, cache, source) {
             try {
@@ -732,7 +728,7 @@ var agentSystem = (function (exports) {
         }
     }
 
-    class Prompt extends ModelBuilder {
+    let Prompt$1 = class Prompt extends ModelBuilder {
         defaultExpressionPrompt = [
             '温柔的表情,开心的笑容,脸颊泛红',
             '害羞的表情,抿嘴微笑,眼神躲闪',
@@ -759,8 +755,8 @@ var agentSystem = (function (exports) {
             const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
             return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{environment}', environment || '');
         }
-    }
-    class Toolchain extends Prompt {
+    };
+    let Toolchain$1 = class Toolchain extends Prompt$1 {
         roleTool = [
             {
                 type: "function",
@@ -777,14 +773,6 @@ var agentSystem = (function (exports) {
                             "negative_prompt": {
                                 type: "string",
                                 description: "负面提示文本,用于排除图像中不希望出现的元素"
-                            },
-                            "use_reference": {
-                                type: "boolean",
-                                description: "是否使用上一次生成的图像作为参考,默认值为 false"
-                            },
-                            "strength": {
-                                type: "number",
-                                description: "参考图像的影响强度,取值范围为 0 到 1,默认值为 0.65"
                             },
                             "cfg_scale": {
                                 type: "number",
@@ -844,12 +832,8 @@ var agentSystem = (function (exports) {
                 const imageParams = {
                     prompt: prompt,
                     negativePrompt: args.negative_prompt || '',
-                    strength: args.strength ?? 0.65,
                     cfgScale: args.cfg_scale ?? 1.0,
                 };
-                if (args.use_reference) {
-                    console.log('[画家] 使用参考图像模式');
-                }
                 const [result, error] = generateImage(imageParams);
                 if (error) {
                     console.error('[画家] 图像生成失败:', error);
@@ -905,21 +889,20 @@ var agentSystem = (function (exports) {
                 return `自画像生成异常: ${error}`;
             }
         }
-    }
-    class PainterRole extends Toolchain {
+    };
+    class PainterRole extends Toolchain$1 {
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
         }
         createImageRendering(source, count = 10) {
             this.coverContext([...source.dialogueRole.messages, ...source.unreadContext]);
-            const recentMessages = this.messages.slice(-count);
-            const messageTexts = [];
-            for (const message of recentMessages) {
+            const unreadTexts = [];
+            for (const message of source.unreadContext.slice(-count)) {
                 if (typeof message.content === 'string')
-                    messageTexts.push(message.content);
+                    unreadTexts.push(message.content);
                 else
                     message.content.forEach(item => { if (item.type === 'text')
-                        messageTexts.push(item.text); });
+                        unreadTexts.push(item.text); });
             }
             let allowGeneration = false;
             const imageKeywords = [
@@ -944,7 +927,7 @@ var agentSystem = (function (exports) {
                 /插画/,
                 /(?:做|弄|整)(?:一(?:张|幅|个))?.*(?:图|画)/,
             ];
-            messageTexts.forEach(text => imageKeywords.forEach(keyword => { if (keyword.test(text))
+            unreadTexts.forEach(text => imageKeywords.forEach(keyword => { if (keyword.test(text))
                 allowGeneration = true; }));
             if (!allowGeneration)
                 return true;
@@ -998,7 +981,46 @@ var agentSystem = (function (exports) {
         }
     }
 
-    class OrganizeRole extends ModelBuilder {
+    class Prompt extends ModelBuilder {
+        buildOrganizePrompt(records) {
+            const now = new Date();
+            const recordTexts = records.map((msg, idx) => {
+                const content = typeof msg.content === 'string'
+                    ? msg.content
+                    : JSON.stringify(msg.content);
+                const preview = content.length > 300 ? content.slice(0, 300) + '...' : content;
+                const timestamp = now.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+                return `[记录${idx + 1}] 时间:${timestamp} | 角色:${msg.role} | 内容:${preview}`;
+            });
+            return `请整理以下 ${records.length} 条对话记录:\n\n${recordTexts.join('\n')}\n\n请按照流程操作：先查询已有档案，再生成结构化描述，最后存储到向量数据库。每条记录必须严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}。完成后请输出整理报告。`;
+        }
+        ensureTimestampInRecord(content) {
+            const timestampRegex = /^\[([^\]]+)\]/;
+            if (timestampRegex.test(content)) {
+                return content;
+            }
+            const now = new Date();
+            const timestamp = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+            return `[${timestamp}] ${content}`;
+        }
+    }
+    class Toolchain extends Prompt {
         organizeTools = [
             {
                 type: "function",
@@ -1056,129 +1078,6 @@ var agentSystem = (function (exports) {
                 }
             }
         ];
-        constructor() {
-            super(fileView('prompts/organizeRole.md')[0]);
-        }
-        organizeHistoricalRecords() {
-            console.log('[编纂者] 开始组织历史记录');
-            if (OnlyData.unreadRecords.length === 0) {
-                console.log('[编纂者] 没有未读记录需要整理');
-                return;
-            }
-            if (!BaseConfig.chromemReady) {
-                BaseConfig.initChromem();
-                if (!BaseConfig.chromemReady) {
-                    console.warn('[编纂者] 向量数据库未就绪，保留未读记录待下次整理');
-                    return;
-                }
-            }
-            try {
-                const organizePrompt = this.buildOrganizePrompt(OnlyData.unreadRecords);
-                this.coverContext({ role: 'user', content: organizePrompt });
-                this.runtimeMessages = [
-                    { role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }
-                ];
-                this.executeOrganizeLoop();
-                console.log('[编纂者] 历史记录组织完成');
-                OnlyData.unreadRecords = [];
-            }
-            catch (error) {
-                console.error('[编纂者] 组织历史记录失败，保留未读记录待下次重试:', error);
-            }
-        }
-        persistDiscardedMessages(discarded) {
-            console.log('[编纂者] 开始持久化被抛弃的消息');
-            if (!BaseConfig.chromemReady)
-                BaseConfig.initChromem();
-            if (!BaseConfig.chromemReady)
-                return;
-            for (const message of discarded) {
-                const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-                chromemAdd(message.role, content);
-            }
-        }
-        queryHistoricalRecords(queryText, topK = 10) {
-            if (!BaseConfig.chromemReady)
-                BaseConfig.initChromem();
-            if (!BaseConfig.chromemReady)
-                return [];
-            const [results, error] = chromemQuery(queryText, topK);
-            if (error) {
-                console.error('[编纂者] 查询历史记录失败:', error);
-                return [];
-            }
-            if (!results || results.length === 0)
-                return [];
-            return results.map((r) => ({
-                id: r.id,
-                role: r.role,
-                content: r.content
-            }));
-        }
-        getHistoricalContext(maxResults = 5) {
-            const records = this.queryHistoricalRecords('近期对话 重要事件', maxResults);
-            if (records.length === 0)
-                return '';
-            return records.map(r => r.content).join('\n');
-        }
-        buildOrganizePrompt(records) {
-            const now = new Date();
-            const recordTexts = records.map((msg, idx) => {
-                const content = typeof msg.content === 'string'
-                    ? msg.content
-                    : JSON.stringify(msg.content);
-                const preview = content.length > 300 ? content.slice(0, 300) + '...' : content;
-                const timestamp = now.toLocaleString('zh-CN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                });
-                return `[记录${idx + 1}] 时间:${timestamp} | 角色:${msg.role} | 内容:${preview}`;
-            });
-            return `请整理以下 ${records.length} 条对话记录:\n\n${recordTexts.join('\n')}\n\n请按照流程操作：先查询已有档案，再生成结构化描述，最后存储到向量数据库。每条记录必须严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}。完成后请输出整理报告。`;
-        }
-        executeOrganizeLoop() {
-            const MAX_ITERATIONS = 5;
-            for (let i = 0; i < MAX_ITERATIONS; i++) {
-                console.log(`[编纂者] 第 ${i + 1} 轮模型推理`);
-                let response;
-                try {
-                    response = this.organizeModelRun();
-                }
-                catch (error) {
-                    console.error(`[编纂者] 第 ${i + 1} 轮推理失败:`, error);
-                    break;
-                }
-                const choice = response.body?.choices?.[0];
-                if (!choice) {
-                    console.log('[编纂者] 模型返回空结果，结束循环');
-                    break;
-                }
-                const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0) {
-                    const replyContent = choice.message?.content || '';
-                    console.log('[编纂者] 模型完成整理:', replyContent.slice(0, 300));
-                    if (replyContent) {
-                        this.writeContext(choice.message);
-                    }
-                    break;
-                }
-                console.log(`[编纂者] 第 ${i + 1} 轮工具调用, 共 ${toolCalls.length} 个工具`);
-                this.writeContext(choice.message);
-                for (const toolCall of toolCalls) {
-                    const result = this.executeOrganizeTool(toolCall);
-                    this.writeContext({
-                        role: 'tool',
-                        content: result,
-                        tool_call_id: toolCall.id
-                    });
-                }
-            }
-        }
         executeOrganizeTool(toolCall) {
             const funcName = toolCall.function.name;
             let args = {};
@@ -1255,50 +1154,110 @@ var agentSystem = (function (exports) {
             }
             return result ? '记录已成功存储到向量数据库' : '存储操作已完成但未返回确认信息';
         }
-        ensureTimestampInRecord(content) {
-            const timestampRegex = /^\[([^\]]+)\]/;
-            if (timestampRegex.test(content)) {
-                return content;
-            }
-            const now = new Date();
-            const timestamp = now.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-            return `[${timestamp}] ${content}`;
+    }
+    class OrganizeRole extends Toolchain {
+        constructor() {
+            super(fileView('prompts/organizeRole.md')[0]);
         }
-        organizeModelRun() {
-            const requestBody = {
-                model: OnlyData.MultimodalName,
-                messages: [
-                    { role: 'system', content: this.systemPrompt },
-                    ...this.messages,
-                    ...this.runtimeMessages
-                ],
-                stream: false,
-                tools: this.organizeTools,
-                tool_choice: 'auto',
-            };
-            const headers = {
-                Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
-                'Content-Type': 'application/json',
-            };
-            const modelRequest = {
-                method: 'POST',
-                crossDomain: true,
-                headers,
-                body: JSON.stringify(requestBody)
-            };
-            const endpoint = '/chat/completions';
-            const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
-            if (error)
-                throw error;
-            return result;
+        organizeHistoricalRecords() {
+            console.log('[编纂者] 开始组织历史记录');
+            if (OnlyData.unreadRecords.length === 0) {
+                console.log('[编纂者] 没有未读记录需要整理');
+                return;
+            }
+            if (!BaseConfig.chromemReady) {
+                BaseConfig.initChromem();
+                if (!BaseConfig.chromemReady) {
+                    console.warn('[编纂者] 向量数据库未就绪，保留未读记录待下次整理');
+                    return;
+                }
+            }
+            try {
+                const organizePrompt = this.buildOrganizePrompt(OnlyData.unreadRecords);
+                this.coverContext({ role: 'user', content: organizePrompt });
+                this.runtimeMessages = [
+                    { role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }
+                ];
+                this.executeOrganizeLoop();
+                console.log('[编纂者] 历史记录组织完成');
+                OnlyData.unreadRecords = [];
+            }
+            catch (error) {
+                console.error('[编纂者] 组织历史记录失败，保留未读记录待下次重试:', error);
+            }
+        }
+        persistDiscardedMessages(discarded) {
+            console.log('[编纂者] 开始持久化被抛弃的消息');
+            if (!BaseConfig.chromemReady)
+                BaseConfig.initChromem();
+            if (!BaseConfig.chromemReady)
+                return;
+            for (const message of discarded) {
+                const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+                chromemAdd(message.role, content);
+            }
+        }
+        queryHistoricalRecords(queryText, topK = 10) {
+            if (!BaseConfig.chromemReady)
+                BaseConfig.initChromem();
+            if (!BaseConfig.chromemReady)
+                return [];
+            const [results, error] = chromemQuery(queryText, topK);
+            if (error) {
+                console.error('[编纂者] 查询历史记录失败:', error);
+                return [];
+            }
+            if (!results || results.length === 0)
+                return [];
+            return results.map((r) => ({
+                id: r.id,
+                role: r.role,
+                content: r.content
+            }));
+        }
+        getHistoricalContext(maxResults = 5) {
+            const records = this.queryHistoricalRecords('近期对话 重要事件', maxResults);
+            if (records.length === 0)
+                return '';
+            return records.map(r => r.content).join('\n');
+        }
+        executeOrganizeLoop() {
+            const MAX_ITERATIONS = 5;
+            for (let i = 0; i < MAX_ITERATIONS; i++) {
+                console.log(`[编纂者] 第 ${i + 1} 轮模型推理`);
+                let response;
+                try {
+                    response = this.run([], this.organizeTools);
+                }
+                catch (error) {
+                    console.error(`[编纂者] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log('[编纂者] 模型返回空结果，结束循环');
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0) {
+                    const replyContent = choice.message?.content || '';
+                    console.log('[编纂者] 模型完成整理:', replyContent.slice(0, 300));
+                    if (replyContent) {
+                        this.writeContext(choice.message);
+                    }
+                    break;
+                }
+                console.log(`[编纂者] 第 ${i + 1} 轮工具调用, 共 ${toolCalls.length} 个工具`);
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    const result = this.executeOrganizeTool(toolCall);
+                    this.writeContext({
+                        role: 'tool',
+                        content: result,
+                        tool_call_id: toolCall.id
+                    });
+                }
+            }
         }
     }
 
@@ -1429,10 +1388,18 @@ var agentSystem = (function (exports) {
                     await this.batchProcessVideoFiles();
                     this.painterRole.createImageRendering(this);
                     await this.createChatMessage();
-                    const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.randomDefaultMessage;
-                    pushContext(messageType, messageResponse);
+                    if (!this.finalResponse.trim().length) {
+                        this.finalResponse = this.randomDefaultMessage;
+                        errorCount++;
+                    }
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
+                    }
+                    synthesizeSpeech(this.finalResponse);
+                    const cleanedResponse = cleanTextForTTS(this.finalResponse);
+                    if (cleanedResponse.trim().length) {
+                        const chunks = splitSentences(cleanedResponse);
+                        chunks.forEach(chunk => pushContext(messageType, chunk));
                     }
                 }
                 catch (error) {
@@ -1483,6 +1450,88 @@ var agentSystem = (function (exports) {
     ];
     AgentExample.testMessageWrite('user', message, 1500);
 
+    function cleanTextForTTS(text) {
+        if (!text)
+            return '';
+        let processed = text;
+        processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        processed = processed.replace(/```[a-zA-Z][a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        processed = processed.replace(/```[\s\S]*?```/g, '');
+        processed = processed.replace(/`[^`]*`/g, '');
+        processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
+        processed = processed.replace(/\[.*?\]\(.*?\)/g, '');
+        processed = processed.replace(/<[^>]*>/g, '');
+        processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+        processed = processed.replace(/\*/g, '');
+        processed = processed.replace(/\r?\n/g, ' ');
+        processed = processed.replace(/\（[^）]*\）/g, '');
+        processed = processed.replace(/\([^)]*\)/g, '');
+        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s~' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!';
+        const whitelist = new RegExp(`[^${allowed}]`, 'g');
+        processed = processed.replace(whitelist, '，');
+        processed = processed.replace(/\s+/g, ' ');
+        return processed.trim();
+    }
+    function splitSentences(text) {
+        if (!text)
+            return [];
+        const TARGET_LENGTH = 30;
+        const PUNCTUATION = /[。？！…，、；：,;:\.\?!]/;
+        const sentences = [];
+        let remaining = text;
+        while (remaining.length > 0) {
+            if (remaining.length <= TARGET_LENGTH * 1.5) {
+                sentences.push(remaining.trim());
+                break;
+            }
+            let splitPos = -1;
+            const searchEnd = Math.min(remaining.length, TARGET_LENGTH + Math.floor(TARGET_LENGTH * 0.5));
+            for (let i = TARGET_LENGTH; i < searchEnd; i++) {
+                if (PUNCTUATION.test(remaining[i])) {
+                    splitPos = i + 1;
+                    break;
+                }
+            }
+            if (splitPos === -1) {
+                const searchStart = Math.max(0, TARGET_LENGTH - Math.floor(TARGET_LENGTH * 0.5));
+                for (let i = TARGET_LENGTH - 1; i >= searchStart; i--) {
+                    if (PUNCTUATION.test(remaining[i])) {
+                        splitPos = i + 1;
+                        break;
+                    }
+                }
+            }
+            if (splitPos === -1 || splitPos === 0) {
+                splitPos = TARGET_LENGTH;
+            }
+            const sentence = remaining.slice(0, splitPos).trim();
+            if (sentence.length > 0) {
+                sentences.push(sentence);
+            }
+            remaining = remaining.slice(splitPos);
+        }
+        return sentences;
+    }
+    function synthesizeSpeech(text) {
+        const cleaned = cleanTextForTTS(text);
+        if (!cleaned)
+            return;
+        const sentences = splitSentences(cleaned);
+        if (sentences.length === 0)
+            return;
+        for (const sentence of sentences) {
+            try {
+                const [audio, err] = tts(sentence);
+                if (err) {
+                    console.error(`TTS合成失败: [${sentence}]`, err);
+                }
+            }
+            catch (e) {
+                console.error(`TTS合成异常: [${sentence}]`, e);
+            }
+        }
+    }
+
     exports.AgentDefine = AgentDefine;
     exports.BaseConfig = BaseConfig;
     exports.CalculateMedian = CalculateMedian;
@@ -1498,13 +1547,16 @@ var agentSystem = (function (exports) {
     exports.RandomFloor = RandomFloor;
     exports.ThinkType = ThinkType;
     exports.calculateFileHash = calculateFileHash;
+    exports.cleanTextForTTS = cleanTextForTTS;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
     exports.getPromptFromDatabase = getPromptFromDatabase;
     exports.queryFromDatabase = queryFromDatabase;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToDatabase = savePromptToDatabase;
+    exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
+    exports.synthesizeSpeech = synthesizeSpeech;
     exports.toBtoaString = toBtoaString;
 
     return exports;

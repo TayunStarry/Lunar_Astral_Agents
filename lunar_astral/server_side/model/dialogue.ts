@@ -89,12 +89,12 @@ export class DialogueRole extends ModelBuilder {
 		}
 		// 覆写处理器模型的上下文为格式化后的消息数组
 		this.messages = formatMessages;
-		/** 最新消息的角色 */
-		const latestRole = this.messages.slice(-1)[0].role;
-		// 如果最新消息是用户,则不处理
-		if (latestRole === 'user' || latestRole === 'assistant') return;
-		// 如果最新消息是模型,则添加提示消息
-		this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
+		// /** 最新消息的角色 */
+		// const latestRole = this.messages.slice(-1)[0].role;
+		// // 如果最新消息是用户,则不处理
+		// if (latestRole === 'user' || latestRole === 'assistant') return;
+		// // 如果最新消息是模型,则添加提示消息
+		// this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
 	}
 	/** 处理聊天消息响应 */
 	protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {

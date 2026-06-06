@@ -106,3 +106,23 @@ export interface ToolCallParameters {
     /** 其他自定义参数 */
     [key: string]: any;
 }
+
+/** TTS语音合成参数接口 */
+export interface TTSParams {
+    /** 参考音频文件路径 */
+    refAudio?: string;
+    /** 生成温度，默认0.8 */
+    temperature?: number;
+    /** Top-K采样参数，默认50 */
+    topK?: number;
+    /** Top-P采样参数，默认0.9 */
+    topP?: number;
+    /** 最大生成token数，默认2048 */
+    maxTokens?: number;
+    /** 重复惩罚系数，默认1.1 */
+    repetitionPenalty?: number;
+    /** 推理线程数，默认4 */
+    threads?: number;
+    /** 是否禁用缓存映射，默认false */
+    disableCache?: boolean;
+}

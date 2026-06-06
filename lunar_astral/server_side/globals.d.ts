@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage } from './index';
+import type { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
 
 declare global {
     /**
@@ -157,4 +157,16 @@ declare global {
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
     function chromemDelete(id: string): [boolean, Error | null];
+    /**
+     * 文本转语音生成
+     * 
+     * 接收文本输入参数，调用TTS合成引擎生成音频数据，进行Base64编码后通过WebSocket广播至所有已连接的客户端
+     * 
+     * @param {string} text 要合成的文本内容
+     * 
+     * @param {TTSParams} [params] 可选的合成参数配置
+     * 
+     * @returns {[string, Error | null]} 包含合成结果的元组，[音频数据(Base64编码的WAV), 错误信息]
+     */
+    function tts(text: string, params?: TTSParams): [string, Error | null];
 }

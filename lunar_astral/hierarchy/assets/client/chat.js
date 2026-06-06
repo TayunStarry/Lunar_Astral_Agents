@@ -1,5 +1,4 @@
 import { randomBorderColor, escapeHtml, clearContainer } from './util.js';
-import { TTS } from './tts.js';
 
 function processThinkTags(content) {
     return content
@@ -194,18 +193,6 @@ function createMessageElement(message) {
     const header = document.createElement('div');
     header.className = 'message-header';
     header.textContent = message.role === 'user' ? '你' : '月华';
-
-    // 添加扬声器按钮（仅助理消息）
-    if (message.role === 'assistant' && message.audioBase64) {
-        const speakerBtn = document.createElement('button');
-        speakerBtn.className = 'speaker-btn';
-        speakerBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
-        speakerBtn.onclick = () => {
-            const arrayBuffer = TTS.base64ToArrayBuffer(message.audioBase64);
-            TTS.playAudioBuffer(arrayBuffer);
-        };
-        header.appendChild(speakerBtn);
-    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';

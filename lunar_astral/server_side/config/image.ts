@@ -88,10 +88,6 @@ export interface DiffusionGenerationParams {
     prompt: string;
     /** 负面提示词 */
     negative_prompt?: string;
-    /** 是否使用参考图片 */
-    use_reference?: boolean;
-    /** 图生图强度 */
-    strength?: number;
     /** 提示词引导系数 */
     cfg_scale?: number;
 }

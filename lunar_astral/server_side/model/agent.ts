@@ -1,4 +1,4 @@
-import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, Clamp, OnlyData } from '../index';
+import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, synthesizeSpeech, cleanTextForTTS, splitSentences } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -69,12 +69,26 @@ class LunarAgent extends AgentDefine {
 				// 创建消息
 				await this.createChatMessage();
 				/** 消息响应 */
-				const messageResponse = this.finalResponse.trim().length ? this.finalResponse : this.randomDefaultMessage;
-				// 将消息推送至外部客户端
-				pushContext(messageType, messageResponse);
+				if (!this.finalResponse.trim().length){
+					// 随机选择一个默认消息
+					this.finalResponse = this.randomDefaultMessage;
+					// 错误次数增加
+					errorCount++;
+				}
 				// 如果未读记录数超过10条，调用编纂者组织历史记录
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
+				}
+				// 执行语音合成
+				synthesizeSpeech(this.finalResponse);
+				/** 获取清洗后的文本 */
+				const cleanedResponse = cleanTextForTTS(this.finalResponse);
+				// 如果清洗后的文本不为空，进行句子切分
+				if (cleanedResponse.trim().length) {
+					/** 句子切分 */
+					const chunks = splitSentences(cleanedResponse);
+					// 遍历句子数组，将每个句子推送至外部客户端
+					chunks.forEach(chunk => pushContext(messageType, chunk));
 				}
 			}
 			catch (error) {

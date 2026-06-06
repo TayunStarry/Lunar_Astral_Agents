@@ -10,7 +10,7 @@ import (
 	"bridge_adapter/pkg/types"
 )
 
-const MaxMessageCache = 5
+const MaxMessageCache = 20
 
 var (
 	AppConfig    types.Config

@@ -60,6 +60,9 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("chromemAdd", adapters.chromemAdd)
 	vm.Set("chromemQuery", adapters.chromemQuery)
 	vm.Set("chromemDelete", adapters.chromemDelete)
+
+	// 注册TTS语音合成适配器
+	vm.Set("tts", adapters.tts)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境

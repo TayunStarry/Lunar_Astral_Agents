@@ -1,388 +1,213 @@
-class TTSManager {
-    allowLoading = true;
-    maxTextLength = 5000;
-    streamThreshold = 50;
+/**
+ * 基于队列的音频播放系统
+ *
+ * 当接收到WebSocket推送的音频数据时立即加入播放队列，
+ * 确保音频播放的顺序性，必须等待当前音频播放完成后才能开始播放队列中的下一个音频。
+ * 提供队列状态管理，包括队列长度监控、播放状态指示和异常处理机制。
+ */
 
-    constructor() {
-        this.audioContext = null;
-        this.currentSource = null;
+class AudioQueueManager {
+    /** @type {AudioContext|null} Web Audio API上下文 */
+    audioContext = null;
+    /** @type {AudioBufferSourceNode|null} 当前正在播放的音频源节点 */
+    currentSource = null;
+    /** @type {string[]} 待播放的音频Base64队列 */
+    queue = [];
+    /** @type {boolean} 是否正在播放 */
+    playing = false;
+    /** @type {number} 已播放的音频数量 */
+    playedCount = 0;
+    /** @type {number} 播放错误计数 */
+    errorCount = 0;
 
-        this.audioSettings = {
-            noiseReduction: 0.15,
-            playbackSpeed: 1.0,
-            trebleBoost: 0.0,
-            bassCut: 0.0
-        };
+    /** 音频处理参数 */
+    audioSettings = {
+        noiseReduction: 0.15,
+        playbackSpeed: 1.0,
+        trebleBoost: 0.0,
+        bassCut: 0.0
+    };
 
-        this.noiseGateFilter = null;
-        this.highShelfFilter = null;
-        this.lowShelfFilter = null;
-        this.gainNode = null;
+    /**
+     * 将Base64编码的WAV音频数据加入播放队列
+     *
+     * @param {string} audioBase64 - Base64编码的WAV音频数据
+     */
+    enqueue(audioBase64) {
+        if (!audioBase64) {
+            console.warn('AudioQueue: 收到空音频数据，已忽略');
+            return;
+        }
+        this.queue.push(audioBase64);
+        console.log(`AudioQueue: 音频入队, 队列长度=${this.queue.length}, 状态=${this.playing ? '播放中' : '空闲'}`);
+
+        // 如果当前未在播放，启动播放流程
+        if (!this.playing) {
+            this.playNext();
+        }
     }
 
-    cleanTextForTTS(text) {
-        if (!text) return '';
-        let processed = text;
-        processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
-        processed = processed.replace(/```[a-zA-Z][a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
-        processed = processed.replace(/```[\s\S]*?```/g, '');
-        processed = processed.replace(/`[^`]*`/g, '');
-        processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
-        processed = processed.replace(/\[.*?\]\(.*?\)/g, '');
-        processed = processed.replace(/<[^>]*>/g, '');
-        processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
-        processed = processed.replace(/\*/g, '');
-        processed = processed.replace(/\r?\n/g, ' ');
-        processed = processed.replace(/\（[^）]*\）/g, '');
-        processed = processed.replace(/\([^)]*\)/g, '');
-        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!';
-        const whitelist = new RegExp(`[^${allowed}]`, 'g');
-        processed = processed.replace(whitelist, '，');
-        processed = processed.replace(/\s+/g, ' ');
-        return processed.trim();
-    }
-
-    async generateAndPlay(text) {
-        if (!this.allowLoading) return null;
-
-        const processedText = this.cleanTextForTTS(text);
-        if (!processedText) {
-            console.warn('TTS: 清理后文本为空');
-            return null;
+    /**
+     * 播放队列中的下一个音频
+     *
+     * 顺序播放机制：仅当当前无音频播放时才从队列头部取出并播放，
+     * 播放完成后自动递归调用自身处理队列中的下一个音频。
+     */
+    playNext() {
+        // 队列为空，停止播放
+        if (this.queue.length === 0) {
+            this.playing = false;
+            this.currentSource = null;
+            console.log('AudioQueue: 队列已清空，播放结束');
+            return;
         }
 
-        if (processedText.length > this.maxTextLength) {
-            console.warn(`TTS: 文本长度超过限制 (${processedText.length} > ${this.maxTextLength})`);
-            this.showError('文本过长，请缩短后重试');
-            return null;
-        }
+        this.playing = true;
 
-        if (processedText.length > this.streamThreshold) {
-            return this.generateAndPlayStream(processedText);
-        }
+        // 从队列头部取出音频数据
+        const audioBase64 = this.queue.shift();
 
         try {
-            const res = await fetch('/tts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: processedText })
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => null);
-                const errorMsg = errorData?.error || errorData?.message || `请求失败 (${res.status})`;
-                throw new Error(errorMsg);
-            }
-
-            const data = await res.json();
-
-            if (!data.success) {
-                throw new Error(data.error || data.message || '语音生成失败');
-            }
-
-            if (!data.audio) {
-                throw new Error('响应中缺少音频数据');
-            }
-
-            const arrayBuffer = this.base64ToArrayBuffer(data.audio);
-            this.playAudioBuffer(arrayBuffer);
-            return data.audio;
+            const arrayBuffer = this.base64ToArrayBuffer(audioBase64);
+            this.decodeAndPlay(arrayBuffer);
         } catch (err) {
-            console.error('TTS 请求失败:', err);
-            this.showError(err.message || '语音生成失败');
-            return null;
+            console.error('AudioQueue: 音频数据处理失败:', err);
+            this.errorCount++;
+            // 出错时继续播放队列中的下一个
+            this.playNext();
         }
     }
 
-    playAudioBuffer(arrayBuffer) {
+    /**
+     * 解码音频数据并播放
+     *
+     * @param {ArrayBuffer} arrayBuffer - WAV音频的ArrayBuffer
+     */
+    decodeAndPlay(arrayBuffer) {
         if (!this.audioContext) {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        if (this.currentSource) {
-            try {
-                this.currentSource.stop();
-            } catch (e) { }
-            this.currentSource = null;
+        // 恢复被浏览器挂起的AudioContext
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
         }
 
         this.audioContext.decodeAudioData(
             arrayBuffer,
             (audioBuffer) => {
-                const source = this.audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.playbackRate.value = this.audioSettings.playbackSpeed;
-
-                this.gainNode = this.audioContext.createGain();
-                this.gainNode.gain.value = 1.0;
-
-                this.noiseGateFilter = this.audioContext.createBiquadFilter();
-                this.noiseGateFilter.type = 'highpass';
-                this.noiseGateFilter.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
-                this.noiseGateFilter.Q.value = 0.5;
-
-                this.lowShelfFilter = this.audioContext.createBiquadFilter();
-                this.lowShelfFilter.type = 'lowshelf';
-                this.lowShelfFilter.frequency.value = 200;
-                this.lowShelfFilter.gain.value = -this.audioSettings.bassCut * 20;
-
-                this.highShelfFilter = this.audioContext.createBiquadFilter();
-                this.highShelfFilter.type = 'highshelf';
-                this.highShelfFilter.frequency.value = 3000;
-                this.highShelfFilter.gain.value = this.audioSettings.trebleBoost * 15;
-
-                source.connect(this.noiseGateFilter);
-                this.noiseGateFilter.connect(this.lowShelfFilter);
-                this.lowShelfFilter.connect(this.highShelfFilter);
-                this.highShelfFilter.connect(this.gainNode);
-                this.gainNode.connect(this.audioContext.destination);
-
-                this.currentSource = source;
-                source.onended = () => {
-                    this.currentSource = null;
-                };
-                source.start();
+                this.playAudioBuffer(audioBuffer);
             },
             (err) => {
-                console.error('TTS: decodeAudioData failed', err);
-                this.showError('音频解码失败');
+                console.error('AudioQueue: 音频解码失败:', err);
+                this.errorCount++;
+                // 解码失败，继续播放下一个
+                this.playNext();
             }
         );
     }
 
-    async generateAndPlayStream(text) {
-        return new Promise((resolve) => {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/tts/stream`;
-            const ws = new WebSocket(wsUrl);
-
-            const chunkQueue = [];
-            const allPCMChunks = [];
-            let sampleRate = 24000;
-            let resolved = false;
-            let isPlaying = false;
-            let streamEnded = false;
-
-            const finalize = (result) => {
-                if (resolved) return;
-                resolved = true;
-                resolve(result);
-            };
-
-            const playNext = () => {
-                if (chunkQueue.length === 0) {
-                    isPlaying = false;
-                    if (streamEnded) {
-                        const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
-                        finalize(wavBase64);
-                    }
-                    return;
-                }
-                isPlaying = true;
-                const { pcmData, sr } = chunkQueue.shift();
-                this.playPCMChunk(pcmData, sr, () => playNext());
-            };
-
-            ws.onopen = () => {
-                ws.send(JSON.stringify({ text }));
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-
-                    if (msg.type === 'error') {
-                        ws.close();
-                        this.showError(msg.error || '流式合成失败');
-                        finalize(null);
-                        return;
-                    }
-
-                    if (msg.type === 'audio_chunk' && msg.audio) {
-                        const pcmBuffer = this.base64ToArrayBuffer(msg.audio);
-                        const pcmData = new Int16Array(pcmBuffer);
-                        if (msg.sample_rate) sampleRate = msg.sample_rate;
-
-                        allPCMChunks.push(pcmData);
-                        chunkQueue.push({ pcmData, sr: sampleRate });
-                        if (!isPlaying) playNext();
-                    }
-
-                    if (msg.type === 'final' || (msg.type === 'audio_chunk' && msg.is_final)) {
-                        ws.close();
-                        streamEnded = true;
-                        if (!isPlaying && chunkQueue.length === 0) {
-                            const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
-                            finalize(wavBase64);
-                        }
-                    }
-                } catch (err) {
-                    console.error('TTS 流式消息处理失败:', err);
-                }
-            };
-
-            ws.onerror = (err) => {
-                console.error('TTS WebSocket 错误:', err);
-                this.showError('流式连接失败');
-                finalize(null);
-            };
-
-            ws.onclose = () => {
-                if (!resolved) {
-                    streamEnded = true;
-                    if (!isPlaying && chunkQueue.length === 0) {
-                        const wavBase64 = this.encodePCMToWAVBase64(allPCMChunks, sampleRate);
-                        finalize(wavBase64);
-                    }
-                }
-            };
-        });
-    }
-
-    encodePCMToWAVBase64(pcmChunks, sampleRate) {
-        const totalLength = pcmChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-        const mergedPCM = new Int16Array(totalLength);
-        let offset = 0;
-        for (const chunk of pcmChunks) {
-            mergedPCM.set(chunk, offset);
-            offset += chunk.length;
-        }
-
-        const numSamples = mergedPCM.length;
-        const dataSize = numSamples * 2;
-        const buffer = new ArrayBuffer(44 + dataSize);
-        const view = new DataView(buffer);
-
-        const writeString = (offset, str) => {
-            for (let i = 0; i < str.length; i++) {
-                view.setUint8(offset + i, str.charCodeAt(i));
-            }
-        };
-
-        writeString(0, 'RIFF');
-        view.setUint32(4, 36 + dataSize, true);
-        writeString(8, 'WAVE');
-        writeString(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, 1, true);
-        view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * 2, true);
-        view.setUint16(32, 2, true);
-        view.setUint16(34, 16, true);
-        writeString(36, 'data');
-        view.setUint32(40, dataSize, true);
-
-        for (let i = 0; i < numSamples; i++) {
-            view.setInt16(44 + i * 2, mergedPCM[i], true);
-        }
-
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        return btoa(binary);
-    }
-
-    playPCMChunk(pcmData, sampleRate, onEnded) {
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        const audioBuffer = this.audioContext.createBuffer(1, pcmData.length, sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let i = 0; i < pcmData.length; i++) {
-            channelData[i] = pcmData[i] / 32768.0;
-        }
-
+    /**
+     * 播放AudioBuffer，构建音频处理链路
+     *
+     * 音频处理链路：Source → NoiseGate → LowShelf → HighShelf → Gain → Destination
+     * 播放完成后自动触发队列中下一个音频的播放。
+     *
+     * @param {AudioBuffer} audioBuffer - 解码后的音频缓冲区
+     */
+    playAudioBuffer(audioBuffer) {
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.playbackRate.value = this.audioSettings.playbackSpeed;
 
-        this.gainNode = this.audioContext.createGain();
-        this.gainNode.gain.value = 1.0;
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = 1.0;
 
-        this.noiseGateFilter = this.audioContext.createBiquadFilter();
-        this.noiseGateFilter.type = 'highpass';
-        this.noiseGateFilter.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
-        this.noiseGateFilter.Q.value = 0.5;
+        const noiseGateFilter = this.audioContext.createBiquadFilter();
+        noiseGateFilter.type = 'highpass';
+        noiseGateFilter.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
+        noiseGateFilter.Q.value = 0.5;
 
-        this.lowShelfFilter = this.audioContext.createBiquadFilter();
-        this.lowShelfFilter.type = 'lowshelf';
-        this.lowShelfFilter.frequency.value = 200;
-        this.lowShelfFilter.gain.value = -this.audioSettings.bassCut * 20;
+        const lowShelfFilter = this.audioContext.createBiquadFilter();
+        lowShelfFilter.type = 'lowshelf';
+        lowShelfFilter.frequency.value = 200;
+        lowShelfFilter.gain.value = -this.audioSettings.bassCut * 20;
 
-        this.highShelfFilter = this.audioContext.createBiquadFilter();
-        this.highShelfFilter.type = 'highshelf';
-        this.highShelfFilter.frequency.value = 3000;
-        this.highShelfFilter.gain.value = this.audioSettings.trebleBoost * 15;
+        const highShelfFilter = this.audioContext.createBiquadFilter();
+        highShelfFilter.type = 'highshelf';
+        highShelfFilter.frequency.value = 3000;
+        highShelfFilter.gain.value = this.audioSettings.trebleBoost * 15;
 
-        source.connect(this.noiseGateFilter);
-        this.noiseGateFilter.connect(this.lowShelfFilter);
-        this.lowShelfFilter.connect(this.highShelfFilter);
-        this.highShelfFilter.connect(this.gainNode);
-        this.gainNode.connect(this.audioContext.destination);
+        source.connect(noiseGateFilter);
+        noiseGateFilter.connect(lowShelfFilter);
+        lowShelfFilter.connect(highShelfFilter);
+        highShelfFilter.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
 
         this.currentSource = source;
+
         source.onended = () => {
             this.currentSource = null;
-            if (onEnded) onEnded();
+            this.playedCount++;
+            // 当前音频播放完成，自动播放队列中的下一个
+            this.playNext();
         };
+
         source.start();
     }
 
-    playPCMBuffer(pcmData, sampleRate) {
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
+    /**
+     * 停止当前播放并清空队列
+     */
+    stop() {
+        // 停止当前播放
         if (this.currentSource) {
-            try { this.currentSource.stop(); } catch (e) { }
+            try {
+                this.currentSource.onended = null; // 防止触发playNext
+                this.currentSource.stop();
+            } catch (e) { /* 忽略已停止的源 */ }
             this.currentSource = null;
         }
 
-        const audioBuffer = this.audioContext.createBuffer(1, pcmData.length, sampleRate);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let i = 0; i < pcmData.length; i++) {
-            channelData[i] = pcmData[i] / 32768.0;
-        }
-
-        const source = this.audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.playbackRate.value = this.audioSettings.playbackSpeed;
-
-        this.gainNode = this.audioContext.createGain();
-        this.gainNode.gain.value = 1.0;
-
-        this.noiseGateFilter = this.audioContext.createBiquadFilter();
-        this.noiseGateFilter.type = 'highpass';
-        this.noiseGateFilter.frequency.value = 80 + (this.audioSettings.noiseReduction * 200);
-        this.noiseGateFilter.Q.value = 0.5;
-
-        this.lowShelfFilter = this.audioContext.createBiquadFilter();
-        this.lowShelfFilter.type = 'lowshelf';
-        this.lowShelfFilter.frequency.value = 200;
-        this.lowShelfFilter.gain.value = -this.audioSettings.bassCut * 20;
-
-        this.highShelfFilter = this.audioContext.createBiquadFilter();
-        this.highShelfFilter.type = 'highshelf';
-        this.highShelfFilter.frequency.value = 3000;
-        this.highShelfFilter.gain.value = this.audioSettings.trebleBoost * 15;
-
-        source.connect(this.noiseGateFilter);
-        this.noiseGateFilter.connect(this.lowShelfFilter);
-        this.lowShelfFilter.connect(this.highShelfFilter);
-        this.highShelfFilter.connect(this.gainNode);
-        this.gainNode.connect(this.audioContext.destination);
-
-        this.currentSource = source;
-        source.onended = () => {
-            this.currentSource = null;
-        };
-        source.start();
+        // 清空队列
+        const clearedCount = this.queue.length;
+        this.queue = [];
+        this.playing = false;
+        console.log(`AudioQueue: 已停止并清空队列, 清除${clearedCount}条待播放音频`);
     }
 
+    /**
+     * 获取队列状态信息
+     *
+     * @returns {{ queueLength: number, playing: boolean, playedCount: number, errorCount: number }}
+     */
+    getStatus() {
+        return {
+            queueLength: this.queue.length,
+            playing: this.playing,
+            playedCount: this.playedCount,
+            errorCount: this.errorCount
+        };
+    }
+
+    /**
+     * 设置音频参数
+     *
+     * @param {string} setting - 参数名称
+     * @param {number} value - 参数值（0-1范围）
+     */
+    setAudioSetting(setting, value) {
+        if (this.audioSettings.hasOwnProperty(setting)) {
+            this.audioSettings[setting] = Math.max(0, Math.min(1, value));
+        }
+    }
+
+    /**
+     * 将Base64字符串转换为ArrayBuffer
+     *
+     * @param {string} base64 - Base64编码的字符串
+     * @returns {ArrayBuffer} 解码后的ArrayBuffer
+     */
     base64ToArrayBuffer(base64) {
         const binaryString = atob(base64);
         const len = binaryString.length;
@@ -392,30 +217,7 @@ class TTSManager {
         }
         return bytes.buffer;
     }
-
-    setAudioSetting(setting, value) {
-        if (this.audioSettings.hasOwnProperty(setting)) {
-            this.audioSettings[setting] = Math.max(0, Math.min(1, value));
-        }
-    }
-
-    showError(message) {
-        const errorToast = document.getElementById('errorToast');
-        if (!errorToast) return;
-        errorToast.textContent = message;
-        errorToast.classList.add('visible');
-        setTimeout(() => errorToast?.classList.remove('visible'), 3000);
-        this.allowLoading = false;
-    }
-
-    stop() {
-        if (this.currentSource) {
-            try {
-                this.currentSource.stop();
-            } catch (e) { }
-            this.currentSource = null;
-        }
-    }
 }
 
-export const TTS = new TTSManager();
+/** 全局音频播放队列单例 */
+export const AudioQueue = new AudioQueueManager();

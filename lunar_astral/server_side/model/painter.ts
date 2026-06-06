@@ -1,4 +1,4 @@
-import { ToolCall, RandomFloor, ModelBuilder, PostMessage, modelResponse, InferencePayload, ModelProtocol, AuthHeaders, OnlyData, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, AgentDefine } from '../index';
+import { ToolCall, RandomFloor, ModelBuilder, modelResponse, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, AgentDefine } from '../index';
 
 /** 绘画角色提示词 */
 class Prompt extends ModelBuilder {
@@ -56,14 +56,6 @@ class Toolchain extends Prompt {
 						"negative_prompt": {
 							type: "string",
 							description: "负面提示文本,用于排除图像中不希望出现的元素"
-						},
-						"use_reference": {
-							type: "boolean",
-							description: "是否使用上一次生成的图像作为参考,默认值为 false"
-						},
-						"strength": {
-							type: "number",
-							description: "参考图像的影响强度,取值范围为 0 到 1,默认值为 0.65"
 						},
 						"cfg_scale": {
 							type: "number",
@@ -133,14 +125,8 @@ class Toolchain extends Prompt {
 			const imageParams: GenerateImageParams = {
 				prompt: prompt,
 				negativePrompt: args.negative_prompt || '',
-				strength: args.strength ?? 0.65,
 				cfgScale: args.cfg_scale ?? 1.0,
 			};
-			// 如果使用参考图像，需要设置初始图像路径
-			if (args.use_reference) {
-				console.log('[画家] 使用参考图像模式');
-				// TODO: 从持久化存储中获取上一次生成的图像路径
-			}
 
 			/** 调用图像生成引擎 */
 			const [result, error] = generateImage(imageParams);
@@ -234,16 +220,14 @@ export class PainterRole extends Toolchain {
 	public createImageRendering(source: AgentDefine, count: number = 10): boolean {
 		//覆写画家智能体的上下文
 		this.coverContext([...source.dialogueRole.messages, ...source.unreadContext]);
-		/** 提取最近的消息内容 */
-		const recentMessages = this.messages.slice(-count);
-		/** 提取最近的消息文本内容 */
-		const messageTexts: string[] = [];
-		// 遍历最近的消息，提取文本内容
-		for (const message of recentMessages) {
+		/** 未读消息文本内容 */
+		const unreadTexts: string[] = [];
+		// 遍历未读消息，提取文本内容
+		for (const message of source.unreadContext.slice(-count)) {
 			// 如果消息内容是字符串，直接添加
-			if (typeof message.content === 'string') messageTexts.push(message.content);
+			if (typeof message.content === 'string') unreadTexts.push(message.content);
 			// 如果消息内容是数组，遍历添加文本内容
-			else message.content.forEach(item => { if (item.type === 'text') messageTexts.push(item.text); });
+			else message.content.forEach(item => { if (item.type === 'text') unreadTexts.push(item.text); });
 		}
 		/** 检查是否允许生成图片 */
 		let allowGeneration = false;
@@ -271,7 +255,7 @@ export class PainterRole extends Toolchain {
 			/(?:做|弄|整)(?:一(?:张|幅|个))?.*(?:图|画)/,
 		];
 		// 遍历消息文本，检查是否包含图片生成关键词
-		messageTexts.forEach(text => imageKeywords.forEach(keyword => { if (keyword.test(text)) allowGeneration = true; }));
+		unreadTexts.forEach(text => imageKeywords.forEach(keyword => { if (keyword.test(text)) allowGeneration = true; }));
 		// 如果没有包含图片生成关键词，直接返回
 		if (!allowGeneration) return true;
 		/** 最大迭代次数 */
@@ -328,7 +312,6 @@ export class PainterRole extends Toolchain {
 	private executePaintingTool(toolCall: ToolCallItem): string {
 		/** 工具函数名称 */
 		const funcName = toolCall.function.name;
-
 		/** 工具函数参数 */
 		let args: Record<string, any> = {};
 		try {
@@ -338,7 +321,7 @@ export class PainterRole extends Toolchain {
 			console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
 			return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
 		}
-
+		// 根据工具函数名称路由到对应的处理函数
 		switch (funcName) {
 			// 处理扩散生成工具调用
 			case 'diffusion_generation': return this.handleDiffusionGeneration(args as DiffusionGenerationParams);
