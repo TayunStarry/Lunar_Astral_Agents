@@ -70,14 +70,7 @@ func (class *Runtime) tts(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", err})
 	}
 
-	// 通过WebSocket广播音频数据至所有已连接的客户端
-	PushMessageFunc("tts", map[string]any{
-		"type":  "audio",
-		"audio": audioData,
-		"text":  text,
-	})
-
-	logger.SubInfo("LunarCore", "TTS", "合成完成并广播: [%s] 长度=%d", text, len(audioData))
+	logger.SubInfo("LunarCore", "TTS", "合成完成: [%s] 长度=%d", text, len(audioData))
 	return class.runtime.ToValue([]any{audioData, nil})
 }
 

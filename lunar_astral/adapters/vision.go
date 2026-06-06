@@ -1,10 +1,10 @@
 package adapters
 
 import (
-	"lunar_astral/hierarchy/image"
-	"lunar_astral/hierarchy/image/generate"
 	"encoding/base64"
 	"fmt"
+	"lunar_astral/hierarchy/image"
+	"lunar_astral/hierarchy/image/generate"
 	"screenshot"
 	"strings"
 
@@ -14,7 +14,7 @@ import (
 // keyframe 适配TypeScript调用的视频关键帧提取功能，转换为TypeScript可处理的格式
 // 返回值: [Array<{filePath: string, timestamp: number, frameNum: number, data: string}>, error] 关键帧列表和错误信息
 func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
+	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
 
@@ -23,12 +23,7 @@ func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("inputFile必须是字符串")})
 	}
 
-	cacheDir, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("cacheDir必须是字符串")})
-	}
-
-	keyFrames, err := image.VideoKeyframeExtraction(inputFile, cacheDir)
+	keyFrames, err := image.VideoKeyframeExtraction(inputFile)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

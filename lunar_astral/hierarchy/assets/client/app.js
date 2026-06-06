@@ -117,15 +117,12 @@ class LunarCoreApp {
 				if (message.data.type === 'response' || message.data.type === 'active') {
 					/** 获取消息的文本内容 */
 					const content = message.data.content || '';
-					// 渲染消息到历史记录（不再绑定TTS）
+					// 渲染消息到历史记录
 					await this.handleAssistantMessage(content, undefined);
-				}
-				break;
-
-			case 'tts':
-				// 接收到服务端推送的TTS音频数据，加入播放队列
-				if (message.data && message.data.audio) {
-					AudioQueue.enqueue(message.data.audio);
+					// 如果包含音频数据，加入播放队列
+					if (message.data.audio) {
+						AudioQueue.enqueue(message.data.audio);
+					}
 				}
 				break;
 

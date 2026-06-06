@@ -1416,11 +1416,21 @@ var agentSystem = (function (exports) {
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
                     }
-                    synthesizeSpeech(this.finalResponse);
                     const cleanedResponse = cleanTextForTTS(this.finalResponse);
                     if (cleanedResponse.trim().length) {
                         const chunks = splitSentences(cleanedResponse);
-                        chunks.forEach(chunk => pushContext(messageType, chunk));
+                        chunks.forEach(chunk => {
+                            let audio = '';
+                            try {
+                                const [audioData, err] = tts(chunk);
+                                if (!err && audioData)
+                                    audio = audioData;
+                            }
+                            catch (e) {
+                                console.error(`TTS合成异常: [${chunk}]`, e);
+                            }
+                            pushContext(messageType, chunk, audio);
+                        });
                     }
                 }
                 catch (error) {
@@ -1434,7 +1444,7 @@ var agentSystem = (function (exports) {
             console.error(error.message, ' || ', error.stack);
             if (errorCount < 3)
                 return false;
-            pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]);
+            pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)], '');
             return true;
         }
         async pullExternalMessages() {
@@ -1497,7 +1507,7 @@ var agentSystem = (function (exports) {
         if (!text)
             return [];
         const TARGET_LENGTH = 30;
-        const PUNCTUATION = /[。？！…，、；：,;:\.\?!]/;
+        const PUNCTUATION = /[。？！…、；：;:\.\?!]/;
         const sentences = [];
         let remaining = text;
         while (remaining.length > 0) {

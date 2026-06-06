@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"logger"
+	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"screenshot"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	ffmpeg "github.com/u2takey/ffmpeg-go"
@@ -40,7 +40,6 @@ type KeyFrame struct {
 type FrameData struct {
 	Image     image.Image
 	Timestamp int
-	Error     error
 }
 
 // IsSupportedVideoFormat 检查文件格式是否支持
@@ -49,8 +48,18 @@ func IsSupportedVideoFormat(filename string) bool {
 	return slices.Contains(supportedVideoFormats, ext)
 }
 
-// VideoKeyframeExtraction 提取视频关键帧并写入本地缓存
-func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, error) {
+// VideoKeyframeExtraction 提取视频关键帧
+func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
+	// 如果输入是HTTP URL，先下载到本地临时文件
+	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
+		tempFile, err := downloadToTempFile(inputFile)
+		if err != nil {
+			return nil, fmt.Errorf("下载视频文件失败: %w", err)
+		}
+		defer os.Remove(tempFile)
+		inputFile = tempFile
+	}
+
 	// 初始化关键帧列表
 	var keyFrames []KeyFrame
 	// 存储前一帧图像，用于计算帧间差异
@@ -74,72 +83,25 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 		frameCount++
 	}
 
-	// 设置工作池大小，根据CPU核心数调整
-	workerCount := min(frameCount, runtime.NumCPU())
-
-	// 创建任务通道和结果通道
-	taskChan := make(chan int, frameCount)
-	resultChan := make(chan FrameData, frameCount)
-
-	// 启动工作池
-	var wg sync.WaitGroup
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for timestamp := range taskChan {
-				// 创建缓冲区用于存储提取的帧数据
-				buf := new(bytes.Buffer)
-				// 使用ffmpeg提取指定时间点的一帧
-				err := ExtractKeyFrames(inputFile, timestamp, buf)
-				// 处理提取失败的情况
-				if err != nil {
-					// 继续处理下一帧，不返回错误
-					logger.Error("LunarCore", "提取帧失败 %d 秒: %v", timestamp, err)
-					resultChan <- FrameData{Error: err}
-					continue
-				}
-				// 检查缓冲区是否为空
-				if buf.Len() == 0 {
-					logger.Error("LunarCore", "提取的帧数据为空 %d 秒", timestamp)
-					resultChan <- FrameData{Error: fmt.Errorf("提取的帧数据为空")}
-					continue
-				}
-				// 解码提取的JPEG图像
-				currImage, err := jpeg.Decode(buf)
-				// 处理解码失败的情况
-				if err != nil {
-					// 继续处理下一帧，不返回错误
-					logger.Error("LunarCore", "解码图像失败: %v", err)
-					resultChan <- FrameData{Error: err}
-					continue
-				}
-				// 发送帧数据到结果通道
-				resultChan <- FrameData{Image: currImage, Timestamp: timestamp}
-			}
-		}()
-	}
-
-	// 发送任务到工作池
-	for i := 0; float64(i) < duration; i += frameInterval {
-		taskChan <- i
-	}
-	close(taskChan)
-
-	// 等待所有任务处理完成
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// 收集所有帧数据
+	// 串行提取帧数据，避免FFmpeg并发读取同一文件导致数据损坏
 	var allFrames []FrameData
-	for frameData := range resultChan {
-		// 跳过有错误的帧
-		if frameData.Error != nil {
+	for i := 0; float64(i) < duration; i += frameInterval {
+		buf := new(bytes.Buffer)
+		err := ExtractKeyFrames(inputFile, i, buf)
+		if err != nil {
+			logger.Error("LunarCore", "提取帧失败 %d 秒: %v", i, err)
 			continue
 		}
-		allFrames = append(allFrames, frameData)
+		if buf.Len() == 0 {
+			logger.Error("LunarCore", "提取的帧数据为空 %d 秒", i)
+			continue
+		}
+		currImage, err := jpeg.Decode(buf)
+		if err != nil {
+			logger.Error("LunarCore", "解码图像失败: %v", err)
+			continue
+		}
+		allFrames = append(allFrames, FrameData{Image: currImage, Timestamp: i})
 	}
 
 	// 按时间戳排序帧数据
@@ -165,7 +127,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 				continue
 			}
 			// 创建关键帧文件
-			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, cacheDir, keyFrames)
+			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, keyFrames)
 			// 处理创建关键帧文件失败的情况
 			if err != nil {
 				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
@@ -178,7 +140,7 @@ func VideoKeyframeExtraction(inputFile string, cacheDir string) ([]KeyFrame, err
 
 		} else {
 			// 创建关键帧文件
-			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, cacheDir, keyFrames)
+			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, keyFrames)
 			// 处理创建关键帧文件失败的情况
 			if err != nil {
 				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
@@ -290,12 +252,10 @@ func FormatTime(seconds int) string {
 	return fmt.Sprintf("%02d:%02d:%02d", int(t.Hours()), int(t.Minutes())%60, int(t.Seconds())%60)
 }
 
-// CreateKeyframeFile 创建关键帧文件并返回图像数据
-func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyFrame) (string, []byte, error) {
-	// 生成关键帧文件名
+// CreateKeyframeFile 编码关键帧图像为JPEG字节数据
+func CreateKeyframeFile(currImage image.Image, keyFrames []KeyFrame) (string, []byte, error) {
+	// 生成关键帧文件名（仅作为标识符，不实际写入磁盘）
 	frameFileName := fmt.Sprintf("key_frame_%d.jpg", len(keyFrames)+1)
-	// 构建完整的文件路径
-	framePath := filepath.Join(cacheDir, frameFileName)
 	// 将当前帧转换为RGBA格式，确保通道数为4
 	rgbaImage := screenshot.ToRGBA(currImage)
 	// 调整图像大小，确保宽高都不超过1024
@@ -305,35 +265,13 @@ func CreateKeyframeFile(currImage image.Image, cacheDir string, keyFrames []KeyF
 	buf := new(bytes.Buffer)
 	// 优化JPEG编码参数，提高压缩质量和速度
 	opt := &jpeg.Options{
-		Quality: 85, // 设置适当的质量参数
+		Quality: 85,
 	}
 	// 将调整后的图像编码为JPEG格式并写入缓冲区
 	if err := jpeg.Encode(buf, resizedImage, opt); err != nil {
-		// 继续处理下一帧，不返回错误
-		logger.Error("LunarCore", "编码图像失败: %v", err)
-		return frameFileName, nil, err
+		return frameFileName, nil, fmt.Errorf("编码图像失败: %w", err)
 	}
 
-	// 仅在需要时写入文件（可选）
-	// 如果只是为了生成文件名而不需要实际文件，可以跳过这一步
-	frameFile, err := os.Create(framePath)
-	if err != nil {
-		// 继续处理下一帧，不返回错误
-		logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
-		// 即使文件创建失败，也返回内存中的图像数据
-		return frameFileName, buf.Bytes(), nil
-	}
-	defer frameFile.Close()
-
-	// 将缓冲区内容写入文件
-	if _, err := frameFile.Write(buf.Bytes()); err != nil {
-		// 继续处理下一帧，不返回错误
-		logger.Error("LunarCore", "写入关键帧文件失败: %v", err)
-		// 即使写入失败，也返回内存中的图像数据
-		return frameFileName, buf.Bytes(), nil
-	}
-
-	// 返回关键帧数据和错误
 	return frameFileName, buf.Bytes(), nil
 }
 
@@ -353,4 +291,38 @@ func ExtractKeyFrames(inputFile string, i int, buf *bytes.Buffer) error {
 // CreateKeyFrame 创建关键帧结构体
 func CreateKeyFrame(frameFileName string, timestamp string, frameNum int, frameData []byte) KeyFrame {
 	return KeyFrame{FilePath: frameFileName, Timestamp: timestamp, FrameNum: frameNum, Data: frameData}
+}
+
+// downloadToTempFile 下载HTTP URL的视频文件到本地临时文件
+func downloadToTempFile(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("HTTP请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP请求返回状态码: %d", resp.StatusCode)
+	}
+
+	// 从URL中提取文件扩展名
+	ext := filepath.Ext(url)
+	if ext == "" || !slices.Contains(supportedVideoFormats, strings.ToLower(ext)) {
+		ext = ".mp4"
+	}
+
+	tempFile, err := os.CreateTemp("", "video_download_*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("创建临时文件失败: %w", err)
+	}
+	tempFileName := tempFile.Name()
+
+	if _, err := io.Copy(tempFile, resp.Body); err != nil {
+		tempFile.Close()
+		os.Remove(tempFileName)
+		return "", fmt.Errorf("写入临时文件失败: %w", err)
+	}
+	tempFile.Close()
+
+	return tempFileName, nil
 }

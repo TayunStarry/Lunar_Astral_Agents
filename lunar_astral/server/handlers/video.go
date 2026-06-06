@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"lunar_astral/hierarchy/image"
 	"encoding/json"
 	"fmt"
 	"io"
+	"lunar_astral/hierarchy/image"
 	"net/http"
 	"os"
 )
@@ -51,16 +51,8 @@ func ExtractKeyFramesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("ExtractKeyFrames请求[ERROR] -> 保存临时文件失败: %v", err), http.StatusInternalServerError)
 		return
 	}
-	// 创建临时目录用于存储关键帧
-	keyFrameDir, err := os.MkdirTemp("", "keyframes_*")
-	if err != nil {
-		http.Error(w, fmt.Sprintf("ExtractKeyFrames请求[ERROR] -> 创建关键帧目录失败: %v", err), http.StatusInternalServerError)
-		return
-	}
-	// 无论后续逻辑成败，均删除关键帧目录，防止磁盘堆积
-	defer os.RemoveAll(keyFrameDir)
 	// 调用核心函数提取关键帧，返回 []KeyFrame
-	keyFrames, err := image.VideoKeyframeExtraction(tempFileName, keyFrameDir)
+	keyFrames, err := image.VideoKeyframeExtraction(tempFileName)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("ExtractKeyFrames请求[ERROR] -> 提取关键帧失败: %v", err), http.StatusInternalServerError)
 		return

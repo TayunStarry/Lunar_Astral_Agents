@@ -16,8 +16,9 @@ func init() {
 }
 
 type PushContextData struct {
-	Type    string      `json:"type"`
-	Content any `json:"content"`
+	Type    string `json:"type"`
+	Content string `json:"content"`
+	Audio   string `json:"audio,omitempty"`
 }
 
 type PushImageData struct {
@@ -25,10 +26,11 @@ type PushImageData struct {
 	Images []string `json:"images"`
 }
 
-func (class *Runtime) pushContext(msgType string, content string) goja.Value {
+func (class *Runtime) pushContext(msgType string, content string, audio string) goja.Value {
 	data := PushContextData{
 		Type:    msgType,
 		Content: content,
+		Audio:   audio,
 	}
 	PushMessageFunc("context", data)
 	return class.runtime.ToValue(true)

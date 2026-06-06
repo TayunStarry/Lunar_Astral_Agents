@@ -1,4 +1,4 @@
-import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, synthesizeSpeech, cleanTextForTTS, splitSentences } from '../index';
+import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, cleanTextForTTS, splitSentences } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -79,16 +79,25 @@ class LunarAgent extends AgentDefine {
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
 				}
-				// 执行语音合成
-				synthesizeSpeech(this.finalResponse);
 				/** 获取清洗后的文本 */
 				const cleanedResponse = cleanTextForTTS(this.finalResponse);
-				// 如果清洗后的文本不为空，进行句子切分
+				// 如果清洗后的文本不为空，进行句子切分并合并推送文本和语音
 				if (cleanedResponse.trim().length) {
 					/** 句子切分 */
 					const chunks = splitSentences(cleanedResponse);
-					// 遍历句子数组，将每个句子推送至外部客户端
-					chunks.forEach(chunk => pushContext(messageType, chunk));
+					// 遍历句子数组，合成语音并推送至外部客户端
+					chunks.forEach(chunk => {
+						/** 语音合成结果 */
+						let audio = '';
+						try {
+							const [audioData, err] = tts(chunk);
+							if (!err && audioData) audio = audioData;
+						} 
+						catch (e) {
+							console.error(`TTS合成异常: [${chunk}]`, e);
+						}
+						pushContext(messageType, chunk, audio);
+					});
 				}
 			}
 			catch (error) {
@@ -106,7 +115,7 @@ class LunarAgent extends AgentDefine {
 		// 如果错误次数小于3次，则继续循环
 		if (errorCount < 3) return false;
 		// 随机选择一个错误消息
-		pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]);
+		pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)], '');
 		// 终止思考链循环
 		return true;
 	}

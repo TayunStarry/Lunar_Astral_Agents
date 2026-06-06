@@ -110,7 +110,7 @@ declare global {
      * 
      * @param {string} data 消息内容
      */
-    function pushContext(msgType: string, data: string): boolean;
+    function pushContext(msgType: string, data: string, audio: string): boolean;
     /**
      * 推送图片
      * 
