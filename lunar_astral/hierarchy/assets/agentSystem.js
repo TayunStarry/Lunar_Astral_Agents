@@ -623,40 +623,61 @@ var agentSystem = (function (exports) {
         formatHistoricalMessages(source) {
             if (this.messages.length === 0)
                 return;
-            const textMessageMap = new Set();
-            const textMessages = [];
-            const visionMessages = [];
-            const formatMessages = [];
+            const flattenedMessages = [];
             for (const message of this.messages) {
-                if (typeof message.content === 'string')
-                    textMessages.push(message);
-                else
-                    for (let index = 0; index < message.content.length; index++) {
-                        const content = message.content[index];
-                        if (content.type == 'text')
-                            textMessages.push({ role: message.role, content: content.text });
-                        else
-                            visionMessages.push({ role: message.role, content: [content] });
-                    }
-            }
-            for (const message of textMessages) {
-                if (typeof message.content !== 'string' || textMessageMap.has(message.content))
-                    continue;
-                formatMessages.push(message);
-                textMessageMap.add(message.content);
-            }
-            if (visionMessages.length <= 10)
-                formatMessages.push(...visionMessages);
-            else
-                for (let i = 0; i < visionMessages.length; i += 10) {
-                    const batchFrames = visionMessages.slice(i, i + 10);
-                    source.descriptionRole.coverContext(batchFrames);
-                    const summaryRequest = source.descriptionRole.run([], []);
-                    const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-                    if (summary && summary.trim().length > 0)
-                        formatMessages.push({ role: 'user', content: summary });
+                if (typeof message.content === 'string') {
+                    flattenedMessages.push(message);
                 }
-            this.messages = formatMessages;
+                else {
+                    for (const content of message.content) {
+                        if (content.type === 'text') {
+                            flattenedMessages.push({ role: message.role, content: content.text });
+                        }
+                        else {
+                            flattenedMessages.push({ role: message.role, content: [content] });
+                        }
+                    }
+                }
+            }
+            const visionCount = flattenedMessages.filter(m => Array.isArray(m.content)).length;
+            if (visionCount <= 10) {
+                this.messages = flattenedMessages;
+                return;
+            }
+            const processedMessages = [];
+            let visionBuffer = [];
+            for (const message of flattenedMessages) {
+                const isVisionMessage = Array.isArray(message.content);
+                if (isVisionMessage) {
+                    visionBuffer.push(message);
+                }
+                else {
+                    if (visionBuffer.length > 0) {
+                        this.processVisionBuffer(visionBuffer, processedMessages, source);
+                        visionBuffer = [];
+                    }
+                    processedMessages.push(message);
+                }
+            }
+            if (visionBuffer.length > 0) {
+                this.processVisionBuffer(visionBuffer, processedMessages, source);
+            }
+            this.messages = processedMessages;
+        }
+        processVisionBuffer(buffer, output, source) {
+            if (buffer.length <= 10) {
+                output.push(...buffer);
+                return;
+            }
+            for (let i = 0; i < buffer.length; i += 10) {
+                const batchFrames = buffer.slice(i, i + 10);
+                source.descriptionRole.coverContext(batchFrames);
+                const summaryRequest = source.descriptionRole.run([], []);
+                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+                if (summary && summary.trim().length > 0) {
+                    output.push({ role: 'user', content: summary });
+                }
+            }
         }
         analyzeMessageResponse(message, cache, source) {
             try {

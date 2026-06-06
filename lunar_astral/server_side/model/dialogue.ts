@@ -37,64 +37,108 @@ export class DialogueRole extends ModelBuilder {
 		// 更新消息内容
 		this.updateMessageContent(cache, source);
 	}
-	/** 格式化历史消息 */
+	/** 格式化历史消息
+	 *  处理流程：
+	 *  1. 遍历原始消息数组，将嵌套的多模态消息结构扁平化为独立消息
+	 *  2. 扁平化过程中严格保持消息的原始时间顺序（数组下标顺序即为时间顺序）
+	 *  3. 若视觉消息总数超过10条，对连续的视觉消息组分批摘要，摘要结果插入原位
+	 *  4. 不执行任何去重操作，确保所有消息完整保留
+	 *
+	 *  时间顺序保证机制：
+	 *  - PostMessage 类型不含时间戳字段，消息数组的下标顺序即为唯一的时间依据
+	 *  - 扁平化时按原始数组顺序逐条处理，拆分后的子消息紧跟原消息位置
+	 *  - 视觉消息摘要替换原消息组的位置，不改变前后文本消息的相对顺序
+	 */
 	public formatHistoricalMessages(source: AgentDefine) {
 		// 如果消息数组为空,则不处理
 		if (this.messages.length === 0) return;
-		/** 用于查重的文本消息映射表 */
-		const textMessageMap = new Set<string>();
-		/** 文本消息数组 */
-		const textMessages: PostMessage[] = [];
-		/** 视觉消息数组 */
-		const visionMessages: PostMessage[] = [];
-		/** 格式化后的消息数组 */
-		const formatMessages: PostMessage[] = [];
-		// 遍历并规整化消息数组
+		/** 扁平化后的消息数组，严格保持原始时间顺序 */
+		const flattenedMessages: PostMessage[] = [];
+		// 遍历原始消息数组，将嵌套结构转换为扁平结构
+		// 关键：按数组下标顺序处理，确保时间先后关系不变
 		for (const message of this.messages) {
-			// 如果消息内容为字符串,则直接添加到文本消息数组
-			if (typeof message.content === 'string') textMessages.push(message)
-			// 如果消息内容为数组,则遍历并添加到文本消息数组或视觉消息数组
-			else for (let index = 0; index < message.content.length; index++) {
-				/** 当前消息内容 */
-				const content = message.content[index];
-				// 如果消息内容为文本,则添加到文本消息数组
-				if (content.type == 'text') textMessages.push({ role: message.role, content: content.text })
-				// 如果消息内容为视觉,则添加到视觉消息数组
-				else visionMessages.push({ role: message.role, content: [content] })
+			// 消息内容为字符串时，已是扁平结构，直接保留
+			if (typeof message.content === 'string') {
+				flattenedMessages.push(message);
+			}
+			// 消息内容为数组时，将每个内容项拆分为独立消息
+			// 拆分后的子消息按原数组内顺序依次追加，保持时间先后
+			else {
+				for (const content of message.content) {
+					// 文本内容项：提取为纯文本消息
+					if (content.type === 'text') {
+						flattenedMessages.push({ role: message.role, content: content.text });
+					}
+					// 视觉内容项：保留为单条视觉消息（内容为单元素数组）
+					else {
+						flattenedMessages.push({ role: message.role, content: [content] });
+					}
+				}
 			}
 		}
-		// 遍历文本消息数组并去除重复消息
-		for (const message of textMessages) {
-			// 过滤掉无效的消息
-			if (typeof message.content !== 'string' || textMessageMap.has(message.content)) continue;
-			// 将提取出来的文本消息合并到格式化消息数组中
-			formatMessages.push(message);
-			// 将文本消息内容添加到映射表中
-			textMessageMap.add(message.content);
+		// 统计视觉消息总数，用于判断是否需要分批摘要
+		const visionCount = flattenedMessages.filter(m => Array.isArray(m.content)).length;
+		// 视觉消息数量<=10，无需摘要，直接使用扁平化结果
+		if (visionCount <= 10) {
+			this.messages = flattenedMessages;
+			return;
 		}
-		// 如果视觉消息数量小于等于10,则合并到格式化消息数组中
-		if (visionMessages.length <= 10) formatMessages.push(...visionMessages);
-		// 如果视觉消息数量大于10,则分批次处理
-		else for (let i = 0; i < visionMessages.length; i += 10) {
+		// 视觉消息数量>10，需要对连续的视觉消息组分批摘要以减少上下文长度
+		// 处理策略：遍历扁平化数组，遇到连续视觉消息时累积到缓冲区，
+		// 遇到非视觉消息时先处理缓冲区，确保摘要结果插入原位，不改变前后消息的相对顺序
+		/** 处理后的最终消息数组 */
+		const processedMessages: PostMessage[] = [];
+		/** 当前连续视觉消息的缓冲区 */
+		let visionBuffer: PostMessage[] = [];
+		for (const message of flattenedMessages) {
+			// 判断当前消息是否为视觉消息（内容为数组类型）
+			const isVisionMessage = Array.isArray(message.content);
+			if (isVisionMessage) {
+				// 累积连续的视觉消息到缓冲区
+				visionBuffer.push(message);
+			} else {
+				// 遇到非视觉消息，先处理缓冲区中累积的视觉消息
+				// 这确保视觉消息的摘要结果出现在正确的位置（在当前文本消息之前）
+				if (visionBuffer.length > 0) {
+					this.processVisionBuffer(visionBuffer, processedMessages, source);
+					visionBuffer = [];
+				}
+				processedMessages.push(message);
+			}
+		}
+		// 处理末尾可能残留的视觉消息缓冲区
+		if (visionBuffer.length > 0) {
+			this.processVisionBuffer(visionBuffer, processedMessages, source);
+		}
+		// 覆写处理器模型的上下文为处理后的消息数组
+		this.messages = processedMessages;
+	}
+	/** 处理连续视觉消息缓冲区
+	 *  当连续视觉消息数量<=10时，直接保留原消息
+	 *  当连续视觉消息数量>10时，分批调用描述角色进行摘要，摘要结果替换原消息组
+	 *  摘要结果插入到输出数组的当前位置，保证时间顺序正确
+	 */
+	private processVisionBuffer(buffer: PostMessage[], output: PostMessage[], source: AgentDefine): void {
+		// 连续视觉消息<=10条，直接追加到输出数组，保持原始顺序
+		if (buffer.length <= 10) {
+			output.push(...buffer);
+			return;
+		}
+		// 连续视觉消息>10条，分批摘要处理，每批最多10条
+		for (let i = 0; i < buffer.length; i += 10) {
 			/** 截取当前批次的视觉消息（每批次最多10条） */
-			const batchFrames = visionMessages.slice(i, i + 10);
+			const batchFrames = buffer.slice(i, i + 10);
 			// 覆盖描述角色的上下文，传入当前批次的视觉消息
 			source.descriptionRole.coverContext(batchFrames);
 			/** 执行描述角色的模型运行，获取总结请求响应 */
 			const summaryRequest = source.descriptionRole.run([], []);
 			/** 模型总结结果 */
 			const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-			// 过滤空字符串和仅包含空格的字符串
-			if (summary && summary.trim().length > 0) formatMessages.push({ role: 'user', content: summary });
+			// 过滤空字符串和仅包含空格的字符串，将摘要作为用户消息插入到当前位置
+			if (summary && summary.trim().length > 0) {
+				output.push({ role: 'user', content: summary });
+			}
 		}
-		// 覆写处理器模型的上下文为格式化后的消息数组
-		this.messages = formatMessages;
-		// /** 最新消息的角色 */
-		// const latestRole = this.messages.slice(-1)[0].role;
-		// // 如果最新消息是用户,则不处理
-		// if (latestRole === 'user' || latestRole === 'assistant') return;
-		// // 如果最新消息是模型,则添加提示消息
-		// this.writeContext({ role: 'user', content: '请继续之前的话题，或者对之前的内容进行优化完善。' });
 	}
 	/** 处理聊天消息响应 */
 	protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {
