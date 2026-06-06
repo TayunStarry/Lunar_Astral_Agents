@@ -23,4 +23,4 @@ export * from './model/painter';
 export * from './model/organize';
 export * from './model/define';
 export * from './model/agent';
-export * from './model/tts';
+export * from './model/narrator';
