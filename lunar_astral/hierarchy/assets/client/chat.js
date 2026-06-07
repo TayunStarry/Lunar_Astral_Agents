@@ -1,4 +1,5 @@
 import { randomBorderColor, escapeHtml, clearContainer } from './util.js';
+import { AudioQueue } from './tts.js';
 
 function processThinkTags(content) {
     return content
@@ -193,6 +194,21 @@ function createMessageElement(message) {
     const header = document.createElement('div');
     header.className = 'message-header';
     header.textContent = message.role === 'user' ? '你' : '月华';
+
+    // 如果消息携带音频数据，添加重播按钮
+    if (message.audio) {
+        const replayBtn = document.createElement('button');
+        replayBtn.className = 'audio-replay-btn';
+        replayBtn.title = '重播语音';
+        replayBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+        replayBtn.addEventListener('click', () => {
+            AudioQueue.enqueue(message.audio);
+            // 点击动画反馈
+            replayBtn.classList.add('replaying');
+            setTimeout(() => replayBtn.classList.remove('replaying'), 600);
+        });
+        header.appendChild(replayBtn);
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';

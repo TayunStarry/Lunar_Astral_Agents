@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     await waitForDependencies();
 
     // 获取服务器信息
-    var serverInfo = await fetchServerInfo();
+    const serverInfo = await fetchServerInfo();
 
     if (serverInfo) {
         // 生成二维码
@@ -18,13 +18,15 @@ document.addEventListener('DOMContentLoaded', async function () {
     bindCopyButton();
 });
 
+// ==== 依赖等待 ====
+
 /**
  * 等待QRCode库加载完成
  */
 async function waitForDependencies() {
-    var retries = 0;
+    let retries = 0;
     while (typeof QRCode === 'undefined' && retries < 50) {
-        await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        await new Promise(resolve => setTimeout(resolve, 100));
         retries++;
     }
     if (typeof QRCode === 'undefined') {
@@ -32,12 +34,14 @@ async function waitForDependencies() {
     }
 }
 
+// ==== 数据获取 ====
+
 /**
  * 获取服务器信息
  */
 async function fetchServerInfo() {
     try {
-        var response = await fetch('/api/server-info');
+        const response = await fetch('/api/server-info');
         if (response.ok) {
             return await response.json();
         }
@@ -52,11 +56,13 @@ async function fetchServerInfo() {
     };
 }
 
+// ==== 二维码 ====
+
 /**
  * 生成二维码，内容为服务器访问URL
  */
 function generateQRCode(url) {
-    var container = document.getElementById('qrcode-container');
+    const container = document.getElementById('qrcode-container');
     if (typeof QRCode !== 'undefined') {
         container.innerHTML = '';
         new QRCode(container, {
@@ -72,14 +78,16 @@ function generateQRCode(url) {
     }
 }
 
+// ==== 健康检查 ====
+
 /**
  * 检查服务健康状态
  */
 async function checkHealth() {
-    var statusEl = document.querySelector('.status-text');
-    var dotEl = document.querySelector('.status-dot');
+    const statusEl = document.querySelector('.status-text');
+    const dotEl = document.querySelector('.status-dot');
     try {
-        var response = await fetch('/health');
+        const response = await fetch('/health');
         if (response.ok) {
             statusEl.textContent = '服务运行中';
             dotEl.classList.add('online');
@@ -93,16 +101,18 @@ async function checkHealth() {
     }
 }
 
+// ==== 复制功能 ====
+
 /**
  * 绑定复制按钮事件
  */
 function bindCopyButton() {
     document.getElementById('copy-btn').addEventListener('click', function () {
-        var url = document.getElementById('server-url').textContent;
+        const url = document.getElementById('server-url').textContent;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).then(function () {
+            navigator.clipboard.writeText(url).then(() => {
                 showCopySuccess();
-            }).catch(function () {
+            }).catch(() => {
                 fallbackCopy(url);
             });
         } else {
@@ -112,15 +122,16 @@ function bindCopyButton() {
 }
 
 /**
- * 显示复制成功反馈
+ * 显示复制成功反馈 - 使用CSS类驱动
  */
 function showCopySuccess() {
-    var btn = document.getElementById('copy-btn');
+    const btn = document.getElementById('copy-btn');
+    btn.classList.add('success');
     btn.innerHTML = '<i class="fas fa-check"></i>';
-    btn.style.background = '#4caf50';
-    setTimeout(function () {
+    showToast('链接已复制到剪贴板');
+    setTimeout(() => {
+        btn.classList.remove('success');
         btn.innerHTML = '<i class="fas fa-copy"></i>';
-        btn.style.background = '';
     }, 2000);
 }
 
@@ -128,7 +139,7 @@ function showCopySuccess() {
  * 备用复制方法
  */
 function fallbackCopy(text) {
-    var textarea = document.createElement('textarea');
+    const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.style.position = 'fixed';
     textarea.style.opacity = '0';
@@ -141,4 +152,18 @@ function fallbackCopy(text) {
         console.error('复制失败:', e);
     }
     document.body.removeChild(textarea);
+}
+
+// ==== Toast 提示 ====
+
+/**
+ * 显示 Toast 提示
+ */
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('visible');
+    setTimeout(() => {
+        toast.classList.remove('visible');
+    }, 2500);
 }

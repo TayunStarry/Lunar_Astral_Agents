@@ -1,18 +1,49 @@
-/* 基础变量 */
+/* ==== 设计令牌 ==== */
 :root {
-    --bg-primary: #0a0a1a;
-    --bg-secondary: #1a1a2e;
-    --bg-card: #16213e;
-    --accent: #4a9eff;
-    --accent-hover: #3a8eef;
-    --text-primary: #e0e0e0;
-    --text-secondary: #a0a0b0;
-    --success: #4caf50;
-    --error: #f44336;
-    --border: #2a2a4e;
-    --shadow: rgba(0, 0, 0, 0.3);
+    /* 玻璃拟态 */
+    --glass-bg: rgba(255, 255, 255, 0.28);
+    --glass-border: rgba(255, 255, 255, 0.25);
+    --glass-blur: 18px;
+    --glass-bg-dark: rgba(38, 38, 42, 0.80);
+    --glass-border-dark: rgba(80, 80, 80, 0.45);
+
+    /* 圆角 */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+
+    /* 阴影 */
+    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.10);
+
+    /* 品牌色 */
+    --brand: #6c9bcf;
+    --brand-hover: #5a8abf;
+    --accent: #9d6bff;
+    --success: #20c997;
+    --danger: #dc3545;
+    --warning: #fbbf24;
+
+    /* 中性色 - 亮色 */
+    --panel-bg: rgba(250, 250, 250, 0.85);
+    --text-primary: rgba(15, 30, 15, 1);
+    --text-secondary: rgba(80, 80, 80, 1);
+    --border-color: rgba(225, 230, 240, 1);
+
+    /* 过渡 */
+    --transition: all 0.45s ease;
 }
 
+/* 暗色主题 */
+.dark-mode {
+    --glass-bg: var(--glass-bg-dark);
+    --glass-border: var(--glass-border-dark);
+    --panel-bg: rgba(38, 38, 42, 0.85);
+    --text-primary: rgba(244, 244, 245, 1);
+    --text-secondary: rgba(180, 180, 180, 1);
+    --border-color: rgba(80, 80, 80, 1);
+}
+
+/* ==== 基础重置 ==== */
 * {
     margin: 0;
     padding: 0;
@@ -20,35 +51,55 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg-primary);
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 15px;
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
+    transition: var(--transition);
 }
 
-/* 背景叠加层 */
-.bg-overlay {
+/* 全局隐藏滚动条 */
+* {
+    scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
+}
+
+/* ==== 三层背景结构 ==== */
+
+/* 底层：全屏背景图 + 模糊 */
+.background {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0a0a1a 100%);
+    background: url('/background') center/cover no-repeat;
+    filter: blur(8px);
+    z-index: -3;
+    transform: scale(1.05);
+}
+
+/* 中层：半透明覆盖 + 毛玻璃 */
+.glass-effect {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px) saturate(180%);
     z-index: -2;
 }
 
-.bg-credit {
-    position: fixed;
-    bottom: 12px;
-    right: 16px;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    opacity: 0.5;
-    z-index: -1;
+.dark-mode .glass-effect {
+    background: rgba(0, 0, 0, 0.3);
 }
 
-/* 容器 */
+/* ==== 容器 ==== */
 .container {
     max-width: 600px;
     margin: 0 auto;
@@ -57,19 +108,27 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: center;
+    position: relative;
+    z-index: 1;
 }
 
-/* 二维码卡片 */
+/* ==== 玻璃面板 ==== */
+.glass-panel {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glass);
+    transition: var(--transition);
+}
+
+/* ==== 二维码卡片 ==== */
 .qr-card {
-    background: var(--bg-card);
-    border-radius: 16px;
     padding: 28px 24px;
     text-align: center;
-    border: 1px solid var(--border);
-    box-shadow: 0 4px 24px var(--shadow);
 }
 
-/* 状态指示器 */
+/* ==== 状态指示器 ==== */
 .status-indicator {
     display: flex;
     align-items: center;
@@ -102,7 +161,7 @@ body {
     font-weight: 500;
 }
 
-/* 二维码容器 */
+/* ==== 二维码容器 ==== */
 .qrcode-container {
     display: flex;
     justify-content: center;
@@ -110,7 +169,7 @@ body {
     min-height: 200px;
     margin: 16px auto;
     background: #fff;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     padding: 16px;
     width: fit-content;
 }
@@ -124,57 +183,112 @@ body {
 }
 
 .qrcode-container .error-text {
-    color: var(--error);
+    color: var(--danger);
     font-size: 0.9rem;
     background: transparent;
 }
 
-/* URL显示 */
+/* ==== URL 显示 ==== */
 .url-display {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     margin-top: 16px;
-    background: var(--bg-secondary);
-    border-radius: 8px;
+    background: var(--glass-bg);
+    border-radius: var(--radius-sm);
     padding: 10px 16px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
 }
 
 .url-text {
-    font-family: 'Courier New', monospace;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     font-size: 0.85rem;
-    color: var(--accent);
+    color: var(--brand);
     word-break: break-all;
     flex: 1;
 }
 
-.copy-btn {
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
+/* ==== 玻璃按钮 ==== */
+.btn-glass {
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
     padding: 6px 10px;
     cursor: pointer;
     font-size: 0.85rem;
-    transition: background 0.2s;
+    backdrop-filter: blur(12px);
+    transition: var(--transition);
     flex-shrink: 0;
 }
 
-.copy-btn:hover {
-    background: var(--accent-hover);
+.btn-glass:hover {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
 }
 
-/* 提示文本 */
+.btn-glass.success {
+    background: var(--success);
+    color: #fff;
+    border-color: var(--success);
+}
+
+/* ==== 提示文本 ==== */
 .hint-text {
     margin-top: 12px;
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
 
-/* 响应式设计 - 小屏设备 */
+/* ==== Toast 提示 ==== */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--glass-bg-dark);
+    color: rgba(244, 244, 245, 1);
+    padding: 10px 24px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border-dark);
+    backdrop-filter: blur(18px);
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: var(--transition);
+    z-index: 9999;
+    pointer-events: none;
+}
+
+.toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ==== 响应式 ==== */
+@media (max-width: 1024px) {
+    .container {
+        padding: 20px 16px;
+    }
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 16px 12px;
+    }
+
+    .qr-card {
+        padding: 20px 16px;
+    }
+}
+
 @media (max-width: 480px) {
+    body {
+        font-size: 13px;
+    }
+
     .container {
         padding: 12px;
     }
@@ -189,12 +303,5 @@ body {
 
     .url-text {
         font-size: 0.75rem;
-    }
-}
-
-/* 响应式设计 - 大屏设备 */
-@media (min-width: 768px) {
-    .container {
-        padding: 40px 20px;
     }
 }

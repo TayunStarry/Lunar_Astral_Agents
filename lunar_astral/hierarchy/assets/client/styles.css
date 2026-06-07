@@ -544,6 +544,43 @@ body {
 	transform: scale(0.95);
 }
 
+/* ========== 音频重播按钮 ========== */
+.audio-replay-btn {
+	background: transparent;
+	border: none;
+	color: rgba(255, 255, 255, 0.5);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+	padding: 4px 6px;
+	font-size: 13px;
+	border-radius: 8px;
+	outline: none;
+}
+
+.audio-replay-btn:hover {
+	color: var(--accent-color);
+	background: rgba(157, 107, 255, 0.15);
+}
+
+.audio-replay-btn:active {
+	transform: scale(0.9);
+}
+
+.audio-replay-btn.replaying {
+	animation: audio-replay-pulse 0.6s ease;
+	color: var(--accent-color);
+}
+
+@keyframes audio-replay-pulse {
+	0% { transform: scale(1); }
+	30% { transform: scale(1.25); }
+	60% { transform: scale(0.95); }
+	100% { transform: scale(1); }
+}
+
 .message-content {
 	color: white;
 	line-height: 1.6;
@@ -634,25 +671,136 @@ body {
 	margin: 8px 0;
 }
 
+/* ========== 代码块色彩方案（月华主题） ========== */
+/* 设计目标：高对比度、清晰可读、与玻璃拟态风格协调 */
+
+/* --- 行内代码 --- */
 .markdown-content code {
-	background: rgba(0, 0, 0, 0.35);
+	background: rgba(157, 107, 255, 0.15);
+	border: 1px solid rgba(157, 107, 255, 0.3);
 	padding: 2px 8px;
 	border-radius: 6px;
-	font-family: 'Consolas', 'Monaco', monospace;
-	font-size: 13px;
+	font-family: 'SF Mono', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+	font-size: 0.88em;
+	color: #e2c8ff;
 }
 
+/* --- 代码块容器 --- */
 .markdown-content pre {
-	background: rgba(0, 0, 0, 0.45);
-	padding: 14px;
+	background: rgba(30, 30, 50, 0.75);
+	border: 1px solid rgba(108, 155, 207, 0.3);
+	border-left: 3px solid var(--primary-color);
+	padding: 16px;
 	border-radius: 12px;
 	overflow-x: auto;
-	margin: 10px 0;
+	margin: 12px 0;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .markdown-content pre code {
 	background: none;
+	border: none;
 	padding: 0;
+	color: #f0f0f5;
+	font-size: 13.5px;
+	line-height: 1.65;
+}
+
+/* --- highlight.js 语法高亮主题（月华定制版） --- */
+/* 基础文本 */
+.hljs {
+	color: #e8e8f0;
+	background: transparent;
+}
+
+/* 关键字 / 操作符 / 选择器 */
+.hljs-keyword,
+.hljs-operator,
+.hljs-selector-tag {
+	color: #9d6bff;
+	font-weight: 500;
+}
+
+/* 函数名 / 方法调用 */
+.hljs-title,
+.hljs-function .hljs-title,
+.hljs-built_in {
+	color: #6c9bcf;
+}
+
+/* 字符串 */
+.hljs-string,
+.hljs-template-variable,
+.hljs-addition {
+	color: #20c997;
+}
+
+/* 数字 / 布尔值 / 常量 */
+.hljs-number,
+.hljs-literal,
+.hljs-boolean,
+.hljs-symbol {
+	color: #fbbf24;
+}
+
+/* 注释 / 元数据 */
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+	color: rgba(180, 180, 200, 0.7);
+	font-style: italic;
+}
+
+/* 类名 / 类型 */
+.hljs-class .hljs-title,
+.hljs-type {
+	color: #ff6b9c;
+}
+
+/* 属性 / 变量 */
+.hljs-attribute,
+.hljs-variable,
+.hljs-name {
+	color: #8a2be2;
+}
+
+/* 参数 */
+.hljs-params {
+	color: #d0d0e0;
+}
+
+/* 正则表达式 */
+.hljs-regexp {
+	color: #dc3545;
+}
+
+/* 标签名（HTML/XML） */
+.hljs-tag .hljs-name {
+	color: #6c9bcf;
+}
+
+/* 标签属性（HTML/XML） */
+.hljs-tag .hljs-attr {
+	color: #9d6bff;
+}
+
+/* 元标签（编译指令等） */
+.hljs-meta {
+	color: #fbbf24;
+}
+
+/* 代码块内的链接 */
+.hljs-link {
+	color: #6c9bcf;
+	text-decoration: underline;
+}
+
+/* 代码块选中状态 */
+.markdown-content pre ::selection {
+	background: rgba(157, 107, 255, 0.4);
+	color: #fff;
 }
 
 .markdown-content ul,

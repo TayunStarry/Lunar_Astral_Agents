@@ -117,11 +117,13 @@ class LunarCoreApp {
 				if (message.data.type === 'response' || message.data.type === 'active') {
 					/** 获取消息的文本内容 */
 					const content = message.data.content || '';
+					/** 获取音频数据 */
+					const audio = message.data.audio || undefined;
 					// 渲染消息到历史记录
-					await this.handleAssistantMessage(content, undefined);
+					await this.handleAssistantMessage(content, undefined, audio);
 					// 如果包含音频数据，加入播放队列
-					if (message.data.audio) {
-						AudioQueue.enqueue(message.data.audio);
+					if (audio) {
+						AudioQueue.enqueue(audio);
 					}
 				}
 				break;
@@ -144,11 +146,12 @@ class LunarCoreApp {
 		}
 	}
 
-	async handleAssistantMessage(content, imageUrl) {
+	async handleAssistantMessage(content, imageUrl, audio) {
 		const assistantMessage = {
 			role: 'assistant',
 			content: content,
 			imageUrl: imageUrl || undefined,
+			audio: audio,
 			timestamp: Date.now(),
 		};
 		this.historyMessages.push(assistantMessage);
