@@ -66,13 +66,9 @@ export class DialogueRole extends ModelBuilder {
 			else {
 				for (const content of message.content) {
 					// 文本内容项：提取为纯文本消息
-					if (content.type === 'text') {
-						flattenedMessages.push({ role: message.role, content: content.text });
-					}
+					if (content.type === 'text') flattenedMessages.push({ role: message.role, content: content.text });
 					// 视觉内容项：保留为单条视觉消息（内容为单元素数组）
-					else {
-						flattenedMessages.push({ role: message.role, content: [content] });
-					}
+					else flattenedMessages.push({ role: message.role, content: [content] });
 				}
 			}
 		}

@@ -416,7 +416,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 		message = append(message, map[string]interface{}{
 			"type": "image",
 			"data": map[string]string{
-				"base64": img,
+				"file": "base64://" + img,
 			},
 		})
 	}

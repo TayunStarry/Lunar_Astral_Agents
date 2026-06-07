@@ -38,7 +38,7 @@ export class AgentDefine {
 	];
 	/** 随机默认应答 */
 	public get randomDefaultMessage(): string {
-		return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length)];
+		return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
 	}
 	/** 构建智能体 并 初始化各个子模型的系统提示词 */
 	protected constructor() {

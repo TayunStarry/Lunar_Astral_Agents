@@ -1,4 +1,4 @@
-import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, cleanTextForTTS, splitSentences } from '../index';
+﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, cleanTextForTTS, splitSentences } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -68,56 +68,68 @@ class LunarAgent extends AgentDefine {
 				this.painterRole.createImageRendering(this);
 				// 创建消息
 				await this.createChatMessage();
-				/** 消息响应 */
-				if (!this.finalResponse.trim().length){
-					// 随机选择一个默认消息
-					this.finalResponse = this.randomDefaultMessage;
-					// 错误次数增加
-					errorCount++;
-				}
+				// 如果消息响应为空，抛出异常
+				if (!this.finalResponse.trim().length) throw new Error('消息响应为空');
+				// 成功响应时重置错误计数
+				else errorCount = 0;
 				// 如果未读记录数超过10条，调用编纂者组织历史记录
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
 				}
 				/** 获取清洗后的文本 */
 				const cleanedResponse = cleanTextForTTS(this.finalResponse);
-				// 如果清洗后的文本不为空，进行句子切分并合并推送文本和语音
-				if (cleanedResponse.trim().length) {
-					/** 句子切分 */
-					const chunks = splitSentences(cleanedResponse);
-					// 遍历句子数组，合成语音并推送至外部客户端
-					chunks.forEach(chunk => {
-						/** 语音合成结果 */
-						let audio = '';
-						try {
-							const [audioData, err] = tts(chunk);
-							if (!err && audioData) audio = audioData;
-						} 
-						catch (e) {
-							console.error(`TTS合成异常: [${chunk}]`, e);
-						}
-						pushContext(messageType, chunk, audio);
-					});
+				// 如果清洗后的文本为空，抛出异常
+				if (!cleanedResponse.trim().length) throw new Error('清洗后的文本为空');
+				/** 句子切分 */
+				const chunks = splitSentences(cleanedResponse);
+				// 遍历句子数组，合成语音并推送至外部客户端
+				for (const chunk of chunks) {
+					/** 语音合成结果 */
+					let audio = '';
+					try {
+						const [audioData, err] = tts(chunk);
+						if (!err && audioData) audio = audioData;
+					}
+					catch (e) {
+						console.error(`TTS合成异常: [${chunk}]`, e);
+					}
+					pushContext(messageType, chunk, audio);
 				}
 			}
 			catch (error) {
-				// 推送错误消息
-				if (this.pushErrorMessage(error as Error, errorCount)) break;
+				/** 获取提示音数据 */
+				const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+				// 如果读取提示音失败，打印错误信息
+				if (readErr) console.error('读取提示音失败:', readErr);
+				// 打印错误信息
+				console.error((error as Error).message, ' || ', (error as Error).stack);
 				// 错误次数增加
 				errorCount++;
+				// 推送兜底消息
+				pushContext('active', this.randomDefaultMessage, promptSound);
+				// 错误累积达阈值，重置状态并重新循环
+				if (errorCount >= 3) {
+					this.resetAgentState();
+					errorCount = 0;
+					continue;
+				}
 			}
 		}
 	}
-	/** 推送错误消息 */
-	protected pushErrorMessage(error: Error, errorCount: number): boolean {
-		// 打印错误信息
-		console.error(error.message, ' || ', error.stack);
-		// 如果错误次数小于3次，则继续循环
-		if (errorCount < 3) return false;
-		// 随机选择一个错误消息
-		pushContext('active', this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)], '');
-		// 终止思考链循环
-		return true;
+	/** 错误累积达阈值后重置智能体状态 */
+	protected resetAgentState(): void {
+		// 清空全部子智能体的messages
+		this.queryKeywords.coverContext([]);
+		this.emotionManager.coverContext([]);
+		this.recorderRole.coverContext([]);
+		this.summaryRole.coverContext([]);
+		this.descriptionRole.coverContext([]);
+		this.dialogueRole.coverContext([]);
+		this.painterRole.coverContext([]);
+		this.organizeRole.coverContext([]);
+		// 清除主智能体的unreadContext和unreadVideoUrl
+		this.unreadContext = [];
+		this.unreadVideoUrl = [];
 	}
 	/** 拉取外部消息 */
 	protected async pullExternalMessages() {

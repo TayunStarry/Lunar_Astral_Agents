@@ -85,6 +85,11 @@ export function splitSentences(text: string): string[] {
             splitPos = TARGET_LENGTH;
         }
 
+        // 确保标点符号在句尾而非下一句开头：将切分点后的连续标点归入当前句
+        while (splitPos < remaining.length && PUNCTUATION.test(remaining[splitPos])) {
+            splitPos++;
+        }
+
         const sentence = remaining.slice(0, splitPos).trim();
         if (sentence.length > 0) {
             sentences.push(sentence);

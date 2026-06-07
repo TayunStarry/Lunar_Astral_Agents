@@ -178,18 +178,28 @@ export class ModelBuilder extends ConfigModifier {
 		}
 		return this;
 	}
-	/** 获取最新的用户消息内容作为查询条件 */
+	/** 获取最新的5条用户消息内容拼接作为查询条件 */
 	private getLatestUserMessageContent(): string | null {
-		// 从消息列表的末尾开始遍历，找到最新的用户消息
-		for (let i = this.messages.length - 1; i >= 0; i--) {
+		/** 收集到的用户消息文本 */
+		const userTexts: string[] = [];
+		// 从消息列表的末尾开始遍历，收集最新的5条用户消息
+		for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
 			/** 检查当前消息是否为用户消息 */
 			const message = this.messages[i];
-			// 如果是用户消息，直接返回其内容
-			if (message.role === 'user' && typeof message.content === 'string') {
-				return message.content;
+			if (message.role === 'user') {
+				// 提取文本内容
+				if (typeof message.content === 'string') {
+					userTexts.unshift(message.content);
+				} else if (Array.isArray(message.content)) {
+					const textContent = message.content
+						.filter(item => item.type === 'text')
+						.map(item => item.text)
+						.join(' ');
+					if (textContent.trim()) userTexts.unshift(textContent);
+				}
 			}
 		}
-		return null;
+		return userTexts.length > 0 ? userTexts.join(' ') : null;
 	}
 	/** 构建模型响应实例 */
 	public constructor(prompt: string) {

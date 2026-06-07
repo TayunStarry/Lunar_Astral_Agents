@@ -52,10 +52,6 @@ func HandleLunarMessage(message []byte) {
 		handleLunarContextMessage(lunarMsg.Data)
 	case "image":
 		handleLunarImageMessage(lunarMsg.Data)
-	case "response":
-		handleLunarResponseMessage(lunarMsg.Data)
-	case "active":
-		handleLunarActiveMessage(lunarMsg.Data)
 	default:
 		logger.Warn("未知的 lunar 消息类型: %s", lunarMsg.Type)
 	}
@@ -68,13 +64,31 @@ func handleLunarContextMessage(data json.RawMessage) {
 		return
 	}
 
-	groupID := config.GetRandomGroupID()
-	if groupID == 0 {
-		logger.Error("没有可用的群组 ID")
-		return
+	switch contextData.Type {
+	case "response":
+		if config.LastGroupID == 0 {
+			logger.Warn("没有记录的群聊 ID，使用随机群聊")
+			config.LastGroupID = config.GetRandomGroupID()
+		}
+		if config.LastGroupID == 0 {
+			logger.Error("没有可用的群组 ID")
+			return
+		}
+		sendSplitTextMessages([]int64{config.LastGroupID}, contextData.Content)
+	case "active":
+		if len(config.AppConfig.QQAdapter.ListenGroupIds) == 0 {
+			logger.Error("没有可用的群组 ID")
+			return
+		}
+		sendSplitTextMessages(config.AppConfig.QQAdapter.ListenGroupIds, contextData.Content)
+	default:
+		groupID := config.GetRandomGroupID()
+		if groupID == 0 {
+			logger.Error("没有可用的群组 ID")
+			return
+		}
+		sendSplitTextMessages([]int64{groupID}, contextData.Content)
 	}
-
-	sendSplitTextMessages([]int64{groupID}, contextData.Content)
 }
 
 func handleLunarImageMessage(data json.RawMessage) {
@@ -84,41 +98,19 @@ func handleLunarImageMessage(data json.RawMessage) {
 		return
 	}
 
-	groupID := config.GetRandomGroupID()
-	if groupID == 0 {
-		logger.Error("没有可用的群组 ID")
-		return
-	}
-
-	err := napcat.SendGroupImageMessage(groupID, imageData.Images)
-	if err != nil {
-		logger.Error("发送群图片消息失败: %v", err)
-	}
-}
-
-func handleLunarResponseMessage(data json.RawMessage) {
-	var contextData types.LunarContextData
-	if err := json.Unmarshal(data, &contextData); err != nil {
-		logger.Error("解析 lunar 响应消息失败: %v", err)
-		return
-	}
-
 	if config.LastGroupID == 0 {
 		logger.Warn("没有记录的群聊 ID，使用随机群聊")
 		config.LastGroupID = config.GetRandomGroupID()
 	}
-
-	sendSplitTextMessages([]int64{config.LastGroupID}, contextData.Content)
-}
-
-func handleLunarActiveMessage(data json.RawMessage) {
-	var contextData types.LunarContextData
-	if err := json.Unmarshal(data, &contextData); err != nil {
-		logger.Error("解析 lunar 主动消息失败: %v", err)
+	if config.LastGroupID == 0 {
+		logger.Error("没有可用的群组 ID")
 		return
 	}
 
-	sendSplitTextMessages(config.AppConfig.QQAdapter.ListenGroupIds, contextData.Content)
+	err := napcat.SendGroupImageMessage(config.LastGroupID, imageData.Images)
+	if err != nil {
+		logger.Error("发送群图片消息失败: %v", err)
+	}
 }
 
 // sendSplitTextMessages 将文本内容按句末标点拆分，然后在后台协程中逐条推送到指定群组。
