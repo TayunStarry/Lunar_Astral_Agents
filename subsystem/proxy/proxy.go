@@ -14,21 +14,94 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
+
+	"browser"
 )
 
-//go:embed certs/*
-var certsFS embed.FS
+//go:embed frontend/*
+var frontendFS embed.FS
+
+// ProxyServerPort 代理服务器HTTPS监听端口
+const ProxyServerPort = 36369
 
 // CORSAllowedOrigins 定义允许跨域访问的来源列表
-var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
+var CORSAllowedOrigins = []string{
+	fmt.Sprintf("http://localhost:%d", *config.BasicPort),
+	fmt.Sprintf("https://localhost:%d", ProxyServerPort),
+}
 
-// 请求映射，键为请求ID，值为请求上下文
+// 前端资源路径前缀
+const frontendPathPrefix = "/proxy_ui"
+
+// 请求映射和互斥锁
 var requests = make(map[string]*any)
-
-// 互斥锁，用于保护请求映射的并发访问
 var serverMutex sync.RWMutex
+
+// Run 启动代理服务器的完整流程：获取IP→启动HTTPS服务→嵌入前端资源→打开浏览器，返回服务器实例
+func Run() *http.Server {
+	logger.SetDevMode(*config.Developer)
+
+	// 1. 获取本地IP地址
+	ip, err := browser.GetLocalIP(nil)
+	if err != nil {
+		logger.Warn("ProxySvr", "获取本地IP失败: %v，使用localhost", err)
+		ip = "localhost"
+	}
+	logger.Info("ProxySvr", "本地IP地址: %s", ip)
+
+	// 2. 启动代理服务器
+	server := StartProxyServer()
+	if server == nil {
+		logger.Error("ProxySvr", "代理服务器启动失败")
+		return nil
+	}
+
+	// 3. 使用browser包的WebView功能打开前端界面
+	serverURL := fmt.Sprintf("https://%s:%d/proxy_ui", ip, ProxyServerPort)
+	logger.Info("ProxySvr", "代理服务地址: %s", serverURL)
+	browser.OpenBrowser(serverURL)
+
+	return server
+}
+
+// StartProxyServer 启动HTTPS代理服务器，监听36369端口
+func StartProxyServer() *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleRequest)
+
+	// 生成自签名证书
+	cert, err := generateSelfSignedCert()
+	if err != nil {
+		logger.Error("ProxySvr", "生成证书失败: %v", err)
+		return nil
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server := &http.Server{
+		Addr:      fmt.Sprintf(":%d", ProxyServerPort),
+		Handler:   mux,
+		TLSConfig: tlsConfig,
+	}
+
+	go func() {
+		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			logger.Error("ProxySvr", "代理服务器启动失败: %v", err)
+		}
+	}()
+
+	logger.Info("ProxySvr", "代理服务器已启动 -> https://localhost:%d/", ProxyServerPort)
+	logger.Info("ProxySvr", "前端界面 [GET] -> https://localhost:%d/proxy_ui", ProxyServerPort)
+	logger.Info("ProxySvr", "健康检查 [GET] -> https://localhost:%d/health", ProxyServerPort)
+	logger.Info("ProxySvr", "服务器信息 [GET] -> https://localhost:%d/api/server-info", ProxyServerPort)
+
+	return server
+}
 
 // BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
 func BuildTLSTerminationProxy() *http.Server {
@@ -40,169 +113,212 @@ func BuildTLSTerminationProxy() *http.Server {
 	logger.Info("ProxySvr", "代理请求 [POST] -> https://localhost:%v/", *config.ProxyPort)
 	logger.Info("ProxySvr", "健康检查 [GET] -> https://localhost:%v/health", *config.ProxyPort)
 
-	// 从嵌入式文件系统读取证书和密钥
-	certPEM, err := certsFS.ReadFile("certs/localhost.pem")
+	// 生成自签名证书
+	cert, err := generateSelfSignedCert()
 	if err != nil {
-		logger.Error("ProxySvr", "读取证书失败: %v", err)
-		return nil
-	}
-	keyPEM, err := certsFS.ReadFile("certs/localhost-key.pem")
-	if err != nil {
-		logger.Error("ProxySvr", "读取私钥失败: %v", err)
+		logger.Error("ProxySvr", "生成证书失败: %v", err)
 		return nil
 	}
 
-	// 加载证书
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		logger.Error("ProxySvr", "加载证书失败: %v", err)
-		return nil
-	}
-
-	// 创建TLS配置
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
 
-	// 创建服务器实例
 	server := &http.Server{
 		Addr:      serverAddr,
 		Handler:   mux,
 		TLSConfig: tlsConfig,
 	}
 
-	// 启动HTTPS服务器（在独立goroutine中运行）
 	go func() {
-		// 启动HTTPS服务器
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			logger.Error("ProxySvr", "服务器启动失败: %v", err)
 		}
 	}()
 
-	// 返回服务器实例
 	return server
 }
 
-// handleHealthCheck 用于监控系统状态和负载情况
-func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	// 添加CORS头，允许跨域访问
+// handleRequest 统一请求处理器：/proxy_ui路径由本地处理，其余全部代理转发
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+	logRequest(r)
 	setCORSHeaders(w, r)
-	// 如果是预检请求（OPTIONS），直接返回200 OK
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	// 只允许GET方法，否则返回405 Method Not Allowed
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	// 使用读锁获取当前挂起的请求数量
-	serverMutex.RLock()
-	pendingRequests := len(requests)
-	serverMutex.RUnlock()
-	// 构造健康检查响应数据
-	healthStatus := map[string]any{
-		"status":           "healthy",         // 服务状态：健康
-		"timestamp":        time.Now(),        // 当前时间戳
-		"pending_requests": pendingRequests,   // 当前挂起的请求数
-		"port":             *config.ProxyPort, // 服务监听端口
-	}
-	// 设置响应头，指定返回JSON格式
-	w.Header().Set("Content-Type", "application/json")
-	// 将健康状态编码为JSON并写入响应体
-	if err := json.NewEncoder(w).Encode(healthStatus); err != nil {
-		// 编码失败，返回500内部服务器错误
-		http.Error(w, "编码响应失败", http.StatusInternalServerError)
-		return
-	}
-}
 
-// setCORSHeaders 设置跨域资源共享（CORS）响应头，允许前端应用从不同的源访问API
-func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
-	// 从请求头中获取来源（Origin）
-	origin := r.Header.Get("Origin")
-	// 检查该来源是否在服务器允许的白名单中
-	allowed := slices.Contains(CORSAllowedOrigins, origin)
-	// 如果来源被允许，则将其写回响应头，允许该来源跨域访问
-	if allowed {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-	} else {
-		// 否则使用白名单中的第一个来源作为默认值，避免暴露空值
-		w.Header().Set("Access-Control-Allow-Origin", CORSAllowedOrigins[0])
-	}
-	// 设置允许的HTTP方法：POST、GET、OPTIONS
-	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-	// 设置允许的请求头：Content-Type、Authorization
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	// 设置预检请求（OPTIONS）的缓存时间，单位为秒，86400秒即24小时
-	w.Header().Set("Access-Control-Max-Age", "86400")
-}
-
-// handleReverseProxy 处理反向代理请求，将HTTPS请求解密后转发给内部的HTTP服务器，并将响应返回给客户端， 实现TLS终止（TLS Termination）模式，让内部服务无需处理HTTPS
-func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
-	// 添加CORS头
-	setCORSHeaders(w, r)
 	// 处理预检请求
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// 检查是否是WebSocket连接
+	// 前端资源请求由本地处理
+	if strings.HasPrefix(r.URL.Path, frontendPathPrefix) {
+		serveFrontend(w, r)
+		return
+	}
+
+	// 健康检查端点
+	if r.URL.Path == "/health" {
+		handleHealthCheck(w, r)
+		return
+	}
+
+	// 服务器信息API
+	if r.URL.Path == "/api/server-info" {
+		handleServerInfo(w, r)
+		return
+	}
+
+	// WebSocket连接代理
 	if r.Header.Get("Upgrade") == "websocket" {
 		handleWebSocketProxy(w, r)
 		return
 	}
 
-	// 目标服务器地址 - 内部HTTP服务器的URL
+	// 其余请求全部代理转发至目标HTTP服务器
+	handleReverseProxy(w, r)
+}
+
+// serveFrontend 提供嵌入式前端资源，embed路径与URL路径直接对应
+func serveFrontend(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	// /proxy_ui 或 /proxy_ui/ 重定向到 /proxy_ui/index.html
+	if path == frontendPathPrefix || path == frontendPathPrefix+"/" {
+		path = frontendPathPrefix + "/index.html"
+	}
+
+	// embed FS路径: frontend/proxy_ui/xxx -> URL: /proxy_ui/xxx
+	content, err := frontendFS.ReadFile("frontend" + path)
+	if err != nil {
+		http.Error(w, "资源未找到", http.StatusNotFound)
+		return
+	}
+
+	contentType := "text/plain; charset=utf-8"
+	switch {
+	case strings.HasSuffix(path, ".html"):
+		contentType = "text/html; charset=utf-8"
+	case strings.HasSuffix(path, ".css"):
+		contentType = "text/css; charset=utf-8"
+	case strings.HasSuffix(path, ".js"):
+		contentType = "application/javascript; charset=utf-8"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Write(content)
+}
+
+// handleServerInfo 返回服务器信息API
+func handleServerInfo(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	ip, _ := browser.GetLocalIP(nil)
+	info := map[string]any{
+		"ip":         ip,
+		"port":       ProxyServerPort,
+		"url":        fmt.Sprintf("https://%s:%d", ip, ProxyServerPort),
+		"basic_port": *config.BasicPort,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(info); err != nil {
+		http.Error(w, "编码响应失败", http.StatusInternalServerError)
+	}
+}
+
+// handleHealthCheck 用于监控系统状态和负载情况
+func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	serverMutex.RLock()
+	pendingRequests := len(requests)
+	serverMutex.RUnlock()
+
+	healthStatus := map[string]any{
+		"status":           "healthy",
+		"timestamp":        time.Now(),
+		"pending_requests": pendingRequests,
+		"port":             ProxyServerPort,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(healthStatus); err != nil {
+		http.Error(w, "编码响应失败", http.StatusInternalServerError)
+		return
+	}
+}
+
+// setCORSHeaders 设置跨域资源共享（CORS）响应头，支持常见HTTP方法
+func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	allowed := slices.Contains(CORSAllowedOrigins, origin)
+	if allowed {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+	w.Header().Set("Access-Control-Max-Age", "86400")
+}
+
+// handleReverseProxy 处理反向代理请求，将HTTPS请求解密后转发给内部的HTTP服务器
+func handleReverseProxy(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Header.Get("Upgrade") == "websocket" {
+		handleWebSocketProxy(w, r)
+		return
+	}
+
 	targetURL := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
-	// 解析目标URL - 将字符串URL转换为url.URL对象
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "目标URL解析失败", http.StatusInternalServerError)
 		return
 	}
-	// 创建反向代理 - 使用标准库创建单主机反向代理
+
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	// 自定义请求处理器 - 配置请求转发规则
 	proxy.Director = func(req *http.Request) {
-		// 保存原始URL用于日志 - 记录客户端请求的原始URL
 		originalURL := req.URL.String()
-		// 设置协议为后端服务器的协议（HTTP）
 		req.URL.Scheme = target.Scheme
-		// 设置主机为后端服务器的主机
 		req.URL.Host = target.Host
-		// 设置Host头为后端服务器的主机
 		req.Host = target.Host
-		// 指示原始请求使用HTTPS（用于后端服务识别原始协议）
 		req.Header.Set("X-Forwarded-Proto", "https")
-		// 指示原始请求的端口
-		req.Header.Set("X-Forwarded-Port", fmt.Sprintf("%d", *config.ProxyPort))
+		_, port, splitErr := net.SplitHostPort(r.Host)
+		if splitErr != nil || port == "" {
+			port = "443"
+		}
+		req.Header.Set("X-Forwarded-Port", port)
 		logger.Info("ProxySvr", "转发请求: %s %s -> %s%s", req.Method, originalURL, targetURL, req.URL.Path)
 	}
-	// 自定义错误处理器 - 处理代理过程中的错误
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		// 记录错误日志 - 输出详细的错误信息
 		logger.Error("ProxySvr", "代理错误: %v", err)
-		// 设置错误响应头 - 返回JSON格式的错误信息
 		w.Header().Set("Content-Type", "application/json")
-		// 使用502状态码表示网关错误
 		w.WriteHeader(http.StatusBadGateway)
-		// 写入错误响应体 - 提供友好的错误信息
 		errorMsg := fmt.Sprintf(`{"error": "无法连接到后端服务器", "message": "%s"}`, err.Error())
 		w.Write([]byte(errorMsg))
 	}
-	// 执行代理请求 - 调用反向代理处理请求
 	proxy.ServeHTTP(w, r)
 }
 
 // handleWebSocketProxy 处理WebSocket代理，将WSS连接转发到内部WS服务
 func handleWebSocketProxy(w http.ResponseWriter, r *http.Request) {
-	// 连接到后端WebSocket服务器
 	targetAddr := fmt.Sprintf("localhost:%d", *config.BasicPort)
 
-	// 建立到后端的连接
 	backendConn, err := net.Dial("tcp", targetAddr)
 	if err != nil {
 		logger.Error("ProxySvr", "WebSocket连接后端失败: %v", err)
@@ -211,7 +327,6 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer backendConn.Close()
 
-	// 获取客户端连接（劫持HTTP连接）
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		logger.Error("ProxySvr", "不支持Hijack接口")
@@ -227,40 +342,45 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer clientConn.Close()
 
-	// 复制WebSocket升级请求到后端
 	var reqBuffer bytes.Buffer
 	r.Write(&reqBuffer)
 	backendConn.Write(reqBuffer.Bytes())
 
-	// 创建双向数据转发
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// 从客户端转发到后端
 	go func() {
 		defer wg.Done()
 		io.Copy(backendConn, clientBuf)
 		io.Copy(backendConn, clientConn)
 	}()
 
-	// 从后端转发到客户端
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, backendConn)
 	}()
 
-	// 等待连接结束
 	wg.Wait()
-
 	logger.Info("ProxySvr", "WebSocket连接关闭")
 }
 
-// ReadCertFile 从嵌入式文件系统读取证书文件
-func ReadCertFile() ([]byte, error) {
-	return certsFS.ReadFile("certs/localhost.pem")
+// logRequest 记录请求日志
+func logRequest(r *http.Request) {
+	logger.Info("ProxySvr", "[%s] %s %s", r.Method, r.RemoteAddr, r.URL.String())
 }
 
-// ReadKeyFile 从嵌入式文件系统读取私钥文件
+// ReadCertFile 读取证书文件（兼容性保留）
+func ReadCertFile() ([]byte, error) {
+	if storedCertPEM == nil {
+		return nil, fmt.Errorf("证书尚未生成")
+	}
+	return storedCertPEM, nil
+}
+
+// ReadKeyFile 读取私钥文件（兼容性保留）
 func ReadKeyFile() ([]byte, error) {
-	return certsFS.ReadFile("certs/localhost-key.pem")
+	if storedKeyPEM == nil {
+		return nil, fmt.Errorf("私钥尚未生成")
+	}
+	return storedKeyPEM, nil
 }

@@ -1,0 +1,200 @@
+/* 基础变量 */
+:root {
+    --bg-primary: #0a0a1a;
+    --bg-secondary: #1a1a2e;
+    --bg-card: #16213e;
+    --accent: #4a9eff;
+    --accent-hover: #3a8eef;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0b0;
+    --success: #4caf50;
+    --error: #f44336;
+    --border: #2a2a4e;
+    --shadow: rgba(0, 0, 0, 0.3);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* 背景叠加层 */
+.bg-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0a0a1a 100%);
+    z-index: -2;
+}
+
+.bg-credit {
+    position: fixed;
+    bottom: 12px;
+    right: 16px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.5;
+    z-index: -1;
+}
+
+/* 容器 */
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* 二维码卡片 */
+.qr-card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 28px 24px;
+    text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 24px var(--shadow);
+}
+
+/* 状态指示器 */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text {
+    font-size: 0.9rem;
+    color: var(--success);
+    font-weight: 500;
+}
+
+/* 二维码容器 */
+.qrcode-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    margin: 16px auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    width: fit-content;
+}
+
+.qrcode-container canvas {
+    display: block !important;
+}
+
+.qrcode-container img {
+    display: none !important;
+}
+
+.qrcode-container .error-text {
+    color: var(--error);
+    font-size: 0.9rem;
+    background: transparent;
+}
+
+/* URL显示 */
+.url-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+}
+
+.url-text {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    word-break: break-all;
+    flex: 1;
+}
+
+.copy-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.copy-btn:hover {
+    background: var(--accent-hover);
+}
+
+/* 提示文本 */
+.hint-text {
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* 响应式设计 - 小屏设备 */
+@media (max-width: 480px) {
+    .container {
+        padding: 12px;
+    }
+
+    .qr-card {
+        padding: 20px 16px;
+    }
+
+    .qrcode-container {
+        padding: 12px;
+    }
+
+    .url-text {
+        font-size: 0.75rem;
+    }
+}
+
+/* 响应式设计 - 大屏设备 */
+@media (min-width: 768px) {
+    .container {
+        padding: 40px 20px;
+    }
+}

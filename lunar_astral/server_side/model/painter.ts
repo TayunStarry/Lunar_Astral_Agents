@@ -284,7 +284,6 @@ export class PainterRole extends Toolchain {
 				/** 模型回复内容 */
 				const replyContent = choice.message?.content || '';
 				// 如果模型回复内容不为空，将模型回复内容写入到聊天模型的未读上下文
-				// 将画家反馈以 user 角色推入，避免对话模型将其视为自己已说的话而重复
 				if (replyContent) source.unreadContext.push({ role: 'user', content: `[画家反馈] ${replyContent}` });
 				break;
 			}

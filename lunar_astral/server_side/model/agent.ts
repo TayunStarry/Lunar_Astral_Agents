@@ -1,4 +1,4 @@
-﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, cleanTextForTTS, splitSentences } from '../index';
+﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -76,14 +76,20 @@ class LunarAgent extends AgentDefine {
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
 				}
-				/** 获取清洗后的文本 */
-				const cleanedResponse = cleanTextForTTS(this.finalResponse);
-				// 如果清洗后的文本为空，抛出异常
-				if (!cleanedResponse.trim().length) throw new Error('清洗后的文本为空');
-				/** 句子切分 */
-				const chunks = splitSentences(cleanedResponse);
-				// 遍历句子数组，合成语音并推送至外部客户端
-				for (const chunk of chunks) {
+				/** 解析原始文本：拆分思考区、代码块、正文切片 */
+				const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
+				// 如果正文切片为空，抛出异常
+				if (!textChunks.length) throw new Error('清洗后的文本为空');
+				// 第一步：按顺序逐一发送思考区内容（不参与语音合成）
+				for (const thinking of thinkingBlocks) {
+					pushContext(messageType, thinking, '');
+				}
+				// 第二步：按顺序逐一发送代码块内容（不参与语音合成）
+				for (const code of codeBlocks) {
+					pushContext(messageType, code, '');
+				}
+				// 第三步：按顺序逐一发送正文切片，合成语音并推送
+				for (const chunk of textChunks) {
 					/** 语音合成结果 */
 					let audio = '';
 					try {

@@ -1490,11 +1490,16 @@ var agentSystem = (function (exports) {
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
                     }
-                    const cleanedResponse = cleanTextForTTS(this.finalResponse);
-                    if (!cleanedResponse.trim().length)
+                    const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
+                    if (!textChunks.length)
                         throw new Error('清洗后的文本为空');
-                    const chunks = splitSentences(cleanedResponse);
-                    for (const chunk of chunks) {
+                    for (const thinking of thinkingBlocks) {
+                        pushContext(messageType, thinking, '');
+                    }
+                    for (const code of codeBlocks) {
+                        pushContext(messageType, code, '');
+                    }
+                    for (const chunk of textChunks) {
                         let audio = '';
                         try {
                             const [audioData, err] = tts(chunk);
@@ -1568,32 +1573,52 @@ var agentSystem = (function (exports) {
     ];
     AgentExample.testMessageWrite('user', message, 1500);
 
+    function extractThinkingBlocks(text) {
+        const blocks = [];
+        const regex = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const content = match[1].trim();
+            if (content.length > 0) {
+                blocks.push(content);
+            }
+        }
+        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        return [blocks, remaining];
+    }
+    function extractCodeBlocks(text) {
+        const blocks = [];
+        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+            blocks.push(match[0]);
+        }
+        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        return [blocks, remaining];
+    }
     function cleanTextForTTS(text) {
         if (!text)
             return '';
         let processed = text;
-        processed = processed.replace(/<think>[\s\S]*?<\/think>/gi, '');
-        processed = processed.replace(/```[a-zA-Z][a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
-        processed = processed.replace(/```[\s\S]*?```/g, '');
         processed = processed.replace(/`[^`]*`/g, '');
         processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
-        processed = processed.replace(/\[.*?\]\(.*?\)/g, '');
+        processed = processed.replace(/\[([^\]]*)\]\(.*?\)/g, '$1');
         processed = processed.replace(/<[^>]*>/g, '');
         processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
         processed = processed.replace(/\*/g, '');
         processed = processed.replace(/\r?\n/g, ' ');
         processed = processed.replace(/\（[^）]*\）/g, '');
         processed = processed.replace(/\([^)]*\)/g, '');
-        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s~' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!';
+        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
         const whitelist = new RegExp(`[^${allowed}]`, 'g');
         processed = processed.replace(whitelist, '，');
         processed = processed.replace(/\s+/g, ' ');
         return processed.trim();
     }
-    function splitSentences(text) {
+    function splitSentences(text, targetLength = 30) {
         if (!text)
             return [];
-        const TARGET_LENGTH = 30;
+        const TARGET_LENGTH = targetLength;
         const PUNCTUATION = /[。？！…，、；：,;:\.\?!]/;
         const sentences = [];
         let remaining = text;
@@ -1633,24 +1658,14 @@ var agentSystem = (function (exports) {
         }
         return sentences;
     }
-    function synthesizeSpeech(text) {
-        const cleaned = cleanTextForTTS(text);
-        if (!cleaned)
-            return;
-        const sentences = splitSentences(cleaned);
-        if (sentences.length === 0)
-            return;
-        for (const sentence of sentences) {
-            try {
-                const [audio, err] = tts(sentence);
-                if (err) {
-                    console.error(`TTS合成失败: [${sentence}]`, err);
-                }
-            }
-            catch (e) {
-                console.error(`TTS合成异常: [${sentence}]`, e);
-            }
-        }
+    function parseContent(rawText) {
+        if (!rawText)
+            return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
+        const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
+        const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
+        const cleanedText = cleanTextForTTS(textAfterCode);
+        const textChunks = splitSentences(cleanedText);
+        return { thinkingBlocks, codeBlocks, textChunks };
     }
 
     exports.AgentDefine = AgentDefine;
@@ -1672,12 +1687,12 @@ var agentSystem = (function (exports) {
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
     exports.getPromptFromDatabase = getPromptFromDatabase;
+    exports.parseContent = parseContent;
     exports.queryFromDatabase = queryFromDatabase;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToDatabase = savePromptToDatabase;
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
-    exports.synthesizeSpeech = synthesizeSpeech;
     exports.toBtoaString = toBtoaString;
 
     return exports;

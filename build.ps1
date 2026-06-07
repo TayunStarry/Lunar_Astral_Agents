@@ -1,4 +1,4 @@
-﻿﻿﻿﻿# Lunar Astral Agents - 统一构建脚本
+﻿﻿﻿﻿﻿# Lunar Astral Agents - 统一构建脚本
 # 负责环境变量检查、依赖验证和统一调度编译
 
 param(
@@ -128,6 +128,7 @@ try {
     Invoke-Build -Path "$ScriptRoot\subsystem\volume_archive" -Name "Volume Archive"
     # Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts_lunar" -Name "Qwen3 TTS Lunar"
     Invoke-Build -Path "$ScriptRoot\subsystem\qwen_asr_lunar" -Name "Qwen ASR Lunar"
+    Invoke-Build -Path "$ScriptRoot\subsystem\proxy" -Name "Proxy Server"
     Invoke-Build -Path "$ScriptRoot\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
     # Invoke-Build -Path "$ScriptRoot\subsystem\sd_lunar" -Name "SD Lunar"
