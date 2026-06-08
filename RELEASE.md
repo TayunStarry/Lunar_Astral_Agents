@@ -85,6 +85,12 @@
 | | 应用加载器 | 一键启动外部 .exe / .ps1 / .bat |
 | **独立模块** | 语音识别 | Qwen3-ASR-0.6B/1.7B，30 种语言 |
 | | 语音合成 | Qwen3-TTS-0.6B，中文语音合成 |
+| **扩展模块** | LunarTick | tick 驱动的通用程序执行引擎 |
+| | QQ 适配器 | NapCat ↔ 月华群聊消息转发 |
+| | GGUF 查看器 | GGUF 模型元数据可视化查看 |
+| | HTTPS 代理 | 本地 HTTPS 代理服务器 |
+| | SD 图像生成 | Stable Diffusion C++ GGML 引擎 |
+| | 卷归档 | 卷归档管理工具 |
 
 ---
 

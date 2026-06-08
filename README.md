@@ -48,6 +48,39 @@
         <li><code>旧版宣传图.jpg</code> <span style="color: #6a737d;">— 旧版宣传图片</span></li>
       </ul>
     </li>
+    <li style="padding-left: 1.5em;"><strong>local_data/</strong> <span style="color: #6a737d;">— 本地数据与前端资源目录</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>lunar_package.json</code> <span style="color: #6a737d;">— 前端包配置</span></li>
+        <li><strong>models/</strong> <span style="color: #6a737d;">— AI 模型文件目录（GGUF/SafeTensors）</span></li>
+        <li><strong>package/</strong> <span style="color: #6a737d;">— 前端共享资源库</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><strong>standard_dependency/</strong> <span style="color: #6a737d;">— 全局标准依赖（CSS/JS）</span></li>
+            <li><strong>different_lunar/</strong> <span style="color: #6a737d;">— 月华前端主界面（含 Live2D/Markdown/Mermaid 等组件）</span></li>
+            <li><strong>database_manager/</strong> <span style="color: #6a737d;">— 数据库管理界面</span></li>
+            <li><strong>file_explorer/</strong> <span style="color: #6a737d;">— 文件浏览器界面</span></li>
+            <li><strong>image_generation/</strong> <span style="color: #6a737d;">— 图像生成界面</span></li>
+            <li><strong>message_rendering/</strong> <span style="color: #6a737d;">— 消息渲染界面</span></li>
+            <li><strong>model_query/</strong> <span style="color: #6a737d;">— 模型查询界面</span></li>
+            <li><strong>multimedia_preview/</strong> <span style="color: #6a737d;">— 多媒体预览界面</span></li>
+            <li><strong>parameter_assistant/</strong> <span style="color: #6a737d;">— 参数助手界面</span></li>
+            <li><strong>qwen3_tts/</strong> <span style="color: #6a737d;">— 语音合成界面</span></li>
+            <li><strong>screenshot_manager/</strong> <span style="color: #6a737d;">— 截图管理界面</span></li>
+            <li><strong>vector_db_manager/</strong> <span style="color: #6a737d;">— 向量数据库管理界面</span></li>
+            <li><strong>fontAwesome/</strong> <span style="color: #6a737d;">— Font Awesome 6.4.0 图标库</span></li>
+            <li><strong>highlight/</strong> <span style="color: #6a737d;">— highlight.js 代码高亮库</span></li>
+            <li><strong>katex/</strong> <span style="color: #6a737d;">— KaTeX 数学公式库</span></li>
+            <li><strong>archive/</strong> <span style="color: #6a737d;">— 归档与许可文件</span></li>
+            <li><code>echarts.min.js</code> <span style="color: #6a737d;">— ECharts 图表库</span></li>
+            <li><code>marked.min.js</code> <span style="color: #6a737d;">— Markdown 渲染库</span></li>
+            <li><code>mermaid.min.js</code> <span style="color: #6a737d;">— Mermaid 流程图库</span></li>
+            <li><code>live2dcubismcore.min.js</code> <span style="color: #6a737d;">— Live2D Cubism 核心库</span></li>
+            <li><code>pixi.5.3.12.min.js</code> <span style="color: #6a737d;">— PixiJS 渲染引擎</span></li>
+            <li><code>pixi-live2d-display-cubism4.min.js</code> <span style="color: #6a737d;">— PixiJS Live2D 显示插件</span></li>
+            <li><code>qrcode.min.js</code> <span style="color: #6a737d;">— 二维码生成库</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
     <li style="padding-left: 1.5em;"><strong>lunar_astral/</strong> <span style="color: #6a737d;">— 核心系统：星图·月华</span>
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>README.md</code> <span style="color: #6a737d;">— 月华系统文档</span></li>
@@ -68,6 +101,8 @@
             <li><code>message.go</code> <span style="color: #6a737d;">— 消息处理适配</span></li>
             <li><code>network.go</code> <span style="color: #6a737d;">— 网络请求适配</span></li>
             <li><code>vision.go</code> <span style="color: #6a737d;">— 视觉处理适配</span></li>
+            <li><code>narrator.go</code> <span style="color: #6a737d;">— 叙述者角色适配</span></li>
+            <li><code>chromem.go</code> <span style="color: #6a737d;">— Chromem 向量嵌入适配</span></li>
           </ul>
         </li>
         <li><strong>model/</strong> <span style="color: #6a737d;">— 模型服务层</span>
@@ -82,13 +117,8 @@
             </li>
             <li><strong>tts/</strong> <span style="color: #6a737d;">— TTS 语音合成引擎</span>
               <ul style="list-style-type: none; padding-left: 1.5em;">
-                <li><code>type.go</code> <span style="color: #6a737d;">— TTS 类型定义</span></li>
-                <li><code>entry.go</code> <span style="color: #6a737d;">— TTS 入口</span></li>
+                <li><code>handler.go</code> <span style="color: #6a737d;">— TTS 请求处理</span></li>
                 <li><code>cache.go</code> <span style="color: #6a737d;">— 音频缓存</span></li>
-                <li><code>capture.go</code> <span style="color: #6a737d;">— 音频捕获</span></li>
-                <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 变量</span></li>
-                <li><code>wrapper.go</code> <span style="color: #6a737d;">— TTS 封装</span></li>
-                <li><code>writer.go</code> <span style="color: #6a737d;">— 音频写入</span></li>
               </ul>
             </li>
           </ul>
@@ -114,7 +144,7 @@
           <ul style="list-style-type: none; padding-left: 1.5em;">
             <li><code>execute.go</code> <span style="color: #6a737d;">— 命令执行</span></li>
             <li><code>kill.go</code> <span style="color: #6a737d;">— 进程终止</span></li>
-            <li><code>network_status.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
+            <li><code>network.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
             <li><code>processes.go</code> <span style="color: #6a737d;">— 进程列表</span></li>
             <li><code>query.go</code> <span style="color: #6a737d;">— 查询功能</span></li>
           </ul>
@@ -138,10 +168,11 @@
                 <li><code>agentSystem.js</code> <span style="color: #6a737d;">— 智能体系统核心 JS</span></li>
                 <li><strong>prompts/</strong> <span style="color: #6a737d;">— AI 提示词模板</span>
                   <ul style="list-style-type: none; padding-left: 1.5em;">
-                    <li><code>chatRole.md</code> <span style="color: #6a737d;">— 聊天角色设定</span></li>
+                    <li><code>dialogueRole.md</code> <span style="color: #6a737d;">— 对话角色设定</span></li>
                     <li><code>descriptionRole.md</code> <span style="color: #6a737d;">— 描述角色设定</span></li>
                     <li><code>emotionManager.md</code> <span style="color: #6a737d;">— 情绪管理设定</span></li>
                     <li><code>imagePrompt.md</code> <span style="color: #6a737d;">— 图像生成提示</span></li>
+                    <li><code>organizeRole.md</code> <span style="color: #6a737d;">— 整理角色设定</span></li>
                     <li><code>painterRole.md</code> <span style="color: #6a737d;">— 画师角色设定</span></li>
                     <li><code>queryKeywords.md</code> <span style="color: #6a737d;">— 关键词查询</span></li>
                     <li><code>recorderRole.md</code> <span style="color: #6a737d;">— 记录角色设定</span></li>
@@ -156,11 +187,13 @@
                     <li><code>chat.js</code> <span style="color: #6a737d;">— 聊天模块</span></li>
                     <li><code>fetch.js</code> <span style="color: #6a737d;">— 网络请求</span></li>
                     <li><code>file.js</code> <span style="color: #6a737d;">— 文件处理</span></li>
+                    <li><code>file-handler.js</code> <span style="color: #6a737d;">— 文件拖拽处理</span></li>
                     <li><code>live2d.js</code> <span style="color: #6a737d;">— Live2D 角色渲染</span></li>
                     <li><code>socket.js</code> <span style="color: #6a737d;">— WebSocket 通信</span></li>
-                    <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+                    <li><code>touch.js</code> <span style="color: #6a737d;">— 触摸交互</span></li>
                     <li><code>tts.js</code> <span style="color: #6a737d;">— 语音合成前端</span></li>
                     <li><code>util.js</code> <span style="color: #6a737d;">— 工具函数</span></li>
+                    <li><code>styles.css</code> <span style="color: #6a737d;">— 样式表</span></li>
                     <li><code>favicon.ico</code> <span style="color: #6a737d;">— 网站图标</span></li>
                   </ul>
                 </li>
@@ -229,31 +262,8 @@
           <ul style="list-style-type: none; padding-left: 1.5em;">
             <li><code>README.md</code> <span style="color: #6a737d;">— 存储模块文档</span></li>
             <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
-            <li><strong>module/</strong> <span style="color: #6a737d;">— 核心逻辑层</span>
-              <ul style="list-style-type: none; padding-left: 1.5em;">
-                <li><code>type.go</code> <span style="color: #6a737d;">— 数据结构</span></li>
-                <li><code>save.go</code> <span style="color: #6a737d;">— 文件保存</span></li>
-                <li><code>read.go</code> <span style="color: #6a737d;">— 文件读取</span></li>
-                <li><code>delete.go</code> <span style="color: #6a737d;">— 文件删除</span></li>
-                <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载</span></li>
-                <li><code>filelist.go</code> <span style="color: #6a737d;">— 文件列表</span></li>
-                <li><code>archive.go</code> <span style="color: #6a737d;">— ZIP 压缩/解压</span></li>
-                <li><code>background.go</code> <span style="color: #6a737d;">— 随机背景图</span></li>
-                <li><code>database.go</code> <span style="color: #6a737d;">— SQLite 数据库</span></li>
-              </ul>
-            </li>
-            <li><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
-              <ul style="list-style-type: none; padding-left: 1.5em;">
-                <li><code>save.go</code> <span style="color: #6a737d;">— 保存接口</span></li>
-                <li><code>read.go</code> <span style="color: #6a737d;">— 读取接口</span></li>
-                <li><code>delete.go</code> <span style="color: #6a737d;">— 删除接口</span></li>
-                <li><code>download.go</code> <span style="color: #6a737d;">— 下载接口</span></li>
-                <li><code>filelist.go</code> <span style="color: #6a737d;">— 文件列表接口</span></li>
-                <li><code>archive.go</code> <span style="color: #6a737d;">— 归档接口</span></li>
-                <li><code>background.go</code> <span style="color: #6a737d;">— 背景图接口</span></li>
-                <li><code>database.go</code> <span style="color: #6a737d;">— 数据库接口</span></li>
-              </ul>
-            </li>
+            <li><strong>module/</strong> <span style="color: #6a737d;">— 核心逻辑层</span></li>
+            <li><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span></li>
           </ul>
         </li>
         <li><strong>screenshot/</strong> <span style="color: #6a737d;">— 子系统：屏幕截图</span>
@@ -263,6 +273,56 @@
             <li><code>type.go</code> <span style="color: #6a737d;">— 类型定义</span></li>
             <li><code>module.go</code> <span style="color: #6a737d;">— 核心逻辑</span></li>
             <li><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务</span></li>
+          </ul>
+        </li>
+        <li><strong>logger/</strong> <span style="color: #6a737d;">— 子系统：彩色日志</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>logger.go</code> <span style="color: #6a737d;">— 彩色终端日志输出</span></li>
+          </ul>
+        </li>
+        <li><strong>LunarTick/</strong> <span style="color: #6a737d;">— 子系统：通用程序执行引擎</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— LunarTick 文档</span></li>
+            <li><strong>api/</strong> <span style="color: #6a737d;">— HTTP API 服务层</span></li>
+            <li><strong>cmd/lunartick/</strong> <span style="color: #6a737d;">— CLI 入口</span></li>
+            <li><strong>engine/</strong> <span style="color: #6a737d;">— 核心引擎（tick 调度/变量/指针/指令）</span></li>
+          </ul>
+        </li>
+        <li><strong>bridge_adapter/</strong> <span style="color: #6a737d;">— 子系统：QQ 群聊适配器</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>DEVELOPMENT_GUIDE.md</code> <span style="color: #6a737d;">— 开发指南</span></li>
+            <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+            <li><strong>pkg/</strong> <span style="color: #6a737d;">— 核心包（config/logger/lunar/message/napcat/types）</span></li>
+            <li><strong>template/</strong> <span style="color: #6a737d;">— 消息模板</span></li>
+          </ul>
+        </li>
+        <li><strong>gguf_metadata_viewer/</strong> <span style="color: #6a737d;">— 子系统：GGUF 元数据查看器</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— 查看器文档</span></li>
+            <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+            <li><strong>gguf/</strong> <span style="color: #6a737d;">— GGUF 二进制解析</span></li>
+            <li><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务 + 前端界面</span></li>
+          </ul>
+        </li>
+        <li><strong>proxy/</strong> <span style="color: #6a737d;">— 子系统：HTTPS 代理服务器</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>proxy.go</code> <span style="color: #6a737d;">— 代理核心逻辑</span></li>
+            <li><code>certs.go</code> <span style="color: #6a737d;">— TLS 证书管理</span></li>
+            <li><strong>cmd/</strong> <span style="color: #6a737d;">— CLI 入口</span></li>
+            <li><strong>frontend/proxy_ui/</strong> <span style="color: #6a737d;">— 代理管理界面</span></li>
+          </ul>
+        </li>
+        <li><strong>sd_lunar/</strong> <span style="color: #6a737d;">— 子系统：Stable Diffusion 图像生成</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><strong>assets/</strong> <span style="color: #6a737d;">— 前端界面</span></li>
+            <li><strong>cpp/</strong> <span style="color: #6a737d;">— C++ GGML 推理引擎</span></li>
+          </ul>
+        </li>
+        <li><strong>volume_archive/</strong> <span style="color: #6a737d;">— 子系统：卷归档管理</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+            <li><strong>component/</strong> <span style="color: #6a737d;">— 核心组件（配置/检查/创建/执行/清理等）</span></li>
           </ul>
         </li>
         <li><strong>qwen3_tts_lunar/</strong> <span style="color: #6a737d;">— 独立系统：语音合成</span>
@@ -404,6 +464,17 @@
         <li><code>browser</code> <span style="color: #6a737d;">— WebView 窗口 + 本地 IP 发现</span></li>
         <li><code>storage</code> <span style="color: #6a737d;">— 文件存储 + SQLite 数据库</span></li>
         <li><code>screenshot</code> <span style="color: #6a737d;">— 屏幕截图 + 图片缩放</span></li>
+        <li><code>logger</code> <span style="color: #6a737d;">— 彩色终端日志</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>扩展子系统</strong> <span style="color: #6a737d;">(subsystem/)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>LunarTick</code> <span style="color: #6a737d;">— 通用程序执行引擎（tick 驱动）</span></li>
+        <li><code>bridge_adapter</code> <span style="color: #6a737d;">— QQ 群聊适配器（NapCat ↔ 月华）</span></li>
+        <li><code>gguf_metadata_viewer</code> <span style="color: #6a737d;">— GGUF 模型元数据查看器</span></li>
+        <li><code>proxy</code> <span style="color: #6a737d;">— HTTPS 代理服务器</span></li>
+        <li><code>sd_lunar</code> <span style="color: #6a737d;">— Stable Diffusion 图像生成引擎</span></li>
+        <li><code>volume_archive</code> <span style="color: #6a737d;">— 卷归档管理</span></li>
       </ul>
     </li>
   </ul>
@@ -664,6 +735,13 @@ Get-Item d:\Lunar_Astral_Agents\Lunar_Astral.exe | Select-Object Length
 | 屏幕截图 | [subsystem/screenshot/README.md](subsystem/screenshot/README.md) | 多显示器截图 + 区域截图 + 图片缩放 |
 | 语音合成 | [subsystem/qwen3_tts_lunar/README.md](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS 文本转语音引擎 |
 | 语音识别 | [subsystem/qwen_asr_lunar/README.md](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR 语音转文本引擎 |
+| LunarTick | [subsystem/LunarTick/README.md](subsystem/LunarTick/README.md) | tick 驱动的通用程序执行引擎 |
+| QQ 适配器 | [subsystem/bridge_adapter/DEVELOPMENT_GUIDE.md](subsystem/bridge_adapter/DEVELOPMENT_GUIDE.md) | NapCat ↔ 月华 QQ 群聊消息转发 |
+| GGUF 查看器 | [subsystem/gguf_metadata_viewer/README.md](subsystem/gguf_metadata_viewer/README.md) | GGUF 模型文件元数据查看工具 |
+| HTTPS 代理 | [subsystem/proxy/](subsystem/proxy/) | HTTPS 代理服务器 + 证书管理 |
+| SD 图像生成 | [subsystem/sd_lunar/](subsystem/sd_lunar/) | Stable Diffusion C++ GGML 推理引擎 |
+| 卷归档 | [subsystem/volume_archive/](subsystem/volume_archive/) | 卷归档管理工具 |
+| 项目架构 | [ARCHITECTURE.md](ARCHITECTURE.md) | 项目架构说明（文件夹层级 + 功能描述） |
 
 ---
 

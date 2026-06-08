@@ -75,6 +75,8 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
         <li><code>network.go</code> <span style="color: #6a737d;">— 网络请求与 IP 定位适配</span></li>
         <li><code>type.go</code> <span style="color: #6a737d;">— 共享类型定义</span></li>
         <li><code>vision.go</code> <span style="color: #6a737d;">— 视觉/图像处理适配</span></li>
+        <li><code>narrator.go</code> <span style="color: #6a737d;">— 叙述者角色适配</span></li>
+        <li><code>chromem.go</code> <span style="color: #6a737d;">— Chromem 向量嵌入适配</span></li>
       </ul>
     </li>
     <li style="padding-left: 1.5em;"><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
@@ -106,13 +108,8 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
         </li>
         <li><strong>tts/</strong> <span style="color: #6a737d;">— TTS 语音合成引擎</span>
           <ul style="list-style-type: none; padding-left: 1.5em;">
-            <li><code>entry.go</code> <span style="color: #6a737d;">— TTS 合成入口</span></li>
+            <li><code>handler.go</code> <span style="color: #6a737d;">— TTS 请求处理</span></li>
             <li><code>cache.go</code> <span style="color: #6a737d;">— WAV 音频缓存</span></li>
-            <li><code>capture.go</code> <span style="color: #6a737d;">— 音频分句捕获</span></li>
-            <li><code>type.go</code> <span style="color: #6a737d;">— TTS 类型定义</span></li>
-            <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 运行时状态</span></li>
-            <li><code>wrapper.go</code> <span style="color: #6a737d;">— WAV 封装</span></li>
-            <li><code>writer.go</code> <span style="color: #6a737d;">— 脉冲编码调制写入</span></li>
           </ul>
         </li>
       </ul>
@@ -146,7 +143,7 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>execute.go</code> <span style="color: #6a737d;">— 命令执行</span></li>
         <li><code>kill.go</code> <span style="color: #6a737d;">— 进程终止</span></li>
-        <li><code>network_status.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
+        <li><code>network.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
         <li><code>processes.go</code> <span style="color: #6a737d;">— 进程列表</span></li>
         <li><code>query.go</code> <span style="color: #6a737d;">— 查询功能</span></li>
       </ul>
@@ -297,16 +294,19 @@ TTS 底层由 [Qwen3-TTS 独立引擎](../subsystem/qwen3_tts_lunar/README.md) �
 | `tts.js` | 语音合成前端播放控制 |
 | `fetch.js` | HTTP 请求封装 |
 | `file.js` | 文件上传与预览 |
+| `file-handler.js` | 文件拖拽处理 |
+| `touch.js` | 触摸交互支持 |
 | `util.js` | 通用工具函数 |
 
 ### 5. AI 提示词（assets/prompts/）
 
 | 文件 | 用途 |
 |------|------|
-| `chatRole.md` | 月华角色基础人设与对话风格 |
+| `dialogueRole.md` | 月华角色基础人设与对话风格 |
 | `descriptionRole.md` | 场景/物品描述角色 |
 | `emotionManager.md` | 情绪状态管理 |
 | `imagePrompt.md` | 图像生成提示词扩写 |
+| `organizeRole.md` | 整理角色设定 |
 | `painterRole.md` | 画师角色设定 |
 | `queryKeywords.md` | 搜索关键词提取 |
 | `recorderRole.md` | 对话记录整理角色 |
