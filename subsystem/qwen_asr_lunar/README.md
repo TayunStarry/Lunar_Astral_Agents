@@ -4,11 +4,11 @@
 
 ---
 
-![独立模块-语音识别-0](../../image/独立模块-语音识别-0.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音识别-0.webp" alt="独立模块-语音识别-0" width="360"></p>
 
 *图：语音识别主界面*
 
-![独立模块-语音识别-1](../../image/独立模块-语音识别-1.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音识别-1.webp" alt="独立模块-语音识别-1" width="360"></p>
 
 *图：语音识别结果展示*
 
@@ -45,42 +45,57 @@ Qwen ASR Lunar 是一个全本地化的语音识别引擎，支持多语言音�
 
 ## 项目结构
 
-```
-qwen_asr_lunar/
-├── main.go                          ← 程序入口（HTTP + WebView）
-├── go.mod                           ← Go 模块定义
-├── asr.go                           ← Go↔C 桥接层（CGO 绑定）
-├── handler.go                       ← HTTP 请求处理 + 音频格式转换
-├── build.ps1                        ← 编译脚本
-├── icon.ico                         ← 应用图标
-│
-├── static/                          ← 前端界面（Go embed 嵌入）
-│   ├── index.html                   ← 主页面（毛玻璃风格）
-│   ├── app.js                       ← 前端逻辑（文件上传/录音/API调用）
-│   ├── style.css                    ← 样式表（深色主题）
-│   ├── picture.webp                 ← 背景装饰图
-│   └── favicon.ico                  ← 图标
-│
-├── openblas/                        ← OpenBLAS 线性代数库
-│   └── include/                     ← C 头文件
-│       ├── cblas.h                  ← C BLAS 接口
-│       ├── f77blas.h                ← Fortran BLAS 接口
-│       ├── lapack.h/lapacke.h       ← LAPACK 接口
-│       └── openblas_config.h        ← 编译配置
-│
-└── C 推理引擎源码                     ← 纯 C 实现，零 Python 依赖
-    ├── qwen_asr.h/c                 ← 主入口：模型加载/释放、推理管线编排
-    ├── qwen_asr_audio.h/c           ← 音频预处理：WAV 加载、Mel spectrogram 计算
-    ├── qwen_asr_encoder.c           ← 编码器：Conv2D Stem + Transformer Encoder
-    ├── qwen_asr_decoder.c           ← 解码器：Qwen3 LLM 自回归解码
-    ├── qwen_asr_tokenizer.h/c       ← GPT-2 BPE 分词器
-    ├── qwen_asr_safetensors.h/c     ← SafeTensors 模型加载器（多分片 + mmap）
-    ├── qwen_asr_kernels.h/c         ← 数学核心：矩阵运算、注意力、归一化
-    ├── qwen_asr_kernels_impl.h      ← 架构调度：编译时选择 SIMD 路径
-    ├── qwen_asr_kernels_avx.c       ← x86 SIMD 优化（AVX2+FMA / AVX-512F+BW）
-    ├── qwen_asr_kernels_neon.c      ← ARM NEON 优化
-    └── qwen_asr_kernels_generic.c   ← 通用纯 C 实现（无 SIMD 回退）
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>qwen_asr_lunar/</strong></li>
+    <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口（HTTP + WebView）</span></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+    <li style="padding-left: 1.5em;"><code>asr.go</code> <span style="color: #6a737d;">— Go↔C 桥接层（CGO 绑定）</span></li>
+    <li style="padding-left: 1.5em;"><code>handler.go</code> <span style="color: #6a737d;">— HTTP 请求处理 + 音频格式转换</span></li>
+    <li style="padding-left: 1.5em;"><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+    <li style="padding-left: 1.5em;">
+      <strong>static/</strong> <span style="color: #6a737d;">— 前端界面（Go embed 嵌入）</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>index.html</code> <span style="color: #6a737d;">— 主页面（毛玻璃风格）</span></li>
+        <li><code>app.js</code> <span style="color: #6a737d;">— 前端逻辑（文件上传/录音/API调用）</span></li>
+        <li><code>style.css</code> <span style="color: #6a737d;">— 样式表（深色主题）</span></li>
+        <li><code>picture.webp</code> <span style="color: #6a737d;">— 背景装饰图</span></li>
+        <li><code>favicon.ico</code> <span style="color: #6a737d;">— 图标</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;">
+      <strong>openblas/</strong> <span style="color: #6a737d;">— OpenBLAS 线性代数库</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li>
+          <strong>include/</strong> <span style="color: #6a737d;">— C 头文件</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>cblas.h</code> <span style="color: #6a737d;">— C BLAS 接口</span></li>
+            <li><code>f77blas.h</code> <span style="color: #6a737d;">— Fortran BLAS 接口</span></li>
+            <li><code>lapack.h/lapacke.h</code> <span style="color: #6a737d;">— LAPACK 接口</span></li>
+            <li><code>openblas_config.h</code> <span style="color: #6a737d;">— 编译配置</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;">
+      <strong>C 推理引擎源码</strong> <span style="color: #6a737d;">— 纯 C 实现，零 Python 依赖</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>qwen_asr.h/c</code> <span style="color: #6a737d;">— 主入口：模型加载/释放、推理管线编排</span></li>
+        <li><code>qwen_asr_audio.h/c</code> <span style="color: #6a737d;">— 音频预处理：WAV 加载、Mel spectrogram 计算</span></li>
+        <li><code>qwen_asr_encoder.c</code> <span style="color: #6a737d;">— 编码器：Conv2D Stem + Transformer Encoder</span></li>
+        <li><code>qwen_asr_decoder.c</code> <span style="color: #6a737d;">— 解码器：Qwen3 LLM 自回归解码</span></li>
+        <li><code>qwen_asr_tokenizer.h/c</code> <span style="color: #6a737d;">— GPT-2 BPE 分词器</span></li>
+        <li><code>qwen_asr_safetensors.h/c</code> <span style="color: #6a737d;">— SafeTensors 模型加载器（多分片 + mmap）</span></li>
+        <li><code>qwen_asr_kernels.h/c</code> <span style="color: #6a737d;">— 数学核心：矩阵运算、注意力、归一化</span></li>
+        <li><code>qwen_asr_kernels_impl.h</code> <span style="color: #6a737d;">— 架构调度：编译时选择 SIMD 路径</span></li>
+        <li><code>qwen_asr_kernels_avx.c</code> <span style="color: #6a737d;">— x86 SIMD 优化（AVX2+FMA / AVX-512F+BW）</span></li>
+        <li><code>qwen_asr_kernels_neon.c</code> <span style="color: #6a737d;">— ARM NEON 优化</span></li>
+        <li><code>qwen_asr_kernels_generic.c</code> <span style="color: #6a737d;">— 通用纯 C 实现（无 SIMD 回退）</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

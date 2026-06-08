@@ -17,286 +17,397 @@
 
 ## 项目结构
 
-```
-Lunar_Astral_Agents/
-│
-├── README.md                           ← 项目主文档（本文件）
-├── image/                              ← 项目图片资源目录
-│   ├── 月华-主页面.webp                ← 月华系统主界面截图
-│   ├── 月华-主界面-手机端.webp         ← 月华系统移动端界面
-│   ├── 月华-聊天记录.webp              ← 月华系统聊天记录界面
-│   ├── 星图-月华-人设图-1.webp         ← 月华角色人设图
-│   ├── 琉璃-主页面.webp                ← 琉璃系统主界面截图
-│   ├── 琉璃-参数管理-配置预览.webp     ← 琉璃配置预览界面
-│   ├── 琉璃-图像生成-参数配置.webp     ← 琉璃图像生成参数配置
-│   ├── 琉璃-图像生成-图片预览.webp     ← 琉璃图像生成预览
-│   ├── 琉璃-截图标注.webp              ← 琉璃截图标注界面
-│   ├── 琉璃-数据管理-主页面.webp       ← 琉璃数据管理界面
-│   ├── 琉璃-数据管理-配置说明.webp     ← 琉璃数据配置说明
-│   ├── 琉璃-文件管理-主页面.webp       ← 琉璃文件管理界面
-│   ├── 琉璃-文件管理-文本编辑.webp     ← 琉璃文本编辑界面
-│   ├── 琉璃-消息渲染.webp              ← 琉璃消息渲染界面
-│   ├── 星图-琉璃-人设图-0.webp         ← 琉璃角色人设图
-│   ├── 多媒体预览-图片0.webp           ← 多媒体图片预览
-│   ├── 多媒体预览-图片1.webp           ← 多媒体图片预览
-│   ├── 多媒体预览-视频.webp            ← 多媒体视频预览
-│   ├── 独立模块-语音合成-0.webp        ← 语音合成独立界面
-│   ├── 独立模块-语音合成-1.webp        ← 语音合成独立界面
-│   ├── 独立模块-语音识别-0.webp        ← 语音识别独立界面
-│   ├── 独立模块-语音识别-1.webp        ← 语音识别独立界面
-│   └── 旧版宣传图.jpg                  ← 旧版宣传图片
-│
-├── lunar_astral/                       ← 核心系统：星图·月华
-│   ├── README.md                       ← 月华系统文档
-│   ├── main.go                         ← 程序入口
-│   ├── go.mod                          ← Go 模块定义
-│   ├── build.ps1                       ← 编译脚本
-│   ├── icon.ico                        ← 应用图标
-│   ├── package.json                    ← Node.js 前端构建配置
-│   ├── rollup.config.js                ← 前端打包配置
-│   ├── tsconfig.json                   ← TypeScript 配置
-│   ├── removeExport.cjs                ← 构建后处理脚本
-│   ├── adapters/                       ← Go↔JS 适配器层（CGO 桥接）
-│   │   ├── type.go                     ← 类型定义
-│   │   ├── create.go                   ← JS 运行时创建
-│   │   ├── database.go                 ← 数据库适配
-│   │   ├── file.go                     ← 文件系统适配
-│   │   ├── message.go                  ← 消息处理适配
-│   │   ├── network.go                  ← 网络请求适配
-│   │   └── vision.go                   ← 视觉处理适配
-│   ├── model/                          ← 模型服务层
-│   │   ├── type.go                     ← 模型类型定义
-│   │   ├── core.go                     ← 核心模型逻辑
-│   │   ├── variable.go                 ← 模型变量
-│   │   ├── llama/                ← llama.cpp 代理
-│   │   │   └── proxy.go                ← 代理核心实现
-│   │   └── tts/                        ← TTS 语音合成引擎
-│   │       ├── type.go                 ← TTS 类型定义
-│   │       ├── entry.go                ← TTS 入口
-│   │       ├── cache.go                ← 音频缓存
-│   │       ├── capture.go              ← 音频捕获
-│   │       ├── variable.go             ← TTS 变量
-│   │       ├── wrapper.go              ← TTS 封装
-│   │       └── writer.go               ← 音频写入
-│   ├── server/                         ← HTTP 服务器层
-│   │   ├── type.go                     ← 服务器类型定义
-│   │   ├── create.go                   ← 服务器创建与启动
-│   │   ├── manage.go                   ← 服务器管理
-│   │   ├── variable.go                 ← 端点与变量
-│   │   └── handlers/                   ← HTTP 请求处理器
-│   │       ├── type.go                 ← 处理器类型
-│   │       ├── generate.go             ← 图像生成处理
-│   │       ├── message.go              ← 消息处理
-│   │       ├── proxy.go                ← 代理转发处理
-│   │       └── video.go                ← 视频处理
-│   ├── release/                        ← 进程/端口管理
-│   │   ├── execute.go                  ← 命令执行
-│   │   ├── kill.go                     ← 进程终止
-│   │   ├── network_status.go           ← 网络状态监控
-│   │   ├── processes.go                ← 进程列表
-│   │   └── query.go                    ← 查询功能
-│   ├── hierarchy/                      ← 前端资源与脚本
-│   │   ├── embedded.go                 ← Go embed 资源嵌入
-│   │   ├── image/                      ← 图像生成模块
-│   │   │   ├── generate/               ← 图像生成
-│   │   │   │   ├── generate.go         ← 生成逻辑
-│   │   │   │   └── type.go             ← 生成类型
-│   │   │   └── video.go                ← 视频工具
-│   │   └── assets/                     ← 前端资源
-│   │       ├── agentSystem.js          ← 智能体系统核心 JS
-│   │       ├── prompts/                ← AI 提示词模板
-│   │       │   ├── chatRole.md         ← 聊天角色设定
-│   │       │   ├── descriptionRole.md  ← 描述角色设定
-│   │       │   ├── emotionManager.md   ← 情绪管理设定
-│   │       │   ├── imagePrompt.md      ← 图像生成提示
-│   │       │   ├── painterRole.md      ← 画师角色设定
-│   │       │   ├── queryKeywords.md    ← 关键词查询
-│   │       │   ├── recorderRole.md     ← 记录角色设定
-│   │       │   ├── selfAppearance.md   ← 角色外观设定
-│   │       │   └── summaryRole.md      ← 摘要角色设定
-│   │       └── client/                 ← 前端客户端
-│   │           ├── index.html          ← 主页面
-│   │           ├── app.js              ← 主应用逻辑
-│   │           ├── chat.js             ← 聊天模块
-│   │           ├── fetch.js            ← 网络请求
-│   │           ├── file.js             ← 文件处理
-│   │           ├── live2d.js           ← Live2D 角色渲染
-│   │           ├── socket.js           ← WebSocket 通信
-│   │           ├── style.css           ← 样式表
-│   │           ├── tts.js              ← 语音合成前端
-│   │           ├── util.js             ← 工具函数
-│   │           └── favicon.ico         ← 网站图标
-│   ├── websocket/                      ← WebSocket 通信层
-│   │   ├── type.go                     ← WebSocket 类型
-│   │   ├── variable.go                 ← WebSocket 变量
-│   │   └── websocket.go                ← WebSocket 核心
-│   └── model/                          ←（同上，模型服务层）
-│
-├── crystal_astral/                     ← 扩展系统：星图·琉璃
-│   ├── README.md                       ← 琉璃系统文档
-│   ├── main.go                         ← 程序入口
-│   ├── go.mod                          ← Go 模块定义
-│   ├── create.go                       ← 服务器创建
-│   ├── embedded.go                     ← 资源嵌入
-│   ├── endpoint.go                     ← API 端点定义
-│   ├── handler.go                      ← 请求处理
-│   ├── type.go                         ← 类型定义
-│   ├── build.ps1                       ← 编译脚本
-│   ├── icon.ico                        ← 应用图标
-│   └── assets/                         ← 前端资源
-│       ├── index.html                  ← 主页面
-│       ├── script.js                   ← 应用逻辑
-│       ├── style.css                   ← 样式表
-│       └── favicon.ico                 ← 网站图标
-│
-├── subsystem/                          ← 可复用子系统模块
-│   ├── config/                         ← 子系统：配置管理
-│   │   ├── README.md                   ← 配置模块文档
-│   │   ├── go.mod                      ← 模块定义
-│   │   ├── init.go                     ← 配置初始化入口
-│   │   ├── allow.go                    ← 功能开关
-│   │   ├── engine.go                   ← 外部引擎配置
-│   │   ├── image.go                    ← 图像参数
-│   │   ├── model.go                    ← 模型路径
-│   │   ├── path.go                     ← 路径配置
-│   │   ├── port.go                     ← 端口配置
-│   │   ├── system.go                   ← 运行时状态
-│   │   └── webview.go                  ← WebView 窗口配置
-│   │
-│   ├── browser/                        ← 子系统：网页前端启动
-│   │   ├── README.md                   ← 浏览器模块文档
-│   │   ├── go.mod                      ← 模块定义
-│   │   ├── execute.go                  ← IP 发现与启动
-│   │   ├── type.go                     ← 类型与状态
-│   │   └── webView.go                  ← WebView 窗口管理
-│   │
-│   ├── storage/                        ← 子系统：文件管理
-│   │   ├── README.md                   ← 存储模块文档
-│   │   ├── go.mod                      ← 模块定义
-│   │   ├── module/                     ← 核心逻辑层
-│   │   │   ├── type.go                 ← 数据结构
-│   │   │   ├── save.go                 ← 文件保存
-│   │   │   ├── read.go                 ← 文件读取
-│   │   │   ├── delete.go               ← 文件删除
-│   │   │   ├── download.go             ← 文件下载
-│   │   │   ├── filelist.go             ← 文件列表
-│   │   │   ├── archive.go              ← ZIP 压缩/解压
-│   │   │   ├── background.go           ← 随机背景图
-│   │   │   └── database.go             ← SQLite 数据库
-│   │   └── server/                     ← HTTP 服务层
-│   │       ├── save.go                 ← 保存接口
-│   │       ├── read.go                 ← 读取接口
-│   │       ├── delete.go               ← 删除接口
-│   │       ├── download.go             ← 下载接口
-│   │       ├── filelist.go             ← 文件列表接口
-│   │       ├── archive.go              ← 归档接口
-│   │       ├── background.go           ← 背景图接口
-│   │       └── database.go             ← 数据库接口
-│   │
-│   ├── screenshot/                     ← 子系统：屏幕截图
-│   │   ├── README.md                   ← 截图模块文档
-│   │   ├── go.mod                      ← 模块定义
-│   │   ├── type.go                     ← 类型定义
-│   │   ├── module.go                   ← 核心逻辑
-│   │   └── server.go                   ← HTTP 服务
-│   │
-│   ├── qwen3_tts_lunar/               ← 独立系统：语音合成
-│   │   ├── README.md                   ← TTS 模块文档
-│   │   ├── main.go                     ← 程序入口
-│   │   ├── go.mod                      ← 模块定义
-│   │   ├── server.go                   ← HTTP 服务
-│   │   ├── build.ps1                   ← 编译脚本
-│   │   ├── build_cpp.ps1               ← C++ 编译脚本
-│   │   ├── build_ggml.ps1              ← GGML 编译脚本
-│   │   ├── icon.ico                    ← 应用图标
-│   │   ├── module/                     ← Go 逻辑层
-│   │   │   ├── generate.go             ← 语音生成
-│   │   │   ├── variable.go             ← 变量定义
-│   │   │   └── stream.go               ← 流式处理
-│   │   ├── client/                     ← 前端界面
-│   │   │   ├── index.html              ← 主页面
-│   │   │   ├── app.js                  ← 应用逻辑
-│   │   │   ├── style.css               ← 样式表
-│   │   │   ├── picture.webp            ← 背景图
-│   │   │   └── favicon.ico             ← 图标
-│   │   └── cpp/                        ← C++ 推理引擎
-│   │       ├── CMakeLists.txt          ← CMake 构建
-│   │       ├── src/                    ← 引擎源码
-│   │       │   ├── qwen3_tts.cpp/h     ← TTS 主引擎
-│   │       │   ├── qwen3tts_c_api.cpp/h ← C API 接口
-│   │       │   ├── tts_transformer.cpp/h ← Transformer 层
-│   │       │   ├── audio_tokenizer_*.cpp/h ← 音频分词器
-│   │       │   ├── gguf_loader.cpp/h   ← GGUF 模型加载
-│   │       │   ├── text_tokenizer.cpp/h ← 文本分词
-│   │       │   ├── main.cpp            ← 独立可执行文件入口
-│   │       │   ├── coreml_*.cpp/h      ← Apple CoreML 加速
-│   │       │   └── qwen3tts.def        ← Windows DLL 导出
-│   │       └── ggml/                   ← GGML 张量计算库
-│   │
-│   └── qwen_asr_lunar/                ← 独立系统：语音识别
-│       ├── README.md                   ← ASR 模块文档
-│       ├── main.go                     ← 程序入口
-│       ├── go.mod                      ← 模块定义
-│       ├── asr.go                      ← Go↔C 桥接层
-│       ├── handler.go                  ← HTTP 处理
-│       ├── build.ps1                   ← 编译脚本
-│       ├── icon.ico                    ← 应用图标
-│       ├── static/                     ← 前端界面
-│       │   ├── index.html              ← 主页面
-│       │   ├── app.js                  ← 应用逻辑
-│       │   ├── style.css               ← 样式表
-│       │   ├── picture.webp            ← 背景图
-│       │   └── favicon.ico             ← 图标
-│       ├── openblas/                   ← OpenBLAS 线性代数库
-│       │   └── include/                ← C 头文件
-│       └── C 推理源码                   ← 纯 C 推理引擎
-│           ├── qwen_asr.h/c            ← 主入口与管线
-│           ├── qwen_asr_audio.h/c      ← 音频预处理
-│           ├── qwen_asr_encoder.c      ← 编码器实现
-│           ├── qwen_asr_decoder.c      ← 解码器实现
-│           ├── qwen_asr_tokenizer.h/c  ← GPT-2 BPE 分词
-│           ├── qwen_asr_safetensors.h/c ← SafeTensors 加载
-│           ├── qwen_asr_kernels.h/c    ← 数学核心分发
-│           ├── qwen_asr_kernels_avx.c  ← x86 SIMD 优化
-│           ├── qwen_asr_kernels_neon.c ← ARM NEON 优化
-│           └── qwen_asr_kernels_generic.c ← 通用实现
-│
-└── .trae/                              ← 项目规则配置
-    └── rules/                          ← 代码规范
-        └── git-commit-message.md       ← Git 提交规范
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>Lunar_Astral_Agents/</strong></li>
+    <li style="padding-left: 1.5em;"><code>README.md</code> <span style="color: #6a737d;">— 项目主文档（本文件）</span></li>
+    <li style="padding-left: 1.5em;"><strong>image/</strong> <span style="color: #6a737d;">— 项目图片资源目录</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>月华-主页面.webp</code> <span style="color: #6a737d;">— 月华系统主界面截图</span></li>
+        <li><code>月华-主界面-手机端.webp</code> <span style="color: #6a737d;">— 月华系统移动端界面</span></li>
+        <li><code>月华-聊天记录.webp</code> <span style="color: #6a737d;">— 月华系统聊天记录界面</span></li>
+        <li><code>星图-月华-人设图-1.webp</code> <span style="color: #6a737d;">— 月华角色人设图</span></li>
+        <li><code>琉璃-主页面.webp</code> <span style="color: #6a737d;">— 琉璃系统主界面截图</span></li>
+        <li><code>琉璃-参数管理-配置预览.webp</code> <span style="color: #6a737d;">— 琉璃配置预览界面</span></li>
+        <li><code>琉璃-图像生成-参数配置.webp</code> <span style="color: #6a737d;">— 琉璃图像生成参数配置</span></li>
+        <li><code>琉璃-图像生成-图片预览.webp</code> <span style="color: #6a737d;">— 琉璃图像生成预览</span></li>
+        <li><code>琉璃-截图标注.webp</code> <span style="color: #6a737d;">— 琉璃截图标注界面</span></li>
+        <li><code>琉璃-数据管理-主页面.webp</code> <span style="color: #6a737d;">— 琉璃数据管理界面</span></li>
+        <li><code>琉璃-数据管理-配置说明.webp</code> <span style="color: #6a737d;">— 琉璃数据配置说明</span></li>
+        <li><code>琉璃-文件管理-主页面.webp</code> <span style="color: #6a737d;">— 琉璃文件管理界面</span></li>
+        <li><code>琉璃-文件管理-文本编辑.webp</code> <span style="color: #6a737d;">— 琉璃文本编辑界面</span></li>
+        <li><code>琉璃-消息渲染.webp</code> <span style="color: #6a737d;">— 琉璃消息渲染界面</span></li>
+        <li><code>星图-琉璃-人设图-0.webp</code> <span style="color: #6a737d;">— 琉璃角色人设图</span></li>
+        <li><code>多媒体预览-图片0.webp</code> <span style="color: #6a737d;">— 多媒体图片预览</span></li>
+        <li><code>多媒体预览-图片1.webp</code> <span style="color: #6a737d;">— 多媒体图片预览</span></li>
+        <li><code>多媒体预览-视频.webp</code> <span style="color: #6a737d;">— 多媒体视频预览</span></li>
+        <li><code>独立模块-语音合成-0.webp</code> <span style="color: #6a737d;">— 语音合成独立界面</span></li>
+        <li><code>独立模块-语音合成-1.webp</code> <span style="color: #6a737d;">— 语音合成独立界面</span></li>
+        <li><code>独立模块-语音识别-0.webp</code> <span style="color: #6a737d;">— 语音识别独立界面</span></li>
+        <li><code>独立模块-语音识别-1.webp</code> <span style="color: #6a737d;">— 语音识别独立界面</span></li>
+        <li><code>旧版宣传图.jpg</code> <span style="color: #6a737d;">— 旧版宣传图片</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>lunar_astral/</strong> <span style="color: #6a737d;">— 核心系统：星图·月华</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>README.md</code> <span style="color: #6a737d;">— 月华系统文档</span></li>
+        <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+        <li><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+        <li><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+        <li><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+        <li><code>package.json</code> <span style="color: #6a737d;">— Node.js 前端构建配置</span></li>
+        <li><code>rollup.config.js</code> <span style="color: #6a737d;">— 前端打包配置</span></li>
+        <li><code>tsconfig.json</code> <span style="color: #6a737d;">— TypeScript 配置</span></li>
+        <li><code>removeExport.cjs</code> <span style="color: #6a737d;">— 构建后处理脚本</span></li>
+        <li><strong>adapters/</strong> <span style="color: #6a737d;">— Go↔JS 适配器层（CGO 桥接）</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>type.go</code> <span style="color: #6a737d;">— 类型定义</span></li>
+            <li><code>create.go</code> <span style="color: #6a737d;">— JS 运行时创建</span></li>
+            <li><code>database.go</code> <span style="color: #6a737d;">— 数据库适配</span></li>
+            <li><code>file.go</code> <span style="color: #6a737d;">— 文件系统适配</span></li>
+            <li><code>message.go</code> <span style="color: #6a737d;">— 消息处理适配</span></li>
+            <li><code>network.go</code> <span style="color: #6a737d;">— 网络请求适配</span></li>
+            <li><code>vision.go</code> <span style="color: #6a737d;">— 视觉处理适配</span></li>
+          </ul>
+        </li>
+        <li><strong>model/</strong> <span style="color: #6a737d;">— 模型服务层</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>type.go</code> <span style="color: #6a737d;">— 模型类型定义</span></li>
+            <li><code>core.go</code> <span style="color: #6a737d;">— 核心模型逻辑</span></li>
+            <li><code>variable.go</code> <span style="color: #6a737d;">— 模型变量</span></li>
+            <li><strong>llama/</strong> <span style="color: #6a737d;">— llama.cpp 代理</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>proxy.go</code> <span style="color: #6a737d;">— 代理核心实现</span></li>
+              </ul>
+            </li>
+            <li><strong>tts/</strong> <span style="color: #6a737d;">— TTS 语音合成引擎</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>type.go</code> <span style="color: #6a737d;">— TTS 类型定义</span></li>
+                <li><code>entry.go</code> <span style="color: #6a737d;">— TTS 入口</span></li>
+                <li><code>cache.go</code> <span style="color: #6a737d;">— 音频缓存</span></li>
+                <li><code>capture.go</code> <span style="color: #6a737d;">— 音频捕获</span></li>
+                <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 变量</span></li>
+                <li><code>wrapper.go</code> <span style="color: #6a737d;">— TTS 封装</span></li>
+                <li><code>writer.go</code> <span style="color: #6a737d;">— 音频写入</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务器层</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>type.go</code> <span style="color: #6a737d;">— 服务器类型定义</span></li>
+            <li><code>create.go</code> <span style="color: #6a737d;">— 服务器创建与启动</span></li>
+            <li><code>manage.go</code> <span style="color: #6a737d;">— 服务器管理</span></li>
+            <li><code>variable.go</code> <span style="color: #6a737d;">— 端点与变量</span></li>
+            <li><strong>handlers/</strong> <span style="color: #6a737d;">— HTTP 请求处理器</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>type.go</code> <span style="color: #6a737d;">— 处理器类型</span></li>
+                <li><code>generate.go</code> <span style="color: #6a737d;">— 图像生成处理</span></li>
+                <li><code>message.go</code> <span style="color: #6a737d;">— 消息处理</span></li>
+                <li><code>proxy.go</code> <span style="color: #6a737d;">— 代理转发处理</span></li>
+                <li><code>video.go</code> <span style="color: #6a737d;">— 视频处理</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>release/</strong> <span style="color: #6a737d;">— 进程/端口管理</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>execute.go</code> <span style="color: #6a737d;">— 命令执行</span></li>
+            <li><code>kill.go</code> <span style="color: #6a737d;">— 进程终止</span></li>
+            <li><code>network_status.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
+            <li><code>processes.go</code> <span style="color: #6a737d;">— 进程列表</span></li>
+            <li><code>query.go</code> <span style="color: #6a737d;">— 查询功能</span></li>
+          </ul>
+        </li>
+        <li><strong>hierarchy/</strong> <span style="color: #6a737d;">— 前端资源与脚本</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>embedded.go</code> <span style="color: #6a737d;">— Go embed 资源嵌入</span></li>
+            <li><strong>image/</strong> <span style="color: #6a737d;">— 图像生成模块</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><strong>generate/</strong> <span style="color: #6a737d;">— 图像生成</span>
+                  <ul style="list-style-type: none; padding-left: 1.5em;">
+                    <li><code>generate.go</code> <span style="color: #6a737d;">— 生成逻辑</span></li>
+                    <li><code>type.go</code> <span style="color: #6a737d;">— 生成类型</span></li>
+                  </ul>
+                </li>
+                <li><code>video.go</code> <span style="color: #6a737d;">— 视频工具</span></li>
+              </ul>
+            </li>
+            <li><strong>assets/</strong> <span style="color: #6a737d;">— 前端资源</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>agentSystem.js</code> <span style="color: #6a737d;">— 智能体系统核心 JS</span></li>
+                <li><strong>prompts/</strong> <span style="color: #6a737d;">— AI 提示词模板</span>
+                  <ul style="list-style-type: none; padding-left: 1.5em;">
+                    <li><code>chatRole.md</code> <span style="color: #6a737d;">— 聊天角色设定</span></li>
+                    <li><code>descriptionRole.md</code> <span style="color: #6a737d;">— 描述角色设定</span></li>
+                    <li><code>emotionManager.md</code> <span style="color: #6a737d;">— 情绪管理设定</span></li>
+                    <li><code>imagePrompt.md</code> <span style="color: #6a737d;">— 图像生成提示</span></li>
+                    <li><code>painterRole.md</code> <span style="color: #6a737d;">— 画师角色设定</span></li>
+                    <li><code>queryKeywords.md</code> <span style="color: #6a737d;">— 关键词查询</span></li>
+                    <li><code>recorderRole.md</code> <span style="color: #6a737d;">— 记录角色设定</span></li>
+                    <li><code>selfAppearance.md</code> <span style="color: #6a737d;">— 角色外观设定</span></li>
+                    <li><code>summaryRole.md</code> <span style="color: #6a737d;">— 摘要角色设定</span></li>
+                  </ul>
+                </li>
+                <li><strong>client/</strong> <span style="color: #6a737d;">— 前端客户端</span>
+                  <ul style="list-style-type: none; padding-left: 1.5em;">
+                    <li><code>index.html</code> <span style="color: #6a737d;">— 主页面</span></li>
+                    <li><code>app.js</code> <span style="color: #6a737d;">— 主应用逻辑</span></li>
+                    <li><code>chat.js</code> <span style="color: #6a737d;">— 聊天模块</span></li>
+                    <li><code>fetch.js</code> <span style="color: #6a737d;">— 网络请求</span></li>
+                    <li><code>file.js</code> <span style="color: #6a737d;">— 文件处理</span></li>
+                    <li><code>live2d.js</code> <span style="color: #6a737d;">— Live2D 角色渲染</span></li>
+                    <li><code>socket.js</code> <span style="color: #6a737d;">— WebSocket 通信</span></li>
+                    <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+                    <li><code>tts.js</code> <span style="color: #6a737d;">— 语音合成前端</span></li>
+                    <li><code>util.js</code> <span style="color: #6a737d;">— 工具函数</span></li>
+                    <li><code>favicon.ico</code> <span style="color: #6a737d;">— 网站图标</span></li>
+                  </ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>websocket/</strong> <span style="color: #6a737d;">— WebSocket 通信层</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>type.go</code> <span style="color: #6a737d;">— WebSocket 类型</span></li>
+            <li><code>variable.go</code> <span style="color: #6a737d;">— WebSocket 变量</span></li>
+            <li><code>websocket.go</code> <span style="color: #6a737d;">— WebSocket 核心</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>crystal_astral/</strong> <span style="color: #6a737d;">— 扩展系统：星图·琉璃</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>README.md</code> <span style="color: #6a737d;">— 琉璃系统文档</span></li>
+        <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+        <li><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+        <li><code>create.go</code> <span style="color: #6a737d;">— 服务器创建</span></li>
+        <li><code>embedded.go</code> <span style="color: #6a737d;">— 资源嵌入</span></li>
+        <li><code>endpoint.go</code> <span style="color: #6a737d;">— API 端点定义</span></li>
+        <li><code>handler.go</code> <span style="color: #6a737d;">— 请求处理</span></li>
+        <li><code>type.go</code> <span style="color: #6a737d;">— 类型定义</span></li>
+        <li><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+        <li><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+        <li><strong>assets/</strong> <span style="color: #6a737d;">— 前端资源</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>index.html</code> <span style="color: #6a737d;">— 主页面</span></li>
+            <li><code>script.js</code> <span style="color: #6a737d;">— 应用逻辑</span></li>
+            <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+            <li><code>favicon.ico</code> <span style="color: #6a737d;">— 网站图标</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>subsystem/</strong> <span style="color: #6a737d;">— 可复用子系统模块</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><strong>config/</strong> <span style="color: #6a737d;">— 子系统：配置管理</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— 配置模块文档</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>init.go</code> <span style="color: #6a737d;">— 配置初始化入口</span></li>
+            <li><code>allow.go</code> <span style="color: #6a737d;">— 功能开关</span></li>
+            <li><code>engine.go</code> <span style="color: #6a737d;">— 外部引擎配置</span></li>
+            <li><code>image.go</code> <span style="color: #6a737d;">— 图像参数</span></li>
+            <li><code>model.go</code> <span style="color: #6a737d;">— 模型路径</span></li>
+            <li><code>path.go</code> <span style="color: #6a737d;">— 路径配置</span></li>
+            <li><code>port.go</code> <span style="color: #6a737d;">— 端口配置</span></li>
+            <li><code>system.go</code> <span style="color: #6a737d;">— 运行时状态</span></li>
+            <li><code>webview.go</code> <span style="color: #6a737d;">— WebView 窗口配置</span></li>
+          </ul>
+        </li>
+        <li><strong>browser/</strong> <span style="color: #6a737d;">— 子系统：网页前端启动</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— 浏览器模块文档</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>execute.go</code> <span style="color: #6a737d;">— IP 发现与启动</span></li>
+            <li><code>type.go</code> <span style="color: #6a737d;">— 类型与状态</span></li>
+            <li><code>webView.go</code> <span style="color: #6a737d;">— WebView 窗口管理</span></li>
+          </ul>
+        </li>
+        <li><strong>storage/</strong> <span style="color: #6a737d;">— 子系统：文件管理</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— 存储模块文档</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><strong>module/</strong> <span style="color: #6a737d;">— 核心逻辑层</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>type.go</code> <span style="color: #6a737d;">— 数据结构</span></li>
+                <li><code>save.go</code> <span style="color: #6a737d;">— 文件保存</span></li>
+                <li><code>read.go</code> <span style="color: #6a737d;">— 文件读取</span></li>
+                <li><code>delete.go</code> <span style="color: #6a737d;">— 文件删除</span></li>
+                <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载</span></li>
+                <li><code>filelist.go</code> <span style="color: #6a737d;">— 文件列表</span></li>
+                <li><code>archive.go</code> <span style="color: #6a737d;">— ZIP 压缩/解压</span></li>
+                <li><code>background.go</code> <span style="color: #6a737d;">— 随机背景图</span></li>
+                <li><code>database.go</code> <span style="color: #6a737d;">— SQLite 数据库</span></li>
+              </ul>
+            </li>
+            <li><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>save.go</code> <span style="color: #6a737d;">— 保存接口</span></li>
+                <li><code>read.go</code> <span style="color: #6a737d;">— 读取接口</span></li>
+                <li><code>delete.go</code> <span style="color: #6a737d;">— 删除接口</span></li>
+                <li><code>download.go</code> <span style="color: #6a737d;">— 下载接口</span></li>
+                <li><code>filelist.go</code> <span style="color: #6a737d;">— 文件列表接口</span></li>
+                <li><code>archive.go</code> <span style="color: #6a737d;">— 归档接口</span></li>
+                <li><code>background.go</code> <span style="color: #6a737d;">— 背景图接口</span></li>
+                <li><code>database.go</code> <span style="color: #6a737d;">— 数据库接口</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>screenshot/</strong> <span style="color: #6a737d;">— 子系统：屏幕截图</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— 截图模块文档</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>type.go</code> <span style="color: #6a737d;">— 类型定义</span></li>
+            <li><code>module.go</code> <span style="color: #6a737d;">— 核心逻辑</span></li>
+            <li><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务</span></li>
+          </ul>
+        </li>
+        <li><strong>qwen3_tts_lunar/</strong> <span style="color: #6a737d;">— 独立系统：语音合成</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— TTS 模块文档</span></li>
+            <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务</span></li>
+            <li><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+            <li><code>build_cpp.ps1</code> <span style="color: #6a737d;">— C++ 编译脚本</span></li>
+            <li><code>build_ggml.ps1</code> <span style="color: #6a737d;">— GGML 编译脚本</span></li>
+            <li><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+            <li><strong>module/</strong> <span style="color: #6a737d;">— Go 逻辑层</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>generate.go</code> <span style="color: #6a737d;">— 语音生成</span></li>
+                <li><code>variable.go</code> <span style="color: #6a737d;">— 变量定义</span></li>
+                <li><code>stream.go</code> <span style="color: #6a737d;">— 流式处理</span></li>
+              </ul>
+            </li>
+            <li><strong>client/</strong> <span style="color: #6a737d;">— 前端界面</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>index.html</code> <span style="color: #6a737d;">— 主页面</span></li>
+                <li><code>app.js</code> <span style="color: #6a737d;">— 应用逻辑</span></li>
+                <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+                <li><code>picture.webp</code> <span style="color: #6a737d;">— 背景图</span></li>
+                <li><code>favicon.ico</code> <span style="color: #6a737d;">— 图标</span></li>
+              </ul>
+            </li>
+            <li><strong>cpp/</strong> <span style="color: #6a737d;">— C++ 推理引擎</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>CMakeLists.txt</code> <span style="color: #6a737d;">— CMake 构建</span></li>
+                <li><strong>src/</strong> <span style="color: #6a737d;">— 引擎源码</span>
+                  <ul style="list-style-type: none; padding-left: 1.5em;">
+                    <li><code>qwen3_tts.cpp/h</code> <span style="color: #6a737d;">— TTS 主引擎</span></li>
+                    <li><code>qwen3tts_c_api.cpp/h</code> <span style="color: #6a737d;">— C API 接口</span></li>
+                    <li><code>tts_transformer.cpp/h</code> <span style="color: #6a737d;">— Transformer 层</span></li>
+                    <li><code>audio_tokenizer_*.cpp/h</code> <span style="color: #6a737d;">— 音频分词器</span></li>
+                    <li><code>gguf_loader.cpp/h</code> <span style="color: #6a737d;">— GGUF 模型加载</span></li>
+                    <li><code>text_tokenizer.cpp/h</code> <span style="color: #6a737d;">— 文本分词</span></li>
+                    <li><code>main.cpp</code> <span style="color: #6a737d;">— 独立可执行文件入口</span></li>
+                    <li><code>coreml_*.cpp/h</code> <span style="color: #6a737d;">— Apple CoreML 加速</span></li>
+                    <li><code>qwen3tts.def</code> <span style="color: #6a737d;">— Windows DLL 导出</span></li>
+                  </ul>
+                </li>
+                <li><strong>ggml/</strong> <span style="color: #6a737d;">— GGML 张量计算库</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>qwen_asr_lunar/</strong> <span style="color: #6a737d;">— 独立系统：语音识别</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>README.md</code> <span style="color: #6a737d;">— ASR 模块文档</span></li>
+            <li><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+            <li><code>go.mod</code> <span style="color: #6a737d;">— 模块定义</span></li>
+            <li><code>asr.go</code> <span style="color: #6a737d;">— Go↔C 桥接层</span></li>
+            <li><code>handler.go</code> <span style="color: #6a737d;">— HTTP 处理</span></li>
+            <li><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+            <li><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+            <li><strong>static/</strong> <span style="color: #6a737d;">— 前端界面</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>index.html</code> <span style="color: #6a737d;">— 主页面</span></li>
+                <li><code>app.js</code> <span style="color: #6a737d;">— 应用逻辑</span></li>
+                <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+                <li><code>picture.webp</code> <span style="color: #6a737d;">— 背景图</span></li>
+                <li><code>favicon.ico</code> <span style="color: #6a737d;">— 图标</span></li>
+              </ul>
+            </li>
+            <li><strong>openblas/</strong> <span style="color: #6a737d;">— OpenBLAS 线性代数库</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><strong>include/</strong> <span style="color: #6a737d;">— C 头文件</span></li>
+              </ul>
+            </li>
+            <li><strong>C 推理源码</strong> <span style="color: #6a737d;">— 纯 C 推理引擎</span>
+              <ul style="list-style-type: none; padding-left: 1.5em;">
+                <li><code>qwen_asr.h/c</code> <span style="color: #6a737d;">— 主入口与管线</span></li>
+                <li><code>qwen_asr_audio.h/c</code> <span style="color: #6a737d;">— 音频预处理</span></li>
+                <li><code>qwen_asr_encoder.c</code> <span style="color: #6a737d;">— 编码器实现</span></li>
+                <li><code>qwen_asr_decoder.c</code> <span style="color: #6a737d;">— 解码器实现</span></li>
+                <li><code>qwen_asr_tokenizer.h/c</code> <span style="color: #6a737d;">— GPT-2 BPE 分词</span></li>
+                <li><code>qwen_asr_safetensors.h/c</code> <span style="color: #6a737d;">— SafeTensors 加载</span></li>
+                <li><code>qwen_asr_kernels.h/c</code> <span style="color: #6a737d;">— 数学核心分发</span></li>
+                <li><code>qwen_asr_kernels_avx.c</code> <span style="color: #6a737d;">— x86 SIMD 优化</span></li>
+                <li><code>qwen_asr_kernels_neon.c</code> <span style="color: #6a737d;">— ARM NEON 优化</span></li>
+                <li><code>qwen_asr_kernels_generic.c</code> <span style="color: #6a737d;">— 通用实现</span></li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>.trae/</strong> <span style="color: #6a737d;">— 项目规则配置</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><strong>rules/</strong> <span style="color: #6a737d;">— 代码规范</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>git-commit-message.md</code> <span style="color: #6a737d;">— Git 提交规范</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ### 层级关系说明
 
-```
-星月智能平台 (Lunar Astral Agents)
-│
-├── 核心系统: 星图·月华 (lunar_astral)
-│   ├── 依赖: config, browser, storage, screenshot, qwen3_tts_lunar
-│   ├── 功能: AI 对话、Live2D 角色、TTS 语音、图像生成
-│   └── 入口: Lunar_Astral.exe
-│
-├── 扩展系统: 星图·琉璃 (crystal_astral)
-│   ├── 依赖: config, browser, storage, screenshot
-│   ├── 功能: 文件管理、数据库管理、截图标注、AI 代理
-│   └── 入口: Crystal_Astral.exe
-│
-├── 独立系统: 语音合成 (qwen3_tts_lunar)
-│   ├── 依赖: C++ GGML 引擎
-│   ├── 功能: Qwen3-TTS 文本转语音
-│   └── 入口: Qwen3_TTS_Lunar.exe
-│
-├── 独立系统: 语音识别 (qwen_asr_lunar)
-│   ├── 依赖: 纯 C 引擎 + OpenBLAS
-│   ├── 功能: Qwen3-ASR 语音转文本
-│   └── 入口: Qwen_ASR_Lunar.exe
-│
-└── 公共子系统 (subsystem/)
-    ├── config      → 全局配置中枢
-    ├── browser     → WebView 窗口 + 本地 IP 发现
-    ├── storage     → 文件存储 + SQLite 数据库
-    └── screenshot  → 屏幕截图 + 图片缩放
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>星月智能平台 (Lunar Astral Agents)</strong></li>
+    <li style="padding-left: 1.5em;"><strong>核心系统: 星图·月华</strong> <span style="color: #6a737d;">(lunar_astral)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><span style="color: #6a737d;">依赖: config, browser, storage, screenshot, qwen3_tts_lunar</span></li>
+        <li><span style="color: #6a737d;">功能: AI 对话、Live2D 角色、TTS 语音、图像生成</span></li>
+        <li><span style="color: #6a737d;">入口: <code>Lunar_Astral.exe</code></span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>扩展系统: 星图·琉璃</strong> <span style="color: #6a737d;">(crystal_astral)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><span style="color: #6a737d;">依赖: config, browser, storage, screenshot</span></li>
+        <li><span style="color: #6a737d;">功能: 文件管理、数据库管理、截图标注、AI 代理</span></li>
+        <li><span style="color: #6a737d;">入口: <code>Crystal_Astral.exe</code></span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>独立系统: 语音合成</strong> <span style="color: #6a737d;">(qwen3_tts_lunar)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><span style="color: #6a737d;">依赖: C++ GGML 引擎</span></li>
+        <li><span style="color: #6a737d;">功能: Qwen3-TTS 文本转语音</span></li>
+        <li><span style="color: #6a737d;">入口: <code>Qwen3_TTS_Lunar.exe</code></span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>独立系统: 语音识别</strong> <span style="color: #6a737d;">(qwen_asr_lunar)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><span style="color: #6a737d;">依赖: 纯 C 引擎 + OpenBLAS</span></li>
+        <li><span style="color: #6a737d;">功能: Qwen3-ASR 语音转文本</span></li>
+        <li><span style="color: #6a737d;">入口: <code>Qwen_ASR_Lunar.exe</code></span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>公共子系统</strong> <span style="color: #6a737d;">(subsystem/)</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>config</code> <span style="color: #6a737d;">— 全局配置中枢</span></li>
+        <li><code>browser</code> <span style="color: #6a737d;">— WebView 窗口 + 本地 IP 发现</span></li>
+        <li><code>storage</code> <span style="color: #6a737d;">— 文件存储 + SQLite 数据库</span></li>
+        <li><code>screenshot</code> <span style="color: #6a737d;">— 屏幕截图 + 图片缩放</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

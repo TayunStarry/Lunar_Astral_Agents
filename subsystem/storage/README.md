@@ -35,30 +35,37 @@
 
 ## 项目结构
 
-```
-storage/
-├── go.mod                          ← 模块定义（依赖 go-sqlite3）
-├── module/                         ← 核心业务逻辑层
-│   ├── type.go                     ← 全部数据结构定义
-│   ├── save.go                     ← 文件保存 + 并发文件锁
-│   ├── read.go                     ← 文件读取 + MIME 类型检测
-│   ├── delete.go                   ← 文件/目录删除
-│   ├── download.go                 ← 文件下载信息获取
-│   ├── filelist.go                 ← 目录列表 + 标识符过滤
-│   ├── archive.go                  ← ZIP 压缩/解压（全内存操作）
-│   ├── background.go               ← 随机背景图选取
-│   └── database.go                 ← SQLite 数据库完整封装（批量操作/事务/安全过滤）
-│
-└── server/                         ← HTTP 服务层
-    ├── save.go                     ← POST 保存处理器
-    ├── read.go                     ← GET 读取处理器
-    ├── delete.go                   ← DELETE 删除处理器
-    ├── download.go                 ← 文件下载处理器
-    ├── filelist.go                 ← 目录列表处理器
-    ├── archive.go                  ← POST 压缩 / PUT 解压
-    ├── background.go               ← GET 随机背景图
-    └── database.go                 ← POST 数据库批量操作
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>storage/</strong></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— 模块定义（依赖 go-sqlite3）</span></li>
+    <li style="padding-left: 1.5em;"><strong>module/</strong> <span style="color: #6a737d;">— 核心业务逻辑层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>type.go</code> <span style="color: #6a737d;">— 全部数据结构定义</span></li>
+        <li><code>save.go</code> <span style="color: #6a737d;">— 文件保存 + 并发文件锁</span></li>
+        <li><code>read.go</code> <span style="color: #6a737d;">— 文件读取 + MIME 类型检测</span></li>
+        <li><code>delete.go</code> <span style="color: #6a737d;">— 文件/目录删除</span></li>
+        <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载信息获取</span></li>
+        <li><code>filelist.go</code> <span style="color: #6a737d;">— 目录列表 + 标识符过滤</span></li>
+        <li><code>archive.go</code> <span style="color: #6a737d;">— ZIP 压缩/解压（全内存操作）</span></li>
+        <li><code>background.go</code> <span style="color: #6a737d;">— 随机背景图选取</span></li>
+        <li><code>database.go</code> <span style="color: #6a737d;">— SQLite 数据库完整封装（批量操作/事务/安全过滤）</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>save.go</code> <span style="color: #6a737d;">— POST 保存处理器</span></li>
+        <li><code>read.go</code> <span style="color: #6a737d;">— GET 读取处理器</span></li>
+        <li><code>delete.go</code> <span style="color: #6a737d;">— DELETE 删除处理器</span></li>
+        <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载处理器</span></li>
+        <li><code>filelist.go</code> <span style="color: #6a737d;">— 目录列表处理器</span></li>
+        <li><code>archive.go</code> <span style="color: #6a737d;">— POST 压缩 / PUT 解压</span></li>
+        <li><code>background.go</code> <span style="color: #6a737d;">— GET 随机背景图</span></li>
+        <li><code>database.go</code> <span style="color: #6a737d;">— POST 数据库批量操作</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

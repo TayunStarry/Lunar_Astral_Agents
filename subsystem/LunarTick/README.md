@@ -717,37 +717,54 @@ func main() {
 
 ## 项目结构
 
-```
-subsystem/LunarTick/
-├── api/
-│   ├── handler.go          # API 请求处理器（路由注册、请求处理、响应写入）
-│   ├── server.go           # HTTP 服务器封装（启动、停止、优雅关闭）
-│   └── types.go            # API 请求/响应数据结构定义
-├── cmd/
-│   └── lunartick/
-│       └── main.go         # CLI 入口（命令行参数解析、引擎初始化、信号处理）
-├── engine/
-│   ├── block.go            # 代码块管理器（创建、状态管理、生命周期）
-│   ├── engine.go           # 引擎编排层（对外统一接口）
-│   ├── executor.go         # 进程执行器（外部程序调用、stdout/stderr 捕获）
-│   ├── expression.go       # 表达式求值器（变量引用、字符串拼接、条件判断）
-│   ├── extended_test.go    # 扩展单元测试（覆盖率 ≥ 81%）
-│   ├── engine_test.go      # 引擎测试
-│   ├── expression_test.go  # 表达式测试
-│   ├── ticker_test.go      # 调度器测试
-│   ├── instructions.go     # 指令集实现（25+ 种指令）
-│   ├── parser.go           # 指令解析器（文本行 → 结构化指令）
-│   ├── pointer.go          # 指针系统（注册、构建、调用）
-│   ├── ticker.go           # Tick 调度器（生命周期循环、阶段管理）
-│   ├── types.go            # 核心类型定义（指令、代码块、等待条件）
-│   └── variable.go         # 变量存储系统（模式控制、原子操作）
-├── bin/
-│   └── lunartick.exe       # 编译产物（可执行程序）
-├── go.mod                  # Go 模块定义
-├── go.sum                  # 依赖校验
-├── build.ps1               # 构建脚本
-└── README.md               # 本文档
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>subsystem/LunarTick/</strong></li>
+    <li style="padding-left: 1.5em;"><strong>api/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>handler.go</code> <span style="color: #6a737d;">— API 请求处理器（路由注册、请求处理、响应写入）</span></li>
+        <li><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务器封装（启动、停止、优雅关闭）</span></li>
+        <li><code>types.go</code> <span style="color: #6a737d;">— API 请求/响应数据结构定义</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>cmd/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><strong>lunartick/</strong>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>main.go</code> <span style="color: #6a737d;">— CLI 入口（命令行参数解析、引擎初始化、信号处理）</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>engine/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>block.go</code> <span style="color: #6a737d;">— 代码块管理器（创建、状态管理、生命周期）</span></li>
+        <li><code>engine.go</code> <span style="color: #6a737d;">— 引擎编排层（对外统一接口）</span></li>
+        <li><code>executor.go</code> <span style="color: #6a737d;">— 进程执行器（外部程序调用、stdout/stderr 捕获）</span></li>
+        <li><code>expression.go</code> <span style="color: #6a737d;">— 表达式求值器（变量引用、字符串拼接、条件判断）</span></li>
+        <li><code>extended_test.go</code> <span style="color: #6a737d;">— 扩展单元测试（覆盖率 ≥ 81%）</span></li>
+        <li><code>engine_test.go</code> <span style="color: #6a737d;">— 引擎测试</span></li>
+        <li><code>expression_test.go</code> <span style="color: #6a737d;">— 表达式测试</span></li>
+        <li><code>ticker_test.go</code> <span style="color: #6a737d;">— 调度器测试</span></li>
+        <li><code>instructions.go</code> <span style="color: #6a737d;">— 指令集实现（25+ 种指令）</span></li>
+        <li><code>parser.go</code> <span style="color: #6a737d;">— 指令解析器（文本行 → 结构化指令）</span></li>
+        <li><code>pointer.go</code> <span style="color: #6a737d;">— 指针系统（注册、构建、调用）</span></li>
+        <li><code>ticker.go</code> <span style="color: #6a737d;">— Tick 调度器（生命周期循环、阶段管理）</span></li>
+        <li><code>types.go</code> <span style="color: #6a737d;">— 核心类型定义（指令、代码块、等待条件）</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— 变量存储系统（模式控制、原子操作）</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>bin/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>lunartick.exe</code> <span style="color: #6a737d;">— 编译产物（可执行程序）</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+    <li style="padding-left: 1.5em;"><code>go.sum</code> <span style="color: #6a737d;">— 依赖校验</span></li>
+    <li style="padding-left: 1.5em;"><code>build.ps1</code> <span style="color: #6a737d;">— 构建脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>README.md</code> <span style="color: #6a737d;">— 本文档</span></li>
+  </ul>
+</div>
 
 ---
 

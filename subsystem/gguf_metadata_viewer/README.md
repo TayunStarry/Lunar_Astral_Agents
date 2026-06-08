@@ -18,31 +18,47 @@
 
 ## 项目结构
 
-```
-gguf_metadata_viewer/
-├── main.go                 # 入口：启动HTTP服务 + 嵌入式浏览器
-├── go.mod / go.sum         # Go 模块定义
-├── gguf/
-│   └── decode.go           # GGUF 二进制格式解析（参考 llama/metadata）
-├── server/
-│   ├── server.go           # HTTP服务器 + API端点 + 元数据终端打印
-│   └── static/
-│       ├── index.html      # 前端界面（拖放区域 + 结果展示）
-│       ├── style.css       # 深色主题样式
-│       └── script.js       # 拖放交互 + API调用 + 搜索过滤
-└── README.md               # 本文档
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>gguf_metadata_viewer/</strong></li>
+    <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 入口：启动HTTP服务 + 嵌入式浏览器</span></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> / <code>go.sum</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+    <li style="padding-left: 1.5em;"><strong>gguf/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>decode.go</code> <span style="color: #6a737d;">— GGUF 二进制格式解析（参考 llama/metadata）</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>server/</strong>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>server.go</code> <span style="color: #6a737d;">— HTTP服务器 + API端点 + 元数据终端打印</span></li>
+        <li><strong>static/</strong>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>index.html</code> <span style="color: #6a737d;">— 前端界面（拖放区域 + 结果展示）</span></li>
+            <li><code>style.css</code> <span style="color: #6a737d;">— 深色主题样式</span></li>
+            <li><code>script.js</code> <span style="color: #6a737d;">— 拖放交互 + API调用 + 搜索过滤</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><code>README.md</code> <span style="color: #6a737d;">— 本文档</span></li>
+  </ul>
+</div>
 
 ### 依赖关系
 
-```
-main.go
- ├── config  (../config)   — 配置管理（Developer模式、端口等）
- ├── logger  (../logger)   — 彩色终端日志
- ├── browser (../browser)  — 嵌入式 WebView2 窗口
- └── server/server.go
-      └── gguf/decode.go   — GGUF 二进制解析
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><code>main.go</code></li>
+    <li style="padding-left: 1.5em;"><code>config</code> <span style="color: #6a737d;">(../config) — 配置管理（Developer模式、端口等）</span></li>
+    <li style="padding-left: 1.5em;"><code>logger</code> <span style="color: #6a737d;">(../logger) — 彩色终端日志</span></li>
+    <li style="padding-left: 1.5em;"><code>browser</code> <span style="color: #6a737d;">(../browser) — 嵌入式 WebView2 窗口</span></li>
+    <li style="padding-left: 1.5em;"><code>server/server.go</code>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>gguf/decode.go</code> <span style="color: #6a737d;">— GGUF 二进制解析</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

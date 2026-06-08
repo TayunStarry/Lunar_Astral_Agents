@@ -4,7 +4,7 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 
 ---
 
-![月华主页面](../image/月华-主页面.webp)
+<p align="center"><img src="../image/月华-主页面.webp" alt="月华主页面"></p>
 
 *图：星图·月华主界面（桌面端）*
 
@@ -39,15 +39,15 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 
 ### 界面展示
 
-![月华手机端](../image/月华-主界面-手机端.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/月华-主界面-手机端.webp" alt="月华手机端" width="360"></p>
 
 *图：星图·月华移动端界面*
 
-![月华聊天记录](../image/月华-聊天记录.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/月华-聊天记录.webp" alt="月华聊天记录" width="360"></p>
 
 *图：星图·月华聊天记录界面*
 
-![星图-月华-人设图-1](../image/星图-月华-人设图-1.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/星图-月华-人设图-1.webp" alt="星图-月华-人设图-1" width="360"></p>
 
 *图：月华角色人设*
 
@@ -55,83 +55,114 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 
 ## 项目结构
 
-```
-lunar_astral/
-├── main.go                  ← 程序入口，启动 HTTP 服务器
-├── go.mod                   ← Go 模块声明（依赖 config/browser/storage/screenshot/tts）
-├── build.ps1                ← 编译脚本
-├── icon.ico                 ← 应用程序图标
-├── package.json             ← Node.js 前端构建
-├── rollup.config.js         ← 前端打包配置
-├── tsconfig.json            ← TypeScript 配置
-├── removeExport.cjs         ← 构建后处理（移除 ES export）
-│
-├── adapters/                ← Go↔JS 适配器层
-│   ├── create.go            ← JS 运行时（goja eventloop）创建与生命周期
-│   ├── database.go          ← SQLite 数据库操作适配
-│   ├── file.go              ← 文件系统操作适配
-│   ├── message.go           ← 上下文消息推拉适配
-│   ├── network.go           ← 网络请求与 IP 定位适配
-│   ├── type.go              ← 共享类型定义
-│   └── vision.go            ← 视觉/图像处理适配
-│
-├── server/                  ← HTTP 服务层
-│   ├── create.go            ← 服务器启动器、CORS 中间件、端口重试
-│   ├── manage.go            ← 初始化流程（flag、MIME、路由、llama、TTS、WebSocket、JS 智能体）
-│   ├── type.go              ← 系统端点与服务类型
-│   ├── variable.go          ← 全局路由表 SystemEndpoints
-│   └── handlers/            ← HTTP 请求处理器
-│       ├── generate.go      ← 图像生成处理（sd-cli 调用）
-│       ├── message.go       ← 消息收发处理
-│       ├── proxy.go         ← llama.cpp 代理转发
-│       ├── type.go          ← 处理器类型
-│       └── video.go         ← 视频关键帧提取
-│
-├── model/                   ← 模型服务层
-│   ├── type.go              ← 模型/任务结构体
-│   ├── core.go              ← 模型列表、端口映射、请求队列
-│   ├── variable.go          ← 并发控制变量
-│   ├── llama/         ← llama.cpp 代理
-│   │   └── proxy.go         ← llama-server 启动/监控/代理/云服务回退
-│   └── tts/                 ← TTS 语音合成引擎
-│       ├── entry.go         ← TTS 合成入口
-│       ├── cache.go         ← WAV 音频缓存
-│       ├── capture.go       ← 音频分句捕获
-│       ├── type.go          ← TTS 类型定义
-│       ├── variable.go      ← TTS 运行时状态
-│       ├── wrapper.go       ← WAV 封装
-│       └── writer.go        ← 脉冲编码调制写入
-│
-├── hierarchy/               ← 前端资源层
-│   ├── embedded.go          ← Go embed.FS 资源嵌入
-│   ├── image/               ← 图像生成
-│   │   ├── generate/        ← 生成逻辑与类型
-│   │   └── video.go         ← 视频工具
-│   └── assets/              ← 前端静态资源
-│       ├── agentSystem.js   ← 智能体核心 JS（goja 运行时执行）
-│       ├── prompts/         ← AI 角色提示词模板（9 个 .md）
-│       └── client/          ← 前端 Web 界面（HTML/CSS/JS）
-│
-├── websocket/               ← WebSocket 通信层
-│   ├── websocket.go         ← 连接管理、读写泵、广播
-│   ├── type.go              ← WebSocket 类型定义
-│   └── variable.go          ← WebSocket 全局变量
-│
-├── release/                 ← 进程/端口管理
-│   ├── execute.go           ← 命令执行
-│   ├── kill.go              ← 进程终止
-│   ├── network_status.go    ← 网络状态监控
-│   ├── processes.go         ← 进程列表
-│   └── query.go             ← 查询功能
-│
-└── server_side/             ← TypeScript 智能体源码（编译→ agentSystem.js）
-    ├── index.ts             ← 智能体入口
-    ├── config/              ← 全局配置（模型/数据库/历史/图像/工具）
-    ├── control/             ← 对话控制（延迟/限制/计划）
-    ├── file/                ← 文件处理（数据库/编码/读取/分割）
-    ├── math/                ← 数学工具（向量/基向量）
-    └── model/               ← AI 模型（智能体/构建器/对话/画师/定义）
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>lunar_astral/</strong></li>
+    <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口，启动 HTTP 服务器</span></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块声明（依赖 config/browser/storage/screenshot/tts）</span></li>
+    <li style="padding-left: 1.5em;"><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>icon.ico</code> <span style="color: #6a737d;">— 应用程序图标</span></li>
+    <li style="padding-left: 1.5em;"><code>package.json</code> <span style="color: #6a737d;">— Node.js 前端构建</span></li>
+    <li style="padding-left: 1.5em;"><code>rollup.config.js</code> <span style="color: #6a737d;">— 前端打包配置</span></li>
+    <li style="padding-left: 1.5em;"><code>tsconfig.json</code> <span style="color: #6a737d;">— TypeScript 配置</span></li>
+    <li style="padding-left: 1.5em;"><code>removeExport.cjs</code> <span style="color: #6a737d;">— 构建后处理（移除 ES export）</span></li>
+    <li style="padding-left: 1.5em;"><strong>adapters/</strong> <span style="color: #6a737d;">— Go↔JS 适配器层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>create.go</code> <span style="color: #6a737d;">— JS 运行时（goja eventloop）创建与生命周期</span></li>
+        <li><code>database.go</code> <span style="color: #6a737d;">— SQLite 数据库操作适配</span></li>
+        <li><code>file.go</code> <span style="color: #6a737d;">— 文件系统操作适配</span></li>
+        <li><code>message.go</code> <span style="color: #6a737d;">— 上下文消息推拉适配</span></li>
+        <li><code>network.go</code> <span style="color: #6a737d;">— 网络请求与 IP 定位适配</span></li>
+        <li><code>type.go</code> <span style="color: #6a737d;">— 共享类型定义</span></li>
+        <li><code>vision.go</code> <span style="color: #6a737d;">— 视觉/图像处理适配</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>create.go</code> <span style="color: #6a737d;">— 服务器启动器、CORS 中间件、端口重试</span></li>
+        <li><code>manage.go</code> <span style="color: #6a737d;">— 初始化流程（flag、MIME、路由、llama、TTS、WebSocket、JS 智能体）</span></li>
+        <li><code>type.go</code> <span style="color: #6a737d;">— 系统端点与服务类型</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— 全局路由表 SystemEndpoints</span></li>
+        <li><strong>handlers/</strong> <span style="color: #6a737d;">— HTTP 请求处理器</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>generate.go</code> <span style="color: #6a737d;">— 图像生成处理（sd-cli 调用）</span></li>
+            <li><code>message.go</code> <span style="color: #6a737d;">— 消息收发处理</span></li>
+            <li><code>proxy.go</code> <span style="color: #6a737d;">— llama.cpp 代理转发</span></li>
+            <li><code>type.go</code> <span style="color: #6a737d;">— 处理器类型</span></li>
+            <li><code>video.go</code> <span style="color: #6a737d;">— 视频关键帧提取</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>model/</strong> <span style="color: #6a737d;">— 模型服务层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>type.go</code> <span style="color: #6a737d;">— 模型/任务结构体</span></li>
+        <li><code>core.go</code> <span style="color: #6a737d;">— 模型列表、端口映射、请求队列</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— 并发控制变量</span></li>
+        <li><strong>llama/</strong> <span style="color: #6a737d;">— llama.cpp 代理</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>proxy.go</code> <span style="color: #6a737d;">— llama-server 启动/监控/代理/云服务回退</span></li>
+          </ul>
+        </li>
+        <li><strong>tts/</strong> <span style="color: #6a737d;">— TTS 语音合成引擎</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>entry.go</code> <span style="color: #6a737d;">— TTS 合成入口</span></li>
+            <li><code>cache.go</code> <span style="color: #6a737d;">— WAV 音频缓存</span></li>
+            <li><code>capture.go</code> <span style="color: #6a737d;">— 音频分句捕获</span></li>
+            <li><code>type.go</code> <span style="color: #6a737d;">— TTS 类型定义</span></li>
+            <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 运行时状态</span></li>
+            <li><code>wrapper.go</code> <span style="color: #6a737d;">— WAV 封装</span></li>
+            <li><code>writer.go</code> <span style="color: #6a737d;">— 脉冲编码调制写入</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>hierarchy/</strong> <span style="color: #6a737d;">— 前端资源层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>embedded.go</code> <span style="color: #6a737d;">— Go embed.FS 资源嵌入</span></li>
+        <li><strong>image/</strong> <span style="color: #6a737d;">— 图像生成</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><strong>generate/</strong> <span style="color: #6a737d;">— 生成逻辑与类型</span></li>
+            <li><code>video.go</code> <span style="color: #6a737d;">— 视频工具</span></li>
+          </ul>
+        </li>
+        <li><strong>assets/</strong> <span style="color: #6a737d;">— 前端静态资源</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>agentSystem.js</code> <span style="color: #6a737d;">— 智能体核心 JS（goja 运行时执行）</span></li>
+            <li><strong>prompts/</strong> <span style="color: #6a737d;">— AI 角色提示词模板（9 个 .md）</span></li>
+            <li><strong>client/</strong> <span style="color: #6a737d;">— 前端 Web 界面（HTML/CSS/JS）</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>websocket/</strong> <span style="color: #6a737d;">— WebSocket 通信层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>websocket.go</code> <span style="color: #6a737d;">— 连接管理、读写泵、广播</span></li>
+        <li><code>type.go</code> <span style="color: #6a737d;">— WebSocket 类型定义</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— WebSocket 全局变量</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>release/</strong> <span style="color: #6a737d;">— 进程/端口管理</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>execute.go</code> <span style="color: #6a737d;">— 命令执行</span></li>
+        <li><code>kill.go</code> <span style="color: #6a737d;">— 进程终止</span></li>
+        <li><code>network_status.go</code> <span style="color: #6a737d;">— 网络状态监控</span></li>
+        <li><code>processes.go</code> <span style="color: #6a737d;">— 进程列表</span></li>
+        <li><code>query.go</code> <span style="color: #6a737d;">— 查询功能</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;"><strong>server_side/</strong> <span style="color: #6a737d;">— TypeScript 智能体源码（编译→ agentSystem.js）</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>index.ts</code> <span style="color: #6a737d;">— 智能体入口</span></li>
+        <li><strong>config/</strong> <span style="color: #6a737d;">— 全局配置（模型/数据库/历史/图像/工具）</span></li>
+        <li><strong>control/</strong> <span style="color: #6a737d;">— 对话控制（延迟/限制/计划）</span></li>
+        <li><strong>file/</strong> <span style="color: #6a737d;">— 文件处理（数据库/编码/读取/分割）</span></li>
+        <li><strong>math/</strong> <span style="color: #6a737d;">— 数学工具（向量/基向量）</span></li>
+        <li><strong>model/</strong> <span style="color: #6a737d;">— AI 模型（智能体/构建器/对话/画师/定义）</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

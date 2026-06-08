@@ -4,7 +4,7 @@
 
 ---
 
-![琉璃主页面](../image/琉璃-主页面.webp)
+<p align="center"><img src="../image/琉璃-主页面.webp" alt="琉璃主页面"></p>
 
 *图：星图·琉璃主界面*
 
@@ -37,43 +37,43 @@
 
 ### 界面展示
 
-![琉璃-数据管理-主页面](../image/琉璃-数据管理-主页面.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-数据管理-主页面.webp" alt="琉璃-数据管理-主页面" width="360"></p>
 
 *图：数据管理主界面*
 
-![琉璃-数据管理-配置说明](../image/琉璃-数据管理-配置说明.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-数据管理-配置说明.webp" alt="琉璃-数据管理-配置说明" width="360"></p>
 
 *图：数据管理配置说明*
 
-![琉璃-文件管理-主页面](../image/琉璃-文件管理-主页面.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-文件管理-主页面.webp" alt="琉璃-文件管理-主页面" width="360"></p>
 
 *图：文件管理主界面*
 
-![琉璃-文件管理-文本编辑](../image/琉璃-文件管理-文本编辑.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-文件管理-文本编辑.webp" alt="琉璃-文件管理-文本编辑" width="360"></p>
 
 *图：文本编辑界面*
 
-![琉璃-参数管理-配置预览](../image/琉璃-参数管理-配置预览.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-参数管理-配置预览.webp" alt="琉璃-参数管理-配置预览" width="360"></p>
 
 *图：参数配置预览*
 
-![琉璃-图像生成-参数配置](../image/琉璃-图像生成-参数配置.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-图像生成-参数配置.webp" alt="琉璃-图像生成-参数配置" width="360"></p>
 
 *图：图像生成参数配置*
 
-![琉璃-图像生成-图片预览](../image/琉璃-图像生成-图片预览.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-图像生成-图片预览.webp" alt="琉璃-图像生成-图片预览" width="360"></p>
 
 *图：图像生成预览*
 
-![琉璃-截图标注](../image/琉璃-截图标注.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-截图标注.webp" alt="琉璃-截图标注" width="360"></p>
 
 *图：截图标注界面*
 
-![琉璃-消息渲染](../image/琉璃-消息渲染.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/琉璃-消息渲染.webp" alt="琉璃-消息渲染" width="360"></p>
 
 *图：消息渲染界面*
 
-![星图-琉璃-人设图-0](../image/星图-琉璃-人设图-0.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../image/星图-琉璃-人设图-0.webp" alt="星图-琉璃-人设图-0" width="360"></p>
 
 *图：琉璃角色人设*
 
@@ -81,24 +81,29 @@
 
 ## 项目结构
 
-```
-crystal_astral/
-├── main.go                  ← 程序入口，随机端口 + 启动服务器
-├── go.mod                   ← Go 模块声明（依赖 config/browser/storage/screenshot）
-├── build.ps1                ← 编译脚本
-├── icon.ico                 ← 应用程序图标
-├── create.go                ← 服务器创建、代理感知路由、应用启动
-├── embedded.go              ← Go embed 前端资源嵌入
-├── endpoint.go              ← SystemEndpoints API 路由表
-├── handler.go               ← 代理转发处理器（模型列表/对话/completions）
-├── type.go                  ← 请求/响应类型定义
-│
-└── assets/                  ← 前端静态资源
-    ├── index.html           ← 主页面（琉璃 UI）
-    ├── script.js            ← 前端应用逻辑
-    ├── style.css            ← 样式表
-    └── favicon.ico          ← 网站图标
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>crystal_astral/</strong></li>
+    <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口，随机端口 + 启动服务器</span></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块声明（依赖 config/browser/storage/screenshot）</span></li>
+    <li style="padding-left: 1.5em;"><code>build.ps1</code> <span style="color: #6a737d;">— 编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>icon.ico</code> <span style="color: #6a737d;">— 应用程序图标</span></li>
+    <li style="padding-left: 1.5em;"><code>create.go</code> <span style="color: #6a737d;">— 服务器创建、代理感知路由、应用启动</span></li>
+    <li style="padding-left: 1.5em;"><code>embedded.go</code> <span style="color: #6a737d;">— Go embed 前端资源嵌入</span></li>
+    <li style="padding-left: 1.5em;"><code>endpoint.go</code> <span style="color: #6a737d;">— SystemEndpoints API 路由表</span></li>
+    <li style="padding-left: 1.5em;"><code>handler.go</code> <span style="color: #6a737d;">— 代理转发处理器（模型列表/对话/completions）</span></li>
+    <li style="padding-left: 1.5em;"><code>type.go</code> <span style="color: #6a737d;">— 请求/响应类型定义</span></li>
+    <li style="padding-left: 1.5em;"><strong>assets/</strong> <span style="color: #6a737d;">— 前端静态资源</span></li>
+    <li>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>index.html</code> <span style="color: #6a737d;">— 主页面（琉璃 UI）</span></li>
+        <li><code>script.js</code> <span style="color: #6a737d;">— 前端应用逻辑</span></li>
+        <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+        <li><code>favicon.ico</code> <span style="color: #6a737d;">— 网站图标</span></li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 

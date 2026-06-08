@@ -4,11 +4,11 @@
 
 ---
 
-![独立模块-语音合成-0](../../image/独立模块-语音合成-0.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音合成-0.webp" alt="独立模块-语音合成-0" width="360"></p>
 
 *图：语音合成主界面*
 
-![独立模块-语音合成-1](../../image/独立模块-语音合成-1.webp)
+<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音合成-1.webp" alt="独立模块-语音合成-1" width="360"></p>
 
 *图：语音合成功能展示*
 
@@ -43,46 +43,65 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
 
 ## 项目结构
 
-```
-qwen3_tts_lunar/
-├── main.go                      ← 程序入口
-├── go.mod                       ← Go 模块定义
-├── server.go                    ← HTTP 服务器
-├── build.ps1                    ← Go 编译脚本
-├── build_cpp.ps1                ← C++ 引擎编译脚本
-├── build_ggml.ps1               ← GGML 库编译脚本
-├── icon.ico                     ← 应用图标
-│
-├── module/                      ← Go 逻辑层
-│   ├── generate.go              ← 语音生成核心逻辑
-│   ├── variable.go              ← TTS 引擎全局变量
-│   └── stream.go                ← 流式音频输出
-│
-├── client/                      ← 前端界面
-│   ├── index.html               ← 主页面（玻璃拟态风格）
-│   ├── app.js                   ← 前端逻辑
-│   ├── style.css                ← 样式表
-│   ├── picture.webp             ← 背景装饰图
-│   └── favicon.ico              ← 图标
-│
-└── cpp/                         ← C++ 推理引擎
-    ├── CMakeLists.txt            ← CMake 构建配置
-    ├── ggml/                     ← GGML 张量计算库（子模块）
-    │   ├── include/              ← 头文件（ggml.h, gguf.h 等 25+）
-    │   ├── src/                  ← GGML 核心源码 + 多后端（CUDA/Vulkan/Metal/SYCL 等）
-    │   └── CMakeLists.txt
-    └── src/                      ← TTS 引擎源码
-        ├── qwen3_tts.cpp/h       ← TTS 主引擎（模型加载与推理流程）
-        ├── qwen3tts_c_api.cpp/h  ← C API 接口（供 Go CGO 调用）
-        ├── qwen3tts.def          ← Windows DLL 导出定义
-        ├── tts_transformer.cpp/h ← Transformer 层实现
-        ├── audio_tokenizer_encoder.cpp/h   ← 音频编码器
-        ├── audio_tokenizer_decoder.cpp/h   ← 音频解码器
-        ├── gguf_loader.cpp/h     ← GGUF 模型文件加载器
-        ├── text_tokenizer.cpp/h  ← 文本分词器
-        ├── coreml_code_predictor.cpp/h/mm  ← Apple CoreML 加速（可选）
-        └── main.cpp              ← 独立可执行文件入口
-```
+<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
+  <ul style="list-style-type: none; padding-left: 0;">
+    <li><strong>qwen3_tts_lunar/</strong></li>
+    <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
+    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
+    <li style="padding-left: 1.5em;"><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务器</span></li>
+    <li style="padding-left: 1.5em;"><code>build.ps1</code> <span style="color: #6a737d;">— Go 编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>build_cpp.ps1</code> <span style="color: #6a737d;">— C++ 引擎编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>build_ggml.ps1</code> <span style="color: #6a737d;">— GGML 库编译脚本</span></li>
+    <li style="padding-left: 1.5em;"><code>icon.ico</code> <span style="color: #6a737d;">— 应用图标</span></li>
+    <li style="padding-left: 1.5em;">
+      <strong>module/</strong> <span style="color: #6a737d;">— Go 逻辑层</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>generate.go</code> <span style="color: #6a737d;">— 语音生成核心逻辑</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 引擎全局变量</span></li>
+        <li><code>stream.go</code> <span style="color: #6a737d;">— 流式音频输出</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;">
+      <strong>client/</strong> <span style="color: #6a737d;">— 前端界面</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>index.html</code> <span style="color: #6a737d;">— 主页面（玻璃拟态风格）</span></li>
+        <li><code>app.js</code> <span style="color: #6a737d;">— 前端逻辑</span></li>
+        <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
+        <li><code>picture.webp</code> <span style="color: #6a737d;">— 背景装饰图</span></li>
+        <li><code>favicon.ico</code> <span style="color: #6a737d;">— 图标</span></li>
+      </ul>
+    </li>
+    <li style="padding-left: 1.5em;">
+      <strong>cpp/</strong> <span style="color: #6a737d;">— C++ 推理引擎</span>
+      <ul style="list-style-type: none; padding-left: 1.5em;">
+        <li><code>CMakeLists.txt</code> <span style="color: #6a737d;">— CMake 构建配置</span></li>
+        <li>
+          <strong>ggml/</strong> <span style="color: #6a737d;">— GGML 张量计算库（子模块）</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><strong>include/</strong> <span style="color: #6a737d;">— 头文件（ggml.h, gguf.h 等 25+）</span></li>
+            <li><strong>src/</strong> <span style="color: #6a737d;">— GGML 核心源码 + 多后端（CUDA/Vulkan/Metal/SYCL 等）</span></li>
+            <li><code>CMakeLists.txt</code></li>
+          </ul>
+        </li>
+        <li>
+          <strong>src/</strong> <span style="color: #6a737d;">— TTS 引擎源码</span>
+          <ul style="list-style-type: none; padding-left: 1.5em;">
+            <li><code>qwen3_tts.cpp/h</code> <span style="color: #6a737d;">— TTS 主引擎（模型加载与推理流程）</span></li>
+            <li><code>qwen3tts_c_api.cpp/h</code> <span style="color: #6a737d;">— C API 接口（供 Go CGO 调用）</span></li>
+            <li><code>qwen3tts.def</code> <span style="color: #6a737d;">— Windows DLL 导出定义</span></li>
+            <li><code>tts_transformer.cpp/h</code> <span style="color: #6a737d;">— Transformer 层实现</span></li>
+            <li><code>audio_tokenizer_encoder.cpp/h</code> <span style="color: #6a737d;">— 音频编码器</span></li>
+            <li><code>audio_tokenizer_decoder.cpp/h</code> <span style="color: #6a737d;">— 音频解码器</span></li>
+            <li><code>gguf_loader.cpp/h</code> <span style="color: #6a737d;">— GGUF 模型文件加载器</span></li>
+            <li><code>text_tokenizer.cpp/h</code> <span style="color: #6a737d;">— 文本分词器</span></li>
+            <li><code>coreml_code_predictor.cpp/h/mm</code> <span style="color: #6a737d;">— Apple CoreML 加速（可选）</span></li>
+            <li><code>main.cpp</code> <span style="color: #6a737d;">— 独立可执行文件入口</span></li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
+</div>
 
 ---
 
