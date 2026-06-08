@@ -26,8 +26,6 @@ export class AgentDefine {
 	public unreadVideoUrl: string[] = [];
 	/** 最终应答 */
 	public finalResponse: string = "";
-	/** 响应速度 */
-	public responseSpeed: number = 0;
 	/** 默认应答 */
 	public defaultAnswers: Array<string> = [
 		'月华摔疼了，要等星光阁哥哥来修……',

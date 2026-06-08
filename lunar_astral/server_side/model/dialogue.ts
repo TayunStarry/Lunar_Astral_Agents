@@ -20,7 +20,7 @@ export class DialogueRole extends ModelBuilder {
 			/** 向处理器模型发送请求并等待响应 */
 			const response = this.run(this.ragMessages, []);
 			// 处理响应文本内容
-			this.analyzeMessageResponse(response.body, cache, source);
+			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求
 			if (cache.toolCalls.length > 0) {
 				/** 处理工具调用 */
@@ -37,18 +37,7 @@ export class DialogueRole extends ModelBuilder {
 		// 更新消息内容
 		this.updateMessageContent(cache, source);
 	}
-	/** 格式化历史消息
-	 *  处理流程：
-	 *  1. 遍历原始消息数组，将嵌套的多模态消息结构扁平化为独立消息
-	 *  2. 扁平化过程中严格保持消息的原始时间顺序（数组下标顺序即为时间顺序）
-	 *  3. 若视觉消息总数超过10条，对连续的视觉消息组分批摘要，摘要结果插入原位
-	 *  4. 不执行任何去重操作，确保所有消息完整保留
-	 *
-	 *  时间顺序保证机制：
-	 *  - PostMessage 类型不含时间戳字段，消息数组的下标顺序即为唯一的时间依据
-	 *  - 扁平化时按原始数组顺序逐条处理，拆分后的子消息紧跟原消息位置
-	 *  - 视觉消息摘要替换原消息组的位置，不改变前后文本消息的相对顺序
-	 */
+	/** 格式化历史消息 */
 	public formatHistoricalMessages(source: AgentDefine) {
 		// 如果消息数组为空,则不处理
 		if (this.messages.length === 0) return;
@@ -86,13 +75,13 @@ export class DialogueRole extends ModelBuilder {
 		const processedMessages: PostMessage[] = [];
 		/** 当前连续视觉消息的缓冲区 */
 		let visionBuffer: PostMessage[] = [];
+		// 遍历扁平化后的消息数组
 		for (const message of flattenedMessages) {
 			// 判断当前消息是否为视觉消息（内容为数组类型）
 			const isVisionMessage = Array.isArray(message.content);
-			if (isVisionMessage) {
-				// 累积连续的视觉消息到缓冲区
-				visionBuffer.push(message);
-			} else {
+			// 累积连续的视觉消息到缓冲区
+			if (isVisionMessage) visionBuffer.push(message);
+			else {
 				// 遇到非视觉消息，先处理缓冲区中累积的视觉消息
 				// 这确保视觉消息的摘要结果出现在正确的位置（在当前文本消息之前）
 				if (visionBuffer.length > 0) {
@@ -108,12 +97,27 @@ export class DialogueRole extends ModelBuilder {
 		}
 		// 覆写处理器模型的上下文为处理后的消息数组
 		this.messages = processedMessages;
+		/** 最新消息的角色 */
+		const latestRole = this.messages.slice(-1)[0].role;
+		// 如果最新消息是用户,则不处理
+		if (latestRole === 'user') return;
+		/** 继续话题的提示词列表 */
+		const continuationPrompts = [
+			'请延续当前话题，继续展开讨论。',
+			'请完善当前话题，对已有内容进行补充和优化。',
+			'请将话题转向旅行，聊聊旅行相关的见闻或计划。',
+			'请将话题转向游戏，聊聊最近有趣的游戏体验。',
+			'请将话题转向音乐，聊聊最近在听的音乐或音乐推荐。',
+			'请将话题转向电影，聊聊最近看过或想看的电影。',
+			'请将话题转向书籍，聊聊最近在读或推荐的书籍。',
+			'请将话题转向动漫，聊聊最近在追或推荐的动漫。',
+		];
+		/** 随机选择一个提示词 */
+		const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length - 1)];
+		// 添加随机选择的提示词到处理器模型的上下文
+		this.writeContext({ role: 'user', content: prompt });
 	}
-	/** 处理连续视觉消息缓冲区
-	 *  当连续视觉消息数量<=10时，直接保留原消息
-	 *  当连续视觉消息数量>10时，分批调用描述角色进行摘要，摘要结果替换原消息组
-	 *  摘要结果插入到输出数组的当前位置，保证时间顺序正确
-	 */
+	/** 处理连续视觉消息缓冲区 */
 	private processVisionBuffer(buffer: PostMessage[], output: PostMessage[], source: AgentDefine): void {
 		// 连续视觉消息<=10条，直接追加到输出数组，保持原始顺序
 		if (buffer.length <= 10) {
@@ -137,7 +141,7 @@ export class DialogueRole extends ModelBuilder {
 		}
 	}
 	/** 处理聊天消息响应 */
-	protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache, source: AgentDefine): void {
+	protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache): void {
 		try {
 			// 处理推理内容数据
 			if (message.choices?.[0]?.message?.reasoning_content) {
@@ -145,7 +149,6 @@ export class DialogueRole extends ModelBuilder {
 			}
 			// 检查是否有词元生成速度数据
 			if (message.timings?.predicted_per_second) {
-				source.responseSpeed = message.timings.predicted_per_second;
 				console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
 			}
 			// 处理工具调用

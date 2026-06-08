@@ -618,7 +618,7 @@ var agentSystem = (function (exports) {
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
                 const response = this.run(this.ragMessages, []);
-                this.analyzeMessageResponse(response.body, cache, source);
+                this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
                     if (hasProcessedToolCalls)
@@ -657,9 +657,8 @@ var agentSystem = (function (exports) {
             let visionBuffer = [];
             for (const message of flattenedMessages) {
                 const isVisionMessage = Array.isArray(message.content);
-                if (isVisionMessage) {
+                if (isVisionMessage)
                     visionBuffer.push(message);
-                }
                 else {
                     if (visionBuffer.length > 0) {
                         this.processVisionBuffer(visionBuffer, processedMessages, source);
@@ -672,6 +671,21 @@ var agentSystem = (function (exports) {
                 this.processVisionBuffer(visionBuffer, processedMessages, source);
             }
             this.messages = processedMessages;
+            const latestRole = this.messages.slice(-1)[0].role;
+            if (latestRole === 'user')
+                return;
+            const continuationPrompts = [
+                '请延续当前话题，继续展开讨论。',
+                '请完善当前话题，对已有内容进行补充和优化。',
+                '请将话题转向旅行，聊聊旅行相关的见闻或计划。',
+                '请将话题转向游戏，聊聊最近有趣的游戏体验。',
+                '请将话题转向音乐，聊聊最近在听的音乐或音乐推荐。',
+                '请将话题转向电影，聊聊最近看过或想看的电影。',
+                '请将话题转向书籍，聊聊最近在读或推荐的书籍。',
+                '请将话题转向动漫，聊聊最近在追或推荐的动漫。',
+            ];
+            const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length - 1)];
+            this.writeContext({ role: 'user', content: prompt });
         }
         processVisionBuffer(buffer, output, source) {
             if (buffer.length <= 10) {
@@ -688,13 +702,12 @@ var agentSystem = (function (exports) {
                 }
             }
         }
-        analyzeMessageResponse(message, cache, source) {
+        analyzeMessageResponse(message, cache) {
             try {
                 if (message.choices?.[0]?.message?.reasoning_content) {
                     cache.thinkingContent = message.choices[0].message.reasoning_content;
                 }
                 if (message.timings?.predicted_per_second) {
-                    source.responseSpeed = message.timings.predicted_per_second;
                     console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
                 }
                 if (message.choices?.[0]?.message?.tool_calls) {
@@ -1357,7 +1370,6 @@ var agentSystem = (function (exports) {
         unreadContext = [];
         unreadVideoUrl = [];
         finalResponse = "";
-        responseSpeed = 0;
         defaultAnswers = [
             '月华摔疼了，要等星光阁哥哥来修……',
             '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
@@ -1604,48 +1616,72 @@ var agentSystem = (function (exports) {
         processed = processed.replace(/\s+/g, ' ');
         return processed.trim();
     }
-    function splitSentences(text, targetLength = 30) {
+    function splitSentences(text) {
         if (!text)
             return [];
-        const TARGET_LENGTH = targetLength;
-        const PUNCTUATION = /[。？！…，、；：,;:\.\?!]/;
-        const sentences = [];
-        let remaining = text;
-        while (remaining.length > 0) {
-            if (remaining.length <= TARGET_LENGTH * 1.5) {
-                sentences.push(remaining.trim());
-                break;
-            }
-            let splitPos = -1;
-            const searchEnd = Math.min(remaining.length, TARGET_LENGTH + Math.floor(TARGET_LENGTH * 0.5));
-            for (let i = TARGET_LENGTH; i < searchEnd; i++) {
-                if (PUNCTUATION.test(remaining[i])) {
-                    splitPos = i + 1;
-                    break;
+        const LEVEL1_PUNCT = /[。：？！—～:?!]/;
+        const LEVEL2_PUNCT = /[，,、；;]/;
+        const MAX_LENGTH = 35;
+        function splitByPunct(source, punctRegex) {
+            const result = [];
+            let start = 0;
+            for (let i = 0; i < source.length; i++) {
+                if (punctRegex.test(source[i])) {
+                    let end = i + 1;
+                    while (end < source.length && punctRegex.test(source[end])) {
+                        end++;
+                    }
+                    const fragment = source.slice(start, end).trim();
+                    if (fragment.length > 0) {
+                        result.push(fragment);
+                    }
+                    start = end;
+                    i = end - 1;
                 }
             }
-            if (splitPos === -1) {
-                const searchStart = Math.max(0, TARGET_LENGTH - Math.floor(TARGET_LENGTH * 0.5));
-                for (let i = TARGET_LENGTH - 1; i >= searchStart; i--) {
-                    if (PUNCTUATION.test(remaining[i])) {
-                        splitPos = i + 1;
+            if (start < source.length) {
+                const fragment = source.slice(start).trim();
+                if (fragment.length > 0) {
+                    result.push(fragment);
+                }
+            }
+            return result;
+        }
+        const level1 = splitByPunct(text, LEVEL1_PUNCT);
+        const result = [];
+        for (const fragment of level1) {
+            if (fragment.length <= MAX_LENGTH) {
+                result.push(fragment);
+                continue;
+            }
+            let remaining = fragment;
+            while (remaining.length > MAX_LENGTH) {
+                let splitPos = -1;
+                for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
+                    if (LEVEL2_PUNCT.test(remaining[i])) {
+                        let end = i + 1;
+                        while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
+                            end++;
+                        }
+                        splitPos = end;
                         break;
                     }
                 }
+                if (splitPos === -1) {
+                    break;
+                }
+                const slice = remaining.slice(0, splitPos).trim();
+                if (slice.length > 0) {
+                    result.push(slice);
+                }
+                remaining = remaining.slice(splitPos);
             }
-            if (splitPos === -1 || splitPos === 0) {
-                splitPos = TARGET_LENGTH;
+            const tail = remaining.trim();
+            if (tail.length > 0) {
+                result.push(tail);
             }
-            while (splitPos < remaining.length && PUNCTUATION.test(remaining[splitPos])) {
-                splitPos++;
-            }
-            const sentence = remaining.slice(0, splitPos).trim();
-            if (sentence.length > 0) {
-                sentences.push(sentence);
-            }
-            remaining = remaining.slice(splitPos);
         }
-        return sentences;
+        return result;
     }
     function parseContent(rawText) {
         if (!rawText)

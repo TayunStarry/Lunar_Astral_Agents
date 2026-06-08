@@ -101,72 +101,108 @@ export function cleanTextForTTS(text: string): string {
 }
 
 /**
- * 将清洗后的文本按目标长度进行智能分句
+ * 将清洗后的文本进行二级智能分句
  *
- * 在目标长度附近寻找最接近的标点符号位置切断，避免硬性截断
- * 优先在目标长度之后找标点，若找不到则在目标长度之前找
+ * 一级切片：基于语句中断标点（句号、冒号、感叹号、问号、破折号、波浪号）切分
+ * 二级切片：对一级切片后超过35字符的片段，基于逗号进一步切分
+ * 若片段中不存在可用于分段的标点符号，则保持原片段不切片
+ * 标点符号始终位于切片末尾，切片顺序与原文完全一致
  *
  * @param text - 清洗后的文本
- * @param targetLength - 目标切片长度，默认30
  * @returns 句子数组
  */
-export function splitSentences(text: string, targetLength: number = 30): string[] {
+export function splitSentences(text: string): string[] {
     if (!text) return [];
 
-    const TARGET_LENGTH = targetLength;
-    // 可作为分句断点的标点符号
-    const PUNCTUATION = /[。？！…，、；：,;:\.\?!]/;
-    const sentences: string[] = [];
-    let remaining = text;
+    // 一级切片：语句中断标点
+    const LEVEL1_PUNCT = /[。：？！—～:?!]/;
+    // 二级切片：逗号类标点
+    const LEVEL2_PUNCT = /[，,、；;]/;
+    const MAX_LENGTH = 35;
 
-    while (remaining.length > 0) {
-        // 短文本直接作为一句
-        if (remaining.length <= TARGET_LENGTH * 1.5) {
-            sentences.push(remaining.trim());
-            break;
-        }
+    /**
+     * 按指定标点正则切分文本，标点归入前一个切片末尾
+     * 连续标点也一并归入前一个切片
+     */
+    function splitByPunct(source: string, punctRegex: RegExp): string[] {
+        const result: string[] = [];
+        let start = 0;
 
-        // 在目标长度附近寻找标点符号断点
-        let splitPos = -1;
-
-        // 优先从目标位置向后搜索标点（允许超出目标长度）
-        const searchEnd = Math.min(remaining.length, TARGET_LENGTH + Math.floor(TARGET_LENGTH * 0.5));
-        for (let i = TARGET_LENGTH; i < searchEnd; i++) {
-            if (PUNCTUATION.test(remaining[i])) {
-                splitPos = i + 1; // 包含标点符号
-                break;
+        for (let i = 0; i < source.length; i++) {
+            if (punctRegex.test(source[i])) {
+                // 将当前标点及紧随的连续同类标点归入当前切片
+                let end = i + 1;
+                while (end < source.length && punctRegex.test(source[end])) {
+                    end++;
+                }
+                const fragment = source.slice(start, end).trim();
+                if (fragment.length > 0) {
+                    result.push(fragment);
+                }
+                start = end;
+                i = end - 1; // for 循环会 i++，所以设为 end - 1
             }
         }
 
-        // 向后未找到，则从目标位置向前搜索
-        if (splitPos === -1) {
-            const searchStart = Math.max(0, TARGET_LENGTH - Math.floor(TARGET_LENGTH * 0.5));
-            for (let i = TARGET_LENGTH - 1; i >= searchStart; i--) {
-                if (PUNCTUATION.test(remaining[i])) {
-                    splitPos = i + 1;
+        // 处理末尾无标点的残余文本
+        if (start < source.length) {
+            const fragment = source.slice(start).trim();
+            if (fragment.length > 0) {
+                result.push(fragment);
+            }
+        }
+
+        return result;
+    }
+
+    // 一级切片
+    const level1 = splitByPunct(text, LEVEL1_PUNCT);
+
+    // 二级切片：对超过35字符的片段，在逗号处选择性地切断，确保每段不超过35字符
+    const result: string[] = [];
+    for (const fragment of level1) {
+        if (fragment.length <= MAX_LENGTH) {
+            result.push(fragment);
+            continue;
+        }
+
+        // 在逗号处切分，但只在必要时切断，确保每段 ≤ 35字符
+        let remaining = fragment;
+        while (remaining.length > MAX_LENGTH) {
+            // 在 MAX_LENGTH 范围内找最后一个逗号位置作为切断点
+            let splitPos = -1;
+            for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
+                if (LEVEL2_PUNCT.test(remaining[i])) {
+                    // 将连续逗号归入当前切片
+                    let end = i + 1;
+                    while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
+                        end++;
+                    }
+                    splitPos = end;
                     break;
                 }
             }
+
+            // 无逗号可切，保持原片段不再切分
+            if (splitPos === -1) {
+                break;
+            }
+
+            const slice = remaining.slice(0, splitPos).trim();
+            if (slice.length > 0) {
+                result.push(slice);
+            }
+            remaining = remaining.slice(splitPos);
         }
 
-        // 前后都找不到标点，在目标长度处硬切
-        if (splitPos === -1 || splitPos === 0) {
-            splitPos = TARGET_LENGTH;
+        // 处理剩余部分
+        const tail = remaining.trim();
+        if (tail.length > 0) {
+            result.push(tail);
         }
-
-        // 确保标点符号在句尾而非下一句开头：将切分点后的连续标点归入当前句
-        while (splitPos < remaining.length && PUNCTUATION.test(remaining[splitPos])) {
-            splitPos++;
-        }
-
-        const sentence = remaining.slice(0, splitPos).trim();
-        if (sentence.length > 0) {
-            sentences.push(sentence);
-        }
-        remaining = remaining.slice(splitPos);
     }
 
-    return sentences;
+    return result;
 }
 
 /**
