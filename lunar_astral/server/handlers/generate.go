@@ -4,7 +4,7 @@ import (
 	"config"
 	"encoding/json"
 	"fmt"
-	"lunar_astral/hierarchy/image/generate"
+	"lunar_astral/image"
 	"net/http"
 	"strings"
 	"time"
@@ -44,7 +44,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 创建任务
-	task, queuePos := generate.CreateGenerateTask(
+	task, queuePos := image.CreateGenerateTask(
 		req.Prompt,
 		req.NegativePrompt,
 		req.BatchSize,
@@ -75,7 +75,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 
 // StartTaskProcessor 启动任务处理协程
 func StartTaskProcessor() {
-	generate.StartTaskProcessor()
+	image.StartTaskProcessor()
 }
 
 // buildReadPath 构建文件读取路径
@@ -88,7 +88,7 @@ func buildReadPath(resultPath string) string {
 }
 
 // buildTaskResponse 构建任务响应
-func buildTaskResponse(task *generate.GenerateTask) map[string]any {
+func buildTaskResponse(task *image.GenerateTask) map[string]any {
 	response := map[string]any{
 		"task_id": task.ID,
 		"status":  task.Status,
@@ -143,7 +143,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 检查任务是否存在
-	task, exists := generate.GetTaskStatus(taskID)
+	task, exists := image.GetTaskStatus(taskID)
 	if !exists {
 		http.Error(w, "任务不存在", http.StatusNotFound)
 		return
@@ -157,7 +157,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 注册客户端等待任务完成
-	ch := generate.RegisterWaitClient(taskID)
+	ch := image.RegisterWaitClient(taskID)
 
 	// 设置SSE响应头
 	setupSSEHeaders(w)
@@ -175,7 +175,7 @@ func GenerateWaitHandler(w http.ResponseWriter, r *http.Request) {
 		sendSSEEvent(w, buildTaskResponse(completedTask))
 	case <-time.After(5 * time.Minute):
 		// 超时处理
-		generate.RemoveWaitClient(taskID)
+		image.RemoveWaitClient(taskID)
 		http.Error(w, "任务处理超时", http.StatusRequestTimeout)
 	}
 }

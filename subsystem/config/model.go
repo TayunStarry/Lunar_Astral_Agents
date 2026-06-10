@@ -19,4 +19,6 @@ var (
 	PromptRefineModel = flag.String("prompt_refine-model", *LocalDir+"/models/Qwen3.GGUF", "提示精炼模型路径，用于优化图像提示词与负面提示词")
 	// PromptMmprojModel 多模态投影模型路径，用于图像与文本的联合编码(因版本原因, 暂不可用)
 	PromptMmprojModel = flag.String("prompt-mmproj-model", "", "多模态投影模型路径，用于图像与文本的联合编码(因版本原因, 暂不可用)")
+	// RealESRGANModel RealESRGAN模型路径，用于图像超分辨率
+	RealESRGANModel = flag.String("real-esrgan-model", *LocalDir+"/models/Qwen3.pth", "RealESRGAN模型路径, 用于图像超分辨率")
 )

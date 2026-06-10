@@ -3,8 +3,7 @@ package adapters
 import (
 	"encoding/base64"
 	"fmt"
-	"lunar_astral/hierarchy/image"
-	"lunar_astral/hierarchy/image/generate"
+	"lunar_astral/image"
 	"screenshot"
 	"strings"
 
@@ -120,17 +119,17 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		batchSize = int(bs)
 	}
 
-	width := 512
+	width := 768
 	if w, ok := params["width"].(float64); ok {
 		width = int(w)
 	}
 
-	height := 512
+	height := 768
 	if h, ok := params["height"].(float64); ok {
 		height = int(h)
 	}
 
-	steps := 20
+	steps := 24
 	if s, ok := params["steps"].(float64); ok {
 		steps = int(s)
 	}
@@ -156,7 +155,7 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片生成函数
-	result, err := generate.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
+	result, err := image.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

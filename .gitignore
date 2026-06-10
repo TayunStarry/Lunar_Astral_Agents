@@ -63,6 +63,8 @@ Thumbs.db
 *.comp.cpp
 
 ## 二进制 / 模型文件
+*.bin
+*.pth
 *.gguf
 *.safetensors
 

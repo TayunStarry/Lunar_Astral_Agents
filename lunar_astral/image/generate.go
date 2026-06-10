@@ -1,4 +1,4 @@
-package generate
+package image
 
 import (
 	"config"
@@ -78,6 +78,7 @@ func ProcessTask(task GenerateTask) {
 		"--diffusion-model", *config.DiffusionModel,
 		"--vae", *config.VariationalModel,
 		"--llm", *config.PromptRefineModel,
+		"--upscale-model", *config.RealESRGANModel,
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),

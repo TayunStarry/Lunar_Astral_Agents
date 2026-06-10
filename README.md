@@ -329,7 +329,7 @@ Get-Item d:\Lunar_Astral_Agents\Lunar_Astral.exe | Select-Object Length
 | 屏幕截图 | [subsystem/screenshot/README.md](subsystem/screenshot/README.md) | 多显示器截图 + 区域截图 + 图片缩放 |
 | 语音合成 | [subsystem/qwen3_tts_lunar/README.md](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS 文本转语音引擎 |
 | 语音识别 | [subsystem/qwen_asr_lunar/README.md](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR 语音转文本引擎 |
-| LunarTick | [subsystem/LunarTick/README.md](subsystem/LunarTick/README.md) | tick 驱动的通用程序执行引擎 |
+| 月球节拍 | [subsystem/LunarTick/README.md](subsystem/LunarTick/README.md) | tick 驱动的通用程序执行引擎 |
 | QQ 适配器 | [subsystem/bridge_adapter/DEVELOPMENT_GUIDE.md](subsystem/bridge_adapter/DEVELOPMENT_GUIDE.md) | NapCat <-> 月华 QQ 群聊消息转发 |
 | GGUF 查看器 | [subsystem/gguf_metadata_viewer/README.md](subsystem/gguf_metadata_viewer/README.md) | GGUF 模型文件元数据查看工具 |
 | HTTPS 代理 | [subsystem/proxy/](subsystem/proxy/) | HTTPS 代理服务器 + 证书管理 |

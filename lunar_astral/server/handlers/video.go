@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"lunar_astral/hierarchy/image"
+	"lunar_astral/image"
 	"net/http"
 	"os"
 )
