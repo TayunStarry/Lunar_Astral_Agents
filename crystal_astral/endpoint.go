@@ -42,4 +42,5 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
 	{Path: "/api/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/api/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
+	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
 }

@@ -1,0 +1,7 @@
+{
+	"id": "purchase_qwen_api",
+	"icon": "/file/read/images/icon/qwen_api.Webp",
+	"title": "购买 Qwen API",
+	"description": "打开 Qwen 的 API 购买页面",
+	"url": "https://bailian.console.aliyun.com/cn-beijing#/home"
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -377,4 +379,71 @@ func modelsProxyHandler(w http.ResponseWriter, r *http.Request) {
 // normalizeProxyURL 规范化代理 URL（仅去除末尾斜杠）
 func normalizeProxyURL(rawURL string) string {
 	return strings.TrimRight(rawURL, "/")
+}
+
+// scanPackagesHandler 扫描包目录，自动发现所有包含 package.json 的子文件夹
+func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to get executable path: %v", err),
+		})
+		return
+	}
+	execDir := filepath.Dir(execPath)
+	packageDir := filepath.Join(execDir, *config.LocalDir, "package")
+
+	entries, err := os.ReadDir(packageDir)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Failed to read package directory: %v", err),
+		})
+		return
+	}
+
+	var packages []PackageInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		configPath := filepath.Join(packageDir, entry.Name(), "package.json")
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			// 没有 package.json 的子文件夹跳过（库/资源文件夹）
+			continue
+		}
+
+		var pkg PackageInfo
+		if err := json.Unmarshal(data, &pkg); err != nil {
+			logger.Warn("CrystalAstral", "解析包配置失败 %s: %v", configPath, err)
+			continue
+		}
+
+		// 如果未指定 url，自动生成默认路径
+		if pkg.URL == "" && pkg.Path == "" {
+			pkg.URL = "/file/read/package/" + entry.Name() + "/index.html"
+		}
+
+		packages = append(packages, pkg)
+	}
+
+	// 按标题排序，保证输出稳定
+	sort.Slice(packages, func(i, j int) bool {
+		return packages[i].ID < packages[j].ID
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(packages)
 }

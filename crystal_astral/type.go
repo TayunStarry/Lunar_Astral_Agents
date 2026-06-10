@@ -16,6 +16,16 @@ type LoadApplicationResponse struct {
 	Message string `json:"message"`
 }
 
+// PackageInfo 包配置信息
+type PackageInfo struct {
+	ID          string `json:"id"`
+	Icon        string `json:"icon"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	URL         string `json:"url,omitempty"`
+	Path        string `json:"path,omitempty"`
+}
+
 // proxyAwareHandler 代理感知处理程序
 // 用于在处理请求时根据路径判断是否需要通过代理转发
 type proxyAwareHandler struct {
