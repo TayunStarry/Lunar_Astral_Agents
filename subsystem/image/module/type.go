@@ -1,9 +1,29 @@
-package image
+package module
 
 import (
+	"image"
 	"sync"
 	"time"
 )
+
+
+// KeyFrame 关键帧结构
+type KeyFrame struct {
+	// 关键帧文件名
+	FilePath string `json:"filePath"`
+	// 关键帧时间戳
+	Timestamp string `json:"timestamp"`
+	// 关键帧编号
+	FrameNum int `json:"frameNum"`
+	// 关键帧图像数据
+	Data []byte `json:"data,omitempty"`
+}
+
+// FrameData 存储帧数据和时间戳
+type FrameData struct {
+	Image     image.Image
+	Timestamp int
+}
 
 // GenerateTask 生成任务结构体
 type GenerateTask struct {

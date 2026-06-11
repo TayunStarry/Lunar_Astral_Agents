@@ -1,10 +1,10 @@
-package handlers
+package server
 
 import (
 	"config"
 	"encoding/json"
 	"fmt"
-	"lunar_astral/image"
+	image"image/module"	
 	"net/http"
 	"strings"
 	"time"
@@ -20,18 +20,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Generate服务 → 未启用[扩散生成]功能", http.StatusServiceUnavailable)
 		return
 	}
-	var req struct {
-		Prompt         string  `json:"prompt"`
-		NegativePrompt string  `json:"negative_prompt"`
-		BatchSize      int     `json:"batch_size"`
-		Width          int     `json:"width"`
-		Height         int     `json:"height"`
-		Strength       float64 `json:"strength"`
-		Steps          int     `json:"steps"`
-		Seed           int64   `json:"seed"`
-		CfgScale       float64 `json:"cfg_scale"`
-		InitImg        string  `json:"init_img"`
-	}
+	var req GenerateRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("Generate服务 → 解析JSON失败: %v", err), http.StatusBadRequest)

@@ -1,4 +1,4 @@
-package image
+package module
 
 import (
 	"config"
@@ -79,6 +79,7 @@ func ProcessTask(task GenerateTask) {
 		"--vae", *config.VariationalModel,
 		"--llm", *config.PromptRefineModel,
 		"--upscale-model", *config.RealESRGANModel,
+		"--hires-denoising-strength", "0.55",
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
@@ -256,7 +257,7 @@ func RemoveWaitClient(taskID string) {
 }
 
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
-func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (map[string]interface{}, error) {
+func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (map[string]any, error) {
 	// 检查是否允许使用扩散生成
 	if !*config.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")

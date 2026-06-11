@@ -1,4 +1,4 @@
-package image
+package module
 
 import (
 	"bytes"
@@ -21,26 +21,6 @@ import (
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
-// 支持的视频格式列表
-var supportedVideoFormats = []string{".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv", ".webm", ".m4v"}
-
-// KeyFrame 关键帧结构
-type KeyFrame struct {
-	// 关键帧文件名
-	FilePath string `json:"filePath"`
-	// 关键帧时间戳
-	Timestamp string `json:"timestamp"`
-	// 关键帧编号
-	FrameNum int `json:"frameNum"`
-	// 关键帧图像数据
-	Data []byte `json:"data,omitempty"`
-}
-
-// FrameData 存储帧数据和时间戳
-type FrameData struct {
-	Image     image.Image
-	Timestamp int
-}
 
 // IsSupportedVideoFormat 检查文件格式是否支持
 func IsSupportedVideoFormat(filename string) bool {

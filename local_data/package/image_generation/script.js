@@ -2,9 +2,8 @@
 let currentTaskId = null;
 let uploadedImagePath = null;
 let currentImageBase64 = null;
-let currentPage = 'gallery';
 
-// DOM元素
+// DOM元素引用
 const elements = {
     prompt: document.getElementById('prompt'),
     negativePrompt: document.getElementById('negative-prompt'),
@@ -31,22 +30,20 @@ const elements = {
     fileGrid: document.getElementById('file-grid'),
     taskStatus: document.getElementById('task-status'),
     taskMessage: document.getElementById('task-message'),
-    taskProgressFill: document.getElementById('task-progress-fill'),
-    toastContainer: document.getElementById('toast-container'),
-    mobileConfigFab: document.getElementById('mobile-config-fab')
+    toastContainer: document.getElementById('toast-container')
 };
 
-// 导航相关元素
-const navTabs = document.querySelectorAll('.nav-tab');
-const pageGallery = document.getElementById('page-gallery');
-const pageSettings = document.getElementById('page-settings');
-
+// ==== 初始化入口 ====
 function initEventListeners() {
+    // 滑块值更新
     elements.widthSlider.addEventListener('input', updateWidthValue);
     elements.heightSlider.addEventListener('input', updateHeightValue);
     elements.strengthSlider.addEventListener('input', updateStrengthValue);
+
+    // 智能优化
     elements.optimizeBtn.addEventListener('click', optimizePromptAndParameters);
 
+    // 参考图上传
     elements.uploadArea.addEventListener('click', () => elements.initImage.click());
     elements.uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -60,49 +57,39 @@ function initEventListeners() {
     elements.initImage.addEventListener('change', handleImageSelect);
     elements.clearImageBtn.addEventListener('click', clearReferenceImage);
 
+    // 底部操作按钮
     elements.generateBtn.addEventListener('click', generateImage);
     elements.resetBtn.addEventListener('click', resetParameters);
     elements.refreshBtn.addEventListener('click', refreshPage);
     elements.clearAllBtn.addEventListener('click', clearAllFiles);
 
-    navTabs.forEach(tab => {
-        tab.addEventListener('click', () => switchPage(tab.dataset.page));
-    });
+    // 键盘快捷键
+    document.addEventListener('keydown', handleKeyboardShortcuts);
 
-    elements.mobileConfigFab.addEventListener('click', () => {
-        switchPage('settings');
-    });
-
+    // 初始化显示值
     updateWidthValue();
     updateHeightValue();
     updateStrengthValue();
 
+    // 加载默认数据
     loadDefaultPrompts();
     loadFileList();
-
-    document.addEventListener('keydown', handleKeyboardShortcuts);
 }
 
-function switchPage(page) {
-    currentPage = page;
-
-    navTabs.forEach(tab => {
-        if (tab.dataset.page === page) {
-            tab.classList.add('active');
-        } else {
-            tab.classList.remove('active');
-        }
-    });
-
-    if (page === 'gallery') {
-        pageGallery.classList.remove('hidden');
-        pageSettings.classList.add('hidden');
-    } else {
-        pageGallery.classList.add('hidden');
-        pageSettings.classList.remove('hidden');
-    }
+// ==== 参数值更新 ====
+function updateWidthValue() {
+    elements.widthValue.textContent = elements.widthSlider.value;
 }
 
+function updateHeightValue() {
+    elements.heightValue.textContent = elements.heightSlider.value;
+}
+
+function updateStrengthValue() {
+    elements.strengthValue.textContent = parseFloat(1 - elements.strengthSlider.value).toFixed(2);
+}
+
+// ==== 提示词加载 ====
 async function loadDefaultPrompts() {
     try {
         const positiveResponse = await fetch('positive_prompt.md');
@@ -127,6 +114,7 @@ async function loadDefaultPrompts() {
     }
 }
 
+// ==== 参考图片处理 ====
 function clearReferenceImage() {
     if (confirm('确定要清除参考图片吗？')) {
         elements.initImage.value = '';
@@ -139,18 +127,6 @@ function clearReferenceImage() {
         elements.uploadArea.style.borderColor = 'rgba(255,255,255,0.5)';
         showToast('参考图片已清除', 'info');
     }
-}
-
-function updateWidthValue() {
-    elements.widthValue.textContent = elements.widthSlider.value;
-}
-
-function updateHeightValue() {
-    elements.heightValue.textContent = elements.heightSlider.value;
-}
-
-function updateStrengthValue() {
-    elements.strengthValue.textContent = parseFloat(1 - elements.strengthSlider.value).toFixed(2);
 }
 
 async function handleDrop(e) {
@@ -218,6 +194,7 @@ async function uploadImage(file) {
     }
 }
 
+// ==== Toast 提示 ====
 function showToast(message, type = 'info', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast-glass toast-${type}`;
@@ -244,6 +221,7 @@ function showToast(message, type = 'info', duration = 3000) {
     }
 }
 
+// ==== 参数重置 ====
 function resetParameters() {
     if (confirm('确定要重置所有参数吗？当前设置将会丢失。')) {
         loadDefaultPrompts();
@@ -273,17 +251,7 @@ function refreshPage() {
     location.reload();
 }
 
-function refreshFileList() {
-    const audio = new Audio('/file/read/audios/prompt-tone.mp3');
-    audio.volume = 1.0;
-    audio.play().catch(() => { });
-    elements.refreshBtn.classList.add('spin');
-    loadFileList();
-    setTimeout(() => {
-        elements.refreshBtn.classList.remove('spin');
-    }, 100);
-}
-
+// ==== 图片生成 ====
 async function generateImage() {
     try {
         const generateData = {
@@ -351,7 +319,7 @@ function waitForTaskCompletion() {
                         elements.generateBtn.disabled = false;
                     }, 2000);
                     currentTaskId = null;
-                    refreshFileList();
+                    loadFileList();
                     eventSource.close();
                 } else if (data.status === 'failed') {
                     elements.taskMessage.textContent = '生成失败';
@@ -388,6 +356,7 @@ function waitForTaskCompletion() {
     }
 }
 
+// ==== 文件列表管理 ====
 async function loadFileList() {
     try {
         elements.fileGrid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -415,7 +384,7 @@ async function loadFileList() {
 
         const filesHTML = allFiles.map(file => {
             const isImage = isImageFile(file.name);
-            const fileIcon = getFileIcon(file.name);
+            const iconHTML = getFileIcon(file.name);
             const sizeFormatted = formatFileSize(file.size);
             const dateFormatted = formatDate(file.lastModified);
             const path = file.path.replace(/\\/g, '/');
@@ -424,14 +393,14 @@ async function loadFileList() {
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
                 ? `<img src="/file/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/file/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/file/read/${path}', '${file.name}')">`
-                : `<div style="font-size: 48px; color: var(--primary-color); opacity: 0.3;">${fileIcon}</div>`;
+                : `<div style="font-size: 48px; color: var(--primary-color); opacity: 0.3;">${iconHTML}</div>`;
 
             return `
                 <div class="file-card">
                     <div class="file-card-header">
-                        <div class="file-icon">${fileIcon}</div>
+                        <div class="file-icon">${iconHTML}</div>
                         <div class="file-name" title="${displayPath}">
-                            <div style="font-size: 0.9em; color: var(--text-light); margin-bottom: 2px;">${pathParts.length > 1 ? pathParts.slice(0, -1).join('/') + '/' : ''}</div>
+                            <div style="font-size: 0.85em; color: var(--text-light); margin-bottom: 2px;">${pathParts.length > 1 ? pathParts.slice(0, -1).join('/') + '/' : ''}</div>
                             <div style="font-weight: bold;">${pathParts[pathParts.length - 1]}</div>
                         </div>
                     </div>
@@ -484,10 +453,18 @@ async function getAllFilesRecursive(dirPath) {
 function getFileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const iconMap = {
-        'png': '<i class="fas fa-image"></i>', 'jpg': '<i class="fas fa-image"></i>', 'jpeg': '<i class="fas fa-image"></i>', 'gif': '<i class="fas fa-image"></i>', 'bmp': '<i class="fas fa-image"></i>', 'webp': '<i class="fas fa-image"></i>',
-        'mp4': '<i class="fas fa-film"></i>', 'webm': '<i class="fas fa-film"></i>', 'ogg': '<i class="fas fa-music"></i>', 'mov': '<i class="fas fa-film"></i>', 'avi': '<i class="fas fa-film"></i>', 'mkv': '<i class="fas fa-film"></i>',
-        'flv': '<i class="fas fa-film"></i>', 'wmv': '<i class="fas fa-film"></i>', 'm4v': '<i class="fas fa-film"></i>', 'mp3': '<i class="fas fa-music"></i>', 'wav': '<i class="fas fa-music"></i>', 'flac': '<i class="fas fa-music"></i>',
-        'aac': '<i class="fas fa-music"></i>', 'pdf': '<i class="fas fa-file-pdf"></i>', 'txt': '<i class="fas fa-file-alt"></i>', 'json': '<i class="fas fa-file-code"></i>', 'default': '<i class="fas fa-file"></i>'
+        'png': '<i class="fas fa-image"></i>', 'jpg': '<i class="fas fa-image"></i>',
+        'jpeg': '<i class="fas fa-image"></i>', 'gif': '<i class="fas fa-image"></i>',
+        'bmp': '<i class="fas fa-image"></i>', 'webp': '<i class="fas fa-image"></i>',
+        'mp4': '<i class="fas fa-film"></i>', 'webm': '<i class="fas fa-film"></i>',
+        'ogg': '<i class="fas fa-music"></i>', 'mov': '<i class="fas fa-film"></i>',
+        'avi': '<i class="fas fa-film"></i>', 'mkv': '<i class="fas fa-film"></i>',
+        'flv': '<i class="fas fa-film"></i>', 'wmv': '<i class="fas fa-film"></i>',
+        'm4v': '<i class="fas fa-film"></i>', 'mp3': '<i class="fas fa-music"></i>',
+        'wav': '<i class="fas fa-music"></i>', 'flac': '<i class="fas fa-music"></i>',
+        'aac': '<i class="fas fa-music"></i>', 'pdf': '<i class="fas fa-file-pdf"></i>',
+        'txt': '<i class="fas fa-file-alt"></i>', 'json': '<i class="fas fa-file-code"></i>',
+        'default': '<i class="fas fa-file"></i>'
     };
     return iconMap[ext] || iconMap.default;
 }
@@ -547,7 +524,7 @@ async function deleteFile(path) {
         const response = await fetch(`/file/delete/${path}`, { method: 'DELETE' });
         if (response.ok) {
             showToast('文件删除成功', 'success');
-            refreshFileList();
+            loadFileList();
         } else {
             const errorText = await response.text();
             throw new Error(errorText);
@@ -565,7 +542,7 @@ async function clearAllFiles() {
         const response = await fetch('/file/delete/images/generated', { method: 'DELETE' });
         if (response.ok) {
             showToast('所有文件已清空', 'success');
-            refreshFileList();
+            loadFileList();
         } else {
             const errorText = await response.text();
             throw new Error(errorText);
@@ -576,6 +553,28 @@ async function clearAllFiles() {
     }
 }
 
+// ==== 图片预览 ====
+function previewImage(src, name) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.8); z-index: 2000;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+    `;
+    overlay.innerHTML = `
+        <img src="${src}" alt="${name}" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px;">
+        <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; cursor: pointer; width: 40px; height: 40px; border-radius: 50%;">×</button>
+    `;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay || e.target.tagName === 'BUTTON') {
+            overlay.remove();
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+// ==== 键盘快捷键 ====
 function handleKeyboardShortcuts(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -594,6 +593,7 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
+// ==== 智能优化 ====
 async function optimizePromptAndParameters() {
     const prompt = elements.prompt.value.trim();
     if (!prompt) {
@@ -875,4 +875,5 @@ function applyOptimizationResult(result) {
     }
 }
 
+// ==== 启动 ====
 document.addEventListener('DOMContentLoaded', initEventListeners);

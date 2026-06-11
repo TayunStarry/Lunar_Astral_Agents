@@ -9,6 +9,7 @@ import (
 	"lunar_astral/server/handlers"
 	"net/http"
 	storage "storage/server"
+	image "image/server"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -66,10 +67,10 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/chromem/stats", Handler: storage.ChromemStatsHandler, Method: "GET", Description: "向量数据库统计信息"},
 	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
 	// 图片生成相关接口
-	{Path: "/generate", Handler: handlers.GenerateHandler, Method: "POST", Description: "图片生成服务"},
-	{Path: "/generate/wait", Handler: handlers.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
+	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
+	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
 	// 视频处理相关接口
-	{Path: "/extract/keyframes", Handler: handlers.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
+	{Path: "/extract/keyframes", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
 	// 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法）
 	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
 	// 代理请求接口

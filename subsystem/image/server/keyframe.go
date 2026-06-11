@@ -1,10 +1,10 @@
-package handlers
+package server
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"lunar_astral/image"
+	image"image/module"	
 	"net/http"
 	"os"
 )

@@ -3,12 +3,12 @@ package server
 import (
 	"config"
 	"context"
+	image "image/server"
 	"logger"
 	"lunar_astral/adapters"
 	"lunar_astral/hierarchy"
 	"lunar_astral/model/llama"
 	"lunar_astral/release"
-	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
 	"mime"
 	"net/http"
@@ -61,7 +61,7 @@ func registerHandlers() {
 	}
 	httpMux.Handle("/", http.StripPrefix("/", fileServer))
 	// 启动扩散生成任务协处理器
-	handlers.StartTaskProcessor()
+	image.StartTaskProcessor()
 	// 注册所有系统端点路径的处理函数
 	for _, endpoint := range SystemEndpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)

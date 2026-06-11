@@ -8,7 +8,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
-	github.com/u2takey/ffmpeg-go v0.5.0
+	image v0.0.0-00010101000000-000000000000
 	logger v0.0.0
 	qwen3_tts_lunar v0.0.0
 	screenshot v0.0.0
@@ -29,6 +29,7 @@ require (
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/mattn/go-sqlite3 v1.14.33 // indirect
 	github.com/philippgille/chromem-go v0.7.0 // indirect
+	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
@@ -47,3 +48,5 @@ replace screenshot => ../subsystem/screenshot
 replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
 
 replace logger => ../subsystem/logger
+
+replace image => ../subsystem/image

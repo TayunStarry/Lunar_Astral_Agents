@@ -13,145 +13,120 @@
     <link rel="stylesheet" href="styles.css">
     <!-- 项目私有脚本 -->
     <script defer src="script.js"></script>
-    <!-- 标准脚本引用 -->
 </head>
 
 <body>
-    <!-- 顶部导航 -->
-    <nav class="top-nav-glass">
-        <div class="nav-brand">
-            <i class="fas fa-palette nav-icon"></i>
-            <h1>星月智能 · 图片生成</h1>
-        </div>
-        <!-- 任务状态 -->
-        <div id="task-status" class="nav-task-status" style="display: none;">
-            <div class="nav-spinner"></div>
-            <span id="task-message">任务处理中...</span>
-        </div>
-        <div class="nav-tabs">
-            <button class="nav-tab active" data-page="gallery">
-                <i class="fas fa-images"></i>
-                <span>图片展示</span>
-            </button>
-            <button class="nav-tab" data-page="settings">
+    <!-- 主容器：三栏布局 -->
+    <div class="main-layout">
+
+        <!-- ===== 左侧面板：生成参数 ===== -->
+        <aside class="side-panel left-panel glass-panel">
+            <div class="panel-header">
                 <i class="fas fa-sliders-h"></i>
-                <span>参数设置</span>
-            </button>
-        </div>
-    </nav>
-
-    <!-- 主容器 -->
-    <div class="main-container">
-        <!-- 图片展示页 -->
-        <div class="page" id="page-gallery">
-            <main class="glass-panel content-panel">
-
-                <div id="file-grid" class="file-grid-glass">
-                    <!-- 文件卡片将通过JS动态插入 -->
-                </div>
-            </main>
-        </div>
-
-        <!-- 设置页 -->
-        <div class="page hidden" id="page-settings">
-            <main class="glass-panel settings-panel">
-                <!-- 上部区域：三个卡片 -->
-                <div class="settings-top-section">
-                    <!-- 正面提示词卡片 -->
-                    <div class="glass-card settings-card">
-                        <h3><i class="fas fa-file-alt"></i> 正面提示词</h3>
-                        <textarea id="prompt" class="glass-input glass-textarea" placeholder="描述你想要生成的图像内容"></textarea>
+                <h2>生成参数</h2>
+            </div>
+            <div class="panel-body">
+                <!-- 噪声强度 -->
+                <div class="form-group">
+                    <label for="strength">噪声强度: <span id="strength-value" class="range-value-glass">0.15</span></label>
+                    <div class="range-group">
+                        <input type="range" id="strength" min="0.1" max="1.0" step="0.01" value="0.85">
                     </div>
+                </div>
+                <!-- 宽度 -->
+                <div class="form-group">
+                    <label for="width">宽度: <span id="width-value" class="range-value-glass">512</span></label>
+                    <div class="range-group">
+                        <input type="range" id="width" min="256" max="2048" step="64" value="512">
+                    </div>
+                </div>
+                <!-- 高度 -->
+                <div class="form-group">
+                    <label for="height">高度: <span id="height-value" class="range-value-glass">512</span></label>
+                    <div class="range-group">
+                        <input type="range" id="height" min="256" max="2048" step="64" value="512">
+                    </div>
+                </div>
+                <!-- 迭代步数 -->
+                <div class="form-group">
+                    <label for="steps">迭代步数</label>
+                    <input type="number" id="steps" class="glass-input" min="1" max="100" value="20">
+                </div>
+                <!-- 生成数量 -->
+                <div class="form-group">
+                    <label for="batch-size">生成数量</label>
+                    <input type="number" id="batch-size" class="glass-input" min="1" max="8" value="1">
+                </div>
+                <!-- 提示词权重 -->
+                <div class="form-group">
+                    <label for="cfg-scale">提示词权重</label>
+                    <input type="number" id="cfg-scale" class="glass-input" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+                <!-- 随机种子 -->
+                <div class="form-group">
+                    <label for="seed">随机种子</label>
+                    <input type="number" id="seed" class="glass-input" min="0" max="999999999" value="0" placeholder="0表示随机">
+                </div>
+            </div>
+            <!-- 任务状态 -->
+            <div id="task-status" class="task-status-bar" style="display: none;">
+                <div class="nav-spinner"></div>
+                <span id="task-message">任务处理中...</span>
+            </div>
+        </aside>
 
-                    <!-- 参考图片上传卡片 -->
-                    <div class="glass-card settings-card">
-                        <h3><i class="fas fa-image"></i> 参考图片</h3>
-                        <div class="form-group">
-                            <label>
-                                上传参考图片
-                                <button type="button" id="clear-image-btn" class="btn-glass-sm btn-danger-sm" style="display: none;">
-                                    <i class="fas fa-trash"></i> 清除
-                                </button>
-                            </label>
-                            <div class="upload-area-glass" id="upload-area">
-                                <div class="upload-preview-wrap">
-                                    <img id="image-preview" class="image-preview-glass" alt="图片预览" style="display: none;">
-                                </div>
-                                <div class="upload-placeholder" id="upload-placeholder">
-                                    <i class="fas fa-folder-open upload-icon-glass"></i>
-                                    <span class="upload-text-glass">点击选择或拖拽图片</span>
-                                    <span class="upload-hint-glass">支持 JPG, PNG, WebP，最大 10MB</span>
-                                </div>
-                                <input type="file" id="init-image" accept="image/*" style="display: none;">
-                            </div>
+        <!-- ===== 中间主面板：图片预览 ===== -->
+        <main class="center-panel glass-panel">
+            <div class="panel-header">
+                <i class="fas fa-images"></i>
+                <h2>生成结果</h2>
+            </div>
+            <div id="file-grid" class="file-grid-glass">
+                <!-- 文件卡片通过JS动态插入 -->
+            </div>
+        </main>
+
+        <!-- ===== 右侧面板：提示词 & 参考图 ===== -->
+        <aside class="side-panel right-panel glass-panel">
+            <div class="panel-body right-panel-body">
+                <!-- 正面提示词 -->
+                <div class="form-group prompt-group">
+                    <label><i class="fas fa-file-alt"></i> 正面提示词</label>
+                    <textarea id="prompt" class="glass-input glass-textarea" placeholder="描述你想要生成的图像内容"></textarea>
+                </div>
+
+                <!-- 参考图片上传 -->
+                <div class="form-group upload-group">
+                    <label>
+                        <i class="fas fa-image"></i> 参考图片
+                        <button type="button" id="clear-image-btn" class="btn-glass-sm btn-danger-sm" style="display: none;">
+                            <i class="fas fa-trash"></i> 清除
+                        </button>
+                    </label>
+                    <div class="upload-area-glass" id="upload-area">
+                        <div class="upload-preview-wrap">
+                            <img id="image-preview" class="image-preview-glass" alt="图片预览" style="display: none;">
                         </div>
-                    </div>
-
-                    <!-- 负面提示词卡片 -->
-                    <div class="glass-card settings-card">
-                        <h3><i class="fas fa-ban"></i> 负面提示词</h3>
-                        <textarea id="negative-prompt" class="glass-input glass-textarea" placeholder="描述你不希望在图像中出现的内容"></textarea>
-                    </div>
-                </div>
-
-                <!-- 下部区域：配置参数 -->
-                <div class="settings-bottom-section">
-                    <!-- 生成参数卡片 -->
-                    <div class="glass-card params-main-card">
-                        <h3><i class="fas fa-cog"></i> 生成参数</h3>
-                        <div class="params-layout">
-                            <!-- 左侧：三个滑条纵向排列 -->
-                            <div class="params-left">
-                                <div class="form-group">
-                                    <label for="strength">噪声强度: <span id="strength-value" class="range-value-glass">0.15</span></label>
-                                    <div class="range-group">
-                                        <input type="range" id="strength" min="0.1" max="1.0" step="0.01" value="0.85">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="width">宽度: <span id="width-value" class="range-value-glass">512</span></label>
-                                    <div class="range-group">
-                                        <input type="range" id="width" min="256" max="2048" step="64" value="512">
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="height">高度: <span id="height-value" class="range-value-glass">512</span></label>
-                                    <div class="range-group">
-                                        <input type="range" id="height" min="256" max="2048" step="64" value="512">
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- 右侧：两列输入框 -->
-                            <div class="params-right">
-                                <div class="params-col">
-                                    <div class="form-group">
-                                        <label for="batch-size">生成数量</label>
-                                        <input type="number" id="batch-size" class="glass-input" min="1" max="8" value="1">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="seed">随机种子</label>
-                                        <input type="number" id="seed" class="glass-input" min="0" max="999999999" value="0" placeholder="0表示随机">
-                                    </div>
-                                </div>
-                                <div class="params-col">
-                                    <div class="form-group">
-                                        <label for="steps">迭代步数</label>
-                                        <input type="number" id="steps" class="glass-input" min="1" max="100" value="20">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="cfg-scale">提示词权重</label>
-                                        <input type="number" id="cfg-scale" class="glass-input" min="0.1" max="3.0" step="0.1" value="1.0">
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="upload-placeholder" id="upload-placeholder">
+                            <i class="fas fa-cloud-upload-alt upload-icon-glass"></i>
+                            <span class="upload-text-glass">点击或拖拽上传参考图</span>
+                            <span class="upload-hint-glass">JPG / PNG / WebP，最大 10MB</span>
                         </div>
+                        <input type="file" id="init-image" accept="image/*" style="display: none;">
                     </div>
                 </div>
-            </main>
-        </div>
+
+                <!-- 负面提示词 -->
+                <div class="form-group prompt-group">
+                    <label><i class="fas fa-ban"></i> 负面提示词</label>
+                    <textarea id="negative-prompt" class="glass-input glass-textarea" placeholder="描述你不希望在图像中出现的内容"></textarea>
+                </div>
+            </div>
+        </aside>
+
     </div>
 
-    <!-- 底部操作按钮组 -->
+    <!-- 底部操作按钮栏 -->
     <div class="bottom-action-bar">
         <button id="generate-btn" class="btn-glass btn-glass-primary">
             <i class="fas fa-magic"></i> 开始生成
@@ -159,21 +134,16 @@
         <button id="optimize-btn" class="btn-glass btn-glass-optimize">
             <i class="fas fa-wand-magic-sparkles"></i> 智能优化
         </button>
-        <button id="reset-btn" class="btn-glass btn-glass-secondary">
-            <i class="fas fa-undo"></i> 重置配置
+        <button id="clear-all-btn" class="btn-glass btn-glass-danger">
+            <i class="fas fa-trash-alt"></i> 清空库存
         </button>
         <button id="refresh-btn" class="btn-glass btn-glass-secondary">
             <i class="fas fa-sync-alt"></i> 刷新页面
         </button>
-        <button id="clear-all-btn" class="btn-glass btn-glass-danger">
-            <i class="fas fa-trash-alt"></i> 清空库存
+        <button id="reset-btn" class="btn-glass btn-glass-secondary">
+            <i class="fas fa-undo"></i> 重置配置
         </button>
     </div>
-
-    <!-- 移动端浮动按钮 -->
-    <button class="mobile-config-fab" id="mobile-config-fab" title="参数设置">
-        <i class="fas fa-sliders-h"></i>
-    </button>
 
     <!-- 弹窗消息提示容器 -->
     <div id="toast-container" class="toast-container-glass"></div>

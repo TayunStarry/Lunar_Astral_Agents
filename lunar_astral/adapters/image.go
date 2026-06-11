@@ -3,7 +3,7 @@ package adapters
 import (
 	"encoding/base64"
 	"fmt"
-	"lunar_astral/image"
+	image "image/module"
 	"screenshot"
 	"strings"
 
@@ -139,7 +139,7 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		strength = st
 	}
 
-	cfgScale := 1.0
+	cfgScale := 2.0
 	if cs, ok := params["cfgScale"].(float64); ok {
 		cfgScale = cs
 	}
