@@ -569,7 +569,6 @@ body {
 .app-page.active {
     display: flex;
     flex-direction: column;
-    animation: fadeSlideIn 0.35s ease;
 }
 
 @keyframes fadeSlideIn {
@@ -747,7 +746,6 @@ body {
 
 .tab-content.active {
     display: flex;
-    animation: fadeSlideIn 0.28s ease;
 }
 
 /* --- 表单 --- */

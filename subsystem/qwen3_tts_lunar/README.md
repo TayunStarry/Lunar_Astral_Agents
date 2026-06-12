@@ -164,15 +164,15 @@ WAV 封装 → .wav 文件/流
 | 文件 | 关键函数 | 说明 |
 |------|---------|------|
 | [variable.go](module/variable.go) | `InitTTSEngine()` | 初始化 TTS 引擎（加载模型 + 参考音频） |
-| [generate.go](module/generate.go) | `GenerateSpeech()` | CGO 调用 C++ 引擎生成音频 |
-| [stream.go](module/stream.go) | `StreamAudio()` | 流式音频输出管理 |
+| [generate.go](module/generate.go) | `SynthesizeText()`, `TTSHandler()` | CGO 调用 C++ 引擎生成音频、HTTP 请求处理 |
+| [stream.go](module/stream.go) | `TTSStreamHandler()`, `SynthesizeTextStreaming()` | WebSocket 流式音频输出管理 |
 
 ### C++ 层 (cpp/src/)
 
 | 文件 | 说明 |
 |------|------|
 | `qwen3_tts.cpp/h` | 主引擎：模型加载、推理流程编排、音频后处理 |
-| `qwen3tts_c_api.cpp/h` | C API 接口层，提供 `qwen3tts_init()`、`qwen3tts_generate()` 等导出函数 |
+| `qwen3tts_c_api.cpp/h` | C API 接口层，提供 `qwen3_tts_create()`、`qwen3_tts_synthesize_with_embedding()` 等导出函数 |
 | `tts_transformer.cpp/h` | Transformer 模型实现（Self-Attention、Cross-Attention、FFN） |
 | `audio_tokenizer_encoder.cpp/h` | 音频编码器：参考音频 → 音频特征 |
 | `audio_tokenizer_decoder.cpp/h` | 音频解码器：Latent Tokens → PCM 波形 |
@@ -201,33 +201,136 @@ GGML 库通过条件编译支持多种 GPU 加速后端：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/tts/generate` | 文本转语音生成 |
-| GET | `/tts/stream` | 流式音频输出（SSE） |
+| POST | `/tts/` | 文本转语音生成 |
+| GET | `/tts/stream` | 流式音频输出（WebSocket） |
+| POST | `/upload/` | 参考音频上传 |
 | GET | `/health` | 健康检查 |
+
+默认端口：`36365`
 
 ### 语音生成请求
 
 ```json
-// POST /tts/generate
+// POST /tts/
 {
   "text": "你好，我是月华，很高兴认识你！",
-  "voice": "default",
-  "speed": 1.0,
-  "format": "wav"
+  "ref_audio": "",              // 可选，参考音频文件路径，为空则使用默认音色
+  "language_id": 2055,          // 可选，语言ID（2055=中文，默认2055）
+  "temperature": 0.8,           // 可选，生成随机性控制
+  "top_k": 0,                   // 可选，Top-K 采样（0=不限制）
+  "top_p": 0.9,                 // 可选，Top-P 采样
+  "max_tokens": 0,              // 可选，最大生成 token 数（0=不限制）
+  "repetition_penalty": 1.1,    // 可选，重复惩罚
+  "threads": 0,                 // 可选，线程数（0=自动）
+  "disable_cache": false        // 可选，禁用缓存映射机制
 }
 ```
 
 ### 语音生成响应
 
 ```json
+// 成功
 {
   "success": true,
-  "audio": "base64_encoded_wav_data...",
-  "duration_ms": 3250,
-  "format": "wav",
-  "sample_rate": 24000
+  "audio": "base64_encoded_wav_data..."
+}
+
+// 失败
+{
+  "success": false,
+  "error": "错误信息"
 }
 ```
+
+### 参考音频上传请求
+
+```json
+// POST /upload/
+// Content-Type: multipart/form-data
+// 字段名: audio
+// 支持格式: WAV
+```
+
+### 参考音频上传响应
+
+```json
+// 成功
+{
+  "success": true,
+  "path": "D:\\...\\local_data\\audios\\ref_xxx.wav",
+  "name": "original_filename.wav"
+}
+
+// 失败
+{
+  "success": false,
+  "error": "错误信息"
+}
+```
+
+### 流式语音合成（WebSocket）
+
+端点：`ws://localhost:36365/tts/stream`
+
+客户端连接 WebSocket 后，发送 JSON 请求：
+
+```json
+{
+  "text": "这是一段较长的文本，将以流式方式输出音频段。",
+  "ref_audio": "",              // 可选，参考音频文件路径
+  "language_id": 2055,          // 可选，语言ID
+  "chunk_frames": 50,           // 可选，每帧音频样本数（默认50）
+  "temperature": 0.8,           // 可选，生成随机性控制
+  "top_k": 0,                   // 可选，Top-K 采样
+  "top_p": 0.9,                 // 可选，Top-P 采样
+  "max_tokens": 0,              // 可选，最大生成 token 数
+  "repetition_penalty": 1.1,    // 可选，重复惩罚
+  "threads": 0,                 // 可选，线程数
+  "disable_cache": false        // 可选，禁用缓存
+}
+```
+
+服务端通过 WebSocket 逐帧返回 JSON 消息：
+
+```json
+// 音频块
+{
+  "type": "audio_chunk",
+  "audio": "base64_encoded_pcm16_data...",
+  "chunk_index": 1,
+  "total_samples": 12000,
+  "sample_rate": 24000
+}
+
+// 最终块
+{
+  "type": "audio_chunk",
+  "audio": "base64_encoded_pcm16_data...",
+  "chunk_index": 5,
+  "total_samples": 60000,
+  "sample_rate": 24000,
+  "is_final": true,
+  "total_chunks": 5
+}
+
+// 合成完成
+{
+  "type": "final",
+  "chunk_index": 5,
+  "total_chunks": 5,
+  "total_samples": 60000,
+  "sample_rate": 24000,
+  "is_final": true
+}
+
+// 错误
+{
+  "type": "error",
+  "error": "错误信息"
+}
+```
+
+> 注意：流式输出的 `audio` 字段为 base64 编码的 PCM16 原始数据（非 WAV 封装），客户端需自行封装 WAV 头或使用 Web Audio API 直接播放。
 
 ---
 
@@ -284,22 +387,26 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
 ```go
 package main
 
-import "qwen3_tts_lunar/module"
+import (
+    "os"
+    "qwen3_tts_lunar/module"
+)
 
 func main() {
     // 初始化 TTS 引擎
-    modelDir := "./models"
-    refAudio := "./audios/reference.wav"
+    modelDir := "./models/Qwen3-TTS"
+    refAudio := "./audios/lunar-template.wav"
     module.InitTTSEngine(modelDir, refAudio)
 
     // 生成语音
-    audioBytes, err := module.GenerateSpeech("你好世界！", "default", 1.0)
+    samples, err := module.SynthesizeText("你好世界！", "", 0, 0, 0, 0, 0, 0, 0)
     if err != nil {
         panic(err)
     }
 
-    // 保存到文件
-    os.WriteFile("output.wav", audioBytes, 0644)
+    // 编码为 WAV 并保存到文件
+    wavData := module.EncodePCMToWAV(samples, 24000)
+    os.WriteFile("output.wav", wavData, 0644)
 }
 ```
 
@@ -307,14 +414,51 @@ func main() {
 
 ```bash
 # 文本转语音
-curl -X POST http://localhost:PORT/tts/generate \
+curl -X POST http://localhost:36365/tts/ \
   -H "Content-Type: application/json" \
-  -d '{"text": "你好，很高兴认识你！", "voice": "default"}'
+  -d '{"text": "你好，很高兴认识你！"}'
 
-# 流式生成
-curl http://localhost:PORT/tts/stream \
+# 上传参考音频
+curl -X POST http://localhost:36365/upload/ \
+  -F "audio=@reference.wav"
+
+# 使用自定义参考音频合成
+curl -X POST http://localhost:36365/tts/ \
   -H "Content-Type: application/json" \
-  -d '{"text": "这是一段较长的文本，将以流式方式输出音频段。"}'
+  -d '{"text": "你好，很高兴认识你！", "ref_audio": "/path/to/uploaded_audio.wav"}'
+
+# 健康检查
+curl http://localhost:36365/health
+```
+
+### WebSocket 流式调用（JavaScript）
+
+```javascript
+const ws = new WebSocket('ws://localhost:36365/tts/stream');
+
+ws.onopen = () => {
+    ws.send(JSON.stringify({
+        text: '这是一段较长的文本，将以流式方式输出音频段。',
+        chunk_frames: 50
+    }));
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    switch (data.type) {
+        case 'audio_chunk':
+            // data.audio: base64 编码的 PCM16 音频数据
+            // data.chunk_index: 当前块序号
+            // data.sample_rate: 采样率 (24000)
+            break;
+        case 'final':
+            // 合成完成
+            break;
+        case 'error':
+            // data.error: 错误信息
+            break;
+    }
+};
 ```
 
 ---
