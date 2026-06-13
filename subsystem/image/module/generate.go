@@ -22,22 +22,23 @@ func StartTaskProcessor() {
 }
 
 // CreateGenerateTask 创建生成任务
-func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (*GenerateTask, int) {
+func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (*GenerateTask, int) {
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	task := &GenerateTask{
-		ID:             taskID,
-		Prompt:         prompt,
-		NegativePrompt: negativePrompt,
-		BatchSize:      batchSize,
-		Width:          width,
-		Height:         height,
-		Strength:       strength,
-		Steps:          steps,
-		Seed:           seed,
-		CfgScale:       cfgScale,
-		InitImg:        initImg,
-		CreatedAt:      time.Now(),
-		Status:         "queued",
+		ID:                   taskID,
+		Prompt:               prompt,
+		NegativePrompt:       negativePrompt,
+		BatchSize:            batchSize,
+		Width:                width,
+		Height:               height,
+		Strength:             strength,
+		Steps:                steps,
+		Seed:                 seed,
+		CfgScale:             cfgScale,
+		InitImg:              initImg,
+		AllowSuperResolution: allowSuperResolution,
+		CreatedAt:            time.Now(),
+		Status:               "queued",
 	}
 
 	// 存储任务状态
@@ -78,8 +79,6 @@ func ProcessTask(task GenerateTask) {
 		"--diffusion-model", *config.DiffusionModel,
 		"--vae", *config.VariationalModel,
 		"--llm", *config.PromptRefineModel,
-		"--upscale-model", *config.RealESRGANModel,
-		"--hires-denoising-strength", "0.55",
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
@@ -111,6 +110,11 @@ func ProcessTask(task GenerateTask) {
 	// 批处理数量
 	if task.BatchSize > 1 {
 		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
+	}
+	// 超分参数
+	if task.AllowSuperResolution {
+		args = append(args, "--upscale-model", *config.RealESRGANModel)
+		args = append(args, "--hires-denoising-strength", "0.55")
 	}
 	// 多模态提示词模型
 	if *config.PromptMmprojModel != "" {
@@ -257,7 +261,7 @@ func RemoveWaitClient(taskID string) {
 }
 
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
-func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string) (map[string]any, error) {
+func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (map[string]any, error) {
 	// 检查是否允许使用扩散生成
 	if !*config.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")
@@ -269,7 +273,7 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 	}
 
 	// 创建任务
-	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
+	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution)
 
 	if task == nil {
 		return nil, fmt.Errorf("任务队列已满")

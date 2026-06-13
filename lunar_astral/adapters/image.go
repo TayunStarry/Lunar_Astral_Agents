@@ -155,7 +155,7 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片生成函数
-	result, err := image.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg)
+	result, err := image.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, false)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

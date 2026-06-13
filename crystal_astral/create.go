@@ -5,6 +5,7 @@ import (
 	"config"
 	"context"
 	"fmt"
+	image_server "image/server"
 	"io"
 	"logger"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 )
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/generate", "/write/message", "/tts", "/tts/stream"}
+var proxyPrefixes = []string{"/v1/", "/write/message", "/tts", "/tts/stream"}
 
 // shouldProxy 判断是否需要代理路径
 func shouldProxy(path string) bool {
@@ -68,6 +69,8 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	if err := module.InitUnifiedDB(*config.SQLDBPath, *config.VectorDBDir); err != nil {
 		logger.Warn("CrystalAstral", "数据库初始化失败: %v (不影响服务启动)", err)
 	}
+	// 启动图像生成任务处理器
+	image_server.StartTaskProcessor()
 	httpMux := http.NewServeMux()
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {

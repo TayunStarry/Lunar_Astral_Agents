@@ -155,21 +155,51 @@ body {
 	display: block;
 }
 
-/* 信息标识移至左下角 */
+/* 语音识别状态标识（原 Live2D 模型名区域，现复用为语音识别消息显示） */
 .live2d-model-intel {
 	position: absolute;
 	left: 10px;
-	bottom: 10px;
-	padding: 6px 18px;
-	background: rgba(0, 0, 0, 0.45);
-	backdrop-filter: blur(8px);
+	top: 10px;
+	max-width: calc(100% - 20px);
+	padding: 8px 18px;
+	background: rgba(0, 0, 0, 0.5);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
 	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: 24px;
-	font-size: 12px;
+	font-size: 13px;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	letter-spacing: 0.5px;
 	pointer-events: none;
-	/* 不阻挡触摸事件穿透到触摸层 */
+	opacity: 0;
+	transform: translateY(8px);
+	transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.live2d-model-intel.visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+/* 语音识别脉冲动画 */
+.live2d-model-intel.listening::before {
+	content: '';
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--success-color);
+	margin-right: 8px;
+	vertical-align: middle;
+	animation: voice-dot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-dot-pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.4; transform: scale(1.5); }
 }
 
 /* ========== 触摸交互区域 ========== */
@@ -350,6 +380,222 @@ body {
 	align-items: stretch;
 }
 
+/* ========== 功能菜单下拉 ========== */
+.function-menu-wrapper {
+	position: relative;
+	display: flex;
+}
+
+.function-menu-wrapper .btn-glass {
+	height: 100%;
+}
+
+.function-menu-dropdown {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 0;
+	min-width: 160px;
+	background: rgba(30, 30, 50, 0.85);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 14px;
+	padding: 6px;
+	display: none;
+	flex-direction: column;
+	gap: 2px;
+	z-index: 100;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+	animation: dropdownFadeIn 0.2s ease;
+}
+
+.function-menu-dropdown.visible {
+	display: flex;
+}
+
+@keyframes dropdownFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.dropdown-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	background: transparent;
+	border: none;
+	border-radius: 10px;
+	color: #ffffff;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.25s ease;
+	white-space: nowrap;
+	outline: none;
+}
+
+.dropdown-item:hover {
+	background: rgba(157, 107, 255, 0.25);
+}
+
+.dropdown-item:active {
+	background: rgba(157, 107, 255, 0.4);
+}
+
+.dropdown-item i {
+	width: 18px;
+	text-align: center;
+	font-size: 14px;
+}
+
+/* 语音对话激活状态 */
+.dropdown-item.voice-active {
+	background: rgba(32, 201, 151, 0.2);
+}
+
+.dropdown-item.voice-active i {
+	color: var(--success-color);
+}
+
+/* ========== 通用悬浮消息组件 (Toast) ========== */
+.toast-container {
+	position: fixed;
+	top: 16px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 3000;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	pointer-events: none;
+	/* 容器不拦截鼠标事件，由内部toast自行处理 */
+	max-width: 90vw;
+	width: auto;
+}
+
+.toast-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 16px;
+	background: rgba(30, 30, 50, 0.88);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 14px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+	color: #ffffff;
+	font-size: 13px;
+	pointer-events: auto;
+	/* toast 自身可交互 */
+	opacity: 0;
+	transform: translateY(-12px);
+	transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+	max-width: 420px;
+}
+
+.toast-item.toast-visible {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.toast-item.toast-leaving {
+	opacity: 0;
+	transform: translateY(-12px);
+}
+
+/* 消息类型左边框色条 */
+.toast-item::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 8px;
+	bottom: 8px;
+	width: 3px;
+	border-radius: 0 2px 2px 0;
+	background: var(--toast-color, var(--primary-color));
+}
+
+.toast-icon {
+	flex-shrink: 0;
+	font-size: 16px;
+	color: var(--toast-color, var(--primary-color));
+}
+
+.toast-message {
+	flex: 1;
+	line-height: 1.4;
+	word-break: break-word;
+}
+
+.toast-close {
+	flex-shrink: 0;
+	background: transparent;
+	border: none;
+	color: rgba(255, 255, 255, 0.5);
+	cursor: pointer;
+	padding: 2px;
+	font-size: 12px;
+	border-radius: 50%;
+	transition: all 0.25s ease;
+	outline: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+}
+
+.toast-close:hover {
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.12);
+}
+
+/* voice 类型常驻消息特殊样式 */
+.toast-item.toast-voice {
+	padding-right: 12px;
+}
+
+.toast-item.toast-voice .toast-icon {
+	animation: toastVoicePulse 1.2s ease-in-out infinite;
+}
+
+@keyframes toastVoicePulse {
+	0%, 100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.5;
+		transform: scale(1.15);
+	}
+}
+
+/* 响应式：小屏幕适配 */
+@media (max-width: 500px) {
+	.toast-container {
+		top: 10px;
+		max-width: 95vw;
+	}
+
+	.toast-item {
+		max-width: 95vw;
+		padding: 8px 12px;
+		font-size: 12px;
+		gap: 8px;
+	}
+
+	.toast-icon {
+		font-size: 14px;
+	}
+}
+
 /* ====================================
    统一按钮设计规范（毛玻璃 + 深色半透明 + 边框）
    ==================================== */
@@ -479,21 +725,21 @@ body {
 	-webkit-backdrop-filter: blur(12px);
 }
 
-/* 消息样式 */
+/* ========== 聊天消息气泡样式 ========== */
 .message {
-	margin-bottom: 14px;
-	padding: 12px 16px;
-	border-radius: 18px;
-	animation: fadeIn 0.3s ease;
-	width: fit-content;
-	min-width: 80px;
-	max-width: 80%;
+	margin-bottom: 12px;
+	padding: 14px 18px;
+	border-radius: 20px;
+	animation: fadeIn 0.35s ease;
+	width: 100%;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
 }
 
 @keyframes fadeIn {
 	from {
 		opacity: 0;
-		transform: translateY(10px);
+		transform: translateY(12px);
 	}
 
 	to {
@@ -502,147 +748,153 @@ body {
 	}
 }
 
+/* 用户消息 */
 .message.user-message {
-	background: rgba(108, 155, 207, 0.45);
-	margin-left: auto;
-	border-bottom-right-radius: 6px;
-}
-
-.message.assistant-message {
-	background: rgba(250, 250, 250, 0.5);
+	background: rgba(108, 155, 207, 0.35);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
-	border: 2px solid rgba(225, 230, 240, 0.6);
-	margin-right: auto;
-	border-bottom-left-radius: 6px;
+	border: 2px dashed rgba(108, 155, 207, 0.55);
+	border-radius: 20px;
+	text-align: left;
+	color: #fff;
 }
 
-/* 助手消息：深色文字适配 */
+/* 助手消息 */
+.message.assistant-message {
+	background: rgba(157, 107, 255, 0.3);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	border: 1px solid rgba(157, 107, 255, 0.35);
+	border-radius: 20px;
+	text-align: left;
+}
+
+/* 助手消息：亮色文字适配 */
 .assistant-message .message-header {
-	color: rgba(80, 80, 80, 1);
+	color: rgba(255, 255, 255, 0.8);
 }
 
 .assistant-message .message-content {
-	color: rgba(15, 30, 15, 1);
+	color: rgba(255, 255, 255, 0.95);
 }
 
 .assistant-message .markdown-content {
-	color: rgba(15, 30, 15, 1);
+	color: rgba(255, 255, 255, 0.95);
 }
 
 .assistant-message .markdown-content h1,
 .assistant-message .markdown-content h2,
 .assistant-message .markdown-content h3,
 .assistant-message .markdown-content h4 {
-	color: rgba(15, 30, 15, 1);
+	color: rgba(255, 255, 255, 0.95);
 }
 
 .assistant-message .markdown-content blockquote {
-	color: rgba(80, 80, 80, 1);
-	border-left-color: var(--primary-color);
+	color: rgba(255, 255, 255, 0.75);
+	border-left-color: rgba(255, 255, 255, 0.4);
 }
 
 .assistant-message .audio-replay-btn {
-	color: rgba(80, 80, 80, 0.6);
+	color: rgba(255, 255, 255, 0.65);
 }
 
 .assistant-message .audio-replay-btn:hover {
-	color: var(--accent-color);
-	background: rgba(157, 107, 255, 0.1);
+	color: #fff;
+	background: rgba(255, 255, 255, 0.15);
 }
 
 /* 助手消息：行内代码适配 */
 .assistant-message .markdown-content code {
-	background: rgba(108, 155, 207, 0.12);
-	border: 1px solid rgba(108, 155, 207, 0.25);
-	color: #3a5a8a;
+	background: rgba(255, 255, 255, 0.15);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	color: rgba(255, 255, 255, 0.9);
 }
 
-/* 助手消息：代码块适配（浅色背景 + 深色高亮） */
+/* 助手消息：代码块适配（深色背景） */
 .assistant-message .markdown-content pre {
-	background: rgba(235, 238, 245, 0.9);
-	border: 1px solid rgba(200, 205, 220, 0.8);
-	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
 }
 
 .assistant-message .markdown-content pre code {
-	color: #2a2a3a;
+	color: #e8e8f0;
 }
 
-/* 助手消息：highlight.js 浅色主题适配 */
+/* 助手消息：highlight.js 深色主题适配 */
 .assistant-message .hljs {
-	color: #2a2a3a;
+	color: #e8e8f0;
 }
 
 .assistant-message .hljs-keyword,
 .assistant-message .hljs-operator,
 .assistant-message .hljs-selector-tag {
-	color: #7c3aed;
+	color: #b794f4;
 }
 
 .assistant-message .hljs-title,
 .assistant-message .hljs-function .hljs-title,
 .assistant-message .hljs-built_in {
-	color: #2563eb;
+	color: #90cdf4;
 }
 
 .assistant-message .hljs-string,
 .assistant-message .hljs-template-variable,
 .assistant-message .hljs-addition {
-	color: #059669;
+	color: #68d391;
 }
 
 .assistant-message .hljs-number,
 .assistant-message .hljs-literal,
 .assistant-message .hljs-boolean,
 .assistant-message .hljs-symbol {
-	color: #d97706;
+	color: #f6e05e;
 }
 
 .assistant-message .hljs-comment,
 .assistant-message .hljs-quote,
 .assistant-message .hljs-deletion {
-	color: rgba(120, 120, 140, 0.75);
+	color: rgba(200, 200, 210, 0.6);
 }
 
 .assistant-message .hljs-class .hljs-title,
 .assistant-message .hljs-type {
-	color: #dc2660;
+	color: #fc8181;
 }
 
 .assistant-message .hljs-attribute,
 .assistant-message .hljs-variable,
 .assistant-message .hljs-name {
-	color: #6d28d9;
+	color: #d6bcfa;
 }
 
 .assistant-message .hljs-params {
-	color: #4a4a5a;
+	color: #cbd5e0;
 }
 
 .assistant-message .hljs-regexp {
-	color: #dc3545;
+	color: #fc8181;
 }
 
 .assistant-message .hljs-tag .hljs-name {
-	color: #2563eb;
+	color: #90cdf4;
 }
 
 .assistant-message .hljs-tag .hljs-attr {
-	color: #7c3aed;
+	color: #b794f4;
 }
 
 .assistant-message .hljs-meta {
-	color: #d97706;
+	color: #f6e05e;
 }
 
 .assistant-message .hljs-link {
-	color: #2563eb;
+	color: #90cdf4;
 }
 
 .assistant-message .markdown-content pre ::selection {
-	background: rgba(108, 155, 207, 0.35);
-	color: #1a1a2e;
+	background: rgba(157, 107, 255, 0.4);
+	color: #fff;
 }
 
 .message-header {
@@ -717,26 +969,30 @@ body {
 	color: white;
 	line-height: 1.6;
 	word-wrap: break-word;
+	overflow-wrap: break-word;
+	max-width: 100%;
+	overflow: hidden;
 }
 
 .message-content img {
 	max-width: 100%;
 	border-radius: 12px;
-	margin: 8px 0;
+	margin: 6px 0;
 	cursor: pointer;
 }
 
 .message-content video {
 	max-width: 100%;
 	border-radius: 12px;
-	margin: 8px 0;
+	margin: 6px 0;
 }
 
 .images-container {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
-	margin: 8px 0;
+	margin: 6px 0;
+	width: 100%;
 }
 
 .images-container .labeled-image-container {
@@ -749,11 +1005,14 @@ body {
 	position: relative;
 	border-radius: 12px;
 	overflow: hidden;
-	margin: 8px 0;
+	margin: 6px 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .labeled-image-container img {
-	width: 100%;
+	max-width: 100%;
 	height: auto;
 	display: block;
 }
@@ -789,6 +1048,8 @@ body {
 .markdown-content {
 	color: white;
 	line-height: 1.6;
+	max-width: 100%;
+	overflow: hidden;
 }
 
 .markdown-content h1,
@@ -819,15 +1080,53 @@ body {
 
 /* --- 代码块容器 --- */
 .markdown-content pre {
+	position: relative;
 	background: rgba(30, 30, 50, 0.75);
 	border: 1px solid rgba(108, 155, 207, 0.3);
 	padding: 16px;
+	padding-top: 36px;
 	border-radius: 12px;
 	overflow-x: auto;
+	overflow-y: auto;
+	max-height: 400px;
+	max-width: 100%;
+	box-sizing: border-box;
 	margin: 12px 0;
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
 	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* 代码块复制按钮 */
+.code-copy-btn {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 12px;
+	cursor: pointer;
+	transition: all 0.25s ease;
+	z-index: 1;
+	outline: none;
+}
+
+.code-copy-btn:hover {
+	background: rgba(255, 255, 255, 0.22);
+	color: #fff;
+	border-color: rgba(255, 255, 255, 0.4);
+}
+
+.code-copy-btn.copied {
+	background: rgba(32, 201, 151, 0.3);
+	border-color: rgba(32, 201, 151, 0.5);
+	color: #20c997;
 }
 
 .markdown-content pre code {
@@ -837,6 +1136,8 @@ body {
 	color: #f0f0f5;
 	font-size: 13.5px;
 	line-height: 1.65;
+	white-space: pre;
+	word-wrap: normal;
 }
 
 /* --- highlight.js 语法高亮主题（月华定制版） --- */
@@ -1052,13 +1353,5 @@ body {
 
 	.main-container-panel {
 		border-radius: 24px;
-	}
-
-	.message.user-message {
-		margin-left: 10%;
-	}
-
-	.message.assistant-message {
-		margin-right: 10%;
 	}
 }

@@ -31,16 +31,33 @@
 						<!-- 点击反馈涟漪动画元素 -->
 						<div class="touch-ripple" id="touchRipple"></div>
 					</div>
-					<div class="live2d-model-intel" id="modelIntel">月之华</div>
+					<div class="live2d-model-intel" id="modelIntel"></div>
 				</div>
 			</div>
 			<!-- 底部输入区 -->
 			<div class="input-container" id="inputContainer">
 				<div class="file-preview-area" id="filePreviewArea"></div>
 				<div class="input-wrapper">
-					<button class="btn-glass" id="chatHistoryButton" title="聊天记录">
-						<i class="fas fa-comments"></i>
-					</button>
+					<div class="function-menu-wrapper" id="functionMenuWrapper">
+						<button class="btn-glass" id="functionMenuButton" title="功能菜单">
+							<i class="fas fa-bars"></i>
+						</button>
+						<div class="function-menu-dropdown" id="functionMenuDropdown">
+							<button class="dropdown-item" id="chatHistoryItem">
+								<i class="fas fa-comments"></i>
+								<span>聊天记录</span>
+							</button>
+							<button class="dropdown-item" id="voiceChatItem">
+								<i class="fas fa-microphone"></i>
+								<span>语音对话</span>
+							</button>
+							<button class="dropdown-item" id="fileImportItem">
+								<i class="fas fa-file-import"></i>
+								<span>文件导入</span>
+							</button>
+						</div>
+					</div>
+					<input type="file" id="fileImportInput" multiple accept="*/*" style="display:none">
 					<textarea class="message-input" id="messageInput" placeholder="想要聊些什么吗？" rows="1"></textarea>
 					<button class="btn-glass btn-send" id="sendButton" title="消息发送">
 						<i class="fas fa-paper-plane"></i>
@@ -61,6 +78,8 @@
 			<div class="modal-body" id="modalBody"></div>
 		</div>
 	</div>
+	<!-- 通用悬浮消息组件 -->
+	<div class="toast-container" id="toastContainer"></div>
 	<!-- 错误提示条 -->
 	<div class="error-toast" id="errorToast"></div>
 </body>

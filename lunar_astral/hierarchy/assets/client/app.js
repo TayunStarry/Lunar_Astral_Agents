@@ -2,6 +2,8 @@ import { WebSocketClient } from './socket.js';
 import { Live2D, EmotionalStateEnum } from './live2d.js';
 import { renderMessage, renderAllMessages } from './chat.js';
 import { AudioQueue } from './tts.js';
+import { VoiceChat } from './voice.js';
+import { Toast } from './toast.js';
 import { TouchInteractionHandler } from './touch.js';
 import { FilePreviewManager } from './file-handler.js';
 import { sendMessages } from './fetch.js';
@@ -33,8 +35,10 @@ class LunarCoreApp {
 		this.modalOverlay = document.getElementById('modalOverlay');
 		this.modalBody = document.getElementById('modalBody');
 		this.errorToast = document.getElementById('errorToast');
+		this.modelIntel = document.getElementById('modelIntel');
 		const touchInteraction = document.getElementById('touchInteraction');
 		const touchRipple = document.getElementById('touchRipple');
+		this.voiceChatItem = document.getElementById('voiceChatItem');
 
 		// 初始化文件预览管理器
 		this.fileManager = new FilePreviewManager(filePreviewArea, (msg) => this.showError(msg));
@@ -50,11 +54,136 @@ class LunarCoreApp {
 			}
 		);
 
-		document.getElementById('chatHistoryButton')?.addEventListener('click', () => this.toggleModal());
+		// 功能菜单下拉
+		this.initFunctionMenu();
+
+		// 模态框关闭
 		document.getElementById('modalClose')?.addEventListener('click', () => this.toggleModal());
 		this.modalOverlay?.addEventListener('click', (e) => {
 			if (e.target === this.modalOverlay) this.toggleModal();
 		});
+
+		// 点击页面其他地方关闭下拉菜单
+		document.addEventListener('click', (e) => {
+			const menuWrapper = document.getElementById('functionMenuWrapper');
+			const dropdown = document.getElementById('functionMenuDropdown');
+			if (menuWrapper && dropdown && !menuWrapper.contains(e.target)) {
+				dropdown.classList.remove('visible');
+			}
+		});
+
+		// 初始化语音识别
+		this.initVoiceChat();
+	}
+
+	initFunctionMenu() {
+		const menuButton = document.getElementById('functionMenuButton');
+		const dropdown = document.getElementById('functionMenuDropdown');
+		const chatHistoryItem = document.getElementById('chatHistoryItem');
+		const voiceChatItemEl = document.getElementById('voiceChatItem');
+		const fileImportItem = document.getElementById('fileImportItem');
+		const fileImportInput = document.getElementById('fileImportInput');
+
+		// 菜单按钮：切换下拉菜单
+		menuButton?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			dropdown?.classList.toggle('visible');
+		});
+
+		// 聊天记录
+		chatHistoryItem?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			dropdown?.classList.remove('visible');
+			this.toggleModal();
+		});
+
+		// 语音对话
+		voiceChatItemEl?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			dropdown?.classList.remove('visible');
+			const enabled = VoiceChat.toggle();
+			this.updateVoiceChatUI(enabled);
+		});
+
+		// 文件导入
+		fileImportItem?.addEventListener('click', (e) => {
+			e.stopPropagation();
+			dropdown?.classList.remove('visible');
+			fileImportInput?.click();
+		});
+
+		// 文件导入输入处理
+		fileImportInput?.addEventListener('change', async (e) => {
+			const files = e.target.files;
+			if (files && files.length > 0) {
+				await this.fileManager.handleFileSelect(Array.from(files));
+			}
+			// 重置input以允许重复选择同一文件
+			fileImportInput.value = '';
+		});
+	}
+
+	initVoiceChat() {
+		// 临时识别结果回调：实时显示在 Live2D 区域
+		VoiceChat.onInterimResult((text) => {
+			if (this.modelIntel && text) {
+				this.modelIntel.textContent = text;
+				this.modelIntel.classList.add('visible');
+			}
+		});
+
+		// 最终识别结果回调：自动填入输入框并发送
+		VoiceChat.onResult((text) => {
+			if (this.messageInput && text) {
+				this.messageInput.value = text;
+				this.autoResizeTextarea();
+				// 恢复语音识别提示文字
+				if (this.modelIntel && VoiceChat.enabled) {
+					this.modelIntel.textContent = '语音识别中...';
+				}
+				// 自动触发消息发送
+				this.handleSend();
+			}
+		});
+
+		// 语音状态变更回调：更新UI
+		VoiceChat.onStatusChange((enabled) => {
+			this.updateVoiceChatUI(enabled);
+		});
+
+		// 语音错误回调：显示友好提示
+		VoiceChat.onError((errorType, reason) => {
+			switch (errorType) {
+				case 'not-allowed':
+					Toast.error('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问');
+					break;
+				case 'unsupported':
+					Toast.warning(reason || '当前环境不支持语音识别');
+					break;
+			}
+		});
+	}
+
+	updateVoiceChatUI(enabled) {
+		// 更新语音对话菜单项样式
+		if (this.voiceChatItem) {
+			if (enabled) {
+				this.voiceChatItem.classList.add('voice-active');
+			} else {
+				this.voiceChatItem.classList.remove('voice-active');
+			}
+		}
+
+		// 控制 Live2D 区域的语音识别状态显示
+		if (this.modelIntel) {
+			if (enabled) {
+				this.modelIntel.textContent = '语音识别中...';
+				this.modelIntel.classList.add('visible', 'listening');
+			} else {
+				this.modelIntel.classList.remove('visible', 'listening');
+				this.modelIntel.textContent = '';
+			}
+		}
 	}
 
 	initEventListeners() {
@@ -124,6 +253,8 @@ class LunarCoreApp {
 					// 如果包含音频数据，加入播放队列
 					if (audio) {
 						AudioQueue.enqueue(audio);
+						// 通知语音识别：音频即将播放
+						VoiceChat.onAudioPlaybackChange();
 					}
 				}
 				break;

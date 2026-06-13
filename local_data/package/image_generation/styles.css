@@ -906,3 +906,44 @@ body {
         max-width: none;
     }
 }
+
+/* ========== 超分按钮样式 ========== */
+.super-resolution-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid rgba(220, 53, 69, 0.5);
+    border-radius: var(--radius-xs);
+    background: rgba(220, 53, 69, 0.25);
+    color: var(--text-medium);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.35s ease;
+    font-family: inherit;
+}
+
+.super-resolution-btn:hover {
+    background: rgba(220, 53, 69, 0.35);
+}
+
+.super-resolution-btn.active {
+    border-color: rgba(102, 126, 234, 0.5);
+    background: rgba(102, 126, 234, 0.25);
+    color: var(--text-dark);
+}
+
+.super-resolution-btn.active:hover {
+    background: rgba(102, 126, 234, 0.35);
+}
+
+.hint-text {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 4px;
+    margin-left: 2px;
+}

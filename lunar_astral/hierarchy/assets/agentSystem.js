@@ -710,6 +710,9 @@ var agentSystem = (function (exports) {
                 if (message.timings?.predicted_per_second) {
                     console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
                 }
+                if (message.timings?.cache_n !== undefined) {
+                    console.log(`缓存命中数量: ${message.timings.cache_n}`);
+                }
                 if (message.choices?.[0]?.message?.tool_calls) {
                     for (const toolCall of message.choices[0].message.tool_calls) {
                         try {

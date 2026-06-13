@@ -3,13 +3,13 @@ package server
 import (
 	"config"
 	"fmt"
+	image "image/server"
 	"lunar_astral/model"
 	"lunar_astral/model/llama"
 	"lunar_astral/model/tts"
 	"lunar_astral/server/handlers"
 	"net/http"
 	storage "storage/server"
-	image "image/server"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -19,7 +19,10 @@ import (
 var httpMux *http.ServeMux
 
 // CORSAllowedOrigins 定义允许跨域访问的来源列表
-var CORSAllowedOrigins = []string{fmt.Sprintf("http://localhost:%d", *config.BasicPort)}
+var CORSAllowedOrigins = []string{
+	fmt.Sprintf("http://localhost:%d", *config.BasicPort),
+	fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort),
+}
 
 // 请求映射，键为请求ID，值为请求上下文
 var requests = make(map[string]*model.RequestContext)

@@ -67,6 +67,13 @@
                     <label for="seed">随机种子</label>
                     <input type="number" id="seed" class="glass-input" min="0" max="999999999" value="0" placeholder="0表示随机">
                 </div>
+                <!-- 允许超分 -->
+                <div class="form-group">
+                    <button type="button" id="allow-super-resolution" class="super-resolution-btn">
+                        <i class="fas fa-expand-arrows-alt"></i> 允许超分
+                    </button>
+                    <span class="hint-text">启用后使用 RealESRGAN 进行高分辨率超分</span>
+                </div>
             </div>
             <!-- 任务状态 -->
             <div id="task-status" class="task-status-bar" style="display: none;">

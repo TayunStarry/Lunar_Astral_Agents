@@ -22,6 +22,7 @@ const elements = {
     batchSize: document.getElementById('batch-size'),
     cfgScale: document.getElementById('cfg-scale'),
     seed: document.getElementById('seed'),
+    allowSuperResolution: document.getElementById('allow-super-resolution'),
     optimizeBtn: document.getElementById('optimize-btn'),
     generateBtn: document.getElementById('generate-btn'),
     resetBtn: document.getElementById('reset-btn'),
@@ -62,6 +63,15 @@ function initEventListeners() {
     elements.resetBtn.addEventListener('click', resetParameters);
     elements.refreshBtn.addEventListener('click', refreshPage);
     elements.clearAllBtn.addEventListener('click', clearAllFiles);
+
+    // 超分按钮切换
+    elements.allowSuperResolution.addEventListener('click', () => {
+        const btn = elements.allowSuperResolution;
+        const isActive = btn.classList.toggle('active');
+        btn.innerHTML = isActive
+            ? '<i class="fas fa-check-circle"></i> 已启用超分'
+            : '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
+    });
 
     // 键盘快捷键
     document.addEventListener('keydown', handleKeyboardShortcuts);
@@ -237,6 +247,8 @@ function resetParameters() {
         elements.batchSize.value = 1;
         elements.cfgScale.value = 1.0;
         elements.seed.value = 0;
+        elements.allowSuperResolution.classList.remove('active');
+        elements.allowSuperResolution.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
 
         updateWidthValue();
         updateHeightValue();
@@ -264,7 +276,8 @@ async function generateImage() {
             steps: parseInt(elements.steps.value),
             seed: elements.seed.value === '0' ? Date.now() % 1000000000 : parseInt(elements.seed.value),
             cfg_scale: parseFloat(elements.cfgScale.value),
-            init_img: uploadedImagePath || null
+            init_img: uploadedImagePath || null,
+            allow_super_resolution: elements.allowSuperResolution.classList.contains('active')
         };
 
         if (!generateData.prompt) {
@@ -626,7 +639,8 @@ function buildOptimizationMessages(prompt) {
         cfg_scale: parseFloat(elements.cfgScale.value),
         strength: parseFloat(elements.strengthSlider.value),
         batch_size: parseInt(elements.batchSize.value),
-        seed: elements.seed.value === '0' ? null : parseInt(elements.seed.value)
+        seed: elements.seed.value === '0' ? null : parseInt(elements.seed.value),
+        allow_super_resolution: elements.allowSuperResolution.classList.contains('active')
     };
 
     let userMessage = `请优化以下提示词和参数设置：
@@ -641,6 +655,7 @@ ${prompt}
 - 提示词权重: ${currentParams.cfg_scale}
 - 噪声强度: ${currentParams.strength}
 - 生成数量: ${currentParams.batch_size}
+- 允许超分: ${currentParams.allow_super_resolution ? '是' : '否'}
 ${currentParams.seed ? `- 随机种子: ${currentParams.seed}` : ''}`;
 
     if (currentImageBase64) {
@@ -758,6 +773,10 @@ async function callMultimodalModel(messages) {
                                 type: 'integer',
                                 description: '随机种子 (可选，不提供则随机)',
                                 minimum: 0
+                            },
+                            allow_super_resolution: {
+                                type: 'boolean',
+                                description: '是否启用超分 (默认 false)'
                             }
                         },
                         required: ['optimized_prompt', 'optimized_negative_prompt', 'width', 'height', 'steps', 'cfg_scale', 'strength', 'batch_size']
@@ -872,6 +891,16 @@ function applyOptimizationResult(result) {
 
     if (data.seed && data.seed >= 0) {
         elements.seed.value = data.seed;
+    }
+
+    if (data.allow_super_resolution !== undefined) {
+        if (data.allow_super_resolution) {
+            elements.allowSuperResolution.classList.add('active');
+            elements.allowSuperResolution.innerHTML = '<i class="fas fa-check-circle"></i> 已启用超分';
+        } else {
+            elements.allowSuperResolution.classList.remove('active');
+            elements.allowSuperResolution.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
+        }
     }
 }
 

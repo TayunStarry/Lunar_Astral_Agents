@@ -22,6 +22,46 @@ function highlightCode(container) {
             window.hljs.highlightElement(block);
         }
     });
+    setupCodeCopyButtons(container);
+}
+
+/** 为代码块添加复制按钮 */
+function setupCodeCopyButtons(container) {
+    container.querySelectorAll('pre').forEach((pre) => {
+        if (pre.querySelector('.code-copy-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'code-copy-btn';
+        btn.innerHTML = '<i class="fas fa-copy"></i><span>复制</span>';
+        btn.addEventListener('click', () => {
+            const code = pre.querySelector('code');
+            const text = code ? code.textContent : pre.textContent;
+            navigator.clipboard.writeText(text || '').then(() => {
+                btn.classList.add('copied');
+                btn.innerHTML = '<i class="fas fa-check"></i><span>已复制</span>';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<i class="fas fa-copy"></i><span>复制</span>';
+                }, 2000);
+            }).catch(() => {
+                // fallback
+                const ta = document.createElement('textarea');
+                ta.value = text || '';
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                btn.classList.add('copied');
+                btn.innerHTML = '<i class="fas fa-check"></i><span>已复制</span>';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.innerHTML = '<i class="fas fa-copy"></i><span>复制</span>';
+                }, 2000);
+            });
+        });
+        pre.appendChild(btn);
+    });
 }
 
 async function renderMermaid(container) {

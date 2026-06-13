@@ -59,6 +59,8 @@ class AudioQueueManager {
             this.playing = false;
             this.currentSource = null;
             console.log('AudioQueue: 队列已清空，播放结束');
+            // 通知语音识别：音频播放完成
+            this.notifyVoiceChat();
             return;
         }
 
@@ -188,6 +190,19 @@ class AudioQueueManager {
             playedCount: this.playedCount,
             errorCount: this.errorCount
         };
+    }
+
+    /**
+     * 通知语音识别模块音频播放状态变化
+     * 使用动态import避免循环依赖
+     */
+    notifyVoiceChat() {
+        // 延迟导入以避免循环依赖
+        import('./voice.js').then(({ VoiceChat }) => {
+            VoiceChat.onAudioPlaybackChange();
+        }).catch(() => {
+            // voice.js 可能未加载，忽略
+        });
     }
 
     /**

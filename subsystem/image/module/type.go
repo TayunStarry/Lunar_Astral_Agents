@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-
 // KeyFrame 关键帧结构
 type KeyFrame struct {
 	// 关键帧文件名
@@ -57,6 +56,8 @@ type GenerateTask struct {
 	ResultPath string `json:"result_path"`
 	// Error 错误信息
 	Error string `json:"error"`
+	// AllowSuperResolution 允许超分
+	AllowSuperResolution bool `json:"allow_super_resolution"`
 }
 
 // TaskQueue 生成任务队列

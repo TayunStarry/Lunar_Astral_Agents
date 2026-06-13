@@ -4,7 +4,7 @@ import (
 	"config"
 	"encoding/json"
 	"fmt"
-	image"image/module"	
+	image "image/module"
 	"net/http"
 	"strings"
 	"time"
@@ -44,6 +44,7 @@ func GenerateHandler(w http.ResponseWriter, r *http.Request) {
 		req.CfgScale,
 		req.Seed,
 		req.InitImg,
+		req.AllowSuperResolution,
 	)
 
 	if task == nil {

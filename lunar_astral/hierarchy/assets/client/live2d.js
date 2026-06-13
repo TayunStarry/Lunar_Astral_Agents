@@ -108,10 +108,6 @@ export const Live2D = {
             antialias: true,
         };
         pixiJSExample = new window.PIXI.Application(parameters);
-        const modelInfo = document.getElementById('modelIntel');
-        if (modelInfo) {
-            modelInfo.textContent = `加载模型: ${currentLive2DModel?.name || '未知'}...`;
-        }
         if (wasHidden && container?.parentElement) {
             container.parentElement.style.display = 'none';
             container.parentElement.style.visibility = 'visible';
@@ -124,15 +120,11 @@ export const Live2D = {
      * @returns {Promise<void>}
      */
     async loadModel() {
-        const modelInfo = document.getElementById('modelIntel');
         try {
             if (Live2DModelInstance) {
                 pixiJSExample?.stage.removeChild(Live2DModelInstance);
                 Live2DModelInstance.destroy();
                 Live2DModelInstance = null;
-            }
-            if (modelInfo) {
-                modelInfo.textContent = `加载模型: ${currentLive2DModel?.name || '未知'}...`;
             }
             if (!currentLive2DModel) {
                 throw new Error('No Live2D model configured');
@@ -145,16 +137,10 @@ export const Live2D = {
             model.x = (container?.clientWidth || 0) * currentLive2DModel.x;
             model.y = (container?.clientHeight || 0) * currentLive2DModel.y;
             pixiJSExample?.stage.addChild(Live2DModelInstance);
-            if (modelInfo) {
-                modelInfo.textContent = currentLive2DModel?.name || '未知';
-            }
         }
         catch (error) {
             if (error instanceof Error) {
                 this.showError(`Live2D 加载失败: ${error.message}`);
-                if (modelInfo) {
-                    modelInfo.textContent = 'Live2D 加载失败';
-                }
             }
             throw error;
         }

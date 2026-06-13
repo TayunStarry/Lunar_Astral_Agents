@@ -52,17 +52,8 @@ func CORSMiddleware(next http.Handler) http.Handler {
 
 // startClientLoading 启动客户端加载任务
 func startClientLoading() {
-	// 获取本地 IP 地址
-	ip, err := browser.GetLocalIP([]string{})
-	// 处理获取 IP 地址失败的情况
-	if err != nil {
-		logger.Error("LunarCore", "%v", err)
-		return
-	}
-	// 构建客户端访问的 URL
-	//clientUrl := fmt.Sprintf("http://localhost:%d", *config.BasicPort)
-	// 构建内部接口的 URL
-	internalURL := fmt.Sprintf("http://%s:%d", ip, *config.BasicPort)
-	// 打开浏览器访问内部接口
-	browser.OpenBrowser(internalURL)
+	// 优先使用 127.0.0.1 访问本地服务，避免防火墙拦截和跨网段问题
+	clientURL := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
+	// 打开浏览器访问
+	browser.OpenBrowser(clientURL)
 }

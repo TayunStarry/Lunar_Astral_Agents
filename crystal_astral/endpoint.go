@@ -1,6 +1,7 @@
 package main
 
 import (
+	image_server "image/server"
 	"net/http"
 	"screenshot"
 	storage "storage/server"
@@ -42,5 +43,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
 	{Path: "/api/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/api/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
+	{Path: "/generate", Handler: image_server.GenerateHandler, Method: "POST", Description: "图像生成"},
+	{Path: "/generate/wait", Handler: image_server.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
 }
