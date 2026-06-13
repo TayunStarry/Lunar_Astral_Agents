@@ -39,7 +39,6 @@ class AudioQueueManager {
             return;
         }
         this.queue.push(audioBase64);
-        console.log(`AudioQueue: 音频入队, 队列长度=${this.queue.length}, 状态=${this.playing ? '播放中' : '空闲'}`);
 
         // 如果当前未在播放，启动播放流程
         if (!this.playing) {
@@ -58,7 +57,6 @@ class AudioQueueManager {
         if (this.queue.length === 0) {
             this.playing = false;
             this.currentSource = null;
-            console.log('AudioQueue: 队列已清空，播放结束');
             // 通知语音识别：音频播放完成
             this.notifyVoiceChat();
             return;
@@ -175,7 +173,6 @@ class AudioQueueManager {
         const clearedCount = this.queue.length;
         this.queue = [];
         this.playing = false;
-        console.log(`AudioQueue: 已停止并清空队列, 清除${clearedCount}条待播放音频`);
     }
 
     /**

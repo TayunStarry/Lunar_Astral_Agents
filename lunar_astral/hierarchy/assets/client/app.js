@@ -233,7 +233,7 @@ class LunarCoreApp {
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const wsUrl = `${protocol}//${window.location.host}/ws`;
 		this.wsClient = new WebSocketClient(wsUrl);
-		this.wsClient.onConnect(() => { console.log('WebSocket connected'); this.setLoadingState(false); });
+		this.wsClient.onConnect(() => this.setLoadingState(false));
 		this.wsClient.onMessage((message) => this.handleWebSocketMessage(message));
 		this.wsClient.onError((error) => { console.error('WebSocket error:', error); this.showError('连接错误，请刷新页面'); });
 		this.wsClient.connect();

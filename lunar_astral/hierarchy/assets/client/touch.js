@@ -88,12 +88,29 @@ export function weightedRandom(items) {
 }
 
 /**
+ * 态度→情绪状态映射
+ *
+ * 将触摸提示词中的态度词映射到 EmotionalStateEnum，
+ * 用于点击时触发对应的 Live2D 动作。
+ */
+const ATTITUDE_TO_EMOTION = {
+	'好奇': 'QUESTION',
+	'疑惑': 'QUESTION',
+	'不适': 'SHY',
+	'高兴': 'HAPPY',
+	'害羞': 'SHY',
+	'生气': 'ANGRY',
+	'惊讶': 'QUESTION',
+	'享受': 'HAPPY',
+};
+
+/**
  * 生成随机触摸提示词
  *
  * 从素材库中随机组合 <力量> + <动作> + <部位> + <态度>,
  * 通过排除规则过滤不合法组合, 确保生成质量。
  *
- * @returns {string} - 格式化的触摸提示词
+ * @returns {{ prompt: string, attitude: string }} - 提示词及态度词
  */
 export function generateTouchPrompt() {
 	const config = TOUCH_PROMPT_CONFIG;
@@ -115,7 +132,10 @@ export function generateTouchPrompt() {
 	);
 
 	// 格式: "<力量><动作>了< 部位>, 请做出<态度>的反应"
-	return `${force}${action}了你的${part}, 请做出${attitude}的反应`;
+	return {
+		prompt: `${force}${action}了你的${part}, 请做出${attitude}的反应`,
+		attitude,
+	};
 }
 
 /**
@@ -239,12 +259,15 @@ export class TouchInteractionHandler {
 	 */
 	async triggerTouchDialogue() {
 		this.callbacks.setLoadingState(true);
-		Live2D.setEmotionState(EmotionalStateEnum.AWAIT);
 
 		try {
 			// 随机生成触摸提示词，直接发送至后端，不在前端聊天记录中显示
-			const touchPrompt = generateTouchPrompt();
-			const openAIMessages = [{ role: 'user', content: touchPrompt }];
+			const { prompt, attitude } = generateTouchPrompt();
+			// 根据态度词映射情绪状态，触发对应的 Live2D 动作
+			const emotionKey = ATTITUDE_TO_EMOTION[attitude] || 'AWAIT';
+			Live2D.setEmotionState(EmotionalStateEnum[emotionKey]);
+
+			const openAIMessages = [{ role: 'user', content: prompt }];
 
 			// 发送消息到后端（不添加到前端聊天记录中）
 			await sendMessages(openAIMessages);

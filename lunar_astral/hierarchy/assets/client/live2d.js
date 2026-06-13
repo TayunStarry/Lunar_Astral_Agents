@@ -6,7 +6,7 @@ let Live2DModelInstance = null;
 let currentLive2DModel = null;
 let currentEmotionState = 'IDLE';
 
-// 情绪状态枚举
+// 情绪状态枚举（与 setting.json mapping 键名对应）
 export const EmotionalStateEnum = {
     IDLE: 'IDLE',
     THINKING: 'THINKING',
@@ -15,6 +15,17 @@ export const EmotionalStateEnum = {
     HAPPY: 'HAPPY',
     SAD: 'SAD',
     ANGRY: 'ANGRY',
+    SHY: 'SHY',
+    QUESTION: 'QUESTION',
+    SPEECHLESS: 'SPEECHLESS',
+    RESIST: 'RESIST',
+    PATIENCE: 'PATIENCE',
+    TIRED: 'TIRED',
+    CONTEMPT: 'CONTEMPT',
+    EMBARRASSED: 'EMBARRASSED',
+    SLEEPY: 'SLEEPY',
+    DISTRACTED: 'DISTRACTED',
+    ERROR: 'ERROR',
 };
 
 /**
@@ -196,25 +207,28 @@ export const Live2D = {
      */
     setEmotionState(state) {
         currentEmotionState = state;
-        if (Live2DModelInstance && Live2DModelInstance.motion) {
-            const motionMap = {
-                IDLE: 'idle',
-                THINKING: 'thinking',
-                AWAIT: 'waiting',
-                SPEAKING: 'speaking',
-                HAPPY: 'happy',
-                SAD: 'sad',
-                ANGRY: 'angry',
-            };
-            const motion = motionMap[state];
-            if (motion) {
-                try {
-                    Live2DModelInstance.motion(motion);
-                } catch (e) {
-                    console.warn(`Motion ${motion} not available:`, e);
-                }
-            }
-        }
+        if (!Live2DModelInstance?.motion) return;
+
+        // 从 setting.json 的 mapping 配置中查找对应状态的动作组
+        const mappingKey = state.toLowerCase();
+        const motionCandidates = currentLive2DModel?.mapping?.[mappingKey];
+        if (!motionCandidates?.length) return;
+
+        // 获取模型实际拥有的动作组名列表
+        const definitions = Live2DModelInstance.internalModel?.motionManager?.definitions;
+        if (!definitions) return;
+
+        // 过滤出 mapping 中模型实际支持的动作组，按优先级排序
+        const validGroups = motionCandidates.filter(group => definitions[group]?.length);
+        if (!validGroups.length) return;
+
+        // 从有效动作组中选取第一个（最高优先级）
+        const group = validGroups[0];
+        const count = definitions[group].length;
+        const index = Math.floor(Math.random() * count);
+
+        // 指定索引播放，FORCE 优先级(3)确保覆盖当前播放中的动作
+        Live2DModelInstance.motion(group, index, 3);
     },
 
     /**

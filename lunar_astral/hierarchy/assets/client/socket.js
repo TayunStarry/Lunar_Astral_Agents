@@ -47,7 +47,6 @@ export class WebSocketClient {
         if (!this.ws) return;
 
         this.ws.onopen = () => {
-            console.log('WebSocket connected');
             this.reconnectAttempts = 0;
             this.connectionHandlers.forEach(handler => handler());
         };
