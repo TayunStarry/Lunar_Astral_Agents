@@ -564,25 +564,37 @@ var agentSystem = (function (exports) {
             return result;
         }
         queryRagMessages() {
-            const latestUserMessage = this.getLatestUserMessageContent();
-            if (!latestUserMessage)
+            const userMessages = this.getLatestUserMessages();
+            if (userMessages.length === 0)
                 return this;
             if (!BaseConfig.chromemReady)
                 BaseConfig.initChromem();
             if (!BaseConfig.chromemReady)
                 return this;
-            const [results, error] = chromemQuery(latestUserMessage, 10);
-            if (error) {
-                console.error('chromem 查询失败:', error);
+            const allResults = [];
+            for (const userMessage of userMessages) {
+                const [results, error] = chromemQuery(userMessage, 5);
+                if (error) {
+                    console.error('chromem 查询失败:', error);
+                    continue;
+                }
+                if (results && results.length > 0) {
+                    allResults.push(...results);
+                }
+            }
+            if (allResults.length === 0)
                 return this;
-            }
-            if (results && results.length > 0) {
-                this.ragMessages = results.map((r) => ({ role: r.role, content: r.content, }));
-                this.ragMessages.forEach((message) => console.log(message.content));
-            }
+            const seen = new Set();
+            const uniqueResults = allResults.filter(r => {
+                if (seen.has(r.content))
+                    return false;
+                seen.add(r.content);
+                return true;
+            });
+            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content, }));
             return this;
         }
-        getLatestUserMessageContent() {
+        getLatestUserMessages() {
             const userTexts = [];
             for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
                 const message = this.messages[i];
@@ -600,7 +612,7 @@ var agentSystem = (function (exports) {
                     }
                 }
             }
-            return userTexts.length > 0 ? userTexts.join(' ') : null;
+            return userTexts;
         }
         constructor(prompt) {
             super();

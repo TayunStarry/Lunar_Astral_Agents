@@ -148,13 +148,13 @@ export class DialogueRole extends ModelBuilder {
 				cache.thinkingContent = message.choices[0].message.reasoning_content;
 			}
 			// 检查是否有词元生成速度数据
-		if (message.timings?.predicted_per_second) {
-			console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
-		}
-		// 检查缓存命中数量
-		if (message.timings?.cache_n !== undefined) {
-			console.log(`缓存命中数量: ${message.timings.cache_n}`);
-		}
+			if (message.timings?.predicted_per_second) {
+				console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
+			}
+			// 检查缓存命中数量
+			if (message.timings?.cache_n !== undefined) {
+				console.log(`缓存命中数量: ${message.timings.cache_n}`);
+			}
 			// 处理工具调用
 			if (message.choices?.[0]?.message?.tool_calls) {
 				// 遍历所有工具调用

@@ -156,30 +156,46 @@ export class ModelBuilder extends ConfigModifier {
 	}
 	/** 从 chromem-go 查询相关消息并填充 ragMessages */
 	public queryRagMessages(): this {
-		/** 获取最新的用户消息内容作为查询条件 */
-		const latestUserMessage = this.getLatestUserMessageContent();
-		// 如果没有最新的用户消息，直接返回
-		if (!latestUserMessage) return this;
+		/** 获取最新的5条用户消息作为查询条件 */
+		const userMessages = this.getLatestUserMessages();
+		// 如果没有用户消息，直接返回
+		if (userMessages.length === 0) return this;
 		// 初始化 chromem-go
 		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
 		// 如果初始化失败，直接返回
 		if (!BaseConfig.chromemReady) return this;
-		/** 查询 chromem-go 相关消息 */
-		const [results, error] = chromemQuery(latestUserMessage, 10);
-		// 如果查询失败，直接返回
-		if (error) {
-			console.error('chromem 查询失败:', error);
-			return this;
+		/** 所有查询结果汇总 */
+		const allResults: { id: string, role: string, content: string }[] = [];
+		// 对每条用户消息分别查询 chromem-go
+		for (const userMessage of userMessages) {
+			const [results, error] = chromemQuery(userMessage, 5);
+			// 单条查询失败则跳过，继续处理下一条
+			if (error) {
+				console.error('chromem 查询失败:', error);
+				continue;
+			}
+			if (results && results.length > 0) {
+				allResults.push(...results);
+			}
 		}
-		// 如果查询结果为空，直接返回
-		if (results && results.length > 0) {
-			this.ragMessages = results.map((r: { role: string, content: string }) => ({ role: r.role as PostMessageRole, content: r.content, }));
-			this.ragMessages.forEach((message) => console.log(message.content));
-		}
+		// 如果没有任何结果，直接返回
+		if (allResults.length === 0) return this;
+		/** 基于内容去重，保留首次出现的记录 */
+		const seen = new Set<string>();
+		/** 过滤出首次出现的记录 */
+		const uniqueResults = allResults.filter(
+			r => {
+				if (seen.has(r.content)) return false;
+				seen.add(r.content);
+				return true;
+			}
+		);
+		// 写入 ragMessages
+		this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content, }));
 		return this;
 	}
-	/** 获取最新的5条用户消息内容拼接作为查询条件 */
-	private getLatestUserMessageContent(): string | null {
+	/** 获取最新的5条用户消息内容 */
+	private getLatestUserMessages(): string[] {
 		/** 收集到的用户消息文本 */
 		const userTexts: string[] = [];
 		// 从消息列表的末尾开始遍历，收集最新的5条用户消息
@@ -199,7 +215,7 @@ export class ModelBuilder extends ConfigModifier {
 				}
 			}
 		}
-		return userTexts.length > 0 ? userTexts.join(' ') : null;
+		return userTexts;
 	}
 	/** 构建模型响应实例 */
 	public constructor(prompt: string) {
