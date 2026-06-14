@@ -85,12 +85,14 @@ func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	resultObjs := make([]map[string]string, 0, len(messages))
+	// chromem-go 已按相似度降序返回结果
+	resultObjs := make([]map[string]any, 0, len(messages))
 	for _, msg := range messages {
-		resultObjs = append(resultObjs, map[string]string{
-			"id":      msg["id"],
-			"role":    msg["role"],
-			"content": msg["content"],
+		resultObjs = append(resultObjs, map[string]any{
+			"id":         msg.ID,
+			"role":       msg.Role,
+			"content":    msg.Content,
+			"similarity": msg.Similarity,
 		})
 	}
 

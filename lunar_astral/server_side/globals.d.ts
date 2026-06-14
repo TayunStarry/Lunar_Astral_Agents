@@ -146,9 +146,9 @@ declare global {
      * 
      * @param {number} topK 返回的最相关结果数量
      * 
-     * @returns {[Array<{id: string, role: string, content: string}>, Error | null]} 包含查询结果的元组
+     * @returns {[Array<{id: string, role: string, content: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function chromemQuery(queryText: string, topK: number): [Array<{ id: string, role: string, content: string }>, Error | null];
+    function chromemQuery(queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
     /**
      * 从 chromem-go 向量数据库删除指定消息
      * 

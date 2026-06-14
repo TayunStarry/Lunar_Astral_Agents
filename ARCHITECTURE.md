@@ -117,21 +117,21 @@ Lunar_Astral_Agents/
 │   │   └── stable_diffusion.cpp/ # SD 参数文档
 │   └── package/                  # 前端共享资源库
 │       ├── archive/             # 归档与许可
-│       ├── database_manager/    # 数据库管理 UI
-│       ├── different_lunar/     # 月华前端主界面
+│       ├── knowledge_base/      # 知识库 UI
+│       ├── legacy_lunar/        # 月华旧版主界面（参照比对用）
 │       ├── file_explorer/       # 文件浏览器 UI
 │       ├── fontAwesome/         # Font Awesome 6.4.0
 │       ├── highlight/           # highlight.js
 │       ├── image_generation/    # 图像生成 UI
 │       ├── katex/               # KaTeX 数学库
-│       ├── message_rendering/   # 消息渲染 UI
-│       ├── model_query/         # 模型查询 UI
+│       ├── message_terminal/    # 消息终端 UI
+│       ├── model_explorer/      # 模型浏览 UI
 │       ├── multimedia_preview/   # 多媒体预览 UI
-│       ├── parameter_assistant/ # 参数助手 UI
+│       ├── config_assistant/    # 配置助手 UI
 │       ├── qwen3_tts/           # TTS 语音合成 UI
-│       ├── screenshot_manager/  # 截图管理 UI
+│       ├── screenshot_annotator/ # 截图标注 UI
 │       ├── standard_dependency/ # 全局标准依赖
-│       └── vector_db_manager/   # 向量数据库管理 UI
+│       └── memory_store/        # 记忆库 UI
 ├── lunar_astral/                # 核心系统：星图·月华
 │   ├── adapters/                # Go↔JS 适配器层
 │   ├── hierarchy/               # 前端资源与脚本
@@ -818,11 +818,11 @@ Lunar_Astral_Agents/
 | **关联关系** | 被所有前端 UI 模块引用为全局基础样式与脚本 |
 | **架构角色** | 前端设计系统的核心，定义了全平台的视觉规范（玻璃拟态、配色、字体等） |
 
-#### `local_data/package/different_lunar/`
+#### `local_data/package/legacy_lunar/`
 
 | 维度 | 说明 |
 |------|------|
-| **主要职责** | 月华前端主界面组件库，包含 Live2D 渲染、Markdown/Mermaid 渲染、提示词管理、包管理等核心前端组件 |
+| **主要职责** | 月华旧版前端主界面，用于参照与比对新版实现效果，包含 Live2D 渲染、Markdown/Mermaid 渲染、提示词管理、包管理等核心前端组件 |
 | **核心模块类型** | HTML/CSS/JS 前端组件 |
 | **关联关系** | 被 `lunar_astral/hierarchy/assets/client/` 引用 |
 | **架构角色** | 月华系统的前端组件库 |
@@ -842,16 +842,16 @@ Lunar_Astral_Agents/
 
 | 目录 | 功能 | 关联后端 |
 |------|------|---------|
-| `database_manager/` | 数据库可视化管理 | `subsystem/storage/` |
+| `knowledge_base/` | 知识库可视化管理 | `subsystem/storage/` |
 | `file_explorer/` | 文件浏览器 | `subsystem/storage/` |
 | `image_generation/` | 图像生成参数配置与预览 | `lunar_astral/server/handlers/generate.go` |
-| `message_rendering/` | 消息渲染（Markdown/Mermaid/ECharts/KaTeX） | `lunar_astral/websocket/` |
-| `model_query/` | 模型查询与参数查看 | `lunar_astral/model/` |
+| `message_terminal/` | 消息终端（Markdown/Mermaid/ECharts/KaTeX） | `lunar_astral/websocket/` |
+| `model_explorer/` | 模型浏览与参数查看 | `lunar_astral/model/` |
 | `multimedia_preview/` | 多媒体预览（图片/视频/音频） | `lunar_astral/server/handlers/video.go` |
-| `parameter_assistant/` | 参数助手 | `subsystem/config/` |
+| `config_assistant/` | 配置助手 | `subsystem/config/` |
 | `qwen3_tts/` | TTS 语音合成界面 | `subsystem/qwen3_tts_lunar/` |
-| `screenshot_manager/` | 截图管理界面 | `subsystem/screenshot/` |
-| `vector_db_manager/` | 向量数据库管理界面 | `subsystem/storage/` |
+| `screenshot_annotator/` | 截图标注界面 | `subsystem/screenshot/` |
+| `memory_store/` | 记忆库（向量语义检索） | `subsystem/storage/` |
 
 ---
 

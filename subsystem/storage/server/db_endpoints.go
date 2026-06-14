@@ -81,9 +81,10 @@ type chromemInitRequest struct {
 }
 
 type chromemMessageData struct {
-	ID      string `json:"id"`
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	ID         string  `json:"id"`         // 消息ID
+	Role       string  `json:"role"`       // 消息角色，user/assistant/system
+	Content    string  `json:"content"`    // 消息内容
+	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
 }
 
 type chromemStatsData struct {
@@ -184,9 +185,10 @@ func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
 	results := make([]chromemMessageData, 0, len(messages))
 	for _, msg := range messages {
 		results = append(results, chromemMessageData{
-			ID:      msg["id"],
-			Role:    msg["role"],
-			Content: msg["content"],
+			ID:         msg.ID,
+			Role:       msg.Role,
+			Content:    msg.Content,
+			Similarity: msg.Similarity,
 		})
 	}
 

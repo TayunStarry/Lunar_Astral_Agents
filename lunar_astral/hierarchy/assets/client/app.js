@@ -8,6 +8,8 @@ import { TouchInteractionHandler } from './touch.js';
 import { FilePreviewManager } from './file-handler.js';
 import { sendMessages } from './fetch.js';
 
+const MAX_HISTORY_MESSAGES = 40;
+
 class LunarCoreApp {
 	wsClient = null;
 	historyMessages = [];
@@ -277,6 +279,14 @@ class LunarCoreApp {
 		}
 	}
 
+	/** 将消息加入历史记录，超出限制时移除最早的消息 */
+	addToHistory(message) {
+		this.historyMessages.push(message);
+		while (this.historyMessages.length > MAX_HISTORY_MESSAGES) {
+			this.historyMessages.shift();
+		}
+	}
+
 	async handleAssistantMessage(content, imageUrl, audio) {
 		const assistantMessage = {
 			role: 'assistant',
@@ -285,7 +295,7 @@ class LunarCoreApp {
 			audio: audio,
 			timestamp: Date.now(),
 		};
-		this.historyMessages.push(assistantMessage);
+		this.addToHistory(assistantMessage);
 
 		if (this.isModalOpen) {
 			await renderMessage(assistantMessage, this.modalBody);
@@ -326,7 +336,7 @@ class LunarCoreApp {
 			if (uploadedFileUrls.length > 0) {
 				userMessage.imageUrls = uploadedFileUrls;
 			}
-			this.historyMessages.push(userMessage);
+			this.addToHistory(userMessage);
 
 			if (this.isModalOpen) {
 				await renderMessage(userMessage, this.modalBody);

@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"slices"
 	"config"
 	"encoding/json"
 	"logger"
@@ -21,7 +22,7 @@ type LTP2PackageInfo struct {
 }
 
 // scanLTP2Packages 扫描 local_data/package/ 下所有带有 "LTP2" 标签的工具包
-// 返回包信息列表和对应的 tool.ts 源码（key 为包名）
+// 返回包信息列表和对应的 tool.js 源码（key 为包名）
 func scanLTP2Packages() ([]LTP2PackageInfo, map[string]string) {
 	packageDir := filepath.Join(*config.LocalDir, "package")
 
@@ -46,25 +47,19 @@ func scanLTP2Packages() ([]LTP2PackageInfo, map[string]string) {
 		}
 
 		var pkg LTP2PackageInfo
-		if err := json.Unmarshal(data, &pkg); err != nil {
+		if err = json.Unmarshal(data, &pkg); err != nil {
 			logger.Warn("LunarCore", "LTP2 解析包配置失败 %s: %v", configPath, err)
 			continue
 		}
 
 		// 仅接受带有 "LTP2" 标签的工具包
-		hasLTP2 := false
-		for _, tag := range pkg.Tags {
-			if tag == "LTP2" {
-				hasLTP2 = true
-				break
-			}
-		}
+		hasLTP2 := slices.Contains(pkg.Tags, "LTP2")
 		if !hasLTP2 {
 			continue
 		}
 
-		// 读取 tool.ts 文件
-		toolPath := filepath.Join(packageDir, entry.Name(), "tool.ts")
+		// 读取 tool.js 文件
+		toolPath := filepath.Join(packageDir, entry.Name(), "tool.js")
 		toolCode, err := os.ReadFile(toolPath)
 		if err != nil {
 			logger.Warn("LunarCore", "LTP2 读取工具文件失败 %s: %v", toolPath, err)
@@ -87,7 +82,7 @@ func loadLTP2ToolPackages(vm *goja.Runtime) string {
 		return "[]"
 	}
 
-	// 获取 agentSystem.OnlyData，注入为全局变量供 tool.ts 使用
+	// 获取 agentSystem.OnlyData，注入为全局变量供 tool.js 使用
 	agentSystemVal := vm.Get("agentSystem")
 	if agentSystemVal == nil || goja.IsUndefined(agentSystemVal) {
 		logger.Warn("LunarCore", "LTP2 agentSystem 不可用，跳过工具注册")

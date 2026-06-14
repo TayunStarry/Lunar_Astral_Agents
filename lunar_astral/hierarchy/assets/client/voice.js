@@ -6,7 +6,7 @@ import { AudioQueue } from './tts.js';
  * 基于 Web Speech API 实现语音识别，将用户语音实时转换为文字输入。
  * 默认关闭状态，需手动开启。
  *
- * 设计参考：local_data/package/different_lunar/script.js 语音识别实现
+ * 设计参考：local_data/package/legacy_lunar/script.js 语音识别实现
  *
  * 逻辑控制：
  * - 使用 continuous=false，每次识别完成后自动重启
@@ -89,7 +89,7 @@ export class VoiceChatManager {
         const rec = new Ctor();
         rec.lang = 'zh-CN';
         rec.interimResults = true;
-        // 参考 different_lunar 使用 continuous=false，每次识别结束后自动重建
+        // 参考 legacy_lunar 使用 continuous=false，每次识别结束后自动重建
         rec.continuous = false;
         rec.maxAlternatives = 1;
 
@@ -149,7 +149,7 @@ export class VoiceChatManager {
     /**
      * 处理语音识别错误
      *
-     * 参考 different_lunar 的 SpeechRecognitionErrorOccurred：
+     * 参考 legacy_lunar 的 SpeechRecognitionErrorOccurred：
      * - aborted / not-allowed：直接返回，不做任何操作（避免触发自动重启循环）
      * - 其他错误：清除计时器，延迟后尝试重启
      */
@@ -279,7 +279,7 @@ export class VoiceChatManager {
             return;
         }
 
-        // 每次启动时重新创建实例（参考 different_lunar 的 createSpeechRecognition 模式）
+        // 每次启动时重新创建实例（参考 legacy_lunar 的 createSpeechRecognition 模式）
         this.recognition = this.createRecognition();
         if (!this.recognition) return;
 

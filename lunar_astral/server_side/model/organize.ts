@@ -172,8 +172,10 @@ class Toolchain extends Prompt {
 			return '未找到相关历史记录，可以放心创建新档案';
 		}
 
-		return '找到以下相关历史记录:\n' + results
-			.map((r: { id: string; role: string; content: string }, i: number) => `[已有记录${i + 1}] ID:${r.id} | 内容:${r.content}`)
+		// chromem-go 已按相似度降序返回结果，直接使用即可
+		return '找到以下相关历史记录（按相关度从高到低排列）:\n' + results
+			.map((r: { id: string; role: string; content: string; similarity: number }, i: number) =>
+				`[已有记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
 			.join('\n');
 	}
 	/** 处理合并记录工具 */
@@ -255,7 +257,8 @@ class Toolchain extends Prompt {
 			const [existingResults] = chromemQuery(checkQuery, 5);
 			if (existingResults && existingResults.length > 0) {
 				const similarRecords = existingResults
-					.map((r: { id: string; content: string }, i: number) => `[相似记录${i + 1}] ID:${r.id} | 内容:${r.content}`)
+					.map((r: { id: string; content: string; similarity: number }, i: number) =>
+						`[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
 					.join('\n');
 				console.warn('[编纂者] 存储前发现相似记录，建议合并而非新增');
 				return `⚠️ 检测到可能存在相似的历史记录，建议使用 merge_existing_record 合并而非新建：\n${similarRecords}\n\n如果确认这些记录与新内容无关，请再次调用 store_organized_record 并说明理由。`;

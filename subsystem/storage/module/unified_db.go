@@ -11,26 +11,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	chromem "github.com/philippgille/chromem-go"
 )
-
-type UnifiedDB struct {
-	sqlDB      *sql.DB
-	chromemDB  *chromem.DB
-	collection *chromem.Collection
-
-	sqlInitialized    bool
-	vectorInitialized bool
-
-	documentEntries   []DocumentEntry
-	documentEntriesMu sync.RWMutex
-	entriesFilePath   string
-	messageIDCounter  int
-}
 
 var Unified *UnifiedDB
 
@@ -1019,6 +1004,7 @@ func (u *UnifiedDB) VectorQueryMessages(ctx context.Context, queryText string, t
 		return nil, fmt.Errorf("chromem 查询消息失败: %v", err)
 	}
 
+	// chromem-go 已按相似度降序返回结果，此处保留原始顺序
 	messages := make([]string, 0, len(results))
 	for _, result := range results {
 		role := "user"
@@ -1037,7 +1023,7 @@ func (u *UnifiedDB) VectorQueryMessages(ctx context.Context, queryText string, t
 	return messages, nil
 }
 
-func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]map[string]string, error) {
+func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]VectorQueryResult, error) {
 	if u.collection == nil {
 		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
 	}
@@ -1051,7 +1037,7 @@ func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, queryTex
 		topK = docCount
 	}
 	if topK == 0 {
-		return []map[string]string{}, nil
+		return []VectorQueryResult{}, nil
 	}
 
 	results, err := u.collection.Query(ctx, queryText, topK, nil, nil)
@@ -1059,16 +1045,18 @@ func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, queryTex
 		return nil, fmt.Errorf("chromem 查询消息失败: %v", err)
 	}
 
-	messages := make([]map[string]string, 0, len(results))
+	// chromem-go 已按相似度降序返回结果，此处保留原始顺序
+	messages := make([]VectorQueryResult, 0, len(results))
 	for _, result := range results {
 		role := "user"
 		if r, ok := result.Metadata["role"]; ok {
 			role = r
 		}
-		messages = append(messages, map[string]string{
-			"id":      result.ID,
-			"role":    role,
-			"content": result.Content,
+		messages = append(messages, VectorQueryResult{
+			ID:         result.ID,
+			Role:       role,
+			Content:    result.Content,
+			Similarity: result.Similarity,
 		})
 	}
 
@@ -1298,7 +1286,7 @@ func AddMessageWithID(ctx context.Context, role string, content string) (string,
 	return Unified.VectorAddMessage(ctx, role, content)
 }
 
-func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]map[string]string, error) {
+func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]VectorQueryResult, error) {
 	if Unified == nil || !Unified.IsVectorInitialized() {
 		return nil, fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
 	}

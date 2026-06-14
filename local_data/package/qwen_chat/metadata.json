@@ -1,0 +1,7 @@
+{
+	"id": "qwen_chat",
+	"icon": "/file/read/package/qwen_chat/icon.webp",
+	"title": "通义千问",
+	"description": "打开 Qwen 的官方客户端",
+	"url": "https://chat.qwen.ai/"
+}

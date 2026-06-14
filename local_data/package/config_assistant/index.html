@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』星图-琉璃</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+    <!-- 标准脚本引用 -->
+</head>
+
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <div class="main-content">
+            <!-- 左侧配置区 -->
+            <div class="config-section">
+                <div class="header">
+                    <h1><i class="fas fa-moon"></i>星月智能 · 配置助手</h1>
+                    <div class="header-actions">
+                        <button id="saveBtn" class="btn btn-primary"><i class="fas fa-save"></i> 保存配置</button>
+                        <button id="resetBtn" class="btn btn-secondary"><i class="fas fa-undo"></i> 重置</button>
+                    </div>
+                </div>
+                <!-- 顶级对象导航 -->
+                <nav class="top-nav" id="topNav">
+                    <!-- 动态生成按钮 -->
+                </nav>
+                <!-- 页面容器 -->
+                <div class="page-container" id="pageContainer">
+                    <!-- 动态生成 config-page -->
+                </div>
+            </div>
+            <!-- 右侧 AI 助手 -->
+            <div class="ai-section">
+                <div class="ai-header">
+                    <div class="ai-avatar"><i class="fas fa-magic"></i></div>
+                    <h2>琉璃助手</h2>
+                </div>
+                <div class="ai-messages" id="aiMessages">
+                    <div class="message ai-message">
+                        <div class="message-avatar"><img src="/file/read/images/icon/agent_avatar.Webp" alt="Agent Avatar">
+                        </div>
+                        <div class="message-content">
+                            你好呀～我是琉璃！姐姐是月华，我来帮你修改配置文件哒！有什么问题尽管问我哦～<i class="fas fa-smile"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="ai-input-container">
+                    <textarea id="aiInput" placeholder="问我关于配置的问题吧..."></textarea>
+                    <button id="aiSendBtn" class="btn btn-send"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预览变更弹窗（保留原功能） -->
+    <div class="preview-modal" id="previewModal">
+        <div class="preview-modal-content">
+            <div class="preview-header">
+                <h3><i class="fas fa-wrench"></i> 配置变更预览</h3>
+                <button class="btn btn-small" id="closePreview"><i class="fas fa-times"></i> 关闭</button>
+            </div>
+            <div class="preview-body">
+                <div class="preview-section">
+                    <h4><i class="fas fa-file"></i> 原配置</h4>
+                    <pre id="originalConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4><i class="fas fa-edit"></i> 变更部分</h4>
+                    <pre id="changedConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4><i class="fas fa-code-branch"></i> 合并后配置</h4>
+                    <pre id="mergedConfigPreview"></pre>
+                </div>
+            </div>
+            <div class="preview-footer">
+                <button class="btn" id="cancelChanges"><i class="fas fa-times-circle"></i> 取消变更</button>
+                <button class="btn btn-primary" id="applyChanges"><i class="fas fa-check-circle"></i> 应用变更</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

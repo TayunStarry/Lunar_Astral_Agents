@@ -1,0 +1,36 @@
+{
+	"id": "realtime_search",
+	"title": "实时搜索",
+	"description": "查询天气信息或搜索最新新闻，提供精准的天气与新闻数据获取能力",
+	"tags": ["LTP2"],
+	"url": "/file/read/package/realtime_search/tool.md",
+	"icon": "/file/read/package/realtime_search/icon.svg",
+	"tools": [
+		{
+			"type": "function",
+			"function": {
+				"name": "realtime_search",
+				"description": "查询天气信息或搜索最新新闻",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"query_type": {
+							"type": "string",
+							"enum": ["weather", "news"],
+							"description": "指定查询类型：'weather' 表示查询天气，'news' 表示搜索新闻"
+						},
+						"sheng": {
+							"type": "string",
+							"description": "省份名称，如'江苏省'、'北京市'。仅在 query_type 为 'weather' 时必填"
+						},
+						"place": {
+							"type": "string",
+							"description": "城市名称，如'南京市'、'上海市'。仅在 query_type 为 'weather' 时必填"
+						}
+					},
+					"required": ["query_type"]
+				}
+			}
+		}
+	]
+}

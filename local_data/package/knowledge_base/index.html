@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』星图-知识库</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+    <!-- 标准脚本引用 -->
+</head>
+
+<body>
+    <!-- 背景图层 -->
+    <div class="bg-layer"></div>
+    <!-- 应用容器 -->
+    <div class="app-container">
+        <!-- 头部区域 -->
+        <header class="app-header glass-panel">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon"><i class="fa-solid fa-moon"></i></div>
+                    <div class="logo-text">
+                        <h1>星月智能 · 知识库</h1>
+                        <p class="subtitle">可视化管理 SQLite 知识数据库</p>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">系统就绪</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="app-main">
+            <!-- 左侧导航 -->
+            <nav class="app-sidebar glass-panel">
+                <section class="sidebar-section">
+                    <h3 class="section-title">
+                        <i class="fa-solid fa-database"></i> 数据库操作
+                    </h3>
+                    <div class="section-actions">
+                        <button id="refresh-tables" class="btn-glass btn-glass-light btn-lg">
+                            <i class="fa-solid fa-rotate-right"></i> 刷新表列表
+                        </button>
+                        <button id="create-table" class="btn-glass btn-glass-accent btn-lg">
+                            <i class="fa-solid fa-plus"></i> 创建表
+                        </button>
+                    </div>
+                </section>
+
+                <section class="sidebar-section sidebar-section-tables">
+                    <div class="section-header">
+                        <h3 class="section-title">
+                            <i class="fa-solid fa-table-list"></i> 表列表
+                            <span class="badge" id="table-count">0</span>
+                        </h3>
+                    </div>
+                    <div class="table-list-container">
+                        <div id="table-list" class="table-list">
+                            <!-- 表列表将通过JS动态生成 -->
+                        </div>
+                    </div>
+                </section>
+            </nav>
+
+            <!-- 右侧内容区域 -->
+            <div class="app-content">
+                <!-- 导航栏 -->
+                <div class="app-nav glass-panel">
+                    <button class="nav-btn active" data-page="info">
+                        <i class="fa-solid fa-circle-info"></i> 表信息
+                    </button>
+                    <button class="nav-btn" data-page="operations">
+                        <i class="fa-solid fa-bolt"></i> 数据操作
+                    </button>
+                    <button class="nav-btn" data-page="preview">
+                        <i class="fa-solid fa-chart-bar"></i> 数据预览
+                    </button>
+                </div>
+
+                <!-- 页面内容 -->
+                <div class="app-pages">
+                    <!-- 表信息页面 -->
+                    <div class="app-page active" data-page="info">
+                        <section class="content-panel glass-panel">
+                            <div class="panel-header">
+                                <h2 class="panel-title">
+                                    <i class="fa-solid fa-circle-info"></i> 表信息
+                                </h2>
+                                <div class="panel-actions">
+                                    <span class="table-stats" id="current-table-stats">未选择表</span>
+                                </div>
+                            </div>
+                            <div class="panel-content">
+                                <div id="table-details" class="table-details">
+                                    <div class="empty-state">
+                                        <div class="empty-icon"><i class="fa-solid fa-table fa-2x"></i></div>
+                                        <h3>请选择一个表查看详细信息</h3>
+                                        <p>从左侧表列表中选择一个表，查看其结构和字段信息</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- 数据操作页面 -->
+                    <div class="app-page" data-page="operations">
+                        <section class="content-panel glass-panel">
+                            <div class="panel-header">
+                                <h2 class="panel-title">
+                                    <i class="fa-solid fa-bolt"></i> 数据操作
+                                </h2>
+                                <div class="panel-actions">
+                                    <button id="show-operators" class="btn-glass btn-glass-dark btn-sm" title="操作符说明">
+                                        <i class="fa-solid fa-circle-question"></i> 帮助
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="panel-content">
+                                <!-- 操作标签页 -->
+                                <div class="operations-tabs">
+                                    <div class="tabs-header">
+                                        <div class="tabs-nav">
+                                            <button class="tab-btn active" data-tab="select">
+                                                <i class="fa-solid fa-magnifying-glass"></i> 查询
+                                            </button>
+                                            <button class="tab-btn" data-tab="insert">
+                                                <i class="fa-solid fa-plus"></i> 插入
+                                            </button>
+                                            <button class="tab-btn" data-tab="update">
+                                                <i class="fa-solid fa-pen-to-square"></i> 更新
+                                            </button>
+                                            <button class="tab-btn" data-tab="delete">
+                                                <i class="fa-solid fa-trash-can"></i> 删除
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- 查询操作 -->
+                                    <div class="tab-content active" id="select-content">
+                                        <div class="form-grid">
+                                            <div class="form-group form-group-wide">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 过滤条件
+                                                    <small class="label-hint">(JSON格式)</small>
+                                                </label>
+                                                <textarea id="select-filter" class="form-textarea glass-input"
+                                                    placeholder='示例: {"id": 1} 或 {"age": {"$gt": 18}}'
+                                                    rows="2"></textarea>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-arrow-up-arrow-down"></i> 排序
+                                                </label>
+                                                <textarea id="select-order" class="form-textarea glass-input"
+                                                    placeholder='示例: [{"column": "id", "direction": "asc"}]'
+                                                    rows="2"></textarea>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-ruler"></i> 限制
+                                                </label>
+                                                <input type="number" id="select-limit" class="form-input glass-input"
+                                                    value="100" min="1" max="1000">
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-location-dot"></i> 偏移
+                                                </label>
+                                                <input type="number" id="select-offset" class="form-input glass-input"
+                                                    value="0" min="0">
+                                            </div>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button id="execute-select" class="btn-glass btn-glass-primary btn-lg">
+                                                <i class="fa-solid fa-rocket"></i> 执行查询
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- 插入操作 -->
+                                    <div class="tab-content" id="insert-content">
+                                        <div class="form-group form-group-wide">
+                                            <label class="form-label">
+                                                <i class="fa-solid fa-pen-to-square"></i> 插入数据
+                                                <small class="label-hint">(JSON格式)</small>
+                                            </label>
+                                            <textarea id="insert-data" class="form-textarea glass-input"
+                                                placeholder='示例: {"name": "测试", "age": 25, "email": "test@example.com"}'
+                                                rows="4"></textarea>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button id="execute-insert" class="btn-glass btn-glass-primary btn-lg">
+                                                <i class="fa-solid fa-upload"></i> 执行插入
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- 更新操作 -->
+                                    <div class="tab-content" id="update-content">
+                                        <div class="form-grid">
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-pen-to-square"></i> 更新数据
+                                                    <small class="label-hint">(JSON格式)</small>
+                                                </label>
+                                                <textarea id="update-data" class="form-textarea glass-input"
+                                                    placeholder='示例: {"name": "新名称", "status": "active"}'
+                                                    rows="3"></textarea>
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    <i class="fa-solid fa-magnifying-glass"></i> 过滤条件
+                                                    <small class="label-hint">(JSON格式)</small>
+                                                </label>
+                                                <textarea id="update-filter" class="form-textarea glass-input"
+                                                    placeholder='示例: {"id": 1} 或 {"status": "inactive"}'
+                                                    rows="3"></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button id="execute-update" class="btn-glass btn-glass-primary btn-lg">
+                                                <i class="fa-solid fa-arrows-rotate"></i> 执行更新
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- 删除操作 -->
+                                    <div class="tab-content" id="delete-content">
+                                        <div class="form-group form-group-wide">
+                                            <label class="form-label">
+                                                <i class="fa-solid fa-triangle-exclamation"></i> 过滤条件
+                                                <small class="label-hint">(JSON格式)</small>
+                                            </label>
+                                            <textarea id="delete-filter" class="form-textarea glass-input"
+                                                placeholder='示例: {"id": 1} 或 {"status": "deleted"}' rows="3"></textarea>
+                                            <div class="form-hint">
+                                                <i class="fa-solid fa-circle-exclamation"></i> 将删除所有匹配条件的记录，请谨慎操作
+                                            </div>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button id="execute-delete" class="btn-glass btn-glass-danger btn-lg">
+                                                <i class="fa-solid fa-trash-can"></i> 执行删除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- 数据预览页面（合并操作结果） -->
+                    <div class="app-page" data-page="preview">
+                        <section class="content-panel glass-panel">
+                            <div class="panel-header">
+                                <h2 class="panel-title">
+                                    <i class="fa-solid fa-chart-bar"></i> 数据预览与操作结果
+                                </h2>
+                                <div class="panel-actions">
+                                    <button id="refresh-preview" class="btn-glass btn-glass-dark btn-sm" title="刷新数据">
+                                        <i class="fa-solid fa-rotate-right"></i>
+                                    </button>
+                                    <button id="clear-results" class="btn-glass btn-glass-dark btn-sm" title="清空结果">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="panel-content preview-panel-content">
+                                <div id="preview-status" class="preview-status"></div>
+                                <div id="preview-content" class="preview-content-area">
+                                    <div class="empty-state">
+                                        <div class="empty-icon"><i class="fa-solid fa-chart-line fa-2x"></i></div>
+                                        <h3>数据预览</h3>
+                                        <p>选择一个表后，将自动显示数据内容<br>执行操作后，结果也将显示在这里</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底部信息 -->
+        <footer class="app-footer glass-panel">
+            <div class="footer-content">
+                <p class="copyright">© 2026 星月智能 · 知识库 v2.0</p>
+                <div class="footer-links">
+                    <span class="status-indicator active"><i class="fa-solid fa-circle"></i> 已连接</span>
+                    <span class="version">SQLite 3.35+</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+    <!-- 创建表对话框 -->
+    <div id="create-table-dialog" class="dialog">
+        <div class="dialog-content glass-panel">
+            <h3><i class="fa-solid fa-table"></i> 创建表</h3>
+            <div class="form-group">
+                <label>表名</label>
+                <input type="text" id="new-table-name" class="form-input glass-input" placeholder="输入表名...">
+            </div>
+
+            <!-- 列管理 -->
+            <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label>列设置</label>
+                    <button id="add-column" class="btn-glass btn-glass-dark btn-sm"><i class="fa-solid fa-plus"></i>
+                        添加列</button>
+                </div>
+                <div id="columns-container">
+                    <!-- 列设置将通过JS动态生成 -->
+                    <div class="column-item">
+                        <div class="column-header">
+                            <span>列 1</span>
+                            <button class="remove-column btn-glass btn-glass-danger btn-xs"><i
+                                    class="fa-solid fa-trash-can"></i> 删除</button>
+                        </div>
+                        <div class="column-fields">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>列名</label>
+                                    <input type="text" class="column-name form-input glass-input" value="id">
+                                </div>
+                                <div class="form-group">
+                                    <label>数据类型</label>
+                                    <select class="column-type form-input glass-input">
+                                        <option value="INTEGER">INTEGER</option>
+                                        <option value="TEXT">TEXT</option>
+                                        <option value="REAL">REAL</option>
+                                        <option value="BLOB">BLOB</option>
+                                        <option value="BOOLEAN">BOOLEAN</option>
+                                        <option value="TIMESTAMP">TIMESTAMP</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" class="column-primary" checked>
+                                    <label>主键</label>
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" class="column-autoinc" checked>
+                                    <label>自增</label>
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" class="column-notnull" checked>
+                                    <label>非空</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>默认值</label>
+                                <input type="text" class="column-default form-input glass-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dialog-buttons">
+                <button id="cancel-create-table" class="btn-glass btn-glass-dark">取消</button>
+                <button id="confirm-create-table" class="btn-glass btn-glass-primary btn-lg"><i
+                        class="fa-solid fa-plus"></i> 创建</button>
+            </div>
+        </div>
+    </div>
+    <!-- 确认对话框 -->
+    <div id="confirm-dialog" class="dialog">
+        <div class="dialog-content glass-panel dialog-sm">
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> 确认操作</h3>
+            <p id="confirm-message">确定要执行此操作吗？</p>
+            <div class="dialog-buttons">
+                <button id="cancel-confirm" class="btn-glass btn-glass-dark">取消</button>
+                <button id="confirm-action" class="btn-glass btn-glass-danger btn-lg"><i class="fa-solid fa-check"></i>
+                    确认</button>
+            </div>
+        </div>
+    </div>
+    <!-- 高级查询操作符说明对话框 -->
+    <div id="operators-dialog" class="dialog">
+        <div class="dialog-content glass-panel">
+            <h3><i class="fa-solid fa-book"></i> 高级查询操作符说明</h3>
+            <div id="operators-content">
+                <table class="operators-table">
+                    <thead>
+                        <tr>
+                            <th>操作符</th>
+                            <th>含义</th>
+                            <th>示例</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>$eq</td>
+                            <td>等于</td>
+                            <td>{"age": {"$eq": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$ne</td>
+                            <td>不等于</td>
+                            <td>{"age": {"$ne": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$gt</td>
+                            <td>大于</td>
+                            <td>{"age": {"$gt": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$gte</td>
+                            <td>大于等于</td>
+                            <td>{"age": {"$gte": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$lt</td>
+                            <td>小于</td>
+                            <td>{"age": {"$lt": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$lte</td>
+                            <td>小于等于</td>
+                            <td>{"age": {"$lte": 18}}</td>
+                        </tr>
+                        <tr>
+                            <td>$like</td>
+                            <td>模糊匹配</td>
+                            <td>{"name": {"$like": "%test%"}}</td>
+                        </tr>
+                        <tr>
+                            <td>$in</td>
+                            <td>在数组中</td>
+                            <td>{"age": {"$in": [18,20,22]}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="dialog-buttons">
+                <button id="close-operators" class="btn-glass btn-glass-dark"><i class="fa-solid fa-xmark"></i>
+                    关闭</button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

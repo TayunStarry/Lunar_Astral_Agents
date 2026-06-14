@@ -164,8 +164,8 @@ export class ModelBuilder extends ConfigModifier {
 		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
 		// 如果初始化失败，直接返回
 		if (!BaseConfig.chromemReady) return this;
-		/** 所有查询结果汇总 */
-		const allResults: { id: string, role: string, content: string }[] = [];
+		/** 所有查询结果汇总（含相似度分数） */
+		const allResults: { id: string, role: string, content: string, similarity: number }[] = [];
 		// 对每条用户消息分别查询 chromem-go
 		for (const userMessage of userMessages) {
 			const [results, error] = chromemQuery(userMessage, 5);
@@ -175,23 +175,27 @@ export class ModelBuilder extends ConfigModifier {
 				continue;
 			}
 			if (results && results.length > 0) {
+				// chromem-go 已按相似度降序返回结果
 				allResults.push(...results);
 			}
 		}
 		// 如果没有任何结果，直接返回
 		if (allResults.length === 0) return this;
-		/** 基于内容去重，保留首次出现的记录 */
-		const seen = new Set<string>();
-		/** 过滤出首次出现的记录 */
-		const uniqueResults = allResults.filter(
-			r => {
-				if (seen.has(r.content)) return false;
-				seen.add(r.content);
-				return true;
+		/** 基于内容去重，保留相似度最高的记录 */
+		const seen = new Map<string, { id: string, role: string, content: string, similarity: number }>();
+		// 遍历所有结果，对相同内容只保留相似度最高的
+		for (const r of allResults) {
+			const existing = seen.get(r.content);
+			if (!existing || r.similarity > existing.similarity) {
+				seen.set(r.content, r);
 			}
-		);
+		}
+		// 按相似度降序排列，确保相关度最高的结果在最前面
+		const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
+		// 输出排序验证信息
+		console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
 		// 写入 ragMessages
-		this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content, }));
+		this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content }));
 		return this;
 	}
 	/** 获取最新的5条用户消息内容 */
