@@ -1,6 +1,6 @@
 {
 	"id": "model_explorer",
-	"icon": "/file/read/images/icon/model_query.Webp",
+	"icon": "/file/read/package/model_explorer/icon.webp",
 	"title": "模型浏览",
-	"description": "打开『 星月智能 』模型浏览"
+	"description": "浏览云端模型列表并测试对话"
 }

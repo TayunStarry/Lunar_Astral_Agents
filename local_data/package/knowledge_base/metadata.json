@@ -2,5 +2,5 @@
 	"id": "knowledge_base",
 	"icon": "/file/read/package/knowledge_base/icon.webp",
 	"title": "知识库",
-	"description": "打开『 星月智能 』知识库"
+	"description": "SQLite 知识数据库可视化管理"
 }
