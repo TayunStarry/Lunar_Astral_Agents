@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"logger"
 	"mime/multipart"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -109,4 +111,75 @@ func ExtractZip(file multipart.File) ([]map[string]any, string, error) {
 		})
 	}
 	return extractedFiles, zipReader.File[0].Name, nil
+}
+
+// PackageDirZip 将指定目录打包为 ZIP 字节数据
+// dirPath: 要打包的目录路径
+// packageName: 包名，作为 ZIP 内文件的根目录前缀
+func PackageDirZip(dirPath string, packageName string) ([]byte, error) {
+	// 检查目录是否存在
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("目录不存在: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("路径不是目录: %s", dirPath)
+	}
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	// 遍历目录下的所有文件
+	err = filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// 跳过根目录本身
+		if path == dirPath {
+			return nil
+		}
+		// 跳过子目录（目录条目会在文件写入时自动创建）
+		if d.IsDir() {
+			return nil
+		}
+
+		// 获取相对于包目录的路径
+		relPath, err := filepath.Rel(dirPath, path)
+		if err != nil {
+			return fmt.Errorf("获取相对路径失败: %w", err)
+		}
+
+		// ZIP 内部路径：包名/相对路径
+		zipPath := filepath.ToSlash(filepath.Join(packageName, relPath))
+
+		// 创建 ZIP 条目
+		zipEntry, err := zipWriter.Create(zipPath)
+		if err != nil {
+			return fmt.Errorf("创建 ZIP 条目失败 %s: %w", zipPath, err)
+		}
+
+		// 读取并写入文件内容
+		fileContent, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("读取文件失败 %s: %w", path, err)
+		}
+
+		if _, err := zipEntry.Write(fileContent); err != nil {
+			return fmt.Errorf("写入 ZIP 条目失败 %s: %w", zipPath, err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		zipWriter.Close()
+		return nil, fmt.Errorf("打包目录失败: %w", err)
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		return nil, fmt.Errorf("关闭 ZIP 写入器失败: %w", err)
+	}
+
+	logger.SubInfo("Storage", "Archive", "成功打包目录: %s -> %s.ltpx (%d 字节)", dirPath, packageName, buf.Len())
+	return buf.Bytes(), nil
 }

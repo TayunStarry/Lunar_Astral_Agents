@@ -343,3 +343,203 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 		PackageTitle: metadata.Title,
 	})
 }
+
+// ExportPackageRequest 包导出请求结构体
+type ExportPackageRequest struct {
+	PackageName string `json:"package_name"`
+	Action      string `json:"action"` // "download" 或 "save"
+	SavePath    string `json:"save_path,omitempty"`
+}
+
+// ExportPackageHandler 处理包导出（打包为 .ltpx）请求
+func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ExportPackageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "解析请求失败: " + err.Error(),
+		})
+		return
+	}
+
+	if req.PackageName == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "包名不能为空",
+		})
+		return
+	}
+
+	// 构建包目录路径
+	packageDir := filepath.Join(*config.LocalDir, "package", req.PackageName)
+
+	// 检查目录是否存在
+	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("包 '%s' 不存在", req.PackageName),
+		})
+		return
+	}
+
+	// 打包目录
+	zipData, err := module.PackageDirZip(packageDir, req.PackageName)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "打包失败: " + err.Error(),
+		})
+		return
+	}
+
+	fileName := req.PackageName + ".ltpx"
+
+	switch req.Action {
+	case "save":
+		// 保存到指定目录
+		savePath := req.SavePath
+		if savePath == "" {
+			savePath = filepath.Join(*config.LocalDir, "package", "archive")
+		}
+		// 确保是相对路径
+		savePath = strings.TrimPrefix(savePath, *config.LocalDir)
+		savePath = strings.TrimPrefix(savePath, "/")
+		savePath = strings.TrimPrefix(savePath, "\\")
+
+		fullSavePath := filepath.Join(*config.LocalDir, savePath, fileName)
+		if mkdirErr := os.MkdirAll(filepath.Dir(fullSavePath), 0755); mkdirErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "创建保存目录失败: " + mkdirErr.Error(),
+			})
+			return
+		}
+
+		if writeErr := os.WriteFile(fullSavePath, zipData, 0644); writeErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"message": "保存文件失败: " + writeErr.Error(),
+			})
+			return
+		}
+
+		logger.Info("Storage", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":    true,
+			"message":    fmt.Sprintf("包 '%s' 已保存到 %s", req.PackageName, fullSavePath),
+			"save_path":  fullSavePath,
+			"file_name":  fileName,
+			"file_size":  len(zipData),
+		})
+
+	default:
+		// 下载到本地（默认行为）
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipData)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(zipData)
+	}
+}
+
+// DeletePackageHandler 处理包删除请求
+func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PackageName string `json:"package_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "解析请求失败: " + err.Error(),
+		})
+		return
+	}
+
+	if req.PackageName == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "包名不能为空",
+		})
+		return
+	}
+
+	// 防止路径穿越
+	packageName := filepath.Clean(req.PackageName)
+	if strings.Contains(packageName, "..") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "无效的包名",
+		})
+		return
+	}
+
+	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+
+	// 安全检查：确保在 package 目录下
+	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(*config.LocalDir, "package"))) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "访问被拒绝",
+		})
+		return
+	}
+
+	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("包 '%s' 不存在", packageName),
+		})
+		return
+	}
+
+	if err := os.RemoveAll(packageDir); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "删除失败: " + err.Error(),
+		})
+		return
+	}
+
+	logger.Info("Storage", "包删除成功: %s", packageName)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"message":      fmt.Sprintf("包 '%s' 已删除", packageName),
+		"package_name": packageName,
+	})
+}

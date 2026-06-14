@@ -34,6 +34,58 @@
             <span>支持 文本文件、图片文件 和 扩展包（.ltpx、.ltp2）</span>
         </div>
     </div>
+
+    <!-- 删除确认模态框 -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>确认删除</h3>
+            </div>
+            <div class="modal-body">
+                <p id="deleteModalMessage">确定要删除该扩展包吗？此操作不可撤销。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-glass btn-glass-cancel" id="deleteCancelBtn">取消</button>
+                <button class="btn-glass btn-glass-danger" id="deleteConfirmBtn">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出打包模态框 -->
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>导出扩展包</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="exportPackageName">包名</label>
+                    <input type="text" id="exportPackageName" class="modal-input" placeholder="输入包名">
+                </div>
+                <div class="form-group">
+                    <label>打包方式</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="exportAction" value="download" checked>
+                            <span>下载到本地</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="exportAction" value="save">
+                            <span>保存到指定目录</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group" id="savePathGroup" style="display:none;">
+                    <label for="exportSavePath">保存路径</label>
+                    <input type="text" id="exportSavePath" class="modal-input" placeholder="package/archive">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-glass btn-glass-cancel" id="exportCancelBtn">取消</button>
+                <button class="btn-glass btn-glass-primary" id="exportConfirmBtn">确认导出</button>
+            </div>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 

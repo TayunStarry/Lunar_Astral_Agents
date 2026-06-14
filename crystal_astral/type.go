@@ -25,6 +25,7 @@ type PackageInfo struct {
 	URL         string   `json:"url,omitempty"`
 	Path        string   `json:"path,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	PackageName string   `json:"package_name,omitempty"`
 }
 
 // proxyAwareHandler 代理感知处理程序

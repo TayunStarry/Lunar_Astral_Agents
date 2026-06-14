@@ -431,6 +431,14 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// 设置包目录名
+		pkg.PackageName = entry.Name()
+
+		// 如果图标是相对路径，解析为完整 URL
+		if pkg.Icon != "" && !strings.HasPrefix(pkg.Icon, "http") && !strings.HasPrefix(pkg.Icon, "/") {
+			pkg.Icon = "/file/read/package/" + entry.Name() + "/" + pkg.Icon
+		}
+
 		// 如果未指定 url，自动生成默认路径
 		if pkg.URL == "" && pkg.Path == "" {
 			pkg.URL = "/file/read/package/" + entry.Name() + "/index.html"

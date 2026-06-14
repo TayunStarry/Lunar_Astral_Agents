@@ -29,6 +29,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载"},
 	{Path: "/file/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档"},
 	{Path: "/file/package/install", Handler: storage.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
+	{Path: "/file/package/export", Handler: storage.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
+	{Path: "/file/package/delete", Handler: storage.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/file/write", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存"},
 	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取"},
 	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据管理"},

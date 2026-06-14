@@ -17,6 +17,18 @@ const sendBtn = document.getElementById('sendBtn');
 const pageGrid = document.getElementById('pageGrid');
 const dropOverlay = document.getElementById('dropOverlay');
 const attachmentsPreview = document.getElementById('attachmentsPreview');
+const deleteModal = document.getElementById('deleteModal');
+const deleteModalMessage = document.getElementById('deleteModalMessage');
+const deleteCancelBtn = document.getElementById('deleteCancelBtn');
+const deleteConfirmBtn = document.getElementById('deleteConfirmBtn');
+const exportModal = document.getElementById('exportModal');
+const exportPackageName = document.getElementById('exportPackageName');
+const exportConfirmBtn = document.getElementById('exportConfirmBtn');
+const exportCancelBtn = document.getElementById('exportCancelBtn');
+const savePathGroup = document.getElementById('savePathGroup');
+
+// 当前操作的包名
+let currentPackageName = null;
 
 // 保存发送按钮默认图标内容
 const defaultSendBtnHTML = sendBtn.innerHTML;
@@ -64,9 +76,33 @@ function renderPageGrid() {
             </div>
             <h3>${page.title}</h3>
             <p>${page.description}</p>
+            <button class="card-btn card-btn-package" title="导出扩展包" data-action="export" data-package="${page.package_name || ''}">
+                <i class="fas fa-box"></i>
+            </button>
+            <button class="card-btn card-btn-delete" title="删除扩展包" data-action="delete" data-package="${page.package_name || ''}">
+                <i class="fas fa-trash-alt"></i>
+            </button>
         `;
-        card.addEventListener('click', () => openPage(page));
+        card.addEventListener('click', (e) => {
+            // 防止点击按钮时触发卡片点击
+            if (e.target.closest('.card-btn')) return;
+            openPage(page);
+        });
         pageGrid.appendChild(card);
+    });
+
+    // 绑定卡片按钮事件
+    document.querySelectorAll('.card-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            const pkgName = btn.dataset.package;
+            if (action === 'delete') {
+                openDeleteModal(pkgName);
+            } else if (action === 'export') {
+                openExportModal(pkgName);
+            }
+        });
     });
 }
 
@@ -418,6 +454,149 @@ chatMessages.addEventListener('drop', async (e) => {
             const text = await file.text();
             addAttachment(file, text);
         }
+    }
+});
+
+// ===== 删除模态框 =====
+function openDeleteModal(packageName) {
+    if (!packageName) {
+        addMessage('system', '无法获取包名信息');
+        return;
+    }
+    currentPackageName = packageName;
+    deleteModalMessage.textContent = `确定要删除扩展包【${packageName}】吗？此操作不可撤销，所有文件将被永久删除。`;
+    deleteModal.classList.add('active');
+}
+
+function closeDeleteModal() {
+    deleteModal.classList.remove('active');
+    currentPackageName = null;
+}
+
+deleteCancelBtn.addEventListener('click', closeDeleteModal);
+
+deleteModal.addEventListener('click', (e) => {
+    if (e.target === deleteModal) closeDeleteModal();
+});
+
+deleteConfirmBtn.addEventListener('click', async () => {
+    if (!currentPackageName) return;
+    deleteConfirmBtn.disabled = true;
+    deleteConfirmBtn.textContent = '删除中...';
+
+    try {
+        const response = await fetch('/file/package/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ package_name: currentPackageName })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            addMessage('system', `扩展包【${currentPackageName}】已删除`);
+            closeDeleteModal();
+            setTimeout(() => loadPages(), 500);
+        } else {
+            addMessage('system', `删除失败: ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Error deleting package:', error);
+        addMessage('system', '删除扩展包时发生网络错误');
+    } finally {
+        deleteConfirmBtn.disabled = false;
+        deleteConfirmBtn.textContent = '确认删除';
+    }
+});
+
+// ===== 导出模态框 =====
+function openExportModal(packageName) {
+    if (!packageName) {
+        addMessage('system', '无法获取包名信息');
+        return;
+    }
+    currentPackageName = packageName;
+    exportPackageName.value = packageName;
+    document.querySelector('input[name="exportAction"][value="download"]').checked = true;
+    savePathGroup.style.display = 'none';
+    exportModal.classList.add('active');
+}
+
+function closeExportModal() {
+    exportModal.classList.remove('active');
+    currentPackageName = null;
+}
+
+exportCancelBtn.addEventListener('click', closeExportModal);
+
+exportModal.addEventListener('click', (e) => {
+    if (e.target === exportModal) closeExportModal();
+});
+
+// 切换打包方式时显示/隐藏保存路径输入框
+document.querySelectorAll('input[name="exportAction"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        savePathGroup.style.display = radio.value === 'save' ? 'block' : 'none';
+    });
+});
+
+exportConfirmBtn.addEventListener('click', async () => {
+    const packageName = exportPackageName.value.trim();
+    if (!packageName) {
+        addMessage('system', '请输入包名');
+        return;
+    }
+
+    const action = document.querySelector('input[name="exportAction"]:checked').value;
+    const savePath = document.getElementById('exportSavePath').value.trim();
+
+    exportConfirmBtn.disabled = true;
+    exportConfirmBtn.textContent = '导出中...';
+
+    try {
+        const body = { package_name: packageName, action };
+        if (action === 'save') {
+            body.save_path = savePath || undefined;
+        }
+
+        const response = await fetch('/file/package/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (action === 'download') {
+            // 下载模式：获取 blob 并触发下载
+            if (!response.ok) {
+                const data = await response.json();
+                addMessage('system', `导出失败: ${data.message}`);
+                return;
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = packageName + '.ltpx';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            addMessage('system', `扩展包【${packageName}.ltpx】已开始下载`);
+            closeExportModal();
+        } else {
+            const data = await response.json();
+            if (data.success) {
+                addMessage('system', data.message);
+                closeExportModal();
+            } else {
+                addMessage('system', `导出失败: ${data.message}`);
+            }
+        }
+    } catch (error) {
+        console.error('Error exporting package:', error);
+        addMessage('system', '导出扩展包时发生网络错误');
+    } finally {
+        exportConfirmBtn.disabled = false;
+        exportConfirmBtn.textContent = '确认导出';
     }
 });
 
