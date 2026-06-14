@@ -145,6 +145,34 @@
         </div>
     </div>
 
+    <!-- 操作确认 / 输入模态框（删除、重命名、新建文件夹） -->
+    <div class="modal" id="action-modal">
+        <div class="modal-content action-modal-content">
+            <button class="modal-close-btn" id="action-modal-close" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="action-modal-icon" id="action-modal-icon">
+                <i class="fas fa-question-circle"></i>
+            </div>
+            <h3 class="action-modal-title" id="action-modal-title">确认操作</h3>
+            <p class="action-modal-message" id="action-modal-message"></p>
+            <!-- 输入模式 -->
+            <div class="action-modal-input-group" id="action-modal-input-group" style="display: none;">
+                <label class="action-modal-label" id="action-modal-label" for="action-modal-input"></label>
+                <input type="text" id="action-modal-input" class="action-modal-input" autocomplete="off">
+                <p class="action-modal-hint" id="action-modal-hint"></p>
+            </div>
+            <div class="action-modal-buttons">
+                <button class="btn btn-secondary" id="action-modal-cancel">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+                <button class="btn" id="action-modal-confirm">
+                    <i class="fas fa-check"></i> 确认
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 错误提示 -->
     <div class="toast" id="toast"></div>
 </body>

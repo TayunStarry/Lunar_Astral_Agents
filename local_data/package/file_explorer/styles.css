@@ -1176,6 +1176,151 @@ input[type="radio"] {
     color: var(--text-muted);
 }
 
+/* ---- 操作确认 / 输入模态框 (Action Modal) ---- */
+.action-modal-content {
+    background: rgba(255, 255, 255, 0.48);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1.5px solid rgba(255, 255, 255, 0.50);
+    border-radius: var(--radius-lg);
+    padding: 30px 28px 24px;
+    width: 92%;
+    max-width: 440px;
+    box-shadow: 0 20px 55px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+    position: relative;
+    text-align: center;
+    animation: modalSlideUp 0.35s var(--ease-smooth);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* 头部图标 */
+.action-modal-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    background: rgba(255, 255, 255, 0.38);
+    border: 1.5px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+}
+
+.action-modal-icon i {
+    color: var(--accent);
+}
+
+/* 图标颜色变体 */
+.action-modal-icon.danger i {
+    color: #dc3545;
+}
+
+.action-modal-icon.warning i {
+    color: #fbbf24;
+}
+
+.action-modal-icon.info i {
+    color: var(--accent);
+}
+
+/* 标题 */
+.action-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+    line-height: 1.4;
+}
+
+/* 描述文字 */
+.action-modal-message {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0 0 20px 0;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+/* 输入区域 */
+.action-modal-input-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.action-modal-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.action-modal-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1.5px solid rgba(255, 255, 255, 0.42);
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    background: rgba(255, 255, 255, 0.38);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text-primary);
+    transition: all 0.25s var(--ease-smooth);
+    box-sizing: border-box;
+}
+
+.action-modal-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.18);
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.action-modal-input.error {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.12);
+}
+
+.action-modal-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 6px 0 0 0;
+    min-height: 18px;
+    transition: color 0.2s ease;
+}
+
+.action-modal-hint.error {
+    color: #dc3545;
+}
+
+/* 按钮区域 */
+.action-modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.action-modal-buttons .btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 20px;
+    font-size: 14px;
+    justify-content: center;
+}
+
 /* ---- Toast 通知 ---- */
 .toast {
     position: fixed;
