@@ -170,7 +170,7 @@ Lunar_Astral_Agents-v2026.05.26/
 │   ├── package/              ← 前端渲染库
 │   ├── audios/               ← 参考音频
 │   │   └── cache/            ← 缓存目录
-│   ├── images/               ← 图片资源
+│   └── images/               ← 图片资源
 │
 ├── crystal_astral/           ← 琉璃源码（嵌入式资源）
 ├── lunar_astral/             ← 月华源码（嵌入式资源）
