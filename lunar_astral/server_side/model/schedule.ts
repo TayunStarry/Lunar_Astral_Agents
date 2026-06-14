@@ -231,7 +231,7 @@ function parseArgs(args?: Record<string, any> | string): Record<string, any> {
 // ==== 工具处理函数 ====
 
 /** 处理创建计划项工具 */
-function handleCreateSchedule(args?: Record<string, any> | string): string {
+async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string> { 
 	const { time, content } = parseArgs(args);
 	if (!time || time.trim().length === 0) {
 		return '创建计划项失败：执行时间不能为空，请提供有效的时间点';
@@ -264,7 +264,7 @@ function handleCreateSchedule(args?: Record<string, any> | string): string {
 }
 
 /** 处理编辑计划项工具 */
-function handleEditSchedule(args?: Record<string, any> | string): string {
+async function handleEditSchedule(args?: Record<string, any> | string): Promise<string> {
 	const { id, time, content } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
 		return '编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID';
@@ -303,7 +303,7 @@ function handleEditSchedule(args?: Record<string, any> | string): string {
 }
 
 /** 处理删除计划项工具 */
-function handleDeleteSchedule(args?: Record<string, any> | string): string {
+async function handleDeleteSchedule(args?: Record<string, any> | string): Promise<string> {
 	const { id } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
 		return '删除计划项失败：计划项ID不能为空';
@@ -329,7 +329,7 @@ function handleDeleteSchedule(args?: Record<string, any> | string): string {
 }
 
 /** 处理查询计划项工具 */
-function handleQuerySchedule(args?: Record<string, any> | string): string {
+async function handleQuerySchedule(args?: Record<string, any> | string): Promise<string> {
 	const { keyword } = parseArgs(args);
 
 	if (scheduleCache.length === 0) {

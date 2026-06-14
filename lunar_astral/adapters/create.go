@@ -137,6 +137,14 @@ func RunAgentContext() error {
 			logger.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
+
+		// agentSystem.js 执行完毕后，agentSystem 全局变量已可用
+		// 加载 LTP2 工具包并将工具定义注入到 OnlyData.ltp2Tools
+		ltp2ToolsJSON := loadLTP2ToolPackages(vm)
+		_, err = vm.RunString(`agentSystem.OnlyData.ltp2Tools = ` + ltp2ToolsJSON + `;`)
+		if err != nil {
+			logger.SubError("LunarCore", "LTP2", "注入工具定义失败: %v", err)
+		}
 	})
 	return nil
 }

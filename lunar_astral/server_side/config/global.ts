@@ -1,4 +1,4 @@
-import { Config, PostMessage } from '../index';
+import { Config, PostMessage, ToolCall } from '../index';
 
 export class OnlyData {
     /** 自定义配置项 */
@@ -38,7 +38,9 @@ export class OnlyData {
     /** 支持的视觉文件扩展名 */
     public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
     /** 月华工具协议的哈希映射 */
-    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any> | string) => string>();
+    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any> | string) => Promise<string>>();
+    /** LTP2 动态加载的工具定义列表 */
+    public static ltp2Tools: ToolCall[] = [];
     /** 系统URL */
     public static get systemUrl(): string {
         return url()[0] + '/v1';

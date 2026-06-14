@@ -1,6 +1,6 @@
 {
 	"id": "file_explorer",
-	"icon": "/file/read/images/icon/file_explorer.Webp",
+	"icon": "/file/read/package/file_explorer/icon.webp",
 	"title": "文件管理",
 	"description": "打开『 星月智能 』文件管理"
 }

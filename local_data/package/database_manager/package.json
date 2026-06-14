@@ -1,6 +1,6 @@
 {
 	"id": "database_manager",
-	"icon": "/file/read/images/icon/database_manager.Webp",
+	"icon": "/file/read/package/database_manager/icon.webp",
 	"title": "数据管理",
 	"description": "打开『 星月智能 』数据管理"
 }

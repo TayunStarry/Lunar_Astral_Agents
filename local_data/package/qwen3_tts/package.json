@@ -1,6 +1,6 @@
 {
 	"id": "qwen3_tts",
-	"icon": "/file/read/images/icon/qwen3_tts.Webp",
+	"icon": "/file/read/package/qwen3_tts/icon.webp",
 	"title": "语音合成",
 	"description": "打开『 星月智能 』语音合成"
 }

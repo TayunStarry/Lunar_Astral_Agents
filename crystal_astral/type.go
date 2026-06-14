@@ -18,12 +18,13 @@ type LoadApplicationResponse struct {
 
 // PackageInfo 包配置信息
 type PackageInfo struct {
-	ID          string `json:"id"`
-	Icon        string `json:"icon"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	URL         string `json:"url,omitempty"`
-	Path        string `json:"path,omitempty"`
+	ID          string   `json:"id"`
+	Icon        string   `json:"icon,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	URL         string   `json:"url,omitempty"`
+	Path        string   `json:"path,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
 // proxyAwareHandler 代理感知处理程序

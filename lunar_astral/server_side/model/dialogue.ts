@@ -18,7 +18,7 @@ export class DialogueRole extends ModelBuilder {
 			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
-			const response = this.run(this.ragMessages, [...scheduleTools]);
+			const response = this.run(this.ragMessages, [...scheduleTools, ...OnlyData.ltp2Tools]);
 			// 处理响应文本内容
 			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求

@@ -1,6 +1,6 @@
 {
 	"id": "screenshot_manager",
-	"icon": "/file/read/images/icon/screenshot_manager.Webp",
+	"icon": "/file/read/package/screenshot_manager/icon.webp",
 	"title": "截图标注",
 	"description": "打开『 星月智能 』截图标注"
 }

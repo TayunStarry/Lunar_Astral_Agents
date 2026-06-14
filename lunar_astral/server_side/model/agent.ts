@@ -49,6 +49,7 @@ class LunarAgent extends AgentDefine {
 				await this.pullExternalMessages();
 				// 检查计划表到期项，将到期计划内容写入上下文
 				const dueItems = checkDueItems();
+				// 遍历到期计划项，将内容写入上下文
 				for (const item of dueItems) {
 					this.unreadContext.push({ role: 'tool', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
 				}

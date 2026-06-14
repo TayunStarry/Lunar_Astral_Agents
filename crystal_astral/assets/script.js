@@ -91,6 +91,16 @@ function initTools() {
 }
 
 function openPage(page) {
+    // LTP2 工具包且 url 以 .md 结尾，跳转到 tool_viewer 全屏渲染 md 文档
+    if (page.tags && page.tags.includes('LTP2') && page.url && page.url.endsWith('.md')) {
+        addMessage('system', `已为您打开工具文档【${page.title}】`);
+        const viewerUrl = '/file/read/package/tool_viewer/index.html?url='
+            + encodeURIComponent(page.url)
+            + '&title=' + encodeURIComponent(page.title);
+        setTimeout(() => { window.open(viewerUrl, '_self'); }, 1000);
+        return;
+    }
+
     if (page.path) {
         addMessage('system', `已为您启动【${page.title}】`);
         loadApplication(page.path);

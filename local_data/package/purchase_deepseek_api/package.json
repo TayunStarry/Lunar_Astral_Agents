@@ -1,6 +1,6 @@
 {
 	"id": "purchase_deepseek_api",
-	"icon": "/file/read/images/icon/deepseek_api.Webp",
+	"icon": "/file/read/package/purchase_deepseek_api/icon.webp",
 	"title": "购买 DeepSeek API",
 	"description": "打开 DeepSeek 的 API 购买页面",
 	"url": "https://platform.deepseek.com/usage"

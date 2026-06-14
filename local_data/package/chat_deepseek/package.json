@@ -1,6 +1,6 @@
 {
 	"id": "chat_deepseek",
-	"icon": "/file/read/images/icon/deepseek_chat.Webp",
+	"icon": "/file/read/package/chat_deepseek/icon.webp",
 	"title": "深度求索",
 	"description": "打开 DeepSeek 的官方客户端",
 	"url": "https://chat.deepseek.com/a/chat"

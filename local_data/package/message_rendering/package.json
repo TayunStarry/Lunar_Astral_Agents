@@ -1,6 +1,6 @@
 {
 	"id": "message_rendering",
-	"icon": "/file/read/images/icon/message_rendering.Webp",
+	"icon": "/file/read/package/message_rendering/icon.webp",
 	"title": "消息渲染",
 	"description": "打开『 星月智能 』消息渲染"
 }
