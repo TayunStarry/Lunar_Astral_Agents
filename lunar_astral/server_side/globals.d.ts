@@ -207,10 +207,4 @@ declare global {
      * @returns {boolean} 是否已初始化
      */
     function webSearchIsReady(): boolean;
-    /**
-     * 检查网络检索子系统是否配置了 LLM
-     *
-     * @returns {boolean} 是否配置了 LLM
-     */
-    function webSearchHasLLM(): boolean;
 }
