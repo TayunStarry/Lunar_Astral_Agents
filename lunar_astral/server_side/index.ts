@@ -7,6 +7,7 @@ export * from './config/history';
 export * from './config/config';
 export * from './config/database';
 export * from './config/image';
+export * from './config/websearch';
 
 export * from './math/basis';
 export * from './math/vector';
@@ -25,3 +26,4 @@ export * from './model/schedule';
 export * from './model/define';
 export * from './model/agent';
 export * from './model/narrator';
+export * from './model/websearch';

@@ -111,7 +111,7 @@ MinPort          ModelPort         ProxyPort        MaxPort
 | `AsrModel` | 自动语音识别 | 语音转文本 |
 | `DiffusionModel` | 扩散模型 | 文生图 |
 | `VariationalModel` | VAE 编解码 | 图像编解码 |
-| `PromptRefineModel` | 提示词精炼 | 图像生成提示优化 |
+| `PromptAnalysisModel` | 提示词精炼 | 图像生成提示优化 |
 | `PromptMmprojModel` | 提示词多模态投影 | 暂不可用 |
 
 ---

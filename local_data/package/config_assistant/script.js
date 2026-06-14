@@ -7,7 +7,7 @@ const labelMap = {
     'project_archiving': '项目归档',
     'diffusion_model': '扩散模型',
     'variational_model': '变分模型',
-    'prompt_refine_model': '提示词精炼模型',
+    'prompt_analysis_model': '提示词精炼模型',
     'asr_model': '语音识别模型',
     'developer': '开发者模式',
     'clear_port': '清理端口',

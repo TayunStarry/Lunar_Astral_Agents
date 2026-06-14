@@ -82,7 +82,7 @@ func getVAEModel() string {
 }
 
 func getRefineModel() string {
-	return *config.PromptRefineModel
+	return *config.PromptAnalysisModel
 }
 
 func saveInitImage(base64Data string) (string, error) {

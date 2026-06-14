@@ -12,32 +12,25 @@ import (
 type ModelConfig struct {
 	// 模型配置
 	Models struct {
-		// 扩散模型路径
-		DiffusionModel string `json:"diffusion_model"`
-		// 变分模型路径
-		VariationalModel string `json:"variational_model"`
-		// 提示精炼模型路径
-		PromptRefineModel string `json:"prompt_refine_model"`
-		// RealESRGAN模型路径，用于图像超分辨率
-		RealESRGANModel string `json:"real_esrgan_model"`
-		// ASR模型路径
-		AsrModel string `json:"asr_model"`
+		DiffusionModel      string `json:"diffusion_model"`       // 扩散模型路径
+		VariationalModel    string `json:"variational_model"`     // 变分模型路径
+		PromptAnalysisModel string `json:"prompt_analysis_model"` // 提示分析模型路径
+		RealESRGANModel     string `json:"real_esrgan_model"`     // 4x超分辨率模型路径
+		AsrModel            string `json:"asr_model"`             // ASR模型路径
 	} `json:"models"`
 	// 服务器配置
 	Server struct {
-		// 是否为开发者模式
-		Developer bool `json:"developer"`
-		// 是否清除端口
-		ClearPort bool `json:"clear_port"`
-		// 是否允许加载扩散模型
-		AllowDiffusion bool `json:"allow_diffusion"`
-		// 是否允许加载多模态模型
-		AllowMultimodal bool `json:"allow_multimodal"`
+		Developer       bool `json:"developer"`        // 是否为开发者模式
+		ClearPort       bool `json:"clear_port"`       // 是否清除端口
+		AllowDiffusion  bool `json:"allow_diffusion"`  // 是否允许加载扩散模型
+		AllowMultimodal bool `json:"allow_multimodal"` // 是否允许加载多模态模型
 	} `json:"server"`
 	// 云模型配置
 	Cloud struct {
-		// 云模型服务地址
-		CloudModelUrl string `json:"cloud_model_url"`
+		CloudModelUrl       string `json:"cloud_model_url"`       // 云模型服务地址
+		CloudModelKey       string `json:"cloud_model_key"`       // 云模型密钥
+		MultimodalModelName string `json:"multimodal_model_name"` // 多模态模型名称
+		EmbeddingModelName  string `json:"embedding_model_name"`  // 嵌入模型名称
 	} `json:"cloud"`
 }
 
@@ -79,9 +72,9 @@ func init() {
 	if parameter.Models.VariationalModel != "" {
 		*VariationalModel = parameter.Models.VariationalModel
 	}
-	// 如果配置文件中 PromptRefineModel 字段非空，则更新全局配置
-	if parameter.Models.PromptRefineModel != "" {
-		*PromptRefineModel = parameter.Models.PromptRefineModel
+	// 如果配置文件中 PromptAnalysisModel 字段非空，则更新全局配置
+	if parameter.Models.PromptAnalysisModel != "" {
+		*PromptAnalysisModel = parameter.Models.PromptAnalysisModel
 	}
 	// 如果配置文件中 RealESRGANModel 字段非空，则更新全局配置
 	if parameter.Models.RealESRGANModel != "" {

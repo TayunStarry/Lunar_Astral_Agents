@@ -189,7 +189,7 @@ Lunar_Astral_Agents-v2026.05.26/
     "asr_model": "./local_data/models/Qwen3-ASR-0.6B",
     "diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
     "variational_model": "./local_data/models/diffusion_pytorch_model.safetensors",
-    "prompt_refine_model": "./local_data/models/Qwen3-4B-Instruct-Q4_K_M.gguf"
+    "prompt_analysis_model": "./local_data/models/Qwen3-4B-Instruct-Q4_K_M.gguf"
   },
   "server": {
     "developer": false,

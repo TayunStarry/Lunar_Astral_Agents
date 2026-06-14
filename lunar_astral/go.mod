@@ -13,6 +13,7 @@ require (
 	qwen3_tts_lunar v0.0.0
 	screenshot v0.0.0
 	storage v0.0.0
+	websearch v0.0.0
 )
 
 require (
@@ -33,8 +34,9 @@ require (
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
+	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 )
 
 replace config => ../subsystem/config
@@ -50,3 +52,5 @@ replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
 replace logger => ../subsystem/logger
 
 replace image => ../subsystem/image
+
+replace websearch => ../subsystem/websearch

@@ -63,6 +63,14 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.tts)
+
+	// 注册网络检索子系统适配器
+	vm.Set("webSearchInit", adapters.webSearchInit)
+	vm.Set("webSearchDeep", adapters.webSearchDeep)
+	vm.Set("webSearchShallow", adapters.webSearchShallow)
+	vm.Set("webSearchResearch", adapters.webSearchResearch)
+	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
+	vm.Set("webSearchHasLLM", adapters.webSearchHasLLM)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境

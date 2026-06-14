@@ -169,4 +169,48 @@ declare global {
      * @returns {[string, Error | null]} 包含合成结果的元组，[音频数据(Base64编码的WAV), 错误信息]
      */
     function tts(text: string, params?: TTSParams): [string, Error | null];
+    /**
+     * 初始化网络检索子系统
+     *
+     * @param {string} baseURL LLM 服务基础 URL
+     *
+     * @param {string} apiKey LLM API 密钥
+     *
+     * @param {string} model LLM 模型名称
+     *
+     * @param {number} maxTokens 最大生成 token 数
+     *
+     * @param {number} temperature 生成温度
+     *
+     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
+     */
+    function webSearchInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number): [boolean, Error | null];
+    /**
+     * 执行深层搜索
+     *
+     * @param {string} query 搜索查询
+     *
+     * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
+     */
+    function webSearchDeep(query: string): [string, Error | null];
+    /**
+     * 执行浅层搜索
+     *
+     * @param {string} query 搜索查询
+     *
+     * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
+     */
+    function webSearchShallow(query: string): [string, Error | null];
+    /**
+     * 检查网络检索子系统是否已初始化
+     *
+     * @returns {boolean} 是否已初始化
+     */
+    function webSearchIsReady(): boolean;
+    /**
+     * 检查网络检索子系统是否配置了 LLM
+     *
+     * @returns {boolean} 是否配置了 LLM
+     */
+    function webSearchHasLLM(): boolean;
 }

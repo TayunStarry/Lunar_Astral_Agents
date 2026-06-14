@@ -60,7 +60,7 @@ class LunarAgent extends AgentDefine {
 				/** 消息类型 */
 				const messageType = messageLength === 0 ? 'response' : 'active';
 				/** 是否允许发言 */
-				const allowSpeak = RandomFloor(1, 100) < this.speakWeight;
+				const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
 				// 如果消息长度为0，且不允许发言，沉默计数+1（上限100），继续循环
 				if (messageLength === 0 && !allowSpeak) {
 					// 沉默计数+1（上限100），继续循环

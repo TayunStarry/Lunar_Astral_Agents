@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage, scheduleTools } from '../index';
+import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage, scheduleTools, webSearchTools } from '../index';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -18,7 +18,7 @@ export class DialogueRole extends ModelBuilder {
 			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
-			const response = this.run(this.ragMessages, [...scheduleTools, ...OnlyData.ltp2Tools]);
+			const response = this.run(this.ragMessages, [...scheduleTools, ...webSearchTools, ...OnlyData.ltp2Tools]);
 			// 处理响应文本内容
 			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求
@@ -103,8 +103,8 @@ export class DialogueRole extends ModelBuilder {
 		// 续写提示词逻辑：所有场景共享
 		/** 最新消息的角色 */
 		const latestRole = this.messages.slice(-1)[0].role;
-		// 如果最新消息是用户,则不处理
-		if (latestRole === 'user') return;
+		// 如果最新消息是用户或工具,则不处理
+		if (latestRole === 'user' || latestRole === 'tool') return;
 		/** 继续话题的提示词列表 */
 		const continuationPrompts = [
 			'请延续当前话题，继续展开讨论。',
