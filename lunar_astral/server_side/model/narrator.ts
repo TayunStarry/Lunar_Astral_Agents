@@ -115,7 +115,7 @@ export function splitSentences(text: string): string[] {
     if (!text) return [];
 
     // 一级切片：语句中断标点
-    const LEVEL1_PUNCT = /[。：？！—～:?!]/;
+    const LEVEL1_PUNCT = /[。？！—～?!]/;
     // 二级切片：逗号类标点
     const LEVEL2_PUNCT = /[，,、；;]/;
     const MAX_LENGTH = 35;

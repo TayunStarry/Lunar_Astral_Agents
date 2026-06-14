@@ -629,7 +629,7 @@ var agentSystem = (function (exports) {
                 this.formatHistoricalMessages(source);
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, []);
+                const response = this.run(this.ragMessages, [...scheduleTools]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
@@ -808,10 +808,12 @@ var agentSystem = (function (exports) {
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
         ];
         selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
-        writeAppearancePrompt(expression, posture, environment) {
+        defaultOutfitPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，侧腰位置悬挂着白色和深蓝的大缎带蝴蝶结，饰有圆润的白色珍珠装饰和金色高光，白色短袜，黑色系带低帮帆布鞋';
+        writeAppearancePrompt(expression, posture, outfit, environment) {
             const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
             const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{environment}', environment || '');
+            const currentOutfit = outfit || this.defaultOutfitPrompt;
+            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
         }
     };
     let Toolchain$1 = class Toolchain extends Prompt$1 {
@@ -858,6 +860,10 @@ var agentSystem = (function (exports) {
                             "posture": {
                                 type: "string",
                                 description: "动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
                             },
                             "environment": {
                                 type: "string",
@@ -917,10 +923,11 @@ var agentSystem = (function (exports) {
                 console.log(`[画家] -> 自画像生成`);
                 console.log(`表情: "${args.expression}"`);
                 console.log(`姿势: "${args.posture}"`);
+                console.log(`服装: "${args.outfit}"`);
                 console.log(`环境: "${args.environment}"`);
                 console.log(`负面提示词: "${args.negative_prompt}"`);
                 console.log(`提示词引导系数: "${args.cfg_scale}"`);
-                const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.environment);
+                const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.outfit, args.environment);
                 const defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
                 const imageParams = {
                     prompt: fullPrompt,
@@ -1373,6 +1380,296 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const SCHEDULE_FILE_PATH = 'database/schedule.json';
+    const scheduleTools = [
+        {
+            type: "function",
+            function: {
+                name: "create_schedule",
+                description: "在计划表中创建新的计划项，指定执行时间点和对应的工作内容。时间格式为 ISO 8601 (如 '2026-06-14T15:30:00') 或中文日期时间格式 (如 '2026年6月14日 15:30')。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        time: {
+                            type: "string",
+                            description: "计划执行的时间点，支持 ISO 8601 格式或中文日期时间格式，例如 '2026-06-14T15:30:00' 或 '2026年6月14日 15:30'"
+                        },
+                        content: {
+                            type: "string",
+                            description: "计划执行的工作内容描述，应清晰说明需要完成的事项"
+                        }
+                    },
+                    required: ["time", "content"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "edit_schedule",
+                description: "编辑计划表中已存在的计划项，可修改其执行时间和/或工作内容。需要提供计划项的ID，至少提供 time 或 content 中的一个进行修改。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要编辑的计划项ID，从 query_schedule 返回结果中获得"
+                        },
+                        time: {
+                            type: "string",
+                            description: "修改后的执行时间点，不修改则留空"
+                        },
+                        content: {
+                            type: "string",
+                            description: "修改后的工作内容描述，不修改则留空"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "delete_schedule",
+                description: "从计划表中删除指定的计划项。需要提供计划项的ID。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要删除的计划项ID，从 query_schedule 返回结果中获得"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "query_schedule",
+                description: "查询计划表中已有的计划项列表，可按关键词筛选。返回所有匹配的计划项及其ID、时间和内容。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        keyword: {
+                            type: "string",
+                            description: "用于筛选计划项的关键词，留空则返回全部计划项"
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+    let scheduleCache = [];
+    function loadSchedulesFromDisk() {
+        const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
+        if (readErr) {
+            return [];
+        }
+        try {
+            const jsonStr = atob(fileData);
+            const data = JSON.parse(jsonStr);
+            return Array.isArray(data) ? data : [];
+        }
+        catch (e) {
+            console.error('[计划表] 计划表数据解析失败:', e);
+            return [];
+        }
+    }
+    function saveSchedulesToDisk(schedules) {
+        try {
+            const jsonStr = JSON.stringify(schedules, null, 2);
+            const [, , saveErr] = saveFile(SCHEDULE_FILE_PATH, true, jsonStr);
+            if (saveErr) {
+                console.error('[计划表] 保存计划表失败:', saveErr);
+                return false;
+            }
+            return true;
+        }
+        catch (e) {
+            console.error('[计划表] 序列化计划表失败:', e);
+            return false;
+        }
+    }
+    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+    function normalizeTime(raw) {
+        if (!raw || raw.trim().length === 0) {
+            return null;
+        }
+        const trimmed = raw.trim();
+        const stdDate = new Date(trimmed);
+        if (!isNaN(stdDate.getTime())) {
+            return formatISO(stdDate);
+        }
+        const cnMatch = trimmed.match(CN_DATE_REGEX);
+        if (cnMatch) {
+            const [, year, month, day, hour, minute, second] = cnMatch;
+            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
+        }
+        return null;
+    }
+    function formatISO(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const mi = String(date.getMinutes()).padStart(2, '0');
+        const s = String(date.getSeconds()).padStart(2, '0');
+        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+    }
+    function initSchedules() {
+        const raw = loadSchedulesFromDisk();
+        if (raw.length === 0) {
+            saveSchedulesToDisk([]);
+            scheduleCache = [];
+            console.log('[计划表] 初始化完成，计划表为空');
+            return;
+        }
+        let needsRewrite = false;
+        for (const item of raw) {
+            const normalized = normalizeTime(item.time);
+            if (normalized && normalized !== item.time) {
+                item.time = normalized;
+                needsRewrite = true;
+            }
+        }
+        scheduleCache = raw;
+        if (needsRewrite) {
+            saveSchedulesToDisk(scheduleCache);
+            console.log('[计划表] 已修正历史数据中的非标准时间格式');
+        }
+        console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
+    }
+    function generateId() {
+        return `schedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+    function parseArgs(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    function handleCreateSchedule(args) {
+        const { time, content } = parseArgs(args);
+        if (!time || time.trim().length === 0) {
+            return '创建计划项失败：执行时间不能为空，请提供有效的时间点';
+        }
+        if (!content || content.trim().length === 0) {
+            return '创建计划项失败：工作内容不能为空，请提供具体的计划内容';
+        }
+        const normalizedTime = normalizeTime(time);
+        if (!normalizedTime) {
+            return `创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`;
+        }
+        const newItem = {
+            id: generateId(),
+            time: normalizedTime,
+            content: content.trim()
+        };
+        scheduleCache.push(newItem);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.pop();
+            return '创建计划项失败：保存到磁盘时出错，请稍后重试';
+        }
+        console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
+        return `计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`;
+    }
+    function handleEditSchedule(args) {
+        const { id, time, content } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return '编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID';
+        }
+        if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
+            return '编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改';
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return `编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`;
+        }
+        const snapshot = { ...scheduleCache[index] };
+        if (time && time.trim().length > 0) {
+            const normalizedTime = normalizeTime(time);
+            if (!normalizedTime) {
+                return `编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`;
+            }
+            scheduleCache[index].time = normalizedTime;
+        }
+        if (content && content.trim().length > 0) {
+            scheduleCache[index].content = content.trim();
+        }
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache[index] = snapshot;
+            return '编辑计划项失败：保存到磁盘时出错，请稍后重试';
+        }
+        console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
+        return `计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`;
+    }
+    function handleDeleteSchedule(args) {
+        const { id } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return '删除计划项失败：计划项ID不能为空';
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return `删除计划项失败：未找到ID为 ${id} 的计划项`;
+        }
+        const deletedItem = scheduleCache[index];
+        scheduleCache.splice(index, 1);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.splice(index, 0, deletedItem);
+            return '删除计划项失败：保存到磁盘时出错，请稍后重试';
+        }
+        console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
+        return `计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`;
+    }
+    function handleQuerySchedule(args) {
+        const { keyword } = parseArgs(args);
+        if (scheduleCache.length === 0) {
+            return '当前计划表为空，没有任何计划项，可以放心创建新计划。';
+        }
+        const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const filtered = keyword && keyword.trim().length > 0
+            ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
+            : sorted;
+        if (filtered.length === 0) {
+            return `未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`;
+        }
+        return `当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
+            filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n');
+    }
+    function checkDueItems() {
+        if (scheduleCache.length === 0)
+            return [];
+        const now = new Date();
+        const dueItems = [];
+        const remaining = [];
+        for (const item of scheduleCache) {
+            const itemTime = new Date(item.time);
+            if (isNaN(itemTime.getTime())) {
+                console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
+                remaining.push(item);
+                continue;
+            }
+            if (now >= itemTime) {
+                dueItems.push(item);
+                console.log(`[计划表] 触发到期计划项: [${item.id}] ${item.time} - ${item.content}`);
+            }
+            else {
+                remaining.push(item);
+            }
+        }
+        if (dueItems.length > 0) {
+            scheduleCache = remaining;
+            saveSchedulesToDisk(scheduleCache);
+        }
+        return dueItems;
+    }
+    initSchedules();
+    OnlyData.lunarToolPackageMap.set('create_schedule', handleCreateSchedule);
+    OnlyData.lunarToolPackageMap.set('edit_schedule', handleEditSchedule);
+    OnlyData.lunarToolPackageMap.set('delete_schedule', handleDeleteSchedule);
+    OnlyData.lunarToolPackageMap.set('query_schedule', handleQuerySchedule);
+
     class AgentDefine {
         queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
         emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
@@ -1487,6 +1784,10 @@ var agentSystem = (function (exports) {
             while (true) {
                 try {
                     await this.pullExternalMessages();
+                    const dueItems = checkDueItems();
+                    for (const item of dueItems) {
+                        this.unreadContext.push({ role: 'tool', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+                    }
                     const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
                     const messageType = messageLength === 0 ? 'response' : 'active';
                     const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
@@ -1634,7 +1935,7 @@ var agentSystem = (function (exports) {
     function splitSentences(text) {
         if (!text)
             return [];
-        const LEVEL1_PUNCT = /[。：？！—～:?!]/;
+        const LEVEL1_PUNCT = /[。？！—～?!]/;
         const LEVEL2_PUNCT = /[，,、；;]/;
         const MAX_LENGTH = 35;
         function splitByPunct(source, punctRegex) {
@@ -1723,14 +2024,17 @@ var agentSystem = (function (exports) {
     exports.RandomFloor = RandomFloor;
     exports.ThinkType = ThinkType;
     exports.calculateFileHash = calculateFileHash;
+    exports.checkDueItems = checkDueItems;
     exports.cleanTextForTTS = cleanTextForTTS;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
     exports.getPromptFromDatabase = getPromptFromDatabase;
+    exports.initSchedules = initSchedules;
     exports.parseContent = parseContent;
     exports.queryFromDatabase = queryFromDatabase;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToDatabase = savePromptToDatabase;
+    exports.scheduleTools = scheduleTools;
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
     exports.toBtoaString = toBtoaString;

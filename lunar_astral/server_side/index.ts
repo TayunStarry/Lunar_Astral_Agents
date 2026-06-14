@@ -21,6 +21,7 @@ export * from './model/builder';
 export * from './model/dialogue';
 export * from './model/painter';
 export * from './model/organize';
+export * from './model/schedule';
 export * from './model/define';
 export * from './model/agent';
 export * from './model/narrator';

@@ -98,6 +98,8 @@ export interface SelfPortraitParams {
     expression: string;
     /** 姿势描述 */
     posture: string;
+    /** 服装描述，默认为角色默认服装 */
+    outfit?: string;
     /** 环境描述 */
     environment: string;
     /** 负面提示词 */

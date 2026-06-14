@@ -1,4 +1,4 @@
-﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent } from '../index';
+﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -47,6 +47,11 @@ class LunarAgent extends AgentDefine {
 			try {
 				// 拉取外部消息
 				await this.pullExternalMessages();
+				// 检查计划表到期项，将到期计划内容写入上下文
+				const dueItems = checkDueItems();
+				for (const item of dueItems) {
+					this.unreadContext.push({ role: 'tool', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+				}
 				/** 消息长度 */
 				const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
 				/** 消息类型 */
@@ -177,21 +182,7 @@ class LunarAgent extends AgentDefine {
 }
 
 const AgentExample = new LunarAgent();
-// setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你好' }]), 5000);
-// setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你叫什么名字' }]), 10000);
-// setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你的哥哥叫什么名字' }]), 15000);
-// setTimeout(() => AgentExample.writeMessage('user', [{ type: 'text', text: '你是一个智能体' }]), 20000);
-// const message: Array<ImageContent | TextContent> = [
-//     {
-//         type: 'image_url',
-//         image_url: { url: url()[0] + '/file/read/images/6b4029976c90a71e.jpg' }
-//     },
-//     {
-//         type: 'text',
-//         text: '描述一下这张图片的内容'
-//     }
-// ];
-// AgentExample.testMessageWrite('user', message, 5000);
+/** 测试消息写入 */
 const message: Array<ImageContent | TextContent> = [
 	{
 		type: 'text',

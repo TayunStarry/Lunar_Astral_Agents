@@ -26,14 +26,18 @@ class Prompt extends ModelBuilder {
 	]
 	/** 自我外观提示 */
 	protected selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0]
-	/** 获得写入了动作与表情的自我外观提示词 */
-	protected writeAppearancePrompt(expression?: string, posture?: string, environment?: string): string {
+	/** 默认服装提示词 */
+	protected defaultOutfitPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，侧腰位置悬挂着白色和深蓝的大缎带蝴蝶结，饰有圆润的白色珍珠装饰和金色高光，白色短袜，黑色系带低帮帆布鞋'
+	/** 获得写入了动作、表情与服装的自我外观提示词 */
+	protected writeAppearancePrompt(expression?: string, posture?: string, outfit?: string, environment?: string): string {
 		/** 当前表情提示词, 默认使用随机表情提示 */
 		const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
 		/** 当前姿势提示词, 默认使用随机姿势提示 */
 		const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-		// 替换表情提示词与姿势提示词
-		return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{environment}', environment || '');
+		/** 当前服装提示词, 默认使用默认服装提示 */
+		const currentOutfit = outfit || this.defaultOutfitPrompt;
+		// 替换表情提示词、姿势提示词、服装提示词与环境提示词
+		return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
 	}
 }
 
@@ -83,6 +87,10 @@ class Toolchain extends Prompt {
 						"posture": {
 							type: "string",
 							description: "动作提示词,描述想要展现的姿势或动作"
+						},
+						"outfit": {
+							type: "string",
+							description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
 						},
 						"environment": {
 							type: "string",
@@ -169,11 +177,12 @@ class Toolchain extends Prompt {
 			console.log(`[画家] -> 自画像生成`);
 			console.log(`表情: "${args.expression}"`)
 			console.log(`姿势: "${args.posture}"`)
+			console.log(`服装: "${args.outfit}"`)
 			console.log(`环境: "${args.environment}"`)
 			console.log(`负面提示词: "${args.negative_prompt}"`)
 			console.log(`提示词引导系数: "${args.cfg_scale}"`)
 			// 构建完整的自画像提示词
-			const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.environment);
+			const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.outfit, args.environment);
 			const defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
 			const imageParams: GenerateImageParams = {
 				prompt: fullPrompt,
