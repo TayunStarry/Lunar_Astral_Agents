@@ -17,6 +17,7 @@ const dragOverlay = document.getElementById('dragOverlay');
 const appContainer = document.getElementById('appContainer');
 const statusDot = document.getElementById('statusDot');
 const statusTextSpan = document.getElementById('statusText');
+const themeToggle = document.getElementById('themeToggle');
 
 // 状态变量
 let messageIdCounter = 0;
@@ -26,6 +27,7 @@ let reconnectTimer = null;
 let manualClose = false;
 let mermaidInitialized = false;
 let dragCounter = 0;
+let isDarkMode = false;
 
 // ---------- 辅助函数 ----------
 function generateMessageId() {
@@ -86,17 +88,19 @@ function updateConnectionStatusUI(connected) {
 if (typeof marked !== 'undefined') {
     marked.setOptions({
         breaks: true,
-        gfm: true,
-        highlight: function (code, lang) {
-            return code;
-        }
+        gfm: true
     });
 }
 
 function initMermaid() {
     if (mermaidInitialized) return;
     if (typeof mermaid !== 'undefined') {
-        mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: isDarkMode ? 'dark' : 'default',
+            securityLevel: 'loose',
+            fontFamily: 'inherit'
+        });
         mermaidInitialized = true;
     }
 }
@@ -151,10 +155,11 @@ function renderEChartsInContainer(container) {
 
 async function renderMermaidInContainer(container) {
     if (typeof mermaid === 'undefined' || !mermaidInitialized) return;
-    const blocks = container.querySelectorAll('code.language-mermaid');
+    // marked 渲染 ```mermaid 后生成 <pre><code class="language-mermaid"> 结构
+    const blocks = container.querySelectorAll('pre code.language-mermaid');
     for (const block of Array.from(blocks)) {
         const textContent = block.textContent || '';
-        if (textContent.length <= 20) continue;
+        if (textContent.trim().length <= 0) continue;
 
         let svg;
         try {
@@ -163,7 +168,17 @@ async function renderMermaidInContainer(container) {
             ({ svg } = await mermaid.render(id, textContent));
         } catch (e) {
             console.error('Mermaid parse/render error:', e, '\nSource:', textContent);
-            continue; // 跳过此图表
+            // 显示错误信息而非静默跳过
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'mermaid-error';
+            errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Mermaid 渲染失败：${escapeHtml(e.message || String(e))}`;
+            const pre = block.parentElement;
+            if (pre && pre.tagName === 'PRE') {
+                pre.replaceWith(errorDiv);
+            } else {
+                block.replaceWith(errorDiv);
+            }
+            continue;
         }
 
         // viewBox 调整，若出错则直接使用原始 svg
@@ -196,11 +211,12 @@ async function renderMermaidInContainer(container) {
 
         const wrapper = document.createElement('div');
         wrapper.className = 'mermaid-container';
-        wrapper.innerHTML = `<div style="width:100%; border:none; padding:0">${finalSvg}</div>`;
-        const parent = block.parentElement;
-        if (parent) {
-            parent.insertBefore(wrapper, block);
-            parent.removeChild(block);
+        wrapper.innerHTML = finalSvg;
+        const pre = block.parentElement;
+        if (pre && pre.tagName === 'PRE') {
+            pre.replaceWith(wrapper);
+        } else {
+            block.replaceWith(wrapper);
         }
     }
 }
@@ -489,13 +505,43 @@ function cleanup() {
 }
 
 function init() {
+    loadTheme();
     initMermaid();
     setupDragEvents();
     setupInputEvents();
     setupImagePreview();
+    setupThemeToggle();
     updateEmptyState();
     connectWebSocket();
     window.addEventListener('beforeunload', cleanup);
+}
+
+// ---------- 暗色模式 ----------
+function loadTheme() {
+    const saved = localStorage.getItem('message_terminal_theme');
+    if (saved === 'dark') {
+        isDarkMode = true;
+        document.body.classList.add('dark-mode');
+        if (themeToggle) themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+    }
+}
+
+function toggleTheme() {
+    isDarkMode = !isDarkMode;
+    document.body.classList.toggle('dark-mode', isDarkMode);
+    if (themeToggle) {
+        themeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    }
+    localStorage.setItem('message_terminal_theme', isDarkMode ? 'dark' : 'light');
+    // 重新初始化 mermaid 以匹配主题
+    mermaidInitialized = false;
+    initMermaid();
+}
+
+function setupThemeToggle() {
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
 }
 
 if (document.readyState === 'loading') {

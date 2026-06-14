@@ -282,7 +282,7 @@ export class PainterRole extends Toolchain {
 				/** 模型回复内容 */
 				const replyContent = choice.message?.content || '';
 				// 如果模型回复内容不为空，将模型回复内容写入到聊天模型的未读上下文
-				if (replyContent) source.unreadContext.push({ role: 'user', content: `[画家反馈] ${replyContent}` });
+				if (replyContent) source.unreadContext.push({ role: 'tool', content: `[画面内容] ${replyContent}` });
 				break;
 			}
 			// 将助手消息写入上下文（包含工具调用信息）

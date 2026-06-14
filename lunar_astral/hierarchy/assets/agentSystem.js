@@ -1010,7 +1010,7 @@ var agentSystem = (function (exports) {
                 if (!toolCalls || toolCalls.length === 0) {
                     const replyContent = choice.message?.content || '';
                     if (replyContent)
-                        source.unreadContext.push({ role: 'user', content: `[画家反馈] ${replyContent}` });
+                        source.unreadContext.push({ role: 'tool', content: `[画面内容] ${replyContent}` });
                     break;
                 }
                 this.writeContext(choice.message);

@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"logger"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -116,8 +118,148 @@ func GetDisplays() []map[string]int {
 	return displays
 }
 
+// processGIF 处理GIF图片：抽取帧、缩放到512x512、纵向拼接至多5帧为长图
+// 若拼接不可行则回退到首帧编码输出
+func processGIF(imgData []byte) (map[string]any, error) {
+	// 1. 解码GIF
+	gifImg, err := gif.DecodeAll(bytes.NewReader(imgData))
+	if err != nil {
+		logger.Error("Screenshot", "processGIF: GIF解码失败: %v", err)
+		return nil, fmt.Errorf("GIF解码失败: %v", err)
+	}
+
+	frameCount := len(gifImg.Image)
+	if frameCount == 0 {
+		logger.Error("Screenshot", "processGIF: GIF无帧数据")
+		return nil, fmt.Errorf("GIF无帧数据")
+	}
+
+	logger.Info("Screenshot", "processGIF: GIF帧数=%d", frameCount)
+
+	// 2. 选取至多5帧，尽量均分
+	selectedIndices := selectFrameIndices(frameCount, 5)
+	logger.Info("Screenshot", "processGIF: 选取帧索引=%v", selectedIndices)
+
+	// 3. 逐帧转换为RGBA并缩放到512x512
+	frames := make([]*image.RGBA, 0, len(selectedIndices))
+	for _, idx := range selectedIndices {
+		palettedFrame := gifImg.Image[idx]
+		// 将Paletted图像绘制到RGBA（考虑GIF的位移偏移）
+		bounds := palettedFrame.Bounds()
+		rgba := image.NewRGBA(bounds)
+		draw.Draw(rgba, bounds, palettedFrame, bounds.Min, draw.Over)
+
+		// 缩放到512x512
+		resized := ResizeToFit(rgba, 512, 512)
+		frames = append(frames, resized)
+	}
+
+	// 4. 尝试纵向拼接
+	concatenated, err := verticallyConcatFrames(frames)
+	if err != nil {
+		// 拼接不可行，回退到首帧
+		logger.Info("Screenshot", "processGIF: 纵向拼接失败(%v)，回退到首帧", err)
+		return encodeSingleFrame(frames[0], "gif")
+	}
+
+	logger.Info("Screenshot", "processGIF: 纵向拼接完成 尺寸=%dx%d",
+		concatenated.Bounds().Dx(), concatenated.Bounds().Dy())
+
+	return encodeSingleFrame(concatenated, "gif")
+}
+
+// selectFrameIndices 从total帧中选取最多maxCount帧，尽量在长度方向均分
+func selectFrameIndices(total, maxCount int) []int {
+	if total <= maxCount {
+		// 帧数不足maxCount，全部选取
+		indices := make([]int, total)
+		for i := range total {
+			indices[i] = i
+		}
+		return indices
+	}
+
+	// 均分选取：在total帧中均匀分布maxCount个采样点
+	indices := make([]int, 0, maxCount)
+	for i := range maxCount {
+		// 使用浮点均分避免首尾偏移
+		idx := int(math.Round(float64(i) * float64(total-1) / float64(maxCount-1)))
+		indices = append(indices, idx)
+	}
+	return indices
+}
+
+// verticallyConcatFrames 将多帧图片纵向拼接为一张长图
+func verticallyConcatFrames(frames []*image.RGBA) (*image.RGBA, error) {
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("无帧数据可拼接")
+	}
+
+	// 统一宽度为第一帧宽度
+	targetWidth := frames[0].Bounds().Dx()
+	totalHeight := 0
+	for _, f := range frames {
+		totalHeight += f.Bounds().Dy()
+	}
+
+	if totalHeight > 16384 {
+		return nil, fmt.Errorf("拼接后高度%d超过16384px限制", totalHeight)
+	}
+
+	// 创建拼接画布
+	result := image.NewRGBA(image.Rect(0, 0, targetWidth, totalHeight))
+
+	currentY := 0
+	for _, f := range frames {
+		frameBounds := f.Bounds()
+		// 居中绘制（帧宽度可能不同）
+		offsetX := (targetWidth - frameBounds.Dx()) / 2
+		draw.Draw(result,
+			image.Rect(offsetX, currentY, offsetX+frameBounds.Dx(), currentY+frameBounds.Dy()),
+			f,
+			image.Point{0, 0},
+			draw.Over,
+		)
+		currentY += frameBounds.Dy()
+	}
+
+	return result, nil
+}
+
+// encodeSingleFrame 将单帧RGBA图像编码输出为PNG格式
+func encodeSingleFrame(img *image.RGBA, sourceFormat string) (map[string]any, error) {
+	width := img.Bounds().Dx()
+	height := img.Bounds().Dy()
+
+	buf := &bytes.Buffer{}
+	// GIF帧可能包含透明度，统一输出PNG
+	outputFormat := "png"
+	contentType := "image/png"
+
+	if err := png.Encode(buf, img); err != nil {
+		logger.Error("Screenshot", "encodeSingleFrame: PNG编码失败: %v", err)
+		return nil, fmt.Errorf("PNG编码失败: %v", err)
+	}
+
+	base64Data := base64.StdEncoding.EncodeToString(buf.Bytes())
+	base64WithHeader := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
+
+	response := map[string]any{
+		"image":  buf.Bytes(),
+		"base64": base64WithHeader,
+		"format": outputFormat,
+		"width":  width,
+		"height": height,
+	}
+
+	logger.Info("Screenshot", "encodeSingleFrame: 编码完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+		outputFormat, width, height, len(buf.Bytes()))
+	return response, nil
+}
+
 // ResizeImage 图片预处理：格式验证、非JPG/PNG转码、等比例缩放到1024、编码输出
 // 仅输出JPG或PNG格式的base64数据
+// GIF格式特殊处理：帧抽取→缩放→纵向拼接→编码输出
 func ResizeImage(imgData []byte) (map[string]any, error) {
 	// 1. 输入验证
 	if len(imgData) == 0 {
@@ -138,8 +280,17 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 
 	var processedData []byte
 
-	// 3. 格式处理：已支持格式直接使用，否则FFmpeg转码
+	// 3. 格式处理：GIF特殊处理，JPG/PNG直接使用，否则FFmpeg转码
 	switch originalFormat {
+	case "gif":
+		// GIF特殊处理：帧抽取→缩放→纵向拼接→编码输出
+		logger.Info("Screenshot", "ResizeImage: 检测到GIF格式，启动GIF帧处理流程")
+		result, err := processGIF(imgData)
+		if err != nil {
+			logger.Error("Screenshot", "ResizeImage: GIF处理失败: %v", err)
+			return nil, fmt.Errorf("GIF处理失败: %v", err)
+		}
+		return result, nil
 	case "jpeg", "png":
 		processedData = imgData
 	default:

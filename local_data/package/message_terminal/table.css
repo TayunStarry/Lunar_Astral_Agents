@@ -1,50 +1,42 @@
-/* 表格容器 */
+/* ========== 表格样式 — 玻璃拟态风格 ========== */
+
 .markdown-table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    margin: 25px 0;
-    border: 1px solid var(--border-e1e6f0, #d0d7de);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
-    border-radius: 10px;
+    margin: 20px 0;
+    border-radius: var(--radius-lg, 1rem);
     overflow: hidden;
-    background: white;
-    position: relative;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: var(--glass-bg, rgba(255, 255, 255, 0.28));
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border-color, rgba(225, 230, 240, 1));
+    box-shadow: var(--shadow-glass, 0 4px 24px rgba(0, 0, 0, 0.10));
 }
 
-/* 表头 */
 .markdown-table thead {
-    background: linear-gradient(135deg, var(--status-4a6fa5, #2c68a0), #3a7bd5);
-    color: white;
+    background: linear-gradient(135deg, rgba(108, 155, 207, 0.3), rgba(157, 107, 255, 0.2));
+    backdrop-filter: blur(4px);
 }
 
 .markdown-table th {
-    border: none;
-    position: relative;
-    text-align: center;
+    padding: 12px 16px;
+    text-align: left;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    font-size: 0.95rem;
-    padding: 16px 20px;
-    border-right: 1px solid rgba(255, 255, 255, 0.4);
-    transition: background 0.3s ease;
+    color: var(--text-primary, rgba(15, 30, 15, 1));
+    border-bottom: 1px solid var(--border-color, rgba(225, 230, 240, 1));
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .markdown-table th:last-child {
     border-right: none;
 }
 
-/* 单元格 */
 .markdown-table td {
-    position: relative;
-    text-align: center;
-    padding: 15px 20px;
-    border: none;
-    border-bottom: 1px solid var(--border-e1e6f0, #eaeef2);
-    border-right: 1px solid var(--border-e1e6f0, #eaeef2);
-    transition: all 0.3s ease;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color, rgba(225, 230, 240, 1));
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary, rgba(15, 30, 15, 1));
+    transition: background 0.2s ease;
 }
 
 .markdown-table td:last-child {
@@ -55,45 +47,32 @@
     border-bottom: none;
 }
 
-/* 交互效果 */
-.markdown-table tr:hover td {
-    background-color: rgba(70, 130, 180, 0.1);
-}
-
 .markdown-table tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.02);
+    background: rgba(0, 0, 0, 0.02);
 }
 
-.markdown-table td:hover {
-    background-color: rgba(100, 149, 237, 0.2) !important;
+.markdown-table tr:hover td {
+    background: rgba(157, 107, 255, 0.08);
 }
 
-/* 表格标题 */
-.table-caption {
-    font-size: 1.15rem;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: var(--text-0f1e0f, #2d3748);
-    display: flex;
-    align-items: center;
-    padding-left: 10px;
+/* 暗色模式表格 */
+.dark-mode .markdown-table thead {
+    background: linear-gradient(135deg, rgba(108, 155, 207, 0.2), rgba(157, 107, 255, 0.15));
 }
 
-.table-caption::before {
-    content: '';
-    display: inline-block;
-    width: 6px;
-    height: 22px;
-    background: linear-gradient(to bottom, var(--status-4a6fa5), #4a86e8);
-    margin-right: 12px;
-    border-radius: 3px;
+.dark-mode .markdown-table tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
 }
 
-/* 表格页脚 */
-.table-footer {
-    font-size: 0.9rem;
-    color: var(--text-secondary, #718096);
-    margin-top: 8px;
-    padding-left: 18px;
-    font-style: italic;
+.dark-mode .markdown-table tr:hover td {
+    background: rgba(157, 107, 255, 0.12);
+}
+
+/* 响应式表格 */
+@media (max-width: 640px) {
+    .markdown-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
 }
