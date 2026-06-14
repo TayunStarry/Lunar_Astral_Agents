@@ -4,6 +4,10 @@
 class LunarAgent extends AgentDefine {
 	/** 发言权重 */
 	protected speakWeight: number = 1;
+	/** 沉默计数（连续不允许发言的循环次数） */
+	protected silenceCount: number = 0;
+	/** 错误计数 */
+	protected errorCount: number = 0;
 	/**
 	 * 批量处理视频文件
 	 *
@@ -40,8 +44,6 @@ class LunarAgent extends AgentDefine {
 	}
 	/** 思考链处理 */
 	protected async thinkingChainProcess() {
-		/** 错误计数 */
-		let errorCount = 0;
 		// 循环处理
 		while (true) {
 			try {
@@ -51,23 +53,36 @@ class LunarAgent extends AgentDefine {
 				const dueItems = checkDueItems();
 				// 遍历到期计划项，将内容写入上下文
 				for (const item of dueItems) {
-					this.unreadContext.push({ role: 'tool', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+					this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
 				}
 				/** 消息长度 */
 				const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
 				/** 消息类型 */
 				const messageType = messageLength === 0 ? 'response' : 'active';
 				/** 是否允许发言 */
-				const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
-				// 如果消息长度为0，且不允许发言，继续循环
+				const allowSpeak = RandomFloor(1, 100) < this.speakWeight;
+				// 如果消息长度为0，且不允许发言，沉默计数+1（上限100），继续循环
 				if (messageLength === 0 && !allowSpeak) {
+					// 沉默计数+1（上限100），继续循环
+					this.silenceCount = Math.min(this.silenceCount + 1, 100);
 					// 等待1秒
 					await new Promise(resolve => setTimeout(resolve, 1000));
 					// 进入下一次循环
 					continue;
 				}
-				// 如果消息长度为0，且允许发言，重置发言权重
-				else if (messageLength == 0 && allowSpeak) this.speakWeight = 0;
+				// 如果消息长度为0，且允许发言，但沉默计数不足30，沉默计数+1（上限100），继续循环
+				if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
+					// 沉默计数+1（上限100），继续循环
+					this.silenceCount = Math.min(this.silenceCount + 1, 100);
+					// 等待1秒
+					await new Promise(resolve => setTimeout(resolve, 1000));
+					// 进入下一次循环
+					continue;
+				}
+				// 允许发言，重置沉默计数和发言权重
+				this.silenceCount = 0;
+				// 如果消息长度为0，发言权重设为0
+				if (messageLength === 0) this.speakWeight = 0;
 				// 批量处理视频文件
 				await this.batchProcessVideoFiles();
 				// 如果包含图像生成关键词，调用画家角色执行绘画循环
@@ -77,7 +92,7 @@ class LunarAgent extends AgentDefine {
 				// 如果消息响应为空，抛出异常
 				if (!this.finalResponse.trim().length) throw new Error('消息响应为空');
 				// 成功响应时重置错误计数
-				else errorCount = 0;
+				else this.errorCount = 0;
 				// 如果未读记录数超过10条，调用编纂者组织历史记录
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
@@ -116,13 +131,13 @@ class LunarAgent extends AgentDefine {
 				// 打印错误信息
 				console.error((error as Error).message, ' || ', (error as Error).stack);
 				// 错误次数增加
-				errorCount++;
+				this.errorCount++;
 				// 推送兜底消息
 				pushContext('active', this.randomDefaultMessage, promptSound);
 				// 错误累积达阈值，重置状态并重新循环
-				if (errorCount >= 3) {
+				if (this.errorCount >= 3) {
 					this.resetAgentState();
-					errorCount = 0;
+					this.errorCount = 0;
 					continue;
 				}
 			}

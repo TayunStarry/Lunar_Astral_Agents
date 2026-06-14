@@ -585,14 +585,16 @@ var agentSystem = (function (exports) {
             }
             if (allResults.length === 0)
                 return this;
-            const seen = new Set();
-            const uniqueResults = allResults.filter(r => {
-                if (seen.has(r.content))
-                    return false;
-                seen.add(r.content);
-                return true;
-            });
-            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content, }));
+            const seen = new Map();
+            for (const r of allResults) {
+                const existing = seen.get(r.content);
+                if (!existing || r.similarity > existing.similarity) {
+                    seen.set(r.content, r);
+                }
+            }
+            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
+            console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content }));
             return this;
         }
         getLatestUserMessages() {
@@ -633,6 +635,7 @@ var agentSystem = (function (exports) {
                 const response = this.run(this.ragMessages, [...scheduleTools, ...OnlyData.ltp2Tools]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
+                    this.writeContext(response.body.choices?.[0]?.message);
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
                     if (hasProcessedToolCalls)
                         return await this.callMultimediaAndToolParsing(cache, source);
@@ -664,26 +667,27 @@ var agentSystem = (function (exports) {
             const visionCount = flattenedMessages.filter(m => Array.isArray(m.content)).length;
             if (visionCount <= 10) {
                 this.messages = flattenedMessages;
-                return;
             }
-            const processedMessages = [];
-            let visionBuffer = [];
-            for (const message of flattenedMessages) {
-                const isVisionMessage = Array.isArray(message.content);
-                if (isVisionMessage)
-                    visionBuffer.push(message);
-                else {
-                    if (visionBuffer.length > 0) {
-                        this.processVisionBuffer(visionBuffer, processedMessages, source);
-                        visionBuffer = [];
+            else {
+                const processedMessages = [];
+                let visionBuffer = [];
+                for (const message of flattenedMessages) {
+                    const isVisionMessage = Array.isArray(message.content);
+                    if (isVisionMessage)
+                        visionBuffer.push(message);
+                    else {
+                        if (visionBuffer.length > 0) {
+                            this.processVisionBuffer(visionBuffer, processedMessages, source);
+                            visionBuffer = [];
+                        }
+                        processedMessages.push(message);
                     }
-                    processedMessages.push(message);
                 }
+                if (visionBuffer.length > 0) {
+                    this.processVisionBuffer(visionBuffer, processedMessages, source);
+                }
+                this.messages = processedMessages;
             }
-            if (visionBuffer.length > 0) {
-                this.processVisionBuffer(visionBuffer, processedMessages, source);
-            }
-            this.messages = processedMessages;
             const latestRole = this.messages.slice(-1)[0].role;
             if (latestRole === 'user')
                 return;
@@ -697,7 +701,7 @@ var agentSystem = (function (exports) {
                 '请将话题转向书籍，聊聊最近在读或推荐的书籍。',
                 '请将话题转向动漫，聊聊最近在追或推荐的动漫。',
             ];
-            const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length - 1)];
+            const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length)];
             this.writeContext({ role: 'user', content: prompt });
         }
         processVisionBuffer(buffer, output, source) {
@@ -1193,8 +1197,8 @@ var agentSystem = (function (exports) {
             if (!results || results.length === 0) {
                 return '未找到相关历史记录，可以放心创建新档案';
             }
-            return '找到以下相关历史记录:\n' + results
-                .map((r, i) => `[已有记录${i + 1}] ID:${r.id} | 内容:${r.content}`)
+            return '找到以下相关历史记录（按相关度从高到低排列）:\n' + results
+                .map((r, i) => `[已有记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
                 .join('\n');
         }
         handleMergeRecord(id, mergedContent) {
@@ -1260,7 +1264,7 @@ var agentSystem = (function (exports) {
                 const [existingResults] = chromemQuery(checkQuery, 5);
                 if (existingResults && existingResults.length > 0) {
                     const similarRecords = existingResults
-                        .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 内容:${r.content}`)
+                        .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
                         .join('\n');
                     console.warn('[编纂者] 存储前发现相似记录，建议合并而非新增');
                     return `⚠️ 检测到可能存在相似的历史记录，建议使用 merge_existing_record 合并而非新建：\n${similarRecords}\n\n如果确认这些记录与新内容无关，请再次调用 store_organized_record 并说明理由。`;
@@ -1760,6 +1764,8 @@ var agentSystem = (function (exports) {
 
     class LunarAgent extends AgentDefine {
         speakWeight = 1;
+        silenceCount = 0;
+        errorCount = 0;
         async batchProcessVideoFiles(userNeeds) {
             if (this.unreadVideoUrl.length === 0)
                 return;
@@ -1781,22 +1787,28 @@ var agentSystem = (function (exports) {
             return this.finalResponse;
         }
         async thinkingChainProcess() {
-            let errorCount = 0;
             while (true) {
                 try {
                     await this.pullExternalMessages();
                     const dueItems = checkDueItems();
                     for (const item of dueItems) {
-                        this.unreadContext.push({ role: 'tool', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+                        this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
                     }
                     const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
                     const messageType = messageLength === 0 ? 'response' : 'active';
-                    const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
+                    const allowSpeak = RandomFloor(1, 100) < this.speakWeight;
                     if (messageLength === 0 && !allowSpeak) {
+                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         continue;
                     }
-                    else if (messageLength == 0 && allowSpeak)
+                    if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
+                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                    this.silenceCount = 0;
+                    if (messageLength === 0)
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
                     this.painterRole.createImageRendering(this);
@@ -1804,7 +1816,7 @@ var agentSystem = (function (exports) {
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
                     else
-                        errorCount = 0;
+                        this.errorCount = 0;
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
                     }
@@ -1835,11 +1847,11 @@ var agentSystem = (function (exports) {
                     if (readErr)
                         console.error('读取提示音失败:', readErr);
                     console.error(error.message, ' || ', error.stack);
-                    errorCount++;
+                    this.errorCount++;
                     pushContext('active', this.randomDefaultMessage, promptSound);
-                    if (errorCount >= 3) {
+                    if (this.errorCount >= 3) {
                         this.resetAgentState();
-                        errorCount = 0;
+                        this.errorCount = 0;
                         continue;
                     }
                 }

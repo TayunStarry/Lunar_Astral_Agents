@@ -23,6 +23,8 @@ export class DialogueRole extends ModelBuilder {
 			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求
 			if (cache.toolCalls.length > 0) {
+				// 在递归前写入 assistant 的 tool_call 消息，确保上下文完整
+				this.writeContext(response.body.choices?.[0]?.message);
 				/** 处理工具调用 */
 				const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
 				// 如果有处理过的工具调用,重新发送请求（包含工具调用结果）
@@ -66,37 +68,39 @@ export class DialogueRole extends ModelBuilder {
 		// 视觉消息数量<=10，无需摘要，直接使用扁平化结果
 		if (visionCount <= 10) {
 			this.messages = flattenedMessages;
-			return;
 		}
 		// 视觉消息数量>10，需要对连续的视觉消息组分批摘要以减少上下文长度
 		// 处理策略：遍历扁平化数组，遇到连续视觉消息时累积到缓冲区，
 		// 遇到非视觉消息时先处理缓冲区，确保摘要结果插入原位，不改变前后消息的相对顺序
-		/** 处理后的最终消息数组 */
-		const processedMessages: PostMessage[] = [];
-		/** 当前连续视觉消息的缓冲区 */
-		let visionBuffer: PostMessage[] = [];
-		// 遍历扁平化后的消息数组
-		for (const message of flattenedMessages) {
-			// 判断当前消息是否为视觉消息（内容为数组类型）
-			const isVisionMessage = Array.isArray(message.content);
-			// 累积连续的视觉消息到缓冲区
-			if (isVisionMessage) visionBuffer.push(message);
-			else {
-				// 遇到非视觉消息，先处理缓冲区中累积的视觉消息
-				// 这确保视觉消息的摘要结果出现在正确的位置（在当前文本消息之前）
-				if (visionBuffer.length > 0) {
-					this.processVisionBuffer(visionBuffer, processedMessages, source);
-					visionBuffer = [];
+		else {
+			/** 处理后的最终消息数组 */
+			const processedMessages: PostMessage[] = [];
+			/** 当前连续视觉消息的缓冲区 */
+			let visionBuffer: PostMessage[] = [];
+			// 遍历扁平化后的消息数组
+			for (const message of flattenedMessages) {
+				// 判断当前消息是否为视觉消息（内容为数组类型）
+				const isVisionMessage = Array.isArray(message.content);
+				// 累积连续的视觉消息到缓冲区
+				if (isVisionMessage) visionBuffer.push(message);
+				else {
+					// 遇到非视觉消息，先处理缓冲区中累积的视觉消息
+					// 这确保视觉消息的摘要结果出现在正确的位置（在当前文本消息之前）
+					if (visionBuffer.length > 0) {
+						this.processVisionBuffer(visionBuffer, processedMessages, source);
+						visionBuffer = [];
+					}
+					processedMessages.push(message);
 				}
-				processedMessages.push(message);
 			}
+			// 处理末尾可能残留的视觉消息缓冲区
+			if (visionBuffer.length > 0) {
+				this.processVisionBuffer(visionBuffer, processedMessages, source);
+			}
+			// 覆写处理器模型的上下文为处理后的消息数组
+			this.messages = processedMessages;
 		}
-		// 处理末尾可能残留的视觉消息缓冲区
-		if (visionBuffer.length > 0) {
-			this.processVisionBuffer(visionBuffer, processedMessages, source);
-		}
-		// 覆写处理器模型的上下文为处理后的消息数组
-		this.messages = processedMessages;
+		// 续写提示词逻辑：所有场景共享
 		/** 最新消息的角色 */
 		const latestRole = this.messages.slice(-1)[0].role;
 		// 如果最新消息是用户,则不处理
@@ -113,7 +117,7 @@ export class DialogueRole extends ModelBuilder {
 			'请将话题转向动漫，聊聊最近在追或推荐的动漫。',
 		];
 		/** 随机选择一个提示词 */
-		const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length - 1)];
+		const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length)];
 		// 添加随机选择的提示词到处理器模型的上下文
 		this.writeContext({ role: 'user', content: prompt });
 	}
