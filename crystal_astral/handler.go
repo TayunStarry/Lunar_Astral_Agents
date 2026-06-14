@@ -381,7 +381,7 @@ func normalizeProxyURL(rawURL string) string {
 	return strings.TrimRight(rawURL, "/")
 }
 
-// scanPackagesHandler 扫描包目录，自动发现所有包含 package.json 的子文件夹
+// scanPackagesHandler 扫描包目录，自动发现所有包含 metadata.json 的子文件夹
 func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -418,10 +418,10 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		configPath := filepath.Join(packageDir, entry.Name(), "package.json")
+		configPath := filepath.Join(packageDir, entry.Name(), "metadata.json")
 		data, err := os.ReadFile(configPath)
 		if err != nil {
-			// 没有 package.json 的子文件夹跳过（库/资源文件夹）
+			// 没有 metadata.json 的子文件夹跳过（库/资源文件夹）
 			continue
 		}
 

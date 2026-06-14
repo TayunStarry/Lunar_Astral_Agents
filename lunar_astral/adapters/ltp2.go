@@ -39,7 +39,7 @@ func scanLTP2Packages() ([]LTP2PackageInfo, map[string]string) {
 			continue
 		}
 
-		configPath := filepath.Join(packageDir, entry.Name(), "package.json")
+		configPath := filepath.Join(packageDir, entry.Name(), "metadata.json")
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			continue

@@ -59,6 +59,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表查询"},
 	{Path: "/file/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载操作"},
 	{Path: "/file/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
+	{Path: "/file/package/install", Handler: storage.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
 	{Path: "/file/write", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
 	// 数据库相关接口

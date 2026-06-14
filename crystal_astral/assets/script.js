@@ -28,6 +28,9 @@ const VALID_FILE_TYPES = [
     'application/json', 'application/xml', 'application/javascript', 'text/markdown'
 ];
 
+// 扩展包文件扩展名
+const PACKAGE_FILE_EXTENSIONS = ['.ltpx', '.ltp2'];
+
 async function loadConfig() {
     try {
         const response = await fetch('/file/read/lunar_config.json');
@@ -304,6 +307,39 @@ async function handleSend() {
     }
 }
 
+// 安装扩展包（.ltpx / .ltp2）
+async function installPackage(file) {
+    addMessage('system', `正在安装扩展包【${file.name}】...`);
+
+    const formData = new FormData();
+    formData.append('package_file', file);
+
+    try {
+        const response = await fetch('/file/package/install', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            addMessage('system', `扩展包安装成功！【${data.package_title}】`);
+            // 重新加载页面列表以显示新安装的包
+            setTimeout(() => loadPages(), 500);
+        } else {
+            addMessage('system', `安装失败: ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Error installing package:', error);
+        addMessage('system', '安装扩展包时发生网络错误');
+    }
+}
+
+// 检查文件是否为扩展包
+function isPackageFile(file) {
+    const name = file.name.toLowerCase();
+    return PACKAGE_FILE_EXTENSIONS.some(ext => name.endsWith(ext));
+}
+
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.ctrlKey) {
         e.preventDefault();
@@ -334,6 +370,11 @@ document.addEventListener('drop', async (e) => {
 
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
+        // 扩展包文件特殊处理
+        if (isPackageFile(file)) {
+            await installPackage(file);
+            continue;
+        }
         if (!VALID_FILE_TYPES.includes(file.type)) {
             addMessage('system', `不支持的文件类型: ${file.name}`);
             continue;
@@ -360,6 +401,11 @@ chatMessages.addEventListener('drop', async (e) => {
 
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
+        // 扩展包文件特殊处理
+        if (isPackageFile(file)) {
+            await installPackage(file);
+            continue;
+        }
         if (!VALID_FILE_TYPES.includes(file.type)) {
             addMessage('system', `不支持的文件类型: ${file.name}`);
             continue;

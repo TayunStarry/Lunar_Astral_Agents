@@ -1,9 +1,13 @@
 package server
 
 import (
+	"config"
 	"encoding/json"
 	"fmt"
+	"logger"
 	"net/http"
+	"os"
+	"path/filepath"
 	"storage/module"
 	"strings"
 )
@@ -111,8 +115,231 @@ func extractZip(w http.ResponseWriter, r *http.Request) {
 	}
 	// 将响应数据编码为 JSON 并写入响应
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		// 若编码失败，返回错误响应给客户端
 		http.Error(w, "Archive请求[ERROR] -> 生成响应失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// PackageInstallResponse 包安装响应结构体
+type PackageInstallResponse struct {
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
+	PackageName  string `json:"package_name,omitempty"`
+	PackageID    string `json:"package_id,omitempty"`
+	PackageTitle string `json:"package_title,omitempty"`
+}
+
+// InstallPackageHandler 处理 .ltpx / .ltp2 包安装请求
+// 将上传的归档文件解压并安装到 local_data/package/<包名>/ 目录下
+func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 解析多部分表单，设置最大内存为 128MB
+	err := r.ParseMultipartForm(128 << 20)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "解析上传文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取上传的包文件（支持 zip_file 和 package_file 两种表单字段名）
+	file, header, err := r.FormFile("package_file")
+	if err != nil {
+		file, header, err = r.FormFile("zip_file")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(PackageInstallResponse{
+				Success: false,
+				Message: "未找到上传的文件",
+			})
+			return
+		}
+	}
+	defer file.Close()
+
+	// 验证文件扩展名
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".ltpx" && ext != ".ltp2" && ext != ".zip" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "不支持的文件类型: " + ext + "，仅支持 .ltpx、.ltp2、.zip",
+		})
+		return
+	}
+
+	// 使用文件名（不含扩展名）作为包名
+	packageName := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
+	if packageName == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "无效的文件名",
+		})
+		return
+	}
+
+	// 解压归档文件
+	extractedFiles, _, err := module.ExtractZip(file)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "解压归档文件失败: " + err.Error(),
+		})
+		return
+	}
+
+	if len(extractedFiles) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "归档文件中没有可提取的文件",
+		})
+		return
+	}
+
+	// 验证归档根目录下是否存在 metadata.json
+	var metadataRaw []byte
+	var hasMetadata bool
+	metadataPrefix := packageName + "/metadata.json"
+	altMetadataPrefix := "metadata.json"
+
+	for _, ef := range extractedFiles {
+		name, _ := ef["name"].(string)
+		if name == metadataPrefix || name == altMetadataPrefix {
+			if content, ok := ef["content"].([]byte); ok {
+				metadataRaw = content
+				hasMetadata = true
+			}
+			break
+		}
+	}
+
+	if !hasMetadata {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: fmt.Sprintf("包 '%s' 缺少有效的 metadata.json 文件", packageName),
+		})
+		return
+	}
+
+	// 解析并验证 metadata.json 格式
+	var metadata struct {
+		ID          string   `json:"id"`
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Icon        string   `json:"icon,omitempty"`
+		URL         string   `json:"url,omitempty"`
+		Path        string   `json:"path,omitempty"`
+		Tags        []string `json:"tags,omitempty"`
+	}
+	if err := json.Unmarshal(metadataRaw, &metadata); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: fmt.Sprintf("metadata.json 格式无效: %v", err),
+		})
+		return
+	}
+
+	if metadata.ID == "" || metadata.Title == "" || metadata.Description == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "metadata.json 缺少必填字段（id、title、description）",
+		})
+		return
+	}
+
+	// 确定目标安装目录
+	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+
+	// 如果目标目录已存在，先删除
+	if _, statErr := os.Stat(packageDir); statErr == nil {
+		if removeErr := os.RemoveAll(packageDir); removeErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(PackageInstallResponse{
+				Success: false,
+				Message: "清理旧包目录失败: " + removeErr.Error(),
+			})
+			return
+		}
+	}
+
+	// 创建目标目录
+	if mkdirErr := os.MkdirAll(packageDir, 0755); mkdirErr != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(PackageInstallResponse{
+			Success: false,
+			Message: "创建包目录失败: " + mkdirErr.Error(),
+		})
+		return
+	}
+
+	// 写入所有解压的文件
+	for _, ef := range extractedFiles {
+		name, _ := ef["name"].(string)
+		content, _ := ef["content"].([]byte)
+		if name == "" {
+			continue
+		}
+
+		// 处理文件名：去除可能的包名前缀
+		// 如果文件名以 "<packageName>/" 开头，去掉这个前缀
+		prefix := packageName + "/"
+		relativeName := name
+		if strings.HasPrefix(name, prefix) {
+			relativeName = strings.TrimPrefix(name, prefix)
+		}
+		if relativeName == "" {
+			continue
+		}
+
+		// 确定文件的完整路径
+		filePath := filepath.Join(packageDir, relativeName)
+
+		// 确保父目录存在
+		parentDir := filepath.Dir(filePath)
+		if mkdirErr := os.MkdirAll(parentDir, 0755); mkdirErr != nil {
+			logger.Error("Storage", "创建父目录失败 %s: %v", parentDir, mkdirErr)
+			continue
+		}
+
+		// 写入文件
+		if writeErr := os.WriteFile(filePath, content, 0644); writeErr != nil {
+			logger.Error("Storage", "写入文件失败 %s: %v", filePath, writeErr)
+			continue
+		}
+	}
+
+	logger.Info("Storage", "包安装成功: %s (ID: %s, 标题: %s)", packageName, metadata.ID, metadata.Title)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(PackageInstallResponse{
+		Success:      true,
+		Message:      fmt.Sprintf("包 '%s' 安装成功", metadata.Title),
+		PackageName:  packageName,
+		PackageID:    metadata.ID,
+		PackageTitle: metadata.Title,
+	})
 }
