@@ -199,7 +199,7 @@ function renderMessage(message) {
     } else {
         avatar.classList.add('ai-avatar');
         const img = document.createElement('img');
-        img.src = '/file/read/images/icon/agent_avatar.Webp';
+        img.src = '/avatar.webp';
         img.alt = '琉璃';
         avatar.appendChild(img);
     }

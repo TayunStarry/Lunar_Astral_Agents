@@ -354,7 +354,7 @@ function addAiMessage(content) {
     const container = document.getElementById('aiMessages');
     const div = document.createElement('div');
     div.className = 'message ai-message';
-    div.innerHTML = `<div class="message-avatar"><img src="/file/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">${marked.parse(content)}</div>`;
+    div.innerHTML = `<div class="message-avatar"><img src="/avatar.webp" alt="Agent Avatar"></div><div class="message-content">${marked.parse(content)}</div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
@@ -364,7 +364,7 @@ function addTypingIndicator() {
     const div = document.createElement('div');
     div.className = 'message ai-message';
     div.id = 'typingIndicator';
-    div.innerHTML = `<div class="message-avatar"><img src="/file/read/images/icon/agent_avatar.Webp" alt="Agent Avatar"></div><div class="message-content">正在思考...<span class="typing-dots"></span></div>`;
+    div.innerHTML = `<div class="message-avatar"><img src="/avatar.webp" alt="Agent Avatar"></div><div class="message-content">正在思考...<span class="typing-dots"></span></div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }

@@ -169,8 +169,8 @@ Lunar_Astral_Agents-v2026.05.26/
 │   ├── lunar_package.json    ← 前端包配置
 │   ├── package/              ← 前端渲染库
 │   ├── audios/               ← 参考音频
+│   │   └── cache/            ← 缓存目录
 │   ├── images/               ← 图片资源
-│   └── embed_cache/          ← 嵌入缓存
 │
 ├── crystal_astral/           ← 琉璃源码（嵌入式资源）
 ├── lunar_astral/             ← 月华源码（嵌入式资源）

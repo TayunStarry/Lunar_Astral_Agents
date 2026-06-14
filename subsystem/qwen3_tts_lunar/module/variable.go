@@ -20,7 +20,7 @@ var embedCache = &speakerEmbedCache{
 	// fileHashes 用于存储参考音频文件的 SHA256 哈希
 	fileHashes: make(map[string]string),
 	// cacheDir 用于指定缓存目录
-	cacheDir: "./local_data/embed_cache",
+	cacheDir: "./local_data/audios/cache",
 }
 
 // 用于存储流式上下文的映射
