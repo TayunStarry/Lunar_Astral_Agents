@@ -1141,30 +1141,39 @@ code {
     position: fixed;
     inset: 0;
     z-index: 200;
-    background: rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .modal-overlay.hidden {
-    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .modal-panel {
     width: min(620px, 90vw);
     max-height: 85vh;
     overflow-y: auto;
-    padding: clamp(1.2rem, 2vw, 1.8rem) !important;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glass);
+    padding: clamp(1.2rem, 2vw, 1.8rem);
     animation: modalSlideIn 0.3s ease-out;
 }
 
 @keyframes modalSlideIn {
     from {
         opacity: 0;
-        transform: translateY(24px) scale(0.96);
+        transform: translateY(20px) scale(0.97);
     }
     to {
         opacity: 1;
@@ -1177,6 +1186,8 @@ code {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1.5vh;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--glass-border);
 }
 
 .modal-title {
@@ -1189,7 +1200,7 @@ code {
     letter-spacing: 0.2px;
 }
 
-.modal-title svg {
+.modal-title i {
     color: var(--warning);
     flex-shrink: 0;
 }
@@ -1218,6 +1229,10 @@ code {
 /* ---------- 模态框内容 ---------- */
 .modal-section {
     margin-bottom: 1.2rem;
+}
+
+.modal-section:last-child {
+    margin-bottom: 0;
 }
 
 .setting-row {
