@@ -70,6 +70,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("webSearchShallow", adapters.webSearchShallow)
 	vm.Set("webSearchResearch", adapters.webSearchResearch)
 	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
+
+	// 注册截图子系统适配器
+	vm.Set("screenshotCapture", adapters.screenshotCapture)
+	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境
@@ -146,9 +150,9 @@ func RunAgentContext() error {
 		}
 
 		// agentSystem.js 执行完毕后，agentSystem 全局变量已可用
-		// 加载 LTP2 工具包并将工具定义注入到 OnlyData.ltp2Tools
+		// 加载 LTP2 工具包并将工具定义注入到 OnlyData.LTPdefinition
 		ltp2ToolsJSON := loadLTP2ToolPackages(vm)
-		_, err = vm.RunString(`agentSystem.OnlyData.ltp2Tools = ` + ltp2ToolsJSON + `;`)
+		_, err = vm.RunString(`agentSystem.OnlyData.LTPdefinition.push(...` + ltp2ToolsJSON + `);`)
 		if err != nil {
 			logger.SubError("LunarCore", "LTP2", "注入工具定义失败: %v", err)
 		}

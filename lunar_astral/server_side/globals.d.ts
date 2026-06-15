@@ -215,4 +215,26 @@ declare global {
      * @returns {boolean} 是否已初始化
      */
     function webSearchIsReady(): boolean;
+    /**
+     * 执行屏幕截图
+     *
+     * @param {number} displayIndex 显示器索引（-1 表示所有显示器，0 表示主显示器）
+     *
+     * @param {string} [region] 截图区域，格式为 "x,y,width,height"
+     *
+     * @param {string} [scale] 缩放参数，如 "0.5" 或 "800,600"
+     *
+     * @param {string} [format] 图片格式，"png" 或 "jpg"
+     *
+     * @param {number} [quality] JPEG 质量 1-100
+     *
+     * @returns {[string, Error | null]} 包含截图结果的元组，[base64 数据 URI, 错误信息]
+     */
+    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [string, Error | null];
+    /**
+     * 获取所有显示器信息
+     *
+     * @returns {[Array<{index: number, x: number, y: number, width: number, height: number}>, Error | null]} 包含显示器信息的元组，[显示器列表, 错误信息]
+     */
+    function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
 }

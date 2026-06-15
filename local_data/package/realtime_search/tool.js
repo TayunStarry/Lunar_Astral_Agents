@@ -1,6 +1,6 @@
 // realtime_search LTP2 工具包 - 实时搜索
 // 由 goja 运行时加载执行，使用 syncFetch 进行网络请求
-// 自动注册到 OnlyData.lunarToolPackageMap
+// 自动注册到 OnlyData.LTPfunction
 
 (function () {
 	/**
@@ -66,10 +66,10 @@
 
 	// 注册到月华工具协议映射表
 	// OnlyData 由 Go 适配器在执行此文件前注入为全局变量
-	if (typeof OnlyData !== 'undefined' && OnlyData.lunarToolPackageMap) {
-		OnlyData.lunarToolPackageMap.set('realtime_search', queryIntelHandler);
+	if (typeof OnlyData !== 'undefined' && OnlyData.LTPfunction) {
+		OnlyData.LTPfunction.set('realtime_search', queryIntelHandler);
 		console.log('[LTP2] realtime_search 工具注册成功');
 	} else {
-		console.error('[LTP2] OnlyData.lunarToolPackageMap 不可用，无法注册 realtime_search');
+		console.error('[LTP2] OnlyData.LTPfunction 不可用，无法注册 realtime_search');
 	}
 })();

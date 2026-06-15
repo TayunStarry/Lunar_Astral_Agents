@@ -22,8 +22,8 @@ var agentSystem = (function (exports) {
             'application/x-yaml'
         ];
         static visionExtensions = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
-        static lunarToolPackageMap = new Map();
-        static ltp2Tools = [];
+        static LTPfunction = new Map();
+        static LTPdefinition = [];
         static get systemUrl() {
             return url()[0] + '/v1';
         }
@@ -632,7 +632,7 @@ var agentSystem = (function (exports) {
                 this.formatHistoricalMessages(source);
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, [...scheduleTools, ...webSearchTools, ...OnlyData.ltp2Tools]);
+                const response = this.run(this.ragMessages, [...scheduleTools, ...webSearchTools, ...OnlyData.LTPdefinition]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -754,7 +754,7 @@ var agentSystem = (function (exports) {
             for (const toolCall of state.toolCalls) {
                 const functionName = toolCall.function.name;
                 const functionArgs = toolCall.function.arguments;
-                const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
+                const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
                 if (!lunarToolPackage) {
                     source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
                     continue;
@@ -1670,10 +1670,10 @@ var agentSystem = (function (exports) {
         return dueItems;
     }
     initSchedules();
-    OnlyData.lunarToolPackageMap.set('create_schedule', handleCreateSchedule);
-    OnlyData.lunarToolPackageMap.set('edit_schedule', handleEditSchedule);
-    OnlyData.lunarToolPackageMap.set('delete_schedule', handleDeleteSchedule);
-    OnlyData.lunarToolPackageMap.set('query_schedule', handleQuerySchedule);
+    OnlyData.LTPfunction.set('create_schedule', handleCreateSchedule);
+    OnlyData.LTPfunction.set('edit_schedule', handleEditSchedule);
+    OnlyData.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+    OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
 
     class AgentDefine {
         queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
@@ -2122,7 +2122,7 @@ var agentSystem = (function (exports) {
         console.log(`[网络检索] 查询结果:\n${result || '未找到相关搜索结果'}`);
         return result || '未找到相关搜索结果';
     }
-    OnlyData.lunarToolPackageMap.set('web_search', handleWebSearch);
+    OnlyData.LTPfunction.set('web_search', handleWebSearch);
 
     exports.AgentDefine = AgentDefine;
     exports.BaseConfig = BaseConfig;

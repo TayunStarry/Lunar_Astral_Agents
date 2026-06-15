@@ -37,10 +37,10 @@ export class OnlyData {
     ];
     /** 支持的视觉文件扩展名 */
     public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
-    /** 月华工具协议的哈希映射 */
-    public static lunarToolPackageMap = new Map<string, (args?: Record<string, any> | string) => Promise<string>>();
-    /** LTP2 动态加载的工具定义列表 */
-    public static ltp2Tools: ToolCall[] = [];
+    /** LTP协议工具包-函数映射表 */
+    public static LTPfunction = new Map<string, (args?: Record<string, any> | string) => Promise<string>>();
+    /** LTP协议工具包-函数定义 */
+    public static LTPdefinition: ToolCall[] = [];
     /** 系统URL */
     public static get systemUrl(): string {
         return url()[0] + '/v1';

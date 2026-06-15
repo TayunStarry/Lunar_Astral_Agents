@@ -1,24 +1,24 @@
 package adapters
 
 import (
-	"slices"
 	"config"
 	"encoding/json"
 	"logger"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/dop251/goja"
 )
 
 // LTP2PackageInfo LTP2 工具包配置结构
 type LTP2PackageInfo struct {
-	ID          string                   `json:"id"`
-	Title       string                   `json:"title"`
-	Description string                   `json:"description"`
-	Tags        []string                 `json:"tags"`
-	URL         string                   `json:"url"`
-	Tools       []map[string]interface{} `json:"tools"`
+	ID          string           `json:"id"`
+	Title       string           `json:"title"`
+	Description string           `json:"description"`
+	Tags        []string         `json:"tags"`
+	URL         string           `json:"url"`
+	Tools       []map[string]any `json:"tools"`
 }
 
 // scanLTP2Packages 扫描 local_data/package/ 下所有带有 "LTP2" 标签的工具包
@@ -66,7 +66,7 @@ func scanLTP2Packages() ([]LTP2PackageInfo, map[string]string) {
 			continue
 		}
 
-		toolSources[entry.Name()] = string(toolCode)
+		toolSources[pkg.ID] = string(toolCode)
 		packages = append(packages, pkg)
 	}
 
@@ -100,7 +100,7 @@ func loadLTP2ToolPackages(vm *goja.Runtime) string {
 	vm.Set("OnlyData", onlyDataVal)
 
 	// 收集所有工具定义
-	var allTools []map[string]interface{}
+	var allTools []map[string]any
 
 	for _, pkg := range packages {
 		toolCode, ok := toolSources[pkg.ID]
@@ -108,7 +108,7 @@ func loadLTP2ToolPackages(vm *goja.Runtime) string {
 			continue
 		}
 
-		// 在 goja 中执行工具代码（工具会自行注册到 OnlyData.lunarToolPackageMap）
+		// 在 goja 中执行工具代码（工具会自行注册到 OnlyData.LTPfunction）
 		_, err := vm.RunString(toolCode)
 		if err != nil {
 			logger.Error("LunarCore", "LTP2 执行工具代码失败 %s: %v", pkg.ID, err)

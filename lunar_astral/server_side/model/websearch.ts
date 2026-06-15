@@ -144,4 +144,6 @@ async function handleWebSearch(args?: Record<string, any> | string): Promise<str
 // ==== 模块级注册 ====
 
 // 将网络搜索工具注册到月华工具协议映射表
-OnlyData.lunarToolPackageMap.set('web_search', handleWebSearch);
+OnlyData.LTPfunction.set('web_search', handleWebSearch);
+// 注册网络检索工具到 LTPdefinition 列表
+OnlyData.LTPdefinition.push(...webSearchTools);

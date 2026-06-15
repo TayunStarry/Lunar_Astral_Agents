@@ -227,7 +227,7 @@ func verticallyConcatFrames(frames []*image.RGBA) (*image.RGBA, error) {
 }
 
 // encodeSingleFrame 将单帧RGBA图像编码输出为PNG格式
-func encodeSingleFrame(img *image.RGBA, sourceFormat string) (map[string]any, error) {
+func encodeSingleFrame(img *image.RGBA, _ string) (map[string]any, error) {
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
 

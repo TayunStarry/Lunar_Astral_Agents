@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage, scheduleTools, webSearchTools } from '../index';
+import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage, scheduleTools, webSearchTools, screenshotTools } from '../index';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -18,7 +18,7 @@ export class DialogueRole extends ModelBuilder {
 			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
-			const response = this.run(this.ragMessages, [...scheduleTools, ...webSearchTools, ...OnlyData.ltp2Tools]);
+			const response = this.run(this.ragMessages, [...OnlyData.LTPdefinition]);
 			// 处理响应文本内容
 			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求
@@ -194,7 +194,7 @@ export class DialogueRole extends ModelBuilder {
 			/** 工具函数参数 */
 			const functionArgs = toolCall.function.arguments;
 			/** 查询对应的月华工具包 */
-			const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
+			const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
 			// 检查是否有对应的工具包
 			if (!lunarToolPackage) {
 				source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });

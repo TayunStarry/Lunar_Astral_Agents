@@ -231,7 +231,7 @@ function parseArgs(args?: Record<string, any> | string): Record<string, any> {
 // ==== 工具处理函数 ====
 
 /** 处理创建计划项工具 */
-async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string> { 
+async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string> {
 	const { time, content } = parseArgs(args);
 	if (!time || time.trim().length === 0) {
 		return '创建计划项失败：执行时间不能为空，请提供有效的时间点';
@@ -396,8 +396,10 @@ export function checkDueItems(): ScheduleItem[] {
 // 初始化计划表缓存
 initSchedules();
 
-// 将工具处理函数注册到月华工具协议映射表
-OnlyData.lunarToolPackageMap.set('create_schedule', handleCreateSchedule);
-OnlyData.lunarToolPackageMap.set('edit_schedule', handleEditSchedule);
-OnlyData.lunarToolPackageMap.set('delete_schedule', handleDeleteSchedule);
-OnlyData.lunarToolPackageMap.set('query_schedule', handleQuerySchedule);
+// 注册计划表工具到 LTPfunction 列表
+OnlyData.LTPfunction.set('create_schedule', handleCreateSchedule);
+OnlyData.LTPfunction.set('edit_schedule', handleEditSchedule);
+OnlyData.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
+// 注册计划表工具到 LTPdefinition 列表
+OnlyData.LTPdefinition.push(...scheduleTools);

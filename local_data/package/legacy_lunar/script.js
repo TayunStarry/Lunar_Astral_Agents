@@ -6554,7 +6554,7 @@ async function handleToolCalls(state, messages, messageElement, messageObject) {
         /** 工具函数参数 */
         const functionArgs = toolCall.function.arguments;
         /** 查询对应的月华工具包 */
-        const lunarToolPackage = OnlyData.lunarToolPackageMap.get(functionName);
+        const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
         // 检查是否有对应的工具包
         if (!lunarToolPackage) {
             messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
@@ -6608,7 +6608,7 @@ function subscriptionToolCall(name, callback) {
         return await callback(args, messageElement, messageObject);
     }
     // 注册到全局工具函数映射表
-    OnlyData.lunarToolPackageMap.set(name, event);
+    OnlyData.LTPfunction.set(name, event);
 }
 
 /**
@@ -8701,7 +8701,7 @@ class OnlyData {
     /** 开发者 */
     static developer = '钛宇-星光阁';
     /** 月华工具协议的哈希映射 */
-    static lunarToolPackageMap = new Map();
+    static LTPfunction = new Map();
     /** 工具调用后返回的附件数据 */
     static toolAttachment = [];
     /** 获取 多模态模型 URL */
