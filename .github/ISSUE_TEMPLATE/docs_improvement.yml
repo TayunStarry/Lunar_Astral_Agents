@@ -1,0 +1,56 @@
+name: 文档改进
+description: 报告文档错误或提出文档改进建议
+title: "[Docs] 简要描述文档问题"
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        文档是项目的重要组成部分。感谢你帮助我们发现和修正文档中的问题！
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: 文档类型
+      description: 涉及哪个文档？
+      options:
+        - README.md
+        - ARCHITECTURE.md
+        - CONTRIBUTING.md
+        - CODE_OF_CONDUCT.md
+        - SECURITY.md
+        - 子系统 README
+        - 代码注释
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: 位置
+      description: 指出有问题的具体位置（文件路径 + 行号或章节名）
+      placeholder: "例如：README.md 第 45 行「环境要求」部分"
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: 问题描述
+      description: 文档中有什么问题？（错误、过时、不清楚等）
+      placeholder: "例如：文档中说需要 Go 1.21，但代码中使用了 1.22 才支持的特性"
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 改进建议
+      description: 你建议如何修改？
+      placeholder: "请提供具体的修改建议或修正后的文本"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息

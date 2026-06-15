@@ -1,0 +1,65 @@
+name: 功能请求
+description: 提出一个新功能或改进建议
+title: "[Feature] 简要描述功能"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你提出的功能建议！请详细描述你的想法，帮助我们更好地理解你的需求。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 需求背景
+      description: 这个功能要解决什么问题？请描述你的使用场景。
+      placeholder: "例如：当前无法批量导出聊天记录，每次只能逐条复制，影响效率。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望方案
+      description: 你希望如何实现这个功能？描述你期望的效果。
+      placeholder: "希望在设置页面增加「导出聊天记录」按钮，支持导出为 Markdown 或 JSON 格式。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 你是否考虑过其他替代方案？如果有请说明。
+      placeholder: "也可以通过右键菜单逐条导出，但批量导出更符合需求。"
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: 涉及模块
+      description: 该功能主要涉及哪个模块？
+      options:
+        - 核心 — 月华 (lunar_astral)
+        - 扩展 — 琉璃 (crystal_astral)
+        - 子系统 — 语音合成 (qwen3_tts)
+        - 子系统 — 语音识别 (qwen_asr)
+        - 子系统 — 图像生成 (sd_lunar)
+        - 子系统 — 代理服务 (proxy)
+        - 子系统 — LunarTick 脚本引擎
+        - 前端界面 (package/*)
+        - 其他 (请在补充信息中说明)
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响评估
+      description: 实现此功能可能影响哪些现有模块或功能？如有了解请说明。
+      placeholder: "可能影响消息存储模块和文件导出模块"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息
+      description: 任何其他有助于我们理解该功能请求的信息，如参考截图、设计稿、类似项目实现等

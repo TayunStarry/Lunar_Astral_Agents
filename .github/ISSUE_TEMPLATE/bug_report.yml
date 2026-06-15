@@ -1,0 +1,75 @@
+name: Bug 报告
+description: 报告一个 Bug 或异常行为
+title: "[Bug] 简要描述问题"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你花时间报告这个问题！请尽可能详细地填写以下信息，帮助我们快速定位和修复。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 请清晰描述你遇到的 Bug 是什么
+      placeholder: "例如：点击「发送消息」按钮时，没有任何反应"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请列出触发该问题所需的操作步骤
+      placeholder: |
+        1. 打开「月华」主界面
+        2. 输入消息并点击发送
+        3. 观察消息区域...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你期望发生什么？
+      placeholder: "期望消息能正常发送并显示 AI 回复"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？
+      placeholder: "消息输入框清空，但聊天区域没有显示新消息"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 请提供你的系统信息
+      value: |
+        - 操作系统: [例如 Windows 11 23H2]
+        - Go 版本: [例如 1.22.0]
+        - Node.js 版本 (如有): [例如 18.20.0]
+        - 受影响模块: [例如 lunar_astral]
+        - 项目版本/提交: [例如 v1.0.0 或 commit abc1234]
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或日志
+      description: 如果方便，请附上截图、控制台输出或相关日志文件
+      placeholder: "拖拽文件到此处或粘贴日志文本"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息
+      description: 任何其他有助于解决问题的信息

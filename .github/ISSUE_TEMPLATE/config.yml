@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用问题 / 一般讨论
+    url: https://github.com/TayunStarry/Lunar_Astral_Agents/discussions
+    about: 对于使用问题或一般性讨论，请在 Discussion 区发起
+  - name: 安全漏洞报告
+    url: https://github.com/TayunStarry/Lunar_Astral_Agents/security/advisories/new
+    about: 请通过私密渠道报告安全漏洞，不要公开提交 Issue
