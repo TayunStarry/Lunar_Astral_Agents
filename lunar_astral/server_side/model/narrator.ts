@@ -104,8 +104,8 @@ export function cleanTextForTTS(text: string): string {
  * 将清洗后的文本进行二级智能分句
  *
  * 一级切片：基于语句中断标点（句号、冒号、感叹号、问号、破折号、波浪号）切分
- * 二级切片：对一级切片后超过35字符的片段，基于逗号进一步切分
- * 若片段中不存在可用于分段的标点符号，则保持原片段不切片
+ * 二级切片：对一级切片后超过35字符的片段，优先在逗号处切分；
+ *           若片段内无逗号，则按 MAX_LENGTH 强制等分，确保最终每段不超过 MAX_LENGTH 字符
  * 标点符号始终位于切片末尾，切片顺序与原文完全一致
  *
  * @param text - 清洗后的文本
@@ -158,7 +158,7 @@ export function splitSentences(text: string): string[] {
     // 一级切片
     const level1 = splitByPunct(text, LEVEL1_PUNCT);
 
-    // 二级切片：对超过35字符的片段，在逗号处选择性地切断，确保每段不超过35字符
+    // 二级切片：对超过 MAX_LENGTH 的片段，优先在逗号处切分；无逗号则强制按长度切分
     const result: string[] = [];
     for (const fragment of level1) {
         if (fragment.length <= MAX_LENGTH) {
@@ -166,7 +166,6 @@ export function splitSentences(text: string): string[] {
             continue;
         }
 
-        // 在逗号处切分，但只在必要时切断，确保每段 ≤ 35字符
         let remaining = fragment;
         while (remaining.length > MAX_LENGTH) {
             // 在 MAX_LENGTH 范围内找最后一个逗号位置作为切断点
@@ -183,9 +182,9 @@ export function splitSentences(text: string): string[] {
                 }
             }
 
-            // 无逗号可切，保持原片段不再切分
+            // 无逗号可切：强制按 MAX_LENGTH 长度切分，避免产生超长片段
             if (splitPos === -1) {
-                break;
+                splitPos = MAX_LENGTH;
             }
 
             const slice = remaining.slice(0, splitPos).trim();
