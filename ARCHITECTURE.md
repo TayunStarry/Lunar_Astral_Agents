@@ -4,6 +4,17 @@
 
 ---
 
+## 人格智能体
+
+星月智能平台承载了两位具有独特个性与智慧体系的 AI 人格智能体：
+
+- **月华** — 「月亮的光华」，智慧如月光般温柔普照。她的智能根植于对全量参数 Qwen 大模型的蒸馏与量化，犹如月光将对太阳光芒的温柔反射。月华掌管 AI 角色对话、Live2D 展示与语音表达，是平台的**核心灵魂**。
+- **琉璃** — 「如水晶般澄澈」，透明、轻盈而纯粹。她专注于工具的纯粹性与操作的直观性，掌管文件管理、数据库操作、截图标注等实用工具集，是平台的**扩展基石**。
+
+月华与琉璃如同星与月——月华以温柔智慧照亮对话空间，琉璃以澄澈纯粹夯实工具基石，二者相辅相成。
+
+---
+
 ## 目录
 
 - [整体架构图](#整体架构图)
@@ -165,6 +176,16 @@ Lunar_Astral_Agents/
     │   ├── gguf/               # GGUF 二进制解析
     │   └── server/             # HTTP 服务 + 前端
     │       └── static/        # 前端静态文件
+    ├── image/
+    │   ├── module/
+    │   │   ├── generate.go
+    │   │   ├── keyframe.go
+    │   │   ├── type.go
+    │   │   └── variable.go
+    │   └── server/
+    │       ├── generate.go
+    │       ├── keyframe.go
+    │       └── type.go
     ├── logger/                 # 彩色终端日志
     ├── LunarTick/              # tick 驱动执行引擎
     │   ├── api/                # HTTP API 服务
@@ -486,6 +507,33 @@ Lunar_Astral_Agents/
 | **关联关系** | 被 `lunar_astral` 和 `crystal_astral` 复用 HTTP handler |
 | **架构角色** | 截图基础设施。详见 [subsystem/screenshot/README.md](subsystem/screenshot/README.md) |
 
+#### `image/`
+
+| 维度 | 说明 |
+|------|------|
+| **主要职责** | 图像生成与视频关键帧提取共享库，封装 stable-diffusion.cpp 调用流程与视频帧截取逻辑，采用 Module + Server 二层架构 |
+| **核心模块类型** | Go 图像生成逻辑、关键帧提取、HTTP 处理器 |
+| **关联关系** | `module/generate.go` 调用外部 `sd-cli.exe` 引擎执行扩散模型推理；`module/keyframe.go` 调用外部 `ffmpeg` 工具提取视频帧；被 `lunar_astral` 的图像生成 handler 复用 |
+| **架构角色** | 图像与视频处理的共享基础设施。详见 [subsystem/image/README.md](subsystem/image/README.md) |
+
+##### `image/module/`
+
+| 维度 | 说明 |
+|------|------|
+| **主要职责** | 核心业务逻辑层，实现扩散图像生成（prompt → sd-cli → JPEG）、视频关键帧提取、Base64 编解码 |
+| **核心模块类型** | Go 业务逻辑函数 |
+| **关联关系** | 被 `image/server/` 的 HTTP handler 调用；调用外部引擎 `sd-cli.exe` 和 `ffmpeg` |
+| **架构角色** | 图像处理子系统的逻辑核心 |
+
+##### `image/server/`
+
+| 维度 | 说明 |
+|------|------|
+| **主要职责** | HTTP 服务层，将 `module/` 的业务逻辑暴露为 RESTful API（`/generate`、`/video`） |
+| **核心模块类型** | Go HTTP handler |
+| **关联关系** | 调用 `image/module/` 的业务函数 |
+| **架构角色** | 图像处理子系统的 API 暴露层 |
+
 #### `logger/`
 
 | 维度 | 说明 |
@@ -631,6 +679,15 @@ Lunar_Astral_Agents/
 | **核心模块类型** | Go 业务组件 |
 | **关联关系** | 被 `volume_archive/` 主程序编排调用 |
 | **架构角色** | 卷归档的逻辑核心 |
+
+#### `websearch/`
+
+| 维度 | 说明 |
+|------|------|
+| **主要职责** | 智能网络检索子系统，提供浅层/深层/研究三级搜索策略，通过 Bing + DuckDuckGo 双引擎 HTML 抓取与 LLM 智能总结，将互联网信息高效提炼为结构化结果 |
+| **核心模块类型** | Go 搜索引擎（Bing/DuckDuckGo HTML 解析）、搜索管线（浅层/深层/研究）、LLM 客户端（OpenAI v1 协议） |
+| **关联关系** | 被 `lunar_astral` 和 `crystal_astral` 通过 Go import 直接引用；`deep.go` 和 `research.go` 依赖 LLM API（`/chat/completions`）进行智能总结；`engine.go` 通过 HTTP 抓取 Bing/DuckDuckGo 搜索结果 |
+| **架构角色** | 网络信息检索基础设施，为 AI 对话提供实时搜索能力。详见 [subsystem/websearch/README.md](subsystem/websearch/README.md) |
 
 ### 独立 AI 引擎
 
@@ -865,13 +922,19 @@ lunar_astral
   ├── subsystem/browser         (WebView 窗口)
   ├── subsystem/storage         (文件 + 数据库)
   ├── subsystem/screenshot      (屏幕截图)
+  ├── subsystem/image           (图像生成 + 关键帧)
+  ├── subsystem/websearch       (网络检索)
   └── subsystem/qwen3_tts_lunar (TTS 引擎，CGO 调用)
 
 crystal_astral
   ├── subsystem/config          (配置管理)
   ├── subsystem/browser         (WebView 窗口)
   ├── subsystem/storage         (文件 + 数据库)
-  └── subsystem/screenshot      (屏幕截图)
+  ├── subsystem/screenshot      (屏幕截图)
+  └── subsystem/websearch       (网络检索)
+
+subsystem/websearch
+  └── golang.org/x/net          (HTML 解析)
 
 subsystem/bridge_adapter
   └── subsystem/config          (配置管理)

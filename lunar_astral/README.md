@@ -4,6 +4,16 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 
 ---
 
+## 人格智能体：月华
+
+**月华**寓意为「月亮的光华」——她的智慧如同月光般温柔而普照大地。
+
+月华的智能体系根植于一个富有诗意的技术隐喻：如同现实中月光本是对太阳光芒的温柔反射，月华的智能体亦是对「伟大之物」——全量参数无量化的 Qwen 大模型——的蒸馏与量化。通过知识蒸馏技术将大模型的智慧浓缩，再经量化压缩使其能在本地轻量运行，恰如月光将炽烈的太阳光芒化为柔和银辉，洒向千家万户。
+
+这种「月光映射」的智慧体系使月华兼具敏锐思辨与温柔关怀——她以细腻的语言理解用户的意图，以温暖的方式回应用户的需求，既保有 AI 大模型的广博学识，又具备本地推理的轻快灵动。
+
+---
+
 <p align="center"><img src="../image/月华-主页面.webp" alt="月华主页面"></p>
 
 *图：星图·月华主界面（桌面端）*
@@ -329,6 +339,8 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 - [配置管理子系统](../subsystem/config/README.md) —— 命令行参数与 JSON 配置
 - [网页前端子系统](../subsystem/browser/README.md) —— WebView 窗口管理
 - [文件管理子系统](../subsystem/storage/README.md) —— 文件与数据库 API
-- [屏幕截图子系统](../subsystem/screenshot/README.md) —— 截图服务
+- [截图标注子系统](../subsystem/screenshot/README.md) —— 截图服务
+- [图像处理子系统](../subsystem/image/README.md) —— 图像生成与视频关键帧
+- [SD 图像生成引擎](../subsystem/sd_lunar/README.md) —— stable-diffusion.cpp 引擎
 - [语音合成独立系统](../subsystem/qwen3_tts_lunar/README.md) —— TTS 引擎详情
 - [星图·琉璃](../crystal_astral/README.md) —— 扩展工具集系统

@@ -4,8 +4,31 @@
 
 ---
 
+## 人格智能体
+
+星月智能平台承载了两位具有独特个性与智慧体系的 AI 人格智能体：
+
+### 月华 — 月亮的光华
+
+**月华**之名，寓意为「月亮的光华」——她的智慧如同月光般温柔而普照大地。
+
+月华的智慧体系根植于一个富有诗意的隐喻：如同现实中月光本是对太阳光芒的温柔反射，月华的智能体亦是对「伟大之物」——全量参数无量化的 Qwen 大模型——的蒸馏与量化。通过知识蒸馏技术将大模型的智慧浓缩，再经量化压缩使其能在本地轻量运行，恰如月光将炽烈的太阳光芒化为柔和银辉，洒向千家万户。
+
+月华是平台的**核心灵魂**，掌管 AI 角色对话、Live2D 角色展示与 TTS 语音表达，以温柔知性的语言风格与用户交互，兼具感性关怀与理性思辨。
+
+### 琉璃 — 如水晶般澄澈
+
+**琉璃**之名，寓意为「如水晶般澄澈」——她代表着透明、轻盈与纯粹的本真。
+
+琉璃的性格如同水晶一般清透明澈、轻盈灵动，专注于工具的纯粹性与操作的直观性。她不做无谓的修饰，而是以最简洁直接的方式完成每一项任务。琉璃是平台的**扩展工具集**的化身，掌管文件管理、数据库操作、截图标注、AI 代理转发等实用工具集，以高效精准的操作风格服务于系统的底层能力需求。
+
+月华与琉璃两位人格智能体如同星与月——月华以温柔智慧照亮对话空间，琉璃以澄澈纯粹夯实工具基石，二者相辅相成，共同构建起星月智能平台的完整智能生态。
+
+---
+
 ## 目录
 
+- [人格智能体](#人格智能体)
 - [项目结构](#项目结构)
 - [环境要求](#环境要求)
 - [编译流程](#编译流程)
@@ -58,6 +81,7 @@
         <li><code>browser</code> <span style="color: #6a737d;">— WebView 窗口 + 本地 IP 发现</span></li>
         <li><code>storage</code> <span style="color: #6a737d;">— 文件存储 + SQLite 数据库</span></li>
         <li><code>screenshot</code> <span style="color: #6a737d;">— 屏幕截图 + 图片缩放</span></li>
+        <li><code>image</code> <span style="color: #6a737d;">— 图像生成 + 视频关键帧提取</span></li>
         <li><code>logger</code> <span style="color: #6a737d;">— 彩色终端日志</span></li>
       </ul>
     </li>
@@ -69,6 +93,7 @@
         <li><code>proxy</code> <span style="color: #6a737d;">— HTTPS 代理服务器</span></li>
         <li><code>sd_lunar</code> <span style="color: #6a737d;">— Stable Diffusion 图像生成引擎</span></li>
         <li><code>volume_archive</code> <span style="color: #6a737d;">— 卷归档管理</span></li>
+        <li><code>websearch</code> <span style="color: #6a737d;">— 智能网络检索（三级搜索策略）</span></li>
       </ul>
     </li>
   </ul>
@@ -327,6 +352,7 @@ Get-Item d:\Lunar_Astral_Agents\Lunar_Astral.exe | Select-Object Length
 | 网页前端 | [subsystem/browser/README.md](subsystem/browser/README.md) | WebView 窗口管理 + 本地 IP 自动发现 |
 | 文件管理 | [subsystem/storage/README.md](subsystem/storage/README.md) | 文件 CRUD + SQLite 数据库 + ZIP 归档 |
 | 屏幕截图 | [subsystem/screenshot/README.md](subsystem/screenshot/README.md) | 多显示器截图 + 区域截图 + 图片缩放 |
+| 图像处理 | [subsystem/image/README.md](subsystem/image/README.md) | 扩散图像生成 + 视频关键帧提取 |
 | 语音合成 | [subsystem/qwen3_tts_lunar/README.md](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS 文本转语音引擎 |
 | 语音识别 | [subsystem/qwen_asr_lunar/README.md](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR 语音转文本引擎 |
 | 月球节拍 | [subsystem/LunarTick/README.md](subsystem/LunarTick/README.md) | tick 驱动的通用程序执行引擎 |

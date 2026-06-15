@@ -1,221 +1,361 @@
-# WebSearch - 网络检索子系统
+# 网络检索子系统（websearch）
 
-独立、完整的网络检索子系统，支持浅层搜索、深层搜索（AI增强）和研究搜索三种模式。可无缝嵌入任何 Go 项目。
+基于 Go 的智能网络检索子系统，提供**浅层搜索**、**深层搜索**、**研究搜索**三级检索策略。通过多引擎（Bing + DuckDuckGo）HTML 抓取、网页内容获取、LLM 智能总结与子问题拆解等流水线技术，将互联网信息高效提炼为结构化的搜索结果。
 
-## 架构概览
+---
+
+## 目录
+
+- [功能概览](#功能概览)
+- [项目结构](#项目结构)
+- [核心架构](#核心架构)
+- [模块详解](#模块详解)
+- [配置说明](#配置说明)
+- [API 接口](#api-接口)
+- [依赖关系](#依赖关系)
+- [使用示例](#使用示例)
+
+---
+
+## 功能概览
+
+| 搜索模式 | 标识 | 说明 |
+|---------|------|------|
+| **浅层搜索** | `shallow` | Bing 优先 → DuckDuckGo 回退，HTML 解析提取标题/摘要/URL |
+| **深层搜索** | `deep` | 浅层搜索 + 网页内容抓取 + 相关性过滤 + LLM 智能总结 |
+| **研究搜索** | `research` | LLM 子问题拆解 → 并行浅层搜索 → 跨子问题 URL 去重 → 综合报告生成 |
+
+三层策略递增：
+
+```
+浅层搜索                    深层搜索                         研究搜索
+Bing → DDG               浅层 + 抓取网页正文              拆解子问题（LLM）
+  ↓                         ↓                              ↓
+格式化输出                相关性过滤                     并行搜索子问题
+                          ↓                              ↓
+                       LLM 智能总结                   URL 去重合并
+                                                        ↓
+                                                   综合研究报告（LLM）
+```
+
+---
+
+## 项目结构
 
 ```
 websearch/
-├── type.go          # 所有类型定义（接口、结构体、枚举）
-├── variable.go      # 包级变量与默认配置
-├── search.go        # 统一入口（System 结构体 + 便捷函数）
-├── engine.go        # 搜索引擎实现（Bing、DuckDuckGo、HTML 解析）
-├── llm.go           # OpenAI v1 协议 LLM 客户端
-├── shallow.go       # 浅层搜索（Bing + DDG 回退）
-├── deep.go          # 深层搜索（搜索 + 抓取 + LLM 总结）
-├── research.go      # 研究搜索（子问题拆解 + 并行搜索 + 综合报告）
-├── format.go        # 结果格式化
-├── search_test.go   # 测试
-├── go.mod / go.sum  # 独立 Go 模块
-└── README.md
+├── type.go          # 类型定义：SearchMode、Searcher 接口、Config 配置树、LLM 协议类型
+├── variable.go      # 默认配置常量
+├── engine.go        # 搜索引擎实现：Bing + DuckDuckGo HTML 抓取与解析
+├── shallow.go       # 浅层搜索器：Bing 优先 → DDG 回退
+├── deep.go          # 深层搜索器：搜索→抓取→相关性过滤→LLM 总结
+├── research.go      # 研究搜索器：子问题拆解→并行搜索→URL去重→综合报告
+├── llm.go           # LLM 客户端：OpenAI v1 协议兼容（/chat/completions）
+├── format.go        # 输出格式化器：自然语言、截断、LLM 专用格式
+├── search.go        # 子系统入口：New()、Search()、便捷函数
+├── go.mod           # Go Module 定义
+└── go.sum           # 依赖校验
 ```
 
-## 快速开始
+---
 
-### 1. 引入依赖
+## 核心架构
 
-在 `go.mod` 中添加：
+### 三层搜索流水线
 
 ```
-require websearch v0.0.0
+                        ┌──────────────────────────┐
+                        │        System             │
+                        │   Search(query, mode)     │
+                        └────────────┬─────────────┘
+                                     │
+            ┌────────────────────────┼────────────────────────┐
+            ▼                        ▼                        ▼
+   ┌────────────────┐     ┌──────────────────┐     ┌───────────────────┐
+   │ ShallowSearcher│     │   DeepSearcher   │     │ ResearchSearcher  │
+   │                │     │                  │     │                   │
+   │ Bing ──→ DDG  │     │ Shallow.searchRaw│     │  decomposeQuery   │
+   │     (回退)     │     │        ↓         │     │  (LLM 拆解)       │
+   │                │     │  fetchContent    │     │        ↓          │
+   └───────┬────────┘     │  (网页正文抓取)  │     │  并行 shallow 搜索 │
+           │              │        ↓         │     │        ↓          │
+           ▼              │  relevanceFilter │     │  URL 去重         │
+   ┌────────────────┐     │  (关键词相关性)  │     │        ↓          │
+   │ formatResults  │     │        ↓         │     │  generateReport   │
+   └────────────────┘     │  LLM.summarize  │     │  (LLM 综合报告)   │
+                          │  (智能总结)      │     └───────────────────┘
+                          └──────────────────┘
 ```
 
-或直接将 `websearch` 目录复制到项目中，替换 module 路径。
+### 搜索引擎层
 
-### 2. 最简用法 — 浅层搜索
-
-```go
-package main
-
-import (
-    "fmt"
-    "log"
-    "websearch"
-)
-
-func main() {
-    // 使用默认配置创建（无需 AI，仅浅层搜索）
-    sys := websearch.New()
-
-    result, err := sys.ShallowSearch("Go 语言并发编程")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println(result)
-}
+```
+          ┌──────────────┐
+          │   Searcher   │  ← 接口
+          │   Interface  │
+          └──────┬───────┘
+                 │
+     ┌───────────┴───────────┐
+     ▼                       ▼
+┌─────────────┐     ┌─────────────────┐
+│ BingSearcher│     │DuckDuckGoSearcher│
+│             │     │                  │
+│ bing.com    │     │ lite.duckduckgo │
+│ b_algo 解析 │     │ .com/lite/      │
+│ HTML 遍历   │     │ result-snippet  │
+└─────────────┘     └─────────────────┘
 ```
 
-### 3. 深层搜索 — 需要 AI
+---
 
-```go
-package main
+## 模块详解
 
-import (
-    "fmt"
-    "log"
-    "websearch"
-)
+### `type.go` — 类型体系
 
-func main() {
-    cfg := websearch.DefaultConfig()
-    // 配置 OpenAI v1 协议兼容的 AI 服务
-    cfg.LLM.BaseURL = "https://api.openai.com/v1"
-    cfg.LLM.APIKey  = "sk-your-api-key"
-    cfg.LLM.Model   = "gpt-4o-mini"
+| 类型 | 说明 |
+|------|------|
+| `SearchMode` | 搜索模式枚举：`shallow` / `deep` / `research` |
+| `SearchResult` | 单条搜索结果：Title、URL、Snippet |
+| `Searcher` | 搜索引擎接口：`Search(query, limit)` + `Name()` |
+| `Config` | 完整配置树（浅层/深层/研究/LLM/HTTP 子配置） |
+| `ChatMessage` / `ChatRequest` / `ChatResponse` | OpenAI v1 协议数据结构 |
+| `Provider` | LLM 提供者接口：`Chat(messages) → (text, error)` |
 
-    sys := websearch.NewWithConfig(cfg)
+**配置树嵌套结构**：
 
-    // 深层搜索：搜索 + 网页抓取 + AI 总结
-    result, err := sys.DeepSearch("深度学习的核心概念")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println(result)
-}
+```
+Config
+├── Shallow:  ShallowConfig  (MaxResults)
+├── Deep:     DeepConfig     (MaxResults, FetchContent, FetchTimeout, MaxContentLength)
+├── Research: ResearchConfig (MaxResults, MaxSubQueries)
+├── LLM:      LLMConfig      (BaseURL, APIKey, Model, MaxTokens, Temperature)
+└── HTTP:     HTTPConfig     (Timeout, UserAgent)
 ```
 
-### 4. 研究搜索 — 多维度深度分析
+### `engine.go` — 搜索引擎
 
-```go
-// 研究搜索：自动拆解子问题 → 并行搜索 → AI 综合报告
-result, err := sys.ResearchSearch("2024年AI大模型在医疗领域的应用进展与挑战")
+| 引擎 | 搜索源 | 解析方式 |
+|------|--------|----------|
+| `BingSearcher` | `bing.com/search?mkt=zh-CN` | HTML 遍历 `b_algo` → `h2` 标题 / `a` 链接 / `b_caption` 摘要 |
+| `DuckDuckGoSearcher` | `lite.duckduckgo.com/lite/` | HTML 遍历 `result-snippet` → `a` 标题+链接 / 文本摘要 |
+
+**Bing 查询优化**：中文短查询（3-10个汉字）自动加双引号精确匹配，提升中文搜索质量。
+
+**通用工具**：
+- `extractTextContent()` — 从 HTML 中提取正文（跳过 script/style/nav/footer/header）
+- `truncateText()` — 按 Unicode 字符截断
+
+### `shallow.go` — 浅层搜索器
+
+**策略**：Bing 优先 → 失败时自动回退到 DuckDuckGo。
+
+| 方法 | 返回 | 说明 |
+|------|------|------|
+| `Search(query)` | 格式化文本 | Bing → DDG 回退，返回自然语言格式 |
+| `SearchRaw(query)` | `[]SearchResult` | 返回原始结构化数据，供深层/研究搜索复用 |
+
+### `deep.go` — 深层搜索器
+
+**三级流水线**：
+
+1. **搜索** → 调用 `ShallowSearcher.SearchRaw()` 获取原始结果
+2. **抓取** → HTTP GET 每个结果 URL，`extractTextContent()` 提取正文（1MB 上限）
+3. **过滤** → `checkContentRelevance()` 三级关键词匹配判定：
+   - 完整查询词匹配标题/摘要 → 直接通过
+   - 任意关键词匹配标题/摘要 → 通过
+   - 仅内容匹配 → 需 ≥1 个关键词
+4. **总结** → LLM 基于搜索结果生成结构化总结（总结 → 分点 → 来源）
+
+**token 预算控制**：
+
+| 预算项 | 限额 | 说明 |
+|--------|------|------|
+| 最大抓取条数 | 30 | 深层搜索最多抓取网页数 |
+| 总内容预算 | 8000 字符 | 所有搜索内容总字符上限 |
+| 单页截断 | 1500 字符 | 每个网页最多保留字符数 |
+| LLM 输出上限 | 1500 字符 | LLM 回复最大字符数 |
+| Prompt 预算 | 8000 字符 | LLM Prompt 总大小限制 |
+
+### `research.go` — 研究搜索器
+
+**四级流水线**：
+
+1. **拆解** → LLM 将用户问题拆解为 3-6 个互补子问题（JSON 数组格式）
+2. **并行搜索** → goroutine 并发执行每个子问题的浅层搜索
+3. **去重** → 跨子问题 URL 去重（trim 尾部 `/` 后标准化对比）
+4. **报告生成** → LLM 汇总所有子问题结果，生成结构化研究报告（核心发现 → 详细分析 → 信息来源）
+
+**预算控制**：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| 每个子问题最多结果 | 15 | 单子问题搜索结果上限 |
+| Snippet 截断 | 150 字符 | 注入报告时的摘要截断 |
+| Prompt 总预算 | 12000 字符 | 报告生成 prompt 预算 |
+| 报告输出上限 | 3000 字符 | LLM 生成报告最大长度 |
+| 子问题注入预算 | 8000 字符 | 子问题结果注入 prompt 总量 |
+
+### `llm.go` — LLM 客户端
+
+`OpenAIProvider` 实现 OpenAI v1 `/chat/completions` 协议：
+
+```
+POST {BaseURL}/chat/completions
+Authorization: Bearer {APIKey}
+Content-Type: application/json
+
+{ "model": "...", "messages": [...], "max_tokens": N, "temperature": T }
 ```
 
-### 5. 按模式搜索
+- 兼容任何 OpenAI v1 协议兼容的 API 端点（如 LM Studio、Ollama、vLLM 等本地推理服务）
+- 默认超时 120 秒（适配本地模型推理延迟）
 
-```go
-result, err := sys.Search("查询内容", websearch.ModeShallow)   // 浅层
-result, err := sys.Search("查询内容", websearch.ModeDeep)       // 深层
-result, err := sys.Search("查询内容", websearch.ModeResearch)   // 研究
-```
+### `format.go` — 输出格式化
 
-## 三种搜索模式
+| 函数 | 用途 |
+|------|------|
+| `formatResults()` | 浅层搜索自然语言格式：「标题」：摘要 |
+| `formatResultsTruncated()` | 带 Snippet 截断保护（防 prompt 溢出） |
+| `formatResultsForLLM()` | LLM 专用格式：编号 + Markdown + 来源 URL |
+| `formatDeepResultsFallback()` | 深层搜索无 LLM 时的 fallback 格式化（4000 字符截断保护） |
 
-| 模式 | 说明 | 需要 AI | 适用场景 |
-|------|------|---------|----------|
-| **浅层搜索** | Bing + DuckDuckGo 回退，快速获取结果 | 否 | 快速查询、简单信息获取 |
-| **深层搜索** | 搜索 + 网页内容抓取 + AI 总结 | 是 | 需要深度分析和总结的查询 |
-| **研究搜索** | 子问题拆解 + 并行搜索 + AI 综合报告 | 是 | 复杂多维度研究问题 |
+### `search.go` — 子系统入口
+
+| 构造函数 | 说明 |
+|----------|------|
+| `New()` | 默认配置，LLM 功能不可用（仅浅层搜索） |
+| `NewWithConfig(cfg)` | 自定义完整配置 |
+| `NewWithLLM(cfg, provider)` | 注入自定义 LLM Provider |
+
+| 搜索方法 | 说明 |
+|----------|------|
+| `Search(query, mode)` | 按模式自动路由到对应搜索器 |
+| `ShallowSearch(query)` | 浅层搜索，无需 LLM |
+| `DeepSearch(query)` | 深层搜索，需 LLM |
+| `ResearchSearch(query)` | 研究搜索，需 LLM |
+
+| 便捷函数 | 说明 |
+|----------|------|
+| `QuickSearch(query)` | 一行浅层搜索 |
+| `QuickDeepSearch(query, llmCfg)` | 一行深层搜索 |
+| `QuickResearchSearch(query, llmCfg)` | 一行研究搜索 |
+
+---
 
 ## 配置说明
 
+### 默认配置
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `Shallow.MaxResults` | 10 | 浅层搜索返回数 |
+| `Deep.MaxResults` | 30 | 深层搜索抓取条数 |
+| `Deep.FetchContent` | `true` | 是否抓取网页正文 |
+| `Deep.FetchTimeout` | 10s | 单页抓取超时 |
+| `Deep.MaxContentLength` | 2000 | 单页内容上限 |
+| `Research.MaxResults` | 10 | 研究搜索单子问题结果数 |
+| `Research.MaxSubQueries` | 6 | 最大子问题数量 |
+| `LLM.BaseURL` | `https://api.openai.com/v1` | LLM API 地址（可替换为本地服务） |
+| `LLM.Model` | `gpt-4o-mini` | 默认模型 |
+| `LLM.MaxTokens` | 4096 | 最大输出 token |
+| `LLM.Temperature` | 0.7 | 生成温度 |
+| `HTTP.Timeout` | 10s | HTTP 请求超时 |
+| `HTTP.UserAgent` | Chrome 120 / Win10 | 搜索引擎请求 UA |
+
+---
+
+## API 接口
+
+### Go 库调用
+
 ```go
+import "websearch"
+
+// 1. 一行浅层搜索（无需 LLM）
+result, err := websearch.QuickSearch("Go 语言最新版本")
+
+// 2. 深层搜索（需 LLM）
+llmCfg := websearch.LLMConfig{
+    BaseURL: "http://localhost:1234/v1",
+    Model:   "qwen2.5-7b-instruct",
+    APIKey:  "not-needed",
+}
+result, err := websearch.QuickDeepSearch("量子计算最新进展", llmCfg)
+
+// 3. 研究搜索（需 LLM）
+result, err := websearch.QuickResearchSearch("AI 在医疗领域的应用", llmCfg)
+
+// 4. 自定义配置
 cfg := websearch.DefaultConfig()
-
-// 浅层搜索配置
-cfg.Shallow.MaxResults = 10           // 最大搜索结果数
-
-// 深层搜索配置
-cfg.Deep.MaxResults      = 30         // 最大搜索结果数
-cfg.Deep.FetchContent    = true       // 是否抓取网页正文
-cfg.Deep.FetchTimeout    = 10         // 抓取超时（秒）
-cfg.Deep.MaxContentLength = 2000      // 单页最大内容长度（字符）
-
-// 研究搜索配置
-cfg.Research.MaxResults    = 10       // 每个子问题最大结果数
-cfg.Research.MaxSubQueries = 6        // 最大子问题数量
-
-// AI 配置（遵循 OpenAI v1 协议）
-cfg.LLM.BaseURL     = "https://api.openai.com/v1"
-cfg.LLM.APIKey      = "sk-xxx"
-cfg.LLM.Model       = "gpt-4o-mini"
-cfg.LLM.MaxTokens   = 4096
-cfg.LLM.Temperature = 0.7
-
-// HTTP 配置
-cfg.HTTP.Timeout   = 10 * time.Second
-cfg.HTTP.UserAgent = "Mozilla/5.0 ..."
+cfg.LLM = llmCfg
+sys := websearch.NewWithConfig(cfg)
+sys.SetShallowMaxResults(15)
+result, err := sys.Search("你的问题", websearch.ModeDeep)
 ```
 
-## 自定义 LLM 提供者
+### 便捷函数对比
 
-实现 `websearch.Provider` 接口即可接入任意 AI 服务：
+| 函数 | 需要 LLM | 返回格式 |
+|------|----------|----------|
+| `QuickSearch(query)` | 否 | 自然语言列表 |
+| `QuickDeepSearch(query, llmCfg)` | 是 | LLM 总结 + 来源 |
+| `QuickResearchSearch(query, llmCfg)` | 是 | 结构化研究报告 |
+
+---
+
+## 依赖关系
+
+### Go Module 依赖
+
+```
+websearch
+  └── golang.org/x/net  v0.40.0  (HTML 解析)
+```
+
+### 跨模块调用关系
+
+```
+lunar_astral / crystal_astral
+        │
+        ▼
+┌───────────────┐
+│   websearch   │  ← 网络检索子系统（库级调用）
+│               │
+│  ├─ engine.go │  → HTTP GET  Bing / DuckDuckGo（外部网络）
+│  ├─ deep.go   │  → HTTP GET  搜索结果网页（外部网络）
+│  └─ llm.go    │  → HTTP POST LLM API（本地或远程 /chat/completions）
+└───────────────┘
+```
+
+- **被调用方**：`lunar_astral` 和 `crystal_astral` 通过 Go import 直接引入
+- **无 DB 依赖**：纯无状态网络检索，不使用 SQLite 或文件存储
+- **外部依赖**：仅 `golang.org/x/net` 用于 HTML 解析
+
+---
+
+## 使用示例
+
+### 场景一：AI 对话中实时搜索
 
 ```go
-type Provider interface {
-    Chat(messages []ChatMessage) (string, error)
-}
+// 月华对话中，用户问实时信息
+searchSys := websearch.NewWithConfig(cfg)
+result, _ := searchSys.DeepSearch("今天北京的天气怎么样")
+// → LLM 总结后的结构化回答，带来源引用
 ```
 
-使用方式：
+### 场景二：知识深度研究
 
 ```go
-provider := myCustomLLMProvider{}
-sys := websearch.NewWithLLM(cfg, provider)
+// 琉璃文件管理场景，用户需要多方信息对比
+result, _ := searchSys.ResearchSearch("Go vs Rust 在系统编程中的优劣比较")
+// → 子问题拆解 → 并行搜索 → URL去重 → 综合研究报告（含核心发现、详细分析、来源列表）
 ```
 
-## 自定义搜索引擎
-
-实现 `websearch.Searcher` 接口即可扩展搜索引擎：
+### 场景三：轻量级快速查询
 
 ```go
-type Searcher interface {
-    Search(query string, limit int) ([]SearchResult, error)
-    Name() string
-}
+// 只需简单搜索结果的场景
+result, _ := websearch.QuickSearch("golang.org/x/net 最新版本")
+// → 纯搜索列表，无 LLM 开销
 ```
-
-通过 `websearch.NewShallowSearcherWithEngine` 注入自定义引擎：
-
-```go
-bing := myBingSearcher{}
-ddg  := myDDGSearcher{}
-sh   := websearch.NewShallowSearcherWithEngine(bing, ddg, 10)
-```
-
-## 便捷函数
-
-```go
-// 快速浅层搜索（默认配置）
-result, err := websearch.QuickSearch("查询内容")
-
-// 快速深层搜索
-result, err := websearch.QuickDeepSearch("查询内容", websearch.LLMConfig{
-    BaseURL: "https://api.openai.com/v1",
-    APIKey:  "sk-xxx",
-    Model:   "gpt-4o-mini",
-})
-
-// 快速研究搜索
-result, err := websearch.QuickResearchSearch("查询内容", llmCfg)
-```
-
-## 错误处理
-
-所有搜索方法在 AI 不可用时自动降级：
-
-- **深层搜索**：LLM 不可用时，回退到原始搜索结果格式化输出
-- **研究搜索**：LLM 拆解失败时，降级为单问题搜索；报告生成失败时，回退到原始汇总
-- **浅层搜索**：Bing 失败时自动回退到 DuckDuckGo
-
-## 运行测试
-
-```bash
-cd subsystem/websearch
-go test ./... -v
-```
-
-## 依赖
-
-- `golang.org/x/net` — HTML 解析
-
-## OpenAI v1 协议兼容性
-
-LLM 客户端严格遵循 OpenAI Chat Completions API 规范：
-
-- 端点：`POST {BaseURL}/chat/completions`
-- 认证：`Authorization: Bearer {APIKey}`
-- 请求体：`{ model, messages, max_tokens, temperature }`
-- 响应体：`{ choices: [{ message: { role, content } }] }`
-
-兼容所有 OpenAI v1 协议的服务，包括但不限于：OpenAI、Azure OpenAI、DeepSeek、通义千问、智谱 AI 等。
