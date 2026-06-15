@@ -202,6 +202,14 @@ declare global {
      */
     function webSearchShallow(query: string): [string, Error | null];
     /**
+     * 执行研究搜索（子问题拆解 + 并行搜索 + URL去重 + 综合报告）
+     *
+     * @param {string} query 搜索查询
+     *
+     * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
+     */
+    function webSearchResearch(query: string): [string, Error | null];
+    /**
      * 检查网络检索子系统是否已初始化
      *
      * @returns {boolean} 是否已初始化

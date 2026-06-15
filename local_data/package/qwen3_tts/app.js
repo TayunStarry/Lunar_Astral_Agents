@@ -203,6 +203,7 @@ function togglePlayPause() {
         AUDIO_PLAYER.play().then(() => {
             ICON_PLAY.classList.add('hidden');
             ICON_PAUSE.classList.remove('hidden');
+            startWaveformAnimation();
         }).catch(error => {
             console.error('播放失败:', error);
             showStatus('播放失败，请重试', 'error');
@@ -211,6 +212,7 @@ function togglePlayPause() {
         AUDIO_PLAYER.pause();
         ICON_PLAY.classList.remove('hidden');
         ICON_PAUSE.classList.add('hidden');
+        stopWaveformAnimation();
     }
 }
 
@@ -724,6 +726,7 @@ function stopAudio() {
     AUDIO_PLAYER.pause();
     AUDIO_PLAYER.currentTime = 0;
     resetPlayerControls();
+    stopWaveformAnimation();
 }
 
 function handleSeek() {
@@ -756,6 +759,7 @@ function handleMetadataLoaded() {
 
 function handleAudioEnded() {
     resetPlayerControls();
+    stopWaveformAnimation();
 }
 
 function downloadAudio() {
@@ -812,7 +816,7 @@ function startWaveformAnimation() {
     for (let i = 0; i < barCount; i++) {
         const bar = document.createElement('div');
         bar.className = 'waveform-bar';
-        bar.style.animationDelay = (i * 0.04) + 's';
+        bar.style.height = '6px';
         bars.push(bar);
         WAVEFORM.appendChild(bar);
     }

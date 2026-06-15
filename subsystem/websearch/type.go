@@ -175,11 +175,31 @@ type DeepSearcher struct {
 // 研究搜索器
 // ============================================================
 
-// subResult 子问题搜索结果
+// 研究搜索预算
+const (
+	researchMaxResultsPerSub   = 15    // 每个子问题最多返回结果数
+	researchMaxSnippetLen      = 150   // 每条Snippet最大字符数
+	researchMaxPromptChars     = 12000 // generateReport prompt总预算
+	researchMaxOutputChars     = 3000  // LLM报告输出最大字符数
+	researchMaxSubResultsChars = 8000  // 子问题结果注入generateReport的总预算
+
+)
+
+// 深层搜索预算
+const (
+	deepMaxFetchResults    = 30   // 深层搜索最多抓取条数
+	deepMaxTotalContentLen = 8000 // 总内容预算：最多8000字符
+	deepMaxPerPageLen      = 1500 // 单页截断
+	deepMaxLLMOutputLen    = 1500 // LLM 总结输出上限
+	deepMaxPromptChars     = 8000 // prompt 总大小预算
+	deepMaxFallbackChars   = 4000 // 回退格式化截断上限
+)
+
+// subResult 子问题搜索结果（保留原始结果用于URL去重）
 type subResult struct {
-	Query  string
-	Result string
-	Error  error
+	Query   string
+	Results []SearchResult // 原始结果，用于URL去重
+	Error   error
 }
 
 // ResearchSearcher 研究搜索器：子问题拆解 + 并行搜索 + 综合报告

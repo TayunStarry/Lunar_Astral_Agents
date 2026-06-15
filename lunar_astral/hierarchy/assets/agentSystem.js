@@ -1997,7 +1997,7 @@ var agentSystem = (function (exports) {
                     }
                 }
                 if (splitPos === -1) {
-                    break;
+                    splitPos = MAX_LENGTH;
                 }
                 const slice = remaining.slice(0, splitPos).trim();
                 if (slice.length > 0) {
@@ -2055,6 +2055,12 @@ var agentSystem = (function (exports) {
     }
     function executeWebSearch(query, mode = 'deep') {
         try {
+            if (mode === 'research') {
+                const [result, err] = webSearchResearch(query);
+                if (err)
+                    return ['', err];
+                return [result, null];
+            }
             if (mode === 'deep') {
                 const [result, err] = webSearchDeep(query);
                 if (err)
@@ -2075,7 +2081,7 @@ var agentSystem = (function (exports) {
             type: "function",
             function: {
                 name: "web_search",
-                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持两种模式：shallow（普通搜索，仅返回搜索结果摘要）和 deep（深度搜索，抓取网页内容并用AI总结，适合需要详细信息的场景）。默认使用 deep 模式。",
+                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：shallow（普通搜索，仅返回搜索结果摘要）、deep（深度搜索，抓取网页内容并用AI总结，适合需要详细信息的场景）、research（研究搜索，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。默认使用 deep 模式。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -2085,8 +2091,8 @@ var agentSystem = (function (exports) {
                         },
                         mode: {
                             type: "string",
-                            description: "搜索模式：shallow（普通搜索）或 deep（深度搜索，默认）",
-                            enum: ["shallow", "deep"]
+                            description: "搜索模式：shallow（普通搜索）、deep（深度搜索，默认）或 research（研究搜索，全面深入分析）",
+                            enum: ["shallow", "deep", "research"]
                         }
                     },
                     required: ["query"]

@@ -68,6 +68,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("webSearchInit", adapters.webSearchInit)
 	vm.Set("webSearchDeep", adapters.webSearchDeep)
 	vm.Set("webSearchShallow", adapters.webSearchShallow)
+	vm.Set("webSearchResearch", adapters.webSearchResearch)
 	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
 }
 

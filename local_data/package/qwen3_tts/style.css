@@ -970,13 +970,8 @@ code {
     width: clamp(3px, 0.45vw, 5px);
     background: linear-gradient(to top, var(--accent), var(--brand-primary));
     border-radius: 3px;
-    animation: flexWave 1s infinite ease-in-out;
     opacity: 0.75;
-}
-
-@keyframes flexWave {
-    0%, 100% { height: 6px; opacity: 0.5; }
-    50% { height: 65%; opacity: 0.9; background: linear-gradient(to top, var(--danger), var(--brand-primary)); }
+    transition: height 0.12s ease-out;
 }
 
 /* ---------- 播放器控制 ---------- */
@@ -1375,16 +1370,18 @@ code {
 }
 
 .queue-current-text {
-    font-size: 0.78rem;
-    color: var(--text-muted);
+    font-size: 0.82rem;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
-    padding: 0.4rem 0.6rem;
-    background: rgba(128, 128, 128, 0.04);
-    border-radius: 8px;
-    max-height: 2.4em;
+    padding: 0.5rem 0.7rem;
+    background: rgba(157, 107, 255, 0.06);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    max-height: 3.6em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 500;
 }
 
 .queue-list {
@@ -1399,18 +1396,19 @@ code {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.3rem 0.5rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 6px;
-    font-size: 0.75rem;
+    font-size: 0.82rem;
     transition: background var(--transition);
 }
 
 .queue-item-pending { color: var(--text-muted); }
 
 .queue-item-active {
-    background: rgba(157, 107, 255, 0.06);
+    background: rgba(157, 107, 255, 0.10);
     color: var(--accent);
-    font-weight: 500;
+    font-weight: 700;
+    font-size: 0.85rem;
 }
 
 .queue-item-done { color: var(--success); }

@@ -13,4 +13,4 @@ export interface WebSearchConfig {
 }
 
 /** 搜索模式类型 */
-export type SearchMode = 'shallow' | 'deep';
+export type SearchMode = 'shallow' | 'deep' | 'research';
