@@ -53,10 +53,8 @@ func (s *ShallowSearcher) Search(query string) (string, error) {
 
 // SearchRaw 执行浅层搜索，返回原始结果（不格式化）
 func (s *ShallowSearcher) SearchRaw(query string) ([]SearchResult, error) {
-	limit := s.maxResults
-	if limit <= 0 {
-		limit = 10
-	}
+	// 硬性上限：最少抓取10条
+	limit := max(s.maxResults, 10)
 
 	results, err := s.bing.Search(query, limit)
 	if err == nil && len(results) > 0 {
