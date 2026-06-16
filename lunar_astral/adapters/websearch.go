@@ -50,22 +50,22 @@ func (class *Runtime) webSearchInit(call goja.FunctionCall) goja.Value {
 	if webSearchSystem.HasLLM() {
 		logger.Info("LunarCore", "网络检索子系统初始化成功，LLM 已配置: %s", model)
 	} else {
-		logger.Warn("LunarCore", "网络检索子系统初始化成功，但 LLM 未配置，深层搜索将降级为浅层搜索")
+		logger.Warn("LunarCore", "网络检索子系统初始化成功，但 LLM 未配置，网页搜索将降级为轻量摘要")
 	}
 
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// webSearchDeep 执行深层搜索
+// webSearchWebpage 执行网页搜索
 // 参数: query
 // 返回值: [string, error]
-func (class *Runtime) webSearchDeep(call goja.FunctionCall) goja.Value {
+func (class *Runtime) webSearchWebpage(call goja.FunctionCall) goja.Value {
 	if webSearchSystem == nil {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("网络检索子系统未初始化，请先调用 webSearchInit")})
 	}
 
 	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchDeep 参数不足，需要 query")})
+		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchWebpage 参数不足，需要 query")})
 	}
 
 	query, ok := call.Argument(0).Export().(string)
@@ -73,27 +73,27 @@ func (class *Runtime) webSearchDeep(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("query 必须是字符串")})
 	}
 
-	logger.Info("LunarCore", "执行深层搜索: %s", query)
+	logger.Info("LunarCore", "执行网页搜索: %s", query)
 
-	result, err := webSearchSystem.DeepSearch(query)
+	result, err := webSearchSystem.WebpageSearch(query)
 	if err != nil {
-		logger.Error("LunarCore", "深层搜索失败: %v", err)
+		logger.Error("LunarCore", "网页搜索失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
 	}
 
 	return class.runtime.ToValue([]any{result, nil})
 }
 
-// webSearchShallow 执行浅层搜索
+// webSearchSimple 执行轻量摘要搜索
 // 参数: query
 // 返回值: [string, error]
-func (class *Runtime) webSearchShallow(call goja.FunctionCall) goja.Value {
+func (class *Runtime) webSearchSimple(call goja.FunctionCall) goja.Value {
 	if webSearchSystem == nil {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("网络检索子系统未初始化，请先调用 webSearchInit")})
 	}
 
 	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchShallow 参数不足，需要 query")})
+		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchSimple 参数不足，需要 query")})
 	}
 
 	query, ok := call.Argument(0).Export().(string)
@@ -101,27 +101,27 @@ func (class *Runtime) webSearchShallow(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("query 必须是字符串")})
 	}
 
-	logger.Info("LunarCore", "执行浅层搜索: %s", query)
+	logger.Info("LunarCore", "执行轻量摘要搜索: %s", query)
 
-	result, err := webSearchSystem.ShallowSearch(query)
+	result, err := webSearchSystem.SimpleSearch(query)
 	if err != nil {
-		logger.Error("LunarCore", "浅层搜索失败: %v", err)
+		logger.Error("LunarCore", "轻量摘要搜索失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
 	}
 
 	return class.runtime.ToValue([]any{result, nil})
 }
 
-// webSearchResearch 执行研究搜索
+// webSearchDepth 执行深度研究
 // 参数: query
 // 返回值: [string, error]
-func (class *Runtime) webSearchResearch(call goja.FunctionCall) goja.Value {
+func (class *Runtime) webSearchDepth(call goja.FunctionCall) goja.Value {
 	if webSearchSystem == nil {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("网络检索子系统未初始化，请先调用 webSearchInit")})
 	}
 
 	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchResearch 参数不足，需要 query")})
+		return class.runtime.ToValue([]any{"", fmt.Errorf("webSearchDepth 参数不足，需要 query")})
 	}
 
 	query, ok := call.Argument(0).Export().(string)
@@ -129,11 +129,11 @@ func (class *Runtime) webSearchResearch(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("query 必须是字符串")})
 	}
 
-	logger.Info("LunarCore", "执行研究搜索: %s", query)
+	logger.Info("LunarCore", "执行深度研究: %s", query)
 
-	result, err := webSearchSystem.ResearchSearch(query)
+	result, err := webSearchSystem.DepthSearch(query)
 	if err != nil {
-		logger.Error("LunarCore", "研究搜索失败: %v", err)
+		logger.Error("LunarCore", "深度研究失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
 	}
 

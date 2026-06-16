@@ -66,9 +66,9 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册网络检索子系统适配器
 	vm.Set("webSearchInit", adapters.webSearchInit)
-	vm.Set("webSearchDeep", adapters.webSearchDeep)
-	vm.Set("webSearchShallow", adapters.webSearchShallow)
-	vm.Set("webSearchResearch", adapters.webSearchResearch)
+	vm.Set("webSearchWebpage", adapters.webSearchWebpage)
+	vm.Set("webSearchSimple", adapters.webSearchSimple)
+	vm.Set("webSearchDepth", adapters.webSearchDepth)
 	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
 
 	// 注册截图子系统适配器

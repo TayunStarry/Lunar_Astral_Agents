@@ -2054,21 +2054,21 @@ var agentSystem = (function (exports) {
     function isWebSearchReady() {
         return webSearchInitialized && webSearchIsReady();
     }
-    function executeWebSearch(query, mode = 'deep') {
+    function executeWebSearch(query, mode = 'webpage') {
         try {
-            if (mode === 'research') {
-                const [result, err] = webSearchResearch(query);
+            if (mode === 'depth') {
+                const [result, err] = webSearchDepth(query);
                 if (err)
                     return ['', err];
                 return [result, null];
             }
-            if (mode === 'deep') {
-                const [result, err] = webSearchDeep(query);
+            if (mode === 'webpage') {
+                const [result, err] = webSearchWebpage(query);
                 if (err)
                     return ['', err];
                 return [result, null];
             }
-            const [result, err] = webSearchShallow(query);
+            const [result, err] = webSearchSimple(query);
             if (err)
                 return ['', err];
             return [result, null];
@@ -2082,7 +2082,7 @@ var agentSystem = (function (exports) {
             type: "function",
             function: {
                 name: "web_search",
-                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：shallow（普通搜索，仅返回搜索结果摘要）、deep（深度搜索，抓取网页内容并用AI总结，适合需要详细信息的场景）、research（研究搜索，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。默认使用 deep 模式。",
+                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：simple（轻量摘要，仅返回搜索结果摘要）、webpage（网页搜索，抓取网页内容并用AI总结，适合需要详细信息的场景，默认）、depth（深度研究，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -2092,8 +2092,8 @@ var agentSystem = (function (exports) {
                         },
                         mode: {
                             type: "string",
-                            description: "搜索模式：shallow（普通搜索）、deep（深度搜索，默认）或 research（研究搜索，全面深入分析）",
-                            enum: ["shallow", "deep", "research"]
+                            description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）或 depth（深度研究，全面深入分析）",
+                            enum: ["simple", "webpage", "depth"]
                         }
                     },
                     required: ["query"]
@@ -2107,7 +2107,7 @@ var agentSystem = (function (exports) {
         if (!query || query.trim().length === 0) {
             return '搜索失败：查询关键词不能为空';
         }
-        const searchMode = mode || 'deep';
+        const searchMode = mode || 'webpage';
         if (!isWebSearchReady()) {
             const initResult = initWebSearch();
             if (!initResult) {

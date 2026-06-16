@@ -18,7 +18,7 @@ interface VERTEX {
  * @returns {number} 限制后的数值, 确保在 [range.min, range.max] 区间内
  */
 export function Clamp({ min, max }: VERTEX, value: number): number {
-    return Math.max(min, Math.min(max, value));
+	return Math.max(min, Math.min(max, value));
 };
 /**
  * * 生成指定范围内的随机整数
@@ -30,7 +30,7 @@ export function Clamp({ min, max }: VERTEX, value: number): number {
  * @returns {number} 返回 min 和 max 之间的一个随机整数, 包括 min 和 max
  */
 export function RandomFloor(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1) + min);
+	return Math.floor(Math.random() * (max - min + 1) + min);
 };
 /**
  * * 生成一个在指定范围内的随机浮点数, 并保留指定的小数位数
@@ -44,7 +44,7 @@ export function RandomFloor(min: number, max: number): number {
  * @returns {number} 在指定范围内的随机浮点数, 保留指定的小数位数
  */
 export function RandomFloat(min: number, max: number, length: number = 2): number {
-    return Number((Math.random() * (max - min) + min).toFixed(length));
+	return Number((Math.random() * (max - min) + min).toFixed(length));
 };
 /**
  * * 计算数组的中位数
@@ -54,18 +54,18 @@ export function RandomFloat(min: number, max: number, length: number = 2): numbe
  * @returns {number} - 返回数组的中位数
  */
 export function CalculateMedian(numbers: number[]): number {
-    /**
-     * * 复制输入的数组并排序, 避免修改原数组
-     */
-    const sortedNumbers = [...numbers].sort((a, b) => a - b);
-    /**
-     * * 计算中位数索引
-     */
-    const middleIndex = Math.floor(sortedNumbers.length / 2);
-    // 如果数组长度是偶数, 返回中间两个数的平均
-    if (sortedNumbers.length % 2 === 0) return (sortedNumbers[middleIndex - 1] + sortedNumbers[middleIndex]) / 2;
-    // 如果数组长度是奇数, 返回中间的数
-    else return sortedNumbers[middleIndex];
+	/**
+	 * * 复制输入的数组并排序, 避免修改原数组
+	 */
+	const sortedNumbers = [...numbers].sort((a, b) => a - b);
+	/**
+	 * * 计算中位数索引
+	 */
+	const middleIndex = Math.floor(sortedNumbers.length / 2);
+	// 如果数组长度是偶数, 返回中间两个数的平均
+	if (sortedNumbers.length % 2 === 0) return (sortedNumbers[middleIndex - 1] + sortedNumbers[middleIndex]) / 2;
+	// 如果数组长度是奇数, 返回中间的数
+	else return sortedNumbers[middleIndex];
 };
 /**
  * * 计算数组中的众数
@@ -75,35 +75,35 @@ export function CalculateMedian(numbers: number[]): number {
  * @returns {number[]} - 返回一个包含所有众数的数组
  */
 export function CalculateModes(numbers: number[]): number[] {
-    /**
-     * * 用于存储数字出现的频率
-     */
-    const frequencyMap = new Map<number, number>();
-    /**
-     * * 用于存储最大频率
-     */
-    let maxFrequency = 0;
-    /**
-     * * 用于存储所有众数
-     */
-    const modes: number[] = [];
-    // 遍历数组, 统计每个数字出现的频率
-    for (const number of numbers) {
-        /**
-         * * 获取当前数字的频率
-         */
-        const frequency = (frequencyMap.get(number) || 0) + 1;
-        // 更新频率映射
-        frequencyMap.set(number, frequency);
-        // 更新最大频率
-        if (frequency > maxFrequency) maxFrequency = frequency;
-    };
-    // 再次遍历频率映射, 找出所有众数
-    frequencyMap.forEach(
-        (frequency, number) => {
-            if (frequency === maxFrequency) modes.push(number);
-        }
-    );
-    // 返回所有众数
-    return modes;
+	/**
+	 * * 用于存储数字出现的频率
+	 */
+	const frequencyMap = new Map<number, number>();
+	/**
+	 * * 用于存储最大频率
+	 */
+	let maxFrequency = 0;
+	/**
+	 * * 用于存储所有众数
+	 */
+	const modes: number[] = [];
+	// 遍历数组, 统计每个数字出现的频率
+	for (const number of numbers) {
+		/**
+		 * * 获取当前数字的频率
+		 */
+		const frequency = (frequencyMap.get(number) || 0) + 1;
+		// 更新频率映射
+		frequencyMap.set(number, frequency);
+		// 更新最大频率
+		if (frequency > maxFrequency) maxFrequency = frequency;
+	};
+	// 再次遍历频率映射, 找出所有众数
+	frequencyMap.forEach(
+		(frequency, number) => {
+			if (frequency === maxFrequency) modes.push(number);
+		}
+	);
+	// 返回所有众数
+	return modes;
 };

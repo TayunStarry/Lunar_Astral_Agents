@@ -684,9 +684,9 @@ Lunar_Astral_Agents/
 
 | 维度 | 说明 |
 |------|------|
-| **主要职责** | 智能网络检索子系统，提供浅层/深层/研究三级搜索策略，通过 Bing + DuckDuckGo 双引擎 HTML 抓取与 LLM 智能总结，将互联网信息高效提炼为结构化结果 |
-| **核心模块类型** | Go 搜索引擎（Bing/DuckDuckGo HTML 解析）、搜索管线（浅层/深层/研究）、LLM 客户端（OpenAI v1 协议） |
-| **关联关系** | 被 `lunar_astral` 和 `crystal_astral` 通过 Go import 直接引用；`deep.go` 和 `research.go` 依赖 LLM API（`/chat/completions`）进行智能总结；`engine.go` 通过 HTTP 抓取 Bing/DuckDuckGo 搜索结果 |
+| **主要职责** | 智能网络检索子系统，提供轻量摘要/网页搜索/深度研究三级搜索策略，通过 Bing + DuckDuckGo 双引擎 HTML 抓取与 LLM 智能总结，将互联网信息高效提炼为结构化结果 |
+| **核心模块类型** | Go 搜索引擎（Bing/DuckDuckGo HTML 解析）、搜索管线（轻量摘要/网页搜索/深度研究）、LLM 客户端（OpenAI v1 协议） |
+| **关联关系** | 被 `lunar_astral` 和 `crystal_astral` 通过 Go import 直接引用；`webpage.go` 和 `depth.go` 依赖 LLM API（`/chat/completions`）进行智能总结；`engine.go` 通过 HTTP 抓取 Bing/DuckDuckGo 搜索结果 |
 | **架构角色** | 网络信息检索基础设施，为 AI 对话提供实时搜索能力。详见 [subsystem/websearch/README.md](subsystem/websearch/README.md) |
 
 ### 独立 AI 引擎

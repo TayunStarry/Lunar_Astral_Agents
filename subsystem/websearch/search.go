@@ -9,7 +9,7 @@ func New() *System {
 func NewWithConfig(cfg Config) *System {
 	s := &System{cfg: cfg}
 
-	s.shallow = NewShallowSearcher(cfg)
+	s.simple = NewSimpleSearcher(cfg)
 
 	// 初始化 LLM（如果配置了 API Key）
 	if cfg.LLM.APIKey != "" {
@@ -22,8 +22,8 @@ func NewWithConfig(cfg Config) *System {
 		)
 	}
 
-	s.deep = NewDeepSearcher(s.shallow, s.llmProvider, cfg.Deep, cfg.HTTP)
-	s.research = NewResearchSearcher(s.shallow, s.llmProvider, cfg.Research)
+	s.webpage = NewWebpageSearcher(s.simple, s.llmProvider, cfg.Webpage, cfg.HTTP)
+	s.depth = NewDepthSearcher(s.simple, s.llmProvider, cfg.Depth, cfg.HTTP)
 
 	return s
 }
@@ -35,9 +35,9 @@ func NewWithLLM(cfg Config, provider Provider) *System {
 		llmProvider: provider,
 	}
 
-	s.shallow = NewShallowSearcher(cfg)
-	s.deep = NewDeepSearcher(s.shallow, s.llmProvider, cfg.Deep, cfg.HTTP)
-	s.research = NewResearchSearcher(s.shallow, s.llmProvider, cfg.Research)
+	s.simple = NewSimpleSearcher(cfg)
+	s.webpage = NewWebpageSearcher(s.simple, s.llmProvider, cfg.Webpage, cfg.HTTP)
+	s.depth = NewDepthSearcher(s.simple, s.llmProvider, cfg.Depth, cfg.HTTP)
 
 	return s
 }
@@ -45,33 +45,33 @@ func NewWithLLM(cfg Config, provider Provider) *System {
 // Search 执行搜索（根据模式自动选择搜索策略）
 func (s *System) Search(query string, mode SearchMode) (string, error) {
 	switch mode {
-	case ModeDeep:
-		return s.DeepSearch(query)
-	case ModeResearch:
-		return s.ResearchSearch(query)
+	case ModeWebpage:
+		return s.WebpageSearch(query)
+	case ModeDepth:
+		return s.DepthSearch(query)
 	default:
-		return s.ShallowSearch(query)
+		return s.SimpleSearch(query)
 	}
 }
 
-// ShallowSearch 执行浅层搜索
-func (s *System) ShallowSearch(query string) (string, error) {
-	return s.shallow.Search(query)
+// SimpleSearch 执行轻量摘要搜索
+func (s *System) SimpleSearch(query string) (string, error) {
+	return s.simple.Search(query)
 }
 
-// DeepSearch 执行深层搜索
-func (s *System) DeepSearch(query string) (string, error) {
-	return s.deep.Search(query)
+// WebpageSearch 执行网页搜索
+func (s *System) WebpageSearch(query string) (string, error) {
+	return s.webpage.Search(query)
 }
 
-// ResearchSearch 执行研究搜索
-func (s *System) ResearchSearch(query string) (string, error) {
-	return s.research.Search(query)
+// DepthSearch 执行深度研究
+func (s *System) DepthSearch(query string) (string, error) {
+	return s.depth.Search(query)
 }
 
-// SetShallowMaxResults 设置浅层搜索最大结果数
-func (s *System) SetShallowMaxResults(n int) {
-	s.shallow.SetMaxResults(n)
+// SetSimpleMaxResults 设置轻量摘要搜索最大结果数
+func (s *System) SetSimpleMaxResults(n int) {
+	s.simple.SetMaxResults(n)
 }
 
 // GetConfig 获取当前配置
@@ -86,24 +86,24 @@ func (s *System) HasLLM() bool {
 
 // ---- 便捷函数 ----
 
-// QuickSearch 快速浅层搜索（使用默认配置）
+// QuickSearch 快速轻量摘要（使用默认配置）
 func QuickSearch(query string) (string, error) {
 	sys := New()
-	return sys.ShallowSearch(query)
+	return sys.SimpleSearch(query)
 }
 
-// QuickDeepSearch 快速深层搜索（使用指定 LLM 配置）
-func QuickDeepSearch(query string, llmCfg LLMConfig) (string, error) {
+// QuickWebpageSearch 快速网页搜索（使用指定 LLM 配置）
+func QuickWebpageSearch(query string, llmCfg LLMConfig) (string, error) {
 	cfg := defaultConfig
 	cfg.LLM = llmCfg
 	sys := NewWithConfig(cfg)
-	return sys.DeepSearch(query)
+	return sys.WebpageSearch(query)
 }
 
-// QuickResearchSearch 快速研究搜索（使用指定 LLM 配置）
-func QuickResearchSearch(query string, llmCfg LLMConfig) (string, error) {
+// QuickDepthSearch 快速深度研究（使用指定 LLM 配置）
+func QuickDepthSearch(query string, llmCfg LLMConfig) (string, error) {
 	cfg := defaultConfig
 	cfg.LLM = llmCfg
 	sys := NewWithConfig(cfg)
-	return sys.ResearchSearch(query)
+	return sys.DepthSearch(query)
 }

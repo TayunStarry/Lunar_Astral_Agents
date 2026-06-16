@@ -8,25 +8,25 @@ import (
 	"time"
 )
 
-// NewDeepSearcher 创建深层搜索器
-func NewDeepSearcher(shallowSearcher *ShallowSearcher, llmProvider Provider, cfg DeepConfig, httpCfg HTTPConfig) *DeepSearcher {
-	return &DeepSearcher{
-		shallow:     shallowSearcher,
+// NewWebpageSearcher 创建网页搜索器
+func NewWebpageSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg WebpageConfig, httpCfg HTTPConfig) *WebpageSearcher {
+	return &WebpageSearcher{
+		simple:      simpleSearcher,
 		llmProvider: llmProvider,
 		cfg:         cfg,
 		httpClient:  &http.Client{Timeout: time.Duration(cfg.FetchTimeout) * time.Second},
 	}
 }
 
-// Search 执行深层搜索
-func (s *DeepSearcher) Search(query string) (string, error) {
-	// 硬性上限：最少抓取10条，最多抓取deepMaxFetchResults条
-	limit := min(max(s.cfg.MaxResults, 10), deepMaxFetchResults)
+// Search 执行网页搜索
+func (s *WebpageSearcher) Search(query string) (string, error) {
+	// 硬性上限：最少抓取10条，最多抓取webpageMaxFetchResults条
+	limit := min(max(s.cfg.MaxResults, 10), webpageMaxFetchResults)
 
 	// 第一步：搜索
-	results, err := s.shallow.SearchRaw(query)
+	results, err := s.simple.SearchRaw(query)
 	if err != nil {
-		return "", fmt.Errorf("深层搜索失败: %w", err)
+		return "", fmt.Errorf("网页搜索失败: %w", err)
 	}
 
 	if len(results) == 0 {
@@ -50,7 +50,7 @@ func (s *DeepSearcher) Search(query string) (string, error) {
 			body, fetchErr := s.fetchContent(r.URL)
 
 			if fetchErr == nil && len(body) > 0 {
-				body = truncateText(body, deepMaxPerPageLen)
+				body = truncateText(body, webpageMaxPerPageLen)
 
 				// 相关性过滤：检查抓取内容是否与查询关键词匹配
 				relevanceScore := checkContentRelevance(queryKeywords, body, r.Title, r.Snippet)
@@ -64,7 +64,7 @@ func (s *DeepSearcher) Search(query string) (string, error) {
 				fetchSuccess++
 				contentLen := len([]rune(body))
 				// token 预算检查
-				if totalContentChars+contentLen > deepMaxTotalContentLen {
+				if totalContentChars+contentLen > webpageMaxTotalContentLen {
 					break
 				}
 				totalContentChars += contentLen
@@ -101,18 +101,18 @@ func (s *DeepSearcher) Search(query string) (string, error) {
 
 	// 第三步：LLM 总结
 	if s.llmProvider == nil {
-		return formatDeepResultsFallback(query, contentParts), nil
+		return formatWebpageResultsFallback(query, contentParts), nil
 	}
 
 	result, err := s.summarizeWithLLM(query, contentParts)
 	if err != nil {
-		return formatDeepResultsFallback(query, contentParts), nil
+		return formatWebpageResultsFallback(query, contentParts), nil
 	}
 
 	return result, nil
 }
 
-func (s *DeepSearcher) summarizeWithLLM(query string, contentParts []string) (string, error) {
+func (s *WebpageSearcher) summarizeWithLLM(query string, contentParts []string) (string, error) {
 	// 构建搜索结果部分，受 maxPromptChars 限制
 	searchContent := strings.Join(contentParts, "\n\n---\n\n")
 
@@ -128,7 +128,7 @@ func (s *DeepSearcher) summarizeWithLLM(query string, contentParts []string) (st
 
 	// 计算可用空间并截断
 	templateOverhead := len([]rune(fmt.Sprintf(promptTemplate, query, "")))
-	availableForContent := deepMaxPromptChars - templateOverhead
+	availableForContent := webpageMaxPromptChars - templateOverhead
 	if availableForContent < 500 {
 		availableForContent = 500
 	}
@@ -157,14 +157,14 @@ func (s *DeepSearcher) summarizeWithLLM(query string, contentParts []string) (st
 
 	// 输出截断
 	responseRunes := []rune(response)
-	if len(responseRunes) > deepMaxLLMOutputLen {
-		response = string(responseRunes[:deepMaxLLMOutputLen]) + "\n\n[回复已截断]"
+	if len(responseRunes) > webpageMaxLLMOutputLen {
+		response = string(responseRunes[:webpageMaxLLMOutputLen]) + "\n\n[回复已截断]"
 	}
 
 	return response, nil
 }
 
-func (s *DeepSearcher) fetchContent(pageURL string) (string, error) {
+func (s *WebpageSearcher) fetchContent(pageURL string) (string, error) {
 	req, err := http.NewRequest("GET", pageURL, nil)
 	if err != nil {
 		return "", err

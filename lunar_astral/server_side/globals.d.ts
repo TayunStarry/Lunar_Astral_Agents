@@ -186,29 +186,29 @@ declare global {
      */
     function webSearchInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number): [boolean, Error | null];
     /**
-     * 执行深层搜索
+     * 执行网页搜索
      *
      * @param {string} query 搜索查询
      *
      * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
      */
-    function webSearchDeep(query: string): [string, Error | null];
+    function webSearchWebpage(query: string): [string, Error | null];
     /**
-     * 执行浅层搜索
+     * 执行轻量摘要
      *
      * @param {string} query 搜索查询
      *
      * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
      */
-    function webSearchShallow(query: string): [string, Error | null];
+    function webSearchSimple(query: string): [string, Error | null];
     /**
-     * 执行研究搜索（子问题拆解 + 并行搜索 + URL去重 + 综合报告）
+     * 执行深度研究（子问题拆解 + 并行搜索 + URL去重 + 综合报告）
      *
      * @param {string} query 搜索查询
      *
      * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
      */
-    function webSearchResearch(query: string): [string, Error | null];
+    function webSearchDepth(query: string): [string, Error | null];
     /**
      * 检查网络检索子系统是否已初始化
      *

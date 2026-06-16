@@ -4,16 +4,16 @@ import "time"
 
 // defaultConfig 默认配置
 var defaultConfig = Config{
-	Shallow: ShallowConfig{
+	Simple: SimpleConfig{
 		MaxResults: 10,
 	},
-	Deep: DeepConfig{
+	Webpage: WebpageConfig{
 		MaxResults:       30,
 		FetchContent:     true,
 		FetchTimeout:     10,
 		MaxContentLength: 2000,
 	},
-	Research: ResearchConfig{
+	Depth: DepthConfig{
 		MaxResults:    10,
 		MaxSubQueries: 6,
 	},

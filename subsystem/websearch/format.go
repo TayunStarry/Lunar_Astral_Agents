@@ -19,7 +19,7 @@ func formatResults(results []SearchResult) string {
 }
 
 // formatResultsTruncated 格式化搜索结果，对Snippet做截断保护
-// 用于研究搜索等可能产生大量结果的场景，防止提示词溢出
+// 用于深度研究等可能产生大量结果的场景，防止提示词溢出
 func formatResultsTruncated(results []SearchResult, maxSnippetLen int) string {
 	var builder strings.Builder
 	for _, r := range results {
@@ -50,14 +50,14 @@ func formatResultsForLLM(results []SearchResult) string {
 	return builder.String()
 }
 
-// formatDeepResultsFallback 深层搜索无 LLM 时的回退格式化（带截断保护）
-func formatDeepResultsFallback(query string, contentParts []string) string {
+// formatWebpageResultsFallback 网页搜索无 LLM 时的回退格式化（带截断保护）
+func formatWebpageResultsFallback(query string, contentParts []string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("搜索 %q 的结果：\n\n", query))
 	content := strings.Join(contentParts, "\n\n")
 	runes := []rune(content)
-	if len(runes) > deepMaxFallbackChars {
-		content = string(runes[:deepMaxFallbackChars]) + "\n\n[内容已截断]"
+	if len(runes) > webpageMaxFallbackChars {
+		content = string(runes[:webpageMaxFallbackChars]) + "\n\n[内容已截断]"
 	}
 	sb.WriteString(content)
 	return sb.String()

@@ -13,12 +13,12 @@ import (
 type SearchMode string
 
 const (
-	// ModeShallow 浅层搜索模式
-	ModeShallow SearchMode = "shallow"
-	// ModeDeep 深层搜索模式
-	ModeDeep SearchMode = "deep"
-	// ModeResearch 研究搜索模式
-	ModeResearch SearchMode = "research"
+	// ModeSimple 轻量摘要模式
+	ModeSimple SearchMode = "simple"
+	// ModeWebpage 网页搜索模式
+	ModeWebpage SearchMode = "webpage"
+	// ModeDepth 深度研究模式
+	ModeDepth SearchMode = "depth"
 )
 
 // ============================================================
@@ -48,28 +48,28 @@ type Searcher interface {
 
 // Config 网络检索子系统完整配置
 type Config struct {
-	Shallow  ShallowConfig
-	Deep     DeepConfig
-	Research ResearchConfig
-	LLM      LLMConfig
-	HTTP     HTTPConfig
+	Simple  SimpleConfig
+	Webpage WebpageConfig
+	Depth   DepthConfig
+	LLM     LLMConfig
+	HTTP    HTTPConfig
 }
 
-// ShallowConfig 浅层搜索配置
-type ShallowConfig struct {
+// SimpleConfig 轻量摘要配置
+type SimpleConfig struct {
 	MaxResults int
 }
 
-// DeepConfig 深层搜索配置
-type DeepConfig struct {
+// WebpageConfig 网页搜索配置
+type WebpageConfig struct {
 	MaxResults       int
 	FetchContent     bool
 	FetchTimeout     int
 	MaxContentLength int
 }
 
-// ResearchConfig 研究搜索配置
-type ResearchConfig struct {
+// DepthConfig 深度研究配置
+type DepthConfig struct {
 	MaxResults    int
 	MaxSubQueries int
 }
@@ -149,50 +149,50 @@ type DuckDuckGoSearcher struct {
 }
 
 // ============================================================
-// 浅层搜索器
+// 轻量摘要
 // ============================================================
 
-// ShallowSearcher 浅层搜索器：Bing + DuckDuckGo 回退
-type ShallowSearcher struct {
+// SimpleSearcher 轻量摘要搜索器：Bing + DuckDuckGo 回退
+type SimpleSearcher struct {
 	bing       Searcher
 	ddg        Searcher
 	maxResults int
 }
 
 // ============================================================
-// 深层搜索器
+// 网页搜索器
 // ============================================================
 
-// DeepSearcher 深层搜索器：搜索 + 网页内容抓取 + LLM 总结
-type DeepSearcher struct {
-	shallow     *ShallowSearcher
+// WebpageSearcher 网页搜索器：搜索 + 网页内容抓取 + LLM 总结
+type WebpageSearcher struct {
+	simple      *SimpleSearcher
 	llmProvider Provider
-	cfg         DeepConfig
+	cfg         WebpageConfig
 	httpClient  *http.Client
 }
 
 // ============================================================
-// 研究搜索器
+// 深度研究
 // ============================================================
 
-// 研究搜索预算
+// 深度研究预算
 const (
-	researchMaxResultsPerSub   = 15    // 每个子问题最多返回结果数
-	researchMaxSnippetLen      = 150   // 每条Snippet最大字符数
-	researchMaxPromptChars     = 12000 // generateReport prompt总预算
-	researchMaxOutputChars     = 3000  // LLM报告输出最大字符数
-	researchMaxSubResultsChars = 8000  // 子问题结果注入generateReport的总预算
-
+	depthMaxResultsPerSub     = 15    // 每个子问题最多返回结果数
+	depthMaxSnippetLen        = 300   // 每条Snippet最大字符数（中文需足够上下文）
+	depthMaxFetchedContentLen = 1500  // 抓取的网页内容截断长度
+	depthMaxPromptChars       = 12000 // generateReport prompt总预算
+	depthMaxOutputChars       = 3000  // LLM报告输出最大字符数
+	depthMaxSubResultsChars   = 8000  // 子问题结果注入generateReport的总预算
 )
 
-// 深层搜索预算
+// 网页搜索预算
 const (
-	deepMaxFetchResults    = 30   // 深层搜索最多抓取条数
-	deepMaxTotalContentLen = 8000 // 总内容预算：最多8000字符
-	deepMaxPerPageLen      = 1500 // 单页截断
-	deepMaxLLMOutputLen    = 1500 // LLM 总结输出上限
-	deepMaxPromptChars     = 8000 // prompt 总大小预算
-	deepMaxFallbackChars   = 4000 // 回退格式化截断上限
+	webpageMaxFetchResults    = 30   // 网页搜索最多抓取条数
+	webpageMaxTotalContentLen = 8000 // 总内容预算：最多8000字符
+	webpageMaxPerPageLen      = 1500 // 单页截断
+	webpageMaxLLMOutputLen    = 1500 // LLM 总结输出上限
+	webpageMaxPromptChars     = 8000 // prompt 总大小预算
+	webpageMaxFallbackChars   = 4000 // 回退格式化截断上限
 )
 
 // subResult 子问题搜索结果（保留原始结果用于URL去重）
@@ -202,11 +202,13 @@ type subResult struct {
 	Error   error
 }
 
-// ResearchSearcher 研究搜索器：子问题拆解 + 并行搜索 + 综合报告
-type ResearchSearcher struct {
-	shallow     *ShallowSearcher
+// DepthSearcher 深度研究：子问题拆解 + 并行搜索 + 内容抓取 + 综合报告
+type DepthSearcher struct {
+	simple      *SimpleSearcher
 	llmProvider Provider
-	cfg         ResearchConfig
+	cfg         DepthConfig
+	httpClient  *http.Client
+	userAgent   string
 }
 
 // ============================================================
@@ -216,9 +218,9 @@ type ResearchSearcher struct {
 // System 网络检索子系统
 type System struct {
 	cfg         Config
-	shallow     *ShallowSearcher
-	deep        *DeepSearcher
-	research    *ResearchSearcher
+	simple      *SimpleSearcher
+	webpage     *WebpageSearcher
+	depth       *DepthSearcher
 	llmProvider Provider
 }
 
