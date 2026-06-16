@@ -105,7 +105,7 @@ var agentSystem = (function (exports) {
             const newFileName = `${fileHash}${fileExtension}`;
             const base64FileName = toBtoaString('images/' + newFileName);
             const [_, __, err] = saveFile(base64FileName, true, file);
-            if (!err)
+            if (err)
                 throw err;
             return `/file/read/images/${newFileName}`;
         }
@@ -379,13 +379,13 @@ var agentSystem = (function (exports) {
             if (errorMessage.includes('no such table') && createTableOperation) {
                 const createTableRequest = { operations: [createTableOperation], transaction: false };
                 let [createTableResult, tableError] = database(createTableRequest);
-                if (!tableError)
-                    throw new Error('创建表失败');
+                if (tableError)
+                    throw tableError;
                 if (!createTableResult.success)
                     throw new Error('创建表失败');
                 [result, error] = database(requestBody);
-                if (!error)
-                    throw new Error('数据库查询失败');
+                if (error)
+                    throw error;
                 if (!result.success || !result.results[0].success)
                     throw new Error('数据库查询失败');
             }
@@ -632,7 +632,7 @@ var agentSystem = (function (exports) {
                 this.formatHistoricalMessages(source);
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, [...scheduleTools, ...webSearchTools, ...OnlyData.LTPdefinition]);
+                const response = this.run(this.ragMessages, [...OnlyData.LTPdefinition]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -1674,6 +1674,7 @@ var agentSystem = (function (exports) {
     OnlyData.LTPfunction.set('edit_schedule', handleEditSchedule);
     OnlyData.LTPfunction.set('delete_schedule', handleDeleteSchedule);
     OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
+    OnlyData.LTPdefinition.push(...scheduleTools);
 
     class AgentDefine {
         queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
@@ -1894,14 +1895,14 @@ var agentSystem = (function (exports) {
         }
         constructor() { super(); this.thinkingChainProcess(); }
     }
-    const AgentExample = new LunarAgent();
+    const AgentRuntime = new LunarAgent();
     const message = [
         {
             type: 'text',
             text: '你好呀~'
         }
     ];
-    AgentExample.testMessageWrite('user', message, 1500);
+    AgentRuntime.testMessageWrite('user', message, 1500);
 
     function extractThinkingBlocks(text) {
         const blocks = [];
@@ -2123,6 +2124,68 @@ var agentSystem = (function (exports) {
         return result || '未找到相关搜索结果';
     }
     OnlyData.LTPfunction.set('web_search', handleWebSearch);
+    OnlyData.LTPdefinition.push(...webSearchTools);
+
+    const screenshotTools = [
+        {
+            type: "function",
+            function: {
+                name: "screenshot",
+                description: "截取当前屏幕画面。当用户要求查看屏幕内容、确认屏幕显示状态、或需要获取当前屏幕画面时，应使用此工具。支持指定显示器索引、截取区域、缩放比例和图片格式。截取的图片会自动缩放处理并展示给用户。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        display_index: {
+                            type: "number",
+                            description: "显示器索引：0 表示主显示器，-1 表示截取所有显示器拼接画面，默认为 0"
+                        },
+                        region: {
+                            type: "string",
+                            description: "截图区域，格式为 'x,y,width,height'，例如 '100,200,800,600'。留空则截取整个显示器"
+                        },
+                        scale: {
+                            type: "string",
+                            description: "缩放参数：可以是比例（如 '0.5'）或指定宽高（如 '800,600'）。留空则自动缩放"
+                        },
+                        format: {
+                            type: "string",
+                            description: "输出图片格式：'png' 或 'jpg'，默认为 'png'",
+                            enum: ["png", "jpg"]
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+    async function handleScreenshot(args) {
+        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
+        const { display_index, region, scale, format } = parsed;
+        const displayIndex = display_index ?? 0;
+        const captureFormat = format || 'png';
+        console.log(`[截图] 工具调用: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+        const [dataURI, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
+        if (captureErr) {
+            console.error(`[截图] 截图失败: ${captureErr.message || String(captureErr)}`);
+            return `截图失败：${captureErr.message || String(captureErr)}`;
+        }
+        if (!dataURI || dataURI.length === 0) {
+            return '截图失败：未获取到截图数据';
+        }
+        const [resizeResult, resizeErr] = resizeImage(dataURI);
+        if (resizeErr) {
+            console.error(`[截图] 图片缩放失败: ${resizeErr.message || String(resizeErr)}`);
+            return `截图失败：图片缩放处理出错 - ${resizeErr.message || String(resizeErr)}`;
+        }
+        if (resizeResult?.base64) {
+            pushImage([resizeResult.base64]);
+            console.log(`[截图] 图片已推送: ${resizeResult.width}x${resizeResult.height}, 格式=${resizeResult.format}`);
+        }
+        const sizeInfo = resizeResult ? `${resizeResult.width}x${resizeResult.height}` : '未知';
+        return `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+    }
+    OnlyData.LTPfunction.set('screenshot', handleScreenshot);
+    OnlyData.LTPdefinition.push(...screenshotTools);
 
     exports.AgentDefine = AgentDefine;
     exports.BaseConfig = BaseConfig;
@@ -2153,6 +2216,7 @@ var agentSystem = (function (exports) {
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToDatabase = savePromptToDatabase;
     exports.scheduleTools = scheduleTools;
+    exports.screenshotTools = screenshotTools;
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
     exports.toBtoaString = toBtoaString;

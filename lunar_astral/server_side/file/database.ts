@@ -27,13 +27,13 @@ export function queryFromDatabase(operations: DatabaseOperation[], createTableOp
             /** 发送创建表请求 */
             let [createTableResult, tableError] = database(createTableRequest);
             // 检查创建表响应状态是否成功
-            if (!tableError) throw new Error('创建表失败');
+            if (tableError) throw tableError;
             /** 检查创建表操作是否成功 */
             if (!createTableResult.success) throw new Error('创建表失败');
             // 重新执行原始查询操作
             [result, error] = database(requestBody);
             // 检查重新执行查询响应状态是否成功
-            if (!error) throw new Error('数据库查询失败');
+            if (error) throw error;
             // 检查重新执行查询操作是否成功
             if (!result.success || !result.results[0].success) throw new Error('数据库查询失败');
         }

@@ -43,8 +43,8 @@ export async function saveImageToServer(file: File): Promise<string> {
         const base64FileName = toBtoaString('images/' + newFileName);
         /** 向服务器发送 POST 请求，尝试保存图片文件 */
         const [_, __, err] = saveFile(base64FileName, true, file);
-        // 检查响应是否成功，若失败则抛出错误
-        if (!err) throw err;
+		// 检查响应是否成功，若失败则抛出错误
+		if (err) throw err;
         // 保存成功，返回图片的读取路径
         return `/file/read/images/${newFileName}`;
     }

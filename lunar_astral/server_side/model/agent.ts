@@ -196,8 +196,8 @@ class LunarAgent extends AgentDefine {
 	/** 构建智能体 并 初始化各个子模型的系统提示词 */
 	public constructor() { super(); this.thinkingChainProcess(); }
 }
-
-const AgentExample = new LunarAgent();
+/** 初始化月华智能体实例 */
+const AgentRuntime = new LunarAgent();
 /** 测试消息写入 */
 const message: Array<ImageContent | TextContent> = [
 	{
@@ -205,4 +205,4 @@ const message: Array<ImageContent | TextContent> = [
 		text: '你好呀~'
 	}
 ];
-AgentExample.testMessageWrite('user', message, 1500);
+AgentRuntime.testMessageWrite('user', message, 1500);
