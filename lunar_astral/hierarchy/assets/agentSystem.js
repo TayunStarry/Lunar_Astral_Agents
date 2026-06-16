@@ -756,16 +756,22 @@ var agentSystem = (function (exports) {
                 const functionArgs = toolCall.function.arguments;
                 const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
                 if (!lunarToolPackage) {
-                    source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+                    this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
                     continue;
                 }
                 try {
                     const toolResult = await lunarToolPackage(functionArgs);
-                    source.unreadContext.push({ role: "tool", content: toolResult, tool_call_id: toolCall.id });
+                    const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
+                    const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
+                    this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
+                    if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
+                        this.messages.push({ role: "tool", content: [{ type: "image_url", image_url: { url: base64Image } }], tool_call_id: toolCall.id });
+                        console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
+                    }
                     hasToolCalls = true;
                 }
                 catch (error) {
-                    source.unreadContext.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+                    this.messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
                 }
             }
             state.currentToolCallIndex = -1;
@@ -1557,14 +1563,14 @@ var agentSystem = (function (exports) {
     async function handleCreateSchedule(args) {
         const { time, content } = parseArgs(args);
         if (!time || time.trim().length === 0) {
-            return '创建计划项失败：执行时间不能为空，请提供有效的时间点';
+            return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
         }
         if (!content || content.trim().length === 0) {
-            return '创建计划项失败：工作内容不能为空，请提供具体的计划内容';
+            return ['创建计划项失败：工作内容不能为空，请提供具体的计划内容', ''];
         }
         const normalizedTime = normalizeTime(time);
         if (!normalizedTime) {
-            return `创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`;
+            return [`创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`, ''];
         }
         const newItem = {
             id: generateId(),
@@ -1574,28 +1580,28 @@ var agentSystem = (function (exports) {
         scheduleCache.push(newItem);
         if (!saveSchedulesToDisk(scheduleCache)) {
             scheduleCache.pop();
-            return '创建计划项失败：保存到磁盘时出错，请稍后重试';
+            return ['创建计划项失败：保存到磁盘时出错，请稍后重试', ''];
         }
         console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
-        return `计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`;
+        return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
     }
     async function handleEditSchedule(args) {
         const { id, time, content } = parseArgs(args);
         if (!id || id.trim().length === 0) {
-            return '编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID';
+            return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
         }
         if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
-            return '编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改';
+            return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
         }
         const index = scheduleCache.findIndex(item => item.id === id.trim());
         if (index === -1) {
-            return `编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`;
+            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
         }
         const snapshot = { ...scheduleCache[index] };
         if (time && time.trim().length > 0) {
             const normalizedTime = normalizeTime(time);
             if (!normalizedTime) {
-                return `编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`;
+                return [`编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`, ''];
             }
             scheduleCache[index].time = normalizedTime;
         }
@@ -1604,43 +1610,43 @@ var agentSystem = (function (exports) {
         }
         if (!saveSchedulesToDisk(scheduleCache)) {
             scheduleCache[index] = snapshot;
-            return '编辑计划项失败：保存到磁盘时出错，请稍后重试';
+            return ['编辑计划项失败：保存到磁盘时出错，请稍后重试', ''];
         }
         console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
-        return `计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`;
+        return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
     }
     async function handleDeleteSchedule(args) {
         const { id } = parseArgs(args);
         if (!id || id.trim().length === 0) {
-            return '删除计划项失败：计划项ID不能为空';
+            return ['删除计划项失败：计划项ID不能为空', ''];
         }
         const index = scheduleCache.findIndex(item => item.id === id.trim());
         if (index === -1) {
-            return `删除计划项失败：未找到ID为 ${id} 的计划项`;
+            return [`删除计划项失败：未找到ID为 ${id} 的计划项`, ''];
         }
         const deletedItem = scheduleCache[index];
         scheduleCache.splice(index, 1);
         if (!saveSchedulesToDisk(scheduleCache)) {
             scheduleCache.splice(index, 0, deletedItem);
-            return '删除计划项失败：保存到磁盘时出错，请稍后重试';
+            return ['删除计划项失败：保存到磁盘时出错，请稍后重试', ''];
         }
         console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
-        return `计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`;
+        return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
     }
     async function handleQuerySchedule(args) {
         const { keyword } = parseArgs(args);
         if (scheduleCache.length === 0) {
-            return '当前计划表为空，没有任何计划项，可以放心创建新计划。';
+            return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
         }
         const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
         const filtered = keyword && keyword.trim().length > 0
             ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
             : sorted;
         if (filtered.length === 0) {
-            return `未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`;
+            return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
         }
-        return `当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
-            filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n');
+        return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
+                filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
     }
     function checkDueItems() {
         if (scheduleCache.length === 0)
@@ -1833,14 +1839,14 @@ var agentSystem = (function (exports) {
                     for (const chunk of textChunks) {
                         let audio = '';
                         try {
-                            const [audioData, err] = tts(chunk);
+                            const [audioData, err] = tts(chunk.tts);
                             if (!err && audioData)
                                 audio = audioData;
                         }
                         catch (e) {
-                            console.error(`TTS合成异常: [${chunk}]`, e);
+                            console.error(`TTS合成异常: [${chunk.tts}]`, e);
                         }
-                        pushContext(messageType, chunk, audio);
+                        pushContext(messageType, chunk.display, audio);
                     }
                 }
                 catch (error) {
@@ -1942,9 +1948,14 @@ var agentSystem = (function (exports) {
         processed = processed.replace(/\([^)]*\)/g, '');
         const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
         const whitelist = new RegExp(`[^${allowed}]`, 'g');
-        processed = processed.replace(whitelist, '，');
+        processed = processed.replace(whitelist, ',');
         processed = processed.replace(/\s+/g, ' ');
         return processed.trim();
+    }
+    function cleanTextForDisplay(text) {
+        if (!text)
+            return '';
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
     }
     function splitSentences(text) {
         if (!text)
@@ -1979,6 +1990,16 @@ var agentSystem = (function (exports) {
         }
         const level1 = splitByPunct(text, LEVEL1_PUNCT);
         const result = [];
+        function isInsideBracket(source, pos) {
+            let depth = 0;
+            for (let i = 0; i < pos; i++) {
+                if (source[i] === '\uFF08' || source[i] === '(')
+                    depth++;
+                else if (source[i] === '\uFF09' || source[i] === ')')
+                    depth--;
+            }
+            return depth > 0;
+        }
         for (const fragment of level1) {
             if (fragment.length <= MAX_LENGTH) {
                 result.push(fragment);
@@ -1988,7 +2009,7 @@ var agentSystem = (function (exports) {
             while (remaining.length > MAX_LENGTH) {
                 let splitPos = -1;
                 for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
-                    if (LEVEL2_PUNCT.test(remaining[i])) {
+                    if (LEVEL2_PUNCT.test(remaining[i]) && !isInsideBracket(remaining, i)) {
                         let end = i + 1;
                         while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
                             end++;
@@ -2018,8 +2039,12 @@ var agentSystem = (function (exports) {
             return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
         const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
-        const cleanedText = cleanTextForTTS(textAfterCode);
-        const textChunks = splitSentences(cleanedText);
+        const displayText = cleanTextForDisplay(textAfterCode);
+        const displayChunks = splitSentences(displayText);
+        const textChunks = displayChunks.map(chunk => ({
+            display: chunk,
+            tts: cleanTextForTTS(chunk),
+        }));
         return { thinkingBlocks, codeBlocks, textChunks };
     }
 
@@ -2082,7 +2107,7 @@ var agentSystem = (function (exports) {
             type: "function",
             function: {
                 name: "web_search",
-                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：simple（轻量摘要，仅返回搜索结果摘要）、webpage（网页搜索，抓取网页内容并用AI总结，适合需要详细信息的场景，默认）、depth（深度研究，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。",
+                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：simple（轻量摘要，仅返回搜索结果摘要）、webpage（网页搜索，抓取网页内容并进行总结，适合需要详细信息的场景，默认）、depth（深度研究，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -2105,23 +2130,24 @@ var agentSystem = (function (exports) {
         const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
         const { query, mode } = parsed;
         if (!query || query.trim().length === 0) {
-            return '搜索失败：查询关键词不能为空';
+            return ['搜索失败：查询关键词不能为空', ''];
         }
         const searchMode = mode || 'webpage';
         if (!isWebSearchReady()) {
             const initResult = initWebSearch();
             if (!initResult) {
-                return '搜索失败：网络检索子系统初始化失败';
+                return ['搜索失败：网络检索子系统初始化失败', ''];
             }
         }
         console.log(`[网络检索] 工具调用: query="${query}", mode="${searchMode}"`);
         const [result, err] = executeWebSearch(query.trim(), searchMode);
         if (err) {
             console.error(`[网络检索] 搜索失败: ${err.message || String(err)}`);
-            return `搜索失败：${err.message || String(err)}`;
+            return [`搜索失败：${err.message || String(err)}`, ''];
         }
-        console.log(`[网络检索] 查询结果:\n${result || '未找到相关搜索结果'}`);
-        return result || '未找到相关搜索结果';
+        const textResult = result || '未找到相关搜索结果';
+        console.log(`[网络检索] 查询结果:\n${textResult}`);
+        return [textResult, ''];
     }
     OnlyData.LTPfunction.set('web_search', handleWebSearch);
     OnlyData.LTPdefinition.push(...webSearchTools);
@@ -2159,30 +2185,34 @@ var agentSystem = (function (exports) {
         }
     ];
     async function handleScreenshot(args) {
+        console.log(`[截图] ========== 开始处理截图工具调用 ==========`);
+        console.log(`[截图] 原始参数: ${JSON.stringify(args)}`);
         const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
         const { display_index, region, scale, format } = parsed;
+        console.log(`[截图] 参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
         const displayIndex = display_index ?? 0;
         const captureFormat = format || 'png';
-        console.log(`[截图] 工具调用: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
-        const [dataURI, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
+        console.log(`[截图] 最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+        console.log(`[截图] 准备执行截图操作...`);
+        const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
         if (captureErr) {
             console.error(`[截图] 截图失败: ${captureErr.message || String(captureErr)}`);
-            return `截图失败：${captureErr.message || String(captureErr)}`;
+            console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+            return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
         }
-        if (!dataURI || dataURI.length === 0) {
-            return '截图失败：未获取到截图数据';
+        console.log(`[截图] 截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
+        if (!result || !result.base64) {
+            console.error(`[截图] 截图失败: 未获取到截图数据`);
+            console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+            return ['截图失败：未获取到截图数据', ''];
         }
-        const [resizeResult, resizeErr] = resizeImage(dataURI);
-        if (resizeErr) {
-            console.error(`[截图] 图片缩放失败: ${resizeErr.message || String(resizeErr)}`);
-            return `截图失败：图片缩放处理出错 - ${resizeErr.message || String(resizeErr)}`;
-        }
-        if (resizeResult?.base64) {
-            pushImage([resizeResult.base64]);
-            console.log(`[截图] 图片已推送: ${resizeResult.width}x${resizeResult.height}, 格式=${resizeResult.format}`);
-        }
-        const sizeInfo = resizeResult ? `${resizeResult.width}x${resizeResult.height}` : '未知';
-        return `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+        pushImage([result.base64]);
+        console.log(`[截图] 图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
+        const sizeInfo = `${result.width}x${result.height}`;
+        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+        console.log(`[截图] 返回响应: ${sizeInfo}`);
+        console.log(`[截图] ========== 截图工具调用结束(成功) ==========`);
+        return [textResponse, result.base64];
     }
     OnlyData.LTPfunction.set('screenshot', handleScreenshot);
     OnlyData.LTPdefinition.push(...screenshotTools);
@@ -2203,6 +2233,7 @@ var agentSystem = (function (exports) {
     exports.ThinkType = ThinkType;
     exports.calculateFileHash = calculateFileHash;
     exports.checkDueItems = checkDueItems;
+    exports.cleanTextForDisplay = cleanTextForDisplay;
     exports.cleanTextForTTS = cleanTextForTTS;
     exports.executeWebSearch = executeWebSearch;
     exports.fetchDocumentCallback = fetchDocumentCallback;

@@ -97,7 +97,7 @@ class LunarAgent extends AgentDefine {
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
 				}
-				/** 解析原始文本：拆分思考区、代码块、正文切片 */
+				/** 解析原始文本：拆分思考区、代码块、正文切片（含display和tts双版本） */
 				const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
 				// 如果正文切片为空，抛出异常
 				if (!textChunks.length) throw new Error('清洗后的文本为空');
@@ -109,18 +109,18 @@ class LunarAgent extends AgentDefine {
 				for (const code of codeBlocks) {
 					pushContext(messageType, code, '');
 				}
-				// 第三步：按顺序逐一发送正文切片，合成语音并推送
+				// 第三步：按顺序逐一发送正文切片，display用于显示，tts用于合成语音
 				for (const chunk of textChunks) {
 					/** 语音合成结果 */
 					let audio = '';
 					try {
-						const [audioData, err] = tts(chunk);
+						const [audioData, err] = tts(chunk.tts);
 						if (!err && audioData) audio = audioData;
 					}
 					catch (e) {
-						console.error(`TTS合成异常: [${chunk}]`, e);
+						console.error(`TTS合成异常: [${chunk.tts}]`, e);
 					}
-					pushContext(messageType, chunk, audio);
+					pushContext(messageType, chunk.display, audio);
 				}
 			}
 			catch (error) {

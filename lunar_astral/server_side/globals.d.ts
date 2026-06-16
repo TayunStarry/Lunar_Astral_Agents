@@ -216,7 +216,10 @@ declare global {
      */
     function webSearchIsReady(): boolean;
     /**
-     * 执行屏幕截图
+     * 执行屏幕截图（内部已集成图片压缩缩放处理）
+     * 
+     * Go 层统一完成截图捕获 + 图片压缩缩放 + base64 编码，
+     * 返回的 base64 字段格式为 "data:image/[format];base64,[data]"
      *
      * @param {number} displayIndex 显示器索引（-1 表示所有显示器，0 表示主显示器）
      *
@@ -228,9 +231,9 @@ declare global {
      *
      * @param {number} [quality] JPEG 质量 1-100
      *
-     * @returns {[string, Error | null]} 包含截图结果的元组，[base64 数据 URI, 错误信息]
+     * @returns {[ResizeImageResult, Error | null]} 包含处理结果的元组，[结果对象(base64/format/width/height), 错误信息]
      */
-    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [string, Error | null];
+    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [ResizeImageResult, Error | null];
     /**
      * 获取所有显示器信息
      *

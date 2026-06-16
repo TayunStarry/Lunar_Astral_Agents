@@ -1,14 +1,25 @@
 /**
+ * 正文切片数据结构
+ *
+ * display — 用于前端显示的文本（仅移除emoji，保留括号内容和原始符号）
+ * tts     — 用于语音合成的文本（完整清洗：移除行内代码、图片标记、HTML标签等）
+ */
+export interface TextChunk {
+	display: string;
+	tts: string;
+}
+
+/**
  * 文本拆分结果数据结构
  *
  * thinkingBlocks — 从原始文本中提取的全部思考区内容（不参与语音合成）
  * codeBlocks     — 从原始文本中提取的全部代码块内容（不参与语音合成）
- * textChunks     — 清洗并切片后的正文内容（参与语音合成）
+ * textChunks     — 清洗并切片后的正文内容，每个切片包含display和tts两个版本
  */
 export interface ParsedContent {
 	thinkingBlocks: string[];
 	codeBlocks: string[];
-	textChunks: string[];
+	textChunks: TextChunk[];
 }
 
 /**
@@ -94,10 +105,25 @@ export function cleanTextForTTS(text: string): string {
 	// 白名单过滤：仅保留中文、英文、数字、常用中英文标点
 	const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
 	const whitelist = new RegExp(`[^${allowed}]`, 'g');
-	processed = processed.replace(whitelist, '，');
+	processed = processed.replace(whitelist, ',');
 	// 合并多余空格
 	processed = processed.replace(/\s+/g, ' ');
 	return processed.trim();
+}
+
+/**
+ * 清洗用于显示的文本
+ *
+ * 仅移除emoji表情符号，保留括号内容、原始符号、HTML标签、Markdown标记等，
+ * 确保前端能完整渲染原始文本内容
+ *
+ * @param text - 原始文本
+ * @returns 仅移除emoji后的文本
+ */
+export function cleanTextForDisplay(text: string): string {
+	if (!text) return '';
+	// 只移除emoji表情符号
+	return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
 }
 
 /**
@@ -159,7 +185,21 @@ export function splitSentences(text: string): string[] {
 	const level1 = splitByPunct(text, LEVEL1_PUNCT);
 
 	// 二级切片：对超过 MAX_LENGTH 的片段，优先在逗号处切分；无逗号则强制按长度切分
+	// 括号内的逗号不计入切分点（TTS无法读取括号内容，切分无意义）
 	const result: string[] = [];
+
+	/**
+	 * 判断指定位置是否处于括号内部（中英文括号均支持）
+	 */
+	function isInsideBracket(source: string, pos: number): boolean {
+		let depth = 0;
+		for (let i = 0; i < pos; i++) {
+			if (source[i] === '\uFF08' || source[i] === '(') depth++;
+			else if (source[i] === '\uFF09' || source[i] === ')') depth--;
+		}
+		return depth > 0;
+	}
+
 	for (const fragment of level1) {
 		if (fragment.length <= MAX_LENGTH) {
 			result.push(fragment);
@@ -168,10 +208,10 @@ export function splitSentences(text: string): string[] {
 
 		let remaining = fragment;
 		while (remaining.length > MAX_LENGTH) {
-			// 在 MAX_LENGTH 范围内找最后一个逗号位置作为切断点
+			// 在 MAX_LENGTH 范围内找最后一个逗号位置作为切断点（跳过括号内的逗号）
 			let splitPos = -1;
 			for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
-				if (LEVEL2_PUNCT.test(remaining[i])) {
+				if (LEVEL2_PUNCT.test(remaining[i]) && !isInsideBracket(remaining, i)) {
 					// 将连续逗号归入当前切片
 					let end = i + 1;
 					while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
@@ -205,16 +245,17 @@ export function splitSentences(text: string): string[] {
 }
 
 /**
- * 完整的文本解析流程：拆分 → 清洗 → 切片
+ * 完整的文本解析流程：拆分 → 切片 → 双版本清洗
  *
  * 处理流程：
  * 1. 提取全部思考区内容 → thinkingBlocks（不参与语音合成）
  * 2. 提取全部代码块内容 → codeBlocks（不参与语音合成）
- * 3. 对剩余文本执行清洗操作
- * 4. 对清洗后的文本执行智能切片 → textChunks（参与语音合成）
+ * 3. 对剩余文本执行智能切片
+ * 4. 清洗用于显示的文本（仅移除emoji）→ display
+ * 5. 清洗用于TTS的文本（移除行内代码、图片标记、HTML标签等）→ tts
  *
  * @param rawText - 原始文本
- * @returns ParsedContent 包含三个独立数组
+ * @returns ParsedContent 包含三个独立数组，textChunks中每个切片包含display和tts两个版本
  */
 export function parseContent(rawText: string): ParsedContent {
 	if (!rawText) return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
@@ -225,11 +266,15 @@ export function parseContent(rawText: string): ParsedContent {
 	// 第二步：提取代码块内容
 	const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
 
-	// 第三步：清洗剩余文本
-	const cleanedText = cleanTextForTTS(textAfterCode);
+	// 第三步：清洗用于显示的文本（仅移除emoji）并智能切片
+	const displayText = cleanTextForDisplay(textAfterCode);
+	const displayChunks = splitSentences(displayText);
 
-	// 第四步：智能切片
-	const textChunks = splitSentences(cleanedText);
+	// 第四步 & 第五步：为每个切片生成显示文本和TTS文本
+	const textChunks: TextChunk[] = displayChunks.map(chunk => ({
+		display: chunk,
+		tts: cleanTextForTTS(chunk),
+	}));
 
 	return { thinkingBlocks, codeBlocks, textChunks };
 }

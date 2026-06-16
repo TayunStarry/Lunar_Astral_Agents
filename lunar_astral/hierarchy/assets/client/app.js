@@ -267,7 +267,8 @@ class LunarCoreApp {
 				// 遍历图片信息，执行图片渲染
 				for (const imageBase64 of message.data.images) {
 					// 渲染图片到历史记录
-					await this.handleAssistantMessage('', 'data:image/jpeg;base64,' + imageBase64);
+					const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : 'data:image/jpeg;base64,' + imageBase64;
+					await this.handleAssistantMessage('', imageUrl);
 				}
 				break;
 

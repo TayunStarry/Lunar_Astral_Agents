@@ -1,19 +1,19 @@
 package adapters
 
 import (
-	"encoding/base64"
 	"fmt"
 	"screenshot"
 
 	"github.com/dop251/goja"
 )
 
-// screenshotCapture 执行屏幕截图并返回 base64 编码的图片数据
+// screenshotCapture 执行屏幕截图、压缩缩放并返回处理后的图片数据
 // 参数: displayIndex, region, scale, format, quality
-// 返回值: [string, error] base64 数据 URI 和错误信息
+// 返回值: [map[string]any, error] 包含 base64/format/width/height 的结果对象和错误信息
+// 注意：此函数内部已集成 ResizeImage 处理，返回的 base64 字段格式为 "data:image/[format];base64,[data]"
 func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{"", fmt.Errorf("screenshotCapture 参数不足，需要 displayIndex")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("screenshotCapture 参数不足，需要 displayIndex")})
 	}
 
 	req := screenshot.ScreenshotRequest{
@@ -55,16 +55,18 @@ func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	}
 
 	// 执行截图
-	imgData, _, contentType, err := screenshot.Screenshot(req)
+	imgData, _, _, err := screenshot.Screenshot(req)
 	if err != nil {
-		return class.runtime.ToValue([]any{"", err})
+		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	// 编码为 base64 数据 URI
-	base64Data := base64.StdEncoding.EncodeToString(imgData)
-	dataURI := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
+	// 统一在 Go 层完成图片压缩缩放处理，确保 base64 格式正确
+	result, err := screenshot.ResizeImage(imgData)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("截图后处理失败: %v", err)})
+	}
 
-	return class.runtime.ToValue([]any{dataURI, nil})
+	return class.runtime.ToValue([]any{result, nil})
 }
 
 // screenshotGetDisplays 获取所有显示器信息

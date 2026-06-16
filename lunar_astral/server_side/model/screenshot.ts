@@ -39,42 +39,47 @@ export const screenshotTools: ToolCall[] = [
 // ==== 工具处理函数 ====
 
 /** 处理截图工具调用 */
-async function handleScreenshot(args?: Record<string, any> | string): Promise<string> {
+async function handleScreenshot(args?: Record<string, any> | string): Promise<string[]> {
+	console.log(`[截图] ========== 开始处理截图工具调用 ==========`);
+	console.log(`[截图] 原始参数: ${JSON.stringify(args)}`);
+
 	const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
 	const { display_index, region, scale, format } = parsed;
+
+	console.log(`[截图] 参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
 
 	const displayIndex = display_index ?? 0;
 	const captureFormat = format || 'png';
 
-	console.log(`[截图] 工具调用: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+	console.log(`[截图] 最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+	console.log(`[截图] 准备执行截图操作...`);
 
-	// 执行截图
-	const [dataURI, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
+	// Go 层统一处理截图捕获 + 图片压缩缩放，返回包含 base64/format/width/height 的结果对象
+	const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0) as [ResizeImageResult, Error | null];
 	if (captureErr) {
 		console.error(`[截图] 截图失败: ${captureErr.message || String(captureErr)}`);
-		return `截图失败：${captureErr.message || String(captureErr)}`;
+		console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+		return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
 	}
 
-	if (!dataURI || dataURI.length === 0) {
-		return '截图失败：未获取到截图数据';
+	console.log(`[截图] 截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
+
+	if (!result || !result.base64) {
+		console.error(`[截图] 截图失败: 未获取到截图数据`);
+		console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+		return ['截图失败：未获取到截图数据', ''];
 	}
 
-	// 通过 resizeImage 缩放处理
-	const [resizeResult, resizeErr] = resizeImage(dataURI) as [ResizeImageResult, Error | null];
-	if (resizeErr) {
-		console.error(`[截图] 图片缩放失败: ${resizeErr.message || String(resizeErr)}`);
-		return `截图失败：图片缩放处理出错 - ${resizeErr.message || String(resizeErr)}`;
-	}
+	// 将处理后的图片推送到前端，base64 格式为 "data:image/[format];base64,[data]"
+	pushImage([result.base64]);
+	console.log(`[截图] 图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
 
-	// 将缩放后的图片推送到未读消息中
-	if (resizeResult?.base64) {
-		pushImage([resizeResult.base64]);
-		console.log(`[截图] 图片已推送: ${resizeResult.width}x${resizeResult.height}, 格式=${resizeResult.format}`);
-	}
-
-	// 返回文本响应
-	const sizeInfo = resizeResult ? `${resizeResult.width}x${resizeResult.height}` : '未知';
-	return `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+	// 返回文本响应 + base64 图片数据
+	const sizeInfo = `${result.width}x${result.height}`;
+	const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+	console.log(`[截图] 返回响应: ${sizeInfo}`);
+	console.log(`[截图] ========== 截图工具调用结束(成功) ==========`);
+	return [textResponse, result.base64];
 }
 
 // ==== 模块级注册 ====

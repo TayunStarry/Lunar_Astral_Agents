@@ -111,12 +111,12 @@ export const webSearchTools: ToolCall[] = [
 ];
 
 /** 处理网络搜索工具调用 */
-async function handleWebSearch(args?: Record<string, any> | string): Promise<string> {
+async function handleWebSearch(args?: Record<string, any> | string): Promise<string[]> {
 	const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
 	const { query, mode } = parsed;
 
 	if (!query || query.trim().length === 0) {
-		return '搜索失败：查询关键词不能为空';
+		return ['搜索失败：查询关键词不能为空', ''];
 	}
 
 	const searchMode: SearchMode = mode || 'webpage';
@@ -125,7 +125,7 @@ async function handleWebSearch(args?: Record<string, any> | string): Promise<str
 	if (!isWebSearchReady()) {
 		const initResult = initWebSearch();
 		if (!initResult) {
-			return '搜索失败：网络检索子系统初始化失败';
+			return ['搜索失败：网络检索子系统初始化失败', ''];
 		}
 	}
 
@@ -134,11 +134,12 @@ async function handleWebSearch(args?: Record<string, any> | string): Promise<str
 	const [result, err] = executeWebSearch(query.trim(), searchMode);
 	if (err) {
 		console.error(`[网络检索] 搜索失败: ${err.message || String(err)}`);
-		return `搜索失败：${err.message || String(err)}`;
+		return [`搜索失败：${err.message || String(err)}`, ''];
 	}
 
-	console.log(`[网络检索] 查询结果:\n${result || '未找到相关搜索结果'}`);
-	return result || '未找到相关搜索结果';
+	const textResult = result || '未找到相关搜索结果';
+	console.log(`[网络检索] 查询结果:\n${textResult}`);
+	return [textResult, ''];
 }
 
 // ==== 模块级注册 ====

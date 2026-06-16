@@ -37,8 +37,8 @@ export class OnlyData {
 	];
 	/** 支持的视觉文件扩展名 */
 	public static readonly visionExtensions: string[] = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
-	/** LTP协议工具包-函数映射表 */
-	public static LTPfunction = new Map<string, (args?: Record<string, any> | string) => Promise<string>>();
+	/** LTP协议工具包-函数映射表，工具函数返回 string[]：下标0=文本内容结果，下标1=图片base64数据（无则为空字符串） */
+	public static LTPfunction = new Map<string, (args?: Record<string, any> | string) => Promise<string[]>>();
 	/** LTP协议工具包-函数定义 */
 	public static LTPdefinition: ToolCall[] = [];
 	/** 系统URL */

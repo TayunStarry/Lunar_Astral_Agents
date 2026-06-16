@@ -197,20 +197,29 @@ export class DialogueRole extends ModelBuilder {
 			const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
 			// 检查是否有对应的工具包
 			if (!lunarToolPackage) {
-				source.unreadContext.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+				this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
 				continue;
 			}
 			try {
-				/** 工具函数执行结果 */
+				/** 工具函数执行结果：string[]格式，下标0=文本内容，下标1=图片base64数据（无则为空字符串） */
 				const toolResult = await lunarToolPackage(functionArgs);
-				// 将工具响应添加到消息历史中
-				source.unreadContext.push({ role: "tool", content: toolResult, tool_call_id: toolCall.id });
+				/** 提取文本内容 */
+				const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
+				/** 提取图片base64数据 */
+				const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
+				// 将文本工具响应添加到消息历史中
+				this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
+				// 如果有图片数据，作为视觉消息追加到消息历史中
+				if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
+					this.messages.push({ role: "tool", content: [{ type: "image_url", image_url: { url: base64Image } }], tool_call_id: toolCall.id });
+					console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
+				}
 				// 标记有工具调用
 				hasToolCalls = true;
 			}
 			catch (error) {
 				// 将工具调用失败信息添加到消息历史中
-				source.unreadContext.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+				this.messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
 			}
 		}
 		// 处理完所有工具调用后,清空状态

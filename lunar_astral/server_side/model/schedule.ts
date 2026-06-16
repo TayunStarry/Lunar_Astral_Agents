@@ -231,19 +231,19 @@ function parseArgs(args?: Record<string, any> | string): Record<string, any> {
 // ==== 工具处理函数 ====
 
 /** 处理创建计划项工具 */
-async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string> {
+async function handleCreateSchedule(args?: Record<string, any> | string): Promise<string[]> {
 	const { time, content } = parseArgs(args);
 	if (!time || time.trim().length === 0) {
-		return '创建计划项失败：执行时间不能为空，请提供有效的时间点';
+		return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
 	}
 	if (!content || content.trim().length === 0) {
-		return '创建计划项失败：工作内容不能为空，请提供具体的计划内容';
+		return ['创建计划项失败：工作内容不能为空，请提供具体的计划内容', ''];
 	}
 
 	/** 归一化时间 */
 	const normalizedTime = normalizeTime(time);
 	if (!normalizedTime) {
-		return `创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`;
+		return [`创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`, ''];
 	}
 
 	const newItem: ScheduleItem = {
@@ -256,26 +256,26 @@ async function handleCreateSchedule(args?: Record<string, any> | string): Promis
 	if (!saveSchedulesToDisk(scheduleCache)) {
 		// 回滚缓存
 		scheduleCache.pop();
-		return '创建计划项失败：保存到磁盘时出错，请稍后重试';
+		return ['创建计划项失败：保存到磁盘时出错，请稍后重试', ''];
 	}
 
 	console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
-	return `计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`;
+	return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
 }
 
 /** 处理编辑计划项工具 */
-async function handleEditSchedule(args?: Record<string, any> | string): Promise<string> {
+async function handleEditSchedule(args?: Record<string, any> | string): Promise<string[]> {
 	const { id, time, content } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
-		return '编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID';
+		return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
 	}
 	if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
-		return '编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改';
+		return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
 	}
 
 	const index = scheduleCache.findIndex(item => item.id === id.trim());
 	if (index === -1) {
-		return `编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`;
+		return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
 	}
 
 	/** 修改前的快照（用于回滚） */
@@ -284,7 +284,7 @@ async function handleEditSchedule(args?: Record<string, any> | string): Promise<
 	if (time && time.trim().length > 0) {
 		const normalizedTime = normalizeTime(time);
 		if (!normalizedTime) {
-			return `编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`;
+			return [`编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`, ''];
 		}
 		scheduleCache[index].time = normalizedTime;
 	}
@@ -295,23 +295,23 @@ async function handleEditSchedule(args?: Record<string, any> | string): Promise<
 	if (!saveSchedulesToDisk(scheduleCache)) {
 		// 回滚缓存
 		scheduleCache[index] = snapshot;
-		return '编辑计划项失败：保存到磁盘时出错，请稍后重试';
+		return ['编辑计划项失败：保存到磁盘时出错，请稍后重试', ''];
 	}
 
 	console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
-	return `计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`;
+	return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
 }
 
 /** 处理删除计划项工具 */
-async function handleDeleteSchedule(args?: Record<string, any> | string): Promise<string> {
+async function handleDeleteSchedule(args?: Record<string, any> | string): Promise<string[]> {
 	const { id } = parseArgs(args);
 	if (!id || id.trim().length === 0) {
-		return '删除计划项失败：计划项ID不能为空';
+		return ['删除计划项失败：计划项ID不能为空', ''];
 	}
 
 	const index = scheduleCache.findIndex(item => item.id === id.trim());
 	if (index === -1) {
-		return `删除计划项失败：未找到ID为 ${id} 的计划项`;
+		return [`删除计划项失败：未找到ID为 ${id} 的计划项`, ''];
 	}
 
 	/** 被删除的项（用于回滚） */
@@ -321,19 +321,19 @@ async function handleDeleteSchedule(args?: Record<string, any> | string): Promis
 	if (!saveSchedulesToDisk(scheduleCache)) {
 		// 回滚缓存
 		scheduleCache.splice(index, 0, deletedItem);
-		return '删除计划项失败：保存到磁盘时出错，请稍后重试';
+		return ['删除计划项失败：保存到磁盘时出错，请稍后重试', ''];
 	}
 
 	console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
-	return `计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`;
+	return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
 }
 
 /** 处理查询计划项工具 */
-async function handleQuerySchedule(args?: Record<string, any> | string): Promise<string> {
+async function handleQuerySchedule(args?: Record<string, any> | string): Promise<string[]> {
 	const { keyword } = parseArgs(args);
 
 	if (scheduleCache.length === 0) {
-		return '当前计划表为空，没有任何计划项，可以放心创建新计划。';
+		return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
 	}
 
 	/** 按时间升序排序 */
@@ -345,11 +345,11 @@ async function handleQuerySchedule(args?: Record<string, any> | string): Promise
 		: sorted;
 
 	if (filtered.length === 0) {
-		return `未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`;
+		return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
 	}
 
-	return `当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
-		filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n');
+	return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
+		filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
 }
 
 // ==== 定时检查 ====
