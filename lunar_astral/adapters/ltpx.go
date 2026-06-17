@@ -1,18 +1,15 @@
 package adapters
 
 import (
-	"config"
 	"encoding/json"
 	"logger"
-	"os"
-	"path/filepath"
-	"slices"
+	"sync"
 
 	"github.com/dop251/goja"
 )
 
-// LTP2PackageInfo LTP2 工具包配置结构
-type LTP2PackageInfo struct {
+// LTPXPackageInfo LTPX 工具包配置结构
+type LTPXPackageInfo struct {
 	ID          string           `json:"id"`
 	Title       string           `json:"title"`
 	Description string           `json:"description"`
@@ -21,114 +18,190 @@ type LTP2PackageInfo struct {
 	Tools       []map[string]any `json:"tools"`
 }
 
-// scanLTP2Packages 扫描 local_data/package/ 下所有带有 "LTP2" 标签的工具包
-// 返回包信息列表和对应的 tool.js 源码（key 为包名）
-func scanLTP2Packages() ([]LTP2PackageInfo, map[string]string) {
-	packageDir := filepath.Join(*config.LocalDir, "package")
-
-	entries, err := os.ReadDir(packageDir)
-	if err != nil {
-		logger.Error("LunarCore", "LTP2 扫描包目录失败: %v", err)
-		return nil, nil
-	}
-
-	var packages []LTP2PackageInfo
-	toolSources := make(map[string]string)
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		configPath := filepath.Join(packageDir, entry.Name(), "metadata.json")
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			continue
-		}
-
-		var pkg LTP2PackageInfo
-		if err = json.Unmarshal(data, &pkg); err != nil {
-			logger.Warn("LunarCore", "LTP2 解析包配置失败 %s: %v", configPath, err)
-			continue
-		}
-
-		// 仅接受带有 "LTP2" 标签的工具包
-		hasLTP2 := slices.Contains(pkg.Tags, "LTP2")
-		if !hasLTP2 {
-			continue
-		}
-
-		// 读取 tool.js 文件
-		toolPath := filepath.Join(packageDir, entry.Name(), "tool.js")
-		toolCode, err := os.ReadFile(toolPath)
-		if err != nil {
-			logger.Warn("LunarCore", "LTP2 读取工具文件失败 %s: %v", toolPath, err)
-			continue
-		}
-
-		toolSources[pkg.ID] = string(toolCode)
-		packages = append(packages, pkg)
-	}
-
-	return packages, toolSources
+// LTPXToolInfo 已加载工具的内部状态
+type LTPXToolInfo struct {
+	Name       string `json:"name"`
+	Definition string `json:"definition"` // 工具定义 JSON 字符串
+	JS         string `json:"js"`         // tool.js 源码
 }
 
-// loadLTP2ToolPackages 在 goja 运行时中加载所有 LTP2 工具包
-// 必须在 agentSystem.js 执行完毕（agentSystem 全局变量可用）后调用
-// 返回工具定义 JSON 字符串；每类工具的函数处理器会注册到 globalThis.__ltp2Handlers
-func loadLTP2ToolPackages(vm *goja.Runtime) string {
-	packages, toolSources := scanLTP2Packages()
-	if len(packages) == 0 {
-		return "[]"
+// LTPXStatus 工具状态查询结果
+type LTPXStatus struct {
+	Loaded         []string         `json:"loaded"`
+	PendingLoads   []*LTPXToolInfo  `json:"pendingLoads"`
+	PendingUnloads []string         `json:"pendingUnloads"`
+}
+
+var (
+	ltpMutex       sync.RWMutex
+	loadedTools    = make(map[string]*LTPXToolInfo)
+	pendingLoads   []*LTPXToolInfo
+	pendingUnloads []string
+)
+
+// LoadLTPXTool 将工具加入待加载队列（由 HTTP handler 调用）
+func LoadLTPXTool(name, defJSON, jsCode string) {
+	ltpMutex.Lock()
+	defer ltpMutex.Unlock()
+	pendingLoads = append(pendingLoads, &LTPXToolInfo{
+		Name: name, Definition: defJSON, JS: jsCode,
+	})
+	logger.Info("LunarCore", "LTPX 工具 %s 已加入待加载队列", name)
+}
+
+// UnloadLTPXTool 将工具加入待卸载队列（由 HTTP handler 调用）
+func UnloadLTPXTool(name string) {
+	ltpMutex.Lock()
+	defer ltpMutex.Unlock()
+	pendingUnloads = append(pendingUnloads, name)
+	logger.Info("LunarCore", "LTPX 工具 %s 已加入待卸载队列", name)
+}
+
+// getLTPXToolStatus 返回当前工具状态（供 JS 端 getLTPXToolStatus 调用）
+// 返回后清空 pending 队列
+func getLTPXToolStatus() *LTPXStatus {
+	ltpMutex.Lock()
+	defer ltpMutex.Unlock()
+
+	loadedNames := make([]string, 0, len(loadedTools))
+	for name := range loadedTools {
+		loadedNames = append(loadedNames, name)
 	}
 
-	// 获取 agentSystem.OnlyData，注入为全局变量供 tool.js 使用
+	status := &LTPXStatus{
+		Loaded:         loadedNames,
+		PendingLoads:   pendingLoads,
+		PendingUnloads: pendingUnloads,
+	}
+
+	// 清空 pending 队列
+	pendingLoads = nil
+	pendingUnloads = nil
+
+	return status
+}
+
+// ensureOnlyDataGlobal 确保 OnlyData 作为全局变量可用（兼容旧工具包代码）
+func ensureOnlyDataGlobal(vm *goja.Runtime) {
 	agentSystemVal := vm.Get("agentSystem")
 	if agentSystemVal == nil || goja.IsUndefined(agentSystemVal) {
-		logger.Warn("LunarCore", "LTP2 agentSystem 不可用，跳过工具注册")
-		return "[]"
+		return
 	}
-
 	agentSystemObj := agentSystemVal.ToObject(vm)
 	onlyDataVal := agentSystemObj.Get("OnlyData")
 	if onlyDataVal == nil || goja.IsUndefined(onlyDataVal) {
-		logger.Warn("LunarCore", "LTP2 OnlyData 不可用，跳过工具注册")
-		return "[]"
+		return
 	}
-
-	// 将 OnlyData 注入为全局变量
 	vm.Set("OnlyData", onlyDataVal)
+}
 
-	// 收集所有工具定义
-	var allTools []map[string]any
+// applyLTPXLoad 在 goja 事件循环中执行工具加载
+func applyLTPXLoad(vm *goja.Runtime, info *LTPXToolInfo) {
+	// 确保 OnlyData 全局变量可用（兼容旧工具包直接引用 OnlyData 的代码）
+	ensureOnlyDataGlobal(vm)
 
-	for _, pkg := range packages {
-		toolCode, ok := toolSources[pkg.ID]
-		if !ok {
-			continue
-		}
-
-		// 在 goja 中执行工具代码（工具会自行注册到 OnlyData.LTPfunction）
-		_, err := vm.RunString(toolCode)
-		if err != nil {
-			logger.Error("LunarCore", "LTP2 执行工具代码失败 %s: %v", pkg.ID, err)
-			continue
-		}
-
-		if len(pkg.Tools) > 0 {
-			allTools = append(allTools, pkg.Tools...)
-		}
-
-		logger.Info("LunarCore", "LTP2 工具包加载成功: %s (%d 个工具)", pkg.ID, len(pkg.Tools))
-	}
-
-	// 序列化工具定义为 JSON
-	toolsJSON, err := json.Marshal(allTools)
+	// 执行工具 JS 代码（工具会自行注册到 OnlyData.LTPfunction）
+	_, err := vm.RunString(info.JS)
 	if err != nil {
-		logger.Error("LunarCore", "LTP2 序列化工具定义失败: %v", err)
-		return "[]"
+		logger.Error("LunarCore", "LTPX 执行工具代码失败 %s: %v", info.Name, err)
+		return
 	}
 
-	logger.Info("LunarCore", "LTP2 工具包加载完成，共 %d 个工具", len(allTools))
-	return string(toolsJSON)
+	// 注入工具定义到 OnlyData.LTPdefinition
+	_, err = vm.RunString(`agentSystem.OnlyData.LTPdefinition.push(` + info.Definition + `);`)
+	if err != nil {
+		logger.Error("LunarCore", "LTPX 注入工具定义失败 %s: %v", info.Name, err)
+		return
+	}
+
+	ltpMutex.Lock()
+	loadedTools[info.Name] = info
+	ltpMutex.Unlock()
+
+	logger.Info("LunarCore", "LTPX 工具加载成功: %s", info.Name)
+}
+
+// applyLTPXUnload 在 goja 事件循环中执行工具卸载
+func applyLTPXUnload(vm *goja.Runtime, name string) {
+	// 从 OnlyData.LTPdefinition 中移除
+	_, err := vm.RunString(`
+		(function() {
+			var defs = agentSystem.OnlyData.LTPdefinition;
+			for (var i = defs.length - 1; i >= 0; i--) {
+				if (defs[i].function && defs[i].function.name === '` + name + `') {
+					defs.splice(i, 1);
+				}
+			}
+		})();
+	`)
+	if err != nil {
+		logger.Error("LunarCore", "LTPX 移除工具定义失败 %s: %v", name, err)
+	}
+
+	// 从 OnlyData.LTPfunction 中移除
+	_, err = vm.RunString(`
+		(function() {
+			agentSystem.OnlyData.LTPfunction.delete('` + name + `');
+		})();
+	`)
+	if err != nil {
+		logger.Error("LunarCore", "LTPX 移除工具函数失败 %s: %v", name, err)
+	}
+
+	ltpMutex.Lock()
+	delete(loadedTools, name)
+	ltpMutex.Unlock()
+
+	logger.Info("LunarCore", "LTPX 工具卸载成功: %s", name)
+}
+
+// ProcessPendingLTPXChanges 在 goja 事件循环中处理所有待处理的加载/卸载
+// 由 getLTPXToolStatus 的 JS 端调用后自动触发
+func ProcessPendingLTPXChanges(vm *goja.Runtime, statusJSON string) {
+	var status LTPXStatus
+	if err := json.Unmarshal([]byte(statusJSON), &status); err != nil {
+		logger.Error("LunarCore", "LTPX 解析状态失败: %v", err)
+		return
+	}
+
+	for _, info := range status.PendingLoads {
+		applyLTPXLoad(vm, info)
+	}
+
+	for _, name := range status.PendingUnloads {
+		applyLTPXUnload(vm, name)
+	}
+}
+
+// getLTPXToolStatusForJS 供 JS 端调用的 Go 函数，返回工具状态 JSON
+func (class *Runtime) getLTPXToolStatusForJS() goja.Value {
+	status := getLTPXToolStatus()
+	data, _ := json.Marshal(status)
+	return class.runtime.ToValue(string(data))
+}
+
+// processLTPXChangesForJS 供 JS 端调用的 Go 函数，在事件循环中处理待处理的加载/卸载
+func (class *Runtime) processLTPXChangesForJS(statusJSON string) goja.Value {
+	ProcessPendingLTPXChanges(class.runtime, statusJSON)
+	return class.runtime.ToValue(true)
+}
+
+// LoadLTPXToolOnLoop 在事件循环中完整加载工具（供 HTTP handler 调用）
+func LoadLTPXToolOnLoop(name, defJSON, jsCode string) {
+	RunOnAgentLoop(func(vm *goja.Runtime) {
+		info := &LTPXToolInfo{Name: name, Definition: defJSON, JS: jsCode}
+		applyLTPXLoad(vm, info)
+	})
+}
+
+// UnloadLTPXToolOnLoop 在事件循环中完整卸载工具（供 HTTP handler 调用）
+func UnloadLTPXToolOnLoop(name string) {
+	RunOnAgentLoop(func(vm *goja.Runtime) {
+		applyLTPXUnload(vm, name)
+	})
+}
+
+// GetLTPXToolStatus 导出函数，供外部查询当前工具状态
+func GetLTPXToolStatus() *LTPXStatus {
+	return getLTPXToolStatus()
 }

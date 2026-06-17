@@ -240,4 +240,20 @@ declare global {
      * @returns {[Array<{index: number, x: number, y: number, width: number, height: number}>, Error | null]} 包含显示器信息的元组，[显示器列表, 错误信息]
      */
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
+    /**
+     * 获取 LTPX 工具状态
+     * 返回当前已加载工具列表和待处理的加载/卸载操作
+     * 
+     * @returns {string} JSON 字符串，包含 loaded、pendingLoads、pendingUnloads
+     */
+    function getLTPXToolStatus(): string;
+    /**
+     * 处理 LTPX 工具变更（加载/卸载）
+     * 在 goja 事件循环中执行工具的注册和注销
+     * 
+     * @param {string} statusJSON 工具状态 JSON 字符串
+     * 
+     * @returns {boolean} 是否处理成功
+     */
+    function processLTPXChanges(statusJSON: string): boolean;
 }

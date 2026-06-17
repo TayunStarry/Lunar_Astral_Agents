@@ -1,4 +1,4 @@
-﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -47,6 +47,8 @@ class LunarAgent extends AgentDefine {
 		// 循环处理
 		while (true) {
 			try {
+				// 查询 LTPX 工具状态，同步加载/卸载
+				this.syncLTPXToolStatus();
 				// 拉取外部消息
 				await this.pullExternalMessages();
 				// 检查计划表到期项，将到期计划内容写入上下文
@@ -157,6 +159,21 @@ class LunarAgent extends AgentDefine {
 		// 清除主智能体的unreadContext和unreadVideoUrl
 		this.unreadContext = [];
 		this.unreadVideoUrl = [];
+	}
+	/** 同步 LTPX 工具状态：查询 Go 层状态并执行加载/卸载 */
+	protected syncLTPXToolStatus(): void {
+		try {
+			const statusJSON = getLTPXToolStatus();
+			if (!statusJSON || statusJSON === '{}') return;
+			const status = JSON.parse(statusJSON);
+			// 处理待加载和待卸载
+			if ((status.pendingLoads && status.pendingLoads.length > 0) ||
+				(status.pendingUnloads && status.pendingUnloads.length > 0)) {
+				processLTPXChanges(statusJSON);
+			}
+		} catch (e) {
+			console.error('LTPX 工具状态同步失败:', e);
+		}
 	}
 	/** 拉取外部消息 */
 	protected async pullExternalMessages() {

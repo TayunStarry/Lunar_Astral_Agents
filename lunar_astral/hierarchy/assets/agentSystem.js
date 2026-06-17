@@ -1796,6 +1796,7 @@ var agentSystem = (function (exports) {
         async thinkingChainProcess() {
             while (true) {
                 try {
+                    this.syncLTPXToolStatus();
                     await this.pullExternalMessages();
                     const dueItems = checkDueItems();
                     for (const item of dueItems) {
@@ -1875,6 +1876,21 @@ var agentSystem = (function (exports) {
             this.organizeRole.coverContext([]);
             this.unreadContext = [];
             this.unreadVideoUrl = [];
+        }
+        syncLTPXToolStatus() {
+            try {
+                const statusJSON = getLTPXToolStatus();
+                if (!statusJSON || statusJSON === '{}')
+                    return;
+                const status = JSON.parse(statusJSON);
+                if ((status.pendingLoads && status.pendingLoads.length > 0) ||
+                    (status.pendingUnloads && status.pendingUnloads.length > 0)) {
+                    processLTPXChanges(statusJSON);
+                }
+            }
+            catch (e) {
+                console.error('LTPX 工具状态同步失败:', e);
+            }
         }
         async pullExternalMessages() {
             pullContext().forEach(message => this.writeMessage(message.role, message.content));

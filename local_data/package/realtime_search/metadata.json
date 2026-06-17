@@ -2,7 +2,10 @@
 	"id": "realtime_search",
 	"title": "实时搜索",
 	"description": "查询实时天气与搜索最新新闻",
-	"tags": ["LTP2"],
+	"tags": [
+		"LTP2",
+		"LTPX"
+	],
 	"url": "/file/read/package/realtime_search/tool.md",
 	"icon": "/file/read/package/realtime_search/icon.svg",
 	"tools": [
@@ -16,7 +19,10 @@
 					"properties": {
 						"query_type": {
 							"type": "string",
-							"enum": ["weather", "news"],
+							"enum": [
+								"weather",
+								"news"
+							],
 							"description": "指定查询类型：'weather' 表示查询天气，'news' 表示搜索新闻"
 						},
 						"sheng": {
@@ -28,7 +34,9 @@
 							"description": "城市名称，如'南京市'、'上海市'。仅在 query_type 为 'weather' 时必填"
 						}
 					},
-					"required": ["query_type"]
+					"required": [
+						"query_type"
+					]
 				}
 			}
 		}

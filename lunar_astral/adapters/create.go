@@ -74,6 +74,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册截图子系统适配器
 	vm.Set("screenshotCapture", adapters.screenshotCapture)
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
+
+	// 注册 LTPX 工具动态管理函数
+	vm.Set("getLTPXToolStatus", adapters.getLTPXToolStatusForJS)
+	vm.Set("processLTPXChanges", adapters.processLTPXChangesForJS)
 }
 
 // createAgentContext 创建并初始化JavaScript运行时环境
@@ -148,16 +152,17 @@ func RunAgentContext() error {
 			logger.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
-
-		// agentSystem.js 执行完毕后，agentSystem 全局变量已可用
-		// 加载 LTP2 工具包并将工具定义注入到 OnlyData.LTPdefinition
-		ltp2ToolsJSON := loadLTP2ToolPackages(vm)
-		_, err = vm.RunString(`agentSystem.OnlyData.LTPdefinition.push(...` + ltp2ToolsJSON + `);`)
-		if err != nil {
-			logger.SubError("LunarCore", "LTP2", "注入工具定义失败: %v", err)
-		}
 	})
 	return nil
+}
+
+// RunOnAgentLoop 在 agent 事件循环中执行函数（供外部模块调用）
+func RunOnAgentLoop(fn func(vm *goja.Runtime)) {
+	if runtime == nil {
+		logger.Error("LunarCore", "JavaScript 运行时未初始化，无法执行操作")
+		return
+	}
+	runtime.RunOnLoop(fn)
 }
 
 // CloseAgentContext 关闭JavaScript运行时环境
