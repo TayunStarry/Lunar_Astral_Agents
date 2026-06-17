@@ -10,56 +10,55 @@ import (
 	"strings"
 )
 
-// 允许预览的文件类型白名单
-var previewAllowlist = map[string]bool{
+// 文件类别常量
+const (
+	CategoryImage = "image"
+	CategoryVideo = "video"
+	CategoryText  = "text"
+)
+
+// PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
+type PreviewEntry struct {
+	MIME     string // MIME 类型
+	Category string // 文件类别: image / video / text
+}
+
+// 允许预览的文件类型白名单（含分类与 MIME 信息，三合一）
+var previewAllowlist = map[string]PreviewEntry{
 	// 图片格式
-	".png":  true,
-	".jpg":  true,
-	".jpeg": true,
-	".webp": true,
-	".gif":  true,
-	".svg":  true,
-	".ico":  true,
-	".bmp":  true,
-	".tiff": true,
-	".tif":  true,
+	".png":  {MIME: "image/png", Category: CategoryImage},
+	".jpg":  {MIME: "image/jpeg", Category: CategoryImage},
+	".jpeg": {MIME: "image/jpeg", Category: CategoryImage},
+	".webp": {MIME: "image/webp", Category: CategoryImage},
+	".gif":  {MIME: "image/gif", Category: CategoryImage},
+	".svg":  {MIME: "image/svg+xml", Category: CategoryImage},
+	".ico":  {MIME: "image/x-icon", Category: CategoryImage},
+	".bmp":  {MIME: "image/bmp", Category: CategoryImage},
+	".tiff": {MIME: "image/tiff", Category: CategoryImage},
+	".tif":  {MIME: "image/tiff", Category: CategoryImage},
 	// 视频格式
-	".mp4":  true,
-	".webm": true,
-	".avi":  true,
-	".mov":  true,
-	".mkv":  true,
-	".wmv":  true,
-	".flv":  true,
-	".m4v":  true,
-	".mpg":  true,
-	".mpeg": true,
+	".mp4":  {MIME: "video/mp4", Category: CategoryVideo},
+	".webm": {MIME: "video/webm", Category: CategoryVideo},
+	".avi":  {MIME: "video/x-msvideo", Category: CategoryVideo},
+	".mov":  {MIME: "video/quicktime", Category: CategoryVideo},
+	".mkv":  {MIME: "video/x-matroska", Category: CategoryVideo},
+	".wmv":  {MIME: "video/x-ms-wmv", Category: CategoryVideo},
+	".flv":  {MIME: "video/x-flv", Category: CategoryVideo},
+	".m4v":  {MIME: "video/mp4", Category: CategoryVideo},
+	".mpg":  {MIME: "video/mpeg", Category: CategoryVideo},
+	".mpeg": {MIME: "video/mpeg", Category: CategoryVideo},
 	// 文本格式（仅数据与配置文件，不含代码/脚本）
-	".txt":  true,
-	".md":   true,
-	".log":  true,
-	".csv":  true,
-	".json": true,
-	".xml":  true,
-	".yaml": true,
-	".yml":  true,
-	".toml": true,
-	".ini":  true,
-	".cfg":  true,
-}
-
-// 图片扩展名集合（用于快速判断是否为图片类型）
-var imageExtensions = map[string]bool{
-	".png": true, ".jpg": true, ".jpeg": true, ".webp": true,
-	".gif": true, ".svg": true, ".ico": true, ".bmp": true,
-	".tiff": true, ".tif": true,
-}
-
-// 视频扩展名集合
-var videoExtensions = map[string]bool{
-	".mp4": true, ".webm": true, ".avi": true, ".mov": true,
-	".mkv": true, ".wmv": true, ".flv": true, ".m4v": true,
-	".mpg": true, ".mpeg": true,
+	".txt":  {MIME: "text/plain", Category: CategoryText},
+	".md":   {MIME: "text/markdown", Category: CategoryText},
+	".log":  {MIME: "text/plain", Category: CategoryText},
+	".csv":  {MIME: "text/csv", Category: CategoryText},
+	".json": {MIME: "application/json", Category: CategoryText},
+	".xml":  {MIME: "application/xml", Category: CategoryText},
+	".yaml": {MIME: "text/yaml", Category: CategoryText},
+	".yml":  {MIME: "text/yaml", Category: CategoryText},
+	".toml": {MIME: "text/toml", Category: CategoryText},
+	".ini":  {MIME: "text/plain", Category: CategoryText},
+	".cfg":  {MIME: "text/plain", Category: CategoryText},
 }
 
 // PreviewFile 预览指定绝对路径的文件内容，不受本地目录限制
@@ -100,70 +99,31 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 		return nil, 0, "", "", fmt.Errorf("文件大小超过限制 (最大 500MB)")
 	}
 
-	// 6. 检查文件扩展名是否在白名单中
+	// 6. 检查文件扩展名是否在白名单中，同时获取 MIME 和类别
 	ext := strings.ToLower(filepath.Ext(cleanPath))
-	if !previewAllowlist[ext] {
+	entry, ok := previewAllowlist[ext]
+	if !ok {
 		logger.SubWarn("Storage", "Preview", "文件类型不被允许: %s (扩展名: %s)", cleanPath, ext)
 		return nil, 0, "", "", fmt.Errorf("不允许的文件类型: %s", ext)
 	}
 
-	// 7. 确定文件类别
-	category := "text"
-	if imageExtensions[ext] {
-		category = "image"
-	} else if videoExtensions[ext] {
-		category = "video"
+	// 7. 获取 MIME 类型（白名单优先，标准库兜底）
+	mimeType := entry.MIME
+	if mimeType == "" {
+		if mt := mime.TypeByExtension(ext); mt != "" {
+			mimeType = mt
+		} else {
+			mimeType = "application/octet-stream"
+		}
 	}
 
-	// 8. 获取 MIME 类型
-	mimeType := "application/octet-stream"
-	if mt, ok := mimeTypeByExt(ext); ok {
-		mimeType = mt
-	} else if mt := mime.TypeByExtension(ext); mt != "" {
-		mimeType = mt
-	}
-
-	// 9. 打开文件
+	// 8. 打开文件
 	file, err := os.Open(cleanPath)
 	if err != nil {
 		logger.SubError("Storage", "Preview", "打开文件失败: %s, %v", cleanPath, err)
 		return nil, 0, "", "", fmt.Errorf("打开文件失败")
 	}
 
-	logger.SubInfo("Storage", "Preview", "预览成功: %s, 类别: %s, 大小: %d 字节", cleanPath, category, fileInfo.Size())
-	return file, fileInfo.Size(), mimeType, category, nil
-}
-
-// mimeTypeByExt 根据扩展名返回对应的 MIME 类型
-func mimeTypeByExt(ext string) (string, bool) {
-	mimeMap := map[string]string{
-		".png":  "image/png",
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".webp": "image/webp",
-		".gif":  "image/gif",
-		".svg":  "image/svg+xml",
-		".ico":  "image/x-icon",
-		".bmp":  "image/bmp",
-		".tiff": "image/tiff",
-		".tif":  "image/tiff",
-		".mp4":  "video/mp4",
-		".webm": "video/webm",
-		".avi":  "video/x-msvideo",
-		".mov":  "video/quicktime",
-		".mkv":  "video/x-matroska",
-		".txt":  "text/plain",
-		".md":   "text/markdown",
-		".json": "application/json",
-		".xml":  "application/xml",
-		".yaml": "text/yaml",
-		".yml":  "text/yaml",
-		".toml": "text/toml",
-		".ini":  "text/plain",
-		".cfg":  "text/plain",
-		".log":  "text/plain",
-		".csv":  "text/csv",
-	}
-	mt, ok := mimeMap[ext]
-	return mt, ok
+	logger.SubInfo("Storage", "Preview", "预览成功: %s, 类别: %s, 大小: %d 字节", cleanPath, entry.Category, fileInfo.Size())
+	return file, fileInfo.Size(), mimeType, entry.Category, nil
 }
