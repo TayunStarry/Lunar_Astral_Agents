@@ -53,4 +53,5 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/convert/image", Handler: convertImageHandler, Method: "POST", Description: "单张图片格式转换"},
 	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
 	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
+	{Path: "/api/gguf/metadata", Handler: ggufMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
 }

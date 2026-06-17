@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』GGUF 元数据查看器</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="script.js"></script>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="glass-effect"></div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <header>
+            <h1><i class="fas fa-file-code"></i> GGUF 模型元数据查看器</h1>
+            <p class="subtitle">输入 GGUF 模型文件路径，解析并查看其完整元数据信息</p>
+            <button id="themeToggle" class="btn-glass theme-toggle" title="切换深色/浅色模式">
+                <i class="fas fa-moon"></i>
+                <span id="themeLabel">深色模式</span>
+            </button>
+        </header>
+
+        <main>
+            <!-- 输入区域 -->
+            <div class="glass-panel input-panel">
+                <div class="input-group">
+                    <label for="modelPath" class="input-label">
+                        <i class="fas fa-folder-open"></i> 模型文件路径
+                    </label>
+                    <div class="input-row">
+                        <input
+                            type="text"
+                            id="modelPath"
+                            class="glass-input"
+                            placeholder="输入 GGUF 模型文件的完整路径，例如：D:\models\qwen2.gguf"
+                            autocomplete="off"
+                        >
+                        <button id="analyzeBtn" class="btn-glass btn-glass-primary">
+                            <i class="fas fa-search"></i> 解析
+                        </button>
+                    </div>
+                    <div class="input-hint">
+                        <i class="fas fa-info-circle"></i> 支持文件名以 .gguf 或 .GGUF 结尾的模型文件
+                    </div>
+                </div>
+
+                <!-- 路径校验反馈 -->
+                <div id="validationFeedback" class="feedback-area" style="display: none;"></div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div id="loadingPanel" class="glass-panel loading-panel" style="display: none;">
+                <div class="spinner"></div>
+                <p id="loadingText">正在解析模型文件...</p>
+            </div>
+
+            <!-- 错误信息 -->
+            <div id="errorPanel" class="glass-panel error-panel" style="display: none;"></div>
+
+            <!-- 解析结果 -->
+            <div id="resultPanel" style="display: none;">
+                <!-- 文件路径栏 -->
+                <div class="glass-panel file-path-bar" id="filePathBar">
+                    <span class="path-label"><i class="fas fa-file"></i> 文件路径：</span>
+                    <span id="displayFilePath" class="path-value"></span>
+                </div>
+
+                <!-- 模型摘要 -->
+                <section class="summary-section">
+                    <h2 class="section-title"><i class="fas fa-chart-pie"></i> 模型摘要</h2>
+                    <div id="summaryCards" class="summary-cards"></div>
+                </section>
+
+                <!-- 元数据表格 + 搜索 -->
+                <section class="metadata-section">
+                    <div class="section-header">
+                        <h2 class="section-title"><i class="fas fa-table"></i> 完整元数据</h2>
+                        <span id="metadataCount" class="badge"></span>
+                    </div>
+
+                    <!-- 关键词搜索框（元数据加载后显示） -->
+                    <div id="searchBar" class="glass-panel search-bar" style="display: none;">
+                        <div class="input-group">
+                            <label for="searchInput" class="input-label">
+                                <i class="fas fa-filter"></i> 关键词查询
+                            </label>
+                            <div class="input-row">
+                                <input
+                                    type="text"
+                                    id="searchInput"
+                                    class="glass-input"
+                                    placeholder="输入关键词搜索元数据键名或值（支持精确/模糊匹配）..."
+                                    autocomplete="off"
+                                >
+                                <button id="clearSearchBtn" class="btn-glass btn-glass-cancel" style="display: none;">
+                                    <i class="fas fa-times"></i> 清除
+                                </button>
+                            </div>
+                            <div class="input-hint">
+                                <span id="searchCount"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 表格 -->
+                    <div class="glass-panel table-wrapper">
+                        <table id="metadataTable">
+                            <thead>
+                                <tr>
+                                    <th class="col-key">键名</th>
+                                    <th class="col-value">值</th>
+                                </tr>
+                            </thead>
+                            <tbody id="metadataBody">
+                                <tr class="empty-row">
+                                    <td colspan="2">
+                                        <div class="empty-state">
+                                            <i class="fas fa-inbox"></i>
+                                            <p>暂无元数据</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <footer>
+            <p>星月智能 - 月之华 | GGUF Metadata Viewer</p>
+        </footer>
+    </div>
+</body>
+</html>
