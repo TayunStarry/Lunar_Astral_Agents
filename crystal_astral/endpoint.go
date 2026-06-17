@@ -49,4 +49,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/generate", Handler: image_server.GenerateHandler, Method: "POST", Description: "图像生成"},
 	{Path: "/generate/wait", Handler: image_server.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
+	{Path: "/file/preview", Handler: storage.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
+	{Path: "/convert/image", Handler: convertImageHandler, Method: "POST", Description: "单张图片格式转换"},
+	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
+	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
 }

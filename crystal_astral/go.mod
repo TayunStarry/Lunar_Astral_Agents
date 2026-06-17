@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	browser v0.0.0
 	config v0.0.0
+	github.com/chai2010/webp v1.0.0
 	image v0.0.0-00010101000000-000000000000
 	logger v0.0.0
 	screenshot v0.0.0

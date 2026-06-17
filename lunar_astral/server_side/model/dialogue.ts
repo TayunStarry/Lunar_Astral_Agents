@@ -1,4 +1,4 @@
-import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage, scheduleTools, webSearchTools, screenshotTools } from '../index';
+import { OnlyData, ChatCache, ModelResponseBody, AgentDefine, ModelBuilder, PostMessage } from '../index';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -26,7 +26,7 @@ export class DialogueRole extends ModelBuilder {
 				// 在递归前写入 assistant 的 tool_call 消息，确保上下文完整
 				this.writeContext(response.body.choices?.[0]?.message);
 				/** 处理工具调用 */
-				const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
+				const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
 				// 如果有处理过的工具调用,重新发送请求（包含工具调用结果）
 				if (hasProcessedToolCalls) return await this.callMultimediaAndToolParsing(cache, source);
 			}
@@ -184,7 +184,7 @@ export class DialogueRole extends ModelBuilder {
 		}
 	}
 	/** 批量执行工具调用 */
-	protected async batchExecutionToolCall(state: ChatCache, source: AgentDefine): Promise<boolean> {
+	protected async batchExecutionToolCall(state: ChatCache): Promise<boolean> {
 		/** 工具调用标志 */
 		let hasToolCalls = false;
 		// 遍历所有工具调用

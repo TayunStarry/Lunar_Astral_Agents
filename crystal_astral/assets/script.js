@@ -97,7 +97,12 @@ function getValueByPath(path) {
 function setValueByPath(path, value) {
     const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
     let current = configData;
-    for (let i = 0; i < parts.length - 1; i++) current = current[parts[i]];
+    for (let i = 0; i < parts.length - 1; i++) {
+        if (!(parts[i] in current) || current[parts[i]] === null) {
+            current[parts[i]] = {};
+        }
+        current = current[parts[i]];
+    }
     current[parts[parts.length - 1]] = value;
 }
 
@@ -654,8 +659,8 @@ function applyConfigChanges() {
     if (pendingConfigChanges) {
         configData = JSON.parse(JSON.stringify(pendingConfigChanges.merged));
         originalConfig = JSON.parse(JSON.stringify(configData));
-        // 刷新所有配置模态框
         refreshAllConfigModals();
+        saveConfig();
         addMessage('system', '配置已成功更新！');
     }
     closePreviewModal();

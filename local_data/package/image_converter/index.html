@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』图片转码</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+</head>
+
+<body>
+    <!-- 背景层 -->
+    <div class="background"></div>
+    <!-- 玻璃效果层 -->
+    <div class="glass-effect"></div>
+    <!-- 主容器 -->
+    <div class="container">
+
+        <!-- 顶部控制栏 -->
+        <header class="control-bar glass-panel">
+            <!-- 路径输入 -->
+            <div class="path-input-group">
+                <label class="control-label"><i class="fas fa-folder-open"></i> 文件夹路径</label>
+                <div class="path-input-row">
+                    <input type="text" id="folder-path" class="glass-input" placeholder="输入文件或文件夹路径，自动解析到文件夹...">
+                    <button id="browse-btn" class="btn-glass btn-glass-primary" title="浏览文件夹">
+                        <i class="fas fa-search"></i> 浏览
+                    </button>
+                </div>
+            </div>
+
+            <!-- 格式选择 -->
+            <div class="format-select-group">
+                <label class="control-label"><i class="fas fa-exchange-alt"></i> 格式转换</label>
+                <div class="format-tabs-row">
+                    <!-- 源格式选项卡 -->
+                    <div class="format-tab-group">
+                        <span class="tab-label">源格式</span>
+                        <div class="tab-buttons" id="source-format-tabs">
+                            <button class="tab-btn active" data-format="all">全部</button>
+                            <button class="tab-btn" data-format="png">PNG</button>
+                            <button class="tab-btn" data-format="jpeg">JPEG</button>
+                            <button class="tab-btn" data-format="webp">WebP</button>
+                        </div>
+                    </div>
+                    <!-- 箭头 -->
+                    <div class="format-arrow">
+                        <i class="fas fa-arrow-right"></i>
+                    </div>
+                    <!-- 目标格式选项卡 -->
+                    <div class="format-tab-group">
+                        <span class="tab-label">目标格式</span>
+                        <div class="tab-buttons" id="target-format-tabs">
+                            <button class="tab-btn" data-format="png">PNG</button>
+                            <button class="tab-btn active" data-format="webp">WebP</button>
+                            <button class="tab-btn" data-format="jpeg">JPEG</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮行 -->
+            <div class="action-row">
+                <div class="action-left">
+                    <!-- 删除源文件开关 -->
+                    <div class="toggle-group">
+                        <button id="delete-source-toggle" class="toggle-switch active">
+                            <span class="toggle-knob"></span>
+                        </button>
+                        <span class="toggle-label">转换后删除源文件</span>
+                    </div>
+                </div>
+                <div class="action-right">
+                    <button id="batch-convert-btn" class="btn-glass btn-glass-primary">
+                        <i class="fas fa-layer-group"></i> 批量转换
+                    </button>
+                    <button id="refresh-btn" class="btn-glass btn-glass-secondary">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- 文件展示区域 -->
+        <main class="file-grid-container glass-panel">
+            <div class="panel-header">
+                <i class="fas fa-images"></i>
+                <h2 id="grid-title">图片文件</h2>
+                <span id="file-count" class="file-count-badge">0 个文件</span>
+            </div>
+            <div id="file-grid" class="file-grid">
+                <!-- 空状态 -->
+                <div id="empty-state" class="empty-state">
+                    <i class="fas fa-inbox empty-icon"></i>
+                    <h3>暂无图片</h3>
+                    <p>请输入文件夹路径并点击浏览，查看支持的图片文件</p>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Toast 消息提示 -->
+    <div id="toast-container" class="toast-container-glass"></div>
+</body>
+
+</html>

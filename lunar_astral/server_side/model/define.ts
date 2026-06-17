@@ -6,8 +6,6 @@ export class AgentDefine {
 	protected queryKeywords: ModelBuilder = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
 	/** 情感管理器 */
 	protected emotionManager: ModelBuilder = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
-	/** 书记者角色(编写记忆) */
-	public recorderRole: ModelBuilder = new ModelBuilder(fileView('prompts/recorderRole.md')[0]);
 	
 	/** 摘要者角色(视频摘要) */
 	public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
@@ -42,8 +40,6 @@ export class AgentDefine {
 	protected constructor() {
 		// 初始化 自定义配置 信息
 		fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
-		// TODO 初始化 工具调用配置
-		// fetchDocumentCallback('resources/toolCall.json').then(content => OnlyData.toolCall = JSON.parse(content));
 		// TODO 初始化 聊天记录
 		// fetchDocumentCallback('resources/chatRecord.json')
 	}
