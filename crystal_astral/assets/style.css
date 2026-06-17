@@ -43,7 +43,7 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 20px;
-    padding: 30px 40px 100px 40px;
+    padding: 30px 40px 160px 40px;
     height: 100vh;
     overflow-y: auto;
     align-content: start;
@@ -177,12 +177,21 @@ body {
 }
 .card-btn-unload:hover { background: rgba(251, 191, 36, 0.8); }
 
-/* ===== 水晶按钮 ===== */
-.crystal-btn {
+/* ===== 底部操作区 ===== */
+.bottom-actions {
     position: fixed;
-    bottom: 20px;
+    bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    z-index: 100;
+}
+
+/* ===== 水晶按钮 ===== */
+.crystal-btn {
     width: 56px;
     height: 56px;
     border-radius: 50%;
@@ -195,19 +204,49 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
     transition: all 0.3s ease;
     box-shadow: 0 4px 20px rgba(150, 180, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
 }
 
 .crystal-btn:hover {
-    transform: translateX(-50%) scale(1.15);
+    transform: scale(1.15);
     box-shadow: 0 6px 30px rgba(150, 180, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
     background: linear-gradient(135deg, rgba(200, 220, 255, 0.6), rgba(240, 200, 255, 0.6), rgba(200, 240, 255, 0.6));
 }
 
 .crystal-btn i {
     filter: drop-shadow(0 0 6px rgba(180, 200, 255, 0.6));
+}
+
+/* ===== 配置按钮 ===== */
+.config-page-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.config-page-btn:hover {
+    background: rgba(255, 255, 255, 0.38);
+    transform: translateY(-2px) scale(1.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.config-page-btn i {
+    opacity: 0.9;
 }
 
 /* ===== 模态框 ===== */
@@ -597,6 +636,247 @@ body {
 }
 .btn-glass-danger:hover { background: rgba(220, 53, 69, 0.7); }
 
+/* ===== 配置模态框 ===== */
+.config-modal {
+    width: 680px;
+    max-width: 94vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.config-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    min-height: 0;
+}
+
+/* 配置气泡网格 */
+.config-bubble-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.config-bubble {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(10px);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    padding: 14px 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.config-bubble:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 配置气泡内标签 */
+.bubble-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 7px;
+    opacity: 0.85;
+}
+
+/* 配置输入框 */
+.bubble-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.bubble-input:focus {
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 2px rgba(108, 155, 207, 0.25);
+}
+
+.bubble-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* 开关组件 */
+.config-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.config-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.config-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.2);
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.config-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: #fff;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.config-switch input:checked + .config-slider {
+    background: rgba(108, 155, 207, 0.85);
+}
+
+.config-switch input:checked + .config-slider:before {
+    transform: translateX(20px);
+}
+
+/* 数组 / 对象区块 */
+.bubble-array,
+.bubble-object {
+    width: 100%;
+}
+
+.array-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    opacity: 0.85;
+}
+
+.array-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.array-item {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.array-item .bubble-input {
+    flex: 1;
+}
+
+.object-title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 8px;
+    opacity: 0.85;
+}
+
+/* 嵌套气泡网格 */
+.bubble-grid-nested {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.bubble-grid-nested .config-bubble {
+    min-width: 200px;
+    flex: 1 1 auto;
+}
+
+/* 配置模态框内的小按钮 */
+.btn-glass-small {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    font-size: 11px;
+    cursor: pointer;
+    color: #fff;
+    transition: all 0.2s;
+    font-family: inherit;
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.15);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-glass-small:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.btn-glass-small.danger {
+    background: rgba(220, 53, 69, 0.35);
+}
+.btn-glass-small.danger:hover {
+    background: rgba(220, 53, 69, 0.6);
+}
+
+.btn-glass-small.add {
+    background: rgba(32, 201, 151, 0.35);
+}
+.btn-glass-small.add:hover {
+    background: rgba(32, 201, 151, 0.6);
+}
+
+/* ===== 预览模态框 ===== */
+.preview-modal {
+    width: 800px;
+    max-width: 94vw;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#previewModal {
+    z-index: 2100;
+}
+
+.preview-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+}
+
+.preview-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    opacity: 0.85;
+}
+
+.preview-section pre {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 14px;
+    overflow: auto;
+    max-height: 180px;
+    font-size: 12px;
+    line-height: 1.5;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 /* 拖放覆盖层 */
 .drop-overlay {
     position: fixed;
@@ -635,11 +915,26 @@ body {
     .page-grid {
         grid-template-columns: repeat(3, 1fr);
         gap: 14px;
-        padding: 20px 20px 90px 20px;
+        padding: 20px 20px 160px 20px;
     }
     .chat-modal {
         width: 95vw;
         max-height: 90vh;
+    }
+    .config-modal {
+        width: 95vw;
+        max-height: 90vh;
+    }
+    .preview-modal {
+        width: 95vw;
+    }
+    .bottom-actions {
+        gap: 6px;
+    }
+    .config-page-btn {
+        width: 34px;
+        height: 34px;
+        font-size: 13px;
     }
 }
 
@@ -647,7 +942,7 @@ body {
     .page-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
-        padding: 14px 14px 80px 14px;
+        padding: 14px 14px 140px 14px;
     }
     .page-card { padding: 10px; }
     .page-card h3 { font-size: 12px; }

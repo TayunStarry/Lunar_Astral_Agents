@@ -16,10 +16,27 @@
     <!-- 网格视图 -->
     <div class="page-grid" id="pageGrid"></div>
 
-    <!-- 水晶功能按钮 -->
-    <button class="crystal-btn" id="crystalBtn" title="琉璃助手">
-        <i class="fas fa-gem"></i>
-    </button>
+    <!-- 底部操作区：单行排列，琉璃助手居中 -->
+    <div class="bottom-actions">
+        <button class="config-page-btn" data-config="models" title="模型配置">
+            <i class="fas fa-robot"></i>
+        </button>
+        <button class="config-page-btn" data-config="server" title="服务器配置">
+            <i class="fas fa-server"></i>
+        </button>
+        <button class="config-page-btn" data-config="project_archiving" title="项目归档">
+            <i class="fas fa-file-archive"></i>
+        </button>
+        <button class="crystal-btn" id="crystalBtn" title="琉璃助手">
+            <i class="fas fa-gem"></i>
+        </button>
+        <button class="config-page-btn" data-config="cloud" title="云端配置">
+            <i class="fas fa-cloud"></i>
+        </button>
+        <button class="config-page-btn" data-config="qq_adapter" title="QQ适配器">
+            <i class="fab fa-qq"></i>
+        </button>
+    </div>
 
     <!-- 聊天模态框 -->
     <div class="modal-overlay" id="chatModal">
@@ -85,6 +102,34 @@
             <div class="modal-footer">
                 <button class="btn-glass btn-glass-cancel" id="exportCancelBtn">取消</button>
                 <button class="btn-glass btn-glass-primary" id="exportConfirmBtn">确认导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置修改确认预览模态框 -->
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal preview-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-wrench"></i> 配置变更预览</h3>
+                <button class="modal-close" id="previewCloseBtn">&times;</button>
+            </div>
+            <div class="modal-body preview-body">
+                <div class="preview-section">
+                    <h4><i class="fas fa-file"></i> 原配置</h4>
+                    <pre id="originalConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4><i class="fas fa-edit"></i> 变更部分</h4>
+                    <pre id="changedConfigPreview"></pre>
+                </div>
+                <div class="preview-section">
+                    <h4><i class="fas fa-code-branch"></i> 合并后配置</h4>
+                    <pre id="mergedConfigPreview"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-glass btn-glass-cancel" id="cancelChangesBtn">取消变更</button>
+                <button class="btn-glass btn-glass-primary" id="applyChangesBtn">应用变更</button>
             </div>
         </div>
     </div>
