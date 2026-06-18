@@ -3,5 +3,8 @@
 	"icon": "/file/read/package/qwen_chat/icon.webp",
 	"title": "通义千问",
 	"description": "打开通义千问官方对话客户端",
-	"url": "https://chat.qwen.ai/"
+	"url": "https://chat.qwen.ai/",
+	"tags": [
+		"Chat"
+	]
 }

@@ -1,5 +1,8 @@
 {
 	"id": "gguf_metadata_viewer",
 	"title": "GGUF 元数据",
-	"description": "解析 GGUF 模型文件元数据，支持关键词搜索过滤"
+	"description": "解析 GGUF 模型文件元数据，支持关键词搜索过滤",
+	"tags": [
+		"App"
+	]
 }

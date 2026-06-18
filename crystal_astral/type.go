@@ -35,3 +35,14 @@ type proxyAwareHandler struct {
 	proxy       *httputil.ReverseProxy
 	shouldProxy func(string) bool
 }
+
+// YuehuaCheckResponse 月华服务检测响应结构体
+type YuehuaCheckResponse struct {
+	Available bool `json:"available"`
+}
+
+// YuehuaStartResponse 月华服务启动响应结构体
+type YuehuaStartResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+}

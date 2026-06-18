@@ -254,27 +254,35 @@ async function uploadAudioFile(file) {
         return;
     }
 
-    const formData = new FormData();
-    formData.append('audio', file);
-
     try {
         showStatus('正在上传音频...', 'info');
-        const response = await fetch(`${API_BASE}/upload/`, {
-            method: 'POST',
-            body: formData
-        });
-        const result = await response.json();
+        const arrayBuffer = await file.arrayBuffer();
+        // 计算文件内容的校验码，取前8位作为文件名
+        const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashPrefix = hashArray.slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join('');
+        const saveFileName = 'audios/' + hashPrefix + ext;
+        const encodedFileName = btoa(unescape(encodeURIComponent(saveFileName)));
 
-        if (result.success) {
-            uploadedRefAudioPath = result.path;
-            FILE_NAME.textContent = result.name;
-            FILE_INFO.classList.remove('hidden');
-            UPLOAD_CONTENT.classList.add('hidden');
-            showStatus('参考音频已就绪', 'success');
-        } else {
-            showStatus('上传失败: ' + (result.error || '未知错误'), 'error');
+        const response = await fetch(`${API_BASE}/file/write`, {
+            method: 'POST',
+            headers: { 'X-File-Name': encodedFileName, 'X-Overwrite': 'true' },
+            body: arrayBuffer
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            showStatus('上传失败: ' + errorText, 'error');
             AUDIO_UPLOAD.value = '';
+            return;
         }
+
+        const result = await response.json();
+        uploadedRefAudioPath = result.path;
+        FILE_NAME.textContent = file.name;
+        FILE_INFO.classList.remove('hidden');
+        UPLOAD_CONTENT.classList.add('hidden');
+        showStatus('参考音频已就绪', 'success');
     } catch (error) {
         showStatus('上传失败: ' + error.message, 'error');
         AUDIO_UPLOAD.value = '';
@@ -597,7 +605,7 @@ function stopStream() {
 
     if (webAudioCtx) {
         scheduledNodes.forEach(node => {
-            try { node.source.stop(); } catch (e) {}
+            try { node.source.stop(); } catch (e) { }
         });
         scheduledNodes = [];
     }
@@ -953,7 +961,7 @@ function resetEQ() {
 
 // Override play function to ensure EQ is connected
 const originalPlay = AUDIO_PLAYER.play;
-AUDIO_PLAYER.play = function() {
+AUDIO_PLAYER.play = function () {
     connectEQToAudioElement();
     return originalPlay.apply(AUDIO_PLAYER, arguments);
 };

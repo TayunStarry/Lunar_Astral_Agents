@@ -636,7 +636,7 @@ var agentSystem = (function (exports) {
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
-                    const hasProcessedToolCalls = await this.batchExecutionToolCall(cache, source);
+                    const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
                     if (hasProcessedToolCalls)
                         return await this.callMultimediaAndToolParsing(cache, source);
                 }
@@ -749,7 +749,7 @@ var agentSystem = (function (exports) {
                 console.error('聊天消息响应处理错误:', error);
             }
         }
-        async batchExecutionToolCall(state, source) {
+        async batchExecutionToolCall(state) {
             let hasToolCalls = false;
             for (const toolCall of state.toolCalls) {
                 const functionName = toolCall.function.name;
@@ -1685,7 +1685,6 @@ var agentSystem = (function (exports) {
     class AgentDefine {
         queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
         emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
-        recorderRole = new ModelBuilder(fileView('prompts/recorderRole.md')[0]);
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
@@ -1868,7 +1867,6 @@ var agentSystem = (function (exports) {
         resetAgentState() {
             this.queryKeywords.coverContext([]);
             this.emotionManager.coverContext([]);
-            this.recorderRole.coverContext([]);
             this.summaryRole.coverContext([]);
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);

@@ -239,11 +239,8 @@ func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 	fileHash, hasHash := c.fileHashes[audioPath]
 	c.mu.Unlock()
 
-	hash := fmt.Sprintf("%x", []byte(audioPath))
-	if len(hash) > 16 {
-		hash = hash[:16]
-	}
-	fileName := hash + ".bin"
+	// 使用文件内容哈希前16位作为缓存文件名，相同内容的音频共享同一 .bin 文件
+	fileName := fileHash[:16] + ".bin"
 	filePath := filepath.Join(c.cacheDir, fileName)
 
 	audioPathBytes := []byte(audioPath)

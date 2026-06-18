@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 - 琉璃 』</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
 </head>
 
 <body>
@@ -35,6 +36,9 @@
         </button>
         <button class="config-page-btn" data-config="qq_adapter" title="QQ适配器">
             <i class="fab fa-qq"></i>
+        </button>
+        <button class="call-yuehua-btn" id="callYuehuaBtn" title="呼叫月华">
+            <i class="fas fa-moon"></i>
         </button>
     </div>
 
@@ -131,6 +135,23 @@
                 <button class="btn-glass btn-glass-cancel" id="cancelChangesBtn">取消变更</button>
                 <button class="btn-glass btn-glass-primary" id="applyChangesBtn">应用变更</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 呼叫月华对话模态框 -->
+    <div class="modal-overlay" id="callYuehuaModal">
+        <div class="modal call-yuehua-dialog">
+            <div class="modal-header">
+                <h3><i class="fas fa-moon"></i> 呼叫月华</h3>
+                <button class="modal-close" id="callYuehuaModalClose">&times;</button>
+            </div>
+            <div class="call-yuehua-body" id="callYuehuaBody">
+                <div class="call-yuehua-avatar">
+                    <img src="/avatar.webp" alt="琉璃">
+                </div>
+                <div class="call-yuehua-message" id="callYuehuaMessage"></div>
+            </div>
+            <div class="call-yuehua-status" id="callYuehuaStatus"></div>
         </div>
     </div>
 

@@ -54,4 +54,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
 	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
 	{Path: "/api/gguf/metadata", Handler: ggufMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
+	{Path: "/api/yuehua/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},
+	{Path: "/api/yuehua/start", Handler: yuehuaStartHandler, Method: "POST", Description: "启动月华服务"},
 }

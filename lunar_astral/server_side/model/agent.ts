@@ -150,7 +150,6 @@ class LunarAgent extends AgentDefine {
 		// 清空全部子智能体的messages
 		this.queryKeywords.coverContext([]);
 		this.emotionManager.coverContext([]);
-		this.recorderRole.coverContext([]);
 		this.summaryRole.coverContext([]);
 		this.descriptionRole.coverContext([]);
 		this.dialogueRole.coverContext([]);

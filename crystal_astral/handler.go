@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"logger"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -546,4 +548,78 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(packages)
+}
+
+// yuehuaCheckHandler 检测月华服务端口(36789)是否可用
+func yuehuaCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	addr := fmt.Sprintf("127.0.0.1:%d", *config.BasicPort)
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	available := err == nil
+	if conn != nil {
+		conn.Close()
+	}
+
+	writeJSON(w, http.StatusOK, YuehuaCheckResponse{
+		Available: available,
+	})
+}
+
+// yuehuaStartHandler 启动月华服务(Lunar_Astral.exe)
+func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, YuehuaStartResponse{
+			Success: false,
+			Message: fmt.Sprintf("获取可执行文件路径失败: %v", err),
+		})
+		return
+	}
+	execDir := filepath.Dir(execPath)
+	exePath := filepath.Join(execDir, "Lunar_Astral.exe")
+
+	if _, err := os.Stat(exePath); os.IsNotExist(err) {
+		writeJSON(w, http.StatusNotFound, YuehuaStartResponse{
+			Success: false,
+			Message: fmt.Sprintf("月华程序不存在: %s", exePath),
+		})
+		return
+	}
+
+	cmd := exec.Command(exePath)
+	cmd.Dir = execDir
+	// 为子进程分配独立控制台窗口，使其终端输出可见
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x10, // CREATE_NEW_CONSOLE
+	}
+	if err := cmd.Start(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, YuehuaStartResponse{
+			Success: false,
+			Message: fmt.Sprintf("启动月华失败: %v", err),
+		})
+		return
+	}
+
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			logger.Error("CrystalAstral", "月华服务退出: %v", err)
+		} else {
+			logger.Info("CrystalAstral", "月华服务已退出")
+		}
+	}()
+
+	logger.Info("CrystalAstral", "月华服务已启动: %s", exePath)
+	writeJSON(w, http.StatusOK, YuehuaStartResponse{
+		Success: true,
+		Message: "月华服务启动成功",
+	})
 }

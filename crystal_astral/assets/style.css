@@ -41,7 +41,7 @@ body {
 /* ===== 网格视图 ===== */
 .page-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 20px;
     padding: 30px 40px 160px 40px;
     height: 100vh;
@@ -76,7 +76,7 @@ body {
 }
 
 .page-card.highlight {
-    animation: cardHighlight 0.8s ease 3;
+    animation: cardHighlight 0.6s ease 2;
     border-color: rgba(255, 215, 0, 0.8);
     box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
 }
@@ -122,60 +122,98 @@ body {
     overflow: hidden;
 }
 
-/* 卡片功能按钮 */
-.card-btn {
+/* 卡片标签 */
+.card-tag {
     position: absolute;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 11px;
+    top: 8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(157, 107, 255, 0.55);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(157, 107, 255, 0.4);
     color: #fff;
-    opacity: 0;
-    transition: opacity 0.2s, background 0.2s, transform 0.2s;
-    z-index: 10;
-    backdrop-filter: blur(8px);
+    z-index: 5;
+    pointer-events: none;
+    letter-spacing: 0.5px;
 }
 
-.page-card:hover .card-btn {
+.card-tag-ltp {
+    background: rgba(220, 53, 69, 0.6);
+    border-color: rgba(220, 53, 69, 0.45);
+}
+
+/* 卡片功能按钮区 */
+.card-actions {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 8px 8px;
+    border-radius: 0 0 16px 16px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.page-card:hover .card-actions {
     opacity: 1;
 }
 
+.card-btn {
+    flex: 1 1 calc(50% - 2px);
+    min-width: 0;
+    height: 24px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    color: #fff;
+    transition: background 0.2s, transform 0.15s;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+    padding: 0 4px;
+}
+
 .card-btn:hover {
-    transform: scale(1.2);
+    transform: scale(1.06);
 }
 
-.card-btn-export {
-    top: 8px;
-    left: 8px;
-    background: rgba(0, 120, 255, 0.5);
+.card-btn i {
+    font-size: 9px;
 }
-.card-btn-export:hover { background: rgba(0, 120, 255, 0.8); }
-
-.card-btn-delete {
-    top: 8px;
-    right: 8px;
-    background: rgba(220, 53, 69, 0.5);
-}
-.card-btn-delete:hover { background: rgba(220, 53, 69, 0.85); }
 
 .card-btn-load {
-    bottom: 8px;
-    left: 8px;
-    background: rgba(32, 201, 151, 0.5);
+    background: rgba(32, 201, 151, 0.45);
 }
-.card-btn-load:hover { background: rgba(32, 201, 151, 0.8); }
+.card-btn-load:hover { background: rgba(32, 201, 151, 0.75); }
 
 .card-btn-unload {
-    bottom: 8px;
-    right: 8px;
-    background: rgba(251, 191, 36, 0.5);
+    background: rgba(251, 191, 36, 0.45);
 }
-.card-btn-unload:hover { background: rgba(251, 191, 36, 0.8); }
+.card-btn-unload:hover { background: rgba(251, 191, 36, 0.75); }
+
+.card-btn-export {
+    background: rgba(0, 120, 255, 0.45);
+}
+.card-btn-export:hover { background: rgba(0, 120, 255, 0.75); }
+
+.card-btn-delete {
+    background: rgba(220, 53, 69, 0.45);
+}
+.card-btn-delete:hover { background: rgba(220, 53, 69, 0.8); }
 
 /* ===== 底部操作区 ===== */
 .bottom-actions {
@@ -247,6 +285,108 @@ body {
 
 .config-page-btn i {
     opacity: 0.9;
+}
+
+/* ===== 呼叫月华按钮 ===== */
+.call-yuehua-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 200, 80, 0.5);
+    background: linear-gradient(135deg, rgba(255, 180, 50, 0.45), rgba(255, 120, 50, 0.45));
+    backdrop-filter: blur(10px);
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    box-shadow: 0 2px 12px rgba(255, 160, 50, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    position: relative;
+    flex-shrink: 0;
+}
+
+.call-yuehua-btn:hover {
+    transform: translateY(-2px) scale(1.12);
+    box-shadow: 0 4px 20px rgba(255, 160, 50, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, rgba(255, 200, 70, 0.55), rgba(255, 140, 60, 0.55));
+    border-color: rgba(255, 210, 100, 0.7);
+}
+
+.call-yuehua-btn i {
+    filter: drop-shadow(0 0 4px rgba(255, 200, 100, 0.7));
+}
+
+.call-yuehua-btn.loading {
+    pointer-events: none;
+}
+
+.call-yuehua-btn.loading i {
+    visibility: hidden;
+}
+
+.call-yuehua-btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ===== 呼叫月华对话模态框 ===== */
+.call-yuehua-dialog {
+    width: 360px;
+    max-width: 90vw;
+    text-align: center;
+}
+
+.call-yuehua-body {
+    padding: 24px 22px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.call-yuehua-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 200, 80, 0.5);
+    box-shadow: 0 4px 16px rgba(255, 160, 50, 0.3);
+    animation: yuehuaFloat 2.5s ease-in-out infinite;
+}
+
+.call-yuehua-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+@keyframes yuehuaFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
+.call-yuehua-message {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #fff;
+    min-height: 24px;
+    word-wrap: break-word;
+}
+
+.call-yuehua-status {
+    padding: 10px 22px 18px;
+    font-size: 12px;
+    opacity: 0.7;
+    min-height: 20px;
 }
 
 /* ===== 模态框 ===== */
@@ -426,6 +566,151 @@ body {
     padding: 7px 12px;
     border-radius: 12px;
     word-wrap: break-word;
+    line-height: 1.5;
+}
+
+/* ===== Markdown 内容样式 ===== */
+.message-bubble.markdown-content {
+    overflow-wrap: break-word;
+}
+
+.message-bubble.markdown-content p {
+    margin: 0 0 8px 0;
+}
+
+.message-bubble.markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+.message-bubble.markdown-content ul,
+.message-bubble.markdown-content ol {
+    margin: 4px 0 8px 0;
+    padding-left: 20px;
+}
+
+.message-bubble.markdown-content li {
+    margin-bottom: 2px;
+}
+
+.message-bubble.markdown-content strong {
+    font-weight: 700;
+}
+
+.message-bubble.markdown-content em {
+    font-style: italic;
+}
+
+.message-bubble.markdown-content a {
+    color: #9dbdff;
+    text-decoration: underline;
+}
+
+.message-bubble.markdown-content blockquote {
+    border-left: 3px solid rgba(157, 107, 255, 0.6);
+    margin: 8px 0;
+    padding: 4px 12px;
+    opacity: 0.9;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 0 6px 6px 0;
+}
+
+.message-bubble.markdown-content code:not(pre code) {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.88em;
+}
+
+.message-bubble.markdown-content table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    width: 100%;
+    font-size: 0.9em;
+}
+
+.message-bubble.markdown-content th,
+.message-bubble.markdown-content td {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.message-bubble.markdown-content th {
+    background: rgba(0, 0, 0, 0.2);
+    font-weight: 600;
+}
+
+/* ===== 代码块容器 ===== */
+.code-block-wrapper {
+    position: relative;
+    margin: 8px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.code-lang {
+    font-size: 11px;
+    opacity: 0.6;
+    text-transform: uppercase;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.code-copy-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.code-copy-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.code-block-wrapper pre {
+    margin: 0;
+    padding: 12px 14px;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow-x: auto;
+}
+
+.code-block-wrapper pre code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* 非 wrapper 包裹的独立 pre（兼容无代码块包装的情况） */
+.message-bubble.markdown-content > pre {
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.message-bubble.markdown-content > pre code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
     line-height: 1.5;
 }
 
@@ -913,7 +1198,7 @@ body {
 /* 响应式 */
 @media (max-width: 768px) {
     .page-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 14px;
         padding: 20px 20px 160px 20px;
     }
@@ -940,7 +1225,7 @@ body {
 
 @media (max-width: 480px) {
     .page-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(1, 1fr);
         gap: 10px;
         padding: 14px 14px 140px 14px;
     }

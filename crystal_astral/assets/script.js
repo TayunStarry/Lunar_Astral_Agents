@@ -25,6 +25,11 @@ const exportPackageName = document.getElementById('exportPackageName');
 const exportConfirmBtn = document.getElementById('exportConfirmBtn');
 const exportCancelBtn = document.getElementById('exportCancelBtn');
 const savePathGroup = document.getElementById('savePathGroup');
+const callYuehuaBtn = document.getElementById('callYuehuaBtn');
+const callYuehuaModal = document.getElementById('callYuehuaModal');
+const callYuehuaModalClose = document.getElementById('callYuehuaModalClose');
+const callYuehuaMessage = document.getElementById('callYuehuaMessage');
+const callYuehuaStatus = document.getElementById('callYuehuaStatus');
 
 let currentPackageName = null;
 const defaultSendBtnHTML = sendBtn.innerHTML;
@@ -36,6 +41,80 @@ const VALID_FILE_TYPES = [
 ];
 
 const PACKAGE_FILE_EXTENSIONS = ['.ltpx', '.ltp2'];
+
+// ===== Markdown 渲染配置 =====
+function initMarked() {
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({ breaks: true, gfm: true });
+    }
+}
+
+async function renderMarkdownContent(content) {
+    if (!content) return '';
+    if (typeof marked !== 'undefined') {
+        return await marked.parse(content);
+    }
+    return escapeHtml(content).replace(/\n/g, '<br>');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function highlightCodeInContainer(container) {
+    if (typeof hljs === 'undefined') return;
+    container.querySelectorAll('pre code').forEach(block => {
+        if (block.parentElement.classList.contains('hljs')) return;
+        try { hljs.highlightElement(block); } catch (e) { console.warn('代码高亮失败', e); }
+    });
+}
+
+function addCodeCopyButtons(container) {
+    container.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.code-copy-btn')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'code-block-wrapper';
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const header = document.createElement('div');
+        header.className = 'code-block-header';
+
+        const code = pre.querySelector('code');
+        const langClass = code ? Array.from(code.classList).find(c => c.startsWith('language-')) : '';
+        const lang = langClass ? langClass.replace('language-', '') : '';
+        const langLabel = document.createElement('span');
+        langLabel.className = 'code-lang';
+        langLabel.textContent = lang;
+        header.appendChild(langLabel);
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+        copyBtn.addEventListener('click', () => {
+            const text = code ? code.textContent : pre.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i>'; }, 2000);
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.top = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i>'; }, 2000);
+            });
+        });
+        header.appendChild(copyBtn);
+        wrapper.insertBefore(header, pre);
+    });
+}
 
 // ===== 配置管理：标签映射 =====
 const labelMap = {
@@ -161,26 +240,36 @@ function renderPageGrid() {
         const card = document.createElement('div');
         card.className = 'page-card';
         card.dataset.pageId = page.id;
+
+        // 标签：有多个时随机显示一个
+        const displayTag = (page.tags && page.tags.length > 0)
+            ? page.tags[Math.floor(Math.random() * page.tags.length)]
+            : null;
+        const isLtpTag = displayTag && /^LTP[0-9A-Za-z]+$/.test(displayTag);
+
         card.innerHTML = `
+            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}">${displayTag}</span>` : ''}
             <div class="icon">
                 <img src="${page.icon}" alt="${page.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%225%22/></svg>'">
             </div>
             <h3>${page.title}</h3>
             <p>${page.description}</p>
-            <button class="card-btn card-btn-export" title="导出包" data-action="export" data-package="${page.package_name || ''}">
-                <i class="fas fa-box"></i>
-            </button>
-            <button class="card-btn card-btn-delete" title="删除包" data-action="delete" data-package="${page.package_name || ''}">
-                <i class="fas fa-trash-alt"></i>
-            </button>
-            ${hasLTPX ? `
-            <button class="card-btn card-btn-load" title="加载包" data-action="load" data-package="${page.package_name || ''}">
-                <i class="fas fa-download"></i>
-            </button>
-            <button class="card-btn card-btn-unload" title="卸载包" data-action="unload" data-package="${page.package_name || ''}">
-                <i class="fas fa-upload"></i>
-            </button>
-            ` : ''}
+            <div class="card-actions">
+                ${hasLTPX ? `
+                <button class="card-btn card-btn-load" title="加载包" data-action="load" data-package="${page.package_name || ''}">
+                    <i class="fas fa-download"></i> 加载
+                </button>
+                <button class="card-btn card-btn-unload" title="卸载包" data-action="unload" data-package="${page.package_name || ''}">
+                    <i class="fas fa-upload"></i> 卸载
+                </button>
+                ` : ''}
+                <button class="card-btn card-btn-export" title="导出包" data-action="export" data-package="${page.package_name || ''}">
+                    <i class="fas fa-box"></i> 导出
+                </button>
+                <button class="card-btn card-btn-delete" title="删除包" data-action="delete" data-package="${page.package_name || ''}">
+                    <i class="fas fa-trash-alt"></i> 删除
+                </button>
+            </div>
         `;
 
         card.addEventListener('click', (e) => {
@@ -287,7 +376,7 @@ async function loadApplication(path) {
 }
 
 // ===== 搜索定位 =====
-function locateAndHighlightCard(pageId) {
+function locateAndHighlightCard(pageId, onHighlightEnd) {
     const card = document.querySelector(`.page-card[data-page-id="${pageId}"]`);
     if (!card) return;
 
@@ -299,7 +388,14 @@ function locateAndHighlightCard(pageId) {
     card.classList.remove('highlight');
     void card.offsetWidth;
     card.classList.add('highlight');
-    setTimeout(() => card.classList.remove('highlight'), 3000);
+
+    // 监听高亮动画结束后执行回调（如打开页面）
+    const onAnimEnd = () => {
+        card.removeEventListener('animationend', onAnimEnd);
+        card.classList.remove('highlight');
+        if (onHighlightEnd) onHighlightEnd();
+    };
+    card.addEventListener('animationend', onAnimEnd);
 }
 
 function fadeOutChatModal() {
@@ -352,7 +448,18 @@ function renderMessage(message) {
     const bubble = document.createElement('div');
     bubble.className = `message-bubble ${message.role}`;
 
-    if (Array.isArray(message.content)) {
+    if (message.role === 'assistant') {
+        // 助手消息：Markdown 渲染
+        const content = Array.isArray(message.content)
+            ? message.content.filter(i => i.type === 'text').map(i => i.text).join('\n')
+            : message.content;
+        bubble.classList.add('markdown-content');
+        renderMarkdownContent(content).then(html => {
+            bubble.innerHTML = html;
+            highlightCodeInContainer(bubble);
+            addCodeCopyButtons(bubble);
+        });
+    } else if (Array.isArray(message.content)) {
         message.content.forEach(item => {
             if (item.type === 'text') {
                 bubble.appendChild(document.createTextNode(item.text));
@@ -516,7 +623,7 @@ async function handleToolCall(toolCall) {
         case 'open_page': {
             const page = pages.find(p => p.id === args.page_id);
             if (page) {
-                locateAndHighlightCard(args.page_id);
+                locateAndHighlightCard(args.page_id, () => openPage(page));
             }
             break;
         }
@@ -1192,10 +1299,109 @@ previewModal.addEventListener('click', (e) => {
     if (e.target === previewModal) closePreviewModal();
 });
 
+// ===== 呼叫月华 =====
+const YUEHUA_WAKEUP_AUDIO = '/file/read/audios/start_lunar.wav';
+const YUEHUA_CALLING_AUDIO = '/file/read/audios/call_lunar.wav';
+const YUEHUA_WAKEUP_TEXT = '月华姐姐~ 月华姐姐~ 起床啦';
+const YUEHUA_CALLING_TEXT = '琉璃: 月华姐姐，有人在找你哦';
+
+async function handleCallYuehua() {
+    if (callYuehuaBtn.classList.contains('loading')) return;
+
+    callYuehuaBtn.classList.add('loading');
+    callYuehuaMessage.textContent = '';
+    callYuehuaStatus.textContent = '正在检测月华服务状态...';
+
+    try {
+        // 检测端口36789可用性
+        const checkResp = await fetch('/api/yuehua/check', { method: 'GET' });
+        const checkData = await checkResp.json();
+
+        if (!checkData.available) {
+            // 端口不可用（月华未启动）：唤醒月华
+            callYuehuaStatus.textContent = '月华服务未启动，正在唤醒月华...';
+            const startResp = await fetch('/api/yuehua/start', { method: 'POST' });
+            const startData = await startResp.json();
+
+            if (!startData.success) {
+                callYuehuaMessage.textContent = '唤醒月华失败了... ' + (startData.message || '');
+                callYuehuaStatus.textContent = '';
+                return;
+            }
+
+            // 播放起床音频 + 显示起床对话
+            playYuehuaAudio(YUEHUA_WAKEUP_AUDIO);
+            callYuehuaMessage.textContent = YUEHUA_WAKEUP_TEXT;
+            callYuehuaStatus.textContent = '月华已唤醒！';
+        } else {
+            // 端口可用（月华已启动）：推送消息 + 条件重建webView
+            callYuehuaStatus.textContent = '正在呼叫月华...';
+            const msgResp = await fetch('/write/message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: [{ role: 'user', content: YUEHUA_CALLING_TEXT }]
+                })
+            });
+            const msgData = await msgResp.json();
+
+            if (!msgData.success) {
+                callYuehuaMessage.textContent = '消息发送失败了...';
+                callYuehuaStatus.textContent = '';
+                return;
+            }
+
+            // 通知月华条件重建webView（仅当webView已关闭时才创建）
+            try {
+                await fetch('http://localhost:36789/api/webview/reopen', { method: 'POST' });
+            } catch (e) {
+                console.warn('通知月华重建webView失败:', e);
+            }
+
+            // 播放呼叫音频 + 显示呼叫对话
+            playYuehuaAudio(YUEHUA_CALLING_AUDIO);
+            callYuehuaMessage.textContent = YUEHUA_CALLING_TEXT;
+            callYuehuaStatus.textContent = '已通知月华！';
+        }
+
+        // 打开模态框
+        callYuehuaModal.classList.add('active');
+
+    } catch (error) {
+        console.error('呼叫月华失败:', error);
+        callYuehuaMessage.textContent = '呼叫月华时发生错误，请稍后重试';
+        callYuehuaStatus.textContent = '';
+    } finally {
+        callYuehuaBtn.classList.remove('loading');
+    }
+}
+
+function playYuehuaAudio(src) {
+    try {
+        const audio = new Audio(src);
+        audio.play().catch(e => console.warn('音频播放失败:', e));
+    } catch (e) {
+        console.warn('音频播放异常:', e);
+    }
+}
+
+// 呼叫月华按钮事件
+callYuehuaBtn.addEventListener('click', handleCallYuehua);
+
+// 关闭呼叫月华模态框
+callYuehuaModalClose.addEventListener('click', () => {
+    callYuehuaModal.classList.remove('active');
+});
+
+callYuehuaModal.addEventListener('click', (e) => {
+    if (e.target === callYuehuaModal) callYuehuaModal.classList.remove('active');
+});
+
 // ===== 启动 =====
 async function initApp() {
     await loadConfig();
     await loadSystemPrompt();
     await loadPages();
+    initMarked();
 }
 initApp();

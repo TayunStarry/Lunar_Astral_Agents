@@ -3,5 +3,8 @@
 	"icon": "/file/read/package/deepseek_api_store/icon.webp",
 	"title": "购买 DeepSeek API",
 	"description": "打开 DeepSeek API 购买页面",
-	"url": "https://platform.deepseek.com/usage"
+	"url": "https://platform.deepseek.com/usage",
+	"tags": [
+		"API"
+	]
 }
