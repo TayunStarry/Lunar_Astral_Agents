@@ -2,29 +2,9 @@ package adapters
 
 import (
 	"encoding/json"
-	"logger"
 
 	"github.com/dop251/goja"
 )
-
-var PushMessageFunc func(msgType string, data interface{})
-
-func init() {
-	PushMessageFunc = func(msgType string, data interface{}) {
-		logger.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
-	}
-}
-
-type PushContextData struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Audio   string `json:"audio,omitempty"`
-}
-
-type PushImageData struct {
-	Type   string   `json:"type"`
-	Images []string `json:"images"`
-}
 
 func (class *Runtime) pushContext(msgType string, content string, audio string) goja.Value {
 	data := PushContextData{
@@ -44,12 +24,6 @@ func (class *Runtime) pushImage(images []string) goja.Value {
 	PushMessageFunc("image", data)
 	return class.runtime.ToValue(true)
 }
-
-// 未处理的上下文消息
-var UnreadContext = make([]PostMessage, 0)
-
-// 未处理的视频URL
-var UnreadVideoUrl = make([]string, 0)
 
 // pullContext 拉取上下文消息
 func (class *Runtime) pullContext() goja.Value {

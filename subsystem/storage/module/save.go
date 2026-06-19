@@ -94,9 +94,6 @@ func DecodeFileName(encodedName string) (string, error) {
 	return fileName, nil
 }
 
-// FileLocks 用于存储文件路径对应的互斥锁
-var FileLocks sync.Map
-
 // GetFileLock 获取指定文件路径的互斥锁
 func GetFileLock(filePath string) *sync.Mutex {
 	lock, _ := FileLocks.LoadOrStore(filePath, &sync.Mutex{})

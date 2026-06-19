@@ -1324,13 +1324,13 @@ async function handleCallYuehua() {
 
     try {
         // 检测端口36789可用性
-        const checkResp = await fetch('/api/yuehua/check', { method: 'GET' });
+        const checkResp = await fetch('/lunar/check', { method: 'GET' });
         const checkData = await checkResp.json();
 
         if (!checkData.available) {
             // 端口不可用（月华未启动）：唤醒月华
             callYuehuaStatus.textContent = '月华服务未启动，正在唤醒月华...';
-            const startResp = await fetch('/api/yuehua/start', { method: 'POST' });
+            const startResp = await fetch('/lunar/start', { method: 'POST' });
             const startData = await startResp.json();
 
             if (!startData.success) {
@@ -1363,7 +1363,7 @@ async function handleCallYuehua() {
 
             // 通知月华条件重建webView（仅当webView已关闭时才创建）
             try {
-                await fetch('http://localhost:36789/api/webview/reopen', { method: 'POST' });
+                await fetch('http://localhost:36789/webview/reopen', { method: 'POST' });
             } catch (e) {
                 console.warn('通知月华重建webView失败:', e);
             }

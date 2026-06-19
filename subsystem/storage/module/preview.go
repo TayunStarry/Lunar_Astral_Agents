@@ -10,57 +10,6 @@ import (
 	"strings"
 )
 
-// 文件类别常量
-const (
-	CategoryImage = "image"
-	CategoryVideo = "video"
-	CategoryText  = "text"
-)
-
-// PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
-type PreviewEntry struct {
-	MIME     string // MIME 类型
-	Category string // 文件类别: image / video / text
-}
-
-// 允许预览的文件类型白名单（含分类与 MIME 信息，三合一）
-var previewAllowlist = map[string]PreviewEntry{
-	// 图片格式
-	".png":  {MIME: "image/png", Category: CategoryImage},
-	".jpg":  {MIME: "image/jpeg", Category: CategoryImage},
-	".jpeg": {MIME: "image/jpeg", Category: CategoryImage},
-	".webp": {MIME: "image/webp", Category: CategoryImage},
-	".gif":  {MIME: "image/gif", Category: CategoryImage},
-	".svg":  {MIME: "image/svg+xml", Category: CategoryImage},
-	".ico":  {MIME: "image/x-icon", Category: CategoryImage},
-	".bmp":  {MIME: "image/bmp", Category: CategoryImage},
-	".tiff": {MIME: "image/tiff", Category: CategoryImage},
-	".tif":  {MIME: "image/tiff", Category: CategoryImage},
-	// 视频格式
-	".mp4":  {MIME: "video/mp4", Category: CategoryVideo},
-	".webm": {MIME: "video/webm", Category: CategoryVideo},
-	".avi":  {MIME: "video/x-msvideo", Category: CategoryVideo},
-	".mov":  {MIME: "video/quicktime", Category: CategoryVideo},
-	".mkv":  {MIME: "video/x-matroska", Category: CategoryVideo},
-	".wmv":  {MIME: "video/x-ms-wmv", Category: CategoryVideo},
-	".flv":  {MIME: "video/x-flv", Category: CategoryVideo},
-	".m4v":  {MIME: "video/mp4", Category: CategoryVideo},
-	".mpg":  {MIME: "video/mpeg", Category: CategoryVideo},
-	".mpeg": {MIME: "video/mpeg", Category: CategoryVideo},
-	// 文本格式（仅数据与配置文件，不含代码/脚本）
-	".txt":  {MIME: "text/plain", Category: CategoryText},
-	".md":   {MIME: "text/markdown", Category: CategoryText},
-	".log":  {MIME: "text/plain", Category: CategoryText},
-	".csv":  {MIME: "text/csv", Category: CategoryText},
-	".json": {MIME: "application/json", Category: CategoryText},
-	".xml":  {MIME: "application/xml", Category: CategoryText},
-	".yaml": {MIME: "text/yaml", Category: CategoryText},
-	".yml":  {MIME: "text/yaml", Category: CategoryText},
-	".toml": {MIME: "text/toml", Category: CategoryText},
-	".ini":  {MIME: "text/plain", Category: CategoryText},
-	".cfg":  {MIME: "text/plain", Category: CategoryText},
-}
-
 // PreviewFile 预览指定绝对路径的文件内容，不受本地目录限制
 // 仅允许读取图片、视频、文本三种类型文件
 func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) {

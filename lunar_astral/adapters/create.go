@@ -5,21 +5,12 @@ import (
 	"fmt"
 	"logger"
 	"lunar_astral/hierarchy"
-	"sync"
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/eventloop"
 	"github.com/dop251/goja_nodejs/process"
 	"github.com/dop251/goja_nodejs/require"
-)
-
-// 全局变量，存储JavaScript运行时实例
-var (
-	runtimeMutex  sync.Mutex
-	runtimeCtx    context.Context
-	runtimeCancel context.CancelFunc
-	runtime       *eventloop.EventLoop
 )
 
 // registerAdaptersToRuntime 注册适配器函数到指定的JavaScript运行时环境

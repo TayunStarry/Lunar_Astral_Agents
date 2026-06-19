@@ -1,18 +1,12 @@
 package module
 
 import (
-	"config"
 	"database/sql"
-	"logger"
 	"sync"
 	"time"
 
 	chromem "github.com/philippgille/chromem-go"
 )
-
-func init() {
-	logger.SetDevMode(*config.Developer)
-}
 
 // FileInfo 文件信息结构体，用于存储文件和目录的相关信息
 type FileInfo struct {
@@ -95,6 +89,12 @@ type DocumentEntry struct {
 	ID      string `json:"id"`      // 文档条目 ID
 	Role    string `json:"role"`    // 文档条目角色，例如 "user" 或 "assistant"
 	Content string `json:"content"` // 文档条目内容
+}
+
+// PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
+type PreviewEntry struct {
+	MIME     string // MIME 类型
+	Category string // 文件类别: image / video / text
 }
 
 // UnifiedDB 统一数据库结构体

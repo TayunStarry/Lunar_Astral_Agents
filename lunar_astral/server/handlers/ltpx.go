@@ -6,25 +6,6 @@ import (
 	"net/http"
 )
 
-// LTPXLoadRequest 加载工具请求
-type LTPXLoadRequest struct {
-	Name       string `json:"name"`
-	Definition string `json:"tool_definition"` // 工具定义 JSON
-	JS         string `json:"tool_js"`         // 工具实现 JS 代码
-}
-
-// LTPXUnloadRequest 卸载工具请求
-type LTPXUnloadRequest struct {
-	Name string `json:"name"`
-}
-
-// LTPXResponse 通用响应
-type LTPXResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Data    any    `json:"data,omitempty"`
-}
-
 // LTPXLoadHandler 处理工具加载请求
 func LTPXLoadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

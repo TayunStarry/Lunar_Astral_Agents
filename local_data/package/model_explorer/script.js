@@ -269,7 +269,7 @@ async function testConnection() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
 
-        const response = await fetch('/api/proxy/models', {
+        const response = await fetch('/proxy/models', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ base_url: baseUrl, api_key: apiKey }),
@@ -338,7 +338,7 @@ async function queryModels() {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
 
-            const response = await fetch('/api/proxy/models', {
+            const response = await fetch('/proxy/models', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ base_url: baseUrl, api_key: apiKey }),
@@ -656,7 +656,7 @@ async function sendChatMessage() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout * 1000);
 
-        const response = await fetch('/api/proxy/chat', {
+        const response = await fetch('/proxy/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

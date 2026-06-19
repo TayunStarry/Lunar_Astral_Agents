@@ -6,18 +6,6 @@ import (
 	"time"
 )
 
-// ProcessInfo 结构体用于存储进程信息
-type ProcessInfo struct {
-	// PID 表示进程的ID
-	PID int
-	// Port 表示进程占用的端口
-	Port int
-	// Name 表示进程的名称
-	Name string
-	// CmdLine 表示启动进程的命令行
-	CmdLine string
-}
-
 // ExecutePortRelease 函数用于执行端口释放操作，扫描指定范围内的端口，终止占用端口的进程，并验证端口释放情况
 func ExecutePortRelease() {
 	// 打印提示信息，表明开始扫描端口占用情况

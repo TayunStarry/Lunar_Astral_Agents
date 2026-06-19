@@ -158,8 +158,8 @@ var SystemEndpoints = []SystemEndpoint{
     {"/capture/region",    HandleScreenshotRegion,   "POST",  "区域截图"},
     {"/capture/displays",  HandleGetDisplays,        "GET",   "屏幕列表"},
     {"/resize",            HandleResizeImage,        "POST",  "图片缩放"},
-    {"/api/proxy/models",  modelsProxyHandler,       "POST",  "模型查询代理"},
-    {"/api/proxy/chat",    chatProxyHandler,         "POST",  "对话代理"},
+    {"/proxy/models",  modelsProxyHandler,       "POST",  "模型查询代理"},
+    {"/proxy/chat",    chatProxyHandler,         "POST",  "对话代理"},
 }
 ```
 
@@ -189,7 +189,7 @@ var SystemEndpoints = []SystemEndpoint{
 
 `chatProxyHandler` 和 `modelsProxyHandler` 提供 OpenAI 兼容的 API 代理功能。
 
-**对话代理**（`POST /api/proxy/chat`）：
+**对话代理**（`POST /proxy/chat`）：
 
 ```json
 // 请求体
@@ -209,7 +209,7 @@ var SystemEndpoints = []SystemEndpoint{
 }
 ```
 
-**模型列表代理**（`POST /api/proxy/models`）：
+**模型列表代理**（`POST /proxy/models`）：
 
 ```json
 // 请求体
@@ -299,8 +299,8 @@ var SystemEndpoints = []SystemEndpoint{
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/api/proxy/chat` | 代理 OpenAI 对话请求 |
-| POST | `/api/proxy/models` | 代理查询模型列表 |
+| POST | `/proxy/chat` | 代理 OpenAI 对话请求 |
+| POST | `/proxy/models` | 代理查询模型列表 |
 
 ---
 
@@ -341,7 +341,7 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 
 ### Q: 如何通过琉璃调用外部模型 API？
 
-使用 `/api/proxy/chat` 端点，传入 `base_url`、`api_key`、`model` 和 `messages` 即可代理转发到任意兼容 OpenAI 格式的 API 服务。
+使用 `/proxy/chat` 端点，传入 `base_url`、`api_key`、`model` 和 `messages` 即可代理转发到任意兼容 OpenAI 格式的 API 服务。
 
 ---
 

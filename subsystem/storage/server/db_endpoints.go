@@ -12,8 +12,6 @@ import (
 	"strings"
 )
 
-var validRoles = []string{"user", "assistant", "system"}
-
 func writeJSON(w http.ResponseWriter, statusCode int, resp map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -64,42 +62,6 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 // =============================================================================
 // 向量数据库端点 — 替代 chromem.go
 // =============================================================================
-
-type chromemAddRequest struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type chromemDeleteRequest struct {
-	ID string `json:"id"`
-}
-
-type chromemInitRequest struct {
-	BaseURL   string `json:"base_url"`
-	APIKey    string `json:"api_key"`
-	ModelName string `json:"model_name"`
-}
-
-type chromemMessageData struct {
-	ID         string  `json:"id"`         // 消息ID
-	Role       string  `json:"role"`       // 消息角色，user/assistant/system
-	Content    string  `json:"content"`    // 消息内容
-	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
-}
-
-type chromemStatsData struct {
-	DocumentCount int  `json:"document_count"`
-	Initialized   bool `json:"initialized"`
-	EntryCount    int  `json:"entry_count"`
-	SyncMismatch  bool `json:"sync_mismatch"`
-}
-
-type chromemQueryData struct {
-	Query      string               `json:"query"`
-	TopK       int                  `json:"top_k"`
-	Results    []chromemMessageData `json:"results"`
-	TotalFound int                  `json:"total_found"`
-}
 
 func ChromemMessagesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

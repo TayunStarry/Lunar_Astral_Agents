@@ -147,7 +147,7 @@ async function handleAnalyze() {
     elements.validationFeedback.style.display = 'none';
 
     try {
-        const response = await fetch('/api/gguf/metadata', {
+        const response = await fetch('/gguf/metadata', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filePath: path })

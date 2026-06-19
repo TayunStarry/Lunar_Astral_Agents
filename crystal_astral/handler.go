@@ -128,22 +128,6 @@ func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ChatProxyRequest 对话代理请求结构体
-type ChatProxyRequest struct {
-	BaseURL  string                   `json:"base_url"`
-	APIKey   string                   `json:"api_key"`
-	Model    string                   `json:"model"`
-	Messages []map[string]interface{} `json:"messages"`
-	Stream   bool                     `json:"stream,omitempty"`
-}
-
-// ChatProxyResponse 对话代理响应结构体
-type ChatProxyResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
-
 // chatProxyHandler 代理 OpenAI 格式的对话请求
 func chatProxyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -263,19 +247,6 @@ func chatProxyHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ModelProxyRequest 模型代理请求结构体
-type ModelProxyRequest struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-}
-
-// ModelProxyResponse 模型代理响应结构体
-type ModelProxyResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
-
 // modelsProxyHandler 代理查询 OpenAI 格式的模型列表
 func modelsProxyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -381,22 +352,6 @@ func modelsProxyHandler(w http.ResponseWriter, r *http.Request) {
 // normalizeProxyURL 规范化代理 URL（仅去除末尾斜杠）
 func normalizeProxyURL(rawURL string) string {
 	return strings.TrimRight(rawURL, "/")
-}
-
-// GGUFMetadataRequest GGUF 元数据请求
-type GGUFMetadataRequest struct {
-	FilePath string `json:"filePath"`
-}
-
-// GGUFMetadataResponse GGUF 元数据响应
-type GGUFMetadataResponse struct {
-	Success  bool              `json:"success"`
-	Error    string            `json:"error,omitempty"`
-	FileName string            `json:"filename,omitempty"`
-	FilePath string            `json:"filePath,omitempty"`
-	Summary  map[string]string `json:"summary,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
-	Count    int               `json:"count,omitempty"`
 }
 
 // ggufMetadataHandler 处理 GGUF 模型元数据解析请求
@@ -564,7 +519,7 @@ func yuehuaCheckHandler(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 	}
 
-	writeJSON(w, http.StatusOK, YuehuaCheckResponse{
+	writeJSON(w, http.StatusOK, LunarCheckResponse{
 		Available: available,
 	})
 }
@@ -578,7 +533,7 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	execPath, err := os.Executable()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, YuehuaStartResponse{
+		writeJSON(w, http.StatusInternalServerError, LunarStartResponse{
 			Success: false,
 			Message: fmt.Sprintf("获取可执行文件路径失败: %v", err),
 		})
@@ -588,7 +543,7 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 	exePath := filepath.Join(execDir, "Lunar_Astral.exe")
 
 	if _, err := os.Stat(exePath); os.IsNotExist(err) {
-		writeJSON(w, http.StatusNotFound, YuehuaStartResponse{
+		writeJSON(w, http.StatusNotFound, LunarStartResponse{
 			Success: false,
 			Message: fmt.Sprintf("月华程序不存在: %s", exePath),
 		})
@@ -602,7 +557,7 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 		CreationFlags: 0x10, // CREATE_NEW_CONSOLE
 	}
 	if err := cmd.Start(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, YuehuaStartResponse{
+		writeJSON(w, http.StatusInternalServerError, LunarStartResponse{
 			Success: false,
 			Message: fmt.Sprintf("启动月华失败: %v", err),
 		})
@@ -618,7 +573,7 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	logger.Info("CrystalAstral", "月华服务已启动: %s", exePath)
-	writeJSON(w, http.StatusOK, YuehuaStartResponse{
+	writeJSON(w, http.StatusOK, LunarStartResponse{
 		Success: true,
 		Message: "月华服务启动成功",
 	})

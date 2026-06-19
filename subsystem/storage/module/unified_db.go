@@ -17,7 +17,9 @@ import (
 	chromem "github.com/philippgille/chromem-go"
 )
 
-var Unified *UnifiedDB
+func init() {
+	logger.SetDevMode(*config.Developer)
+}
 
 func InitUnifiedDB(sqlPath string, vectorDir string) error {
 	if Unified != nil && Unified.sqlInitialized && Unified.vectorInitialized {

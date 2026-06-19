@@ -16,9 +16,6 @@ import (
 	"time"
 )
 
-// proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/write/message", "/tts", "/tts/stream", "/ltpx/"}
-
 // shouldProxy 判断是否需要代理路径
 func shouldProxy(path string) bool {
 	for _, prefix := range proxyPrefixes {

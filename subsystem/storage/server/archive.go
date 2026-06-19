@@ -120,15 +120,6 @@ func extractZip(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PackageInstallResponse 包安装响应结构体
-type PackageInstallResponse struct {
-	Success      bool   `json:"success"`
-	Message      string `json:"message"`
-	PackageName  string `json:"package_name,omitempty"`
-	PackageID    string `json:"package_id,omitempty"`
-	PackageTitle string `json:"package_title,omitempty"`
-}
-
 // InstallPackageHandler 处理 .ltpx / .ltp2 包安装请求
 // 将上传的归档文件解压并安装到 local_data/package/<包名>/ 目录下
 func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
@@ -344,13 +335,6 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ExportPackageRequest 包导出请求结构体
-type ExportPackageRequest struct {
-	PackageName string `json:"package_name"`
-	Action      string `json:"action"` // "download" 或 "save"
-	SavePath    string `json:"save_path,omitempty"`
-}
-
 // ExportPackageHandler 处理包导出（打包为 .ltpx）请求
 func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -443,11 +427,11 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		logger.Info("Storage", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":    true,
-			"message":    fmt.Sprintf("包 '%s' 已保存到 %s", req.PackageName, fullSavePath),
-			"save_path":  fullSavePath,
-			"file_name":  fileName,
-			"file_size":  len(zipData),
+			"success":   true,
+			"message":   fmt.Sprintf("包 '%s' 已保存到 %s", req.PackageName, fullSavePath),
+			"save_path": fullSavePath,
+			"file_name": fileName,
+			"file_size": len(zipData),
 		})
 
 	default:

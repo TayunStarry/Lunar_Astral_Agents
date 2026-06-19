@@ -16,15 +16,15 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/kbinani/screenshot"
 )
 
-// 截图互斥锁
-var screenshotMutex sync.RWMutex
+func init() {
+	logger.SetDevMode(*config.Developer)
+}
 
 // Screenshot 执行截图操作
 func Screenshot(req ScreenshotRequest) ([]byte, string, string, error) {

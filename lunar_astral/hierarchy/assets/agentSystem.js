@@ -1391,6 +1391,248 @@ var agentSystem = (function (exports) {
         }
     }
 
+    class AgentDefine {
+        queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
+        emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
+        summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
+        descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
+        dialogueRole = new DialogueRole();
+        painterRole = new PainterRole();
+        organizeRole = new OrganizeRole();
+        unreadContext = [];
+        unreadVideoUrl = [];
+        finalResponse = "";
+        defaultAnswers = [
+            '月华摔疼了，要等星光阁哥哥来修……',
+            '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
+            '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
+            '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
+            '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
+        ];
+        get randomDefaultMessage() {
+            return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
+        }
+        constructor() {
+            fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
+        }
+        async analysisVideoFile(videoUrl, userNeeds) {
+            const cachedPrompt = getPromptFromDatabase(videoUrl);
+            if (cachedPrompt) {
+                this.unreadContext.push({ role: 'user', content: cachedPrompt });
+                return;
+            }
+            const [images, error] = keyframe(videoUrl, './cache');
+            if (images.length === 0 || error)
+                throw new Error('提取关键帧失败');
+            const sandboxMessages = [];
+            let videoSummary = '';
+            const frameMessages = images.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
+            for (let i = 0; i < frameMessages.length; i += 20) {
+                const batchFrames = frameMessages.slice(i, i + 20);
+                this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
+                const summaryRequest = this.descriptionRole.run([], []);
+                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+                if (summary && summary.trim().length > 0)
+                    sandboxMessages.push({ type: 'text', text: summary });
+            }
+            if (sandboxMessages.length > 1) {
+                this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
+                const summaryRequest = this.summaryRole.run([], []);
+                videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
+            }
+            else if (sandboxMessages.length === 1)
+                videoSummary = sandboxMessages[0].text;
+            else
+                videoSummary = this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
+            if (videoSummary)
+                this.unreadContext.push({ role: 'user', content: videoSummary });
+            if (userNeeds.trim().length > 0)
+                this.unreadContext.push({ role: 'user', content: userNeeds });
+            if (videoSummary)
+                savePromptToDatabase(videoUrl, videoSummary);
+        }
+        async LiteImageFile() {
+            for (let message of this.unreadContext) {
+                if (typeof message.content === 'string')
+                    continue;
+                const newContent = [];
+                for (let item of message.content) {
+                    if (item.type == 'text')
+                        newContent.push(item);
+                    else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                        await this.analysisVideoFile(item.image_url.url, '');
+                    }
+                    else if (!item.image_url.url.startsWith("data:image")) {
+                        const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                        if (error)
+                            throw new Error('获取图片文件失败');
+                        const [resizedBlob, error1] = resizeImage(response.body);
+                        if (error1)
+                            throw new Error('缩放图片失败');
+                        newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
+                    }
+                }
+                message.content = newContent;
+            }
+        }
+    }
+
+    class LunarAgent extends AgentDefine {
+        speakWeight = 1;
+        silenceCount = 0;
+        errorCount = 0;
+        async batchProcessVideoFiles(userNeeds) {
+            if (this.unreadVideoUrl.length === 0)
+                return;
+            for (const videoUrl of this.unreadVideoUrl) {
+                try {
+                    await this.analysisVideoFile(videoUrl, userNeeds || '');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                catch (error) {
+                    continue;
+                }
+            }
+            this.unreadVideoUrl = [];
+        }
+        async createChatMessage() {
+            const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
+            await this.dialogueRole.callMultimediaAndToolParsing(cache, this);
+            this.speakWeight--;
+            return this.finalResponse;
+        }
+        async thinkingChainProcess() {
+            while (true) {
+                try {
+                    this.syncLTPXToolStatus();
+                    await this.pullExternalMessages();
+                    const dueItems = checkDueItems();
+                    for (const item of dueItems) {
+                        this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+                    }
+                    const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+                    const messageType = messageLength === 0 ? 'response' : 'active';
+                    const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
+                    if (messageLength === 0 && !allowSpeak) {
+                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                    if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
+                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        continue;
+                    }
+                    this.silenceCount = 0;
+                    if (messageLength === 0)
+                        this.speakWeight = 0;
+                    await this.batchProcessVideoFiles();
+                    this.painterRole.createImageRendering(this);
+                    await this.createChatMessage();
+                    if (!this.finalResponse.trim().length)
+                        throw new Error('消息响应为空');
+                    else
+                        this.errorCount = 0;
+                    if (OnlyData.unreadRecords.length > 10) {
+                        setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
+                    }
+                    const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
+                    if (!textChunks.length)
+                        throw new Error('清洗后的文本为空');
+                    for (const thinking of thinkingBlocks) {
+                        pushContext(messageType, thinking, '');
+                    }
+                    for (const code of codeBlocks) {
+                        pushContext(messageType, code, '');
+                    }
+                    for (const chunk of textChunks) {
+                        let audio = '';
+                        try {
+                            const [audioData, err] = tts(chunk.tts);
+                            if (!err && audioData)
+                                audio = audioData;
+                        }
+                        catch (e) {
+                            console.error(`TTS合成异常: [${chunk.tts}]`, e);
+                        }
+                        pushContext(messageType, chunk.display, audio);
+                    }
+                }
+                catch (error) {
+                    const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+                    if (readErr)
+                        console.error('读取提示音失败:', readErr);
+                    console.error(error.message, ' || ', error.stack);
+                    this.errorCount++;
+                    pushContext('active', this.randomDefaultMessage, promptSound);
+                    if (this.errorCount >= 3) {
+                        this.resetAgentState();
+                        this.errorCount = 0;
+                        continue;
+                    }
+                }
+            }
+        }
+        resetAgentState() {
+            this.queryKeywords.coverContext([]);
+            this.emotionManager.coverContext([]);
+            this.summaryRole.coverContext([]);
+            this.descriptionRole.coverContext([]);
+            this.dialogueRole.coverContext([]);
+            this.painterRole.coverContext([]);
+            this.organizeRole.coverContext([]);
+            this.unreadContext = [];
+            this.unreadVideoUrl = [];
+        }
+        syncLTPXToolStatus() {
+            try {
+                const statusJSON = getLTPXToolStatus();
+                if (!statusJSON || statusJSON === '{}')
+                    return;
+                const status = JSON.parse(statusJSON);
+                if ((status.pendingLoads && status.pendingLoads.length > 0) ||
+                    (status.pendingUnloads && status.pendingUnloads.length > 0)) {
+                    processLTPXChanges(statusJSON);
+                }
+            }
+            catch (e) {
+                console.error('LTPX 工具状态同步失败:', e);
+            }
+        }
+        async pullExternalMessages() {
+            pullContext().forEach(message => this.writeMessage(message.role, message.content));
+            pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        writeMessage(role, messages) {
+            this.unreadContext.push({ role, content: messages });
+            this.speakWeight += RandomFloor(1, 3);
+            if (typeof messages === 'string')
+                messages = [{ type: 'text', text: messages }];
+            messages.forEach(message => { if (message.type === 'text')
+                console.log(message.text); });
+        }
+        writeVideoUrl(videoUrl) {
+            console.log('写入视频文件:' + videoUrl);
+            this.unreadVideoUrl.push(videoUrl);
+            this.speakWeight += RandomFloor(1, 3);
+        }
+        async testMessageWrite(role, messages, timeout) {
+            await new Promise(resolve => setTimeout(resolve, timeout));
+            if (messages.length > 0)
+                this.writeMessage(role, messages);
+        }
+        constructor() { super(); this.thinkingChainProcess(); }
+    }
+    const AgentRuntime = new LunarAgent();
+    const message = [
+        {
+            type: 'text',
+            text: '你好呀~'
+        }
+    ];
+    AgentRuntime.testMessageWrite('user', message, 1500);
+
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [
         {
@@ -1682,386 +1924,6 @@ var agentSystem = (function (exports) {
     OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
     OnlyData.LTPdefinition.push(...scheduleTools);
 
-    class AgentDefine {
-        queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
-        emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
-        summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
-        descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
-        dialogueRole = new DialogueRole();
-        painterRole = new PainterRole();
-        organizeRole = new OrganizeRole();
-        unreadContext = [];
-        unreadVideoUrl = [];
-        finalResponse = "";
-        defaultAnswers = [
-            '月华摔疼了，要等星光阁哥哥来修……',
-            '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
-            '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
-            '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
-            '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
-        ];
-        get randomDefaultMessage() {
-            return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
-        }
-        constructor() {
-            fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
-        }
-        async analysisVideoFile(videoUrl, userNeeds) {
-            const cachedPrompt = getPromptFromDatabase(videoUrl);
-            if (cachedPrompt) {
-                this.unreadContext.push({ role: 'user', content: cachedPrompt });
-                return;
-            }
-            const [images, error] = keyframe(videoUrl, './cache');
-            if (images.length === 0 || error)
-                throw new Error('提取关键帧失败');
-            const sandboxMessages = [];
-            let videoSummary = '';
-            const frameMessages = images.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
-            for (let i = 0; i < frameMessages.length; i += 20) {
-                const batchFrames = frameMessages.slice(i, i + 20);
-                this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
-                const summaryRequest = this.descriptionRole.run([], []);
-                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-                if (summary && summary.trim().length > 0)
-                    sandboxMessages.push({ type: 'text', text: summary });
-            }
-            if (sandboxMessages.length > 1) {
-                this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
-                const summaryRequest = this.summaryRole.run([], []);
-                videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
-            }
-            else if (sandboxMessages.length === 1)
-                videoSummary = sandboxMessages[0].text;
-            else
-                videoSummary = this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
-            if (videoSummary)
-                this.unreadContext.push({ role: 'user', content: videoSummary });
-            if (userNeeds.trim().length > 0)
-                this.unreadContext.push({ role: 'user', content: userNeeds });
-            if (videoSummary)
-                savePromptToDatabase(videoUrl, videoSummary);
-        }
-        async LiteImageFile() {
-            for (let message of this.unreadContext) {
-                if (typeof message.content === 'string')
-                    continue;
-                const newContent = [];
-                for (let item of message.content) {
-                    if (item.type == 'text')
-                        newContent.push(item);
-                    else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
-                        await this.analysisVideoFile(item.image_url.url, '');
-                    }
-                    else if (!item.image_url.url.startsWith("data:image")) {
-                        const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
-                        if (error)
-                            throw new Error('获取图片文件失败');
-                        const [resizedBlob, error1] = resizeImage(response.body);
-                        if (error1)
-                            throw new Error('缩放图片失败');
-                        newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
-                    }
-                }
-                message.content = newContent;
-            }
-        }
-    }
-
-    class LunarAgent extends AgentDefine {
-        speakWeight = 1;
-        silenceCount = 0;
-        errorCount = 0;
-        async batchProcessVideoFiles(userNeeds) {
-            if (this.unreadVideoUrl.length === 0)
-                return;
-            for (const videoUrl of this.unreadVideoUrl) {
-                try {
-                    await this.analysisVideoFile(videoUrl, userNeeds || '');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-                catch (error) {
-                    continue;
-                }
-            }
-            this.unreadVideoUrl = [];
-        }
-        async createChatMessage() {
-            const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
-            await this.dialogueRole.callMultimediaAndToolParsing(cache, this);
-            this.speakWeight--;
-            return this.finalResponse;
-        }
-        async thinkingChainProcess() {
-            while (true) {
-                try {
-                    this.syncLTPXToolStatus();
-                    await this.pullExternalMessages();
-                    const dueItems = checkDueItems();
-                    for (const item of dueItems) {
-                        this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
-                    }
-                    const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-                    const messageType = messageLength === 0 ? 'response' : 'active';
-                    const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
-                    if (messageLength === 0 && !allowSpeak) {
-                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        continue;
-                    }
-                    if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
-                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        continue;
-                    }
-                    this.silenceCount = 0;
-                    if (messageLength === 0)
-                        this.speakWeight = 0;
-                    await this.batchProcessVideoFiles();
-                    this.painterRole.createImageRendering(this);
-                    await this.createChatMessage();
-                    if (!this.finalResponse.trim().length)
-                        throw new Error('消息响应为空');
-                    else
-                        this.errorCount = 0;
-                    if (OnlyData.unreadRecords.length > 10) {
-                        setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
-                    }
-                    const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
-                    if (!textChunks.length)
-                        throw new Error('清洗后的文本为空');
-                    for (const thinking of thinkingBlocks) {
-                        pushContext(messageType, thinking, '');
-                    }
-                    for (const code of codeBlocks) {
-                        pushContext(messageType, code, '');
-                    }
-                    for (const chunk of textChunks) {
-                        let audio = '';
-                        try {
-                            const [audioData, err] = tts(chunk.tts);
-                            if (!err && audioData)
-                                audio = audioData;
-                        }
-                        catch (e) {
-                            console.error(`TTS合成异常: [${chunk.tts}]`, e);
-                        }
-                        pushContext(messageType, chunk.display, audio);
-                    }
-                }
-                catch (error) {
-                    const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
-                    if (readErr)
-                        console.error('读取提示音失败:', readErr);
-                    console.error(error.message, ' || ', error.stack);
-                    this.errorCount++;
-                    pushContext('active', this.randomDefaultMessage, promptSound);
-                    if (this.errorCount >= 3) {
-                        this.resetAgentState();
-                        this.errorCount = 0;
-                        continue;
-                    }
-                }
-            }
-        }
-        resetAgentState() {
-            this.queryKeywords.coverContext([]);
-            this.emotionManager.coverContext([]);
-            this.summaryRole.coverContext([]);
-            this.descriptionRole.coverContext([]);
-            this.dialogueRole.coverContext([]);
-            this.painterRole.coverContext([]);
-            this.organizeRole.coverContext([]);
-            this.unreadContext = [];
-            this.unreadVideoUrl = [];
-        }
-        syncLTPXToolStatus() {
-            try {
-                const statusJSON = getLTPXToolStatus();
-                if (!statusJSON || statusJSON === '{}')
-                    return;
-                const status = JSON.parse(statusJSON);
-                if ((status.pendingLoads && status.pendingLoads.length > 0) ||
-                    (status.pendingUnloads && status.pendingUnloads.length > 0)) {
-                    processLTPXChanges(statusJSON);
-                }
-            }
-            catch (e) {
-                console.error('LTPX 工具状态同步失败:', e);
-            }
-        }
-        async pullExternalMessages() {
-            pullContext().forEach(message => this.writeMessage(message.role, message.content));
-            pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        writeMessage(role, messages) {
-            this.unreadContext.push({ role, content: messages });
-            this.speakWeight += RandomFloor(1, 3);
-            if (typeof messages === 'string')
-                messages = [{ type: 'text', text: messages }];
-            messages.forEach(message => { if (message.type === 'text')
-                console.log(message.text); });
-        }
-        writeVideoUrl(videoUrl) {
-            console.log('写入视频文件:' + videoUrl);
-            this.unreadVideoUrl.push(videoUrl);
-            this.speakWeight += RandomFloor(1, 3);
-        }
-        async testMessageWrite(role, messages, timeout) {
-            await new Promise(resolve => setTimeout(resolve, timeout));
-            if (messages.length > 0)
-                this.writeMessage(role, messages);
-        }
-        constructor() { super(); this.thinkingChainProcess(); }
-    }
-    const AgentRuntime = new LunarAgent();
-    const message = [
-        {
-            type: 'text',
-            text: '你好呀~'
-        }
-    ];
-    AgentRuntime.testMessageWrite('user', message, 1500);
-
-    function extractThinkingBlocks(text) {
-        const blocks = [];
-        const regex = /<think>([\s\S]*?)<\/think>/gi;
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-            const content = match[1].trim();
-            if (content.length > 0) {
-                blocks.push(content);
-            }
-        }
-        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-        return [blocks, remaining];
-    }
-    function extractCodeBlocks(text) {
-        const blocks = [];
-        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
-        let match;
-        while ((match = codeBlockRegex.exec(text)) !== null) {
-            blocks.push(match[0]);
-        }
-        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
-        return [blocks, remaining];
-    }
-    function cleanTextForTTS(text) {
-        if (!text)
-            return '';
-        let processed = text;
-        processed = processed.replace(/`[^`]*`/g, '');
-        processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
-        processed = processed.replace(/\[([^\]]*)\]\(.*?\)/g, '$1');
-        processed = processed.replace(/<[^>]*>/g, '');
-        processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
-        processed = processed.replace(/\*/g, '');
-        processed = processed.replace(/\r?\n/g, ' ');
-        processed = processed.replace(/\（[^）]*\）/g, '');
-        processed = processed.replace(/\([^)]*\)/g, '');
-        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
-        const whitelist = new RegExp(`[^${allowed}]`, 'g');
-        processed = processed.replace(whitelist, ',');
-        processed = processed.replace(/\s+/g, ' ');
-        return processed.trim();
-    }
-    function cleanTextForDisplay(text) {
-        if (!text)
-            return '';
-        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
-    }
-    function splitSentences(text) {
-        if (!text)
-            return [];
-        const LEVEL1_PUNCT = /[。？！—～?!]/;
-        const LEVEL2_PUNCT = /[，,、；;]/;
-        const MAX_LENGTH = 35;
-        function splitByPunct(source, punctRegex) {
-            const result = [];
-            let start = 0;
-            for (let i = 0; i < source.length; i++) {
-                if (punctRegex.test(source[i])) {
-                    let end = i + 1;
-                    while (end < source.length && punctRegex.test(source[end])) {
-                        end++;
-                    }
-                    const fragment = source.slice(start, end).trim();
-                    if (fragment.length > 0) {
-                        result.push(fragment);
-                    }
-                    start = end;
-                    i = end - 1;
-                }
-            }
-            if (start < source.length) {
-                const fragment = source.slice(start).trim();
-                if (fragment.length > 0) {
-                    result.push(fragment);
-                }
-            }
-            return result;
-        }
-        const level1 = splitByPunct(text, LEVEL1_PUNCT);
-        const result = [];
-        function isInsideBracket(source, pos) {
-            let depth = 0;
-            for (let i = 0; i < pos; i++) {
-                if (source[i] === '\uFF08' || source[i] === '(')
-                    depth++;
-                else if (source[i] === '\uFF09' || source[i] === ')')
-                    depth--;
-            }
-            return depth > 0;
-        }
-        for (const fragment of level1) {
-            if (fragment.length <= MAX_LENGTH) {
-                result.push(fragment);
-                continue;
-            }
-            let remaining = fragment;
-            while (remaining.length > MAX_LENGTH) {
-                let splitPos = -1;
-                for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
-                    if (LEVEL2_PUNCT.test(remaining[i]) && !isInsideBracket(remaining, i)) {
-                        let end = i + 1;
-                        while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
-                            end++;
-                        }
-                        splitPos = end;
-                        break;
-                    }
-                }
-                if (splitPos === -1) {
-                    splitPos = MAX_LENGTH;
-                }
-                const slice = remaining.slice(0, splitPos).trim();
-                if (slice.length > 0) {
-                    result.push(slice);
-                }
-                remaining = remaining.slice(splitPos);
-            }
-            const tail = remaining.trim();
-            if (tail.length > 0) {
-                result.push(tail);
-            }
-        }
-        return result;
-    }
-    function parseContent(rawText) {
-        if (!rawText)
-            return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
-        const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
-        const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
-        const displayText = cleanTextForDisplay(textAfterCode);
-        const displayChunks = splitSentences(displayText);
-        const textChunks = displayChunks.map(chunk => ({
-            display: chunk,
-            tts: cleanTextForTTS(chunk),
-        }));
-        return { thinkingBlocks, codeBlocks, textChunks };
-    }
-
     let webSearchInitialized = false;
     function initWebSearch() {
         if (webSearchInitialized) {
@@ -2230,6 +2092,144 @@ var agentSystem = (function (exports) {
     }
     OnlyData.LTPfunction.set('screenshot', handleScreenshot);
     OnlyData.LTPdefinition.push(...screenshotTools);
+
+    function extractThinkingBlocks(text) {
+        const blocks = [];
+        const regex = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const content = match[1].trim();
+            if (content.length > 0) {
+                blocks.push(content);
+            }
+        }
+        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        return [blocks, remaining];
+    }
+    function extractCodeBlocks(text) {
+        const blocks = [];
+        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+            blocks.push(match[0]);
+        }
+        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        return [blocks, remaining];
+    }
+    function cleanTextForTTS(text) {
+        if (!text)
+            return '';
+        let processed = text;
+        processed = processed.replace(/`[^`]*`/g, '');
+        processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
+        processed = processed.replace(/\[([^\]]*)\]\(.*?\)/g, '$1');
+        processed = processed.replace(/<[^>]*>/g, '');
+        processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+        processed = processed.replace(/\*/g, '');
+        processed = processed.replace(/\r?\n/g, ' ');
+        processed = processed.replace(/\（[^）]*\）/g, '');
+        processed = processed.replace(/\([^)]*\)/g, '');
+        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
+        const whitelist = new RegExp(`[^${allowed}]`, 'g');
+        processed = processed.replace(whitelist, ',');
+        processed = processed.replace(/\s+/g, ' ');
+        return processed.trim();
+    }
+    function cleanTextForDisplay(text) {
+        if (!text)
+            return '';
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+    }
+    function splitSentences(text) {
+        if (!text)
+            return [];
+        const LEVEL1_PUNCT = /[。？！—～?!]/;
+        const LEVEL2_PUNCT = /[，,、；;]/;
+        const MAX_LENGTH = 35;
+        function splitByPunct(source, punctRegex) {
+            const result = [];
+            let start = 0;
+            for (let i = 0; i < source.length; i++) {
+                if (punctRegex.test(source[i])) {
+                    let end = i + 1;
+                    while (end < source.length && punctRegex.test(source[end])) {
+                        end++;
+                    }
+                    const fragment = source.slice(start, end).trim();
+                    if (fragment.length > 0) {
+                        result.push(fragment);
+                    }
+                    start = end;
+                    i = end - 1;
+                }
+            }
+            if (start < source.length) {
+                const fragment = source.slice(start).trim();
+                if (fragment.length > 0) {
+                    result.push(fragment);
+                }
+            }
+            return result;
+        }
+        const level1 = splitByPunct(text, LEVEL1_PUNCT);
+        const result = [];
+        function isInsideBracket(source, pos) {
+            let depth = 0;
+            for (let i = 0; i < pos; i++) {
+                if (source[i] === '\uFF08' || source[i] === '(')
+                    depth++;
+                else if (source[i] === '\uFF09' || source[i] === ')')
+                    depth--;
+            }
+            return depth > 0;
+        }
+        for (const fragment of level1) {
+            if (fragment.length <= MAX_LENGTH) {
+                result.push(fragment);
+                continue;
+            }
+            let remaining = fragment;
+            while (remaining.length > MAX_LENGTH) {
+                let splitPos = -1;
+                for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
+                    if (LEVEL2_PUNCT.test(remaining[i]) && !isInsideBracket(remaining, i)) {
+                        let end = i + 1;
+                        while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
+                            end++;
+                        }
+                        splitPos = end;
+                        break;
+                    }
+                }
+                if (splitPos === -1) {
+                    splitPos = MAX_LENGTH;
+                }
+                const slice = remaining.slice(0, splitPos).trim();
+                if (slice.length > 0) {
+                    result.push(slice);
+                }
+                remaining = remaining.slice(splitPos);
+            }
+            const tail = remaining.trim();
+            if (tail.length > 0) {
+                result.push(tail);
+            }
+        }
+        return result;
+    }
+    function parseContent(rawText) {
+        if (!rawText)
+            return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
+        const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
+        const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
+        const displayText = cleanTextForDisplay(textAfterCode);
+        const displayChunks = splitSentences(displayText);
+        const textChunks = displayChunks.map(chunk => ({
+            display: chunk,
+            tts: cleanTextForTTS(chunk),
+        }));
+        return { thinkingBlocks, codeBlocks, textChunks };
+    }
 
     exports.AgentDefine = AgentDefine;
     exports.BaseConfig = BaseConfig;

@@ -192,3 +192,30 @@ func IsWebViewSupported() bool {
 		return false
 	}
 }
+
+// WebViewClosed 返回一个 channel，当 webview 关闭时收到信号
+func WebViewClosed() <-chan struct{} {
+	return webviewClosedCh
+}
+
+// IsWebViewRunning 返回当前是否有 webView 实例在运行
+func IsWebViewRunning() bool {
+	webviewMutex.Lock()
+	defer webviewMutex.Unlock()
+	return webviewRunning
+}
+
+// waitForCleanup 等待前一个 webview 实例清理完成
+func waitForCleanup() {
+	webviewMutex.Lock()
+	running := webviewRunning
+	webviewMutex.Unlock()
+	if !running {
+		return
+	}
+	// 等待清理完成信号或超时
+	select {
+	case <-webviewCleanupDone:
+	case <-time.After(5 * time.Second):
+	}
+}

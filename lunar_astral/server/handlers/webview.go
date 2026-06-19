@@ -8,12 +8,6 @@ import (
 	"net/http"
 )
 
-// WebViewReopenResponse webView重建响应结构体
-type WebViewReopenResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
 // WebViewReopenHandler 重建webView页面端点
 // 仅当webView已关闭时才重新创建，若webView仍在运行则跳过
 func WebViewReopenHandler(w http.ResponseWriter, r *http.Request) {

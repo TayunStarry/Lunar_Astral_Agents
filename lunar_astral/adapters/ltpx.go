@@ -3,40 +3,8 @@ package adapters
 import (
 	"encoding/json"
 	"logger"
-	"sync"
 
 	"github.com/dop251/goja"
-)
-
-// LTPXPackageInfo LTPX 工具包配置结构
-type LTPXPackageInfo struct {
-	ID          string           `json:"id"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	Tags        []string         `json:"tags"`
-	URL         string           `json:"url"`
-	Tools       []map[string]any `json:"tools"`
-}
-
-// LTPXToolInfo 已加载工具的内部状态
-type LTPXToolInfo struct {
-	Name       string `json:"name"`
-	Definition string `json:"definition"` // 工具定义 JSON 字符串
-	JS         string `json:"js"`         // tool.js 源码
-}
-
-// LTPXStatus 工具状态查询结果
-type LTPXStatus struct {
-	Loaded         []string         `json:"loaded"`
-	PendingLoads   []*LTPXToolInfo  `json:"pendingLoads"`
-	PendingUnloads []string         `json:"pendingUnloads"`
-}
-
-var (
-	ltpMutex       sync.RWMutex
-	loadedTools    = make(map[string]*LTPXToolInfo)
-	pendingLoads   []*LTPXToolInfo
-	pendingUnloads []string
 )
 
 // LoadLTPXTool 将工具加入待加载队列（由 HTTP handler 调用）

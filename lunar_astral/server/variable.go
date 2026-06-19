@@ -92,5 +92,5 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/unload", Handler: handlers.LTPXUnloadHandler, Method: "POST", Description: "卸载LTPX工具包"},
 	{Path: "/ltpx/status", Handler: handlers.LTPXStatusHandler, Method: "GET", Description: "查询LTPX工具状态"},
 	// WebView管理接口
-	{Path: "/api/webview/reopen", Handler: handlers.WebViewReopenHandler, Method: "POST", Description: "重建webView页面"},
+	{Path: "/webview/reopen", Handler: handlers.WebViewReopenHandler, Method: "POST", Description: "重建webView页面"},
 }

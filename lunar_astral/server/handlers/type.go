@@ -1,6 +1,9 @@
 package handlers
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"lunar_astral/adapters"
+)
 
 // ProxyRequest 定义代理请求的结构
 type ProxyRequest struct {
@@ -23,4 +26,45 @@ type ProxyResponse struct {
 	StatusText string            `json:"statusText"` // 响应状态文本
 	Headers    map[string]string `json:"headers"`    // 响应头
 	Body       json.RawMessage   `json:"body"`       // 响应体
+}
+
+// LTPXLoadRequest 加载工具请求
+type LTPXLoadRequest struct {
+	Name       string `json:"name"`
+	Definition string `json:"tool_definition"` // 工具定义 JSON
+	JS         string `json:"tool_js"`         // 工具实现 JS 代码
+}
+
+// LTPXUnloadRequest 卸载工具请求
+type LTPXUnloadRequest struct {
+	Name string `json:"name"`
+}
+
+// LTPXResponse 通用响应
+type LTPXResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Data    any    `json:"data,omitempty"`
+}
+
+// MessageBatchRequest 消息批量写入请求
+type MessageBatchRequest struct {
+	Messages []adapters.PostMessage `json:"messages"`
+}
+
+// VideoUrlBatchRequest 视频URL批量写入请求
+type VideoUrlBatchRequest struct {
+	Urls []string `json:"urls"`
+}
+
+// BatchResponse 批量操作响应
+type BatchResponse struct {
+	Success bool `json:"success"`
+	Length  int  `json:"length"`
+}
+
+// WebViewReopenResponse webView重建响应结构体
+type WebViewReopenResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
 }

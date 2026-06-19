@@ -1,24 +1,11 @@
 package handlers
 
 import (
-	"lunar_astral/adapters"
 	"encoding/json"
 	"io"
+	"lunar_astral/adapters"
 	"net/http"
 )
-
-type MessageBatchRequest struct {
-	Messages []adapters.PostMessage `json:"messages"`
-}
-
-type VideoUrlBatchRequest struct {
-	Urls []string `json:"urls"`
-}
-
-type BatchResponse struct {
-	Success bool `json:"success"`
-	Length  int  `json:"length"`
-}
 
 func MessageBatchHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {

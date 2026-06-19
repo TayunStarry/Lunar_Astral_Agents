@@ -8,9 +8,6 @@ import (
 	"github.com/dop251/goja"
 )
 
-// webSearchSystem 网络检索子系统实例
-var webSearchSystem *websearch.System
-
 // webSearchInit 初始化网络检索子系统
 // 参数: baseURL, apiKey, model, maxTokens, temperature
 // 返回值: [boolean, error]

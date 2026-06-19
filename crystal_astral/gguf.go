@@ -9,23 +9,6 @@ import (
 	"strings"
 )
 
-// GGUF 值类型常量
-const (
-	ggufTypeUint8   uint32 = 0
-	ggufTypeInt8    uint32 = 1
-	ggufTypeUint16  uint32 = 2
-	ggufTypeInt16   uint32 = 3
-	ggufTypeUint32  uint32 = 4
-	ggufTypeInt32   uint32 = 5
-	ggufTypeFloat32 uint32 = 6
-	ggufTypeBool    uint32 = 7
-	ggufTypeString  uint32 = 8
-	ggufTypeArray   uint32 = 9
-	ggufTypeUint64  uint32 = 10
-	ggufTypeInt64   uint32 = 11
-	ggufTypeFloat64 uint32 = 12
-)
-
 // parseGGUFMetadata 从 io.Reader 解析 GGUF 格式的元数据
 func parseGGUFMetadata(reader io.Reader) (map[string]any, error) {
 	magicBytes := make([]byte, 4)
