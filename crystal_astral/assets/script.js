@@ -1060,9 +1060,11 @@ async function handleUnloadPackage(packageName) {
             new Audio('/file/read/audios/disable_tool_package.wav').play().catch(() => {});
             addMessage('system', `工具包【${packageName}】卸载成功`);
         } else {
+            new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
             addMessage('system', `卸载失败: ${result.message}`);
         }
     } catch (error) {
+        new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
         console.error('Error unloading package:', error);
         addMessage('system', `卸载工具包失败: ${error.message}`);
     }
