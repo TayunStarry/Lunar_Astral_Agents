@@ -10,38 +10,6 @@ import (
 	"strings"
 )
 
-// OrganizeOperation 单个整理操作
-type OrganizeOperation struct {
-	Type   string `json:"type"`             // 操作类型: move, rename, merge, delete
-	Source string `json:"source"`           // 源路径（相对于工作目录）
-	Target string `json:"target,omitempty"` // 目标路径（相对于工作目录），delete 操作不需要
-}
-
-// OrganizeResult 单个操作结果
-type OrganizeResult struct {
-	Success bool   `json:"success"`
-	Type    string `json:"type"`
-	Source  string `json:"source"`
-	Target  string `json:"target,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
-// OrganizeRequest 批量整理请求
-type OrganizeRequest struct {
-	BasePath   string              `json:"base_path"`  // 工作目录基础路径（相对于 LocalDir）
-	Operations []OrganizeOperation `json:"operations"` // 操作列表
-}
-
-// OrganizeResponse 批量整理响应
-type OrganizeResponse struct {
-	Success      bool             `json:"success"`
-	Results      []OrganizeResult `json:"results"`
-	Total        int              `json:"total"`
-	SuccessCount int              `json:"success_count"`
-	FailCount    int              `json:"fail_count"`
-	Error        string           `json:"error,omitempty"`
-}
-
 // ExecuteOrganize 执行批量文件整理操作
 func ExecuteOrganize(req OrganizeRequest) OrganizeResponse {
 	response := OrganizeResponse{
