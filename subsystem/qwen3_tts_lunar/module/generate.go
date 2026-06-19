@@ -183,14 +183,15 @@ func (c *speakerEmbedCache) loadFromDisk() {
 			continue
 		}
 
-		if len(data) < 8 || len(data)%4 != 0 {
-			logger.SubError("QWEN-TTS", "EmbedCache", "跳过无效文件: %s", f.Name())
+		// 最小有效大小：4(路径长度) + 4(embedding长度) = 8
+		if len(data) < 8 {
+			logger.SubError("QWEN-TTS", "EmbedCache", "跳过无效文件: %s (过小)", f.Name())
 			continue
 		}
 
 		audioPathLen := int(data[0])<<24 | int(data[1])<<16 | int(data[2])<<8 | int(data[3])
 		if 4+audioPathLen+4 > len(data) {
-			logger.SubError("QWEN-TTS", "EmbedCache", "跳过损坏文件: %s", f.Name())
+			logger.SubError("QWEN-TTS", "EmbedCache", "跳过损坏文件: %s (路径越界)", f.Name())
 			continue
 		}
 
@@ -214,16 +215,27 @@ func (c *speakerEmbedCache) loadFromDisk() {
 			embedding[i] = *(*float32)(unsafe.Pointer(&bits))
 		}
 
-		c.embeddings[audioPath] = embedding
-
-		if len(data) >= embedDataEnd+8 {
+		// 读取文件哈希（4字节长度 + 哈希字符串）
+		var fileHash string
+		if len(data) >= embedDataEnd+4 {
 			hashLenStart := embedDataEnd
 			hashLen := int(data[hashLenStart])<<24 | int(data[hashLenStart+1])<<16 |
 				int(data[hashLenStart+2])<<8 | int(data[hashLenStart+3])
-			if len(data) >= hashLenStart+4+hashLen {
-				fileHash := string(data[hashLenStart+4 : hashLenStart+4+hashLen])
-				c.fileHashes[audioPath] = fileHash
+			if len(data) >= hashLenStart+4+hashLen && hashLen > 0 {
+				fileHash = string(data[hashLenStart+4 : hashLenStart+4+hashLen])
 			}
+		}
+
+		// 以 fileHash 作为主键存入缓存，确保相同内容的音频在不同路径下也能命中
+		if fileHash != "" {
+			c.embeddings[fileHash] = embedding
+			c.fileHashes[fileHash] = fileHash
+			// 同时以路径为键建立映射，方便路径查找
+			c.embeddings[audioPath] = embedding
+			c.fileHashes[audioPath] = fileHash
+		} else {
+			// 旧格式无哈希：仅以路径为键
+			c.embeddings[audioPath] = embedding
 		}
 
 		loaded++
@@ -238,6 +250,12 @@ func (c *speakerEmbedCache) saveToDisk(audioPath string, embedding []float32) {
 	c.mu.Lock()
 	fileHash, hasHash := c.fileHashes[audioPath]
 	c.mu.Unlock()
+
+	if !hasHash || len(fileHash) < 16 {
+		// 没有文件哈希时无法生成稳定的缓存文件名，跳过磁盘持久化
+		logger.SubWarn("QWEN-TTS", "EmbedCache", "跳过保存（缺少文件哈希）: %s", audioPath)
+		return
+	}
 
 	// 使用文件内容哈希前16位作为缓存文件名，相同内容的音频共享同一 .bin 文件
 	fileName := fileHash[:16] + ".bin"
@@ -327,13 +345,25 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 	}
 
 	embedCache.mu.Lock()
-	cachedEmbedding, found := embedCache.embeddings[refAudio]
-	cachedHash, hasHash := embedCache.fileHashes[refAudio]
+	// 优先以文件内容哈希查找缓存，确保相同内容的音频在不同路径下也能命中
+	cachedEmbedding, found := embedCache.embeddings[currentHash]
+	if !found {
+		// 回退到路径查找
+		cachedEmbedding, found = embedCache.embeddings[refAudio]
+	}
 
-	if found && hasHash && cachedHash == currentHash {
-		embedCache.mu.Unlock()
-		logger.SubInfo("QWEN-TTS", "EmbedCache", "命中缓存: %s (hash=%s)", refAudio, currentHash[:16])
-		return cachedEmbedding, nil
+	if found {
+		// 验证哈希一致性
+		cachedHash, hasHash := embedCache.fileHashes[refAudio]
+		if !hasHash {
+			cachedHash, hasHash = embedCache.fileHashes[currentHash]
+		}
+		if hasHash && cachedHash == currentHash {
+			embedCache.mu.Unlock()
+			logger.SubInfo("QWEN-TTS", "EmbedCache", "命中缓存: %s (hash=%s)", refAudio, currentHash[:16])
+			return cachedEmbedding, nil
+		}
+		// 哈希不匹配说明文件已变更，需要重新提取
 	}
 	embedCache.mu.Unlock()
 
@@ -360,8 +390,11 @@ func getOrExtractEmbedding(refAudio string) ([]float32, error) {
 	copy(embedding, embedBuf[:embedSize])
 
 	embedCache.mu.Lock()
+	// 以路径和哈希双重索引存储，确保重启后通过任一键都能命中
 	embedCache.embeddings[refAudio] = embedding
+	embedCache.embeddings[currentHash] = embedding
 	embedCache.fileHashes[refAudio] = currentHash
+	embedCache.fileHashes[currentHash] = currentHash
 	embedCache.mu.Unlock()
 
 	embedCache.saveToDisk(refAudio, embedding)

@@ -7,7 +7,6 @@
 		"LTPX"
 	],
 	"url": "/file/read/package/realtime_search/tool.md",
-	"icon": "/file/read/package/realtime_search/icon.svg",
 	"tools": [
 		{
 			"type": "function",

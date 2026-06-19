@@ -1,0 +1,10 @@
+{
+	"id": "view_on_gitcode",
+	"icon": "/file/read/package/view_on_gitcode/icon.webp",
+	"title": "打开项目仓库",
+	"description": "打开 GitCode 项目仓库",
+	"url": "https://gitcode.com/TayunStarry/Lunar_Astral_Agents",
+	"tags": [
+		"Git"
+	]
+}

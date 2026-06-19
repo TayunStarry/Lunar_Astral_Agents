@@ -232,6 +232,12 @@ async function loadPages() {
 }
 
 // ===== 网格渲染 =====
+const DEFAULT_ICON_COUNT = 12;
+
+function getRandomDefaultIcon() {
+    return `/default/icon (${Math.floor(Math.random() * DEFAULT_ICON_COUNT) + 1}).webp`;
+}
+
 function renderPageGrid() {
     pageGrid.innerHTML = '';
     pages.forEach(page => {
@@ -250,7 +256,7 @@ function renderPageGrid() {
         card.innerHTML = `
             ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}">${displayTag}</span>` : ''}
             <div class="icon">
-                <img src="${page.icon}" alt="${page.title}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%225%22/></svg>'">
+                <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
             </div>
             <h3>${page.title}</h3>
             <p>${page.description}</p>
@@ -1021,11 +1027,14 @@ async function handleLoadPackage(packageName) {
         const result = await resp.json();
 
         if (result.success) {
+            new Audio('/file/read/audios/enable_tool_package.wav').play().catch(() => {});
             addMessage('system', `工具包【${packageName}】加载成功`);
         } else {
+            new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
             addMessage('system', `加载失败: ${result.message}`);
         }
     } catch (error) {
+        new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
         console.error('Error loading package:', error);
         addMessage('system', `加载工具包失败: ${error.message}`);
     }
@@ -1047,6 +1056,7 @@ async function handleUnloadPackage(packageName) {
         const result = await resp.json();
 
         if (result.success) {
+            new Audio('/file/read/audios/disable_tool_package.wav').play().catch(() => {});
             addMessage('system', `工具包【${packageName}】卸载成功`);
         } else {
             addMessage('system', `卸载失败: ${result.message}`);
