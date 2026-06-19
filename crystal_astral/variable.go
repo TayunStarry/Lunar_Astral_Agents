@@ -61,8 +61,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/chromem/stats", Handler: storage.ChromemStatsHandler, Method: "GET", Description: "向量数据库统计信息"},
 	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
 
+	// ==== 文件整理 ====
+	{Path: "/file/organize", Handler: storage.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
+
 	// ==== 截图与图像处理 ====
 	{Path: "/capture", Handler: screenshot.HandleScreenshot, Method: "POST", Description: "通用截图"},
+	{Path: "/keyframe", Handler: image_server.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
 	{Path: "/capture/display/", Handler: screenshot.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
 	{Path: "/capture/region", Handler: screenshot.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
 	{Path: "/capture/displays", Handler: screenshot.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
@@ -92,4 +96,30 @@ var supportedFormats = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".webp": true,
+}
+
+// fileCategoryMap 文件扩展名到分类的映射
+var fileCategoryMap = map[string]string{
+	// 文本文件
+	".txt": "text", ".md": "text", ".log": "text", ".csv": "text",
+	".json": "text", ".xml": "text", ".yaml": "text", ".yml": "text",
+	".toml": "text", ".ini": "text", ".cfg": "text", ".conf": "text",
+	".html": "text", ".css": "text", ".js": "text", ".ts": "text",
+	".go": "code", ".py": "code", ".java": "code", ".c": "code",
+	".cpp": "code", ".h": "code", ".rs": "code", ".rb": "code",
+	".sh": "code", ".bat": "code", ".ps1": "code",
+	// 图片文件
+	".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image",
+	".gif": "image", ".svg": "image", ".bmp": "image", ".ico": "image",
+	".tiff": "image", ".tif": "image", ".avif": "image",
+	// 视频文件
+	".mp4": "video", ".webm": "video", ".avi": "video", ".mov": "video",
+	".mkv": "video", ".wmv": "video", ".flv": "video", ".m4v": "video",
+	".mpg": "video", ".mpeg": "video",
+	// 音频文件
+	".mp3": "audio", ".wav": "audio", ".flac": "audio", ".aac": "audio",
+	".ogg": "audio", ".wma": "audio", ".m4a": "audio",
+	// 压缩文件
+	".zip": "archive", ".rar": "archive", ".7z": "archive", ".tar": "archive",
+	".gz": "archive", ".bz2": "archive", ".xz": "archive",
 }

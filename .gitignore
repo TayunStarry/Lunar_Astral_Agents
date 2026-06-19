@@ -24,6 +24,7 @@ local_data/images/
 local_data/documents/
 local_data/database/
 local_data/audios/
+workspace/
 
 ## 系统文件
 desktop.ini

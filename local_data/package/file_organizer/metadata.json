@@ -1,0 +1,9 @@
+{
+	"id": "file_organizer",
+	"icon": "/file/read/package/file_organizer/icon.webp",
+	"title": "文件整理",
+	"description": "AI驱动的智能文件整理工具，自动分类、重命名、移动文件",
+	"tags": [
+		"App"
+	]
+}

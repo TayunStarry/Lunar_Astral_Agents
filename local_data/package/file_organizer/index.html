@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』文件整理</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="prompts.js"></script>
+    <script defer src="tools.js"></script>
+    <script defer src="script.js"></script>
+</head>
+
+<body>
+    <div class="background"></div>
+    <div class="glass-effect"></div>
+
+    <div class="app-container">
+        <!-- 操作栏 -->
+        <section class="path-bar glass-panel">
+            <div class="path-actions">
+                <div class="drop-hint">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <span>拖拽文件到下方区域开始整理</span>
+                </div>
+                <div class="toolbar-group">
+                    <div class="status-indicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">就绪</span>
+                    </div>
+                    <button id="theme-toggle" class="btn-icon" title="切换主题">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button id="start-btn" class="btn-glass btn-glass-primary" disabled>
+                        <i class="fas fa-wand-magic-sparkles"></i> 开始整理
+                    </button>
+                    <button id="refresh-btn" class="btn-glass btn-glass-ghost" title="刷新">
+                        <i class="fas fa-arrows-rotate"></i>
+                    </button>
+                    <button id="clear-workspace-btn" class="btn-glass btn-glass-danger" title="清除工作区">
+                        <i class="fas fa-broom"></i> 清除
+                    </button>
+                    <button id="zip-workspace-btn" class="btn-glass btn-glass-secondary" title="打包工作区">
+                        <i class="fas fa-file-zipper"></i> 打包
+                    </button>
+                    <button id="export-log-btn" class="btn-glass btn-glass-secondary" title="导出操作日志">
+                        <i class="fas fa-file-lines"></i> 导出日志
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 进度条 -->
+        <section id="progress-section" class="progress-section glass-panel" style="display: none;">
+            <div class="progress-header">
+                <div class="progress-label">
+                    <i class="fas fa-circle-notch fa-spin"></i>
+                    <span id="progress-status">准备中...</span>
+                </div>
+                <span id="progress-percent" class="progress-pct">0%</span>
+            </div>
+            <div class="progress-track">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+        </section>
+
+        <!-- 文件列表 -->
+        <main class="main-content glass-panel">
+            <div class="content-header">
+                <div class="content-title">
+                    <i class="fas fa-grip"></i>
+                    <h2>文件列表</h2>
+                </div>
+                <span id="file-count" class="badge">0 个文件</span>
+            </div>
+            <div id="file-grid" class="file-grid">
+                <div id="empty-state" class="empty-state">
+                    <div class="empty-visual">
+                        <i class="fas fa-folder-tree"></i>
+                    </div>
+                    <h3>选择文件夹开始整理</h3>
+                    <p>输入路径或点击浏览按钮选择需要整理的文件夹</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- 底栏 -->
+        <footer class="app-footer">
+            <span>星月智能 · 文件整理工具</span>
+            <span>所有操作均在本地执行，数据安全无忧</span>
+        </footer>
+    </div>
+
+    <!-- 审阅模态框 -->
+    <div id="review-modal" class="modal-overlay" style="display: none;">
+        <div class="review-panel glass-panel">
+            <div class="review-header">
+                <div class="review-title">
+                    <div class="review-icon"><i class="fas fa-clipboard-check"></i></div>
+                    <div>
+                        <h3>整理方案审阅</h3>
+                        <p class="review-subtitle">AI 已根据文件内容生成整理方案，请审阅后确认</p>
+                    </div>
+                </div>
+            </div>
+            <div class="review-stats" id="review-stats"></div>
+            <div id="review-body" class="review-body"></div>
+            <div class="review-footer">
+                <button id="review-cancel" class="btn-glass btn-glass-danger">
+                    <i class="fas fa-xmark"></i> 取消
+                </button>
+                <button id="review-execute" class="btn-glass btn-glass-success">
+                    <i class="fas fa-check"></i> 确认执行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+</body>
+
+</html>
