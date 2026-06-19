@@ -145,6 +145,11 @@ body {
     border-color: rgba(220, 53, 69, 0.45);
 }
 
+.card-tag-git {
+    background: rgba(30, 30, 30, 0.75);
+    border-color: rgba(60, 60, 60, 0.5);
+}
+
 /* 卡片功能按钮区 */
 .card-actions {
     position: absolute;

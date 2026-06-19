@@ -29,6 +29,7 @@ local_data/audios/
 desktop.ini
 Thumbs.db
 .DS_Store
+.agents
 
 ## 临时文件
 *.tmp

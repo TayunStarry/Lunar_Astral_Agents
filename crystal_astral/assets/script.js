@@ -252,9 +252,10 @@ function renderPageGrid() {
             ? page.tags[Math.floor(Math.random() * page.tags.length)]
             : null;
         const isLtpTag = displayTag && /^LTP[0-9A-Za-z]+$/.test(displayTag);
+        const isGitTag = displayTag === 'Git';
 
         card.innerHTML = `
-            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}">${displayTag}</span>` : ''}
+            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}${isGitTag ? ' card-tag-git' : ''}">${displayTag}</span>` : ''}
             <div class="icon">
                 <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
             </div>
