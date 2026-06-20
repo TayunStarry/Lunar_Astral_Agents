@@ -582,6 +582,7 @@ function updateFileCard(index, updates) {
 // ==== 审阅模态框 ====
 
 function showReviewModal(operations) {
+    new Audio('/file/read/audios/prompt-tone.mp3').play().catch(() => {});
     const modal = $('#review-modal');
     const body = $('#review-body');
     const stats = $('#review-stats');

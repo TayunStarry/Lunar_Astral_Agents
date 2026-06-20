@@ -1,0 +1,9 @@
+{
+	"id": "novel_studio",
+	"icon": "/file/read/package/novel_studio/icon.webp",
+	"title": "小说工作室",
+	"description": "AI 辅助小说创作工具，支持大纲构建、章节续写、内容审核与记忆点管理",
+	"tags": [
+		"App"
+	]
+}

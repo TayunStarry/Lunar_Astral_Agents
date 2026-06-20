@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』小说工作室</title>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
+</head>
+
+<body>
+    <!-- 背景层 -->
+    <div class="background"></div>
+    <!-- 玻璃效果层 -->
+    <div class="glass-effect"></div>
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 顶部工具栏 -->
+        <header class="toolbar">
+            <div class="toolbar-left">
+                <button id="buildBtn" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-hammer"></i> 构建故事
+                </button>
+                <button id="continueBtn" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-pen-fancy"></i> 续写故事
+                </button>
+                <button id="stopBtn" class="btn-glass btn-glass-danger" disabled>
+                    <i class="fas fa-stop-circle"></i> 中断
+                </button>
+                <button id="exportBtn" class="btn-glass">
+                    <i class="fas fa-download"></i> 导出
+                </button>
+                <button id="editChapterBtn" class="btn-glass" disabled title="仅可编辑已审核通过的章节">
+                    <i class="fas fa-edit"></i> 编辑故事
+                </button>
+                <button id="resetBtn" class="btn-glass btn-glass-danger">
+                    <i class="fas fa-undo-alt"></i> 重置
+                </button>
+            </div>
+            <div class="toolbar-right">
+                <span class="toolbar-status" id="toolbarStatus"></span>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧控制面板 -->
+            <aside class="side-panel" id="sidePanel">
+                <div class="panel-section">
+                    <h3 class="panel-title"><i class="fas fa-lightbulb"></i> 故事引子</h3>
+                    <textarea id="seedInput" class="panel-textarea"
+                        placeholder="在此输入故事引子，为AI提供创作起点...&#10;&#10;支持 Markdown 格式，若包含 # 第X章 格式的标题，将自动识别为预制章节"
+                        rows="4"></textarea>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-title"><i class="fas fa-sitemap"></i> 小说大纲</h3>
+                    <textarea id="outlineInput" class="panel-textarea" placeholder="AI 将在此生成小说大纲，您也可以手动编辑..."
+                        rows="6"></textarea>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-title"><i class="fas fa-arrow-right"></i> 章节延续走向</h3>
+                    <textarea id="directionInput" class="panel-textarea" placeholder="描述下一章的发展方向..."
+                        rows="4"></textarea>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-title"><i class="fas fa-check-double"></i> 章节评判标准</h3>
+                    <textarea id="criteriaInput" class="panel-textarea" placeholder="章节质量的评判标准..." rows="4"></textarea>
+                </div>
+
+                <div class="panel-section">
+                    <h3 class="panel-title"><i class="fas fa-sliders-h"></i> 参数设置</h3>
+                    <div class="param-grid">
+                        <div class="param-item">
+                            <label>最小字数</label>
+                            <input type="number" id="wordMin" class="param-input" value="3000" min="500" max="50000"
+                                step="100">
+                        </div>
+                        <div class="param-item">
+                            <label>最大字数</label>
+                            <input type="number" id="wordMax" class="param-input" value="4000" min="500" max="50000"
+                                step="100">
+                        </div>
+                        <div class="param-item">
+                            <label>摘要引用章节数</label>
+                            <input type="number" id="summaryCount" class="param-input" value="3" min="1" max="20"
+                                step="1" title="续写时引用前N章的摘要作为上下文">
+                        </div>
+                    </div>
+                    <h4 class="param-subtitle">重试次数</h4>
+                    <div class="param-grid param-grid-small">
+                        <div class="param-item">
+                            <label>字数调整</label>
+                            <input type="number" id="retryWordAdjust" class="param-input" value="2" min="0" max="10"
+                                step="1">
+                        </div>
+                        <div class="param-item">
+                            <label>内容审核</label>
+                            <input type="number" id="retryContentReview" class="param-input" value="3" min="0" max="10"
+                                step="1">
+                        </div>
+                        <div class="param-item">
+                            <label>构建故事</label>
+                            <input type="number" id="retryBuildStory" class="param-input" value="1" min="0" max="5"
+                                step="1">
+                        </div>
+                        <div class="param-item">
+                            <label>记忆点审核</label>
+                            <input type="number" id="retryMemoryReview" class="param-input" value="1" min="0" max="5"
+                                step="1">
+                        </div>
+                        <div class="param-item">
+                            <label>摘要生成</label>
+                            <input type="number" id="retrySummaryGenerate" class="param-input" value="1" min="0" max="5"
+                                step="1">
+                        </div>
+                    </div>
+                    <div class="switch-group">
+                        <label class="switch-label">
+                            <input type="checkbox" id="dynamicDirection" checked>
+                            <span class="switch-slider"></span>
+                            动态章节走向
+                        </label>
+                        <label class="switch-label">
+                            <input type="checkbox" id="dynamicCriteria" checked>
+                            <span class="switch-slider"></span>
+                            动态评判标准
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 知识点面板 -->
+                <div class="panel-section" id="memoriesPanel">
+                    <h3 class="panel-title">
+                        <i class="fas fa-brain"></i> 知识点
+                        <span class="memories-counter" id="memoriesCounter">知识点: 0/50</span>
+                    </h3>
+                    <div class="memories-input-row">
+                        <input type="text" id="memoryCharInput" class="memory-input" placeholder="人物" maxlength="20">
+                        <input type="text" id="memorySceneInput" class="memory-input" placeholder="场景" maxlength="20">
+                    </div>
+                    <div class="memories-input-row">
+                        <input type="text" id="memoryPlotInput" class="memory-input" placeholder="情节" maxlength="50">
+                        <input type="text" id="memoryTimeInput" class="memory-input" placeholder="时间" maxlength="20">
+                    </div>
+                    <div class="memories-input-row">
+                        <input type="text" id="memoryNoteInput" class="memory-input memory-input-full" placeholder="备注"
+                            maxlength="30">
+                        <button id="memoryAddBtn" class="btn-glass btn-glass-small">
+                            <i class="fas fa-plus"></i> 新增
+                        </button>
+                    </div>
+                    <div class="memories-list" id="memoriesList">
+                        <div class="memories-empty">暂无知识点</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 右侧章节浏览区 -->
+            <main class="chapter-viewer" id="chapterViewer">
+                <div class="chapter-nav">
+                    <button id="prevChapterBtn" class="btn-glass btn-glass-small" disabled>
+                        <i class="fas fa-chevron-left"></i> 上一章
+                    </button>
+                    <span class="chapter-title" id="chapterTitle">第 0 章</span>
+                    <button id="nextChapterBtn" class="btn-glass btn-glass-small" disabled>
+                        下一章 <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="chapter-content glass-panel markdown-content" id="chapterContent">
+                    <div class="empty-state">
+                        <i class="fas fa-feather-alt"></i>
+                        <h3>小说工作室</h3>
+                        <p>在左侧面板输入故事引子，然后点击「构建故事」开始创作之旅</p>
+                    </div>
+                </div>
+                <textarea class="chapter-edit-area glass-panel" id="chapterEditArea" style="display:none;"></textarea>
+                <div class="chapter-footer" id="chapterFooter">
+                    <div class="toolbar-center">
+                        <span class="chapter-counter" id="chapterCounter">
+                            <i class="fas fa-book"></i> 章节: <strong>0</strong>
+                        </span>
+                        <span class="phase-indicator" id="phaseIndicator">
+                            <span class="phase-dot"></span> 就绪
+                        </span>
+                    </div>
+                    <span class="chapter-words" id="chapterWords"></span>
+                    <span class="chapter-tokens" id="chapterTokens">
+                        <span class="token-label">Tokens:</span> 
+                        <span class="token-current">0</span> / 
+                        <span class="token-total">0</span>
+                    </span>
+                    <span class="chapter-status" id="chapterStatus"></span>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div class="toast" id="toast">
+        <i class="fas fa-info-circle"></i>
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- 章节走向弹窗 -->
+    <div class="modal-overlay" id="directionModal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3><i class="fas fa-arrow-right"></i> 章节走向与评判标准</h3>
+                <button class="modal-close" id="directionModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4>章节延续走向</h4>
+                    <textarea id="modalDirection" class="panel-textarea" rows="4" placeholder="下一章的延续走向..."></textarea>
+                </div>
+                <div class="modal-section">
+                    <h4>评判标准</h4>
+                    <textarea id="modalCriteria" class="panel-textarea" rows="4" placeholder="章节评判标准..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modalKeepBtn" class="btn-glass">维持不变</button>
+                <button id="modalUpdateBtn" class="btn-glass btn-glass-primary">更新并继续</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 中断确认弹窗 -->
+    <div class="modal-overlay" id="interruptModal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> 确认中断</h3>
+                <button class="modal-close" id="interruptModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>当前正在执行 AI 任务，将在当前任务完成后保存状态并中断。</p>
+                <p>中断后可通过「续写故事」按钮恢复进度。</p>
+            </div>
+            <div class="modal-footer">
+                <button id="interruptCancelBtn" class="btn-glass">取消</button>
+                <button id="interruptConfirmBtn" class="btn-glass btn-glass-danger">确认中断</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出弹窗 -->
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> 导出小说</h3>
+                <button class="modal-close" id="exportModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>导出内容包括所有已审核通过的章节和当前正在编写的草稿。</p>
+                <p>导出的文件仅供阅读使用，不可用于恢复工作状态。</p>
+                <div class="export-options">
+                    <label class="export-radio">
+                        <input type="radio" name="exportFormat" value="txt" checked> TXT 纯文本
+                    </label>
+                    <label class="export-radio">
+                        <input type="radio" name="exportFormat" value="md"> Markdown
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="exportCancelBtn" class="btn-glass">取消</button>
+                <button id="exportConfirmBtn" class="btn-glass btn-glass-primary">导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 内容审核审批弹窗 -->
+    <div class="modal-overlay" id="reviewApprovalModal">
+        <div class="modal glass-panel review-approval-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-gavel"></i> 章节审核审批</h3>
+                <span class="review-chapter-badge" id="reviewChapterBadge"></span>
+            </div>
+            <div class="modal-body">
+                <p class="review-intro">自动审核未通过，请审阅以下问题并做出决策。</p>
+                <div class="review-retry-info" id="reviewRetryInfo"></div>
+                <div class="review-issues-list" id="reviewIssuesList">
+                    <!-- 动态填充问题列表 -->
+                </div>
+                <div class="review-user-opinion">
+                    <h4><i class="fas fa-comment-dots"></i> 您的审批意见</h4>
+                    <textarea id="reviewUserOpinion" class="panel-textarea" rows="3"
+                        placeholder="输入您对审核结果的意见与修改建议..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer review-actions">
+                <button id="reviewRewriteAllBtn" class="btn-glass btn-glass-danger">
+                    <i class="fas fa-redo-alt"></i> 重写全章
+                </button>
+                <button id="reviewRewriteSelectedBtn" class="btn-glass" disabled>
+                    <i class="fas fa-check-double"></i> 改写选中项
+                </button>
+                <button id="reviewAcceptBtn" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-check-circle"></i> 认可当前内容
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -263,6 +263,19 @@ function refreshPage() {
     location.reload();
 }
 
+// ==== 完成提示音 ====
+function playCompletionSound() {
+    try {
+        const audio = new Audio('/file/read/audios/prompt-tone.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(err => {
+            console.log('音频播放失败（可能需要用户交互后播放）:', err);
+        });
+    } catch (error) {
+        console.log('创建音频对象失败:', error);
+    }
+}
+
 // ==== 图片生成 ====
 async function generateImage() {
     try {
@@ -327,6 +340,7 @@ function waitForTaskCompletion() {
                 if (data.status === 'completed') {
                     elements.taskMessage.textContent = '生成完成！';
                     showToast('图像生成完成！', 'success');
+                    playCompletionSound();
                     setTimeout(() => {
                         elements.taskStatus.style.display = 'none';
                         elements.generateBtn.disabled = false;
