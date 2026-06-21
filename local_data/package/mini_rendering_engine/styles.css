@@ -494,6 +494,19 @@ html, body {
 .keyframe-list-item .kf-empty {
     flex: 1; font-size: 11px; color: var(--text-dim); font-style: italic;
 }
+.kf-delay {
+    width: 48px; padding: 3px 6px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 4px; color: var(--text);
+    font-size: 12px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    text-align: center; outline: none;
+    -moz-appearance: textfield;
+    flex-shrink: 0;
+}
+.kf-delay::-webkit-inner-spin-button,
+.kf-delay::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.kf-delay:focus { border-color: var(--brand); }
 
 /* 面部可见性控制 */
 .face-toggle-row {
@@ -538,19 +551,19 @@ html, body {
 #camera-panel {
     position: fixed; bottom: 62px; left: 50%;
     transform: translateX(-50%);
-    padding: 12px 20px; border-radius: var(--radius-lg);
-    display: flex; align-items: center; gap: 12px;
-    font-size: 14px;
+    padding: 8px 14px; border-radius: var(--radius-lg);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
 }
 #camera-panel label {
-    color: var(--text-dim); font-size: 12px; font-weight: 600;
+    color: var(--text-dim); font-size: 11px; font-weight: 600;
 }
 #camera-panel input {
-    width: 72px; padding: 8px 10px;
+    width: 60px; padding: 6px 8px;
     background: var(--input-bg);
     border: 1px solid var(--glass-border);
     border-radius: 6px; color: var(--text);
-    font-size: 15px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     outline: none; text-align: center;
     -moz-appearance: textfield;
 }
@@ -561,7 +574,7 @@ html, body {
 #camera-panel input:focus { border-color: var(--input-focus-border); }
 #camera-panel .cam-sep { color: var(--text-dim); font-weight: 600; }
 #camera-panel .btn-glass {
-    width: auto; height: 40px; font-size: 14px; padding: 0 14px;
+    width: auto; height: 32px; font-size: 13px; padding: 0 12px;
 }
 
 /* 空状态 */

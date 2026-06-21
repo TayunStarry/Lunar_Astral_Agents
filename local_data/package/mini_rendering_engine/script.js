@@ -111,11 +111,10 @@ class SceneManager {
         this._selectionSet = new Set();
         this.nextId = 1;
         this.texturePool = new Map(); // name -> { name, base64, threeTexture }
-        this.keyframes = []; // { index, state: { objects: [], lighting: {} } }
-        this.playSpeed = 1.0; // 秒/帧
+        this.keyframes = []; // { index, delay: 1.0, state: { objects: [], lighting: {} } }
         this.isPlaying = false;
-        this._playTimer = 0;
         this._playFrameIdx = 0;
+        this._interpTimer = 0;
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color('#2a2a3a');
@@ -813,7 +812,7 @@ class SceneManager {
         const currState = this.captureState();
         if (idx === 0) {
             // 第0帧：记录当前完整状态
-            this.keyframes.push({ index: 0, state: currState });
+            this.keyframes.push({ index: 0, delay: 1.0, state: currState });
             return 0;
         }
         const prevState = this.keyframes[idx - 1].state;
@@ -842,6 +841,7 @@ class SceneManager {
         );
         this.keyframes.push({
             index: idx,
+            delay: 1.0,
             state: {
                 objects: changedObjects,
                 lighting: lightChanged ? currLight : null,
@@ -884,6 +884,69 @@ class SceneManager {
             }
         }
     }
+
+    resolveState(index) {
+        // 计算累积状态：从帧0到帧N的完整合并结果
+        const state = { objects: new Map(), lighting: null };
+        for (let i = 0; i <= index; i++) {
+            const kf = this.keyframes[i];
+            const st = kf.state;
+            if (st.objects) {
+                for (const od of st.objects) {
+                    state.objects.set(od.id, { ...od });
+                }
+            }
+            if (st.lighting && st.lighting.sunDir) {
+                state.lighting = { ...st.lighting };
+            }
+        }
+        return state;
+    }
+
+    interpolateFrames(fromIdx, toIdx, t) {
+        const _lerp = (a, b, t) => a + (b - a) * t;
+        const fromState = this.resolveState(fromIdx);
+        const toState = this.resolveState(toIdx);
+        // 插值图元
+        for (const [id, toObj] of toState.objects) {
+            const fromObj = fromState.objects.get(id);
+            const obj = this.objects.find(o => o.userData.id === id);
+            if (!obj) continue;
+            if (fromObj) {
+                obj.position.set(
+                    _lerp(fromObj.pos.x, toObj.pos.x, t),
+                    _lerp(fromObj.pos.y, toObj.pos.y, t),
+                    _lerp(fromObj.pos.z, toObj.pos.z, t)
+                );
+                obj.rotation.set(
+                    _lerp(fromObj.rot.x, toObj.rot.x, t),
+                    _lerp(fromObj.rot.y, toObj.rot.y, t),
+                    _lerp(fromObj.rot.z, toObj.rot.z, t)
+                );
+                obj.scale.set(
+                    _lerp(fromObj.scl.x, toObj.scl.x, t),
+                    _lerp(fromObj.scl.y, toObj.scl.y, t),
+                    _lerp(fromObj.scl.z, toObj.scl.z, t)
+                );
+            } else {
+                obj.position.set(toObj.pos.x, toObj.pos.y, toObj.pos.z);
+                obj.rotation.set(toObj.rot.x, toObj.rot.y, toObj.rot.z);
+                obj.scale.set(toObj.scl.x, toObj.scl.y, toObj.scl.z);
+            }
+        }
+        // 插值光照
+        if (fromState.lighting && toState.lighting) {
+            const fl = fromState.lighting, tl = toState.lighting;
+            this.sunLight.position.set(
+                _lerp(fl.sunDir.x, tl.sunDir.x, t),
+                _lerp(fl.sunDir.y, tl.sunDir.y, t),
+                _lerp(fl.sunDir.z, tl.sunDir.z, t)
+            );
+            this.ambientLight.intensity = _lerp(fl.ambient, tl.ambient, t);
+            this.hemiLight.intensity = _lerp(fl.hemi, tl.hemi, t);
+            this.sunLight.intensity = _lerp(fl.sun, tl.sun, t);
+        }
+    }
 }
 
 // ============ 相机控制器 ============
@@ -904,6 +967,7 @@ class CameraController {
         // 键盘平移
         this._keys = {};
         this.keyboardPanSpeed = 0.6;
+        this._cameraSpaceEnabled = true; // 无选中时允许 Space/Shift 升降摄像头
 
         // 环绕
         this._orbiting = false;
@@ -999,6 +1063,16 @@ class CameraController {
             if (this._keys['KeyS']) this._panOffset.addScaledVector(forward, -kps);
             if (this._keys['KeyD']) this._panOffset.addScaledVector(right, kps);
             if (this._keys['KeyA']) this._panOffset.addScaledVector(right, -kps);
+        }
+
+        // 垂直升降（Space/Shift）
+        if (this._cameraSpaceEnabled) {
+            const space = this._keys['Space'];
+            const shift = this._keys['ShiftLeft'] || this._keys['ShiftRight'];
+            if (space || shift) {
+                const kps = this._spherical.radius * 0.001 * this.keyboardPanSpeed;
+                this._panOffset.addScaledVector(this.camera.up, (space ? kps : 0) + (shift ? -kps : 0));
+            }
         }
 
         this.target.add(this._panOffset);
@@ -1104,7 +1178,6 @@ class AssetManager {
             textures: [...sceneManager.texturePool.values()].map(e => ({ name: e.name, base64: e.base64 })),
             objects: sceneManager.objects.map(obj => AssetManager._serialize(obj)),
             keyframes: sceneManager.keyframes,
-            playSpeed: sceneManager.playSpeed,
         };
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
@@ -1456,8 +1529,6 @@ class UIManager {
         this.btnKfDelete = document.getElementById('btn-kf-delete');
         this.btnKfPlay = document.getElementById('btn-kf-play');
         this.btnKfStop = document.getElementById('btn-kf-stop');
-        this.kfSpeed = document.getElementById('kf-speed');
-        this.kfSpeedVal = document.getElementById('kf-speed-val');
         this.keyframeList = document.getElementById('keyframe-list');
 
         this.bindEvents();
@@ -1549,10 +1620,6 @@ class UIManager {
         this.btnKfDelete.addEventListener('click', () => this._kfDelete());
         this.btnKfPlay.addEventListener('click', () => this._kfTogglePlay());
         this.btnKfStop.addEventListener('click', () => this._kfStop());
-        this.kfSpeed.addEventListener('input', () => {
-            this.sm.playSpeed = parseFloat(this.kfSpeed.value);
-            this.kfSpeedVal.textContent = this.kfSpeed.value + 's';
-        });
 
         // 画布点击选择
         const canvas = this.sm.canvas;
@@ -1608,6 +1675,39 @@ class UIManager {
                 return;
             }
 
+            // 1/2/3/4: 切换操作模式（选中/未选中均可用）
+            if (e.key === '1') {
+                this._operationMode = 'translate';
+                this._updateStatusMode('位移');
+                this.showToast('操作模式: 位移', 'info');
+                return;
+            }
+            if (e.key === '2') {
+                this._operationMode = 'rotate';
+                this._updateStatusMode('旋转');
+                this.showToast('操作模式: 旋转', 'info');
+                return;
+            }
+            if (e.key === '3') {
+                this._operationMode = 'scale';
+                this._updateStatusMode('缩放');
+                this.showToast('操作模式: 缩放', 'info');
+                return;
+            }
+            if (e.key === '4') {
+                this._operationMode = 'sunDir';
+                this._updateStatusMode('光照');
+                this.showToast('操作模式: 光照方向调整', 'info');
+                return;
+            }
+
+            // ==== 无选中时操作 ====
+            if (!sel) {
+                this.cc._cameraSpaceEnabled = true;
+                return;
+            }
+            this.cc._cameraSpaceEnabled = false;
+
             // ==== 选中对象快捷键 ====
             if (!sel) return;
 
@@ -1659,31 +1759,7 @@ class UIManager {
                 if (e.key === 'Shift') { sun.position.y = Math.max(0.5, sun.position.y - step); this.refresh(); return; }
             }
 
-            // 1/2/3/4: 切换操作模式
-            if (e.key === '1') {
-                this._operationMode = 'translate';
-                this._updateStatusMode('位移');
-                this.showToast('操作模式: 位移', 'info');
-                return;
-            }
-            if (e.key === '2') {
-                this._operationMode = 'rotate';
-                this._updateStatusMode('旋转');
-                this.showToast('操作模式: 旋转', 'info');
-                return;
-            }
-            if (e.key === '3') {
-                this._operationMode = 'scale';
-                this._updateStatusMode('缩放');
-                this.showToast('操作模式: 缩放', 'info');
-                return;
-            }
-            if (e.key === '4') {
-                this._operationMode = 'sunDir';
-                this._updateStatusMode('光照');
-                this.showToast('操作模式: 光照方向调整', 'info');
-                return;
-            }
+            // ==== 操作模式切换 ====
         });
 
         // R 键松开时停止环绕
@@ -1997,11 +2073,14 @@ class UIManager {
             if (objData.type === 'group') {
                 const group = new THREE.Group();
                 group.userData = {
-                    id: this.sm.nextId++,
+                    id: objData.id != null ? objData.id : this.sm.nextId++,
                     name: objData.name || '组合体',
                     type: 'group',
                     children: [],
                 };
+                if (objData.id != null) {
+                    this.sm.nextId = Math.max(this.sm.nextId, objData.id + 1);
+                }
                 group.position.set(objData.position.x, objData.position.y, objData.position.z);
                 group.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z);
                 group.scale.set(objData.scale.x, objData.scale.y, objData.scale.z);
@@ -2021,14 +2100,9 @@ class UIManager {
                 this.sm.objects.push(mesh);
             }
         }
-        // 导入关键帧和播放速度
+        // 导入关键帧
         if (data.keyframes && Array.isArray(data.keyframes)) {
             this.sm.keyframes = data.keyframes;
-        }
-        if (data.playSpeed !== undefined) {
-            this.sm.playSpeed = data.playSpeed;
-            this.kfSpeed.value = data.playSpeed;
-            this.kfSpeedVal.textContent = data.playSpeed + 's';
         }
         this.renderTexturePool();
         this.refresh();
@@ -2037,11 +2111,14 @@ class UIManager {
     async _loadGroupAsset(data) {
         const group = new THREE.Group();
         group.userData = {
-            id: this.sm.nextId++,
+            id: data.id != null ? data.id : this.sm.nextId++,
             name: data.name || '导入组合体',
             type: 'group',
             children: [],
         };
+        if (data.id != null) {
+            this.sm.nextId = Math.max(this.sm.nextId, data.id + 1);
+        }
         group.position.set(data.position.x, data.position.y, data.position.z);
         group.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
         group.scale.set(data.scale.x, data.scale.y, data.scale.z);
@@ -2084,7 +2161,7 @@ class UIManager {
         mesh.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z);
         mesh.scale.set(objData.scale.x, objData.scale.y, objData.scale.z);
         mesh.userData = {
-            id: this.sm.nextId++,
+            id: objData.id != null ? objData.id : this.sm.nextId++,
             name: objData.name || '导入对象',
             type: objData.type || 'imported',
             primitiveType: objData.primitiveType || null,
@@ -2093,6 +2170,9 @@ class UIManager {
             faceVisible: faceVisible || null,
             textureName: objData.material?.textureName || null,
         };
+        if (objData.id != null) {
+            this.sm.nextId = Math.max(this.sm.nextId, objData.id + 1);
+        }
         return mesh;
     }
 
@@ -2549,6 +2629,7 @@ class UIManager {
         this.renderHierarchy();
         this.renderInspector();
         this.renderKeyframeList();
+        this.cc._cameraSpaceEnabled = !this.sm.selected;
         this._scheduleAutoSave();
     }
 
@@ -2579,14 +2660,12 @@ class UIManager {
         }
         this.sm.isPlaying = !this.sm.isPlaying;
         if (this.sm.isPlaying) {
-            this.sm._playTimer = 0;
+            this.sm._interpTimer = 0;
             this.sm._playFrameIdx = 0;
             this.sm.applyKeyframeState(0);
-            this.btnKfPlay.querySelector('i').className = 'fas fa-pause';
             this.btnKfPlay.innerHTML = '<i class="fas fa-pause"></i> 暂停';
             this.showToast('动画播放中...', 'success');
         } else {
-            this.btnKfPlay.querySelector('i').className = 'fas fa-play';
             this.btnKfPlay.innerHTML = '<i class="fas fa-play"></i> 播放';
             this.showToast('动画已暂停', 'success');
         }
@@ -2595,9 +2674,9 @@ class UIManager {
 
     _kfStop() {
         this.sm.isPlaying = false;
-        this.sm._playTimer = 0;
+        this.sm._interpTimer = 0;
         this.sm._playFrameIdx = 0;
-        this.btnKfPlay.querySelector('i').className = 'fas fa-play';
+        this.sm.applyKeyframeState(0);
         this.btnKfPlay.innerHTML = '<i class="fas fa-play"></i> 播放';
         this.showToast('动画已停止', 'success');
         this.refresh();
@@ -2620,18 +2699,28 @@ class UIManager {
             html += `<div class="keyframe-list-item${active}" data-kf-idx="${i}">
                 <span class="kf-index">#${i}</span>
                 <span class="kf-info">${info}</span>
+                <input type="number" class="kf-delay" value="${kf.delay}" min="0.1" max="30" step="0.1" title="延迟(秒)" data-kf-idx="${i}">
             </div>`;
         });
         this.keyframeList.innerHTML = html;
 
         // 点击关键帧项跳转
         this.keyframeList.querySelectorAll('.keyframe-list-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', e => {
+                if (e.target.classList.contains('kf-delay')) return; // 不拦截输入框点击
                 const idx = parseInt(item.dataset.kfIdx);
                 this.sm._playFrameIdx = idx;
                 this.sm.applyKeyframeState(idx);
                 this.refresh();
                 this.showToast(`已跳转到关键帧 ${idx}`, 'success');
+            });
+        });
+        // 每帧延迟时间修改
+        this.keyframeList.querySelectorAll('.kf-delay').forEach(input => {
+            input.addEventListener('input', () => {
+                const idx = parseInt(input.dataset.kfIdx);
+                this.sm.keyframes[idx].delay = Math.max(0.1, parseFloat(input.value) || 1.0);
+                this._scheduleAutoSave();
             });
         });
     }
@@ -2655,8 +2744,10 @@ class UIManager {
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">层级面板</p>
                 <p>双击元素: 聚焦显示 | 点击文件夹图标: 折叠/展开</p>
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">关键帧动画</p>
-                <p>在"关键帧"选项卡中管理动画帧 | 点击"添加帧"记录当前状态</p>
-                <p>帧0记录初始状态，后续帧仅记录变化 | 播放速度可调（默认1秒/帧）</p>
+                <p>在"关键帧"选项卡中管理动画帧 | 每帧独立设置延迟时间</p>
+                <p>帧0记录初始状态，后续帧仅记录变化 | 帧间线性插值平滑过渡</p>
+                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">自由视角</p>
+                <p>无选中对象时: <kbd>Space</kbd> 抬升相机 | <kbd>Shift</kbd> 降低相机</p>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
                 <button class="btn-glass btn-glass-primary" id="help-close" style="padding:8px 24px;height:36px;font-size:14px">关闭</button>
@@ -2707,7 +2798,6 @@ class UIManager {
                 textures: [...this.sm.texturePool.values()].map(e => ({ name: e.name, base64: e.base64 })),
                 objects: this.sm.objects.map(obj => AssetManager._serialize(obj)),
                 keyframes: this.sm.keyframes,
-                playSpeed: this.sm.playSpeed,
             };
             const json = JSON.stringify({ version: '2.0', savedAt: new Date().toISOString(), ...data }, null, 2);
             await fetch('/file/write', {
@@ -2847,16 +2937,20 @@ class App {
             this._fpsAccum = 0; this._fpsCount = 0; this._fpsTimer = 0;
         }
 
-        // 关键帧动画播放
+        // 关键帧动画播放（带线性插值）
         const sm = this.sceneManager;
         if (sm.isPlaying && sm.keyframes.length > 1) {
-            sm._playTimer += dt;
-            if (sm._playTimer >= sm.playSpeed) {
-                sm._playTimer -= sm.playSpeed;
+            const currentFrame = sm.keyframes[sm._playFrameIdx];
+            sm._interpTimer += dt;
+            if (sm._interpTimer >= currentFrame.delay) {
+                sm._interpTimer -= currentFrame.delay;
                 sm._playFrameIdx = (sm._playFrameIdx + 1) % sm.keyframes.length;
-                sm.applyKeyframeState(sm._playFrameIdx);
                 this.uiManager.refresh();
             }
+            // 线性插值到下一帧
+            const nextIdx = (sm._playFrameIdx + 1) % sm.keyframes.length;
+            const t = sm._interpTimer / currentFrame.delay;
+            sm.interpolateFrames(sm._playFrameIdx, nextIdx, t);
         }
 
         this.cameraController.update();
