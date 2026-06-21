@@ -1,4 +1,5 @@
 import * as THREE from './three.module.js';
+import * as CANNON from './cannon-es.module.js';
 
 // ============ 图元定义 ============
 const PRIMITIVES = {
@@ -359,6 +360,16 @@ class SceneManager {
         const def = PRIMITIVES[type];
         if (!def) return null;
         const geo = def.geo(params);
+
+        // 修正 ConeGeometry 的 group materialIndex 断层问题
+        // CylinderGeometry 生成 groups 的 materialIndex 为 0(侧面), 1(顶盖), 2(底盖)
+        // 但 ConeGeometry(radiusTop=0) 跳过顶盖，导致 groups 的 materialIndex 为 0 和 2
+        // 当材质为数组时，material[2] 越界会导致 Three.js raycast 崩溃
+        if (type === 'cone' && geo.groups) {
+            for (const group of geo.groups) {
+                if (group.materialIndex === 2) group.materialIndex = 1;
+            }
+        }
 
         let mat;
         let faceNames = null;
@@ -1160,7 +1171,7 @@ class CameraController {
 
 // ============ 资产管理器 ============
 class AssetManager {
-    static exportScene(sceneManager) {
+    static exportScene(sceneManager, physicsManager = null) {
         const data = {
             version: '2.0', name: '渲染方案', createdAt: new Date().toISOString(),
             skybox: {
@@ -1175,6 +1186,20 @@ class AssetManager {
                 sunDir: { x: sceneManager.sunLight.position.x, y: sceneManager.sunLight.position.y, z: sceneManager.sunLight.position.z },
                 shadows: sceneManager.sunLight.castShadow,
             },
+            ground: {
+                gridVisible: sceneManager.gridHelper.visible,
+                groundVisible: sceneManager.groundPlane.visible,
+                size: sceneManager.gridHelper.geometry.parameters?.size || 20,
+                color: '#' + sceneManager.gridHelper.material[0].color.getHexString(),
+            },
+            physics: physicsManager ? {
+                gravity: physicsManager.gravity,
+                groundY: physicsManager.groundY,
+                massSingle: physicsManager.massSingle,
+                massGroup: physicsManager.massGroup,
+                linearDamping: physicsManager.linearDamping,
+                angularDamping: physicsManager.angularDamping,
+            } : null,
             textures: [...sceneManager.texturePool.values()].map(e => ({ name: e.name, base64: e.base64 })),
             objects: sceneManager.objects.map(obj => AssetManager._serialize(obj)),
             keyframes: sceneManager.keyframes,
@@ -1343,7 +1368,14 @@ class AssetManager {
                     p[param.key] = data[param.key] !== undefined ? data[param.key] : param.default;
                 }
             }
-            return def.geo(p);
+            const geo = def.geo(p);
+            // 修正 ConeGeometry 的 group materialIndex 断层（同 addPrimitive）
+            if (type === 'cone' && geo.groups) {
+                for (const group of geo.groups) {
+                    if (group.materialIndex === 2) group.materialIndex = 1;
+                }
+            }
+            return geo;
         }
         return new THREE.BoxGeometry(1, 1, 1);
     }
@@ -1481,9 +1513,10 @@ class TextureGenerator {
 
 // ============ UI 管理器 ============
 class UIManager {
-    constructor(sm, cc) {
+    constructor(sm, cc, pm) {
         this.sm = sm;
         this.cc = cc;
+        this.pm = pm;
         this._toastTimer = null;
         this._panelsVisible = true;
 
@@ -1657,6 +1690,7 @@ class UIManager {
             const sel = this.sm.selected;
             // 删除
             if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (sel) this.pm.removeBody(sel);
                 this.sm.deleteSelected(); this.refresh(); this.showToast('已删除', 'success'); return;
             }
             // Ctrl+G 组合 / Ctrl+Shift+G 取消组合
@@ -1672,6 +1706,21 @@ class UIManager {
                 const children = this.sm.ungroupSelected();
                 if (children) { this.refresh(); this.showToast('已取消组合', 'success'); }
                 else this.showToast('当前选中对象不是组合体', 'info');
+                return;
+            }
+
+            // Q: 对选中图元施加/取消物理效果
+            if (e.key === 'q' || e.key === 'Q') {
+                if (!sel) { this.showToast('请先选中图元', 'info'); return; }
+                const added = this.pm.toggleObject(sel);
+                this.showToast(added ? `物理效果已施加: ${sel.userData.name}` : `物理效果已取消: ${sel.userData.name}`, 'success');
+                return;
+            }
+
+            // E: 对整个场景施加/取消物理效果
+            if (e.key === 'e' || e.key === 'E') {
+                const added = this.pm.toggleAll();
+                this.showToast(added ? '物理效果已施加到全部图元' : '物理效果已取消', 'success');
                 return;
             }
 
@@ -1785,11 +1834,40 @@ class UIManager {
         bind('light-dir-x', () => this._updateSunDir());
         bind('light-dir-y', () => this._updateSunDir());
         bind('light-dir-z', () => this._updateSunDir());
-        bind('light-shadows', el => this.sm.setShadowsEnabled(el.checked));
-        bind('ground-grid', el => this.sm.setGridVisible(el.checked));
-        bind('ground-plane', el => this.sm.setGroundVisible(el.checked));
+
+        // 切换按钮（替代 checkbox）
+        const bindToggle = (id, callback) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('click', () => {
+                el.classList.toggle('active');
+                el.textContent = el.classList.contains('active') ? '开启' : '关闭';
+                callback(el.classList.contains('active'));
+                this._scheduleAutoSave();
+            });
+        };
+        bindToggle('light-shadows', active => this.sm.setShadowsEnabled(active));
+        bindToggle('ground-grid', active => this.sm.setGridVisible(active));
+        bindToggle('ground-plane', active => this.sm.setGroundVisible(active));
+
         bind('ground-size', el => this.sm.setGroundSize(parseInt(el.value) || 20));
         bind('ground-color', el => this.sm.setGridColor(el.value));
+
+        // 物理模拟参数
+        const bindPhys = (id, setter) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', () => {
+                setter(parseFloat(el.value));
+                this._scheduleAutoSave();
+            });
+        };
+        bindPhys('phys-gravity', v => { if (this.pm) this.pm.gravity = v; });
+        bindPhys('phys-ground-y', v => { if (this.pm) this.pm.groundY = v; });
+        bindPhys('phys-mass-single', v => { if (this.pm) this.pm.massSingle = v; });
+        bindPhys('phys-mass-group', v => { if (this.pm) this.pm.massGroup = v; });
+        bindPhys('phys-linear-damping', v => { if (this.pm) this.pm.linearDamping = v; });
+        bindPhys('phys-angular-damping', v => { if (this.pm) this.pm.angularDamping = v; });
     }
 
     _updateSunDir() {
@@ -1930,7 +2008,7 @@ class UIManager {
             return;
         }
         switch (action) {
-            case 'delete-selected': this.sm.deleteSelected(); this.refresh(); this.showToast('已删除', 'success'); break;
+            case 'delete-selected': { const sel = this.sm.selected; if (sel) this.pm.removeBody(sel); this.sm.deleteSelected(); this.refresh(); this.showToast('已删除', 'success'); break; }
             case 'duplicate-selected': this.sm.duplicateSelected(); this.refresh(); this.showToast('已复制', 'success'); break;
             case 'group-selected': {
                 const group = this.sm.groupSelected();
@@ -1944,7 +2022,7 @@ class UIManager {
                 else this.showToast('当前选中对象不是组合体', 'info');
                 break;
             }
-            case 'export-scene': AssetManager.exportScene(this.sm); this.showToast('方案已导出', 'success'); break;
+            case 'export-scene': AssetManager.exportScene(this.sm, this.pm); this.showToast('方案已导出', 'success'); break;
             case 'import-scene': this.importInput.click(); break;
             case 'import-group-asset': this.groupImportInput.click(); break;
             case 'view-top': if (this.sm.selected) { this.cc.focusOnAxis(this.sm.selected, 'top'); } else { this.cc.setView(new THREE.Vector3(0, 10, 0.01), new THREE.Vector3(0, 0, 0)); } break;
@@ -2059,6 +2137,13 @@ class UIManager {
                     this.sm.setSunIntensity(data.lighting.sun ?? 1.2);
                     if (data.lighting.sunDir) this.sm.setSunDirection(data.lighting.sunDir.x, data.lighting.sunDir.y, data.lighting.sunDir.z);
                     this.sm.setShadowsEnabled(data.lighting.shadows ?? true);
+                    // 更新阴影按钮
+                    const shadowsBtn = document.getElementById('light-shadows');
+                    if (shadowsBtn) {
+                        const active = data.lighting.shadows ?? true;
+                        shadowsBtn.classList.toggle('active', active);
+                        shadowsBtn.textContent = active ? '开启' : '关闭';
+                    }
                 }
             } else {
                 this.sm.setAmbientIntensity(data.lighting.ambient ?? 0.6);
@@ -2066,7 +2151,54 @@ class UIManager {
                 this.sm.setSunIntensity(data.lighting.sun ?? 1.2);
                 if (data.lighting.sunDir) this.sm.setSunDirection(data.lighting.sunDir.x, data.lighting.sunDir.y, data.lighting.sunDir.z);
                 this.sm.setShadowsEnabled(data.lighting.shadows ?? true);
+                // 更新阴影按钮
+                const shadowsBtn = document.getElementById('light-shadows');
+                if (shadowsBtn) {
+                    const active = data.lighting.shadows ?? true;
+                    shadowsBtn.classList.toggle('active', active);
+                    shadowsBtn.textContent = active ? '开启' : '关闭';
+                }
             }
+        }
+
+        // 地面设置
+        if (data.ground) {
+            this.sm.setGridVisible(data.ground.gridVisible ?? true);
+            this.sm.setGroundVisible(data.ground.groundVisible ?? true);
+            if (data.ground.size != null) this.sm.setGroundSize(data.ground.size);
+            if (data.ground.color) this.sm.setGridColor(data.ground.color);
+            // 更新 UI
+            const gridBtn = document.getElementById('ground-grid');
+            const planeBtn = document.getElementById('ground-plane');
+            const sizeEl = document.getElementById('ground-size');
+            const colorEl = document.getElementById('ground-color');
+            if (gridBtn) { gridBtn.classList.toggle('active', data.ground.gridVisible ?? true); gridBtn.textContent = (data.ground.gridVisible ?? true) ? '开启' : '关闭'; }
+            if (planeBtn) { planeBtn.classList.toggle('active', data.ground.groundVisible ?? true); planeBtn.textContent = (data.ground.groundVisible ?? true) ? '开启' : '关闭'; }
+            if (sizeEl) sizeEl.value = data.ground.size ?? 20;
+            if (colorEl) colorEl.value = data.ground.color ?? '#444466';
+        }
+
+        // 物理模拟参数
+        if (data.physics && this.pm) {
+            this.pm.gravity = data.physics.gravity ?? -9.82;
+            this.pm.groundY = data.physics.groundY ?? -0.5;
+            this.pm.massSingle = data.physics.massSingle ?? 1;
+            this.pm.massGroup = data.physics.massGroup ?? 2;
+            this.pm.linearDamping = data.physics.linearDamping ?? 0.1;
+            this.pm.angularDamping = data.physics.angularDamping ?? 0.1;
+            // 更新 UI
+            const physGravity = document.getElementById('phys-gravity');
+            const physGroundY = document.getElementById('phys-ground-y');
+            const physMassSingle = document.getElementById('phys-mass-single');
+            const physMassGroup = document.getElementById('phys-mass-group');
+            const physLinearDamping = document.getElementById('phys-linear-damping');
+            const physAngularDamping = document.getElementById('phys-angular-damping');
+            if (physGravity) physGravity.value = data.physics.gravity ?? -9.82;
+            if (physGroundY) physGroundY.value = data.physics.groundY ?? -0.5;
+            if (physMassSingle) physMassSingle.value = data.physics.massSingle ?? 1;
+            if (physMassGroup) physMassGroup.value = data.physics.massGroup ?? 2;
+            if (physLinearDamping) physLinearDamping.value = data.physics.linearDamping ?? 0.1;
+            if (physAngularDamping) physAngularDamping.value = data.physics.angularDamping ?? 0.1;
         }
 
         for (const objData of data.objects) {
@@ -2185,9 +2317,16 @@ class UIManager {
         );
         this.sm.raycaster.setFromCamera(mouse, this.sm.camera);
         // 过滤：仅保留有有效材质和几何体的可拾取对象
+        // 同时检查材质数组与几何体 group materialIndex 是否匹配，避免 Three.js raycast 崩溃
         const pickable = this.sm.objects.filter(obj => {
             if (obj.isGroup) return true;
-            return obj.isMesh && obj.material && obj.geometry;
+            if (!obj.isMesh || !obj.material || !obj.geometry) return false;
+            if (Array.isArray(obj.material) && obj.geometry.groups) {
+                for (const group of obj.geometry.groups) {
+                    if (group.materialIndex >= obj.material.length) return false;
+                }
+            }
+            return true;
         });
         const intersects = this.sm.raycaster.intersectObjects(pickable, true);
         if (intersects.length > 0) {
@@ -2253,7 +2392,6 @@ class UIManager {
                     this._renderTreeItem(childContainer, child, depth + 1, obj);
                 }
                 parent.appendChild(childContainer);
-                // 点击文件夹图标折叠/展开
                 const iconEl = item.querySelector('i');
                 if (iconEl) {
                     iconEl.style.cursor = 'pointer';
@@ -2742,12 +2880,14 @@ class UIManager {
                 <p><kbd>Delete</kbd> / <kbd>Backspace</kbd> 删除 | <kbd>Ctrl+G</kbd> 组合 | <kbd>Ctrl+Shift+G</kbd> 取消组合</p>
                 <p><kbd>W/A/S/D</kbd> 键盘平移视角</p>
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">层级面板</p>
-                <p>双击元素: 聚焦显示 | 点击文件夹图标: 折叠/展开</p>
+                <p>双击元素/组合体: 聚焦显示</p>
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">关键帧动画</p>
                 <p>在"关键帧"选项卡中管理动画帧 | 每帧独立设置延迟时间</p>
                 <p>帧0记录初始状态，后续帧仅记录变化 | 帧间线性插值平滑过渡</p>
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">自由视角</p>
                 <p>无选中对象时: <kbd>Space</kbd> 抬升相机 | <kbd>Shift</kbd> 降低相机</p>
+                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">物理模拟</p>
+                <p><kbd>Q</kbd> 对选中图元施加/取消物理效果 | <kbd>E</kbd> 对全部图元施加/取消物理效果</p>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
                 <button class="btn-glass btn-glass-primary" id="help-close" style="padding:8px 24px;height:36px;font-size:14px">关闭</button>
@@ -2795,6 +2935,20 @@ class UIManager {
                     sunDir: { x: this.sm.sunLight.position.x, y: this.sm.sunLight.position.y, z: this.sm.sunLight.position.z },
                     shadows: this.sm.sunLight.castShadow,
                 },
+                ground: {
+                    gridVisible: this.sm.gridHelper.visible,
+                    groundVisible: this.sm.groundPlane.visible,
+                    size: this.sm.gridHelper.geometry.parameters?.size || 20,
+                    color: '#' + this.sm.gridHelper.material[0].color.getHexString(),
+                },
+                physics: this.pm ? {
+                    gravity: this.pm.gravity,
+                    groundY: this.pm.groundY,
+                    massSingle: this.pm.massSingle,
+                    massGroup: this.pm.massGroup,
+                    linearDamping: this.pm.linearDamping,
+                    angularDamping: this.pm.angularDamping,
+                } : null,
                 textures: [...this.sm.texturePool.values()].map(e => ({ name: e.name, base64: e.base64 })),
                 objects: this.sm.objects.map(obj => AssetManager._serialize(obj)),
                 keyframes: this.sm.keyframes,
@@ -2869,13 +3023,153 @@ class UIManager {
     }
 }
 
+// ============ 物理引擎 ============
+class PhysicsManager {
+    constructor(sceneManager) {
+        this.sm = sceneManager;
+        this.world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -9.82, 0),
+        });
+        this.world.broadphase = new CANNON.NaiveBroadphase();
+        this.world.solver.iterations = 10;
+
+        this.bodies = new Map(); // mesh.userData.id -> CANNON.Body
+        this.isActive = false;
+        this._groundBody = null;
+        this._groundY = -0.5;
+
+        // 可调参数
+        this._massSingle = 1;
+        this._massGroup = 2;
+        this._linearDamping = 0.1;
+        this._angularDamping = 0.1;
+    }
+
+    get gravity() { return this.world.gravity.y; }
+    set gravity(v) { this.world.gravity.y = v; }
+
+    get groundY() { return this._groundY; }
+    set groundY(v) {
+        this._groundY = v;
+        if (this._groundBody) {
+            this._groundBody.position.set(0, v, 0);
+        }
+    }
+
+    get massSingle() { return this._massSingle; }
+    set massSingle(v) { this._massSingle = v; }
+
+    get massGroup() { return this._massGroup; }
+    set massGroup(v) { this._massGroup = v; }
+
+    get linearDamping() { return this._linearDamping; }
+    set linearDamping(v) { this._linearDamping = v; }
+
+    get angularDamping() { return this._angularDamping; }
+    set angularDamping(v) { this._angularDamping = v; }
+
+    _ensureGround() {
+        if (this._groundBody) return;
+        const groundShape = new CANNON.Plane();
+        this._groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+        this._groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        this._groundBody.position.set(0, this._groundY, 0);
+        this.world.addBody(this._groundBody);
+    }
+
+    _removeGround() {
+        if (this._groundBody) {
+            this.world.removeBody(this._groundBody);
+            this._groundBody = null;
+        }
+    }
+
+    createBody(mesh) {
+        if (this.bodies.has(mesh.userData.id)) return null;
+        const box = new THREE.Box3().setFromObject(mesh);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const half = new CANNON.Vec3(
+            Math.max(size.x / 2, 0.1),
+            Math.max(size.y / 2, 0.1),
+            Math.max(size.z / 2, 0.1)
+        );
+        const shape = new CANNON.Box(half);
+        let mass = mesh.userData.type === 'group' ? this._massGroup : this._massSingle;
+        const body = new CANNON.Body({
+            mass,
+            shape,
+            position: new CANNON.Vec3(mesh.position.x, mesh.position.y, mesh.position.z),
+            quaternion: new CANNON.Quaternion(mesh.quaternion.x, mesh.quaternion.y, mesh.quaternion.z, mesh.quaternion.w),
+        });
+        body.linearDamping = this._linearDamping;
+        body.angularDamping = this._angularDamping;
+        this.world.addBody(body);
+        this.bodies.set(mesh.userData.id, body);
+        return body;
+    }
+
+    removeBody(mesh) {
+        const body = this.bodies.get(mesh.userData.id);
+        if (body) {
+            this.world.removeBody(body);
+            this.bodies.delete(mesh.userData.id);
+        }
+    }
+
+    toggleObject(mesh) {
+        if (this.bodies.has(mesh.userData.id)) {
+            this.removeBody(mesh);
+            if (this.bodies.size === 0) this._removeGround();
+            return false;
+        }
+        this._ensureGround();
+        this.createBody(mesh);
+        return true;
+    }
+
+    toggleAll() {
+        if (this.bodies.size > 0) {
+            this.reset();
+            return false;
+        }
+        this._ensureGround();
+        for (const obj of this.sm.objects) {
+            this.createBody(obj);
+        }
+        return true;
+    }
+
+    reset() {
+        for (const body of this.bodies.values()) {
+            this.world.removeBody(body);
+        }
+        this.bodies.clear();
+        this._removeGround();
+        this.isActive = false;
+    }
+
+    update(dt) {
+        const hasBodies = this.bodies.size > 0;
+        if (!hasBodies) return;
+        this.world.step(1 / 60, Math.min(dt, 0.05), 3);
+        for (const [id, body] of this.bodies) {
+            const mesh = this.sm.objects.find(o => o.userData.id === id);
+            if (mesh) {
+                mesh.position.copy(body.position);
+                mesh.quaternion.copy(body.quaternion);
+            }
+        }
+    }
+}
+
 // ============ 应用入口 ============
 class App {
     constructor() {
         const canvas = document.getElementById('render-canvas');
         this.sceneManager = new SceneManager(canvas);
         this.cameraController = new CameraController(this.sceneManager.camera, canvas);
-        this.uiManager = new UIManager(this.sceneManager, this.cameraController);
+        this.physicsManager = new PhysicsManager(this.sceneManager);
+        this.uiManager = new UIManager(this.sceneManager, this.cameraController, this.physicsManager);
 
         this._lastTime = performance.now();
         this._fpsAccum = 0; this._fpsCount = 0; this._fpsTimer = 0;
@@ -2954,6 +3248,7 @@ class App {
         }
 
         this.cameraController.update();
+        this.physicsManager.update(dt);
         this.sceneManager.render();
     }
 }

@@ -385,16 +385,6 @@ html, body {
     border-radius: 6px; padding: 10px 10px;
     color: var(--text); font-size: 15px; outline: none;
 }
-.inspector-row input[type="checkbox"] {
-    width: 18px; height: 18px; cursor: pointer;
-    accent-color: var(--brand); margin-right: 4px;
-    vertical-align: middle;
-}
-.inspector-row .checkbox-label {
-    font-size: 13px; color: var(--text);
-    cursor: pointer; user-select: none;
-}
-
 /* 纹理选择器 */
 .texture-selector {
     display: flex; gap: 6px; flex-wrap: wrap;
@@ -460,10 +450,6 @@ html, body {
 .settings-row input[type="range"] {
     flex: 1; cursor: pointer; height: 8px;
 }
-.settings-row input[type="checkbox"] {
-    width: 20px; height: 20px; cursor: pointer;
-    accent-color: var(--brand);
-}
 .settings-row .btn-glass {
     width: auto; height: 40px; font-size: 13px; padding: 0 14px;
 }
@@ -508,15 +494,6 @@ html, body {
 .kf-delay::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .kf-delay:focus { border-color: var(--brand); }
 
-/* 面部可见性控制 */
-.face-toggle-row {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 4px; font-size: 13px;
-}
-.face-toggle-row input[type="checkbox"] {
-    width: 16px; height: 16px; accent-color: var(--brand);
-}
-
 /* 面可见性按钮网格 */
 .face-vis-grid {
     display: grid;
@@ -545,6 +522,37 @@ html, body {
     background: var(--brand);
     color: #fff;
     border-color: var(--brand);
+}
+
+/* 设置面板切换按钮（替代 checkbox） */
+.settings-toggle-btn {
+    height: 32px; padding: 0 14px;
+    border: 2px solid var(--glass-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text-dim);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px;
+}
+.settings-toggle-btn:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+.settings-toggle-btn.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+}
+
+/* 天空盒横排 */
+.skybox-row {
+    flex-wrap: wrap;
+}
+.skybox-row label {
+    min-width: auto;
 }
 
 /* 摄像机坐标面板 */
