@@ -1,8 +1,8 @@
 :root {
-    --glass-bg: rgba(255, 255, 255, 0.55);
-    --glass-bg-dark: rgba(38, 38, 42, 0.92);
-    --glass-border: rgba(255, 255, 255, 0.35);
-    --glass-blur: 10px;
+    --glass-bg: rgba(255, 255, 255, 0.88);
+    --glass-bg-dark: rgba(214, 214, 214, 0.95);
+    --glass-border: rgba(200, 200, 210, 0.55);
+    --glass-blur: 4px;
     --radius-sm: 0.5rem;
     --radius-md: 0.75rem;
     --radius-lg: 1rem;
@@ -15,19 +15,23 @@
     --warn: #fbbf24;
     --text: rgba(15, 30, 15, 1);
     --text-dim: rgba(80, 80, 80, 1);
-    --panel-bg: rgba(250, 250, 250, 0.92);
-    --border-color: rgba(225, 230, 240, 1);
+    --panel-bg: rgba(250, 250, 250, 0.96);
+    --border-color: rgba(200, 210, 220, 1);
+    --input-bg: rgba(240, 242, 248, 0.9);
+    --input-focus-border: #6c9bcf;
 }
 
 .dark-mode {
-    --glass-bg: rgba(38, 38, 42, 0.92);
-    --glass-bg-dark: rgba(28, 28, 32, 0.96);
-    --glass-border: rgba(255, 255, 255, 0.18);
-    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.45);
+    --glass-bg: rgba(38, 38, 42, 0.95);
+    --glass-bg-dark: rgba(22, 22, 26, 0.97);
+    --glass-border: rgba(255, 255, 255, 0.25);
+    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.5);
     --text: rgba(244, 244, 245, 1);
     --text-dim: rgba(180, 180, 180, 1);
-    --panel-bg: rgba(38, 38, 42, 0.92);
+    --panel-bg: rgba(38, 38, 42, 0.95);
     --border-color: rgba(80, 80, 80, 1);
+    --input-bg: rgba(255, 255, 255, 0.08);
+    --input-focus-border: #6c9bcf;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -73,8 +77,8 @@ html, body {
 #toolbar {
     position: fixed; top: 12px; left: 50%;
     transform: translateX(-50%);
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 20px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 24px;
     border-radius: var(--radius-lg);
 }
 .toolbar-group {
@@ -86,7 +90,7 @@ html, body {
     margin-right: 6px; font-weight: 600;
 }
 .toolbar-divider {
-    width: 1px; height: 28px;
+    width: 1px; height: 32px;
     background: var(--glass-border);
     margin: 0 6px;
 }
@@ -94,12 +98,12 @@ html, body {
 /* 按钮 - 放大 */
 .btn-glass {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px;
-    background: rgba(255, 255, 255, 0.2);
+    width: 52px; height: 52px;
+    background: rgba(255, 255, 255, 0.25);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     color: var(--text);
-    font-size: 16px;
+    font-size: 19px;
     cursor: pointer;
     transition: var(--transition);
     padding: 0;
@@ -115,9 +119,9 @@ html, body {
     color: #fff;
 }
 .btn-glass-primary {
-    width: auto; padding: 0 16px;
-    font-size: 14px; font-weight: 500;
-    gap: 8px; height: 44px;
+    width: auto; padding: 0 20px;
+    font-size: 15px; font-weight: 600;
+    gap: 10px; height: 52px;
 }
 .btn-glass-danger:hover {
     background: rgba(220, 53, 69, 0.3);
@@ -127,19 +131,98 @@ html, body {
 
 /* 面板切换按钮 */
 #btn-toggle-panels {
-    position: fixed; top: 14px; left: 14px;
     z-index: 20;
+}
+
+/* 轴线视图按钮 */
+.btn-view-axis {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
 }
 
 /* 侧面板 */
 .side-panel {
-    position: fixed; top: 76px; bottom: 52px;
-    width: 280px;
+    position: fixed; top: 92px; bottom: 56px;
+    width: 300px;
     display: flex; flex-direction: column;
     overflow: hidden;
     transition: transform 0.35s ease, opacity 0.35s ease;
 }
-.side-panel-left { left: 12px; }
+/* 左侧区域：面板 + 图元 */
+.left-area {
+    position: fixed; top: 92px; bottom: 56px; left: 12px;
+    width: 300px;
+    display: flex; flex-direction: column;
+    gap: 8px;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+}
+.left-area.hidden {
+    transform: translateX(-320px);
+    opacity: 0; pointer-events: none;
+}
+
+#left-panel {
+    position: relative; top: auto; bottom: auto; left: auto;
+    flex: 1; min-height: 0;
+    width: 100%;
+}
+
+/* 图元面板 */
+#primitive-panel {
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+.primitive-panel-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    font-size: 13px; font-weight: 600;
+    border-bottom: 1px solid var(--glass-border);
+    color: var(--text);
+    flex-shrink: 0;
+}
+.primitive-panel-header i { color: var(--brand); font-size: 14px; }
+
+.primitive-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 6px;
+    overflow-y: auto;
+    max-height: 200px;
+}
+
+.primitive-btn {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.35);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+    transition: var(--transition);
+    min-height: 56px;
+}
+.primitive-btn:hover {
+    background: rgba(108, 155, 207, 0.15);
+    border-color: var(--brand);
+}
+.primitive-btn i {
+    font-size: 18px;
+    color: var(--brand);
+}
+.primitive-btn span {
+    line-height: 1.2;
+    text-align: center;
+    color: var(--text-dim);
+}
 .side-panel-right { right: 12px; }
 .side-panel.hidden {
     transform: translateX(-320px);
@@ -169,8 +252,8 @@ html, body {
     flex-shrink: 0;
 }
 .panel-tab {
-    flex: 1; padding: 10px 8px; text-align: center;
-    font-size: 12px; font-weight: 600; cursor: pointer;
+    flex: 1; padding: 12px 8px; text-align: center;
+    font-size: 13px; font-weight: 600; cursor: pointer;
     color: var(--text-dim); border-bottom: 2px solid transparent;
     transition: var(--transition);
 }
@@ -190,15 +273,17 @@ html, body {
 /* 层级树 */
 .tree-item {
     display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; border-radius: 6px;
-    cursor: pointer; font-size: 14px;
+    padding: 10px 14px; border-radius: 6px;
+    cursor: pointer; font-size: 15px;
     transition: background 0.2s;
     margin-bottom: 2px;
 }
 .tree-item:hover { background: rgba(108, 155, 207, 0.15); }
 .tree-item.selected { background: rgba(108, 155, 207, 0.3); border: 1px solid var(--brand); }
-.tree-item i { color: var(--text-dim); font-size: 14px; width: 18px; text-align: center; }
+.tree-item i { color: var(--text-dim); font-size: 16px; width: 20px; text-align: center; }
 .tree-item .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-item .tree-child-count { font-size: 11px; color: var(--text-dim); opacity: 0.7; margin-left: 4px; }
+.tree-children { border-left: 1px dashed var(--glass-border); margin-left: 10px; }
 
 /* 纹理池 */
 .texture-pool-grid {
@@ -256,53 +341,66 @@ html, body {
 }
 .inspector-row {
     display: flex; align-items: center; gap: 10px;
-    margin-bottom: 8px; font-size: 13px;
+    margin-bottom: 10px; font-size: 14px;
 }
 .inspector-row label {
-    width: 32px; color: var(--text-dim);
-    font-size: 12px; font-weight: 600;
+    width: 36px; color: var(--text-dim);
+    font-size: 13px; font-weight: 600;
     text-align: center;
 }
 .inspector-row input[type="number"] {
-    flex: 1; width: 0;
-    background: rgba(255, 255, 255, 0.12);
+    flex: 1; width: 0; min-width: 60px;
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 6px; padding: 7px 9px;
-    color: var(--text); font-size: 14px;
+    border-radius: 6px; padding: 10px 12px;
+    color: var(--text); font-size: 15px;
     font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     outline: none;
+    -moz-appearance: textfield;
 }
-.inspector-row input[type="number"]:focus { border-color: var(--brand); }
+.inspector-row input[type="number"]::-webkit-inner-spin-button,
+.inspector-row input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
+.inspector-row input[type="number"]:focus { border-color: var(--input-focus-border); }
 .inspector-row input[type="color"] {
-    width: 36px; height: 30px; border: 1px solid var(--glass-border);
+    width: 40px; height: 34px; border: 1px solid var(--glass-border);
     border-radius: 6px; cursor: pointer; background: none; padding: 2px;
 }
 .inspector-row input[type="range"] {
-    flex: 1; cursor: pointer; height: 6px;
+    flex: 1; cursor: pointer; height: 8px;
 }
 .inspector-row input[type="text"] {
     flex: 1; width: 0;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 6px; padding: 7px 9px;
-    color: var(--text); font-size: 14px;
+    border-radius: 6px; padding: 10px 10px;
+    color: var(--text); font-size: 15px;
     outline: none;
 }
-.inspector-row input[type="text"]:focus { border-color: var(--brand); }
+.inspector-row input[type="text"]:focus { border-color: var(--input-focus-border); }
 .inspector-row select {
-    flex: 1; background: rgba(255, 255, 255, 0.12);
+    flex: 1; background: var(--input-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 6px; padding: 7px 9px;
-    color: var(--text); font-size: 14px; outline: none;
+    border-radius: 6px; padding: 10px 10px;
+    color: var(--text); font-size: 15px; outline: none;
 }
-.inspector-row .btn-glass { width: auto; height: 34px; font-size: 12px; padding: 0 10px; }
+.inspector-row input[type="checkbox"] {
+    width: 18px; height: 18px; cursor: pointer;
+    accent-color: var(--brand); margin-right: 4px;
+    vertical-align: middle;
+}
+.inspector-row .checkbox-label {
+    font-size: 13px; color: var(--text);
+    cursor: pointer; user-select: none;
+}
 
 /* 纹理选择器 */
 .texture-selector {
     display: flex; gap: 6px; flex-wrap: wrap;
 }
 .texture-selector-item {
-    width: 48px; height: 48px;
+    width: 56px; height: 56px;
     border: 2px solid var(--glass-border);
     border-radius: 6px; cursor: pointer;
     overflow: hidden; transition: var(--transition);
@@ -311,11 +409,11 @@ html, body {
 .texture-selector-item.selected { border-color: var(--accent); box-shadow: 0 0 8px var(--accent); }
 .texture-selector-item img { width: 100%; height: 100%; object-fit: cover; }
 .texture-selector-none {
-    width: 48px; height: 48px;
+    width: 56px; height: 56px;
     border: 2px dashed var(--glass-border);
     border-radius: 6px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    color: var(--text-dim); font-size: 20px;
+    color: var(--text-dim); font-size: 22px;
     transition: var(--transition);
 }
 .texture-selector-none:hover { border-color: var(--danger); color: var(--danger); }
@@ -333,61 +431,137 @@ html, body {
 }
 .settings-row {
     display: flex; align-items: center; gap: 10px;
-    margin-bottom: 8px; font-size: 13px;
+    margin-bottom: 10px; font-size: 14px;
 }
 .settings-row label {
-    min-width: 44px; color: var(--text-dim);
-    font-size: 12px; font-weight: 600;
+    min-width: 48px; color: var(--text-dim);
+    font-size: 13px; font-weight: 600;
 }
 .settings-row input[type="number"],
 .settings-row input[type="text"] {
-    flex: 1; width: 0;
-    background: rgba(255, 255, 255, 0.12);
+    flex: 1; width: 0; min-width: 60px;
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
-    border-radius: 6px; padding: 7px 9px;
-    color: var(--text); font-size: 14px;
+    border-radius: 6px; padding: 10px 12px;
+    color: var(--text); font-size: 15px;
     outline: none;
     font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    -moz-appearance: textfield;
 }
-.settings-row input:focus { border-color: var(--brand); }
+.settings-row input[type="number"]::-webkit-inner-spin-button,
+.settings-row input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
+.settings-row input:focus { border-color: var(--input-focus-border); }
 .settings-row input[type="color"] {
-    width: 36px; height: 30px; border: 1px solid var(--glass-border);
+    width: 40px; height: 34px; border: 1px solid var(--glass-border);
     border-radius: 6px; cursor: pointer; background: none; padding: 2px;
 }
 .settings-row input[type="range"] {
-    flex: 1; cursor: pointer;
+    flex: 1; cursor: pointer; height: 8px;
 }
 .settings-row input[type="checkbox"] {
-    width: 18px; height: 18px; cursor: pointer;
+    width: 20px; height: 20px; cursor: pointer;
     accent-color: var(--brand);
 }
 .settings-row .btn-glass {
-    width: auto; height: 34px; font-size: 12px; padding: 0 12px;
+    width: auto; height: 40px; font-size: 13px; padding: 0 14px;
+}
+
+/* 关键帧面板 */
+.keyframe-list-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
+    transition: background 0.2s;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+}
+.keyframe-list-item:hover { background: rgba(108, 155, 207, 0.1); }
+.keyframe-list-item.active {
+    background: rgba(108, 155, 207, 0.2);
+    border-color: var(--brand);
+}
+.keyframe-list-item .kf-index {
+    font-size: 12px; font-weight: 700; color: var(--brand);
+    min-width: 28px; text-align: center;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+.keyframe-list-item .kf-info {
+    flex: 1; font-size: 11px; color: var(--text-dim);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.keyframe-list-item .kf-empty {
+    flex: 1; font-size: 11px; color: var(--text-dim); font-style: italic;
+}
+
+/* 面部可见性控制 */
+.face-toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px; font-size: 13px;
+}
+.face-toggle-row input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--brand);
+}
+
+/* 面可见性按钮网格 */
+.face-vis-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 4px;
+}
+.face-vis-btn {
+    aspect-ratio: 1;
+    border: 2px solid var(--glass-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex; align-items: center; justify-content: center;
+    padding: 4px;
+}
+.face-vis-btn:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+.face-vis-btn.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
 }
 
 /* 摄像机坐标面板 */
 #camera-panel {
-    position: fixed; bottom: 52px; left: 50%;
+    position: fixed; bottom: 62px; left: 50%;
     transform: translateX(-50%);
-    padding: 10px 16px; border-radius: var(--radius-lg);
-    display: flex; align-items: center; gap: 10px;
-    font-size: 13px;
+    padding: 12px 20px; border-radius: var(--radius-lg);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 14px;
 }
 #camera-panel label {
-    color: var(--text-dim); font-size: 11px; font-weight: 600;
+    color: var(--text-dim); font-size: 12px; font-weight: 600;
 }
 #camera-panel input {
-    width: 64px; padding: 6px 8px;
-    background: rgba(255, 255, 255, 0.12);
+    width: 72px; padding: 8px 10px;
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
     border-radius: 6px; color: var(--text);
-    font-size: 13px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 15px; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
     outline: none; text-align: center;
+    -moz-appearance: textfield;
 }
-#camera-panel input:focus { border-color: var(--brand); }
+#camera-panel input::-webkit-inner-spin-button,
+#camera-panel input::-webkit-outer-spin-button {
+    -webkit-appearance: none; margin: 0;
+}
+#camera-panel input:focus { border-color: var(--input-focus-border); }
 #camera-panel .cam-sep { color: var(--text-dim); font-weight: 600; }
 #camera-panel .btn-glass {
-    width: auto; height: 32px; font-size: 12px; padding: 0 12px;
+    width: auto; height: 40px; font-size: 14px; padding: 0 14px;
 }
 
 /* 空状态 */
@@ -405,26 +579,26 @@ html, body {
     position: fixed; bottom: 8px; left: 50%;
     transform: translateX(-50%);
     display: flex; align-items: center; gap: 24px;
-    padding: 8px 24px; font-size: 13px;
+    padding: 10px 28px; font-size: 14px;
     border-radius: var(--radius-lg);
 }
 .status-item {
     display: flex; align-items: center; gap: 8px;
-    color: var(--text-dim);
+    color: var(--text-dim); font-size: 14px;
 }
-.status-item i { font-size: 13px; }
+.status-item i { font-size: 14px; }
 .status-item span {
     color: var(--accent); font-weight: 600;
     font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
 }
-.status-mode {
+.status-mode-item {
     color: var(--brand); font-weight: 600;
     padding: 3px 12px; border-radius: 10px;
     background: rgba(108, 155, 207, 0.15);
     border: 1px solid rgba(108, 155, 207, 0.3);
     cursor: pointer;
 }
-.status-mode:hover { background: rgba(108, 155, 207, 0.25); }
+.status-mode-item:hover { background: rgba(108, 155, 207, 0.25); }
 
 /* Toast */
 .toast {
@@ -447,6 +621,51 @@ html, body {
 .toast.success { border-color: var(--success); }
 .toast.error { border-color: var(--danger); }
 
+/* 模态框覆盖层 */
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+}
+.modal-overlay.visible {
+    opacity: 1; pointer-events: auto;
+}
+.modal-content {
+    max-width: 480px; width: 90%;
+    padding: 24px;
+    max-height: 80vh; overflow-y: auto;
+}
+.modal-content h3 {
+    margin-bottom: 12px; font-size: 16px;
+}
+.modal-content p {
+    margin-bottom: 8px; font-size: 14px;
+    color: var(--text-dim);
+}
+.modal-option {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; margin-bottom: 6px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px; cursor: pointer;
+    transition: background 0.2s;
+}
+.modal-option:hover {
+    background: rgba(108, 155, 207, 0.15);
+}
+.modal-option .opt-label {
+    font-size: 14px; font-weight: 600;
+}
+.modal-option .opt-desc {
+    font-size: 12px; color: var(--text-dim);
+}
+.modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end;
+    margin-top: 16px;
+}
+
 /* 暗色模式适配 */
 .dark-mode .background {
     background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%);
@@ -455,7 +674,7 @@ html, body {
     background: rgba(0, 0, 0, 0.15);
 }
 .dark-mode .btn-glass {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.10);
 }
 .dark-mode .inspector-row input[type="number"],
 .dark-mode .inspector-row input[type="text"],
@@ -463,22 +682,43 @@ html, body {
 .dark-mode .settings-row input[type="text"],
 .dark-mode #camera-panel input,
 .dark-mode .inspector-row select {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.08);
+}
+.dark-mode .primitive-btn {
+    background: rgba(255, 255, 255, 0.08);
+}
+.dark-mode .primitive-btn:hover {
+    background: rgba(108, 155, 207, 0.2);
+}
+
+/* 键盘快捷键样式 */
+kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    color: var(--text);
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 4px;
+    box-shadow: 0 1px 0 var(--glass-border);
 }
 
 /* 响应式 */
 @media (max-width: 1024px) {
-    .side-panel { width: 240px; }
+    .left-area, .side-panel { width: 260px; }
+    .btn-glass { width: 44px; height: 44px; font-size: 16px; }
 }
 @media (max-width: 768px) {
-    .side-panel { display: none; }
-    #toolbar { gap: 3px; padding: 8px 12px; }
+    .left-area, .side-panel { display: none; }
+    #toolbar { gap: 4px; padding: 8px 14px; }
     .toolbar-label { display: none; }
     .toolbar-divider { margin: 0 3px; }
     #camera-panel { display: none; }
+    .btn-glass { width: 40px; height: 40px; font-size: 15px; }
 }
 @media (max-width: 480px) {
     #toolbar { top: 4px; padding: 6px 10px; border-radius: 8px; }
-    .btn-glass { width: 36px; height: 36px; font-size: 14px; }
+    .btn-glass { width: 38px; height: 38px; font-size: 14px; }
     #status-bar { font-size: 11px; gap: 12px; padding: 6px 14px; }
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	image_server "image/server"
 	"io"
+	"io/fs"
 	"logger"
 	"net/http"
 	"os"
@@ -130,4 +131,14 @@ func (h *proxyAwareHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.fs.ServeHTTP(w, r)
 	}
+}
+
+// Gethierarchy 返回嵌入的文件系统
+func Gethierarchy() http.FileSystem {
+	// 创建一个子文件系统，只包含assets目录下的内容
+	subFS, err := fs.Sub(EmbeddedFiles, "assets")
+	if err != nil {
+		panic(err)
+	}
+	return http.FS(subFS)
 }

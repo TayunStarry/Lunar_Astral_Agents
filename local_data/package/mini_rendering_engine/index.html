@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 』轻量渲染引擎</title>
-    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
-    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <link rel="stylesheet" href="/package/standard_dependency/styles.css">
+    <script src="/package/standard_dependency/script.js"></script>
     <link rel="stylesheet" href="styles.css">
     <script defer type="module" src="script.js"></script>
 </head>
@@ -17,89 +17,199 @@
     <!-- 主渲染画布 -->
     <canvas id="render-canvas"></canvas>
 
-    <!-- 面板切换按钮 -->
-    <button class="btn-glass" id="btn-toggle-panels" title="切换面板显示"><i class="fas fa-columns"></i></button>
-
     <!-- 顶部工具栏 -->
     <div id="toolbar" class="glass-panel">
-        <div class="toolbar-group">
-            <span class="toolbar-label">图元</span>
-            <button class="btn-glass" data-action="add-cube" title="立方体"><i class="fas fa-cube"></i></button>
-            <button class="btn-glass" data-action="add-sphere" title="球体"><i class="fas fa-circle"></i></button>
-            <button class="btn-glass" data-action="add-cylinder" title="圆柱体"><i class="fas fa-database"></i></button>
-            <button class="btn-glass" data-action="add-cone" title="圆锥体"><i class="fas fa-traffic-cone"></i></button>
-            <button class="btn-glass" data-action="add-plane" title="平面"><i class="fas fa-square"></i></button>
-            <button class="btn-glass" data-action="add-torus" title="圆环"><i class="fas fa-donut"></i></button>
-        </div>
-        <div class="toolbar-divider"></div>
-        <div class="toolbar-group">
-            <span class="toolbar-label">变换</span>
-            <button class="btn-glass" data-action="gizmo-translate" id="btn-gizmo-translate" title="移动 (W)"><i class="fas fa-arrows-alt"></i></button>
-            <button class="btn-glass" data-action="gizmo-rotate" id="btn-gizmo-rotate" title="旋转 (E)"><i class="fas fa-sync-alt"></i></button>
-            <button class="btn-glass" data-action="gizmo-scale" id="btn-gizmo-scale" title="缩放 (R)"><i class="fas fa-expand-arrows-alt"></i></button>
-        </div>
-        <div class="toolbar-divider"></div>
         <div class="toolbar-group">
             <span class="toolbar-label">操作</span>
             <button class="btn-glass" data-action="delete-selected" title="删除选中"><i class="fas fa-trash"></i></button>
             <button class="btn-glass" data-action="duplicate-selected" title="复制选中"><i class="fas fa-copy"></i></button>
-            <button class="btn-glass" data-action="focus-selected" title="聚焦选中"><i class="fas fa-bullseye"></i></button>
+            <button class="btn-glass" data-action="group-selected" title="编组"><i class="fas fa-object-group"></i></button>
+            <button class="btn-glass" data-action="ungroup-selected" title="取消编组"><i class="fas fa-object-ungroup"></i></button>
         </div>
         <div class="toolbar-divider"></div>
         <div class="toolbar-group">
             <span class="toolbar-label">方案</span>
-            <button class="btn-glass btn-glass-primary" data-action="export-scene" title="导出方案"><i class="fas fa-file-export"></i> 导出</button>
-            <button class="btn-glass btn-glass-primary" data-action="import-scene" title="导入方案"><i class="fas fa-file-import"></i> 导入</button>
+            <button class="btn-glass btn-glass-primary" data-action="export-scene" title="导出方案"><i class="fas fa-file-export"></i></button>
+            <button class="btn-glass btn-glass-primary" data-action="import-scene" title="导入方案"><i class="fas fa-file-import"></i></button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <span class="toolbar-label">资产</span>
+            <button class="btn-glass btn-glass-primary" data-action="import-group-asset" title="导入组合体资产"><i class="fas fa-box-open"></i></button>
         </div>
         <div class="toolbar-divider"></div>
         <div class="toolbar-group">
             <span class="toolbar-label">视图</span>
-            <button class="btn-glass" data-action="view-top" title="俯视图"><i class="fas fa-arrow-down"></i></button>
-            <button class="btn-glass" data-action="view-front" title="前视图"><i class="fas fa-arrow-right"></i></button>
-            <button class="btn-glass" data-action="view-right" title="右视图"><i class="fas fa-arrow-left"></i></button>
-            <button class="btn-glass" data-action="view-reset" title="重置视角"><i class="fas fa-sync-alt"></i></button>
+            <button class="btn-glass btn-view-axis" data-action="view-front" title="前视图 (Z轴)">Z</button>
+            <button class="btn-glass btn-view-axis" data-action="view-right" title="右视图 (X轴)">X</button>
+            <button class="btn-glass btn-view-axis" data-action="view-top" title="俯视图 (Y轴)">Y</button>
         </div>
         <div class="toolbar-divider"></div>
         <div class="toolbar-group">
+            <button class="btn-glass" id="btn-toggle-panels" title="切换面板显示"><i class="fas fa-columns"></i></button>
             <button class="btn-glass" id="btn-theme" title="切换主题"><i class="fas fa-moon"></i></button>
+            <button class="btn-glass" id="btn-help" title="操作说明"><i class="fas fa-question"></i></button>
         </div>
     </div>
 
-    <!-- 左侧面板：层级 + 纹理池 -->
-    <div id="left-panel" class="glass-panel side-panel side-panel-left">
-        <div class="panel-tabs">
-            <div class="panel-tab active" data-tab="hierarchy">场景层级</div>
-            <div class="panel-tab" data-tab="textures">纹理池</div>
-        </div>
-        <div id="tab-hierarchy" class="panel-body">
-            <div id="hierarchy-tree">
-                <div class="empty-state">
-                    <i class="fas fa-cube"></i>
-                    <p>暂无对象</p>
-                    <small>使用顶部工具栏添加图元</small>
+    <!-- 左侧面板区域：层级/纹理/生成器 + 图元面板 -->
+    <div id="left-area" class="left-area">
+        <div id="left-panel" class="glass-panel side-panel side-panel-left">
+            <div class="panel-tabs">
+                <div class="panel-tab active" data-tab="hierarchy">场景层级</div>
+                <div class="panel-tab" data-tab="settings">场景设置</div>
+                <div class="panel-tab" data-tab="keyframes">关键帧</div>
+            </div>
+            <div id="tab-hierarchy" class="panel-body">
+                <div id="hierarchy-tree">
+                    <div class="empty-state">
+                        <i class="fas fa-cube"></i>
+                        <p>暂无对象</p>
+                        <small>使用下方图元面板添加</small>
+                    </div>
+                </div>
+            </div>
+            <div id="tab-settings" class="panel-body" style="display:none">
+                <!-- 天空盒 -->
+                <div class="settings-group">
+                    <div class="settings-group-title">天空盒</div>
+                    <div class="settings-row">
+                        <label>顶部</label>
+                        <input type="color" id="sky-top" value="#ffffff">
+                    </div>
+                    <div class="settings-row">
+                        <label>中部</label>
+                        <input type="color" id="sky-mid" value="#ffffff">
+                    </div>
+                    <div class="settings-row">
+                        <label>底部</label>
+                        <input type="color" id="sky-bottom" value="#ffffff">
+                    </div>
+                </div>
+                <!-- 光照 -->
+                <div class="settings-group">
+                    <div class="settings-group-title">光照系统</div>
+                    <div class="settings-row">
+                        <label>环境光</label>
+                        <input type="range" id="light-ambient" min="0" max="2" step="0.05" value="0.6">
+                        <span style="font-size:11px;width:32px;text-align:right">0.60</span>
+                    </div>
+                    <div class="settings-row">
+                        <label>半球光</label>
+                        <input type="range" id="light-hemi" min="0" max="2" step="0.05" value="0.5">
+                        <span style="font-size:11px;width:32px;text-align:right">0.50</span>
+                    </div>
+                    <div class="settings-row">
+                        <label>主光源</label>
+                        <input type="range" id="light-sun" min="0" max="3" step="0.05" value="1.2">
+                        <span style="font-size:11px;width:32px;text-align:right">1.20</span>
+                    </div>
+                    <div class="settings-row">
+                        <label>方向X</label>
+                        <input type="number" id="light-dir-x" value="10" step="1">
+                    </div>
+                    <div class="settings-row">
+                        <label>方向Y</label>
+                        <input type="number" id="light-dir-y" value="15" step="1">
+                    </div>
+                    <div class="settings-row">
+                        <label>方向Z</label>
+                        <input type="number" id="light-dir-z" value="8" step="1">
+                    </div>
+                    <div class="settings-row">
+                        <label>阴影</label>
+                        <input type="checkbox" id="light-shadows" checked>
+                    </div>
+                </div>
+                <!-- 地面 -->
+                <div class="settings-group">
+                    <div class="settings-group-title">地面设置</div>
+                    <div class="settings-row">
+                        <label>显示网格</label>
+                        <input type="checkbox" id="ground-grid" checked>
+                    </div>
+                    <div class="settings-row">
+                        <label>显示地面</label>
+                        <input type="checkbox" id="ground-plane" checked>
+                    </div>
+                    <div class="settings-row">
+                        <label>网格大小</label>
+                        <input type="number" id="ground-size" value="20" step="1" min="4" max="100">
+                    </div>
+                    <div class="settings-row">
+                        <label>网格颜色</label>
+                        <input type="color" id="ground-color" value="#444466">
+                    </div>
+                </div>
+            </div>
+            <div id="tab-keyframes" class="panel-body" style="display:none">
+                <div style="display:flex;gap:6px;margin-bottom:8px">
+                    <button class="btn-glass" id="btn-kf-add" style="flex:1;height:36px;font-size:13px"><i class="fas fa-plus"></i> 添加帧</button>
+                    <button class="btn-glass" id="btn-kf-delete" style="flex:1;height:36px;font-size:13px"><i class="fas fa-trash"></i> 删除帧</button>
+                </div>
+                <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+                    <button class="btn-glass" id="btn-kf-play" style="flex:1;height:36px;font-size:13px"><i class="fas fa-play"></i> 播放</button>
+                    <button class="btn-glass" id="btn-kf-stop" style="height:36px;width:36px;font-size:13px"><i class="fas fa-stop"></i></button>
+                </div>
+                <div class="inspector-row">
+                    <label>速度</label>
+                    <input type="range" id="kf-speed" min="0.1" max="5" step="0.1" value="1">
+                    <span style="font-size:11px;width:32px;text-align:right" id="kf-speed-val">1.0s</span>
+                </div>
+                <div id="keyframe-list" style="max-height:180px;overflow-y:auto;margin-top:8px">
+                    <div class="empty-state"><i class="fas fa-film"></i><p>无关键帧</p><small>点击"添加帧"创建</small></div>
                 </div>
             </div>
         </div>
-        <div id="tab-textures" class="panel-body" style="display:none">
-            <div style="margin-bottom:10px">
-                <button class="btn-glass btn-glass-primary" id="btn-import-texture" style="width:100%;height:38px;font-size:13px">
-                    <i class="fas fa-image"></i> 导入纹理 (PNG/JPG/WebP)
+
+        <!-- 图元面板 -->
+        <div id="primitive-panel" class="glass-panel">
+            <div class="primitive-panel-header">
+                <i class="fas fa-shapes"></i> 图元
+            </div>
+            <div class="primitive-grid">
+                <button class="primitive-btn" data-action="add-cube" title="立方体">
+                    <i class="fas fa-cube"></i><span>立方体</span>
                 </button>
-                <input type="file" id="texture-file-input" accept="image/png,image/jpeg,image/webp" multiple style="display:none">
-            </div>
-            <div id="texture-pool-grid" class="texture-pool-grid">
-                <div class="texture-pool-item texture-pool-add" id="texture-pool-add">
-                    <i class="fas fa-plus"></i>
-                </div>
+                <button class="primitive-btn" data-action="add-sphere" title="球体">
+                    <i class="fas fa-circle"></i><span>球体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-cylinder" title="圆柱体">
+                    <i class="fas fa-database"></i><span>圆柱体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-cone" title="圆锥体">
+                    <i class="fas fa-traffic-cone"></i><span>圆锥体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-plane" title="平面">
+                    <i class="fas fa-square"></i><span>平面</span>
+                </button>
+                <button class="primitive-btn" data-action="add-torus" title="圆环">
+                    <i class="fas fa-donut"></i><span>圆环</span>
+                </button>
+                <button class="primitive-btn" data-action="add-dodecahedron" title="十二面体">
+                    <i class="fas fa-shapes"></i><span>十二面体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-octahedron" title="八面体">
+                    <i class="fas fa-gem"></i><span>八面体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-tetrahedron" title="四面体">
+                    <i class="fas fa-play"></i><span>四面体</span>
+                </button>
+                <button class="primitive-btn" data-action="add-torusKnot" title="环结">
+                    <i class="fas fa-infinity"></i><span>环结</span>
+                </button>
+                <button class="primitive-btn" data-action="add-ring" title="圆环面">
+                    <i class="fas fa-circle-notch"></i><span>圆环面</span>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- 右侧面板：属性 + 场景设置 -->
+    <!-- 右侧面板：属性 + 纹理 -->
     <div id="right-panel" class="glass-panel side-panel side-panel-right">
         <div class="panel-tabs">
             <div class="panel-tab active" data-tab="inspector">属性</div>
-            <div class="panel-tab" data-tab="settings">场景设置</div>
+            <div class="panel-tab" data-tab="textures">纹理</div>
         </div>
         <div id="tab-inspector" class="panel-body">
             <div id="inspector-body">
@@ -110,76 +220,39 @@
                 </div>
             </div>
         </div>
-        <div id="tab-settings" class="panel-body" style="display:none">
-            <!-- 天空盒 -->
-            <div class="settings-group">
-                <div class="settings-group-title">天空盒</div>
-                <div class="settings-row">
-                    <label>顶部</label>
-                    <input type="color" id="sky-top" value="#1a2a4a">
-                </div>
-                <div class="settings-row">
-                    <label>中部</label>
-                    <input type="color" id="sky-mid" value="#3a5a7a">
-                </div>
-                <div class="settings-row">
-                    <label>底部</label>
-                    <input type="color" id="sky-bottom" value="#5a7a9a">
+        <div id="tab-textures" class="panel-body" style="display:none">
+            <div style="margin-bottom:10px">
+                <button class="btn-glass btn-glass-primary" id="btn-import-texture" style="width:100%;height:52px;font-size:15px;font-weight:600">
+                    <i class="fas fa-image"></i> 导入纹理 (PNG/JPG/WebP)
+                </button>
+                <input type="file" id="texture-file-input" accept="image/png,image/jpeg,image/webp" multiple style="display:none">
+            </div>
+            <div id="texture-pool-grid" class="texture-pool-grid">
+                <div class="texture-pool-item texture-pool-add" id="texture-pool-add">
+                    <i class="fas fa-plus"></i>
                 </div>
             </div>
-            <!-- 光照 -->
-            <div class="settings-group">
-                <div class="settings-group-title">光照系统</div>
-                <div class="settings-row">
-                    <label>环境光</label>
-                    <input type="range" id="light-ambient" min="0" max="2" step="0.05" value="0.6">
-                    <span style="font-size:11px;width:32px;text-align:right">0.60</span>
+            <div class="settings-group-title" style="margin-top:16px">纹理生成器</div>
+            <div id="texture-generator-panel">
+                <div class="inspector-row"><label>基色</label><input type="color" id="gen-color" value="#8D6E63"></div>
+                <div class="inspector-row"><label>图案</label>
+                    <select id="gen-pattern" style="flex:1;height:30px;border-radius:6px;border:1px solid var(--border-color);background:var(--input-bg);padding:0 8px;font-size:13px">
+                        <option value="noise">噪点</option>
+                        <option value="grass">草地</option>
+                        <option value="wood">木纹</option>
+                        <option value="brick">砖墙</option>
+                        <option value="stone">石纹</option>
+                        <option value="grid">方格</option>
+                        <option value="stripes">条纹</option>
+                        <option value="solid">纯色</option>
+                    </select>
                 </div>
-                <div class="settings-row">
-                    <label>半球光</label>
-                    <input type="range" id="light-hemi" min="0" max="2" step="0.05" value="0.5">
-                    <span style="font-size:11px;width:32px;text-align:right">0.50</span>
+                <div style="display:flex;gap:6px;margin-top:8px">
+                    <button class="btn-glass btn-glass-primary" id="btn-gen-preview" style="flex:1;height:36px;font-size:13px"><i class="fas fa-sync-alt"></i> 预览</button>
+                    <button class="btn-glass" id="btn-gen-add" style="flex:1;height:36px;font-size:13px"><i class="fas fa-plus"></i> 添加到纹理池</button>
                 </div>
-                <div class="settings-row">
-                    <label>主光源</label>
-                    <input type="range" id="light-sun" min="0" max="3" step="0.05" value="1.2">
-                    <span style="font-size:11px;width:32px;text-align:right">1.20</span>
-                </div>
-                <div class="settings-row">
-                    <label>方向X</label>
-                    <input type="number" id="light-dir-x" value="10" step="1">
-                </div>
-                <div class="settings-row">
-                    <label>方向Y</label>
-                    <input type="number" id="light-dir-y" value="15" step="1">
-                </div>
-                <div class="settings-row">
-                    <label>方向Z</label>
-                    <input type="number" id="light-dir-z" value="8" step="1">
-                </div>
-                <div class="settings-row">
-                    <label>阴影</label>
-                    <input type="checkbox" id="light-shadows" checked>
-                </div>
-            </div>
-            <!-- 地面 -->
-            <div class="settings-group">
-                <div class="settings-group-title">地面设置</div>
-                <div class="settings-row">
-                    <label>显示网格</label>
-                    <input type="checkbox" id="ground-grid" checked>
-                </div>
-                <div class="settings-row">
-                    <label>显示地面</label>
-                    <input type="checkbox" id="ground-plane" checked>
-                </div>
-                <div class="settings-row">
-                    <label>网格大小</label>
-                    <input type="number" id="ground-size" value="20" step="1" min="4" max="100">
-                </div>
-                <div class="settings-row">
-                    <label>网格颜色</label>
-                    <input type="color" id="ground-color" value="#444466">
+                <div style="margin-top:10px;border-radius:8px;overflow:hidden;border:1px solid var(--border-color);background:#fff;min-height:120px;display:flex;align-items:center;justify-content:center">
+                    <canvas id="gen-preview-canvas" style="width:100%;image-rendering:pixelated"></canvas>
                 </div>
             </div>
         </div>
@@ -207,11 +280,18 @@
         <div class="status-item"><i class="fas fa-tachometer-alt"></i> FPS: <span id="status-fps">0</span></div>
         <div class="status-item"><i class="fas fa-cubes"></i> 对象: <span id="status-objects">0</span></div>
         <div class="status-item"><i class="fas fa-draw-polygon"></i> 三角面: <span id="status-faces">0</span></div>
-        <div class="status-item status-mode" id="status-mode" title="点击切换变换模式">轨道模式</div>
+        <div class="status-item"><i class="fas fa-video"></i> 相机: <span id="status-cam">--</span></div>
+        <div class="status-item status-mode-item" id="status-mode">模式: 位移</div>
     </div>
 
     <!-- 隐藏的文件输入 -->
     <input type="file" id="import-file-input" accept=".json" style="display:none">
+    <input type="file" id="import-group-input" accept=".json" style="display:none">
+
+    <!-- 模态层 -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content glass-panel" id="modal-content"></div>
+    </div>
 
     <!-- Toast 提示 -->
     <div id="toast" class="toast"></div>
