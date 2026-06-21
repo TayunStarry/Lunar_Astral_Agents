@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿# Lunar Astral Agents - 统一构建脚本
+﻿﻿# Lunar Astral Agents - 统一构建脚本
 # 负责环境变量检查、依赖验证和统一调度编译
 
 param(

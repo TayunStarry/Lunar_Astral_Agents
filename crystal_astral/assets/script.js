@@ -1315,8 +1315,8 @@ previewModal.addEventListener('click', (e) => {
 // ===== 呼叫月华 =====
 const YUEHUA_WAKEUP_AUDIO = '/file/read/audios/start_lunar.wav';
 const YUEHUA_CALLING_AUDIO = '/file/read/audios/call_lunar.wav';
-const YUEHUA_WAKEUP_TEXT = '月华姐姐~ 月华姐姐~ 起床啦';
-const YUEHUA_CALLING_TEXT = '琉璃: 月华姐姐，有人在找你哦';
+const YUEHUA_WAKEUP_TEXT = '月华姐姐~~ 起床啦!';
+const YUEHUA_CALLING_TEXT = '琉璃: 月华姐姐，有人在找你';
 
 async function handleCallYuehua() {
     if (callYuehuaBtn.classList.contains('loading')) return;
