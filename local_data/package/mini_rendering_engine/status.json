@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "savedAt": "2026-06-21T09:41:10.014Z",
+  "savedAt": "2026-06-21T11:47:53.049Z",
   "skybox": {
     "top": "#ffffff",
     "mid": "#ffffff",
@@ -29,14 +29,14 @@
   ],
   "objects": [
     {
-      "id": 4,
+      "id": 1,
       "name": "组合体 4",
       "type": "group",
       "primitiveType": null,
       "position": {
         "x": 0,
         "y": 0,
-        "z": 0
+        "z": -1
       },
       "rotation": {
         "x": 0,
@@ -50,7 +50,7 @@
       },
       "children": [
         {
-          "id": 5,
+          "id": 2,
           "name": "立方体 1",
           "type": "cube",
           "primitiveType": "cube",
@@ -88,7 +88,7 @@
           }
         },
         {
-          "id": 6,
+          "id": 3,
           "name": "圆锥体 2",
           "type": "cone",
           "primitiveType": "cone",
@@ -126,7 +126,7 @@
           }
         },
         {
-          "id": 7,
+          "id": 4,
           "name": "圆环 3",
           "type": "torus",
           "primitiveType": "torus",
@@ -167,7 +167,7 @@
       ]
     },
     {
-      "id": 8,
+      "id": 5,
       "name": "组合体 10",
       "type": "group",
       "primitiveType": null,
@@ -188,7 +188,7 @@
       },
       "children": [
         {
-          "id": 9,
+          "id": 6,
           "name": "立方体 1",
           "type": "cube",
           "primitiveType": "cube",
@@ -226,7 +226,7 @@
           }
         },
         {
-          "id": 10,
+          "id": 7,
           "name": "圆锥体 2",
           "type": "cone",
           "primitiveType": "cone",
@@ -264,7 +264,7 @@
           }
         },
         {
-          "id": 11,
+          "id": 8,
           "name": "圆环 3",
           "type": "torus",
           "primitiveType": "torus",
@@ -305,7 +305,7 @@
       ]
     },
     {
-      "id": 12,
+      "id": 9,
       "name": "组合体 16",
       "type": "group",
       "primitiveType": null,
@@ -326,7 +326,7 @@
       },
       "children": [
         {
-          "id": 13,
+          "id": 10,
           "name": "圆环 3",
           "type": "torus",
           "primitiveType": "torus",
@@ -365,7 +365,7 @@
           }
         },
         {
-          "id": 14,
+          "id": 11,
           "name": "圆锥体 2",
           "type": "cone",
           "primitiveType": "cone",
@@ -403,7 +403,7 @@
           }
         },
         {
-          "id": 15,
+          "id": 12,
           "name": "立方体 1",
           "type": "cube",
           "primitiveType": "cube",
@@ -443,7 +443,7 @@
       ]
     },
     {
-      "id": 16,
+      "id": 13,
       "name": "平面 13",
       "type": "plane",
       "primitiveType": "plane",
@@ -481,7 +481,7 @@
       }
     },
     {
-      "id": 17,
+      "id": 14,
       "name": "组合体 17",
       "type": "group",
       "primitiveType": null,
@@ -502,7 +502,7 @@
       },
       "children": [
         {
-          "id": 2,
+          "id": 15,
           "name": "球体 2",
           "type": "sphere",
           "primitiveType": "sphere",
@@ -539,7 +539,7 @@
           }
         },
         {
-          "id": 3,
+          "id": 16,
           "name": "立方体 1",
           "type": "cube",
           "primitiveType": "cube",
@@ -586,30 +586,11 @@
         "objects": [
           {
             "id": 1,
-            "name": "组合体 3",
-            "pos": {
-              "x": 0,
-              "y": 1,
-              "z": 2.5
-            },
-            "rot": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scl": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            }
-          },
-          {
-            "id": 4,
             "name": "组合体 4",
             "pos": {
               "x": 0,
               "y": 0,
-              "z": 0
+              "z": -1
             },
             "rot": {
               "x": 0,
@@ -623,7 +604,7 @@
             }
           },
           {
-            "id": 8,
+            "id": 5,
             "name": "组合体 10",
             "pos": {
               "x": 0,
@@ -642,7 +623,7 @@
             }
           },
           {
-            "id": 12,
+            "id": 9,
             "name": "组合体 16",
             "pos": {
               "x": 0,
@@ -661,12 +642,31 @@
             }
           },
           {
-            "id": 16,
+            "id": 13,
             "name": "平面 13",
             "pos": {
               "x": 0,
               "y": 4.4,
               "z": -2.9
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          {
+            "id": 14,
+            "name": "组合体 17",
+            "pos": {
+              "x": 0,
+              "y": 1,
+              "z": 4
             },
             "rot": {
               "x": 0,
@@ -697,15 +697,15 @@
       "state": {
         "objects": [
           {
-            "id": 1,
-            "name": "组合体 3",
+            "id": 14,
+            "name": "组合体 17",
             "pos": {
               "x": 0,
               "y": 1,
               "z": 4
             },
             "rot": {
-              "x": 0,
+              "x": 3.141592653589792,
               "y": 0,
               "z": 0
             },
@@ -717,6 +717,118 @@
           }
         ],
         "lighting": null
+      }
+    },
+    {
+      "index": 2,
+      "state": {
+        "objects": [
+          {
+            "id": 1,
+            "name": "组合体 4",
+            "pos": {
+              "x": 0,
+              "y": 0,
+              "z": -1
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          {
+            "id": 5,
+            "name": "组合体 10",
+            "pos": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          {
+            "id": 9,
+            "name": "组合体 16",
+            "pos": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          {
+            "id": 13,
+            "name": "平面 13",
+            "pos": {
+              "x": 0,
+              "y": 4.4,
+              "z": -2.9
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          },
+          {
+            "id": 14,
+            "name": "组合体 17",
+            "pos": {
+              "x": 0,
+              "y": 1,
+              "z": 4
+            },
+            "rot": {
+              "x": 3.141592653589792,
+              "y": 0,
+              "z": 1.5707963267948966
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        ],
+        "lighting": {
+          "sunDir": {
+            "x": 10,
+            "y": 15,
+            "z": 8
+          },
+          "ambient": 2,
+          "hemi": 2,
+          "sun": 3
+        }
       }
     }
   ],
