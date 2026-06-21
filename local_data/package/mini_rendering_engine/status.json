@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "savedAt": "2026-06-21T13:47:29.318Z",
+  "savedAt": "2026-06-21T23:42:15.890Z",
   "skybox": {
     "top": "#ffffff",
     "mid": "#ffffff",
@@ -17,206 +17,43 @@
     },
     "shadows": true
   },
+  "ground": {
+    "gridVisible": true,
+    "groundVisible": true,
+    "size": 20,
+    "color": "#ffffff"
+  },
+  "physics": {
+    "gravity": -9.82,
+    "groundY": -0.5,
+    "massSingle": 1,
+    "linearDamping": 0.1,
+    "angularDamping": 0.1
+  },
   "textures": [],
   "objects": [
     {
-      "id": 33,
-      "name": "组合体 33",
-      "type": "group",
-      "primitiveType": null,
+      "id": 1,
+      "name": "立方体 1",
+      "type": "cube",
+      "primitiveType": "cube",
       "position": {
-        "x": 1.9443140464163466,
-        "y": -8.500000790719328,
-        "z": 5.002802001003338
+        "x": 0,
+        "y": 0.5,
+        "z": 0
       },
       "rotation": {
-        "x": 3.14158604138697,
-        "y": -0.17098251520203278,
-        "z": 3.1415866258864438
+        "x": 0,
+        "y": 0,
+        "z": 0
       },
       "scale": {
         "x": 1,
         "y": 1,
         "z": 1
       },
-      "children": [
-        {
-          "id": 32,
-          "name": "球体 32",
-          "type": "sphere",
-          "primitiveType": "sphere",
-          "position": {
-            "x": 0,
-            "y": -1,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          },
-          "material": {
-            "color": "#bdc180",
-            "roughness": 0.5,
-            "metalness": 0.1,
-            "opacity": 1,
-            "transparent": false,
-            "side": 0,
-            "flatShading": false,
-            "wireframe": false,
-            "type": "standard"
-          },
-          "geometry": {
-            "type": "sphere",
-            "r": 0.5,
-            "seg": 32
-          }
-        },
-        {
-          "id": 31,
-          "name": "立方体 31",
-          "type": "cube",
-          "primitiveType": "cube",
-          "position": {
-            "x": 0,
-            "y": 1,
-            "z": 0
-          },
-          "rotation": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          },
-          "scale": {
-            "x": 1,
-            "y": 1,
-            "z": 1
-          },
-          "material": {
-            "color": "#87cbdd",
-            "roughness": 0.5,
-            "metalness": 0.1,
-            "opacity": 1,
-            "transparent": false,
-            "side": 0,
-            "flatShading": false,
-            "wireframe": false,
-            "type": "standard"
-          },
-          "faceMaterials": [
-            {
-              "color": "#87cbdd",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            },
-            {
-              "color": "#67d4d6",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            },
-            {
-              "color": "#b4dc68",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            },
-            {
-              "color": "#c596ee",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            },
-            {
-              "color": "#dee16b",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            },
-            {
-              "color": "#dd6bbe",
-              "roughness": 0.5,
-              "metalness": 0.1,
-              "opacity": 1,
-              "transparent": false,
-              "side": 0,
-              "flatShading": false,
-              "wireframe": false
-            }
-          ],
-          "faceNames": [
-            "右",
-            "左",
-            "上",
-            "下",
-            "前",
-            "后"
-          ],
-          "faceVisible": [
-            true,
-            true,
-            true,
-            true,
-            true,
-            true
-          ],
-          "geometry": {
-            "type": "cube",
-            "w": 1,
-            "h": 1,
-            "d": 1
-          }
-        }
-      ]
-    },
-    {
-      "id": 34,
-      "name": "立方体 34",
-      "type": "cube",
-      "primitiveType": "cube",
-      "position": {
-        "x": -5.40691929336352,
-        "y": -9.65001527484206,
-        "z": -11.143232289273048
-      },
-      "rotation": {
-        "x": -0.0000026967129613027582,
-        "y": -1.162001451833812,
-        "z": -0.000004254204830939415
-      },
-      "scale": {
-        "x": 3.8000000000000025,
-        "y": 0.7000000000000001,
-        "z": 0.7000000000000001
-      },
       "material": {
-        "color": "#7681d6",
+        "color": "#e8c3a7",
         "roughness": 0.5,
         "metalness": 0.1,
         "opacity": 1,
@@ -228,7 +65,7 @@
       },
       "faceMaterials": [
         {
-          "color": "#7681d6",
+          "color": "#e8c3a7",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -238,7 +75,7 @@
           "wireframe": false
         },
         {
-          "color": "#e1acc7",
+          "color": "#b16ed3",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -248,7 +85,7 @@
           "wireframe": false
         },
         {
-          "color": "#68dad6",
+          "color": "#97d792",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -258,7 +95,7 @@
           "wireframe": false
         },
         {
-          "color": "#ebce84",
+          "color": "#86d2cc",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -268,7 +105,7 @@
           "wireframe": false
         },
         {
-          "color": "#cfa88c",
+          "color": "#a4cbe2",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -278,7 +115,7 @@
           "wireframe": false
         },
         {
-          "color": "#7c97c0",
+          "color": "#74d8b5",
           "roughness": 0.5,
           "metalness": 0.1,
           "opacity": 1,
@@ -310,75 +147,45 @@
         "h": 1,
         "d": 1
       }
-    },
-    {
-      "id": 36,
-      "name": "圆锥体 36",
-      "type": "cone",
-      "primitiveType": "cone",
-      "position": {
-        "x": -2.580055353867826,
-        "y": -9.500013489777634,
-        "z": 0.04597151969618896
-      },
-      "rotation": {
-        "x": 3.141590323964534,
-        "y": 0.016965730671612802,
-        "z": 3.937643443800515e-7
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "material": {
-        "color": "#7ddb87",
-        "roughness": 0.5,
-        "metalness": 0.1,
-        "opacity": 1,
-        "transparent": false,
-        "side": 0,
-        "flatShading": false,
-        "wireframe": false,
-        "type": "standard"
-      },
-      "faceMaterials": [
-        {
-          "color": "#7ddb87",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#e4cbab",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        }
-      ],
-      "faceNames": [
-        "侧面",
-        "底面"
-      ],
-      "faceVisible": [
-        true,
-        true
-      ],
-      "geometry": {
-        "type": "cone",
-        "r": 0.5,
-        "h": 1,
-        "seg": 32
-      }
     }
   ],
-  "keyframes": []
+  "keyframes": [
+    {
+      "index": 0,
+      "delay": 1,
+      "state": {
+        "objects": [
+          {
+            "id": 1,
+            "name": "立方体 1",
+            "pos": {
+              "x": 0,
+              "y": 0.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            }
+          }
+        ],
+        "lighting": {
+          "sunDir": {
+            "x": 10,
+            "y": 15,
+            "z": 8
+          },
+          "ambient": 0.6,
+          "hemi": 0.5,
+          "sun": 1.2
+        }
+      }
+    }
+  ]
 }
