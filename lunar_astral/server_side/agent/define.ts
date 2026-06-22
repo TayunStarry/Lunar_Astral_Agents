@@ -125,6 +125,7 @@ export class AgentDefine {
 					await this.analysisVideoFile(item.image_url.url, '');
 				}
 				else if (!item.image_url.url.startsWith("data:image")) {
+					console.log(item.image_url.url);
 					// 获取图片文件内容
 					const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
 					// 检查请求是否成功

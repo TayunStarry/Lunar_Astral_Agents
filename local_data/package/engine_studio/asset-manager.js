@@ -22,7 +22,7 @@ class AssetManager {
                 gridVisible: sceneManager.gridHelper.visible,
                 groundVisible: sceneManager.groundPlane.visible,
                 size: sceneManager.gridHelper.geometry.parameters?.size || 20,
-                color: '#' + sceneManager.gridHelper.material.color.getHexString(),
+                color: sceneManager.gridColor,
             },
             physics: physicsManager ? {
                 gravity: physicsManager.gravity,
@@ -76,6 +76,9 @@ class AssetManager {
             scale: { x: group.scale.x, y: group.scale.y, z: group.scale.z },
             children: group.children.map(child => AssetManager._serialize(child)),
         };
+        if (group.userData.physics) {
+            data.physics = JSON.parse(JSON.stringify(group.userData.physics));
+        }
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -136,6 +139,9 @@ class AssetManager {
         // 组合体：递归序列化子对象
         if (mesh.userData.type === 'group') {
             data.children = mesh.children.map(child => AssetManager._serialize(child));
+            if (mesh.userData.physics) {
+                data.physics = JSON.parse(JSON.stringify(mesh.userData.physics));
+            }
             return data;
         }
 
@@ -184,6 +190,10 @@ class AssetManager {
                 }
             }
             data.geometry = gd;
+        }
+        // 物理属性
+        if (mesh.userData.physics) {
+            data.physics = JSON.parse(JSON.stringify(mesh.userData.physics));
         }
         return data;
     }

@@ -57,7 +57,7 @@ func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 // reloadPageParameters 重新加载页面参数
 func reloadPageParameters() {
 	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
-	*config.WebViewWidth = 1450
+	*config.WebViewWidth = 1500
 	*config.WebViewHeight = 1050
 }
 

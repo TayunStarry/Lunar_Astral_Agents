@@ -303,6 +303,112 @@
     <input type="file" id="import-file-input" accept=".json" style="display:none">
     <input type="file" id="import-group-input" accept=".json" style="display:none">
 
+    <!-- 物理属性配置模态框 -->
+    <div id="physics-modal-overlay" class="modal-overlay">
+        <div class="modal-content glass-panel" id="physics-modal-content" style="max-width:500px; max-height:85vh; overflow-y:auto; padding:24px;">
+            <h3 style="margin-top:0;"><i class="fas fa-cog"></i> 物理属性配置 - <span id="phys-modal-title"></span></h3>
+
+            <!-- 锚定点 -->
+            <div class="settings-group">
+                <div class="settings-group-title">锚定点</div>
+                <div class="settings-row">
+                    <label>固定位置（不受重力影响）</label>
+                    <button class="btn-glass btn-toggle" id="phys-anchor-toggle" data-active="false">关闭</button>
+                </div>
+            </div>
+
+            <!-- 自动旋转 -->
+            <div class="settings-group">
+                <div class="settings-group-title">自动旋转</div>
+                <div class="settings-row">
+                    <label>启用自动旋转</label>
+                    <button class="btn-glass btn-toggle" id="phys-rotate-toggle" data-active="false">关闭</button>
+                </div>
+                <div class="settings-row" id="phys-rotate-axis-row" style="display:none">
+                    <label>旋转轴</label>
+                    <div class="btn-group">
+                        <button class="btn-glass btn-sm phys-axis-btn" data-axis="x">X轴</button>
+                        <button class="btn-glass btn-sm phys-axis-btn active" data-axis="y">Y轴</button>
+                        <button class="btn-glass btn-sm phys-axis-btn" data-axis="z">Z轴</button>
+                    </div>
+                </div>
+                <div class="settings-row" id="phys-rotate-speed-row" style="display:none">
+                    <label>旋转速度</label>
+                    <input type="number" id="phys-rotate-speed" value="1" step="0.1" min="0.1" max="50">
+                </div>
+            </div>
+
+            <!-- 初始动能 -->
+            <div class="settings-group">
+                <div class="settings-group-title">初始动能</div>
+                <div class="settings-row">
+                    <label>启用初始动能</label>
+                    <button class="btn-glass btn-toggle" id="phys-kinetic-toggle" data-active="false">关闭</button>
+                </div>
+                <div id="phys-kinetic-params" style="display:none">
+                    <div class="settings-row">
+                        <label>速度 X</label>
+                        <input type="number" id="phys-kinetic-vx" value="0" step="0.1">
+                    </div>
+                    <div class="settings-row">
+                        <label>速度 Y</label>
+                        <input type="number" id="phys-kinetic-vy" value="0" step="0.1">
+                    </div>
+                    <div class="settings-row">
+                        <label>速度 Z</label>
+                        <input type="number" id="phys-kinetic-vz" value="0" step="0.1">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 引力/斥力 -->
+            <div class="settings-group">
+                <div class="settings-group-title">引力</div>
+                <div class="settings-row">
+                    <label>启用引力</label>
+                    <button class="btn-glass btn-toggle" id="phys-attract-toggle" data-active="false">关闭</button>
+                </div>
+                <div id="phys-attract-params" style="display:none">
+                    <div class="settings-row">
+                        <label>目标对象</label>
+                        <select id="phys-attract-target">
+                            <option value="">-- 选择对象 --</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <label>引力强度</label>
+                        <input type="number" id="phys-attract-strength" value="1" step="0.1" min="0.1" max="100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="settings-group-title">斥力</div>
+                <div class="settings-row">
+                    <label>启用斥力</label>
+                    <button class="btn-glass btn-toggle" id="phys-repel-toggle" data-active="false">关闭</button>
+                </div>
+                <div id="phys-repel-params" style="display:none">
+                    <div class="settings-row">
+                        <label>目标对象</label>
+                        <select id="phys-repel-target">
+                            <option value="">-- 选择对象 --</option>
+                        </select>
+                    </div>
+                    <div class="settings-row">
+                        <label>斥力强度</label>
+                        <input type="number" id="phys-repel-strength" value="1" step="0.1" min="0.1" max="100">
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align:right; margin-top:16px; display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn-glass btn-glass-danger" id="phys-modal-cancel">取消</button>
+                <button class="btn-glass btn-glass-primary" id="phys-modal-save">保存配置</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 模态层 -->
     <div id="modal-overlay" class="modal-overlay">
         <div class="modal-content glass-panel" id="modal-content"></div>

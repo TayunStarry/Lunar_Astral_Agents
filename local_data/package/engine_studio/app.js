@@ -32,7 +32,7 @@ class App {
         if (choice === 1) {
             // 继续之前的工程
             try {
-                const resp = await fetch('/file/read/package/mini_rendering_engine/status.json');
+                const resp = await fetch('/file/read/package/engine_studio/status.json');
                 if (resp.ok) {
                     const data = await resp.json();
                     await this.uiManager._loadSceneData(data);
@@ -44,7 +44,7 @@ class App {
         } else if (choice === 2) {
             // 新建工程并保存旧工程状态
             try {
-                const resp = await fetch('/file/read/package/mini_rendering_engine/status.json');
+                const resp = await fetch('/file/read/package/engine_studio/status.json');
                 if (resp.ok) {
                     const blob = await resp.blob();
                     const url = URL.createObjectURL(blob);

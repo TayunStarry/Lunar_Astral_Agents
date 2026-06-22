@@ -17,7 +17,7 @@ class SceneManager {
         this._interpTimer = 0;
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color('#2a2a3a');
+        this.scene.background = new THREE.Color('#ffffff');
 
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -82,6 +82,7 @@ class SceneManager {
 
     // ============ 地面 ============
     setupGrid() {
+        this._gridColor = '#444466';
         this.gridHelper = new THREE.GridHelper(20, 20, 0x444466, 0x222244);
         this.scene.add(this.gridHelper);
 
@@ -99,7 +100,8 @@ class SceneManager {
     setGroundSize(size) {
         this.scene.remove(this.gridHelper);
         this.scene.remove(this.groundPlane);
-        this.gridHelper = new THREE.GridHelper(size, size, 0x444466, 0x222244);
+        const c = new THREE.Color(this._gridColor);
+        this.gridHelper = new THREE.GridHelper(size, size, c.getHex(), c.getHex());
         this.scene.add(this.gridHelper);
         this.groundPlane.geometry.dispose();
         this.groundPlane.geometry = new THREE.PlaneGeometry(size, size);
@@ -107,6 +109,7 @@ class SceneManager {
         this.scene.add(this.groundPlane);
     }
     setGridColor(hex) {
+        this._gridColor = hex;
         const c = new THREE.Color(hex);
         this.scene.remove(this.gridHelper);
         const size = this.gridHelper.geometry.parameters?.size || 20;
@@ -114,6 +117,7 @@ class SceneManager {
         this.gridHelper = new THREE.GridHelper(size, div, c.getHex(), c.getHex());
         this.scene.add(this.gridHelper);
     }
+    get gridColor() { return this._gridColor; }
 
     // ============ 天空盒 ============
     setupSkybox() {
@@ -302,6 +306,7 @@ class SceneManager {
             faceNames: faceNames,
             faceVisible: faceVisible,
             _faceMaterials: faceNames ? (Array.isArray(mat) ? mat.map(m => m.clone()) : null) : null,
+            physics: { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
         };
         this.scene.add(mesh);
         this.objects.push(mesh);
@@ -399,6 +404,7 @@ class SceneManager {
                 name: `${src.userData.name} (副本)`,
                 type: 'group',
                 children: [],
+                physics: { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
             };
             for (const child of src.children) {
                 const childGeo = child.geometry.clone();
@@ -459,6 +465,7 @@ class SceneManager {
             name: `组合体 ${this.nextId - 1}`,
             type: 'group',
             children: [],
+            physics: { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
         };
 
         this._clearAllHighlights();
@@ -695,6 +702,7 @@ class SceneManager {
                 pos: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
                 rot: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
                 scl: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
+                physics: obj.userData.physics ? JSON.parse(JSON.stringify(obj.userData.physics)) : null,
             })),
             lighting: {
                 sunDir: { x: this.sunLight.position.x, y: this.sunLight.position.y, z: this.sunLight.position.z },
@@ -764,6 +772,7 @@ class SceneManager {
                         obj.position.set(od.pos.x, od.pos.y, od.pos.z);
                         obj.rotation.set(od.rot.x, od.rot.y, od.rot.z);
                         obj.scale.set(od.scl.x, od.scl.y, od.scl.z);
+                        if (od.physics) obj.userData.physics = JSON.parse(JSON.stringify(od.physics));
                     }
                 }
             }

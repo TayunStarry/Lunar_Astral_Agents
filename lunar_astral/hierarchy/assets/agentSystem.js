@@ -1463,6 +1463,7 @@ var agentSystem = (function (exports) {
                         await this.analysisVideoFile(item.image_url.url, '');
                     }
                     else if (!item.image_url.url.startsWith("data:image")) {
+                        console.log(item.image_url.url);
                         const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                         if (error)
                             throw new Error('获取图片文件失败');

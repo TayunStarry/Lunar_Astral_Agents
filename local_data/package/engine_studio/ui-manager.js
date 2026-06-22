@@ -172,24 +172,27 @@ class UIManager {
         // 摄像机坐标
         document.getElementById('btn-cam-goto').addEventListener('click', () => this._gotoCamera());
 
-        // Q/E 直接步进（所有数字输入框）：Q 减小，E 增大
-        document.addEventListener('keydown', e => {
-            const input = document.activeElement?.closest?.('input[type="number"]');
-            if (!input) return;
-            const key = e.key.toLowerCase();
-            if (key !== 'q' && key !== 'e') return;
-            e.preventDefault();
-            const step = parseFloat(input.step) || 1;
-            const dir = key === 'q' ? -1 : 1;
-            const newVal = (parseFloat(input.value) || 0) + dir * step;
-            input.value = parseFloat(newVal.toFixed(4));
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        });
-
         // 键盘快捷键
         document.addEventListener('keydown', e => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
             const sel = this.sm.selected;
+
+            // Q/E 优先处理（即使在输入框聚焦时也生效）
+            // Q: 打开物理属性配置模态框
+            if (e.key === 'q' || e.key === 'Q') {
+                if (!sel) { this.showToast('请先选中图元', 'info'); return; }
+                this._showPhysicsModal(sel);
+                return;
+            }
+            // E: 对整个场景施加/取消物理效果
+            if (e.key === 'e' || e.key === 'E') {
+                const added = this.pm.toggleAll();
+                this.showToast(added ? '物理效果已施加到全部图元' : '物理效果已取消', 'success');
+                return;
+            }
+
+            // 其他快捷键在输入框聚焦时不生效
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
             // 删除
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (sel) this.pm.removeBody(sel);
@@ -208,21 +211,6 @@ class UIManager {
                 const children = this.sm.ungroupSelected();
                 if (children) { this.refresh(); this.showToast('已取消组合', 'success'); }
                 else this.showToast('当前选中对象不是组合体', 'info');
-                return;
-            }
-
-            // Q: 对选中图元施加/取消物理效果
-            if (e.key === 'q' || e.key === 'Q') {
-                if (!sel) { this.showToast('请先选中图元', 'info'); return; }
-                const added = this.pm.toggleObject(sel);
-                this.showToast(added ? `物理效果已施加: ${sel.userData.name}` : `物理效果已取消: ${sel.userData.name}`, 'success');
-                return;
-            }
-
-            // E: 对整个场景施加/取消物理效果
-            if (e.key === 'e' || e.key === 'E') {
-                const added = this.pm.toggleAll();
-                this.showToast(added ? '物理效果已施加到全部图元' : '物理效果已取消', 'success');
                 return;
             }
 
@@ -607,6 +595,7 @@ class UIManager {
             const currentBottom = '#' + this.sm.skySphere.material.uniforms.bottomColor.value.getHexString();
             const isDefaultSky = (currentTop === '#ffffff' && currentMid === '#ffffff' && currentBottom === '#ffffff');
             const isSameSky = (currentTop === data.skybox.top && currentMid === data.skybox.mid && currentBottom === data.skybox.bottom);
+            let applySky = false;
             if (!isDefaultSky && !isSameSky) {
                 const choice = await this._showConflictModal(
                     '天空盒冲突',
@@ -614,9 +603,19 @@ class UIManager {
                     '保留',
                     '覆盖'
                 );
-                if (choice === 2) this.sm.setSkyboxColors(data.skybox.top, data.skybox.mid, data.skybox.bottom);
+                if (choice === 2) applySky = true;
             } else {
+                applySky = true;
+            }
+            if (applySky) {
                 this.sm.setSkyboxColors(data.skybox.top, data.skybox.mid, data.skybox.bottom);
+                // 同步更新天空盒输入框
+                const skyTopEl = document.getElementById('sky-top');
+                const skyMidEl = document.getElementById('sky-mid');
+                const skyBottomEl = document.getElementById('sky-bottom');
+                if (skyTopEl) skyTopEl.value = data.skybox.top || '#ffffff';
+                if (skyMidEl) skyMidEl.value = data.skybox.mid || '#ffffff';
+                if (skyBottomEl) skyBottomEl.value = data.skybox.bottom || '#ffffff';
             }
         }
         if (data.lighting) {
@@ -707,6 +706,7 @@ class UIManager {
                     name: objData.name || '组合体',
                     type: 'group',
                     children: [],
+                    physics: objData.physics ? JSON.parse(JSON.stringify(objData.physics)) : { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
                 };
                 if (objData.id != null) {
                     this.sm.nextId = Math.max(this.sm.nextId, objData.id + 1);
@@ -745,6 +745,7 @@ class UIManager {
             name: data.name || '导入组合体',
             type: 'group',
             children: [],
+            physics: data.physics ? JSON.parse(JSON.stringify(data.physics)) : { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
         };
         if (data.id != null) {
             this.sm.nextId = Math.max(this.sm.nextId, data.id + 1);
@@ -799,6 +800,7 @@ class UIManager {
             faceNames: faceNames || null,
             faceVisible: faceVisible || null,
             textureName: objData.material?.textureName || null,
+            physics: objData.physics ? JSON.parse(JSON.stringify(objData.physics)) : { enabled: false, anchored: false, autoRotate: { enabled: false, axis: 'y', speed: 1 }, initialKinetic: { enabled: false, velocity: { x: 0, y: 0, z: 0 } }, attraction: { enabled: false, targetId: '', strength: 1 }, repulsion: { enabled: false, targetId: '', strength: 1 } },
         };
         if (objData.id != null) {
             this.sm.nextId = Math.max(this.sm.nextId, objData.id + 1);
@@ -870,7 +872,7 @@ class UIManager {
             const hasChildren = obj.children.length > 0;
             const isCollapsed = obj.userData._treeCollapsed !== false; // 默认折叠
             const iconClass = isCollapsed ? 'fa-folder' : 'fa-folder-open';
-            item.innerHTML = `<i class="fas ${iconClass}"></i><span class="tree-name">${this._esc(obj.userData.name || '未命名')}</span><span class="tree-child-count">(${obj.children.length})</span>`;
+            item.innerHTML = `<i class="fas ${iconClass}"></i><span class="tree-name">${this._esc(obj.userData.name || '未命名')}</span><span class="tree-child-count">(${obj.children.length})</span>${this._physGearIcon(obj)}`;
             parent.appendChild(item);
             item.addEventListener('click', (e) => {
                 if (e.ctrlKey || e.metaKey) {
@@ -912,7 +914,7 @@ class UIManager {
             const type = obj.userData.primitiveType || obj.userData.type || 'unknown';
             const icon = PRIMITIVES[type] ? PRIMITIVES[type].icon : 'fa-cube';
             const indent = groupParent ? '└ ' : '';
-            item.innerHTML = `<i class="fas ${icon}"></i><span class="tree-name">${indent}${this._esc(obj.userData.name || '未命名')}</span>`;
+            item.innerHTML = `<i class="fas ${icon}"></i><span class="tree-name">${indent}${this._esc(obj.userData.name || '未命名')}</span>${this._physGearIcon(obj)}`;
             parent.appendChild(item);
             item.addEventListener('click', (e) => {
                 // 点击组合体子对象 → 选中父级组合体
@@ -1385,7 +1387,7 @@ class UIManager {
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">自由视角</p>
                 <p>无选中对象时: <kbd>Space</kbd> 抬升相机 | <kbd>Shift</kbd> 降低相机</p>
                 <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">物理模拟</p>
-                <p><kbd>Q</kbd> 对选中图元施加/取消物理效果 | <kbd>E</kbd> 对全部图元施加/取消物理效果</p>
+                <p><kbd>Q</kbd> 打开物理属性配置（锚点/旋转/动能/引力斥力） | <kbd>E</kbd> 对全部图元施加/取消物理效果</p>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
                 <button class="btn-glass btn-glass-primary" id="help-close" style="padding:8px 24px;height:36px;font-size:14px">关闭</button>
@@ -1427,7 +1429,7 @@ class UIManager {
                     gridVisible: this.sm.gridHelper.visible,
                     groundVisible: this.sm.groundPlane.visible,
                     size: this.sm.gridHelper.geometry.parameters?.size || 20,
-                    color: '#' + this.sm.gridHelper.material.color.getHexString(),
+                    color: this.sm.gridColor,
                 },
                 physics: this.pm ? {
                     gravity: this.pm.gravity,
@@ -1446,7 +1448,7 @@ class UIManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-File-Name': this._encodePath('package/mini_rendering_engine/status.json'),
+                    'X-File-Name': this._encodePath('package/engine_studio/status.json'),
                     'X-Overwrite': 'true',
                 },
                 body: json,
@@ -1461,7 +1463,7 @@ class UIManager {
     async _showRecoveryModal() {
         let hasSaved = false;
         try {
-            const resp = await fetch('/file/read/package/mini_rendering_engine/status.json');
+            const resp = await fetch('/file/read/package/engine_studio/status.json');
             if (resp.ok) {
                 const text = await resp.text();
                 if (text && text.trim()) {
@@ -1509,6 +1511,183 @@ class UIManager {
 
     _esc(str) {
         const div = document.createElement('div'); div.textContent = str; return div.innerHTML;
+    }
+
+    _physGearIcon(obj) {
+        const phys = obj.userData.physics;
+        if (!phys) return '';
+        const hasConfig = phys.anchored || phys.autoRotate?.enabled || phys.initialKinetic?.enabled || phys.attraction?.enabled || phys.repulsion?.enabled;
+        return hasConfig ? ' <i class="fas fa-cog" style="color:#9d6bff;font-size:11px;margin-left:4px;" title="已配置物理属性"></i>' : '';
+    }
+
+    // ============ 物理属性配置模态框 ============
+    _showPhysicsModal(mesh) {
+        this._physModalTarget = mesh;
+        const phys = mesh.userData.physics || {};
+        const overlay = document.getElementById('physics-modal-overlay');
+        document.getElementById('phys-modal-title').textContent = mesh.userData.name;
+
+        // 锚定点
+        const anchorBtn = document.getElementById('phys-anchor-toggle');
+        this._setToggleBtn(anchorBtn, phys.anchored || false);
+
+        // 自动旋转
+        const autoRotateEnabled = phys.autoRotate?.enabled || false;
+        const rotateBtn = document.getElementById('phys-rotate-toggle');
+        this._setToggleBtn(rotateBtn, autoRotateEnabled);
+        document.getElementById('phys-rotate-axis-row').style.display = autoRotateEnabled ? '' : 'none';
+        document.getElementById('phys-rotate-speed-row').style.display = autoRotateEnabled ? '' : 'none';
+        document.querySelectorAll('.phys-axis-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.axis === (phys.autoRotate?.axis || 'y'));
+        });
+        document.getElementById('phys-rotate-speed').value = phys.autoRotate?.speed || 1;
+
+        // 初始动能（与自动旋转互斥：KINEMATIC 刚体不受力）
+        const kineticEnabled = phys.initialKinetic?.enabled && !autoRotateEnabled;
+        const kineticBtn = document.getElementById('phys-kinetic-toggle');
+        this._setToggleBtn(kineticBtn, kineticEnabled);
+        document.getElementById('phys-kinetic-params').style.display = kineticEnabled ? '' : 'none';
+        document.getElementById('phys-kinetic-vx').value = phys.initialKinetic?.velocity?.x || 0;
+        document.getElementById('phys-kinetic-vy').value = phys.initialKinetic?.velocity?.y || 0;
+        document.getElementById('phys-kinetic-vz').value = phys.initialKinetic?.velocity?.z || 0;
+
+        // 引力
+        const attractBtn = document.getElementById('phys-attract-toggle');
+        this._setToggleBtn(attractBtn, phys.attraction?.enabled || false);
+        document.getElementById('phys-attract-params').style.display = phys.attraction?.enabled ? '' : 'none';
+        document.getElementById('phys-attract-strength').value = phys.attraction?.strength || 1;
+        this._populatePhysTargets('phys-attract-target', phys.attraction?.targetId, mesh.userData.id);
+
+        // 斥力
+        const repelBtn = document.getElementById('phys-repel-toggle');
+        this._setToggleBtn(repelBtn, phys.repulsion?.enabled || false);
+        document.getElementById('phys-repel-params').style.display = phys.repulsion?.enabled ? '' : 'none';
+        document.getElementById('phys-repel-strength').value = phys.repulsion?.strength || 1;
+        this._populatePhysTargets('phys-repel-target', phys.repulsion?.targetId, mesh.userData.id);
+
+        this._bindPhysModalEvents();
+        overlay.classList.add('visible');
+    }
+
+    _setToggleBtn(btn, active) {
+        btn.dataset.active = active ? 'true' : 'false';
+        btn.textContent = active ? '开启' : '关闭';
+        btn.classList.toggle('active', active);
+    }
+
+    _populatePhysTargets(selectId, selectedId, selfId) {
+        const sel = document.getElementById(selectId);
+        sel.innerHTML = '<option value="">-- 选择对象 --</option>';
+        for (const obj of this.sm.objects) {
+            if (obj.userData.id === selfId) continue;
+            sel.innerHTML += `<option value="${obj.userData.id}" ${obj.userData.id === selectedId ? 'selected' : ''}>${this._esc(obj.userData.name)}</option>`;
+        }
+    }
+
+    _bindPhysModalEvents() {
+        const toggle = (btnId, showIds) => {
+            const btn = document.getElementById(btnId);
+            const active = btn.dataset.active === 'true';
+            const newActive = !active;
+            this._setToggleBtn(btn, newActive);
+            showIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = newActive ? '' : 'none';
+            });
+            // 锚定点与初始动能互斥
+            if (btnId === 'phys-anchor-toggle' && newActive) {
+                this._setToggleBtn(document.getElementById('phys-kinetic-toggle'), false);
+                document.getElementById('phys-kinetic-params').style.display = 'none';
+            }
+            if (btnId === 'phys-kinetic-toggle' && newActive) {
+                this._setToggleBtn(document.getElementById('phys-anchor-toggle'), false);
+                // 初始动能与自动旋转互斥（KINEMATIC 刚体不受力）
+                this._setToggleBtn(document.getElementById('phys-rotate-toggle'), false);
+                document.getElementById('phys-rotate-axis-row').style.display = 'none';
+                document.getElementById('phys-rotate-speed-row').style.display = 'none';
+            }
+            // 自动旋转与初始动能互斥（KINEMATIC 刚体不受力，初始动能无效）
+            if (btnId === 'phys-rotate-toggle' && newActive) {
+                this._setToggleBtn(document.getElementById('phys-kinetic-toggle'), false);
+                document.getElementById('phys-kinetic-params').style.display = 'none';
+                this.showToast('自动旋转已启用：物体转为 KINEMATIC 刚体，初始动能已自动关闭', 'info');
+            }
+        };
+
+        document.getElementById('phys-anchor-toggle').onclick = () => toggle('phys-anchor-toggle', []);
+        document.getElementById('phys-rotate-toggle').onclick = () => toggle('phys-rotate-toggle', ['phys-rotate-axis-row', 'phys-rotate-speed-row']);
+        document.getElementById('phys-kinetic-toggle').onclick = () => toggle('phys-kinetic-toggle', ['phys-kinetic-params']);
+        document.getElementById('phys-attract-toggle').onclick = () => toggle('phys-attract-toggle', ['phys-attract-params']);
+        document.getElementById('phys-repel-toggle').onclick = () => toggle('phys-repel-toggle', ['phys-repel-params']);
+
+        // 旋转轴按钮
+        document.querySelectorAll('.phys-axis-btn').forEach(b => {
+            b.onclick = () => {
+                document.querySelectorAll('.phys-axis-btn').forEach(bb => bb.classList.remove('active'));
+                b.classList.add('active');
+            };
+        });
+
+        // 保存/取消
+        document.getElementById('phys-modal-save').onclick = () => this._savePhysicsConfig();
+        document.getElementById('phys-modal-cancel').onclick = () => this._hidePhysicsModal();
+
+        // 点击遮罩关闭
+        document.getElementById('physics-modal-overlay').onclick = (e) => {
+            if (e.target === document.getElementById('physics-modal-overlay')) this._hidePhysicsModal();
+        };
+    }
+
+    _hidePhysicsModal() {
+        document.getElementById('physics-modal-overlay').classList.remove('visible');
+        this._physModalTarget = null;
+    }
+
+    _savePhysicsConfig() {
+        const mesh = this._physModalTarget;
+        if (!mesh) return;
+        if (!mesh.userData.physics) mesh.userData.physics = {};
+
+        const phys = mesh.userData.physics;
+        phys.enabled = true;
+        phys.anchored = document.getElementById('phys-anchor-toggle').dataset.active === 'true';
+        phys.autoRotate = {
+            enabled: document.getElementById('phys-rotate-toggle').dataset.active === 'true',
+            axis: document.querySelector('.phys-axis-btn.active')?.dataset?.axis || 'y',
+            speed: parseFloat(document.getElementById('phys-rotate-speed').value) || 1,
+        };
+        phys.initialKinetic = {
+            enabled: document.getElementById('phys-kinetic-toggle').dataset.active === 'true',
+            velocity: {
+                x: parseFloat(document.getElementById('phys-kinetic-vx').value) || 0,
+                y: parseFloat(document.getElementById('phys-kinetic-vy').value) || 0,
+                z: parseFloat(document.getElementById('phys-kinetic-vz').value) || 0,
+            },
+        };
+        phys.attraction = {
+            enabled: document.getElementById('phys-attract-toggle').dataset.active === 'true',
+            targetId: document.getElementById('phys-attract-target').value || '',
+            strength: parseFloat(document.getElementById('phys-attract-strength').value) || 1,
+        };
+        phys.repulsion = {
+            enabled: document.getElementById('phys-repel-toggle').dataset.active === 'true',
+            targetId: document.getElementById('phys-repel-target').value || '',
+            strength: parseFloat(document.getElementById('phys-repel-strength').value) || 1,
+        };
+
+        // 如果启用了物理属性，(重新)创建刚体以应用最新配置（类型/碰撞体/角速度等）
+        if (phys.enabled) {
+            if (this.pm.bodies.has(mesh.userData.id)) {
+                this.pm.removeBody(mesh);
+            }
+            this.pm._ensureGround();
+            this.pm.createBody(mesh);
+        }
+
+        this._hidePhysicsModal();
+        this.refresh();
+        this._scheduleAutoSave();
+        this.showToast(`物理配置已保存: ${mesh.userData.name}`, 'success');
     }
 }
 
