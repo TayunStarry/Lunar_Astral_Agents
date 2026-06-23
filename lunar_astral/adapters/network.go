@@ -4,6 +4,7 @@ import (
 	"browser"
 	"bytes"
 	"config"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -131,8 +132,12 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 		req.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	}
 
-	// 发送请求
-	client := &http.Client{}
+	// 发送请求（支持自签名证书）
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("发送请求失败: %v", err)})

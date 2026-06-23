@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "savedAt": "2026-06-22T14:03:17.379Z",
+  "savedAt": "2026-06-23T13:33:54.204Z",
   "skybox": {
     "top": "#ffffff",
     "mid": "#ffffff",
@@ -25,162 +25,13 @@
   },
   "physics": {
     "gravity": -9.82,
-    "groundY": -0.5,
+    "groundY": -0.05,
     "massSingle": 1,
     "linearDamping": 0.1,
     "angularDamping": 0.1
   },
   "textures": [],
   "objects": [
-    {
-      "id": 8,
-      "name": "立方体 8",
-      "type": "cube",
-      "primitiveType": "cube",
-      "position": {
-        "x": 0.0005106833451957404,
-        "y": 1.499984318738373,
-        "z": 0.0006201876575605022
-      },
-      "rotation": {
-        "x": -4.604838880465507e-7,
-        "y": 0.011749970515023026,
-        "z": 0.000005995294974902072
-      },
-      "scale": {
-        "x": 11.099999999999977,
-        "y": 1,
-        "z": 0.7000000000000001
-      },
-      "material": {
-        "color": "#a573ea",
-        "roughness": 0.5,
-        "metalness": 0.1,
-        "opacity": 1,
-        "transparent": false,
-        "side": 0,
-        "flatShading": false,
-        "wireframe": false,
-        "type": "standard"
-      },
-      "faceMaterials": [
-        {
-          "color": "#a573ea",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        },
-        {
-          "color": "#c8bc79",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        },
-        {
-          "color": "#858fde",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        },
-        {
-          "color": "#7ee377",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        },
-        {
-          "color": "#71e5d1",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        },
-        {
-          "color": "#ca86c9",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false,
-          "textureName": null
-        }
-      ],
-      "faceNames": [
-        "右",
-        "左",
-        "上",
-        "下",
-        "前",
-        "后"
-      ],
-      "faceVisible": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true
-      ],
-      "geometry": {
-        "type": "cube",
-        "w": 1,
-        "h": 1,
-        "d": 1
-      },
-      "physics": {
-        "enabled": false,
-        "anchored": false,
-        "autoRotate": {
-          "enabled": false,
-          "axis": "y",
-          "speed": 1
-        },
-        "initialKinetic": {
-          "enabled": false,
-          "velocity": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          }
-        },
-        "attraction": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
-        },
-        "repulsion": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
-        }
-      }
-    },
     {
       "id": 9,
       "name": "组合体 9",
@@ -189,11 +40,11 @@
       "position": {
         "x": 0,
         "y": 1,
-        "z": 4.440892098500626e-15
+        "z": 0
       },
       "rotation": {
         "x": 0,
-        "y": 34.519500000001614,
+        "y": 126.0435999999134,
         "z": 0
       },
       "scale": {
@@ -203,14 +54,14 @@
       },
       "children": [
         {
-          "id": 7,
-          "name": "圆柱体 7",
+          "id": 6,
+          "name": "圆柱体 4 (副本) (副本)",
           "type": "cylinder",
           "primitiveType": "cylinder",
           "position": {
-            "x": 0,
-            "y": 0.5,
-            "z": 4.499999999999996
+            "x": -1.5,
+            "y": 0,
+            "z": 0
           },
           "rotation": {
             "x": 0,
@@ -218,12 +69,12 @@
             "z": 0
           },
           "scale": {
-            "x": 1,
+            "x": 0.35,
             "y": 1,
-            "z": 1
+            "z": 0.35
           },
           "material": {
-            "color": "#a2dde9",
+            "color": "#dd6cae",
             "roughness": 0.5,
             "metalness": 0.1,
             "opacity": 1,
@@ -235,7 +86,7 @@
           },
           "faceMaterials": [
             {
-              "color": "#a2dde9",
+              "color": "#dd6cae",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -246,7 +97,7 @@
               "textureName": null
             },
             {
-              "color": "#e1bca4",
+              "color": "#c798e8",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -257,7 +108,7 @@
               "textureName": null
             },
             {
-              "color": "#e1d287",
+              "color": "#7be288",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -314,14 +165,14 @@
           }
         },
         {
-          "id": 6,
-          "name": "圆柱体 6",
+          "id": 4,
+          "name": "圆柱体 4",
           "type": "cylinder",
           "primitiveType": "cylinder",
           "position": {
             "x": 0,
-            "y": -0.5,
-            "z": -4.440892098500626e-15
+            "y": 0,
+            "z": -1.5
           },
           "rotation": {
             "x": 0,
@@ -329,12 +180,12 @@
             "z": 0
           },
           "scale": {
-            "x": 9.999999999999982,
+            "x": 0.35,
             "y": 1,
-            "z": 9.999999999999982
+            "z": 0.35
           },
           "material": {
-            "color": "#81dcc9",
+            "color": "#dd6cae",
             "roughness": 0.5,
             "metalness": 0.1,
             "opacity": 1,
@@ -346,7 +197,7 @@
           },
           "faceMaterials": [
             {
-              "color": "#81dcc9",
+              "color": "#dd6cae",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -357,7 +208,7 @@
               "textureName": null
             },
             {
-              "color": "#c2eba2",
+              "color": "#c798e8",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -368,7 +219,7 @@
               "textureName": null
             },
             {
-              "color": "#d5ee93",
+              "color": "#7be288",
               "roughness": 0.5,
               "metalness": 0.1,
               "opacity": 1,
@@ -395,6 +246,294 @@
             "rb": 0.5,
             "h": 1,
             "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 7,
+          "name": "圆柱体 4 (副本) (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 5,
+          "name": "圆柱体 4 (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 3,
+          "name": "圆环 3",
+          "type": "torus",
+          "primitiveType": "torus",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 1.5707963267948966,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "material": {
+            "color": "#d49ee3",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "geometry": {
+            "type": "torus",
+            "r": 1.5,
+            "t": 0.2,
+            "rSeg": 16,
+            "tSeg": 32
           },
           "physics": {
             "enabled": false,
@@ -455,150 +594,536 @@
     },
     {
       "id": 10,
-      "name": "圆柱体 10",
-      "type": "cylinder",
-      "primitiveType": "cylinder",
+      "name": "组合体 9 (副本)",
+      "type": "group",
+      "primitiveType": null,
       "position": {
-        "x": 0,
-        "y": 13.5,
-        "z": 7
+        "x": -0.017395626262664728,
+        "y": 1.7263117703316515,
+        "z": -0.008210147285311713
       },
       "rotation": {
-        "x": 1.5707963267948966,
-        "y": 0,
-        "z": 0
+        "x": 0.015340325918958637,
+        "y": 0.6041192114462641,
+        "z": -0.02051518876828502
       },
       "scale": {
         "x": 1,
         "y": 1,
         "z": 1
       },
-      "material": {
-        "color": "#63c7d2",
-        "roughness": 0.5,
-        "metalness": 0.1,
-        "opacity": 1,
-        "transparent": false,
-        "side": 0,
-        "flatShading": false,
-        "wireframe": false,
-        "type": "standard"
-      },
-      "faceMaterials": [
+      "children": [
         {
-          "color": "#63c7d2",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#ce8f80",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#b16ecd",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        }
-      ],
-      "faceNames": [
-        "侧面",
-        "顶面",
-        "底面"
-      ],
-      "faceVisible": [
-        true,
-        true,
-        true
-      ],
-      "geometry": {
-        "type": "cylinder",
-        "rt": 0.5,
-        "rb": 0.5,
-        "h": 1,
-        "seg": 32
-      },
-      "physics": {
-        "enabled": true,
-        "anchored": true,
-        "autoRotate": {
-          "enabled": false,
-          "axis": "y",
-          "speed": 1
-        },
-        "initialKinetic": {
-          "enabled": false,
-          "velocity": {
+          "id": 11,
+          "name": "圆柱体 4 (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": -1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
             "x": 0,
             "y": 0,
             "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
           }
         },
-        "attraction": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
+        {
+          "id": 12,
+          "name": "圆柱体 4",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": -1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
         },
-        "repulsion": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
+        {
+          "id": 13,
+          "name": "圆柱体 4 (副本) (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 14,
+          "name": "圆柱体 4 (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 15,
+          "name": "圆环 3",
+          "type": "torus",
+          "primitiveType": "torus",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 1.5707963267948966,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "material": {
+            "color": "#d49ee3",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "geometry": {
+            "type": "torus",
+            "r": 1.5,
+            "t": 0.2,
+            "rSeg": 16,
+            "tSeg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
         }
-      }
-    },
-    {
-      "id": 11,
-      "name": "圆环 11",
-      "type": "torus",
-      "primitiveType": "torus",
-      "position": {
-        "x": 2.2146793033270926,
-        "y": -0.30001560802863814,
-        "z": 7.698958397633879
-      },
-      "rotation": {
-        "x": -1.3534644126166863e-7,
-        "y": 0.7121387574308329,
-        "z": 1.676188816581258e-7
-      },
-      "scale": {
-        "x": 1,
-        "y": 1,
-        "z": 1
-      },
-      "material": {
-        "color": "#bc81db",
-        "roughness": 0.5,
-        "metalness": 0.1,
-        "opacity": 1,
-        "transparent": false,
-        "side": 0,
-        "flatShading": false,
-        "wireframe": false,
-        "type": "standard"
-      },
-      "geometry": {
-        "type": "torus",
-        "r": 1.5,
-        "t": 0.2,
-        "rSeg": 16,
-        "tSeg": 32
-      },
+      ],
       "physics": {
         "enabled": false,
         "anchored": false,
@@ -628,19 +1153,1699 @@
       }
     },
     {
-      "id": 12,
-      "name": "球体 12",
+      "id": 18,
+      "name": "组合体 9 (副本) (副本)",
+      "type": "group",
+      "primitiveType": null,
+      "position": {
+        "x": -0.003421385999742042,
+        "y": 2.4259968962995733,
+        "z": -0.005645701933192568
+      },
+      "rotation": {
+        "x": 0.022418927573946867,
+        "y": 0.8373958334064133,
+        "z": -0.02527649509779788
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "children": [
+        {
+          "id": 19,
+          "name": "圆柱体 4 (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": -1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 20,
+          "name": "圆柱体 4",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": -1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 21,
+          "name": "圆柱体 4 (副本) (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 22,
+          "name": "圆柱体 4 (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 23,
+          "name": "圆环 3",
+          "type": "torus",
+          "primitiveType": "torus",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 1.5707963267948966,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "material": {
+            "color": "#d49ee3",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "geometry": {
+            "type": "torus",
+            "r": 1.5,
+            "t": 0.2,
+            "rSeg": 16,
+            "tSeg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        }
+      ],
+      "physics": {
+        "enabled": false,
+        "anchored": false,
+        "autoRotate": {
+          "enabled": false,
+          "axis": "y",
+          "speed": 1
+        },
+        "initialKinetic": {
+          "enabled": false,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "attraction": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        },
+        "repulsion": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        }
+      }
+    },
+    {
+      "id": 25,
+      "name": "组合体 9 (副本) (副本) (副本)",
+      "type": "group",
+      "primitiveType": null,
+      "position": {
+        "x": 0.009018008103147812,
+        "y": 3.1258435518817254,
+        "z": -0.002781181314434437
+      },
+      "rotation": {
+        "x": -0.005579985863048354,
+        "y": -0.5004461504447711,
+        "z": -0.019290356094404902
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "children": [
+        {
+          "id": 26,
+          "name": "圆柱体 4 (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": -1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 27,
+          "name": "圆柱体 4",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": -1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 28,
+          "name": "圆柱体 4 (副本) (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 29,
+          "name": "圆柱体 4 (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 30,
+          "name": "圆环 3",
+          "type": "torus",
+          "primitiveType": "torus",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 1.5707963267948966,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "material": {
+            "color": "#d49ee3",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "geometry": {
+            "type": "torus",
+            "r": 1.5,
+            "t": 0.2,
+            "rSeg": 16,
+            "tSeg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        }
+      ],
+      "physics": {
+        "enabled": false,
+        "anchored": false,
+        "autoRotate": {
+          "enabled": false,
+          "axis": "y",
+          "speed": 1
+        },
+        "initialKinetic": {
+          "enabled": false,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "attraction": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        },
+        "repulsion": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        }
+      }
+    },
+    {
+      "id": 32,
+      "name": "组合体 9 (副本) (副本) (副本) (副本)",
+      "type": "group",
+      "primitiveType": null,
+      "position": {
+        "x": -0.0013980918318885788,
+        "y": 3.826568897270389,
+        "z": -0.1285126745890924
+      },
+      "rotation": {
+        "x": 0.0002645687786741245,
+        "y": -0.19581431511355882,
+        "z": -0.01728525437733378
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "children": [
+        {
+          "id": 33,
+          "name": "圆柱体 4 (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": -1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 34,
+          "name": "圆柱体 4",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": -1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 35,
+          "name": "圆柱体 4 (副本) (副本) (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 1.5,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 36,
+          "name": "圆柱体 4 (副本)",
+          "type": "cylinder",
+          "primitiveType": "cylinder",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 1.5
+          },
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 0.35,
+            "y": 1,
+            "z": 0.35
+          },
+          "material": {
+            "color": "#dd6cae",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "faceMaterials": [
+            {
+              "color": "#dd6cae",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#c798e8",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            },
+            {
+              "color": "#7be288",
+              "roughness": 0.5,
+              "metalness": 0.1,
+              "opacity": 1,
+              "transparent": false,
+              "side": 0,
+              "flatShading": false,
+              "wireframe": false,
+              "textureName": null
+            }
+          ],
+          "faceNames": [
+            "侧面",
+            "顶面",
+            "底面"
+          ],
+          "faceVisible": [
+            true,
+            true,
+            true
+          ],
+          "geometry": {
+            "type": "cylinder",
+            "rt": 0.5,
+            "rb": 0.5,
+            "h": 1,
+            "seg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        },
+        {
+          "id": 37,
+          "name": "圆环 3",
+          "type": "torus",
+          "primitiveType": "torus",
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "rotation": {
+            "x": 1.5707963267948966,
+            "y": 0,
+            "z": 0
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "material": {
+            "color": "#d49ee3",
+            "roughness": 0.5,
+            "metalness": 0.1,
+            "opacity": 1,
+            "transparent": false,
+            "side": 0,
+            "flatShading": false,
+            "wireframe": false,
+            "type": "standard"
+          },
+          "geometry": {
+            "type": "torus",
+            "r": 1.5,
+            "t": 0.2,
+            "rSeg": 16,
+            "tSeg": 32
+          },
+          "physics": {
+            "enabled": false,
+            "anchored": false,
+            "autoRotate": {
+              "enabled": false,
+              "axis": "y",
+              "speed": 1
+            },
+            "initialKinetic": {
+              "enabled": false,
+              "velocity": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            },
+            "attraction": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            },
+            "repulsion": {
+              "enabled": false,
+              "targetId": "",
+              "strength": 1
+            }
+          }
+        }
+      ],
+      "physics": {
+        "enabled": false,
+        "anchored": false,
+        "autoRotate": {
+          "enabled": false,
+          "axis": "y",
+          "speed": 1
+        },
+        "initialKinetic": {
+          "enabled": false,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "attraction": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        },
+        "repulsion": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        }
+      }
+    },
+    {
+      "id": 38,
+      "name": "球体 38",
       "type": "sphere",
       "primitiveType": "sphere",
       "position": {
-        "x": 0.04456535615989094,
-        "y": 0.999834987512716,
-        "z": -2.911796999653305
+        "x": 0.8977262068737011,
+        "y": 0.4499970703449047,
+        "z": -2.644646395739884
       },
       "rotation": {
-        "x": -0.1348250709365586,
-        "y": -0.008404252223194509,
-        "z": 0.09029011751167274
+        "x": -1.9370507817405158,
+        "y": 0.02993544627282833,
+        "z": -2.767031177520469
       },
       "scale": {
         "x": 1,
@@ -648,7 +2853,7 @@
         "z": 1
       },
       "material": {
-        "color": "#c275c1",
+        "color": "#dbc387",
         "roughness": 0.5,
         "metalness": 0.1,
         "opacity": 1,
@@ -690,149 +2895,6 @@
           "strength": 1
         }
       }
-    },
-    {
-      "id": 13,
-      "name": "立方体 13",
-      "type": "cube",
-      "primitiveType": "cube",
-      "position": {
-        "x": 0.04619950684898418,
-        "y": -0.00006219033692362551,
-        "z": -2.6712261597312636
-      },
-      "rotation": {
-        "x": -0.00043342676860288993,
-        "y": -0.020011780465282847,
-        "z": -0.000383460393131813
-      },
-      "scale": {
-        "x": 1,
-        "y": 1.4000000000000004,
-        "z": 1
-      },
-      "material": {
-        "color": "#dd8eed",
-        "roughness": 0.5,
-        "metalness": 0.1,
-        "opacity": 1,
-        "transparent": false,
-        "side": 0,
-        "flatShading": false,
-        "wireframe": false,
-        "type": "standard"
-      },
-      "faceMaterials": [
-        {
-          "color": "#dd8eed",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#7fc2c5",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#a3d38d",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#70a4de",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#93dd9b",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        },
-        {
-          "color": "#99e9d2",
-          "roughness": 0.5,
-          "metalness": 0.1,
-          "opacity": 1,
-          "transparent": false,
-          "side": 0,
-          "flatShading": false,
-          "wireframe": false
-        }
-      ],
-      "faceNames": [
-        "右",
-        "左",
-        "上",
-        "下",
-        "前",
-        "后"
-      ],
-      "faceVisible": [
-        true,
-        true,
-        true,
-        true,
-        true,
-        true
-      ],
-      "geometry": {
-        "type": "cube",
-        "w": 1,
-        "h": 1,
-        "d": 1
-      },
-      "physics": {
-        "enabled": false,
-        "anchored": false,
-        "autoRotate": {
-          "enabled": false,
-          "axis": "y",
-          "speed": 1
-        },
-        "initialKinetic": {
-          "enabled": false,
-          "velocity": {
-            "x": 0,
-            "y": 0,
-            "z": 0
-          }
-        },
-        "attraction": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
-        },
-        "repulsion": {
-          "enabled": false,
-          "targetId": "",
-          "strength": 1
-        }
-      }
     }
   ],
   "keyframes": [
@@ -842,62 +2904,16 @@
       "state": {
         "objects": [
           {
-            "id": 8,
-            "name": "立方体 8",
-            "pos": {
-              "x": 0,
-              "y": 8,
-              "z": 0
-            },
-            "rot": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scl": {
-              "x": 11.099999999999977,
-              "y": 1,
-              "z": 0.7000000000000001
-            },
-            "physics": {
-              "enabled": false,
-              "anchored": false,
-              "autoRotate": {
-                "enabled": false,
-                "axis": "y",
-                "speed": 1
-              },
-              "initialKinetic": {
-                "enabled": false,
-                "velocity": {
-                  "x": 0,
-                  "y": 0,
-                  "z": 0
-                }
-              },
-              "attraction": {
-                "enabled": false,
-                "targetId": "",
-                "strength": 1
-              },
-              "repulsion": {
-                "enabled": false,
-                "targetId": "",
-                "strength": 1
-              }
-            }
-          },
-          {
             "id": 9,
             "name": "组合体 9",
             "pos": {
               "x": 0,
               "y": 1,
-              "z": 4.440892098500626e-15
+              "z": 0
             },
             "rot": {
               "x": 0,
-              "y": 0,
+              "y": 4.6872999999523195,
               "z": 0
             },
             "scl": {
@@ -935,15 +2951,15 @@
           },
           {
             "id": 10,
-            "name": "圆柱体 10",
+            "name": "组合体 9 (副本)",
             "pos": {
               "x": 0,
-              "y": 13.5,
-              "z": 7
+              "y": 3,
+              "z": 0
             },
             "rot": {
-              "x": 1.5707963267948966,
-              "y": 0,
+              "x": 0,
+              "y": -0.6806784082777886,
               "z": 0
             },
             "scl": {
@@ -952,8 +2968,8 @@
               "z": 1
             },
             "physics": {
-              "enabled": true,
-              "anchored": true,
+              "enabled": false,
+              "anchored": false,
               "autoRotate": {
                 "enabled": false,
                 "axis": "y",
@@ -980,12 +2996,12 @@
             }
           },
           {
-            "id": 11,
-            "name": "圆环 11",
+            "id": 18,
+            "name": "组合体 9 (副本) (副本)",
             "pos": {
               "x": 0,
-              "y": 13.5,
-              "z": 7
+              "y": 5.5,
+              "z": 0
             },
             "rot": {
               "x": 0,
@@ -1026,16 +3042,16 @@
             }
           },
           {
-            "id": 12,
-            "name": "球体 12",
+            "id": 25,
+            "name": "组合体 9 (副本) (副本) (副本)",
             "pos": {
               "x": 0,
-              "y": 12.999982451367861,
-              "z": -2.5
+              "y": 8,
+              "z": 0
             },
             "rot": {
               "x": 0,
-              "y": 0,
+              "y": -0.6806784082777886,
               "z": 0
             },
             "scl": {
@@ -1072,12 +3088,12 @@
             }
           },
           {
-            "id": 13,
-            "name": "立方体 13",
+            "id": 32,
+            "name": "组合体 9 (副本) (副本) (副本) (副本)",
             "pos": {
               "x": 0,
-              "y": 2.5,
-              "z": -2.5
+              "y": 10,
+              "z": 0
             },
             "rot": {
               "x": 0,
@@ -1128,61 +3144,6 @@
           "hemi": 0.5,
           "sun": 1.2
         }
-      }
-    },
-    {
-      "index": 1,
-      "delay": 1,
-      "state": {
-        "objects": [
-          {
-            "id": 13,
-            "name": "立方体 13",
-            "pos": {
-              "x": 0,
-              "y": 2.5,
-              "z": -2.5
-            },
-            "rot": {
-              "x": 0,
-              "y": 0,
-              "z": 0
-            },
-            "scl": {
-              "x": 1,
-              "y": 1.4000000000000004,
-              "z": 1
-            },
-            "physics": {
-              "enabled": false,
-              "anchored": false,
-              "autoRotate": {
-                "enabled": false,
-                "axis": "y",
-                "speed": 1
-              },
-              "initialKinetic": {
-                "enabled": false,
-                "velocity": {
-                  "x": 0,
-                  "y": 0,
-                  "z": 0
-                }
-              },
-              "attraction": {
-                "enabled": false,
-                "targetId": "",
-                "strength": 1
-              },
-              "repulsion": {
-                "enabled": false,
-                "targetId": "",
-                "strength": 1
-              }
-            }
-          }
-        ],
-        "lighting": null
       }
     }
   ]

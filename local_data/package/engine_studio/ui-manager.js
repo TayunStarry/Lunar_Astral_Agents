@@ -9,6 +9,8 @@ class UIManager {
         this.sm = sm;
         this.cc = cc;
         this.pm = pm;
+        // 注入相机控制器引用，供物理操控模式获取视角方向与启动越肩视角
+        this.pm.setCameraController(this.cc);
         this._toastTimer = null;
         this._panelsVisible = true;
         this._dirty = false;  // 自动保存脏标记
@@ -156,10 +158,11 @@ class UIManager {
         this.btnKfPlay.addEventListener('click', () => this._kfTogglePlay());
         this.btnKfStop.addEventListener('click', () => this._kfStop());
 
-        // 画布点击选择
+        // 画布点击选择（物理操控模式下禁止选中）
         const canvas = this.sm.canvas;
         canvas.addEventListener('click', e => {
             if (e.button !== 0) return;
+            if (this.pm.controlState.active) return; // 操控模式下禁止鼠标选中
             this._pickObject(e.clientX, e.clientY, e);
         });
 
@@ -185,18 +188,69 @@ class UIManager {
             }
             // E: 对整个场景施加/取消物理效果
             if (e.key === 'e' || e.key === 'E') {
+                const wasControl = this.pm.controlState.active;
                 const added = this.pm.toggleAll();
                 this.showToast(added ? '物理效果已施加到全部图元' : '物理效果已取消', 'success');
+                // 取消物理时 reset() 会自动 stopControl，需同步状态显示
+                if (wasControl && !this.pm.controlState.active) this._syncControlStatus();
+                return;
+            }
+            // Z: 切换碰撞体线框可视化
+            if (e.key === 'z' || e.key === 'Z') {
+                const visible = this.pm.toggleDebug();
+                this.showToast(visible ? '碰撞体可视化已开启（青色线框）' : '碰撞体可视化已关闭', 'info');
+                return;
+            }
+            // X: 切换物理操控模式（越肩视角 + WASD 施力 + 空格跳跃）
+            if (e.key === 'x' || e.key === 'X') {
+                if (this.pm.controlState.active) {
+                    this.pm.stopControl();
+                    this._syncControlStatus();
+                    this.showToast('已退出物理操控模式，视角已恢复', 'info');
+                } else {
+                    if (!sel) { this.showToast('请先选中图元', 'info'); return; }
+                    if (this.pm.bodies.size === 0) { this.showToast('请先按 E 启动物理模拟', 'info'); return; }
+                    if (!this.pm.canControl(sel)) {
+                        this.showToast('该图元不可操控（需为动态刚体，请检查是否锚定）', 'error'); return;
+                    }
+                    if (this.pm.startControl(sel)) {
+                        // 取消所有选中状态（操控模式禁止选中）
+                        this.sm.deselect();
+                        this.refresh();
+                        // 自动隐藏面板，确保操作界面简洁
+                        if (this._panelsVisible) {
+                            this._panelsVisible = false;
+                            this.leftArea.classList.add('hidden');
+                            this.rightPanel.classList.add('hidden');
+                            this.cameraPanel.style.display = 'none';
+                        }
+                        this._syncControlStatus();
+                        this.showToast('物理操控模式已开启：WASD 移动 · 空格跳跃 · 鼠标旋转视角 · X 退出', 'success');
+                    }
+                }
                 return;
             }
 
             // 其他快捷键在输入框聚焦时不生效
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
 
+            // 物理操控模式：WASD/Space 路由到物理管理器（基于视角方向施力）
+            if (this.pm.controlState.active) {
+                const code = e.code;
+                if (code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD' || code === 'Space') {
+                    e.preventDefault();
+                    this.pm.setControlKey(code, true);
+                    return;
+                }
+            }
+
             // 删除
             if (e.key === 'Delete' || e.key === 'Backspace') {
+                const wasControl = this.pm.controlState.active;
                 if (sel) this.pm.removeBody(sel);
-                this.sm.deleteSelected(); this.refresh(); this.showToast('已删除', 'success'); return;
+                this.sm.deleteSelected(); this.refresh(); this.showToast('已删除', 'success');
+                if (wasControl && !this.pm.controlState.active) this._syncControlStatus();
+                return;
             }
             // Ctrl+G 组合 / Ctrl+Shift+G 取消组合
             if ((e.ctrlKey || e.metaKey) && e.key === 'g' && !e.shiftKey) {
@@ -301,12 +355,31 @@ class UIManager {
             // ==== 操作模式切换 ====
         });
 
-        // R 键松开时停止环绕
+        // R 键松开时停止环绕；物理操控模式下释放 WASD/Space
         document.addEventListener('keyup', e => {
             if (e.key === 'r' || e.key === 'R') {
                 this.cc.stopOrbit();
             }
+            if (this.pm.controlState.active) {
+                const code = e.code;
+                if (code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD' || code === 'Space') {
+                    this.pm.setControlKey(code, false);
+                }
+            }
         });
+    }
+
+    /**
+     * 同步物理操控模式的状态显示
+     * 进入时显示"物理操控"并添加视觉反馈；退出时恢复原模式并移除反馈
+     */
+    _syncControlStatus() {
+        if (this.pm.controlState.active) {
+            this._updateStatusMode('物理');
+        } else {
+            const modeMap = { translate: '位移', rotate: '旋转', scale: '缩放', sunDir: '光照' };
+            this._updateStatusMode(modeMap[this._operationMode] || '位移');
+        }
     }
 
     _bindSettings() {
@@ -1363,37 +1436,89 @@ class UIManager {
         });
     }
 
-    // ============ 操作说明 ============
+    // ============ 操作说明（选项卡式） ============
     _showHelpModal() {
         const overlay = document.getElementById('modal-overlay');
         const content = document.getElementById('modal-content');
         content.innerHTML = `
-            <h3 style="margin-bottom:16px"><i class="fas fa-keyboard"></i> 键鼠操作说明</h3>
+            <h3 style="margin-bottom:16px"><i class="fas fa-book-open"></i> 操作说明</h3>
+            <div class="help-tabs">
+                <button class="help-tab active" data-help-tab="mouse"><i class="fas fa-mouse"></i> 键鼠操作</button>
+                <button class="help-tab" data-help-tab="keys"><i class="fas fa-keyboard"></i> 快捷键</button>
+                <button class="help-tab" data-help-tab="physics"><i class="fas fa-atom"></i> 物理系统</button>
+                <button class="help-tab" data-help-tab="features"><i class="fas fa-cubes"></i> 功能说明</button>
+            </div>
             <div style="max-height:60vh;overflow-y:auto;font-size:13px;line-height:1.8">
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">鼠标操作</p>
-                <p>左键拖拽: 旋转视角 | 右键拖拽/中键: 平移视角 | 滚轮: 缩放</p>
-                <p>左键点击: 选中对象 | Ctrl+点击: 多选 | 左键空白: 取消选中</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">选中对象快捷键</p>
-                <p><kbd>R</kbd> (按住) 环绕图元 | <kbd>方向键</kbd> / <kbd>空格</kbd> / <kbd>Shift</kbd> 模式操作</p>
-                <p><kbd>1</kbd> 位移模式 | <kbd>2</kbd> 旋转模式 | <kbd>3</kbd> 缩放模式 | <kbd>4</kbd> 光照模式</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">通用快捷键</p>
-                <p><kbd>Delete</kbd> / <kbd>Backspace</kbd> 删除 | <kbd>Ctrl+G</kbd> 组合 | <kbd>Ctrl+Shift+G</kbd> 取消组合</p>
-                <p><kbd>W/A/S/D</kbd> 键盘平移视角</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">层级面板</p>
-                <p>双击元素/组合体: 聚焦显示</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">关键帧动画</p>
-                <p>在"关键帧"选项卡中管理动画帧 | 每帧独立设置延迟时间</p>
-                <p>帧0记录初始状态，后续帧仅记录变化 | 帧间线性插值平滑过渡</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">自由视角</p>
-                <p>无选中对象时: <kbd>Space</kbd> 抬升相机 | <kbd>Shift</kbd> 降低相机</p>
-                <p style="font-weight:700;color:var(--brand);margin:8px 0 4px">物理模拟</p>
-                <p><kbd>Q</kbd> 打开物理属性配置（锚点/旋转/动能/引力斥力） | <kbd>E</kbd> 对全部图元施加/取消物理效果</p>
+
+                <div class="help-panel active" data-help-panel="mouse">
+                    <p class="help-section-title">视角控制</p>
+                    <p>左键拖拽: 旋转视角 | 右键拖拽 / 中键: 平移视角 | 滚轮: 缩放</p>
+                    <p class="help-section-title">对象选择</p>
+                    <p>左键点击: 选中对象 | <kbd>Ctrl</kbd>+点击: 多选 | 左键空白: 取消选中</p>
+                    <p class="help-section-title">层级面板</p>
+                    <p>双击元素 / 组合体: 聚焦显示该对象</p>
+                    <p class="help-section-title">自由视角（无选中对象时）</p>
+                    <p><kbd>Space</kbd> 抬升相机 | <kbd>Shift</kbd> 降低相机</p>
+                </div>
+
+                <div class="help-panel" data-help-panel="keys">
+                    <p class="help-section-title">操作模式切换</p>
+                    <p><kbd>1</kbd> 位移模式 | <kbd>2</kbd> 旋转模式 | <kbd>3</kbd> 缩放模式 | <kbd>4</kbd> 光照模式</p>
+                    <p class="help-section-title">模式内操作（方向键 / 空格 / Shift）</p>
+                    <p>位移: 方向键平移 XZ · <kbd>Space</kbd> 上升 · <kbd>Shift</kbd> 下降</p>
+                    <p>旋转: 方向键绕轴 · <kbd>Space</kbd>/<kbd>Shift</kbd> 绕 Z 轴</p>
+                    <p>缩放: 方向键缩放 XZ · <kbd>Space</kbd>/<kbd>Shift</kbd> 缩放 Y</p>
+                    <p>光照: 方向键移动太阳 · <kbd>Space</kbd>/<kbd>Shift</kbd> 升降太阳</p>
+                    <p class="help-section-title">选中对象快捷键</p>
+                    <p><kbd>R</kbd> (按住) 环绕图元 | <kbd>W</kbd>/<kbd>A</kbd>/<kbd>S</kbd>/<kbd>D</kbd> 键盘平移视角</p>
+                    <p class="help-section-title">通用快捷键</p>
+                    <p><kbd>Delete</kbd> / <kbd>Backspace</kbd> 删除选中对象</p>
+                    <p><kbd>Ctrl</kbd>+<kbd>G</kbd> 组合 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> 取消组合</p>
+                </div>
+
+                <div class="help-panel" data-help-panel="physics">
+                    <p class="help-section-title">物理模拟</p>
+                    <p><kbd>Q</kbd> 打开物理属性配置（锚点 / 自动旋转 / 初始动能 / 引力斥力）</p>
+                    <p><kbd>E</kbd> 对全部图元施加 / 取消物理效果</p>
+                    <p><kbd>Z</kbd> 切换碰撞体线框可视化（青色线框显示实际碰撞形状）</p>
+                    <p class="help-section-title accent">物理操控模式（需先 E 启动模拟 + 选中动态图元）</p>
+                    <p><kbd>X</kbd> 进入 / 退出越肩操控模式（相机聚焦并持续追踪选中图元）</p>
+                    <p><kbd>W</kbd>/<kbd>S</kbd> 沿视角前 / 后施力 | <kbd>A</kbd>/<kbd>D</kbd> 沿视角左 / 右施力</p>
+                    <p><kbd>Space</kbd> 跳跃（基于真实接地检测 + 冷却，落地前无法再次起跳）</p>
+                    <p>鼠标拖拽可旋转越肩视角，操控方向实时跟随视角</p>
+                    <p>退出时自动恢复默认视角与操控方式；移动过程冻结旋转确保平稳</p>
+                </div>
+
+                <div class="help-panel" data-help-panel="features">
+                    <p class="help-section-title">关键帧动画</p>
+                    <p>在"关键帧"选项卡中管理动画帧 | 每帧独立设置延迟时间</p>
+                    <p>帧 0 记录初始状态，后续帧仅记录变化 | 帧间线性插值平滑过渡</p>
+                    <p class="help-section-title">纹理系统</p>
+                    <p>在"纹理"选项卡中导入与管理纹理资源，点击纹理池应用至选中对象</p>
+                    <p class="help-section-title">场景设置</p>
+                    <p>在"设置"选项卡调整天空盒配色、光照强度、地面尺寸、阴影与网格</p>
+                    <p class="help-section-title">自动保存</p>
+                    <p>场景变更后每 10 秒自动保存，下次启动可恢复上次工程</p>
+                </div>
+
             </div>
             <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
                 <button class="btn-glass btn-glass-primary" id="help-close" style="padding:8px 24px;height:36px;font-size:14px">关闭</button>
             </div>
         `;
         overlay.classList.add('visible');
+
+        // 选项卡切换逻辑
+        content.querySelectorAll('.help-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const target = tab.dataset.helpTab;
+                content.querySelectorAll('.help-tab').forEach(t => t.classList.toggle('active', t === tab));
+                content.querySelectorAll('.help-panel').forEach(p => {
+                    p.classList.toggle('active', p.dataset.helpPanel === target);
+                });
+            });
+        });
+
         const close = () => overlay.classList.remove('visible');
         content.querySelector('#help-close').addEventListener('click', close);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });

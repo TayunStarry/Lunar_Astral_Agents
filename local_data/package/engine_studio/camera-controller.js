@@ -25,6 +25,14 @@ class CameraController {
         this._orbitTarget = new THREE.Vector3();
         this._orbitSpeed = 1.5; // 弧度/秒
 
+        // 越肩视角（物理操控模式）
+        this._overShoulder = false;
+        this._osTarget = null;            // 跟踪的 THREE.Object3D
+        this._osSavedView = null;         // 进入前保存的视角，用于退出时恢复
+        this._osHeight = 2.5;             // 相机相对目标的高度偏移
+        this._osMinDistance = 3;          // 越肩模式最小距离
+        this._osFocus = null;             // 平滑插值后的焦点位置
+
         this.rotateSpeed = 0.5;
         this.zoomSpeed = 1.0;
         this.panSpeed = 0.8;
@@ -85,6 +93,40 @@ class CameraController {
 
     update() {
         if (!this.enabled) return;
+
+        // 越肩视角模式：跟踪目标，鼠标可环绕，禁用 WASD/Space 相机平移
+        if (this._overShoulder) {
+            if (!this._osTarget) { this._overShoulder = false; return; }
+            // 应用鼠标旋转/缩放增量
+            this._spherical.theta += this._sphericalDelta.theta;
+            this._spherical.phi += this._sphericalDelta.phi;
+            this._spherical.phi = Math.max(this.minPolarAngle, Math.min(this.maxPolarAngle, this._spherical.phi));
+            this._spherical.radius = Math.max(
+                this._osMinDistance,
+                Math.min(this.maxDistance, this._spherical.radius + this._sphericalDelta.radius)
+            );
+            // 目标点：跟踪物体位置 + 适当高度（聚焦物体上半部，避免视角被地面遮挡）
+            const desiredFocus = new THREE.Vector3(
+                this._osTarget.position.x,
+                this._osTarget.position.y + this._osHeight * 0.3,
+                this._osTarget.position.z
+            );
+            // 焦点平滑插值：消除物体微小物理抖动向相机的传递，视角跟随更平稳
+            if (!this._osFocus) this._osFocus = desiredFocus.clone();
+            else this._osFocus.lerp(desiredFocus, 0.25);
+            const focus = this._osFocus;
+            // 相机位置 = 目标 + 球面偏移
+            const offset = new THREE.Vector3().setFromSpherical(this._spherical);
+            this.camera.position.copy(focus).add(offset);
+            this.camera.lookAt(focus);
+            this.target.copy(focus);
+            // 衰减增量（平滑过渡，避免抖动）
+            this._sphericalDelta.theta *= 0.85;
+            this._sphericalDelta.phi *= 0.85;
+            this._sphericalDelta.radius *= 0.85;
+            this._panOffset.set(0, 0, 0);
+            return;
+        }
 
         // 环绕模式
         if (this._orbiting) {
@@ -203,6 +245,68 @@ class CameraController {
             default: this.focusOnObject(obj); return;
         }
         this.setView(pos, center);
+    }
+
+    // ============ 越肩视角（物理操控模式） ============
+
+    /**
+     * 启动越肩视角：相机持续跟踪目标物体，鼠标可环绕
+     * 保存当前视角以便退出时恢复
+     */
+    startOverShoulder(target) {
+        if (this._overShoulder) return;
+        this._osTarget = target;
+        this._osSavedView = {
+            position: this.camera.position.clone(),
+            target: this.target.clone(),
+        };
+        // 初始化平滑焦点为物体当前位置，避免进入瞬间相机跳变
+        this._osFocus = new THREE.Vector3(
+            target.position.x,
+            target.position.y + this._osHeight * 0.3,
+            target.position.z
+        );
+        // 基于物体包围盒初始化合适的观察距离
+        const box = new THREE.Box3().setFromObject(target);
+        const size = new THREE.Vector3(); box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = Math.max(this._osMinDistance, maxDim * 3);
+        // 从当前相机方向计算球面坐标，保持视角连续性
+        const offset = new THREE.Vector3().copy(this.camera.position).sub(this.target);
+        this._spherical.setFromVector3(offset);
+        this._spherical.radius = dist;
+        this._overShoulder = true;
+        this._orbiting = false; // 与环绕模式互斥
+    }
+
+    /**
+     * 退出越肩视角：恢复进入前的默认视角
+     */
+    stopOverShoulder() {
+        if (!this._overShoulder) return;
+        this._overShoulder = false;
+        this._osTarget = null;
+        this._osFocus = null;
+        if (this._osSavedView) {
+            this.setView(this._osSavedView.position, this._osSavedView.target);
+            this._osSavedView = null;
+        }
+    }
+
+    isOverShoulder() { return this._overShoulder; }
+
+    /**
+     * 返回基于当前视角的水平移动方向（XZ 平面）
+     * 用于 WASD 施力方向计算，确保操控方向与视角一致
+     * @returns {{forward: THREE.Vector3, right: THREE.Vector3}}
+     */
+    getMoveDirections() {
+        const forward = new THREE.Vector3().copy(this.target).sub(this.camera.position);
+        forward.y = 0;
+        if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
+        forward.normalize();
+        const right = new THREE.Vector3().crossVectors(forward, this.camera.up).normalize();
+        return { forward, right };
     }
 }
 

@@ -731,7 +731,8 @@ class SceneManager {
             }
             const changed = obj.pos.x !== prev.pos.x || obj.pos.y !== prev.pos.y || obj.pos.z !== prev.pos.z
                 || obj.rot.x !== prev.rot.x || obj.rot.y !== prev.rot.y || obj.rot.z !== prev.rot.z
-                || obj.scl.x !== prev.scl.x || obj.scl.y !== prev.scl.y || obj.scl.z !== prev.scl.z;
+                || obj.scl.x !== prev.scl.x || obj.scl.y !== prev.scl.y || obj.scl.z !== prev.scl.z
+                || JSON.stringify(obj.physics) !== JSON.stringify(prev.physics);
             if (changed) changedObjects.push(obj);
         }
         const prevLight = prevState.lighting;
@@ -830,6 +831,10 @@ class SceneManager {
                 obj.position.set(toObj.pos.x, toObj.pos.y, toObj.pos.z);
                 obj.rotation.set(toObj.rot.x, toObj.rot.y, toObj.rot.z);
                 obj.scale.set(toObj.scl.x, toObj.scl.y, toObj.scl.z);
+            }
+            // 物理参数 snap 到目标帧（非空间属性不插值）
+            if (toObj.physics) {
+                obj.userData.physics = JSON.parse(JSON.stringify(toObj.physics));
             }
         }
         if (fromState.lighting && toState.lighting) {

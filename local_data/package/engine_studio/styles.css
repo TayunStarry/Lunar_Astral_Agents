@@ -712,6 +712,47 @@ html, body {
     background: rgba(108, 155, 207, 0.2);
 }
 
+/* ============ 操作说明选项卡 ============ */
+.help-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.help-tab {
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 13px;
+    border-radius: 0;
+    transition: var(--transition);
+    font-family: inherit;
+}
+.help-tab:hover { color: var(--brand); }
+.help-tab.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+    font-weight: 600;
+}
+.help-panel { display: none; }
+.help-panel.active { display: block; animation: help-panel-in 0.2s ease; }
+@keyframes help-panel-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.help-section-title {
+    font-weight: 700;
+    color: var(--brand);
+    margin: 10px 0 4px;
+    font-size: 13px;
+}
+.help-section-title.accent { color: var(--accent); }
+.help-panel p { margin: 3px 0; }
+
 /* 键盘快捷键样式 */
 kbd {
     display: inline-block;
