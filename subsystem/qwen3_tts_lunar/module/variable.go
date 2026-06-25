@@ -1,10 +1,7 @@
 package module
 
 import (
-	"net/http"
 	"sync"
-
-	"github.com/gorilla/websocket"
 )
 
 // 全局TTS引擎实例
@@ -23,23 +20,11 @@ var embedCache = &speakerEmbedCache{
 	cacheDir: "./local_data/audios/cache",
 }
 
-// 用于存储流式上下文的映射
-var streamCtxMap = make(map[int32]*streamingContext)
+// MaxCacheSize TTS音频缓存容量上限（条目数）
+const MaxCacheSize = 64
 
-// 用于生成唯一的流式上下文ID
-var streamCtxCounter int32
+// 全局TTS音频缓存实例，容量为 MaxCacheSize 条记录
+var ttsCache = NewTTSCache(MaxCacheSize)
 
-// 用于保护streamCtxMap	的互斥锁
-var streamCtxMapMu sync.Mutex
-
-// 用于升级WebSocket连接的实例
-var wsUpgrader = websocket.Upgrader{
-	// ReadBufferSize 用于设置读取缓冲区大小
-	ReadBufferSize: 1024,
-	// WriteBufferSize 用于设置写入缓冲区大小
-	WriteBufferSize: 65536,
-	// CheckOrigin 用于检查WebSocket连接的来源是否安全
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
+// synthFunc 用于TTS合成的函数变量，可被测试替换为mock实现
+var synthFunc = SynthesizeText

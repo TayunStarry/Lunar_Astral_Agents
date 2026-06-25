@@ -44,10 +44,6 @@
                 <i class="fas fa-play"></i>
                 <span>合成语音</span>
             </button>
-            <button id="stream-btn" class="btn-glass btn-glass-stream">
-                <i class="fas fa-link"></i>
-                <span>流式输出</span>
-            </button>
             <button id="download-btn" class="btn-glass" title="下载音频">
                 <i class="fas fa-download"></i>
                 <span>下载</span>
@@ -116,7 +112,6 @@
                         <i class="fas fa-music"></i>
                     </span>
                     <h3>音频预览</h3>
-                    <span id="stream-badge" class="player-badge stream-badge hidden">● 流式传输中</span>
                 </div>
 
                 <div class="waveform-stage" id="waveform"></div>
@@ -154,12 +149,6 @@
                     <h3>合成参数</h3>
                 </div>
                 <div class="settings-grid">
-                    <div class="setting-item">
-                        <label for="chunkframes-input">流式帧数</label>
-                        <input type="number" id="chunkframes-input" class="glass-input" placeholder="50" min="1"
-                            max="500" value="100">
-                        <span class="setting-hint">每帧传输间隔，越小延迟越低</span>
-                    </div>
                     <div class="setting-item">
                         <label for="temperature-input">温度</label>
                         <div class="slider-row">

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "savedAt": "2026-06-23T13:33:54.204Z",
+  "savedAt": "2026-06-25T12:16:56.825Z",
   "skybox": {
     "top": "#ffffff",
     "mid": "#ffffff",
@@ -44,7 +44,7 @@
       },
       "rotation": {
         "x": 0,
-        "y": 126.0435999999134,
+        "y": 16.00639999996086,
         "z": 0
       },
       "scale": {
@@ -598,14 +598,14 @@
       "type": "group",
       "primitiveType": null,
       "position": {
-        "x": -0.017395626262664728,
-        "y": 1.7263117703316515,
-        "z": -0.008210147285311713
+        "x": -0.002018901800071321,
+        "y": 1.7201042570396938,
+        "z": 0.009326160901609822
       },
       "rotation": {
-        "x": 0.015340325918958637,
-        "y": 0.6041192114462641,
-        "z": -0.02051518876828502
+        "x": -3.1197017672131158,
+        "y": 1.0626282356775276,
+        "z": 3.1318993956297403
       },
       "scale": {
         "x": 1,
@@ -1158,14 +1158,14 @@
       "type": "group",
       "primitiveType": null,
       "position": {
-        "x": -0.003421385999742042,
-        "y": 2.4259968962995733,
-        "z": -0.005645701933192568
+        "x": -0.01595375470774923,
+        "y": 2.4192942232097994,
+        "z": 0.061965889893301256
       },
       "rotation": {
-        "x": 0.022418927573946867,
-        "y": 0.8373958334064133,
-        "z": -0.02527649509779788
+        "x": -3.1248925844696087,
+        "y": 0.6973613445375026,
+        "z": 3.135933200285493
       },
       "scale": {
         "x": 1,
@@ -1718,14 +1718,14 @@
       "type": "group",
       "primitiveType": null,
       "position": {
-        "x": 0.009018008103147812,
-        "y": 3.1258435518817254,
-        "z": -0.002781181314434437
+        "x": -0.023839611933605308,
+        "y": 3.1191203124320657,
+        "z": 0.06616178196946614
       },
       "rotation": {
-        "x": -0.005579985863048354,
-        "y": -0.5004461504447711,
-        "z": -0.019290356094404902
+        "x": -3.1040083558429306,
+        "y": 1.4092907737784184,
+        "z": 3.116718823918166
       },
       "scale": {
         "x": 1,
@@ -2278,14 +2278,14 @@
       "type": "group",
       "primitiveType": null,
       "position": {
-        "x": -0.0013980918318885788,
-        "y": 3.826568897270389,
-        "z": -0.1285126745890924
+        "x": -0.09583010854097913,
+        "y": 3.8183504374139408,
+        "z": 0.09593646438781206
       },
       "rotation": {
-        "x": 0.0002645687786741245,
-        "y": -0.19581431511355882,
-        "z": -0.01728525437733378
+        "x": -3.12501647635019,
+        "y": 0.7350937393947098,
+        "z": 3.1363691141993257
       },
       "scale": {
         "x": 1,
@@ -2838,14 +2838,14 @@
       "type": "sphere",
       "primitiveType": "sphere",
       "position": {
-        "x": 0.8977262068737011,
-        "y": 0.4499970703449047,
-        "z": -2.644646395739884
+        "x": 2.705178212622918,
+        "y": 0.44999707034489467,
+        "z": -4.7814347983995305
       },
       "rotation": {
-        "x": -1.9370507817405158,
-        "y": 0.02993544627282833,
-        "z": -2.767031177520469
+        "x": -0.5567671247718551,
+        "y": 1.108554728606752,
+        "z": 0.8866478531296628
       },
       "scale": {
         "x": 1,
@@ -3093,6 +3093,447 @@
             "pos": {
               "x": 0,
               "y": 10,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          }
+        ],
+        "lighting": {
+          "sunDir": {
+            "x": 10,
+            "y": 15,
+            "z": 8
+          },
+          "ambient": 0.6,
+          "hemi": 0.5,
+          "sun": 1.2
+        }
+      }
+    },
+    {
+      "index": 1,
+      "delay": 1,
+      "state": {
+        "objects": [
+          {
+            "id": 10,
+            "name": "组合体 9 (副本)",
+            "pos": {
+              "x": 0,
+              "y": 4.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": -0.6806784082777886,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 18,
+            "name": "组合体 9 (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 8.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 25,
+            "name": "组合体 9 (副本) (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 12.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": -0.6806784082777886,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 32,
+            "name": "组合体 9 (副本) (副本) (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 15.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 38,
+            "name": "球体 38",
+            "pos": {
+              "x": 0.8977262068737011,
+              "y": 0.4499970703449047,
+              "z": -2.644646395739884
+            },
+            "rot": {
+              "x": -1.9370507817405171,
+              "y": 0.029935446272828386,
+              "z": -2.767031177520469
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          }
+        ],
+        "lighting": null
+      }
+    },
+    {
+      "index": 2,
+      "delay": 1,
+      "state": {
+        "objects": [
+          {
+            "id": 9,
+            "name": "组合体 9",
+            "pos": {
+              "x": 0,
+              "y": 1,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 4.6872999999523195,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": true,
+              "anchored": true,
+              "autoRotate": {
+                "enabled": true,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 18,
+            "name": "组合体 9 (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 10,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 25,
+            "name": "组合体 9 (副本) (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 15.5,
+              "z": 0
+            },
+            "rot": {
+              "x": 0,
+              "y": -0.6806784082777886,
+              "z": 0
+            },
+            "scl": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "physics": {
+              "enabled": false,
+              "anchored": false,
+              "autoRotate": {
+                "enabled": false,
+                "axis": "y",
+                "speed": 1
+              },
+              "initialKinetic": {
+                "enabled": false,
+                "velocity": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                }
+              },
+              "attraction": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              },
+              "repulsion": {
+                "enabled": false,
+                "targetId": "",
+                "strength": 1
+              }
+            }
+          },
+          {
+            "id": 32,
+            "name": "组合体 9 (副本) (副本) (副本) (副本)",
+            "pos": {
+              "x": 0,
+              "y": 20,
               "z": 0
             },
             "rot": {

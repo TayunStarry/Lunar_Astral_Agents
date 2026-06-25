@@ -4,22 +4,13 @@
 
 ---
 
-<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音合成-0.webp" alt="独立模块-语音合成-0" width="360"></p>
-
-*图：语音合成主界面*
-
-<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音合成-1.webp" alt="独立模块-语音合成-1" width="360"></p>
-
-*图：语音合成功能展示*
-
----
-
 ## 目录
 
 - [功能概述](#功能概述)
 - [项目结构](#项目结构)
 - [核心架构](#核心架构)
 - [核心模块说明](#核心模块说明)
+- [缓存机制](#缓存机制)
 - [API 接口定义](#api-接口定义)
 - [编译与运行](#编译与运行)
 - [使用示例](#使用示例)
@@ -37,7 +28,8 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
 | 音色克隆 | 通过参考音频（reference audio）控制合成音色 |
 | GPU 加速 | 通过 CUDA、Vulkan、Metal 等多后端加速推理 |
 | 本地运行 | 纯 C++/Go 实现，无需 Python 环境 |
-| 嵌入式界面 | Go 内嵌 Web UI，WebView 桌面窗口 |
+| 纯后端服务 | 仅提供 HTTP/WebSocket API，无前端界面 |
+| 音频缓存 | LRU + singleflight 缓存机制，避免重复合成 |
 
 ---
 
@@ -56,19 +48,11 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
     <li style="padding-left: 1.5em;">
       <strong>module/</strong> <span style="color: #6a737d;">— Go 逻辑层</span>
       <ul style="list-style-type: none; padding-left: 1.5em;">
-        <li><code>generate.go</code> <span style="color: #6a737d;">— 语音生成核心逻辑</span></li>
-        <li><code>variable.go</code> <span style="color: #6a737d;">— TTS 引擎全局变量</span></li>
-        <li><code>stream.go</code> <span style="color: #6a737d;">— 流式音频输出</span></li>
-      </ul>
-    </li>
-    <li style="padding-left: 1.5em;">
-      <strong>client/</strong> <span style="color: #6a737d;">— 前端界面</span>
-      <ul style="list-style-type: none; padding-left: 1.5em;">
-        <li><code>index.html</code> <span style="color: #6a737d;">— 主页面（玻璃拟态风格）</span></li>
-        <li><code>app.js</code> <span style="color: #6a737d;">— 前端逻辑</span></li>
-        <li><code>style.css</code> <span style="color: #6a737d;">— 样式表</span></li>
-        <li><code>picture.webp</code> <span style="color: #6a737d;">— 背景装饰图</span></li>
-        <li><code>favicon.ico</code> <span style="color: #6a737d;">— 图标</span></li>
+        <li><code>type.go</code> <span style="color: #6a737d;">— 类型定义（含缓存类型）</span></li>
+        <li><code>variable.go</code> <span style="color: #6a737d;">— 全局变量与缓存实例</span></li>
+        <li><code>cache.go</code> <span style="color: #6a737d;">— LRU 缓存与单飞机制实现</span></li>
+        <li><code>generate.go</code> <span style="color: #6a737d;">— 语音生成核心逻辑（集成缓存）</span></li>
+        <li><code>stream.go</code> <span style="color: #6a737d;">— 流式音频输出（集成缓存）</span></li>
       </ul>
     </li>
     <li style="padding-left: 1.5em;">
@@ -163,9 +147,11 @@ WAV 封装 → .wav 文件/流
 
 | 文件 | 关键函数 | 说明 |
 |------|---------|------|
-| [variable.go](module/variable.go) | `InitTTSEngine()` | 初始化 TTS 引擎（加载模型 + 参考音频） |
-| [generate.go](module/generate.go) | `SynthesizeText()`, `TTSHandler()` | CGO 调用 C++ 引擎生成音频、HTTP 请求处理 |
-| [stream.go](module/stream.go) | `TTSStreamHandler()`, `SynthesizeTextStreaming()` | WebSocket 流式音频输出管理 |
+| [type.go](module/type.go) | `TTSCache`, `CacheEntry`, `InflightCall` | 类型定义集中管理（含缓存类型） |
+| [variable.go](module/variable.go) | `ttsCache`, `synthFunc` | 全局变量与缓存实例 |
+| [cache.go](module/cache.go) | `NewTTSCache()`, `ComputeCacheKey()`, `Get()`, `Set()` | LRU 缓存与单飞机制实现 |
+| [generate.go](module/generate.go) | `SynthesizeText()`, `synthesizeWithCache()`, `TTSHandler()` | CGO 调用 C++ 引擎生成音频、缓存集成、HTTP 请求处理 |
+| [stream.go](module/stream.go) | `TTSStreamHandler()`, `SynthesizeTextStreaming()` | WebSocket 流式音频输出管理（集成缓存） |
 
 ### C++ 层 (cpp/src/)
 
@@ -192,6 +178,65 @@ GGML 库通过条件编译支持多种 GPU 加速后端：
 | OpenCL | `GGML_USE_OPENCL` | 通用 GPU |
 | BLAS | `GGML_USE_BLAS` | CPU 加速 |
 | RPC | `GGML_USE_RPC` | 远程推理 |
+
+---
+
+## 缓存机制
+
+系统集成了 LRU + singleflight 缓存机制，避免相同文本的重复合成，显著提升响应速度。
+
+### 缓存架构
+
+```
+请求到达
+    │
+    ▼
+构建缓存键（SHA256(文本+参考音频+参数)）
+    │
+    ▼
+DisableCache=false? ──否──► 跳过缓存查询
+    │是
+    ▼
+缓存命中? ──是──► 直接返回缓存的音频数据
+    │否
+    ▼
+单飞检查（防止缓存击穿）
+    │
+    ├─ 已有合成中 ──► 等待结果并返回
+    │
+    └─ 首次请求 ──► 执行TTS合成
+                        │
+                        ▼
+                  写入缓存 + 通知等待者
+                        │
+                        ▼
+                  返回音频数据
+```
+
+### 缓存特性
+
+| 特性 | 说明 |
+|------|------|
+| LRU 淘汰 | 容量上限 64 条，淘汰最久未使用的条目 |
+| 单飞模式 | 并发相同请求只合成一次，防止缓存击穿 |
+| 缓存键 | 基于文本、参考音频、语言ID、采样参数的 SHA256 哈希 |
+| 强制更新 | `disable_cache=true` 时跳过缓存查询但仍更新缓存 |
+| 线程安全 | 基于 `sync.RWMutex` 保护并发访问 |
+| 流式缓存 | 流式合成完成后缓存完整音频，下次请求可直接返回 |
+
+### 缓存控制
+
+通过请求参数 `disable_cache` 控制：
+
+```json
+{
+  "text": "你好世界",
+  "disable_cache": false  // false=优先使用缓存, true=强制重新合成
+}
+```
+
+- `disable_cache=false`（默认）：优先查询缓存，命中则返回缓存数据，未命中则合成并缓存
+- `disable_cache=true`：跳过缓存查询直接合成，合成完成后更新缓存
 
 ---
 
@@ -376,7 +421,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
 .\Qwen3_TTS_Lunar.exe
 ```
 
-程序自动打开 WebView 窗口，提供可视化文本输入与语音播放界面。
+程序启动后作为后台 HTTP 服务运行，通过 `http://localhost:36365` 提供 TTS API 接口。
 
 ---
 

@@ -5,9 +5,6 @@ package module
 #cgo CFLAGS: -I"${SRCDIR}/../cpp/src" -I"${SRCDIR}/../cpp/ggml/include"
 #include <stdlib.h>
 #include "qwen3tts_c_api.h"
-
-//export streamPCMCallback
-extern int streamPCMCallback(float* samples, int32_t n_samples, int32_t sample_rate, int is_final, void* user_data);
 */
 import "C"
 
@@ -22,7 +19,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 )
@@ -51,28 +47,6 @@ type speakerEmbedCache struct {
 	fileHashes map[string]string
 	// cacheDir 用于指定缓存目录
 	cacheDir string
-}
-
-// StreamPCMChunk 用于存储PCM音频数据
-type StreamPCMChunk struct {
-	// Samples 用于存储PCM音频数据
-	Samples []float32
-	// SampleRate 用于存储采样率
-	SampleRate int32
-	// IsFinal 用于存储是否为最后一帧音频
-	IsFinal bool
-}
-
-// streamingContext 用于存储流式上下文
-type streamingContext struct {
-	// Ch 用于存储PCM音频数据的通道
-	Ch chan StreamPCMChunk
-	// Done 用于存储流式上下文是否完成的通道
-	Done chan struct{}
-	// Err 用于存储流式上下文的错误信息
-	Err error
-	// abort 用于存储流式上下文是否被取消
-	abort atomic.Int32
 }
 
 // TTSRequest 用于存储TTS请求
@@ -105,52 +79,6 @@ type TTSResponse struct {
 	Success bool `json:"success"`
 	// Audio 用于存储音频文件路径
 	Audio string `json:"audio,omitempty"`
-	// Error 用于存储错误信息
-	Error string `json:"error,omitempty"`
-}
-
-// WSStreamRequest 用于存储WebSocket流请求
-type WSStreamRequest struct {
-	// Text 用于存储要转换的文本
-	Text string `json:"text"`
-	// RefAudio 用于存储参考音频文件
-	RefAudio string `json:"ref_audio,omitempty"`
-	// LanguageID 用于存储语言ID
-	LanguageID int32 `json:"language_id,omitempty"`
-	// ChunkFrames 用于存储每帧音频的样本数
-	ChunkFrames int32 `json:"chunk_frames,omitempty"`
-	// Temperature 用于控制生成随机性
-	Temperature float32 `json:"temperature,omitempty"`
-	// TopK 用于Top-K采样
-	TopK int32 `json:"top_k,omitempty"`
-	// TopP 用于Top-P采样
-	TopP float32 `json:"top_p,omitempty"`
-	// MaxTokens 用于设置最大生成token数
-	MaxTokens int32 `json:"max_tokens,omitempty"`
-	// RepetitionPenalty 用于控制重复惩罚
-	RepetitionPenalty float32 `json:"repetition_penalty,omitempty"`
-	// Threads 用于设置线程数
-	Threads int32 `json:"threads,omitempty"`
-	// DisableCache 用于禁用缓存映射机制
-	DisableCache bool `json:"disable_cache,omitempty"`
-}
-
-// WSStreamResponse 用于存储WebSocket流响应
-type WSStreamResponse struct {
-	// Type 用于存储响应类型
-	Type string `json:"type"`
-	// Audio 用于存储音频文件路径
-	Audio string `json:"audio,omitempty"`
-	// ChunkIndex 用于存储音频块序号
-	ChunkIndex int32 `json:"chunk_index,omitempty"`
-	// TotalChunks 用于存储总块数（final时提供）
-	TotalChunks int32 `json:"total_chunks,omitempty"`
-	// TotalSamples 用于存储总样本数
-	TotalSamples int32 `json:"total_samples,omitempty"`
-	// SampleRate 用于存储采样率
-	SampleRate int32 `json:"sample_rate,omitempty"`
-	// IsFinal 用于存储是否为最后一帧音频
-	IsFinal bool `json:"is_final,omitempty"`
 	// Error 用于存储错误信息
 	Error string `json:"error,omitempty"`
 }
@@ -535,6 +463,51 @@ func putUint32LE(b []byte, v uint32) {
 	b[3] = byte(v >> 24)
 }
 
+// synthesizeWithCache 执行带缓存支持的TTS合成
+// 当 DisableCache 为 false 时优先查询缓存，缓存未命中时执行实际合成并写入缓存
+// 使用 singleflight 模式防止高并发下的缓存击穿
+func synthesizeWithCache(req *TTSRequest) (string, error) {
+	cacheKey := buildCacheKey(req)
+
+	// 如果未禁用缓存，尝试从缓存获取
+	if !req.DisableCache {
+		if audioData, hit := ttsCache.Get(cacheKey); hit {
+			logger.SubInfo("QWEN-TTS", "Cache", "缓存命中，返回已缓存音频: [%s]", req.Text)
+			return audioData, nil
+		}
+	}
+
+	// 单飞模式：防止并发重复合成（缓存击穿保护）
+	inflight, exists := ttsCache.GetOrCreateInflight(cacheKey)
+	if exists {
+		logger.SubInfo("QWEN-TTS", "Cache", "等待已有合成完成: [%s]", req.Text)
+		audioData, err := inflight.Wait()
+		if err != nil {
+			return "", err
+		}
+		return audioData, nil
+	}
+	defer ttsCache.RemoveInflight(cacheKey)
+
+	// 执行实际的TTS合成
+	samples, err := synthFunc(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
+	if err != nil {
+		inflight.Complete("", err)
+		return "", err
+	}
+
+	wavData := EncodePCMToWAV(samples, 24000)
+	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
+
+	// 无论 disable_cache 是否为 true，都更新缓存
+	// 当 disable_cache=true 时，强制生成新数据并更新缓存
+	ttsCache.Set(cacheKey, audioBase64)
+	inflight.Complete(audioBase64, nil)
+
+	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
+	return audioBase64, nil
+}
+
 func TTSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
@@ -571,7 +544,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	samples, err := SynthesizeText(req.Text, req.RefAudio, req.LanguageID, req.Temperature, req.TopK, req.TopP, req.MaxTokens, req.RepetitionPenalty, req.Threads)
+	audioBase64, err := synthesizeWithCache(&req)
 	if err != nil {
 		logger.Error("QWEN-TTS", "合成失败: [%s] %v", req.Text, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -581,11 +554,6 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	wavData := EncodePCMToWAV(samples, 24000)
-	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
-
-	logger.Info("QWEN-TTS", "合成完成: [%s] 采样数: %d", req.Text, len(samples))
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(TTSResponse{
@@ -662,166 +630,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		"path":    absPath,
 		"name":    header.Filename,
 	})
-}
-
-//export streamPCMCallback
-func streamPCMCallback(samples *C.float, nSamples C.int32_t, sampleRate C.int32_t, isFinal C.int, userData unsafe.Pointer) C.int {
-	ctxID := *(*C.int32_t)(userData)
-	ctxIDInt := int32(ctxID)
-
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxIDInt]
-	streamCtxMapMu.Unlock()
-
-	if !exists {
-		return 1
-	}
-
-	if ctx.abort.Load() != 0 {
-		return 1
-	}
-
-	n := int(nSamples)
-	chunk := StreamPCMChunk{
-		SampleRate: int32(sampleRate),
-		IsFinal:    isFinal != 0,
-	}
-
-	if n > 0 {
-		sampleSlice := (*[1 << 30]C.float)(unsafe.Pointer(samples))[:n:n]
-		chunk.Samples = make([]float32, n)
-		for i := 0; i < n; i++ {
-			chunk.Samples[i] = float32(sampleSlice[i])
-		}
-	}
-
-	select {
-	case ctx.Ch <- chunk:
-		return 0
-	case <-ctx.Done:
-		ctx.abort.Store(1)
-		return 1
-	}
-}
-
-func SynthesizeTextStreaming(text, refAudio string, languageID int32, chunkFrames int32, temperature float32, topK int32, topP float32, maxTokens int32, repetitionPenalty float32, threads int32) (int32, error) {
-	if globalTTS == nil || globalTTS.handle == nil {
-		return 0, fmt.Errorf("TTS 引擎未初始化")
-	}
-
-	if refAudio == "" {
-		refAudio = globalTTS.refAudio
-	}
-	if languageID == 0 {
-		languageID = globalTTS.languageID
-	}
-
-	embedding, err := getOrExtractEmbedding(refAudio)
-	if err != nil {
-		return 0, err
-	}
-
-	if threads <= 0 {
-		threads = int32(max(1, runtime.NumCPU()-1))
-	}
-
-	streamCtxMapMu.Lock()
-	streamCtxCounter++
-	ctxID := streamCtxCounter
-	ctx := &streamingContext{
-		Ch:   make(chan StreamPCMChunk, 4),
-		Done: make(chan struct{}),
-	}
-	streamCtxMap[ctxID] = ctx
-	streamCtxMapMu.Unlock()
-
-	cText := C.CString(text)
-	cEmbedding := make([]C.float, len(embedding))
-	for i, v := range embedding {
-		cEmbedding[i] = C.float(v)
-	}
-
-	var cParams C.Qwen3TtsParams
-	C.qwen3_tts_default_params(&cParams)
-	cParams.n_threads = C.int32_t(threads)
-	cParams.language_id = C.int32_t(languageID)
-	if temperature != 0 {
-		cParams.temperature = C.float(temperature)
-	}
-	if topK != 0 {
-		cParams.top_k = C.int32_t(topK)
-	}
-	if topP != 0 {
-		cParams.top_p = C.float(topP)
-	}
-	if maxTokens != 0 {
-		cParams.max_audio_tokens = C.int32_t(maxTokens)
-	}
-	if repetitionPenalty != 0 {
-		cParams.repetition_penalty = C.float(repetitionPenalty)
-	}
-
-	pCtxID := new(C.int32_t)
-	*pCtxID = C.int32_t(ctxID)
-	cChunkFrames := C.int32_t(chunkFrames)
-
-	go func() {
-		defer C.free(unsafe.Pointer(cText))
-
-		globalTTS.mu.Lock()
-		result := C.qwen3_tts_synthesize_streaming_with_embedding(
-			globalTTS.handle,
-			cText,
-			(*C.float)(unsafe.Pointer(&cEmbedding[0])),
-			C.int32_t(len(cEmbedding)),
-			&cParams,
-			C.qwen3_tts_stream_callback(C.streamPCMCallback),
-			unsafe.Pointer(pCtxID),
-			cChunkFrames,
-		)
-		globalTTS.mu.Unlock()
-
-		streamCtxMapMu.Lock()
-		delete(streamCtxMap, ctxID)
-		streamCtxMapMu.Unlock()
-
-		if result != 0 {
-			errStr := C.GoString(C.qwen3_tts_get_error(globalTTS.handle))
-			ctx.Err = fmt.Errorf("TTS 流式合成失败: %s", errStr)
-		}
-		close(ctx.Done)
-	}()
-
-	return ctxID, nil
-}
-
-// AbortStreamContext 中止指定流式上下文的合成操作
-func AbortStreamContext(ctxID int32) {
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxID]
-	streamCtxMapMu.Unlock()
-	if exists {
-		ctx.abort.Store(1)
-	}
-}
-
-// GetStreamChannel 获取指定流式上下文的音频通道和完成信号
-func GetStreamChannel(ctxID int32) (<-chan StreamPCMChunk, <-chan struct{}, error) {
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxID]
-	streamCtxMapMu.Unlock()
-	if !exists {
-		return nil, nil, fmt.Errorf("流式上下文未找到")
-	}
-	return ctx.Ch, ctx.Done, nil
-}
-
-// GetStreamContext 获取指定流式上下文，用于检查错误等
-func GetStreamContext(ctxID int32) (*streamingContext, bool) {
-	streamCtxMapMu.Lock()
-	ctx, exists := streamCtxMap[ctxID]
-	streamCtxMapMu.Unlock()
-	return ctx, exists
 }
 
 func HealthHandler(w http.ResponseWriter, r *http.Request) {

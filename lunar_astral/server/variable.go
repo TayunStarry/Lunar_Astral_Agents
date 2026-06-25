@@ -6,11 +6,11 @@ import (
 	image "image/server"
 	"lunar_astral/model"
 	"lunar_astral/model/llama"
-	"lunar_astral/model/tts"
 	"lunar_astral/server/handlers"
 	"net/http"
 	storage "storage/server"
 	"sync"
+	tts"qwen3_tts_lunar/module"
 
 	"github.com/gorilla/websocket"
 )
@@ -85,8 +85,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
 	// TTS语音服务相关接口
-	{Path: "/tts", Handler: tts.TTSHandlerWrapper, Method: "POST", Description: "TTS语音合成服务"},
-	{Path: "/tts/stream", Handler: tts.TTSStreamHandlerWrapper, Method: "GET", Description: "TTS流式合成服务"},
+	{Path: "/tts", Handler: tts.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
+	{Path: "/tts/stream", Handler: tts.TTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
 	// LTPX 工具动态管理接口
 	{Path: "/ltpx/load", Handler: handlers.LTPXLoadHandler, Method: "POST", Description: "加载LTPX工具包"},
 	{Path: "/ltpx/unload", Handler: handlers.LTPXUnloadHandler, Method: "POST", Description: "卸载LTPX工具包"},

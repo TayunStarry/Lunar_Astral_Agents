@@ -1,9 +1,6 @@
 package main
 
 import (
-	"embed"
-	"io"
-	"io/fs"
 	"logger"
 	"net"
 	"net/http"
@@ -14,9 +11,6 @@ import (
 	"syscall"
 	"time"
 )
-
-//go:embed client/*
-var clientFiles embed.FS
 
 var (
 	httpMux    *http.ServeMux
@@ -31,35 +25,13 @@ type Endpoint struct {
 }
 
 var endpoints = []Endpoint{
-	{Path: "/tts/", Handler: module.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	{Path: "/tts/stream", Handler: module.TTSStreamHandler, Method: "GET", Description: "TTS流式合成服务"},
+	{Path: "/tts", Handler: module.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
 	{Path: "/upload/", Handler: module.UploadHandler, Method: "POST", Description: "参考音频上传"},
 	{Path: "/health", Handler: module.HealthHandler, Method: "GET", Description: "健康检查"},
 }
 
 func registerHandlers() {
 	httpMux = http.NewServeMux()
-
-	clientFS, err := fs.Sub(clientFiles, "client")
-	if err == nil {
-		fileServer := http.FileServer(http.FS(clientFS))
-		httpMux.Handle("/", http.StripPrefix("/", fileServer))
-		logger.Info("QWEN-TTS", "使用嵌入的客户端文件")
-	} else {
-		assetsDir := "./client"
-		if _, err := os.Stat(assetsDir); err == nil {
-			fileServer := http.FileServer(http.Dir(assetsDir))
-			httpMux.Handle("/", http.StripPrefix("/", fileServer))
-			logger.Info("QWEN-TTS", "使用本地文件系统客户端文件")
-		} else {
-			logger.Error("QWEN-TTS", "未找到客户端文件目录")
-			httpMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				w.WriteHeader(http.StatusNotFound)
-				io.WriteString(w, "<html><body><h1>404 Not Found</h1><p>客户端文件未找到</p></body></html>")
-			})
-		}
-	}
 
 	for _, endpoint := range endpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
@@ -111,17 +83,6 @@ func setupSignalHandling() chan os.Signal {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	return quit
-}
-
-func waitForShutdown(quit chan os.Signal) {
-	<-quit
-	logger.Info("QWEN-TTS", "正在关闭...")
-
-	if httpServer != nil {
-		shutdownServer()
-	}
-
-	logger.Info("QWEN-TTS", "已安全关闭")
 }
 
 func shutdownServer() {

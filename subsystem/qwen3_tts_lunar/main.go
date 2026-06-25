@@ -1,26 +1,20 @@
 package main
 
 import (
-	"browser"
-	"config"
 	"context"
 	"flag"
+	"fmt"
 	"logger"
 	"os"
 	"qwen3_tts_lunar/module"
 	"time"
-)
 
-// reloadPageParameters 重新加载页面参数
-func reloadPageParameters() {
-	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
-	*config.WebViewWidth = 1150
-	*config.WebViewHeight = 960
-}
+	"config"
+)
 
 // main 主函数
 func main() {
-	addr := ":36365"
+	addr := fmt.Sprintf(":%d", *config.BasicPort)
 	modelDir := *config.LocalDir + "/models/Qwen3-TTS"
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	flag.Parse()
@@ -36,19 +30,11 @@ func main() {
 	logger.Info("QWEN-TTS", "监听端口: %s", addr)
 	go startServer(addr)
 
-	if waitForServerReady(addr, 10) {
-		url := "http://localhost" + addr
-		reloadPageParameters()
-		browser.OpenBrowser(url)
-	}
-
 	quit := setupSignalHandling()
 
 	select {
 	case <-quit:
 		logger.Info("QWEN-TTS", "接收到中断信号，正在关闭...")
-	case <-browser.WebViewClosed():
-		logger.Info("QWEN-TTS", "检测到 WebView 关闭，正在关闭...")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -62,6 +48,5 @@ func main() {
 
 	shutdownServer()
 
-	browser.CloseWebView()
 	logger.Info("QWEN-TTS", "已成功关闭")
 }

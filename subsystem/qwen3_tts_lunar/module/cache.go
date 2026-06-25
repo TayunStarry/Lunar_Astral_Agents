@@ -1,4 +1,4 @@
-package tts
+package module
 
 import (
 	"container/list"
@@ -35,7 +35,7 @@ func (c *TTSCache) Get(key string) (string, bool) {
 
 	if !exists {
 		c.misses.Add(1)
-		logger.SubInfo("TTS-Cache", "未命中", "缓存未命中: key=%s", key[:16])
+		logger.SubInfo("QWEN-TTS", "Cache", "未命中: key=%s", truncateKey(key))
 		return "", false
 	}
 
@@ -47,13 +47,13 @@ func (c *TTSCache) Get(key string) (string, bool) {
 		c.lruList.MoveToFront(entry.element)
 		c.mu.Unlock()
 		c.hits.Add(1)
-		logger.SubInfo("TTS-Cache", "命中", "缓存命中: key=%s", key[:16])
+		logger.SubInfo("QWEN-TTS", "Cache", "命中: key=%s", truncateKey(key))
 		return entry.audioData, true
 	}
 	c.mu.Unlock()
 
 	c.misses.Add(1)
-	logger.SubInfo("TTS-Cache", "未命中", "缓存未命中(竞争淘汰): key=%s", key[:16])
+	logger.SubInfo("QWEN-TTS", "Cache", "未命中(竞争淘汰): key=%s", truncateKey(key))
 	return "", false
 }
 
@@ -67,7 +67,7 @@ func (c *TTSCache) Set(key, audioData string) {
 		entry.audioData = audioData
 		c.lruList.MoveToFront(entry.element)
 		c.updates.Add(1)
-		logger.SubInfo("TTS-Cache", "更新", "缓存更新: key=%s, 当前条目数=%d", key[:16], c.lruList.Len())
+		logger.SubInfo("QWEN-TTS", "Cache", "更新: key=%s, 当前条目数=%d", truncateKey(key), c.lruList.Len())
 		return
 	}
 
@@ -84,7 +84,7 @@ func (c *TTSCache) Set(key, audioData string) {
 	entry.element = c.lruList.PushFront(entry)
 	c.items[key] = entry
 	c.updates.Add(1)
-	logger.SubInfo("TTS-Cache", "添加", "缓存添加: key=%s, 当前条目数=%d", key[:16], c.lruList.Len())
+	logger.SubInfo("QWEN-TTS", "Cache", "添加: key=%s, 当前条目数=%d", truncateKey(key), c.lruList.Len())
 }
 
 // evictLRU 淘汰链表尾部（最久未使用）的缓存条目，调用前需持有写锁
@@ -98,7 +98,7 @@ func (c *TTSCache) evictLRU() {
 	delete(c.items, entry.key)
 	c.lruList.Remove(element)
 	c.evictions.Add(1)
-	logger.SubInfo("TTS-Cache", "淘汰", "LRU淘汰: key=%s, 当前条目数=%d", entry.key[:16], c.lruList.Len())
+	logger.SubInfo("QWEN-TTS", "Cache", "LRU淘汰: key=%s, 当前条目数=%d", truncateKey(entry.key), c.lruList.Len())
 }
 
 // GetOrCreateInflight 获取或创建单飞调用，防止缓存击穿
@@ -109,14 +109,14 @@ func (c *TTSCache) GetOrCreateInflight(key string) (*InflightCall, bool) {
 	defer c.mu.Unlock()
 
 	if call, exists := c.inflight[key]; exists {
-		return call, true // 已存在，返回已有的调用
+		return call, true
 	}
 
 	call := &InflightCall{
-		result: make(chan inflightResult, 1),
+		done: make(chan struct{}),
 	}
 	c.inflight[key] = call
-	return call, false // 新创建
+	return call, false
 }
 
 // RemoveInflight 移除单飞调用记录，合成完成后调用
@@ -126,19 +126,30 @@ func (c *TTSCache) RemoveInflight(key string) {
 	delete(c.inflight, key)
 }
 
-// Complete 完成单飞调用，向等待者发送结果
+// Complete 完成单飞调用，向所有等待者发送结果
+// 使用 close(done) 模式确保所有等待者都能被唤醒
 func (call *InflightCall) Complete(data string, err error) {
-	call.result <- inflightResult{data: data, err: err}
+	call.mu.Lock()
+	defer call.mu.Unlock()
+	if !call.completed {
+		call.result = data
+		call.err = err
+		call.completed = true
+		close(call.done)
+	}
 }
 
 // Wait 等待单飞调用完成并返回结果
+// 多个等待者可同时调用，都会在 Complete 后被唤醒
 func (call *InflightCall) Wait() (string, error) {
-	result := <-call.result
-	return result.data, result.err
+	<-call.done
+	return call.result, call.err
 }
 
 // Stats 返回缓存统计信息
 func (c *TTSCache) Stats() map[string]int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return map[string]int64{
 		"hits":      c.hits.Load(),
 		"misses":    c.misses.Load(),
@@ -146,4 +157,27 @@ func (c *TTSCache) Stats() map[string]int64 {
 		"updates":   c.updates.Load(),
 		"size":      int64(c.lruList.Len()),
 	}
+}
+
+// truncateKey 截断缓存键用于日志显示，避免日志过长
+func truncateKey(key string) string {
+	if len(key) > 16 {
+		return key[:16]
+	}
+	return key
+}
+
+// buildCacheKey 根据TTS请求参数构建缓存键
+func buildCacheKey(req *TTSRequest) string {
+	return ComputeCacheKey(map[string]interface{}{
+		"text":               req.Text,
+		"ref_audio":          req.RefAudio,
+		"language_id":        req.LanguageID,
+		"temperature":        req.Temperature,
+		"top_k":              req.TopK,
+		"top_p":              req.TopP,
+		"max_tokens":         req.MaxTokens,
+		"repetition_penalty": req.RepetitionPenalty,
+		"threads":            req.Threads,
+	})
 }

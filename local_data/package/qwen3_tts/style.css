@@ -285,28 +285,6 @@ code {
     box-shadow: 0 4px 20px rgba(108, 155, 207, 0.15);
 }
 
-.btn-glass-stream {
-    background: linear-gradient(135deg, rgba(157, 107, 255, 0.10), rgba(108, 155, 207, 0.06));
-    border-color: rgba(157, 107, 255, 0.18);
-}
-
-.btn-glass-stream:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(157, 107, 255, 0.18), rgba(108, 155, 207, 0.12));
-    border-color: rgba(157, 107, 255, 0.35);
-    box-shadow: 0 4px 20px rgba(157, 107, 255, 0.12);
-}
-
-.btn-glass-stream.active {
-    background: linear-gradient(135deg, rgba(157, 107, 255, 0.20), rgba(108, 155, 207, 0.14));
-    border-color: rgba(157, 107, 255, 0.40);
-    animation: streamGlow 2s ease-in-out infinite;
-}
-
-@keyframes streamGlow {
-    0%, 100% { box-shadow: 0 1px 8px rgba(157, 107, 255, 0.08); }
-    50% { box-shadow: 0 3px 18px rgba(157, 107, 255, 0.18); }
-}
-
 .btn-glass-batch {
     background: linear-gradient(135deg, rgba(251, 191, 36, 0.10), rgba(157, 107, 255, 0.06));
     border-color: rgba(251, 191, 36, 0.18);
@@ -925,11 +903,6 @@ code {
     transition: var(--transition);
 }
 
-.player-card.streaming {
-    border-color: rgba(157, 107, 255, 0.30) !important;
-    box-shadow: 0 0 20px rgba(157, 107, 255, 0.08), var(--shadow-card) !important;
-}
-
 .player-badge {
     background: rgba(128, 128, 128, 0.08);
     backdrop-filter: blur(6px);
@@ -939,17 +912,6 @@ code {
     font-weight: 500;
     color: var(--text-secondary);
     margin-left: auto;
-}
-
-.stream-badge {
-    background: rgba(157, 107, 255, 0.08) !important;
-    color: var(--accent) !important;
-    animation: badgePulse 1.5s ease-in-out infinite;
-}
-
-@keyframes badgePulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
 }
 
 /* ---------- 波形图 ---------- */
