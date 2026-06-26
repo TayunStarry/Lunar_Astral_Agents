@@ -1,13 +1,21 @@
 package websocket
 
-import "github.com/gorilla/websocket"
+import (
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
 
 // WebSocket 客户端结构
 type WSClient struct {
 	// WebSocket 连接
 	conn *websocket.Conn
-	// 发送消息通道
+	// 发送消息通道（阻塞式，由 writePump 消费）
 	send chan []byte
+	// 关闭信号通道：客户端任一侧断开后关闭，用于解除广播方的阻塞
+	done chan struct{}
+	// 确保 shutdown 仅执行一次
+	once sync.Once
 	// 客户端引用
 	client *WSClient
 }

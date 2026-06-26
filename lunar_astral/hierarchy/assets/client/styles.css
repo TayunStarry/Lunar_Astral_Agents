@@ -99,9 +99,9 @@ body {
 	z-index: -1;
 }
 
-/* 外层容器：等比缩放，16:9 类手机比例（实际竖屏 9:16） */
+/* 外层容器：等比缩放，3:4 比例（适配手机竖屏，横向空间更充裕） */
 .container {
-	aspect-ratio: 9 / 16;
+	aspect-ratio: 3 / 4;
 	max-height: 100vh;
 	max-width: 100vw;
 	height: 100vh;
