@@ -23,7 +23,7 @@ type embeddingData struct {
 
 // embeddingResponse 对应 OpenAI 兼容 /v1/embeddings 响应体
 type embeddingResponse struct {
-	Data  []embeddingData `json:"data"`            // 嵌入向量列表，与 input 等长
+	Data  []embeddingData `json:"data"` // 嵌入向量列表，与 input 等长
 	Error *struct {
 		Message string `json:"message"` // 错误描述
 	} `json:"error,omitempty"` // 错误响应载荷
@@ -32,11 +32,11 @@ type embeddingResponse struct {
 // embedTexts 批量调用 /v1/embeddings 获取嵌入向量
 // model 参数指定嵌入模型名（通常为集合锁定的 Model 字段）
 // 返回向量切片与输入文本切片等长且一一对应
-func (u *UnifiedDB) embedTexts(ctx context.Context, model string, texts []string) ([][]float32, error) {
-	if !u.vectorInitialized {
+func (d *VectorDB) embedTexts(ctx context.Context, model string, texts []string) ([][]float32, error) {
+	if !d.vectorInitialized {
 		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
 	}
-	if u.embeddingBaseURL == "" {
+	if d.embeddingBaseURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
 	}
 	if len(texts) == 0 {
@@ -52,17 +52,18 @@ func (u *UnifiedDB) embedTexts(ctx context.Context, model string, texts []string
 		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
 	}
 
-	apiURL := strings.TrimRight(u.embeddingBaseURL, "/") + "/v1/embeddings"
+	// base_url 约定已含 /v1 前缀（与 chat completions 一致），仅追加 /embeddings
+	apiURL := strings.TrimRight(d.embeddingBaseURL, "/") + "/embeddings"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if u.embeddingAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+u.embeddingAPIKey)
+	if d.embeddingAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+d.embeddingAPIKey)
 	}
 
-	resp, err := u.httpClient.Do(req)
+	resp, err := d.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求嵌入服务失败: %w", err)
 	}
@@ -101,8 +102,8 @@ func (u *UnifiedDB) embedTexts(ctx context.Context, model string, texts []string
 }
 
 // embedText 嵌入单条文本，返回对应向量
-func (u *UnifiedDB) embedText(ctx context.Context, model string, text string) ([]float32, error) {
-	vecs, err := u.embedTexts(ctx, model, []string{text})
+func (d *VectorDB) embedText(ctx context.Context, model string, text string) ([]float32, error) {
+	vecs, err := d.embedTexts(ctx, model, []string{text})
 	if err != nil {
 		return nil, err
 	}

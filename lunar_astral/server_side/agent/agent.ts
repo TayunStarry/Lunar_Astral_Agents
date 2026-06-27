@@ -99,10 +99,13 @@ class LunarAgent extends AgentDefine {
 				if (OnlyData.unreadRecords.length > 10) {
 					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
 				}
-				/** 解析原始文本：拆分思考区、代码块、正文切片（含display和tts双版本） */
-				const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
+				/** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
+				const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
 				// 如果正文切片为空，抛出异常
 				if (!textChunks.length) throw new Error('清洗后的文本为空');
+				// 动作区与情感区仅打印到终端，不发送到前端、不参与语音合成
+				if (actionBlocks.length) console.log('[动作区]', actionBlocks.join(' | '));
+				if (emotionBlocks.length) console.log('[情感区]', emotionBlocks.join(' | '));
 				// 第一步：按顺序逐一发送思考区内容（不参与语音合成）
 				for (const thinking of thinkingBlocks) {
 					pushContext(messageType, thinking, '');

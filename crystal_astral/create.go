@@ -61,12 +61,46 @@ func reloadPageParameters() {
 	*config.WebViewHeight = 1050
 }
 
+// initVectorDatabase 自动初始化向量数据库实例与默认集合
+// 优先使用配置的 cloud_model_url；未配置时回退到月华服务地址（http://localhost:<BasicPort>/v1）
+// 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化
+func initVectorDatabase() {
+	// 解析嵌入服务 base_url：配置优先，否则回退到月华服务地址
+	baseURL := *config.CloudModelUrl
+	if baseURL == "" {
+		baseURL = fmt.Sprintf("http://localhost:%d/v1", *config.BasicPort)
+	}
+
+	// 第一步：实例初始化（仅配置嵌入服务连接，不产生网络请求）
+	if err := module.VectorInitInstance(baseURL, defaultVectorAPIKey); err != nil {
+		logger.Warn("CrystalAstral", "向量数据库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
+		return
+	}
+	logger.Info("CrystalAstral", "向量数据库实例初始化完成, base_url: %s", baseURL)
+
+	// 第二步：创建/打开默认集合（探针文本嵌入定维度，含网络请求，加超时保护）
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := module.CollectionInit(ctx, defaultVectorCollection, defaultVectorModelName); err != nil {
+		logger.Warn("CrystalAstral", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", defaultVectorCollection, err)
+		return
+	}
+	logger.Info("CrystalAstral", "集合 [%s] 创建成功, 模型: %s", defaultVectorCollection, defaultVectorModelName)
+}
+
 // StartServer 启动服务器
 func StartServer(port int, root http.FileSystem, name string) error {
-	// 初始化统一数据库(SQL + 向量数据库基础)
-	if err := module.InitUnifiedDB(*config.SQLDBPath, *config.VectorDBDir); err != nil {
-		logger.Warn("CrystalAstral", "数据库初始化失败: %v (不影响服务启动)", err)
+	// 初始化 SQL 关系型数据库（SQLite）
+	if err := module.InitSQLDB(*config.SQLDBPath); err != nil {
+		logger.Warn("CrystalAstral", "SQL 数据库初始化失败: %v (不影响服务启动)", err)
 	}
+	// 初始化向量数据库存储目录（仅准备本地存储结构，不产生网络请求）
+	if err := module.InitVectorDB(*config.VectorDBDir); err != nil {
+		logger.Warn("CrystalAstral", "向量数据库初始化失败: %v (不影响服务启动)", err)
+	}
+	// 自动初始化向量数据库实例与默认集合（与 lunar_astral 的 JS agent 行为对齐）
+	// 优先使用配置的 cloud_model_url；未配置时回退到月华服务地址（由代理转发至模型服务）
+	initVectorDatabase()
 	// 启动图像生成任务处理器
 	image_server.StartTaskProcessor()
 	httpMux := http.NewServeMux()

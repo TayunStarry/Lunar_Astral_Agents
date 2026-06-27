@@ -26,8 +26,18 @@
 			<div class="live2d-wrapper" id="live2dWrapper">
 				<div class="live2d-container" id="live2dContainer">
 					<canvas id="live2dCanvas"></canvas>
-					<!-- 触摸交互区域，统一覆盖整个Live2D模型，用于触发AI交流 -->
+					<!-- 触摸交互区域：5行×3列分区网格，对应模型不同身体部位 -->
 					<div class="touch-interaction" id="touchInteraction">
+						<!-- 分区触摸检测层：每个区域对应独立触摸反应事件 -->
+						<div class="touch-region" data-region="face_hair"></div>
+						<div class="touch-region" data-region="right_arm"></div>
+						<div class="touch-region" data-region="chest_belly"></div>
+						<div class="touch-region" data-region="left_arm"></div>
+						<div class="touch-region" data-region="right_hand"></div>
+						<div class="touch-region" data-region="hip"></div>
+						<div class="touch-region" data-region="left_hand"></div>
+						<div class="touch-region" data-region="thigh"></div>
+						<div class="touch-region" data-region="leg_foot"></div>
 						<!-- 点击反馈涟漪动画元素 -->
 						<div class="touch-ripple" id="touchRipple"></div>
 					</div>

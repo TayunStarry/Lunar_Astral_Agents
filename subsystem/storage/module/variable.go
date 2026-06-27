@@ -50,5 +50,8 @@ var previewAllowlist = map[string]PreviewEntry{
 	".cfg":  {MIME: "text/plain", Category: CategoryText},
 }
 
-// Unified 统一数据库实例
-var Unified *UnifiedDB
+// SQLDatabase 关系型数据库实例（SQLDB）
+var SQLDatabase *SQLDB
+
+// VectorDatabase 向量数据库实例（VectorDB）
+var VectorDatabase *VectorDB

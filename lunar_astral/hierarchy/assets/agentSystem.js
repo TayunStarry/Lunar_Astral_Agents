@@ -468,7 +468,7 @@ var agentSystem = (function (exports) {
         static initChromem() {
             if (BaseConfig.chromemReady)
                 return;
-            const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+            const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
             if (err)
                 console.error('chromem 初始化失败:', err);
             else
@@ -574,7 +574,7 @@ var agentSystem = (function (exports) {
                 return this;
             const allResults = [];
             for (const userMessage of userMessages) {
-                const [results, error] = chromemQuery(userMessage, 5);
+                const [results, error] = chromemQuery('lunar_messages', userMessage, 5);
                 if (error) {
                     console.error('chromem 查询失败:', error);
                     continue;
@@ -1195,7 +1195,7 @@ var agentSystem = (function (exports) {
             if (!queryText || queryText.trim().length === 0) {
                 return '查询文本为空，请提供有效的查询关键词';
             }
-            const [results, error] = chromemQuery(queryText.trim(), topK);
+            const [results, error] = chromemQuery('lunar_messages', queryText.trim(), topK);
             if (error) {
                 console.error('[编纂者] chromem 查询失败:', error);
                 return `向量数据库查询失败: ${error}`;
@@ -1220,14 +1220,14 @@ var agentSystem = (function (exports) {
                     return '向量数据库未就绪，合并失败，请稍后重试';
                 }
             }
-            const [deleteResult, deleteError] = chromemDelete(id.trim());
+            const [deleteResult, deleteError] = chromemDelete('lunar_messages', id.trim());
             if (deleteError) {
                 console.error('[编纂者] 合并时删除旧记录失败:', deleteError);
                 return `合并失败：删除旧记录 ${id} 时出错: ${deleteError}`;
             }
             console.log(`[编纂者] 合并：已删除旧记录 ${id}`);
             const finalContent = this.ensureTimestampInRecord(mergedContent.trim());
-            const [addResult, addError] = chromemAdd('assistant', finalContent);
+            const [addResult, addError] = chromemAdd('lunar_messages', 'assistant', finalContent);
             if (addError) {
                 console.error('[编纂者] 合并时存储新记录失败:', addError);
                 return `合并失败：旧记录 ${id} 已删除，但存储合并内容时出错: ${addError}。合并内容: ${finalContent.slice(0, 200)}`;
@@ -1245,7 +1245,7 @@ var agentSystem = (function (exports) {
                     return '向量数据库未就绪，删除失败，请稍后重试';
                 }
             }
-            const [result, error] = chromemDelete(id.trim());
+            const [result, error] = chromemDelete('lunar_messages', id.trim());
             if (error) {
                 console.error('[编纂者] chromem 删除失败:', error);
                 return `向量数据库删除失败: ${error}`;
@@ -1267,7 +1267,7 @@ var agentSystem = (function (exports) {
             const eventMatch = trimmedContent.match(/事件[:：](.+?)[|｜]/);
             const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
             if (checkQuery) {
-                const [existingResults] = chromemQuery(checkQuery, 5);
+                const [existingResults] = chromemQuery('lunar_messages', checkQuery, 5);
                 if (existingResults && existingResults.length > 0) {
                     const similarRecords = existingResults
                         .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
@@ -1277,7 +1277,7 @@ var agentSystem = (function (exports) {
                 }
             }
             const finalContent = this.ensureTimestampInRecord(trimmedContent);
-            const [result, error] = chromemAdd('assistant', finalContent);
+            const [result, error] = chromemAdd('lunar_messages', 'assistant', finalContent);
             if (error) {
                 console.error('[编纂者] chromem 存储失败:', error);
                 return `向量数据库存储失败: ${error}`;
@@ -1324,7 +1324,7 @@ var agentSystem = (function (exports) {
                 return;
             for (const message of discarded) {
                 const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-                chromemAdd(message.role, content);
+                chromemAdd('lunar_messages', message.role, content);
             }
         }
         queryHistoricalRecords(queryText, topK = 10) {
@@ -1332,7 +1332,7 @@ var agentSystem = (function (exports) {
                 BaseConfig.initChromem();
             if (!BaseConfig.chromemReady)
                 return [];
-            const [results, error] = chromemQuery(queryText, topK);
+            const [results, error] = chromemQuery('lunar_messages', queryText, topK);
             if (error) {
                 console.error('[编纂者] 查询历史记录失败:', error);
                 return [];
@@ -1537,9 +1537,13 @@ var agentSystem = (function (exports) {
                     if (OnlyData.unreadRecords.length > 10) {
                         setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
                     }
-                    const { thinkingBlocks, codeBlocks, textChunks } = parseContent(this.finalResponse);
+                    const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
                     if (!textChunks.length)
                         throw new Error('清洗后的文本为空');
+                    if (actionBlocks.length)
+                        console.log('[动作区]', actionBlocks.join(' | '));
+                    if (emotionBlocks.length)
+                        console.log('[情感区]', emotionBlocks.join(' | '));
                     for (const thinking of thinkingBlocks) {
                         pushContext(messageType, thinking, '');
                     }
@@ -2094,6 +2098,7 @@ var agentSystem = (function (exports) {
     OnlyData.LTPfunction.set('screenshot', handleScreenshot);
     OnlyData.LTPdefinition.push(...screenshotTools);
 
+    const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
     function extractThinkingBlocks(text) {
         const blocks = [];
         const regex = /<think>([\s\S]*?)<\/think>/gi;
@@ -2115,6 +2120,41 @@ var agentSystem = (function (exports) {
             blocks.push(match[0]);
         }
         const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        return [blocks, remaining];
+    }
+    function extractActionBlocks(text) {
+        const blocks = [];
+        const regex = /[\(（]([^()（）]+?)[\)）]/g;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const content = match[1].trim();
+            if (content.length > 0) {
+                blocks.push(content);
+            }
+        }
+        const remaining = text.replace(/[\(（]([^()（）]*?)[\)）]/g, '');
+        return [blocks, remaining];
+    }
+    function extractEmotionBlocks(text) {
+        const blocks = [];
+        const regex = new RegExp(EMOJI_REGEX.source, 'gu');
+        let match;
+        let lastEnd = -1;
+        let current = '';
+        while ((match = regex.exec(text)) !== null) {
+            if (current.length > 0 && match.index === lastEnd) {
+                current += match[0];
+            }
+            else {
+                if (current.length > 0)
+                    blocks.push(current);
+                current = match[0];
+            }
+            lastEnd = match.index + match[0].length;
+        }
+        if (current.length > 0)
+            blocks.push(current);
+        const remaining = text.replace(new RegExp(EMOJI_REGEX.source, 'gu'), '');
         return [blocks, remaining];
     }
     function cleanTextForTTS(text) {
@@ -2145,8 +2185,16 @@ var agentSystem = (function (exports) {
         if (!text)
             return [];
         const LEVEL1_PUNCT = /[。？！—～?!]/;
-        const LEVEL2_PUNCT = /[，,、；;]/;
+        const LEVEL2_PUNCT = /[，,、：；:;]/;
         const MAX_LENGTH = 35;
+        const LEADING_PUNCT = /^[。，、：；:;,?!？！—～"'""''()（）\[\]【】{}<>…\s]+/;
+        const TRAILING_COMMA = /[，,]+$/;
+        function formatChunk(chunk) {
+            let result = chunk.trim();
+            result = result.replace(LEADING_PUNCT, '');
+            result = result.replace(TRAILING_COMMA, '');
+            return result.trim();
+        }
         function splitByPunct(source, punctRegex) {
             const result = [];
             let start = 0;
@@ -2186,7 +2234,9 @@ var agentSystem = (function (exports) {
         }
         for (const fragment of level1) {
             if (fragment.length <= MAX_LENGTH) {
-                result.push(fragment);
+                const formatted = formatChunk(fragment);
+                if (formatted.length > 0)
+                    result.push(formatted);
                 continue;
             }
             let remaining = fragment;
@@ -2205,13 +2255,13 @@ var agentSystem = (function (exports) {
                 if (splitPos === -1) {
                     splitPos = MAX_LENGTH;
                 }
-                const slice = remaining.slice(0, splitPos).trim();
+                const slice = formatChunk(remaining.slice(0, splitPos));
                 if (slice.length > 0) {
                     result.push(slice);
                 }
                 remaining = remaining.slice(splitPos);
             }
-            const tail = remaining.trim();
+            const tail = formatChunk(remaining);
             if (tail.length > 0) {
                 result.push(tail);
             }
@@ -2220,16 +2270,18 @@ var agentSystem = (function (exports) {
     }
     function parseContent(rawText) {
         if (!rawText)
-            return { thinkingBlocks: [], codeBlocks: [], textChunks: [] };
+            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], emotionBlocks: [], textChunks: [] };
         const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
-        const displayText = cleanTextForDisplay(textAfterCode);
+        const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterCode);
+        const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterAction);
+        const displayText = cleanTextForDisplay(textAfterEmotion);
         const displayChunks = splitSentences(displayText);
         const textChunks = displayChunks.map(chunk => ({
             display: chunk,
             tts: cleanTextForTTS(chunk),
         }));
-        return { thinkingBlocks, codeBlocks, textChunks };
+        return { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks };
     }
 
     exports.AgentDefine = AgentDefine;

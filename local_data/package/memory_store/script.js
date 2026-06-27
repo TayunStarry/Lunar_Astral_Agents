@@ -4,12 +4,12 @@
 // ============================================================
 
 var API = {
-    MESSAGES:   '/vector/collections/lunar_messages/messages',
-    STATS:      '/vector/collections/lunar_messages/stats',
+    MESSAGES:   '/vector/lunar_messages/messages',
+    STATS:      '/vector/lunar_messages/stats',
     INIT:       '/vector/init',
-    COLLECTION: '/vector/collections/lunar_messages',
-    DOCS:       '/vector/collections/lunar_messages/documents',
-    REBUILD:    '/vector/collections/lunar_messages/rebuild'
+    COLLECTION: '/vector/lunar_messages',
+    DOCS:       '/vector/lunar_messages/documents',
+    REBUILD:    '/vector/lunar_messages/rebuild'
 };
 
 var PAGE_SIZE = 12;
@@ -484,6 +484,10 @@ async function executeSearch(query) {
 // ========== 添加 ==========
 
 function showAddPanel() {
+    if (!App.initialized) {
+        showToast('向量数据库未初始化，请先完成初始化', 'error');
+        return;
+    }
     D.addPanel.style.display = 'block';
     D.addContent.focus();
 }
@@ -494,6 +498,11 @@ function hideAddPanel() {
 }
 
 async function handleAdd() {
+    if (!App.initialized) {
+        showToast('向量数据库未初始化，请先完成初始化', 'error');
+        return;
+    }
+
     var role = D.addRole.value;
     var content = D.addContent.value.trim();
 

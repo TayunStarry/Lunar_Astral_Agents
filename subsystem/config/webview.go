@@ -6,7 +6,7 @@ var (
 	// WebViewTitle webview 窗口标题
 	WebViewTitle = flag.String("webview-title", "星月智能 - 月之华", "webview 窗口标题")
 	// WebViewWidth webview 窗口宽度
-	WebViewWidth = flag.Int("webview-width", 325, "webview 窗口宽度")
+	WebViewWidth = flag.Int("webview-width", 326, "webview 窗口宽度")
 	// WebViewHeight webview 窗口高度
 	WebViewHeight = flag.Int("webview-height", 500, "webview 窗口高度")
 	// WebViewMinWidth webview 窗口最小宽度

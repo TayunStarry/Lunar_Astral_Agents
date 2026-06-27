@@ -12,70 +12,26 @@ import (
 	"strings"
 )
 
-func writeJSON(w http.ResponseWriter, statusCode int, resp map[string]interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(resp)
-}
-
-func writeError(w http.ResponseWriter, statusCode int, message string) {
-	writeJSON(w, statusCode, map[string]interface{}{
-		"success": false,
-		"error":   message,
-	})
-}
-
-func writeSuccess(w http.ResponseWriter, data interface{}) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success": true,
-		"data":    data,
-	})
-}
-
 // =============================================================================
-// 数据库操作端点 — 替代 database.go
-// =============================================================================
-
-func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "数据库请求[ERROR] -> 不允许的请求方法")
-		return
-	}
-
-	var req module.DatabaseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("数据库请求[ERROR] -> 解析请求失败: %v", err))
-		return
-	}
-
-	result := module.ExecuteDatabaseRequest(req)
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, fmt.Sprintf("数据库请求[ERROR] -> 编码响应失败: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	logger.Info("Storage", "数据库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
-}
-
-// =============================================================================
-// 向量数据库端点 — 多集合 RESTful 架构
-// 路由：/vector/ 子树分发，解析路径中的集合名
+// 向量数据库端点 — 多集合扁平化 RESTful 架构
+// 存储布局：<VectorDBDir>/<collectionName>/{documents.json, metadata.json}
+// URL 布局：/vector/<collectionName>/...（移除旧版 collections/ 中间层）
 // =============================================================================
 
 // VectorHandler 向量数据库统一分发器
 // 支持路径：
-//   POST   /vector/init                            实例初始化（配置嵌入服务连接）
-//   GET    /vector/stats                           全局统计（聚合所有集合）
-//   GET    /vector/collections                     列出所有集合
-//   POST   /vector/collections/{name}              创建/打开集合（锁定模型）
-//   GET    /vector/collections/{name}/stats        集合统计
-//   POST   /vector/collections/{name}/messages     添加消息
-//   GET    /vector/collections/{name}/messages     查询消息
-//   DELETE /vector/collections/{name}/messages     删除消息
-//   GET    /vector/collections/{name}/documents    文档分页列表
-//   POST   /vector/collections/{name}/rebuild      重建（删除维度不符文档）
+//   POST   /vector/init                     实例初始化（配置嵌入服务连接）
+//   GET    /vector/stats                    全局统计（聚合所有集合）
+//   GET    /vector/collections              列出所有集合（保留字）
+//   POST   /vector/{name}                   创建/打开集合（锁定模型）
+//   GET    /vector/{name}/stats             集合统计
+//   POST   /vector/{name}/messages          添加消息
+//   GET    /vector/{name}/messages          查询消息
+//   DELETE /vector/{name}/messages          删除消息
+//   GET    /vector/{name}/documents         文档分页列表
+//   POST   /vector/{name}/rebuild           重建（删除维度不符文档）
+//
+// 保留字：init、stats、collections 不可作为集合名
 func VectorHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/vector/")
 	path = strings.Trim(path, "/")
@@ -86,45 +42,28 @@ func VectorHandler(w http.ResponseWriter, r *http.Request) {
 
 	parts := strings.Split(path, "/")
 
-	// /vector/init
-	if len(parts) == 1 && parts[0] == "init" {
-		handleVectorInit(w, r)
-		return
-	}
-
-	// /vector/stats
-	if len(parts) == 1 && parts[0] == "stats" {
-		handleVectorGlobalStats(w, r)
-		return
-	}
-
-	// /vector/collections 或 /vector/collections/{name}/...
-	if parts[0] != "collections" {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("向量数据库请求[ERROR] -> 未知路径: /vector/%s", path))
-		return
-	}
-
-	// /vector/collections — 列出所有集合
+	// 单段路径：保留字端点 或 集合创建
 	if len(parts) == 1 {
-		handleVectorListCollections(w, r)
-		return
+		switch parts[0] {
+		case "init":
+			handleVectorInit(w, r)
+			return
+		case "stats":
+			handleVectorGlobalStats(w, r)
+			return
+		case "collections":
+			handleVectorListCollections(w, r)
+			return
+		default:
+			// /vector/{name} — 创建/打开集合
+			handleVectorCollectionCreate(w, r, parts[0])
+			return
+		}
 	}
 
-	// parts[1] = 集合名, parts[2+] = 操作
-	if len(parts) < 2 {
-		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> 集合名不能为空")
-		return
-	}
-
-	collectionName := parts[1]
-
-	// /vector/collections/{name} — 创建/打开集合
-	if len(parts) == 2 {
-		handleVectorCollectionCreate(w, r, collectionName)
-		return
-	}
-
-	action := parts[2]
+	// 两段路径：/vector/{name}/{action}
+	collectionName := parts[0]
+	action := parts[1]
 	switch action {
 	case "messages":
 		handleVectorMessages(w, r, collectionName)
@@ -249,7 +188,7 @@ func handleVectorListCollections(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleVectorCollectionCreate POST /vector/collections/{name} — 创建/打开集合（探针定维度）
+// handleVectorCollectionCreate POST /vector/{name} — 创建/打开集合（探针定维度）
 func handleVectorCollectionCreate(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
@@ -290,7 +229,7 @@ func handleVectorCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 	})
 }
 
-// handleVectorCollectionStats GET /vector/collections/{name}/stats — 集合统计
+// handleVectorCollectionStats GET /vector/{name}/stats — 集合统计
 func handleVectorCollectionStats(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
@@ -321,7 +260,7 @@ func handleVectorCollectionStats(w http.ResponseWriter, r *http.Request, collect
 	})
 }
 
-// handleVectorMessages POST/GET/DELETE /vector/collections/{name}/messages
+// handleVectorMessages POST/GET/DELETE /vector/{name}/messages
 func handleVectorMessages(w http.ResponseWriter, r *http.Request, collectionName string) {
 	switch r.Method {
 	case http.MethodPost:
@@ -455,7 +394,7 @@ func handleVectorDeleteMessage(w http.ResponseWriter, r *http.Request, collectio
 	})
 }
 
-// handleVectorDocuments GET /vector/collections/{name}/documents — 文档分页列表
+// handleVectorDocuments GET /vector/{name}/documents — 文档分页列表
 func handleVectorDocuments(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
@@ -500,7 +439,7 @@ func handleVectorDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 	})
 }
 
-// handleVectorRebuild POST /vector/collections/{name}/rebuild — 重建（删除维度不符文档）
+// handleVectorRebuild POST /vector/{name}/rebuild — 重建（删除维度不符文档）
 func handleVectorRebuild(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")

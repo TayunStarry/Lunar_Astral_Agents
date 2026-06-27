@@ -25,6 +25,14 @@ const (
 	ggufTypeFloat64 uint32 = 12
 )
 
+// ==== 向量数据库自动初始化默认值 ====
+// 与 lunar_astral 的 TypeScript 默认值保持一致（见 server_side/config/global.ts）
+const (
+	defaultVectorAPIKey     = "key-520-1314-2000-02-18" // 默认 API 密钥
+	defaultVectorModelName  = "system-embedding"        // 默认嵌入模型名
+	defaultVectorCollection = "lunar_messages"          // memory_store 前端操作的固定集合名
+)
+
 // ==== 全局变量 ====
 
 // EmbeddedFiles 嵌入的静态资源文件系统

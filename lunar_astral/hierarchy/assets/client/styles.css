@@ -211,14 +211,44 @@ body {
 	height: 100%;
 	z-index: 10;
 	background: transparent;
-	cursor: pointer;
-	/* 允许触摸事件穿透到canvas，但可被JS捕获 */
+	/* 父层捕获所有点击（避免穿透到canvas），由JS通过事件委托判断分区 */
+	cursor: default;
 	pointer-events: auto;
 	-webkit-tap-highlight-color: transparent;
-	/* 去除移动端默认点击高亮 */
+	-webkit-user-select: none;
+	user-select: none;
+	/* 5行×3列分区网格，对应模型不同身体部位 */
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	grid-template-rows: 1fr 1fr 1fr 1fr 1fr;
+	grid-template-areas:
+		". face_hair ."
+		"right_arm chest_belly left_arm"
+		"right_hand hip left_hand"
+		". thigh ."
+		". leg_foot .";
+}
+
+/* 分区触摸检测层：每个区域负责独立身体部位的触摸响应 */
+.touch-region {
+	background: transparent;
+	cursor: pointer;
+	pointer-events: auto;
+	-webkit-tap-highlight-color: transparent;
 	-webkit-user-select: none;
 	user-select: none;
 }
+
+/* 各区域绑定到网格命名区域，确保边界清晰无重叠 */
+.touch-region[data-region="face_hair"] { grid-area: face_hair; }
+.touch-region[data-region="right_arm"] { grid-area: right_arm; }
+.touch-region[data-region="chest_belly"] { grid-area: chest_belly; }
+.touch-region[data-region="left_arm"] { grid-area: left_arm; }
+.touch-region[data-region="right_hand"] { grid-area: right_hand; }
+.touch-region[data-region="hip"] { grid-area: hip; }
+.touch-region[data-region="left_hand"] { grid-area: left_hand; }
+.touch-region[data-region="thigh"] { grid-area: thigh; }
+.touch-region[data-region="leg_foot"] { grid-area: leg_foot; }
 
 /* 触摸涟漪反馈动画 */
 .touch-ripple {
@@ -232,6 +262,8 @@ body {
 	/* 不阻挡后续触摸事件 */
 	opacity: 0;
 	transition: none;
+	/* 确保涟漪显示在分区检测层之上 */
+	z-index: 20;
 }
 
 .touch-ripple.active {

@@ -105,6 +105,7 @@ type collectionMeta struct {
 }
 
 // Collection 单个向量集合 — 集合级锁定的模型与维度
+// 文档 ID 采用 UUID v4 格式（由 generateUUID 生成），旧版 msg-N 格式 ID 在加载时保留原值
 type Collection struct {
 	Name      string           // 集合名
 	Model     string           // 锁定的嵌入模型名
@@ -113,7 +114,6 @@ type Collection struct {
 	mu        sync.RWMutex     // 文档读写锁
 	filePath  string           // documents.json 路径
 	metaPath  string           // metadata.json 路径
-	idCounter int              // 集合内消息 ID 计数器
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
@@ -122,17 +122,22 @@ type PreviewEntry struct {
 	Category string // 文件类别: image / video / text
 }
 
-// UnifiedDB 统一数据库结构体（多集合架构）
-type UnifiedDB struct {
-	sqlDB *sql.DB // SQL 数据库连接
+// SQLDB 关系型数据库结构体（SQLite）
+// 职责：SQL 连接管理、批量操作、表结构管理、信息查询
+type SQLDB struct {
+	sqlDB          *sql.DB // SQL 数据库连接
+	sqlInitialized bool    // SQL 数据库是否初始化完成
+}
 
-	sqlInitialized bool // SQL 数据库是否初始化完成
-
+// VectorDB 向量数据库结构体（多集合架构，扁平化存储）
+// 职责：嵌入服务连接、集合管理、向量 CRUD、维度锁定、持久化
+// 存储布局：<baseDir>/<collectionName>/{documents.json, metadata.json}
+type VectorDB struct {
 	vectorInitialized bool                   // 向量数据库实例是否初始化完成
 	embeddingBaseURL  string                 // 嵌入服务 base_url（OpenAI 兼容）
 	embeddingAPIKey   string                 // 嵌入服务 API Key
 	httpClient        *http.Client           // 嵌入服务 HTTP 客户端（所有集合共享）
-	collectionsDir    string                 // collections/ 目录绝对路径
+	baseDir           string                 // 向量存储根目录绝对路径（集合目录的直接父级）
 	collections       map[string]*Collection // 集合名 → 集合实例
 	collectionsMu     sync.RWMutex           // collections map 读写锁
 }
