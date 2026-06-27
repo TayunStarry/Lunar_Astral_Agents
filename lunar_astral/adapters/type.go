@@ -2,10 +2,12 @@ package adapters
 
 import "github.com/dop251/goja"
 
-// IPInfo 存储IP地址信息
+// IPInfo 存储IP地址信息（对应 ip-api.com 响应结构）
 type IPInfo struct {
-	Region string `json:"region"`
-	City   string `json:"city"`
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+	RegionName string `json:"regionName"`
+	City       string `json:"city"`
 }
 
 // Runtime 存储JavaScript运行时实例，用于调用适配器函数

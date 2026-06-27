@@ -10,11 +10,13 @@ import (
 	"io"
 	"logger"
 	"net/http"
+	"time"
 
 	"github.com/dop251/goja"
 )
 
 // address 适配TypeScript调用的网络地址查询功能，获取当前服务器网络地址列表
+// 使用 ip-api.com 替代 ipapi.co，后者限流严格（频繁返回 429）
 // 返回值: [Array<string>, error] 地址列表和错误信息
 func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	// 如果当前地址已缓存，直接返回
@@ -22,34 +24,45 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{config.ServerAddress, nil})
 	}
 
-	// 从IP地址查询位置信息
-	resp, err := http.Get("https://ipapi.co/json/")
+	// 默认兜底地址
+	defaultAddr := []string{"江苏省", "南京市"}
+
+	// 调用 ip-api.com 查询位置信息（支持中文，免费版限流 45次/分钟，仅支持 HTTP）
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://ip-api.com/json/?lang=zh-CN&fields=status,message,regionName,city")
 	if err != nil {
 		logger.Error("LunarCore", "获取位置失败: %v", err)
-		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
+		return class.runtime.ToValue([]any{defaultAddr, err})
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("LunarCore", "获取位置失败: %s", resp.Status)
-		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
+		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("HTTP状态异常: %s", resp.Status)})
 	}
 
 	// 解析JSON响应
 	var data IPInfo
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		logger.Error("LunarCore", "解析位置信息失败: %v", err)
-		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
+		return class.runtime.ToValue([]any{defaultAddr, err})
+	}
+
+	// 检查API返回状态
+	if data.Status != "success" {
+		logger.Error("LunarCore", "获取位置失败: %s", data.Message)
+		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("API返回失败: %s", data.Message)})
 	}
 
 	// 确保省份和城市信息存在
-	if data.Region == "" || data.City == "" {
+	if data.RegionName == "" || data.City == "" {
 		logger.Error("LunarCore", "获取位置失败: 省份或城市信息缺失")
-		return class.runtime.ToValue([]any{[]string{"江苏省", "南京市"}, err})
+		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("省份或城市信息缺失")})
 	}
+
 	// 缓存当前地址
-	config.ServerAddress = []string{data.Region, data.City}
+	config.ServerAddress = []string{data.RegionName, data.City}
 	return class.runtime.ToValue([]any{config.ServerAddress, nil})
 }
 
