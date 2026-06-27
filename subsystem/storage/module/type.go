@@ -2,10 +2,9 @@ package module
 
 import (
 	"database/sql"
+	"net/http"
 	"sync"
 	"time"
-
-	chromem "github.com/philippgille/chromem-go"
 )
 
 // FileInfo 文件信息结构体，用于存储文件和目录的相关信息
@@ -70,7 +69,7 @@ type DatabaseRequest struct {
 	Transaction bool          `json:"transaction,omitempty"` // 是否开启事务，默认 false
 }
 
-// chromemMessage 表示 chromem-go 中的消息结构
+// chromemMessage 表示兼容旧版接口的消息结构（仅用于 VectorQueryMessages 的 JSON 编码）
 type chromemMessage struct {
 	Role    string `json:"role"`    // 消息角色，例如 "user" 或 "assistant"
 	Content string `json:"content"` // 消息内容
@@ -84,11 +83,37 @@ type VectorQueryResult struct {
 	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
 }
 
-// DocumentEntry 文档条目 — 用于前端分页列表
+// DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
 type DocumentEntry struct {
 	ID      string `json:"id"`      // 文档条目 ID
 	Role    string `json:"role"`    // 文档条目角色，例如 "user" 或 "assistant"
 	Content string `json:"content"` // 文档条目内容
+}
+
+// VectorDocument 向量数据库文档 — 自行实现的存储单元，含嵌入向量
+type VectorDocument struct {
+	ID        string    `json:"id"`        // 文档 ID
+	Role      string    `json:"role"`      // 消息角色，user/assistant/system
+	Content   string    `json:"content"`   // 原始文本内容
+	Embedding []float32 `json:"embedding"` // 嵌入向量（由 /v1/embeddings 生成）
+}
+
+// collectionMeta 集合元数据，持久化到 metadata.json
+type collectionMeta struct {
+	Model     string `json:"model"`     // 锁定的嵌入模型名
+	Dimension int    `json:"dimension"` // 锁定的向量维度（探针文本确定）
+}
+
+// Collection 单个向量集合 — 集合级锁定的模型与维度
+type Collection struct {
+	Name      string           // 集合名
+	Model     string           // 锁定的嵌入模型名
+	Dimension int              // 锁定的向量维度（探针文本确定，0 表示未确定）
+	Documents []VectorDocument // 文档列表（含嵌入向量），内存中维护
+	mu        sync.RWMutex     // 文档读写锁
+	filePath  string           // documents.json 路径
+	metaPath  string           // metadata.json 路径
+	idCounter int              // 集合内消息 ID 计数器
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
@@ -97,17 +122,19 @@ type PreviewEntry struct {
 	Category string // 文件类别: image / video / text
 }
 
-// UnifiedDB 统一数据库结构体
+// UnifiedDB 统一数据库结构体（多集合架构）
 type UnifiedDB struct {
-	sqlDB             *sql.DB             // SQL 数据库连接
-	chromemDB         *chromem.DB         // 向量数据库连接
-	collection        *chromem.Collection // 向量数据库集合
-	sqlInitialized    bool                // SQL 数据库是否初始化完成
-	vectorInitialized bool                // 向量数据库是否初始化完成
-	documentEntries   []DocumentEntry     // 文档条目列表，用于前端分页列表
-	documentEntriesMu sync.RWMutex        // 文档条目列表的读写锁，用于并发访问
-	entriesFilePath   string              // 文档条目列表的 JSON 文件路径，用于存储和加载
-	messageIDCounter  int                 // 消息 ID计数器，用于生成唯一的消息 ID
+	sqlDB *sql.DB // SQL 数据库连接
+
+	sqlInitialized bool // SQL 数据库是否初始化完成
+
+	vectorInitialized bool                   // 向量数据库实例是否初始化完成
+	embeddingBaseURL  string                 // 嵌入服务 base_url（OpenAI 兼容）
+	embeddingAPIKey   string                 // 嵌入服务 API Key
+	httpClient        *http.Client           // 嵌入服务 HTTP 客户端（所有集合共享）
+	collectionsDir    string                 // collections/ 目录绝对路径
+	collections       map[string]*Collection // 集合名 → 集合实例
+	collectionsMu     sync.RWMutex           // collections map 读写锁
 }
 
 // OrganizeOperation 单个整理操作

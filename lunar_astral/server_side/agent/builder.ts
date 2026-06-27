@@ -24,7 +24,7 @@ export class BaseConfig {
 	/** 初始化chromem-go向量数据库 */
 	protected static initChromem(): void {
 		if (BaseConfig.chromemReady) return;
-		const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+		const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
 		if (err) console.error('chromem 初始化失败:', err);
 		else BaseConfig.chromemReady = true;
 	}
@@ -168,7 +168,7 @@ export class ModelBuilder extends ConfigModifier {
 		const allResults: { id: string, role: string, content: string, similarity: number }[] = [];
 		// 对每条用户消息分别查询 chromem-go
 		for (const userMessage of userMessages) {
-			const [results, error] = chromemQuery(userMessage, 5);
+			const [results, error] = chromemQuery('lunar_messages', userMessage, 5);
 			// 单条查询失败则跳过，继续处理下一条
 			if (error) {
 				console.error('chromem 查询失败:', error);

@@ -8,9 +8,9 @@ import (
 	"lunar_astral/model/llama"
 	"lunar_astral/server/handlers"
 	"net/http"
+	tts "qwen3_tts_lunar/module"
 	storage "storage/server"
 	"sync"
-	tts"qwen3_tts_lunar/module"
 
 	"github.com/gorilla/websocket"
 )
@@ -66,12 +66,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
 	// 数据库相关接口
 	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据库管理"},
-	// 向量数据库相关接口
-	{Path: "/chromem/init", Handler: storage.ChromemInitHandler, Method: "POST", Description: "向量数据库初始化"},
-	{Path: "/chromem/messages", Handler: storage.ChromemMessagesHandler, Method: "POST", Description: "向量数据库消息管理"},
-	{Path: "/chromem/rebuild", Handler: storage.ChromemRebuildHandler, Method: "POST", Description: "重建向量数据库文档索引"},
-	{Path: "/chromem/stats", Handler: storage.ChromemStatsHandler, Method: "GET", Description: "向量数据库统计信息"},
-	{Path: "/chromem/documents", Handler: storage.ChromemDocumentsHandler, Method: "GET", Description: "向量数据库文档列表"},
+	// 向量数据库相关接口（多集合 RESTful 架构）
+	{Path: "/vector/", Handler: storage.VectorHandler, Method: "ANY", Description: "向量数据库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
 	// 图片生成相关接口
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},

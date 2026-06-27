@@ -7,14 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"logger"
+	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	chromem "github.com/philippgille/chromem-go"
 )
 
 func init() {
@@ -35,7 +34,11 @@ func InitUnifiedDB(sqlPath string, vectorDir string) error {
 	if err := os.MkdirAll(vectorDir, 0755); err != nil {
 		return fmt.Errorf("创建向量数据库目录失败: %v", err)
 	}
-	u.entriesFilePath = filepath.Join(vectorDir, "entries.json")
+	u.collectionsDir = filepath.Join(vectorDir, "collections")
+	if err := os.MkdirAll(u.collectionsDir, 0755); err != nil {
+		return fmt.Errorf("创建集合目录失败: %v", err)
+	}
+	u.collections = make(map[string]*Collection)
 
 	Unified = u
 	logger.Info("Storage", "统一数据库 SQL 初始化完成: %s", sqlPath)
@@ -84,35 +87,182 @@ func (u *UnifiedDB) initSQL(dbPath string) error {
 	return nil
 }
 
-func (u *UnifiedDB) VectorInit(baseURL string, apiKey string, modelName string) error {
+// VectorInitInstance 初始化向量数据库实例（不创建任何集合）
+// 仅配置嵌入服务连接，并加载已存在的集合到内存
+func (u *UnifiedDB) VectorInitInstance(baseURL string, apiKey string) error {
 	if u.vectorInitialized {
 		return nil
 	}
 
-	if u.entriesFilePath == "" {
+	if u.collectionsDir == "" {
 		return fmt.Errorf("向量数据库未配置存储路径, 请先调用 InitUnifiedDB")
 	}
 
-	db, err := chromem.NewPersistentDB(filepath.Dir(u.entriesFilePath), true)
-	if err != nil {
-		return fmt.Errorf("chromem 创建持久化数据库失败: %v", err)
-	}
-
-	embeddingFunc := chromem.NewEmbeddingFuncOpenAICompat(baseURL, apiKey, modelName, nil)
-
-	collection, err := db.GetOrCreateCollection("lunar_messages", nil, embeddingFunc)
-	if err != nil {
-		return fmt.Errorf("chromem 创建集合失败: %v", err)
-	}
-
-	u.chromemDB = db
-	u.collection = collection
+	u.embeddingBaseURL = baseURL
+	u.embeddingAPIKey = apiKey
+	u.httpClient = &http.Client{Timeout: 120 * time.Second}
 	u.vectorInitialized = true
 
-	u.loadEntriesFromFile()
+	u.loadAllCollections()
 
-	logger.Info("Storage", "chromem 向量数据库初始化完成, 模型: %s, 已加载 %d 条文档记录", modelName, len(u.documentEntries))
+	logger.Info("Storage", "向量数据库实例初始化完成, base_url: %s, 已加载 %d 个集合",
+		u.embeddingBaseURL, len(u.collections))
 	return nil
+}
+
+// validateCollectionName 校验集合名合法性（仅字母数字下划线连字符，防路径穿越）
+func validateCollectionName(name string) error {
+	if name == "" {
+		return fmt.Errorf("集合名不能为空")
+	}
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return fmt.Errorf("集合名仅允许字母、数字、下划线、连字符: %s", name)
+		}
+	}
+	return nil
+}
+
+// CollectionInit 创建或打开指定名称的集合
+// 通过探针文本嵌入一次确定向量维度，写入 metadata.json
+// 若集合已存在且 model 一致则直接返回，model 变更则重新探针并更新维度
+func (u *UnifiedDB) CollectionInit(ctx context.Context, name string, modelName string) error {
+	if !u.vectorInitialized {
+		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	if err := validateCollectionName(name); err != nil {
+		return err
+	}
+
+	// 已存在则直接返回
+	u.collectionsMu.RLock()
+	if _, ok := u.collections[name]; ok {
+		u.collectionsMu.RUnlock()
+		return nil
+	}
+	u.collectionsMu.RUnlock()
+
+	collDir := filepath.Join(u.collectionsDir, name)
+	if err := os.MkdirAll(collDir, 0755); err != nil {
+		return fmt.Errorf("创建集合目录失败: %v", err)
+	}
+
+	filePath := filepath.Join(collDir, "documents.json")
+	metaPath := filepath.Join(collDir, "metadata.json")
+
+	// 尝试加载已有 metadata
+	var meta collectionMeta
+	if data, err := os.ReadFile(metaPath); err == nil && len(data) > 0 {
+		if jsonErr := json.Unmarshal(data, &meta); jsonErr != nil {
+			return fmt.Errorf("metadata.json 解析失败: %v", jsonErr)
+		}
+	}
+
+	// metadata 不存在或 model 变更时，重新探针定维度
+	if meta.Dimension == 0 || meta.Model != modelName {
+		probeVec, err := u.embedText(ctx, modelName, name)
+		if err != nil {
+			return fmt.Errorf("探针文本嵌入失败: %v", err)
+		}
+		meta.Model = modelName
+		meta.Dimension = len(probeVec)
+		if err := saveCollectionMeta(metaPath, meta); err != nil {
+			return fmt.Errorf("写入 metadata.json 失败: %v", err)
+		}
+	}
+
+	c := &Collection{
+		Name:      name,
+		Model:     meta.Model,
+		Dimension: meta.Dimension,
+		Documents: make([]VectorDocument, 0),
+		filePath:  filePath,
+		metaPath:  metaPath,
+	}
+	c.loadDocumentsFromFile()
+
+	u.collectionsMu.Lock()
+	u.collections[name] = c
+	u.collectionsMu.Unlock()
+
+	logger.Info("Storage", "集合 [%s] 初始化完成, 模型: %s, 维度: %d, 文档数: %d",
+		name, c.Model, c.Dimension, len(c.Documents))
+	return nil
+}
+
+// saveCollectionMeta 写入集合元数据
+func saveCollectionMeta(metaPath string, meta collectionMeta) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(metaPath, data, 0644)
+}
+
+// getCollection 获取集合实例，不存在返回错误
+func (u *UnifiedDB) getCollection(name string) (*Collection, error) {
+	u.collectionsMu.RLock()
+	defer u.collectionsMu.RUnlock()
+	c, ok := u.collections[name]
+	if !ok {
+		return nil, fmt.Errorf("集合 [%s] 不存在, 请先调用 CollectionInit", name)
+	}
+	return c, nil
+}
+
+// loadAllCollections 启动时扫描 collectionsDir 加载所有集合到内存
+func (u *UnifiedDB) loadAllCollections() {
+	entries, err := os.ReadDir(u.collectionsDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warn("Storage", "扫描集合目录失败: %v", err)
+		}
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if validateCollectionName(name) != nil {
+			continue
+		}
+		collDir := filepath.Join(u.collectionsDir, name)
+		metaPath := filepath.Join(collDir, "metadata.json")
+		filePath := filepath.Join(collDir, "documents.json")
+
+		var meta collectionMeta
+		if data, err := os.ReadFile(metaPath); err == nil && len(data) > 0 {
+			if jsonErr := json.Unmarshal(data, &meta); jsonErr != nil {
+				logger.Warn("Storage", "集合 [%s] metadata 解析失败: %v", name, jsonErr)
+				continue
+			}
+		}
+
+		if meta.Model == "" || meta.Dimension == 0 {
+			logger.Warn("Storage", "集合 [%s] metadata 不完整, 跳过加载", name)
+			continue
+		}
+
+		c := &Collection{
+			Name:      name,
+			Model:     meta.Model,
+			Dimension: meta.Dimension,
+			Documents: make([]VectorDocument, 0),
+			filePath:  filePath,
+			metaPath:  metaPath,
+		}
+		c.loadDocumentsFromFile()
+
+		u.collectionsMu.Lock()
+		u.collections[name] = c
+		u.collectionsMu.Unlock()
+
+		logger.Info("Storage", "已加载集合 [%s], 模型: %s, 维度: %d, 文档数: %d",
+			name, c.Model, c.Dimension, len(c.Documents))
+	}
 }
 
 func (u *UnifiedDB) IsSQLInitialized() bool {
@@ -909,198 +1059,145 @@ func (u *UnifiedDB) executeGetTableCount(table string) OperationResult {
 }
 
 // =============================================================================
-// 向量数据库操作
+// 向量数据库操作（多集合）
 // =============================================================================
 
-func (u *UnifiedDB) VectorAddMessage(ctx context.Context, role string, content string) (string, error) {
-	if u.collection == nil {
-		return "", fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
+func (u *UnifiedDB) VectorAddMessage(ctx context.Context, collectionName string, role string, content string) (string, error) {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return "", err
 	}
 
 	if strings.TrimSpace(content) == "" {
 		return "", fmt.Errorf("消息内容不能为空")
 	}
 
-	u.messageIDCounter++
-	id := fmt.Sprintf("msg-%d", u.messageIDCounter)
-
-	metadata := map[string]string{
-		"role": role,
-	}
-
-	doc := chromem.Document{
-		ID:       id,
-		Metadata: metadata,
-		Content:  content,
-	}
-
-	err := u.collection.AddDocuments(ctx, []chromem.Document{doc}, runtime.NumCPU())
+	embedding, err := u.embedText(ctx, c.Model, content)
 	if err != nil {
-		return "", fmt.Errorf("chromem 添加消息失败: %v", err)
+		return "", fmt.Errorf("嵌入文本失败: %v", err)
 	}
 
-	u.documentEntriesMu.Lock()
-	u.documentEntries = append(u.documentEntries, DocumentEntry{ID: id, Role: role, Content: content})
-	u.documentEntriesMu.Unlock()
+	if len(embedding) != c.Dimension {
+		return "", fmt.Errorf("嵌入维度 %d 与集合 [%s] 维度 %d 不符",
+			len(embedding), collectionName, c.Dimension)
+	}
 
-	u.saveEntriesToFile()
+	c.mu.Lock()
+	c.idCounter++
+	id := fmt.Sprintf("msg-%d", c.idCounter)
+	c.Documents = append(c.Documents, VectorDocument{
+		ID:        id,
+		Role:      role,
+		Content:   content,
+		Embedding: embedding,
+	})
+	c.mu.Unlock()
 
+	c.saveDocumentsToFile()
 	return id, nil
 }
 
-func (u *UnifiedDB) VectorAddMessageSilent(ctx context.Context, role string, content string) error {
-	if u.collection == nil {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
-	}
-
-	if strings.TrimSpace(content) == "" {
-		return nil
-	}
-
-	u.messageIDCounter++
-	id := fmt.Sprintf("msg-%d", u.messageIDCounter)
-
-	metadata := map[string]string{
-		"role": role,
-	}
-
-	doc := chromem.Document{
-		ID:       id,
-		Metadata: metadata,
-		Content:  content,
-	}
-
-	err := u.collection.AddDocuments(ctx, []chromem.Document{doc}, runtime.NumCPU())
-	if err != nil {
-		return fmt.Errorf("chromem 添加消息失败: %v", err)
-	}
-
-	u.documentEntriesMu.Lock()
-	u.documentEntries = append(u.documentEntries, DocumentEntry{ID: id, Role: role, Content: content})
-	u.documentEntriesMu.Unlock()
-
-	u.saveEntriesToFile()
-
-	return nil
+func (u *UnifiedDB) VectorAddMessageSilent(ctx context.Context, collectionName string, role string, content string) error {
+	_, err := u.VectorAddMessage(ctx, collectionName, role, content)
+	return err
 }
 
-func (u *UnifiedDB) VectorQueryMessages(ctx context.Context, queryText string, topK int) ([]string, error) {
-	if u.collection == nil {
-		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
+func (u *UnifiedDB) VectorQueryMessages(ctx context.Context, collectionName string, queryText string, topK int) ([]string, error) {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return nil, err
 	}
 
 	if topK <= 0 {
 		topK = 10
 	}
 
-	docCount := u.collection.Count()
-	if topK > docCount {
-		topK = docCount
-	}
-	if topK == 0 {
-		return []string{}, nil
-	}
-
-	results, err := u.collection.Query(ctx, queryText, topK, nil, nil)
+	queryVec, err := u.embedText(ctx, c.Model, queryText)
 	if err != nil {
-		return nil, fmt.Errorf("chromem 查询消息失败: %v", err)
+		return nil, fmt.Errorf("嵌入查询文本失败: %v", err)
 	}
 
-	// chromem-go 已按相似度降序返回结果，此处保留原始顺序
-	messages := make([]string, 0, len(results))
-	for _, result := range results {
-		role := "user"
-		if r, ok := result.Metadata["role"]; ok {
-			role = r
-		}
+	if len(queryVec) != c.Dimension {
+		return nil, fmt.Errorf("查询嵌入维度 %d 与集合 [%s] 维度 %d 不符",
+			len(queryVec), collectionName, c.Dimension)
+	}
 
-		msg := chromemMessage{Role: role, Content: result.Content}
+	results := c.queryTopK(queryVec, topK)
+
+	messages := make([]string, 0, len(results))
+	for _, r := range results {
+		msg := chromemMessage{Role: r.Role, Content: r.Content}
 		jsonBytes, err := json.Marshal(msg)
 		if err != nil {
 			continue
 		}
 		messages = append(messages, string(jsonBytes))
 	}
-
 	return messages, nil
 }
 
-func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]VectorQueryResult, error) {
-	if u.collection == nil {
-		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
+func (u *UnifiedDB) VectorQueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]VectorQueryResult, error) {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return nil, err
 	}
 
 	if topK <= 0 {
 		topK = 10
 	}
 
-	docCount := u.collection.Count()
-	if topK > docCount {
-		topK = docCount
-	}
-	if topK == 0 {
-		return []VectorQueryResult{}, nil
-	}
-
-	results, err := u.collection.Query(ctx, queryText, topK, nil, nil)
+	queryVec, err := u.embedText(ctx, c.Model, queryText)
 	if err != nil {
-		return nil, fmt.Errorf("chromem 查询消息失败: %v", err)
+		return nil, fmt.Errorf("嵌入查询文本失败: %v", err)
 	}
 
-	// chromem-go 已按相似度降序返回结果，此处保留原始顺序
-	messages := make([]VectorQueryResult, 0, len(results))
-	for _, result := range results {
-		role := "user"
-		if r, ok := result.Metadata["role"]; ok {
-			role = r
-		}
-		messages = append(messages, VectorQueryResult{
-			ID:         result.ID,
-			Role:       role,
-			Content:    result.Content,
-			Similarity: result.Similarity,
-		})
+	if len(queryVec) != c.Dimension {
+		return nil, fmt.Errorf("查询嵌入维度 %d 与集合 [%s] 维度 %d 不符",
+			len(queryVec), collectionName, c.Dimension)
 	}
 
-	return messages, nil
+	return c.queryTopK(queryVec, topK), nil
 }
 
-func (u *UnifiedDB) VectorDeleteMessage(ctx context.Context, id string) error {
-	if u.collection == nil {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
+func (u *UnifiedDB) VectorDeleteMessage(ctx context.Context, collectionName string, id string) error {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return err
 	}
 
-	if err := u.collection.Delete(ctx, nil, nil, id); err != nil {
-		return fmt.Errorf("chromem 删除消息失败: %v", err)
-	}
-
-	u.documentEntriesMu.Lock()
-	for i, entry := range u.documentEntries {
-		if entry.ID == id {
-			u.documentEntries = append(u.documentEntries[:i], u.documentEntries[i+1:]...)
-			break
+	c.mu.Lock()
+	for i, doc := range c.Documents {
+		if doc.ID == id {
+			c.Documents = append(c.Documents[:i], c.Documents[i+1:]...)
+			c.mu.Unlock()
+			c.saveDocumentsToFile()
+			return nil
 		}
 	}
-	u.documentEntriesMu.Unlock()
-
-	u.saveEntriesToFile()
-
+	c.mu.Unlock()
 	return nil
 }
 
-func (u *UnifiedDB) VectorGetCollectionCount() int {
-	if u.collection == nil {
+func (u *UnifiedDB) VectorGetCollectionCount(collectionName string) int {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
 		return 0
 	}
-	return u.collection.Count()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.Documents)
 }
 
-func (u *UnifiedDB) VectorGetDocuments(offset int, limit int) ([]DocumentEntry, int) {
-	u.documentEntriesMu.RLock()
-	defer u.documentEntriesMu.RUnlock()
+func (u *UnifiedDB) VectorGetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return []DocumentEntry{}, 0
+	}
 
-	total := len(u.documentEntries)
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
+	total := len(c.Documents)
 	if offset < 0 {
 		offset = 0
 	}
@@ -1114,90 +1211,109 @@ func (u *UnifiedDB) VectorGetDocuments(offset int, limit int) ([]DocumentEntry, 
 	}
 
 	entries := make([]DocumentEntry, end-offset)
-	copy(entries, u.documentEntries[offset:end])
+	for i := offset; i < end; i++ {
+		entries[i-offset] = DocumentEntry{
+			ID:      c.Documents[i].ID,
+			Role:    c.Documents[i].Role,
+			Content: c.Documents[i].Content,
+		}
+	}
 	return entries, total
 }
 
-func (u *UnifiedDB) VectorGetEntryCount() int {
-	u.documentEntriesMu.RLock()
-	defer u.documentEntriesMu.RUnlock()
-	return len(u.documentEntries)
+func (u *UnifiedDB) VectorGetEntryCount(collectionName string) int {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return 0
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.Documents)
 }
 
-func (u *UnifiedDB) VectorHasSyncMismatch() bool {
-	if u.collection == nil {
+// VectorHasSyncMismatch 检测集合内是否有文档向量缺失或维度与集合锁定维度不符
+func (u *UnifiedDB) VectorHasSyncMismatch(collectionName string) bool {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
 		return false
 	}
-	return u.collection.Count() != u.VectorGetEntryCount()
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, doc := range c.Documents {
+		if len(doc.Embedding) != c.Dimension {
+			return true
+		}
+	}
+	return false
 }
 
-func (u *UnifiedDB) VectorRebuildEntries(ctx context.Context) (int, error) {
-	if u.collection == nil {
-		return 0, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInit")
-	}
-
-	chromemCount := u.collection.Count()
-	if chromemCount == 0 {
-		u.documentEntriesMu.Lock()
-		u.documentEntries = nil
-		u.documentEntriesMu.Unlock()
-		u.saveEntriesToFile()
-		return 0, nil
-	}
-
-	results, err := u.collection.Query(ctx, " ", chromemCount, nil, nil)
+// VectorRebuildEntries 删除向量缺失或维度不符的文档，重新持久化
+// ctx 保留以兼容签名，当前实现不调用嵌入服务
+func (u *UnifiedDB) VectorRebuildEntries(ctx context.Context, collectionName string) (int, error) {
+	_ = ctx
+	c, err := u.getCollection(collectionName)
 	if err != nil {
-		return 0, fmt.Errorf("chromem 查询所有文档失败: %v", err)
+		return 0, err
 	}
 
-	seenIDs := make(map[string]bool)
-	var newEntries []DocumentEntry
-
-	for _, result := range results {
-		if seenIDs[result.ID] {
+	c.mu.Lock()
+	original := len(c.Documents)
+	filtered := make([]VectorDocument, 0, original)
+	removed := 0
+	for _, doc := range c.Documents {
+		if len(doc.Embedding) != c.Dimension {
+			removed++
 			continue
 		}
-		seenIDs[result.ID] = true
+		filtered = append(filtered, doc)
+	}
+	c.Documents = filtered
+	c.mu.Unlock()
 
-		role := "user"
-		if r, ok := result.Metadata["role"]; ok {
-			role = r
-		}
-
-		newEntries = append(newEntries, DocumentEntry{
-			ID:      result.ID,
-			Role:    role,
-			Content: result.Content,
-		})
+	if removed > 0 {
+		c.saveDocumentsToFile()
+		logger.Info("Storage", "集合 [%s] 重建完成, 原始 %d 条, 删除 %d 条维度不符, 剩余 %d 条",
+			collectionName, original, removed, len(filtered))
+	} else {
+		logger.Info("Storage", "集合 [%s] 重建完成, 无异常文档, 共 %d 条", collectionName, original)
 	}
 
-	u.documentEntriesMu.Lock()
-	u.documentEntries = newEntries
-	u.documentEntriesMu.Unlock()
-
-	u.saveEntriesToFile()
-
-	maxNum := 0
-	for _, entry := range newEntries {
-		var num int
-		if _, scanErr := fmt.Sscanf(entry.ID, "msg-%d", &num); scanErr == nil && num > maxNum {
-			maxNum = num
-		}
-	}
-	if maxNum > u.messageIDCounter {
-		u.messageIDCounter = maxNum
-	}
-
-	logger.Info("Storage", "chromem 重建 entries 完成, 共 %d 条文档", len(newEntries))
-
-	return len(newEntries), nil
+	return len(filtered), nil
 }
 
-func (u *UnifiedDB) loadEntriesFromFile() {
-	data, err := os.ReadFile(u.entriesFilePath)
+// VectorListCollections 返回所有已加载集合的名称
+func (u *UnifiedDB) VectorListCollections() []string {
+	u.collectionsMu.RLock()
+	defer u.collectionsMu.RUnlock()
+	names := make([]string, 0, len(u.collections))
+	for name := range u.collections {
+		names = append(names, name)
+	}
+	return names
+}
+
+// VectorGetCollectionInfo 返回集合元信息（模型、维度、文档数）
+func (u *UnifiedDB) VectorGetCollectionInfo(collectionName string) (model string, dimension int, count int, err error) {
+	c, err := u.getCollection(collectionName)
+	if err != nil {
+		return "", 0, 0, err
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Model, c.Dimension, len(c.Documents), nil
+}
+
+// =============================================================================
+// Collection 持久化方法
+// =============================================================================
+
+// loadDocumentsFromFile 从 documents.json 加载文档到集合内存
+func (c *Collection) loadDocumentsFromFile() {
+	data, err := os.ReadFile(c.filePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn("Storage", "chromem 读取 entries.json 失败: %v", err)
+			logger.Warn("Storage", "集合 [%s] 读取 documents.json 失败: %v", c.Name, err)
 		}
 		return
 	}
@@ -1206,46 +1322,54 @@ func (u *UnifiedDB) loadEntriesFromFile() {
 		return
 	}
 
-	var entries []DocumentEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		logger.Warn("Storage", "chromem entries.json 解析失败: %v", err)
+	var docs []VectorDocument
+	if err := json.Unmarshal(data, &docs); err != nil {
+		logger.Warn("Storage", "集合 [%s] documents.json 解析失败: %v", c.Name, err)
 		return
 	}
 
-	u.documentEntriesMu.Lock()
-	u.documentEntries = entries
-	u.documentEntriesMu.Unlock()
+	c.mu.Lock()
+	c.Documents = docs
+	c.mu.Unlock()
 
 	maxNum := 0
-	for _, entry := range entries {
+	for _, doc := range docs {
 		var num int
-		if _, scanErr := fmt.Sscanf(entry.ID, "msg-%d", &num); scanErr == nil && num > maxNum {
+		if _, scanErr := fmt.Sscanf(doc.ID, "msg-%d", &num); scanErr == nil && num > maxNum {
 			maxNum = num
 		}
 	}
-	if maxNum > u.messageIDCounter {
-		u.messageIDCounter = maxNum
+	if maxNum > c.idCounter {
+		c.idCounter = maxNum
 	}
-
-	logger.Info("Storage", "chromem 从 entries.json 加载了 %d 条文档, ID计数器重置为 %d", len(entries), u.messageIDCounter)
 }
 
-func (u *UnifiedDB) saveEntriesToFile() {
-	u.documentEntriesMu.RLock()
-	data, err := json.MarshalIndent(u.documentEntries, "", "  ")
-	u.documentEntriesMu.RUnlock()
+// saveDocumentsToFile 原子化持久化文档：写临时文件 + rename
+// Windows 上 rename 不能覆盖已存在文件，先 Remove 再 Rename
+func (c *Collection) saveDocumentsToFile() {
+	c.mu.RLock()
+	data, err := json.MarshalIndent(c.Documents, "", "  ")
+	c.mu.RUnlock()
 	if err != nil {
-		logger.Error("Storage", "chromem entries 序列化失败: %v", err)
+		logger.Error("Storage", "集合 [%s] documents 序列化失败: %v", c.Name, err)
 		return
 	}
 
-	if err := os.WriteFile(u.entriesFilePath, data, 0644); err != nil {
-		logger.Error("Storage", "chromem entries.json 写入失败: %v", err)
+	tmpPath := c.filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		logger.Error("Storage", "集合 [%s] 临时文件写入失败: %v", c.Name, err)
+		return
+	}
+
+	// Windows: Remove + Rename 模拟原子替换
+	os.Remove(c.filePath)
+	if err := os.Rename(tmpPath, c.filePath); err != nil {
+		logger.Error("Storage", "集合 [%s] 原子重命名失败: %v", c.Name, err)
 	}
 }
 
 // =============================================================================
-// 全局包装函数 — 保持与原有代码的兼容性
+// 全局包装函数 — 多集合架构
 // =============================================================================
 
 func EnsureDBInitialized() error {
@@ -1274,76 +1398,101 @@ func IsInitialized() bool {
 	return Unified != nil && Unified.IsVectorInitialized()
 }
 
-func AddMessage(ctx context.Context, role string, content string) error {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
-	}
-	return Unified.VectorAddMessageSilent(ctx, role, content)
-}
-
-func AddMessageWithID(ctx context.Context, role string, content string) (string, error) {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return "", fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
-	}
-	return Unified.VectorAddMessage(ctx, role, content)
-}
-
-func QueryMessagesWithContent(ctx context.Context, queryText string, topK int) ([]VectorQueryResult, error) {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return nil, fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
-	}
-	return Unified.VectorQueryMessagesWithContent(ctx, queryText, topK)
-}
-
-func DeleteMessage(ctx context.Context, id string) error {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
-	}
-	return Unified.VectorDeleteMessage(ctx, id)
-}
-
-func GetCollectionCount() int {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return 0
-	}
-	return Unified.VectorGetCollectionCount()
-}
-
-func GetDocuments(offset int, limit int) ([]DocumentEntry, int) {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return []DocumentEntry{}, 0
-	}
-	return Unified.VectorGetDocuments(offset, limit)
-}
-
-func GetEntryCount() int {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return 0
-	}
-	return Unified.VectorGetEntryCount()
-}
-
-func HasSyncMismatch() bool {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return false
-	}
-	return Unified.VectorHasSyncMismatch()
-}
-
-func RebuildEntries(ctx context.Context) (int, error) {
-	if Unified == nil || !Unified.IsVectorInitialized() {
-		return 0, fmt.Errorf("chromem 未初始化, 请先调用 VectorInit")
-	}
-	return Unified.VectorRebuildEntries(ctx)
-}
-
-func Init(baseURL string, apiKey string, modelName string) error {
+// VectorInitInstance 全局包装 — 初始化向量实例（不创建任何集合）
+func VectorInitInstance(baseURL string, apiKey string) error {
 	if Unified == nil {
 		if err := InitUnifiedDB(*config.SQLDBPath, *config.VectorDBDir); err != nil {
 			return err
 		}
 	}
-	return Unified.VectorInit(baseURL, apiKey, modelName)
+	return Unified.VectorInitInstance(baseURL, apiKey)
+}
+
+// CollectionInit 全局包装 — 创建或打开指定名称的集合（探针定维度）
+func CollectionInit(ctx context.Context, name string, modelName string) error {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.CollectionInit(ctx, name, modelName)
+}
+
+func AddMessage(ctx context.Context, collectionName string, role string, content string) error {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorAddMessageSilent(ctx, collectionName, role, content)
+}
+
+func AddMessageWithID(ctx context.Context, collectionName string, role string, content string) (string, error) {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return "", fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorAddMessage(ctx, collectionName, role, content)
+}
+
+func QueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]VectorQueryResult, error) {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorQueryMessagesWithContent(ctx, collectionName, queryText, topK)
+}
+
+func DeleteMessage(ctx context.Context, collectionName string, id string) error {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorDeleteMessage(ctx, collectionName, id)
+}
+
+func GetCollectionCount(collectionName string) int {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return 0
+	}
+	return Unified.VectorGetCollectionCount(collectionName)
+}
+
+func GetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return []DocumentEntry{}, 0
+	}
+	return Unified.VectorGetDocuments(collectionName, offset, limit)
+}
+
+func GetEntryCount(collectionName string) int {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return 0
+	}
+	return Unified.VectorGetEntryCount(collectionName)
+}
+
+func HasSyncMismatch(collectionName string) bool {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return false
+	}
+	return Unified.VectorHasSyncMismatch(collectionName)
+}
+
+func RebuildEntries(ctx context.Context, collectionName string) (int, error) {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return 0, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorRebuildEntries(ctx, collectionName)
+}
+
+// VectorListCollections 全局包装 — 列出所有已加载集合名
+func VectorListCollections() []string {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return []string{}
+	}
+	return Unified.VectorListCollections()
+}
+
+// VectorGetCollectionInfo 全局包装 — 获取集合的模型、维度、文档数
+func VectorGetCollectionInfo(collectionName string) (string, int, int, error) {
+	if Unified == nil || !Unified.IsVectorInitialized() {
+		return "", 0, 0, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	}
+	return Unified.VectorGetCollectionInfo(collectionName)
 }
 
 // =============================================================================

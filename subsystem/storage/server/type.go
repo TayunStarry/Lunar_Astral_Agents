@@ -16,38 +16,51 @@ type ExportPackageRequest struct {
 	SavePath    string `json:"save_path,omitempty"`
 }
 
-type chromemAddRequest struct {
+type vectorAddRequest struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type chromemDeleteRequest struct {
+type vectorDeleteRequest struct {
 	ID string `json:"id"`
 }
 
-type chromemInitRequest struct {
-	BaseURL   string `json:"base_url"`
-	APIKey    string `json:"api_key"`
+// vectorInitRequest 实例初始化请求（仅配置嵌入服务连接，不创建集合）
+type vectorInitRequest struct {
+	BaseURL string `json:"base_url"`
+	APIKey  string `json:"api_key"`
+}
+
+// vectorCollectionRequest 创建/打开集合请求（集合级锁定模型）
+type vectorCollectionRequest struct {
 	ModelName string `json:"model_name"`
 }
 
-type chromemMessageData struct {
+type vectorMessageData struct {
 	ID         string  `json:"id"`         // 消息ID
 	Role       string  `json:"role"`       // 消息角色，user/assistant/system
 	Content    string  `json:"content"`    // 消息内容
 	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
 }
 
-type chromemStatsData struct {
+type vectorStatsData struct {
 	DocumentCount int  `json:"document_count"`
 	Initialized   bool `json:"initialized"`
 	EntryCount    int  `json:"entry_count"`
-	SyncMismatch  bool `json:"sync_mismatch"`
+	SyncMismatch  bool `json:"sync_mismatch"` // 维度不符文档存在标记
 }
 
-type chromemQueryData struct {
-	Query      string               `json:"query"`
-	TopK       int                  `json:"top_k"`
-	Results    []chromemMessageData `json:"results"`
-	TotalFound int                  `json:"total_found"`
+type vectorQueryData struct {
+	Query      string             `json:"query"`
+	TopK       int                `json:"top_k"`
+	Results    []vectorMessageData `json:"results"`
+	TotalFound int                `json:"total_found"`
+}
+
+// vectorCollectionInfo 集合信息（含模型与维度）
+type vectorCollectionInfo struct {
+	Name      string `json:"name"`
+	Model     string `json:"model"`
+	Dimension int    `json:"dimension"`
+	Count     int    `json:"count"`
 }

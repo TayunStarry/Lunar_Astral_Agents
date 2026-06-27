@@ -118,45 +118,53 @@ declare global {
      */
     function pushImage(imageData: string[]): boolean;
     /**
-     * 初始化 chromem-go 向量数据库
-     * 
+     * 初始化向量数据库实例并创建指定集合
+     *
      * @param {string} baseURL 嵌入模型服务的基础URL (e.g. http://localhost:36789/v1)
-     * 
+     *
      * @param {string} apiKey API密钥
-     * 
-     * @param {string} modelName 嵌入模型名称
-     * 
+     *
+     * @param {string} modelName 嵌入模型名称（集合级锁定）
+     *
+     * @param {string} collectionName 集合名称（探针定维度）
+     *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function chromemInit(baseURL: string, apiKey: string, modelName: string): [boolean, Error | null];
+    function chromemInit(baseURL: string, apiKey: string, modelName: string, collectionName: string): [boolean, Error | null];
     /**
-     * 向 chromem-go 向量数据库添加消息
-     * 
+     * 向指定集合添加消息
+     *
+     * @param {string} collectionName 集合名称
+     *
      * @param {string} role 消息角色 (user/assistant/system/tool)
-     * 
+     *
      * @param {string} content 消息文本内容
-     * 
+     *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function chromemAdd(role: string, content: string): [boolean, Error | null];
+    function chromemAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
     /**
-     * 从 chromem-go 向量数据库查询相关消息
-     * 
+     * 从指定集合查询相关消息
+     *
+     * @param {string} collectionName 集合名称
+     *
      * @param {string} queryText 查询文本
-     * 
+     *
      * @param {number} topK 返回的最相关结果数量
-     * 
+     *
      * @returns {[Array<{id: string, role: string, content: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function chromemQuery(queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
+    function chromemQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
     /**
-     * 从 chromem-go 向量数据库删除指定消息
-     * 
+     * 从指定集合删除消息
+     *
+     * @param {string} collectionName 集合名称
+     *
      * @param {string} id 要删除的消息ID
-     * 
+     *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function chromemDelete(id: string): [boolean, Error | null];
+    function chromemDelete(collectionName: string, id: string): [boolean, Error | null];
     /**
      * 文本转语音生成
      * 

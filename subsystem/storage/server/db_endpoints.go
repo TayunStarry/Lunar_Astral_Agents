@@ -60,29 +60,288 @@ func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // =============================================================================
-// 向量数据库端点 — 替代 chromem.go
+// 向量数据库端点 — 多集合 RESTful 架构
+// 路由：/vector/ 子树分发，解析路径中的集合名
 // =============================================================================
 
-func ChromemMessagesHandler(w http.ResponseWriter, r *http.Request) {
+// VectorHandler 向量数据库统一分发器
+// 支持路径：
+//   POST   /vector/init                            实例初始化（配置嵌入服务连接）
+//   GET    /vector/stats                           全局统计（聚合所有集合）
+//   GET    /vector/collections                     列出所有集合
+//   POST   /vector/collections/{name}              创建/打开集合（锁定模型）
+//   GET    /vector/collections/{name}/stats        集合统计
+//   POST   /vector/collections/{name}/messages     添加消息
+//   GET    /vector/collections/{name}/messages     查询消息
+//   DELETE /vector/collections/{name}/messages     删除消息
+//   GET    /vector/collections/{name}/documents    文档分页列表
+//   POST   /vector/collections/{name}/rebuild      重建（删除维度不符文档）
+func VectorHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/vector/")
+	path = strings.Trim(path, "/")
+	if path == "" {
+		writeError(w, http.StatusNotFound, "向量数据库请求[ERROR] -> 路径不能为空")
+		return
+	}
+
+	parts := strings.Split(path, "/")
+
+	// /vector/init
+	if len(parts) == 1 && parts[0] == "init" {
+		handleVectorInit(w, r)
+		return
+	}
+
+	// /vector/stats
+	if len(parts) == 1 && parts[0] == "stats" {
+		handleVectorGlobalStats(w, r)
+		return
+	}
+
+	// /vector/collections 或 /vector/collections/{name}/...
+	if parts[0] != "collections" {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("向量数据库请求[ERROR] -> 未知路径: /vector/%s", path))
+		return
+	}
+
+	// /vector/collections — 列出所有集合
+	if len(parts) == 1 {
+		handleVectorListCollections(w, r)
+		return
+	}
+
+	// parts[1] = 集合名, parts[2+] = 操作
+	if len(parts) < 2 {
+		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> 集合名不能为空")
+		return
+	}
+
+	collectionName := parts[1]
+
+	// /vector/collections/{name} — 创建/打开集合
+	if len(parts) == 2 {
+		handleVectorCollectionCreate(w, r, collectionName)
+		return
+	}
+
+	action := parts[2]
+	switch action {
+	case "messages":
+		handleVectorMessages(w, r, collectionName)
+	case "stats":
+		handleVectorCollectionStats(w, r, collectionName)
+	case "documents":
+		handleVectorDocuments(w, r, collectionName)
+	case "rebuild":
+		handleVectorRebuild(w, r, collectionName)
+	default:
+		writeError(w, http.StatusNotFound, fmt.Sprintf("向量数据库请求[ERROR] -> 未知的集合操作: %s", action))
+	}
+}
+
+// handleVectorInit POST /vector/init — 实例初始化（仅配置嵌入服务连接，不创建集合）
+func handleVectorInit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
+		return
+	}
+
+	if module.IsInitialized() {
+		writeSuccess(w, map[string]string{
+			"message": "向量数据库实例已初始化",
+		})
+		return
+	}
+
+	var req vectorInitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("向量数据库请求[ERROR] -> 解析请求失败: %v", err))
+		return
+	}
+
+	if req.BaseURL == "" {
+		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> base_url 不能为空")
+		return
+	}
+
+	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") {
+		req.BaseURL = "http://" + req.BaseURL
+		logger.Warn("Storage", "向量 base_url 缺少协议前缀, 已自动补全为: %s", req.BaseURL)
+	}
+
+	if err := module.VectorInitInstance(req.BaseURL, req.APIKey); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 实例初始化失败: %v", err))
+		return
+	}
+
+	logger.Info("Storage", "向量实例初始化成功, base_url: %s", req.BaseURL)
+
+	writeSuccess(w, map[string]string{
+		"message":  "向量数据库实例初始化成功",
+		"base_url": req.BaseURL,
+	})
+}
+
+// handleVectorGlobalStats GET /vector/stats — 全局统计（聚合所有集合）
+func handleVectorGlobalStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
+		return
+	}
+
+	initialized := module.IsInitialized()
+	if !initialized {
+		writeSuccess(w, vectorStatsData{
+			Initialized: false,
+		})
+		return
+	}
+
+	collections := module.VectorListCollections()
+	totalDocs := 0
+	mismatch := false
+	for _, name := range collections {
+		totalDocs += module.GetCollectionCount(name)
+		if module.HasSyncMismatch(name) {
+			mismatch = true
+		}
+	}
+
+	writeSuccess(w, vectorStatsData{
+		DocumentCount: totalDocs,
+		Initialized:   true,
+		EntryCount:    totalDocs,
+		SyncMismatch:  mismatch,
+	})
+}
+
+// handleVectorListCollections GET /vector/collections — 列出所有集合
+func handleVectorListCollections(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
+		return
+	}
+
+	names := module.VectorListCollections()
+	infos := make([]vectorCollectionInfo, 0, len(names))
+	for _, name := range names {
+		model, dim, count, err := module.VectorGetCollectionInfo(name)
+		if err != nil {
+			logger.Warn("Storage", "获取集合 [%s] 信息失败: %v", name, err)
+			continue
+		}
+		infos = append(infos, vectorCollectionInfo{
+			Name:      name,
+			Model:     model,
+			Dimension: dim,
+			Count:     count,
+		})
+	}
+
+	writeSuccess(w, map[string]interface{}{
+		"collections": infos,
+		"total":       len(infos),
+	})
+}
+
+// handleVectorCollectionCreate POST /vector/collections/{name} — 创建/打开集合（探针定维度）
+func handleVectorCollectionCreate(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化, 请先调用 /vector/init")
+		return
+	}
+
+	var req vectorCollectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("向量数据库请求[ERROR] -> 解析请求失败: %v", err))
+		return
+	}
+
+	if req.ModelName == "" {
+		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> model_name 不能为空")
+		return
+	}
+
+	ctx := context.Background()
+	if err := module.CollectionInit(ctx, collectionName, req.ModelName); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 集合创建失败: %v", err))
+		return
+	}
+
+	model, dim, count, _ := module.VectorGetCollectionInfo(collectionName)
+	logger.Info("Storage", "集合 [%s] 创建成功, 模型: %s, 维度: %d, 文档数: %d",
+		collectionName, model, dim, count)
+
+	writeSuccess(w, vectorCollectionInfo{
+		Name:      collectionName,
+		Model:     model,
+		Dimension: dim,
+		Count:     count,
+	})
+}
+
+// handleVectorCollectionStats GET /vector/collections/{name}/stats — 集合统计
+func handleVectorCollectionStats(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
+		return
+	}
+
+	model, dim, count, err := module.VectorGetCollectionInfo(collectionName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("向量数据库请求[ERROR] -> %v", err))
+		return
+	}
+
+	mismatch := module.HasSyncMismatch(collectionName)
+
+	logger.Info("Storage", "集合 [%s] 统计: 文档数=%d, 模型=%s, 维度=%d, 维度不符=%v",
+		collectionName, count, model, dim, mismatch)
+
+	writeSuccess(w, vectorStatsData{
+		DocumentCount: count,
+		Initialized:   true,
+		EntryCount:    count,
+		SyncMismatch:  mismatch,
+	})
+}
+
+// handleVectorMessages POST/GET/DELETE /vector/collections/{name}/messages
+func handleVectorMessages(w http.ResponseWriter, r *http.Request, collectionName string) {
 	switch r.Method {
 	case http.MethodPost:
-		handleChromemAdd(w, r)
+		handleVectorAddMessage(w, r, collectionName)
 	case http.MethodGet:
-		handleChromemQuery(w, r)
+		handleVectorQueryMessages(w, r, collectionName)
 	case http.MethodDelete:
-		handleChromemDelete(w, r)
+		handleVectorDeleteMessage(w, r, collectionName)
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST/GET/DELETE")
 	}
 }
 
-func handleChromemAdd(w http.ResponseWriter, r *http.Request) {
+func handleVectorAddMessage(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> chromem 未初始化")
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
 		return
 	}
 
-	var req chromemAddRequest
+	var req vectorAddRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("向量数据库请求[ERROR] -> 解析请求失败: %v", err))
 		return
@@ -103,13 +362,14 @@ func handleChromemAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	id, err := module.AddMessageWithID(ctx, req.Role, req.Content)
+	id, err := module.AddMessageWithID(ctx, collectionName, req.Role, req.Content)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 添加消息失败: %v", err))
 		return
 	}
 
-	logger.Info("Storage", "chromem 添加消息成功, ID: %s, 角色: %s, 内容长度: %d", id, req.Role, len(req.Content))
+	logger.Info("Storage", "集合 [%s] 添加消息成功, ID: %s, 角色: %s, 内容长度: %d",
+		collectionName, id, req.Role, len(req.Content))
 
 	writeSuccess(w, map[string]string{
 		"id":      id,
@@ -118,9 +378,9 @@ func handleChromemAdd(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
+func handleVectorQueryMessages(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> chromem 未初始化")
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
 		return
 	}
 
@@ -138,15 +398,15 @@ func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	messages, err := module.QueryMessagesWithContent(ctx, queryText, topK)
+	messages, err := module.QueryMessagesWithContent(ctx, collectionName, queryText, topK)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 查询失败: %v", err))
 		return
 	}
 
-	results := make([]chromemMessageData, 0, len(messages))
+	results := make([]vectorMessageData, 0, len(messages))
 	for _, msg := range messages {
-		results = append(results, chromemMessageData{
+		results = append(results, vectorMessageData{
 			ID:         msg.ID,
 			Role:       msg.Role,
 			Content:    msg.Content,
@@ -154,9 +414,10 @@ func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	logger.Info("Storage", "chromem 查询完成, 查询: %s, 结果数: %d", queryText, len(results))
+	logger.Info("Storage", "集合 [%s] 查询完成, 查询: %s, 结果数: %d",
+		collectionName, queryText, len(results))
 
-	writeSuccess(w, chromemQueryData{
+	writeSuccess(w, vectorQueryData{
 		Query:      queryText,
 		TopK:       topK,
 		Results:    results,
@@ -164,13 +425,13 @@ func handleChromemQuery(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func handleChromemDelete(w http.ResponseWriter, r *http.Request) {
+func handleVectorDeleteMessage(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> chromem 未初始化")
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
 		return
 	}
 
-	var req chromemDeleteRequest
+	var req vectorDeleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("向量数据库请求[ERROR] -> 解析请求失败: %v", err))
 		return
@@ -182,95 +443,27 @@ func handleChromemDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	if err := module.DeleteMessage(ctx, req.ID); err != nil {
+	if err := module.DeleteMessage(ctx, collectionName, req.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 删除消息失败: %v", err))
 		return
 	}
 
-	logger.Info("Storage", "chromem 删除消息成功, ID: %s", req.ID)
+	logger.Info("Storage", "集合 [%s] 删除消息成功, ID: %s", collectionName, req.ID)
 
 	writeSuccess(w, map[string]string{
 		"id": req.ID,
 	})
 }
 
-func ChromemStatsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
-		return
-	}
-
-	count := module.GetCollectionCount()
-	initialized := module.IsInitialized()
-	entryCount := module.GetEntryCount()
-	mismatch := module.HasSyncMismatch()
-
-	logger.Info("Storage", "chromem 统计信息: 文档数=%d, 已初始化=%v, 条目数=%d, 不同步=%v", count, initialized, entryCount, mismatch)
-
-	writeSuccess(w, chromemStatsData{
-		DocumentCount: count,
-		Initialized:   initialized,
-		EntryCount:    entryCount,
-		SyncMismatch:  mismatch,
-	})
-}
-
-func ChromemInitHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
-		return
-	}
-
-	if module.IsInitialized() {
-		writeSuccess(w, map[string]string{
-			"message": "chromem 向量数据库已初始化",
-		})
-		return
-	}
-
-	var req chromemInitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("向量数据库请求[ERROR] -> 解析请求失败: %v", err))
-		return
-	}
-
-	if req.BaseURL == "" {
-		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> base_url 不能为空")
-		return
-	}
-
-	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") {
-		req.BaseURL = "http://" + req.BaseURL
-		logger.Warn("Storage", "chromem base_url 缺少协议前缀, 已自动补全为: %s", req.BaseURL)
-	}
-
-	if req.ModelName == "" {
-		writeError(w, http.StatusBadRequest, "向量数据库请求[ERROR] -> model_name 不能为空")
-		return
-	}
-
-	if err := module.Init(req.BaseURL, req.APIKey, req.ModelName); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 初始化失败: %v", err))
-		return
-	}
-
-	logger.Info("Storage", "chromem 初始化成功, base_url: %s, model: %s", req.BaseURL, req.ModelName)
-
-	writeSuccess(w, map[string]string{
-		"message":    "chromem 向量数据库初始化成功",
-		"base_url":   req.BaseURL,
-		"model_name": req.ModelName,
-	})
-}
-
-func ChromemDocumentsHandler(w http.ResponseWriter, r *http.Request) {
+// handleVectorDocuments GET /vector/collections/{name}/documents — 文档分页列表
+func handleVectorDocuments(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
 		return
 	}
 
 	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> chromem 未初始化")
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
 		return
 	}
 
@@ -288,11 +481,11 @@ func ChromemDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	entries, total := module.GetDocuments(offset, limit)
+	entries, total := module.GetDocuments(collectionName, offset, limit)
 
-	docList := make([]chromemMessageData, 0, len(entries))
+	docList := make([]vectorMessageData, 0, len(entries))
 	for _, entry := range entries {
-		docList = append(docList, chromemMessageData{
+		docList = append(docList, vectorMessageData{
 			ID:      entry.ID,
 			Role:    entry.Role,
 			Content: entry.Content,
@@ -307,28 +500,29 @@ func ChromemDocumentsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func ChromemRebuildHandler(w http.ResponseWriter, r *http.Request) {
+// handleVectorRebuild POST /vector/collections/{name}/rebuild — 重建（删除维度不符文档）
+func handleVectorRebuild(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "向量数据库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
 
 	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> chromem 未初始化")
+		writeError(w, http.StatusServiceUnavailable, "向量数据库请求[ERROR] -> 向量数据库未初始化")
 		return
 	}
 
 	ctx := context.Background()
-	count, err := module.RebuildEntries(ctx)
+	count, err := module.RebuildEntries(ctx, collectionName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("向量数据库请求[ERROR] -> 重建条目失败: %v", err))
 		return
 	}
 
-	logger.Info("Storage", "chromem rebuild 完成, 重建 %d 条文档条目", count)
+	logger.Info("Storage", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
 
 	writeSuccess(w, map[string]interface{}{
 		"rebuilt": count,
-		"message": fmt.Sprintf("成功重建 %d 条文档条目", count),
+		"message": fmt.Sprintf("集合 [%s] 重建完成, 剩余 %d 条文档", collectionName, count),
 	})
 }

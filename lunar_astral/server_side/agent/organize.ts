@@ -162,7 +162,7 @@ class Toolchain extends Prompt {
 			return '查询文本为空，请提供有效的查询关键词';
 		}
 
-		const [results, error] = chromemQuery(queryText.trim(), topK);
+		const [results, error] = chromemQuery('lunar_messages', queryText.trim(), topK);
 		if (error) {
 			console.error('[编纂者] chromem 查询失败:', error);
 			return `向量数据库查询失败: ${error}`;
@@ -195,7 +195,7 @@ class Toolchain extends Prompt {
 		}
 
 		// 先删除旧记录
-		const [deleteResult, deleteError] = chromemDelete(id.trim());
+		const [deleteResult, deleteError] = chromemDelete('lunar_messages', id.trim());
 		if (deleteError) {
 			console.error('[编纂者] 合并时删除旧记录失败:', deleteError);
 			return `合并失败：删除旧记录 ${id} 时出错: ${deleteError}`;
@@ -204,7 +204,7 @@ class Toolchain extends Prompt {
 
 		// 存储合并后的新记录
 		const finalContent = this.ensureTimestampInRecord(mergedContent.trim());
-		const [addResult, addError] = chromemAdd('assistant', finalContent);
+		const [addResult, addError] = chromemAdd('lunar_messages', 'assistant', finalContent);
 		if (addError) {
 			console.error('[编纂者] 合并时存储新记录失败:', addError);
 			return `合并失败：旧记录 ${id} 已删除，但存储合并内容时出错: ${addError}。合并内容: ${finalContent.slice(0, 200)}`;
@@ -226,7 +226,7 @@ class Toolchain extends Prompt {
 			}
 		}
 
-		const [result, error] = chromemDelete(id.trim());
+		const [result, error] = chromemDelete('lunar_messages', id.trim());
 		if (error) {
 			console.error('[编纂者] chromem 删除失败:', error);
 			return `向量数据库删除失败: ${error}`;
@@ -254,7 +254,7 @@ class Toolchain extends Prompt {
 		const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
 
 		if (checkQuery) {
-			const [existingResults] = chromemQuery(checkQuery, 5);
+			const [existingResults] = chromemQuery('lunar_messages', checkQuery, 5);
 			if (existingResults && existingResults.length > 0) {
 				const similarRecords = existingResults
 					.map((r: { id: string; content: string; similarity: number }, i: number) =>
@@ -266,7 +266,7 @@ class Toolchain extends Prompt {
 		}
 
 		const finalContent = this.ensureTimestampInRecord(trimmedContent);
-		const [result, error] = chromemAdd('assistant', finalContent);
+		const [result, error] = chromemAdd('lunar_messages', 'assistant', finalContent);
 		if (error) {
 			console.error('[编纂者] chromem 存储失败:', error);
 			return `向量数据库存储失败: ${error}`;
@@ -320,7 +320,7 @@ export class OrganizeRole extends Toolchain {
 		if (!BaseConfig.chromemReady) return;
 		for (const message of discarded) {
 			const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-			chromemAdd(message.role, content);
+			chromemAdd('lunar_messages', message.role, content);
 		}
 	}
 	/** 查询历史记录 */
@@ -328,7 +328,7 @@ export class OrganizeRole extends Toolchain {
 		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
 		if (!BaseConfig.chromemReady) return [];
 
-		const [results, error] = chromemQuery(queryText, topK);
+		const [results, error] = chromemQuery('lunar_messages', queryText, topK);
 		if (error) {
 			console.error('[编纂者] 查询历史记录失败:', error);
 			return [];

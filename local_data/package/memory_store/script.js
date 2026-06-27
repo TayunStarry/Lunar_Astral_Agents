@@ -4,11 +4,12 @@
 // ============================================================
 
 var API = {
-    MESSAGES: '/chromem/messages',
-    STATS:    '/chromem/stats',
-    INIT:     '/chromem/init',
-    DOCS:     '/chromem/documents',
-    REBUILD:  '/chromem/rebuild'
+    MESSAGES:   '/vector/collections/lunar_messages/messages',
+    STATS:      '/vector/collections/lunar_messages/stats',
+    INIT:       '/vector/init',
+    COLLECTION: '/vector/collections/lunar_messages',
+    DOCS:       '/vector/collections/lunar_messages/documents',
+    REBUILD:    '/vector/collections/lunar_messages/rebuild'
 };
 
 var PAGE_SIZE = 12;
@@ -249,18 +250,32 @@ async function handleInit() {
     showBtnLoading(D.btnInit, true);
 
     try {
-        var resp = await fetch(API.INIT, {
+        // 第一步：实例初始化（只传 base_url 和 api_key，不含 model_name）
+        var initResp = await fetch(API.INIT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base_url: base, api_key: key, model_name: model })
+            body: JSON.stringify({ base_url: base, api_key: key })
         });
-        var result = await resp.json();
+        var initResult = await initResp.json();
 
-        if (result.success) {
+        if (!initResult.success) {
+            showToast('初始化失败: ' + (initResult.error || '未知错误'), 'error');
+            return;
+        }
+
+        // 第二步：创建集合（传 model_name）
+        var colResp = await fetch(API.COLLECTION, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_name: model })
+        });
+        var colResult = await colResp.json();
+
+        if (colResult.success) {
             showToast('向量数据库初始化成功', 'success');
             loadStats();
         } else {
-            showToast('初始化失败: ' + (result.error || '未知错误'), 'error');
+            showToast('集合创建失败: ' + (colResult.error || '未知错误'), 'error');
         }
     } catch (err) {
         showToast('初始化请求失败: ' + err.message, 'error');
@@ -602,8 +617,8 @@ async function handleRebuild() {
 
     showModal(
         '重建索引',
-        '<p>将从 chromem 数据库中读取所有文档并重建本地索引条目。此操作用于修复数据不同步问题。</p>' +
-        '<p class="modal-hint">提示：如果 chromem 中有大量文档，此操作可能需要一些时间。</p>',
+        '<p>将检测并清理维度不符或向量缺失的文档记录。此操作用于修复向量数据异常。</p>' +
+        '<p class="modal-hint">提示：如果集合中有大量文档，此操作可能需要一些时间。</p>',
         async function () {
             closeModal();
             await executeRebuild();
