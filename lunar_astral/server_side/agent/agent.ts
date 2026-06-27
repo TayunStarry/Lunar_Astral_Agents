@@ -1,4 +1,4 @@
-﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+﻿﻿﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {

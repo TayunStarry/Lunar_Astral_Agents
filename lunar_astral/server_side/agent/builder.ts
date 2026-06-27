@@ -17,16 +17,16 @@ export class BaseConfig {
 	protected runtimeMessages: PostMessage[] = [];
 	/** 系统提示 */
 	protected systemPrompt: string = "你的名字叫做月华, 是一个女孩子";
-	/** chromem是否已初始化 */
-	protected static chromemReady: boolean = false;
+	/** 向量数据库是否已初始化 */
+	protected static vectorReady: boolean = false;
 	/** 私有化构造函数，防止外部实例化 */
 	protected constructor() { }
-	/** 初始化chromem-go向量数据库 */
-	protected static initChromem(): void {
-		if (BaseConfig.chromemReady) return;
-		const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
-		if (err) console.error('chromem 初始化失败:', err);
-		else BaseConfig.chromemReady = true;
+	/** 初始化向量数据库 */
+	protected static initVector(): void {
+		if (BaseConfig.vectorReady) return;
+		const [_, err] = vectorInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
+		if (err) console.error('向量数据库初始化失败:', err);
+		else BaseConfig.vectorReady = true;
 	}
 }
 
@@ -154,28 +154,28 @@ export class ModelBuilder extends ConfigModifier {
 		// 返回模型响应
 		return result;
 	}
-	/** 从 chromem-go 查询相关消息并填充 ragMessages */
+	/** 从 向量数据库 查询相关消息并填充 ragMessages */
 	public queryRagMessages(): this {
 		/** 获取最新的5条用户消息作为查询条件 */
 		const userMessages = this.getLatestUserMessages();
 		// 如果没有用户消息，直接返回
 		if (userMessages.length === 0) return this;
-		// 初始化 chromem-go
-		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
+		// 初始化 向量数据库
+		if (!BaseConfig.vectorReady) BaseConfig.initVector();
 		// 如果初始化失败，直接返回
-		if (!BaseConfig.chromemReady) return this;
+		if (!BaseConfig.vectorReady) return this;
 		/** 所有查询结果汇总（含相似度分数） */
 		const allResults: { id: string, role: string, content: string, similarity: number }[] = [];
-		// 对每条用户消息分别查询 chromem-go
+		// 对每条用户消息分别查询 向量数据库
 		for (const userMessage of userMessages) {
-			const [results, error] = chromemQuery('lunar_messages', userMessage, 5);
+			const [results, error] = vectorQuery('lunar_messages', userMessage, 5);
 			// 单条查询失败则跳过，继续处理下一条
 			if (error) {
-				console.error('chromem 查询失败:', error);
+				console.error('向量数据库查询失败:', error);
 				continue;
 			}
 			if (results && results.length > 0) {
-				// chromem-go 已按相似度降序返回结果
+				// 向量数据库 已按相似度降序返回结果
 				allResults.push(...results);
 			}
 		}

@@ -463,16 +463,16 @@ var agentSystem = (function (exports) {
         ragMessages = [];
         runtimeMessages = [];
         systemPrompt = "你的名字叫做月华, 是一个女孩子";
-        static chromemReady = false;
+        static vectorReady = false;
         constructor() { }
-        static initChromem() {
-            if (BaseConfig.chromemReady)
+        static initVector() {
+            if (BaseConfig.vectorReady)
                 return;
-            const [_, err] = chromemInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
+            const [_, err] = vectorInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
             if (err)
-                console.error('chromem 初始化失败:', err);
+                console.error('向量数据库初始化失败:', err);
             else
-                BaseConfig.chromemReady = true;
+                BaseConfig.vectorReady = true;
         }
     }
     class PromptProcessor extends BaseConfig {
@@ -568,15 +568,15 @@ var agentSystem = (function (exports) {
             const userMessages = this.getLatestUserMessages();
             if (userMessages.length === 0)
                 return this;
-            if (!BaseConfig.chromemReady)
-                BaseConfig.initChromem();
-            if (!BaseConfig.chromemReady)
+            if (!BaseConfig.vectorReady)
+                BaseConfig.initVector();
+            if (!BaseConfig.vectorReady)
                 return this;
             const allResults = [];
             for (const userMessage of userMessages) {
-                const [results, error] = chromemQuery('lunar_messages', userMessage, 5);
+                const [results, error] = vectorQuery('lunar_messages', userMessage, 5);
                 if (error) {
-                    console.error('chromem 查询失败:', error);
+                    console.error('向量数据库查询失败:', error);
                     continue;
                 }
                 if (results && results.length > 0) {
@@ -1195,9 +1195,9 @@ var agentSystem = (function (exports) {
             if (!queryText || queryText.trim().length === 0) {
                 return '查询文本为空，请提供有效的查询关键词';
             }
-            const [results, error] = chromemQuery('lunar_messages', queryText.trim(), topK);
+            const [results, error] = vectorQuery('lunar_messages', queryText.trim(), topK);
             if (error) {
-                console.error('[编纂者] chromem 查询失败:', error);
+                console.error('[编纂者] 向量数据库查询失败:', error);
                 return `向量数据库查询失败: ${error}`;
             }
             if (!results || results.length === 0) {
@@ -1214,20 +1214,20 @@ var agentSystem = (function (exports) {
             if (!mergedContent || mergedContent.trim().length === 0) {
                 return '合并内容为空，已跳过合并';
             }
-            if (!BaseConfig.chromemReady) {
-                BaseConfig.initChromem();
-                if (!BaseConfig.chromemReady) {
+            if (!BaseConfig.vectorReady) {
+                BaseConfig.initVector();
+                if (!BaseConfig.vectorReady) {
                     return '向量数据库未就绪，合并失败，请稍后重试';
                 }
             }
-            const [deleteResult, deleteError] = chromemDelete('lunar_messages', id.trim());
+            const [deleteResult, deleteError] = vectorDelete('lunar_messages', id.trim());
             if (deleteError) {
                 console.error('[编纂者] 合并时删除旧记录失败:', deleteError);
                 return `合并失败：删除旧记录 ${id} 时出错: ${deleteError}`;
             }
             console.log(`[编纂者] 合并：已删除旧记录 ${id}`);
             const finalContent = this.ensureTimestampInRecord(mergedContent.trim());
-            const [addResult, addError] = chromemAdd('lunar_messages', 'assistant', finalContent);
+            const [addResult, addError] = vectorAdd('lunar_messages', 'assistant', finalContent);
             if (addError) {
                 console.error('[编纂者] 合并时存储新记录失败:', addError);
                 return `合并失败：旧记录 ${id} 已删除，但存储合并内容时出错: ${addError}。合并内容: ${finalContent.slice(0, 200)}`;
@@ -1239,15 +1239,15 @@ var agentSystem = (function (exports) {
             if (!id || id.trim().length === 0) {
                 return '记录ID为空，已跳过删除';
             }
-            if (!BaseConfig.chromemReady) {
-                BaseConfig.initChromem();
-                if (!BaseConfig.chromemReady) {
+            if (!BaseConfig.vectorReady) {
+                BaseConfig.initVector();
+                if (!BaseConfig.vectorReady) {
                     return '向量数据库未就绪，删除失败，请稍后重试';
                 }
             }
-            const [result, error] = chromemDelete('lunar_messages', id.trim());
+            const [result, error] = vectorDelete('lunar_messages', id.trim());
             if (error) {
-                console.error('[编纂者] chromem 删除失败:', error);
+                console.error('[编纂者] 向量数据库删除失败:', error);
                 return `向量数据库删除失败: ${error}`;
             }
             return result ? `记录 ${id} 已成功从向量数据库删除` : `删除操作已完成但未返回确认信息`;
@@ -1256,9 +1256,9 @@ var agentSystem = (function (exports) {
             if (!content || content.trim().length === 0) {
                 return '记录内容为空，已跳过存储';
             }
-            if (!BaseConfig.chromemReady) {
-                BaseConfig.initChromem();
-                if (!BaseConfig.chromemReady) {
+            if (!BaseConfig.vectorReady) {
+                BaseConfig.initVector();
+                if (!BaseConfig.vectorReady) {
                     return '向量数据库未就绪，存储失败，请稍后重试';
                 }
             }
@@ -1267,7 +1267,7 @@ var agentSystem = (function (exports) {
             const eventMatch = trimmedContent.match(/事件[:：](.+?)[|｜]/);
             const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
             if (checkQuery) {
-                const [existingResults] = chromemQuery('lunar_messages', checkQuery, 5);
+                const [existingResults] = vectorQuery('lunar_messages', checkQuery, 5);
                 if (existingResults && existingResults.length > 0) {
                     const similarRecords = existingResults
                         .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
@@ -1277,9 +1277,9 @@ var agentSystem = (function (exports) {
                 }
             }
             const finalContent = this.ensureTimestampInRecord(trimmedContent);
-            const [result, error] = chromemAdd('lunar_messages', 'assistant', finalContent);
+            const [result, error] = vectorAdd('lunar_messages', 'assistant', finalContent);
             if (error) {
-                console.error('[编纂者] chromem 存储失败:', error);
+                console.error('[编纂者] 向量数据库存储失败:', error);
                 return `向量数据库存储失败: ${error}`;
             }
             return result ? '记录已成功存储到向量数据库' : '存储操作已完成但未返回确认信息';
@@ -1295,9 +1295,9 @@ var agentSystem = (function (exports) {
                 console.log('[编纂者] 没有未读记录需要整理');
                 return;
             }
-            if (!BaseConfig.chromemReady) {
-                BaseConfig.initChromem();
-                if (!BaseConfig.chromemReady) {
+            if (!BaseConfig.vectorReady) {
+                BaseConfig.initVector();
+                if (!BaseConfig.vectorReady) {
                     console.warn('[编纂者] 向量数据库未就绪，保留未读记录待下次整理');
                     return;
                 }
@@ -1318,21 +1318,21 @@ var agentSystem = (function (exports) {
         }
         persistDiscardedMessages(discarded) {
             console.log('[编纂者] 开始持久化被抛弃的消息');
-            if (!BaseConfig.chromemReady)
-                BaseConfig.initChromem();
-            if (!BaseConfig.chromemReady)
+            if (!BaseConfig.vectorReady)
+                BaseConfig.initVector();
+            if (!BaseConfig.vectorReady)
                 return;
             for (const message of discarded) {
                 const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-                chromemAdd('lunar_messages', message.role, content);
+                vectorAdd('lunar_messages', message.role, content);
             }
         }
         queryHistoricalRecords(queryText, topK = 10) {
-            if (!BaseConfig.chromemReady)
-                BaseConfig.initChromem();
-            if (!BaseConfig.chromemReady)
+            if (!BaseConfig.vectorReady)
+                BaseConfig.initVector();
+            if (!BaseConfig.vectorReady)
                 return [];
-            const [results, error] = chromemQuery('lunar_messages', queryText, topK);
+            const [results, error] = vectorQuery('lunar_messages', queryText, topK);
             if (error) {
                 console.error('[编纂者] 查询历史记录失败:', error);
                 return [];
@@ -2124,15 +2124,33 @@ var agentSystem = (function (exports) {
     }
     function extractActionBlocks(text) {
         const blocks = [];
-        const regex = /[\(（]([^()（）]+?)[\)）]/g;
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-            const content = match[1].trim();
-            if (content.length > 0) {
-                blocks.push(content);
+        const stack = [];
+        const ranges = [];
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '(' || ch === '\uFF08') {
+                stack.push(i);
+            }
+            else if (ch === ')' || ch === '\uFF09') {
+                if (stack.length === 0)
+                    continue;
+                const start = stack.pop();
+                if (stack.length === 0) {
+                    const content = text.slice(start + 1, i).trim();
+                    if (content.length > 0) {
+                        blocks.push(content);
+                    }
+                    ranges.push([start, i + 1]);
+                }
             }
         }
-        const remaining = text.replace(/[\(（]([^()（）]*?)[\)）]/g, '');
+        let remaining = '';
+        let lastEnd = 0;
+        for (const [start, end] of ranges) {
+            remaining += text.slice(lastEnd, start);
+            lastEnd = end;
+        }
+        remaining += text.slice(lastEnd);
         return [blocks, remaining];
     }
     function extractEmotionBlocks(text) {

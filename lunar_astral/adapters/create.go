@@ -46,11 +46,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
 
-	// 注册chromem-go向量数据库适配器
-	vm.Set("chromemInit", adapters.chromemInit)
-	vm.Set("chromemAdd", adapters.chromemAdd)
-	vm.Set("chromemQuery", adapters.chromemQuery)
-	vm.Set("chromemDelete", adapters.chromemDelete)
+	// 注册向量数据库适配器
+	vm.Set("vectorInit", adapters.vectorInit)
+	vm.Set("vectorAdd", adapters.vectorAdd)
+	vm.Set("vectorQuery", adapters.vectorQuery)
+	vm.Set("vectorDelete", adapters.vectorDelete)
 
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.tts)

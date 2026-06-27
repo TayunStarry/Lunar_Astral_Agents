@@ -85,26 +85,51 @@ function extractCodeBlocks(text: string): [string[], string] {
 /**
  * 从原始文本中提取动作区内容（全角"（）"或半角"()"包裹的内容）
  *
- * 匹配最内层的括号对，内容不能包含括号字符本身（不支持嵌套）
- * 空括号或仅含空白的括号会被跳过
- * 同时从原始文本中移除这些括号片段
+ * 采用栈匹配算法支持任意层嵌套：
+ * - 仅提取"最外层"括号对的内容（内层括号原样保留在内容中）
+ * - 例如 "(动作(嵌套))" 提取为 "动作(嵌套)"，并整体移除该括号片段
+ * - 全角/半角括号可混合配对（兼容输入法切换场景）
+ * - 空括号或仅含空白的括号会被跳过（不记录但会移除）
+ * - 未闭合的括号不视为动作区，原样保留在文本中
  *
  * @param text - 原始文本（应已移除思考区与代码块）
- * @returns [提取的动作区内容数组（仅括号内文字）, 移除动作区后的文本]
+ * @returns [提取的动作区内容数组（含内层括号）, 移除最外层括号片段后的文本]
  */
 function extractActionBlocks(text: string): [string[], string] {
 	const blocks: string[] = [];
-	// 匹配全角（）或半角()，内容为非括号字符（非贪婪）
-	const regex = /[\(（]([^()（）]+?)[\)）]/g;
-	let match: RegExpExecArray | null;
-	while ((match = regex.exec(text)) !== null) {
-		const content = match[1].trim();
-		if (content.length > 0) {
-			blocks.push(content);
+	/** 开括号位置栈（全角/半角混用同一栈，支持混合配对） */
+	const stack: number[] = [];
+	/** 已闭合的最外层括号区间 [start, end)（end 为闭括号索引+1） */
+	const ranges: Array<[number, number]> = [];
+
+	for (let i = 0; i < text.length; i++) {
+		const ch = text[i];
+		if (ch === '(' || ch === '\uFF08') {
+			// 开括号入栈
+			stack.push(i);
+		} else if (ch === ')' || ch === '\uFF09') {
+			if (stack.length === 0) continue; // 多余的闭括号，忽略
+			const start = stack.pop()!;
+			// 仅当栈空时，表示一个最外层括号对完整闭合
+			if (stack.length === 0) {
+				const content = text.slice(start + 1, i).trim();
+				if (content.length > 0) {
+					blocks.push(content);
+				}
+				ranges.push([start, i + 1]);
+			}
 		}
 	}
-	// 从原文中移除所有动作区括号片段
-	const remaining = text.replace(/[\(（]([^()（）]*?)[\)）]/g, '');
+
+	// 根据区间构建 remaining：移除所有最外层括号片段，保留其余原文
+	let remaining = '';
+	let lastEnd = 0;
+	for (const [start, end] of ranges) {
+		remaining += text.slice(lastEnd, start);
+		lastEnd = end;
+	}
+	remaining += text.slice(lastEnd);
+
 	return [blocks, remaining];
 }
 

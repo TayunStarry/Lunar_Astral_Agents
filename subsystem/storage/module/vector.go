@@ -354,7 +354,7 @@ func (d *VectorDB) VectorAddMessageSilent(ctx context.Context, collectionName st
 	return err
 }
 
-// VectorQueryMessages 按查询文本检索最相似的消息，返回 chromem 兼容格式的 JSON 字符串列表
+// VectorQueryMessages 按查询文本检索最相似的消息，返回向量消息兼容格式的 JSON 字符串列表
 func (d *VectorDB) VectorQueryMessages(ctx context.Context, collectionName string, queryText string, topK int) ([]string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -379,7 +379,7 @@ func (d *VectorDB) VectorQueryMessages(ctx context.Context, collectionName strin
 
 	messages := make([]string, 0, len(results))
 	for _, r := range results {
-		msg := chromemMessage{Role: r.Role, Content: r.Content}
+		msg := vectorMessage{Role: r.Role, Content: r.Content}
 		jsonBytes, err := json.Marshal(msg)
 		if err != nil {
 			continue

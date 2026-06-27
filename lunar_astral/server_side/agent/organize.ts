@@ -162,9 +162,9 @@ class Toolchain extends Prompt {
 			return '查询文本为空，请提供有效的查询关键词';
 		}
 
-		const [results, error] = chromemQuery('lunar_messages', queryText.trim(), topK);
+		const [results, error] = vectorQuery('lunar_messages', queryText.trim(), topK);
 		if (error) {
-			console.error('[编纂者] chromem 查询失败:', error);
+			console.error('[编纂者] 向量数据库查询失败:', error);
 			return `向量数据库查询失败: ${error}`;
 		}
 
@@ -172,7 +172,7 @@ class Toolchain extends Prompt {
 			return '未找到相关历史记录，可以放心创建新档案';
 		}
 
-		// chromem-go 已按相似度降序返回结果，直接使用即可
+		// 向量数据库 已按相似度降序返回结果，直接使用即可
 		return '找到以下相关历史记录（按相关度从高到低排列）:\n' + results
 			.map((r: { id: string; role: string; content: string; similarity: number }, i: number) =>
 				`[已有记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
@@ -187,15 +187,15 @@ class Toolchain extends Prompt {
 			return '合并内容为空，已跳过合并';
 		}
 
-		if (!BaseConfig.chromemReady) {
-			BaseConfig.initChromem();
-			if (!BaseConfig.chromemReady) {
+		if (!BaseConfig.vectorReady) {
+			BaseConfig.initVector();
+			if (!BaseConfig.vectorReady) {
 				return '向量数据库未就绪，合并失败，请稍后重试';
 			}
 		}
 
 		// 先删除旧记录
-		const [deleteResult, deleteError] = chromemDelete('lunar_messages', id.trim());
+		const [deleteResult, deleteError] = vectorDelete('lunar_messages', id.trim());
 		if (deleteError) {
 			console.error('[编纂者] 合并时删除旧记录失败:', deleteError);
 			return `合并失败：删除旧记录 ${id} 时出错: ${deleteError}`;
@@ -204,7 +204,7 @@ class Toolchain extends Prompt {
 
 		// 存储合并后的新记录
 		const finalContent = this.ensureTimestampInRecord(mergedContent.trim());
-		const [addResult, addError] = chromemAdd('lunar_messages', 'assistant', finalContent);
+		const [addResult, addError] = vectorAdd('lunar_messages', 'assistant', finalContent);
 		if (addError) {
 			console.error('[编纂者] 合并时存储新记录失败:', addError);
 			return `合并失败：旧记录 ${id} 已删除，但存储合并内容时出错: ${addError}。合并内容: ${finalContent.slice(0, 200)}`;
@@ -219,16 +219,16 @@ class Toolchain extends Prompt {
 			return '记录ID为空，已跳过删除';
 		}
 
-		if (!BaseConfig.chromemReady) {
-			BaseConfig.initChromem();
-			if (!BaseConfig.chromemReady) {
+		if (!BaseConfig.vectorReady) {
+			BaseConfig.initVector();
+			if (!BaseConfig.vectorReady) {
 				return '向量数据库未就绪，删除失败，请稍后重试';
 			}
 		}
 
-		const [result, error] = chromemDelete('lunar_messages', id.trim());
+		const [result, error] = vectorDelete('lunar_messages', id.trim());
 		if (error) {
-			console.error('[编纂者] chromem 删除失败:', error);
+			console.error('[编纂者] 向量数据库删除失败:', error);
 			return `向量数据库删除失败: ${error}`;
 		}
 
@@ -240,9 +240,9 @@ class Toolchain extends Prompt {
 			return '记录内容为空，已跳过存储';
 		}
 
-		if (!BaseConfig.chromemReady) {
-			BaseConfig.initChromem();
-			if (!BaseConfig.chromemReady) {
+		if (!BaseConfig.vectorReady) {
+			BaseConfig.initVector();
+			if (!BaseConfig.vectorReady) {
 				return '向量数据库未就绪，存储失败，请稍后重试';
 			}
 		}
@@ -254,7 +254,7 @@ class Toolchain extends Prompt {
 		const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
 
 		if (checkQuery) {
-			const [existingResults] = chromemQuery('lunar_messages', checkQuery, 5);
+			const [existingResults] = vectorQuery('lunar_messages', checkQuery, 5);
 			if (existingResults && existingResults.length > 0) {
 				const similarRecords = existingResults
 					.map((r: { id: string; content: string; similarity: number }, i: number) =>
@@ -266,9 +266,9 @@ class Toolchain extends Prompt {
 		}
 
 		const finalContent = this.ensureTimestampInRecord(trimmedContent);
-		const [result, error] = chromemAdd('lunar_messages', 'assistant', finalContent);
+		const [result, error] = vectorAdd('lunar_messages', 'assistant', finalContent);
 		if (error) {
-			console.error('[编纂者] chromem 存储失败:', error);
+			console.error('[编纂者] 向量数据库存储失败:', error);
 			return `向量数据库存储失败: ${error}`;
 		}
 
@@ -289,9 +289,9 @@ export class OrganizeRole extends Toolchain {
 			return;
 		}
 
-		if (!BaseConfig.chromemReady) {
-			BaseConfig.initChromem();
-			if (!BaseConfig.chromemReady) {
+		if (!BaseConfig.vectorReady) {
+			BaseConfig.initVector();
+			if (!BaseConfig.vectorReady) {
 				console.warn('[编纂者] 向量数据库未就绪，保留未读记录待下次整理');
 				return;
 			}
@@ -316,19 +316,19 @@ export class OrganizeRole extends Toolchain {
 	/** 持久化被抛弃的消息 */
 	public persistDiscardedMessages(discarded: PostMessage[]): void {
 		console.log('[编纂者] 开始持久化被抛弃的消息');
-		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
-		if (!BaseConfig.chromemReady) return;
+		if (!BaseConfig.vectorReady) BaseConfig.initVector();
+		if (!BaseConfig.vectorReady) return;
 		for (const message of discarded) {
 			const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-			chromemAdd('lunar_messages', message.role, content);
+			vectorAdd('lunar_messages', message.role, content);
 		}
 	}
 	/** 查询历史记录 */
 	public queryHistoricalRecords(queryText: string, topK: number = 10): (PostMessage & { id: string })[] {
-		if (!BaseConfig.chromemReady) BaseConfig.initChromem();
-		if (!BaseConfig.chromemReady) return [];
+		if (!BaseConfig.vectorReady) BaseConfig.initVector();
+		if (!BaseConfig.vectorReady) return [];
 
-		const [results, error] = chromemQuery('lunar_messages', queryText, topK);
+		const [results, error] = vectorQuery('lunar_messages', queryText, topK);
 		if (error) {
 			console.error('[编纂者] 查询历史记录失败:', error);
 			return [];

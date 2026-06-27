@@ -130,7 +130,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function chromemInit(baseURL: string, apiKey: string, modelName: string, collectionName: string): [boolean, Error | null];
+    function vectorInit(baseURL: string, apiKey: string, modelName: string, collectionName: string): [boolean, Error | null];
     /**
      * 向指定集合添加消息
      *
@@ -142,7 +142,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function chromemAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
+    function vectorAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
     /**
      * 从指定集合查询相关消息
      *
@@ -154,7 +154,7 @@ declare global {
      *
      * @returns {[Array<{id: string, role: string, content: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function chromemQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
+    function vectorQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
     /**
      * 从指定集合删除消息
      *
@@ -164,7 +164,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function chromemDelete(collectionName: string, id: string): [boolean, Error | null];
+    function vectorDelete(collectionName: string, id: string): [boolean, Error | null];
     /**
      * 文本转语音生成
      * 

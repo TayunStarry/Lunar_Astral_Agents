@@ -9,11 +9,17 @@ import (
 	"github.com/dop251/goja"
 )
 
-// chromemInit 初始化向量数据库实例并创建指定集合
+// vector_adapter.go 向量数据库适配器
+//
+// 桥接 goja JS 运行时与自实现的向量数据库（subsystem/storage/module）。
+// JS 侧通过 vectorInit/vectorAdd/vectorQuery/vectorDelete 调用，
+// 由 create.go 中的 vm.Set 注册到全局作用域。
+
+// vectorInit 初始化向量数据库实例并创建指定集合
 // 参数: baseURL, apiKey, modelName, collectionName
-func (class *Runtime) chromemInit(call goja.FunctionCall) goja.Value {
+func (class *Runtime) vectorInit(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 4 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemInit 参数不足, 需 4 个: baseURL, apiKey, modelName, collectionName")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("vectorInit 参数不足, 需 4 个: baseURL, apiKey, modelName, collectionName")})
 	}
 
 	baseURL, ok := call.Argument(0).Export().(string)
@@ -52,11 +58,11 @@ func (class *Runtime) chromemInit(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// chromemAdd 添加消息到指定集合
+// vectorAdd 添加消息到指定集合
 // 参数: collectionName, role, content
-func (class *Runtime) chromemAdd(call goja.FunctionCall) goja.Value {
+func (class *Runtime) vectorAdd(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemAdd 参数不足, 需 3 个: collectionName, role, content")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("vectorAdd 参数不足, 需 3 个: collectionName, role, content")})
 	}
 
 	collectionName, ok := call.Argument(0).Export().(string)
@@ -84,11 +90,11 @@ func (class *Runtime) chromemAdd(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// chromemQuery 查询指定集合的相关消息
+// vectorQuery 查询指定集合的相关消息
 // 参数: collectionName, queryText, topK
-func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
+func (class *Runtime) vectorQuery(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemQuery 参数不足, 需 3 个: collectionName, queryText, topK")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("vectorQuery 参数不足, 需 3 个: collectionName, queryText, topK")})
 	}
 
 	collectionName, ok := call.Argument(0).Export().(string)
@@ -124,11 +130,11 @@ func (class *Runtime) chromemQuery(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{resultObjs, nil})
 }
 
-// chromemDelete 从指定集合删除消息
+// vectorDelete 从指定集合删除消息
 // 参数: collectionName, id
-func (class *Runtime) chromemDelete(call goja.FunctionCall) goja.Value {
+func (class *Runtime) vectorDelete(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("chromemDelete 参数不足, 需 2 个: collectionName, id")})
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("vectorDelete 参数不足, 需 2 个: collectionName, id")})
 	}
 
 	collectionName, ok := call.Argument(0).Export().(string)

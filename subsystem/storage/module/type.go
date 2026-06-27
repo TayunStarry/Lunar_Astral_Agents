@@ -69,8 +69,8 @@ type DatabaseRequest struct {
 	Transaction bool          `json:"transaction,omitempty"` // 是否开启事务，默认 false
 }
 
-// chromemMessage 表示兼容旧版接口的消息结构（仅用于 VectorQueryMessages 的 JSON 编码）
-type chromemMessage struct {
+// vectorMessage 向量查询返回的兼容消息结构（仅用于 VectorQueryMessages 的 JSON 编码）
+type vectorMessage struct {
 	Role    string `json:"role"`    // 消息角色，例如 "user" 或 "assistant"
 	Content string `json:"content"` // 消息内容
 }

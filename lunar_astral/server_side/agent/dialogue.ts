@@ -15,7 +15,7 @@ export class DialogueRole extends ModelBuilder {
 			this.formatHistoricalMessages(source);
 			// 添加当前时间到运行时消息列表
 			this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
-			// 从 chromem-go 查询相关历史消息作为 RAG 上下文
+			// 从向量数据库查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
 			const response = this.run(this.ragMessages, [...OnlyData.LTPdefinition]);
