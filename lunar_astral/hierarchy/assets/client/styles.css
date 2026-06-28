@@ -1076,6 +1076,29 @@ body {
 	margin-left: 3px;
 }
 
+/* 音频播放器容器 */
+.audio-container {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 6px 0;
+	width: 100%;
+}
+
+.message-audio-player {
+	width: 100%;
+	max-width: 320px;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.18);
+	backdrop-filter: blur(12px);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.dark-mode .message-audio-player {
+	background: rgba(38, 38, 42, 0.75);
+	border-color: rgba(255, 255, 255, 0.08);
+}
+
 /* Markdown 内容 */
 .markdown-content {
 	color: white;

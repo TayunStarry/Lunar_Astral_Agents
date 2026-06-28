@@ -651,11 +651,13 @@ var agentSystem = (function (exports) {
             if (this.messages.length === 0)
                 return;
             const flattenedMessages = [];
+            const isAudioMessage = (c) => c.type === 'input_audio';
             for (const message of this.messages) {
-                if (typeof message.content === 'string') {
-                    flattenedMessages.push(message);
-                }
-                else {
+                if (typeof message.content !== 'string') {
+                    if (message.content.some(isAudioMessage)) {
+                        flattenedMessages.push(message);
+                        continue;
+                    }
                     for (const content of message.content) {
                         if (content.type === 'text')
                             flattenedMessages.push({ role: message.role, content: content.text });
@@ -663,16 +665,18 @@ var agentSystem = (function (exports) {
                             flattenedMessages.push({ role: message.role, content: [content] });
                     }
                 }
+                else
+                    flattenedMessages.push(message);
             }
-            const visionCount = flattenedMessages.filter(m => Array.isArray(m.content)).length;
-            if (visionCount <= 10) {
+            const visionCount = flattenedMessages.filter(m => { if (!Array.isArray(m.content) || m.content.some(isAudioMessage))
+                return false; }).length;
+            if (visionCount <= 10)
                 this.messages = flattenedMessages;
-            }
             else {
                 const processedMessages = [];
                 let visionBuffer = [];
                 for (const message of flattenedMessages) {
-                    const isVisionMessage = Array.isArray(message.content);
+                    const isVisionMessage = Array.isArray(message.content) && !message.content.some(isAudioMessage);
                     if (isVisionMessage)
                         visionBuffer.push(message);
                     else {
@@ -1457,12 +1461,12 @@ var agentSystem = (function (exports) {
                     continue;
                 const newContent = [];
                 for (let item of message.content) {
-                    if (item.type == 'text')
+                    if (item.type == 'text' || item.type == 'input_audio')
                         newContent.push(item);
-                    else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                    else if (item.image_url && OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                         await this.analysisVideoFile(item.image_url.url, '');
                     }
-                    else if (!item.image_url.url.startsWith("data:image")) {
+                    else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
                         console.log(item.image_url.url);
                         const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                         if (error)

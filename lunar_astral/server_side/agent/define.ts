@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, DialogueRole, PainterRole, RandomFloor,OrganizeRole } from '../index';
+import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, DialogueRole, PainterRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -6,7 +6,7 @@ export class AgentDefine {
 	protected queryKeywords: ModelBuilder = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
 	/** 情感管理器 */
 	protected emotionManager: ModelBuilder = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
-	
+
 	/** 摘要者角色(视频摘要) */
 	public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
 	/** 描述者角色(视频描述) */
@@ -106,6 +106,12 @@ export class AgentDefine {
 	/**
 	 * 遍历未读上下文数组,处理图片文件
 	 *
+	 * 处理规则：
+	 * - text 类型：原样保留
+	 * - input_audio 类型：原样保留（音频数据已是纯 base64，无需处理，由 llama.cpp 直接解码）
+	 * - image_url 类型 + 视频格式扩展名：调用 analysisVideoFile 提取关键帧
+	 * - image_url 类型 + 远程图片 URL（非 data:image）：下载并缩放
+	 *
 	 * @returns {Promise<void>} - 处理完成后的 Promise
 	 */
 	public async LiteImageFile(): Promise<void> {
@@ -114,17 +120,17 @@ export class AgentDefine {
 			// 跳过纯文本消息
 			if (typeof message.content === 'string') continue;
 			/** 新内容数组 */
-			const newContent: Array<ImageContent | TextContent> = [];
+			const newContent: Array<ImageContent | AudioContent | TextContent> = [];
 			// 遍历消息内容中的每个项
 			for (let item of message.content) {
-				// 如果是文本项,直接添加到新内容数组
-				if (item.type == 'text') newContent.push(item);
+				/// 如果是文本项或音频项,直接添加到新内容数组
+				if (item.type == 'text' || item.type == 'input_audio') newContent.push(item);
 				// 检查是否为支持的视频文件格式
-				else if (OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+				else if (item.image_url && OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
 					// 处理视频文件
 					await this.analysisVideoFile(item.image_url.url, '');
 				}
-				else if (!item.image_url.url.startsWith("data:image")) {
+				else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
 					console.log(item.image_url.url);
 					// 获取图片文件内容
 					const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });

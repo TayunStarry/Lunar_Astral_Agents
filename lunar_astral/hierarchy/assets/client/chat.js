@@ -360,6 +360,20 @@ export async function renderMessage(message, container) {
         await renderMath(markdownContent);
     }
 
+    // 渲染用户上传的音频文件（音频播放器）
+    if (message.audioUrls && message.audioUrls.length > 0) {
+        const audioContainer = document.createElement('div');
+        audioContainer.className = 'audio-container';
+        for (const audioUrl of message.audioUrls) {
+            const audio = document.createElement('audio');
+            audio.className = 'message-audio-player';
+            audio.controls = true;
+            audio.src = audioUrl;
+            audioContainer.appendChild(audio);
+        }
+        contentDiv.appendChild(audioContainer);
+    }
+
     container.appendChild(messageElement);
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     return messageElement;

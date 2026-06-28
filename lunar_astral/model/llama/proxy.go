@@ -48,9 +48,9 @@ func Init() {
 		// 批处理大小
 		"--batch-size", "2048",
 		// 微批处理大小
-		"--ubatch-size", "512",
+		"--ubatch-size", "1024",
 		// 使用的CPU线程数
-		"--threads", strconv.Itoa(runtime.NumCPU()),
+		"--threads", strconv.Itoa(runtime.NumCPU() / 2),
 		// K缓存量化类型：8位量化
 		"--cache-type-k", "q8_0",
 		// V缓存量化类型：8位量化

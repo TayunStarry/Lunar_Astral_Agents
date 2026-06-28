@@ -45,33 +45,32 @@ export class DialogueRole extends ModelBuilder {
 		if (this.messages.length === 0) return;
 		/** 扁平化后的消息数组，严格保持原始时间顺序 */
 		const flattenedMessages: PostMessage[] = [];
+		/** 判断消息是否为音频消息（input_audio 类型） */
+		const isAudioMessage = (c: any): boolean => c.type === 'input_audio';
 		// 遍历原始消息数组，将嵌套结构转换为扁平结构
-		// 关键：按数组下标顺序处理，确保时间先后关系不变
 		for (const message of this.messages) {
-			// 消息内容为字符串时，已是扁平结构，直接保留
-			if (typeof message.content === 'string') {
-				flattenedMessages.push(message);
-			}
-			// 消息内容为数组时，将每个内容项拆分为独立消息
-			// 拆分后的子消息按原数组内顺序依次追加，保持时间先后
-			else {
+			// 消息内容为数组时，根据是否含音频采取不同策略
+			if (typeof message.content !== 'string') {
+				// 检查消息是否包含音频内容
+				if (message.content.some(isAudioMessage)) {
+					flattenedMessages.push(message);
+					continue;
+				}
+				// 非音频消息（图片等）：按原逻辑拆分每个内容项为独立消息
 				for (const content of message.content) {
 					// 文本内容项：提取为纯文本消息
 					if (content.type === 'text') flattenedMessages.push({ role: message.role, content: content.text });
-					// 视觉内容项：保留为单条视觉消息（内容为单元素数组）
+					// 视觉内容项：保留为单条消息（内容为单元素数组）
 					else flattenedMessages.push({ role: message.role, content: [content] });
 				}
 			}
+			else flattenedMessages.push(message);
 		}
-		// 统计视觉消息总数，用于判断是否需要分批摘要
-		const visionCount = flattenedMessages.filter(m => Array.isArray(m.content)).length;
+		/** 视觉消息总数 */
+		const visionCount = flattenedMessages.filter(m => { if (!Array.isArray(m.content) || m.content.some(isAudioMessage)) return false; }).length;
 		// 视觉消息数量<=10，无需摘要，直接使用扁平化结果
-		if (visionCount <= 10) {
-			this.messages = flattenedMessages;
-		}
+		if (visionCount <= 10) this.messages = flattenedMessages;
 		// 视觉消息数量>10，需要对连续的视觉消息组分批摘要以减少上下文长度
-		// 处理策略：遍历扁平化数组，遇到连续视觉消息时累积到缓冲区，
-		// 遇到非视觉消息时先处理缓冲区，确保摘要结果插入原位，不改变前后消息的相对顺序
 		else {
 			/** 处理后的最终消息数组 */
 			const processedMessages: PostMessage[] = [];
@@ -79,8 +78,8 @@ export class DialogueRole extends ModelBuilder {
 			let visionBuffer: PostMessage[] = [];
 			// 遍历扁平化后的消息数组
 			for (const message of flattenedMessages) {
-				// 判断当前消息是否为视觉消息（内容为数组类型）
-				const isVisionMessage = Array.isArray(message.content);
+				// 判断当前消息是否为视觉消息（内容为数组类型，且非音频消息）
+				const isVisionMessage = Array.isArray(message.content) && !message.content.some(isAudioMessage);
 				// 累积连续的视觉消息到缓冲区
 				if (isVisionMessage) visionBuffer.push(message);
 				else {

@@ -320,7 +320,7 @@ class LunarCoreApp {
 			// 上传文件并构建内容块
 			const filePromises = this.fileManager.previews.map(preview => this.fileManager.processFileUpload(preview));
 			const fileResults = await Promise.all(filePromises);
-			const { contentBlocks, userContentParts, uploadedFileUrls } = await this.fileManager.buildFileContentBlocks(fileResults);
+			const { contentBlocks, userContentParts, uploadedFileUrls, audioPreviewUrls } = await this.fileManager.buildFileContentBlocks(fileResults);
 
 			if (text) {
 				contentBlocks.push({ type: 'text', text: text });
@@ -336,6 +336,9 @@ class LunarCoreApp {
 			};
 			if (uploadedFileUrls.length > 0) {
 				userMessage.imageUrls = uploadedFileUrls;
+			}
+			if (audioPreviewUrls.length > 0) {
+				userMessage.audioUrls = audioPreviewUrls;
 			}
 			this.addToHistory(userMessage);
 

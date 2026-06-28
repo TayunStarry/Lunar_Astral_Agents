@@ -1,4 +1,4 @@
-﻿﻿﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -187,7 +187,7 @@ class LunarAgent extends AgentDefine {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 	}
 	/** 写入消息 */
-	public writeMessage(role: PostMessageRole, messages: Array<ImageContent | TextContent>) {
+	public writeMessage(role: PostMessageRole, messages: Array<ImageContent | AudioContent | TextContent>) {
 		// 从外部写入消息
 		this.unreadContext.push({ role, content: messages });
 		// 增加随机的发言权重
@@ -206,7 +206,7 @@ class LunarAgent extends AgentDefine {
 		this.speakWeight += RandomFloor(1, 3);
 	}
 	/** 测试消息写入 */
-	public async testMessageWrite(role: PostMessageRole, messages: Array<ImageContent | TextContent>, timeout: number) {
+	public async testMessageWrite(role: PostMessageRole, messages: Array<ImageContent | AudioContent | TextContent>, timeout: number) {
 		// 等待指定超时时间
 		await new Promise(resolve => setTimeout(resolve, timeout));
 		// 如果消息数组非空，写入消息
@@ -218,7 +218,7 @@ class LunarAgent extends AgentDefine {
 /** 初始化月华智能体实例 */
 const AgentRuntime = new LunarAgent();
 /** 测试消息写入 */
-const message: Array<ImageContent | TextContent> = [
+const message: Array<ImageContent | AudioContent | TextContent> = [
 	{
 		type: 'text',
 		text: '你好呀~'
