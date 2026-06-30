@@ -108,13 +108,13 @@ export interface BatchResult {
 	operations: number;
 }
 
-/** 数据库操作 */
-export type DatabaseOperation = DataOperation | TableOperation | InfoOperation;
+/** 知识库操作 */
+export type KnowledgeOperation = DataOperation | TableOperation | InfoOperation;
 
-/** 数据库请求 */
-export interface DatabaseRequest {
+/** 知识库请求 */
+export interface KnowledgeRequest {
 	/** 操作列表 */
-	operations: Array<DatabaseOperation>;
+	operations: Array<KnowledgeOperation>;
 	/** 是否使用事务 */
 	transaction?: boolean;
 }

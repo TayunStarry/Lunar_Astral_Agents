@@ -4,12 +4,12 @@
 // ============================================================
 
 var API = {
-    MESSAGES:   '/vector/lunar_messages/messages',
-    STATS:      '/vector/lunar_messages/stats',
-    INIT:       '/vector/init',
-    COLLECTION: '/vector/lunar_messages',
-    DOCS:       '/vector/lunar_messages/documents',
-    REBUILD:    '/vector/lunar_messages/rebuild'
+    MESSAGES:   '/memory/lunar_messages/messages',
+    STATS:      '/memory/lunar_messages/stats',
+    INIT:       '/memory/init',
+    COLLECTION: '/memory/lunar_messages',
+    DOCS:       '/memory/lunar_messages/documents',
+    REBUILD:    '/memory/lunar_messages/rebuild'
 };
 
 var PAGE_SIZE = 12;

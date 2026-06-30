@@ -58,7 +58,7 @@ const elements = {
 };
 
 // API基础URL
-const API_BASE = '/database/';
+const API_BASE = '/knowledge/';
 
 // ============================================================
 // 初始化

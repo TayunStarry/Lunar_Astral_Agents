@@ -50,8 +50,8 @@ var previewAllowlist = map[string]PreviewEntry{
 	".cfg":  {MIME: "text/plain", Category: CategoryText},
 }
 
-// SQLDatabase 关系型数据库实例（SQLDB）
-var SQLDatabase *SQLDB
+// KnowledgeDatabase 知识库实例（KnowledgeDB）
+var KnowledgeDatabase *KnowledgeDB
 
-// VectorDatabase 向量数据库实例（VectorDB）
-var VectorDatabase *VectorDB
+// MemoryDatabase 记忆库实例（MemoryDB）
+var MemoryDatabase *MemoryDB

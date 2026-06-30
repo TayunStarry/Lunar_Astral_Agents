@@ -63,20 +63,20 @@ type IndexDefinition struct {
 	Unique  bool     `json:"unique,omitempty"` // 是否唯一
 }
 
-// DatabaseRequest 数据库请求
-type DatabaseRequest struct {
-	Operations  []interface{} `json:"operations"`            // 数据库操作列表 ，每个元素可以是DataOperation, TableOperation, InfoOperation
+// KnowledgeRequest 知识库请求
+type KnowledgeRequest struct {
+	Operations  []interface{} `json:"operations"`            // 知识库操作列表 ，每个元素可以是DataOperation, TableOperation, InfoOperation
 	Transaction bool          `json:"transaction,omitempty"` // 是否开启事务，默认 false
 }
 
-// vectorMessage 向量查询返回的兼容消息结构（仅用于 VectorQueryMessages 的 JSON 编码）
-type vectorMessage struct {
+// memoryMessage 记忆库查询返回的兼容消息结构（仅用于 MemoryQueryMessages 的 JSON 编码）
+type memoryMessage struct {
 	Role    string `json:"role"`    // 消息角色，例如 "user" 或 "assistant"
 	Content string `json:"content"` // 消息内容
 }
 
-// VectorQueryResult 向量查询结果（含相似度分数）
-type VectorQueryResult struct {
+// MemoryQueryResult 记忆库查询结果（含相似度分数）
+type MemoryQueryResult struct {
 	ID         string  `json:"id"`         // 文档 ID
 	Role       string  `json:"role"`       // 消息角色
 	Content    string  `json:"content"`    // 消息内容
@@ -90,8 +90,8 @@ type DocumentEntry struct {
 	Content string `json:"content"` // 文档条目内容
 }
 
-// VectorDocument 向量数据库文档 — 自行实现的存储单元，含嵌入向量
-type VectorDocument struct {
+// MemoryDocument 记忆库文档 — 自行实现的存储单元，含嵌入向量
+type MemoryDocument struct {
 	ID        string    `json:"id"`        // 文档 ID
 	Role      string    `json:"role"`      // 消息角色，user/assistant/system
 	Content   string    `json:"content"`   // 原始文本内容
@@ -104,16 +104,17 @@ type collectionMeta struct {
 	Dimension int    `json:"dimension"` // 锁定的向量维度（探针文本确定）
 }
 
-// Collection 单个向量集合 — 集合级锁定的模型与维度
+// Collection 单个记忆集合 — 集合级锁定的模型与维度
 // 文档 ID 采用 UUID v4 格式（由 generateUUID 生成），旧版 msg-N 格式 ID 在加载时保留原值
 type Collection struct {
-	Name      string           // 集合名
-	Model     string           // 锁定的嵌入模型名
-	Dimension int              // 锁定的向量维度（探针文本确定，0 表示未确定）
-	Documents []VectorDocument // 文档列表（含嵌入向量），内存中维护
-	mu        sync.RWMutex     // 文档读写锁
-	filePath  string           // documents.json 路径
-	metaPath  string           // metadata.json 路径
+	Name            string           // 集合名
+	Model           string           // 锁定的嵌入模型名
+	Dimension       int              // 锁定的向量维度（探针文本确定，0 表示未确定）
+	Documents       []MemoryDocument // 文档列表（含嵌入向量），内存中维护
+	mu              sync.RWMutex     // 文档读写锁
+	filePath        string           // documents.json 路径
+	metaPath        string           // metadata.json 路径
+	lastFileModTime time.Time        // documents.json 最近一次已加载的修改时间，用于跨进程一致性检测
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
@@ -122,22 +123,22 @@ type PreviewEntry struct {
 	Category string // 文件类别: image / video / text
 }
 
-// SQLDB 关系型数据库结构体（SQLite）
+// KnowledgeDB 知识库结构体（SQLite）
 // 职责：SQL 连接管理、批量操作、表结构管理、信息查询
-type SQLDB struct {
-	sqlDB          *sql.DB // SQL 数据库连接
-	sqlInitialized bool    // SQL 数据库是否初始化完成
+type KnowledgeDB struct {
+	knowledgeDB          *sql.DB // 知识库 SQL 连接
+	knowledgeInitialized bool    // 知识库是否初始化完成
 }
 
-// VectorDB 向量数据库结构体（多集合架构，扁平化存储）
-// 职责：嵌入服务连接、集合管理、向量 CRUD、维度锁定、持久化
+// MemoryDB 记忆库结构体（多集合架构，扁平化存储）
+// 职责：嵌入服务连接、集合管理、记忆 CRUD、维度锁定、持久化
 // 存储布局：<baseDir>/<collectionName>/{documents.json, metadata.json}
-type VectorDB struct {
-	vectorInitialized bool                   // 向量数据库实例是否初始化完成
+type MemoryDB struct {
+	memoryInitialized bool                   // 记忆库实例是否初始化完成
 	embeddingBaseURL  string                 // 嵌入服务 base_url（OpenAI 兼容）
 	embeddingAPIKey   string                 // 嵌入服务 API Key
 	httpClient        *http.Client           // 嵌入服务 HTTP 客户端（所有集合共享）
-	baseDir           string                 // 向量存储根目录绝对路径（集合目录的直接父级）
+	baseDir           string                 // 记忆存储根目录绝对路径（集合目录的直接父级）
 	collections       map[string]*Collection // 集合名 → 集合实例
 	collectionsMu     sync.RWMutex           // collections map 读写锁
 }

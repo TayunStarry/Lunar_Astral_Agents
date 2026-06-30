@@ -17,25 +17,25 @@ func init() {
 	logger.SetDevMode(*config.Developer)
 }
 
-// InitSQLDB 初始化关系型数据库（SQLite）
-// 创建数据库目录、打开连接、设置 PRAGMA，并赋值给全局 SQLDatabase 实例
-func InitSQLDB(dbPath string) error {
-	if SQLDatabase != nil && SQLDatabase.sqlInitialized {
+// InitKnowledgeDB 初始化知识库（SQLite）
+// 创建数据库目录、打开连接、设置 PRAGMA，并赋值给全局 KnowledgeDatabase 实例
+func InitKnowledgeDB(dbPath string) error {
+	if KnowledgeDatabase != nil && KnowledgeDatabase.knowledgeInitialized {
 		return nil
 	}
 
-	db := &SQLDB{}
-	if err := db.initSQL(dbPath); err != nil {
-		return fmt.Errorf("初始化SQL数据库失败: %v", err)
+	db := &KnowledgeDB{}
+	if err := db.initKnowledge(dbPath); err != nil {
+		return fmt.Errorf("初始化知识库失败: %v", err)
 	}
 
-	SQLDatabase = db
-	logger.Info("Storage", "SQL 数据库初始化完成: %s", dbPath)
+	KnowledgeDatabase = db
+	logger.Info("Storage", "知识库初始化完成: %s", dbPath)
 	return nil
 }
 
-// initSQL 打开 SQLite 连接并设置连接池与 PRAGMA
-func (d *SQLDB) initSQL(dbPath string) error {
+// initKnowledge 打开 SQLite 连接并设置连接池与 PRAGMA
+func (d *KnowledgeDB) initKnowledge(dbPath string) error {
 	dir := filepath.Dir(dbPath)
 	if dir != "." && dir != "/" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -70,41 +70,41 @@ func (d *SQLDB) initSQL(dbPath string) error {
 		logger.Error("Storage", "启用外键约束失败: %v", err)
 	}
 
-	d.sqlDB = db
-	d.sqlInitialized = true
+	d.knowledgeDB = db
+	d.knowledgeInitialized = true
 	return nil
 }
 
-// IsSQLInitialized 返回 SQL 数据库是否已初始化
-func (d *SQLDB) IsSQLInitialized() bool {
-	return d != nil && d.sqlInitialized
+// IsKnowledgeInitialized 返回知识库是否已初始化
+func (d *KnowledgeDB) IsKnowledgeInitialized() bool {
+	return d != nil && d.knowledgeInitialized
 }
 
-// Close 关闭 SQL 数据库连接
-func (d *SQLDB) Close() error {
-	if d.sqlDB != nil {
-		if err := d.sqlDB.Close(); err != nil {
+// Close 关闭知识库连接
+func (d *KnowledgeDB) Close() error {
+	if d.knowledgeDB != nil {
+		if err := d.knowledgeDB.Close(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Ping 测试 SQL 数据库连接是否存活
-func (d *SQLDB) Ping() error {
-	if d.sqlDB == nil {
-		return fmt.Errorf("SQL数据库未初始化")
+// Ping 测试知识库连接是否存活
+func (d *KnowledgeDB) Ping() error {
+	if d.knowledgeDB == nil {
+		return fmt.Errorf("知识库未初始化")
 	}
-	_, err := d.sqlDB.Exec("SELECT 1")
+	_, err := d.knowledgeDB.Exec("SELECT 1")
 	return err
 }
 
 // =============================================================================
-// SQL 批量操作
+// 知识库批量操作
 // =============================================================================
 
-// ExecuteBatch 批量执行数据库操作，支持事务包裹
-func (d *SQLDB) ExecuteBatch(request DatabaseRequest) *BatchResult {
+// ExecuteBatch 批量执行知识库操作，支持事务包裹
+func (d *KnowledgeDB) ExecuteBatch(request KnowledgeRequest) *BatchResult {
 	startTime := time.Now()
 	var results []OperationResult
 
@@ -119,7 +119,7 @@ func (d *SQLDB) ExecuteBatch(request DatabaseRequest) *BatchResult {
 	var err error
 
 	if request.Transaction && len(request.Operations) > 1 {
-		tx, err = d.sqlDB.Begin()
+		tx, err = d.knowledgeDB.Begin()
 		if err != nil {
 			return &BatchResult{
 				Success: false,
@@ -197,7 +197,7 @@ func (d *SQLDB) ExecuteBatch(request DatabaseRequest) *BatchResult {
 	}
 }
 
-func (d *SQLDB) executeDataOperation(op map[string]any, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeDataOperation(op map[string]any, tx *sql.Tx) OperationResult {
 	opType, _ := op["type"].(string)
 	table, _ := op["table"].(string)
 
@@ -230,7 +230,7 @@ func (d *SQLDB) executeDataOperation(op map[string]any, tx *sql.Tx) OperationRes
 	}
 }
 
-func (d *SQLDB) executeInsert(table string, op map[string]any, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeInsert(table string, op map[string]any, tx *sql.Tx) OperationResult {
 	data, _ := op["data"].(map[string]any)
 	if len(data) == 0 {
 		return OperationResult{
@@ -262,7 +262,7 @@ func (d *SQLDB) executeInsert(table string, op map[string]any, tx *sql.Tx) Opera
 	if tx != nil {
 		result, err = tx.Exec(query, values...)
 	} else {
-		result, err = d.sqlDB.Exec(query, values...)
+		result, err = d.knowledgeDB.Exec(query, values...)
 	}
 
 	if err != nil {
@@ -286,7 +286,7 @@ func (d *SQLDB) executeInsert(table string, op map[string]any, tx *sql.Tx) Opera
 	}
 }
 
-func (d *SQLDB) executeUpdate(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeUpdate(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	data, _ := op["data"].(map[string]interface{})
 	filter, _ := op["filter"].(map[string]interface{})
 
@@ -323,7 +323,7 @@ func (d *SQLDB) executeUpdate(table string, op map[string]interface{}, tx *sql.T
 	if tx != nil {
 		result, err = tx.Exec(query, values...)
 	} else {
-		result, err = d.sqlDB.Exec(query, values...)
+		result, err = d.knowledgeDB.Exec(query, values...)
 	}
 
 	if err != nil {
@@ -345,7 +345,7 @@ func (d *SQLDB) executeUpdate(table string, op map[string]interface{}, tx *sql.T
 	}
 }
 
-func (d *SQLDB) executeDelete(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeDelete(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	filter, _ := op["filter"].(map[string]interface{})
 
 	whereClause, values := buildWhereClause(filter)
@@ -361,7 +361,7 @@ func (d *SQLDB) executeDelete(table string, op map[string]interface{}, tx *sql.T
 	if tx != nil {
 		result, err = tx.Exec(query, values...)
 	} else {
-		result, err = d.sqlDB.Exec(query, values...)
+		result, err = d.knowledgeDB.Exec(query, values...)
 	}
 
 	if err != nil {
@@ -383,7 +383,7 @@ func (d *SQLDB) executeDelete(table string, op map[string]interface{}, tx *sql.T
 	}
 }
 
-func (d *SQLDB) executeSelect(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeSelect(table string, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	filter, _ := op["filter"].(map[string]interface{})
 	limit, _ := op["limit"].(float64)
 	offset, _ := op["offset"].(float64)
@@ -429,7 +429,7 @@ func (d *SQLDB) executeSelect(table string, op map[string]interface{}, tx *sql.T
 	if tx != nil {
 		rows, err = tx.Query(query, values...)
 	} else {
-		rows, err = d.sqlDB.Query(query, values...)
+		rows, err = d.knowledgeDB.Query(query, values...)
 	}
 
 	if err != nil {
@@ -498,7 +498,7 @@ func (d *SQLDB) executeSelect(table string, op map[string]interface{}, tx *sql.T
 	}
 }
 
-func (d *SQLDB) executeTableOperation(op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeTableOperation(op map[string]interface{}, tx *sql.Tx) OperationResult {
 	opType, _ := op["type"].(string)
 	table, _ := op["table"].(string)
 
@@ -531,7 +531,7 @@ func (d *SQLDB) executeTableOperation(op map[string]interface{}, tx *sql.Tx) Ope
 	}
 }
 
-func (d *SQLDB) executeCreateTable(op map[string]interface{}, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeCreateTable(op map[string]interface{}, tx *sql.Tx) OperationResult {
 	definition, _ := op["definition"].(map[string]interface{})
 	table, _ := op["table"].(string)
 
@@ -638,7 +638,7 @@ func (d *SQLDB) executeCreateTable(op map[string]interface{}, tx *sql.Tx) Operat
 	if tx != nil {
 		_, err = tx.Exec(createSQL.String())
 	} else {
-		_, err = d.sqlDB.Exec(createSQL.String())
+		_, err = d.knowledgeDB.Exec(createSQL.String())
 	}
 
 	if err != nil {
@@ -657,14 +657,14 @@ func (d *SQLDB) executeCreateTable(op map[string]interface{}, tx *sql.Tx) Operat
 	}
 }
 
-func (d *SQLDB) executeDropTable(table string, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeDropTable(table string, tx *sql.Tx) OperationResult {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS `%s`", table)
 
 	var err error
 	if tx != nil {
 		_, err = tx.Exec(query)
 	} else {
-		_, err = d.sqlDB.Exec(query)
+		_, err = d.knowledgeDB.Exec(query)
 	}
 
 	if err != nil {
@@ -683,7 +683,7 @@ func (d *SQLDB) executeDropTable(table string, tx *sql.Tx) OperationResult {
 	}
 }
 
-func (d *SQLDB) executeTruncateTable(table string, tx *sql.Tx) OperationResult {
+func (d *KnowledgeDB) executeTruncateTable(table string, tx *sql.Tx) OperationResult {
 	query := fmt.Sprintf("DELETE FROM `%s`", table)
 
 	var result sql.Result
@@ -692,7 +692,7 @@ func (d *SQLDB) executeTruncateTable(table string, tx *sql.Tx) OperationResult {
 	if tx != nil {
 		result, err = tx.Exec(query)
 	} else {
-		result, err = d.sqlDB.Exec(query)
+		result, err = d.knowledgeDB.Exec(query)
 	}
 
 	if err != nil {
@@ -714,7 +714,7 @@ func (d *SQLDB) executeTruncateTable(table string, tx *sql.Tx) OperationResult {
 	}
 }
 
-func (d *SQLDB) executeInfoOperation(op map[string]interface{}) OperationResult {
+func (d *KnowledgeDB) executeInfoOperation(op map[string]interface{}) OperationResult {
 	opType, _ := op["type"].(string)
 	table, _ := op["table"].(string)
 
@@ -752,10 +752,10 @@ func (d *SQLDB) executeInfoOperation(op map[string]interface{}) OperationResult 
 	}
 }
 
-func (d *SQLDB) executeGetTables() OperationResult {
+func (d *KnowledgeDB) executeGetTables() OperationResult {
 	query := "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
 
-	rows, err := d.sqlDB.Query(query)
+	rows, err := d.knowledgeDB.Query(query)
 	if err != nil {
 		return OperationResult{
 			Success:   false,
@@ -785,10 +785,10 @@ func (d *SQLDB) executeGetTables() OperationResult {
 	}
 }
 
-func (d *SQLDB) executeGetTableStructure(table string) OperationResult {
+func (d *KnowledgeDB) executeGetTableStructure(table string) OperationResult {
 	query := fmt.Sprintf("PRAGMA table_info(`%s`)", table)
 
-	rows, err := d.sqlDB.Query(query)
+	rows, err := d.knowledgeDB.Query(query)
 	if err != nil {
 		return OperationResult{
 			Success:   false,
@@ -845,10 +845,10 @@ func (d *SQLDB) executeGetTableStructure(table string) OperationResult {
 	}
 }
 
-func (d *SQLDB) executeGetTableCount(table string) OperationResult {
+func (d *KnowledgeDB) executeGetTableCount(table string) OperationResult {
 	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", table)
 
-	row := d.sqlDB.QueryRow(query)
+	row := d.knowledgeDB.QueryRow(query)
 
 	var count int64
 	if err := row.Scan(&count); err != nil {
@@ -869,35 +869,35 @@ func (d *SQLDB) executeGetTableCount(table string) OperationResult {
 }
 
 // =============================================================================
-// 全局包装函数 — SQL 数据库
+// 全局包装函数 — 知识库
 // =============================================================================
 
-// EnsureDBInitialized 确保 SQL 数据库已初始化并连接可用
-func EnsureDBInitialized() error {
-	if SQLDatabase == nil || !SQLDatabase.IsSQLInitialized() {
-		if err := InitSQLDB(*config.SQLDBPath); err != nil {
+// EnsureKnowledgeInitialized 确保知识库已初始化并连接可用
+func EnsureKnowledgeInitialized() error {
+	if KnowledgeDatabase == nil || !KnowledgeDatabase.IsKnowledgeInitialized() {
+		if err := InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
 			return err
 		}
 	}
-	if err := SQLDatabase.Ping(); err != nil {
-		return fmt.Errorf("数据库连接失败: %v", err)
+	if err := KnowledgeDatabase.Ping(); err != nil {
+		return fmt.Errorf("知识库连接失败: %v", err)
 	}
 	return nil
 }
 
-// ExecuteDatabaseRequest 全局包装 — 执行 SQL 数据库批量请求
-func ExecuteDatabaseRequest(request DatabaseRequest) *BatchResult {
-	if err := EnsureDBInitialized(); err != nil {
+// ExecuteKnowledgeRequest 全局包装 — 执行知识库批量请求
+func ExecuteKnowledgeRequest(request KnowledgeRequest) *BatchResult {
+	if err := EnsureKnowledgeInitialized(); err != nil {
 		return &BatchResult{
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
-	return SQLDatabase.ExecuteBatch(request)
+	return KnowledgeDatabase.ExecuteBatch(request)
 }
 
 // =============================================================================
-// SQL 工具函数
+// 知识库工具函数
 // =============================================================================
 
 // buildWhereClause 根据 MongoDB 风格的 filter 构造 SQL WHERE 子句与参数列表

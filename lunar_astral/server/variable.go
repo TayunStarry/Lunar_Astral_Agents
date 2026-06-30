@@ -64,10 +64,10 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/delete", Handler: storage.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/file/write", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取操作"},
-	// 数据库相关接口
-	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据库管理"},
-	// 向量数据库相关接口（多集合 RESTful 架构）
-	{Path: "/vector/", Handler: storage.VectorHandler, Method: "ANY", Description: "向量数据库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
+	// 知识库相关接口
+	{Path: "/knowledge/", Handler: storage.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
+	// 记忆库相关接口（多集合 RESTful 架构）
+	{Path: "/memory/", Handler: storage.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
 	// 图片生成相关接口
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},

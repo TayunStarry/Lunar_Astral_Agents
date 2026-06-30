@@ -8,9 +8,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// database 适配TypeScript调用的数据库操作功能，处理请求并转换结果格式
-// 返回值: [Object, error] 数据库操作结果和错误信息
-func (class *Runtime) database(call goja.FunctionCall) goja.Value {
+// knowledge 适配TypeScript调用的知识库操作功能，处理请求并转换结果格式
+// 返回值: [Object, error] 知识库操作结果和错误信息
+func (class *Runtime) knowledge(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
 	}
@@ -20,8 +20,8 @@ func (class *Runtime) database(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("request必须是对象")})
 	}
 
-	// 构建数据库请求
-	dbRequest := storage.DatabaseRequest{}
+	// 构建知识库请求
+	dbRequest := storage.KnowledgeRequest{}
 
 	if transaction, ok := request["transaction"].(bool); ok {
 		dbRequest.Transaction = transaction
@@ -37,8 +37,8 @@ func (class *Runtime) database(call goja.FunctionCall) goja.Value {
 		}
 	}
 
-	// 执行数据库操作
-	result := storage.ExecuteDatabaseRequest(dbRequest)
+	// 执行知识库操作
+	result := storage.ExecuteKnowledgeRequest(dbRequest)
 
 	jsonData, _ := json.Marshal(result)
 	var response map[string]any

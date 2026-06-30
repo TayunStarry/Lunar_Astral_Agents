@@ -5,7 +5,7 @@ export * from './config/model';
 export * from './config/tool';
 export * from './config/history';
 export * from './config/config';
-export * from './config/database';
+export * from './config/knowledge';
 export * from './config/image';
 export * from './config/websearch';
 export * from './config/screenshot';
@@ -17,7 +17,7 @@ export * from './math/vector';
 export * from './file/read';
 export * from './file/split';
 export * from './file/encoder';
-export * from './file/database';
+export * from './file/knowledge';
 
 export * from './agent/builder';
 export * from './agent/dialogue';

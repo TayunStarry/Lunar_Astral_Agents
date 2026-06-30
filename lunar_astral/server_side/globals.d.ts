@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, DatabaseRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
+import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
 
 declare global {
     /**
@@ -38,13 +38,13 @@ declare global {
      */
     function fileView(filePath: string): [string, Error | null];
     /**
-     * 执行数据库请求
-     * 
-     * @param {DatabaseRequest} request 数据库请求对象
-     * 
-     * @returns {[BatchResult, Error | null]} 包含数据库操作结果的元组，[操作结果, 错误信息]
+     * 执行知识库请求
+     *
+     * @param {KnowledgeRequest} request 知识库请求对象
+     *
+     * @returns {[BatchResult, Error | null]} 包含知识库操作结果的元组，[操作结果, 错误信息]
      */
-    function database(request: DatabaseRequest): [BatchResult, Error | null];
+    function knowledge(request: KnowledgeRequest): [BatchResult, Error | null];
     /**
      * 获取系统访问URL
      * 
@@ -118,7 +118,7 @@ declare global {
      */
     function pushImage(imageData: string[]): boolean;
     /**
-     * 初始化向量数据库实例并创建指定集合
+     * 初始化记忆库实例并创建指定集合
      *
      * @param {string} baseURL 嵌入模型服务的基础URL (e.g. http://localhost:36789/v1)
      *
@@ -130,7 +130,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function vectorInit(baseURL: string, apiKey: string, modelName: string, collectionName: string): [boolean, Error | null];
+    function memoryInit(baseURL: string, apiKey: string, modelName: string, collectionName: string): [boolean, Error | null];
     /**
      * 向指定集合添加消息
      *
@@ -142,7 +142,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function vectorAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
+    function memoryAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
     /**
      * 从指定集合查询相关消息
      *
@@ -154,7 +154,7 @@ declare global {
      *
      * @returns {[Array<{id: string, role: string, content: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列
      */
-    function vectorQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
+    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
     /**
      * 从指定集合删除消息
      *
@@ -164,7 +164,7 @@ declare global {
      *
      * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
      */
-    function vectorDelete(collectionName: string, id: string): [boolean, Error | null];
+    function memoryDelete(collectionName: string, id: string): [boolean, Error | null];
     /**
      * 文本转语音生成
      * 

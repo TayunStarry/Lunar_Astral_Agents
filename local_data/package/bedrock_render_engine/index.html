@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』基岩渲染引擎</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <script defer type="module" src="app.js"></script>
+</head>
+<body>
+    <!-- 背景层 -->
+    <div class="background"></div>
+    <div class="glass-effect"></div>
+
+    <!-- 主渲染画布 -->
+    <canvas id="render-canvas"></canvas>
+
+    <!-- 顶部工具栏 -->
+    <div id="toolbar" class="glass-panel">
+        <div class="toolbar-group">
+            <span class="toolbar-label">资源</span>
+            <button class="btn-glass btn-glass-primary" id="btn-import" title="导入资源（模型/动画/控制器，自动识别）">
+                <i class="fas fa-folder-open"></i> 导入资源
+            </button>
+            <input type="file" id="resource-file-input" accept=".bbmodel,.json" multiple style="display:none">
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <span class="toolbar-label">材质</span>
+            <select id="render-method-select" class="glass-select" disabled title="切换 Bedrock render method">
+                <option value="opaque">opaque</option>
+                <option value="alphatest" selected>alphatest</option>
+                <option value="translucent">translucent</option>
+                <option value="double_sided">double_sided</option>
+            </select>
+            <button class="btn-glass" id="btn-toggle-lit" disabled title="切换光照模式（unlit/lit）" style="font-size:12px;padding:0 10px;height:32px">
+                <i class="fas fa-sun"></i> <span id="lit-label">unlit</span>
+            </button>
+            <button class="btn-glass" id="btn-material-panel" disabled title="打开材质参数面板" style="height:32px;width:32px;font-size:12px">
+                <i class="fas fa-sliders-h"></i>
+            </button>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-group">
+            <button class="btn-glass" id="btn-toggle-panels" title="切换面板显示">
+                <i class="fas fa-columns"></i>
+            </button>
+            <button class="btn-glass" id="btn-theme" title="切换主题">
+                <i class="fas fa-moon"></i>
+            </button>
+            <button class="btn-glass" id="btn-help" title="操作说明">
+                <i class="fas fa-question"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 左侧面板：模型层级 -->
+    <div id="left-panel" class="glass-panel side-panel side-panel-left">
+        <div class="panel-tabs">
+            <div class="panel-tab active" data-tab="hierarchy">骨骼层级</div>
+            <div class="panel-tab" data-tab="info">模型信息</div>
+        </div>
+        <div id="tab-hierarchy" class="panel-body">
+            <div id="hierarchy-tree">
+                <div class="empty-state">
+                    <i class="fas fa-bone"></i>
+                    <p>暂无模型</p>
+                    <small>点击"导入资源"或拖拽文件</small>
+                </div>
+            </div>
+        </div>
+        <div id="tab-info" class="panel-body" style="display:none">
+            <div id="info-body">
+                <div class="empty-state">
+                    <i class="fas fa-info-circle"></i>
+                    <p>未加载模型</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧面板：动画组管理 -->
+    <div id="right-panel" class="glass-panel side-panel side-panel-right">
+        <div class="panel-tabs">
+            <div class="panel-tab active" data-tab="anim-groups">动画组</div>
+        </div>
+        <div id="tab-anim-groups" class="panel-body">
+            <div id="anim-group-container">
+                <div class="empty-state">
+                    <i class="fas fa-layer-group"></i>
+                    <p>无动画组</p>
+                    <small>加载模型和动画后自动创建</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部状态栏 -->
+    <div id="status-bar" class="glass-panel">
+        <div class="status-item"><i class="fas fa-tachometer-alt"></i> FPS: <span id="status-fps">0</span></div>
+        <div class="status-item"><i class="fas fa-bone"></i> 骨骼: <span id="status-bones">0</span></div>
+        <div class="status-item"><i class="fas fa-cube"></i> 立方体: <span id="status-cubes">0</span></div>
+        <div class="status-item"><i class="fas fa-draw-polygon"></i> 三角面: <span id="status-faces">0</span></div>
+        <div class="status-item"><i class="fas fa-video"></i> 相机: <span id="status-cam">--</span></div>
+        <div class="status-item" id="status-mode">就绪</div>
+    </div>
+
+    <!-- 模态层 -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content glass-panel" id="modal-content"></div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="toast"></div>
+</body>
+</html>

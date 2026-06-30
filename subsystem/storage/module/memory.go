@@ -41,39 +41,39 @@ func generateUUID() string {
 }
 
 // =============================================================================
-// 向量数据库初始化
+// 记忆库初始化
 // =============================================================================
 
-// InitVectorDB 初始化向量数据库存储根目录
-// 创建 baseDir、迁移旧 collections/ 层级、初始化集合 map，并赋值给全局 VectorDatabase 实例
-// 此函数不产生网络请求，仅准备本地存储结构；嵌入服务连接由 VectorInitInstance 配置
-func InitVectorDB(vectorDir string) error {
-	if VectorDatabase != nil && VectorDatabase.vectorInitialized {
+// InitMemoryDB 初始化记忆库存储根目录
+// 创建 baseDir、迁移旧 collections/ 层级、初始化集合 map，并赋值给全局 MemoryDatabase 实例
+// 此函数不产生网络请求，仅准备本地存储结构；嵌入服务连接由 MemoryInitInstance 配置
+func InitMemoryDB(memoryDir string) error {
+	if MemoryDatabase != nil && MemoryDatabase.memoryInitialized {
 		return nil
 	}
 
-	if err := os.MkdirAll(vectorDir, 0755); err != nil {
-		return fmt.Errorf("创建向量数据库目录失败: %v", err)
+	if err := os.MkdirAll(memoryDir, 0755); err != nil {
+		return fmt.Errorf("创建记忆库目录失败: %v", err)
 	}
 
-	// 迁移旧版 collections/ 层级：将 <vectorDir>/collections/<name> 上移到 <vectorDir>/<name>
-	migrateCollectionsLayer(vectorDir)
+	// 迁移旧版 collections/ 层级：将 <memoryDir>/collections/<name> 上移到 <memoryDir>/<name>
+	migrateCollectionsLayer(memoryDir)
 
-	db := &VectorDB{
-		baseDir:     vectorDir,
+	db := &MemoryDB{
+		baseDir:     memoryDir,
 		collections: make(map[string]*Collection),
 	}
-	VectorDatabase = db
+	MemoryDatabase = db
 
-	logger.Info("Storage", "向量数据库存储目录已就绪: %s", vectorDir)
+	logger.Info("Storage", "记忆库存储目录已就绪: %s", memoryDir)
 	return nil
 }
 
 // migrateCollectionsLayer 迁移旧版 collections/ 层级到扁平化结构
-// 若 <vectorDir>/collections/ 存在，将其下所有集合目录上移到 <vectorDir>/ 下
+// 若 <memoryDir>/collections/ 存在，将其下所有集合目录上移到 <memoryDir>/ 下
 // 迁移完成后删除空的 collections/ 目录；已存在同名目录时跳过该集合
-func migrateCollectionsLayer(vectorDir string) {
-	oldCollectionsDir := filepath.Join(vectorDir, "collections")
+func migrateCollectionsLayer(memoryDir string) {
+	oldCollectionsDir := filepath.Join(memoryDir, "collections")
 	entries, err := os.ReadDir(oldCollectionsDir)
 	if err != nil {
 		// 旧目录不存在视为无需迁移
@@ -90,7 +90,7 @@ func migrateCollectionsLayer(vectorDir string) {
 			continue
 		}
 		oldPath := filepath.Join(oldCollectionsDir, name)
-		newPath := filepath.Join(vectorDir, name)
+		newPath := filepath.Join(memoryDir, name)
 
 		// 目标已存在则跳过，避免覆盖用户数据
 		if _, statErr := os.Stat(newPath); statErr == nil {
@@ -116,26 +116,26 @@ func migrateCollectionsLayer(vectorDir string) {
 	}
 }
 
-// VectorInitInstance 初始化向量数据库实例（不创建任何集合）
+// MemoryInitInstance 初始化记忆库实例（不创建任何集合）
 // 仅配置嵌入服务连接，并加载已存在的集合到内存
-// 方法接收者为 *VectorDB；全局包装函数同名 VectorInitInstance 负责实例懒初始化
-func (d *VectorDB) VectorInitInstance(baseURL string, apiKey string) error {
-	if d.vectorInitialized {
+// 方法接收者为 *MemoryDB；全局包装函数同名 MemoryInitInstance 负责实例懒初始化
+func (d *MemoryDB) MemoryInitInstance(baseURL string, apiKey string) error {
+	if d.memoryInitialized {
 		return nil
 	}
 
 	if d.baseDir == "" {
-		return fmt.Errorf("向量数据库未配置存储路径, 请先调用 InitVectorDB")
+		return fmt.Errorf("记忆库未配置存储路径, 请先调用 InitMemoryDB")
 	}
 
 	d.embeddingBaseURL = baseURL
 	d.embeddingAPIKey = apiKey
 	d.httpClient = &http.Client{Timeout: 120 * time.Second}
-	d.vectorInitialized = true
+	d.memoryInitialized = true
 
 	d.loadAllCollections()
 
-	logger.Info("Storage", "向量数据库实例初始化完成, base_url: %s, 已加载 %d 个集合",
+	logger.Info("Storage", "记忆库实例初始化完成, base_url: %s, 已加载 %d 个集合",
 		d.embeddingBaseURL, len(d.collections))
 	return nil
 }
@@ -152,7 +152,7 @@ func validateCollectionName(name string) error {
 			return fmt.Errorf("集合名仅允许字母、数字、下划线、连字符: %s", name)
 		}
 	}
-	// 拒绝 URL 路由保留名，避免与 /vector/init、/vector/stats、/vector/collections 冲突
+	// 拒绝 URL 路由保留名，避免与 /memory/init、/memory/stats、/memory/collections 冲突
 	switch name {
 	case "init", "stats", "collections":
 		return fmt.Errorf("集合名不能使用保留字: %s", name)
@@ -163,9 +163,9 @@ func validateCollectionName(name string) error {
 // CollectionInit 创建或打开指定名称的集合
 // 通过探针文本嵌入一次确定向量维度，写入 metadata.json
 // 若集合已存在且 model 一致则直接返回，model 变更则重新探针并更新维度
-func (d *VectorDB) CollectionInit(ctx context.Context, name string, modelName string) error {
-	if !d.vectorInitialized {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName string) error {
+	if !d.memoryInitialized {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
 	if err := validateCollectionName(name); err != nil {
 		return err
@@ -213,7 +213,7 @@ func (d *VectorDB) CollectionInit(ctx context.Context, name string, modelName st
 		Name:      name,
 		Model:     meta.Model,
 		Dimension: meta.Dimension,
-		Documents: make([]VectorDocument, 0),
+		Documents: make([]MemoryDocument, 0),
 		filePath:  filePath,
 		metaPath:  metaPath,
 	}
@@ -238,7 +238,7 @@ func saveCollectionMeta(metaPath string, meta collectionMeta) error {
 }
 
 // getCollection 获取集合实例，不存在返回错误
-func (d *VectorDB) getCollection(name string) (*Collection, error) {
+func (d *MemoryDB) getCollection(name string) (*Collection, error) {
 	d.collectionsMu.RLock()
 	defer d.collectionsMu.RUnlock()
 	c, ok := d.collections[name]
@@ -250,11 +250,11 @@ func (d *VectorDB) getCollection(name string) (*Collection, error) {
 
 // loadAllCollections 启动时扫描 baseDir 加载所有集合到内存
 // 扁平化布局下，baseDir 的每个子目录即为一个集合
-func (d *VectorDB) loadAllCollections() {
+func (d *MemoryDB) loadAllCollections() {
 	entries, err := os.ReadDir(d.baseDir)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.Warn("Storage", "扫描向量存储目录失败: %v", err)
+			logger.Warn("Storage", "扫描记忆存储目录失败: %v", err)
 		}
 		return
 	}
@@ -288,7 +288,7 @@ func (d *VectorDB) loadAllCollections() {
 			Name:      name,
 			Model:     meta.Model,
 			Dimension: meta.Dimension,
-			Documents: make([]VectorDocument, 0),
+			Documents: make([]MemoryDocument, 0),
 			filePath:  filePath,
 			metaPath:  metaPath,
 		}
@@ -303,18 +303,18 @@ func (d *VectorDB) loadAllCollections() {
 	}
 }
 
-// IsVectorInitialized 返回向量数据库实例是否已初始化
-func (d *VectorDB) IsVectorInitialized() bool {
-	return d != nil && d.vectorInitialized
+// IsMemoryInitialized 返回记忆库实例是否已初始化
+func (d *MemoryDB) IsMemoryInitialized() bool {
+	return d != nil && d.memoryInitialized
 }
 
 // =============================================================================
-// 向量数据库操作（多集合）
+// 记忆库操作（多集合）
 // =============================================================================
 
-// VectorAddMessage 向指定集合添加一条消息，返回新生成的 UUID 文档 ID
+// MemoryAddMessage 向指定集合添加一条消息，返回新生成的 UUID 文档 ID
 // ID 采用 UUID v4 格式；旧版 msg-N 格式 ID 仅在历史数据加载时保留，新增文档一律使用 UUID
-func (d *VectorDB) VectorAddMessage(ctx context.Context, collectionName string, role string, content string) (string, error) {
+func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName string, role string, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
@@ -336,7 +336,7 @@ func (d *VectorDB) VectorAddMessage(ctx context.Context, collectionName string, 
 
 	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, VectorDocument{
+	c.Documents = append(c.Documents, MemoryDocument{
 		ID:        id,
 		Role:      role,
 		Content:   content,
@@ -348,14 +348,14 @@ func (d *VectorDB) VectorAddMessage(ctx context.Context, collectionName string, 
 	return id, nil
 }
 
-// VectorAddMessageSilent 添加消息但不返回 ID，仅返回错误
-func (d *VectorDB) VectorAddMessageSilent(ctx context.Context, collectionName string, role string, content string) error {
-	_, err := d.VectorAddMessage(ctx, collectionName, role, content)
+// MemoryAddMessageSilent 添加消息但不返回 ID，仅返回错误
+func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName string, role string, content string) error {
+	_, err := d.MemoryAddMessage(ctx, collectionName, role, content)
 	return err
 }
 
-// VectorQueryMessages 按查询文本检索最相似的消息，返回向量消息兼容格式的 JSON 字符串列表
-func (d *VectorDB) VectorQueryMessages(ctx context.Context, collectionName string, queryText string, topK int) ([]string, error) {
+// MemoryQueryMessages 按查询文本检索最相似的消息，返回记忆消息兼容格式的 JSON 字符串列表
+func (d *MemoryDB) MemoryQueryMessages(ctx context.Context, collectionName string, queryText string, topK int) ([]string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return nil, err
@@ -379,7 +379,7 @@ func (d *VectorDB) VectorQueryMessages(ctx context.Context, collectionName strin
 
 	messages := make([]string, 0, len(results))
 	for _, r := range results {
-		msg := vectorMessage{Role: r.Role, Content: r.Content}
+		msg := memoryMessage{Role: r.Role, Content: r.Content}
 		jsonBytes, err := json.Marshal(msg)
 		if err != nil {
 			continue
@@ -389,8 +389,8 @@ func (d *VectorDB) VectorQueryMessages(ctx context.Context, collectionName strin
 	return messages, nil
 }
 
-// VectorQueryMessagesWithContent 按查询文本检索最相似的消息，返回含 ID/角色/内容/相似度的结构化结果
-func (d *VectorDB) VectorQueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]VectorQueryResult, error) {
+// MemoryQueryMessagesWithContent 按查询文本检索最相似的消息，返回含 ID/角色/内容/相似度的结构化结果
+func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]MemoryQueryResult, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return nil, err
@@ -413,9 +413,9 @@ func (d *VectorDB) VectorQueryMessagesWithContent(ctx context.Context, collectio
 	return c.queryTopK(queryVec, topK), nil
 }
 
-// VectorDeleteMessage 按 ID 删除指定集合中的一条文档
+// MemoryDeleteMessage 按 ID 删除指定集合中的一条文档
 // 兼容 UUID 与旧版 msg-N 两种 ID 格式（按字符串相等匹配）
-func (d *VectorDB) VectorDeleteMessage(ctx context.Context, collectionName string, id string) error {
+func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName string, id string) error {
 	_ = ctx
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -435,23 +435,27 @@ func (d *VectorDB) VectorDeleteMessage(ctx context.Context, collectionName strin
 	return nil
 }
 
-// VectorGetCollectionCount 返回集合中文档总数
-func (d *VectorDB) VectorGetCollectionCount(collectionName string) int {
+// MemoryGetCollectionCount 返回集合中文档总数
+func (d *MemoryDB) MemoryGetCollectionCount(collectionName string) int {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return 0
 	}
+	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.Documents)
 }
 
-// VectorGetDocuments 分页返回集合文档条目（不含嵌入向量），同时返回总数
-func (d *VectorDB) VectorGetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
+// MemoryGetDocuments 分页返回集合文档条目（不含嵌入向量），同时返回总数
+func (d *MemoryDB) MemoryGetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return []DocumentEntry{}, 0
 	}
+
+	// 跨进程一致性检测：若磁盘文件被其他进程更新则重载内存缓存
+	c.reloadIfChanged()
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -480,19 +484,20 @@ func (d *VectorDB) VectorGetDocuments(collectionName string, offset int, limit i
 	return entries, total
 }
 
-// VectorGetEntryCount 返回集合中文档总数（与 VectorGetCollectionCount 等价，语义别名）
-func (d *VectorDB) VectorGetEntryCount(collectionName string) int {
+// MemoryGetEntryCount 返回集合中文档总数（与 MemoryGetCollectionCount 等价，语义别名）
+func (d *MemoryDB) MemoryGetEntryCount(collectionName string) int {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return 0
 	}
+	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.Documents)
 }
 
-// VectorHasSyncMismatch 检测集合内是否有文档向量缺失或维度与集合锁定维度不符
-func (d *VectorDB) VectorHasSyncMismatch(collectionName string) bool {
+// MemoryHasSyncMismatch 检测集合内是否有文档向量缺失或维度与集合锁定维度不符
+func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return false
@@ -508,9 +513,9 @@ func (d *VectorDB) VectorHasSyncMismatch(collectionName string) bool {
 	return false
 }
 
-// VectorRebuildEntries 删除向量缺失或维度不符的文档，重新持久化
+// MemoryRebuildEntries 删除向量缺失或维度不符的文档，重新持久化
 // ctx 保留以兼容签名，当前实现不调用嵌入服务
-func (d *VectorDB) VectorRebuildEntries(ctx context.Context, collectionName string) (int, error) {
+func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName string) (int, error) {
 	_ = ctx
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -519,7 +524,7 @@ func (d *VectorDB) VectorRebuildEntries(ctx context.Context, collectionName stri
 
 	c.mu.Lock()
 	original := len(c.Documents)
-	filtered := make([]VectorDocument, 0, original)
+	filtered := make([]MemoryDocument, 0, original)
 	removed := 0
 	for _, doc := range c.Documents {
 		if len(doc.Embedding) != c.Dimension {
@@ -542,8 +547,8 @@ func (d *VectorDB) VectorRebuildEntries(ctx context.Context, collectionName stri
 	return len(filtered), nil
 }
 
-// VectorListCollections 返回所有已加载集合的名称
-func (d *VectorDB) VectorListCollections() []string {
+// MemoryListCollections 返回所有已加载集合的名称
+func (d *MemoryDB) MemoryListCollections() []string {
 	d.collectionsMu.RLock()
 	defer d.collectionsMu.RUnlock()
 	names := make([]string, 0, len(d.collections))
@@ -553,12 +558,13 @@ func (d *VectorDB) VectorListCollections() []string {
 	return names
 }
 
-// VectorGetCollectionInfo 返回集合元信息（模型、维度、文档数）
-func (d *VectorDB) VectorGetCollectionInfo(collectionName string) (model string, dimension int, count int, err error) {
+// MemoryGetCollectionInfo 返回集合元信息（模型、维度、文档数）
+func (d *MemoryDB) MemoryGetCollectionInfo(collectionName string) (model string, dimension int, count int, err error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", 0, 0, err
 	}
+	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Model, c.Dimension, len(c.Documents), nil
@@ -579,11 +585,18 @@ func (c *Collection) loadDocumentsFromFile() {
 		return
 	}
 
+	// 记录本次加载对应的文件修改时间，供 reloadIfChanged 跨进程一致性检测使用
+	if fi, statErr := os.Stat(c.filePath); statErr == nil {
+		c.mu.Lock()
+		c.lastFileModTime = fi.ModTime()
+		c.mu.Unlock()
+	}
+
 	if len(data) == 0 {
 		return
 	}
 
-	var docs []VectorDocument
+	var docs []MemoryDocument
 	if err := json.Unmarshal(data, &docs); err != nil {
 		logger.Warn("Storage", "集合 [%s] documents.json 解析失败: %v", c.Name, err)
 		return
@@ -592,6 +605,26 @@ func (c *Collection) loadDocumentsFromFile() {
 	c.mu.Lock()
 	c.Documents = docs
 	c.mu.Unlock()
+}
+
+// reloadIfChanged 跨进程一致性检测：若 documents.json 被其他进程修改则重载到内存
+// 场景：crystal_astral（前端 HTTP 服务）与 lunar_astral（AI 引擎）为两个独立进程，
+// 共享同一磁盘文件但各自维护独立内存缓存。lunar_astral 写入后，crystal_astral 的
+// 内存缓存会过期；此方法在读路径调用前比对文件修改时间，发现变化即重载。
+func (c *Collection) reloadIfChanged() {
+	fi, err := os.Stat(c.filePath)
+	if err != nil {
+		return
+	}
+	c.mu.RLock()
+	last := c.lastFileModTime
+	c.mu.RUnlock()
+	if !fi.ModTime().After(last) {
+		return
+	}
+	logger.Info("Storage", "集合 [%s] 检测到 documents.json 被外部更新, 重新加载 (旧 mtime: %v, 新 mtime: %v)",
+		c.Name, last, fi.ModTime())
+	c.loadDocumentsFromFile()
 }
 
 // saveDocumentsToFile 原子化持久化文档：写临时文件 + rename
@@ -615,123 +648,131 @@ func (c *Collection) saveDocumentsToFile() {
 	os.Remove(c.filePath)
 	if err := os.Rename(tmpPath, c.filePath); err != nil {
 		logger.Error("Storage", "集合 [%s] 原子重命名失败: %v", c.Name, err)
+		return
+	}
+
+	// 更新本进程记录的文件修改时间，避免 reloadIfChanged 误判本进程写入为外部更新
+	if fi, statErr := os.Stat(c.filePath); statErr == nil {
+		c.mu.Lock()
+		c.lastFileModTime = fi.ModTime()
+		c.mu.Unlock()
 	}
 }
 
 // =============================================================================
-// 全局包装函数 — 向量数据库（多集合架构）
+// 全局包装函数 — 记忆库（多集合架构）
 // =============================================================================
 
-// IsInitialized 全局包装 — 返回向量数据库实例是否已初始化
+// IsInitialized 全局包装 — 返回记忆库实例是否已初始化
 func IsInitialized() bool {
-	return VectorDatabase != nil && VectorDatabase.IsVectorInitialized()
+	return MemoryDatabase != nil && MemoryDatabase.IsMemoryInitialized()
 }
 
-// VectorInitInstance 全局包装 — 初始化向量实例（不创建任何集合）
-// 若 VectorDatabase 为 nil，先调用 InitVectorDB 准备存储目录
-func VectorInitInstance(baseURL string, apiKey string) error {
-	if VectorDatabase == nil {
-		if err := InitVectorDB(*config.VectorDBDir); err != nil {
+// MemoryInitInstance 全局包装 — 初始化记忆库实例（不创建任何集合）
+// 若 MemoryDatabase 为 nil，先调用 InitMemoryDB 准备存储目录
+func MemoryInitInstance(baseURL string, apiKey string) error {
+	if MemoryDatabase == nil {
+		if err := InitMemoryDB(*config.MemoryDBDir); err != nil {
 			return err
 		}
 	}
-	return VectorDatabase.VectorInitInstance(baseURL, apiKey)
+	return MemoryDatabase.MemoryInitInstance(baseURL, apiKey)
 }
 
 // CollectionInit 全局包装 — 创建或打开指定名称的集合（探针定维度）
 func CollectionInit(ctx context.Context, name string, modelName string) error {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.CollectionInit(ctx, name, modelName)
+	return MemoryDatabase.CollectionInit(ctx, name, modelName)
 }
 
 // AddMessage 全局包装 — 添加消息（不返回 ID）
 func AddMessage(ctx context.Context, collectionName string, role string, content string) error {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorAddMessageSilent(ctx, collectionName, role, content)
+	return MemoryDatabase.MemoryAddMessageSilent(ctx, collectionName, role, content)
 }
 
 // AddMessageWithID 全局包装 — 添加消息并返回新生成的 UUID 文档 ID
 func AddMessageWithID(ctx context.Context, collectionName string, role string, content string) (string, error) {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return "", fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return "", fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorAddMessage(ctx, collectionName, role, content)
+	return MemoryDatabase.MemoryAddMessage(ctx, collectionName, role, content)
 }
 
 // QueryMessagesWithContent 全局包装 — 查询消息（返回含相似度的结构化结果）
-func QueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]VectorQueryResult, error) {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+func QueryMessagesWithContent(ctx context.Context, collectionName string, queryText string, topK int) ([]MemoryQueryResult, error) {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorQueryMessagesWithContent(ctx, collectionName, queryText, topK)
+	return MemoryDatabase.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
 }
 
 // DeleteMessage 全局包装 — 按 ID 删除消息
 func DeleteMessage(ctx context.Context, collectionName string, id string) error {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorDeleteMessage(ctx, collectionName, id)
+	return MemoryDatabase.MemoryDeleteMessage(ctx, collectionName, id)
 }
 
 // GetCollectionCount 全局包装 — 返回集合文档总数
 func GetCollectionCount(collectionName string) int {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return 0
 	}
-	return VectorDatabase.VectorGetCollectionCount(collectionName)
+	return MemoryDatabase.MemoryGetCollectionCount(collectionName)
 }
 
 // GetDocuments 全局包装 — 分页返回文档条目
 func GetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return []DocumentEntry{}, 0
 	}
-	return VectorDatabase.VectorGetDocuments(collectionName, offset, limit)
+	return MemoryDatabase.MemoryGetDocuments(collectionName, offset, limit)
 }
 
 // GetEntryCount 全局包装 — 返回集合文档总数
 func GetEntryCount(collectionName string) int {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return 0
 	}
-	return VectorDatabase.VectorGetEntryCount(collectionName)
+	return MemoryDatabase.MemoryGetEntryCount(collectionName)
 }
 
 // HasSyncMismatch 全局包装 — 检测维度不符文档
 func HasSyncMismatch(collectionName string) bool {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return false
 	}
-	return VectorDatabase.VectorHasSyncMismatch(collectionName)
+	return MemoryDatabase.MemoryHasSyncMismatch(collectionName)
 }
 
 // RebuildEntries 全局包装 — 重建（删除维度不符文档）
 func RebuildEntries(ctx context.Context, collectionName string) (int, error) {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return 0, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return 0, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorRebuildEntries(ctx, collectionName)
+	return MemoryDatabase.MemoryRebuildEntries(ctx, collectionName)
 }
 
-// VectorListCollections 全局包装 — 列出所有已加载集合名
-func VectorListCollections() []string {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
+// MemoryListCollections 全局包装 — 列出所有已加载集合名
+func MemoryListCollections() []string {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return []string{}
 	}
-	return VectorDatabase.VectorListCollections()
+	return MemoryDatabase.MemoryListCollections()
 }
 
-// VectorGetCollectionInfo 全局包装 — 获取集合的模型、维度、文档数
-func VectorGetCollectionInfo(collectionName string) (string, int, int, error) {
-	if VectorDatabase == nil || !VectorDatabase.IsVectorInitialized() {
-		return "", 0, 0, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+// MemoryGetCollectionInfo 全局包装 — 获取集合的模型、维度、文档数
+func MemoryGetCollectionInfo(collectionName string) (string, int, int, error) {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return "", 0, 0, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	return VectorDatabase.VectorGetCollectionInfo(collectionName)
+	return MemoryDatabase.MemoryGetCollectionInfo(collectionName)
 }
 
 // cosineSimilarity 计算两个向量的余弦相似度，取值范围 [-1, 1]，越高越相似
@@ -759,7 +800,7 @@ func cosineSimilarity(a, b []float32) float32 {
 
 // queryTopK 按 queryVec 检索最相似的 topK 篇文档，按相似度降序返回
 // 相似度相同的文档保持其在 Documents 中的原始顺序（稳定排序）
-func (c *Collection) queryTopK(queryVec []float32, topK int) []VectorQueryResult {
+func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -787,10 +828,10 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []VectorQueryResult
 		topK = len(results)
 	}
 
-	out := make([]VectorQueryResult, topK)
+	out := make([]MemoryQueryResult, topK)
 	for i := 0; i < topK; i++ {
 		doc := &c.Documents[results[i].index]
-		out[i] = VectorQueryResult{
+		out[i] = MemoryQueryResult{
 			ID:         doc.ID,
 			Role:       doc.Role,
 			Content:    doc.Content,

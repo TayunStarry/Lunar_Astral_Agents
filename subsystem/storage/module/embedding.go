@@ -32,9 +32,9 @@ type embeddingResponse struct {
 // embedTexts 批量调用 /v1/embeddings 获取嵌入向量
 // model 参数指定嵌入模型名（通常为集合锁定的 Model 字段）
 // 返回向量切片与输入文本切片等长且一一对应
-func (d *VectorDB) embedTexts(ctx context.Context, model string, texts []string) ([][]float32, error) {
-	if !d.vectorInitialized {
-		return nil, fmt.Errorf("向量数据库未初始化, 请先调用 VectorInitInstance")
+func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string) ([][]float32, error) {
+	if !d.memoryInitialized {
+		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
 	if d.embeddingBaseURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
@@ -102,7 +102,7 @@ func (d *VectorDB) embedTexts(ctx context.Context, model string, texts []string)
 }
 
 // embedText 嵌入单条文本，返回对应向量
-func (d *VectorDB) embedText(ctx context.Context, model string, text string) ([]float32, error) {
+func (d *MemoryDB) embedText(ctx context.Context, model string, text string) ([]float32, error) {
 	vecs, err := d.embedTexts(ctx, model, []string{text})
 	if err != nil {
 		return nil, err

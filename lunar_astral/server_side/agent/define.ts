@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromDatabase, savePromptToDatabase, ModelBuilder, DialogueRole, PainterRole, RandomFloor, OrganizeRole } from '../index';
+import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -54,7 +54,7 @@ export class AgentDefine {
 	 */
 	protected async analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
 		/** 检查是否已处理过该视频 */
-		const cachedPrompt = getPromptFromDatabase(videoUrl);
+		const cachedPrompt = getPromptFromKnowledge(videoUrl);
 		// 如果视频已处理过,直接添加到未读上下文
 		if (cachedPrompt) {
 			this.unreadContext.push({ role: 'user', content: cachedPrompt });
@@ -100,8 +100,8 @@ export class AgentDefine {
 		if (videoSummary) this.unreadContext.push({ role: 'user', content: videoSummary });
 		// 如果用户需求非空,添加到消息数组
 		if (userNeeds.trim().length > 0) this.unreadContext.push({ role: 'user', content: userNeeds });
-		// 缓存处理结果到数据库
-		if (videoSummary) savePromptToDatabase(videoUrl, videoSummary);
+		// 缓存处理结果到知识库
+		if (videoSummary) savePromptToKnowledge(videoUrl, videoSummary);
 	}
 	/**
 	 * 遍历未读上下文数组,处理图片文件

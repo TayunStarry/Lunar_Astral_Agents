@@ -24,8 +24,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("fileView", adapters.fileView)
 	vm.Set("fileList", adapters.fileList)
 
-	// 注册数据库操作适配器
-	vm.Set("database", adapters.database)
+	// 注册知识库操作适配器
+	vm.Set("knowledge", adapters.knowledge)
 
 	// 注册网络操作适配器
 	vm.Set("url", adapters.url)
@@ -46,11 +46,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
 
-	// 注册向量数据库适配器
-	vm.Set("vectorInit", adapters.vectorInit)
-	vm.Set("vectorAdd", adapters.vectorAdd)
-	vm.Set("vectorQuery", adapters.vectorQuery)
-	vm.Set("vectorDelete", adapters.vectorDelete)
+	// 注册记忆库适配器
+	vm.Set("memoryInit", adapters.memoryInit)
+	vm.Set("memoryAdd", adapters.memoryAdd)
+	vm.Set("memoryQuery", adapters.memoryQuery)
+	vm.Set("memoryDelete", adapters.memoryDelete)
 
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.tts)

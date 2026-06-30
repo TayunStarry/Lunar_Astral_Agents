@@ -1,0 +1,10 @@
+{
+	"id": "bedrock_render_engine",
+	"title": "基岩渲染引擎",
+	"description": "基于 Three.js r160 的 Bedrock Edition 实体渲染引擎，支持 .bbmodel 模型加载、骨骼动画播放、动画控制器状态机、MoLang 表达式求值、4 种 Bedrock render method 材质系统",
+	"tags": [
+		"Studio",
+		"3D",
+		"Bedrock"
+	]
+}

@@ -32,30 +32,30 @@ func writeSuccess(w http.ResponseWriter, data interface{}) {
 }
 
 // =============================================================================
-// 数据库操作端点 — SQL 关系型数据库（SQLite）
+// 知识库操作端点 — SQL 关系型数据库（SQLite）
 // =============================================================================
 
-// DatabaseHandler 处理 SQL 数据库批量操作请求
-// 路由：POST /database/
-func DatabaseHandler(w http.ResponseWriter, r *http.Request) {
+// KnowledgeHandler 处理知识库批量操作请求
+// 路由：POST /knowledge/
+func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "数据库请求[ERROR] -> 不允许的请求方法")
+		writeError(w, http.StatusMethodNotAllowed, "知识库请求[ERROR] -> 不允许的请求方法")
 		return
 	}
 
-	var req module.DatabaseRequest
+	var req module.KnowledgeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("数据库请求[ERROR] -> 解析请求失败: %v", err))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("知识库请求[ERROR] -> 解析请求失败: %v", err))
 		return
 	}
 
-	result := module.ExecuteDatabaseRequest(req)
+	result := module.ExecuteKnowledgeRequest(req)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
-		http.Error(w, fmt.Sprintf("数据库请求[ERROR] -> 编码响应失败: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("知识库请求[ERROR] -> 编码响应失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	logger.Info("Storage", "数据库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
+	logger.Info("Storage", "知识库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
 }

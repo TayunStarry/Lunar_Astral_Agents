@@ -1,0 +1,9 @@
+{
+    "model": "index.bbmodel",
+    "animations": [
+        "animation/实体动画_基础动画.json",
+        "animation/实体动画_待机动画.json",
+        "animation/实体动画_游泳动画.json",
+        "animation/实体动画_近战攻击.json"
+    ]
+}

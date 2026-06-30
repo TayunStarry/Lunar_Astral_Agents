@@ -25,12 +25,12 @@ const (
 	ggufTypeFloat64 uint32 = 12
 )
 
-// ==== 向量数据库自动初始化默认值 ====
+// ==== 记忆库自动初始化默认值 ====
 // 与 lunar_astral 的 TypeScript 默认值保持一致（见 server_side/config/global.ts）
 const (
-	defaultVectorAPIKey     = "key-520-1314-2000-02-18" // 默认 API 密钥
-	defaultVectorModelName  = "system-embedding"        // 默认嵌入模型名
-	defaultVectorCollection = "lunar_messages"          // memory_store 前端操作的固定集合名
+	defaultMemoryAPIKey     = "key-520-1314-2000-02-18" // 默认 API 密钥
+	defaultMemoryModelName  = "system-embedding"        // 默认嵌入模型名
+	defaultMemoryCollection = "lunar_messages"          // memory_store 前端操作的固定集合名
 )
 
 // ==== 全局变量 ====
@@ -61,9 +61,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/delete", Handler: storage.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
 
-	// ==== 数据库 ====
-	{Path: "/database/", Handler: storage.DatabaseHandler, Method: "POST", Description: "数据管理"},
-	{Path: "/vector/", Handler: storage.VectorHandler, Method: "ANY", Description: "向量数据库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
+	// ==== 知识库与记忆库 ====
+	{Path: "/knowledge/", Handler: storage.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
+	{Path: "/memory/", Handler: storage.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
 
 	// ==== 文件整理 ====
 	{Path: "/file/organize", Handler: storage.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},

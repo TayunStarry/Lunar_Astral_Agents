@@ -1272,12 +1272,14 @@ var agentSystem = (function (exports) {
             const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
             if (checkQuery) {
                 const [existingResults] = vectorQuery('lunar_messages', checkQuery, 5);
-                if (existingResults && existingResults.length > 0) {
-                    const similarRecords = existingResults
+                const SIMILARITY_THRESHOLD = 0.85;
+                const highSimilarityResults = (existingResults || []).filter((r) => r.similarity >= SIMILARITY_THRESHOLD);
+                if (highSimilarityResults.length > 0) {
+                    const similarRecords = highSimilarityResults
                         .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
                         .join('\n');
-                    console.warn('[编纂者] 存储前发现相似记录，建议合并而非新增');
-                    return `⚠️ 检测到可能存在相似的历史记录，建议使用 merge_existing_record 合并而非新建：\n${similarRecords}\n\n如果确认这些记录与新内容无关，请再次调用 store_organized_record 并说明理由。`;
+                    console.warn('[编纂者] 存储前发现高相似度记录，建议合并而非新增');
+                    return `⚠️ 检测到存在高度相似的历史记录（相似度≥85%），建议使用 merge_existing_record 合并而非新建：\n${similarRecords}\n\n如果确认这些记录与新内容无关，请再次调用 store_organized_record 并说明理由。`;
                 }
             }
             const finalContent = this.ensureTimestampInRecord(trimmedContent);
