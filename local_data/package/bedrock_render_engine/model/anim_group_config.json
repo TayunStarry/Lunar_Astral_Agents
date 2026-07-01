@@ -1,7 +1,6 @@
 {
   "format_version": "1.0.0",
   "animation_groups": {
-    "default_group": "默认组",
     "groups": [
       {
         "name": "默认组",
@@ -133,7 +132,7 @@
         ],
         "boneVisibility": {},
         "loopMode": "repeat",
-        "transitionDuration": 1,
+        "transitionDuration": 0.5,
         "visibilityDelay": 0
       },
       {

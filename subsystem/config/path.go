@@ -11,5 +11,5 @@ var (
 	// KnowledgeDBPath  知识库文件路径，统一数据库存储
 	KnowledgeDBPath = flag.String("knowledge-db", *LocalDir+"/database/knowledge.db", "知识库文件路径")
 	// MemoryDBDir  记忆库文件夹路径，统一数据库存储
-	MemoryDBDir = flag.String("memory-db", *LocalDir+"/database/vector", "记忆库文件夹路径")
+	MemoryDBDir = flag.String("memory-db", *LocalDir+"/database/memory", "记忆库文件夹路径")
 )

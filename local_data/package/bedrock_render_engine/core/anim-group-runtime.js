@@ -170,18 +170,6 @@ export class AnimGroupRuntime {
     }
 
     /**
-     * 设置默认组
-     * @param {string} name
-     */
-    setDefaultGroup(name) {
-        const g = this.groups.get(name);
-        if (!g) return;
-        if (this.defaultGroup) this.defaultGroup.isDefault = false;
-        g.isDefault = true;
-        this.defaultGroup = g;
-    }
-
-    /**
      * 激活自定义组（互斥，平滑过渡）
      * @param {string} name 组名
      */
@@ -463,29 +451,36 @@ export class AnimGroupRuntime {
 
             const result = interpolateBone(boneAnim, time, this.molang);
             const rest = restPoses.get(bone.name);
+            const restRot = rest ? rest.rotation : [0, 0, 0];
+            const restPos = rest ? rest.position : [0, 0, 0];
+            const restScale = rest ? rest.scale : [1, 1, 1];
 
+            // 旋转：有动画值则叠加到 rest，无则重置到 rest（避免上一个动画的残留）
+            bone.sceneObject.rotation.order = 'ZYX';
             if (result.rotation) {
-                const restRot = rest ? rest.rotation : [0, 0, 0];
                 const animRot = BedrockCoordinate.rotationToThree(result.rotation);
-                bone.sceneObject.rotation.order = 'ZYX';
                 bone.sceneObject.rotation.set(
                     restRot[0] + animRot[0],
                     restRot[1] + animRot[1],
                     restRot[2] + animRot[2]
                 );
+            } else {
+                bone.sceneObject.rotation.set(restRot[0], restRot[1], restRot[2]);
             }
 
+            // 位置：有动画值则叠加到 rest，无则重置到 rest
             if (result.position) {
-                const restPos = rest ? rest.position : [0, 0, 0];
                 bone.sceneObject.position.set(
                     restPos[0] + result.position[0],
                     restPos[1] + result.position[1],
                     restPos[2] + result.position[2]
                 );
+            } else {
+                bone.sceneObject.position.set(restPos[0], restPos[1], restPos[2]);
             }
 
+            // 缩放：有动画值则乘到 rest，无则重置到 rest
             if (result.scale) {
-                const restScale = rest ? rest.scale : [1, 1, 1];
                 const sx = result.scale[0] !== undefined ? result.scale[0] : 1;
                 const sy = result.scale[1] !== undefined ? result.scale[1] : 1;
                 const sz = result.scale[2] !== undefined ? result.scale[2] : 1;
@@ -495,6 +490,9 @@ export class AnimGroupRuntime {
                     bone.sceneObject.visible = true;
                     bone.sceneObject.scale.set(restScale[0] * sx, restScale[1] * sy, restScale[2] * sz);
                 }
+            } else {
+                bone.sceneObject.visible = rest ? rest.visible : true;
+                bone.sceneObject.scale.set(restScale[0], restScale[1], restScale[2]);
             }
         }
     }
@@ -514,13 +512,9 @@ export class AnimGroupRuntime {
         const restPoses = this.animRuntime._restPoses;
         const easeAlpha = alpha * alpha * (3 - 2 * alpha); // smoothstep
 
-        // 先收集目标动画影响的骨骼
-        const animatedBones = new Set();
-        for (const [boneName] of anim.bones) {
-            animatedBones.add(boneName);
-        }
-
-        // 对所有骨骼做过渡
+        // 对所有骨骼做过渡：每个通道独立计算目标值
+        // 目标值 = rest + anim偏移（若动画有该通道）；否则目标值 = rest
+        // 这样即使新动画缺少某些通道，旧动画的残留也会被平滑过渡回 rest pose
         outliner.traverseBones(bone => {
             if (!bone.sceneObject) return;
             const from = fromPoses.get(bone.name);
@@ -528,70 +522,69 @@ export class AnimGroupRuntime {
 
             const boneAnim = anim.bones.get(bone.name);
             const rest = restPoses.get(bone.name);
+            const restRot = rest ? rest.rotation : [0, 0, 0];
+            const restPos = rest ? rest.position : [0, 0, 0];
+            const restScale = rest ? rest.scale : [1, 1, 1];
 
+            // 获取动画插值结果（若骨骼在动画中）
+            let result = null;
             if (boneAnim) {
-                const result = interpolateBone(boneAnim, time, this.molang);
-                // 旋转过渡
-                if (result.rotation) {
-                    const restRot = rest ? rest.rotation : [0, 0, 0];
-                    const animRot = BedrockCoordinate.rotationToThree(result.rotation);
-                    const targetRot = [restRot[0] + animRot[0], restRot[1] + animRot[1], restRot[2] + animRot[2]];
-                    bone.sceneObject.rotation.order = 'ZYX';
-                    bone.sceneObject.rotation.set(
-                        from.rotation[0] + (targetRot[0] - from.rotation[0]) * easeAlpha,
-                        from.rotation[1] + (targetRot[1] - from.rotation[1]) * easeAlpha,
-                        from.rotation[2] + (targetRot[2] - from.rotation[2]) * easeAlpha
-                    );
-                }
-                // 位置过渡
-                if (result.position) {
-                    const restPos = rest ? rest.position : [0, 0, 0];
-                    const targetPos = [restPos[0] + result.position[0], restPos[1] + result.position[1], restPos[2] + result.position[2]];
-                    bone.sceneObject.position.set(
-                        from.position[0] + (targetPos[0] - from.position[0]) * easeAlpha,
-                        from.position[1] + (targetPos[1] - from.position[1]) * easeAlpha,
-                        from.position[2] + (targetPos[2] - from.position[2]) * easeAlpha
-                    );
-                }
-                // 缩放过渡
-                if (result.scale) {
-                    const restScale = rest ? rest.scale : [1, 1, 1];
-                    const sx = result.scale[0] !== undefined ? result.scale[0] : 1;
-                    const sy = result.scale[1] !== undefined ? result.scale[1] : 1;
-                    const sz = result.scale[2] !== undefined ? result.scale[2] : 1;
-                    const targetSx = sx === 0 ? 0.0001 : restScale[0] * sx;
-                    const targetSy = sy === 0 ? 0.0001 : restScale[1] * sy;
-                    const targetSz = sz === 0 ? 0.0001 : restScale[2] * sz;
-                    bone.sceneObject.visible = true;
-                    bone.sceneObject.scale.set(
-                        from.scale[0] + (targetSx - from.scale[0]) * easeAlpha,
-                        from.scale[1] + (targetSy - from.scale[1]) * easeAlpha,
-                        from.scale[2] + (targetSz - from.scale[2]) * easeAlpha
-                    );
+                result = interpolateBone(boneAnim, time, this.molang);
+            }
+
+            // 旋转目标：rest + animRot（若动画有旋转通道）；否则 rest
+            bone.sceneObject.rotation.order = 'ZYX';
+            let targetRot;
+            if (result && result.rotation) {
+                const animRot = BedrockCoordinate.rotationToThree(result.rotation);
+                targetRot = [restRot[0] + animRot[0], restRot[1] + animRot[1], restRot[2] + animRot[2]];
+            } else {
+                targetRot = restRot;
+            }
+            bone.sceneObject.rotation.set(
+                from.rotation[0] + (targetRot[0] - from.rotation[0]) * easeAlpha,
+                from.rotation[1] + (targetRot[1] - from.rotation[1]) * easeAlpha,
+                from.rotation[2] + (targetRot[2] - from.rotation[2]) * easeAlpha
+            );
+
+            // 位置目标：rest + animPos（若动画有位置通道）；否则 rest
+            let targetPos;
+            if (result && result.position) {
+                targetPos = [restPos[0] + result.position[0], restPos[1] + result.position[1], restPos[2] + result.position[2]];
+            } else {
+                targetPos = restPos;
+            }
+            bone.sceneObject.position.set(
+                from.position[0] + (targetPos[0] - from.position[0]) * easeAlpha,
+                from.position[1] + (targetPos[1] - from.position[1]) * easeAlpha,
+                from.position[2] + (targetPos[2] - from.position[2]) * easeAlpha
+            );
+
+            // 缩放目标：rest * animScale（若动画有缩放通道）；否则 rest
+            let targetSx, targetSy, targetSz, targetVisible;
+            if (result && result.scale) {
+                const sx = result.scale[0] !== undefined ? result.scale[0] : 1;
+                const sy = result.scale[1] !== undefined ? result.scale[1] : 1;
+                const sz = result.scale[2] !== undefined ? result.scale[2] : 1;
+                if (sx === 0 || sy === 0 || sz === 0) {
+                    targetVisible = false;
+                    targetSx = 0.0001; targetSy = 0.0001; targetSz = 0.0001;
+                } else {
+                    targetVisible = true;
+                    targetSx = restScale[0] * sx;
+                    targetSy = restScale[1] * sy;
+                    targetSz = restScale[2] * sz;
                 }
             } else {
-                // 该骨骼不在当前动画中，从起始姿势过渡到 rest pose
-                const restRot = rest ? rest.rotation : [0, 0, 0];
-                const restPos = rest ? rest.position : [0, 0, 0];
-                const restScale = rest ? rest.scale : [1, 1, 1];
-                bone.sceneObject.rotation.order = 'ZYX';
-                bone.sceneObject.rotation.set(
-                    from.rotation[0] + (restRot[0] - from.rotation[0]) * easeAlpha,
-                    from.rotation[1] + (restRot[1] - from.rotation[1]) * easeAlpha,
-                    from.rotation[2] + (restRot[2] - from.rotation[2]) * easeAlpha
-                );
-                bone.sceneObject.position.set(
-                    from.position[0] + (restPos[0] - from.position[0]) * easeAlpha,
-                    from.position[1] + (restPos[1] - from.position[1]) * easeAlpha,
-                    from.position[2] + (restPos[2] - from.position[2]) * easeAlpha
-                );
-                bone.sceneObject.visible = true;
-                bone.sceneObject.scale.set(
-                    from.scale[0] + (restScale[0] - from.scale[0]) * easeAlpha,
-                    from.scale[1] + (restScale[1] - from.scale[1]) * easeAlpha,
-                    from.scale[2] + (restScale[2] - from.scale[2]) * easeAlpha
-                );
+                targetVisible = rest ? rest.visible : true;
+                targetSx = restScale[0]; targetSy = restScale[1]; targetSz = restScale[2];
             }
+            bone.sceneObject.visible = true; // 过渡期间保持可见，结束后由显隐逻辑控制
+            bone.sceneObject.scale.set(
+                from.scale[0] + (targetSx - from.scale[0]) * easeAlpha,
+                from.scale[1] + (targetSy - from.scale[1]) * easeAlpha,
+                from.scale[2] + (targetSz - from.scale[2]) * easeAlpha
+            );
         });
     }
 
@@ -670,7 +663,6 @@ export class AnimGroupRuntime {
         return {
             format_version: '1.0.0',
             animation_groups: {
-                default_group: this.defaultGroup?.name || null,
                 groups: Array.from(this.groups.values()).map(g => g.toJSON())
             }
         };
@@ -696,17 +688,6 @@ export class AnimGroupRuntime {
                 g.animations = g.animations.filter(name => availableAnimations.has(name));
             }
             this.addGroup(g);
-        }
-
-        // 设置默认组
-        const defaultName = cfg.default_group;
-        if (defaultName && this.groups.has(defaultName)) {
-            this.setDefaultGroup(defaultName);
-        } else {
-            // 找第一个 isDefault 的组
-            for (const g of this.groups.values()) {
-                if (g.isDefault) { this.defaultGroup = g; break; }
-            }
         }
     }
 }

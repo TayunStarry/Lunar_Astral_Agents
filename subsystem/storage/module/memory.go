@@ -56,9 +56,6 @@ func InitMemoryDB(memoryDir string) error {
 		return fmt.Errorf("创建记忆库目录失败: %v", err)
 	}
 
-	// 迁移旧版 collections/ 层级：将 <memoryDir>/collections/<name> 上移到 <memoryDir>/<name>
-	migrateCollectionsLayer(memoryDir)
-
 	db := &MemoryDB{
 		baseDir:     memoryDir,
 		collections: make(map[string]*Collection),
@@ -67,53 +64,6 @@ func InitMemoryDB(memoryDir string) error {
 
 	logger.Info("Storage", "记忆库存储目录已就绪: %s", memoryDir)
 	return nil
-}
-
-// migrateCollectionsLayer 迁移旧版 collections/ 层级到扁平化结构
-// 若 <memoryDir>/collections/ 存在，将其下所有集合目录上移到 <memoryDir>/ 下
-// 迁移完成后删除空的 collections/ 目录；已存在同名目录时跳过该集合
-func migrateCollectionsLayer(memoryDir string) {
-	oldCollectionsDir := filepath.Join(memoryDir, "collections")
-	entries, err := os.ReadDir(oldCollectionsDir)
-	if err != nil {
-		// 旧目录不存在视为无需迁移
-		return
-	}
-
-	migrated := 0
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if validateCollectionName(name) != nil {
-			continue
-		}
-		oldPath := filepath.Join(oldCollectionsDir, name)
-		newPath := filepath.Join(memoryDir, name)
-
-		// 目标已存在则跳过，避免覆盖用户数据
-		if _, statErr := os.Stat(newPath); statErr == nil {
-			logger.Warn("Storage", "迁移跳过: 目标集合目录已存在 %s", newPath)
-			continue
-		}
-
-		if err := os.Rename(oldPath, newPath); err != nil {
-			logger.Warn("Storage", "迁移集合 [%s] 失败: %v", name, err)
-			continue
-		}
-		migrated++
-		logger.Info("Storage", "迁移集合 [%s]: %s -> %s", name, oldPath, newPath)
-	}
-
-	// 尝试删除空的旧 collections 目录（非致命）
-	if migrated > 0 {
-		if rmErr := os.Remove(oldCollectionsDir); rmErr != nil {
-			logger.Warn("Storage", "删除旧 collections 目录失败（可能非空）: %v", rmErr)
-		} else {
-			logger.Info("Storage", "已删除旧 collections/ 目录, 共迁移 %d 个集合", migrated)
-		}
-	}
 }
 
 // MemoryInitInstance 初始化记忆库实例（不创建任何集合）
