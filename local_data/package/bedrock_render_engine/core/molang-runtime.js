@@ -386,6 +386,7 @@ const DEFAULT_QUERY = {
     state_time: 0,
     vertical_speed: 0,
     ground_speed: 0,
+    target_x_rotation: 0,
     target_y_rotation: 0,
     is_sneaking: 0,
     is_moving: 0,

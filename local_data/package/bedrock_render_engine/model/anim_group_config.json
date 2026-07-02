@@ -191,9 +191,7 @@
       {
         "name": "眨眼",
         "isDefault": false,
-        "animations": [
-          "animation.player_to_individuation.blink"
-        ],
+        "animations": [],
         "boneVisibility": {},
         "loopMode": "hold",
         "transitionDuration": 0.3,

@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "savedAt": "2026-06-25T12:16:56.825Z",
+  "savedAt": "2026-07-01T15:09:21.109Z",
   "skybox": {
     "top": "#ffffff",
     "mid": "#ffffff",
@@ -2866,6 +2866,114 @@
       "geometry": {
         "type": "sphere",
         "r": 0.5,
+        "seg": 32
+      },
+      "physics": {
+        "enabled": false,
+        "anchored": false,
+        "autoRotate": {
+          "enabled": false,
+          "axis": "y",
+          "speed": 1
+        },
+        "initialKinetic": {
+          "enabled": false,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        "attraction": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        },
+        "repulsion": {
+          "enabled": false,
+          "targetId": "",
+          "strength": 1
+        }
+      }
+    },
+    {
+      "id": 39,
+      "name": "圆柱体 39",
+      "type": "cylinder",
+      "primitiveType": "cylinder",
+      "position": {
+        "x": 0,
+        "y": 0.5,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "material": {
+        "color": "#e0a9d8",
+        "roughness": 0.5,
+        "metalness": 0.1,
+        "opacity": 1,
+        "transparent": false,
+        "side": 0,
+        "flatShading": false,
+        "wireframe": false,
+        "type": "standard"
+      },
+      "faceMaterials": [
+        {
+          "color": "#e0a9d8",
+          "roughness": 0.5,
+          "metalness": 0.1,
+          "opacity": 1,
+          "transparent": false,
+          "side": 0,
+          "flatShading": false,
+          "wireframe": false
+        },
+        {
+          "color": "#9e75d5",
+          "roughness": 0.5,
+          "metalness": 0.1,
+          "opacity": 1,
+          "transparent": false,
+          "side": 0,
+          "flatShading": false,
+          "wireframe": false
+        },
+        {
+          "color": "#e7f098",
+          "roughness": 0.5,
+          "metalness": 0.1,
+          "opacity": 1,
+          "transparent": false,
+          "side": 0,
+          "flatShading": false,
+          "wireframe": false
+        }
+      ],
+      "faceNames": [
+        "侧面",
+        "顶面",
+        "底面"
+      ],
+      "faceVisible": [
+        true,
+        true,
+        true
+      ],
+      "geometry": {
+        "type": "cylinder",
+        "rt": 0.5,
+        "rb": 0.5,
+        "h": 1,
         "seg": 32
       },
       "physics": {

@@ -10,6 +10,7 @@
 //   - 导入/导出配置 JSON
 
 import { AnimGroup, AnimGroupRuntime } from '../core/anim-group-runtime.js';
+import { AnimationClassifier } from '../core/animation-classifier.js';
 
 /**
  * 动画组管理面板
@@ -43,10 +44,11 @@ export class AnimGroupManager {
     }
 
     /**
-     * 更新可用动画表
+     * 更新可用动画表（过滤掉特殊动画，仅显示普通动画供选择）
      */
     setAvailableAnimations(animMap) {
-        this.availableAnimations = animMap;
+        // 过滤掉特殊动画（.blink/.move/.fast_move），仅保留普通动画
+        this.availableAnimations = AnimationClassifier.filterDisplayAnimations(animMap);
     }
 
     /**
@@ -79,7 +81,6 @@ export class AnimGroupManager {
                 </button>
             </div>
             <div id="agm-group-list" class="agm-group-list"></div>
-            <div id="agm-editor" class="agm-editor" style="display:none"></div>
         `;
     }
 
@@ -221,7 +222,10 @@ export class AnimGroupManager {
                         this.runtime.removeGroup(group.name);
                         if (this.editingGroup === group.name) {
                             this.editingGroup = null;
-                            document.getElementById('agm-editor').style.display = 'none';
+                            const editor = document.getElementById('agm-editor');
+                            if (editor) editor.style.display = 'none';
+                            this._switchLeftPanelTab('hierarchy');
+                            this._setEditorTabVisible(false); // 隐藏"动画组编辑"tab
                             this.onEditGroup(null); // 通知骨骼层级面板退出显隐编辑
                         }
                         this.refresh();
@@ -256,23 +260,69 @@ export class AnimGroupManager {
 
     /**
      * 切换编辑器显示
+     * 打开时：显示"动画组编辑"tab 并切换过去，确保左侧面板可见
+     * 关闭时：切回"骨骼层级"tab 并隐藏"动画组编辑"tab
      * @private
      */
     _toggleEditor(groupName) {
         if (this.editingGroup === groupName) {
             // 关闭编辑器
             this.editingGroup = null;
-            document.getElementById('agm-editor').style.display = 'none';
+            const editor = document.getElementById('agm-editor');
+            if (editor) editor.style.display = 'none';
+            this._switchLeftPanelTab('hierarchy'); // 切回骨骼层级
+            this._setEditorTabVisible(false);     // 隐藏"动画组编辑"tab
             this.onEditGroup(null); // 通知骨骼层级面板退出显隐编辑
         } else {
             this.editingGroup = groupName;
             this._renderEditor(groupName);
-            document.getElementById('agm-editor').style.display = '';
+            const editor = document.getElementById('agm-editor');
+            if (editor) editor.style.display = '';
+            this._setEditorTabVisible(true);      // 显示"动画组编辑"tab
+            this._switchLeftPanelTab('agm-editor'); // 切到动画组编辑
             // 通知骨骼层级面板进入显隐编辑模式
             const group = this.runtime.groups.get(groupName);
             this.onEditGroup(group);
         }
         this._renderGroupList();
+    }
+
+    /**
+     * 显示/隐藏"动画组编辑"tab
+     * @param {boolean} visible
+     * @private
+     */
+    _setEditorTabVisible(visible) {
+        const tab = document.querySelector('#left-panel .panel-tab[data-tab="agm-editor"]');
+        if (tab) tab.style.display = visible ? '' : 'none';
+    }
+
+    /**
+     * 切换左侧面板的 tab，并确保左侧面板可见
+     * @param {string} tabName 'hierarchy' 或 'agm-editor'
+     * @private
+     */
+    _switchLeftPanelTab(tabName) {
+        const leftPanel = document.getElementById('left-panel');
+        if (!leftPanel) return;
+        // 确保左侧面板可见（如果被隐藏则显示）
+        if (leftPanel.style.display === 'none') {
+            leftPanel.style.display = '';
+            // 通知 App 同步面板状态
+            const app = window.__bedrockRenderEngine;
+            if (app) {
+                app._panelsVisible = true;
+                const btn = document.getElementById('btn-toggle-panels');
+                if (btn) btn.style.opacity = '1';
+            }
+        }
+        // 切换 tab（仅对可见的 tab 生效）
+        leftPanel.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+        leftPanel.querySelectorAll('.panel-body').forEach(b => b.style.display = 'none');
+        const tab = leftPanel.querySelector(`.panel-tab[data-tab="${tabName}"]`);
+        const body = leftPanel.querySelector(`#tab-${tabName}`);
+        if (tab) tab.classList.add('active');
+        if (body) body.style.display = '';
     }
 
     /**
@@ -349,7 +399,7 @@ export class AnimGroupManager {
             <div class="agm-editor-section">
                 <div class="agm-bone-hint">
                     <i class="fas fa-info-circle"></i>
-                    <span>骨骼显隐控制已移至左侧<strong>「骨骼层级」</strong>面板</span>
+                    <span>骨骼显隐控制请切换到<strong>「骨骼层级」</strong>标签页</span>
                     <small>当前覆盖: ${boneOverrideCount} 个骨骼</small>
                 </div>
             </div>
@@ -369,6 +419,8 @@ export class AnimGroupManager {
         editor.querySelector('.agm-btn-close-editor').addEventListener('click', () => {
             this.editingGroup = null;
             editor.style.display = 'none';
+            this._switchLeftPanelTab('hierarchy'); // 切回骨骼层级
+            this._setEditorTabVisible(false);      // 隐藏"动画组编辑"tab
             this.onEditGroup(null); // 通知骨骼层级面板退出显隐编辑
             this._renderGroupList();
         });

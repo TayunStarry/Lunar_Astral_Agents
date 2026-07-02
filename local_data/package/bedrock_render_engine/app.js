@@ -14,11 +14,12 @@ import { MolangRuntime } from './core/molang-runtime.js';
 import { AnimationCodec } from './core/animation-codec.js';
 import { AnimationRuntime } from './core/animation-runtime.js';
 import { AnimGroup, AnimGroupRuntime } from './core/anim-group-runtime.js';
+import { SpecialAnimationRuntime } from './core/special-animation-runtime.js';
+import { MovementController } from './core/movement-controller.js';
 import { FileLoader } from './ui/file-loader.js';
 import { AnimGroupManager } from './ui/anim-group-manager.js';
-import { MaterialPanel } from './ui/material-panel.js';
-import { ViewportPanel } from './ui/viewport.js';
 import { BoneHierarchyPanel } from './ui/bone-hierarchy.js';
+import { MovementPanel } from './ui/movement-panel.js';
 import * as THREE from './vendor/three.module.js';
 
 /**
@@ -35,18 +36,20 @@ class App {
         this.animationRuntime = null;
         /** @type {AnimGroupRuntime|null} */
         this.animGroupRuntime = null;
+        /** @type {SpecialAnimationRuntime|null} */
+        this.specialAnimRuntime = null;
+        /** @type {MovementController|null} */
+        this.movementController = null;
 
         // ==== UI 模块 ====
         /** @type {FileLoader|null} */
         this.fileLoader = null;
         /** @type {AnimGroupManager|null} */
         this.animGroupManager = null;
-        /** @type {MaterialPanel|null} */
-        this.materialPanel = null;
-        /** @type {ViewportPanel|null} */
-        this.viewportPanel = null;
         /** @type {BoneHierarchyPanel|null} */
         this.boneHierarchyPanel = null;
+        /** @type {MovementPanel|null} */
+        this.movementPanel = null;
 
         // ==== 状态 ====
         this.currentModel = null;
@@ -59,31 +62,26 @@ class App {
             canvas: document.getElementById('render-canvas'),
             btnImport: document.getElementById('btn-import'),
             resourceFileInput: document.getElementById('resource-file-input'),
-            renderMethodSelect: document.getElementById('render-method-select'),
-            btnToggleLit: document.getElementById('btn-toggle-lit'),
-            litLabel: document.getElementById('lit-label'),
-            btnMaterialPanel: document.getElementById('btn-material-panel'),
             btnTogglePanels: document.getElementById('btn-toggle-panels'),
             btnTheme: document.getElementById('btn-theme'),
             btnHelp: document.getElementById('btn-help'),
+            btnMovement: document.getElementById('btn-movement'),
             hierarchyTree: document.getElementById('hierarchy-tree'),
-            infoBody: document.getElementById('info-body'),
             animGroupContainer: document.getElementById('anim-group-container'),
-            statusFps: document.getElementById('status-fps'),
-            statusBones: document.getElementById('status-bones'),
-            statusCubes: document.getElementById('status-cubes'),
-            statusFaces: document.getElementById('status-faces'),
-            statusCam: document.getElementById('status-cam'),
-            statusMode: document.getElementById('status-mode'),
+            statusIcon: document.getElementById('status-icon'),
+            statusText: document.getElementById('status-text'),
             toast: document.getElementById('toast'),
             modalOverlay: document.getElementById('modal-overlay'),
             modalContent: document.getElementById('modal-content')
         };
 
-        // 面板状态
-        this._panelsVisible = true;
+        // 面板状态（默认隐藏，仅显示模型）
+        this._panelsVisible = false;
         this._darkMode = false;
-        this._lit = false;
+
+        // 状态轮播
+        this._statusCarouselIndex = 0;
+        this._statusCarouselTimer = null;
     }
 
     /**
@@ -109,12 +107,26 @@ class App {
             }
         });
 
-        // 4. 挂载到渲染循环
+        // 4. 创建特殊动画运行时（叠加在 AnimGroupRuntime 之上：眨眼/移动/快速移动）
+        this.specialAnimRuntime = new SpecialAnimationRuntime(this.molang, this.animationRuntime);
+
+        // 5. 创建移动控制器（同步 q.target_x_rotation / q.target_y_rotation 等到 MoLang）
+        this.movementController = new MovementController({
+            renderer: this.renderer,
+            molang: this.molang,
+            onMoveStateChange: (isMoving, isFastMoving) => {
+                this.specialAnimRuntime?.setMoveState(isMoving, isFastMoving);
+            }
+        });
+
+        // 6. 挂载到渲染循环（顺序：组动画 → 特殊动画叠加 → 移动控制）
         this.renderer.onUpdate = (dt) => {
             this.animGroupRuntime.tick(dt);
+            this.specialAnimRuntime?.tick(dt);
+            this.movementController?.tick(dt);
         };
 
-        // 5. 初始化 UI 模块
+        // 7. 初始化 UI 模块
         this.fileLoader = new FileLoader({
             onLoadBbmodel: (f) => this.loadBbmodelFromFile(f),
             onLoadAnimations: (fs) => this.loadAnimationsFromFiles(fs),
@@ -132,27 +144,22 @@ class App {
             onEditGroup: (group) => this._onEditGroup(group)
         });
 
-        this.materialPanel = new MaterialPanel({
-            renderer: this.renderer,
-            onInflateBiasChange: (bias) => this.setInflateBias(bias),
-            onToast: (msg, type) => this.showToast(msg, type)
-        });
-
-        this.viewportPanel = new ViewportPanel({
-            renderer: this.renderer,
-            onToast: (msg, type) => this.showToast(msg, type)
-        });
-
         this.boneHierarchyPanel = new BoneHierarchyPanel(
             { containerId: 'hierarchy-tree' },
             (bone) => this.highlightBone(bone)
         );
 
-        // 6. 绑定事件
+        // 8. 创建移动控制面板
+        this.movementPanel = new MovementPanel({
+            controller: this.movementController,
+            onToast: (msg, type) => this.showToast(msg, type)
+        });
+
+        // 9. 绑定事件
         this.bindEvents();
         this.startStatusUpdate();
 
-        // 7. 自动加载 model 文件夹资源
+        // 10. 自动加载 model 文件夹资源
         await this._autoLoadResources();
 
         console.log('[bedrock_render_engine] 初始化完成（动画组架构）');
@@ -220,7 +227,10 @@ class App {
             this.animGroupManager?.setAvailableAnimations(this.currentAnimations);
             this.animGroupManager?.refresh();
 
-            // 6. 尝试加载已保存的动画组配置（覆盖默认组）
+            // 6. 通知特殊动画运行时加载分类后的动画（眨眼/移动/快速移动）
+            this.specialAnimRuntime?.setAnimations(this.currentAnimations);
+
+            // 7. 尝试加载已保存的动画组配置（覆盖默认组）
             await this._tryLoadSavedConfig();
 
             this.setStatusMode('就绪');
@@ -340,12 +350,6 @@ class App {
         result.outliner.traverseBones(bone => bones.push(bone));
         this.animGroupManager?.setAvailableBones(bones);
 
-        // 更新模型信息面板
-        this.updateInfoPanel(result);
-
-        // 启用材质控制
-        this._enableMaterialControls();
-
         const boneCount = result.outliner.boneCount;
         const cubeCount = result.outliner.cubeCount;
         this.showToast(`加载成功：${boneCount} 骨骼 / ${cubeCount} 立方体`, 'success');
@@ -368,6 +372,8 @@ class App {
             }
             this.animGroupManager?.setAvailableAnimations(this.currentAnimations);
             this.animGroupManager?.refresh();
+            // 通知特殊动画运行时重新分类
+            this.specialAnimRuntime?.setAnimations(this.currentAnimations);
             this.showToast(`加载 ${loaded.length} 个动画（共 ${this.currentAnimations.size} 个）`, 'success');
 
             // 如果尚无默认组，自动创建
@@ -533,36 +539,17 @@ class App {
             e.target.value = '';
         });
 
-        // render method 切换
-        this.elements.renderMethodSelect.addEventListener('change', (e) => {
-            if (this.renderer) {
-                this.renderer.setRenderMethod(e.target.value);
-                this.showToast(`材质切换为 ${e.target.value}`, 'success');
-            }
-        });
-
-        // lit/unlit 光照切换
-        this.elements.btnToggleLit.addEventListener('click', () => {
-            if (!this.renderer) return;
-            this._lit = !this._lit;
-            this.renderer.setLit(this._lit);
-            this.elements.litLabel.textContent = this._lit ? 'lit' : 'unlit';
-            this.elements.btnToggleLit.querySelector('i').className = this._lit ? 'fas fa-lightbulb' : 'fas fa-sun';
-            this.showToast(`光照模式：${this._lit ? 'lit（MeshLambertMaterial）' : 'unlit（MeshBasicMaterial）'}`, 'success');
-        });
-
-        // 材质参数面板切换
-        this.elements.btnMaterialPanel.addEventListener('click', () => {
-            this.materialPanel?.toggle();
-        });
-
-        // 面板切换
+        // 面板切换（左/右侧面板）
         this.elements.btnTogglePanels.addEventListener('click', () => {
             this._panelsVisible = !this._panelsVisible;
             document.querySelectorAll('.side-panel').forEach(p => {
                 p.style.display = this._panelsVisible ? '' : 'none';
             });
+            // 切换按钮图标状态
+            this.elements.btnTogglePanels.style.opacity = this._panelsVisible ? '1' : '0.7';
         });
+        // 初始隐藏状态：按钮半透明
+        this.elements.btnTogglePanels.style.opacity = '0.7';
 
         // 主题切换
         this.elements.btnTheme.addEventListener('click', () => {
@@ -573,13 +560,28 @@ class App {
                 : '<i class="fas fa-moon"></i>';
         });
 
+        // 移动控制面板切换
+        if (this.elements.btnMovement) {
+            this.elements.btnMovement.addEventListener('click', () => {
+                this.movementPanel?.toggle();
+            });
+        }
+
         // 帮助
         this.elements.btnHelp.addEventListener('click', () => {
             this.showModal(`
                 <h3 style="margin-top:0"><i class="fas fa-question-circle"></i> 操作说明</h3>
                 <div style="margin-top:16px;font-size:14px;line-height:1.8">
-                    <p><b>导入资源</b>：点击工具栏"导入资源"或拖拽文件到页面，自动识别模型/动画/动画组配置</p>
+                    <p><b>导入资源</b>：点击右下角"导入"按钮或拖拽文件到页面，自动识别模型/动画/动画组配置</p>
                     <p><b>自动加载</b>：页面打开时自动加载 model 文件夹中的 index.bbmodel 及关联动画</p>
+                    <p><b>切换面板</b>：点击右下角"切换面板"按钮，显示/隐藏骨骼层级与动画组管理面板</p>
+                    <p><b>移动控制</b>：点击右下角"移动控制"按钮（<i class="fas fa-arrows-alt"></i>）打开移动面板</p>
+                    <ul style="margin-left:20px">
+                        <li>位置控制：输入 X/Y/Z 坐标，点击"移动到目标"平滑移动，或"瞬移"直接到位</li>
+                        <li>朝向控制：拖动偏航/俯仰滑块精确调整（对应 q.target_y_rotation / q.target_x_rotation）</li>
+                        <li>鼠标追踪：启用后模型朝向鼠标投影点；自动锁定会持续移动到鼠标位置</li>
+                        <li>移动速度：滑块调节 1~30 单位/秒</li>
+                    </ul>
                     <p><b>动画组管理</b>：右侧"动画组"面板管理动画组</p>
                     <ul style="margin-left:20px">
                         <li>默认组（<i class="fas fa-home" style="color:var(--success)"></i>）：永久生效，循环播放</li>
@@ -587,13 +589,17 @@ class App {
                         <li>编辑组：点击 <i class="fas fa-edit"></i> 设置循环模式、过渡时长、动画序列、骨骼显隐</li>
                         <li>气泡选择：点击动画气泡添加/移除到组</li>
                     </ul>
+                    <p><b>特殊动画</b>：名称含 <code>.blink</code> / <code>.move</code> / <code>.fast_move</code> 的动画自动归类，不在列表显示</p>
+                    <ul style="margin-left:20px">
+                        <li><code>.blink</code>：随机 3-5 秒间隔触发一次眨眼</li>
+                        <li><code>.move</code>：模型移动时循环播放</li>
+                        <li><code>.fast_move</code>：模型长距离/快速移动时循环播放</li>
+                    </ul>
                     <p><b>动画名称</b>：所有动画仅显示最后一段（如 standby_animation-0）</p>
                     <p><b>骨骼层级</b>：左侧面板默认全折叠，点击箭头展开，点击名称高亮</p>
-                    <p><b>切换材质</b>：工具栏下拉选择 render method</p>
-                    <p><b>光照切换</b>：点击 unlit/lit 按钮切换光照模式</p>
-                    <p><b>材质参数</b>：点击 <i class="fas fa-sliders-h"></i> 调整 alphatest、不透明度、z-fighting 微调</p>
                     <p><b>配置导入导出</b>：动画组面板工具栏 <i class="fas fa-file-import"></i>/<i class="fas fa-file-export"></i> 按钮导入导出 JSON 配置</p>
                     <p><b>视角控制</b>：左键拖拽旋转 / 右键拖拽平移 / 滚轮缩放</p>
+                    <p><b>状态气泡</b>：左上角气泡每 3 秒轮播 FPS / 骨骼数 / 立方体数 / 三角面 / 动画状态 / 相机位置</p>
                 </div>
                 <div style="text-align:right;margin-top:16px">
                     <button class="btn-glass btn-glass-primary" onclick="document.getElementById('modal-overlay').classList.remove('visible')">关闭</button>
@@ -627,38 +633,7 @@ class App {
         });
     }
 
-    /**
-     * 启用材质控制按钮
-     * @private
-     */
-    _enableMaterialControls() {
-        this.elements.renderMethodSelect.disabled = false;
-        this.elements.btnToggleLit.disabled = false;
-        this.elements.btnMaterialPanel.disabled = false;
-    }
-
     // ==== UI 更新 ====
-
-    /**
-     * 更新模型信息面板
-     */
-    updateInfoPanel(result) {
-        const body = this.elements.infoBody;
-        const { meta, metadata, outliner, textures } = result;
-
-        body.innerHTML = `
-            <div class="info-row"><span class="info-label">名称</span><span class="info-value">${metadata.name}</span></div>
-            <div class="info-row"><span class="info-label">标识符</span><span class="info-value">${metadata.modelIdentifier}</span></div>
-            <div class="info-row"><span class="info-label">格式版本</span><span class="info-value">${meta.formatVersion}</span></div>
-            <div class="info-row"><span class="info-label">模型格式</span><span class="info-value">${meta.modelFormat}</span></div>
-            <div class="info-row"><span class="info-label">box_uv</span><span class="info-value">${meta.boxUv}</span></div>
-            <div class="info-row"><span class="info-label">分辨率</span><span class="info-value">${meta.resolution.width}×${meta.resolution.height}</span></div>
-            <div class="info-row"><span class="info-label">骨骼数</span><span class="info-value">${outliner.boneCount}</span></div>
-            <div class="info-row"><span class="info-label">立方体数</span><span class="info-value">${outliner.cubeCount}</span></div>
-            <div class="info-row"><span class="info-label">纹理数</span><span class="info-value">${textures.length}</span></div>
-            <div class="info-row"><span class="info-label">动画模式</span><span class="info-value">${metadata.bedrockAnimationMode}</span></div>
-        `;
-    }
 
     /**
      * 更新动画组状态（由 AnimGroupManager 调用）
@@ -672,49 +647,84 @@ class App {
     }
 
     /**
-     * 启动状态栏更新
+     * 启动状态气泡轮播
+     * 左上角气泡每 3 秒轮播一项：FPS → 骨骼 → 立方体 → 三角面 → 动画状态 → 相机
      */
     startStatusUpdate() {
+        // 立即显示第一项
+        this._updateStatusBubble();
+
+        // 每 3 秒切换一项
+        this._statusCarouselTimer = setInterval(() => {
+            this._statusCarouselIndex = (this._statusCarouselIndex + 1) % 6;
+            this._updateStatusBubble();
+        }, 3000);
+
+        // 高频更新动画组进度（不影响气泡文字，仅刷新管理面板进度条）
         setInterval(() => {
-            if (!this.renderer) return;
-            this.elements.statusFps.textContent = this.renderer.fps;
-            if (this.currentModel) {
-                this.elements.statusBones.textContent = this.currentModel.outliner.boneCount;
-                this.elements.statusCubes.textContent = this.currentModel.outliner.cubeCount;
-                this.elements.statusFaces.textContent = this.renderer.getTriangleCount();
-            }
-            this.elements.statusCam.textContent = this.renderer.getCameraPositionString();
-
-            // 显示当前动画组状态
-            if (this.animGroupRuntime) {
-                const rt = this.animGroupRuntime;
-                if (rt.playing && rt.currentGroup) {
-                    const groupName = rt.currentGroup.name;
-                    const animShort = rt.currentAnimationShortName;
-                    if (animShort) {
-                        this.elements.statusMode.textContent = `${groupName} ▶ ${animShort}`;
-                    } else {
-                        this.elements.statusMode.textContent = `${groupName}`;
-                    }
-                } else {
-                    this.elements.statusMode.textContent = '就绪';
-                }
-
-                // 轻量级进度更新（不重建 DOM）
-                if (rt.playing) {
-                    this.animGroupManager?.updateProgress();
-                }
+            if (this.animGroupRuntime?.playing) {
+                this.animGroupManager?.updateProgress();
             }
         }, 100);
+    }
+
+    /**
+     * 更新状态气泡内容（根据当前轮播索引）
+     * @private
+     */
+    _updateStatusBubble() {
+        if (!this.renderer || !this.elements.statusText) return;
+
+        const icons = [
+            'fas fa-tachometer-alt',  // FPS
+            'fas fa-bone',             // 骨骼
+            'fas fa-cube',             // 立方体
+            'fas fa-vector-square',    // 三角面
+            'fas fa-film',             // 动画
+            'fas fa-video'             // 相机
+        ];
+        let text = '';
+        switch (this._statusCarouselIndex) {
+            case 0: // FPS
+                text = `${this.renderer.fps} FPS`;
+                break;
+            case 1: // 骨骼数
+                text = this.currentModel ? `${this.currentModel.outliner.boneCount} 骨骼` : '无模型';
+                break;
+            case 2: // 立方体数
+                text = this.currentModel ? `${this.currentModel.outliner.cubeCount} 立方体` : '无模型';
+                break;
+            case 3: // 三角面数
+                text = `${this.renderer.getTriangleCount()} 面`;
+                break;
+            case 4: // 动画状态
+                if (this.animGroupRuntime?.playing && this.animGroupRuntime.currentGroup) {
+                    const g = this.animGroupRuntime.currentGroup;
+                    const animShort = this.animGroupRuntime.currentAnimationShortName;
+                    text = animShort ? `${g.name} ▶ ${animShort}` : g.name;
+                } else {
+                    text = this._statusModeText || '就绪';
+                }
+                break;
+            case 5: // 相机位置
+                text = this.renderer.getCameraPositionString();
+                break;
+        }
+        this.elements.statusIcon.className = icons[this._statusCarouselIndex];
+        this.elements.statusText.textContent = text;
     }
 
     // ==== 工具方法 ====
 
     /**
-     * 设置状态模式
+     * 设置状态模式（暂存到 _statusModeText，供气泡轮播读取）
      */
     setStatusMode(mode) {
-        this.elements.statusMode.textContent = mode;
+        this._statusModeText = mode;
+        // 如果当前轮播正在显示"动画状态"项，立即刷新气泡
+        if (this._statusCarouselIndex === 4) {
+            this._updateStatusBubble();
+        }
     }
 
     /**

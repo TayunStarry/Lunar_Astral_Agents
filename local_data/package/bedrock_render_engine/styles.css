@@ -110,41 +110,70 @@ body {
     box-shadow: var(--shadow-glass-dark);
 }
 
-/* ==== 工具栏 ==== */
-#toolbar {
+/* ==== 状态气泡（左上角轮播） ==== */
+.status-bubble {
     position: fixed;
     top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 16px;
     z-index: 100;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    max-width: calc(100vw - 32px);
-    flex-wrap: wrap;
-    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+    max-width: 280px;
+    pointer-events: none;
+    user-select: none;
 }
 
-.toolbar-group {
+.status-bubble i {
+    color: var(--brand);
+    font-size: 11px;
+}
+
+.status-bubble span {
+    color: var(--text-primary);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==== 浮动按钮组（右下角） ==== */
+.fab-container {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+}
+
+.fab-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    font-size: 14px;
+    padding: 0;
 }
 
-.toolbar-label {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-right: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.fab-btn:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.4);
 }
 
-.toolbar-divider {
-    width: 1px;
-    height: 24px;
-    background: var(--border-color);
-    opacity: 0.5;
+.dark-mode .fab-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* ==== 按钮 ==== */
@@ -237,8 +266,8 @@ body {
 /* ==== 侧面板 ==== */
 .side-panel {
     position: fixed;
-    top: 80px;
-    bottom: 56px;
+    top: 56px;
+    bottom: 72px;
     width: 340px;
     z-index: 50;
     display: flex;
@@ -615,45 +644,7 @@ body {
     color: var(--text-secondary);
 }
 
-/* ==== 状态栏 ==== */
-#status-bar {
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 8px 16px;
-    font-size: 12px;
-    max-width: calc(100vw - 32px);
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.status-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--text-secondary);
-}
-
-.status-item i {
-    color: var(--brand);
-}
-
-.status-item span {
-    color: var(--text-primary);
-    font-weight: 600;
-    min-width: 24px;
-    text-align: right;
-}
-
-#status-mode {
-    color: var(--accent);
-    font-weight: 600;
-}
+/* ==== 旧状态栏样式已移除（改为左上角气泡） ==== */
 
 /* ==== 模态框 ==== */
 .modal-overlay {
@@ -726,18 +717,14 @@ body {
         bottom: auto;
         max-height: 40vh;
     }
-    .side-panel-left { top: 80px; }
-    .side-panel-right { top: calc(80px + 40vh + 8px); }
-    #status-bar { font-size: 11px; gap: 8px; }
-    .viewport-panel { bottom: 56px !important; left: 8px !important; }
-    .material-panel { right: 8px !important; top: 80px !important; }
+    .side-panel-left { top: 56px; }
+    .side-panel-right { top: calc(56px + 40vh + 8px); }
+    .status-bubble { max-width: 180px; font-size: 11px; }
 }
 
 @media (max-width: 480px) {
-    #toolbar { padding: 6px 8px; gap: 4px; }
     .btn-glass { height: 32px; padding: 0 10px; font-size: 12px; }
-    .toolbar-label { display: none; }
-    .toolbar-divider { display: none; }
+    .fab-btn { width: 36px; height: 36px; font-size: 12px; }
 }
 
 /* ==== 拖拽遮罩 ==== */
@@ -839,51 +826,6 @@ body {
 
 .state-chip.active {
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
-}
-
-/* ==== 材质参数面板 ==== */
-.material-panel {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-}
-
-.material-panel input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    outline: none;
-}
-
-.material-panel input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    background: var(--accent);
-    border-radius: 50%;
-    cursor: pointer;
-}
-
-.material-panel input[type="range"]::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
-    background: var(--accent);
-    border-radius: 50%;
-    cursor: pointer;
-    border: none;
-}
-
-/* ==== 视口浮动面板 ==== */
-.viewport-panel {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-
-.viewport-panel .btn-glass {
-    transition: all 0.2s;
-}
-
-.viewport-panel .btn-glass:hover {
-    background: rgba(108, 155, 207, 0.3);
 }
 
 /* ==== 动画组管理面板 ==== */
