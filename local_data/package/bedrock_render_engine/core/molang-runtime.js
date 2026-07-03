@@ -388,6 +388,7 @@ const DEFAULT_QUERY = {
     ground_speed: 0,
     target_x_rotation: 0,
     target_y_rotation: 0,
+    body_y_rotation: 0,
     is_sneaking: 0,
     is_moving: 0,
     is_in_water: 0,
@@ -485,6 +486,19 @@ export class MolangRuntime {
     reset() {
         this.temp = {};
         this.variables = {};
+    }
+
+    /**
+     * 获取所有 MoLang 上下文变量的快照（用于调试面板实时显示）
+     * @returns {{query: object, variables: object, temp: object, context: object}}
+     */
+    getAllContext() {
+        return {
+            query: { ...this.query },
+            variables: { ...this.variables },
+            temp: { ...this.temp },
+            context: { ...this.context }
+        };
     }
 
     /**

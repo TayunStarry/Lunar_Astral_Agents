@@ -290,6 +290,48 @@ export class Renderer {
     }
 
     /**
+     * 平滑移动相机到角色正前方（5 秒无移动时调用）
+     * 根据模型当前朝向（modelRoot.rotation.y）计算前方，而非固定 -Z
+     * 复用 _introActive 渲染逻辑，起始位置为当前相机位置
+     * @param {number} duration 持续时间（秒），默认 1.5
+     */
+    moveCameraToFront(duration = 1.5) {
+        const box = new THREE.Box3();
+        box.makeEmpty();
+        if (this.modelRoot) box.expandByObject(this.modelRoot);
+        if (box.isEmpty()) return;
+
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 1);
+
+        // 根据模型当前朝向计算前方方向
+        // 模型默认面朝 +Z（Bedrock yaw=0=South），摄像头在其对面（-Z）才能看到正面
+        // 旋转 bodyYaw 后：front = (sin(yaw), 0, cos(yaw))，摄像头 = (-sin(yaw), 0, -cos(yaw))
+        const bodyYaw = this.modelRoot.rotation.y;
+        const frontX = -Math.sin(bodyYaw);
+        const frontZ = -Math.cos(bodyYaw);
+
+        // 结束位置：模型前方，略偏上俯视
+        const endDist = maxDim * 1.0;
+        const endPos = new THREE.Vector3(
+            center.x + frontX * endDist,
+            center.y + maxDim * 0.3,
+            center.z + frontZ * endDist
+        );
+
+        // 起始位置：当前相机位置
+        this._introActive = true;
+        this._introStartTime = performance.now();
+        this._introDuration = duration * 1000;
+        this._introStartPos.copy(this.camera.position);
+        this._introEndPos.copy(endPos);
+        this._introTarget.copy(center);
+        this._introSavedControlsEnabled = this.controls.enabled;
+        this.controls.enabled = false;
+    }
+
+    /**
      * 递归构建骨骼的 Three.js Object3D
      *
      * 关键点：Three.js 的层级变换是相对父级的。
@@ -562,6 +604,29 @@ export class Renderer {
     getCameraPositionString() {
         const p = this.camera.position;
         return `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`;
+    }
+
+    /**
+     * 获取头部骨骼的全局位置（用于鼠标追踪球面映射）
+     * 查找名为 headCheek 的骨骼，返回其 sceneObject 的全局位置
+     * @returns {import('../vendor/three.module.js').Vector3|null} 头部全局位置，找不到返回 null
+     */
+    getHeadWorldPosition() {
+        let headPos = null;
+        this.modelRoot.traverse((obj) => {
+            if (obj.name === 'headCheek' && !headPos) {
+                const worldPos = new THREE.Vector3();
+                obj.getWorldPosition(worldPos);
+                headPos = worldPos;
+            }
+        });
+        // 找到 headCheek 就用它，否则回退到 modelRoot 上方 12 单位
+        if (headPos) return headPos;
+        return new THREE.Vector3(
+            this.modelRoot.position.x,
+            this.modelRoot.position.y + 12,
+            this.modelRoot.position.z
+        );
     }
 
     /**

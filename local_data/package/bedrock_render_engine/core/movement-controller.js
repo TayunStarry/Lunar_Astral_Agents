@@ -2,12 +2,14 @@
 //
 // 职责：
 //   - 平滑移动模型到目标坐标（基于 modelRoot.position）
-//   - 朝向控制：计算并设置 q.target_x_rotation / q.target_y_rotation
+//   - 朝向控制：仅设置 q.target_x_rotation / q.target_y_rotation（不再旋转 modelRoot）
+//   - 身体旋转由 BodyRotationInterpreter + 动画骨骼驱动（whole 骨骼引用 q.body_y_rotation）
 //   - 碰撞检测：禁止穿过地板（Y >= 0）及边界
 //   - 鼠标追踪：将鼠标位置投影到地面，作为朝向目标
 //   - 自动锁定：持续锁定目标为鼠标位置
 //   - 同步 MoLang 变量：is_moving / ground_speed / move_speed / target_*_rotation
 //   - 通知 SpecialAnimationRuntime 移动状态变化
+//   - 5 秒无操作触发 onIdle 回调（用于摄像头归位）
 
 import * as THREE from '../vendor/three.module.js';
 
@@ -43,10 +45,12 @@ export class MovementController {
         this._isFastMoving = false;
 
         // 移动参数
-        /** @type {number} 普通移动速度（单位/秒） */
-        this._moveSpeed = 5;
-        /** @type {number} 快速移动速度阈值 */
-        this._fastMoveThreshold = 10;
+        /** @type {number} 普通移动速度（单位/秒），距离 ≤ 阈值时使用 */
+        this._moveSpeedNormal = 30;
+        /** @type {number} 快速移动速度（单位/秒），距离 > 阈值时使用 */
+        this._moveSpeedFast = 45;
+        /** @type {number} 距离阈值（单位）：超过此距离判定为快速移动 */
+        this._distanceThreshold = 30;
         /** @type {number} 到达目标的判定距离 */
         this._arrivalDistance = 0.05;
 
@@ -62,19 +66,21 @@ export class MovementController {
         /** @type {number} 朝向插值速度（度/秒） */
         this._rotationSpeed = 360;
 
-        // ==== 鼠标追踪 ====
+        // ==== 鼠标追踪（球面映射） ====
         /** @type {boolean} 鼠标追踪是否启用 */
         this._mouseTracking = false;
         /** @type {boolean} 自动锁定鼠标位置 */
         this._mouseLock = false;
-        /** @type {THREE.Vector3} 鼠标在世界地面的投影点 */
-        this._mouseGroundPoint = new THREE.Vector3();
         /** @type {THREE.Raycaster} */
         this._raycaster = new THREE.Raycaster();
         /** @type {THREE.Vector2} 归一化鼠标坐标 */
         this._mouseNDC = new THREE.Vector2();
-        /** @type {THREE.Plane} 地面平面（Y=0） */
-        this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        /** @type {THREE.Vector3} 头部世界位置（每帧更新） */
+        this._headWorldPos = new THREE.Vector3();
+        /** @type {number} 球面半径（单位） */
+        this._mouseSphereRadius = 10;
+        /** @type {number} 鼠标追踪朝向过渡速度（度/秒，比移动朝向略慢） */
+        this._mouseRotationSpeed = 120;
 
         // ==== 碰撞边界 ====
         /** @type {number} 地板高度（Y 最小值） */
@@ -85,6 +91,20 @@ export class MovementController {
         // ==== 回调 ====
         this._onPositionChange = null;
         this._onRotationChange = null;
+        /** @type {(() => void)|null} 5 秒无操作回调 */
+        this._onIdle = null;
+        /** @type {(() => void)|null} setTarget 时回调（用于同步 body_y_rotation） */
+        this._onSetTarget = null;
+
+        // ==== 闲置检测 ====
+        /** @type {number} 最后移动时间戳（毫秒，仅位置变化时更新） */
+        this._lastMoveTime = performance.now();
+        /** @type {number} 闲置触发阈值（毫秒） */
+        this._idleThreshold = 5000;
+        /** @type {boolean} 是否已触发闲置 */
+        this._idleTriggered = false;
+        /** @type {boolean} 是否曾发生过移动（一次都没有则永不触发闲置） */
+        this._hasEverMoved = false;
 
         this._bindMouseEvents();
     }
@@ -107,6 +127,8 @@ export class MovementController {
 
         // 计算朝向目标方向
         this._updateTargetRotation();
+        this._markMove();
+        if (this._onSetTarget) this._onSetTarget();
     }
 
     /**
@@ -125,6 +147,7 @@ export class MovementController {
         this._isMoving = false;
         this._isFastMoving = false;
         this._notifyMoveState();
+        this._markMove();
     }
 
     /**
@@ -177,7 +200,7 @@ export class MovementController {
      * @param {number} speed 单位/秒
      */
     setMoveSpeed(speed) {
-        this._moveSpeed = Math.max(0.1, speed);
+        this._moveSpeedNormal = Math.max(0.1, speed);
     }
 
     /**
@@ -185,25 +208,42 @@ export class MovementController {
      * @param {number} deltaTime 帧间隔（秒）
      */
     tick(deltaTime) {
-        // 1. 鼠标锁定模式：持续将目标设为鼠标位置
-        if (this._mouseLock && this._mouseTracking) {
-            this._target.copy(this._mouseGroundPoint);
-            this._target.y = Math.max(this._floorY, this._target.y);
-            this._updateTargetRotation();
+        // 1. 更新头部世界位置
+        this._updateHeadPosition();
+
+        // 2. 鼠标追踪：计算球面映射并设置朝向目标
+        if (this._mouseTracking) {
+            this._computeSphereTracking();
         }
 
-        // 2. 移动到目标位置
+        // 3. 鼠标锁定模式：持续将目标设为鼠标球面映射位置
+        if (this._mouseLock && this._mouseTracking) {
+            // 将球面映射点投影到地面作为移动目标
+            this._target.copy(this._headWorldPos);
+            // 使用 current Yaw 计算前方方向，沿该方向推进
+            this._updateTargetRotation();
+            this._markMove();
+            if (this._onSetTarget) this._onSetTarget();
+        }
+
+        // 4. 移动到目标位置
         this._updateMovement(deltaTime);
 
-        // 3. 朝向插值
+        // 5. 朝向插值
         this._updateRotation(deltaTime);
 
-        // 4. 同步 MoLang 变量
+        // 6. 同步 MoLang 变量（target_y_rotation 等供 BodyRotationInterpreter 读取）
         this._syncMolang();
 
-        // 5. 应用到渲染器
+        // 7. 应用位置到渲染器（朝向不再旋转 modelRoot，由动画骨骼驱动）
         this._applyPosition();
-        this._applyRotation();
+
+        // 8. 闲置检测：仅当发生过移动 + 5 秒无新位置变化时触发
+        if (this._hasEverMoved && !this._idleTriggered
+            && (performance.now() - this._lastMoveTime > this._idleThreshold)) {
+            this._idleTriggered = true;
+            if (this._onIdle) this._onIdle();
+        }
     }
 
     // ==== 属性 ====
@@ -242,10 +282,35 @@ export class MovementController {
      */
     onRotationChange(cb) { this._onRotationChange = cb; }
 
+    /**
+     * 设置闲置回调（5 秒无操作时触发一次）
+     * @param {() => void} cb
+     */
+    onIdle(cb) { this._onIdle = cb; }
+
+    /**
+     * 设置 setTarget 回调（移动开始时同步 body_y_rotation）
+     * @param {() => void} cb
+     */
+    onSetTarget(cb) { this._onSetTarget = cb; }
+
+    /**
+     * 标记一次位置移动（重置闲置计时器）
+     * @private
+     */
+    _markMove() {
+        this._lastMoveTime = performance.now();
+        this._idleTriggered = false;
+        this._hasEverMoved = true;
+    }
+
     // ==== 内部实现 ====
 
     /**
      * 更新移动（平滑移动到目标）
+     * 基于当前剩余距离动态切换动画类型与速度：
+     *   距离 > 30 单位 → fast_move 动画，45 单位/秒
+     *   距离 ≤ 30 单位 → move 动画，30 单位/秒
      * @param {number} dt
      * @private
      */
@@ -256,7 +321,7 @@ export class MovementController {
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
         if (dist < this._arrivalDistance) {
-            // 到达目标
+            // 到达目标：关闭移动状态，触发动画淡出
             if (this._isMoving) {
                 this._position.copy(this._target);
                 this._isMoving = false;
@@ -266,8 +331,9 @@ export class MovementController {
             return;
         }
 
-        // 计算移动速度（基于距离自适应：远距离全速，近距离减速）
-        const speed = this._moveSpeed;
+        // 基于当前剩余距离决定移动速度与动画类型
+        const isFast = dist > this._distanceThreshold;
+        const speed = isFast ? this._moveSpeedFast : this._moveSpeedNormal;
         const moveDist = Math.min(dist, speed * dt);
 
         // 归一化方向并移动
@@ -281,16 +347,18 @@ export class MovementController {
             this._position.y = this._floorY;
         }
 
-        // 更新移动状态
+        // 更新移动状态并通知动画系统
         const wasMoving = this._isMoving;
         const wasFast = this._isFastMoving;
         this._isMoving = true;
-        // 快速移动判定：速度超过阈值 或 距离很远
-        this._isFastMoving = speed >= this._fastMoveThreshold || dist > this._fastMoveThreshold * 2;
+        this._isFastMoving = isFast;
 
         if (wasMoving !== this._isMoving || wasFast !== this._isFastMoving) {
             this._notifyMoveState();
         }
+
+        // 标记位置变化（重置闲置计时器）
+        this._markMove();
     }
 
     /**
@@ -344,23 +412,16 @@ export class MovementController {
 
     /**
      * 同步 MoLang 变量
-     *
-     * target_y_rotation 刻意保持 0：偏航已由 modelRoot.rotation.y 直接控制，
-     * 若再传入动画会让 whole 骨骼二次旋转，叠加产生 roll（Z 轴倾斜）。
-     * target_x_rotation 正常传递：俯仰由动画中的 whole/arms 等骨骼消费。
-     *
      * @private
      */
     _syncMolang() {
-        // 计算地面速度
-        const dx = this._target.x - this._position.x;
-        const dz = this._target.z - this._position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        const groundSpeed = this._isMoving ? Math.min(this._moveSpeed, dist) : 0;
+        // 计算地面速度：使用当前动画类型对应的速度
+        const speed = this._isFastMoving ? this._moveSpeedFast : this._moveSpeedNormal;
+        const groundSpeed = this._isMoving ? speed : 0;
 
         this.molang.updateContext({
             target_x_rotation: this._pitch,
-            target_y_rotation: 0,
+            target_y_rotation: this._yaw,
             is_moving: this._isMoving ? 1 : 0,
             is_sprinting: this._isFastMoving ? 1 : 0,
             ground_speed: groundSpeed,
@@ -383,21 +444,10 @@ export class MovementController {
     }
 
     /**
-     * 应用朝向到渲染器
-     *
-     * 偏航（yaw）：直接设置 modelRoot.rotation.y，持久生效，不受动画切换影响
-     * 俯仰（pitch）：通过 MoLang 变量 q.target_x_rotation 传递给动画系统（whole/arms 等骨骼消费）
-     *
-     * 注意：target_y_rotation MoLang 变量刻意保持为 0，避免动画中 whole 骨骼的
-     * q.target_y_rotation 旋转与 modelRoot.rotation.y 双重叠加，在 ZYX Euler 顺序下
-     * 产生 roll 分量导致 Z 轴倾斜。
-     *
+     * 应用朝向变化回调（不再旋转 modelRoot；偏航由动画骨骼 whole 引用 q.body_y_rotation 驱动）
      * @private
      */
     _applyRotation() {
-        if (this.renderer && this.renderer.modelRoot) {
-            this.renderer.modelRoot.rotation.y = this._yaw * Math.PI / 180;
-        }
         if (this._onRotationChange) {
             this._onRotationChange(this.currentRotation);
         }
@@ -426,39 +476,108 @@ export class MovementController {
     }
 
     /**
-     * 鼠标移动处理
+     * 鼠标移动处理 — 仅更新 NDC 坐标，球面计算在 tick() 中每帧执行
      * @param {MouseEvent} e
      * @private
      */
     _onMouseMove(e) {
-        if (!this._mouseTracking) return;
-
         const canvas = this.renderer?.canvas;
         if (!canvas) return;
 
-        // 计算归一化设备坐标
         const rect = canvas.getBoundingClientRect();
         this._mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         this._mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
 
-        // 射线投射到地面平面
-        this._raycaster.setFromCamera(this._mouseNDC, this.renderer.camera);
-        const hitPoint = new THREE.Vector3();
-        this._raycaster.ray.intersectPlane(this._groundPlane, hitPoint);
-
-        if (hitPoint) {
-            this._mouseGroundPoint.copy(hitPoint);
+    /**
+     * 更新头部世界位置（从 renderer 获取 headCheek 骨骼的全局位置）
+     * @private
+     */
+    _updateHeadPosition() {
+        if (this.renderer?.getHeadWorldPosition) {
+            const pos = this.renderer.getHeadWorldPosition();
+            if (pos) this._headWorldPos.copy(pos);
         }
+    }
 
-        // 鼠标追踪模式（非锁定）：仅更新朝向，不移动
-        if (this._mouseTracking && !this._mouseLock) {
-            // 计算朝向鼠标方向（+180° 翻转，同 _updateTargetRotation）
-            const dx = this._mouseGroundPoint.x - this._position.x;
-            const dz = this._mouseGroundPoint.z - this._position.z;
-            if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
-                this._targetYaw = Math.atan2(dx, dz) * 180 / Math.PI + 180;
+    /**
+     * 球面映射追踪 — 以头部为圆心、半径 10 构建球面，将鼠标映射到球面上
+     * 计算偏航与俯仰，平滑过渡 target_yaw / target_pitch
+     * @private
+     */
+    _computeSphereTracking() {
+        const camera = this.renderer?.camera;
+        if (!camera) return;
+
+        // 从相机通过鼠标 NDC 发出射线
+        this._raycaster.setFromCamera(this._mouseNDC, camera);
+        const ray = this._raycaster.ray;
+
+        // 射线与球面求交（球心 = 头部位置，半径 = 10）
+        // 参考: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection
+        const L = ray.origin.clone().sub(this._headWorldPos);
+        const a = ray.direction.dot(ray.direction); // 应为 1
+        const b = 2 * ray.direction.dot(L);
+        const c = L.dot(L) - this._mouseSphereRadius * this._mouseSphereRadius;
+        const discriminant = b * b - 4 * a * c;
+
+        let hitPoint;
+        if (discriminant >= 0) {
+            // 射线与球面相交，取最近的交点
+            const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+            if (t > 0) {
+                hitPoint = ray.origin.clone().addScaledVector(ray.direction, t);
+            } else {
+                // 交点在相机后方，回退到最近点
+                const tNear = (-b + Math.sqrt(discriminant)) / (2 * a);
+                hitPoint = ray.origin.clone().addScaledVector(ray.direction, tNear);
+            }
+        } else {
+            // 射线未命中球面：取球面上离射线最近的点
+            const tCa = -ray.direction.dot(L) / a;
+            const closestOnRay = ray.origin.clone().addScaledVector(ray.direction, tCa);
+            const dirToSphere = this._headWorldPos.clone().sub(closestOnRay);
+            const distToSphere = dirToSphere.length();
+            if (distToSphere < 0.001) {
+                // 射线穿过球心，取球面上方一点
+                hitPoint = this._headWorldPos.clone().add(
+                    new THREE.Vector3(0, this._mouseSphereRadius, 0)
+                );
+            } else {
+                dirToSphere.normalize();
+                hitPoint = this._headWorldPos.clone().addScaledVector(dirToSphere, -this._mouseSphereRadius);
             }
         }
+
+        // 从头部到命中点的方向向量
+        const dir = hitPoint.clone().sub(this._headWorldPos);
+        const dist = dir.length();
+        if (dist < 0.001) return;
+
+        dir.normalize();
+
+        // 计算偏航（水平角）：模型正面朝 -Z，加 180° 翻转
+        // yaw = atan2(dir.x, -dir.z) → 标准 atan2(X, Z) 的朝向
+        // 但模型正面朝 -Z，所以要加 180°
+        let targetYaw = Math.atan2(dir.x, dir.z) * 180 / Math.PI + 180;
+
+        // 计算俯仰（垂直角）
+        const horizontalDist = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+        let targetPitch = Math.atan2(dir.y, horizontalDist) * 180 / Math.PI;
+        targetPitch = Math.max(-89, Math.min(89, targetPitch));
+
+        // 平滑过渡 target_yaw / target_pitch（使用较慢的鼠标追踪速度）
+        let yawDiff = targetYaw - this._targetYaw;
+        while (yawDiff > 180) yawDiff -= 360;
+        while (yawDiff < -180) yawDiff += 360;
+
+        const maxStep = this._mouseRotationSpeed * (1 / 60); // 每帧最大步长
+        const yawStep = Math.abs(yawDiff) <= maxStep ? yawDiff : Math.sign(yawDiff) * maxStep;
+        const pitchDiff = targetPitch - this._targetPitch;
+        const pitchStep = Math.abs(pitchDiff) <= maxStep ? pitchDiff : Math.sign(pitchDiff) * maxStep;
+
+        this._targetYaw += yawStep;
+        this._targetPitch += pitchStep;
     }
 
     /**

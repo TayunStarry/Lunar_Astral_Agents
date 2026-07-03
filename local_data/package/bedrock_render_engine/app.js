@@ -16,10 +16,12 @@ import { AnimationRuntime } from './core/animation-runtime.js';
 import { AnimGroup, AnimGroupRuntime } from './core/anim-group-runtime.js';
 import { SpecialAnimationRuntime } from './core/special-animation-runtime.js';
 import { MovementController } from './core/movement-controller.js';
+import { BodyRotationInterpreter } from './core/body-rotation-interpreter.js';
 import { FileLoader } from './ui/file-loader.js';
 import { AnimGroupManager } from './ui/anim-group-manager.js';
 import { BoneHierarchyPanel } from './ui/bone-hierarchy.js';
 import { MovementPanel } from './ui/movement-panel.js';
+import { MolangPanel } from './ui/molang-panel.js';
 import * as THREE from './vendor/three.module.js';
 
 /**
@@ -40,6 +42,8 @@ class App {
         this.specialAnimRuntime = null;
         /** @type {MovementController|null} */
         this.movementController = null;
+        /** @type {BodyRotationInterpreter|null} */
+        this.bodyRotationInterpreter = null;
 
         // ==== UI 模块 ====
         /** @type {FileLoader|null} */
@@ -50,6 +54,8 @@ class App {
         this.boneHierarchyPanel = null;
         /** @type {MovementPanel|null} */
         this.movementPanel = null;
+        /** @type {MolangPanel|null} */
+        this.molangPanel = null;
 
         // ==== 状态 ====
         this.currentModel = null;
@@ -66,6 +72,7 @@ class App {
             btnTheme: document.getElementById('btn-theme'),
             btnHelp: document.getElementById('btn-help'),
             btnMovement: document.getElementById('btn-movement'),
+            btnMolang: document.getElementById('btn-molang'),
             hierarchyTree: document.getElementById('hierarchy-tree'),
             animGroupContainer: document.getElementById('anim-group-container'),
             statusIcon: document.getElementById('status-icon'),
@@ -119,14 +126,30 @@ class App {
             }
         });
 
-        // 6. 挂载到渲染循环（顺序：组动画 → 特殊动画叠加 → 移动控制）
+        // 6. 创建身体旋转解释器（直接操作 modelRoot.rotation.y + headCheek 骨骼补偿）
+        //    outliner 在模型加载后通过 setOutliner 设置，再调用 findBones()
+        this.bodyRotationInterpreter = new BodyRotationInterpreter(this.molang, this.renderer, null);
+
+        // 7. 注册移动方向同步：setTarget 时立即同步 body_y_rotation，避免"屁股朝目标"
+        this.movementController.onSetTarget(() => {
+            this.bodyRotationInterpreter?.syncToTarget();
+        });
+
+        // 8. 注册闲置回调：5 秒无操作 → 摄像头平滑移动到角色正面
+        this.movementController.onIdle(() => {
+            this.renderer?.moveCameraToFront(1.5);
+        });
+
+        // 9. 挂载到渲染循环（顺序：组动画 → 特殊动画叠加 → 移动控制 → 身体旋转解释 → MoLang 面板刷新）
         this.renderer.onUpdate = (dt) => {
             this.animGroupRuntime.tick(dt);
             this.specialAnimRuntime?.tick(dt);
             this.movementController?.tick(dt);
+            this.bodyRotationInterpreter?.tick(dt);
+            this.molangPanel?.refresh();
         };
 
-        // 7. 初始化 UI 模块
+        // 10. 初始化 UI 模块
         this.fileLoader = new FileLoader({
             onLoadBbmodel: (f) => this.loadBbmodelFromFile(f),
             onLoadAnimations: (fs) => this.loadAnimationsFromFiles(fs),
@@ -149,17 +172,20 @@ class App {
             (bone) => this.highlightBone(bone)
         );
 
-        // 8. 创建移动控制面板
+        // 10. 创建移动控制面板
         this.movementPanel = new MovementPanel({
             controller: this.movementController,
             onToast: (msg, type) => this.showToast(msg, type)
         });
 
-        // 9. 绑定事件
+        // 11. 创建 MoLang 调试面板
+        this.molangPanel = new MolangPanel({ molang: this.molang });
+
+        // 12. 绑定事件
         this.bindEvents();
         this.startStatusUpdate();
 
-        // 10. 自动加载 model 文件夹资源
+        // 13. 自动加载 model 文件夹资源
         await this._autoLoadResources();
 
         console.log('[bedrock_render_engine] 初始化完成（动画组架构）');
@@ -349,6 +375,12 @@ class App {
         const bones = [];
         result.outliner.traverseBones(bone => bones.push(bone));
         this.animGroupManager?.setAvailableBones(bones);
+
+        // 更新身体旋转解释器的骨骼引用（用于直接操作 headCheek 等骨骼）
+        if (this.bodyRotationInterpreter) {
+            this.bodyRotationInterpreter.outliner = result.outliner;
+            this.bodyRotationInterpreter.findBones();
+        }
 
         const boneCount = result.outliner.boneCount;
         const cubeCount = result.outliner.cubeCount;
@@ -567,6 +599,13 @@ class App {
             });
         }
 
+        // MoLang 调试面板切换
+        if (this.elements.btnMolang) {
+            this.elements.btnMolang.addEventListener('click', () => {
+                this.molangPanel?.toggle();
+            });
+        }
+
         // 帮助
         this.elements.btnHelp.addEventListener('click', () => {
             this.showModal(`
@@ -595,6 +634,9 @@ class App {
                         <li><code>.move</code>：模型移动时循环播放</li>
                         <li><code>.fast_move</code>：模型长距离/快速移动时循环播放</li>
                     </ul>
+                    <p><b>身体旋转追踪</b>：设置朝向后，头部立即转向目标（<code>q.target_y_rotation</code>），身体缓慢转动到面朝方向（<code>q.body_y_rotation</code>）；当头身角度差 > 35° 时强制加速身体旋转</p>
+                    <p><b>摄像头自动归位</b>：5 秒无操作后，摄像头平滑移动到角色正面</p>
+                    <p><b>MoLang 调试</b>：点击右下角 <i class="fas fa-code"></i> 按钮打开调试面板，实时显示所有 MoLang 变量值</p>
                     <p><b>动画名称</b>：所有动画仅显示最后一段（如 standby_animation-0）</p>
                     <p><b>骨骼层级</b>：左侧面板默认全折叠，点击箭头展开，点击名称高亮</p>
                     <p><b>配置导入导出</b>：动画组面板工具栏 <i class="fas fa-file-import"></i>/<i class="fas fa-file-export"></i> 按钮导入导出 JSON 配置</p>

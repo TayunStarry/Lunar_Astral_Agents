@@ -65,6 +65,10 @@ export class SpecialAnimationRuntime {
         /** @type {boolean} 模型是否正在快速移动 */
         this._isFastMoving = false;
 
+        // 移动动画涉及的骨骼名列表（用于停用时重置到 rest pose）
+        /** @type {string[]} */
+        this._moveAffectedBones = [];
+
         this._scheduleNextBlink();
     }
 
@@ -83,6 +87,7 @@ export class SpecialAnimationRuntime {
         this._movePlaying = null;
         this._moveFade = 0;
         this._moveFadingOut = false;
+        this._moveAffectedBones = [];
     }
 
     /**
@@ -169,14 +174,17 @@ export class SpecialAnimationRuntime {
      */
     _startMoveAnimation() {
         // 优先选择 fast_move，其次 move
-        if (this._isFastMoving && this._fastMoveAnims.length > 0) {
-            this._movePlaying = this._fastMoveAnims[Math.floor(Math.random() * this._fastMoveAnims.length)];
-        } else if (this._moveAnims.length > 0) {
-            this._movePlaying = this._moveAnims[Math.floor(Math.random() * this._moveAnims.length)];
-        }
+        const animName = this._isFastMoving && this._fastMoveAnims.length > 0
+            ? this._fastMoveAnims[Math.floor(Math.random() * this._fastMoveAnims.length)]
+            : this._moveAnims[Math.floor(Math.random() * this._moveAnims.length)];
+        this._movePlaying = animName;
         this._moveTime = 0;
         this._moveFade = 0;
         this._moveFadingOut = false;
+
+        // 记录该动画涉及的所有骨骼（用于停用时重置）
+        const anim = this.animations.get(animName);
+        this._moveAffectedBones = anim ? Array.from(anim.bones.keys()) : [];
     }
 
     /**
@@ -187,15 +195,17 @@ export class SpecialAnimationRuntime {
     _tickMove(dt) {
         if (!this._movePlaying) return;
 
-        // 切换 fast_move ↔ move（速度变化时）
+        // 切换 fast_move ↔ move（速度变化时，保持 fade 值避免闪烁）
         const desiredAnim = this._isFastMoving
             ? (this._fastMoveAnims[0] || this._moveAnims[0])
             : (this._moveAnims[0] || this._fastMoveAnims[0]);
         if (desiredAnim && desiredAnim !== this._movePlaying && !this._moveFadingOut) {
-            // 切换动画类型
+            // 切换动画类型：保持当前 fade 权重，避免重新淡入的闪烁
             this._movePlaying = desiredAnim;
             this._moveTime = 0;
-            this._moveFade = 0;
+            // 更新受影响骨骼列表
+            const newAnim = this.animations.get(desiredAnim);
+            this._moveAffectedBones = newAnim ? Array.from(newAnim.bones.keys()) : [];
         }
 
         const anim = this.animations.get(this._movePlaying);
@@ -210,8 +220,11 @@ export class SpecialAnimationRuntime {
             this._moveFade -= dt * fadeSpeed;
             if (this._moveFade <= 0) {
                 this._moveFade = 0;
+                // 停用移动动画：将涉及的骨骼显式重置到 rest pose
+                this._resetMoveBonesToRest();
                 this._movePlaying = null;
                 this._moveFadingOut = false;
+                this._moveAffectedBones = [];
                 return;
             }
         } else {
@@ -230,6 +243,34 @@ export class SpecialAnimationRuntime {
     }
 
     // ==== 动画应用 ====
+
+    /**
+     * 将移动动画涉及的骨骼重置到 rest pose
+     * 解决移动动画停用后骨骼停留在行走姿态的问题（类似动画组的"停用"流程）
+     * @private
+     */
+    _resetMoveBonesToRest() {
+        if (!this.animRuntime || !this.animRuntime.outliner) return;
+        const boneMap = this.animRuntime.boneMap;
+        const restPoses = this.animRuntime._restPoses;
+        if (!boneMap || !restPoses) return;
+
+        for (const boneName of this._moveAffectedBones) {
+            const bone = boneMap.get(boneName);
+            if (!bone || !bone.sceneObject) continue;
+
+            const rest = restPoses.get(boneName);
+            const restRot = rest ? rest.rotation : [0, 0, 0];
+            const restPos = rest ? rest.position : [0, 0, 0];
+            const restScale = rest ? rest.scale : [1, 1, 1];
+
+            bone.sceneObject.rotation.order = 'ZYX';
+            bone.sceneObject.rotation.set(restRot[0], restRot[1], restRot[2]);
+            bone.sceneObject.position.set(restPos[0], restPos[1], restPos[2]);
+            bone.sceneObject.scale.set(restScale[0], restScale[1], restScale[2]);
+            bone.sceneObject.visible = true;
+        }
+    }
 
     /**
      * 将特殊动画应用到骨骼（叠加在 rest pose 之上，覆盖组动画对相同骨骼的设置）

@@ -144,48 +144,22 @@
 					"rotation": ["(q.vertical_speed>0)?0:-math.clamp((2*q.vertical_speed),-20,0)/2", 0, 0]
 				},
 				"rightLeg": {
-					"rotation": ["q.target_y_rotation > 0 ? q.target_y_rotation * -0.35 : 0", 0, "q.target_y_rotation > 0 ? q.target_y_rotation * 0.1 : 0"]
-				},
-				"rightLowerLeg": {
-					"rotation": ["q.target_y_rotation > 0 ? q.target_y_rotation * 0.75 : 0", 0, 0]
-				},
-				"rightFoot": {
-					"rotation": ["q.target_y_rotation > 0 ? q.target_y_rotation * 0.35 : 0", 0, 0]
-				},
-				"rightSole": {
-					"rotation": ["q.target_y_rotation > 0 ? q.target_y_rotation * -0.35 : 0", 0, 0]
-				},
-				"leftLeg": {
-					"rotation": ["q.target_y_rotation < 0 ? q.target_y_rotation * 0.35 : 0", 0, "q.target_y_rotation < 0 ? q.target_y_rotation * 0.1 : 0"]
+					"rotation": [0, 0, "q.target_y_rotation != q.body_y_rotation ? 5 : 0"]
 				},
 				"leftLowerLeg": {
-					"rotation": ["q.target_y_rotation < 0 ? q.target_y_rotation * -0.75 : 0", 0, 0]
-				},
-				"leftFoot": {
-					"rotation": ["q.target_y_rotation < 0 ? q.target_y_rotation * -0.35 : 0", 0, 0]
-				},
-				"leftSole": {
-					"rotation": ["q.target_y_rotation < 0 ? q.target_y_rotation * 0.35 : 0", 0, 0]
+					"rotation": ["-q.target_y_rotation != q.body_y_rotation ? -45 : -0", 0, 0]
 				},
 				"rightArm": {
-					"rotation": [
-						"q.target_y_rotation < 0 ? q.target_y_rotation * -0.35 : 0",
-						0,
-						"q.target_y_rotation < 0 ? (q.target_y_rotation * -0.15) + (math.cos(q.life_time * 100) * 3) + 3 : (math.cos(q.life_time * 100) * 3) + 3"
-					]
+					"rotation": [0, 0, "(math.cos(q.life_time * 100) * 3) + 3"]
 				},
 				"rightForeArm": {
-					"rotation": ["q.target_y_rotation < 0 ? q.target_y_rotation * 0.65 : q.target_y_rotation * -0.5", 0, 0]
+					"rotation": [-10, 0, 0]
 				},
 				"leftArm": {
-					"rotation": [
-						"q.target_y_rotation > 0 ? q.target_y_rotation * 0.35 : 0",
-						0,
-						"q.target_y_rotation < 0 ? (q.target_y_rotation * 0.15) + (math.cos(q.life_time * 100) * -3) - 3 : (math.cos(q.life_time * 100) * -3) - 3"
-					]
+					"rotation": [0, 0, "(math.cos(q.life_time * 100) * -3) - 3"]
 				},
 				"leftForeArm": {
-					"rotation": ["q.target_y_rotation > 0 ? q.target_y_rotation * -0.65 : q.target_y_rotation * 0.5", 0, 0]
+					"rotation": [-10, 0, 0]
 				},
 				"tail_0": {
 					"rotation": ["-35 + (math.cos(q.life_time * 50) * 10)", "(math.cos(q.life_time * 50) * 20)", 0]
@@ -370,7 +344,7 @@
 					"scale": [1.2, 1, 2.5]
 				},
 				"character": {
-					"rotation": ["math.clamp(q.ground_speed, 0, 60) / 3", 0, "math.clamp(q.target_y_rotation, -5, 5)"]
+					"rotation": ["math.clamp(q.ground_speed, 0, 60) / 3", 0, 0]
 				},
 				"rightitem": {
 					"rotation": [45, 0, 0]
@@ -973,7 +947,7 @@
 			"animation_length": 0.75,
 			"bones": {
 				"body": {
-					"rotation": ["math.clamp(q.target_x_rotation, -3.5, 3.5)", 0, "math.clamp(q.target_y_rotation, -3.5, 3.5)"]
+					"rotation": ["math.clamp(q.target_x_rotation, -3.5, 3.5)", 0, 0]
 				},
 				"character": {
 					"position": {
@@ -1844,7 +1818,7 @@
 					"position": [0, -1, 0]
 				},
 				"body": {
-					"rotation": ["math.clamp(q.target_x_rotation, -3.5, 3.5)", 0, "math.clamp(q.target_y_rotation, -3.5, 3.5)"]
+					"rotation": ["math.clamp(q.target_x_rotation, -3.5, 3.5)", 0, 0]
 				},
 				"catEarsLeft": {
 					"rotation": {
@@ -5264,20 +5238,6 @@
 				"progressBar_7": {
 					"rotation": [0, "q.life_time * 50", 0],
 					"scale": 1
-				}
-			}
-		},
-		"animation.player_to_individuation.look_target": {
-			"loop": true,
-			"bones": {
-				"headCheek": {
-					"rotation": ["q.is_gliding ? -75 : q.target_x_rotation", "q.target_y_rotation", 0]
-				},
-				"RightLongHair": {
-					"rotation": ["-q.target_x_rotation + (q.is_riding ? 0 : math.clamp(q.ground_speed, -1, 3) * 3) + math.cos(100 * q.life_time) * 3", 0, 0]
-				},
-				"LeftLongHair": {
-					"rotation": ["-q.target_x_rotation + (q.is_riding ? 0 : math.clamp(q.ground_speed, -1, 3) * 3) + math.cos(125 * q.life_time) * 3", 0, 0]
 				}
 			}
 		},
