@@ -175,12 +175,29 @@ export class MovementController {
 
     /**
      * 启用/禁用鼠标追踪
+     * 启用时：重置朝向为 0，锁定摄像头到 (4, 28.5, 73) 聚焦角色
+     * 禁用时：解锁摄像头，恢复轨道控制
      * @param {boolean} enabled
      */
     setMouseTracking(enabled) {
         this._mouseTracking = enabled;
-        if (!enabled) {
+        if (enabled) {
+            // a. 重置朝向为 0
+            this._targetYaw = 0;
+            this._targetPitch = 0;
+            this._yaw = 0;
+            this._pitch = 0;
+
+            // b. 锁定摄像头到角色正前方（-Z 方向），全身出镜
+            if (this.renderer?.lockCamera) {
+                this.renderer.lockCamera(10, 20, -120);
+            }
+        } else {
             this._mouseLock = false;
+            // 解锁摄像头
+            if (this.renderer?.unlockCamera) {
+                this.renderer.unlockCamera();
+            }
         }
     }
 
@@ -560,6 +577,12 @@ export class MovementController {
         // yaw = atan2(dir.x, -dir.z) → 标准 atan2(X, Z) 的朝向
         // 但模型正面朝 -Z，所以要加 180°
         let targetYaw = Math.atan2(dir.x, dir.z) * 180 / Math.PI + 180;
+
+        // d. 偏航限制在 [-45°, 45°] 范围内（鼠标追踪模式下）
+        // 规范到 [-180, 180] 再截断
+        while (targetYaw > 180) targetYaw -= 360;
+        while (targetYaw < -180) targetYaw += 360;
+        targetYaw = Math.max(-45, Math.min(45, targetYaw));
 
         // 计算俯仰（垂直角）
         const horizontalDist = Math.sqrt(dir.x * dir.x + dir.z * dir.z);

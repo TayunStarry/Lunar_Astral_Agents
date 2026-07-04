@@ -143,12 +143,6 @@
 				"ponytailRoot": {
 					"rotation": ["(q.vertical_speed>0)?0:-math.clamp((2*q.vertical_speed),-20,0)/2", 0, 0]
 				},
-				"rightLeg": {
-					"rotation": [0, 0, "q.target_y_rotation != q.body_y_rotation ? 5 : 0"]
-				},
-				"leftLowerLeg": {
-					"rotation": ["-q.target_y_rotation != q.body_y_rotation ? -45 : -0", 0, 0]
-				},
 				"rightArm": {
 					"rotation": [0, 0, "(math.cos(q.life_time * 100) * 3) + 3"]
 				},

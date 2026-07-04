@@ -57,6 +57,14 @@ export class Renderer {
         // 简易轨道控制器
         this.controls = new SimpleOrbitControls(canvas, this.camera);
 
+        // 摄像头锁定状态（鼠标追踪模式使用）
+        /** @type {boolean} 是否锁定摄像头（禁止轨道控制） */
+        this._cameraLocked = false;
+        /** @type {THREE.Vector3} 锁定时的相机位置 */
+        this._lockedCameraPos = new THREE.Vector3();
+        /** @type {THREE.Vector3} 锁定时的焦点位置 */
+        this._lockedCameraTarget = new THREE.Vector3();
+
         // 点击跳过登场动画
         canvas.addEventListener('pointerdown', () => {
             if (this._introActive) this.skipIntroAnimation();
@@ -188,6 +196,12 @@ export class Renderer {
                 this.controls.enabled = this._introSavedControlsEnabled;
                 this.controls.update();
             }
+        } else if (this._cameraLocked) {
+            // 摄像头锁定：强制保持位置和朝向，禁止轨道控制
+            this.camera.position.copy(this._lockedCameraPos);
+            this.controls.target.copy(this._lockedCameraTarget);
+            this.camera.lookAt(this._lockedCameraTarget);
+            this.controls.enabled = false;
         } else {
             this.controls.update();
         }
@@ -628,6 +642,60 @@ export class Renderer {
             this.modelRoot.position.z
         );
     }
+
+    /**
+     * 锁定摄像头到指定位置和焦点
+     * 在锁定期间，轨道控制器被禁用，摄像头保持固定姿态
+     * @param {number} x 相机位置 X
+     * @param {number} y 相机位置 Y
+     * @param {number} z 相机位置 Z
+     * @param {{x?: number, y?: number, z?: number}} target 焦点位置（默认为模型中心）
+     */
+    lockCamera(x, y, z, target) {
+        // 取消登场动画
+        if (this._introActive) this.skipIntroAnimation();
+
+        this._lockedCameraPos.set(x, y, z);
+        if (target) {
+            this._lockedCameraTarget.set(target.x || 0, target.y || 0, target.z || 0);
+        } else {
+            // 默认聚焦模型中心
+            const box = new THREE.Box3();
+            box.makeEmpty();
+            this.modelRoot.traverse((obj) => {
+                if (obj.isMesh) box.expandByObject(obj);
+            });
+            if (!box.isEmpty()) {
+                box.getCenter(this._lockedCameraTarget);
+            } else {
+                this._lockedCameraTarget.copy(this.modelRoot.position);
+            }
+        }
+        this._cameraLocked = true;
+
+        // 立即移动相机到锁定位置
+        this.camera.position.copy(this._lockedCameraPos);
+        this.controls.target.copy(this._lockedCameraTarget);
+        this.camera.lookAt(this._lockedCameraTarget);
+    }
+
+    /**
+     * 解锁摄像头，恢复轨道控制
+     * 同步控制器内部球面状态，避免闪回
+     */
+    unlockCamera() {
+        if (!this._cameraLocked) return;
+        this._cameraLocked = false;
+
+        // 同步控制器内部球面状态
+        const offset = this.camera.position.clone().sub(this.controls.target);
+        this.controls._spherical.setFromVector3(offset);
+        this.controls.enabled = true;
+        this.controls.update();
+    }
+
+    /** @returns {boolean} 摄像头是否处于锁定状态 */
+    get cameraLocked() { return this._cameraLocked; }
 
     /**
      * 设置相机预设视角

@@ -5,7 +5,6 @@
 //   - 朝向控制：偏航/俯仰滑块 + 精确输入
 //   - 鼠标追踪：启用/禁用开关
 //   - 自动锁定：锁定目标为鼠标位置
-//   - 移动速度：滑块调节
 //
 // 面板浮动在视口左侧（骨骼层级 tab 下方），默认隐藏
 
@@ -99,17 +98,6 @@ export class MovementPanel {
                 <input type="range" id="mp-pitch" min="-89" max="89" step="1" value="0" style="width:100%;height:16px">
             </div>
 
-            <!-- 移动速度 -->
-            <div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-                    <span style="font-size:10px;color:var(--text-secondary)">
-                        <i class="fas fa-tachometer-alt"></i> 移动速度
-                    </span>
-                    <span id="mp-speed-val" style="font-size:11px;font-family:monospace;color:var(--text-primary)">5.0</span>
-                </div>
-                <input type="range" id="mp-speed" min="1" max="30" step="0.5" value="5" style="width:100%;height:16px">
-            </div>
-
             <!-- 鼠标追踪 -->
             <div style="border-top:1px solid var(--border-color);padding-top:8px;display:flex;flex-direction:column;gap:6px">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -188,15 +176,6 @@ export class MovementPanel {
             const v = parseFloat(e.target.value);
             pitchVal.textContent = v.toFixed(0) + '°';
             this.controller.setRotation(parseFloat(yawSlider.value), v);
-        });
-
-        // 移动速度
-        const speedSlider = c.querySelector('#mp-speed');
-        const speedVal = c.querySelector('#mp-speed-val');
-        speedSlider.addEventListener('input', (e) => {
-            const v = parseFloat(e.target.value);
-            speedVal.textContent = v.toFixed(1);
-            this.controller.setMoveSpeed(v);
         });
 
         // 鼠标追踪开关
