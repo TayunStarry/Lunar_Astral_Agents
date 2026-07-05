@@ -1,0 +1,228 @@
+{
+  "format_version": "1.0.0",
+  "animation_groups": {
+    "groups": [
+      {
+        "name": "默认组",
+        "isDefault": true,
+        "animations": [
+          "animation.player_to_individuation.initialization"
+        ],
+        "boneVisibility": {
+          "suspensionPoint": true,
+          "whole": true,
+          "progressBars": false,
+          "progressBar_0": true,
+          "progressBar_1": true,
+          "progressBar_2": true,
+          "selectBox": false,
+          "speedBar": false,
+          "character": true,
+          "speedBarFrame": false,
+          "swingSeat": false,
+          "frontSight": false,
+          "flowerRopeGroup": false
+        },
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "步行",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.move"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "奔跑",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.fast_move"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "冲刺",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.super_move"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "射击",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.use_crossbow",
+          "animation.player_to_individuation.charged_crossbow"
+        ],
+        "boneVisibility": {
+          "selectBox": true,
+          "frontSight": true,
+          "progressBars": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0.5
+      },
+      {
+        "name": "荡秋千",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.standby_animation-1"
+        ],
+        "boneVisibility": {
+          "swingSeat": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0.5
+      },
+      {
+        "name": "翻花绳",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.standby_animation-0"
+        ],
+        "boneVisibility": {
+          "flowerRopeGroup": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 1
+      },
+      {
+        "name": "游泳",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.swim"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 1,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "浮在水中",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.float_swim"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "爬行",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.creep"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.5,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "潜行",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.sneak_move"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "起飞",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.jump",
+          "animation.player_to_individuation.flight"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "举起三叉戟",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.use_trident"
+        ],
+        "boneVisibility": {
+          "progressBars": true,
+          "selectBox": true,
+          "frontSight": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0.3
+      },
+      {
+        "name": "快速射击",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.use_bow"
+        ],
+        "boneVisibility": {
+          "progressBars": true,
+          "selectBox": true,
+          "frontSight": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0.3
+      },
+      {
+        "name": "眨眼",
+        "isDefault": false,
+        "animations": [],
+        "boneVisibility": {},
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "睡觉",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.sleep"
+        ],
+        "boneVisibility": {},
+        "loopMode": "repeat",
+        "transitionDuration": 1,
+        "visibilityDelay": 0
+      },
+      {
+        "name": "长枪蓄力",
+        "isDefault": false,
+        "animations": [
+          "animation.player_to_individuation.use_spear"
+        ],
+        "boneVisibility": {
+          "progressBars": true,
+          "selectBox": true,
+          "frontSight": true
+        },
+        "loopMode": "hold",
+        "transitionDuration": 0.3,
+        "visibilityDelay": 0.5
+      }
+    ]
+  }
+}

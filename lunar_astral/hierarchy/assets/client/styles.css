@@ -129,8 +129,8 @@ body {
 	transition: var(--transition);
 }
 
-/* Live2D 展示区：占据剩余所有空间 */
-.live2d-wrapper {
+/* 3D渲染器展示区：占据剩余所有空间 */
+.renderer-wrapper {
 	flex: 1;
 	display: flex;
 	align-items: center;
@@ -139,7 +139,7 @@ body {
 	overflow: hidden;
 }
 
-.live2d-container {
+.renderer-container {
 	width: 100%;
 	height: 100%;
 	position: relative;
@@ -149,14 +149,15 @@ body {
 	box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
-#live2dCanvas {
+#rendererFrame {
 	width: 100%;
 	height: 100%;
+	border: none;
 	display: block;
 }
 
-/* 语音识别状态标识  */
-.live2d-model-intel {
+/* 语音识别状态标识 */
+.model-intel {
 	position: absolute;
 	left: 10px;
 	top: 10px;
@@ -177,15 +178,16 @@ body {
 	opacity: 0;
 	transform: translateY(8px);
 	transition: opacity 0.35s ease, transform 0.35s ease;
+	z-index: 10;
 }
 
-.live2d-model-intel.visible {
+.model-intel.visible {
 	opacity: 1;
 	transform: translateY(0);
 }
 
 /* 语音识别脉冲动画 */
-.live2d-model-intel.listening::before {
+.model-intel.listening::before {
 	content: '';
 	display: inline-block;
 	width: 8px;
@@ -200,117 +202,6 @@ body {
 @keyframes voice-dot-pulse {
 	0%, 100% { opacity: 1; transform: scale(1); }
 	50% { opacity: 0.4; transform: scale(1.5); }
-}
-
-/* ========== 触摸交互区域 ========== */
-.touch-interaction {
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	z-index: 10;
-	background: transparent;
-	/* 父层捕获所有点击（避免穿透到canvas），由JS通过事件委托判断分区 */
-	cursor: default;
-	pointer-events: auto;
-	-webkit-tap-highlight-color: transparent;
-	-webkit-user-select: none;
-	user-select: none;
-	/* 5行×3列分区网格，对应模型不同身体部位 */
-	display: grid;
-	grid-template-columns: 1fr 1fr 1fr;
-	grid-template-rows: 1fr 1fr 1fr 1fr 1fr;
-	grid-template-areas:
-		". face_hair ."
-		"right_arm chest_belly left_arm"
-		"right_hand hip left_hand"
-		". thigh ."
-		". leg_foot .";
-}
-
-/* 分区触摸检测层：每个区域负责独立身体部位的触摸响应 */
-.touch-region {
-	background: transparent;
-	cursor: pointer;
-	pointer-events: auto;
-	-webkit-tap-highlight-color: transparent;
-	-webkit-user-select: none;
-	user-select: none;
-}
-
-/* 各区域绑定到网格命名区域，确保边界清晰无重叠 */
-.touch-region[data-region="face_hair"] { grid-area: face_hair; }
-.touch-region[data-region="right_arm"] { grid-area: right_arm; }
-.touch-region[data-region="chest_belly"] { grid-area: chest_belly; }
-.touch-region[data-region="left_arm"] { grid-area: left_arm; }
-.touch-region[data-region="right_hand"] { grid-area: right_hand; }
-.touch-region[data-region="hip"] { grid-area: hip; }
-.touch-region[data-region="left_hand"] { grid-area: left_hand; }
-.touch-region[data-region="thigh"] { grid-area: thigh; }
-.touch-region[data-region="leg_foot"] { grid-area: leg_foot; }
-
-/* 触摸涟漪反馈动画 */
-.touch-ripple {
-	position: absolute;
-	width: 0;
-	height: 0;
-	border-radius: 50%;
-	background: radial-gradient(circle, rgba(157, 107, 255, 0.5) 0%, rgba(157, 107, 255, 0.1) 60%, transparent 70%);
-	transform: translate(-50%, -50%);
-	pointer-events: none;
-	/* 不阻挡后续触摸事件 */
-	opacity: 0;
-	transition: none;
-	/* 确保涟漪显示在分区检测层之上 */
-	z-index: 20;
-}
-
-.touch-ripple.active {
-	animation: touch-ripple-expand 0.6s ease-out forwards;
-}
-
-@keyframes touch-ripple-expand {
-	0% {
-		width: 0;
-		height: 0;
-		opacity: 1;
-	}
-
-	100% {
-		width: 350px;
-		height: 350px;
-		opacity: 0;
-	}
-}
-
-/* 触摸交互区域的微光呼吸动画（提示用户可交互） */
-.touch-interaction::after {
-	content: '';
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
-	width: 60px;
-	height: 60px;
-	border-radius: 50%;
-	background: radial-gradient(circle, rgba(157, 107, 255, 0.15) 0%, transparent 70%);
-	pointer-events: none;
-	animation: touch-glow-pulse 3s ease-in-out infinite;
-}
-
-@keyframes touch-glow-pulse {
-
-	0%,
-	100% {
-		transform: translate(-50%, -50%) scale(0.8);
-		opacity: 0.3;
-	}
-
-	50% {
-		transform: translate(-50%, -50%) scale(1.4);
-		opacity: 0.8;
-	}
 }
 
 /* 输入区域 */

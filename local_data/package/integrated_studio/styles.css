@@ -1,0 +1,463 @@
+/* ============ 设计令牌（CSS 变量） ============ */
+:root {
+    /* 布局尺寸 */
+    --topbar-h: 48px;
+    --info-h: 80px;
+    --panel-w: 360px;
+    --gap: 8px;
+
+    /* 玻璃拟态令牌 */
+    --glass-bg: rgba(255, 255, 255, 0.28);
+    --glass-bg-strong: rgba(255, 255, 255, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-blur: 18px;
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.10);
+    --transition: all 0.45s ease;
+
+    /* 语义色 */
+    --brand: #6c9bcf;
+    --accent: #9d6bff;
+    --success: #20c997;
+    --danger: #dc3545;
+    --warning: #fbbf24;
+
+    /* 中性色（亮色） */
+    --text-primary: rgba(15, 30, 15, 1);
+    --text-secondary: rgba(80, 80, 80, 1);
+    --panel-bg: rgba(250, 250, 250, 0.85);
+    --border-color: rgba(225, 230, 240, 1);
+}
+
+/* 暗色模式覆写 */
+.dark-mode {
+    --glass-bg: rgba(38, 38, 42, 0.75);
+    --glass-bg-strong: rgba(38, 38, 42, 0.90);
+    --glass-border: rgba(80, 80, 80, 0.5);
+    --text-primary: rgba(244, 244, 245, 1);
+    --text-secondary: rgba(180, 180, 180, 1);
+    --panel-bg: rgba(38, 38, 42, 0.85);
+    --border-color: rgba(80, 80, 80, 1);
+}
+
+/* ============ 基础重置 ============ */
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 15px;
+    color: var(--text-primary);
+    background: transparent;
+}
+
+/* 全局隐藏滚动条但保留滚动 */
+::-webkit-scrollbar { display: none; }
+scrollbar-width: none;
+
+/* ============ 背景层 + 玻璃效果层 ============ */
+.background {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #a8c0e0 0%, #c0a8e0 50%, #e0c0a8 100%);
+    background-size: 200% 200%;
+    animation: bgShift 30s ease infinite;
+    z-index: -2;
+}
+
+.glass-effect {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px) saturate(180%);
+    -webkit-backdrop-filter: blur(5px) saturate(180%);
+    z-index: -1;
+}
+
+.dark-mode .background {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+.dark-mode .glass-effect {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+@keyframes bgShift {
+    0%, 100% { background-position: 0% 0%; }
+    50%      { background-position: 100% 100%; }
+}
+
+/* ============ CSS Grid 主布局 ============ */
+.studio-grid {
+    display: grid;
+    grid-template-columns: 1fr var(--panel-w);
+    grid-template-rows: var(--topbar-h) 1fr var(--info-h);
+    grid-template-areas:
+        "topbar topbar"
+        "engine panel"
+        "info   info";
+    height: 100vh;
+    gap: var(--gap);
+    padding: var(--gap);
+}
+
+.area-topbar { grid-area: topbar; }
+.area-engine { grid-area: engine; }
+.area-panel  { grid-area: panel; }
+.area-info   { grid-area: info; }
+
+/* ============ 顶栏 ============ */
+.area-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-glass);
+}
+
+.tab-strip {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: var(--glass-bg-strong);
+    color: var(--accent);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.tab-btn.active i {
+    color: var(--accent);
+}
+
+.tab-btn i {
+    font-size: 13px;
+}
+
+.toolbar {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.tool-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.tool-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.tool-btn i {
+    font-size: 14px;
+}
+
+/* ============ iframe 玻璃容器 ============ */
+.area-engine,
+.area-panel,
+.area-info {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.area-engine iframe,
+.area-info iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* 操纵面板容器 */
+.area-panel {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-glass);
+}
+
+.area-panel iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: transparent;
+    display: none;
+}
+
+.area-panel iframe.active {
+    display: block;
+}
+
+.area-panel iframe[hidden] {
+    display: none !important;
+}
+
+/* 加载占位 */
+.panel-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    z-index: 5;
+}
+
+.panel-loading i {
+    font-size: 32px;
+    color: var(--accent);
+}
+
+.panel-loading[hidden] {
+    display: none !important;
+}
+
+/* ============ 帮助模态框 ============ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 1000;
+}
+
+.modal-overlay[hidden] {
+    display: none !important;
+}
+
+.modal {
+    width: min(640px, 90vw);
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.glass-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glass);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-header h3 i {
+    color: var(--accent);
+}
+
+.modal-close {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.modal-close:hover {
+    background: rgba(220, 53, 69, 0.15);
+    color: var(--danger);
+}
+
+.modal-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+}
+
+.shortcut-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.shortcut-table th,
+.shortcut-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.shortcut-table th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.shortcut-table kbd {
+    display: inline-block;
+    padding: 2px 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+    font-size: 12px;
+    color: var(--accent);
+}
+
+/* ============ Toast ============ */
+.toast {
+    position: fixed;
+    bottom: calc(var(--info-h) + var(--gap) + 16px);
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 10px 20px;
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 14px;
+    box-shadow: var(--shadow-glass);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    z-index: 999;
+    max-width: 80vw;
+}
+
+.toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ============ 响应式断点 ============ */
+
+/* 平板：缩窄面板 */
+@media (max-width: 1024px) {
+    :root {
+        --panel-w: 280px;
+    }
+}
+
+/* 手机横屏：堆叠布局 */
+@media (max-width: 768px) {
+    .studio-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--topbar-h) 1fr auto var(--info-h);
+        grid-template-areas:
+            "topbar"
+            "engine"
+            "panel"
+            "info";
+    }
+
+    .area-panel {
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+
+    .tab-btn span,
+    .tool-btn span {
+        display: none;
+    }
+
+    .tab-btn,
+    .tool-btn {
+        padding: 6px 10px;
+    }
+}
+
+/* 手机竖屏：面板模态弹出 */
+@media (max-width: 480px) {
+    .studio-grid {
+        grid-template-rows: var(--topbar-h) 1fr var(--info-h);
+        grid-template-areas:
+            "topbar"
+            "engine"
+            "info";
+    }
+
+    .area-panel {
+        position: fixed;
+        inset: var(--topbar-h) 0 var(--info-h) 0;
+        z-index: 100;
+        max-height: none;
+        background: rgba(0, 0, 0, 0.4);
+    }
+
+    .area-panel:not(:has(iframe.active)) {
+        display: none;
+    }
+
+    .area-panel iframe.active {
+        background: var(--panel-bg);
+    }
+}

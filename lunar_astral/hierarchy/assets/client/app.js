@@ -1,14 +1,34 @@
 import { WebSocketClient } from './socket.js';
-import { Live2D, EmotionalStateEnum } from './live2d.js';
 import { renderMessage, renderAllMessages } from './chat.js';
 import { AudioQueue } from './tts.js';
 import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
-import { TouchInteractionHandler } from './touch.js';
 import { FilePreviewManager } from './file-handler.js';
 import { sendMessages } from './fetch.js';
 
 const MAX_HISTORY_MESSAGES = 40;
+
+// ==== 3D渲染器广播频道 ====
+const rendererChannel = new BroadcastChannel('lunar-astral-renderer');
+
+// ==== 触摸提示词生成（3D模型点击→AI对话） ====
+const TOUCH_PROMPTS = {
+	'头部': ['轻轻摸了摸头', '拍了拍脑袋', '揉了揉头发'],
+	'头发': ['拨弄了一下头发', '轻轻拉了拉发丝', '梳理着头发'],
+	'胸部': ['轻轻抱了一下', '拍了拍胸口', '靠在怀里'],
+	'右臂': ['握住了右手', '轻轻碰了碰右臂', '拉起右手'],
+	'左臂': ['握住了左手', '轻轻碰了碰左臂', '拉起左手'],
+	'右手': ['握住了右手', '和右手十指相扣', '轻轻抚摸右手'],
+	'左手': ['握住了左手', '和左手十指相扣', '轻轻抚摸左手'],
+	'右腿': ['碰了碰右腿', '轻轻捏了捏右腿'],
+	'左腿': ['碰了碰左腿', '轻轻捏了捏左腿'],
+};
+
+function generateTouchPrompt(part) {
+	const prompts = TOUCH_PROMPTS[part];
+	if (!prompts) return `触碰了${part}`;
+	return prompts[Math.floor(Math.random() * prompts.length)];
+}
 
 class LunarCoreApp {
 	wsClient = null;
@@ -21,13 +41,12 @@ class LunarCoreApp {
 	modalBody = null;
 	errorToast = null;
 	fileManager = null;
-	touchHandler = null;
 
 	constructor() {
 		this.initElements();
 		this.initEventListeners();
 		this.initWebSocket();
-		this.initLive2D();
+		this.initRendererChannel();
 	}
 
 	initElements() {
@@ -38,23 +57,10 @@ class LunarCoreApp {
 		this.modalBody = document.getElementById('modalBody');
 		this.errorToast = document.getElementById('errorToast');
 		this.modelIntel = document.getElementById('modelIntel');
-		const touchInteraction = document.getElementById('touchInteraction');
-		const touchRipple = document.getElementById('touchRipple');
 		this.voiceChatItem = document.getElementById('voiceChatItem');
 
 		// 初始化文件预览管理器
 		this.fileManager = new FilePreviewManager(filePreviewArea, (msg) => this.showError(msg));
-
-		// 初始化触摸交互处理器
-		this.touchHandler = new TouchInteractionHandler(
-			touchInteraction,
-			touchRipple,
-			{
-				setLoadingState: (loading) => this.setLoadingState(loading),
-				showError: (msg) => this.showError(msg),
-				isLoading: () => this.isLoading,
-			}
-		);
 
 		// 功能菜单下拉
 		this.initFunctionMenu();
@@ -120,13 +126,12 @@ class LunarCoreApp {
 			if (files && files.length > 0) {
 				await this.fileManager.handleFileSelect(Array.from(files));
 			}
-			// 重置input以允许重复选择同一文件
 			fileImportInput.value = '';
 		});
 	}
 
 	initVoiceChat() {
-		// 临时识别结果回调：实时显示在 Live2D 区域
+		// 临时识别结果回调：实时显示在模型区域
 		VoiceChat.onInterimResult((text) => {
 			if (this.modelIntel && text) {
 				this.modelIntel.textContent = text;
@@ -139,21 +144,19 @@ class LunarCoreApp {
 			if (this.messageInput && text) {
 				this.messageInput.value = text;
 				this.autoResizeTextarea();
-				// 恢复语音识别提示文字
 				if (this.modelIntel && VoiceChat.enabled) {
 					this.modelIntel.textContent = '语音识别中...';
 				}
-				// 自动触发消息发送
 				this.handleSend();
 			}
 		});
 
-		// 语音状态变更回调：更新UI
+		// 语音状态变更回调
 		VoiceChat.onStatusChange((enabled) => {
 			this.updateVoiceChatUI(enabled);
 		});
 
-		// 语音错误回调：显示友好提示
+		// 语音错误回调
 		VoiceChat.onError((errorType, reason) => {
 			switch (errorType) {
 				case 'not-allowed':
@@ -167,7 +170,6 @@ class LunarCoreApp {
 	}
 
 	updateVoiceChatUI(enabled) {
-		// 更新语音对话菜单项样式
 		if (this.voiceChatItem) {
 			if (enabled) {
 				this.voiceChatItem.classList.add('voice-active');
@@ -175,8 +177,6 @@ class LunarCoreApp {
 				this.voiceChatItem.classList.remove('voice-active');
 			}
 		}
-
-		// 控制 Live2D 区域的语音识别状态显示
 		if (this.modelIntel) {
 			if (enabled) {
 				this.modelIntel.textContent = '语音识别中...';
@@ -227,7 +227,6 @@ class LunarCoreApp {
 		if (this.messageInput) {
 			this.messageInput.style.height = 'auto';
 			this.messageInput.style.height = Math.min(this.messageInput.scrollHeight, 120) + 'px';
-			Live2D.reloadContainer();
 		}
 	}
 
@@ -241,32 +240,94 @@ class LunarCoreApp {
 		this.wsClient.connect();
 	}
 
+	// ==== 3D渲染器广播频道初始化 ====
+	initRendererChannel() {
+		rendererChannel.onmessage = (event) => {
+			const msg = event.data;
+			if (!msg || !msg.type) return;
+
+			switch (msg.type) {
+				case 'body_click':
+					// 3D模型身体部位被点击 → 生成触摸提示词 → 发送给AI
+					this.handleBodyClick(msg.part, msg.boneName);
+					break;
+				case 'action_started':
+					console.log(`[主客户端] 动作已执行: ${msg.action}`);
+					break;
+				case 'movement_complete':
+					console.log('[主客户端] 位移完成');
+					break;
+			}
+		};
+	}
+
+	// ==== 处理3D模型点击 ====
+	handleBodyClick(part, boneName) {
+		const prompt = generateTouchPrompt(part);
+		// 直接作为用户消息发送（不在聊天记录中显示触摸提示词）
+		this.sendTouchPrompt(prompt);
+	}
+
+	async sendTouchPrompt(prompt) {
+		try {
+			const openAIMessages = [{ role: 'user', content: prompt }];
+			await sendMessages(openAIMessages);
+		} catch (error) {
+			console.error('触摸提示词发送失败:', error);
+		}
+	}
+
+	// ==== 向3D渲染器发送指令 ====
+	sendRendererCommand(command) {
+		rendererChannel.postMessage(command);
+	}
+
 	async handleWebSocketMessage(message) {
 		switch (message.type) {
 			case 'context':
-				// 判断是否为响应或活动消息
+				// 检查是否为动作/位移指令（特殊type前缀）
+				// 注意：pushContext 的 data 参数是 JSON 字符串，存在 message.data.content 中
+				if (message.data.type === 'action') {
+					const inner = message.data.content ? JSON.parse(message.data.content) : {};
+					this.sendRendererCommand({
+						type: 'action',
+						action: inner.action
+					});
+					break;
+				}
+				if (message.data.type === 'movement') {
+					const inner = message.data.content ? JSON.parse(message.data.content) : {};
+					this.sendRendererCommand({
+						type: 'movement',
+						position: inner.position,
+						resumeTracking: inner.resumeTracking
+					});
+					break;
+				}
+				if (message.data.type === 'mouse_tracking') {
+					const inner = message.data.content ? JSON.parse(message.data.content) : {};
+					this.sendRendererCommand({
+						type: 'mouse_tracking',
+						enabled: inner.enabled
+					});
+					break;
+				}
+
+				// 正常响应/活动消息
 				if (message.data.type === 'response' || message.data.type === 'active') {
-					/** 获取消息的文本内容 */
 					const content = message.data.content || '';
-					/** 获取音频数据 */
 					const audio = message.data.audio || undefined;
-					// 渲染消息到历史记录
 					await this.handleAssistantMessage(content, undefined, audio);
-					// 如果包含音频数据，加入播放队列
 					if (audio) {
 						AudioQueue.enqueue(audio);
-						// 通知语音识别：音频即将播放
 						VoiceChat.onAudioPlaybackChange();
 					}
 				}
 				break;
 
 			case 'image':
-				// 判断是否有图片信息
 				if (!message.data.images) break;
-				// 遍历图片信息，执行图片渲染
 				for (const imageBase64 of message.data.images) {
-					// 渲染图片到历史记录
 					const imageUrl = imageBase64.startsWith('data:') ? imageBase64 : 'data:image/jpeg;base64,' + imageBase64;
 					await this.handleAssistantMessage('', imageUrl);
 				}
@@ -275,12 +336,11 @@ class LunarCoreApp {
 			case 'error':
 				this.showError(message.data.content || '发生错误');
 				this.setLoadingState(false);
-				Live2D.setStateWithTimeout(EmotionalStateEnum.IDLE);
 				break;
 		}
 	}
 
-	/** 将消息加入历史记录，超出限制时移除最早的消息 */
+	/** 将消息加入历史记录 */
 	addToHistory(message) {
 		this.historyMessages.push(message);
 		while (this.historyMessages.length > MAX_HISTORY_MESSAGES) {
@@ -302,7 +362,6 @@ class LunarCoreApp {
 			await renderMessage(assistantMessage, this.modalBody);
 		}
 		this.setLoadingState(false);
-		Live2D.setStateWithTimeout(EmotionalStateEnum.IDLE);
 	}
 
 	async handleSend() {
@@ -312,12 +371,10 @@ class LunarCoreApp {
 		if (!text && !hasFiles) return;
 
 		this.setLoadingState(true);
-		Live2D.setEmotionState(EmotionalStateEnum.AWAIT);
 
 		try {
 			const openAIMessages = [];
 
-			// 上传文件并构建内容块
 			const filePromises = this.fileManager.previews.map(preview => this.fileManager.processFileUpload(preview));
 			const fileResults = await Promise.all(filePromises);
 			const { contentBlocks, userContentParts, uploadedFileUrls, audioPreviewUrls } = await this.fileManager.buildFileContentBlocks(fileResults);
@@ -355,7 +412,6 @@ class LunarCoreApp {
 			console.error('Send error:', error);
 			this.showError(error instanceof Error ? error.message : '发送失败');
 			this.setLoadingState(false);
-			Live2D.setStateWithTimeout(EmotionalStateEnum.IDLE);
 		}
 	}
 
@@ -389,15 +445,6 @@ class LunarCoreApp {
 			this.errorToast.textContent = message;
 			this.errorToast.classList.add('visible');
 			setTimeout(() => { this.errorToast?.classList.remove('visible'); }, 3000);
-		}
-	}
-
-	async initLive2D() {
-		try {
-			await Live2D.init();
-		} catch (error) {
-			console.error('Failed to initialize Live2D:', error);
-			this.showError('Live2D 初始化失败');
 		}
 	}
 }

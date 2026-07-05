@@ -27,12 +27,6 @@ const scriptDependencies = [
     '/file/read/package/echarts.min.js',
     // 代码高亮库
     '/file/read/package/highlight/highlight.min.js',
-    // Live2D Cubism 核心库
-    '/file/read/package/live2dcubismcore.min.js',
-    // Pixi.js 库
-    '/file/read/package/pixi.5.3.12.min.js',
-    // Pixi.js 库 Live2D Cubism 插件
-    '/file/read/package/pixi-live2d-display-cubism4.min.js',
     // 二维码库
     '/file/read/package/qrcode.min.js',
     // Katex 数学公式渲染 库

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』状态信息</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255,255,255,0.28);
+            --glass-border: rgba(255,255,255,0.35);
+            --glass-blur: 18px;
+            --radius-md: 0.75rem;
+            --text-primary: rgba(15,30,15,1);
+            --text-secondary: rgba(80,80,80,1);
+            --accent: #9d6bff;
+            --success: #20c997;
+            --danger: #dc3545;
+            --warn: #fbbf24;
+            --transition: all 0.45s ease;
+        }
+        .dark-mode {
+            --text-primary: rgba(244,244,245,1);
+            --text-secondary: rgba(180,180,180,1);
+            --glass-bg: rgba(38,38,42,0.82);
+            --glass-border: rgba(80,80,80,0.6);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: transparent;
+            font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+            font-size: 12px; color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .info-bar {
+            display: flex; align-items: center; gap: 16px;
+            height: 100%; padding: 0 16px;
+        }
+
+        .info-group {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 10px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md);
+            transition: var(--transition);
+        }
+        .info-group i { color: var(--accent); font-size: 11px; }
+        .info-label { color: var(--text-secondary); font-size: 11px; }
+        .info-value {
+            color: var(--text-primary); font-weight: 600;
+            font-family: 'SF Mono','Consolas',monospace; font-size: 11px;
+        }
+
+        .separator { width: 1px; height: 20px; background: var(--glass-border); }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            display: inline-block; margin-right: 4px;
+        }
+        .status-dot.on { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .status-dot.off { background: var(--text-secondary); opacity: 0.4; }
+        .status-dot.warn { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+
+        .molang-group {
+            display: flex; align-items: center; gap: 6px;
+            margin-left: auto;
+            padding: 4px 10px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md);
+        }
+        .molang-input {
+            width: 180px; padding: 3px 6px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid var(--glass-border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: 'SF Mono','Consolas',monospace; font-size: 11px;
+            outline: none;
+        }
+        .molang-input:focus { border-color: var(--accent); }
+        .molang-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
+        .molang-value {
+            min-width: 60px; max-width: 120px;
+            color: var(--accent); font-weight: 600;
+            font-family: 'SF Mono','Consolas',monospace; font-size: 11px;
+            text-align: right;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
+        .fps-bar {
+            display: inline-flex; align-items: center; gap: 2px;
+            margin-left: 4px;
+        }
+        .fps-bar-seg {
+            width: 3px; height: 10px;
+            background: var(--text-secondary); opacity: 0.2;
+            border-radius: 1px;
+        }
+        .fps-bar-seg.active { opacity: 1; }
+        .fps-bar-seg.low { background: var(--danger); }
+        .fps-bar-seg.mid { background: var(--warn); }
+        .fps-bar-seg.high { background: var(--success); }
+    </style>
+</head>
+<body>
+    <div class="info-bar">
+        <!-- FPS -->
+        <div class="info-group">
+            <i class="fas fa-gauge-high"></i>
+            <span class="info-label">FPS</span>
+            <span class="info-value" id="stat-fps">--</span>
+            <div class="fps-bar" id="fps-bar">
+                <div class="fps-bar-seg"></div>
+                <div class="fps-bar-seg"></div>
+                <div class="fps-bar-seg"></div>
+                <div class="fps-bar-seg"></div>
+                <div class="fps-bar-seg"></div>
+            </div>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 模式 -->
+        <div class="info-group">
+            <i class="fas fa-eye"></i>
+            <span class="info-label">模式</span>
+            <span class="info-value" id="stat-mode">--</span>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 角色位置 -->
+        <div class="info-group">
+            <i class="fas fa-location-dot"></i>
+            <span class="info-label">位置</span>
+            <span class="info-value" id="stat-pos">x:0.00 y:0.00 z:0.00</span>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 物理状态 -->
+        <div class="info-group">
+            <i class="fas fa-atom"></i>
+            <span class="info-label">物理体</span>
+            <span class="info-value" id="stat-bodies">0</span>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 角色状态 -->
+        <div class="info-group">
+            <span class="status-dot off" id="dot-grounded"></span>
+            <span class="info-label">接地</span>
+        </div>
+        <div class="info-group">
+            <span class="status-dot off" id="dot-sneaking"></span>
+            <span class="info-label">潜行</span>
+        </div>
+
+        <!-- molang 查询（Q12） -->
+        <div class="molang-group">
+            <i class="fas fa-calculator"></i>
+            <input type="text" class="molang-input" id="molang-input"
+                   placeholder="MoLang 表达式..." value="">
+            <span class="molang-value" id="molang-value">--</span>
+        </div>
+    </div>
+
+    <script>
+        // ==== 信息层面板 ====
+        const CHANNEL_NAME = 'integrated-studio-bus';
+        const SOURCE = 'info-panel';
+        const channel = new BroadcastChannel(CHANNEL_NAME);
+
+        const elements = {
+            statFps: document.getElementById('stat-fps'),
+            fpsBar: document.getElementById('fps-bar'),
+            statMode: document.getElementById('stat-mode'),
+            statPos: document.getElementById('stat-pos'),
+            statBodies: document.getElementById('stat-bodies'),
+            dotGrounded: document.getElementById('dot-grounded'),
+            dotSneaking: document.getElementById('dot-sneaking'),
+            molangInput: document.getElementById('molang-input'),
+            molangValue: document.getElementById('molang-value'),
+        };
+
+        const state = {
+            molangExpr: '',
+            molangDebounce: null,
+        };
+
+        function init() {
+            bindEvents();
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+        }
+
+        function bindEvents() {
+            // molang 表达式输入（Q12：防抖 300ms）
+            elements.molangInput.addEventListener('input', () => {
+                clearTimeout(state.molangDebounce);
+                state.molangDebounce = setTimeout(() => {
+                    state.molangExpr = elements.molangInput.value.trim();
+                    if (state.molangExpr) {
+                        broadcast('query_molang', { expression: state.molangExpr });
+                    } else {
+                        elements.molangValue.textContent = '--';
+                    }
+                }, 300);
+            });
+
+            // 监听消息
+            channel.onmessage = (event) => {
+                const msg = event.data;
+                if (!msg || msg.source === SOURCE) return;
+                switch (msg.type) {
+                    case 'telemetry':
+                        updateTelemetry(msg.payload);
+                        break;
+                    case 'molang_value':
+                        updateMolangValue(msg.payload);
+                        break;
+                    case 'mode_changed':
+                        elements.statMode.textContent = msg.payload?.mode === 'editor' ? '编辑器' : '嵌入式';
+                        break;
+                    case 'theme_changed':
+                        document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
+                        break;
+                }
+            };
+        }
+
+        function updateTelemetry(p) {
+            if (!p) return;
+
+            // FPS
+            elements.statFps.textContent = p.fps ?? '--';
+            updateFpsBar(p.fps ?? 0);
+
+            // 模式
+            elements.statMode.textContent = p.mode === 'editor' ? '编辑器' : '嵌入式';
+
+            // 位置
+            if (p.character) {
+                elements.statPos.textContent =
+                    `x:${p.character.x.toFixed(2)} y:${p.character.y.toFixed(2)} z:${p.character.z.toFixed(2)}`;
+            }
+
+            // 物理体数
+            elements.statBodies.textContent = `${p.physicsBodyCount ?? 0}`;
+
+            // 状态指示灯
+            elements.dotGrounded.className = 'status-dot ' + (p.isGrounded ? 'on' : 'off');
+            elements.dotSneaking.className = 'status-dot ' + (p.isSneaking ? 'warn' : 'off');
+        }
+
+        function updateMolangValue(p) {
+            if (!p) return;
+            const v = p.value;
+            if (v === null || v === undefined) {
+                elements.molangValue.textContent = '--';
+            } else if (typeof v === 'number') {
+                elements.molangValue.textContent = v.toFixed(4);
+            } else {
+                elements.molangValue.textContent = String(v).substring(0, 20);
+            }
+        }
+
+        function updateFpsBar(fps) {
+            const segs = elements.fpsBar.querySelectorAll('.fps-bar-seg');
+            // 5 段：每段代表 12 FPS（60 FPS 满格）
+            const level = Math.min(5, Math.ceil(fps / 12));
+            segs.forEach((seg, i) => {
+                seg.classList.remove('active', 'low', 'mid', 'high');
+                if (i < level) {
+                    seg.classList.add('active');
+                    if (fps < 20) seg.classList.add('low');
+                    else if (fps < 40) seg.classList.add('mid');
+                    else seg.classList.add('high');
+                }
+            });
+        }
+
+        function broadcast(type, payload) {
+            channel.postMessage({ type, source: SOURCE, payload, timestamp: Date.now() });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

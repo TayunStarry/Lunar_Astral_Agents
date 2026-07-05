@@ -52,28 +52,3 @@ export async function sendMessages(messages) {
     }
     return response.json();
 }
-
-/**
- * 从服务器获取Live2D设置
- *
- * @returns {Promise<{ name?: string; url?: string; scale?: number; x?: number; y?: number; autoInteract?: boolean }>} - Live2D设置对象
- */
-export async function fetchLive2DSetting() {
-    try {
-        const response = await fetch('/file/read/models/live2d/setting.json');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const rawText = await response.text();
-        const jsonText = rawText
-            .replace(/\/\/.*$/gm, '')
-            .replace(/\/\*[\s\S]*?\*\//g, '')
-            .replace(/'/g, '"');
-        const setting = JSON.parse(jsonText);
-        return setting;
-    }
-    catch (error) {
-        console.error('Failed to fetch Live2D setting:', error);
-        return {};
-    }
-}

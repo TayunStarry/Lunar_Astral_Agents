@@ -13,7 +13,6 @@
     <link rel="stylesheet" href="styles.css">
     <!-- 项目私有脚本 -->
 	<script src="./app.js" type="module"></script>
-    <!-- 标准脚本引用 -->
 </head>
 
 <body>
@@ -22,26 +21,11 @@
 	<!-- 主容器 -->
 	<div class="container">
 		<div class="main-container-panel" id="mainContainerPanel">
-			<!-- 核心展示区：Live2D 模型 -->
-			<div class="live2d-wrapper" id="live2dWrapper">
-				<div class="live2d-container" id="live2dContainer">
-					<canvas id="live2dCanvas"></canvas>
-					<!-- 触摸交互区域：5行×3列分区网格，对应模型不同身体部位 -->
-					<div class="touch-interaction" id="touchInteraction">
-						<!-- 分区触摸检测层：每个区域对应独立触摸反应事件 -->
-						<div class="touch-region" data-region="face_hair"></div>
-						<div class="touch-region" data-region="right_arm"></div>
-						<div class="touch-region" data-region="chest_belly"></div>
-						<div class="touch-region" data-region="left_arm"></div>
-						<div class="touch-region" data-region="right_hand"></div>
-						<div class="touch-region" data-region="hip"></div>
-						<div class="touch-region" data-region="left_hand"></div>
-						<div class="touch-region" data-region="thigh"></div>
-						<div class="touch-region" data-region="leg_foot"></div>
-						<!-- 点击反馈涟漪动画元素 -->
-						<div class="touch-ripple" id="touchRipple"></div>
-					</div>
-					<div class="live2d-model-intel" id="modelIntel"></div>
+			<!-- 3D渲染器展示区 -->
+			<div class="renderer-wrapper" id="rendererWrapper">
+				<div class="renderer-container" id="rendererContainer">
+					<iframe id="rendererFrame" src="./renderer.html" allow="autoplay"></iframe>
+					<div class="model-intel" id="modelIntel"></div>
 				</div>
 			</div>
 			<!-- 底部输入区 -->

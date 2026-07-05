@@ -369,32 +369,32 @@ var agentSystem = (function (exports) {
         return new Promise(process);
     }
 
-    function queryFromDatabase(operations, createTableOperation) {
+    function queryFromKnowledge(operations, createTableOperation) {
         const requestBody = { operations, transaction: false };
-        let [result, error] = database(requestBody);
+        let [result, error] = knowledge(requestBody);
         if (error)
-            throw new Error('数据库查询失败');
+            throw new Error('知识库查询失败');
         if (!result.success || !result.results[0].success) {
             const errorMessage = result.error || result.results[0].error || '';
             if (errorMessage.includes('no such table') && createTableOperation) {
                 const createTableRequest = { operations: [createTableOperation], transaction: false };
-                let [createTableResult, tableError] = database(createTableRequest);
+                let [createTableResult, tableError] = knowledge(createTableRequest);
                 if (tableError)
                     throw tableError;
                 if (!createTableResult.success)
                     throw new Error('创建表失败');
-                [result, error] = database(requestBody);
+                [result, error] = knowledge(requestBody);
                 if (error)
                     throw error;
                 if (!result.success || !result.results[0].success)
-                    throw new Error('数据库查询失败');
+                    throw new Error('知识库查询失败');
             }
             else
-                throw new Error('数据库查询失败');
+                throw new Error('知识库查询失败');
         }
         return result;
     }
-    function getPromptFromDatabase(key) {
+    function getPromptFromKnowledge(key) {
         try {
             const operations = [
                 {
@@ -417,7 +417,7 @@ var agentSystem = (function (exports) {
                     ]
                 }
             };
-            const result = queryFromDatabase(operations, createTableOperation);
+            const result = queryFromKnowledge(operations, createTableOperation);
             if (result.success && result.results[0].success && result.results[0].rows) {
                 return result.results[0].rows[0].Prompt;
             }
@@ -427,9 +427,9 @@ var agentSystem = (function (exports) {
             return null;
         }
     }
-    function savePromptToDatabase(key, prompt) {
+    function savePromptToKnowledge(key, prompt) {
         try {
-            const existingPrompt = getPromptFromDatabase(key);
+            const existingPrompt = getPromptFromKnowledge(key);
             const operations = [];
             if (existingPrompt)
                 operations.push({ type: 'update', table: 'KeyPrompt', data: { Prompt: prompt }, filter: { IndexKey: key } });
@@ -446,11 +446,11 @@ var agentSystem = (function (exports) {
                     ]
                 }
             };
-            const result = queryFromDatabase(operations, createTableOperation);
+            const result = queryFromKnowledge(operations, createTableOperation);
             return result.success && result.results[0].success;
         }
         catch (error) {
-            console.error('向数据库存储提示词失败:', error);
+            console.error('向知识库存储提示词失败:', error);
             return false;
         }
     }
@@ -463,16 +463,16 @@ var agentSystem = (function (exports) {
         ragMessages = [];
         runtimeMessages = [];
         systemPrompt = "你的名字叫做月华, 是一个女孩子";
-        static vectorReady = false;
+        static memoryReady = false;
         constructor() { }
-        static initVector() {
-            if (BaseConfig.vectorReady)
+        static initMemory() {
+            if (BaseConfig.memoryReady)
                 return;
-            const [_, err] = vectorInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
+            const [_, err] = memoryInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
             if (err)
-                console.error('向量数据库初始化失败:', err);
+                console.error('记忆库初始化失败:', err);
             else
-                BaseConfig.vectorReady = true;
+                BaseConfig.memoryReady = true;
         }
     }
     class PromptProcessor extends BaseConfig {
@@ -568,15 +568,15 @@ var agentSystem = (function (exports) {
             const userMessages = this.getLatestUserMessages();
             if (userMessages.length === 0)
                 return this;
-            if (!BaseConfig.vectorReady)
-                BaseConfig.initVector();
-            if (!BaseConfig.vectorReady)
+            if (!BaseConfig.memoryReady)
+                BaseConfig.initMemory();
+            if (!BaseConfig.memoryReady)
                 return this;
             const allResults = [];
             for (const userMessage of userMessages) {
-                const [results, error] = vectorQuery('lunar_messages', userMessage, 5);
+                const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
                 if (error) {
-                    console.error('向量数据库查询失败:', error);
+                    console.error('记忆库查询失败:', error);
                     continue;
                 }
                 if (results && results.length > 0) {
@@ -1051,33 +1051,21 @@ var agentSystem = (function (exports) {
     }
 
     class Prompt extends ModelBuilder {
-        buildOrganizePrompt(records) {
-            const now = new Date();
-            const recordTexts = records.map((msg, idx) => {
-                const content = typeof msg.content === 'string'
-                    ? msg.content
-                    : JSON.stringify(msg.content);
-                const preview = content.length > 300 ? content.slice(0, 300) + '...' : content;
-                const timestamp = now.toLocaleString('zh-CN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                });
-                return `[记录${idx + 1}] 时间:${timestamp} | 角色:${msg.role} | 内容:${preview}`;
-            });
-            return `请整理以下 ${records.length} 条对话记录:\n\n${recordTexts.join('\n')}\n\n【重要原则】合并优先，新增为辅！请严格按照以下流程操作：\n1. 先用 query_existing_records 充分查询已有档案（建议 top_k=10），确认是否存在相似记录\n2. 如果找到语义相似的已有记录，必须使用 merge_existing_record 合并到已有记录中，而非创建新条目\n3. 仅当确认无任何相似记录时，才使用 store_organized_record 新增\n4. 完全重复的信息直接跳过，不存储\n\n每条记录必须严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}。完成后请输出整理报告。`;
-        }
-        ensureTimestampInRecord(content) {
-            const timestampRegex = /^\[([^\]]+)\]/;
-            if (timestampRegex.test(content)) {
-                return content;
+        currentLocation = '';
+        getCurrentLocation() {
+            if (this.currentLocation)
+                return this.currentLocation;
+            const [addressResult, error] = address();
+            if (error || !addressResult || addressResult.length === 0) {
+                this.currentLocation = '未知地点';
             }
-            const now = new Date();
-            const timestamp = now.toLocaleString('zh-CN', {
+            else {
+                this.currentLocation = addressResult.join(' ');
+            }
+            return this.currentLocation;
+        }
+        getCurrentTime() {
+            return new Date().toLocaleString('zh-CN', {
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
@@ -1086,209 +1074,144 @@ var agentSystem = (function (exports) {
                 second: '2-digit',
                 hour12: false
             });
-            return `[${timestamp}] ${content}`;
+        }
+        buildSummarizePrompt(records) {
+            const recordTexts = records.map((msg, idx) => {
+                const content = typeof msg.content === 'string'
+                    ? msg.content
+                    : JSON.stringify(msg.content);
+                const preview = content.length > 500 ? content.slice(0, 500) + '...' : content;
+                return `[事件${idx + 1}] 角色:${msg.role} | 内容:${preview}`;
+            });
+            const currentTime = this.getCurrentTime();
+            const currentLocation = this.getCurrentLocation();
+            return `请将以下 ${records.length} 条历史事件数据，每个事件独立摘要为一个简洁准确的记忆点摘要。
+
+【事件数据】
+${recordTexts.join('\n')}
+
+【系统上下文】
+- 当前时间: ${currentTime}（若事件未包含时间信息，使用此时间）
+- 当前位置: ${currentLocation}（若事件未包含地点信息，使用此位置）
+
+【处理规则】
+1. 每个事件独立生成一条记忆点摘要，不要跨事件合并
+2. 若事件明确包含时间信息，保留原时间；否则使用上述当前时间
+3. 若事件明确包含地点信息，保留原地点；否则使用上述当前位置
+4. 摘要内容简洁准确，聚焦核心事实
+
+【输出格式】
+请输出 JSON 数组，每个元素对应一个事件的记忆点摘要：
+\`\`\`json
+[
+  {
+    "time": "时间信息（从事件中提取，若无则使用当前时间）",
+    "location": "地点信息（从事件中提取，若无则使用当前位置）",
+    "content": "事件的核心内容摘要，简洁准确",
+    "topic": "事件的关键词或主题"
+  }
+]
+\`\`\`
+
+仅输出 JSON 数组，不要包含其他说明文字。`;
+        }
+        buildDecisionPrompt(summary, existingRecords) {
+            return `请针对以下记忆点摘要，判断应执行的操作：
+
+【当前摘要】
+- 时间: ${summary.time}
+- 地点: ${summary.location}
+- 内容: ${summary.content}
+- 话题: ${summary.topic}
+
+【已有相关记录】
+${existingRecords}
+
+【决策要求】
+请判断以下三项：
+1. 是否需要与已有记录合并？若合并，需提供合并后的完整内容（合并方式：删除旧记录，写入新合并记录）
+2. 是否需要删除某些已有记录？列出要删除的记录ID
+3. 是否需要将当前摘要持久化存储到数据库？
+
+【决策原则】
+- 完全重复的信息：删除旧的，不写入新的（should_store=false）
+- 语义关联可合并：删除旧的，写入合并后的新内容（should_store=true，store_content为合并后内容）
+- 无相似记录：直接写入新摘要（should_store=true，store_content为原摘要格式化内容）
+- 已有记录过时但新摘要无价值：仅删除旧的（should_store=false）
+
+【输出格式】
+请输出 JSON 对象：
+\`\`\`json
+{
+  "delete_ids": ["需要删除的记录ID列表"],
+  "should_store": true或false,
+  "store_content": "若存储，使用的内容（合并时为合并后内容，否则为原摘要格式化内容）"
+}
+\`\`\`
+
+仅输出 JSON 对象，不要包含其他说明文字。`;
+        }
+        formatSummaryAsRecord(summary) {
+            return `[${summary.time}] 地点:${summary.location} | 事件:${summary.content} | 话题:${summary.topic}`;
+        }
+        ensureTimestampInRecord(content) {
+            const timestampRegex = /^\[([^\]]+)\]/;
+            if (timestampRegex.test(content))
+                return content;
+            return `[${this.getCurrentTime()}] ${content}`;
         }
     }
     class Toolchain extends Prompt {
-        organizeTools = [
-            {
-                type: "function",
-                function: {
-                    name: "query_existing_records",
-                    description: "查询向量数据库中已存在的历史档案记录，用于查重和关联。在生成新记录前，必须先调用此工具确认是否已有相似记录。建议使用较大的 top_k 值（如10）以确保充分查重。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            query_text: {
-                                type: "string",
-                                description: "用于语义检索的查询关键词或描述文本，建议使用多个关键词组合查询"
-                            },
-                            top_k: {
-                                type: "integer",
-                                description: "返回最相关的记录数量，建议设为10以确保充分查重，最大不超过20条"
-                            }
-                        },
-                        required: ["query_text"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "merge_existing_record",
-                    description: "将新内容合并到已有的历史档案记录中。当新内容与已有记录存在语义关联（同一话题延续、同一事件更新、内容补充等）时，必须使用此工具而非 store_organized_record。操作会删除旧记录并存储合并后的新记录。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            id: {
-                                type: "string",
-                                description: "要合并的已有记录ID，从 query_existing_records 返回结果中获得"
-                            },
-                            merged_content: {
-                                type: "string",
-                                description: "合并后的完整记录内容，必须包含旧记录和新记录的所有关键信息，严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}"
-                            }
-                        },
-                        required: ["id", "merged_content"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "delete_existing_record",
-                    description: "删除向量数据库中已存在的重复或过时的历史档案记录。在合并或更新已有记录时，应先删除旧记录再存储新记录。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            id: {
-                                type: "string",
-                                description: "要删除的历史记录ID，从 query_existing_records 返回结果中获得"
-                            }
-                        },
-                        required: ["id"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "store_organized_record",
-                    description: "将整理好的结构化记录存储到向量数据库。仅当通过 query_existing_records 确认无相似记录时才可使用此工具。如果存在相似记录，应使用 merge_existing_record 合并而非新建。每条记录必须严格遵循格式：[时间戳] 地点:{地点} | 人物:{参与者} | 事件:{事件摘要} | 话题:{关键词}",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            content: {
-                                type: "string",
-                                description: "结构化记录内容，严格遵循指定格式，包含时间、地点、人物、事件、话题五个维度的完整信息"
-                            }
-                        },
-                        required: ["content"]
-                    }
-                }
+        queryExistingRecords(queryText, topK = 10) {
+            if (!queryText || queryText.trim().length === 0)
+                return [];
+            const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
+            if (error) {
+                console.error('[编纂者] 记忆库查询失败:', error);
+                return [];
             }
-        ];
-        executeOrganizeTool(toolCall) {
-            const funcName = toolCall.function.name;
-            let args = {};
+            return results || [];
+        }
+        executeBatchActions(decisions) {
+            const allDeleteIds = [];
+            for (const decision of decisions) {
+                allDeleteIds.push(...decision.deleteIds);
+            }
+            const uniqueDeleteIds = [...new Set(allDeleteIds)];
+            console.log(`[编纂者] 准备删除 ${uniqueDeleteIds.length} 条旧记录`);
+            for (const id of uniqueDeleteIds) {
+                const trimmedId = id.trim();
+                if (!trimmedId)
+                    continue;
+                const [, error] = memoryDelete('lunar_messages', trimmedId);
+                if (error)
+                    console.error(`[编纂者] 删除记录 ${trimmedId} 失败:`, error);
+                else
+                    console.log(`[编纂者] 已删除记录 ${trimmedId}`);
+            }
+            const toStore = decisions.filter(d => d.shouldStore);
+            console.log(`[编纂者] 准备写入 ${toStore.length} 条新记录`);
+            for (const decision of toStore) {
+                if (!decision.storeContent || decision.storeContent.trim().length === 0)
+                    continue;
+                const finalContent = this.ensureTimestampInRecord(decision.storeContent.trim());
+                const [, error] = memoryAdd('lunar_messages', 'assistant', finalContent);
+                if (error)
+                    console.error('[编纂者] 写入记录失败:', error);
+                else
+                    console.log('[编纂者] 已写入新记录');
+            }
+        }
+        parseJsonResponse(content) {
             try {
-                args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
+                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+                const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
+                return JSON.parse(jsonStr);
             }
-            catch {
-                console.error(`[编纂者] 工具调用参数解析失败:`, toolCall.function.arguments);
-                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串`;
+            catch (error) {
+                console.error('[编纂者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
+                return null;
             }
-            console.log(`[编纂者] 执行工具: ${funcName}`);
-            switch (funcName) {
-                case 'query_existing_records':
-                    return this.handleQueryRecords(args.query_text || '', args.top_k || 10);
-                case 'merge_existing_record':
-                    return this.handleMergeRecord(args.id || '', args.merged_content || '');
-                case 'delete_existing_record':
-                    return this.handleDeleteRecord(args.id || '');
-                case 'store_organized_record':
-                    return this.handleStoreRecord(args.content || '');
-                default:
-                    console.warn(`[编纂者] 未知工具: ${funcName}`);
-                    return `未知工具: ${funcName}，可用工具为 query_existing_records、merge_existing_record、delete_existing_record 和 store_organized_record`;
-            }
-        }
-        handleQueryRecords(queryText, topK) {
-            if (!queryText || queryText.trim().length === 0) {
-                return '查询文本为空，请提供有效的查询关键词';
-            }
-            const [results, error] = vectorQuery('lunar_messages', queryText.trim(), topK);
-            if (error) {
-                console.error('[编纂者] 向量数据库查询失败:', error);
-                return `向量数据库查询失败: ${error}`;
-            }
-            if (!results || results.length === 0) {
-                return '未找到相关历史记录，可以放心创建新档案';
-            }
-            return '找到以下相关历史记录（按相关度从高到低排列）:\n' + results
-                .map((r, i) => `[已有记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
-                .join('\n');
-        }
-        handleMergeRecord(id, mergedContent) {
-            if (!id || id.trim().length === 0) {
-                return '记录ID为空，无法合并，请提供从 query_existing_records 获取的记录ID';
-            }
-            if (!mergedContent || mergedContent.trim().length === 0) {
-                return '合并内容为空，已跳过合并';
-            }
-            if (!BaseConfig.vectorReady) {
-                BaseConfig.initVector();
-                if (!BaseConfig.vectorReady) {
-                    return '向量数据库未就绪，合并失败，请稍后重试';
-                }
-            }
-            const [deleteResult, deleteError] = vectorDelete('lunar_messages', id.trim());
-            if (deleteError) {
-                console.error('[编纂者] 合并时删除旧记录失败:', deleteError);
-                return `合并失败：删除旧记录 ${id} 时出错: ${deleteError}`;
-            }
-            console.log(`[编纂者] 合并：已删除旧记录 ${id}`);
-            const finalContent = this.ensureTimestampInRecord(mergedContent.trim());
-            const [addResult, addError] = vectorAdd('lunar_messages', 'assistant', finalContent);
-            if (addError) {
-                console.error('[编纂者] 合并时存储新记录失败:', addError);
-                return `合并失败：旧记录 ${id} 已删除，但存储合并内容时出错: ${addError}。合并内容: ${finalContent.slice(0, 200)}`;
-            }
-            console.log(`[编纂者] 合并成功：旧记录 ${id} 已替换为合并内容`);
-            return `记录合并成功：已将旧记录 ${id} 替换为合并后的内容`;
-        }
-        handleDeleteRecord(id) {
-            if (!id || id.trim().length === 0) {
-                return '记录ID为空，已跳过删除';
-            }
-            if (!BaseConfig.vectorReady) {
-                BaseConfig.initVector();
-                if (!BaseConfig.vectorReady) {
-                    return '向量数据库未就绪，删除失败，请稍后重试';
-                }
-            }
-            const [result, error] = vectorDelete('lunar_messages', id.trim());
-            if (error) {
-                console.error('[编纂者] 向量数据库删除失败:', error);
-                return `向量数据库删除失败: ${error}`;
-            }
-            return result ? `记录 ${id} 已成功从向量数据库删除` : `删除操作已完成但未返回确认信息`;
-        }
-        handleStoreRecord(content) {
-            if (!content || content.trim().length === 0) {
-                return '记录内容为空，已跳过存储';
-            }
-            if (!BaseConfig.vectorReady) {
-                BaseConfig.initVector();
-                if (!BaseConfig.vectorReady) {
-                    return '向量数据库未就绪，存储失败，请稍后重试';
-                }
-            }
-            const trimmedContent = content.trim();
-            const topicMatch = trimmedContent.match(/话题[:：](.+)/);
-            const eventMatch = trimmedContent.match(/事件[:：](.+?)[|｜]/);
-            const checkQuery = topicMatch ? topicMatch[1].trim() : eventMatch ? eventMatch[1].trim() : trimmedContent.slice(0, 50);
-            if (checkQuery) {
-                const [existingResults] = vectorQuery('lunar_messages', checkQuery, 5);
-                const SIMILARITY_THRESHOLD = 0.85;
-                const highSimilarityResults = (existingResults || []).filter((r) => r.similarity >= SIMILARITY_THRESHOLD);
-                if (highSimilarityResults.length > 0) {
-                    const similarRecords = highSimilarityResults
-                        .map((r, i) => `[相似记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`)
-                        .join('\n');
-                    console.warn('[编纂者] 存储前发现高相似度记录，建议合并而非新增');
-                    return `⚠️ 检测到存在高度相似的历史记录（相似度≥85%），建议使用 merge_existing_record 合并而非新建：\n${similarRecords}\n\n如果确认这些记录与新内容无关，请再次调用 store_organized_record 并说明理由。`;
-                }
-            }
-            const finalContent = this.ensureTimestampInRecord(trimmedContent);
-            const [result, error] = vectorAdd('lunar_messages', 'assistant', finalContent);
-            if (error) {
-                console.error('[编纂者] 向量数据库存储失败:', error);
-                return `向量数据库存储失败: ${error}`;
-            }
-            return result ? '记录已成功存储到向量数据库' : '存储操作已完成但未返回确认信息';
         }
     }
     class OrganizeRole extends Toolchain {
@@ -1301,20 +1224,23 @@ var agentSystem = (function (exports) {
                 console.log('[编纂者] 没有未读记录需要整理');
                 return;
             }
-            if (!BaseConfig.vectorReady) {
-                BaseConfig.initVector();
-                if (!BaseConfig.vectorReady) {
-                    console.warn('[编纂者] 向量数据库未就绪，保留未读记录待下次整理');
+            if (!BaseConfig.memoryReady) {
+                BaseConfig.initMemory();
+                if (!BaseConfig.memoryReady) {
+                    console.warn('[编纂者] 记忆库未就绪，保留未读记录待下次整理');
                     return;
                 }
             }
             try {
-                const organizePrompt = this.buildOrganizePrompt(OnlyData.unreadRecords);
-                this.coverContext({ role: 'user', content: organizePrompt });
-                this.runtimeMessages = [
-                    { role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }
-                ];
-                this.executeOrganizeLoop();
+                const summaries = this.generateMemorySummaries(OnlyData.unreadRecords);
+                if (summaries.length === 0) {
+                    console.log('[编纂者] 未生成有效摘要，结束整理');
+                    return;
+                }
+                console.log(`[编纂者] 阶段一完成，生成 ${summaries.length} 条记忆点摘要`);
+                const decisions = this.processSummaries(summaries);
+                console.log(`[编纂者] 阶段二完成，生成 ${decisions.length} 条决策`);
+                this.executeBatchActions(decisions);
                 console.log('[编纂者] 历史记录组织完成');
                 OnlyData.unreadRecords = [];
             }
@@ -1322,23 +1248,94 @@ var agentSystem = (function (exports) {
                 console.error('[编纂者] 组织历史记录失败，保留未读记录待下次重试:', error);
             }
         }
+        generateMemorySummaries(records) {
+            const prompt = this.buildSummarizePrompt(records);
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[编纂者] 阶段一模型推理失败:', error);
+                return [];
+            }
+            const content = response.body?.choices?.[0]?.message?.content || '';
+            const summaries = this.parseJsonResponse(content);
+            if (!summaries || !Array.isArray(summaries))
+                return [];
+            return summaries.filter(s => s && s.content && s.content.trim().length > 0);
+        }
+        processSummaries(summaries) {
+            const decisions = [];
+            for (const summary of summaries) {
+                const decision = this.processMemorySummary(summary);
+                decisions.push(decision);
+            }
+            return decisions;
+        }
+        processMemorySummary(summary) {
+            const queryText = summary.topic || summary.content.slice(0, 50);
+            const existing = this.queryExistingRecords(queryText, 10);
+            const existingText = existing.length === 0
+                ? '无相关已有记录'
+                : existing.map((r, i) => `[记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
+            const prompt = this.buildDecisionPrompt(summary, existingText);
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[编纂者] 阶段二模型推理失败，使用默认决策（存储原摘要）:', error);
+                return this.buildFallbackDecision(summary, existing);
+            }
+            const content = response.body?.choices?.[0]?.message?.content || '';
+            const decision = this.parseJsonResponse(content);
+            if (!decision) {
+                return this.buildFallbackDecision(summary, existing);
+            }
+            let storeContent = decision.store_content || '';
+            if (decision.should_store && !storeContent) {
+                storeContent = this.formatSummaryAsRecord(summary);
+            }
+            return {
+                summary,
+                deleteIds: decision.delete_ids || [],
+                shouldStore: !!decision.should_store,
+                storeContent
+            };
+        }
+        buildFallbackDecision(summary, existing) {
+            const SIMILARITY_THRESHOLD = 0.85;
+            const deleteIds = existing
+                .filter(r => r.similarity >= SIMILARITY_THRESHOLD)
+                .map(r => r.id);
+            return {
+                summary,
+                deleteIds,
+                shouldStore: true,
+                storeContent: this.formatSummaryAsRecord(summary)
+            };
+        }
         persistDiscardedMessages(discarded) {
             console.log('[编纂者] 开始持久化被抛弃的消息');
-            if (!BaseConfig.vectorReady)
-                BaseConfig.initVector();
-            if (!BaseConfig.vectorReady)
+            if (!BaseConfig.memoryReady)
+                BaseConfig.initMemory();
+            if (!BaseConfig.memoryReady)
                 return;
             for (const message of discarded) {
                 const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-                vectorAdd('lunar_messages', message.role, content);
+                memoryAdd('lunar_messages', message.role, content);
             }
         }
         queryHistoricalRecords(queryText, topK = 10) {
-            if (!BaseConfig.vectorReady)
-                BaseConfig.initVector();
-            if (!BaseConfig.vectorReady)
+            if (!BaseConfig.memoryReady)
+                BaseConfig.initMemory();
+            if (!BaseConfig.memoryReady)
                 return [];
-            const [results, error] = vectorQuery('lunar_messages', queryText, topK);
+            const [results, error] = memoryQuery('lunar_messages', queryText, topK);
             if (error) {
                 console.error('[编纂者] 查询历史记录失败:', error);
                 return [];
@@ -1356,44 +1353,6 @@ var agentSystem = (function (exports) {
             if (records.length === 0)
                 return '';
             return records.map(r => r.content).join('\n');
-        }
-        executeOrganizeLoop() {
-            const MAX_ITERATIONS = 8;
-            for (let i = 0; i < MAX_ITERATIONS; i++) {
-                console.log(`[编纂者] 第 ${i + 1} 轮模型推理`);
-                let response;
-                try {
-                    response = this.run([], this.organizeTools);
-                }
-                catch (error) {
-                    console.error(`[编纂者] 第 ${i + 1} 轮推理失败:`, error);
-                    break;
-                }
-                const choice = response.body?.choices?.[0];
-                if (!choice) {
-                    console.log('[编纂者] 模型返回空结果，结束循环');
-                    break;
-                }
-                const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0) {
-                    const replyContent = choice.message?.content || '';
-                    console.log('[编纂者] 模型完成整理:', replyContent.slice(0, 300));
-                    if (replyContent) {
-                        this.writeContext(choice.message);
-                    }
-                    break;
-                }
-                console.log(`[编纂者] 第 ${i + 1} 轮工具调用, 共 ${toolCalls.length} 个工具`);
-                this.writeContext(choice.message);
-                for (const toolCall of toolCalls) {
-                    const result = this.executeOrganizeTool(toolCall);
-                    this.writeContext({
-                        role: 'tool',
-                        content: result,
-                        tool_call_id: toolCall.id
-                    });
-                }
-            }
         }
     }
 
@@ -1422,7 +1381,7 @@ var agentSystem = (function (exports) {
             fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
         }
         async analysisVideoFile(videoUrl, userNeeds) {
-            const cachedPrompt = getPromptFromDatabase(videoUrl);
+            const cachedPrompt = getPromptFromKnowledge(videoUrl);
             if (cachedPrompt) {
                 this.unreadContext.push({ role: 'user', content: cachedPrompt });
                 return;
@@ -1455,7 +1414,7 @@ var agentSystem = (function (exports) {
             if (userNeeds.trim().length > 0)
                 this.unreadContext.push({ role: 'user', content: userNeeds });
             if (videoSummary)
-                savePromptToDatabase(videoUrl, videoSummary);
+                savePromptToKnowledge(videoUrl, videoSummary);
         }
         async LiteImageFile() {
             for (let message of this.unreadContext) {
@@ -1810,11 +1769,11 @@ var agentSystem = (function (exports) {
     function generateId() {
         return `schedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     }
-    function parseArgs(args) {
+    function parseArgs$1(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
     async function handleCreateSchedule(args) {
-        const { time, content } = parseArgs(args);
+        const { time, content } = parseArgs$1(args);
         if (!time || time.trim().length === 0) {
             return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
         }
@@ -1839,7 +1798,7 @@ var agentSystem = (function (exports) {
         return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
     }
     async function handleEditSchedule(args) {
-        const { id, time, content } = parseArgs(args);
+        const { id, time, content } = parseArgs$1(args);
         if (!id || id.trim().length === 0) {
             return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
         }
@@ -1869,7 +1828,7 @@ var agentSystem = (function (exports) {
         return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
     }
     async function handleDeleteSchedule(args) {
-        const { id } = parseArgs(args);
+        const { id } = parseArgs$1(args);
         if (!id || id.trim().length === 0) {
             return ['删除计划项失败：计划项ID不能为空', ''];
         }
@@ -1887,7 +1846,7 @@ var agentSystem = (function (exports) {
         return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
     }
     async function handleQuerySchedule(args) {
-        const { keyword } = parseArgs(args);
+        const { keyword } = parseArgs$1(args);
         if (scheduleCache.length === 0) {
             return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
         }
@@ -2103,6 +2062,88 @@ var agentSystem = (function (exports) {
     }
     OnlyData.LTPfunction.set('screenshot', handleScreenshot);
     OnlyData.LTPdefinition.push(...screenshotTools);
+
+    const agentControlTools = [
+        {
+            type: "function",
+            function: {
+                name: "play_action",
+                description: "让智能体执行预设动作。可用动作：荡秋千（需要鼠标追踪）、翻花绳（需要鼠标追踪）。执行动作时会自动切换鼠标追踪状态。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        action_name: {
+                            type: "string",
+                            description: "动作名称，可选值：荡秋千、翻花绳",
+                            enum: ["荡秋千", "翻花绳"]
+                        }
+                    },
+                    required: ["action_name"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "agent_movement",
+                description: "控制智能体移动到指定位置。移动期间会自动关闭鼠标追踪，移动结束后可选恢复。移动有10秒超时限制。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        x: {
+                            type: "number",
+                            description: "目标X坐标"
+                        },
+                        y: {
+                            type: "number",
+                            description: "目标Y坐标（地面为0）"
+                        },
+                        z: {
+                            type: "number",
+                            description: "目标Z坐标"
+                        },
+                        resume_tracking: {
+                            type: "boolean",
+                            description: "移动结束后是否恢复鼠标追踪，默认为 true"
+                        }
+                    },
+                    required: ["x", "y", "z"]
+                }
+            }
+        }
+    ];
+    const ALLOWED_ACTIONS = ['荡秋千', '翻花绳'];
+    function parseArgs(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    async function handlePlayAction(args) {
+        const { action_name } = parseArgs(args);
+        if (!action_name || typeof action_name !== 'string' || action_name.trim().length === 0) {
+            return ['执行动作失败：动作名称不能为空，请提供有效的动作名称', ''];
+        }
+        if (!ALLOWED_ACTIONS.includes(action_name)) {
+            return [`执行动作失败：不支持的动作 "${action_name}"，可用动作为：${ALLOWED_ACTIONS.join('、')}`, ''];
+        }
+        pushContext('action', JSON.stringify({ type: 'action', action: action_name }), '');
+        console.log(`[智能体控制] 执行动作: ${action_name}`);
+        return [`已执行动作：${action_name}`, ''];
+    }
+    async function handleAgentMovement(args) {
+        const { x, y, z, resume_tracking } = parseArgs(args);
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') {
+            return ['移动失败：坐标参数 x、y、z 必须为数字', ''];
+        }
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+            return ['移动失败：坐标参数 x、y、z 不能为 NaN', ''];
+        }
+        const resumeTracking = resume_tracking !== false;
+        pushContext('movement', JSON.stringify({ type: 'movement', position: { x, y, z }, resumeTracking }), '');
+        console.log(`[智能体控制] 移动到 (${x}, ${y}, ${z})，恢复鼠标追踪: ${resumeTracking}`);
+        return [`正在移动到 (${x}, ${y}, ${z})`, ''];
+    }
+    OnlyData.LTPfunction.set('play_action', handlePlayAction);
+    OnlyData.LTPfunction.set('agent_movement', handleAgentMovement);
+    OnlyData.LTPdefinition.push(...agentControlTools);
 
     const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
     function extractThinkingBlocks(text) {
@@ -2322,6 +2363,7 @@ var agentSystem = (function (exports) {
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
     exports.ThinkType = ThinkType;
+    exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
     exports.checkDueItems = checkDueItems;
     exports.cleanTextForDisplay = cleanTextForDisplay;
@@ -2329,14 +2371,14 @@ var agentSystem = (function (exports) {
     exports.executeWebSearch = executeWebSearch;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
-    exports.getPromptFromDatabase = getPromptFromDatabase;
+    exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
     exports.initWebSearch = initWebSearch;
     exports.isWebSearchReady = isWebSearchReady;
     exports.parseContent = parseContent;
-    exports.queryFromDatabase = queryFromDatabase;
+    exports.queryFromKnowledge = queryFromKnowledge;
     exports.saveImageToServer = saveImageToServer;
-    exports.savePromptToDatabase = savePromptToDatabase;
+    exports.savePromptToKnowledge = savePromptToKnowledge;
     exports.scheduleTools = scheduleTools;
     exports.screenshotTools = screenshotTools;
     exports.splitSentences = splitSentences;

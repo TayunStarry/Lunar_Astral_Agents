@@ -1,0 +1,9 @@
+{
+    "model": "index.bbmodel",
+    "animations": [
+        "animation/base.json",
+        "animation/idle.json",
+        "animation/swim.json",
+        "animation/melee.json"
+    ]
+}

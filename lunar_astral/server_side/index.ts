@@ -29,5 +29,6 @@ export * from './agent/agent';
 export * from './tool/schedule';
 export * from './tool/websearch';
 export * from './tool/screenshot';
+export * from './tool/agent-control';
 
 export * from './parser/parser';

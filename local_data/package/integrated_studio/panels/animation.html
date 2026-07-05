@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』动画操纵</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255,255,255,0.28);
+            --glass-border: rgba(255,255,255,0.35);
+            --glass-blur: 18px;
+            --radius-md: 0.75rem;
+            --text-primary: rgba(15,30,15,1);
+            --text-secondary: rgba(80,80,80,1);
+            --accent: #9d6bff;
+            --success: #20c997;
+            --danger: #dc3545;
+            --warning: #fbbf24;
+            --transition: all 0.45s ease;
+        }
+        .dark-mode {
+            --text-primary: rgba(244,244,245,1);
+            --text-secondary: rgba(180,180,180,1);
+            --glass-bg: rgba(38,38,42,0.82);
+            --glass-border: rgba(80,80,80,0.6);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: transparent;
+            font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+            font-size: 13px; color: var(--text-primary);
+            overflow-y: auto; overflow-x: hidden;
+            scrollbar-width: none;
+        }
+        body::-webkit-scrollbar { display: none; }
+
+        .panel { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .panel-title {
+            font-size: 14px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);
+        }
+        .panel-title i { color: var(--accent); }
+        .panel-title .badge {
+            margin-left: auto; font-size: 11px; padding: 2px 8px;
+            background: rgba(157,107,255,0.15); border-radius: 10px;
+            color: var(--accent); font-weight: 500;
+        }
+
+        .glass-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md); padding: 10px 12px;
+            transition: var(--transition);
+        }
+        .card-title {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-secondary);
+            margin-bottom: 8px; padding-bottom: 6px;
+            border-bottom: 1px dashed var(--glass-border);
+        }
+        .card-title i { color: var(--accent); }
+        .card-title .card-actions { margin-left: auto; display: flex; gap: 4px; }
+
+        .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn {
+            flex: 1; min-width: 60px; padding: 6px 10px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); color: var(--text-primary);
+            font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            transition: var(--transition);
+            backdrop-filter: blur(var(--glass-blur));
+        }
+        .btn:hover { background: rgba(157,107,255,0.15); border-color: var(--accent); }
+        .btn.btn-primary { background: rgba(157,107,255,0.25); border-color: var(--accent); color: var(--accent); }
+        .btn.btn-success { background: rgba(32,201,151,0.2); border-color: var(--success); color: var(--success); }
+        .btn.btn-warn { background: rgba(251,191,36,0.2); border-color: var(--warning); color: var(--warning); }
+        .btn.btn-danger { background: rgba(220,53,69,0.2); border-color: var(--danger); color: var(--danger); }
+        .btn.btn-icon { flex: 0 0 auto; min-width: 28px; padding: 4px 8px; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .field { margin-bottom: 8px; }
+        .field:last-child { margin-bottom: 0; }
+        .field-label {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;
+        }
+        .field-value { color: var(--accent); font-weight: 600; font-family: 'SF Mono','Consolas',monospace; }
+        .field-input {
+            width: 100%; padding: 6px 8px;
+            background: rgba(255,255,255,0.5); border: 1px solid var(--glass-border);
+            border-radius: 6px; color: var(--text-primary); font-size: 12px;
+            font-family: inherit;
+        }
+        .dark-mode .field-input { background: rgba(20,20,24,0.5); }
+        .field-input:focus { outline: none; border-color: var(--accent); }
+        select.field-input { cursor: pointer; }
+        textarea.field-input {
+            resize: vertical; min-height: 60px; font-family: 'SF Mono','Consolas',monospace;
+        }
+
+        input[type="range"] {
+            width: 100%; height: 4px; background: rgba(157,107,255,0.2);
+            border-radius: 2px; appearance: none; -webkit-appearance: none; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none; -webkit-appearance: none;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid #fff;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid #fff;
+        }
+
+        .anim-list {
+            max-height: 280px; overflow-y: auto;
+            scrollbar-width: none;
+        }
+        .anim-list::-webkit-scrollbar { display: none; }
+        .anim-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 10px; margin-bottom: 4px;
+            border-radius: var(--radius-md); cursor: pointer;
+            border: 1px solid transparent; transition: var(--transition);
+            font-size: 12px;
+        }
+        .anim-item:hover { background: rgba(157,107,255,0.1); }
+        .anim-item.active { background: rgba(157,107,255,0.2); border-color: var(--accent); color: var(--accent); }
+        .anim-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .anim-item .meta { font-size: 10px; opacity: 0.7; }
+        .anim-item .ops { display: flex; gap: 2px; }
+        .anim-item .ops button {
+            background: transparent; border: none; cursor: pointer;
+            padding: 2px 4px; font-size: 11px; color: var(--text-secondary);
+            border-radius: 4px; transition: var(--transition);
+        }
+        .anim-item .ops button:hover { background: rgba(157,107,255,0.2); color: var(--accent); }
+        .anim-item .ops button.danger:hover { color: var(--danger); background: rgba(220,53,69,0.15); }
+
+        .anim-seq-list {
+            display: flex; flex-direction: column; gap: 4px;
+            max-height: 160px; overflow-y: auto; scrollbar-width: none;
+            padding: 4px; background: rgba(0,0,0,0.05); border-radius: 6px;
+        }
+        .dark-mode .anim-seq-list { background: rgba(0,0,0,0.2); }
+        .anim-seq-list::-webkit-scrollbar { display: none; }
+        .anim-seq-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 8px; background: var(--glass-bg);
+            border: 1px solid var(--glass-border); border-radius: 4px;
+            font-size: 11px;
+        }
+        .anim-seq-item .idx {
+            width: 18px; height: 18px; border-radius: 50%;
+            background: rgba(157,107,255,0.2); color: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 600; flex-shrink: 0;
+        }
+        .anim-seq-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .anim-seq-item .ops button {
+            background: transparent; border: none; cursor: pointer;
+            padding: 2px; font-size: 10px; color: var(--text-secondary);
+        }
+        .anim-seq-item .ops button:hover { color: var(--accent); }
+        .anim-seq-item .ops button.danger:hover { color: var(--danger); }
+
+        .empty-state {
+            text-align: center; padding: 20px 10px;
+            color: var(--text-secondary); font-size: 12px;
+        }
+        .empty-state i { font-size: 24px; display: block; margin-bottom: 8px; opacity: 0.5; }
+
+        .toast-container {
+            position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 6px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 8px 14px; border-radius: 8px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            font-size: 12px; color: var(--text-primary);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            animation: toast-in 0.3s ease, toast-out 0.3s ease 2.4s forwards;
+            pointer-events: auto;
+        }
+        .toast.success { border-color: var(--success); color: var(--success); }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+
+        .editor-section {
+            border-top: 1px dashed var(--glass-border);
+            padding-top: 8px; margin-top: 8px;
+        }
+        .chip-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 8px; background: rgba(157,107,255,0.12);
+            border: 1px solid rgba(157,107,255,0.3); border-radius: 10px;
+            font-size: 11px; color: var(--accent); cursor: pointer;
+        }
+        .chip.selected { background: rgba(157,107,255,0.3); }
+        .chip i { font-size: 9px; }
+
+        /* 骨骼显隐列表 */
+        .bone-item {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 8px; margin-bottom: 3px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 4px; font-size: 11px; cursor: pointer;
+            transition: var(--transition);
+        }
+        .bone-item:hover { background: rgba(157,107,255,0.1); }
+        .bone-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bone-item .state {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;
+        }
+        .bone-item .state.default { background: rgba(150,150,150,0.2); color: var(--text-secondary); }
+        .bone-item .state.show { background: rgba(32,201,151,0.2); color: var(--success); }
+        .bone-item .state.hide { background: rgba(220,53,69,0.2); color: var(--danger); }
+        .bone-item.highlight { background: rgba(157,107,255,0.2); border-color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="panel-title">
+            <i class="fas fa-film"></i><span>动画操纵</span>
+            <span class="badge" id="badge-mode">运行中</span>
+        </div>
+
+        <!-- 播放控制 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-play-circle"></i><span>播放控制</span></div>
+            <div class="btn-row" style="margin-bottom: 8px;">
+                <button class="btn btn-success" id="btn-play" type="button">
+                    <i class="fas fa-play"></i><span>继续</span>
+                </button>
+                <button class="btn btn-warn" id="btn-pause" type="button">
+                    <i class="fas fa-pause"></i><span>暂停</span>
+                </button>
+            </div>
+            <div class="field">
+                <div class="field-label">
+                    <span><i class="fas fa-tachometer-alt"></i> 播放速度</span>
+                    <span class="field-value" id="val-speed">1.0×</span>
+                </div>
+                <input type="range" id="slider-speed" min="0.1" max="3.0" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <!-- 动画组列表 -->
+        <div class="glass-card">
+            <div class="card-title">
+                <i class="fas fa-layer-group"></i><span>动画组</span>
+                <span class="card-actions">
+                    <button class="btn btn-icon btn-primary" id="btn-add-group" title="新建组">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btn btn-icon" id="btn-import" title="导入配置">
+                        <i class="fas fa-file-import"></i>
+                    </button>
+                    <button class="btn btn-icon" id="btn-export" title="导出配置">
+                        <i class="fas fa-file-export"></i>
+                    </button>
+                    <button class="btn btn-icon btn-success" id="btn-save" title="保存到服务器">
+                        <i class="fas fa-save"></i>
+                    </button>
+                </span>
+            </div>
+            <div class="anim-list" id="anim-list">
+                <div class="empty-state">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>等待引擎加载动画...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 组编辑器 -->
+        <div class="glass-card" id="group-editor" style="display:none;">
+            <div class="card-title">
+                <i class="fas fa-sliders-h"></i>
+                <span>组编辑器：<span id="editor-name" style="color:var(--accent);font-weight:600;"></span></span>
+            </div>
+
+            <div class="field">
+                <div class="field-label"><span>组名</span></div>
+                <input type="text" class="field-input" id="edit-name" placeholder="组名">
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <span>循环模式</span>
+                    <span class="field-value" id="val-loop">repeat</span>
+                </div>
+                <select class="field-input" id="edit-loop">
+                    <option value="repeat">repeat — 循环重播</option>
+                    <option value="return">return — 播完回到初始并停</option>
+                    <option value="hold">hold — 停在最后一帧</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <span>过渡时长（秒）</span>
+                    <span class="field-value" id="val-transition">0.3</span>
+                </div>
+                <input type="range" id="edit-transition" min="0" max="2.0" step="0.05" value="0.3">
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <span>骨骼显隐延迟（秒）</span>
+                    <span class="field-value" id="val-delay">0.0</span>
+                </div>
+                <input type="range" id="edit-delay" min="0" max="3.0" step="0.1" value="0">
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <span>动画序列</span>
+                    <span class="field-value" id="val-seq-count">0</span>
+                </div>
+                <div class="anim-seq-list" id="anim-seq-list" style="margin-bottom:6px;">
+                    <div class="empty-state" style="padding:8px;"><span>未选择动画</span></div>
+                </div>
+                <div class="field-label" style="margin-top:6px;"><span>可用动画（点击添加）</span></div>
+                <div class="chip-list" id="anim-pool"></div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <span><i class="fas fa-bone"></i> 骨骼显隐</span>
+                    <span class="field-value" id="val-bone-count">0</span>
+                </div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">
+                    三态切换：默认 → 显 → 隐（仅显/隐会写入组配置）
+                </div>
+                <div class="anim-seq-list" id="bone-list" style="max-height:180px;">
+                    <div class="empty-state" style="padding:8px;"><span>无骨骼数据</span></div>
+                </div>
+                <div class="btn-row" style="margin-top:4px;">
+                    <button class="btn" id="btn-bone-all-default" type="button" style="font-size:11px;">
+                        <i class="fas fa-undo"></i><span>全部默认</span>
+                    </button>
+                    <button class="btn" id="btn-bone-all-show" type="button" style="font-size:11px;">
+                        <i class="fas fa-eye"></i><span>全部显示</span>
+                    </button>
+                    <button class="btn" id="btn-bone-all-hide" type="button" style="font-size:11px;">
+                        <i class="fas fa-eye-slash"></i><span>全部隐藏</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="btn-row" style="margin-top:8px;">
+                <button class="btn btn-primary" id="btn-apply" type="button">
+                    <i class="fas fa-check"></i><span>应用</span>
+                </button>
+                <button class="btn btn-warn" id="btn-activate" type="button">
+                    <i class="fas fa-bolt"></i><span>立即激活</span>
+                </button>
+                <button class="btn btn-danger" id="btn-delete" type="button">
+                    <i class="fas fa-trash"></i><span>删除</span>
+                </button>
+                <button class="btn" id="btn-close-editor" type="button">
+                    <i class="fas fa-times"></i><span>关闭</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+    <input type="file" id="file-input" accept=".json" style="display:none;">
+
+    <script>
+        // ==== 动画操纵面板 ====
+        const CHANNEL_NAME = 'integrated-studio-bus';
+        const SOURCE = 'animation-panel';
+        const channel = new BroadcastChannel(CHANNEL_NAME);
+
+        const elements = {
+            btnPlay: document.getElementById('btn-play'),
+            btnPause: document.getElementById('btn-pause'),
+            sliderSpeed: document.getElementById('slider-speed'),
+            valSpeed: document.getElementById('val-speed'),
+            animList: document.getElementById('anim-list'),
+            btnAddGroup: document.getElementById('btn-add-group'),
+            btnImport: document.getElementById('btn-import'),
+            btnExport: document.getElementById('btn-export'),
+            btnSave: document.getElementById('btn-save'),
+            // 编辑器
+            editor: document.getElementById('group-editor'),
+            editorName: document.getElementById('editor-name'),
+            editName: document.getElementById('edit-name'),
+            editLoop: document.getElementById('edit-loop'),
+            valLoop: document.getElementById('val-loop'),
+            editTransition: document.getElementById('edit-transition'),
+            valTransition: document.getElementById('val-transition'),
+            editDelay: document.getElementById('edit-delay'),
+            valDelay: document.getElementById('val-delay'),
+            animSeqList: document.getElementById('anim-seq-list'),
+            valSeqCount: document.getElementById('val-seq-count'),
+            animPool: document.getElementById('anim-pool'),
+            // 骨骼显隐
+            boneList: document.getElementById('bone-list'),
+            valBoneCount: document.getElementById('val-bone-count'),
+            btnBoneAllDefault: document.getElementById('btn-bone-all-default'),
+            btnBoneAllShow: document.getElementById('btn-bone-all-show'),
+            btnBoneAllHide: document.getElementById('btn-bone-all-hide'),
+            btnApply: document.getElementById('btn-apply'),
+            btnActivate: document.getElementById('btn-activate'),
+            btnDelete: document.getElementById('btn-delete'),
+            btnCloseEditor: document.getElementById('btn-close-editor'),
+            fileInput: document.getElementById('file-input'),
+            toastContainer: document.getElementById('toast-container'),
+            badgeMode: document.getElementById('badge-mode'),
+        };
+
+        const state = {
+            speed: 1.0,
+            groups: [],
+            allAnimations: [],
+            bones: [],
+            activeGroupName: null,
+            editingName: null,
+            editingSeq: [],
+            /** @type {Object<string, boolean>} boneName → visible */
+            editingBoneVisibility: {},
+        };
+
+        function init() {
+            bindEvents();
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+        }
+
+        function bindEvents() {
+            elements.btnPlay.addEventListener('click', () => {
+                broadcast('animation_control', { action: 'resume' });
+            });
+            elements.btnPause.addEventListener('click', () => {
+                broadcast('animation_control', { action: 'pause' });
+            });
+            elements.sliderSpeed.addEventListener('input', () => {
+                state.speed = parseFloat(elements.sliderSpeed.value);
+                elements.valSpeed.textContent = state.speed.toFixed(1) + '×';
+                broadcast('animation_control', { action: 'set_speed', speed: state.speed });
+            });
+
+            // 组管理按钮
+            elements.btnAddGroup.addEventListener('click', onCreateGroup);
+            elements.btnImport.addEventListener('click', () => elements.fileInput.click());
+            elements.btnExport.addEventListener('click', onExportConfig);
+            elements.btnSave.addEventListener('click', onSaveConfig);
+
+            elements.fileInput.addEventListener('change', onFileSelected);
+
+            // 编辑器控件
+            elements.editLoop.addEventListener('change', () => {
+                elements.valLoop.textContent = elements.editLoop.value;
+            });
+            elements.editTransition.addEventListener('input', () => {
+                elements.valTransition.textContent = parseFloat(elements.editTransition.value).toFixed(2);
+            });
+            elements.editDelay.addEventListener('input', () => {
+                elements.valDelay.textContent = parseFloat(elements.editDelay.value).toFixed(1);
+            });
+
+            elements.btnApply.addEventListener('click', onApplyEdit);
+            elements.btnActivate.addEventListener('click', onActivateGroup);
+            elements.btnDelete.addEventListener('click', onDeleteGroup);
+            elements.btnCloseEditor.addEventListener('click', () => {
+                elements.editor.style.display = 'none';
+                state.editingName = null;
+            });
+
+            // 骨骼批量操作
+            elements.btnBoneAllDefault.addEventListener('click', () => {
+                state.editingBoneVisibility = {};
+                renderBoneList();
+            });
+            elements.btnBoneAllShow.addEventListener('click', () => {
+                state.editingBoneVisibility = {};
+                for (const b of state.bones) state.editingBoneVisibility[b] = true;
+                renderBoneList();
+            });
+            elements.btnBoneAllHide.addEventListener('click', () => {
+                state.editingBoneVisibility = {};
+                for (const b of state.bones) state.editingBoneVisibility[b] = false;
+                renderBoneList();
+            });
+
+            channel.onmessage = (event) => {
+                const msg = event.data;
+                if (!msg || msg.source === SOURCE) return;
+                handleChannelMessage(msg);
+            };
+        }
+
+        function handleChannelMessage(msg) {
+            switch (msg.type) {
+                case 'animation_list':
+                    renderAnimList(msg.payload?.groups ?? []);
+                    state.allAnimations = msg.payload?.allAnimations ?? [];
+                    state.bones = msg.payload?.bones ?? [];
+                    if (state.editingName) {
+                        refreshAnimPool();
+                        renderBoneList();
+                    }
+                    break;
+                case 'anim_group_op_result': {
+                    const p = msg.payload || {};
+                    showToast(p.message || (p.ok ? '操作成功' : '操作失败'), p.ok ? 'success' : 'error');
+                    break;
+                }
+                case 'anim_group_export_result':
+                    onExportResult(msg.payload?.config);
+                    break;
+                case 'theme_changed':
+                    document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
+                    break;
+            }
+        }
+
+        // ==== 渲染组列表 ====
+        function renderAnimList(groups) {
+            state.groups = groups;
+            // 找出激活组名
+            const active = groups.find(g => g.isActive);
+            state.activeGroupName = active ? active.name : null;
+
+            if (groups.length === 0) {
+                elements.animList.innerHTML = '<div class="empty-state"><i class="fas fa-film"></i><span>暂无动画组</span></div>';
+                return;
+            }
+
+            elements.animList.innerHTML = groups.map(g => `
+                <div class="anim-item ${g.name === state.activeGroupName ? 'active' : ''}" data-name="${escapeHtml(g.name)}">
+                    <i class="fas ${g.isDefault ? 'fa-star' : (g.isActive ? 'fa-circle' : 'fa-play-circle')}"></i>
+                    <span class="name">${escapeHtml(g.name)}${g.isDefault ? ' (默认)' : ''}</span>
+                    <span class="meta">${g.animationCount ?? 0} 动画 · ${g.loopMode || 'repeat'}</span>
+                    <span class="ops">
+                        <button class="edit" title="编辑"><i class="fas fa-pen"></i></button>
+                        ${g.isDefault ? '' : '<button class="activate" title="激活"><i class="fas fa-bolt"></i></button>'}
+                        ${g.isDefault ? '' : '<button class="danger delete" title="删除"><i class="fas fa-trash"></i></button>'}
+                    </span>
+                </div>
+            `).join('');
+
+            elements.animList.querySelectorAll('.anim-item').forEach(item => {
+                const name = item.dataset.name;
+                item.addEventListener('click', (e) => {
+                    // 若点的是按钮则不触发激活
+                    if (e.target.closest('button')) return;
+                    if (name !== state.activeGroupName) {
+                        broadcast('animation_control', { action: 'play_group', groupName: name });
+                    }
+                });
+                item.querySelector('button.edit')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openEditor(name);
+                });
+                item.querySelector('button.activate')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    broadcast('animation_control', { action: 'play_group', groupName: name });
+                });
+                item.querySelector('button.delete')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`确认删除动画组「${name}」？`)) {
+                        broadcast('anim_group_delete', { name });
+                        if (state.editingName === name) {
+                            elements.editor.style.display = 'none';
+                            state.editingName = null;
+                        }
+                    }
+                });
+            });
+        }
+
+        // ==== 新建组 ====
+        function onCreateGroup() {
+            const baseName = '新建组';
+            let n = 1;
+            let name = baseName;
+            const existing = new Set(state.groups.map(g => g.name));
+            while (existing.has(name)) {
+                name = `${baseName} ${++n}`;
+            }
+            broadcast('anim_group_create', {
+                name,
+                loopMode: 'repeat',
+                transitionDuration: 0.3,
+                visibilityDelay: 0,
+                animations: [],
+            });
+            // 等待 op_result 后打开编辑器
+            const openTimer = setInterval(() => {
+                if (state.groups.find(g => g.name === name)) {
+                    clearInterval(openTimer);
+                    openEditor(name);
+                }
+            }, 100);
+            setTimeout(() => clearInterval(openTimer), 3000);
+        }
+
+        // ==== 打开编辑器 ====
+        function openEditor(name) {
+            const g = state.groups.find(x => x.name === name);
+            if (!g) return;
+            state.editingName = name;
+            state.editingSeq = Array.isArray(g.animations) ? [...g.animations] : [];
+            state.editingBoneVisibility = g.boneVisibility ? { ...g.boneVisibility } : {};
+
+            elements.editorName.textContent = g.name + (g.isDefault ? ' (默认)' : '');
+            elements.editName.value = g.name;
+            elements.editName.disabled = g.isDefault; // 默认组名不可改
+            elements.editLoop.value = g.loopMode || 'repeat';
+            elements.valLoop.textContent = elements.editLoop.value;
+            elements.editLoop.disabled = g.isDefault; // 默认组 loopMode 固定
+            elements.editTransition.value = g.transitionDuration ?? 0.3;
+            elements.valTransition.textContent = parseFloat(elements.editTransition.value).toFixed(2);
+            elements.editTransition.disabled = g.isDefault;
+            elements.editDelay.value = g.visibilityDelay ?? 0;
+            elements.valDelay.textContent = parseFloat(elements.editDelay.value).toFixed(1);
+            elements.editDelay.disabled = g.isDefault;
+
+            // 激活/删除按钮对默认组禁用
+            elements.btnActivate.disabled = g.isDefault;
+            elements.btnDelete.disabled = g.isDefault;
+
+            renderSeqList();
+            refreshAnimPool();
+            renderBoneList();
+            elements.editor.style.display = '';
+        }
+
+        // ==== 渲染骨骼显隐列表 ====
+        function renderBoneList() {
+            const bones = state.bones;
+            elements.valBoneCount.textContent = bones.length;
+            if (bones.length === 0) {
+                elements.boneList.innerHTML = '<div class="empty-state" style="padding:8px;"><span>无骨骼数据</span></div>';
+                return;
+            }
+            elements.boneList.innerHTML = bones.map(b => {
+                const vis = state.editingBoneVisibility[b];
+                const stateClass = vis === undefined ? 'default' : (vis ? 'show' : 'hide');
+                const stateIcon = vis === undefined ? 'fa-circle' : (vis ? 'fa-eye' : 'fa-eye-slash');
+                const stateText = vis === undefined ? '默认' : (vis ? '显' : '隐');
+                return `
+                    <div class="bone-item" data-bone="${escapeHtml(b)}">
+                        <span class="name" title="${escapeHtml(b)}">${escapeHtml(b)}</span>
+                        <span class="state ${stateClass}"><i class="fas ${stateIcon}"></i>${stateText}</span>
+                    </div>
+                `;
+            }).join('');
+            elements.boneList.querySelectorAll('.bone-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const bone = item.dataset.bone;
+                    const cur = state.editingBoneVisibility[bone];
+                    // 三态循环：undefined → true → false → undefined
+                    if (cur === undefined) state.editingBoneVisibility[bone] = true;
+                    else if (cur === true) state.editingBoneVisibility[bone] = false;
+                    else delete state.editingBoneVisibility[bone];
+                    // 通知引擎高亮该骨骼（3D模型上闪烁）
+                    broadcast('highlight_bone', { boneName: bone });
+                    // 重建列表
+                    renderBoneList();
+                });
+            });
+        }
+
+        function renderSeqList() {
+            elements.valSeqCount.textContent = state.editingSeq.length;
+            if (state.editingSeq.length === 0) {
+                elements.animSeqList.innerHTML = '<div class="empty-state" style="padding:8px;"><span>未选择动画</span></div>';
+                return;
+            }
+            elements.animSeqList.innerHTML = state.editingSeq.map((name, idx) => `
+                <div class="anim-seq-item">
+                    <span class="idx">${idx + 1}</span>
+                    <span class="name" title="${escapeHtml(name)}">${escapeHtml(shortName(name))}</span>
+                    <span class="ops">
+                        <button class="up" title="上移" ${idx === 0 ? 'disabled' : ''}><i class="fas fa-arrow-up"></i></button>
+                        <button class="down" title="下移" ${idx === state.editingSeq.length - 1 ? 'disabled' : ''}><i class="fas fa-arrow-down"></i></button>
+                        <button class="danger remove" title="移除"><i class="fas fa-times"></i></button>
+                    </span>
+                </div>
+            `).join('');
+            elements.animSeqList.querySelectorAll('.anim-seq-item').forEach((item, idx) => {
+                item.querySelector('button.up')?.addEventListener('click', () => {
+                    if (idx > 0) {
+                        [state.editingSeq[idx - 1], state.editingSeq[idx]] = [state.editingSeq[idx], state.editingSeq[idx - 1]];
+                        renderSeqList();
+                    }
+                });
+                item.querySelector('button.down')?.addEventListener('click', () => {
+                    if (idx < state.editingSeq.length - 1) {
+                        [state.editingSeq[idx + 1], state.editingSeq[idx]] = [state.editingSeq[idx], state.editingSeq[idx + 1]];
+                        renderSeqList();
+                    }
+                });
+                item.querySelector('button.remove').addEventListener('click', () => {
+                    state.editingSeq.splice(idx, 1);
+                    renderSeqList();
+                    refreshAnimPool();
+                });
+            });
+        }
+
+        function refreshAnimPool() {
+            if (state.allAnimations.length === 0) {
+                elements.animPool.innerHTML = '<span style="font-size:11px;opacity:0.6;">无可用动画</span>';
+                return;
+            }
+            const used = new Set(state.editingSeq);
+            elements.animPool.innerHTML = state.allAnimations.map(name => `
+                <span class="chip ${used.has(name) ? 'selected' : ''}" data-name="${escapeHtml(name)}" title="${escapeHtml(name)}">
+                    <span>${escapeHtml(shortName(name))}</span>
+                    <i class="fas ${used.has(name) ? 'fa-check' : 'fa-plus'}"></i>
+                </span>
+            `).join('');
+            elements.animPool.querySelectorAll('.chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const name = chip.dataset.name;
+                    const idx = state.editingSeq.indexOf(name);
+                    if (idx >= 0) {
+                        state.editingSeq.splice(idx, 1);
+                    } else {
+                        state.editingSeq.push(name);
+                    }
+                    renderSeqList();
+                    refreshAnimPool();
+                });
+            });
+        }
+
+        function onApplyEdit() {
+            if (!state.editingName) return;
+            const g = state.groups.find(x => x.name === state.editingName);
+            if (!g) return;
+            const newName = elements.editName.value.trim();
+            // 仅保留显/隐状态（undefined 的不写入）
+            const boneVisibility = {};
+            for (const [k, v] of Object.entries(state.editingBoneVisibility)) {
+                if (v === true || v === false) boneVisibility[k] = v;
+            }
+            const payload = {
+                name: state.editingName,
+                animations: [...state.editingSeq],
+                boneVisibility,
+                loopMode: elements.editLoop.value,
+                transitionDuration: parseFloat(elements.editTransition.value),
+                visibilityDelay: parseFloat(elements.editDelay.value),
+            };
+            broadcast('anim_group_update', payload);
+            // 若改了名字，关闭编辑器避免名字错位
+            if (!g.isDefault && newName && newName !== state.editingName) {
+                broadcast('anim_group_delete', { name: state.editingName });
+                broadcast('anim_group_create', { ...payload, name: newName });
+                state.editingName = newName;
+                elements.editorName.textContent = newName;
+            }
+        }
+
+        function onActivateGroup() {
+            if (!state.editingName) return;
+            broadcast('animation_control', { action: 'play_group', groupName: state.editingName });
+        }
+
+        function onDeleteGroup() {
+            if (!state.editingName) return;
+            if (!confirm(`确认删除动画组「${state.editingName}」？`)) return;
+            broadcast('anim_group_delete', { name: state.editingName });
+            elements.editor.style.display = 'none';
+            state.editingName = null;
+        }
+
+        // ==== 导入/导出/保存 ====
+        function onExportConfig() {
+            broadcast('anim_group_export', {});
+        }
+
+        function onExportResult(config) {
+            if (!config) return;
+            try {
+                const json = JSON.stringify(config, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'anim_group_config.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('配置已导出', 'success');
+            } catch (err) {
+                showToast('导出失败：' + err.message, 'error');
+            }
+        }
+
+        function onSaveConfig() {
+            broadcast('anim_group_save', {});
+        }
+
+        function onFileSelected(e) {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const text = String(reader.result || '');
+                    JSON.parse(text); // 仅校验
+                    broadcast('anim_group_import', { config: text });
+                } catch (err) {
+                    showToast('文件解析失败：' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // 允许重复选择同一文件
+        }
+
+        // ==== Toast ====
+        function showToast(message, type = '') {
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = message;
+            elements.toastContainer.appendChild(el);
+            setTimeout(() => el.remove(), 2800);
+        }
+
+        // ==== 工具 ====
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+        function shortName(full) {
+            if (!full) return '';
+            const parts = full.split('.');
+            return parts[parts.length - 1];
+        }
+
+        function broadcast(type, payload) {
+            channel.postMessage({ type, source: SOURCE, payload, timestamp: Date.now() });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
