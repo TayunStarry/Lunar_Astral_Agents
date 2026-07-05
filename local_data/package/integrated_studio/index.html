@@ -34,6 +34,9 @@
                 <button class="tab-btn" data-panel="elements" type="button">
                     <i class="fas fa-shapes"></i><span>元素</span>
                 </button>
+                <button class="tab-btn" data-panel="assets" type="button">
+                    <i class="fas fa-folder-open"></i><span>资产</span>
+                </button>
             </div>
             <div class="toolbar">
                 <button class="tool-btn" id="btn-mode" type="button" title="切换编辑器/嵌入式视图">
@@ -59,6 +62,7 @@
             <iframe data-panel="animation" src="panels/animation.html" class="active" title="动画操纵面板"></iframe>
             <iframe data-panel="movement"  src="panels/movement.html"  hidden title="位移操纵面板"></iframe>
             <iframe data-panel="elements"  src="panels/elements.html"  hidden title="元素操纵面板"></iframe>
+            <iframe data-panel="assets"    src="panels/assets.html"    hidden title="资产管理面板"></iframe>
             <div class="panel-loading" hidden>
                 <i class="fas fa-spinner fa-spin"></i>
                 <span>加载中...</span>
@@ -89,6 +93,7 @@
                         <tr><td><kbd>W</kbd> / <kbd>A</kbd> / <kbd>S</kbd> / <kbd>D</kbd></td><td>角色水平移动（相机相对）</td><td>点击引擎视口获取焦点后</td></tr>
                         <tr><td><kbd>Space</kbd></td><td>跳跃（高度 = 0.5 × 包围盒高度）</td><td>角色接地时</td></tr>
                         <tr><td><kbd>Ctrl</kbd></td><td>潜行（碰撞箱减半，移速 ×0.5）</td><td>角色接地时</td></tr>
+                        <tr><td><kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd></td><td>切换编辑模式：位移 / 旋转 / 缩放</td><td>选中图元时</td></tr>
                         <tr><td><kbd>Z</kbd></td><td>切换物理碰撞体线框可视化</td><td>引擎视口聚焦</td></tr>
                         <tr><td>鼠标拖拽</td><td>轨道相机旋转</td><td>引擎视口</td></tr>
                         <tr><td>滚轮</td><td>相机缩放</td><td>引擎视口</td></tr>

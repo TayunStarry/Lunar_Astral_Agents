@@ -20,11 +20,13 @@ class PhysicsManager {
 
         // 可调参数
         this._massSingle = 1;
+        this._density = 1.0; // 密度系数（质量 = 体积 × 密度）
         this._linearDamping = 0.1;
         this._angularDamping = 0.1;
         this._restitution = 0.3;
         this._friction = 0.3;
-        this.fallSpeedMultiplier = 2.0;
+        this.fallSpeedMultiplier = 3.0;
+        this._stepRate = 120; // 物理逻辑帧率（world.step 的 1/timestep）
 
         // 碰撞体调试可视化
         this._debugGroup = null;       // THREE.Group 持有所有调试线框
@@ -63,6 +65,9 @@ class PhysicsManager {
     get massSingle() { return this._massSingle; }
     set massSingle(v) { this._massSingle = v; }
 
+    get density() { return this._density; }
+    set density(v) { this._density = v; }
+
     get linearDamping() { return this._linearDamping; }
     set linearDamping(v) { this._linearDamping = v; }
 
@@ -97,6 +102,73 @@ class PhysicsManager {
     }
 
     // ============ 碰撞体生成 ============
+
+    /**
+     * 根据图元参数计算体积
+     * @param {string} type 图元类型
+     * @param {object} params 图元参数
+     * @param {{x,y,z}} scale 有效缩放
+     * @returns {number} 体积
+     */
+    computeVolume(type, params = {}, scale = { x: 1, y: 1, z: 1 }) {
+        const sx = scale.x, sy = scale.y, sz = scale.z;
+        switch (type) {
+            case 'cube': {
+                const w = (params.w || 1) * sx;
+                const h = (params.h || 1) * sy;
+                const d = (params.d || 1) * sz;
+                return w * h * d;
+            }
+            case 'sphere': {
+                const r = (params.r || 0.5) * Math.max(sx, sy, sz);
+                return (4 / 3) * Math.PI * r * r * r;
+            }
+            case 'cylinder': {
+                const rt = (params.rt ?? 0.5) * Math.max(sx, sz);
+                const rb = (params.rb ?? 0.5) * Math.max(sx, sz);
+                const h = (params.h || 1) * sy;
+                return Math.PI * ((rt + rb) / 2) * ((rt + rb) / 2) * h;
+            }
+            case 'cone': {
+                const r = (params.r || 0.5) * Math.max(sx, sz);
+                const h = (params.h || 1) * sy;
+                return (1 / 3) * Math.PI * r * r * h;
+            }
+            case 'plane': {
+                const w = (params.w || 1) * sx;
+                const h = (params.h || 1) * sy;
+                return w * h * 0.01; // 平面厚度极小
+            }
+            case 'torus': {
+                const R = (params.r || 0.5) * Math.max(sx, sy);
+                const t = (params.t || 0.2) * Math.max(sx, sy, sz);
+                return 2 * Math.PI * Math.PI * R * t * t;
+            }
+            case 'dodecahedron':
+            case 'octahedron':
+            case 'tetrahedron': {
+                const r = (params.r || 0.5) * Math.max(sx, sy, sz);
+                // 近似为球体体积的某个比例
+                const factor = type === 'dodecahedron' ? 0.87 : type === 'octahedron' ? 0.52 : 0.28;
+                return factor * (4 / 3) * Math.PI * r * r * r;
+            }
+            case 'torusKnot': {
+                const R = (params.r || 0.5) * Math.max(sx, sy, sz);
+                const t = (params.t || 0.15) * Math.max(sx, sy, sz);
+                // 近似：管体积 × 缠绕系数
+                return 2.5 * Math.PI * Math.PI * R * t * t;
+            }
+            case 'ring': {
+                const inner = (params.inner || 0.3) * Math.max(sx, sy);
+                const outer = (params.outer || 0.5) * Math.max(sx, sy);
+                return Math.PI * (outer * outer - inner * inner) * 0.01; // 薄片
+            }
+            default: {
+                // 兜底：用包围盒体积
+                return (1 * sx) * (1 * sy) * (1 * sz);
+            }
+        }
+    }
 
     /**
      * 根据图元类型生成对应的 CANNON 碰撞形状
@@ -389,8 +461,32 @@ class PhysicsManager {
             mass = 0;
         } else {
             bodyType = CANNON.Body.DYNAMIC;
-            const childCount = mesh.userData.type === 'group' ? mesh.children.length : 1;
-            mass = childCount * this._massSingle;
+            // 质量按体积 × 密度计算
+            if (mesh.userData.type === 'group') {
+                // 组合体：累加子图元体积
+                let totalVol = 0;
+                for (const child of mesh.children) {
+                    const childScale = {
+                        x: mesh.scale.x * child.scale.x,
+                        y: mesh.scale.y * child.scale.y,
+                        z: mesh.scale.z * child.scale.z,
+                    };
+                    totalVol += this.computeVolume(
+                        child.userData.type,
+                        child.userData.primitiveParams || {},
+                        childScale
+                    );
+                }
+                mass = Math.max(totalVol * this._density, 0.1);
+            } else {
+                // 基础图元：按体积计算
+                const vol = this.computeVolume(
+                    mesh.userData.type,
+                    mesh.userData.primitiveParams || {},
+                    { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z }
+                );
+                mass = Math.max(vol * this._density, 0.1);
+            }
         }
 
         const body = new CANNON.Body({

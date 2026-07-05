@@ -1,0 +1,10 @@
+{
+  "physics": {
+    "restitution": 0.3,
+    "friction": 0.3,
+    "linearDamping": 0.1,
+    "angularDamping": 0.1,
+    "fallSpeedMultiplier": 3,
+    "gravity": -9.82
+  }
+}

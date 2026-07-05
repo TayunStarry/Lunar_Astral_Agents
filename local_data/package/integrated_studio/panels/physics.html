@@ -193,13 +193,6 @@
             </div>
         </div>
 
-        <!-- 状态 -->
-        <div class="glass-card">
-            <div class="stat-row"><span>物理体数</span><span id="stat-bodies">0</span></div>
-            <div class="stat-row"><span>接地状态</span><span id="stat-grounded">是</span></div>
-            <div class="stat-row"><span>潜行状态</span><span id="stat-sneaking">否</span></div>
-        </div>
-
         <!-- 操作按钮 -->
         <div class="btn-row">
             <button class="btn btn-primary" id="btn-apply" type="button">
@@ -231,9 +224,7 @@
             valFallSpeed: document.getElementById('val-fall-speed'),
             toggleDebug: document.getElementById('toggle-debug'),
             toggleFixedRot: document.getElementById('toggle-fixedRot'),
-            statBodies: document.getElementById('stat-bodies'),
-            statGrounded: document.getElementById('stat-grounded'),
-            statSneaking: document.getElementById('stat-sneaking'),
+
             btnApply: document.getElementById('btn-apply'),
             btnReset: document.getElementById('btn-reset'),
         };
@@ -361,9 +352,6 @@
 
         function updateStats(p) {
             if (!p) return;
-            elements.statBodies.textContent = `${p.physicsBodyCount ?? 0}`;
-            elements.statGrounded.textContent = p.isGrounded ? '是' : '否';
-            elements.statSneaking.textContent = p.isSneaking ? '是' : '否';
         }
 
         document.addEventListener('DOMContentLoaded', init);

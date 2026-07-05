@@ -88,6 +88,22 @@ let compassAngle = 0;
 let telemetryTimer = 0;
 let molangTimer = 0;
 
+/** 图片资产库：uuid → { uuid, base64, name } */
+const imageAssetStore = new Map();
+
+/** 物理禁用模式：开启后新创建图元不自动启用物理化 */
+let physicsDisabled = false;
+
+/** FPS 采样（最近 30 秒，用于调试覆盖层显示平均 FPS） */
+const _fpsSamples = [];
+let _fpsSampleTimer = 0;
+
+/** 当前选中的图元/组合体 ID（用于编辑模式） */
+let selectedElementId = null;
+
+/** 编辑模式：translate / rotate / scale */
+let editMode = 'translate';
+
 // ==== 指令队列（位移优先，10 秒超时） ====
 const commandQueue = [];
 let isExecutingCommand = false;
@@ -101,18 +117,22 @@ const ACTION_DEFINITIONS = {
 
 // ==== 点击检测：骨骼→部位映射 ====
 const BONE_PART_MAP = {
-    'headCheek': '头部',
-    'RightLongHair': '头发',
-    'LeftLongHair': '头发',
-    'whole': '胸部',
-    'RightArm': '右臂',
-    'LeftArm': '左臂',
-    'RightForeArm': '右臂',
-    'LeftForeArm': '左臂',
-    'RightHand': '右手',
-    'LeftHand': '左手',
-    'RightLeg': '右腿',
-    'LeftLeg': '左腿',
+    'head': '头部',
+    'hairBack': '马尾辫',
+    'hair': '头发',
+    'chest': '胸部',
+    'rightArm': '右大臂',
+    'leftArm': '左大臂',
+    'rightForeArm': '右小臂',
+    'leftForeArm': '左小臂',
+    'rightHand': '右手',
+    'LeftHand': 'leftHand',
+    'rightLeg': '右大腿',
+    'LeftLeg': '左大腿',
+    'rightLowerLeg':'右小腿',
+    'leftLowerLeg':'左小腿',
+    'leftFoot':'左脚',
+    'rightFoot':'右脚',
 };
 
 const raycaster = new THREE.Raycaster();
@@ -190,6 +210,9 @@ async function init() {
     // 14. 自动加载资源
     await autoLoadResources();
 
+    // 14.5 自动加载纹理库到 imageAssetStore
+    await autoLoadImageAssets();
+
     // 15. 角色物理初始化（模型加载后计算静态 AABB — Q8）
     if (currentModel) {
         characterPhysics.attachToModel(renderer.modelRoot);
@@ -234,6 +257,14 @@ async function init() {
 
 // ==== 渲染循环 ====
 function onUpdate(dt) {
+    // FPS 采样（每 0.5 秒取一次，保留 30 秒 = 60 个样本）
+    _fpsSampleTimer += dt;
+    if (_fpsSampleTimer >= 0.5) {
+        _fpsSampleTimer = 0;
+        _fpsSamples.push(renderer?.fps ?? 0);
+        if (_fpsSamples.length > 60) _fpsSamples.shift();
+    }
+
     // 1. 动画系统 tick
     animGroupRuntime?.tick(dt);
     specialAnimRuntime?.tick(dt);
@@ -325,6 +356,27 @@ async function autoLoadResources() {
         console.log(`[Engine] 已加载 ${currentAnimations.size} 个动画`);
     } catch (err) {
         console.error('[Engine] 自动加载失败:', err);
+    }
+}
+
+// ==== 自动加载纹理库 ====
+async function autoLoadImageAssets() {
+    try {
+        const resp = await fetch('/file/read/package/integrated_studio/property/images_config.json');
+        if (!resp.ok) {
+            console.warn('[Engine] 未找到 images_config.json');
+            return;
+        }
+        const data = await resp.json();
+        if (data.images) {
+            for (const [uuid, info] of Object.entries(data.images)) {
+                imageAssetStore.set(uuid, { uuid, base64: info.base64, name: info.name || uuid });
+            }
+            console.log(`[Engine] 已加载 ${imageAssetStore.size} 个纹理资产`);
+            broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+        }
+    } catch (err) {
+        console.warn('[Engine] 纹理库加载失败:', err);
     }
 }
 
@@ -439,7 +491,27 @@ function bindKeyboard() {
     window.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-        switch (e.code) {
+        const code = e.code;
+
+        // 选中元素编辑控制：WASD/Space/Shift 优先用于编辑
+        if (selectedElementId && !movementController?._hasTarget) {
+            const dirMap = {
+                'KeyW': 'north', 'KeyS': 'south',
+                'KeyD': 'east', 'KeyA': 'west',
+                'Space': 'up', 'ShiftLeft': 'down', 'ShiftRight': 'down',
+            };
+            const dir = dirMap[code];
+            if (dir) {
+                handleChannelMessage({ type: 'element_edit_step', payload: { direction: dir, step: 1 } });
+                return; // 不再传递给角色移动控制
+            }
+        }
+        // 模式切换快捷键
+        if (code === 'Digit1') { editMode = 'translate'; broadcast('edit_mode_changed', { mode: 'translate' }); return; }
+        if (code === 'Digit2') { editMode = 'rotate'; broadcast('edit_mode_changed', { mode: 'rotate' }); return; }
+        if (code === 'Digit3') { editMode = 'scale'; broadcast('edit_mode_changed', { mode: 'scale' }); return; }
+
+        switch (code) {
             case 'KeyZ':
                 togglePhysicsDebug();
                 break;
@@ -520,15 +592,34 @@ function updateDebugOverlay() {
     if (!overlay) return;
 
     const bodyCount = physicsManager?.bodies.size ?? 0;
-    const grounded = characterPhysics?.isGrounded ? '接地' : '空中';
-    const sneaking = characterPhysics?.isSneaking ? ' 潜行' : '';
-    const vel = characterPhysics?._body?.velocity;
-    const speed = vel ? Math.sqrt(vel.x ** 2 + vel.z ** 2).toFixed(1) : '0';
-    const vy = vel ? vel.y.toFixed(1) : '0';
+
+    // 模型面数
+    let faceCount = 0;
+    if (renderer?.modelRoot) {
+        renderer.modelRoot.traverse(child => {
+            if (child.isMesh && child.geometry) {
+                const idx = child.geometry.index;
+                if (idx) faceCount += idx.count / 3;
+                else {
+                    const pos = child.geometry.getAttribute('position');
+                    if (pos) faceCount += pos.count / 3;
+                }
+            }
+        });
+    }
+    const faceStr = faceCount >= 1000 ? (faceCount / 1000).toFixed(1) + 'K' : Math.round(faceCount);
+
+    // 30秒平均FPS
+    const avgFps = _fpsSamples.length > 0
+        ? (_fpsSamples.reduce((a, b) => a + b, 0) / _fpsSamples.length).toFixed(1)
+        : '--';
+
+    // 物理引擎逻辑帧率
+    const physStepRate = physicsManager?._stepRate ?? 60;
 
     overlay.textContent =
-        `物理体: ${bodyCount}  ${grounded}${sneaking}\n` +
-        `水平速度: ${speed}  垂直速度: ${vy}`;
+        `面数: ${faceStr}  物理体: ${bodyCount}\n` +
+        `平均FPS: ${avgFps}  物理帧率: ${physStepRate}Hz`;
 }
 
 // ==== BroadcastChannel 消息处理 ====
@@ -543,6 +634,17 @@ async function handleChannelMessage(msg) {
             }
             if (source === 'elements-panel') {
                 broadcastCompoundsList();
+                // 广播所有现有图元信息（用于解散组合体后子图元回归列表）
+                for (const mesh of primitives?.getAll?.() || []) {
+                    if (!primitives?.isCompound?.(mesh.userData.id)) {
+                        broadcast('primitive_created', {
+                            id: mesh.userData.id,
+                            type: mesh.userData.type,
+                            color: mesh.material?.color?.getHex?.() ?? 0x9d6bff,
+                            isCompound: false,
+                        });
+                    }
+                }
             }
             break;
 
@@ -707,8 +809,10 @@ async function handleChannelMessage(msg) {
                     color: spec.color,
                     isCompound: false,
                 });
-                // 全局物理：新增图元立即加入物理世界
-                physicsManager?.addPrimitive?.(createdMesh);
+                // 全局物理：新增图元，仅在物理未禁用时启用
+                if (!physicsDisabled) {
+                    physicsManager?.addPrimitive?.(createdMesh);
+                }
                 // 广播生成位置信息给元素面板
                 broadcast('primitive_spawn_info', {
                     id: createdMesh.userData.id,
@@ -777,9 +881,22 @@ async function handleChannelMessage(msg) {
         }
 
         case 'texture_apply': {
-            const ok = primitives?.applyTexture?.(payload.id, payload.dataUrl, {
-                repeat: payload.repeat,
-            });
+            let dataUrl = payload.dataUrl;
+            // 如果传了 textureUUID，从图片资产库查找 base64
+            if (!dataUrl && payload.textureUUID) {
+                const imgAsset = imageAssetStore.get(payload.textureUUID);
+                if (imgAsset) dataUrl = imgAsset.base64;
+            }
+            if (!dataUrl) {
+                broadcast('texture_op_result', { ok: false, id: payload.id, action: 'apply' });
+                break;
+            }
+            const repeat = { x: payload.repeatU || 1, y: payload.repeatV || 1 };
+            const ok = primitives?.applyTexture?.(payload.id, dataUrl, { repeat });
+            if (ok && payload.textureUUID) {
+                const mesh = primitives?.getById?.(payload.id);
+                if (mesh) mesh.userData.textureUUID = payload.textureUUID;
+            }
             broadcast('texture_op_result', { ok: !!ok, id: payload.id, action: 'apply' });
             break;
         }
@@ -790,9 +907,58 @@ async function handleChannelMessage(msg) {
             break;
         }
 
-        case 'asset_export_one': {
-            const asset = primitives?.exportAsset?.(payload.id);
-            broadcast('asset_export_result', { id: payload.id, asset });
+        case 'texture_list_request': {
+            const textures = [];
+            for (const [uuid, asset] of imageAssetStore) {
+                textures.push({ uuid: asset.uuid, name: asset.name, thumbnail: asset.base64 });
+            }
+            broadcast('texture_list', { textures });
+            break;
+        }
+
+        case 'image_asset_save': {
+            const { uuid, base64, name } = payload || {};
+            if (!uuid || !base64) break;
+            imageAssetStore.set(uuid, { uuid, base64, name: name || uuid });
+            broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+            break;
+        }
+
+        case 'image_asset_delete': {
+            const { uuid } = payload || {};
+            if (!uuid) break;
+            imageAssetStore.delete(uuid);
+            broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+            break;
+        }
+
+        case 'image_assets_list_request': {
+            broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+            break;
+        }
+
+        case 'assets_list_request': {
+            // 扫描 model/assets/ 目录中的 JSON 文件列表
+            try {
+                const listPath = 'package/integrated_studio/model/assets/';
+                const resp = await fetch(`/file/read/${listPath}`);
+                if (resp.ok) {
+                    const dirListing = await resp.json();
+                    // dirListing 可能是文件名数组或对象
+                    const files = Array.isArray(dirListing) ? dirListing : Object.keys(dirListing || {});
+                    const assets = files
+                        .filter(f => f.endsWith('.json'))
+                        .map(f => {
+                            const name = f.replace(/\.json$/, '');
+                            return { id: name, name, type: 'unknown', primitiveCount: 0 };
+                        });
+                    broadcast('assets_list', { assets });
+                } else {
+                    broadcast('assets_list', { assets: [] });
+                }
+            } catch (err) {
+                broadcast('assets_list', { assets: [] });
+            }
             break;
         }
 
@@ -804,7 +970,7 @@ async function handleChannelMessage(msg) {
         case 'asset_import': {
             try {
                 const json = typeof payload.asset === 'string' ? JSON.parse(payload.asset) : payload.asset;
-                const obj = primitives?.importAsset?.(json);
+                const obj = primitives?.importAsset?.(json, imageAssetStore);
                 if (obj) {
                     if (obj.isGroup) {
                         broadcast('compound_created', {
@@ -831,9 +997,453 @@ async function handleChannelMessage(msg) {
             break;
         }
 
+        case 'config_save': {
+            const configType = payload?.type; // 'physics', 'scene', 'images', 'all'
+            const saveData = {};
+
+            if (configType === 'physics' || configType === 'all') {
+                saveData.physics = {
+                    restitution: physicsManager?.restitution ?? 0.3,
+                    friction: physicsManager?.friction ?? 0.3,
+                    linearDamping: physicsManager?.linearDamping ?? 0.1,
+                    angularDamping: physicsManager?.angularDamping ?? 0.1,
+                    fallSpeedMultiplier: physicsManager?.fallSpeedMultiplier ?? 3.0,
+                    gravity: physicsManager?.gravity ?? -9.82,
+                };
+            }
+
+            if (configType === 'scene' || configType === 'all') {
+                const prims = [];
+                for (const mesh of primitives?.getAll?.() || []) {
+                    const exportData = primitives.exportAsset(mesh.userData.id);
+                    if (exportData) prims.push(exportData);
+                }
+                for (const c of primitives?.getCompounds?.() || []) {
+                    const exportData = primitives.exportAsset(c.id);
+                    if (exportData) prims.push(exportData);
+                }
+                saveData.scene = {
+                    primitives: prims,
+                    characterPosition: renderer?.modelRoot?.position
+                        ? { x: renderer.modelRoot.position.x, y: renderer.modelRoot.position.y, z: renderer.modelRoot.position.z }
+                        : { x: 0, y: 0, z: 0 },
+                };
+            }
+
+            if (configType === 'images' || configType === 'all') {
+                const images = {};
+                for (const [uuid, asset] of imageAssetStore) {
+                    images[uuid] = { base64: asset.base64, name: asset.name };
+                }
+                saveData.images = images;
+            }
+
+            // 写入 property/ 文件夹
+            const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
+            const relativePath = `package/integrated_studio/property/${fileName}.json`;
+            try {
+                const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
+                const resp = await fetch('/file/write', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-File-Name': encodedPath,
+                        'X-Overwrite': 'true',
+                    },
+                    body: JSON.stringify(saveData, null, 2),
+                });
+                if (resp.ok) {
+                    broadcast('config_save_result', { type: configType, ok: true, message: `已保存至 property/${fileName}.json` });
+                } else {
+                    broadcast('config_save_result', { type: configType, ok: false, message: `保存失败：HTTP ${resp.status}` });
+                }
+            } catch (err) {
+                broadcast('config_save_result', { type: configType, ok: false, message: '保存异常：' + err.message });
+            }
+            break;
+        }
+
+        case 'config_load': {
+            const configType = payload?.type; // 'physics', 'scene', 'images', 'all'
+            const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
+            const relativePath = `package/integrated_studio/property/${fileName}.json`;
+            try {
+                const resp = await fetch(`/file/read/${relativePath}`);
+                if (!resp.ok) {
+                    broadcast('config_load_result', { type: configType, ok: false, message: `文件不存在或读取失败：HTTP ${resp.status}` });
+                    break;
+                }
+                const data = await resp.json();
+
+                if ((configType === 'physics' || configType === 'all') && data.physics) {
+                    const p = data.physics;
+                    if (physicsManager) {
+                        if (p.restitution !== undefined) physicsManager.restitution = p.restitution;
+                        if (p.friction !== undefined) physicsManager.friction = p.friction;
+                        if (p.linearDamping !== undefined) physicsManager.linearDamping = p.linearDamping;
+                        if (p.angularDamping !== undefined) physicsManager.angularDamping = p.angularDamping;
+                        if (p.fallSpeedMultiplier !== undefined) physicsManager.fallSpeedMultiplier = p.fallSpeedMultiplier;
+                        if (p.gravity !== undefined) physicsManager.gravity = p.gravity;
+                    }
+                    broadcast('physics_param', {
+                        restitution: physicsManager?.restitution,
+                        friction: physicsManager?.friction,
+                        linearDamping: physicsManager?.linearDamping,
+                        angularDamping: physicsManager?.angularDamping,
+                        fallSpeedMultiplier: physicsManager?.fallSpeedMultiplier,
+                        gravity: physicsManager?.gravity,
+                    });
+                }
+
+                if ((configType === 'scene' || configType === 'all') && data.scene) {
+                    physicsManager?.reset();
+                    primitives?.clear();
+                    const sceneData = data.scene;
+                    if (sceneData.primitives) {
+                        for (const asset of sceneData.primitives) {
+                            const obj = primitives?.importAsset?.(asset, imageAssetStore);
+                            if (obj && !physicsDisabled) physicsManager?.addPrimitive?.(obj);
+                            // 广播每个图元/组合体的创建事件，供元素面板刷新列表
+                            if (obj) {
+                                if (obj.isGroup || obj.userData?.type === 'group') {
+                                    broadcast('compound_created', {
+                                        id: obj.userData.id,
+                                        name: obj.userData.name,
+                                        memberIds: obj.userData.compoundMemberIds,
+                                        anchored: !!obj.userData.physics?.anchored,
+                                    });
+                                } else {
+                                    broadcast('primitive_created', {
+                                        id: obj.userData.id,
+                                        type: obj.userData.type,
+                                        color: obj.material?.color?.getHex?.() ?? 0x9d6bff,
+                                        isCompound: false,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    if (sceneData.characterPosition && renderer?.modelRoot) {
+                        renderer.modelRoot.position.set(
+                            sceneData.characterPosition.x,
+                            sceneData.characterPosition.y,
+                            sceneData.characterPosition.z
+                        );
+                    }
+                    broadcastCompoundsList();
+                }
+
+                if ((configType === 'images' || configType === 'all') && data.images) {
+                    imageAssetStore.clear();
+                    for (const [uuid, info] of Object.entries(data.images)) {
+                        imageAssetStore.set(uuid, { uuid, base64: info.base64, name: info.name || uuid });
+                    }
+                    broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+                }
+
+                broadcast('config_load_result', { type: configType, ok: true, message: `已从 property/${fileName}.json 加载` });
+            } catch (err) {
+                broadcast('config_load_result', { type: configType, ok: false, message: '加载异常：' + err.message });
+            }
+            break;
+        }
+
+        case 'scene_load': {
+            // 同 config_load scene 分支
+            const data = payload;
+            if (!data?.scene) break;
+            physicsManager?.reset();
+            primitives?.clear();
+            for (const asset of data.scene.primitives || []) {
+                const obj = primitives?.importAsset?.(asset, imageAssetStore);
+                if (obj && !physicsDisabled) physicsManager?.addPrimitive?.(obj);
+            }
+            if (data.scene.characterPosition && renderer?.modelRoot) {
+                renderer.modelRoot.position.set(
+                    data.scene.characterPosition.x,
+                    data.scene.characterPosition.y,
+                    data.scene.characterPosition.z
+                );
+            }
+            broadcastCompoundsList();
+            break;
+        }
+
+        case 'physics_disabled': {
+            physicsDisabled = !!payload?.enabled;
+            break;
+        }
+
+        case 'element_select': {
+            const id = payload?.id;
+            if (selectedElementId) {
+                // 取消之前的选中
+                broadcast('element_deselected', { id: selectedElementId });
+            }
+            selectedElementId = id;
+            if (id) {
+                // 选中时：卸载物理体 + 网格对齐
+                const mesh = primitives?.getById?.(id);
+                if (mesh) {
+                    physicsManager?.removePrimitive?.(mesh);
+                    // 网格对齐：位置规整到整数
+                    mesh.position.x = Math.round(mesh.position.x);
+                    mesh.position.y = Math.round(mesh.position.y);
+                    mesh.position.z = Math.round(mesh.position.z);
+                    // 显示选中高亮
+                    mesh.traverse(child => {
+                        if (child.isMesh && child.material) {
+                            child.userData._origEmissive = child.material.emissive?.clone?.();
+                            child.userData._origEmissiveIntensity = child.material.emissiveIntensity ?? 0;
+                            if (child.material.emissive !== undefined) {
+                                child.material.emissive.setHex(0x6c9bcf);
+                                child.material.emissiveIntensity = 0.4;
+                            }
+                        }
+                    });
+                }
+                broadcast('element_selected', { id, position: mesh ? { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z } : null });
+            }
+            break;
+        }
+
+        case 'element_deselect': {
+            if (selectedElementId) {
+                const mesh = primitives?.getById?.(selectedElementId);
+                if (mesh) {
+                    // 移除选中高亮
+                    mesh.traverse(child => {
+                        if (child.isMesh && child.material) {
+                            if (child.userData._origEmissive) {
+                                child.material.emissive?.copy(child.userData._origEmissive);
+                                child.material.emissiveIntensity = child.userData._origEmissiveIntensity ?? 0;
+                            }
+                            delete child.userData._origEmissive;
+                            delete child.userData._origEmissiveIntensity;
+                        }
+                    });
+                }
+                broadcast('element_deselected', { id: selectedElementId });
+                selectedElementId = null;
+            }
+            break;
+        }
+
+        case 'element_edit_mode': {
+            editMode = payload?.mode || 'translate'; // translate, rotate, scale
+            break;
+        }
+
+        case 'element_edit_step': {
+            // WASD/Space/Shift 控制选中元素
+            if (!selectedElementId) break;
+            const mesh = primitives?.getById?.(selectedElementId);
+            if (!mesh) break;
+            const step = payload?.step || 1;
+            const dir = payload?.direction; // 'up','down','north','south','east','west'
+
+            switch (editMode) {
+                case 'translate':
+                    if (dir === 'north') mesh.position.z -= step;
+                    else if (dir === 'south') mesh.position.z += step;
+                    else if (dir === 'east') mesh.position.x += step;
+                    else if (dir === 'west') mesh.position.x -= step;
+                    else if (dir === 'up') mesh.position.y += step;
+                    else if (dir === 'down') mesh.position.y -= step;
+                    break;
+                case 'rotate':
+                    const angle = (Math.PI / 12) * step; // 15度步进
+                    if (dir === 'north' || dir === 'south') mesh.rotation.x += (dir === 'north' ? -angle : angle);
+                    else if (dir === 'east' || dir === 'west') mesh.rotation.y += (dir === 'east' ? angle : -angle);
+                    else if (dir === 'up' || dir === 'down') mesh.rotation.z += (dir === 'up' ? angle : -angle);
+                    break;
+                case 'scale':
+                    const s = 0.1 * step;
+                    if (dir === 'north' || dir === 'south') mesh.scale.y += (dir === 'north' ? s : -s);
+                    else if (dir === 'east' || dir === 'west') mesh.scale.x += (dir === 'east' ? s : -s);
+                    else if (dir === 'up' || dir === 'down') mesh.scale.z += (dir === 'up' ? s : -s);
+                    break;
+            }
+            // 位移模式网格对齐
+            if (editMode === 'translate') {
+                mesh.position.x = Math.round(mesh.position.x);
+                mesh.position.y = Math.round(mesh.position.y);
+                mesh.position.z = Math.round(mesh.position.z);
+            }
+            broadcast('element_transform', {
+                id: selectedElementId,
+                position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+                rotation: { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z },
+                scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z },
+                mode: editMode,
+            });
+            break;
+        }
+
+        case 'element_physics_enable': {
+            const id = payload?.id;
+            const mesh = primitives?.getById?.(id);
+            if (mesh) physicsManager?.addPrimitive?.(mesh);
+            break;
+        }
+
+        case 'element_physics_disable': {
+            const id = payload?.id;
+            const mesh = primitives?.getById?.(id);
+            if (mesh) physicsManager?.removePrimitive?.(mesh);
+            break;
+        }
+
+        case 'unload_all_physics': {
+            // 卸载所有非角色图元/组合体的物理效果并对齐网格
+            for (const mesh of primitives?.getAll?.() || []) {
+                physicsManager?.removePrimitive?.(mesh);
+                mesh.position.x = Math.round(mesh.position.x);
+                mesh.position.y = Math.round(mesh.position.y);
+                mesh.position.z = Math.round(mesh.position.z);
+            }
+            broadcast('all_physics_unloaded', {});
+            break;
+        }
+
         case 'theme_changed':
             document.body.classList.toggle('dark-mode', payload?.dark === true);
             break;
+
+        case 'config_import_json': {
+            const configType = payload?.type;
+            const data = payload?.data;
+            if (!data) break;
+            // 复用 config_load 的加载逻辑，但从 payload 读取而非文件
+            if ((configType === 'physics') && data.physics) {
+                const p = data.physics;
+                if (physicsManager) {
+                    if (p.restitution !== undefined) physicsManager.restitution = p.restitution;
+                    if (p.friction !== undefined) physicsManager.friction = p.friction;
+                    if (p.linearDamping !== undefined) physicsManager.linearDamping = p.linearDamping;
+                    if (p.angularDamping !== undefined) physicsManager.angularDamping = p.angularDamping;
+                    if (p.fallSpeedMultiplier !== undefined) physicsManager.fallSpeedMultiplier = p.fallSpeedMultiplier;
+                    if (p.gravity !== undefined) physicsManager.gravity = p.gravity;
+                }
+                broadcast('physics_param', {
+                    restitution: physicsManager?.restitution,
+                    friction: physicsManager?.friction,
+                    linearDamping: physicsManager?.linearDamping,
+                    angularDamping: physicsManager?.angularDamping,
+                    fallSpeedMultiplier: physicsManager?.fallSpeedMultiplier,
+                    gravity: physicsManager?.gravity,
+                });
+            }
+
+            if ((configType === 'scene') && data.scene) {
+                physicsManager?.reset();
+                primitives?.clear();
+                const sceneData = data.scene;
+                if (sceneData.primitives) {
+                    for (const asset of sceneData.primitives) {
+                        const obj = primitives?.importAsset?.(asset, imageAssetStore);
+                        if (obj && !physicsDisabled) physicsManager?.addPrimitive?.(obj);
+                    }
+                }
+                if (sceneData.characterPosition && renderer?.modelRoot) {
+                    renderer.modelRoot.position.set(
+                        sceneData.characterPosition.x,
+                        sceneData.characterPosition.y,
+                        sceneData.characterPosition.z
+                    );
+                }
+                broadcastCompoundsList();
+            }
+
+            broadcast('config_load_result', { type: configType, ok: true, message: 'JSON 配置已导入' });
+            break;
+        }
+
+        case 'asset_save_library': {
+            // 保存当前选中的图元/组合体到资产库
+            const name = payload?.name;
+            if (!selectedElementId) {
+                broadcast('asset_op_result', { ok: false, message: '请先在元素页选中一个图元或组合体' });
+                break;
+            }
+            await handleAssetSave(selectedElementId, name);
+            break;
+        }
+
+        case 'asset_import_json': {
+            const assetData = payload?.asset;
+            if (!assetData) break;
+            try {
+                const json = typeof assetData === 'string' ? JSON.parse(assetData) : assetData;
+                const obj = primitives?.importAsset?.(json, imageAssetStore);
+                if (obj) {
+                    if (!physicsDisabled) physicsManager?.addPrimitive?.(obj);
+                    if (obj.isGroup || obj.userData?.type === 'group') {
+                        broadcast('compound_created', {
+                            id: obj.userData.id,
+                            name: obj.userData.name,
+                            memberIds: obj.userData.compoundMemberIds,
+                            anchored: !!obj.userData.physics?.anchored,
+                        });
+                    }
+                    broadcast('primitive_created', { id: obj.userData.id, type: obj.userData.type, color: obj.userData.color });
+                    broadcast('asset_op_result', { ok: true, message: '资产已导入场景' });
+                }
+            } catch (err) {
+                broadcast('asset_op_result', { ok: false, message: '导入失败：' + err.message });
+            }
+            break;
+        }
+
+        case 'asset_delete': {
+            const assetId = payload?.assetId;
+            if (!assetId) break;
+            // 从场景中删除（如果存在）
+            const mesh = primitives?.getById?.(assetId);
+            if (mesh) {
+                physicsManager?.removePrimitive?.(mesh);
+                primitives?.removeById?.(assetId);
+                broadcast('primitive_removed', { id: assetId });
+            }
+            broadcast('asset_op_result', { ok: true, message: '资产已删除' });
+            break;
+        }
+
+        case 'asset_import_scene': {
+            // 从 model/assets/ 读取资产文件并导入到场景
+            const assetId = payload?.assetId;
+            if (!assetId) break;
+            try {
+                const relativePath = `package/integrated_studio/model/assets/${assetId}.json`;
+                const resp = await fetch(`/file/read/${relativePath}`);
+                if (!resp.ok) {
+                    broadcast('asset_op_result', { ok: false, message: `资产文件不存在：${assetId}.json` });
+                    break;
+                }
+                const asset = await resp.json();
+                const obj = primitives?.importAsset?.(asset, imageAssetStore);
+                if (obj) {
+                    if (!physicsDisabled) physicsManager?.addPrimitive?.(obj);
+                    if (obj.isGroup || obj.userData?.type === 'group') {
+                        broadcast('compound_created', {
+                            id: obj.userData.id,
+                            name: obj.userData.name,
+                            memberIds: obj.userData.compoundMemberIds,
+                            anchored: !!obj.userData.physics?.anchored,
+                        });
+                    } else {
+                        broadcast('primitive_created', { id: obj.userData.id, type: obj.userData.type, isCompound: false });
+                    }
+                    broadcastCompoundsList();
+                    broadcast('asset_op_result', { ok: true, message: `资产「${assetId}」已导入场景` });
+                } else {
+                    broadcast('asset_op_result', { ok: false, message: '资产格式无效' });
+                }
+            } catch (err) {
+                broadcast('asset_op_result', { ok: false, message: '导入异常：' + err.message });
+            }
+            break;
+        }
 
         default:
             console.debug('[Engine] 未识别的消息:', type);
@@ -1250,16 +1860,20 @@ function broadcastTelemetry() {
     const charPos = characterPhysics?.getPosition();
     const camPos = renderer?.camera.position;
 
+    // 统计场景图元/组合体数
+    const allPrims = primitives?.getAll?.() || [];
+    const compoundCount = primitives?.getCompounds?.()?.length ?? 0;
+    const primCount = allPrims.length;
+
     broadcast('telemetry', {
         fps: renderer?.fps ?? 0,
         mode: currentMode,
         character: charPos ? { x: charPos.x, y: charPos.y, z: charPos.z } : null,
         camera: camPos ? { x: camPos.x, y: camPos.y, z: camPos.z } : null,
-        physicsBodyCount: physicsManager?.bodies.size ?? 0,
-        isGrounded: characterPhysics?.isGrounded ?? false,
-        isSneaking: characterPhysics?.isSneaking ?? false,
         isMoving: movementController?.isMoving ?? false,
         isFastMoving: movementController?.isFastMoving ?? false,
+        primitiveCount: primCount,
+        compoundCount: compoundCount,
     });
 }
 

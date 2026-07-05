@@ -3,7 +3,7 @@
 
 // ==== 常量 ====
 const CHANNEL_NAME = 'integrated-studio-bus';
-const PANELS = ['physics', 'animation', 'movement', 'elements'];
+const PANELS = ['physics', 'animation', 'movement', 'elements', 'assets'];
 const SOURCE_BASE = 'base';
 
 // ==== DOM 引用聚合 ====

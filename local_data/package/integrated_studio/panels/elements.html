@@ -134,8 +134,8 @@
         .btn.btn-icon { flex: 0 0 auto; min-width: 28px; padding: 4px 8px; }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .prim-list, .compound-list { max-height: 220px; overflow-y: auto; scrollbar-width: none; }
-        .prim-list::-webkit-scrollbar, .compound-list::-webkit-scrollbar { display: none; }
+        .elem-list { max-height: 280px; overflow-y: auto; scrollbar-width: none; }
+        .elem-list::-webkit-scrollbar { display: none; }
         .list-item {
             display: flex; align-items: center; gap: 8px;
             padding: 6px 8px; margin-bottom: 4px;
@@ -146,9 +146,12 @@
         .dark-mode .list-item { background: rgba(255,255,255,0.04); }
         .list-item:hover { background: rgba(157,107,255,0.1); border-color: var(--accent); }
         .list-item.selected { background: rgba(157,107,255,0.18); border-color: var(--accent); }
+        .list-item .type-icon { flex-shrink: 0; }
+        .list-item .type-icon.prim { color: var(--accent); }
+        .list-item .type-icon.compound { color: var(--warning); }
         .list-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .list-item .meta { font-size: 10px; opacity: 0.6; }
-        .list-item .ops { display: flex; gap: 2px; }
+        .list-item .meta { font-size: 10px; opacity: 0.6; flex-shrink: 0; }
+        .list-item .ops { display: flex; gap: 2px; flex-shrink: 0; }
         .list-item .ops button {
             background: transparent; border: none; cursor: pointer;
             padding: 2px 4px; font-size: 11px; color: var(--text-secondary);
@@ -156,11 +159,6 @@
         }
         .list-item .ops button:hover { color: var(--accent); background: rgba(157,107,255,0.15); }
         .list-item .ops button.danger:hover { color: var(--danger); background: rgba(220,53,69,0.15); }
-        .prim-color {
-            width: 12px; height: 12px; border-radius: 3px;
-            border: 1px solid rgba(255,255,255,0.3); flex-shrink: 0;
-        }
-        .compound-icon { color: var(--warning); }
 
         .toggle-row {
             display: flex; align-items: center; gap: 8px;
@@ -204,14 +202,7 @@
         @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
 
-        .texture-preview {
-            display: flex; gap: 8px; align-items: center; margin-bottom: 6px;
-        }
-        .texture-preview img {
-            width: 40px; height: 40px; border-radius: 4px;
-            border: 1px solid var(--glass-border); object-fit: cover;
-        }
-        .texture-preview .info { flex: 1; font-size: 11px; color: var(--text-secondary); }
+        .sep { border-top: 1px dashed var(--glass-border); margin: 8px 0; }
     </style>
 </head>
 <body>
@@ -286,121 +277,81 @@
             </div>
         </div>
 
-        <!-- 图元列表 -->
+        <!-- 统一元素列表 -->
         <div class="glass-card">
             <div class="card-title">
-                <i class="fas fa-list"></i><span>图元列表</span>
+                <i class="fas fa-list"></i><span>元素列表</span>
                 <span class="card-actions">
                     <button class="btn btn-icon btn-success" id="btn-make-compound" title="将选中图元合并为组合体">
                         <i class="fas fa-object-group"></i>
                     </button>
                 </span>
             </div>
-            <div class="prim-list" id="prim-list">
+            <div class="elem-list" id="elem-list">
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    <span>暂无图元</span>
+                    <span>暂无元素</span>
                 </div>
-            </div>
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">
-                <i class="fas fa-info-circle"></i> 点击图元项选中（可多选），然后点击右上合并按钮创建组合体
             </div>
         </div>
 
-        <!-- 组合体列表 -->
-        <div class="glass-card">
+        <!-- 选中编辑 -->
+        <div class="glass-card" id="edit-card" style="display:none;">
             <div class="card-title">
-                <i class="fas fa-cubes"></i><span>组合体</span>
-                <span class="field-value" id="compound-count" style="margin-left:auto;">0</span>
+                <i class="fas fa-mouse-pointer"></i><span>选中编辑</span>
+                <span class="field-value" id="edit-target-name" style="margin-left:auto;">-</span>
             </div>
-            <div class="compound-list" id="compound-list">
-                <div class="empty-state">
-                    <i class="fas fa-cubes"></i>
-                    <span>暂无组合体</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- 纹理管理 -->
-        <div class="glass-card" id="texture-card">
-            <div class="card-title"><i class="fas fa-image"></i><span>纹理管理</span></div>
-            <div class="field" id="texture-target-field">
-                <div class="field-label"><span>目标</span><span class="field-value" id="tex-target-name">未选择</span></div>
-            </div>
+            <!-- 编辑模式 -->
             <div class="field">
-                <div class="field-label"><span><i class="fas fa-file-image"></i> 上传纹理</span></div>
-                <div class="texture-preview" id="tex-preview" style="display:none;">
-                    <img id="tex-img" alt="texture preview">
-                    <div class="info">
-                        <div id="tex-info-name"></div>
-                        <div id="tex-info-size"></div>
-                    </div>
-                    <button class="btn btn-icon btn-danger" id="btn-tex-clear-preview" type="button">
-                        <i class="fas fa-times"></i>
-                    </button>
+                <div class="field-label"><span>编辑模式</span><span class="field-value" id="edit-mode-label">位移</span></div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btn-mode-translate" type="button"><i class="fas fa-arrows-alt"></i> 位移(1)</button>
+                    <button class="btn" id="btn-mode-rotate" type="button"><i class="fas fa-sync-alt"></i> 旋转(2)</button>
+                    <button class="btn" id="btn-mode-scale" type="button"><i class="fas fa-expand-arrows-alt"></i> 缩放(3)</button>
                 </div>
-                <input type="file" id="tex-file-input" accept="image/*" style="display:none;">
-                <button class="btn" id="btn-tex-upload" type="button">
-                    <i class="fas fa-upload"></i><span>选择图片</span>
-                </button>
             </div>
             <div class="field">
                 <div class="field-label">
-                    <span>UV 重复</span>
-                    <span class="field-value" id="val-repeat">1 × 1</span>
-                </div>
-                <div class="coord-row">
-                    <div class="coord-field">
-                        <span class="coord-label x">U</span>
-                        <input type="number" id="input-repeat-u" value="1" min="1" step="1">
-                    </div>
-                    <div class="coord-field">
-                        <span class="coord-label y">V</span>
-                        <input type="number" id="input-repeat-v" value="1" min="1" step="1">
-                    </div>
+                    <span>当前位置</span>
+                    <span class="field-value" id="edit-position">0, 0, 0</span>
                 </div>
             </div>
+            <!-- 纹理（仅图元可见，组合体隐藏） -->
+            <div id="texture-section">
+                <div class="sep"></div>
+                <div class="field">
+                    <div class="field-label"><span><i class="fas fa-image"></i> 纹理</span></div>
+                    <div class="btn-row" style="margin-bottom:6px;">
+                        <select id="tex-uuid-select" style="flex:1;">
+                            <option value="">-- 请选择纹理 --</option>
+                        </select>
+                        <button class="btn btn-icon" id="btn-tex-refresh" type="button" title="刷新纹理列表">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btn-tex-apply" type="button">
+                        <i class="fas fa-check"></i><span>应用纹理</span>
+                    </button>
+                    <button class="btn btn-warn" id="btn-tex-clear" type="button">
+                        <i class="fas fa-eraser"></i><span>清除纹理</span>
+                    </button>
+                </div>
+            </div>
+            <div class="sep"></div>
+            <!-- 物理控制 -->
             <div class="btn-row">
-                <button class="btn btn-primary" id="btn-tex-apply" type="button">
-                    <i class="fas fa-check"></i><span>应用纹理</span>
-                </button>
-                <button class="btn btn-warn" id="btn-tex-clear" type="button">
-                    <i class="fas fa-eraser"></i><span>清除纹理</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- 资产管理 -->
-        <div class="glass-card">
-            <div class="card-title"><i class="fas fa-folder-open"></i><span>资产管理</span></div>
-            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">
-                资产包含图元/组合体的几何、颜色、纹理、物理参数，可保存到服务器或导出为 JSON 文件
-            </div>
-            <div class="field">
-                <div class="field-label"><span>目标</span><span class="field-value" id="asset-target-name">未选择</span></div>
-            </div>
-            <div class="field">
-                <div class="field-label"><span>保存名称</span></div>
-                <input type="text" id="input-asset-name" placeholder="例如：桥墩_01">
-            </div>
-            <div class="btn-row">
-                <button class="btn btn-primary" id="btn-asset-save" type="button">
-                    <i class="fas fa-save"></i><span>保存到服务器</span>
-                </button>
-                <button class="btn btn-success" id="btn-asset-export" type="button">
-                    <i class="fas fa-file-export"></i><span>导出 JSON</span>
-                </button>
+                <button class="btn btn-success" id="btn-physics-enable" type="button"><i class="fas fa-play"></i> 启用物理化</button>
+                <button class="btn btn-danger" id="btn-physics-disable" type="button"><i class="fas fa-stop"></i> 禁用物理化</button>
             </div>
             <div class="btn-row" style="margin-top:6px;">
-                <button class="btn btn-warn" id="btn-asset-import" type="button">
-                    <i class="fas fa-file-import"></i><span>从 JSON 导入</span>
-                </button>
+                <button class="btn btn-warn" id="btn-unload-all" type="button"><i class="fas fa-unlink"></i> 卸载全部物理</button>
             </div>
         </div>
     </div>
 
     <div class="toast-container" id="toast-container"></div>
-    <input type="file" id="asset-file-input" accept=".json" style="display:none;">
 
     <script>
         // ==== 元素操纵面板 ====
@@ -468,55 +419,47 @@
             toggleAnchored: document.getElementById('toggle-anchored'),
             btnAdd: document.getElementById('btn-add'),
             btnClear: document.getElementById('btn-clear'),
-            primList: document.getElementById('prim-list'),
+            elemList: document.getElementById('elem-list'),
             btnMakeCompound: document.getElementById('btn-make-compound'),
-            compoundList: document.getElementById('compound-list'),
-            compoundCount: document.getElementById('compound-count'),
             badgeCount: document.getElementById('badge-count'),
             // 纹理
-            texTargetName: document.getElementById('tex-target-name'),
-            texPreview: document.getElementById('tex-preview'),
-            texImg: document.getElementById('tex-img'),
-            texInfoName: document.getElementById('tex-info-name'),
-            texInfoSize: document.getElementById('tex-info-size'),
-            btnTexUpload: document.getElementById('btn-tex-upload'),
-            btnTexClearPreview: document.getElementById('btn-tex-clear-preview'),
-            texFileInput: document.getElementById('tex-file-input'),
-            inputRepeatU: document.getElementById('input-repeat-u'),
-            inputRepeatV: document.getElementById('input-repeat-v'),
-            valRepeat: document.getElementById('val-repeat'),
+            texUuidSelect: document.getElementById('tex-uuid-select'),
+            btnTexRefresh: document.getElementById('btn-tex-refresh'),
             btnTexApply: document.getElementById('btn-tex-apply'),
             btnTexClear: document.getElementById('btn-tex-clear'),
-            // 资产
-            assetTargetName: document.getElementById('asset-target-name'),
-            inputAssetName: document.getElementById('input-asset-name'),
-            btnAssetSave: document.getElementById('btn-asset-save'),
-            btnAssetExport: document.getElementById('btn-asset-export'),
-            btnAssetImport: document.getElementById('btn-asset-import'),
-            assetFileInput: document.getElementById('asset-file-input'),
+            textureSection: document.getElementById('texture-section'),
+            // 编辑
+            editCard: document.getElementById('edit-card'),
+            editTargetName: document.getElementById('edit-target-name'),
+            editModeLabel: document.getElementById('edit-mode-label'),
+            editPosition: document.getElementById('edit-position'),
+            btnModeTranslate: document.getElementById('btn-mode-translate'),
+            btnModeRotate: document.getElementById('btn-mode-rotate'),
+            btnModeScale: document.getElementById('btn-mode-scale'),
+            btnPhysicsEnable: document.getElementById('btn-physics-enable'),
+            btnPhysicsDisable: document.getElementById('btn-physics-disable'),
+            btnUnloadAll: document.getElementById('btn-unload-all'),
             toastContainer: document.getElementById('toast-container'),
         };
 
+        // 统一元素列表：{ id, name, type: 'primitive'|'compound', primType, color, selected }
         const state = {
             currentType: 'cube',
             params: {},
             anchored: false,
             primitiveOpacity: 1.0,
-            primitives: [], // {id, type, color, selected}
-            compounds: [],  // {id, name, memberIds, anchored, selected}
-            selectedPrimIds: new Set(),
-            // 当前纹理目标（图元或组合体 ID）
-            textureTargetId: null,
-            textureDataUrl: null,
-            textureFileName: null,
-            // 当前资产目标
-            assetTargetId: null,
+            items: [],        // unified list of all elements
+            selectedId: null,  // single selection
+            selectedPrimIds: new Set(), // multi-select for compound creation
+            textureList: [],   // [{uuid, name, thumbnail}]
+            editMode: 'translate',
         };
 
         function init() {
             bindEvents();
             renderParams('cube');
             channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+            broadcast('texture_list_request', {});
         }
 
         function bindEvents() {
@@ -540,19 +483,28 @@
             elements.btnMakeCompound.addEventListener('click', makeCompound);
 
             // 纹理
-            elements.btnTexUpload.addEventListener('click', () => elements.texFileInput.click());
-            elements.btnTexClearPreview.addEventListener('click', clearTexturePreview);
-            elements.texFileInput.addEventListener('change', onTextureSelected);
-            elements.inputRepeatU.addEventListener('input', updateRepeatLabel);
-            elements.inputRepeatV.addEventListener('input', updateRepeatLabel);
+            elements.btnTexRefresh.addEventListener('click', () => broadcast('texture_list_request', {}));
             elements.btnTexApply.addEventListener('click', applyTexture);
             elements.btnTexClear.addEventListener('click', clearTexture);
 
-            // 资产
-            elements.btnAssetSave.addEventListener('click', saveAsset);
-            elements.btnAssetExport.addEventListener('click', exportAsset);
-            elements.btnAssetImport.addEventListener('click', () => elements.assetFileInput.click());
-            elements.assetFileInput.addEventListener('change', onAssetFileSelected);
+            // 编辑控制
+            elements.btnModeTranslate.addEventListener('click', () => setEditMode('translate'));
+            elements.btnModeRotate.addEventListener('click', () => setEditMode('rotate'));
+            elements.btnModeScale.addEventListener('click', () => setEditMode('scale'));
+            elements.btnPhysicsEnable.addEventListener('click', () => {
+                if (state.selectedId) broadcast('element_physics_enable', { id: state.selectedId });
+                showToast('物理化已启用', 'success');
+            });
+            elements.btnPhysicsDisable.addEventListener('click', () => {
+                if (state.selectedId) broadcast('element_physics_disable', { id: state.selectedId });
+                showToast('物理化已禁用', 'success');
+            });
+            elements.btnUnloadAll.addEventListener('click', () => {
+                if (confirm('确认卸载全部非角色图元/组合体的物理效果并对齐网格？')) {
+                    broadcast('unload_all_physics', {});
+                    showToast('已卸载全部物理', 'success');
+                }
+            });
 
             channel.onmessage = (event) => {
                 const msg = event.data;
@@ -570,7 +522,7 @@
                     onPrimitiveRemoved(msg.payload);
                     break;
                 case 'compounds_list':
-                    renderCompoundList(msg.payload?.compounds ?? []);
+                    onCompoundsList(msg.payload?.compounds ?? []);
                     break;
                 case 'compound_created':
                     showToast('组合体已创建', 'success');
@@ -585,14 +537,10 @@
                     showToast(msg.payload?.action === 'apply' ? '纹理已应用' : '纹理已清除',
                               msg.payload?.ok ? 'success' : 'error');
                     break;
-                case 'asset_op_result':
-                    showToast(msg.payload?.message || '操作完成', msg.payload?.ok ? 'success' : 'error');
-                    break;
-                case 'asset_export_result':
-                    onAssetExportResult(msg.payload);
+                case 'texture_list':
+                    onTextureList(msg.payload?.textures ?? []);
                     break;
                 case 'primitive_spawn_info':
-                    // 更新位置输入框为生成的位置
                     if (msg.payload?.position) {
                         elements.inputX.value = msg.payload.position.x.toFixed(1);
                         elements.inputY.value = msg.payload.position.y.toFixed(1);
@@ -602,7 +550,58 @@
                 case 'theme_changed':
                     document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
                     break;
+                case 'element_selected': {
+                    const { id, position } = msg.payload || {};
+                    state.selectedId = id;
+                    showEditCard(id);
+                    if (position) elements.editPosition.textContent = `${position.x}, ${position.y}, ${position.z}`;
+                    renderElemList();
+                    break;
+                }
+                case 'element_deselected': {
+                    state.selectedId = null;
+                    // 不清空 selectedPrimIds，保留面板侧多选状态
+                    elements.editCard.style.display = 'none';
+                    renderElemList();
+                    break;
+                }
+                case 'element_transform': {
+                    const { position, mode } = msg.payload || {};
+                    if (position) elements.editPosition.textContent = `${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`;
+                    if (mode) setEditMode(mode, true);
+                    break;
+                }
+                case 'edit_mode_changed': {
+                    setEditMode(msg.payload?.mode || 'translate', true);
+                    break;
+                }
+                case 'all_physics_unloaded': {
+                    showToast('已卸载全部图元物理', 'success');
+                    break;
+                }
             }
+        }
+
+        // ==== 编辑模式 ====
+        const MODE_LABELS = { translate: '位移', rotate: '旋转', scale: '缩放' };
+
+        function setEditMode(mode, fromEngine = false) {
+            state.editMode = mode;
+            elements.editModeLabel.textContent = MODE_LABELS[mode] || mode;
+            elements.btnModeTranslate.classList.toggle('btn-primary', mode === 'translate');
+            elements.btnModeRotate.classList.toggle('btn-primary', mode === 'rotate');
+            elements.btnModeScale.classList.toggle('btn-primary', mode === 'scale');
+            if (!fromEngine) broadcast('element_edit_mode', { mode });
+        }
+
+        // ==== 显示编辑卡片 ====
+        function showEditCard(id) {
+            elements.editCard.style.display = '';
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+            elements.editTargetName.textContent = item.name;
+            // 组合体隐藏纹理区域
+            elements.textureSection.style.display = item.type === 'compound' ? 'none' : '';
         }
 
         // ==== 图元创建 ====
@@ -636,7 +635,6 @@
             const spec = {
                 type: state.currentType,
                 params: { ...state.params },
-                // 不传position，由引擎端基于角色位置R50/H40随机生成
                 color: parseInt(elements.inputColor.value.replace('#', ''), 16),
                 physics: { anchored: state.anchored },
                 opacity: state.primitiveOpacity,
@@ -646,309 +644,273 @@
 
         function onPrimitiveCreated(payload) {
             if (!payload) return;
-            state.primitives.push({
+            // 防止重复添加（如 panel_ready 同步时）
+            if (state.items.some(i => i.id === payload.id)) return;
+            state.items.push({
                 id: payload.id,
-                type: payload.type || state.currentType,
-                color: payload.color ?? parseInt(elements.inputColor.value.replace('#', ''), 16),
-                selected: false,
+                name: PRIM_NAMES[payload.type] || payload.type,
+                type: 'primitive',
+                primType: payload.type,
+                color: payload.color ?? 0x9d6bff,
             });
-            renderPrimList();
+            renderElemList();
         }
 
         function onPrimitiveRemoved(payload) {
             const id = payload?.id;
-            state.primitives = state.primitives.filter(p => p.id !== id);
+            state.items = state.items.filter(i => i.id !== id);
             state.selectedPrimIds.delete(id);
-            if (state.textureTargetId === id) clearTextureTarget();
-            if (state.assetTargetId === id) clearAssetTarget();
-            renderPrimList();
+            if (state.selectedId === id) {
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
+            renderElemList();
+        }
+
+        // ==== 组合体列表同步 ====
+        function onCompoundsList(compounds) {
+            // 移除旧组合体条目，重新添加
+            state.items = state.items.filter(i => i.type !== 'compound');
+            for (const c of compounds) {
+                state.items.push({
+                    id: c.id,
+                    name: c.name || '组合体',
+                    type: 'compound',
+                    memberCount: c.memberIds?.length || 0,
+                    anchored: c.anchored,
+                });
+            }
+            renderElemList();
         }
 
         function onCompoundDissolved(payload) {
-            const id = payload?.compoundId;
-            state.compounds = state.compounds.filter(c => c.id !== id);
-            if (state.textureTargetId === id) clearTextureTarget();
-            if (state.assetTargetId === id) clearAssetTarget();
-            renderCompoundList(state.compounds);
+            const { compoundId, childIds } = payload || {};
+            // 从列表移除组合体
+            state.items = state.items.filter(i => i.id !== compoundId);
+            // 子图元重新出现在列表中 — 请求引擎重新广播所有图元信息
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+            if (state.selectedPrimIds.has(compoundId)) {
+                state.selectedPrimIds.delete(compoundId);
+            }
+            if (state.selectedId === compoundId) {
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
             showToast('组合体已解散', 'success');
+            renderElemList();
         }
 
-        function removePrimitive(id) {
-            broadcast('primitive_remove', { id });
+        function removeElement(id) {
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+            if (item.type === 'compound') {
+                // 组合体：解散还是删除整个？这里直接移除（包含子图元）
+                if (confirm('确认删除此组合体（含子图元）？')) {
+                    broadcast('primitive_remove', { id });
+                }
+            } else {
+                broadcast('primitive_remove', { id });
+            }
+            // 同时取消选中
+            if (state.selectedId === id) {
+                broadcast('element_deselect', {});
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
+        }
+
+        function dissolveCompound(id) {
+            if (confirm('确认解散此组合体？子图元将回归独立列表。')) {
+                broadcast('compound_dissolve', { id });
+            }
         }
 
         function clearAll() {
             if (!confirm('确认清空所有图元与组合体？')) return;
-            // 先解散所有组合体（让子图元回归独立列表后再统一删除）
-            for (const c of [...state.compounds]) {
-                broadcast('compound_dissolve', { id: c.id });
+            for (const item of [...state.items]) {
+                if (item.type === 'compound') {
+                    broadcast('compound_dissolve', { id: item.id });
+                }
             }
-            // 删除所有图元
-            for (const p of [...state.primitives]) {
-                broadcast('primitive_remove', { id: p.id });
+            for (const item of [...state.items]) {
+                if (item.type === 'primitive') {
+                    broadcast('primitive_remove', { id: item.id });
+                }
             }
-            state.primitives = [];
-            state.compounds = [];
+            state.items = [];
             state.selectedPrimIds.clear();
-            clearTextureTarget();
-            clearAssetTarget();
-            renderPrimList();
-            renderCompoundList([]);
+            state.selectedId = null;
+            elements.editCard.style.display = 'none';
+            renderElemList();
         }
 
-        // ==== 图元列表 ====
-        function renderPrimList() {
-            elements.badgeCount.textContent = `${state.primitives.length + state.compounds.length} 项`;
-            if (state.primitives.length === 0) {
-                elements.primList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><span>暂无图元</span></div>';
-                elements.btnMakeCompound.disabled = true;
+        // ==== 统一元素列表 ====
+        function renderElemList() {
+            const primitives = state.items.filter(i => i.type === 'primitive');
+            const compounds = state.items.filter(i => i.type === 'compound');
+            elements.badgeCount.textContent = `${state.items.length} 项`;
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+
+            if (state.items.length === 0) {
+                elements.elemList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><span>暂无元素</span></div>';
                 return;
             }
-            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
-            elements.primList.innerHTML = state.primitives.map(p => {
-                const hex = '#' + (p.color ?? 0x9d6bff).toString(16).padStart(6, '0');
-                const selected = state.selectedPrimIds.has(p.id);
-                const isTexTarget = state.textureTargetId === p.id;
-                const isAssetTarget = state.assetTargetId === p.id;
+
+            // 先图元后组合体
+            const ordered = [...primitives, ...compounds];
+            elements.elemList.innerHTML = ordered.map(item => {
+                const isSelected = state.selectedPrimIds.has(item.id);
+                const iconClass = item.type === 'compound' ? 'fas fa-cubes type-icon compound' : 'fas fa-cube type-icon prim';
+                const meta = item.type === 'compound'
+                    ? `${item.memberCount ?? 0} 图元 · ${item.anchored ? '静态' : '动态'}`
+                    : item.id;
+                const compoundOps = item.type === 'compound'
+                    ? `<button class="dissolve" title="解散组合体"><i class="fas fa-undo"></i></button>` : '';
                 return `
-                    <div class="list-item ${selected ? 'selected' : ''}" data-id="${escapeHtml(p.id)}">
-                        <div class="prim-color" style="background:${hex}"></div>
-                        <span class="name">${PRIM_NAMES[p.type] || p.type}</span>
-                        <span class="meta">${isTexTarget ? '<i class="fas fa-image" title="纹理目标"></i> ' : ''}${isAssetTarget ? '<i class="fas fa-folder" title="资产目标"></i> ' : ''}${p.id}</span>
+                    <div class="list-item ${isSelected ? 'selected' : ''}" data-id="${escapeHtml(item.id)}" data-type="${item.type}">
+                        <i class="${iconClass}"></i>
+                        <span class="name">${escapeHtml(item.name)}</span>
+                        <span class="meta">${meta}</span>
                         <span class="ops">
-                            <button class="tex" title="设为纹理目标"><i class="fas fa-image"></i></button>
-                            <button class="asset" title="设为资产目标"><i class="fas fa-folder"></i></button>
+                            ${compoundOps}
                             <button class="danger remove" title="删除"><i class="fas fa-times"></i></button>
                         </span>
                     </div>
                 `;
             }).join('');
-            elements.primList.querySelectorAll('.list-item').forEach(item => {
-                const id = item.dataset.id;
-                item.addEventListener('click', (e) => {
+
+            elements.elemList.querySelectorAll('.list-item').forEach(el => {
+                const id = el.dataset.id;
+                const type = el.dataset.type;
+                // 单击切换选中
+                el.addEventListener('click', (e) => {
                     if (e.target.closest('button')) return;
-                    if (state.selectedPrimIds.has(id)) state.selectedPrimIds.delete(id);
-                    else state.selectedPrimIds.add(id);
-                    renderPrimList();
+                    toggleSelectItem(id, type);
                 });
-                item.querySelector('button.tex').addEventListener('click', (e) => {
+                // 双击取消选中
+                el.addEventListener('dblclick', (e) => {
+                    if (e.target.closest('button')) return;
+                    deselectItem(id);
+                });
+                // 删除按钮
+                el.querySelector('button.remove').addEventListener('click', (e) => {
                     e.stopPropagation();
-                    setTextureTarget(id, PRIM_NAMES[state.primitives.find(p => p.id === id)?.type] || id);
+                    removeElement(id);
                 });
-                item.querySelector('button.asset').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    setAssetTarget(id, PRIM_NAMES[state.primitives.find(p => p.id === id)?.type] || id);
-                });
-                item.querySelector('button.remove').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    removePrimitive(id);
-                });
+                // 解散按钮（组合体）
+                const dissolveBtn = el.querySelector('button.dissolve');
+                if (dissolveBtn) {
+                    dissolveBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dissolveCompound(id);
+                    });
+                }
             });
         }
 
-        // ==== 组合体 ====
+        function toggleSelectItem(id, type) {
+            if (state.selectedPrimIds.has(id)) {
+                // 已选中 → 取消选中
+                deselectItem(id);
+                return;
+            }
+            // 选中该项
+            if (type === 'primitive') {
+                state.selectedPrimIds.add(id);
+            }
+            state.selectedId = id;
+
+            if (state.selectedPrimIds.size >= 2) {
+                // 多选模式：隐藏编辑卡，不发送 element_select
+                elements.editCard.style.display = 'none';
+                broadcast('element_deselect', {});
+                state.selectedId = null;
+            } else {
+                // 单选模式：显示编辑卡
+                broadcast('element_select', { id });
+                showEditCard(id);
+            }
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+            renderElemList();
+        }
+
+        function deselectItem(id) {
+            state.selectedPrimIds.delete(id);
+            if (state.selectedPrimIds.size === 1) {
+                // 从多选恢复到单选：显示编辑卡
+                const remainingId = Array.from(state.selectedPrimIds)[0];
+                state.selectedId = remainingId;
+                broadcast('element_select', { id: remainingId });
+                showEditCard(remainingId);
+            } else if (state.selectedPrimIds.size === 0) {
+                // 全部取消选中
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+                broadcast('element_deselect', {});
+            }
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+            renderElemList();
+        }
+
+        // ==== 组合体创建 ====
         function makeCompound() {
             const ids = Array.from(state.selectedPrimIds);
             if (ids.length < 2) {
                 showToast('请至少选择 2 个图元', 'error');
                 return;
             }
-            const name = prompt('组合体名称：', `组合体 ${state.compounds.length + 1}`);
+            const name = prompt('组合体名称：', `组合体 ${state.items.filter(i => i.type === 'compound').length + 1}`);
             if (name === null) return;
             const anchored = confirm('组合体是否锚定（静态）？\n确定=锚定，取消=动态');
             broadcast('compound_create', { meshIds: ids, name: name || undefined, anchored });
-            // 创建后从独立列表移除（等待 compound_created 事件）
-            state.primitives = state.primitives.filter(p => !state.selectedPrimIds.has(p.id));
+            // 从列表中移除已合并的图元
+            state.items = state.items.filter(i => !state.selectedPrimIds.has(i.id));
             state.selectedPrimIds.clear();
-            renderPrimList();
-        }
-
-        function renderCompoundList(compounds) {
-            state.compounds = compounds;
-            elements.compoundCount.textContent = compounds.length;
-            elements.badgeCount.textContent = `${state.primitives.length + state.compounds.length} 项`;
-            if (compounds.length === 0) {
-                elements.compoundList.innerHTML = '<div class="empty-state"><i class="fas fa-cubes"></i><span>暂无组合体</span></div>';
-                return;
-            }
-            elements.compoundList.innerHTML = compounds.map(c => {
-                const isTexTarget = state.textureTargetId === c.id;
-                const isAssetTarget = state.assetTargetId === c.id;
-                return `
-                    <div class="list-item" data-id="${escapeHtml(c.id)}">
-                        <i class="fas fa-cubes compound-icon"></i>
-                        <span class="name">${escapeHtml(c.name)}</span>
-                        <span class="meta">${c.memberIds?.length || 0} 图元 · ${c.anchored ? '静态' : '动态'}${isTexTarget ? ' · <i class="fas fa-image"></i>' : ''}${isAssetTarget ? ' · <i class="fas fa-folder"></i>' : ''}</span>
-                        <span class="ops">
-                            <button class="tex" title="设为纹理目标"><i class="fas fa-image"></i></button>
-                            <button class="asset" title="设为资产目标"><i class="fas fa-folder"></i></button>
-                            <button class="danger dissolve" title="解散"><i class="fas fa-undo"></i></button>
-                            <button class="danger remove" title="删除整个组合体"><i class="fas fa-times"></i></button>
-                        </span>
-                    </div>
-                `;
-            }).join('');
-            elements.compoundList.querySelectorAll('.list-item').forEach(item => {
-                const id = item.dataset.id;
-                const c = compounds.find(x => x.id === id);
-                item.querySelector('button.tex').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    setTextureTarget(id, c?.name || id);
-                });
-                item.querySelector('button.asset').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    setAssetTarget(id, c?.name || id);
-                });
-                item.querySelector('button.dissolve').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm('确认解散此组合体？子图元将回归独立列表。')) {
-                        broadcast('compound_dissolve', { id });
-                    }
-                });
-                item.querySelector('button.remove').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (confirm('确认删除整个组合体（含子图元）？')) {
-                        broadcast('primitive_remove', { id });
-                    }
-                });
-            });
+            state.selectedId = null;
+            elements.editCard.style.display = 'none';
+            renderElemList();
         }
 
         // ==== 纹理 ====
-        function setTextureTarget(id, name) {
-            state.textureTargetId = id;
-            elements.texTargetName.textContent = name;
-        }
-
-        function clearTextureTarget() {
-            state.textureTargetId = null;
-            elements.texTargetName.textContent = '未选择';
-            clearTexturePreview();
-        }
-
-        function clearTexturePreview() {
-            state.textureDataUrl = null;
-            state.textureFileName = null;
-            elements.texPreview.style.display = 'none';
-            elements.texFileInput.value = '';
-        }
-
-        function onTextureSelected(e) {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-                state.textureDataUrl = String(reader.result || '');
-                state.textureFileName = file.name;
-                elements.texImg.src = state.textureDataUrl;
-                elements.texInfoName.textContent = file.name;
-                elements.texInfoSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
-                elements.texPreview.style.display = '';
-            };
-            reader.readAsDataURL(file);
-            e.target.value = '';
-        }
-
-        function updateRepeatLabel() {
-            const u = parseInt(elements.inputRepeatU.value) || 1;
-            const v = parseInt(elements.inputRepeatV.value) || 1;
-            elements.valRepeat.textContent = `${u} × ${v}`;
+        function onTextureList(textures) {
+            state.textureList = textures || [];
+            const prev = elements.texUuidSelect.value;
+            elements.texUuidSelect.innerHTML = '<option value="">-- 请选择纹理 --</option>';
+            state.textureList.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.uuid;
+                opt.textContent = t.name || t.uuid;
+                elements.texUuidSelect.appendChild(opt);
+            });
+            if (prev && state.textureList.some(t => t.uuid === prev)) {
+                elements.texUuidSelect.value = prev;
+            }
         }
 
         function applyTexture() {
-            if (!state.textureTargetId) {
-                showToast('请先选择纹理目标', 'error');
+            if (!state.selectedId) {
+                showToast('请先选中一个图元', 'error');
                 return;
             }
-            if (!state.textureDataUrl) {
-                showToast('请先上传纹理图片', 'error');
+            const item = state.items.find(i => i.id === state.selectedId);
+            if (item?.type === 'compound') {
+                showToast('组合体不能应用纹理', 'error');
                 return;
             }
-            const u = parseInt(elements.inputRepeatU.value) || 1;
-            const v = parseInt(elements.inputRepeatV.value) || 1;
-            broadcast('texture_apply', {
-                id: state.textureTargetId,
-                dataUrl: state.textureDataUrl,
-                repeat: { x: u, y: v },
-            });
+            const uuid = elements.texUuidSelect.value;
+            if (!uuid) {
+                showToast('请选择纹理', 'error');
+                return;
+            }
+            broadcast('texture_apply', { id: state.selectedId, textureUUID: uuid, repeatU: 1, repeatV: 1 });
         }
 
         function clearTexture() {
-            if (!state.textureTargetId) {
-                showToast('请先选择纹理目标', 'error');
+            if (!state.selectedId) {
+                showToast('请先选中一个图元', 'error');
                 return;
             }
-            broadcast('texture_clear', { id: state.textureTargetId });
-        }
-
-        // ==== 资产 ====
-        function setAssetTarget(id, name) {
-            state.assetTargetId = id;
-            elements.assetTargetName.textContent = name;
-        }
-
-        function clearAssetTarget() {
-            state.assetTargetId = null;
-            elements.assetTargetName.textContent = '未选择';
-        }
-
-        function saveAsset() {
-            if (!state.assetTargetId) {
-                showToast('请先选择资产目标', 'error');
-                return;
-            }
-            const name = elements.inputAssetName.value.trim();
-            if (!name) {
-                showToast('请输入保存名称', 'error');
-                return;
-            }
-            broadcast('asset_save_one', { id: state.assetTargetId, name });
-        }
-
-        function exportAsset() {
-            if (!state.assetTargetId) {
-                showToast('请先选择资产目标', 'error');
-                return;
-            }
-            broadcast('asset_export_one', { id: state.assetTargetId });
-        }
-
-        function onAssetExportResult(payload) {
-            if (!payload?.asset) {
-                showToast('资产导出失败', 'error');
-                return;
-            }
-            try {
-                const json = JSON.stringify(payload.asset, null, 2);
-                const blob = new Blob([json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const name = (elements.inputAssetName.value.trim() || `asset_${payload.id}`).replace(/[^\w\-]/g, '_');
-                a.href = url;
-                a.download = `${name}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('资产已导出', 'success');
-            } catch (err) {
-                showToast('导出失败：' + err.message, 'error');
-            }
-        }
-
-        function onAssetFileSelected(e) {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-                try {
-                    const text = String(reader.result || '');
-                    JSON.parse(text); // 校验
-                    broadcast('asset_import', { asset: text });
-                } catch (err) {
-                    showToast('文件解析失败：' + err.message, 'error');
-                }
-            };
-            reader.readAsText(file);
-            e.target.value = '';
+            broadcast('texture_clear', { id: state.selectedId });
         }
 
         // ==== Toast ====

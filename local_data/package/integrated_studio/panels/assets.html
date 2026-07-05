@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』资产管理</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255,255,255,0.28);
+            --glass-border: rgba(255,255,255,0.35);
+            --glass-blur: 18px;
+            --radius-md: 0.75rem;
+            --text-primary: rgba(15,30,15,1);
+            --text-secondary: rgba(80,80,80,1);
+            --accent: #9d6bff;
+            --success: #20c997;
+            --danger: #dc3545;
+            --warning: #fbbf24;
+            --transition: all 0.45s ease;
+        }
+        .dark-mode {
+            --text-primary: rgba(244,244,245,1);
+            --text-secondary: rgba(180,180,180,1);
+            --glass-bg: rgba(38,38,42,0.82);
+            --glass-border: rgba(80,80,80,0.6);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: transparent;
+            font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+            font-size: 13px; color: var(--text-primary);
+            overflow-y: auto; overflow-x: hidden;
+            scrollbar-width: none;
+        }
+        body::-webkit-scrollbar { display: none; }
+
+        .panel { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+        .panel-title {
+            font-size: 14px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);
+        }
+        .panel-title i { color: var(--accent); }
+
+        .glass-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md); padding: 10px 12px;
+            transition: var(--transition);
+        }
+        .card-title {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-secondary);
+            margin-bottom: 8px; padding-bottom: 6px;
+            border-bottom: 1px dashed var(--glass-border);
+        }
+        .card-title i { color: var(--accent); }
+        .card-title .card-actions { margin-left: auto; display: flex; gap: 4px; }
+
+        .field { margin-bottom: 8px; }
+        .field:last-child { margin-bottom: 0; }
+        .field-label {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;
+        }
+        .field-value { color: var(--accent); font-weight: 600; font-family: 'SF Mono','Consolas',monospace; }
+
+        input[type="text"], input[type="number"] {
+            width: 100%; padding: 6px 8px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px; color: var(--text-primary);
+            font-size: 12px; outline: none; font-family: inherit;
+        }
+        .dark-mode input[type="text"], .dark-mode input[type="number"] {
+            background: rgba(20,20,24,0.4);
+        }
+        input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+
+        .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn {
+            flex: 1; min-width: 60px; padding: 6px 10px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); color: var(--text-primary);
+            font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            transition: var(--transition);
+            backdrop-filter: blur(var(--glass-blur));
+        }
+        .btn:hover { background: rgba(157,107,255,0.15); border-color: var(--accent); }
+        .btn.btn-primary { background: rgba(157,107,255,0.25); border-color: var(--accent); color: var(--accent); }
+        .btn.btn-success { background: rgba(32,201,151,0.2); border-color: var(--success); color: var(--success); }
+        .btn.btn-danger { background: rgba(220,53,69,0.2); border-color: var(--danger); color: var(--danger); }
+        .btn.btn-warning { background: rgba(251,191,36,0.2); border-color: var(--warning); color: var(--warning); }
+        .btn.btn-icon { flex: 0 0 auto; min-width: 28px; padding: 4px 8px; }
+
+        .stat-row {
+            display: flex; justify-content: space-between;
+            font-size: 12px; padding: 3px 0; color: var(--text-secondary);
+        }
+        .stat-row span:last-child { color: var(--text-primary); font-family: 'SF Mono','Consolas',monospace; }
+
+        .asset-list { max-height: 220px; overflow-y: auto; scrollbar-width: none; }
+        .asset-list::-webkit-scrollbar { display: none; }
+        .list-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px; margin-bottom: 4px;
+            border-radius: 6px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.1); font-size: 12px;
+            transition: var(--transition);
+        }
+        .dark-mode .list-item { background: rgba(255,255,255,0.04); }
+        .list-item:hover { background: rgba(157,107,255,0.1); border-color: var(--accent); }
+        .list-item .icon { color: var(--accent); flex-shrink: 0; }
+        .list-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .list-item .meta { font-size: 10px; color: var(--text-secondary); flex-shrink: 0; }
+        .list-item .ops { display: flex; gap: 2px; flex-shrink: 0; }
+        .list-item .ops button {
+            background: transparent; border: none; cursor: pointer;
+            padding: 2px 4px; font-size: 11px; color: var(--text-secondary); border-radius: 4px;
+        }
+        .list-item .ops button:hover { color: var(--accent); background: rgba(157,107,255,0.15); }
+        .list-item .ops button.danger:hover { color: var(--danger); background: rgba(220,53,69,0.15); }
+
+        .empty-state {
+            text-align: center; padding: 16px 10px;
+            color: var(--text-secondary); font-size: 12px;
+        }
+        .empty-state i { font-size: 20px; display: block; margin-bottom: 6px; opacity: 0.5; }
+
+        /* 图片资产缩略图 */
+        .img-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px; max-height: 280px; overflow-y: auto; scrollbar-width: none;
+        }
+        .img-grid::-webkit-scrollbar { display: none; }
+        .img-item {
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 6px; border-radius: 6px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.1); cursor: pointer;
+            transition: var(--transition); position: relative;
+        }
+        .dark-mode .img-item { background: rgba(255,255,255,0.04); }
+        .img-item:hover { background: rgba(157,107,255,0.1); border-color: var(--accent); }
+        .img-item img {
+            width: 60px; height: 60px; object-fit: cover;
+            border-radius: 4px; border: 1px solid var(--glass-border);
+        }
+        .img-item .img-name {
+            font-size: 10px; color: var(--text-secondary);
+            max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            text-align: center;
+        }
+        .img-item .img-uuid {
+            font-size: 9px; color: var(--text-secondary); opacity: 0.6;
+            font-family: 'SF Mono','Consolas',monospace;
+        }
+        .img-item .img-delete {
+            position: absolute; top: 2px; right: 2px;
+            background: rgba(220,53,69,0.8); border: none; border-radius: 50%;
+            width: 16px; height: 16px; font-size: 9px; color: #fff;
+            cursor: pointer; display: none; align-items: center; justify-content: center;
+        }
+        .img-item:hover .img-delete { display: flex; }
+
+        /* 拖拽上传区域 */
+        .drop-zone {
+            border: 2px dashed var(--glass-border); border-radius: var(--radius-md);
+            padding: 14px; text-align: center; color: var(--text-secondary);
+            font-size: 12px; transition: var(--transition); cursor: pointer;
+        }
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--accent); background: rgba(157,107,255,0.08);
+        }
+        .drop-zone i { font-size: 18px; display: block; margin-bottom: 4px; }
+
+        .toast-container {
+            position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 6px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 8px 14px; border-radius: 8px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            font-size: 12px; color: var(--text-primary);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            animation: toast-in 0.3s ease, toast-out 0.3s ease 2.4s forwards;
+            pointer-events: auto;
+        }
+        .toast.success { border-color: var(--success); color: var(--success); }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="panel-title">
+            <i class="fas fa-boxes-stacked"></i><span>资产管理</span>
+        </div>
+
+        <!-- 场景资产 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-layer-group"></i><span>场景资产</span></div>
+            <div class="stat-row"><span>图元数量</span><span id="stat-prim-count">0</span></div>
+            <div class="stat-row"><span>组合体数量</span><span id="stat-compound-count">0</span></div>
+            <div class="btn-row" style="margin-top: 8px;">
+                <button class="btn btn-success" id="btn-scene-save" type="button">
+                    <i class="fas fa-save"></i><span>保存场景</span>
+                </button>
+                <button class="btn" id="btn-scene-load" type="button">
+                    <i class="fas fa-folder-open"></i><span>加载场景</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- 图元/组合体资产 -->
+        <div class="glass-card">
+            <div class="card-title">
+                <i class="fas fa-cubes"></i><span>图元/组合体资产</span>
+                <span class="card-actions">
+                    <button class="btn btn-icon btn-primary" id="btn-asset-refresh" title="刷新资产列表">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </span>
+            </div>
+            <div class="field">
+                <div class="field-label"><span>资产名称</span></div>
+                <input type="text" id="input-asset-name" placeholder="例如：桥墩_01">
+            </div>
+            <div class="btn-row" style="margin-bottom: 8px;">
+                <button class="btn btn-primary" id="btn-asset-save" type="button">
+                    <i class="fas fa-save"></i><span>保存选中</span>
+                </button>
+            </div>
+
+            <div class="asset-list" id="asset-list">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <span>暂无资产</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图片/纹理资产 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-images"></i><span>图片/纹理资产</span></div>
+            <!-- 上传区域 -->
+            <div class="drop-zone" id="img-drop-zone">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>点击或拖拽图片到此处上传</span>
+            </div>
+            <input type="file" id="img-file-input" accept="image/*" multiple style="display:none;">
+            <div style="margin-top: 8px;">
+                <div class="btn-row" style="margin-bottom: 6px;">
+                    <button class="btn btn-success" id="btn-img-save" type="button">
+                        <i class="fas fa-save"></i><span>保存图片库</span>
+                    </button>
+                    <button class="btn" id="btn-img-load" type="button">
+                        <i class="fas fa-folder-open"></i><span>加载图片库</span>
+                    </button>
+                </div>
+                <div class="img-grid" id="img-grid">
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <i class="fas fa-image"></i>
+                        <span>暂无图片资产</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 物理参数配置保存/加载 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-atom"></i><span>物理参数配置</span></div>
+            <div class="btn-row">
+                <button class="btn btn-success" id="btn-physics-save" type="button">
+                    <i class="fas fa-save"></i><span>保存物理配置</span>
+                </button>
+                <button class="btn" id="btn-physics-load" type="button">
+                    <i class="fas fa-folder-open"></i><span>加载物理配置</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- 全量保存/加载 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-database"></i><span>全量保存/加载</span></div>
+            <div class="btn-row">
+                <button class="btn btn-success" id="btn-save-all" type="button">
+                    <i class="fas fa-save"></i><span>全部保存</span>
+                </button>
+                <button class="btn btn-warning" id="btn-load-all" type="button">
+                    <i class="fas fa-folder-open"></i><span>全部加载</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // ==== 资产管理面板 ====
+        const CHANNEL_NAME = 'integrated-studio-bus';
+        const SOURCE = 'assets-panel';
+        const channel = new BroadcastChannel(CHANNEL_NAME);
+
+        const elements = {
+            // 场景资产
+            statPrimCount: document.getElementById('stat-prim-count'),
+            statCompoundCount: document.getElementById('stat-compound-count'),
+            btnSceneSave: document.getElementById('btn-scene-save'),
+            btnSceneLoad: document.getElementById('btn-scene-load'),
+            // 图元/组合体资产
+            inputAssetName: document.getElementById('input-asset-name'),
+            btnAssetSave: document.getElementById('btn-asset-save'),
+            btnAssetRefresh: document.getElementById('btn-asset-refresh'),
+            assetList: document.getElementById('asset-list'),
+            // 图片/纹理资产
+            imgDropZone: document.getElementById('img-drop-zone'),
+            imgFileInput: document.getElementById('img-file-input'),
+            imgGrid: document.getElementById('img-grid'),
+            btnImgSave: document.getElementById('btn-img-save'),
+            btnImgLoad: document.getElementById('btn-img-load'),
+            // 物理参数配置
+            btnPhysicsSave: document.getElementById('btn-physics-save'),
+            btnPhysicsLoad: document.getElementById('btn-physics-load'),
+            // 全量保存/加载
+            btnSaveAll: document.getElementById('btn-save-all'),
+            btnLoadAll: document.getElementById('btn-load-all'),
+            // 通用
+            toastContainer: document.getElementById('toast-container'),
+        };
+
+        const state = {
+            // 场景
+            primCount: 0,
+            compoundCount: 0,
+            // 图元/组合体资产
+            assets: [], // { id, name, type, primitiveCount }
+            // 图片资产
+            imageAssets: [], // { uuid, base64, name }
+        };
+
+        // ==== 初始化 ====
+        function init() {
+            bindEvents();
+            broadcast('assets_list_request', {});
+            broadcast('image_assets_list_request', {});
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+        }
+
+        function bindEvents() {
+            // ---- 场景资产 ----
+            elements.btnSceneSave.addEventListener('click', () => {
+                broadcast('config_save', { type: 'scene' });
+            });
+            elements.btnSceneLoad.addEventListener('click', () => {
+                broadcast('config_load', { type: 'scene' });
+            });
+
+            // ---- 图元/组合体资产 ----
+            elements.btnAssetSave.addEventListener('click', saveAssetToLibrary);
+            elements.btnAssetRefresh.addEventListener('click', () => broadcast('assets_list_request', {}));
+
+            // ---- 图片/纹理资产 ----
+            elements.imgDropZone.addEventListener('click', () => elements.imgFileInput.click());
+            elements.imgFileInput.addEventListener('change', onImageFilesSelected);
+            elements.imgDropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                elements.imgDropZone.classList.add('drag-over');
+            });
+            elements.imgDropZone.addEventListener('dragleave', () => {
+                elements.imgDropZone.classList.remove('drag-over');
+            });
+            elements.imgDropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                elements.imgDropZone.classList.remove('drag-over');
+                const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+                if (files.length > 0) uploadImageFiles(files);
+            });
+            elements.btnImgSave.addEventListener('click', () => {
+                broadcast('config_save', { type: 'images' });
+            });
+            elements.btnImgLoad.addEventListener('click', () => {
+                broadcast('config_load', { type: 'images' });
+            });
+
+            // ---- 物理参数配置 ----
+            elements.btnPhysicsSave.addEventListener('click', () => {
+                broadcast('config_save', { type: 'physics' });
+            });
+            elements.btnPhysicsLoad.addEventListener('click', () => {
+                broadcast('config_load', { type: 'physics' });
+            });
+
+            // ---- 全量保存/加载 ----
+            elements.btnSaveAll.addEventListener('click', () => {
+                broadcast('config_save', { type: 'all' });
+            });
+            elements.btnLoadAll.addEventListener('click', () => {
+                broadcast('config_load', { type: 'all' });
+            });
+
+            // ---- 频道消息 ----
+            channel.onmessage = (event) => {
+                const msg = event.data;
+                if (!msg || msg.source === SOURCE) return;
+                handleChannelMessage(msg);
+            };
+        }
+
+        // ==== 频道消息处理 ====
+        function handleChannelMessage(msg) {
+            switch (msg.type) {
+                case 'telemetry':
+                    updateSceneStats(msg.payload);
+                    break;
+                case 'assets_list':
+                    state.assets = msg.payload?.assets ?? [];
+                    renderAssetList();
+                    break;
+                case 'image_assets_list':
+                    state.imageAssets = msg.payload?.images ?? [];
+                    renderImageGrid();
+                    break;
+                case 'config_save_result':
+                    showToast(msg.payload?.message || '保存完成', msg.payload?.ok ? 'success' : 'error');
+                    break;
+                case 'config_load_result':
+                    showToast(msg.payload?.message || '加载完成', msg.payload?.ok ? 'success' : 'error');
+                    break;
+                case 'asset_op_result':
+                    showToast(msg.payload?.message || '操作完成', msg.payload?.ok ? 'success' : 'error');
+                    break;
+                case 'texture_list_request':
+                    replyTextureList();
+                    break;
+                case 'theme_changed':
+                    document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
+                    break;
+            }
+        }
+
+        // ==== 场景资产 ====
+        function updateSceneStats(p) {
+            if (!p) return;
+            state.primCount = p.primitiveCount ?? state.primCount;
+            state.compoundCount = p.compoundCount ?? state.compoundCount;
+            elements.statPrimCount.textContent = state.primCount;
+            elements.statCompoundCount.textContent = state.compoundCount;
+        }
+
+        // ==== 图元/组合体资产 ====
+        function saveAssetToLibrary() {
+            const name = elements.inputAssetName.value.trim();
+            if (!name) {
+                showToast('请输入资产名称', 'error');
+                return;
+            }
+            broadcast('asset_save_library', { name });
+            elements.inputAssetName.value = '';
+        }
+
+        function importAssetToScene(assetId) {
+            broadcast('asset_import_scene', { assetId });
+            showToast('资产已导入场景', 'success');
+        }
+
+        function deleteAsset(assetId) {
+            broadcast('asset_delete', { assetId });
+        }
+
+        function renderAssetList() {
+            if (state.assets.length === 0) {
+                elements.assetList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><span>暂无资产</span></div>';
+                return;
+            }
+            elements.assetList.innerHTML = state.assets.map(a => {
+                const typeIcon = a.type === 'compound' ? 'fa-cubes' : 'fa-cube';
+                const typeLabel = a.type === 'compound' ? '组合体' : '图元';
+                return `
+                    <div class="list-item" data-id="${escapeHtml(a.id)}">
+                        <i class="fas ${typeIcon} icon"></i>
+                        <span class="name">${escapeHtml(a.name)}</span>
+                        <span class="meta">${typeLabel} · ${a.primitiveCount ?? 0} 图元</span>
+                        <span class="ops">
+                            <button class="import" title="导入到场景"><i class="fas fa-file-import"></i></button>
+                            <button class="danger" title="删除"><i class="fas fa-trash-alt"></i></button>
+                        </span>
+                    </div>
+                `;
+            }).join('');
+            elements.assetList.querySelectorAll('.list-item').forEach(item => {
+                const id = item.dataset.id;
+                item.querySelector('button.import').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    importAssetToScene(id);
+                });
+                item.querySelector('button.danger').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteAsset(id);
+                });
+            });
+        }
+
+        // ==== 图片/纹理资产 ====
+        function onImageFilesSelected(e) {
+            const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+            if (files.length > 0) uploadImageFiles(files);
+            e.target.value = '';
+        }
+
+        function uploadImageFiles(files) {
+            for (const file of files) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = String(reader.result || '');
+                    const uuid = generateUUID();
+                    const name = file.name;
+                    broadcast('image_asset_save', { uuid, base64, name });
+                    state.imageAssets.push({ uuid, base64, name });
+                    renderImageGrid();
+                    showToast(`图片「${name}」已上传`, 'success');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function copyUUID(uuid) {
+            navigator.clipboard.writeText(uuid).then(() => {
+                showToast(`UUID 已复制：${uuid.substring(0, 8)}...`, 'success');
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = uuid;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast(`UUID 已复制：${uuid.substring(0, 8)}...`, 'success');
+            });
+        }
+
+        function deleteImageAsset(uuid) {
+            broadcast('image_asset_delete', { uuid });
+            state.imageAssets = state.imageAssets.filter(img => img.uuid !== uuid);
+            renderImageGrid();
+            showToast('图片已删除', 'success');
+        }
+
+        function renderImageGrid() {
+            if (state.imageAssets.length === 0) {
+                elements.imgGrid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-image"></i><span>暂无图片资产</span></div>';
+                return;
+            }
+            elements.imgGrid.innerHTML = state.imageAssets.map(img => `
+                <div class="img-item" data-uuid="${escapeHtml(img.uuid)}" title="点击复制 UUID">
+                    <button class="img-delete" title="删除"><i class="fas fa-times"></i></button>
+                    <img src="${escapeHtml(img.base64)}" alt="${escapeHtml(img.name)}">
+                    <span class="img-name">${escapeHtml(img.name)}</span>
+                    <span class="img-uuid">${img.uuid.substring(0, 8)}</span>
+                </div>
+            `).join('');
+            elements.imgGrid.querySelectorAll('.img-item').forEach(item => {
+                const uuid = item.dataset.uuid;
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('.img-delete')) return;
+                    copyUUID(uuid);
+                });
+                item.querySelector('.img-delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteImageAsset(uuid);
+                });
+            });
+        }
+
+        // 回复纹理列表给元素页
+        function replyTextureList() {
+            const textures = state.imageAssets.map(img => {
+                // 生成缩略图：将图片缩小到小尺寸base64
+                const thumbnail = generateThumbnail(img.base64, img.name);
+                return { uuid: img.uuid, name: img.name, thumbnail };
+            });
+            broadcast('texture_list', { textures });
+        }
+
+        // 生成缩略图（异步，通过canvas缩小）
+        function generateThumbnail(base64, name) {
+            // 直接返回原图base64作为fallback，异步生成缩略图后更新
+            // 为简化实现，直接使用原始base64
+            // 引擎端可以自行处理缩略图尺寸
+            return base64;
+        }
+
+        // ==== Toast ====
+        function showToast(message, type = '') {
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = message;
+            elements.toastContainer.appendChild(el);
+            setTimeout(() => el.remove(), 2800);
+        }
+
+        // ==== 工具函数 ====
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function broadcast(type, payload) {
+            channel.postMessage({ type, source: SOURCE, payload, timestamp: Date.now() });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -143,7 +143,7 @@ class Primitives {
         const params = spec.params || {};
         const geometry = def.geo(params);
         const material = new THREE.MeshStandardMaterial({
-            color: spec.color ?? 0xffffff,
+            color: spec.color ?? Primitives._randomColor(),
             roughness: 0.6,
             metalness: 0.1,
         });
@@ -322,6 +322,29 @@ class Primitives {
     }
 
     /**
+     * 生成随机颜色（用于无纹理图元）
+     * @returns {number} hex color
+     */
+    static _randomColor() {
+        const hue = Math.random() * 360;
+        const s = 0.5 + Math.random() * 0.3;
+        const l = 0.4 + Math.random() * 0.25;
+        // HSL to hex
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
+        const m = l - c / 2;
+        let r, g, b;
+        if (hue < 60) { r = c; g = x; b = 0; }
+        else if (hue < 120) { r = x; g = c; b = 0; }
+        else if (hue < 180) { r = 0; g = c; b = x; }
+        else if (hue < 240) { r = 0; g = x; b = c; }
+        else if (hue < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        const toHex = (v) => Math.round((v + m) * 255);
+        return (toHex(r) << 16) | (toHex(g) << 8) | toHex(b);
+    }
+
+    /**
      * 为图元应用纹理
      * @param {string} id 图元或组合体 ID
      * @param {string} dataUrl 纹理数据 URL（data:image/...）
@@ -341,10 +364,19 @@ class Primitives {
 
             const applyToMesh = (mesh) => {
                 if (!mesh.material) return;
-                // 保留旧材质其他属性，仅替换 map
-                if (mesh.material.map) mesh.material.map.dispose();
-                mesh.material.map = texture;
-                mesh.material.needsUpdate = true;
+                // 完全替换材质：纯白底色 + 纹理贴图，确保不叠加颜色
+                const oldMat = mesh.material;
+                const newMat = new THREE.MeshStandardMaterial({
+                    map: texture,
+                    color: 0xffffff,
+                    roughness: 0.8,
+                    metalness: 0.0,
+                    transparent: false,
+                    opacity: 1.0,
+                });
+                if (oldMat.map && oldMat.map !== texture) oldMat.map.dispose();
+                oldMat.dispose();
+                mesh.material = newMat;
             };
 
             if (target.isMesh) {
@@ -369,8 +401,12 @@ class Primitives {
             if (mesh.material.map) {
                 mesh.material.map.dispose();
                 mesh.material.map = null;
-                mesh.material.needsUpdate = true;
             }
+            // 清除纹理后恢复为随机颜色纯色材质
+            mesh.material.color.setHex(Primitives._randomColor());
+            mesh.material.transparent = mesh.userData._customTransparent || false;
+            mesh.material.opacity = mesh.userData._customOpacity ?? 1.0;
+            mesh.material.needsUpdate = true;
         };
         if (target.isMesh) clearOnMesh(target);
         else if (target.isGroup) target.traverse(c => { if (c.isMesh) clearOnMesh(c); });
@@ -394,7 +430,7 @@ class Primitives {
             scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z },
             color: mesh.material?.color?.getHex?.() ?? 0x9d6bff,
             hasTexture: !!mesh.material?.map,
-            textureDataUrl: mesh.material?.map?.image?.src || null,
+            textureUUID: mesh.userData.textureUUID || null,
             physics: { ...(mesh.userData.physics || {}) },
         });
 
@@ -423,7 +459,7 @@ class Primitives {
      * @param {object} asset 资产对象（由 exportAsset 生成）
      * @returns {THREE.Object3D|null} 创建的对象
      */
-    importAsset(asset) {
+    importAsset(asset, imageAssetStore = null) {
         if (!asset || !asset.format_version || !asset.asset_type) return null;
 
         if (asset.asset_type === 'primitive') {
@@ -437,8 +473,16 @@ class Primitives {
                 color: d.color,
                 physics: d.physics,
             });
-            if (mesh && d.hasTexture && d.textureDataUrl) {
-                this.applyTexture(mesh.userData.id, d.textureDataUrl);
+            if (mesh && d.hasTexture) {
+                let dataUrl = d.textureDataUrl || null;
+                if (!dataUrl && d.textureUUID && imageAssetStore) {
+                    const imgAsset = imageAssetStore.get(d.textureUUID);
+                    if (imgAsset) dataUrl = imgAsset.base64;
+                }
+                if (dataUrl) {
+                    this.applyTexture(mesh.userData.id, dataUrl);
+                    if (d.textureUUID) mesh.userData.textureUUID = d.textureUUID;
+                }
             }
             return mesh;
         }
@@ -455,8 +499,16 @@ class Primitives {
                     physics: d.physics,
                 });
                 if (mesh) {
-                    if (d.hasTexture && d.textureDataUrl) {
-                        this.applyTexture(mesh.userData.id, d.textureDataUrl);
+                    if (d.hasTexture) {
+                        let dataUrl = d.textureDataUrl || null;
+                        if (!dataUrl && d.textureUUID && imageAssetStore) {
+                            const imgAsset = imageAssetStore.get(d.textureUUID);
+                            if (imgAsset) dataUrl = imgAsset.base64;
+                        }
+                        if (dataUrl) {
+                            this.applyTexture(mesh.userData.id, dataUrl);
+                            if (d.textureUUID) mesh.userData.textureUUID = d.textureUUID;
+                        }
                     }
                     meshes.push(mesh);
                 }
