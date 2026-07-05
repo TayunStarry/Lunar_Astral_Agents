@@ -518,6 +518,22 @@ function bindKeyboard() {
             case 'KeyM':
                 toggleMolangMonitor();
                 break;
+            case 'KeyR':
+                // R: 一次追踪聚焦
+                cameraController?.stopOverShoulder?.();
+                renderer?.moveCameraToFront?.(1.5);
+                break;
+            case 'KeyE':
+                // E: 开关快速追踪
+                quickTrackEnabled = !quickTrackEnabled;
+                if (!quickTrackEnabled) removeQuickTrackMarker();
+                broadcast('quick_track_changed', { enabled: quickTrackEnabled });
+                break;
+            case 'KeyQ':
+                // Q: 开关鼠标追踪
+                movementController?.setMouseTracking?.(!movementController?.mouseTracking);
+                broadcast('mouse_tracking_changed', { enabled: !!movementController?.mouseTracking });
+                break;
         }
     });
 }
@@ -1182,10 +1198,9 @@ async function handleChannelMessage(msg) {
             }
             selectedElementId = id;
             if (id) {
-                // 选中时：卸载物理体 + 网格对齐
+                // 选中时：网格对齐 + 高亮（不自动卸载物理，由用户手动控制）
                 const mesh = primitives?.getById?.(id);
                 if (mesh) {
-                    physicsManager?.removePrimitive?.(mesh);
                     // 网格对齐：位置规整到整数
                     mesh.position.x = Math.round(mesh.position.x);
                     mesh.position.y = Math.round(mesh.position.y);
