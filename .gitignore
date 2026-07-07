@@ -14,6 +14,9 @@ local_data/lunar_config.json
 subsystem/bridge_adapter/local_data/lunar_config.json
 subsystem/volume_archive/local_data/lunar_config.json
 
+## 嵌入式资源目录（构建前由 local_data 同步生成，不纳入版本控制）
+crystal_astral/embedded_data/
+
 ## Go 测试产物
 coverage
 coverage.out

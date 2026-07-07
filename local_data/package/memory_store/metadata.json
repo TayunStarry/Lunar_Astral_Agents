@@ -1,9 +1,0 @@
-{
-	"id": "memory_store",
-	"icon": "/file/read/package/memory_store/icon.webp",
-	"title": "记忆库",
-	"description": "语义搜索与向量记忆存储",
-	"tags": [
-		"App"
-	]
-}

@@ -1,4 +1,4 @@
-import { ToolCall, RandomFloor, ModelBuilder, modelResponse, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, AgentDefine } from '../index';
+import { ToolCall, PostMessage,RandomFloor, ModelBuilder, modelResponse, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, AgentDefine } from '../index';
 
 /** 绘画角色提示词 */
 class Prompt extends ModelBuilder {
@@ -219,20 +219,44 @@ class Toolchain extends Prompt {
 	}
 }
 
+/** 绘画作品详情记录（用于向对话者传递作品信息） */
+interface PaintingDetail {
+	/** 工具名称 */
+	toolName: string;
+	/** 正向提示词摘要 */
+	promptSummary: string;
+	/** 表情（自画像专用） */
+	expression?: string;
+	/** 姿势（自画像专用） */
+	posture?: string;
+	/** 环境（自画像专用） */
+	environment?: string;
+}
+
 /** 画家角色 */
 export class PainterRole extends Toolchain {
+	/** 画家独立历史（跨周期持久化，供对话者消费后清空） */
+	private _history: PostMessage[] = [];
 	/** 构造函数 */
 	public constructor() {
 		super(fileView('prompts/painterRole.md')[0]);
 	}
+	/** 获取画家历史摘要（对话者调用后清空） */
+	public consumeHistory(): PostMessage[] {
+		const result = [...this._history];
+		this._history = [];
+		return result;
+	}
 	/** 创建图像渲染上下文 */
-	public createImageRendering(source: AgentDefine, count: number = 10): boolean {
-		//覆写画家智能体的上下文
-		this.coverContext([...source.dialogueRole.messages, ...source.unreadContext]);
+	public createImageRendering(source: AgentDefine, unreadContext: PostMessage[], count: number = 10): boolean {
+		// 构建画家上下文：对话历史（最近15条）+ 画家自身历史（最近5条）+ 当前未读
+		const dialogueHistory = source.dialogueRole.messages.slice(-15);
+		const painterHistory = this._history.slice(-5);
+		this.coverContext([...dialogueHistory, ...painterHistory, ...unreadContext]);
 		/** 未读消息文本内容 */
 		const unreadTexts: string[] = [];
 		// 遍历未读消息，提取文本内容
-		for (const message of source.unreadContext.slice(-count)) {
+		for (const message of unreadContext.slice(-count)) {
 			// 如果消息内容是字符串，直接添加
 			if (typeof message.content === 'string') unreadTexts.push(message.content);
 			// 如果消息内容是数组，遍历添加文本内容
@@ -258,6 +282,10 @@ export class PainterRole extends Toolchain {
 		if (!allowGeneration) return true;
 		/** 最大迭代次数 */
 		const MAX_ITERATIONS = 3;
+
+		/** 绘画记录 — 收集所有生成的图像详情，用于向对话者传递 */
+		const paintings: PaintingDetail[] = [];
+
 		// 执行绘画推理循环
 		for (let i = 0; i < MAX_ITERATIONS; i++) {
 			console.log(`[画家] 第 ${i + 1} 轮绘画推理`);
@@ -294,9 +322,78 @@ export class PainterRole extends Toolchain {
 				const result = this.executePaintingTool(toolCall);
 				// 将工具执行结果写入上下文
 				this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+
+				// 收集绘画工具调用的详情，用于向对话者传递作品信息
+				this.collectPaintingDetail(toolCall, paintings);
 			}
 		}
+
+		// 将绘画作品详情写入画家历史，供对话者消费
+		if (paintings.length > 0) {
+			const summary = this.buildPaintingSummary(paintings);
+			this._history.push({ role: 'tool', content: summary });
+			console.log(`[画家] 已将 ${paintings.length} 幅作品详情写入历史`);
+		}
+
 		return false;
+	}
+
+	/**
+	 * 从工具调用中提取绘画作品详情
+	 */
+	private collectPaintingDetail(toolCall: ToolCallItem, paintings: PaintingDetail[]): void {
+		try {
+			const args = typeof toolCall.function.arguments === 'string'
+				? JSON.parse(toolCall.function.arguments)
+				: toolCall.function.arguments;
+
+			if (toolCall.function.name === 'self_portrait') {
+				paintings.push({
+					toolName: 'self_portrait',
+					promptSummary: '自画像',
+					expression: args.expression || '',
+					posture: args.posture || '',
+					environment: args.environment || '',
+				});
+			} else if (toolCall.function.name === 'diffusion_generation') {
+				const prompt = args.prompt || '';
+				paintings.push({
+					toolName: 'diffusion_generation',
+					promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
+				});
+			}
+		} catch {
+			// 解析失败时跳过，不阻断流程
+		}
+	}
+
+	/**
+	 * 构建绘画作品摘要，供对话者使用
+	 *
+	 * 对话者将根据此摘要向用户介绍生成的图像作品，
+	 * 因此需要包含完整的作品信息以确保对话准确性。
+	 */
+	private buildPaintingSummary(paintings: PaintingDetail[]): string {
+		const parts: string[] = [];
+		parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
+
+		for (let i = 0; i < paintings.length; i++) {
+			const p = paintings[i];
+			const detailLines: string[] = [];
+			if (p.toolName === 'self_portrait') {
+				detailLines.push(`作品${i + 1}：自画像`);
+				if (p.expression) detailLines.push(`  - 表情：${p.expression}`);
+				if (p.posture) detailLines.push(`  - 姿势：${p.posture}`);
+				if (p.environment) detailLines.push(`  - 环境：${p.environment}`);
+			} else {
+				detailLines.push(`作品${i + 1}：扩散生成图像`);
+				detailLines.push(`  - 画面内容：${p.promptSummary}`);
+			}
+			parts.push(detailLines.join('\n'));
+		}
+
+		parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
+		return parts.join('\n');
 	}
 	/**
 	 * 执行绘画工具调用

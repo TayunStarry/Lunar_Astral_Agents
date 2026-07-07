@@ -1,4 +1,4 @@
-﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+﻿﻿﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -87,9 +87,14 @@ class LunarAgent extends AgentDefine {
 				if (messageLength === 0) this.speakWeight = 0;
 				// 批量处理视频文件
 				await this.batchProcessVideoFiles();
-				// 如果包含图像生成关键词，调用画家角色执行绘画循环
-				this.painterRole.createImageRendering(this);
-				// 创建消息
+				// 保存当前未读上下文的快照，供子智能体读取后独立维护
+				// 对话者会在 callMultimediaAndToolParsing 中消费并清空 unreadContext
+				const currentUnreadContext = [...this.unreadContext];
+				// 如果包含图像生成关键词，调用画家角色执行绘画循环（在对话者之前）
+				this.painterRole.createImageRendering(this, currentUnreadContext);
+				// 如果包含音乐创作关键词，调用音乐家角色执行音乐创作循环（在对话者之前）
+				this.musicianRole.createMusicComposition(this, currentUnreadContext);
+				// 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
 				await this.createChatMessage();
 				// 如果消息响应为空，抛出异常
 				if (!this.finalResponse.trim().length) throw new Error('消息响应为空');
@@ -157,6 +162,7 @@ class LunarAgent extends AgentDefine {
 		this.descriptionRole.coverContext([]);
 		this.dialogueRole.coverContext([]);
 		this.painterRole.coverContext([]);
+		this.musicianRole.coverContext([]);
 		this.organizeRole.coverContext([]);
 		// 清除主智能体的unreadContext和unreadVideoUrl
 		this.unreadContext = [];

@@ -8,6 +8,8 @@ import (
 
 func main() {
 	flag.Parse()
+	// 备用机制：启动时检查 local_data 目录，从嵌入资源中补全缺失文件
+	EnsureLocalData()
 	// 生成10000~40000之间的随机端口
 	port := rand.Intn(30001) + 10000
 	// 服务名称

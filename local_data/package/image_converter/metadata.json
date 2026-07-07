@@ -1,9 +1,0 @@
-{
-	"id": "image_converter",
-	"icon": "/file/read/package/image_converter/icon.webp",
-	"title": "图片转码",
-	"description": "PNG、JPEG、WebP 图片格式相互转换工具",
-	"tags": [
-		"App"
-	]
-}

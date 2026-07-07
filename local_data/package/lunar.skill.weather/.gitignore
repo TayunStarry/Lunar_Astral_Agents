@@ -1,0 +1,6 @@
+*.backup
+*.ltpx
+config.yaml
+.DS_Store
+Thumbs.db
+data/

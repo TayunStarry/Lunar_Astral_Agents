@@ -1,0 +1,9 @@
+{
+	"id": "lunar.means.model.explorer",
+	"icon": "/file/read/package/lunar.means.model.explorer/icon.webp",
+	"title": "模型浏览",
+	"description": "浏览云端模型列表并测试对话",
+	"tags": [
+		"App"
+	]
+}

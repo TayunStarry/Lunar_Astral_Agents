@@ -1,9 +1,0 @@
-{
-	"id": "file_explorer",
-	"icon": "/file/read/package/file_explorer/icon.webp",
-	"title": "文件管理",
-	"description": "浏览与管理项目文件",
-	"tags": [
-		"App"
-	]
-}

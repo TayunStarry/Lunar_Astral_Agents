@@ -1,0 +1,32 @@
+{
+  "id": "lunar.skill.weather",
+  "title": "天气查询",
+  "version": "1.0.0",
+  "type": "tool",
+  "description": "天气查询工具插件，支持多API提供者自动回退（和风天气 → Open-Meteo → wttr.in），LLM可通过Function Calling主动调用",
+  "tags": [
+    "LTP3",
+    "LTPX"
+  ],
+  "url": "/file/read/package/lunar.skill.weather/tool.md",
+  "icon": "",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "查询指定城市的实时天气和未来2天预报。返回温度、天气状况、湿度、风力、体感温度等信息。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "城市名称，中文或英文均可，示例: 北京、上海、shenzhen、Tokyo"
+            }
+          },
+          "required": ["city"]
+        }
+      }
+    }
+  ]
+}

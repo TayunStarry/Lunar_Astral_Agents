@@ -1,0 +1,157 @@
+{
+  "manifestVersion": 1,
+  "id": "com.yaraflow.weather",
+  "name": "天气查询",
+  "version": "1.0.0",
+  "type": "tool",
+  "description": "天气查询工具插件，支持多API提供者自动回退（和风天气 → Open-Meteo → wttr.in），LLM可通过Function Calling主动调用。",
+  "author": {
+    "name": "瞳瞳",
+    "url": "https://gitee.com"
+  },
+  "license": "MIT",
+  "main": "index.js",
+  "permissions": [
+    "tool.register",
+    "http.request",
+    "plugin.config.read",
+    "plugin.config.write",
+    "plugin.file.read",
+    "plugin.file.write",
+    "encoding.use",
+    "crypto.use"
+  ],
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "查询指定城市的实时天气和未来2天预报。返回温度、天气状况、湿度、风力、体感温度等信息。支持中文城市名，如'北京'、'上海'、'深圳'。",
+      "parameters": [
+        {
+          "name": "city",
+          "type": "string",
+          "description": "城市名称，中文或英文均可，示例: 北京、上海、shenzhen、Tokyo",
+          "required": true
+        }
+      ],
+      "toolType": "core",
+      "visibility": "visible"
+    }
+  ],
+  "config": {
+    "type": "yaml",
+    "configFile": "config.yaml",
+    "default": {},
+    "sections": [
+      {
+        "name": "plugin",
+        "label": "插件设置",
+        "description": "插件的基本开关设置",
+        "order": 0,
+        "fields": [
+          {
+            "name": "enabled",
+            "type": "boolean",
+            "description": "启用后，LLM可通过Function Calling自动查询天气",
+            "default": true,
+            "order": 1
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "label": "API设置",
+        "description": "天气API提供者配置。支持多API自动回退，不填Key也能用（自动使用免费API）",
+        "order": 10,
+        "fields": [
+          {
+          "name": "provider",
+          "type": "select",
+          "description": "API提供者。auto=自动回退（推荐），qweather=和风天气（需API Host和凭据），openmeteo=Open-Meteo（免费免Key），wttr=wttr.in（免费免Key）",
+          "default": "auto",
+          "order": 1,
+          "options": [
+            { "label": "自动回退（推荐）", "value": "auto" },
+            { "label": "和风天气（需凭据）", "value": "qweather" },
+            { "label": "Open-Meteo（免费）", "value": "openmeteo" },
+            { "label": "wttr.in（免费）", "value": "wttr" }
+          ]
+        },
+        {
+          "name": "qweather_host",
+          "type": "string",
+          "description": "⚠️ 和风天气API Host（在控制台设置中查看，格式如 abc1234.qweatherapi.com）。原公共API地址(devapi.qweather.com)将从2026年起逐步停止服务，必须配置此项。",
+          "default": "",
+          "placeholder": "例如: abc1234xyz.def.qweatherapi.com",
+          "order": 2
+        },
+        {
+          "name": "qweather_auth",
+          "type": "select",
+          "description": "和风天气认证方式。api_key=API密钥（简单但2027年起受限），jwt=JWT令牌（推荐，安全性更高）",
+          "default": "api_key",
+          "order": 3,
+          "options": [
+            { "label": "API Key（简单，2027年起受限）", "value": "api_key" },
+            { "label": "JWT令牌（推荐，安全）", "value": "jwt" }
+          ]
+        },
+        {
+          "name": "qweather_key",
+          "type": "string",
+          "description": "和风天气API Key（仅API Key模式需要），示例: abc123def456",
+          "default": "",
+          "placeholder": "填入和风天气API Key",
+          "order": 4
+        },
+        {
+          "name": "qweather_project_id",
+          "type": "string",
+          "description": "和风天气JWT认证 - 项目ID（Project ID，仅JWT模式需要），在控制台项目管理中查看",
+          "default": "",
+          "placeholder": "JWT模式必填",
+          "order": 5
+        },
+        {
+          "name": "qweather_key_id",
+          "type": "string",
+          "description": "和风天气JWT认证 - 密钥ID（Key ID，仅JWT模式需要），在控制台凭据管理中查看",
+          "default": "",
+          "placeholder": "JWT模式必填",
+          "order": 6
+        },
+        {
+          "name": "qweather_private_key",
+          "type": "textarea",
+          "description": "和风天气JWT认证 - Ed25519私钥（PEM格式，仅JWT模式需要），创建凭据时下载",
+          "default": "",
+          "placeholder": "JWT模式必填，粘贴完整的PEM私钥",
+          "order": 7
+        }
+        ]
+      },
+      {
+        "name": "display",
+        "label": "显示设置",
+        "description": "天气信息的显示偏好",
+        "order": 20,
+        "fields": [
+          {
+            "name": "default_city",
+            "type": "string",
+            "description": "默认城市，用户未指定城市时使用，示例: 北京",
+            "default": "",
+            "placeholder": "留空则不设默认城市",
+            "order": 1
+          },
+          {
+            "name": "show_aqi",
+            "type": "boolean",
+            "description": "是否显示空气质量指数（仅和风天气支持）",
+            "default": true,
+            "order": 2
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+	"id": "lunar.studio.integrated",
+	"title": "复合引擎工作室",
+	"description": "整合 Bedrock 实体渲染、cannon-es 物理模拟、图元组装与角色物理操控的模块化复合工作室。基座层通过 iframe 集成引擎层、4 个操纵层（物理/动画/位移/元素）和信息层，利用 BroadcastChannel 实现组件间直接广播通信。支持角色 AABB 物理碰撞、WASD 速度追踪力操控、跳跃/潜行状态机、物理作用域动态配额（人物 + 100 单位内最近 50 个图元）。",
+	"tags": [
+		"Studio",
+		"3D",
+		"Bedrock",
+		"Physics",
+		"iframe"
+	]
+}

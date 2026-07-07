@@ -1,0 +1,10 @@
+{
+	"id": "lunar.means.qq.adapter",
+	"icon": "/file/read/package/lunar.means.qq.adapter/icon.webp",
+	"title": "QQ 适配器",
+	"description": "启动 NapCat QQ 适配器",
+	"path": "D:/NapCat.Shell.Windows.OneKey/NapCat.41785.Shell/napcat.bat",
+	"tags": [
+		"App"
+	]
+}

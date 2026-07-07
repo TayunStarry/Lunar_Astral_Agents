@@ -1,0 +1,8 @@
+{
+	"id": "lunar.studio.engine",
+	"title": "引擎工坊",
+	"description": "基于 Three.js 的轻量级 3D 场景组装与渲染工坊，支持模型导入、材质编辑、灯光天空盒配置及场景方案导入导出",
+	"tags": [
+		"Studio"
+	]
+}

@@ -1,9 +1,0 @@
-{
-	"id": "gguf_metadata_viewer",
-	"icon": "/file/read/package/gguf_metadata_viewer/icon.webp",
-	"title": "GGUF 元数据",
-	"description": "解析 GGUF 模型文件元数据，支持关键词搜索过滤",
-	"tags": [
-		"App"
-	]
-}

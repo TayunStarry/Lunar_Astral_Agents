@@ -7,9 +7,10 @@
 	"scripts": {
 		"release.min": "tsc && rollup -c",
 		"ltp": "node script/run-generate-tool.js",
-
 		"compile.server": "tsc ./server_side/index.ts --removeComments --moduleResolution node --target es2022 --outDir ./node_modules/deliverable",
-		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/index.js --file ./hierarchy/assets/agentSystem.js --format iife --name agentSystem"
+		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/index.js --file ./hierarchy/assets/agentSystem.js --format iife --name agentSystem",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"keywords": [
 		"ai",
@@ -24,6 +25,7 @@
 		"@rollup/plugin-terser": "^1.0.0",
 		"@types/node": "^20.19.39",
 		"rollup": "^4.55.1",
-		"typescript": "^5.0.0"
+		"typescript": "^5.0.0",
+		"vitest": "^4.1.10"
 	}
 }

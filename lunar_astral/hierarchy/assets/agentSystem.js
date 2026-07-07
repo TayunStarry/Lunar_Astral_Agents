@@ -33,19 +33,19 @@ var agentSystem = (function (exports) {
         }
         ;
         static get SystemKey() {
-            return OnlyData.customConfig.cloud.cloud_model_key || 'key-520-1314-2000-02-18';
+            return OnlyData.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
         }
         ;
         static get MultimodalName() {
-            return OnlyData.customConfig.cloud.multimodal_model_name || "system-multimodal";
+            return OnlyData.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
         }
         ;
         static get EmbeddingName() {
-            return OnlyData.customConfig.cloud.embedding_model_name || "system-embedding";
+            return OnlyData.customConfig?.cloud?.embedding_model_name || "system-embedding";
         }
         ;
         static get userName() {
-            return OnlyData.customConfig.server.user_name || "阁下";
+            return OnlyData.customConfig?.server?.user_name || "阁下";
         }
         ;
     }
@@ -627,6 +627,14 @@ var agentSystem = (function (exports) {
         async callMultimediaAndToolParsing(cache, source) {
             try {
                 await source.LiteImageFile();
+                const painterHistory = source.painterRole.consumeHistory();
+                const musicianHistory = source.musicianRole.consumeHistory();
+                for (const msg of painterHistory) {
+                    source.unreadContext.push(msg);
+                }
+                for (const msg of musicianHistory) {
+                    source.unreadContext.push(msg);
+                }
                 source.unreadContext.forEach(context => this.writeContext(context));
                 source.unreadContext = [];
                 this.formatHistoricalMessages(source);
@@ -971,13 +979,21 @@ var agentSystem = (function (exports) {
         }
     };
     class PainterRole extends Toolchain$1 {
+        _history = [];
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
         }
-        createImageRendering(source, count = 10) {
-            this.coverContext([...source.dialogueRole.messages, ...source.unreadContext]);
+        consumeHistory() {
+            const result = [...this._history];
+            this._history = [];
+            return result;
+        }
+        createImageRendering(source, unreadContext, count = 10) {
+            const dialogueHistory = source.dialogueRole.messages.slice(-15);
+            const painterHistory = this._history.slice(-5);
+            this.coverContext([...dialogueHistory, ...painterHistory, ...unreadContext]);
             const unreadTexts = [];
-            for (const message of source.unreadContext.slice(-count)) {
+            for (const message of unreadContext.slice(-count)) {
                 if (typeof message.content === 'string')
                     unreadTexts.push(message.content);
                 else
@@ -1001,6 +1017,7 @@ var agentSystem = (function (exports) {
             if (!allowGeneration)
                 return true;
             const MAX_ITERATIONS = 3;
+            const paintings = [];
             for (let i = 0; i < MAX_ITERATIONS; i++) {
                 console.log(`[画家] 第 ${i + 1} 轮绘画推理`);
                 let response;
@@ -1028,9 +1045,64 @@ var agentSystem = (function (exports) {
                     console.log(`[画家] 执行工具: ${toolCall.function.name}`);
                     const result = this.executePaintingTool(toolCall);
                     this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+                    this.collectPaintingDetail(toolCall, paintings);
                 }
             }
+            if (paintings.length > 0) {
+                const summary = this.buildPaintingSummary(paintings);
+                this._history.push({ role: 'tool', content: summary });
+                console.log(`[画家] 已将 ${paintings.length} 幅作品详情写入历史`);
+            }
             return false;
+        }
+        collectPaintingDetail(toolCall, paintings) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                if (toolCall.function.name === 'self_portrait') {
+                    paintings.push({
+                        toolName: 'self_portrait',
+                        promptSummary: '自画像',
+                        expression: args.expression || '',
+                        posture: args.posture || '',
+                        environment: args.environment || '',
+                    });
+                }
+                else if (toolCall.function.name === 'diffusion_generation') {
+                    const prompt = args.prompt || '';
+                    paintings.push({
+                        toolName: 'diffusion_generation',
+                        promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
+                    });
+                }
+            }
+            catch {
+            }
+        }
+        buildPaintingSummary(paintings) {
+            const parts = [];
+            parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
+            for (let i = 0; i < paintings.length; i++) {
+                const p = paintings[i];
+                const detailLines = [];
+                if (p.toolName === 'self_portrait') {
+                    detailLines.push(`作品${i + 1}：自画像`);
+                    if (p.expression)
+                        detailLines.push(`  - 表情：${p.expression}`);
+                    if (p.posture)
+                        detailLines.push(`  - 姿势：${p.posture}`);
+                    if (p.environment)
+                        detailLines.push(`  - 环境：${p.environment}`);
+                }
+                else {
+                    detailLines.push(`作品${i + 1}：扩散生成图像`);
+                    detailLines.push(`  - 画面内容：${p.promptSummary}`);
+                }
+                parts.push(detailLines.join('\n'));
+            }
+            parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
+            return parts.join('\n');
         }
         executePaintingTool(toolCall) {
             const funcName = toolCall.function.name;
@@ -1046,6 +1118,289 @@ var agentSystem = (function (exports) {
                 case 'diffusion_generation': return this.handleDiffusionGeneration(args);
                 case 'self_portrait': return this.handleSelfPortrait(args);
                 default: return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
+            }
+        }
+    }
+
+    class MusicPrompt extends ModelBuilder {
+        defaultInstruments = [
+            '钢琴',
+            '小提琴',
+            '长笛',
+            '大提琴',
+            '吉他',
+            '竖琴',
+            '单簧管',
+            '双簧管',
+        ];
+        defaultStyles = [
+            '古典',
+            '浪漫',
+            '巴洛克',
+            '现代简约',
+            '民谣',
+            '轻音乐',
+            '爵士',
+            '新世纪',
+        ];
+        defaultMeters = ['4/4', '3/4', '6/8', '2/4'];
+        defaultKeys = ['C', 'G', 'D', 'F', 'a', 'e', 'd'];
+    }
+    class MusicToolchain extends MusicPrompt {
+        musicTool = [
+            {
+                type: "function",
+                function: {
+                    name: "compose_music",
+                    description: "创作音乐作品并生成ABC记谱法格式的乐谱。ABC记谱法是一种基于文本的音乐记谱格式，使用字母表示音符。请务必生成完整的、可直接播放的ABC乐谱，确保音符时值、小节线和调号正确。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "title": {
+                                type: "string",
+                                description: "音乐作品标题"
+                            },
+                            "instruments": {
+                                type: "string",
+                                description: "使用的乐器列表，多个乐器用逗号分隔，如'钢琴,小提琴'"
+                            },
+                            "tempo": {
+                                type: "number",
+                                description: "演奏速度（BPM），默认120"
+                            },
+                            "structure": {
+                                type: "string",
+                                description: "音乐段落结构描述，例如：'前奏(4小节)-主旋律(8小节)-副歌(8小节)-尾声(4小节)'"
+                            },
+                            "key": {
+                                type: "string",
+                                description: "调式，如 C、G、D、F、a、e、d"
+                            },
+                            "meter": {
+                                type: "string",
+                                description: "拍号，如 4/4、3/4、6/8"
+                            },
+                            "abc_notation": {
+                                type: "string",
+                                description: `ABC记谱法格式的完整乐谱。必须严格遵循ABC记谱法规范：
+
+标题行格式:
+X:1
+T:作品标题
+M:拍号
+L:默认音符时值(如 1/8 表示八分音符)
+Q:速度标记(如 1/4=120)
+K:调号
+
+音符与音高: 使用CDEFGAB表示音名，小写字母表示高八度，后面跟逗号表示低八度(如 C, D, E,)。升半音用^前缀(如 ^C)，降半音用_前缀(如 _B)。
+时值: 数字后缀表示时值倍数，如 C2 表示两倍时值的C音，C/2 表示一半时值。
+小节线: | 分隔小节，|| 表示双小节线，|] 表示结束。
+休止符: z 表示休止符，时值规则同音符。
+
+示例:
+X:1
+T:月光小夜曲
+M:4/4
+L:1/8
+Q:1/4=100
+K:C
+C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
+                            }
+                        },
+                        required: [
+                            "title",
+                            "abc_notation"
+                        ]
+                    }
+                }
+            }
+        ];
+        handleComposeMusic(args) {
+            try {
+                const title = args.title || '未命名作品';
+                const abcNotation = args.abc_notation || '';
+                console.log(`[音乐家] 创作音乐: "${title}"`);
+                if (args.instruments)
+                    console.log(`  乐器: ${args.instruments}`);
+                if (args.tempo)
+                    console.log(`  速度: ${args.tempo} BPM`);
+                if (args.structure)
+                    console.log(`  结构: ${args.structure}`);
+                if (!abcNotation.trim()) {
+                    return '音乐创作失败：ABC记谱法乐谱为空';
+                }
+                const hasX = /^X:\s*\d+/m.test(abcNotation);
+                const hasT = /^T:\s*.+/m.test(abcNotation);
+                const hasK = /^K:\s*.+/m.test(abcNotation);
+                if (!hasX || !hasK) {
+                    console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
+                    let fixedAbc = abcNotation;
+                    if (!hasX)
+                        fixedAbc = 'X:1\n' + fixedAbc;
+                    if (!hasT)
+                        fixedAbc = fixedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
+                    if (!hasK)
+                        fixedAbc = fixedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
+                    const pushSuccess = pushContext('music', fixedAbc, '');
+                    if (!pushSuccess) {
+                        console.warn('[音乐家] 推送乐谱到前端失败');
+                    }
+                    return `音乐作品"${title}"创作成功（已自动补全格式）。乐谱已推送到前端进行渲染播放。`;
+                }
+                const pushSuccess = pushContext('music', abcNotation, '');
+                if (!pushSuccess) {
+                    console.warn('[音乐家] 推送乐谱到前端失败');
+                }
+                console.log(`[音乐家] 乐谱推送成功，长度: ${abcNotation.length} 字符`);
+                return `音乐作品"${title}"创作成功。乐谱已推送到前端进行渲染播放。`;
+            }
+            catch (error) {
+                console.error('[音乐家] 音乐创作处理异常:', error);
+                return `音乐创作异常: ${error}`;
+            }
+        }
+    }
+    class MusicianRole extends MusicToolchain {
+        _history = [];
+        constructor() {
+            super(fileView('prompts/musicianRole.md')[0]);
+        }
+        consumeHistory() {
+            const result = [...this._history];
+            this._history = [];
+            return result;
+        }
+        createMusicComposition(source, unreadContext, count = 10) {
+            const dialogueHistory = source.dialogueRole.messages.slice(-15);
+            const musicianHistory = this._history.slice(-5);
+            this.coverContext([...dialogueHistory, ...musicianHistory, ...unreadContext]);
+            const unreadTexts = [];
+            for (const message of unreadContext.slice(-count)) {
+                if (typeof message.content === 'string')
+                    unreadTexts.push(message.content);
+                else
+                    message.content.forEach(item => { if (item.type === 'text')
+                        unreadTexts.push(item.text); });
+            }
+            let allowComposition = false;
+            const musicKeywords = [
+                /创作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /生成(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /写(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /制作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /编(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|曲|钢琴曲|古典乐|轻音乐)/,
+                /(?:帮我|给我|为我)(?:创作|生成|写|制作|编|做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)?/,
+                /(?:做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /来(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+                /作曲/,
+                /编曲/,
+                /谱写/,
+                /演奏(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|钢琴曲|古典乐|轻音乐)/,
+                /(?:弹|拉|吹)(?:一(?:首|段|曲))?.*(?:钢琴|小提琴|吉他|笛子|古筝|曲子|音乐|旋律)/,
+            ];
+            unreadTexts.forEach(text => musicKeywords.forEach(keyword => { if (keyword.test(text))
+                allowComposition = true; }));
+            if (!allowComposition)
+                return true;
+            const MAX_ITERATIONS = 3;
+            const createdPieces = [];
+            for (let i = 0; i < MAX_ITERATIONS; i++) {
+                console.log(`[音乐家] 第 ${i + 1} 轮音乐创作推理`);
+                let response;
+                try {
+                    response = this.run([], this.musicTool);
+                }
+                catch (error) {
+                    console.error(`[音乐家] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log('[音乐家] 模型返回空结果，结束音乐创作循环');
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0) {
+                    const replyContent = choice.message?.content || '';
+                    if (replyContent)
+                        source.unreadContext.push({ role: 'tool', content: `[音乐创作] ${replyContent}` });
+                    break;
+                }
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    console.log(`[音乐家] 执行工具: ${toolCall.function.name}`);
+                    const result = this.executeMusicTool(toolCall);
+                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+                    if (toolCall.function.name === 'compose_music') {
+                        this.collectMusicDetail(toolCall, createdPieces);
+                    }
+                }
+            }
+            if (createdPieces.length > 0) {
+                const summary = this.buildMusicSummary(createdPieces);
+                this._history.push({ role: 'tool', content: summary });
+                console.log(`[音乐家] 已将 ${createdPieces.length} 首作品详情写入历史`);
+            }
+            return false;
+        }
+        collectMusicDetail(toolCall, pieces) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                if (args.title) {
+                    pieces.push({
+                        title: args.title,
+                        instruments: args.instruments || '',
+                        tempo: args.tempo || 0,
+                        structure: args.structure || '',
+                        key: args.key || '',
+                        meter: args.meter || '',
+                        abcLength: (args.abc_notation || '').length,
+                    });
+                }
+            }
+            catch {
+            }
+        }
+        buildMusicSummary(pieces) {
+            const parts = [];
+            parts.push('[音乐创作记录] 你（月华）刚刚完成了以下音乐作品创作：');
+            for (let i = 0; i < pieces.length; i++) {
+                const p = pieces[i];
+                const detailLines = [];
+                detailLines.push(`作品${i + 1}：《${p.title}》`);
+                if (p.instruments)
+                    detailLines.push(`  - 乐器配置：${p.instruments}`);
+                if (p.key)
+                    detailLines.push(`  - 调式：${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
+                if (p.tempo > 0)
+                    detailLines.push(`  - 速度：${p.tempo} BPM`);
+                if (p.meter)
+                    detailLines.push(`  - 拍号：${p.meter}`);
+                if (p.structure)
+                    detailLines.push(`  - 段落结构：${p.structure}`);
+                detailLines.push(`  - 乐谱长度：${p.abcLength} 字符`);
+                parts.push(detailLines.join('\n'));
+            }
+            parts.push('\n注意：请基于以上真实创作信息向用户介绍音乐作品，切勿编造不存在的曲名、乐器或结构。乐谱已通过音乐播放器推送给用户，可以引导用户查看和播放。');
+            return parts.join('\n');
+        }
+        executeMusicTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[音乐家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            switch (funcName) {
+                case 'compose_music': return this.handleComposeMusic(args);
+                default: return `未知工具: ${funcName}，可用工具为 compose_music`;
             }
         }
     }
@@ -1363,6 +1718,7 @@ ${existingRecords}
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
         painterRole = new PainterRole();
+        musicianRole = new MusicianRole();
         organizeRole = new OrganizeRole();
         unreadContext = [];
         unreadVideoUrl = [];
@@ -1493,7 +1849,9 @@ ${existingRecords}
                     if (messageLength === 0)
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
-                    this.painterRole.createImageRendering(this);
+                    const currentUnreadContext = [...this.unreadContext];
+                    this.painterRole.createImageRendering(this, currentUnreadContext);
+                    this.musicianRole.createMusicComposition(this, currentUnreadContext);
                     await this.createChatMessage();
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
@@ -1550,6 +1908,7 @@ ${existingRecords}
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);
             this.painterRole.coverContext([]);
+            this.musicianRole.coverContext([]);
             this.organizeRole.coverContext([]);
             this.unreadContext = [];
             this.unreadVideoUrl = [];
@@ -2357,6 +2716,7 @@ ${existingRecords}
     exports.DialogueRole = DialogueRole;
     exports.FileToBase64 = FileToBase64;
     exports.ModelBuilder = ModelBuilder;
+    exports.MusicianRole = MusicianRole;
     exports.OnlyData = OnlyData;
     exports.OrganizeRole = OrganizeRole;
     exports.PainterRole = PainterRole;

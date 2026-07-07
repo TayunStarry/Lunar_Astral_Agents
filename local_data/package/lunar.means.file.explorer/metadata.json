@@ -1,0 +1,9 @@
+{
+	"id": "lunar.means.file.explorer",
+	"icon": "/file/read/package/lunar.means.file.explorer/icon.webp",
+	"title": "文件管理",
+	"description": "浏览与管理项目文件",
+	"tags": [
+		"App"
+	]
+}

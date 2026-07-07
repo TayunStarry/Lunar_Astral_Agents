@@ -5,6 +5,7 @@ import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
 import { FilePreviewManager } from './file-handler.js';
 import { sendMessages } from './fetch.js';
+import { initMusicRenderer, renderMusicScore } from './music_renderer.js';
 
 const MAX_HISTORY_MESSAGES = 40;
 
@@ -47,6 +48,7 @@ class LunarCoreApp {
 		this.initEventListeners();
 		this.initWebSocket();
 		this.initRendererChannel();
+		initMusicRenderer();
 	}
 
 	initElements() {
@@ -321,6 +323,14 @@ class LunarCoreApp {
 					if (audio) {
 						AudioQueue.enqueue(audio);
 						VoiceChat.onAudioPlaybackChange();
+					}
+				}
+
+				// 音乐创作消息
+				if (message.data.type === 'music') {
+					const abcNotation = message.data.content || '';
+					if (abcNotation) {
+						renderMusicScore(abcNotation);
 					}
 				}
 				break;

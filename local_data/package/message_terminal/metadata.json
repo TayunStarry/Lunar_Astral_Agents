@@ -1,9 +1,0 @@
-{
-	"id": "message_terminal",
-	"icon": "/file/read/package/message_terminal/icon.webp",
-	"title": "消息终端",
-	"description": "WebSocket 实时消息接收与富文本渲染",
-	"tags": [
-		"App"
-	]
-}
