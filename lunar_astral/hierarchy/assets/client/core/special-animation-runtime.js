@@ -60,14 +60,52 @@ export class SpecialAnimationRuntime {
         this._moveFadingOut = false;
 
         // 移动状态（由 MovementController 设置）
-        /** @type {boolean} 模型是否正在移动 */
-        this._isMoving = false;
-        /** @type {boolean} 模型是否正在快速移动 */
-        this._isFastMoving = false;
+    /** @type {boolean} 模型是否正在移动 */
+    this._isMoving = false;
+    /** @type {boolean} 模型是否正在快速移动 */
+    this._isFastMoving = false;
 
-        // 移动动画涉及的骨骼名列表（用于停用时重置到 rest pose）
-        /** @type {string[]} */
-        this._moveAffectedBones = [];
+    // 跳跃/潜行状态（由 MovementController 设置）
+    /** @type {boolean} 是否正在跳跃 */
+    this._isJumping = false;
+    /** @type {boolean} 是否正在潜行 */
+    this._isSneaking = false;
+    /** @type {boolean} 是否坐下（无法抵达） */
+    this._isSitting = false;
+
+    // 跳跃动画状态
+    /** @type {string|null} 当前正在播放的跳跃动画名 */
+    this._jumpPlaying = null;
+    /** @type {number} 跳跃动画播放时间 */
+    this._jumpTime = 0;
+    /** @type {number} 跳跃动画淡入淡出进度 */
+    this._jumpFade = 0;
+    /** @type {string[]} 跳跃动画涉及的骨骼名列表 */
+    this._jumpAffectedBones = [];
+
+    // 潜行动画状态
+    /** @type {string|null} 当前正在播放的潜行动画名 */
+    this._sneakPlaying = null;
+    /** @type {number} 潜行动画播放时间 */
+    this._sneakTime = 0;
+    /** @type {number} 潜行动画淡入淡出进度 */
+    this._sneakFade = 0;
+    /** @type {string[]} 潜行动画涉及的骨骼名列表 */
+    this._sneakAffectedBones = [];
+
+    // 坐下动画状态
+    /** @type {string|null} 当前正在播放的坐下动画名 */
+    this._sitPlaying = null;
+    /** @type {number} 坐下动画播放时间 */
+    this._sitTime = 0;
+    /** @type {number} 坐下动画淡入淡出进度 */
+    this._sitFade = 0;
+    /** @type {string[]} 坐下动画涉及的骨骼名列表 */
+    this._sitAffectedBones = [];
+
+    // 移动动画涉及的骨骼名列表（用于停用时重置到 rest pose）
+    /** @type {string[]} */
+    this._moveAffectedBones = [];
 
         this._scheduleNextBlink();
     }
@@ -111,6 +149,61 @@ export class SpecialAnimationRuntime {
     }
 
     /**
+     * 设置跳跃状态
+     * 启动/停止跳跃动画（和行走动画同样的直接骨骼应用方式）
+     * @param {boolean} isJumping
+     */
+    setJumping(isJumping) {
+        if (this._isJumping === isJumping) return;
+        this._isJumping = isJumping;
+        this.molang?.updateContext?.({ is_jumping: isJumping ? 1 : 0 });
+
+        if (isJumping) {
+            // 停止移动动画（跳跃优先级高于行走）
+            this._stopMoveAnimation();
+            this._startJumpAnimation();
+        } else {
+            this._stopJumpAnimation();
+        }
+    }
+
+    /**
+     * 设置潜行状态
+     * 启动/停止潜行动画
+     * @param {boolean} isSneaking
+     */
+    setSneaking(isSneaking) {
+        if (this._isSneaking === isSneaking) return;
+        this._isSneaking = isSneaking;
+        this.molang?.updateContext?.({ is_sneaking: isSneaking ? 1 : 0 });
+
+        if (isSneaking) {
+            // 停止移动动画（潜行优先级高于行走）
+            this._stopMoveAnimation();
+            this._startSneakAnimation();
+        } else {
+            this._stopSneakAnimation();
+        }
+    }
+
+    /**
+     * 设置坐下状态（无法抵达）
+     * @param {boolean} isSitting
+     */
+    setSitting(isSitting) {
+        if (this._isSitting === isSitting) return;
+        this._isSitting = isSitting;
+        this.molang?.updateContext?.({ is_riding: isSitting ? 1 : 0 });
+
+        if (isSitting) {
+            this._stopMoveAnimation();
+            this._startSitAnimation();
+        } else {
+            this._stopSitAnimation();
+        }
+    }
+
+    /**
      * 每帧更新（在 AnimGroupRuntime.tick 之后调用）
      * @param {number} deltaTime 帧间隔（秒）
      */
@@ -118,8 +211,19 @@ export class SpecialAnimationRuntime {
         // 1. 处理眨眼动画
         this._tickBlink(deltaTime);
 
-        // 2. 处理移动动画
-        this._tickMove(deltaTime);
+        // 2. 处理跳跃动画（最高优先级）
+        this._tickJump(deltaTime);
+
+        // 3. 处理潜行动画
+        this._tickSneak(deltaTime);
+
+        // 4. 处理坐下动画
+        this._tickSit(deltaTime);
+
+        // 5. 处理移动动画（最低优先级，跳跃/潜行/坐下时自动停止）
+        if (!this._isJumping && !this._isSneaking && !this._isSitting) {
+            this._tickMove(deltaTime);
+        }
     }
 
     // ==== 眨眼动画 ====
@@ -360,6 +464,185 @@ export class SpecialAnimationRuntime {
                     }
                 }
             }
+        }
+    }
+
+    // ==== 跳跃动画 ====
+
+    /**
+     * 启动跳跃动画
+     * @private
+     */
+    _startJumpAnimation() {
+        // 查找跳跃动画（优先使用指定名称，回退到分类）
+        const jumpAnimNames = ['animation.player_to_individuation.jump'];
+        let animName = jumpAnimNames.find(n => this.animations.has(n));
+        if (!animName) return;
+
+        this._jumpPlaying = animName;
+        this._jumpTime = 0;
+        this._jumpFade = 0;
+        const anim = this.animations.get(animName);
+        this._jumpAffectedBones = anim ? Array.from(anim.bones.keys()) : [];
+    }
+
+    /**
+     * 停止跳跃动画
+     * @private
+     */
+    _stopJumpAnimation() {
+        if (!this._jumpPlaying) return;
+        this._resetBonesToRest(this._jumpAffectedBones);
+        this._jumpPlaying = null;
+        this._jumpFade = 0;
+        this._jumpAffectedBones = [];
+    }
+
+    /**
+     * 跳跃动画帧更新
+     * @param {number} dt
+     * @private
+     */
+    _tickJump(dt) {
+        if (!this._jumpPlaying) return;
+
+        const anim = this.animations.get(this._jumpPlaying);
+        if (!anim) {
+            this._jumpPlaying = null;
+            return;
+        }
+
+        // 淡入
+        this._jumpFade = Math.min(1, this._jumpFade + dt * 5);
+
+        // 推进时间
+        this._jumpTime += dt;
+        const animLen = anim.animationLength || 1;
+        if (animLen > 0 && this._jumpTime >= animLen) {
+            // 跳跃动画循环播放（直到 isJumping=false）
+            this._jumpTime = this._jumpTime % animLen;
+        }
+
+        // 应用到骨骼
+        this._applySpecialAnimation(this._jumpPlaying, this._jumpTime, this._jumpFade);
+    }
+
+    // ==== 潜行动画 ====
+
+    _startSneakAnimation() {
+        const sneakAnimNames = ['animation.player_to_individuation.sneak'];
+        let animName = sneakAnimNames.find(n => this.animations.has(n));
+        if (!animName) return;
+
+        this._sneakPlaying = animName;
+        this._sneakTime = 0;
+        this._sneakFade = 0;
+        const anim = this.animations.get(animName);
+        this._sneakAffectedBones = anim ? Array.from(anim.bones.keys()) : [];
+    }
+
+    _stopSneakAnimation() {
+        if (!this._sneakPlaying) return;
+        this._resetBonesToRest(this._sneakAffectedBones);
+        this._sneakPlaying = null;
+        this._sneakFade = 0;
+        this._sneakAffectedBones = [];
+    }
+
+    _tickSneak(dt) {
+        if (!this._sneakPlaying) return;
+
+        const anim = this.animations.get(this._sneakPlaying);
+        if (!anim) { this._sneakPlaying = null; return; }
+
+        this._sneakFade = Math.min(1, this._sneakFade + dt * 5);
+        this._sneakTime += dt;
+        const animLen = anim.animationLength || 1;
+        if (animLen > 0 && this._sneakTime >= animLen) {
+            this._sneakTime = this._sneakTime % animLen;
+        }
+
+        this._applySpecialAnimation(this._sneakPlaying, this._sneakTime, this._sneakFade);
+    }
+
+    // ==== 坐下动画 ====
+
+    _startSitAnimation() {
+        const sitAnimNames = ['animation.player_to_individuation.ride'];
+        let animName = sitAnimNames.find(n => this.animations.has(n));
+        if (!animName) return;
+
+        this._sitPlaying = animName;
+        this._sitTime = 0;
+        this._sitFade = 0;
+        const anim = this.animations.get(animName);
+        this._sitAffectedBones = anim ? Array.from(anim.bones.keys()) : [];
+    }
+
+    _stopSitAnimation() {
+        if (!this._sitPlaying) return;
+        this._resetBonesToRest(this._sitAffectedBones);
+        this._sitPlaying = null;
+        this._sitFade = 0;
+        this._sitAffectedBones = [];
+    }
+
+    _tickSit(dt) {
+        if (!this._sitPlaying) return;
+
+        const anim = this.animations.get(this._sitPlaying);
+        if (!anim) { this._sitPlaying = null; return; }
+
+        this._sitFade = Math.min(1, this._sitFade + dt * 5);
+        this._sitTime += dt;
+        const animLen = anim.animationLength || 1;
+        if (animLen > 0 && this._sitTime >= animLen) {
+            this._sitTime = this._sitTime % animLen;
+        }
+
+        this._applySpecialAnimation(this._sitPlaying, this._sitTime, this._sitFade);
+    }
+
+    // ==== 通用辅助 ====
+
+    /**
+     * 立即停止移动动画（不带淡出，由跳跃/潜行/坐下抢占时使用）
+     * @private
+     */
+    _stopMoveAnimation() {
+        if (!this._movePlaying) return;
+        this._resetBonesToRest(this._moveAffectedBones);
+        this._movePlaying = null;
+        this._moveFadingOut = false;
+        this._moveFade = 0;
+        this._moveAffectedBones = [];
+    }
+
+    /**
+     * 将指定骨骼列表重置到 rest pose（复用 _resetMoveBonesToRest 的逻辑）
+     * @param {string[]} boneNames
+     * @private
+     */
+    _resetBonesToRest(boneNames) {
+        if (!this.animRuntime || !this.animRuntime.outliner) return;
+        const boneMap = this.animRuntime.boneMap;
+        const restPoses = this.animRuntime._restPoses;
+        if (!boneMap || !restPoses) return;
+
+        for (const boneName of boneNames) {
+            const bone = boneMap.get(boneName);
+            if (!bone || !bone.sceneObject) continue;
+
+            const rest = restPoses.get(boneName);
+            const restRot = rest ? rest.rotation : [0, 0, 0];
+            const restPos = rest ? rest.position : [0, 0, 0];
+            const restScale = rest ? rest.scale : [1, 1, 1];
+
+            bone.sceneObject.rotation.order = 'ZYX';
+            bone.sceneObject.rotation.set(restRot[0], restRot[1], restRot[2]);
+            bone.sceneObject.position.set(restPos[0], restPos[1], restPos[2]);
+            bone.sceneObject.scale.set(restScale[0], restScale[1], restScale[2]);
+            bone.sceneObject.visible = true;
         }
     }
 }

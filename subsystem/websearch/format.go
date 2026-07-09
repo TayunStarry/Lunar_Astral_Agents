@@ -37,19 +37,6 @@ func formatResultsTruncated(results []SearchResult, maxSnippetLen int) string {
 	return builder.String()
 }
 
-// formatResultsForLLM 格式化结果供 LLM 使用（含来源 URL）
-func formatResultsForLLM(results []SearchResult) string {
-	var builder strings.Builder
-	for i, r := range results {
-		builder.WriteString(fmt.Sprintf("%d. **%s**\n", i+1, r.Title))
-		if r.Snippet != "" {
-			builder.WriteString(fmt.Sprintf("   %s\n", r.Snippet))
-		}
-		builder.WriteString(fmt.Sprintf("   来源: %s\n\n", r.URL))
-	}
-	return builder.String()
-}
-
 // formatWebpageResultsFallback 网页搜索无 LLM 时的回退格式化（带截断保护）
 func formatWebpageResultsFallback(query string, contentParts []string) string {
 	var sb strings.Builder
@@ -61,13 +48,4 @@ func formatWebpageResultsFallback(query string, contentParts []string) string {
 	}
 	sb.WriteString(content)
 	return sb.String()
-}
-
-// truncateForLog 截断文本用于日志
-func truncateForLog(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	return string(runes[:maxLen]) + "..."
 }

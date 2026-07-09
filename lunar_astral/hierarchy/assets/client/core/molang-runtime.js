@@ -427,6 +427,12 @@ export class MolangRuntime {
         this.temp = {};
         /** context.* 变量（c.* 别名） */
         this.context = {};
+
+        // ==== 变更追踪（按键 M 模态框用） ====
+        /** @type {Array<{key: string, value: any, timestamp: number}>} 最近变更记录 */
+        this._changeLog = [];
+        /** @type {number} 变更记录保留时长（毫秒） */
+        this._changeLogTTL = 30000;
     }
 
     /**
@@ -470,7 +476,36 @@ export class MolangRuntime {
      * @param {object} ctx
      */
     updateContext(ctx) {
+        const now = Date.now();
+        for (const key in ctx) {
+            const newVal = ctx[key];
+            const oldVal = this.query[key];
+            // 仅在值实际变化时记录（NaN 视为无变化）
+            if (oldVal !== newVal && !(Number.isNaN(oldVal) && Number.isNaN(newVal))) {
+                this._changeLog.push({ key, value: newVal, timestamp: now });
+            }
+        }
         Object.assign(this.query, ctx);
+    }
+
+    /**
+     * 获取最近 N 秒内变更的 molang 键值对（去重，保留最新值）
+     * @param {number} seconds 时间窗口（秒），默认 30
+     * @returns {Array<{key: string, value: any, age: number}>} 按名称长度+字母序排列
+     */
+    getRecentChanges(seconds = 30) {
+        const cutoff = Date.now() - seconds * 1000;
+        // 清理过期记录
+        this._changeLog = this._changeLog.filter(e => e.timestamp >= cutoff);
+        // 去重：每个 key 只保留最新记录
+        const latest = new Map();
+        for (const entry of this._changeLog) {
+            latest.set(entry.key, entry);
+        }
+        // 转换为数组并按名称长度+字母序排列
+        return Array.from(latest.values())
+            .map(e => ({ key: e.key, value: e.value, age: (Date.now() - e.timestamp) / 1000 }))
+            .sort((a, b) => a.key.length - b.key.length || a.key.localeCompare(b.key));
     }
 
     /**

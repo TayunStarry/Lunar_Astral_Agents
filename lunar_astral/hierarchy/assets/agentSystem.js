@@ -514,14 +514,22 @@ var agentSystem = (function (exports) {
             return this;
         }
         writeContext(context) {
+            const cleaned = this.stripReasoningContent(context);
             if (this.messages.length >= 20) {
                 const discarded = this.messages.slice(0, this.messages.length - 19);
-                this.messages = this.messages.slice(-19).concat(context);
+                this.messages = this.messages.slice(-19).concat(cleaned);
                 OnlyData.unreadRecords.push(...discarded);
             }
             else
-                this.messages.push(context);
+                this.messages.push(cleaned);
             return this;
+        }
+        stripReasoningContent(message) {
+            if ('reasoning_content' in message) {
+                const { reasoning_content, ...rest } = message;
+                return rest;
+            }
+            return message;
         }
         coverContext(context) {
             this.messages = Array.isArray(context) ? context : [context];
@@ -623,18 +631,81 @@ var agentSystem = (function (exports) {
         }
     }
 
+    class CreativeRoleBase extends ModelBuilder {
+        _history = [];
+        DIALOGUE_HISTORY_LIMIT = 15;
+        OWN_HISTORY_LIMIT = 5;
+        MAX_ITERATIONS = 3;
+        UNREAD_CHECK_COUNT = 10;
+        constructor(prompt) {
+            super(prompt);
+        }
+        consumeHistory() {
+            const result = [...this._history];
+            this._history = [];
+            return result;
+        }
+        createCreativeWork(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
+            const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
+            const ownHistory = this._history.slice(-this.OWN_HISTORY_LIMIT);
+            this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
+            const unreadTexts = this.extractUnreadTexts(unreadContext, count);
+            if (!this.matchKeywords(unreadTexts))
+                return true;
+            const details = [];
+            for (let i = 0; i < this.MAX_ITERATIONS; i++) {
+                console.log(`[${this.roleName}] 第 ${i + 1} 轮推理`);
+                let response;
+                try {
+                    response = this.run([], this.getToolDefinitions());
+                }
+                catch (error) {
+                    console.error(`[${this.roleName}] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log(`[${this.roleName}] 模型返回空结果，结束循环`);
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0)
+                    break;
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    console.log(`[${this.roleName}] 执行工具: ${toolCall.function.name}`);
+                    const result = this.executeTool(toolCall);
+                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+                    this.collectDetail(toolCall, details);
+                }
+            }
+            if (details.length > 0) {
+                const summary = this.buildSummary(details);
+                this._history.push({ role: 'user', content: summary });
+                console.log(`[${this.roleName}] 已将 ${details.length} 件作品详情写入历史`);
+            }
+            return false;
+        }
+        extractUnreadTexts(unreadContext, count) {
+            const texts = [];
+            for (const message of unreadContext.slice(-count)) {
+                if (typeof message.content === 'string')
+                    texts.push(message.content);
+                else
+                    message.content.forEach(item => { if (item.type === 'text')
+                        texts.push(item.text); });
+            }
+            return texts;
+        }
+    }
+
     class DialogueRole extends ModelBuilder {
         async callMultimediaAndToolParsing(cache, source) {
             try {
                 await source.LiteImageFile();
-                const painterHistory = source.painterRole.consumeHistory();
-                const musicianHistory = source.musicianRole.consumeHistory();
-                for (const msg of painterHistory) {
-                    source.unreadContext.push(msg);
-                }
-                for (const msg of musicianHistory) {
-                    source.unreadContext.push(msg);
-                }
+                source.researcherRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+                source.painterRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+                source.musicianRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.unreadContext.forEach(context => this.writeContext(context));
                 source.unreadContext = [];
                 this.formatHistoricalMessages(source);
@@ -809,7 +880,7 @@ var agentSystem = (function (exports) {
         }
     }
 
-    let Prompt$1 = class Prompt extends ModelBuilder {
+    class PainterRole extends CreativeRoleBase {
         defaultExpressionPrompt = [
             '温柔的表情,开心的笑容,脸颊泛红',
             '害羞的表情,抿嘴微笑,眼神躲闪',
@@ -832,14 +903,6 @@ var agentSystem = (function (exports) {
         ];
         selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
         defaultOutfitPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，侧腰位置悬挂着白色和深蓝的大缎带蝴蝶结，饰有圆润的白色珍珠装饰和金色高光，白色短袜，黑色系带低帮帆布鞋';
-        writeAppearancePrompt(expression, posture, outfit, environment) {
-            const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-            const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-            const currentOutfit = outfit || this.defaultOutfitPrompt;
-            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
-        }
-    };
-    let Toolchain$1 = class Toolchain extends Prompt$1 {
         roleTool = [
             {
                 type: "function",
@@ -910,6 +973,96 @@ var agentSystem = (function (exports) {
                 }
             }
         ];
+        imageKeywords = [
+            /画(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /生成(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /绘制(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /创作(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /(?:帮我|给我|为我)(?:画|绘制|生成|创作|做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)?/,
+            /(?:做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /来(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
+            /自画像/,
+            /画(?:一(?:张|幅|个))?自画像/,
+        ];
+        constructor() {
+            super(fileView('prompts/painterRole.md')[0]);
+        }
+        get roleName() { return '画家'; }
+        matchKeywords(texts) {
+            return texts.some(text => this.imageKeywords.some(keyword => keyword.test(text)));
+        }
+        getToolDefinitions() { return this.roleTool; }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            switch (funcName) {
+                case 'diffusion_generation': return this.handleDiffusionGeneration(args);
+                case 'self_portrait': return this.handleSelfPortrait(args);
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
+            }
+        }
+        collectDetail(toolCall, paintings) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                if (toolCall.function.name === 'self_portrait') {
+                    paintings.push({
+                        toolName: 'self_portrait',
+                        promptSummary: '自画像',
+                        expression: args.expression || '',
+                        posture: args.posture || '',
+                        environment: args.environment || '',
+                    });
+                }
+                else if (toolCall.function.name === 'diffusion_generation') {
+                    const prompt = args.prompt || '';
+                    paintings.push({
+                        toolName: 'diffusion_generation',
+                        promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
+                    });
+                }
+            }
+            catch {
+            }
+        }
+        buildSummary(paintings) {
+            const parts = [];
+            parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
+            for (let i = 0; i < paintings.length; i++) {
+                const p = paintings[i];
+                const detailLines = [];
+                if (p.toolName === 'self_portrait') {
+                    detailLines.push(`作品${i + 1}：自画像`);
+                    if (p.expression)
+                        detailLines.push(`  - 表情：${p.expression}`);
+                    if (p.posture)
+                        detailLines.push(`  - 姿势：${p.posture}`);
+                    if (p.environment)
+                        detailLines.push(`  - 环境：${p.environment}`);
+                }
+                else {
+                    detailLines.push(`作品${i + 1}：扩散生成图像`);
+                    detailLines.push(`  - 画面内容：${p.promptSummary}`);
+                }
+                parts.push(detailLines.join('\n'));
+            }
+            parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
+            return parts.join('\n');
+        }
+        writeAppearancePrompt(expression, posture, outfit, environment) {
+            const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+            const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+            const currentOutfit = outfit || this.defaultOutfitPrompt;
+            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
+        }
         handleDiffusionGeneration(args) {
             try {
                 const prompt = args.prompt || '';
@@ -977,176 +1130,9 @@ var agentSystem = (function (exports) {
                 return `自画像生成异常: ${error}`;
             }
         }
-    };
-    class PainterRole extends Toolchain$1 {
-        _history = [];
-        constructor() {
-            super(fileView('prompts/painterRole.md')[0]);
-        }
-        consumeHistory() {
-            const result = [...this._history];
-            this._history = [];
-            return result;
-        }
-        createImageRendering(source, unreadContext, count = 10) {
-            const dialogueHistory = source.dialogueRole.messages.slice(-15);
-            const painterHistory = this._history.slice(-5);
-            this.coverContext([...dialogueHistory, ...painterHistory, ...unreadContext]);
-            const unreadTexts = [];
-            for (const message of unreadContext.slice(-count)) {
-                if (typeof message.content === 'string')
-                    unreadTexts.push(message.content);
-                else
-                    message.content.forEach(item => { if (item.type === 'text')
-                        unreadTexts.push(item.text); });
-            }
-            let allowGeneration = false;
-            const imageKeywords = [
-                /画(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /生成(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /绘制(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /创作(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /(?:帮我|给我|为我)(?:画|绘制|生成|创作|做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)?/,
-                /(?:做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /来(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-                /自画像/,
-                /画(?:一(?:张|幅|个))?自画像/,
-            ];
-            unreadTexts.forEach(text => imageKeywords.forEach(keyword => { if (keyword.test(text))
-                allowGeneration = true; }));
-            if (!allowGeneration)
-                return true;
-            const MAX_ITERATIONS = 3;
-            const paintings = [];
-            for (let i = 0; i < MAX_ITERATIONS; i++) {
-                console.log(`[画家] 第 ${i + 1} 轮绘画推理`);
-                let response;
-                try {
-                    response = this.run([], this.roleTool);
-                }
-                catch (error) {
-                    console.error(`[画家] 第 ${i + 1} 轮推理失败:`, error);
-                    break;
-                }
-                const choice = response.body?.choices?.[0];
-                if (!choice) {
-                    console.log('[画家] 模型返回空结果，结束绘画循环');
-                    break;
-                }
-                const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0) {
-                    const replyContent = choice.message?.content || '';
-                    if (replyContent)
-                        source.unreadContext.push({ role: 'tool', content: `[画面内容] ${replyContent}` });
-                    break;
-                }
-                this.writeContext(choice.message);
-                for (const toolCall of toolCalls) {
-                    console.log(`[画家] 执行工具: ${toolCall.function.name}`);
-                    const result = this.executePaintingTool(toolCall);
-                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
-                    this.collectPaintingDetail(toolCall, paintings);
-                }
-            }
-            if (paintings.length > 0) {
-                const summary = this.buildPaintingSummary(paintings);
-                this._history.push({ role: 'tool', content: summary });
-                console.log(`[画家] 已将 ${paintings.length} 幅作品详情写入历史`);
-            }
-            return false;
-        }
-        collectPaintingDetail(toolCall, paintings) {
-            try {
-                const args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-                if (toolCall.function.name === 'self_portrait') {
-                    paintings.push({
-                        toolName: 'self_portrait',
-                        promptSummary: '自画像',
-                        expression: args.expression || '',
-                        posture: args.posture || '',
-                        environment: args.environment || '',
-                    });
-                }
-                else if (toolCall.function.name === 'diffusion_generation') {
-                    const prompt = args.prompt || '';
-                    paintings.push({
-                        toolName: 'diffusion_generation',
-                        promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
-                    });
-                }
-            }
-            catch {
-            }
-        }
-        buildPaintingSummary(paintings) {
-            const parts = [];
-            parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
-            for (let i = 0; i < paintings.length; i++) {
-                const p = paintings[i];
-                const detailLines = [];
-                if (p.toolName === 'self_portrait') {
-                    detailLines.push(`作品${i + 1}：自画像`);
-                    if (p.expression)
-                        detailLines.push(`  - 表情：${p.expression}`);
-                    if (p.posture)
-                        detailLines.push(`  - 姿势：${p.posture}`);
-                    if (p.environment)
-                        detailLines.push(`  - 环境：${p.environment}`);
-                }
-                else {
-                    detailLines.push(`作品${i + 1}：扩散生成图像`);
-                    detailLines.push(`  - 画面内容：${p.promptSummary}`);
-                }
-                parts.push(detailLines.join('\n'));
-            }
-            parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
-            return parts.join('\n');
-        }
-        executePaintingTool(toolCall) {
-            const funcName = toolCall.function.name;
-            let args = {};
-            try {
-                args = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
-            }
-            catch (parseError) {
-                console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
-                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
-            }
-            switch (funcName) {
-                case 'diffusion_generation': return this.handleDiffusionGeneration(args);
-                case 'self_portrait': return this.handleSelfPortrait(args);
-                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
-            }
-        }
     }
 
-    class MusicPrompt extends ModelBuilder {
-        defaultInstruments = [
-            '钢琴',
-            '小提琴',
-            '长笛',
-            '大提琴',
-            '吉他',
-            '竖琴',
-            '单簧管',
-            '双簧管',
-        ];
-        defaultStyles = [
-            '古典',
-            '浪漫',
-            '巴洛克',
-            '现代简约',
-            '民谣',
-            '轻音乐',
-            '爵士',
-            '新世纪',
-        ];
-        defaultMeters = ['4/4', '3/4', '6/8', '2/4'];
-        defaultKeys = ['C', 'G', 'D', 'F', 'a', 'e', 'd'];
-    }
-    class MusicToolchain extends MusicPrompt {
+    class MusicianRole extends CreativeRoleBase {
         musicTool = [
             {
                 type: "function",
@@ -1215,135 +1201,47 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
                 }
             }
         ];
-        handleComposeMusic(args) {
-            try {
-                const title = args.title || '未命名作品';
-                const abcNotation = args.abc_notation || '';
-                console.log(`[音乐家] 创作音乐: "${title}"`);
-                if (args.instruments)
-                    console.log(`  乐器: ${args.instruments}`);
-                if (args.tempo)
-                    console.log(`  速度: ${args.tempo} BPM`);
-                if (args.structure)
-                    console.log(`  结构: ${args.structure}`);
-                if (!abcNotation.trim()) {
-                    return '音乐创作失败：ABC记谱法乐谱为空';
-                }
-                const hasX = /^X:\s*\d+/m.test(abcNotation);
-                const hasT = /^T:\s*.+/m.test(abcNotation);
-                const hasK = /^K:\s*.+/m.test(abcNotation);
-                if (!hasX || !hasK) {
-                    console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
-                    let fixedAbc = abcNotation;
-                    if (!hasX)
-                        fixedAbc = 'X:1\n' + fixedAbc;
-                    if (!hasT)
-                        fixedAbc = fixedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
-                    if (!hasK)
-                        fixedAbc = fixedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
-                    const pushSuccess = pushContext('music', fixedAbc, '');
-                    if (!pushSuccess) {
-                        console.warn('[音乐家] 推送乐谱到前端失败');
-                    }
-                    return `音乐作品"${title}"创作成功（已自动补全格式）。乐谱已推送到前端进行渲染播放。`;
-                }
-                const pushSuccess = pushContext('music', abcNotation, '');
-                if (!pushSuccess) {
-                    console.warn('[音乐家] 推送乐谱到前端失败');
-                }
-                console.log(`[音乐家] 乐谱推送成功，长度: ${abcNotation.length} 字符`);
-                return `音乐作品"${title}"创作成功。乐谱已推送到前端进行渲染播放。`;
-            }
-            catch (error) {
-                console.error('[音乐家] 音乐创作处理异常:', error);
-                return `音乐创作异常: ${error}`;
-            }
-        }
-    }
-    class MusicianRole extends MusicToolchain {
-        _history = [];
+        musicKeywords = [
+            /创作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /生成(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /写(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /制作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /编(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|曲|钢琴曲|古典乐|轻音乐)/,
+            /(?:帮我|给我|为我)(?:创作|生成|写|制作|编|做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)?/,
+            /(?:做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /来(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
+            /作曲/,
+            /编曲/,
+            /谱写/,
+            /演奏(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|钢琴曲|古典乐|轻音乐)/,
+            /(?:弹|拉|吹)(?:一(?:首|段|曲))?.*(?:钢琴|小提琴|吉他|笛子|古筝|曲子|音乐|旋律)/,
+        ];
         constructor() {
             super(fileView('prompts/musicianRole.md')[0]);
         }
-        consumeHistory() {
-            const result = [...this._history];
-            this._history = [];
-            return result;
+        get roleName() { return '音乐家'; }
+        matchKeywords(texts) {
+            return texts.some(text => this.musicKeywords.some(keyword => keyword.test(text)));
         }
-        createMusicComposition(source, unreadContext, count = 10) {
-            const dialogueHistory = source.dialogueRole.messages.slice(-15);
-            const musicianHistory = this._history.slice(-5);
-            this.coverContext([...dialogueHistory, ...musicianHistory, ...unreadContext]);
-            const unreadTexts = [];
-            for (const message of unreadContext.slice(-count)) {
-                if (typeof message.content === 'string')
-                    unreadTexts.push(message.content);
-                else
-                    message.content.forEach(item => { if (item.type === 'text')
-                        unreadTexts.push(item.text); });
+        getToolDefinitions() { return this.musicTool; }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
             }
-            let allowComposition = false;
-            const musicKeywords = [
-                /创作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /生成(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /写(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /制作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /编(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|曲|钢琴曲|古典乐|轻音乐)/,
-                /(?:帮我|给我|为我)(?:创作|生成|写|制作|编|做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)?/,
-                /(?:做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /来(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-                /作曲/,
-                /编曲/,
-                /谱写/,
-                /演奏(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|钢琴曲|古典乐|轻音乐)/,
-                /(?:弹|拉|吹)(?:一(?:首|段|曲))?.*(?:钢琴|小提琴|吉他|笛子|古筝|曲子|音乐|旋律)/,
-            ];
-            unreadTexts.forEach(text => musicKeywords.forEach(keyword => { if (keyword.test(text))
-                allowComposition = true; }));
-            if (!allowComposition)
-                return true;
-            const MAX_ITERATIONS = 3;
-            const createdPieces = [];
-            for (let i = 0; i < MAX_ITERATIONS; i++) {
-                console.log(`[音乐家] 第 ${i + 1} 轮音乐创作推理`);
-                let response;
-                try {
-                    response = this.run([], this.musicTool);
-                }
-                catch (error) {
-                    console.error(`[音乐家] 第 ${i + 1} 轮推理失败:`, error);
-                    break;
-                }
-                const choice = response.body?.choices?.[0];
-                if (!choice) {
-                    console.log('[音乐家] 模型返回空结果，结束音乐创作循环');
-                    break;
-                }
-                const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0) {
-                    const replyContent = choice.message?.content || '';
-                    if (replyContent)
-                        source.unreadContext.push({ role: 'tool', content: `[音乐创作] ${replyContent}` });
-                    break;
-                }
-                this.writeContext(choice.message);
-                for (const toolCall of toolCalls) {
-                    console.log(`[音乐家] 执行工具: ${toolCall.function.name}`);
-                    const result = this.executeMusicTool(toolCall);
-                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
-                    if (toolCall.function.name === 'compose_music') {
-                        this.collectMusicDetail(toolCall, createdPieces);
-                    }
-                }
+            catch (parseError) {
+                console.error(`[音乐家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
-            if (createdPieces.length > 0) {
-                const summary = this.buildMusicSummary(createdPieces);
-                this._history.push({ role: 'tool', content: summary });
-                console.log(`[音乐家] 已将 ${createdPieces.length} 首作品详情写入历史`);
+            switch (funcName) {
+                case 'compose_music': return this.handleComposeMusic(args);
+                default: return `未知工具: ${funcName}，可用工具为 compose_music`;
             }
-            return false;
         }
-        collectMusicDetail(toolCall, pieces) {
+        collectDetail(toolCall, pieces) {
             try {
                 const args = typeof toolCall.function.arguments === 'string'
                     ? JSON.parse(toolCall.function.arguments)
@@ -1363,7 +1261,7 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
             catch {
             }
         }
-        buildMusicSummary(pieces) {
+        buildSummary(pieces) {
             const parts = [];
             parts.push('[音乐创作记录] 你（月华）刚刚完成了以下音乐作品创作：');
             for (let i = 0; i < pieces.length; i++) {
@@ -1386,7 +1284,227 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
             parts.push('\n注意：请基于以上真实创作信息向用户介绍音乐作品，切勿编造不存在的曲名、乐器或结构。乐谱已通过音乐播放器推送给用户，可以引导用户查看和播放。');
             return parts.join('\n');
         }
-        executeMusicTool(toolCall) {
+        handleComposeMusic(args) {
+            try {
+                const title = args.title || '未命名作品';
+                const abcNotation = args.abc_notation || '';
+                const instruments = (args.instruments || '').trim();
+                console.log(`[音乐家] 创作音乐: "${title}"`);
+                if (instruments)
+                    console.log(`  乐器: ${instruments}`);
+                if (args.tempo)
+                    console.log(`  速度: ${args.tempo} BPM`);
+                if (args.structure)
+                    console.log(`  结构: ${args.structure}`);
+                if (!abcNotation.trim()) {
+                    return '音乐创作失败：ABC记谱法乐谱为空';
+                }
+                const enrichedAbc = this.injectInstrumentDirective(abcNotation, instruments);
+                const hasX = /^X:\s*\d+/m.test(enrichedAbc);
+                const hasT = /^T:\s*.+/m.test(enrichedAbc);
+                const hasK = /^K:\s*.+/m.test(enrichedAbc);
+                if (!hasX || !hasK) {
+                    console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
+                    let fixedAbc = enrichedAbc;
+                    if (!hasX)
+                        fixedAbc = 'X:1\n' + fixedAbc;
+                    if (!hasT)
+                        fixedAbc = fixedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
+                    if (!hasK)
+                        fixedAbc = fixedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
+                    const pushSuccess = pushContext('music', fixedAbc, '');
+                    if (!pushSuccess) {
+                        console.warn('[音乐家] 推送乐谱到前端失败');
+                    }
+                    return `音乐作品"${title}"创作成功（已自动补全格式）。乐谱已推送到前端进行渲染播放。`;
+                }
+                const pushSuccess = pushContext('music', enrichedAbc, '');
+                if (!pushSuccess) {
+                    console.warn('[音乐家] 推送乐谱到前端失败');
+                }
+                console.log(`[音乐家] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}`);
+                return `音乐作品"${title}"创作成功。乐谱已推送到前端进行渲染播放。`;
+            }
+            catch (error) {
+                console.error('[音乐家] 音乐创作处理异常:', error);
+                return `音乐创作异常: ${error}`;
+            }
+        }
+        injectInstrumentDirective(abcNotation, instruments) {
+            if (!instruments)
+                return abcNotation;
+            const cleaned = instruments
+                .replace(/，/g, ',')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean)
+                .join(',');
+            if (!cleaned)
+                return abcNotation;
+            if (/^%%instrument/m.test(abcNotation))
+                return abcNotation;
+            const directive = `%%instrument ${cleaned}\n`;
+            const xMatch = abcNotation.match(/^X:\s*\d+/m);
+            if (xMatch && xMatch.index !== undefined) {
+                const before = abcNotation.substring(0, xMatch.index);
+                const after = abcNotation.substring(xMatch.index);
+                return before + directive + after;
+            }
+            return directive + abcNotation;
+        }
+    }
+
+    class ResearcherRole extends ModelBuilder {
+        _history = [];
+        DIALOGUE_HISTORY_LIMIT = 15;
+        OWN_HISTORY_LIMIT = 5;
+        MAX_ITERATIONS = 5;
+        UNREAD_CHECK_COUNT = 10;
+        webSearchInitialized = false;
+        assemblyMemoryInjected = false;
+        researchTools = [
+            {
+                type: "function",
+                function: {
+                    name: "web_search",
+                    description: "执行网络搜索，获取实时信息。当需要联网获取实时数据、最新资讯、事实查询等信息时使用。支持四种模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究，子问题拆解并行搜索）、assembly（大会辩论式深度研究，维新派vs守旧派多轮辩论，综合网络与记忆库信息生成报告，适合复杂争议性问题）。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            query: {
+                                type: "string",
+                                description: "搜索查询关键词或问题"
+                            },
+                            mode: {
+                                type: "string",
+                                description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究）或 assembly（大会辩论式深度研究，综合网络搜索与记忆库）",
+                                enum: ["simple", "webpage", "depth", "assembly"]
+                            }
+                        },
+                        required: ["query"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "memory_query",
+                    description: "查询内部记忆库中的历史对话和事件记录。用于回忆过去的对话内容、查找用户偏好、追溯历史事件等需要从内部记忆中检索信息的场景。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            query: {
+                                type: "string",
+                                description: "查询文本，用于在记忆库中搜索相关记录"
+                            },
+                            top_k: {
+                                type: "number",
+                                description: "返回的最相关结果数量，默认10"
+                            }
+                        },
+                        required: ["query"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "process_links",
+                    description: "处理消息中的链接。自动识别链接类型：网页链接抓取内容并总结、图片链接使用视觉模型识别、下载链接自动下载文件。处理后将原始链接替换为摘要标签。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            text: {
+                                type: "string",
+                                description: "包含链接的文本内容，工具会自动提取并处理其中的所有链接"
+                            }
+                        },
+                        required: ["text"]
+                    }
+                }
+            }
+        ];
+        researchKeywords = [
+            /查(?:一查|一下|询|找|找找|看看)/,
+            /搜索/,
+            /搜(?:一搜|一下)/,
+            /搜索(?:一搜|一下)/,
+            /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
+            /研究(?:一(?:下|研究))/,
+            /调查(?:一(?:下|调查))?/,
+            /思考(?:一(?:下|思考))?/,
+            /回忆(?:一(?:下|回忆))?/,
+            /想想?(?:看|起|到)/,
+            /记不记得/,
+            /还记得/,
+            /以前(?:说过|聊过|讨论过|提过|提到)/,
+            /上次(?:说|聊|讨论|提|提到)/,
+            /了解(?:一(?:下|了解))?/,
+            /(?:是|到底(?:是)|究竟(?:是))什么/,
+            /(?:怎么|为什么|怎么回事)/,
+            /(?:最新|最近|当前|目前|今天|现在).*(?:消息|新闻|情况|状态|动态|信息|数据)/,
+            /(?:有没有|是否).*(?:相关|关于)/,
+            /深入(?:了解|分析|研究)/,
+            /详细(?:了解|分析|说明|解释)/,
+            /分析(?:一(?:下|分析))?/,
+            /核实/,
+            /验证/,
+            /(?:真|假|正确|错误|靠谱|可靠)/,
+            /(?:资料|文献|论文|报告|数据|统计)/,
+        ];
+        constructor() {
+            super(fileView('prompts/researcherRole.md')[0]);
+        }
+        consumeHistory() {
+            const result = [...this._history];
+            this._history = [];
+            return result;
+        }
+        executeResearch(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
+            const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
+            const ownHistory = this._history.slice(-this.OWN_HISTORY_LIMIT);
+            this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
+            const unreadTexts = this.extractUnreadTexts(unreadContext, count);
+            if (!this.matchKeywords(unreadTexts))
+                return true;
+            const details = [];
+            for (let i = 0; i < this.MAX_ITERATIONS; i++) {
+                console.log(`[研究者] 第 ${i + 1} 轮推理`);
+                let response;
+                try {
+                    response = this.run([], this.researchTools);
+                }
+                catch (error) {
+                    console.error(`[研究者] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log(`[研究者] 模型返回空结果，结束循环`);
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0)
+                    break;
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    console.log(`[研究者] 执行工具: ${toolCall.function.name}`);
+                    const result = this.executeTool(toolCall);
+                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+                    this.collectDetail(toolCall, details);
+                }
+            }
+            if (details.length > 0) {
+                const report = this.synthesizeReport();
+                this._history.push({ role: 'user', content: report });
+                console.log(`[研究者] 已将研究报告写入历史（${details.length} 条工具调用记录）`);
+            }
+            return false;
+        }
+        matchKeywords(texts) {
+            return texts.some(text => this.researchKeywords.some(keyword => keyword.test(text)));
+        }
+        executeTool(toolCall) {
             const funcName = toolCall.function.name;
             let args = {};
             try {
@@ -1395,13 +1513,206 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
                     : toolCall.function.arguments;
             }
             catch (parseError) {
-                console.error(`[音乐家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                console.error(`[研究者] 工具调用参数解析失败:`, toolCall.function.arguments);
                 return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
             switch (funcName) {
-                case 'compose_music': return this.handleComposeMusic(args);
-                default: return `未知工具: ${funcName}，可用工具为 compose_music`;
+                case 'web_search': return this.handleWebSearch(args);
+                case 'memory_query': return this.handleMemoryQuery(args);
+                case 'process_links': return this.handleProcessLinks(args);
+                default: return `未知工具: ${funcName}，可用工具为 web_search、memory_query 和 process_links`;
             }
+        }
+        handleWebSearch(args) {
+            try {
+                const query = args.query || '';
+                if (!query.trim())
+                    return '搜索失败：查询关键词不能为空';
+                const mode = args.mode || 'webpage';
+                if (!this.webSearchInitialized) {
+                    const initResult = this.initWebSearch();
+                    if (!initResult)
+                        return '搜索失败：网络检索子系统初始化失败';
+                }
+                console.log(`[研究者] 网络搜索: query="${query}", mode="${mode}"`);
+                let result;
+                let error = null;
+                switch (mode) {
+                    case 'assembly':
+                        if (!this.assemblyMemoryInjected) {
+                            this.injectMemoryProvider();
+                        }
+                        [result, error] = webSearchAssembly(query.trim());
+                        break;
+                    case 'depth':
+                        [result, error] = webSearchDepth(query.trim());
+                        break;
+                    case 'webpage':
+                        [result, error] = webSearchWebpage(query.trim());
+                        break;
+                    case 'simple':
+                    default:
+                        [result, error] = webSearchSimple(query.trim());
+                        break;
+                }
+                if (error) {
+                    console.error(`[研究者] 网络搜索失败: ${error.message || String(error)}`);
+                    return `搜索失败：${error.message || String(error)}`;
+                }
+                const textResult = result || '未找到相关搜索结果';
+                console.log(`[研究者] 搜索结果长度: ${textResult.length} 字符`);
+                return textResult;
+            }
+            catch (error) {
+                console.error('[研究者] 网络搜索处理异常:', error);
+                return `网络搜索异常: ${error}`;
+            }
+        }
+        handleMemoryQuery(args) {
+            try {
+                const query = args.query || '';
+                if (!query.trim())
+                    return '查询失败：查询文本不能为空';
+                const topK = args.top_k || 10;
+                if (!BaseConfig.memoryReady) {
+                    BaseConfig.initMemory();
+                    if (!BaseConfig.memoryReady)
+                        return '查询失败：记忆库未就绪';
+                }
+                console.log(`[研究者] 记忆库查询: query="${query}", topK=${topK}`);
+                const [results, error] = memoryQuery('lunar_messages', query.trim(), topK);
+                if (error) {
+                    console.error(`[研究者] 记忆库查询失败: ${error}`);
+                    return `记忆库查询失败：${error}`;
+                }
+                if (!results || results.length === 0)
+                    return '记忆库中未找到相关记录';
+                const formattedResults = results.map((r, i) => `[记录${i + 1}] 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
+                console.log(`[研究者] 查询到 ${results.length} 条相关记录`);
+                return formattedResults;
+            }
+            catch (error) {
+                console.error('[研究者] 记忆库查询处理异常:', error);
+                return `记忆库查询异常: ${error}`;
+            }
+        }
+        handleProcessLinks(args) {
+            try {
+                const text = args.text || '';
+                if (!text.trim())
+                    return '处理失败：文本内容不能为空';
+                if (!this.webSearchInitialized) {
+                    const initResult = this.initWebSearch();
+                    if (!initResult)
+                        return '处理失败：网络检索子系统初始化失败';
+                }
+                console.log(`[研究者] 处理链接: 文本长度=${text.length}`);
+                const [replacedText, descriptions, error] = webSearchProcessLinks(text);
+                if (error) {
+                    console.error(`[研究者] 链接处理失败: ${error}`);
+                    return `链接处理失败：${error}`;
+                }
+                if (!descriptions || descriptions.length === 0)
+                    return '未检测到链接';
+                const result = `替换后文本:\n${replacedText}\n\n链接详情:\n${descriptions.join('\n')}`;
+                console.log(`[研究者] 处理了 ${descriptions.length} 个链接`);
+                return result;
+            }
+            catch (error) {
+                console.error('[研究者] 链接处理异常:', error);
+                return `链接处理异常: ${error}`;
+            }
+        }
+        initWebSearch() {
+            if (this.webSearchInitialized)
+                return true;
+            try {
+                const [success, err] = webSearchInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.MultimodalName, 4096, 0.7);
+                if (err) {
+                    console.error('[研究者] 网络检索初始化失败:', err);
+                    return false;
+                }
+                this.webSearchInitialized = true;
+                console.log('[研究者] 网络检索子系统初始化成功');
+                return true;
+            }
+            catch (e) {
+                console.error('[研究者] 网络检索初始化异常:', e);
+                return false;
+            }
+        }
+        injectMemoryProvider() {
+            try {
+                const [success, err] = webSearchSetMemoryProvider();
+                if (err) {
+                    console.warn('[研究者] 注入记忆库提供者失败:', err);
+                    return;
+                }
+                this.assemblyMemoryInjected = true;
+                console.log('[研究者] 已为大会辩论模式注入记忆库提供者');
+            }
+            catch (e) {
+                console.warn('[研究者] 注入记忆库提供者异常:', e);
+            }
+        }
+        collectDetail(toolCall, details) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                const query = args.query || args.text || '';
+                const keyFindings = query ? `查询: ${query}` : '';
+                if (toolCall.function.name === 'web_search') {
+                    details.push({
+                        toolName: 'web_search',
+                        query,
+                        mode: args.mode || 'webpage',
+                        keyFindings,
+                    });
+                }
+                else if (toolCall.function.name === 'memory_query') {
+                    details.push({
+                        toolName: 'memory_query',
+                        query,
+                        keyFindings,
+                    });
+                }
+                else if (toolCall.function.name === 'process_links') {
+                    details.push({
+                        toolName: 'process_links',
+                        query,
+                        keyFindings,
+                    });
+                }
+            }
+            catch {
+            }
+        }
+        synthesizeReport() {
+            try {
+                const response = this.run([], []);
+                const content = response.body?.choices?.[0]?.message?.content || '';
+                if (content.trim().length === 0) {
+                    console.warn('[研究者] 综合分析返回空结果');
+                    return '[研究报告] 研究过程中未能生成有效报告，请稍后重试。';
+                }
+                return content;
+            }
+            catch (error) {
+                console.error('[研究者] 综合分析失败:', error);
+                return '[研究报告] 研究报告生成失败，请稍后重试。';
+            }
+        }
+        extractUnreadTexts(unreadContext, count) {
+            const texts = [];
+            for (const message of unreadContext.slice(-count)) {
+                if (typeof message.content === 'string')
+                    texts.push(message.content);
+                else
+                    message.content.forEach(item => { if (item.type === 'text')
+                        texts.push(item.text); });
+            }
+            return texts;
         }
     }
 
@@ -1717,6 +2028,7 @@ ${existingRecords}
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
+        researcherRole = new ResearcherRole();
         painterRole = new PainterRole();
         musicianRole = new MusicianRole();
         organizeRole = new OrganizeRole();
@@ -1850,8 +2162,9 @@ ${existingRecords}
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
                     const currentUnreadContext = [...this.unreadContext];
-                    this.painterRole.createImageRendering(this, currentUnreadContext);
-                    this.musicianRole.createMusicComposition(this, currentUnreadContext);
+                    this.researcherRole.executeResearch(this.dialogueRole.messages, currentUnreadContext);
+                    this.painterRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
+                    this.musicianRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
                     await this.createChatMessage();
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
@@ -1907,6 +2220,7 @@ ${existingRecords}
             this.summaryRole.coverContext([]);
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);
+            this.researcherRole.coverContext([]);
             this.painterRole.coverContext([]);
             this.musicianRole.coverContext([]);
             this.organizeRole.coverContext([]);
@@ -2307,55 +2621,6 @@ ${existingRecords}
             return ['', e];
         }
     }
-    const webSearchTools = [
-        {
-            type: "function",
-            function: {
-                name: "web_search",
-                description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：simple（轻量摘要，仅返回搜索结果摘要）、webpage（网页搜索，抓取网页内容并进行总结，适合需要详细信息的场景，默认）、depth（深度研究，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        query: {
-                            type: "string",
-                            description: "搜索查询关键词或问题"
-                        },
-                        mode: {
-                            type: "string",
-                            description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）或 depth（深度研究，全面深入分析）",
-                            enum: ["simple", "webpage", "depth"]
-                        }
-                    },
-                    required: ["query"]
-                }
-            }
-        }
-    ];
-    async function handleWebSearch(args) {
-        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
-        const { query, mode } = parsed;
-        if (!query || query.trim().length === 0) {
-            return ['搜索失败：查询关键词不能为空', ''];
-        }
-        const searchMode = mode || 'webpage';
-        if (!isWebSearchReady()) {
-            const initResult = initWebSearch();
-            if (!initResult) {
-                return ['搜索失败：网络检索子系统初始化失败', ''];
-            }
-        }
-        console.log(`[网络检索] 工具调用: query="${query}", mode="${searchMode}"`);
-        const [result, err] = executeWebSearch(query.trim(), searchMode);
-        if (err) {
-            console.error(`[网络检索] 搜索失败: ${err.message || String(err)}`);
-            return [`搜索失败：${err.message || String(err)}`, ''];
-        }
-        const textResult = result || '未找到相关搜索结果';
-        console.log(`[网络检索] 查询结果:\n${textResult}`);
-        return [textResult, ''];
-    }
-    OnlyData.LTPfunction.set('web_search', handleWebSearch);
-    OnlyData.LTPdefinition.push(...webSearchTools);
 
     const screenshotTools = [
         {
@@ -2713,6 +2978,7 @@ ${existingRecords}
     exports.CalculateMedian = CalculateMedian;
     exports.CalculateModes = CalculateModes;
     exports.Clamp = Clamp;
+    exports.CreativeRoleBase = CreativeRoleBase;
     exports.DialogueRole = DialogueRole;
     exports.FileToBase64 = FileToBase64;
     exports.ModelBuilder = ModelBuilder;
@@ -2722,6 +2988,7 @@ ${existingRecords}
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
+    exports.ResearcherRole = ResearcherRole;
     exports.ThinkType = ThinkType;
     exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
@@ -2744,7 +3011,6 @@ ${existingRecords}
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
     exports.toBtoaString = toBtoaString;
-    exports.webSearchTools = webSearchTools;
 
     return exports;
 

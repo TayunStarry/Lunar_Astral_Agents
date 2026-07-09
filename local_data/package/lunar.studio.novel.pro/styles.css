@@ -2,14 +2,14 @@
  * 小说工作室 Pro 样式表
  * 三栏工作台布局 + 玻璃拟态
  *
- * 设计差异点（与 novel_studio 区分）：
+ * 设计差异点（与 lunar.studio.novel 区分）：
  *   1. 顶部工具栏左侧增加品牌区，右侧 status-dot
  *   2. 主区域三栏 grid（左 300 / 中 flex / 右 340）
  *   3. 中栏顶部 10 步进度条横向轨道
  *   4. 中栏底部 Token 看板四宫格
  *   5. 右栏卡片化（含待确认徽章、人工审核入口卡）
  *   6. 知识库双 tab（快速单条 / 批量长文切片预览）
- *   7. 强调色改用青蓝渐变（区别于 novel_studio 单色蓝）
+ *   7. 强调色改用青蓝渐变（区别于 lunar.studio.novel 单色蓝）
  */
 
 /* ==================== CSS 变量 ==================== */
@@ -27,7 +27,7 @@
     --radius-xl: 1.5rem;
     --transition: all 0.45s ease;
 
-    /* 配色（与 novel_studio 差异化：青蓝→紫渐变） */
+    /* 配色（与 lunar.studio.novel 差异化：青蓝→紫渐变） */
     --brand: #5b8def;
     --brand-deep: #4a6fd4;
     --accent: #9d6bff;

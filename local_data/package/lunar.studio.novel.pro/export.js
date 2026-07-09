@@ -39,7 +39,7 @@
     ];
 
     /** 导出文件名前缀 */
-    const FILE_PREFIX = 'novel_studio_pro_';
+    const FILE_PREFIX = 'lunar.studio.novel_pro_';
 
     /**
      * Exporter 类
@@ -380,7 +380,7 @@
                 // 附带导出元信息
                 const backup = {
                     _meta: {
-                        exporter: 'novel_studio_pro',
+                        exporter: 'lunar.studio.novel_pro',
                         version: (snapshot.config && snapshot.config.version) || '1.0.0',
                         exportedAt: new Date().toISOString(),
                         chapterCount: (snapshot.chapters || []).length,

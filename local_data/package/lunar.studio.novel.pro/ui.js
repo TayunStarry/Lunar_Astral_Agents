@@ -3,7 +3,7 @@
  * 负责 DOM 渲染、模态框、Toast、段落选择交互、知识点面板双 tab、配置开关等。
  *
  * 设计契约：
- *   - 沿用 novel_studio 的玻璃拟态风格 + Font Awesome 图标
+ *   - 沿用 lunar.studio.novel 的玻璃拟态风格 + Font Awesome 图标
  *   - 知识点双 tab（快速单条 + 批量长文切片预览，grilling 问题 14）
  *   - 步骤 8 段落级选择交互（grilling 问题 6/7）
  *   - 步骤 9 下一章走向确认弹窗（grilling 问题 10）

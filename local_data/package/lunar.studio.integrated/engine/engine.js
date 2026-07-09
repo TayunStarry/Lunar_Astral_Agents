@@ -177,13 +177,13 @@ async function init() {
 
     // 8. 闲置回调（已移除自动回正视角，改由面板"追踪聚焦"按钮触发）
 
-    // 9. 图元管理器（engine_studio 移植）
+    // 9. 图元管理器（lunar.studio.engine 移植）
     primitives = new Primitives(renderer);
 
     // 10. 相机控制器（越肩视角，WASD 模式启用）
     cameraController = new CameraController(renderer);
 
-    // 11. 物理管理器（engine_studio 移植，构造签名适配为 renderer）
+    // 11. 物理管理器（lunar.studio.engine 移植，构造签名适配为 renderer）
     physicsManager = new PhysicsManager(renderer);
     physicsManager.isActive = true; // 物理始终开启
     physicsManager._ensureGround(); // 确保地面存在，防止角色物理体无限下落
@@ -362,7 +362,7 @@ async function autoLoadResources() {
 // ==== 自动加载纹理库 ====
 async function autoLoadImageAssets() {
     try {
-        const resp = await fetch('/file/read/package/integrated_studio/property/images_config.json');
+        const resp = await fetch('/file/read/package/lunar.studio.integrated/property/images_config.json');
         if (!resp.ok) {
             console.warn('[Engine] 未找到 images_config.json');
             return;
@@ -420,7 +420,7 @@ async function handleAssetSave(id, name) {
     try {
         const json = JSON.stringify(asset, null, 2);
         const safeName = (name || `asset_${id}`).replace(/[^\w\-]/g, '_');
-        const relativePath = `package/integrated_studio/model/assets/${safeName}.json`;
+        const relativePath = `package/lunar.studio.integrated/model/assets/${safeName}.json`;
         const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
         const resp = await fetch('/file/write', {
             method: 'POST',
@@ -975,7 +975,7 @@ async function handleChannelMessage(msg) {
         case 'assets_list_request': {
             // 扫描 model/assets/ 目录中的 JSON 文件列表
             try {
-                const listPath = 'package/integrated_studio/model/assets/';
+                const listPath = 'package/lunar.studio.integrated/model/assets/';
                 const resp = await fetch(`/file/read/${listPath}`);
                 if (resp.ok) {
                     const dirListing = await resp.json();
@@ -1075,7 +1075,7 @@ async function handleChannelMessage(msg) {
 
             // 写入 property/ 文件夹
             const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
-            const relativePath = `package/integrated_studio/property/${fileName}.json`;
+            const relativePath = `package/lunar.studio.integrated/property/${fileName}.json`;
             try {
                 const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
                 const resp = await fetch('/file/write', {
@@ -1101,7 +1101,7 @@ async function handleChannelMessage(msg) {
         case 'config_load': {
             const configType = payload?.type; // 'physics', 'scene', 'images', 'all'
             const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
-            const relativePath = `package/integrated_studio/property/${fileName}.json`;
+            const relativePath = `package/lunar.studio.integrated/property/${fileName}.json`;
             try {
                 const resp = await fetch(`/file/read/${relativePath}`);
                 if (!resp.ok) {
@@ -1448,7 +1448,7 @@ async function handleChannelMessage(msg) {
             const assetId = payload?.assetId;
             if (!assetId) break;
             try {
-                const relativePath = `package/integrated_studio/model/assets/${assetId}.json`;
+                const relativePath = `package/lunar.studio.integrated/model/assets/${assetId}.json`;
                 const resp = await fetch(`/file/read/${relativePath}`);
                 if (!resp.ok) {
                     broadcast('asset_op_result', { ok: false, message: `资产文件不存在：${assetId}.json` });
@@ -1596,7 +1596,7 @@ async function handleAnimGroupSave() {
     try {
         const config = animGroupRuntime.exportConfig();
         const json = JSON.stringify(config, null, 2);
-        const relativePath = 'package/integrated_studio/model/anim_group_config.json';
+        const relativePath = 'package/lunar.studio.integrated/model/anim_group_config.json';
         const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
         const resp = await fetch('/file/write', {
             method: 'POST',

@@ -1,0 +1,60 @@
+/* ========== 消息记录模态框 ========== */
+
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.25);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	display: none;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.modal-overlay.visible {
+	display: flex;
+}
+
+/* 模态框容器 */
+.modal-content {
+	width: 100%;
+	height: 100%;
+	background: rgba(20, 20, 40, 0.25);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 32px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+}
+
+.modal-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 18px 24px;
+	background: rgba(255, 255, 255, 0.08);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.modal-header h3 {
+	color: white;
+	font-size: 20px;
+	font-weight: 600;
+}
+
+/* 模态框内部滚动区 */
+.modal-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 20px;
+	background: rgba(255, 255, 255, 0.15);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+}

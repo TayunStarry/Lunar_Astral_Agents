@@ -7,17 +7,12 @@ export class DialogueRole extends ModelBuilder {
 		try {
 			// 对消息中的图片文件进行压缩与解析处理
 			await source.LiteImageFile();
-			// 消费子智能体历史摘要，合并到对话者上下文
-			// 画家和音乐家在对话者之前执行，将作品摘要写入各自的 _history
-			// 对话者在此消费这些摘要，确保最终应答能引用创作成果
-			const painterHistory = source.painterRole.consumeHistory();
-			const musicianHistory = source.musicianRole.consumeHistory();
-			for (const msg of painterHistory) {
-				source.unreadContext.push(msg);
-			}
-			for (const msg of musicianHistory) {
-				source.unreadContext.push(msg);
-			}
+			// 合并 研究员角色 历史摘要
+			source.researcherRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+			// 合并 画家角色 历史摘要
+			source.painterRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+			// 合并 音乐家角色 历史摘要
+			source.musicianRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
 			// 将未读上下文数组中的消息添加到处理器模型的上下文
 			source.unreadContext.forEach(context => this.writeContext(context));
 			// 清空未读上下文数组

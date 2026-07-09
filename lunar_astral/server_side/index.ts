@@ -20,9 +20,11 @@ export * from './file/encoder';
 export * from './file/knowledge';
 
 export * from './agent/builder';
+export * from './agent/creative';
 export * from './agent/dialogue';
 export * from './agent/painter';
 export * from './agent/musician';
+export * from './agent/researcher';
 export * from './agent/organize';
 export * from './agent/define';
 export * from './agent/agent';

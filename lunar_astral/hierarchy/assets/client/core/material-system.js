@@ -1,6 +1,6 @@
 // ==== material-system.js — Bedrock 材质系统 ====
 
-import * as THREE from '../three.module.js';
+import * as THREE from '../vendor/three.module.js';
 
 /**
  * MaterialSystem — 4 种 Bedrock render method 的材质管理

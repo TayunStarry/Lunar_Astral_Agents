@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -40,14 +41,7 @@ func (s *DepthSearcher) Search(query string) (string, error) {
 		} else {
 			subQueries = decomposed
 			// 确保原始查询在子问题中（保持原始搜索意图）
-			hasOriginal := false
-			for _, sq := range subQueries {
-				if sq == query {
-					hasOriginal = true
-					break
-				}
-			}
-			if !hasOriginal {
+			if !slices.Contains(subQueries, query) {
 				subQueries = append([]string{query}, subQueries...)
 			}
 		}
@@ -113,19 +107,16 @@ func (s *DepthSearcher) Search(query string) (string, error) {
 
 // fetchContentForResults 为搜索结果抓取网页内容
 // 对原始查询的 top N 结果抓取内容，子问题结果仅使用摘要
-func (s *DepthSearcher) fetchContentForResults(results []subResult, originalQuery string) {
+func (s *DepthSearcher) fetchContentForResults(results []subResult, _ string) {
 	if len(results) == 0 {
 		return
 	}
 
 	// 只对第一个子问题（原始查询）的结果抓取内容
 	topResult := &results[0]
-	fetchLimit := 3
-	if len(topResult.Results) < fetchLimit {
-		fetchLimit = len(topResult.Results)
-	}
+	fetchLimit := min(3, len(topResult.Results))
 
-	for i := 0; i < fetchLimit; i++ {
+	for i := range fetchLimit {
 		r := &topResult.Results[i]
 		if r.URL == "" {
 			continue
@@ -165,12 +156,19 @@ func (s *DepthSearcher) fetchContent(pageURL string) (string, error) {
 }
 
 // isProperNounQuery 判断查询是否为专有名词或短查询，不应拆解
-// 判定条件：短查询（≤6字符）且不含疑问词
+// 判定条件：短查询（≤8字符）或含特殊分隔符
 func isProperNounQuery(query string) bool {
 	runes := []rune(query)
 
-	// 短查询（≤6个字符）不拆解
-	if len(runes) <= 6 {
+	// 包含特殊分隔符的查询视为专有名词/人名/品牌名
+	for _, r := range runes {
+		if r == '·' || r == '-' || r == '—' || r == '～' || r == '~' || r == '|' || r == '•' || r == '/' {
+			return true
+		}
+	}
+
+	// 短查询（≤8个字符）不拆解
+	if len(runes) <= 8 {
 		return true
 	}
 
@@ -315,9 +313,7 @@ func (s *DepthSearcher) generateReport(originalQuery string, results []subResult
 		// 计算需要从allResults中砍掉多少
 		overhead := len([]rune(fmt.Sprintf(promptTemplate, originalQuery, "")))
 		available := depthMaxPromptChars - overhead
-		if available < 500 {
-			available = 500
-		}
+		available = max(available, 500)
 		allResultsRunes := []rune(allResults)
 		if len(allResultsRunes) > available {
 			allResults = string(allResultsRunes[:available]) + "\n\n[搜索结果已按token预算截断]"

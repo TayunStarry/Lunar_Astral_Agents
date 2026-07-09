@@ -4,7 +4,7 @@
  *
  * 设计契约（grilling 问题 11）：
  *   - prompt 文件使用 {{变量名}} 占位符
- *   - JS 端字符串替换，沿用 novel_studio 的 fillPrompt 模式
+ *   - JS 端字符串替换，沿用 lunar.studio.novel 的 fillPrompt 模式
  *   - 内存缓存避免重复 fetch
  */
 
@@ -12,7 +12,7 @@
     'use strict';
 
     /** prompt 文件根路径（相对 /file/read/package/） */
-    const PROMPT_DIR = 'novel_studio_pro/prompts';
+    const PROMPT_DIR = 'lunar.studio.novel_pro/prompts';
 
     /** 已加载的 prompt 缓存 */
     const promptCache = {};

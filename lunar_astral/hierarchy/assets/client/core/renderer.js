@@ -1,6 +1,6 @@
 // ==== renderer.js — Three.js 渲染器 ====
 
-import * as THREE from '../three.module.js';
+import * as THREE from '../vendor/three.module.js';
 import { BedrockCoordinate } from './geometry-loader.js';
 import { Bone, CubeElement } from './outliner.js';
 import { MaterialSystem } from './material-system.js';
@@ -50,6 +50,10 @@ export class Renderer {
         // 模型根容器
         this.modelRoot = new THREE.Group();
         this.scene.add(this.modelRoot);
+
+        // 图元根容器（物理作用域内的图元挂载点）
+        this.primitivesRoot = new THREE.Group();
+        this.scene.add(this.primitivesRoot);
 
         // z-fighting 微调：每个 cube 的额外膨胀偏移（用户可调）
         this.inflateBias = 0.01;
@@ -233,8 +237,8 @@ export class Renderer {
             }
         }
 
-        // 生产模式：无登场动画，直接适配相机
-        this._fitCameraToModel();
+        // 播放登场动画（相机从后方远处旋转到正面）
+        this.playIntroAnimation();
     }
 
     /**
@@ -258,7 +262,7 @@ export class Renderer {
         const maxDim = Math.max(size.x, size.y, size.z, 1);
 
         // 结束位置：正面（-Z 方向），拉近，略偏上俯视
-        const endDist = maxDim * 0.8;
+        const endDist = maxDim * 1.0;
         const endPos = new THREE.Vector3(
             center.x - maxDim * 0.2,
             center.y + maxDim * 0.3,
@@ -319,11 +323,20 @@ export class Renderer {
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z, 1);
 
-        // 结束位置：使用与 _fitCameraToModel 一致的球面坐标
-        const distance = maxDim * 0.8;
-        const spherical = new THREE.Spherical(distance, 1.5357, 3.1541);
-        const offset = new THREE.Vector3().setFromSpherical(spherical);
-        const endPos = center.clone().add(offset);
+        // 根据模型当前朝向计算前方方向
+        // 模型默认面朝 +Z（Bedrock yaw=0=South），摄像头在其对面（-Z）才能看到正面
+        // 旋转 bodyYaw 后：front = (sin(yaw), 0, cos(yaw))，摄像头 = (-sin(yaw), 0, -cos(yaw))
+        const bodyYaw = this.modelRoot.rotation.y;
+        const frontX = -Math.sin(bodyYaw);
+        const frontZ = -Math.cos(bodyYaw);
+
+        // 结束位置：模型前方，略偏上俯视
+        const endDist = maxDim * 1.0;
+        const endPos = new THREE.Vector3(
+            center.x + frontX * endDist,
+            center.y + maxDim * 0.3,
+            center.z + frontZ * endDist
+        );
 
         // 起始位置：当前相机位置
         this._introActive = true;
@@ -568,18 +581,10 @@ export class Renderer {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z, 1);
-        // 焦点：水平居中于模型原点，垂直方向下移确保模型偏下显示
-        const focusTarget = new THREE.Vector3(
-            this.modelRoot.position.x,
-            center.y - size.y * 0.075,
-            this.modelRoot.position.z
-        );
-        const distance = maxDim * 0.8;
-        const spherical = new THREE.Spherical(distance, 1.5357, 3.1541);
-        const offset = new THREE.Vector3().setFromSpherical(spherical);
-        this.camera.position.copy(focusTarget).add(offset);
-        this.controls.target.copy(focusTarget);
-        this.controls._spherical.copy(spherical);
+        const distance = maxDim * 2.5;
+
+        this.camera.position.set(center.x + distance * 0.6, center.y + distance * 0.8, center.z + distance);
+        this.controls.target.copy(center);
         this.controls.update();
     }
 
@@ -622,7 +627,7 @@ export class Renderer {
     /**
      * 获取头部骨骼的全局位置（用于鼠标追踪球面映射）
      * 查找名为 headCheek 的骨骼，返回其 sceneObject 的全局位置
-     * @returns {import('../three.module.js').Vector3|null} 头部全局位置，找不到返回 null
+     * @returns {import('../vendor/three.module.js').Vector3|null} 头部全局位置，找不到返回 null
      */
     getHeadWorldPosition() {
         let headPos = null;
@@ -693,48 +698,6 @@ export class Renderer {
         this.controls.update();
     }
 
-    /**
-     * 以球面坐标锁定摄像头（相对于模型中心）
-     * 自动计算半径以匹配 _fitCameraToModel 的距离
-     * @param {number} phi 球面 phi 角
-     * @param {number} theta 球面 theta 角
-     */
-    lockCameraSpherical(phi, theta) {
-        // 取消登场动画
-        if (this._introActive) this.skipIntroAnimation();
-
-        // 计算模型包围盒中心与大小
-        const box = new THREE.Box3();
-        box.makeEmpty();
-        this.modelRoot.traverse((obj) => {
-            if (obj.isMesh) box.expandByObject(obj);
-        });
-
-        let center, distance;
-        if (!box.isEmpty()) {
-            center = box.getCenter(new THREE.Vector3());
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z, 1);
-            distance = maxDim * 0.8;
-        } else {
-            center = this.modelRoot.position.clone();
-            distance = 63;
-        }
-
-        const spherical = new THREE.Spherical(distance, phi, theta);
-        const offset = new THREE.Vector3().setFromSpherical(spherical);
-        const cameraPos = center.clone().add(offset);
-
-        this._lockedCameraPos.copy(cameraPos);
-        this._lockedCameraTarget.copy(center);
-        this._cameraLocked = true;
-
-        // 立即移动相机
-        this.camera.position.copy(this._lockedCameraPos);
-        this.controls.target.copy(this._lockedCameraTarget);
-        this.camera.lookAt(this._lockedCameraTarget);
-    }
-
     /** @returns {boolean} 摄像头是否处于锁定状态 */
     get cameraLocked() { return this._cameraLocked; }
 
@@ -754,8 +717,7 @@ export class Renderer {
         const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
         const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z, 1);
-        const dist = maxDim * 0.8;
-        const isoSpherical = new THREE.Spherical(dist, 1.5357, 3.1541);
+        const dist = maxDim * 2.5;
 
         const offsets = {
             front: [0, 0, dist],
@@ -764,17 +726,10 @@ export class Renderer {
             right: [dist, 0, 0],
             top: [0, dist, 0.001],
             bottom: [0, -dist, 0.001],
+            iso: [dist * 0.6, dist * 0.8, dist]
         };
-
-        let cameraPos;
-        if (preset === 'iso') {
-            const isoOffset = new THREE.Vector3().setFromSpherical(isoSpherical);
-            cameraPos = center.clone().add(isoOffset);
-        } else {
-            const off = offsets[preset] || offsets.front;
-            cameraPos = new THREE.Vector3(center.x + off[0], center.y + off[1], center.z + off[2]);
-        }
-        this.camera.position.copy(cameraPos);
+        const off = offsets[preset] || offsets.iso;
+        this.camera.position.set(center.x + off[0], center.y + off[1], center.z + off[2]);
         this.controls.target.copy(center);
         this.controls.update();
     }

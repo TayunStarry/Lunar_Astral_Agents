@@ -18,7 +18,7 @@
     const EMBEDDING_MODEL = 'system-embedding';
 
     /** 向量文件根目录（相对 /file/read/package/ 的路径） */
-    const VECTOR_STORE_DIR = 'novel_studio_pro/vector_store';
+    const VECTOR_STORE_DIR = 'lunar.studio.novel_pro/vector_store';
 
     /** 表名 → 文件名映射，构成"表名机制" */
     const TABLE_FILES = {

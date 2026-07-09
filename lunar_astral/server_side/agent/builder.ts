@@ -86,15 +86,24 @@ class ConfigModifier extends PromptProcessor {
 		this.enableTools = enable;
 		return this;
 	}
-	/** 写入上下文 */
+	/** 写入上下文（自动剥离 reasoning_content，避免回传触发模型无限推理） */
 	public writeContext(context: PostMessage): this {
+		const cleaned = this.stripReasoningContent(context);
 		if (this.messages.length >= 20) {
 			const discarded = this.messages.slice(0, this.messages.length - 19);
-			this.messages = this.messages.slice(-19).concat(context);
+			this.messages = this.messages.slice(-19).concat(cleaned);
 			OnlyData.unreadRecords.push(...discarded);
 		}
-		else this.messages.push(context);
+		else this.messages.push(cleaned);
 		return this;
+	}
+	/** 剥离消息中的 reasoning_content 字段，防止回传给模型触发无限推理 */
+	private stripReasoningContent(message: PostMessage): PostMessage {
+		if ('reasoning_content' in message) {
+			const { reasoning_content, ...rest } = message as any;
+			return rest as PostMessage;
+		}
+		return message;
 	}
 	/** 覆写上下文 */
 	public coverContext(context: PostMessage[] | PostMessage): this {

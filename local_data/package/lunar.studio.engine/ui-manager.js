@@ -1573,7 +1573,7 @@ class UIManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-File-Name': this._encodePath('package/engine_studio/status.json'),
+                    'X-File-Name': this._encodePath('package/lunar.studio.engine/status.json'),
                     'X-Overwrite': 'true',
                 },
                 body: json,
@@ -1588,7 +1588,7 @@ class UIManager {
     async _showRecoveryModal() {
         let hasSaved = false;
         try {
-            const resp = await fetch('/file/read/package/engine_studio/status.json');
+            const resp = await fetch('/file/read/package/lunar.studio.engine/status.json');
             if (resp.ok) {
                 const text = await resp.text();
                 if (text && text.trim()) {

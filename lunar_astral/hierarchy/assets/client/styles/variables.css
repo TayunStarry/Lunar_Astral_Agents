@@ -1,0 +1,51 @@
+/* ========== 设计令牌 / CSS 变量 ========== */
+
+:root {
+	/* 状态色 */
+	--status-218838: rgba(40, 167, 69, 1);
+	--status-3a5a8a: rgba(58, 90, 138, 1);
+	--status-4a6fa5: rgba(74, 111, 165, 1);
+	--status-6c9bcf: rgba(108, 155, 207, 1);
+	--status-8a2be2: rgba(138, 43, 226, 1);
+	--status-9d6bff: rgba(157, 107, 255, 1);
+	--status-dc3545: rgba(220, 53, 69, 1);
+	--status-fbbf24: rgba(255, 193, 7, 1);
+	--status-ffc107: rgba(33, 136, 56, 1);
+	--status-20c997: rgba(32, 201, 151, 1);
+	--status-ff6b9c: rgba(255, 107, 156, 1);
+
+	/* 背景色 */
+	--background-fafafa: rgba(250, 250, 250, 0.85);
+	--background-f5f5f5: rgba(250, 250, 250, 0.35);
+	--background-fcfefb: rgba(252, 254, 251, 1);
+	--background-f2f7fa: rgba(242, 247, 250, 1);
+
+	/* 文本与边框 */
+	--text-0f1e0f: rgba(15, 30, 15, 1);
+	--border-e1e6f0: rgba(225, 230, 240, 1);
+
+	/* 阴影与过渡 */
+	--shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+	--transition: all 0.45s ease;
+
+	/* 玻璃拟态 */
+	--glass-bg: rgba(255, 255, 255, 0.18);
+	--glass-border: rgba(255, 255, 255, 0.25);
+	--glass-blur: blur(5px);
+
+	/* 玻璃按钮变量 */
+	--btn-glass-bg: rgba(0, 0, 0, 0.25);
+	--btn-glass-border: rgba(255, 255, 255, 0.25);
+	--btn-glass-hover-bg: rgba(0, 0, 0, 0.45);
+	--btn-glass-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+	--btn-glass-radius: 14px;
+
+	/* 主题色 */
+	--primary-color: #6c9bcf;
+	--accent-color: #9d6bff;
+	--error-color: #dc3545;
+	--success-color: #20c997;
+
+	/* 背景图片 */
+	--bg-image: url('/background');
+}

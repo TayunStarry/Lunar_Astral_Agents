@@ -75,6 +75,14 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 				))
 			} else {
 				fetchFail++
+				// 抓取失败时也对标题/摘要做相关性检查
+				relevanceScore := checkContentRelevance(queryKeywords, "", r.Title, r.Snippet)
+				if relevanceScore < 1 {
+					skipParts = append(skipParts, fmt.Sprintf(
+						"[来源%d] %s (抓取失败且不相关，已跳过)", i+1, r.URL,
+					))
+					continue
+				}
 				// 抓取失败时用摘要，也做截断
 				snippetLen := len([]rune(r.Snippet))
 				if snippetLen > 300 {
@@ -93,9 +101,23 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 				i+1, r.Title, r.Snippet, r.URL,
 			))
 		}
-	}
-
+	} // 第三步：LLM 总结 or 兜底
 	if len(contentParts) == 0 {
+		// 所有结果被过滤但仍有搜索结果 → 兜底返回前3条原始结果
+		if len(results) > 0 {
+			fallbackParts := make([]string, 0, 3)
+			for i, r := range results {
+				if i >= 3 {
+					break
+				}
+				fallbackParts = append(fallbackParts, fmt.Sprintf(
+					"[来源%d] %s\n摘要: %s\nURL: %s",
+					i+1, r.Title, truncateText(r.Snippet, 200), r.URL,
+				))
+			}
+			searchContent := strings.Join(fallbackParts, "\n\n---\n\n")
+			return fmt.Sprintf("搜索 %q 的原始结果（相关性过滤较严格，以下为未过滤的原始结果）：\n\n%s", query, searchContent), nil
+		}
 		return fmt.Sprintf("搜索 %q 没有找到相关内容，所有结果已被相关性过滤。", query), nil
 	}
 

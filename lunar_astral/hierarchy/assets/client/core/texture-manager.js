@@ -1,6 +1,6 @@
 // ==== texture-manager.js — 纹理管理器 ====
 
-import * as THREE from '../three.module.js';
+import * as THREE from '../vendor/three.module.js';
 
 /**
  * TextureManager — 加载 .bbmodel 中的纹理并构建 THREE.Texture

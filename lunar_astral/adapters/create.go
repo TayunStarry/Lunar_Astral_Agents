@@ -61,6 +61,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("webSearchSimple", adapters.webSearchSimple)
 	vm.Set("webSearchDepth", adapters.webSearchDepth)
 	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
+	vm.Set("webSearchAssembly", adapters.webSearchAssembly)
+	vm.Set("webSearchProcessLinks", adapters.webSearchProcessLinks)
+	vm.Set("webSearchSetMemoryProvider", adapters.webSearchSetMemoryProvider)
+	vm.Set("webSearchSetDownloadFunc", adapters.webSearchSetDownloadFunc)
 
 	// 注册截图子系统适配器
 	vm.Set("screenshotCapture", adapters.screenshotCapture)

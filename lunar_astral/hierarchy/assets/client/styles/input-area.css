@@ -1,0 +1,226 @@
+/* ========== 输入区域组件 ========== */
+
+/* 文件预览悬浮区 */
+.file-preview-area {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 0;
+	min-height: 0;
+	z-index: 10;
+	min-width: 80%;
+}
+
+.file-preview-area:empty {
+	display: none;
+}
+
+.file-preview-item {
+	position: relative;
+	width: 62px;
+	height: 62px;
+	border-radius: 12px;
+	overflow: hidden;
+	background: rgba(0, 0, 0, 0.2);
+	animation: float 2.5s ease-in-out infinite;
+	will-change: transform;
+}
+
+@keyframes float {
+	0%, 100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-5px);
+	}
+}
+
+.file-preview-item img,
+.file-preview-item video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.file-preview-item .remove-btn {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 18px;
+	height: 18px;
+	border: none;
+	border-radius: 50%;
+	background: var(--error-color);
+	color: white;
+	cursor: pointer;
+	font-size: 10px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.file-preview-item .file-label {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: 2px;
+	background: rgba(0, 0, 0, 0.6);
+	color: white;
+	font-size: 8px;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.input-wrapper {
+	display: flex;
+	gap: 10px;
+	align-items: stretch;
+}
+
+/* 功能菜单下拉 */
+.function-menu-wrapper {
+	position: relative;
+	display: flex;
+}
+
+.function-menu-wrapper .btn-glass {
+	height: 100%;
+}
+
+.function-menu-dropdown {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 0;
+	min-width: 160px;
+	background: rgba(30, 30, 50, 0.85);
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 14px;
+	padding: 6px;
+	display: none;
+	flex-direction: column;
+	gap: 2px;
+	z-index: 100;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+	animation: dropdownFadeIn 0.2s ease;
+}
+
+.function-menu-dropdown.visible {
+	display: flex;
+}
+
+@keyframes dropdownFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.dropdown-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	background: transparent;
+	border: none;
+	border-radius: 10px;
+	color: #ffffff;
+	font-size: 14px;
+	cursor: pointer;
+	transition: all 0.25s ease;
+	white-space: nowrap;
+	outline: none;
+}
+
+.dropdown-item:hover {
+	background: rgba(157, 107, 255, 0.25);
+}
+
+.dropdown-item:active {
+	background: rgba(157, 107, 255, 0.4);
+}
+
+.dropdown-item i {
+	width: 18px;
+	text-align: center;
+	font-size: 14px;
+}
+
+/* 语音对话激活状态 */
+.dropdown-item.voice-active {
+	background: rgba(32, 201, 151, 0.2);
+}
+
+.dropdown-item.voice-active i {
+	color: var(--success-color);
+}
+
+/* 统一按钮设计规范（毛玻璃 + 深色半透明 + 边框） */
+.btn-glass {
+	background: var(--btn-glass-bg);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 2px solid var(--btn-glass-border);
+	border-radius: var(--btn-glass-radius);
+	color: #ffffff;
+	cursor: pointer;
+	font-size: 16px;
+	padding: 10px 16px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+	box-shadow: var(--btn-glass-shadow);
+	outline: none;
+}
+
+.btn-glass:hover {
+	background: var(--btn-glass-hover-bg);
+	border-color: rgba(255, 255, 255, 0.45);
+	transform: translateY(-1px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.btn-glass:active {
+	transform: translateY(0);
+	background: rgba(0, 0, 0, 0.7);
+}
+
+/* 输入框 */
+.message-input {
+	flex: 1;
+	padding: 12px 18px;
+	background: rgba(255, 255, 255, 0.85);
+	border: 2px solid rgba(255, 255, 255, 0.5);
+	border-radius: 16px;
+	color: #1a1a2e;
+	font-size: 15px;
+	resize: none;
+	max-height: 120px;
+	outline: none;
+	transition: var(--transition);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.message-input:focus {
+	border-color: var(--accent-color);
+	box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.3);
+	background: rgba(255, 255, 255, 0.95);
+}
+
+.message-input::placeholder {
+	color: #6c6c8a;
+}

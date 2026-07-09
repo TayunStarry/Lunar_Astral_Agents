@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 // NewOpenAIProvider 创建 OpenAI v1 协议兼容的 LLM 客户端
 func NewOpenAIProvider(baseURL, apiKey, model string, maxTokens int, temperature float64) *OpenAIProvider {
 	return &OpenAIProvider{
@@ -25,7 +24,7 @@ func NewOpenAIProvider(baseURL, apiKey, model string, maxTokens int, temperature
 
 // Chat 发送聊天请求并获取响应文本
 func (p *OpenAIProvider) Chat(messages []ChatMessage) (string, error) {
-	reqBody := ChatRequest{
+	reqBody := chatRequest{
 		Model:       p.model,
 		Messages:    messages,
 		MaxTokens:   p.maxTokens,
@@ -58,14 +57,14 @@ func (p *OpenAIProvider) Chat(messages []ChatMessage) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
+		var errResp errorResponse
 		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error.Message != "" {
 			return "", fmt.Errorf("LLM 服务错误 (HTTP %d): %s", resp.StatusCode, errResp.Error.Message)
 		}
 		return "", fmt.Errorf("LLM 服务返回异常状态码 %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var chatResp ChatResponse
+	var chatResp chatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
 		return "", fmt.Errorf("解析响应失败: %w", err)
 	}

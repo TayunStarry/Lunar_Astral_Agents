@@ -1,4 +1,4 @@
-import { ToolCall, OnlyData, WebSearchConfig, SearchMode } from '../index';
+import { OnlyData, WebSearchConfig, SearchMode } from '../index';
 
 /** 网络检索子系统是否已初始化 */
 let webSearchInitialized = false;
@@ -82,69 +82,6 @@ export function executeWebSearch(query: string, mode: SearchMode = 'webpage'): [
 	}
 }
 
-// ==== 工具定义 ====
-
-/** 网络检索工具定义 */
-export const webSearchTools: ToolCall[] = [
-	{
-		type: "function",
-		function: {
-			name: "web_search",
-			description: "执行网络搜索，获取实时信息。当用户的问题涉及实时数据、最新资讯、事实查询等需要联网获取的信息时，应使用此工具。支持三种模式：simple（轻量摘要，仅返回搜索结果摘要）、webpage（网页搜索，抓取网页内容并进行总结，适合需要详细信息的场景，默认）、depth（深度研究，将问题拆解为多个子问题并行搜索，去重后生成综合研究报告，适合需要全面深入分析的场景）。",
-			parameters: {
-				type: "object",
-				properties: {
-					query: {
-						type: "string",
-						description: "搜索查询关键词或问题"
-					},
-					mode: {
-						type: "string",
-						description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）或 depth（深度研究，全面深入分析）",
-						enum: ["simple", "webpage", "depth"]
-					}
-				},
-				required: ["query"]
-			}
-		}
-	}
-];
-
-/** 处理网络搜索工具调用 */
-async function handleWebSearch(args?: Record<string, any> | string): Promise<string[]> {
-	const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
-	const { query, mode } = parsed;
-
-	if (!query || query.trim().length === 0) {
-		return ['搜索失败：查询关键词不能为空', ''];
-	}
-
-	const searchMode: SearchMode = mode || 'webpage';
-
-	// 确保子系统已初始化
-	if (!isWebSearchReady()) {
-		const initResult = initWebSearch();
-		if (!initResult) {
-			return ['搜索失败：网络检索子系统初始化失败', ''];
-		}
-	}
-
-	console.log(`[网络检索] 工具调用: query="${query}", mode="${searchMode}"`);
-
-	const [result, err] = executeWebSearch(query.trim(), searchMode);
-	if (err) {
-		console.error(`[网络检索] 搜索失败: ${err.message || String(err)}`);
-		return [`搜索失败：${err.message || String(err)}`, ''];
-	}
-
-	const textResult = result || '未找到相关搜索结果';
-	console.log(`[网络检索] 查询结果:\n${textResult}`);
-	return [textResult, ''];
-}
-
 // ==== 模块级注册 ====
-
-// 将网络搜索工具注册到月华工具协议映射表
-OnlyData.LTPfunction.set('web_search', handleWebSearch);
-// 注册网络检索工具到 LTPdefinition 列表
-OnlyData.LTPdefinition.push(...webSearchTools);
+// web_search 已迁移至研究者角色（ResearcherRole）作为私有工具
+// 本模块仅保留初始化与类型基础设施

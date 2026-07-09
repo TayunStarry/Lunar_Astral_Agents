@@ -18,7 +18,7 @@ const CHAPTER_STATUS = {
     APPROVED: 'approved'
 };
 
-const STATE_FILE = 'package/novel_studio/status.json';
+const STATE_FILE = 'package/lunar.studio.novel/status.json';
 const MODEL_NAME = 'system-multimodal';
 const MAX_MEMORIES = 50;
 const MAX_RETRIES = 3;
@@ -158,7 +158,7 @@ class NovelStudio {
         ];
         for (const name of promptFiles) {
             try {
-                const resp = await fetch(`/file/read/package/novel_studio/prompts/${name}.md`);
+                const resp = await fetch(`/file/read/package/lunar.studio.novel/prompts/${name}.md`);
                 if (resp.ok) {
                     this.prompts[name] = await resp.text();
                 }

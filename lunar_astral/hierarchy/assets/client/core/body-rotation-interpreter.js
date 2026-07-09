@@ -147,6 +147,23 @@ export class BodyRotationInterpreter {
         this.molang.updateContext({ body_y_rotation: this._bodyYaw });
     }
 
+    /**
+     * 设置目标俯仰角（target_x_rotation），带 clamp [-10, 45]（Q9）
+     * @param {number} x 目标俯仰（度）
+     */
+    setTargetX(x) {
+        const clamped = Math.max(-10, Math.min(45, x));
+        this.molang.updateContext({ target_x_rotation: clamped });
+    }
+
+    /**
+     * 设置目标偏航角（target_y_rotation）
+     * @param {number} y 目标偏航（度）
+     */
+    setTargetY(y) {
+        this.molang.updateContext({ target_y_rotation: y });
+    }
+
     /** @returns {number} 当前身体偏航（度） */
     get bodyYaw() { return this._bodyYaw; }
 

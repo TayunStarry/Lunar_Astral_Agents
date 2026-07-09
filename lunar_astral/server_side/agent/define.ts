@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, RandomFloor, OrganizeRole } from '../index';
+import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, ResearcherRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -13,6 +13,8 @@ export class AgentDefine {
 	public descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
 	/** 聊天者角色(用户交互) */
 	public dialogueRole: DialogueRole = new DialogueRole();
+	/** 研究者角色(深度调研与信息查证) */
+	public researcherRole: ResearcherRole = new ResearcherRole();
 	/** 绘图师角色(图片生成) */
 	public painterRole: PainterRole = new PainterRole();
 	/** 音乐家角色(音乐创作) */
