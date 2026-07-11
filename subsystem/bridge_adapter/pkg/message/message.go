@@ -1,16 +1,22 @@
 package message
 
+// 消息解析与处理逻辑
+
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strconv"
 
+	"bridge_adapter/pkg/cache"
 	"bridge_adapter/pkg/config"
 	"bridge_adapter/pkg/logger"
 	"bridge_adapter/pkg/napcat"
 	"bridge_adapter/pkg/types"
 )
 
+// ParseMessageSegments 解析消息段列表，返回格式化的内容和是否包含图片
 func ParseMessageSegments(segments []types.MessageSegment, groupID int64) (interface{}, bool, error) {
 	var contentArray []map[string]interface{}
 	var contentStr string
@@ -127,6 +133,7 @@ func ParseMessageSegments(segments []types.MessageSegment, groupID int64) (inter
 	return contentStr, false, nil
 }
 
+// appendContent 根据当前内容格式追加文本
 func appendContent(contentArray *[]map[string]interface{}, contentStr *string, text string) {
 	if len(*contentArray) > 0 {
 		*contentArray = append(*contentArray, map[string]interface{}{
@@ -138,10 +145,11 @@ func appendContent(contentArray *[]map[string]interface{}, contentStr *string, t
 	}
 }
 
-func BuildMessagesFromCache() []types.OpenAIMessage {
+// BuildOpenAIMessages 从缓存消息构建 OpenAI 格式消息列表
+func BuildOpenAIMessages(messages []types.CachedMessage) []types.OpenAIMessage {
 	var openAIMessages []types.OpenAIMessage
 
-	for _, msg := range config.MessageCache {
+	for _, msg := range messages {
 		senderName := config.GetUserName(msg.GroupID, msg.UserID)
 
 		if msg.HasImages {
@@ -169,41 +177,46 @@ func BuildMessagesFromCache() []types.OpenAIMessage {
 	return openAIMessages
 }
 
-func HandleNapcatMessage(message []byte) {
+// HandleNapcatMessage 处理从 Napcat 接收到的消息
+func HandleNapcatMessage(rawMessage []byte) {
 	var napcatMsg types.NapcatMessage
-	if err := json.Unmarshal(message, &napcatMsg); err != nil {
+	if err := json.Unmarshal(rawMessage, &napcatMsg); err != nil {
 		logger.Error("解析 napcat 消息失败: %v", err)
 		return
 	}
 
+	// 过滤自己发送的消息
 	if napcatMsg.UserID == napcatMsg.SelfID {
 		return
 	}
 
+	// 过滤非监听群的消息
 	if !config.IsInListenGroup(napcatMsg.GroupID) {
 		return
 	}
 
+	// 过滤非群消息
 	if napcatMsg.MessageType != "group" {
 		return
 	}
 
+	// 解析消息内容
 	content, hasImages, err := ParseMessageSegments(napcatMsg.Message, napcatMsg.GroupID)
 	if err != nil {
 		logger.Error("解析消息段失败: %v", err)
 		return
 	}
 
+	// 添加到对应群聊的缓存
 	cachedMsg := types.CachedMessage{
 		GroupID:   napcatMsg.GroupID,
 		UserID:    napcatMsg.UserID,
 		Content:   content,
 		HasImages: hasImages,
 	}
-	config.AddToMessageCache(cachedMsg)
+	cache.AddMessage(cachedMsg)
 
-	logger.Debug("消息已添加到缓存，当前缓存 %d 条消息", len(config.MessageCache))
-
+	// 提取文本内容用于关键词检测
 	var contentStr string
 	if str, ok := content.(string); ok {
 		contentStr = str
@@ -219,27 +232,45 @@ func HandleNapcatMessage(message []byte) {
 		}
 	}
 
+	// 关键词检测
 	if !config.ContainsTriggerKeyword(contentStr) {
-		logger.Debug("消息不包含触发关键词，仅缓存: %s", contentStr)
+		logger.Debug("群 %d: 消息不含触发关键词，仅缓存 (当前 %d 条)", napcatMsg.GroupID, len(cache.GetGroupMessages(napcatMsg.GroupID)))
 		return
 	}
 
-	logger.Info("检测到触发关键词，准备发送 %d 条缓存消息", len(config.MessageCache))
+	// 触发关键词 → 处理该群的消息
+	triggerUser := config.GetUserName(napcatMsg.GroupID, napcatMsg.UserID)
+	keyword := config.FindTriggerKeyword(contentStr)
 
+	logger.Info("群 %d: 检测到触发关键词 '%s' (发送者: %s)", napcatMsg.GroupID, keyword, triggerUser)
+
+	// 记录来源群号
 	config.LastGroupID = napcatMsg.GroupID
 
-	openAIMessages := BuildMessagesFromCache()
+	// 为该群生成消息摘要
+	summary := cache.GenerateSummary(napcatMsg.GroupID, triggerUser, keyword)
+	cache.AddSummary(napcatMsg.GroupID, summary)
+	logger.Info("群 %d: 已生成消息摘要 (关键词=%s, 摘要长度=%d)", napcatMsg.GroupID, keyword, len(summary.Content))
+
+	// 构建并发送该群的所有缓存消息
+	groupMessages := cache.GetGroupMessages(napcatMsg.GroupID)
+	openAIMessages := BuildOpenAIMessages(groupMessages)
 
 	err = SendToLunarCore(openAIMessages)
 	if err != nil {
-		logger.Error("发送消息到 lunar_core 失败: %v", err)
+		logger.Error("发送群 %d 消息到 lunar_core 失败: %v", napcatMsg.GroupID, err)
 		return
 	}
 
-	config.ClearMessageCache()
-	logger.Info("缓存消息已清除")
+	// 发送成功后清除该群的缓存
+	cache.ClearGroupCache(napcatMsg.GroupID)
+
+	// 打印缓存统计
+	totalGroups, totalMessages, totalSummaries := cache.GetCacheStats()
+	logger.Info("缓存统计: %d 个群, %d 条消息, %d 条摘要", totalGroups, totalMessages, totalSummaries)
 }
 
+// SendToLunarCore 将消息发送到 lunar_core 的消息写入接口
 func SendToLunarCore(messages []types.OpenAIMessage) error {
 	url := config.AppConfig.QQAdapter.LunarCoreUrl + "/write/message"
 
@@ -252,7 +283,7 @@ func SendToLunarCore(messages []types.OpenAIMessage) error {
 		return err
 	}
 
-	req, err := napcat.NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -265,7 +296,7 @@ func SendToLunarCore(messages []types.OpenAIMessage) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := napcat.ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

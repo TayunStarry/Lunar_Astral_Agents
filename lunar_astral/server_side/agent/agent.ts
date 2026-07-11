@@ -102,10 +102,8 @@ class LunarAgent extends AgentDefine {
 				if (!this.finalResponse.trim().length) throw new Error('消息响应为空');
 				// 成功响应时重置错误计数
 				else this.errorCount = 0;
-				// 如果未读记录数超过10条，调用编纂者组织历史记录
-				if (OnlyData.unreadRecords.length > 10) {
-					setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
-				}
+				// 如果未读记录数超过30条，调用编纂者组织历史记录
+				if (OnlyData.unreadRecords.length > 30) this.organizeRole.organizeHistoricalRecords();
 				/** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
 				const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
 				// 如果正文切片为空，抛出异常

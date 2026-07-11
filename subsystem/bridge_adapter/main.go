@@ -1,9 +1,7 @@
 package main
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"bridge_adapter/pkg/config"
 	"bridge_adapter/pkg/logger"
@@ -13,18 +11,31 @@ import (
 )
 
 func main() {
-	logger.Info("========== Bridge Adapter 启动 ==========")
+	logger.Info("Bridge Adapter 启动中...")
 
+	// 加载配置
 	config.LoadConfig()
 
-	go napcat.FetchGroupMembers()
+	// 获取群成员列表
+	napcat.FetchGroupMembers()
 
-	go napcat.ConnectToNapcatWebSocket(message.HandleNapcatMessage)
-	go lunar.ConnectToLunarWebSocket(lunar.HandleLunarMessage)
+	// 启动双 WebSocket 连接
+	go func() {
+		for {
+			lunar.ConnectToLunarWebSocket(lunar.HandleLunarMessage)
+			logger.Warn("Lunar WebSocket 连接断开，5秒后重连...")
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	go func() {
+		for {
+			napcat.ConnectToNapcatWebSocket(message.HandleNapcatMessage)
+			logger.Warn("Napcat WebSocket 连接断开，5秒后重连...")
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
-	logger.Info("程序退出")
+	// 阻塞主协程
+	select {}
 }

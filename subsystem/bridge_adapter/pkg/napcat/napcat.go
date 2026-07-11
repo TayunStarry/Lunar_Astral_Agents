@@ -1,5 +1,7 @@
 package napcat
 
+// Napcat WebSocket/HTTP 客户端
+
 import (
 	"bytes"
 	"encoding/json"
@@ -7,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"bridge_adapter/pkg/config"
 	"bridge_adapter/pkg/logger"
@@ -16,16 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var HTTPClient = &http.Client{Timeout: 10 * time.Second}
-
-func NewHTTPRequest(method, url string, body io.Reader) (*http.Request, error) {
-	return http.NewRequest(method, url, body)
-}
-
-func ReadResponseBody(resp *http.Response) ([]byte, error) {
-	return io.ReadAll(resp.Body)
-}
-
+// FetchGroupMembers 获取所有监听群的成员列表
 func FetchGroupMembers() {
 	token := config.AppConfig.QQAdapter.NapcatWsToken
 	baseURL := config.GetNapcatHTTPBaseURL()
@@ -39,6 +31,7 @@ func FetchGroupMembers() {
 	}
 }
 
+// FetchGroupMemberList 获取单个群的成员列表
 func FetchGroupMemberList(baseURL, token string, groupID int64) error {
 	url := baseURL + "/get_group_member_list"
 
@@ -49,7 +42,7 @@ func FetchGroupMemberList(baseURL, token string, groupID int64) error {
 		return err
 	}
 
-	req, err := NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -63,7 +56,7 @@ func FetchGroupMemberList(baseURL, token string, groupID int64) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -109,6 +102,7 @@ func FetchGroupMemberList(baseURL, token string, groupID int64) error {
 	return nil
 }
 
+// GetMessageContent 通过 get_msg API 获取单条消息的文本内容
 func GetMessageContent(messageID string) (string, error) {
 	token := config.AppConfig.QQAdapter.NapcatWsToken
 	baseURL := config.GetNapcatHTTPBaseURL()
@@ -121,7 +115,7 @@ func GetMessageContent(messageID string) (string, error) {
 		return "", err
 	}
 
-	req, err := NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
@@ -135,7 +129,7 @@ func GetMessageContent(messageID string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -177,6 +171,7 @@ func GetMessageContent(messageID string) (string, error) {
 	return "", fmt.Errorf("无法解析消息内容")
 }
 
+// GetForwardMessageContent 获取转发消息的完整内容
 func GetForwardMessageContent(forwardID string, groupID int64) (interface{}, bool, error) {
 	token := config.AppConfig.QQAdapter.NapcatWsToken
 	baseURL := config.GetNapcatHTTPBaseURL()
@@ -189,7 +184,7 @@ func GetForwardMessageContent(forwardID string, groupID int64) (interface{}, boo
 		return nil, false, err
 	}
 
-	req, err := NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, false, err
 	}
@@ -203,7 +198,7 @@ func GetForwardMessageContent(forwardID string, groupID int64) (interface{}, boo
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, false, err
 	}
@@ -229,6 +224,7 @@ func GetForwardMessageContent(forwardID string, groupID int64) (interface{}, boo
 	return ParseForwardMessages(forwardResp.Messages, groupID)
 }
 
+// ParseForwardMessages 解析转发消息列表
 func ParseForwardMessages(messages []types.NapcatMessage, groupID int64) (interface{}, bool, error) {
 	var contentArray []map[string]interface{}
 	var contentStr string
@@ -358,6 +354,7 @@ func ParseForwardMessages(messages []types.NapcatMessage, groupID int64) (interf
 	return contentStr, false, nil
 }
 
+// SendGroupTextMessage 发送群文本消息
 func SendGroupTextMessage(groupID int64, content string) error {
 	baseURL := config.GetNapcatHTTPBaseURL()
 	url := baseURL + "/send_group_msg"
@@ -382,7 +379,7 @@ func SendGroupTextMessage(groupID int64, content string) error {
 		return err
 	}
 
-	req, err := NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -396,7 +393,7 @@ func SendGroupTextMessage(groupID int64, content string) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -406,6 +403,7 @@ func SendGroupTextMessage(groupID int64, content string) error {
 	return nil
 }
 
+// SendGroupImageMessage 发送群图片消息
 func SendGroupImageMessage(groupID int64, images []string) error {
 	baseURL := config.GetNapcatHTTPBaseURL()
 	url := baseURL + "/send_group_msg"
@@ -431,7 +429,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 		return err
 	}
 
-	req, err := NewHTTPRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -445,7 +443,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := ReadResponseBody(resp)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -455,6 +453,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 	return nil
 }
 
+// ConnectToNapcatWebSocket 连接到 Napcat WebSocket 服务器
 func ConnectToNapcatWebSocket(messageHandler func([]byte)) {
 	url := config.AppConfig.QQAdapter.NapcatWsServer
 	token := config.AppConfig.QQAdapter.NapcatWsToken

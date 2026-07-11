@@ -1,5 +1,7 @@
 package lunar
 
+// Lunar WebSocket 客户端与消息分发逻辑
+
 import (
 	"encoding/json"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// ConnectToLunarWebSocket 连接到 lunar_astral 的 WebSocket 服务器
 func ConnectToLunarWebSocket(messageHandler func([]byte)) {
 	url := config.AppConfig.QQAdapter.LunarWsServer
 
@@ -29,28 +32,27 @@ func ConnectToLunarWebSocket(messageHandler func([]byte)) {
 	logger.Info("成功连接到 lunar_ws_server")
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			logger.Error("从 lunar_ws_server 读取消息失败: %v", err)
 			break
 		}
 		if config.AppConfig.QQAdapter.DisplayLogs {
-			logger.Debug("收到 lunar_ws_server 消息: %s", message)
+			logger.Debug("收到 lunar_ws_server 消息: %s", msg)
 		}
-		messageHandler(message)
+		messageHandler(msg)
 	}
 }
 
-func HandleLunarMessage(message []byte) {
+// HandleLunarMessage 处理从 lunar_astral 接收到的消息
+func HandleLunarMessage(rawMessage []byte) {
 	var lunarMsg types.LunarMessage
-	if err := json.Unmarshal(message, &lunarMsg); err != nil {
+	if err := json.Unmarshal(rawMessage, &lunarMsg); err != nil {
 		logger.Error("解析 lunar 消息失败: %v", err)
 		return
 	}
 
 	switch lunarMsg.Type {
-	case "batch":
-		handleLunarBatchMessage(lunarMsg.Data)
 	case "context":
 		handleLunarContextMessage(lunarMsg.Data)
 	case "image":
@@ -60,76 +62,8 @@ func HandleLunarMessage(message []byte) {
 	}
 }
 
-// handleLunarBatchMessage 处理来自 lunar_astral 的批量消息推送（单次最多20条）。
-// 每条消息独立调用AI路由判定目标群组，然后逐条分发。
-func handleLunarBatchMessage(data json.RawMessage) {
-	var batchPush types.LunarBatchPush
-	if err := json.Unmarshal(data, &batchPush); err != nil {
-		// 可能 data 就是 messages 数组本身
-		var messages []types.LunarBatchItem
-		if err2 := json.Unmarshal(data, &messages); err2 != nil {
-			logger.Error("解析 lunar 批量消息失败: %v", err)
-			return
-		}
-		batchPush.Messages = messages
-	}
-
-	if len(batchPush.Messages) == 0 {
-		logger.Warn("收到空的批量消息推送")
-		return
-	}
-
-	logger.Info("收到批量消息推送，共 %d 条消息", len(batchPush.Messages))
-
-	availableGroups := config.AppConfig.QQAdapter.ListenGroupIds
-	if len(availableGroups) == 0 {
-		logger.Error("没有可用的群组 ID")
-		return
-	}
-
-	// 收集所有文本内容用于AI路由分析
-	messages := make([]string, 0, len(batchPush.Messages))
-	for _, item := range batchPush.Messages {
-		messages = append(messages, item.Content)
-	}
-
-	// 批量调用AI路由判定
-	routingResults, routingErrs := routing.AnalyzeBatchMessages(messages, availableGroups)
-
-	for i, item := range batchPush.Messages {
-		var targetGroups []int64
-		if routingErrs[i] != nil {
-			// AI路由失败，回退到默认路由
-			logger.Warn("第 %d/%d 条消息AI路由失败，使用默认路由: %v", i+1, len(batchPush.Messages), routingErrs[i])
-			targetGroups = getDefaultRouteGroups(item.MsgType)
-		} else {
-			targetGroups = routingResults[i]
-		}
-
-		if len(targetGroups) == 0 {
-			logger.Warn("第 %d/%d 条消息没有目标群组，跳过", i+1, len(batchPush.Messages))
-			continue
-		}
-
-		logger.Info("批量消息 [%d/%d] 分发到群组 %v (类型=%s)", i+1, len(batchPush.Messages), targetGroups, item.MsgType)
-
-		switch item.MsgType {
-		case "image":
-			if len(item.Images) > 0 {
-				for _, groupID := range targetGroups {
-					if err := napcat.SendGroupImageMessage(groupID, item.Images); err != nil {
-						logger.Error("发送群图片消息失败 (群 %d): %v", groupID, err)
-					}
-				}
-			}
-		default:
-			sendSplitTextMessages(targetGroups, item.Content)
-		}
-	}
-
-	logger.Info("批量消息推送处理完成，共 %d 条", len(batchPush.Messages))
-}
-
+// handleLunarContextMessage 处理文本类型的响应消息。
+// response/active/context/image 仅作为类型参考，所有消息均走AI路由判定。
 func handleLunarContextMessage(data json.RawMessage) {
 	var contextData types.LunarContextData
 	if err := json.Unmarshal(data, &contextData); err != nil {
@@ -137,17 +71,29 @@ func handleLunarContextMessage(data json.RawMessage) {
 		return
 	}
 
+	// 拦截 music 类型消息，禁止推送给群聊
+	if contextData.Type == "music" {
+		logger.Info("music类型消息已拦截，跳过推送")
+		return
+	}
+
 	availableGroups := config.AppConfig.QQAdapter.ListenGroupIds
 	if len(availableGroups) == 0 {
 		logger.Error("没有可用的群组 ID")
 		return
 	}
 
-	// 尝试AI路由判定
-	targetGroups, err := routing.AnalyzeMessageRoute(contextData.Content, availableGroups)
+	// 构建路由上下文 — MsgType 仅作为参考信息传入
+	routeCtx := routing.RouteContext{
+		SourceGroupID:   config.LastGroupID,
+		AvailableGroups: availableGroups,
+		MsgType:         contextData.Type,
+	}
+
+	// 调用AI路由判定（基于消息内容 + 群聊摘要上下文）
+	targetGroups, err := routing.AnalyzeMessageRoute(contextData.Content, routeCtx)
 	if err != nil {
-		logger.Warn("AI路由失败，使用默认路由策略: %v", err)
-		// 回退到原有的默认路由逻辑
+		logger.Warn("AI路由失败，使用默认路由策略 (类型=%s): %v", contextData.Type, err)
 		targetGroups = getDefaultRouteGroups(contextData.Type)
 	}
 
@@ -156,10 +102,12 @@ func handleLunarContextMessage(data json.RawMessage) {
 		return
 	}
 
-	logger.Info("AI路由判定: 消息类型=%s, 目标群组=%v", contextData.Type, targetGroups)
+	logger.Info("路由判定: 消息类型=%s, 目标群组=%v", contextData.Type, targetGroups)
 	sendSplitTextMessages(targetGroups, contextData.Content)
 }
 
+// handleLunarImageMessage 处理图片类型的响应消息。
+// 图片消息同样走AI路由，image类型仅作为参考。
 func handleLunarImageMessage(data json.RawMessage) {
 	var imageData types.LunarImageData
 	if err := json.Unmarshal(data, &imageData); err != nil {
@@ -173,8 +121,16 @@ func handleLunarImageMessage(data json.RawMessage) {
 		return
 	}
 
-	// 图片消息：尝试AI路由（基于图片类型描述），失败则使用LastGroupID
-	targetGroups, err := routing.AnalyzeMessageRoute("[图片消息] 类型: "+imageData.Type, availableGroups)
+	// 图片消息也走AI路由，MsgType 仅作参考
+	routeCtx := routing.RouteContext{
+		SourceGroupID:   config.LastGroupID,
+		AvailableGroups: availableGroups,
+		MsgType:         "image",
+	}
+
+	// 使用图片类型信息作为路由分析内容
+	routeContent := "[图片消息] 类型: " + imageData.Type
+	targetGroups, err := routing.AnalyzeMessageRoute(routeContent, routeCtx)
 	if err != nil {
 		logger.Warn("图片消息AI路由失败，使用默认路由: %v", err)
 		if config.LastGroupID == 0 {
@@ -187,7 +143,7 @@ func handleLunarImageMessage(data json.RawMessage) {
 		targetGroups = []int64{config.LastGroupID}
 	}
 
-	logger.Info("图片消息AI路由: 目标群组=%v", targetGroups)
+	logger.Info("图片消息路由: 目标群组=%v", targetGroups)
 
 	for _, groupID := range targetGroups {
 		if err := napcat.SendGroupImageMessage(groupID, imageData.Images); err != nil {
@@ -196,25 +152,20 @@ func handleLunarImageMessage(data json.RawMessage) {
 	}
 }
 
-// getDefaultRouteGroups 默认路由策略：根据消息类型返回目标群组。
-// 当AI路由不可用或失败时作为回退方案。
+// getDefaultRouteGroups 默认路由策略：AI路由失败时的回退方案。
+// response → 来源群, active → 全部群, 其他 → 来源群或首个监听群
 func getDefaultRouteGroups(msgType string) []int64 {
 	availableGroups := config.AppConfig.QQAdapter.ListenGroupIds
 
 	switch msgType {
-	case "response":
-		if config.LastGroupID == 0 {
-			logger.Warn("没有记录的群聊 ID，使用随机群聊")
-			config.LastGroupID = config.GetRandomGroupID()
-		}
-		if config.LastGroupID == 0 {
-			logger.Error("没有可用的群组 ID")
-			return nil
-		}
-		return []int64{config.LastGroupID}
 	case "active":
+		// active 类型传统上是广播，作为回退行为保留
 		return availableGroups
 	default:
+		// response/context 等类型默认回源群
+		if config.LastGroupID != 0 {
+			return []int64{config.LastGroupID}
+		}
 		groupID := config.GetRandomGroupID()
 		if groupID == 0 {
 			return nil
@@ -224,7 +175,6 @@ func getDefaultRouteGroups(msgType string) []int64 {
 }
 
 // sendSplitTextMessages 将文本内容按句末标点拆分，然后在后台协程中逐条推送到指定群组。
-// 推送间隔 = 500ms + len(part) * 10ms，上限 2000ms，消息越长等待越久，确保顺序发送。
 func sendSplitTextMessages(groupIDs []int64, content string) {
 	if len(groupIDs) == 0 {
 		logger.Warn("没有可用的群组 ID，跳过消息发送")
@@ -236,7 +186,6 @@ func sendSplitTextMessages(groupIDs []int64, content string) {
 		return
 	}
 
-	// 只有一条消息，直接同步发送
 	if len(parts) == 1 {
 		for _, groupID := range groupIDs {
 			if err := napcat.SendGroupTextMessage(groupID, parts[0]); err != nil {
@@ -246,9 +195,8 @@ func sendSplitTextMessages(groupIDs []int64, content string) {
 		return
 	}
 
-	logger.Info("消息已拆分为 %d 条，将逐条发送 (间隔 500ms~2000ms，随消息长度递增)", len(parts))
+	logger.Info("消息已拆分为 %d 条，将逐条发送 (间隔 500ms~2000ms)", len(parts))
 
-	// 在后台协程中逐条发送，避免阻塞 WebSocket 读取
 	go func() {
 		for i, part := range parts {
 			for _, groupID := range groupIDs {
@@ -256,7 +204,6 @@ func sendSplitTextMessages(groupIDs []int64, content string) {
 					logger.Error("发送群文本消息失败 (群 %d, 第 %d/%d 条): %v", groupID, i+1, len(parts), err)
 				}
 			}
-			// 最后一条不需要等待
 			if i < len(parts)-1 {
 				delay := 500 + min(len(part)*10, 1500)
 				time.Sleep(time.Duration(delay) * time.Millisecond)

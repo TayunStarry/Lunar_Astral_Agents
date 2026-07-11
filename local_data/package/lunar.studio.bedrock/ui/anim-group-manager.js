@@ -523,7 +523,7 @@ export class AnimGroupManager {
         try {
             const config = this.runtime.exportConfig();
             const json = JSON.stringify(config, null, 2);
-            const relativePath = 'package/bedrock_render_engine/model/anim_group_config.json';
+            const relativePath = 'package/lunar.studio.bedrock/model/anim_group_config.json';
             const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
             const resp = await fetch('/file/write', {
                 method: 'POST',

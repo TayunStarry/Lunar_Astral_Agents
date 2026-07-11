@@ -18,7 +18,7 @@ export class GeometryLoader {
 
         // 版本兼容性检查（参考 bbmodel.js:processHeader）
         if (json.meta?.format_version && parseFloat(json.meta.format_version) > 5.0) {
-            console.warn(`[bedrock_render_engine] .bbmodel format_version ${json.meta.format_version} 高于支持的 5.0，可能存在兼容性问题`);
+            console.warn(`[lunar.studio.bedrock] .bbmodel format_version ${json.meta.format_version} 高于支持的 5.0，可能存在兼容性问题`);
         }
 
         // 元信息提取

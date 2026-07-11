@@ -89,9 +89,9 @@ class ConfigModifier extends PromptProcessor {
 	/** 写入上下文（自动剥离 reasoning_content，避免回传触发模型无限推理） */
 	public writeContext(context: PostMessage): this {
 		const cleaned = this.stripReasoningContent(context);
-		if (this.messages.length >= 20) {
-			const discarded = this.messages.slice(0, this.messages.length - 19);
-			this.messages = this.messages.slice(-19).concat(cleaned);
+		if (this.messages.length >= 40) {
+			const discarded = this.messages.slice(0, this.messages.length - 39);
+			this.messages = this.messages.slice(-39).concat(cleaned);
 			OnlyData.unreadRecords.push(...discarded);
 		}
 		else this.messages.push(cleaned);

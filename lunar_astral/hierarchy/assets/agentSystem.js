@@ -515,9 +515,9 @@ var agentSystem = (function (exports) {
         }
         writeContext(context) {
             const cleaned = this.stripReasoningContent(context);
-            if (this.messages.length >= 20) {
-                const discarded = this.messages.slice(0, this.messages.length - 19);
-                this.messages = this.messages.slice(-19).concat(cleaned);
+            if (this.messages.length >= 40) {
+                const discarded = this.messages.slice(0, this.messages.length - 39);
+                this.messages = this.messages.slice(-39).concat(cleaned);
                 OnlyData.unreadRecords.push(...discarded);
             }
             else
@@ -2235,9 +2235,8 @@ ${existingRecords}
                         throw new Error('消息响应为空');
                     else
                         this.errorCount = 0;
-                    if (OnlyData.unreadRecords.length > 10) {
-                        setTimeout(() => this.organizeRole.organizeHistoricalRecords(), 0);
-                    }
+                    if (OnlyData.unreadRecords.length > 30)
+                        this.organizeRole.organizeHistoricalRecords();
                     const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
                     if (!textChunks.length)
                         throw new Error('清洗后的文本为空');

@@ -1,4 +1,4 @@
-// ==== app.js — bedrock_render_engine 主入口 ====
+// ==== app.js — lunar.studio.bedrock 主入口 ====
 //
 // 架构（重构后）：
 //   - 资源导入：统一"导入资源"按钮 + 拖拽，FileLoader 智能分类
@@ -188,7 +188,7 @@ class App {
         // 13. 自动加载 model 文件夹资源
         await this._autoLoadResources();
 
-        console.log('[bedrock_render_engine] 初始化完成（动画组架构）');
+        console.log('[lunar.studio.bedrock] 初始化完成（动画组架构）');
     }
 
     // ==== 自动加载 ====
@@ -199,7 +199,7 @@ class App {
      * @private
      */
     async _autoLoadResources() {
-        const baseURL = '/file/read/package/bedrock_render_engine/model/';
+        const baseURL = '/file/read/package/lunar.studio.bedrock/model/';
         try {
             this.setStatusMode('自动加载中...');
 
@@ -297,7 +297,7 @@ class App {
      * @private
      */
     async _tryLoadSavedConfig() {
-        const baseURL = '/file/read/package/bedrock_render_engine/model/';
+        const baseURL = '/file/read/package/lunar.studio.bedrock/model/';
         try {
             const resp = await fetch(baseURL + 'anim_group_config.json');
             if (!resp.ok) return;

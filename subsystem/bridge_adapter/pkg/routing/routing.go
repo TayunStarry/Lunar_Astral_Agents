@@ -1,5 +1,7 @@
 package routing
 
+// AI 路由引擎：基于群聊摘要 + 消息内容智能判定推送目标
+
 import (
 	"bytes"
 	"encoding/json"
@@ -9,39 +11,28 @@ import (
 	"strings"
 	"time"
 
+	"bridge_adapter/pkg/cache"
 	"bridge_adapter/pkg/config"
 	"bridge_adapter/pkg/logger"
 	"bridge_adapter/pkg/types"
 )
 
-// aiHTTPClient 专用于AI路由调用的HTTP客户端，超时时间较长以等待AI推理
-var aiHTTPClient = &http.Client{Timeout: time.Duration(config.DefaultAIAPITimeout) * time.Second}
-
-// routingSystemPrompt 构建AI路由的系统提示词
-func routingSystemPrompt(availableGroups []int64) string {
-	var sb strings.Builder
-	sb.WriteString("你是一个消息路由助手。根据消息内容，智能判断应该发送到哪些QQ群聊。\n\n")
-	sb.WriteString("可用群聊列表：\n")
-	for _, gid := range availableGroups {
-		sb.WriteString(fmt.Sprintf("- 群ID: %d\n", gid))
-	}
-	sb.WriteString("\n规则：\n")
-	sb.WriteString("1. 分析消息内容，判断其适合发送到哪个或哪些群\n")
-	sb.WriteString("2. 如果消息内容有明确的群聊指向性，只返回相关群ID\n")
-	sb.WriteString("3. 如果是通用消息（如公告、广播），返回所有群ID\n")
-	sb.WriteString("4. 返回一个JSON对象，格式为 {\"group_ids\": [群ID数组]}\n")
-	sb.WriteString("5. 只返回JSON，不要包含任何其他文字或解释\n")
-	return sb.String()
+// RouteContext 路由上下文，包含来源群聊、可用群列表、消息类型
+type RouteContext struct {
+	SourceGroupID   int64   // 消息来源群聊ID
+	AvailableGroups []int64 // 所有可用的群聊ID列表
+	MsgType         string  // 消息类型：response/active/context/image（仅作类型参考）
 }
 
 // AnalyzeMessageRoute 调用AI分析消息内容，返回应推送的目标群聊ID列表。
+// 所有消息类型均通过AI路由判定，response/active/context/image仅作为类型参考传入。
 // 如果AI路由未启用或调用失败，返回 nil 和 error，调用方应回退到默认路由。
-func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int64, error) {
+func AnalyzeMessageRoute(messageContent string, ctx RouteContext) ([]int64, error) {
 	if !config.GetAIRoutingEnabled() {
 		return nil, fmt.Errorf("AI路由未启用")
 	}
 
-	if len(availableGroups) == 0 {
+	if len(ctx.AvailableGroups) == 0 {
 		return nil, fmt.Errorf("没有可用的群组")
 	}
 
@@ -55,7 +46,7 @@ func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int6
 	reqBody := types.ChatCompletionRequest{
 		Model: model,
 		Messages: []types.ChatCompletionMessage{
-			{Role: "system", Content: routingSystemPrompt(availableGroups)},
+			{Role: "system", Content: buildRoutingPrompt(ctx)},
 			{Role: "user", Content: messageContent},
 		},
 	}
@@ -66,8 +57,8 @@ func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int6
 		return nil, err
 	}
 
-	logger.Info("AI路由: 正在调用 %s 分析消息 (长度=%d字符, 可用群组=%d个)",
-		apiURL, len(messageContent), len(availableGroups))
+	logger.Info("AI路由: 正在调用 %s 分析消息 (类型=%s, 来源群=%d, 长度=%d字符, 可用群组=%d个)",
+		apiURL, ctx.MsgType, ctx.SourceGroupID, len(messageContent), len(ctx.AvailableGroups))
 
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -78,7 +69,7 @@ func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int6
 	req.Header.Set("Content-Type", "application/json")
 
 	startTime := time.Now()
-	resp, err := aiHTTPClient.Do(req)
+	resp, err := AIHTTPClient.Do(req)
 	elapsed := time.Since(startTime)
 
 	if err != nil {
@@ -112,8 +103,7 @@ func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int6
 	aiContent := chatResp.Choices[0].Message.Content
 	logger.Info("AI路由: 收到响应 (耗时=%v): %s", elapsed, aiContent)
 
-	// 尝试从AI响应中提取JSON
-	groupIDs, err := parseAIRoutingResponse(aiContent, availableGroups)
+	groupIDs, err := parseAIRoutingResponse(aiContent, ctx.AvailableGroups)
 	if err != nil {
 		logger.Error("AI路由: 解析路由判定失败: %v", err)
 		return nil, err
@@ -123,16 +113,52 @@ func AnalyzeMessageRoute(messageContent string, availableGroups []int64) ([]int6
 	return groupIDs, nil
 }
 
-// parseAIRoutingResponse 从AI的文本响应中提取群组ID列表。
-// AI可能返回纯JSON，也可能在JSON外包裹了其他文字，需要智能提取。
+// buildRoutingPrompt 构建AI路由的系统提示词。
+// 核心设计：将所有群聊的摘要作为上下文提供给AI，让它基于内容相关性和话题匹配进行路由判定。
+func buildRoutingPrompt(ctx RouteContext) string {
+	allSummaries := cache.GetAllSummaries()
+
+	var sb strings.Builder
+	sb.WriteString("你是一个QQ群消息路由助手。你需要判断AI的回复消息应该发送到哪个或哪些群聊。\n\n")
+
+	// 列出所有可用群聊及其摘要
+	sb.WriteString("## 可用群聊及近期对话摘要\n")
+	for _, gid := range ctx.AvailableGroups {
+		marker := ""
+		if gid == ctx.SourceGroupID {
+			marker = " ← 消息来源群（用户在此群发起对话）"
+		}
+		sb.WriteString(fmt.Sprintf("\n### 群ID: %d%s\n", gid, marker))
+
+		summaries, hasSummaries := allSummaries[gid]
+		if hasSummaries && len(summaries) > 0 {
+			sb.WriteString("近期对话摘要：\n")
+			for i, s := range summaries {
+				sb.WriteString(fmt.Sprintf("%d. [关键词:%s] %s\n", i+1, s.Keyword, s.Content))
+			}
+		} else {
+			sb.WriteString("(暂无近期对话记录)\n")
+		}
+	}
+
+	sb.WriteString("\n## 路由规则\n")
+	sb.WriteString("1. **默认行为**：AI回复应仅发送到消息来源群（即发起对话的那个群），除非有明确理由需要扩散\n")
+	sb.WriteString("2. **内容匹配**：如果回复内容与某个非来源群的近期对话话题高度相关，可额外发送到该群\n")
+	sb.WriteString("3. **跨群扩散**：仅当消息内容明显涉及所有群聊都应知晓的信息时（如全局公告、紧急通知），才发送到多个群\n")
+	sb.WriteString("4. **保守原则**：拿不准时，宁可少发不要多发。错误扩散比遗漏更糟糕\n")
+	sb.WriteString("5. 返回格式：{\"group_ids\": [群ID数组]}\n")
+	sb.WriteString("6. 只返回JSON，不要包含任何其他文字或解释\n")
+
+	return sb.String()
+}
+
+// parseAIRoutingResponse 从AI的文本响应中提取群组ID列表
 func parseAIRoutingResponse(aiContent string, availableGroups []int64) ([]int64, error) {
-	// 尝试直接解析整个响应
 	var decision types.AIRoutingDecision
 	if err := json.Unmarshal([]byte(aiContent), &decision); err == nil {
 		return validateGroupIDs(decision.GroupIDs, availableGroups)
 	}
 
-	// 尝试提取JSON部分（AI可能在JSON外包裹了文字）
 	jsonStart := strings.Index(aiContent, "{")
 	jsonEnd := strings.LastIndex(aiContent, "}")
 	if jsonStart >= 0 && jsonEnd > jsonStart {
@@ -142,7 +168,6 @@ func parseAIRoutingResponse(aiContent string, availableGroups []int64) ([]int64,
 		}
 	}
 
-	// 尝试提取数组格式 [123, 456]
 	arrStart := strings.Index(aiContent, "[")
 	arrEnd := strings.LastIndex(aiContent, "]")
 	if arrStart >= 0 && arrEnd > arrStart {
@@ -162,7 +187,6 @@ func validateGroupIDs(groupIDs []int64, availableGroups []int64) ([]int64, error
 		return nil, fmt.Errorf("AI返回的群组ID列表为空")
 	}
 
-	// 构建可用群组集合用于快速查找
 	availableSet := make(map[int64]bool)
 	for _, gid := range availableGroups {
 		availableSet[gid] = true
@@ -182,31 +206,4 @@ func validateGroupIDs(groupIDs []int64, availableGroups []int64) ([]int64, error
 	}
 
 	return validIDs, nil
-}
-
-// AnalyzeBatchMessages 批量分析消息并返回每条消息对应的目标群组。
-// 每条消息独立调用AI判定，但通过并发控制避免API过载。
-func AnalyzeBatchMessages(messages []string, availableGroups []int64) ([][]int64, []error) {
-	results := make([][]int64, len(messages))
-	errs := make([]error, len(messages))
-
-	if !config.GetAIRoutingEnabled() {
-		for i := range messages {
-			errs[i] = fmt.Errorf("AI路由未启用")
-		}
-		return results, errs
-	}
-
-	// 逐条分析（保持顺序，避免并发过多导致API过载）
-	for i, msg := range messages {
-		groupIDs, err := AnalyzeMessageRoute(msg, availableGroups)
-		if err != nil {
-			errs[i] = err
-			logger.Warn("AI路由: 第 %d/%d 条消息路由分析失败: %v", i+1, len(messages), err)
-		} else {
-			results[i] = groupIDs
-		}
-	}
-
-	return results, errs
 }

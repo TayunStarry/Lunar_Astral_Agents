@@ -7,6 +7,8 @@ import (
 	"strconv"
 )
 
+// ==================== 配置类型 ====================
+
 type Config struct {
 	QQAdapter QQAdapter `json:"qq_adapter"`
 }
@@ -18,11 +20,11 @@ type QQAdapter struct {
 	LunarCoreUrl     string     `json:"lunar_core_url"`
 	LunarWsServer    string     `json:"lunar_ws_server"`
 	ListenGroupIds   Int64Slice `json:"listen_group_ids"`
-	PollInterval     int        `json:"poll_interval"`
 	TriggerKeywords  []string   `json:"trigger_keywords"`
-	DefaultReply     string     `json:"default_reply"`
 	AIRoutingEnabled bool       `json:"ai_routing_enabled"`
 	AIRoutingModel   string     `json:"ai_routing_model"`
+	MaxGroupCache    int        `json:"max_group_cache"`
+	MaxGroupSummary  int        `json:"max_group_summary"`
 }
 
 type Int64Slice []int64
@@ -57,6 +59,8 @@ func (s *Int64Slice) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+// ==================== Napcat 消息类型 ====================
 
 type NapcatMessage struct {
 	SelfID      int64            `json:"self_id"`
@@ -111,6 +115,45 @@ type FileData struct {
 	URL      string `json:"url"`
 }
 
+type NapcatWSResponse struct {
+	Status  string          `json:"status"`
+	Retcode int             `json:"retcode"`
+	Data    json.RawMessage `json:"data"`
+	Message string          `json:"message"`
+	Wording string          `json:"wording"`
+	Echo    string          `json:"echo"`
+	Stream  string          `json:"stream"`
+}
+
+type ForwardMessageResponse struct {
+	Messages []NapcatMessage `json:"messages"`
+}
+
+// ==================== 缓存类型 ====================
+
+// CachedMessage 单条缓存消息
+type CachedMessage struct {
+	GroupID   int64       // 来源群号
+	UserID    int64       // 发送者ID
+	Content   interface{} // string 或 []map[string]interface{}
+	HasImages bool        // 是否包含图片
+}
+
+// GroupCache 按群号分组的消息缓存
+type GroupCache struct {
+	GroupID  int64
+	Messages []CachedMessage
+}
+
+// SummaryEntry 单条摘要记录
+type SummaryEntry struct {
+	TriggerUser string // 触发关键词的用户名
+	Keyword     string // 触发的关键词
+	Content     string // 摘要文本
+}
+
+// ==================== Lunar 消息类型 ====================
+
 type LunarMessage struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
@@ -126,6 +169,8 @@ type LunarImageData struct {
 	Images []string `json:"images"`
 }
 
+// ==================== OpenAI 兼容 API 类型 ====================
+
 type OpenAIMessage struct {
 	Role    string      `json:"role"`
 	Content interface{} `json:"content"`
@@ -135,65 +180,27 @@ type BatchMessageRequest struct {
 	Messages []OpenAIMessage `json:"messages"`
 }
 
-type NapcatWSResponse struct {
-	Status  string          `json:"status"`
-	Retcode int             `json:"retcode"`
-	Data    json.RawMessage `json:"data"`
-	Message string          `json:"message"`
-	Wording string          `json:"wording"`
-	Echo    string          `json:"echo"`
-	Stream  string          `json:"stream"`
-}
-
-type ForwardMessageResponse struct {
-	Messages []NapcatMessage `json:"messages"`
-}
-
-type CachedMessage struct {
-	GroupID   int64
-	UserID    int64
-	Content   interface{}
-	HasImages bool
-}
-
-// ==================== AI 路由相关类型 ====================
-
-// ChatCompletionRequest OpenAI 兼容的聊天补全请求
 type ChatCompletionRequest struct {
 	Model    string                  `json:"model"`
 	Messages []ChatCompletionMessage `json:"messages"`
 }
 
-// ChatCompletionMessage 聊天消息
 type ChatCompletionMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// ChatCompletionResponse OpenAI 兼容的聊天补全响应
 type ChatCompletionResponse struct {
 	Choices []ChatCompletionChoice `json:"choices"`
 }
 
-// ChatCompletionChoice 聊天补全选项
 type ChatCompletionChoice struct {
 	Message ChatCompletionMessage `json:"message"`
 }
 
-// AIRoutingDecision AI 路由判定结果（JSON 反序列化）
+// ==================== AI 路由类型 ====================
+
+// AIRoutingDecision AI 路由判定结果
 type AIRoutingDecision struct {
 	GroupIDs []int64 `json:"group_ids"`
-}
-
-// LunarBatchPush 来自 lunar_astral 的批量消息推送结构
-type LunarBatchPush struct {
-	Type     string           `json:"type"`
-	Messages []LunarBatchItem `json:"messages"`
-}
-
-// LunarBatchItem 批量推送中的单条消息
-type LunarBatchItem struct {
-	MsgType string   `json:"msg_type"`         // "context" 或 "image"
-	Content string   `json:"content"`          // 文本内容
-	Images  []string `json:"images,omitempty"` // 图片base64列表
 }
