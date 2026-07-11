@@ -1133,12 +1133,13 @@ var agentSystem = (function (exports) {
     }
 
     class MusicianRole extends CreativeRoleBase {
+        MAX_ITERATIONS = 5;
         musicTool = [
             {
                 type: "function",
                 function: {
                     name: "compose_music",
-                    description: "创作音乐作品并生成ABC记谱法格式的乐谱。ABC记谱法是一种基于文本的音乐记谱格式，使用字母表示音符。请务必生成完整的、可直接播放的ABC乐谱，确保音符时值、小节线和调号正确。",
+                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，后端将通过SoundFont专业音色库渲染为真实乐器音色的音频。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
                     parameters: {
                         type: "object",
                         properties: {
@@ -1148,15 +1149,15 @@ var agentSystem = (function (exports) {
                             },
                             "instruments": {
                                 type: "string",
-                                description: "使用的乐器列表，多个乐器用逗号分隔，如'钢琴,小提琴'"
+                                description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'等。"
                             },
                             "tempo": {
                                 type: "number",
-                                description: "演奏速度（BPM），默认120"
+                                description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
                             },
                             "structure": {
                                 type: "string",
-                                description: "音乐段落结构描述，例如：'前奏(4小节)-主旋律(8小节)-副歌(8小节)-尾声(4小节)'"
+                                description: "音乐段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
                             },
                             "key": {
                                 type: "string",
@@ -1168,29 +1169,73 @@ var agentSystem = (function (exports) {
                             },
                             "abc_notation": {
                                 type: "string",
-                                description: `ABC记谱法格式的完整乐谱。必须严格遵循ABC记谱法规范：
+                                description: `ABC记谱法格式的完整乐谱。后端使用FluidSynth+SoundFont渲染真实乐器音色，GM标准乐器编号确保音色正确。
 
-标题行格式:
+=== 基础格式 ===
 X:1
 T:作品标题
 M:拍号
-L:默认音符时值(如 1/8 表示八分音符)
-Q:速度标记(如 1/4=120)
+L:默认音符时值(如 1/8)
+Q:速度标记(如 1/4=100)
 K:调号
 
-音符与音高: 使用CDEFGAB表示音名，小写字母表示高八度，后面跟逗号表示低八度(如 C, D, E,)。升半音用^前缀(如 ^C)，降半音用_前缀(如 _B)。
-时值: 数字后缀表示时值倍数，如 C2 表示两倍时值的C音，C/2 表示一半时值。
-小节线: | 分隔小节，|| 表示双小节线，|] 表示结束。
-休止符: z 表示休止符，时值规则同音符。
+=== 音符规则 ===
+音名: C D E F G A B（大写=中低音区, 小写cdefgab=高八度, 加逗号=低八度如C,D,）
+升降号: ^升半音(如^C)  _降半音(如_B)
+时值: 数字后缀=倍数(C2=两倍)  /数字=分数(C/2=一半)
+小节线: | 分隔  || 双线  |] 结束
+休止符: z
 
-示例:
+=== 和弦伴奏（核心要求！必须包含！） ===
+和弦用方括号包裹同时发音的音符，如 [CEG] 表示C大三和弦同时演奏。
+和弦必须贯穿全曲，形成完整的伴奏织体：
+
+1. 柱式和弦: [C,,E,,G,,]2 [C,,E,,G,,]2 | [F,,A,,C,]2 [G,,B,,D,]2 |
+2. 分解和弦(琶音): C,,2 E,2 G,2 c2 | F,,2 A,2 C2 f2 |
+3. 阿尔贝蒂低音: C,2 G,2 E,2 G,2 | F,2 C2 A,2 C2 |
+
+=== 多声部记谱（多乐器时必须使用） ===
+[V:1] = 第一个乐器（通常是旋律声部）
+[V:2] = 第二个乐器（通常是和弦伴奏/低音声部）
+各声部小节对齐、同步演奏。
+
+=== 表情记号（使音乐富有表现力！） ===
+力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
+运音法: .断奏 >重音 -保持
+
+=== GM乐器编号（通过 %%prog 声部 程序号 指定） ===
+钢琴0  竖琴46  吉他24  大提琴42  小提琴40
+长笛73  单簧管71  双簧管68  小号56  合成器80
+示例: %%prog 1 0  %%prog 2 42
+
+=== 完整示例：钢琴独奏（含和弦伴奏） ===
+%%prog 1 0
 X:1
-T:月光小夜曲
+T:晨光曲
 M:4/4
 L:1/8
-Q:1/4=100
+Q:1/4=90
 K:C
-C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
+!mp! [V:1] c2 e2 g2 e2 | f2 a2 g2 e2 | d2 f2 e2 d2 | c4 z4 |
+!mf! [V:2] [C,,E,,G,,]4 | [F,,A,,C,]4 | [G,,B,,D,]4 | [C,,E,,G,,]4 |
+
+=== 完整示例：钢琴+大提琴二重奏 ===
+%%prog 1 0
+%%prog 2 42
+X:1
+T:夜色温柔
+M:4/4
+L:1/8
+Q:1/4=80
+K:Am
+!mp! [V:1] e2 a2 c'2 a2 | d2 f2 e2 d2 | c2 e2 d2 ^c2 | A4 z4 |
+!p!   [V:2] [A,,2E,2A,2]2 | [D,,2A,,2D,2]2 | [E,,2B,,2E,2]2 | [A,,,2E,,2A,,2]2 |
+
+关键原则:
+- 必须包含和弦伴奏，不可只有单音旋律线
+- 左手/第二声部使用和弦或分解和弦提供和声支撑
+- 合理使用力度变化（开头mp、高潮f、结尾p）
+- 旋律要有乐句呼吸感（每4-8小节一个乐句，句末用稍长时值或休止）`
                             }
                         },
                         required: [
@@ -1299,31 +1344,25 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
                 if (!abcNotation.trim()) {
                     return '音乐创作失败：ABC记谱法乐谱为空';
                 }
-                const enrichedAbc = this.injectInstrumentDirective(abcNotation, instruments);
+                let enrichedAbc = this.injectInstrumentDirective(abcNotation, instruments);
                 const hasX = /^X:\s*\d+/m.test(enrichedAbc);
                 const hasT = /^T:\s*.+/m.test(enrichedAbc);
                 const hasK = /^K:\s*.+/m.test(enrichedAbc);
                 if (!hasX || !hasK) {
                     console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
-                    let fixedAbc = enrichedAbc;
                     if (!hasX)
-                        fixedAbc = 'X:1\n' + fixedAbc;
+                        enrichedAbc = 'X:1\n' + enrichedAbc;
                     if (!hasT)
-                        fixedAbc = fixedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
+                        enrichedAbc = enrichedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
                     if (!hasK)
-                        fixedAbc = fixedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
-                    const pushSuccess = pushContext('music', fixedAbc, '');
-                    if (!pushSuccess) {
-                        console.warn('[音乐家] 推送乐谱到前端失败');
-                    }
-                    return `音乐作品"${title}"创作成功（已自动补全格式）。乐谱已推送到前端进行渲染播放。`;
+                        enrichedAbc = enrichedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
                 }
                 const pushSuccess = pushContext('music', enrichedAbc, '');
                 if (!pushSuccess) {
                     console.warn('[音乐家] 推送乐谱到前端失败');
                 }
-                console.log(`[音乐家] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}`);
-                return `音乐作品"${title}"创作成功。乐谱已推送到前端进行渲染播放。`;
+                console.log(`[音乐家] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
+                return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，音频正在通过 SoundFont 专业音色库渲染，稍后将自动播放。`;
             }
             catch (error) {
                 console.error('[音乐家] 音乐创作处理异常:', error);
@@ -1333,17 +1372,36 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
         injectInstrumentDirective(abcNotation, instruments) {
             if (!instruments)
                 return abcNotation;
-            const cleaned = instruments
+            const list = instruments
                 .replace(/，/g, ',')
                 .split(',')
                 .map(s => s.trim())
-                .filter(Boolean)
-                .join(',');
-            if (!cleaned)
+                .filter(Boolean);
+            if (list.length === 0)
                 return abcNotation;
-            if (/^%%instrument/m.test(abcNotation))
+            if (/^%%(?:voice|prog)\s+/m.test(abcNotation))
                 return abcNotation;
-            const directive = `%%instrument ${cleaned}\n`;
+            const gmPrograms = {
+                '钢琴': 0, 'piano': 0,
+                '竖琴': 46, 'harp': 46,
+                '吉他': 24, 'guitar': 24,
+                '大提琴': 42, 'cello': 42,
+                '小提琴': 40, 'violin': 40,
+                '长笛': 73, 'flute': 73,
+                '单簧管': 71, 'clarinet': 71,
+                '双簧管': 68, 'oboe': 68,
+                '小号': 56, 'trumpet': 56,
+                '合成器': 80, 'synth': 80,
+            };
+            const directives = [];
+            for (let i = 0; i < list.length; i++) {
+                const inst = list[i];
+                const voiceNum = i + 1;
+                const prog = gmPrograms[inst.toLowerCase()] ?? gmPrograms[inst] ?? 0;
+                directives.push(`%%prog ${voiceNum} ${prog}`);
+                directives.push(`%%voice ${voiceNum} ${inst}`);
+            }
+            const directive = directives.join('\n') + '\n';
             const xMatch = abcNotation.match(/^X:\s*\d+/m);
             if (xMatch && xMatch.index !== undefined) {
                 const before = abcNotation.substring(0, xMatch.index);
@@ -1631,6 +1689,15 @@ C2 E2 G2 c'2 | e'2 d'2 c'2 G2 | E2 C2 D2 E2 | C8 |]`
                 if (err) {
                     console.error('[研究者] 网络检索初始化失败:', err);
                     return false;
+                }
+                try {
+                    const downloadDir = 'local_data/downloads';
+                    const groupID = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                    webSearchSetDownloadFunc(downloadDir, groupID);
+                    console.log(`[研究者] 下载目录已配置: ${downloadDir}/${groupID}`);
+                }
+                catch (dlErr) {
+                    console.warn('[研究者] 设置下载回调失败，链接处理中的下载链接将降级:', dlErr);
                 }
                 this.webSearchInitialized = true;
                 console.log('[研究者] 网络检索子系统初始化成功');
@@ -2023,8 +2090,6 @@ ${existingRecords}
     }
 
     class AgentDefine {
-        queryKeywords = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
-        emotionManager = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
@@ -2215,8 +2280,6 @@ ${existingRecords}
             }
         }
         resetAgentState() {
-            this.queryKeywords.coverContext([]);
-            this.emotionManager.coverContext([]);
             this.summaryRole.coverContext([]);
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);

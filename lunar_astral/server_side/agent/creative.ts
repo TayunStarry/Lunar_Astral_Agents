@@ -17,8 +17,8 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	protected readonly DIALOGUE_HISTORY_LIMIT = 15;
 	/** 自身历史读取条数 */
 	protected readonly OWN_HISTORY_LIMIT = 5;
-	/** 最大推理迭代次数 */
-	protected readonly MAX_ITERATIONS = 3;
+	/** 最大推理迭代次数（子类可覆写） */
+	protected MAX_ITERATIONS = 3;
 	/** 未读消息检查条数 */
 	protected readonly UNREAD_CHECK_COUNT = 10;
 

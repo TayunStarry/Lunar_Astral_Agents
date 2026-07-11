@@ -221,11 +221,8 @@ TTS 底层由 [Qwen3-TTS 独立引擎](../subsystem/qwen3_tts_lunar/README.md) �
 |------|------|
 | `dialogueRole.md` | 月华角色基础人设与对话风格 |
 | `descriptionRole.md` | 场景/物品描述角色 |
-| `emotionManager.md` | 情绪状态管理 |
-| `imagePrompt.md` | 图像生成提示词扩写 |
 | `organizeRole.md` | 整理角色设定 |
 | `painterRole.md` | 画师角色设定 |
-| `queryKeywords.md` | 搜索关键词提取 |
 | `recorderRole.md` | 对话记录整理角色 |
 | `selfAppearance.md` | 角色外观自我描述 |
 | `summaryRole.md` | 对话摘要整理角色 |

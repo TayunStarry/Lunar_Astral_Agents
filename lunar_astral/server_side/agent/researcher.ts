@@ -385,6 +385,18 @@ export class ResearcherRole extends ModelBuilder {
 				console.error('[研究者] 网络检索初始化失败:', err);
 				return false;
 			}
+
+			// 设置下载回调：下载到 local_data/downloads/{会话ID}/
+			try {
+				const downloadDir = 'local_data/downloads';
+				const groupID = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+				webSearchSetDownloadFunc(downloadDir, groupID);
+				console.log(`[研究者] 下载目录已配置: ${downloadDir}/${groupID}`);
+			}
+			catch (dlErr) {
+				console.warn('[研究者] 设置下载回调失败，链接处理中的下载链接将降级:', dlErr);
+			}
+
 			this.webSearchInitialized = true;
 			console.log('[研究者] 网络检索子系统初始化成功');
 			return true;

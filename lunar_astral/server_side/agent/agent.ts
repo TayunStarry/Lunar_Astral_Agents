@@ -158,8 +158,6 @@ class LunarAgent extends AgentDefine {
 	/** 错误累积达阈值后重置智能体状态 */
 	protected resetAgentState(): void {
 		// 清空全部子智能体的messages
-		this.queryKeywords.coverContext([]);
-		this.emotionManager.coverContext([]);
 		this.summaryRole.coverContext([]);
 		this.descriptionRole.coverContext([]);
 		this.dialogueRole.coverContext([]);

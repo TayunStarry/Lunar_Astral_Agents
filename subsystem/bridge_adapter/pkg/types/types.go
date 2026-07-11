@@ -12,15 +12,17 @@ type Config struct {
 }
 
 type QQAdapter struct {
-	DisplayLogs     bool       `json:"display_logs"`
-	NapcatWsServer  string     `json:"napcat_ws_server"`
-	NapcatWsToken   string     `json:"napcat_ws_token"`
-	LunarCoreUrl    string     `json:"lunar_core_url"`
-	LunarWsServer   string     `json:"lunar_ws_server"`
-	ListenGroupIds  Int64Slice `json:"listen_group_ids"`
-	PollInterval    int        `json:"poll_interval"`
-	TriggerKeywords []string   `json:"trigger_keywords"`
-	DefaultReply    string     `json:"default_reply"`
+	DisplayLogs      bool       `json:"display_logs"`
+	NapcatWsServer   string     `json:"napcat_ws_server"`
+	NapcatWsToken    string     `json:"napcat_ws_token"`
+	LunarCoreUrl     string     `json:"lunar_core_url"`
+	LunarWsServer    string     `json:"lunar_ws_server"`
+	ListenGroupIds   Int64Slice `json:"listen_group_ids"`
+	PollInterval     int        `json:"poll_interval"`
+	TriggerKeywords  []string   `json:"trigger_keywords"`
+	DefaultReply     string     `json:"default_reply"`
+	AIRoutingEnabled bool       `json:"ai_routing_enabled"`
+	AIRoutingModel   string     `json:"ai_routing_model"`
 }
 
 type Int64Slice []int64
@@ -152,4 +154,46 @@ type CachedMessage struct {
 	UserID    int64
 	Content   interface{}
 	HasImages bool
+}
+
+// ==================== AI 路由相关类型 ====================
+
+// ChatCompletionRequest OpenAI 兼容的聊天补全请求
+type ChatCompletionRequest struct {
+	Model    string                  `json:"model"`
+	Messages []ChatCompletionMessage `json:"messages"`
+}
+
+// ChatCompletionMessage 聊天消息
+type ChatCompletionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// ChatCompletionResponse OpenAI 兼容的聊天补全响应
+type ChatCompletionResponse struct {
+	Choices []ChatCompletionChoice `json:"choices"`
+}
+
+// ChatCompletionChoice 聊天补全选项
+type ChatCompletionChoice struct {
+	Message ChatCompletionMessage `json:"message"`
+}
+
+// AIRoutingDecision AI 路由判定结果（JSON 反序列化）
+type AIRoutingDecision struct {
+	GroupIDs []int64 `json:"group_ids"`
+}
+
+// LunarBatchPush 来自 lunar_astral 的批量消息推送结构
+type LunarBatchPush struct {
+	Type     string           `json:"type"`
+	Messages []LunarBatchItem `json:"messages"`
+}
+
+// LunarBatchItem 批量推送中的单条消息
+type LunarBatchItem struct {
+	MsgType string   `json:"msg_type"`         // "context" 或 "image"
+	Content string   `json:"content"`          // 文本内容
+	Images  []string `json:"images,omitempty"` // 图片base64列表
 }

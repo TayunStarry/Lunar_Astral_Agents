@@ -88,4 +88,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/status", Handler: handlers.LTPXStatusHandler, Method: "GET", Description: "查询LTPX工具状态"},
 	// WebView管理接口
 	{Path: "/webview/reopen", Handler: handlers.WebViewReopenHandler, Method: "POST", Description: "重建webView页面"},
+	// 音乐渲染相关接口
+	{Path: "/music/render", Handler: handlers.MusicRenderHandler, Method: "POST", Description: "ABC乐谱渲染为WAV音频"},
+	{Path: "/music/deps", Handler: handlers.MusicDepsHandler, Method: "GET", Description: "音乐渲染依赖状态查询"},
 }

@@ -5,7 +5,7 @@ import { VoiceChat } from './voice.js';
 import { Toast } from './toast.js';
 import { FilePreviewManager } from './file-handler.js';
 import { sendMessages } from './fetch.js';
-import { initMusicRenderer, renderMusicScore } from './music_renderer.js';
+import { initMusicRenderer, renderMusicScore, playRenderedAudio } from './music_renderer.js';
 
 const MAX_HISTORY_MESSAGES = 40;
 
@@ -331,6 +331,17 @@ class LunarCoreApp {
 					const abcNotation = message.data.content || '';
 					if (abcNotation) {
 						renderMusicScore(abcNotation);
+					}
+				}
+				// 后端渲染音频就绪（FluidSynth + SoundFont）
+				if (message.data.type === 'music_audio') {
+					try {
+						const audioData = JSON.parse(message.data.content || '{}');
+						if (audioData.type === 'audio_ready' && audioData.audio_url) {
+							playRenderedAudio(audioData.audio_url, audioData.file_name);
+						}
+					} catch (e) {
+						console.warn('[音乐] 音频数据解析失败:', e);
 					}
 				}
 				break;

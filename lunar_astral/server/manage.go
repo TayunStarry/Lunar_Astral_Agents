@@ -4,12 +4,13 @@ import (
 	"config"
 	"context"
 	image "image/server"
-	"logger"
 	"lunar_astral/adapters"
 	"lunar_astral/hierarchy"
 	"lunar_astral/model/llama"
 	"lunar_astral/release"
+	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
+	"logger"
 	"mime"
 	"net/http"
 	"os"
@@ -43,6 +44,8 @@ func InitializeServer() {
 	initTTSEngine()
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
+	// 注册音乐渲染回调（FluidSynth + SoundFont）
+	adapters.MusicRenderFunc = handlers.RenderMusicInternal
 	// 运行智能体上下文
 	adapters.RunAgentContext()
 }

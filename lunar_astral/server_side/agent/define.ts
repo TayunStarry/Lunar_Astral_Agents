@@ -2,11 +2,6 @@ import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelRe
 
 /** 智能体定义 */
 export class AgentDefine {
-	/** 推理关键词 */
-	protected queryKeywords: ModelBuilder = new ModelBuilder(fileView('prompts/queryKeywords.md')[0]);
-	/** 情感管理器 */
-	protected emotionManager: ModelBuilder = new ModelBuilder(fileView('prompts/emotionManager.md')[0]);
-
 	/** 摘要者角色(视频摘要) */
 	public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
 	/** 描述者角色(视频描述) */
@@ -21,7 +16,6 @@ export class AgentDefine {
 	public musicianRole: MusicianRole = new MusicianRole();
 	/** 编纂角色(组织记忆) */
 	protected organizeRole: OrganizeRole = new OrganizeRole();
-
 	/** 未读上下文 */
 	public unreadContext: PostMessage[] = [];
 	/** 未读视频文件 */

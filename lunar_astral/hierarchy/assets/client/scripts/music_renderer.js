@@ -105,6 +105,27 @@ export function renderMusicScore(abcNotation) {
 }
 
 /**
+ * 播放后端渲染的 WAV 音频
+ * 当 FluidSynth + SoundFont 渲染完成时，前端收到音频 URL 直接播放
+ * @param {string} audioUrl - WAV 音频文件 URL
+ * @param {string} fileName - 文件名
+ */
+export function playRenderedAudio(audioUrl, fileName) {
+    if (!audioUrl) {
+        console.warn('[音乐渲染器] 无效的音频 URL');
+        return;
+    }
+
+    if (!isReady) {
+        pendingQueue.push({ type: 'play_audio', audioUrl, fileName });
+        return;
+    }
+
+    showIframe();
+    postToIframe({ type: 'play_audio', audioUrl, fileName });
+}
+
+/**
  * 关闭音乐播放器
  */
 export function closeMusicRenderer() {

@@ -505,7 +505,7 @@
                     <button class="music-btn" id="music-btn-history" title="历史记录">
                         <i class="fas fa-history"></i>
                     </button>
-                    <button class="music-btn" id="music-btn-download" title="下载乐谱">
+                    <button class="music-btn" id="music-btn-download" title="下载音频/乐谱">
                         <i class="fas fa-download"></i>
                     </button>
                     <button class="music-btn music-btn-close" id="music-btn-close" title="关闭">
@@ -531,21 +531,6 @@
                         <option value="1.25">1.25x</option>
                         <option value="1.5">1.5x</option>
                         <option value="2">2x</option>
-                    </select>
-                </div>
-                <div class="music-setting">
-                    <label class="music-setting-label"><i class="fas fa-guitar"></i> 乐器</label>
-                    <select class="music-setting-select" id="music-setting-instrument" title="切换乐器音色">
-                        <option value="piano">钢琴</option>
-                        <option value="violin">小提琴</option>
-                        <option value="flute">长笛</option>
-                        <option value="cello">大提琴</option>
-                        <option value="guitar">吉他</option>
-                        <option value="harp">竖琴</option>
-                        <option value="clarinet">单簧管</option>
-                        <option value="oboe">双簧管</option>
-                        <option value="trumpet">小号</option>
-                        <option value="synth">合成器</option>
                     </select>
                 </div>
                 <div class="music-setting">
@@ -612,16 +597,19 @@
         bpm: 120,
         key: 'C',
         meter: '4/4',
-        /** 当前使用的乐器名称（来自 %%instrument 指令或用户手动选择） */
+        /** 当前使用的乐器名称（显示用，多声部时为逗号分隔） */
         instruments: '钢琴',
-        /** 解析得到的乐器列表（数组形式） */
-        instrumentList: ['钢琴'],
+        /** 声部→乐器名映射（来自 %%voice 指令），如 {1:'钢琴', 2:'小提琴'} */
+        voiceInstruments: new Map([[1, '钢琴']]),
+        /** 声部→合成器运行时映射，如 {1: {synth, reverb, effects, presetKey, instrumentName}} */
+        voices: {},
         notes: [],
+        /** 旧字段保留用于兼容（单声部场景指向 voices[1]） */
         toneSynth: null,
         toneReverb: null,
-        /** 当前合成器对应的乐器预设键名 */
+        /** 当前主声部预设键名（用于 UI 下拉框显示） */
         currentPresetKey: 'piano',
-        /** 效果链节点缓存（filter/vibrato 等，统一释放） */
+        /** 效果链节点缓存（单声部兼容，多声部时存在 voices[N].effects） */
         _effectNodes: [],
         /** 最近一次 seek 的时间（用于乐器切换时恢复进度） */
         _lastSeekTime: 0,
@@ -630,158 +618,362 @@
     };
 
     // ==== 乐器音色映射表 ====
-    // 每个预设包含：keywords（中文/英文匹配关键词）、label（显示名）、
-    //              factory（创建 Tone.js 合成器的工厂函数）、effects（可选效果链）
-    // 不同乐器使用不同的合成器类型与振荡器/滤波器组合，产生明显可辨的音色差异
+    // 每个预设包含：keywords、label、factory、effects、velocityRange、defaultArticulation
+    // 核心升级：使用 FMSynth/AMSynth 替代基础振荡器，产生更丰富、更有辨识度的音色
+    // FMSynth = 频率调制合成（harmonicity × modulationIndex 控制谐波结构）
+    // AMSynth = 振幅调制合成（harmonicity 控制边带频率）
+    // 每种乐器的 harmonicity 和 modulationIndex 都根据其声学特性调校
     const INSTRUMENT_PRESETS = {
-        // 钢琴：三角波 + 快速衰减 + 长释放（接近真实钢琴衰减特性）
+        // ── 钢琴：FM 合成，harmonicity=3 产生钢琴特有的泛音结构 ──
         piano: {
             keywords: ['钢琴', 'piano', '电子琴', 'keyboard', '键盘'],
             label: '钢琴',
-            factory: () => new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: 'triangle' },
-                envelope: { attack: 0.005, decay: 0.3, sustain: 0.2, release: 1.2 },
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 3,
+                modulationIndex: 10,
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.005, decay: 0.4, sustain: 0.15, release: 1.5 },
+                modulation: { type: 'square' },
+                modulationEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.8 },
                 volume: -8,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.2, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 6000, Q: 0.5 }),
+                reverb: new Tone.Reverb({ decay: 2.5, wet: 0.22 }),
+                chorus: new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.15, wet: 0.12 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 5500, Q: 0.7 }),
             }),
+            velocityRange: [0.25, 0.95],
+            defaultArticulation: 'default',
         },
-        // 小提琴：锯齿波 + 低通滤波 + 颤音（弓弦摩擦质感）
+        // ── 小提琴：FM 合成 + 颤音效果，锯齿波载波模拟弓弦摩擦 ──
         violin: {
             keywords: ['小提琴', 'violin', 'fiddle', '弓弦'],
             label: '小提琴',
-            factory: () => new Tone.PolySynth(Tone.MonoSynth, {
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 2,
+                modulationIndex: 5,
                 oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.08, decay: 0.2, sustain: 0.7, release: 0.6 },
-                filter: { type: 'lowpass', frequency: 3500, Q: 1.2 },
-                filterEnvelope: { attack: 0.1, decay: 0.2, sustain: 0.5, release: 0.6, baseFrequency: 800, octaves: 3 },
-                volume: -14,
+                envelope: { attack: 0.12, decay: 0.15, sustain: 0.75, release: 0.6 },
+                modulation: { type: 'sine' },
+                modulationEnvelope: { attack: 0.15, decay: 0.1, sustain: 0.6, release: 0.4 },
+                volume: -12,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.8, wet: 0.35 }),
-                vibrato: new Tone.Vibrato({ frequency: 5.5, depth: 0.08 }),
+                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.30 }),
+                vibrato: new Tone.Vibrato({ frequency: 5.5, depth: 0.08, wet: 0.6 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 4000, Q: 1.2 }),
             }),
+            velocityRange: [0.20, 0.90],
+            defaultArticulation: 'legato',
         },
-        // 长笛：正弦波 + 慢起音（气息渐入）+ 轻颤音
+        // ── 长笛：FM 合成低调制指数，接近纯音 + 气息质感 ──
         flute: {
             keywords: ['长笛', 'flute', '笛子', '竹笛', '横笛'],
             label: '长笛',
-            factory: () => new Tone.PolySynth(Tone.Synth, {
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 1,
+                modulationIndex: 2,
                 oscillator: { type: 'sine' },
-                envelope: { attack: 0.12, decay: 0.1, sustain: 0.8, release: 0.5 },
-                volume: -10,
+                envelope: { attack: 0.15, decay: 0.08, sustain: 0.80, release: 0.45 },
+                modulation: { type: 'sine' },
+                modulationEnvelope: { attack: 0.18, decay: 0.08, sustain: 0.6, release: 0.3 },
+                volume: -8,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.5, wet: 0.3 }),
-                vibrato: new Tone.Vibrato({ frequency: 4.5, depth: 0.06 }),
+                reverb: new Tone.Reverb({ decay: 2.8, wet: 0.32 }),
+                vibrato: new Tone.Vibrato({ frequency: 4.2, depth: 0.05, wet: 0.45 }),
             }),
+            velocityRange: [0.25, 0.80],
+            defaultArticulation: 'legato',
         },
-        // 大提琴：锯齿波 + 低通 + 低音区强调
+        // ── 大提琴：FM 合成低 harmonicity，温暖厚实 ──
         cello: {
             keywords: ['大提琴', 'cello', 'violoncello'],
             label: '大提琴',
-            factory: () => new Tone.PolySynth(Tone.MonoSynth, {
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 1.5,
+                modulationIndex: 4,
                 oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.15, decay: 0.3, sustain: 0.6, release: 1.0 },
-                filter: { type: 'lowpass', frequency: 1800, Q: 1.5 },
-                filterEnvelope: { attack: 0.2, decay: 0.3, sustain: 0.4, release: 0.8, baseFrequency: 400, octaves: 2.5 },
-                volume: -12,
+                envelope: { attack: 0.18, decay: 0.2, sustain: 0.65, release: 1.2 },
+                modulation: { type: 'triangle' },
+                modulationEnvelope: { attack: 0.2, decay: 0.15, sustain: 0.5, release: 0.9 },
+                volume: -10,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.8, wet: 0.3 }),
+                reverb: new Tone.Reverb({ decay: 3.0, wet: 0.28 }),
+                vibrato: new Tone.Vibrato({ frequency: 4.0, depth: 0.06, wet: 0.5 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 2200, Q: 1.5 }),
             }),
+            velocityRange: [0.20, 0.92],
+            defaultArticulation: 'legato',
         },
-        // 吉他：PluckSynth（Karplus-Strong 弦振动算法，接近拨弦质感）
+        // ── 吉他：FMSynth 模拟拨弦（高调制指数 + 极短衰减 = 拨弦质感） ──
+        // 注意：Tone.PluckSynth 不继承 Monophonic，无法用于 PolySynth
         guitar: {
             keywords: ['吉他', 'guitar', '木吉他', '电吉他', '贝斯', 'bass'],
             label: '吉他',
-            factory: () => new Tone.PolySynth(Tone.PluckSynth, {
-                attackNoise: 1,
-                dampening: 4000,
-                resonance: 0.9,
-                volume: -6,
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 2,
+                modulationIndex: 15,
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.001, decay: 0.35, sustain: 0.0, release: 0.8 },
+                modulation: { type: 'square' },
+                modulationEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.0, release: 0.25 },
+                volume: -4,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.2, wet: 0.2 }),
+                reverb: new Tone.Reverb({ decay: 1.5, wet: 0.18 }),
+                chorus: new Tone.Chorus({ frequency: 2.0, delayTime: 4, depth: 0.12, wet: 0.10 }),
             }),
+            velocityRange: [0.25, 0.92],
+            defaultArticulation: 'default',
         },
-        // 竖琴：PluckSynth 高共振 + 较长延音
+        // ── 竖琴：FMSynth 模拟拨弦（较慢衰减 + 高共振延音） ──
         harp: {
             keywords: ['竖琴', 'harp', '里拉琴'],
             label: '竖琴',
-            factory: () => new Tone.PolySynth(Tone.PluckSynth, {
-                attackNoise: 0.5,
-                dampening: 5500,
-                resonance: 0.95,
-                volume: -6,
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 1.5,
+                modulationIndex: 8,
+                oscillator: { type: 'sine' },
+                envelope: { attack: 0.002, decay: 0.6, sustain: 0.05, release: 1.8 },
+                modulation: { type: 'triangle' },
+                modulationEnvelope: { attack: 0.002, decay: 0.25, sustain: 0.0, release: 0.5 },
+                volume: -4,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 3.5, wet: 0.4 }),
+                reverb: new Tone.Reverb({ decay: 4.0, wet: 0.45 }),
+                chorus: new Tone.Chorus({ frequency: 1.2, delayTime: 5, depth: 0.18, wet: 0.15 }),
             }),
+            velocityRange: [0.30, 0.85],
+            defaultArticulation: 'default',
         },
-        // 单簧管：方波 + 低通滤波（簧片共振特征）
+        // ── 单簧管：FM 合成方波载波，产生奇次谐波（单簧管声学特征） ──
         clarinet: {
             keywords: ['单簧管', 'clarinet', '黑管', '竖笛'],
             label: '单簧管',
-            factory: () => new Tone.PolySynth(Tone.Synth, {
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 3,
+                modulationIndex: 3,
                 oscillator: { type: 'square' },
-                envelope: { attack: 0.06, decay: 0.15, sustain: 0.75, release: 0.5 },
-                volume: -16,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 2400, Q: 1.0 }),
-            }),
-        },
-        // 双簧管：锯齿波 + 带通滤波（双簧穿透音色）
-        oboe: {
-            keywords: ['双簧管', 'oboe', '英国管'],
-            label: '双簧管',
-            factory: () => new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.07, decay: 0.15, sustain: 0.8, release: 0.5 },
-                volume: -16,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.8, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'bandpass', frequency: 1400, Q: 2.5 }),
-            }),
-        },
-        // 小号：锯齿波 + 喇叭形包络
-        trumpet: {
-            keywords: ['小号', 'trumpet', '号角', '铜管'],
-            label: '小号',
-            factory: () => new Tone.PolySynth(Tone.MonoSynth, {
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.04, decay: 0.15, sustain: 0.8, release: 0.3 },
-                filter: { type: 'lowpass', frequency: 4500, Q: 2.0 },
-                filterEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.7, release: 0.3, baseFrequency: 1200, octaves: 2.5 },
+                envelope: { attack: 0.08, decay: 0.12, sustain: 0.78, release: 0.5 },
+                modulation: { type: 'sine' },
+                modulationEnvelope: { attack: 0.1, decay: 0.08, sustain: 0.5, release: 0.3 },
                 volume: -14,
             }),
             effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.6, wet: 0.25 }),
+                reverb: new Tone.Reverb({ decay: 2.2, wet: 0.25 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 2800, Q: 1.0 }),
+                vibrato: new Tone.Vibrato({ frequency: 4.8, depth: 0.04, wet: 0.35 }),
             }),
+            velocityRange: [0.22, 0.88],
+            defaultArticulation: 'legato',
         },
-        // 合成器（默认）：丰富模拟合成音色
-        synth: {
-            keywords: ['合成器', 'synth', '电子', '电子琴'],
-            label: '合成器',
-            factory: () => new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
-                envelope: { attack: 0.03, decay: 0.2, sustain: 0.5, release: 0.8 },
+        // ── 双簧管：FM 合成高调制指数，穿透性音色 ──
+        oboe: {
+            keywords: ['双簧管', 'oboe', '英国管'],
+            label: '双簧管',
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 2,
+                modulationIndex: 8,
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.09, decay: 0.1, sustain: 0.80, release: 0.45 },
+                modulation: { type: 'square' },
+                modulationEnvelope: { attack: 0.08, decay: 0.06, sustain: 0.6, release: 0.3 },
+                volume: -14,
+            }),
+            effects: () => ({
+                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.22 }),
+                filter: new Tone.Filter({ type: 'bandpass', frequency: 1500, Q: 2.2 }),
+                vibrato: new Tone.Vibrato({ frequency: 5.2, depth: 0.05, wet: 0.4 }),
+            }),
+            velocityRange: [0.25, 0.90],
+            defaultArticulation: 'legato',
+        },
+        // ── 小号：FM 合成锯齿波载波 + 喇叭形滤波包络 ──
+        trumpet: {
+            keywords: ['小号', 'trumpet', '号角', '铜管'],
+            label: '小号',
+            factory: () => new Tone.PolySynth(Tone.FMSynth, {
+                harmonicity: 1,
+                modulationIndex: 7,
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.04, decay: 0.12, sustain: 0.80, release: 0.35 },
+                modulation: { type: 'sine' },
+                modulationEnvelope: { attack: 0.03, decay: 0.15, sustain: 0.7, release: 0.25 },
                 volume: -12,
             }),
             effects: () => ({
                 reverb: new Tone.Reverb({ decay: 1.8, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 4000, Q: 0.8 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 5000, Q: 1.5 }),
             }),
+            velocityRange: [0.28, 0.95],
+            defaultArticulation: 'default',
+        },
+        // ── 合成器：AM 合成厚锯齿波 + 合唱，模拟模拟合成铺底 ──
+        synth: {
+            keywords: ['合成器', 'synth', '电子', '电子琴'],
+            label: '合成器',
+            factory: () => new Tone.PolySynth(Tone.AMSynth, {
+                harmonicity: 2.5,
+                oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
+                envelope: { attack: 0.03, decay: 0.2, sustain: 0.55, release: 0.9 },
+                modulation: { type: 'square' },
+                modulationEnvelope: { attack: 0.02, decay: 0.1, sustain: 0.4, release: 0.6 },
+                volume: -10,
+            }),
+            effects: () => ({
+                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.20 }),
+                chorus: new Tone.Chorus({ frequency: 3.0, delayTime: 2.5, depth: 0.25, wet: 0.25 }),
+                filter: new Tone.Filter({ type: 'lowpass', frequency: 4500, Q: 0.8 }),
+            }),
+            velocityRange: [0.20, 0.95],
+            defaultArticulation: 'default',
         },
     };
 
     /** 默认预设（未知乐器时使用，比原硬编码 triangle 更柔和） */
     const DEFAULT_PRESET_KEY = 'piano';
+
+    // ==== 乐器音域范围表（MIDI 音符号数） ====
+    // 用于多乐器单声部场景的回退策略：按音高将音符分配到最合适的乐器
+    // 参考 General MIDI 各乐器的典型音域
+    const INSTRUMENT_PITCH_RANGES = {
+        cello:    { low: 36, high: 72 },  // C2-C4 大提琴低音区
+        bass:     { low: 28, high: 55 },  // E1-G3 贝斯
+        guitar:   { low: 40, high: 76 },  // E3-E5 吉他
+        harp:     { low: 40, high: 84 },  // E3-C6 竖琴
+        piano:    { low: 36, high: 96 },  // C2-C7 钢琴全音域
+        clarinet: { low: 50, high: 80 },  // D3-G#4 单簧管
+        oboe:     { low: 58, high: 84 },  // Bb3-C6 双簧管
+        trumpet:  { low: 54, high: 84 },  // F#3-C6 小号
+        violin:   { low: 55, high: 96 },  // G3-C7 小提琴
+        flute:    { low: 60, high: 96 },  // C4-C7 长笛
+        synth:    { low: 36, high: 96 },  // 合成器全音域
+    };
+
+    // ==== 表达引擎 ====
+    // 核心目标：消除"打点计数器"感，为每个音符注入人性化表达
+    // 包括：力度变化、时序偏移、运音法、动态轮廓、乐句呼吸
+    const ExpressionEngine = {
+        // 确定性伪随机：相同种子总是返回相同结果（保证 seek 后表现一致）
+        pseudoRandom(seed) {
+            const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        },
+
+        // 解析拍号得到每小节拍数
+        parseBeatsPerMeasure(meter) {
+            if (!meter) return 4;
+            const parts = meter.split('/');
+            return parseInt(parts[0]) || 4;
+        },
+
+        // 计算音符在小节中的节拍位置（0-based 浮点数）
+        getBeatPosition(timeSeconds, bpm, beatsPerMeasure) {
+            const secondsPerBeat = 60 / bpm;
+            const totalBeats = timeSeconds / secondsPerBeat;
+            return totalBeats % beatsPerMeasure;
+        },
+
+        // 计算乐句位置（0-1，0=乐句开头，0.5=高点，1=结尾）
+        // 使用 8 拍为一个乐句单位的正弦弧线
+        getPhrasePosition(timeSeconds, bpm) {
+            const secondsPerBeat = 60 / bpm;
+            const phraseBeats = 8; // 2 小节的乐句单位（4/4 拍）
+            const phraseDuration = phraseBeats * secondsPerBeat;
+            const pos = (timeSeconds % phraseDuration) / phraseDuration;
+            return pos;
+        },
+
+        // 计算单个音符的力度（velocity, 0-1）
+        // 综合：力度记号 + 节拍强调 + 乐句轮廓 + 乐器动态范围 + 随机人性化
+        getVelocity(noteIndex, voiceId, beatPosition, phrasePosition, dynamics, presetKey) {
+            const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
+            const [vMin, vMax] = preset.velocityRange || [0.2, 0.9];
+
+            // 1. 基础力度（来自 ABC 力度记号）
+            const dynamicMap = { pp: 0.15, p: 0.30, mp: 0.45, mf: 0.60, f: 0.80, ff: 0.95 };
+            let base = dynamicMap[dynamics] || 0.60;
+
+            // 2. 节拍强调：强拍略响
+            const beatNum = Math.floor(beatPosition);
+            const beatsPerMeasure = this.parseBeatsPerMeasure(state.meter);
+            if (beatNum === 0) base *= 1.10;          // 强拍
+            else if (beatsPerMeasure === 4 && beatNum === 2) base *= 1.05; // 次强拍
+            else if (beatsPerMeasure === 3 && beatNum === 1) base *= 1.03; // 3/4 拍第二拍微弱
+
+            // 3. 乐句轮廓：正弦弧线——起句渐强，句中高点，收句渐弱
+            const phraseCurve = Math.sin(phrasePosition * Math.PI);
+            base *= 0.88 + phraseCurve * 0.20;
+
+            // 4. 随机人性化 ±12%（确定性，每次播放一致）
+            const rand = this.pseudoRandom(noteIndex * 7 + voiceId * 31 + 13);
+            base *= 1 + (rand - 0.5) * 0.24;
+
+            // 映射到乐器动态范围
+            return Math.max(vMin, Math.min(vMax, vMin + base * (vMax - vMin)));
+        },
+
+        // 计算时序偏移（秒）—— 消除机器人感
+        // 强拍微提前，弱拍微延后，再加随机抖动
+        getTimingOffset(noteIndex, voiceId, beatPosition) {
+            const beatNum = Math.floor(beatPosition);
+            // 强拍提前 12ms，弱拍延后 5ms
+            const beatOffset = beatNum === 0 ? -0.012 : 0.005;
+            // 随机偏移 ±18ms
+            const randOffset = (this.pseudoRandom(noteIndex * 11 + voiceId * 23 + 7) - 0.5) * 0.036;
+            return beatOffset + randOffset;
+        },
+
+        // 计算持续时间乘数（基于运音法）
+        getDurationMultiplier(articulation, presetKey) {
+            const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
+            const defaultArt = preset.defaultArticulation || 'default';
+            const art = articulation || defaultArt;
+
+            const map = {
+                staccato: 0.35,
+                staccatissimo: 0.20,
+                tenuto: 1.05,
+                accent: 0.80,
+                legato: 0.95,
+                default: 0.85,  // 默认略微断开
+            };
+            return map[art] || map[defaultArt];
+        },
+
+        // 对原始音符应用完整的表达处理，返回增强后的音符
+        applyExpression(notes) {
+            const bpm = state.bpm;
+            const beatsPerMeasure = this.parseBeatsPerMeasure(state.meter);
+
+            // 构建声部→预设键映射
+            const voicePresetMap = {};
+            for (const [voiceId, instrumentName] of state.voiceInstruments) {
+                voicePresetMap[voiceId] = matchInstrumentPreset(instrumentName);
+            }
+
+            return notes.map((n, index) => {
+                const presetKey = voicePresetMap[n.voice] || DEFAULT_PRESET_KEY;
+                const beatPos = this.getBeatPosition(n.time, bpm, beatsPerMeasure);
+                const phrasePos = this.getPhrasePosition(n.time, bpm);
+
+                const velocity = this.getVelocity(
+                    index, n.voice, beatPos, phrasePos, n.dynamics, presetKey
+                );
+                const timingOffset = this.getTimingOffset(index, n.voice, beatPos);
+                const durationMul = this.getDurationMultiplier(n.articulation, presetKey);
+
+                return {
+                    ...n,
+                    velocity,
+                    time: Math.max(0, n.time + timingOffset),
+                    duration: n.duration * durationMul,
+                };
+            });
+        },
+    };
 
     // ==== DOM 缓存 ====
     const el = {
@@ -801,7 +993,6 @@
         timeCurrent: document.getElementById('music-time-current'),
         timeTotal: document.getElementById('music-time-total'),
         speedSelect: document.getElementById('music-setting-speed'),
-        instrumentSelect: document.getElementById('music-setting-instrument'),
         keyDisplay: document.getElementById('music-setting-key'),
         meterDisplay: document.getElementById('music-setting-meter'),
         historyPanel: document.getElementById('music-history-panel'),
@@ -821,6 +1012,10 @@
         switch (msg.type) {
             case 'render':
                 renderMusicScore(msg.abcNotation);
+                break;
+            case 'play_audio':
+                // 后端 FluidSynth + SoundFont 渲染的 WAV 音频
+                playRenderedAudio(msg.audioUrl, msg.fileName);
                 break;
             case 'close':
                 hideMusicModal();
@@ -881,25 +1076,6 @@
             }
             notifyState();
         });
-
-        // 乐器切换：更新预设键名，若正在播放则重启合成器以应用新音色
-        if (el.instrumentSelect) {
-            el.instrumentSelect.addEventListener('change', () => {
-                const newPresetKey = el.instrumentSelect.value;
-                if (!INSTRUMENT_PRESETS[newPresetKey]) return;
-                state.currentPresetKey = newPresetKey;
-                console.log(`[音乐渲染器] 用户切换乐器 → ${newPresetKey}`);
-
-                if (state.isPlaying || state.isPaused) {
-                    // 重启播放以应用新音色（保留当前进度）
-                    const currentRealTime = state.isPlaying
-                        ? Tone.Transport.seconds * (state._speed || 1)
-                        : (state._lastSeekTime || 0);
-                    seekTo(currentRealTime);
-                }
-                notifyState();
-            });
-        }
 
         el.progressBar.addEventListener('click', (e) => {
             if (state.totalDuration <= 0) return;
@@ -963,28 +1139,45 @@
         const meterMatch = abcNotation.match(/^M:\s*(.+)/m);
         state.meter = meterMatch ? meterMatch[1].trim() : '4/4';
 
-        // 解析乐器元信息（来自 musician.ts 注入的 %%instrument 指令）
-        state.instrumentList = parseInstrumentMeta(abcNotation);
-        state.instruments = state.instrumentList.join(',');
-        // 以第一个乐器作为主音色
-        state.currentPresetKey = matchInstrumentPreset(state.instrumentList[0]);
-        console.log(`[音乐渲染器] 乐器: ${state.instruments} → 预设: ${state.currentPresetKey}`);
+        // 解析声部→乐器映射（来自 musician.ts 注入的 %%voice 指令）
+        state.voiceInstruments = parseVoiceInstruments(abcNotation);
+        state.instruments = Array.from(state.voiceInstruments.values()).join(',');
+        // 主声部预设键名（用于 UI 下拉框显示）
+        const firstInstrument = state.voiceInstruments.get(1) || Array.from(state.voiceInstruments.values())[0];
+        state.currentPresetKey = matchInstrumentPreset(firstInstrument);
+        console.log(`[音乐渲染器] 声部乐器映射:`, Object.fromEntries(state.voiceInstruments));
 
-        state.notes = parseABCNotes(abcNotation);
+        // 解析多声部音符（支持 [V:N] 标记）
+        const parseResult = parseABCNotesMultiVoice(abcNotation);
+        state.notes = parseResult.notes;
         if (state.notes.length === 0) {
             console.warn('[音乐渲染器] 无法解析 ABC 乐谱中的音符');
             postToParent({ type: 'error', message: '乐谱中未找到有效音符' });
             return;
         }
 
-        state.totalDuration = state.notes[state.notes.length - 1].time + state.notes[state.notes.length - 1].duration;
+        // 回退策略：单声部多乐器时按音高分配音符到各乐器
+        const hasMultipleVoices = new Set(state.notes.map(n => n.voice)).size > 1;
+        if (!hasMultipleVoices && state.voiceInstruments.size > 1) {
+            console.log('[音乐渲染器] 单声部多乐器场景，启用按音高分配回退策略');
+            state.notes = distributeNotesByPitch(state.notes, state.voiceInstruments);
+        }
+
+        // 总时长 = 所有声部结束时间的最大值
+        state.totalDuration = Math.max(...Object.values(parseResult.voiceTimes), 0);
+        // 回退：若 voiceTimes 异常，使用最后一个音符的结束时间
+        if (state.totalDuration <= 0 && state.notes.length > 0) {
+            const lastNote = state.notes[state.notes.length - 1];
+            state.totalDuration = lastNote.time + lastNote.duration;
+        }
 
         updateUI();
         resetPlaybackState();
         showMusicModal();
         addToHistory(state.title, abcNotation);
 
-        console.log(`[音乐渲染器] 乐谱就绪: "${state.title}", ${state.notes.length} 个音符, ${state.totalDuration.toFixed(1)}s`);
+        const voiceCount = new Set(state.notes.map(n => n.voice)).size;
+        console.log(`[音乐渲染器] 乐谱就绪: "${state.title}", ${state.notes.length} 个音符, ${voiceCount} 个声部, ${state.totalDuration.toFixed(1)}s`);
         notifyState();
     }
 
@@ -998,10 +1191,6 @@
         el.timeCurrent.textContent = '00:00';
         el.progressFill.style.width = '0%';
         el.speedSelect.value = '1';
-        // 同步乐器下拉框到当前预设
-        if (el.instrumentSelect) {
-            el.instrumentSelect.value = state.currentPresetKey;
-        }
     }
 
     function resetPlaybackState() {
@@ -1037,21 +1226,27 @@
     function beginNewPlayback() {
         disposeSynth();
 
-        // 根据当前乐器预设动态创建合成器与效果链
-        const { synth, reverb } = createSynthForInstrument(state.currentPresetKey);
-        state.toneSynth = synth;
-        state.toneReverb = reverb;
+        // 为所有声部创建独立的合成器实例（多乐器并行）
+        createSynthsForVoices(state.voiceInstruments);
 
         Tone.Transport.bpm.value = 60;
 
         const speed = parseFloat(el.speedSelect.value);
         const timeScale = 1 / speed;
 
-        state.notes.forEach(({ note, duration, time }) => {
+        // 应用表达引擎：为每个音符计算 velocity、时序偏移、运音法
+        const expressiveNotes = ExpressionEngine.applyExpression(state.notes);
+
+        // 多声部并行调度：每个音符发送到其所属声部的合成器，携带 velocity
+        expressiveNotes.forEach(({ note, duration, time, voice, velocity }) => {
+            const voiceData = state.voices[voice] || state.voices[1];
+            if (!voiceData || !voiceData.synth) return;
+
             const scheduledTime = time * timeScale;
-            const noteDuration = duration * timeScale * 0.9;
+            const noteDuration = duration * timeScale;
+            const vel = velocity || 0.7;
             Tone.Transport.schedule((t) => {
-                state.toneSynth.triggerAttackRelease(note, noteDuration, t);
+                voiceData.synth.triggerAttackRelease(note, noteDuration, t, vel);
             }, scheduledTime);
         });
 
@@ -1114,19 +1309,24 @@
         Tone.Transport.cancel();
         disposeSynth();
 
-        // 根据当前乐器预设动态创建合成器与效果链
-        const { synth, reverb } = createSynthForInstrument(state.currentPresetKey);
-        state.toneSynth = synth;
-        state.toneReverb = reverb;
+        // 为所有声部创建独立的合成器实例（多乐器并行）
+        createSynthsForVoices(state.voiceInstruments);
 
         Tone.Transport.bpm.value = 60;
 
         const speed = parseFloat(el.speedSelect.value);
         const timeScale = 1 / speed;
 
-        state.notes.forEach(({ note, duration, time }) => {
+        // 应用表达引擎：为每个音符计算 velocity、时序偏移、运音法
+        const expressiveNotes = ExpressionEngine.applyExpression(state.notes);
+
+        // 多声部并行调度：跳过已播放的音符，剩余音符携带 velocity
+        expressiveNotes.forEach(({ note, duration, time, voice, velocity }) => {
             const noteEnd = time + duration;
             if (noteEnd <= seconds) return;
+
+            const voiceData = state.voices[voice] || state.voices[1];
+            if (!voiceData || !voiceData.synth) return;
 
             let scheduledTime = (time - seconds) * timeScale;
             if (scheduledTime < 0) scheduledTime = 0;
@@ -1135,10 +1335,11 @@
             if (time < seconds) {
                 remainingDuration = noteEnd - seconds;
             }
-            const noteDuration = remainingDuration * timeScale * 0.9;
+            const noteDuration = remainingDuration * timeScale;
+            const vel = velocity || 0.7;
 
             Tone.Transport.schedule((t) => {
-                state.toneSynth.triggerAttackRelease(note, noteDuration, t);
+                voiceData.synth.triggerAttackRelease(note, noteDuration, t, vel);
             }, scheduledTime);
         });
 
@@ -1174,23 +1375,216 @@
     // ==== 乐器元信息解析 ====
 
     /**
-     * 从 ABC 乐谱头部解析 `%%instrument` 指令
+     * 从 ABC 乐谱头部解析声部乐器映射
      *
-     * ABC 标准支持 `%%` 开头的指令行（stylesheet directive），
-     * musician.ts 在推送乐谱时会注入 `%%instrument 钢琴,小提琴` 形式的指令。
+     * 优先解析 `%%voice N 乐器名` 指令（musician.ts 注入的多声部格式），
+     * 回退到 `%%instrument 乐器1,乐器2` 格式（兼容旧版）。
      *
      * @param {string} abcNotation - ABC 乐谱文本
-     * @returns {string[]} 乐器名称数组（如 ['钢琴', '小提琴']），未找到则返回 ['钢琴']
+     * @returns {Map<number, string>} 声部ID→乐器名映射，如 {1:'钢琴', 2:'小提琴'}
      */
-    function parseInstrumentMeta(abcNotation) {
-        const match = abcNotation.match(/^%%instrument\s+(.+)$/m);
-        if (!match) return ['钢琴'];
-        const instruments = match[1]
-            .replace(/，/g, ',')
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean);
-        return instruments.length > 0 ? instruments : ['钢琴'];
+    function parseVoiceInstruments(abcNotation) {
+        const voiceMap = new Map();
+        // 优先解析 %%voice N 乐器名
+        const voiceRegex = /^%%voice\s+(\d+)\s+(.+)$/gm;
+        let match;
+        while ((match = voiceRegex.exec(abcNotation)) !== null) {
+            const voiceId = parseInt(match[1]);
+            const instrument = match[2].trim();
+            if (instrument) voiceMap.set(voiceId, instrument);
+        }
+        if (voiceMap.size > 0) return voiceMap;
+
+        // 回退：解析 %%instrument 乐器1,乐器2（旧版兼容）
+        const instMatch = abcNotation.match(/^%%instrument\s+(.+)$/m);
+        if (instMatch) {
+            const instruments = instMatch[1]
+                .replace(/，/g, ',')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+            instruments.forEach((inst, i) => voiceMap.set(i + 1, inst));
+        }
+        if (voiceMap.size === 0) voiceMap.set(1, '钢琴');
+        return voiceMap;
+    }
+
+    /**
+     * 解析 ABC 乐谱中的多声部音符
+     *
+     * 支持 ABC 标准的 `[V:N]` 声部标记。每个声部维护独立的时间轴，
+     * 各声部并行演奏。无 `[V:N]` 标记时所有音符归入声部 1。
+     *
+     * 算法：
+     * 1. 提取 K: 行之后的音乐主体
+     * 2. 按 `[V:N]` 标记分段，每段属于对应声部
+     * 3. 每个声部独立累加时间（并行演奏）
+     *
+     * @param {string} abcNotation - ABC 乐谱文本
+     * @returns {{notes: Array, voiceTimes: Object}} 音符数组与各声部结束时间
+     */
+    function parseABCNotesMultiVoice(abcNotation) {
+        const notes = [];
+
+        const lengthMatch = abcNotation.match(/^L:\s*(\d+)\/(\d+)/m);
+        let defaultDuration = 0.125;
+        if (lengthMatch) {
+            defaultDuration = parseInt(lengthMatch[1]) / parseInt(lengthMatch[2]);
+        }
+
+        const tempoMatch = abcNotation.match(/^Q:\s*(\d+)\/(\d+)=(\d+)/m);
+        let bpm = 120;
+        let beatDuration = 0.25;
+        if (tempoMatch) {
+            beatDuration = parseInt(tempoMatch[1]) / parseInt(tempoMatch[2]);
+            bpm = parseInt(tempoMatch[3]);
+        }
+
+        const secondsPerBeat = 60 / bpm;
+        const defaultSeconds = defaultDuration / beatDuration * secondsPerBeat;
+
+        const keyIndex = abcNotation.search(/^K:.*$/m);
+        if (keyIndex === -1) return { notes, voiceTimes: { 1: 0 } };
+
+        const musicBody = abcNotation.substring(keyIndex).replace(/^K:.*$/m, '').trim();
+
+        // 按 [V:N] 标记分段（保留标记本身）
+        const segments = musicBody.split(/(?=\[V:\d+\])/);
+
+        const voiceTimes = { 1: 0 };
+        let currentVoice = 1;
+
+        // 表情状态跟踪（力度和运音法持续到被覆盖为止）
+        let currentDynamics = 'mf';  // 默认中强
+        let currentArticulation = null;  // 无特殊运音法
+
+        // 预扫描：提取表情记号位置（力度、运音法）
+        // ABC 力度记号：!pp! !p! !mp! !mf! !f! !ff!
+        // ABC 运音法：. (staccato) > (accent) - (tenuto) ~ (roll/trill)
+        const dynamicRegex = /!(pp|p|mp|mf|f|ff)!/g;
+        const articulationRegex = /([.>-])/g;
+
+        const noteRegex = /([\^=_]*)([a-gA-G])([,']*)(\d*)(\/?\d*)/g;
+
+        for (const segment of segments) {
+            const voiceMatch = segment.match(/^\[V:(\d+)\]/);
+            if (voiceMatch) {
+                currentVoice = parseInt(voiceMatch[1]);
+                if (voiceTimes[currentVoice] === undefined) voiceTimes[currentVoice] = 0;
+            }
+
+            noteRegex.lastIndex = 0;
+            let match;
+            let lastIndex = 0;
+            while ((match = noteRegex.exec(segment)) !== null) {
+                // 扫描此音符之前的文本，提取表情记号
+                const textBefore = segment.substring(lastIndex, match.index);
+                lastIndex = match.index + match[0].length;
+
+                // 更新力度记号（最后一个生效）
+                let dynMatch;
+                dynamicRegex.lastIndex = 0;
+                while ((dynMatch = dynamicRegex.exec(textBefore)) !== null) {
+                    currentDynamics = dynMatch[1];
+                }
+
+                // 更新运音法（紧邻音符前的一个记号生效）
+                const lastArtMatch = textBefore.match(/([.>-])\s*$/);
+                if (lastArtMatch) {
+                    const artMap = { '.': 'staccato', '>': 'accent', '-': 'tenuto' };
+                    currentArticulation = artMap[lastArtMatch[1]] || null;
+                } else {
+                    // 运音法仅作用于紧跟其后的一个音符
+                    currentArticulation = null;
+                }
+
+                const accidental = match[1];
+                const noteName = match[2];
+                const octave = match[3];
+                const durationNum = match[4];
+                const durationFrac = match[5];
+
+                let duration = defaultSeconds;
+                if (durationNum) {
+                    duration = defaultSeconds * parseInt(durationNum);
+                }
+                if (durationFrac && durationFrac.startsWith('/')) {
+                    const fracVal = parseInt(durationFrac.substring(1));
+                    if (fracVal > 0) duration = defaultSeconds / fracVal;
+                }
+
+                // 音符格式：音名 + 升降号 + 八度数字（如 "C#3"、"Db4"）
+                // 此顺序匹配 noteToNumber 正则 /^([A-Ga-g])([#b]?)(\d+)$/
+                // 且 Tone.js triggerAttackRelease 也接受此格式
+                let fullNote = noteName;
+                if (accidental.includes('^')) fullNote += '#';
+                if (accidental.includes('_')) fullNote += 'b';
+                if (noteName === noteName.toLowerCase()) {
+                    fullNote += '4';
+                } else {
+                    fullNote += '3';
+                }
+                if (octave.includes("'")) fullNote = fullNote.replace(/(\d+)$/, m => String(parseInt(m) + 1));
+                if (octave.includes(',')) fullNote = fullNote.replace(/(\d+)$/, m => String(parseInt(m) - 1));
+
+                const time = voiceTimes[currentVoice] || 0;
+                notes.push({
+                    note: fullNote,
+                    duration,
+                    time,
+                    voice: currentVoice,
+                    dynamics: currentDynamics,
+                    articulation: currentArticulation,
+                });
+                voiceTimes[currentVoice] = time + duration;
+            }
+        }
+
+        return { notes, voiceTimes };
+    }
+
+    /**
+     * 回退策略：单声部多乐器场景下按音高分配音符到各乐器
+     *
+     * 当乐谱没有 [V:N] 标记（单声部）但指定了多个乐器时，
+     * 将每个音符分配到音域最匹配的乐器对应的声部。
+     *
+     * @param {Array} notes - 原始音符数组（voice 全为 1）
+     * @param {Map<number, string>} voiceMap - 声部→乐器映射
+     * @returns {Array} 重新分配 voice 后的音符数组
+     */
+    function distributeNotesByPitch(notes, voiceMap) {
+        if (voiceMap.size <= 1) return notes;
+
+        // 构建声部→{presetKey, range, center} 映射
+        const voiceRanges = [];
+        for (const [voiceId, instrumentName] of voiceMap) {
+            const presetKey = matchInstrumentPreset(instrumentName);
+            const range = INSTRUMENT_PITCH_RANGES[presetKey] || { low: 0, high: 127 };
+            voiceRanges.push({ voiceId, presetKey, range, center: (range.low + range.high) / 2 });
+        }
+        // 按音域中心从低到高排序
+        voiceRanges.sort((a, b) => a.center - b.center);
+
+        // 计算相邻乐器音域中心的分界点
+        // 分界点 = 两个相邻中心的中点，音符按分界点分配到最近的乐器
+        const boundaries = [];
+        for (let i = 0; i < voiceRanges.length - 1; i++) {
+            boundaries.push((voiceRanges[i].center + voiceRanges[i + 1].center) / 2);
+        }
+
+        return notes.map(n => {
+            const pitch = noteToNumber(n.note);
+
+            // 按分界点分配：找到 pitch 落在哪个区间
+            let voiceIdx = 0;
+            for (let i = 0; i < boundaries.length; i++) {
+                if (pitch > boundaries[i]) voiceIdx = i + 1;
+                else break;
+            }
+
+            return { ...n, voice: voiceRanges[voiceIdx].voiceId };
+        });
     }
 
     /**
@@ -1214,13 +1608,13 @@
     }
 
     /**
-     * 根据预设键名创建合成器与效果链
+     * 根据预设键名创建合成器与效果链（独立实例）
      *
      * 创建顺序：合成器 → 效果链节点（filter/vibrato）→ reverb → destination
-     * 所有效果节点都缓存在 state._effectNodes 中以便统一释放。
+     * 返回完整的合成器对象供多声部并行使用。
      *
      * @param {string} presetKey - 预设键名
-     * @returns {{synth: object, reverb: object}} 合成器与混响节点引用
+     * @returns {{synth: object, reverb: object, effects: Array}} 合成器、混响与效果节点数组
      */
     function createSynthForInstrument(presetKey) {
         const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
@@ -1228,7 +1622,6 @@
         const effects = preset.effects();
 
         // 效果节点连接顺序：synth → filter → vibrato → reverb → destination
-        // 注意：Tone.js 中 connect 链必须按信号流向顺序
         let lastNode = synth;
         const effectNodes = [];
 
@@ -1238,7 +1631,6 @@
             effectNodes.push(effects.filter);
         }
         if (effects.vibrato) {
-            // Vibrato 作为调制效果，接入信号链
             lastNode.connect(effects.vibrato);
             lastNode = effects.vibrato;
             effectNodes.push(effects.vibrato);
@@ -1251,31 +1643,158 @@
             lastNode.toDestination();
         }
 
-        // 缓存所有效果节点用于统一释放
-        state._effectNodes = effectNodes;
-        state.currentPresetKey = presetKey;
+        return { synth, reverb: effects.reverb || null, effects: effectNodes };
+    }
 
-        return { synth, reverb: effects.reverb || null };
+    /**
+     * 为所有声部创建独立的合成器实例
+     *
+     * 遍历 state.voiceInstruments 映射，为每个声部创建对应的合成器与效果链。
+     * 每个声部拥有完全独立的合成器实例，实现真正的多乐器并行演奏。
+     *
+     * @param {Map<number, string>} voiceInstruments - 声部ID→乐器名映射
+     */
+    function createSynthsForVoices(voiceInstruments) {
+        disposeAllSynths();
+        state.voices = {};
+
+        for (const [voiceId, instrumentName] of voiceInstruments) {
+            const presetKey = matchInstrumentPreset(instrumentName);
+            const { synth, reverb, effects } = createSynthForInstrument(presetKey);
+            state.voices[voiceId] = {
+                synth,
+                reverb,
+                effects,
+                presetKey,
+                instrumentName,
+            };
+            console.log(`[音乐渲染器] 声部 ${voiceId}: ${instrumentName} → 预设 ${presetKey}`);
+        }
+
+        // 兼容旧字段：toneSynth 指向声部 1 的合成器
+        const firstVoice = state.voices[1] || Object.values(state.voices)[0];
+        if (firstVoice) {
+            state.toneSynth = firstVoice.synth;
+            state.toneReverb = firstVoice.reverb;
+            state._effectNodes = firstVoice.effects;
+            state.currentPresetKey = firstVoice.presetKey;
+        }
+    }
+
+    /**
+     * 释放所有声部的合成器与效果节点
+     */
+    function disposeAllSynths() {
+        for (const voiceId in state.voices) {
+            const v = state.voices[voiceId];
+            if (v.synth) {
+                try { v.synth.dispose(); } catch (e) { /* 已释放 */ }
+            }
+            if (v.effects && v.effects.length > 0) {
+                v.effects.forEach(node => {
+                    try { node.dispose(); } catch (e) { /* 已释放 */ }
+                });
+            }
+        }
+        state.voices = {};
+        state.toneSynth = null;
+        state.toneReverb = null;
+        state._effectNodes = [];
     }
 
     function disposeSynth() {
-        if (state.toneSynth) {
-            state.toneSynth.dispose();
-            state.toneSynth = null;
+        disposeAllSynths();
+    }
+
+    // ==== 后端音频播放（FluidSynth + SoundFont 渲染的 WAV） ====
+
+    /** 当前 HTML5 Audio 实例（后端渲染音频） */
+    let _renderedAudio = null;
+    /** 后端渲染的音频 URL（供下载使用，即使 Audio 对象被释放也不丢失） */
+    let _renderedAudioUrl = null;
+    /** 后端渲染的文件名 */
+    let _renderedAudioName = null;
+
+    /**
+     * 播放后端渲染的 WAV 音频
+     *
+     * 当后端 FluidSynth + SoundFont 渲染完成时，前端收到音频 URL，
+     * 使用 HTML5 Audio API 直接播放，音质远超前端 Tone.js 合成。
+     * 同时更新 UI 进度条和时间显示。
+     */
+    function playRenderedAudio(audioUrl, fileName) {
+        console.log(`[音乐渲染器] 收到后端渲染音频: ${audioUrl}`);
+
+        // 停止前端合成器播放（如果正在进行）
+        if (state.isPlaying) {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            state.isPlaying = false;
+            state.isPaused = false;
         }
-        if (state.toneReverb) {
-            state.toneReverb.dispose();
-            state.toneReverb = null;
+        disposeSynth();
+
+        // 停止之前的渲染音频
+        if (_renderedAudio) {
+            _renderedAudio.pause();
+            _renderedAudio = null;
         }
-        // 释放其他效果节点（filter/vibrato 等）
-        if (state._effectNodes && state._effectNodes.length > 0) {
-            state._effectNodes.forEach(node => {
-                // 跳过已释放的 reverb（上方已处理）
-                if (node === state.toneReverb) return;
-                try { node.dispose(); } catch (e) { /* 节点可能已随上游释放 */ }
-            });
-            state._effectNodes = [];
-        }
+
+        // 保存音频 URL 和文件名（供下载使用）
+        _renderedAudioUrl = audioUrl;
+        _renderedAudioName = fileName || 'music.wav';
+
+        // 创建 HTML5 Audio 实例
+        const audio = new Audio(audioUrl);
+        _renderedAudio = audio;
+
+        audio.addEventListener('loadedmetadata', () => {
+            state.totalDuration = audio.duration;
+            state.isPlaying = true;
+            state.isPaused = false;
+            state.title = fileName ? fileName.replace(/\.wav$/, '') : state.title;
+            updatePlayButton();
+            updateUI();
+            showMusicModal();
+            hideScrollingTitle();
+            console.log(`[音乐渲染器] 后端音频加载完成，时长: ${audio.duration.toFixed(1)}s`);
+        });
+
+        audio.addEventListener('timeupdate', () => {
+            if (!audio.duration) return;
+            const progress = (audio.currentTime / audio.duration) * 100;
+            el.progressFill.style.width = progress + '%';
+            el.timeCurrent.textContent = formatTime(audio.currentTime);
+        });
+
+        audio.addEventListener('ended', () => {
+            state.isPlaying = false;
+            state.isPaused = false;
+            updatePlayButton();
+            showScrollingTitle();
+            notifyState();
+        });
+
+        audio.addEventListener('error', (e) => {
+            console.error('[音乐渲染器] 后端音频播放失败:', e);
+            postToParent({ type: 'error', message: '音频播放失败，将使用前端合成器' });
+            // 回退：如果有 ABC 乐谱数据，使用前端合成器
+            if (state.abcNotation) {
+                console.log('[音乐渲染器] 回退到前端合成器播放');
+                beginNewPlayback();
+            }
+        });
+
+        audio.play().catch(err => {
+            console.warn('[音乐渲染器] 音频自动播放被阻止:', err);
+        });
+    }
+
+    /**
+     * 检查当前是否正在播放后端渲染音频
+     */
+    function isPlayingRenderedAudio() {
+        return _renderedAudio !== null && !_renderedAudio.paused;
     }
 
     // ==== 进度动画 ====
@@ -1410,82 +1929,48 @@
 
     // ==== 下载 ====
     function downloadScore() {
+        const safeName = state.title.replace(/[\\/:*?"<>|]/g, '_');
+
+        // 优先下载后端渲染的 WAV 音频（fetch→blob 确保触发下载而非浏览器直接播放）
+        if (_renderedAudioUrl) {
+            fetch(_renderedAudioUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = _renderedAudioName || `${safeName}.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                })
+                .catch(err => {
+                    console.warn('[音乐渲染器] WAV 下载失败，回退到 ABC 文件:', err);
+                    downloadABCFile(safeName);
+                });
+            return;
+        }
+
+        // 回退：下载 ABC 乐谱文件
+        downloadABCFile(safeName);
+    }
+
+    /** 下载 ABC 乐谱文件 */
+    function downloadABCFile(safeName) {
         if (!state.abcNotation) return;
         const blob = new Blob([state.abcNotation], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const safeName = state.title.replace(/[\\/:*?"<>|]/g, '_');
         a.download = `${safeName}.abc`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }
-
-    // ==== 音符解析 ====
-    function parseABCNotes(abcNotation) {
-        const notes = [];
-
-        const lengthMatch = abcNotation.match(/^L:\s*(\d+)\/(\d+)/m);
-        let defaultDuration = 0.125;
-        if (lengthMatch) {
-            defaultDuration = parseInt(lengthMatch[1]) / parseInt(lengthMatch[2]);
-        }
-
-        const tempoMatch = abcNotation.match(/^Q:\s*(\d+)\/(\d+)=(\d+)/m);
-        let bpm = 120;
-        let beatDuration = 0.25;
-        if (tempoMatch) {
-            beatDuration = parseInt(tempoMatch[1]) / parseInt(tempoMatch[2]);
-            bpm = parseInt(tempoMatch[3]);
-        }
-
-        const secondsPerBeat = 60 / bpm;
-        const defaultSeconds = defaultDuration / beatDuration * secondsPerBeat;
-
-        const keyIndex = abcNotation.search(/^K:.*$/m);
-        if (keyIndex === -1) return notes;
-
-        const musicBody = abcNotation.substring(keyIndex).replace(/^K:.*$/m, '').trim();
-
-        const noteRegex = /([\^=_]*)([a-gA-G])([,']*)(\d*)(\/?\d*)/g;
-        let match;
-        let currentTime = 0;
-
-        while ((match = noteRegex.exec(musicBody)) !== null) {
-            const accidental = match[1];
-            const noteName = match[2];
-            const octave = match[3];
-            const durationNum = match[4];
-            const durationFrac = match[5];
-
-            let duration = defaultSeconds;
-            if (durationNum) {
-                duration = defaultSeconds * parseInt(durationNum);
-            }
-            if (durationFrac && durationFrac.startsWith('/')) {
-                const fracVal = parseInt(durationFrac.substring(1));
-                if (fracVal > 0) duration = defaultSeconds / fracVal;
-            }
-
-            let fullNote = noteName;
-            if (noteName === noteName.toLowerCase()) {
-                fullNote += '4';
-            } else {
-                fullNote += '3';
-            }
-            if (octave.includes("'")) fullNote = fullNote.replace(/\d/, m => parseInt(m) + 1);
-            if (octave.includes(',')) fullNote = fullNote.replace(/\d/, m => parseInt(m) - 1);
-
-            if (accidental.includes('^')) fullNote += '#';
-            if (accidental.includes('_')) fullNote += 'b';
-
-            notes.push({ note: fullNote, duration, time: currentTime });
-            currentTime += duration;
-        }
-
-        return notes;
     }
 
     // ==== 播放按钮 ====

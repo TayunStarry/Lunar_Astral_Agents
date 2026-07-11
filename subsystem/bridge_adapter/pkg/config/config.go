@@ -12,6 +12,12 @@ import (
 
 const MaxMessageCache = 20
 
+// AI 路由默认配置
+const (
+	DefaultAIRoutingModel = "system-multimodal"
+	DefaultAIAPITimeout   = 30 // 秒
+)
+
 var (
 	AppConfig    types.Config
 	GroupMembers = make(map[int64]map[int64]string)
@@ -36,6 +42,7 @@ func LoadConfig() {
 	logger.Info("lunar_ws_server: %s", AppConfig.QQAdapter.LunarWsServer)
 	logger.Info("listen_group_ids: %v", AppConfig.QQAdapter.ListenGroupIds)
 	logger.Info("trigger_keywords: %v", AppConfig.QQAdapter.TriggerKeywords)
+	logger.Info("ai_routing_enabled: %v, ai_routing_model: %s", AppConfig.QQAdapter.AIRoutingEnabled, GetAIRoutingModel())
 }
 
 func GetNapcatHTTPBaseURL() string {
@@ -90,6 +97,24 @@ func HasTriggerKeywordInCache() bool {
 		}
 	}
 	return false
+}
+
+// GetAIRoutingEnabled 获取AI路由是否启用
+func GetAIRoutingEnabled() bool {
+	return AppConfig.QQAdapter.AIRoutingEnabled
+}
+
+// GetAIRoutingModel 获取AI路由使用的模型名称
+func GetAIRoutingModel() string {
+	if AppConfig.QQAdapter.AIRoutingModel == "" {
+		return DefaultAIRoutingModel
+	}
+	return AppConfig.QQAdapter.AIRoutingModel
+}
+
+// GetLunarCoreV1URL 获取 lunar_core 的 /v1 端点地址
+func GetLunarCoreV1URL() string {
+	return AppConfig.QQAdapter.LunarCoreUrl + "/v1/chat/completions"
 }
 
 func GetUserName(groupID int64, userID int64) string {

@@ -17,6 +17,8 @@
             "3826713076"
         ],
         "display_logs": true,
-        "default_reply": "月华不知道哦~"
+        "default_reply": "月华不知道哦~",
+        "ai_routing_enabled": true,
+        "ai_routing_model": "system-multimodal"
     }
 }
