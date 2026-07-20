@@ -200,8 +200,7 @@ Lunar_Astral_Agents-v2026.05.26/
   },
   "server": {
     "developer": false,
-    "allow_diffusion": true,
-    "allow_multimodal": true
+    "allow_diffusion": true
   },
   "cloud": {
     "cloud_model_url": "",
@@ -215,7 +214,6 @@ Lunar_Astral_Agents-v2026.05.26/
 | `models.*` | 各 AI 模型文件路径（GGUF/SafeTensors 格式） |
 | `server.developer` | `true` 启用开发模式（直接读文件系统，不读 embed） |
 | `server.allow_diffusion` | `false` 禁用图像生成功能 |
-| `server.allow_multimodal` | `false` 禁用多模态（仅文本对话） |
 | `cloud.cloud_model_url` | 云端模型 API（留空则纯本地运行） |
 
 ---

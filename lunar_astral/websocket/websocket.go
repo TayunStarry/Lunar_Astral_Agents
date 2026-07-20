@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"logger"
 	"lunar_astral/adapters"
+	"lunar_astral/bridging/napcat"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -134,10 +135,42 @@ func BroadcastMessage(msgType string, data any) {
 		return
 	}
 
+	// 桥接适配器：将智能体响应转发到QQ群聊
+	bridgeToQQ(response)
+
 	for _, c := range clients {
 		select {
 		case c.send <- msgBytes:
 		case <-c.done:
 		}
+	}
+}
+
+// bridgeToQQ 将智能体广播的响应消息转发到QQ群聊（如果桥接器已连接）
+func bridgeToQQ(response WSResponse) {
+	if !napcat.IsBridgingEnabled() {
+		return
+	}
+
+	switch response.Type {
+	case "context":
+		// Data 可能是任意结构体，通过 JSON 序列化/反序列化提取字段
+		dataBytes, err := json.Marshal(response.Data)
+		if err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
+			return
+		}
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
+			return
+		}
+		msgType, _ := dataMap["type"].(string)
+		content, _ := dataMap["content"].(string)
+		if content != "" {
+			go napcat.HandleAgentResponse(msgType, content)
+		}
+	case "image":
+		// 图片消息暂不转发到QQ群
 	}
 }

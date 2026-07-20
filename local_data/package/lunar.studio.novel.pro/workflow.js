@@ -1,880 +1,928 @@
 /**
  * 工作流模块
- * 实现 10 步章节生成流水线状态机。
- *
- * 设计契约：
- *   - 步骤 1: 大纲处理（覆写/格式化，grilling 问题 8）
- *   - 步骤 2: 段落大纲预构建
- *   - 步骤 3: 段落内容生成（每段查询知识库，grilling 问题 2）
- *   - 步骤 4: 格式校验（正则 + AI 兜底，grilling 问题 9）
- *   - 步骤 5: 章节大纲评审（失败 → 整章重写）
- *   - 步骤 6: 总体大纲评审（失败 → 整章重写）
- *   - 步骤 7: 段落评审 + 重写（60% 阈值，最多 3 次重写，grilling 问题 6/7）
- *   - 步骤 8: 人工审核（阻塞等待用户操作）
- *   - 步骤 9: 摘要+nextDirection+nextCriteria 生成（grilling 问题 10）
- *   - 步骤 10: 后期编辑（仅 approved 章节，触发摘要重生成，grilling 问题 15）
- *
- * 中断恢复（grilling 问题 12）：
- *   - 调用级中断（步骤 3/7 段落之间）
- *   - 步骤级降级（步骤 5/6 失败整章重写时不可中断）
+ * 6 步章节生成流水线状态机，含中断恢复机制
  */
 
-(function (global) {
+(function(global) {
     'use strict';
 
-    /** 步骤枚举 */
-    const STEPS = {
-        STEP1_OUTLINE: 1,
-        STEP2_PARAGRAPH_OUTLINES: 2,
-        STEP3_GENERATE_PARAGRAPHS: 3,
-        STEP4_FORMAT_CHECK: 4,
-        STEP5_CHAPTER_OUTLINE_REVIEW: 5,
-        STEP6_TOTAL_OUTLINE_REVIEW: 6,
-        STEP7_PARAGRAPH_REVIEW: 7,
-        STEP8_HUMAN_APPROVAL: 8,
-        STEP9_GENERATE_SUMMARY: 9,
-        STEP10_POST_EDIT: 10
-    };
+    var PHASE = global.PHASE;
+    var CHAPTER_STATUS = global.CHAPTER_STATUS;
 
-    /** 整章重写最大次数 */
-    const MAX_CHAPTER_REWRITE = 3;
+    // ==== 中断错误类 ====
+    function InterruptError(step, paragraphIndex, attempt) {
+        this.interrupted = true;
+        this.step = step;
+        this.paragraphIndex = paragraphIndex || 0;
+        this.attempt = attempt || 0;
+    }
+    InterruptError.prototype = Object.create(Error.prototype);
+    InterruptError.prototype.constructor = InterruptError;
 
-    /** 段落目标字数（用于估算段落数量） */
-    const PARAGRAPH_TARGET_WORDS = 400;
-
-    /**
-     * Workflow 类
-     */
+    // ==== Workflow 类 ====
     class Workflow {
-        /**
-         * @param {object} status status.json 引用
-         * @param {object} vectorStore VectorStore 实例
-         * @param {object} reviewer Reviewer 实例
-         * @param {object} callbacks 回调集合
-         * @param {function} callbacks.onProgress 进度回调 (step, message)
-         * @param {function} callbacks.onTokenUsed token 跟踪回调
-         * @param {function} callbacks.onStateChange 状态变更回调
-         * @param {function} callbacks.onSaveStatus 保存 status 回调
-         * @param {function} callbacks.onHumanApproval 人工审核回调 (chapterData) => Promise<{action, opinion, paragraphOpinions}>
-         * @param {function} callbacks.onConfirm 确认弹窗回调 (title, msg) => Promise<bool>
-         * @param {function} callbacks.onToast Toast 回调 (message, level)
-         * @param {function} callbacks.checkInterrupt 检查中断 () => bool
-         * @param {function} callbacks.setInterruptContext 设置中断上下文 (ctx) => void
-         */
-        constructor(status, vectorStore, reviewer, callbacks) {
-            this.status = status;
-            this.vectorStore = vectorStore;
-            this.reviewer = reviewer;
-            this.callbacks = callbacks || {};
+        constructor(app) {
+            this.app = app;
             this.pendingStop = false;
         }
 
-        /** 请求中断（用户点击 stopBtn 时调用） */
-        requestStop() {
-            this.pendingStop = true;
-        }
-
-        /** 重置中断标志 */
-        resetStop() {
-            this.pendingStop = false;
-        }
-
-        /** 检查中断：调用级中断点（步骤 3/7 段落之间）调用 */
-        checkInterruptCallLevel(context) {
-            if (this.pendingStop) {
-                this._saveInterruptContext(Object.assign({ canResume: true }, context));
-                throw new Error('USER_INTERRUPTED');
-            }
-        }
-
-        /** 检查中断：步骤级降级点（步骤 5/6 重写时不可中断） */
-        checkInterruptStepLevel(context) {
-            // 步骤级降级：当前在不可中断的步骤内，忽略 pendingStop
-            // 但记录用户已请求中断，等步骤边界再处理
-        }
-
-        /** 保存中断上下文 */
-        _saveInterruptContext(ctx) {
-            this.status.phase = 'interrupted';
-            this.status.interruptContext = Object.assign({
-                step: 0,
-                paragraphIndex: 0,
-                attempt: 0,
-                retryCount: 0,
-                canResume: true
-            }, ctx);
-            if (this.callbacks.setInterruptContext) {
-                this.callbacks.setInterruptContext(this.status.interruptContext);
-            }
-            if (this.callbacks.onSaveStatus) {
-                this.callbacks.onSaveStatus();
-            }
-        }
-
-        /** 更新进度 */
-        _progress(step, message) {
-            if (this.callbacks.onProgress) this.callbacks.onProgress(step, message);
-        }
-
-        /** token 跟踪 */
-        _trackToken(tokenInfo) {
-            if (this.callbacks.onTokenUsed) this.callbacks.onTokenUsed(tokenInfo);
-        }
-
-        /** 保存状态 */
-        _saveState() {
-            if (this.callbacks.onSaveStatus) this.callbacks.onSaveStatus();
-        }
-
-        /** ==================== 主流程入口 ==================== */
-
-        /**
-         * 启动章节生成（从步骤 1 开始）。
-         */
+        // ==== 启动章节生成（步骤 1-6） ====
         async startChapter() {
+            var state = this.app.state;
             this.resetStop();
-            this.status.phase = 'building';
-            this.status.currentDraft = this._initDraft();
-            this._saveState();
+
+            // 初始化 currentDraft
+            if (!state.currentDraft) {
+                state.currentDraft = {
+                    chapterIndex: state.chapterIndex,
+                    chapterOutline: '',
+                    direction: '',
+                    paragraphOutlines: [],
+                    paragraphs: [],
+                    reviewResults: [],
+                    wordCountAttempts: 0,
+                    formatChanges: 0
+                };
+            }
 
             try {
-                await this.runFromStep(STEPS.STEP1_OUTLINE);
+                // 步骤 1: 章节大纲确认
+                await this._step1_confirmOutline();
+                await this.app.saveState();
+
+                // 步骤 2: 段落大纲规划
+                await this._step2_buildParagraphOutlines();
+                await this.app.saveState();
+
+                // 步骤 3: 逐段生成
+                await this._step3_generateParagraphs();
+                await this.app.saveState();
+
+                // 步骤 4: 格式校验
+                await this._step4_formatCheck();
+                await this.app.saveState();
+
+                // 步骤 5: 字数审核
+                await this._step5_wordCountReview();
+                await this.app.saveState();
+
+                // 步骤 6: 段落级自动审核
+                await this._step6_contentReview();
+                await this.app.saveState();
+
+                // 全部完成，进入人工审核阶段
+                this.app.setPhase(PHASE.HUMAN_REVIEW);
+                this._renderProgress(6, '章节生成完成，等待人工审核');
+                this._showHumanApprovalCard();
+                await this.app.saveState();
+
             } catch (e) {
-                if (e.message === 'USER_INTERRUPTED') {
-                    this._progress(0, '已中断，可点击续写故事恢复');
+                if (e && e.interrupted) {
+                    // 保存中断上下文
+                    state.interruptContext = {
+                        step: e.step,
+                        paragraphIndex: e.paragraphIndex,
+                        attempt: e.attempt
+                    };
+                    this.app.setPhase(PHASE.INTERRUPTED);
+                    this._renderProgress(e.step, '已中断 — 可点击「续写」恢复');
+                    await this.app.saveState();
+                    this.app.showToast('已在步骤 ' + e.step + ' 中断，可恢复');
                 } else {
-                    this.status.phase = 'idle';
-                    this._saveState();
-                    throw e;
+                    // 其他错误
+                    this.app.setPhase(PHASE.IDLE);
+                    this._renderProgress(0, '生成失败: ' + (e.message || '未知错误'));
+                    await this.app.saveState();
+                    this.app.showToast('章节生成失败: ' + (e.message || '未知错误'));
                 }
             }
         }
 
-        /**
-         * 从中断点恢复。
-         */
+        // ==== 从中断点恢复 ====
         async resumeFromInterrupt() {
-            const ctx = this.status.interruptContext;
-            if (!ctx || !ctx.canResume) {
-                // 不可恢复，丢弃 currentDraft
-                this.status.currentDraft = null;
-                this.status.phase = 'idle';
-                this.status.interruptContext = null;
-                this._saveState();
-                if (this.callbacks.onToast) this.callbacks.onToast('上次中断不可恢复，已回退到本章起点', 'warning');
+            var state = this.app.state;
+            var ctx = state.interruptContext;
+            if (!ctx) {
+                // 无中断上下文，从头开始
+                await this.startChapter();
                 return;
             }
+
             this.resetStop();
-            this.status.phase = 'building';
-            this._saveState();
-            this._progress(ctx.step, '正在恢复到步骤 ' + ctx.step + '...');
-            await this.runFromStep(ctx.step, ctx);
-        }
+            this.app.showToast('正在从步骤 ' + ctx.step + ' 恢复...');
 
-        /**
-         * 从指定步骤开始执行（中断恢复或正常流程）。
-         */
-        async runFromStep(startStep, context) {
-            const draft = this.status.currentDraft;
-            if (!draft) throw new Error('currentDraft 不存在');
-
-            let step = startStep;
-            while (step <= STEPS.STEP7_PARAGRAPH_REVIEW) {
-                if (this.pendingStop && step !== STEPS.STEP1_OUTLINE) {
-                    // 步骤边界检查中断
-                    this._saveInterruptContext({ step: step, canResume: true });
-                    this._progress(0, '已中断，可点击续写故事恢复');
-                    return;
+            try {
+                // 根据中断步骤恢复
+                if (ctx.step <= 1) {
+                    await this._step1_confirmOutline();
+                    await this.app.saveState();
+                    await this._step2_buildParagraphOutlines();
+                    await this.app.saveState();
+                    await this._step3_generateParagraphs();
+                    await this.app.saveState();
+                } else if (ctx.step === 2) {
+                    await this._step2_buildParagraphOutlines();
+                    await this.app.saveState();
+                    await this._step3_generateParagraphs();
+                    await this.app.saveState();
+                } else if (ctx.step === 3) {
+                    // 从段落中断点恢复
+                    await this._step3_generateParagraphs(ctx.paragraphIndex);
+                    await this.app.saveState();
+                } else if (ctx.step === 4) {
+                    await this._step4_formatCheck();
+                    await this.app.saveState();
+                } else if (ctx.step === 5) {
+                    await this._step5_wordCountReview();
+                    await this.app.saveState();
+                } else if (ctx.step === 6) {
+                    // 从审核段落中断点恢复
+                    await this._step6_contentReview(ctx.paragraphIndex, ctx.attempt);
+                    await this.app.saveState();
                 }
 
-                draft.currentStep = step;
-                this._saveState();
+                // 完成中断步骤后，继续后续步骤
+                var currentStep = ctx.step;
 
-                switch (step) {
-                    case STEPS.STEP1_OUTLINE:
-                        await this.step1_processOutline();
-                        step = STEPS.STEP2_PARAGRAPH_OUTLINES;
-                        break;
-                    case STEPS.STEP2_PARAGRAPH_OUTLINES:
-                        await this.step2_buildParagraphOutlines();
-                        step = STEPS.STEP3_GENERATE_PARAGRAPHS;
-                        break;
-                    case STEPS.STEP3_GENERATE_PARAGRAPHS:
-                        await this.step3_generateParagraphs(context);
-                        step = STEPS.STEP4_FORMAT_CHECK;
-                        break;
-                    case STEPS.STEP4_FORMAT_CHECK:
-                        await this.step4_formatCheck();
-                        step = STEPS.STEP5_CHAPTER_OUTLINE_REVIEW;
-                        break;
-                    case STEPS.STEP5_CHAPTER_OUTLINE_REVIEW:
-                        const pass5 = await this.step5_chapterOutlineReview();
-                        if (!pass5) {
-                            // 整章重写：回到步骤 2 重新生成段落大纲与内容
-                            draft.retryCount = (draft.retryCount || 0) + 1;
-                            if (draft.retryCount > MAX_CHAPTER_REWRITE) {
-                                if (this.callbacks.onToast) this.callbacks.onToast('整章重写已达上限 ' + MAX_CHAPTER_REWRITE + ' 次，进入人工审核', 'warning');
-                                await this.step8_humanApproval();
-                                return;
-                            }
-                            this._progress(5, '步骤 5 评审未通过，进入整章重写（第 ' + draft.retryCount + '/' + MAX_CHAPTER_REWRITE + ' 次）');
-                            step = STEPS.STEP2_PARAGRAPH_OUTLINES;
-                        } else {
-                            step = STEPS.STEP6_TOTAL_OUTLINE_REVIEW;
-                        }
-                        break;
-                    case STEPS.STEP6_TOTAL_OUTLINE_REVIEW:
-                        const pass6 = await this.step6_totalOutlineReview();
-                        if (!pass6) {
-                            draft.retryCount = (draft.retryCount || 0) + 1;
-                            if (draft.retryCount > MAX_CHAPTER_REWRITE) {
-                                if (this.callbacks.onToast) this.callbacks.onToast('整章重写已达上限 ' + MAX_CHAPTER_REWRITE + ' 次，进入人工审核', 'warning');
-                                await this.step8_humanApproval();
-                                return;
-                            }
-                            this._progress(6, '步骤 6 评审未通过，进入整章重写（第 ' + draft.retryCount + '/' + MAX_CHAPTER_REWRITE + ' 次）');
-                            step = STEPS.STEP2_PARAGRAPH_OUTLINES;
-                        } else {
-                            step = STEPS.STEP7_PARAGRAPH_REVIEW;
-                        }
-                        break;
-                    case STEPS.STEP7_PARAGRAPH_REVIEW:
-                        await this.step7_paragraphReview(context);
-                        await this.step8_humanApproval();
-                        return;
+                if (currentStep < 4) {
+                    await this._step4_formatCheck();
+                    await this.app.saveState();
+                }
+                if (currentStep < 5) {
+                    await this._step5_wordCountReview();
+                    await this.app.saveState();
+                }
+                if (currentStep < 6) {
+                    await this._step6_contentReview();
+                    await this.app.saveState();
+                }
+
+                // 清除中断上下文
+                state.interruptContext = null;
+
+                // 进入人工审核阶段
+                this.app.setPhase(PHASE.HUMAN_REVIEW);
+                this._renderProgress(6, '章节生成完成，等待人工审核');
+                this._showHumanApprovalCard();
+                await this.app.saveState();
+
+            } catch (e) {
+                if (e && e.interrupted) {
+                    state.interruptContext = {
+                        step: e.step,
+                        paragraphIndex: e.paragraphIndex,
+                        attempt: e.attempt
+                    };
+                    this.app.setPhase(PHASE.INTERRUPTED);
+                    this._renderProgress(e.step, '已中断 — 可点击「续写」恢复');
+                    await this.app.saveState();
+                    this.app.showToast('再次中断，可恢复');
+                } else {
+                    this.app.setPhase(PHASE.IDLE);
+                    this._renderProgress(0, '恢复失败: ' + (e.message || '未知错误'));
+                    await this.app.saveState();
+                    this.app.showToast('恢复失败: ' + (e.message || '未知错误'));
                 }
             }
         }
 
-        /** 初始化草稿对象 */
-        _initDraft() {
-            return {
-                chapterIndex: this.status.chapterIndex,
-                startedAt: new Date().toISOString(),
-                currentStep: 1,
-                direction: this.status.direction,
-                paragraphs: [],
-                paragraphOutlines: [],
-                formatLog: [],
-                reviewResults: {
-                    chapterOutline: null,
-                    totalOutline: null,
-                    paragraphs: []
-                },
-                retryCount: 0,
-                tokens: 0,
-                tokenBreakdown: {
-                    step1: 0, step2: 0, step3_paragraphs: 0, step4_format: 0,
-                    step5_review: 0, step6_review: 0, step7_review: 0, step7_rewrite: 0,
-                    step9_summary: 0, step10_edit: 0
-                },
-                callLog: [],
-                revisions: []
-            };
+        // ==== 步骤10：编辑章节后重新生成摘要 ====
+        async step10_editChapter(chapterIndex, newContent) {
+            var state = this.app.state;
+            var chapter = state.chapters.find(function(c) { return c.index === chapterIndex; });
+            if (!chapter) {
+                this.app.showToast('未找到章节 ' + chapterIndex);
+                return;
+            }
+
+            this.app.setPhase(PHASE.GENERATING_SUMMARY);
+            this._renderProgress(10, '正在重新生成摘要...');
+
+            try {
+                var prevSummary = this._getPrevSummary(chapterIndex);
+                var chapterOutline = '';
+                if (state.chapterOutlines && state.chapterOutlines[chapterIndex - 1]) {
+                    chapterOutline = state.chapterOutlines[chapterIndex - 1].outline || '';
+                }
+
+                var prompt = await global.PromptLoader.loadAndFill('generate_summary', {
+                    outline: state.outline || '',
+                    chapterOutline: chapterOutline,
+                    direction: chapter.direction || chapterOutline,
+                    chapterContent: newContent,
+                    prevSummary: prevSummary || '（无）',
+                    chapterIndex: chapterIndex
+                });
+
+                var messages = [
+                    { role: 'system', content: '你是一位专业的小说编辑助手。请严格按照 JSON 格式输出摘要和下一章建议，不要包含任何其他文字。' },
+                    { role: 'user', content: prompt }
+                ];
+
+                var result = await this.app.config.callChat(messages, {
+                    temperature: 0.5,
+                    maxTokens: 4096
+                });
+
+                // 记录 token
+                this.app.config.trackToken({
+                    step: 'generate_summary',
+                    model: this.app.config.getConfig().name,
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    totalTokens: result.totalTokens
+                });
+
+                // 解析摘要结果
+                var summaryData = this._parseSummaryResult(result.content);
+                if (summaryData) {
+                    chapter.summary = summaryData.summary || '';
+                    // 如果有下一章走向建议，更新状态
+                    if (summaryData.nextDirection) {
+                        state.nextDirection = summaryData.nextDirection;
+                    }
+                    if (summaryData.nextCriteria) {
+                        state.nextCriteria = summaryData.nextCriteria;
+                    }
+                    // 更新下一章走向 UI
+                    this._renderNextDirection();
+                }
+
+                await this.app.saveState();
+                this.app.setPhase(PHASE.IDLE);
+                this._renderProgress(0, '摘要已重新生成');
+                this.app.showToast('摘要已重新生成');
+
+            } catch (e) {
+                this.app.setPhase(PHASE.IDLE);
+                this.app.showToast('摘要生成失败: ' + (e.message || '未知错误'));
+            }
         }
 
-        /** ==================== 步骤 1: 大纲处理 ==================== */
-
-        async step1_processOutline() {
-            this._progress(1, '步骤 1：处理章节大纲...');
-            const draft = this.status.currentDraft;
-            const config = this.status.config;
-
-            // 检索上一章摘要（步骤 9 产物）
-            let prevSummary = '';
-            if (this.status.chapters.length > 0) {
-                const lastChapter = this.status.chapters[this.status.chapters.length - 1];
-                prevSummary = lastChapter.summary || '';
-            }
-
-            // 从知识库检索相关知识点（基于当前章节走向）
-            let knowledgeContext = '';
-            if (!this.status.config.vectorDimensionMismatch) {
-                const results = await this.vectorStore.query(
-                    'story_points',
-                    this.status.direction || '故事背景',
-                    5,
-                    { step: 1, paragraphIndex: -1 }
-                );
-                knowledgeContext = results.map(function (r) {
-                    return '[相关知识点 ' + (r.item.path || '') + '] ' + r.item.content;
-                }).join('\n\n');
-            }
-
-            const prompt = await global.PromptLoader.loadAndFill('process_outline', {
-                outline: this.status.outline || '',
-                direction: this.status.direction || '',
-                prevSummary: prevSummary,
-                knowledgeContext: knowledgeContext,
-                overwriteDirection: config.overwriteDirection ? 'true' : 'false',
-                hasPrevSummary: prevSummary ? 'true' : 'false'
-            });
-
-            const result = await this.reviewer.callChat(prompt, { step: 1 }, {
-                systemMessage: '你是一位资深小说编辑与故事架构师，只输出 JSON。',
-                temperature: 0.6
-            });
-
-            const parsed = this.reviewer.parseJsonWithFallback(result.content, {
-                direction: this.status.direction,
-                keyEvents: [],
-                characters: [],
-                scenes: [],
-                emotionalTone: '',
-                modified: false
-            });
-
-            // 应用处理后的走向
-            draft.direction = parsed.data.direction || this.status.direction;
-            draft.directionMeta = {
-                keyEvents: parsed.data.keyEvents || [],
-                characters: parsed.data.characters || [],
-                scenes: parsed.data.scenes || [],
-                emotionalTone: parsed.data.emotionalTone || '',
-                modified: parsed.data.modified || false
-            };
-            this._saveState();
+        // ==== 请求中断 ====
+        requestStop() {
+            this.pendingStop = true;
+            this.app.pendingStop = true;
         }
 
-        /** ==================== 步骤 2: 段落大纲预构建 ==================== */
-
-        async step2_buildParagraphOutlines() {
-            this._progress(2, '步骤 2：构建段落大纲...');
-            const draft = this.status.currentDraft;
-            const config = this.status.config;
-
-            // 估算段落数：字数目标 / 段落目标字数
-            const targetParagraphCount = Math.max(3, Math.ceil(config.wordMax / PARAGRAPH_TARGET_WORDS));
-
-            let prevSummary = '';
-            if (this.status.chapters.length > 0) {
-                prevSummary = this.status.chapters[this.status.chapters.length - 1].summary || '';
-            }
-
-            let knowledgeContext = '';
-            if (!this.status.config.vectorDimensionMismatch) {
-                const results = await this.vectorStore.query(
-                    'story_points',
-                    draft.direction,
-                    5,
-                    { step: 2, paragraphIndex: -1 }
-                );
-                knowledgeContext = results.map(function (r) { return r.item.content; }).join('\n\n');
-            }
-
-            const prompt = await global.PromptLoader.loadAndFill('build_paragraph_outlines', {
-                outline: this.status.outline || '',
-                direction: draft.direction,
-                prevSummary: prevSummary,
-                knowledgeContext: knowledgeContext,
-                targetParagraphCount: targetParagraphCount
-            });
-
-            const result = await this.reviewer.callChat(prompt, { step: 2 }, {
-                systemMessage: '你是一位资深小说编辑，只输出 JSON。',
-                temperature: 0.5
-            });
-
-            const parsed = this.reviewer.parseJsonWithFallback(result.content, {
-                paragraphOutlines: []
-            });
-
-            draft.paragraphOutlines = parsed.data.paragraphOutlines || [];
-            this._saveState();
+        // ==== 重置中断标志 ====
+        resetStop() {
+            this.pendingStop = false;
+            this.app.pendingStop = false;
         }
 
-        /** ==================== 步骤 3: 段落内容生成 ==================== */
+        // ==== 步骤 1: 章节大纲确认 ====
+        async _step1_confirmOutline() {
+            this._checkStop();
+            var state = this.app.state;
+            var draft = state.currentDraft;
 
-        async step3_generateParagraphs(context) {
-            this._progress(3, '步骤 3：生成段落内容...');
-            const draft = this.status.currentDraft;
-            const outlines = draft.paragraphOutlines;
-            if (!outlines || outlines.length === 0) throw new Error('段落大纲为空');
+            this.app.setPhase(PHASE.BUILDING);
+            this._renderProgress(1, '正在确认章节大纲...');
 
-            // 中断恢复：从指定段落索引继续
-            const startIdx = (context && context.step === 3 && context.paragraphIndex) ? context.paragraphIndex : 0;
+            // 取 chapterOutlines[chapterIndex] 作为当前章节大纲
+            var chapterIndex = state.chapterIndex;
+            var chapterOutline = '';
 
-            // 若从中断恢复，保留已生成的段落
-            if (startIdx > 0 && draft.paragraphs && draft.paragraphs.length >= startIdx) {
-                draft.paragraphs = draft.paragraphs.slice(0, startIdx);
-            } else {
+            if (state.chapterOutlines && state.chapterOutlines[chapterIndex]) {
+                chapterOutline = state.chapterOutlines[chapterIndex].outline || '';
+            }
+
+            // 若无且 chapters 为空，取 state.nextDirection
+            if (!chapterOutline && state.chapters.length === 0) {
+                chapterOutline = state.nextDirection || '';
+            }
+
+            // 若仍无，取 nextDirection
+            if (!chapterOutline) {
+                chapterOutline = state.nextDirection || '';
+            }
+
+            draft.chapterIndex = chapterIndex + 1;
+            draft.chapterOutline = chapterOutline;
+            draft.direction = chapterOutline;
+
+            // 更新方向 UI
+            this.app.elements.directionInput.value = chapterOutline;
+
+            this._renderProgress(1, '章节大纲已确认: 第 ' + draft.chapterIndex + ' 章');
+        }
+
+        // ==== 步骤 2: 段落大纲规划 ====
+        async _step2_buildParagraphOutlines() {
+            this._checkStop();
+            var state = this.app.state;
+            var draft = state.currentDraft;
+
+            this.app.setPhase(PHASE.BUILDING);
+            this._renderProgress(2, '正在规划段落大纲...');
+
+            var prevSummary = this._getPrevSummary();
+            var wordTarget = state.config.paragraphTarget || 400;
+
+            var prompt = await global.PromptLoader.loadAndFill('build_paragraph_outlines', {
+                outline: state.outline || '',
+                chapterOutline: draft.chapterOutline,
+                criteria: state.criteria || '',
+                prevSummary: prevSummary || '（无）',
+                wordTarget: wordTarget
+            });
+
+            var messages = [
+                { role: 'system', content: '你是一位专业的小说创作顾问。请严格按照 JSON 数组格式返回段落大纲，不要添加任何额外文字。' },
+                { role: 'user', content: prompt }
+            ];
+
+            var result = await this.app.config.callChat(messages, {
+                temperature: 0.7,
+                maxTokens: 4096
+            });
+
+            // 记录 token
+            this.app.config.trackToken({
+                step: 'build_paragraph_outlines',
+                model: this.app.config.getConfig().name,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            });
+
+            // 解析段落大纲
+            draft.paragraphOutlines = this._parseParagraphOutlines(result.content);
+
+            this._renderProgress(2, '段落大纲规划完成，共 ' + draft.paragraphOutlines.length + ' 段');
+        }
+
+        // ==== 步骤 3: 逐段生成 ====
+        async _step3_generateParagraphs(startFromIndex) {
+            var state = this.app.state;
+            var draft = state.currentDraft;
+            var outlines = draft.paragraphOutlines;
+
+            if (!outlines || outlines.length === 0) return;
+
+            this.app.setPhase(PHASE.GENERATING_PARAGRAPHS);
+
+            // 确定起始段落索引
+            var startIdx = (startFromIndex !== undefined && startFromIndex > 0) ? startFromIndex : 0;
+
+            // 如果从0开始，清空段落
+            if (startIdx === 0) {
                 draft.paragraphs = [];
             }
 
-            for (let i = startIdx; i < outlines.length; i++) {
-                this.checkInterruptCallLevel({ step: 3, paragraphIndex: i });
+            for (var i = startIdx; i < outlines.length; i++) {
+                // 中断检查
+                this._checkStop(3, i, 0);
 
-                const outline = outlines[i];
-                const prevParagraph = i > 0 ? draft.paragraphs[i - 1].content : '';
-                const prevSummary = this.status.chapters.length > 0 ? (this.status.chapters[this.status.chapters.length - 1].summary || '') : '';
+                var outline = outlines[i];
+                this._renderProgress(3, '正在生成第 ' + (i + 1) + '/' + outlines.length + ' 段...');
 
-                // 查询知识库
-                let knowledgeContext = '';
-                if (!this.status.config.vectorDimensionMismatch) {
-                    const results = await this.vectorStore.query(
-                        'story_points',
-                        outline.summary,
-                        3,
-                        { step: 3, paragraphIndex: i }
-                    );
-                    knowledgeContext = results.map(function (r) { return r.item.content; }).join('\n\n');
+                // 查询记忆库知识点
+                var knowledgeContext = '';
+                try {
+                    var kp = outline.knowledgePoints || [];
+                    var queryText = outline.content || '';
+                    if (kp.length > 0) {
+                        queryText = kp.join('，') + '。' + queryText;
+                    }
+                    knowledgeContext = await this.app.memory.getKnowledgeContext(queryText, 10);
+                } catch (e) {
+                    console.warn('知识点查询失败:', e);
                 }
 
-                const prompt = await global.PromptLoader.loadAndFill('generate_paragraph', {
-                    outline: this.status.outline || '',
-                    direction: draft.direction,
-                    prevSummary: prevSummary,
-                    paragraphOutline: outline.summary,
-                    paragraphIndex: i,
-                    totalParagraphs: outlines.length,
-                    prevParagraph: prevParagraph.slice(-200),
-                    knowledgeContext: knowledgeContext,
-                    wordTarget: this.status.config.wordMax,
-                    wordGenerated: draft.paragraphs.reduce(function (s, p) { return s + p.content.length; }, 0)
+                // 获取上一段内容
+                var prevParagraph = (i > 0 && draft.paragraphs[i - 1]) ? draft.paragraphs[i - 1] : '';
+
+                var wordTarget = state.config.paragraphTarget || 400;
+
+                var prompt = await global.PromptLoader.loadAndFill('generate_paragraph', {
+                    paragraphIndex: i + 1,
+                    wordTarget: wordTarget,
+                    outline: state.outline || '',
+                    chapterOutline: draft.chapterOutline,
+                    paragraphOutline: outline.content || '',
+                    knowledgeContext: knowledgeContext || '（无）',
+                    prevParagraph: prevParagraph || '（无，这是第一段）'
                 });
 
-                this._progress(3, '步骤 3：生成段落 ' + (i + 1) + '/' + outlines.length + '...');
-                const result = await this.reviewer.callChat(prompt, { step: 3, paragraphIndex: i }, {
-                    systemMessage: '你是一位专业小说作家，直接输出段落正文，不要 JSON、围栏或解释。',
+                var messages = [
+                    { role: 'system', content: '你是一位才华横溢的小说作家。请直接输出段落正文，不要添加序号、标题或任何额外标记。' },
+                    { role: 'user', content: prompt }
+                ];
+
+                var result = await this.app.config.callChat(messages, {
                     temperature: 0.8,
-                    maxTokens: 1500
+                    maxTokens: 4096
                 });
 
-                let content = result.content.trim();
-                // 移除残留围栏
-                content = content.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim();
-
-                draft.paragraphs.push({
-                    index: i,
-                    content: content,
-                    wordCount: content.length,
-                    revisions: []
+                // 记录 token
+                this.app.config.trackToken({
+                    step: 'generate_paragraph',
+                    model: this.app.config.getConfig().name,
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    totalTokens: result.totalTokens
                 });
-                this._saveState();
+
+                var paragraphText = (result.content || '').trim();
+                draft.paragraphs[i] = paragraphText;
+
+                // 实时更新草稿面板
+                this._renderDraft();
+                await this.app.saveState();
             }
+
+            this._renderProgress(3, '所有段落生成完成，共 ' + draft.paragraphs.length + ' 段');
         }
 
-        /** ==================== 步骤 4: 格式校验 ==================== */
+        // ==== 步骤 4: 格式校验 ====
+        async _step4_formatCheck() {
+            this._checkStop();
+            var state = this.app.state;
+            var draft = state.currentDraft;
 
-        async step4_formatCheck() {
-            this._progress(4, '步骤 4：格式校验...');
-            const draft = this.status.currentDraft;
-            const formatters = global.NovelStudioProFormatters;
+            this._renderProgress(4, '正在执行格式校验...');
 
             // 合并段落为完整章节
-            const fullContent = '# 第' + this._chapterTitle(this.status.chapterIndex) + '章\n\n' +
-                draft.paragraphs.map(function (p) { return p.content; }).join('\n\n');
+            var chapterContent = draft.paragraphs.join('\n\n');
 
-            // 正则扫描
-            const regexResult = formatters.formatChapterContent(fullContent);
-            draft.formatLog = regexResult.formatLog;
+            // 正则清理
+            var cleaned = this._formatCleanRegex(chapterContent);
 
-            let finalContent = regexResult.cleaned;
-            if (regexResult.needsAiReview) {
-                this._progress(4, '步骤 4：检测到大量异常，触发 AI 兜底校验...');
-                const aiResult = await this.reviewer.formatCheckWithAI(finalContent, { step: 4 });
-                if (aiResult.cleanedText) {
-                    finalContent = aiResult.cleanedText;
-                    draft.formatLog.push('ai_fallback_cleaned: ' + aiResult.removedCount + ' 处');
-                }
+            // 计算改动比例
+            var formatChanges = 0;
+            if (chapterContent !== cleaned) {
+                var diffLen = Math.abs(chapterContent.length - cleaned.length);
+                formatChanges = chapterContent.length > 0 ? diffLen / chapterContent.length : 0;
+                draft.paragraphs = cleaned.split(/\n\n+/);
+                draft.formatChanges = formatChanges;
             }
 
-            // 重新切分段落
-            const newParagraphs = formatters.segmentParagraphs(finalContent);
-            if (newParagraphs.length > 0) {
-                draft.paragraphs = newParagraphs.map(function (p) {
-                    return Object.assign(p, { revisions: [] });
+            // 若改动 > 5%，触发 AI 兜底校验
+            if (formatChanges > 0.05) {
+                this._renderProgress(4, '格式改动较大（' + (formatChanges * 100).toFixed(1) + '%），执行 AI 兜底校验...');
+
+                var prompt = await global.PromptLoader.loadAndFill('format_check', {
+                    content: cleaned
                 });
-            }
-            draft.formattedContent = finalContent;
-            this._saveState();
-        }
 
-        /** ==================== 步骤 5: 章节大纲评审 ==================== */
+                var messages = [
+                    { role: 'system', content: '你是一位文本清洁编辑。请直接输出清理后的完整章节内容，不要添加任何解释。' },
+                    { role: 'user', content: prompt }
+                ];
 
-        async step5_chapterOutlineReview() {
-            const draft = this.status.currentDraft;
-            const review = await this.reviewer.reviewChapterOutline(
-                Object.assign({ direction: draft.direction }, draft.directionMeta),
-                draft.paragraphs,
-                { step: 5 }
-            );
-            draft.reviewResults.chapterOutline = review;
-            this._saveState();
-            return review.pass;
-        }
+                var result = await this.app.config.callChat(messages, {
+                    temperature: 0.2,
+                    maxTokens: 8192
+                });
 
-        /** ==================== 步骤 6: 总体大纲评审 ==================== */
+                // 记录 token
+                this.app.config.trackToken({
+                    step: 'format_check',
+                    model: this.app.config.getConfig().name,
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    totalTokens: result.totalTokens
+                });
 
-        async step6_totalOutlineReview() {
-            const draft = this.status.currentDraft;
-            const review = await this.reviewer.reviewTotalOutline(
-                this.status.outline,
-                Object.assign({ direction: draft.direction }, draft.directionMeta),
-                draft.paragraphs,
-                { step: 6 }
-            );
-            draft.reviewResults.totalOutline = review;
-            this._saveState();
-            return review.pass;
-        }
-
-        /** ==================== 步骤 7: 段落评审 ==================== */
-
-        async step7_paragraphReview(context) {
-            this._progress(7, '步骤 7：段落评审...');
-            const draft = this.status.currentDraft;
-            const criteria = this.status.criteria || '';
-            const paragraphs = draft.paragraphs;
-
-            // 中断恢复：从指定段落开始
-            const startIdx = (context && context.step === 7 && context.paragraphIndex) ? context.paragraphIndex : 0;
-            if (startIdx > 0 && draft.reviewResults.paragraphs.length >= startIdx) {
-                draft.reviewResults.paragraphs = draft.reviewResults.paragraphs.slice(0, startIdx);
-            } else {
-                draft.reviewResults.paragraphs = [];
+                var aiCleaned = (result.content || '').trim();
+                if (aiCleaned) {
+                    draft.paragraphs = aiCleaned.split(/\n\n+/);
+                }
             }
 
-            // 阶段 1：批量评审
-            for (let i = startIdx; i < paragraphs.length; i++) {
-                this.checkInterruptCallLevel({ step: 7, paragraphIndex: i });
-                const para = paragraphs[i];
-                const prevCtx = i > 0 ? paragraphs[i - 1].content.slice(-100) : '';
-                const nextCtx = i < paragraphs.length - 1 ? paragraphs[i + 1].content.slice(0, 100) : '';
-                const review = await this.reviewer.reviewParagraph(
-                    criteria, para, paragraphs.length, prevCtx, nextCtx, { step: 7 }
+            this._renderDraft();
+            this._renderProgress(4, '格式校验完成');
+        }
+
+        // ==== 步骤 5: 字数审核 ====
+        async _step5_wordCountReview() {
+            this._checkStop();
+            var state = this.app.state;
+            var draft = state.currentDraft;
+            var wordMin = state.config.wordMin || 3000;
+            var wordMax = state.config.wordMax || 4000;
+            var maxRetries = 3;
+
+            this.app.setPhase(PHASE.WORD_REVIEW);
+
+            for (var attempt = 0; attempt < maxRetries; attempt++) {
+                this._checkStop();
+
+                var chapterContent = draft.paragraphs.join('\n\n');
+                var wordCount = this.app.countWords(chapterContent);
+
+                this._renderProgress(5, '字数审核: ' + wordCount + ' 字（目标 ' + wordMin + '-' + wordMax + '），第 ' + (attempt + 1) + '/' + maxRetries + ' 轮');
+
+                // 字数达标
+                if (wordCount >= wordMin && wordCount <= wordMax) {
+                    this._renderProgress(5, '字数审核通过: ' + wordCount + ' 字');
+                    draft.wordCountAttempts = attempt;
+                    return;
+                }
+
+                // 调用 AI 字数审核
+                var reviewResult = await this.app.reviewer.checkWordCount(
+                    chapterContent, wordCount, wordMin, wordMax
                 );
-                review.needsRewrite = review.score < global.Reviewer.PARAGRAPH_PASS_THRESHOLD;
-                draft.reviewResults.paragraphs.push(review);
-                this._saveState();
+
+                if (reviewResult.wordStatus === 'ok') {
+                    this._renderProgress(5, '字数审核通过（AI 判定）');
+                    draft.wordCountAttempts = attempt;
+                    return;
+                }
+
+                if (reviewResult.wordStatus === 'under') {
+                    // 字数不足：插入过渡段
+                    var positions = reviewResult.transitionPositions || [];
+                    if (positions.length > 0) {
+                        // 按倒序插入，避免索引偏移
+                        var sortedPositions = positions.slice().sort(function(a, b) { return b - a; });
+                        for (var j = 0; j < sortedPositions.length; j++) {
+                            var pos = sortedPositions[j];
+                            if (pos >= 0 && pos < draft.paragraphs.length - 1) {
+                                var prevPara = draft.paragraphs[pos];
+                                var nextPara = draft.paragraphs[pos + 1];
+
+                                var transitionResult = await this.app.reviewer.generateTransition(
+                                    pos + 1, prevPara, pos + 2, nextPara
+                                );
+
+                                if (transitionResult.content) {
+                                    draft.paragraphs.splice(pos + 1, 0, transitionResult.content);
+                                    // 更新 paragraphOutlines 索引
+                                    draft.paragraphOutlines.splice(pos + 1, 0, {
+                                        index: pos + 2,
+                                        content: '（过渡段）',
+                                        knowledgePoints: []
+                                    });
+                                }
+                            }
+                        }
+                        this._renderDraft();
+                    }
+                } else if (reviewResult.wordStatus === 'over') {
+                    // 字数超标：精简或删除段落
+                    var trimParagraphs = reviewResult.trimParagraphs || [];
+                    var deleteParagraphs = reviewResult.deleteParagraphs || [];
+
+                    // 先删除（按倒序避免索引偏移）
+                    if (deleteParagraphs.length > 0) {
+                        var sortedDeletes = deleteParagraphs.slice().sort(function(a, b) { return b - a; });
+                        for (var k = 0; k < sortedDeletes.length; k++) {
+                            var delIdx = sortedDeletes[k] - 1; // 转为 0-based
+                            if (delIdx >= 0 && delIdx < draft.paragraphs.length) {
+                                draft.paragraphs.splice(delIdx, 1);
+                                draft.paragraphOutlines.splice(delIdx, 1);
+                            }
+                        }
+                    }
+
+                    // 精简（改写指定段落）
+                    for (var m = 0; m < trimParagraphs.length; m++) {
+                        var trimItem = trimParagraphs[m];
+                        var trimIdx = (typeof trimItem === 'object' ? trimItem.index : trimItem) - 1;
+                        var direction = typeof trimItem === 'object' ? trimItem.direction : '精简内容';
+
+                        if (trimIdx >= 0 && trimIdx < draft.paragraphs.length) {
+                            var rewriteResult = await this.app.reviewer.rewriteParagraph(
+                                trimIdx + 1,
+                                draft.paragraphs[trimIdx],
+                                ['字数超标，需要精简'],
+                                [direction],
+                                ''
+                            );
+                            if (rewriteResult.content) {
+                                draft.paragraphs[trimIdx] = rewriteResult.content;
+                            }
+                        }
+                    }
+
+                    this._renderDraft();
+                }
+
+                await this.app.saveState();
             }
 
-            // 阶段 2：对需要重写的段落执行重写 + 重新评审
-            for (let i = 0; i < draft.reviewResults.paragraphs.length; i++) {
-                this.checkInterruptCallLevel({ step: 7, paragraphIndex: i, attempt: 1 });
-                const review = draft.reviewResults.paragraphs[i];
-                if (!review.needsRewrite) continue;
+            draft.wordCountAttempts = maxRetries;
+            this._renderProgress(5, '字数审核达到重试上限，继续后续步骤');
+        }
 
-                let attempt = 0;
-                let currentContent = paragraphs[i].content;
-                let currentReview = review;
+        // ==== 步骤 6: 段落级自动审核 ====
+        async _step6_contentReview(startFromIndex, startAttempt) {
+            var state = this.app.state;
+            var draft = state.currentDraft;
+            var paragraphs = draft.paragraphs;
+            var maxRounds = 3;
 
-                while (attempt < global.Reviewer.PARAGRAPH_MAX_REWRITE && currentReview.score < global.Reviewer.PARAGRAPH_PASS_THRESHOLD) {
-                    attempt++;
-                    this.checkInterruptCallLevel({ step: 7, paragraphIndex: i, attempt: attempt });
+            this.app.setPhase(PHASE.CONTENT_REVIEW);
 
-                    const prevParagraph = i > 0 ? paragraphs[i - 1].content : '';
-                    const rewritten = await this.reviewer.rewriteParagraph(
-                        { index: i, content: currentContent },
-                        currentReview,
-                        { direction: draft.direction, prevParagraph: prevParagraph, criteria: criteria },
-                        attempt,
-                        { step: 7, paragraphIndex: i, attempt: attempt }
+            // 初始化审核结果
+            if (!draft.reviewResults) {
+                draft.reviewResults = [];
+            }
+
+            // 确定起始段落索引
+            var startIdx = (startFromIndex !== undefined && startFromIndex > 0) ? startFromIndex : 0;
+
+            for (var i = startIdx; i < paragraphs.length; i++) {
+                // 中断检查
+                this._checkStop(6, i, 0);
+
+                var paragraphContent = paragraphs[i];
+                if (!paragraphContent || !paragraphContent.trim()) continue;
+
+                // 获取上下文
+                var prevContext = i > 0 ? paragraphs[i - 1] : '';
+                var nextContext = i < paragraphs.length - 1 ? paragraphs[i + 1] : '';
+
+                // 初始化该段落的审核结果
+                var reviewResult = draft.reviewResults[i] || {
+                    index: i + 1,
+                    passed: false,
+                    issues: [],
+                    suggestions: [],
+                    attempts: 0
+                };
+
+                // 确定起始审核轮次
+                var startRound = (i === startIdx && startAttempt !== undefined && startAttempt > 0) ? startAttempt : 0;
+
+                for (var round = startRound; round < maxRounds; round++) {
+                    this._checkStop(6, i, round);
+
+                    this._renderProgress(6, '审核第 ' + (i + 1) + '/' + paragraphs.length + ' 段，第 ' + (round + 1) + '/' + maxRounds + ' 轮');
+
+                    // 调用审核
+                    var result = await this.app.reviewer.reviewParagraph(
+                        i + 1, paragraphContent, prevContext, nextContext
                     );
 
-                    // 记录改动
-                    paragraphs[i].revisions.push({
-                        attempt: attempt,
-                        oldContent: currentContent,
-                        newContent: rewritten,
-                        scoreBefore: currentReview.score
-                    });
-                    currentContent = rewritten;
-                    paragraphs[i].content = rewritten;
-                    paragraphs[i].wordCount = rewritten.length;
+                    reviewResult.attempts = round + 1;
+                    reviewResult.issues = result.issues || [];
+                    reviewResult.suggestions = result.suggestions || [];
 
-                    // 重新评审
-                    const prevCtx = i > 0 ? paragraphs[i - 1].content.slice(-100) : '';
-                    const nextCtx = i < paragraphs.length - 1 ? paragraphs[i + 1].content.slice(0, 100) : '';
-                    currentReview = await this.reviewer.reviewParagraph(
-                        criteria, paragraphs[i], paragraphs.length, prevCtx, nextCtx,
-                        { step: 7, paragraphIndex: i, attempt: attempt }
-                    );
-                    currentReview.needsRewrite = currentReview.score < global.Reviewer.PARAGRAPH_PASS_THRESHOLD;
-                    currentReview.attempt = attempt;
-                    draft.reviewResults.paragraphs[i] = currentReview;
-                    this._saveState();
-                }
-
-                if (currentReview.score < global.Reviewer.PARAGRAPH_PASS_THRESHOLD) {
-                    currentReview.rewriteExhausted = true;
-                    if (this.callbacks.onToast) {
-                        this.callbacks.onToast('段落 ' + (i + 1) + ' 重写 3 次仍未达标，将进入人工审核', 'warning');
+                    if (result.passed) {
+                        reviewResult.passed = true;
+                        break;
                     }
+
+                    // 未通过，改写
+                    this._renderProgress(6, '第 ' + (i + 1) + ' 段未通过审核，正在改写...');
+
+                    var rewriteResult = await this.app.reviewer.rewriteParagraph(
+                        i + 1,
+                        paragraphContent,
+                        result.issues,
+                        result.suggestions,
+                        ''
+                    );
+
+                    if (rewriteResult.content) {
+                        paragraphContent = rewriteResult.content;
+                        paragraphs[i] = paragraphContent;
+                    }
+
+                    await this.app.saveState();
                 }
+
+                // 保存审核结果
+                draft.reviewResults[i] = reviewResult;
+
+                // 实时更新草稿
+                this._renderDraft();
+                await this.app.saveState();
+            }
+
+            // 统计审核结果
+            var passedCount = draft.reviewResults.filter(function(r) { return r && r.passed; }).length;
+            var totalCount = draft.reviewResults.filter(function(r) { return r; }).length;
+            this._renderProgress(6, '自动审核完成: ' + passedCount + '/' + totalCount + ' 段通过');
+        }
+
+        // ==== 检查是否请求中断 ====
+        _checkStop(step, paragraphIndex, attempt) {
+            if (this.app.pendingStop || this.pendingStop) {
+                throw new InterruptError(step || 0, paragraphIndex || 0, attempt || 0);
             }
         }
 
-        /** ==================== 步骤 8: 人工审核 ==================== */
+        // ==== 渲染草稿面板 ====
+        _renderDraft() {
+            var draft = this.app.state.currentDraft;
+            if (!draft) return;
 
-        async step8_humanApproval() {
-            this._progress(8, '步骤 8：等待人工审核...');
-            this.status.phase = 'reviewing';
-            this._saveState();
+            var el = this.app.elements;
+            var paragraphs = draft.paragraphs || [];
+            var outlines = draft.paragraphOutlines || [];
 
-            const draft = this.status.currentDraft;
-            if (!this.callbacks.onHumanApproval) {
-                throw new Error('未配置 onHumanApproval 回调');
+            // 显示草稿面板
+            el.draftPanel.style.display = 'flex';
+            el.draftMeta.textContent = paragraphs.length + ' / ' + (outlines.length || '—');
+
+            // 渲染段落
+            var html = '';
+            for (var i = 0; i < paragraphs.length; i++) {
+                var p = paragraphs[i] || '';
+                var outline = outlines[i] || {};
+                var review = (draft.reviewResults && draft.reviewResults[i]) || null;
+
+                var statusClass = '';
+                if (review) {
+                    statusClass = review.passed ? ' passed' : ' failed';
+                }
+
+                html += '<div class="draft-paragraph' + statusClass + '">';
+                html += '<div class="draft-paragraph-header">';
+                html += '<span class="draft-paragraph-index">第 ' + (i + 1) + ' 段</span>';
+                if (outline.content) {
+                    html += '<span class="draft-paragraph-outline">' + this._escapeHtml(outline.content.substring(0, 50)) + '</span>';
+                }
+                if (review && !review.passed) {
+                    html += '<span class="draft-paragraph-status draft-status-failed"><i class="fas fa-times-circle"></i> 未通过</span>';
+                } else if (review && review.passed) {
+                    html += '<span class="draft-paragraph-status draft-status-passed"><i class="fas fa-check-circle"></i> 通过</span>';
+                }
+                html += '</div>';
+                html += '<div class="draft-paragraph-content">' + this._escapeHtml(p) + '</div>';
+                html += '</div>';
             }
 
-            const result = await this.callbacks.onHumanApproval({
-                chapterIndex: draft.chapterIndex,
-                paragraphs: draft.paragraphs,
-                reviewResults: draft.reviewResults,
-                formatLog: draft.formatLog,
-                revisions: draft.revisions
-            });
-
-            if (result.action === 'approve') {
-                // 进入步骤 9
-                await this.step9_generateSummary();
-            } else if (result.action === 'rewrite_all') {
-                // 整章重写
-                this.status.phase = 'building';
-                draft.retryCount = (draft.retryCount || 0) + 1;
-                if (result.opinion) {
-                    draft.directionMeta = draft.directionMeta || {};
-                    draft.directionMeta.userOpinion = result.opinion;
-                }
-                this._saveState();
-                await this.runFromStep(STEPS.STEP2_PARAGRAPH_OUTLINES);
-            } else if (result.action === 'edit_paragraphs') {
-                // 用户对特定段落提出改进意见
-                if (result.paragraphOpinions) {
-                    for (const op of result.paragraphOpinions) {
-                        const para = draft.paragraphs[op.index];
-                        if (!para) continue;
-                        const rewritten = await this.reviewer.rewriteParagraph(
-                            para,
-                            { issues: [{ severity: 'high', location: '整体', issue: op.opinion, suggestion: op.opinion }], summary: '用户意见' },
-                            { direction: draft.direction, prevParagraph: op.index > 0 ? draft.paragraphs[op.index - 1].content : '', criteria: this.status.criteria },
-                            1,
-                            { step: 8, paragraphIndex: op.index }
-                        );
-                        para.revisions.push({ attempt: 'user', oldContent: para.content, newContent: rewritten });
-                        para.content = rewritten;
-                        para.wordCount = rewritten.length;
-                    }
-                    this._saveState();
-                }
-                // 重新进入人工审核
-                await this.step8_humanApproval();
-            }
+            el.draftParagraphs.innerHTML = html;
         }
 
-        /** ==================== 步骤 9: 摘要生成 ==================== */
-
-        async step9_generateSummary() {
-            this._progress(9, '步骤 9：生成摘要与下一章走向...');
-            const draft = this.status.currentDraft;
-            const config = this.status.config;
-
-            let prevSummary = '';
-            if (this.status.chapters.length > 0) {
-                prevSummary = this.status.chapters[this.status.chapters.length - 1].summary || '';
-            }
-
-            const fullContent = draft.paragraphs.map(function (p) { return p.content; }).join('\n\n');
-
-            const prompt = await global.PromptLoader.loadAndFill('generate_summary', {
-                outline: this.status.outline || '',
-                direction: draft.direction,
-                chapterContent: fullContent,
-                prevSummary: prevSummary,
-                chapterIndex: draft.chapterIndex
-            });
-
-            const result = await this.reviewer.callChat(prompt, { step: 9 }, {
-                systemMessage: '你是一位专业的小说编辑助手，只输出 JSON。',
-                temperature: 0.5,
-                maxTokens: 2000
-            });
-
-            const parsed = this.reviewer.parseJsonWithFallback(result.content, {
-                summary: '',
-                nextDirection: '',
-                nextCriteria: ''
-            });
-
-            // 写入当前章节到 chapters 数组
-            const chapterTokens = draft.callLog.reduce(function (s, c) { return s + (c.totalTokens || 0); }, 0);
-            const approvedChapter = {
-                index: draft.chapterIndex,
-                title: '第' + this._chapterTitle(draft.chapterIndex) + '章',
-                content: fullContent,
-                summary: parsed.data.summary || '',
-                tokens: chapterTokens,
-                tokenBreakdown: draft.tokenBreakdown,
-                approvedAt: new Date().toISOString(),
-                revisions: []
+        // ==== 渲染进度信息 ====
+        _renderProgress(step, message) {
+            var el = this.app.elements;
+            var stepNames = {
+                0: '就绪',
+                1: '步骤1: 章节大纲确认',
+                2: '步骤2: 段落大纲规划',
+                3: '步骤3: 逐段生成',
+                4: '步骤4: 格式校验',
+                5: '步骤5: 字数审核',
+                6: '步骤6: 段落级自动审核',
+                10: '步骤10: 重新生成摘要'
             };
-            this.status.chapters.push(approvedChapter);
 
-            // 写入摘要到向量库 chapter_summaries
-            if (parsed.data.summary && !this.status.config.vectorDimensionMismatch) {
-                try {
-                    const embedResult = await this.vectorStore.embed(parsed.data.summary, { step: 9, paragraphIndex: -1 });
-                    if (embedResult.embedding) {
-                        await this.vectorStore.addItem('chapter_summaries', {
-                            chapterIndex: draft.chapterIndex,
-                            summary: parsed.data.summary,
-                            embedding: embedResult.embedding,
-                            source: 'auto'
-                        });
-                    }
-                } catch (e) {
-                    if (this.callbacks.onToast) this.callbacks.onToast('章节摘要写入向量库失败: ' + e.message, 'warning');
+            if (el.progressCurrentStep) {
+                el.progressCurrentStep.textContent = stepNames[step] || ('步骤 ' + step);
+            }
+            if (el.progressMessage) {
+                el.progressMessage.textContent = message || '';
+            }
+        }
+
+        // ==== 获取前几章摘要拼接 ====
+        _getPrevSummary(upToChapterIndex) {
+            var state = this.app.state;
+            var chapters = state.chapters || [];
+            var summaries = [];
+            var maxIndex = upToChapterIndex !== undefined ? upToChapterIndex : state.chapterIndex;
+
+            for (var i = 0; i < chapters.length && i < maxIndex; i++) {
+                var ch = chapters[i];
+                if (ch && ch.summary) {
+                    summaries.push('第 ' + ch.index + ' 章摘要: ' + ch.summary);
                 }
             }
 
-            // 暂存下一章走向与评判标准（待用户确认后覆盖）
-            this.status.nextDirection = parsed.data.nextDirection || '';
-            this.status.nextCriteria = parsed.data.nextCriteria || '';
-            this.status.nextDirectionSource = 'ai_suggestion';
-
-            // 压缩 callLog（approved 后）
-            draft.callLog = [];
-
-            // 清理 currentDraft
-            this.status.currentDraft = null;
-            this.status.chapterIndex = draft.chapterIndex + 1;
-            this.status.phase = 'idle';
-            this.status.interruptContext = null;
-            this._saveState();
-
-            this._progress(9, '步骤 9 完成，章节已通过审核');
-
-            // 弹出确认弹窗（由 UI 层处理）
-            if (this.callbacks.onNextDirectionReady) {
-                this.callbacks.onNextDirectionReady(this.status.nextDirection, this.status.nextCriteria);
-            }
+            return summaries.length > 0 ? summaries.join('\n\n') : '';
         }
 
-        /** ==================== 步骤 10: 后期编辑 ==================== */
+        // ==== 正则清理格式 ====
+        _formatCleanRegex(content) {
+            if (!content) return content;
 
-        /**
-         * 编辑已审核通过的章节并重新生成摘要。
-         *
-         * @param {number} chapterIndex 章节序号
-         * @param {string} newContent 新内容
-         */
-        async step10_editChapter(chapterIndex, newContent) {
-            this._progress(10, '步骤 10：编辑章节并重新生成摘要...');
-            const chapter = this.status.chapters.find(function (c) { return c.index === chapterIndex; });
-            if (!chapter) throw new Error('章节不存在: ' + chapterIndex);
+            var cleaned = content;
 
-            const oldSummary = chapter.summary;
-            const oldTokens = chapter.tokens || 0;
-
-            // 更新内容
-            chapter.content = newContent;
-
-            // 删除旧摘要向量
-            if (!this.status.config.vectorDimensionMismatch) {
-                await this.vectorStore.deleteByChapterIndex('chapter_summaries', chapterIndex);
-            }
-
-            // 重新生成摘要
-            let prevSummary = '';
-            const idx = this.status.chapters.findIndex(function (c) { return c.index === chapterIndex; });
-            if (idx > 0) prevSummary = this.status.chapters[idx - 1].summary || '';
-
-            const prompt = await global.PromptLoader.loadAndFill('generate_summary', {
-                outline: this.status.outline || '',
-                direction: '（编辑后重新生成摘要，仅生成 summary 字段）',
-                chapterContent: newContent,
-                prevSummary: prevSummary,
-                chapterIndex: chapterIndex
+            // 1. 清理 Markdown 代码块围栏 ```...```
+            cleaned = cleaned.replace(/```[\s\S]*?```/g, function(match) {
+                // 提取代码块中的实际内容（去掉围栏行）
+                var inner = match.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
+                return inner.trim();
             });
 
-            const result = await this.reviewer.callChat(prompt, { step: 10 }, {
-                systemMessage: '你是一位专业的小说编辑助手，只输出 JSON。',
-                temperature: 0.5,
-                maxTokens: 1500
-            });
+            // 2. 清理孤立的代码块开始/结束标记
+            cleaned = cleaned.replace(/^```[\w]*\s*$/gm, '');
 
-            const parsed = this.reviewer.parseJsonWithFallback(result.content, {
-                summary: '',
-                nextDirection: '',
-                nextCriteria: ''
-            });
+            // 3. 清理 JSON 残留（单行简单 JSON 对象）
+            cleaned = cleaned.replace(/\{[^}]*"[^"]*"\s*:\s*[^}]*\}/g, '');
 
-            chapter.summary = parsed.data.summary || '';
-            chapter.tokens = oldTokens + result.totalTokens;
-            chapter.editedAt = new Date().toISOString();
+            // 4. 清理 HTML 标签残留
+            cleaned = cleaned.replace(/<\/?[a-zA-Z][^>]*>/g, '');
 
-            // 记录改动历史
-            chapter.revisions.push({
-                at: new Date().toISOString(),
-                oldSummary: oldSummary,
-                newSummary: chapter.summary,
-                oldTokens: oldTokens,
-                newTokens: chapter.tokens,
-                tokensDelta: result.totalTokens
-            });
+            // 5. 清理多余的空行（超过 2 个连续空行压缩为 2 个）
+            cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 
-            // 写入新摘要到向量库
-            if (chapter.summary && !this.status.config.vectorDimensionMismatch) {
-                try {
-                    const embedResult = await this.vectorStore.embed(chapter.summary, { step: 10, paragraphIndex: -1 });
-                    if (embedResult.embedding) {
-                        await this.vectorStore.addItem('chapter_summaries', {
-                            chapterIndex: chapterIndex,
-                            summary: chapter.summary,
-                            embedding: embedResult.embedding,
-                            source: 'edit'
-                        });
-                    }
-                } catch (e) {
-                    if (this.callbacks.onToast) this.callbacks.onToast('新摘要写入向量库失败: ' + e.message, 'warning');
+            // 6. 清理不自然的 AI 输出痕迹
+            cleaned = cleaned.replace(/^(?:以下是|好的，|好的，以下是|当然，|当然，以下是|下面是)[\s，：:]*/gm, '');
+
+            // 7. 清理行首序号标记（如 "1. " "1、" 等，仅在段落开头）
+            cleaned = cleaned.replace(/^[\s]*(?:\d+[\.、\)）]\s*)/gm, '');
+
+            return cleaned.trim();
+        }
+
+        // ==== 解析段落大纲 JSON ====
+        _parseParagraphOutlines(text) {
+            if (!text) return [];
+
+            // 尝试提取 JSON
+            var jsonStr = null;
+            var codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+            if (codeBlockMatch) {
+                jsonStr = codeBlockMatch[1].trim();
+            } else {
+                // 尝试匹配方括号数组
+                var bracketMatch = text.match(/\[[\s\S]*\]/);
+                if (bracketMatch) {
+                    jsonStr = bracketMatch[0];
                 }
             }
 
-            this._saveState();
-            this._progress(10, '章节已更新，摘要已重新生成');
-        }
-
-        /** ==================== 工具方法 ==================== */
-
-        /**
-         * 章节序号转中文标题。
-         */
-        _chapterTitle(num) {
-            const chinese = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-            if (num <= 10) return chinese[num];
-            if (num < 20) return '十' + chinese[num - 10];
-            if (num < 100) {
-                const tens = Math.floor(num / 10);
-                const ones = num % 10;
-                return chinese[tens] + '十' + (ones > 0 ? chinese[ones] : '');
+            if (jsonStr) {
+                try {
+                    var parsed = JSON.parse(jsonStr);
+                    if (Array.isArray(parsed)) {
+                        return parsed.map(function(item, idx) {
+                            if (typeof item === 'string') {
+                                return { index: idx + 1, content: item, knowledgePoints: [] };
+                            }
+                            return {
+                                index: item.index || idx + 1,
+                                content: item.content || item.outline || item.text || '',
+                                knowledgePoints: Array.isArray(item.knowledgePoints) ? item.knowledgePoints : []
+                            };
+                        }).filter(function(po) { return po.content.trim(); });
+                    }
+                } catch (e) {
+                    // JSON 解析失败，尝试按行分割
+                }
             }
-            return String(num);
+
+            // 按行分割降级处理
+            var lines = text.split('\n').filter(function(l) { return l.trim().length > 5; });
+            return lines.map(function(line, idx) {
+                // 移除序号前缀
+                var cleaned = line.replace(/^\s*\d+[\.、\)）]\s*/, '').trim();
+                return { index: idx + 1, content: cleaned, knowledgePoints: [] };
+            }).filter(function(po) { return po.content.length > 2; });
         }
 
-        /**
-         * 用户确认采用 AI 建议的下一章走向后调用，覆盖 direction/criteria。
-         */
-        applyNextDirection(editedDirection, editedCriteria) {
-            this.status.direction = editedDirection || this.status.nextDirection;
-            this.status.criteria = editedCriteria || this.status.nextCriteria;
-            this.status.nextDirection = '';
-            this.status.nextCriteria = '';
-            this.status.nextDirectionSource = '';
-            this._saveState();
+        // ==== 解析摘要生成结果 ====
+        _parseSummaryResult(text) {
+            if (!text) return null;
+
+            var jsonStr = null;
+            var codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+            if (codeBlockMatch) {
+                jsonStr = codeBlockMatch[1].trim();
+            } else {
+                var braceMatch = text.match(/\{[\s\S]*\}/);
+                if (braceMatch) {
+                    jsonStr = braceMatch[0];
+                }
+            }
+
+            if (jsonStr) {
+                try {
+                    return JSON.parse(jsonStr);
+                } catch (e) {
+                    // JSON 解析失败
+                }
+            }
+
+            return null;
         }
 
-        /**
-         * 用户拒绝采用 AI 建议的下一章走向。
-         */
-        rejectNextDirection() {
-            this.status.nextDirection = '';
-            this.status.nextCriteria = '';
-            this.status.nextDirectionSource = '';
-            this._saveState();
+        // ==== 渲染下一章走向卡片 ====
+        _renderNextDirection() {
+            var state = this.app.state;
+            if (!state.nextDirection) return;
+
+            var el = this.app.elements;
+            el.nextDirectionPreview.value = state.nextDirection;
+            el.nextCriteriaPreview.value = state.nextCriteria || '';
+            el.nextDirectionCard.style.display = '';
+        }
+
+        // ==== 显示人工审核入口 ====
+        _showHumanApprovalCard() {
+            var el = this.app.elements;
+            el.humanApprovalCard.style.display = '';
+        }
+
+        // ==== HTML 转义 ====
+        _escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     }
 
-    // 暴露到全局
+    // ==== 暴露到全局 ====
     global.Workflow = Workflow;
-    global.WORKFLOW_STEPS = STEPS;
 })(typeof window !== 'undefined' ? window : this);

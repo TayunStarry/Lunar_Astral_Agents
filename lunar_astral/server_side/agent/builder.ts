@@ -116,10 +116,12 @@ class ConfigModifier extends PromptProcessor {
 export class ModelBuilder extends ConfigModifier {
 	/** 运行模型，可输入额外的上下文补充 */
 	public run(appendContext: PostMessage[], toolCall: ToolCall[]): modelResponse {
-		/** 模型请求体消息列表 */
-		const messages = [
+		/** 模型请求体消息列表（拼接所有来源） */
+		const rawMessages: PostMessage[] = [
 			// 系统提示词
 			{ role: 'system', content: this.systemPrompt },
+			// 用户上下文占位符
+			{ role: 'user', content: '[上下文]' },
 			// 追加的上下文(rag消息)
 			...appendContext,
 			// 早期历史消息
@@ -132,7 +134,7 @@ export class ModelBuilder extends ConfigModifier {
 		/** 构建发给推理模型的请求体 */
 		const requestBody = {
 			model: OnlyData.MultimodalName,
-			messages: messages,
+			messages: rawMessages,
 			stream: this.stream,
 			tools: toolCall,
 			tool_choice: 'auto',
@@ -158,8 +160,19 @@ export class ModelBuilder extends ConfigModifier {
 		const endpoint = "/chat/completions";
 		/** 直接调用Go函数处理请求 */
 		const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
-		// 抛出错误
+		// 抛出请求级错误
 		if (error) throw error;
+		// 检查云端错误响应（网关返回 {error: {...}} 而非正常 choices）
+		if (result?.body?.error) {
+			const errMsg = typeof result.body.error === 'string'
+				? result.body.error
+				: result.body.error.message || JSON.stringify(result.body.error);
+			throw new Error(`模型服务错误 [${result.status}]: ${errMsg}`);
+		}
+		// 检查响应体结构完整性
+		if (!result?.body?.choices) {
+			throw new Error(`模型响应异常: status=${result?.status}, body=${JSON.stringify(result?.body)?.substring(0, 200)}`);
+		}
 		// 返回模型响应
 		return result;
 	}

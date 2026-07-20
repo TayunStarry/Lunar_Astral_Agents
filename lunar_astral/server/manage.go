@@ -5,6 +5,7 @@ import (
 	"context"
 	image "image/server"
 	"lunar_astral/adapters"
+	"lunar_astral/bridging/napcat"
 	"lunar_astral/hierarchy"
 	"lunar_astral/model/llama"
 	"lunar_astral/release"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
@@ -48,6 +50,8 @@ func InitializeServer() {
 	adapters.MusicRenderFunc = handlers.RenderMusicInternal
 	// 运行智能体上下文
 	adapters.RunAgentContext()
+	// 初始化桥接适配器
+	initBridgeAdapter()
 }
 
 // registerHandlers 注册所有HTTP请求处理器
@@ -95,6 +99,36 @@ func initTTSEngine() {
 	module.InitTTSEngine(modelDir, refAudio)
 }
 
+// initBridgeAdapter 初始化桥接适配器
+func initBridgeAdapter() {
+	// 构建配置文件路径
+	exePath, err := os.Executable()
+	if err != nil {
+		logger.Error("LunarCore", "获取可执行文件路径失败: %v", err)
+		return
+	}
+	exeDir := filepath.Dir(exePath)
+	configPath := filepath.Join(exeDir, *config.LocalDir, "lunar_config.json")
+
+	// 加载桥接配置
+	if err := napcat.LoadBridgingConfig(configPath); err != nil {
+		logger.Error("LunarCore", "加载桥接配置失败: %v", err)
+		return
+	}
+
+	// 注册桥接器消息回调
+	napcat.SendMessageToAgent = func(content string, senderName string) {
+		// 将QQ群消息推送到智能体上下文
+		adapters.UnreadContext = append(adapters.UnreadContext, adapters.PostMessage{
+			Role:    "user",
+			Content: content,
+		})
+	}
+
+	// 启动桥接器定时扫描
+	napcat.StartBridgeScanner()
+}
+
 // shutdownServer 优雅关闭服务器
 func shutdownServer(server *http.Server) {
 	// 打印服务器正在关闭的信息
@@ -105,6 +139,8 @@ func shutdownServer(server *http.Server) {
 	defer cancel()
 	// 关闭JavaScript运行时
 	adapters.CloseAgentContext()
+	// 关闭桥接适配器
+	napcat.StopBridge()
 	// 关闭llama.cpp服务器
 	llama.Close()
 	// 关闭WebSocket服务器

@@ -34,19 +34,22 @@ func StartServerListener(server *http.Server) {
 // CORSMiddleware CORS 中间件
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 设置 CORS 相关头信息，允许所有来源访问，支持多种 HTTP 方法和请求头
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
-		// 处理 OPTIONS 请求，直接返回 200 状态码
+		// 处理 OPTIONS 预检请求，直接返回 200
 		if r.Method == "OPTIONS" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
 		// 调用下一个处理器
 		next.ServeHTTP(w, r)
+
+		// 在处理器返回后覆盖 CORS 头，避免与上游（如代理）重复
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	})
 }
 

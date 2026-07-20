@@ -76,7 +76,7 @@
 |------|---------|------|
 | [init.go](init.go) | `ModelConfig` 结构体 | JSON 配置文件加载 + `init()` 入口 |
 | [port.go](port.go) | `BasicPort`、`ModelPort`、`ProxyPort` 等 | 网络端口体系与云服务地址 |
-| [allow.go](allow.go) | `AllowDiffusion`、`AllowMultimodal`、`AllowBrowser` | 功能开关控制 |
+| [allow.go](allow.go) | `AllowDiffusion`、`AllowBrowser` | 功能开关控制 |
 | [engine.go](engine.go) | `InferEngine`、`VisualEngine` | 外部引擎可执行文件路径 |
 | [image.go](image.go) | `MaxWidth`、`MaxHeight`、`JPEGQuality`、`Format`、`FfmpegPath` | 图像处理参数 |
 | [model.go](model.go) | `EmbeddingModel` 等 8 个模型路径 | 全部 AI 模型文件路径（GGUF 格式） |
@@ -134,7 +134,6 @@ MinPort          ModelPort         ProxyPort        MaxPort
 | 变量 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `AllowDiffusion` | `*bool` | `true` | 是否启用扩散图像生成 |
-| `AllowMultimodal` | `*bool` | `true` | 是否启用多模态模型 |
 | `AllowBrowser` | `*bool` | `true` | 是否允许打开系统浏览器 |
 | `ClearPort` | `*bool` | `false` | 是否在启动时清理端口 |
 

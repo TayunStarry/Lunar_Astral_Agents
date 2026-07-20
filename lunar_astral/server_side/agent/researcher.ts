@@ -57,7 +57,7 @@ export class ResearcherRole extends ModelBuilder {
 			type: "function",
 			function: {
 				name: "web_search",
-				description: "执行网络搜索，获取实时信息。当需要联网获取实时数据、最新资讯、事实查询等信息时使用。支持四种模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究，子问题拆解并行搜索）、assembly（大会辩论式深度研究，维新派vs守旧派多轮辩论，综合网络与记忆库信息生成报告，适合复杂争议性问题）。",
+				description: "执行网络搜索，获取实时信息。当需要联网获取实时数据、最新资讯、事实查询等信息时使用。支持四种模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究，子问题拆解并行搜索）、assembly（大会辩论式深度研究，维新派vs守旧派多轮辩论，综合网络与记忆信息生成报告，适合复杂争议性问题）。",
 				parameters: {
 					type: "object",
 					properties: {
@@ -67,7 +67,7 @@ export class ResearcherRole extends ModelBuilder {
 						},
 						mode: {
 							type: "string",
-							description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究）或 assembly（大会辩论式深度研究，综合网络搜索与记忆库）",
+							description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究）或 assembly（大会辩论式深度研究，综合网络搜索与记忆）",
 							enum: ["simple", "webpage", "depth", "assembly"]
 						}
 					},
@@ -79,13 +79,13 @@ export class ResearcherRole extends ModelBuilder {
 			type: "function",
 			function: {
 				name: "memory_query",
-				description: "查询内部记忆库中的历史对话和事件记录。用于回忆过去的对话内容、查找用户偏好、追溯历史事件等需要从内部记忆中检索信息的场景。",
+				description: "回忆过去的对话内容和历史事件记录。用于想起之前聊过的话题、查找用户偏好、追溯历史事件等需要从记忆中回忆信息的场景。",
 				parameters: {
 					type: "object",
 					properties: {
 						query: {
 							type: "string",
-							description: "查询文本，用于在记忆库中搜索相关记录"
+							description: "查询文本，用于回忆相关记录"
 						},
 						top_k: {
 							type: "number",
@@ -143,6 +143,14 @@ export class ResearcherRole extends ModelBuilder {
 		/验证/,
 		/(?:真|假|正确|错误|靠谱|可靠)/,
 		/(?:资料|文献|论文|报告|数据|统计)/,
+		// 时间相关意图
+		/(?:现在|当前|今天|此时).*(?:几点|时间|日期|号|星期|周几)/,
+		/(?:几点|几号|星期几|周几|什么时间|哪天)/,
+		/(?:今天|现在)(?:是|多少).*(?:号|日|时间)/,
+		// 地址位置相关意图
+		/(?:现在|当前|目前).*(?:在哪|位置|地点|地址|地方)/,
+		/(?:我在哪|我在哪里|这是哪|什么地方|哪个城市|哪个省)/,
+		/(?:当前位置|当前地址|所在地|地理位置|具体位置)/,
 	];
 
 	/** 构造函数 */
@@ -177,6 +185,17 @@ export class ResearcherRole extends ModelBuilder {
 
 		// 检查是否匹配研究关键词
 		if (!this.matchKeywords(unreadTexts)) return true;
+
+		// 注入当前时间和位置到运行时上下文（避免多余的工具调用轮次）
+		const now = new Date();
+		const timeStr = now.toLocaleString('zh-CN', {
+			year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+		});
+		const weekDay = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()];
+		const [addressResult] = address();
+		const locationStr = addressResult?.length > 0 ? addressResult.join(' ') : '未知';
+		this.runtimeMessages = [{ role: 'user', content: `当前时间: ${timeStr} ${weekDay}\n当前位置: ${locationStr}` }];
 
 		// 研究详情收集
 		const details: ResearchDetail[] = [];
@@ -302,39 +321,39 @@ export class ResearcherRole extends ModelBuilder {
 		}
 	}
 
-	/** 处理记忆库查询工具调用（同步） */
+	/** 处理记忆查询工具调用（同步） */
 	private handleMemoryQuery(args: MemoryQueryParams): string {
 		try {
 			const query = args.query || '';
-			if (!query.trim()) return '查询失败：查询文本不能为空';
+			if (!query.trim()) return '回忆失败：查询文本不能为空';
 			const topK = args.top_k || 10;
 
-			// 确保记忆库已初始化
+			// 确保记忆已初始化
 			if (!BaseConfig.memoryReady) {
 				BaseConfig.initMemory();
-				if (!BaseConfig.memoryReady) return '查询失败：记忆库未就绪';
+				if (!BaseConfig.memoryReady) return '回忆失败：记忆尚未准备好';
 			}
 
-			console.log(`[研究者] 记忆库查询: query="${query}", topK=${topK}`);
+			console.log(`[研究者] 记忆查询: query="${query}", topK=${topK}`);
 
 			const [results, error] = memoryQuery('lunar_messages', query.trim(), topK);
 			if (error) {
-				console.error(`[研究者] 记忆库查询失败: ${error}`);
-				return `记忆库查询失败：${error}`;
+				console.error(`[研究者] 记忆查询失败: ${error}`);
+				return `回忆失败：${error}`;
 			}
 
-			if (!results || results.length === 0) return '记忆库中未找到相关记录';
+			if (!results || results.length === 0) return '没有回忆起相关的内容';
 
 			const formattedResults = results.map((r, i) =>
-				`[记录${i + 1}] 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`
+				`[记录${i + 1}] 相关度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`
 			).join('\n');
 
-			console.log(`[研究者] 查询到 ${results.length} 条相关记录`);
+			console.log(`[研究者] 回忆到 ${results.length} 条相关记录`);
 			return formattedResults;
 		}
 		catch (error) {
-			console.error('[研究者] 记忆库查询处理异常:', error);
-			return `记忆库查询异常: ${error}`;
+			console.error('[研究者] 记忆查询处理异常:', error);
+			return `回忆异常: ${error}`;
 		}
 	}
 

@@ -130,7 +130,6 @@ const labelMap = {
     'developer': '开发者模式',
     'clear_port': '清理端口',
     'allow_diffusion': '允许扩散',
-    'allow_multimodal': '允许多模态',
     'cloud_model_url': '云端模型地址',
     'cloud_model_key': '云端模型密钥',
     'multimodal_model_name': '多模态模型名称',

@@ -41,7 +41,7 @@ var agentSystem = (function (exports) {
         }
         ;
         static get EmbeddingName() {
-            return OnlyData.customConfig?.cloud?.embedding_model_name || "system-embedding";
+            return "system-embedding";
         }
         ;
         static get userName() {
@@ -538,8 +538,9 @@ var agentSystem = (function (exports) {
     }
     class ModelBuilder extends ConfigModifier {
         run(appendContext, toolCall) {
-            const messages = [
+            const rawMessages = [
                 { role: 'system', content: this.systemPrompt },
+                { role: 'user', content: '[上下文]' },
                 ...appendContext,
                 ...this.messages.slice(0, -1),
                 ...this.runtimeMessages,
@@ -547,7 +548,7 @@ var agentSystem = (function (exports) {
             ];
             const requestBody = {
                 model: OnlyData.MultimodalName,
-                messages: messages,
+                messages: rawMessages,
                 stream: this.stream,
                 tools: toolCall,
                 tool_choice: 'auto',
@@ -570,6 +571,15 @@ var agentSystem = (function (exports) {
             const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
             if (error)
                 throw error;
+            if (result?.body?.error) {
+                const errMsg = typeof result.body.error === 'string'
+                    ? result.body.error
+                    : result.body.error.message || JSON.stringify(result.body.error);
+                throw new Error(`模型服务错误 [${result.status}]: ${errMsg}`);
+            }
+            if (!result?.body?.choices) {
+                throw new Error(`模型响应异常: status=${result?.status}, body=${JSON.stringify(result?.body)?.substring(0, 200)}`);
+            }
             return result;
         }
         queryRagMessages() {
@@ -1848,41 +1858,36 @@ ${recordTexts.join('\n')}
 
 仅输出 JSON 数组，不要包含其他说明文字。`;
         }
-        buildDecisionPrompt(summary, existingRecords) {
-            return `请针对以下记忆点摘要，判断应执行的操作：
+        buildBatchMergePrompt(candidates) {
+            const candidateTexts = candidates.map((c, idx) => {
+                const existingText = c.existingRecords.map((r, i) => `[历史记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
+                return `--- 待合并项${idx + 1} ---
+当前摘要: 时间:${c.summary.time} | 地点:${c.summary.location} | 内容:${c.summary.content} | 话题:${c.summary.topic}
+已有历史记录:
+${existingText}`;
+            }).join('\n\n');
+            return `请对以下 ${candidates.length} 个待合并项逐一判断：当前摘要与历史记录内容相似但需要合并更新。
 
-【当前摘要】
-- 时间: ${summary.time}
-- 地点: ${summary.location}
-- 内容: ${summary.content}
-- 话题: ${summary.topic}
-
-【已有相关记录】
-${existingRecords}
-
-【决策要求】
-请判断以下三项：
-1. 是否需要与已有记录合并？若合并，需提供合并后的完整内容（合并方式：删除旧记录，写入新合并记录）
-2. 是否需要删除某些已有记录？列出要删除的记录ID
-3. 是否需要将当前摘要持久化存储到数据库？
+${candidateTexts}
 
 【决策原则】
-- 完全重复的信息：删除旧的，不写入新的（should_store=false）
-- 语义关联可合并：删除旧的，写入合并后的新内容（should_store=true，store_content为合并后内容）
-- 无相似记录：直接写入新摘要（should_store=true，store_content为原摘要格式化内容）
-- 已有记录过时但新摘要无价值：仅删除旧的（should_store=false）
+对每个待合并项：
+1. 若当前摘要与历史记录语义完全相同 → merged_content 为空字符串，delete_ids 包含需要清理的历史记录ID
+2. 若当前摘要包含历史记录中没有的新信息 → 合并为更完整的记录，merged_content 为合并后内容（以 [时间] 地点:... | 事件:... | 话题:... 格式输出），delete_ids 包含被合并的历史记录ID
+3. 若历史记录已足够完整，当前摘要无新增信息 → merged_content 为空字符串，delete_ids 为空数组（保留原记录不变）
 
 【输出格式】
-请输出 JSON 对象：
+请输出 JSON 数组，每个元素对应一个待合并项的决策结果（顺序与输入一致）：
 \`\`\`json
-{
-  "delete_ids": ["需要删除的记录ID列表"],
-  "should_store": true或false,
-  "store_content": "若存储，使用的内容（合并时为合并后内容，否则为原摘要格式化内容）"
-}
+[
+  {
+    "delete_ids": ["需要删除的历史记录ID"],
+    "merged_content": "合并后的完整内容（空字符串表示放弃合并）"
+  }
+]
 \`\`\`
 
-仅输出 JSON 对象，不要包含其他说明文字。`;
+仅输出 JSON 数组，不要包含其他说明文字。`;
         }
         formatSummaryAsRecord(summary) {
             return `[${summary.time}] 地点:${summary.location} | 事件:${summary.content} | 话题:${summary.topic}`;
@@ -1948,6 +1953,10 @@ ${existingRecords}
         }
     }
     class OrganizeRole extends Toolchain {
+        DUPLICATE_THRESHOLD = 0.85;
+        MERGE_THRESHOLD = 0.55;
+        DEDUP_THRESHOLD = 0.93;
+        MERGE_BATCH_SIZE = 10;
         constructor() {
             super(fileView('prompts/organizeRole.md')[0]);
         }
@@ -1971,9 +1980,16 @@ ${existingRecords}
                     return;
                 }
                 console.log(`[编纂者] 阶段一完成，生成 ${summaries.length} 条记忆点摘要`);
-                const decisions = this.processSummaries(summaries);
-                console.log(`[编纂者] 阶段二完成，生成 ${decisions.length} 条决策`);
+                const { decisions, mergeCandidates } = this.classifyAndDecide(summaries);
+                const dupCount = decisions.filter(d => d.category === 'duplicate').length;
+                const newCount = decisions.filter(d => d.category === 'new').length;
+                const mergeCount = mergeCandidates.length;
+                console.log(`[编纂者] 阶段二三完成 — 重复:${dupCount} | 待合并:${mergeCount} | 新增:${newCount}`);
+                if (mergeCandidates.length > 0) {
+                    this.processMergeCandidates(decisions, mergeCandidates);
+                }
                 this.executeBatchActions(decisions);
+                this.deduplicateMemory();
                 console.log('[编纂者] 历史记录组织完成');
                 OnlyData.unreadRecords = [];
             }
@@ -1999,21 +2015,88 @@ ${existingRecords}
                 return [];
             return summaries.filter(s => s && s.content && s.content.trim().length > 0);
         }
-        processSummaries(summaries) {
+        classifyAndDecide(summaries) {
             const decisions = [];
+            const mergeCandidates = [];
             for (const summary of summaries) {
-                const decision = this.processMemorySummary(summary);
-                decisions.push(decision);
+                const queryText = summary.topic || summary.content.slice(0, 50);
+                const existing = this.queryExistingRecords(queryText, 10);
+                if (existing.length === 0) {
+                    decisions.push({
+                        summary,
+                        category: 'new',
+                        deleteIds: [],
+                        shouldStore: true,
+                        storeContent: this.formatSummaryAsRecord(summary),
+                    });
+                    continue;
+                }
+                const maxSimilarity = Math.max(...existing.map(r => r.similarity));
+                if (maxSimilarity >= this.DUPLICATE_THRESHOLD) {
+                    console.log(`[编纂者] 重复过滤（相似度 ${(maxSimilarity * 100).toFixed(1)}%）: "${summary.content.slice(0, 30)}..."`);
+                    decisions.push({
+                        summary,
+                        category: 'duplicate',
+                        deleteIds: [],
+                        shouldStore: false,
+                        storeContent: '',
+                    });
+                }
+                else if (maxSimilarity >= this.MERGE_THRESHOLD) {
+                    const relevantRecords = existing.filter(r => r.similarity >= this.MERGE_THRESHOLD);
+                    decisions.push({
+                        summary,
+                        category: 'merge',
+                        deleteIds: [],
+                        shouldStore: false,
+                        storeContent: '',
+                    });
+                    mergeCandidates.push({ summary, existingRecords: relevantRecords });
+                }
+                else {
+                    decisions.push({
+                        summary,
+                        category: 'new',
+                        deleteIds: [],
+                        shouldStore: true,
+                        storeContent: this.formatSummaryAsRecord(summary),
+                    });
+                }
             }
-            return decisions;
+            return { decisions, mergeCandidates };
         }
-        processMemorySummary(summary) {
-            const queryText = summary.topic || summary.content.slice(0, 50);
-            const existing = this.queryExistingRecords(queryText, 10);
-            const existingText = existing.length === 0
-                ? '无相关已有记录'
-                : existing.map((r, i) => `[记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
-            const prompt = this.buildDecisionPrompt(summary, existingText);
+        processMergeCandidates(decisions, mergeCandidates) {
+            console.log(`[编纂者] 阶段四：开始批量合并 ${mergeCandidates.length} 项`);
+            for (let batchStart = 0; batchStart < mergeCandidates.length; batchStart += this.MERGE_BATCH_SIZE) {
+                const batch = mergeCandidates.slice(batchStart, batchStart + this.MERGE_BATCH_SIZE);
+                const batchResults = this.executeBatchMerge(batch);
+                for (let i = 0; i < batch.length; i++) {
+                    const candidate = batch[i];
+                    const result = batchResults[i];
+                    const decisionIdx = decisions.findIndex(d => d.category === 'merge' && d.summary === candidate.summary);
+                    if (decisionIdx === -1)
+                        continue;
+                    if (result && result.merged_content && result.merged_content.trim()) {
+                        decisions[decisionIdx].deleteIds = result.delete_ids || [];
+                        decisions[decisionIdx].shouldStore = true;
+                        decisions[decisionIdx].storeContent = result.merged_content.trim();
+                        console.log(`[编纂者] 合并成功: "${candidate.summary.content.slice(0, 30)}..." → 删${decisions[decisionIdx].deleteIds.length}条+写1条`);
+                    }
+                    else if (result && result.delete_ids && result.delete_ids.length > 0) {
+                        decisions[decisionIdx].deleteIds = result.delete_ids;
+                        decisions[decisionIdx].shouldStore = false;
+                        console.log(`[编纂者] LLM判定重复: "${candidate.summary.content.slice(0, 30)}..." → 仅删${result.delete_ids.length}条`);
+                    }
+                    else {
+                        decisions[decisionIdx].shouldStore = true;
+                        decisions[decisionIdx].storeContent = this.formatSummaryAsRecord(candidate.summary);
+                        console.log(`[编纂者] 合并无变化，直接存储: "${candidate.summary.content.slice(0, 30)}..."`);
+                    }
+                }
+            }
+        }
+        executeBatchMerge(batch) {
+            const prompt = this.buildBatchMergePrompt(batch);
             this.coverContext({ role: 'user', content: prompt });
             this.runtimeMessages = [];
             let response;
@@ -2021,36 +2104,50 @@ ${existingRecords}
                 response = this.run([], []);
             }
             catch (error) {
-                console.error('[编纂者] 阶段二模型推理失败，使用默认决策（存储原摘要）:', error);
-                return this.buildFallbackDecision(summary, existing);
+                console.error('[编纂者] 阶段四批量合并推理失败:', error);
+                return batch.map(() => ({ delete_ids: [], merged_content: '' }));
             }
             const content = response.body?.choices?.[0]?.message?.content || '';
-            const decision = this.parseJsonResponse(content);
-            if (!decision) {
-                return this.buildFallbackDecision(summary, existing);
+            const results = this.parseJsonResponse(content);
+            if (!results || !Array.isArray(results)) {
+                console.warn('[编纂者] 批量合并结果解析失败，回退为直接存储');
+                return batch.map(() => ({ delete_ids: [], merged_content: '' }));
             }
-            let storeContent = decision.store_content || '';
-            if (decision.should_store && !storeContent) {
-                storeContent = this.formatSummaryAsRecord(summary);
+            while (results.length < batch.length) {
+                results.push({ delete_ids: [], merged_content: '' });
             }
-            return {
-                summary,
-                deleteIds: decision.delete_ids || [],
-                shouldStore: !!decision.should_store,
-                storeContent
-            };
+            return results.slice(0, batch.length);
         }
-        buildFallbackDecision(summary, existing) {
-            const SIMILARITY_THRESHOLD = 0.85;
-            const deleteIds = existing
-                .filter(r => r.similarity >= SIMILARITY_THRESHOLD)
-                .map(r => r.id);
-            return {
-                summary,
-                deleteIds,
-                shouldStore: true,
-                storeContent: this.formatSummaryAsRecord(summary)
-            };
+        deduplicateMemory() {
+            const recentRecords = this.queryExistingRecords('近期对话 重要事件', 15);
+            if (recentRecords.length === 0)
+                return;
+            const toDelete = [];
+            for (const record of recentRecords) {
+                const queryText = record.content.slice(0, 80);
+                const matches = this.queryExistingRecords(queryText, 5);
+                for (const match of matches) {
+                    if (match.id === record.id)
+                        continue;
+                    if (match.similarity >= this.DEDUP_THRESHOLD) {
+                        const shorterId = record.content.length <= match.content.length ? record.id : match.id;
+                        if (!toDelete.includes(shorterId)) {
+                            toDelete.push(shorterId);
+                            console.log(`[编纂者] 去重扫描发现重复记录，删除较短项 ${shorterId}（相似度 ${(match.similarity * 100).toFixed(1)}%）`);
+                        }
+                    }
+                }
+            }
+            for (const id of toDelete) {
+                const trimmedId = id.trim();
+                if (!trimmedId)
+                    continue;
+                const [, error] = memoryDelete('lunar_messages', trimmedId);
+                if (error)
+                    console.error(`[编纂者] 去重删除 ${trimmedId} 失败:`, error);
+                else
+                    console.log(`[编纂者] 已去重删除记录 ${trimmedId}`);
+            }
         }
         persistDiscardedMessages(discarded) {
             console.log('[编纂者] 开始持久化被抛弃的消息');

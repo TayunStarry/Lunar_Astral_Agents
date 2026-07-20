@@ -10,8 +10,6 @@ export interface Config {
 		cloud_model_key?: string;
 		/** 视觉理解模型名称 */
 		multimodal_model_name?: string;
-		/** 文本嵌入模型名称 */
-		embedding_model_name?: string;
 	};
 	server: {
 		/** 用户名 */

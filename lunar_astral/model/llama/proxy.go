@@ -19,11 +19,6 @@ import (
 
 // Init 初始化并启动 llama.cpp 服务器
 func Init() {
-	// 判断是否在配置中允许加载多模态模型
-	if *config.AllowMultimodal == false {
-		return
-	}
-
 	args := []string{
 		// 模型预设配置文件路径
 		"--models-preset", "local_data/models/models.ini",
@@ -217,20 +212,26 @@ func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 
 // ProxyToCloud 将请求反向代理到云服务器
 func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
-	target, err := url.Parse(*config.CloudModelUrl + "/chat/completions")
+	target, err := url.Parse(*config.CloudModelUrl)
 	if err != nil {
 		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
 		return
 	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	// 自定义 Director 函数，强制将所有请求重定向到 /chat/completions
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		logger.Error("LlamaProxy", "云代理错误: %v", err)
+		http.Error(w, "GGUF模块[ERROR] -> 云代理失败", http.StatusBadGateway)
+	}
+	// 自定义 Director 函数，保留原始请求路径并注入认证头
 	proxy.Director = func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
-		req.URL.Path = target.Path
-		req.URL.RawPath = ""
-		req.URL.RawQuery = ""
 		req.Host = target.Host
+		// 注入云模型密钥认证头
+		if *config.CloudModelKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.CloudModelKey)
+		}
 	}
+	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *config.CloudModelUrl, r.URL.Path)
 	proxy.ServeHTTP(w, r)
 }

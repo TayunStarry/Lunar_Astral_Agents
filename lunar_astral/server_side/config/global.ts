@@ -57,9 +57,9 @@ export class OnlyData {
 	public static get MultimodalName(): string {
 		return OnlyData.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
 	};
-	/** 获取 嵌入模型名称 */
+	/** 获取 嵌入模型名称（固定使用本地模型） */
 	public static get EmbeddingName(): string {
-		return OnlyData.customConfig?.cloud?.embedding_model_name || "system-embedding";
+		return "system-embedding";
 	};
 	/** 获取 用户名 */
 	public static get userName(): string {

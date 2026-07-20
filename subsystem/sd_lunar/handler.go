@@ -453,15 +453,14 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success":          true,
-			"visual_engine":    getVisualEngine(),
-			"diffusion_model":  getDiffusionModel(),
-			"vae_model":        getVAEModel(),
-			"refine_model":     getRefineModel(),
-			"allow_diffusion":  *config.AllowDiffusion,
-			"allow_multimodal": *config.AllowMultimodal,
-			"developer":        *config.Developer,
-			"local_dir":        *config.LocalDir,
+			"success":         true,
+			"visual_engine":   getVisualEngine(),
+			"diffusion_model": getDiffusionModel(),
+			"vae_model":       getVAEModel(),
+			"refine_model":    getRefineModel(),
+			"allow_diffusion": *config.AllowDiffusion,
+			"developer":       *config.Developer,
+			"local_dir":       *config.LocalDir,
 		})
 		return
 	}

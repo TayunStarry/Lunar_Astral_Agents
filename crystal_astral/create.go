@@ -62,14 +62,11 @@ func reloadPageParameters() {
 }
 
 // initMemoryDatabase 自动初始化记忆库实例与默认集合
-// 优先使用配置的 cloud_model_url；未配置时回退到月华服务地址（http://localhost:<BasicPort>/v1）
+// 嵌入模型锁定使用本地月华服务代理（http://localhost:<BasicPort>/v1），不走云端
 // 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化
 func initMemoryDatabase() {
-	// 解析嵌入服务 base_url：配置优先，否则回退到月华服务地址
-	baseURL := *config.CloudModelUrl
-	if baseURL == "" {
-		baseURL = fmt.Sprintf("http://localhost:%d/v1", *config.BasicPort)
-	}
+	// 嵌入服务 base_url：始终使用本地月华服务代理
+	baseURL := fmt.Sprintf("http://localhost:%d/v1", *config.BasicPort)
 
 	// 第一步：实例初始化（仅配置嵌入服务连接，不产生网络请求）
 	if err := module.MemoryInitInstance(baseURL, defaultMemoryAPIKey); err != nil {

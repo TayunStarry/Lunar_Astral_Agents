@@ -15,4 +15,6 @@ var (
 	ProxyPort = flag.Int("proxy-port", *BasicPort+5, "系统Web服务的代理监听口, 边定了系统Web服务的端口范围")
 	// CloudModelUrl 云模型服务的地址，用于云端模型调用等任务
 	CloudModelUrl = flag.String("cloud-model-url", "", "云模型服务的地址, 用于云端模型调用等任务")
+	// CloudModelKey 云模型服务的密钥，用于认证请求
+	CloudModelKey = flag.String("cloud-model-key", "", "云模型服务的密钥, 用于认证请求")
 )

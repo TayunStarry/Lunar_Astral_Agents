@@ -20,17 +20,15 @@ type ModelConfig struct {
 	} `json:"models"`
 	// 服务器配置
 	Server struct {
-		Developer       bool `json:"developer"`        // 是否为开发者模式
-		ClearPort       bool `json:"clear_port"`       // 是否清除端口
-		AllowDiffusion  bool `json:"allow_diffusion"`  // 是否允许加载扩散模型
-		AllowMultimodal bool `json:"allow_multimodal"` // 是否允许加载多模态模型
+		Developer      bool `json:"developer"`       // 是否为开发者模式
+		ClearPort      bool `json:"clear_port"`      // 是否清除端口
+		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许加载扩散模型
 	} `json:"server"`
 	// 云模型配置
 	Cloud struct {
 		CloudModelUrl       string `json:"cloud_model_url"`       // 云模型服务地址
 		CloudModelKey       string `json:"cloud_model_key"`       // 云模型密钥
 		MultimodalModelName string `json:"multimodal_model_name"` // 多模态模型名称
-		EmbeddingModelName  string `json:"embedding_model_name"`  // 嵌入模型名称
 	} `json:"cloud"`
 }
 
@@ -88,6 +86,10 @@ func init() {
 	if parameter.Cloud.CloudModelUrl != "" {
 		*CloudModelUrl = parameter.Cloud.CloudModelUrl
 	}
+	// 如果配置文件中 CloudModelKey 字段非空，则更新全局配置
+	if parameter.Cloud.CloudModelKey != "" {
+		*CloudModelKey = parameter.Cloud.CloudModelKey
+	}
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.Server.Developer == true {
 		*Developer = true
@@ -105,11 +107,5 @@ func init() {
 		*AllowDiffusion = true
 	} else {
 		*AllowDiffusion = false
-	}
-	// 如果配置文件中 AllowMultimodal 字段非空，则更新全局配置
-	if parameter.Server.AllowMultimodal == true {
-		*AllowMultimodal = true
-	} else {
-		*AllowMultimodal = false
 	}
 }

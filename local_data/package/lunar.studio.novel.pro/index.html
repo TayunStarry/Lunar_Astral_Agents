@@ -15,286 +15,298 @@
 
 <body>
     <!-- 背景层 -->
-    <div class="background"></div>
+    <div class="background" id="backgroundLayer"></div>
     <!-- 玻璃效果层 -->
     <div class="glass-effect"></div>
 
-    <!-- 主容器：三栏工作台 -->
-    <div class="container workspace">
+    <!-- 主容器 -->
+    <div class="container">
         <!-- 顶部工具栏 -->
         <header class="toolbar">
-            <div class="toolbar-brand">
-                <i class="fas fa-feather-pointed"></i>
-                <span>小说工作室 <em>Pro</em></span>
-            </div>
-            <div class="toolbar-actions">
-                <button id="buildBtn" class="btn-glass btn-glass-primary" title="从第1章开始构建（覆盖现有草稿）">
+            <div class="toolbar-left">
+                <button id="buildBtn" class="btn-glass btn-glass-primary">
                     <i class="fas fa-hammer"></i> 构建
                 </button>
-                <button id="continueBtn" class="btn-glass btn-glass-primary" title="从中断点恢复续写">
-                    <i class="fas fa-pen-fancy"></i> 续写
+                <button id="continueBtn" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-pen-fancy"></i> 续写下一章
                 </button>
-                <button id="stopBtn" class="btn-glass btn-glass-danger" disabled title="调用级中断（步骤3/7段落之间）">
+                <button id="stopBtn" class="btn-glass btn-glass-danger" disabled>
                     <i class="fas fa-stop-circle"></i> 中断
                 </button>
                 <span class="toolbar-divider"></span>
-                <button id="exportBtn" class="btn-glass" title="导出 TXT/MD/CSV/JSON">
-                    <i class="fas fa-download"></i> 导出
-                </button>
+                <button id="exportBtn" class="btn-glass"><i class="fas fa-download"></i> 导出</button>
                 <button id="editChapterBtn" class="btn-glass" disabled title="仅可编辑已审核通过的章节">
                     <i class="fas fa-edit"></i> 编辑
                 </button>
-                <button id="resetBtn" class="btn-glass btn-glass-danger" title="清空全部状态">
-                    <i class="fas fa-undo-alt"></i> 重置
-                </button>
+                <button id="configBtn" class="btn-glass"><i class="fas fa-cog"></i> 配置</button>
+                <button id="resetBtn" class="btn-glass btn-glass-danger"><i class="fas fa-undo-alt"></i> 重置</button>
             </div>
-            <div class="toolbar-status" id="toolbarStatus">
+            <div class="toolbar-right">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">就绪</span>
             </div>
         </header>
 
-        <!-- 主内容区：三栏 grid -->
-        <div class="main-grid">
-
-            <!-- ============ 左栏：知识库 + 配置 ============ -->
-            <aside class="col-left">
-                <!-- 故事引子 -->
-                <section class="glass-panel panel-block">
-                    <h3 class="panel-title">
-                        <i class="fas fa-lightbulb"></i> 故事引子
-                    </h3>
-                    <textarea id="seedInput" class="panel-textarea"
-                        placeholder="故事起点，可为空。支持 # 第X章 标题自动识别为预制章节" rows="3"></textarea>
-                </section>
-
-                <!-- 知识点双 tab -->
-                <section class="glass-panel panel-block" id="memoriesPanel">
-                    <h3 class="panel-title">
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧控制面板 -->
+            <aside class="side-panel" id="sidePanel">
+                <!-- 分页导航 -->
+                <nav class="sidebar-tabs" id="sidebarTabs">
+                    <button class="sidebar-tab active" data-page="creative">
+                        <i class="fas fa-lightbulb"></i> 创意构建
+                    </button>
+                    <button class="sidebar-tab" data-page="outlines">
+                        <i class="fas fa-list-ol"></i> 章节纲要
+                    </button>
+                    <button class="sidebar-tab" data-page="knowledge">
                         <i class="fas fa-brain"></i> 知识库
-                        <span class="memories-counter" id="memoriesCounter">0</span>
-                    </h3>
-                    <div class="tab-bar" id="knowledgeTabs">
-                        <button class="tab-btn active" data-tab="quick">
-                            <i class="fas fa-plus-circle"></i> 快速单条
-                        </button>
-                        <button class="tab-btn" data-tab="bulk">
-                            <i class="fas fa-layer-group"></i> 批量长文
-                        </button>
-                    </div>
-                    <!-- 快速单条 tab -->
-                    <div class="tab-pane active" data-pane="quick" id="quickPane">
-                        <input type="text" id="spPathInput" class="memory-input memory-input-full"
-                            placeholder="路径（如 人物/林冲/外貌）" maxlength="60">
-                        <textarea id="spContentInput" class="panel-textarea"
-                            placeholder="知识点内容..." rows="3"></textarea>
-                        <button id="spAddBtn" class="btn-glass btn-glass-small btn-block">
-                            <i class="fas fa-plus"></i> 入库
-                        </button>
-                    </div>
-                    <!-- 批量长文 tab -->
-                    <div class="tab-pane" data-pane="bulk" id="bulkPane">
-                        <textarea id="bulkTextInput" class="panel-textarea"
-                            placeholder="粘贴长文，支持 Markdown。点击切片预览后可选择入库项" rows="5"></textarea>
-                        <div class="bulk-actions">
-                            <button id="bulkSplitBtn" class="btn-glass btn-glass-small">
-                                <i class="fas fa-cut"></i> 切片预览
-                            </button>
-                            <span class="bulk-hint" id="bulkHint">idealLen=800</span>
-                        </div>
-                        <div class="bulk-preview" id="bulkPreview"></div>
-                        <button id="bulkCommitBtn" class="btn-glass btn-glass-small btn-block" disabled>
-                            <i class="fas fa-cloud-upload-alt"></i> 批量入库
-                        </button>
-                    </div>
-                    <!-- 知识点列表 -->
-                    <div class="memories-list" id="memoriesList">
-                        <div class="empty-state-small">暂无知识点</div>
-                    </div>
-                </section>
+                    </button>
+                    <button class="sidebar-tab" data-page="review" id="reviewTab" style="display:none;">
+                        <i class="fas fa-gavel"></i> 审核
+                        <span class="tab-badge" id="reviewBadge" style="display:none;">!</span>
+                    </button>
+                </nav>
 
-                <!-- 参数设置 -->
-                <section class="glass-panel panel-block">
-                    <h3 class="panel-title">
-                        <i class="fas fa-sliders-h"></i> 参数设置
-                    </h3>
-                    <div class="param-grid">
-                        <div class="param-item">
-                            <label>章节最小字数</label>
-                            <input type="number" id="wordMin" class="param-input" value="3000" min="500" max="50000" step="100">
-                        </div>
-                        <div class="param-item">
-                            <label>章节最大字数</label>
-                            <input type="number" id="wordMax" class="param-input" value="4000" min="500" max="50000" step="100">
-                        </div>
-                        <div class="param-item">
-                            <label>段落目标字数</label>
-                            <input type="number" id="paragraphTarget" class="param-input" value="400" min="200" max="600" step="50">
-                        </div>
-                        <div class="param-item">
-                            <label>整章重写上限</label>
-                            <input type="number" id="maxChapterRewrite" class="param-input" value="3" min="1" max="5" step="1">
+                <!-- 页面容器 -->
+                <div class="sidebar-pages">
+                    <!-- ===== 创意构建页 ===== -->
+                    <div class="sidebar-page active" data-page="creative" id="pageCreative">
+                        <div class="outlines-grid">
+                            <div class="panel-section param-card" id="creativeSection">
+                                <h3 class="panel-title collapsible" data-toggle="creativeBody">
+                                    <i class="fas fa-file-import"></i> 素材导入
+                                    <i class="fas fa-chevron-down collapse-icon"></i>
+                                </h3>
+                                <div class="panel-body" id="creativeBody">
+                                    <div class="import-zone" id="importZone">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <p>拖拽 .txt/.md 文件到此处，或点击选择</p>
+                                        <input type="file" id="fileInput" accept=".txt,.md,.json" style="display:none">
+                                        <button id="selectFileBtn" class="btn-glass btn-glass-small"><i class="fas fa-folder-open"></i> 选择文件</button>
+                                    </div>
+                                    <textarea id="rawTextInput" class="panel-textarea" placeholder="或在此直接输入原始大纲/创意引导/前情提要..." rows="4"></textarea>
+                                    <button id="extractOutlineBtn" class="btn-glass btn-glass-primary btn-block"><i class="fas fa-magic"></i> AI 提取纲要</button>
+                                    <div class="import-hint" id="importHint" style="display:none;"></div>
+                                </div>
+                            </div>
+
+                            <div class="panel-section outline-card">
+                                <h3 class="panel-title"><i class="fas fa-sitemap"></i> 总体大纲 <span class="title-badge" id="outlineStatus">未填写</span></h3>
+                                <textarea id="outlineInput" class="panel-textarea" placeholder="AI 生成或手动编辑总体大纲..." rows="5"></textarea>
+                            </div>
+
+                            <div class="panel-section outline-card">
+                                <h3 class="panel-title"><i class="fas fa-check-double"></i> 章节评判标准 <span class="title-badge" id="criteriaStatus">未填写</span></h3>
+                                <textarea id="criteriaInput" class="panel-textarea" placeholder="AI 生成或手动编辑评判标准..." rows="3"></textarea>
+                            </div>
+
+                            <div class="panel-section outline-card">
+                                <h3 class="panel-title"><i class="fas fa-list-ol"></i> 各章节大纲 <span class="title-badge" id="chapterOutlinesStatus">未填写</span></h3>
+                                <div class="chapter-outlines-summary" id="chapterOutlinesList">
+                                    <div class="empty-state-small">AI 提取后显示各章节大纲</div>
+                                </div>
+                                <button id="editOutlinesBtn" class="btn-glass btn-glass-small btn-block" style="display:none;">
+                                    <i class="fas fa-edit"></i> 查看/编辑章节大纲
+                                </button>
+                            </div>
+
+                            <div class="panel-section param-card" id="confirmSection">
+                                <button id="confirmInitBtn" class="btn-glass btn-glass-primary btn-block confirm-init-btn" disabled>
+                                    <i class="fas fa-check-circle"></i> 确认初始化完成
+                                </button>
+                                <div class="confirm-init-hint" id="confirmInitHint" style="display:none;"></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="switch-group">
-                        <label class="switch-label" title="开启后用户输入的走向将覆盖 AI 生成结果">
-                            <input type="checkbox" id="overwriteDirection">
-                            <span class="switch-slider"></span>
-                            走向覆写
-                        </label>
-                        <label class="switch-label" title="开启后总体大纲将自动修订（默认关闭）">
-                            <input type="checkbox" id="autoReviseOutline">
-                            <span class="switch-slider"></span>
-                            自动修订大纲
-                        </label>
+
+                    <!-- ===== 章节纲要页 ===== -->
+                    <div class="sidebar-page" data-page="outlines" id="pageOutlines">
+                        <div class="outlines-grid">
+                            <div class="panel-section outline-card">
+                                <h3 class="panel-title"><i class="fas fa-arrow-right"></i> 当前章节大纲</h3>
+                                <textarea id="directionInput" class="panel-textarea" placeholder="当前章节发展方向..." rows="3"></textarea>
+                            </div>
+
+                            <div class="panel-section outline-card">
+                                <h3 class="panel-title"><i class="fas fa-check-double"></i> 评判标准</h3>
+                                <textarea id="criteriaViewInput" class="panel-textarea" placeholder="..." rows="3"></textarea>
+                            </div>
+
+                            <div class="panel-section param-card">
+                                <h3 class="panel-title"><i class="fas fa-sliders-h"></i> 参数设置</h3>
+                                <div class="param-grid">
+                                    <div class="param-item">
+                                        <label>最小字数</label>
+                                        <input type="number" id="wordMin" class="param-input" value="3000" min="500" max="50000" step="100">
+                                    </div>
+                                    <div class="param-item">
+                                        <label>最大字数</label>
+                                        <input type="number" id="wordMax" class="param-input" value="4000" min="500" max="50000" step="100">
+                                    </div>
+                                    <div class="param-item">
+                                        <label>段落目标字数</label>
+                                        <input type="number" id="paragraphTarget" class="param-input" value="400" min="200" max="600" step="50">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 待确认：下一章走向 -->
+                            <div class="panel-section outline-card next-direction-card" id="nextDirectionCard" style="display:none;">
+                                <h3 class="panel-title"><i class="fas fa-bell"></i> 待确认：下一章走向</h3>
+                                <label class="next-label">走向建议</label>
+                                <textarea id="nextDirectionPreview" class="panel-textarea" rows="3" readonly></textarea>
+                                <label class="next-label">评判标准建议</label>
+                                <textarea id="nextCriteriaPreview" class="panel-textarea" rows="2" readonly></textarea>
+                                <div class="next-direction-actions">
+                                    <button id="nextDirectionEditBtn" class="btn-glass btn-glass-small"><i class="fas fa-edit"></i> 编辑后采纳</button>
+                                    <button id="nextDirectionAcceptBtn" class="btn-glass btn-glass-small btn-glass-primary"><i class="fas fa-check"></i> 采纳</button>
+                                    <button id="nextDirectionRejectBtn" class="btn-glass btn-glass-small btn-glass-danger"><i class="fas fa-times"></i> 弃用</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </section>
+
+                    <!-- ===== 知识库页 ===== -->
+                    <div class="sidebar-page" data-page="knowledge" id="pageKnowledge">
+                        <div class="panel-section" id="memoriesPanel">
+                            <h3 class="panel-title">
+                                <i class="fas fa-brain"></i> 知识库
+                                <span class="memories-counter" id="memoriesCounter">0</span>
+                            </h3>
+                            <div class="tab-bar" id="knowledgeTabs">
+                                <button class="tab-btn active" data-tab="quick"><i class="fas fa-plus-circle"></i> 快速单条</button>
+                                <button class="tab-btn" data-tab="aiSummary"><i class="fas fa-robot"></i> AI 摘要</button>
+                            </div>
+                            <div class="tab-pane active" data-pane="quick" id="quickPane">
+                                <textarea id="spContentInput" class="panel-textarea" placeholder="输入知识点内容..." rows="2"></textarea>
+                                <button id="spAddBtn" class="btn-glass btn-glass-small btn-block"><i class="fas fa-plus"></i> 入库</button>
+                            </div>
+                            <div class="tab-pane" data-pane="aiSummary" id="aiSummaryPane">
+                                <textarea id="bulkTextInput" class="panel-textarea" placeholder="粘贴长文本，AI 将自动拆解为知识点摘要..." rows="3"></textarea>
+                                <button id="aiSummarizeBtn" class="btn-glass btn-glass-small btn-block"><i class="fas fa-magic"></i> AI 拆解入库</button>
+                            </div>
+                            <div class="memories-list" id="memoriesList">
+                                <div class="empty-state-small">暂无知识点</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== 审核页 ===== -->
+                    <div class="sidebar-page" data-page="review" id="pageReview">
+                        <div class="panel-section human-approval-card" id="humanApprovalCard" style="display:none;">
+                            <h3 class="panel-title"><i class="fas fa-gavel"></i> 人工审核待办</h3>
+                            <p class="approval-hint" id="approvalHint">章节已生成，请审核段落。</p>
+                            <button id="openApprovalBtn" class="btn-glass btn-glass-primary btn-block"><i class="fas fa-eye"></i> 开始段落审核</button>
+                        </div>
+                        <!-- 审核内容区（内联渲染） -->
+                        <div class="review-inline" id="reviewInline" style="display:none;"></div>
+                        <!-- 空状态 -->
+                        <div class="review-empty" id="reviewEmpty">
+                            <div class="empty-state">
+                                <i class="fas fa-gavel"></i>
+                                <h3>暂无审核内容</h3>
+                                <p>章节生成完成后，审核内容将在此显示</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </aside>
 
-            <!-- ============ 中栏：章节生成 + 10 步进度 ============ -->
-            <main class="col-center">
-                <!-- 10 步进度条 -->
-                <section class="glass-panel progress-panel">
-                    <div class="progress-header">
-                        <span class="progress-title">
-                            <i class="fas fa-stream"></i> 10 步流水线
-                        </span>
-                        <span class="progress-current" id="progressCurrentStep">—</span>
-                    </div>
-                    <div class="step-track" id="stepTrack">
-                        <!-- 10 个步骤节点由 JS 渲染 -->
-                    </div>
-                    <div class="progress-message" id="progressMessage">点击「构建」开始第 1 章</div>
-                </section>
+            <!-- 右侧章节浏览区 -->
+            <main class="chapter-viewer" id="chapterViewer">
+                <!-- 进度条（单行） -->
+                <div class="glass-panel progress-panel" id="progressPanel">
+                    <span class="progress-title"><i class="fas fa-stream"></i> 生成进度</span>
+                    <span class="progress-current" id="progressCurrentStep">—</span>
+                    <span class="progress-message" id="progressMessage">点击「构建」开始第 1 章</span>
+                </div>
 
-                <!-- 章节浏览 -->
-                <section class="glass-panel chapter-panel">
-                    <div class="chapter-nav">
-                        <button id="prevChapterBtn" class="btn-glass btn-glass-small" disabled>
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        <span class="chapter-title" id="chapterTitle">尚未开始</span>
-                        <button id="nextChapterBtn" class="btn-glass btn-glass-small" disabled>
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
-                    </div>
-                    <div class="chapter-content markdown-content" id="chapterContent">
-                        <div class="empty-state">
-                            <i class="fas fa-feather-alt"></i>
-                            <h3>小说工作室 Pro</h3>
-                            <p>10 步流水线：大纲处理 → 段落大纲 → 段落生成 → 格式校验 → 章节大纲评审 → 总体大纲评审 → 段落评审 → 人工审核 → 摘要生成 → 后期编辑</p>
-                        </div>
-                    </div>
-                    <textarea class="chapter-edit-area" id="chapterEditArea" style="display:none;"></textarea>
-                </section>
+                <!-- 章节导航 -->
+                <div class="chapter-nav">
+                    <button id="prevChapterBtn" class="btn-glass btn-glass-small" disabled>
+                        <i class="fas fa-chevron-left"></i> 上一章
+                    </button>
+                    <span class="chapter-title" id="chapterTitle">尚未开始</span>
+                    <button id="nextChapterBtn" class="btn-glass btn-glass-small" disabled>
+                        下一章 <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
 
-                <!-- 草稿段落实时预览（步骤 3/7 期间） -->
-                <section class="glass-panel draft-panel" id="draftPanel" style="display:none;">
-                    <div class="draft-header">
-                        <span class="draft-title">
-                            <i class="fas fa-flask"></i> 草稿段落
-                        </span>
-                        <span class="draft-meta" id="draftMeta">— / —</span>
+                <!-- 章节内容 -->
+                <div class="chapter-content glass-panel markdown-content" id="chapterContent">
+                    <div class="empty-state">
+                        <i class="fas fa-feather-alt"></i>
+                        <h3>小说工作室 Pro</h3>
+                        <p>在左侧面板导入素材并提取纲要，然后点击「构建」开始创作</p>
                     </div>
-                    <div class="draft-paragraphs" id="draftParagraphs"></div>
-                </section>
+                </div>
+                <textarea class="chapter-edit-area glass-panel" id="chapterEditArea" style="display:none;"></textarea>
 
-                <!-- Token 看板 -->
-                <section class="glass-panel token-panel">
-                    <div class="token-cell">
-                        <span class="token-label">本章</span>
-                        <span class="token-value" id="tokenCurrent">0</span>
+                <!-- 章节元信息 -->
+                <div class="chapter-meta" id="chapterMeta" style="display:none;">
+                    <p class="chapter-outline-view" id="chapterOutlineView"></p>
+                    <p class="chapter-summary" id="chapterSummary"></p>
+                </div>
+
+                <!-- 底栏：统计 + Token -->
+                <div class="chapter-footer">
+                    <div class="footer-stats">
+                        <span class="footer-stat"><i class="fas fa-book"></i> 章节: <strong id="chapterCount">0</strong></span>
+                        <span class="footer-stat"><i class="fas fa-font"></i> 字数: <strong id="wordCount">0</strong></span>
                     </div>
-                    <div class="token-cell">
-                        <span class="token-label">累计</span>
-                        <span class="token-value" id="tokenTotal">0</span>
+                    <div class="footer-tokens">
+                        <i class="fas fa-microchip token-icon"></i>
+                        <span class="token-label">本章</span><span class="token-value" id="tokenCurrent">0</span>
+                        <span class="token-sep">/</span>
+                        <span class="token-label">累计</span><span class="token-value" id="tokenTotal">0</span>
+                        <span class="token-unit">tokens</span>
                     </div>
-                    <div class="token-cell">
-                        <span class="token-label">章节</span>
-                        <span class="token-value" id="chapterCount">0</span>
-                    </div>
-                    <div class="token-cell">
-                        <span class="token-label">字数</span>
-                        <span class="token-value" id="wordCount">0</span>
-                    </div>
-                </section>
+                </div>
             </main>
 
-            <!-- ============ 右栏：大纲 + 审核卡片 ============ -->
-            <aside class="col-right">
-                <!-- 总体大纲 -->
-                <section class="glass-panel panel-block">
-                    <h3 class="panel-title">
-                        <i class="fas fa-sitemap"></i> 总体大纲
-                    </h3>
-                    <textarea id="outlineInput" class="panel-textarea"
-                        placeholder="AI 生成或手动编辑总体大纲..." rows="6"></textarea>
-                </section>
-
-                <!-- 章节走向 -->
-                <section class="glass-panel panel-block">
-                    <h3 class="panel-title">
-                        <i class="fas fa-arrow-right"></i> 章节走向
-                        <span class="title-badge" id="directionSource" title="来源：用户/AI/暂存">—</span>
-                    </h3>
-                    <textarea id="directionInput" class="panel-textarea"
-                        placeholder="当前章节发展方向..." rows="3"></textarea>
-                </section>
-
-                <!-- 评判标准 -->
-                <section class="glass-panel panel-block">
-                    <h3 class="panel-title">
-                        <i class="fas fa-check-double"></i> 评判标准
-                    </h3>
-                    <textarea id="criteriaInput" class="panel-textarea"
-                        placeholder="段落审核标准..." rows="3"></textarea>
-                </section>
-
-                <!-- 下一章走向暂存卡片（步骤 9 产物，待用户确认） -->
-                <section class="glass-panel panel-block next-direction-card" id="nextDirectionCard" style="display:none;">
-                    <h3 class="panel-title">
-                        <i class="fas fa-bell"></i> 待确认：下一章走向
-                    </h3>
-                    <div class="next-direction-body">
-                        <label class="next-label">走向建议</label>
-                        <textarea id="nextDirectionPreview" class="panel-textarea" rows="3" readonly></textarea>
-                        <label class="next-label">评判标准建议</label>
-                        <textarea id="nextCriteriaPreview" class="panel-textarea" rows="3" readonly></textarea>
-                    </div>
-                    <div class="next-direction-actions">
-                        <button id="nextDirectionEditBtn" class="btn-glass btn-glass-small">
-                            <i class="fas fa-edit"></i> 编辑后采纳
-                        </button>
-                        <button id="nextDirectionAcceptBtn" class="btn-glass btn-glass-small btn-glass-primary">
-                            <i class="fas fa-check"></i> 直接采纳
-                        </button>
-                        <button id="nextDirectionRejectBtn" class="btn-glass btn-glass-small btn-glass-danger">
-                            <i class="fas fa-times"></i> 弃用
-                        </button>
-                    </div>
-                </section>
-
-                <!-- 人工审核入口（步骤 8 阻塞时显示） -->
-                <section class="glass-panel panel-block human-approval-card" id="humanApprovalCard" style="display:none;">
-                    <h3 class="panel-title">
-                        <i class="fas fa-gavel"></i> 人工审核待办
-                    </h3>
-                    <p class="approval-hint">章节已生成，请审核段落。</p>
-                    <button id="openApprovalBtn" class="btn-glass btn-glass-primary btn-block">
-                        <i class="fas fa-eye"></i> 打开段落审核
-                    </button>
-                </section>
+            <!-- 右侧草稿面板 -->
+            <aside class="draft-panel" id="draftPanel" style="display:none;">
+                <div class="draft-header">
+                    <span class="draft-title"><i class="fas fa-flask"></i> 草稿段落</span>
+                    <span class="draft-meta" id="draftMeta">— / —</span>
+                </div>
+                <div class="draft-paragraphs" id="draftParagraphs"></div>
             </aside>
         </div>
     </div>
 
     <!-- Toast 提示 -->
-    <div class="toast" id="toast">
-        <i class="fas fa-info-circle"></i>
-        <span id="toastMessage"></span>
+    <div class="toast" id="toast"><i class="fas fa-info-circle"></i><span id="toastMessage"></span></div>
+
+    <!-- AI 配置模态框 -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> AI 配置</h3>
+                <button class="modal-close" id="configModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="config-item">
+                    <label>API 地址（供记忆库调用，AI 聊天走内置代理）</label>
+                    <input type="text" id="aiUrlInput" class="config-input" placeholder="http://localhost:36789" value="http://localhost:36789">
+                </div>
+                <div class="config-item">
+                    <label>模型名称</label>
+                    <input type="text" id="aiNameInput" class="config-input" placeholder="system-multimodal" value="system-multimodal">
+                </div>
+                <div class="config-item">
+                    <label>API Key</label>
+                    <input type="password" id="aiKeyInput" class="config-input" placeholder="2000-0218" value="2000-0218">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="configSaveBtn" class="btn-glass btn-glass-primary"><i class="fas fa-save"></i> 保存并初始化</button>
+            </div>
+        </div>
     </div>
 
-    <!-- 导出弹窗（4 格式） -->
+    <!-- 导出弹窗 -->
     <div class="modal-overlay" id="exportModal">
         <div class="modal glass-panel">
             <div class="modal-header">
@@ -303,33 +315,8 @@
             </div>
             <div class="modal-body">
                 <div class="export-options">
-                    <label class="export-radio">
-                        <input type="radio" name="exportFormat" value="txt" checked>
-                        <span><i class="fas fa-file-alt"></i> TXT 纯文本</span>
-                    </label>
-                    <label class="export-radio">
-                        <input type="radio" name="exportFormat" value="md">
-                        <span><i class="fab fa-markdown"></i> Markdown</span>
-                    </label>
-                    <label class="export-radio">
-                        <input type="radio" name="exportFormat" value="csv">
-                        <span><i class="fas fa-table"></i> 工作日志 CSV</span>
-                    </label>
-                    <label class="export-radio">
-                        <input type="radio" name="exportFormat" value="json">
-                        <span><i class="fas fa-database"></i> 状态备份 JSON</span>
-                    </label>
-                </div>
-                <div class="export-flags" id="exportFlags">
-                    <label class="export-flag">
-                        <input type="checkbox" id="exportIncludeOutline" checked> 含大纲
-                    </label>
-                    <label class="export-flag">
-                        <input type="checkbox" id="exportIncludeDraft" checked> 含草稿
-                    </label>
-                    <label class="export-flag">
-                        <input type="checkbox" id="exportIncludeEmbeddings"> 含向量数据
-                    </label>
+                    <label class="export-radio"><input type="radio" name="exportFormat" value="txt" checked><span><i class="fas fa-file-alt"></i> TXT 纯文本</span></label>
+                    <label class="export-radio"><input type="radio" name="exportFormat" value="json"><span><i class="fas fa-database"></i> 状态备份 JSON</span></label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -347,7 +334,7 @@
                 <button class="modal-close" id="interruptModalClose">&times;</button>
             </div>
             <div class="modal-body">
-                <p>调用级中断：步骤 3/7 段落之间可恢复，其他步骤将回退至本章起点。</p>
+                <p>调用级中断：段落生成/审核之间可恢复，其他步骤将回退至本章起点。</p>
             </div>
             <div class="modal-footer">
                 <button id="interruptCancelBtn" class="btn-glass">取消</button>
@@ -356,11 +343,28 @@
         </div>
     </div>
 
+    <!-- 章节大纲编辑弹窗 -->
+    <div class="modal-overlay" id="outlinesModal">
+        <div class="modal glass-panel outlines-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-list-ol"></i> 各章节大纲</h3>
+                <button class="modal-close" id="outlinesModalClose">&times;</button>
+            </div>
+            <div class="modal-body outlines-modal-body" id="outlinesModalBody">
+                <!-- 动态渲染 -->
+            </div>
+            <div class="modal-footer">
+                <button id="outlinesModalSaveBtn" class="btn-glass btn-glass-primary"><i class="fas fa-save"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 项目私有脚本（按依赖顺序加载） -->
-    <script defer src="split.js"></script>
-    <script defer src="formatters.js"></script>
-    <script defer src="vector_store.js"></script>
     <script defer src="prompts.js"></script>
+    <script defer src="config.js"></script>
+    <script defer src="memory.js"></script>
+    <script defer src="knowledge.js"></script>
+    <script defer src="creative.js"></script>
     <script defer src="reviewer.js"></script>
     <script defer src="workflow.js"></script>
     <script defer src="ui.js"></script>
