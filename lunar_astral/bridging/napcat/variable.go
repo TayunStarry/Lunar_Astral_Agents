@@ -51,7 +51,5 @@ const (
 // ==== 消息发送回调 ====
 
 // SendMessageToAgent 向智能体推送消息的回调函数，由服务器层注册
-var SendMessageToAgent func(content string, senderName string)
-
-// SendImageToAgent 向智能体推送图片消息的回调函数，由服务器层注册
-var SendImageToAgent func(images []string)
+// 参数为 OpenAI 格式消息列表 []map[string]interface{}
+var SendMessageToAgent func(messages []map[string]interface{})

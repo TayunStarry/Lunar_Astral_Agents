@@ -117,12 +117,14 @@ func initBridgeAdapter() {
 	}
 
 	// 注册桥接器消息回调
-	napcat.SendMessageToAgent = func(content string, senderName string) {
-		// 将QQ群消息推送到智能体上下文
-		adapters.UnreadContext = append(adapters.UnreadContext, adapters.PostMessage{
-			Role:    "user",
-			Content: content,
-		})
+	napcat.SendMessageToAgent = func(messages []map[string]interface{}) {
+		// 将QQ群消息（OpenAI格式）推送到智能体上下文
+		for _, msg := range messages {
+			adapters.UnreadContext = append(adapters.UnreadContext, adapters.PostMessage{
+				Role:    "user",
+				Content: msg["content"],
+			})
+		}
 	}
 
 	// 启动桥接器定时扫描

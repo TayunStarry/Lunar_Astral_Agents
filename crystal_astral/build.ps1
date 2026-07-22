@@ -1,4 +1,4 @@
-﻿# Crystal Astral - 编译脚本
+# Crystal Astral - 编译脚本
 # 由根目录脚本统一调用，仅处理图标编译和项目编译
 
 param(
@@ -122,7 +122,10 @@ try {
     if ($TargetOS -ne "windows") { $binaryName = "Crystal_Astral" }
     $outputPath = "..\$binaryName"
 
-    $ldflags = "-s -w -H windowsgui"
+    # 仅 Windows 平台使用 windowsgui 头部（隐藏控制台窗口）
+    $ldflags = "-s -w"
+    if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
+    
     $buildArgs = @(
         "build",
         "-tags", "webview",

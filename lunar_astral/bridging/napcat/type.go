@@ -95,11 +95,11 @@ type NapcatWSResponse struct {
 
 // CachedMessage 缓存的单条消息
 type CachedMessage struct {
-	GroupID   int64  // 来源群号
-	UserID    int64  // 发送者ID
-	Nickname  string // 发送者昵称
-	Content   string // 文本内容
-	HasImages bool   // 是否包含图片
+	GroupID   int64       // 来源群号
+	UserID    int64       // 发送者ID
+	Nickname  string      // 发送者昵称
+	Content   interface{} // string 或 []map[string]interface{} (OpenAI多模态格式)
+	HasImages bool        // 是否包含图片
 }
 
 // MessageCache 消息缓存容器

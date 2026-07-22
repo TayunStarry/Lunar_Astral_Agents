@@ -107,6 +107,57 @@ func SendGroupTextMessage(groupID int64, content string) error {
 	return nil
 }
 
+// SendGroupImageMessage 发送群图片消息（base64 编码）
+func SendGroupImageMessage(groupID int64, images []string) error {
+	baseURL := getNapcatHTTPBaseURL()
+	url := baseURL + "/send_group_msg"
+	token := bridgeConfig.BridgingToken
+
+	message := make([]map[string]interface{}, 0, len(images))
+	for _, img := range images {
+		message = append(message, map[string]interface{}{
+			"type": "image",
+			"data": map[string]string{
+				"file": "base64://" + img,
+			},
+		})
+	}
+
+	requestData := map[string]interface{}{
+		"group_id": groupID,
+		"message":  message,
+	}
+
+	body, err := json.Marshal(requestData)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	logger.SubInfo("LunarCore", "Napcat", "发送群图片消息响应: %s", respBody)
+	return nil
+}
+
 // GetMessageContent 通过 get_msg API 获取单条消息的文本内容
 func GetMessageContent(messageID string) (string, error) {
 	baseURL := getNapcatHTTPBaseURL()

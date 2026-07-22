@@ -86,54 +86,41 @@ func performScan() {
 
 	logger.SubInfo("LunarCore", "Napcat", "正在扫描适配器连接 (第 %d/%d 次)...", currentRetry+1, maxScanRetries)
 
-	// 尝试连接
+	// 尝试连接（阻塞直到连接断开或失败）
 	setBridgeState(BridgeConnecting)
-	err := tryConnect()
-	if err != nil {
+	err := ConnectToNapcatWebSocket(HandleNapcatMessage)
+
+	// 到这里说明连接已断开或连接失败
+	// 通过状态判断：如果是 BridgeDisconnected，说明曾经连接成功后又断开
+	// 如果是 BridgeConnecting，说明从未成功连接过
+	currentState := GetBridgeState()
+
+	if currentState == BridgeDisconnected {
+		// 曾连接成功后断开 → 重置重试计数，重新扫描
+		logger.SubWarn("LunarCore", "Napcat", "连接断开，%v 后重新扫描...", scanInterval)
 		scanMutex.Lock()
-		scanRetryCount++
-		retryCount := scanRetryCount
+		scanRetryCount = 0
 		scanMutex.Unlock()
-
-		if retryCount >= maxScanRetries {
-			setBridgeState(BridgeFailed)
-			logger.SubError("LunarCore", "Napcat", "达到最大重试次数 (%d)，停止扫描: %v", maxScanRetries, err)
-			return
-		}
-
-		logger.SubWarn("LunarCore", "Napcat", "适配器连接失败，%v 后重试 (%d/%d): %v", scanInterval, retryCount, maxScanRetries, err)
-		setBridgeState(BridgeDisconnected)
 		scheduleScan()
 		return
 	}
 
-	// 连接成功
-	setBridgeState(BridgeConnected)
+	// 初次连接失败 → 消耗重试次数
 	scanMutex.Lock()
-	scanRetryCount = 0
+	scanRetryCount++
+	retryCount := scanRetryCount
 	scanMutex.Unlock()
 
-	logger.SubInfo("LunarCore", "Napcat", "适配器连接成功")
-}
+	setBridgeState(BridgeDisconnected)
 
-// tryConnect 尝试连接适配器并启动消息处理循环
-func tryConnect() error {
-	err := ConnectToNapcatWebSocket(HandleNapcatMessage)
-	if err != nil {
-		setBridgeState(BridgeDisconnected)
-		// 连接断开后，重新安排扫描（不消耗重试次数，仅连接失败消耗）
-		go func() {
-			if GetBridgeState() != BridgeFailed {
-				logger.SubWarn("LunarCore", "Napcat", "连接断开，%v 后重新扫描...", scanInterval)
-				scanMutex.Lock()
-				scanRetryCount = 0
-				scanMutex.Unlock()
-				scheduleScan()
-			}
-		}()
-		return err
+	if retryCount >= maxScanRetries {
+		setBridgeState(BridgeFailed)
+		logger.SubError("LunarCore", "Napcat", "达到最大重试次数 (%d)，停止扫描: %v", maxScanRetries, err)
+		return
 	}
-	return nil
+
+	logger.SubWarn("LunarCore", "Napcat", "适配器连接失败，%v 后重试 (%d/%d): %v", scanInterval, retryCount, maxScanRetries, err)
+	scheduleScan()
 }
 
 // StopBridge 停止桥接器
@@ -149,7 +136,7 @@ func StopBridge() {
 	logger.SubInfo("LunarCore", "Napcat", "桥接器已停止")
 }
 
-// HandleAgentResponse 处理智能体的响应消息，转发回QQ群聊
+// HandleAgentResponse 处理智能体的文本响应消息，转发回QQ群聊
 // 严格保持乐谱消息不转发策略
 func HandleAgentResponse(msgType string, content string) {
 	// 乐谱消息不转发
@@ -171,5 +158,23 @@ func HandleAgentResponse(msgType string, content string) {
 
 	if err := SendGroupTextMessage(groupID, content); err != nil {
 		logger.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", groupID, err)
+	}
+}
+
+// HandleAgentImageResponse 处理智能体的图片响应消息，转发回QQ群聊
+func HandleAgentImageResponse(images []string) {
+	if GetBridgeState() != BridgeConnected {
+		logger.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过图片转发")
+		return
+	}
+
+	groupID := bridgeConfig.BridgingTarget
+	if groupID == 0 {
+		logger.SubError("LunarCore", "Napcat", "目标群号为空，无法转发图片")
+		return
+	}
+
+	if err := SendGroupImageMessage(groupID, images); err != nil {
+		logger.SubError("LunarCore", "Napcat", "转发图片到群 %d 失败: %v", groupID, err)
 	}
 }

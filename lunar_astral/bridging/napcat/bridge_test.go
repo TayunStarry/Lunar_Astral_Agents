@@ -8,7 +8,6 @@ import (
 )
 
 func TestLoadBridgingConfig(t *testing.T) {
-	// 创建临时配置文件
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "lunar_config.json")
 
@@ -104,6 +103,14 @@ func TestHandleAgentResponse_NotConnected(t *testing.T) {
 
 	// 未连接时不应转发
 	HandleAgentResponse("text", "测试内容")
+}
+
+func TestHandleAgentImageResponse_NotConnected(t *testing.T) {
+	resetBridgeState()
+	setBridgeState(BridgeDisconnected)
+
+	// 未连接时不应转发图片
+	HandleAgentImageResponse([]string{"base64data"})
 }
 
 func TestStopBridge(t *testing.T) {
