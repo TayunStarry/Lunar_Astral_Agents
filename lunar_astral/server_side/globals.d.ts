@@ -299,4 +299,34 @@ declare global {
      * @returns {boolean} 是否处理成功
      */
     function processLTPXChanges(statusJSON: string): boolean;
-}
+	    /**
+	     * 初始化学习者智能体
+	     *
+	     * @param {string} baseURL LLM 服务基础 URL
+	     * @param {string} apiKey LLM API 密钥
+	     * @param {string} model LLM 模型名称
+	     * @param {number} maxTokens 最大生成 token 数
+	     * @param {number} temperature 生成温度
+	     * @param {string} embeddingURL 嵌入服务基础 URL
+	     * @param {string} embeddingKey 嵌入服务 API 密钥
+	     * @param {string} embeddingModel 嵌入模型名称
+	     *
+	     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
+	     */
+	    function learnerInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
+	    /**
+	     * 执行学习者研究
+	     *
+	     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
+	     * @param {string} unreadJSON 未读消息的 JSON 字符串
+	     *
+	     * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
+	     */
+	    function learnerExecute(dialogueJSON: string, unreadJSON: string): [string, Error | null];
+	    /**
+	     * 检查学习者智能体是否已初始化
+	     *
+	     * @returns {boolean} 是否已初始化
+	     */
+	    function learnerIsReady(): boolean;
+	}

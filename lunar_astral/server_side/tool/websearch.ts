@@ -83,5 +83,5 @@ export function executeWebSearch(query: string, mode: SearchMode = 'webpage'): [
 }
 
 // ==== 模块级注册 ====
-// web_search 已迁移至研究者角色（ResearcherRole）作为私有工具
+// web_search 已迁移至学习者角色（LearnerRole）作为私有工具
 // 本模块仅保留初始化与类型基础设施

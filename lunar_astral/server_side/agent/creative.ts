@@ -11,8 +11,6 @@ import { ToolCall, PostMessage, ModelBuilder, modelResponse, ToolCallItem } from
  * @typeParam TDetail - 创作详情类型（如 PaintingDetail / MusicPieceDetail）
  */
 export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
-	/** 独立历史（跨周期持久化，供对话者消费后清空） */
-	private _history: PostMessage[] = [];
 	/** 对话历史读取条数 */
 	protected readonly DIALOGUE_HISTORY_LIMIT = 15;
 	/** 自身历史读取条数 */
@@ -47,8 +45,8 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 
 	/** 获取历史摘要（对话者调用后清空） */
 	public consumeHistory(): PostMessage[] {
-		const result = [...this._history];
-		this._history = [];
+		const result = [...this.messages];
+		this.messages = [];
 		return result;
 	}
 
@@ -64,7 +62,7 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	public createCreativeWork(dialogueMessages: PostMessage[], unreadContext: PostMessage[], count: number = this.UNREAD_CHECK_COUNT): boolean {
 		// 构建上下文：对话历史 + 自身历史 + 当前未读
 		const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
-		const ownHistory = this._history.slice(-this.OWN_HISTORY_LIMIT);
+		const ownHistory = this.messages.slice(-this.OWN_HISTORY_LIMIT);
 		this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
 
 		// 提取未读消息文本
@@ -115,7 +113,7 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 		// 将创作详情写入历史，供对话者消费
 		if (details.length > 0) {
 			const summary = this.buildSummary(details);
-			this._history.push({ role: 'user', content: summary });
+			this.messages.push({ role: 'user', content: summary });
 			console.log(`[${this.roleName}] 已将 ${details.length} 件作品详情写入历史`);
 		}
 

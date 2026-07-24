@@ -7,8 +7,8 @@ export class DialogueRole extends ModelBuilder {
 		try {
 			// 对消息中的图片文件进行压缩与解析处理
 			await source.LiteImageFile();
-			// 合并 研究员角色 历史摘要
-			source.researcherRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+			// 合并 学习者角色 历史摘要
+			source.learnerRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
 			// 合并 画家角色 历史摘要
 			source.painterRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
 			// 合并 音乐家角色 历史摘要

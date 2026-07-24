@@ -642,7 +642,6 @@ var agentSystem = (function (exports) {
     }
 
     class CreativeRoleBase extends ModelBuilder {
-        _history = [];
         DIALOGUE_HISTORY_LIMIT = 15;
         OWN_HISTORY_LIMIT = 5;
         MAX_ITERATIONS = 3;
@@ -651,13 +650,13 @@ var agentSystem = (function (exports) {
             super(prompt);
         }
         consumeHistory() {
-            const result = [...this._history];
-            this._history = [];
+            const result = [...this.messages];
+            this.messages = [];
             return result;
         }
         createCreativeWork(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
             const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
-            const ownHistory = this._history.slice(-this.OWN_HISTORY_LIMIT);
+            const ownHistory = this.messages.slice(-this.OWN_HISTORY_LIMIT);
             this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
             const unreadTexts = this.extractUnreadTexts(unreadContext, count);
             if (!this.matchKeywords(unreadTexts))
@@ -691,7 +690,7 @@ var agentSystem = (function (exports) {
             }
             if (details.length > 0) {
                 const summary = this.buildSummary(details);
-                this._history.push({ role: 'user', content: summary });
+                this.messages.push({ role: 'user', content: summary });
                 console.log(`[${this.roleName}] 已将 ${details.length} 件作品详情写入历史`);
             }
             return false;
@@ -713,7 +712,7 @@ var agentSystem = (function (exports) {
         async callMultimediaAndToolParsing(cache, source) {
             try {
                 await source.LiteImageFile();
-                source.researcherRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
+                source.learnerRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.painterRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.musicianRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.unreadContext.forEach(context => this.writeContext(context));
@@ -1422,387 +1421,84 @@ K:Am
         }
     }
 
-    class ResearcherRole extends ModelBuilder {
-        _history = [];
-        DIALOGUE_HISTORY_LIMIT = 15;
-        OWN_HISTORY_LIMIT = 5;
-        MAX_ITERATIONS = 5;
-        UNREAD_CHECK_COUNT = 10;
-        webSearchInitialized = false;
-        assemblyMemoryInjected = false;
-        researchTools = [
-            {
-                type: "function",
-                function: {
-                    name: "web_search",
-                    description: "执行网络搜索，获取实时信息。当需要联网获取实时数据、最新资讯、事实查询等信息时使用。支持四种模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究，子问题拆解并行搜索）、assembly（大会辩论式深度研究，维新派vs守旧派多轮辩论，综合网络与记忆信息生成报告，适合复杂争议性问题）。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            query: {
-                                type: "string",
-                                description: "搜索查询关键词或问题"
-                            },
-                            mode: {
-                                type: "string",
-                                description: "搜索模式：simple（轻量摘要）、webpage（网页搜索，默认）、depth（深度研究）或 assembly（大会辩论式深度研究，综合网络搜索与记忆）",
-                                enum: ["simple", "webpage", "depth", "assembly"]
-                            }
-                        },
-                        required: ["query"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "memory_query",
-                    description: "回忆过去的对话内容和历史事件记录。用于想起之前聊过的话题、查找用户偏好、追溯历史事件等需要从记忆中回忆信息的场景。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            query: {
-                                type: "string",
-                                description: "查询文本，用于回忆相关记录"
-                            },
-                            top_k: {
-                                type: "number",
-                                description: "返回的最相关结果数量，默认10"
-                            }
-                        },
-                        required: ["query"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "process_links",
-                    description: "处理消息中的链接。自动识别链接类型：网页链接抓取内容并总结、图片链接使用视觉模型识别、下载链接自动下载文件。处理后将原始链接替换为摘要标签。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            text: {
-                                type: "string",
-                                description: "包含链接的文本内容，工具会自动提取并处理其中的所有链接"
-                            }
-                        },
-                        required: ["text"]
-                    }
-                }
+    const learnerKeywords = [
+        /查(?:一查|一下|询|找|找找|看看)/,
+        /搜索/,
+        /搜(?:一搜|一下)/,
+        /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
+        /研究(?:一(?:下|研究))/,
+        /调查(?:一(?:下|调查))?/,
+        /回忆(?:一(?:下|回忆))?/,
+        /想想?(?:看|起|到)/,
+        /记不记得/,
+        /还记得/,
+        /以前(?:说过|聊过|讨论过|提过|提到)/,
+        /上次(?:说|聊|讨论|提|提到)/,
+        /深入(?:了解|分析|研究)/,
+        /详细(?:了解|分析|说明|解释)/,
+        /分析(?:一(?:下|分析))?/,
+        /核实/,
+        /验证/,
+        /(?:真|假|正确|错误|靠谱|可靠)/,
+        /(?:资料|文献|论文|报告|数据|统计)/
+    ];
+    let learnerInitialized = false;
+    function ensureLearnerInitialized() {
+        if (learnerInitialized)
+            return true;
+        if (!learnerIsReady()) {
+            const [success, err] = learnerInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.MultimodalName, 4096, 0.7, OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+            if (err) {
+                console.error('[学习者] 初始化失败:', err);
+                return false;
             }
-        ];
-        researchKeywords = [
-            /查(?:一查|一下|询|找|找找|看看)/,
-            /搜索/,
-            /搜(?:一搜|一下)/,
-            /搜索(?:一搜|一下)/,
-            /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
-            /研究(?:一(?:下|研究))/,
-            /调查(?:一(?:下|调查))?/,
-            /思考(?:一(?:下|思考))?/,
-            /回忆(?:一(?:下|回忆))?/,
-            /想想?(?:看|起|到)/,
-            /记不记得/,
-            /还记得/,
-            /以前(?:说过|聊过|讨论过|提过|提到)/,
-            /上次(?:说|聊|讨论|提|提到)/,
-            /了解(?:一(?:下|了解))?/,
-            /(?:是|到底(?:是)|究竟(?:是))什么/,
-            /(?:怎么|为什么|怎么回事)/,
-            /(?:最新|最近|当前|目前|今天|现在).*(?:消息|新闻|情况|状态|动态|信息|数据)/,
-            /(?:有没有|是否).*(?:相关|关于)/,
-            /深入(?:了解|分析|研究)/,
-            /详细(?:了解|分析|说明|解释)/,
-            /分析(?:一(?:下|分析))?/,
-            /核实/,
-            /验证/,
-            /(?:真|假|正确|错误|靠谱|可靠)/,
-            /(?:资料|文献|论文|报告|数据|统计)/,
-            /(?:现在|当前|今天|此时).*(?:几点|时间|日期|号|星期|周几)/,
-            /(?:几点|几号|星期几|周几|什么时间|哪天)/,
-            /(?:今天|现在)(?:是|多少).*(?:号|日|时间)/,
-            /(?:现在|当前|目前).*(?:在哪|位置|地点|地址|地方)/,
-            /(?:我在哪|我在哪里|这是哪|什么地方|哪个城市|哪个省)/,
-            /(?:当前位置|当前地址|所在地|地理位置|具体位置)/,
-        ];
-        constructor() {
-            super(fileView('prompts/researcherRole.md')[0]);
         }
+        learnerInitialized = true;
+        console.log('[学习者] 初始化完成');
+        return true;
+    }
+    class LearnerRole {
+        messages = [];
         consumeHistory() {
-            const result = [...this._history];
-            this._history = [];
+            const result = [...this.messages];
+            this.messages = [];
             return result;
         }
-        executeResearch(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
-            const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
-            const ownHistory = this._history.slice(-this.OWN_HISTORY_LIMIT);
-            this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
-            const unreadTexts = this.extractUnreadTexts(unreadContext, count);
+        executeLearner(dialogueMessages, unreadContext) {
+            const unreadTexts = this.extractTexts(unreadContext);
             if (!this.matchKeywords(unreadTexts))
                 return true;
-            const now = new Date();
-            const timeStr = now.toLocaleString('zh-CN', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-            });
-            const weekDay = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][now.getDay()];
-            const [addressResult] = address();
-            const locationStr = addressResult?.length > 0 ? addressResult.join(' ') : '未知';
-            this.runtimeMessages = [{ role: 'user', content: `当前时间: ${timeStr} ${weekDay}\n当前位置: ${locationStr}` }];
-            const details = [];
-            for (let i = 0; i < this.MAX_ITERATIONS; i++) {
-                console.log(`[研究者] 第 ${i + 1} 轮推理`);
-                let response;
-                try {
-                    response = this.run([], this.researchTools);
-                }
-                catch (error) {
-                    console.error(`[研究者] 第 ${i + 1} 轮推理失败:`, error);
-                    break;
-                }
-                const choice = response.body?.choices?.[0];
-                if (!choice) {
-                    console.log(`[研究者] 模型返回空结果，结束循环`);
-                    break;
-                }
-                const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0)
-                    break;
-                this.writeContext(choice.message);
-                for (const toolCall of toolCalls) {
-                    console.log(`[研究者] 执行工具: ${toolCall.function.name}`);
-                    const result = this.executeTool(toolCall);
-                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
-                    this.collectDetail(toolCall, details);
-                }
+            if (!ensureLearnerInitialized())
+                return true;
+            const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
+            const unreadJSON = JSON.stringify(unreadContext.slice(-10));
+            console.log('[学习者] 开始执行研究...');
+            const [report, error] = learnerExecute(dialogueJSON, unreadJSON);
+            if (error) {
+                console.error('[学习者] 执行失败:', error);
+                return true;
             }
-            if (details.length > 0) {
-                const report = this.synthesizeReport();
-                this._history.push({ role: 'user', content: report });
-                console.log(`[研究者] 已将研究报告写入历史（${details.length} 条工具调用记录）`);
+            if (report && report.trim().length > 0) {
+                this.messages.push({ role: 'user', content: report });
+                console.log('[学习者] 已将研究报告写入历史');
             }
             return false;
         }
         matchKeywords(texts) {
-            return texts.some(text => this.researchKeywords.some(keyword => keyword.test(text)));
+            return texts.some(text => learnerKeywords.some(keyword => keyword.test(text)));
         }
-        executeTool(toolCall) {
-            const funcName = toolCall.function.name;
-            let args = {};
-            try {
-                args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-            }
-            catch (parseError) {
-                console.error(`[研究者] 工具调用参数解析失败:`, toolCall.function.arguments);
-                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
-            }
-            switch (funcName) {
-                case 'web_search': return this.handleWebSearch(args);
-                case 'memory_query': return this.handleMemoryQuery(args);
-                case 'process_links': return this.handleProcessLinks(args);
-                default: return `未知工具: ${funcName}，可用工具为 web_search、memory_query 和 process_links`;
-            }
-        }
-        handleWebSearch(args) {
-            try {
-                const query = args.query || '';
-                if (!query.trim())
-                    return '搜索失败：查询关键词不能为空';
-                const mode = args.mode || 'webpage';
-                if (!this.webSearchInitialized) {
-                    const initResult = this.initWebSearch();
-                    if (!initResult)
-                        return '搜索失败：网络检索子系统初始化失败';
-                }
-                console.log(`[研究者] 网络搜索: query="${query}", mode="${mode}"`);
-                let result;
-                let error = null;
-                switch (mode) {
-                    case 'assembly':
-                        if (!this.assemblyMemoryInjected) {
-                            this.injectMemoryProvider();
-                        }
-                        [result, error] = webSearchAssembly(query.trim());
-                        break;
-                    case 'depth':
-                        [result, error] = webSearchDepth(query.trim());
-                        break;
-                    case 'webpage':
-                        [result, error] = webSearchWebpage(query.trim());
-                        break;
-                    case 'simple':
-                    default:
-                        [result, error] = webSearchSimple(query.trim());
-                        break;
-                }
-                if (error) {
-                    console.error(`[研究者] 网络搜索失败: ${error.message || String(error)}`);
-                    return `搜索失败：${error.message || String(error)}`;
-                }
-                const textResult = result || '未找到相关搜索结果';
-                console.log(`[研究者] 搜索结果长度: ${textResult.length} 字符`);
-                return textResult;
-            }
-            catch (error) {
-                console.error('[研究者] 网络搜索处理异常:', error);
-                return `网络搜索异常: ${error}`;
-            }
-        }
-        handleMemoryQuery(args) {
-            try {
-                const query = args.query || '';
-                if (!query.trim())
-                    return '回忆失败：查询文本不能为空';
-                const topK = args.top_k || 10;
-                if (!BaseConfig.memoryReady) {
-                    BaseConfig.initMemory();
-                    if (!BaseConfig.memoryReady)
-                        return '回忆失败：记忆尚未准备好';
-                }
-                console.log(`[研究者] 记忆查询: query="${query}", topK=${topK}`);
-                const [results, error] = memoryQuery('lunar_messages', query.trim(), topK);
-                if (error) {
-                    console.error(`[研究者] 记忆查询失败: ${error}`);
-                    return `回忆失败：${error}`;
-                }
-                if (!results || results.length === 0)
-                    return '没有回忆起相关的内容';
-                const formattedResults = results.map((r, i) => `[记录${i + 1}] 相关度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
-                console.log(`[研究者] 回忆到 ${results.length} 条相关记录`);
-                return formattedResults;
-            }
-            catch (error) {
-                console.error('[研究者] 记忆查询处理异常:', error);
-                return `回忆异常: ${error}`;
-            }
-        }
-        handleProcessLinks(args) {
-            try {
-                const text = args.text || '';
-                if (!text.trim())
-                    return '处理失败：文本内容不能为空';
-                if (!this.webSearchInitialized) {
-                    const initResult = this.initWebSearch();
-                    if (!initResult)
-                        return '处理失败：网络检索子系统初始化失败';
-                }
-                console.log(`[研究者] 处理链接: 文本长度=${text.length}`);
-                const [replacedText, descriptions, error] = webSearchProcessLinks(text);
-                if (error) {
-                    console.error(`[研究者] 链接处理失败: ${error}`);
-                    return `链接处理失败：${error}`;
-                }
-                if (!descriptions || descriptions.length === 0)
-                    return '未检测到链接';
-                const result = `替换后文本:\n${replacedText}\n\n链接详情:\n${descriptions.join('\n')}`;
-                console.log(`[研究者] 处理了 ${descriptions.length} 个链接`);
-                return result;
-            }
-            catch (error) {
-                console.error('[研究者] 链接处理异常:', error);
-                return `链接处理异常: ${error}`;
-            }
-        }
-        initWebSearch() {
-            if (this.webSearchInitialized)
-                return true;
-            try {
-                const [success, err] = webSearchInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.MultimodalName, 4096, 0.7);
-                if (err) {
-                    console.error('[研究者] 网络检索初始化失败:', err);
-                    return false;
-                }
-                try {
-                    const downloadDir = 'local_data/downloads';
-                    const groupID = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                    webSearchSetDownloadFunc(downloadDir, groupID);
-                    console.log(`[研究者] 下载目录已配置: ${downloadDir}/${groupID}`);
-                }
-                catch (dlErr) {
-                    console.warn('[研究者] 设置下载回调失败，链接处理中的下载链接将降级:', dlErr);
-                }
-                this.webSearchInitialized = true;
-                console.log('[研究者] 网络检索子系统初始化成功');
-                return true;
-            }
-            catch (e) {
-                console.error('[研究者] 网络检索初始化异常:', e);
-                return false;
-            }
-        }
-        injectMemoryProvider() {
-            try {
-                const [success, err] = webSearchSetMemoryProvider();
-                if (err) {
-                    console.warn('[研究者] 注入记忆库提供者失败:', err);
-                    return;
-                }
-                this.assemblyMemoryInjected = true;
-                console.log('[研究者] 已为大会辩论模式注入记忆库提供者');
-            }
-            catch (e) {
-                console.warn('[研究者] 注入记忆库提供者异常:', e);
-            }
-        }
-        collectDetail(toolCall, details) {
-            try {
-                const args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-                const query = args.query || args.text || '';
-                const keyFindings = query ? `查询: ${query}` : '';
-                if (toolCall.function.name === 'web_search') {
-                    details.push({
-                        toolName: 'web_search',
-                        query,
-                        mode: args.mode || 'webpage',
-                        keyFindings,
-                    });
-                }
-                else if (toolCall.function.name === 'memory_query') {
-                    details.push({
-                        toolName: 'memory_query',
-                        query,
-                        keyFindings,
-                    });
-                }
-                else if (toolCall.function.name === 'process_links') {
-                    details.push({
-                        toolName: 'process_links',
-                        query,
-                        keyFindings,
-                    });
-                }
-            }
-            catch {
-            }
-        }
-        synthesizeReport() {
-            try {
-                const response = this.run([], []);
-                const content = response.body?.choices?.[0]?.message?.content || '';
-                if (content.trim().length === 0) {
-                    console.warn('[研究者] 综合分析返回空结果');
-                    return '[研究报告] 研究过程中未能生成有效报告，请稍后重试。';
-                }
-                return content;
-            }
-            catch (error) {
-                console.error('[研究者] 综合分析失败:', error);
-                return '[研究报告] 研究报告生成失败，请稍后重试。';
-            }
-        }
-        extractUnreadTexts(unreadContext, count) {
+        extractTexts(messages) {
             const texts = [];
-            for (const message of unreadContext.slice(-count)) {
-                if (typeof message.content === 'string')
-                    texts.push(message.content);
-                else
-                    message.content.forEach(item => { if (item.type === 'text')
-                        texts.push(item.text); });
+            for (const msg of messages) {
+                if (typeof msg.content === 'string') {
+                    texts.push(msg.content);
+                }
+                else if (Array.isArray(msg.content)) {
+                    msg.content.forEach((item) => {
+                        if (item.type === 'text')
+                            texts.push(item.text);
+                    });
+                }
             }
             return texts;
         }
@@ -2205,7 +1901,7 @@ ${candidateTexts}
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
-        researcherRole = new ResearcherRole();
+        learnerRole = new LearnerRole();
         painterRole = new PainterRole();
         musicianRole = new MusicianRole();
         organizeRole = new OrganizeRole();
@@ -2339,7 +2035,7 @@ ${candidateTexts}
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
                     const currentUnreadContext = [...this.unreadContext];
-                    this.researcherRole.executeResearch(this.dialogueRole.messages, currentUnreadContext);
+                    this.learnerRole.executeLearner(this.dialogueRole.messages, currentUnreadContext);
                     this.painterRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
                     this.musicianRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
                     await this.createChatMessage();
@@ -2394,7 +2090,7 @@ ${candidateTexts}
             this.summaryRole.coverContext([]);
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);
-            this.researcherRole.coverContext([]);
+            this.learnerRole.messages = [];
             this.painterRole.coverContext([]);
             this.musicianRole.coverContext([]);
             this.organizeRole.coverContext([]);
@@ -3155,6 +2851,7 @@ ${candidateTexts}
     exports.CreativeRoleBase = CreativeRoleBase;
     exports.DialogueRole = DialogueRole;
     exports.FileToBase64 = FileToBase64;
+    exports.LearnerRole = LearnerRole;
     exports.ModelBuilder = ModelBuilder;
     exports.MusicianRole = MusicianRole;
     exports.OnlyData = OnlyData;
@@ -3162,7 +2859,6 @@ ${candidateTexts}
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
-    exports.ResearcherRole = ResearcherRole;
     exports.ThinkType = ThinkType;
     exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
