@@ -1,4 +1,4 @@
-package agent
+package learner
 
 // ============================================================
 // 配置与状态
@@ -236,4 +236,71 @@ type PostMessage struct {
 type TextContent struct {
 	Type string `json:"type"`
 	Text string `json:"text"`
+}
+
+// ============================================================
+// 意图与策略
+// ============================================================
+
+// IntentHint TS 层传入的意图提示
+type IntentHint string
+
+const (
+	IntentMemory    IntentHint = "memory"    // 记忆偏向
+	IntentSearch    IntentHint = "search"    // 搜索偏向
+	IntentBalanced  IntentHint = "balanced"  // 均衡
+	IntentAmbiguous IntentHint = "ambiguous" // 模糊，需预查记忆判定
+)
+
+// AgentSearchMode 智能体搜索模式（与 websearch.SearchMode 对齐）
+type AgentSearchMode string
+
+const (
+	AgentModeSimple  AgentSearchMode = "simple"  // 轻量摘要
+	AgentModeWebpage AgentSearchMode = "webpage" // 网页搜索
+	AgentModeDepth   AgentSearchMode = "depth"   // 深度研究
+)
+
+// StrategyPlan LLM 策略评估输出（阶段2）
+type StrategyPlan struct {
+	Sufficient       bool            `json:"sufficient"`
+	DirectAnswer     string          `json:"direct_answer,omitempty"`
+	Intent           IntentHint      `json:"intent"`
+	SearchStrategy   AgentSearchMode `json:"search_strategy,omitempty"`
+	MultiAngleSearch bool            `json:"multi_angle_search"`
+	DebateRounds     int             `json:"debate_rounds"`
+	SubQuestions     []SubQuestion   `json:"sub_questions,omitempty"`
+	MemoryTopK       int             `json:"memory_top_k"`
+}
+
+// ProbeResult 预探测结果（阶段1）
+type ProbeResult struct {
+	SearchItems   []SearchItemPreview // Simple 搜索结果
+	MemoryMatches []MemoryMatch       // 记忆查询结果
+}
+
+// SearchItemPreview Simple 搜索结果预览条目
+type SearchItemPreview struct {
+	Title   string
+	URL     string
+	Snippet string
+}
+
+// ============================================================
+// 调试导出
+// ============================================================
+
+// DebugContextDump 调试用上下文快照（导出到文件供排查问题）
+type DebugContextDump struct {
+	Timestamp       string              `json:"timestamp"`
+	IntentHint      string              `json:"intent_hint"`
+	DialogueJSON    string              `json:"dialogue_json"`
+	UnreadJSON      string              `json:"unread_json"`
+	FullContext     string              `json:"full_context"`
+	ProbeSearch     []SearchItemPreview `json:"probe_search_items"`
+	ProbeMemory     []MemoryMatch       `json:"probe_memory_matches"`
+	StrategyPlan    *StrategyPlan       `json:"strategy_plan,omitempty"`
+	DebateState     *DebateState        `json:"debate_state,omitempty"`
+	MemoryAvailable bool                `json:"memory_available"`
+	SearchAvailable bool                `json:"search_available"`
 }

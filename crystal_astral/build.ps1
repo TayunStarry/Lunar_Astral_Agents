@@ -1,4 +1,4 @@
-# Crystal Astral - 编译脚本
+﻿# Crystal Astral - 编译脚本
 # 由根目录脚本统一调用，仅处理图标编译和项目编译
 
 param(

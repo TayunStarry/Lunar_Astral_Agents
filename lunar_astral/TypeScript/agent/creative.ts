@@ -60,16 +60,23 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	 * @returns true 表示未执行创作，false 表示已执行创作
 	 */
 	public createCreativeWork(dialogueMessages: PostMessage[], unreadContext: PostMessage[], count: number = this.UNREAD_CHECK_COUNT): boolean {
+		// 保留原始输出历史（仅包含前几轮的创作摘要，不含对话历史）
+		const outputHistory = [...this.messages];
+
 		// 构建上下文：对话历史 + 自身历史 + 当前未读
 		const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
-		const ownHistory = this.messages.slice(-this.OWN_HISTORY_LIMIT);
+		const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
 		this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
 
 		// 提取未读消息文本
 		const unreadTexts = this.extractUnreadTexts(unreadContext, count);
 
 		// 检查是否匹配创作关键词
-		if (!this.matchKeywords(unreadTexts)) return true;
+		if (!this.matchKeywords(unreadTexts)) {
+			// 未匹配：恢复原始输出历史，避免 consumeHistory 返回对话历史
+			this.messages = outputHistory;
+			return true;
+		}
 
 		// 创作记录
 		const details: TDetail[] = [];
@@ -110,7 +117,9 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 			}
 		}
 
-		// 将创作详情写入历史，供对话者消费
+		// 重置 messages 为仅包含创作输出（摘要），丢弃 LLM 推理用的临时上下文
+		// 避免 consumeHistory 将对话历史回传给对话者导致消息重复
+		this.messages = [];
 		if (details.length > 0) {
 			const summary = this.buildSummary(details);
 			this.messages.push({ role: 'user', content: summary });

@@ -48,6 +48,10 @@ var agentSystem = (function (exports) {
             return OnlyData.customConfig?.server?.user_name || "阁下";
         }
         ;
+        static get debugMode() {
+            return OnlyData.customConfig?.server?.debug_mode ?? false;
+        }
+        ;
     }
 
     const ThinkType = [
@@ -639,6 +643,55 @@ var agentSystem = (function (exports) {
             super();
             this.systemPrompt = this.promptCompletion(prompt);
         }
+        dumpContext(roleName, outputPath) {
+            const timestamp = new Date().toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            });
+            const snapshot = {
+                timestamp,
+                role: roleName,
+                systemPrompt: this.systemPrompt,
+                messagesCount: this.messages.length,
+                messages: this.messages.map((msg, idx) => {
+                    const content = typeof msg.content === 'string'
+                        ? msg.content
+                        : JSON.stringify(msg.content);
+                    return {
+                        index: idx,
+                        role: msg.role,
+                        contentPreview: content.length > 500 ? content.slice(0, 500) + '...' : content,
+                        contentLength: content.length,
+                    };
+                }),
+                ragMessagesCount: this.ragMessages.length,
+                ragMessages: this.ragMessages.map((msg, idx) => ({
+                    index: idx,
+                    role: msg.role,
+                    contentPreview: typeof msg.content === 'string'
+                        ? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
+                        : JSON.stringify(msg.content).slice(0, 300),
+                })),
+                runtimeMessagesCount: this.runtimeMessages.length,
+                runtimeMessages: this.runtimeMessages.map((msg, idx) => ({
+                    index: idx,
+                    role: msg.role,
+                    contentPreview: typeof msg.content === 'string'
+                        ? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
+                        : JSON.stringify(msg.content).slice(0, 300),
+                })),
+                stream: this.stream,
+                enableTools: this.enableTools,
+            };
+            const path = outputPath || `agent_debug_${roleName}.json`;
+            const [, error] = saveDebugFile(path, JSON.stringify(snapshot, null, 2));
+            if (error) {
+                console.error(`[${roleName}] 导出上下文失败:`, error);
+                return '';
+            }
+            console.log(`[${roleName}] 上下文快照已导出: ${path}`);
+            return path;
+        }
     }
 
     class CreativeRoleBase extends ModelBuilder {
@@ -655,12 +708,15 @@ var agentSystem = (function (exports) {
             return result;
         }
         createCreativeWork(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
+            const outputHistory = [...this.messages];
             const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
-            const ownHistory = this.messages.slice(-this.OWN_HISTORY_LIMIT);
+            const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
             this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
             const unreadTexts = this.extractUnreadTexts(unreadContext, count);
-            if (!this.matchKeywords(unreadTexts))
+            if (!this.matchKeywords(unreadTexts)) {
+                this.messages = outputHistory;
                 return true;
+            }
             const details = [];
             for (let i = 0; i < this.MAX_ITERATIONS; i++) {
                 console.log(`[${this.roleName}] 第 ${i + 1} 轮推理`);
@@ -688,6 +744,7 @@ var agentSystem = (function (exports) {
                     this.collectDetail(toolCall, details);
                 }
             }
+            this.messages = [];
             if (details.length > 0) {
                 const summary = this.buildSummary(details);
                 this.messages.push({ role: 'user', content: summary });
@@ -1421,26 +1478,29 @@ K:Am
         }
     }
 
-    const learnerKeywords = [
-        /查(?:一查|一下|询|找|找找|看看)/,
-        /搜索/,
-        /搜(?:一搜|一下)/,
-        /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
-        /研究(?:一(?:下|研究))/,
-        /调查(?:一(?:下|调查))?/,
+    const memoryKeywords = [
         /回忆(?:一(?:下|回忆))?/,
         /想想?(?:看|起|到)/,
         /记不记得/,
         /还记得/,
         /以前(?:说过|聊过|讨论过|提过|提到)/,
         /上次(?:说|聊|讨论|提|提到)/,
+    ];
+    const searchKeywords = [
+        /搜索/,
+        /搜(?:一搜|一下)/,
         /深入(?:了解|分析|研究)/,
         /详细(?:了解|分析|说明|解释)/,
         /分析(?:一(?:下|分析))?/,
+        /(?:资料|文献|论文|报告|数据|统计)/,
+        /调查(?:一(?:下|调查))?/,
         /核实/,
         /验证/,
+    ];
+    const ambiguousKeywords = [
+        /查(?:一查|一下|询|找|找找|看看)/,
+        /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
         /(?:真|假|正确|错误|靠谱|可靠)/,
-        /(?:资料|文献|论文|报告|数据|统计)/
     ];
     let learnerInitialized = false;
     function ensureLearnerInitialized() {
@@ -1457,6 +1517,18 @@ K:Am
         console.log('[学习者] 初始化完成');
         return true;
     }
+    function detectIntent(texts) {
+        if (texts.some(text => memoryKeywords.some(keyword => keyword.test(text)))) {
+            return 'memory';
+        }
+        if (texts.some(text => searchKeywords.some(keyword => keyword.test(text)))) {
+            return 'search';
+        }
+        if (texts.some(text => ambiguousKeywords.some(keyword => keyword.test(text)))) {
+            return 'ambiguous';
+        }
+        return 'balanced';
+    }
     class LearnerRole {
         messages = [];
         consumeHistory() {
@@ -1466,14 +1538,17 @@ K:Am
         }
         executeLearner(dialogueMessages, unreadContext) {
             const unreadTexts = this.extractTexts(unreadContext);
-            if (!this.matchKeywords(unreadTexts))
+            const allKeywords = [...memoryKeywords, ...searchKeywords, ...ambiguousKeywords];
+            if (!unreadTexts.some(text => allKeywords.some(keyword => keyword.test(text)))) {
                 return true;
+            }
             if (!ensureLearnerInitialized())
                 return true;
+            const intentHint = detectIntent(unreadTexts);
             const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
             const unreadJSON = JSON.stringify(unreadContext.slice(-10));
-            console.log('[学习者] 开始执行研究...');
-            const [report, error] = learnerExecute(dialogueJSON, unreadJSON);
+            console.log('[学习者] 开始执行研究, 意图偏向:', intentHint);
+            const [report, error] = learnerExecute(dialogueJSON, unreadJSON, intentHint);
             if (error) {
                 console.error('[学习者] 执行失败:', error);
                 return true;
@@ -1483,9 +1558,6 @@ K:Am
                 console.log('[学习者] 已将研究报告写入历史');
             }
             return false;
-        }
-        matchKeywords(texts) {
-            return texts.some(text => learnerKeywords.some(keyword => keyword.test(text)));
         }
         extractTexts(messages) {
             const texts = [];
@@ -1501,6 +1573,71 @@ K:Am
                 }
             }
             return texts;
+        }
+        dumpContext(dialogueMessages, unreadContext, outputPath) {
+            const path = outputPath || 'agent_debug_学习者.json';
+            const timestamp = new Date().toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+            });
+            const unreadTexts = this.extractTexts(unreadContext);
+            const intentHint = detectIntent(unreadTexts);
+            const snapshot = {
+                timestamp,
+                role: '学习者',
+                intentHint,
+                ownMessagesCount: this.messages.length,
+                ownMessages: this.messages.map((msg, idx) => {
+                    const content = typeof msg.content === 'string'
+                        ? msg.content
+                        : JSON.stringify(msg.content);
+                    return {
+                        index: idx,
+                        role: msg.role,
+                        contentPreview: content.length > 500 ? content.slice(0, 500) + '...' : content,
+                        contentLength: content.length,
+                    };
+                }),
+                dialogueMessagesCount: dialogueMessages.length,
+                dialogueMessages: dialogueMessages.slice(-15).map((msg, idx) => {
+                    const content = typeof msg.content === 'string'
+                        ? msg.content
+                        : JSON.stringify(msg.content);
+                    return {
+                        index: idx,
+                        role: msg.role,
+                        contentPreview: content.length > 300 ? content.slice(0, 300) + '...' : content,
+                    };
+                }),
+                unreadContextCount: unreadContext.length,
+                unreadContext: unreadContext.slice(-10).map((msg, idx) => {
+                    const content = typeof msg.content === 'string'
+                        ? msg.content
+                        : JSON.stringify(msg.content);
+                    return {
+                        index: idx,
+                        role: msg.role,
+                        contentPreview: content.length > 300 ? content.slice(0, 300) + '...' : content,
+                    };
+                }),
+                learnerInitialized,
+            };
+            const [, error] = saveDebugFile(path, JSON.stringify(snapshot, null, 2));
+            if (error) {
+                console.error('[学习者] 导出 TS 层上下文失败:', error);
+                return '';
+            }
+            if (learnerInitialized) {
+                const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
+                const unreadJSON = JSON.stringify(unreadContext.slice(-10));
+                const goPath = path.replace('.json', '_go.json');
+                const [, goError] = learnerDumpContext(dialogueJSON, unreadJSON, intentHint, goPath);
+                if (goError) {
+                    console.error('[学习者] 导出 Go 层上下文失败:', goError);
+                }
+            }
+            console.log('[学习者] 上下文快照已导出:', path);
+            return path;
         }
     }
 
@@ -1982,6 +2119,44 @@ ${candidateTexts}
                 message.content = newContent;
             }
         }
+        dumpAllContexts(outputDir) {
+            if (!OnlyData.debugMode)
+                return [];
+            const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
+            const results = [];
+            const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
+            if (dialoguePath)
+                results.push(dialoguePath);
+            const learnerPath = this.learnerRole.dumpContext(this.dialogueRole.messages, this.unreadContext, `${dir}\\agent_debug_学习者.json`);
+            if (learnerPath)
+                results.push(learnerPath);
+            const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
+            if (painterPath)
+                results.push(painterPath);
+            const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
+            if (musicianPath)
+                results.push(musicianPath);
+            const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
+            if (organizePath)
+                results.push(organizePath);
+            const indexData = {
+                timestamp: new Date().toLocaleString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                }),
+                unreadContextCount: this.unreadContext.length,
+                unreadVideoUrlCount: this.unreadVideoUrl.length,
+                unreadRecordsCount: OnlyData.unreadRecords.length,
+                finalResponse: this.finalResponse,
+                exportedFiles: results,
+            };
+            const indexPath = `${dir}\\agent_debug_index.json`;
+            const [, indexError] = saveDebugFile(indexPath, JSON.stringify(indexData, null, 2));
+            if (!indexError)
+                results.push(indexPath);
+            console.log(`[智能体] 已导出 ${results.length} 个上下文文件到 ${dir}`);
+            return results;
+        }
     }
 
     class LunarAgent extends AgentDefine {
@@ -2070,6 +2245,7 @@ ${candidateTexts}
                         }
                         pushContext(messageType, chunk.display, audio);
                     }
+                    this.dumpAllContexts();
                 }
                 catch (error) {
                     const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');

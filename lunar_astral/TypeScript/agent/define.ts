@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, modelResponse, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, RandomFloor, OrganizeRole } from '../index';
+import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -143,7 +143,66 @@ export class AgentDefine {
 				}
 			}
 			// 替换消息内容
-			message.content = newContent;
+				message.content = newContent;
+			}
+		}
+		/**
+		 * 一键导出所有子智能体的运行时上下文到本地文件（覆写模式）
+		 *
+		 * 将对话者、学习者、画家、音乐家、编纂者的上下文分别导出为独立 JSON 文件，
+		 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
+		 *
+		 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
+		 * @returns 导出文件路径数组
+		 */
+		public dumpAllContexts(outputDir?: string): string[] {
+			// 调试模式关闭时跳过导出
+			if (!OnlyData.debugMode) return [];
+
+			const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
+			const results: string[] = [];
+
+			// 对话者
+			const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
+			if (dialoguePath) results.push(dialoguePath);
+
+			// 学习者（需要对话历史和未读上下文）
+			const learnerPath = this.learnerRole.dumpContext(
+				this.dialogueRole.messages,
+				this.unreadContext,
+				`${dir}\\agent_debug_学习者.json`
+			);
+			if (learnerPath) results.push(learnerPath);
+
+			// 画家
+			const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
+			if (painterPath) results.push(painterPath);
+
+			// 音乐家
+			const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
+			if (musicianPath) results.push(musicianPath);
+
+			// 编纂者
+			const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
+			if (organizePath) results.push(organizePath);
+
+			// 生成汇总索引文件
+			const indexData = {
+				timestamp: new Date().toLocaleString('zh-CN', {
+					year: 'numeric', month: '2-digit', day: '2-digit',
+					hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+				}),
+				unreadContextCount: this.unreadContext.length,
+				unreadVideoUrlCount: this.unreadVideoUrl.length,
+				unreadRecordsCount: OnlyData.unreadRecords.length,
+				finalResponse: this.finalResponse,
+				exportedFiles: results,
+			};
+			const indexPath = `${dir}\\agent_debug_index.json`;
+			const [, indexError] = saveDebugFile(indexPath, JSON.stringify(indexData, null, 2));
+			if (!indexError) results.push(indexPath);
+
+			console.log(`[智能体] 已导出 ${results.length} 个上下文文件到 ${dir}`);
+			return results;
 		}
 	}
-}

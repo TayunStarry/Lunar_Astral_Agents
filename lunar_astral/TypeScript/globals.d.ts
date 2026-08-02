@@ -315,18 +315,41 @@ declare global {
 	     */
 	    function learnerInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
 	    /**
-	     * 执行学习者研究
-	     *
-	     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
-	     * @param {string} unreadJSON 未读消息的 JSON 字符串
-	     *
-	     * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
-	     */
-	    function learnerExecute(dialogueJSON: string, unreadJSON: string): [string, Error | null];
+		     * 执行学习者研究
+		     *
+		     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
+		     * @param {string} unreadJSON 未读消息的 JSON 字符串
+		     * @param {string} intentHint 意图提示 ("memory" | "search" | "balanced" | "ambiguous")
+		     *
+		     * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
+		     */
+		    function learnerExecute(dialogueJSON: string, unreadJSON: string, intentHint: string): [string, Error | null];
 	    /**
 	     * 检查学习者智能体是否已初始化
 	     *
 	     * @returns {boolean} 是否已初始化
 	     */
 	    function learnerIsReady(): boolean;
+	    /**
+	     * 导出学习者 Go 层运行时上下文到文件（覆写模式）
+	     * 包含搜索结果、策略评估、辩论状态、记忆匹配等 Go 层完整数据
+	     *
+	     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
+	     * @param {string} unreadJSON 未读消息的 JSON 字符串
+	     * @param {string} intentHint 意图提示
+	     * @param {string} outputPath 输出文件路径
+	     *
+	     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
+	     */
+	    function learnerDumpContext(dialogueJSON: string, unreadJSON: string, intentHint: string, outputPath: string): [string, Error | null];
+	    /**
+	     * 将调试内容写入本地文件（覆写模式）
+	     * 用于各子智能体导出上下文快照
+	     *
+	     * @param {string} filePath 输出文件的绝对路径
+	     * @param {string} content 要写入的字符串内容
+	     *
+	     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
+	     */
+	    function saveDebugFile(filePath: string, content: string): [string, Error | null];
 	}

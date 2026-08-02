@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, InferencePayload, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole, ToolCall } from '../index';
+import { OnlyData, PostMessage, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole, ToolCall } from '../index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -248,5 +248,68 @@ export class ModelBuilder extends ConfigModifier {
 		super();
 		// 补全系统提示词
 		this.systemPrompt = this.promptCompletion(prompt);
+	}
+
+	/**
+	 * 导出当前子智能体的运行时上下文到本地 JSON 文件（覆写模式）
+	 *
+	 * 用于调试排查消息重复、上下文异常等问题。
+	 * 所有继承 ModelBuilder 的子智能体均可使用此方法。
+	 *
+	 * @param roleName 角色名称（用于日志和文件命名）
+	 * @param outputPath 输出文件路径（默认 agent_debug_{roleName}.json）
+	 * @returns 导出文件路径，或空字符串表示失败
+	 */
+	public dumpContext(roleName: string, outputPath?: string): string {
+		const timestamp = new Date().toLocaleString('zh-CN', {
+			year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+		});
+
+		const snapshot = {
+			timestamp,
+			role: roleName,
+			systemPrompt: this.systemPrompt,
+			messagesCount: this.messages.length,
+			messages: this.messages.map((msg, idx) => {
+				const content = typeof msg.content === 'string'
+					? msg.content
+					: JSON.stringify(msg.content);
+				return {
+					index: idx,
+					role: msg.role,
+					contentPreview: content.length > 500 ? content.slice(0, 500) + '...' : content,
+					contentLength: content.length,
+				};
+			}),
+			ragMessagesCount: this.ragMessages.length,
+			ragMessages: this.ragMessages.map((msg, idx) => ({
+				index: idx,
+				role: msg.role,
+				contentPreview: typeof msg.content === 'string'
+					? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
+					: JSON.stringify(msg.content).slice(0, 300),
+			})),
+			runtimeMessagesCount: this.runtimeMessages.length,
+			runtimeMessages: this.runtimeMessages.map((msg, idx) => ({
+				index: idx,
+				role: msg.role,
+				contentPreview: typeof msg.content === 'string'
+					? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
+					: JSON.stringify(msg.content).slice(0, 300),
+			})),
+			stream: this.stream,
+			enableTools: this.enableTools,
+		};
+
+		const path = outputPath || `agent_debug_${roleName}.json`;
+		const [, error] = saveDebugFile(path, JSON.stringify(snapshot, null, 2));
+		if (error) {
+			console.error(`[${roleName}] 导出上下文失败:`, error);
+			return '';
+		}
+
+		console.log(`[${roleName}] 上下文快照已导出: ${path}`);
+		return path;
 	}
 }

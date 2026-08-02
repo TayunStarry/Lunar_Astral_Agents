@@ -1,5 +1,4 @@
-import { ToolCall, ToolCallItem } from '../index';
-import { CreativeRoleBase } from './creative';
+import { ToolCall, ToolCallItem, CreativeRoleBase } from '../index';
 
 /**
  * 音乐创作参数接口

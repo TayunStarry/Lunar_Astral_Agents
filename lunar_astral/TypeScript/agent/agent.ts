@@ -1,4 +1,4 @@
-﻿import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -131,7 +131,9 @@ class LunarAgent extends AgentDefine {
 						console.error(`TTS合成异常: [${chunk.tts}]`, e);
 					}
 					pushContext(messageType, chunk.display, audio);
-				}
+					}
+					// 思考链结尾：导出所有子智能体上下文快照（覆写模式）
+					this.dumpAllContexts();
 			}
 			catch (error) {
 				/** 获取提示音数据 */

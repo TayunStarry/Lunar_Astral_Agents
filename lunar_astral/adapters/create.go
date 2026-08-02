@@ -1,18 +1,18 @@
 package adapters
 
 import (
-		"context"
-		"fmt"
-		"logger"
-		"lunar_astral/agent"
-		"lunar_astral/hierarchy"
+	"context"
+	"fmt"
+	"logger"
+	"lunar_astral/hierarchy"
+	"lunar_astral/learner"
 
-		"github.com/dop251/goja"
-		"github.com/dop251/goja_nodejs/console"
-		"github.com/dop251/goja_nodejs/eventloop"
-		"github.com/dop251/goja_nodejs/process"
-		"github.com/dop251/goja_nodejs/require"
-	)
+	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/console"
+	"github.com/dop251/goja_nodejs/eventloop"
+	"github.com/dop251/goja_nodejs/process"
+	"github.com/dop251/goja_nodejs/require"
+)
 
 // registerAdaptersToRuntime 注册适配器函数到指定的JavaScript运行时环境
 func registerAdaptersToRuntime(vm *goja.Runtime) {
@@ -24,6 +24,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("readFile", adapters.readFile)
 	vm.Set("fileView", adapters.fileView)
 	vm.Set("fileList", adapters.fileList)
+	vm.Set("saveDebugFile", adapters.saveDebugFile)
 
 	// 注册知识库操作适配器
 	vm.Set("knowledge", adapters.knowledge)
@@ -72,12 +73,12 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
 
 	// 注册 LTPX 工具动态管理函数
-		vm.Set("getLTPXToolStatus", adapters.getLTPXToolStatusForJS)
-		vm.Set("processLTPXChanges", adapters.processLTPXChangesForJS)
+	vm.Set("getLTPXToolStatus", adapters.getLTPXToolStatusForJS)
+	vm.Set("processLTPXChanges", adapters.processLTPXChangesForJS)
 
-		// 注册学习者智能体适配器
-		agent.BindLearnerToRuntime(vm)
-	}
+	// 注册学习者智能体适配器
+	learner.BindLearnerToRuntime(vm)
+}
 
 // createAgentContext 创建并初始化JavaScript运行时环境
 func createAgentContext() error {

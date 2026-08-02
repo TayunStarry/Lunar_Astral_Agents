@@ -65,4 +65,8 @@ export class OnlyData {
 	public static get userName(): string {
 		return OnlyData.customConfig?.server?.user_name || "阁下";
 	};
+	/** 获取 调试模式开关 */
+	public static get debugMode(): boolean {
+		return OnlyData.customConfig?.server?.debug_mode ?? false;
+	};
 };

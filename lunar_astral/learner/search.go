@@ -1,4 +1,4 @@
-package agent
+package learner
 
 import (
 	"fmt"
@@ -106,6 +106,58 @@ func (m *SearchManager) SearchAndCompress(query string, maxChars int, llm *LLMCl
 // IsAvailable 检查搜索是否可用
 func (m *SearchManager) IsAvailable() bool {
 	return m.initialized && m.searchSystem != nil
+}
+
+// SimpleSearchRaw 执行轻量摘要搜索，返回原始搜索结果预览
+func (m *SearchManager) SimpleSearchRaw(query string) ([]SearchItemPreview, error) {
+	if !m.initialized || m.searchSystem == nil {
+		return nil, fmt.Errorf("搜索子系统未初始化")
+	}
+
+	logger.Info("Learner", "执行轻量摘要搜索: %s", query)
+
+	results, err := m.searchSystem.SimpleSearchRaw(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为 learner 包的 SearchItemPreview
+	preview := make([]SearchItemPreview, 0, len(results))
+	for _, r := range results {
+		preview = append(preview, SearchItemPreview{
+			Title:   r.Title,
+			URL:     r.URL,
+			Snippet: truncateText(r.Snippet, 200), // 截断摘要避免过长
+		})
+	}
+	return preview, nil
+}
+
+// WebpageSearch 执行网页搜索（搜索 + 内容抓取 + LLM 总结）
+func (m *SearchManager) WebpageSearch(query string) (string, error) {
+	if !m.initialized || m.searchSystem == nil {
+		return "", fmt.Errorf("搜索子系统未初始化")
+	}
+
+	logger.Info("Learner", "执行网页搜索: %s", query)
+
+	return m.searchSystem.WebpageSearch(query)
+}
+
+// Search 统一搜索入口，按模式路由
+func (m *SearchManager) Search(query string, mode AgentSearchMode) (string, error) {
+	if !m.initialized || m.searchSystem == nil {
+		return "", fmt.Errorf("搜索子系统未初始化")
+	}
+
+	switch mode {
+	case AgentModeWebpage:
+		return m.WebpageSearch(query)
+	case AgentModeDepth:
+		return m.DepthSearch(query)
+	default: // AgentModeSimple
+		return m.searchSystem.SimpleSearch(query)
+	}
 }
 
 // compressResult 使用 LLM 压缩搜索结果

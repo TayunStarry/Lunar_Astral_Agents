@@ -185,3 +185,8 @@ func (s *System) WebpageSearch(query string) (string, error) {
 func (s *System) DepthSearch(query string) (string, error) {
 	return s.depthSearch(query)
 }
+
+// SimpleSearchRaw 执行轻量摘要搜索，返回原始搜索结果（供调用方做二次处理）
+func (s *System) SimpleSearchRaw(query string) ([]SearchResult, error) {
+	return s.simple.SearchRaw(query)
+}

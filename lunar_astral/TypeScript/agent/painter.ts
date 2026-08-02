@@ -1,5 +1,4 @@
-import { ToolCall,  RandomFloor,  GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem } from '../index';
-import { CreativeRoleBase } from './creative';
+import { ToolCall,  RandomFloor,  GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, CreativeRoleBase } from '../index';
 
 /** 绘画作品详情记录（用于向对话者传递作品信息） */
 interface PaintingDetail {

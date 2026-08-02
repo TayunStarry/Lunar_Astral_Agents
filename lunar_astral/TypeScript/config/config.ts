@@ -14,6 +14,8 @@ export interface Config {
 	server: {
 		/** 用户名 */
 		user_name?: string;
+		/** 调试模式开关：开启时导出子智能体上下文日志 */
+		debug_mode?: boolean;
 	};
 }
 

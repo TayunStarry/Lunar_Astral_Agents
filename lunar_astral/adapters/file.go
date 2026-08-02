@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -138,4 +140,36 @@ func (class *Runtime) fileView(call goja.FunctionCall) goja.Value {
 	}
 
 	return class.runtime.ToValue([]any{string(content), nil})
+}
+
+// saveDebugFile 将调试内容写入本地文件（覆写模式）
+// 参数: filePath(绝对路径), content(字符串内容)
+// 返回值: [string, error] 文件路径和错误信息
+func (class *Runtime) saveDebugFile(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足，需要 filePath 和 content")})
+	}
+
+	filePath, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("filePath必须是字符串")})
+	}
+
+	content, ok := call.Argument(1).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("content必须是字符串")})
+	}
+
+	// 确保目录存在
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("创建目录失败: %w", err)})
+	}
+
+	// 覆写写入文件
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("写入文件失败: %w", err)})
+	}
+
+	return class.runtime.ToValue([]any{filePath, nil})
 }
