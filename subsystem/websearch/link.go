@@ -221,6 +221,16 @@ func (s *System) processWebpageLink(url string) string {
 		return "无法访问"
 	}
 
+	// 如果内容过少，可能是 SPA 页面，尝试使用浏览器渲染
+	if s.browserRenderer != nil && len([]rune(body)) < 200 {
+		if rendered, err := s.browserRenderer.Render(url); err == nil && rendered != "" && len([]rune(rendered)) > len([]rune(body)) {
+			if s.DebugLog != nil {
+				s.DebugLog("[fetch_url] 检测到SPA页面，已使用浏览器渲染 url=%s", url)
+			}
+			body = rendered
+		}
+	}
+
 	body = truncateText(body, linkMaxSummaryNoLLM*2) // 给 LLM 足够的上下文
 
 	if s.llmProvider == nil {

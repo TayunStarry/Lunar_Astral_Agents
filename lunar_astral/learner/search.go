@@ -9,7 +9,7 @@ import (
 )
 
 // SearchManager 搜索管理器
-// 封装 websearch 包，提供搜索结果压缩和 token 预算控制
+// 封装 websearch 子系统，提供初步搜索和深度搜索能力
 type SearchManager struct {
 	searchSystem *websearch.System
 	initialized  bool
@@ -20,25 +20,21 @@ func NewSearchManager() *SearchManager {
 	return &SearchManager{}
 }
 
-// Init 初始化搜索子系统（使用学习者配置）
+// Init 初始化搜索子系统
 func (m *SearchManager) Init(cfg LearnerConfig) error {
 	if m.initialized {
 		return nil
 	}
 
 	wsCfg := websearch.DefaultConfig()
-	wsCfg.LLM.BaseURL = cfg.BaseURL
-	wsCfg.LLM.APIKey = cfg.APIKey
-	wsCfg.LLM.Model = cfg.Model
-	wsCfg.LLM.MaxTokens = cfg.MaxTokens
-	wsCfg.LLM.Temperature = cfg.Temperature
 
-	// 启用深度搜索，增加子问题数量
+	// 启用深度搜索
 	wsCfg.Depth.Enabled = true
 	wsCfg.Depth.MaxSubQueries = MaxSearchSubQuestions
-	wsCfg.Depth.MaxResults = 15
 
-	m.searchSystem = websearch.NewWithConfig(wsCfg)
+	// 创建 LLM provider 并初始化搜索系统
+	provider := websearch.NewOpenAIProvider(cfg.BaseURL, cfg.APIKey, cfg.Model, cfg.MaxTokens, cfg.Temperature)
+	m.searchSystem = websearch.NewWithLLM(wsCfg, provider)
 
 	if m.searchSystem.HasLLM() {
 		logger.Info("Learner", "搜索子系统初始化成功，LLM 已配置: %s", cfg.Model)
@@ -50,7 +46,36 @@ func (m *SearchManager) Init(cfg LearnerConfig) error {
 	return nil
 }
 
+// SimpleSearch 执行初步网络搜索（轻量摘要模式）
+// 返回搜索结果摘要列表，用于步骤 d 的初步信息获取
+func (m *SearchManager) SimpleSearch(query string) ([]SearchItemPreview, error) {
+	if !m.initialized || m.searchSystem == nil {
+		return nil, fmt.Errorf("搜索子系统未初始化")
+	}
+
+	logger.Info("Learner", "执行初步网络搜索: %s", query)
+
+	results, err := m.searchSystem.SimpleSearchRaw(query)
+	if err != nil {
+		logger.Error("Learner", "初步网络搜索失败: %v", err)
+		return nil, err
+	}
+
+	preview := make([]SearchItemPreview, 0, len(results))
+	for _, r := range results {
+		preview = append(preview, SearchItemPreview{
+			Title:   r.Title,
+			URL:     r.URL,
+			Snippet: truncateRunes(r.Snippet, 200),
+		})
+	}
+
+	logger.Info("Learner", "初步网络搜索完成: %d 条结果", len(preview))
+	return preview, nil
+}
+
 // DepthSearch 执行深度搜索
+// 返回完整的深度研究报告
 func (m *SearchManager) DepthSearch(query string) (string, error) {
 	if !m.initialized || m.searchSystem == nil {
 		return "", fmt.Errorf("搜索子系统未初始化")
@@ -65,72 +90,6 @@ func (m *SearchManager) DepthSearch(query string) (string, error) {
 	}
 
 	return result, nil
-}
-
-// SearchAndCompress 执行深度搜索并压缩结果到指定字符数内
-// 如果搜索结果超过 maxChars，使用 LLM 进行摘要压缩
-func (m *SearchManager) SearchAndCompress(query string, maxChars int, llm *LLMClient) (string, error) {
-	if !m.initialized || m.searchSystem == nil {
-		return "", fmt.Errorf("搜索子系统未初始化")
-	}
-
-	result, err := m.DepthSearch(query)
-	if err != nil {
-		return "", err
-	}
-
-	// 如果结果已经足够短，直接返回
-	if len([]rune(result)) <= maxChars {
-		return result, nil
-	}
-
-	// 使用 LLM 压缩搜索结果
-	if llm != nil {
-		compressed, compressErr := m.compressResult(result, maxChars, llm)
-		if compressErr == nil && len([]rune(compressed)) <= maxChars {
-			logger.Info("Learner", "搜索结果已压缩: %d → %d 字符", len([]rune(result)), len([]rune(compressed)))
-			return compressed, nil
-		}
-		// 压缩失败，回退到截断
-		if compressErr != nil {
-			logger.Warn("Learner", "搜索结果 LLM 压缩失败: %v，回退到截断", compressErr)
-		}
-	}
-
-	// 截断到最大字符数
-	truncated := truncateText(result, maxChars)
-	logger.Info("Learner", "搜索结果已截断: %d → %d 字符", len([]rune(result)), len([]rune(truncated)))
-	return truncated, nil
-}
-
-// IsAvailable 检查搜索是否可用
-func (m *SearchManager) IsAvailable() bool {
-	return m.initialized && m.searchSystem != nil
-}
-
-// SimpleSearchRaw 执行轻量摘要搜索，返回原始搜索结果预览
-func (m *SearchManager) SimpleSearchRaw(query string) ([]SearchItemPreview, error) {
-	if !m.initialized || m.searchSystem == nil {
-		return nil, fmt.Errorf("搜索子系统未初始化")
-	}
-
-	logger.Info("Learner", "执行轻量摘要搜索: %s", query)
-
-	results, err := m.searchSystem.SimpleSearchRaw(query)
-	if err != nil {
-		return nil, err
-	}
-
-	// 转换为 learner 包的 SearchItemPreview
-	preview := make([]SearchItemPreview, 0, len(results))
-	for _, r := range results {
-		preview = append(preview, SearchItemPreview{
-			Title:   r.Title,
-			URL:     r.URL,
-			Snippet: truncateText(r.Snippet, 200), // 截断摘要避免过长
-		})
-	}
-	return preview, nil
 }
 
 // WebpageSearch 执行网页搜索（搜索 + 内容抓取 + LLM 总结）
@@ -155,38 +114,31 @@ func (m *SearchManager) Search(query string, mode AgentSearchMode) (string, erro
 		return m.WebpageSearch(query)
 	case AgentModeDepth:
 		return m.DepthSearch(query)
-	default: // AgentModeSimple
-		return m.searchSystem.SimpleSearch(query)
+	default:
+		// Simple 模式：返回格式化文本
+		items, err := m.SimpleSearch(query)
+		if err != nil {
+			return "", err
+		}
+		return formatSimpleSearchResults(items), nil
 	}
 }
 
-// compressResult 使用 LLM 压缩搜索结果
-func (m *SearchManager) compressResult(result string, maxChars int, llm *LLMClient) (string, error) {
-	prompt := fmt.Sprintf(`请将以下搜索结果压缩为不超过 %d 字的精炼摘要。保留所有关键事实、数据、来源信息，删除冗余内容。
+// IsAvailable 检查搜索是否可用
+func (m *SearchManager) IsAvailable() bool {
+	return m.initialized && m.searchSystem != nil
+}
 
-搜索结果：
-%s
-
-要求：
-1. 保留所有关键事实和数据
-2. 保留信息来源
-3. 删除重复和冗余内容
-4. 不超过 %d 字`, maxChars, result, maxChars)
-
-	messages := []LLMMessage{
-		{Role: "system", Content: "你是一个信息压缩助手，擅长在保留关键信息的前提下精炼文本。"},
-		{Role: "user", Content: prompt},
+// formatSimpleSearchResults 格式化初步搜索结果为文本
+func formatSimpleSearchResults(items []SearchItemPreview) string {
+	if len(items) == 0 {
+		return "未找到相关搜索结果"
 	}
 
-	resp, err := llm.Chat(messages, BudgetSearchCompress)
-	if err != nil {
-		return "", err
+	var parts []string
+	for i, item := range items {
+		parts = append(parts, fmt.Sprintf("[%d] %s\n    %s\n    %s",
+			i+1, item.Title, item.URL, item.Snippet))
 	}
-
-	compressed := strings.TrimSpace(resp.Content)
-	if len([]rune(compressed)) > maxChars {
-		compressed = truncateText(compressed, maxChars)
-	}
-
-	return compressed, nil
+	return strings.Join(parts, "\n\n")
 }

@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"context"
 	"fmt"
 	"logger"
 	"websearch"
@@ -36,13 +37,9 @@ func (class *Runtime) webSearchInit(call goja.FunctionCall) goja.Value {
 	temperature := call.Argument(4).ToFloat()
 
 	cfg := websearch.DefaultConfig()
-	cfg.LLM.BaseURL = baseURL
-	cfg.LLM.APIKey = apiKey
-	cfg.LLM.Model = model
-	cfg.LLM.MaxTokens = maxTokens
-	cfg.LLM.Temperature = temperature
 
-	webSearchSystem = websearch.NewWithConfig(cfg)
+	provider := websearch.NewOpenAIProvider(baseURL, apiKey, model, maxTokens, temperature)
+	webSearchSystem = websearch.NewWithLLM(cfg, provider)
 
 	if webSearchSystem.HasLLM() {
 		logger.Info("LunarCore", "网络检索子系统初始化成功，LLM 已配置: %s", model)
@@ -162,7 +159,7 @@ func (class *Runtime) webSearchAssembly(call goja.FunctionCall) goja.Value {
 
 	logger.Info("LunarCore", "执行大会辩论式深度研究: %s", query)
 
-	result, err := webSearchSystem.Search(query, websearch.ModeDepth)
+	result, err := webSearchSystem.Search(context.Background(), query, websearch.ModeDepth)
 	if err != nil {
 		logger.Error("LunarCore", "大会辩论式深度研究失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})

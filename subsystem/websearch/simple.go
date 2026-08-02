@@ -5,10 +5,10 @@ import "fmt"
 // NewSimpleSearcher 创建轻量摘要搜索器
 func NewSimpleSearcher(cfg Config) *SimpleSearcher {
 	return &SimpleSearcher{
-		baidu:      NewBaiduSearcher(cfg.HTTP.Timeout, cfg.HTTP.UserAgent),
-		sogou:      NewSogouSearcher(cfg.HTTP.Timeout, cfg.HTTP.UserAgent),
-		bing:       NewBingSearcher(cfg.HTTP.Timeout, cfg.HTTP.UserAgent),
-		ddg:        NewDuckDuckGoSearcher(cfg.HTTP.Timeout, cfg.HTTP.UserAgent),
+		baidu:      NewBaiduSearcher(cfg.HTTP),
+		sogou:      NewSogouSearcher(cfg.HTTP),
+		bing:       NewBingSearcher(cfg.HTTP),
+		ddg:        NewDuckDuckGoSearcher(cfg.HTTP),
 		maxResults: cfg.Simple.MaxResults,
 	}
 }
@@ -20,7 +20,7 @@ func (s *SimpleSearcher) SetMaxResults(n int) {
 	}
 }
 
-// Search 执行轻量摘要搜索，百度 → 搜狗 → Bing → DuckDuckGo 级联回退
+// Search 执行轻量摘要搜索（Bing → 百度 → 搜狗 → DuckDuckGo）
 func (s *SimpleSearcher) Search(query string) (string, error) {
 	limit := s.maxResults
 	if limit <= 0 {
@@ -32,9 +32,9 @@ func (s *SimpleSearcher) Search(query string) (string, error) {
 		searcher Searcher
 		name     string
 	}{
+		{s.bing, "Bing"},
 		{s.baidu, "百度"},
 		{s.sogou, "搜狗"},
-		{s.bing, "Bing"},
 		{s.ddg, "DuckDuckGo"},
 	}
 
@@ -51,7 +51,7 @@ func (s *SimpleSearcher) Search(query string) (string, error) {
 	return fmt.Sprintf("未找到与 %q 相关的搜索结果，所有搜索引擎均无结果。", query), nil
 }
 
-// SearchRaw 执行轻量摘要搜索，返回原始结果（百度 → 搜狗 → Bing → DDG）
+// SearchRaw 执行轻量摘要搜索，返回原始结果
 func (s *SimpleSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	limit := max(s.maxResults, 10)
 
@@ -62,7 +62,7 @@ func (s *SimpleSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	return results, nil
 }
 
-// SearchRawNoPrep 跳过预处理的原始搜索（用于回退策略），百度 → 搜狗 → Bing → DDG
+// SearchRawNoPrep 跳过预处理的原始搜索（用于回退策略）
 func (s *SimpleSearcher) SearchRawNoPrep(query string) ([]SearchResult, error) {
 	limit := max(s.maxResults, 10)
 
@@ -75,30 +75,76 @@ func (s *SimpleSearcher) SearchRawNoPrep(query string) ([]SearchResult, error) {
 
 // trySearchRaw 依次尝试各引擎的标准搜索（带预处理）
 func (s *SimpleSearcher) trySearchRaw(query string, limit int) ([]SearchResult, error) {
-	engines := []Searcher{s.baidu, s.sogou, s.bing, s.ddg}
+	engines := []Searcher{s.bing, s.baidu, s.sogou, s.ddg}
 	for _, eng := range engines {
 		if eng == nil {
 			continue
 		}
-		results, err := eng.Search(query, limit)
-		if err == nil && len(results) > 0 {
-			return results, nil
+		// 健康检查：跳过已降级引擎
+		if s.health != nil && s.health.IsDegraded(eng.Name()) {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 已降级，跳过", eng.Name())
+			}
+			continue
 		}
+		results, err := eng.Search(query, limit)
+		if s.health != nil {
+			s.health.RecordResult(eng.Name(), err == nil && len(results) > 0)
+		}
+		if err != nil {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 搜索出错 err=%v", eng.Name(), err)
+			}
+			continue
+		}
+		if len(results) == 0 {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 返回空结果", eng.Name())
+			}
+			continue
+		}
+		if s.debugLog != nil {
+			s.debugLog("[引擎选择] %s 命中，返回%d条结果", eng.Name(), len(results))
+		}
+		return results, nil
 	}
 	return nil, nil
 }
 
 // trySearchRawNoPrep 依次尝试各引擎的原始搜索（跳过预处理）
 func (s *SimpleSearcher) trySearchRawNoPrep(query string, limit int) ([]SearchResult, error) {
-	engines := []Searcher{s.baidu, s.sogou, s.bing, s.ddg}
+	engines := []Searcher{s.bing, s.baidu, s.sogou, s.ddg}
 	for _, eng := range engines {
 		if eng == nil {
 			continue
 		}
-		results, err := eng.SearchRaw(query, limit)
-		if err == nil && len(results) > 0 {
-			return results, nil
+		// 健康检查：跳过已降级引擎
+		if s.health != nil && s.health.IsDegraded(eng.Name()) {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 已降级，跳过", eng.Name())
+			}
+			continue
 		}
+		results, err := eng.SearchRaw(query, limit)
+		if s.health != nil {
+			s.health.RecordResult(eng.Name(), err == nil && len(results) > 0)
+		}
+		if err != nil {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 搜索出错 err=%v", eng.Name(), err)
+			}
+			continue
+		}
+		if len(results) == 0 {
+			if s.debugLog != nil {
+				s.debugLog("[引擎选择] %s 返回空结果", eng.Name())
+			}
+			continue
+		}
+		if s.debugLog != nil {
+			s.debugLog("[引擎选择] %s 命中，返回%d条结果", eng.Name(), len(results))
+		}
+		return results, nil
 	}
 	return nil, nil
 }

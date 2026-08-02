@@ -26,11 +26,122 @@ type LearnerState struct {
 
 // LearnerResult 学习者执行结果
 type LearnerResult struct {
-	Report       string   // 研究报告全文
-	Sources      []string // 信息来源列表
-	MemoryOps    int      // 记忆操作次数
-	SearchRounds int      // 搜索轮次
-	DebateRounds int      // 辩论轮次
+	Report        string   // 研究报告全文
+	Sources       []string // 信息来源列表
+	KnowledgeOps  int      // 知识记忆操作次数
+	ExperienceOps int      // 经验记忆操作次数
+	SearchRounds  int      // 深度搜索轮次
+}
+
+// ============================================================
+// 工作流阶段
+// ============================================================
+
+// WorkflowPhase 工作流阶段
+type WorkflowPhase int
+
+const (
+	PhaseRefine       WorkflowPhase = iota // a: AI 推理完善请求
+	PhaseMemoryQuery                       // b: 查询记忆库
+	PhaseWebSearch                         // d: 初步网络搜索
+	PhaseEvaluate                          // e: AI 总结评估 + 决策
+	PhaseDeepSearch                        // g/h: 深度搜索循环
+	PhaseFinalize                          // i: 统一处理 + 记忆更新
+)
+
+// ============================================================
+// 步骤 a: 查询推理完善
+// ============================================================
+
+// RefinedQuery AI 推理完善后的查询
+type RefinedQuery struct {
+	Original    string   `json:"original"`     // 原始请求
+	Refined     string   `json:"refined"`      // 完善后的完整查询
+	KeyPoints   []string `json:"key_points"`   // 关键要点
+	SearchTerms []string `json:"search_terms"` // 建议搜索词
+}
+
+// ============================================================
+// 步骤 e: 评估与决策
+// ============================================================
+
+// EvaluationResult AI 评估结果
+type EvaluationResult struct {
+	Sufficient      bool   `json:"sufficient"`        // 信息是否充足
+	Summary         string `json:"summary,omitempty"`  // 阶段性摘要（充足时）
+	NeedDeepSearch  bool   `json:"need_deep_search"`   // 是否需要深度搜索
+	DeepSearchQuery string `json:"deep_search_query,omitempty"` // 深度搜索查询词
+	Reasoning       string `json:"reasoning"`          // 评估理由
+}
+
+// ============================================================
+// 步骤 g/h: 深度搜索
+// ============================================================
+
+// SearchRound 深度搜索单轮记录
+type SearchRound struct {
+	RoundNum   int    // 轮次编号
+	Query      string // 搜索查询词
+	Result     string // 搜索结果（压缩后）
+	Evaluation string // AI 对结果的评估
+	Sufficient bool   // 本轮信息是否充足
+}
+
+// SearchEvaluation AI 对搜索内容的评估
+type SearchEvaluation struct {
+	Sufficient         bool   `json:"sufficient"`           // 信息是否充足
+	Summary            string `json:"summary,omitempty"`     // 相关信息摘要
+	SupplementaryQuery string `json:"supplementary_query,omitempty"` // 补充搜索词
+	Reasoning          string `json:"reasoning"`             // 评估理由
+}
+
+// ============================================================
+// 工作流状态
+// ============================================================
+
+// WorkflowState 工作流运行时状态
+type WorkflowState struct {
+	OriginalQuery string              // 原始用户请求
+	RefinedQuery  *RefinedQuery       // 完善后的查询
+	KnowledgeMem  []MemoryMatch       // 知识记忆检索结果
+	ExperienceMem []MemoryMatch       // 经验记忆检索结果
+	SimpleSearch  []SearchItemPreview // 初步网络搜索摘要
+	Evaluation    *EvaluationResult   // 评估与决策
+	SearchRounds  []SearchRound       // 深度搜索轮次
+	FinalReport   string              // 最终报告
+	CurrentPhase  WorkflowPhase       // 当前阶段
+}
+
+// ============================================================
+// 记忆相关类型
+// ============================================================
+
+// MemoryMatch 记忆匹配结果
+type MemoryMatch struct {
+	ID         string  // 文档 ID
+	Content    string  // 内容
+	Similarity float32 // 相似度
+	Table      string  // 来源表名（knowledge / experience）
+}
+
+// MemoryUpdate 记忆更新指令
+type MemoryUpdate struct {
+	OldID      string // 原条目 ID（空表示新增）
+	NewContent string // 新内容
+	Reason     string // 更新原因
+}
+
+// MemoryAddRequest 记忆添加请求
+type MemoryAddRequest struct {
+	Table   string // 目标表名
+	Content string // 内容
+}
+
+// MemoryBatchResult 记忆批量操作结果
+type MemoryBatchResult struct {
+	KnowledgeAdded  int // 知识记忆新增条数
+	KnowledgeUpdated int // 知识记忆更新条数
+	ExperienceAdded int // 经验记忆新增条数
 }
 
 // ============================================================
@@ -58,7 +169,7 @@ type FunctionCall struct {
 	Arguments string `json:"arguments"`
 }
 
-// ToolDefinition 工具定义（传给 LLM 的 JSON 格式）
+// ToolDefinition 工具定义
 type ToolDefinition struct {
 	Type     string      `json:"type"`
 	Function FunctionDef `json:"function"`
@@ -73,83 +184,9 @@ type FunctionDef struct {
 
 // LLMResponse LLM 响应
 type LLMResponse struct {
-	Content     string     `json:"content,omitempty"`
-	ToolCalls   []ToolCall `json:"tool_calls,omitempty"`
-	FinishReason string    `json:"finish_reason,omitempty"`
-}
-
-// ============================================================
-// 辩论系统类型
-// ============================================================
-
-// DebatePhase 辩论阶段
-type DebatePhase int
-
-const (
-	PhaseAnalyze   DebatePhase = iota // 阶段1: 问题分析
-	PhaseSearch                       // 阶段2: 并行搜索
-	PhaseDebate                       // 阶段3: 辩论循环
-	PhaseSynthesize                   // 阶段4: 综合报告
-)
-
-// SubQuestion 子问题
-type SubQuestion struct {
-	Question     string // 子问题文本
-	SearchQuery  string // 对应的搜索查询
-	SearchResult string // 搜索结果（压缩后）
-	Source       string // 来源标记
-}
-
-// DebateRole 辩论角色
-type DebateRole string
-
-const (
-	RoleModerator DebateRole = "moderator" // 主持人
-	RoleNetPro    DebateRole = "net_pro"   // 网络派
-	RoleMemPro    DebateRole = "mem_pro"   // 记忆派
-	RoleSkeptic   DebateRole = "skeptic"   // 质疑者
-	RoleJudge     DebateRole = "judge"     // 裁决者
-)
-
-// DebateRound 辩论轮次记录
-type DebateRound struct {
-	RoundNum     int    // 轮次编号
-	NetProArg    string // 网络派论点
-	MemProArg    string // 记忆派论点
-	SkepticArg   string // 质疑者论点
-	JudgeVerdict string // 裁决者判断
-	IsConverged  bool   // 是否收敛
-	Summary      string // 本轮摘要（压缩后，供下一轮使用）
-}
-
-// DebateState 辩论状态
-type DebateState struct {
-	OriginalQuery string        // 原始查询
-	SubQuestions  []SubQuestion // 子问题列表
-	MemoryResults []MemoryMatch // 记忆检索结果
-	Rounds        []DebateRound // 辩论轮次
-	CurrentPhase  DebatePhase   // 当前阶段
-	Converged     bool          // 是否已收敛
-	MaxRounds     int           // 最大辩论轮次
-}
-
-// ============================================================
-// 记忆相关类型
-// ============================================================
-
-// MemoryMatch 记忆匹配结果
-type MemoryMatch struct {
-	ID         string  // 文档 ID
-	Content    string  // 内容
-	Similarity float32 // 相似度
-	Superseded bool    // 是否已被新条目替代（标记删除用）
-}
-
-// MemoryUpdate 记忆更新指令
-type MemoryUpdate struct {
-	OldID      string // 原条目 ID
-	NewContent string // 完善后的内容
-	Reason     string // 更新原因
+	Content      string     `json:"content,omitempty"`
+	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
+	FinishReason string     `json:"finish_reason,omitempty"`
 }
 
 // ============================================================
@@ -163,36 +200,17 @@ type TokenBudget struct {
 }
 
 // ============================================================
-// 报告类型
-// ============================================================
-
-// ReportOutline 报告提纲
-type ReportOutline struct {
-	Topic      string   // 研究主题
-	Conclusion string   // 核心结论方向
-	Sections   []string // 提纲要点列表
-	Doubts     []string // 待解决的疑点
-}
-
-// ReportSection 报告段落
-type ReportSection struct {
-	Title   string // 段落标题
-	Content string // 段落内容
-	Source  string // 信息来源
-}
-
-// ============================================================
 // LLM 请求/响应结构体
 // ============================================================
 
 // chatCompletionRequest OpenAI v1 Chat Completion 请求
 type chatCompletionRequest struct {
-	Model       string        `json:"model"`
-	Messages    []LLMMessage  `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []LLMMessage     `json:"messages"`
+	MaxTokens   int              `json:"max_tokens,omitempty"`
+	Temperature float64          `json:"temperature,omitempty"`
 	Tools       []ToolDefinition `json:"tools,omitempty"`
-	ToolChoice  string        `json:"tool_choice,omitempty"`
+	ToolChoice  string           `json:"tool_choice,omitempty"`
 }
 
 // chatCompletionResponse OpenAI v1 Chat Completion 响应
@@ -226,7 +244,7 @@ type chatCompletionError struct {
 // TS 层传入的消息结构
 // ============================================================
 
-// PostMessage TS 层消息结构（与 adapters/type.go 保持兼容）
+// PostMessage TS 层消息结构
 type PostMessage struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"`
@@ -239,20 +257,17 @@ type TextContent struct {
 }
 
 // ============================================================
-// 意图与策略
+// 搜索相关类型
 // ============================================================
 
-// IntentHint TS 层传入的意图提示
-type IntentHint string
+// SearchItemPreview 初步搜索摘要条目
+type SearchItemPreview struct {
+	Title   string
+	URL     string
+	Snippet string
+}
 
-const (
-	IntentMemory    IntentHint = "memory"    // 记忆偏向
-	IntentSearch    IntentHint = "search"    // 搜索偏向
-	IntentBalanced  IntentHint = "balanced"  // 均衡
-	IntentAmbiguous IntentHint = "ambiguous" // 模糊，需预查记忆判定
-)
-
-// AgentSearchMode 智能体搜索模式（与 websearch.SearchMode 对齐）
+// AgentSearchMode 智能体搜索模式
 type AgentSearchMode string
 
 const (
@@ -261,46 +276,23 @@ const (
 	AgentModeDepth   AgentSearchMode = "depth"   // 深度研究
 )
 
-// StrategyPlan LLM 策略评估输出（阶段2）
-type StrategyPlan struct {
-	Sufficient       bool            `json:"sufficient"`
-	DirectAnswer     string          `json:"direct_answer,omitempty"`
-	Intent           IntentHint      `json:"intent"`
-	SearchStrategy   AgentSearchMode `json:"search_strategy,omitempty"`
-	MultiAngleSearch bool            `json:"multi_angle_search"`
-	DebateRounds     int             `json:"debate_rounds"`
-	SubQuestions     []SubQuestion   `json:"sub_questions,omitempty"`
-	MemoryTopK       int             `json:"memory_top_k"`
-}
-
-// ProbeResult 预探测结果（阶段1）
-type ProbeResult struct {
-	SearchItems   []SearchItemPreview // Simple 搜索结果
-	MemoryMatches []MemoryMatch       // 记忆查询结果
-}
-
-// SearchItemPreview Simple 搜索结果预览条目
-type SearchItemPreview struct {
-	Title   string
-	URL     string
-	Snippet string
-}
-
 // ============================================================
 // 调试导出
 // ============================================================
 
-// DebugContextDump 调试用上下文快照（导出到文件供排查问题）
+// DebugContextDump 调试用上下文快照
 type DebugContextDump struct {
-	Timestamp       string              `json:"timestamp"`
-	IntentHint      string              `json:"intent_hint"`
-	DialogueJSON    string              `json:"dialogue_json"`
-	UnreadJSON      string              `json:"unread_json"`
-	FullContext     string              `json:"full_context"`
-	ProbeSearch     []SearchItemPreview `json:"probe_search_items"`
-	ProbeMemory     []MemoryMatch       `json:"probe_memory_matches"`
-	StrategyPlan    *StrategyPlan       `json:"strategy_plan,omitempty"`
-	DebateState     *DebateState        `json:"debate_state,omitempty"`
-	MemoryAvailable bool                `json:"memory_available"`
-	SearchAvailable bool                `json:"search_available"`
+	Timestamp      string              `json:"timestamp"`
+	DialogueJSON   string              `json:"dialogue_json"`
+	UnreadJSON     string              `json:"unread_json"`
+	FullContext    string              `json:"full_context"`
+	RefinedQuery   *RefinedQuery       `json:"refined_query,omitempty"`
+	KnowledgeMem   []MemoryMatch       `json:"knowledge_memory"`
+	ExperienceMem  []MemoryMatch       `json:"experience_memory"`
+	SimpleSearch   []SearchItemPreview `json:"simple_search"`
+	Evaluation     *EvaluationResult   `json:"evaluation,omitempty"`
+	SearchRounds   []SearchRound       `json:"search_rounds"`
+	FinalReport    string              `json:"final_report,omitempty"`
+	MemoryReady    bool                `json:"memory_ready"`
+	SearchReady    bool                `json:"search_ready"`
 }

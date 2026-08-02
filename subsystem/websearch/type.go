@@ -2,6 +2,7 @@ package websearch
 
 import (
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -27,9 +28,10 @@ const (
 
 // SearchResult 单条搜索结果
 type SearchResult struct {
-	Title   string
-	URL     string
-	Snippet string
+	Title      string
+	URL        string
+	Snippet    string
+	IsOfficial bool // 是否为官方网站（由搜索引擎标记）
 }
 
 // ============================================================
@@ -52,7 +54,6 @@ type Config struct {
 	Simple  SimpleConfig
 	Webpage WebpageConfig
 	Depth   DepthConfig
-	LLM     llmConfig
 	HTTP    HTTPConfig
 }
 
@@ -71,25 +72,18 @@ type WebpageConfig struct {
 
 // DepthConfig 深度研究配置（大会辩论模式）
 type DepthConfig struct {
-	Enabled       bool // 是否启用大会辩论深度搜索
-	MaxRounds     int  // 最大辩论轮次 (默认3)
-	MaxResults    int  // 每个子问题最大结果
-	MaxSubQueries int  // 最大子问题数
-}
-
-// llmConfig OpenAI v1 协议兼容的 AI 模型配置
-type llmConfig struct {
-	BaseURL     string
-	APIKey      string
-	Model       string
-	MaxTokens   int
-	Temperature float64
+	Enabled                  bool // 是否启用大会辩论深度搜索
+	MaxRounds                int  // 最大辩论轮次 (默认5)
+	MaxSubQueries            int  // 最大子问题数
+	MaxSupplementarySearches int  // 补充搜索最大次数（默认3），0表示禁用
 }
 
 // HTTPConfig HTTP 客户端配置
 type HTTPConfig struct {
-	Timeout   time.Duration
-	UserAgent string
+	Timeout      time.Duration
+	UserAgent    string
+	MaxRetries   int           // 最大重试次数（默认2）
+	RetryBackoff time.Duration // 基础退避时间（默认500ms）
 }
 
 // ============================================================
@@ -153,22 +147,30 @@ type MemoryProvider interface {
 
 // BingSearcher 使用必应中文搜索
 type BingSearcher struct {
-	client *http.Client
+	client  *http.Client
+	httpCfg HTTPConfig
 }
 
 // BaiduSearcher 使用百度搜索
 type BaiduSearcher struct {
-	client *http.Client
+	client            *http.Client
+	httpCfg           HTTPConfig
+	cookieWarmed      bool
+	browserRenderer   BrowserRenderer // 无头浏览器渲染器（CAPTCHA 回退用）
+	captchaDetected   bool            // 是否已检测到CAPTCHA（HTTP请求被拦截）
+	captchaDetectedAt time.Time       // CAPTCHA检测时间（用于定期重试HTTP）
 }
 
 // SogouSearcher 使用搜狗搜索
 type SogouSearcher struct {
-	client *http.Client
+	client  *http.Client
+	httpCfg HTTPConfig
 }
 
 // DuckDuckGoSearcher 使用 DuckDuckGo Lite 搜索
 type DuckDuckGoSearcher struct {
-	client *http.Client
+	client  *http.Client
+	httpCfg HTTPConfig
 }
 
 // ============================================================
@@ -182,6 +184,8 @@ type SimpleSearcher struct {
 	bing       Searcher
 	ddg        Searcher
 	maxResults int
+	health     *EngineHealth
+	debugLog   func(format string, args ...interface{})
 }
 
 // ============================================================
@@ -190,10 +194,29 @@ type SimpleSearcher struct {
 
 // WebpageSearcher 网页搜索器：搜索 + 网页内容抓取 + LLM 总结
 type WebpageSearcher struct {
-	simple      *SimpleSearcher
-	llmProvider Provider
-	cfg         WebpageConfig
-	httpClient  *http.Client
+	simple          *SimpleSearcher
+	llmProvider     Provider
+	cfg             WebpageConfig
+	httpClient      *http.Client
+	browserRenderer BrowserRenderer // SPA 页面浏览器渲染器（可选）
+	debugLog        func(format string, args ...interface{})
+}
+
+// ============================================================
+// 大会辩论研究数据
+// ============================================================
+
+// ResearchData 深度搜索采集的结构化研究数据，供大会辩论使用
+type ResearchData struct {
+	OriginalQuery string
+	SubQueries    []SubQueryResult
+}
+
+// SubQueryResult 单个子问题的搜索结果（含完整网页正文）
+type SubQueryResult struct {
+	Query   string
+	Results []SearchResult // Snippet 字段已填充为完整网页正文
+	Error   error
 }
 
 // ============================================================
@@ -237,11 +260,13 @@ type subResult struct {
 
 // DepthSearcher 深度研究：子问题拆解 + 并行搜索 + 内容抓取 + 综合报告
 type DepthSearcher struct {
-	simple      *SimpleSearcher
-	llmProvider Provider
-	cfg         DepthConfig
-	httpClient  *http.Client
-	userAgent   string
+	simple          *SimpleSearcher
+	llmProvider     Provider
+	cfg             DepthConfig
+	httpClient      *http.Client
+	userAgent       string
+	browserRenderer BrowserRenderer                          // SPA 页面浏览器渲染器（可选）
+	debugLog        func(format string, args ...interface{}) // 诊断日志回调
 }
 
 // ============================================================
@@ -262,7 +287,11 @@ type System struct {
 	memProvider     MemoryProvider
 	visionProvider  VisionProvider
 	downloadFunc    DownloadFunc
-	downloadGroupID string // 下载目标群组ID（由调用方在处理前设置）
+	downloadGroupID string                                   // 下载目标群组ID（由调用方在处理前设置）
+	health          *EngineHealth                            // 搜索引擎健康检查
+	browserRenderer BrowserRenderer                          // 无头浏览器渲染器（SPA页面用）
+	browserMu       sync.Mutex                               // 保护浏览器创建/销毁的并发安全
+	DebugLog        func(format string, args ...interface{}) // 诊断日志回调（由调用方注入）
 }
 
 // ============================================================
@@ -293,56 +322,4 @@ type OpenAIProvider struct {
 	maxTokens   int
 	temperature float64
 	client      *http.Client
-}
-
-// ============================================================
-// 大会辩论类型定义
-// ============================================================
-
-// DelegateRole 辩论角色
-type DelegateRole string
-
-const (
-	// RoleReformist 维新派（搜索派）：主张相信网络搜索结果
-	RoleReformist DelegateRole = "reformist"
-	// RoleConservative 守旧派（记忆派）：主张相信已有记忆/知识
-	RoleConservative DelegateRole = "conservative"
-	// RoleSupporter 赞同者：寻找双方论点的共同点
-	RoleSupporter DelegateRole = "supporter"
-	// RoleOpponent 反对者：挑双方论点的漏洞
-	RoleOpponent DelegateRole = "opponent"
-	// RoleSynthesizer 整合者：主持辩论，综合各方论点
-	RoleSynthesizer DelegateRole = "synthesizer"
-)
-
-// DebateRound 一轮辩论记录
-type DebateRound struct {
-	Round         int
-	ReformistA    string // 维新派A发言
-	ConservativeA string // 守旧派A发言
-	Supporter     string // 赞同者评论
-	Opponent      string // 反对者挑刺
-	ReformistB    string // 维新派B反驳/补充
-	ConservativeB string // 守旧派B反驳/补充
-	Verdict       string // 整合者本轮判断
-	Converged     bool   // 本轮是否收敛
-}
-
-// AssemblyState 大会状态
-type AssemblyState struct {
-	OriginalQuery string
-	Topics        []string // 拆解出的议题
-	Rounds        []DebateRound
-	CurrentRound  int
-	Converged     bool
-	SearchResults map[string][]SearchResult // 维新派搜索结果, key=议题
-	MemoryResults map[string]string         // 守旧派记忆检索结果, key=议题
-}
-
-// Assembly 大会辩论系统
-type Assembly struct {
-	simple      *SimpleSearcher
-	llmProvider Provider
-	memProvider MemoryProvider
-	cfg         DepthConfig
 }

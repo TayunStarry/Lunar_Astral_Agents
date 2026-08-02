@@ -1,6 +1,7 @@
 package websearch
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,28 +15,24 @@ import (
 
 // NewDepthSearcher 创建 深度研究 搜索器
 func NewDepthSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg DepthConfig, httpCfg HTTPConfig) *DepthSearcher {
-	maxResults := cfg.MaxResults
-	if maxResults <= 0 || maxResults > depthMaxResultsPerSub {
-		maxResults = depthMaxResultsPerSub
-	}
 	return &DepthSearcher{
 		simple:      simpleSearcher,
 		llmProvider: llmProvider,
-		cfg:         DepthConfig{MaxResults: maxResults, MaxSubQueries: cfg.MaxSubQueries},
+		cfg:         cfg,
 		httpClient:  &http.Client{Timeout: time.Duration(httpCfg.Timeout) * time.Second},
 		userAgent:   httpCfg.UserAgent,
 	}
 }
 
-// Search 执行 深度研究：拆解子问题 → 并行搜索 → 内容抓取 → URL去重 → 综合报告
-func (s *DepthSearcher) Search(query string) (string, error) {
+// Search 执行深度研究
+func (s *DepthSearcher) Search(ctx context.Context, query string) (string, error) {
 	// 第一步：判断是否需要拆解子问题
 	var subQueries []string
 	if isProperNounQuery(query) {
 		// 短查询/专有名词不拆解，直接搜索
 		subQueries = []string{query}
 	} else {
-		decomposed, err := s.decomposeQuery(query)
+		decomposed, err := s.decomposeQuery(ctx, query)
 		if err != nil || len(decomposed) == 0 {
 			subQueries = []string{query}
 		} else {
@@ -60,10 +57,15 @@ func (s *DepthSearcher) Search(query string) (string, error) {
 	var wg sync.WaitGroup
 	resultCh := make(chan subResult, len(subQueries))
 
+	// 并发限流（固定为3，避免对搜索引擎造成过大压力）
+	sem := make(chan struct{}, 3)
+
 	for _, sq := range subQueries {
 		wg.Add(1)
 		go func(q string) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			results, searchErr := s.simple.SearchRaw(q)
 			resultCh <- subResult{Query: q, Results: results, Error: searchErr}
 		}(sq)
@@ -97,40 +99,188 @@ func (s *DepthSearcher) Search(query string) (string, error) {
 		allResults[i].Results = deduped
 	}
 
-	// 第三步：为原始查询的 top 结果抓取网页内容
-	// 这是深度研究与轻量摘要的关键区别：获取实际页面内容而非仅依赖摘要
+	// 第三步：抓取网页内容
 	s.fetchContentForResults(allResults, query)
 
 	// 第四步：汇总生成报告
 	return s.generateReport(query, allResults)
 }
 
+// CollectData 采集结构化研究数据，供大会辩论使用
+// 执行子问题拆解、并行搜索、网页内容抓取、URL去重，但不生成最终报告
+func (s *DepthSearcher) CollectData(ctx context.Context, query string) (*ResearchData, error) {
+	// 第一步：判断是否需要拆解子问题
+	var subQueries []string
+	if isProperNounQuery(query) {
+		subQueries = []string{query}
+	} else {
+		decomposed, err := s.decomposeQuery(ctx, query)
+		if err != nil || len(decomposed) == 0 {
+			subQueries = []string{query}
+		} else {
+			subQueries = decomposed
+			if !slices.Contains(subQueries, query) {
+				subQueries = append([]string{query}, subQueries...)
+			}
+		}
+	}
+
+	maxSub := s.cfg.MaxSubQueries
+	if maxSub <= 0 {
+		maxSub = 6
+	}
+	if len(subQueries) > maxSub {
+		subQueries = subQueries[:maxSub]
+	}
+
+	// 第二步：并行搜索每个子问题
+	var wg sync.WaitGroup
+	resultCh := make(chan subResult, len(subQueries))
+
+	// 并发限流（固定为3，避免对搜索引擎造成过大压力）
+	sem := make(chan struct{}, 3)
+
+	for _, sq := range subQueries {
+		wg.Add(1)
+		go func(q string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			results, searchErr := s.simple.SearchRaw(q)
+			resultCh <- subResult{Query: q, Results: results, Error: searchErr}
+		}(sq)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	var allResults []subResult
+	for r := range resultCh {
+		allResults = append(allResults, r)
+	}
+
+	// URL去重
+	seenURLs := make(map[string]bool)
+	for i := range allResults {
+		if allResults[i].Error != nil {
+			continue
+		}
+		var deduped []SearchResult
+		for _, r := range allResults[i].Results {
+			normalizedURL := strings.TrimRight(strings.TrimSpace(r.URL), "/")
+			if seenURLs[normalizedURL] {
+				continue
+			}
+			seenURLs[normalizedURL] = true
+			deduped = append(deduped, r)
+		}
+		allResults[i].Results = deduped
+	}
+
+	// 第三步：抓取网页内容（填充到 Snippet 字段）
+	s.fetchContentForResults(allResults, query)
+
+	// 转换为 ResearchData
+	data := &ResearchData{
+		OriginalQuery: query,
+		SubQueries:    make([]SubQueryResult, len(allResults)),
+	}
+	for i, r := range allResults {
+		data.SubQueries[i] = SubQueryResult{
+			Query:   r.Query,
+			Results: r.Results,
+			Error:   r.Error,
+		}
+	}
+
+	return data, nil
+}
+
 // fetchContentForResults 为搜索结果抓取网页内容
-// 对原始查询的 top N 结果抓取内容，子问题结果仅使用摘要
-func (s *DepthSearcher) fetchContentForResults(results []subResult, _ string) {
+func (s *DepthSearcher) fetchContentForResults(results []subResult, query string) {
 	if len(results) == 0 {
 		return
 	}
 
-	// 只对第一个子问题（原始查询）的结果抓取内容
-	topResult := &results[0]
-	fetchLimit := min(3, len(topResult.Results))
+	// 阶段1：HTTP 抓取所有结果，收集 SPA 索引
+	type fetchItem struct {
+		subIdx int
+		resIdx int
+		body   string
+		isSPA  bool
+	}
+	var allItems []fetchItem
+	var spaItems []int // 指向 allItems 的索引
 
-	for i := range fetchLimit {
-		r := &topResult.Results[i]
-		if r.URL == "" {
-			continue
+	for subIdx := range results {
+		topResult := &results[subIdx]
+		fetchLimit := min(5, len(topResult.Results))
+
+		for i := range fetchLimit {
+			r := &topResult.Results[i]
+			if r.URL == "" {
+				continue
+			}
+			body, err := s.fetchContentHTTPOnly(r.URL)
+			if err != nil || len(body) == 0 {
+				continue
+			}
+			isSPA := isSPAShell(body)
+			itemIdx := len(allItems)
+			allItems = append(allItems, fetchItem{subIdx, i, body, isSPA})
+			if isSPA {
+				spaItems = append(spaItems, itemIdx)
+			}
 		}
-		body, err := s.fetchContent(r.URL)
-		if err == nil && len(body) > 0 {
-			// 截断到合理长度
-			r.Snippet = truncateText(body, depthMaxFetchedContentLen)
+	}
+
+	// 阶段2：并行浏览器渲染所有 SPA 页面
+	if s.browserRenderer != nil && len(spaItems) > 0 {
+		if s.debugLog != nil {
+			s.debugLog("[深度搜索] 开始并行渲染 %d 个SPA页面", len(spaItems))
 		}
+		sem := make(chan struct{}, 3) // 最多3并发
+		var wg sync.WaitGroup
+		for _, itemIdx := range spaItems {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				item := &allItems[idx]
+				url := results[item.subIdx].Results[item.resIdx].URL
+				if rendered := renderWithBrowser(s.browserRenderer, url, s.debugLog, query); rendered != "" {
+					item.body = rendered
+					item.isSPA = false
+				}
+			}(itemIdx)
+		}
+		wg.Wait()
+	}
+
+	// 阶段3：回写结果
+	for _, item := range allItems {
+		r := &results[item.subIdx].Results[item.resIdx]
+		body := truncateText(item.body, depthMaxFetchedContentLen)
+		if item.isSPA && r.Snippet != "" {
+			body = r.Snippet
+		}
+		r.Snippet = body
 	}
 }
 
-func (s *DepthSearcher) fetchContent(pageURL string) (string, error) {
-	req, err := http.NewRequest("GET", pageURL, nil)
+// fetchContentHTTPOnly 仅 HTTP 抓取 + 文本提取，不触发浏览器渲染
+func (s *DepthSearcher) fetchContentHTTPOnly(pageURL string) (string, error) {
+	realURL := pageURL
+	if isSogouRedirect(pageURL) {
+		if resolved := resolveSogouURL(s.httpClient, pageURL); resolved != "" {
+			realURL = resolved
+		}
+	}
+
+	req, err := http.NewRequest("GET", realURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -155,10 +305,120 @@ func (s *DepthSearcher) fetchContent(pageURL string) (string, error) {
 	return extractTextContent(string(body)), nil
 }
 
-// isProperNounQuery 判断查询是否为专有名词或短查询，不应拆解
-// 判定条件：短查询（≤8字符）或含特殊分隔符
+func (s *DepthSearcher) fetchContent(pageURL string, queryKeywords []string) (string, error) {
+	realURL := pageURL
+	if isSogouRedirect(pageURL) {
+		if resolved := resolveSogouURL(s.httpClient, pageURL); resolved != "" {
+			realURL = resolved
+		}
+	}
+
+	req, err := http.NewRequest("GET", realURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", s.userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+
+	htmlStr := string(body)
+	text := extractTextContent(htmlStr)
+
+	if isSPAShell(text) {
+		if s.browserRenderer != nil {
+			if rendered := renderWithBrowser(s.browserRenderer, realURL, s.debugLog); rendered != "" {
+				text = rendered
+			} else if s.debugLog != nil {
+				s.debugLog("[深度搜索] SPA浏览器渲染失败 将回退到摘要 URL=%s body_len=%d",
+					realURL, len([]rune(text)))
+			}
+		} else if s.debugLog != nil {
+			s.debugLog("[深度搜索] SPA检测到但浏览器未初始化 URL=%s body_len=%d",
+				realURL, len([]rune(text)))
+		}
+	}
+
+	if len(queryKeywords) > 0 && isThinContent(text) {
+		links := extractPageLinks(htmlStr)
+		bestURLs := selectBestLinks(links, queryKeywords, realURL, 2)
+		for _, detailURL := range bestURLs {
+			detailBody, err := s.fetchRawContent(detailURL)
+			if err == nil && len(detailBody) > 0 {
+				detailText := extractTextContent(detailBody)
+				if len([]rune(detailText)) > 100 {
+					text = text + "\n\n[详情页内容]\n" + detailText
+					break
+				}
+			}
+		}
+	}
+
+	return text, nil
+}
+
+// fetchRawContent 抓取页面原始HTML（不做链接跟踪）
+func (s *DepthSearcher) fetchRawContent(pageURL string) (string, error) {
+	req, err := http.NewRequest("GET", pageURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", s.userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+
+	htmlStr := string(body)
+
+	if s.browserRenderer != nil {
+		text := extractTextContent(htmlStr)
+		if isSPAShell(text) {
+			if rendered, err := s.browserRenderer.Render(pageURL); err == nil && rendered != "" {
+				return rendered, nil
+			}
+		}
+	}
+
+	return htmlStr, nil
+}
+
+// isProperNounQuery 判断查询是否为专有名词或短查询
 func isProperNounQuery(query string) bool {
 	runes := []rune(query)
+
+	// 包含疑问词的查询应拆解，不视为专有名词（优先判断）
+	questionWords := []string{"什么", "怎么", "如何", "为什么", "哪", "吗", "呢", "多少", "几", "是否", "有哪些", "哪些", "谁", "何时", "何地"}
+	for _, w := range questionWords {
+		if strings.Contains(query, w) {
+			return false
+		}
+	}
 
 	// 包含特殊分隔符的查询视为专有名词/人名/品牌名
 	for _, r := range runes {
@@ -167,21 +427,13 @@ func isProperNounQuery(query string) bool {
 		}
 	}
 
-	// 短查询（≤8个字符）不拆解
-	if len(runes) <= 8 {
+	// 极短查询（≤4个字符）不拆解，如单个词"超自然"
+	if len(runes) <= 4 {
 		return true
 	}
 
-	// 包含疑问词的查询不视为专有名词
-	questionWords := []string{"什么", "怎么", "如何", "为什么", "哪", "吗", "呢", "多少", "几", "是否"}
-	for _, w := range questionWords {
-		if strings.Contains(query, w) {
-			return false
-		}
-	}
-
 	// 无空格的中文字符串（可能是专有名词）
-	hasSpace := strings.Contains(query, " ") || strings.Contains(query, "  ")
+	hasSpace := strings.Contains(query, " ") || strings.Contains(query, "　")
 	if !hasSpace {
 		chineseCount := 0
 		for _, r := range runes {
@@ -189,8 +441,9 @@ func isProperNounQuery(query string) bool {
 				chineseCount++
 			}
 		}
-		// 纯中文且≤10字，可能是专有名词
-		if chineseCount == len(runes) && len(runes) <= 10 {
+		// 纯中文且≤4字，可能是专有名词（如人名、地名、游戏名）
+		// 超过4字的纯中文查询（如"最近的大新闻"）应拆解
+		if chineseCount == len(runes) && len(runes) <= 4 {
 			return true
 		}
 	}
@@ -198,7 +451,7 @@ func isProperNounQuery(query string) bool {
 	return false
 }
 
-func (s *DepthSearcher) decomposeQuery(query string) ([]string, error) {
+func (s *DepthSearcher) decomposeQuery(ctx context.Context, query string) ([]string, error) {
 	if s.llmProvider == nil {
 		return []string{query}, nil
 	}
@@ -217,6 +470,11 @@ func (s *DepthSearcher) decomposeQuery(query string) ([]string, error) {
 
 	messages := []ChatMessage{
 		{Role: "user", Content: prompt},
+	}
+
+	// 检查上下文是否已取消
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	response, err := s.llmProvider.Chat(messages)
@@ -241,7 +499,6 @@ func (s *DepthSearcher) decomposeQuery(query string) ([]string, error) {
 }
 
 // generateReport 使用 LLM 汇总所有子问题搜索结果，生成结构化报告
-// 包含prompt预算控制和输出截断保护
 func (s *DepthSearcher) generateReport(originalQuery string, results []subResult) (string, error) {
 	// 格式化子问题结果，控制总注入量
 	var parts []string
@@ -302,7 +559,7 @@ func (s *DepthSearcher) generateReport(originalQuery string, results []subResult
 2. 包含"核心发现"章节（3-5点总结）
 3. 包含"详细分析"章节，按维度分点阐述
 4. 包含"信息来源"章节，列出所有引用的来源
-5. 保持专业、客观的语气
+5. 直接呈现搜索结果中的信息，不要对信息来源做"可靠/不可靠"的主观判断，由用户自行判断
 6. 用markdown格式输出`
 
 	prompt := fmt.Sprintf(promptTemplate, originalQuery, allResults)
@@ -342,4 +599,22 @@ func (s *DepthSearcher) generateReport(originalQuery string, results []subResult
 	}
 
 	return response, nil
+}
+
+// SupplementarySearch 补充搜索（供大会辩论中途使用）
+func (s *DepthSearcher) SupplementarySearch(query string) ([]SearchResult, error) {
+	results, err := s.simple.SearchRaw(query)
+	if err != nil {
+		return nil, err
+	}
+	// 为结果抓取网页内容
+	for i := range results {
+		if results[i].URL != "" {
+			content, fetchErr := s.fetchContent(results[i].URL, nil)
+			if fetchErr == nil && content != "" {
+				results[i].Snippet = content
+			}
+		}
+	}
+	return results, nil
 }

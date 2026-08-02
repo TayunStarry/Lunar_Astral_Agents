@@ -1,4 +1,4 @@
-﻿package learner
+package learner
 
 import (
 	"sync"
@@ -12,46 +12,50 @@ var learnerInstance *Learner
 // learnerMutex 学习者实例互斥锁
 var learnerMutex sync.RWMutex
 
-// ==== 常量 ====
+// ==== 记忆表名常量 ====
 
 const (
-	// LearnerMemoryTable 学习者专用记忆表名
-	LearnerMemoryTable = "online_learning"
+	// TableKnowledge 知识记忆表名 — 存储从网络搜索获取的事实性知识
+	TableKnowledge = "learner_knowledge"
 
-	// MaxDebateRounds 最大辩论轮次
-	MaxDebateRounds = 5
+	// TableExperience 经验记忆表名 — 存储请求处理策略与搜索指导经验
+	TableExperience = "learner_experience"
+)
 
-	// MaxSearchSubQuestions 最大子问题数
+// ==== 工作流常量 ====
+
+const (
+	// MaxDeepSearchRounds 深度搜索最大轮次
+	MaxDeepSearchRounds = 5
+
+	// MaxSearchSubQuestions 最大子问题数（深度搜索拆解用）
 	MaxSearchSubQuestions = 4
-
-	// MemoryUpdateSimilarityThreshold 记忆更新相似度阈值（余弦相似度）
-	MemoryUpdateSimilarityThreshold = 0.75
 
 	// MemoryQueryTopK 记忆查询默认返回条数
 	MemoryQueryTopK = 10
 
-	// DefaultMaxToolCallRounds 默认工具调用最大轮次
-	DefaultMaxToolCallRounds = 8
+	// ExperienceQueryTopK 经验记忆查询返回条数
+	ExperienceQueryTopK = 5
 
-	// DebateSummaryMaxChars 辩论摘要最大字符数
-	DebateSummaryMaxChars = 300
+	// SimpleSearchMaxResults 初步网络搜索最大结果数
+	SimpleSearchMaxResults = 10
 
 	// SearchResultMaxChars 单次搜索结果压缩后最大字符数
 	SearchResultMaxChars = 1500
 
-	// TotalSearchResultMaxChars 搜索结果总量最大字符数（所有子问题合计）
-	TotalSearchResultMaxChars = 4500
+	// DeepSearchResultMaxChars 深度搜索结果最大字符数
+	DeepSearchResultMaxChars = 3000
 
 	// ContextMaxTokens 单次 LLM 调用上下文最大 token 数
-	ContextMaxTokens = 20480
+	ContextMaxTokens = 16384
 
-	// CharPerToken 中文字符与 token 的估算比率（1 token ≈ 1.5 中文字符）
+	// CharPerToken 中文字符与 token 的估算比率
 	CharPerToken = 1.5
 
 	// OutputTokenReserve 输出 token 预留量
 	OutputTokenReserve = 4096
 
-	// InputTokenReserve 输入 token 预留量（= ContextMaxTokens - OutputTokenReserve）
+	// InputTokenReserve 输入 token 预留量
 	InputTokenReserve = ContextMaxTokens - OutputTokenReserve
 
 	// DialogueHistoryLimit 对话历史读取条数
@@ -61,97 +65,143 @@ const (
 	UnreadCheckCount = 10
 )
 
+// ==== 降级阈值常量 ====
+
+const (
+	// KnowledgeMinSimilarity 知识记忆最低相似度阈值
+	// 低于此值的记忆条目被视为与查询不相关
+	KnowledgeMinSimilarity = 0.60
+
+	// KnowledgeMinMatchCount 知识记忆最少匹配条数
+	// 当知识库可用但记忆查询结果少于该数量时，返回"月华不知道"
+	KnowledgeMinMatchCount = 2
+
+	// MemoryUpdateSimilarityThreshold 记忆更新相似度阈值
+	// 高于此值的旧记忆条目将被新内容替代
+	MemoryUpdateSimilarityThreshold = 0.75
+)
+
+// ==== 报告验证常量 ====
+
+const (
+	// MinReportLength 报告最小字符数（低于此值视为无效）
+	MinReportLength = 10
+
+	// MaxReportLength 报告最大字符数（超出截断）
+	MaxReportLength = 8000
+)
+
 // ==== Token 预算预设 ====
 
 var (
-	// BudgetAnalyze 问题分析阶段预算
-	BudgetAnalyze = TokenBudget{MaxInput: 4000, MaxOutput: 1000}
+	// BudgetRefine 查询推理完善预算
+	BudgetRefine = TokenBudget{MaxInput: 2000, MaxOutput: 800}
 
-	// BudgetSearchCompress 搜索结果压缩预算
-	BudgetSearchCompress = TokenBudget{MaxInput: 6000, MaxOutput: 1500}
+	// BudgetEvaluate 策略评估预算
+	BudgetEvaluate = TokenBudget{MaxInput: 8000, MaxOutput: 2000}
 
-	// BudgetDebate 辩论阶段预算
-	BudgetDebate = TokenBudget{MaxInput: 8000, MaxOutput: 2500}
+	// BudgetSearchEval 搜索内容评估预算
+	BudgetSearchEval = TokenBudget{MaxInput: 6000, MaxOutput: 1500}
 
-	// BudgetConvergence 收敛判断预算
-	BudgetConvergence = TokenBudget{MaxInput: 3000, MaxOutput: 300}
-
-	// BudgetReportOutline 报告提纲预算
-	BudgetReportOutline = TokenBudget{MaxInput: 10000, MaxOutput: 1500}
-
-	// BudgetReportFull 完整报告预算
-	BudgetReportFull = TokenBudget{MaxInput: 12000, MaxOutput: 4000}
+	// BudgetReport 报告生成预算
+	BudgetReport = TokenBudget{MaxInput: 10000, MaxOutput: 4000}
 
 	// BudgetMemoryUpdate 记忆更新预算
 	BudgetMemoryUpdate = TokenBudget{MaxInput: 4000, MaxOutput: 800}
+
+	// BudgetSearchCompress 搜索结果压缩预算
+	BudgetSearchCompress = TokenBudget{MaxInput: 6000, MaxOutput: 1500}
 )
 
-// ==== 意图校准 ====
-
-// MemoryStrongMatchThreshold 记忆强匹配相似度阈值
-const MemoryStrongMatchThreshold = 0.75
-
-// MemoryStrongMatchMinCount 判定记忆偏向的强匹配最少条目数
-const MemoryStrongMatchMinCount = 3
-
-// IntentMemoryTopK 意图→记忆查询 topK 映射
-var IntentMemoryTopK = map[IntentHint]int{
-	IntentMemory:   25,
-	IntentSearch:   5,
-	IntentBalanced: 10,
-}
-
-// ==== 策略评估预算 ====
-
-// BudgetStrategyEval 阶段2策略评估预算
-var BudgetStrategyEval = TokenBudget{MaxInput: 8000, MaxOutput: 2000}
-
-// BudgetWebpageReport Webpage 分支报告预算
-var BudgetWebpageReport = TokenBudget{MaxInput: 10000, MaxOutput: 3000}
-
-// ==== 辩论系统默认 Prompt 模板 ====
+// ==== 默认 Prompt 模板 ====
 // 当嵌入式文件系统加载失败时使用
 
-const defaultDebatePrompt = `你是学习者的辩论系统。四角色交替辩论：
-- 网络派：基于搜索结果
-- 记忆派：基于记忆数据
-- 质疑者：挑战双方论点
-- 裁决者：综合评估，判断信息充分度
+const defaultRefinePrompt = `你是学习者的查询推理引擎。请将用户的原始请求完善为结构化、信息充分的查询语句。
 
-每个角色发言控制在300字以内，基于证据，不编造。`
+原始请求可能简短、模糊或包含隐含意图。你需要：
+1. 补全隐含的上下文和意图
+2. 提取关键要点
+3. 生成适合网络搜索的关键词
 
-const defaultReportPrompt = `你是学习者的报告生成系统。输出 [研究报告] 格式：
-
-[研究报告]
-
-## 研究主题
-## 研究结论
-## 支持证据
-## 疑点与未解决问题
-## 研究方法说明
-
-所有结论必须有证据支撑，标注来源（网络/记忆/辩论共识）。`
-
-const defaultMemoryPrompt = `你是学习者的记忆管理助手。基于研究结果判断是否需要更新记忆库中的条目。
-
-输出 JSON 数组格式（不需要更新则输出 []）：
-[{"old_id": "旧条目ID", "new_content": "完善后的完整内容", "reason": "更新原因"}]
-
-只更新确实需要修正或补充的条目。`
-
-// defaultStrategyPrompt 策略评估的内置默认 prompt
-const defaultStrategyPrompt = `你是学习者的"策略评估中枢"。你需要基于预探测结果（轻量搜索摘要 + 记忆库匹配），判断信息是否足以直接回答用户问题，并决定下一步研究策略。
-
-输出 JSON 格式：
+输出 JSON 格式（只输出 JSON，不要其他内容）：
 {
-  "sufficient": true或false,
-  "direct_answer": "sufficient=true时的直接回答（以[研究报告]开头）",
-  "intent": "memory或search或balanced",
-  "search_strategy": "webpage或depth（sufficient=false时必填）",
-  "multi_angle_search": true或false,
-  "debate_rounds": 2到5的整数（仅depth策略时）,
-  "sub_questions": [{"question": "子问题", "search_query": "搜索关键词", "dimension": "维度"}],
-  "memory_top_k": 5到25的整数
+  "refined": "完善后的完整查询语句",
+  "key_points": ["关键要点1", "关键要点2", "关键要点3"],
+  "search_terms": ["搜索词1", "搜索词2", "搜索词3"]
 }
 
-约束：sufficient=true时direct_answer以[研究报告]开头；sufficient=false时search_strategy必填；debate_rounds不超过5；sub_questions不超过4个；只输出JSON。`
+要求：refined 字段应是一段完整的、信息充分的查询描述；key_points 列出用户关心的核心问题；search_terms 列出适合搜索引擎的关键词组合。`
+
+const defaultEvaluatePrompt = `你是学习者的策略评估中枢。你需要基于已收集的信息（知识记忆、经验记忆、网络搜索摘要），判断信息是否足以回答用户问题，并决定是否需要深度搜索。
+
+评估标准：
+1. 信息是否覆盖用户问题的核心要点？
+2. 信息来源是否可靠、时效性是否足够？
+3. 是否存在明显的知识盲区？
+
+输出 JSON 格式（只输出 JSON，不要其他内容）：
+{
+  "sufficient": true或false,
+  "summary": "sufficient=true时的阶段性摘要，以[研究报告]开头",
+  "need_deep_search": true或false,
+  "deep_search_query": "sufficient=false时的深度搜索查询词",
+  "reasoning": "评估理由简述"
+}
+
+约束：sufficient=true时summary必须包含实质性内容；sufficient=false时deep_search_query必填。`
+
+const defaultSearchEvalPrompt = `你是学习者的搜索内容评估器。请评估新获取的深度搜索内容是否足以回答用户问题。
+
+输出 JSON 格式（只输出 JSON，不要其他内容）：
+{
+  "sufficient": true或false,
+  "summary": "相关信息摘要",
+  "supplementary_query": "补充搜索词（sufficient=false时必填）",
+  "reasoning": "评估理由简述"
+}
+
+约束：sufficient=true时summary必须包含从搜索内容中提取的关键信息；sufficient=false时supplementary_query必填。`
+
+const defaultMemoryPrompt = `你是学习者的记忆管理助手。基于本次研究结果，请生成记忆更新指令。
+
+需要处理两种记忆：
+1. 知识记忆：从网络搜索中获取的新事实、数据、信息
+2. 经验记忆：本次请求的处理策略，包括采用了什么搜索方式、效果如何
+
+输出 JSON 格式（只输出 JSON，不要其他内容）：
+{
+  "knowledge_items": [{"content": "知识摘要内容"}],
+  "experience_item": "本次请求处理策略描述，包括：查询类型、采用的搜索策略、搜索轮次、信息充足度评估"
+}
+
+约束：knowledge_items 可为空数组；experience_item 必须包含策略描述。`
+
+const defaultReportPrompt = `你是学习者的报告生成系统。请基于所有收集到的信息，生成一份完整的研究报告。
+
+输出格式：以 [研究报告] 开头，包含以下结构：
+- 研究主题
+- 研究结论
+- 支持证据（标注来源：网络/记忆）
+- 疑点与未解决问题（如有）
+- 研究方法说明
+
+所有结论必须有证据支撑，标注来源。`
+
+const defaultInsufficientReport = `[研究报告]
+
+## 研究主题
+%s
+
+## 研究结论
+月华已经尽力搜索了相关信息，但经过多轮搜索后，仍未能找到足够的信息来全面回答您的问题。
+
+## 已获取的部分信息
+%s
+
+## 疑点与未解决问题
+经过%d轮深度搜索，以下问题仍需进一步信息：
+- 部分关键信息在网络公开资源中覆盖不足
+- 建议尝试更具体的查询方向或等待相关信息更新
+
+## 研究方法说明
+本研究采用了查询推理完善 → 记忆库检索 → 网络搜索 → 多轮深度搜索的研究流程。`
