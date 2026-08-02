@@ -463,6 +463,50 @@ func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	return false
 }
 
+// MemoryDeleteCollection 删除整个集合：从内存中移除，删除磁盘目录
+// 操作不可恢复，调用方应确保前端已做二次确认
+func (d *MemoryDB) MemoryDeleteCollection(collectionName string) error {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return err
+	}
+
+	collDir := filepath.Join(d.baseDir, collectionName)
+
+	d.collectionsMu.Lock()
+	delete(d.collections, collectionName)
+	d.collectionsMu.Unlock()
+
+	if err := os.RemoveAll(collDir); err != nil {
+		return fmt.Errorf("删除集合目录失败: %v", err)
+	}
+
+	logger.Info("Storage", "集合 [%s] 已删除, 文档数: %d, 目录: %s",
+		collectionName, len(c.Documents), collDir)
+	return nil
+}
+
+// MemoryClearCollection 清空集合中所有文档（保留集合元数据，仅删除文档）
+// 操作不可恢复，调用方应确保前端已做二次确认
+func (d *MemoryDB) MemoryClearCollection(collectionName string) error {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return err
+	}
+
+	originalCount := len(c.Documents)
+
+	c.mu.Lock()
+	c.Documents = make([]MemoryDocument, 0)
+	c.mu.Unlock()
+
+	c.saveDocumentsToFile()
+
+	logger.Info("Storage", "集合 [%s] 已清空, 删除文档数: %d",
+		collectionName, originalCount)
+	return nil
+}
+
 // MemoryRebuildEntries 删除向量缺失或维度不符的文档，重新持久化
 // ctx 保留以兼容签名，当前实现不调用嵌入服务
 func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName string) (int, error) {
@@ -699,6 +743,22 @@ func HasSyncMismatch(collectionName string) bool {
 		return false
 	}
 	return MemoryDatabase.MemoryHasSyncMismatch(collectionName)
+}
+
+// DeleteCollection 全局包装 — 删除整个集合
+func DeleteCollection(collectionName string) error {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
+	}
+	return MemoryDatabase.MemoryDeleteCollection(collectionName)
+}
+
+// ClearCollection 全局包装 — 清空集合所有文档
+func ClearCollection(collectionName string) error {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
+	}
+	return MemoryDatabase.MemoryClearCollection(collectionName)
 }
 
 // RebuildEntries 全局包装 — 重建（删除维度不符文档）

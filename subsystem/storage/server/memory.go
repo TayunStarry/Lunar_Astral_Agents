@@ -24,12 +24,14 @@ import (
 //   GET    /memory/stats                    全局统计（聚合所有集合）
 //   GET    /memory/collections              列出所有集合（保留字）
 //   POST   /memory/{name}                   创建/打开集合（锁定模型）
+//   DELETE /memory/{name}                   删除集合（移除目录及所有文档）
 //   GET    /memory/{name}/stats             集合统计
 //   POST   /memory/{name}/messages          添加消息
 //   GET    /memory/{name}/messages          查询消息
 //   DELETE /memory/{name}/messages          删除消息
 //   GET    /memory/{name}/documents         文档分页列表
 //   POST   /memory/{name}/rebuild           重建（删除维度不符文档）
+//   POST   /memory/{name}/clear             清空集合（删除所有文档，保留元数据）
 //
 // 保留字：init、stats、collections 不可作为集合名
 func MemoryHandler(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +44,7 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	parts := strings.Split(path, "/")
 
-	// 单段路径：保留字端点 或 集合创建
+	// 单段路径：保留字端点 或 集合操作
 	if len(parts) == 1 {
 		switch parts[0] {
 		case "init":
@@ -55,7 +57,12 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 			handleMemoryListCollections(w, r)
 			return
 		default:
-			// /memory/{name} — 创建/打开集合
+			// DELETE /memory/{name} — 删除集合
+			if r.Method == http.MethodDelete {
+				handleMemoryDeleteCollection(w, r, parts[0])
+				return
+			}
+			// POST /memory/{name} — 创建/打开集合
 			handleMemoryCollectionCreate(w, r, parts[0])
 			return
 		}
@@ -65,15 +72,17 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 	collectionName := parts[0]
 	action := parts[1]
 	switch action {
-	case "messages":
-		handleMemoryMessages(w, r, collectionName)
-	case "stats":
-		handleMemoryCollectionStats(w, r, collectionName)
-	case "documents":
-		handleMemoryDocuments(w, r, collectionName)
-	case "rebuild":
-		handleMemoryRebuild(w, r, collectionName)
-	default:
+		case "messages":
+			handleMemoryMessages(w, r, collectionName)
+		case "stats":
+			handleMemoryCollectionStats(w, r, collectionName)
+		case "documents":
+			handleMemoryDocuments(w, r, collectionName)
+		case "rebuild":
+			handleMemoryRebuild(w, r, collectionName)
+		case "clear":
+			handleMemoryClearCollection(w, r, collectionName)
+		default:
 		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未知的集合操作: %s", action))
 	}
 }
@@ -463,5 +472,53 @@ func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName 
 	writeSuccess(w, map[string]interface{}{
 		"rebuilt": count,
 		"message": fmt.Sprintf("集合 [%s] 重建完成, 剩余 %d 条文档", collectionName, count),
+	})
+}
+
+// handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合（移除目录及所有文档）
+func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if r.Method != http.MethodDelete {
+		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 DELETE")
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
+		return
+	}
+
+	if err := module.DeleteCollection(collectionName); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除集合失败: %v", err))
+		return
+	}
+
+	logger.Info("Storage", "集合 [%s] 删除成功", collectionName)
+
+	writeSuccess(w, map[string]string{
+		"message": fmt.Sprintf("集合 [%s] 已删除", collectionName),
+	})
+}
+
+// handleMemoryClearCollection POST /memory/{name}/clear — 清空集合（删除所有文档，保留元数据）
+func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
+		return
+	}
+
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
+		return
+	}
+
+	if err := module.ClearCollection(collectionName); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 清空集合失败: %v", err))
+		return
+	}
+
+	logger.Info("Storage", "集合 [%s] 清空成功", collectionName)
+
+	writeSuccess(w, map[string]string{
+		"message": fmt.Sprintf("集合 [%s] 已清空", collectionName),
 	})
 }
