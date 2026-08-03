@@ -285,6 +285,7 @@ type DebugContextDump struct {
 	Timestamp      string              `json:"timestamp"`
 	DialogueJSON   string              `json:"dialogue_json"`
 	UnreadJSON     string              `json:"unread_json"`
+	Mode           string              `json:"mode"`
 	FullContext    string              `json:"full_context"`
 	RefinedQuery   *RefinedQuery       `json:"refined_query,omitempty"`
 	KnowledgeMem   []MemoryMatch       `json:"knowledge_memory"`

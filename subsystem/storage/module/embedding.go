@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -55,7 +54,6 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 
 	// base_url 约定已含 /v1 前缀（与 chat completions 一致），仅追加 /embeddings
 	apiURL := strings.TrimRight(d.embeddingBaseURL, "/") + "/embeddings"
-	log.Printf("发送嵌入请求到 %s", apiURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)

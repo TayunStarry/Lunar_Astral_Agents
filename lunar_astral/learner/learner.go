@@ -55,9 +55,13 @@ func (l *Learner) Init() error {
 }
 
 // Execute 执行学习者研究流程
-// 参数: dialogueJSON (对话历史JSON), unreadJSON (未读消息JSON), hint (意图提示，保留兼容)
+// 参数: dialogueJSON (对话历史JSON), unreadJSON (未读消息JSON), mode (运行模式: "recall" | "full")
 // 返回: 报告文本 或 错误
-func (l *Learner) Execute(dialogueJSON string, unreadJSON string, hint string) (string, error) {
+//
+// 模式说明:
+//   - "recall": 回忆模式，仅查询推理完善 + 记忆库检索，跳过所有网络搜索，适用于"回忆一下"类意图
+//   - "full" 及其他: 完整研究流程，走 9 步工作流（推理完善 → 记忆查询 → 网络搜索 → 评估 → 深度搜索 → 记忆更新）
+func (l *Learner) Execute(dialogueJSON string, unreadJSON string, mode string) (string, error) {
 	startTime := time.Now()
 
 	// 构建完整上下文
@@ -66,7 +70,7 @@ func (l *Learner) Execute(dialogueJSON string, unreadJSON string, hint string) (
 		return "月华不知道呢，请提供更具体的问题吧~", nil
 	}
 
-	logger.Info("Learner", "开始执行研究，上下文长度: %d 字符", len([]rune(fullContext)))
+	logger.Info("Learner", "开始执行研究，上下文长度: %d 字符，模式: %s", len([]rune(fullContext)), mode)
 
 	// 检查知识库是否可用
 	if !l.memory.IsAvailable() {
@@ -76,6 +80,50 @@ func (l *Learner) Execute(dialogueJSON string, unreadJSON string, hint string) (
 
 	// 创建并运行工作流
 	runner := NewWorkflowRunner(l.llm, l.search, l.memory, l.prompts)
+
+	// ============================================================
+	// 回忆模式：快速路径 — 仅查询记忆库，跳过网络搜索
+	// ============================================================
+	if mode == "recall" {
+		report, state, err := runner.RunRecallOnly(fullContext)
+		if err != nil {
+			logger.Error("Learner", "回忆模式执行失败: %v", err)
+
+			// 降级策略：知识库可用但其他错误 → 基于相似度决定
+			if state != nil && l.memory.IsAvailable() {
+				knowledgeMem := state.KnowledgeMem
+				if l.memory.HasKnowledgeMatches(knowledgeMem) {
+					logger.Info("Learner", "降级：知识库有足够匹配，返回知识库数据")
+					fallbackReport := buildKnowledgeFallbackReport(fullContext, knowledgeMem)
+					elapsed := time.Since(startTime)
+					logger.Info("Learner", "研究完成(降级-知识库): 耗时=%v", elapsed)
+					return fallbackReport, nil
+				}
+			}
+
+			return "月华不知道呢，处理过程中遇到了问题~", nil
+		}
+
+		// TS 层验证：检查最小长度和乱码
+		if !isValidReport(report) {
+			logger.Warn("Learner", "回忆模式报告验证失败，长度=%d", len([]rune(report)))
+
+			// 降级：尝试使用知识库数据
+			if state != nil && l.memory.HasKnowledgeMatches(state.KnowledgeMem) {
+				report = buildKnowledgeFallbackReport(fullContext, state.KnowledgeMem)
+			} else {
+				return "月华不知道呢，生成的内容似乎有问题~", nil
+			}
+		}
+
+		elapsed := time.Since(startTime)
+		logger.Info("Learner", "研究完成(回忆): 耗时=%v", elapsed)
+		return report, nil
+	}
+
+	// ============================================================
+	// 完整研究模式：9 步工作流
+	// ============================================================
 	report, state, err := runner.Run(fullContext)
 	if err != nil {
 		logger.Error("Learner", "研究执行失败: %v", err)
@@ -108,7 +156,7 @@ func (l *Learner) Execute(dialogueJSON string, unreadJSON string, hint string) (
 	}
 
 	elapsed := time.Since(startTime)
-	logger.Info("Learner", "研究完成: 耗时=%v", elapsed)
+	logger.Info("Learner", "研究完成(完整): 耗时=%v", elapsed)
 
 	return report, nil
 }
@@ -194,11 +242,12 @@ func buildKnowledgeFallbackReport(query string, matches []MemoryMatch) string {
 
 // DumpContext 导出学习者运行时上下文到 JSON 文件（覆写模式）
 // 用于调试排查问题
-func (l *Learner) DumpContext(dialogueJSON string, unreadJSON string, outputPath string) (string, error) {
+func (l *Learner) DumpContext(dialogueJSON string, unreadJSON string, mode string, outputPath string) (string, error) {
 	dump := &DebugContextDump{
 		Timestamp:    time.Now().Format("2006-01-02 15:04:05"),
 		DialogueJSON: dialogueJSON,
 		UnreadJSON:   unreadJSON,
+		Mode:         mode,
 		MemoryReady:  l.memory.IsAvailable(),
 		SearchReady:  l.search.IsAvailable(),
 	}
@@ -206,10 +255,18 @@ func (l *Learner) DumpContext(dialogueJSON string, unreadJSON string, outputPath
 	// 构建完整上下文
 	dump.FullContext = l.buildFullContext(dialogueJSON, unreadJSON)
 
-	// 执行工作流
+	// 执行工作流（根据模式选择路径）
 	if l.memory.IsAvailable() {
 		runner := NewWorkflowRunner(l.llm, l.search, l.memory, l.prompts)
-		_, state, err := runner.Run(dump.FullContext)
+		var state *WorkflowState
+		var err error
+
+		if mode == "recall" {
+			_, state, err = runner.RunRecallOnly(dump.FullContext)
+		} else {
+			_, state, err = runner.Run(dump.FullContext)
+		}
+
 		if err == nil && state != nil {
 			dump.RefinedQuery = state.RefinedQuery
 			dump.KnowledgeMem = state.KnowledgeMem
@@ -309,13 +366,15 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 			unreadJSON, _ = call.Argument(1).Export().(string)
 		}
 
-		// 第三个参数 hint 保留兼容性，但新系统不依赖它
-		hint := ""
+		// 第三个参数 mode：运行模式 ("recall" | "full")，默认为 "full"
+		mode := "full"
 		if len(call.Arguments) >= 3 {
-			hint, _ = call.Argument(2).Export().(string)
+			if m, ok := call.Argument(2).Export().(string); ok && m != "" {
+				mode = m
+			}
 		}
 
-		report, err := inst.Execute(dialogueJSON, unreadJSON, hint)
+		report, err := inst.Execute(dialogueJSON, unreadJSON, mode)
 		if err != nil {
 			logger.Error("Learner", "学习者执行失败: %v", err)
 			return vm.ToValue([]any{"月华不知道呢，处理过程中遇到了问题~", err})
@@ -331,37 +390,43 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 	})
 
 	// learnerDumpContext 导出学习者上下文到文件（覆写模式）
-	vm.Set("learnerDumpContext", func(call goja.FunctionCall) goja.Value {
-		learnerMutex.RLock()
-		inst := learnerInstance
-		learnerMutex.RUnlock()
+		vm.Set("learnerDumpContext", func(call goja.FunctionCall) goja.Value {
+			learnerMutex.RLock()
+			inst := learnerInstance
+			learnerMutex.RUnlock()
 
-		if inst == nil {
-			return vm.ToValue([]any{"", fmt.Errorf("学习者未初始化，请先调用 learnerInit")})
-		}
-
-		dialogueJSON := ""
-		unreadJSON := ""
-		outputPath := "learner_debug_context.json"
-
-		if len(call.Arguments) >= 1 {
-			dialogueJSON, _ = call.Argument(0).Export().(string)
-		}
-		if len(call.Arguments) >= 2 {
-			unreadJSON, _ = call.Argument(1).Export().(string)
-		}
-		if len(call.Arguments) >= 3 {
-			if path, ok := call.Argument(2).Export().(string); ok && path != "" {
-				outputPath = path
+			if inst == nil {
+				return vm.ToValue([]any{"", fmt.Errorf("学习者未初始化，请先调用 learnerInit")})
 			}
-		}
 
-		path, err := inst.DumpContext(dialogueJSON, unreadJSON, outputPath)
-		if err != nil {
-			logger.Error("Learner", "上下文导出失败: %v", err)
-			return vm.ToValue([]any{"", err})
-		}
+			dialogueJSON := ""
+			unreadJSON := ""
+			mode := ""
+			outputPath := "learner_debug_context.json"
 
-		return vm.ToValue([]any{path, nil})
-	})
+			if len(call.Arguments) >= 1 {
+				dialogueJSON, _ = call.Argument(0).Export().(string)
+			}
+			if len(call.Arguments) >= 2 {
+				unreadJSON, _ = call.Argument(1).Export().(string)
+			}
+			if len(call.Arguments) >= 3 {
+				if m, ok := call.Argument(2).Export().(string); ok {
+					mode = m
+				}
+			}
+			if len(call.Arguments) >= 4 {
+				if path, ok := call.Argument(3).Export().(string); ok && path != "" {
+					outputPath = path
+				}
+			}
+
+			path, err := inst.DumpContext(dialogueJSON, unreadJSON, mode, outputPath)
+			if err != nil {
+				logger.Error("Learner", "上下文导出失败: %v", err)
+				return vm.ToValue([]any{"", err})
+			}
+
+			return vm.ToValue([]any{path, nil})
+		})
 }

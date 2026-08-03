@@ -1478,30 +1478,26 @@ K:Am
         }
     }
 
-    const memoryKeywords = [
-        /回忆(?:一(?:下|回忆))?/,
-        /想想?(?:看|起|到)/,
-        /记不记得/,
-        /还记得/,
-        /以前(?:说过|聊过|讨论过|提过|提到)/,
+    const learnerKeywords = [
+        /回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
+        /还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
         /上次(?:说|聊|讨论|提|提到)/,
-    ];
-    const searchKeywords = [
-        /搜索/,
-        /搜(?:一搜|一下)/,
-        /深入(?:了解|分析|研究)/,
-        /详细(?:了解|分析|说明|解释)/,
-        /分析(?:一(?:下|分析))?/,
-        /(?:资料|文献|论文|报告|数据|统计)/,
-        /调查(?:一(?:下|调查))?/,
-        /核实/,
-        /验证/,
-    ];
-    const ambiguousKeywords = [
+        /搜索/, /搜(?:一搜|一下)/, /深入(?:了解|分析|研究)/,
+        /详细(?:了解|分析|说明|解释)/, /分析(?:一(?:下|分析))?/,
+        /(?:资料|文献|论文|报告|数据|统计)/, /调查(?:一(?:下|调查))?/,
+        /核实/, /验证/,
         /查(?:一查|一下|询|找|找找|看看)/,
         /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
         /(?:真|假|正确|错误|靠谱|可靠)/,
     ];
+    const recallKeywords = [
+        /回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
+        /还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
+        /上次(?:说|聊|讨论|提|提到)/,
+    ];
+    function isRecallIntent(texts) {
+        return texts.some(text => recallKeywords.some(kw => kw.test(text)));
+    }
     let learnerInitialized = false;
     function ensureLearnerInitialized() {
         if (learnerInitialized)
@@ -1517,18 +1513,6 @@ K:Am
         console.log('[学习者] 初始化完成');
         return true;
     }
-    function detectIntent(texts) {
-        if (texts.some(text => memoryKeywords.some(keyword => keyword.test(text)))) {
-            return 'memory';
-        }
-        if (texts.some(text => searchKeywords.some(keyword => keyword.test(text)))) {
-            return 'search';
-        }
-        if (texts.some(text => ambiguousKeywords.some(keyword => keyword.test(text)))) {
-            return 'ambiguous';
-        }
-        return 'balanced';
-    }
     class LearnerRole {
         messages = [];
         consumeHistory() {
@@ -1538,17 +1522,16 @@ K:Am
         }
         executeLearner(dialogueMessages, unreadContext) {
             const unreadTexts = this.extractTexts(unreadContext);
-            const allKeywords = [...memoryKeywords, ...searchKeywords, ...ambiguousKeywords];
-            if (!unreadTexts.some(text => allKeywords.some(keyword => keyword.test(text)))) {
+            if (!unreadTexts.some(text => learnerKeywords.some(keyword => keyword.test(text)))) {
                 return true;
             }
             if (!ensureLearnerInitialized())
                 return true;
-            const intentHint = detectIntent(unreadTexts);
+            const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
             const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
             const unreadJSON = JSON.stringify(unreadContext.slice(-10));
-            console.log('[学习者] 开始执行研究, 意图偏向:', intentHint);
-            const [report, error] = learnerExecute(dialogueJSON, unreadJSON, intentHint);
+            console.log('[学习者] 开始执行研究, 模式:', mode);
+            const [report, error] = learnerExecute(dialogueJSON, unreadJSON, mode);
             if (error) {
                 console.error('[学习者] 执行失败:', error);
                 return true;
@@ -1581,11 +1564,11 @@ K:Am
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             });
             const unreadTexts = this.extractTexts(unreadContext);
-            const intentHint = detectIntent(unreadTexts);
+            const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
             const snapshot = {
                 timestamp,
                 role: '学习者',
-                intentHint,
+                mode,
                 ownMessagesCount: this.messages.length,
                 ownMessages: this.messages.map((msg, idx) => {
                     const content = typeof msg.content === 'string'
@@ -1631,7 +1614,7 @@ K:Am
                 const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
                 const unreadJSON = JSON.stringify(unreadContext.slice(-10));
                 const goPath = path.replace('.json', '_go.json');
-                const [, goError] = learnerDumpContext(dialogueJSON, unreadJSON, intentHint, goPath);
+                const [, goError] = learnerDumpContext(dialogueJSON, unreadJSON, mode, goPath);
                 if (goError) {
                     console.error('[学习者] 导出 Go 层上下文失败:', goError);
                 }

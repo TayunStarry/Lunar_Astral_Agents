@@ -10,6 +10,18 @@ import (
 )
 
 // ============================================================
+// 工作流步骤说明
+// 步骤 a: AI 推理完善请求
+// 步骤 b: 查询记忆库（知识 + 经验双表）
+// 步骤 c: 预留（已移除）
+// 步骤 d: 初步网络搜索
+// 步骤 e: AI 总结评估 + 决策
+// 步骤 f: 预留（已移除）
+// 步骤 g/h: 深度搜索循环
+// 步骤 i: 统一处理工作流（记忆更新 + 返回结果）
+// ============================================================
+
+// ============================================================
 // 步骤 a: AI 推理完善请求
 // ============================================================
 
@@ -131,10 +143,10 @@ func (w *WorkflowRunner) evaluateAndDecide(
 	if err != nil {
 		logger.Error("Learner", "策略评估失败: %v，降级为深度搜索", err)
 		return &EvaluationResult{
-			Sufficient:     false,
-			NeedDeepSearch: true,
+			Sufficient:      false,
+			NeedDeepSearch:  true,
 			DeepSearchQuery: refinedQuery,
-			Reasoning:      fmt.Sprintf("评估失败，降级为深度搜索: %v", err),
+			Reasoning:       fmt.Sprintf("评估失败，降级为深度搜索: %v", err),
 		}, nil
 	}
 
@@ -280,7 +292,8 @@ func (w *WorkflowRunner) unifiedProcessing(
 	}
 
 	// 1. 更新知识记忆：将网络搜索获取的新知识存入
-	knowledgeItems := extractKnowledgeItems(finalReport, searchRounds)
+	// 优先使用 LLM 生成结构化知识条目，失败时回退到模板提取
+	knowledgeItems := w.extractKnowledgeWithLLM(refinedQuery, finalReport, searchRounds)
 	if len(knowledgeItems) > 0 {
 		count, err := w.memory.BatchAddKnowledge(knowledgeItems)
 		if err != nil {
@@ -291,8 +304,8 @@ func (w *WorkflowRunner) unifiedProcessing(
 		}
 	}
 
-	// 2. 更新经验记忆：记录本次请求的处理策略
-	experienceItem := w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	// 2. 更新经验记忆：使用 LLM 生成策略描述，失败时回退到模板生成
+	experienceItem := w.generateExperienceWithLLM(refinedQuery, finalReport, searchRounds)
 	if experienceItem != "" {
 		_, err := w.memory.AddExperience(experienceItem)
 		if err != nil {
@@ -310,6 +323,107 @@ func (w *WorkflowRunner) unifiedProcessing(
 		batchResult.KnowledgeAdded, batchResult.ExperienceAdded)
 
 	return batchResult, finalReport
+}
+
+// extractKnowledgeWithLLM 使用 LLM 生成结构化知识条目
+// 失败时回退到模板提取
+func (w *WorkflowRunner) extractKnowledgeWithLLM(
+	refinedQuery *RefinedQuery,
+	finalReport string,
+	searchRounds []SearchRound,
+) []string {
+	// 尝试使用 LLM 生成知识条目
+	prompt := w.prompts.buildMemoryUpdatePrompt(
+		refinedQuery.Original,
+		refinedQuery.Refined,
+		finalReport,
+		searchRounds,
+		nil,
+	)
+
+	messages := []LLMMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: "请基于研究结果生成记忆更新指令 JSON。"},
+	}
+
+	resp, err := w.llm.Chat(messages, BudgetMemoryUpdate)
+	if err != nil {
+		logger.Warn("Learner", "LLM 记忆更新生成失败，回退到模板提取: %v", err)
+		return extractKnowledgeItems(finalReport, searchRounds)
+	}
+
+	// 解析 LLM 响应中的知识条目
+	jsonStr := extractJSON(strings.TrimSpace(resp.Content))
+	var result struct {
+		KnowledgeItems []struct {
+			Content string `json:"content"`
+		} `json:"knowledge_items"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		logger.Warn("Learner", "LLM 记忆更新结果解析失败，回退到模板提取: %v", err)
+		return extractKnowledgeItems(finalReport, searchRounds)
+	}
+
+	var items []string
+	for _, item := range result.KnowledgeItems {
+		if len([]rune(strings.TrimSpace(item.Content))) >= 10 {
+			items = append(items, item.Content)
+		}
+	}
+
+	if len(items) == 0 {
+		logger.Info("Learner", "LLM 未生成知识条目，使用模板提取")
+		return extractKnowledgeItems(finalReport, searchRounds)
+	}
+
+	logger.Info("Learner", "LLM 生成知识条目: %d 条", len(items))
+	return items
+}
+
+// generateExperienceWithLLM 使用 LLM 生成经验记忆条目
+// 失败时回退到模板生成
+func (w *WorkflowRunner) generateExperienceWithLLM(
+	refinedQuery *RefinedQuery,
+	finalReport string,
+	searchRounds []SearchRound,
+) string {
+	// 尝试使用 LLM 生成经验条目
+	prompt := w.prompts.buildMemoryUpdatePrompt(
+		refinedQuery.Original,
+		refinedQuery.Refined,
+		finalReport,
+		searchRounds,
+		nil,
+	)
+
+	messages := []LLMMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: "请生成经验记忆条目 JSON。"},
+	}
+
+	resp, err := w.llm.Chat(messages, BudgetMemoryUpdate)
+	if err != nil {
+		logger.Warn("Learner", "LLM 经验记忆生成失败，回退到模板生成: %v", err)
+		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	}
+
+	// 解析 LLM 响应中的经验条目
+	jsonStr := extractJSON(strings.TrimSpace(resp.Content))
+	var result struct {
+		ExperienceItem string `json:"experience_item"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		logger.Warn("Learner", "LLM 经验记忆结果解析失败，回退到模板生成: %v", err)
+		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	}
+
+	if strings.TrimSpace(result.ExperienceItem) == "" {
+		logger.Info("Learner", "LLM 未生成经验条目，使用模板生成")
+		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	}
+
+	logger.Info("Learner", "LLM 生成经验条目: 长度=%d", len([]rune(result.ExperienceItem)))
+	return result.ExperienceItem
 }
 
 // ============================================================
@@ -518,6 +632,78 @@ func (w *WorkflowRunner) Run(rawQuery string) (string, *WorkflowState, error) {
 		elapsed, len(searchRounds), batchResult.KnowledgeAdded, batchResult.ExperienceAdded)
 
 	return finalReport, w.state, nil
+}
+
+// ============================================================
+// 回忆模式：快速路径（仅查询记忆库，跳过网络搜索）
+// ============================================================
+
+// RunRecallOnly 执行回忆模式快速路径
+// 仅查询推理完善 + 记忆库检索，跳过所有网络搜索步骤
+// 适用于用户明确表示"回忆"意图的场景（如"回忆一下上次聊过什么"）
+func (w *WorkflowRunner) RunRecallOnly(rawQuery string) (string, *WorkflowState, error) {
+	startTime := time.Now()
+	w.state = &WorkflowState{
+		OriginalQuery: rawQuery,
+	}
+
+	// 步骤 a: AI 推理完善请求
+	refined, err := w.refineQuery(rawQuery)
+	if err != nil {
+		return "", w.state, fmt.Errorf("步骤 a 失败: %w", err)
+	}
+	w.state.RefinedQuery = refined
+
+	// 步骤 b: 查询记忆库（知识 + 经验）
+	knowledgeMem, experienceMem, err := w.queryMemory(refined.Refined)
+	if err != nil {
+		logger.Warn("Learner", "回忆模式记忆查询失败: %v", err)
+	}
+	w.state.KnowledgeMem = knowledgeMem
+	w.state.ExperienceMem = experienceMem
+
+	// 跳过步骤 d/e/g/h：回忆模式不进行网络搜索
+	// 直接基于记忆库构建报告
+	report := buildRecallReport(refined.Refined, refined.Original, knowledgeMem)
+	w.state.FinalReport = report
+	w.state.CurrentPhase = PhaseFinalize
+
+	elapsed := time.Since(startTime)
+	logger.Info("Learner", "回忆模式完成: 耗时=%v, 知识匹配=%d条, 经验匹配=%d条",
+		elapsed, len(knowledgeMem), len(experienceMem))
+
+	return report, w.state, nil
+}
+
+// buildRecallReport 构建回忆模式报告
+// 基于记忆库检索结果生成格式化报告，标注来源为记忆而非网络
+func buildRecallReport(refinedQuery, originalQuery string, knowledgeMem []MemoryMatch) string {
+	queryForDisplay := originalQuery
+	if queryForDisplay == "" {
+		queryForDisplay = refinedQuery
+	}
+
+	var parts []string
+	parts = append(parts, "[研究报告]")
+	parts = append(parts, "")
+	parts = append(parts, "## 研究主题")
+	parts = append(parts, queryForDisplay)
+
+	if len(knowledgeMem) > 0 {
+		parts = append(parts, "")
+		parts = append(parts, "## 回忆到的内容")
+		parts = append(parts, FormatMemoryResults(knowledgeMem))
+	} else {
+		parts = append(parts, "")
+		parts = append(parts, "## 回忆结果")
+		parts = append(parts, fmt.Sprintf("月华没有回忆起与「%s」相关的内容呢~", truncateRunes(queryForDisplay, 60)))
+	}
+
+	parts = append(parts, "")
+	parts = append(parts, "## 研究方法说明")
+	parts = append(parts, "本研究采用回忆模式，仅检索本地记忆库（知识记忆 + 经验记忆），未进行网络搜索。如需获取最新信息，请使用搜索类关键词。")
+
+	return strings.Join(parts, "\n")
 }
 
 // buildFallbackReport 构建降级报告（深度搜索失败时使用）
