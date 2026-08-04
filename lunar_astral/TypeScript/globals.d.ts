@@ -218,46 +218,46 @@ declare global {
      */
     function webSearchDepth(query: string): [string, Error | null];
     /**
-	 * 检查网络检索子系统是否已初始化
-	 *
-	 * @returns {boolean} 是否已初始化
-	 */
-	function webSearchIsReady(): boolean;
-	/**
-	 * 执行大会辩论式深度研究
-	 * 需先调用 webSearchSetMemoryProvider 设置记忆库提供者
-	 *
-	 * @param {string} query 搜索查询
-	 *
-	 * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
-	 */
-	function webSearchAssembly(query: string): [string, Error | null];
-	/**
-	 * 处理消息中的链接，提取URL并替换为摘要
-	 * 对网页链接抓取内容并总结，对图片链接使用视觉模型识别，对下载链接调用下载回调
-	 *
-	 * @param {string} query 包含链接的消息文本
-	 *
-	 * @returns {[string, string[], Error | null]} 包含处理结果的元组，[替换后的文本, 链接描述列表, 错误信息]
-	 */
-	function webSearchProcessLinks(query: string): [string, string[], Error | null];
-	/**
-	 * 设置记忆库提供者（供大会辩论的守旧派使用）
-	 * 自动使用内置记忆库实例，无需参数
-	 *
-	 * @returns {[boolean, Error | null]} 包含设置结果的元组，[是否成功, 错误信息]
-	 */
-	function webSearchSetMemoryProvider(): [boolean, Error | null];
-	/**
-	 * 设置下载回调函数
-	 * 配置后，processLinks 遇到下载链接时会自动下载文件到指定目录
-	 *
-	 * @param {string} downloadDir 下载目标目录
-	 * @param {string} groupID 下载目标群组ID
-	 *
-	 * @returns {[boolean, Error | null]} 包含设置结果的元组，[是否成功, 错误信息]
-	 */
-	function webSearchSetDownloadFunc(downloadDir: string, groupID: string): [boolean, Error | null];
+     * 检查网络检索子系统是否已初始化
+     *
+     * @returns {boolean} 是否已初始化
+     */
+    function webSearchIsReady(): boolean;
+    /**
+     * 执行大会辩论式深度研究
+     * 需先调用 webSearchSetMemoryProvider 设置记忆库提供者
+     *
+     * @param {string} query 搜索查询
+     *
+     * @returns {[string, Error | null]} 包含搜索结果的元组，[搜索结果文本, 错误信息]
+     */
+    function webSearchAssembly(query: string): [string, Error | null];
+    /**
+     * 处理消息中的链接，提取URL并替换为摘要
+     * 对网页链接抓取内容并总结，对图片链接使用视觉模型识别，对下载链接调用下载回调
+     *
+     * @param {string} query 包含链接的消息文本
+     *
+     * @returns {[string, string[], Error | null]} 包含处理结果的元组，[替换后的文本, 链接描述列表, 错误信息]
+     */
+    function webSearchProcessLinks(query: string): [string, string[], Error | null];
+    /**
+     * 设置记忆库提供者（供大会辩论的守旧派使用）
+     * 自动使用内置记忆库实例，无需参数
+     *
+     * @returns {[boolean, Error | null]} 包含设置结果的元组，[是否成功, 错误信息]
+     */
+    function webSearchSetMemoryProvider(): [boolean, Error | null];
+    /**
+     * 设置下载回调函数
+     * 配置后，processLinks 遇到下载链接时会自动下载文件到指定目录
+     *
+     * @param {string} downloadDir 下载目标目录
+     * @param {string} groupID 下载目标群组ID
+     *
+     * @returns {[boolean, Error | null]} 包含设置结果的元组，[是否成功, 错误信息]
+     */
+    function webSearchSetDownloadFunc(downloadDir: string, groupID: string): [boolean, Error | null];
     /**
      * 执行屏幕截图（内部已集成图片压缩缩放处理）
      * 
@@ -299,57 +299,55 @@ declare global {
      * @returns {boolean} 是否处理成功
      */
     function processLTPXChanges(statusJSON: string): boolean;
-	    /**
-	     * 初始化学习者智能体
-	     *
-	     * @param {string} baseURL LLM 服务基础 URL
-	     * @param {string} apiKey LLM API 密钥
-	     * @param {string} model LLM 模型名称
-	     * @param {number} maxTokens 最大生成 token 数
-	     * @param {number} temperature 生成温度
-	     * @param {string} embeddingURL 嵌入服务基础 URL
-	     * @param {string} embeddingKey 嵌入服务 API 密钥
-	     * @param {string} embeddingModel 嵌入模型名称
-	     *
-	     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
-	     */
-	    function learnerInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
-	    /**
-		     * 执行学习者研究
-		     *
-		     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
-		     * @param {string} unreadJSON 未读消息的 JSON 字符串
-		     * @param {string} intentHint 意图提示 ("memory" | "search" | "balanced" | "ambiguous")
-		     *
-		     * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
-		     */
-		    function learnerExecute(dialogueJSON: string, unreadJSON: string, intentHint: string): [string, Error | null];
-	    /**
-	     * 检查学习者智能体是否已初始化
-	     *
-	     * @returns {boolean} 是否已初始化
-	     */
-	    function learnerIsReady(): boolean;
-	    /**
-	     * 导出学习者 Go 层运行时上下文到文件（覆写模式）
-	     * 包含搜索结果、策略评估、辩论状态、记忆匹配等 Go 层完整数据
-	     *
-	     * @param {string} dialogueJSON 对话历史消息的 JSON 字符串
-	     * @param {string} unreadJSON 未读消息的 JSON 字符串
-	     * @param {string} intentHint 意图提示
-	     * @param {string} outputPath 输出文件路径
-	     *
-	     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
-	     */
-	    function learnerDumpContext(dialogueJSON: string, unreadJSON: string, intentHint: string, outputPath: string): [string, Error | null];
-	    /**
-	     * 将调试内容写入本地文件（覆写模式）
-	     * 用于各子智能体导出上下文快照
-	     *
-	     * @param {string} filePath 输出文件的绝对路径
-	     * @param {string} content 要写入的字符串内容
-	     *
-	     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
-	     */
-	    function saveDebugFile(filePath: string, content: string): [string, Error | null];
-	}
+    /**
+     * 初始化学习者智能体
+     *
+     * @param {string} baseURL LLM 服务基础 URL
+     * @param {string} apiKey LLM API 密钥
+     * @param {string} model LLM 模型名称
+     * @param {number} maxTokens 最大生成 token 数
+     * @param {number} temperature 生成温度
+     * @param {string} embeddingURL 嵌入服务基础 URL
+     * @param {string} embeddingKey 嵌入服务 API 密钥
+     * @param {string} embeddingModel 嵌入模型名称
+     *
+     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
+     */
+    function learnerInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
+    /**
+     * 执行学习者研究
+     *
+     * @param {string[]} unreadMessages 未读消息文本数组
+     * @param {string} mode 运行模式 ("recall" | "full")，默认为 "full"
+     *
+     * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
+     */
+    function learnerExecute(unreadMessages: string[], mode: string): [string, Error | null];
+    /**
+     * 检查学习者智能体是否已初始化
+     *
+     * @returns {boolean} 是否已初始化
+     */
+    function learnerIsReady(): boolean;
+    /**
+     * 导出学习者 Go 层运行时上下文到文件（覆写模式）
+     * 包含搜索结果、策略评估、记忆匹配等 Go 层完整数据
+     *
+     * @param {string[]} unreadMessages 未读消息文本数组
+     * @param {string} mode 运行模式
+     * @param {string} outputPath 输出文件路径
+     *
+     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
+     */
+    function learnerDumpContext(unreadMessages: string[], mode: string, outputPath: string): [string, Error | null];
+    /**
+     * 将调试内容写入本地文件（覆写模式）
+     * 用于各子智能体导出上下文快照
+     *
+     * @param {string} filePath 输出文件的绝对路径
+     * @param {string} content 要写入的字符串内容
+     *
+     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
+     */
+    function saveDebugFile(filePath: string, content: string): [string, Error | null];
+}

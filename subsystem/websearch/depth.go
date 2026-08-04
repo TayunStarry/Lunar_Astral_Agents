@@ -14,18 +14,27 @@ import (
 )
 
 // NewDepthSearcher 创建 深度研究 搜索器
-func NewDepthSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg DepthConfig, httpCfg HTTPConfig) *DepthSearcher {
+func NewDepthSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg DepthConfig, httpCfg HTTPConfig, knowledge *SearchKnowledge) *DepthSearcher {
 	return &DepthSearcher{
 		simple:      simpleSearcher,
 		llmProvider: llmProvider,
 		cfg:         cfg,
 		httpClient:  &http.Client{Timeout: time.Duration(httpCfg.Timeout) * time.Second},
 		userAgent:   httpCfg.UserAgent,
+		knowledge:   knowledge,
 	}
 }
 
 // Search 执行深度研究
 func (s *DepthSearcher) Search(ctx context.Context, query string) (string, error) {
+	result, _, err := s.SearchWithResults(ctx, query)
+	return result, err
+}
+
+// SearchWithResults 执行深度研究并返回原始搜索结果（供知识库存储使用）
+// forceRefresh: true 时跳过 URL 缓存，强制重新抓取
+func (s *DepthSearcher) SearchWithResults(ctx context.Context, query string, forceRefresh ...bool) (string, []SearchResult, error) {
+	skipURLCache := len(forceRefresh) > 0 && forceRefresh[0]
 	// 第一步：判断是否需要拆解子问题
 	var subQueries []string
 	if isProperNounQuery(query) {
@@ -57,7 +66,6 @@ func (s *DepthSearcher) Search(ctx context.Context, query string) (string, error
 	var wg sync.WaitGroup
 	resultCh := make(chan subResult, len(subQueries))
 
-	// 并发限流（固定为3，避免对搜索引擎造成过大压力）
 	sem := make(chan struct{}, 3)
 
 	for _, sq := range subQueries {
@@ -81,7 +89,7 @@ func (s *DepthSearcher) Search(ctx context.Context, query string) (string, error
 		allResults = append(allResults, r)
 	}
 
-	// URL去重：跨子问题去重，同一URL只保留首次出现的子问题结果
+	// URL去重
 	seenURLs := make(map[string]bool)
 	for i := range allResults {
 		if allResults[i].Error != nil {
@@ -99,16 +107,27 @@ func (s *DepthSearcher) Search(ctx context.Context, query string) (string, error
 		allResults[i].Results = deduped
 	}
 
-	// 第三步：抓取网页内容
-	s.fetchContentForResults(allResults, query)
+	// 抓取网页内容
+	s.fetchContentForResults(allResults, query, skipURLCache)
 
 	// 第四步：汇总生成报告
-	return s.generateReport(query, allResults)
+	report, err := s.generateReport(query, allResults)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// 收集所有原始搜索结果（用于知识库存储）
+	var rawResults []SearchResult
+	for _, sr := range allResults {
+		rawResults = append(rawResults, sr.Results...)
+	}
+
+	return report, rawResults, nil
 }
 
-// CollectData 采集结构化研究数据，供大会辩论使用
-// 执行子问题拆解、并行搜索、网页内容抓取、URL去重，但不生成最终报告
-func (s *DepthSearcher) CollectData(ctx context.Context, query string) (*ResearchData, error) {
+// CollectData 采集结构化研究数据
+func (s *DepthSearcher) CollectData(ctx context.Context, query string, forceRefresh ...bool) (*ResearchData, error) {
+	skipURLCache := len(forceRefresh) > 0 && forceRefresh[0]
 	// 第一步：判断是否需要拆解子问题
 	var subQueries []string
 	if isProperNounQuery(query) {
@@ -137,7 +156,6 @@ func (s *DepthSearcher) CollectData(ctx context.Context, query string) (*Researc
 	var wg sync.WaitGroup
 	resultCh := make(chan subResult, len(subQueries))
 
-	// 并发限流（固定为3，避免对搜索引擎造成过大压力）
 	sem := make(chan struct{}, 3)
 
 	for _, sq := range subQueries {
@@ -180,7 +198,7 @@ func (s *DepthSearcher) CollectData(ctx context.Context, query string) (*Researc
 	}
 
 	// 第三步：抓取网页内容（填充到 Snippet 字段）
-	s.fetchContentForResults(allResults, query)
+	s.fetchContentForResults(allResults, query, skipURLCache)
 
 	// 转换为 ResearchData
 	data := &ResearchData{
@@ -198,10 +216,53 @@ func (s *DepthSearcher) CollectData(ctx context.Context, query string) (*Researc
 	return data, nil
 }
 
-// fetchContentForResults 为搜索结果抓取网页内容
-func (s *DepthSearcher) fetchContentForResults(results []subResult, query string) {
+// flattenSubResults 摊平子问题结果为单层列表
+func flattenSubResults(results []subResult) []SearchResult {
+	var flat []SearchResult
+	for _, r := range results {
+		flat = append(flat, r.Results...)
+	}
+	return flat
+}
+
+// fetchContentForResults 为搜索结果抓取网页内容（集成URL缓存）
+// skipURLCache: true 时跳过所有 URL 缓存，强制重新抓取
+func (s *DepthSearcher) fetchContentForResults(results []subResult, query string, skipURLCache bool) {
 	if len(results) == 0 {
 		return
+	}
+
+	// 阶段0：对每个子问题的结果重排序——官方优先 + 关键词相关性
+	for subIdx := range results {
+		topResult := &results[subIdx]
+		if len(topResult.Results) == 0 {
+			continue
+		}
+		SortResults(topResult.Results, query)
+		if s.debugLog != nil {
+			var officialURLs []string
+			for _, r := range topResult.Results {
+				if r.IsOfficial {
+					officialURLs = append(officialURLs, r.URL)
+				}
+			}
+			if len(officialURLs) > 0 {
+				s.debugLog("[深度搜索] 结果重排序后官方结果 URLs=%v", officialURLs)
+			}
+		}
+	}
+
+	// 动态域名发现：识别高频域名，抓取首页和新闻列表页
+	flatResults := flattenSubResults(results)
+	if discovered := DiscoverOfficialHomepages(flatResults, s.debugLog); len(discovered) > 0 && len(results) > 0 {
+		results[0].Results = append(discovered, results[0].Results...)
+		if s.debugLog != nil {
+			urls := make([]string, len(discovered))
+			for i, r := range discovered {
+				urls[i] = r.URL
+			}
+			s.debugLog("[深度搜索] 域名发现 插入%d条结果 URLs=%v", len(discovered), urls)
+		}
 	}
 
 	// 阶段1：HTTP 抓取所有结果，收集 SPA 索引
@@ -216,18 +277,91 @@ func (s *DepthSearcher) fetchContentForResults(results []subResult, query string
 
 	for subIdx := range results {
 		topResult := &results[subIdx]
-		fetchLimit := min(5, len(topResult.Results))
+		fetchLimit := min(8, len(topResult.Results))
+		// 第一个子问题结果包含首页发现和新闻列表，需要更多抓取配额
+		// 防止官方域名新闻列表页被挤出抓取队列
+		if subIdx == 0 {
+			fetchLimit = min(20, len(topResult.Results))
+		}
 
 		for i := range fetchLimit {
 			r := &topResult.Results[i]
 			if r.URL == "" {
 				continue
 			}
-			body, err := s.fetchContentHTTPOnly(r.URL)
-			if err != nil || len(body) == 0 {
+			// 过滤字典/百科网站，避免浪费资源渲染无关页面
+			if isDictionarySite(r.URL) {
+				if s.debugLog != nil {
+					s.debugLog("[深度搜索] 字典网站过滤跳过 URL=%s", r.URL)
+				}
 				continue
 			}
-			isSPA := isSPAShell(body)
+
+			// 先从知识库缓存中查找URL内容（三级保护）
+			var body string
+			var isSPA bool
+			cacheHit := false
+			if s.knowledge != nil && !skipURLCache {
+				// 保护1：更新类查询 TTL 30分钟，定义类查询 TTL 120分钟
+				cacheTTL := time.Duration(0) // 0 = 不检查
+				if isUpdateQuery(query) {
+					cacheTTL = 30 * time.Minute
+				} else {
+					cacheTTL = 120 * time.Minute
+				}
+
+				cached, err := s.knowledge.LookupURL(r.URL, cacheTTL)
+				if err == nil && cached != nil && cached.Content != "" {
+					// 保护2：关键词验证——缓存内容必须包含至少一个查询关键词
+					queryKeywords := extractQueryKeywords(query)
+					contentHasKeyword := len(queryKeywords) == 0 // 无关键词要求时跳过验证
+					if !contentHasKeyword {
+						lower := strings.ToLower(cached.Content)
+						for _, kw := range queryKeywords {
+							if strings.Contains(lower, strings.ToLower(kw)) {
+								contentHasKeyword = true
+								break
+							}
+						}
+					}
+					if !contentHasKeyword {
+						// 缓存内容不含查询关键词，视为无效缓存，强制重新抓取
+						if s.debugLog != nil {
+							s.debugLog("[深度搜索] URL缓存无关键词 跳过缓存 URL=%s", r.URL)
+						}
+						goto fetchHTTP
+					}
+
+					// 保护3：SPA壳检测——即使命中缓存，如果是SPA壳也需重新抓取
+					body = cached.Content
+					isSPA = isSPAShell(body)
+					if s.debugLog != nil {
+						s.debugLog("[深度搜索] URL缓存命中 URL=%s isSPA=%v", r.URL, isSPA)
+					}
+					if !isSPA {
+						allItems = append(allItems, fetchItem{subIdx, i, body, isSPA})
+						cacheHit = true
+						continue
+					}
+					// SPA壳 → 重新抓取
+				}
+			}
+		fetchHTTP:
+			if cacheHit {
+				continue
+			}
+
+			body, err := s.fetchContentHTTPOnly(r.URL)
+			if err != nil || len(body) == 0 {
+				if s.debugLog != nil {
+					s.debugLog("[深度搜索] HTTP抓取失败或空 URL=%s err=%v", r.URL, err)
+				}
+				continue
+			}
+			isSPA = isSPAShell(body)
+			if s.debugLog != nil {
+				s.debugLog("[深度搜索] HTTP抓取 URL=%s body_len=%d isSPA=%v", r.URL, len(body), isSPA)
+			}
 			itemIdx := len(allItems)
 			allItems = append(allItems, fetchItem{subIdx, i, body, isSPA})
 			if isSPA {
@@ -251,23 +385,43 @@ func (s *DepthSearcher) fetchContentForResults(results []subResult, query string
 				defer func() { <-sem }()
 				item := &allItems[idx]
 				url := results[item.subIdx].Results[item.resIdx].URL
-				if rendered := renderWithBrowser(s.browserRenderer, url, s.debugLog, query); rendered != "" {
+				if rendered, title := renderWithBrowser(s.browserRenderer, url, s.debugLog, query); rendered != "" {
 					item.body = rendered
 					item.isSPA = false
+					// 如果浏览器返回了标题，更新结果的标题
+					if title != "" {
+						results[item.subIdx].Results[item.resIdx].Title = title
+					}
 				}
 			}(itemIdx)
 		}
 		wg.Wait()
 	}
 
-	// 阶段3：回写结果
+	// 阶段3：回写结果 + 存储URL内容到知识库
 	for _, item := range allItems {
 		r := &results[item.subIdx].Results[item.resIdx]
 		body := truncateText(item.body, depthMaxFetchedContentLen)
+
+		// 如果浏览器渲染失败（仍然是SPA空壳），且有摘要，则回退到摘要
 		if item.isSPA && r.Snippet != "" {
 			body = r.Snippet
 		}
 		r.Snippet = body
+
+		if s.debugLog != nil {
+			s.debugLog("[深度搜索] 结果回写 URL=%s snippet_len=%d wasSPA=%v", r.URL, len(body), item.isSPA)
+		}
+
+		// 存储URL内容到知识库：无论是否是SPA，只要有有效内容就存储
+		// 浏览器渲染成功后的内容更有价值，必须保存
+		if s.knowledge != nil && body != "" {
+			sourceType := "depth_search_http"
+			if !item.isSPA {
+				sourceType = "depth_search_browser"
+			}
+			go s.knowledge.StoreURL(r.URL, r.Title, body, sourceType)
+		}
 	}
 }
 
@@ -340,7 +494,7 @@ func (s *DepthSearcher) fetchContent(pageURL string, queryKeywords []string) (st
 
 	if isSPAShell(text) {
 		if s.browserRenderer != nil {
-			if rendered := renderWithBrowser(s.browserRenderer, realURL, s.debugLog); rendered != "" {
+			if rendered, _ := renderWithBrowser(s.browserRenderer, realURL, s.debugLog); rendered != "" {
 				text = rendered
 			} else if s.debugLog != nil {
 				s.debugLog("[深度搜索] SPA浏览器渲染失败 将回退到摘要 URL=%s body_len=%d",
@@ -399,7 +553,7 @@ func (s *DepthSearcher) fetchRawContent(pageURL string) (string, error) {
 	if s.browserRenderer != nil {
 		text := extractTextContent(htmlStr)
 		if isSPAShell(text) {
-			if rendered, err := s.browserRenderer.Render(pageURL); err == nil && rendered != "" {
+			if rendered, _, err := s.browserRenderer.Render(pageURL); err == nil && rendered != "" {
 				return rendered, nil
 			}
 		}
@@ -446,9 +600,26 @@ func isProperNounQuery(query string) bool {
 		if chineseCount == len(runes) && len(runes) <= 4 {
 			return true
 		}
+		// 纯英文单词，视为专有名词（如品牌名、产品名）
+		if isAsciiWord(query) {
+			return true
+		}
 	}
 
 	return false
+}
+
+// isAsciiWord 判断是否为纯英文单词（无空格，全字母）
+func isAsciiWord(s string) bool {
+	if strings.Contains(s, " ") {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 func (s *DepthSearcher) decomposeQuery(ctx context.Context, query string) ([]string, error) {
@@ -464,9 +635,9 @@ func (s *DepthSearcher) decomposeQuery(ctx context.Context, query string) ([]str
 1. 保留原始问题中的专有名词、产品名、人名等完整词语，不要将其拆分
 2. 每个子问题应聚焦于问题的不同方面或维度
 3. 子问题之间应有互补性，避免重复
-4. 用JSON数组格式输出，只输出数组，不要其他内容
-
-示例输出：["子问题1", "子问题2", "子问题3"]`, query)
+4. 子问题应该是可直接用于搜索引擎的关键词组合，而非完整问句
+5. 如果用户问题只有一个单词（如品牌名、产品名），直接返回只包含该单词的数组，不要拆解
+6. 用JSON数组格式输出，只输出数组，不要其他内容`, query)
 
 	messages := []ChatMessage{
 		{Role: "user", Content: prompt},
@@ -556,11 +727,11 @@ func (s *DepthSearcher) generateReport(originalQuery string, results []subResult
 
 要求：
 1. 以"# 深度研究报告"开头
-2. 包含"核心发现"章节（3-5点总结）
-3. 包含"详细分析"章节，按维度分点阐述
-4. 包含"信息来源"章节，列出所有引用的来源
-5. 直接呈现搜索结果中的信息，不要对信息来源做"可靠/不可靠"的主观判断，由用户自行判断
-6. 用markdown格式输出`
+2. 包含"## 核心发现"章节（3-5点总结，每点标注该发现的权威性）
+3. 包含"## 详细分析"章节，按维度分点阐述
+4. 对于每条信息，标注其来源的权威性等级（🏛️官方/⭐高权威/✅可信/📄一般/⚠️低权威），优先引用权威来源
+5. 包含"## 信息来源"章节，列出所有引用的来源及权威性标注
+6. 用markdown格式输出，结构清晰、层次分明`
 
 	prompt := fmt.Sprintf(promptTemplate, originalQuery, allResults)
 
@@ -617,4 +788,162 @@ func (s *DepthSearcher) SupplementarySearch(query string) ([]SearchResult, error
 		}
 	}
 	return results, nil
+}
+
+// deriveHomepageURL 从子页面URL推导出首页URL（纯动态，无硬编码）
+func deriveHomepageURL(subURL string) string {
+	if idx := strings.Index(subURL, "://"); idx >= 0 {
+		protocolEnd := idx + 3
+		if slashIdx := strings.Index(subURL[protocolEnd:], "/"); slashIdx >= 0 {
+			return subURL[:protocolEnd+slashIdx] + "/"
+		}
+		return subURL
+	}
+	return subURL
+}
+
+// extractDomain 从URL中提取域名
+func extractDomain(rawURL string) string {
+	if idx := strings.Index(rawURL, "://"); idx >= 0 {
+		hostPart := rawURL[idx+3:]
+		if slashIdx := strings.Index(hostPart, "/"); slashIdx >= 0 {
+			return hostPart[:slashIdx]
+		}
+		if questionIdx := strings.Index(hostPart, "?"); questionIdx >= 0 {
+			return hostPart[:questionIdx]
+		}
+		return hostPart
+	}
+	return ""
+}
+
+// 域名发现黑名单：这些域名不参与动态域名发现
+var domainDiscoveryBlacklist = []string{
+	"baike.baidu.com",
+	"baike.sogou.com",
+	"baike.so.com",
+	"zh.wikipedia.org",
+	"wiki.biligame.com",
+	"prts.wiki",
+	"huijiwiki.com",
+	"fandom.com",
+	"gamepedia.com",
+	"moegirl.org.cn",
+	"mrzh.163.com",
+	"163.com",
+	"zhihu.com",
+	"tieba.baidu.com",
+	"bilibili.com",
+	"douyin.com",
+	"xiaohongshu.com",
+	"weibo.com",
+	"sohu.com",
+	"sina.com.cn",
+	"qq.com",
+	"gamersky.com",
+	"3dmgame.com",
+	"gamers.com",
+	"www.baidu.com",
+	"m.baidu.com",
+	"so.com",
+	"sogou.com",
+	"smzdm.com",
+	"csdn.net",
+	"juejin.cn",
+	"nga.cn",
+	"nga.178.com",
+	"douban.com",
+	"mi.com",
+}
+
+// isDomainBlacklisted 检查域名是否在黑名单中
+func isDomainBlacklisted(domain string) bool {
+	for _, blocked := range domainDiscoveryBlacklist {
+		if domain == blocked || strings.HasSuffix(domain, "."+blocked) {
+			return true
+		}
+	}
+	return false
+}
+
+// DiscoverOfficialHomepages 从搜索结果中发现高频域名，返回首页和新闻列表页
+func DiscoverOfficialHomepages(results []SearchResult, debugLog func(format string, args ...interface{})) []SearchResult {
+	domainCount := make(map[string]int)
+	domainHomepage := make(map[string]string)
+	domainHasOfficial := make(map[string]bool)
+
+	for _, r := range results {
+		if r.URL == "" {
+			continue
+		}
+		domain := extractDomain(r.URL)
+		if domain == "" {
+			continue
+		}
+		if isDomainBlacklisted(domain) {
+			continue
+		}
+		domainCount[domain]++
+		if _, ok := domainHomepage[domain]; !ok {
+			domainHomepage[domain] = deriveHomepageURL(r.URL)
+		}
+		if r.IsOfficial {
+			domainHasOfficial[domain] = true
+		}
+	}
+
+	// 选出高频域名（≥2次）或被标记为官方的域名，推导首页
+	var homepageResults []SearchResult
+	seen := make(map[string]bool)
+
+	for domain, count := range domainCount {
+		homepage := domainHomepage[domain]
+		if seen[homepage] {
+			continue
+		}
+		if count >= 2 || domainHasOfficial[domain] {
+			seen[homepage] = true
+			isOfficial := domainHasOfficial[domain]
+			homepageResults = append(homepageResults, SearchResult{
+				Title:      domain + " 官方首页",
+				URL:        homepage,
+				Snippet:    fmt.Sprintf("[自动发现] 域名 %s 在搜索结果中出现 %d 次", domain, count),
+				IsOfficial: isOfficial,
+			})
+			if debugLog != nil {
+				debugLog("[域名发现] domain=%s count=%d official=%v homepage=%s", domain, count, isOfficial, homepage)
+			}
+		}
+	}
+
+	if len(homepageResults) == 0 {
+		return nil
+	}
+
+	// 追加新闻列表页：仅对官方域名尝试 /news 等常见聚合页
+	newsListPaths := []string{"/news", "/news/", "/article"}
+	var allResults []SearchResult
+	allResults = append(allResults, homepageResults...)
+	newsListsSeen := make(map[string]bool)
+	for _, r := range homepageResults {
+		if !r.IsOfficial {
+			continue
+		}
+		baseURL := strings.TrimRight(r.URL, "/")
+		for _, path := range newsListPaths {
+			candidateURL := baseURL + path
+			if newsListsSeen[candidateURL] {
+				continue
+			}
+			newsListsSeen[candidateURL] = true
+			allResults = append(allResults, SearchResult{
+				Title:      r.Title + " 新闻列表",
+				URL:        candidateURL,
+				Snippet:    fmt.Sprintf("[自动发现] 从 %s 推导的新闻列表页", r.URL),
+				IsOfficial: r.IsOfficial,
+			})
+		}
+	}
+
+	return allResults
 }

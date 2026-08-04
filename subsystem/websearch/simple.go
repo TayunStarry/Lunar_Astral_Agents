@@ -10,6 +10,7 @@ func NewSimpleSearcher(cfg Config) *SimpleSearcher {
 		bing:       NewBingSearcher(cfg.HTTP),
 		ddg:        NewDuckDuckGoSearcher(cfg.HTTP),
 		maxResults: cfg.Simple.MaxResults,
+		timeRange:  cfg.Simple.TimeRange,
 	}
 }
 
@@ -20,7 +21,12 @@ func (s *SimpleSearcher) SetMaxResults(n int) {
 	}
 }
 
-// Search 执行轻量摘要搜索（Bing → 百度 → 搜狗 → DuckDuckGo）
+// SetTimeRange 设置时间范围过滤
+func (s *SimpleSearcher) SetTimeRange(tr TimeRange) {
+	s.timeRange = tr
+}
+
+// Search 轻量摘要搜索，Bing → 百度 → 搜狗 → DuckDuckGo 依次尝试
 func (s *SimpleSearcher) Search(query string) (string, error) {
 	limit := s.maxResults
 	if limit <= 0 {
@@ -42,8 +48,9 @@ func (s *SimpleSearcher) Search(query string) (string, error) {
 		if eng.searcher == nil {
 			continue
 		}
-		results, err := eng.searcher.Search(query, limit)
+		results, err := eng.searcher.SearchWithTimeRange(query, limit, s.timeRange)
 		if err == nil && len(results) > 0 {
+			ScoreResults(results)
 			return formatResults(results), nil
 		}
 	}
@@ -51,7 +58,7 @@ func (s *SimpleSearcher) Search(query string) (string, error) {
 	return fmt.Sprintf("未找到与 %q 相关的搜索结果，所有搜索引擎均无结果。", query), nil
 }
 
-// SearchRaw 执行轻量摘要搜索，返回原始结果
+// SearchRaw 轻量摘要搜索，返回原始结果列表
 func (s *SimpleSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	limit := max(s.maxResults, 10)
 
@@ -59,6 +66,8 @@ func (s *SimpleSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("轻量摘要搜索全部失败: %w", err)
 	}
+	ScoreResults(results)
+	SortResults(results, query)
 	return results, nil
 }
 
@@ -70,10 +79,12 @@ func (s *SimpleSearcher) SearchRawNoPrep(query string) ([]SearchResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("原始搜索全部失败: %w", err)
 	}
+	ScoreResults(results)
+	SortResults(results, query)
 	return results, nil
 }
 
-// trySearchRaw 依次尝试各引擎的标准搜索（带预处理）
+// trySearchRaw 依次尝试各引擎，跳过已降级引擎
 func (s *SimpleSearcher) trySearchRaw(query string, limit int) ([]SearchResult, error) {
 	engines := []Searcher{s.bing, s.baidu, s.sogou, s.ddg}
 	for _, eng := range engines {
@@ -87,7 +98,7 @@ func (s *SimpleSearcher) trySearchRaw(query string, limit int) ([]SearchResult, 
 			}
 			continue
 		}
-		results, err := eng.Search(query, limit)
+		results, err := eng.SearchWithTimeRange(query, limit, s.timeRange)
 		if s.health != nil {
 			s.health.RecordResult(eng.Name(), err == nil && len(results) > 0)
 		}
@@ -125,7 +136,7 @@ func (s *SimpleSearcher) trySearchRawNoPrep(query string, limit int) ([]SearchRe
 			}
 			continue
 		}
-		results, err := eng.SearchRaw(query, limit)
+		results, err := eng.SearchWithTimeRange(query, limit, s.timeRange)
 		if s.health != nil {
 			s.health.RecordResult(eng.Name(), err == nil && len(results) > 0)
 		}

@@ -36,10 +36,10 @@ func (class *Runtime) webSearchInit(call goja.FunctionCall) goja.Value {
 
 	temperature := call.Argument(4).ToFloat()
 
-	cfg := websearch.DefaultConfig()
+	cfg := websearch.DefaultConfig
 
 	provider := websearch.NewOpenAIProvider(baseURL, apiKey, model, maxTokens, temperature)
-	webSearchSystem = websearch.NewWithLLM(cfg, provider)
+	webSearchSystem = websearch.NewWithLLM(cfg, provider, nil)
 
 	if webSearchSystem.HasLLM() {
 		logger.Info("LunarCore", "网络检索子系统初始化成功，LLM 已配置: %s", model)
@@ -69,7 +69,7 @@ func (class *Runtime) webSearchWebpage(call goja.FunctionCall) goja.Value {
 
 	logger.Info("LunarCore", "执行网页搜索: %s", query)
 
-	result, err := webSearchSystem.WebpageSearch(query)
+	result, err := webSearchSystem.Search(context.Background(), query, websearch.ModeWebpage)
 	if err != nil {
 		logger.Error("LunarCore", "网页搜索失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
@@ -97,7 +97,7 @@ func (class *Runtime) webSearchSimple(call goja.FunctionCall) goja.Value {
 
 	logger.Info("LunarCore", "执行轻量摘要搜索: %s", query)
 
-	result, err := webSearchSystem.SimpleSearch(query)
+	result, err := webSearchSystem.Search(context.Background(), query, websearch.ModeSimple)
 	if err != nil {
 		logger.Error("LunarCore", "轻量摘要搜索失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
@@ -125,7 +125,7 @@ func (class *Runtime) webSearchDepth(call goja.FunctionCall) goja.Value {
 
 	logger.Info("LunarCore", "执行深度研究: %s", query)
 
-	result, err := webSearchSystem.DepthSearch(query)
+	result, err := webSearchSystem.Search(context.Background(), query, websearch.ModeDepth)
 	if err != nil {
 		logger.Error("LunarCore", "深度研究失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})

@@ -1,9 +1,10 @@
 module YaraFlow/internal/search
 
-go 1.25
+go 1.26
 
 require (
 	github.com/chromedp/chromedp v0.16.0
+	github.com/mattn/go-sqlite3 v1.14.44
 	golang.org/x/net v0.40.0
 )
 

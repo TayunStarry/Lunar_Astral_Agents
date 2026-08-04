@@ -9,12 +9,6 @@ import (
 	"storage/module"
 )
 
-// MemoryManager 记忆管理器
-// 管理两个独立的记忆表：知识记忆（learner_knowledge）和经验记忆（learner_experience）
-type MemoryManager struct {
-	initialized bool
-}
-
 // NewMemoryManager 创建记忆管理器
 func NewMemoryManager() *MemoryManager {
 	return &MemoryManager{}

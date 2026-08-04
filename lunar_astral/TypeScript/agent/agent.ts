@@ -87,15 +87,12 @@ class LunarAgent extends AgentDefine {
 				if (messageLength === 0) this.speakWeight = 0;
 				// 批量处理视频文件
 				await this.batchProcessVideoFiles();
-				// 保存当前未读上下文的快照，供子智能体读取后独立维护
-				// 对话者会在 callMultimediaAndToolParsing 中消费并清空 unreadContext
-				const currentUnreadContext = [...this.unreadContext];
 				// 如果包含研究意图关键词，调用学习者角色执行研究循环（最先执行）
-			this.learnerRole.executeLearner(this.dialogueRole.messages, currentUnreadContext);
+				this.learnerRole.executeLearner(this.unreadContext);
 				// 如果包含图像生成关键词，调用画家角色执行绘画循环
-				this.painterRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
+				this.painterRole.createCreativeWork(this.unreadContext);
 				// 如果包含音乐创作关键词，调用音乐家角色执行音乐创作循环
-				this.musicianRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
+				this.musicianRole.createCreativeWork(this.unreadContext);
 				// 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
 				await this.createChatMessage();
 				// 如果消息响应为空，抛出异常
@@ -123,17 +120,15 @@ class LunarAgent extends AgentDefine {
 				for (const chunk of textChunks) {
 					/** 语音合成结果 */
 					let audio = '';
-					try {
-						const [audioData, err] = tts(chunk.tts);
-						if (!err && audioData) audio = audioData;
-					}
-					catch (e) {
-						console.error(`TTS合成异常: [${chunk.tts}]`, e);
-					}
+					/** 语音合成 */
+					const [audioData, err] = tts(chunk.tts);
+					// 如果语音合成成功，将结果赋值给audio
+					if (!err && audioData) audio = audioData;
+					// 推送消息（包含显示内容和语音数据）
 					pushContext(messageType, chunk.display, audio);
-					}
-					// 思考链结尾：导出所有子智能体上下文快照（覆写模式）
-					this.dumpAllContexts();
+				}
+				// 思考链结尾：导出所有子智能体上下文快照（覆写模式）
+				this.dumpAllContexts();
 			}
 			catch (error) {
 				/** 获取提示音数据 */

@@ -40,45 +40,45 @@ export const screenshotTools: ToolCall[] = [
 
 /** 处理截图工具调用 */
 async function handleScreenshot(args?: Record<string, any> | string): Promise<string[]> {
-	console.log(`[截图] ========== 开始处理截图工具调用 ==========`);
-	console.log(`[截图] 原始参数: ${JSON.stringify(args)}`);
+	console.log(`========== 开始处理截图工具调用 ==========`);
+	console.log(`原始参数: ${JSON.stringify(args)}`);
 
 	const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
 	const { display_index, region, scale, format } = parsed;
 
-	console.log(`[截图] 参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
+	console.log(`参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
 
 	const displayIndex = display_index ?? 0;
 	const captureFormat = format || 'png';
 
-	console.log(`[截图] 最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
-	console.log(`[截图] 准备执行截图操作...`);
+	console.log(`最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+	console.log(`准备执行截图操作...`);
 
 	// Go 层统一处理截图捕获 + 图片压缩缩放，返回包含 base64/format/width/height 的结果对象
 	const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0) as [ResizeImageResult, Error | null];
 	if (captureErr) {
-		console.error(`[截图] 截图失败: ${captureErr.message || String(captureErr)}`);
-		console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+		console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
+		console.log(`========== 截图工具调用结束(失败) ==========`);
 		return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
 	}
 
-	console.log(`[截图] 截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
+	console.log(`截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
 
 	if (!result || !result.base64) {
-		console.error(`[截图] 截图失败: 未获取到截图数据`);
-		console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+		console.error(`截图失败: 未获取到截图数据`);
+		console.log(`========== 截图工具调用结束(失败) ==========`);
 		return ['截图失败：未获取到截图数据', ''];
 	}
 
 	// 将处理后的图片推送到前端，base64 格式为 "data:image/[format];base64,[data]"
 	pushImage([result.base64]);
-	console.log(`[截图] 图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
+	console.log(`图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
 
 	// 返回文本响应 + base64 图片数据
 	const sizeInfo = `${result.width}x${result.height}`;
 	const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
-	console.log(`[截图] 返回响应: ${sizeInfo}`);
-	console.log(`[截图] ========== 截图工具调用结束(成功) ==========`);
+	console.log(`返回响应: ${sizeInfo}`);
+	console.log(`========== 截图工具调用结束(成功) ==========`);
 	return [textResponse, result.base64];
 }
 

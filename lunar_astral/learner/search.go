@@ -1,19 +1,13 @@
 package learner
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"logger"
 	"websearch"
 )
-
-// SearchManager 搜索管理器
-// 封装 websearch 子系统，提供初步搜索和深度搜索能力
-type SearchManager struct {
-	searchSystem *websearch.System
-	initialized  bool
-}
 
 // NewSearchManager 创建搜索管理器
 func NewSearchManager() *SearchManager {
@@ -26,15 +20,17 @@ func (m *SearchManager) Init(cfg LearnerConfig) error {
 		return nil
 	}
 
-	wsCfg := websearch.DefaultConfig()
+	wsCfg := websearch.DefaultConfig
 
-	// 启用深度搜索
 	wsCfg.Depth.Enabled = true
 	wsCfg.Depth.MaxSubQueries = MaxSearchSubQuestions
 
-	// 创建 LLM provider 并初始化搜索系统
 	provider := websearch.NewOpenAIProvider(cfg.BaseURL, cfg.APIKey, cfg.Model, cfg.MaxTokens, cfg.Temperature)
-	m.searchSystem = websearch.NewWithLLM(wsCfg, provider)
+	m.searchSystem = websearch.NewWithLLM(wsCfg, provider, nil)
+
+	m.searchSystem.SetDebugLogFunc(func(format string, args ...interface{}) {
+		logger.Info("Learner", "[WebSearch] "+format, args...)
+	})
 
 	if m.searchSystem.HasLLM() {
 		logger.Info("Learner", "搜索子系统初始化成功，LLM 已配置: %s", cfg.Model)
@@ -47,7 +43,6 @@ func (m *SearchManager) Init(cfg LearnerConfig) error {
 }
 
 // SimpleSearch 执行初步网络搜索（轻量摘要模式）
-// 返回搜索结果摘要列表，用于步骤 d 的初步信息获取
 func (m *SearchManager) SimpleSearch(query string) ([]SearchItemPreview, error) {
 	if !m.initialized || m.searchSystem == nil {
 		return nil, fmt.Errorf("搜索子系统未初始化")
@@ -66,7 +61,7 @@ func (m *SearchManager) SimpleSearch(query string) ([]SearchItemPreview, error) 
 		preview = append(preview, SearchItemPreview{
 			Title:   r.Title,
 			URL:     r.URL,
-			Snippet: truncateRunes(r.Snippet, 200),
+			Snippet: truncateRunes(r.Snippet, 800),
 		})
 	}
 
@@ -75,7 +70,6 @@ func (m *SearchManager) SimpleSearch(query string) ([]SearchItemPreview, error) 
 }
 
 // DepthSearch 执行深度搜索
-// 返回完整的深度研究报告
 func (m *SearchManager) DepthSearch(query string) (string, error) {
 	if !m.initialized || m.searchSystem == nil {
 		return "", fmt.Errorf("搜索子系统未初始化")
@@ -83,7 +77,7 @@ func (m *SearchManager) DepthSearch(query string) (string, error) {
 
 	logger.Info("Learner", "执行深度搜索: %s", query)
 
-	result, err := m.searchSystem.DepthSearch(query)
+	result, err := m.searchSystem.Search(context.Background(), query, websearch.ModeDepth)
 	if err != nil {
 		logger.Error("Learner", "深度搜索失败: %v", err)
 		return "", err
@@ -100,7 +94,22 @@ func (m *SearchManager) WebpageSearch(query string) (string, error) {
 
 	logger.Info("Learner", "执行网页搜索: %s", query)
 
-	return m.searchSystem.WebpageSearch(query)
+	result, err := m.searchSystem.Search(context.Background(), query, websearch.ModeWebpage)
+	if err != nil {
+		logger.Error("Learner", "网页搜索失败: %v", err)
+		return "", err
+	}
+
+	logger.Info("Learner", "网页搜索原始返回，长度=%d 字符", len([]rune(result)))
+	if len([]rune(result)) > 0 {
+		preview := result
+		if len([]rune(preview)) > 3000 {
+			preview = string([]rune(preview)[:3000]) + "...[截断]"
+		}
+		logger.Info("Learner", "网页搜索内容预览:\n---BEGIN---\n%s\n---END---", preview)
+	}
+
+	return result, nil
 }
 
 // Search 统一搜索入口，按模式路由
@@ -115,7 +124,6 @@ func (m *SearchManager) Search(query string, mode AgentSearchMode) (string, erro
 	case AgentModeDepth:
 		return m.DepthSearch(query)
 	default:
-		// Simple 模式：返回格式化文本
 		items, err := m.SimpleSearch(query)
 		if err != nil {
 			return "", err

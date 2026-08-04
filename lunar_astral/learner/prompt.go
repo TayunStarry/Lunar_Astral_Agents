@@ -2,6 +2,8 @@ package learner
 
 import (
 	"fmt"
+	"strings"
+
 	"lunar_astral/hierarchy"
 )
 
@@ -9,55 +11,39 @@ import (
 // Prompt 模板管理
 // ============================================================
 
-// PromptTemplates 所有 prompt 模板的集合
-type PromptTemplates struct {
-	Refine     string // 步骤 a: 查询推理完善
-	Evaluate   string // 步骤 e: 策略评估
-	SearchEval string // 步骤 h: 搜索内容评估
-	Memory     string // 步骤 i: 记忆更新
-	Report     string // 步骤 i: 报告生成
-}
-
 // loadPrompts 从嵌入式文件系统加载 prompt 模板
-// 加载失败时回退到内置默认模板
-func loadPrompts() *PromptTemplates {
+// 所有 prompt 模板文件必须存在，加载失败时返回错误
+func loadPrompts() (*PromptTemplates, error) {
 	pt := &PromptTemplates{}
 
-	// 尝试从嵌入式文件系统加载
-	if data, err := hierarchy.EmbeddedFiles.ReadFile("assets/prompts/learnerRefine.md"); err == nil {
-		pt.Refine = string(data)
-	}
-	if data, err := hierarchy.EmbeddedFiles.ReadFile("assets/prompts/learnerEvaluate.md"); err == nil {
-		pt.Evaluate = string(data)
-	}
-	if data, err := hierarchy.EmbeddedFiles.ReadFile("assets/prompts/learnerSearchEval.md"); err == nil {
-		pt.SearchEval = string(data)
-	}
-	if data, err := hierarchy.EmbeddedFiles.ReadFile("assets/prompts/learnerMemory.md"); err == nil {
-		pt.Memory = string(data)
-	}
-	if data, err := hierarchy.EmbeddedFiles.ReadFile("assets/prompts/learnerReport.md"); err == nil {
-		pt.Report = string(data)
+	// 必须加载的 prompt 文件列表
+	promptFiles := []struct {
+		dest *string
+		path string
+	}{
+		{&pt.Refine, "assets/prompts/learnerRefine.md"},
+		{&pt.Evaluate, "assets/prompts/learnerEvaluate.md"},
+		{&pt.SearchEval, "assets/prompts/learnerSearchEval.md"},
+		{&pt.Memory, "assets/prompts/learnerMemory.md"},
+		{&pt.Report, "assets/prompts/learnerReport.md"},
 	}
 
-	// 回退到内置默认模板
-	if pt.Refine == "" {
-		pt.Refine = defaultRefinePrompt
-	}
-	if pt.Evaluate == "" {
-		pt.Evaluate = defaultEvaluatePrompt
-	}
-	if pt.SearchEval == "" {
-		pt.SearchEval = defaultSearchEvalPrompt
-	}
-	if pt.Memory == "" {
-		pt.Memory = defaultMemoryPrompt
-	}
-	if pt.Report == "" {
-		pt.Report = defaultReportPrompt
+	var missingFiles []string
+	for _, pf := range promptFiles {
+		data, err := hierarchy.EmbeddedFiles.ReadFile(pf.path)
+		if err != nil {
+			missingFiles = append(missingFiles, fmt.Sprintf("%s: %v", pf.path, err))
+			continue
+		}
+		*pf.dest = string(data)
 	}
 
-	return pt
+	if len(missingFiles) > 0 {
+		return nil, fmt.Errorf("缺少必需的 Prompt 模板文件:\n%s\n请确保所有 prompt 模板文件已嵌入到 assets/prompts/ 目录中",
+			strings.Join(missingFiles, "\n"))
+	}
+
+	return pt, nil
 }
 
 // buildRefinePrompt 构建步骤 a 的 refine prompt
@@ -113,15 +99,24 @@ func (pt *PromptTemplates) buildEvaluatePrompt(
 }
 
 // buildSearchEvalPrompt 构建步骤 h 的搜索内容评估 prompt
+// previousQueries 提供已搜索的查询词列表，引导 AI 生成不同的补充角度
 func (pt *PromptTemplates) buildSearchEvalPrompt(
 	refinedQuery string,
 	searchResult string,
 	roundNum int,
 	allPreviousResults string,
+	previousQueries []string,
 ) string {
 	previousText := ""
 	if allPreviousResults != "" {
 		previousText = fmt.Sprintf("\n前序搜索轮次摘要：\n%s\n", allPreviousResults)
+	}
+
+	// 列出已搜索的查询词，引导 AI 生成不同的补充角度
+	previousQueriesText := ""
+	if len(previousQueries) > 0 {
+		previousQueriesText = fmt.Sprintf("\n已搜索的查询词（禁止重复）：\n%s\n",
+			strings.Join(previousQueries, "、"))
 	}
 
 	return fmt.Sprintf(`%s
@@ -131,9 +126,9 @@ func (pt *PromptTemplates) buildSearchEvalPrompt(
 
 当前第%d轮深度搜索结果：
 %s
-%s
-请评估搜索内容是否足以回答用户问题，并输出评估 JSON。`,
-		pt.SearchEval, refinedQuery, roundNum, searchResult, previousText)
+%s%s
+请评估搜索内容是否足以回答用户问题，并输出评估 JSON。supplementary_query 必须是此前未搜索过的全新角度。`,
+		pt.SearchEval, refinedQuery, roundNum, searchResult, previousText, previousQueriesText)
 }
 
 // buildMemoryUpdatePrompt 构建步骤 i 的记忆更新 prompt

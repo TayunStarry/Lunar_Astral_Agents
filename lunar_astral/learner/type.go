@@ -1,5 +1,68 @@
 package learner
 
+import (
+	"net/http"
+
+	"websearch"
+)
+
+// ============================================================
+// 核心结构体
+// ============================================================
+
+// Learner 学习者智能体
+// 采用双记忆架构（知识记忆 + 经验记忆），9 步工作流
+type Learner struct {
+	config  LearnerConfig
+	llm     *LLMClient
+	search  *SearchManager
+	memory  *MemoryManager
+	prompts *PromptTemplates
+}
+
+// LLMClient LLM 客户端
+// 直接调用 /v1/chat/completions，支持 token 预算控制
+type LLMClient struct {
+	baseURL     string
+	apiKey      string
+	model       string
+	maxTokens   int
+	temperature float64
+	httpClient  *http.Client
+}
+
+// MemoryManager 记忆管理器
+// 管理两个独立的记忆表：知识记忆（learner_knowledge）和经验记忆（learner_experience）
+type MemoryManager struct {
+	initialized bool
+}
+
+// PromptTemplates 所有 prompt 模板的集合
+type PromptTemplates struct {
+	Refine     string // 步骤 a: 查询推理完善
+	Evaluate   string // 步骤 e: 策略评估
+	SearchEval string // 步骤 h: 搜索内容评估
+	Memory     string // 步骤 i: 记忆更新
+	Report     string // 步骤 i: 报告生成
+}
+
+// SearchManager 搜索管理器
+// 封装 websearch 子系统，提供初步搜索和深度搜索能力
+type SearchManager struct {
+	searchSystem *websearch.System
+	initialized  bool
+}
+
+// WorkflowRunner 工作流执行器
+// 封装所有工作流步骤，持有 LLM、搜索、记忆等依赖
+type WorkflowRunner struct {
+	llm     *LLMClient
+	search  *SearchManager
+	memory  *MemoryManager
+	prompts *PromptTemplates
+	state   *WorkflowState
+}
+
 // ============================================================
 // 配置与状态
 // ============================================================
@@ -41,12 +104,12 @@ type LearnerResult struct {
 type WorkflowPhase int
 
 const (
-	PhaseRefine       WorkflowPhase = iota // a: AI 推理完善请求
-	PhaseMemoryQuery                       // b: 查询记忆库
-	PhaseWebSearch                         // d: 初步网络搜索
-	PhaseEvaluate                          // e: AI 总结评估 + 决策
-	PhaseDeepSearch                        // g/h: 深度搜索循环
-	PhaseFinalize                          // i: 统一处理 + 记忆更新
+	PhaseRefine      WorkflowPhase = iota // a: AI 推理完善请求
+	PhaseMemoryQuery                      // b: 查询记忆库
+	PhaseWebSearch                        // d: 初步网络搜索
+	PhaseEvaluate                         // e: AI 总结评估 + 决策
+	PhaseDeepSearch                       // g/h: 深度搜索循环
+	PhaseFinalize                         // i: 统一处理 + 记忆更新
 )
 
 // ============================================================
@@ -67,11 +130,11 @@ type RefinedQuery struct {
 
 // EvaluationResult AI 评估结果
 type EvaluationResult struct {
-	Sufficient      bool   `json:"sufficient"`        // 信息是否充足
-	Summary         string `json:"summary,omitempty"`  // 阶段性摘要（充足时）
-	NeedDeepSearch  bool   `json:"need_deep_search"`   // 是否需要深度搜索
+	Sufficient      bool   `json:"sufficient"`                  // 信息是否充足
+	Summary         string `json:"summary,omitempty"`           // 阶段性摘要（充足时）
+	NeedDeepSearch  bool   `json:"need_deep_search"`            // 是否需要深度搜索
 	DeepSearchQuery string `json:"deep_search_query,omitempty"` // 深度搜索查询词
-	Reasoning       string `json:"reasoning"`          // 评估理由
+	Reasoning       string `json:"reasoning"`                   // 评估理由
 }
 
 // ============================================================
@@ -89,10 +152,10 @@ type SearchRound struct {
 
 // SearchEvaluation AI 对搜索内容的评估
 type SearchEvaluation struct {
-	Sufficient         bool   `json:"sufficient"`           // 信息是否充足
-	Summary            string `json:"summary,omitempty"`     // 相关信息摘要
+	Sufficient         bool   `json:"sufficient"`                    // 信息是否充足
+	Summary            string `json:"summary,omitempty"`             // 相关信息摘要
 	SupplementaryQuery string `json:"supplementary_query,omitempty"` // 补充搜索词
-	Reasoning          string `json:"reasoning"`             // 评估理由
+	Reasoning          string `json:"reasoning"`                     // 评估理由
 }
 
 // ============================================================
@@ -139,9 +202,9 @@ type MemoryAddRequest struct {
 
 // MemoryBatchResult 记忆批量操作结果
 type MemoryBatchResult struct {
-	KnowledgeAdded  int // 知识记忆新增条数
+	KnowledgeAdded   int // 知识记忆新增条数
 	KnowledgeUpdated int // 知识记忆更新条数
-	ExperienceAdded int // 经验记忆新增条数
+	ExperienceAdded  int // 经验记忆新增条数
 }
 
 // ============================================================
@@ -241,22 +304,6 @@ type chatCompletionError struct {
 }
 
 // ============================================================
-// TS 层传入的消息结构
-// ============================================================
-
-// PostMessage TS 层消息结构
-type PostMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"`
-}
-
-// TextContent 文本内容
-type TextContent struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-// ============================================================
 // 搜索相关类型
 // ============================================================
 
@@ -283,8 +330,7 @@ const (
 // DebugContextDump 调试用上下文快照
 type DebugContextDump struct {
 	Timestamp      string              `json:"timestamp"`
-	DialogueJSON   string              `json:"dialogue_json"`
-	UnreadJSON     string              `json:"unread_json"`
+	UnreadMessages []string            `json:"unread_messages"`
 	Mode           string              `json:"mode"`
 	FullContext    string              `json:"full_context"`
 	RefinedQuery   *RefinedQuery       `json:"refined_query,omitempty"`

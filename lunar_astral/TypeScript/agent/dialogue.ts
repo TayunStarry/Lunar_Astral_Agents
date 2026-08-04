@@ -63,6 +63,14 @@ export class DialogueRole extends ModelBuilder {
 					continue;
 				}
 				// 非音频消息（图片等）：按原逻辑拆分每个内容项为独立消息
+				// 但若消息同时包含文本和图片，保留合并结构（避免多模态代理因
+				// 文本缺少媒体标记而报错："number of media markers does not match"）
+				const hasText = message.content.some((c: any) => c.type === 'text');
+				const hasImage = message.content.some((c: any) => c.type === 'image_url');
+				if (hasText && hasImage) {
+					flattenedMessages.push(message);
+					continue;
+				}
 				for (const content of message.content) {
 					// 文本内容项：提取为纯文本消息
 					if (content.type === 'text') flattenedMessages.push({ role: message.role, content: content.text });
@@ -110,20 +118,9 @@ export class DialogueRole extends ModelBuilder {
 		const latestRole = this.messages.slice(-1)[0].role;
 		// 如果最新消息是用户或工具,则不处理
 		if (latestRole === 'user' || latestRole === 'tool') return;
-		/** 继续话题的提示词列表 */
-		const continuationPrompts = [
-			'请延续当前话题，继续展开讨论。',
-			'请完善当前话题，对已有内容进行补充和优化。',
-			'请将话题转向旅行，聊聊旅行相关的见闻或计划。',
-			'请将话题转向游戏，聊聊最近有趣的游戏体验。',
-			'请将话题转向音乐，聊聊最近在听的音乐或音乐推荐。',
-			'请将话题转向电影，聊聊最近看过或想看的电影。',
-			'请将话题转向书籍，聊聊最近在读或推荐的书籍。',
-			'请将话题转向动漫，聊聊最近在追或推荐的动漫。',
-		];
-		/** 随机选择一个提示词 */
-		const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length)];
-		// 添加随机选择的提示词到处理器模型的上下文
+		/** 随机拼接提示词：从多个维度随机组合，生成自然的话题引导 */
+		const prompt = this.buildContinuationPrompt();
+		// 添加随机拼接的提示词到处理器模型的上下文
 		this.writeContext({ role: 'user', content: prompt });
 	}
 	/** 处理连续视觉消息缓冲区 */
@@ -212,13 +209,20 @@ export class DialogueRole extends ModelBuilder {
 				const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
 				/** 提取图片base64数据 */
 				const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
-				// 将文本工具响应添加到消息历史中
-				this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
-				// 如果有图片数据，作为视觉消息追加到消息历史中
+				// 将工具响应添加到消息历史中，图片与文本合并为单条消息
 				if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
-					this.messages.push({ role: "tool", content: [{ type: "image_url", image_url: { url: base64Image } }], tool_call_id: toolCall.id });
+					/** 合并文本与图片消息 */
+					const message: PostMessage = {
+						role: "user",
+						content: [
+							{ type: "text", text: textContent },
+							{ type: "image_url", image_url: { url: base64Image } }
+						]
+					}
+					this.messages.push(message);
 					console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
 				}
+				else this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
 				// 标记有工具调用
 				hasToolCalls = true;
 			}
@@ -243,7 +247,6 @@ export class DialogueRole extends ModelBuilder {
 			/** 新的思考标签内容 */
 			const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
 			// 合并为带有思考标签的描述内容
-			// source.finalResponse = newThinkTag + state.descriptionContent;
 			source.finalResponse = state.descriptionContent;
 			// 打印思考标签内容
 			console.log(newThinkTag);
@@ -252,6 +255,72 @@ export class DialogueRole extends ModelBuilder {
 		else source.finalResponse = state.descriptionContent;
 		// 返回修正后的消息内容
 		return source.finalResponse;
+	}
+	/** 随机拼接续写提示词：从多个维度抽取条目组合，生成自然的话题引导 */
+	private buildContinuationPrompt(): string {
+		/** 随机取数组元素 */
+		const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+		/** 兴趣话题 */
+		const interests = [
+			'旅行', '游戏', '音乐', '电影', '书籍', '动漫', '美食', '运动',
+			'摄影', '绘画', '手工', '编程', '天文', '历史', '哲学', '科技',
+			'宠物', '园艺', '穿搭', '舞蹈', '乐器', '写作', '钓鱼', '骑行',
+		];
+		/** 正在做的事情 */
+		const doing = [
+			'正在喝一杯热茶', '正在窗边发呆', '刚刚整理完房间', '正在浏览网页',
+			'正在听一首新歌', '刚刚看完一段视频', '正在翻看旧照片', '正在写日记',
+			'正在做手工', '正在画一幅画', '正在弹琴', '正在做一道菜',
+			'正在散步', '正在看窗外的风景', '正在刷手机', '正在整理书架',
+		];
+		/** 想做的事情 */
+		const wantTo = [
+			'想去海边看日落', '想学一门新乐器', '想去看一场演唱会', '想去爬山',
+			'想养一只猫', '想尝试做一道新菜', '想去看极光', '想去逛博物馆',
+			'想学画画', '想去露营', '想写一首诗', '想去看一场电影',
+			'想去游乐园', '想学跳舞', '想去看樱花', '想开一家小店',
+		];
+		/** 所在位置 */
+		const location = [
+			'坐在窗边的书桌前', '窝在沙发里', '躺在草地上', '站在阳台上',
+			'靠在床头', '坐在咖啡馆的角落', '在公园的长椅上', '在图书馆里',
+			'在厨房里', '在工作室里', '在花园里', '在天台上',
+		];
+		/** 当前动作 */
+		const action = [
+			'伸了个懒腰', '托着下巴', '揉了揉眼睛', '转着手里的笔',
+			'轻轻哼着歌', '翘着二郎腿', '抱着抱枕', '拨弄着头发',
+			'用手指敲着桌面', '晃着双脚', '靠在椅背上', '侧着头',
+		];
+		/** 当前心情 */
+		const mood = [
+			'心情很放松', '觉得有点无聊', '心情特别好', '有点小期待',
+			'感觉懒洋洋的', '很平静', '有点好奇', '心情不错',
+			'稍微有点困', '精神很好', '有点怀旧', '感觉很温暖',
+		];
+
+		/** 所有维度池 */
+		const pools: { label: string; items: string[] }[] = [
+			{ label: '兴趣', items: interests },
+			{ label: '正在做', items: doing },
+			{ label: '想做', items: wantTo },
+			{ label: '位置', items: location },
+			{ label: '动作', items: action },
+			{ label: '心情', items: mood },
+		];
+
+		// 随机选取 2~3 个维度
+		const count = 2 + Math.floor(Math.random() * 2); // 2 或 3
+		const shuffled = [...pools].sort(() => Math.random() - 0.5);
+		const selected = shuffled.slice(0, count);
+
+		// 从每个选中维度随机取一条
+		const parts = selected.map(p => pick(p.items));
+
+		// 拼接为自然语句
+		const prefix = pick(['你', '现在你', '此刻你', '这会儿你',]);
+		const suffix = pick(['，聊点什么吧~', '，来聊聊吧~', '，说说看吧~', '，展开聊聊？', '，有什么想说的吗？', '，分享一下呗~',]);
+		return `${prefix}${parts.join('，')}${suffix}`;
 	}
 	/** 构造函数 */
 	public constructor() {

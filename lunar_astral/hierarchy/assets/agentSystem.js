@@ -695,7 +695,6 @@ var agentSystem = (function (exports) {
     }
 
     class CreativeRoleBase extends ModelBuilder {
-        DIALOGUE_HISTORY_LIMIT = 15;
         OWN_HISTORY_LIMIT = 5;
         MAX_ITERATIONS = 3;
         UNREAD_CHECK_COUNT = 10;
@@ -707,11 +706,10 @@ var agentSystem = (function (exports) {
             this.messages = [];
             return result;
         }
-        createCreativeWork(dialogueMessages, unreadContext, count = this.UNREAD_CHECK_COUNT) {
+        createCreativeWork(unreadContext, count = this.UNREAD_CHECK_COUNT) {
             const outputHistory = [...this.messages];
-            const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
             const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
-            this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
+            this.coverContext([...ownHistory, ...unreadContext]);
             const unreadTexts = this.extractUnreadTexts(unreadContext, count);
             if (!this.matchKeywords(unreadTexts)) {
                 this.messages = outputHistory;
@@ -803,6 +801,12 @@ var agentSystem = (function (exports) {
                         flattenedMessages.push(message);
                         continue;
                     }
+                    const hasText = message.content.some((c) => c.type === 'text');
+                    const hasImage = message.content.some((c) => c.type === 'image_url');
+                    if (hasText && hasImage) {
+                        flattenedMessages.push(message);
+                        continue;
+                    }
                     for (const content of message.content) {
                         if (content.type === 'text')
                             flattenedMessages.push({ role: message.role, content: content.text });
@@ -840,17 +844,7 @@ var agentSystem = (function (exports) {
             const latestRole = this.messages.slice(-1)[0].role;
             if (latestRole === 'user' || latestRole === 'tool')
                 return;
-            const continuationPrompts = [
-                '请延续当前话题，继续展开讨论。',
-                '请完善当前话题，对已有内容进行补充和优化。',
-                '请将话题转向旅行，聊聊旅行相关的见闻或计划。',
-                '请将话题转向游戏，聊聊最近有趣的游戏体验。',
-                '请将话题转向音乐，聊聊最近在听的音乐或音乐推荐。',
-                '请将话题转向电影，聊聊最近看过或想看的电影。',
-                '请将话题转向书籍，聊聊最近在读或推荐的书籍。',
-                '请将话题转向动漫，聊聊最近在追或推荐的动漫。',
-            ];
-            const prompt = continuationPrompts[Math.floor(Math.random() * continuationPrompts.length)];
+            const prompt = this.buildContinuationPrompt();
             this.writeContext({ role: 'user', content: prompt });
         }
         processVisionBuffer(buffer, output, source) {
@@ -912,11 +906,19 @@ var agentSystem = (function (exports) {
                     const toolResult = await lunarToolPackage(functionArgs);
                     const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
                     const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
-                    this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
                     if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
-                        this.messages.push({ role: "tool", content: [{ type: "image_url", image_url: { url: base64Image } }], tool_call_id: toolCall.id });
+                        const message = {
+                            role: "user",
+                            content: [
+                                { type: "text", text: textContent },
+                                { type: "image_url", image_url: { url: base64Image } }
+                            ]
+                        };
+                        this.messages.push(message);
                         console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
                     }
+                    else
+                        this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
                     hasToolCalls = true;
                 }
                 catch (error) {
@@ -940,6 +942,56 @@ var agentSystem = (function (exports) {
             else
                 source.finalResponse = state.descriptionContent;
             return source.finalResponse;
+        }
+        buildContinuationPrompt() {
+            const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+            const interests = [
+                '旅行', '游戏', '音乐', '电影', '书籍', '动漫', '美食', '运动',
+                '摄影', '绘画', '手工', '编程', '天文', '历史', '哲学', '科技',
+                '宠物', '园艺', '穿搭', '舞蹈', '乐器', '写作', '钓鱼', '骑行',
+            ];
+            const doing = [
+                '正在喝一杯热茶', '正在窗边发呆', '刚刚整理完房间', '正在浏览网页',
+                '正在听一首新歌', '刚刚看完一段视频', '正在翻看旧照片', '正在写日记',
+                '正在做手工', '正在画一幅画', '正在弹琴', '正在做一道菜',
+                '正在散步', '正在看窗外的风景', '正在刷手机', '正在整理书架',
+            ];
+            const wantTo = [
+                '想去海边看日落', '想学一门新乐器', '想去看一场演唱会', '想去爬山',
+                '想养一只猫', '想尝试做一道新菜', '想去看极光', '想去逛博物馆',
+                '想学画画', '想去露营', '想写一首诗', '想去看一场电影',
+                '想去游乐园', '想学跳舞', '想去看樱花', '想开一家小店',
+            ];
+            const location = [
+                '坐在窗边的书桌前', '窝在沙发里', '躺在草地上', '站在阳台上',
+                '靠在床头', '坐在咖啡馆的角落', '在公园的长椅上', '在图书馆里',
+                '在厨房里', '在工作室里', '在花园里', '在天台上',
+            ];
+            const action = [
+                '伸了个懒腰', '托着下巴', '揉了揉眼睛', '转着手里的笔',
+                '轻轻哼着歌', '翘着二郎腿', '抱着抱枕', '拨弄着头发',
+                '用手指敲着桌面', '晃着双脚', '靠在椅背上', '侧着头',
+            ];
+            const mood = [
+                '心情很放松', '觉得有点无聊', '心情特别好', '有点小期待',
+                '感觉懒洋洋的', '很平静', '有点好奇', '心情不错',
+                '稍微有点困', '精神很好', '有点怀旧', '感觉很温暖',
+            ];
+            const pools = [
+                { label: '兴趣', items: interests },
+                { label: '正在做', items: doing },
+                { label: '想做', items: wantTo },
+                { label: '位置', items: location },
+                { label: '动作', items: action },
+                { label: '心情', items: mood },
+            ];
+            const count = 2 + Math.floor(Math.random() * 2);
+            const shuffled = [...pools].sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, count);
+            const parts = selected.map(p => pick(p.items));
+            const prefix = pick(['你', '现在你', '此刻你', '这会儿你',]);
+            const suffix = pick(['，聊点什么吧~', '，来聊聊吧~', '，说说看吧~', '，展开聊聊？', '，有什么想说的吗？', '，分享一下呗~',]);
+            return `${prefix}${parts.join('，')}${suffix}`;
         }
         constructor() {
             super(fileView('prompts/dialogueRole.md')[0]);
@@ -1520,7 +1572,7 @@ K:Am
             this.messages = [];
             return result;
         }
-        executeLearner(dialogueMessages, unreadContext) {
+        executeLearner(unreadContext) {
             const unreadTexts = this.extractTexts(unreadContext);
             if (!unreadTexts.some(text => learnerKeywords.some(keyword => keyword.test(text)))) {
                 return true;
@@ -1528,10 +1580,8 @@ K:Am
             if (!ensureLearnerInitialized())
                 return true;
             const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
-            const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
-            const unreadJSON = JSON.stringify(unreadContext.slice(-10));
             console.log('[学习者] 开始执行研究, 模式:', mode);
-            const [report, error] = learnerExecute(dialogueJSON, unreadJSON, mode);
+            const [report, error] = learnerExecute(unreadTexts, mode);
             if (error) {
                 console.error('[学习者] 执行失败:', error);
                 return true;
@@ -1611,10 +1661,8 @@ K:Am
                 return '';
             }
             if (learnerInitialized) {
-                const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
-                const unreadJSON = JSON.stringify(unreadContext.slice(-10));
                 const goPath = path.replace('.json', '_go.json');
-                const [, goError] = learnerDumpContext(dialogueJSON, unreadJSON, mode, goPath);
+                const [, goError] = learnerDumpContext(unreadTexts, mode, goPath);
                 if (goError) {
                     console.error('[学习者] 导出 Go 层上下文失败:', goError);
                 }
@@ -2192,10 +2240,9 @@ ${candidateTexts}
                     if (messageLength === 0)
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
-                    const currentUnreadContext = [...this.unreadContext];
-                    this.learnerRole.executeLearner(this.dialogueRole.messages, currentUnreadContext);
-                    this.painterRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
-                    this.musicianRole.createCreativeWork(this.dialogueRole.messages, currentUnreadContext);
+                    this.learnerRole.executeLearner(this.unreadContext);
+                    this.painterRole.createCreativeWork(this.unreadContext);
+                    this.musicianRole.createCreativeWork(this.unreadContext);
                     await this.createChatMessage();
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
@@ -2218,14 +2265,9 @@ ${candidateTexts}
                     }
                     for (const chunk of textChunks) {
                         let audio = '';
-                        try {
-                            const [audioData, err] = tts(chunk.tts);
-                            if (!err && audioData)
-                                audio = audioData;
-                        }
-                        catch (e) {
-                            console.error(`TTS合成异常: [${chunk.tts}]`, e);
-                        }
+                        const [audioData, err] = tts(chunk.tts);
+                        if (!err && audioData)
+                            audio = audioData;
                         pushContext(messageType, chunk.display, audio);
                     }
                     this.dumpAllContexts();
@@ -2684,33 +2726,33 @@ ${candidateTexts}
         }
     ];
     async function handleScreenshot(args) {
-        console.log(`[截图] ========== 开始处理截图工具调用 ==========`);
-        console.log(`[截图] 原始参数: ${JSON.stringify(args)}`);
+        console.log(`========== 开始处理截图工具调用 ==========`);
+        console.log(`原始参数: ${JSON.stringify(args)}`);
         const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
         const { display_index, region, scale, format } = parsed;
-        console.log(`[截图] 参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
+        console.log(`参数解析完成: display_index=${display_index}, region=${region}, scale=${scale}, format=${format}`);
         const displayIndex = display_index ?? 0;
         const captureFormat = format || 'png';
-        console.log(`[截图] 最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
-        console.log(`[截图] 准备执行截图操作...`);
+        console.log(`最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
+        console.log(`准备执行截图操作...`);
         const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
         if (captureErr) {
-            console.error(`[截图] 截图失败: ${captureErr.message || String(captureErr)}`);
-            console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+            console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
             return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
         }
-        console.log(`[截图] 截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
+        console.log(`截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
         if (!result || !result.base64) {
-            console.error(`[截图] 截图失败: 未获取到截图数据`);
-            console.log(`[截图] ========== 截图工具调用结束(失败) ==========`);
+            console.error(`截图失败: 未获取到截图数据`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
             return ['截图失败：未获取到截图数据', ''];
         }
         pushImage([result.base64]);
-        console.log(`[截图] 图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
+        console.log(`图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
         const sizeInfo = `${result.width}x${result.height}`;
         const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
-        console.log(`[截图] 返回响应: ${sizeInfo}`);
-        console.log(`[截图] ========== 截图工具调用结束(成功) ==========`);
+        console.log(`返回响应: ${sizeInfo}`);
+        console.log(`========== 截图工具调用结束(成功) ==========`);
         return [textResponse, result.base64];
     }
     OnlyData.LTPfunction.set('screenshot', handleScreenshot);

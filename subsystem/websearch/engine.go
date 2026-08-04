@@ -23,9 +23,19 @@ func NewBingSearcher(cfg HTTPConfig) *BingSearcher {
 func (b *BingSearcher) Name() string { return "Bing" }
 
 func (b *BingSearcher) Search(query string, limit int) ([]SearchResult, error) {
+	return b.SearchWithTimeRange(query, limit, TimeRangeNone)
+}
+
+func (b *BingSearcher) SearchWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
 	processedQuery := preprocessBingQuery(query)
-	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s&mkt=zh-CN&setlang=zh-hans",
+	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s",
 		url.QueryEscape(processedQuery))
+
+	// 时间范围过滤：Bing 使用 tbs=qdr: 参数
+	// d=day, w=week, m=month, y=year
+	if timeRange != TimeRangeNone {
+		searchURL += bingTimeRangeParam(timeRange)
+	}
 
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -56,8 +66,17 @@ func (b *BingSearcher) Search(query string, limit int) ([]SearchResult, error) {
 
 // SearchRaw 直接搜索，跳过预处理（用于回退策略，避免引号精确匹配过窄）
 func (b *BingSearcher) SearchRaw(query string, limit int) ([]SearchResult, error) {
-	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s&mkt=zh-CN&setlang=zh-hans",
+	return b.SearchRawWithTimeRange(query, limit, TimeRangeNone)
+}
+
+// SearchRawWithTimeRange 直接搜索（带时间范围），跳过预处理
+func (b *BingSearcher) SearchRawWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s",
 		url.QueryEscape(query))
+
+	if timeRange != TimeRangeNone {
+		searchURL += bingTimeRangeParam(timeRange)
+	}
 
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -86,13 +105,29 @@ func (b *BingSearcher) SearchRaw(query string, limit int) ([]SearchResult, error
 	return extractBingResults(string(body), limit), nil
 }
 
-// preprocessBingQuery 预处理查询字符串，提升中文搜索质量
+// bingTimeRangeParam 返回Bing时间范围URL参数（tbs=qdr:）
+func bingTimeRangeParam(tr TimeRange) string {
+	switch tr {
+	case TimeRangeDay:
+		return "&tbs=qdr:d"
+	case TimeRangeWeek:
+		return "&tbs=qdr:w"
+	case TimeRangeMonth:
+		return "&tbs=qdr:m"
+	case TimeRangeYear:
+		return "&tbs=qdr:y"
+	default:
+		return ""
+	}
+}
+
+// preprocessBingQuery 预处理查询：含特殊分隔符时加引号做精确匹配
 func preprocessBingQuery(query string) string {
 	if strings.Contains(query, "\"") || strings.Contains(query, "\u201c") {
 		return query
 	}
 
-	// 含特殊分隔符的查询：加引号做精确匹配，避免被拆成单字匹配到无关内容
+	// 含特殊分隔符的查询：加引号做精确匹配
 	hasSpecial := false
 	for _, r := range query {
 		if r == '·' || r == '-' || r == '/' || r == '|' || r == '•' ||
@@ -105,8 +140,7 @@ func preprocessBingQuery(query string) string {
 		return "\"" + query + "\""
 	}
 
-	// 其他查询原样返回，让 Bing 自然分词
-	// 加引号会触发精确短语匹配，对含修饰词的查询（如"超自然最近更新"）有害
+	// 其他查询原样返回
 	return query
 }
 
@@ -122,6 +156,7 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 	var inH2 bool
 	var inCaption bool
 	var skipChildren bool
+	var seenOfficialMark bool // 是否已检测到"官方"标记
 
 	var walk func(n *html.Node)
 	walk = func(n *html.Node) {
@@ -138,6 +173,7 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 						inH2 = false
 						inCaption = false
 						skipChildren = false
+						seenOfficialMark = false
 						break
 					}
 				}
@@ -152,8 +188,8 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 					}
 				}
 			}
-			// 只提取h2标签内的链接作为搜索结果URL，避免提取网站卡片中的链接
-			if inAlgo && inH2 && n.Data == "a" && currentResult.URL == "" {
+			// 提取链接：在 b_algo 块内的第一个有效 <a> 标签（不限于 h2 内）
+			if inAlgo && n.Data == "a" && currentResult.URL == "" {
 				for _, attr := range n.Attr {
 					if attr.Key == "href" && attr.Val != "" && !strings.HasPrefix(attr.Val, "javascript:") && !strings.HasPrefix(attr.Val, "#") {
 						currentResult.URL = attr.Val
@@ -161,14 +197,36 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 					}
 				}
 			}
-			// 检测官方标记：Bing 通常在标题附近的 span 或 div 中显示"官方"文字
-			if inAlgo && n.Data == "span" {
-				for _, attr := range n.Attr {
-					if attr.Key == "class" && (strings.Contains(attr.Val, "b_official") || strings.Contains(attr.Val, "label") || strings.Contains(attr.Val, "badge")) {
-						// 检查子节点是否包含"官方"文字
-						if hasOfficialText(n) {
-							currentResult.IsOfficial = true
+			// 检测官方标记：Bing 在多种位置显示"官方"文字
+			if inAlgo && !seenOfficialMark {
+				// 方式1：span/div 的 class 包含官方相关标识
+				if n.Data == "span" || n.Data == "div" {
+					for _, attr := range n.Attr {
+						if attr.Key == "class" {
+							if strings.Contains(attr.Val, "b_official") || strings.Contains(attr.Val, "label") || strings.Contains(attr.Val, "badge") {
+								if hasOfficialText(n) {
+									currentResult.IsOfficial = true
+									seenOfficialMark = true
+									break
+								}
+							}
 						}
+						// 方式2：aria-label 或 title 包含"官方"
+						if (attr.Key == "aria-label" || attr.Key == "title") && strings.Contains(attr.Val, "官方") {
+							currentResult.IsOfficial = true
+							seenOfficialMark = true
+							break
+						}
+					}
+				}
+				// 方式3：cite 标签的文本是纯域名（无空格、含点），视为网站卡片标记
+				if n.Data == "cite" {
+					text := strings.TrimSpace(extractNodeText(n))
+					// 纯域名特征：不含空格、含至少一个点、不含路径分隔
+					if text != "" && !strings.Contains(text, " ") && strings.Contains(text, ".") && !strings.Contains(text, "/") {
+						// cite 显示域名是 Bing 网站卡片的特征，通常配合官方标记
+						// 但 cite 本身不能独立作为官方标记，需要结合其他信号
+						// 这里仅记录，不直接判定为官方
 					}
 				}
 			}
@@ -181,7 +239,7 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 			}
 			if inH2 && currentResult.Title == "" {
 				currentResult.Title = text
-				// 检测标题中的官方标记：所有搜索引擎都会在官方网站标题中包含"官方网站"或"Official Site"
+				// 检测标题中的官方标记
 				if strings.Contains(text, "官方网站") || strings.Contains(strings.ToLower(text), "official site") {
 					currentResult.IsOfficial = true
 				}
@@ -191,6 +249,17 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 					currentResult.Snippet += " "
 				}
 				currentResult.Snippet += text
+			}
+			// 检测任何文本中的"官方"标记（兜底）
+			if !seenOfficialMark && (strings.Contains(text, "官方") || strings.Contains(strings.ToLower(text), "official")) {
+				// 排除"非官方""未经官方"等否定情况
+				if !strings.Contains(text, "非官方") && !strings.Contains(text, "未经官方") {
+					// 只在标题或 cite 附近的文本才认定为官方标记
+					if inH2 || n.Parent != nil && (n.Parent.Data == "cite" || (n.Parent.Data == "span" && hasClassContaining(n.Parent, "official"))) {
+						currentResult.IsOfficial = true
+						seenOfficialMark = true
+					}
+				}
 			}
 		}
 
@@ -250,7 +319,12 @@ func NewBaiduSearcher(cfg HTTPConfig) *BaiduSearcher {
 
 func (b *BaiduSearcher) Name() string { return "Baidu" }
 
-// warmupCookie 访问百度首页获取 BAIDUID Cookie，降低后续搜索触发 CAPTCHA 的概率
+// SearchWithTimeRange 百度搜索（带时间范围），当前回退到普通搜索
+func (b *BaiduSearcher) SearchWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	return b.Search(query, limit)
+}
+
+// warmupCookie 访问百度首页获取Cookie，降低CAPTCHA触发概率
 func (b *BaiduSearcher) warmupCookie() {
 	b.cookieWarmed = true
 	req, _ := http.NewRequest("GET", "https://www.baidu.com/", nil)
@@ -333,13 +407,12 @@ func (b *BaiduSearcher) Search(query string, limit int) ([]SearchResult, error) 
 	return results, nil
 }
 
-// searchWithBrowser 使用无头浏览器渲染百度搜索页面并提取结果
-// 作为 HTTP 请求被 CAPTCHA 拦截时的回退方案
+// searchWithBrowser 浏览器渲染百度搜索页面，作为HTTP被CAPTCHA拦截时的回退方案
 func (b *BaiduSearcher) searchWithBrowser(query string, limit int) ([]SearchResult, error) {
 	searchURL := fmt.Sprintf("https://www.baidu.com/s?wd=%s&ie=utf-8&rn=%d",
 		url.QueryEscape(query), limit)
 
-	html, err := b.browserRenderer.Render(searchURL)
+	html, _, err := b.browserRenderer.Render(searchURL)
 	if err != nil {
 		return nil, fmt.Errorf("浏览器渲染百度搜索失败: %w", err)
 	}
@@ -494,6 +567,12 @@ func NewSogouSearcher(cfg HTTPConfig) *SogouSearcher {
 }
 
 func (s *SogouSearcher) Name() string { return "Sogou" }
+
+// SearchWithTimeRange 搜狗搜索（带时间范围）
+// 搜狗时间范围参数较复杂，当前回退到普通搜索
+func (s *SogouSearcher) SearchWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	return s.Search(query, limit)
+}
 
 func (s *SogouSearcher) Search(query string, limit int) ([]SearchResult, error) {
 	searchURL := fmt.Sprintf("https://www.sogou.com/web?query=%s&ie=utf8&num=%d",
@@ -675,6 +754,12 @@ func NewDuckDuckGoSearcher(cfg HTTPConfig) *DuckDuckGoSearcher {
 
 func (d *DuckDuckGoSearcher) Name() string { return "DuckDuckGo" }
 
+// SearchWithTimeRange DuckDuckGo 搜索（带时间范围）
+// DDG Lite 不支持时间范围过滤，回退到普通搜索
+func (d *DuckDuckGoSearcher) SearchWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	return d.Search(query, limit)
+}
+
 func (d *DuckDuckGoSearcher) SearchRaw(query string, limit int) ([]SearchResult, error) {
 	return d.Search(query, limit) // DDG 无预处理，Search 即原始搜索
 }
@@ -804,6 +889,39 @@ func hasOfficialText(n *html.Node) bool {
 	return false
 }
 
+// extractNodeText 提取节点及其子节点的全部文本
+func extractNodeText(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
+	if n.Type == html.TextNode {
+		return strings.TrimSpace(n.Data)
+	}
+	var sb strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if text := extractNodeText(c); text != "" {
+			if sb.Len() > 0 {
+				sb.WriteString(" ")
+			}
+			sb.WriteString(text)
+		}
+	}
+	return sb.String()
+}
+
+// hasClassContaining 检查元素是否包含指定的 class 名
+func hasClassContaining(n *html.Node, keyword string) bool {
+	if n == nil || n.Type != html.ElementNode {
+		return false
+	}
+	for _, attr := range n.Attr {
+		if attr.Key == "class" && strings.Contains(strings.ToLower(attr.Val), strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
 // extractTextContent 从 HTML 中提取正文文本
 func extractTextContent(htmlStr string) string {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
@@ -852,7 +970,7 @@ func truncateText(text string, maxLen int) string {
 	return string(runes[:maxLen]) + "..."
 }
 
-// setBrowserHeaders 设置现代浏览器的标配请求头，降低被搜索引擎反爬/CAPTCHA 的概率
+// setBrowserHeaders 设置现代浏览器请求头，降低被搜索引擎反爬的概率
 func setBrowserHeaders(req *http.Request) {
 	req.Header.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
 	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
@@ -873,8 +991,7 @@ type pageLink struct {
 	Text string
 }
 
-// extractPageLinks 从 HTML 中提取所有链接及其可见文本
-// 跳过导航、页脚、javascript等非内容链接
+// extractPageLinks 从HTML中提取所有链接及可见文本，跳过导航、页脚等非内容链接
 func extractPageLinks(htmlStr string) []pageLink {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
 	if err != nil {
@@ -965,8 +1082,7 @@ func isThinContent(text string) bool {
 	return avgLen < 80
 }
 
-// selectBestLinks 按链接文本与查询关键词的匹配度排序，返回 top N 个 URL
-// baseURL 用于将相对路径转为绝对路径
+// selectBestLinks 按链接文本与查询关键词的匹配度排序，返回top N个URL
 func selectBestLinks(links []pageLink, queryKeywords []string, baseURL string, maxLinks int) []string {
 	if len(links) == 0 || len(queryKeywords) == 0 {
 		return nil

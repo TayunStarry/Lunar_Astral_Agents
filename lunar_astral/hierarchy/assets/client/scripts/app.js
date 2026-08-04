@@ -251,10 +251,10 @@ class LunarCoreApp {
 			switch (msg.type) {
 				case 'body_click':
 					// 3D模型身体部位被点击 → 生成触摸提示词 → 发送给AI
-					this.handleBodyClick(msg.part, msg.boneName);
+					this.handleBodyClick(msg.payload?.partName, msg.payload?.boneName);
 					break;
 				case 'action_started':
-					console.log(`[主客户端] 动作已执行: ${msg.action}`);
+					console.log(`[主客户端] 动作已执行: ${msg.payload?.action}`);
 					break;
 				case 'movement_complete':
 					console.log('[主客户端] 位移完成');
@@ -293,7 +293,9 @@ class LunarCoreApp {
 					const inner = message.data.content ? JSON.parse(message.data.content) : {};
 					this.sendRendererCommand({
 						type: 'action',
-						action: inner.action
+						source: 'hierarchy-client',
+						payload: { action: inner.action },
+						timestamp: Date.now(),
 					});
 					break;
 				}
@@ -301,8 +303,12 @@ class LunarCoreApp {
 					const inner = message.data.content ? JSON.parse(message.data.content) : {};
 					this.sendRendererCommand({
 						type: 'movement',
-						position: inner.position,
-						resumeTracking: inner.resumeTracking
+						source: 'hierarchy-client',
+						payload: {
+							position: inner.position,
+							resumeTracking: inner.resumeTracking,
+						},
+						timestamp: Date.now(),
 					});
 					break;
 				}
@@ -310,7 +316,9 @@ class LunarCoreApp {
 					const inner = message.data.content ? JSON.parse(message.data.content) : {};
 					this.sendRendererCommand({
 						type: 'mouse_tracking',
-						enabled: inner.enabled
+						source: 'hierarchy-client',
+						payload: { enabled: inner.enabled },
+						timestamp: Date.now(),
 					});
 					break;
 				}

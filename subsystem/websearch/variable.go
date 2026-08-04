@@ -2,22 +2,22 @@ package websearch
 
 import "time"
 
-// defaultConfig 默认配置
-var defaultConfig = Config{
+// DefaultConfig 默认配置
+var DefaultConfig = Config{
 	Simple: SimpleConfig{
 		MaxResults: 10,
 	},
 	Webpage: WebpageConfig{
-		MaxResults:       30,
-		FetchContent:     true,
-		FetchTimeout:     10,
-		MaxContentLength: 2000,
+		MaxResults:            30,
+		FetchContent:          true,
+		FetchTimeout:          10,
+		MaxContentLength:      2000,
+		EnableDomainDiscovery: false,
 	},
 	Depth: DepthConfig{
-		Enabled:                  true,
-		MaxRounds:                1,
-		MaxSubQueries:            6,
-		MaxSupplementarySearches: 3,
+		Enabled:       true,
+		MaxSubQueries: 6,
+		MaxGapRounds:  3,
 	},
 	HTTP: HTTPConfig{
 		Timeout:      10 * time.Second,

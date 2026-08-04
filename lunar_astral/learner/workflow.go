@@ -98,7 +98,8 @@ func (w *WorkflowRunner) queryMemory(query string) ([]MemoryMatch, []MemoryMatch
 // ============================================================
 
 // simpleWebSearch 执行初步网络搜索（轻量摘要模式）
-func (w *WorkflowRunner) simpleWebSearch(query string) []SearchItemPreview {
+// 使用 refine 步骤生成的 search_terms 进行多词搜索，合并去重结果
+func (w *WorkflowRunner) simpleWebSearch(searchTerms []string, refinedQuery string) []SearchItemPreview {
 	w.state.CurrentPhase = PhaseWebSearch
 	logger.Info("Learner", "=== 步骤 d: 初步网络搜索 ===")
 
@@ -107,15 +108,45 @@ func (w *WorkflowRunner) simpleWebSearch(query string) []SearchItemPreview {
 		return nil
 	}
 
-	// 使用完善后的查询的第一个搜索词
-	searchQuery := query
-	results, err := w.search.SimpleSearch(searchQuery)
-	if err != nil {
-		logger.Warn("Learner", "初步网络搜索失败: %v", err)
-		return nil
+	// 使用所有 search_terms 进行多词搜索（最多 4 个词）
+	terms := searchTerms
+	if len(terms) == 0 {
+		terms = []string{refinedQuery}
+	}
+	if len(terms) > 4 {
+		terms = terms[:4]
 	}
 
-	return results
+	logger.Info("Learner", "初步网络搜索: 使用 %d 个搜索词: %v", len(terms), terms)
+
+	// 并行搜索所有 search_terms，合并去重
+	seenURLs := make(map[string]bool)
+	var allResults []SearchItemPreview
+
+	for _, term := range terms {
+		results, err := w.search.SimpleSearch(term)
+		if err != nil {
+			logger.Warn("Learner", "初步网络搜索词=%q 失败: %v", term, err)
+			continue
+		}
+		for _, r := range results {
+			normalizedURL := strings.TrimRight(strings.TrimSpace(r.URL), "/")
+			if seenURLs[normalizedURL] {
+				continue
+			}
+			seenURLs[normalizedURL] = true
+			allResults = append(allResults, r)
+		}
+		logger.Info("Learner", "搜索词=%q 返回 %d 条结果", term, len(results))
+	}
+
+	// 限制总数
+	if len(allResults) > SimpleSearchMaxResults*2 {
+		allResults = allResults[:SimpleSearchMaxResults*2]
+	}
+
+	logger.Info("Learner", "初步网络搜索完成: 合并去重后 %d 条结果", len(allResults))
+	return allResults
 }
 
 // ============================================================
@@ -173,35 +204,91 @@ func (w *WorkflowRunner) evaluateAndDecide(
 // ============================================================
 
 // deepSearchLoop 执行深度搜索循环
-// 每轮：搜索 → AI 评估 → 充足则退出 / 不足则补充搜索
-// 最多 MaxDeepSearchRounds 轮
-func (w *WorkflowRunner) deepSearchLoop(refinedQuery string, eval *EvaluationResult) ([]SearchRound, string, error) {
+// 使用 refined.SearchTerms 进行多角度搜索，每轮搜索后 AI 评估
+// 最多 MaxDeepSearchRounds 轮，每轮搜索条件必须不同
+// 禁止重复搜索相同或高度相似的查询词
+func (w *WorkflowRunner) deepSearchLoop(refined *RefinedQuery, eval *EvaluationResult) ([]SearchRound, string, error) {
 	w.state.CurrentPhase = PhaseDeepSearch
 	logger.Info("Learner", "=== 步骤 g/h: 深度搜索循环 ===")
 
-	searchQuery := eval.DeepSearchQuery
-	if searchQuery == "" {
-		searchQuery = refinedQuery
+	// 构建初始搜索词队列：优先使用 search_terms，其次 eval.DeepSearchQuery
+	var searchQueue []string
+	if len(refined.SearchTerms) > 0 {
+		// 使用 search_terms 中尚未在简单搜索中使用的词
+		searchQueue = append(searchQueue, refined.SearchTerms...)
 	}
+	if eval.DeepSearchQuery != "" && eval.DeepSearchQuery != refined.Refined {
+		// 避免重复添加
+		found := false
+		for _, t := range searchQueue {
+			if t == eval.DeepSearchQuery {
+				found = true
+				break
+			}
+		}
+		if !found {
+			searchQueue = append(searchQueue, eval.DeepSearchQuery)
+		}
+	}
+	if len(searchQueue) == 0 {
+		searchQueue = []string{refined.Refined}
+	}
+
+	logger.Info("Learner", "深度搜索初始搜索词队列: %v", searchQueue)
 
 	var rounds []SearchRound
 	var allPreviousSummaries string
+	var previousQueries []string // 跟踪所有已搜索的查询词，用于去重
+
+	queueIdx := 0 // 当前在 searchQueue 中的位置
 
 	for roundNum := 1; roundNum <= MaxDeepSearchRounds; roundNum++ {
+		// 确定本轮搜索词：优先从队列取，其次从 LLM 补充
+		var searchQuery string
+		if queueIdx < len(searchQueue) {
+			searchQuery = searchQueue[queueIdx]
+			queueIdx++
+		}
+
+		// 去重检查
+		if searchQuery == "" || isDuplicateQuery(searchQuery, previousQueries) {
+			if queueIdx < len(searchQueue) {
+				continue // 尝试下一个队列词
+			}
+			logger.Info("Learner", "深度搜索第 %d 轮无有效搜索词，终止循环", roundNum)
+			break
+		}
+
 		logger.Info("Learner", "深度搜索轮次 %d/%d: %s", roundNum, MaxDeepSearchRounds, searchQuery)
 
-		// 执行深度搜索
-		searchResult, err := w.search.DepthSearch(searchQuery)
+		// 记录本轮查询词
+		previousQueries = append(previousQueries, searchQuery)
+
+		// 执行网页搜索（搜索 + 网页内容抓取 + LLM 智能总结）
+		searchResult, err := w.search.WebpageSearch(searchQuery)
 		if err != nil {
 			logger.Warn("Learner", "深度搜索第 %d 轮失败: %v", roundNum, err)
 			searchResult = fmt.Sprintf("搜索失败: %v", err)
 		}
 
-		// 压缩搜索结果
+		// 压缩搜索结果（增大预算到 8000 字符，确保不丢失关键信息）
 		compressedResult := truncateRunes(searchResult, DeepSearchResultMaxChars)
 
-		// AI 评估搜索结果
-		evalPrompt := w.prompts.buildSearchEvalPrompt(refinedQuery, compressedResult, roundNum, allPreviousSummaries)
+		// 调试：打印搜索结果
+		logger.Info("Learner", "深度搜索第 %d 轮: 原始=%d字符, 压缩后=%d字符 (阈值=%d)",
+			roundNum, len([]rune(searchResult)), len([]rune(compressedResult)), DeepSearchResultMaxChars)
+		if len([]rune(searchResult)) > 0 && len([]rune(searchResult)) <= DeepSearchResultMaxChars {
+			logger.Info("Learner", "深度搜索第 %d 轮完整内容:\n---BEGIN---\n%s\n---END---", roundNum, searchResult)
+		} else {
+			debugPreview := searchResult
+			if len([]rune(debugPreview)) > 4000 {
+				debugPreview = string([]rune(debugPreview)[:4000]) + "...[原始共" + fmt.Sprintf("%d", len([]rune(searchResult))) + "字符]"
+			}
+			logger.Info("Learner", "深度搜索第 %d 轮原始内容(前4000):\n---BEGIN---\n%s\n---END---", roundNum, debugPreview)
+		}
+
+		// AI 评估搜索结果（传入已搜索的查询词列表，引导 AI 生成不同的补充角度）
+		evalPrompt := w.prompts.buildSearchEvalPrompt(refined.Refined, compressedResult, roundNum, allPreviousSummaries, previousQueries)
 		evalMessages := []LLMMessage{
 			{Role: "system", Content: evalPrompt},
 			{Role: "user", Content: "请评估搜索结果并输出 JSON。"},
@@ -246,28 +333,62 @@ func (w *WorkflowRunner) deepSearchLoop(refinedQuery string, eval *EvaluationRes
 		// 信息充足 → 退出
 		if searchEval.Sufficient {
 			logger.Info("Learner", "深度搜索第 %d 轮信息充足，退出循环", roundNum)
-			// 简历最后一轮的摘要
 			return rounds, searchEval.Summary, nil
 		}
 
 		// 信息不足 → 准备下一轮搜索
+		// 优先从 searchQueue 取下一个词，其次用 LLM 生成的补充词
+		if queueIdx < len(searchQueue) {
+			// 还有预设的搜索词，跳过 LLM 补充词，直接使用队列中的下一个词
+			continue
+		}
+
+		// 队列用尽，使用 LLM 生成的补充搜索词
 		if searchEval.SupplementaryQuery != "" {
-			searchQuery = searchEval.SupplementaryQuery
+			if isDuplicateQuery(searchEval.SupplementaryQuery, previousQueries) {
+				logger.Info("Learner", "补充查询词与历史重复，终止循环: %s", searchEval.SupplementaryQuery)
+				break
+			}
+			searchQueue = append(searchQueue, searchEval.SupplementaryQuery)
 		} else {
-			// 无补充搜索词，退出循环
 			logger.Info("Learner", "无补充搜索词，退出循环")
 			break
 		}
 	}
 
-	// 达到最大轮次，返回现有信息
-	logger.Info("Learner", "深度搜索达到最大轮次 %d，返回现有信息", MaxDeepSearchRounds)
+	// 达到最大轮次或被去重终止，返回现有信息
+	logger.Info("Learner", "深度搜索结束: 共 %d 轮", len(rounds))
 
 	// 构建不足时的报告
 	partialInfo := buildPartialInfoFromRounds(rounds)
-	report := fmt.Sprintf(defaultInsufficientReport, refinedQuery, partialInfo, len(rounds))
+	report := buildInsufficientReport(refined.Refined, partialInfo, len(rounds))
 
 	return rounds, report, nil
+}
+
+// isDuplicateQuery 检查查询词是否与历史查询高度相似
+// 使用简单策略：完全相同或包含关系视为重复
+func isDuplicateQuery(query string, previousQueries []string) bool {
+	if query == "" {
+		return false
+	}
+
+	queryLower := strings.ToLower(strings.TrimSpace(query))
+	for _, prev := range previousQueries {
+		prevLower := strings.ToLower(strings.TrimSpace(prev))
+		// 完全相同 → 重复
+		if queryLower == prevLower {
+			return true
+		}
+		// 包含关系（一个包含另一个且长度差异 < 30%）→ 高度相似
+		if strings.Contains(queryLower, prevLower) || strings.Contains(prevLower, queryLower) {
+			lenDiff := float64(len([]rune(queryLower))-len([]rune(prevLower))) / float64(len([]rune(prevLower)))
+			if lenDiff < 0 && lenDiff > -0.3 || lenDiff >= 0 && lenDiff < 0.3 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ============================================================
@@ -404,26 +525,41 @@ func (w *WorkflowRunner) generateExperienceWithLLM(
 	resp, err := w.llm.Chat(messages, BudgetMemoryUpdate)
 	if err != nil {
 		logger.Warn("Learner", "LLM 经验记忆生成失败，回退到模板生成: %v", err)
-		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+		return w.generateExperienceItem(refinedQuery, searchRounds)
 	}
 
 	// 解析 LLM 响应中的经验条目
+	// 兼容两种格式：字符串 "experience_item": "..." 或数组 "experience_item": ["..."]
 	jsonStr := extractJSON(strings.TrimSpace(resp.Content))
-	var result struct {
+	experienceItem := parseExperienceField(jsonStr)
+	if experienceItem == "" {
+		logger.Info("Learner", "LLM 未生成经验条目，使用模板生成")
+		return w.generateExperienceItem(refinedQuery, searchRounds)
+	}
+
+	logger.Info("Learner", "LLM 生成经验条目: 长度=%d", len([]rune(experienceItem)))
+	return experienceItem
+}
+
+// parseExperienceField 解析 experience_item 字段，兼容字符串和数组两种格式
+func parseExperienceField(jsonStr string) string {
+	// 尝试解析为字符串格式
+	var strResult struct {
 		ExperienceItem string `json:"experience_item"`
 	}
-	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		logger.Warn("Learner", "LLM 经验记忆结果解析失败，回退到模板生成: %v", err)
-		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	if err := json.Unmarshal([]byte(jsonStr), &strResult); err == nil && strings.TrimSpace(strResult.ExperienceItem) != "" {
+		return strResult.ExperienceItem
 	}
 
-	if strings.TrimSpace(result.ExperienceItem) == "" {
-		logger.Info("Learner", "LLM 未生成经验条目，使用模板生成")
-		return w.generateExperienceItem(refinedQuery, searchRounds, finalReport)
+	// 尝试解析为数组格式（LLM 可能返回 ["item1", "item2"]）
+	var arrResult struct {
+		ExperienceItem []string `json:"experience_item"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &arrResult); err == nil && len(arrResult.ExperienceItem) > 0 {
+		return strings.Join(arrResult.ExperienceItem, "\n")
 	}
 
-	logger.Info("Learner", "LLM 生成经验条目: 长度=%d", len([]rune(result.ExperienceItem)))
-	return result.ExperienceItem
+	return ""
 }
 
 // ============================================================
@@ -451,11 +587,7 @@ func extractKnowledgeItems(report string, searchRounds []SearchRound) []string {
 }
 
 // generateExperienceItem 生成经验记忆条目
-func (w *WorkflowRunner) generateExperienceItem(
-	refinedQuery *RefinedQuery,
-	searchRounds []SearchRound,
-	finalReport string,
-) string {
+func (w *WorkflowRunner) generateExperienceItem(refinedQuery *RefinedQuery, searchRounds []SearchRound) string {
 	now := time.Now().Format("2006-01-02 15:04:05")
 
 	desc := fmt.Sprintf("[经验记忆] 时间: %s\n", now)
@@ -527,19 +659,34 @@ func buildPartialInfoFromRounds(rounds []SearchRound) string {
 	return strings.Join(parts, "\n")
 }
 
+// buildInsufficientReport 构建信息不足时的研究报告
+func buildInsufficientReport(refinedQuery, partialInfo string, roundCount int) string {
+	var parts []string
+	parts = append(parts, "[研究报告]")
+	parts = append(parts, "")
+	parts = append(parts, "## 研究主题")
+	parts = append(parts, refinedQuery)
+	parts = append(parts, "")
+	parts = append(parts, "## 研究结论")
+	parts = append(parts, "月华已经尽力搜索了相关信息，但经过多轮搜索后，仍未能找到足够的信息来全面回答您的问题。")
+	parts = append(parts, "")
+	parts = append(parts, "## 已获取的部分信息")
+	parts = append(parts, partialInfo)
+	parts = append(parts, "")
+	parts = append(parts, "## 疑点与未解决问题")
+	parts = append(parts, fmt.Sprintf("经过%d轮深度搜索，以下问题仍需进一步信息：", roundCount))
+	parts = append(parts, "- 部分关键信息在网络公开资源中覆盖不足")
+	parts = append(parts, "- 建议尝试更具体的查询方向或等待相关信息更新")
+	parts = append(parts, "")
+	parts = append(parts, "## 研究方法说明")
+	parts = append(parts, "本研究采用了查询推理完善 → 记忆库检索 → 网络搜索 → 多轮深度搜索的研究流程。")
+
+	return strings.Join(parts, "\n")
+}
+
 // ============================================================
 // 工作流运行器
 // ============================================================
-
-// WorkflowRunner 工作流执行器
-// 封装所有工作流步骤，持有 LLM、搜索、记忆等依赖
-type WorkflowRunner struct {
-	llm     *LLMClient
-	search  *SearchManager
-	memory  *MemoryManager
-	prompts *PromptTemplates
-	state   *WorkflowState
-}
 
 // NewWorkflowRunner 创建工作流运行器
 func NewWorkflowRunner(llm *LLMClient, search *SearchManager, memory *MemoryManager, prompts *PromptTemplates) *WorkflowRunner {
@@ -575,8 +722,8 @@ func (w *WorkflowRunner) Run(rawQuery string) (string, *WorkflowState, error) {
 	w.state.KnowledgeMem = knowledgeMem
 	w.state.ExperienceMem = experienceMem
 
-	// 步骤 d: 初步网络搜索
-	searchItems := w.simpleWebSearch(refined.Refined)
+	// 步骤 d: 初步网络搜索（使用 search_terms 多词搜索）
+	searchItems := w.simpleWebSearch(refined.SearchTerms, refined.Refined)
 	w.state.SimpleSearch = searchItems
 
 	// 步骤 e: AI 总结评估 + 决策
@@ -605,8 +752,8 @@ func (w *WorkflowRunner) Run(rawQuery string) (string, *WorkflowState, error) {
 		return finalReport, w.state, nil
 	}
 
-	// 步骤 g/h: 深度搜索循环
-	searchRounds, searchReport, err := w.deepSearchLoop(refined.Refined, eval)
+	// 步骤 g/h: 深度搜索循环（使用 search_terms 和 eval 结果进行多角度搜索）
+	searchRounds, searchReport, err := w.deepSearchLoop(refined, eval)
 	if err != nil {
 		logger.Error("Learner", "深度搜索循环失败: %v", err)
 		// 降级：使用已有信息构建报告

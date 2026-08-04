@@ -10,17 +10,6 @@ import (
 	"time"
 )
 
-// LLMClient LLM 客户端
-// 直接调用 /v1/chat/completions，支持 token 预算控制
-type LLMClient struct {
-	baseURL     string
-	apiKey      string
-	model       string
-	maxTokens   int
-	temperature float64
-	httpClient  *http.Client
-}
-
 // NewLLMClient 创建 LLM 客户端
 func NewLLMClient(cfg LearnerConfig) *LLMClient {
 	return &LLMClient{

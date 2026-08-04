@@ -11,8 +11,6 @@ import { ToolCall, PostMessage, ModelBuilder, modelResponse, ToolCallItem } from
  * @typeParam TDetail - 创作详情类型（如 PaintingDetail / MusicPieceDetail）
  */
 export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
-	/** 对话历史读取条数 */
-	protected readonly DIALOGUE_HISTORY_LIMIT = 15;
 	/** 自身历史读取条数 */
 	protected readonly OWN_HISTORY_LIMIT = 5;
 	/** 最大推理迭代次数（子类可覆写） */
@@ -53,20 +51,21 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	/**
 	 * 执行创作流程
 	 *
-	 * @param dialogueMessages 对话历史消息（来自 dialogueRole.messages）
+	 * 基于未读消息判定是否触发创作
+	 * 自行维护独立的创作历史，不依赖外部对话上下文。
+	 *
 	 * @param unreadContext 当前未读上下文快照
 	 * @param count 检查的消息数量
 	 *
 	 * @returns true 表示未执行创作，false 表示已执行创作
 	 */
-	public createCreativeWork(dialogueMessages: PostMessage[], unreadContext: PostMessage[], count: number = this.UNREAD_CHECK_COUNT): boolean {
-		// 保留原始输出历史（仅包含前几轮的创作摘要，不含对话历史）
+	public createCreativeWork(unreadContext: PostMessage[], count: number = this.UNREAD_CHECK_COUNT): boolean {
+		// 保留原始输出历史（仅包含前几轮的创作摘要）
 		const outputHistory = [...this.messages];
 
-		// 构建上下文：对话历史 + 自身历史 + 当前未读
-		const dialogueHistory = dialogueMessages.slice(-this.DIALOGUE_HISTORY_LIMIT);
+		// 构建上下文：自身创作历史 + 当前未读消息（不含对话者聊天记录）
 		const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
-		this.coverContext([...dialogueHistory, ...ownHistory, ...unreadContext]);
+		this.coverContext([...ownHistory, ...unreadContext]);
 
 		// 提取未读消息文本
 		const unreadTexts = this.extractUnreadTexts(unreadContext, count);

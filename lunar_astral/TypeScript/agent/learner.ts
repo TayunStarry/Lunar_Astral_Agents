@@ -71,11 +71,10 @@ export class LearnerRole {
 	/**
 	 * 执行学习研究
 	 *
-	 * @param dialogueMessages 对话历史消息
 	 * @param unreadContext 当前未读上下文
 	 * @returns true 表示未执行研究，false 表示已执行研究
 	 */
-	public executeLearner(dialogueMessages: PostMessage[], unreadContext: PostMessage[]): boolean {
+	public executeLearner(unreadContext: PostMessage[]): boolean {
 		// 提取未读消息文本
 		const unreadTexts = this.extractTexts(unreadContext);
 
@@ -90,13 +89,9 @@ export class LearnerRole {
 		// 判定运行模式：回忆模式仅查记忆库，搜索模式走完整流程
 		const mode: 'recall' | 'full' = isRecallIntent(unreadTexts) ? 'recall' : 'full';
 
-		// 序列化消息为 JSON
-		const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
-		const unreadJSON = JSON.stringify(unreadContext.slice(-10));
-
-		// 调用 Go 层学习者（传入运行模式）
+		// 调用 Go 层学习者（传入未读消息文本数组，不再传入对话历史）
 		console.log('[学习者] 开始执行研究, 模式:', mode);
-		const [report, error] = learnerExecute(dialogueJSON, unreadJSON, mode);
+		const [report, error] = learnerExecute(unreadTexts, mode);
 
 		if (error) {
 			console.error('[学习者] 执行失败:', error);
@@ -198,10 +193,8 @@ export class LearnerRole {
 
 		// Go 层快照（搜索结果、策略评估、记忆匹配等）
 		if (learnerInitialized) {
-			const dialogueJSON = JSON.stringify(dialogueMessages.slice(-15));
-			const unreadJSON = JSON.stringify(unreadContext.slice(-10));
 			const goPath = path.replace('.json', '_go.json');
-			const [, goError] = learnerDumpContext(dialogueJSON, unreadJSON, mode, goPath);
+			const [, goError] = learnerDumpContext(unreadTexts, mode, goPath);
 			if (goError) {
 				console.error('[学习者] 导出 Go 层上下文失败:', goError);
 			}

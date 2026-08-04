@@ -13,16 +13,6 @@ import (
 	"github.com/dop251/goja"
 )
 
-// Learner 学习者智能体
-// 采用双记忆架构（知识记忆 + 经验记忆），9 步工作流
-type Learner struct {
-	config  LearnerConfig
-	llm     *LLMClient
-	search  *SearchManager
-	memory  *MemoryManager
-	prompts *PromptTemplates
-}
-
 // NewLearner 创建学习者实例
 func NewLearner(cfg LearnerConfig) *Learner {
 	return &Learner{config: cfg}
@@ -46,7 +36,11 @@ func (l *Learner) Init() error {
 	}
 
 	// 加载 Prompt 模板
-	l.prompts = loadPrompts()
+	var err error
+	l.prompts, err = loadPrompts()
+	if err != nil {
+		return fmt.Errorf("加载 Prompt 模板失败: %w", err)
+	}
 
 	logger.Info("Learner", "学习者智能体初始化完成 (搜索=%v, 记忆=%v)",
 		l.search.IsAvailable(), l.memory.IsAvailable())
@@ -55,17 +49,17 @@ func (l *Learner) Init() error {
 }
 
 // Execute 执行学习者研究流程
-// 参数: dialogueJSON (对话历史JSON), unreadJSON (未读消息JSON), mode (运行模式: "recall" | "full")
+// 参数: unreadMessages (未读消息文本数组), mode (运行模式: "recall" | "full")
 // 返回: 报告文本 或 错误
 //
 // 模式说明:
 //   - "recall": 回忆模式，仅查询推理完善 + 记忆库检索，跳过所有网络搜索，适用于"回忆一下"类意图
 //   - "full" 及其他: 完整研究流程，走 9 步工作流（推理完善 → 记忆查询 → 网络搜索 → 评估 → 深度搜索 → 记忆更新）
-func (l *Learner) Execute(dialogueJSON string, unreadJSON string, mode string) (string, error) {
+func (l *Learner) Execute(unreadMessages []string, mode string) (string, error) {
 	startTime := time.Now()
 
-	// 构建完整上下文
-	fullContext := l.buildFullContext(dialogueJSON, unreadJSON)
+	// 构建上下文：仅使用未读消息，不再传入对话历史
+	fullContext := l.buildContext(unreadMessages)
 	if fullContext == "" {
 		return "月华不知道呢，请提供更具体的问题吧~", nil
 	}
@@ -161,71 +155,17 @@ func (l *Learner) Execute(dialogueJSON string, unreadJSON string, mode string) (
 	return report, nil
 }
 
-// buildFullContext 从 TS 层传入的消息构建完整上下文
-// 策略：未读消息在前（包含最新触发搜索的消息），对话历史在后（提供背景）
-func (l *Learner) buildFullContext(dialogueJSON string, unreadJSON string) string {
+// buildContext 从未读消息数组中构建查询上下文
+// 仅将未读消息文本用换行符拼接，不再混入对话历史
+func (l *Learner) buildContext(unreadMessages []string) string {
 	var parts []string
-
-	// 第一步：提取未读消息（优先级最高，包含触发搜索的消息）
-	if unreadJSON != "" {
-		var unreadMessages []PostMessage
-		if err := json.Unmarshal([]byte(unreadJSON), &unreadMessages); err == nil {
-			for _, msg := range unreadMessages {
-				text := extractTextFromPostMessage(msg)
-				if strings.TrimSpace(text) != "" {
-					parts = append(parts, text)
-				}
-			}
+	for _, msg := range unreadMessages {
+		text := strings.TrimSpace(msg)
+		if text != "" {
+			parts = append(parts, text)
 		}
 	}
-
-	// 第二步：提取对话历史中的用户消息（提供背景上下文）
-	if dialogueJSON != "" {
-		var dialogueMessages []PostMessage
-		if err := json.Unmarshal([]byte(dialogueJSON), &dialogueMessages); err == nil {
-			// 只取最近的几条
-			start := 0
-			if len(dialogueMessages) > DialogueHistoryLimit {
-				start = len(dialogueMessages) - DialogueHistoryLimit
-			}
-			for _, msg := range dialogueMessages[start:] {
-				if msg.Role == "user" {
-					text := extractTextFromPostMessage(msg)
-					if strings.TrimSpace(text) != "" {
-						parts = append(parts, text)
-					}
-				}
-			}
-		}
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
 	return strings.Join(parts, "\n")
-}
-
-// extractTextFromPostMessage 从 PostMessage 中提取文本内容
-func extractTextFromPostMessage(msg PostMessage) string {
-	switch v := msg.Content.(type) {
-	case string:
-		return v
-	case []interface{}:
-		var parts []string
-		for _, item := range v {
-			if m, ok := item.(map[string]interface{}); ok {
-				if t, ok := m["type"].(string); ok && t == "text" {
-					if text, ok := m["text"].(string); ok {
-						parts = append(parts, text)
-					}
-				}
-			}
-		}
-		return strings.Join(parts, " ")
-	default:
-		return fmt.Sprintf("%v", msg.Content)
-	}
 }
 
 // buildKnowledgeFallbackReport 基于知识库构建降级报告
@@ -242,18 +182,17 @@ func buildKnowledgeFallbackReport(query string, matches []MemoryMatch) string {
 
 // DumpContext 导出学习者运行时上下文到 JSON 文件（覆写模式）
 // 用于调试排查问题
-func (l *Learner) DumpContext(dialogueJSON string, unreadJSON string, mode string, outputPath string) (string, error) {
+func (l *Learner) DumpContext(unreadMessages []string, mode string, outputPath string) (string, error) {
 	dump := &DebugContextDump{
-		Timestamp:    time.Now().Format("2006-01-02 15:04:05"),
-		DialogueJSON: dialogueJSON,
-		UnreadJSON:   unreadJSON,
-		Mode:         mode,
-		MemoryReady:  l.memory.IsAvailable(),
-		SearchReady:  l.search.IsAvailable(),
+		Timestamp:      time.Now().Format("2006-01-02 15:04:05"),
+		UnreadMessages: unreadMessages,
+		Mode:           mode,
+		MemoryReady:    l.memory.IsAvailable(),
+		SearchReady:    l.search.IsAvailable(),
 	}
 
-	// 构建完整上下文
-	dump.FullContext = l.buildFullContext(dialogueJSON, unreadJSON)
+	// 构建上下文
+	dump.FullContext = l.buildContext(unreadMessages)
 
 	// 执行工作流（根据模式选择路径）
 	if l.memory.IsAvailable() {
@@ -356,25 +295,27 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 			return vm.ToValue([]any{"月华不知道呢，学习者还没准备好~", fmt.Errorf("学习者未初始化，请先调用 learnerInit")})
 		}
 
-		dialogueJSON := ""
-		unreadJSON := ""
-
+		// 第一个参数：未读消息字符串数组
+		unreadMessages := []string{}
 		if len(call.Arguments) >= 1 {
-			dialogueJSON, _ = call.Argument(0).Export().(string)
-		}
-		if len(call.Arguments) >= 2 {
-			unreadJSON, _ = call.Argument(1).Export().(string)
+			if arr, ok := call.Argument(0).Export().([]interface{}); ok {
+				for _, item := range arr {
+					if s, ok := item.(string); ok {
+						unreadMessages = append(unreadMessages, s)
+					}
+				}
+			}
 		}
 
-		// 第三个参数 mode：运行模式 ("recall" | "full")，默认为 "full"
+		// 第二个参数 mode：运行模式 ("recall" | "full")，默认为 "full"
 		mode := "full"
-		if len(call.Arguments) >= 3 {
-			if m, ok := call.Argument(2).Export().(string); ok && m != "" {
+		if len(call.Arguments) >= 2 {
+			if m, ok := call.Argument(1).Export().(string); ok && m != "" {
 				mode = m
 			}
 		}
 
-		report, err := inst.Execute(dialogueJSON, unreadJSON, mode)
+		report, err := inst.Execute(unreadMessages, mode)
 		if err != nil {
 			logger.Error("Learner", "学习者执行失败: %v", err)
 			return vm.ToValue([]any{"月华不知道呢，处理过程中遇到了问题~", err})
@@ -390,43 +331,47 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 	})
 
 	// learnerDumpContext 导出学习者上下文到文件（覆写模式）
-		vm.Set("learnerDumpContext", func(call goja.FunctionCall) goja.Value {
-			learnerMutex.RLock()
-			inst := learnerInstance
-			learnerMutex.RUnlock()
+	vm.Set("learnerDumpContext", func(call goja.FunctionCall) goja.Value {
+		learnerMutex.RLock()
+		inst := learnerInstance
+		learnerMutex.RUnlock()
 
-			if inst == nil {
-				return vm.ToValue([]any{"", fmt.Errorf("学习者未初始化，请先调用 learnerInit")})
-			}
+		if inst == nil {
+			return vm.ToValue([]any{"", fmt.Errorf("学习者未初始化，请先调用 learnerInit")})
+		}
 
-			dialogueJSON := ""
-			unreadJSON := ""
-			mode := ""
-			outputPath := "learner_debug_context.json"
-
-			if len(call.Arguments) >= 1 {
-				dialogueJSON, _ = call.Argument(0).Export().(string)
-			}
-			if len(call.Arguments) >= 2 {
-				unreadJSON, _ = call.Argument(1).Export().(string)
-			}
-			if len(call.Arguments) >= 3 {
-				if m, ok := call.Argument(2).Export().(string); ok {
-					mode = m
+		// 第一个参数：未读消息字符串数组
+		unreadMessages := []string{}
+		if len(call.Arguments) >= 1 {
+			if arr, ok := call.Argument(0).Export().([]interface{}); ok {
+				for _, item := range arr {
+					if s, ok := item.(string); ok {
+						unreadMessages = append(unreadMessages, s)
+					}
 				}
 			}
-			if len(call.Arguments) >= 4 {
-				if path, ok := call.Argument(3).Export().(string); ok && path != "" {
-					outputPath = path
-				}
-			}
+		}
 
-			path, err := inst.DumpContext(dialogueJSON, unreadJSON, mode, outputPath)
-			if err != nil {
-				logger.Error("Learner", "上下文导出失败: %v", err)
-				return vm.ToValue([]any{"", err})
-			}
+		mode := ""
+		outputPath := "learner_debug_context.json"
 
-			return vm.ToValue([]any{path, nil})
-		})
+		if len(call.Arguments) >= 2 {
+			if m, ok := call.Argument(1).Export().(string); ok {
+				mode = m
+			}
+		}
+		if len(call.Arguments) >= 3 {
+			if path, ok := call.Argument(2).Export().(string); ok && path != "" {
+				outputPath = path
+			}
+		}
+
+		path, err := inst.DumpContext(unreadMessages, mode, outputPath)
+		if err != nil {
+			logger.Error("Learner", "上下文导出失败: %v", err)
+			return vm.ToValue([]any{"", err})
+		}
+
+		return vm.ToValue([]any{path, nil})
+	})
 }

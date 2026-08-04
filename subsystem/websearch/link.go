@@ -2,7 +2,6 @@ package websearch
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -69,7 +68,7 @@ var downloadExtensions = map[string]bool{
 	".dmg": true, ".mp3": true, ".mp4": true, ".avi": true, ".mkv": true,
 }
 
-// classifyLink 根据后缀判断链接类型，无后缀时发 HEAD 请求检测 Content-Type
+// classifyLink 根据URL后缀判断链接类型，无后缀时发HEAD请求检测Content-Type
 func classifyLink(url string) LinkType {
 	lower := strings.ToLower(url)
 
@@ -123,7 +122,7 @@ func detectContentType(url string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -136,8 +135,7 @@ func detectContentType(url string) string {
 
 // ── 链接处理主入口 ──
 
-// processAndReplaceLinks 提取查询中的链接，抓取内容并替换为编号格式
-// 返回替换后的纯文本（不含映射块）和编号映射
+// processAndReplaceLinks 提取消息中的链接，抓取内容并替换为编号格式
 func (s *System) processAndReplaceLinks(query string) (string, map[string]string) {
 	urls := extractURLs(query)
 	if len(urls) == 0 {
@@ -216,80 +214,15 @@ func (s *System) processImageLink(url string) string {
 // ── 网页链接处理 ──
 
 func (s *System) processWebpageLink(url string) string {
-	body, err := fetchLinkContent(url)
+	// 确保浏览器可用（懒加载），供 fetchContent 的 SPA 渲染使用
+	s.EnsureBrowser()
+
+	body, err := s.webpage.fetchContent(url, nil)
 	if err != nil || len(body) == 0 {
 		return "无法访问"
 	}
 
-	// 如果内容过少，可能是 SPA 页面，尝试使用浏览器渲染
-	if s.browserRenderer != nil && len([]rune(body)) < 200 {
-		if rendered, err := s.browserRenderer.Render(url); err == nil && rendered != "" && len([]rune(rendered)) > len([]rune(body)) {
-			if s.DebugLog != nil {
-				s.DebugLog("[fetch_url] 检测到SPA页面，已使用浏览器渲染 url=%s", url)
-			}
-			body = rendered
-		}
-	}
-
-	body = truncateText(body, linkMaxSummaryNoLLM*2) // 给 LLM 足够的上下文
-
-	if s.llmProvider == nil {
-		return truncateText(body, linkMaxSummaryNoLLM)
-	}
-
-	summary, err := s.summarizeLinkContent(body)
-	if err != nil || summary == "" {
-		return truncateText(body, linkMaxSummaryNoLLM)
-	}
-
-	return truncateText(summary, linkMaxSummaryLLM)
-}
-
-// fetchLinkContent 抓取链接内容
-func fetchLinkContent(url string) (string, error) {
-	client := &http.Client{Timeout: time.Duration(linkFetchTimeout) * time.Second}
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", err
-	}
-
-	return extractTextContent(string(body)), nil
-}
-
-// summarizeLinkContent 使用 LLM 总结链接内容
-func (s *System) summarizeLinkContent(content string) (string, error) {
-	prompt := fmt.Sprintf(`请用一句话（不超过50字）概括以下网页内容的核心主题：
-
-%s`, truncateText(content, linkMaxSummaryNoLLM*2))
-
-	messages := []ChatMessage{
-		{Role: "user", Content: prompt},
-	}
-
-	response, err := s.llmProvider.Chat(messages)
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(response), nil
+	return truncateText(body, linkMaxRawContent)
 }
 
 // stripURLs 从文本中移除所有 URL，返回纯文字（用于搜索）

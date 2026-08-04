@@ -695,15 +695,19 @@ async function handleChannelMessage(msg) {
             break;
 
         case 'action':
-            enqueueCommand({ type: 'action', action: payload.action });
+            if (payload?.action) {
+                enqueueCommand({ type: 'action', action: payload.action });
+            }
             break;
 
         case 'movement':
-            enqueueCommand({
-                type: 'movement',
-                position: payload.position,
-                resumeTracking: payload.resumeTracking !== false
-            });
+            if (payload?.position) {
+                enqueueCommand({
+                    type: 'movement',
+                    position: payload.position,
+                    resumeTracking: payload.resumeTracking !== false
+                });
+            }
             break;
 
         case 'rotation':

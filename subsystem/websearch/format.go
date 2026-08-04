@@ -5,13 +5,20 @@ import (
 	"strings"
 )
 
-// formatResults 格式化搜索结果为自然语言文本
+// formatResults 格式化搜索结果为文本
 func formatResults(results []SearchResult) string {
 	var builder strings.Builder
-	for _, r := range results {
-		builder.WriteString(fmt.Sprintf("「%s」", r.Title))
+	for i, r := range results {
+		authLabel := ""
+		if r.AuthorityScore > 0 {
+			authLabel = " " + AuthorityLabel(r.AuthorityScore)
+		}
+		builder.WriteString(fmt.Sprintf("[%d]%s %s\n", i+1, authLabel, r.Title))
+		if r.URL != "" {
+			builder.WriteString(fmt.Sprintf("    %s\n", r.URL))
+		}
 		if r.Snippet != "" {
-			builder.WriteString(fmt.Sprintf("：%s", r.Snippet))
+			builder.WriteString(fmt.Sprintf("    %s\n", r.Snippet))
 		}
 		builder.WriteString("\n")
 	}
@@ -19,18 +26,24 @@ func formatResults(results []SearchResult) string {
 }
 
 // formatResultsTruncated 格式化搜索结果，对Snippet做截断保护
-// 用于深度研究等可能产生大量结果的场景，防止提示词溢出
 func formatResultsTruncated(results []SearchResult, maxSnippetLen int) string {
 	var builder strings.Builder
-	for _, r := range results {
+	for i, r := range results {
 		snippet := r.Snippet
 		runes := []rune(snippet)
 		if len(runes) > maxSnippetLen {
 			snippet = string(runes[:maxSnippetLen]) + "..."
 		}
-		builder.WriteString(fmt.Sprintf("「%s」", r.Title))
+		authLabel := ""
+		if r.AuthorityScore > 0 {
+			authLabel = " " + AuthorityLabel(r.AuthorityScore)
+		}
+		builder.WriteString(fmt.Sprintf("[%d]%s %s\n", i+1, authLabel, r.Title))
+		if r.URL != "" {
+			builder.WriteString(fmt.Sprintf("    %s\n", r.URL))
+		}
 		if snippet != "" {
-			builder.WriteString(fmt.Sprintf("：%s", snippet))
+			builder.WriteString(fmt.Sprintf("    %s\n", snippet))
 		}
 		builder.WriteString("\n")
 	}

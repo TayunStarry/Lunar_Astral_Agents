@@ -10,18 +10,25 @@ import (
 )
 
 // NewWebpageSearcher 创建网页搜索器
-func NewWebpageSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg WebpageConfig, httpCfg HTTPConfig, debugLog func(format string, args ...interface{})) *WebpageSearcher {
+func NewWebpageSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg WebpageConfig, httpCfg HTTPConfig, debugLog func(format string, args ...interface{}), knowledge *SearchKnowledge) *WebpageSearcher {
 	return &WebpageSearcher{
 		simple:      simpleSearcher,
 		llmProvider: llmProvider,
 		cfg:         cfg,
 		httpClient:  &http.Client{Timeout: time.Duration(cfg.FetchTimeout) * time.Second},
 		debugLog:    debugLog,
+		knowledge:   knowledge,
 	}
 }
 
 // Search 执行网页搜索
 func (s *WebpageSearcher) Search(query string) (string, error) {
+	result, _, err := s.SearchWithResults(query)
+	return result, err
+}
+
+// SearchWithResults 执行网页搜索并返回原始搜索结果（供知识库存储使用）
+func (s *WebpageSearcher) SearchWithResults(query string) (string, []SearchResult, error) {
 	if s.debugLog != nil {
 		s.debugLog("[网页搜索] 开始搜索 query=%q", query)
 	}
@@ -31,11 +38,11 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 	// 第一步：搜索
 	results, err := s.simple.SearchRaw(query)
 	if err != nil {
-		return "", fmt.Errorf("网页搜索失败: %w", err)
+		return "", nil, fmt.Errorf("网页搜索失败: %w", err)
 	}
 
 	if len(results) == 0 {
-		return fmt.Sprintf("未找到与 %q 相关的搜索结果。", query), nil
+		return fmt.Sprintf("未找到与 %q 相关的搜索结果。", query), nil, nil
 	}
 	if len(results) > limit {
 		results = results[:limit]
@@ -110,7 +117,17 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 		results = results[:limit]
 	}
 
-	// 第二步：抓取网页内容 + 相关性过滤（降级后用核心实体的关键词）
+	// 动态域名发现
+	if s.cfg.EnableDomainDiscovery {
+		if discovered := DiscoverOfficialHomepages(results, s.debugLog); len(discovered) > 0 {
+			results = append(discovered, results...)
+			if s.debugLog != nil {
+				s.debugLog("[网页搜索] 域名发现 插入%d条结果", len(discovered))
+			}
+		}
+	}
+
+	// 第二步：抓取网页内容 + 相关性过滤
 	queryKeywords := extractQueryKeywords(effectiveQuery)
 
 	contentParts := make([]string, 0, len(results))
@@ -120,7 +137,7 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 	totalContentChars := 0
 
 	if s.cfg.FetchContent {
-		// 阶段1：HTTP 抓取所有结果
+		// 阶段1：HTTP抓取所有结果
 		type fetchItem struct {
 			idx    int
 			result SearchResult
@@ -141,7 +158,7 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 			}
 		}
 
-		// 阶段2：并行浏览器渲染所有 SPA 页面
+		// 阶段2：并行浏览器渲染SPA页面
 		if s.browserRenderer != nil {
 			// 收集需要渲染的 SPA 索引
 			var spaIndices []int
@@ -184,9 +201,13 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 						defer func() { <-sem }()
 
 						url := items[i].result.URL
-						if rendered := renderWithBrowser(s.browserRenderer, url, s.debugLog, effectiveQuery); rendered != "" {
+						if rendered, title := renderWithBrowser(s.browserRenderer, url, s.debugLog, effectiveQuery); rendered != "" {
 							items[i].body = rendered
 							items[i].isSPA = false
+							// 如果浏览器返回了标题，更新结果的标题
+							if title != "" {
+								items[i].result.Title = title
+							}
 						} else if s.debugLog != nil {
 							s.debugLog("[网页搜索] SPA浏览器渲染失败 将回退到摘要 URL=%s body_len=%d",
 								url, len([]rune(items[i].body)))
@@ -197,7 +218,7 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 			}
 		}
 
-		// 阶段3：相关性过滤 + 组装结果
+		// 阶段3：相关性过滤+组装结果+存储URL到知识库
 		for _, item := range items {
 			i := item.idx
 			r := item.result
@@ -206,6 +227,7 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 				body := truncateText(item.body, webpageMaxPerPageLen)
 				wasSPA := item.isSPA
 
+				// 如果浏览器渲染失败（仍然是SPA空壳），且有摘要，则回退到摘要
 				if wasSPA && r.Snippet != "" {
 					body = r.Snippet
 				}
@@ -242,6 +264,15 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 					"[来源%d] %s\nURL: %s\n内容:\n%s",
 					i+1, r.Title, r.URL, body,
 				))
+
+				// 存储URL内容到知识库：无论是否是SPA，只要有有效内容就存储
+				if s.knowledge != nil && body != "" {
+					sourceType := "webpage_http"
+					if !wasSPA {
+						sourceType = "webpage_browser"
+					}
+					go s.knowledge.StoreURL(r.URL, r.Title, body, sourceType)
+				}
 			} else {
 				fetchFail++
 				if s.debugLog != nil {
@@ -274,7 +305,7 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 				i+1, r.Title, r.Snippet, r.URL,
 			))
 		}
-	} // 第三步：LLM 总结 or 兜底
+	}
 
 	if s.debugLog != nil {
 		s.debugLog("[网页搜索] 汇总 查询=%q 成功=%d 失败=%d 跳过=%d 总字符=%d",
@@ -295,22 +326,22 @@ func (s *WebpageSearcher) Search(query string) (string, error) {
 				))
 			}
 			searchContent := strings.Join(fallbackParts, "\n\n---\n\n")
-			return fmt.Sprintf("搜索 %q 的原始结果（相关性过滤较严格，以下为未过滤的原始结果）：\n\n%s", query, searchContent), nil
+			return fmt.Sprintf("搜索 %q 的原始结果（相关性过滤较严格，以下为未过滤的原始结果）：\n\n%s", query, searchContent), results, nil
 		}
-		return fmt.Sprintf("搜索 %q 没有找到相关内容，所有结果已被相关性过滤。", query), nil
+		return fmt.Sprintf("搜索 %q 没有找到相关内容，所有结果已被相关性过滤。", query), nil, nil
 	}
 
 	// 第三步：LLM 总结
 	if s.llmProvider == nil {
-		return formatWebpageResultsFallback(query, contentParts), nil
+		return formatWebpageResultsFallback(query, contentParts), results, nil
 	}
 
 	result, err := s.summarizeWithLLM(query, contentParts)
 	if err != nil {
-		return formatWebpageResultsFallback(query, contentParts), nil
+		return formatWebpageResultsFallback(query, contentParts), results, nil
 	}
 
-	return result, nil
+	return result, results, nil
 }
 
 func (s *WebpageSearcher) summarizeWithLLM(query string, contentParts []string) (string, error) {
@@ -320,11 +351,12 @@ func (s *WebpageSearcher) summarizeWithLLM(query string, contentParts []string) 
 	promptTemplate := `请基于以下搜索结果，对用户问题"%s"进行综合分析回答。
 
 要求：
-1. 先给出一个简洁的总结（2-3句话）
-2. 然后分点列出关键信息，每个要点标注来源编号
-3. 直接呈现搜索结果中的信息，不要对信息来源做"可靠/不可靠"的主观判断
-4. 如果信息来自非官方渠道，只需标注来源类型（如"第三方网站"），由用户自行判断可信度
-5. 最后列出所有引用来源的URL
+1. 先给出一个**核心结论**（1-2句话，概括最重要的发现）
+2. 然后分点列出**关键信息**，每个要点标注来源编号
+3. 对于每条信息，标注其来源的权威性等级（🏛️官方/⭐高权威/✅可信/📄一般/⚠️低权威）
+4. 如果信息来自非官方渠道，只需标注来源类型，由用户自行判断可信度
+5. 优先引用权威来源的信息，低权威来源的信息仅作补充参考
+6. 最后列出所有引用来源的URL
 
 搜索结果：
 %s`
@@ -367,8 +399,7 @@ func (s *WebpageSearcher) summarizeWithLLM(query string, contentParts []string) 
 	return response, nil
 }
 
-// SearchRaw 执行网页搜索+内容抓取，返回原始结果列表（不含LLM总结）
-// 供大会辩论补充搜索使用：搜索 → 抓取全文 → 相关性过滤 → 返回带正文的SearchResult
+// SearchRaw 执行网页搜索+内容抓取，返回原始结果（不含LLM总结），供大会辩论补充搜索使用
 func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	if s.debugLog != nil {
 		s.debugLog("[网页搜索-Raw] 补充搜索 query=%q", query)
@@ -433,6 +464,13 @@ func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 		results = results[:limit]
 	}
 
+	// 动态域名发现
+	if s.cfg.EnableDomainDiscovery {
+		if discovered := DiscoverOfficialHomepages(results, s.debugLog); len(discovered) > 0 {
+			results = append(discovered, results...)
+		}
+	}
+
 	// 第二步：抓取网页内容
 	queryKeywords := extractQueryKeywords(effectiveQuery)
 	var rawResults []SearchResult
@@ -484,9 +522,13 @@ func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 						sem <- struct{}{}
 						defer func() { <-sem }()
 						url := items[i].result.URL
-						if rendered := renderWithBrowser(s.browserRenderer, url, s.debugLog, effectiveQuery); rendered != "" {
+						if rendered, title := renderWithBrowser(s.browserRenderer, url, s.debugLog, effectiveQuery); rendered != "" {
 							items[i].body = rendered
 							items[i].isSPA = false
+							// 如果浏览器返回了标题，更新结果的标题
+							if title != "" {
+								items[i].result.Title = title
+							}
 						}
 					}(idx)
 				}
@@ -494,12 +536,13 @@ func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 			}
 		}
 
-		// 相关性过滤 + 组装结果
+		// 相关性过滤 + 组装结果 + 存储URL内容到知识库
 		for _, item := range items {
 			r := item.result
 			if item.err == nil && len(item.body) > 0 {
 				body := truncateText(item.body, webpageMaxPerPageLen)
 				wasSPA := item.isSPA
+				// 如果浏览器渲染失败（仍然是SPA空壳），且有摘要，则回退到摘要
 				if wasSPA && r.Snippet != "" {
 					body = r.Snippet
 				}
@@ -512,6 +555,15 @@ func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 				}
 				r.Snippet = body // 用正文替换摘要
 				rawResults = append(rawResults, r)
+
+				// 存储URL内容到知识库
+				if s.knowledge != nil && body != "" {
+					sourceType := "webpage_raw_http"
+					if !wasSPA {
+						sourceType = "webpage_raw_browser"
+					}
+					go s.knowledge.StoreURL(r.URL, r.Title, body, sourceType)
+				}
 			} else {
 				// 抓取失败时用摘要
 				relevanceScore := checkContentRelevance(queryKeywords, "", r.Title, r.Snippet, r.URL, r.IsOfficial)
@@ -536,9 +588,7 @@ func (s *WebpageSearcher) SearchRaw(query string) ([]SearchResult, error) {
 	return rawResults, nil
 }
 
-// SearchRawWithSelectiveFetch 补充搜索专用：简单搜索 + 选择性抓取前N条正文
-// 策略：先用简单搜索拿到所有结果的标题+摘要（快），然后只对最相关的前2条抓取网页正文（有深度）
-// 这样既保证了信息覆盖面（多条摘要），又保证了关键信息的深度（前2条正文），且节省时间和token
+// SearchRawWithSelectiveFetch 补充搜索：简单搜索获取标题+摘要，再对前N条抓取正文
 func (s *WebpageSearcher) SearchRawWithSelectiveFetch(query string, maxFetch int) ([]SearchResult, error) {
 	if s.debugLog != nil {
 		s.debugLog("[网页搜索-选择性抓取] 补充搜索 query=%q maxFetch=%d", query, maxFetch)
@@ -569,58 +619,13 @@ func (s *WebpageSearcher) SearchRawWithSelectiveFetch(query string, maxFetch int
 	}
 	results = filtered
 
-	// 第二步：按相关性排序（标题匹配优先，其次摘要匹配）
-	queryKeywords := extractQueryKeywords(query)
-	queryLower := strings.ToLower(query)
-	scored := make([]struct {
-		result SearchResult
-		score  int
-	}, len(results))
-	for i, r := range results {
-		score := 0
-		titleLower := strings.ToLower(r.Title)
-		snippetLower := strings.ToLower(r.Snippet)
-		// 完整查询在标题中出现：最高优先级
-		if strings.Contains(titleLower, queryLower) {
-			score += 10
-		}
-		// 完整查询在摘要中出现
-		if strings.Contains(snippetLower, queryLower) {
-			score += 5
-		}
-		// 关键词匹配
-		for _, kw := range queryKeywords {
-			kwLower := strings.ToLower(kw)
-			if strings.Contains(titleLower, kwLower) {
-				score += 3
-			}
-			if strings.Contains(snippetLower, kwLower) {
-				score += 1
-			}
-		}
-		// 官方网站加分
-		if r.IsOfficial {
-			score += 2
-		}
-		scored[i] = struct {
-			result SearchResult
-			score  int
-		}{r, score}
-	}
-
-	// 按分数降序排序
-	for i := 0; i < len(scored); i++ {
-		for j := i + 1; j < len(scored); j++ {
-			if scored[j].score > scored[i].score {
-				scored[i], scored[j] = scored[j], scored[i]
-			}
-		}
-	}
+	// 第二步：按相关性+权威性排序（所有模式共用的排序逻辑）
+	SortResults(results, query)
 
 	// 第三步：对前 maxFetch 条结果抓取网页正文
-	fetchCount := min(maxFetch, len(scored))
+	fetchCount := min(maxFetch, len(results))
 	for i := 0; i < fetchCount; i++ {
-		r := scored[i].result
+		r := results[i]
 		if r.URL == "" {
 			continue
 		}
@@ -633,7 +638,7 @@ func (s *WebpageSearcher) SearchRawWithSelectiveFetch(query string, maxFetch int
 		}
 		if len([]rune(body)) > 100 {
 			// 抓取成功，用正文替换摘要（截断到合理长度）
-			scored[i].result.Snippet = truncateText(body, 1500)
+			results[i].Snippet = truncateText(body, 1500)
 			if s.debugLog != nil {
 				s.debugLog("[网页搜索-选择性抓取] 抓取成功 url=%q 正文长度=%d", r.URL, len([]rune(body)))
 			}
@@ -641,10 +646,8 @@ func (s *WebpageSearcher) SearchRawWithSelectiveFetch(query string, maxFetch int
 	}
 
 	// 组装最终结果
-	finalResults := make([]SearchResult, 0, len(scored))
-	for _, s := range scored {
-		finalResults = append(finalResults, s.result)
-	}
+	finalResults := make([]SearchResult, 0, len(results))
+	finalResults = append(finalResults, results...)
 
 	if s.debugLog != nil {
 		s.debugLog("[网页搜索-选择性抓取] 补充搜索完成 query=%q 结果数=%d 抓取正文数=%d", query, len(finalResults), fetchCount)
@@ -653,8 +656,7 @@ func (s *WebpageSearcher) SearchRawWithSelectiveFetch(query string, maxFetch int
 	return finalResults, nil
 }
 
-// fetchContentHTTPOnly 仅 HTTP 抓取 + 文本提取，不触发浏览器渲染
-// 用于并行渲染前的批量 HTTP 抓取阶段
+// fetchContentHTTPOnly HTTP抓取+文本提取，不触发浏览器渲染
 func (s *WebpageSearcher) fetchContentHTTPOnly(pageURL string) (string, error) {
 	// 搜狗跳转链接：先解析真实URL
 	realURL := pageURL
@@ -668,7 +670,7 @@ func (s *WebpageSearcher) fetchContentHTTPOnly(pageURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := s.httpClient.Do(req)
@@ -701,7 +703,7 @@ func (s *WebpageSearcher) fetchContent(pageURL string, queryKeywords []string) (
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := s.httpClient.Do(req)
@@ -724,7 +726,7 @@ func (s *WebpageSearcher) fetchContent(pageURL string, queryKeywords []string) (
 
 	if isSPAShell(text) {
 		if s.browserRenderer != nil {
-			if rendered := renderWithBrowser(s.browserRenderer, realURL, s.debugLog); rendered != "" {
+			if rendered, _ := renderWithBrowser(s.browserRenderer, realURL, s.debugLog); rendered != "" {
 				if s.debugLog != nil {
 					s.debugLog("[网页搜索] SPA浏览器渲染成功 URL=%s html_len=%d rendered_len=%d",
 						realURL, len([]rune(text)), len([]rune(rendered)))
@@ -767,7 +769,7 @@ func (s *WebpageSearcher) fetchRawContent(pageURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := s.httpClient.Do(req)
@@ -790,7 +792,7 @@ func (s *WebpageSearcher) fetchRawContent(pageURL string) (string, error) {
 	if s.browserRenderer != nil {
 		text := extractTextContent(htmlStr)
 		if isSPAShell(text) {
-			if rendered, err := s.browserRenderer.Render(pageURL); err == nil && rendered != "" {
+			if rendered, _, err := s.browserRenderer.Render(pageURL); err == nil && rendered != "" {
 				if s.debugLog != nil {
 					s.debugLog("[网页搜索] 详情页SPA浏览器渲染成功 URL=%s", pageURL)
 				}
@@ -813,7 +815,7 @@ func resolveSogouURL(client *http.Client, sogouURL string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := client.Do(req)
@@ -979,7 +981,7 @@ func extractCoreEntity(query string) string {
 }
 
 // checkContentRelevance 检查内容与查询的相关性，返回匹配关键词数量
-func checkContentRelevance(queryKeywords []string, content, title, snippet, url string, isOfficial bool) int {
+func checkContentRelevance(queryKeywords []string, content, title, snippet, _ string, isOfficial bool) int {
 	if len(queryKeywords) == 0 {
 		return 2 // 无法判断时，默认保留
 	}

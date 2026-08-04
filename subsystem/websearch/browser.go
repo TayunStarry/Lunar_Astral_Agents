@@ -16,7 +16,7 @@ import (
 )
 
 type BrowserRenderer interface {
-	Render(url string, query ...string) (string, error)
+	Render(url string, query ...string) (text string, title string, err error)
 	Close()
 }
 
@@ -176,6 +176,7 @@ func NewChromeRenderer(timeout time.Duration, debugLog func(format string, args 
 			}
 		}
 		cmd.Process.Kill()
+		killProcessTree(cmd.Process.Pid)
 		os.RemoveAll(tempDir)
 		return nil
 	}
@@ -216,7 +217,7 @@ func (c *ChromeRenderer) SetDebugLog(fn func(format string, args ...interface{})
 	c.debugLog = fn
 }
 
-func (c *ChromeRenderer) Render(url string, query ...string) (string, error) {
+func (c *ChromeRenderer) Render(url string, query ...string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(c.browserCtx, c.timeout)
 	defer cancel()
 
@@ -237,6 +238,7 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, error) {
 	}
 
 	var text string
+	var pageTitle string
 	var links []string
 	var err error
 
@@ -251,28 +253,23 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, error) {
 		if c.debugLog != nil {
 			c.debugLog("[浏览器渲染] 页面加载失败 url=%s err=%v", url, err)
 		}
-		return "", err
+		return "", "", err
 	}
 
 	err = chromedp.Run(pageCtx,
 		chromedp.Sleep(3*time.Second),
-		chromedp.Evaluate(`
-			var noticeItems = document.querySelectorAll('[class*="notice"],[class*="Notice"],[class*="公告"]');
-			noticeItems.forEach(function(item) {
-				if (item.getAttribute('class') && item.getAttribute('class').includes('noticeItem')) {
-					item.click();
-				}
-			});
-		`, nil),
-		chromedp.Sleep(1*time.Second),
 		chromedp.Text("body", &text),
+		chromedp.Title(&pageTitle),
 	)
 	if err != nil {
 		if c.debugLog != nil {
 			c.debugLog("[浏览器渲染] 获取内容失败 url=%s err=%v", url, err)
 		}
-		return "", err
+		return "", "", err
 	}
+
+	// 预加载交互：尝试点击页面中与查询关键词相关的元素
+	text, _ = c.interactPage(pageCtx, queryKeywords, text)
 
 	err = chromedp.Run(pageCtx,
 		chromedp.Evaluate(`
@@ -370,53 +367,56 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, error) {
 		if c.debugLog != nil {
 			c.debugLog("[浏览器渲染] 渲染失败 url=%s err=%v", url, err)
 		}
-		return "", err
+		return "", "", err
 	}
 
 	if c.debugLog != nil {
 		c.debugLog("[浏览器渲染] 主页渲染完成 url=%s text_len=%d links_count=%d", url, len([]rune(text)), len(links))
 	}
 
-	textLen := len([]rune(text))
-	if textLen >= 800 {
-		// 检查内容是否包含查询关键词
-		containsQueryKeywords := false
-		if queryKeywords != "" {
-			textLower := strings.ToLower(text)
-			for _, kw := range strings.Split(queryKeywords, ",") {
-				if strings.Contains(textLower, strings.ToLower(kw)) {
-					containsQueryKeywords = true
-					break
-				}
-			}
-		}
+	// 按时效排序：新闻/资讯类链接按数字ID降序排列，最新在前
+	links = sortLinksByRecency(links)
+	if c.debugLog != nil && len(links) > 0 {
+		c.debugLog("[浏览器渲染] 链接时效排序后 top3=%v", links[:min(3, len(links))])
+	}
 
-		// 如果内容足够丰富但不包含查询关键词，不跳过深度渲染
-		if !containsQueryKeywords && queryKeywords != "" {
-			if c.debugLog != nil {
-				c.debugLog("[浏览器渲染] 页面内容足够但不包含查询关键词，继续深度渲染")
+	textLen := len([]rune(text))
+	// 预先计算关键词命中状态，供后续多处使用
+	containsQueryKeywords := false
+	if queryKeywords != "" {
+		textLower := strings.ToLower(text)
+		for _, kw := range strings.Split(queryKeywords, ",") {
+			if strings.Contains(textLower, strings.ToLower(kw)) {
+				containsQueryKeywords = true
+				break
 			}
-		} else {
-			if c.debugLog != nil {
-				c.debugLog("[浏览器渲染] 页面内容已足够丰富，跳过深度渲染")
-			}
-			return text, nil
 		}
 	}
 
-	if len(links) > 0 {
-		// 检查内容是否包含查询关键词
-		containsQueryKeywords := false
-		if queryKeywords != "" {
-			textLower := strings.ToLower(text)
-			for _, kw := range strings.Split(queryKeywords, ",") {
-				if strings.Contains(textLower, strings.ToLower(kw)) {
-					containsQueryKeywords = true
-					break
-				}
+	if textLen >= 800 {
+		// 如果内容足够丰富且包含查询关键词，直接返回
+		if containsQueryKeywords {
+			if c.debugLog != nil {
+				c.debugLog("[浏览器渲染] 页面内容已足够丰富且包含关键词，跳过深度渲染")
 			}
+			return text, pageTitle, nil
 		}
+		// 内容丰富但不含关键词，继续深度渲染
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 页面内容足够但不包含查询关键词，继续深度渲染")
+		}
+	}
 
+	// links为0但不含关键词时，再次尝试交互（可能预加载时没点到有效元素）
+	richButNoKeyword := !containsQueryKeywords && queryKeywords != ""
+	if len(links) == 0 && richButNoKeyword {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 无链接但不含关键词，再次尝试交互查找")
+		}
+		text, _ = c.interactPage(pageCtx, queryKeywords, text)
+	}
+
+	if len(links) > 0 {
 		shouldDeepRender := textLen < 200
 
 		if !shouldDeepRender && textLen < 1000 && len(links) >= 5 {
@@ -520,7 +520,88 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, error) {
 		}
 	}
 
-	return text, nil
+	return text, pageTitle, nil
+}
+
+// interactPage 点击页面中与查询关键词相关的元素，触发SPA导航或内容展开
+func (c *ChromeRenderer) interactPage(pageCtx context.Context, queryKeywords string, text string) (string, bool) {
+	kwJS := "''"
+	if queryKeywords != "" {
+		kwJS = fmt.Sprintf("%q", queryKeywords)
+	}
+
+	interactJS := fmt.Sprintf(`(function() {
+		var kw = %s;
+		var keywords = kw.split(",").filter(Boolean);
+		var allElements = document.querySelectorAll("a, button, [role='link'], div[onclick], span[onclick]");
+
+		// 1. 优先点击文本包含查询关键词的元素
+		for (var el of allElements) {
+			var elText = (el.textContent || "").trim();
+			if (elText.length > 50) continue;
+			for (var k of keywords) {
+				if (k && elText.toLowerCase().includes(k.toLowerCase())) {
+					try { el.click(); return "kw:" + elText; } catch(e) {}
+				}
+			}
+		}
+
+		// 2. 点击常见的展开/导航元素
+		var selectors = [
+			'[class*="notice"]','[class*="Notice"]','[class*="公告"]',
+			'[class*="more"]','[class*="More"]','[class*="expand"]','[class*="展开"]',
+			'[class*="tab"]','[class*="Tab"]','[role="tab"]',
+			'button','[class*="btn"]','[class*="Btn"]',
+			'a[class*="nav"]','a[class*="Nav"]'
+		];
+		var seen = new Set();
+		for (var sel of selectors) {
+			var els = document.querySelectorAll(sel);
+			for (var el of els) {
+				var key = el.textContent || "";
+				if (seen.has(key)) continue;
+				seen.add(key);
+				try { el.click(); } catch(e) {}
+			}
+		}
+		return "generic";
+	})()`, kwJS)
+
+	var clickResult string
+	interactCtx, interactCancel := context.WithTimeout(pageCtx, 5*time.Second)
+	defer interactCancel()
+
+	if err := chromedp.Run(interactCtx, chromedp.Evaluate(interactJS, &clickResult)); err != nil {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 页面交互执行失败: %v", err)
+		}
+		return text, false
+	}
+
+	// 等待交互后的新内容
+	var newText string
+	if err := chromedp.Run(interactCtx,
+		chromedp.Sleep(3*time.Second),
+		chromedp.Text("body", &newText),
+	); err != nil {
+		return text, false
+	}
+
+	if len([]rune(newText)) > len([]rune(text)) {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 页面交互后内容增加 text_len=%d click=%s", len([]rune(newText)), clickResult)
+		}
+		return newText, true
+	}
+	// SPA 导航会替换页面内容（而非追加），需检测内容是否真正变化
+	if len(newText) > 0 && newText != text {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 页面交互后内容变化 text_len=%d original_len=%d click=%s",
+				len([]rune(newText)), len([]rune(text)), clickResult)
+		}
+		return newText, true
+	}
+	return text, false
 }
 
 func (c *ChromeRenderer) Close() {
@@ -528,9 +609,9 @@ func (c *ChromeRenderer) Close() {
 	c.allocatorCancel()
 
 	if c.browserCmd != nil && c.browserCmd.Process != nil {
-		c.browserCmd.Process.Kill()
+		killProcessTree(c.browserCmd.Process.Pid)
 		if c.debugLog != nil {
-			c.debugLog("[浏览器渲染] 浏览器进程已终止 pid=%d", c.browserCmd.Process.Pid)
+			c.debugLog("[浏览器渲染] 浏览器进程树已终止 pid=%d", c.browserCmd.Process.Pid)
 		}
 	}
 
@@ -539,6 +620,16 @@ func (c *ChromeRenderer) Close() {
 		if c.debugLog != nil {
 			c.debugLog("[浏览器渲染] 临时目录已清理 dir=%s", c.tempDir)
 		}
+	}
+}
+
+// killProcessTree 终止进程及其所有子进程（Windows 用 taskkill，Unix 用 kill）
+func killProcessTree(pid int) {
+	switch runtime.GOOS {
+	case "windows":
+		exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", pid)).Run()
+	default:
+		exec.Command("kill", "-TERM", fmt.Sprintf("-%d", pid)).Run()
 	}
 }
 
@@ -638,10 +729,30 @@ func cleanupOrphanBrowsersLinux() {
 }
 
 func isSPAShell(text string) bool {
-	return len([]rune(text)) < 200
+	// 文本太短 → SPA空壳
+	if len([]rune(text)) < 200 {
+		return true
+	}
+	// 去除常见导航词后剩余有效文本极少 → 主要是导航内容
+	navKeywords := []string{
+		"首页", "导航", "菜单", "登录", "注册", "帮助", "关于",
+		"home", "menu", "login", "register", "help", "about",
+		"联系", "公告", "新闻中心", "产品", "服务", "支持",
+	}
+	lower := strings.ToLower(text)
+	effective := text
+	for _, kw := range navKeywords {
+		effective = strings.ReplaceAll(effective, kw, "")
+	}
+	// 去掉导航关键词后剩下不到100字符 → SPA空壳
+	if len([]rune(strings.TrimSpace(effective))) < 100 {
+		return true
+	}
+	_ = lower
+	return false
 }
 
-// isNewsLink 判断 URL 是否为新闻/资讯类页面（不要求尾斜杠，/news 和 /news/ 均可匹配）
+// isNewsLink 判断URL是否为新闻/资讯类页面
 func isNewsLink(url string) bool {
 	newsPatterns := []string{"/news", "/detail", "/article", "/post", "/blog", "/story", "/info", "/announcement"}
 	for _, pattern := range newsPatterns {
@@ -758,22 +869,117 @@ func filterLinksByQuery(links []string, query string) []string {
 	return result
 }
 
-func renderWithBrowser(renderer BrowserRenderer, url string, debugLog func(format string, args ...interface{}), query ...string) string {
-	if renderer == nil {
-		return ""
+// sortLinksByRecency 新闻/资讯类链接按URL中数字ID降序排列，最新在前
+func sortLinksByRecency(links []string) []string {
+	if len(links) <= 1 {
+		return links
 	}
-	rendered, err := renderer.Render(url, query...)
+
+	// 提取每个链接的排序键：数字ID + 是否为新闻/资讯页
+	type scoredLink struct {
+		url    string
+		numID  int // 数字ID，越大越新
+		isNews bool
+	}
+	scored := make([]scoredLink, 0, len(links))
+	newsPatterns := []string{"/news/", "/detail/", "/article/", "/post/", "/info/", "/announcement/"}
+
+	for _, link := range links {
+		sl := scoredLink{url: link}
+
+		// 检查是否为新闻/资讯类页面
+		for _, p := range newsPatterns {
+			if strings.Contains(link, p) {
+				sl.isNews = true
+				break
+			}
+		}
+
+		// 提取 URL 路径中的最后一个数字段作为ID
+		// 如 /news/9335 → 9335, /news/7231 → 7231
+		if idx := strings.LastIndex(link, "/"); idx >= 0 {
+			numStr := link[idx+1:]
+			// 去掉可能的查询参数和尾部斜杠
+			if qIdx := strings.Index(numStr, "?"); qIdx >= 0 {
+				numStr = numStr[:qIdx]
+			}
+			if numStr != "" {
+				// 提取连续数字
+				var digits []byte
+				for _, ch := range numStr {
+					if ch >= '0' && ch <= '9' {
+						digits = append(digits, byte(ch))
+					} else {
+						break
+					}
+				}
+				if len(digits) > 0 {
+					fmt.Sscanf(string(digits), "%d", &sl.numID)
+				}
+			}
+		}
+
+		scored = append(scored, sl)
+	}
+
+	// 排序：新闻/资讯页按数字ID降序，非新闻页保持原顺序
+	// 新闻页之间：ID大的在前（最新）
+	// 非新闻页之间：保持原顺序
+	newsIdx := 0
+	for i := range scored {
+		if scored[i].isNews {
+			// 将新闻项移到前面，按ID降序插入
+			insert := newsIdx
+			for j := newsIdx; j < i; j++ {
+				if scored[j].isNews && scored[j].numID < scored[i].numID {
+					insert = j
+					break
+				}
+				if !scored[j].isNews {
+					insert = j
+					break
+				}
+				insert = j + 1
+			}
+			if insert < i {
+				tmp := scored[i]
+				copy(scored[insert+1:], scored[insert:i])
+				scored[insert] = tmp
+			}
+			newsIdx++
+		}
+	}
+
+	result := make([]string, len(scored))
+	for i, sl := range scored {
+		result[i] = sl.url
+	}
+	return result
+}
+
+func renderWithBrowser(renderer BrowserRenderer, url string, debugLog func(format string, args ...interface{}), query ...string) (string, string) {
+	if renderer == nil {
+		return "", ""
+	}
+	// 安全兜底：过滤字典/百科网站，避免浪费资源渲染无关页面
+	if isDictionarySite(url) {
+		if debugLog != nil {
+			debugLog("[浏览器渲染] 字典网站过滤跳过 URL=%s", url)
+		}
+		return "", ""
+	}
+	rendered, title, err := renderer.Render(url, query...)
 	if err != nil {
 		if debugLog != nil {
 			debugLog("[浏览器渲染] 渲染失败 url=%s err=%v", url, err)
 		}
-		return ""
+		return "", ""
 	}
 	if len([]rune(rendered)) < 50 {
 		if debugLog != nil {
 			debugLog("[浏览器渲染] 渲染结果仍为空壳 url=%s rendered_len=%d", url, len([]rune(rendered)))
 		}
-		return ""
+		return "", ""
 	}
-	return rendered
+	return rendered, title
 }
