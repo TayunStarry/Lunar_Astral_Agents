@@ -17,6 +17,10 @@ import (
 
 type BrowserRenderer interface {
 	Render(url string, query ...string) (text string, title string, err error)
+	// RenderPage 简单渲染页面，仅导航+等待+提取HTML，不进行交互或深度渲染
+	// 适用于搜索结果页等不需要复杂交互的页面
+	// waitFor: 可选 CSS 选择器列表，等待其中任意一个元素出现后再提取 HTML
+	RenderPage(url string, waitFor ...string) (htmlContent string, err error)
 	Close()
 }
 
@@ -217,6 +221,89 @@ func (c *ChromeRenderer) SetDebugLog(fn func(format string, args ...interface{})
 	c.debugLog = fn
 }
 
+// RenderPage 简单渲染页面：导航→等待body→等待指定元素（可选）→提取HTML，不做交互或深度渲染
+// 适用于搜索结果页等不需要复杂交互的页面
+// waitFor: 可选 CSS 选择器，等待该元素出现后再提取 HTML（如 "li.b_algo"）
+func (c *ChromeRenderer) RenderPage(url string, waitFor ...string) (string, error) {
+	// RenderPage 需要更长超时：页面加载（最多30s）+ 渲染等待（5s）+ 缓冲
+	// 如果全局 timeout 大于 45s 则使用全局值，否则用 45s
+	renderTimeout := c.timeout
+	if renderTimeout < 45*time.Second {
+		renderTimeout = 45 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(c.browserCtx, renderTimeout)
+	defer cancel()
+
+	pageCtx, pageCancel := chromedp.NewContext(ctx)
+	defer pageCancel()
+
+	if c.debugLog != nil {
+		c.debugLog("[浏览器渲染] 新标签页已创建 URL=%s", url)
+	}
+
+	pageLoadCtx, pageLoadCancel := context.WithTimeout(pageCtx, 30*time.Second)
+	defer pageLoadCancel()
+
+	// 构建导航动作
+	navActions := []chromedp.Action{
+		chromedp.Navigate(url),
+		// 反检测：隐藏无头浏览器特征，在页面加载前注入
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			var dummy interface{}
+			// 先等待 body 出现，再注入反检测 JS
+			_ = chromedp.WaitReady("body").Do(ctx)
+			return chromedp.Evaluate(`
+				Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+				Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+				Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh']});
+				window.chrome = {runtime: {}};
+			`, &dummy).Do(ctx)
+		}),
+		chromedp.WaitReady("body"),
+	}
+
+	// 如果有等待选择器，添加等待动作
+	waitSelector := ""
+	for _, s := range waitFor {
+		if s != "" {
+			waitSelector = s
+			break
+		}
+	}
+	if waitSelector != "" {
+		navActions = append(navActions, chromedp.WaitReady(waitSelector))
+		_ = waitSelector
+	}
+
+	err := chromedp.Run(pageLoadCtx, navActions...)
+	if err != nil {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 页面加载失败 url=%s err=%v", url, err)
+		}
+		return "", err
+	}
+
+	// 等待页面渲染完成（JavaScript 执行），增加等待时间确保 Bing 搜索结果加载
+	var htmlContent string
+	err = chromedp.Run(pageCtx,
+		chromedp.Sleep(5*time.Second),
+		chromedp.Evaluate(`document.documentElement.outerHTML`, &htmlContent),
+	)
+	if err != nil {
+		if c.debugLog != nil {
+			c.debugLog("[浏览器渲染] 获取内容失败 url=%s err=%v", url, err)
+		}
+		return "", err
+	}
+
+	if c.debugLog != nil {
+		htmlLen := len([]rune(htmlContent))
+		c.debugLog("[浏览器渲染] 页面渲染完成 url=%s html_len=%d", url, htmlLen)
+	}
+
+	return htmlContent, nil
+}
+
 func (c *ChromeRenderer) Render(url string, query ...string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(c.browserCtx, c.timeout)
 	defer cancel()
@@ -238,9 +325,9 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, string, er
 	}
 
 	var text string
-	var pageTitle string
 	var links []string
 	var err error
+	var htmlContent string
 
 	pageLoadCtx, pageLoadCancel := context.WithTimeout(pageCtx, 30*time.Second)
 	defer pageLoadCancel()
@@ -259,7 +346,7 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, string, er
 	err = chromedp.Run(pageCtx,
 		chromedp.Sleep(3*time.Second),
 		chromedp.Text("body", &text),
-		chromedp.Title(&pageTitle),
+		chromedp.Evaluate(`document.documentElement.outerHTML`, &htmlContent),
 	)
 	if err != nil {
 		if c.debugLog != nil {
@@ -399,7 +486,7 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, string, er
 			if c.debugLog != nil {
 				c.debugLog("[浏览器渲染] 页面内容已足够丰富且包含关键词，跳过深度渲染")
 			}
-			return text, pageTitle, nil
+			return text, htmlContent, nil
 		}
 		// 内容丰富但不含关键词，继续深度渲染
 		if c.debugLog != nil {
@@ -520,7 +607,7 @@ func (c *ChromeRenderer) Render(url string, query ...string) (string, string, er
 		}
 	}
 
-	return text, pageTitle, nil
+	return text, htmlContent, nil
 }
 
 // interactPage 点击页面中与查询关键词相关的元素，触发SPA导航或内容展开
@@ -968,7 +1055,7 @@ func renderWithBrowser(renderer BrowserRenderer, url string, debugLog func(forma
 		}
 		return "", ""
 	}
-	rendered, title, err := renderer.Render(url, query...)
+	rendered, htmlContent, err := renderer.Render(url, query...)
 	if err != nil {
 		if debugLog != nil {
 			debugLog("[浏览器渲染] 渲染失败 url=%s err=%v", url, err)
@@ -981,5 +1068,27 @@ func renderWithBrowser(renderer BrowserRenderer, url string, debugLog func(forma
 		}
 		return "", ""
 	}
+
+	// 从 HTML 中提取页面标题
+	title := extractPageTitle(htmlContent)
 	return rendered, title
+}
+
+// extractPageTitle 从 HTML 中提取 <title> 标签内容
+func extractPageTitle(htmlContent string) string {
+	start := strings.Index(strings.ToLower(htmlContent), "<title")
+	if start < 0 {
+		return ""
+	}
+	// 跳过 <title ...> 找到 >
+	closeTag := strings.IndexByte(htmlContent[start:], '>')
+	if closeTag < 0 {
+		return ""
+	}
+	contentStart := start + closeTag + 1
+	end := strings.Index(htmlContent[contentStart:], "</title")
+	if end < 0 {
+		return ""
+	}
+	return strings.TrimSpace(htmlContent[contentStart : contentStart+end])
 }

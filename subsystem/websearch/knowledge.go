@@ -21,7 +21,8 @@ type SearchKnowledge struct {
 }
 
 // NewSearchKnowledge 创建搜索知识库，自动建表
-func NewSearchKnowledge(dbPath string, debugLog func(format string, args ...interface{})) (*SearchKnowledge, error) {
+// skipSearchTable: 智能学习模式下跳过 search_results 表（向量知识库替代），仅保留 url_content
+func NewSearchKnowledge(dbPath string, debugLog func(format string, args ...interface{}), skipSearchTable ...bool) (*SearchKnowledge, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("创建知识库目录失败: %w", err)
@@ -32,8 +33,9 @@ func NewSearchKnowledge(dbPath string, debugLog func(format string, args ...inte
 		return nil, fmt.Errorf("打开知识库失败: %w", err)
 	}
 
+	skip := len(skipSearchTable) > 0 && skipSearchTable[0]
 	sk := &SearchKnowledge{db: db, debugLog: debugLog}
-	if err := sk.initTables(); err != nil {
+	if err := sk.initTables(skip); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("初始化知识库表失败: %w", err)
 	}
@@ -44,20 +46,10 @@ func NewSearchKnowledge(dbPath string, debugLog func(format string, args ...inte
 	return sk, nil
 }
 
-// initTables 创建数据表及FTS5全文索引
-func (sk *SearchKnowledge) initTables() error {
-	// 创建主表（兼容旧数据库）
+// initTables 创建数据表，skipSearch 时跳过 search_results 和 FTS5（向量模式仅需 url_content）
+func (sk *SearchKnowledge) initTables(skipSearch bool) error {
+	// URL 内容缓存表（所有模式都需要）
 	_, err := sk.db.Exec(`
-		CREATE TABLE IF NOT EXISTS search_results (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			query_hash  TEXT NOT NULL,
-			query_text  TEXT NOT NULL,
-			results     TEXT NOT NULL,
-			searched_at DATETIME NOT NULL,
-			updated_at  DATETIME NOT NULL
-		);
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_query_hash ON search_results(query_hash);
-
 		CREATE TABLE IF NOT EXISTS url_content (
 			id          INTEGER PRIMARY KEY AUTOINCREMENT,
 			url_hash    TEXT NOT NULL,
@@ -69,6 +61,30 @@ func (sk *SearchKnowledge) initTables() error {
 			updated_at  DATETIME NOT NULL
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_url_hash ON url_content(url_hash);
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 智能学习模式：跳过 search_results 表（向量知识库替代）
+	if skipSearch {
+		if sk.debugLog != nil {
+			sk.debugLog("[搜索知识库] 向量模式，跳过 search_results 表，仅保留 url_content")
+		}
+		return nil
+	}
+
+	// 创建 search_results 表（旧逻辑）
+	_, err = sk.db.Exec(`
+		CREATE TABLE IF NOT EXISTS search_results (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			query_hash  TEXT NOT NULL,
+			query_text  TEXT NOT NULL,
+			results     TEXT NOT NULL,
+			searched_at DATETIME NOT NULL,
+			updated_at  DATETIME NOT NULL
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_query_hash ON search_results(query_hash);
 	`)
 	if err != nil {
 		return err

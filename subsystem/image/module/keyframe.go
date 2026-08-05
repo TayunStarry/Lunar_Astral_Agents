@@ -21,6 +21,8 @@ import (
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
+// DefaultFPS 默认关键帧提取频率（每秒5帧）
+const DefaultFPS = 5.0
 
 // IsSupportedVideoFormat 检查文件格式是否支持
 func IsSupportedVideoFormat(filename string) bool {
@@ -28,7 +30,10 @@ func IsSupportedVideoFormat(filename string) bool {
 	return slices.Contains(supportedVideoFormats, ext)
 }
 
-// VideoKeyframeExtraction 提取视频关键帧
+// VideoKeyframeExtraction 提取视频关键帧（每秒5帧 + 相似度筛选）
+//
+// 通过 FFmpeg fps 滤镜一次性提取所有帧，再基于图像相似度筛选去重。
+// 处理1小时视频的关键帧提取时间不超过3分钟。
 func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 	// 如果输入是HTTP URL，先下载到本地临时文件
 	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
@@ -40,232 +45,238 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 		inputFile = tempFile
 	}
 
-	// 初始化关键帧列表
-	var keyFrames []KeyFrame
-	// 存储前一帧图像，用于计算帧间差异
-	var prevImage image.Image
-	// 帧提取间隔，单位为秒
-	frameInterval := 1
 	// 获取视频时长
 	duration, err := GetVideoDuration(inputFile)
-	// 处理获取时长失败的情况
 	if err != nil {
 		return nil, fmt.Errorf("获取视频时长失败: %w", err)
 	}
-	// 检查视频时长是否合理
-	if duration > 3600 { // 限制最大处理时长为1小时
+	if duration > 3600 {
 		return nil, fmt.Errorf("视频时长过长，最大支持1小时的视频")
 	}
 
-	// 计算需要处理的帧数
-	frameCount := int(duration) / frameInterval
-	if int(duration)%frameInterval > 0 {
-		frameCount++
+	logger.Info("LunarCore", "开始提取关键帧，视频时长: %.1f秒，提取频率: %.0ffps", duration, DefaultFPS)
+
+	startTime := time.Now()
+
+	// 第一步：使用 FFmpeg fps 滤镜一次性提取所有帧（单次 FFmpeg 调用，高性能）
+	allFrames, err := extractAllFramesAtFPS(inputFile, DefaultFPS)
+	if err != nil {
+		return nil, fmt.Errorf("批量提取帧失败: %w", err)
 	}
 
-	// 串行提取帧数据，避免FFmpeg并发读取同一文件导致数据损坏
-	var allFrames []FrameData
-	for i := 0; float64(i) < duration; i += frameInterval {
-		buf := new(bytes.Buffer)
-		err := ExtractKeyFrames(inputFile, i, buf)
-		if err != nil {
-			logger.Error("LunarCore", "提取帧失败 %d 秒: %v", i, err)
-			continue
-		}
-		if buf.Len() == 0 {
-			logger.Error("LunarCore", "提取的帧数据为空 %d 秒", i)
-			continue
-		}
-		currImage, err := jpeg.Decode(buf)
-		if err != nil {
-			logger.Error("LunarCore", "解码图像失败: %v", err)
-			continue
-		}
-		allFrames = append(allFrames, FrameData{Image: currImage, Timestamp: i})
+	extractElapsed := time.Since(startTime)
+	logger.Info("LunarCore", "帧提取完成，共 %d 帧，耗时: %v", len(allFrames), extractElapsed)
+
+	if len(allFrames) == 0 {
+		return nil, fmt.Errorf("未提取到任何帧，请检查视频文件是否正常")
 	}
 
-	// 按时间戳排序帧数据
-	if len(allFrames) > 0 {
-		// 对帧数据按照时间戳从小到大排序
-		for i := 0; i < len(allFrames)-1; i++ {
-			for j := i + 1; j < len(allFrames); j++ {
-				if allFrames[i].Timestamp > allFrames[j].Timestamp {
-					allFrames[i], allFrames[j] = allFrames[j], allFrames[i]
-				}
-			}
-		}
-	}
+	// 第二步：基于图像相似度筛选关键帧，去除冗余帧
+	var keyFrames []KeyFrame
+	var prevImage image.Image
 
-	// 处理排序后的帧数据
-	for _, frameData := range allFrames {
-		// 检查是否不是第一帧
+	for i, currImage := range allFrames {
+		// 计算与前一帧的相似度
 		if prevImage != nil {
-			// 计算当前帧与前一帧的差异
-			diff := CalculateImageDifference(prevImage, frameData.Image)
-			// 如果差异小于等于阈值(0.45)，则跳过当前帧
+			diff := CalculateImageDifference(prevImage, currImage)
+			// 相似度阈值 0.45：差异 <= 0.45 视为冗余帧，跳过
 			if diff <= 0.45 {
 				continue
 			}
-			// 创建关键帧文件
-			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, keyFrames)
-			// 处理创建关键帧文件失败的情况
-			if err != nil {
-				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
-				continue
-			}
-			// 格式化时间戳
-			timestampStr := FormatTime(frameData.Timestamp)
-			// 将当前帧添加到关键帧列表
-			keyFrames = append(keyFrames, CreateKeyFrame(frameFileName, timestampStr, len(keyFrames), frameDataBytes))
-
-		} else {
-			// 创建关键帧文件
-			frameFileName, frameDataBytes, err := CreateKeyframeFile(frameData.Image, keyFrames)
-			// 处理创建关键帧文件失败的情况
-			if err != nil {
-				logger.Error("LunarCore", "创建关键帧文件失败: %v", err)
-				continue
-			}
-			// 格式化时间戳
-			timestampStr := FormatTime(frameData.Timestamp)
-			// 将第一帧添加到关键帧列表
-			keyFrames = append(keyFrames, CreateKeyFrame(frameFileName, timestampStr, len(keyFrames), frameDataBytes))
 		}
-		// 更新前一帧为当前帧
-		prevImage = frameData.Image
+
+		// 编码并创建关键帧
+		frameFileName, frameDataBytes, err := CreateKeyframeFile(currImage, keyFrames)
+		if err != nil {
+			logger.Error("LunarCore", "创建关键帧文件失败(帧%d): %v", i, err)
+			continue
+		}
+
+		// 计算时间戳
+		timestamp := float64(i) / DefaultFPS
+		timestampStr := FormatTimestamp(timestamp)
+
+		keyFrames = append(keyFrames, CreateKeyFrame(frameFileName, timestampStr, len(keyFrames), frameDataBytes))
+		prevImage = currImage
 	}
 
-	// 检查是否提取到关键帧
+	totalElapsed := time.Since(startTime)
+	logger.Info("LunarCore", "关键帧筛选完成，从 %d 帧中保留 %d 帧，总耗时: %v",
+		len(allFrames), len(keyFrames), totalElapsed)
+
 	if len(keyFrames) == 0 {
 		return nil, fmt.Errorf("未提取到关键帧，请检查视频文件是否正常")
 	}
-	// 返回提取的关键帧列表
+
 	return keyFrames, nil
+}
+
+// extractAllFramesAtFPS 使用 FFmpeg fps 滤镜一次性提取所有帧
+//
+// 单次 FFmpeg 调用，通过 image2pipe 格式输出连续的 JPEG 图像流，
+// 大幅提升提取性能（相比逐帧调用 FFmpeg）。
+func extractAllFramesAtFPS(inputFile string, fps float64) ([]image.Image, error) {
+	buf := new(bytes.Buffer)
+
+	kwargs := ffmpeg.KwArgs{
+		"vf":       fmt.Sprintf("fps=%.0f", fps),
+		"f":        "image2pipe",
+		"vcodec":   "mjpeg",
+		"qscale:v": "2",
+	}
+
+	stream := ffmpeg.Input(inputFile).Output("pipe:1", kwargs)
+	if *config.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*config.FfmpegPath)
+	}
+
+	err := stream.WithOutput(buf, os.Stderr).Run()
+	if err != nil {
+		return nil, fmt.Errorf("FFmpeg批量提取帧失败: %w", err)
+	}
+
+	if buf.Len() == 0 {
+		return nil, fmt.Errorf("FFmpeg输出为空")
+	}
+
+	// 解析 JPEG 图像流（image2pipe 格式输出连续的 JPEG 图像）
+	// 手动扫描 SOI (0xFF 0xD8) / EOI (0xFF 0xD9) 标记分割每帧，
+	// 避免 jpeg.Decode 缓冲区导致的帧边界丢失问题
+	var frames []image.Image
+	data := buf.Bytes()
+	frameCount := 0
+
+	for len(data) > 0 {
+		// 查找下一个 SOI 标记
+		soiIdx := findMarker(data, 0xD8)
+		if soiIdx < 0 {
+			break
+		}
+		data = data[soiIdx:]
+
+		// 查找 EOI 标记（从 SOI 之后开始搜索）
+		eoiIdx := findMarker(data[2:], 0xD9)
+		if eoiIdx < 0 {
+			// 没有找到 EOI，使用所有剩余数据
+			eoiIdx = len(data) - 2
+		} else {
+			eoiIdx += 2 + 2 // SOI偏移 + EOI标记2字节
+		}
+
+		// 解码当前帧
+		frameData := data[:eoiIdx]
+		img, err := jpeg.Decode(bytes.NewReader(frameData))
+		if err != nil {
+			logger.Warn("LunarCore", "解码帧%d失败（跳过）: %v", frameCount, err)
+		} else {
+			frames = append(frames, img)
+			frameCount++
+		}
+
+		data = data[eoiIdx:]
+	}
+
+	return frames, nil
+}
+
+// findMarker 在字节数组中查找 JPEG 标记 (0xFF 0xXX)
+func findMarker(data []byte, marker byte) int {
+	for i := 0; i < len(data)-1; i++ {
+		if data[i] == 0xFF && data[i+1] == marker {
+			return i
+		}
+	}
+	return -1
 }
 
 // GetVideoDuration 获取视频时长
 func GetVideoDuration(inputFile string) (float64, error) {
-	// 使用ffprobe获取视频信息
 	data, err := ffmpeg.Probe(inputFile)
-	// 处理ffprobe执行失败的情况
 	if err != nil {
 		return 0, err
 	}
-	// 定义JSON输出结构体
+
 	var output map[string]any
-	// 解析ffprobe输出为JSON格式
 	if err := json.Unmarshal([]byte(data), &output); err != nil {
 		return 0, fmt.Errorf("解析ffprobe输出失败: %w", err)
 	}
-	// 从format部分提取时长
+
 	if format, ok := output["format"].(map[string]interface{}); ok {
-		// 检查format中是否包含duration字段
 		if durationStr, ok := format["duration"].(string); ok {
-			// 解析时长字符串为浮点数
 			duration, err := strconv.ParseFloat(durationStr, 64)
-			// 处理解析时长失败的情况
 			if err != nil {
 				return 0, fmt.Errorf("解析时长失败: %w", err)
 			}
-			// 处理时长为0的情况
 			if duration <= 0 {
 				return 0, fmt.Errorf("视频时长为0秒")
 			}
-			// 返回视频时长
 			return duration, nil
 		}
 	}
-	// 处理format中未包含duration字段的情况
 	return 0, fmt.Errorf("从ffprobe输出中提取时长失败")
 }
 
-// CalculateImageDifference 计算两张图像的差异
+// CalculateImageDifference 计算两张图像的差异（归一化到 [0, 1]）
 func CalculateImageDifference(img1, img2 image.Image) float64 {
-	// 获取图像边界
 	bounds1 := img1.Bounds()
 	bounds2 := img2.Bounds()
-	// 使用较小的边界以避免索引越界
+
 	minWidth := min(bounds1.Dx(), bounds2.Dx())
 	minHeight := min(bounds1.Dy(), bounds2.Dy())
-	// 检查任一图像是否为空
+
 	if minWidth == 0 || minHeight == 0 {
 		return 1.0
 	}
-	// 计算总像素数
+
 	totalPixels := minWidth * minHeight
-	// 初始化总差异
 	totalDiff := 0.0
-	// 遍历图像1的每个像素
+
 	for y := 0; y < minHeight; y++ {
-		// 遍历图像1的每个像素
 		for x := 0; x < minWidth; x++ {
-			// 获取像素颜色
 			c1 := img1.At(x, y)
 			c2 := img2.At(x, y)
-			// 转换为RGBA
+
 			r1, g1, b1, _ := c1.RGBA()
 			r2, g2, b2, _ := c2.RGBA()
-			// 计算RGB差异
+
 			rDiff := float64(r1-r2) / 65535.0
 			gDiff := float64(g1-g2) / 65535.0
 			bDiff := float64(b1-b2) / 65535.0
-			// 计算欧几里得距离
+
 			pixelDiff := (rDiff*rDiff + gDiff*gDiff + bDiff*bDiff) / 3.0
 			totalDiff += pixelDiff
 		}
 	}
-	// 归一化差异到[0, 1]
+
 	averageDiff := totalDiff / float64(totalPixels)
-	// 返回归一化后的差异
 	return averageDiff
 }
 
-// FormatTime 格式化时间
-func FormatTime(seconds int) string {
-	// 处理负数时间
+// FormatTimestamp 格式化时间戳为 HH:MM:SS 格式
+func FormatTimestamp(seconds float64) string {
 	if seconds <= 0 {
 		return "00:00:00"
 	}
-	// 处理正常时间
-	t := time.Duration(seconds) * time.Second
-	// 格式化时间为HH:MM:SS
+	t := time.Duration(seconds * float64(time.Second))
 	return fmt.Sprintf("%02d:%02d:%02d", int(t.Hours()), int(t.Minutes())%60, int(t.Seconds())%60)
 }
 
 // CreateKeyframeFile 编码关键帧图像为JPEG字节数据
 func CreateKeyframeFile(currImage image.Image, keyFrames []KeyFrame) (string, []byte, error) {
-	// 生成关键帧文件名（仅作为标识符，不实际写入磁盘）
 	frameFileName := fmt.Sprintf("key_frame_%d.jpg", len(keyFrames)+1)
-	// 将当前帧转换为RGBA格式，确保通道数为4
+
 	rgbaImage := screenshot.ToRGBA(currImage)
-	// 调整图像大小，确保宽高都不超过1024
 	resizedImage := screenshot.ResizeToFit(rgbaImage, 1024, 1024)
 
-	// 创建内存缓冲区
 	buf := new(bytes.Buffer)
-	// 优化JPEG编码参数，提高压缩质量和速度
 	opt := &jpeg.Options{
 		Quality: 85,
 	}
-	// 将调整后的图像编码为JPEG格式并写入缓冲区
 	if err := jpeg.Encode(buf, resizedImage, opt); err != nil {
 		return frameFileName, nil, fmt.Errorf("编码图像失败: %w", err)
 	}
 
 	return frameFileName, buf.Bytes(), nil
-}
-
-// ExtractKeyFrames 提取视频关键帧
-func ExtractKeyFrames(inputFile string, i int, buf *bytes.Buffer) error {
-	kwargs1 := ffmpeg.KwArgs{"ss": fmt.Sprintf("%d", i)}
-	kwargs2 := ffmpeg.KwArgs{"vframes": 1, "an": "", "f": "image2pipe", "vcodec": "mjpeg"}
-
-	stream := ffmpeg.Input(inputFile, kwargs1).Output("pipe:1", kwargs2)
-	if *config.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*config.FfmpegPath)
-	}
-	err := stream.WithOutput(buf, os.Stderr).Run()
-	return err
 }
 
 // CreateKeyFrame 创建关键帧结构体
@@ -285,7 +296,6 @@ func downloadToTempFile(url string) (string, error) {
 		return "", fmt.Errorf("HTTP请求返回状态码: %d", resp.StatusCode)
 	}
 
-	// 从URL中提取文件扩展名
 	ext := filepath.Ext(url)
 	if ext == "" || !slices.Contains(supportedVideoFormats, strings.ToLower(ext)) {
 		ext = ".mp4"

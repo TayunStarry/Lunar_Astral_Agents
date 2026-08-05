@@ -174,7 +174,7 @@ func cosineSimilarity(a, b []float64) float64 {
 }
 
 // applyRerank 对搜索结果应用余弦相似度重排序
-func applyRerank(reranker *Reranker, query string, results []SearchResult, _ func(format string, args ...interface{})) []SearchResult {
+func applyRerank(reranker *Reranker, query string, results []SearchResult, debugLog func(format string, args ...interface{})) []SearchResult {
 	if reranker == nil {
 		return results
 	}

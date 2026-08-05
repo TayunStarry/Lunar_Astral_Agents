@@ -670,8 +670,11 @@ func (s *WebpageSearcher) fetchContentHTTPOnly(pageURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Referer", "https://www.google.com/")
+	setBrowserHeaders(req)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -703,7 +706,7 @@ func (s *WebpageSearcher) fetchContent(pageURL string, queryKeywords []string) (
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := s.httpClient.Do(req)
@@ -769,7 +772,7 @@ func (s *WebpageSearcher) fetchRawContent(pageURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := s.httpClient.Do(req)
@@ -815,7 +818,7 @@ func resolveSogouURL(client *http.Client, sogouURL string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := client.Do(req)
@@ -981,7 +984,7 @@ func extractCoreEntity(query string) string {
 }
 
 // checkContentRelevance 检查内容与查询的相关性，返回匹配关键词数量
-func checkContentRelevance(queryKeywords []string, content, title, snippet, _ string, isOfficial bool) int {
+func checkContentRelevance(queryKeywords []string, content, title, snippet, url string, isOfficial bool) int {
 	if len(queryKeywords) == 0 {
 		return 2 // 无法判断时，默认保留
 	}

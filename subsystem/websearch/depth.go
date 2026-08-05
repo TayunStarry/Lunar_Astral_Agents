@@ -19,9 +19,10 @@ func NewDepthSearcher(simpleSearcher *SimpleSearcher, llmProvider Provider, cfg 
 		simple:      simpleSearcher,
 		llmProvider: llmProvider,
 		cfg:         cfg,
-		httpClient:  &http.Client{Timeout: time.Duration(httpCfg.Timeout) * time.Second},
+		httpClient:  &http.Client{Timeout: httpCfg.Timeout},
 		userAgent:   httpCfg.UserAgent,
 		knowledge:   knowledge,
+		seenURLs:    make(map[string]bool),
 	}
 }
 
@@ -289,6 +290,18 @@ func (s *DepthSearcher) fetchContentForResults(results []subResult, query string
 			if r.URL == "" {
 				continue
 			}
+			// 全局 URL 去重：跨轮次避免重复抓取
+			s.seenURLsMu.Lock()
+			if s.seenURLs[r.URL] {
+				s.seenURLsMu.Unlock()
+				if s.debugLog != nil {
+					s.debugLog("[深度搜索] URL已存在 跳过 URL=%s", r.URL)
+				}
+				continue
+			}
+			s.seenURLs[r.URL] = true
+			s.seenURLsMu.Unlock()
+
 			// 过滤字典/百科网站，避免浪费资源渲染无关页面
 			if isDictionarySite(r.URL) {
 				if s.debugLog != nil {
@@ -440,6 +453,9 @@ func (s *DepthSearcher) fetchContentHTTPOnly(pageURL string) (string, error) {
 	}
 	req.Header.Set("User-Agent", s.userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Referer", "https://www.google.com/")
+	setBrowserHeaders(req)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -845,6 +861,7 @@ var domainDiscoveryBlacklist = []string{
 	"gamers.com",
 	"www.baidu.com",
 	"m.baidu.com",
+	"baidu.com", // 覆盖 image.baidu.com、wenku.baidu.com 等所有子域名
 	"so.com",
 	"sogou.com",
 	"smzdm.com",

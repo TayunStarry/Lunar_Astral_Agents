@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"storage/module"
 )
 
 // NewWithLLM 使用工具模型池 LLM 提供者创建网络检索子系统
@@ -20,12 +22,15 @@ func NewWithLLM(cfg Config, provider Provider, debugLog func(format string, args
 	s.simple = NewSimpleSearcher(cfg)
 	s.simple.health = s.health
 	s.simple.debugLog = debugLog
+	// 给 BingSearcher 注入 debugLog
+	if bing, ok := s.simple.bing.(*BingSearcher); ok {
+		bing.debugLog = debugLog
+	}
 
-	// 先初始化搜索知识库（SQLite）——所有模式都初始化，简易模式也需要查询
+	// 初始化搜索知识库（SQLite）——URL 缓存始终需要
 	var knowledge *SearchKnowledge
-	sk, err := NewSearchKnowledge("data/search_knowledge.db", debugLog)
+	sk, err := NewSearchKnowledge("data/search_knowledge.db", debugLog, cfg.KnowledgeVector.Enabled)
 	if err != nil {
-		// 初始化失败时不能静默吞掉，否则后续所有知识库操作都被跳过
 		if debugLog != nil {
 			debugLog("[搜索知识库] 初始化失败: %v", err)
 		} else {
@@ -40,6 +45,35 @@ func NewWithLLM(cfg Config, provider Provider, debugLog func(format string, args
 	s.depth = NewDepthSearcher(s.simple, s.llmProvider, cfg.Depth, cfg.HTTP, knowledge)
 	s.depth.debugLog = debugLog
 
+	// 智能学习模式：通过 storage 模块初始化向量知识库集合 + 学习器
+	if cfg.KnowledgeVector.Enabled {
+		// 初始化 storage 模块中的向量知识库集合（由 storage 模块统一管理）
+		if module.MemoryDatabase != nil && module.MemoryDatabase.IsMemoryInitialized() {
+			ctx := context.Background()
+			// 初始化 search_knowledge 集合（知识记忆）
+			if err := module.CollectionInit(ctx, "search_knowledge", "system-embedding"); err != nil {
+				if debugLog != nil {
+					debugLog("[智能搜索] 知识集合初始化失败: %v", err)
+				}
+			}
+			// 初始化 search_experience 集合（经验记忆）
+			if err := module.CollectionInit(ctx, "search_experience", "system-embedding"); err != nil {
+				if debugLog != nil {
+					debugLog("[智能搜索] 经验集合初始化失败: %v", err)
+				}
+			}
+			s.learner = NewSearchLearner(module.MemoryDatabase, s.simple, s.depth, provider, knowledge,
+				cfg.KnowledgeVector, cfg.Depth, debugLog)
+			if debugLog != nil {
+				debugLog("[智能搜索] 学习器已就绪，使用 storage 模块向量存储")
+			}
+		} else {
+			if debugLog != nil {
+				debugLog("[智能搜索] storage 模块记忆库未初始化，跳过智能学习模式")
+			}
+		}
+	}
+
 	return s
 }
 
@@ -51,6 +85,10 @@ func (s *System) SetDebugLogFunc(fn func(format string, args ...interface{})) {
 	s.depth.debugLog = fn
 	if s.knowledge != nil {
 		s.knowledge.debugLog = fn
+	}
+	// 更新 BingSearcher 的 debugLog
+	if bing, ok := s.simple.bing.(*BingSearcher); ok {
+		bing.debugLog = fn
 	}
 
 	if s.DebugLog != nil {
@@ -70,7 +108,7 @@ func (s *System) SetVisionProvider(vp VisionProvider) {
 
 // SetRerankProvider 设置重排序提供者（Embedding模型池）
 // 用于 LLM Rerank：对搜索结果按余弦相似度重排序
-// 仅在网页搜索和深度搜索中生效，简易搜索不调用
+// 注意：向量知识库已迁移至 storage 模块，embedding 由 storage 内部管理，无需额外注入
 func (s *System) SetRerankProvider(embedding EmbeddingProvider) {
 	s.reranker = NewReranker(embedding, s.DebugLog)
 }
@@ -131,8 +169,13 @@ func (s *System) Search(ctx context.Context, query string, mode SearchMode, forc
 	return s.doSearch(ctx, query, mode, forceRefresh...)
 }
 
-// doSearch 按模式路由搜索，集成知识库缓存
+// doSearch 按模式路由搜索，智能学习模式优先
 func (s *System) doSearch(ctx context.Context, query string, mode SearchMode, forceRefresh ...bool) (string, error) {
+	// 智能学习模式：走完整工作流（refine→memory→search→evaluate→deep→store）
+	if s.learner != nil {
+		return s.learner.LearnAndSearch(ctx, query)
+	}
+
 	skipCache := len(forceRefresh) > 0 && forceRefresh[0]
 
 	// 简易模式：查知识库，未命中/过期则轻量联网搜索
@@ -258,12 +301,6 @@ func (s *System) simpleSearch(query string) (string, error) {
 	return s.simple.Search(query)
 }
 
-// SimpleSearchRaw 执行轻量摘要搜索，返回原始结果列表（而非格式化字符串）
-// 供外部调用方自行处理搜索结果结构
-func (s *System) SimpleSearchRaw(query string) ([]SearchResult, error) {
-	return s.simple.SearchRaw(query)
-}
-
 // webpageSearch 执行网页搜索
 func (s *System) webpageSearch(query string) (string, error) {
 	result, _, err := s.webpage.SearchWithResults(query)
@@ -359,8 +396,8 @@ func (s *System) getConfig() Config {
 	return s.cfg
 }
 
-// HasLLM 检查是否配置了 LLM
-func (s *System) HasLLM() bool {
+// hasLLM 检查是否配置了 LLM
+func (s *System) hasLLM() bool {
 	return s.llmProvider != nil
 }
 
@@ -386,6 +423,9 @@ func (s *System) EnsureBrowser() {
 	if baidu, ok := s.simple.baidu.(*BaiduSearcher); ok {
 		baidu.browserRenderer = cr
 	}
+	if bing, ok := s.simple.bing.(*BingSearcher); ok {
+		bing.browserRenderer = cr
+	}
 }
 
 // CloseBrowser 关闭浏览器并清理所有进程
@@ -402,6 +442,23 @@ func (s *System) CloseBrowser() {
 	if baidu, ok := s.simple.baidu.(*BaiduSearcher); ok {
 		baidu.browserRenderer = nil
 	}
+	if bing, ok := s.simple.bing.(*BingSearcher); ok {
+		bing.browserRenderer = nil
+	}
+}
+
+// HasLearner 检查学习者是否已就绪
+func (s *System) HasLearner() bool {
+	return s.learner != nil
+}
+
+// LearnerSearch 执行智能学习搜索（refine→memory→search→evaluate→deep→store 工作流）
+// 供外部 Goja 封装层调用
+func (s *System) LearnerSearch(ctx context.Context, query string) (string, error) {
+	if s.learner == nil {
+		return "", fmt.Errorf("学习者未初始化")
+	}
+	return s.learner.LearnAndSearch(ctx, query)
 }
 
 // Close 释放子系统资源

@@ -157,7 +157,8 @@ class LunarAgent extends AgentDefine {
 		this.learnerRole.messages = [];
 		this.painterRole.coverContext([]);
 		this.musicianRole.coverContext([]);
-		this.organizeRole.coverContext([]);
+			this.viewerRole.coverContext([]);
+			this.organizeRole.coverContext([]);
 		// 清除主智能体的unreadContext和unreadVideoUrl
 		this.unreadContext = [];
 		this.unreadVideoUrl = [];

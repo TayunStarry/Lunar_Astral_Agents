@@ -1632,6 +1632,9 @@ K:Am
         }
     }
 
+    const PERSON_PREFIX = '[人物档案 - ';
+    const EVENT_PREFIX = '[事件档案 - ';
+    const SELF_PREFIX = '[自我档案]';
     class Prompt extends ModelBuilder {
         currentLocation = '';
         getCurrentLocation() {
@@ -1657,89 +1660,342 @@ K:Am
                 hour12: false
             });
         }
-        buildSummarizePrompt(records) {
-            const recordTexts = records.map((msg, idx) => {
+        formatMessages(records) {
+            return records.map((msg, idx) => {
                 const content = typeof msg.content === 'string'
                     ? msg.content
                     : JSON.stringify(msg.content);
-                const preview = content.length > 500 ? content.slice(0, 500) + '...' : content;
-                return `[事件${idx + 1}] 角色:${msg.role} | 内容:${preview}`;
-            });
+                const preview = content.length > 600 ? content.slice(0, 600) + '...' : content;
+                return `[消息${idx + 1}] 角色:${msg.role} | ${preview}`;
+            }).join('\n');
+        }
+        buildPersonExtractPrompt(records) {
             const currentTime = this.getCurrentTime();
             const currentLocation = this.getCurrentLocation();
-            return `请将以下 ${records.length} 条历史事件数据，每个事件独立摘要为一个简洁准确的记忆点摘要。
+            return `请从以下对话消息中提取所有人物信息，为每个人物生成一份档案。
 
-【事件数据】
-${recordTexts.join('\n')}
+【对话消息】
+${this.formatMessages(records)}
 
 【系统上下文】
-- 当前时间: ${currentTime}（若事件未包含时间信息，使用此时间）
-- 当前位置: ${currentLocation}（若事件未包含地点信息，使用此位置）
+- 当前时间: ${currentTime}
+- 当前位置: ${currentLocation}
 
-【处理规则】
-1. 每个事件独立生成一条记忆点摘要，不要跨事件合并
-2. 若事件明确包含时间信息，保留原时间；否则使用上述当前时间
-3. 若事件明确包含地点信息，保留原地点；否则使用上述当前位置
-4. 摘要内容简洁准确，聚焦核心事实
-
-【输出格式】
-请输出 JSON 数组，每个元素对应一个事件的记忆点摘要：
-\`\`\`json
-[
-  {
-    "time": "时间信息（从事件中提取，若无则使用当前时间）",
-    "location": "地点信息（从事件中提取，若无则使用当前位置）",
-    "content": "事件的核心内容摘要，简洁准确",
-    "topic": "事件的关键词或主题"
-  }
-]
-\`\`\`
-
-仅输出 JSON 数组，不要包含其他说明文字。`;
-        }
-        buildBatchMergePrompt(candidates) {
-            const candidateTexts = candidates.map((c, idx) => {
-                const existingText = c.existingRecords.map((r, i) => `[历史记录${i + 1}] ID:${r.id} | 相似度:${(r.similarity * 100).toFixed(1)}% | 内容:${r.content}`).join('\n');
-                return `--- 待合并项${idx + 1} ---
-当前摘要: 时间:${c.summary.time} | 地点:${c.summary.location} | 内容:${c.summary.content} | 话题:${c.summary.topic}
-已有历史记录:
-${existingText}`;
-            }).join('\n\n');
-            return `请对以下 ${candidates.length} 个待合并项逐一判断：当前摘要与历史记录内容相似但需要合并更新。
-
-${candidateTexts}
-
-【决策原则】
-对每个待合并项：
-1. 若当前摘要与历史记录语义完全相同 → merged_content 为空字符串，delete_ids 包含需要清理的历史记录ID
-2. 若当前摘要包含历史记录中没有的新信息 → 合并为更完整的记录，merged_content 为合并后内容（以 [时间] 地点:... | 事件:... | 话题:... 格式输出），delete_ids 包含被合并的历史记录ID
-3. 若历史记录已足够完整，当前摘要无新增信息 → merged_content 为空字符串，delete_ids 为空数组（保留原记录不变）
+【提取规则】
+1. 从消息中识别所有被提及的人物（包括说话者自身），为每个独立人物生成一份档案
+2. 同一个人物不要重复提取
+3. 若某字段在消息中未提及，则留空（不要编造）
+4. 字段说明：
+   - name: 人物名称（必填，如"月华"、"星光阁"）
+   - nickname: 外号或别名
+   - gender: 性别
+   - personality: 性格特征描述
+   - clothing: 服饰特点描述
+   - location: 当前所在地点
+   - dietaryPrefs: 饮食偏好
+   - currentActivity: 当前正在进行的活动
 
 【输出格式】
-请输出 JSON 数组，每个元素对应一个待合并项的决策结果（顺序与输入一致）：
+请输出 JSON 对象，包含 items 数组：
 \`\`\`json
-[
-  {
-    "delete_ids": ["需要删除的历史记录ID"],
-    "merged_content": "合并后的完整内容（空字符串表示放弃合并）"
-  }
-]
+{
+  "items": [
+    {
+      "name": "人物名称",
+      "nickname": "外号",
+      "gender": "性别",
+      "personality": "性格特征",
+      "clothing": "服饰特点",
+      "location": "所在地点",
+      "dietaryPrefs": "饮食偏好",
+      "currentActivity": "当前活动"
+    }
+  ]
+}
 \`\`\`
 
-仅输出 JSON 数组，不要包含其他说明文字。`;
+仅输出 JSON，不要包含其他说明文字。`;
         }
-        formatSummaryAsRecord(summary) {
-            return `[${summary.time}] 地点:${summary.location} | 事件:${summary.content} | 话题:${summary.topic}`;
+        buildPersonMergePrompt(existingArchive, newInfo) {
+            return `请将以下人物档案的新信息合并到已有档案中，补充和更新档案内容。
+
+【已有档案】
+${existingArchive}
+
+【新信息】
+${JSON.stringify(newInfo, null, 2)}
+
+【合并规则】
+1. 保留已有档案中所有仍然有效的信息
+2. 用新信息补充和更新对应字段
+3. 若新信息与已有信息冲突，以新信息为准（新信息更有时效性）
+4. 不要删除已有档案中未与新信息冲突的字段
+
+【输出格式】
+请输出合并后的完整档案 JSON：
+\`\`\`json
+{
+  "name": "人物名称",
+  "nickname": "外号",
+  "gender": "性别",
+  "personality": "性格特征",
+  "clothing": "服饰特点",
+  "location": "所在地点",
+  "dietaryPrefs": "饮食偏好",
+  "currentActivity": "当前活动"
+}
+\`\`\`
+
+仅输出 JSON，不要包含其他说明文字。`;
         }
-        ensureTimestampInRecord(content) {
-            const timestampRegex = /^\[([^\]]+)\]/;
-            if (timestampRegex.test(content))
-                return content;
-            return `[${this.getCurrentTime()}] ${content}`;
+        buildEventExtractPrompt(records) {
+            const currentTime = this.getCurrentTime();
+            const currentLocation = this.getCurrentLocation();
+            return `请从以下对话消息中提取所有事件信息，为每个独立事件生成一份档案。
+
+【对话消息】
+${this.formatMessages(records)}
+
+【系统上下文】
+- 当前时间: ${currentTime}
+- 当前位置: ${currentLocation}
+
+【提取规则】
+1. 从消息中识别所有已发生或正在发生的事件
+2. 仅提取具有明确信息的事件，不要编造
+3. 字段说明：
+   - name: 事件简称（必填，如"星月祭典"、"代码审查"）
+   - type: 事件类型（如"社交活动"、"工作会议"、"个人事务"）
+   - time: 发生时间（从消息中提取，若无则使用当前时间）
+   - location: 发生地点
+   - keyNotes: 关键注意事项或重要细节
+
+【输出格式】
+请输出 JSON 对象，包含 items 数组：
+\`\`\`json
+{
+  "items": [
+    {
+      "name": "事件简称",
+      "type": "事件类型",
+      "time": "发生时间",
+      "location": "发生地点",
+      "keyNotes": "关键注意事项"
+    }
+  ]
+}
+\`\`\`
+
+仅输出 JSON，不要包含其他说明文字。`;
+        }
+        buildEventMergePrompt(existingArchive, newInfo) {
+            return `请将以下事件档案的新信息合并到已有档案中，补充和更新档案内容。
+
+【已有档案】
+${existingArchive}
+
+【新信息】
+${JSON.stringify(newInfo, null, 2)}
+
+【合并规则】
+1. 保留已有档案中所有仍然有效的信息
+2. 用新信息补充和更新对应字段
+3. 若新信息与已有信息冲突，以新信息为准
+
+【输出格式】
+请输出合并后的完整档案 JSON：
+\`\`\`json
+{
+  "name": "事件简称",
+  "type": "事件类型",
+  "time": "发生时间",
+  "location": "发生地点",
+  "keyNotes": "关键注意事项"
+}
+\`\`\`
+
+仅输出 JSON，不要包含其他说明文字。`;
+        }
+        buildSelfExtractPrompt(records) {
+            return `请从以下对话消息中提取关于"月华"（即说话者自身）的当前状态信息。
+
+【对话消息】
+${this.formatMessages(records)}
+
+【提取规则】
+1. 仅提取关于月华自身的信息
+2. 字段说明：
+   - mood: 当前心情状态（如"开心"、"疲惫"、"专注"）
+   - clothing: 当前服饰描述
+   - activity: 正在进行的活动
+   - needs: 当前需求或期望获取的物品/信息
+3. 若某字段在消息中未提及，则留空
+
+【输出格式】
+请输出 JSON 对象：
+\`\`\`json
+{
+  "mood": "心情状态",
+  "clothing": "服饰描述",
+  "activity": "正在进行的活动",
+  "needs": "当前需求"
+}
+\`\`\`
+
+仅输出 JSON，不要包含其他说明文字。`;
+        }
+        buildSelfMergePrompt(existingArchive, newInfo) {
+            return `请将以下自我档案的新信息合并到已有档案中，补充和更新档案内容。
+
+【已有档案】
+${existingArchive}
+
+【新信息】
+${JSON.stringify(newInfo, null, 2)}
+
+【合并规则】
+1. 保留已有档案中所有仍然有效的信息
+2. 用新信息补充和更新对应字段
+3. 若新信息与已有信息冲突，以新信息为准
+
+【输出格式】
+请输出合并后的完整档案 JSON：
+\`\`\`json
+{
+  "mood": "心情状态",
+  "clothing": "服饰描述",
+  "activity": "正在进行的活动",
+  "needs": "当前需求"
+}
+\`\`\`
+
+仅输出 JSON，不要包含其他说明文字。`;
+        }
+        formatPersonArchive(archive) {
+            const fields = [];
+            if (archive.name)
+                fields.push(`名称: ${archive.name}`);
+            if (archive.nickname)
+                fields.push(`外号: ${archive.nickname}`);
+            if (archive.gender)
+                fields.push(`性别: ${archive.gender}`);
+            if (archive.personality)
+                fields.push(`性格: ${archive.personality}`);
+            if (archive.clothing)
+                fields.push(`服饰: ${archive.clothing}`);
+            if (archive.location)
+                fields.push(`地点: ${archive.location}`);
+            if (archive.dietaryPrefs)
+                fields.push(`饮食: ${archive.dietaryPrefs}`);
+            if (archive.currentActivity)
+                fields.push(`活动: ${archive.currentActivity}`);
+            return `${PERSON_PREFIX}${archive.name}]\n${fields.join('\n')}`;
+        }
+        formatEventArchive(archive) {
+            const fields = [];
+            if (archive.name)
+                fields.push(`事件: ${archive.name}`);
+            if (archive.type)
+                fields.push(`类型: ${archive.type}`);
+            if (archive.time)
+                fields.push(`时间: ${archive.time}`);
+            if (archive.location)
+                fields.push(`地点: ${archive.location}`);
+            if (archive.keyNotes)
+                fields.push(`注意事项: ${archive.keyNotes}`);
+            return `${EVENT_PREFIX}${archive.name}]\n${fields.join('\n')}`;
+        }
+        formatSelfArchive(archive) {
+            const fields = [];
+            if (archive.mood)
+                fields.push(`心情: ${archive.mood}`);
+            if (archive.clothing)
+                fields.push(`服饰: ${archive.clothing}`);
+            if (archive.activity)
+                fields.push(`活动: ${archive.activity}`);
+            if (archive.needs)
+                fields.push(`需求: ${archive.needs}`);
+            return `${SELF_PREFIX}\n${fields.join('\n')}`;
+        }
+        parsePersonArchive(content) {
+            try {
+                const result = { name: '' };
+                const lines = content.replace(PERSON_PREFIX, '').replace(/\]$/, '').split('\n');
+                const headerMatch = content.match(/\[人物档案 - (.+?)\]/);
+                if (headerMatch)
+                    result.name = headerMatch[1];
+                for (const line of lines) {
+                    if (line.startsWith('名称: '))
+                        result.name = result.name || line.slice(4);
+                    else if (line.startsWith('外号: '))
+                        result.nickname = line.slice(4);
+                    else if (line.startsWith('性别: '))
+                        result.gender = line.slice(4);
+                    else if (line.startsWith('性格: '))
+                        result.personality = line.slice(4);
+                    else if (line.startsWith('服饰: '))
+                        result.clothing = line.slice(4);
+                    else if (line.startsWith('地点: '))
+                        result.location = line.slice(4);
+                    else if (line.startsWith('饮食: '))
+                        result.dietaryPrefs = line.slice(4);
+                    else if (line.startsWith('活动: '))
+                        result.currentActivity = line.slice(4);
+                }
+                return result.name ? result : null;
+            }
+            catch {
+                return null;
+            }
+        }
+        parseEventArchive(content) {
+            try {
+                const result = { name: '' };
+                const headerMatch = content.match(/\[事件档案 - (.+?)\]/);
+                if (headerMatch)
+                    result.name = headerMatch[1];
+                const lines = content.replace(EVENT_PREFIX, '').replace(/\]$/, '').split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('事件: '))
+                        result.name = result.name || line.slice(4);
+                    else if (line.startsWith('类型: '))
+                        result.type = line.slice(4);
+                    else if (line.startsWith('时间: '))
+                        result.time = line.slice(4);
+                    else if (line.startsWith('地点: '))
+                        result.location = line.slice(4);
+                    else if (line.startsWith('注意事项: '))
+                        result.keyNotes = line.slice(4);
+                }
+                return result.name ? result : null;
+            }
+            catch {
+                return null;
+            }
+        }
+        parseSelfArchive(content) {
+            try {
+                const result = {};
+                const lines = content.replace(SELF_PREFIX, '').split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('心情: '))
+                        result.mood = line.slice(4);
+                    else if (line.startsWith('服饰: '))
+                        result.clothing = line.slice(4);
+                    else if (line.startsWith('活动: '))
+                        result.activity = line.slice(4);
+                    else if (line.startsWith('需求: '))
+                        result.needs = line.slice(4);
+                }
+                return (result.mood || result.clothing || result.activity || result.needs) ? result : null;
+            }
+            catch {
+                return null;
+            }
         }
     }
     class Toolchain extends Prompt {
-        queryExistingRecords(queryText, topK = 10) {
+        queryMemory(queryText, topK = 10) {
             if (!queryText || queryText.trim().length === 0)
                 return [];
             const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
@@ -1749,35 +2005,31 @@ ${candidateTexts}
             }
             return results || [];
         }
-        executeBatchActions(decisions) {
-            const allDeleteIds = [];
-            for (const decision of decisions) {
-                allDeleteIds.push(...decision.deleteIds);
-            }
-            const uniqueDeleteIds = [...new Set(allDeleteIds)];
-            console.log(`[编纂者] 准备删除 ${uniqueDeleteIds.length} 条旧记录`);
-            for (const id of uniqueDeleteIds) {
-                const trimmedId = id.trim();
-                if (!trimmedId)
-                    continue;
-                const [, error] = memoryDelete('lunar_messages', trimmedId);
+        queryArchiveByPrefix(prefix, topK = 50) {
+            const allResults = this.queryMemory(prefix, topK);
+            return allResults.filter(r => r.content.startsWith(prefix));
+        }
+        deleteRecords(ids) {
+            const uniqueIds = [...new Set(ids.filter(id => id && id.trim()))];
+            if (uniqueIds.length === 0)
+                return;
+            console.log(`[编纂者] 删除 ${uniqueIds.length} 条旧档案`);
+            for (const id of uniqueIds) {
+                const [, error] = memoryDelete('lunar_messages', id.trim());
                 if (error)
-                    console.error(`[编纂者] 删除记录 ${trimmedId} 失败:`, error);
+                    console.error(`[编纂者] 删除记录 ${id} 失败:`, error);
                 else
-                    console.log(`[编纂者] 已删除记录 ${trimmedId}`);
+                    console.log(`[编纂者] 已删除记录 ${id}`);
             }
-            const toStore = decisions.filter(d => d.shouldStore);
-            console.log(`[编纂者] 准备写入 ${toStore.length} 条新记录`);
-            for (const decision of toStore) {
-                if (!decision.storeContent || decision.storeContent.trim().length === 0)
-                    continue;
-                const finalContent = this.ensureTimestampInRecord(decision.storeContent.trim());
-                const [, error] = memoryAdd('lunar_messages', 'assistant', finalContent);
-                if (error)
-                    console.error('[编纂者] 写入记录失败:', error);
-                else
-                    console.log('[编纂者] 已写入新记录');
-            }
+        }
+        writeArchive(content) {
+            if (!content || content.trim().length === 0)
+                return;
+            const [, error] = memoryAdd('lunar_messages', 'assistant', content.trim());
+            if (error)
+                console.error('[编纂者] 写入档案失败:', error);
+            else
+                console.log(`[编纂者] 已写入档案: ${content.slice(0, 60)}...`);
         }
         parseJsonResponse(content) {
             try {
@@ -1790,17 +2042,32 @@ ${candidateTexts}
                 return null;
             }
         }
+        runLLM(prompt) {
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            try {
+                const response = this.run([], []);
+                return response.body?.choices?.[0]?.message?.content || '';
+            }
+            catch (error) {
+                console.error('[编纂者] LLM 推理失败:', error);
+                return '';
+            }
+        }
+        runMergeLLM(prompt) {
+            const content = this.runLLM(prompt);
+            if (!content)
+                return null;
+            return this.parseJsonResponse(content);
+        }
     }
     class OrganizeRole extends Toolchain {
-        DUPLICATE_THRESHOLD = 0.85;
-        MERGE_THRESHOLD = 0.55;
-        DEDUP_THRESHOLD = 0.93;
-        MERGE_BATCH_SIZE = 10;
+        ARCHIVE_QUERY_TOPK = 50;
         constructor() {
             super(fileView('prompts/organizeRole.md')[0]);
         }
         organizeHistoricalRecords() {
-            console.log('[编纂者] 开始组织历史记录');
+            console.log('[编纂者] 开始档案收集与整理');
             if (OnlyData.unreadRecords.length === 0) {
                 console.log('[编纂者] 没有未读记录需要整理');
                 return;
@@ -1812,180 +2079,153 @@ ${candidateTexts}
                     return;
                 }
             }
+            const records = [...OnlyData.unreadRecords];
             try {
-                const summaries = this.generateMemorySummaries(OnlyData.unreadRecords);
-                if (summaries.length === 0) {
-                    console.log('[编纂者] 未生成有效摘要，结束整理');
-                    return;
-                }
-                console.log(`[编纂者] 阶段一完成，生成 ${summaries.length} 条记忆点摘要`);
-                const { decisions, mergeCandidates } = this.classifyAndDecide(summaries);
-                const dupCount = decisions.filter(d => d.category === 'duplicate').length;
-                const newCount = decisions.filter(d => d.category === 'new').length;
-                const mergeCount = mergeCandidates.length;
-                console.log(`[编纂者] 阶段二三完成 — 重复:${dupCount} | 待合并:${mergeCount} | 新增:${newCount}`);
-                if (mergeCandidates.length > 0) {
-                    this.processMergeCandidates(decisions, mergeCandidates);
-                }
-                this.executeBatchActions(decisions);
-                this.deduplicateMemory();
-                console.log('[编纂者] 历史记录组织完成');
+                this.processPersonArchives(records);
+                this.processEventArchives(records);
+                this.processSelfArchive(records);
+                console.log('[编纂者] 档案整理完成');
                 OnlyData.unreadRecords = [];
             }
             catch (error) {
-                console.error('[编纂者] 组织历史记录失败，保留未读记录待下次重试:', error);
+                console.error('[编纂者] 档案整理失败，保留未读记录待下次重试:', error);
             }
         }
-        generateMemorySummaries(records) {
-            const prompt = this.buildSummarizePrompt(records);
-            this.coverContext({ role: 'user', content: prompt });
-            this.runtimeMessages = [];
-            let response;
-            try {
-                response = this.run([], []);
+        processPersonArchives(records) {
+            console.log('[编纂者] === 阶段一：人物档案处理 ===');
+            const prompt = this.buildPersonExtractPrompt(records);
+            const content = this.runLLM(prompt);
+            if (!content) {
+                console.log('[编纂者] 人物档案提取未获得有效结果');
+                return;
             }
-            catch (error) {
-                console.error('[编纂者] 阶段一模型推理失败:', error);
-                return [];
+            const result = this.parseJsonResponse(content);
+            if (!result || !result.items || result.items.length === 0) {
+                console.log('[编纂者] 未提取到人物信息');
+                return;
             }
-            const content = response.body?.choices?.[0]?.message?.content || '';
-            const summaries = this.parseJsonResponse(content);
-            if (!summaries || !Array.isArray(summaries))
-                return [];
-            return summaries.filter(s => s && s.content && s.content.trim().length > 0);
+            console.log(`[编纂者] 提取到 ${result.items.length} 个人物档案`);
+            for (const person of result.items) {
+                if (!person.name)
+                    continue;
+                this.processSinglePersonArchive(person);
+            }
         }
-        classifyAndDecide(summaries) {
-            const decisions = [];
-            const mergeCandidates = [];
-            for (const summary of summaries) {
-                const queryText = summary.topic || summary.content.slice(0, 50);
-                const existing = this.queryExistingRecords(queryText, 10);
-                if (existing.length === 0) {
-                    decisions.push({
-                        summary,
-                        category: 'new',
-                        deleteIds: [],
-                        shouldStore: true,
-                        storeContent: this.formatSummaryAsRecord(summary),
-                    });
+        processSinglePersonArchive(newInfo) {
+            const prefix = `${PERSON_PREFIX}${newInfo.name}]`;
+            console.log(`[编纂者] 处理人物档案: ${newInfo.name}`);
+            const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
+            if (existingRecords.length === 0) {
+                const archiveText = this.formatPersonArchive(newInfo);
+                this.writeArchive(archiveText);
+                console.log(`[编纂者] 新增人物档案: ${newInfo.name}`);
+                return;
+            }
+            console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            for (const record of existingRecords) {
+                const oldArchive = this.parsePersonArchive(record.content);
+                if (!oldArchive) {
+                    this.deleteRecords([record.id]);
                     continue;
                 }
-                const maxSimilarity = Math.max(...existing.map(r => r.similarity));
-                if (maxSimilarity >= this.DUPLICATE_THRESHOLD) {
-                    console.log(`[编纂者] 重复过滤（相似度 ${(maxSimilarity * 100).toFixed(1)}%）: "${summary.content.slice(0, 30)}..."`);
-                    decisions.push({
-                        summary,
-                        category: 'duplicate',
-                        deleteIds: [],
-                        shouldStore: false,
-                        storeContent: '',
-                    });
-                }
-                else if (maxSimilarity >= this.MERGE_THRESHOLD) {
-                    const relevantRecords = existing.filter(r => r.similarity >= this.MERGE_THRESHOLD);
-                    decisions.push({
-                        summary,
-                        category: 'merge',
-                        deleteIds: [],
-                        shouldStore: false,
-                        storeContent: '',
-                    });
-                    mergeCandidates.push({ summary, existingRecords: relevantRecords });
+                const mergePrompt = this.buildPersonMergePrompt(record.content, newInfo);
+                const merged = this.runMergeLLM(mergePrompt);
+                if (merged && merged.name) {
+                    this.deleteRecords([record.id]);
+                    const archiveText = this.formatPersonArchive(merged);
+                    this.writeArchive(archiveText);
+                    console.log(`[编纂者] 合并更新人物档案: ${merged.name}`);
                 }
                 else {
-                    decisions.push({
-                        summary,
-                        category: 'new',
-                        deleteIds: [],
-                        shouldStore: true,
-                        storeContent: this.formatSummaryAsRecord(summary),
-                    });
-                }
-            }
-            return { decisions, mergeCandidates };
-        }
-        processMergeCandidates(decisions, mergeCandidates) {
-            console.log(`[编纂者] 阶段四：开始批量合并 ${mergeCandidates.length} 项`);
-            for (let batchStart = 0; batchStart < mergeCandidates.length; batchStart += this.MERGE_BATCH_SIZE) {
-                const batch = mergeCandidates.slice(batchStart, batchStart + this.MERGE_BATCH_SIZE);
-                const batchResults = this.executeBatchMerge(batch);
-                for (let i = 0; i < batch.length; i++) {
-                    const candidate = batch[i];
-                    const result = batchResults[i];
-                    const decisionIdx = decisions.findIndex(d => d.category === 'merge' && d.summary === candidate.summary);
-                    if (decisionIdx === -1)
-                        continue;
-                    if (result && result.merged_content && result.merged_content.trim()) {
-                        decisions[decisionIdx].deleteIds = result.delete_ids || [];
-                        decisions[decisionIdx].shouldStore = true;
-                        decisions[decisionIdx].storeContent = result.merged_content.trim();
-                        console.log(`[编纂者] 合并成功: "${candidate.summary.content.slice(0, 30)}..." → 删${decisions[decisionIdx].deleteIds.length}条+写1条`);
-                    }
-                    else if (result && result.delete_ids && result.delete_ids.length > 0) {
-                        decisions[decisionIdx].deleteIds = result.delete_ids;
-                        decisions[decisionIdx].shouldStore = false;
-                        console.log(`[编纂者] LLM判定重复: "${candidate.summary.content.slice(0, 30)}..." → 仅删${result.delete_ids.length}条`);
-                    }
-                    else {
-                        decisions[decisionIdx].shouldStore = true;
-                        decisions[decisionIdx].storeContent = this.formatSummaryAsRecord(candidate.summary);
-                        console.log(`[编纂者] 合并无变化，直接存储: "${candidate.summary.content.slice(0, 30)}..."`);
-                    }
+                    const archiveText = this.formatPersonArchive(newInfo);
+                    this.writeArchive(archiveText);
+                    console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
         }
-        executeBatchMerge(batch) {
-            const prompt = this.buildBatchMergePrompt(batch);
-            this.coverContext({ role: 'user', content: prompt });
-            this.runtimeMessages = [];
-            let response;
-            try {
-                response = this.run([], []);
-            }
-            catch (error) {
-                console.error('[编纂者] 阶段四批量合并推理失败:', error);
-                return batch.map(() => ({ delete_ids: [], merged_content: '' }));
-            }
-            const content = response.body?.choices?.[0]?.message?.content || '';
-            const results = this.parseJsonResponse(content);
-            if (!results || !Array.isArray(results)) {
-                console.warn('[编纂者] 批量合并结果解析失败，回退为直接存储');
-                return batch.map(() => ({ delete_ids: [], merged_content: '' }));
-            }
-            while (results.length < batch.length) {
-                results.push({ delete_ids: [], merged_content: '' });
-            }
-            return results.slice(0, batch.length);
-        }
-        deduplicateMemory() {
-            const recentRecords = this.queryExistingRecords('近期对话 重要事件', 15);
-            if (recentRecords.length === 0)
+        processEventArchives(records) {
+            console.log('[编纂者] === 阶段二：事件档案处理 ===');
+            const prompt = this.buildEventExtractPrompt(records);
+            const content = this.runLLM(prompt);
+            if (!content) {
+                console.log('[编纂者] 事件档案提取未获得有效结果');
                 return;
-            const toDelete = [];
-            for (const record of recentRecords) {
-                const queryText = record.content.slice(0, 80);
-                const matches = this.queryExistingRecords(queryText, 5);
-                for (const match of matches) {
-                    if (match.id === record.id)
-                        continue;
-                    if (match.similarity >= this.DEDUP_THRESHOLD) {
-                        const shorterId = record.content.length <= match.content.length ? record.id : match.id;
-                        if (!toDelete.includes(shorterId)) {
-                            toDelete.push(shorterId);
-                            console.log(`[编纂者] 去重扫描发现重复记录，删除较短项 ${shorterId}（相似度 ${(match.similarity * 100).toFixed(1)}%）`);
-                        }
-                    }
+            }
+            const result = this.parseJsonResponse(content);
+            if (!result || !result.items || result.items.length === 0) {
+                console.log('[编纂者] 未提取到事件信息');
+                return;
+            }
+            console.log(`[编纂者] 提取到 ${result.items.length} 个事件档案`);
+            for (const event of result.items) {
+                if (!event.name)
+                    continue;
+                this.processSingleEventArchive(event);
+            }
+        }
+        processSingleEventArchive(newInfo) {
+            const prefix = `${EVENT_PREFIX}${newInfo.name}]`;
+            console.log(`[编纂者] 处理事件档案: ${newInfo.name}`);
+            const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
+            if (existingRecords.length === 0) {
+                const archiveText = this.formatEventArchive(newInfo);
+                this.writeArchive(archiveText);
+                console.log(`[编纂者] 新增事件档案: ${newInfo.name}`);
+                return;
+            }
+            console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            for (const record of existingRecords) {
+                const mergePrompt = this.buildEventMergePrompt(record.content, newInfo);
+                const merged = this.runMergeLLM(mergePrompt);
+                if (merged && merged.name) {
+                    this.deleteRecords([record.id]);
+                    const archiveText = this.formatEventArchive(merged);
+                    this.writeArchive(archiveText);
+                    console.log(`[编纂者] 合并更新事件档案: ${merged.name}`);
+                }
+                else {
+                    const archiveText = this.formatEventArchive(newInfo);
+                    this.writeArchive(archiveText);
+                    console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
-            for (const id of toDelete) {
-                const trimmedId = id.trim();
-                if (!trimmedId)
-                    continue;
-                const [, error] = memoryDelete('lunar_messages', trimmedId);
-                if (error)
-                    console.error(`[编纂者] 去重删除 ${trimmedId} 失败:`, error);
-                else
-                    console.log(`[编纂者] 已去重删除记录 ${trimmedId}`);
+        }
+        processSelfArchive(records) {
+            console.log('[编纂者] === 阶段三：自我档案处理 ===');
+            const prompt = this.buildSelfExtractPrompt(records);
+            const content = this.runLLM(prompt);
+            if (!content) {
+                console.log('[编纂者] 自我档案提取未获得有效结果');
+                return;
+            }
+            const newInfo = this.parseJsonResponse(content);
+            if (!newInfo || (!newInfo.mood && !newInfo.clothing && !newInfo.activity && !newInfo.needs)) {
+                console.log('[编纂者] 未提取到有效的自我信息');
+                return;
+            }
+            console.log('[编纂者] 处理自我档案');
+            const existingRecords = this.queryArchiveByPrefix(SELF_PREFIX, this.ARCHIVE_QUERY_TOPK);
+            if (existingRecords.length === 0) {
+                const archiveText = this.formatSelfArchive(newInfo);
+                this.writeArchive(archiveText);
+                console.log('[编纂者] 新增自我档案');
+                return;
+            }
+            console.log(`[编纂者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
+            for (const record of existingRecords) {
+                const mergePrompt = this.buildSelfMergePrompt(record.content, newInfo);
+                const merged = this.runMergeLLM(mergePrompt);
+                if (merged && (merged.mood || merged.clothing || merged.activity || merged.needs)) {
+                    this.deleteRecords([record.id]);
+                    const archiveText = this.formatSelfArchive(merged);
+                    this.writeArchive(archiveText);
+                    console.log('[编纂者] 合并更新自我档案');
+                }
+                else {
+                    const archiveText = this.formatSelfArchive(newInfo);
+                    this.writeArchive(archiveText);
+                    console.log('[编纂者] 合并失败，新信息作为补充写入');
+                }
             }
         }
         persistDiscardedMessages(discarded) {
@@ -2025,6 +2265,147 @@ ${candidateTexts}
         }
     }
 
+    class ViewerRole extends ModelBuilder {
+        BATCH_SIZE = 20;
+        SECONDARY_SUMMARY_INTERVAL = 5;
+        MAX_ROUNDS = 40;
+        constructor() {
+            super(fileView('prompts/viewerRole.md')[0]);
+        }
+        async watchVideo(keyframes) {
+            const totalFrames = Math.min(keyframes.length, this.MAX_ROUNDS * this.BATCH_SIZE);
+            const totalRounds = Math.ceil(totalFrames / this.BATCH_SIZE);
+            console.log(`[观影者] 开始观看视频，共 ${totalFrames} 帧，${totalRounds} 轮`);
+            const evaluations = [];
+            const secondarySummaries = [];
+            for (let round = 0; round < totalRounds; round++) {
+                const start = round * this.BATCH_SIZE;
+                const batch = keyframes.slice(start, start + this.BATCH_SIZE);
+                if (batch.length === 0)
+                    break;
+                console.log(`[观影者] 第 ${round + 1}/${totalRounds} 轮，处理 ${batch.length} 帧`);
+                const evaluation = await this.evaluateBatch(batch, round + 1);
+                if (evaluation) {
+                    evaluations.push(evaluation);
+                    console.log(`[观影者] 第 ${round + 1} 轮评价完成`);
+                }
+                const isLastRound = round === totalRounds - 1;
+                const shouldSummarize = (round + 1) % this.SECONDARY_SUMMARY_INTERVAL === 0 || isLastRound;
+                if (shouldSummarize && evaluations.length > 0) {
+                    const recentEvals = evaluations.slice(-this.SECONDARY_SUMMARY_INTERVAL);
+                    const secondarySummary = await this.generateSecondarySummary(recentEvals);
+                    if (secondarySummary) {
+                        secondarySummaries.push(secondarySummary);
+                        console.log(`[观影者] 二次摘要完成（第 ${secondarySummaries.length} 份）`);
+                    }
+                }
+            }
+            if (secondarySummaries.length === 0) {
+                console.warn('[观影者] 未产生任何二次摘要');
+                return '月华观看了这个视频，但没有获取到足够的信息。';
+            }
+            if (secondarySummaries.length === 1) {
+                console.log('[观影者] 仅一份摘要，直接返回');
+                return secondarySummaries[0];
+            }
+            const finalSummary = await this.generateTertiarySummary(secondarySummaries);
+            console.log('[观影者] 三次摘要（最终观后感）完成');
+            return finalSummary || secondarySummaries.join('\n\n');
+        }
+        async evaluateBatch(frames, round) {
+            const imageContents = frames.map(frame => ({
+                type: 'image_url',
+                image_url: { url: `data:image/jpeg;base64,${frame.data}` }
+            }));
+            const prompt = `请观看以下视频的第 ${round} 批关键帧（共 ${frames.length} 帧），以月华的身份描述你的观影感受和发现的关键信息。
+时间范围：${frames[0]?.timestamp || '?'} ~ ${frames[frames.length - 1]?.timestamp || '?'}
+
+请按以下格式输出：
+【感受】
+（以月华的第一人称写2-4句话）
+
+【关键信息】
+- 人物：...
+- 场景：...
+- 事件：...
+- 变化：...`;
+            this.coverContext({
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    ...imageContents
+                ]
+            });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error(`[观影者] 第 ${round} 轮推理失败:`, error);
+                return '';
+            }
+            const content = response.body?.choices?.[0]?.message?.content || '';
+            if (!content.trim()) {
+                console.warn(`[观影者] 第 ${round} 轮返回空内容`);
+            }
+            return content;
+        }
+        async generateSecondarySummary(evaluations) {
+            const prompt = `请将以下 ${evaluations.length} 段视频片段评价整合为一份连贯的摘要。
+
+【评价内容】
+${evaluations.map((e, i) => `--- 片段${i + 1} ---\n${e}`).join('\n\n')}
+
+【整合要求】
+1. 保持月华的第一人称视角
+2. 使用活泼可爱的女孩语气
+3. 突出最重要的感受和发现
+4. 按时间线或逻辑线组织内容
+5. 字数控制在200-400字
+
+仅输出摘要内容，不要包含其他说明文字。`;
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[观影者] 二次摘要推理失败:', error);
+                return '';
+            }
+            return response.body?.choices?.[0]?.message?.content || '';
+        }
+        async generateTertiarySummary(secondarySummaries) {
+            const prompt = `请将以下 ${secondarySummaries.length} 份视频片段摘要整合为一份完整的视频观后感。
+
+【片段摘要】
+${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
+
+【整合要求】
+1. 以月华的身份，用第一人称视角写一份完整的观后感
+2. 使用活泼可爱的女孩语气
+3. 描述月华对整个视频的整体感受和印象
+4. 包含视频的主要内容概述、最打动月华的部分、月华的个人感受
+5. 字数控制在300-500字
+6. 结构清晰，有开头、主体和结尾
+
+仅输出观后感内容，不要包含其他说明文字。`;
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[观影者] 三次摘要推理失败:', error);
+                return '';
+            }
+            return response.body?.choices?.[0]?.message?.content || '';
+        }
+    }
+
     class AgentDefine {
         static instance;
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
@@ -2033,6 +2414,7 @@ ${candidateTexts}
         learnerRole = new LearnerRole();
         painterRole = new PainterRole();
         musicianRole = new MusicianRole();
+        viewerRole = new ViewerRole();
         organizeRole = new OrganizeRole();
         unreadContext = [];
         unreadVideoUrl = [];
@@ -2054,37 +2436,39 @@ ${candidateTexts}
             const cachedPrompt = getPromptFromKnowledge(videoUrl);
             if (cachedPrompt) {
                 this.unreadContext.push({ role: 'user', content: cachedPrompt });
+                console.log('[观影者] 命中视频缓存，直接返回');
                 return;
             }
+            console.log('[观影者] 开始提取视频关键帧...');
             const [images, error] = keyframe(videoUrl, './cache');
-            if (images.length === 0 || error)
+            if (images.length === 0 || error) {
+                console.error('[观影者] 关键帧提取失败:', error);
                 throw new Error('提取关键帧失败');
-            const sandboxMessages = [];
-            let videoSummary = '';
-            const frameMessages = images.map(frame => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${frame.data}` } }));
-            for (let i = 0; i < frameMessages.length; i += 20) {
-                const batchFrames = frameMessages.slice(i, i + 20);
-                this.descriptionRole.coverContext({ role: 'user', content: batchFrames });
-                const summaryRequest = this.descriptionRole.run([], []);
-                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-                if (summary && summary.trim().length > 0)
-                    sandboxMessages.push({ type: 'text', text: summary });
             }
-            if (sandboxMessages.length > 1) {
-                this.summaryRole.coverContext({ role: 'user', content: sandboxMessages });
-                const summaryRequest = this.summaryRole.run([], []);
-                videoSummary = summaryRequest.body?.choices?.[0]?.message?.content;
-            }
-            else if (sandboxMessages.length === 1)
-                videoSummary = sandboxMessages[0].text;
-            else
-                videoSummary = this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
-            if (videoSummary)
+            console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
+            const keyframes = images.map((frame) => ({
+                data: frame.data,
+                timestamp: frame.timestamp || ''
+            }));
+            console.log('[观影者] 开始观看视频...');
+            const videoSummary = await this.viewerRole.watchVideo(keyframes);
+            console.log('[观影者] 视频观看完成');
+            if (videoSummary && videoSummary.trim().length > 0) {
                 this.unreadContext.push({ role: 'user', content: videoSummary });
-            if (userNeeds.trim().length > 0)
+            }
+            else {
+                this.unreadContext.push({
+                    role: 'user',
+                    content: this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]
+                });
+            }
+            if (userNeeds.trim().length > 0) {
                 this.unreadContext.push({ role: 'user', content: userNeeds });
-            if (videoSummary)
+            }
+            if (videoSummary) {
                 savePromptToKnowledge(videoUrl, videoSummary);
+                console.log('[观影者] 观后感已缓存');
+            }
         }
         async LiteImageFile() {
             for (let message of this.unreadContext) {
@@ -2128,6 +2512,9 @@ ${candidateTexts}
             const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
             if (musicianPath)
                 results.push(musicianPath);
+            const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
+            if (viewerPath)
+                results.push(viewerPath);
             const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
             if (organizePath)
                 results.push(organizePath);
@@ -2253,6 +2640,7 @@ ${candidateTexts}
             this.learnerRole.messages = [];
             this.painterRole.coverContext([]);
             this.musicianRole.coverContext([]);
+            this.viewerRole.coverContext([]);
             this.organizeRole.coverContext([]);
             this.unreadContext = [];
             this.unreadVideoUrl = [];
@@ -2805,9 +3193,9 @@ ${candidateTexts}
         if (!instance || !instance.painterRole) {
             return ['绘画任务调度失败：绘画师子智能体未就绪，请稍后重试', ''];
         }
-        console.log(`[智能体控制] 调度绘画师: ${description.slice(0, 100)}...`);
+        console.log(`[智能体控制] 调度绘画师: ${description}`);
         const result = await instance.painterRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 绘画师完成: ${result.slice(0, 100)}...`);
+        console.log(`[智能体控制] 绘画师完成: ${result}`);
         return [result, ''];
     }
     async function handleDispatchMusician(args) {
@@ -2819,9 +3207,9 @@ ${candidateTexts}
         if (!instance || !instance.musicianRole) {
             return ['音乐任务调度失败：演奏家子智能体未就绪，请稍后重试', ''];
         }
-        console.log(`[智能体控制] 调度演奏家: ${description.slice(0, 100)}...`);
+        console.log(`[智能体控制] 调度演奏家: ${description}`);
         const result = await instance.musicianRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 演奏家完成: ${result.slice(0, 100)}...`);
+        console.log(`[智能体控制] 演奏家完成: ${result}`);
         return [result, ''];
     }
     OnlyData.LTPfunction.set('play_action', handlePlayAction);
@@ -3052,6 +3440,7 @@ ${candidateTexts}
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
     exports.ThinkType = ThinkType;
+    exports.ViewerRole = ViewerRole;
     exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
     exports.checkDueItems = checkDueItems;

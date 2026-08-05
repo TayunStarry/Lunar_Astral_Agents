@@ -41,10 +41,11 @@ func noteToMIDI(note string) int {
 	// 升降号
 	sharp := 0
 	if idx < len(note) {
-		if note[idx] == '#' {
+		switch note[idx] {
+		case '#':
 			sharp = 1
 			idx++
-		} else if note[idx] == 'b' {
+		case 'b':
 			sharp = -1
 			idx++
 		}
@@ -206,7 +207,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 	voicePrograms = map[int]int{1: 0}
 
 	// 解析 BPM — Q:1/4=120 格式
-	if tempoMatch := findMatch(abcNotation, `Q:\s*(\d+)/(\d+)\s*=\s*(\d+)`); tempoMatch != nil && len(tempoMatch) >= 3 {
+	if tempoMatch := findMatch(abcNotation, `Q:\s*(\d+)/(\d+)\s*=\s*(\d+)`); len(tempoMatch) >= 3 {
 		if beatUnit, err := strconv.Atoi(tempoMatch[0]); err == nil {
 			if beats, err := strconv.Atoi(tempoMatch[1]); err == nil {
 				if tempo, err := strconv.Atoi(tempoMatch[2]); err == nil {
@@ -216,7 +217,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 		}
 	}
 	// Q:120 简单格式
-	if simpleQ := findMatch(abcNotation, `Q:\s*(\d+)\s*$`); simpleQ != nil && len(simpleQ) >= 1 {
+	if simpleQ := findMatch(abcNotation, `Q:\s*(\d+)\s*$`); len(simpleQ) >= 1 {
 		if t, err := strconv.Atoi(simpleQ[0]); err == nil && bpm == 120 {
 			bpm = float64(t)
 		}
@@ -224,7 +225,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 
 	// 解析 %%prog N 程序号（GM 乐器程序号）
 	for _, line := range strings.Split(abcNotation, "\n") {
-		if m := findMatchString(line, `^%%prog\s+(\d+)\s+(\d+)`); m != nil && len(m) >= 2 {
+		if m := findMatchString(line, `^%%prog\s+(\d+)\s+(\d+)`); len(m) >= 2 {
 			voiceID, _ := strconv.Atoi(m[0])
 			prog, _ := strconv.Atoi(m[1])
 			voicePrograms[voiceID] = prog
@@ -233,7 +234,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 
 	// 解析 %%voice N 乐器名
 	for _, line := range strings.Split(abcNotation, "\n") {
-		if m := findMatchString(line, `^%%voice\s+(\d+)\s+(.+)`); m != nil && len(m) >= 2 {
+		if m := findMatchString(line, `^%%voice\s+(\d+)\s+(.+)`); len(m) >= 2 {
 			voiceID, _ := strconv.Atoi(m[0])
 			voiceInstruments[voiceID] = strings.TrimSpace(m[1])
 		}
@@ -241,7 +242,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 
 	// 解析 %%instrument（兼容旧版）
 	instMatch := findMatch(abcNotation, `%%instrument\s+(.+)$`)
-	if instMatch != nil && len(voiceInstruments) <= 1 {
+	if len(instMatch) >= 2 && len(voiceInstruments) <= 1 {
 		instruments := strings.Split(strings.ReplaceAll(instMatch[1], "，", ","), ",")
 		for i, inst := range instruments {
 			voiceInstruments[i+1] = strings.TrimSpace(inst)
@@ -251,7 +252,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 	// 解析 L: 默认音符时值
 	defaultLenNum := 1
 	defaultLenDen := 8
-	if lMatch := findMatch(abcNotation, `L:\s*(\d+)/(\d+)`); lMatch != nil && len(lMatch) >= 2 {
+	if lMatch := findMatch(abcNotation, `L:\s*(\d+)/(\d+)`); len(lMatch) >= 2 {
 		if n, err := strconv.Atoi(lMatch[0]); err == nil {
 			if d, err := strconv.Atoi(lMatch[1]); err == nil && d > 0 {
 				defaultLenNum = n
@@ -263,7 +264,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 	// 解析 M: 拍号（用于时值校验）
 	meterNum := 4
 	meterDen := 4
-	if mMatch := findMatch(abcNotation, `M:\s*(\d+)/(\d+)`); mMatch != nil && len(mMatch) >= 2 {
+	if mMatch := findMatch(abcNotation, `M:\s*(\d+)/(\d+)`); len(mMatch) >= 2 {
 		if n, err := strconv.Atoi(mMatch[0]); err == nil {
 			if d, err := strconv.Atoi(mMatch[1]); err == nil && d > 0 {
 				meterNum = n
@@ -301,7 +302,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 		// 先提取力度记号（如 !mp!、!f! 等，可能出现在行首）
 		// 力度记号持续生效直到下一个力度记号
 		for {
-			if dm := findMatchString(line, `^!(pp|p|mp|mf|f|ff)!`); dm != nil && len(dm) >= 1 {
+			if dm := findMatchString(line, `^!(pp|p|mp|mf|f|ff)!`); len(dm) >= 1 {
 				currentDynamics = dm[0]
 				prefix := "!" + dm[0] + "!"
 				line = strings.TrimSpace(line[len(prefix):])
@@ -311,7 +312,7 @@ func parseABCForMIDI(abcNotation string) (notes []abcNote, bpm float64, voiceIns
 		}
 
 		// 处理 [V:N] 标记（力度记号已剥离，现在 [V:N] 可能在行首）
-		if vm := findMatchString(line, `^\[V:(\d+)\]`); vm != nil && len(vm) >= 1 {
+		if vm := findMatchString(line, `^\[V:(\d+)\]`); len(vm) >= 1 {
 			currentVoice, _ = strconv.Atoi(vm[0])
 			if _, exists := voiceTimes[currentVoice]; !exists {
 				voiceTimes[currentVoice] = 0
@@ -406,9 +407,10 @@ func tokenizeABCLine(line string) []string {
 			depth := 1
 			j := i + 1
 			for j < len(line) && depth > 0 {
-				if line[j] == '[' {
+				switch line[j] {
+				case '[':
 					depth++
-				} else if line[j] == ']' {
+				case ']':
 					depth--
 				}
 				j++
@@ -458,9 +460,10 @@ func parseChordNotes(chordStr string, voice int, dynamics string) []abcNote {
 // buildNoteName 构建完整音符名（音名 + 升降号 + 八度）
 func buildNoteName(accidental, noteName, octave string) string {
 	fullNote := strings.ToUpper(string(noteName[0]))
-	if accidental == "^" {
+	switch accidental {
+	case "^":
 		fullNote += "#"
-	} else if accidental == "_" {
+	case "_":
 		fullNote += "b"
 	}
 
@@ -471,9 +474,10 @@ func buildNoteName(accidental, noteName, octave string) string {
 	apostrophes := 0
 	commas := 0
 	for _, r := range octave {
-		if r == '\'' {
+		switch r {
+		case '\'':
 			apostrophes++
-		} else if r == ',' {
+		case ',':
 			commas++
 		}
 	}
@@ -484,7 +488,7 @@ func buildNoteName(accidental, noteName, octave string) string {
 
 // calcDuration 从时值字符串计算持续时间（秒）
 func calcDuration(durStr []string, defaultNum, defaultDen int, secondsPerBeat float64) float64 {
-	if durStr == nil || len(durStr) == 0 || durStr[0] == "" {
+	if len(durStr) == 0 || durStr[0] == "" {
 		// 默认时值 = L: 定义
 		defaultDuration := float64(defaultNum) / float64(defaultDen)
 		beatsPerNote := defaultDuration / 0.25 // 一拍=1/4

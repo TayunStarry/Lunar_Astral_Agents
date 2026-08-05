@@ -122,7 +122,7 @@ func detectContentType(url string) string {
 	if err != nil {
 		return ""
 	}
-	req.Header.Set("User-Agent", DefaultConfig.HTTP.UserAgent)
+	req.Header.Set("User-Agent", defaultConfig.HTTP.UserAgent)
 
 	resp, err := client.Do(req)
 	if err != nil {

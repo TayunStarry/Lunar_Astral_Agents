@@ -14,19 +14,68 @@ import (
 
 // NewBingSearcher 创建必应搜索器
 func NewBingSearcher(cfg HTTPConfig) *BingSearcher {
+	jar, _ := cookiejar.New(nil)
 	return &BingSearcher{
-		client:  &http.Client{Timeout: cfg.Timeout},
-		httpCfg: cfg,
+		client: &http.Client{
+			Timeout: cfg.Timeout,
+			Jar:     jar,
+		},
+		httpCfg:   cfg,
+		cookieJar: jar,
 	}
 }
 
 func (b *BingSearcher) Name() string { return "Bing" }
+
+// warmupCookie 访问 Bing 首页获取 Cookie，让 Bing 识别为正常浏览器访问
+func (b *BingSearcher) warmupCookie() {
+	b.cookieWarmed = true
+	b.warmedAt = time.Now()
+	req, _ := http.NewRequest("GET", "https://cn.bing.com/", nil)
+	req.Header.Set("User-Agent", b.httpCfg.UserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	// 忽略预热请求的结果，只关心 Cookie 是否被设置
+	resp, err := b.client.Do(req)
+	if err == nil {
+		resp.Body.Close()
+	}
+}
 
 func (b *BingSearcher) Search(query string, limit int) ([]SearchResult, error) {
 	return b.SearchWithTimeRange(query, limit, TimeRangeNone)
 }
 
 func (b *BingSearcher) SearchWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	// 浏览器可用时，优先使用浏览器渲染（结果更准确，与用户 Edge 浏览器看到的搜索结果一致）
+	if b.browserRenderer != nil {
+		if b.debugLog != nil {
+			b.debugLog("[Bing搜索] 使用浏览器渲染 query=%q", query)
+		}
+		results, err := b.searchWithBrowser(query, limit, timeRange)
+		if err == nil {
+			return results, nil
+		}
+		// 浏览器渲染失败 → 回退到 HTTP（而不是直接返回错误让 trySearchRaw 跳过 Bing）
+		if b.debugLog != nil {
+			b.debugLog("[Bing搜索] 浏览器渲染失败: %v，回退到HTTP", err)
+		}
+	} else {
+		if b.debugLog != nil {
+			b.debugLog("[Bing搜索] 浏览器渲染器不可用，使用HTTP query=%q", query)
+		}
+	}
+
+	// 若检测到 CAPTCHA 且距上次检测超过 1 分钟，尝试恢复 HTTP 请求
+	if b.captchaDetected && time.Since(b.captchaDetectedAt) > 1*time.Minute {
+		b.captchaDetected = false
+	}
+
+	// 首次搜索前预热 Cookie
+	if !b.cookieWarmed || time.Since(b.warmedAt) > 30*time.Minute {
+		b.warmupCookie()
+	}
+
 	processedQuery := preprocessBingQuery(query)
 	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s",
 		url.QueryEscape(processedQuery))
@@ -44,15 +93,22 @@ func (b *BingSearcher) SearchWithTimeRange(query string, limit int, timeRange Ti
 	req.Header.Set("User-Agent", b.httpCfg.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Referer", "https://cn.bing.com/")
 	setBrowserHeaders(req)
 
 	resp, err := doWithRetry(b.client, req, b.httpCfg)
 	if err != nil {
+		// HTTP 请求失败 → 标记 CAPTCHA
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
 		return nil, fmt.Errorf("请求 Bing 搜索失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// HTTP 返回异常状态码 → 标记 CAPTCHA
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
 		return nil, fmt.Errorf("Bing 搜索返回异常状态码: %d", resp.StatusCode)
 	}
 
@@ -61,7 +117,54 @@ func (b *BingSearcher) SearchWithTimeRange(query string, limit int, timeRange Ti
 		return nil, fmt.Errorf("读取搜索响应失败: %w", err)
 	}
 
-	return extractBingResults(string(body), limit), nil
+	results := extractBingResults(string(body), limit)
+
+	// HTTP 返回空结果 → 标记 CAPTCHA
+	if len(results) == 0 {
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
+	}
+
+	return results, nil
+}
+
+// searchWithBrowser 浏览器渲染 Bing 搜索页面，作为优先搜索方案（结果更准确）
+func (b *BingSearcher) searchWithBrowser(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s",
+		url.QueryEscape(query))
+
+	if timeRange != TimeRangeNone {
+		searchURL += bingTimeRangeParam(timeRange)
+	}
+
+	// 使用 RenderPage 渲染，不等待特定元素（避免 div#b_results 可能不存在的超时问题）
+	// 反检测 JS + 5s 睡眠足够让 Bing 渲染搜索结果，fallback 解析器处理无 b_algo 的情况
+	htmlContent, err := b.browserRenderer.RenderPage(searchURL)
+	if err != nil {
+		if b.debugLog != nil {
+			b.debugLog("[Bing搜索] 浏览器渲染失败: %v，回退到HTTP", err)
+		}
+		return nil, err
+	}
+
+	results := extractBingResults(htmlContent, limit)
+	if len(results) == 0 {
+		// 调试：检查 HTML 是否包含搜索结果元素
+		if b.debugLog != nil {
+			hasBAlgo := strings.Contains(htmlContent, "b_algo")
+			hasBResults := strings.Contains(htmlContent, "b_results")
+			hasCaptcha := strings.Contains(htmlContent, "captcha") || strings.Contains(htmlContent, "CAPTCHA")
+			sampleStart := len(htmlContent)
+			if sampleStart > 200 {
+				sampleStart = 200
+			}
+			b.debugLog("[Bing搜索] 无结果分析: b_algo=%v b_results=%v captcha=%v html_len=%d sample=%s",
+				hasBAlgo, hasBResults, hasCaptcha, len(htmlContent), htmlContent[:sampleStart])
+		}
+		return nil, fmt.Errorf("浏览器渲染 Bing 搜索无结果（可能被反爬拦截）")
+	}
+
+	return results, nil
 }
 
 // SearchRaw 直接搜索，跳过预处理（用于回退策略，避免引号精确匹配过窄）
@@ -71,6 +174,20 @@ func (b *BingSearcher) SearchRaw(query string, limit int) ([]SearchResult, error
 
 // SearchRawWithTimeRange 直接搜索（带时间范围），跳过预处理
 func (b *BingSearcher) SearchRawWithTimeRange(query string, limit int, timeRange TimeRange) ([]SearchResult, error) {
+	// 若检测到 CAPTCHA 且距上次检测超过 1 分钟，尝试恢复 HTTP 请求
+	if b.captchaDetected && time.Since(b.captchaDetectedAt) > 1*time.Minute {
+		b.captchaDetected = false
+	}
+	// 已知被 CAPTCHA 拦截，跳过 HTTP 请求直接用浏览器
+	if b.captchaDetected && b.browserRenderer != nil {
+		return b.searchWithBrowser(query, limit, timeRange)
+	}
+
+	// 首次搜索前预热 Cookie
+	if !b.cookieWarmed || time.Since(b.warmedAt) > 30*time.Minute {
+		b.warmupCookie()
+	}
+
 	searchURL := fmt.Sprintf("https://cn.bing.com/search?q=%s",
 		url.QueryEscape(query))
 
@@ -85,15 +202,28 @@ func (b *BingSearcher) SearchRawWithTimeRange(query string, limit int, timeRange
 	req.Header.Set("User-Agent", b.httpCfg.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+	req.Header.Set("Referer", "https://cn.bing.com/")
 	setBrowserHeaders(req)
 
 	resp, err := doWithRetry(b.client, req, b.httpCfg)
 	if err != nil {
+		// HTTP 请求失败 → 标记 CAPTCHA 并回退到浏览器
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
+		if b.browserRenderer != nil {
+			return b.searchWithBrowser(query, limit, timeRange)
+		}
 		return nil, fmt.Errorf("请求 Bing 搜索失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// HTTP 返回异常状态码 → 标记 CAPTCHA 并回退到浏览器
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
+		if b.browserRenderer != nil {
+			return b.searchWithBrowser(query, limit, timeRange)
+		}
 		return nil, fmt.Errorf("Bing 搜索返回异常状态码: %d", resp.StatusCode)
 	}
 
@@ -102,7 +232,18 @@ func (b *BingSearcher) SearchRawWithTimeRange(query string, limit int, timeRange
 		return nil, fmt.Errorf("读取搜索响应失败: %w", err)
 	}
 
-	return extractBingResults(string(body), limit), nil
+	results := extractBingResults(string(body), limit)
+
+	// HTTP 返回空结果 → 标记 CAPTCHA（可能被拦截但没报错）并回退到浏览器
+	if len(results) == 0 {
+		b.captchaDetected = true
+		b.captchaDetectedAt = time.Now()
+		if b.browserRenderer != nil {
+			return b.searchWithBrowser(query, limit, timeRange)
+		}
+	}
+
+	return results, nil
 }
 
 // bingTimeRangeParam 返回Bing时间范围URL参数（tbs=qdr:）
@@ -121,26 +262,15 @@ func bingTimeRangeParam(tr TimeRange) string {
 	}
 }
 
-// preprocessBingQuery 预处理查询：含特殊分隔符时加引号做精确匹配
+// preprocessBingQuery 预处理查询：保持查询原样，不做引号精确匹配
+// 之前会将含特殊分隔符的查询整个用引号包起来做精确匹配，这样搜索范围太窄，
+// 对于含特殊字符的专有名词（如"彼岸幻梦模组-基岩版"）反而搜不到东西。
+// 特殊字符本身已是 Bing 理解查询意图的好信号，不需要额外处理。
 func preprocessBingQuery(query string) string {
+	// 如果用户自己已经加了引号，尊重用户意图
 	if strings.Contains(query, "\"") || strings.Contains(query, "\u201c") {
 		return query
 	}
-
-	// 含特殊分隔符的查询：加引号做精确匹配
-	hasSpecial := false
-	for _, r := range query {
-		if r == '·' || r == '-' || r == '/' || r == '|' || r == '•' ||
-			r == '\u2014' || r == '～' || r == '~' || r == '、' {
-			hasSpecial = true
-			break
-		}
-	}
-	if hasSpecial {
-		return "\"" + query + "\""
-	}
-
-	// 其他查询原样返回
 	return query
 }
 
@@ -151,6 +281,7 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 	}
 
 	var results []SearchResult
+	var foundAlgo bool // 是否找到过 b_algo 元素
 	var inAlgo bool
 	var currentResult SearchResult
 	var inH2 bool
@@ -168,6 +299,7 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 			if n.Data == "li" {
 				for _, attr := range n.Attr {
 					if attr.Key == "class" && strings.Contains(attr.Val, "b_algo") {
+						foundAlgo = true
 						inAlgo = true
 						currentResult = SearchResult{}
 						inH2 = false
@@ -300,6 +432,103 @@ func extractBingResults(htmlStr string, limit int) []SearchResult {
 	}
 
 	walk(doc)
+
+	// 备用解析：如果标准解析没找到 b_algo 元素，尝试从 #b_results 中直接提取 li 元素
+	if len(results) == 0 && !foundAlgo {
+		fallback := extractBingResultsFallback(doc, limit)
+		if len(fallback) > 0 {
+			return fallback
+		}
+	}
+
+	return results
+}
+
+// extractBingResultsFallback 备用解析：不依赖 b_algo 类名，直接从 #b_results 容器中提取 li 元素
+func extractBingResultsFallback(doc *html.Node, limit int) []SearchResult {
+	var results []SearchResult
+	var inResults bool // 是否在 #b_results 容器内
+
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if len(results) >= limit {
+			return
+		}
+		if n.Type == html.ElementNode {
+			// 进入 #b_results 容器
+			if n.Data == "div" || n.Data == "ol" {
+				for _, attr := range n.Attr {
+					if attr.Key == "id" && (attr.Val == "b_results" || attr.Val == "b_results") {
+						inResults = true
+						break
+					}
+				}
+			}
+			// 在 #b_results 中提取 li 元素
+			if inResults && n.Data == "li" {
+				var result SearchResult
+				// 遍历 li 的子元素，提取标题和链接
+				var extractFromLi func(li *html.Node)
+				extractFromLi = func(li *html.Node) {
+					if li.Type == html.ElementNode {
+						// 提取链接
+						if li.Data == "a" && result.URL == "" {
+							for _, attr := range li.Attr {
+								if attr.Key == "href" && attr.Val != "" && !strings.HasPrefix(attr.Val, "javascript:") && !strings.HasPrefix(attr.Val, "#") {
+									result.URL = attr.Val
+									break
+								}
+							}
+						}
+						// 提取标题文本
+						if li.Data == "h2" && result.Title == "" {
+							if c := li.FirstChild; c != nil && c.Type == html.TextNode {
+								result.Title = strings.TrimSpace(c.Data)
+							}
+						}
+					}
+					if li.Type == html.TextNode && result.Title == "" {
+						text := strings.TrimSpace(li.Data)
+						if text != "" && len(text) < 200 {
+							// 检查是否在 h2 内
+							for p := li.Parent; p != nil; p = p.Parent {
+								if p.Data == "h2" {
+									result.Title = text
+									break
+								}
+							}
+						}
+					}
+					for c := li.FirstChild; c != nil; c = c.NextSibling {
+						extractFromLi(c)
+					}
+				}
+				extractFromLi(n)
+
+				// 检查标题和链接是否有效
+				result.Title = strings.TrimSpace(result.Title)
+				result.URL = strings.TrimSpace(result.URL)
+				if result.Title != "" && result.URL != "" && strings.HasPrefix(result.URL, "http") {
+					results = append(results, result)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+		if n.Type == html.ElementNode && inResults {
+			if n.Data == "div" || n.Data == "ol" {
+				for _, attr := range n.Attr {
+					if attr.Key == "id" && (attr.Val == "b_results" || attr.Val == "b_results") {
+						inResults = false
+						break
+					}
+				}
+			}
+		}
+	}
+
+	walk(doc)
 	return results
 }
 
@@ -339,8 +568,8 @@ func (b *BaiduSearcher) warmupCookie() {
 }
 
 func (b *BaiduSearcher) Search(query string, limit int) ([]SearchResult, error) {
-	// 如果已检测到 CAPTCHA 且距上次检测超过 5 分钟，尝试恢复 HTTP 请求
-	if b.captchaDetected && time.Since(b.captchaDetectedAt) > 5*time.Minute {
+	// 如果已检测到 CAPTCHA 且距上次检测超过 1 分钟，尝试恢复 HTTP 请求
+	if b.captchaDetected && time.Since(b.captchaDetectedAt) > 1*time.Minute {
 		b.captchaDetected = false
 	}
 	// 已知被 CAPTCHA 拦截，跳过 HTTP 请求直接用浏览器

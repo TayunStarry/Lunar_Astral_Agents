@@ -375,7 +375,9 @@ func (s *DepthSearcher) appendMemoryData(data *ResearchData, memResult string) *
 		OriginalQuery: data.OriginalQuery,
 		SubQueries:    make([]SubQueryResult, len(data.SubQueries)),
 	}
-	copy(copied.SubQueries, data.SubQueries)
+	for i, sq := range data.SubQueries {
+		copied.SubQueries[i] = sq
+	}
 	if len(copied.SubQueries) > 0 {
 		memItem := SearchResult{
 			Title:   "记忆库信息",
@@ -396,7 +398,9 @@ func (s *DepthSearcher) appendSupplementaryData(data *ResearchData, query string
 		OriginalQuery: data.OriginalQuery,
 		SubQueries:    make([]SubQueryResult, len(data.SubQueries)+1),
 	}
-	copy(copied.SubQueries, data.SubQueries)
+	for i, sq := range data.SubQueries {
+		copied.SubQueries[i] = sq
+	}
 	copied.SubQueries[len(data.SubQueries)] = SubQueryResult{
 		Query:   fmt.Sprintf("补充搜索：%s", query),
 		Results: results,

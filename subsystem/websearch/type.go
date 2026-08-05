@@ -2,6 +2,7 @@ package websearch
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"sync"
 	"time"
 )
@@ -69,10 +70,19 @@ type Searcher interface {
 
 // Config 网络检索子系统完整配置
 type Config struct {
-	Simple  SimpleConfig
-	Webpage WebpageConfig
-	Depth   DepthConfig
-	HTTP    HTTPConfig
+	Simple          SimpleConfig
+	Webpage         WebpageConfig
+	Depth           DepthConfig
+	HTTP            HTTPConfig
+	KnowledgeVector KnowledgeVectorConfig // 向量知识库配置（开启后启用智能学习模式）
+}
+
+// KnowledgeVectorConfig 向量知识库配置
+// 向量存储已迁移至 storage 模块统一管理，DataDir 和 TopK 字段已废弃
+type KnowledgeVectorConfig struct {
+	Enabled bool   // 是否开启智能学习模式（关闭时走旧逻辑）
+	DataDir string // [已废弃] 向量存储由 storage 模块统一管理，此字段不再使用
+	TopK    int    // [已废弃] 向量检索 topK 由 learner 内部常量控制，此字段不再使用
 }
 
 // SimpleConfig 轻量摘要配置
@@ -162,8 +172,15 @@ type MemoryProvider interface {
 
 // BingSearcher 必应中文搜索
 type BingSearcher struct {
-	client  *http.Client
-	httpCfg HTTPConfig
+	client            *http.Client
+	httpCfg           HTTPConfig
+	cookieJar         *cookiejar.Jar
+	cookieWarmed      bool
+	warmedAt          time.Time
+	browserRenderer   BrowserRenderer
+	captchaDetected   bool
+	captchaDetectedAt time.Time
+	debugLog          func(format string, args ...interface{})
 }
 
 // BaiduSearcher 百度搜索
@@ -272,6 +289,9 @@ type DepthSearcher struct {
 	browserRenderer BrowserRenderer
 	debugLog        func(format string, args ...interface{})
 	knowledge       *SearchKnowledge
+	// 全局 URL 去重，跨轮次避免重复抓取
+	seenURLs   map[string]bool
+	seenURLsMu sync.Mutex
 }
 
 // ── 子系统入口 ──
@@ -286,6 +306,7 @@ type System struct {
 	webpage         *WebpageSearcher
 	depth           *DepthSearcher
 	knowledge       *SearchKnowledge
+	learner         *SearchLearner // 智能搜索学习器
 	llmProvider     Provider
 	memProvider     MemoryProvider
 	visionProvider  VisionProvider
