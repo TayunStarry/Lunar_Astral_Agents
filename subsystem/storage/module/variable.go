@@ -53,5 +53,8 @@ var previewAllowlist = map[string]PreviewEntry{
 // KnowledgeDatabase 知识库实例（KnowledgeDB）
 var KnowledgeDatabase *KnowledgeDB
 
+// MemoryChunkSize 每个分块文件的最大条目数（contents 与 embeddings 分别计数）
+const MemoryChunkSize = 100
+
 // MemoryDatabase 记忆库实例（MemoryDB）
 var MemoryDatabase *MemoryDB

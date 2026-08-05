@@ -121,6 +121,17 @@ export class MovementController {
         this._markMove();
     }
 
+    /** 取消当前移动（清除目标，停止移动状态） */
+    cancelMovement() {
+        this._hasTarget = false;
+        this._isMoving = false;
+        this._isFastMoving = false;
+        this._jumping = false;
+        this._horizontalArrived = false;
+        this._characterPhysics?.stopMove();
+        this._notifyMoveState();
+    }
+
     setRotation(yaw, pitch) {
         this._targetYaw = yaw;
         this._targetPitch = pitch;

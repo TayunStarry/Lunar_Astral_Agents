@@ -38,6 +38,10 @@ type MusicRenderResponse struct {
 func getFluidSynthPath() string {
 	// 项目规范路径：local_data/package/fluidsynth/
 	localPath := filepath.Join(*config.LocalDir, "package", "fluidsynth", "fluidsynth.exe")
+	// 转为绝对路径，确保 exec.Command 能正确解析（相对路径在 CreateProcess 时可能失败）
+	if absPath, err := filepath.Abs(localPath); err == nil {
+		localPath = absPath
+	}
 	if _, err := os.Stat(localPath); err == nil {
 		return localPath
 	}
@@ -51,6 +55,9 @@ func getFluidSynthPath() string {
 // getAbc2midiPath 获取 abc2midi 可执行文件路径
 func getAbc2midiPath() string {
 	localPath := filepath.Join(*config.LocalDir, "package", "fluidsynth", "abc2midi.exe")
+	if absPath, err := filepath.Abs(localPath); err == nil {
+		localPath = absPath
+	}
 	if _, err := os.Stat(localPath); err == nil {
 		return localPath
 	}
@@ -64,6 +71,9 @@ func getAbc2midiPath() string {
 func getSoundFontPath() string {
 	// 项目规范路径：local_data/package/soundfonts/
 	sfDir := filepath.Join(*config.LocalDir, "package", "soundfonts")
+	if absDir, err := filepath.Abs(sfDir); err == nil {
+		sfDir = absDir
+	}
 	candidates := []string{
 		filepath.Join(sfDir, "general.sf2"),
 		filepath.Join(sfDir, "GeneralUser.sf2"),
@@ -89,6 +99,9 @@ func getSoundFontPath() string {
 func getOutputDir() string {
 	// 项目规范路径：local_data/audios/
 	outputDir := filepath.Join(*config.LocalDir, "audios")
+	if absDir, err := filepath.Abs(outputDir); err == nil {
+		outputDir = absDir
+	}
 	os.MkdirAll(outputDir, 0755)
 	return outputDir
 }

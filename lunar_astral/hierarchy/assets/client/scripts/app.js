@@ -244,24 +244,63 @@ class LunarCoreApp {
 
 	// ==== 3D渲染器广播频道初始化 ====
 	initRendererChannel() {
-		rendererChannel.onmessage = (event) => {
-			const msg = event.data;
-			if (!msg || !msg.type) return;
+			rendererChannel.onmessage = (event) => {
+				const msg = event.data;
+				if (!msg || !msg.type) return;
 
-			switch (msg.type) {
-				case 'body_click':
-					// 3D模型身体部位被点击 → 生成触摸提示词 → 发送给AI
-					this.handleBodyClick(msg.payload?.partName, msg.payload?.boneName);
-					break;
-				case 'action_started':
-					console.log(`[主客户端] 动作已执行: ${msg.payload?.action}`);
-					break;
-				case 'movement_complete':
-					console.log('[主客户端] 位移完成');
-					break;
-			}
-		};
-	}
+				switch (msg.type) {
+					case 'body_click':
+						// 3D模型身体部位被点击 → 生成触摸提示词 → 发送给AI
+						this.handleBodyClick(msg.payload?.partName, msg.payload?.boneName);
+						break;
+					case 'action_started':
+						console.log(`[主客户端] 动作已执行: ${msg.payload?.action}`);
+						// 回传事件到AI上下文
+						this.sendAgentEvent('action_started', JSON.stringify(msg.payload || {}));
+						break;
+					case 'movement_complete':
+						console.log('[主客户端] 位移完成');
+						// 回传事件到AI上下文
+						this.sendAgentEvent('movement_complete', JSON.stringify(msg.payload || {}));
+						break;
+					case 'telemetry':
+						// 遥测数据 → 更新服务器端的智能体位置缓存
+						if (msg.payload?.character) {
+							this.sendAgentPosition(msg.payload.character);
+						}
+						break;
+				}
+			};
+		}
+
+		// ==== 向服务器发送智能体位置 ====
+		sendAgentPosition(position) {
+			fetch('/write/agent_position', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					x: position.x ?? 0,
+					y: position.y ?? 0,
+					z: position.z ?? 0,
+				}),
+			}).catch(err => {
+				// 静默失败，避免遥测错误刷屏
+			});
+		}
+
+		// ==== 向服务器发送智能体引擎事件 ====
+		sendAgentEvent(eventType, data) {
+			fetch('/write/agent_event', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					event: eventType,
+					data: data,
+				}),
+			}).catch(err => {
+				console.warn('[主客户端] 发送智能体事件失败:', err);
+			});
+		}
 
 	// ==== 处理3D模型点击 ====
 	handleBodyClick(part, boneName) {

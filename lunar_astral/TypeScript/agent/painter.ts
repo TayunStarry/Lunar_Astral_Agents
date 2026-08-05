@@ -1,4 +1,4 @@
-import { ToolCall,  RandomFloor,  GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, CreativeRoleBase } from '../index';
+import { ToolCall, RandomFloor, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, CreativeRoleBase } from '../index';
 
 /** 绘画作品详情记录（用于向对话者传递作品信息） */
 interface PaintingDetail {
@@ -113,28 +113,12 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			}
 		}
 	]
-	/** 图片生成关键词模式 — 仅匹配用户明确要求生成图片的意图 */
-	private readonly imageKeywords = [
-		/画(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/生成(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/绘制(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/创作(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/(?:帮我|给我|为我)(?:画|绘制|生成|创作|做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)?/,
-		/(?:做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/来(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-		/自画像/,
-		/画(?:一(?:张|幅|个))?自画像/,
-	]
 	/** 构造函数 */
 	public constructor() {
 		super(fileView('prompts/painterRole.md')[0]);
 	}
 	/** 角色名称 */
 	protected get roleName(): string { return '画家' }
-	/** 检查未读消息是否匹配图片生成关键词 */
-	protected matchKeywords(texts: string[]): boolean {
-		return texts.some(text => this.imageKeywords.some(keyword => keyword.test(text)));
-	}
 	/** 获取工具定义 */
 	protected getToolDefinitions(): ToolCall[] { return this.roleTool }
 	/** 执行绘画工具调用 */
@@ -179,25 +163,22 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			// 解析失败时跳过，不阻断流程
 		}
 	}
-	/** 构建绘画作品摘要，供对话者使用 */
+	/** 构建绘画作品摘要，使用月华话术格式 */
 	protected buildSummary(paintings: PaintingDetail[]): string {
+		if (paintings.length === 0) return '月华没有绘制任何作品';
 		const parts: string[] = [];
-		parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
 		for (let i = 0; i < paintings.length; i++) {
 			const p = paintings[i];
-			const detailLines: string[] = [];
 			if (p.toolName === 'self_portrait') {
-				detailLines.push(`作品${i + 1}：自画像`);
-				if (p.expression) detailLines.push(`  - 表情：${p.expression}`);
-				if (p.posture) detailLines.push(`  - 姿势：${p.posture}`);
-				if (p.environment) detailLines.push(`  - 环境：${p.environment}`);
+				let desc = '月华绘制了一幅自画像';
+				if (p.expression) desc += `，展现了${p.expression}`;
+				if (p.environment) desc += `，背景是${p.environment}`;
+				parts.push(desc + '。');
 			} else {
-				detailLines.push(`作品${i + 1}：扩散生成图像`);
-				detailLines.push(`  - 画面内容：${p.promptSummary}`);
+				parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
 			}
-			parts.push(detailLines.join('\n'));
 		}
-		parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
+		parts.push('图像已通过前端推送给用户。');
 		return parts.join('\n');
 	}
 	/** 获得写入了动作、表情与服装的自我外观提示词 */

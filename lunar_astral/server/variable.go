@@ -87,8 +87,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/unload", Handler: handlers.LTPXUnloadHandler, Method: "POST", Description: "卸载LTPX工具包"},
 	{Path: "/ltpx/status", Handler: handlers.LTPXStatusHandler, Method: "GET", Description: "查询LTPX工具状态"},
 	// WebView管理接口
-	{Path: "/webview/reopen", Handler: handlers.WebViewReopenHandler, Method: "POST", Description: "重建webView页面"},
-	// 音乐渲染相关接口
+		{Path: "/webview/reopen", Handler: handlers.WebViewReopenHandler, Method: "POST", Description: "重建webView页面"},
+		// 智能体控制接口
+		{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
+		{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
+		// 音乐渲染相关接口
 	{Path: "/music/render", Handler: handlers.MusicRenderHandler, Method: "POST", Description: "ABC乐谱渲染为WAV音频"},
 	{Path: "/music/deps", Handler: handlers.MusicDepsHandler, Method: "GET", Description: "音乐渲染依赖状态查询"},
 }

@@ -2,6 +2,8 @@ import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, fetchDo
 
 /** 智能体定义 */
 export class AgentDefine {
+	/** 全局单例引用，供工具处理函数访问子智能体实例 */
+	public static instance: AgentDefine;
 	/** 摘要者角色(视频摘要) */
 	public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
 	/** 描述者角色(视频描述) */

@@ -147,3 +147,56 @@ func (class *Runtime) pullVideoUrl() goja.Value {
 	// 返回拉取到的视频URL
 	return class.runtime.ToValue(url)
 }
+
+// getAgentPosition 获取缓存的智能体3D位置（由前端遥测数据更新）
+func (class *Runtime) getAgentPosition() goja.Value {
+	agentPositionMutex.RLock()
+	defer agentPositionMutex.RUnlock()
+	return class.runtime.ToValue(map[string]interface{}{
+		"x": agentPosition.X,
+		"y": agentPosition.Y,
+		"z": agentPosition.Z,
+	})
+}
+
+// pushAgentEvent 将 3D 引擎事件推送到 AI 上下文
+// eventType: 事件类型（如 "movement_complete", "action_started"）
+// data: 事件数据的 JSON 字符串
+func (class *Runtime) pushAgentEvent(eventType string, data string) goja.Value {
+	message := PostMessage{
+		Role: "system",
+		Content: map[string]string{
+			"type":    "agent_event",
+			"event":   eventType,
+			"data":    data,
+		},
+	}
+	UnreadContext = append(UnreadContext, message)
+	logger.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
+	return class.runtime.ToValue(true)
+}
+
+// UpdateAgentPosition 供 HTTP handler 调用，更新缓存的智能体位置
+// 该函数不在 JS 运行时中导出，仅由 Go 端调用
+func UpdateAgentPosition(x, y, z float64) {
+	agentPositionMutex.Lock()
+	defer agentPositionMutex.Unlock()
+	agentPosition.X = x
+	agentPosition.Y = y
+	agentPosition.Z = z
+}
+
+// PushAgentEventToContext 供 HTTP handler 调用，将引擎事件推送到 AI 上下文
+// 该函数不在 JS 运行时中导出，仅由 Go 端调用
+func PushAgentEventToContext(eventType string, data string) {
+	message := PostMessage{
+		Role: "system",
+		Content: map[string]string{
+			"type":  "agent_event",
+			"event": eventType,
+			"data":  data,
+		},
+	}
+	UnreadContext = append(UnreadContext, message)
+	logger.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
+}

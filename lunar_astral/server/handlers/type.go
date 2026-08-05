@@ -68,3 +68,16 @@ type WebViewReopenResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 }
+
+// AgentPositionRequest 智能体位置更新请求
+type AgentPositionRequest struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+// AgentEventRequest 智能体引擎事件请求
+type AgentEventRequest struct {
+	Event string `json:"event"` // 事件类型: movement_complete, action_started
+	Data  string `json:"data"`  // 事件数据 JSON 字符串
+}

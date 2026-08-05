@@ -135,7 +135,6 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 		return fmt.Errorf("创建集合目录失败: %v", err)
 	}
 
-	filePath := filepath.Join(collDir, "documents.json")
 	metaPath := filepath.Join(collDir, "metadata.json")
 
 	// 尝试加载已有 metadata
@@ -154,7 +153,7 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 		}
 		meta.Model = modelName
 		meta.Dimension = len(probeVec)
-		if err := saveCollectionMeta(metaPath, meta); err != nil {
+		if err := atomicWriteJSON(metaPath, meta); err != nil {
 			return fmt.Errorf("写入 metadata.json 失败: %v", err)
 		}
 	}
@@ -164,7 +163,7 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 		Model:     meta.Model,
 		Dimension: meta.Dimension,
 		Documents: make([]MemoryDocument, 0),
-		filePath:  filePath,
+		collDir:   collDir,
 		metaPath:  metaPath,
 	}
 	c.loadDocumentsFromFile()
@@ -176,15 +175,6 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 	logger.Info("Storage", "集合 [%s] 初始化完成, 模型: %s, 维度: %d, 文档数: %d",
 		name, c.Model, c.Dimension, len(c.Documents))
 	return nil
-}
-
-// saveCollectionMeta 写入集合元数据
-func saveCollectionMeta(metaPath string, meta collectionMeta) error {
-	data, err := json.MarshalIndent(meta, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(metaPath, data, 0644)
 }
 
 // getCollection 获取集合实例，不存在返回错误
@@ -219,7 +209,6 @@ func (d *MemoryDB) loadAllCollections() {
 		}
 		collDir := filepath.Join(d.baseDir, name)
 		metaPath := filepath.Join(collDir, "metadata.json")
-		filePath := filepath.Join(collDir, "documents.json")
 
 		var meta collectionMeta
 		if data, err := os.ReadFile(metaPath); err == nil && len(data) > 0 {
@@ -239,7 +228,7 @@ func (d *MemoryDB) loadAllCollections() {
 			Model:     meta.Model,
 			Dimension: meta.Dimension,
 			Documents: make([]MemoryDocument, 0),
-			filePath:  filePath,
+			collDir:   collDir,
 			metaPath:  metaPath,
 		}
 		c.loadDocumentsFromFile()
@@ -471,7 +460,7 @@ func (d *MemoryDB) MemoryDeleteCollection(collectionName string) error {
 		return err
 	}
 
-	collDir := filepath.Join(d.baseDir, collectionName)
+	collDir := c.collDir
 
 	d.collectionsMu.Lock()
 	delete(d.collections, collectionName)
@@ -565,48 +554,251 @@ func (d *MemoryDB) MemoryGetCollectionInfo(collectionName string) (model string,
 }
 
 // =============================================================================
-// Collection 持久化方法
+// Collection 持久化方法 — 分块存储（contents_NNNN.json + embeddings_NNNN.json）
 // =============================================================================
 
-// loadDocumentsFromFile 从 documents.json 加载文档到集合内存
+// contentFilePath 返回指定分块编号的内容文件路径
+// 格式：<collDir>/contents_0001.json
+func (c *Collection) contentFilePath(chunkNum int) string {
+	return filepath.Join(c.collDir, fmt.Sprintf("contents_%04d.json", chunkNum))
+}
+
+// embeddingFilePath 返回指定分块编号的嵌入向量文件路径
+// 格式：<collDir>/embeddings_0001.json
+func (c *Collection) embeddingFilePath(chunkNum int) string {
+	return filepath.Join(c.collDir, fmt.Sprintf("embeddings_%04d.json", chunkNum))
+}
+
+// atomicWriteJSON 原子化写入 JSON 文件：写临时文件 + delete + rename
+// Windows 兼容：rename 不能覆盖已存在文件，需先删除
+func atomicWriteJSON(path string, data interface{}) error {
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("序列化失败: %w", err)
+	}
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, jsonData, 0644); err != nil {
+		return fmt.Errorf("临时文件写入失败: %w", err)
+	}
+	os.Remove(path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("原子重命名失败: %w", err)
+	}
+	return nil
+}
+
+// readJSONFile 读取并反序列化 JSON 文件到指定目标
+func readJSONFile(path string, target interface{}) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, target)
+}
+
+// saveCollectionMeta 原子化写入集合元数据（含分块计数），并更新 lastFileModTime
+// 在所有分块文件写入完成后调用，确保跨进程读取一致性
+func (c *Collection) saveCollectionMeta() error {
+	meta := collectionMeta{
+		Model:      c.Model,
+		Dimension:  c.Dimension,
+		ChunkCount: c.chunkCount,
+	}
+	if err := atomicWriteJSON(c.metaPath, meta); err != nil {
+		return err
+	}
+	// 更新本进程记录的文件修改时间，避免 reloadIfChanged 误判本进程写入为外部更新
+	if fi, statErr := os.Stat(c.metaPath); statErr == nil {
+		c.mu.Lock()
+		c.lastFileModTime = fi.ModTime()
+		c.mu.Unlock()
+	}
+	return nil
+}
+
+// updateLastModTime 更新 lastFileModTime 为 metadata.json 的当前修改时间
+func (c *Collection) updateLastModTime() {
+	if fi, err := os.Stat(c.metaPath); err == nil {
+		c.mu.Lock()
+		c.lastFileModTime = fi.ModTime()
+		c.mu.Unlock()
+	}
+}
+
+// loadDocumentsFromFile 加载文档到集合内存
+// 自动检测旧格式（documents.json）并即时迁移到新格式（分块存储）
 // 兼容旧版 msg-N 格式 ID 与新版 UUID 格式 ID，加载时保留原值不做改写
 func (c *Collection) loadDocumentsFromFile() {
-	data, err := os.ReadFile(c.filePath)
+	oldPath := filepath.Join(c.collDir, "documents.json")
+
+	if _, err := os.Stat(oldPath); err == nil {
+		// 旧格式分支：加载 documents.json，然后立即迁移到新格式
+		c.loadFromOldFormat(oldPath)
+		if err := c.migrateToNewFormat(); err != nil {
+			logger.Error("Storage", "集合 [%s] 迁移到新格式失败: %v, 保留旧文件", c.Name, err)
+			return
+		}
+		// 迁移成功后删除旧文件
+		if err := os.Remove(oldPath); err != nil {
+			logger.Warn("Storage", "集合 [%s] 删除旧 documents.json 失败: %v", c.Name, err)
+		}
+		logger.Info("Storage", "集合 [%s] 已从旧格式迁移到分块存储, 分块数: %d, 文档数: %d",
+			c.Name, c.chunkCount, len(c.Documents))
+	} else {
+		// 新格式分支：从分块文件加载
+		c.loadFromChunks()
+	}
+
+	// 统一更新 lastFileModTime 为 metadata.json 的修改时间
+	c.updateLastModTime()
+}
+
+// loadFromOldFormat 从旧格式 documents.json 加载文档到内存
+func (c *Collection) loadFromOldFormat(oldPath string) {
+	data, err := os.ReadFile(oldPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			logger.Warn("Storage", "集合 [%s] 读取 documents.json 失败: %v", c.Name, err)
 		}
 		return
 	}
-
-	// 记录本次加载对应的文件修改时间，供 reloadIfChanged 跨进程一致性检测使用
-	if fi, statErr := os.Stat(c.filePath); statErr == nil {
-		c.mu.Lock()
-		c.lastFileModTime = fi.ModTime()
-		c.mu.Unlock()
-	}
-
 	if len(data) == 0 {
+		c.mu.Lock()
+		c.Documents = make([]MemoryDocument, 0)
+		c.mu.Unlock()
 		return
 	}
-
 	var docs []MemoryDocument
 	if err := json.Unmarshal(data, &docs); err != nil {
 		logger.Warn("Storage", "集合 [%s] documents.json 解析失败: %v", c.Name, err)
 		return
 	}
-
 	c.mu.Lock()
 	c.Documents = docs
 	c.mu.Unlock()
 }
 
-// reloadIfChanged 跨进程一致性检测：若 documents.json 被其他进程修改则重载到内存
+// loadFromChunks 从分块文件加载文档到内存
+// 按 metadata.json 中的 chunk_count 遍历加载所有内容与嵌入向量分块，按 ID 合并
+func (c *Collection) loadFromChunks() {
+	// 读取 metadata.json 获取分块数
+	var meta collectionMeta
+	if err := readJSONFile(c.metaPath, &meta); err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warn("Storage", "集合 [%s] 读取 metadata.json 失败: %v", c.Name, err)
+		}
+		return
+	}
+
+	if meta.ChunkCount == 0 {
+		c.mu.Lock()
+		c.Documents = make([]MemoryDocument, 0)
+		c.mu.Unlock()
+		c.chunkCount = 0
+		return
+	}
+
+	// 加载所有内容分块和嵌入向量分块
+	allContents := make([]contentEntry, 0)
+	embedMap := make(map[string][]float32)
+
+	for i := 1; i <= meta.ChunkCount; i++ {
+		// 加载内容分块
+		var contents []contentEntry
+		if err := readJSONFile(c.contentFilePath(i), &contents); err != nil {
+			logger.Warn("Storage", "集合 [%s] 读取 contents_%04d.json 失败: %v, 跳过该分块", c.Name, i, err)
+			continue
+		}
+		allContents = append(allContents, contents...)
+
+		// 加载嵌入向量分块
+		var embeddings []embeddingEntry
+		if err := readJSONFile(c.embeddingFilePath(i), &embeddings); err != nil {
+			logger.Warn("Storage", "集合 [%s] 读取 embeddings_%04d.json 失败: %v, 跳过该分块", c.Name, i, err)
+			continue
+		}
+		for _, e := range embeddings {
+			embedMap[e.ID] = e.Embedding
+		}
+	}
+
+	// 按 ID 合并内容与嵌入向量
+	docs := make([]MemoryDocument, 0, len(allContents))
+	for _, ct := range allContents {
+		emb, ok := embedMap[ct.ID]
+		if !ok {
+			logger.Warn("Storage", "集合 [%s] 文档 %s 缺少嵌入向量 (文件可能损坏), 跳过", c.Name, ct.ID)
+			continue
+		}
+		docs = append(docs, MemoryDocument{
+			ID:        ct.ID,
+			Role:      ct.Role,
+			Content:   ct.Content,
+			Embedding: emb,
+		})
+	}
+
+	c.mu.Lock()
+	c.Documents = docs
+	c.mu.Unlock()
+	c.chunkCount = meta.ChunkCount
+}
+
+// migrateToNewFormat 将内存中的文档写入新格式分块文件
+// 调用方必须确保 c.Documents 已经加载完毕
+func (c *Collection) migrateToNewFormat() error {
+	c.mu.RLock()
+	totalDocs := len(c.Documents)
+	c.mu.RUnlock()
+
+	newChunkCount := (totalDocs + MemoryChunkSize - 1) / MemoryChunkSize
+
+	// 写入所有分块
+	for i := 0; i < newChunkCount; i++ {
+		chunkNum := i + 1
+		start := i * MemoryChunkSize
+		end := start + MemoryChunkSize
+		if end > totalDocs {
+			end = totalDocs
+		}
+
+		c.mu.RLock()
+		chunkDocs := c.Documents[start:end]
+		c.mu.RUnlock()
+
+		contents := make([]contentEntry, len(chunkDocs))
+		embeddings := make([]embeddingEntry, len(chunkDocs))
+		for j, doc := range chunkDocs {
+			contents[j] = contentEntry{ID: doc.ID, Role: doc.Role, Content: doc.Content}
+			embeddings[j] = embeddingEntry{ID: doc.ID, Embedding: doc.Embedding}
+		}
+
+		if err := atomicWriteJSON(c.contentFilePath(chunkNum), contents); err != nil {
+			return fmt.Errorf("写入 contents_%04d.json 失败: %w", chunkNum, err)
+		}
+		if err := atomicWriteJSON(c.embeddingFilePath(chunkNum), embeddings); err != nil {
+			return fmt.Errorf("写入 embeddings_%04d.json 失败: %w", chunkNum, err)
+		}
+	}
+
+	c.chunkCount = newChunkCount
+
+	// 更新 metadata.json（含 chunk_count）
+	if err := c.saveCollectionMeta(); err != nil {
+		return fmt.Errorf("更新 metadata.json 失败: %w", err)
+	}
+
+	return nil
+}
+
+// reloadIfChanged 跨进程一致性检测：若 metadata.json 被其他进程修改则重载到内存
 // 场景：crystal_astral（前端 HTTP 服务）与 lunar_astral（AI 引擎）为两个独立进程，
 // 共享同一磁盘文件但各自维护独立内存缓存。lunar_astral 写入后，crystal_astral 的
-// 内存缓存会过期；此方法在读路径调用前比对文件修改时间，发现变化即重载。
+// 内存缓存会过期；此方法在读路径调用前比对 metadata.json 修改时间，发现变化即重载。
+// 新格式下以 metadata.json 为检测锚点：每次写入都会在所有分块完成后更新 metadata.json，
+// 保证跨进程读取到一致的数据。
 func (c *Collection) reloadIfChanged() {
-	fi, err := os.Stat(c.filePath)
+	fi, err := os.Stat(c.metaPath)
 	if err != nil {
 		return
 	}
@@ -616,41 +808,68 @@ func (c *Collection) reloadIfChanged() {
 	if !fi.ModTime().After(last) {
 		return
 	}
-	logger.Info("Storage", "集合 [%s] 检测到 documents.json 被外部更新, 重新加载 (旧 mtime: %v, 新 mtime: %v)",
+	logger.Info("Storage", "集合 [%s] 检测到 metadata.json 被外部更新, 重新加载 (旧 mtime: %v, 新 mtime: %v)",
 		c.Name, last, fi.ModTime())
 	c.loadDocumentsFromFile()
 }
 
-// saveDocumentsToFile 原子化持久化文档：写临时文件 + rename
-// Windows 上 rename 不能覆盖已存在文件，先 Remove 再 Rename
+// saveDocumentsToFile 将内存中的文档写入分块存储文件
+// 按 MemoryChunkSize（100 条）切分文档，写入 contents_NNNN.json + embeddings_NNNN.json
+// 自动清理多余分块文件（当文档总数减少时），最后原子化更新 metadata.json
 func (c *Collection) saveDocumentsToFile() {
 	c.mu.RLock()
-	data, err := json.MarshalIndent(c.Documents, "", "  ")
+	totalDocs := len(c.Documents)
+	// 浅拷贝文档切片，避免长时间持锁
+	docs := make([]MemoryDocument, totalDocs)
+	copy(docs, c.Documents)
 	c.mu.RUnlock()
-	if err != nil {
-		logger.Error("Storage", "集合 [%s] documents 序列化失败: %v", c.Name, err)
-		return
+
+	newChunkCount := (totalDocs + MemoryChunkSize - 1) / MemoryChunkSize
+
+	// 写入所有新分块
+	for i := 0; i < newChunkCount; i++ {
+		chunkNum := i + 1
+		start := i * MemoryChunkSize
+		end := start + MemoryChunkSize
+		if end > totalDocs {
+			end = totalDocs
+		}
+
+		chunkDocs := docs[start:end]
+		contents := make([]contentEntry, len(chunkDocs))
+		embeddings := make([]embeddingEntry, len(chunkDocs))
+		for j, doc := range chunkDocs {
+			contents[j] = contentEntry{ID: doc.ID, Role: doc.Role, Content: doc.Content}
+			embeddings[j] = embeddingEntry{ID: doc.ID, Embedding: doc.Embedding}
+		}
+
+		if err := atomicWriteJSON(c.contentFilePath(chunkNum), contents); err != nil {
+			logger.Error("Storage", "集合 [%s] contents_%04d.json 写入失败: %v", c.Name, chunkNum, err)
+			return
+		}
+		if err := atomicWriteJSON(c.embeddingFilePath(chunkNum), embeddings); err != nil {
+			logger.Error("Storage", "集合 [%s] embeddings_%04d.json 写入失败: %v", c.Name, chunkNum, err)
+			return
+		}
 	}
 
-	tmpPath := c.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		logger.Error("Storage", "集合 [%s] 临时文件写入失败: %v", c.Name, err)
-		return
+	// 删除多余的分块文件（当文档总数减少导致分块数下降时）
+	oldChunkCount := c.chunkCount
+	for i := newChunkCount + 1; i <= oldChunkCount; i++ {
+		os.Remove(c.contentFilePath(i))
+		os.Remove(c.embeddingFilePath(i))
 	}
 
-	// Windows: Remove + Rename 模拟原子替换
-	os.Remove(c.filePath)
-	if err := os.Rename(tmpPath, c.filePath); err != nil {
-		logger.Error("Storage", "集合 [%s] 原子重命名失败: %v", c.Name, err)
-		return
+	c.chunkCount = newChunkCount
+
+	// 原子化更新 metadata.json
+	if err := c.saveCollectionMeta(); err != nil {
+		logger.Error("Storage", "集合 [%s] metadata.json 更新失败: %v", c.Name, err)
 	}
 
-	// 更新本进程记录的文件修改时间，避免 reloadIfChanged 误判本进程写入为外部更新
-	if fi, statErr := os.Stat(c.filePath); statErr == nil {
-		c.mu.Lock()
-		c.lastFileModTime = fi.ModTime()
-		c.mu.Unlock()
-	}
+	// 清理可能残留的旧格式 documents.json（迁移后遗留或异常情况）
+	oldPath := filepath.Join(c.collDir, "documents.json")
+	os.Remove(oldPath) // 忽略错误，文件可能不存在
 }
 
 // =============================================================================

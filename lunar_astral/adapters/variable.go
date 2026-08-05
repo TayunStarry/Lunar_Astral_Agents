@@ -50,3 +50,11 @@ var UnreadVideoUrl = make([]string, 0)
 
 // webSearchSystem 网络检索子系统实例
 var webSearchSystem *websearch.System
+
+// ==== 智能体 3D 位置全局变量 ====
+
+// agentPosition 缓存的智能体最新3D位置（由前端遥测数据更新）
+var agentPosition AgentPositionData
+
+// agentPositionMutex 保护 agentPosition 的并发访问
+var agentPositionMutex sync.RWMutex

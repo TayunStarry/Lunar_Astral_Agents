@@ -57,17 +57,6 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.tts)
 
-	// 注册网络检索子系统适配器
-	vm.Set("webSearchInit", adapters.webSearchInit)
-	vm.Set("webSearchWebpage", adapters.webSearchWebpage)
-	vm.Set("webSearchSimple", adapters.webSearchSimple)
-	vm.Set("webSearchDepth", adapters.webSearchDepth)
-	vm.Set("webSearchIsReady", adapters.webSearchIsReady)
-	vm.Set("webSearchAssembly", adapters.webSearchAssembly)
-	vm.Set("webSearchProcessLinks", adapters.webSearchProcessLinks)
-	vm.Set("webSearchSetMemoryProvider", adapters.webSearchSetMemoryProvider)
-	vm.Set("webSearchSetDownloadFunc", adapters.webSearchSetDownloadFunc)
-
 	// 注册截图子系统适配器
 	vm.Set("screenshotCapture", adapters.screenshotCapture)
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
@@ -75,6 +64,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册 LTPX 工具动态管理函数
 	vm.Set("getLTPXToolStatus", adapters.getLTPXToolStatusForJS)
 	vm.Set("processLTPXChanges", adapters.processLTPXChangesForJS)
+
+	// 注册智能体控制适配器
+	vm.Set("getAgentPosition", adapters.getAgentPosition)
+	vm.Set("pushAgentEvent", adapters.pushAgentEvent)
 
 	// 注册学习者智能体适配器
 	learner.BindLearnerToRuntime(vm)

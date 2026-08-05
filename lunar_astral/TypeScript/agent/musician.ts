@@ -150,32 +150,12 @@ K:Am
 			}
 		}
 	]
-	/** 音乐创作关键词模式 — 匹配用户明确要求创作音乐的意图 */
-	private readonly musicKeywords = [
-		/创作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/生成(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/写(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/制作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/编(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|曲|钢琴曲|古典乐|轻音乐)/,
-		/(?:帮我|给我|为我)(?:创作|生成|写|制作|编|做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)?/,
-		/(?:做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/来(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-		/作曲/,
-		/编曲/,
-		/谱写/,
-		/演奏(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|钢琴曲|古典乐|轻音乐)/,
-		/(?:弹|拉|吹)(?:一(?:首|段|曲))?.*(?:钢琴|小提琴|吉他|笛子|古筝|曲子|音乐|旋律)/,
-	]
 	/** 构造函数 */
 	public constructor() {
 		super(fileView('prompts/musicianRole.md')[0]);
 	}
 	/** 角色名称 */
 	protected get roleName(): string { return '音乐家' }
-	/** 检查未读消息是否匹配音乐创作关键词 */
-	protected matchKeywords(texts: string[]): boolean {
-		return texts.some(text => this.musicKeywords.some(keyword => keyword.test(text)));
-	}
 	/** 获取工具定义 */
 	protected getToolDefinitions(): ToolCall[] { return this.musicTool }
 	/** 执行音乐创作工具调用 */
@@ -217,23 +197,22 @@ K:Am
 			// 解析失败时跳过，不阻断流程
 		}
 	}
-	/** 构建音乐作品摘要，供对话者使用 */
+	/** 构建音乐作品摘要，使用月华话术格式 */
 	protected buildSummary(pieces: MusicPieceDetail[]): string {
+		if (pieces.length === 0) return '月华没有演奏任何作品';
 		const parts: string[] = [];
-		parts.push('[音乐创作记录] 你（月华）刚刚完成了以下音乐作品创作：');
 		for (let i = 0; i < pieces.length; i++) {
 			const p = pieces[i];
-			const detailLines: string[] = [];
-			detailLines.push(`作品${i + 1}：《${p.title}》`);
-			if (p.instruments) detailLines.push(`  - 乐器配置：${p.instruments}`);
-			if (p.key) detailLines.push(`  - 调式：${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
-			if (p.tempo > 0) detailLines.push(`  - 速度：${p.tempo} BPM`);
-			if (p.meter) detailLines.push(`  - 拍号：${p.meter}`);
-			if (p.structure) detailLines.push(`  - 段落结构：${p.structure}`);
-			detailLines.push(`  - 乐谱长度：${p.abcLength} 字符`);
-			parts.push(detailLines.join('\n'));
+			let desc = `月华演奏了《${p.title}》`;
+			const details: string[] = [];
+			if (p.instruments) details.push(`使用${p.instruments}`);
+			if (p.key) details.push(`${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
+			if (p.tempo > 0) details.push(`${p.tempo}BPM`);
+			if (p.structure) details.push(`结构为${p.structure}`);
+			if (details.length > 0) desc += `（${details.join('，')}）`;
+			parts.push(desc + '。');
 		}
-		parts.push('\n注意：请基于以上真实创作信息向用户介绍音乐作品，切勿编造不存在的曲名、乐器或结构。乐谱已通过音乐播放器推送给用户，可以引导用户查看和播放。');
+		parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
 		return parts.join('\n');
 	}
 	/**

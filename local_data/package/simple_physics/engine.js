@@ -1767,7 +1767,13 @@ async function executeAction(actionName) {
         console.warn(`[Engine] 未知动作: ${actionName}`);
         return;
     }
-    if (movementController?.isMoving) return;
+    // 如果正在移动，先取消当前移动再执行动作（避免静默丢弃）
+    if (movementController?.isMoving) {
+        console.log(`[Engine] 检测到正在移动，取消移动以执行动作: ${actionName}`);
+        movementController.cancelMovement();
+        // 等待一帧确保移动状态完全清除
+        await new Promise(resolve => requestAnimationFrame(resolve));
+    }
 
     movementController?.setMouseTracking(def.mouseTracking);
     animGroupRuntime?.activateGroup(def.group);

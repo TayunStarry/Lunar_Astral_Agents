@@ -89,10 +89,8 @@ class LunarAgent extends AgentDefine {
 				await this.batchProcessVideoFiles();
 				// 如果包含研究意图关键词，调用学习者角色执行研究循环（最先执行）
 				this.learnerRole.executeLearner(this.unreadContext);
-				// 如果包含图像生成关键词，调用画家角色执行绘画循环
-				this.painterRole.createCreativeWork(this.unreadContext);
-				// 如果包含音乐创作关键词，调用音乐家角色执行音乐创作循环
-				this.musicianRole.createCreativeWork(this.unreadContext);
+				// 绘画师和演奏家已改为通过工具调用触发（dispatch_painter / dispatch_musician），
+				// 不再由思考链中的关键词匹配自动触发
 				// 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
 				await this.createChatMessage();
 				// 如果消息响应为空，抛出异常
@@ -215,7 +213,12 @@ class LunarAgent extends AgentDefine {
 		if (messages.length > 0) this.writeMessage(role, messages);
 	}
 	/** 构建智能体 并 初始化各个子模型的系统提示词 */
-	public constructor() { super(); this.thinkingChainProcess(); }
+	public constructor() {
+		super();
+		// 设置全局单例引用，供工具处理函数访问子智能体实例
+		AgentDefine.instance = this;
+		this.thinkingChainProcess();
+	}
 }
 /** 初始化月华智能体实例 */
 const AgentRuntime = new LunarAgent();

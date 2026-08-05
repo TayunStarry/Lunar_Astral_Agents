@@ -697,7 +697,6 @@ var agentSystem = (function (exports) {
     class CreativeRoleBase extends ModelBuilder {
         OWN_HISTORY_LIMIT = 5;
         MAX_ITERATIONS = 3;
-        UNREAD_CHECK_COUNT = 10;
         constructor(prompt) {
             super(prompt);
         }
@@ -706,16 +705,19 @@ var agentSystem = (function (exports) {
             this.messages = [];
             return result;
         }
-        createCreativeWork(unreadContext, count = this.UNREAD_CHECK_COUNT) {
-            const outputHistory = [...this.messages];
-            const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
-            this.coverContext([...ownHistory, ...unreadContext]);
-            const unreadTexts = this.extractUnreadTexts(unreadContext, count);
-            if (!this.matchKeywords(unreadTexts)) {
-                this.messages = outputHistory;
-                return true;
+        writeContext(context) {
+            const cleaned = this.stripReasoningContent(context);
+            if (this.messages.length >= 40) {
+                this.messages = this.messages.slice(-39).concat(cleaned);
             }
+            else
+                this.messages.push(cleaned);
+            return this;
+        }
+        async createCreativeWork(taskDescription) {
+            this.writeContext({ role: 'user', content: taskDescription });
             const details = [];
+            let rejectionReason = '';
             for (let i = 0; i < this.MAX_ITERATIONS; i++) {
                 console.log(`[${this.roleName}] 第 ${i + 1} 轮推理`);
                 let response;
@@ -732,8 +734,13 @@ var agentSystem = (function (exports) {
                     break;
                 }
                 const toolCalls = choice.message?.tool_calls;
-                if (!toolCalls || toolCalls.length === 0)
+                if (!toolCalls || toolCalls.length === 0) {
+                    if (choice.message?.content && choice.message.content.trim()) {
+                        rejectionReason = choice.message.content;
+                    }
+                    this.writeContext(choice.message);
                     break;
+                }
                 this.writeContext(choice.message);
                 for (const toolCall of toolCalls) {
                     console.log(`[${this.roleName}] 执行工具: ${toolCall.function.name}`);
@@ -742,24 +749,14 @@ var agentSystem = (function (exports) {
                     this.collectDetail(toolCall, details);
                 }
             }
-            this.messages = [];
-            if (details.length > 0) {
-                const summary = this.buildSummary(details);
-                this.messages.push({ role: 'user', content: summary });
-                console.log(`[${this.roleName}] 已将 ${details.length} 件作品详情写入历史`);
+            if (details.length === 0) {
+                const reason = rejectionReason || '月华认为此次无需进行创作';
+                console.log(`[${this.roleName}] 未产出作品，原因: ${reason}`);
+                return reason;
             }
-            return false;
-        }
-        extractUnreadTexts(unreadContext, count) {
-            const texts = [];
-            for (const message of unreadContext.slice(-count)) {
-                if (typeof message.content === 'string')
-                    texts.push(message.content);
-                else
-                    message.content.forEach(item => { if (item.type === 'text')
-                        texts.push(item.text); });
-            }
-            return texts;
+            const summary = this.buildSummary(details);
+            console.log(`[${this.roleName}] 已完成 ${details.length} 件作品创作`);
+            return summary;
         }
     }
 
@@ -768,8 +765,6 @@ var agentSystem = (function (exports) {
             try {
                 await source.LiteImageFile();
                 source.learnerRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
-                source.painterRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
-                source.musicianRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.unreadContext.forEach(context => this.writeContext(context));
                 source.unreadContext = [];
                 this.formatHistoricalMessages(source);
@@ -1091,24 +1086,10 @@ var agentSystem = (function (exports) {
                 }
             }
         ];
-        imageKeywords = [
-            /画(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /生成(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /绘制(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /创作(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /(?:帮我|给我|为我)(?:画|绘制|生成|创作|做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)?/,
-            /(?:做|弄|整)(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /来(?:一(?:张|幅|个))?(?:图|画|图片|图像|插画|插图)/,
-            /自画像/,
-            /画(?:一(?:张|幅|个))?自画像/,
-        ];
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
         }
         get roleName() { return '画家'; }
-        matchKeywords(texts) {
-            return texts.some(text => this.imageKeywords.some(keyword => keyword.test(text)));
-        }
         getToolDefinitions() { return this.roleTool; }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
@@ -1152,27 +1133,24 @@ var agentSystem = (function (exports) {
             }
         }
         buildSummary(paintings) {
+            if (paintings.length === 0)
+                return '月华没有绘制任何作品';
             const parts = [];
-            parts.push('[绘画创作记录] 你（月华）刚刚完成了以下图像作品创作：');
             for (let i = 0; i < paintings.length; i++) {
                 const p = paintings[i];
-                const detailLines = [];
                 if (p.toolName === 'self_portrait') {
-                    detailLines.push(`作品${i + 1}：自画像`);
+                    let desc = '月华绘制了一幅自画像';
                     if (p.expression)
-                        detailLines.push(`  - 表情：${p.expression}`);
-                    if (p.posture)
-                        detailLines.push(`  - 姿势：${p.posture}`);
+                        desc += `，展现了${p.expression}`;
                     if (p.environment)
-                        detailLines.push(`  - 环境：${p.environment}`);
+                        desc += `，背景是${p.environment}`;
+                    parts.push(desc + '。');
                 }
                 else {
-                    detailLines.push(`作品${i + 1}：扩散生成图像`);
-                    detailLines.push(`  - 画面内容：${p.promptSummary}`);
+                    parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
                 }
-                parts.push(detailLines.join('\n'));
             }
-            parts.push('\n注意：请基于以上真实创作信息向用户介绍图像作品，切勿编造画面内容。图像已通过前端推送给用户。');
+            parts.push('图像已通过前端推送给用户。');
             return parts.join('\n');
         }
         writeAppearancePrompt(expression, posture, outfit, environment) {
@@ -1364,28 +1342,10 @@ K:Am
                 }
             }
         ];
-        musicKeywords = [
-            /创作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /生成(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /写(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /制作(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /编(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|曲|钢琴曲|古典乐|轻音乐)/,
-            /(?:帮我|给我|为我)(?:创作|生成|写|制作|编|做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)?/,
-            /(?:做|弄|整)(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /来(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|乐谱|钢琴曲|古典乐|轻音乐)/,
-            /作曲/,
-            /编曲/,
-            /谱写/,
-            /演奏(?:一(?:首|段|曲))?.*(?:音乐|乐曲|歌曲|曲子|旋律|钢琴曲|古典乐|轻音乐)/,
-            /(?:弹|拉|吹)(?:一(?:首|段|曲))?.*(?:钢琴|小提琴|吉他|笛子|古筝|曲子|音乐|旋律)/,
-        ];
         constructor() {
             super(fileView('prompts/musicianRole.md')[0]);
         }
         get roleName() { return '音乐家'; }
-        matchKeywords(texts) {
-            return texts.some(text => this.musicKeywords.some(keyword => keyword.test(text)));
-        }
         getToolDefinitions() { return this.musicTool; }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
@@ -1425,26 +1385,26 @@ K:Am
             }
         }
         buildSummary(pieces) {
+            if (pieces.length === 0)
+                return '月华没有演奏任何作品';
             const parts = [];
-            parts.push('[音乐创作记录] 你（月华）刚刚完成了以下音乐作品创作：');
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
-                const detailLines = [];
-                detailLines.push(`作品${i + 1}：《${p.title}》`);
+                let desc = `月华演奏了《${p.title}》`;
+                const details = [];
                 if (p.instruments)
-                    detailLines.push(`  - 乐器配置：${p.instruments}`);
+                    details.push(`使用${p.instruments}`);
                 if (p.key)
-                    detailLines.push(`  - 调式：${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
+                    details.push(`${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
                 if (p.tempo > 0)
-                    detailLines.push(`  - 速度：${p.tempo} BPM`);
-                if (p.meter)
-                    detailLines.push(`  - 拍号：${p.meter}`);
+                    details.push(`${p.tempo}BPM`);
                 if (p.structure)
-                    detailLines.push(`  - 段落结构：${p.structure}`);
-                detailLines.push(`  - 乐谱长度：${p.abcLength} 字符`);
-                parts.push(detailLines.join('\n'));
+                    details.push(`结构为${p.structure}`);
+                if (details.length > 0)
+                    desc += `（${details.join('，')}）`;
+                parts.push(desc + '。');
             }
-            parts.push('\n注意：请基于以上真实创作信息向用户介绍音乐作品，切勿编造不存在的曲名、乐器或结构。乐谱已通过音乐播放器推送给用户，可以引导用户查看和播放。');
+            parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
             return parts.join('\n');
         }
         handleComposeMusic(args) {
@@ -2066,6 +2026,7 @@ ${candidateTexts}
     }
 
     class AgentDefine {
+        static instance;
         summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
@@ -2241,8 +2202,6 @@ ${candidateTexts}
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
                     this.learnerRole.executeLearner(this.unreadContext);
-                    this.painterRole.createCreativeWork(this.unreadContext);
-                    this.musicianRole.createCreativeWork(this.unreadContext);
                     await this.createChatMessage();
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
@@ -2336,7 +2295,11 @@ ${candidateTexts}
             if (messages.length > 0)
                 this.writeMessage(role, messages);
         }
-        constructor() { super(); this.thinkingChainProcess(); }
+        constructor() {
+            super();
+            AgentDefine.instance = this;
+            this.thinkingChainProcess();
+        }
     }
     const AgentRuntime = new LunarAgent();
     const message = [
@@ -2638,61 +2601,6 @@ ${candidateTexts}
     OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
     OnlyData.LTPdefinition.push(...scheduleTools);
 
-    let webSearchInitialized = false;
-    function initWebSearch() {
-        if (webSearchInitialized) {
-            console.log('[网络检索] 子系统已初始化，跳过重复初始化');
-            return true;
-        }
-        const config = {
-            baseURL: OnlyData.systemUrl,
-            apiKey: OnlyData.SystemKey,
-            model: OnlyData.MultimodalName,
-            maxTokens: 4096,
-            temperature: 0.7,
-        };
-        try {
-            const [success, err] = webSearchInit(config.baseURL, config.apiKey, config.model, config.maxTokens, config.temperature);
-            if (err) {
-                console.error('[网络检索] 初始化失败:', err);
-                return false;
-            }
-            webSearchInitialized = true;
-            console.log('[网络检索] 子系统初始化成功');
-            return true;
-        }
-        catch (e) {
-            console.error('[网络检索] 初始化异常:', e);
-            return false;
-        }
-    }
-    function isWebSearchReady() {
-        return webSearchInitialized && webSearchIsReady();
-    }
-    function executeWebSearch(query, mode = 'webpage') {
-        try {
-            if (mode === 'depth') {
-                const [result, err] = webSearchDepth(query);
-                if (err)
-                    return ['', err];
-                return [result, null];
-            }
-            if (mode === 'webpage') {
-                const [result, err] = webSearchWebpage(query);
-                if (err)
-                    return ['', err];
-                return [result, null];
-            }
-            const [result, err] = webSearchSimple(query);
-            if (err)
-                return ['', err];
-            return [result, null];
-        }
-        catch (e) {
-            return ['', e];
-        }
-    }
-
     const screenshotTools = [
         {
             type: "function",
@@ -2805,6 +2713,52 @@ ${candidateTexts}
                     required: ["x", "y", "z"]
                 }
             }
+        },
+        {
+            type: "function",
+            function: {
+                name: "query_agent_position",
+                description: "查询智能体当前在3D场景中的位置坐标。返回{x, y, z}坐标，可用于确定移动目标。",
+                parameters: {
+                    type: "object",
+                    properties: {},
+                    required: []
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_painter",
+                description: "向绘画师子智能体发布绘画创作任务。绘画师会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'画一幅星空下的少女'。描述越详细，绘画效果越好。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_musician",
+                description: "向演奏家子智能体发布音乐创作任务。演奏家会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "音乐需求描述，如'创作一首轻快的钢琴曲'、'写一首抒情的钢琴与大提琴二重奏'。描述越详细，音乐创作效果越好。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
         }
     ];
     const ALLOWED_ACTIONS = ['荡秋千', '翻花绳'];
@@ -2836,8 +2790,45 @@ ${candidateTexts}
         console.log(`[智能体控制] 移动到 (${x}, ${y}, ${z})，恢复鼠标追踪: ${resumeTracking}`);
         return [`正在移动到 (${x}, ${y}, ${z})`, ''];
     }
+    async function handleQueryAgentPosition(args) {
+        const pos = getAgentPosition();
+        const posStr = `当前智能体位置: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`;
+        console.log(`[智能体控制] ${posStr}`);
+        return [posStr, ''];
+    }
+    async function handleDispatchPainter(args) {
+        const { description } = parseArgs(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
+        }
+        const instance = AgentDefine.instance;
+        if (!instance || !instance.painterRole) {
+            return ['绘画任务调度失败：绘画师子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度绘画师: ${description.slice(0, 100)}...`);
+        const result = await instance.painterRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 绘画师完成: ${result.slice(0, 100)}...`);
+        return [result, ''];
+    }
+    async function handleDispatchMusician(args) {
+        const { description } = parseArgs(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
+        }
+        const instance = AgentDefine.instance;
+        if (!instance || !instance.musicianRole) {
+            return ['音乐任务调度失败：演奏家子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度演奏家: ${description.slice(0, 100)}...`);
+        const result = await instance.musicianRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 演奏家完成: ${result.slice(0, 100)}...`);
+        return [result, ''];
+    }
     OnlyData.LTPfunction.set('play_action', handlePlayAction);
     OnlyData.LTPfunction.set('agent_movement', handleAgentMovement);
+    OnlyData.LTPfunction.set('query_agent_position', handleQueryAgentPosition);
+    OnlyData.LTPfunction.set('dispatch_painter', handleDispatchPainter);
+    OnlyData.LTPfunction.set('dispatch_musician', handleDispatchMusician);
     OnlyData.LTPdefinition.push(...agentControlTools);
 
     const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
@@ -3066,13 +3057,10 @@ ${candidateTexts}
     exports.checkDueItems = checkDueItems;
     exports.cleanTextForDisplay = cleanTextForDisplay;
     exports.cleanTextForTTS = cleanTextForTTS;
-    exports.executeWebSearch = executeWebSearch;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
     exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
-    exports.initWebSearch = initWebSearch;
-    exports.isWebSearchReady = isWebSearchReady;
     exports.parseContent = parseContent;
     exports.queryFromKnowledge = queryFromKnowledge;
     exports.saveImageToServer = saveImageToServer;

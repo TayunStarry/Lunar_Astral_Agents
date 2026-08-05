@@ -4,7 +4,7 @@ import { ToolCall, PostMessage, ModelBuilder, modelResponse, ToolCallItem } from
  * 创作型子智能体基座
  *
  * 绘画师与音乐家共享相同的工作流：
- *   构建上下文 → 关键词匹配 → 推理循环 → 收集创作详情 → 写入历史 → 供对话者消费
+ *   接收任务描述 → 追加到历史 → 推理循环 → 收集创作详情 → 返回作品描述
  *
  * 子类只需实现5个抽象钩子即可完成特化。
  *
@@ -15,8 +15,6 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	protected readonly OWN_HISTORY_LIMIT = 5;
 	/** 最大推理迭代次数（子类可覆写） */
 	protected MAX_ITERATIONS = 3;
-	/** 未读消息检查条数 */
-	protected readonly UNREAD_CHECK_COUNT = 10;
 
 	/** 构造函数 */
 	protected constructor(prompt: string) {
@@ -25,9 +23,6 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 
 	/** 角色名称（用于日志） */
 	protected abstract get roleName(): string;
-
-	/** 检查未读消息是否匹配创作关键词 */
-	protected abstract matchKeywords(texts: string[]): boolean;
 
 	/** 获取工具定义 */
 	protected abstract getToolDefinitions(): ToolCall[];
@@ -41,7 +36,7 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	/** 根据创作详情构建摘要，供对话者使用 */
 	protected abstract buildSummary(details: TDetail[]): string;
 
-	/** 获取历史摘要（对话者调用后清空） */
+	/** 获取历史摘要（对话者调用后清空，新架构下不再使用，保留用于调试导出） */
 	public consumeHistory(): PostMessage[] {
 		const result = [...this.messages];
 		this.messages = [];
@@ -49,36 +44,38 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	}
 
 	/**
+	 * 覆写 writeContext：子智能体淘汰的消息不进入 OnlyData.unreadRecords
+	 *
+	 * 对话者淘汰的历史记录才能进入 unreadRecords 供编纂者归档。
+	 */
+	public writeContext(context: PostMessage): this {
+		const cleaned = this.stripReasoningContent(context);
+		if (this.messages.length >= 40) {
+			this.messages = this.messages.slice(-39).concat(cleaned);
+			// 子智能体淘汰的消息不进入 OnlyData.unreadRecords
+		}
+		else this.messages.push(cleaned);
+		return this;
+	}
+
+	/**
 	 * 执行创作流程
 	 *
-	 * 基于未读消息判定是否触发创作
-	 * 自行维护独立的创作历史，不依赖外部对话上下文。
+	 * 接收对话者通过工具调用传来的任务描述，追加到自身历史中，
+	 * 运行 LLM 推理循环，调用专业工具链完成创作。
 	 *
-	 * @param unreadContext 当前未读上下文快照
-	 * @param count 检查的消息数量
+	 * @param taskDescription 对话者传来的创作任务描述
 	 *
-	 * @returns true 表示未执行创作，false 表示已执行创作
+	 * @returns 作品描述文本（月华话术格式），或拒绝原因
 	 */
-	public createCreativeWork(unreadContext: PostMessage[], count: number = this.UNREAD_CHECK_COUNT): boolean {
-		// 保留原始输出历史（仅包含前几轮的创作摘要）
-		const outputHistory = [...this.messages];
-
-		// 构建上下文：自身创作历史 + 当前未读消息（不含对话者聊天记录）
-		const ownHistory = outputHistory.slice(-this.OWN_HISTORY_LIMIT);
-		this.coverContext([...ownHistory, ...unreadContext]);
-
-		// 提取未读消息文本
-		const unreadTexts = this.extractUnreadTexts(unreadContext, count);
-
-		// 检查是否匹配创作关键词
-		if (!this.matchKeywords(unreadTexts)) {
-			// 未匹配：恢复原始输出历史，避免 consumeHistory 返回对话历史
-			this.messages = outputHistory;
-			return true;
-		}
+	public async createCreativeWork(taskDescription: string): Promise<string> {
+		// 将任务描述追加到自身历史中
+		this.writeContext({ role: 'user', content: taskDescription });
 
 		// 创作记录
 		const details: TDetail[] = [];
+		/** 拒绝原因（LLM 判定无需创作时的文本回复） */
+		let rejectionReason = '';
 
 		// 推理循环
 		for (let i = 0; i < this.MAX_ITERATIONS; i++) {
@@ -100,8 +97,15 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 			}
 			/** 工具调用列表 */
 			const toolCalls = choice.message?.tool_calls;
-			// 如果模型没有调用任何工具，直接结束循环
-			if (!toolCalls || toolCalls.length === 0) break;
+			// 如果模型没有调用任何工具，捕获其文本回复作为拒绝原因
+			if (!toolCalls || toolCalls.length === 0) {
+				if (choice.message?.content && choice.message.content.trim()) {
+					rejectionReason = choice.message.content;
+				}
+				// 将助手消息写入上下文（保留拒绝原因供后续推理参考）
+				this.writeContext(choice.message);
+				break;
+			}
 			// 将助手消息写入上下文（包含工具调用信息）
 			this.writeContext(choice.message);
 			// 遍历执行所有工具调用
@@ -116,25 +120,16 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 			}
 		}
 
-		// 重置 messages 为仅包含创作输出（摘要），丢弃 LLM 推理用的临时上下文
-		// 避免 consumeHistory 将对话历史回传给对话者导致消息重复
-		this.messages = [];
-		if (details.length > 0) {
-			const summary = this.buildSummary(details);
-			this.messages.push({ role: 'user', content: summary });
-			console.log(`[${this.roleName}] 已将 ${details.length} 件作品详情写入历史`);
+		// 如果没有创作产出，返回拒绝原因
+		if (details.length === 0) {
+			const reason = rejectionReason || '月华认为此次无需进行创作';
+			console.log(`[${this.roleName}] 未产出作品，原因: ${reason}`);
+			return reason;
 		}
 
-		return false;
-	}
-
-	/** 提取未读消息文本 */
-	protected extractUnreadTexts(unreadContext: PostMessage[], count: number): string[] {
-		const texts: string[] = [];
-		for (const message of unreadContext.slice(-count)) {
-			if (typeof message.content === 'string') texts.push(message.content);
-			else message.content.forEach(item => { if (item.type === 'text') texts.push(item.text); });
-		}
-		return texts;
+		// 构建作品摘要并返回
+		const summary = this.buildSummary(details);
+		console.log(`[${this.roleName}] 已完成 ${details.length} 件作品创作`);
+		return summary;
 	}
 }

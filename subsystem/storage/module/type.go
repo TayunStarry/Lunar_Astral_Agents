@@ -98,23 +98,41 @@ type MemoryDocument struct {
 	Embedding []float32 `json:"embedding"` // 嵌入向量（由 /v1/embeddings 生成）
 }
 
+// contentEntry 内容分块条目 — 对应 contents_NNNN.json 中的单条记录
+// 仅含标识与文本，不含嵌入向量，与 embeddingEntry 通过 ID 关联
+type contentEntry struct {
+	ID      string `json:"id"`      // 文档 ID（与 embeddingEntry 一一对应）
+	Role    string `json:"role"`    // 消息角色，user/assistant/system
+	Content string `json:"content"` // 原始文本内容
+}
+
+// embeddingEntry 嵌入向量分块条目 — 对应 embeddings_NNNN.json 中的单条记录
+// 仅含标识与向量，与 contentEntry 通过 ID 关联
+type embeddingEntry struct {
+	ID        string    `json:"id"`        // 文档 ID（与 contentEntry 一一对应）
+	Embedding []float32 `json:"embedding"` // 嵌入向量
+}
+
 // collectionMeta 集合元数据，持久化到 metadata.json
 type collectionMeta struct {
-	Model     string `json:"model"`     // 锁定的嵌入模型名
-	Dimension int    `json:"dimension"` // 锁定的向量维度（探针文本确定）
+	Model      string `json:"model"`                 // 锁定的嵌入模型名
+	Dimension  int    `json:"dimension"`             // 锁定的向量维度（探针文本确定）
+	ChunkCount int    `json:"chunk_count,omitempty"` // 分块对数（0 表示空集合或旧格式）
 }
 
 // Collection 单个记忆集合 — 集合级锁定的模型与维度
 // 文档 ID 采用 UUID v4 格式（由 generateUUID 生成），旧版 msg-N 格式 ID 在加载时保留原值
+// 存储布局：<collDir>/contents_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
 type Collection struct {
 	Name            string           // 集合名
 	Model           string           // 锁定的嵌入模型名
 	Dimension       int              // 锁定的向量维度（探针文本确定，0 表示未确定）
 	Documents       []MemoryDocument // 文档列表（含嵌入向量），内存中维护
 	mu              sync.RWMutex     // 文档读写锁
-	filePath        string           // documents.json 路径
+	collDir         string           // 集合目录绝对路径
 	metaPath        string           // metadata.json 路径
-	lastFileModTime time.Time        // documents.json 最近一次已加载的修改时间，用于跨进程一致性检测
+	chunkCount      int              // 当前分块对数（0 表示空集合）
+	lastFileModTime time.Time        // metadata.json 最近一次已加载的修改时间，用于跨进程一致性检测
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
