@@ -1,12 +1,10 @@
-import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, RandomFloor, OrganizeRole } from '../index';
+import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
 	/** 全局单例引用，供工具处理函数访问子智能体实例 */
 	public static instance: AgentDefine;
-	/** 摘要者角色(视频摘要) */
-	public summaryRole: ModelBuilder = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
-	/** 描述者角色(视频描述) */
+	/** 描述者角色(视觉内容描述) */
 	public descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
 	/** 聊天者角色(用户交互) */
 	public dialogueRole: DialogueRole = new DialogueRole();
@@ -18,6 +16,8 @@ export class AgentDefine {
 	public musicianRole: MusicianRole = new MusicianRole();
 	/** 观影者角色(视频观看) */
 	public viewerRole: ViewerRole = new ViewerRole();
+	/** 行动者角色(3D动画/位移/空间感知) */
+	public actorRole: ActorRole = new ActorRole();
 	/** 编纂角色(组织记忆) */
 	protected organizeRole: OrganizeRole = new OrganizeRole();
 	/** 未读上下文 */
@@ -43,71 +43,71 @@ export class AgentDefine {
 		// 初始化 自定义配置 信息
 		fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
 		// TODO 初始化 聊天记录
-		// fetchDocumentCallback('resources/chatRecord.json')
+		// fetchDocumentCallback('resources/chatRecord.json').then(content => OnlyData.chatRecord = content);
 	}
 	/**
-		 * 处理视频文件（观影者智能体）
-		 *
-		 * 提取关键帧后交由观影者子智能体分批观看，
-		 * 生成月华视角的观后感摘要，并缓存结果。
-		 *
-		 * @param {string} videoUrl - 视频文件路径或URL
-		 * @param {string} userNeeds - 用户需求
-		 *
-		 * @returns {Promise<void>} - 处理完成后的 Promise
-		 */
-		protected async analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
-			// 缓存检查：如果已处理过该视频，直接返回缓存结果
-			const cachedPrompt = getPromptFromKnowledge(videoUrl);
-			if (cachedPrompt) {
-				this.unreadContext.push({ role: 'user', content: cachedPrompt });
-				console.log('[观影者] 命中视频缓存，直接返回');
-				return;
-			}
-
-			// 第一步：提取关键帧
-			console.log('[观影者] 开始提取视频关键帧...');
-			const [images, error] = keyframe(videoUrl, './cache');
-			if (images.length === 0 || error) {
-				console.error('[观影者] 关键帧提取失败:', error);
-				throw new Error('提取关键帧失败');
-			}
-			console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
-
-			// 第二步：将关键帧转换为观影者所需格式
-			/** 关键帧数据数组 */
-			const keyframes = images.map((frame: { data: string; timestamp: string }) => ({
-				data: frame.data,
-				timestamp: frame.timestamp || ''
-			}));
-
-			// 第三步：调用观影者智能体观看视频
-			console.log('[观影者] 开始观看视频...');
-			const videoSummary = await this.viewerRole.watchVideo(keyframes);
-			console.log('[观影者] 视频观看完成');
-
-			// 第四步：将观后感添加到未读上下文
-			if (videoSummary && videoSummary.trim().length > 0) {
-				this.unreadContext.push({ role: 'user', content: videoSummary });
-			} else {
-				// 兜底：使用默认应答
-				this.unreadContext.push({
-					role: 'user',
-					content: this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]
-				});
-			}
-
-			// 如果用户需求非空，追加到上下文
-			if (userNeeds.trim().length > 0) {
-				this.unreadContext.push({ role: 'user', content: userNeeds });
-			}
-
-			// 第五步：缓存观后感
-			if (videoSummary) {
-				savePromptToKnowledge(videoUrl, videoSummary);
-				console.log('[观影者] 观后感已缓存');
-			}
+	 * 处理视频文件（观影者智能体）
+	 *
+	 * 提取关键帧后交由观影者子智能体分批观看，
+	 * 生成月华视角的观后感摘要，并缓存结果。
+	 *
+	 * @param {string} videoUrl - 视频文件路径或URL
+	 * @param {string} userNeeds - 用户需求
+	 *
+	 * @returns {Promise<void>} - 处理完成后的 Promise
+	 */
+	protected async analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
+		// 缓存检查：如果已处理过该视频，直接返回缓存结果
+		const cachedPrompt = getPromptFromKnowledge(videoUrl);
+		if (cachedPrompt) {
+			this.unreadContext.push({ role: 'user', content: cachedPrompt });
+			console.log('[观影者] 命中视频缓存，直接返回');
+			return;
 		}
+
+		// 第一步：提取关键帧
+		console.log('[观影者] 开始提取视频关键帧...');
+		const [images, error] = keyframe(videoUrl, './cache');
+		if (images.length === 0 || error) {
+			console.error('[观影者] 关键帧提取失败:', error);
+			throw new Error('提取关键帧失败');
+		}
+		console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
+
+		// 第二步：将关键帧转换为观影者所需格式
+		/** 关键帧数据数组 */
+		const keyframes = images.map((frame: { data: string; timestamp: string }) => ({
+			data: frame.data,
+			timestamp: frame.timestamp || ''
+		}));
+
+		// 第三步：调用观影者智能体观看视频
+		console.log('[观影者] 开始观看视频...');
+		const videoSummary = await this.viewerRole.watchVideo(keyframes);
+		console.log('[观影者] 视频观看完成');
+
+		// 第四步：将观后感添加到未读上下文
+		if (videoSummary && videoSummary.trim().length > 0) {
+			this.unreadContext.push({ role: 'user', content: videoSummary });
+		} else {
+			// 兜底：使用默认应答
+			this.unreadContext.push({
+				role: 'user',
+				content: this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]
+			});
+		}
+
+		// 如果用户需求非空，追加到上下文
+		if (userNeeds.trim().length > 0) {
+			this.unreadContext.push({ role: 'user', content: userNeeds });
+		}
+
+		// 第五步：缓存观后感
+		if (videoSummary) {
+			savePromptToKnowledge(videoUrl, videoSummary);
+			console.log('[观影者] 观后感已缓存');
+		}
+	}
 	/**
 	 * 遍历未读上下文数组,处理图片文件
 	 *
@@ -150,70 +150,74 @@ export class AgentDefine {
 				}
 			}
 			// 替换消息内容
-				message.content = newContent;
-			}
-		}
-		/**
-		 * 一键导出所有子智能体的运行时上下文到本地文件（覆写模式）
-		 *
-		 * 将对话者、学习者、画家、音乐家、编纂者的上下文分别导出为独立 JSON 文件，
-		 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
-		 *
-		 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
-		 * @returns 导出文件路径数组
-		 */
-		public dumpAllContexts(outputDir?: string): string[] {
-			// 调试模式关闭时跳过导出
-			if (!OnlyData.debugMode) return [];
-
-			const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
-			const results: string[] = [];
-
-			// 对话者
-			const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
-			if (dialoguePath) results.push(dialoguePath);
-
-			// 学习者（需要对话历史和未读上下文）
-			const learnerPath = this.learnerRole.dumpContext(
-				this.dialogueRole.messages,
-				this.unreadContext,
-				`${dir}\\agent_debug_学习者.json`
-			);
-			if (learnerPath) results.push(learnerPath);
-
-			// 画家
-			const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
-			if (painterPath) results.push(painterPath);
-
-			// 音乐家
-			const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
-			if (musicianPath) results.push(musicianPath);
-
-			// 观影者
-			const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
-			if (viewerPath) results.push(viewerPath);
-
-			// 编纂者
-			const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
-			if (organizePath) results.push(organizePath);
-
-			// 生成汇总索引文件
-			const indexData = {
-				timestamp: new Date().toLocaleString('zh-CN', {
-					year: 'numeric', month: '2-digit', day: '2-digit',
-					hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-				}),
-				unreadContextCount: this.unreadContext.length,
-				unreadVideoUrlCount: this.unreadVideoUrl.length,
-				unreadRecordsCount: OnlyData.unreadRecords.length,
-				finalResponse: this.finalResponse,
-				exportedFiles: results,
-			};
-			const indexPath = `${dir}\\agent_debug_index.json`;
-			const [, indexError] = saveDebugFile(indexPath, JSON.stringify(indexData, null, 2));
-			if (!indexError) results.push(indexPath);
-
-			console.log(`[智能体] 已导出 ${results.length} 个上下文文件到 ${dir}`);
-			return results;
+			message.content = newContent;
 		}
 	}
+	/**
+	 * 一键导出所有子智能体的运行时上下文到本地文件（覆写模式）
+	 *
+	 * 将对话者、学习者、画家、音乐家、编纂者的上下文分别导出为独立 JSON 文件，
+	 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
+	 *
+	 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
+	 * @returns 导出文件路径数组
+	 */
+	public dumpAllContexts(outputDir?: string): string[] {
+		// 调试模式关闭时跳过导出
+		if (!OnlyData.debugMode) return [];
+
+		const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
+		const results: string[] = [];
+
+		// 对话者
+		const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
+		if (dialoguePath) results.push(dialoguePath);
+
+		// 学习者（需要对话历史和未读上下文）
+		const learnerPath = this.learnerRole.dumpContext(
+			this.dialogueRole.messages,
+			this.unreadContext,
+			`${dir}\\agent_debug_学习者.json`
+		);
+		if (learnerPath) results.push(learnerPath);
+
+		// 画家
+		const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
+		if (painterPath) results.push(painterPath);
+
+		// 音乐家
+		const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
+		if (musicianPath) results.push(musicianPath);
+
+		// 观影者
+		const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
+		if (viewerPath) results.push(viewerPath);
+
+		// 行动者
+		const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
+		if (actorPath) results.push(actorPath);
+
+		// 编纂者
+		const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
+		if (organizePath) results.push(organizePath);
+
+		// 生成汇总索引文件
+		const indexData = {
+			timestamp: new Date().toLocaleString('zh-CN', {
+				year: 'numeric', month: '2-digit', day: '2-digit',
+				hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+			}),
+			unreadContextCount: this.unreadContext.length,
+			unreadVideoUrlCount: this.unreadVideoUrl.length,
+			unreadRecordsCount: OnlyData.unreadRecords.length,
+			finalResponse: this.finalResponse,
+			exportedFiles: results,
+		};
+		const indexPath = `${dir}\\agent_debug_index.json`;
+		const [, indexError] = saveDebugFile(indexPath, JSON.stringify(indexData, null, 2));
+		if (!indexError) results.push(indexPath);
+
+		console.log(`[智能体] 已导出 ${results.length} 个上下文文件到 ${dir}`);
+		return results;
+	}
+}

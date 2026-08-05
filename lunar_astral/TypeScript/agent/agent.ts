@@ -151,14 +151,14 @@ class LunarAgent extends AgentDefine {
 	/** 错误累积达阈值后重置智能体状态 */
 	protected resetAgentState(): void {
 		// 清空全部子智能体的messages
-		this.summaryRole.coverContext([]);
 		this.descriptionRole.coverContext([]);
 		this.dialogueRole.coverContext([]);
 		this.learnerRole.messages = [];
 		this.painterRole.coverContext([]);
 		this.musicianRole.coverContext([]);
-			this.viewerRole.coverContext([]);
-			this.organizeRole.coverContext([]);
+		this.viewerRole.coverContext([]);
+		this.actorRole.coverContext([]);
+		this.organizeRole.coverContext([]);
 		// 清除主智能体的unreadContext和unreadVideoUrl
 		this.unreadContext = [];
 		this.unreadVideoUrl = [];

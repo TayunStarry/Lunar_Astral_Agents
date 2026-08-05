@@ -98,7 +98,7 @@ class ConfigModifier extends PromptProcessor {
 		return this;
 	}
 	/** 剥离消息中的 reasoning_content 字段，防止回传给模型触发无限推理 */
-		protected stripReasoningContent(message: PostMessage): PostMessage {
+	protected stripReasoningContent(message: PostMessage): PostMessage {
 		if ('reasoning_content' in message) {
 			const { reasoning_content, ...rest } = message as any;
 			return rest as PostMessage;
