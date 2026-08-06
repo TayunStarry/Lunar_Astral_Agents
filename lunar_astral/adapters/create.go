@@ -69,6 +69,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("getAgentPosition", adapters.getAgentPosition)
 	vm.Set("pushAgentEvent", adapters.pushAgentEvent)
 
+	// 注册引擎桥接适配器
+	vm.Set("sendToEngine", adapters.sendToEngine)
+	vm.Set("getAvailableActions", adapters.getAvailableActions)
+
 	// 注册学习者智能体适配器
 	learner.BindLearnerToRuntime(vm)
 }

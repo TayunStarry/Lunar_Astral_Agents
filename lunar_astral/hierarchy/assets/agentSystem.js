@@ -2406,65 +2406,82 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
 
+    const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
     class ActorRole extends CreativeRoleBase {
         MAX_ITERATIONS = 5;
-        roleTool = [
-            {
-                type: "function",
-                function: {
-                    name: "play_action",
-                    description: "让月华执行预设动作。可用动作：荡秋千（需要鼠标追踪）、翻花绳（需要鼠标追踪）。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            action_name: {
-                                type: "string",
-                                description: "动作名称",
-                                enum: ["荡秋千", "翻花绳"]
-                            }
-                        },
-                        required: ["action_name"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "agent_movement",
-                    description: "控制月华移动到指定3D坐标位置。移动期间会自动关闭鼠标追踪。",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            x: { type: "number", description: "目标X坐标" },
-                            y: { type: "number", description: "目标Y坐标（地面为0）" },
-                            z: { type: "number", description: "目标Z坐标" },
-                            resume_tracking: {
-                                type: "boolean",
-                                description: "移动结束后是否恢复鼠标追踪，默认为 true"
-                            }
-                        },
-                        required: ["x", "y", "z"]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "query_agent_position",
-                    description: "查询月华当前在3D场景中的位置坐标。返回{x, y, z}格式坐标。",
-                    parameters: {
-                        type: "object",
-                        properties: {},
-                        required: []
-                    }
-                }
-            }
-        ];
         constructor() {
             super(fileView('prompts/actorRole.md')[0]);
         }
         get roleName() { return '行动者'; }
-        getToolDefinitions() { return this.roleTool; }
+        getAvailableActionNames() {
+            try {
+                const raw = getAvailableActions();
+                if (!raw || raw === '{}')
+                    return FALLBACK_ACTIONS;
+                const parsed = JSON.parse(raw);
+                if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+                    return parsed.actions.map(a => a.name);
+                }
+            }
+            catch {
+            }
+            return FALLBACK_ACTIONS;
+        }
+        getToolDefinitions() {
+            const actionNames = this.getAvailableActionNames();
+            return [
+                {
+                    type: "function",
+                    function: {
+                        name: "play_action",
+                        description: "让月华执行预设动作。可用动作：" + actionNames.join('、') + "。",
+                        parameters: {
+                            type: "object",
+                            properties: {
+                                action_name: {
+                                    type: "string",
+                                    description: "动作名称",
+                                    enum: actionNames
+                                }
+                            },
+                            required: ["action_name"]
+                        }
+                    }
+                },
+                {
+                    type: "function",
+                    function: {
+                        name: "agent_movement",
+                        description: "控制月华移动到指定3D坐标位置。移动期间会自动关闭鼠标追踪。",
+                        parameters: {
+                            type: "object",
+                            properties: {
+                                x: { type: "number", description: "目标X坐标" },
+                                y: { type: "number", description: "目标Y坐标（地面为0）" },
+                                z: { type: "number", description: "目标Z坐标" },
+                                resume_tracking: {
+                                    type: "boolean",
+                                    description: "移动结束后是否恢复鼠标追踪，默认为 true"
+                                }
+                            },
+                            required: ["x", "y", "z"]
+                        }
+                    }
+                },
+                {
+                    type: "function",
+                    function: {
+                        name: "query_agent_position",
+                        description: "查询月华当前在3D场景中的位置坐标。返回{x, y, z}格式坐标。",
+                        parameters: {
+                            type: "object",
+                            properties: {},
+                            required: []
+                        }
+                    }
+                }
+            ];
+        }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
             let args = {};
@@ -2523,11 +2540,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             const actionName = args.action_name || '';
             if (!actionName)
                 return '执行动作失败：动作名称不能为空';
-            const ALLOWED = ['荡秋千', '翻花绳'];
-            if (!ALLOWED.includes(actionName)) {
-                return `执行动作失败：不支持的动作 "${actionName}"，可用动作为：${ALLOWED.join('、')}`;
+            const allowed = this.getAvailableActionNames();
+            if (!allowed.includes(actionName)) {
+                return `执行动作失败：不支持的动作 "${actionName}"，可用动作为：${allowed.join('、')}`;
             }
-            pushContext('action', JSON.stringify({ type: 'action', action: actionName }), '');
+            sendToEngine('action', JSON.stringify({ action: actionName }));
             console.log(`[行动者] 执行动作: ${actionName}`);
             return `已执行动作：${actionName}`;
         }
@@ -2539,11 +2556,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             if (isNaN(x) || isNaN(y) || isNaN(z)) {
                 return '移动失败：坐标参数 x、y、z 必须为有效数字';
             }
-            pushContext('movement', JSON.stringify({
-                type: 'movement',
+            sendToEngine('movement', JSON.stringify({
                 position: { x, y, z },
                 resumeTracking
-            }), '');
+            }));
             console.log(`[行动者] 移动到 (${x}, ${y}, ${z})，恢复追踪: ${resumeTracking}`);
             return `已移动到 (${x}, ${y}, ${z})`;
         }
@@ -3212,7 +3228,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     properties: {
                         description: {
                             type: "string",
-                            description: "行动需求描述，如'让月华去荡秋千'、'移动到秋千旁边'、'翻花绳'。描述越清晰，行动者执行越准确。"
+                            description: "行动需求描述，如'让月华去荡秋千'、'移动到坐标(1, 2, 3)'、'开始翻花绳'。描述越清晰，行动者执行越准确。"
                         }
                     },
                     required: ["description"]

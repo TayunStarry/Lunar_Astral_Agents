@@ -48,6 +48,14 @@ var EmbeddedFiles embed.FS
 //go:embed embedded_data/*
 var EmbeddedLocalData embed.FS
 
+// StudioHubInstance 工作室 WebSocket 集线器全局实例
+// 在 StartServer() 中初始化，供所有前端组件通过 /ws/studio 端点连接
+var StudioHubInstance *StudioHub
+
+// animCache 动画列表缓存（从引擎 animation_list 消息中提取的动作定义）
+// 由 StudioHub.Run() 中 cacheAnimationList() 更新，由 HandleGetAnimations 读取
+var animCache = &AnimationListCache{}
+
 // SystemEndpoints 系统端点列表
 var SystemEndpoints = []SystemEndpoint{
 	// ==== 应用与资源 ====
@@ -97,6 +105,10 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== 月华服务 ====
 	{Path: "/lunar/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},
 	{Path: "/lunar/start", Handler: yuehuaStartHandler, Method: "POST", Description: "启动月华服务"},
+
+	// ==== 引擎命令桥接 ====
+	{Path: "/api/engine/command", Handler: HandleEngineCommand, Method: "POST", Description: "智能体引擎命令转发"},
+	{Path: "/api/engine/animations", Handler: HandleGetAnimations, Method: "GET", Description: "查询引擎可用动作列表"},
 }
 
 // proxyPrefixes 要代理的路径前缀

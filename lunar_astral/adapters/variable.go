@@ -34,9 +34,23 @@ var (
 // PushMessageFunc 消息推送函数，由 websocket 包初始化时设置
 var PushMessageFunc func(msgType string, data interface{})
 
+// StudioBroadcastFunc 引擎广播函数，由 websocket 包初始化时设置
+// 用于 sendToEngine 直接将命令广播到本地 StudioHub
+var StudioBroadcastFunc func([]byte)
+
+// GetAnimCacheFunc 获取动画缓存函数，由 websocket 包初始化时设置
+// 用于 getAvailableActions 读取本地缓存的动画列表
+var GetAnimCacheFunc func() interface{}
+
 func init() {
 	PushMessageFunc = func(msgType string, data interface{}) {
 		logger.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
+	}
+	StudioBroadcastFunc = func([]byte) {
+		logger.Error("LunarCore", "StudioBroadcastFunc 未初始化")
+	}
+	GetAnimCacheFunc = func() interface{} {
+		return nil
 	}
 }
 

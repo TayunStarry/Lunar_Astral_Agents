@@ -54,8 +54,8 @@ if (currentMode === 'editor') {
     document.body.classList.add('mode-editor');
 }
 
-// ==== 广播频道 ====
-const channel = new BroadcastChannel(CHANNEL_NAME);
+// ==== 广播频道（通过 WebSocket 中继，替代 BroadcastChannel） ====
+const channel = new WsBridge(CHANNEL_NAME);
 
 // ==== 核心模块 ====
 let renderer = null;
@@ -117,11 +117,18 @@ const commandQueue = [];
 let isExecutingCommand = false;
 let movementTimeout = null;
 
-// ==== 动作定义 ====
-const ACTION_DEFINITIONS = {
-    '荡秋千': { group: '荡秋千', mouseTracking: true },
-    '翻花绳': { group: '翻花绳', mouseTracking: true },
-};
+// ==== 动作定义（从已加载的动画组自动生成，排除默认组和空动画组） ====
+function buildActionDefinitions() {
+    if (!animGroupRuntime) return {};
+    const defs = {};
+    for (const [name, group] of animGroupRuntime.groups) {
+        // 排除默认组（待机状态）和空动画组（如"眨眼"）
+        if (group.isDefault) continue;
+        if (!Array.isArray(group.animations) || group.animations.length === 0) continue;
+        defs[name] = { group: name, mouseTracking: true };
+    }
+    return defs;
+}
 
 // ==== 点击检测：骨骼→部位映射 ====
 const BONE_PART_MAP = {
@@ -228,7 +235,11 @@ async function init() {
         cameraController?.setFollowTarget?.(renderer.modelRoot);
     }
 
-    // 16. 默认开启鼠标追踪
+    // 16. 初始化鼠标追踪（默认开启，由自动状态机管理启停）
+    // 先注册回调，再设置状态，确保初始状态能被广播
+    movementController.onTrackingChanged((enabled) => {
+        broadcast('mouse_tracking_changed', { enabled });
+    });
     movementController.setMouseTracking(true);
 
     // 17. 绑定事件
@@ -368,20 +379,33 @@ async function autoLoadResources() {
 }
 
 // ==== 自动加载纹理库 ====
+// 优先从 images_config.json 加载，回退到 all_config.json（支持"全部保存"场景）
 async function autoLoadImageAssets() {
     try {
-        const resp = await fetch('/file/read/package/lunar.studio.integrated/property/images_config.json');
-        if (!resp.ok) {
-            console.warn('[Engine] 未找到 images_config.json');
-            return;
+        const configFiles = [
+            'images_config.json',
+            'all_config.json',
+        ];
+        let data = null;
+        for (const fileName of configFiles) {
+            const resp = await fetch(`/file/read/package/lunar.studio.integrated/property/${fileName}`);
+            if (resp.ok) {
+                data = await resp.json();
+                if (data?.images && Object.keys(data.images).length > 0) {
+                    console.log(`[Engine] 从 ${fileName} 加载纹理资产`);
+                    break;
+                }
+                data = null; // 文件存在但无图片数据，继续尝试下一个
+            }
         }
-        const data = await resp.json();
-        if (data.images) {
+        if (data?.images) {
             for (const [uuid, info] of Object.entries(data.images)) {
                 imageAssetStore.set(uuid, { uuid, base64: info.base64, name: info.name || uuid });
             }
             console.log(`[Engine] 已加载 ${imageAssetStore.size} 个纹理资产`);
             broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
+        } else {
+            console.warn('[Engine] 未找到纹理资产配置');
         }
     } catch (err) {
         console.warn('[Engine] 纹理库加载失败:', err);
@@ -405,7 +429,12 @@ function broadcastAnimationList() {
     const allAnims = Array.from(currentAnimations.keys());
     // 提取骨骼名列表（供面板渲染骨骼显隐控制）
     const bones = animationRuntime?.boneMap ? Array.from(animationRuntime.boneMap.keys()) : [];
-    broadcast('animation_list', { groups, allAnimations: allAnims, bones });
+    // 从动画组自动生成动作定义，供后端智能体动态构建工具列表
+    const actionDefs = Object.entries(buildActionDefinitions()).map(([name, def]) => ({
+        name,
+        mouseTracking: def.mouseTracking,
+    }));
+    broadcast('animation_list', { groups, allAnimations: allAnims, bones, actionDefinitions: actionDefs });
 }
 
 // ==== 广播组合体列表（供元素面板渲染） ====
@@ -532,25 +561,16 @@ function bindKeyboard() {
                 renderer?.moveCameraToFront?.(1.5);
                 break;
             case 'KeyE':
-                // E: 开关点击移动（与光标朝向互斥）
+                // E: 开关点击移动
                 quickTrackEnabled = !quickTrackEnabled;
                 if (quickTrackEnabled) {
-                    movementController?.setMouseTracking?.(false);
+                    movementController?.suppressAutoTracking?.(true);
                     broadcast('mouse_tracking_changed', { enabled: false });
+                } else {
+                    movementController?.suppressAutoTracking?.(false);
                 }
                 if (!quickTrackEnabled) hideQuickTrackMarker();
                 broadcast('quick_track_changed', { enabled: quickTrackEnabled });
-                break;
-            case 'KeyQ':
-                // Q: 开关光标朝向（与点击移动互斥）
-                const newMT = !movementController?.mouseTracking;
-                movementController?.setMouseTracking?.(newMT);
-                if (newMT) {
-                    quickTrackEnabled = false;
-                    hideQuickTrackMarker();
-                    broadcast('quick_track_changed', { enabled: false });
-                }
-                broadcast('mouse_tracking_changed', { enabled: !!movementController?.mouseTracking });
                 break;
         }
     });
@@ -659,7 +679,6 @@ function updateDebugOverlay() {
 // ==== BroadcastChannel 消息处理 ====
 async function handleChannelMessage(msg) {
     const { type, payload, source } = msg;
-
     switch (type) {
         case 'panel_ready':
             // 面板就绪握手：晚订阅的面板可重新请求状态
@@ -720,20 +739,6 @@ async function handleChannelMessage(msg) {
             }
             break;
 
-        case 'mouse_tracking':
-            movementController?.setMouseTracking(payload.enabled);
-            // 开启光标朝向时自动关闭点击移动
-            if (payload.enabled) {
-                quickTrackEnabled = false;
-                hideQuickTrackMarker();
-                broadcast('quick_track_changed', { enabled: false });
-                if (renderer?.modelRoot) {
-                    cameraController?.stopOverShoulder?.();
-                    renderer.moveCameraToFront(1.5);
-                }
-            }
-            break;
-
         case 'focus_character':
             if (renderer?.modelRoot) {
                 // 退出越肩模式，让轨道控制器接管
@@ -746,10 +751,10 @@ async function handleChannelMessage(msg) {
         case 'quick_track':
             quickTrackEnabled = !!payload?.enabled;
             if (quickTrackEnabled) {
-                // 开启点击移动时自动关闭光标朝向
-                movementController?.setMouseTracking?.(false);
+                movementController?.suppressAutoTracking?.(true);
                 broadcast('mouse_tracking_changed', { enabled: false });
             } else {
+                movementController?.suppressAutoTracking?.(false);
                 hideQuickTrackMarker();
             }
             break;
@@ -1085,10 +1090,9 @@ async function handleChannelMessage(msg) {
                 saveData.images = images;
             }
 
-            // 写入 property/ 文件夹
-            const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
-            const relativePath = `package/lunar.studio.integrated/property/${fileName}.json`;
-            try {
+            // 辅助函数：写入单个配置文件
+            const writeConfig = async (fileName, data) => {
+                const relativePath = `package/lunar.studio.integrated/property/${fileName}.json`;
                 const encodedPath = btoa(unescape(encodeURIComponent(relativePath)));
                 const resp = await fetch('/file/write', {
                     method: 'POST',
@@ -1097,12 +1101,35 @@ async function handleChannelMessage(msg) {
                         'X-File-Name': encodedPath,
                         'X-Overwrite': 'true',
                     },
-                    body: JSON.stringify(saveData, null, 2),
+                    body: JSON.stringify(data, null, 2),
                 });
-                if (resp.ok) {
-                    broadcast('config_save_result', { type: configType, ok: true, message: `已保存至 property/${fileName}.json` });
+                return resp.ok;
+            };
+
+            try {
+                if (configType === 'all') {
+                    // "全部保存"：同时写入 all_config.json 和独立配置文件
+                    // 确保单独加载 physics/images/scene 时也能找到数据
+                    const results = await Promise.all([
+                        writeConfig('all_config', saveData),
+                        writeConfig('physics_config', { physics: saveData.physics }),
+                        writeConfig('images_config', { images: saveData.images }),
+                        writeConfig('scene_config', { scene: saveData.scene }),
+                    ]);
+                    const allOk = results.every(r => r);
+                    broadcast('config_save_result', {
+                        type: configType,
+                        ok: allOk,
+                        message: allOk ? '已保存全部配置（含独立配置文件）' : '部分配置文件保存失败',
+                    });
                 } else {
-                    broadcast('config_save_result', { type: configType, ok: false, message: `保存失败：HTTP ${resp.status}` });
+                    const fileName = `${configType}_config`;
+                    const ok = await writeConfig(fileName, saveData);
+                    broadcast('config_save_result', {
+                        type: configType,
+                        ok,
+                        message: ok ? `已保存至 property/${fileName}.json` : `保存失败`,
+                    });
                 }
             } catch (err) {
                 broadcast('config_save_result', { type: configType, ok: false, message: '保存异常：' + err.message });
@@ -1112,16 +1139,33 @@ async function handleChannelMessage(msg) {
 
         case 'config_load': {
             const configType = payload?.type; // 'physics', 'scene', 'images', 'all'
-            const fileName = configType === 'all' ? 'all_config' : `${configType}_config`;
-            const relativePath = `package/lunar.studio.integrated/property/${fileName}.json`;
-            try {
-                const resp = await fetch(`/file/read/${relativePath}`);
-                if (!resp.ok) {
-                    broadcast('config_load_result', { type: configType, ok: false, message: `文件不存在或读取失败：HTTP ${resp.status}` });
-                    break;
-                }
-                const data = await resp.json();
+            const configFiles = configType === 'all'
+                ? ['all_config.json']
+                : [`${configType}_config.json`, 'all_config.json']; // 回退到 all_config.json
+            const basePath = 'package/lunar.studio.integrated/property';
 
+            let data = null;
+            let loadedFrom = null;
+            for (const fileName of configFiles) {
+                try {
+                    const fetchUrl = `/file/read/${basePath}/${fileName}`;
+                    const resp = await fetch(fetchUrl);
+                    if (resp.ok) {
+                        data = await resp.json();
+                        loadedFrom = fileName;
+                        break;
+                    }
+                } catch (e) {
+                    console.warn('[Engine] config_load 获取失败:', e.message);
+                }
+            }
+
+            if (!data) {
+                broadcast('config_load_result', { type: configType, ok: false, message: `配置文件不存在` });
+                break;
+            }
+
+            try {
                 if ((configType === 'physics' || configType === 'all') && data.physics) {
                     const p = data.physics;
                     if (physicsManager) {
@@ -1188,7 +1232,7 @@ async function handleChannelMessage(msg) {
                     broadcast('image_assets_list', { images: Array.from(imageAssetStore.values()) });
                 }
 
-                broadcast('config_load_result', { type: configType, ok: true, message: `已从 property/${fileName}.json 加载` });
+                broadcast('config_load_result', { type: configType, ok: true, message: `已从 ${loadedFrom} 加载` });
             } catch (err) {
                 broadcast('config_load_result', { type: configType, ok: false, message: '加载异常：' + err.message });
             }
@@ -1762,7 +1806,7 @@ async function executeCommand(cmd) {
 }
 
 async function executeAction(actionName) {
-    const def = ACTION_DEFINITIONS[actionName];
+    const def = buildActionDefinitions()[actionName];
     if (!def) {
         console.warn(`[Engine] 未知动作: ${actionName}`);
         return;
@@ -1808,7 +1852,7 @@ async function executeMovement(position, resumeTracking) {
 }
 
 function onMovementComplete(resumeTracking) {
-    if (resumeTracking && movementController) {
+    if (resumeTracking && movementController && !quickTrackEnabled) {
         movementController.setMouseTracking(true);
     }
     broadcast('movement_complete', {});

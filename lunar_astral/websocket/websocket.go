@@ -95,7 +95,14 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 func SetupWebSocketHandler(mux *http.ServeMux) {
 	adapters.PushMessageFunc = BroadcastMessage
+	adapters.StudioBroadcastFunc = StudioBroadcast
+	adapters.GetAnimCacheFunc = func() interface{} {
+		animCache.RLock()
+		defer animCache.RUnlock()
+		return animCache
+	}
 	mux.HandleFunc("/ws", WSHandler)
+	StartStudioHub(mux)
 }
 
 func CloseWebSocketServer() {
@@ -147,52 +154,52 @@ func BroadcastMessage(msgType string, data any) {
 }
 
 // bridgeToQQ 将智能体广播的响应消息转发到QQ群聊（如果桥接器已连接）
-	func bridgeToQQ(response WSResponse) {
-		if !napcat.IsBridgingEnabled() {
+func bridgeToQQ(response WSResponse) {
+	if !napcat.IsBridgingEnabled() {
+		return
+	}
+
+	switch response.Type {
+	case "context":
+		// Data 可能是任意结构体，通过 JSON 序列化/反序列化提取字段
+		dataBytes, err := json.Marshal(response.Data)
+		if err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
 			return
 		}
-
-		switch response.Type {
-		case "context":
-			// Data 可能是任意结构体，通过 JSON 序列化/反序列化提取字段
-			dataBytes, err := json.Marshal(response.Data)
-			if err != nil {
-				logger.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
-				return
-			}
-			var dataMap map[string]interface{}
-			if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
-				logger.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
-				return
-			}
-			msgType, _ := dataMap["type"].(string)
-			content, _ := dataMap["content"].(string)
-			if content != "" {
-				go napcat.HandleAgentResponse(msgType, content)
-			}
-		case "image":
-			// 图片消息：提取 base64 编码的图片列表并转发到QQ群
-			dataBytes, err := json.Marshal(response.Data)
-			if err != nil {
-				logger.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)
-				return
-			}
-			var dataMap map[string]interface{}
-			if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
-				logger.SubError("LunarCore", "WebSocket", "桥接解析图片数据失败: %v", err)
-				return
-			}
-			// 提取 images 数组
-			if rawImages, ok := dataMap["images"].([]interface{}); ok {
-				var images []string
-				for _, img := range rawImages {
-					if imgStr, ok := img.(string); ok {
-						images = append(images, imgStr)
-					}
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
+			return
+		}
+		msgType, _ := dataMap["type"].(string)
+		content, _ := dataMap["content"].(string)
+		if content != "" {
+			go napcat.HandleAgentResponse(msgType, content)
+		}
+	case "image":
+		// 图片消息：提取 base64 编码的图片列表并转发到QQ群
+		dataBytes, err := json.Marshal(response.Data)
+		if err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)
+			return
+		}
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
+			logger.SubError("LunarCore", "WebSocket", "桥接解析图片数据失败: %v", err)
+			return
+		}
+		// 提取 images 数组
+		if rawImages, ok := dataMap["images"].([]interface{}); ok {
+			var images []string
+			for _, img := range rawImages {
+				if imgStr, ok := img.(string); ok {
+					images = append(images, imgStr)
 				}
-				if len(images) > 0 {
-					go napcat.HandleAgentImageResponse(images)
-				}
+			}
+			if len(images) > 0 {
+				go napcat.HandleAgentImageResponse(images)
 			}
 		}
 	}
+}

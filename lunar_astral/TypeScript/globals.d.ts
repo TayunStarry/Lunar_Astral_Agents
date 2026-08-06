@@ -132,6 +132,24 @@ declare global {
      */
     function pushAgentEvent(eventType: string, data: string): boolean;
     /**
+ * 向引擎直接发送命令（绕过前端转发，Agent → StudioHub → 引擎）
+ *
+ * @param {string} type 消息类型（如 'action', 'movement', 'mouse_tracking'）
+ * @param {string} payload JSON 字符串格式的 payload 数据
+ * @returns {boolean} 是否成功
+ */
+function sendToEngine(type: string, payload: string): boolean;
+/**
+ * 查询引擎当前可用的动作列表
+ * 
+ * 返回引擎 ACTION_DEFINITIONS 中已注册的动作定义，
+ * 数据来源于引擎广播的 animation_list 消息中携带的 actionDefinitions 字段
+ *
+ * @returns {string} JSON 字符串，格式为 {"actions":[{"name":"荡秋千","mouseTracking":true},...],"updated_at":...}
+ *                   引擎未就绪或缓存为空时返回 "{}"
+ */
+function getAvailableActions(): string;
+    /**
      * 初始化记忆库实例并创建指定集合
      *
      * @param {string} baseURL 嵌入模型服务的基础URL (e.g. http://localhost:36789/v1)

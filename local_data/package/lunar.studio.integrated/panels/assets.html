@@ -6,6 +6,7 @@
     <title>『 星月智能 』资产管理</title>
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/ws_bridge.js"></script>
     <style>
         :root {
             --glass-bg: rgba(255,255,255,0.28);
@@ -310,7 +311,7 @@
         // ==== 资产管理面板 ====
         const CHANNEL_NAME = 'integrated-studio-bus';
         const SOURCE = 'assets-panel';
-        const channel = new BroadcastChannel(CHANNEL_NAME);
+        const channel = new WsBridge(CHANNEL_NAME);
 
         const elements = {
             // 场景资产
@@ -358,54 +359,60 @@
         }
 
         function bindEvents() {
+            // 安全绑定：检查元素是否存在，防止单个 null 元素阻断所有事件绑定
+            const safeOn = (el, event, fn) => {
+                if (el) { el.addEventListener(event, fn); }
+                else { console.error('[Assets] 元素未找到，无法绑定事件:', event); }
+            };
+
             // ---- 场景资产 ----
-            elements.btnSceneSave.addEventListener('click', () => {
+            safeOn(elements.btnSceneSave, 'click', () => {
                 broadcast('config_save', { type: 'scene' });
             });
-            elements.btnSceneLoad.addEventListener('click', () => {
+            safeOn(elements.btnSceneLoad, 'click', () => {
                 broadcast('config_load', { type: 'scene' });
             });
 
             // ---- 图元/组合体资产 ----
-            elements.btnAssetSave.addEventListener('click', saveAssetToLibrary);
-            elements.btnAssetRefresh.addEventListener('click', () => broadcast('assets_list_request', {}));
+            safeOn(elements.btnAssetSave, 'click', saveAssetToLibrary);
+            safeOn(elements.btnAssetRefresh, 'click', () => broadcast('assets_list_request', {}));
 
             // ---- 图片/纹理资产 ----
-            elements.imgDropZone.addEventListener('click', () => elements.imgFileInput.click());
-            elements.imgFileInput.addEventListener('change', onImageFilesSelected);
-            elements.imgDropZone.addEventListener('dragover', (e) => {
+            safeOn(elements.imgDropZone, 'click', () => elements.imgFileInput.click());
+            safeOn(elements.imgFileInput, 'change', onImageFilesSelected);
+            safeOn(elements.imgDropZone, 'dragover', (e) => {
                 e.preventDefault();
                 elements.imgDropZone.classList.add('drag-over');
             });
-            elements.imgDropZone.addEventListener('dragleave', () => {
+            safeOn(elements.imgDropZone, 'dragleave', () => {
                 elements.imgDropZone.classList.remove('drag-over');
             });
-            elements.imgDropZone.addEventListener('drop', (e) => {
+            safeOn(elements.imgDropZone, 'drop', (e) => {
                 e.preventDefault();
                 elements.imgDropZone.classList.remove('drag-over');
                 const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
                 if (files.length > 0) uploadImageFiles(files);
             });
-            elements.btnImgSave.addEventListener('click', () => {
+            safeOn(elements.btnImgSave, 'click', () => {
                 broadcast('config_save', { type: 'images' });
             });
-            elements.btnImgLoad.addEventListener('click', () => {
+            safeOn(elements.btnImgLoad, 'click', () => {
                 broadcast('config_load', { type: 'images' });
             });
 
             // ---- 物理参数配置 ----
-            elements.btnPhysicsSave.addEventListener('click', () => {
+            safeOn(elements.btnPhysicsSave, 'click', () => {
                 broadcast('config_save', { type: 'physics' });
             });
-            elements.btnPhysicsLoad.addEventListener('click', () => {
+            safeOn(elements.btnPhysicsLoad, 'click', () => {
                 broadcast('config_load', { type: 'physics' });
             });
 
             // ---- 全量保存/加载 ----
-            elements.btnSaveAll.addEventListener('click', () => {
+            safeOn(elements.btnSaveAll, 'click', () => {
                 broadcast('config_save', { type: 'all' });
             });
-            elements.btnLoadAll.addEventListener('click', () => {
+            safeOn(elements.btnLoadAll, 'click', () => {
                 broadcast('config_load', { type: 'all' });
             });
 

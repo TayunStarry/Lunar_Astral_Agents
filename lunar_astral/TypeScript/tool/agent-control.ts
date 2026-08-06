@@ -14,7 +14,7 @@ export const agentControlTools: ToolCall[] = [
 				properties: {
 					description: {
 						type: "string",
-						description: "行动需求描述，如'让月华去荡秋千'、'移动到秋千旁边'、'翻花绳'。描述越清晰，行动者执行越准确。"
+						description: "行动需求描述，如'让月华去荡秋千'、'移动到坐标(1, 2, 3)'、'开始翻花绳'。描述越清晰，行动者执行越准确。"
 					}
 				},
 				required: ["description"]

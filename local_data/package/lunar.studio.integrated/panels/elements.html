@@ -6,6 +6,7 @@
     <title>『 星月智能 』元素操纵</title>
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/ws_bridge.js"></script>
     <style>
         :root {
             --glass-bg: rgba(255,255,255,0.28);
@@ -357,7 +358,7 @@
         // ==== 元素操纵面板 ====
         const CHANNEL_NAME = 'integrated-studio-bus';
         const SOURCE = 'elements-panel';
-        const channel = new BroadcastChannel(CHANNEL_NAME);
+        const channel = new WsBridge(CHANNEL_NAME);
 
         const PRIM_PARAMS = {
             cube: [

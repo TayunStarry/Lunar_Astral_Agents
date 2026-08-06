@@ -69,6 +69,15 @@ export class MovementController {
         this._mouseSphereRadius = 10;
         this._mouseRotationSpeed = 120;
 
+        // ==== 自动鼠标追踪状态 ====
+        this._mouseInCanvas = false;           // 鼠标是否在画布内
+        this._mouseIdleTime = 0;               // 鼠标静止累计时间（秒）
+        this._modelStationaryTime = 0;         // 模型未移动累计时间（秒）
+        this._autoTrackingCooldown = 5.0;      // 自动追踪冷却倒计时（初始5秒，追踪关闭后开始倒数）
+        this._autoThreshold = 3.0;             // 模型静止/鼠标静止阈值（秒）
+        this._isAutoResetting = false;         // 是否正在自动回正俯仰/偏航
+        this._suppressAutoTracking = false;   // 外部抑制自动追踪（如点击移动模式）
+
         // ==== 闲置 ====
         this._lastMoveTime = performance.now();
         this._idleThreshold = 5000;
@@ -138,9 +147,10 @@ export class MovementController {
     }
 
     setMouseTracking(enabled) {
+        // 允许外部强制设置（如执行动作时），覆盖自动逻辑
         this._mouseTracking = enabled;
         if (enabled) {
-            // 不再锁定视角，只重置偏航/俯仰
+            this._isAutoResetting = false;
             this._targetYaw = 0;
             this._targetPitch = 0;
             this._yaw = 0;
@@ -153,6 +163,15 @@ export class MovementController {
     setMouseLock(enabled) {
         this._mouseLock = enabled;
         if (enabled) this._mouseTracking = true;
+    }
+
+    /** 抑制自动追踪（如点击移动模式启用时调用） */
+    suppressAutoTracking(suppress) {
+        this._suppressAutoTracking = suppress;
+        if (suppress) {
+            this._mouseTracking = false;
+            this._isAutoResetting = true;
+        }
     }
 
     setCharacterPhysics(cp) { this._characterPhysics = cp; }
@@ -184,36 +203,46 @@ export class MovementController {
             if (this._sitTimer >= this._sitDuration) {
                 this._sitting = false;
                 this._stopAnim(RIDE_ANIM);
-                this._pitch = 0;       // 坐下结束回正俯仰
+                this._pitch = 0;
                 this._targetPitch = 0;
             }
             this._syncMolang();
             return;
         }
 
-        // 2. 鼠标追踪
+        // 2. 自动鼠标追踪状态机
+        this._updateAutoTracking(dt);
+
+        // 3. 鼠标追踪（由自动状态机决定 _mouseTracking）
         this._updateHeadPosition();
         if (this._mouseTracking) {
             this._computeSphereTracking();
         }
 
-        // 3. 跳跃更新（数学抛物线直接驱动Y）
+        // 4. 自动回正俯仰/偏航（鼠标追踪关闭时逐渐归零）
+        if (this._isAutoResetting) {
+            this._tickAutoReset(dt);
+        }
+
+        // 5. 跳跃更新（数学抛物线直接驱动Y）
         if (this._jumping) {
             this._tickJump(dt);
             this._syncMolang();
             return;
         }
 
-        // 5. 移动
+        // 6. 移动
         this._tickMove(dt);
 
-        // 6. 朝向插值
-        this._updateRotation(dt);
+        // 7. 朝向插值（自动回正期间由 _tickAutoReset 自行处理，避免冲突）
+        if (!this._isAutoResetting) {
+            this._updateRotation(dt);
+        }
 
-        // 7. 同步 MoLang
+        // 8. 同步 MoLang
         this._syncMolang();
 
-        // 8. 闲置检测
+        // 9. 闲置检测
         if (this._hasEverMoved && !this._idleTriggered
             && (performance.now() - this._lastMoveTime > this._idleThreshold)) {
             this._idleTriggered = true;
@@ -580,8 +609,16 @@ export class MovementController {
     // ==== 鼠标 ====
 
     _bindMouseEvents() {
+        const canvas = this.renderer?.canvas;
+        if (!canvas) return;
+
         this._onMouseMove = this._onMouseMove.bind(this);
-        window.addEventListener('mousemove', this._onMouseMove);
+        this._onMouseEnter = this._onMouseEnter.bind(this);
+        this._onMouseLeave = this._onMouseLeave.bind(this);
+
+        canvas.addEventListener('mousemove', this._onMouseMove);
+        canvas.addEventListener('mouseenter', this._onMouseEnter);
+        canvas.addEventListener('mouseleave', this._onMouseLeave);
     }
 
     _onMouseMove(e) {
@@ -590,7 +627,115 @@ export class MovementController {
         const rect = canvas.getBoundingClientRect();
         this._mouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         this._mouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // 重置鼠标静止计时器（有移动 = 不再静止）
+        this._mouseIdleTime = 0;
     }
+
+    _onMouseEnter() {
+        this._mouseInCanvas = true;
+    }
+
+    _onMouseLeave() {
+        this._mouseInCanvas = false;
+    }
+
+    // ==== 自动鼠标追踪状态机 ====
+
+    _updateAutoTracking(dt) {
+        const isMoving = this._isMoving || this._jumping;
+        const wasTracking = this._mouseTracking;
+
+        // ---- 更新计时器 ----
+        if (this._mouseInCanvas) {
+            this._mouseIdleTime += dt;
+        }
+
+        if (isMoving) {
+            // 模型正在移动：重置静止计时器，冷却恢复为满值
+            this._modelStationaryTime = 0;
+            this._autoTrackingCooldown = 5.0;
+        } else {
+            // 模型静止：累加静止时间
+            this._modelStationaryTime += dt;
+        }
+
+        // 追踪关闭时：冷却倒计时递减
+        if (!this._mouseTracking) {
+            this._autoTrackingCooldown = Math.max(0, this._autoTrackingCooldown - dt);
+        }
+
+        // ---- 关闭追踪的条件 ----
+        if (this._mouseTracking) {
+            const shouldDisable =
+                !this._mouseInCanvas ||                          // 鼠标离开画布
+                this._mouseIdleTime >= this._autoThreshold;      // 鼠标静止超过3秒
+
+            if (shouldDisable) {
+                this._mouseTracking = false;
+                this._isAutoResetting = true;
+                this._autoTrackingCooldown = 5.0;                // 启动冷却倒计时
+            }
+        }
+
+        // ---- 开启追踪的条件 ----
+        if (!this._mouseTracking && !this._isAutoResetting && !this._suppressAutoTracking) {
+            const shouldEnable =
+                this._modelStationaryTime >= this._autoThreshold &&   // 模型3秒未移动
+                this._autoTrackingCooldown <= 0 &&                    // 冷却倒计时结束
+                this._mouseInCanvas;                                   // 鼠标在画布内
+
+            if (shouldEnable) {
+                this._mouseTracking = true;
+                // 重置计时器，避免刚开启就被关闭条件触发
+                this._mouseIdleTime = 0;
+                // 重置追踪角度
+                this._targetYaw = 0;
+                this._targetPitch = 0;
+                this._yaw = 0;
+                this._pitch = 0;
+            }
+        }
+
+        // ---- 追踪状态变化时通知外部 ----
+        if (wasTracking !== this._mouseTracking) {
+            this._onTrackingChanged?.(this._mouseTracking);
+        }
+    }
+
+    // ==== 自动回正俯仰/偏航（逐渐归零） ====
+
+    _tickAutoReset(dt) {
+        const resetSpeed = 90; // 度/秒
+
+        // 回正偏航
+        let yawDiff = 0 - this._yaw;
+        while (yawDiff > 180) yawDiff -= 360;
+        while (yawDiff < -180) yawDiff += 360;
+        const maxYawStep = resetSpeed * dt;
+        this._yaw += Math.abs(yawDiff) <= maxYawStep ? yawDiff : Math.sign(yawDiff) * maxYawStep;
+
+        // 回正俯仰
+        const pitchDiff = 0 - this._pitch;
+        const maxPitchStep = resetSpeed * dt;
+        this._pitch += Math.abs(pitchDiff) <= maxPitchStep ? pitchDiff : Math.sign(pitchDiff) * maxPitchStep;
+
+        // 同步 target 值（避免 _updateRotation 干扰）
+        this._targetYaw = this._yaw;
+        this._targetPitch = this._pitch;
+
+        // 检查是否已归零
+        if (Math.abs(this._yaw) < 0.1 && Math.abs(this._pitch) < 0.1) {
+            this._yaw = 0;
+            this._pitch = 0;
+            this._targetYaw = 0;
+            this._targetPitch = 0;
+            this._isAutoResetting = false;
+        }
+    }
+
+    /** 注册追踪状态变化回调（供引擎广播 mouse_tracking_changed） */
+    onTrackingChanged(cb) { this._onTrackingChanged = cb; }
 
     _updateHeadPosition() {
         if (this.renderer?.getHeadWorldPosition) {
@@ -653,6 +798,11 @@ export class MovementController {
     }
 
     dispose() {
-        window.removeEventListener('mousemove', this._onMouseMove);
+        const canvas = this.renderer?.canvas;
+        if (canvas) {
+            canvas.removeEventListener('mousemove', this._onMouseMove);
+            canvas.removeEventListener('mouseenter', this._onMouseEnter);
+            canvas.removeEventListener('mouseleave', this._onMouseLeave);
+        }
     }
 }

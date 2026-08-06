@@ -318,50 +318,9 @@ class LunarCoreApp {
 		}
 	}
 
-	// ==== 向3D渲染器发送指令 ====
-	sendRendererCommand(command) {
-		rendererChannel.postMessage(command);
-	}
-
 	async handleWebSocketMessage(message) {
 		switch (message.type) {
 			case 'context':
-				// 检查是否为动作/位移指令（特殊type前缀）
-				// 注意：pushContext 的 data 参数是 JSON 字符串，存在 message.data.content 中
-				if (message.data.type === 'action') {
-					const inner = message.data.content ? JSON.parse(message.data.content) : {};
-					this.sendRendererCommand({
-						type: 'action',
-						source: 'hierarchy-client',
-						payload: { action: inner.action },
-						timestamp: Date.now(),
-					});
-					break;
-				}
-				if (message.data.type === 'movement') {
-					const inner = message.data.content ? JSON.parse(message.data.content) : {};
-					this.sendRendererCommand({
-						type: 'movement',
-						source: 'hierarchy-client',
-						payload: {
-							position: inner.position,
-							resumeTracking: inner.resumeTracking,
-						},
-						timestamp: Date.now(),
-					});
-					break;
-				}
-				if (message.data.type === 'mouse_tracking') {
-					const inner = message.data.content ? JSON.parse(message.data.content) : {};
-					this.sendRendererCommand({
-						type: 'mouse_tracking',
-						source: 'hierarchy-client',
-						payload: { enabled: inner.enabled },
-						timestamp: Date.now(),
-					});
-					break;
-				}
-
 				// 正常响应/活动消息
 				if (message.data.type === 'response' || message.data.type === 'active') {
 					const content = message.data.content || '';

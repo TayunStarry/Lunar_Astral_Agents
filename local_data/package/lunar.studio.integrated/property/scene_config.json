@@ -1,0 +1,79 @@
+{
+  "scene": {
+    "primitives": [
+      {
+        "format_version": "1.0.0",
+        "asset_type": "primitive",
+        "data": {
+          "type": "cube",
+          "params": {
+            "w": 10,
+            "h": 10,
+            "d": 10
+          },
+          "position": {
+            "x": -36.00408103915275,
+            "y": 4.949752423944187,
+            "z": 41.0066105170318
+          },
+          "rotation": {
+            "x": -2.6094473639084887e-8,
+            "y": 0.0003155173331612329,
+            "z": 1.4134283047940116e-7,
+            "order": "XYZ"
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "color": 16777215,
+          "hasTexture": false,
+          "textureUUID": null,
+          "physics": {
+            "anchored": false
+          }
+        }
+      },
+      {
+        "format_version": "1.0.0",
+        "asset_type": "primitive",
+        "data": {
+          "type": "cube",
+          "params": {
+            "w": 10,
+            "h": 10,
+            "d": 10
+          },
+          "position": {
+            "x": 8.99821620814905,
+            "y": 4.949752423944124,
+            "z": -40.995282250255045
+          },
+          "rotation": {
+            "x": -2.609448404465701e-8,
+            "y": 0.00031397839036520573,
+            "z": 1.413427764807249e-7,
+            "order": "XYZ"
+          },
+          "scale": {
+            "x": 1,
+            "y": 1,
+            "z": 1
+          },
+          "color": 16777215,
+          "hasTexture": true,
+          "textureUUID": "d2c56fec-9548-4a80-bd67-935d249b59ae",
+          "physics": {
+            "anchored": false
+          }
+        }
+      }
+    ],
+    "characterPosition": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  }
+}

@@ -25,7 +25,7 @@ const state = {
     activePanel: 'animation',          // 当前激活的操纵层（Q6.2 默认动画）
     currentMode: 'editor',             // 当前引擎视图模式（Q5）
     readyPanels: new Set(),            // 已就绪的 panel iframe（Q6.5 握手）
-    channel: new BroadcastChannel(CHANNEL_NAME),
+    channel: new WsBridge(CHANNEL_NAME),
     toastTimer: null,
 };
 

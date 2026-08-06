@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"lunar_astral/adapters"
+	"lunar_astral/websocket"
 	"net/http"
 )
 
@@ -123,4 +124,20 @@ func AgentEventHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Length:  1,
 	})
+}
+
+// EngineCommandHandler 接收引擎命令（HTTP POST），直接广播到本地 StudioHub
+// 用于外部系统（如 crystal_astral）向引擎发送命令时的兼容路径
+func EngineCommandHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+	websocket.StudioBroadcast(body)
+	w.WriteHeader(http.StatusOK)
 }

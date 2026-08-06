@@ -7,6 +7,7 @@ import (
 	"lunar_astral/model"
 	"lunar_astral/model/llama"
 	"lunar_astral/server/handlers"
+	lunar_ws "lunar_astral/websocket"
 	"net/http"
 	tts "qwen3_tts_lunar/module"
 	storage "storage/server"
@@ -92,4 +93,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// 音乐渲染相关接口
 	{Path: "/music/render", Handler: handlers.MusicRenderHandler, Method: "POST", Description: "ABC乐谱渲染为WAV音频"},
 	{Path: "/music/deps", Handler: handlers.MusicDepsHandler, Method: "GET", Description: "音乐渲染依赖状态查询"},
+	// 引擎桥接接口
+	{Path: "/api/engine/command", Handler: handlers.EngineCommandHandler, Method: "POST", Description: "智能体引擎命令转发"},
+	{Path: "/api/engine/animations", Handler: lunar_ws.HandleGetAnimations, Method: "GET", Description: "查询引擎可用动作列表"},
 }

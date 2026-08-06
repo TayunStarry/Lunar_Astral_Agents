@@ -8,7 +8,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
-	image v0.0.0-00010101000000-000000000000
+	image v0.0.0
 	logger v0.0.0
 	qwen3_tts_lunar v0.0.0
 	screenshot v0.0.0

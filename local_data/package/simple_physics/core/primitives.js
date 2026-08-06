@@ -151,7 +151,9 @@ class Primitives {
 
         // 位置/旋转/缩放
         if (spec.position) mesh.position.copy(spec.position);
-        if (spec.rotation) mesh.rotation.copy(spec.rotation);
+        if (spec.rotation) {
+            mesh.rotation.set(spec.rotation.x, spec.rotation.y, spec.rotation.z, spec.rotation.order || 'XYZ');
+        }
         if (spec.scale) mesh.scale.copy(spec.scale);
 
         // 元数据
@@ -426,7 +428,7 @@ class Primitives {
             type: mesh.userData.type,
             params: { ...(mesh.userData.primitiveParams || {}) },
             position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
-            rotation: { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z },
+            rotation: { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z, order: mesh.rotation.order },
             scale: { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z },
             color: mesh.material?.color?.getHex?.() ?? 0x9d6bff,
             hasTexture: !!mesh.material?.map,

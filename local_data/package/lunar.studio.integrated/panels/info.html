@@ -6,6 +6,7 @@
     <title>『 星月智能 』状态信息</title>
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/ws_bridge.js"></script>
     <style>
         :root {
             --glass-bg: rgba(255,255,255,0.28);
@@ -130,6 +131,15 @@
 
         <div class="separator"></div>
 
+        <!-- 鼠标追踪 -->
+        <div class="info-group">
+            <i class="fas fa-location-arrow" id="tracking-icon"></i>
+            <span class="info-label">追踪</span>
+            <span class="info-value" id="stat-tracking">--</span>
+        </div>
+
+        <div class="separator"></div>
+
         <!-- 角色位置 -->
         <div class="info-group">
             <i class="fas fa-location-dot"></i>
@@ -152,12 +162,14 @@
         // ==== 信息层面板 ====
         const CHANNEL_NAME = 'integrated-studio-bus';
         const SOURCE = 'info-panel';
-        const channel = new BroadcastChannel(CHANNEL_NAME);
+        const channel = new WsBridge(CHANNEL_NAME);
 
         const elements = {
             statFps: document.getElementById('stat-fps'),
             fpsBar: document.getElementById('fps-bar'),
             statMode: document.getElementById('stat-mode'),
+            statTracking: document.getElementById('stat-tracking'),
+            trackingIcon: document.getElementById('tracking-icon'),
             statPos: document.getElementById('stat-pos'),
             molangInput: document.getElementById('molang-input'),
             molangValue: document.getElementById('molang-value'),
@@ -204,6 +216,9 @@
                     case 'theme_changed':
                         document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
                         break;
+                    case 'mouse_tracking_changed':
+                        updateTrackingStatus(!!msg.payload?.enabled);
+                        break;
                 }
             };
         }
@@ -222,6 +237,18 @@
             if (p.character) {
                 elements.statPos.textContent =
                     `x:${p.character.x.toFixed(2)} y:${p.character.y.toFixed(2)} z:${p.character.z.toFixed(2)}`;
+            }
+        }
+
+        function updateTrackingStatus(enabled) {
+            if (enabled) {
+                elements.statTracking.textContent = '开启';
+                elements.statTracking.style.color = 'var(--success)';
+                elements.trackingIcon.style.color = 'var(--success)';
+            } else {
+                elements.statTracking.textContent = '关闭';
+                elements.statTracking.style.color = 'var(--text-secondary)';
+                elements.trackingIcon.style.color = 'var(--text-secondary)';
             }
         }
 

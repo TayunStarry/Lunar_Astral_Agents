@@ -101,6 +101,12 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	// 启动图像生成任务处理器
 	image_server.StartTaskProcessor()
 	httpMux := http.NewServeMux()
+
+	// 初始化工作室 WebSocket 集线器（哑中继，不解析消息内容）
+	StudioHubInstance = NewStudioHub()
+	go StudioHubInstance.Run()
+	httpMux.HandleFunc("/ws/studio", StudioHubInstance.HandleWebSocket)
+
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)

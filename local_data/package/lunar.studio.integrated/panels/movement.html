@@ -6,6 +6,7 @@
     <title>『 星月智能 』位移操纵</title>
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/ws_bridge.js"></script>
     <style>
         :root {
             --glass-bg: rgba(255,255,255,0.28);
@@ -212,20 +213,17 @@
             </div>
         </div>
 
-        <!-- 光标朝向 & 追踪聚焦 -->
+        <!-- 追踪聚焦 -->
         <div class="glass-card">
-            <div class="toggle-row">
-                <span><i class="fas fa-location-arrow"></i> 光标朝向</span>
-                <div class="toggle active" id="toggle-tracking"></div>
+            <div style="margin-bottom: 4px;">
+                <span><i class="fas fa-crosshairs"></i> 追踪聚焦</span>
             </div>
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
-                角色始终面向鼠标光标方向
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom: 6px;">
+                将相机移至角色正前方
             </div>
-            <div style="margin-top:6px;">
-                <button class="btn btn-primary" id="btn-focus" type="button" style="width:100%;">
-                    <i class="fas fa-crosshairs"></i><span>追踪聚焦</span>
-                </button>
-            </div>
+            <button class="btn btn-primary" id="btn-focus" type="button" style="width:100%;">
+                <i class="fas fa-crosshairs"></i><span>追踪聚焦</span>
+            </button>
         </div>
 
         <!-- 点击移动 -->
@@ -264,7 +262,7 @@
     <script>
         const CHANNEL_NAME = 'integrated-studio-bus';
         const SOURCE = 'movement-panel';
-        const channel = new BroadcastChannel(CHANNEL_NAME);
+        const channel = new WsBridge(CHANNEL_NAME);
 
         const elements = {
             inputX: document.getElementById('input-x'),
@@ -274,7 +272,6 @@
             sliderPitch: document.getElementById('slider-pitch'),
             valYaw: document.getElementById('val-yaw'),
             valPitch: document.getElementById('val-pitch'),
-            toggleTracking: document.getElementById('toggle-tracking'),
             btnFocus: document.getElementById('btn-focus'),
             toggleQuickTrack: document.getElementById('toggle-quick-track'),
             statX: document.getElementById('stat-x'),
@@ -287,7 +284,6 @@
         };
 
         const state = {
-            mouseTracking: true,
             isMoving: false,
             quickTrack: false,
         };
@@ -302,9 +298,6 @@
                 const x = parseFloat(elements.inputX.value) || 0;
                 const y = parseFloat(elements.inputY.value) || 0;
                 const z = parseFloat(elements.inputZ.value) || 0;
-                // 执行移动时强制关闭鼠标追踪
-                state.mouseTracking = false;
-                elements.toggleTracking.classList.remove('active');
                 broadcast('movement', { position: { x, y, z }, resumeTracking: false });
             });
 
@@ -326,17 +319,6 @@
                 broadcast('rotation', { pitch });
             });
 
-            elements.toggleTracking.addEventListener('click', () => {
-                state.mouseTracking = !state.mouseTracking;
-                elements.toggleTracking.classList.toggle('active', state.mouseTracking);
-                // 开启光标朝向时关闭点击移动（互斥）
-                if (state.mouseTracking) {
-                    state.quickTrack = false;
-                    elements.toggleQuickTrack.classList.remove('active');
-                }
-                broadcast('mouse_tracking', { enabled: state.mouseTracking });
-            });
-
             elements.btnFocus.addEventListener('click', () => {
                 broadcast('focus_character', {});
             });
@@ -353,11 +335,6 @@
             elements.toggleQuickTrack.addEventListener('click', () => {
                 state.quickTrack = !state.quickTrack;
                 elements.toggleQuickTrack.classList.toggle('active', state.quickTrack);
-                // 开启点击移动时关闭光标朝向（互斥）
-                if (state.quickTrack) {
-                    state.mouseTracking = false;
-                    elements.toggleTracking.classList.remove('active');
-                }
                 broadcast('quick_track', { enabled: state.quickTrack });
             });
 
@@ -371,9 +348,6 @@
                     updatePhase('idle');
                 } else if (msg.type === 'theme_changed') {
                     document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
-                } else if (msg.type === 'mouse_tracking_changed') {
-                    state.mouseTracking = !!msg.payload?.enabled;
-                    elements.toggleTracking.classList.toggle('active', state.mouseTracking);
                 } else if (msg.type === 'quick_track_changed') {
                     state.quickTrack = !!msg.payload?.enabled;
                     elements.toggleQuickTrack.classList.toggle('active', state.quickTrack);
