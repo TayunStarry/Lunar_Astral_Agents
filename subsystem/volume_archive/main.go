@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	logger.SetDevMode(true)
+	logger.SetDevMode(true, "local_data/documents/debug")
 	configPath := flag.String("config", "local_data/lunar_config.json", "配置文件路径")
 	outputPath := flag.String("output_path", "", "输出文件基础名称")
 	partSizeMB := flag.Int("part_size_mb", 0, "分卷大小（MB）")

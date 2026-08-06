@@ -42,7 +42,7 @@ var serverMutex sync.RWMutex
 
 // Run 启动代理服务器的完整流程：获取IP→启动HTTPS服务→嵌入前端资源→打开浏览器，返回服务器实例
 func Run() *http.Server {
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 
 	// 1. 获取本地IP地址
 	ip, err := browser.GetLocalIP(nil)
@@ -105,7 +105,7 @@ func StartProxyServer() *http.Server {
 
 // BuildTLSTerminationProxy 构建一个HTTPS终止代理服务器，接收外部HTTPS请求，将其解密后转发给内部的HTTP服务器
 func BuildTLSTerminationProxy() *http.Server {
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealthCheck)
 	mux.HandleFunc("/", handleReverseProxy)

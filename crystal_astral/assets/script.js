@@ -1363,13 +1363,6 @@ async function handleCallYuehua() {
                 return;
             }
 
-            // 通知月华条件重建webView（仅当webView已关闭时才创建）
-            try {
-                await fetch('http://localhost:36789/webview/reopen', { method: 'POST' });
-            } catch (e) {
-                console.warn('通知月华重建webView失败:', e);
-            }
-
             // 播放呼叫音频 + 显示呼叫对话
             playYuehuaAudio(YUEHUA_CALLING_AUDIO);
             callYuehuaMessage.textContent = YUEHUA_CALLING_TEXT;

@@ -3,6 +3,7 @@ package main
 import (
 	"lunar_astral/server"
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -14,6 +15,8 @@ func main() {
 	project := &http.Server{}
 	// 启动服务器监听
 	go server.StartServerListener(project)
-	// 等待关闭信号并优雅关闭服务器
+	// 等待关闭信号（系统信号或 WebView 关闭）并优雅关闭服务器
 	server.WaitForShutdown(quit, project)
+	// 确保进程彻底退出（Windows 上 WebView2 COM 可能残留引用）
+	os.Exit(0)
 }

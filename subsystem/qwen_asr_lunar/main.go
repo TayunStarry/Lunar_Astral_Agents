@@ -30,7 +30,7 @@ func main() {
 	port := getEnv("PORT", fmt.Sprintf("%d", *config.ModelPort+1))
 	modelDir := getEnv("MODEL_DIR", *config.AsrModel)
 
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 
 	logger.Info("ASREngine", "ASR Server 启动中...")
 	logger.Info("ASREngine", "模型目录: %s", modelDir)

@@ -106,12 +106,11 @@ func Close() {
 
 	logger.Info("LlamaProxy", "正在关闭 llama-server...")
 
-	if err := serverProcess.Process.Signal(nil); err == nil {
-		if err := serverProcess.Process.Kill(); err != nil {
-			logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
-		} else {
-			logger.Info("LlamaProxy", "llama-server 已终止")
-		}
+	// 直接 Kill 子进程（Signal(nil) 在 Windows 上不可用，跳过无效的空信号检查）
+	if err := serverProcess.Process.Kill(); err != nil {
+		logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
+	} else {
+		logger.Info("LlamaProxy", "llama-server 已终止")
 	}
 }
 

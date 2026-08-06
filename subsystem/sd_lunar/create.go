@@ -36,7 +36,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 
 	logger.Info("sd_lunar", "%s 正运行在 http://localhost%s", name, serverAddr)
 	reloadPageParameters()
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 	startTaskProcessor()
 	go browser.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
 

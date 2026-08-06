@@ -1,7 +1,7 @@
 var agentSystem = (function (exports) {
     'use strict';
 
-    class OnlyData {
+    class GlobalConfig {
         static customConfig = { cloud: {}, server: {} };
         static unreadRecords = [];
         static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
@@ -33,11 +33,11 @@ var agentSystem = (function (exports) {
         }
         ;
         static get SystemKey() {
-            return OnlyData.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
+            return GlobalConfig.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
         }
         ;
         static get MultimodalName() {
-            return OnlyData.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
+            return GlobalConfig.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
         }
         ;
         static get EmbeddingName() {
@@ -45,11 +45,11 @@ var agentSystem = (function (exports) {
         }
         ;
         static get userName() {
-            return OnlyData.customConfig?.server?.user_name || "阁下";
+            return GlobalConfig.customConfig?.server?.user_name || "阁下";
         }
         ;
         static get debugMode() {
-            return OnlyData.customConfig?.server?.debug_mode ?? false;
+            return GlobalConfig.customConfig?.server?.debug_mode ?? false;
         }
         ;
     }
@@ -472,7 +472,7 @@ var agentSystem = (function (exports) {
         static initMemory() {
             if (BaseConfig.memoryReady)
                 return;
-            const [_, err] = memoryInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
+            const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName, 'lunar_messages');
             if (err)
                 console.error('记忆库初始化失败:', err);
             else
@@ -490,7 +490,7 @@ var agentSystem = (function (exports) {
             else
                 addressText = currentAddress.join(' ');
             return prompt
-                .replace(/{name}/g, OnlyData.userName)
+                .replace(/{name}/g, GlobalConfig.userName)
                 .replace(/{current-address}/g, addressText);
         }
         extractTextFromMessages(messages) {
@@ -522,7 +522,7 @@ var agentSystem = (function (exports) {
             if (this.messages.length >= 40) {
                 const discarded = this.messages.slice(0, this.messages.length - 39);
                 this.messages = this.messages.slice(-39).concat(cleaned);
-                OnlyData.unreadRecords.push(...discarded);
+                GlobalConfig.unreadRecords.push(...discarded);
             }
             else
                 this.messages.push(cleaned);
@@ -551,7 +551,7 @@ var agentSystem = (function (exports) {
                 ...this.messages.slice(-1)
             ];
             const requestBody = {
-                model: OnlyData.MultimodalName,
+                model: GlobalConfig.MultimodalName,
                 messages: rawMessages,
                 stream: this.stream,
                 tools: toolCall,
@@ -562,7 +562,7 @@ var agentSystem = (function (exports) {
                 delete requestBody.tools;
             }
             const headers = {
-                Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
+                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.SystemKey)}`,
                 "Content-Type": "application/json",
             };
             const modelRequest = {
@@ -572,7 +572,7 @@ var agentSystem = (function (exports) {
                 body: JSON.stringify(requestBody)
             };
             const endpoint = "/chat/completions";
-            const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
+            const [result, error] = syncFetch({ url: GlobalConfig.systemUrl + endpoint, execute: modelRequest });
             if (error)
                 throw error;
             if (result?.body?.error) {
@@ -770,7 +770,7 @@ var agentSystem = (function (exports) {
                 this.formatHistoricalMessages(source);
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, [...OnlyData.LTPdefinition]);
+                const response = this.run(this.ragMessages, [...GlobalConfig.LTPdefinition]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -892,7 +892,7 @@ var agentSystem = (function (exports) {
             for (const toolCall of state.toolCalls) {
                 const functionName = toolCall.function.name;
                 const functionArgs = toolCall.function.arguments;
-                const lunarToolPackage = OnlyData.LTPfunction.get(functionName);
+                const lunarToolPackage = GlobalConfig.LTPfunction.get(functionName);
                 if (!lunarToolPackage) {
                     this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
                     continue;
@@ -1089,7 +1089,7 @@ var agentSystem = (function (exports) {
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
         }
-        get roleName() { return '画家'; }
+        get roleName() { return '绘制者'; }
         getToolDefinitions() { return this.roleTool; }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
@@ -1098,7 +1098,7 @@ var agentSystem = (function (exports) {
                 args = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
             }
             catch (parseError) {
-                console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                console.error(`[绘制者] 工具调用参数解析失败:`, toolCall.function.arguments);
                 return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
             switch (funcName) {
@@ -1164,7 +1164,7 @@ var agentSystem = (function (exports) {
                 const prompt = args.prompt || '';
                 if (!prompt.trim())
                     return '扩散生成失败：正向提示词不能为空';
-                console.log(`[画家] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
+                console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
                 const imageParams = {
                     prompt: prompt,
                     negativePrompt: args.negative_prompt || '',
@@ -1172,27 +1172,27 @@ var agentSystem = (function (exports) {
                 };
                 const [result, error] = generateImage(imageParams);
                 if (error) {
-                    console.error('[画家] 图像生成失败:', error);
+                    console.error('[绘制者] 图像生成失败:', error);
                     return `扩散图像生成失败: ${error}`;
                 }
                 if (!result || !result.base64) {
                     return '扩散图像生成失败：引擎返回空结果';
                 }
-                console.log(`[画家] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
+                console.log(`[绘制者] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
                 const pushSuccess = pushImage([result.base64]);
                 if (!pushSuccess) {
-                    console.warn('[画家] 推送图片到前端失败');
+                    console.warn('[绘制者] 推送图片到前端失败');
                 }
                 return `扩散图像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
             }
             catch (error) {
-                console.error('[画家] 扩散生成处理异常:', error);
+                console.error('[绘制者] 扩散生成处理异常:', error);
                 return `扩散图像生成异常: ${error}`;
             }
         }
         handleSelfPortrait(args) {
             try {
-                console.log(`[画家] -> 自画像生成`);
+                console.log(`[绘制者] -> 自画像生成`);
                 console.log(`表情: "${args.expression}"`);
                 console.log(`姿势: "${args.posture}"`);
                 console.log(`服装: "${args.outfit}"`);
@@ -1208,21 +1208,21 @@ var agentSystem = (function (exports) {
                 };
                 const [result, error] = generateImage(imageParams);
                 if (error) {
-                    console.error('[画家] 自画像生成失败:', error);
+                    console.error('[绘制者] 自画像生成失败:', error);
                     return `自画像生成失败: ${error}`;
                 }
                 if (!result || !result.base64) {
                     return '自画像生成失败：引擎返回空结果';
                 }
-                console.log(`[画家] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
+                console.log(`[绘制者] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
                 const pushSuccess = pushImage([result.base64]);
                 if (!pushSuccess) {
-                    console.warn('[画家] 推送自画像到前端失败');
+                    console.warn('[绘制者] 推送自画像到前端失败');
                 }
                 return `自画像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
             }
             catch (error) {
-                console.error('[画家] 自画像生成处理异常:', error);
+                console.error('[绘制者] 自画像生成处理异常:', error);
                 return `自画像生成异常: ${error}`;
             }
         }
@@ -1345,7 +1345,7 @@ K:Am
         constructor() {
             super(fileView('prompts/musicianRole.md')[0]);
         }
-        get roleName() { return '音乐家'; }
+        get roleName() { return '演奏者'; }
         getToolDefinitions() { return this.musicTool; }
         executeTool(toolCall) {
             const funcName = toolCall.function.name;
@@ -1356,7 +1356,7 @@ K:Am
                     : toolCall.function.arguments;
             }
             catch (parseError) {
-                console.error(`[音乐家] 工具调用参数解析失败:`, toolCall.function.arguments);
+                console.error(`[演奏者] 工具调用参数解析失败:`, toolCall.function.arguments);
                 return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
             switch (funcName) {
@@ -1412,7 +1412,7 @@ K:Am
                 const title = args.title || '未命名作品';
                 const abcNotation = args.abc_notation || '';
                 const instruments = (args.instruments || '').trim();
-                console.log(`[音乐家] 创作音乐: "${title}"`);
+                console.log(`[演奏者] 创作音乐: "${title}"`);
                 if (instruments)
                     console.log(`  乐器: ${instruments}`);
                 if (args.tempo)
@@ -1427,7 +1427,7 @@ K:Am
                 const hasT = /^T:\s*.+/m.test(enrichedAbc);
                 const hasK = /^K:\s*.+/m.test(enrichedAbc);
                 if (!hasX || !hasK) {
-                    console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
+                    console.warn('[演奏者] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
                     if (!hasX)
                         enrichedAbc = 'X:1\n' + enrichedAbc;
                     if (!hasT)
@@ -1437,13 +1437,13 @@ K:Am
                 }
                 const pushSuccess = pushContext('music', enrichedAbc, '');
                 if (!pushSuccess) {
-                    console.warn('[音乐家] 推送乐谱到前端失败');
+                    console.warn('[演奏者] 推送乐谱到前端失败');
                 }
-                console.log(`[音乐家] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
+                console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
                 return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，音频正在通过 SoundFont 专业音色库渲染，稍后将自动播放。`;
             }
             catch (error) {
-                console.error('[音乐家] 音乐创作处理异常:', error);
+                console.error('[演奏者] 音乐创作处理异常:', error);
                 return `音乐创作异常: ${error}`;
             }
         }
@@ -1515,7 +1515,7 @@ K:Am
         if (learnerInitialized)
             return true;
         if (!learnerIsReady()) {
-            const [success, err] = learnerInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.MultimodalName, 4096, 0.7, OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName);
+            const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, 4096, 0.7, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
             if (err) {
                 console.error('[学习者] 初始化失败:', err);
                 return false;
@@ -2000,7 +2000,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return [];
             const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
             if (error) {
-                console.error('[编纂者] 记忆库查询失败:', error);
+                console.error('[组织者] 记忆库查询失败:', error);
                 return [];
             }
             return results || [];
@@ -2013,13 +2013,13 @@ ${JSON.stringify(newInfo, null, 2)}
             const uniqueIds = [...new Set(ids.filter(id => id && id.trim()))];
             if (uniqueIds.length === 0)
                 return;
-            console.log(`[编纂者] 删除 ${uniqueIds.length} 条旧档案`);
+            console.log(`[组织者] 删除 ${uniqueIds.length} 条旧档案`);
             for (const id of uniqueIds) {
                 const [, error] = memoryDelete('lunar_messages', id.trim());
                 if (error)
-                    console.error(`[编纂者] 删除记录 ${id} 失败:`, error);
+                    console.error(`[组织者] 删除记录 ${id} 失败:`, error);
                 else
-                    console.log(`[编纂者] 已删除记录 ${id}`);
+                    console.log(`[组织者] 已删除记录 ${id}`);
             }
         }
         writeArchive(content) {
@@ -2027,9 +2027,9 @@ ${JSON.stringify(newInfo, null, 2)}
                 return;
             const [, error] = memoryAdd('lunar_messages', 'assistant', content.trim());
             if (error)
-                console.error('[编纂者] 写入档案失败:', error);
+                console.error('[组织者] 写入档案失败:', error);
             else
-                console.log(`[编纂者] 已写入档案: ${content.slice(0, 60)}...`);
+                console.log(`[组织者] 已写入档案: ${content.slice(0, 60)}...`);
         }
         parseJsonResponse(content) {
             try {
@@ -2038,7 +2038,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return JSON.parse(jsonStr);
             }
             catch (error) {
-                console.error('[编纂者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
+                console.error('[组织者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
                 return null;
             }
         }
@@ -2050,7 +2050,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return response.body?.choices?.[0]?.message?.content || '';
             }
             catch (error) {
-                console.error('[编纂者] LLM 推理失败:', error);
+                console.error('[组织者] LLM 推理失败:', error);
                 return '';
             }
         }
@@ -2067,44 +2067,44 @@ ${JSON.stringify(newInfo, null, 2)}
             super(fileView('prompts/organizeRole.md')[0]);
         }
         organizeHistoricalRecords() {
-            console.log('[编纂者] 开始档案收集与整理');
-            if (OnlyData.unreadRecords.length === 0) {
-                console.log('[编纂者] 没有未读记录需要整理');
+            console.log('[组织者] 开始档案收集与整理');
+            if (GlobalConfig.unreadRecords.length === 0) {
+                console.log('[组织者] 没有未读记录需要整理');
                 return;
             }
             if (!BaseConfig.memoryReady) {
                 BaseConfig.initMemory();
                 if (!BaseConfig.memoryReady) {
-                    console.warn('[编纂者] 记忆库未就绪，保留未读记录待下次整理');
+                    console.warn('[组织者] 记忆库未就绪，保留未读记录待下次整理');
                     return;
                 }
             }
-            const records = [...OnlyData.unreadRecords];
+            const records = [...GlobalConfig.unreadRecords];
             try {
                 this.processPersonArchives(records);
                 this.processEventArchives(records);
                 this.processSelfArchive(records);
-                console.log('[编纂者] 档案整理完成');
-                OnlyData.unreadRecords = [];
+                console.log('[组织者] 档案整理完成');
+                GlobalConfig.unreadRecords = [];
             }
             catch (error) {
-                console.error('[编纂者] 档案整理失败，保留未读记录待下次重试:', error);
+                console.error('[组织者] 档案整理失败，保留未读记录待下次重试:', error);
             }
         }
         processPersonArchives(records) {
-            console.log('[编纂者] === 阶段一：人物档案处理 ===');
+            console.log('[组织者] === 阶段一：人物档案处理 ===');
             const prompt = this.buildPersonExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[编纂者] 人物档案提取未获得有效结果');
+                console.log('[组织者] 人物档案提取未获得有效结果');
                 return;
             }
             const result = this.parseJsonResponse(content);
             if (!result || !result.items || result.items.length === 0) {
-                console.log('[编纂者] 未提取到人物信息');
+                console.log('[组织者] 未提取到人物信息');
                 return;
             }
-            console.log(`[编纂者] 提取到 ${result.items.length} 个人物档案`);
+            console.log(`[组织者] 提取到 ${result.items.length} 个人物档案`);
             for (const person of result.items) {
                 if (!person.name)
                     continue;
@@ -2113,15 +2113,15 @@ ${JSON.stringify(newInfo, null, 2)}
         }
         processSinglePersonArchive(newInfo) {
             const prefix = `${PERSON_PREFIX}${newInfo.name}]`;
-            console.log(`[编纂者] 处理人物档案: ${newInfo.name}`);
+            console.log(`[组织者] 处理人物档案: ${newInfo.name}`);
             const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatPersonArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log(`[编纂者] 新增人物档案: ${newInfo.name}`);
+                console.log(`[组织者] 新增人物档案: ${newInfo.name}`);
                 return;
             }
-            console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const oldArchive = this.parsePersonArchive(record.content);
                 if (!oldArchive) {
@@ -2134,29 +2134,29 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatPersonArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log(`[编纂者] 合并更新人物档案: ${merged.name}`);
+                    console.log(`[组织者] 合并更新人物档案: ${merged.name}`);
                 }
                 else {
                     const archiveText = this.formatPersonArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+                    console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
         }
         processEventArchives(records) {
-            console.log('[编纂者] === 阶段二：事件档案处理 ===');
+            console.log('[组织者] === 阶段二：事件档案处理 ===');
             const prompt = this.buildEventExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[编纂者] 事件档案提取未获得有效结果');
+                console.log('[组织者] 事件档案提取未获得有效结果');
                 return;
             }
             const result = this.parseJsonResponse(content);
             if (!result || !result.items || result.items.length === 0) {
-                console.log('[编纂者] 未提取到事件信息');
+                console.log('[组织者] 未提取到事件信息');
                 return;
             }
-            console.log(`[编纂者] 提取到 ${result.items.length} 个事件档案`);
+            console.log(`[组织者] 提取到 ${result.items.length} 个事件档案`);
             for (const event of result.items) {
                 if (!event.name)
                     continue;
@@ -2165,15 +2165,15 @@ ${JSON.stringify(newInfo, null, 2)}
         }
         processSingleEventArchive(newInfo) {
             const prefix = `${EVENT_PREFIX}${newInfo.name}]`;
-            console.log(`[编纂者] 处理事件档案: ${newInfo.name}`);
+            console.log(`[组织者] 处理事件档案: ${newInfo.name}`);
             const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatEventArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log(`[编纂者] 新增事件档案: ${newInfo.name}`);
+                console.log(`[组织者] 新增事件档案: ${newInfo.name}`);
                 return;
             }
-            console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const mergePrompt = this.buildEventMergePrompt(record.content, newInfo);
                 const merged = this.runMergeLLM(mergePrompt);
@@ -2181,37 +2181,37 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatEventArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log(`[编纂者] 合并更新事件档案: ${merged.name}`);
+                    console.log(`[组织者] 合并更新事件档案: ${merged.name}`);
                 }
                 else {
                     const archiveText = this.formatEventArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+                    console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
         }
         processSelfArchive(records) {
-            console.log('[编纂者] === 阶段三：自我档案处理 ===');
+            console.log('[组织者] === 阶段三：自我档案处理 ===');
             const prompt = this.buildSelfExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[编纂者] 自我档案提取未获得有效结果');
+                console.log('[组织者] 自我档案提取未获得有效结果');
                 return;
             }
             const newInfo = this.parseJsonResponse(content);
             if (!newInfo || (!newInfo.mood && !newInfo.clothing && !newInfo.activity && !newInfo.needs)) {
-                console.log('[编纂者] 未提取到有效的自我信息');
+                console.log('[组织者] 未提取到有效的自我信息');
                 return;
             }
-            console.log('[编纂者] 处理自我档案');
+            console.log('[组织者] 处理自我档案');
             const existingRecords = this.queryArchiveByPrefix(SELF_PREFIX, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatSelfArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log('[编纂者] 新增自我档案');
+                console.log('[组织者] 新增自我档案');
                 return;
             }
-            console.log(`[编纂者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[组织者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const mergePrompt = this.buildSelfMergePrompt(record.content, newInfo);
                 const merged = this.runMergeLLM(mergePrompt);
@@ -2219,17 +2219,17 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatSelfArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log('[编纂者] 合并更新自我档案');
+                    console.log('[组织者] 合并更新自我档案');
                 }
                 else {
                     const archiveText = this.formatSelfArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log('[编纂者] 合并失败，新信息作为补充写入');
+                    console.log('[组织者] 合并失败，新信息作为补充写入');
                 }
             }
         }
         persistDiscardedMessages(discarded) {
-            console.log('[编纂者] 开始持久化被抛弃的消息');
+            console.log('[组织者] 开始持久化被抛弃的消息');
             if (!BaseConfig.memoryReady)
                 BaseConfig.initMemory();
             if (!BaseConfig.memoryReady)
@@ -2246,7 +2246,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return [];
             const [results, error] = memoryQuery('lunar_messages', queryText, topK);
             if (error) {
-                console.error('[编纂者] 查询历史记录失败:', error);
+                console.error('[组织者] 查询历史记录失败:', error);
                 return [];
             }
             if (!results || results.length === 0)
@@ -2406,15 +2406,164 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
 
+    class ActorRole extends CreativeRoleBase {
+        MAX_ITERATIONS = 5;
+        roleTool = [
+            {
+                type: "function",
+                function: {
+                    name: "play_action",
+                    description: "让月华执行预设动作。可用动作：荡秋千（需要鼠标追踪）、翻花绳（需要鼠标追踪）。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            action_name: {
+                                type: "string",
+                                description: "动作名称",
+                                enum: ["荡秋千", "翻花绳"]
+                            }
+                        },
+                        required: ["action_name"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "agent_movement",
+                    description: "控制月华移动到指定3D坐标位置。移动期间会自动关闭鼠标追踪。",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            x: { type: "number", description: "目标X坐标" },
+                            y: { type: "number", description: "目标Y坐标（地面为0）" },
+                            z: { type: "number", description: "目标Z坐标" },
+                            resume_tracking: {
+                                type: "boolean",
+                                description: "移动结束后是否恢复鼠标追踪，默认为 true"
+                            }
+                        },
+                        required: ["x", "y", "z"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "query_agent_position",
+                    description: "查询月华当前在3D场景中的位置坐标。返回{x, y, z}格式坐标。",
+                    parameters: {
+                        type: "object",
+                        properties: {},
+                        required: []
+                    }
+                }
+            }
+        ];
+        constructor() {
+            super(fileView('prompts/actorRole.md')[0]);
+        }
+        get roleName() { return '行动者'; }
+        getToolDefinitions() { return this.roleTool; }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[行动者] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败: ${parseError}`;
+            }
+            switch (funcName) {
+                case 'play_action': return this.handlePlayAction(args);
+                case 'agent_movement': return this.handleAgentMovement(args);
+                case 'query_agent_position': return this.handleQueryAgentPosition();
+                default: return `未知工具: ${funcName}`;
+            }
+        }
+        collectDetail(toolCall, details) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                const detail = { toolName: toolCall.function.name };
+                if (toolCall.function.name === 'play_action') {
+                    detail.actionName = args.action_name || '';
+                }
+                else if (toolCall.function.name === 'agent_movement') {
+                    detail.targetPos = `(${args.x}, ${args.y}, ${args.z})`;
+                }
+                details.push(detail);
+            }
+            catch {
+            }
+        }
+        buildSummary(details) {
+            if (details.length === 0)
+                return '月华没有执行任何行动';
+            const parts = [];
+            for (const d of details) {
+                if (d.toolName === 'query_agent_position')
+                    continue;
+                if (d.toolName === 'play_action' && d.actionName) {
+                    parts.push(`月华${d.actionName}了`);
+                }
+                else if (d.toolName === 'agent_movement' && d.targetPos) {
+                    parts.push(`月华移动到了${d.targetPos}`);
+                }
+            }
+            if (parts.length === 0)
+                return '月华完成了行动任务';
+            return parts.join('，') + '。';
+        }
+        handlePlayAction(args) {
+            const actionName = args.action_name || '';
+            if (!actionName)
+                return '执行动作失败：动作名称不能为空';
+            const ALLOWED = ['荡秋千', '翻花绳'];
+            if (!ALLOWED.includes(actionName)) {
+                return `执行动作失败：不支持的动作 "${actionName}"，可用动作为：${ALLOWED.join('、')}`;
+            }
+            pushContext('action', JSON.stringify({ type: 'action', action: actionName }), '');
+            console.log(`[行动者] 执行动作: ${actionName}`);
+            return `已执行动作：${actionName}`;
+        }
+        handleAgentMovement(args) {
+            const x = Number(args.x);
+            const y = Number(args.y);
+            const z = Number(args.z);
+            const resumeTracking = args.resume_tracking !== false;
+            if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                return '移动失败：坐标参数 x、y、z 必须为有效数字';
+            }
+            pushContext('movement', JSON.stringify({
+                type: 'movement',
+                position: { x, y, z },
+                resumeTracking
+            }), '');
+            console.log(`[行动者] 移动到 (${x}, ${y}, ${z})，恢复追踪: ${resumeTracking}`);
+            return `已移动到 (${x}, ${y}, ${z})`;
+        }
+        handleQueryAgentPosition() {
+            const pos = getAgentPosition();
+            const result = `当前位置: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`;
+            console.log(`[行动者] ${result}`);
+            return result;
+        }
+    }
+
     class AgentDefine {
         static instance;
-        summaryRole = new ModelBuilder(fileView('prompts/summaryRole.md')[0]);
         descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
         dialogueRole = new DialogueRole();
         learnerRole = new LearnerRole();
         painterRole = new PainterRole();
         musicianRole = new MusicianRole();
         viewerRole = new ViewerRole();
+        actorRole = new ActorRole();
         organizeRole = new OrganizeRole();
         unreadContext = [];
         unreadVideoUrl = [];
@@ -2430,7 +2579,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
         }
         constructor() {
-            fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
+            fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
         }
         async analysisVideoFile(videoUrl, userNeeds) {
             const cachedPrompt = getPromptFromKnowledge(videoUrl);
@@ -2478,7 +2627,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 for (let item of message.content) {
                     if (item.type == 'text' || item.type == 'input_audio')
                         newContent.push(item);
-                    else if (item.image_url && OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                    else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                         await this.analysisVideoFile(item.image_url.url, '');
                     }
                     else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
@@ -2496,7 +2645,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
         }
         dumpAllContexts(outputDir) {
-            if (!OnlyData.debugMode)
+            if (!GlobalConfig.debugMode)
                 return [];
             const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
             const results = [];
@@ -2506,16 +2655,19 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             const learnerPath = this.learnerRole.dumpContext(this.dialogueRole.messages, this.unreadContext, `${dir}\\agent_debug_学习者.json`);
             if (learnerPath)
                 results.push(learnerPath);
-            const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
+            const painterPath = this.painterRole.dumpContext('绘制者', `${dir}\\agent_debug_绘制者.json`);
             if (painterPath)
                 results.push(painterPath);
-            const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
+            const musicianPath = this.musicianRole.dumpContext('演奏者', `${dir}\\agent_debug_演奏者.json`);
             if (musicianPath)
                 results.push(musicianPath);
             const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
             if (viewerPath)
                 results.push(viewerPath);
-            const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
+            const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
+            if (actorPath)
+                results.push(actorPath);
+            const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
             if (organizePath)
                 results.push(organizePath);
             const indexData = {
@@ -2525,7 +2677,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 }),
                 unreadContextCount: this.unreadContext.length,
                 unreadVideoUrlCount: this.unreadVideoUrl.length,
-                unreadRecordsCount: OnlyData.unreadRecords.length,
+                unreadRecordsCount: GlobalConfig.unreadRecords.length,
                 finalResponse: this.finalResponse,
                 exportedFiles: results,
             };
@@ -2594,7 +2746,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                         throw new Error('消息响应为空');
                     else
                         this.errorCount = 0;
-                    if (OnlyData.unreadRecords.length > 30)
+                    if (GlobalConfig.unreadRecords.length > 30)
                         this.organizeRole.organizeHistoricalRecords();
                     const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
                     if (!textChunks.length)
@@ -2634,13 +2786,13 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
         }
         resetAgentState() {
-            this.summaryRole.coverContext([]);
             this.descriptionRole.coverContext([]);
             this.dialogueRole.coverContext([]);
             this.learnerRole.messages = [];
             this.painterRole.coverContext([]);
             this.musicianRole.coverContext([]);
             this.viewerRole.coverContext([]);
+            this.actorRole.coverContext([]);
             this.organizeRole.coverContext([]);
             this.unreadContext = [];
             this.unreadVideoUrl = [];
@@ -2678,7 +2830,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             this.unreadVideoUrl.push(videoUrl);
             this.speakWeight += RandomFloor(1, 3);
         }
-        async testMessageWrite(role, messages, timeout) {
+        async messageWrite(role, messages, timeout) {
             await new Promise(resolve => setTimeout(resolve, timeout));
             if (messages.length > 0)
                 this.writeMessage(role, messages);
@@ -2690,13 +2842,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
     const AgentRuntime = new LunarAgent();
-    const message = [
-        {
-            type: 'text',
-            text: '你好呀~'
-        }
-    ];
-    AgentRuntime.testMessageWrite('user', message, 1500);
+    const initializationMessage = { type: 'text', text: '你好呀~' };
+    AgentRuntime.messageWrite('user', [initializationMessage], 1500);
 
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [
@@ -2983,11 +3130,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         return dueItems;
     }
     initSchedules();
-    OnlyData.LTPfunction.set('create_schedule', handleCreateSchedule);
-    OnlyData.LTPfunction.set('edit_schedule', handleEditSchedule);
-    OnlyData.LTPfunction.set('delete_schedule', handleDeleteSchedule);
-    OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
-    OnlyData.LTPdefinition.push(...scheduleTools);
+    GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
+    GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
+    GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+    GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
+    GlobalConfig.LTPdefinition.push(...scheduleTools);
 
     const screenshotTools = [
         {
@@ -3051,66 +3198,24 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         console.log(`========== 截图工具调用结束(成功) ==========`);
         return [textResponse, result.base64];
     }
-    OnlyData.LTPfunction.set('screenshot', handleScreenshot);
-    OnlyData.LTPdefinition.push(...screenshotTools);
+    GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
+    GlobalConfig.LTPdefinition.push(...screenshotTools);
 
     const agentControlTools = [
         {
             type: "function",
             function: {
-                name: "play_action",
-                description: "让智能体执行预设动作。可用动作：荡秋千（需要鼠标追踪）、翻花绳（需要鼠标追踪）。执行动作时会自动切换鼠标追踪状态。",
+                name: "dispatch_actor",
+                description: "向行动者子智能体发布行动任务。行动者负责控制月华在3D场景中的动画、位移和空间感知。只需用一句话描述你想让月华做什么，行动者会自行规划并执行具体操作。",
                 parameters: {
                     type: "object",
                     properties: {
-                        action_name: {
+                        description: {
                             type: "string",
-                            description: "动作名称，可选值：荡秋千、翻花绳",
-                            enum: ["荡秋千", "翻花绳"]
+                            description: "行动需求描述，如'让月华去荡秋千'、'移动到秋千旁边'、'翻花绳'。描述越清晰，行动者执行越准确。"
                         }
                     },
-                    required: ["action_name"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "agent_movement",
-                description: "控制智能体移动到指定位置。移动期间会自动关闭鼠标追踪，移动结束后可选恢复。移动有10秒超时限制。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        x: {
-                            type: "number",
-                            description: "目标X坐标"
-                        },
-                        y: {
-                            type: "number",
-                            description: "目标Y坐标（地面为0）"
-                        },
-                        z: {
-                            type: "number",
-                            description: "目标Z坐标"
-                        },
-                        resume_tracking: {
-                            type: "boolean",
-                            description: "移动结束后是否恢复鼠标追踪，默认为 true"
-                        }
-                    },
-                    required: ["x", "y", "z"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "query_agent_position",
-                description: "查询智能体当前在3D场景中的位置坐标。返回{x, y, z}坐标，可用于确定移动目标。",
-                parameters: {
-                    type: "object",
-                    properties: {},
-                    required: []
+                    required: ["description"]
                 }
             }
         },
@@ -3118,7 +3223,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             type: "function",
             function: {
                 name: "dispatch_painter",
-                description: "向绘画师子智能体发布绘画创作任务。绘画师会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+                description: "向绘制者子智能体发布绘画创作任务。绘制者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -3135,7 +3240,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             type: "function",
             function: {
                 name: "dispatch_musician",
-                description: "向演奏家子智能体发布音乐创作任务。演奏家会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
+                description: "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -3149,40 +3254,22 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
         }
     ];
-    const ALLOWED_ACTIONS = ['荡秋千', '翻花绳'];
     function parseArgs(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
-    async function handlePlayAction(args) {
-        const { action_name } = parseArgs(args);
-        if (!action_name || typeof action_name !== 'string' || action_name.trim().length === 0) {
-            return ['执行动作失败：动作名称不能为空，请提供有效的动作名称', ''];
+    async function handleDispatchActor(args) {
+        const { description } = parseArgs(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['行动任务调度失败：任务描述不能为空，请提供具体的行动需求', ''];
         }
-        if (!ALLOWED_ACTIONS.includes(action_name)) {
-            return [`执行动作失败：不支持的动作 "${action_name}"，可用动作为：${ALLOWED_ACTIONS.join('、')}`, ''];
+        const instance = AgentDefine.instance;
+        if (!instance || !instance.actorRole) {
+            return ['行动任务调度失败：行动者子智能体未就绪，请稍后重试', ''];
         }
-        pushContext('action', JSON.stringify({ type: 'action', action: action_name }), '');
-        console.log(`[智能体控制] 执行动作: ${action_name}`);
-        return [`已执行动作：${action_name}`, ''];
-    }
-    async function handleAgentMovement(args) {
-        const { x, y, z, resume_tracking } = parseArgs(args);
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') {
-            return ['移动失败：坐标参数 x、y、z 必须为数字', ''];
-        }
-        if (isNaN(x) || isNaN(y) || isNaN(z)) {
-            return ['移动失败：坐标参数 x、y、z 不能为 NaN', ''];
-        }
-        const resumeTracking = resume_tracking !== false;
-        pushContext('movement', JSON.stringify({ type: 'movement', position: { x, y, z }, resumeTracking }), '');
-        console.log(`[智能体控制] 移动到 (${x}, ${y}, ${z})，恢复鼠标追踪: ${resumeTracking}`);
-        return [`正在移动到 (${x}, ${y}, ${z})`, ''];
-    }
-    async function handleQueryAgentPosition(args) {
-        const pos = getAgentPosition();
-        const posStr = `当前智能体位置: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`;
-        console.log(`[智能体控制] ${posStr}`);
-        return [posStr, ''];
+        console.log(`[智能体控制] 调度行动者: ${description}`);
+        const result = await instance.actorRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 行动者完成: ${result}`);
+        return [result, ''];
     }
     async function handleDispatchPainter(args) {
         const { description } = parseArgs(args);
@@ -3191,11 +3278,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         const instance = AgentDefine.instance;
         if (!instance || !instance.painterRole) {
-            return ['绘画任务调度失败：绘画师子智能体未就绪，请稍后重试', ''];
+            return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
         }
-        console.log(`[智能体控制] 调度绘画师: ${description}`);
+        console.log(`[智能体控制] 调度绘制者: ${description}`);
         const result = await instance.painterRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 绘画师完成: ${result}`);
+        console.log(`[智能体控制] 绘制者完成: ${result}`);
         return [result, ''];
     }
     async function handleDispatchMusician(args) {
@@ -3205,19 +3292,17 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         const instance = AgentDefine.instance;
         if (!instance || !instance.musicianRole) {
-            return ['音乐任务调度失败：演奏家子智能体未就绪，请稍后重试', ''];
+            return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
         }
-        console.log(`[智能体控制] 调度演奏家: ${description}`);
+        console.log(`[智能体控制] 调度演奏者: ${description}`);
         const result = await instance.musicianRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 演奏家完成: ${result}`);
+        console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
-    OnlyData.LTPfunction.set('play_action', handlePlayAction);
-    OnlyData.LTPfunction.set('agent_movement', handleAgentMovement);
-    OnlyData.LTPfunction.set('query_agent_position', handleQueryAgentPosition);
-    OnlyData.LTPfunction.set('dispatch_painter', handleDispatchPainter);
-    OnlyData.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-    OnlyData.LTPdefinition.push(...agentControlTools);
+    GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
+    GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
+    GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+    GlobalConfig.LTPdefinition.push(...agentControlTools);
 
     const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
     function extractThinkingBlocks(text) {
@@ -3423,6 +3508,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         return { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks };
     }
 
+    exports.ActorRole = ActorRole;
     exports.AgentDefine = AgentDefine;
     exports.BaseConfig = BaseConfig;
     exports.CalculateMedian = CalculateMedian;
@@ -3431,10 +3517,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.CreativeRoleBase = CreativeRoleBase;
     exports.DialogueRole = DialogueRole;
     exports.FileToBase64 = FileToBase64;
+    exports.GlobalConfig = GlobalConfig;
     exports.LearnerRole = LearnerRole;
     exports.ModelBuilder = ModelBuilder;
     exports.MusicianRole = MusicianRole;
-    exports.OnlyData = OnlyData;
     exports.OrganizeRole = OrganizeRole;
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;

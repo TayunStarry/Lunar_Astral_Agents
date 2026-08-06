@@ -1,4 +1,4 @@
-import { ChatCache, RandomFloor, AgentDefine, ImageContent, AudioContent, TextContent, PostMessageRole, OnlyData, parseContent, checkDueItems } from '../index';
+import { ChatCache, RandomFloor, AgentDefine, PostMessageRole, GlobalConfig, parseContent, checkDueItems, MessageContent } from '../index';
 
 /** 月华智能体 */
 class LunarAgent extends AgentDefine {
@@ -89,16 +89,14 @@ class LunarAgent extends AgentDefine {
 				await this.batchProcessVideoFiles();
 				// 如果包含研究意图关键词，调用学习者角色执行研究循环（最先执行）
 				this.learnerRole.executeLearner(this.unreadContext);
-				// 绘画师和演奏家已改为通过工具调用触发（dispatch_painter / dispatch_musician），
-				// 不再由思考链中的关键词匹配自动触发
 				// 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
 				await this.createChatMessage();
 				// 如果消息响应为空，抛出异常
 				if (!this.finalResponse.trim().length) throw new Error('消息响应为空');
 				// 成功响应时重置错误计数
 				else this.errorCount = 0;
-				// 如果未读记录数超过30条，调用编纂者组织历史记录
-				if (OnlyData.unreadRecords.length > 30) this.organizeRole.organizeHistoricalRecords();
+				// 如果未读记录数超过30条，调用组织者组织历史记录
+				if (GlobalConfig.unreadRecords.length > 30) this.organizeRole.organizeHistoricalRecords();
 				/** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
 				const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
 				// 如果正文切片为空，抛出异常
@@ -188,7 +186,7 @@ class LunarAgent extends AgentDefine {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 	}
 	/** 写入消息 */
-	public writeMessage(role: PostMessageRole, messages: Array<ImageContent | AudioContent | TextContent>) {
+	public writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
 		// 从外部写入消息
 		this.unreadContext.push({ role, content: messages });
 		// 增加随机的发言权重
@@ -207,7 +205,7 @@ class LunarAgent extends AgentDefine {
 		this.speakWeight += RandomFloor(1, 3);
 	}
 	/** 测试消息写入 */
-	public async testMessageWrite(role: PostMessageRole, messages: Array<ImageContent | AudioContent | TextContent>, timeout: number) {
+	public async messageWrite(role: PostMessageRole, messages: Array<MessageContent>, timeout: number) {
 		// 等待指定超时时间
 		await new Promise(resolve => setTimeout(resolve, timeout));
 		// 如果消息数组非空，写入消息
@@ -223,11 +221,7 @@ class LunarAgent extends AgentDefine {
 }
 /** 初始化月华智能体实例 */
 const AgentRuntime = new LunarAgent();
-/** 测试消息写入 */
-const message: Array<ImageContent | AudioContent | TextContent> = [
-	{
-		type: 'text',
-		text: '你好呀~'
-	}
-];
-AgentRuntime.testMessageWrite('user', message, 1500);
+/** 初始化消息 */
+const initializationMessage: MessageContent = { type: 'text', text: '你好呀~' };
+// 向模型发送用户消息
+AgentRuntime.messageWrite('user', [initializationMessage], 1500);

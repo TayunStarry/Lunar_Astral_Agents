@@ -19,7 +19,7 @@ func main() {
 	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
 	flag.Parse()
 
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 
 	if _, err := os.Stat(modelDir); os.IsNotExist(err) {
 		logger.Error("QWEN-TTS", "模型目录不存在: %s", modelDir)

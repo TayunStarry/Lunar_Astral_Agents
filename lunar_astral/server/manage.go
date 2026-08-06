@@ -1,9 +1,11 @@
 package server
 
 import (
+	"browser"
 	"config"
 	"context"
 	image "image/server"
+	"logger"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
 	"lunar_astral/hierarchy"
@@ -11,7 +13,6 @@ import (
 	"lunar_astral/release"
 	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
-	"logger"
 	"mime"
 	"net/http"
 	"os"
@@ -29,7 +30,7 @@ func InitializeServer() {
 		release.ExecutePortRelease()
 	}
 	// 设置日志开发模式
-	logger.SetDevMode(*config.Developer)
+	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 	// 设置MIME类型映射
 	for ext, mimeType := range config.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
@@ -84,10 +85,15 @@ func SetupSignalHandling() chan os.Signal {
 	return quit
 }
 
-// WaitForShutdown 等待关闭信号并优雅关闭服务器
+// WaitForShutdown 等待关闭信号（系统信号或 WebView 关闭）并优雅关闭服务器
 func WaitForShutdown(quit chan os.Signal, server *http.Server) {
-	// 阻塞等待系统信号，当接收到信号时继续执行后续代码
-	<-quit
+	// 阻塞等待系统信号或 WebView 关闭信号，当接收到任一信号时继续执行后续代码
+	select {
+	case <-quit:
+		logger.Info("LunarCore", "接收到中断信号，正在关闭...")
+	case <-browser.WebViewClosed():
+		logger.Info("LunarCore", "检测到 WebView 关闭，正在关闭...")
+	}
 	// 执行服务器关闭流程
 	shutdownServer(server)
 }
@@ -147,6 +153,8 @@ func shutdownServer(server *http.Server) {
 	llama.Close()
 	// 关闭WebSocket服务器
 	websocket.CloseWebSocketServer()
+	// 关闭WebView窗口（若未关闭则主动关闭）
+	browser.CloseWebView()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序

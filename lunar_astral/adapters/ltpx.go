@@ -49,34 +49,34 @@ func getLTPXToolStatus() *LTPXStatus {
 	return status
 }
 
-// ensureOnlyDataGlobal 确保 OnlyData 作为全局变量可用（兼容旧工具包代码）
-func ensureOnlyDataGlobal(vm *goja.Runtime) {
+// ensureGlobalConfigGlobal 确保 GlobalConfig 作为全局变量可用（兼容旧工具包代码）
+func ensureGlobalConfigGlobal(vm *goja.Runtime) {
 	agentSystemVal := vm.Get("agentSystem")
 	if agentSystemVal == nil || goja.IsUndefined(agentSystemVal) {
 		return
 	}
 	agentSystemObj := agentSystemVal.ToObject(vm)
-	onlyDataVal := agentSystemObj.Get("OnlyData")
-	if onlyDataVal == nil || goja.IsUndefined(onlyDataVal) {
+	GlobalConfigVal := agentSystemObj.Get("GlobalConfig")
+	if GlobalConfigVal == nil || goja.IsUndefined(GlobalConfigVal) {
 		return
 	}
-	vm.Set("OnlyData", onlyDataVal)
+	vm.Set("GlobalConfig", GlobalConfigVal)
 }
 
 // applyLTPXLoad 在 goja 事件循环中执行工具加载
 func applyLTPXLoad(vm *goja.Runtime, info *LTPXToolInfo) {
-	// 确保 OnlyData 全局变量可用（兼容旧工具包直接引用 OnlyData 的代码）
-	ensureOnlyDataGlobal(vm)
+	// 确保 GlobalConfig 全局变量可用（兼容旧工具包直接引用 GlobalConfig 的代码）
+	ensureGlobalConfigGlobal(vm)
 
-	// 执行工具 JS 代码（工具会自行注册到 OnlyData.LTPfunction）
+	// 执行工具 JS 代码（工具会自行注册到 GlobalConfig.LTPfunction）
 	_, err := vm.RunString(info.JS)
 	if err != nil {
 		logger.Error("LunarCore", "LTPX 执行工具代码失败 %s: %v", info.Name, err)
 		return
 	}
 
-	// 注入工具定义到 OnlyData.LTPdefinition
-	_, err = vm.RunString(`agentSystem.OnlyData.LTPdefinition.push(` + info.Definition + `);`)
+	// 注入工具定义到 GlobalConfig.LTPdefinition
+	_, err = vm.RunString(`agentSystem.GlobalConfig.LTPdefinition.push(` + info.Definition + `);`)
 	if err != nil {
 		logger.Error("LunarCore", "LTPX 注入工具定义失败 %s: %v", info.Name, err)
 		return
@@ -91,10 +91,10 @@ func applyLTPXLoad(vm *goja.Runtime, info *LTPXToolInfo) {
 
 // applyLTPXUnload 在 goja 事件循环中执行工具卸载
 func applyLTPXUnload(vm *goja.Runtime, name string) {
-	// 从 OnlyData.LTPdefinition 中移除
+	// 从 GlobalConfig.LTPdefinition 中移除
 	_, err := vm.RunString(`
 		(function() {
-			var defs = agentSystem.OnlyData.LTPdefinition;
+			var defs = agentSystem.GlobalConfig.LTPdefinition;
 			for (var i = defs.length - 1; i >= 0; i--) {
 				if (defs[i].function && defs[i].function.name === '` + name + `') {
 					defs.splice(i, 1);
@@ -106,10 +106,10 @@ func applyLTPXUnload(vm *goja.Runtime, name string) {
 		logger.Error("LunarCore", "LTPX 移除工具定义失败 %s: %v", name, err)
 	}
 
-	// 从 OnlyData.LTPfunction 中移除
+	// 从 GlobalConfig.LTPfunction 中移除
 	_, err = vm.RunString(`
 		(function() {
-			agentSystem.OnlyData.LTPfunction.delete('` + name + `');
+			agentSystem.GlobalConfig.LTPfunction.delete('` + name + `');
 		})();
 	`)
 	if err != nil {

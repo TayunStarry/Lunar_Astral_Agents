@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage } from '../index';
+import { GlobalConfig, PostMessage } from '../index';
 
 /** 学习者触发关键词 — 统一匹配所有研究/回忆意图 */
 const learnerKeywords = [
@@ -37,14 +37,14 @@ function ensureLearnerInitialized(): boolean {
 	if (learnerInitialized) return true;
 	if (!learnerIsReady()) {
 		const [success, err] = learnerInit(
-			OnlyData.systemUrl,
-			OnlyData.SystemKey,
-			OnlyData.MultimodalName,
+			GlobalConfig.systemUrl,
+			GlobalConfig.SystemKey,
+			GlobalConfig.MultimodalName,
 			4096,
 			0.7,
-			OnlyData.systemUrl,
-			OnlyData.SystemKey,
-			OnlyData.EmbeddingName
+			GlobalConfig.systemUrl,
+			GlobalConfig.SystemKey,
+			GlobalConfig.EmbeddingName
 		);
 		if (err) {
 			console.error('[学习者] 初始化失败:', err);

@@ -1,4 +1,4 @@
-import { OnlyData, modelResponse, ModelBuilder, PostMessage, BaseConfig } from '../index';
+import { GlobalConfig, modelResponse, ModelBuilder, PostMessage, BaseConfig } from '../index';
 
 // ==== 档案类型定义 ====
 
@@ -79,7 +79,7 @@ const SELF_PREFIX = '[自我档案]';
 
 // ==== 提示词构建器 ====
 
-/** 编纂者提示词构建 */
+/** 组织者提示词构建 */
 class Prompt extends ModelBuilder {
 	/** 当前地址缓存 */
 	private currentLocation: string = '';
@@ -435,14 +435,14 @@ ${JSON.stringify(newInfo, null, 2)}
 
 // ==== 工具链 ====
 
-/** 编纂者工具链 */
+/** 组织者工具链 */
 class Toolchain extends Prompt {
 	/** 查询记忆库 */
 	protected queryMemory(queryText: string, topK: number = 10): MemoryRecord[] {
 		if (!queryText || queryText.trim().length === 0) return [];
 		const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
 		if (error) {
-			console.error('[编纂者] 记忆库查询失败:', error);
+			console.error('[组织者] 记忆库查询失败:', error);
 			return [];
 		}
 		return results || [];
@@ -458,11 +458,11 @@ class Toolchain extends Prompt {
 	protected deleteRecords(ids: string[]): void {
 		const uniqueIds = [...new Set(ids.filter(id => id && id.trim()))];
 		if (uniqueIds.length === 0) return;
-		console.log(`[编纂者] 删除 ${uniqueIds.length} 条旧档案`);
+		console.log(`[组织者] 删除 ${uniqueIds.length} 条旧档案`);
 		for (const id of uniqueIds) {
 			const [, error] = memoryDelete('lunar_messages', id.trim());
-			if (error) console.error(`[编纂者] 删除记录 ${id} 失败:`, error);
-			else console.log(`[编纂者] 已删除记录 ${id}`);
+			if (error) console.error(`[组织者] 删除记录 ${id} 失败:`, error);
+			else console.log(`[组织者] 已删除记录 ${id}`);
 		}
 	}
 
@@ -470,8 +470,8 @@ class Toolchain extends Prompt {
 	protected writeArchive(content: string): void {
 		if (!content || content.trim().length === 0) return;
 		const [, error] = memoryAdd('lunar_messages', 'assistant', content.trim());
-		if (error) console.error('[编纂者] 写入档案失败:', error);
-		else console.log(`[编纂者] 已写入档案: ${content.slice(0, 60)}...`);
+		if (error) console.error('[组织者] 写入档案失败:', error);
+		else console.log(`[组织者] 已写入档案: ${content.slice(0, 60)}...`);
 	}
 
 	/** 解析模型返回的 JSON */
@@ -481,7 +481,7 @@ class Toolchain extends Prompt {
 			const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
 			return JSON.parse(jsonStr) as T;
 		} catch (error) {
-			console.error('[编纂者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
+			console.error('[组织者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
 			return null;
 		}
 	}
@@ -494,7 +494,7 @@ class Toolchain extends Prompt {
 			const response = this.run([], []);
 			return response.body?.choices?.[0]?.message?.content || '';
 		} catch (error) {
-			console.error('[编纂者] LLM 推理失败:', error);
+			console.error('[组织者] LLM 推理失败:', error);
 			return '';
 		}
 	}
@@ -507,9 +507,9 @@ class Toolchain extends Prompt {
 	}
 }
 
-// ==== 编纂者角色 ====
+// ==== 组织者角色 ====
 
-/** 编纂者角色 */
+/** 组织者角色 */
 export class OrganizeRole extends Toolchain {
 	/** 档案查询 topK */
 	private readonly ARCHIVE_QUERY_TOPK = 50;
@@ -520,21 +520,21 @@ export class OrganizeRole extends Toolchain {
 
 	/** 组织历史记录（主入口） */
 	public organizeHistoricalRecords(): void {
-		console.log('[编纂者] 开始档案收集与整理');
-		if (OnlyData.unreadRecords.length === 0) {
-			console.log('[编纂者] 没有未读记录需要整理');
+		console.log('[组织者] 开始档案收集与整理');
+		if (GlobalConfig.unreadRecords.length === 0) {
+			console.log('[组织者] 没有未读记录需要整理');
 			return;
 		}
 
 		if (!BaseConfig.memoryReady) {
 			BaseConfig.initMemory();
 			if (!BaseConfig.memoryReady) {
-				console.warn('[编纂者] 记忆库未就绪，保留未读记录待下次整理');
+				console.warn('[组织者] 记忆库未就绪，保留未读记录待下次整理');
 				return;
 			}
 		}
 
-		const records = [...OnlyData.unreadRecords];
+		const records = [...GlobalConfig.unreadRecords];
 
 		try {
 			// 严格按照 人物档案 → 事件档案 → 自我档案 的顺序处理
@@ -542,11 +542,11 @@ export class OrganizeRole extends Toolchain {
 			this.processEventArchives(records);
 			this.processSelfArchive(records);
 
-			console.log('[编纂者] 档案整理完成');
-			OnlyData.unreadRecords = [];
+			console.log('[组织者] 档案整理完成');
+			GlobalConfig.unreadRecords = [];
 		}
 		catch (error) {
-			console.error('[编纂者] 档案整理失败，保留未读记录待下次重试:', error);
+			console.error('[组织者] 档案整理失败，保留未读记录待下次重试:', error);
 		}
 	}
 
@@ -554,23 +554,23 @@ export class OrganizeRole extends Toolchain {
 
 	/** 处理人物档案 */
 	private processPersonArchives(records: PostMessage[]): void {
-		console.log('[编纂者] === 阶段一：人物档案处理 ===');
+		console.log('[组织者] === 阶段一：人物档案处理 ===');
 
 		// 第一步：从消息中提取人物信息
 		const prompt = this.buildPersonExtractPrompt(records);
 		const content = this.runLLM(prompt);
 		if (!content) {
-			console.log('[编纂者] 人物档案提取未获得有效结果');
+			console.log('[组织者] 人物档案提取未获得有效结果');
 			return;
 		}
 
 		const result = this.parseJsonResponse<ExtractResult<PersonArchive>>(content);
 		if (!result || !result.items || result.items.length === 0) {
-			console.log('[编纂者] 未提取到人物信息');
+			console.log('[组织者] 未提取到人物信息');
 			return;
 		}
 
-		console.log(`[编纂者] 提取到 ${result.items.length} 个人物档案`);
+		console.log(`[组织者] 提取到 ${result.items.length} 个人物档案`);
 
 		// 第二步：对每个人物，查询已有档案并合并
 		for (const person of result.items) {
@@ -582,7 +582,7 @@ export class OrganizeRole extends Toolchain {
 	/** 处理单个人物档案 */
 	private processSinglePersonArchive(newInfo: PersonArchive): void {
 		const prefix = `${PERSON_PREFIX}${newInfo.name}]`;
-		console.log(`[编纂者] 处理人物档案: ${newInfo.name}`);
+		console.log(`[组织者] 处理人物档案: ${newInfo.name}`);
 
 		// 查询记忆库中是否存在该人物的旧档案
 		const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
@@ -591,12 +591,12 @@ export class OrganizeRole extends Toolchain {
 			// 无旧档案，直接写入
 			const archiveText = this.formatPersonArchive(newInfo);
 			this.writeArchive(archiveText);
-			console.log(`[编纂者] 新增人物档案: ${newInfo.name}`);
+			console.log(`[组织者] 新增人物档案: ${newInfo.name}`);
 			return;
 		}
 
 		// 有旧档案，执行合并更新
-		console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+		console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
 		for (const record of existingRecords) {
 			// 解析旧档案
 			const oldArchive = this.parsePersonArchive(record.content);
@@ -614,12 +614,12 @@ export class OrganizeRole extends Toolchain {
 				this.deleteRecords([record.id]);
 				const archiveText = this.formatPersonArchive(merged);
 				this.writeArchive(archiveText);
-				console.log(`[编纂者] 合并更新人物档案: ${merged.name}`);
+				console.log(`[组织者] 合并更新人物档案: ${merged.name}`);
 			} else {
 				// 合并失败，保留旧档案，写入新信息作为补充
 				const archiveText = this.formatPersonArchive(newInfo);
 				this.writeArchive(archiveText);
-				console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+				console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
 			}
 		}
 	}
@@ -628,23 +628,23 @@ export class OrganizeRole extends Toolchain {
 
 	/** 处理事件档案 */
 	private processEventArchives(records: PostMessage[]): void {
-		console.log('[编纂者] === 阶段二：事件档案处理 ===');
+		console.log('[组织者] === 阶段二：事件档案处理 ===');
 
 		// 第一步：从消息中提取事件信息
 		const prompt = this.buildEventExtractPrompt(records);
 		const content = this.runLLM(prompt);
 		if (!content) {
-			console.log('[编纂者] 事件档案提取未获得有效结果');
+			console.log('[组织者] 事件档案提取未获得有效结果');
 			return;
 		}
 
 		const result = this.parseJsonResponse<ExtractResult<EventArchive>>(content);
 		if (!result || !result.items || result.items.length === 0) {
-			console.log('[编纂者] 未提取到事件信息');
+			console.log('[组织者] 未提取到事件信息');
 			return;
 		}
 
-		console.log(`[编纂者] 提取到 ${result.items.length} 个事件档案`);
+		console.log(`[组织者] 提取到 ${result.items.length} 个事件档案`);
 
 		// 第二步：对每个事件，查询已有档案并合并
 		for (const event of result.items) {
@@ -656,7 +656,7 @@ export class OrganizeRole extends Toolchain {
 	/** 处理单个事件档案 */
 	private processSingleEventArchive(newInfo: EventArchive): void {
 		const prefix = `${EVENT_PREFIX}${newInfo.name}]`;
-		console.log(`[编纂者] 处理事件档案: ${newInfo.name}`);
+		console.log(`[组织者] 处理事件档案: ${newInfo.name}`);
 
 		// 查询记忆库中是否存在该事件的旧档案
 		const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
@@ -665,12 +665,12 @@ export class OrganizeRole extends Toolchain {
 			// 无旧档案，直接写入
 			const archiveText = this.formatEventArchive(newInfo);
 			this.writeArchive(archiveText);
-			console.log(`[编纂者] 新增事件档案: ${newInfo.name}`);
+			console.log(`[组织者] 新增事件档案: ${newInfo.name}`);
 			return;
 		}
 
 		// 有旧档案，执行合并更新
-		console.log(`[编纂者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+		console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
 		for (const record of existingRecords) {
 			// 合并
 			const mergePrompt = this.buildEventMergePrompt(record.content, newInfo);
@@ -679,11 +679,11 @@ export class OrganizeRole extends Toolchain {
 				this.deleteRecords([record.id]);
 				const archiveText = this.formatEventArchive(merged);
 				this.writeArchive(archiveText);
-				console.log(`[编纂者] 合并更新事件档案: ${merged.name}`);
+				console.log(`[组织者] 合并更新事件档案: ${merged.name}`);
 			} else {
 				const archiveText = this.formatEventArchive(newInfo);
 				this.writeArchive(archiveText);
-				console.log(`[编纂者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+				console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
 			}
 		}
 	}
@@ -692,23 +692,23 @@ export class OrganizeRole extends Toolchain {
 
 	/** 处理自我档案 */
 	private processSelfArchive(records: PostMessage[]): void {
-		console.log('[编纂者] === 阶段三：自我档案处理 ===');
+		console.log('[组织者] === 阶段三：自我档案处理 ===');
 
 		// 第一步：从消息中提取自我信息
 		const prompt = this.buildSelfExtractPrompt(records);
 		const content = this.runLLM(prompt);
 		if (!content) {
-			console.log('[编纂者] 自我档案提取未获得有效结果');
+			console.log('[组织者] 自我档案提取未获得有效结果');
 			return;
 		}
 
 		const newInfo = this.parseJsonResponse<SelfArchive>(content);
 		if (!newInfo || (!newInfo.mood && !newInfo.clothing && !newInfo.activity && !newInfo.needs)) {
-			console.log('[编纂者] 未提取到有效的自我信息');
+			console.log('[组织者] 未提取到有效的自我信息');
 			return;
 		}
 
-		console.log('[编纂者] 处理自我档案');
+		console.log('[组织者] 处理自我档案');
 
 		// 第二步：查询已有自我档案
 		const existingRecords = this.queryArchiveByPrefix(SELF_PREFIX, this.ARCHIVE_QUERY_TOPK);
@@ -717,12 +717,12 @@ export class OrganizeRole extends Toolchain {
 			// 无旧档案，直接写入
 			const archiveText = this.formatSelfArchive(newInfo);
 			this.writeArchive(archiveText);
-			console.log('[编纂者] 新增自我档案');
+			console.log('[组织者] 新增自我档案');
 			return;
 		}
 
 		// 有旧档案，执行合并更新
-		console.log(`[编纂者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
+		console.log(`[组织者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
 		for (const record of existingRecords) {
 			const mergePrompt = this.buildSelfMergePrompt(record.content, newInfo);
 			const merged = this.runMergeLLM<SelfArchive>(mergePrompt);
@@ -730,11 +730,11 @@ export class OrganizeRole extends Toolchain {
 				this.deleteRecords([record.id]);
 				const archiveText = this.formatSelfArchive(merged);
 				this.writeArchive(archiveText);
-				console.log('[编纂者] 合并更新自我档案');
+				console.log('[组织者] 合并更新自我档案');
 			} else {
 				const archiveText = this.formatSelfArchive(newInfo);
 				this.writeArchive(archiveText);
-				console.log('[编纂者] 合并失败，新信息作为补充写入');
+				console.log('[组织者] 合并失败，新信息作为补充写入');
 			}
 		}
 	}
@@ -743,7 +743,7 @@ export class OrganizeRole extends Toolchain {
 
 	/** 持久化被抛弃的消息 */
 	public persistDiscardedMessages(discarded: PostMessage[]): void {
-		console.log('[编纂者] 开始持久化被抛弃的消息');
+		console.log('[组织者] 开始持久化被抛弃的消息');
 		if (!BaseConfig.memoryReady) BaseConfig.initMemory();
 		if (!BaseConfig.memoryReady) return;
 		for (const message of discarded) {
@@ -759,7 +759,7 @@ export class OrganizeRole extends Toolchain {
 
 		const [results, error] = memoryQuery('lunar_messages', queryText, topK);
 		if (error) {
-			console.error('[编纂者] 查询历史记录失败:', error);
+			console.error('[组织者] 查询历史记录失败:', error);
 			return [];
 		}
 

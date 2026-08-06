@@ -1,4 +1,4 @@
-import { OnlyData, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole } from '../index';
+import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -6,19 +6,19 @@ export class AgentDefine {
 	public static instance: AgentDefine;
 	/** 描述者角色(视觉内容描述) */
 	public descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
-	/** 聊天者角色(用户交互) */
+	/** 对话者角色(用户交互) */
 	public dialogueRole: DialogueRole = new DialogueRole();
 	/** 学习者角色(深度调研与信息查证) */
 	public learnerRole: LearnerRole = new LearnerRole();
-	/** 绘图师角色(图片生成) */
+	/** 绘制者角色(图片生成) */
 	public painterRole: PainterRole = new PainterRole();
-	/** 音乐家角色(音乐创作) */
+	/** 演奏者角色(音乐创作) */
 	public musicianRole: MusicianRole = new MusicianRole();
 	/** 观影者角色(视频观看) */
 	public viewerRole: ViewerRole = new ViewerRole();
 	/** 行动者角色(3D动画/位移/空间感知) */
 	public actorRole: ActorRole = new ActorRole();
-	/** 编纂角色(组织记忆) */
+	/** 组织者角色(组织记忆) */
 	protected organizeRole: OrganizeRole = new OrganizeRole();
 	/** 未读上下文 */
 	public unreadContext: PostMessage[] = [];
@@ -41,9 +41,9 @@ export class AgentDefine {
 	/** 构建智能体 并 初始化各个子模型的系统提示词 */
 	protected constructor() {
 		// 初始化 自定义配置 信息
-		fetchDocumentCallback('lunar_config.json').then(content => OnlyData.customConfig = content);
+		fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
 		// TODO 初始化 聊天记录
-		// fetchDocumentCallback('resources/chatRecord.json').then(content => OnlyData.chatRecord = content);
+		// fetchDocumentCallback('resources/chatRecord.json').then(content => GlobalConfig.chatRecord = content);
 	}
 	/**
 	 * 处理视频文件（观影者智能体）
@@ -131,7 +131,7 @@ export class AgentDefine {
 				/// 如果是文本项或音频项,直接添加到新内容数组
 				if (item.type == 'text' || item.type == 'input_audio') newContent.push(item);
 				// 检查是否为支持的视频文件格式
-				else if (item.image_url && OnlyData.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+				else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
 					// 处理视频文件
 					await this.analysisVideoFile(item.image_url.url, '');
 				}
@@ -156,7 +156,7 @@ export class AgentDefine {
 	/**
 	 * 一键导出所有子智能体的运行时上下文到本地文件（覆写模式）
 	 *
-	 * 将对话者、学习者、画家、音乐家、编纂者的上下文分别导出为独立 JSON 文件，
+	 * 将对话者、学习者、绘制者、演奏者、组织者的上下文分别导出为独立 JSON 文件，
 	 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
 	 *
 	 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
@@ -164,7 +164,7 @@ export class AgentDefine {
 	 */
 	public dumpAllContexts(outputDir?: string): string[] {
 		// 调试模式关闭时跳过导出
-		if (!OnlyData.debugMode) return [];
+		if (!GlobalConfig.debugMode) return [];
 
 		const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
 		const results: string[] = [];
@@ -181,13 +181,13 @@ export class AgentDefine {
 		);
 		if (learnerPath) results.push(learnerPath);
 
-		// 画家
-		const painterPath = this.painterRole.dumpContext('画家', `${dir}\\agent_debug_画家.json`);
-		if (painterPath) results.push(painterPath);
+		// 绘制者
+			const painterPath = this.painterRole.dumpContext('绘制者', `${dir}\\agent_debug_绘制者.json`);
+			if (painterPath) results.push(painterPath);
 
-		// 音乐家
-		const musicianPath = this.musicianRole.dumpContext('音乐家', `${dir}\\agent_debug_音乐家.json`);
-		if (musicianPath) results.push(musicianPath);
+			// 演奏者
+			const musicianPath = this.musicianRole.dumpContext('演奏者', `${dir}\\agent_debug_演奏者.json`);
+			if (musicianPath) results.push(musicianPath);
 
 		// 观影者
 		const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
@@ -197,8 +197,8 @@ export class AgentDefine {
 		const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
 		if (actorPath) results.push(actorPath);
 
-		// 编纂者
-		const organizePath = this.organizeRole.dumpContext('编纂者', `${dir}\\agent_debug_编纂者.json`);
+		// 组织者
+			const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
 		if (organizePath) results.push(organizePath);
 
 		// 生成汇总索引文件
@@ -209,7 +209,7 @@ export class AgentDefine {
 			}),
 			unreadContextCount: this.unreadContext.length,
 			unreadVideoUrlCount: this.unreadVideoUrl.length,
-			unreadRecordsCount: OnlyData.unreadRecords.length,
+			unreadRecordsCount: GlobalConfig.unreadRecords.length,
 			finalResponse: this.finalResponse,
 			exportedFiles: results,
 		};

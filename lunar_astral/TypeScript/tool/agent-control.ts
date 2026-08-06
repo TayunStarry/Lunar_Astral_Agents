@@ -1,4 +1,4 @@
-import { ToolCall, OnlyData, AgentDefine } from '../index';
+import { ToolCall, GlobalConfig, AgentDefine } from '../index';
 
 // ==== 工具定义 ====
 
@@ -25,7 +25,7 @@ export const agentControlTools: ToolCall[] = [
 		type: "function",
 		function: {
 			name: "dispatch_painter",
-			description: "向绘画师子智能体发布绘画创作任务。绘画师会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+			description: "向绘制者子智能体发布绘画创作任务。绘制者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
 			parameters: {
 				type: "object",
 				properties: {
@@ -42,7 +42,7 @@ export const agentControlTools: ToolCall[] = [
 		type: "function",
 		function: {
 			name: "dispatch_musician",
-			description: "向演奏家子智能体发布音乐创作任务。演奏家会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
+			description: "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
 			parameters: {
 				type: "object",
 				properties: {
@@ -83,7 +83,7 @@ async function handleDispatchActor(args?: Record<string, any> | string): Promise
 	return [result, ''];
 }
 
-/** 处理绘画师调度工具 */
+/** 处理绘制者调度工具 */
 async function handleDispatchPainter(args?: Record<string, any> | string): Promise<string[]> {
 	const { description } = parseArgs(args);
 
@@ -93,16 +93,16 @@ async function handleDispatchPainter(args?: Record<string, any> | string): Promi
 
 	const instance = AgentDefine.instance;
 	if (!instance || !instance.painterRole) {
-		return ['绘画任务调度失败：绘画师子智能体未就绪，请稍后重试', ''];
+		return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
 	}
 
-	console.log(`[智能体控制] 调度绘画师: ${description}`);
+	console.log(`[智能体控制] 调度绘制者: ${description}`);
 	const result = await instance.painterRole.createCreativeWork(description.trim());
-	console.log(`[智能体控制] 绘画师完成: ${result}`);
+	console.log(`[智能体控制] 绘制者完成: ${result}`);
 	return [result, ''];
 }
 
-/** 处理演奏家调度工具 */
+/** 处理演奏者调度工具 */
 async function handleDispatchMusician(args?: Record<string, any> | string): Promise<string[]> {
 	const { description } = parseArgs(args);
 
@@ -112,20 +112,20 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 
 	const instance = AgentDefine.instance;
 	if (!instance || !instance.musicianRole) {
-		return ['音乐任务调度失败：演奏家子智能体未就绪，请稍后重试', ''];
+		return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
 	}
 
-	console.log(`[智能体控制] 调度演奏家: ${description}`);
+	console.log(`[智能体控制] 调度演奏者: ${description}`);
 	const result = await instance.musicianRole.createCreativeWork(description.trim());
-	console.log(`[智能体控制] 演奏家完成: ${result}`);
+	console.log(`[智能体控制] 演奏者完成: ${result}`);
 	return [result, ''];
 }
 
 // ==== 模块级注册 ====
 
 // 注册智能体控制工具到 LTPfunction 映射表
-OnlyData.LTPfunction.set('dispatch_actor', handleDispatchActor);
-OnlyData.LTPfunction.set('dispatch_painter', handleDispatchPainter);
-OnlyData.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
+GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
+GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
 // 注册智能体控制工具到 LTPdefinition 列表
-OnlyData.LTPdefinition.push(...agentControlTools);
+GlobalConfig.LTPdefinition.push(...agentControlTools);

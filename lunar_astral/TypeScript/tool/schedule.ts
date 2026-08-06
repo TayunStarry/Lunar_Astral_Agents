@@ -1,4 +1,4 @@
-import { ToolCall, OnlyData } from '../index';
+import { ToolCall, GlobalConfig } from '../index';
 
 /** 计划表项 */
 interface ScheduleItem {
@@ -397,9 +397,9 @@ export function checkDueItems(): ScheduleItem[] {
 initSchedules();
 
 // 注册计划表工具到 LTPfunction 列表
-OnlyData.LTPfunction.set('create_schedule', handleCreateSchedule);
-OnlyData.LTPfunction.set('edit_schedule', handleEditSchedule);
-OnlyData.LTPfunction.set('delete_schedule', handleDeleteSchedule);
-OnlyData.LTPfunction.set('query_schedule', handleQuerySchedule);
+GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
+GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
+GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
 // 注册计划表工具到 LTPdefinition 列表
-OnlyData.LTPdefinition.push(...scheduleTools);
+GlobalConfig.LTPdefinition.push(...scheduleTools);

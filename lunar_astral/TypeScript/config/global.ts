@@ -1,6 +1,6 @@
 import { Config, PostMessage, ToolCall } from '../index';
-
-export class OnlyData {
+/** 全局配置 */
+export class GlobalConfig {
 	/** 自定义配置项 */
 	public static customConfig: Config = { cloud: {}, server: {} };
 	/** 未读记录列表 */
@@ -51,11 +51,11 @@ export class OnlyData {
 	};
 	/** 获取 系统 API 密钥 */
 	public static get SystemKey(): string {
-		return OnlyData.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
+		return GlobalConfig.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
 	};
 	/** 获取 多模态模型名称 */
 	public static get MultimodalName(): string {
-		return OnlyData.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
+		return GlobalConfig.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
 	};
 	/** 获取 嵌入模型名称（固定使用本地模型） */
 	public static get EmbeddingName(): string {
@@ -63,10 +63,10 @@ export class OnlyData {
 	};
 	/** 获取 用户名 */
 	public static get userName(): string {
-		return OnlyData.customConfig?.server?.user_name || "阁下";
+		return GlobalConfig.customConfig?.server?.user_name || "阁下";
 	};
 	/** 获取 调试模式开关 */
 	public static get debugMode(): boolean {
-		return OnlyData.customConfig?.server?.debug_mode ?? false;
+		return GlobalConfig.customConfig?.server?.debug_mode ?? false;
 	};
 };

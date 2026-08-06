@@ -1,6 +1,6 @@
 // realtime_search LTP2 工具包 - 实时搜索
 // 由 goja 运行时加载执行，使用 syncFetch 进行网络请求
-// 自动注册到 OnlyData.LTPfunction
+// 自动注册到 GlobalConfig.LTPfunction
 
 /**
  * 查询天气信息
@@ -64,4 +64,4 @@ async function queryIntelHandler(args) {
 }
 
 // 注册到月华工具协议映射表
-OnlyData.LTPfunction.set('realtime_search', queryIntelHandler);
+GlobalConfig.LTPfunction.set('realtime_search', queryIntelHandler);

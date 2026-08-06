@@ -126,6 +126,9 @@ export interface TextContent {
 	/** 文本内容 */
 	text: string;
 }
+
+/** 消息内容类型 */
+export type MessageContent = ImageContent | AudioContent | TextContent;
 /**
  * 模型对话完成响应结构
  * 对应 OpenAI Chat Completions API 响应格式

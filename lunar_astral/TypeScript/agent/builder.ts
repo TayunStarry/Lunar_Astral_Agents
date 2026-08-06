@@ -1,4 +1,4 @@
-import { OnlyData, PostMessage, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole, ToolCall } from '../index';
+import { GlobalConfig, PostMessage, ModelProtocol, AuthHeaders, modelResponse, PostMessageRole, ToolCall } from '../index';
 
 /** 当前的真实地址位置 */
 let currentAddress: string[] = [];
@@ -24,7 +24,7 @@ export class BaseConfig {
 	/** 初始化记忆库 */
 	protected static initMemory(): void {
 		if (BaseConfig.memoryReady) return;
-		const [_, err] = memoryInit(OnlyData.systemUrl, OnlyData.SystemKey, OnlyData.EmbeddingName, 'lunar_messages');
+		const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName, 'lunar_messages');
 		if (err) console.error('记忆库初始化失败:', err);
 		else BaseConfig.memoryReady = true;
 	}
@@ -49,7 +49,7 @@ class PromptProcessor extends BaseConfig {
 		// 返回替换后的系统提示词
 		return prompt
 			// 转换用户名称
-			.replace(/{name}/g, OnlyData.userName)
+			.replace(/{name}/g, GlobalConfig.userName)
 			// 转换当前地址
 			.replace(/{current-address}/g, addressText);
 	}
@@ -92,7 +92,7 @@ class ConfigModifier extends PromptProcessor {
 		if (this.messages.length >= 40) {
 			const discarded = this.messages.slice(0, this.messages.length - 39);
 			this.messages = this.messages.slice(-39).concat(cleaned);
-			OnlyData.unreadRecords.push(...discarded);
+			GlobalConfig.unreadRecords.push(...discarded);
 		}
 		else this.messages.push(cleaned);
 		return this;
@@ -133,7 +133,7 @@ export class ModelBuilder extends ConfigModifier {
 		];
 		/** 构建发给推理模型的请求体 */
 		const requestBody = {
-			model: OnlyData.MultimodalName,
+			model: GlobalConfig.MultimodalName,
 			messages: rawMessages,
 			stream: this.stream,
 			tools: toolCall,
@@ -146,7 +146,7 @@ export class ModelBuilder extends ConfigModifier {
 		};
 		/** 构建请求头 */
 		const headers: AuthHeaders = {
-			Authorization: `Bearer ${encodeURIComponent(OnlyData.SystemKey)}`,
+			Authorization: `Bearer ${encodeURIComponent(GlobalConfig.SystemKey)}`,
 			"Content-Type": "application/json",
 		};
 		/** 构建模型请求 */
@@ -159,7 +159,7 @@ export class ModelBuilder extends ConfigModifier {
 		/** 定义API端点 */
 		const endpoint = "/chat/completions";
 		/** 直接调用Go函数处理请求 */
-		const [result, error] = syncFetch({ url: OnlyData.systemUrl + endpoint, execute: modelRequest });
+		const [result, error] = syncFetch({ url: GlobalConfig.systemUrl + endpoint, execute: modelRequest });
 		// 抛出请求级错误
 		if (error) throw error;
 		// 检查云端错误响应（网关返回 {error: {...}} 而非正常 choices）

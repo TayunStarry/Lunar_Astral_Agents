@@ -3,7 +3,7 @@ import { ToolCall, PostMessage, ModelBuilder, modelResponse, ToolCallItem } from
 /**
  * 创作型子智能体基座
  *
- * 绘画师与音乐家共享相同的工作流：
+ * 绘制者与演奏者共享相同的工作流：
  *   接收任务描述 → 追加到历史 → 推理循环 → 收集创作详情 → 返回作品描述
  *
  * 子类只需实现5个抽象钩子即可完成特化。
@@ -44,15 +44,15 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	}
 
 	/**
-	 * 覆写 writeContext：子智能体淘汰的消息不进入 OnlyData.unreadRecords
+	 * 覆写 writeContext：子智能体淘汰的消息不进入 GlobalConfig.unreadRecords
 	 *
-	 * 对话者淘汰的历史记录才能进入 unreadRecords 供编纂者归档。
+	 * 对话者淘汰的历史记录才能进入 unreadRecords 供组织者归档。
 	 */
 	public writeContext(context: PostMessage): this {
 		const cleaned = this.stripReasoningContent(context);
 		if (this.messages.length >= 40) {
 			this.messages = this.messages.slice(-39).concat(cleaned);
-			// 子智能体淘汰的消息不进入 OnlyData.unreadRecords
+			// 子智能体淘汰的消息不进入 GlobalConfig.unreadRecords
 		}
 		else this.messages.push(cleaned);
 		return this;

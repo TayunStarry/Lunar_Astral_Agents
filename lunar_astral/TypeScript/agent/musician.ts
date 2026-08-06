@@ -33,7 +33,7 @@ interface MusicPieceDetail {
 	abcLength: number;
 }
 
-/** 音乐家角色 */
+/** 演奏者角色 */
 export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 	/** 音乐创作允许更多思考轮次，确保乐谱完整性与表现力 */
 	protected MAX_ITERATIONS = 5;
@@ -155,7 +155,7 @@ K:Am
 		super(fileView('prompts/musicianRole.md')[0]);
 	}
 	/** 角色名称 */
-	protected get roleName(): string { return '音乐家' }
+	protected get roleName(): string { return '演奏者' }
 	/** 获取工具定义 */
 	protected getToolDefinitions(): ToolCall[] { return this.musicTool }
 	/** 执行音乐创作工具调用 */
@@ -168,7 +168,7 @@ K:Am
 				: toolCall.function.arguments;
 		}
 		catch (parseError) {
-			console.error(`[音乐家] 工具调用参数解析失败:`, toolCall.function.arguments);
+			console.error(`[演奏者] 工具调用参数解析失败:`, toolCall.function.arguments);
 			return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
 		}
 		switch (funcName) {
@@ -229,7 +229,7 @@ K:Am
 			const abcNotation = args.abc_notation || '';
 			const instruments = (args.instruments || '').trim();
 
-			console.log(`[音乐家] 创作音乐: "${title}"`);
+			console.log(`[演奏者] 创作音乐: "${title}"`);
 			if (instruments) console.log(`  乐器: ${instruments}`);
 			if (args.tempo) console.log(`  速度: ${args.tempo} BPM`);
 			if (args.structure) console.log(`  结构: ${args.structure}`);
@@ -246,7 +246,7 @@ K:Am
 			const hasK = /^K:\s*.+/m.test(enrichedAbc);
 
 			if (!hasX || !hasK) {
-				console.warn('[音乐家] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
+				console.warn('[演奏者] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
 				if (!hasX) enrichedAbc = 'X:1\n' + enrichedAbc;
 				if (!hasT) enrichedAbc = enrichedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
 				if (!hasK) enrichedAbc = enrichedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
@@ -255,17 +255,17 @@ K:Am
 			// 第一步：推送 ABC 乐谱到前端（用于乐谱可视化展示）
 			const pushSuccess = pushContext('music', enrichedAbc, '');
 			if (!pushSuccess) {
-				console.warn('[音乐家] 推送乐谱到前端失败');
+				console.warn('[演奏者] 推送乐谱到前端失败');
 			}
 
 			// Go 后端会自动拦截 'music' 类型消息，触发 FluidSynth + SoundFont 音频渲染
 			// 渲染完成后通过 'music_audio' 类型推送音频 URL 到前端
 
-			console.log(`[音乐家] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
+			console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
 			return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，音频正在通过 SoundFont 专业音色库渲染，稍后将自动播放。`;
 		}
 		catch (error) {
-			console.error('[音乐家] 音乐创作处理异常:', error);
+			console.error('[演奏者] 音乐创作处理异常:', error);
 			return `音乐创作异常: ${error}`;
 		}
 	}

@@ -14,7 +14,7 @@ interface PaintingDetail {
 	environment?: string;
 }
 
-/** 画家角色 */
+/** 绘制者角色 */
 export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	/** 默认表情提示 */
 	private readonly defaultExpressionPrompt = [
@@ -118,7 +118,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		super(fileView('prompts/painterRole.md')[0]);
 	}
 	/** 角色名称 */
-	protected get roleName(): string { return '画家' }
+	protected get roleName(): string { return '绘制者' }
 	/** 获取工具定义 */
 	protected getToolDefinitions(): ToolCall[] { return this.roleTool }
 	/** 执行绘画工具调用 */
@@ -129,7 +129,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			args = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
 		}
 		catch (parseError) {
-			console.error(`[画家] 工具调用参数解析失败:`, toolCall.function.arguments);
+			console.error(`[绘制者] 工具调用参数解析失败:`, toolCall.function.arguments);
 			return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
 		}
 		switch (funcName) {
@@ -193,7 +193,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		try {
 			const prompt = args.prompt || '';
 			if (!prompt.trim()) return '扩散生成失败：正向提示词不能为空';
-			console.log(`[画家] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
+			console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
 			const imageParams: GenerateImageParams = {
 				prompt: prompt,
 				negativePrompt: args.negative_prompt || '',
@@ -201,28 +201,28 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			};
 			const [result, error] = generateImage(imageParams);
 			if (error) {
-				console.error('[画家] 图像生成失败:', error);
+				console.error('[绘制者] 图像生成失败:', error);
 				return `扩散图像生成失败: ${error}`;
 			}
 			if (!result || !result.base64) {
 				return '扩散图像生成失败：引擎返回空结果';
 			}
-			console.log(`[画家] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
+			console.log(`[绘制者] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
 			const pushSuccess = pushImage([result.base64]);
 			if (!pushSuccess) {
-				console.warn('[画家] 推送图片到前端失败');
+				console.warn('[绘制者] 推送图片到前端失败');
 			}
 			return `扩散图像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
 		}
 		catch (error) {
-			console.error('[画家] 扩散生成处理异常:', error);
+			console.error('[绘制者] 扩散生成处理异常:', error);
 			return `扩散图像生成异常: ${error}`;
 		}
 	}
 	/** 处理自画像生成 */
 	private handleSelfPortrait(args: SelfPortraitParams): string {
 		try {
-			console.log(`[画家] -> 自画像生成`);
+			console.log(`[绘制者] -> 自画像生成`);
 			console.log(`表情: "${args.expression}"`)
 			console.log(`姿势: "${args.posture}"`)
 			console.log(`服装: "${args.outfit}"`)
@@ -238,21 +238,21 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			};
 			const [result, error] = generateImage(imageParams);
 			if (error) {
-				console.error('[画家] 自画像生成失败:', error);
+				console.error('[绘制者] 自画像生成失败:', error);
 				return `自画像生成失败: ${error}`;
 			}
 			if (!result || !result.base64) {
 				return '自画像生成失败：引擎返回空结果';
 			}
-			console.log(`[画家] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
+			console.log(`[绘制者] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
 			const pushSuccess = pushImage([result.base64]);
 			if (!pushSuccess) {
-				console.warn('[画家] 推送自画像到前端失败');
+				console.warn('[绘制者] 推送自画像到前端失败');
 			}
 			return `自画像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
 		}
 		catch (error) {
-			console.error('[画家] 自画像生成处理异常:', error);
+			console.error('[绘制者] 自画像生成处理异常:', error);
 			return `自画像生成异常: ${error}`;
 		}
 	}

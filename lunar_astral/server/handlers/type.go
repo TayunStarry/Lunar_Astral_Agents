@@ -63,12 +63,6 @@ type BatchResponse struct {
 	Length  int  `json:"length"`
 }
 
-// WebViewReopenResponse webView重建响应结构体
-type WebViewReopenResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
 // AgentPositionRequest 智能体位置更新请求
 type AgentPositionRequest struct {
 	X float64 `json:"x"`
