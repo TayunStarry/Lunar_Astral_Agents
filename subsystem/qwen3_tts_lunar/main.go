@@ -32,10 +32,8 @@ func main() {
 
 	quit := setupSignalHandling()
 
-	select {
-	case <-quit:
-		logger.Info("QWEN-TTS", "接收到中断信号，正在关闭...")
-	}
+	<-quit
+	logger.Info("QWEN-TTS", "接收到中断信号，正在关闭...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
