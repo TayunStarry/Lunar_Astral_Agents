@@ -110,10 +110,22 @@ func validateCollectionName(name string) error {
 	return nil
 }
 
-// CollectionInit 创建或打开指定名称的集合
+// CollectionInit 创建或打开指定名称的集合（默认 text 类型）
 // 通过探针文本嵌入一次确定向量维度，写入 metadata.json
 // 若集合已存在且 model 一致则直接返回，model 变更则重新探针并更新维度
 func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName string) error {
+	return d.collectionInit(ctx, name, modelName, CollectionTypeText)
+}
+
+// CollectionInitImage 创建或打开指定名称的 image 类型集合
+// image 集合使用三元嵌入向量（情绪 + 色彩风格 + 主要内容），存储 base64 图片数据
+// 通过探针文本嵌入一次确定向量维度，写入 metadata.json（含 type="image"）
+func (d *MemoryDB) CollectionInitImage(ctx context.Context, name string, modelName string) error {
+	return d.collectionInit(ctx, name, modelName, CollectionTypeImage)
+}
+
+// collectionInit 内部通用集合初始化逻辑
+func (d *MemoryDB) collectionInit(ctx context.Context, name string, modelName string, collType string) error {
 	if !d.memoryInitialized {
 		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
@@ -123,7 +135,12 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 
 	// 已存在则直接返回
 	d.collectionsMu.RLock()
-	if _, ok := d.collections[name]; ok {
+	if existing, ok := d.collections[name]; ok {
+		// 已存在集合的类型必须与请求一致
+		if existing.CollectionType != collType {
+			d.collectionsMu.RUnlock()
+			return fmt.Errorf("集合 [%s] 已存在且类型为 %s, 无法以 %s 类型重新初始化", name, existing.CollectionType, collType)
+		}
 		d.collectionsMu.RUnlock()
 		return nil
 	}
@@ -145,6 +162,13 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 		}
 	}
 
+	// 若已有 metadata 且类型字段存在，以既有类型为准；否则写入请求类型
+	if meta.Type == "" {
+		meta.Type = collType
+	} else if meta.Type != collType {
+		return fmt.Errorf("集合 [%s] 磁盘 metadata 类型为 %s, 与请求类型 %s 不一致", name, meta.Type, collType)
+	}
+
 	// metadata 不存在或 model 变更时，重新探针定维度
 	if meta.Dimension == 0 || meta.Model != modelName {
 		probeVec, err := d.embedText(ctx, modelName, name)
@@ -159,12 +183,14 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 	}
 
 	c := &Collection{
-		Name:      name,
-		Model:     meta.Model,
-		Dimension: meta.Dimension,
-		Documents: make([]MemoryDocument, 0),
-		collDir:   collDir,
-		metaPath:  metaPath,
+		Name:           name,
+		Model:          meta.Model,
+		Dimension:      meta.Dimension,
+		CollectionType: meta.Type,
+		Documents:      make([]MemoryDocument, 0),
+		ImageDocuments: make([]ImageDocument, 0),
+		collDir:        collDir,
+		metaPath:       metaPath,
 	}
 	c.loadDocumentsFromFile()
 
@@ -172,8 +198,8 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name string, modelName st
 	d.collections[name] = c
 	d.collectionsMu.Unlock()
 
-	logger.Info("Storage", "集合 [%s] 初始化完成, 模型: %s, 维度: %d, 文档数: %d",
-		name, c.Model, c.Dimension, len(c.Documents))
+	logger.Info("Storage", "集合 [%s] 初始化完成, 类型: %s, 模型: %s, 维度: %d, 文档数: %d",
+		name, c.CollectionType, c.Model, c.Dimension, c.docCount())
 	return nil
 }
 
@@ -190,6 +216,7 @@ func (d *MemoryDB) getCollection(name string) (*Collection, error) {
 
 // loadAllCollections 启动时扫描 baseDir 加载所有集合到内存
 // 扁平化布局下，baseDir 的每个子目录即为一个集合
+// 根据 metadata.json 中的 type 字段区分 text/image 集合，分别加载对应文档
 func (d *MemoryDB) loadAllCollections() {
 	entries, err := os.ReadDir(d.baseDir)
 	if err != nil {
@@ -223,13 +250,21 @@ func (d *MemoryDB) loadAllCollections() {
 			continue
 		}
 
+		// 未指定类型时默认为 text
+		collType := meta.Type
+		if collType == "" {
+			collType = CollectionTypeText
+		}
+
 		c := &Collection{
-			Name:      name,
-			Model:     meta.Model,
-			Dimension: meta.Dimension,
-			Documents: make([]MemoryDocument, 0),
-			collDir:   collDir,
-			metaPath:  metaPath,
+			Name:           name,
+			Model:          meta.Model,
+			Dimension:      meta.Dimension,
+			CollectionType: collType,
+			Documents:      make([]MemoryDocument, 0),
+			ImageDocuments: make([]ImageDocument, 0),
+			collDir:        collDir,
+			metaPath:       metaPath,
 		}
 		c.loadDocumentsFromFile()
 
@@ -237,14 +272,32 @@ func (d *MemoryDB) loadAllCollections() {
 		d.collections[name] = c
 		d.collectionsMu.Unlock()
 
-		logger.Info("Storage", "已加载集合 [%s], 模型: %s, 维度: %d, 文档数: %d",
-			name, c.Model, c.Dimension, len(c.Documents))
+		logger.Info("Storage", "已加载集合 [%s], 类型: %s, 模型: %s, 维度: %d, 文档数: %d",
+			name, c.CollectionType, c.Model, c.Dimension, c.docCount())
 	}
 }
 
 // IsMemoryInitialized 返回记忆库实例是否已初始化
 func (d *MemoryDB) IsMemoryInitialized() bool {
 	return d != nil && d.memoryInitialized
+}
+
+// docCount 返回集合中文档总数（根据类型返回对应文档数）
+func (c *Collection) docCount() int {
+	if c.CollectionType == CollectionTypeImage {
+		return len(c.ImageDocuments)
+	}
+	return len(c.Documents)
+}
+
+// =============================================================================
+// image 集合专用文件路径方法
+// =============================================================================
+
+// base64FilePath 返回指定分块编号的 base64 图片数据文件路径
+// 格式：<collDir>/base64_0001.json（仅 image 类型集合使用）
+func (c *Collection) base64FilePath(chunkNum int) string {
+	return filepath.Join(c.collDir, fmt.Sprintf("base64_%04d.json", chunkNum))
 }
 
 // =============================================================================
@@ -354,11 +407,26 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 
 // MemoryDeleteMessage 按 ID 删除指定集合中的一条文档
 // 兼容 UUID 与旧版 msg-N 两种 ID 格式（按字符串相等匹配）
+// 根据集合类型分别操作 Documents 或 ImageDocuments
 func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName string, id string) error {
 	_ = ctx
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return err
+	}
+
+	if c.CollectionType == CollectionTypeImage {
+		c.mu.Lock()
+		for i, doc := range c.ImageDocuments {
+			if doc.ID == id {
+				c.ImageDocuments = append(c.ImageDocuments[:i], c.ImageDocuments[i+1:]...)
+				c.mu.Unlock()
+				c.saveDocumentsToFile()
+				return nil
+			}
+		}
+		c.mu.Unlock()
+		return nil
 	}
 
 	c.mu.Lock()
@@ -374,7 +442,7 @@ func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName strin
 	return nil
 }
 
-// MemoryGetCollectionCount 返回集合中文档总数
+// MemoryGetCollectionCount 返回集合中文档总数（根据类型返回对应文档数）
 func (d *MemoryDB) MemoryGetCollectionCount(collectionName string) int {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -383,10 +451,11 @@ func (d *MemoryDB) MemoryGetCollectionCount(collectionName string) int {
 	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.Documents)
+	return c.docCount()
 }
 
 // MemoryGetDocuments 分页返回集合文档条目（不含嵌入向量），同时返回总数
+// image 类型集合返回的 DocumentEntry 中，Content 字段存储图片 ID（base64 数据不在此返回）
 func (d *MemoryDB) MemoryGetDocuments(collectionName string, offset int, limit int) ([]DocumentEntry, int) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -395,6 +464,34 @@ func (d *MemoryDB) MemoryGetDocuments(collectionName string, offset int, limit i
 
 	// 跨进程一致性检测：若磁盘文件被其他进程更新则重载内存缓存
 	c.reloadIfChanged()
+
+	if c.CollectionType == CollectionTypeImage {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+
+		total := len(c.ImageDocuments)
+		if offset < 0 {
+			offset = 0
+		}
+		if offset >= total {
+			return []DocumentEntry{}, total
+		}
+
+		end := offset + limit
+		if end > total {
+			end = total
+		}
+
+		entries := make([]DocumentEntry, end-offset)
+		for i := offset; i < end; i++ {
+			entries[i-offset] = DocumentEntry{
+				ID:      c.ImageDocuments[i].ID,
+				Role:    "image",
+				Content: c.ImageDocuments[i].ID,
+			}
+		}
+		return entries, total
+	}
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -432,10 +529,11 @@ func (d *MemoryDB) MemoryGetEntryCount(collectionName string) int {
 	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.Documents)
+	return c.docCount()
 }
 
 // MemoryHasSyncMismatch 检测集合内是否有文档向量缺失或维度与集合锁定维度不符
+// image 类型集合检查三元嵌入向量中每个向量的维度
 func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -444,6 +542,18 @@ func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
+	if c.CollectionType == CollectionTypeImage {
+		for _, doc := range c.ImageDocuments {
+			for v := 0; v < 3; v++ {
+				if len(doc.Embeddings[v]) != c.Dimension {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	for _, doc := range c.Documents {
 		if len(doc.Embedding) != c.Dimension {
 			return true
@@ -461,6 +571,7 @@ func (d *MemoryDB) MemoryDeleteCollection(collectionName string) error {
 	}
 
 	collDir := c.collDir
+	docCount := c.docCount()
 
 	d.collectionsMu.Lock()
 	delete(d.collections, collectionName)
@@ -470,39 +581,81 @@ func (d *MemoryDB) MemoryDeleteCollection(collectionName string) error {
 		return fmt.Errorf("删除集合目录失败: %v", err)
 	}
 
-	logger.Info("Storage", "集合 [%s] 已删除, 文档数: %d, 目录: %s",
-		collectionName, len(c.Documents), collDir)
+	logger.Info("Storage", "集合 [%s] 已删除, 类型: %s, 文档数: %d, 目录: %s",
+		collectionName, c.CollectionType, docCount, collDir)
 	return nil
 }
 
 // MemoryClearCollection 清空集合中所有文档（保留集合元数据，仅删除文档）
 // 操作不可恢复，调用方应确保前端已做二次确认
+// 根据集合类型清空对应的文档列表
 func (d *MemoryDB) MemoryClearCollection(collectionName string) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return err
 	}
 
-	originalCount := len(c.Documents)
+	var originalCount int
 
-	c.mu.Lock()
-	c.Documents = make([]MemoryDocument, 0)
-	c.mu.Unlock()
+	if c.CollectionType == CollectionTypeImage {
+		c.mu.Lock()
+		originalCount = len(c.ImageDocuments)
+		c.ImageDocuments = make([]ImageDocument, 0)
+		c.mu.Unlock()
+	} else {
+		c.mu.Lock()
+		originalCount = len(c.Documents)
+		c.Documents = make([]MemoryDocument, 0)
+		c.mu.Unlock()
+	}
 
 	c.saveDocumentsToFile()
 
-	logger.Info("Storage", "集合 [%s] 已清空, 删除文档数: %d",
-		collectionName, originalCount)
+	logger.Info("Storage", "集合 [%s] 已清空, 类型: %s, 删除文档数: %d",
+		collectionName, c.CollectionType, originalCount)
 	return nil
 }
 
 // MemoryRebuildEntries 删除向量缺失或维度不符的文档，重新持久化
 // ctx 保留以兼容签名，当前实现不调用嵌入服务
+// image 类型集合检查三元嵌入向量中每个向量的维度
 func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName string) (int, error) {
 	_ = ctx
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return 0, err
+	}
+
+	if c.CollectionType == CollectionTypeImage {
+		c.mu.Lock()
+		original := len(c.ImageDocuments)
+		filtered := make([]ImageDocument, 0, original)
+		removed := 0
+		for _, doc := range c.ImageDocuments {
+			dimOk := true
+			for v := 0; v < 3; v++ {
+				if len(doc.Embeddings[v]) != c.Dimension {
+					dimOk = false
+					break
+				}
+			}
+			if !dimOk {
+				removed++
+				continue
+			}
+			filtered = append(filtered, doc)
+		}
+		c.ImageDocuments = filtered
+		c.mu.Unlock()
+
+		if removed > 0 {
+			c.saveDocumentsToFile()
+			logger.Info("Storage", "图片集合 [%s] 重建完成, 原始 %d 条, 删除 %d 条维度不符, 剩余 %d 条",
+				collectionName, original, removed, len(filtered))
+		} else {
+			logger.Info("Storage", "图片集合 [%s] 重建完成, 无异常文档, 共 %d 条", collectionName, original)
+		}
+		return len(filtered), nil
 	}
 
 	c.mu.Lock()
@@ -550,7 +703,19 @@ func (d *MemoryDB) MemoryGetCollectionInfo(collectionName string) (model string,
 	c.reloadIfChanged()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.Model, c.Dimension, len(c.Documents), nil
+	return c.Model, c.Dimension, c.docCount(), nil
+}
+
+// MemoryGetCollectionInfoWithType 返回集合元信息（模型、维度、文档数、类型）
+func (d *MemoryDB) MemoryGetCollectionInfoWithType(collectionName string) (model string, dimension int, count int, collType string) {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return "", 0, 0, ""
+	}
+	c.reloadIfChanged()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Model, c.Dimension, c.docCount(), c.CollectionType
 }
 
 // =============================================================================
@@ -596,13 +761,14 @@ func readJSONFile(path string, target interface{}) error {
 	return json.Unmarshal(data, target)
 }
 
-// saveCollectionMeta 原子化写入集合元数据（含分块计数），并更新 lastFileModTime
+// saveCollectionMeta 原子化写入集合元数据（含分块计数与集合类型），并更新 lastFileModTime
 // 在所有分块文件写入完成后调用，确保跨进程读取一致性
 func (c *Collection) saveCollectionMeta() error {
 	meta := collectionMeta{
 		Model:      c.Model,
 		Dimension:  c.Dimension,
 		ChunkCount: c.chunkCount,
+		Type:       c.CollectionType,
 	}
 	if err := atomicWriteJSON(c.metaPath, meta); err != nil {
 		return err
@@ -626,9 +792,18 @@ func (c *Collection) updateLastModTime() {
 }
 
 // loadDocumentsFromFile 加载文档到集合内存
-// 自动检测旧格式（documents.json）并即时迁移到新格式（分块存储）
+// 根据 CollectionType 分派到对应加载逻辑：
+//   - text 类型：自动检测旧格式（documents.json）并即时迁移到新格式（分块存储）
+//   - image 类型：从 base64 分块文件 + embeddings 分块文件加载
+//
 // 兼容旧版 msg-N 格式 ID 与新版 UUID 格式 ID，加载时保留原值不做改写
 func (c *Collection) loadDocumentsFromFile() {
+	if c.CollectionType == CollectionTypeImage {
+		c.loadImageDocumentsFromFile()
+		c.updateLastModTime()
+		return
+	}
+
 	oldPath := filepath.Join(c.collDir, "documents.json")
 
 	if _, err := os.Stat(oldPath); err == nil {
@@ -814,9 +989,17 @@ func (c *Collection) reloadIfChanged() {
 }
 
 // saveDocumentsToFile 将内存中的文档写入分块存储文件
-// 按 MemoryChunkSize（100 条）切分文档，写入 contents_NNNN.json + embeddings_NNNN.json
+// 根据 CollectionType 分派到对应保存逻辑：
+//   - text 类型：按 MemoryChunkSize（100 条）切分文档，写入 contents_NNNN.json + embeddings_NNNN.json
+//   - image 类型：按 MemoryChunkSize（100 条）切分文档，写入 base64_NNNN.json + embeddings_NNNN.json
+//
 // 自动清理多余分块文件（当文档总数减少时），最后原子化更新 metadata.json
 func (c *Collection) saveDocumentsToFile() {
+	if c.CollectionType == CollectionTypeImage {
+		c.saveImageDocumentsToFile()
+		return
+	}
+
 	c.mu.RLock()
 	totalDocs := len(c.Documents)
 	// 浅拷贝文档切片，避免长时间持锁
@@ -873,6 +1056,347 @@ func (c *Collection) saveDocumentsToFile() {
 }
 
 // =============================================================================
+// image 集合持久化方法 — 分块存储（base64_NNNN.json + embeddings_NNNN.json）
+// =============================================================================
+
+// loadImageDocumentsFromFile 从 image 类型分块文件加载图片文档到集合内存
+// 按 metadata.json 中的 chunk_count 遍历加载所有 base64 与 embeddings 分块，按 ID 合并
+func (c *Collection) loadImageDocumentsFromFile() {
+	// 读取 metadata.json 获取分块数
+	var meta collectionMeta
+	if err := readJSONFile(c.metaPath, &meta); err != nil {
+		if !os.IsNotExist(err) {
+			logger.Warn("Storage", "集合 [%s] 读取 metadata.json 失败: %v", c.Name, err)
+		}
+		return
+	}
+
+	if meta.ChunkCount == 0 {
+		c.mu.Lock()
+		c.ImageDocuments = make([]ImageDocument, 0)
+		c.mu.Unlock()
+		c.chunkCount = 0
+		return
+	}
+
+	// 加载所有 base64 分块和 embeddings 分块
+	allBase64 := make([]base64Entry, 0)
+	embedMap := make(map[string][3][]float32)
+
+	for i := 1; i <= meta.ChunkCount; i++ {
+		// 加载 base64 分块
+		var base64s []base64Entry
+		if err := readJSONFile(c.base64FilePath(i), &base64s); err != nil {
+			logger.Warn("Storage", "集合 [%s] 读取 base64_%04d.json 失败: %v, 跳过该分块", c.Name, i, err)
+			continue
+		}
+		allBase64 = append(allBase64, base64s...)
+
+		// 加载 embeddings 分块（image 格式：三元嵌入向量）
+		var embeddings []imageEmbeddingEntry
+		if err := readJSONFile(c.embeddingFilePath(i), &embeddings); err != nil {
+			logger.Warn("Storage", "集合 [%s] 读取 embeddings_%04d.json 失败: %v, 跳过该分块", c.Name, i, err)
+			continue
+		}
+		for _, e := range embeddings {
+			embedMap[e.ID] = e.Embeddings
+		}
+	}
+
+	// 按 ID 合并 base64 数据与三元嵌入向量
+	docs := make([]ImageDocument, 0, len(allBase64))
+	for _, b64 := range allBase64 {
+		emb, ok := embedMap[b64.ID]
+		if !ok {
+			logger.Warn("Storage", "集合 [%s] 图片文档 %s 缺少嵌入向量 (文件可能损坏), 跳过", c.Name, b64.ID)
+			continue
+		}
+		// 验证三个嵌入向量维度均与集合锁定维度一致
+		dimOk := true
+		for idx := range emb {
+			if len(emb[idx]) != c.Dimension {
+				logger.Warn("Storage", "集合 [%s] 图片文档 %s 嵌入向量[%d] 维度 %d 与集合维度 %d 不符, 跳过",
+					c.Name, b64.ID, idx, len(emb[idx]), c.Dimension)
+				dimOk = false
+				break
+			}
+		}
+		if !dimOk {
+			continue
+		}
+		docs = append(docs, ImageDocument{
+			ID:         b64.ID,
+			Image:      b64.Image,
+			Embeddings: emb,
+		})
+	}
+
+	c.mu.Lock()
+	c.ImageDocuments = docs
+	c.mu.Unlock()
+	c.chunkCount = meta.ChunkCount
+}
+
+// saveImageDocumentsToFile 将内存中的图片文档写入分块存储文件
+// 按 MemoryChunkSize（100 条）切分文档，写入 base64_NNNN.json + embeddings_NNNN.json
+// 自动清理多余分块文件，最后原子化更新 metadata.json
+func (c *Collection) saveImageDocumentsToFile() {
+	c.mu.RLock()
+	totalDocs := len(c.ImageDocuments)
+	// 浅拷贝文档切片，避免长时间持锁
+	docs := make([]ImageDocument, totalDocs)
+	copy(docs, c.ImageDocuments)
+	c.mu.RUnlock()
+
+	newChunkCount := (totalDocs + MemoryChunkSize - 1) / MemoryChunkSize
+
+	// 写入所有新分块
+	for i := 0; i < newChunkCount; i++ {
+		chunkNum := i + 1
+		start := i * MemoryChunkSize
+		end := start + MemoryChunkSize
+		if end > totalDocs {
+			end = totalDocs
+		}
+
+		chunkDocs := docs[start:end]
+		base64s := make([]base64Entry, len(chunkDocs))
+		embeddings := make([]imageEmbeddingEntry, len(chunkDocs))
+		for j, doc := range chunkDocs {
+			base64s[j] = base64Entry{ID: doc.ID, Image: doc.Image}
+			embeddings[j] = imageEmbeddingEntry{ID: doc.ID, Embeddings: doc.Embeddings}
+		}
+
+		if err := atomicWriteJSON(c.base64FilePath(chunkNum), base64s); err != nil {
+			logger.Error("Storage", "集合 [%s] base64_%04d.json 写入失败: %v", c.Name, chunkNum, err)
+			return
+		}
+		if err := atomicWriteJSON(c.embeddingFilePath(chunkNum), embeddings); err != nil {
+			logger.Error("Storage", "集合 [%s] embeddings_%04d.json 写入失败: %v", c.Name, chunkNum, err)
+			return
+		}
+	}
+
+	// 删除多余的分块文件
+	oldChunkCount := c.chunkCount
+	for i := newChunkCount + 1; i <= oldChunkCount; i++ {
+		os.Remove(c.base64FilePath(i))
+		os.Remove(c.embeddingFilePath(i))
+	}
+
+	c.chunkCount = newChunkCount
+
+	// 原子化更新 metadata.json
+	if err := c.saveCollectionMeta(); err != nil {
+		logger.Error("Storage", "集合 [%s] metadata.json 更新失败: %v", c.Name, err)
+	}
+}
+
+// =============================================================================
+// image 集合操作 — 图片记忆库 CRUD 与查询
+// =============================================================================
+
+// MemoryAddImage 向指定 image 类型集合添加一条图片记录
+// 接收 base64 图片数据与三个文本描述（情绪、色彩风格、主要内容），
+// 分别调用嵌入模型对三个描述计算嵌入向量，然后按顺序存储为三元嵌入向量
+// 返回新生成的 UUID 文档 ID
+func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName string, base64Image string, emotionDesc string, colorStyleDesc string, contentDesc string) (string, error) {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return "", err
+	}
+
+	if c.CollectionType != CollectionTypeImage {
+		return "", fmt.Errorf("集合 [%s] 类型为 %s, 不支持图片添加操作", collectionName, c.CollectionType)
+	}
+
+	if strings.TrimSpace(base64Image) == "" {
+		return "", fmt.Errorf("图片数据不能为空")
+	}
+
+	// 批量嵌入三个文本描述，减少 API 调用次数
+	texts := []string{emotionDesc, colorStyleDesc, contentDesc}
+	vectors, err := d.embedTexts(ctx, c.Model, texts)
+	if err != nil {
+		return "", fmt.Errorf("嵌入图片描述文本失败: %v", err)
+	}
+
+	// 验证三个嵌入向量维度均与集合锁定维度一致
+	for idx, vec := range vectors {
+		if len(vec) != c.Dimension {
+			return "", fmt.Errorf("嵌入向量[%d] 维度 %d 与集合 [%s] 维度 %d 不符",
+				idx, len(vec), collectionName, c.Dimension)
+		}
+	}
+
+	id := generateUUID()
+	var embeddings [3][]float32
+	copy(embeddings[:], vectors)
+
+	doc := ImageDocument{
+		ID:         id,
+		Image:      base64Image,
+		Embeddings: embeddings,
+	}
+
+	c.mu.Lock()
+	c.ImageDocuments = append(c.ImageDocuments, doc)
+	c.mu.Unlock()
+
+	c.saveImageDocumentsToFile()
+
+	logger.Info("Storage", "图片集合 [%s] 新增图片文档, ID: %s, 情绪: %s, 色彩: %s, 内容: %s",
+		collectionName, id, truncateDesc(emotionDesc), truncateDesc(colorStyleDesc), truncateDesc(contentDesc))
+	return id, nil
+}
+
+// MemoryQueryImages 按查询文本检索最相似的图片，采用三元嵌入向量 + topK 加权排序
+// 查询流程：
+//  1. 将查询文本嵌入为查询向量
+//  2. 对每个条目，分别计算查询向量与三个嵌入向量的相似度，取平均为基础评分
+//  3. 对每个向量索引（0/1/2），独立计算 topK 排名，按命中数加权基础评分
+//     - 命中 0 个：×1.0 | 命中 1 个：×1.3 | 命中 2 个：×1.6 | 命中 3 个：×2.0
+//  4. 按最终评分降序排列，返回前 topK 条结果
+func (d *MemoryDB) MemoryQueryImages(ctx context.Context, collectionName string, queryText string, topK int) ([]ImageQueryResult, error) {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.CollectionType != CollectionTypeImage {
+		return nil, fmt.Errorf("集合 [%s] 类型为 %s, 不支持图片查询操作", collectionName, c.CollectionType)
+	}
+
+	if topK <= 0 {
+		topK = 5
+	}
+
+	// 步骤 1：嵌入查询文本
+	queryVec, err := d.embedText(ctx, c.Model, queryText)
+	if err != nil {
+		return nil, fmt.Errorf("嵌入查询文本失败: %v", err)
+	}
+
+	if len(queryVec) != c.Dimension {
+		return nil, fmt.Errorf("查询嵌入维度 %d 与集合 [%s] 维度 %d 不符",
+			len(queryVec), collectionName, c.Dimension)
+	}
+
+	return c.queryImagesTopK(queryVec, topK), nil
+}
+
+// queryImagesTopK 按 queryVec 对图片文档执行三元嵌入向量 + topK 加权检索
+// 返回按最终评分降序排列的前 topK 条结果
+func (c *Collection) queryImagesTopK(queryVec []float32, topK int) []ImageQueryResult {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	docs := c.ImageDocuments
+	if len(docs) == 0 || topK <= 0 {
+		return nil
+	}
+
+	const numVectors = 3
+
+	// 步骤 2：计算每个条目与三个嵌入向量的相似度
+	type entryScore struct {
+		index  int
+		scores [numVectors]float32 // 三个相似度：[情绪, 色彩风格, 主要内容]
+	}
+	entries := make([]entryScore, len(docs))
+	for i := range docs {
+		entries[i].index = i
+		for v := 0; v < numVectors; v++ {
+			entries[i].scores[v] = cosineSimilarity(queryVec, docs[i].Embeddings[v])
+		}
+	}
+
+	// 步骤 3：对每个向量索引独立计算 topK 排名
+	// 使用 entry index 作为唯一标识的集合来判断是否在 topK 中
+	type topRankSet map[int]struct{}
+
+	topRankSets := [numVectors]topRankSet{}
+	for v := 0; v < numVectors; v++ {
+		// 按该向量索引的相似度排序
+		vecScored := make([]struct {
+			index int
+			score float32
+		}, len(docs))
+		for i := range docs {
+			vecScored[i].index = i
+			vecScored[i].score = entries[i].scores[v]
+		}
+		sort.SliceStable(vecScored, func(i, j int) bool {
+			return vecScored[i].score > vecScored[j].score
+		})
+
+		// 取前 topK（或全部，如果文档数不足 topK）
+		limit := topK
+		if limit > len(vecScored) {
+			limit = len(vecScored)
+		}
+		topRankSets[v] = make(topRankSet, limit)
+		for k := 0; k < limit; k++ {
+			topRankSets[v][vecScored[k].index] = struct{}{}
+		}
+	}
+
+	// 步骤 4：计算最终评分
+	// boostMultiplier: 0→1.0, 1→1.3, 2→1.6, 3→2.0
+	boostMultiplier := [4]float32{1.0, 1.3, 1.6, 2.0}
+
+	results := make([]ImageQueryResult, len(docs))
+	for i := range entries {
+		doc := &docs[entries[i].index]
+
+		// 基础评分 = 三个相似度的平均值
+		var baseScore float32
+		for v := 0; v < numVectors; v++ {
+			baseScore += entries[i].scores[v]
+		}
+		baseScore /= float32(numVectors)
+
+		// 计算 topK 命中数
+		hitCount := 0
+		for v := 0; v < numVectors; v++ {
+			if _, ok := topRankSets[v][entries[i].index]; ok {
+				hitCount++
+			}
+		}
+
+		finalScore := baseScore * boostMultiplier[hitCount]
+
+		results[i] = ImageQueryResult{
+			ID:         doc.ID,
+			Image:      doc.Image,
+			BaseScore:  baseScore,
+			FinalScore: finalScore,
+			BoostLevel: hitCount,
+		}
+	}
+
+	// 按最终评分降序排序
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].FinalScore > results[j].FinalScore
+	})
+
+	if topK > len(results) {
+		topK = len(results)
+	}
+
+	return results[:topK]
+}
+
+// truncateDesc 截断描述文本用于日志输出（最多 30 个字符）
+func truncateDesc(s string) string {
+	runes := []rune(s)
+	if len(runes) <= 30 {
+		return s
+	}
+	return string(runes[:30]) + "..."
+}
+
+// =============================================================================
 // 全局包装函数 — 记忆库（多集合架构）
 // =============================================================================
 
@@ -892,12 +1416,36 @@ func MemoryInitInstance(baseURL string, apiKey string) error {
 	return MemoryDatabase.MemoryInitInstance(baseURL, apiKey)
 }
 
-// CollectionInit 全局包装 — 创建或打开指定名称的集合（探针定维度）
+// CollectionInit 全局包装 — 创建或打开指定名称的 text 类型集合（探针定维度）
 func CollectionInit(ctx context.Context, name string, modelName string) error {
 	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
 		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
 	return MemoryDatabase.CollectionInit(ctx, name, modelName)
+}
+
+// CollectionInitImage 全局包装 — 创建或打开指定名称的 image 类型集合（探针定维度）
+func CollectionInitImage(ctx context.Context, name string, modelName string) error {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
+	}
+	return MemoryDatabase.CollectionInitImage(ctx, name, modelName)
+}
+
+// AddImage 全局包装 — 向 image 集合添加图片记录，返回新生成的 UUID
+func AddImage(ctx context.Context, collectionName string, base64Image string, emotionDesc string, colorStyleDesc string, contentDesc string) (string, error) {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return "", fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
+	}
+	return MemoryDatabase.MemoryAddImage(ctx, collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc)
+}
+
+// QueryImages 全局包装 — 按查询文本检索图片，返回含加权评分的结构化结果
+func QueryImages(ctx context.Context, collectionName string, queryText string, topK int) ([]ImageQueryResult, error) {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
+	}
+	return MemoryDatabase.MemoryQueryImages(ctx, collectionName, queryText, topK)
 }
 
 // AddMessage 全局包装 — 添加消息（不返回 ID）
@@ -1002,6 +1550,14 @@ func MemoryGetCollectionInfo(collectionName string) (string, int, int, error) {
 		return "", 0, 0, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
 	return MemoryDatabase.MemoryGetCollectionInfo(collectionName)
+}
+
+// MemoryGetCollectionInfoWithType 全局包装 — 获取集合的模型、维度、文档数、类型
+func MemoryGetCollectionInfoWithType(collectionName string) (string, int, int, string) {
+	if MemoryDatabase == nil || !MemoryDatabase.IsMemoryInitialized() {
+		return "", 0, 0, ""
+	}
+	return MemoryDatabase.MemoryGetCollectionInfoWithType(collectionName)
 }
 
 // cosineSimilarity 计算两个向量的余弦相似度，取值范围 [-1, 1]，越高越相似

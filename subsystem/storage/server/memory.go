@@ -20,18 +20,19 @@ import (
 
 // MemoryHandler 记忆库统一分发器
 // 支持路径：
-//   POST   /memory/init                     实例初始化（配置嵌入服务连接）
-//   GET    /memory/stats                    全局统计（聚合所有集合）
-//   GET    /memory/collections              列出所有集合（保留字）
-//   POST   /memory/{name}                   创建/打开集合（锁定模型）
-//   DELETE /memory/{name}                   删除集合（移除目录及所有文档）
-//   GET    /memory/{name}/stats             集合统计
-//   POST   /memory/{name}/messages          添加消息
-//   GET    /memory/{name}/messages          查询消息
-//   DELETE /memory/{name}/messages          删除消息
-//   GET    /memory/{name}/documents         文档分页列表
-//   POST   /memory/{name}/rebuild           重建（删除维度不符文档）
-//   POST   /memory/{name}/clear             清空集合（删除所有文档，保留元数据）
+//
+//	POST   /memory/init                     实例初始化（配置嵌入服务连接）
+//	GET    /memory/stats                    全局统计（聚合所有集合）
+//	GET    /memory/collections              列出所有集合（保留字）
+//	POST   /memory/{name}                   创建/打开集合（锁定模型）
+//	DELETE /memory/{name}                   删除集合（移除目录及所有文档）
+//	GET    /memory/{name}/stats             集合统计
+//	POST   /memory/{name}/messages          添加消息
+//	GET    /memory/{name}/messages          查询消息
+//	DELETE /memory/{name}/messages          删除消息
+//	GET    /memory/{name}/documents         文档分页列表
+//	POST   /memory/{name}/rebuild           重建（删除维度不符文档）
+//	POST   /memory/{name}/clear             清空集合（删除所有文档，保留元数据）
 //
 // 保留字：init、stats、collections 不可作为集合名
 func MemoryHandler(w http.ResponseWriter, r *http.Request) {
@@ -72,17 +73,19 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 	collectionName := parts[0]
 	action := parts[1]
 	switch action {
-		case "messages":
-			handleMemoryMessages(w, r, collectionName)
-		case "stats":
-			handleMemoryCollectionStats(w, r, collectionName)
-		case "documents":
-			handleMemoryDocuments(w, r, collectionName)
-		case "rebuild":
-			handleMemoryRebuild(w, r, collectionName)
-		case "clear":
-			handleMemoryClearCollection(w, r, collectionName)
-		default:
+	case "messages":
+		handleMemoryMessages(w, r, collectionName)
+	case "stats":
+		handleMemoryCollectionStats(w, r, collectionName)
+	case "documents":
+		handleMemoryDocuments(w, r, collectionName)
+	case "images":
+		handleMemoryImages(w, r, collectionName)
+	case "rebuild":
+		handleMemoryRebuild(w, r, collectionName)
+	case "clear":
+		handleMemoryClearCollection(w, r, collectionName)
+	default:
 		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 未知的集合操作: %s", action))
 	}
 }
@@ -178,16 +181,13 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 	names := module.MemoryListCollections()
 	infos := make([]memoryCollectionInfo, 0, len(names))
 	for _, name := range names {
-		model, dim, count, err := module.MemoryGetCollectionInfo(name)
-		if err != nil {
-			logger.Warn("Storage", "获取集合 [%s] 信息失败: %v", name, err)
-			continue
-		}
+		model, dim, count, colType := module.MemoryGetCollectionInfoWithType(name)
 		infos = append(infos, memoryCollectionInfo{
 			Name:      name,
 			Model:     model,
 			Dimension: dim,
 			Count:     count,
+			Type:      colType,
 		})
 	}
 
@@ -221,20 +221,34 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 	}
 
 	ctx := context.Background()
-	if err := module.CollectionInit(ctx, collectionName, req.ModelName); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
+
+	// 根据 collection_type 选择创建 text 或 image 集合
+	collType := req.CollectionType
+	if collType == "" || collType == module.CollectionTypeText {
+		if err := module.CollectionInit(ctx, collectionName, req.ModelName); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
+			return
+		}
+	} else if collType == module.CollectionTypeImage {
+		if err := module.CollectionInitImage(ctx, collectionName, req.ModelName); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 图片集合创建失败: %v", err))
+			return
+		}
+	} else {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 无效的集合类型: %s，仅支持 text/image", collType))
 		return
 	}
 
-	model, dim, count, _ := module.MemoryGetCollectionInfo(collectionName)
-	logger.Info("Storage", "集合 [%s] 创建成功, 模型: %s, 维度: %d, 文档数: %d",
-		collectionName, model, dim, count)
+	model, dim, count, colType := module.MemoryGetCollectionInfoWithType(collectionName)
+	logger.Info("Storage", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d, 文档数: %d",
+		collectionName, colType, model, dim, count)
 
 	writeSuccess(w, memoryCollectionInfo{
 		Name:      collectionName,
 		Model:     model,
 		Dimension: dim,
 		Count:     count,
+		Type:      colType,
 	})
 }
 
@@ -521,4 +535,117 @@ func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collect
 	writeSuccess(w, map[string]string{
 		"message": fmt.Sprintf("集合 [%s] 已清空", collectionName),
 	})
+}
+
+// =============================================================================
+// image 集合端点 — 图片记忆库的增删查
+// POST  /memory/{name}/images — 添加图片文档
+// GET   /memory/{name}/images — 查询图片文档
+// DELETE /memory/{name}/images — 删除图片文档
+// =============================================================================
+
+// handleMemoryImages POST/GET/DELETE /memory/{name}/images
+func handleMemoryImages(w http.ResponseWriter, r *http.Request, collectionName string) {
+	switch r.Method {
+	case http.MethodPost:
+		handleMemoryAddImage(w, r, collectionName)
+	case http.MethodGet:
+		handleMemoryQueryImages(w, r, collectionName)
+	case http.MethodDelete:
+		handleMemoryDeleteMessage(w, r, collectionName)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST/GET/DELETE")
+	}
+}
+
+func handleMemoryAddImage(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
+		return
+	}
+
+	var req memoryAddImageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 解析请求失败: %v", err))
+		return
+	}
+
+	if req.Image == "" {
+		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 图片数据不能为空")
+		return
+	}
+
+	ctx := context.Background()
+	id, err := module.AddImage(ctx, collectionName, req.Image, req.EmotionDesc, req.ColorStyleDesc, req.ContentDesc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
+		return
+	}
+
+	logger.Info("Storage", "图片集合 [%s] 添加图片成功, ID: %s, 情绪: %s, 色彩: %s, 内容: %s",
+		collectionName, id, truncateStr(req.EmotionDesc, 30), truncateStr(req.ColorStyleDesc, 30), truncateStr(req.ContentDesc, 30))
+
+	writeSuccess(w, map[string]string{
+		"id":               id,
+		"emotion_desc":     req.EmotionDesc,
+		"color_style_desc": req.ColorStyleDesc,
+		"content_desc":     req.ContentDesc,
+	})
+}
+
+func handleMemoryQueryImages(w http.ResponseWriter, r *http.Request, collectionName string) {
+	if !module.IsInitialized() {
+		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
+		return
+	}
+
+	queryText := r.URL.Query().Get("query")
+	if queryText == "" {
+		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 查询文本不能为空")
+		return
+	}
+
+	topK := 5
+	if topKStr := r.URL.Query().Get("top_k"); topKStr != "" {
+		if val, err := strconv.Atoi(topKStr); err == nil && val > 0 && val <= 100 {
+			topK = val
+		}
+	}
+
+	ctx := context.Background()
+	results, err := module.QueryImages(ctx, collectionName, queryText, topK)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 图片查询失败: %v", err))
+		return
+	}
+
+	imageResults := make([]memoryImageQueryResult, 0, len(results))
+	for _, r := range results {
+		imageResults = append(imageResults, memoryImageQueryResult{
+			ID:         r.ID,
+			Image:      r.Image,
+			BaseScore:  r.BaseScore,
+			FinalScore: r.FinalScore,
+			BoostLevel: r.BoostLevel,
+		})
+	}
+
+	logger.Info("Storage", "图片集合 [%s] 查询完成, 查询: %s, 结果数: %d",
+		collectionName, queryText, len(imageResults))
+
+	writeSuccess(w, memoryImageQueryData{
+		Query:      queryText,
+		TopK:       topK,
+		Results:    imageResults,
+		TotalFound: len(imageResults),
+	})
+}
+
+// truncateStr 截断字符串用于日志输出（最多 maxLen 个字符）
+func truncateStr(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "..."
 }

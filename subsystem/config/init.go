@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ModelConfig 定义模型配置的结构
@@ -34,6 +35,16 @@ type ModelConfig struct {
 
 // init 加载配置文件
 func init() {
+	// 过滤 Go 测试框架注入的 -test.* 标志，避免 flag.Parse() 因未知标志而失败
+	// Go 1.24+ 会在测试二进制中自动注入 -test.testlogfile 等标志
+	filtered := make([]string, 0, len(os.Args))
+	for _, arg := range os.Args {
+		if !strings.HasPrefix(arg, "-test.") {
+			filtered = append(filtered, arg)
+		}
+	}
+	os.Args = filtered
+
 	// 解析命令行参数
 	flag.Parse()
 	// 获取当前可执行文件的路径

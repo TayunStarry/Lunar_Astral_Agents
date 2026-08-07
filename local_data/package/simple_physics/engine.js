@@ -993,15 +993,15 @@ async function handleChannelMessage(msg) {
             // 扫描 model/assets/ 目录中的 JSON 文件列表
             try {
                 const listPath = `${MODEL_FILE_PATH}/assets/`;
-                const resp = await fetch(`/file/read/${listPath}`);
+                const resp = await fetch(`/file/list/${listPath}`, { method: 'POST' });
                 if (resp.ok) {
                     const dirListing = await resp.json();
-                    // dirListing 可能是文件名数组或对象
-                    const files = Array.isArray(dirListing) ? dirListing : Object.keys(dirListing || {});
-                    const assets = files
-                        .filter(f => f.endsWith('.json'))
-                        .map(f => {
-                            const name = f.replace(/\.json$/, '');
+                    // dirListing 是 [{name, size, isDir, ...}] 的 FileInfo 对象数组
+                    const entries = Array.isArray(dirListing) ? dirListing : [];
+                    const assets = entries
+                        .filter(e => e.name && e.name.endsWith('.json'))
+                        .map(e => {
+                            const name = e.name.replace(/\.json$/, '');
                             return { id: name, name, type: 'unknown', primitiveCount: 0 };
                         });
                     broadcast('assets_list', { assets });

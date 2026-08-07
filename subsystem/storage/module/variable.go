@@ -9,6 +9,12 @@ const (
 	CategoryText  = "text"
 )
 
+// 记忆库集合类型常量
+const (
+	CollectionTypeText  = "text"  // 文本集合类型（contents + embeddings 分块存储）
+	CollectionTypeImage = "image" // 图片集合类型（base64 + embeddings 分块存储，三元嵌入向量）
+)
+
 // FileLocks 用于存储文件路径对应的互斥锁
 var FileLocks sync.Map
 

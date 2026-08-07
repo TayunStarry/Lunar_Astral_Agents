@@ -156,3 +156,113 @@ func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
 
 	return class.runtime.ToValue([]any{true, nil})
 }
+
+// memoryInitImage 初始化 image 类型记忆库集合
+// 参数: collectionName, modelName
+func (class *Runtime) memoryInitImage(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInitImage 参数不足, 需 2 个: collectionName, modelName")})
+	}
+
+	collectionName, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
+	}
+
+	modelName, ok := call.Argument(1).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("modelName 必须是字符串")})
+	}
+
+	// 使用默认 baseURL + apiKey 初始化实例（与 memoryInit 一致）
+	// 这里假设实例已经由 memoryInit 初始化过，仅创建 image 类型集合
+	ctx := context.Background()
+	if err := module.CollectionInitImage(ctx, collectionName, modelName); err != nil {
+		logger.Error("LunarCore", "图片集合 [%s] 创建失败: %v", collectionName, err)
+		return class.runtime.ToValue([]any{false, err})
+	}
+
+	return class.runtime.ToValue([]any{true, nil})
+}
+
+// memoryAddImage 向 image 类型集合添加图片文档
+// 参数: collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc
+func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 5 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 5 个: collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc")})
+	}
+
+	collectionName, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
+	}
+
+	base64Image, ok := call.Argument(1).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("base64Image 必须是字符串")})
+	}
+
+	emotionDesc, ok := call.Argument(2).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("emotionDesc 必须是字符串")})
+	}
+
+	colorStyleDesc, ok := call.Argument(3).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("colorStyleDesc 必须是字符串")})
+	}
+
+	contentDesc, ok := call.Argument(4).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("contentDesc 必须是字符串")})
+	}
+
+	ctx := context.Background()
+	id, err := module.AddImage(ctx, collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc)
+	if err != nil {
+		logger.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	return class.runtime.ToValue([]any{id, nil})
+}
+
+// memoryQueryImage 查询 image 类型集合中的图片
+// 参数: collectionName, queryText, topK
+func (class *Runtime) memoryQueryImage(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 3 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQueryImage 参数不足, 需 3 个: collectionName, queryText, topK")})
+	}
+
+	collectionName, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
+	}
+
+	queryText, ok := call.Argument(1).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("queryText 必须是字符串")})
+	}
+
+	topK := int(call.Argument(2).ToInteger())
+
+	ctx := context.Background()
+	results, err := module.QueryImages(ctx, collectionName, queryText, topK)
+	if err != nil {
+		logger.Error("LunarCore", "图片集合 [%s] 查询失败: %v", collectionName, err)
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	resultObjs := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		resultObjs = append(resultObjs, map[string]any{
+			"id":          r.ID,
+			"image":       r.Image,
+			"base_score":  r.BaseScore,
+			"final_score": r.FinalScore,
+			"boost_level": r.BoostLevel,
+		})
+	}
+
+	return class.runtime.ToValue([]any{resultObjs, nil})
+}

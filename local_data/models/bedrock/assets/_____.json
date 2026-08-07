@@ -1,0 +1,35 @@
+{
+  "format_version": "1.0.0",
+  "asset_type": "primitive",
+  "data": {
+    "type": "cube",
+    "params": {
+      "w": 10,
+      "h": 10,
+      "d": 10
+    },
+    "position": {
+      "x": -16.391042297841015,
+      "y": 4.94975242393814,
+      "z": -48.11765312635892
+    },
+    "rotation": {
+      "x": -2.609524730227491e-8,
+      "y": 0.0002014697490009996,
+      "z": 1.413388266807425e-7,
+      "order": "XYZ"
+    },
+    "scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "color": 16777215,
+    "hasTexture": true,
+    "textureUUID": "d2c56fec-9548-4a80-bd67-935d249b59ae",
+    "physics": {
+      "anchored": false
+    }
+  },
+  "name": "实验性方块"
+}

@@ -41,7 +41,8 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button id="btn-refresh" class="btn-icon" title="刷新统计"><i class="fa-solid fa-rotate-right"></i></button>
+                    <button id="btn-refresh" class="btn-icon" title="刷新统计"><i
+                            class="fa-solid fa-rotate-right"></i></button>
                 </div>
             </div>
         </header>
@@ -63,18 +64,18 @@
                 <div class="init-form-row">
                     <div class="form-group flex-2">
                         <label class="form-label"><i class="fa-solid fa-link"></i> API 地址</label>
-                        <input type="text" id="init-base-url" class="form-input"
-                            placeholder="http://localhost:36789/v1" value="http://localhost:36789/v1">
+                        <input type="text" id="init-base-url" class="form-input" placeholder="http://localhost:36789/v1"
+                            value="http://localhost:36789/v1">
                     </div>
                     <div class="form-group flex-2">
                         <label class="form-label"><i class="fa-solid fa-microchip"></i> 模型名称</label>
-                        <input type="text" id="init-model-name" class="form-input"
-                            placeholder="system-embedding" value="system-embedding">
+                        <input type="text" id="init-model-name" class="form-input" placeholder="system-embedding"
+                            value="system-embedding">
                     </div>
                     <div class="form-group flex-2">
                         <label class="form-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
-                        <input type="text" id="init-collection-name" class="form-input"
-                            placeholder="lunar_messages" value="lunar_messages">
+                        <input type="text" id="init-collection-name" class="form-input" placeholder="lunar_messages"
+                            value="lunar_messages">
                     </div>
                     <div class="form-group flex-1">
                         <label class="form-label"><i class="fa-solid fa-key"></i> Key（可选）</label>
@@ -86,7 +87,8 @@
                 </button>
                 <p class="init-hint">
                     <i class="fa-solid fa-circle-info"></i>
-                    常见地址：LM Studio <code>http://localhost:1234/v1</code>&nbsp; Olama <code>http://localhost:11434/v1</code>&nbsp; DeepSeek <code>https://api.deepseek.com/v1</code>
+                    常见地址：LM Studio <code>http://localhost:1234/v1</code>&nbsp; Olama
+                    <code>http://localhost:11434/v1</code>&nbsp; DeepSeek <code>https://api.deepseek.com/v1</code>
                 </p>
             </div>
         </section>
@@ -112,6 +114,10 @@
                         <div class="stat-row">
                             <span class="stat-label"><i class="fa-solid fa-vector-square"></i> 维度</span>
                             <span class="stat-value" id="stat-dim">--</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label"><i class="fa-solid fa-cubes"></i> 类型</span>
+                            <span class="stat-value" id="stat-type">--</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-label"><i class="fa-solid fa-file-lines"></i> 文档数</span>
@@ -274,13 +280,20 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label class="form-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
-                    <input type="text" id="create-col-name" class="form-input"
-                        placeholder="仅允许字母、数字、下划线、连字符" maxlength="64">
+                    <input type="text" id="create-col-name" class="form-input" placeholder="仅允许字母、数字、下划线、连字符"
+                        maxlength="64">
                 </div>
                 <div class="form-group">
                     <label class="form-label"><i class="fa-solid fa-microchip"></i> 模型名称</label>
-                    <input type="text" id="create-col-model" class="form-input"
-                        placeholder="system-embedding" value="system-embedding">
+                    <input type="text" id="create-col-model" class="form-input" placeholder="system-embedding"
+                        value="system-embedding">
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-cubes"></i> 集合类型</label>
+                    <select id="create-col-type" class="form-select">
+                        <option value="text">文本文档 (text)</option>
+                        <option value="image">图片记忆 (image)</option>
+                    </select>
                 </div>
                 <p class="modal-hint">集合名称不可与已有集合重复，且不可使用保留字（init/stats/collections）。</p>
             </div>
@@ -288,6 +301,57 @@
                 <button class="btn-secondary modal-close-btn" data-close="modal-create-collection">取消</button>
                 <button id="btn-create-submit" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
                     <i class="fa-solid fa-check"></i> 创建
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加图片模态框（image 集合专用） -->
+    <div class="modal-overlay" id="modal-add-image" style="display:none;">
+        <div class="modal-card glass-card modal-add-doc-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-image"></i> 添加图片</h3>
+                <button class="btn-icon modal-close-btn" data-close="modal-add-image" title="关闭">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-upload"></i> 选择图片</label>
+                    <div class="image-upload-area" id="image-upload-area">
+                        <input type="file" id="add-image-file" accept="image/*" style="display:none;">
+                        <div class="image-upload-placeholder" id="image-upload-placeholder">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>点击或拖拽上传图片</span>
+                        </div>
+                        <img id="image-upload-preview" class="image-upload-preview" style="display:none;" alt="预览">
+                        <button id="btn-remove-image" class="btn-remove-image" style="display:none;" title="移除图片">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-face-smile"></i> 情绪描述</label>
+                    <input type="text" id="add-emotion-desc" class="form-input" placeholder="描述图片传达的情绪氛围，如：温暖、宁静、忧郁...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-palette"></i> 色彩风格描述</label>
+                    <input type="text" id="add-color-style-desc" class="form-input"
+                        placeholder="描述图片的色彩风格，如：暖色调、高对比度、柔和...">
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-align-left"></i> 主要内容描述</label>
+                    <textarea id="add-content-desc" class="form-textarea" rows="3"
+                        placeholder="描述图片中的主要内容，如：一只猫在窗台上晒太阳..."></textarea>
+                </div>
+                <div class="add-modal-hint">
+                    <span>三个描述将分别向量化，用于多维语义检索</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary modal-close-btn" data-close="modal-add-image">取消</button>
+                <button id="btn-add-image-submit" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> 添加到图片记忆库
                 </button>
             </div>
         </div>

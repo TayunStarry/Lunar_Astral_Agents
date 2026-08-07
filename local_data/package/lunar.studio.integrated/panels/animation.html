@@ -262,6 +262,7 @@
         <div class="glass-card">
             <div class="card-title">
                 <i class="fas fa-layer-group"></i><span>动画组</span>
+                <span class="badge" id="badge-group-count">0</span>
                 <span class="card-actions">
                     <button class="btn btn-icon btn-primary" id="btn-add-group" title="新建组">
                         <i class="fas fa-plus"></i>
@@ -423,6 +424,7 @@
             fileInput: document.getElementById('file-input'),
             toastContainer: document.getElementById('toast-container'),
             badgeMode: document.getElementById('badge-mode'),
+            badgeGroupCount: document.getElementById('badge-group-count'),
         };
 
         const state = {
@@ -435,6 +437,8 @@
             editingSeq: [],
             /** @type {Object<string, boolean>} boneName → visible */
             editingBoneVisibility: {},
+            /** 首次加载时自动打开默认组编辑器 */
+            _initialEditorOpened: false,
         };
 
         function init() {
@@ -533,6 +537,8 @@
         // ==== 渲染组列表 ====
         function renderAnimList(groups) {
             state.groups = groups;
+            // 更新组计数
+            elements.badgeGroupCount.textContent = groups.length;
             // 找出激活组名
             const active = groups.find(g => g.isActive);
             state.activeGroupName = active ? active.name : null;
@@ -583,6 +589,15 @@
                     }
                 });
             });
+
+            // 首次加载时自动打开默认组编辑器
+            if (!state._initialEditorOpened) {
+                state._initialEditorOpened = true;
+                const defaultGroup = groups.find(g => g.isDefault);
+                if (defaultGroup) {
+                    openEditor(defaultGroup.name);
+                }
+            }
         }
 
         // ==== 新建组 ====

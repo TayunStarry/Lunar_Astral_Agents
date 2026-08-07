@@ -54,6 +54,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("memoryQuery", adapters.memoryQuery)
 	vm.Set("memoryDelete", adapters.memoryDelete)
 
+	// 注册图片记忆库适配器
+	vm.Set("memoryInitImage", adapters.memoryInitImage)
+	vm.Set("memoryAddImage", adapters.memoryAddImage)
+	vm.Set("memoryQueryImage", adapters.memoryQueryImage)
+
 	// 注册TTS语音合成适配器
 	vm.Set("tts", adapters.tts)
 

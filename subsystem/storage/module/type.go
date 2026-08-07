@@ -118,21 +118,56 @@ type collectionMeta struct {
 	Model      string `json:"model"`                 // 锁定的嵌入模型名
 	Dimension  int    `json:"dimension"`             // 锁定的向量维度（探针文本确定）
 	ChunkCount int    `json:"chunk_count,omitempty"` // 分块对数（0 表示空集合或旧格式）
+	Type       string `json:"type,omitempty"`        // 集合类型："text" 或 "image"（空值等价于 "text"）
 }
 
 // Collection 单个记忆集合 — 集合级锁定的模型与维度
 // 文档 ID 采用 UUID v4 格式（由 generateUUID 生成），旧版 msg-N 格式 ID 在加载时保留原值
-// 存储布局：<collDir>/contents_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
+// text 类型存储布局：<collDir>/contents_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
+// image 类型存储布局：<collDir>/base64_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
 type Collection struct {
 	Name            string           // 集合名
 	Model           string           // 锁定的嵌入模型名
 	Dimension       int              // 锁定的向量维度（探针文本确定，0 表示未确定）
-	Documents       []MemoryDocument // 文档列表（含嵌入向量），内存中维护
+	CollectionType  string           // 集合类型："text" 或 "image"
+	Documents       []MemoryDocument // 文本文档列表（含嵌入向量），text 类型使用
+	ImageDocuments  []ImageDocument  // 图片文档列表（含三元嵌入向量），image 类型使用
 	mu              sync.RWMutex     // 文档读写锁
 	collDir         string           // 集合目录绝对路径
 	metaPath        string           // metadata.json 路径
 	chunkCount      int              // 当前分块对数（0 表示空集合）
 	lastFileModTime time.Time        // metadata.json 最近一次已加载的修改时间，用于跨进程一致性检测
+}
+
+// ImageDocument 图片记忆库文档 — 包含 base64 图片数据与三元嵌入向量
+// 三个嵌入向量分别对应：情绪描述、色彩风格描述、主要内容描述
+type ImageDocument struct {
+	ID         string       `json:"id"`         // 文档 ID（UUID v4 格式）
+	Image      string       `json:"image"`      // 图片 base64 编码数据
+	Embeddings [3][]float32 `json:"embeddings"` // 三个嵌入向量：[情绪, 色彩风格, 主要内容]
+}
+
+// base64Entry base64 分块条目 — 对应 base64_NNNN.json 中的单条记录
+// 仅含标识与图片 base64 数据，与 imageEmbeddingEntry 通过 ID 关联
+type base64Entry struct {
+	ID    string `json:"id"`    // 文档 ID（与 imageEmbeddingEntry 一一对应）
+	Image string `json:"image"` // 图片 base64 编码数据
+}
+
+// imageEmbeddingEntry 图片嵌入向量分块条目 — 对应 embeddings_NNNN.json 中的单条记录（image 类型）
+// 与 text 类型的 embeddingEntry 不同，此类型存储三个嵌入向量组成的数组
+type imageEmbeddingEntry struct {
+	ID         string       `json:"id"`         // 文档 ID（与 base64Entry 一一对应）
+	Embeddings [3][]float32 `json:"embeddings"` // 三个嵌入向量：[情绪, 色彩风格, 主要内容]
+}
+
+// ImageQueryResult 图片记忆库查询结果（含相似度分数与最终评分）
+type ImageQueryResult struct {
+	ID         string  `json:"id"`          // 文档 ID
+	Image      string  `json:"image"`       // 图片 base64 编码数据
+	BaseScore  float32 `json:"base_score"`  // 基础评分（三个向量相似度平均值）
+	FinalScore float32 `json:"final_score"` // 最终评分（tok5 加权后）
+	BoostLevel int     `json:"boost_level"` // 加权等级：0/1/2/3（对应 ×1.0/×1.3/×1.6/×2.0）
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别

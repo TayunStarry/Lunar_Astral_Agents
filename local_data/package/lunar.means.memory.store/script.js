@@ -4,18 +4,19 @@
 // ============================================================
 
 var API = {
-    INIT:        '/memory/init',
-    STATS:       '/memory/stats',
+    INIT: '/memory/init',
+    STATS: '/memory/stats',
     COLLECTIONS: '/memory/collections',
     collection: function (name) {
         var encoded = encodeURIComponent(name);
         return {
-            BASE:     '/memory/' + encoded,
-            STATS:    '/memory/' + encoded + '/stats',
+            BASE: '/memory/' + encoded,
+            STATS: '/memory/' + encoded + '/stats',
             MESSAGES: '/memory/' + encoded + '/messages',
-            DOCS:     '/memory/' + encoded + '/documents',
-            REBUILD:  '/memory/' + encoded + '/rebuild',
-            CLEAR:    '/memory/' + encoded + '/clear'
+            DOCS: '/memory/' + encoded + '/documents',
+            IMAGES: '/memory/' + encoded + '/images',
+            REBUILD: '/memory/' + encoded + '/rebuild',
+            CLEAR: '/memory/' + encoded + '/clear'
         };
     }
 };
@@ -32,7 +33,9 @@ var App = {
     searchMode: false,
     searchQuery: '',
     documents: [],
-    searchResults: []
+    searchResults: [],
+    imageBase64: null,       // 当前上传的图片 base64
+    isImageCollection: false // 当前集合是否为 image 类型
 };
 
 function $(id) {
@@ -42,75 +45,89 @@ function $(id) {
 var D = {
     // Header
     hdrCollections: $('hdr-collections'),
-    hdrCount:       $('hdr-count'),
-    hdrDot:         $('hdr-status-dot'),
-    hdrLabel:       $('hdr-status-label'),
-    syncWarn:       $('sync-warn'),
-    btnRefresh:     $('btn-refresh'),
+    hdrCount: $('hdr-count'),
+    hdrDot: $('hdr-status-dot'),
+    hdrLabel: $('hdr-status-label'),
+    syncWarn: $('sync-warn'),
+    btnRefresh: $('btn-refresh'),
     btnRebuildSync: $('btn-rebuild-sync'),
 
     // Init
-    initCard:       $('init-card'),
-    initBase:       $('init-base-url'),
-    initKey:        $('init-api-key'),
-    initModel:      $('init-model-name'),
-    initColName:    $('init-collection-name'),
-    btnInit:        $('btn-init'),
+    initCard: $('init-card'),
+    initBase: $('init-base-url'),
+    initKey: $('init-api-key'),
+    initModel: $('init-model-name'),
+    initColName: $('init-collection-name'),
+    btnInit: $('btn-init'),
 
     // App body
-    appBody:        $('app-body'),
+    appBody: $('app-body'),
 
     // Left sidebar - collection stats
-    statName:       $('stat-name'),
-    statModel:      $('stat-model'),
-    statDim:        $('stat-dim'),
-    statCount:      $('stat-count'),
-    btnAddDoc:      $('btn-add-doc'),
-    btnRebuild:     $('btn-rebuild'),
+    statName: $('stat-name'),
+    statModel: $('stat-model'),
+    statDim: $('stat-dim'),
+    statType: $('stat-type'),
+    statCount: $('stat-count'),
+    btnAddDoc: $('btn-add-doc'),
+    btnRebuild: $('btn-rebuild'),
 
     // Left sidebar - collection list
     collectionList: $('collection-list'),
-    btnCreateCol:   $('btn-create-collection'),
+    btnCreateCol: $('btn-create-collection'),
 
     // Left sidebar - footer
-    btnClearCol:    $('btn-clear-collection'),
+    btnClearCol: $('btn-clear-collection'),
 
     // Search
-    searchInput:    $('search-input'),
-    btnSearch:      $('btn-search'),
+    searchInput: $('search-input'),
+    btnSearch: $('btn-search'),
     btnClearSearch: $('btn-clear-search'),
 
     // Content area
-    loadingState:   $('loading-state'),
-    emptyState:     $('empty-state'),
-    emptyColState:  $('empty-collection-state'),
-    errorState:     $('error-state'),
-    docList:        $('doc-list'),
+    loadingState: $('loading-state'),
+    emptyState: $('empty-state'),
+    emptyColState: $('empty-collection-state'),
+    errorState: $('error-state'),
+    docList: $('doc-list'),
 
     // Pagination
-    pagination:     $('pagination'),
-    btnPrev:        $('btn-prev'),
-    btnNext:        $('btn-next'),
-    pageInfo:       $('page-info'),
+    pagination: $('pagination'),
+    btnPrev: $('btn-prev'),
+    btnNext: $('btn-next'),
+    pageInfo: $('page-info'),
 
     // Confirm modal
-    modalOverlay:   $('modal-overlay'),
-    modalTitle:     $('modal-title'),
-    modalBody:      $('modal-body'),
-    modalConfirm:   $('modal-confirm'),
-    modalCancel:    $('modal-cancel'),
+    modalOverlay: $('modal-overlay'),
+    modalTitle: $('modal-title'),
+    modalBody: $('modal-body'),
+    modalConfirm: $('modal-confirm'),
+    modalCancel: $('modal-cancel'),
 
     // Add doc modal
-    modalAddDoc:    $('modal-add-doc'),
-    addRole:        $('add-role'),
-    addContent:     $('add-content'),
-    btnAddSubmit:   $('btn-add-submit'),
+    modalAddDoc: $('modal-add-doc'),
+    addRole: $('add-role'),
+    addContent: $('add-content'),
+    btnAddSubmit: $('btn-add-submit'),
 
     // Create collection modal
     modalCreateCol: $('modal-create-collection'),
-    createColName:  $('create-col-name'),
+    createColName: $('create-col-name'),
     createColModel: $('create-col-model'),
+    createColType: $('create-col-type'),
     btnCreateSubmit: $('btn-create-submit'),
+
+    // Add image modal
+    modalAddImage: $('modal-add-image'),
+    addImageFile: $('add-image-file'),
+    imageUploadArea: $('image-upload-area'),
+    imageUploadPlaceholder: $('image-upload-placeholder'),
+    imageUploadPreview: $('image-upload-preview'),
+    btnRemoveImage: $('btn-remove-image'),
+    addEmotionDesc: $('add-emotion-desc'),
+    addColorStyleDesc: $('add-color-style-desc'),
+    addContentDesc: $('add-content-desc'),
+    btnAddImageSubmit: $('btn-add-image-submit'),
 
     // Toast
     toastContainer: $('toast-container')
@@ -142,11 +159,43 @@ function bindGlobalEvents() {
     D.btnClearSearch.addEventListener('click', clearSearch);
 
     // Add doc
-    D.btnAddDoc.addEventListener('click', showAddDocModal);
+    D.btnAddDoc.addEventListener('click', function () {
+        if (App.isImageCollection) {
+            showAddImageModal();
+        } else {
+            showAddDocModal();
+        }
+    });
     D.btnAddSubmit.addEventListener('click', handleAddDocument);
     D.addContent.addEventListener('keydown', function (e) {
         if (e.ctrlKey && e.key === 'Enter') handleAddDocument();
         if (e.key === 'Escape') closeModalById('modal-add-doc');
+    });
+
+    // Add image
+    D.btnAddImageSubmit.addEventListener('click', handleAddImage);
+    D.imageUploadArea.addEventListener('click', function () {
+        D.addImageFile.click();
+    });
+    D.addImageFile.addEventListener('change', handleImageFileSelected);
+    D.btnRemoveImage.addEventListener('click', function (e) {
+        e.stopPropagation();
+        clearImageUpload();
+    });
+    // Drag and drop for image upload
+    D.imageUploadArea.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        D.imageUploadArea.classList.add('drag-over');
+    });
+    D.imageUploadArea.addEventListener('dragleave', function () {
+        D.imageUploadArea.classList.remove('drag-over');
+    });
+    D.imageUploadArea.addEventListener('drop', function (e) {
+        e.preventDefault();
+        D.imageUploadArea.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            processImageFile(e.dataTransfer.files[0]);
+        }
     });
 
     // Rebuild
@@ -226,6 +275,7 @@ function bindKeyboard() {
         }
         if (e.key === 'Escape') {
             if (D.modalAddDoc.style.display === 'flex') closeModalById('modal-add-doc');
+            if (D.modalAddImage.style.display === 'flex') closeModalById('modal-add-image');
             if (D.modalCreateCol.style.display === 'flex') closeModalById('modal-create-collection');
             if (D.modalOverlay.style.display === 'flex') closeConfirmModal();
         }
@@ -436,12 +486,28 @@ function updateCollectionStats(col) {
         D.statName.textContent = col.name;
         D.statModel.textContent = col.model;
         D.statDim.textContent = col.dimension;
+        D.statType.textContent = col.type === 'image' ? '图片记忆' : '文本文档';
         D.statCount.textContent = col.count;
+        App.isImageCollection = col.type === 'image';
+        updateAddButton();
     } else {
         D.statName.textContent = '--';
         D.statModel.textContent = '--';
         D.statDim.textContent = '--';
+        D.statType.textContent = '--';
         D.statCount.textContent = '--';
+        App.isImageCollection = false;
+        updateAddButton();
+    }
+}
+
+function updateAddButton() {
+    if (App.isImageCollection) {
+        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-image"></i> 添加图片';
+        D.btnAddDoc.title = '向当前图片集合添加图片';
+    } else {
+        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-plus"></i> 添加文档';
+        D.btnAddDoc.title = '向当前集合添加文档';
     }
 }
 
@@ -485,14 +551,16 @@ function renderCollectionList() {
     for (var i = 0; i < App.collections.length; i++) {
         var col = App.collections[i];
         var isActive = col.name === App.currentCollection;
-        html += '<div class="collection-item' + (isActive ? ' active' : '') + '" data-col-name="' + esc(col.name) + '">' +
-            '<span class="col-icon"><i class="fa-solid fa-folder' + (isActive ? '-open' : '') + '"></i></span>' +
+        var typeIcon = col.type === 'image' ? 'fa-image' : 'fa-folder';
+        var typeCls = col.type === 'image' ? ' image-type' : '';
+        html += '<div class="collection-item' + (isActive ? ' active' : '') + typeCls + '" data-col-name="' + esc(col.name) + '">' +
+            '<span class="col-icon"><i class="fa-solid ' + (isActive ? 'fa-folder-open' : typeIcon) + '"></i></span>' +
             '<span class="col-name" title="' + esc(col.name) + '">' + esc(col.name) + '</span>' +
             '<span class="col-count">' + col.count + '</span>' +
             '<button class="btn-delete-col" data-col-name="' + esc(col.name) + '" title="删除集合">' +
-                '<i class="fa-solid fa-trash-can"></i>' +
+            '<i class="fa-solid fa-trash-can"></i>' +
             '</button>' +
-        '</div>';
+            '</div>';
     }
 
     D.collectionList.innerHTML = html;
@@ -514,6 +582,7 @@ function showCreateCollectionModal() {
 async function handleCreateCollection() {
     var name = D.createColName.value.trim();
     var model = D.createColModel.value.trim();
+    var type = D.createColType.value;
 
     if (!name) { showToast('集合名称不能为空', 'error'); return; }
     if (!model) { showToast('模型名称不能为空', 'error'); return; }
@@ -537,12 +606,12 @@ async function handleCreateCollection() {
         var resp = await fetch(API.collection(name).BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_name: model })
+            body: JSON.stringify({ model_name: model, collection_type: type })
         });
         var result = await resp.json();
 
         if (result.success) {
-            showToast('集合 ' + name + ' 创建成功', 'success');
+            showToast('集合 ' + name + ' (' + type + ') 创建成功', 'success');
             closeModalById('modal-create-collection');
             App.currentCollection = name;
             loadCollections();
@@ -563,11 +632,11 @@ function confirmDeleteCollection(name) {
     showConfirmModal(
         '确认删除集合',
         '<div class="modal-delete-body">' +
-            '<p>确定要删除集合 <strong>' + esc(name) + '</strong> 吗？</p>' +
-            '<p>此操作将<strong>永久删除</strong>该集合的所有文档，<strong>不可恢复</strong>。</p>' +
-            '<div class="modal-delete-info">' +
-                '<span class="modal-delete-id">' + esc(name) + '</span>' +
-            '</div>' +
+        '<p>确定要删除集合 <strong>' + esc(name) + '</strong> 吗？</p>' +
+        '<p>此操作将<strong>永久删除</strong>该集合的所有文档，<strong>不可恢复</strong>。</p>' +
+        '<div class="modal-delete-info">' +
+        '<span class="modal-delete-id">' + esc(name) + '</span>' +
+        '</div>' +
         '</div>',
         function () {
             closeConfirmModal();
@@ -613,9 +682,9 @@ function handleClearCollection() {
     showConfirmModal(
         '确认清空集合',
         '<div class="modal-delete-body">' +
-            '<p>确定要清空集合 <strong>' + esc(App.currentCollection) + '</strong> 吗？</p>' +
-            '<p>此操作将<strong>永久删除</strong>该集合中的所有文档，<strong>不可恢复</strong>。</p>' +
-            '<p class="modal-hint">集合元数据（模型、维度）将被保留。</p>' +
+        '<p>确定要清空集合 <strong>' + esc(App.currentCollection) + '</strong> 吗？</p>' +
+        '<p>此操作将<strong>永久删除</strong>该集合中的所有文档，<strong>不可恢复</strong>。</p>' +
+        '<p class="modal-hint">集合元数据（模型、维度）将被保留。</p>' +
         '</div>',
         function () {
             closeConfirmModal();
@@ -818,29 +887,59 @@ function renderCard(doc, isSearch) {
         simBadge = '<span class="sim-badge ' + simCls + '" title="余弦相似度">' + simPercent + '%</span>';
     }
 
+    // Handle image document cards
+    if (App.isImageCollection || doc.role === 'image' || doc.image) {
+        var imageSrc = doc.image || '';
+        var scoreInfo = '';
+        if (isSearch && typeof doc.final_score === 'number') {
+            var scorePercent = (doc.final_score * 100).toFixed(1);
+            var boostLabel = doc.boost_level > 0 ? ' (×' + doc.boost_level + ' 加权)' : '';
+            scoreInfo = '<span class="sim-badge sim-high" title="最终评分' + boostLabel + '">' + scorePercent + '%</span>';
+        }
+        return '<div class="' + cardCls + ' image-card" data-doc-id="' + esc(doc.id) + '">' +
+            '<span class="doc-role-badge image">图片</span>' +
+            scoreInfo +
+            '<div class="doc-body">' +
+            '<div class="doc-id-row">' +
+            '<code class="doc-id-tag">' + esc(doc.id) + '</code>' +
+            '<div class="doc-actions-inline">' +
+            (hasValidId
+                ? '<button class="btn-icon-sm btn-del" title="删除此图片" data-delete-id="' + esc(doc.id) + '">' +
+                '<i class="fa-solid fa-trash-can"></i>' +
+                '</button>'
+                : '') +
+            '</div>' +
+            '</div>' +
+            (imageSrc
+                ? '<div class="image-preview-container"><img src="' + escAttr(imageSrc) + '" class="image-preview-thumb" alt="图片" loading="lazy"></div>'
+                : '<div class="image-preview-container"><span class="image-placeholder"><i class="fa-solid fa-image"></i> 图片数据将通过搜索加载</span></div>') +
+            '</div>' +
+            '</div>';
+    }
+
     return '<div class="' + cardCls + '" data-doc-id="' + esc(doc.id) + '">' +
         '<span class="doc-role-badge ' + esc(doc.role) + '">' + esc(doc.role) + '</span>' +
         simBadge +
         '<div class="doc-body">' +
-            '<div class="doc-id-row">' +
-                '<code class="doc-id-tag">' + esc(doc.id) + '</code>' +
-                '<div class="doc-actions-inline">' +
-                    '<button class="btn-icon-sm btn-copy" title="复制内容" data-content="' + escAttr(doc.content) + '">' +
-                        '<i class="fa-solid fa-copy"></i>' +
-                    '</button>' +
-                    (hasValidId
-                        ? '<button class="btn-icon-sm btn-del" title="删除此文档" data-delete-id="' + esc(doc.id) + '">' +
-                            '<i class="fa-solid fa-trash-can"></i>' +
-                          '</button>'
-                        : '') +
-                '</div>' +
-            '</div>' +
-            '<div class="doc-content">' + esc(doc.content) + '</div>' +
-            (doc.content.length > 200
-                ? '<button class="btn-expand" onclick="this.previousElementSibling.classList.toggle(\'expanded\'); this.textContent = this.previousElementSibling.classList.contains(\'expanded\') ? \'收起\' : \'展开全部\';" type="button">展开全部</button>'
-                : '') +
+        '<div class="doc-id-row">' +
+        '<code class="doc-id-tag">' + esc(doc.id) + '</code>' +
+        '<div class="doc-actions-inline">' +
+        '<button class="btn-icon-sm btn-copy" title="复制内容" data-content="' + escAttr(doc.content) + '">' +
+        '<i class="fa-solid fa-copy"></i>' +
+        '</button>' +
+        (hasValidId
+            ? '<button class="btn-icon-sm btn-del" title="删除此文档" data-delete-id="' + esc(doc.id) + '">' +
+            '<i class="fa-solid fa-trash-can"></i>' +
+            '</button>'
+            : '') +
         '</div>' +
-    '</div>';
+        '</div>' +
+        '<div class="doc-content">' + esc(doc.content) + '</div>' +
+        (doc.content.length > 200
+            ? '<button class="btn-expand" onclick="this.previousElementSibling.classList.toggle(\'expanded\'); this.textContent = this.previousElementSibling.classList.contains(\'expanded\') ? \'收起\' : \'展开全部\';" type="button">展开全部</button>'
+            : '') +
+        '</div>' +
+        '</div>';
 }
 
 function renderPagination() {
@@ -920,7 +1019,11 @@ async function executeSearch(query) {
     var topK = PAGE_SIZE;
 
     try {
-        var url = API.collection(App.currentCollection).MESSAGES + '?query=' + encodeURIComponent(query) + '&top_k=' + topK;
+        // Use /images for image collections, /messages for text collections
+        var endpoint = App.isImageCollection
+            ? API.collection(App.currentCollection).IMAGES
+            : API.collection(App.currentCollection).MESSAGES;
+        var url = endpoint + '?query=' + encodeURIComponent(query) + '&top_k=' + topK;
         var resp = await fetch(url);
         var result = await resp.json();
 
@@ -1016,11 +1119,11 @@ function confirmDeleteDoc(id, button) {
     showConfirmModal(
         '确认删除',
         '<div class="modal-delete-body">' +
-            '<p>确定要删除以下文档吗？此操作<strong>不可恢复</strong>。</p>' +
-            '<div class="modal-delete-info">' +
-                '<span class="modal-delete-id">' + esc(id) + '</span>' +
-                '<span class="doc-role-badge ' + esc(role) + '">' + esc(role) + '</span>' +
-            '</div>' +
+        '<p>确定要删除以下文档吗？此操作<strong>不可恢复</strong>。</p>' +
+        '<div class="modal-delete-info">' +
+        '<span class="modal-delete-id">' + esc(id) + '</span>' +
+        '<span class="doc-role-badge ' + esc(role) + '">' + esc(role) + '</span>' +
+        '</div>' +
         '</div>',
         function () {
             closeConfirmModal();
@@ -1191,6 +1294,117 @@ async function copyToClipboard(text) {
         document.execCommand('copy');
         document.body.removeChild(ta);
         showToast('内容已复制到剪贴板', 'success');
+    }
+}
+
+// ========== 图片上传与添加 ==========
+
+function showAddImageModal() {
+    if (!App.initialized) {
+        showToast('记忆库未初始化，请先完成初始化', 'error');
+        return;
+    }
+    if (!App.currentCollection) {
+        showToast('请先选择一个集合', 'error');
+        return;
+    }
+    clearImageUpload();
+    D.addEmotionDesc.value = '';
+    D.addColorStyleDesc.value = '';
+    D.addContentDesc.value = '';
+    D.modalAddImage.style.display = 'flex';
+}
+
+function clearImageUpload() {
+    App.imageBase64 = null;
+    D.addImageFile.value = '';
+    D.imageUploadPlaceholder.style.display = 'flex';
+    D.imageUploadPreview.style.display = 'none';
+    D.btnRemoveImage.style.display = 'none';
+    D.imageUploadArea.classList.remove('has-image');
+}
+
+function handleImageFileSelected(e) {
+    if (e.target.files && e.target.files[0]) {
+        processImageFile(e.target.files[0]);
+    }
+}
+
+function processImageFile(file) {
+    if (!file.type.startsWith('image/')) {
+        showToast('请选择图片文件', 'error');
+        return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+        showToast('图片大小不能超过 10MB', 'error');
+        return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        App.imageBase64 = e.target.result;
+        D.imageUploadPreview.src = e.target.result;
+        D.imageUploadPlaceholder.style.display = 'none';
+        D.imageUploadPreview.style.display = 'block';
+        D.btnRemoveImage.style.display = 'flex';
+        D.imageUploadArea.classList.add('has-image');
+    };
+    reader.onerror = function () {
+        showToast('图片读取失败', 'error');
+    };
+    reader.readAsDataURL(file);
+}
+
+async function handleAddImage() {
+    if (!App.initialized || !App.currentCollection) {
+        showToast('请先选择一个集合', 'error');
+        return;
+    }
+
+    if (!App.imageBase64) {
+        showToast('请先选择一张图片', 'error');
+        return;
+    }
+
+    var emotionDesc = D.addEmotionDesc.value.trim();
+    var colorStyleDesc = D.addColorStyleDesc.value.trim();
+    var contentDesc = D.addContentDesc.value.trim();
+
+    D.btnAddImageSubmit.disabled = true;
+    showBtnLoading(D.btnAddImageSubmit, true, '添加中...');
+
+    try {
+        var resp = await fetch(API.collection(App.currentCollection).IMAGES, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image: App.imageBase64,
+                emotion_desc: emotionDesc,
+                color_style_desc: colorStyleDesc,
+                content_desc: contentDesc
+            })
+        });
+        var result = await resp.json();
+
+        if (result.success) {
+            showToast('图片添加成功', 'success');
+            closeModalById('modal-add-image');
+            App.page = 1;
+            App.searchMode = false;
+            App.searchQuery = '';
+            D.searchInput.value = '';
+            D.btnClearSearch.style.display = 'none';
+            loadCollectionStats(App.currentCollection);
+            loadCollections();
+        } else {
+            showToast('添加失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (err) {
+        showToast('网络请求失败: ' + err.message, 'error');
+    } finally {
+        D.btnAddImageSubmit.disabled = false;
+        showBtnLoading(D.btnAddImageSubmit, false, '添加到图片记忆库');
     }
 }
 

@@ -50,9 +50,9 @@ func (h *StudioHub) Run() {
 			}
 
 		case message := <-h.Broadcast:
-				// 检查是否为 animation_list 消息，缓存动作定义供智能体查询
-				cacheAnimationList(message)
-				for client := range h.Clients {
+			// 检查是否为 animation_list 消息，缓存动作定义供智能体查询
+			cacheAnimationList(message)
+			for client := range h.Clients {
 				select {
 				case client.Send <- message:
 				default:
