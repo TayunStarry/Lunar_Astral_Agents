@@ -680,14 +680,14 @@ Lunar_Astral_Agents/
 | **关联关系** | 被 `volume_archive/` 主程序编排调用 |
 | **架构角色** | 卷归档的逻辑核心 |
 
-#### `websearch/`
+#### `lunar_chromedp/`
 
 | 维度 | 说明 |
 |------|------|
-| **主要职责** | 智能网络检索子系统，提供轻量摘要/网页搜索/深度研究三级搜索策略，通过 Bing + DuckDuckGo 双引擎 HTML 抓取与 LLM 智能总结，将互联网信息高效提炼为结构化结果 |
-| **核心模块类型** | Go 搜索引擎（Bing/DuckDuckGo HTML 解析）、搜索管线（轻量摘要/网页搜索/深度研究）、LLM 客户端（OpenAI v1 协议） |
-| **关联关系** | 被 `lunar_astral` 和 `crystal_astral` 通过 Go import 直接引用；`webpage.go` 和 `depth.go` 依赖 LLM API（`/chat/completions`）进行智能总结；`engine.go` 通过 HTTP 抓取 Bing/DuckDuckGo 搜索结果 |
-| **架构角色** | 网络信息检索基础设施，为 AI 对话提供实时搜索能力。详见 [subsystem/websearch/README.md](subsystem/websearch/README.md) |
+| **主要职责** | 智能网络检索子系统，基于 Chromedp 无头浏览器引擎实现 Bing/百度/搜狗多引擎搜索、网页文本与截图提取、LLM 智能总结与深度搜索，并将搜索结果写入记忆库供后续复用 |
+| **核心模块类型** | Chromedp 浏览器引擎、搜索管线（记忆检索/网络搜索/深度搜索/报告生成）、LLM 客户端（OpenAI v1 协议）、记忆系统（storage 集成） |
+| **关联关系** | 被 `lunar_astral` 通过 Go import 直接引用（学习者子智能体）；`browser.go` 启动无头浏览器抓取搜索结果；`ai.go` 依赖 LLM API（`/chat/completions`）进行智能总结 |
+| **架构角色** | 网络信息检索基础设施，为 AI 对话提供实时搜索能力。详见 [subsystem/lunar_chromedp/README.md](subsystem/lunar_chromedp/README.md) |
 
 ### 独立 AI 引擎
 
@@ -923,7 +923,7 @@ lunar_astral
   ├── subsystem/storage         (文件 + 数据库)
   ├── subsystem/screenshot      (屏幕截图)
   ├── subsystem/image           (图像生成 + 关键帧)
-  ├── subsystem/websearch       (网络检索)
+  ├── subsystem/lunar_chromedp  (网络检索)
   └── subsystem/qwen3_tts_lunar (TTS 引擎，CGO 调用)
 
 crystal_astral
@@ -931,9 +931,11 @@ crystal_astral
   ├── subsystem/browser         (WebView 窗口)
   ├── subsystem/storage         (文件 + 数据库)
   ├── subsystem/screenshot      (屏幕截图)
-  └── subsystem/websearch       (网络检索)
+  └── subsystem/image           (图像处理)
 
-subsystem/websearch
+subsystem/lunar_chromedp
+  ├── subsystem/storage         (记忆库)
+  ├── subsystem/config          (配置管理)
   └── golang.org/x/net          (HTML 解析)
 
 subsystem/bridge_adapter

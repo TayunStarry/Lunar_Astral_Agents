@@ -9,7 +9,6 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	image v0.0.0-00010101000000-000000000000
 	logger v0.0.0
-	screenshot v0.0.0
 	storage v0.0.0
 )
 
@@ -37,7 +36,5 @@ replace storage => ../subsystem/storage
 replace browser => ../subsystem/browser
 
 replace image => ../subsystem/image
-
-replace screenshot => ../subsystem/screenshot
 
 replace logger => ../subsystem/logger

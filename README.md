@@ -93,7 +93,7 @@
         <li><code>proxy</code> <span style="color: #6a737d;">— HTTPS 代理服务器</span></li>
         <li><code>sd_lunar</code> <span style="color: #6a737d;">— Stable Diffusion 图像生成引擎</span></li>
         <li><code>volume_archive</code> <span style="color: #6a737d;">— 卷归档管理</span></li>
-        <li><code>websearch</code> <span style="color: #6a737d;">— 智能网络检索（三级搜索策略）</span></li>
+        <li><code>lunar_chromedp</code> <span style="color: #6a737d;">— 智能网络检索（Chromedp 浏览器引擎）</span></li>
       </ul>
     </li>
   </ul>

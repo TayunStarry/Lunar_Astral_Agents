@@ -1,4 +1,4 @@
-package screenshot
+package module
 
 import (
 	"bytes"
@@ -91,9 +91,9 @@ func Screenshot(req ScreenshotRequest) ([]byte, string, string, error) {
 	}
 
 	// 更新最后截图时间
-	screenshotMutex.Lock()
-	lastCapture = time.Now()
-	screenshotMutex.Unlock()
+	ScreenshotMutex.Lock()
+	LastCapture = time.Now().UnixNano()
+	ScreenshotMutex.Unlock()
 
 	contentType := getContentType(req.Format)
 	return buf.Bytes(), filename, contentType, nil
@@ -554,7 +554,7 @@ func screenshotAllDisplaysOptimized() (*image.RGBA, error) {
 	return img, nil
 }
 
-// 将 NRGBA 转换为 RGBA
+// ToRGBA 将 image.Image 转换为 RGBA
 func ToRGBA(img image.Image) *image.RGBA {
 	// 如果已经是 RGBA，直接返回
 	if rgba, ok := img.(*image.RGBA); ok {
@@ -611,7 +611,7 @@ func resizeImage(img *image.RGBA, scaleStr string) (*image.RGBA, error) {
 	return ToRGBA(resized), nil
 }
 
-// 缩放到合适大小
+// ResizeToFit 缩放到合适大小
 func ResizeToFit(img *image.RGBA, maxWidth, maxHeight int) *image.RGBA {
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
@@ -682,12 +682,13 @@ func getContentType(format string) string {
 
 // 检查截图频率限制
 func checkScreenshotRateLimit() error {
-	screenshotMutex.RLock()
-	timeSinceLastCapture := time.Since(lastCapture)
-	screenshotMutex.RUnlock()
+	ScreenshotMutex.RLock()
+	elapsed := time.Now().UnixNano() - LastCapture
+	ScreenshotMutex.RUnlock()
 
-	if timeSinceLastCapture < captureCooldown {
-		return fmt.Errorf("截图过于频繁，请等待 %.1f 秒", float64(captureCooldown-timeSinceLastCapture)/float64(time.Second))
+	if elapsed < CaptureCooldown {
+		remaining := float64(CaptureCooldown-elapsed) / float64(time.Second)
+		return fmt.Errorf("截图过于频繁，请等待 %.1f 秒", remaining)
 	}
 	return nil
 }

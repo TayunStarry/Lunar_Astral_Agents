@@ -54,6 +54,23 @@ export const agentControlTools: ToolCall[] = [
 				required: ["description"]
 			}
 		}
+	},
+	{
+		type: "function",
+		function: {
+			name: "dispatch_learner",
+			description: "向学习者子智能体发布学习研究任务。学习者会执行网络搜索和记忆库查询，收集信息后生成结构化的研究报告。适用于需要查证事实、搜索资料、研究分析等场景。",
+			parameters: {
+				type: "object",
+				properties: {
+					description: {
+						type: "string",
+						description: "学习研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，搜索结果越准确。"
+					}
+				},
+				required: ["description"]
+			}
+		}
 	}
 ];
 
@@ -121,11 +138,31 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 	return [result, ''];
 }
 
+/** 处理学习者调度工具 */
+async function handleDispatchLearner(args?: Record<string, any> | string): Promise<string[]> {
+	const { description } = parseArgs(args);
+
+	if (!description || typeof description !== 'string' || description.trim().length === 0) {
+		return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
+	}
+
+	const instance = AgentDefine.instance;
+	if (!instance || !instance.learnerRole) {
+		return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
+	}
+
+	console.log(`[智能体控制] 调度学习者: ${description}`);
+	const result = await instance.learnerRole.createCreativeWork(description.trim());
+	console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
+	return [result, ''];
+}
+
 // ==== 模块级注册 ====
 
 // 注册智能体控制工具到 LTPfunction 映射表
 GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
 GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
 GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+GlobalConfig.LTPfunction.set('dispatch_learner', handleDispatchLearner);
 // 注册智能体控制工具到 LTPdefinition 列表
 GlobalConfig.LTPdefinition.push(...agentControlTools);

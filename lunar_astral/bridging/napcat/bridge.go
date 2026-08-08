@@ -5,7 +5,6 @@ package napcat
 import (
 	"encoding/json"
 	"os"
-	"time"
 
 	"logger"
 )
@@ -47,8 +46,8 @@ func setBridgeState(state BridgeState) {
 	bridgeState = state
 }
 
-// StartBridgeScanner 启动定时扫描机制
-// 当未连接适配器且 bridging_path 不为空时，启动定时扫描
+// StartBridgeScanner 启动桥接器连接
+// 只允许连接一次：成功则持续服务，失败或断开则直接放弃该机制，不再重试
 func StartBridgeScanner() {
 	if !IsBridgingEnabled() {
 		logger.SubInfo("LunarCore", "Napcat", "桥接器未启用 (bridging_path 为空或 bridging_type 非 napcat)")
@@ -58,80 +57,17 @@ func StartBridgeScanner() {
 	logger.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, target=%d, keywords=%v",
 		bridgeConfig.BridgingPath, bridgeConfig.BridgingTarget, bridgeConfig.BridgingKeywords)
 
-	// 启动首次扫描
-	scheduleScan()
-}
-
-// scheduleScan 安排下一次扫描
-func scheduleScan() {
-	scanMutex.Lock()
-	defer scanMutex.Unlock()
-
-	if scanTimer != nil {
-		scanTimer.Stop()
-	}
-
-	scanTimer = time.AfterFunc(scanInterval, performScan)
-}
-
-// performScan 执行一次扫描
-func performScan() {
-	scanMutex.Lock()
-	currentRetry := scanRetryCount
-	scanMutex.Unlock()
-
-	if GetBridgeState() == BridgeConnected {
-		return
-	}
-
-	logger.SubInfo("LunarCore", "Napcat", "正在扫描适配器连接 (第 %d/%d 次)...", currentRetry+1, maxScanRetries)
-
-	// 尝试连接（阻塞直到连接断开或失败）
+	// 单次连接尝试，成功后阻塞服务直至断开，失败后不再重试
 	setBridgeState(BridgeConnecting)
 	err := ConnectToNapcatWebSocket(HandleNapcatMessage)
 
-	// 到这里说明连接已断开或连接失败
-	// 通过状态判断：如果是 BridgeDisconnected，说明曾经连接成功后又断开
-	// 如果是 BridgeConnecting，说明从未成功连接过
-	currentState := GetBridgeState()
-
-	if currentState == BridgeDisconnected {
-		// 曾连接成功后断开 → 重置重试计数，重新扫描
-		logger.SubWarn("LunarCore", "Napcat", "连接断开，%v 后重新扫描...", scanInterval)
-		scanMutex.Lock()
-		scanRetryCount = 0
-		scanMutex.Unlock()
-		scheduleScan()
-		return
-	}
-
-	// 初次连接失败 → 消耗重试次数
-	scanMutex.Lock()
-	scanRetryCount++
-	retryCount := scanRetryCount
-	scanMutex.Unlock()
-
-	setBridgeState(BridgeDisconnected)
-
-	if retryCount >= maxScanRetries {
-		setBridgeState(BridgeFailed)
-		logger.SubError("LunarCore", "Napcat", "达到最大重试次数 (%d)，停止扫描: %v", maxScanRetries, err)
-		return
-	}
-
-	logger.SubWarn("LunarCore", "Napcat", "适配器连接失败，%v 后重试 (%d/%d): %v", scanInterval, retryCount, maxScanRetries, err)
-	scheduleScan()
+	// 走到这里说明连接失败或连接已断开，直接放弃桥接机制
+	setBridgeState(BridgeFailed)
+	logger.SubError("LunarCore", "Napcat", "适配器连接失败或已断开，放弃桥接机制: %v", err)
 }
 
 // StopBridge 停止桥接器
 func StopBridge() {
-	scanMutex.Lock()
-	if scanTimer != nil {
-		scanTimer.Stop()
-		scanTimer = nil
-	}
-	scanMutex.Unlock()
-
 	setBridgeState(BridgeDisconnected)
 	logger.SubInfo("LunarCore", "Napcat", "桥接器已停止")
 }

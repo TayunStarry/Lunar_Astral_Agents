@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	image_server "image/server"
-	"screenshot"
 	storage "storage/server"
 )
 
@@ -85,12 +84,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/organize", Handler: storage.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 
 	// ==== 截图与图像处理 ====
-	{Path: "/capture", Handler: screenshot.HandleScreenshot, Method: "POST", Description: "通用截图"},
+	{Path: "/capture", Handler: image_server.HandleScreenshot, Method: "POST", Description: "通用截图"},
 	{Path: "/keyframe", Handler: image_server.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
-	{Path: "/capture/display/", Handler: screenshot.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
-	{Path: "/capture/region", Handler: screenshot.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
-	{Path: "/capture/displays", Handler: screenshot.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
-	{Path: "/resize", Handler: screenshot.HandleResizeImage, Method: "POST", Description: "图片缩放"},
+	{Path: "/capture/display/", Handler: image_server.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
+	{Path: "/capture/region", Handler: image_server.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
+	{Path: "/capture/displays", Handler: image_server.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
+	{Path: "/resize", Handler: image_server.HandleResizeImage, Method: "POST", Description: "图片缩放"},
 	{Path: "/convert/image", Handler: convertImageHandler, Method: "POST", Description: "单张图片格式转换"},
 	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
 	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},

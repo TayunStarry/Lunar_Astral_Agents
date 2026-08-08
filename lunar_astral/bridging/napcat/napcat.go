@@ -36,9 +36,6 @@ func ConnectToNapcatWebSocket(messageHandler func([]byte)) error {
 
 	// 连接成功，立即设置状态为已连接
 	setBridgeState(BridgeConnected)
-	scanMutex.Lock()
-	scanRetryCount = 0
-	scanMutex.Unlock()
 	logger.SubInfo("LunarCore", "Napcat", "成功连接到 napcat 服务器")
 
 	for {

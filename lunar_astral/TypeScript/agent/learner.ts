@@ -1,34 +1,5 @@
 import { GlobalConfig, PostMessage } from '../index';
 
-/** 学习者触发关键词 — 统一匹配所有研究/回忆意图 */
-const learnerKeywords = [
-	// 回忆偏向
-	/回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
-	/还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
-	/上次(?:说|聊|讨论|提|提到)/,
-	// 搜索偏向
-	/搜索/, /搜(?:一搜|一下)/, /深入(?:了解|分析|研究)/,
-	/详细(?:了解|分析|说明|解释)/, /分析(?:一(?:下|分析))?/,
-	/(?:资料|文献|论文|报告|数据|统计)/, /调查(?:一(?:下|调查))?/,
-	/核实/, /验证/,
-	// 模糊偏向
-	/查(?:一查|一下|询|找|找找|看看)/,
-	/(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
-	/(?:真|假|正确|错误|靠谱|可靠)/,
-];
-
-/** 回忆偏向关键词 — 仅需查记忆库，无需网络搜索 */
-const recallKeywords = [
-	/回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
-	/还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
-	/上次(?:说|聊|讨论|提|提到)/,
-];
-
-/** 判定是否为回忆偏向意图 */
-function isRecallIntent(texts: string[]): boolean {
-	return texts.some(text => recallKeywords.some(kw => kw.test(text)));
-}
-
 /** 学习者是否已初始化 */
 let learnerInitialized = false;
 
@@ -36,16 +7,7 @@ let learnerInitialized = false;
 function ensureLearnerInitialized(): boolean {
 	if (learnerInitialized) return true;
 	if (!learnerIsReady()) {
-		const [success, err] = learnerInit(
-			GlobalConfig.systemUrl,
-			GlobalConfig.SystemKey,
-			GlobalConfig.MultimodalName,
-			4096,
-			0.7,
-			GlobalConfig.systemUrl,
-			GlobalConfig.SystemKey,
-			GlobalConfig.EmbeddingName
-		);
+		const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
 		if (err) {
 			console.error('[学习者] 初始化失败:', err);
 			return false;
@@ -56,76 +18,52 @@ function ensureLearnerInitialized(): boolean {
 	return true;
 }
 
-/** 学习者角色（轻量级：正则匹配 + Goja 调用） */
+/**
+ * 学习者角色（工具调用模式）
+ *
+ * 通过对话者的 dispatch_learner 工具调用触发，
+ * 执行网络搜索或记忆库查询，返回结构化报告。
+ */
 export class LearnerRole {
-	/** 消息历史（供主智能体消费） */
+	/** 消息历史（供调试导出） */
 	public messages: PostMessage[] = [];
 
-	/** 消费历史（主智能体调用后清空） */
-	public consumeHistory(): PostMessage[] {
-		const result = [...this.messages];
-		this.messages = [];
-		return result;
-	}
-
 	/**
-	 * 执行学习研究
+	 * 执行学习研究任务
 	 *
-	 * @param unreadContext 当前未读上下文
-	 * @returns true 表示未执行研究，false 表示已执行研究
+	 * @param taskDescription 对话者通过工具调用传来的研究需求描述
+	 * @returns 搜索报告文本（markdown 格式）
 	 */
-	public executeLearner(unreadContext: PostMessage[]): boolean {
-		// 提取未读消息文本
-		const unreadTexts = this.extractTexts(unreadContext);
-
-		// 检查是否匹配任意学习者关键词
-		if (!unreadTexts.some(text => learnerKeywords.some(keyword => keyword.test(text)))) {
-			return true; // 未匹配，不执行
+	public async createCreativeWork(taskDescription: string): Promise<string> {
+		if (!taskDescription || taskDescription.trim().length === 0) {
+			return '研究任务调度失败：任务描述不能为空，请提供具体的学习研究需求';
 		}
 
 		// 确保学习者已初始化
-		if (!ensureLearnerInitialized()) return true;
+		if (!ensureLearnerInitialized()) {
+			return '研究任务调度失败：学习者子智能体未就绪，请稍后重试';
+		}
 
-		// 判定运行模式：回忆模式仅查记忆库，搜索模式走完整流程
-		const mode: 'recall' | 'full' = isRecallIntent(unreadTexts) ? 'recall' : 'full';
-
-		// 调用 Go 层学习者（传入未读消息文本数组，不再传入对话历史）
-		console.log('[学习者] 开始执行研究, 模式:', mode);
-		const [report, error] = learnerExecute(unreadTexts, mode);
+		console.log('[学习者] 开始执行研究:', taskDescription);
+		const [report, error] = learnerExecute(taskDescription.trim());
 
 		if (error) {
 			console.error('[学习者] 执行失败:', error);
-			return true;
+			return `研究任务执行失败：${error}`;
 		}
 
-		// 将研究报告写入历史
 		if (report && report.trim().length > 0) {
-			this.messages.push({ role: 'user', content: report });
-			console.log('[学习者] 已将研究报告写入历史');
+			// 记录到自身历史（供调试导出）
+			this.messages.push({ role: 'assistant', content: report });
+			console.log('[学习者] 研究完成，报告已生成');
+			return report;
 		}
 
-		return false;
-	}
-
-	/** 提取消息文本 */
-	private extractTexts(messages: PostMessage[]): string[] {
-		const texts: string[] = [];
-		for (const msg of messages) {
-			if (typeof msg.content === 'string') {
-				texts.push(msg.content);
-			} else if (Array.isArray(msg.content)) {
-				msg.content.forEach((item: any) => {
-					if (item.type === 'text') texts.push(item.text);
-				});
-			}
-		}
-		return texts;
+		return '研究任务完成，但未找到相关信息。';
 	}
 
 	/**
 	 * 导出学习者运行时上下文到文件（覆写模式）
-	 *
-	 * 同时导出 TS 层（消息历史、运行模式）和 Go 层（搜索结果、策略评估、记忆匹配）。
 	 *
 	 * @param dialogueMessages 对话历史消息
 	 * @param unreadContext 当前未读上下文
@@ -135,19 +73,14 @@ export class LearnerRole {
 	public dumpContext(dialogueMessages: PostMessage[], unreadContext: PostMessage[], outputPath?: string): string {
 		const path = outputPath || 'agent_debug_学习者.json';
 
-		// TS 层快照
 		const timestamp = new Date().toLocaleString('zh-CN', {
 			year: 'numeric', month: '2-digit', day: '2-digit',
 			hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
 		});
 
-		const unreadTexts = this.extractTexts(unreadContext);
-		const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
-
 		const snapshot = {
 			timestamp,
 			role: '学习者',
-			mode,
 			ownMessagesCount: this.messages.length,
 			ownMessages: this.messages.map((msg, idx) => {
 				const content = typeof msg.content === 'string'
@@ -191,13 +124,11 @@ export class LearnerRole {
 			return '';
 		}
 
-		// Go 层快照（搜索结果、策略评估、记忆匹配等）
-		if (learnerInitialized) {
-			const goPath = path.replace('.json', '_go.json');
-			const [, goError] = learnerDumpContext(unreadTexts, mode, goPath);
-			if (goError) {
-				console.error('[学习者] 导出 Go 层上下文失败:', goError);
-			}
+		// Go 层快照
+		const goPath = path.replace('.json', '_go.json');
+		const [, goError] = learnerDumpContext('', goPath);
+		if (goError) {
+			console.error('[学习者] 导出 Go 层上下文失败:', goError);
 		}
 
 		console.log('[学习者] 上下文快照已导出:', path);

@@ -87,8 +87,6 @@ class LunarAgent extends AgentDefine {
 				if (messageLength === 0) this.speakWeight = 0;
 				// 批量处理视频文件
 				await this.batchProcessVideoFiles();
-				// 如果包含研究意图关键词，调用学习者角色执行研究循环（最先执行）
-				this.learnerRole.executeLearner(this.unreadContext);
 				// 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
 				await this.createChatMessage();
 				// 如果消息响应为空，抛出异常

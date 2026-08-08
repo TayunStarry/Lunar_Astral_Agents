@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	image "image/module"
-	"screenshot"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -84,7 +83,7 @@ func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片缩放函数
-	result, err := screenshot.ResizeImage(bytesData)
+	result, err := image.ResizeImage(bytesData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

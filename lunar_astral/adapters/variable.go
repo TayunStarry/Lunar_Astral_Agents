@@ -5,8 +5,6 @@ import (
 	"logger"
 	"sync"
 
-	"websearch"
-
 	"github.com/dop251/goja_nodejs/eventloop"
 )
 
@@ -59,11 +57,6 @@ var UnreadContext = make([]PostMessage, 0)
 
 // UnreadVideoUrl 未处理的视频URL
 var UnreadVideoUrl = make([]string, 0)
-
-// ==== 网络检索全局变量 ====
-
-// webSearchSystem 网络检索子系统实例
-var webSearchSystem *websearch.System
 
 // ==== 智能体 3D 位置全局变量 ====
 

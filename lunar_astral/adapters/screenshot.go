@@ -2,7 +2,7 @@ package adapters
 
 import (
 	"fmt"
-	"screenshot"
+	image "image/module"
 
 	"github.com/dop251/goja"
 )
@@ -16,7 +16,7 @@ func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("screenshotCapture 参数不足，需要 displayIndex")})
 	}
 
-	req := screenshot.ScreenshotRequest{
+	req := image.ScreenshotRequest{
 		DisplayIndex: -1, // 默认截取主显示器
 		Format:       "png",
 	}
@@ -55,13 +55,13 @@ func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	}
 
 	// 执行截图
-	imgData, _, _, err := screenshot.Screenshot(req)
+	imgData, _, _, err := image.Screenshot(req)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
 	// 统一在 Go 层完成图片压缩缩放处理，确保 base64 格式正确
-	result, err := screenshot.ResizeImage(imgData)
+	result, err := image.ResizeImage(imgData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("截图后处理失败: %v", err)})
 	}
@@ -72,7 +72,7 @@ func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 // screenshotGetDisplays 获取所有显示器信息
 // 返回值: [Array<{index, x, y, width, height}>, error]
 func (class *Runtime) screenshotGetDisplays(call goja.FunctionCall) goja.Value {
-	displays := screenshot.GetDisplays()
+	displays := image.GetDisplays()
 
 	// 转换为 []map[string]any 以便 goja 正确序列化
 	result := make([]map[string]any, len(displays))

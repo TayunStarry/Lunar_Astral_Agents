@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"screenshot"
 	"slices"
 	"strconv"
 	"strings"
@@ -265,8 +264,8 @@ func FormatTimestamp(seconds float64) string {
 func CreateKeyframeFile(currImage image.Image, keyFrames []KeyFrame) (string, []byte, error) {
 	frameFileName := fmt.Sprintf("key_frame_%d.jpg", len(keyFrames)+1)
 
-	rgbaImage := screenshot.ToRGBA(currImage)
-	resizedImage := screenshot.ResizeToFit(rgbaImage, 1024, 1024)
+	rgbaImage := ToRGBA(currImage)
+	resizedImage := ResizeToFit(rgbaImage, 1024, 1024)
 
 	buf := new(bytes.Buffer)
 	opt := &jpeg.Options{

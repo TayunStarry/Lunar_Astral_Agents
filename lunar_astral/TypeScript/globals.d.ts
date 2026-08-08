@@ -253,27 +253,24 @@ function getAvailableActions(): string;
     /**
      * 初始化学习者智能体
      *
-     * @param {string} baseURL LLM 服务基础 URL
-     * @param {string} apiKey LLM API 密钥
-     * @param {string} model LLM 模型名称
-     * @param {number} maxTokens 最大生成 token 数
-     * @param {number} temperature 生成温度
+     * @param {string} baseURL API 服务基础 URL
+     * @param {string} apiKey API 密钥
+     * @param {string} model 模型名称
      * @param {string} embeddingURL 嵌入服务基础 URL
      * @param {string} embeddingKey 嵌入服务 API 密钥
      * @param {string} embeddingModel 嵌入模型名称
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function learnerInit(baseURL: string, apiKey: string, model: string, maxTokens: number, temperature: number, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
+    function learnerInit(baseURL: string, apiKey: string, model: string, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
     /**
      * 执行学习者研究
      *
-     * @param {string[]} unreadMessages 未读消息文本数组
-     * @param {string} mode 运行模式 ("recall" | "full")，默认为 "full"
+     * @param {string} query 研究查询字符串
      *
      * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
      */
-    function learnerExecute(unreadMessages: string[], mode: string): [string, Error | null];
+    function learnerExecute(query: string): [string, Error | null];
     /**
      * 检查学习者智能体是否已初始化
      *
@@ -282,15 +279,13 @@ function getAvailableActions(): string;
     function learnerIsReady(): boolean;
     /**
      * 导出学习者 Go 层运行时上下文到文件（覆写模式）
-     * 包含搜索结果、策略评估、记忆匹配等 Go 层完整数据
      *
-     * @param {string[]} unreadMessages 未读消息文本数组
-     * @param {string} mode 运行模式
+     * @param {string} query 当前查询字符串（可为空）
      * @param {string} outputPath 输出文件路径
      *
      * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
      */
-    function learnerDumpContext(unreadMessages: string[], mode: string, outputPath: string): [string, Error | null];
+    function learnerDumpContext(query: string, outputPath: string): [string, Error | null];
     /**
      * 将调试内容写入本地文件（覆写模式）
      * 用于各子智能体导出上下文快照

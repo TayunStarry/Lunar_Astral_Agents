@@ -7,9 +7,7 @@ export class DialogueRole extends ModelBuilder {
 		try {
 			// 对消息中的图片文件进行压缩与解析处理
 			await source.LiteImageFile();
-			// 合并 学习者角色 历史摘要
-			source.learnerRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
-			// 绘制者和演奏者已改为通过工具调用返回作品描述（dispatch_painter / dispatch_musician），
+			// 绘制者、演奏者和学习者已改为通过工具调用返回描述（dispatch_*），
 			// 不再通过 consumeHistory() 向对话者传递摘要
 			// 将未读上下文数组中的消息添加到处理器模型的上下文
 			source.unreadContext.forEach(context => this.writeContext(context));

@@ -764,7 +764,6 @@ var agentSystem = (function (exports) {
         async callMultimediaAndToolParsing(cache, source) {
             try {
                 await source.LiteImageFile();
-                source.learnerRole.consumeHistory().forEach(msg => source.unreadContext.push(msg));
                 source.unreadContext.forEach(context => this.writeContext(context));
                 source.unreadContext = [];
                 this.formatHistoricalMessages(source);
@@ -1490,32 +1489,12 @@ K:Am
         }
     }
 
-    const learnerKeywords = [
-        /回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
-        /还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
-        /上次(?:说|聊|讨论|提|提到)/,
-        /搜索/, /搜(?:一搜|一下)/, /深入(?:了解|分析|研究)/,
-        /详细(?:了解|分析|说明|解释)/, /分析(?:一(?:下|分析))?/,
-        /(?:资料|文献|论文|报告|数据|统计)/, /调查(?:一(?:下|调查))?/,
-        /核实/, /验证/,
-        /查(?:一查|一下|询|找|找找|看看)/,
-        /(?:帮我|给我|为我|替我)(?:查|搜索|找|调查|研究|检索|查询)/,
-        /(?:真|假|正确|错误|靠谱|可靠)/,
-    ];
-    const recallKeywords = [
-        /回忆(?:一(?:下|回忆))?/, /想想?(?:看|起|到)/, /记不记得/,
-        /还记得/, /以前(?:说过|聊过|讨论过|提过|提到)/,
-        /上次(?:说|聊|讨论|提|提到)/,
-    ];
-    function isRecallIntent(texts) {
-        return texts.some(text => recallKeywords.some(kw => kw.test(text)));
-    }
     let learnerInitialized = false;
     function ensureLearnerInitialized() {
         if (learnerInitialized)
             return true;
         if (!learnerIsReady()) {
-            const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, 4096, 0.7, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
+            const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
             if (err) {
                 console.error('[学习者] 初始化失败:', err);
                 return false;
@@ -1527,45 +1506,25 @@ K:Am
     }
     class LearnerRole {
         messages = [];
-        consumeHistory() {
-            const result = [...this.messages];
-            this.messages = [];
-            return result;
-        }
-        executeLearner(unreadContext) {
-            const unreadTexts = this.extractTexts(unreadContext);
-            if (!unreadTexts.some(text => learnerKeywords.some(keyword => keyword.test(text)))) {
-                return true;
+        async createCreativeWork(taskDescription) {
+            if (!taskDescription || taskDescription.trim().length === 0) {
+                return '研究任务调度失败：任务描述不能为空，请提供具体的学习研究需求';
             }
-            if (!ensureLearnerInitialized())
-                return true;
-            const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
-            console.log('[学习者] 开始执行研究, 模式:', mode);
-            const [report, error] = learnerExecute(unreadTexts, mode);
+            if (!ensureLearnerInitialized()) {
+                return '研究任务调度失败：学习者子智能体未就绪，请稍后重试';
+            }
+            console.log('[学习者] 开始执行研究:', taskDescription);
+            const [report, error] = learnerExecute(taskDescription.trim());
             if (error) {
                 console.error('[学习者] 执行失败:', error);
-                return true;
+                return `研究任务执行失败：${error}`;
             }
             if (report && report.trim().length > 0) {
-                this.messages.push({ role: 'user', content: report });
-                console.log('[学习者] 已将研究报告写入历史');
+                this.messages.push({ role: 'assistant', content: report });
+                console.log('[学习者] 研究完成，报告已生成');
+                return report;
             }
-            return false;
-        }
-        extractTexts(messages) {
-            const texts = [];
-            for (const msg of messages) {
-                if (typeof msg.content === 'string') {
-                    texts.push(msg.content);
-                }
-                else if (Array.isArray(msg.content)) {
-                    msg.content.forEach((item) => {
-                        if (item.type === 'text')
-                            texts.push(item.text);
-                    });
-                }
-            }
-            return texts;
+            return '研究任务完成，但未找到相关信息。';
         }
         dumpContext(dialogueMessages, unreadContext, outputPath) {
             const path = outputPath || 'agent_debug_学习者.json';
@@ -1573,12 +1532,9 @@ K:Am
                 year: 'numeric', month: '2-digit', day: '2-digit',
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             });
-            const unreadTexts = this.extractTexts(unreadContext);
-            const mode = isRecallIntent(unreadTexts) ? 'recall' : 'full';
             const snapshot = {
                 timestamp,
                 role: '学习者',
-                mode,
                 ownMessagesCount: this.messages.length,
                 ownMessages: this.messages.map((msg, idx) => {
                     const content = typeof msg.content === 'string'
@@ -1620,12 +1576,10 @@ K:Am
                 console.error('[学习者] 导出 TS 层上下文失败:', error);
                 return '';
             }
-            if (learnerInitialized) {
-                const goPath = path.replace('.json', '_go.json');
-                const [, goError] = learnerDumpContext(unreadTexts, mode, goPath);
-                if (goError) {
-                    console.error('[学习者] 导出 Go 层上下文失败:', goError);
-                }
+            const goPath = path.replace('.json', '_go.json');
+            const [, goError] = learnerDumpContext('', goPath);
+            if (goError) {
+                console.error('[学习者] 导出 Go 层上下文失败:', goError);
             }
             console.log('[学习者] 上下文快照已导出:', path);
             return path;
@@ -2756,7 +2710,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     if (messageLength === 0)
                         this.speakWeight = 0;
                     await this.batchProcessVideoFiles();
-                    this.learnerRole.executeLearner(this.unreadContext);
                     await this.createChatMessage();
                     if (!this.finalResponse.trim().length)
                         throw new Error('消息响应为空');
@@ -3268,6 +3221,23 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     required: ["description"]
                 }
             }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_learner",
+                description: "向学习者子智能体发布学习研究任务。学习者会执行网络搜索和记忆库查询，收集信息后生成结构化的研究报告。适用于需要查证事实、搜索资料、研究分析等场景。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "学习研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，搜索结果越准确。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
         }
     ];
     function parseArgs(args) {
@@ -3315,9 +3285,24 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
+    async function handleDispatchLearner(args) {
+        const { description } = parseArgs(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
+        }
+        const instance = AgentDefine.instance;
+        if (!instance || !instance.learnerRole) {
+            return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度学习者: ${description}`);
+        const result = await instance.learnerRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
+        return [result, ''];
+    }
     GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
     GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+    GlobalConfig.LTPfunction.set('dispatch_learner', handleDispatchLearner);
     GlobalConfig.LTPdefinition.push(...agentControlTools);
 
     const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
