@@ -1,7 +1,7 @@
 // ==== 星月智能 · 文件整理 — 前端逻辑 ====
 
-const WORKSPACE = 'package/file_organizer/workspace';
-const PACKAGE_DIR = 'package/file_organizer';
+const WORKSPACE = 'package/lunar.means.file.organizer/workspace';
+const PACKAGE_DIR = 'package/lunar.means.file.organizer';
 const MODEL = 'system-multimodal';
 const BATCH_SIZE = 20;
 
@@ -770,7 +770,7 @@ async function startOrganize() {
 
 async function loadSummariesFromCache() {
     try {
-        const res = await fetch('/file/read/package/file_organizer/summaries.json');
+        const res = await fetch('/file/read/package/lunar.means.file.organizer/summaries.json');
         if (!res.ok) return null;
         return await res.json();
     } catch {
@@ -809,7 +809,7 @@ async function executeConfirmedOperations() {
         if (result.success) {
             showToast(`整理完成！成功执行 ${result.success_count} 个操作`, 'success');
             // 文件已移动，清除过期摘要缓存
-            try { await fetch('/file/delete/package/file_organizer/summaries.json', { method: 'DELETE' }); } catch {}
+            try { await fetch('/file/delete/package/lunar.means.file.organizer/summaries.json', { method: 'DELETE' }); } catch {}
         } else {
             showToast(`整理完成，${result.success_count} 成功，${result.fail_count} 失败`, 'warning');
         }

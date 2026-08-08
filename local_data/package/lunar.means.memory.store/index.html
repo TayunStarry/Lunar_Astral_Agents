@@ -41,8 +41,14 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button id="btn-refresh" class="btn-icon" title="刷新统计"><i
-                            class="fa-solid fa-rotate-right"></i></button>
+                    <button id="btn-model-config" class="btn-icon" title="嵌入模型 / 多模态模型配置">
+                        <i class="fa-solid fa-gear"></i>
+                        <span class="model-status-dots" id="model-status-dots">
+                            <span class="model-dot" id="mdot-embed" title="嵌入模型: 检测中">●</span>
+                            <span class="model-dot" id="mdot-multimodal" title="多模态模型: 检测中">●</span>
+                        </span>
+                    </button>
+                    <button id="btn-refresh" class="btn-icon" title="刷新统计"><i class="fa-solid fa-rotate-right"></i></button>
                 </div>
             </div>
         </header>
@@ -127,8 +133,11 @@
                             <button id="btn-add-doc" class="btn-primary btn-sm" title="向当前集合添加文档">
                                 <i class="fa-solid fa-plus"></i> 添加文档
                             </button>
+                            <button id="btn-batch-import" class="btn-secondary btn-sm" title="批量导入图片到当前集合" style="display:none;">
+                                <i class="fa-solid fa-folder-open"></i> 批量
+                            </button>
                             <button id="btn-rebuild" class="btn-secondary btn-sm" title="重建当前集合索引">
-                                <i class="fa-solid fa-arrows-rotate"></i> 重建索引
+                                <i class="fa-solid fa-arrows-rotate"></i> 重建
                             </button>
                         </div>
                     </div>
@@ -350,8 +359,107 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary modal-close-btn" data-close="modal-add-image">取消</button>
+                <button id="btn-build-desc" class="btn-secondary btn-sm" title="使用多模态模型自动分析图片并填充描述">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 构建描述
+                </button>
+                <span class="build-desc-hint" id="build-desc-hint"></span>
                 <button id="btn-add-image-submit" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
                     <i class="fa-solid fa-cloud-arrow-up"></i> 添加到图片记忆库
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模型配置模态框 -->
+    <div class="modal-overlay" id="modal-model-config" style="display:none;">
+        <div class="modal-card glass-card modal-config-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-gear"></i> 模型配置</h3>
+                <button class="btn-icon modal-close-btn" data-close="modal-model-config" title="关闭">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="model-config-section">
+                    <h4 class="config-section-title">
+                        <i class="fa-solid fa-microchip"></i> 嵌入模型
+                        <span class="model-avail-dot" id="cfg-embed-avail" title="检测中">●</span>
+                    </h4>
+                    <div class="form-group">
+                        <label class="form-label">模型名</label>
+                        <input type="text" id="cfg-embed-model" class="form-input"
+                            placeholder="system-embedding" value="system-embedding">
+                    </div>
+                </div>
+                <div class="model-config-section">
+                    <h4 class="config-section-title">
+                        <i class="fa-solid fa-eye"></i> 多模态模型
+                        <span class="model-avail-dot" id="cfg-multimodal-avail" title="检测中">●</span>
+                    </h4>
+                    <div class="form-group">
+                        <label class="form-label">模型名</label>
+                        <input type="text" id="cfg-multimodal-model" class="form-input"
+                            placeholder="system-multimodal" value="system-multimodal">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API 地址</label>
+                        <input type="text" id="cfg-multimodal-url" class="form-input"
+                            placeholder="http://localhost:36789/v1" value="http://localhost:36789/v1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">API Key</label>
+                        <input type="password" id="cfg-multimodal-key" class="form-input"
+                            placeholder="sk-...（可选）">
+                    </div>
+                </div>
+                <p class="config-hint" id="config-status-hint"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary modal-close-btn" data-close="modal-model-config">取消</button>
+                <button id="btn-save-model-config" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
+                    <i class="fa-solid fa-floppy-disk"></i> 保存配置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量导入模态框 -->
+    <div class="modal-overlay" id="modal-batch-import" style="display:none;">
+        <div class="modal-card glass-card modal-batch-card">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-folder-open"></i> 批量导入</h3>
+                <button class="btn-icon modal-close-btn" data-close="modal-batch-import" title="关闭">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-folder"></i> 图片目录路径</label>
+                    <div class="batch-path-row">
+                        <input type="text" id="batch-path" class="form-input"
+                            placeholder="输入图片所在目录的绝对路径，如：D:\images\photos">
+                        <button id="btn-scan-path" class="btn-primary btn-sm">
+                            <i class="fa-solid fa-magnifying-glass"></i> 扫描
+                        </button>
+                    </div>
+                </div>
+                <div class="batch-file-list" id="batch-file-list">
+                    <div class="batch-empty-hint">
+                        <i class="fa-solid fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件
+                    </div>
+                </div>
+                <div class="batch-progress" id="batch-progress" style="display:none;">
+                    <div class="batch-progress-bar">
+                        <div class="batch-progress-fill" id="batch-progress-fill"></div>
+                    </div>
+                    <span class="batch-progress-text" id="batch-progress-text">0/0</span>
+                </div>
+                <div class="batch-log" id="batch-log" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary modal-close-btn" data-close="modal-batch-import">关闭</button>
+                <button id="btn-start-batch" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;" disabled>
+                    <i class="fa-solid fa-play"></i> 开始导入
                 </button>
             </div>
         </div>

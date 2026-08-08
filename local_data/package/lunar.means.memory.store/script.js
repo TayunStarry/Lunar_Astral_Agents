@@ -35,7 +35,11 @@ var App = {
     documents: [],
     searchResults: [],
     imageBase64: null,       // 当前上传的图片 base64
-    isImageCollection: false // 当前集合是否为 image 类型
+    isImageCollection: false, // 当前集合是否为 image 类型
+    embedAvailable: null,     // 嵌入模型可用性：true/false/null
+    multimodalAvailable: null, // 多模态模型可用性：true/false/null
+    batchFiles: [],           // 批量导入的图片文件列表
+    batchRunning: false       // 批量导入是否正在运行
 };
 
 function $(id) {
@@ -45,12 +49,15 @@ function $(id) {
 var D = {
     // Header
     hdrCollections: $('hdr-collections'),
-    hdrCount: $('hdr-count'),
-    hdrDot: $('hdr-status-dot'),
-    hdrLabel: $('hdr-status-label'),
-    syncWarn: $('sync-warn'),
-    btnRefresh: $('btn-refresh'),
+    hdrCount:       $('hdr-count'),
+    hdrDot:         $('hdr-status-dot'),
+    hdrLabel:       $('hdr-status-label'),
+    syncWarn:       $('sync-warn'),
+    btnRefresh:     $('btn-refresh'),
     btnRebuildSync: $('btn-rebuild-sync'),
+    btnModelConfig: $('btn-model-config'),
+    mdotEmbed:      $('mdot-embed'),
+    mdotMultimodal: $('mdot-multimodal'),
 
     // Init
     initCard: $('init-card'),
@@ -69,8 +76,9 @@ var D = {
     statDim: $('stat-dim'),
     statType: $('stat-type'),
     statCount: $('stat-count'),
-    btnAddDoc: $('btn-add-doc'),
-    btnRebuild: $('btn-rebuild'),
+    btnAddDoc:      $('btn-add-doc'),
+    btnRebuild:     $('btn-rebuild'),
+    btnBatchImport: $('btn-batch-import'),
 
     // Left sidebar - collection list
     collectionList: $('collection-list'),
@@ -129,6 +137,32 @@ var D = {
     addContentDesc: $('add-content-desc'),
     btnAddImageSubmit: $('btn-add-image-submit'),
 
+    // Build description
+    btnBuildDesc:    $('btn-build-desc'),
+    buildDescHint:   $('build-desc-hint'),
+
+    // Model config modal
+    modalModelConfig:    $('modal-model-config'),
+    cfgEmbedModel:       $('cfg-embed-model'),
+    cfgEmbedAvail:       $('cfg-embed-avail'),
+    cfgMultimodalModel:  $('cfg-multimodal-model'),
+    cfgMultimodalAvail:  $('cfg-multimodal-avail'),
+    cfgMultimodalUrl:    $('cfg-multimodal-url'),
+    cfgMultimodalKey:    $('cfg-multimodal-key'),
+    btnSaveModelConfig:  $('btn-save-model-config'),
+    configStatusHint:    $('config-status-hint'),
+
+    // Batch import modal
+    modalBatchImport:  $('modal-batch-import'),
+    batchPath:         $('batch-path'),
+    btnScanPath:       $('btn-scan-path'),
+    batchFileList:     $('batch-file-list'),
+    batchProgress:     $('batch-progress'),
+    batchProgressFill: $('batch-progress-fill'),
+    batchProgressText: $('batch-progress-text'),
+    batchLog:          $('batch-log'),
+    btnStartBatch:     $('btn-start-batch'),
+
     // Toast
     toastContainer: $('toast-container')
 };
@@ -138,7 +172,9 @@ var D = {
 function init() {
     bindGlobalEvents();
     bindKeyboard();
+    loadModelConfigToUI();
     loadGlobalStats();
+    checkModelsAvailability();
 }
 
 function bindGlobalEvents() {
@@ -197,6 +233,20 @@ function bindGlobalEvents() {
             processImageFile(e.dataTransfer.files[0]);
         }
     });
+
+    // Build description
+    D.btnBuildDesc.addEventListener('click', handleBuildDescriptions);
+
+    // Model config - open modal
+    D.btnModelConfig.addEventListener('click', function () {
+        showModelConfigModal();
+    });
+    D.btnSaveModelConfig.addEventListener('click', saveModelConfig);
+
+    // Batch import
+    D.btnBatchImport.addEventListener('click', showBatchImportModal);
+    D.btnScanPath.addEventListener('click', handleScanPath);
+    D.btnStartBatch.addEventListener('click', handleStartBatch);
 
     // Rebuild
     D.btnRebuild.addEventListener('click', handleRebuild);
@@ -277,6 +327,8 @@ function bindKeyboard() {
             if (D.modalAddDoc.style.display === 'flex') closeModalById('modal-add-doc');
             if (D.modalAddImage.style.display === 'flex') closeModalById('modal-add-image');
             if (D.modalCreateCol.style.display === 'flex') closeModalById('modal-create-collection');
+            if (D.modalModelConfig.style.display === 'flex') closeModalById('modal-model-config');
+            if (D.modalBatchImport.style.display === 'flex') closeModalById('modal-batch-import');
             if (D.modalOverlay.style.display === 'flex') closeConfirmModal();
         }
     });
@@ -503,11 +555,13 @@ function updateCollectionStats(col) {
 
 function updateAddButton() {
     if (App.isImageCollection) {
-        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-image"></i> 添加图片';
+        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-image"></i> 新增';
         D.btnAddDoc.title = '向当前图片集合添加图片';
+        D.btnBatchImport.style.display = 'inline-flex';
     } else {
         D.btnAddDoc.innerHTML = '<i class="fa-solid fa-plus"></i> 添加文档';
         D.btnAddDoc.title = '向当前集合添加文档';
+        D.btnBatchImport.style.display = 'none';
     }
 }
 
@@ -1406,6 +1460,578 @@ async function handleAddImage() {
         D.btnAddImageSubmit.disabled = false;
         showBtnLoading(D.btnAddImageSubmit, false, '添加到图片记忆库');
     }
+}
+
+// ========== 模型配置 ==========
+
+var MODEL_CONFIG_KEY = 'lunar_memory_model_config';
+
+function getModelConfig() {
+    try {
+        var raw = localStorage.getItem(MODEL_CONFIG_KEY);
+        if (raw) {
+            var cfg = JSON.parse(raw);
+            return {
+                embedModel: cfg.embedModel || 'system-embedding',
+                multimodalModel: cfg.multimodalModel || 'system-multimodal',
+                multimodalUrl: cfg.multimodalUrl || 'http://localhost:36789/v1',
+                multimodalKey: cfg.multimodalKey || ''
+            };
+        }
+    } catch (e) {}
+    return {
+        embedModel: 'system-embedding',
+        multimodalModel: 'system-multimodal',
+        multimodalUrl: 'http://localhost:36789/v1',
+        multimodalKey: ''
+    };
+}
+
+function loadModelConfigToUI() {
+    var cfg = getModelConfig();
+    D.cfgEmbedModel.value = cfg.embedModel;
+    D.cfgMultimodalModel.value = cfg.multimodalModel;
+    D.cfgMultimodalUrl.value = cfg.multimodalUrl;
+    D.cfgMultimodalKey.value = cfg.multimodalKey;
+}
+
+function showModelConfigModal() {
+    loadModelConfigToUI();
+    updateModalAvailDots();
+    D.configStatusHint.textContent = '';
+    D.configStatusHint.className = 'config-hint';
+    D.modalModelConfig.style.display = 'flex';
+}
+
+function updateModalAvailDots() {
+    updateAvailDot(D.cfgEmbedAvail, App.embedAvailable);
+    updateAvailDot(D.cfgMultimodalAvail, App.multimodalAvailable);
+}
+
+function saveModelConfig() {
+    var cfg = {
+        embedModel: D.cfgEmbedModel.value.trim() || 'system-embedding',
+        multimodalModel: D.cfgMultimodalModel.value.trim() || 'system-multimodal',
+        multimodalUrl: D.cfgMultimodalUrl.value.trim() || 'http://localhost:36789/v1',
+        multimodalKey: D.cfgMultimodalKey.value.trim()
+    };
+
+    try {
+        localStorage.setItem(MODEL_CONFIG_KEY, JSON.stringify(cfg));
+        D.configStatusHint.textContent = '✓ 配置已保存 (' + new Date().toLocaleTimeString() + ')';
+        D.configStatusHint.className = 'config-hint config-saved';
+        // 保存后重新检查可用性
+        checkModelsAvailability();
+        setTimeout(function () {
+            D.configStatusHint.textContent = '';
+            D.configStatusHint.className = 'config-hint';
+        }, 3000);
+    } catch (e) {
+        showToast('保存配置失败: ' + e.message, 'error');
+    }
+}
+
+// ========== 模型可用性检测 ==========
+
+async function checkModelsAvailability() {
+    // 检查嵌入模型：尝试对 models 端点执行 GET
+    checkEmbedModel();
+    // 检查多模态模型：先检查嵌入模型完成后再检查
+    setTimeout(function () { checkMultimodalModel(); }, 800);
+}
+
+async function checkEmbedModel() {
+    var cfg = getModelConfig();
+    var baseUrl = (cfg.multimodalUrl || 'http://localhost:36789/v1').replace(/\/+$/, '');
+    try {
+        var resp = await fetch(baseUrl + '/models', {
+            headers: cfg.multimodalKey ? { 'Authorization': 'Bearer ' + cfg.multimodalKey } : {}
+        });
+        if (resp.ok) {
+            var data = await resp.json();
+            var models = (data.data || []).map(function (m) { return m.id || ''; });
+            App.embedAvailable = models.indexOf(cfg.embedModel) !== -1 || models.indexOf('system-embedding') !== -1;
+        } else {
+            App.embedAvailable = false;
+        }
+    } catch (e) {
+        App.embedAvailable = false;
+    }
+    updateModelStatusDots();
+}
+
+async function checkMultimodalModel() {
+    var cfg = getModelConfig();
+    var baseUrl = (cfg.multimodalUrl || 'http://localhost:36789/v1').replace(/\/+$/, '');
+    try {
+        var resp = await fetch(baseUrl + '/models', {
+            headers: cfg.multimodalKey ? { 'Authorization': 'Bearer ' + cfg.multimodalKey } : {}
+        });
+        if (resp.ok) {
+            var data = await resp.json();
+            var models = (data.data || []).map(function (m) { return m.id || ''; });
+            App.multimodalAvailable = models.indexOf(cfg.multimodalModel) !== -1 || models.indexOf('system-multimodal') !== -1;
+        } else {
+            App.multimodalAvailable = false;
+        }
+    } catch (e) {
+        App.multimodalAvailable = false;
+    }
+    updateModelStatusDots();
+}
+
+function updateModelStatusDots() {
+    updateAvailDot(D.mdotEmbed, App.embedAvailable);
+    updateAvailDot(D.mdotMultimodal, App.multimodalAvailable);
+    updateAvailDot(D.cfgEmbedAvail, App.embedAvailable);
+    updateAvailDot(D.cfgMultimodalAvail, App.multimodalAvailable);
+}
+
+function updateAvailDot(el, available) {
+    if (!el) return;
+    el.classList.remove('avail-yes', 'avail-no', 'avail-checking');
+    if (available === true) {
+        el.classList.add('avail-yes');
+        el.title = el.title ? el.title.replace('检测中', '可用').replace('不可用', '可用') : '可用';
+    } else if (available === false) {
+        el.classList.add('avail-no');
+        el.title = el.title ? el.title.replace('检测中', '不可用').replace('可用', '不可用') : '不可用';
+    } else {
+        el.classList.add('avail-checking');
+    }
+}
+
+// ========== 构建描述（多模态模型） ==========
+
+// handleBuildDescriptions 调用多模态模型分析图片，自动填充三个描述字段
+async function handleBuildDescriptions() {
+    if (!App.imageBase64) {
+        showToast('请先上传一张图片', 'warn');
+        return;
+    }
+
+    var cfg = getModelConfig();
+    if (!cfg.multimodalUrl || !cfg.multimodalModel) {
+        showToast('请先在「模型配置」中设置多模态模型信息', 'error');
+        return;
+    }
+
+    D.btnBuildDesc.disabled = true;
+    showBtnLoading(D.btnBuildDesc, true, '分析中...');
+    D.buildDescHint.textContent = '正在调用多模态模型分析图片...';
+    D.buildDescHint.className = 'build-desc-hint loading';
+
+    try {
+        var result = await callMultimodalModel(cfg);
+        if (result) {
+            D.addEmotionDesc.value = result.emotion || '';
+            D.addColorStyleDesc.value = result.color_style || '';
+            D.addContentDesc.value = result.content || '';
+            D.buildDescHint.textContent = '✓ 描述已自动填充';
+            D.buildDescHint.className = 'build-desc-hint success';
+            showToast('描述构建完成', 'success');
+        }
+    } catch (err) {
+        D.buildDescHint.textContent = '✗ ' + (err.message || '分析失败');
+        D.buildDescHint.className = 'build-desc-hint error';
+        showToast('构建描述失败: ' + err.message, 'error');
+    } finally {
+        D.btnBuildDesc.disabled = false;
+        showBtnLoading(D.btnBuildDesc, false, '构建描述');
+    }
+}
+
+// callMultimodalModel 调用多模态模型的 /v1/chat/completions 接口分析图片
+// 返回 { emotion, color_style, content } 对象
+async function callMultimodalModel(cfg) {
+    var baseUrl = cfg.multimodalUrl.replace(/\/+$/, '');
+    var apiUrl = baseUrl + '/chat/completions';
+
+    var systemPrompt = '你是一个专业的视觉内容分析助手。请仔细观察图片，从以下三个维度用中文进行细致、准确的描述，每个描述控制在2-4句话，避免空洞笼统的表达：\n\n' +
+        '1. 情绪氛围（emotion）：描述画面传达的情感基调与心理感受。注意人物表情、光线明暗、构图张力、场景氛围等线索。\n' +
+        '   例如："温暖宁静的黄昏氛围，人物表情柔和放松，侧逆光营造出淡淡的怀旧感"而非"开心的感觉"。\n\n' +
+        '2. 色彩风格（color_style）：描述画面的主色调、配色方案与视觉风格。注意色温（冷/暖）、饱和度、对比度、色彩搭配模式。\n' +
+        '   例如："低饱和度暖色调为主，橙黄与暗绿对比，有胶片质感"而非"颜色好看"。\n\n' +
+        '3. 主要内容（content）：描述画面中的核心视觉元素及其关系。包括主体对象、动作/状态、场景环境、关键细节。\n' +
+        '   例如："一位穿白色连衣裙的女性站在海边礁石上，双臂展开面向大海，海浪拍打礁石激起白色泡沫"而非"一个女人在海边"。\n\n' +
+        '请严格按照以下JSON格式输出，不要包含任何其他内容（不要输出markdown代码块标记，不要输出解释）：\n' +
+        '{"emotion":"...","color_style":"...","content":"..."}';
+
+    var headers = {
+        'Content-Type': 'application/json'
+    };
+    if (cfg.multimodalKey) {
+        headers['Authorization'] = 'Bearer ' + cfg.multimodalKey;
+    }
+
+    var body = {
+        model: cfg.multimodalModel,
+        messages: [
+            { role: 'system', content: systemPrompt },
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: '请分析这张图片' },
+                    { type: 'image_url', image_url: { url: App.imageBase64 } }
+                ]
+            }
+        ],
+        max_tokens: 300,
+        temperature: 0.3
+    };
+
+    var resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+        var errText = '';
+        try {
+            var errJson = await resp.json();
+            errText = errJson.error ? errJson.error.message || JSON.stringify(errJson.error) : resp.statusText;
+        } catch (e) {
+            errText = resp.statusText || 'HTTP ' + resp.status;
+        }
+        throw new Error(errText);
+    }
+
+    var data = await resp.json();
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('模型返回格式异常');
+    }
+
+    var content = data.choices[0].message.content || '';
+
+    // 尝试解析JSON（可能包含markdown代码块或前后空白）
+    var jsonStr = content.trim();
+    // 去除可能的 markdown 代码块标记
+    var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+    }
+
+    try {
+        var parsed = JSON.parse(jsonStr);
+        return {
+            emotion: parsed.emotion || '',
+            color_style: parsed.color_style || '',
+            content: parsed.content || ''
+        };
+    } catch (e) {
+        // 如果JSON解析失败，尝试用正则提取
+        var emotion = extractField(content, 'emotion', '情绪');
+        var colorStyle = extractField(content, 'color_style', '色彩');
+        var contentDesc = extractField(content, 'content', '内容');
+        if (emotion || colorStyle || contentDesc) {
+            return { emotion: emotion, color_style: colorStyle, content: contentDesc };
+        }
+        throw new Error('无法解析模型返回的描述内容');
+    }
+}
+
+// extractField 从文本中提取字段值，用于JSON解析失败时的兜底
+function extractField(text, jsonKey, cnLabel) {
+    // 尝试从 JSON 片段中提取
+    var re = new RegExp('"' + jsonKey + '"\\s*:\\s*"([^"]*)"', 'i');
+    var m = text.match(re);
+    if (m) return m[1];
+
+    // 尝试从中文标签后提取
+    re = new RegExp(cnLabel + '[：:]\\s*(.+?)(?:\\n|$)', 'i');
+    m = text.match(re);
+    if (m) return m[1].trim();
+
+    return '';
+}
+
+// ========== 批量导入 ==========
+
+function showBatchImportModal() {
+    if (!App.initialized) {
+        showToast('记忆库未初始化，请先完成初始化', 'error');
+        return;
+    }
+    if (!App.currentCollection) {
+        showToast('请先选择一个集合', 'error');
+        return;
+    }
+    if (!App.isImageCollection) {
+        showToast('批量导入仅支持图片类型集合，请先选择图片集合', 'warn');
+        return;
+    }
+
+    D.batchPath.value = '';
+    D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件</div>';
+    D.batchProgress.style.display = 'none';
+    D.batchLog.style.display = 'none';
+    D.batchLog.innerHTML = '';
+    D.btnStartBatch.disabled = true;
+    App.batchFiles = [];
+    App.batchRunning = false;
+    D.modalBatchImport.style.display = 'flex';
+}
+
+async function handleScanPath() {
+    var path = D.batchPath.value.trim();
+    if (!path) {
+        showToast('请输入目录路径', 'error');
+        return;
+    }
+
+    D.btnScanPath.disabled = true;
+    showBtnLoading(D.btnScanPath, true, '扫描中...');
+
+    try {
+        // 通过 /file/list/{path} 端点扫描目录（路径拼接，非查询参数）
+        var resp = await fetch('/file/list/' + path);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var files = await resp.json();
+
+        // 返回格式为直接数组 [{name, path, type, ...}, ...]
+        if (Array.isArray(files)) {
+            // 筛选图片文件
+            var imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+            App.batchFiles = files.filter(function (f) {
+                var name = (f.name || '').toLowerCase();
+                for (var i = 0; i < imageExts.length; i++) {
+                    if (name.endsWith(imageExts[i])) return true;
+                }
+                return false;
+            }).map(function (f) {
+                return { name: f.name, path: f.path };
+            });
+
+            renderBatchFileList();
+            D.btnStartBatch.disabled = App.batchFiles.length === 0;
+            showToast('扫描完成，找到 ' + App.batchFiles.length + ' 张图片', 'success');
+        } else {
+            D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-circle-exclamation"></i> 目录不存在或无法访问</div>';
+            App.batchFiles = [];
+            D.btnStartBatch.disabled = true;
+        }
+    } catch (err) {
+        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-circle-exclamation"></i> 扫描失败: ' + esc(err.message) + '</div>';
+        App.batchFiles = [];
+        D.btnStartBatch.disabled = true;
+    } finally {
+        D.btnScanPath.disabled = false;
+        showBtnLoading(D.btnScanPath, false, '扫描');
+    }
+}
+
+function renderBatchFileList() {
+    if (App.batchFiles.length === 0) {
+        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-inbox"></i> 目录中没有图片文件</div>';
+        return;
+    }
+
+    var html = '<div class="batch-file-count">找到 <strong>' + App.batchFiles.length + '</strong> 张图片</div>';
+    var maxShow = 20;
+    for (var i = 0; i < Math.min(App.batchFiles.length, maxShow); i++) {
+        var f = App.batchFiles[i];
+        html += '<div class="batch-file-item"><i class="fa-solid fa-image"></i> <span>' + esc(f.name) + '</span>' +
+            '<span class="batch-file-status" id="batch-status-' + i + '">等待</span></div>';
+    }
+    if (App.batchFiles.length > maxShow) {
+        html += '<div class="batch-file-item batch-file-more">... 还有 ' + (App.batchFiles.length - maxShow) + ' 个文件</div>';
+    }
+    D.batchFileList.innerHTML = html;
+}
+
+async function handleStartBatch() {
+    if (App.batchFiles.length === 0 || App.batchRunning) return;
+
+    var cfg = getModelConfig();
+    if (!cfg.multimodalUrl || !cfg.multimodalModel) {
+        showToast('请先在「模型配置」中设置多模态模型信息', 'error');
+        return;
+    }
+
+    App.batchRunning = true;
+    D.btnStartBatch.disabled = true;
+    D.batchProgress.style.display = 'flex';
+    D.batchLog.style.display = 'block';
+    D.batchLog.innerHTML = '';
+    updateBatchProgress(0, App.batchFiles.length);
+
+    var successCount = 0;
+    var failCount = 0;
+    var total = App.batchFiles.length;
+
+    for (var i = 0; i < total; i++) {
+        if (!App.batchRunning) break;
+
+        var f = App.batchFiles[i];
+        updateFileStatus(i, '读取中...');
+
+        try {
+            // 1. 读取图片文件为 base64
+            var base64 = await readFileAsBase64(f.path);
+            if (!base64) {
+                updateFileStatus(i, '读取失败');
+                appendBatchLog('✗', f.name, '文件读取失败');
+                failCount++;
+                updateBatchProgress(i + 1, total);
+                continue;
+            }
+
+            // 2. 调用多模态模型生成描述
+            updateFileStatus(i, '分析中...');
+            var desc = null;
+            try {
+                desc = await callMultimodalForFile(cfg, base64);
+            } catch (e) {
+                appendBatchLog('⚠', f.name, '描述生成失败（' + e.message + '），使用空描述');
+                desc = { emotion: '', color_style: '', content: '' };
+            }
+
+            // 3. 添加到记忆库
+            updateFileStatus(i, '上传中...');
+            var addResp = await fetch(API.collection(App.currentCollection).IMAGES, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: base64,
+                    emotion_desc: desc.emotion || '',
+                    color_style_desc: desc.color_style || '',
+                    content_desc: desc.content || ''
+                })
+            });
+            var addResult = await addResp.json();
+
+            if (addResult.success) {
+                updateFileStatus(i, '✓ 成功');
+                appendBatchLog('✓', f.name, '导入成功');
+                successCount++;
+            } else {
+                updateFileStatus(i, '添加失败');
+                appendBatchLog('✗', f.name, (addResult.error || '添加失败'));
+                failCount++;
+            }
+        } catch (err) {
+            updateFileStatus(i, '错误');
+            appendBatchLog('✗', f.name, err.message);
+            failCount++;
+        }
+
+        updateBatchProgress(i + 1, total);
+    }
+
+    // 完成
+    App.batchRunning = false;
+    D.btnStartBatch.disabled = false;
+    appendBatchLog('', '', '--- 批量导入完成：成功 ' + successCount + '，失败 ' + failCount + ' ---');
+    showToast('批量导入完成: 成功 ' + successCount + '/失败 ' + failCount, successCount > 0 ? 'success' : 'error');
+
+    // 刷新集合
+    loadCollectionStats(App.currentCollection);
+    loadCollections();
+}
+
+// readFileAsBase64 通过 /file/read/{path} 端点读取文件并转为 base64
+async function readFileAsBase64(filePath) {
+    var resp = await fetch('/file/read/' + filePath);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    var blob = await resp.blob();
+    return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () { resolve(reader.result); };
+        reader.onerror = function () { reject(new Error('base64 转换失败')); };
+        reader.readAsDataURL(blob);
+    });
+}
+
+// callMultimodalForFile 调用多模态模型分析指定图片，与 callMultimodalModel 相同逻辑但接受独立 base64
+async function callMultimodalForFile(cfg, base64) {
+    var baseUrl = cfg.multimodalUrl.replace(/\/+$/, '');
+    var apiUrl = baseUrl + '/chat/completions';
+
+    var systemPrompt = '你是一个专业的视觉内容分析助手。请仔细观察图片，从以下三个维度用中文进行细致、准确的描述，每个描述控制在2-4句话，避免空洞笼统的表达：\n\n' +
+        '1. 情绪氛围（emotion）：描述画面传达的情感基调与心理感受。注意人物表情、光线明暗、构图张力、场景氛围等线索。\n' +
+        '   例如："温暖宁静的黄昏氛围，人物表情柔和放松，侧逆光营造出淡淡的怀旧感"而非"开心的感觉"。\n\n' +
+        '2. 色彩风格（color_style）：描述画面的主色调、配色方案与视觉风格。注意色温（冷/暖）、饱和度、对比度、色彩搭配模式。\n' +
+        '   例如："低饱和度暖色调为主，橙黄与暗绿对比，有胶片质感"而非"颜色好看"。\n\n' +
+        '3. 主要内容（content）：描述画面中的核心视觉元素及其关系。包括主体对象、动作/状态、场景环境、关键细节。\n' +
+        '   例如："一位穿白色连衣裙的女性站在海边礁石上，双臂展开面向大海，海浪拍打礁石激起白色泡沫"而非"一个女人在海边"。\n\n' +
+        '请严格按照以下JSON格式输出，不要包含任何其他内容（不要输出markdown代码块标记，不要输出解释）：\n' +
+        '{"emotion":"...","color_style":"...","content":"..."}';
+
+    var headers = { 'Content-Type': 'application/json' };
+    if (cfg.multimodalKey) {
+        headers['Authorization'] = 'Bearer ' + cfg.multimodalKey;
+    }
+
+    var resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+            model: cfg.multimodalModel,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: '请分析这张图片' },
+                        { type: 'image_url', image_url: { url: base64 } }
+                    ]
+                }
+            ],
+            max_tokens: 300,
+            temperature: 0.3
+        })
+    });
+
+    if (!resp.ok) {
+        var errText = '';
+        try { var errJson = await resp.json(); errText = errJson.error ? errJson.error.message || JSON.stringify(errJson.error) : resp.statusText; }
+        catch (e) { errText = resp.statusText || 'HTTP ' + resp.status; }
+        throw new Error(errText);
+    }
+
+    var data = await resp.json();
+    var content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    var jsonStr = content.trim();
+    var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+    if (jsonMatch) jsonStr = jsonMatch[0];
+
+    try {
+        var parsed = JSON.parse(jsonStr);
+        return { emotion: parsed.emotion || '', color_style: parsed.color_style || '', content: parsed.content || '' };
+    } catch (e) {
+        return {
+            emotion: extractField(content, 'emotion', '情绪'),
+            color_style: extractField(content, 'color_style', '色彩'),
+            content: extractField(content, 'content', '内容')
+        };
+    }
+}
+
+function updateFileStatus(index, status) {
+    var el = document.getElementById('batch-status-' + index);
+    if (el) el.textContent = status;
+}
+
+function updateBatchProgress(current, total) {
+    var pct = total > 0 ? Math.round((current / total) * 100) : 0;
+    D.batchProgressFill.style.width = pct + '%';
+    D.batchProgressText.textContent = current + '/' + total;
+}
+
+function appendBatchLog(icon, name, msg) {
+    var line = document.createElement('div');
+    line.className = 'batch-log-line';
+    if (icon) {
+        line.innerHTML = '<span class="batch-log-icon">' + icon + '</span> ' +
+            '<span class="batch-log-name">' + esc(name) + '</span> ' +
+            '<span class="batch-log-msg">' + esc(msg) + '</span>';
+    } else {
+        line.innerHTML = '<span class="batch-log-msg batch-log-summary">' + esc(msg) + '</span>';
+    }
+    D.batchLog.appendChild(line);
+    D.batchLog.scrollTop = D.batchLog.scrollHeight;
 }
 
 init();

@@ -1522,6 +1522,203 @@ body {
     color: rgba(155, 89, 182, 0.7);
 }
 
+/* ========== 头部模型状态指示点 ========== */
+
+#btn-model-config {
+    width: auto; padding: 0 0.6rem; gap: 4px; margin: 0 0.35rem;
+    font-size: 0.8rem;
+}
+
+#btn-model-config .fa-gear {
+    font-size: 0.85rem;
+}
+
+.model-status-dots {
+    display: inline-flex; gap: 2px;
+    line-height: 1; font-size: 0.55rem;
+}
+
+.model-dot {
+    transition: color 0.4s ease;
+}
+
+.model-dot.avail-checking { color: #999; }
+.model-dot.avail-yes       { color: #20c997; }
+.model-dot.avail-no        { color: #dc3545; }
+
+/* ========== 模型配置模态框 ========== */
+
+.modal-config-card {
+    max-width: 440px;
+}
+
+.modal-config-card .model-config-section {
+    margin-bottom: 0.8rem;
+}
+
+.modal-config-card .config-section-title {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.82rem; font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem; padding-top: 0.5rem;
+    border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.modal-config-card .config-section-title:first-of-type {
+    border-top: none; padding-top: 0;
+}
+
+.model-avail-dot {
+    font-size: 0.6rem; margin-left: auto;
+    transition: color 0.4s ease;
+}
+
+.model-avail-dot.avail-checking { color: #999; }
+.model-avail-dot.avail-yes       { color: #20c997; }
+.model-avail-dot.avail-no        { color: #dc3545; }
+
+.modal-config-card .form-group {
+    margin-bottom: 0.5rem;
+}
+
+.modal-config-card .form-label {
+    font-size: 0.75rem; margin-bottom: 0.2rem;
+}
+
+.config-hint {
+    text-align: center; font-size: 0.72rem;
+    margin-top: 0.5rem; transition: color 0.3s ease;
+}
+
+.config-hint.config-saved { color: rgba(46,204,113,0.8); }
+
+/* ========== 构建描述按钮（模态框底部） ========== */
+
+.modal-footer .build-desc-hint {
+    flex: 1; font-size: 0.72rem; font-style: italic;
+    transition: color 0.3s ease; text-align: left;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.build-desc-hint.loading { color: rgba(52,152,219,0.75); }
+.build-desc-hint.success { color: rgba(46,204,113,0.8); }
+.build-desc-hint.error   { color: rgba(248,113,113,0.8); }
+
+/* ========== 批量导入 ========== */
+
+.modal-batch-card {
+    max-width: 560px;
+}
+
+.batch-path-row {
+    display: flex; gap: 0.5rem;
+}
+
+.batch-path-row .form-input {
+    flex: 1;
+}
+
+.batch-path-row .btn-sm {
+    flex-shrink: 0;
+}
+
+.batch-file-list {
+    max-height: 240px; overflow-y: auto;
+    border: 1px solid rgba(0,0,0,0.08); border-radius: var(--radius-sm);
+    margin-top: 0.6rem; padding: 0.4rem 0;
+    background: rgba(255,255,255,0.15);
+}
+
+.batch-empty-hint {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 0.5rem; padding: 2rem 1rem;
+    color: var(--text-muted); font-size: 0.8rem; font-style: italic;
+}
+
+.batch-empty-hint i {
+    font-size: 1.5rem; opacity: 0.35;
+}
+
+.batch-file-count {
+    padding: 0.3rem 0.8rem 0.5rem;
+    font-size: 0.78rem; color: var(--text-secondary);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.batch-file-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.35rem 0.8rem; font-size: 0.78rem;
+    border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+
+.batch-file-item i {
+    font-size: 0.75rem; color: rgba(155,89,182,0.5);
+    flex-shrink: 0;
+}
+
+.batch-file-item span:first-of-type {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.batch-file-status {
+    font-size: 0.7rem; color: var(--text-muted);
+    flex-shrink: 0; min-width: 4em; text-align: right;
+}
+
+.batch-file-more {
+    color: var(--text-muted); font-style: italic; justify-content: center;
+}
+
+.batch-progress {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-top: 0.8rem;
+}
+
+.batch-progress-bar {
+    flex: 1; height: 6px;
+    background: rgba(0,0,0,0.08); border-radius: 3px;
+    overflow: hidden;
+}
+
+.batch-progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, rgba(108,155,207,0.7), rgba(157,107,255,0.7));
+    border-radius: 3px; transition: width 0.3s ease;
+}
+
+.batch-progress-text {
+    font-size: 0.72rem; color: var(--text-muted);
+    flex-shrink: 0; min-width: 3em; text-align: right;
+}
+
+.batch-log {
+    margin-top: 0.6rem; max-height: 160px; overflow-y: auto;
+    background: rgba(0,0,0,0.03); border-radius: var(--radius-sm);
+    padding: 0.4rem 0.6rem; font-size: 0.72rem;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.batch-log-line {
+    padding: 0.15rem 0; border-bottom: 1px solid rgba(0,0,0,0.03);
+    line-height: 1.5;
+}
+
+.batch-log-icon {
+    font-weight: 700;
+}
+
+.batch-log-name {
+    color: var(--text-secondary); margin-right: 0.3rem;
+}
+
+.batch-log-msg {
+    color: var(--text-muted);
+}
+
+.batch-log-summary {
+    font-weight: 700; color: var(--text-secondary);
+}
+
 /* ========== 滚动条 ========== */
 
 ::-webkit-scrollbar {
