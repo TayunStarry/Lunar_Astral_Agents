@@ -1,0 +1,6 @@
+{
+  "model": "system-embedding",
+  "dimension": 1024,
+  "chunk_count": 1,
+  "type": "text"
+}
