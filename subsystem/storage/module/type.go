@@ -69,6 +69,10 @@ type KnowledgeRequest struct {
 	Transaction bool          `json:"transaction,omitempty"` // 是否开启事务，默认 false
 }
 
+// =============================================================================
+// v2 记忆库类型定义 — 标签向量中介检索架构
+// =============================================================================
+
 // memoryMessage 记忆库查询返回的兼容消息结构（仅用于 MemoryQueryMessages 的 JSON 编码）
 type memoryMessage struct {
 	Role    string `json:"role"`    // 消息角色，例如 "user" 或 "assistant"
@@ -76,98 +80,77 @@ type memoryMessage struct {
 }
 
 // MemoryQueryResult 记忆库查询结果（含相似度分数）
+// v2: Similarity 字段表示标签向量匹配频次得分（C_i / N），范围 [0, 1]
 type MemoryQueryResult struct {
-	ID         string  `json:"id"`         // 文档 ID
-	Role       string  `json:"role"`       // 消息角色
-	Content    string  `json:"content"`    // 消息内容
-	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
+	ID         string  `json:"id"`              // 文档 ID
+	Role       string  `json:"role"`            // 消息角色，image 文档为 "image"
+	Content    string  `json:"content"`         // 消息内容，image 文档为空
+	Image      string  `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
+	Similarity float32 `json:"similarity"`      // 标签匹配频次得分
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
 type DocumentEntry struct {
-	ID      string `json:"id"`      // 文档条目 ID
-	Role    string `json:"role"`    // 文档条目角色，例如 "user" 或 "assistant"
-	Content string `json:"content"` // 文档条目内容
+	ID      string `json:"id"`              // 文档条目 ID
+	Role    string `json:"role"`            // 文档条目角色，"image" 表示图片文档
+	Content string `json:"content"`         // 文档条目内容，image 文档为空
+	Image   string `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
 }
 
-// MemoryDocument 记忆库文档 — 自行实现的存储单元，含嵌入向量
-type MemoryDocument struct {
-	ID        string    `json:"id"`        // 文档 ID
-	Role      string    `json:"role"`      // 消息角色，user/assistant/system
-	Content   string    `json:"content"`   // 原始文本内容
-	Embedding []float32 `json:"embedding"` // 嵌入向量（由 /v1/embeddings 生成）
+// Document 统一文档结构（text 和 image 共用）
+// text 文档：ID + Role + Content
+// image 文档：ID + Image
+type Document struct {
+	ID      string `json:"id"`                // 文档 UUID v4
+	Role    string `json:"role,omitempty"`    // 消息角色，text 文档使用
+	Content string `json:"content,omitempty"` // 文本内容，text 文档使用
+	Image   string `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
 }
 
-// contentEntry 内容分块条目 — 对应 contents_NNNN.json 中的单条记录
-// 仅含标识与文本，不含嵌入向量，与 embeddingEntry 通过 ID 关联
-type contentEntry struct {
-	ID      string `json:"id"`      // 文档 ID（与 embeddingEntry 一一对应）
-	Role    string `json:"role"`    // 消息角色，user/assistant/system
-	Content string `json:"content"` // 原始文本内容
+// TagVector 标签向量条目 — 标签文本的嵌入向量及其关联的原始文档 UUID 数组
+// 标签向量在集合内全局共享，多个文档可关联同一标签向量
+type TagVector struct {
+	Tag       string    `json:"tag"`       // 标签文本（保留，便于调试和可解释性）
+	Embedding []float32 `json:"embedding"` // 标签文本的嵌入向量
+	UUIDs     []string  `json:"uuid"`      // 关联的原始文档 UUID 数组
 }
 
-// embeddingEntry 嵌入向量分块条目 — 对应 embeddings_NNNN.json 中的单条记录
-// 仅含标识与向量，与 contentEntry 通过 ID 关联
-type embeddingEntry struct {
-	ID        string    `json:"id"`        // 文档 ID（与 contentEntry 一一对应）
-	Embedding []float32 `json:"embedding"` // 嵌入向量
-}
-
-// collectionMeta 集合元数据，持久化到 metadata.json
+// collectionMeta v2 集合元数据，持久化到 metadata.json
 type collectionMeta struct {
-	Model      string `json:"model"`                 // 锁定的嵌入模型名
-	Dimension  int    `json:"dimension"`             // 锁定的向量维度（探针文本确定）
-	ChunkCount int    `json:"chunk_count,omitempty"` // 分块对数（0 表示空集合或旧格式）
-	Type       string `json:"type,omitempty"`        // 集合类型："text" 或 "image"（空值等价于 "text"）
+	EmbeddingModel      string `json:"embedding_model"`       // 锁定的嵌入模型名
+	EmbeddingDimension  int    `json:"embedding_dimension"`   // 锁定的向量维度
+	ChunkCount          int    `json:"chunk_count,omitempty"` // 已废弃，保留兼容
+	MultimodalModel     string `json:"multimodal_model"`      // 标签生成多模态模型名
+	Type                string `json:"type"`                  // 集合类型："text" 或 "image"
+	Version             int    `json:"version"`               // 数据格式版本号（v2 = 2）
+	DocumentsChunkCount int    `json:"documents_chunk_count"` // text 文档分块数
+	ImagesChunkCount    int    `json:"images_chunk_count"`    // image 文档分块数
+	TagsChunkCount      int    `json:"tags_chunk_count"`      // 标签向量分块数
 }
 
-// Collection 单个记忆集合 — 集合级锁定的模型与维度
-// 文档 ID 采用 UUID v4 格式（由 generateUUID 生成），旧版 msg-N 格式 ID 在加载时保留原值
-// text 类型存储布局：<collDir>/contents_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
-// image 类型存储布局：<collDir>/base64_NNNN.json + embeddings_NNNN.json（分块存储，每块 ≤100 条）
+// Collection 单个记忆集合 — v2 标签向量中介检索架构
+// 文本与图片文档统一为 Document 列表，标签向量独立存储
+// 存储布局：
+//
+//	<collDir>/metadata.json
+//	<collDir>/documents_NNNN.json  (text 文档，500 条/块)
+//	<collDir>/images_NNNN.json     (image 文档，20 条/块)
+//	<collDir>/tags_NNNN.json       (标签向量，100 条/块)
 type Collection struct {
-	Name            string           // 集合名
-	Model           string           // 锁定的嵌入模型名
-	Dimension       int              // 锁定的向量维度（探针文本确定，0 表示未确定）
-	CollectionType  string           // 集合类型："text" 或 "image"
-	Documents       []MemoryDocument // 文本文档列表（含嵌入向量），text 类型使用
-	ImageDocuments  []ImageDocument  // 图片文档列表（含三元嵌入向量），image 类型使用
-	mu              sync.RWMutex     // 文档读写锁
-	collDir         string           // 集合目录绝对路径
-	metaPath        string           // metadata.json 路径
-	chunkCount      int              // 当前分块对数（0 表示空集合）
-	lastFileModTime time.Time        // metadata.json 最近一次已加载的修改时间，用于跨进程一致性检测
-}
-
-// ImageDocument 图片记忆库文档 — 包含 base64 图片数据与三元嵌入向量
-// 三个嵌入向量分别对应：情绪描述、色彩风格描述、主要内容描述
-type ImageDocument struct {
-	ID         string       `json:"id"`         // 文档 ID（UUID v4 格式）
-	Image      string       `json:"image"`      // 图片 base64 编码数据
-	Embeddings [3][]float32 `json:"embeddings"` // 三个嵌入向量：[情绪, 色彩风格, 主要内容]
-}
-
-// base64Entry base64 分块条目 — 对应 base64_NNNN.json 中的单条记录
-// 仅含标识与图片 base64 数据，与 imageEmbeddingEntry 通过 ID 关联
-type base64Entry struct {
-	ID    string `json:"id"`    // 文档 ID（与 imageEmbeddingEntry 一一对应）
-	Image string `json:"image"` // 图片 base64 编码数据
-}
-
-// imageEmbeddingEntry 图片嵌入向量分块条目 — 对应 embeddings_NNNN.json 中的单条记录（image 类型）
-// 与 text 类型的 embeddingEntry 不同，此类型存储三个嵌入向量组成的数组
-type imageEmbeddingEntry struct {
-	ID         string       `json:"id"`         // 文档 ID（与 base64Entry 一一对应）
-	Embeddings [3][]float32 `json:"embeddings"` // 三个嵌入向量：[情绪, 色彩风格, 主要内容]
-}
-
-// ImageQueryResult 图片记忆库查询结果（含相似度分数与最终评分）
-type ImageQueryResult struct {
-	ID         string  `json:"id"`          // 文档 ID
-	Image      string  `json:"image"`       // 图片 base64 编码数据
-	BaseScore  float32 `json:"base_score"`  // 基础评分（三个向量相似度平均值）
-	FinalScore float32 `json:"final_score"` // 最终评分（tok5 加权后）
-	BoostLevel int     `json:"boost_level"` // 加权等级：0/1/2/3（对应 ×1.0/×1.3/×1.6/×2.0）
+	Name                string       // 集合名
+	Model               string       // 锁定的嵌入模型名
+	Dimension           int          // 锁定的向量维度
+	CollectionType      string       // 集合类型："text" 或 "image"
+	MultimodalModel     string       // 标签生成多模态模型名（来自全局配置）
+	Documents           []Document   // 统一文档列表（text 或 image）
+	TagVectors          []TagVector  // 标签向量列表（常驻内存）
+	mu                  sync.RWMutex // 数据读写锁
+	collDir             string       // 集合目录绝对路径
+	metaPath            string       // metadata.json 路径
+	documentsChunkCount int          // text 文档分块数
+	imagesChunkCount    int          // image 文档分块数
+	tagsChunkCount      int          // 标签向量分块数
+	lastFileModTime     time.Time    // metadata.json 最近加载时间，用于跨进程一致性检测
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别
@@ -183,15 +166,19 @@ type KnowledgeDB struct {
 	knowledgeInitialized bool    // 知识库是否初始化完成
 }
 
-// MemoryDB 记忆库结构体（多集合架构，扁平化存储）
-// 职责：嵌入服务连接、集合管理、记忆 CRUD、维度锁定、持久化
-// 存储布局：<baseDir>/<collectionName>/{documents.json, metadata.json}
+// MemoryDB 记忆库结构体（多集合架构，扁平化存储，v2 标签向量中介检索）
+// 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
+// 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, images_*.json, tags_*.json}
 type MemoryDB struct {
 	memoryInitialized bool                   // 记忆库实例是否初始化完成
 	embeddingBaseURL  string                 // 嵌入服务 base_url（OpenAI 兼容）
 	embeddingAPIKey   string                 // 嵌入服务 API Key
-	httpClient        *http.Client           // 嵌入服务 HTTP 客户端（所有集合共享）
-	baseDir           string                 // 记忆存储根目录绝对路径（集合目录的直接父级）
+	llmBaseURL        string                 // LLM 标签生成服务 base_url
+	llmAPIKey         string                 // LLM 标签生成服务 API Key
+	multimodalModel   string                 // 多模态模型名（用于标签生成）
+	httpClient        *http.Client           // HTTP 客户端（嵌入 + LLM 共享）
+	llmMu             sync.Mutex             // LLM 调用互斥锁（严格单线程）
+	baseDir           string                 // 记忆存储根目录绝对路径
 	collections       map[string]*Collection // 集合名 → 集合实例
 	collectionsMu     sync.RWMutex           // collections map 读写锁
 }

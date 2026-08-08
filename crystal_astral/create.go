@@ -61,24 +61,24 @@ func reloadPageParameters() {
 	*config.WebViewHeight = 1050
 }
 
-// initMemoryDatabase 自动初始化记忆库实例与默认集合
-// 嵌入模型锁定使用本地月华服务代理（http://localhost:<BasicPort>/v1），不走云端
+// initMemoryDatabase 自动初始化记忆库实例与默认集合（v2 标签向量架构）
+// 嵌入模型与 LLM 标签生成模型均使用本地月华服务代理（http://localhost:<BasicPort>/v1），不走云端
 // 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化
 func initMemoryDatabase() {
-	// 嵌入服务 base_url：始终使用本地月华服务代理
+	// 嵌入服务与 LLM 服务 base_url：始终使用本地月华服务代理
 	baseURL := fmt.Sprintf("http://localhost:%d/v1", *config.BasicPort)
 
-	// 第一步：实例初始化（仅配置嵌入服务连接，不产生网络请求）
-	if err := module.MemoryInitInstance(baseURL, defaultMemoryAPIKey); err != nil {
+	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务）
+	if err := module.MemoryInitInstance(baseURL, defaultMemoryAPIKey, baseURL, defaultMemoryAPIKey, defaultMultimodalModelName); err != nil {
 		logger.Warn("CrystalAstral", "记忆库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
 		return
 	}
-	logger.Info("CrystalAstral", "记忆库实例初始化完成, base_url: %s", baseURL)
+	logger.Info("CrystalAstral", "记忆库实例初始化完成, embedding: %s, llm: %s", baseURL, baseURL)
 
 	// 第二步：创建/打开默认集合（探针文本嵌入定维度，含网络请求，加超时保护）
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := module.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName); err != nil {
+	if err := module.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName, module.CollectionTypeText); err != nil {
 		logger.Warn("CrystalAstral", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", defaultMemoryCollection, err)
 		return
 	}

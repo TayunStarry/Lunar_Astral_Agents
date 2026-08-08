@@ -16,40 +16,40 @@ type ExportPackageRequest struct {
 	SavePath    string `json:"save_path,omitempty"`
 }
 
+// memoryAddRequest v2 统一添加请求（text 和 image 共用）
+// 若 Image 字段非空，则视为图片文档；否则为文本文档
 type memoryAddRequest struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// memoryAddImageRequest 添加图片文档请求（image 类型集合专用）
-type memoryAddImageRequest struct {
-	Image          string `json:"image"`            // 图片 base64 编码数据
-	EmotionDesc    string `json:"emotion_desc"`     // 情绪描述
-	ColorStyleDesc string `json:"color_style_desc"` // 色彩风格描述
-	ContentDesc    string `json:"content_desc"`     // 主要内容描述
+	Role    string `json:"role,omitempty"`    // 消息角色，text 文档使用
+	Content string `json:"content,omitempty"` // 文本内容，text 文档使用
+	Image   string `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
 }
 
 type memoryDeleteRequest struct {
 	ID string `json:"id"`
 }
 
-// memoryInitRequest 实例初始化请求（仅配置嵌入服务连接，不创建集合）
+// memoryInitRequest v2 实例初始化请求（嵌入服务 + LLM 标签生成服务）
 type memoryInitRequest struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
+	BaseURL         string `json:"base_url"`          // 嵌入服务 base_url
+	APIKey          string `json:"api_key"`           // 嵌入服务 API Key
+	LLMBaseURL      string `json:"llm_base_url"`      // LLM 标签生成服务 base_url
+	LLMAPIKey       string `json:"llm_api_key"`       // LLM 标签生成服务 API Key
+	MultimodalModel string `json:"multimodal_model"`  // 多模态模型名
 }
 
 // memoryCollectionRequest 创建/打开集合请求（集合级锁定模型）
 type memoryCollectionRequest struct {
 	ModelName      string `json:"model_name"`
-	CollectionType string `json:"collection_type,omitempty"` // 集合类型："text" 或 "image"，空值默认为 text
+	CollectionType string `json:"collection_type,omitempty"` // 集合类型："text" 或 "image"
 }
 
+// memoryMessageData v2 查询结果单条消息（text 和 image 统一）
 type memoryMessageData struct {
-	ID         string  `json:"id"`         // 消息ID
-	Role       string  `json:"role"`       // 消息角色，user/assistant/system
-	Content    string  `json:"content"`    // 消息内容
-	Similarity float32 `json:"similarity"` // 余弦相似度分数 [-1, 1]，越高越相关
+	ID         string  `json:"id"`                   // 消息 ID
+	Role       string  `json:"role"`                 // 消息角色，image 文档为 "image"
+	Content    string  `json:"content"`              // 消息内容，image 文档为空
+	Image      string  `json:"image,omitempty"`      // 图片 base64 数据，仅 image 文档
+	Similarity float32 `json:"similarity"`           // 标签匹配频次得分 [0, 1]
 }
 
 type memoryStatsData struct {
@@ -66,28 +66,14 @@ type memoryQueryData struct {
 	TotalFound int                 `json:"total_found"`
 }
 
-// memoryCollectionInfo 集合信息（含模型、维度与类型）
+// memoryCollectionInfo v2 集合信息
 type memoryCollectionInfo struct {
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	Dimension int    `json:"dimension"`
-	Count     int    `json:"count"`
-	Type      string `json:"type,omitempty"` // 集合类型："text" 或 "image"
-}
-
-// memoryImageQueryData 图片查询结果数据
-type memoryImageQueryData struct {
-	Query      string                   `json:"query"`
-	TopK       int                      `json:"top_k"`
-	Results    []memoryImageQueryResult `json:"results"`
-	TotalFound int                      `json:"total_found"`
-}
-
-// memoryImageQueryResult 单条图片查询结果
-type memoryImageQueryResult struct {
-	ID         string  `json:"id"`          // 文档 ID
-	Image      string  `json:"image"`       // 图片 base64 编码数据
-	BaseScore  float32 `json:"base_score"`  // 基础评分（三个向量相似度平均值）
-	FinalScore float32 `json:"final_score"` // 最终评分（tok5 加权后）
-	BoostLevel int     `json:"boost_level"` // 加权等级：0/1/2/3
+	Name              string `json:"name"`
+	EmbeddingModel    string `json:"embedding_model"`
+	Dimension         int    `json:"dimension"`
+	Count             int    `json:"count"`
+	Type              string `json:"type"`
+	MultimodalModel   string `json:"multimodal_model,omitempty"`
+	Version           int    `json:"version"`
+	TagCount          int    `json:"tag_count"`
 }

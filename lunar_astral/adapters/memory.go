@@ -9,48 +9,48 @@ import (
 	"github.com/dop251/goja"
 )
 
-// memory.go 记忆库适配器
+// memory.go 记忆库适配器 v2 — 标签向量中介检索架构
 //
 // 桥接 goja JS 运行时与自实现的记忆库（subsystem/storage/module）。
-// JS 侧通过 memoryInit/memoryAdd/memoryQuery/memoryDelete 调用，
+// JS 侧通过 memoryInit/memoryAdd/memoryQuery/memoryDelete/memoryAddImage 调用，
 // 由 create.go 中的 vm.Set 注册到全局作用域。
+//
+// v2 变更：
+//   - memoryInit 新增 LLM 配置参数和 collectionType
+//   - memoryInitImage 已移除（统一到 memoryInit）
+//   - memoryQueryImage 已移除（统一到 memoryQuery）
+//   - memoryAddImage 简化为 2 参数（LLM 自动生成标签）
 
 // memoryInit 初始化记忆库实例并创建指定集合
-// 参数: baseURL, apiKey, modelName, collectionName
+// 参数: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType
+// collectionType: "text" 或 "image"
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 4 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 4 个: baseURL, apiKey, modelName, collectionName")})
+	if len(call.Arguments) < 8 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 8 个: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType")})
 	}
 
-	baseURL, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("baseURL 必须是字符串")})
+	baseURL, _ := call.Argument(0).Export().(string)
+	apiKey, _ := call.Argument(1).Export().(string)
+	llmBaseURL, _ := call.Argument(2).Export().(string)
+	llmAPIKey, _ := call.Argument(3).Export().(string)
+	multimodalModel, _ := call.Argument(4).Export().(string)
+	modelName, _ := call.Argument(5).Export().(string)
+	collectionName, _ := call.Argument(6).Export().(string)
+	collectionType, _ := call.Argument(7).Export().(string)
+
+	if collectionType == "" {
+		collectionType = module.CollectionTypeText
 	}
 
-	apiKey, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("apiKey 必须是字符串")})
-	}
-
-	modelName, ok := call.Argument(2).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("modelName 必须是字符串")})
-	}
-
-	collectionName, ok := call.Argument(3).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	// 第一步：实例初始化（配置嵌入服务连接）
-	if err := module.MemoryInitInstance(baseURL, apiKey); err != nil {
+	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务）
+	if err := module.MemoryInitInstance(baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel); err != nil {
 		logger.Error("LunarCore", "记忆库实例初始化失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
-	// 第二步：创建/打开集合（探针定维度，锁定模型）
+	// 第二步：创建/打开集合
 	ctx := context.Background()
-	if err := module.CollectionInit(ctx, collectionName, modelName); err != nil {
+	if err := module.CollectionInit(ctx, collectionName, modelName, collectionType); err != nil {
 		logger.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
@@ -58,73 +58,58 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// memoryAdd 添加消息到指定集合
+// memoryAdd 添加消息到指定集合（同步阻塞，等待 LLM 标签生成完成）
 // 参数: collectionName, role, content
 func (class *Runtime) memoryAdd(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAdd 参数不足, 需 3 个: collectionName, role, content")})
 	}
 
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	role, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("role 必须是字符串")})
-	}
-
-	content, ok := call.Argument(2).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("content 必须是字符串")})
-	}
+	collectionName, _ := call.Argument(0).Export().(string)
+	role, _ := call.Argument(1).Export().(string)
+	content, _ := call.Argument(2).Export().(string)
 
 	ctx := context.Background()
-	err := module.AddMessage(ctx, collectionName, role, content)
+	id, err := module.MemoryAddMessage(ctx, collectionName, role, content)
 	if err != nil {
 		logger.Error("LunarCore", "集合 [%s] 添加消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
-	return class.runtime.ToValue([]any{true, nil})
+	return class.runtime.ToValue([]any{id, nil})
 }
 
-// memoryQuery 查询指定集合的相关消息
+// memoryQuery 查询指定集合的相关消息（text 和 image 统一）
 // 参数: collectionName, queryText, topK
 func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 3 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQuery 参数不足, 需 3 个: collectionName, queryText, topK")})
 	}
 
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	queryText, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("queryText 必须是字符串")})
-	}
-
+	collectionName, _ := call.Argument(0).Export().(string)
+	queryText, _ := call.Argument(1).Export().(string)
 	topK := int(call.Argument(2).ToInteger())
 
 	ctx := context.Background()
-	messages, err := module.QueryMessagesWithContent(ctx, collectionName, queryText, topK)
+	results, err := module.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
 	if err != nil {
 		logger.Error("LunarCore", "集合 [%s] 查询消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
-	// 已按相似度降序返回结果
-	resultObjs := make([]map[string]any, 0, len(messages))
-	for _, msg := range messages {
-		resultObjs = append(resultObjs, map[string]any{
-			"id":         msg.ID,
-			"role":       msg.Role,
-			"content":    msg.Content,
-			"similarity": msg.Similarity,
-		})
+	resultObjs := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		obj := map[string]any{
+			"id":         r.ID,
+			"role":       r.Role,
+			"similarity": r.Similarity,
+		}
+		if r.Image != "" {
+			obj["image"] = r.Image
+		} else {
+			obj["content"] = r.Content
+		}
+		resultObjs = append(resultObjs, obj)
 	}
 
 	return class.runtime.ToValue([]any{resultObjs, nil})
@@ -137,18 +122,11 @@ func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryDelete 参数不足, 需 2 个: collectionName, id")})
 	}
 
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	id, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("id 必须是字符串")})
-	}
+	collectionName, _ := call.Argument(0).Export().(string)
+	id, _ := call.Argument(1).Export().(string)
 
 	ctx := context.Background()
-	err := module.DeleteMessage(ctx, collectionName, id)
+	err := module.MemoryDeleteMessage(ctx, collectionName, id)
 	if err != nil {
 		logger.Error("LunarCore", "集合 [%s] 删除消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
@@ -157,112 +135,22 @@ func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{true, nil})
 }
 
-// memoryInitImage 初始化 image 类型记忆库集合
-// 参数: collectionName, modelName
-func (class *Runtime) memoryInitImage(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInitImage 参数不足, 需 2 个: collectionName, modelName")})
-	}
-
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	modelName, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("modelName 必须是字符串")})
-	}
-
-	// 使用默认 baseURL + apiKey 初始化实例（与 memoryInit 一致）
-	// 这里假设实例已经由 memoryInit 初始化过，仅创建 image 类型集合
-	ctx := context.Background()
-	if err := module.CollectionInitImage(ctx, collectionName, modelName); err != nil {
-		logger.Error("LunarCore", "图片集合 [%s] 创建失败: %v", collectionName, err)
-		return class.runtime.ToValue([]any{false, err})
-	}
-
-	return class.runtime.ToValue([]any{true, nil})
-}
-
-// memoryAddImage 向 image 类型集合添加图片文档
-// 参数: collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc
+// memoryAddImage 向 image 类型集合添加图片文档（LLM 自动生成标签）
+// 参数: collectionName, base64Image
 func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 5 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 5 个: collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc")})
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 2 个: collectionName, base64Image")})
 	}
 
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	base64Image, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("base64Image 必须是字符串")})
-	}
-
-	emotionDesc, ok := call.Argument(2).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("emotionDesc 必须是字符串")})
-	}
-
-	colorStyleDesc, ok := call.Argument(3).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("colorStyleDesc 必须是字符串")})
-	}
-
-	contentDesc, ok := call.Argument(4).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("contentDesc 必须是字符串")})
-	}
+	collectionName, _ := call.Argument(0).Export().(string)
+	base64Image, _ := call.Argument(1).Export().(string)
 
 	ctx := context.Background()
-	id, err := module.AddImage(ctx, collectionName, base64Image, emotionDesc, colorStyleDesc, contentDesc)
+	id, err := module.MemoryAddImage(ctx, collectionName, base64Image)
 	if err != nil {
 		logger.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
 	return class.runtime.ToValue([]any{id, nil})
-}
-
-// memoryQueryImage 查询 image 类型集合中的图片
-// 参数: collectionName, queryText, topK
-func (class *Runtime) memoryQueryImage(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 3 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryQueryImage 参数不足, 需 3 个: collectionName, queryText, topK")})
-	}
-
-	collectionName, ok := call.Argument(0).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("collectionName 必须是字符串")})
-	}
-
-	queryText, ok := call.Argument(1).Export().(string)
-	if !ok {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("queryText 必须是字符串")})
-	}
-
-	topK := int(call.Argument(2).ToInteger())
-
-	ctx := context.Background()
-	results, err := module.QueryImages(ctx, collectionName, queryText, topK)
-	if err != nil {
-		logger.Error("LunarCore", "图片集合 [%s] 查询失败: %v", collectionName, err)
-		return class.runtime.ToValue([]any{nil, err})
-	}
-
-	resultObjs := make([]map[string]any, 0, len(results))
-	for _, r := range results {
-		resultObjs = append(resultObjs, map[string]any{
-			"id":          r.ID,
-			"image":       r.Image,
-			"base_score":  r.BaseScore,
-			"final_score": r.FinalScore,
-			"boost_level": r.BoostLevel,
-		})
-	}
-
-	return class.runtime.ToValue([]any{resultObjs, nil})
 }

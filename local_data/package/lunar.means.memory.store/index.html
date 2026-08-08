@@ -64,19 +64,29 @@
         <!-- 初始化卡片（未初始化时显示） -->
         <section class="glass-card init-card" id="init-card" style="display:none;">
             <div class="card-header">
-                <h2 class="card-title"><i class="fa-solid fa-plug"></i> 初始化记忆库</h2>
+                <h2 class="card-title"><i class="fa-solid fa-plug"></i> 初始化记忆库 v2</h2>
             </div>
             <div class="card-body init-form-body">
                 <div class="init-form-row">
                     <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-link"></i> API 地址</label>
+                        <label class="form-label"><i class="fa-solid fa-link"></i> 嵌入 API 地址</label>
                         <input type="text" id="init-base-url" class="form-input" placeholder="http://localhost:36789/v1"
                             value="http://localhost:36789/v1">
                     </div>
                     <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-microchip"></i> 模型名称</label>
+                        <label class="form-label"><i class="fa-solid fa-brain"></i> LLM API 地址</label>
+                        <input type="text" id="init-llm-url" class="form-input" placeholder="http://localhost:36789/v1"
+                            value="http://localhost:36789/v1">
+                    </div>
+                    <div class="form-group flex-2">
+                        <label class="form-label"><i class="fa-solid fa-microchip"></i> 嵌入模型</label>
                         <input type="text" id="init-model-name" class="form-input" placeholder="system-embedding"
                             value="system-embedding">
+                    </div>
+                    <div class="form-group flex-2">
+                        <label class="form-label"><i class="fa-solid fa-robot"></i> 多模态模型</label>
+                        <input type="text" id="init-multimodal-model" class="form-input" placeholder="system-multimodal"
+                            value="system-multimodal">
                     </div>
                     <div class="form-group flex-2">
                         <label class="form-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
@@ -93,8 +103,8 @@
                 </button>
                 <p class="init-hint">
                     <i class="fa-solid fa-circle-info"></i>
-                    常见地址：LM Studio <code>http://localhost:1234/v1</code>&nbsp; Olama
-                    <code>http://localhost:11434/v1</code>&nbsp; DeepSeek <code>https://api.deepseek.com/v1</code>
+                    嵌入和LLM可共用同一地址。常见：LM Studio <code>http://localhost:1234/v1</code>&nbsp; Olama
+                    <code>http://localhost:11434/v1</code>
                 </p>
             </div>
         </section>
@@ -315,7 +325,7 @@
         </div>
     </div>
 
-    <!-- 添加图片模态框（image 集合专用） -->
+    <!-- 添加图片模态框（image 集合专用，v2: LLM 自动生成标签） -->
     <div class="modal-overlay" id="modal-add-image" style="display:none;">
         <div class="modal-card glass-card modal-add-doc-card">
             <div class="modal-header">
@@ -339,30 +349,10 @@
                         </button>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fa-solid fa-face-smile"></i> 情绪描述</label>
-                    <input type="text" id="add-emotion-desc" class="form-input" placeholder="描述图片传达的情绪氛围，如：温暖、宁静、忧郁...">
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fa-solid fa-palette"></i> 色彩风格描述</label>
-                    <input type="text" id="add-color-style-desc" class="form-input"
-                        placeholder="描述图片的色彩风格，如：暖色调、高对比度、柔和...">
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fa-solid fa-align-left"></i> 主要内容描述</label>
-                    <textarea id="add-content-desc" class="form-textarea" rows="3"
-                        placeholder="描述图片中的主要内容，如：一只猫在窗台上晒太阳..."></textarea>
-                </div>
-                <div class="add-modal-hint">
-                    <span>三个描述将分别向量化，用于多维语义检索</span>
-                </div>
+                <p class="modal-hint">LLM 将自动分析图片内容并生成中文标签，用于语义检索。</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary modal-close-btn" data-close="modal-add-image">取消</button>
-                <button id="btn-build-desc" class="btn-secondary btn-sm" title="使用多模态模型自动分析图片并填充描述">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> 构建描述
-                </button>
-                <span class="build-desc-hint" id="build-desc-hint"></span>
                 <button id="btn-add-image-submit" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
                     <i class="fa-solid fa-cloud-arrow-up"></i> 添加到图片记忆库
                 </button>

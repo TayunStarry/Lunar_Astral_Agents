@@ -13,26 +13,26 @@ import (
 )
 
 // =============================================================================
-// 记忆库端点 — 多集合扁平化 RESTful 架构
-// 存储布局：<MemoryDBDir>/<collectionName>/{documents.json, metadata.json}
-// URL 布局：/memory/<collectionName>/...（移除旧版 collections/ 中间层）
+// v2 记忆库端点 — 统一 text/image 架构，标签向量中介检索
+// 存储布局：<MemoryDBDir>/<collectionName>/{metadata.json, documents_*.json, images_*.json, tags_*.json}
+// URL 布局：/memory/<collectionName>/...（移除了旧版 collections/ 中间层和 images 专用端点）
 // =============================================================================
 
 // MemoryHandler 记忆库统一分发器
 // 支持路径：
 //
-//	POST   /memory/init                     实例初始化（配置嵌入服务连接）
+//	POST   /memory/init                     实例初始化（嵌入服务 + LLM 服务）
 //	GET    /memory/stats                    全局统计（聚合所有集合）
 //	GET    /memory/collections              列出所有集合（保留字）
 //	POST   /memory/{name}                   创建/打开集合（锁定模型）
 //	DELETE /memory/{name}                   删除集合（移除目录及所有文档）
 //	GET    /memory/{name}/stats             集合统计
-//	POST   /memory/{name}/messages          添加消息
-//	GET    /memory/{name}/messages          查询消息
-//	DELETE /memory/{name}/messages          删除消息
+//	POST   /memory/{name}/messages          添加消息/图片（统一端点）
+//	GET    /memory/{name}/messages          查询消息/图片（统一端点）
+//	DELETE /memory/{name}/messages          删除消息/图片（统一端点）
 //	GET    /memory/{name}/documents         文档分页列表
-//	POST   /memory/{name}/rebuild           重建（删除维度不符文档）
-//	POST   /memory/{name}/clear             清空集合（删除所有文档，保留元数据）
+//	POST   /memory/{name}/rebuild           重建标签向量
+//	POST   /memory/{name}/clear             清空集合
 //
 // 保留字：init、stats、collections 不可作为集合名
 func MemoryHandler(w http.ResponseWriter, r *http.Request) {
@@ -79,8 +79,6 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 		handleMemoryCollectionStats(w, r, collectionName)
 	case "documents":
 		handleMemoryDocuments(w, r, collectionName)
-	case "images":
-		handleMemoryImages(w, r, collectionName)
 	case "rebuild":
 		handleMemoryRebuild(w, r, collectionName)
 	case "clear":
@@ -90,14 +88,14 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleMemoryInit POST /memory/init — 实例初始化（仅配置嵌入服务连接，不创建集合）
+// handleMemoryInit POST /memory/init — v2 实例初始化（嵌入服务 + LLM 标签生成服务）
 func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
 
-	if module.IsInitialized() {
+	if module.IsMemoryInitialized() {
 		writeSuccess(w, map[string]string{
 			"message": "记忆库实例已初始化",
 		})
@@ -120,12 +118,12 @@ func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 		logger.Warn("Storage", "记忆库 base_url 缺少协议前缀, 已自动补全为: %s", req.BaseURL)
 	}
 
-	if err := module.MemoryInitInstance(req.BaseURL, req.APIKey); err != nil {
+	if err := module.MemoryInitInstance(req.BaseURL, req.APIKey, req.LLMBaseURL, req.LLMAPIKey, req.MultimodalModel); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 实例初始化失败: %v", err))
 		return
 	}
 
-	logger.Info("Storage", "记忆库实例初始化成功, base_url: %s", req.BaseURL)
+	logger.Info("Storage", "记忆库实例初始化成功, embedding: %s, llm: %s", req.BaseURL, req.LLMBaseURL)
 
 	writeSuccess(w, map[string]string{
 		"message":  "记忆库实例初始化成功",
@@ -140,7 +138,7 @@ func handleMemoryGlobalStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	initialized := module.IsInitialized()
+	initialized := module.IsMemoryInitialized()
 	if !initialized {
 		writeSuccess(w, memoryStatsData{
 			Initialized: false,
@@ -152,8 +150,8 @@ func handleMemoryGlobalStats(w http.ResponseWriter, r *http.Request) {
 	totalDocs := 0
 	mismatch := false
 	for _, name := range collections {
-		totalDocs += module.GetCollectionCount(name)
-		if module.HasSyncMismatch(name) {
+		totalDocs += module.MemoryGetEntryCount(name)
+		if module.MemoryHasSyncMismatch(name) {
 			mismatch = true
 		}
 	}
@@ -173,7 +171,7 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -181,13 +179,19 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 	names := module.MemoryListCollections()
 	infos := make([]memoryCollectionInfo, 0, len(names))
 	for _, name := range names {
-		model, dim, count, colType := module.MemoryGetCollectionInfoWithType(name)
+		info := module.MemoryGetCollectionInfoWithType(name)
+		if info == nil {
+			continue
+		}
 		infos = append(infos, memoryCollectionInfo{
-			Name:      name,
-			Model:     model,
-			Dimension: dim,
-			Count:     count,
-			Type:      colType,
+			Name:            name,
+			EmbeddingModel:  getStringField(info, "embedding_model"),
+			Dimension:       getIntField(info, "embedding_dimension"),
+			Count:           getIntField(info, "document_count"),
+			Type:            getStringField(info, "type"),
+			MultimodalModel: getStringField(info, "multimodal_model"),
+			Version:         getIntField(info, "version"),
+			TagCount:        getIntField(info, "tag_count"),
 		})
 	}
 
@@ -197,14 +201,14 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMemoryCollectionCreate POST /memory/{name} — 创建/打开集合（探针定维度）
+// handleMemoryCollectionCreate POST /memory/{name} — v2 创建/打开集合
 func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化, 请先调用 /memory/init")
 		return
 	}
@@ -220,35 +224,32 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 		return
 	}
 
-	ctx := context.Background()
-
-	// 根据 collection_type 选择创建 text 或 image 集合
 	collType := req.CollectionType
-	if collType == "" || collType == module.CollectionTypeText {
-		if err := module.CollectionInit(ctx, collectionName, req.ModelName); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
-			return
-		}
-	} else if collType == module.CollectionTypeImage {
-		if err := module.CollectionInitImage(ctx, collectionName, req.ModelName); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 图片集合创建失败: %v", err))
-			return
-		}
-	} else {
+	if collType == "" {
+		collType = module.CollectionTypeText
+	}
+	if collType != module.CollectionTypeText && collType != module.CollectionTypeImage {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 无效的集合类型: %s，仅支持 text/image", collType))
 		return
 	}
 
-	model, dim, count, colType := module.MemoryGetCollectionInfoWithType(collectionName)
-	logger.Info("Storage", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d, 文档数: %d",
-		collectionName, colType, model, dim, count)
+	ctx := context.Background()
+	if err := module.CollectionInit(ctx, collectionName, req.ModelName, collType); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
+		return
+	}
+
+	info := module.MemoryGetCollectionInfoWithType(collectionName)
+	logger.Info("Storage", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d",
+		collectionName, collType, req.ModelName, getIntField(info, "embedding_dimension"))
 
 	writeSuccess(w, memoryCollectionInfo{
-		Name:      collectionName,
-		Model:     model,
-		Dimension: dim,
-		Count:     count,
-		Type:      colType,
+		Name:           collectionName,
+		EmbeddingModel: req.ModelName,
+		Dimension:      getIntField(info, "embedding_dimension"),
+		Count:          getIntField(info, "document_count"),
+		Type:           collType,
+		TagCount:       getIntField(info, "tag_count"),
 	})
 }
 
@@ -259,21 +260,22 @@ func handleMemoryCollectionStats(w http.ResponseWriter, r *http.Request, collect
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
-	model, dim, count, err := module.MemoryGetCollectionInfo(collectionName)
-	if err != nil {
-		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> %v", err))
+	info := module.MemoryGetCollectionInfo(collectionName)
+	if info == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 集合 '%s' 不存在", collectionName))
 		return
 	}
 
-	mismatch := module.HasSyncMismatch(collectionName)
+	count := getIntField(info, "document_count")
+	mismatch := module.MemoryHasSyncMismatch(collectionName)
 
-	logger.Info("Storage", "集合 [%s] 统计: 文档数=%d, 模型=%s, 维度=%d, 维度不符=%v",
-		collectionName, count, model, dim, mismatch)
+	logger.Info("Storage", "集合 [%s] 统计: 文档数=%d, 标签数=%d, 维度不符=%v",
+		collectionName, count, getIntField(info, "tag_count"), mismatch)
 
 	writeSuccess(w, memoryStatsData{
 		DocumentCount: count,
@@ -283,7 +285,7 @@ func handleMemoryCollectionStats(w http.ResponseWriter, r *http.Request, collect
 	})
 }
 
-// handleMemoryMessages POST/GET/DELETE /memory/{name}/messages
+// handleMemoryMessages POST/GET/DELETE /memory/{name}/messages — v2 统一消息/图片端点
 func handleMemoryMessages(w http.ResponseWriter, r *http.Request, collectionName string) {
 	switch r.Method {
 	case http.MethodPost:
@@ -297,8 +299,9 @@ func handleMemoryMessages(w http.ResponseWriter, r *http.Request, collectionName
 	}
 }
 
+// handleMemoryAddMessage v2 统一添加端点（text 和 image 共用）
 func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -309,39 +312,51 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionNa
 		return
 	}
 
-	if req.Role == "" {
-		req.Role = "user"
-	}
-
-	if !slices.Contains(validRoles, req.Role) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 无效的角色: %s，仅支持 user/assistant/system", req.Role))
-		return
-	}
-
-	if req.Content == "" {
-		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 消息内容不能为空")
-		return
-	}
-
 	ctx := context.Background()
-	id, err := module.AddMessageWithID(ctx, collectionName, req.Role, req.Content)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加消息失败: %v", err))
-		return
+
+	if req.Image != "" {
+		// 图片文档添加
+		id, err := module.MemoryAddImage(ctx, collectionName, req.Image)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
+			return
+		}
+		logger.Info("Storage", "集合 [%s] 添加图片成功, ID: %s", collectionName, id)
+		writeSuccess(w, map[string]string{"id": id, "type": "image"})
+	} else {
+		// 文本文档添加
+		if req.Role == "" {
+			req.Role = "user"
+		}
+		if !slices.Contains(validRoles, req.Role) {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 无效的角色: %s，仅支持 user/assistant/system", req.Role))
+			return
+		}
+		if req.Content == "" {
+			writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 消息内容不能为空")
+			return
+		}
+
+		id, err := module.MemoryAddMessage(ctx, collectionName, req.Role, req.Content)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加消息失败: %v", err))
+			return
+		}
+
+		logger.Info("Storage", "集合 [%s] 添加消息成功, ID: %s, 角色: %s, 内容长度: %d",
+			collectionName, id, req.Role, len(req.Content))
+
+		writeSuccess(w, map[string]string{
+			"id":      id,
+			"role":    req.Role,
+			"content": req.Content,
+		})
 	}
-
-	logger.Info("Storage", "集合 [%s] 添加消息成功, ID: %s, 角色: %s, 内容长度: %d",
-		collectionName, id, req.Role, len(req.Content))
-
-	writeSuccess(w, map[string]string{
-		"id":      id,
-		"role":    req.Role,
-		"content": req.Content,
-	})
 }
 
+// handleMemoryQueryMessages v2 统一查询端点
 func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -360,7 +375,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 	}
 
 	ctx := context.Background()
-	messages, err := module.QueryMessagesWithContent(ctx, collectionName, queryText, topK)
+	messages, err := module.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 查询失败: %v", err))
 		return
@@ -372,6 +387,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 			ID:         msg.ID,
 			Role:       msg.Role,
 			Content:    msg.Content,
+			Image:      msg.Image,
 			Similarity: msg.Similarity,
 		})
 	}
@@ -387,8 +403,9 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 	})
 }
 
+// handleMemoryDeleteMessage v2 统一删除端点
 func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -405,7 +422,7 @@ func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request, collectio
 	}
 
 	ctx := context.Background()
-	if err := module.DeleteMessage(ctx, collectionName, req.ID); err != nil {
+	if err := module.MemoryDeleteMessage(ctx, collectionName, req.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除消息失败: %v", err))
 		return
 	}
@@ -417,14 +434,14 @@ func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request, collectio
 	})
 }
 
-// handleMemoryDocuments GET /memory/{name}/documents — 文档分页列表
+// handleMemoryDocuments GET /memory/{name}/documents — v2 文档分页列表
 func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 GET")
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
@@ -443,7 +460,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 		}
 	}
 
-	entries, total := module.GetDocuments(collectionName, offset, limit)
+	entries, total := module.MemoryGetDocuments(collectionName, offset, limit)
 
 	docList := make([]memoryMessageData, 0, len(entries))
 	for _, entry := range entries {
@@ -451,6 +468,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 			ID:      entry.ID,
 			Role:    entry.Role,
 			Content: entry.Content,
+			Image:   entry.Image,
 		})
 	}
 
@@ -462,25 +480,25 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 	})
 }
 
-// handleMemoryRebuild POST /memory/{name}/rebuild — 重建（删除维度不符文档）
+// handleMemoryRebuild POST /memory/{name}/rebuild — v2 重建标签向量
 func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
 	ctx := context.Background()
-	count, err := module.RebuildEntries(ctx, collectionName)
-	if err != nil {
+	if err := module.MemoryRebuildEntries(ctx, collectionName, "", nil); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 重建条目失败: %v", err))
 		return
 	}
 
+	count := module.MemoryGetEntryCount(collectionName)
 	logger.Info("Storage", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
 
 	writeSuccess(w, map[string]interface{}{
@@ -489,19 +507,19 @@ func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName 
 	})
 }
 
-// handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合（移除目录及所有文档）
+// handleMemoryDeleteCollection DELETE /memory/{name} — 删除集合
 func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodDelete {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 DELETE")
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
-	if err := module.DeleteCollection(collectionName); err != nil {
+	if err := module.MemoryDeleteCollection(collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 删除集合失败: %v", err))
 		return
 	}
@@ -513,19 +531,19 @@ func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collec
 	})
 }
 
-// handleMemoryClearCollection POST /memory/{name}/clear — 清空集合（删除所有文档，保留元数据）
+// handleMemoryClearCollection POST /memory/{name}/clear — 清空集合
 func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
 		return
 	}
 
-	if !module.IsInitialized() {
+	if !module.IsMemoryInitialized() {
 		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
 		return
 	}
 
-	if err := module.ClearCollection(collectionName); err != nil {
+	if err := module.MemoryClearCollection(collectionName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 清空集合失败: %v", err))
 		return
 	}
@@ -538,114 +556,34 @@ func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collect
 }
 
 // =============================================================================
-// image 集合端点 — 图片记忆库的增删查
-// POST  /memory/{name}/images — 添加图片文档
-// GET   /memory/{name}/images — 查询图片文档
-// DELETE /memory/{name}/images — 删除图片文档
+// 辅助函数
 // =============================================================================
 
-// handleMemoryImages POST/GET/DELETE /memory/{name}/images
-func handleMemoryImages(w http.ResponseWriter, r *http.Request, collectionName string) {
-	switch r.Method {
-	case http.MethodPost:
-		handleMemoryAddImage(w, r, collectionName)
-	case http.MethodGet:
-		handleMemoryQueryImages(w, r, collectionName)
-	case http.MethodDelete:
-		handleMemoryDeleteMessage(w, r, collectionName)
-	default:
-		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST/GET/DELETE")
+// getStringField 从 map[string]interface{} 安全获取字符串字段
+func getStringField(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
 	}
-}
-
-func handleMemoryAddImage(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
-	var req memoryAddImageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 解析请求失败: %v", err))
-		return
-	}
-
-	if req.Image == "" {
-		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 图片数据不能为空")
-		return
-	}
-
-	ctx := context.Background()
-	id, err := module.AddImage(ctx, collectionName, req.Image, req.EmotionDesc, req.ColorStyleDesc, req.ContentDesc)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
-		return
-	}
-
-	logger.Info("Storage", "图片集合 [%s] 添加图片成功, ID: %s, 情绪: %s, 色彩: %s, 内容: %s",
-		collectionName, id, truncateStr(req.EmotionDesc, 30), truncateStr(req.ColorStyleDesc, 30), truncateStr(req.ContentDesc, 30))
-
-	writeSuccess(w, map[string]string{
-		"id":               id,
-		"emotion_desc":     req.EmotionDesc,
-		"color_style_desc": req.ColorStyleDesc,
-		"content_desc":     req.ContentDesc,
-	})
-}
-
-func handleMemoryQueryImages(w http.ResponseWriter, r *http.Request, collectionName string) {
-	if !module.IsInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
-	queryText := r.URL.Query().Get("query")
-	if queryText == "" {
-		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> 查询文本不能为空")
-		return
-	}
-
-	topK := 5
-	if topKStr := r.URL.Query().Get("top_k"); topKStr != "" {
-		if val, err := strconv.Atoi(topKStr); err == nil && val > 0 && val <= 100 {
-			topK = val
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
 		}
 	}
-
-	ctx := context.Background()
-	results, err := module.QueryImages(ctx, collectionName, queryText, topK)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 图片查询失败: %v", err))
-		return
-	}
-
-	imageResults := make([]memoryImageQueryResult, 0, len(results))
-	for _, r := range results {
-		imageResults = append(imageResults, memoryImageQueryResult{
-			ID:         r.ID,
-			Image:      r.Image,
-			BaseScore:  r.BaseScore,
-			FinalScore: r.FinalScore,
-			BoostLevel: r.BoostLevel,
-		})
-	}
-
-	logger.Info("Storage", "图片集合 [%s] 查询完成, 查询: %s, 结果数: %d",
-		collectionName, queryText, len(imageResults))
-
-	writeSuccess(w, memoryImageQueryData{
-		Query:      queryText,
-		TopK:       topK,
-		Results:    imageResults,
-		TotalFound: len(imageResults),
-	})
+	return ""
 }
 
-// truncateStr 截断字符串用于日志输出（最多 maxLen 个字符）
-func truncateStr(s string, maxLen int) string {
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
+// getIntField 从 map[string]interface{} 安全获取整数字段
+func getIntField(m map[string]interface{}, key string) int {
+	if m == nil {
+		return 0
 	}
-	return string(runes[:maxLen]) + "..."
+	if v, ok := m[key]; ok {
+		switch val := v.(type) {
+		case int:
+			return val
+		case float64:
+			return int(val)
+		}
+	}
+	return 0
 }

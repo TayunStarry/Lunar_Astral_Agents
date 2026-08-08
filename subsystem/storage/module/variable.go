@@ -11,9 +11,26 @@ const (
 
 // 记忆库集合类型常量
 const (
-	CollectionTypeText  = "text"  // 文本集合类型（contents + embeddings 分块存储）
-	CollectionTypeImage = "image" // 图片集合类型（base64 + embeddings 分块存储，三元嵌入向量）
+	CollectionTypeText  = "text"  // 文本集合类型（documents_*.json + tags_*.json 分块存储）
+	CollectionTypeImage = "image" // 图片集合类型（images_*.json + tags_*.json 分块存储）
 )
+
+// v2 记忆库分块大小常量
+const (
+	DocumentsChunkSize = 500 // text 文档分块大小（条/块）
+	ImagesChunkSize    = 20  // image 文档分块大小（条/块）
+	TagsChunkSize      = 100 // 标签向量分块大小（条/块）
+)
+
+// v2 记忆库配置常量
+const (
+	CurrentVersion    = 2     // 当前数据格式版本号
+	TagDedupThreshold = 0.9   // 标签向量去重阈值（余弦相似度）
+	MaxTagRetries     = 3     // LLM 标签生成最大重试次数
+)
+
+// MemoryChunkSize 已废弃，保留兼容旧版迁移逻辑
+const MemoryChunkSize = 100
 
 // FileLocks 用于存储文件路径对应的互斥锁
 var FileLocks sync.Map
@@ -58,9 +75,6 @@ var previewAllowlist = map[string]PreviewEntry{
 
 // KnowledgeDatabase 知识库实例（KnowledgeDB）
 var KnowledgeDatabase *KnowledgeDB
-
-// MemoryChunkSize 每个分块文件的最大条目数（contents 与 embeddings 分别计数）
-const MemoryChunkSize = 100
 
 // MemoryDatabase 记忆库实例（MemoryDB）
 var MemoryDatabase *MemoryDB

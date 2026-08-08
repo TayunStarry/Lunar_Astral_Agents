@@ -27,9 +27,10 @@ const (
 // ==== 记忆库自动初始化默认值 ====
 // 与 lunar_astral 的 TypeScript 默认值保持一致（见 server_side/config/global.ts）
 const (
-	defaultMemoryAPIKey     = "key-520-1314-2000-02-18" // 默认 API 密钥
-	defaultMemoryModelName  = "system-embedding"        // 默认嵌入模型名
-	defaultMemoryCollection = "lunar_messages"          // memory_store 前端操作的固定集合名
+	defaultMemoryAPIKey        = "key-520-1314-2000-02-18" // 默认 API 密钥
+	defaultMemoryModelName     = "system-embedding"        // 默认嵌入模型名
+	defaultMultimodalModelName = "system-multimodal"       // 默认多模态模型名（标签生成）
+	defaultMemoryCollection    = "lunar_messages"          // memory_store 前端操作的固定集合名
 )
 
 // ==== 全局变量 ====

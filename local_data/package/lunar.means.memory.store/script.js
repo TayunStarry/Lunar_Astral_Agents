@@ -14,7 +14,6 @@ var API = {
             STATS: '/memory/' + encoded + '/stats',
             MESSAGES: '/memory/' + encoded + '/messages',
             DOCS: '/memory/' + encoded + '/documents',
-            IMAGES: '/memory/' + encoded + '/images',
             REBUILD: '/memory/' + encoded + '/rebuild',
             CLEAR: '/memory/' + encoded + '/clear'
         };
@@ -132,14 +131,7 @@ var D = {
     imageUploadPlaceholder: $('image-upload-placeholder'),
     imageUploadPreview: $('image-upload-preview'),
     btnRemoveImage: $('btn-remove-image'),
-    addEmotionDesc: $('add-emotion-desc'),
-    addColorStyleDesc: $('add-color-style-desc'),
-    addContentDesc: $('add-content-desc'),
     btnAddImageSubmit: $('btn-add-image-submit'),
-
-    // Build description
-    btnBuildDesc:    $('btn-build-desc'),
-    buildDescHint:   $('build-desc-hint'),
 
     // Model config modal
     modalModelConfig:    $('modal-model-config'),
@@ -233,9 +225,6 @@ function bindGlobalEvents() {
             processImageFile(e.dataTransfer.files[0]);
         }
     });
-
-    // Build description
-    D.btnBuildDesc.addEventListener('click', handleBuildDescriptions);
 
     // Model config - open modal
     D.btnModelConfig.addEventListener('click', function () {
@@ -402,22 +391,32 @@ async function refreshAll() {
 async function handleInit() {
     var base = D.initBase.value.trim();
     var key = D.initKey.value.trim();
+    var llmUrl = document.getElementById('init-llm-url').value.trim();
+    var multimodalModel = document.getElementById('init-multimodal-model').value.trim();
     var model = D.initModel.value.trim();
     var colName = D.initColName.value.trim() || 'lunar_messages';
 
-    if (!base) { showToast('API 地址不能为空', 'error'); return; }
-    if (!model) { showToast('模型名称不能为空', 'error'); return; }
+    if (!base) { showToast('嵌入 API 地址不能为空', 'error'); return; }
+    if (!llmUrl) { showToast('LLM API 地址不能为空', 'error'); return; }
+    if (!model) { showToast('嵌入模型名称不能为空', 'error'); return; }
+    if (!multimodalModel) { showToast('多模态模型名称不能为空', 'error'); return; }
     if (!colName) { showToast('集合名称不能为空', 'error'); return; }
 
     D.btnInit.disabled = true;
     showBtnLoading(D.btnInit, true, '初始化中...');
 
     try {
-        // Step 1: Initialize instance
+        // Step 1: Initialize instance (embedding + LLM tag generation)
         var initResp = await fetch(API.INIT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base_url: base, api_key: key })
+            body: JSON.stringify({
+                base_url: base,
+                api_key: key,
+                llm_base_url: llmUrl,
+                llm_api_key: key,
+                multimodal_model: multimodalModel
+            })
         });
         var initResult = await initResp.json();
 
@@ -536,7 +535,7 @@ function findCollection(name) {
 function updateCollectionStats(col) {
     if (col) {
         D.statName.textContent = col.name;
-        D.statModel.textContent = col.model;
+        D.statModel.textContent = col.embedding_model || col.model;
         D.statDim.textContent = col.dimension;
         D.statType.textContent = col.type === 'image' ? '图片记忆' : '文本文档';
         D.statCount.textContent = col.count;
@@ -1073,11 +1072,8 @@ async function executeSearch(query) {
     var topK = PAGE_SIZE;
 
     try {
-        // Use /images for image collections, /messages for text collections
-        var endpoint = App.isImageCollection
-            ? API.collection(App.currentCollection).IMAGES
-            : API.collection(App.currentCollection).MESSAGES;
-        var url = endpoint + '?query=' + encodeURIComponent(query) + '&top_k=' + topK;
+        // v2: 统一使用 /messages 端点（text 和 image 共用）
+        var url = API.collection(App.currentCollection).MESSAGES + '?query=' + encodeURIComponent(query) + '&top_k=' + topK;
         var resp = await fetch(url);
         var result = await resp.json();
 
@@ -1351,7 +1347,7 @@ async function copyToClipboard(text) {
     }
 }
 
-// ========== 图片上传与添加 ==========
+// ========== 图片上传与添加 v2 ==========
 
 function showAddImageModal() {
     if (!App.initialized) {
@@ -1363,9 +1359,6 @@ function showAddImageModal() {
         return;
     }
     clearImageUpload();
-    D.addEmotionDesc.value = '';
-    D.addColorStyleDesc.value = '';
-    D.addContentDesc.value = '';
     D.modalAddImage.style.display = 'flex';
 }
 
@@ -1421,23 +1414,15 @@ async function handleAddImage() {
         return;
     }
 
-    var emotionDesc = D.addEmotionDesc.value.trim();
-    var colorStyleDesc = D.addColorStyleDesc.value.trim();
-    var contentDesc = D.addContentDesc.value.trim();
-
     D.btnAddImageSubmit.disabled = true;
     showBtnLoading(D.btnAddImageSubmit, true, '添加中...');
 
     try {
-        var resp = await fetch(API.collection(App.currentCollection).IMAGES, {
+        // v2: 统一使用 /messages 端点，LLM 自动生成标签
+        var resp = await fetch(API.collection(App.currentCollection).MESSAGES, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image: App.imageBase64,
-                emotion_desc: emotionDesc,
-                color_style_desc: colorStyleDesc,
-                content_desc: contentDesc
-            })
+            body: JSON.stringify({ image: App.imageBase64 })
         });
         var result = await resp.json();
 
@@ -1458,7 +1443,7 @@ async function handleAddImage() {
         showToast('网络请求失败: ' + err.message, 'error');
     } finally {
         D.btnAddImageSubmit.disabled = false;
-        showBtnLoading(D.btnAddImageSubmit, false, '添加到图片记忆库');
+        showBtnLoading(D.btnAddImageSubmit, false, '添加到记忆库');
     }
 }
 
@@ -1601,151 +1586,6 @@ function updateAvailDot(el, available) {
     }
 }
 
-// ========== 构建描述（多模态模型） ==========
-
-// handleBuildDescriptions 调用多模态模型分析图片，自动填充三个描述字段
-async function handleBuildDescriptions() {
-    if (!App.imageBase64) {
-        showToast('请先上传一张图片', 'warn');
-        return;
-    }
-
-    var cfg = getModelConfig();
-    if (!cfg.multimodalUrl || !cfg.multimodalModel) {
-        showToast('请先在「模型配置」中设置多模态模型信息', 'error');
-        return;
-    }
-
-    D.btnBuildDesc.disabled = true;
-    showBtnLoading(D.btnBuildDesc, true, '分析中...');
-    D.buildDescHint.textContent = '正在调用多模态模型分析图片...';
-    D.buildDescHint.className = 'build-desc-hint loading';
-
-    try {
-        var result = await callMultimodalModel(cfg);
-        if (result) {
-            D.addEmotionDesc.value = result.emotion || '';
-            D.addColorStyleDesc.value = result.color_style || '';
-            D.addContentDesc.value = result.content || '';
-            D.buildDescHint.textContent = '✓ 描述已自动填充';
-            D.buildDescHint.className = 'build-desc-hint success';
-            showToast('描述构建完成', 'success');
-        }
-    } catch (err) {
-        D.buildDescHint.textContent = '✗ ' + (err.message || '分析失败');
-        D.buildDescHint.className = 'build-desc-hint error';
-        showToast('构建描述失败: ' + err.message, 'error');
-    } finally {
-        D.btnBuildDesc.disabled = false;
-        showBtnLoading(D.btnBuildDesc, false, '构建描述');
-    }
-}
-
-// callMultimodalModel 调用多模态模型的 /v1/chat/completions 接口分析图片
-// 返回 { emotion, color_style, content } 对象
-async function callMultimodalModel(cfg) {
-    var baseUrl = cfg.multimodalUrl.replace(/\/+$/, '');
-    var apiUrl = baseUrl + '/chat/completions';
-
-    var systemPrompt = '你是一个专业的视觉内容分析助手。请仔细观察图片，从以下三个维度用中文进行细致、准确的描述，每个描述控制在2-4句话，避免空洞笼统的表达：\n\n' +
-        '1. 情绪氛围（emotion）：描述画面传达的情感基调与心理感受。注意人物表情、光线明暗、构图张力、场景氛围等线索。\n' +
-        '   例如："温暖宁静的黄昏氛围，人物表情柔和放松，侧逆光营造出淡淡的怀旧感"而非"开心的感觉"。\n\n' +
-        '2. 色彩风格（color_style）：描述画面的主色调、配色方案与视觉风格。注意色温（冷/暖）、饱和度、对比度、色彩搭配模式。\n' +
-        '   例如："低饱和度暖色调为主，橙黄与暗绿对比，有胶片质感"而非"颜色好看"。\n\n' +
-        '3. 主要内容（content）：描述画面中的核心视觉元素及其关系。包括主体对象、动作/状态、场景环境、关键细节。\n' +
-        '   例如："一位穿白色连衣裙的女性站在海边礁石上，双臂展开面向大海，海浪拍打礁石激起白色泡沫"而非"一个女人在海边"。\n\n' +
-        '请严格按照以下JSON格式输出，不要包含任何其他内容（不要输出markdown代码块标记，不要输出解释）：\n' +
-        '{"emotion":"...","color_style":"...","content":"..."}';
-
-    var headers = {
-        'Content-Type': 'application/json'
-    };
-    if (cfg.multimodalKey) {
-        headers['Authorization'] = 'Bearer ' + cfg.multimodalKey;
-    }
-
-    var body = {
-        model: cfg.multimodalModel,
-        messages: [
-            { role: 'system', content: systemPrompt },
-            {
-                role: 'user',
-                content: [
-                    { type: 'text', text: '请分析这张图片' },
-                    { type: 'image_url', image_url: { url: App.imageBase64 } }
-                ]
-            }
-        ],
-        max_tokens: 300,
-        temperature: 0.3
-    };
-
-    var resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(body)
-    });
-
-    if (!resp.ok) {
-        var errText = '';
-        try {
-            var errJson = await resp.json();
-            errText = errJson.error ? errJson.error.message || JSON.stringify(errJson.error) : resp.statusText;
-        } catch (e) {
-            errText = resp.statusText || 'HTTP ' + resp.status;
-        }
-        throw new Error(errText);
-    }
-
-    var data = await resp.json();
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('模型返回格式异常');
-    }
-
-    var content = data.choices[0].message.content || '';
-
-    // 尝试解析JSON（可能包含markdown代码块或前后空白）
-    var jsonStr = content.trim();
-    // 去除可能的 markdown 代码块标记
-    var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-        jsonStr = jsonMatch[0];
-    }
-
-    try {
-        var parsed = JSON.parse(jsonStr);
-        return {
-            emotion: parsed.emotion || '',
-            color_style: parsed.color_style || '',
-            content: parsed.content || ''
-        };
-    } catch (e) {
-        // 如果JSON解析失败，尝试用正则提取
-        var emotion = extractField(content, 'emotion', '情绪');
-        var colorStyle = extractField(content, 'color_style', '色彩');
-        var contentDesc = extractField(content, 'content', '内容');
-        if (emotion || colorStyle || contentDesc) {
-            return { emotion: emotion, color_style: colorStyle, content: contentDesc };
-        }
-        throw new Error('无法解析模型返回的描述内容');
-    }
-}
-
-// extractField 从文本中提取字段值，用于JSON解析失败时的兜底
-function extractField(text, jsonKey, cnLabel) {
-    // 尝试从 JSON 片段中提取
-    var re = new RegExp('"' + jsonKey + '"\\s*:\\s*"([^"]*)"', 'i');
-    var m = text.match(re);
-    if (m) return m[1];
-
-    // 尝试从中文标签后提取
-    re = new RegExp(cnLabel + '[：:]\\s*(.+?)(?:\\n|$)', 'i');
-    m = text.match(re);
-    if (m) return m[1].trim();
-
-    return '';
-}
-
 // ========== 批量导入 ==========
 
 function showBatchImportModal() {
@@ -1843,12 +1683,6 @@ function renderBatchFileList() {
 async function handleStartBatch() {
     if (App.batchFiles.length === 0 || App.batchRunning) return;
 
-    var cfg = getModelConfig();
-    if (!cfg.multimodalUrl || !cfg.multimodalModel) {
-        showToast('请先在「模型配置」中设置多模态模型信息', 'error');
-        return;
-    }
-
     App.batchRunning = true;
     D.btnStartBatch.disabled = true;
     D.batchProgress.style.display = 'flex';
@@ -1877,27 +1711,12 @@ async function handleStartBatch() {
                 continue;
             }
 
-            // 2. 调用多模态模型生成描述
-            updateFileStatus(i, '分析中...');
-            var desc = null;
-            try {
-                desc = await callMultimodalForFile(cfg, base64);
-            } catch (e) {
-                appendBatchLog('⚠', f.name, '描述生成失败（' + e.message + '），使用空描述');
-                desc = { emotion: '', color_style: '', content: '' };
-            }
-
-            // 3. 添加到记忆库
+            // 2. 直接添加到记忆库（v2: LLM 自动生成标签）
             updateFileStatus(i, '上传中...');
-            var addResp = await fetch(API.collection(App.currentCollection).IMAGES, {
+            var addResp = await fetch(API.collection(App.currentCollection).MESSAGES, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: base64,
-                    emotion_desc: desc.emotion || '',
-                    color_style_desc: desc.color_style || '',
-                    content_desc: desc.content || ''
-                })
+                body: JSON.stringify({ image: base64 })
             });
             var addResult = await addResp.json();
 
@@ -1942,71 +1761,6 @@ async function readFileAsBase64(filePath) {
         reader.onerror = function () { reject(new Error('base64 转换失败')); };
         reader.readAsDataURL(blob);
     });
-}
-
-// callMultimodalForFile 调用多模态模型分析指定图片，与 callMultimodalModel 相同逻辑但接受独立 base64
-async function callMultimodalForFile(cfg, base64) {
-    var baseUrl = cfg.multimodalUrl.replace(/\/+$/, '');
-    var apiUrl = baseUrl + '/chat/completions';
-
-    var systemPrompt = '你是一个专业的视觉内容分析助手。请仔细观察图片，从以下三个维度用中文进行细致、准确的描述，每个描述控制在2-4句话，避免空洞笼统的表达：\n\n' +
-        '1. 情绪氛围（emotion）：描述画面传达的情感基调与心理感受。注意人物表情、光线明暗、构图张力、场景氛围等线索。\n' +
-        '   例如："温暖宁静的黄昏氛围，人物表情柔和放松，侧逆光营造出淡淡的怀旧感"而非"开心的感觉"。\n\n' +
-        '2. 色彩风格（color_style）：描述画面的主色调、配色方案与视觉风格。注意色温（冷/暖）、饱和度、对比度、色彩搭配模式。\n' +
-        '   例如："低饱和度暖色调为主，橙黄与暗绿对比，有胶片质感"而非"颜色好看"。\n\n' +
-        '3. 主要内容（content）：描述画面中的核心视觉元素及其关系。包括主体对象、动作/状态、场景环境、关键细节。\n' +
-        '   例如："一位穿白色连衣裙的女性站在海边礁石上，双臂展开面向大海，海浪拍打礁石激起白色泡沫"而非"一个女人在海边"。\n\n' +
-        '请严格按照以下JSON格式输出，不要包含任何其他内容（不要输出markdown代码块标记，不要输出解释）：\n' +
-        '{"emotion":"...","color_style":"...","content":"..."}';
-
-    var headers = { 'Content-Type': 'application/json' };
-    if (cfg.multimodalKey) {
-        headers['Authorization'] = 'Bearer ' + cfg.multimodalKey;
-    }
-
-    var resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-            model: cfg.multimodalModel,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                {
-                    role: 'user',
-                    content: [
-                        { type: 'text', text: '请分析这张图片' },
-                        { type: 'image_url', image_url: { url: base64 } }
-                    ]
-                }
-            ],
-            max_tokens: 300,
-            temperature: 0.3
-        })
-    });
-
-    if (!resp.ok) {
-        var errText = '';
-        try { var errJson = await resp.json(); errText = errJson.error ? errJson.error.message || JSON.stringify(errJson.error) : resp.statusText; }
-        catch (e) { errText = resp.statusText || 'HTTP ' + resp.status; }
-        throw new Error(errText);
-    }
-
-    var data = await resp.json();
-    var content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    var jsonStr = content.trim();
-    var jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (jsonMatch) jsonStr = jsonMatch[0];
-
-    try {
-        var parsed = JSON.parse(jsonStr);
-        return { emotion: parsed.emotion || '', color_style: parsed.color_style || '', content: parsed.content || '' };
-    } catch (e) {
-        return {
-            emotion: extractField(content, 'emotion', '情绪'),
-            color_style: extractField(content, 'color_style', '色彩'),
-            content: extractField(content, 'content', '内容')
-        };
-    }
 }
 
 function updateFileStatus(index, status) {
