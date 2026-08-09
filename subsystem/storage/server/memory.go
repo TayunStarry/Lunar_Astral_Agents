@@ -171,11 +171,7 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !module.IsMemoryInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
+	// 集合列表是纯磁盘扫描操作，无需嵌入服务初始化即可工作
 	names := module.MemoryListCollections()
 	infos := make([]memoryCollectionInfo, 0, len(names))
 	for _, name := range names {
@@ -260,11 +256,7 @@ func handleMemoryCollectionStats(w http.ResponseWriter, r *http.Request, collect
 		return
 	}
 
-	if !module.IsMemoryInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
+	// 集合统计是纯磁盘读取操作，无需嵌入服务初始化即可工作
 	info := module.MemoryGetCollectionInfo(collectionName)
 	if info == nil {
 		writeError(w, http.StatusNotFound, fmt.Sprintf("记忆库请求[ERROR] -> 集合 '%s' 不存在", collectionName))
@@ -441,11 +433,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 		return
 	}
 
-	if !module.IsMemoryInitialized() {
-		writeError(w, http.StatusServiceUnavailable, "记忆库请求[ERROR] -> 记忆库未初始化")
-		return
-	}
-
+	// 文档列表是纯磁盘读取操作，无需嵌入服务初始化即可工作
 	offset := 0
 	if offStr := r.URL.Query().Get("offset"); offStr != "" {
 		if val, err := strconv.Atoi(offStr); err == nil && val >= 0 {

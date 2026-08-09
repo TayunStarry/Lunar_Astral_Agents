@@ -193,22 +193,22 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 	var messages []chatMessage
 
 	if isImage {
-			// 多模态图片标签生成（v3 增强：OCR 文字提取 + 人物特征分析）
-			systemMsg := chatMessage{
-				Role: "system",
-				Content: "你是一个视觉内容标签生成助手。请仔细观察图片，按以下规则生成标签，严格以JSON数组格式返回，不要包含任何其他内容。\n\n" +
-					"标签生成规则：\n" +
-					"1. 描述图片的整体内容主题和风格特点\n" +
-					"2. 提取画面中的文字信息（OCR）：如有可见文字，生成对应标签\n" +
-					"3. 若图片包含人物，额外提取以下特征：\n" +
-					"   - 面部表情（如：微笑、严肃、惊讶、悲伤、愤怒）\n" +
-					"   - 肢体动作（如：站立、挥手、奔跑、坐着、跳舞）\n" +
-					"   - 头发颜色（如：黑色头发、金色头发、棕色头发、红色头发）\n" +
-					"   - 服饰风格与颜色（如：白色连衣裙、黑色西装、休闲T恤、校服）\n" +
-					"4. 描述画面的色彩倾向和情感氛围\n" +
-					"用中文输出，标签数量控制在5-15个。\n\n" +
-					"示例输出：[\"自然风景\",\"日落\",\"暖色调\",\"海边\",\"宁静\",\"白色连衣裙\",\"微笑\",\"黑色长发\",\"站立\",\"夕阳余晖\"]",
-			}
+		// 多模态图片标签生成（v3 增强：OCR 文字提取 + 人物特征分析）
+		systemMsg := chatMessage{
+			Role: "system",
+			Content: "你是一个视觉内容标签生成助手。请仔细观察图片，按以下规则生成标签，严格以JSON数组格式返回，不要包含任何其他内容。\n\n" +
+				"标签生成规则：\n" +
+				"1. 描述图片的整体内容主题和风格特点\n" +
+				"2. 提取画面中的文字信息（OCR）：如有可见文字，生成对应标签\n" +
+				"3. 若图片包含人物，额外提取以下特征：\n" +
+				"   - 面部表情（如：微笑、严肃、惊讶、悲伤、愤怒）\n" +
+				"   - 肢体动作（如：站立、挥手、奔跑、坐着、跳舞）\n" +
+				"   - 头发颜色（如：黑色头发、金色头发、棕色头发、红色头发）\n" +
+				"   - 服饰风格与颜色（如：白色连衣裙、黑色西装、休闲T恤、校服）\n" +
+				"4. 描述画面的色彩倾向和情感氛围\n" +
+				"用中文输出，标签数量控制在5-15个。\n\n" +
+				"示例输出：[\"自然风景\",\"日落\",\"暖色调\",\"海边\",\"宁静\",\"白色连衣裙\",\"微笑\",\"黑色长发\",\"站立\",\"夕阳余晖\"]",
+		}
 		userMsg := chatMessage{
 			Role: "user",
 			Content: []chatContentPart{
@@ -301,14 +301,13 @@ func parseTagsJSON(raw string) ([]string, error) {
 
 	// 去除 markdown 代码块标记
 	if strings.HasPrefix(raw, "```") {
-		// 找到第一个换行后的内容
+		// 找到第一个换行后的内容（跳过语言标记行如 ```json）
 		if idx := strings.Index(raw, "\n"); idx != -1 {
 			raw = raw[idx+1:]
 		}
-		// 去除结尾的 ```
-		if strings.HasSuffix(raw, "```") {
-			raw = raw[:len(raw)-3]
-		}
+		// 去除结尾的 ```（先 trim 尾部空白再 TrimSuffix，避免换行符干扰）
+		raw = strings.TrimRight(raw, " \t\n\r")
+		raw = strings.TrimSuffix(raw, "```")
 		raw = strings.TrimSpace(raw)
 	}
 

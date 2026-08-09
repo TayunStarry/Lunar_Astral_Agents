@@ -3312,9 +3312,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         let match;
         while ((match = regex.exec(text)) !== null) {
             const content = match[1].trim();
-            if (content.length > 0) {
+            if (content.length > 0)
                 blocks.push(content);
-            }
         }
         const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
         return [blocks, remaining];
@@ -3335,20 +3334,18 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         const ranges = [];
         for (let i = 0; i < text.length; i++) {
             const ch = text[i];
-            if (ch === '(' || ch === '\uFF08') {
+            if (ch === '(' || ch === '\uFF08')
                 stack.push(i);
-            }
             else if (ch === ')' || ch === '\uFF09') {
                 if (stack.length === 0)
                     continue;
                 const start = stack.pop();
-                if (stack.length === 0) {
-                    const content = text.slice(start + 1, i).trim();
-                    if (content.length > 0) {
-                        blocks.push(content);
-                    }
-                    ranges.push([start, i + 1]);
-                }
+                if (stack.length !== 0)
+                    continue;
+                const content = text.slice(start + 1, i).trim();
+                if (content.length > 0)
+                    blocks.push(content);
+                ranges.push([start, i + 1]);
             }
         }
         let remaining = '';
@@ -3395,101 +3392,90 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         processed = processed.replace(/\r?\n/g, ' ');
         processed = processed.replace(/\（[^）]*\）/g, '');
         processed = processed.replace(/\([^)]*\)/g, '');
-        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;';
+        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u3008\u3009\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;()\\[\\]';
         const whitelist = new RegExp(`[^${allowed}]`, 'g');
         processed = processed.replace(whitelist, ',');
+        processed = processed.replace(/,{2,}/g, ',');
         processed = processed.replace(/\s+/g, ' ');
         return processed.trim();
     }
-    function cleanTextForDisplay(text) {
-        if (!text)
-            return '';
+    function removeEmojiSymbols(text) {
         return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+    }
+    function formatChunk(chunk) {
+        const LEADING_PUNCT = /^[。，、：；:;,?!？！—～"'""''()（）\[\]【】{}<>…\s]+/;
+        const TRAILING_COMMA = /[，,]+$/;
+        const result = chunk.replace(LEADING_PUNCT, '').replace(TRAILING_COMMA, '');
+        return result.trim();
+    }
+    function splitByPunct(source, punctRegex) {
+        const result = [];
+        let start = 0;
+        for (let i = 0; i < source.length; i++) {
+            if (!punctRegex.test(source[i]))
+                continue;
+            let end = i + 1;
+            while (end < source.length && punctRegex.test(source[end]))
+                end++;
+            const fragment = source.slice(start, end).trim();
+            if (fragment.length > 0)
+                result.push(fragment);
+            start = end;
+            i = end - 1;
+        }
+        if (start < source.length) {
+            const fragment = source.slice(start).trim();
+            if (fragment.length > 0)
+                result.push(fragment);
+        }
+        return result;
+    }
+    function isInsideBracket(source, pos) {
+        let depth = 0;
+        for (let i = 0; i < pos; i++) {
+            if (source[i] === '\uFF08' || source[i] === '(')
+                depth++;
+            else if (source[i] === '\uFF09' || source[i] === ')')
+                depth--;
+        }
+        return depth > 0;
     }
     function splitSentences(text) {
         if (!text)
             return [];
         const LEVEL1_PUNCT = /[。？！—～?!]/;
         const LEVEL2_PUNCT = /[，,、：；:;]/;
-        const MAX_LENGTH = 35;
-        const LEADING_PUNCT = /^[。，、：；:;,?!？！—～"'""''()（）\[\]【】{}<>…\s]+/;
-        const TRAILING_COMMA = /[，,]+$/;
-        function formatChunk(chunk) {
-            let result = chunk.trim();
-            result = result.replace(LEADING_PUNCT, '');
-            result = result.replace(TRAILING_COMMA, '');
-            return result.trim();
-        }
-        function splitByPunct(source, punctRegex) {
-            const result = [];
-            let start = 0;
-            for (let i = 0; i < source.length; i++) {
-                if (punctRegex.test(source[i])) {
-                    let end = i + 1;
-                    while (end < source.length && punctRegex.test(source[end])) {
-                        end++;
-                    }
-                    const fragment = source.slice(start, end).trim();
-                    if (fragment.length > 0) {
-                        result.push(fragment);
-                    }
-                    start = end;
-                    i = end - 1;
-                }
-            }
-            if (start < source.length) {
-                const fragment = source.slice(start).trim();
-                if (fragment.length > 0) {
-                    result.push(fragment);
-                }
-            }
-            return result;
-        }
+        const IDEAL_MAXIMUM_LENGTH = 35;
         const level1 = splitByPunct(text, LEVEL1_PUNCT);
         const result = [];
-        function isInsideBracket(source, pos) {
-            let depth = 0;
-            for (let i = 0; i < pos; i++) {
-                if (source[i] === '\uFF08' || source[i] === '(')
-                    depth++;
-                else if (source[i] === '\uFF09' || source[i] === ')')
-                    depth--;
-            }
-            return depth > 0;
-        }
-        for (const fragment of level1) {
-            if (fragment.length <= MAX_LENGTH) {
-                const formatted = formatChunk(fragment);
+        for (let content of level1) {
+            if (content.length <= IDEAL_MAXIMUM_LENGTH) {
+                const formatted = formatChunk(content);
                 if (formatted.length > 0)
                     result.push(formatted);
                 continue;
             }
-            let remaining = fragment;
-            while (remaining.length > MAX_LENGTH) {
+            while (content.length > IDEAL_MAXIMUM_LENGTH) {
                 let splitPos = -1;
-                for (let i = Math.min(remaining.length - 1, MAX_LENGTH - 1); i >= 0; i--) {
-                    if (LEVEL2_PUNCT.test(remaining[i]) && !isInsideBracket(remaining, i)) {
-                        let end = i + 1;
-                        while (end < remaining.length && LEVEL2_PUNCT.test(remaining[end])) {
-                            end++;
-                        }
-                        splitPos = end;
-                        break;
-                    }
+                for (let i = Math.min(content.length - 1, IDEAL_MAXIMUM_LENGTH - 1); i >= 0; i--) {
+                    if (!LEVEL2_PUNCT.test(content[i]) || isInsideBracket(content, i))
+                        continue;
+                    let end = i + 1;
+                    while (end < content.length && LEVEL2_PUNCT.test(content[end]))
+                        end++;
+                    splitPos = end;
+                    break;
                 }
-                if (splitPos === -1) {
-                    splitPos = MAX_LENGTH;
-                }
-                const slice = formatChunk(remaining.slice(0, splitPos));
-                if (slice.length > 0) {
+                if (splitPos === -1)
+                    break;
+                const slice = formatChunk(content.slice(0, splitPos));
+                if (slice.length > 0)
                     result.push(slice);
-                }
-                remaining = remaining.slice(splitPos);
+                content = content.slice(splitPos);
             }
-            const tail = formatChunk(remaining);
-            if (tail.length > 0) {
+            const tail = formatChunk(content);
+            if (tail.length > 0)
                 result.push(tail);
-            }
         }
         return result;
     }
@@ -3500,12 +3486,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
         const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterCode);
         const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterAction);
-        const displayText = cleanTextForDisplay(textAfterEmotion);
+        const displayText = removeEmojiSymbols(textAfterEmotion);
         const displayChunks = splitSentences(displayText);
-        const textChunks = displayChunks.map(chunk => ({
-            display: chunk,
-            tts: cleanTextForTTS(chunk),
-        }));
+        const textChunks = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
         return { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks };
     }
 
@@ -3531,7 +3514,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
     exports.checkDueItems = checkDueItems;
-    exports.cleanTextForDisplay = cleanTextForDisplay;
     exports.cleanTextForTTS = cleanTextForTTS;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
@@ -3539,6 +3521,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.initSchedules = initSchedules;
     exports.parseContent = parseContent;
     exports.queryFromKnowledge = queryFromKnowledge;
+    exports.removeEmojiSymbols = removeEmojiSymbols;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToKnowledge = savePromptToKnowledge;
     exports.scheduleTools = scheduleTools;

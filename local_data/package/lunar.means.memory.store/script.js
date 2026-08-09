@@ -941,17 +941,17 @@ function renderCard(doc, isSearch) {
     }
 
     // Handle image document cards
-    if (App.isImageCollection || doc.role === 'image' || doc.image) {
-        var imageSrc = doc.image || '';
-        var scoreInfo = '';
-        if (isSearch && typeof doc.final_score === 'number') {
-            var scorePercent = (doc.final_score * 100).toFixed(1);
-            var boostLabel = doc.boost_level > 0 ? ' (×' + doc.boost_level + ' 加权)' : '';
-            scoreInfo = '<span class="sim-badge sim-high" title="最终评分' + boostLabel + '">' + scorePercent + '%</span>';
-        }
+	    if (App.isImageCollection || doc.role === 'image' || doc.image) {
+	        var imageSrc = doc.image || '';
+	        var imgSimBadge = '';
+	        if (isSearch && typeof doc.similarity === 'number') {
+	            var simPercent = (doc.similarity * 100).toFixed(1);
+	            var simCls = simPercent > 80 ? 'sim-high' : simPercent > 50 ? 'sim-mid' : 'sim-low';
+	            imgSimBadge = '<span class="sim-badge ' + simCls + '" title="累加余弦相似度">' + simPercent + '%</span>';
+	        }
         return '<div class="' + cardCls + ' image-card" data-doc-id="' + esc(doc.id) + '">' +
             '<span class="doc-role-badge image">图片</span>' +
-            scoreInfo +
+            imgSimBadge +
             '<div class="doc-body">' +
             '<div class="doc-id-row">' +
             '<code class="doc-id-tag">' + esc(doc.id) + '</code>' +

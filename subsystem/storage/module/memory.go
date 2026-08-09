@@ -566,8 +566,9 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 }
 
 // queryTopK 标签向量中介检索核心算法 (v3: 文档引用标签 UUID)
-// 流程: 嵌入查询 → 匹配标签 → 取标签 UUID → 筛选文档 → 评分排序
-// 评分: 该文档匹配的标签数 / 结果集文档总数
+// 流程: 嵌入查询 → 匹配标签 → 取标签 UUID → 筛选文档 → 平均评分排序
+// 评分: 所有匹配标签的余弦相似度取平均值（多标签命中取均分）
+// 例如: 文档A被标签1(0.5)和标签2(0.8)同时命中 → 得分 (0.5+0.8)/2 = 0.65
 func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -595,17 +596,21 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		actualTagK = len(tagScores)
 	}
 
-	// 步骤 2: 收集 topK 标签的 UUID
-	matchedTagUUIDs := make(map[string]struct{}, actualTagK)
+	// 步骤 2: 构建 标签UUID → 相似度 映射（topK 标签）
+	tagScoreMap := make(map[string]float32, actualTagK)
 	for i := 0; i < actualTagK; i++ {
-		matchedTagUUIDs[c.TagVectors[tagScores[i].idx].UUID] = struct{}{}
+		uuid := c.TagVectors[tagScores[i].idx].UUID
+		// 同一 UUID 可能被多个标签命中（去重后不存在），取最高分
+		if existing, ok := tagScoreMap[uuid]; !ok || tagScores[i].score > existing {
+			tagScoreMap[uuid] = tagScores[i].score
+		}
 	}
 
-	// 步骤 3: 筛选包含这些标签的文档，统计每个文档的匹配标签数
+	// 步骤 3: 筛选包含这些标签的文档，计算匹配标签的余弦相似度平均值
 	type docScored struct {
-		doc          Document
-		matchedCount int
-		order        int
+		doc      Document
+		avgScore float32
+		order    int
 	}
 
 	docOrder := make(map[string]int)
@@ -615,33 +620,31 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 
 	docScores := make([]docScored, 0)
 	for _, doc := range c.Documents {
-		matchCount := 0
+		var sum float32
+		var matchCount int
 		for _, tagUUID := range doc.TagUUIDs {
-			if _, ok := matchedTagUUIDs[tagUUID]; ok {
+			if score, ok := tagScoreMap[tagUUID]; ok {
+				sum += score
 				matchCount++
 			}
 		}
 		if matchCount > 0 {
 			docScores = append(docScores, docScored{
-				doc:          doc,
-				matchedCount: matchCount,
-				order:        docOrder[doc.ID],
+				doc:      doc,
+				avgScore: sum / float32(matchCount),
+				order:    docOrder[doc.ID],
 			})
 		}
 	}
 
-	totalDocs := len(docScores)
-	if totalDocs == 0 {
+	if len(docScores) == 0 {
 		return nil
 	}
 
-	// 步骤 4: 评分 = 该文档匹配的标签数 / 结果集文档总数
-	// 降序排列，平局按原始插入顺序
+	// 步骤 4: 按平均得分降序排列，平局按原始插入顺序
 	sort.SliceStable(docScores, func(i, j int) bool {
-		scoreI := float32(docScores[i].matchedCount) / float32(totalDocs)
-		scoreJ := float32(docScores[j].matchedCount) / float32(totalDocs)
-		if scoreI != scoreJ {
-			return scoreI > scoreJ
+		if docScores[i].avgScore != docScores[j].avgScore {
+			return docScores[i].avgScore > docScores[j].avgScore
 		}
 		return docScores[i].order < docScores[j].order
 	})
@@ -663,7 +666,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 			Role:       role,
 			Content:    doc.Content,
 			Image:      doc.Image,
-			Similarity: float32(docScores[i].matchedCount) / float32(totalDocs),
+			Similarity: docScores[i].avgScore,
 		}
 	}
 	return results

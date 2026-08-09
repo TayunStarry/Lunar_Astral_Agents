@@ -25,7 +25,7 @@ const (
 // v3 记忆库配置常量
 const (
 	CurrentVersion    = 3     // 当前数据格式版本号（v3: 文档引用标签 UUID）
-	TagDedupThreshold = 0.9   // 标签向量去重阈值（余弦相似度）
+	TagDedupThreshold = 0.85   // 标签向量去重阈值（余弦相似度）
 	MaxTagRetries     = 3     // LLM 标签生成最大重试次数
 )
 

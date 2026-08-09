@@ -28,7 +28,7 @@
             </header>
             <div class="panel-body" id="inputBody">
                 <div class="page-drop-zone" id="dropZone">
-                    <textarea id="inputText" class="page-textarea" placeholder="在此输入待翻译文本，或拖入文本文件..." autocomplete="off"></textarea>
+                    <textarea id="inputText" class="page-textarea" placeholder="在此输入待翻译文本，或拖入文本文件..." autocomplete="off" spellcheck="false"></textarea>
                     <div class="drop-overlay" id="dropOverlay">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <span>释放文件以导入</span>
@@ -100,10 +100,7 @@
                         <i class="fas fa-list-ul"></i> 逐行
                     </button>
                 </div>
-            </div>
-
-            <!-- 语言设置卡片 -->
-            <div class="tb-card">
+                <div class="tb-card-divider"></div>
                 <label class="tb-card-label"><i class="fas fa-globe"></i> 目标语言</label>
                 <select id="targetLang" class="glass-select">
                     <option value="auto" selected>中英互译</option>
@@ -121,6 +118,87 @@
                     <option value="Thai">泰文</option>
                     <option value="Vietnamese">越南文</option>
                 </select>
+            </div>
+
+            <!-- 颜色风格卡片 -->
+            <div class="tb-card tb-card--color">
+                <label class="tb-card-label"><i class="fas fa-palette"></i> 颜色风格</label>
+                <div class="color-swatches" id="colorSwatches">
+                    <button class="color-swatch active" data-color="default" title="默认风格">
+                        <span class="color-dot" style="background:#6c9bcf;"></span>
+                        <span>默认</span>
+                    </button>
+                    <button class="color-swatch" data-color="light-green" title="浅绿风格">
+                        <span class="color-dot" style="background:#4caf50;"></span>
+                        <span>浅绿</span>
+                    </button>
+                    <button class="color-swatch" data-color="light-blue" title="浅蓝风格">
+                        <span class="color-dot" style="background:#42a5f5;"></span>
+                        <span>浅蓝</span>
+                    </button>
+                    <button class="color-swatch" data-color="purple" title="紫色风格">
+                        <span class="color-dot" style="background:#9c27b0;"></span>
+                        <span>紫色</span>
+                    </button>
+                    <button class="color-swatch" data-color="orange" title="橙色风格">
+                        <span class="color-dot" style="background:#ff9800;"></span>
+                        <span>橙色</span>
+                    </button>
+                    <button class="color-swatch" data-color="pink" title="粉色风格">
+                        <span class="color-dot" style="background:#e91e63;"></span>
+                        <span>粉色</span>
+                    </button>
+                    <button class="color-swatch" data-color="cyan" title="青色风格">
+                        <span class="color-dot" style="background:#00bcd4;"></span>
+                        <span>青色</span>
+                    </button>
+                    <button class="color-swatch" data-color="teal" title="青绿风格">
+                        <span class="color-dot" style="background:#009688;"></span>
+                        <span>青绿</span>
+                    </button>
+                    <button class="color-swatch" data-color="gold" title="金色风格">
+                        <span class="color-dot" style="background:#ffc107;"></span>
+                        <span>金色</span>
+                    </button>
+                    <button class="color-swatch" data-color="indigo" title="靛蓝风格">
+                        <span class="color-dot" style="background:#3f51b5;"></span>
+                        <span>靛蓝</span>
+                    </button>
+                    <button class="color-swatch" data-color="dark-blue" title="深蓝风格">
+                        <span class="color-dot" style="background:#1a237e;"></span>
+                        <span>深蓝</span>
+                    </button>
+                    <button class="color-swatch" data-color="dark-green" title="深绿风格">
+                        <span class="color-dot" style="background:#1b5e20;"></span>
+                        <span>深绿</span>
+                    </button>
+                </div>
+                <div class="tb-card-divider"></div>
+                <button id="themeToggle" class="btn-glass btn-full" title="切换深色/浅色模式">
+                    <i class="fas fa-moon"></i>
+                    <span id="themeLabel">深色模式</span>
+                </button>
+            </div>
+
+            <!-- 译名词库卡片 -->
+            <div class="tb-card tb-card--glossary">
+                <label class="tb-card-label">
+                    <i class="fas fa-book"></i> 译名词库 <span class="glossary-count" id="glossaryCount">0</span>
+                </label>
+                <div class="glossary-add-row">
+                    <input type="text" id="glossaryKey" class="glossary-input" placeholder="术语/Key" autocomplete="off">
+                    <span class="glossary-arrow"><i class="fas fa-arrow-right"></i></span>
+                    <input type="text" id="glossaryValue" class="glossary-input" placeholder="推荐译名" autocomplete="off">
+                    <button id="glossaryAdd" class="btn-glass btn-glass-primary btn-sm" title="添加">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+                <div class="glossary-list" id="glossaryList">
+                    <div class="glossary-empty" id="glossaryEmpty">
+                        <i class="fas fa-inbox"></i>
+                        <span>暂无词条，添加后自动存入记忆库</span>
+                    </div>
+                </div>
             </div>
 
             <!-- 样式转换卡片 -->
@@ -145,14 +223,6 @@
                 <div class="style-placeholder" id="stylePlaceholder" style="display:none;">
                     <i class="fas fa-info-circle"></i> 文本超过500字，样式转换已隐藏
                 </div>
-            </div>
-
-            <!-- 主题卡片 -->
-            <div class="tb-card tb-card--theme">
-                <button id="themeToggle" class="btn-glass btn-full" title="切换深色/浅色模式">
-                    <i class="fas fa-moon"></i>
-                    <span id="themeLabel">深色模式</span>
-                </button>
             </div>
         </div>
     </aside>

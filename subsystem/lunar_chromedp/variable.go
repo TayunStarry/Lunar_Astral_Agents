@@ -21,7 +21,7 @@ const (
 	MaxSearchRounds         = 8                // 深度搜索最大轮次
 	MaxScreenshotsPerPage   = 10               // 单页最大截图数
 	TextHeavyThreshold      = 500              // 文本密集型判定阈值（字符数）
-	MemorySimilarityMin     = 0.7              // 记忆库相似度最低阈值
+	MemorySimilarityMin     = 0.55             // 记忆库相似度最低阈值
 	KeywordDedupThreshold   = 0.85             // 关键词去重余弦相似度阈值
 	MaxContextTokensDefault = 16384            // 默认最大上下文 tokens
 	QueryTimeout            = 30 * time.Second // 单次浏览器操作超时

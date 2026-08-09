@@ -81,13 +81,13 @@ type memoryMessage struct {
 }
 
 // MemoryQueryResult 记忆库查询结果（含相似度分数）
-// v3: Similarity 字段表示该文档匹配的标签数 / 结果集文档总数
+// v3: Similarity 字段表示匹配标签的余弦相似度平均值
 type MemoryQueryResult struct {
 	ID         string  `json:"id"`              // 文档 ID
 	Role       string  `json:"role"`            // 消息角色，image 文档为 "image"
 	Content    string  `json:"content"`         // 消息内容，image 文档为空
 	Image      string  `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
-	Similarity float32 `json:"similarity"`      // 标签匹配频次得分
+	Similarity float32 `json:"similarity"`      // 匹配标签余弦相似度平均值
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
@@ -101,10 +101,10 @@ type DocumentEntry struct {
 // Document 统一文档结构（text 和 image 共用）
 // v3: 新增 TagUUIDs 字段，存储引用的标签向量 UUID
 type Document struct {
-	ID       string   `json:"id"`                // 文档 UUID v4
-	Role     string   `json:"role,omitempty"`    // 消息角色，text 文档使用
-	Content  string   `json:"content,omitempty"` // 文本内容，text 文档使用
-	Image    string   `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	ID       string   `json:"id"`                  // 文档 UUID v4
+	Role     string   `json:"role,omitempty"`      // 消息角色，text 文档使用
+	Content  string   `json:"content,omitempty"`   // 文本内容，text 文档使用
+	Image    string   `json:"image,omitempty"`     // 图片 base64 数据，image 文档使用
 	TagUUIDs []string `json:"tag_uuids,omitempty"` // v3: 引用的标签向量 UUID 列表
 }
 
