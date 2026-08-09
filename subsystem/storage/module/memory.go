@@ -354,6 +354,7 @@ func (c *Collection) docCount() int {
 
 // MemoryAddMessage 添加文本消息到记忆库，同步阻塞等待 LLM 标签生成完成
 // 返回生成的文档 UUID，LLM 标签生成失败则不存储文档
+// v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
 func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -380,12 +381,12 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 		return "", fmt.Errorf("标签嵌入失败: %w", err)
 	}
 
-	// 4. 去重匹配并更新标签向量
-	c.processTagVectors(tags, tagVecs, id)
+	// 4. v3: 去重匹配，获取标签 UUID
+	tagUUIDs := c.processTagVectors(tags, tagVecs)
 
-	// 5. 添加文档
+	// 5. 添加文档（含 TagUUIDs）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TagUUIDs: tagUUIDs})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -422,6 +423,7 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 
 // MemoryAddImage 添加图片到记忆库，同步阻塞等待 LLM 标签生成完成
 // base64Image 为完整的 data:image/...;base64,... 格式
+// v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
 func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -448,12 +450,12 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 		return "", fmt.Errorf("标签嵌入失败: %w", err)
 	}
 
-	// 4. 去重匹配并更新标签向量
-	c.processTagVectors(tags, tagVecs, id)
+	// 4. v3: 去重匹配，获取标签 UUID
+	tagUUIDs := c.processTagVectors(tags, tagVecs)
 
-	// 5. 添加文档
+	// 5. 添加文档（含 TagUUIDs）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image})
+	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TagUUIDs: tagUUIDs})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -467,12 +469,14 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 	return id, nil
 }
 
-// processTagVectors 对标签向量进行去重匹配并更新标签向量列表
-// 余弦相似度 > TagDedupThreshold 时复用已有标签向量
-func (c *Collection) processTagVectors(tags []string, newVecs [][]float32, docUUID string) {
+// processTagVectors 对标签向量进行去重匹配，返回每个标签对应的 UUID
+// v3: 标签向量拥有独立 UUID，不再存储文档引用
+// 余弦相似度 > TagDedupThreshold 时复用已有标签向量 UUID
+func (c *Collection) processTagVectors(tags []string, newVecs [][]float32) []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	tagUUIDs := make([]string, len(newVecs))
 	for i, vec := range newVecs {
 		bestIdx := -1
 		bestSim := float32(-1)
@@ -487,20 +491,23 @@ func (c *Collection) processTagVectors(tags []string, newVecs [][]float32, docUU
 
 		if bestSim >= TagDedupThreshold {
 			// 复用已有标签向量
-			c.TagVectors[bestIdx].UUIDs = append(c.TagVectors[bestIdx].UUIDs, docUUID)
+			tagUUIDs[i] = c.TagVectors[bestIdx].UUID
 		} else {
-			// 新增标签向量（保留标签文本）
+			// 新增标签向量
 			tagText := ""
 			if i < len(tags) {
 				tagText = tags[i]
 			}
+			newUUID := generateUUID()
 			c.TagVectors = append(c.TagVectors, TagVector{
+				UUID:      newUUID,
 				Tag:       tagText,
 				Embedding: vec,
-				UUIDs:     []string{docUUID},
 			})
+			tagUUIDs[i] = newUUID
 		}
 	}
+	return tagUUIDs
 }
 
 // MemoryQueryMessages 查询记忆库，返回 topK 条最匹配的 JSON 消息字符串
@@ -558,7 +565,9 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 	return c.queryTopK(queryVec, topK), nil
 }
 
-// queryTopK 标签向量中介检索核心算法
+// queryTopK 标签向量中介检索核心算法 (v3: 文档引用标签 UUID)
+// 流程: 嵌入查询 → 匹配标签 → 取标签 UUID → 筛选文档 → 评分排序
+// 评分: 该文档匹配的标签数 / 结果集文档总数
 func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -567,7 +576,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		return nil
 	}
 
-	// 步骤 2-3: 计算所有标签向量的相似度并取 topK
+	// 步骤 1: 计算所有标签向量的相似度并取 topK
 	type tagScored struct {
 		idx   int
 		score float32
@@ -586,27 +595,17 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		actualTagK = len(tagScores)
 	}
 
-	// 步骤 4: 收集 topK 标签关联的所有 UUID，去重并统计频次
-	uuidSet := make(map[string]struct{})
-	uuidCount := make(map[string]int)
+	// 步骤 2: 收集 topK 标签的 UUID
+	matchedTagUUIDs := make(map[string]struct{}, actualTagK)
 	for i := 0; i < actualTagK; i++ {
-		tv := &c.TagVectors[tagScores[i].idx]
-		for _, uid := range tv.UUIDs {
-			uuidSet[uid] = struct{}{}
-			uuidCount[uid]++
-		}
+		matchedTagUUIDs[c.TagVectors[tagScores[i].idx].UUID] = struct{}{}
 	}
 
-	totalUnique := len(uuidSet)
-	if totalUnique == 0 {
-		return nil
-	}
-
-	// 步骤 5-6: 得分 = 频次 / 去重 UUID 总数
+	// 步骤 3: 筛选包含这些标签的文档，统计每个文档的匹配标签数
 	type docScored struct {
-		doc   Document
-		score float32
-		order int // 原始插入顺序
+		doc          Document
+		matchedCount int
+		order        int
 	}
 
 	docOrder := make(map[string]int)
@@ -614,26 +613,40 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		docOrder[doc.ID] = i
 	}
 
-	docScores := make([]docScored, 0, totalUnique)
+	docScores := make([]docScored, 0)
 	for _, doc := range c.Documents {
-		if _, ok := uuidSet[doc.ID]; ok {
+		matchCount := 0
+		for _, tagUUID := range doc.TagUUIDs {
+			if _, ok := matchedTagUUIDs[tagUUID]; ok {
+				matchCount++
+			}
+		}
+		if matchCount > 0 {
 			docScores = append(docScores, docScored{
-				doc:   doc,
-				score: float32(uuidCount[doc.ID]) / float32(totalUnique),
-				order: docOrder[doc.ID],
+				doc:          doc,
+				matchedCount: matchCount,
+				order:        docOrder[doc.ID],
 			})
 		}
 	}
 
-	// 步骤 7: 排序 — 得分降序，平局按原始插入顺序
+	totalDocs := len(docScores)
+	if totalDocs == 0 {
+		return nil
+	}
+
+	// 步骤 4: 评分 = 该文档匹配的标签数 / 结果集文档总数
+	// 降序排列，平局按原始插入顺序
 	sort.SliceStable(docScores, func(i, j int) bool {
-		if docScores[i].score != docScores[j].score {
-			return docScores[i].score > docScores[j].score
+		scoreI := float32(docScores[i].matchedCount) / float32(totalDocs)
+		scoreJ := float32(docScores[j].matchedCount) / float32(totalDocs)
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
 		}
 		return docScores[i].order < docScores[j].order
 	})
 
-	// 步骤 8: 返回前 topK 条
+	// 步骤 5: 返回前 topK 条
 	if topK > len(docScores) {
 		topK = len(docScores)
 	}
@@ -650,13 +663,15 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 			Role:       role,
 			Content:    doc.Content,
 			Image:      doc.Image,
-			Similarity: docScores[i].score,
+			Similarity: float32(docScores[i].matchedCount) / float32(totalDocs),
 		}
 	}
 	return results
 }
 
-// MemoryDeleteMessage 删除指定 UUID 的文档，同步清理关联的标签向量
+// MemoryDeleteMessage 删除指定 UUID 的文档
+// v3: 仅删除文档本身 (O(1))，不再遍历标签向量清理引用
+// 悬空标签留待 MemoryRebuildEntries 或 MemoryClearCollection 时统一清理
 func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName, id string) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -679,29 +694,9 @@ func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName, id s
 		return nil
 	}
 
-	// 2. 从标签向量中移除该 UUID
-	c.mu.Lock()
-	for i := len(c.TagVectors) - 1; i >= 0; i-- {
-		tv := &c.TagVectors[i]
-		for j, uid := range tv.UUIDs {
-			if uid == id {
-				tv.UUIDs = append(tv.UUIDs[:j], tv.UUIDs[j+1:]...)
-				break
-			}
-		}
-		// 标签无引用则删除
-		if len(tv.UUIDs) == 0 {
-			c.TagVectors = append(c.TagVectors[:i], c.TagVectors[i+1:]...)
-		}
-	}
-	c.mu.Unlock()
-
-	// 3. 持久化
+	// 2. v3: 仅持久化文档，不清理标签向量（悬空标签留待重建时处理）
 	if err := c.saveDocumentsToFile(); err != nil {
 		return fmt.Errorf("保存文档失败: %w", err)
-	}
-	if err := c.saveTagsToFile(); err != nil {
-		return fmt.Errorf("保存标签向量失败: %w", err)
 	}
 
 	return nil
@@ -766,7 +761,8 @@ func (d *MemoryDB) MemoryGetEntryCount(collectionName string) int {
 	return c.docCount()
 }
 
-// MemoryHasSyncMismatch 检查集合中文档数量与标签向量引用是否一致
+// MemoryHasSyncMismatch 检查集合中文档引用的标签 UUID 是否都存在
+// v3: 检查文档的 TagUUIDs 是否都指向存在的标签向量
 func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -783,10 +779,22 @@ func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 		return false
 	}
 
-	// 检查标签向量数量是否合理
 	tagCount := len(c.TagVectors)
 	if tagCount == 0 && docCount > 0 {
 		return true // 有文档但没有标签向量
+	}
+
+	// v3: 检查是否有文档引用了不存在的标签 UUID
+	tagUUIDSet := make(map[string]struct{}, tagCount)
+	for _, tv := range c.TagVectors {
+		tagUUIDSet[tv.UUID] = struct{}{}
+	}
+	for _, doc := range c.Documents {
+		for _, tagUUID := range doc.TagUUIDs {
+			if _, ok := tagUUIDSet[tagUUID]; !ok {
+				return true // 文档引用了不存在的标签（悬空引用）
+			}
+		}
 	}
 
 	return false
@@ -838,7 +846,8 @@ func (d *MemoryDB) MemoryClearCollection(collectionName string) error {
 }
 
 // MemoryRebuildEntries 重建集合的标签向量（重新生成标签 + 嵌入）
-// 当嵌入模型变更时调用，LLM 标签保持不变（需重新生成）
+// v3: 逐文档重新生成标签，仅保留被文档引用的标签向量（自动丢弃悬空标签）
+// 当嵌入模型变更时调用
 func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, modelName string, progress func(int, int)) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -850,7 +859,7 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 	copy(docs, c.Documents)
 	c.mu.RUnlock()
 
-	// 清空标签向量
+	// v3: 清空旧标签向量，重建后仅保留被引用的标签
 	c.mu.Lock()
 	c.TagVectors = make([]TagVector, 0)
 	c.mu.Unlock()
@@ -888,10 +897,24 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 			continue
 		}
 
-		// 去重
-		c.processTagVectors(tags, tagVecs, doc.ID)
+		// v3: 去重匹配，获取标签 UUID
+		tagUUIDs := c.processTagVectors(tags, tagVecs)
+
+		// v3: 更新文档的 TagUUIDs
+		c.mu.Lock()
+		for j := range c.Documents {
+			if c.Documents[j].ID == doc.ID {
+				c.Documents[j].TagUUIDs = tagUUIDs
+				break
+			}
+		}
+		c.mu.Unlock()
 	}
 
+	// v3: 重建完成，TagVectors 仅包含被文档引用的标签（悬空标签已自动丢弃）
+	if err := c.saveDocumentsToFile(); err != nil {
+		return fmt.Errorf("保存文档失败: %w", err)
+	}
 	if err := c.saveTagsToFile(); err != nil {
 		return fmt.Errorf("保存标签向量失败: %w", err)
 	}
@@ -1243,8 +1266,11 @@ func cosineSimilarity(a, b []float32) float32 {
 
 var globalMemoryDB *MemoryDB
 
-// InitMemoryDB 全局初始化
+// InitMemoryDB 全局初始化（幂等：若已初始化则直接返回现有实例）
 func InitMemoryDB(baseDir string) *MemoryDB {
+	if globalMemoryDB != nil {
+		return globalMemoryDB
+	}
 	globalMemoryDB = &MemoryDB{
 		baseDir:     baseDir,
 		collections: make(map[string]*Collection),

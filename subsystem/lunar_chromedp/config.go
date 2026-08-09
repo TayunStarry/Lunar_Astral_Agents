@@ -13,12 +13,13 @@ import (
 // 调用方可基于此配置修改后传入 InitSearch
 func DefaultSearchConfig() SearchConfig {
 	return SearchConfig{
-		MultimodalURL:   "http://127.0.0.1:8080/v1",
-		MultimodalName:  "system-multimodal",
-		MultimodalKey:   "",
-		EmbeddingURL:    "http://127.0.0.1:8080/v1",
-		EmbeddingName:   "system-embedding",
-		EmbeddingKey:    "",
+		MultimodalURL:    "http://127.0.0.1:8080/v1",
+		MultimodalName:   "system-multimodal",
+		MultimodalKey:    "",
+		EmbeddingURL:     "http://127.0.0.1:8080/v1",
+		EmbeddingName:    "system-embedding",
+		EmbeddingKey:     "",
+		MemoryDBDir:      "local_data/database/memory",
 		MaxContextTokens: MaxContextTokensDefault,
 	}
 }

@@ -23,7 +23,6 @@ import (
 
 // memoryInit 初始化记忆库实例并创建指定集合
 // 参数: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType
-// collectionType: "text" 或 "image"
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 8 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 8 个: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType")})
@@ -41,6 +40,9 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	if collectionType == "" {
 		collectionType = module.CollectionTypeText
 	}
+
+	// 确保全局 MemoryDB 实例已初始化（幂等，若 crystal_astral 已初始化则复用）
+	module.InitMemoryDB("local_data/database/memory")
 
 	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务）
 	if err := module.MemoryInitInstance(baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel); err != nil {

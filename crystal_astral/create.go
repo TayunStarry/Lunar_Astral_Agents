@@ -92,9 +92,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		logger.Warn("CrystalAstral", "知识库初始化失败: %v (不影响服务启动)", err)
 	}
 	// 初始化记忆库存储目录（仅准备本地存储结构，不产生网络请求）
-	if err := module.InitMemoryDB(*config.MemoryDBDir); err != nil {
-		logger.Warn("CrystalAstral", "记忆库初始化失败: %v (不影响服务启动)", err)
-	}
+	module.InitMemoryDB(*config.MemoryDBDir)
 	// 自动初始化记忆库实例与默认集合（与 lunar_astral 的 JS agent 行为对齐）
 	// 优先使用配置的 cloud_model_url；未配置时回退到月华服务地址（由代理转发至模型服务）
 	initMemoryDatabase()

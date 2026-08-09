@@ -472,7 +472,7 @@ var agentSystem = (function (exports) {
         static initMemory() {
             if (BaseConfig.memoryReady)
                 return;
-            const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName, 'lunar_messages');
+            const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.EmbeddingName, 'lunar_messages', 'text');
             if (err)
                 console.error('记忆库初始化失败:', err);
             else

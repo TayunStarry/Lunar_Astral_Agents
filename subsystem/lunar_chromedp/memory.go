@@ -26,15 +26,18 @@ func init() {
 // =============================================================================
 
 // initMemoryCollection 初始化记忆库连接并创建 search_memory 集合
-// embeddingURL: 嵌入服务 base_url（也是 LLM 服务的 base_url）
-// embeddingModel: 嵌入模型名（也是 LLM 多模态模型名）
-func initMemoryCollection(embeddingURL, embeddingModel, embeddingKey string) error {
+// embeddingURL: 嵌入服务 base_url
+// embeddingModel: 嵌入模型名（用于向量检索）
+// embeddingKey: API 密钥
+// llmModel: 多模态/对话模型名（用于标签生成，不可用嵌入模型！）
+func initMemoryCollection(embeddingURL, embeddingModel, embeddingKey, llmModel string) error {
 	// 初始化记忆库实例（嵌入服务 + LLM 标签生成服务）
+	// 参数顺序: embeddingBaseURL, embeddingAPIKey, llmBaseURL, llmAPIKey, multimodalModel
 	if !module.IsMemoryInitialized() {
-		if err := module.MemoryInitInstance(embeddingURL, embeddingKey, embeddingURL, embeddingKey, embeddingModel); err != nil {
+		if err := module.MemoryInitInstance(embeddingURL, embeddingKey, embeddingURL, embeddingKey, llmModel); err != nil {
 			return fmt.Errorf("记忆库实例初始化失败: %w", err)
 		}
-		fmt.Printf("[%s] 记忆库实例已初始化\n", ModuleName)
+		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, embeddingModel, llmModel)
 	}
 
 	// 检查 search_memory 集合状态

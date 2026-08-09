@@ -2,6 +2,7 @@ package lunar_chromedp
 
 import (
 	"fmt"
+	"storage/module"
 	"strings"
 	"sync"
 	"time"
@@ -69,7 +70,9 @@ var (
 	memoryStore func(record MemorySearchRecord) error
 
 	// memoryInitCollection 初始化 search_memory 集合
-	memoryInitCollection func(embeddingURL, embeddingModel, embeddingKey string) error
+	// embeddingModel: 嵌入模型名（用于向量检索）
+	// llmModel: 多模态/对话模型名（用于标签生成）
+	memoryInitCollection func(embeddingURL, embeddingModel, embeddingKey, llmModel string) error
 )
 
 // memoryEntry 记忆检索中间结果
@@ -137,7 +140,11 @@ func InitSearch(config SearchConfig) error {
 
 	// 验证嵌入模型连通性 + 初始化 search_memory 集合
 	if memoryInitCollection != nil {
-		if err := memoryInitCollection(config.EmbeddingURL, config.EmbeddingName, config.EmbeddingKey); err != nil {
+		// 初始化 MemoryDB 全局实例（仅首次调用生效，后续调用幂等）
+		if config.MemoryDBDir != "" {
+			module.InitMemoryDB(config.MemoryDBDir)
+		}
+		if err := memoryInitCollection(config.EmbeddingURL, config.EmbeddingName, config.EmbeddingKey, config.MultimodalName); err != nil {
 			return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
 				config.EmbeddingName, config.EmbeddingURL, err)
 		}
@@ -527,6 +534,10 @@ func (a *SearchAgent) executeSearchAndExtract(keywords []string) (summaries []st
 
 	fmt.Printf("[%s] 去重后共 %d 条搜索结果\n", ModuleName, len(uniqueResults))
 
+	// 过滤字典网站（搜索智能体自身具备字典能力，无需查阅外部字典网站）
+	uniqueResults = filterDictionarySites(uniqueResults)
+	fmt.Printf("[%s] 过滤字典网站后剩余 %d 条结果\n", ModuleName, len(uniqueResults))
+
 	// 提取每个页面内容并摘要
 	var unreachableCount int
 	for i, result := range uniqueResults {
@@ -641,6 +652,35 @@ func (a *SearchAgent) filterValuableResults(query string, summaries []string, so
 	}
 
 	return filteredSummaries, filteredSources
+}
+
+// filterDictionarySites 过滤字典/词典类网站
+// 搜索智能体自身具备字典能力，无需浪费浏览器时间和模型 token 查阅外部字典网站
+func filterDictionarySites(results []SearchResult) []SearchResult {
+	if len(results) == 0 {
+		return results
+	}
+
+	filtered := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		if isDictionarySite(r.URL, r.Title) {
+			fmt.Printf("[%s] 过滤字典网站: %s\n", ModuleName, r.URL)
+			continue
+		}
+		filtered = append(filtered, r)
+	}
+	return filtered
+}
+
+// isDictionarySite 检查 URL 或标题是否包含字典关键词
+func isDictionarySite(url, title string) bool {
+	combined := strings.ToLower(url + " " + title)
+	for _, kw := range dictionaryKeywords {
+		if strings.Contains(combined, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 // =============================================================================

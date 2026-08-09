@@ -34,4 +34,4 @@ export * from './tool/schedule';
 export * from './tool/screenshot';
 export * from './tool/agent-control';
 
-export * from './parser/parser';
+export * from './file/parser';

@@ -17,6 +17,8 @@ type SearchConfig struct {
 	EmbeddingURL  string // 嵌入服务 API 地址
 	EmbeddingName string // 嵌入模型名称（如 system-embedding）
 	EmbeddingKey  string // 嵌入服务 API 密钥（可为空）
+	// 记忆库存储目录
+	MemoryDBDir string // 记忆库数据存储根目录，默认 "local_data/database/memory"
 	// 上下文控制
 	MaxContextTokens int // 单次 AI 调用最大上下文长度，默认 16384
 }

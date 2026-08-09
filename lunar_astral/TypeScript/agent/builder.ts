@@ -24,7 +24,7 @@ export class BaseConfig {
 	/** 初始化记忆库 */
 	protected static initMemory(): void {
 		if (BaseConfig.memoryReady) return;
-		const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName, 'lunar_messages');
+		const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.EmbeddingName, 'lunar_messages', 'text');
 		if (err) console.error('记忆库初始化失败:', err);
 		else BaseConfig.memoryReady = true;
 	}

@@ -70,7 +70,8 @@ type KnowledgeRequest struct {
 }
 
 // =============================================================================
-// v2 记忆库类型定义 — 标签向量中介检索架构
+// v3 记忆库类型定义 — 文档引用标签 UUID 架构
+// 核心变更：引用方向反转，TagVector 不再存储文档 UUID
 // =============================================================================
 
 // memoryMessage 记忆库查询返回的兼容消息结构（仅用于 MemoryQueryMessages 的 JSON 编码）
@@ -80,7 +81,7 @@ type memoryMessage struct {
 }
 
 // MemoryQueryResult 记忆库查询结果（含相似度分数）
-// v2: Similarity 字段表示标签向量匹配频次得分（C_i / N），范围 [0, 1]
+// v3: Similarity 字段表示该文档匹配的标签数 / 结果集文档总数
 type MemoryQueryResult struct {
 	ID         string  `json:"id"`              // 文档 ID
 	Role       string  `json:"role"`            // 消息角色，image 文档为 "image"
@@ -98,37 +99,37 @@ type DocumentEntry struct {
 }
 
 // Document 统一文档结构（text 和 image 共用）
-// text 文档：ID + Role + Content
-// image 文档：ID + Image
+// v3: 新增 TagUUIDs 字段，存储引用的标签向量 UUID
 type Document struct {
-	ID      string `json:"id"`                // 文档 UUID v4
-	Role    string `json:"role,omitempty"`    // 消息角色，text 文档使用
-	Content string `json:"content,omitempty"` // 文本内容，text 文档使用
-	Image   string `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	ID       string   `json:"id"`                // 文档 UUID v4
+	Role     string   `json:"role,omitempty"`    // 消息角色，text 文档使用
+	Content  string   `json:"content,omitempty"` // 文本内容，text 文档使用
+	Image    string   `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	TagUUIDs []string `json:"tag_uuids,omitempty"` // v3: 引用的标签向量 UUID 列表
 }
 
-// TagVector 标签向量条目 — 标签文本的嵌入向量及其关联的原始文档 UUID 数组
-// 标签向量在集合内全局共享，多个文档可关联同一标签向量
+// TagVector 标签向量条目 — 标签文本的嵌入向量，拥有独立 UUID
+// v3: 不再存储关联文档 UUID，引用关系由 Document.TagUUIDs 维护
 type TagVector struct {
+	UUID      string    `json:"uuid"`      // v3: 标签向量唯一标识
 	Tag       string    `json:"tag"`       // 标签文本（保留，便于调试和可解释性）
 	Embedding []float32 `json:"embedding"` // 标签文本的嵌入向量
-	UUIDs     []string  `json:"uuid"`      // 关联的原始文档 UUID 数组
 }
 
-// collectionMeta v2 集合元数据，持久化到 metadata.json
+// collectionMeta v3 集合元数据，持久化到 metadata.json
 type collectionMeta struct {
 	EmbeddingModel      string `json:"embedding_model"`       // 锁定的嵌入模型名
 	EmbeddingDimension  int    `json:"embedding_dimension"`   // 锁定的向量维度
 	ChunkCount          int    `json:"chunk_count,omitempty"` // 已废弃，保留兼容
 	MultimodalModel     string `json:"multimodal_model"`      // 标签生成多模态模型名
 	Type                string `json:"type"`                  // 集合类型："text" 或 "image"
-	Version             int    `json:"version"`               // 数据格式版本号（v2 = 2）
+	Version             int    `json:"version"`               // 数据格式版本号（v3 = 3）
 	DocumentsChunkCount int    `json:"documents_chunk_count"` // text 文档分块数
 	ImagesChunkCount    int    `json:"images_chunk_count"`    // image 文档分块数
 	TagsChunkCount      int    `json:"tags_chunk_count"`      // 标签向量分块数
 }
 
-// Collection 单个记忆集合 — v2 标签向量中介检索架构
+// Collection 单个记忆集合 — v3 文档引用标签 UUID 架构
 // 文本与图片文档统一为 Document 列表，标签向量独立存储
 // 存储布局：
 //
@@ -166,7 +167,7 @@ type KnowledgeDB struct {
 	knowledgeInitialized bool    // 知识库是否初始化完成
 }
 
-// MemoryDB 记忆库结构体（多集合架构，扁平化存储，v2 标签向量中介检索）
+// MemoryDB 记忆库结构体（多集合架构，扁平化存储，v3 文档引用标签 UUID 架构）
 // 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
 // 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, images_*.json, tags_*.json}
 type MemoryDB struct {

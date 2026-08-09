@@ -1,10 +1,10 @@
 // ===== 全局元素引用 =====
 const E = {
-    sidebar: document.getElementById('sidebar'),
-    sidebarTrigger: document.getElementById('sidebarTrigger'),
-    sidebarArrow: document.getElementById('sidebarArrow'),
+    toolbar: document.getElementById('toolbar'),
+    toolbarToggle: document.getElementById('toolbarToggle'),
     inputText: document.getElementById('inputText'),
     charCount: document.getElementById('charCount'),
+    btnClear: document.getElementById('btnClear'),
     dropZone: document.getElementById('dropZone'),
     dropOverlay: document.getElementById('dropOverlay'),
     btnTranslate: document.getElementById('btnTranslate'),
@@ -42,20 +42,19 @@ const E = {
 // ===== 状态 =====
 let currentMode = 'full';            // 默认全文翻译
 let isTranslating = false;
-let abortController = null;          // 用于中断流式请求
+let abortController = null;
 
 // 翻页状态
-let inputFullText = '';              // 输入全文
-let inputPages = [];                 // 输入分页数组
-let inputPageIdx = 0;               // 当前输入页码 (0-based)
+let inputFullText = '';
+let inputPages = [];
+let inputPageIdx = 0;
 
-let outputFullText = '';            // 输出全文
-let outputPages = [];               // 输出分页数组
-let outputPageIdx = 0;             // 当前输出页码 (0-based)
+let outputFullText = '';
+let outputPages = [];
+let outputPageIdx = 0;
 
 // ===== 初始化 =====
 function init() {
-    // 默认全文模式
     switchMode('full');
 
     // 输入事件
@@ -66,6 +65,9 @@ function init() {
             onTranslate();
         }
     });
+
+    // 清空按钮
+    E.btnClear.addEventListener('click', onClearInput);
 
     // 拖拽
     E.dropZone.addEventListener('dragover', onDragOver);
@@ -88,14 +90,17 @@ function init() {
     // 主题
     E.themeToggle.addEventListener('click', onToggleTheme);
 
-    // ===== 侧边栏交互 =====
-    // 鼠标靠近左边缘 → 展开
-    E.sidebarTrigger.addEventListener('mouseenter', openSidebar);
-    // 鼠标离开侧边栏 → 收起（延迟防抖）
-    E.sidebar.addEventListener('mouseleave', scheduleCloseSidebar);
-    E.sidebar.addEventListener('mouseenter', cancelCloseSidebar);
-    // 点击把手切换
-    document.querySelector('.sidebar-handle').addEventListener('click', toggleSidebar);
+    // 底边栏：点击三角切换
+    E.toolbarToggle.addEventListener('click', toggleToolbar);
+    // 点击工具栏外部区域关闭
+    document.addEventListener('click', (e) => {
+        if (E.toolbar.classList.contains('open') &&
+            !E.toolbar.contains(e.target) &&
+            e.target !== E.toolbarToggle &&
+            !E.toolbarToggle.contains(e.target)) {
+            closeToolbar();
+        }
+    });
 
     // 翻页按钮
     E.inputFirst.addEventListener('click', () => inputGoToPage(0));
@@ -117,46 +122,38 @@ function init() {
     updateStyleVisibility();
 }
 
-// ===== 侧边栏 =====
-let sidebarCloseTimer = null;
-
-function openSidebar() {
-    E.sidebar.classList.add('open');
-    cancelCloseSidebar();
+// ===== 底边栏 =====
+function toggleToolbar() {
+    E.toolbar.classList.toggle('open');
 }
 
-function scheduleCloseSidebar() {
-    sidebarCloseTimer = setTimeout(() => {
-        E.sidebar.classList.remove('open');
-    }, 400);
+function closeToolbar() {
+    E.toolbar.classList.remove('open');
 }
 
-function cancelCloseSidebar() {
-    if (sidebarCloseTimer) {
-        clearTimeout(sidebarCloseTimer);
-        sidebarCloseTimer = null;
-    }
-}
-
-function toggleSidebar() {
-    if (E.sidebar.classList.contains('open')) {
-        E.sidebar.classList.remove('open');
-    } else {
-        E.sidebar.classList.add('open');
-    }
-    cancelCloseSidebar();
+// ===== 清空输入 =====
+function onClearInput() {
+    if (!inputFullText.trim()) return;
+    inputFullText = '';
+    inputPages = [''];
+    inputPageIdx = 0;
+    E.inputText.value = '';
+    E.charCount.textContent = '0 字';
+    E.inputFooter.style.display = 'none';
+    E.inputPageInfo.textContent = '第 1/1 页';
+    updateStyleVisibility();
+    showToast('输入框已清空', 'success');
 }
 
 // ===== 翻页系统 =====
 function getLinesPerPage(panelBody) {
-    // 用隐藏元素测量行高
     const test = document.createElement('span');
     test.textContent = 'Ag';
     test.style.cssText = 'position:absolute;visibility:hidden;font-size:0.9rem;font-family:inherit;line-height:1.65;';
     panelBody.appendChild(test);
     const lh = test.getBoundingClientRect().height;
     panelBody.removeChild(test);
-    const h = panelBody.clientHeight - 32; // 扣除 padding
+    const h = panelBody.clientHeight - 32;
     return Math.max(1, Math.floor(h / lh));
 }
 
@@ -188,15 +185,10 @@ function recalcInputPages(keepIdx) {
     inputPages = splitIntoPages(text, lpp);
     if (inputPages.length === 0) inputPages = [''];
 
-    // 显示/隐藏翻页栏
     const multiPage = inputPages.length > 1;
     E.inputFooter.style.display = multiPage ? '' : 'none';
 
-    if (keepIdx) {
-        inputPageIdx = Math.min(inputPageIdx, inputPages.length - 1);
-    } else {
-        inputPageIdx = Math.min(inputPageIdx, inputPages.length - 1);
-    }
+    inputPageIdx = Math.min(inputPageIdx, inputPages.length - 1);
     renderInputPage();
 }
 
@@ -228,7 +220,7 @@ function updateInputNavButtons() {
 function appendToInputText(newText) {
     inputFullText += (inputFullText ? '\n' : '') + newText;
     recalcInputPages(true);
-    inputGoToPage(inputPages.length - 1); // 跳到最新页
+    inputGoToPage(inputPages.length - 1);
     E.charCount.textContent = `${inputFullText.length} 字`;
     updateStyleVisibility();
 }
@@ -242,9 +234,7 @@ function recalcOutputPages(keepIdx) {
     const multiPage = outputPages.length > 1;
     E.outputFooter.style.display = multiPage ? '' : 'none';
 
-    if (keepIdx) {
-        outputPageIdx = Math.min(outputPageIdx, outputPages.length - 1);
-    }
+    outputPageIdx = Math.min(outputPageIdx, outputPages.length - 1);
     renderOutputPage();
     updateOutputNavButtons();
 }
@@ -283,7 +273,6 @@ function appendToOutputText(newText) {
 
 // ===== 输入变化 =====
 function onInputChange() {
-    // 从 textarea 同步回全文
     if (inputPages.length > 0 && inputPageIdx < inputPages.length) {
         inputPages[inputPageIdx] = E.inputText.value;
         inputFullText = pagesToFullText(inputPages);
@@ -369,7 +358,7 @@ async function onTranslate() {
     E.outputFooter.style.display = 'none';
     E.outputCharCount.textContent = '0 字';
     E.outputLoading.style.display = '';
-    E.loadingText.textContent = `正在翻译为${langLabel}...`;
+    E.loadingText.textContent = lang === 'auto' ? '正在中英互译...' : `正在翻译为${langLabel}...`;
 
     try {
         if (currentMode === 'line') {
@@ -388,10 +377,18 @@ async function onTranslate() {
     }
 }
 
-// ===== 逐行翻译（真·逐行，一行一行翻译） =====
+// ===== 构建翻译系统提示 =====
+function buildSystemPrompt(targetLang) {
+    if (targetLang === 'auto') {
+        return '你是一个专业的中英互译引擎。如果输入是中文，则翻译为英文；如果输入是英文，则翻译为中文。只输出翻译结果，不要添加任何解释。';
+    }
+    return `你是一个专业的翻译引擎。请将以下文本翻译为${targetLang}。只输出翻译结果，不要添加任何解释。`;
+}
+
+// ===== 逐行翻译（每一行单独翻译，保持当前页） =====
 async function translateLineByLine(text, targetLang, langLabel) {
     const lines = text.split('\n');
-    const lineMap = []; // { isKV, key, value } for KV lines, { text } for plain lines
+    const lineMap = [];
 
     for (const line of lines) {
         const eqIdx = line.indexOf('=');
@@ -408,17 +405,15 @@ async function translateLineByLine(text, targetLang, langLabel) {
         }
     }
 
-    // 逐行翻译 KV 行
-    let translatedCount = 0;
     const kvIndices = [];
     lineMap.forEach((m, i) => { if (m.isKV) kvIndices.push(i); });
 
     const resultLines = new Array(lineMap.length).fill('');
-
-    // 先填充非 KV 行
     lineMap.forEach((m, i) => {
         if (!m.isKV) resultLines[i] = m.text;
     });
+
+    const sysPrompt = buildSystemPrompt(targetLang);
 
     for (let ki = 0; ki < kvIndices.length; ki++) {
         const i = kvIndices[ki];
@@ -427,7 +422,7 @@ async function translateLineByLine(text, targetLang, langLabel) {
         E.loadingText.textContent = `正在翻译第 ${ki + 1}/${kvIndices.length} 行...`;
 
         const messages = [
-            { role: 'system', content: `你是一个专业的翻译引擎。请将以下文本翻译为${targetLang}。只输出翻译结果，不要添加任何解释。` },
+            { role: 'system', content: sysPrompt },
             { role: 'user', content: m.value }
         ];
 
@@ -435,13 +430,16 @@ async function translateLineByLine(text, targetLang, langLabel) {
             const translated = await callAI(messages);
             resultLines[i] = `${m.key}=${translated.trim()}`;
         } catch (err) {
-            resultLines[i] = `${m.key}=${m.value}`; // 翻译失败保留原文
+            resultLines[i] = `${m.key}=${m.value}`;
         }
 
-        // 每翻译一行就更新输出
+        // 更新输出全文并重新计算分页，但保持当前浏览页
         outputFullText = resultLines.join('\n');
+        const savedPage = outputPageIdx;
         recalcOutputPages(true);
-        outputGoToPage(outputPages.length - 1);
+        if (outputPageIdx !== savedPage) {
+            outputGoToPage(savedPage);
+        }
         E.outputCharCount.textContent = `${outputFullText.length} 字`;
     }
 
@@ -451,26 +449,25 @@ async function translateLineByLine(text, targetLang, langLabel) {
 // ===== 全文翻译（流式输出） =====
 async function translateFullTextStream(text, targetLang, langLabel) {
     const MAX_CHARS = 8000;
+    const sysPrompt = buildSystemPrompt(targetLang);
 
     if (text.length <= MAX_CHARS) {
         const messages = [
-            { role: 'system', content: `你是一个专业的翻译引擎。请将以下文本翻译为${targetLang}。只输出翻译结果，不要添加任何解释。` },
+            { role: 'system', content: sysPrompt },
             { role: 'user', content: text }
         ];
         await streamAI(messages);
     } else {
-        // 超过8000字分批，每批用流式
         const chunks = splitTextAtNaturalBreaks(text, MAX_CHARS);
         for (let i = 0; i < chunks.length; i++) {
             if (!isTranslating) return;
             E.loadingText.textContent = `正在翻译第 ${i + 1}/${chunks.length} 段...`;
 
             const messages = [
-                { role: 'system', content: `你是一个专业的翻译引擎。这是全文翻译的第 ${i + 1}/${chunks.length} 段。请翻译为${targetLang}。只输出翻译结果。` },
+                { role: 'system', content: `${sysPrompt} 这是全文翻译的第 ${i + 1}/${chunks.length} 段。` },
                 { role: 'user', content: chunks[i] }
             ];
 
-            // 段间加分隔空行
             if (i > 0) appendToOutputText('\n\n');
             await streamAI(messages);
         }
@@ -564,11 +561,9 @@ function splitTextAtNaturalBreaks(text, maxLen) {
         if (remaining.length <= maxLen) { chunks.push(remaining); break; }
 
         const search = remaining.substring(0, maxLen);
-        // 段落分隔
         let idx = search.lastIndexOf('\n\n');
         if (idx > maxLen * 0.5) { chunks.push(remaining.substring(0, idx + 2)); remaining = remaining.substring(idx + 2); continue; }
 
-        // 句末标点
         const ends = ['. ', '。', '！\n', '!\n', '?\n', '？\n', '.\n', '；\n', ';\n', '...', '……'];
         let best = -1, bestLen = 0;
         for (const e of ends) {
@@ -577,15 +572,12 @@ function splitTextAtNaturalBreaks(text, maxLen) {
         }
         if (best > maxLen * 0.4) { chunks.push(remaining.substring(0, best + bestLen)); remaining = remaining.substring(best + bestLen); continue; }
 
-        // 换行
         idx = search.lastIndexOf('\n');
         if (idx > maxLen * 0.5) { chunks.push(remaining.substring(0, idx + 1)); remaining = remaining.substring(idx + 1); continue; }
 
-        // 空格
         idx = search.lastIndexOf(' ');
         if (idx > maxLen * 0.5) { chunks.push(remaining.substring(0, idx + 1)); remaining = remaining.substring(idx + 1); continue; }
 
-        // 硬截断
         chunks.push(remaining.substring(0, maxLen));
         remaining = remaining.substring(maxLen);
     }
@@ -627,7 +619,6 @@ function onStyleConvert(e) {
     if (!btn) return;
     const style = btn.dataset.style;
 
-    // 优先转换输出
     if (outputFullText.trim()) {
         outputFullText = applyStyleConvert(style, outputFullText);
         recalcOutputPages(false);
@@ -637,7 +628,6 @@ function onStyleConvert(e) {
         return;
     }
 
-    // 无输出时转换输入
     if (!inputFullText.trim()) { showToast('请先输入文本', 'error'); return; }
     inputFullText = applyStyleConvert(style, inputFullText);
     recalcInputPages(false);
@@ -671,7 +661,6 @@ function onToggleTheme() {
     E.themeLabel.textContent = isDark ? '浅色模式' : '深色模式';
     E.themeToggle.querySelector('i').className = isDark ? 'fas fa-sun' : 'fas fa-moon';
     localStorage.setItem('translate-theme', isDark ? 'dark' : 'light');
-    // 重新计算分页（行高可能变化）
     setTimeout(() => { recalcInputPages(true); recalcOutputPages(true); }, 400);
 }
 

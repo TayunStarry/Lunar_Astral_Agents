@@ -32,6 +32,11 @@ const (
 	PageLoadTimeout         = 15 * time.Second // 页面加载超时
 )
 
+// 字典网站关键词黑名单 — 搜索智能体具备字典能力，无需浪费 token 在字典网站
+var dictionaryKeywords = []string{
+	"字典", "词典", "辞典", "dictionary", "lexicon", "thesaurus",
+}
+
 // 搜索智能体模块标识
 const ModuleName = "SearchAgent"
 

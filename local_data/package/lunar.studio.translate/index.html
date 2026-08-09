@@ -13,102 +13,22 @@
     <div class="background"></div>
     <div class="glass-effect"></div>
 
-    <!-- 左侧边缘触发区 -->
-    <div class="sidebar-trigger" id="sidebarTrigger"></div>
-
-    <!-- 侧边栏覆盖层 -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-inner">
-            <div class="sidebar-handle">
-                <i class="fas fa-chevron-right" id="sidebarArrow"></i>
-            </div>
-            <div class="sidebar-scroll">
-                <h3 class="sidebar-title"><i class="fas fa-sliders-h"></i> 功能面板</h3>
-
-                <!-- 翻译按钮 -->
-                <button id="btnTranslate" class="btn-glass btn-glass-primary btn-full">
-                    <i class="fas fa-language"></i> 开始翻译
-                </button>
-
-                <!-- 目标语言 -->
-                <div class="sidebar-group">
-                    <label class="sidebar-label"><i class="fas fa-globe"></i> 目标语言</label>
-                    <select id="targetLang" class="glass-select">
-                        <option value="Chinese">中文</option>
-                        <option value="English" selected>英文</option>
-                        <option value="Japanese">日文</option>
-                        <option value="Korean">韩文</option>
-                        <option value="French">法文</option>
-                        <option value="German">德文</option>
-                        <option value="Spanish">西班牙文</option>
-                        <option value="Russian">俄文</option>
-                        <option value="Arabic">阿拉伯文</option>
-                        <option value="Portuguese">葡萄牙文</option>
-                        <option value="Italian">意大利文</option>
-                        <option value="Thai">泰文</option>
-                        <option value="Vietnamese">越南文</option>
-                    </select>
-                </div>
-
-                <!-- 翻译模式 -->
-                <div class="sidebar-group">
-                    <label class="sidebar-label"><i class="fas fa-exchange-alt"></i> 翻译模式</label>
-                    <div class="mode-toggle-group">
-                        <button class="mode-btn" data-mode="full" id="modeFull">
-                            <i class="fas fa-file-lines"></i> 全文
-                        </button>
-                        <button class="mode-btn" data-mode="line" id="modeLine">
-                            <i class="fas fa-list-ul"></i> 逐行
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 样式转换区 -->
-                <div class="sidebar-group" id="styleGroup">
-                    <label class="sidebar-label"><i class="fas fa-text-height"></i> 样式转换</label>
-                    <div class="style-buttons-grid" id="styleButtonsGrid">
-                        <button class="btn-glass btn-style" data-style="upper">全大写</button>
-                        <button class="btn-glass btn-style" data-style="lower">全小写</button>
-                        <button class="btn-glass btn-style" data-style="capitalize">首字母大写</button>
-                        <button class="btn-glass btn-style" data-style="uncapitalize">首字母小写</button>
-                        <button class="btn-glass btn-style" data-style="space_to_underscore">空格→下划线</button>
-                        <button class="btn-glass btn-style" data-style="underscore_space_to_camel">→驼峰</button>
-                        <button class="btn-glass btn-style" data-style="camel_to_underscore">驼峰→下划线</button>
-                        <button class="btn-glass btn-style" data-style="camel_to_space">驼峰→空格</button>
-                        <button class="btn-glass btn-style" data-style="space_to_hyphen">空格→中横线</button>
-                        <button class="btn-glass btn-style" data-style="underscore_to_hyphen">下划线→中横线</button>
-                        <button class="btn-glass btn-style" data-style="hyphen_to_underscore">中横线→下划线</button>
-                        <button class="btn-glass btn-style" data-style="underscore_to_space">下划线→空格</button>
-                        <button class="btn-glass btn-style" data-style="underscore_to_dot">下划线→小数点</button>
-                        <button class="btn-glass btn-style" data-style="dot_to_underscore">小数点→下划线</button>
-                    </div>
-                    <div class="style-placeholder" id="stylePlaceholder" style="display:none;">
-                        <i class="fas fa-info-circle"></i> 文本超过500字，样式转换已隐藏
-                    </div>
-                </div>
-            </div>
-
-            <!-- 主题切换 -->
-            <div class="sidebar-footer">
-                <button id="themeToggle" class="btn-glass btn-full" title="切换深色/浅色模式">
-                    <i class="fas fa-moon"></i>
-                    <span id="themeLabel">深色模式</span>
-                </button>
-            </div>
-        </div>
-    </aside>
-
     <!-- 主布局：左右全高面板 -->
     <main class="main-layout">
         <!-- 左侧：输入面板 -->
         <section class="panel input-panel" id="inputPanel">
             <header class="panel-header">
                 <span class="panel-title"><i class="fas fa-pen-to-square"></i> 输入文本</span>
-                <span class="char-count" id="charCount">0 字</span>
+                <div class="panel-header-right">
+                    <button id="btnClear" class="btn-glass btn-sm btn-clear" title="清空输入框">
+                        <i class="fas fa-trash-alt"></i> 清空
+                    </button>
+                    <span class="char-count" id="charCount">0 字</span>
+                </div>
             </header>
             <div class="panel-body" id="inputBody">
                 <div class="page-drop-zone" id="dropZone">
-                    <textarea id="inputText" class="page-textarea" placeholder="在此输入待翻译文本，或拖入文件..." autocomplete="off"></textarea>
+                    <textarea id="inputText" class="page-textarea" placeholder="在此输入待翻译文本，或拖入文本文件..." autocomplete="off"></textarea>
                     <div class="drop-overlay" id="dropOverlay">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <span>释放文件以导入</span>
@@ -156,6 +76,86 @@
             </footer>
         </section>
     </main>
+
+    <!-- 底边栏触发按钮 -->
+    <button class="toolbar-toggle" id="toolbarToggle" title="展开功能面板">
+        <i class="fas fa-chevron-up"></i>
+    </button>
+
+    <!-- 底部工具栏（从下方弹出） -->
+    <aside class="toolbar" id="toolbar">
+        <div class="toolbar-inner">
+            <!-- 翻译操作卡片 -->
+            <div class="tb-card tb-card--action">
+                <button id="btnTranslate" class="btn-glass btn-glass-primary btn-cta">
+                    <i class="fas fa-language"></i> 开始翻译
+                </button>
+                <div class="tb-card-divider"></div>
+                <label class="tb-card-label"><i class="fas fa-exchange-alt"></i> 翻译模式</label>
+                <div class="mode-toggle-group">
+                    <button class="mode-btn active" data-mode="full" id="modeFull">
+                        <i class="fas fa-file-lines"></i> 全文
+                    </button>
+                    <button class="mode-btn" data-mode="line" id="modeLine">
+                        <i class="fas fa-list-ul"></i> 逐行
+                    </button>
+                </div>
+            </div>
+
+            <!-- 语言设置卡片 -->
+            <div class="tb-card">
+                <label class="tb-card-label"><i class="fas fa-globe"></i> 目标语言</label>
+                <select id="targetLang" class="glass-select">
+                    <option value="auto" selected>中英互译</option>
+                    <option value="English">英文</option>
+                    <option value="Chinese">中文</option>
+                    <option value="Japanese">日文</option>
+                    <option value="Korean">韩文</option>
+                    <option value="French">法文</option>
+                    <option value="German">德文</option>
+                    <option value="Spanish">西班牙文</option>
+                    <option value="Russian">俄文</option>
+                    <option value="Arabic">阿拉伯文</option>
+                    <option value="Portuguese">葡萄牙文</option>
+                    <option value="Italian">意大利文</option>
+                    <option value="Thai">泰文</option>
+                    <option value="Vietnamese">越南文</option>
+                </select>
+            </div>
+
+            <!-- 样式转换卡片 -->
+            <div class="tb-card tb-card--styles" id="styleGroup">
+                <label class="tb-card-label"><i class="fas fa-text-height"></i> 样式转换</label>
+                <div class="style-buttons-grid" id="styleButtonsGrid">
+                    <button class="btn-glass btn-style" data-style="upper">全大写</button>
+                    <button class="btn-glass btn-style" data-style="lower">全小写</button>
+                    <button class="btn-glass btn-style" data-style="capitalize">首字母大写</button>
+                    <button class="btn-glass btn-style" data-style="uncapitalize">首字母小写</button>
+                    <button class="btn-glass btn-style" data-style="space_to_underscore">空格→下划线</button>
+                    <button class="btn-glass btn-style" data-style="underscore_space_to_camel">→驼峰</button>
+                    <button class="btn-glass btn-style" data-style="camel_to_underscore">驼峰→下划线</button>
+                    <button class="btn-glass btn-style" data-style="camel_to_space">驼峰→空格</button>
+                    <button class="btn-glass btn-style" data-style="space_to_hyphen">空格→中横线</button>
+                    <button class="btn-glass btn-style" data-style="underscore_to_hyphen">下划线→中横线</button>
+                    <button class="btn-glass btn-style" data-style="hyphen_to_underscore">中横线→下划线</button>
+                    <button class="btn-glass btn-style" data-style="underscore_to_space">下划线→空格</button>
+                    <button class="btn-glass btn-style" data-style="underscore_to_dot">下划线→小数点</button>
+                    <button class="btn-glass btn-style" data-style="dot_to_underscore">小数点→下划线</button>
+                </div>
+                <div class="style-placeholder" id="stylePlaceholder" style="display:none;">
+                    <i class="fas fa-info-circle"></i> 文本超过500字，样式转换已隐藏
+                </div>
+            </div>
+
+            <!-- 主题卡片 -->
+            <div class="tb-card tb-card--theme">
+                <button id="themeToggle" class="btn-glass btn-full" title="切换深色/浅色模式">
+                    <i class="fas fa-moon"></i>
+                    <span id="themeLabel">深色模式</span>
+                </button>
+            </div>
+        </div>
+    </aside>
 
     <!-- Toast -->
     <div id="toast" class="toast"></div>
