@@ -12,11 +12,11 @@ import (
 
 func main() {
 	printBanner()
-	printCapabilities()
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Print("\n请输入选项编号 (1-4): ")
+		printMenu()
+		fmt.Print("\n请输入选项编号 (1-5): ")
 		if !scanner.Scan() {
 			break
 		}
@@ -30,6 +30,8 @@ func main() {
 		case "3":
 			runHTTPSProxy()
 		case "4":
+			runPackageArchive()
+		case "5":
 			fmt.Println("\n感谢使用「星月智能 · 环境修复工具」，再见！")
 			return
 		default:
@@ -45,9 +47,7 @@ func printBanner() {
 	fmt.Println(strings.Repeat("═", 56))
 }
 
-func printCapabilities() {
-	fmt.Println()
-	fmt.Println("  本工具具备以下能力：")
+func printMenu() {
 	fmt.Println()
 	fmt.Println("  ┌──────────────────────────────────────────────────┐")
 	fmt.Println("  │ [1] 资源补全修复                                  │")
@@ -63,7 +63,11 @@ func printCapabilities() {
 	fmt.Println("  │     启动 HTTPS→HTTP 反向代理，解密转发请求          │")
 	fmt.Println("  │     自动生成 TLS 证书，终端显示访问链接              │")
 	fmt.Println("  ├──────────────────────────────────────────────────┤")
-	fmt.Println("  │ [4] 退出程序                                      │")
+	fmt.Println("  │ [4] 分卷打包归档                                  │")
+	fmt.Println("  │     将项目文件打包为 7z 分卷压缩包                   │")
+	fmt.Println("  │     支持自定义配置文件，指定包含/排除路径             │")
+	fmt.Println("  ├──────────────────────────────────────────────────┤")
+	fmt.Println("  │ [5] 退出程序                                      │")
 	fmt.Println("  └──────────────────────────────────────────────────┘")
 }
 

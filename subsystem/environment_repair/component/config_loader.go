@@ -6,59 +6,47 @@ import (
 	"os"
 )
 
-func LoadPackageConfig(configPath string) error {
+// LoadArchiveConfig 加载扁平 JSON 配置文件，设置默认值
+func LoadArchiveConfig(configPath string) (*ArchiveConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return fmt.Errorf("读取配置文件失败 %s: %v", configPath, err)
+		return nil, fmt.Errorf("读取配置文件失败 %s: %v", configPath, err)
 	}
 
-	config := &PackageConfig{}
+	config := &ArchiveConfig{}
 	if err := json.Unmarshal(data, config); err != nil {
-		return fmt.Errorf("解析配置文件失败: %v", err)
+		return nil, fmt.Errorf("解析配置文件失败: %v", err)
 	}
 
-	config.ProjectArchiving.Plans = make(map[string][]string)
-
-	var rawMap map[string]interface{}
-	if err := json.Unmarshal(data, &rawMap); err != nil {
-		return fmt.Errorf("解析配置文件失败: %v", err)
+	// 设置默认值
+	if config.Size == 0 {
+		config.Size = 2048
 	}
-
-	if pa, ok := rawMap["project_archiving"].(map[string]interface{}); ok {
-		for key, value := range pa {
-			if key == "exclude" || key == "sevenzip_paths" || key == "defaults" {
-				continue
-			}
-			if paths, ok := value.([]interface{}); ok {
-				var strPaths []string
-				for _, p := range paths {
-					if str, ok := p.(string); ok {
-						strPaths = append(strPaths, str)
-					}
-				}
-				config.ProjectArchiving.Plans[key] = strPaths
-			}
-		}
+	if config.Level == 0 {
+		config.Level = 5
 	}
 
 	GlobalConfig = config
-	return nil
+	return config, nil
 }
 
+// GetExcludePatterns 获取排除规则列表
 func GetExcludePatterns() []string {
 	if GlobalConfig == nil {
 		return []string{}
 	}
-	return GlobalConfig.ProjectArchiving.Exclude
+	return GlobalConfig.Exclude
 }
 
+// GetSevenZipPaths 获取 7z 工具搜索路径列表
 func GetSevenZipPaths() []string {
 	if GlobalConfig == nil {
 		return []string{}
 	}
-	return GlobalConfig.ProjectArchiving.SevenZipPaths
+	return GlobalConfig.Archive
 }
 
+// IsExcluded 检查文件/目录名是否匹配排除规则
 func IsExcluded(name string, isDir bool) bool {
 	patterns := GetExcludePatterns()
 	for _, pattern := range patterns {
@@ -89,9 +77,10 @@ func filepathMatch(pattern, name string) (bool, error) {
 	return matchPattern(pattern, name)
 }
 
+// matchPattern 自定义通配符匹配（支持 *.ext、目录名、精确文件名）
 func matchPattern(pattern, name string) (bool, error) {
-	if pattern == "*.log" || pattern == "*.tmp" || pattern == "*.bak" ||
-		pattern == "*.pyc" || pattern == "*.pyo" || pattern == "*.ts" || pattern == "*.go" {
+	// 通配符扩展名匹配：*.log, *.tmp, *.bak, *.pyc, *.pyo, *.ts, *.go
+	if len(pattern) > 1 && pattern[0] == '*' && pattern[1] == '.' {
 		ext := pattern[1:]
 		if len(name) >= len(ext) && name[len(name)-len(ext):] == ext {
 			return true, nil
@@ -99,19 +88,20 @@ func matchPattern(pattern, name string) (bool, error) {
 		return false, nil
 	}
 
+	// 精确文件名匹配
 	if pattern == ".DS_Store" {
 		return name == ".DS_Store", nil
 	}
 
-	if pattern == "node_modules" || pattern == "__pycache__" ||
-		pattern == "dist" || pattern == "build" {
-		return name == pattern, nil
+	// 目录名匹配
+	knownDirs := []string{"node_modules", "__pycache__", "dist", "build", ".git"}
+	for _, d := range knownDirs {
+		if pattern == d {
+			return name == d, nil
+		}
 	}
 
-	if pattern == ".git" {
-		return name == ".git", nil
-	}
-
+	// .egg-info 后缀匹配
 	if pattern == "*.egg-info" {
 		ext := ".egg-info"
 		if len(name) >= len(ext) && name[len(name)-len(ext):] == ext {

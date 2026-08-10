@@ -2,11 +2,11 @@ package component
 
 import (
 	"fmt"
-	"logger"
 	"os"
 	"path/filepath"
 )
 
+// ResolvePath 将相对路径解析为绝对路径
 func ResolvePath(relativePath string) (string, error) {
 	absPath, err := filepath.Abs(relativePath)
 	if err != nil {
@@ -15,6 +15,7 @@ func ResolvePath(relativePath string) (string, error) {
 	return absPath, nil
 }
 
+// GetBaseDir 获取源文件列表的基准目录（第一个源文件所在的目录）
 func GetBaseDir(sources []string) (string, error) {
 	if len(sources) == 0 {
 		return "", fmt.Errorf("源文件列表为空")
@@ -36,20 +37,4 @@ func GetBaseDir(sources []string) (string, error) {
 	}
 
 	return filepath.Dir(absPath), nil
-}
-
-func PrintInfo(format string, args ...interface{}) {
-	logger.Info("VolumeArchive", format, args...)
-}
-
-func PrintWarning(format string, args ...interface{}) {
-	logger.Error("VolumeArchive", format, args...)
-}
-
-func PrintError(format string, args ...interface{}) {
-	logger.Error("VolumeArchive", format, args...)
-}
-
-func PrintSuccess(format string, args ...interface{}) {
-	logger.Info("VolumeArchive", format, args...)
 }

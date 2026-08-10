@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// ProgressTracker 进度追踪器，解析 7z 输出并渲染彩色进度条
 type ProgressTracker struct {
 	LastPercent  int
 	StartTime    time.Time
@@ -15,6 +16,7 @@ type ProgressTracker struct {
 	SpinnerIndex int
 }
 
+// NewProgressTracker 创建新的进度追踪器
 func NewProgressTracker() *ProgressTracker {
 	return &ProgressTracker{
 		LastPercent:  0,
@@ -25,6 +27,7 @@ func NewProgressTracker() *ProgressTracker {
 	}
 }
 
+// UpdateProgress 从 7z 输出行解析进度百分比
 func (pt *ProgressTracker) UpdateProgress(output string) {
 	re := regexp.MustCompile(`(\d+)%`)
 	matches := re.FindStringSubmatch(output)
@@ -43,6 +46,7 @@ func (pt *ProgressTracker) UpdateProgress(output string) {
 	}
 }
 
+// displayPreparing 渲染准备阶段的 Spinner 动画
 func (pt *ProgressTracker) displayPreparing() {
 	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	elapsed := time.Since(pt.StartTime).Seconds()
@@ -53,6 +57,7 @@ func (pt *ProgressTracker) displayPreparing() {
 	fmt.Printf("\r\033[36m[%s]\033[0m \033[33m正在准备压缩...\033[0m 耗时: %.1fs", spinner, elapsed)
 }
 
+// displayProgress 渲染彩色进度条
 func (pt *ProgressTracker) displayProgress(percent int) {
 	barLength := 50
 	filled := int(float64(percent) / 100.0 * float64(barLength))

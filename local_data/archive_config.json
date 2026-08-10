@@ -1,0 +1,50 @@
+{
+	"import": [
+		"qwen3tts.dll",
+		"vulkan-1.dll",
+		"libstdc++-6.dll",
+		"libwinpthread-1.dll",
+		"Lunar_Astral.exe",
+		"Crystal_Astral.exe",
+		"Environment_Repair.exe",
+		"local_data/audios",
+		"local_data/package",
+		"local_data/certs/",
+		"local_data/archive_config.json",
+		"local_data/lunar_config.json",
+		"local_data/images/background",
+		"local_data/images/placeholder",
+		"local_data/models/llama.cpp",
+		"local_data/models/Qwen3.5-9B",
+		"local_data/models/models.ini",
+		"local_data/models/bedrock",
+		"local_data/models/stable_diffusion.cpp",
+		"local_data/models/Qwen3-Embedding-0.6B.gguf",
+		"local_data/models/Qwen3-TTS",
+		"local_data/models/z_image_turbo"
+	],
+	"exclude": [
+		"*.log",
+		"*.tmp",
+		"*.bak",
+		".git/",
+		"node_modules/",
+		"__pycache__/",
+		"*.pyc",
+		"*.pyo",
+		"*.egg-info/",
+		"dist/",
+		"build/",
+		".DS_Store",
+		"*.ts",
+		"*.go"
+	],
+	"archive": [
+		"./local_data/package/archive/7z.exe",
+		"C:/Program Files/7-Zip/7z.exe",
+		"C:/Program Files (x86)/7-Zip/7z.exe"
+	],
+	"output": "./Lunar-Astral-Agents-Release",
+	"size": 2048,
+	"level": 5
+}

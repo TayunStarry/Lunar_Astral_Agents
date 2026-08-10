@@ -84,7 +84,7 @@ function Sync-EmbeddedData {
 
         $syncCount++
 
-        Write-Host "  v 同步 audios/" -ForegroundColor Gray
+        Write-Host "    同步 audios/" -ForegroundColor Gray
 
     }
 
@@ -112,7 +112,7 @@ function Sync-EmbeddedData {
 
             $syncCount++
 
-            Write-Host "  v 同步 images/$imgDir/" -ForegroundColor Gray
+            Write-Host "    同步 images/$imgDir/" -ForegroundColor Gray
 
         }
 
@@ -146,7 +146,7 @@ function Sync-EmbeddedData {
 
                 $syncCount++
 
-                Write-Host "  * 同步 package/$($subDir.Name)/" -ForegroundColor Gray
+                Write-Host "    同步 package/$($subDir.Name)/" -ForegroundColor Gray
 
             }
 
@@ -184,7 +184,7 @@ function Sync-EmbeddedData {
 
                 $syncCount++
 
-                Write-Host "  * 同步 package/$($file.Name)" -ForegroundColor Gray
+                Write-Host "    同步 package/$($file.Name)" -ForegroundColor Gray
 
             }
 
@@ -208,6 +208,20 @@ function Sync-EmbeddedData {
 
 
 
+# ---------- 图标资源处理 ----------
+function Build-IconIfNeeded {
+    if ($TargetOS -ne "windows" -or -not (Test-Path "icon.ico")) {
+        return
+    }
+
+    if (Test-Path "icon.syso") {
+        return
+    }
+
+    & rsrc -ico icon.ico -o icon.syso
+    if ($LASTEXITCODE -ne 0) { throw "rsrc 图标编译失败" }
+}
+
 # ---------- 编译主流程 ----------
 
 try {
@@ -219,12 +233,12 @@ try {
 
 
     # 启用 CGO
-
     $env:CGO_ENABLED = 1
-
     $env:GOOS = $TargetOS
-
     $env:GOARCH = $TargetArch
+
+    # 编译图标资源（Windows 下嵌入 .ico 到可执行文件）
+    Build-IconIfNeeded
 
 
 
