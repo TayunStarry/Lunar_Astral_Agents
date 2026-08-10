@@ -3,6 +3,7 @@ package lunar_chromedp
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -156,3 +157,20 @@ func logProgress(event ProgressEvent) {
 		logger.Info(ModuleName, "%s", event.Message)
 	}
 }
+
+// =============================================================================
+// HTTP 客户端与类型
+// =============================================================================
+
+var (
+	aiHTTPClient = &http.Client{Timeout: 120 * time.Second}
+)
+
+// =============================================================================
+// 关键词去重缓存
+// =============================================================================
+
+var (
+	keywordEmbedMu    sync.RWMutex
+	keywordEmbedCache = make(map[string][]float32) // 关键词 → 嵌入向量
+)

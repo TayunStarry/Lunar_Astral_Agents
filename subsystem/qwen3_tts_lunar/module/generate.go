@@ -1,7 +1,7 @@
 package module
 
 /*
-#cgo LDFLAGS: -L"${SRCDIR}/../cpp/build" "${SRCDIR}/../cpp/build/libqwen3tts.dll.a" -lgomp
+#cgo LDFLAGS: -L"${SRCDIR}/../cpp/build" "${SRCDIR}/../cpp/build/libqwen3tts.dll.a" -Wl,-Bstatic -lgomp -Wl,-Bdynamic
 #cgo CFLAGS: -I"${SRCDIR}/../cpp/src" -I"${SRCDIR}/../cpp/ggml/include"
 #include <stdlib.h>
 #include "qwen3tts_c_api.h"

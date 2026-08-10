@@ -9,8 +9,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"sync"
-	"time"
 )
 
 // =============================================================================
@@ -27,79 +25,6 @@ func init() {
 	aiEvaluateSufficiency = evaluateSufficiency
 	aiGenerateReport = generateReport
 }
-
-// =============================================================================
-// HTTP 客户端与类型
-// =============================================================================
-
-var (
-	aiHTTPClient = &http.Client{Timeout: 120 * time.Second}
-)
-
-// chatMessage OpenAI 兼容消息格式
-type chatMessage struct {
-	Role    string      `json:"role"`
-	Content interface{} `json:"content"` // string 或 []contentPart
-}
-
-// contentPart 多模态消息的内容部分
-type contentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *imageURL `json:"image_url,omitempty"`
-}
-
-// imageURL 图片 URL（base64 data URI）
-type imageURL struct {
-	URL string `json:"url"`
-}
-
-// chatRequest OpenAI 兼容聊天请求
-type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
-	Stream      bool          `json:"stream"`
-}
-
-// chatResponse OpenAI 兼容聊天响应
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-	Error *struct {
-		Message string `json:"message"`
-		Type    string `json:"type"`
-	} `json:"error,omitempty"`
-}
-
-// embeddingRequest 嵌入请求
-type embeddingRequest struct {
-	Model string `json:"model"`
-	Input string `json:"input"`
-}
-
-// embeddingResponse 嵌入响应
-type embeddingResponse struct {
-	Data []struct {
-		Embedding []float32 `json:"embedding"`
-	} `json:"data"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
-}
-
-// =============================================================================
-// 关键词去重缓存
-// =============================================================================
-
-var (
-	keywordEmbedMu      sync.RWMutex
-	keywordEmbedCache   = make(map[string][]float32) // 关键词 → 嵌入向量
-)
 
 // =============================================================================
 // 核心 AI 调用函数

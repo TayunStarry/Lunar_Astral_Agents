@@ -22,7 +22,6 @@ type ModelConfig struct {
 	// 服务器配置
 	Server struct {
 		Developer      bool `json:"developer"`       // 是否为开发者模式
-		ClearPort      bool `json:"clear_port"`      // 是否清除端口
 		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许加载扩散模型
 	} `json:"server"`
 	// 云模型配置
@@ -106,12 +105,6 @@ func init() {
 		*Developer = true
 	} else {
 		*Developer = false
-	}
-	// 如果配置文件中 ClearPort 字段非空，则更新全局配置
-	if parameter.Server.ClearPort == true {
-		*ClearPort = true
-	} else {
-		*ClearPort = false
 	}
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
 	if parameter.Server.AllowDiffusion == true {

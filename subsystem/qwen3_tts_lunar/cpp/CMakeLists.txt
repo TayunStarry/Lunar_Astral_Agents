@@ -16,7 +16,14 @@ if(QWEN3_TTS_TIMING)
     add_compile_definitions(QWEN3_TTS_TIMING)
 endif()
 
+# 手动配置 OpenMP，使用静态链接 libwinpthread 避免引入不必要的 DLL 依赖
+# 注意：libgomp 无法静态链接（依赖 dlopen/dlsym），保留为动态 DLL
 find_package(Threads REQUIRED)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fopenmp")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
+# 静态链接 libgcc、libstdc++ 和 libwinpthread
+# libgomp 保留动态链接（需要 dlopen/dlsym 等动态加载函数）
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic")
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found - version ${OpenMP_CXX_VERSION}")

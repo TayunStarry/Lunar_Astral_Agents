@@ -126,14 +126,12 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    Invoke-Build -Path "$ScriptRoot\subsystem\bridge_adapter" -Name "Bridge Adapter"
     Invoke-Build -Path "$ScriptRoot\subsystem\volume_archive" -Name "Volume Archive"
-    # Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts_lunar" -Name "Qwen3 TTS Lunar"
+    Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts_lunar" -Name "Qwen3 TTS Lunar"
     Invoke-Build -Path "$ScriptRoot\subsystem\qwen_asr_lunar" -Name "Qwen ASR Lunar"
     Invoke-Build -Path "$ScriptRoot\subsystem\proxy" -Name "Proxy Server"
     Invoke-Build -Path "$ScriptRoot\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
-    # Invoke-Build -Path "$ScriptRoot\subsystem\sd_lunar" -Name "SD Lunar"
 
     Write-Host ""
     Write-Host "  全部构建成功完成！" -ForegroundColor Green

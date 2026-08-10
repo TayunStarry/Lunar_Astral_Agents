@@ -1,4 +1,4 @@
-﻿# Luna Astral - 编译脚本
+# Luna Astral - 编译脚本
 # 由根目录脚本统一调用，仅处理图标编译和项目编译
 
 param(
@@ -59,6 +59,7 @@ try {
     $env:GOOS = $TargetOS
     $env:GOARCH = $TargetArch
     $env:CGO_CFLAGS = "-w"
+    $env:CGO_LDFLAGS = "-static-libgcc -static-libstdc++ -Wl,-Bstatic,-lwinpthread,-Bdynamic"
 
     # 编译服务端脚本 
     $exitCode = Invoke-NativeCommand { npm run server.side }
@@ -69,11 +70,11 @@ try {
     if ($TargetOS -ne "windows") { $binaryName = "Lunar_Astral" }
     $outputPath = "..\$binaryName"
 
-    $ldflags = "-s -w"
+    $ldflags = "-s -w -extldflags=-Wl,-Bstatic,-lstdc++,-lgcc,-lgcc_eh,-lwinpthread,-Bdynamic"
     $buildArgs = @(
         "build",
         "-tags", "webview",
-        "-ldflags=$ldflags",
+        "-ldflags", $ldflags,
         "-o", $outputPath
     )
     $exitCode = Invoke-NativeCommand { go $buildArgs }

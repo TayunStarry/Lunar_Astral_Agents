@@ -1,4 +1,4 @@
-﻿# build.ps1 - Qwen3_TTS_Lunar Master Build Script
+# build.ps1 - Qwen3_TTS_Lunar Master Build Script
 # 3-stage build: GGML -> C++ -> Go
 param(
     [ValidateSet("Debug", "Release")]
@@ -213,6 +213,7 @@ if (-not $SkipGo) {
     $env:CGO_ENABLED = "1"
     $env:GOOS = "windows"
     $env:GOARCH = "amd64"
+    $env:CGO_LDFLAGS = "-static-libgcc -static-libstdc++"
 
     $goOutput = cmd /c "go build -v -o ..\..\Qwen3_TTS_Lunar.exe -ldflags ""-s -w"" 2>&1"
     $goExitCode = $LASTEXITCODE

@@ -40,14 +40,6 @@ const (
 //go:embed assets/*
 var EmbeddedFiles embed.FS
 
-// EmbeddedLocalData 嵌入的本地数据资源文件系统
-// 包含 audios/、images/background/、images/placeholder/ 以及 package/ 下的库资源
-// （无 metadata.json 的子目录与裸露的 js 文件），用于启动时补全缺失的 local_data 内容。
-// 资源由 build.ps1 的 Sync-EmbeddedData 在编译前从 ../local_data 同步到 embedded_data/。
-//
-//go:embed embedded_data/*
-var EmbeddedLocalData embed.FS
-
 // StudioHubInstance 工作室 WebSocket 集线器全局实例
 // 在 StartServer() 中初始化，供所有前端组件通过 /ws/studio 端点连接
 var StudioHubInstance *StudioHub

@@ -10,7 +10,6 @@ import (
 	"lunar_astral/bridging/napcat"
 	"lunar_astral/hierarchy"
 	"lunar_astral/model/llama"
-	"lunar_astral/release"
 	"lunar_astral/server/handlers"
 	"lunar_astral/websocket"
 	"mime"
@@ -25,10 +24,6 @@ import (
 
 // InitializeServer 初始化服务器配置和组件
 func InitializeServer() {
-	// 如果指定了端口释放选项，则执行端口释放
-	if *config.ClearPort {
-		release.ExecutePortRelease()
-	}
 	// 设置日志开发模式
 	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
 	// 设置MIME类型映射
