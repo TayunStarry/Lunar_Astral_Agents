@@ -21,9 +21,6 @@ var powershellCommands = []string{
 	"ConvertTo-Csv -NoTypeInformation",
 }
 
-// localDir 本地数据目录名（与 config.LocalDir 默认值保持一致）
-const localDir = "local_data"
-
 // PortRange 端口扫描范围
 type PortRange struct {
 	Start int

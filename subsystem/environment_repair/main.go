@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"config"
 )
 
 func main() {
@@ -14,7 +16,7 @@ func main() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Print("\n请输入选项编号 (1-3): ")
+		fmt.Print("\n请输入选项编号 (1-4): ")
 		if !scanner.Scan() {
 			break
 		}
@@ -26,6 +28,8 @@ func main() {
 		case "2":
 			runPortRelease()
 		case "3":
+			runHTTPSProxy()
+		case "4":
 			fmt.Println("\n感谢使用「星月智能 · 环境修复工具」，再见！")
 			return
 		default:
@@ -55,7 +59,11 @@ func printCapabilities() {
 	fmt.Println("  │     扫描指定端口范围，终止占用端口的进程             │")
 	fmt.Println("  │     支持自定义端口范围，自动验证释放结果             │")
 	fmt.Println("  ├──────────────────────────────────────────────────┤")
-	fmt.Println("  │ [3] 退出程序                                      │")
+	fmt.Println("  │ [3] HTTPS 代理服务                                │")
+	fmt.Println("  │     启动 HTTPS→HTTP 反向代理，解密转发请求          │")
+	fmt.Println("  │     自动生成 TLS 证书，终端显示访问链接              │")
+	fmt.Println("  ├──────────────────────────────────────────────────┤")
+	fmt.Println("  │ [4] 退出程序                                      │")
 	fmt.Println("  └──────────────────────────────────────────────────┘")
 }
 
@@ -91,12 +99,22 @@ func runPortRelease() {
 	}
 }
 
+func runHTTPSProxy() {
+	fmt.Println()
+	fmt.Println(strings.Repeat("─", 48))
+	fmt.Println("  [3] HTTPS 代理服务")
+	fmt.Println(strings.Repeat("─", 48))
+	fmt.Println()
+
+	RunHTTPSProxy()
+}
+
 func promptPortRange() PortRange {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// 默认端口范围（与 config 子系统默认值一致）
-	defaultStart := 36784
-	defaultEnd := 36804
+	defaultStart := *config.MinPort
+	defaultEnd := *config.MaxPort
 
 	fmt.Printf("请输入起始端口 [默认 %d]: ", defaultStart)
 	if scanner.Scan() {
