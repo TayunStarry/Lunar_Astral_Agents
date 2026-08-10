@@ -1,145 +1,114 @@
 # 星月智能（Lunar Astral Agents）—— 发行版说明
 
-**版本**：v2026.05.26  
-**发布日期**：2026-05-26  
+**版本**：v2026.08.10  
 **适用平台**：Windows 10/11（64 位）
 
 ---
 
 ## 项目简介
 
-星月智能是一个**纯本地化**的桌面 AI 智能体平台，将多模态大语言模型、图像生成、语音识别与合成等多种 AI 能力整合于一体，无需任何 Python 环境或云端依赖，所有模型推理均在本地完成。
+星月智能是一个**纯本地化**的桌面 AI 智能体平台，整合多模态对话、图像生成、语音识别与合成等 AI 能力。无需 Python 环境或云端依赖，所有推理均在本地完成。
 
-### 两位人格智能体
-
-- **月华** — 「月亮的光华」，智慧如月光般温柔普照。她的智能根植于对全量参数 Qwen 大模型的蒸馏与量化——犹如月光将对太阳光芒的温柔反射，将大模型的庞大智慧浓缩为可在本地轻量运行的形态。月华是平台的核心灵魂，掌管 AI 角色对话、Live2D 展示与语音表达。
-- **琉璃** — 「如水晶般澄澈」，透明、轻盈而纯粹。她专注于工具的纯粹性与操作的直观性，掌管文件管理、数据库操作、截图标注等实用工具集，是平台的高效扩展基石。
-
-月华与琉璃如同星与月——月华以温柔智慧照亮对话空间，琉璃以澄澈纯粹夯实工具基石，二者相辅相成。
+项目由两位人格智能体驱动：**月华**（AI 对话核心）与 **琉璃**（工具集扩展），二者相辅相成。
 
 ---
 
-## 核心亮点
+## 项目组成
 
-### 🔮 真·本地运行
-所有 AI 能力均在本机执行，无需联网、无需注册、无需 API Key。数据完全私有，始终掌握在您手中。
+### 1. 星图·月华（lunar_astral）— AI 桌面智能体核心
 
-### 🧠 多模态 AI 对话
-基于 Qwen3 系列模型的角色扮演对话，支持文本、图片、视频等多媒体输入，具备上下文记忆与情绪感知能力。
+**功能**：多模态 AI 角色对话、Live2D 角色展示、TTS 语音合成、文生图、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、QQ 群聊适配器。
 
-### 🎭 Live2D 角色互动
-集成 Live2D 渲染引擎，虚拟角色「月华」支持实时表情变化和动作展示，带来沉浸式交互体验。
+**技术栈**：Go 后端 + TypeScript 智能体（goja 运行时）+ WebView2 前端。底层依赖 llama.cpp 进行 GGUF 模型推理。
 
-### 🎙️ 语音全链路
-- **语音识别**（Qwen3-ASR）：支持中英粤日韩等 30 种语言，纯 C 推理引擎，BF16 高精度
-- **语音合成**（Qwen3-TTS）：支持文本转自然语音，可定制音色，C++ GGML 引擎驱动
+**运行**：`.\Lunar_Astral.exe`，可选 `-developer`（开发模式）、`-basic-port`（指定端口）等参数。
 
-### 🎨 图像生成
-搭载 stable-diffusion.cpp 引擎，支持文生图与提示词精炼，输出高质量图像。
-
-### 🪟 桌面原生体验
-基于 WebView2 的嵌入式桌面窗口，无需浏览器即可流畅运行，支持窗口自定义与多端访问。
+**依赖**：WebView2 Runtime（Win11 已预装），GGUF 格式模型文件。
 
 ---
 
-## 系统架构
+### 2. 星图·琉璃（crystal_astral）— 工具集扩展程序
 
-星月智能平台由「星图·月华」（AI 桌面智能体）和「星图·琉璃」（工具集扩展程序）两大核心系统组成，底层依赖 llama.cpp、stable-diffusion.cpp、Qwen3-TTS/ASR 等推理引擎。详细架构请参见 **[ARCHITECTURE.md](ARCHITECTURE.md)**。
+**功能**：文件管理、SQLite 数据库可视化 CRUD、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、外部应用加载器。
+
+**技术栈**：Go 后端 + 原生 HTML/CSS/JS 前端（毛玻璃风格），复用 storage 和 image 子系统。
+
+**运行**：`.\Crystal_Astral.exe`，自动随机端口（10000~40000），WebView 窗口（1500×1050）。AI 请求自动代理到月华后端。
+
+**依赖**：WebView2 Runtime。
 
 ---
 
-## 功能一览
+### 3. 环境修复工具（environment_repair）— 运维工具箱
 
-| 模块 | 功能 | 说明 |
-|------|------|------|
-| **星图·月华** | AI 角色对话 | 基于 Qwen3 的多模态智能体，支持角色扮演 |
-| | Live2D 展示 | 实时角色渲染，表情与动作联动 |
-| | 语音合成 | 月华语音输出，支持音色定制 |
-| | 图像生成 | 文生图 + 提示词优化 |
-| | 富文本渲染 | Markdown / Mermaid / ECharts / KaTeX |
-| | QQ 适配器 | 接入 QQ 群聊，@ 即可唤醒 |
-| **星图·琉璃** | 文件管理 | 本地文件浏览、上传、下载、编辑 |
-| | 数据库管理 | SQLite 可视化 CRUD，批量操作 |
-| | 屏幕截图 | 多显示器截图、区域截图、标注 |
-| | AI 代理转发 | 代理 OpenAI 格式 API，接入外部模型 |
-| | 应用加载器 | 一键启动外部 .exe / .ps1 / .bat |
-| **独立模块** | 语音识别 | Qwen3-ASR-0.6B/1.7B，30 种语言 |
-| | 语音合成 | Qwen3-TTS-0.6B，中文语音合成 |
-| **扩展模块** | LunarTick | tick 驱动的通用程序执行引擎 |
-| | QQ 适配器 | NapCat ↔ 月华群聊消息转发 |
-| | GGUF 查看器 | GGUF 模型元数据可视化查看 |
-| | HTTPS 代理 | 本地 HTTPS 代理服务器 |
-| | SD 图像生成 | Stable Diffusion C++ GGML 引擎 |
-| | 卷归档 | 卷归档管理工具 |
+**功能**：资源补全修复（从内嵌资源释放缺失文件）、端口占用释放、HTTPS 反向代理（自动 TLS 证书 + WebSocket 隧道 + CORS）、分卷打包归档。
+
+**技术栈**：Go 命令行程序，交互式终端菜单。
+
+**运行**：`.\Environment_Repair.exe`，终端交互式菜单选择功能。
+
+**依赖**：7z（仅打包功能需要）。
+
+---
+
+### 4. 搜索智能体（lunar_chromedp）— AI 网络搜索
+
+**功能**：基于 Chromedp 的多引擎搜索（Bing/百度/搜狗），页面内容提取 → AI 摘要 → 深度搜索 → 记忆存储。自动过滤字典网站。
+
+**技术栈**：Go 库，通过 Chromedp 控制浏览器，调用多模态模型进行视觉理解与摘要。
+
+**依赖**：Chrome/Edge 浏览器，多模态模型 API 与嵌入模型 API。
+
+---
+
+### 5. 语音识别（qwen_asr_lunar）— Qwen3-ASR 引擎
+
+**功能**：纯本地语音识别，支持中/英/粤/日/韩等 30 种语言。双模型规模（0.6B/1.7B），BF16 高精度推理，AVX2/AVX-512/NEON SIMD 加速。
+
+**技术栈**：纯 C 推理引擎 + Go HTTP 服务（CGO 桥接），浏览器端 MediaRecorder API 录音。
+
+**运行**：`.\Qwen_ASR_Lunar.exe`，自动打开 WebView 窗口（648×960），提供 HTTP API（`POST /asr`）。
+
+**依赖**：SafeTensors 格式模型文件，FFmpeg（可选），OpenBLAS（可选加速）。
+
+---
+
+### 6. 语音合成（qwen3_tts_lunar）— Qwen3-TTS 引擎
+
+**功能**：纯本地中文文本转语音，支持音色克隆（参考音频）、流式输出、LRU 缓存。支持 CUDA/Vulkan/Metal 多 GPU 后端加速。
+
+**技术栈**：C++ GGML 推理引擎（DLL）+ Go HTTP/WebSocket 服务（CGO 调用）。
+
+**运行**：`.\Qwen3_TTS_Lunar.exe`，默认端口 36365。提供 HTTP API（`POST /tts/`）和 WebSocket 流式接口。
+
+**依赖**：GGUF 格式模型文件，参考音频文件，CUDA Toolkit（可选）。
 
 ---
 
 ## 运行环境
 
-### 操作系统
-- ✅ Windows 10 21H2+（64 位）
-- ✅ Windows 11（64 位）
-- ❌ 32 位系统不支持
-- ❌ Linux / macOS 不支持
-
-### 硬件建议
-
 | 配置项 | 最低要求 | 推荐配置 |
 |--------|---------|---------|
+| 操作系统 | Windows 10 21H2+（64 位） | Windows 11 |
 | CPU | x86_64，支持 AVX2 | 4 核以上 |
 | 内存 | 8 GB | 16 GB |
 | 显卡 | 无要求（纯 CPU 可运行） | NVIDIA CUDA 12.x（显存 4GB+） |
-| 磁盘 | 10 GB 可用空间 | SSD 20 GB+ |
+| 磁盘 | 10 GB | SSD 20 GB+ |
 
-### 运行时依赖
-
-| 依赖 | 版本 | 下载 |
-|------|------|------|
-| WebView2 Runtime | ≥ 109.0 | [微软官网](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)（Win11 已预装） |
-| NVIDIA CUDA | 12.x 或 13.x（可选） | [NVIDIA 官网](https://developer.nvidia.com/cuda-downloads) |
-| FFmpeg | ≥ 5.0（可选） | [ffmpeg.org](https://ffmpeg.org/download.html) |
+**运行时依赖**：WebView2 Runtime（Win11 已预装）、NVIDIA CUDA（可选）、FFmpeg（可选）。
 
 ---
 
 ## 快速开始
 
-### 第一步：解压发行包
+1. 将 GGUF 模型文件放入 `local_data\models\`，编辑 `local_data\lunar_config.json` 配置模型路径
+2. 启动核心智能体：`.\Lunar_Astral.exe`
+3. 启动扩展工具：`.\Crystal_Astral.exe`
+4. 独立模块（可选）：`.\Qwen_ASR_Lunar.exe` / `.\Qwen3_TTS_Lunar.exe`
 
-将下载的压缩包解压到**不包含中文和空格**的路径下，例如 `D:\Lunar_Astral\`。
+---
 
-### 第二步：配置模型
-
-将 GGUF 格式的模型文件放入 `local_data\models\` 目录，编辑 `local_data\lunar_config.json` 配置模型路径。
-
-支持模型：
-
-| 模型类型 | 推荐模型 | 格式 |
-|---------|---------|------|
-| 多模态对话 | Qwen3-1.7B / Qwen3-4B | GGUF |
-| 视觉投影 | mmproj-Qwen3-F16 | GGUF |
-| 语音识别 | Qwen3-ASR-0.6B / 1.7B | SafeTensors |
-| 语音合成 | qwen3-tts-0.6b | GGUF |
-| 图像生成 | z_image_turbo | GGUF |
-
-### 第三步：启动
-
-```powershell
-# 启动核心智能体（月华）
-.\Lunar_Astral.exe
-
-# 启动扩展工具集（琉璃）
-.\Crystal_Astral.exe
-
-# 启动语音识别（独立模块）
-.\Qwen_ASR_Lunar.exe
-
-# 启动语音合成（独立模块）
-.\Qwen3_TTS_Lunar.exe
-```
-
-首次启动后程序自动打开 WebView 桌面窗口，即可开始使用。
-
-### 命令行参数
+## 命令行参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
@@ -151,51 +120,15 @@
 
 ---
 
-## 发行包内容
-
-本发行版（`plan-3` 完整包）包含以下文件：
-
-```
-Lunar_Astral_Agents-v2026.05.26/
-│
-├── Lunar_Astral.exe          ← 核心智能体主程序
-├── Crystal_Astral.exe        ← 扩展工具集主程序
-├── Qwen_ASR_Lunar.exe        ← 语音识别独立程序
-├── Qwen3_TTS_Lunar.exe       ← 语音合成独立程序
-│
-├── qwen3tts.dll              ← TTS 推理引擎 DLL
-├── libdl.dll                 ← 运行时依赖库
-├── libgcc_s_seh-1.dll        ← GCC 运行时
-├── libgomp-1.dll             ← OpenMP 运行时
-├── libstdc++-6.dll           ← C++ 标准库
-├── libwinpthread-1.dll       ← POSIX 线程库
-├── vulkan-1.dll              ← Vulkan 运行时
-│
-├── local_data/               ← 本地数据目录
-│   ├── lunar_config.json     ← 主配置文件
-│   ├── lunar_package.json    ← 前端包配置
-│   ├── package/              ← 前端渲染库
-│   ├── audios/               ← 参考音频
-│   │   └── cache/            ← 缓存目录
-│   └── images/               ← 图片资源
-│
-├── crystal_astral/           ← 琉璃源码（嵌入式资源）
-├── lunar_astral/             ← 月华源码（嵌入式资源）
-└── subsystem/                ← 公共子系统源码
-```
-
----
-
 ## 配置说明
 
-`lunar_config.json` 核心配置项：
+核心配置项（`lunar_config.json`）：
 
 ```json
 {
   "models": {
     "asr_model": "./local_data/models/Qwen3-ASR-0.6B",
     "diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
-    "variational_model": "./local_data/models/diffusion_pytorch_model.safetensors",
     "prompt_analysis_model": "./local_data/models/Qwen3-4B-Instruct-Q4_K_M.gguf"
   },
   "server": {
@@ -209,93 +142,27 @@ Lunar_Astral_Agents-v2026.05.26/
 }
 ```
 
-| 配置项 | 说明 |
-|--------|------|
-| `models.*` | 各 AI 模型文件路径（GGUF/SafeTensors 格式） |
-| `server.developer` | `true` 启用开发模式（直接读文件系统，不读 embed） |
-| `server.allow_diffusion` | `false` 禁用图像生成功能 |
-| `cloud.cloud_model_url` | 云端模型 API（留空则纯本地运行） |
-
 ---
 
-## QQ 群聊适配器
+## 下载
 
-星月智能内置了 **NapCat QQ 适配器**，可以让月华接入 QQ 群聊。
-
-### 配置方法
-
-1. 部署 [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 并启动 WebSocket 服务
-2. 在 `lunar_config.json` 中配置：
-
-```json
-"qq_adapter": {
-  "napcat_ws_server": "ws://localhost:4567",
-  "napcat_ws_token": "your_token_here",
-  "listen_group_ids": ["群号1", "群号2"],
-  "trigger_keywords": ["月华", "@机器人"],
-  "poll_interval": 10
-}
-```
-
-### 使用方式
-
-在配置的 QQ 群中发送包含关键词（如 `@月华`）的消息即可唤醒 AI 对话。
-
-| 配置项 | 说明 |
-|--------|------|
-| `napcat_ws_server` | NapCat WebSocket 服务地址 |
-| `listen_group_ids` | 监听的 QQ 群号列表 |
-| `trigger_keywords` | 触发词列表（消息包含任一即唤醒） |
-| `poll_interval` | 消息轮询间隔（秒） |
-| `default_reply` | 无法回答时的默认回复 |
-
----
-
-## 编译指南
-
-如需从源码自行编译，请参见 **[README.md 编译流程](README.md#编译流程)**。
+> 链接：[https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#](https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#)  
+> 提取码：**klKs**
 
 ---
 
 ## 常见问题
 
-### 启动失败怎么办？
+**启动失败**：确认 WebView2 Runtime 已安装、路径不含中文、`lunar_config.json` 配置正确。
 
-1. 确认 WebView2 Runtime 已安装（Win11 预装，Win10 需手动安装）
-2. 确认没有中文路径
-3. 检查 `local_data\lunar_config.json` 配置是否正确
-4. 查看控制台输出的错误日志
+**内存不足**：使用量化模型（Q4_K_M），关闭不需要的功能（`allow_diffusion: false`），使用较小模型。
 
-### 如何添加新的 AI 模型？
-
-将 GGUF 格式模型放入 `local_data\models\`，在 `lunar_config.json` 中配置路径后重启。
-
-### 内存不足怎么办？
-
-- 使用量化模型（Q4_K_M 等，而非 F16）
-- 关闭不需要的功能（`allow_diffusion: false`）
-- 使用较小模型（1.7B 替代 4B）
-
-### 支持云端模型吗？
-
-支持。在 `lunar_config.json` 中配置 `cloud.cloud_model_url` 为兼容 OpenAI 格式的 API 地址（如阿里云 DashScope、LM Studio 等），系统将自动切换到云端推理。
+**支持云端模型**：在 `lunar_config.json` 中配置 `cloud.cloud_model_url` 即可切换到 OpenAI 兼容 API。
 
 ---
 
 ## 致谢
 
-本项目使用了以下开源项目，特此致谢：
-
-| 项目 | 用途 | 许可 |
-|------|------|------|
-| [llama.cpp](https://github.com/ggerganov/llama.cpp) | GGUF 模型推理引擎 | MIT |
-| [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) | 扩散模型推理 | MIT |
-| [qwen3-tts.cpp](https://github.com/predict-woo/qwen3-tts.cpp) | 文本转语音模型 | MIT |
-| [qwen3-asr](https://github.com/antirez/qwen-asr) | 语音识别模型 | MIT |
-| [GGML](https://github.com/ggerganov/ggml) | 张量计算库 | MIT |
-| [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) | 嵌入式浏览器 | Microsoft |
-| [Live2D](https://www.live2d.com/) | 角色渲染引擎 | Live2D |
-
----
+本项目使用了以下开源项目：llama.cpp、stable-diffusion.cpp、qwen3-tts.cpp、qwen3-asr、GGML、WebView2、Live2D。
 
 > 🌟 月华和琉璃永远陪伴着大家 ~ 一起探索 AI 的无限可能吧！
