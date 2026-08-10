@@ -168,25 +168,29 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 
 	// stdout 解析 goroutine
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			tracker.UpdateProgress(line)
+		stdScanner := bufio.NewScanner(stdout)
+		for stdScanner.Scan() {
+			tracker.UpdateProgress(stdScanner.Text())
 		}
+		_ = stdScanner.Err()
 	}()
 
-	// stderr 解析（主 goroutine）
-	scanner := bufio.NewScanner(stderr)
-	for scanner.Scan() {
-		line := scanner.Text()
-		tracker.UpdateProgress(line)
+	// stderr 解析 goroutine
+	go func() {
+		errScanner := bufio.NewScanner(stderr)
+		for errScanner.Scan() {
+			tracker.UpdateProgress(errScanner.Text())
+		}
+		_ = errScanner.Err()
+	}()
+
+	// 等待子进程结束
+	if err := cmd.Wait(); err != nil {
+		close(done)
+		return fmt.Errorf("7z压缩过程失败: %v", err)
 	}
 
 	close(done)
-
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("7z压缩过程失败: %v", err)
-	}
 
 	fmt.Printf("\n  压缩完成！输出文件: %s\n", out7z)
 	return nil

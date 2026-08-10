@@ -60,6 +60,7 @@ func RunHTTPSProxy() {
 			}
 		}
 	}
+	_ = scanner.Err()
 
 	fmt.Println()
 	fmt.Println(strings.Repeat("─", 48))
@@ -75,7 +76,7 @@ func RunHTTPSProxy() {
 		return
 	}
 
-	// 5. 启动 HTTPS 代理服务器
+	// 构建后端目标 URL
 	targetURL := fmt.Sprintf("http://localhost:%d", backendPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
@@ -83,10 +84,21 @@ func RunHTTPSProxy() {
 		return
 	}
 
+	// 5. 构建路由（健康检查 + 代理转发 + WebSocket 代理）
 	mux := http.NewServeMux()
+
+	// /health 健康检查端点
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		healthCheckHandler(w, r, targetURL)
+	})
+
+	// 代理转发（含 WebSocket 升级检测）
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handleProxyRequest(w, r, target, targetURL)
 	})
+
+	// 包裹 CORS 中间件
+	handler := corsMiddleware(mux)
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -94,7 +106,7 @@ func RunHTTPSProxy() {
 
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", proxyPort),
-		Handler:   mux,
+		Handler:   handler,
 		TLSConfig: tlsConfig,
 	}
 
@@ -133,6 +145,8 @@ func RunHTTPSProxy() {
 				return
 			}
 		}
+		// 忽略 stdin 扫描错误（正常情况下由 EOF 触发）
+		_ = inputScanner.Err()
 	}()
 
 	select {
@@ -149,8 +163,16 @@ func RunHTTPSProxy() {
 	fmt.Println("  代理服务已关闭")
 }
 
-// handleProxyRequest 处理代理请求，将 HTTPS 请求转发到内部 HTTP 后端
+// handleProxyRequest 处理代理请求，检测 WebSocket 升级并分流
+// - 普通 HTTP 请求：使用 ReverseProxy 转发
+// - WebSocket 升级请求：使用 TCP 隧道转发
 func handleProxyRequest(w http.ResponseWriter, r *http.Request, target *url.URL, targetURL string) {
+	// 检测 WebSocket 升级请求
+	if isWebSocketUpgrade(r) {
+		handleWebSocketProxy(w, r, targetURL)
+		return
+	}
+
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.Director = func(req *http.Request) {
 		originalPath := req.URL.Path
@@ -168,7 +190,7 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request, target *url.URL,
 		fmt.Printf("  [PROXY] %s %s -> %s%s\n", req.Method, originalPath, targetURL, req.URL.Path)
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		fmt.Printf("  [ERROR] 代理转发失败: %v\n", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
@@ -298,6 +320,138 @@ func saveCertToDisk(certPEM, keyPEM []byte) error {
 	}
 
 	return nil
+}
+
+// ==== CORS 自动处理中间件 ====
+
+// corsMiddleware 为所有响应添加 CORS 头，并处理 OPTIONS 预检请求
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, Upgrade, Connection, Sec-WebSocket-Key, Sec-WebSocket-Version, Sec-WebSocket-Protocol, Sec-WebSocket-Extensions")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type, X-Request-Id")
+
+		// 处理 OPTIONS 预检请求
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// ==== /health 健康检查端点 ====
+
+// healthCheckHandler 返回代理服务健康状态（JSON 格式）
+func healthCheckHandler(w http.ResponseWriter, _ *http.Request, targetURL string) {
+	backendReachable := checkBackendHealth(targetURL)
+	status := "ok"
+	httpStatus := http.StatusOK
+	if !backendReachable {
+		status = "degraded"
+		httpStatus = http.StatusOK // 代理本身正常，只是后端不可达
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpStatus)
+	fmt.Fprintf(w, `{"status":"%s","service":"environment_repair_proxy","backend":"%s","backend_reachable":%t,"timestamp":"%s"}`,
+		status, targetURL, backendReachable, time.Now().Format(time.RFC3339))
+}
+
+// checkBackendHealth 检查后端 HTTP 服务是否可达
+func checkBackendHealth(targetURL string) bool {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(targetURL)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode < 500
+}
+
+// ==== WebSocket 代理 (WSS→WS) ====
+
+// isWebSocketUpgrade 检测请求是否为 WebSocket 升级请求
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.ToLower(r.Header.Get("Connection")) == "upgrade" &&
+		strings.ToLower(r.Header.Get("Upgrade")) == "websocket"
+}
+
+// handleWebSocketProxy 处理 WebSocket 代理：劫持客户端连接，建立到后端的 TCP 隧道，双向转发数据
+func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL string) {
+	// 解析后端地址
+	backendHost := strings.TrimPrefix(targetURL, "http://")
+	backendAddr := backendHost
+	if !strings.Contains(backendHost, ":") {
+		backendAddr = backendHost + ":80"
+	}
+
+	// 建立到后端的 TCP 连接
+	backendConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
+	if err != nil {
+		fmt.Printf("  [ERROR] WebSocket 后端连接失败 (%s): %v\n", backendAddr, err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprintf(w, `{"error":"WebSocket后端连接失败","message":"%s"}`, err.Error())
+		return
+	}
+	defer backendConn.Close()
+
+	// 劫持客户端连接
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		fmt.Printf("  [ERROR] 服务器不支持连接劫持\n")
+		http.Error(w, "WebSocket proxy not supported", http.StatusInternalServerError)
+		return
+	}
+
+	clientConn, bufrw, err := hj.Hijack()
+	if err != nil {
+		fmt.Printf("  [ERROR] 劫持客户端连接失败: %v\n", err)
+		return
+	}
+	defer clientConn.Close()
+
+	// 将原始 HTTP 升级请求转发到后端
+	if err := r.Write(backendConn); err != nil {
+		fmt.Printf("  [ERROR] 转发 WebSocket 升级请求失败: %v\n", err)
+		return
+	}
+
+	// 刷新客户端缓冲区
+	bufrw.Flush()
+
+	fmt.Printf("  [PROXY] WSS→WS 隧道已建立: %s -> %s\n", r.URL.Path, backendAddr)
+
+	// 双向数据转发
+	done := make(chan struct{}, 2)
+
+	go func() {
+		io.Copy(backendConn, clientConn)
+		done <- struct{}{}
+	}()
+
+	go func() {
+		io.Copy(clientConn, backendConn)
+		done <- struct{}{}
+	}()
+
+	// 等待任一方向关闭
+	<-done
+
+	// 关闭连接
+	backendConn.Close()
+	clientConn.Close()
+
+	fmt.Printf("  [PROXY] WSS→WS 隧道已关闭: %s\n", r.URL.Path)
 }
 
 // ==== 网络工具 ====

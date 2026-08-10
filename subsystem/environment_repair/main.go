@@ -38,6 +38,7 @@ func main() {
 			fmt.Println("无效选项，请重新输入。")
 		}
 	}
+	_ = scanner.Err()
 }
 
 func printBanner() {
@@ -60,7 +61,7 @@ func printMenu() {
 	fmt.Println("  │     支持自定义端口范围，自动验证释放结果             │")
 	fmt.Println("  ├──────────────────────────────────────────────────┤")
 	fmt.Println("  │ [3] HTTPS 代理服务                                │")
-	fmt.Println("  │     启动 HTTPS→HTTP 反向代理，解密转发请求          │")
+	fmt.Println("  │     启动 HTTPS → HTTP 反向代理，解密转发请求        │")
 	fmt.Println("  │     自动生成 TLS 证书，终端显示访问链接              │")
 	fmt.Println("  ├──────────────────────────────────────────────────┤")
 	fmt.Println("  │ [4] 分卷打包归档                                  │")
@@ -148,5 +149,6 @@ func promptPortRange() PortRange {
 		}
 	}
 
+	_ = scanner.Err()
 	return PortRange{Start: defaultStart, End: defaultEnd}
 }

@@ -128,6 +128,7 @@ func promptConfigPath() string {
 		}
 	}
 
+	_ = scanner.Err()
 	return defaultPath
 }
 
@@ -170,5 +171,6 @@ func confirmExecution() bool {
 			return false
 		}
 	}
+	_ = scanner.Err()
 	return true
 }
