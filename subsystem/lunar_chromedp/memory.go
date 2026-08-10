@@ -12,8 +12,6 @@ import (
 // v2 记忆系统集成 — 基于 storage/module 的标签向量中介检索
 // =============================================================================
 
-const searchMemoryCollection = "search_memory"
-
 func init() {
 	// 注册记忆库钩子到 agent.go
 	memoryInitCollection = initMemoryCollection

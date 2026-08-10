@@ -140,3 +140,28 @@ type embeddingResponse struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
+
+// SearchAgent 搜索智能体主控制器
+// 负责流程编排：记忆检索 → 网络搜索 → 深度搜索 → 报告生成 → 记忆存储
+type SearchAgent struct {
+	config SearchConfig
+
+	// 已使用的搜索关键词（用于深度搜索去重）
+	usedKeywords []string
+	// 搜索过程中积累的摘要
+	accumulatedSummaries []string
+	// 搜索过程中积累的来源 URL
+	accumulatedSources []string
+}
+
+// memoryEntry 记忆检索中间结果
+type memoryEntry struct {
+	Content    string
+	Similarity float32
+}
+
+// cpuReading CPU 读数记录
+type cpuReading struct {
+	percent   float64
+	timestamp time.Time
+}

@@ -2,90 +2,16 @@ package lunar_chromedp
 
 import (
 	"fmt"
-	"storage/module"
+	"logger"
 	"strings"
-	"sync"
 	"time"
+
+	"storage/module"
 )
 
 // =============================================================================
 // 搜索智能体 — 主控流程编排
 // =============================================================================
-
-// 搜索智能体全局实例
-var (
-	searchAgent     *SearchAgent
-	searchAgentMu   sync.Mutex
-	searchAgentInit bool
-)
-
-// SearchAgent 搜索智能体主控制器
-// 负责流程编排：记忆检索 → 网络搜索 → 深度搜索 → 报告生成 → 记忆存储
-type SearchAgent struct {
-	config SearchConfig
-
-	// 已使用的搜索关键词（用于深度搜索去重）
-	usedKeywords []string
-	// 搜索过程中积累的摘要
-	accumulatedSummaries []string
-	// 搜索过程中积累的来源 URL
-	accumulatedSources []string
-}
-
-// =============================================================================
-// 子模块函数钩子（由 ai.go / memory.go / monitor.go 在 init 时注册）
-// =============================================================================
-
-// AI 调用钩子
-var (
-	// aiCall 通用 AI 调用：发送 prompt，返回文本响应
-	aiCall func(systemPrompt string, userPrompt string, images [][]byte) (string, error)
-
-	// aiJudgeMemory 判定记忆库内容是否足以回答用户问题
-	// 返回：(足够, 有时效性要求, 错误)
-	aiJudgeMemory func(memoryContext string, query string) (sufficient bool, timeSensitive bool, err error)
-
-	// aiGenerateKeywords 将自然语言查询转化为结构化搜索关键词
-	aiGenerateKeywords func(query string) ([]string, error)
-
-	// aiGenerateDeepKeywords 基于已有上下文生成新的深度搜索关键词
-	aiGenerateDeepKeywords func(query string, accumulatedSummaries string, usedKeywords []string) ([]string, error)
-
-	// aiSummarizeContent 对网页内容进行摘要（文本或截图）
-	aiSummarizeContent func(content string, screenshots [][]byte) (string, error)
-
-	// aiEvaluateSufficiency 评估当前积累的信息是否足以回答用户问题
-	aiEvaluateSufficiency func(query string, accumulatedSummaries string) (sufficient bool, reasoning string, err error)
-
-	// aiGenerateReport 基于所有摘要生成最终搜索报告
-	aiGenerateReport func(query string, summaries []string, sources []string) (string, error)
-)
-
-// 记忆库钩子
-var (
-	// memoryLookup 在 search_memory 集合中检索相似历史记录
-	memoryLookup func(query string, topK int) ([]memoryEntry, error)
-
-	// memoryStore 将搜索记录存入 search_memory
-	memoryStore func(record MemorySearchRecord) error
-
-	// memoryInitCollection 初始化 search_memory 集合
-	// embeddingModel: 嵌入模型名（用于向量检索）
-	// llmModel: 多模态/对话模型名（用于标签生成）
-	memoryInitCollection func(embeddingURL, embeddingModel, embeddingKey, llmModel string) error
-)
-
-// memoryEntry 记忆检索中间结果
-type memoryEntry struct {
-	Content    string
-	Similarity float32
-}
-
-// 浏览器健康检查钩子
-var (
-	// checkBrowserHealth 检查浏览器进程健康状态
-	checkBrowserHealth func() BrowserHealth
-)
 
 // =============================================================================
 // 公开 API
@@ -736,6 +662,35 @@ func tryRestartBrowser() error {
 // =============================================================================
 // 通用辅助函数
 // =============================================================================
+
+// logProgress 输出搜索进度到终端日志
+// 根据阶段类型使用不同的 logger 层级：
+//   - 正常阶段 → logger.SubInfo
+//   - 警告/错误 → logger.SubWarn / logger.SubError
+func logProgress(event ProgressEvent) {
+	switch event.Phase {
+	case "memory_lookup":
+		logger.Info(ModuleName, "[记忆检索] %s", event.Message)
+	case "searching":
+		logger.SubInfo(ModuleName, "搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
+	case "extracting":
+		logger.SubInfo(ModuleName, "提取", "%s", event.Message)
+	case "summarizing":
+		logger.SubInfo(ModuleName, "摘要", "%s", event.Message)
+	case "evaluating":
+		logger.Info(ModuleName, "[充分性评估] %s", event.Message)
+	case "deep_search":
+		logger.SubInfo(ModuleName, "深度搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
+	case "generating_report":
+		logger.Info(ModuleName, "[报告生成] %s", event.Message)
+	case "warning":
+		logger.Warn(ModuleName, "%s", event.Message)
+	case "error":
+		logger.Error(ModuleName, "%s", event.Message)
+	default:
+		logger.Info(ModuleName, "%s", event.Message)
+	}
+}
 
 // truncateText 截断文本到指定最大字符数（保留完整 rune）
 func truncateText(text string, maxLen int) string {

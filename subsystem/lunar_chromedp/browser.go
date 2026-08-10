@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -87,6 +88,53 @@ func ensureBrowser() error {
 	}
 	browserMutex.Unlock()
 	return LaunchBrowser()
+}
+
+// buildBrowserOpts 构建 chromedp 浏览器启动选项
+func buildBrowserOpts() []chromedp.ExecAllocatorOption {
+	opts := []chromedp.ExecAllocatorOption{
+		chromedp.NoFirstRun,
+		chromedp.NoDefaultBrowserCheck,
+		chromedp.Headless,
+		chromedp.DisableGPU,
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-sync", true),
+		chromedp.Flag("disable-translate", true),
+		chromedp.Flag("mute-audio", true),
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("disable-features", "TranslateUI"),
+		chromedp.WindowSize(1920, 1080),
+	}
+
+	if BrowserExecPath != "" {
+		opts = append(opts, chromedp.ExecPath(BrowserExecPath))
+	}
+
+	return opts
+}
+
+// detectBrowserPath 自动检测可用的浏览器
+// 优先级：用户指定 > Edge > Chrome（默认）
+func detectBrowserPath() string {
+	if BrowserExecPath != "" {
+		fmt.Printf("[%s] 使用用户指定的浏览器: %s\n", ModuleName, BrowserExecPath)
+		return BrowserExecPath
+	}
+
+	// 尝试检测 Edge
+	for _, p := range edgePaths {
+		if _, err := os.Stat(p); err == nil {
+			fmt.Printf("[%s] 自动检测到 Edge 浏览器: %s\n", ModuleName, p)
+			return p
+		}
+	}
+
+	// 未检测到，让 chromedp 使用默认 Chrome 查找逻辑
+	fmt.Printf("[%s] 未检测到 Edge，使用默认浏览器查找逻辑\n", ModuleName)
+	return ""
 }
 
 // =============================================================================
@@ -429,22 +477,6 @@ func extractDOMText(ctx context.Context) (string, error) {
 // =============================================================================
 // DOM 文本清洗
 // =============================================================================
-
-// 噪声文本正则模式
-var noisePatterns = []*regexp.Regexp{
-	// 导航栏
-	regexp.MustCompile(`(?i)(首页|导航|菜单|Home|Menu|Navigation)`),
-	// Cookie 横幅
-	regexp.MustCompile(`(?i)(cookie|隐私政策|Privacy Policy|接受|cookie 政策)`),
-	// 广告标识
-	regexp.MustCompile(`(?i)(广告|AD|Sponsored|推广|Advertisement)`),
-	// 社交分享文本
-	regexp.MustCompile(`(?i)(分享到|Share|Tweet|转发|点赞)`),
-	// 版权声明
-	regexp.MustCompile(`(?i)(Copyright\s*©|版权所有|All Rights Reserved)`),
-	// 登录/注册
-	regexp.MustCompile(`(?i)(登录|注册|Sign\s*In|Sign\s*Up|Log\s*In|注册/登录)`),
-}
 
 // cleanDOMText 清洗 DOM 提取的文本
 // 移除噪声行、压缩空白、规范化输出

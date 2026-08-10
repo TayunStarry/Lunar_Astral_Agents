@@ -2,15 +2,10 @@ package lunar_chromedp
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"os"
+	"regexp"
 	"sync"
 	"time"
-
-	"logger"
-
-	"github.com/chromedp/chromedp"
 )
 
 // =============================================================================
@@ -76,87 +71,90 @@ var engineFallbackOrder = []string{"bing", "baidu", "sogou"}
 // 浏览器可执行文件路径（空字符串表示自动检测）
 var BrowserExecPath string
 
-// chromedp 浏览器启动选项
-func buildBrowserOpts() []chromedp.ExecAllocatorOption {
-	opts := []chromedp.ExecAllocatorOption{
-		chromedp.NoFirstRun,
-		chromedp.NoDefaultBrowserCheck,
-		chromedp.Headless,
-		chromedp.DisableGPU,
-		chromedp.Flag("no-sandbox", true),
-		chromedp.Flag("disable-dev-shm-usage", true),
-		chromedp.Flag("disable-extensions", true),
-		chromedp.Flag("disable-background-networking", true),
-		chromedp.Flag("disable-sync", true),
-		chromedp.Flag("disable-translate", true),
-		chromedp.Flag("mute-audio", true),
-		chromedp.Flag("hide-scrollbars", true),
-		chromedp.Flag("disable-features", "TranslateUI"),
-		chromedp.WindowSize(1920, 1080),
-	}
-
-	if BrowserExecPath != "" {
-		opts = append(opts, chromedp.ExecPath(BrowserExecPath))
-	}
-
-	return opts
-}
-
 // edgePaths Windows 上 Edge 浏览器的可能安装路径
 var edgePaths = []string{
 	`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
 	`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
 }
 
-// detectBrowserPath 自动检测可用的浏览器
-// 优先级：用户指定 > Edge > Chrome（默认）
-func detectBrowserPath() string {
-	if BrowserExecPath != "" {
-		fmt.Printf("[%s] 使用用户指定的浏览器: %s\n", ModuleName, BrowserExecPath)
-		return BrowserExecPath
-	}
+// =============================================================================
+// 搜索智能体全局实例
+// =============================================================================
 
-	// 尝试检测 Edge
-	for _, p := range edgePaths {
-		if _, err := os.Stat(p); err == nil {
-			fmt.Printf("[%s] 自动检测到 Edge 浏览器: %s\n", ModuleName, p)
-			return p
-		}
-	}
+var (
+	searchAgent     *SearchAgent
+	searchAgentMu   sync.Mutex
+	searchAgentInit bool
+)
 
-	// 未检测到，让 chromedp 使用默认 Chrome 查找逻辑
-	fmt.Printf("[%s] 未检测到 Edge，使用默认浏览器查找逻辑\n", ModuleName)
-	return ""
-}
+// =============================================================================
+// AI 调用钩子（由 ai.go 在 init 时注册）
+// =============================================================================
 
-// logProgress 输出搜索进度到终端日志
-// 根据阶段类型使用不同的 logger 层级：
-//   - 正常阶段 → logger.SubInfo
-//   - 警告/错误 → logger.SubWarn / logger.SubError
-func logProgress(event ProgressEvent) {
-	switch event.Phase {
-	case "memory_lookup":
-		logger.Info(ModuleName, "[记忆检索] %s", event.Message)
-	case "searching":
-		logger.SubInfo(ModuleName, "搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
-	case "extracting":
-		logger.SubInfo(ModuleName, "提取", "%s", event.Message)
-	case "summarizing":
-		logger.SubInfo(ModuleName, "摘要", "%s", event.Message)
-	case "evaluating":
-		logger.Info(ModuleName, "[充分性评估] %s", event.Message)
-	case "deep_search":
-		logger.SubInfo(ModuleName, "深度搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
-	case "generating_report":
-		logger.Info(ModuleName, "[报告生成] %s", event.Message)
-	case "warning":
-		logger.Warn(ModuleName, "%s", event.Message)
-	case "error":
-		logger.Error(ModuleName, "%s", event.Message)
-	default:
-		logger.Info(ModuleName, "%s", event.Message)
-	}
-}
+var (
+	// aiCall 通用 AI 调用：发送 prompt，返回文本响应
+	aiCall func(systemPrompt string, userPrompt string, images [][]byte) (string, error)
+
+	// aiJudgeMemory 判定记忆库内容是否足以回答用户问题
+	aiJudgeMemory func(memoryContext string, query string) (sufficient bool, timeSensitive bool, err error)
+
+	// aiGenerateKeywords 将自然语言查询转化为结构化搜索关键词
+	aiGenerateKeywords func(query string) ([]string, error)
+
+	// aiGenerateDeepKeywords 基于已有上下文生成新的深度搜索关键词
+	aiGenerateDeepKeywords func(query string, accumulatedSummaries string, usedKeywords []string) ([]string, error)
+
+	// aiSummarizeContent 对网页内容进行摘要（文本或截图）
+	aiSummarizeContent func(content string, screenshots [][]byte) (string, error)
+
+	// aiEvaluateSufficiency 评估当前积累的信息是否足以回答用户问题
+	aiEvaluateSufficiency func(query string, accumulatedSummaries string) (sufficient bool, reasoning string, err error)
+
+	// aiGenerateReport 基于所有摘要生成最终搜索报告
+	aiGenerateReport func(query string, summaries []string, sources []string) (string, error)
+)
+
+// =============================================================================
+// 记忆库钩子（由 memory.go 在 init 时注册）
+// =============================================================================
+
+var (
+	// memoryLookup 在 search_memory 集合中检索相似历史记录
+	memoryLookup func(query string, topK int) ([]memoryEntry, error)
+
+	// memoryStore 将搜索记录存入 search_memory
+	memoryStore func(record MemorySearchRecord) error
+
+	// memoryInitCollection 初始化 search_memory 集合
+	memoryInitCollection func(embeddingURL, embeddingModel, embeddingKey, llmModel string) error
+)
+
+// =============================================================================
+// 浏览器健康检查钩子（由 monitor.go 在 init 时注册）
+// =============================================================================
+
+var (
+	checkBrowserHealth func() BrowserHealth
+)
+
+// =============================================================================
+// CPU 持续高占用追踪（monitor.go 使用）
+// =============================================================================
+
+var (
+	cpuHighSince    time.Time
+	cpuHighMu       sync.Mutex
+	cpuWasHigh      bool
+	cpuCheckHistory []cpuReading
+)
+
+const maxCPUHistory = 10 // 保留最近 10 次 CPU 检查记录
+
+// =============================================================================
+// 记忆库集合名称
+// =============================================================================
+
+const searchMemoryCollection = "search_memory"
 
 // =============================================================================
 // HTTP 客户端与类型
@@ -174,3 +172,22 @@ var (
 	keywordEmbedMu    sync.RWMutex
 	keywordEmbedCache = make(map[string][]float32) // 关键词 → 嵌入向量
 )
+
+// =============================================================================
+// DOM 文本清洗 — 噪声正则模式（browser.go 使用）
+// =============================================================================
+
+var noisePatterns = []*regexp.Regexp{
+	// 导航栏
+	regexp.MustCompile(`(?i)(首页|导航|菜单|Home|Menu|Navigation)`),
+	// Cookie 横幅
+	regexp.MustCompile(`(?i)(cookie|隐私政策|Privacy Policy|接受|cookie 政策)`),
+	// 广告标识
+	regexp.MustCompile(`(?i)(广告|AD|Sponsored|推广|Advertisement)`),
+	// 社交分享文本
+	regexp.MustCompile(`(?i)(分享到|Share|Tweet|转发|点赞)`),
+	// 版权声明
+	regexp.MustCompile(`(?i)(Copyright\s*©|版权所有|All Rights Reserved)`),
+	// 登录/注册
+	regexp.MustCompile(`(?i)(登录|注册|Sign\s*In|Sign\s*Up|Log\s*In|注册/登录)`),
+}

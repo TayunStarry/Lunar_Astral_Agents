@@ -3,7 +3,6 @@ package lunar_chromedp
 import (
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
@@ -16,21 +15,6 @@ import (
 func init() {
 	// 注册浏览器健康检查钩子到 agent.go
 	checkBrowserHealth = monitorBrowserHealth
-}
-
-// CPU 持续高占用追踪
-var (
-	cpuHighSince    time.Time     // CPU 首次超过阈值的时间
-	cpuHighMu       sync.Mutex    // CPU 追踪锁
-	cpuWasHigh      bool          // 上次检查时 CPU 是否超阈值
-	cpuCheckHistory []cpuReading  // 最近 N 次 CPU 检查记录
-)
-
-const maxCPUHistory = 10 // 保留最近 10 次 CPU 检查记录
-
-type cpuReading struct {
-	percent   float64
-	timestamp time.Time
 }
 
 // =============================================================================
@@ -142,11 +126,11 @@ func chromeProcessNames() []string {
 	return []string{
 		"chrome.exe",
 		"chromium.exe",
-		"msedge.exe",    // Microsoft Edge
-		"chrome",        // Linux/macOS
-		"chromium",      // Linux/macOS
+		"msedge.exe",       // Microsoft Edge
+		"chrome",           // Linux/macOS
+		"chromium",         // Linux/macOS
 		"chromium-browser", // Linux 变体
-		"msedge",        // Linux Edge
+		"msedge",           // Linux Edge
 	}
 }
 
