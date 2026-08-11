@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"lunar_chromedp"
+	"LunarSubsystem/lunar_chromedp"
 )
 
 // TestResult 单次查询的测试结果

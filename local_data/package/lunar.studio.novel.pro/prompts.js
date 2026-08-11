@@ -5,8 +5,11 @@ var PHASE = {
     IDLE: 'idle',
     BUILDING: 'building',
     GENERATING_PARAGRAPHS: 'generating_paragraphs',
+    POLISHING_PARAGRAPHS: 'polishing_paragraphs',
     WORD_REVIEW: 'word_review',
     CONTENT_REVIEW: 'content_review',
+    CHAPTER_REVIEW: 'chapter_review',
+    FINAL_POLISH: 'final_polish',
     HUMAN_REVIEW: 'human_review',
     GENERATING_SUMMARY: 'generating_summary',
     INTERRUPTED: 'interrupted'

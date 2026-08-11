@@ -2,17 +2,17 @@ module qwen-asr-server
 
 go 1.24.4
 
-replace browser => ../browser
+replace LunarSubsystem/browser_client => ../browser_client
 
-replace config => ../config
+replace LunarSubsystem/general_config => ../general_config
 
-require browser v0.0.0-00010101000000-000000000000
+require LunarSubsystem/browser_client v0.0.0-00010101000000-000000000000
 
 require (
-	config v0.0.0-00010101000000-000000000000 
+	LunarSubsystem/general_config v0.0.0-00010101000000-000000000000
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 )
 
-require logger v0.0.0
+require LunarSubsystem/general_logger v0.0.0
 
-replace logger => ../logger
+replace LunarSubsystem/general_logger => ../general_logger

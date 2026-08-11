@@ -1,8 +1,8 @@
 package adapters
 
 import (
+	"LunarSubsystem/general_logger"
 	"encoding/json"
-	"logger"
 	"time"
 
 	"github.com/dop251/goja"

@@ -2,7 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
-	"logger"
+	"LunarSubsystem/general_logger"
 	"net/http"
 	"sync"
 	"time"

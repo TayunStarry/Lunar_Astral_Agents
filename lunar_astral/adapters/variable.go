@@ -1,8 +1,8 @@
 package adapters
 
 import (
+	"LunarSubsystem/general_logger"
 	"context"
-	"logger"
 	"sync"
 
 	"github.com/dop251/goja_nodejs/eventloop"

@@ -1,9 +1,9 @@
 package main
 
 import (
+	storage "LunarSubsystem/file_manager/server"
+	image_server "LunarSubsystem/image_processor/server"
 	"embed"
-	image_server "image/server"
-	storage "storage/server"
 )
 
 // ==== GGUF 值类型常量 ====

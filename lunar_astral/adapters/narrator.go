@@ -1,9 +1,9 @@
 package adapters
 
 import (
+	"LunarSubsystem/general_logger"
 	"encoding/base64"
 	"fmt"
-	"logger"
 	"qwen3_tts_lunar/module"
 
 	"github.com/dop251/goja"

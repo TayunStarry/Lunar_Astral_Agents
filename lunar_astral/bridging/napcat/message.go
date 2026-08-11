@@ -3,12 +3,11 @@ package napcat
 // 消息解析与处理逻辑
 
 import (
+	"LunarSubsystem/general_logger"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"logger"
 )
 
 // HandleNapcatMessage 处理从 Napcat 接收到的消息

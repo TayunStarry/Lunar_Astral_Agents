@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"config"
+	"LunarSubsystem/general_config"
 	"encoding/json"
 	"fmt"
 	"io"

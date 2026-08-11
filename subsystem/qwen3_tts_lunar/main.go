@@ -1,15 +1,14 @@
 package main
 
 import (
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"context"
 	"flag"
 	"fmt"
-	"logger"
 	"os"
 	"qwen3_tts_lunar/module"
 	"time"
-
-	"config"
 )
 
 // main 主函数

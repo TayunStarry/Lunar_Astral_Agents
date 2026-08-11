@@ -1,10 +1,10 @@
 package model
 
 import (
-	"config"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"encoding/json"
 	"fmt"
-	"logger"
 	"time"
 )
 

@@ -1,11 +1,11 @@
 package module
 
 import (
+	"LunarSubsystem/general_logger"
 	"container/list"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"logger"
 )
 
 // NewTTSCache 创建新的TTS缓存实例

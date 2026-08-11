@@ -1,14 +1,14 @@
 package adapters
 
 import (
-	"browser"
+	"LunarSubsystem/browser_client"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"bytes"
-	"config"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"logger"
 	"net/http"
 	"time"
 

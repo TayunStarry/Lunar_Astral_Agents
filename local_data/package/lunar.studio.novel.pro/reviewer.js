@@ -157,6 +157,186 @@
             };
         }
 
+        // ==== 草稿生成（高温度，关注故事流畅性） ====
+        // 返回: { content, inputTokens, outputTokens, totalTokens }
+        async draftParagraph(paragraphIndex, paragraphOutline, knowledgeContext, prevParagraph, wordTarget, chapterOutline, outline, dramaticBeat, emotionalTarget, pacing) {
+            var prompt = await global.PromptLoader.loadAndFill('draft_paragraph', {
+                paragraphIndex: paragraphIndex,
+                paragraphOutline: paragraphOutline,
+                knowledgeContext: knowledgeContext || '（无）',
+                prevParagraph: prevParagraph || '（无，这是第一段）',
+                wordTarget: wordTarget,
+                chapterOutline: chapterOutline || '',
+                outline: outline || '',
+                dramaticBeat: dramaticBeat || '',
+                emotionalTarget: emotionalTarget || '',
+                pacing: pacing || ''
+            });
+
+            var messages = [
+                { role: 'system', content: '你是一位才华横溢的小说作家。请直接输出段落草稿正文，不要添加序号、标题或任何额外标记。此刻不需要雕琢文字，专注于把故事讲好。' },
+                { role: 'user', content: prompt }
+            ];
+
+            var result = await this.app.config.callChat(messages, {
+                temperature: 0.85,
+                maxTokens: 4096
+            });
+
+            this.app.config.trackToken({
+                step: 'draft_paragraph',
+                model: this.app.config.getConfig().name,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            });
+
+            return {
+                content: (result.content || '').trim(),
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            };
+        }
+
+        // ==== 段落精炼（中温度，关注文学技巧） ====
+        // 返回: { content, inputTokens, outputTokens, totalTokens }
+        async polishParagraph(paragraphIndex, draftContent, paragraphOutline, prevParagraph, nextOutline, chapterOutline, criteria) {
+            var prompt = await global.PromptLoader.loadAndFill('polish_paragraph', {
+                paragraphIndex: paragraphIndex,
+                draftContent: draftContent,
+                paragraphOutline: paragraphOutline || '',
+                prevParagraph: prevParagraph || '（无，这是第一段）',
+                nextOutline: nextOutline || '（无，这是最后一段）',
+                chapterOutline: chapterOutline || '',
+                criteria: criteria || ''
+            });
+
+            var messages = [
+                { role: 'system', content: '你是一位精益求精的文学编辑。请直接输出精炼后的段落正文，不要添加序号、标题或任何额外标记。' },
+                { role: 'user', content: prompt }
+            ];
+
+            var result = await this.app.config.callChat(messages, {
+                temperature: 0.5,
+                maxTokens: 4096
+            });
+
+            this.app.config.trackToken({
+                step: 'polish_paragraph',
+                model: this.app.config.getConfig().name,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            });
+
+            return {
+                content: (result.content || '').trim(),
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            };
+        }
+
+        // ==== 整章全局审读 ====
+        // 返回: { passed, issues, suggestions, emotionalCurve, pacingAnalysis, reviseParagraphs }
+        async reviewChapter(chapterContent, chapterOutline, criteria, outline) {
+            var prompt = await global.PromptLoader.loadAndFill('review_chapter', {
+                chapterContent: chapterContent,
+                chapterOutline: chapterOutline || '',
+                criteria: criteria || '',
+                outline: outline || ''
+            });
+
+            var messages = [
+                { role: 'system', content: '你是一位资深的小说主编。请以 JSON 格式返回审读结果，不要添加任何额外文字。' },
+                { role: 'user', content: prompt }
+            ];
+
+            var result = await this.app.config.callChat(messages, {
+                temperature: 0.4,
+                maxTokens: 4096
+            });
+
+            this.app.config.trackToken({
+                step: 'review_chapter',
+                model: this.app.config.getConfig().name,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            });
+
+            return this._parseChapterReviewResult(result.content);
+        }
+
+        // ==== 最终润色（低温度，句子级雕琢） ====
+        // 返回: { content, inputTokens, outputTokens, totalTokens }
+        async finalPolish(chapterContent, chapterOutline, criteria) {
+            var prompt = await global.PromptLoader.loadAndFill('final_polish', {
+                chapterContent: chapterContent,
+                chapterOutline: chapterOutline || '',
+                criteria: criteria || ''
+            });
+
+            var messages = [
+                { role: 'system', content: '你是一位文字雕琢大师。请直接输出润色后的完整章节内容，不要添加任何解释或标记。' },
+                { role: 'user', content: prompt }
+            ];
+
+            var result = await this.app.config.callChat(messages, {
+                temperature: 0.3,
+                maxTokens: 8192
+            });
+
+            this.app.config.trackToken({
+                step: 'final_polish',
+                model: this.app.config.getConfig().name,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            });
+
+            return {
+                content: (result.content || '').trim(),
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+                totalTokens: result.totalTokens
+            };
+        }
+
+        // ==== 解析整章审读结果 ====
+        _parseChapterReviewResult(text) {
+            var defaults = {
+                passed: true,
+                issues: [],
+                suggestions: [],
+                emotionalCurve: '',
+                pacingAnalysis: '',
+                reviseParagraphs: []
+            };
+
+            if (!text) return defaults;
+
+            var jsonStr = this._extractJSON(text);
+            if (jsonStr) {
+                try {
+                    var parsed = JSON.parse(jsonStr);
+                    return {
+                        passed: !!parsed.passed,
+                        issues: Array.isArray(parsed.issues) ? parsed.issues : [],
+                        suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+                        emotionalCurve: parsed.emotionalCurve || '',
+                        pacingAnalysis: parsed.pacingAnalysis || '',
+                        reviseParagraphs: Array.isArray(parsed.reviseParagraphs) ? parsed.reviseParagraphs : []
+                    };
+                } catch (e) {
+                    // JSON 解析失败
+                }
+            }
+
+            return defaults;
+        }
+
         // ==== 解析段落审核结果 ====
         _parseReviewResult(text) {
             if (!text) return { passed: true, issues: [], suggestions: [] };
@@ -186,12 +366,12 @@
         }
 
         // ==== 解析字数审核结果 ====
+        // 新格式：expandParagraphs / compressParagraphs（自然扩写/压缩）
         _parseWordCountResult(text) {
             var defaults = {
                 wordStatus: 'ok',
-                transitionPositions: [],
-                trimParagraphs: [],
-                deleteParagraphs: []
+                expandParagraphs: [],
+                compressParagraphs: []
             };
 
             if (!text) return defaults;
@@ -202,9 +382,8 @@
                     var parsed = JSON.parse(jsonStr);
                     return {
                         wordStatus: parsed.wordStatus || 'ok',
-                        transitionPositions: Array.isArray(parsed.transitionPositions) ? parsed.transitionPositions : [],
-                        trimParagraphs: Array.isArray(parsed.trimParagraphs) ? parsed.trimParagraphs : [],
-                        deleteParagraphs: Array.isArray(parsed.deleteParagraphs) ? parsed.deleteParagraphs : []
+                        expandParagraphs: Array.isArray(parsed.expandParagraphs) ? parsed.expandParagraphs : [],
+                        compressParagraphs: Array.isArray(parsed.compressParagraphs) ? parsed.compressParagraphs : []
                     };
                 } catch (e) {
                     // JSON 解析失败

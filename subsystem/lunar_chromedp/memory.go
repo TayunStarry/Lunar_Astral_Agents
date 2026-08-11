@@ -1,12 +1,11 @@
 package lunar_chromedp
 
 import (
-	"config"
+	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/general_config"
 	"context"
 	"fmt"
 	"strings"
-
-	"storage/module"
 )
 
 // =============================================================================

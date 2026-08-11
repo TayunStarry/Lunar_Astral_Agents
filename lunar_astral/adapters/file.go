@@ -1,12 +1,12 @@
 package adapters
 
 import (
-	storage "storage/module"
-	"lunar_astral/hierarchy"
+	"LunarSubsystem/file_manager/module"
 	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
+	"lunar_astral/hierarchy"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +52,7 @@ func (class *Runtime) saveFile(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{"", "", fmt.Errorf("不支持的文件数据类型")})
 	}
 
-	fileName, path, err := storage.SaveFile(fileName, overwrite, reader)
+	fileName, path, err := module.SaveFile(fileName, overwrite, reader)
 	if err != nil {
 		return class.runtime.ToValue([]any{"", "", err})
 	}
@@ -71,7 +71,7 @@ func (class *Runtime) readFile(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, 0, "", fmt.Errorf("filePath必须是字符串")})
 	}
 
-	file, size, mimeType, err := storage.ReadFile(filePath)
+	file, size, mimeType, err := module.ReadFile(filePath)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, 0, "", err})
 	}
@@ -100,7 +100,7 @@ func (class *Runtime) fileList(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("path必须是字符串")})
 	}
 
-	fileList, err := storage.GetFileList(path)
+	fileList, err := module.GetFileList(path)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

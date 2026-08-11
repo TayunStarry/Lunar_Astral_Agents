@@ -1,6 +1,7 @@
 /**
  * 工作流模块
- * 6 步章节生成流水线状态机，含中断恢复机制
+ * 8 步章节生成流水线：草稿→精炼→格式→字数→审核→整章审读→最终润色
+ * 含中断恢复机制
  */
 
 (function(global) {
@@ -10,9 +11,10 @@
     var CHAPTER_STATUS = global.CHAPTER_STATUS;
 
     // ==== 中断错误类 ====
-    function InterruptError(step, paragraphIndex, attempt) {
+    function InterruptError(step, paragraphIndex, attempt, subStep) {
         this.interrupted = true;
         this.step = step;
+        this.subStep = subStep || '';
         this.paragraphIndex = paragraphIndex || 0;
         this.attempt = attempt || 0;
     }
@@ -26,7 +28,7 @@
             this.pendingStop = false;
         }
 
-        // ==== 启动章节生成（步骤 1-6） ====
+        // ==== 启动章节生成（步骤 1-8） ====
         async startChapter() {
             var state = this.app.state;
             this.resetStop();
@@ -38,10 +40,14 @@
                     chapterOutline: '',
                     direction: '',
                     paragraphOutlines: [],
+                    draftParagraphs: [],
                     paragraphs: [],
                     reviewResults: [],
                     wordCountAttempts: 0,
-                    formatChanges: 0
+                    formatChanges: 0,
+                    chapterReviewResult: null,
+                    chapterReviewAttempts: 0,
+                    finalPolishApplied: false
                 };
             }
 
@@ -54,8 +60,12 @@
                 await this._step2_buildParagraphOutlines();
                 await this.app.saveState();
 
-                // 步骤 3: 逐段生成
-                await this._step3_generateParagraphs();
+                // 步骤 3a: 草稿生成
+                await this._step3a_draftParagraphs();
+                await this.app.saveState();
+
+                // 步骤 3b: 段落精炼
+                await this._step3b_polishParagraphs();
                 await this.app.saveState();
 
                 // 步骤 4: 格式校验
@@ -70,9 +80,17 @@
                 await this._step6_contentReview();
                 await this.app.saveState();
 
+                // 步骤 7: 整章全局审读
+                await this._step7_chapterReview();
+                await this.app.saveState();
+
+                // 步骤 8: 最终润色
+                await this._step8_finalPolish();
+                await this.app.saveState();
+
                 // 全部完成，进入人工审核阶段
                 this.app.setPhase(PHASE.HUMAN_REVIEW);
-                this._renderProgress(6, '章节生成完成，等待人工审核');
+                this._renderProgress(8, '章节生成完成，等待人工审核');
                 this._showHumanApprovalCard();
                 await this.app.saveState();
 
@@ -81,6 +99,7 @@
                     // 保存中断上下文
                     state.interruptContext = {
                         step: e.step,
+                        subStep: e.subStep || '',
                         paragraphIndex: e.paragraphIndex,
                         attempt: e.attempt
                     };
@@ -112,48 +131,70 @@
             this.app.showToast('正在从步骤 ' + ctx.step + ' 恢复...');
 
             try {
-                // 根据中断步骤恢复
-                if (ctx.step <= 1) {
+                var step = ctx.step;
+                var subStep = ctx.subStep || '';
+
+                if (step <= 1) {
                     await this._step1_confirmOutline();
                     await this.app.saveState();
                     await this._step2_buildParagraphOutlines();
                     await this.app.saveState();
-                    await this._step3_generateParagraphs();
+                    await this._step3a_draftParagraphs();
                     await this.app.saveState();
-                } else if (ctx.step === 2) {
+                    await this._step3b_polishParagraphs();
+                    await this.app.saveState();
+                } else if (step === 2) {
                     await this._step2_buildParagraphOutlines();
                     await this.app.saveState();
-                    await this._step3_generateParagraphs();
+                    await this._step3a_draftParagraphs();
                     await this.app.saveState();
-                } else if (ctx.step === 3) {
-                    // 从段落中断点恢复
-                    await this._step3_generateParagraphs(ctx.paragraphIndex);
+                    await this._step3b_polishParagraphs();
                     await this.app.saveState();
-                } else if (ctx.step === 4) {
+                } else if (step === 3) {
+                    if (subStep === 'draft' || !subStep) {
+                        // 从草稿生成中断点恢复，然后继续精炼
+                        await this._step3a_draftParagraphs(ctx.paragraphIndex);
+                        await this.app.saveState();
+                        await this._step3b_polishParagraphs();
+                        await this.app.saveState();
+                    } else if (subStep === 'polish') {
+                        // 从精炼中断点恢复
+                        await this._step3b_polishParagraphs(ctx.paragraphIndex);
+                        await this.app.saveState();
+                    }
+                } else if (step === 4) {
                     await this._step4_formatCheck();
                     await this.app.saveState();
-                } else if (ctx.step === 5) {
+                } else if (step === 5) {
                     await this._step5_wordCountReview();
                     await this.app.saveState();
-                } else if (ctx.step === 6) {
-                    // 从审核段落中断点恢复
+                } else if (step === 6) {
                     await this._step6_contentReview(ctx.paragraphIndex, ctx.attempt);
+                    await this.app.saveState();
+                } else if (step === 7) {
+                    await this._step7_chapterReview(ctx.attempt);
                     await this.app.saveState();
                 }
 
                 // 完成中断步骤后，继续后续步骤
-                var currentStep = ctx.step;
-
-                if (currentStep < 4) {
+                if (step < 4) {
                     await this._step4_formatCheck();
                     await this.app.saveState();
                 }
-                if (currentStep < 5) {
+                if (step < 5) {
                     await this._step5_wordCountReview();
                     await this.app.saveState();
                 }
-                if (currentStep < 6) {
+                if (step < 6) {
                     await this._step6_contentReview();
+                    await this.app.saveState();
+                }
+                if (step < 7) {
+                    await this._step7_chapterReview();
+                    await this.app.saveState();
+                }
+                if (step < 8) {
+                    await this._step8_finalPolish();
                     await this.app.saveState();
                 }
 
@@ -162,7 +203,7 @@
 
                 // 进入人工审核阶段
                 this.app.setPhase(PHASE.HUMAN_REVIEW);
-                this._renderProgress(6, '章节生成完成，等待人工审核');
+                this._renderProgress(8, '章节生成完成，等待人工审核');
                 this._showHumanApprovalCard();
                 await this.app.saveState();
 
@@ -170,6 +211,7 @@
                 if (e && e.interrupted) {
                     state.interruptContext = {
                         step: e.step,
+                        subStep: e.subStep || '',
                         paragraphIndex: e.paragraphIndex,
                         attempt: e.attempt
                     };
@@ -224,7 +266,6 @@
                     maxTokens: 4096
                 });
 
-                // 记录 token
                 this.app.config.trackToken({
                     step: 'generate_summary',
                     model: this.app.config.getConfig().name,
@@ -233,18 +274,15 @@
                     totalTokens: result.totalTokens
                 });
 
-                // 解析摘要结果
                 var summaryData = this._parseSummaryResult(result.content);
                 if (summaryData) {
                     chapter.summary = summaryData.summary || '';
-                    // 如果有下一章走向建议，更新状态
                     if (summaryData.nextDirection) {
                         state.nextDirection = summaryData.nextDirection;
                     }
                     if (summaryData.nextCriteria) {
                         state.nextCriteria = summaryData.nextCriteria;
                     }
-                    // 更新下一章走向 UI
                     this._renderNextDirection();
                 }
 
@@ -273,14 +311,13 @@
 
         // ==== 步骤 1: 章节大纲确认 ====
         async _step1_confirmOutline() {
-            this._checkStop();
+            this._checkStop(1);
             var state = this.app.state;
             var draft = state.currentDraft;
 
             this.app.setPhase(PHASE.BUILDING);
             this._renderProgress(1, '正在确认章节大纲...');
 
-            // 取 chapterOutlines[chapterIndex] 作为当前章节大纲
             var chapterIndex = state.chapterIndex;
             var chapterOutline = '';
 
@@ -288,12 +325,10 @@
                 chapterOutline = state.chapterOutlines[chapterIndex].outline || '';
             }
 
-            // 若无且 chapters 为空，取 state.nextDirection
             if (!chapterOutline && state.chapters.length === 0) {
                 chapterOutline = state.nextDirection || '';
             }
 
-            // 若仍无，取 nextDirection
             if (!chapterOutline) {
                 chapterOutline = state.nextDirection || '';
             }
@@ -302,15 +337,14 @@
             draft.chapterOutline = chapterOutline;
             draft.direction = chapterOutline;
 
-            // 更新方向 UI
             this.app.elements.directionInput.value = chapterOutline;
 
             this._renderProgress(1, '章节大纲已确认: 第 ' + draft.chapterIndex + ' 章');
         }
 
-        // ==== 步骤 2: 段落大纲规划 ====
+        // ==== 步骤 2: 段落大纲规划（增强：戏剧节拍、情感目标、节奏） ====
         async _step2_buildParagraphOutlines() {
-            this._checkStop();
+            this._checkStop(2);
             var state = this.app.state;
             var draft = state.currentDraft;
 
@@ -338,7 +372,6 @@
                 maxTokens: 4096
             });
 
-            // 记录 token
             this.app.config.trackToken({
                 step: 'build_paragraph_outlines',
                 model: this.app.config.getConfig().name,
@@ -347,14 +380,13 @@
                 totalTokens: result.totalTokens
             });
 
-            // 解析段落大纲
             draft.paragraphOutlines = this._parseParagraphOutlines(result.content);
 
             this._renderProgress(2, '段落大纲规划完成，共 ' + draft.paragraphOutlines.length + ' 段');
         }
 
-        // ==== 步骤 3: 逐段生成 ====
-        async _step3_generateParagraphs(startFromIndex) {
+        // ==== 步骤 3a: 逐段生成草稿（高温度，关注故事流畅性） ====
+        async _step3a_draftParagraphs(startFromIndex) {
             var state = this.app.state;
             var draft = state.currentDraft;
             var outlines = draft.paragraphOutlines;
@@ -363,20 +395,17 @@
 
             this.app.setPhase(PHASE.GENERATING_PARAGRAPHS);
 
-            // 确定起始段落索引
             var startIdx = (startFromIndex !== undefined && startFromIndex > 0) ? startFromIndex : 0;
 
-            // 如果从0开始，清空段落
             if (startIdx === 0) {
-                draft.paragraphs = [];
+                draft.draftParagraphs = [];
             }
 
             for (var i = startIdx; i < outlines.length; i++) {
-                // 中断检查
-                this._checkStop(3, i, 0);
+                this._checkStop(3, i, 0, 'draft');
 
                 var outline = outlines[i];
-                this._renderProgress(3, '正在生成第 ' + (i + 1) + '/' + outlines.length + ' 段...');
+                this._renderProgress(3, '正在生成草稿 第 ' + (i + 1) + '/' + outlines.length + ' 段...');
 
                 // 查询记忆库知识点
                 var knowledgeContext = '';
@@ -391,66 +420,100 @@
                     console.warn('知识点查询失败:', e);
                 }
 
-                // 获取上一段内容
-                var prevParagraph = (i > 0 && draft.paragraphs[i - 1]) ? draft.paragraphs[i - 1] : '';
-
+                // 获取上一段草稿
+                var prevDraft = (i > 0 && draft.draftParagraphs[i - 1]) ? draft.draftParagraphs[i - 1] : '';
                 var wordTarget = state.config.paragraphTarget || 400;
 
-                var prompt = await global.PromptLoader.loadAndFill('generate_paragraph', {
-                    paragraphIndex: i + 1,
-                    wordTarget: wordTarget,
-                    outline: state.outline || '',
-                    chapterOutline: draft.chapterOutline,
-                    paragraphOutline: outline.content || '',
-                    knowledgeContext: knowledgeContext || '（无）',
-                    prevParagraph: prevParagraph || '（无，这是第一段）'
-                });
+                var result = await this.app.reviewer.draftParagraph(
+                    i + 1,
+                    outline.content || '',
+                    knowledgeContext,
+                    prevDraft,
+                    wordTarget,
+                    draft.chapterOutline,
+                    state.outline,
+                    outline.dramaticBeat || '',
+                    outline.emotionalTarget || '',
+                    outline.pacing || ''
+                );
 
-                var messages = [
-                    { role: 'system', content: '你是一位才华横溢的小说作家。请直接输出段落正文，不要添加序号、标题或任何额外标记。' },
-                    { role: 'user', content: prompt }
-                ];
-
-                var result = await this.app.config.callChat(messages, {
-                    temperature: 0.8,
-                    maxTokens: 4096
-                });
-
-                // 记录 token
-                this.app.config.trackToken({
-                    step: 'generate_paragraph',
-                    model: this.app.config.getConfig().name,
-                    inputTokens: result.inputTokens,
-                    outputTokens: result.outputTokens,
-                    totalTokens: result.totalTokens
-                });
-
-                var paragraphText = (result.content || '').trim();
-                draft.paragraphs[i] = paragraphText;
+                draft.draftParagraphs[i] = result.content;
 
                 // 实时更新草稿面板
                 this._renderDraft();
                 await this.app.saveState();
             }
 
-            this._renderProgress(3, '所有段落生成完成，共 ' + draft.paragraphs.length + ' 段');
+            this._renderProgress(3, '草稿生成完成，共 ' + draft.draftParagraphs.length + ' 段');
+        }
+
+        // ==== 步骤 3b: 逐段精炼（中温度，关注文学技巧） ====
+        async _step3b_polishParagraphs(startFromIndex) {
+            var state = this.app.state;
+            var draft = state.currentDraft;
+            var outlines = draft.paragraphOutlines;
+            var draftParagraphs = draft.draftParagraphs;
+
+            if (!draftParagraphs || draftParagraphs.length === 0) return;
+
+            this.app.setPhase(PHASE.POLISHING_PARAGRAPHS);
+
+            var startIdx = (startFromIndex !== undefined && startFromIndex > 0) ? startFromIndex : 0;
+
+            if (startIdx === 0) {
+                draft.paragraphs = [];
+            }
+
+            for (var i = startIdx; i < draftParagraphs.length; i++) {
+                this._checkStop(3, i, 0, 'polish');
+
+                this._renderProgress(3, '正在精炼 第 ' + (i + 1) + '/' + draftParagraphs.length + ' 段...');
+
+                var draftContent = draftParagraphs[i];
+                if (!draftContent || !draftContent.trim()) {
+                    draft.paragraphs[i] = draftContent;
+                    continue;
+                }
+
+                var outline = outlines[i] || {};
+                // 使用已精炼的前一段作为上下文（不是草稿）
+                var prevPolished = (i > 0 && draft.paragraphs[i - 1]) ? draft.paragraphs[i - 1] : '';
+                // 下一段的段落大纲
+                var nextOutline = (i < outlines.length - 1 && outlines[i + 1]) ? (outlines[i + 1].content || '') : '';
+
+                var result = await this.app.reviewer.polishParagraph(
+                    i + 1,
+                    draftContent,
+                    outline.content || '',
+                    prevPolished,
+                    nextOutline,
+                    draft.chapterOutline,
+                    state.criteria
+                );
+
+                draft.paragraphs[i] = result.content;
+
+                // 实时更新草稿面板
+                this._renderDraft();
+                await this.app.saveState();
+            }
+
+            this._renderProgress(3, '段落精炼完成，共 ' + draft.paragraphs.length + ' 段');
         }
 
         // ==== 步骤 4: 格式校验 ====
         async _step4_formatCheck() {
-            this._checkStop();
+            this._checkStop(4);
             var state = this.app.state;
             var draft = state.currentDraft;
 
             this._renderProgress(4, '正在执行格式校验...');
 
-            // 合并段落为完整章节
             var chapterContent = draft.paragraphs.join('\n\n');
 
             // 正则清理
             var cleaned = this._formatCleanRegex(chapterContent);
 
-            // 计算改动比例
             var formatChanges = 0;
             if (chapterContent !== cleaned) {
                 var diffLen = Math.abs(chapterContent.length - cleaned.length);
@@ -477,7 +540,6 @@
                     maxTokens: 8192
                 });
 
-                // 记录 token
                 this.app.config.trackToken({
                     step: 'format_check',
                     model: this.app.config.getConfig().name,
@@ -496,9 +558,9 @@
             this._renderProgress(4, '格式校验完成');
         }
 
-        // ==== 步骤 5: 字数审核 ====
+        // ==== 步骤 5: 字数审核（重新设计：自然扩写/压缩，不强制插入或删除段落） ====
         async _step5_wordCountReview() {
-            this._checkStop();
+            this._checkStop(5);
             var state = this.app.state;
             var draft = state.currentDraft;
             var wordMin = state.config.wordMin || 3000;
@@ -508,7 +570,7 @@
             this.app.setPhase(PHASE.WORD_REVIEW);
 
             for (var attempt = 0; attempt < maxRetries; attempt++) {
-                this._checkStop();
+                this._checkStop(5);
 
                 var chapterContent = draft.paragraphs.join('\n\n');
                 var wordCount = this.app.countWords(chapterContent);
@@ -522,7 +584,7 @@
                     return;
                 }
 
-                // 调用 AI 字数审核
+                // 调用 AI 字数审核（返回 expandParagraphs / compressParagraphs）
                 var reviewResult = await this.app.reviewer.checkWordCount(
                     chapterContent, wordCount, wordMin, wordMax
                 );
@@ -534,71 +596,48 @@
                 }
 
                 if (reviewResult.wordStatus === 'under') {
-                    // 字数不足：插入过渡段
-                    var positions = reviewResult.transitionPositions || [];
-                    if (positions.length > 0) {
-                        // 按倒序插入，避免索引偏移
-                        var sortedPositions = positions.slice().sort(function(a, b) { return b - a; });
-                        for (var j = 0; j < sortedPositions.length; j++) {
-                            var pos = sortedPositions[j];
-                            if (pos >= 0 && pos < draft.paragraphs.length - 1) {
-                                var prevPara = draft.paragraphs[pos];
-                                var nextPara = draft.paragraphs[pos + 1];
+                    // 字数不足：自然扩写目标段落
+                    var expandParagraphs = reviewResult.expandParagraphs || [];
+                    for (var j = 0; j < expandParagraphs.length; j++) {
+                        var expandItem = expandParagraphs[j];
+                        var expandIdx = (typeof expandItem === 'object' ? expandItem.index : expandItem) - 1;
+                        var direction = typeof expandItem === 'object' ? expandItem.direction : '自然扩展内容';
 
-                                var transitionResult = await this.app.reviewer.generateTransition(
-                                    pos + 1, prevPara, pos + 2, nextPara
-                                );
-
-                                if (transitionResult.content) {
-                                    draft.paragraphs.splice(pos + 1, 0, transitionResult.content);
-                                    // 更新 paragraphOutlines 索引
-                                    draft.paragraphOutlines.splice(pos + 1, 0, {
-                                        index: pos + 2,
-                                        content: '（过渡段）',
-                                        knowledgePoints: []
-                                    });
-                                }
-                            }
-                        }
-                        this._renderDraft();
-                    }
-                } else if (reviewResult.wordStatus === 'over') {
-                    // 字数超标：精简或删除段落
-                    var trimParagraphs = reviewResult.trimParagraphs || [];
-                    var deleteParagraphs = reviewResult.deleteParagraphs || [];
-
-                    // 先删除（按倒序避免索引偏移）
-                    if (deleteParagraphs.length > 0) {
-                        var sortedDeletes = deleteParagraphs.slice().sort(function(a, b) { return b - a; });
-                        for (var k = 0; k < sortedDeletes.length; k++) {
-                            var delIdx = sortedDeletes[k] - 1; // 转为 0-based
-                            if (delIdx >= 0 && delIdx < draft.paragraphs.length) {
-                                draft.paragraphs.splice(delIdx, 1);
-                                draft.paragraphOutlines.splice(delIdx, 1);
-                            }
-                        }
-                    }
-
-                    // 精简（改写指定段落）
-                    for (var m = 0; m < trimParagraphs.length; m++) {
-                        var trimItem = trimParagraphs[m];
-                        var trimIdx = (typeof trimItem === 'object' ? trimItem.index : trimItem) - 1;
-                        var direction = typeof trimItem === 'object' ? trimItem.direction : '精简内容';
-
-                        if (trimIdx >= 0 && trimIdx < draft.paragraphs.length) {
+                        if (expandIdx >= 0 && expandIdx < draft.paragraphs.length) {
                             var rewriteResult = await this.app.reviewer.rewriteParagraph(
-                                trimIdx + 1,
-                                draft.paragraphs[trimIdx],
-                                ['字数超标，需要精简'],
+                                expandIdx + 1,
+                                draft.paragraphs[expandIdx],
+                                ['字数不足，需要扩展'],
                                 [direction],
                                 ''
                             );
                             if (rewriteResult.content) {
-                                draft.paragraphs[trimIdx] = rewriteResult.content;
+                                draft.paragraphs[expandIdx] = rewriteResult.content;
                             }
                         }
                     }
+                    this._renderDraft();
+                } else if (reviewResult.wordStatus === 'over') {
+                    // 字数超标：自然压缩目标段落
+                    var compressParagraphs = reviewResult.compressParagraphs || [];
+                    for (var k = 0; k < compressParagraphs.length; k++) {
+                        var compressItem = compressParagraphs[k];
+                        var compressIdx = (typeof compressItem === 'object' ? compressItem.index : compressItem) - 1;
+                        var direction = typeof compressItem === 'object' ? compressItem.direction : '精简文字';
 
+                        if (compressIdx >= 0 && compressIdx < draft.paragraphs.length) {
+                            var rewriteResult2 = await this.app.reviewer.rewriteParagraph(
+                                compressIdx + 1,
+                                draft.paragraphs[compressIdx],
+                                ['字数超标，需要精简'],
+                                [direction],
+                                ''
+                            );
+                            if (rewriteResult2.content) {
+                                draft.paragraphs[compressIdx] = rewriteResult2.content;
+                            }
+                        }
+                    }
                     this._renderDraft();
                 }
 
@@ -609,7 +648,7 @@
             this._renderProgress(5, '字数审核达到重试上限，继续后续步骤');
         }
 
-        // ==== 步骤 6: 段落级自动审核 ====
+        // ==== 步骤 6: 段落级自动审核（增强文学质量维度） ====
         async _step6_contentReview(startFromIndex, startAttempt) {
             var state = this.app.state;
             var draft = state.currentDraft;
@@ -618,26 +657,21 @@
 
             this.app.setPhase(PHASE.CONTENT_REVIEW);
 
-            // 初始化审核结果
             if (!draft.reviewResults) {
                 draft.reviewResults = [];
             }
 
-            // 确定起始段落索引
             var startIdx = (startFromIndex !== undefined && startFromIndex > 0) ? startFromIndex : 0;
 
             for (var i = startIdx; i < paragraphs.length; i++) {
-                // 中断检查
                 this._checkStop(6, i, 0);
 
                 var paragraphContent = paragraphs[i];
                 if (!paragraphContent || !paragraphContent.trim()) continue;
 
-                // 获取上下文
                 var prevContext = i > 0 ? paragraphs[i - 1] : '';
                 var nextContext = i < paragraphs.length - 1 ? paragraphs[i + 1] : '';
 
-                // 初始化该段落的审核结果
                 var reviewResult = draft.reviewResults[i] || {
                     index: i + 1,
                     passed: false,
@@ -646,7 +680,6 @@
                     attempts: 0
                 };
 
-                // 确定起始审核轮次
                 var startRound = (i === startIdx && startAttempt !== undefined && startAttempt > 0) ? startAttempt : 0;
 
                 for (var round = startRound; round < maxRounds; round++) {
@@ -654,7 +687,6 @@
 
                     this._renderProgress(6, '审核第 ' + (i + 1) + '/' + paragraphs.length + ' 段，第 ' + (round + 1) + '/' + maxRounds + ' 轮');
 
-                    // 调用审核
                     var result = await this.app.reviewer.reviewParagraph(
                         i + 1, paragraphContent, prevContext, nextContext
                     );
@@ -668,7 +700,6 @@
                         break;
                     }
 
-                    // 未通过，改写
                     this._renderProgress(6, '第 ' + (i + 1) + ' 段未通过审核，正在改写...');
 
                     var rewriteResult = await this.app.reviewer.rewriteParagraph(
@@ -687,24 +718,122 @@
                     await this.app.saveState();
                 }
 
-                // 保存审核结果
                 draft.reviewResults[i] = reviewResult;
 
-                // 实时更新草稿
                 this._renderDraft();
                 await this.app.saveState();
             }
 
-            // 统计审核结果
             var passedCount = draft.reviewResults.filter(function(r) { return r && r.passed; }).length;
             var totalCount = draft.reviewResults.filter(function(r) { return r; }).length;
             this._renderProgress(6, '自动审核完成: ' + passedCount + '/' + totalCount + ' 段通过');
         }
 
+        // ==== 步骤 7: 整章全局审读（新增） ====
+        async _step7_chapterReview(startAttempt) {
+            var state = this.app.state;
+            var draft = state.currentDraft;
+            var maxRounds = 2;
+
+            this.app.setPhase(PHASE.CHAPTER_REVIEW);
+
+            if (!draft.chapterReviewAttempts) {
+                draft.chapterReviewAttempts = 0;
+            }
+
+            var startRound = (startAttempt !== undefined && startAttempt > 0) ? startAttempt : 0;
+
+            for (var round = startRound; round < maxRounds; round++) {
+                this._checkStop(7, 0, round);
+
+                this._renderProgress(7, '整章全局审读 第 ' + (round + 1) + '/' + maxRounds + ' 轮...');
+
+                var chapterContent = draft.paragraphs.join('\n\n');
+                var reviewResult = await this.app.reviewer.reviewChapter(
+                    chapterContent,
+                    draft.chapterOutline,
+                    state.criteria || '',
+                    state.outline || ''
+                );
+
+                draft.chapterReviewResult = reviewResult;
+                draft.chapterReviewAttempts = round + 1;
+
+                if (reviewResult.passed) {
+                    this._renderProgress(7, '整章审读通过');
+                    return;
+                }
+
+                // 根据审读建议修改指定段落
+                var reviseParagraphs = reviewResult.reviseParagraphs || [];
+                if (reviseParagraphs.length === 0) {
+                    this._renderProgress(7, '审读未通过但无具体修改建议，继续后续步骤');
+                    return;
+                }
+
+                for (var i = 0; i < reviseParagraphs.length; i++) {
+                    var item = reviseParagraphs[i];
+                    var idx = (typeof item === 'object' ? item.index : item) - 1;
+                    var direction = typeof item === 'object' ? item.direction : '根据审读建议改进';
+
+                    if (idx >= 0 && idx < draft.paragraphs.length) {
+                        this._renderProgress(7, '根据审读建议修改第 ' + (idx + 1) + ' 段...');
+
+                        var rewriteResult = await this.app.reviewer.rewriteParagraph(
+                            idx + 1,
+                            draft.paragraphs[idx],
+                            reviewResult.issues || [],
+                            [(direction || '根据审读建议改进')],
+                            ''
+                        );
+                        if (rewriteResult.content) {
+                            draft.paragraphs[idx] = rewriteResult.content;
+                        }
+                    }
+                }
+
+                this._renderDraft();
+                await this.app.saveState();
+            }
+
+            this._renderProgress(7, '整章审读达到重试上限，继续后续步骤');
+        }
+
+        // ==== 步骤 8: 最终润色（新增：句子级雕琢） ====
+        async _step8_finalPolish() {
+            this._checkStop(8);
+            var state = this.app.state;
+            var draft = state.currentDraft;
+
+            this.app.setPhase(PHASE.FINAL_POLISH);
+            this._renderProgress(8, '正在进行最终润色...');
+
+            var chapterContent = draft.paragraphs.join('\n\n');
+
+            var result = await this.app.reviewer.finalPolish(
+                chapterContent,
+                draft.chapterOutline,
+                state.criteria || ''
+            );
+
+            var polishedContent = result.content;
+            if (polishedContent) {
+                var polishedParagraphs = polishedContent.split(/\n\n+/);
+                if (polishedParagraphs.length > 0) {
+                    draft.paragraphs = polishedParagraphs;
+                }
+            }
+
+            draft.finalPolishApplied = true;
+
+            this._renderDraft();
+            this._renderProgress(8, '最终润色完成');
+        }
+
         // ==== 检查是否请求中断 ====
-        _checkStop(step, paragraphIndex, attempt) {
+        _checkStop(step, paragraphIndex, attempt, subStep) {
             if (this.app.pendingStop || this.pendingStop) {
-                throw new InterruptError(step || 0, paragraphIndex || 0, attempt || 0);
+                throw new InterruptError(step || 0, paragraphIndex || 0, attempt || 0, subStep || '');
             }
         }
 
@@ -715,22 +844,30 @@
 
             var el = this.app.elements;
             var paragraphs = draft.paragraphs || [];
+            var draftParagraphs = draft.draftParagraphs || [];
             var outlines = draft.paragraphOutlines || [];
 
             // 显示草稿面板
             el.draftPanel.style.display = 'flex';
             el.draftMeta.textContent = paragraphs.length + ' / ' + (outlines.length || '—');
 
-            // 渲染段落
+            // 渲染段落（优先显示精炼后的段落，否则显示草稿）
             var html = '';
-            for (var i = 0; i < paragraphs.length; i++) {
-                var p = paragraphs[i] || '';
+            for (var i = 0; i < (paragraphs.length || draftParagraphs.length || outlines.length); i++) {
+                var p = paragraphs[i] || draftParagraphs[i] || '';
                 var outline = outlines[i] || {};
                 var review = (draft.reviewResults && draft.reviewResults[i]) || null;
 
                 var statusClass = '';
+                var statusLabel = '';
                 if (review) {
                     statusClass = review.passed ? ' passed' : ' failed';
+                } else if (paragraphs[i] && !draftParagraphs[i]) {
+                    // 有精炼段落但无草稿（可能是旧版本状态）
+                } else if (paragraphs[i]) {
+                    statusLabel = '<span class="draft-paragraph-status draft-status-passed"><i class="fas fa-check-circle"></i> 已精炼</span>';
+                } else if (draftParagraphs[i]) {
+                    statusLabel = '<span class="draft-paragraph-status" style="color:var(--warning);"><i class="fas fa-pencil-alt"></i> 草稿</span>';
                 }
 
                 html += '<div class="draft-paragraph' + statusClass + '">';
@@ -739,10 +876,15 @@
                 if (outline.content) {
                     html += '<span class="draft-paragraph-outline">' + this._escapeHtml(outline.content.substring(0, 50)) + '</span>';
                 }
+                if (outline.dramaticBeat) {
+                    html += '<span class="draft-paragraph-outline" style="color:var(--accent);">[' + this._escapeHtml(outline.dramaticBeat) + ']</span>';
+                }
                 if (review && !review.passed) {
                     html += '<span class="draft-paragraph-status draft-status-failed"><i class="fas fa-times-circle"></i> 未通过</span>';
                 } else if (review && review.passed) {
                     html += '<span class="draft-paragraph-status draft-status-passed"><i class="fas fa-check-circle"></i> 通过</span>';
+                } else if (statusLabel) {
+                    html += statusLabel;
                 }
                 html += '</div>';
                 html += '<div class="draft-paragraph-content">' + this._escapeHtml(p) + '</div>';
@@ -759,10 +901,12 @@
                 0: '就绪',
                 1: '步骤1: 章节大纲确认',
                 2: '步骤2: 段落大纲规划',
-                3: '步骤3: 逐段生成',
+                3: '步骤3: 逐段生成+精炼',
                 4: '步骤4: 格式校验',
                 5: '步骤5: 字数审核',
-                6: '步骤6: 段落级自动审核',
+                6: '步骤6: 段落级内容审核',
+                7: '步骤7: 整章全局审读',
+                8: '步骤8: 最终润色',
                 10: '步骤10: 重新生成摘要'
             };
 
@@ -799,7 +943,6 @@
 
             // 1. 清理 Markdown 代码块围栏 ```...```
             cleaned = cleaned.replace(/```[\s\S]*?```/g, function(match) {
-                // 提取代码块中的实际内容（去掉围栏行）
                 var inner = match.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
                 return inner.trim();
             });
@@ -825,17 +968,15 @@
             return cleaned.trim();
         }
 
-        // ==== 解析段落大纲 JSON ====
+        // ==== 解析段落大纲 JSON（含新字段：dramaticBeat, emotionalTarget, pacing） ====
         _parseParagraphOutlines(text) {
             if (!text) return [];
 
-            // 尝试提取 JSON
             var jsonStr = null;
             var codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
             if (codeBlockMatch) {
                 jsonStr = codeBlockMatch[1].trim();
             } else {
-                // 尝试匹配方括号数组
                 var bracketMatch = text.match(/\[[\s\S]*\]/);
                 if (bracketMatch) {
                     jsonStr = bracketMatch[0];
@@ -848,11 +989,21 @@
                     if (Array.isArray(parsed)) {
                         return parsed.map(function(item, idx) {
                             if (typeof item === 'string') {
-                                return { index: idx + 1, content: item, knowledgePoints: [] };
+                                return {
+                                    index: idx + 1,
+                                    content: item,
+                                    dramaticBeat: '',
+                                    emotionalTarget: '',
+                                    pacing: '',
+                                    knowledgePoints: []
+                                };
                             }
                             return {
                                 index: item.index || idx + 1,
                                 content: item.content || item.outline || item.text || '',
+                                dramaticBeat: item.dramaticBeat || '',
+                                emotionalTarget: item.emotionalTarget || '',
+                                pacing: item.pacing || '',
                                 knowledgePoints: Array.isArray(item.knowledgePoints) ? item.knowledgePoints : []
                             };
                         }).filter(function(po) { return po.content.trim(); });
@@ -865,9 +1016,15 @@
             // 按行分割降级处理
             var lines = text.split('\n').filter(function(l) { return l.trim().length > 5; });
             return lines.map(function(line, idx) {
-                // 移除序号前缀
                 var cleaned = line.replace(/^\s*\d+[\.、\)）]\s*/, '').trim();
-                return { index: idx + 1, content: cleaned, knowledgePoints: [] };
+                return {
+                    index: idx + 1,
+                    content: cleaned,
+                    dramaticBeat: '',
+                    emotionalTarget: '',
+                    pacing: '',
+                    knowledgePoints: []
+                };
             }).filter(function(po) { return po.content.length > 2; });
         }
 

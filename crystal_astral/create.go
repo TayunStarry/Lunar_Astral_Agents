@@ -1,18 +1,18 @@
 package main
 
 import (
-	"browser"
-	"config"
+	"LunarSubsystem/browser_client"
+	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
+	image "LunarSubsystem/image_processor/server"
 	"context"
 	"fmt"
-	image_server "image/server"
 	"io"
 	"io/fs"
-	"logger"
 	"net/http"
 	"os"
 	"os/signal"
-	"storage/module"
 	"syscall"
 	"time"
 )
@@ -94,7 +94,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	// 模型配置从 lunar_config.json 的 agent 配置组读取
 	initMemoryDatabase()
 	// 启动图像生成任务处理器
-	image_server.StartTaskProcessor()
+	image.StartTaskProcessor()
 	httpMux := http.NewServeMux()
 
 	// 初始化工作室 WebSocket 集线器（哑中继，不解析消息内容）

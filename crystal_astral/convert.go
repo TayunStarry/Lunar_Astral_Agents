@@ -1,12 +1,12 @@
 package main
 
 import (
+	"LunarSubsystem/general_logger"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
-	"logger"
 	"net/http"
 	"os"
 	"path/filepath"

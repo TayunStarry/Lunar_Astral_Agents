@@ -1,11 +1,11 @@
 package server
 
 import (
-	"browser"
-	"config"
+	"LunarSubsystem/browser_client"
+	"LunarSubsystem/general_config"
 	"context"
-	image "image/server"
-	"logger"
+	image "LunarSubsystem/image_processor/server"
+	"LunarSubsystem/general_logger"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
 	"lunar_astral/hierarchy"

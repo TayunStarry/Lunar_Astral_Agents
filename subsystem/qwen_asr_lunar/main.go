@@ -1,13 +1,13 @@
 package main
 
 import (
-	"browser"
-	"config"
+	"LunarSubsystem/browser_client"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"context"
 	"embed"
 	"fmt"
 	"io/fs"
-	"logger"
 	"net/http"
 	"os"
 	"os/signal"

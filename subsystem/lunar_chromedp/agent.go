@@ -1,13 +1,12 @@
 package lunar_chromedp
 
 import (
-	"config"
+	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"fmt"
-	"logger"
 	"strings"
 	"time"
-
-	"storage/module"
 )
 
 // =============================================================================
@@ -41,31 +40,31 @@ func InitSearch(cfg SearchConfig) error {
 	configMutex.Unlock()
 
 	// 验证多模态模型连通性（模型配置从 config 模块读取）
-		if aiCall != nil {
-			testPrompt := "请回复 'OK'"
-			resp, err := aiCall("你是一个测试助手。", testPrompt, nil)
-			if err != nil {
-				return fmt.Errorf("多模态模型连通性测试失败 [%s @ %s]: %w",
-					*config.SearchMultimodalModel, *config.SearchMultimodalURL, err)
-			}
-			if !strings.Contains(strings.ToUpper(resp), "OK") {
-				return fmt.Errorf("多模态模型响应异常，未返回预期内容")
-			}
-			fmt.Printf("[%s] 多模态模型连接验证通过: %s\n", ModuleName, *config.SearchMultimodalModel)
+	if aiCall != nil {
+		testPrompt := "请回复 'OK'"
+		resp, err := aiCall("你是一个测试助手。", testPrompt, nil)
+		if err != nil {
+			return fmt.Errorf("多模态模型连通性测试失败 [%s @ %s]: %w",
+				*config.SearchMultimodalModel, *config.SearchMultimodalURL, err)
 		}
+		if !strings.Contains(strings.ToUpper(resp), "OK") {
+			return fmt.Errorf("多模态模型响应异常，未返回预期内容")
+		}
+		fmt.Printf("[%s] 多模态模型连接验证通过: %s\n", ModuleName, *config.SearchMultimodalModel)
+	}
 
-		// 验证嵌入模型连通性 + 初始化 search_memory 集合
-		if memoryInitCollection != nil {
-			// 初始化 MemoryDB 全局实例（仅首次调用生效，后续调用幂等）
-			if cfg.MemoryDBDir != "" {
-				module.InitMemoryDB(cfg.MemoryDBDir)
-			}
-			if err := memoryInitCollection(); err != nil {
-				return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
-					*config.SearchEmbeddingModel, *config.SearchEmbeddingURL, err)
-			}
-			fmt.Printf("[%s] 嵌入模型连接验证通过: %s\n", ModuleName, *config.SearchEmbeddingModel)
+	// 验证嵌入模型连通性 + 初始化 search_memory 集合
+	if memoryInitCollection != nil {
+		// 初始化 MemoryDB 全局实例（仅首次调用生效，后续调用幂等）
+		if cfg.MemoryDBDir != "" {
+			module.InitMemoryDB(cfg.MemoryDBDir)
 		}
+		if err := memoryInitCollection(); err != nil {
+			return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
+				*config.SearchEmbeddingModel, *config.SearchEmbeddingURL, err)
+		}
+		fmt.Printf("[%s] 嵌入模型连接验证通过: %s\n", ModuleName, *config.SearchEmbeddingModel)
+	}
 
 	// 启动浏览器
 	if err := LaunchBrowser(); err != nil {

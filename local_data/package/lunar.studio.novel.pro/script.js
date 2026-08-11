@@ -304,7 +304,7 @@
                     this.state.config = Object.assign(createDefaultState().config, data.config || {});
                     this.state.config.ai = Object.assign(createDefaultState().config.ai, (data.config && data.config.ai) || {});
                     // 中间阶段重置为 IDLE
-                    var midPhases = [PHASE.BUILDING, PHASE.GENERATING_PARAGRAPHS, PHASE.WORD_REVIEW, PHASE.CONTENT_REVIEW, PHASE.HUMAN_REVIEW, PHASE.GENERATING_SUMMARY];
+                    var midPhases = [PHASE.BUILDING, PHASE.GENERATING_PARAGRAPHS, PHASE.POLISHING_PARAGRAPHS, PHASE.WORD_REVIEW, PHASE.CONTENT_REVIEW, PHASE.CHAPTER_REVIEW, PHASE.FINAL_POLISH, PHASE.HUMAN_REVIEW, PHASE.GENERATING_SUMMARY];
                     if (midPhases.includes(this.state.phase) || this.state.phase === PHASE.INTERRUPTED) {
                         this.state.phase = PHASE.IDLE;
                         this.showToast('已恢复上次工作状态');
@@ -361,9 +361,12 @@
             var phaseNames = {};
             phaseNames[PHASE.IDLE] = '就绪';
             phaseNames[PHASE.BUILDING] = '构建中...';
-            phaseNames[PHASE.GENERATING_PARAGRAPHS] = '生成段落中...';
+            phaseNames[PHASE.GENERATING_PARAGRAPHS] = '生成草稿中...';
+            phaseNames[PHASE.POLISHING_PARAGRAPHS] = '段落精炼中...';
             phaseNames[PHASE.WORD_REVIEW] = '字数审核中...';
             phaseNames[PHASE.CONTENT_REVIEW] = '内容审核中...';
+            phaseNames[PHASE.CHAPTER_REVIEW] = '整章审读中...';
+            phaseNames[PHASE.FINAL_POLISH] = '最终润色中...';
             phaseNames[PHASE.HUMAN_REVIEW] = '人工审核中...';
             phaseNames[PHASE.GENERATING_SUMMARY] = '生成摘要中...';
             phaseNames[PHASE.INTERRUPTED] = '已中断';

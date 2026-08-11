@@ -268,19 +268,19 @@ func parseBingResults(pageHTML string, maxResults int) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-				results = append(results, result)
-				if len(results) >= maxResults {
-					break
-				}
+			results = append(results, result)
+			if len(results) >= maxResults {
+				break
 			}
 		}
-
-		return results
 	}
 
-	// parseBaiduResults 解析百度搜索结果页 HTML
-	// 百度结果结构：<div class="result c-container"> → <h3 class="t"><a>标题</a></h3> + <span class="content-right_*">摘要</span>
-	func parseBaiduResults(pageHTML string, maxResults int) []SearchResult {
+	return results
+}
+
+// parseBaiduResults 解析百度搜索结果页 HTML
+// 百度结果结构：<div class="result c-container"> → <h3 class="t"><a>标题</a></h3> + <span class="content-right_*">摘要</span>
+func parseBaiduResults(pageHTML string, maxResults int) []SearchResult {
 	doc, err := html.Parse(strings.NewReader(pageHTML))
 	if err != nil {
 		return nil
@@ -324,19 +324,19 @@ func parseBingResults(pageHTML string, maxResults int) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-				results = append(results, result)
-				if len(results) >= maxResults {
-					break
-				}
+			results = append(results, result)
+			if len(results) >= maxResults {
+				break
 			}
 		}
-
-		return results
 	}
 
-	// parseSogouResults 解析搜狗搜索结果页 HTML
-	// 搜狗结果结构：<div class="rb"> 或 <div class="vrwrap"> → <h3 class="vrTitle"><a>标题</a></h3> + <p>摘要</p>
-	func parseSogouResults(pageHTML string, maxResults int) []SearchResult {
+	return results
+}
+
+// parseSogouResults 解析搜狗搜索结果页 HTML
+// 搜狗结果结构：<div class="rb"> 或 <div class="vrwrap"> → <h3 class="vrTitle"><a>标题</a></h3> + <p>摘要</p>
+func parseSogouResults(pageHTML string, maxResults int) []SearchResult {
 	doc, err := html.Parse(strings.NewReader(pageHTML))
 	if err != nil {
 		return nil
@@ -383,19 +383,19 @@ func parseBingResults(pageHTML string, maxResults int) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-				results = append(results, result)
-				if len(results) >= maxResults {
-					break
-				}
+			results = append(results, result)
+			if len(results) >= maxResults {
+				break
 			}
 		}
-
-		return results
 	}
 
-	// =============================================================================
-	// 网页内容提取
-	// =============================================================================
+	return results
+}
+
+// =============================================================================
+// 网页内容提取
+// =============================================================================
 
 // ExtractPageContent 导航到指定 URL 并提取页面内容
 // 先提取 DOM 文本，根据文本量判定为 text 或 visual 类型

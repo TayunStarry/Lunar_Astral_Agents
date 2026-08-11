@@ -1,8 +1,8 @@
 package lunar_chromedp
 
 import (
+	"LunarSubsystem/general_config"
 	"bytes"
-	"config"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -74,25 +74,25 @@ func callAI(systemPrompt string, userPrompt string, images [][]byte) (string, er
 // callEmbedding 调用嵌入 API，返回文本的嵌入向量
 // 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
 func callEmbedding(text string) ([]float32, error) {
-		body := embeddingRequest{
-			Model: *config.SearchEmbeddingModel,
-			Input: text,
-		}
+	body := embeddingRequest{
+		Model: *config.SearchEmbeddingModel,
+		Input: text,
+	}
 
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
-		}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
+	}
 
-		baseURL := normalizeBaseURL(*config.SearchEmbeddingURL)
-		req, err := http.NewRequest("POST", baseURL+"/embeddings", bytes.NewReader(jsonBody))
-		if err != nil {
-			return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if *config.SearchEmbeddingKey != "" {
-			req.Header.Set("Authorization", "Bearer "+*config.SearchEmbeddingKey)
-		}
+	baseURL := normalizeBaseURL(*config.SearchEmbeddingURL)
+	req, err := http.NewRequest("POST", baseURL+"/embeddings", bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if *config.SearchEmbeddingKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*config.SearchEmbeddingKey)
+	}
 
 	resp, err := aiHTTPClient.Do(req)
 	if err != nil {

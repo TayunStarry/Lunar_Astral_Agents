@@ -3,16 +3,16 @@ module lunar_astral
 go 1.26
 
 require (
-	browser v0.0.0
-	config v0.0.0
+	LunarSubsystem/browser_client v0.0.0
+	LunarSubsystem/file_manager v0.0.0
+	LunarSubsystem/general_logger v0.0.0
+	LunarSubsystem/image_processor v0.0.0
+	LunarSubsystem/general_config v0.0.0
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
-	image v0.0.0
-	logger v0.0.0
-	lunar_chromedp v0.0.0
+	LunarSubsystem/lunar_chromedp v0.0.0
 	qwen3_tts_lunar v0.0.0
-	storage v0.0.0
 )
 
 require (
@@ -47,16 +47,16 @@ require (
 	golang.org/x/text v0.25.0 // indirect
 )
 
-replace config => ../subsystem/config
+replace LunarSubsystem/general_config => ../subsystem/general_config
 
-replace storage => ../subsystem/storage
+replace LunarSubsystem/file_manager => ../subsystem/file_manager
 
-replace browser => ../subsystem/browser
+replace LunarSubsystem/browser_client => ../subsystem/browser_client
 
 replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
 
-replace logger => ../subsystem/logger
+replace LunarSubsystem/general_logger => ../subsystem/general_logger
 
-replace image => ../subsystem/image
+replace LunarSubsystem/image_processor => ../subsystem/image_processor
 
-replace lunar_chromedp => ../subsystem/lunar_chromedp
+replace LunarSubsystem/lunar_chromedp => ../subsystem/lunar_chromedp

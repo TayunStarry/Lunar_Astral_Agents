@@ -1,8 +1,8 @@
 package adapters
 
 import (
+	"LunarSubsystem/general_logger"
 	"encoding/json"
-	"logger"
 
 	"github.com/dop251/goja"
 )
@@ -166,9 +166,9 @@ func (class *Runtime) pushAgentEvent(eventType string, data string) goja.Value {
 	message := PostMessage{
 		Role: "system",
 		Content: map[string]string{
-			"type":    "agent_event",
-			"event":   eventType,
-			"data":    data,
+			"type":  "agent_event",
+			"event": eventType,
+			"data":  data,
 		},
 	}
 	UnreadContext = append(UnreadContext, message)

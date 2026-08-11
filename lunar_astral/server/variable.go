@@ -1,16 +1,16 @@
 package server
 
 import (
-	"config"
+	storage "LunarSubsystem/file_manager/server"
+	"LunarSubsystem/general_config"
+	image "LunarSubsystem/image_processor/server"
 	"fmt"
-	image "image/server"
 	"lunar_astral/model"
 	"lunar_astral/model/llama"
 	"lunar_astral/server/handlers"
 	lunar_ws "lunar_astral/websocket"
 	"net/http"
 	tts "qwen3_tts_lunar/module"
-	storage "storage/server"
 	"sync"
 
 	"github.com/gorilla/websocket"

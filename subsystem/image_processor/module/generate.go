@@ -1,0 +1,312 @@
+package module
+
+import (
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// StartTaskProcessor 启动任务处理协程
+func StartTaskProcessor() {
+	go func() {
+		for task := range TaskQueue {
+			ProcessTask(task)
+		}
+	}()
+}
+
+// CreateGenerateTask 创建生成任务
+func CreateGenerateTask(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (*GenerateTask, int) {
+	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
+	task := &GenerateTask{
+		ID:                   taskID,
+		Prompt:               prompt,
+		NegativePrompt:       negativePrompt,
+		BatchSize:            batchSize,
+		Width:                width,
+		Height:               height,
+		Strength:             strength,
+		Steps:                steps,
+		Seed:                 seed,
+		CfgScale:             cfgScale,
+		InitImg:              initImg,
+		AllowSuperResolution: allowSuperResolution,
+		CreatedAt:            time.Now(),
+		Status:               "queued",
+	}
+
+	// 存储任务状态
+	TaskStatusMu.Lock()
+	TaskStatus[taskID] = task
+	TaskStatusMu.Unlock()
+
+	// 将任务加入队列
+	select {
+	case TaskQueue <- *task:
+		return task, len(TaskQueue)
+	default:
+		return nil, -1
+	}
+}
+
+// ProcessTask 处理单个任务
+func ProcessTask(task GenerateTask) {
+	taskID := task.ID
+
+	// 更新任务状态为运行中
+	TaskStatusMu.Lock()
+	task.Status = "running"
+	TaskStatus[taskID] = &task
+	TaskStatusMu.Unlock()
+	logger.Info("LunarCore", "开始处理任务: %s", taskID)
+
+	// 构建输出文件名
+	timestamp := time.Now().Format("20060102_150405")
+	outputFilename := fmt.Sprintf("%s.png", timestamp)
+	outputPath := filepath.Join(*config.LocalDir, "images/generated", outputFilename)
+
+	// 确保输出目录存在
+	os.MkdirAll(filepath.Join(*config.LocalDir, "images/generated"), 0755)
+
+	// 构建命令参数
+	args := []string{
+		"--diffusion-model", *config.DiffusionModel,
+		"--vae", *config.VariationalModel,
+		"--llm", *config.PromptAnalysisModel,
+		"--diffusion-fa",
+		"--vae-tiling",
+		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
+		"--steps", fmt.Sprintf("%d", task.Steps),
+		"-H", fmt.Sprintf("%d", task.Height),
+		"-W", fmt.Sprintf("%d", task.Width),
+		"-o", outputPath,
+		"-p", task.Prompt,
+	}
+
+	// 添加负面提示词
+	if task.NegativePrompt != "" {
+		args = append(args, "-n", task.NegativePrompt)
+	}
+
+	// 图生图参数
+	if task.InitImg != "" && task.InitImg != "null" {
+		initImgPath := filepath.Join(*config.LocalDir, task.InitImg)
+		if _, err := os.Stat(initImgPath); err == nil {
+			args = append(args, "--init-img", initImgPath)
+			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
+		}
+	}
+
+	// 随机数种子
+	if task.Seed != 0 {
+		args = append(args, "--seed", fmt.Sprintf("%d", task.Seed))
+	}
+	// 批处理数量
+	if task.BatchSize > 1 {
+		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
+	}
+	// 超分参数
+	if task.AllowSuperResolution {
+		args = append(args, "--upscale-model", *config.RealESRGANModel)
+		args = append(args, "--hires-denoising-strength", "0.55")
+	}
+	// 多模态提示词模型
+	if *config.PromptMmprojModel != "" {
+		args = append(args, "--llm_vision", *config.PromptMmprojModel)
+	}
+
+	// 显示命令参数，正确分组
+	logger.Info("LunarCore", "执行命令参数:")
+	logger.Info("LunarCore", "  程序: %s", *config.VisualEngine)
+
+	// 正确分组显示参数
+	for i := 0; i < len(args); i++ {
+		current := args[i]
+
+		// 检查是否是带值的参数
+		isValueParam := false
+		value := ""
+
+		if strings.HasPrefix(current, "-") || strings.HasPrefix(current, "--") {
+			// 这是一个参数
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && !strings.HasPrefix(args[i+1], "--") {
+				// 下一个不是参数，是值
+				value = args[i+1]
+				i++ // 跳过值
+				isValueParam = true
+			}
+		}
+
+		if isValueParam {
+			logger.Info("LunarCore", "  参数: %s %s", current, value)
+		} else {
+			logger.Info("LunarCore", "  参数: %s", current)
+		}
+	}
+
+	// 执行命令
+	cmd := exec.Command(*config.VisualEngine, args...)
+
+	// 捕获标准输出和错误输出
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	if err := cmd.Start(); err != nil {
+		logger.Error("LunarCore", "任务[%s]执行失败: %v", taskID, err)
+		TaskStatusMu.Lock()
+		task.Status = "failed"
+		task.Error = err.Error()
+		TaskStatus[taskID] = &task
+		TaskStatusMu.Unlock()
+		return
+	}
+
+	// 创建一个更简单的输出处理器
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				output := string(buf[:n])
+				// 直接输出，让终端处理格式化
+				fmt.Print(output)
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				output := string(buf[:n])
+				// 直接输出，让终端处理格式化
+				fmt.Fprint(os.Stderr, output)
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	// 等待命令完成
+	err := cmd.Wait()
+
+	TaskStatusMu.Lock()
+	if err != nil {
+		logger.Error("LunarCore", "任务[%s]执行失败: %v", taskID, err)
+		task.Status = "failed"
+		task.Error = err.Error()
+	} else {
+		logger.Info("LunarCore", "任务[%s]已完成", taskID)
+		logger.Info("LunarCore", "生成结果: ./%s", outputPath)
+		task.Status = "completed"
+		task.ResultPath = outputPath
+	}
+	completedTask := &task
+	TaskStatus[taskID] = completedTask
+	TaskStatusMu.Unlock()
+
+	// 通知等待的客户端
+	NotifyWaitClients(taskID, completedTask)
+}
+
+// NotifyWaitClients 通知等待的客户端任务完成
+func NotifyWaitClients(taskID string, task *GenerateTask) {
+	WaitClientsMu.RLock()
+	ch, exists := WaitClients[taskID]
+	WaitClientsMu.RUnlock()
+
+	if exists {
+		ch <- task
+		close(ch)
+
+		WaitClientsMu.Lock()
+		delete(WaitClients, taskID)
+		WaitClientsMu.Unlock()
+	}
+}
+
+// GetTaskStatus 获取任务状态
+func GetTaskStatus(taskID string) (*GenerateTask, bool) {
+	TaskStatusMu.RLock()
+	defer TaskStatusMu.RUnlock()
+	task, exists := TaskStatus[taskID]
+	return task, exists
+}
+
+// RegisterWaitClient 注册等待客户端
+func RegisterWaitClient(taskID string) chan *GenerateTask {
+	ch := make(chan *GenerateTask, 1)
+	WaitClientsMu.Lock()
+	WaitClients[taskID] = ch
+	WaitClientsMu.Unlock()
+	return ch
+}
+
+// RemoveWaitClient 移除等待客户端
+func RemoveWaitClient(taskID string) {
+	WaitClientsMu.Lock()
+	delete(WaitClients, taskID)
+	WaitClientsMu.Unlock()
+}
+
+// GenerateImage 生成图片并等待完成，返回图片路径和base64编码
+func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (map[string]any, error) {
+	// 检查是否允许使用扩散生成
+	if !*config.AllowDiffusion {
+		return nil, fmt.Errorf("未启用[扩散生成]功能")
+	}
+
+	// 验证参数
+	if prompt == "" {
+		return nil, fmt.Errorf("提示词不能为空")
+	}
+
+	// 创建任务
+	task, _ := CreateGenerateTask(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, allowSuperResolution)
+
+	if task == nil {
+		return nil, fmt.Errorf("任务队列已满")
+	}
+
+	// 注册等待客户端
+	ch := RegisterWaitClient(task.ID)
+
+	// 等待任务完成
+	completedTask := <-ch
+
+	// 检查任务状态
+	if completedTask.Status == "failed" {
+		return nil, fmt.Errorf("任务执行失败: %s", completedTask.Error)
+	}
+
+	// 读取生成的图片文件
+	imageData, err := os.ReadFile(completedTask.ResultPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取图片文件失败: %v", err)
+	}
+
+	// 生成base64编码
+	base64Data := base64.StdEncoding.EncodeToString(imageData)
+
+	// 构造返回结果
+	result := map[string]any{
+		"path":   completedTask.ResultPath,
+		"base64": base64Data,
+		"width":  width,
+		"height": height,
+		"seed":   seed,
+	}
+
+	return result, nil
+}

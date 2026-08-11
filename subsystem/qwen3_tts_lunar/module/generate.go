@@ -9,11 +9,11 @@ package module
 import "C"
 
 import (
+	"LunarSubsystem/general_logger"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"logger"
 	"net/http"
 	"os"
 	"path/filepath"

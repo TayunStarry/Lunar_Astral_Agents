@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"config"
+	"LunarSubsystem/general_config"
 )
 
 func main() {

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"logger"
+	"LunarSubsystem/general_logger"
 )
 
 // LoadBridgingConfig 从配置文件加载桥接器配置

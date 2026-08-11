@@ -1,9 +1,9 @@
 package adapters
 
 import (
+	"LunarSubsystem/general_logger"
 	"context"
 	"fmt"
-	"logger"
 	"lunar_astral/hierarchy"
 	"lunar_astral/learner"
 

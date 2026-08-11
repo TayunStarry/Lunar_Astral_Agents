@@ -1,9 +1,9 @@
 package adapters
 
 import (
+	"LunarSubsystem/image_processor/module"
 	"encoding/base64"
 	"fmt"
-	image "image/module"
 	"strings"
 
 	"github.com/dop251/goja"
@@ -21,7 +21,7 @@ func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("inputFile必须是字符串")})
 	}
 
-	keyFrames, err := image.VideoKeyframeExtraction(inputFile)
+	keyFrames, err := module.VideoKeyframeExtraction(inputFile)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}
@@ -84,7 +84,7 @@ func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片缩放函数，返回图片数据数组
-	results, err := image.ResizeImage(bytesData)
+	results, err := module.ResizeImage(bytesData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}
@@ -155,7 +155,7 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 	}
 
 	// 调用图片生成函数
-	result, err := image.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, false)
+	result, err := module.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, false)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

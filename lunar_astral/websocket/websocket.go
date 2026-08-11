@@ -2,7 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
-	"logger"
+	"LunarSubsystem/general_logger"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
 	"net/http"

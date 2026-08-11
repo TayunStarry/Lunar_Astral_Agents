@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"lunar_chromedp"
+	"LunarSubsystem/lunar_chromedp"
 )
 
 func main() {

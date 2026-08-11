@@ -1,11 +1,11 @@
 package adapters
 
 import (
-	"config"
+	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"context"
 	"fmt"
-	"logger"
-	"storage/module"
 
 	"github.com/dop251/goja"
 )

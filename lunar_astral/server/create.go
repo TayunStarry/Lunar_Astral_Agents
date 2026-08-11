@@ -1,10 +1,10 @@
 package server
 
 import (
-	"browser"
-	"config"
+	"LunarSubsystem/browser_client"
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"fmt"
-	"logger"
 	"net"
 	"net/http"
 )

@@ -1,9 +1,9 @@
 package adapters
 
 import (
+	"LunarSubsystem/file_manager/module"
 	"encoding/json"
 	"fmt"
-	storage "storage/module"
 
 	"github.com/dop251/goja"
 )
@@ -21,7 +21,7 @@ func (class *Runtime) knowledge(call goja.FunctionCall) goja.Value {
 	}
 
 	// 构建知识库请求
-	dbRequest := storage.KnowledgeRequest{}
+	dbRequest := module.KnowledgeRequest{}
 
 	if transaction, ok := request["transaction"].(bool); ok {
 		dbRequest.Transaction = transaction
@@ -38,7 +38,7 @@ func (class *Runtime) knowledge(call goja.FunctionCall) goja.Value {
 	}
 
 	// 执行知识库操作
-	result := storage.ExecuteKnowledgeRequest(dbRequest)
+	result := module.ExecuteKnowledgeRequest(dbRequest)
 
 	jsonData, _ := json.Marshal(result)
 	var response map[string]any

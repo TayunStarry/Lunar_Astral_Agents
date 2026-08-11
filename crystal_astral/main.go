@@ -1,8 +1,8 @@
 package main
 
 import (
+	"LunarSubsystem/general_logger"
 	"flag"
-	"logger"
 	"math/rand"
 )
 

@@ -1,12 +1,12 @@
 package llama
 
 import (
+	"LunarSubsystem/general_config"
+	"LunarSubsystem/general_logger"
 	"bufio"
-	"config"
 	"context"
 	"fmt"
 	"io"
-	"logger"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -177,7 +177,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		proxyToLocal(w, r)
 		return
 	}
-	if *config.CloudModelUrl != "" {
+	if *config.AgentMultimodalURL != "" {
 		ProxyToCloud(w, r)
 		return
 	}
@@ -211,7 +211,7 @@ func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 
 // ProxyToCloud 将请求反向代理到云服务器
 func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
-	target, err := url.Parse(*config.CloudModelUrl)
+	target, err := url.Parse(*config.AgentMultimodalURL)
 	if err != nil {
 		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
 		return
@@ -227,10 +227,10 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		req.URL.Host = target.Host
 		req.Host = target.Host
 		// 注入云模型密钥认证头
-		if *config.CloudModelKey != "" {
-			req.Header.Set("Authorization", "Bearer "+*config.CloudModelKey)
+		if *config.AgentMultimodalKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.AgentMultimodalKey)
 		}
 	}
-	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *config.CloudModelUrl, r.URL.Path)
+	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *config.AgentMultimodalURL, r.URL.Path)
 	proxy.ServeHTTP(w, r)
 }
