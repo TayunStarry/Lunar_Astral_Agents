@@ -2,6 +2,7 @@ package lunar_chromedp
 
 import (
 	"bytes"
+	"config"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -34,8 +35,14 @@ func init() {
 // =============================================================================
 
 // callAI 通用 AI 调用：发送 system + user prompt（可选图片），返回文本响应
+// 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
 func callAI(systemPrompt string, userPrompt string, images [][]byte) (string, error) {
-	config := getAIConfig()
+	maxTokens := MaxContextTokensDefault
+	configMutex.RLock()
+	if activeConfig != nil && activeConfig.MaxContextTokens > 0 {
+		maxTokens = activeConfig.MaxContextTokens
+	}
+	configMutex.RUnlock()
 
 	messages := []chatMessage{
 		{Role: "system", Content: systemPrompt},
@@ -61,32 +68,31 @@ func callAI(systemPrompt string, userPrompt string, images [][]byte) (string, er
 		messages = append(messages, chatMessage{Role: "user", Content: userPrompt})
 	}
 
-	return callChatAPI(config.MultimodalURL, config.MultimodalName, config.MultimodalKey, messages, config.MaxContextTokens)
+	return callChatAPI(*config.SearchMultimodalURL, *config.SearchMultimodalModel, *config.SearchMultimodalKey, messages, maxTokens)
 }
 
 // callEmbedding 调用嵌入 API，返回文本的嵌入向量
+// 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
 func callEmbedding(text string) ([]float32, error) {
-	config := getAIConfig()
+		body := embeddingRequest{
+			Model: *config.SearchEmbeddingModel,
+			Input: text,
+		}
 
-	body := embeddingRequest{
-		Model: config.EmbeddingName,
-		Input: text,
-	}
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
+		}
 
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
-	}
-
-	baseURL := normalizeBaseURL(config.EmbeddingURL)
-	req, err := http.NewRequest("POST", baseURL+"/embeddings", bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if config.EmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+config.EmbeddingKey)
-	}
+		baseURL := normalizeBaseURL(*config.SearchEmbeddingURL)
+		req, err := http.NewRequest("POST", baseURL+"/embeddings", bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if *config.SearchEmbeddingKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.SearchEmbeddingKey)
+		}
 
 	resp, err := aiHTTPClient.Do(req)
 	if err != nil {
@@ -590,16 +596,6 @@ func parseSufficiencyResponse(resp string) (sufficient bool, reasoning string, e
 // =============================================================================
 // 工具函数
 // =============================================================================
-
-// getAIConfig 获取当前 AI 配置（线程安全）
-func getAIConfig() SearchConfig {
-	configMutex.RLock()
-	defer configMutex.RUnlock()
-	if activeConfig != nil {
-		return *activeConfig
-	}
-	return SearchConfig{}
-}
 
 // normalizeBaseURL 规范化 API 基础 URL，确保以 /v1 结尾
 func normalizeBaseURL(rawURL string) string {

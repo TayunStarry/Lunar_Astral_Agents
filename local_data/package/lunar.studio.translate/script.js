@@ -807,13 +807,13 @@ function loadColorStyle() {
 // ===== 记忆库 API（译名词库） =====
 const GLOSSARY_COLLECTION = 'translation_verification';
 
-// 确保集合存在（仅添加时调用）
+// 确保集合存在（仅添加时调用，嵌入模型名从 memory.embedding_model 配置读取）
 async function memoryEnsureCollection() {
     try {
         const resp = await fetch(`/memory/${GLOSSARY_COLLECTION}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_name: 'system-embedding', collection_type: 'text' })
+            body: JSON.stringify({ collection_type: 'text' })
         });
         return resp.ok || resp.status === 409;
     } catch (e) {

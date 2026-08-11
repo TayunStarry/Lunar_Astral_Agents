@@ -1,0 +1,48 @@
+{
+	"models": {
+		"asr_model": "./local_data/models/Qwen3-ASR-0.6B",
+		"diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
+		"variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
+		"prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+		"real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth"
+	},
+	"server": {
+		"user_name": null,
+		"developer": true,
+		"clear_port": false,
+		"allow_diffusion": true,
+		"bridging_type": "napcat-0",
+		"bridging_path": "ws://localhost:4567",
+		"bridging_token": "ItlC2Nc1DfICVYq5",
+		"bridging_target": 906314036,
+		"bridging_keywords": [
+			"月华",
+			"3826713076"
+		],
+		"debug_mode": false
+	},
+	"agent": {
+		"embedding_model": "system-embedding",
+		"embedding_url": "http://127.0.0.1:36789/v1",
+		"embedding_key": "",
+		"multimodal_model": "system-multimodal",
+		"multimodal_url": "http://127.0.0.1:36789/v1",
+		"multimodal_key": ""
+	},
+	"memory": {
+		"embedding_model": "system-embedding",
+		"embedding_url": "http://127.0.0.1:36789/v1",
+		"embedding_key": "",
+		"multimodal_model": "system-multimodal",
+		"multimodal_url": "http://127.0.0.1:36789/v1",
+		"multimodal_key": ""
+	},
+	"search": {
+		"embedding_model": "system-embedding",
+		"embedding_url": "http://127.0.0.1:36789/v1",
+		"embedding_key": "",
+		"multimodal_model": "system-multimodal",
+		"multimodal_url": "http://127.0.0.1:36789/v1",
+		"multimodal_key": ""
+	}
+}

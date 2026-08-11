@@ -6,7 +6,7 @@
 
 ## 人格智能体
 
-- **月华** — AI 桌面智能体核心，掌管多模态对话、Live2D 角色展示、TTS 语音合成与图像生成
+- **月华** — AI 桌面智能体核心，掌管多模态对话、TTS 语音合成与图像生成
 - **琉璃** — 工具集扩展系统，掌管文件管理、数据库操作、截图标注、AI 代理转发
 
 ---
@@ -96,7 +96,7 @@ Lunar_Astral_Agents/
 | 模块 | 职责 |
 |------|------|
 | `adapters/` | Go↔JS 双向桥接，基于 goja 运行时将 Go 能力暴露为 JS 可调用函数 |
-| `hierarchy/` | 前端资源容器，Go embed 嵌入，含 Live2D 引擎、角色 Prompt、Web 界面 |
+| `hierarchy/` | 前端资源容器，Go embed 嵌入，含角色 Prompt、Web 界面 |
 | `model/` | 模型服务层，管理 llama-server 进程生命周期、TTS 引擎调用、请求队列 |
 | `server/` | HTTP 服务入口，路由注册、CORS、初始化编排 |
 | `server_side/` | TypeScript 智能体源码，编译为 agentSystem.js 在 goja 中执行 |
@@ -169,12 +169,12 @@ lunar_chromedp → storage, config
 用户输入 → HTTP API → Go 服务层 → JS 智能体 (goja) → llama-server (GGUF)
                                                     → TTS 引擎 (C++ GGML)
                                                     → SD 引擎 (C++ GGML)
-         → WebSocket 推送 → 前端渲染 (Markdown/Mermaid/ECharts/Live2D)
+         → WebSocket 推送 → 前端渲染 (Markdown/Mermaid/ECharts)
 ```
 
 ### 前端资源引用
 
-所有前端 UI 统一引用 `local_data/package/standard_dependency/` 获取基础样式与脚本，通过 `/file/read/package/` 路径加载第三方库（ECharts、marked、mermaid、Live2D、PixiJS、KaTeX 等）。
+所有前端 UI 统一引用 `local_data/package/standard_dependency/` 获取基础样式与脚本，通过 `/file/read/package/` 路径加载第三方库（ECharts、marked、mermaid、KaTeX 等）。
 
 ---
 

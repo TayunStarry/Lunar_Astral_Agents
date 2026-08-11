@@ -2,14 +2,20 @@ import { AuthHeaders, ToolCall } from '../index';
 
 /** 全局系统配置项 */
 export interface Config {
-	/** 云配置 */
-	cloud: {
-		/** 云模型 URL */
-		cloud_model_url?: string;
-		/** 云模型 API 密钥 */
-		cloud_model_key?: string;
-		/** 视觉理解模型名称 */
-		multimodal_model_name?: string;
+	/** 核心智能体配置（月华 Agent） */
+	agent: {
+		/** 嵌入模型名称 */
+		embedding_model?: string;
+		/** 嵌入服务 API 地址 */
+		embedding_url?: string;
+		/** 嵌入服务 API 密钥 */
+		embedding_key?: string;
+		/** 多模态模型名称 */
+		multimodal_model?: string;
+		/** 多模态服务 API 地址 */
+		multimodal_url?: string;
+		/** 多模态服务 API 密钥 */
+		multimodal_key?: string;
 	};
 	server: {
 		/** 用户名 */

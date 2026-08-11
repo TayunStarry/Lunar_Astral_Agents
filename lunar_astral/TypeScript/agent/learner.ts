@@ -7,7 +7,7 @@ let learnerInitialized = false;
 function ensureLearnerInitialized(): boolean {
 	if (learnerInitialized) return true;
 	if (!learnerIsReady()) {
-		const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
+		const [success, err] = learnerInit();
 		if (err) {
 			console.error('[学习者] 初始化失败:', err);
 			return false;

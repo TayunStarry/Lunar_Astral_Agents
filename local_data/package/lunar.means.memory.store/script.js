@@ -35,8 +35,6 @@ var App = {
     searchResults: [],
     imageBase64: null,       // 当前上传的图片 base64
     isImageCollection: false, // 当前集合是否为 image 类型
-    embedAvailable: null,     // 嵌入模型可用性：true/false/null
-    multimodalAvailable: null, // 多模态模型可用性：true/false/null
     batchFiles: [],           // 批量导入的图片文件列表
     batchRunning: false       // 批量导入是否正在运行
 };
@@ -54,15 +52,9 @@ var D = {
     syncWarn:       $('sync-warn'),
     btnRefresh:     $('btn-refresh'),
     btnRebuildSync: $('btn-rebuild-sync'),
-    btnModelConfig: $('btn-model-config'),
-    mdotEmbed:      $('mdot-embed'),
-    mdotMultimodal: $('mdot-multimodal'),
 
     // Init
     initCard: $('init-card'),
-    initBase: $('init-base-url'),
-    initKey: $('init-api-key'),
-    initModel: $('init-model-name'),
     initColName: $('init-collection-name'),
     btnInit: $('btn-init'),
 
@@ -120,7 +112,6 @@ var D = {
     // Create collection modal
     modalCreateCol: $('modal-create-collection'),
     createColName: $('create-col-name'),
-    createColModel: $('create-col-model'),
     createColType: $('create-col-type'),
     btnCreateSubmit: $('btn-create-submit'),
 
@@ -132,17 +123,6 @@ var D = {
     imageUploadPreview: $('image-upload-preview'),
     btnRemoveImage: $('btn-remove-image'),
     btnAddImageSubmit: $('btn-add-image-submit'),
-
-    // Model config modal
-    modalModelConfig:    $('modal-model-config'),
-    cfgEmbedModel:       $('cfg-embed-model'),
-    cfgEmbedAvail:       $('cfg-embed-avail'),
-    cfgMultimodalModel:  $('cfg-multimodal-model'),
-    cfgMultimodalAvail:  $('cfg-multimodal-avail'),
-    cfgMultimodalUrl:    $('cfg-multimodal-url'),
-    cfgMultimodalKey:    $('cfg-multimodal-key'),
-    btnSaveModelConfig:  $('btn-save-model-config'),
-    configStatusHint:    $('config-status-hint'),
 
     // Batch import modal
     modalBatchImport:  $('modal-batch-import'),
@@ -164,9 +144,7 @@ var D = {
 function init() {
     bindGlobalEvents();
     bindKeyboard();
-    loadModelConfigToUI();
     loadGlobalStats();
-    checkModelsAvailability();
 }
 
 function bindGlobalEvents() {
@@ -225,12 +203,6 @@ function bindGlobalEvents() {
             processImageFile(e.dataTransfer.files[0]);
         }
     });
-
-    // Model config - open modal
-    D.btnModelConfig.addEventListener('click', function () {
-        showModelConfigModal();
-    });
-    D.btnSaveModelConfig.addEventListener('click', saveModelConfig);
 
     // Batch import
     D.btnBatchImport.addEventListener('click', showBatchImportModal);
@@ -316,7 +288,6 @@ function bindKeyboard() {
             if (D.modalAddDoc.style.display === 'flex') closeModalById('modal-add-doc');
             if (D.modalAddImage.style.display === 'flex') closeModalById('modal-add-image');
             if (D.modalCreateCol.style.display === 'flex') closeModalById('modal-create-collection');
-            if (D.modalModelConfig.style.display === 'flex') closeModalById('modal-model-config');
             if (D.modalBatchImport.style.display === 'flex') closeModalById('modal-batch-import');
             if (D.modalOverlay.style.display === 'flex') closeConfirmModal();
         }
@@ -389,34 +360,18 @@ async function refreshAll() {
 // ========== 初始化 ==========
 
 async function handleInit() {
-    var base = D.initBase.value.trim();
-    var key = D.initKey.value.trim();
-    var llmUrl = document.getElementById('init-llm-url').value.trim();
-    var multimodalModel = document.getElementById('init-multimodal-model').value.trim();
-    var model = D.initModel.value.trim();
     var colName = D.initColName.value.trim() || 'lunar_messages';
 
-    if (!base) { showToast('嵌入 API 地址不能为空', 'error'); return; }
-    if (!llmUrl) { showToast('LLM API 地址不能为空', 'error'); return; }
-    if (!model) { showToast('嵌入模型名称不能为空', 'error'); return; }
-    if (!multimodalModel) { showToast('多模态模型名称不能为空', 'error'); return; }
     if (!colName) { showToast('集合名称不能为空', 'error'); return; }
 
     D.btnInit.disabled = true;
     showBtnLoading(D.btnInit, true, '初始化中...');
 
     try {
-        // Step 1: Initialize instance (embedding + LLM tag generation)
         var initResp = await fetch(API.INIT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                base_url: base,
-                api_key: key,
-                llm_base_url: llmUrl,
-                llm_api_key: key,
-                multimodal_model: multimodalModel
-            })
+            body: JSON.stringify({})
         });
         var initResult = await initResp.json();
 
@@ -425,11 +380,10 @@ async function handleInit() {
             return;
         }
 
-        // Step 2: Create initial collection
         var colResp = await fetch(API.collection(colName).BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_name: model })
+            body: JSON.stringify({})
         });
         var colResult = await colResp.json();
 
@@ -460,7 +414,6 @@ async function loadCollections() {
             D.hdrCollections.textContent = collections.length;
 
             if (collections.length > 0) {
-                // Auto-select: prefer existing currentCollection, then lunar_messages, then first
                 var found = false;
                 if (App.currentCollection) {
                     for (var i = 0; i < collections.length; i++) {
@@ -471,7 +424,6 @@ async function loadCollections() {
                     }
                 }
                 if (!found) {
-                    // Try lunar_messages first
                     var hasLunar = false;
                     for (var i = 0; i < collections.length; i++) {
                         if (collections[i].name === 'lunar_messages') {
@@ -627,18 +579,15 @@ function showCreateCollectionModal() {
         return;
     }
     D.createColName.value = '';
-    D.createColModel.value = 'system-embedding';
     D.modalCreateCol.style.display = 'flex';
     setTimeout(function () { D.createColName.focus(); }, 100);
 }
 
 async function handleCreateCollection() {
     var name = D.createColName.value.trim();
-    var model = D.createColModel.value.trim();
     var type = D.createColType.value;
 
     if (!name) { showToast('集合名称不能为空', 'error'); return; }
-    if (!model) { showToast('模型名称不能为空', 'error'); return; }
 
     // Validate name
     if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
@@ -659,7 +608,7 @@ async function handleCreateCollection() {
         var resp = await fetch(API.collection(name).BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model_name: model, collection_type: type })
+            body: JSON.stringify({ collection_type: type })
         });
         var result = await resp.json();
 
@@ -1444,145 +1393,6 @@ async function handleAddImage() {
     } finally {
         D.btnAddImageSubmit.disabled = false;
         showBtnLoading(D.btnAddImageSubmit, false, '添加到记忆库');
-    }
-}
-
-// ========== 模型配置 ==========
-
-var MODEL_CONFIG_KEY = 'lunar_memory_model_config';
-
-function getModelConfig() {
-    try {
-        var raw = localStorage.getItem(MODEL_CONFIG_KEY);
-        if (raw) {
-            var cfg = JSON.parse(raw);
-            return {
-                embedModel: cfg.embedModel || 'system-embedding',
-                multimodalModel: cfg.multimodalModel || 'system-multimodal',
-                multimodalUrl: cfg.multimodalUrl || 'http://localhost:36789/v1',
-                multimodalKey: cfg.multimodalKey || ''
-            };
-        }
-    } catch (e) {}
-    return {
-        embedModel: 'system-embedding',
-        multimodalModel: 'system-multimodal',
-        multimodalUrl: 'http://localhost:36789/v1',
-        multimodalKey: ''
-    };
-}
-
-function loadModelConfigToUI() {
-    var cfg = getModelConfig();
-    D.cfgEmbedModel.value = cfg.embedModel;
-    D.cfgMultimodalModel.value = cfg.multimodalModel;
-    D.cfgMultimodalUrl.value = cfg.multimodalUrl;
-    D.cfgMultimodalKey.value = cfg.multimodalKey;
-}
-
-function showModelConfigModal() {
-    loadModelConfigToUI();
-    updateModalAvailDots();
-    D.configStatusHint.textContent = '';
-    D.configStatusHint.className = 'config-hint';
-    D.modalModelConfig.style.display = 'flex';
-}
-
-function updateModalAvailDots() {
-    updateAvailDot(D.cfgEmbedAvail, App.embedAvailable);
-    updateAvailDot(D.cfgMultimodalAvail, App.multimodalAvailable);
-}
-
-function saveModelConfig() {
-    var cfg = {
-        embedModel: D.cfgEmbedModel.value.trim() || 'system-embedding',
-        multimodalModel: D.cfgMultimodalModel.value.trim() || 'system-multimodal',
-        multimodalUrl: D.cfgMultimodalUrl.value.trim() || 'http://localhost:36789/v1',
-        multimodalKey: D.cfgMultimodalKey.value.trim()
-    };
-
-    try {
-        localStorage.setItem(MODEL_CONFIG_KEY, JSON.stringify(cfg));
-        D.configStatusHint.textContent = '✓ 配置已保存 (' + new Date().toLocaleTimeString() + ')';
-        D.configStatusHint.className = 'config-hint config-saved';
-        // 保存后重新检查可用性
-        checkModelsAvailability();
-        setTimeout(function () {
-            D.configStatusHint.textContent = '';
-            D.configStatusHint.className = 'config-hint';
-        }, 3000);
-    } catch (e) {
-        showToast('保存配置失败: ' + e.message, 'error');
-    }
-}
-
-// ========== 模型可用性检测 ==========
-
-async function checkModelsAvailability() {
-    // 检查嵌入模型：尝试对 models 端点执行 GET
-    checkEmbedModel();
-    // 检查多模态模型：先检查嵌入模型完成后再检查
-    setTimeout(function () { checkMultimodalModel(); }, 800);
-}
-
-async function checkEmbedModel() {
-    var cfg = getModelConfig();
-    var baseUrl = (cfg.multimodalUrl || 'http://localhost:36789/v1').replace(/\/+$/, '');
-    try {
-        var resp = await fetch(baseUrl + '/models', {
-            headers: cfg.multimodalKey ? { 'Authorization': 'Bearer ' + cfg.multimodalKey } : {}
-        });
-        if (resp.ok) {
-            var data = await resp.json();
-            var models = (data.data || []).map(function (m) { return m.id || ''; });
-            App.embedAvailable = models.indexOf(cfg.embedModel) !== -1 || models.indexOf('system-embedding') !== -1;
-        } else {
-            App.embedAvailable = false;
-        }
-    } catch (e) {
-        App.embedAvailable = false;
-    }
-    updateModelStatusDots();
-}
-
-async function checkMultimodalModel() {
-    var cfg = getModelConfig();
-    var baseUrl = (cfg.multimodalUrl || 'http://localhost:36789/v1').replace(/\/+$/, '');
-    try {
-        var resp = await fetch(baseUrl + '/models', {
-            headers: cfg.multimodalKey ? { 'Authorization': 'Bearer ' + cfg.multimodalKey } : {}
-        });
-        if (resp.ok) {
-            var data = await resp.json();
-            var models = (data.data || []).map(function (m) { return m.id || ''; });
-            App.multimodalAvailable = models.indexOf(cfg.multimodalModel) !== -1 || models.indexOf('system-multimodal') !== -1;
-        } else {
-            App.multimodalAvailable = false;
-        }
-    } catch (e) {
-        App.multimodalAvailable = false;
-    }
-    updateModelStatusDots();
-}
-
-function updateModelStatusDots() {
-    updateAvailDot(D.mdotEmbed, App.embedAvailable);
-    updateAvailDot(D.mdotMultimodal, App.multimodalAvailable);
-    updateAvailDot(D.cfgEmbedAvail, App.embedAvailable);
-    updateAvailDot(D.cfgMultimodalAvail, App.multimodalAvailable);
-}
-
-function updateAvailDot(el, available) {
-    if (!el) return;
-    el.classList.remove('avail-yes', 'avail-no', 'avail-checking');
-    if (available === true) {
-        el.classList.add('avail-yes');
-        el.title = el.title ? el.title.replace('检测中', '可用').replace('不可用', '可用') : '可用';
-    } else if (available === false) {
-        el.classList.add('avail-no');
-        el.title = el.title ? el.title.replace('检测中', '不可用').replace('可用', '不可用') : '不可用';
-    } else {
-        el.classList.add('avail-checking');
     }
 }
 

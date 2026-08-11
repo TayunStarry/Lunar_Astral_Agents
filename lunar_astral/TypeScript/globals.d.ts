@@ -153,18 +153,14 @@ declare global {
     function getAvailableActions(): string;
     /**
      * 初始化记忆库实例并创建指定集合
+     * 模型配置从 lunar_config.json 的 memory 配置组读取
      *
-     * @param {string} baseURL 嵌入模型服务的基础URL (e.g. http://localhost:36789/v1)
-     *
-     * @param {string} apiKey API密钥
-     *
-     * @param {string} modelName 嵌入模型名称（集合级锁定）
-     *
-     * @param {string} collectionName 集合名称（探针定维度）
+     * @param {string} collectionName 集合名称
+     * @param {string} collectionType 集合类型 ('text' | 'image')
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function memoryInit(baseURL: string, apiKey: string, llmBaseURL: string, llmAPIKey: string, multimodalModel: string, modelName: string, collectionName: string, collectionType: string): [boolean, Error | null];
+    function memoryInit(collectionName: string, collectionType: string): [boolean, Error | null];
     /**
      * 向指定集合添加消息
      *
@@ -254,17 +250,13 @@ declare global {
     function processLTPXChanges(statusJSON: string): boolean;
     /**
      * 初始化学习者智能体
+     * 模型配置从 lunar_config.json 读取
      *
-     * @param {string} baseURL API 服务基础 URL
-     * @param {string} apiKey API 密钥
-     * @param {string} model 模型名称
-     * @param {string} embeddingURL 嵌入服务基础 URL
-     * @param {string} embeddingKey 嵌入服务 API 密钥
-     * @param {string} embeddingModel 嵌入模型名称
+     * @param {string} [memoryDBDir] 记忆库数据存储目录（可选，默认 'local_data/database/memory'）
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function learnerInit(baseURL: string, apiKey: string, model: string, embeddingURL: string, embeddingKey: string, embeddingModel: string): [boolean, Error | null];
+    function learnerInit(memoryDBDir?: string): [boolean, Error | null];
     /**
      * 执行学习者研究
      *

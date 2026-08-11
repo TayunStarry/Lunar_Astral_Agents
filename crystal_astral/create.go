@@ -62,18 +62,15 @@ func reloadPageParameters() {
 }
 
 // initMemoryDatabase 自动初始化记忆库实例与默认集合（v2 标签向量架构）
-// 嵌入模型与 LLM 标签生成模型均使用本地月华服务代理（http://localhost:<BasicPort>/v1），不走云端
+// 模型配置（嵌入模型、多模态模型、API 地址）从 config 模块（lunar_config.json）读取
 // 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化
 func initMemoryDatabase() {
-	// 嵌入服务与 LLM 服务 base_url：始终使用本地月华服务代理
-	baseURL := fmt.Sprintf("http://localhost:%d/v1", *config.BasicPort)
-
-	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务）
-	if err := module.MemoryInitInstance(baseURL, defaultMemoryAPIKey, baseURL, defaultMemoryAPIKey, defaultMultimodalModelName); err != nil {
+	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务，模型配置从 config 模块读取）
+	if err := module.MemoryInitInstance(); err != nil {
 		logger.Warn("CrystalAstral", "记忆库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
 		return
 	}
-	logger.Info("CrystalAstral", "记忆库实例初始化完成, embedding: %s, llm: %s", baseURL, baseURL)
+	logger.Info("CrystalAstral", "记忆库实例初始化完成 (模型配置从 lunar_config.json 读取)")
 
 	// 第二步：创建/打开默认集合（探针文本嵌入定维度，含网络请求，加超时保护）
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -94,7 +91,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	// 初始化记忆库存储目录（仅准备本地存储结构，不产生网络请求）
 	module.InitMemoryDB(*config.MemoryDBDir)
 	// 自动初始化记忆库实例与默认集合（与 lunar_astral 的 JS agent 行为对齐）
-	// 优先使用配置的 cloud_model_url；未配置时回退到月华服务地址（由代理转发至模型服务）
+	// 模型配置从 lunar_config.json 的 agent 配置组读取
 	initMemoryDatabase()
 	// 启动图像生成任务处理器
 	image_server.StartTaskProcessor()

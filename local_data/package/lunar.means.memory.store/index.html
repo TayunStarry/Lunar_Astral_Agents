@@ -41,13 +41,6 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button id="btn-model-config" class="btn-icon" title="嵌入模型 / 多模态模型配置">
-                        <i class="fa-solid fa-gear"></i>
-                        <span class="model-status-dots" id="model-status-dots">
-                            <span class="model-dot" id="mdot-embed" title="嵌入模型: 检测中">●</span>
-                            <span class="model-dot" id="mdot-multimodal" title="多模态模型: 检测中">●</span>
-                        </span>
-                    </button>
                     <button id="btn-refresh" class="btn-icon" title="刷新统计"><i class="fa-solid fa-rotate-right"></i></button>
                 </div>
             </div>
@@ -68,34 +61,10 @@
             </div>
             <div class="card-body init-form-body">
                 <div class="init-form-row">
-                    <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-link"></i> 嵌入 API 地址</label>
-                        <input type="text" id="init-base-url" class="form-input" placeholder="http://localhost:36789/v1"
-                            value="http://localhost:36789/v1">
-                    </div>
-                    <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-brain"></i> LLM API 地址</label>
-                        <input type="text" id="init-llm-url" class="form-input" placeholder="http://localhost:36789/v1"
-                            value="http://localhost:36789/v1">
-                    </div>
-                    <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-microchip"></i> 嵌入模型</label>
-                        <input type="text" id="init-model-name" class="form-input" placeholder="system-embedding"
-                            value="system-embedding">
-                    </div>
-                    <div class="form-group flex-2">
-                        <label class="form-label"><i class="fa-solid fa-robot"></i> 多模态模型</label>
-                        <input type="text" id="init-multimodal-model" class="form-input" placeholder="system-multimodal"
-                            value="system-multimodal">
-                    </div>
-                    <div class="form-group flex-2">
+                    <div class="form-group" style="flex:1">
                         <label class="form-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
                         <input type="text" id="init-collection-name" class="form-input" placeholder="lunar_messages"
                             value="lunar_messages">
-                    </div>
-                    <div class="form-group flex-1">
-                        <label class="form-label"><i class="fa-solid fa-key"></i> Key（可选）</label>
-                        <input type="password" id="init-api-key" class="form-input" placeholder="sk-...">
                     </div>
                 </div>
                 <button id="btn-init" class="btn-primary btn-init-inline">
@@ -103,8 +72,7 @@
                 </button>
                 <p class="init-hint">
                     <i class="fa-solid fa-circle-info"></i>
-                    嵌入和LLM可共用同一地址。常见：LM Studio <code>http://localhost:1234/v1</code>&nbsp; Olama
-                    <code>http://localhost:11434/v1</code>
+                    模型地址与多模态模型配置已迁移至 <code>lunar_config.json</code>，无需在此手动填写。
                 </p>
             </div>
         </section>
@@ -303,11 +271,6 @@
                         maxlength="64">
                 </div>
                 <div class="form-group">
-                    <label class="form-label"><i class="fa-solid fa-microchip"></i> 模型名称</label>
-                    <input type="text" id="create-col-model" class="form-input" placeholder="system-embedding"
-                        value="system-embedding">
-                </div>
-                <div class="form-group">
                     <label class="form-label"><i class="fa-solid fa-cubes"></i> 集合类型</label>
                     <select id="create-col-type" class="form-select">
                         <option value="text">文本文档 (text)</option>
@@ -355,59 +318,6 @@
                 <button class="btn-secondary modal-close-btn" data-close="modal-add-image">取消</button>
                 <button id="btn-add-image-submit" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
                     <i class="fa-solid fa-cloud-arrow-up"></i> 添加到图片记忆库
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 模型配置模态框 -->
-    <div class="modal-overlay" id="modal-model-config" style="display:none;">
-        <div class="modal-card glass-card modal-config-card">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-gear"></i> 模型配置</h3>
-                <button class="btn-icon modal-close-btn" data-close="modal-model-config" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="model-config-section">
-                    <h4 class="config-section-title">
-                        <i class="fa-solid fa-microchip"></i> 嵌入模型
-                        <span class="model-avail-dot" id="cfg-embed-avail" title="检测中">●</span>
-                    </h4>
-                    <div class="form-group">
-                        <label class="form-label">模型名</label>
-                        <input type="text" id="cfg-embed-model" class="form-input"
-                            placeholder="system-embedding" value="system-embedding">
-                    </div>
-                </div>
-                <div class="model-config-section">
-                    <h4 class="config-section-title">
-                        <i class="fa-solid fa-eye"></i> 多模态模型
-                        <span class="model-avail-dot" id="cfg-multimodal-avail" title="检测中">●</span>
-                    </h4>
-                    <div class="form-group">
-                        <label class="form-label">模型名</label>
-                        <input type="text" id="cfg-multimodal-model" class="form-input"
-                            placeholder="system-multimodal" value="system-multimodal">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">API 地址</label>
-                        <input type="text" id="cfg-multimodal-url" class="form-input"
-                            placeholder="http://localhost:36789/v1" value="http://localhost:36789/v1">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">API Key</label>
-                        <input type="password" id="cfg-multimodal-key" class="form-input"
-                            placeholder="sk-...（可选）">
-                    </div>
-                </div>
-                <p class="config-hint" id="config-status-hint"></p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary modal-close-btn" data-close="modal-model-config">取消</button>
-                <button id="btn-save-model-config" class="btn-primary" style="width:auto;padding:0.5rem 1.5rem;">
-                    <i class="fa-solid fa-floppy-disk"></i> 保存配置
                 </button>
             </div>
         </div>

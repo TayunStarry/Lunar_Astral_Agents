@@ -1,6 +1,7 @@
 package server
 
 import (
+	"config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -89,6 +90,7 @@ func MemoryHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleMemoryInit POST /memory/init — v2 实例初始化（嵌入服务 + LLM 标签生成服务）
+// 模型配置从 config 模块（lunar_config.json）读取，不再通过请求体传入
 func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
@@ -102,32 +104,15 @@ func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req memoryInitRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 解析请求失败: %v", err))
-		return
-	}
-
-	if req.BaseURL == "" {
-		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> base_url 不能为空")
-		return
-	}
-
-	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") {
-		req.BaseURL = "http://" + req.BaseURL
-		logger.Warn("Storage", "记忆库 base_url 缺少协议前缀, 已自动补全为: %s", req.BaseURL)
-	}
-
-	if err := module.MemoryInitInstance(req.BaseURL, req.APIKey, req.LLMBaseURL, req.LLMAPIKey, req.MultimodalModel); err != nil {
+	if err := module.MemoryInitInstance(); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 实例初始化失败: %v", err))
 		return
 	}
 
-	logger.Info("Storage", "记忆库实例初始化成功, embedding: %s, llm: %s", req.BaseURL, req.LLMBaseURL)
+	logger.Info("Storage", "记忆库实例初始化成功（模型配置从 lunar_config.json 读取）")
 
 	writeSuccess(w, map[string]string{
-		"message":  "记忆库实例初始化成功",
-		"base_url": req.BaseURL,
+		"message": "记忆库实例初始化成功",
 	})
 }
 
@@ -215,10 +200,8 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 		return
 	}
 
-	if req.ModelName == "" {
-		writeError(w, http.StatusBadRequest, "记忆库请求[ERROR] -> model_name 不能为空")
-		return
-	}
+	// 模型名从 config 模块（lunar_config.json memory.embedding_model）读取
+	modelName := *config.MemoryEmbeddingModel
 
 	collType := req.CollectionType
 	if collType == "" {
@@ -230,18 +213,18 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 	}
 
 	ctx := context.Background()
-	if err := module.CollectionInit(ctx, collectionName, req.ModelName, collType); err != nil {
+	if err := module.CollectionInit(ctx, collectionName, modelName, collType); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
 		return
 	}
 
 	info := module.MemoryGetCollectionInfoWithType(collectionName)
 	logger.Info("Storage", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d",
-		collectionName, collType, req.ModelName, getIntField(info, "embedding_dimension"))
+		collectionName, collType, modelName, getIntField(info, "embedding_dimension"))
 
 	writeSuccess(w, memoryCollectionInfo{
 		Name:           collectionName,
-		EmbeddingModel: req.ModelName,
+		EmbeddingModel: modelName,
 		Dimension:      getIntField(info, "embedding_dimension"),
 		Count:          getIntField(info, "document_count"),
 		Type:           collType,

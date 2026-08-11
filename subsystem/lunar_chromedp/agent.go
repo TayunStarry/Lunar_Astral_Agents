@@ -1,6 +1,7 @@
 package lunar_chromedp
 
 import (
+	"config"
 	"fmt"
 	"logger"
 	"strings"
@@ -18,9 +19,10 @@ import (
 // =============================================================================
 
 // InitSearch 初始化搜索智能体
-// 必须在使用 Search 之前调用，传入多模态模型和嵌入模型的配置
+// 必须在使用 Search 之前调用
+// 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取，不再通过 SearchConfig 传入
 // 初始化失败时返回错误（如模型不可用、配置无效等）
-func InitSearch(config SearchConfig) error {
+func InitSearch(cfg SearchConfig) error {
 	searchAgentMu.Lock()
 	defer searchAgentMu.Unlock()
 
@@ -29,53 +31,41 @@ func InitSearch(config SearchConfig) error {
 	}
 
 	// 参数校验
-	if strings.TrimSpace(config.MultimodalURL) == "" {
-		return fmt.Errorf("多模态模型 URL 不能为空")
-	}
-	if strings.TrimSpace(config.MultimodalName) == "" {
-		return fmt.Errorf("多模态模型名称不能为空")
-	}
-	if strings.TrimSpace(config.EmbeddingURL) == "" {
-		return fmt.Errorf("嵌入模型 URL 不能为空")
-	}
-	if strings.TrimSpace(config.EmbeddingName) == "" {
-		return fmt.Errorf("嵌入模型名称不能为空")
-	}
-	if config.MaxContextTokens <= 0 {
-		config.MaxContextTokens = MaxContextTokensDefault
+	if cfg.MaxContextTokens <= 0 {
+		cfg.MaxContextTokens = MaxContextTokensDefault
 	}
 
 	// 提前设置全局配置（AI 调用层在连通性测试中需要读取）
 	configMutex.Lock()
-	activeConfig = &config
+	activeConfig = &cfg
 	configMutex.Unlock()
 
-	// 验证多模态模型连通性
-	if aiCall != nil {
-		testPrompt := "请回复 'OK'"
-		resp, err := aiCall("你是一个测试助手。", testPrompt, nil)
-		if err != nil {
-			return fmt.Errorf("多模态模型连通性测试失败 [%s @ %s]: %w",
-				config.MultimodalName, config.MultimodalURL, err)
+	// 验证多模态模型连通性（模型配置从 config 模块读取）
+		if aiCall != nil {
+			testPrompt := "请回复 'OK'"
+			resp, err := aiCall("你是一个测试助手。", testPrompt, nil)
+			if err != nil {
+				return fmt.Errorf("多模态模型连通性测试失败 [%s @ %s]: %w",
+					*config.SearchMultimodalModel, *config.SearchMultimodalURL, err)
+			}
+			if !strings.Contains(strings.ToUpper(resp), "OK") {
+				return fmt.Errorf("多模态模型响应异常，未返回预期内容")
+			}
+			fmt.Printf("[%s] 多模态模型连接验证通过: %s\n", ModuleName, *config.SearchMultimodalModel)
 		}
-		if !strings.Contains(strings.ToUpper(resp), "OK") {
-			return fmt.Errorf("多模态模型响应异常，未返回预期内容")
-		}
-		fmt.Printf("[%s] 多模态模型连接验证通过: %s\n", ModuleName, config.MultimodalName)
-	}
 
-	// 验证嵌入模型连通性 + 初始化 search_memory 集合
-	if memoryInitCollection != nil {
-		// 初始化 MemoryDB 全局实例（仅首次调用生效，后续调用幂等）
-		if config.MemoryDBDir != "" {
-			module.InitMemoryDB(config.MemoryDBDir)
+		// 验证嵌入模型连通性 + 初始化 search_memory 集合
+		if memoryInitCollection != nil {
+			// 初始化 MemoryDB 全局实例（仅首次调用生效，后续调用幂等）
+			if cfg.MemoryDBDir != "" {
+				module.InitMemoryDB(cfg.MemoryDBDir)
+			}
+			if err := memoryInitCollection(); err != nil {
+				return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
+					*config.SearchEmbeddingModel, *config.SearchEmbeddingURL, err)
+			}
+			fmt.Printf("[%s] 嵌入模型连接验证通过: %s\n", ModuleName, *config.SearchEmbeddingModel)
 		}
-		if err := memoryInitCollection(config.EmbeddingURL, config.EmbeddingName, config.EmbeddingKey, config.MultimodalName); err != nil {
-			return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
-				config.EmbeddingName, config.EmbeddingURL, err)
-		}
-		fmt.Printf("[%s] 嵌入模型连接验证通过: %s\n", ModuleName, config.EmbeddingName)
-	}
 
 	// 启动浏览器
 	if err := LaunchBrowser(); err != nil {
@@ -83,19 +73,19 @@ func InitSearch(config SearchConfig) error {
 	}
 
 	searchAgent = &SearchAgent{
-		config: config,
+		config: cfg,
 	}
 	searchAgentInit = true
 
 	// 设置全局配置（供 AI 调用层读取）
 	configMutex.Lock()
-	activeConfig = &config
+	activeConfig = &cfg
 	configMutex.Unlock()
 
 	fmt.Printf("[%s] 搜索智能体初始化完成\n", ModuleName)
-	fmt.Printf("[%s]   多模态: %s @ %s\n", ModuleName, config.MultimodalName, config.MultimodalURL)
-	fmt.Printf("[%s]   嵌入:   %s @ %s\n", ModuleName, config.EmbeddingName, config.EmbeddingURL)
-	fmt.Printf("[%s]   上下文上限: %d tokens\n", ModuleName, config.MaxContextTokens)
+	fmt.Printf("[%s]   多模态: %s @ %s\n", ModuleName, *config.SearchMultimodalModel, *config.SearchMultimodalURL)
+	fmt.Printf("[%s]   嵌入:   %s @ %s\n", ModuleName, *config.SearchEmbeddingModel, *config.SearchEmbeddingURL)
+	fmt.Printf("[%s]   上下文上限: %d tokens\n", ModuleName, cfg.MaxContextTokens)
 
 	return nil
 }

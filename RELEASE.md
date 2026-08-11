@@ -17,7 +17,7 @@
 
 ### 1. 星图·月华（lunar_astral）— AI 桌面智能体核心
 
-**功能**：多模态 AI 角色对话、Live2D 角色展示、TTS 语音合成、文生图、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、QQ 群聊适配器。
+**功能**：多模态 AI 角色对话、TTS 语音合成、文生图、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、QQ 群聊适配器。
 
 **技术栈**：Go 后端 + TypeScript 智能体（goja 运行时）+ WebView2 前端。底层依赖 llama.cpp 进行 GGUF 模型推理。
 
@@ -163,6 +163,6 @@
 
 ## 致谢
 
-本项目使用了以下开源项目：llama.cpp、stable-diffusion.cpp、qwen3-tts.cpp、qwen3-asr、GGML、WebView2、Live2D。
+本项目使用了以下开源项目：llama.cpp、stable-diffusion.cpp、qwen3-tts.cpp、qwen3-asr、GGML、WebView2。
 
 > 🌟 月华和琉璃永远陪伴着大家 ~ 一起探索 AI 的无限可能吧！

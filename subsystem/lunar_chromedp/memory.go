@@ -1,6 +1,7 @@
 package lunar_chromedp
 
 import (
+	"config"
 	"context"
 	"fmt"
 	"strings"
@@ -24,18 +25,15 @@ func init() {
 // =============================================================================
 
 // initMemoryCollection 初始化记忆库连接并创建 search_memory 集合
-// embeddingURL: 嵌入服务 base_url
-// embeddingModel: 嵌入模型名（用于向量检索）
-// embeddingKey: API 密钥
-// llmModel: 多模态/对话模型名（用于标签生成，不可用嵌入模型！）
-func initMemoryCollection(embeddingURL, embeddingModel, embeddingKey, llmModel string) error {
+// 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
+func initMemoryCollection() error {
 	// 初始化记忆库实例（嵌入服务 + LLM 标签生成服务）
-	// 参数顺序: embeddingBaseURL, embeddingAPIKey, llmBaseURL, llmAPIKey, multimodalModel
+	// 模型配置从 config 模块读取，不再通过参数传入
 	if !module.IsMemoryInitialized() {
-		if err := module.MemoryInitInstance(embeddingURL, embeddingKey, embeddingURL, embeddingKey, llmModel); err != nil {
+		if err := module.MemoryInitInstance(); err != nil {
 			return fmt.Errorf("记忆库实例初始化失败: %w", err)
 		}
-		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, embeddingModel, llmModel)
+		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, *config.SearchEmbeddingModel, *config.SearchMultimodalModel)
 	}
 
 	// 检查 search_memory 集合状态
@@ -44,13 +42,13 @@ func initMemoryCollection(embeddingURL, embeddingModel, embeddingKey, llmModel s
 	if info == nil {
 		// 集合不存在，创建新集合
 		fmt.Printf("[%s] 记忆集合 '%s' 不存在，正在创建...\n", ModuleName, searchMemoryCollection)
-		return createCollection(embeddingModel)
+		return createCollection()
 	}
 
 	dim := getIntField(info, "embedding_dimension")
 	count := getIntField(info, "document_count")
 	fmt.Printf("[%s] 记忆集合 '%s' 已存在 (模型=%s 维度=%d 文档=%d)\n",
-		ModuleName, searchMemoryCollection, embeddingModel, dim, count)
+		ModuleName, searchMemoryCollection, *config.SearchEmbeddingModel, dim, count)
 
 	// 检查维度是否匹配
 	if module.MemoryHasSyncMismatch(searchMemoryCollection) {
@@ -58,14 +56,16 @@ func initMemoryCollection(embeddingURL, embeddingModel, embeddingKey, llmModel s
 		if err := module.MemoryDeleteCollection(searchMemoryCollection); err != nil {
 			return fmt.Errorf("删除旧记忆集合失败: %w", err)
 		}
-		return createCollection(embeddingModel)
+		return createCollection()
 	}
 
 	return nil
 }
 
 // createCollection 创建 search_memory 集合
-func createCollection(modelName string) error {
+// 模型名从 config 模块读取
+func createCollection() error {
+	modelName := *config.SearchEmbeddingModel
 	ctx := context.Background()
 	if err := module.CollectionInit(ctx, searchMemoryCollection, modelName, module.CollectionTypeText); err != nil {
 		return fmt.Errorf("创建记忆集合 '%s' 失败: %w", searchMemoryCollection, err)

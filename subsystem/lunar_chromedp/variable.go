@@ -125,6 +125,7 @@ var (
 
 // =============================================================================
 // 记忆库钩子（由 memory.go 在 init 时注册）
+// 模型配置从 config 模块（lunar_config.json）读取，不再通过参数传入
 // =============================================================================
 
 var (
@@ -135,7 +136,7 @@ var (
 	memoryStore func(record MemorySearchRecord) error
 
 	// memoryInitCollection 初始化 search_memory 集合
-	memoryInitCollection func(embeddingURL, embeddingModel, embeddingKey, llmModel string) error
+	memoryInitCollection func() error
 )
 
 // =============================================================================

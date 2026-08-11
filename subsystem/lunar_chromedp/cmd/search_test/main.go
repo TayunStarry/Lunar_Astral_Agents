@@ -26,12 +26,8 @@ func main() {
 	fmt.Println("  搜索智能体 — 集成测试 v2")
 	fmt.Println("============================================")
 
-	// 配置：使用本地 36789 端口的模型服务
+	// 配置：模型配置已迁移至 lunar_config.json，此处仅设置记忆库目录和上下文控制
 	config := lunar_chromedp.DefaultSearchConfig()
-	config.MultimodalURL = "http://127.0.0.1:36789/v1"
-	config.MultimodalName = "system-multimodal"
-	config.EmbeddingURL = "http://127.0.0.1:36789/v1"
-	config.EmbeddingName = "system-embedding"
 	config.MaxContextTokens = 16384
 
 	fmt.Println("\n[初始化] 正在连接模型服务器并启动浏览器...")

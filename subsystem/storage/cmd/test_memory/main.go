@@ -20,10 +20,7 @@ import (
 
 // 测试配置
 const (
-	testBaseURL         = "http://localhost:36789/v1"
-	testAPIKey          = ""
 	testEmbeddingModel  = "system-embedding"
-	testMultimodalModel = "system-multimodal"
 	testTextCollection  = "test_text_memory"
 	testImageCollection = "test_image_memory"
 )
@@ -120,7 +117,7 @@ func main() {
 	module.InitMemoryDB(tempDir)
 
 	subTest("初始化记忆库实例（嵌入 + LLM）")
-	err = module.MemoryInitInstance(testBaseURL, testAPIKey, testBaseURL, testAPIKey, testMultimodalModel)
+	err = module.MemoryInitInstance()
 	if !check(err, "实例初始化") {
 		failed++
 		os.Exit(1)

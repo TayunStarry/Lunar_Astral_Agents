@@ -24,12 +24,33 @@ type ModelConfig struct {
 		Developer      bool `json:"developer"`       // 是否为开发者模式
 		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许加载扩散模型
 	} `json:"server"`
-	// 云模型配置
-	Cloud struct {
-		CloudModelUrl       string `json:"cloud_model_url"`       // 云模型服务地址
-		CloudModelKey       string `json:"cloud_model_key"`       // 云模型密钥
-		MultimodalModelName string `json:"multimodal_model_name"` // 多模态模型名称
-	} `json:"cloud"`
+	// 核心智能体模型配置（月华 Agent）
+	Agent struct {
+			EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
+			EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
+			EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
+			MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
+			MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
+			MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
+		} `json:"agent"`
+	// 记忆库独立模型配置（优先于旧版 server/models 全局配置）
+	Memory struct {
+		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
+		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
+		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
+		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
+		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
+		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
+	} `json:"memory"`
+	// 智能搜索独立模型配置（优先于旧版 server/models 全局配置）
+	Search struct {
+		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
+		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
+		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
+		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
+		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
+		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
+	} `json:"search"`
 }
 
 // init 加载配置文件
@@ -92,13 +113,64 @@ func init() {
 	if parameter.Models.AsrModel != "" {
 		*AsrModel = parameter.Models.AsrModel
 	}
-	// 如果配置文件中 CloudModelUrl 字段非空，则更新全局配置
-	if parameter.Cloud.CloudModelUrl != "" {
-		*CloudModelUrl = parameter.Cloud.CloudModelUrl
+
+	// ==== 记忆库独立配置（memory，优先于旧版 server/models 全局配置） ====
+	if parameter.Memory.EmbeddingModel != "" {
+		*MemoryEmbeddingModel = parameter.Memory.EmbeddingModel
 	}
-	// 如果配置文件中 CloudModelKey 字段非空，则更新全局配置
-	if parameter.Cloud.CloudModelKey != "" {
-		*CloudModelKey = parameter.Cloud.CloudModelKey
+	if parameter.Memory.EmbeddingURL != "" {
+		*MemoryEmbeddingURL = parameter.Memory.EmbeddingURL
+	}
+	if parameter.Memory.EmbeddingKey != "" {
+		*MemoryEmbeddingKey = parameter.Memory.EmbeddingKey
+	}
+	if parameter.Memory.MultimodalModel != "" {
+		*MemoryMultimodalModel = parameter.Memory.MultimodalModel
+	}
+	if parameter.Memory.MultimodalURL != "" {
+		*MemoryMultimodalURL = parameter.Memory.MultimodalURL
+	}
+	if parameter.Memory.MultimodalKey != "" {
+		*MemoryMultimodalKey = parameter.Memory.MultimodalKey
+	}
+
+	// ==== 智能搜索独立配置（search，优先于旧版 server/models 全局配置） ====
+	if parameter.Search.EmbeddingModel != "" {
+		*SearchEmbeddingModel = parameter.Search.EmbeddingModel
+	}
+	if parameter.Search.EmbeddingURL != "" {
+		*SearchEmbeddingURL = parameter.Search.EmbeddingURL
+	}
+	if parameter.Search.EmbeddingKey != "" {
+		*SearchEmbeddingKey = parameter.Search.EmbeddingKey
+	}
+	if parameter.Search.MultimodalModel != "" {
+		*SearchMultimodalModel = parameter.Search.MultimodalModel
+	}
+	if parameter.Search.MultimodalURL != "" {
+		*SearchMultimodalURL = parameter.Search.MultimodalURL
+	}
+	if parameter.Search.MultimodalKey != "" {
+		*SearchMultimodalKey = parameter.Search.MultimodalKey
+	}
+	// ==== 核心智能体配置（agent） ====
+	if parameter.Agent.EmbeddingModel != "" {
+		*AgentEmbeddingModel = parameter.Agent.EmbeddingModel
+	}
+	if parameter.Agent.EmbeddingURL != "" {
+		*AgentEmbeddingURL = parameter.Agent.EmbeddingURL
+	}
+	if parameter.Agent.EmbeddingKey != "" {
+		*AgentEmbeddingKey = parameter.Agent.EmbeddingKey
+	}
+	if parameter.Agent.MultimodalModel != "" {
+		*AgentMultimodalModel = parameter.Agent.MultimodalModel
+	}
+	if parameter.Agent.MultimodalURL != "" {
+		*AgentMultimodalURL = parameter.Agent.MultimodalURL
+	}
+	if parameter.Agent.MultimodalKey != "" {
+		*AgentMultimodalKey = parameter.Agent.MultimodalKey
 	}
 	// 如果配置文件中 Developer 字段非空，则更新全局配置
 	if parameter.Server.Developer == true {

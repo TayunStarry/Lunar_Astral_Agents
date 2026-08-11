@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"config"
 )
 
 // =============================================================================
@@ -49,33 +51,18 @@ func initMemoryDBInstance(baseDir string) *MemoryDB {
 }
 
 // MemoryInitInstance 初始化记忆库实例的嵌入服务与 LLM 标签生成服务连接
-// embeddingBaseURL/embeddingAPIKey: 嵌入服务（/v1/embeddings），首次设置后不可变更
-// llmBaseURL/llmAPIKey: LLM 服务（/v1/chat/completions，用于标签生成），可后续更新
-// multimodalModel: 多模态模型名（用于标签生成），可后续更新
-func (d *MemoryDB) MemoryInitInstance(embeddingBaseURL, embeddingAPIKey, llmBaseURL, llmAPIKey, multimodalModel string) error {
+// 模型配置从 config 模块（lunar_config.json）读取，不再通过参数传入
+// 嵌入服务 URL 和 API Key 首次设置后不可变更；LLM 配置可后续通过 config 更新
+func (d *MemoryDB) MemoryInitInstance() error {
 	if d.baseDir == "" {
 		return fmt.Errorf("记忆库 baseDir 为空，请先调用 InitMemoryDB")
 	}
 
 	wasInitialized := d.memoryInitialized
 
-	// 嵌入服务配置：首次设置后锁定（变更会破坏已有集合的向量一致性）
 	if !wasInitialized {
-		d.embeddingBaseURL = embeddingBaseURL
-		d.embeddingAPIKey = embeddingAPIKey
 		d.httpClient = &http.Client{Timeout: 120 * time.Second}
 		d.memoryInitialized = true
-	}
-
-	// LLM 标签生成配置：允许后续更新（不影响已有数据）
-	if llmBaseURL != "" {
-		d.llmBaseURL = llmBaseURL
-	}
-	if llmAPIKey != "" {
-		d.llmAPIKey = llmAPIKey
-	}
-	if multimodalModel != "" {
-		d.multimodalModel = multimodalModel
 	}
 
 	if !wasInitialized {
@@ -184,7 +171,7 @@ func (d *MemoryDB) collectionInitFromMeta(ctx context.Context, name, modelName, 
 		Model:           modelName,
 		Dimension:       meta.EmbeddingDimension,
 		CollectionType:  collectionType,
-		MultimodalModel: d.multimodalModel,
+		MultimodalModel: *config.MemoryMultimodalModel,
 		collDir:         collDir,
 		metaPath:        metaPath,
 	}
@@ -216,7 +203,7 @@ func (d *MemoryDB) collectionInitNew(ctx context.Context, name, modelName, colle
 		Model:           modelName,
 		Dimension:       probeDim,
 		CollectionType:  collectionType,
-		MultimodalModel: d.multimodalModel,
+		MultimodalModel: *config.MemoryMultimodalModel,
 		Documents:       make([]Document, 0),
 		TagVectors:      make([]TagVector, 0),
 		collDir:         collDir,
@@ -1286,12 +1273,12 @@ func GetMemoryDB() *MemoryDB {
 	return globalMemoryDB
 }
 
-// MemoryInitInstance 全局初始化记忆库实例
-func MemoryInitInstance(embeddingBaseURL, embeddingAPIKey, llmBaseURL, llmAPIKey, multimodalModel string) error {
+// MemoryInitInstance 全局初始化记忆库实例（模型配置从 config 模块读取）
+func MemoryInitInstance() error {
 	if globalMemoryDB == nil {
 		return fmt.Errorf("全局 MemoryDB 未初始化")
 	}
-	return globalMemoryDB.MemoryInitInstance(embeddingBaseURL, embeddingAPIKey, llmBaseURL, llmAPIKey, multimodalModel)
+	return globalMemoryDB.MemoryInitInstance()
 }
 
 // CollectionInit 全局初始化集合

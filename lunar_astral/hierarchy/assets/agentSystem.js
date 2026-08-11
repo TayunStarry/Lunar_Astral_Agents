@@ -2,7 +2,7 @@ var agentSystem = (function (exports) {
     'use strict';
 
     class GlobalConfig {
-        static customConfig = { cloud: {}, server: {} };
+        static customConfig = { agent: {}, server: {} };
         static unreadRecords = [];
         static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
         static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
@@ -25,7 +25,7 @@ var agentSystem = (function (exports) {
         static LTPfunction = new Map();
         static LTPdefinition = [];
         static get systemUrl() {
-            return url()[0] + '/v1';
+            return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
         }
         ;
         static get fileServiceUrl() {
@@ -33,15 +33,15 @@ var agentSystem = (function (exports) {
         }
         ;
         static get SystemKey() {
-            return GlobalConfig.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
+            return GlobalConfig.customConfig?.agent?.multimodal_key || 'key-520-1314-2000-02-18';
         }
         ;
         static get MultimodalName() {
-            return GlobalConfig.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
+            return GlobalConfig.customConfig?.agent?.multimodal_model || "system-multimodal";
         }
         ;
         static get EmbeddingName() {
-            return "system-embedding";
+            return GlobalConfig.customConfig?.agent?.embedding_model || "system-embedding";
         }
         ;
         static get userName() {
@@ -472,7 +472,7 @@ var agentSystem = (function (exports) {
         static initMemory() {
             if (BaseConfig.memoryReady)
                 return;
-            const [_, err] = memoryInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.EmbeddingName, 'lunar_messages', 'text');
+            const [_, err] = memoryInit('lunar_messages', 'text');
             if (err)
                 console.error('记忆库初始化失败:', err);
             else
@@ -787,74 +787,58 @@ var agentSystem = (function (exports) {
         formatHistoricalMessages(source) {
             if (this.messages.length === 0)
                 return;
-            const flattenedMessages = [];
-            const isAudioMessage = (c) => c.type === 'input_audio';
-            for (const message of this.messages) {
-                if (typeof message.content !== 'string') {
-                    if (message.content.some(isAudioMessage)) {
-                        flattenedMessages.push(message);
-                        continue;
-                    }
-                    const hasText = message.content.some((c) => c.type === 'text');
-                    const hasImage = message.content.some((c) => c.type === 'image_url');
-                    if (hasText && hasImage) {
-                        flattenedMessages.push(message);
-                        continue;
-                    }
-                    for (const content of message.content) {
-                        if (content.type === 'text')
-                            flattenedMessages.push({ role: message.role, content: content.text });
-                        else
-                            flattenedMessages.push({ role: message.role, content: [content] });
-                    }
-                }
-                else
-                    flattenedMessages.push(message);
-            }
-            const visionCount = flattenedMessages.filter(m => { if (!Array.isArray(m.content) || m.content.some(isAudioMessage))
-                return false; }).length;
-            if (visionCount <= 10)
-                this.messages = flattenedMessages;
-            else {
+            const totalImages = this.countTotalImages(this.messages);
+            if (totalImages >= 20) {
                 const processedMessages = [];
-                let visionBuffer = [];
-                for (const message of flattenedMessages) {
-                    const isVisionMessage = Array.isArray(message.content) && !message.content.some(isAudioMessage);
-                    if (isVisionMessage)
-                        visionBuffer.push(message);
-                    else {
-                        if (visionBuffer.length > 0) {
-                            this.processVisionBuffer(visionBuffer, processedMessages, source);
-                            visionBuffer = [];
-                        }
+                for (const message of this.messages) {
+                    if (typeof message.content === 'string') {
                         processedMessages.push(message);
+                        continue;
                     }
-                }
-                if (visionBuffer.length > 0) {
-                    this.processVisionBuffer(visionBuffer, processedMessages, source);
+                    const textResult = this.summarizeMessageImages(message, source);
+                    if (!textResult || textResult.trim() === '')
+                        continue;
+                    processedMessages.push({ role: message.role, content: textResult });
                 }
                 this.messages = processedMessages;
             }
+            if (this.messages.length === 0)
+                return;
             const latestRole = this.messages.slice(-1)[0].role;
             if (latestRole === 'user' || latestRole === 'tool')
                 return;
             const prompt = this.buildContinuationPrompt();
             this.writeContext({ role: 'user', content: prompt });
         }
-        processVisionBuffer(buffer, output, source) {
-            if (buffer.length <= 10) {
-                output.push(...buffer);
-                return;
-            }
-            for (let i = 0; i < buffer.length; i += 10) {
-                const batchFrames = buffer.slice(i, i + 10);
-                source.descriptionRole.coverContext(batchFrames);
+        summarizeMessageImages(message, source) {
+            if (typeof message.content === 'string')
+                return message.content;
+            const imageItems = message.content.filter((c) => c.type === 'image_url');
+            const textItems = message.content.filter((c) => c.type === 'text');
+            const textPart = textItems.map((c) => c.text).join('\n');
+            if (imageItems.length === 0)
+                return textPart || null;
+            try {
+                source.descriptionRole.coverContext({ role: 'user', content: imageItems });
                 const summaryRequest = source.descriptionRole.run([], []);
                 const summary = summaryRequest.body?.choices?.[0]?.message?.content;
                 if (summary && summary.trim().length > 0) {
-                    output.push({ role: 'user', content: summary });
+                    return textPart ? `${textPart}\n[图片描述：${summary}]` : `[图片描述：${summary}]`;
                 }
+                return textPart || null;
             }
+            catch (error) {
+                console.error('[对话者] 图片摘要异常:', error);
+                return textPart || null;
+            }
+        }
+        countImagesInMessage(message) {
+            if (typeof message.content === 'string')
+                return 0;
+            return message.content.filter((c) => c.type === 'image_url').length;
+        }
+        countTotalImages(messages) {
+            return messages.reduce((sum, m) => sum + this.countImagesInMessage(m), 0);
         }
         analyzeMessageResponse(message, cache) {
             try {
@@ -1494,7 +1478,7 @@ K:Am
         if (learnerInitialized)
             return true;
         if (!learnerIsReady()) {
-            const [success, err] = learnerInit(GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.MultimodalName, GlobalConfig.systemUrl, GlobalConfig.SystemKey, GlobalConfig.EmbeddingName);
+            const [success, err] = learnerInit();
             if (err) {
                 console.error('[学习者] 初始化失败:', err);
                 return false;
@@ -2601,14 +2585,13 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                         await this.analysisVideoFile(item.image_url.url, '');
                     }
                     else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
-                        console.log(item.image_url.url);
                         const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
                         if (error)
                             throw new Error('获取图片文件失败');
-                        const [resizedBlob, error1] = resizeImage(response.body);
+                        const [resizedImages, error1] = resizeImage(response.body);
                         if (error1)
                             throw new Error('缩放图片失败');
-                        newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
+                        resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
                     }
                 }
                 message.content = newContent;
@@ -3147,25 +3130,28 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         const captureFormat = format || 'png';
         console.log(`最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
         console.log(`准备执行截图操作...`);
-        const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
+        const [results, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0);
         if (captureErr) {
             console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
             console.log(`========== 截图工具调用结束(失败) ==========`);
             return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
         }
-        console.log(`截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
-        if (!result || !result.base64) {
+        if (!results || results.length === 0) {
             console.error(`截图失败: 未获取到截图数据`);
             console.log(`========== 截图工具调用结束(失败) ==========`);
             return ['截图失败：未获取到截图数据', ''];
         }
-        pushImage([result.base64]);
-        console.log(`图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
-        const sizeInfo = `${result.width}x${result.height}`;
-        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+        const firstFrame = results[0];
+        console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const base64List = results.map((r) => r.base64);
+        pushImage(base64List);
+        console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
+        const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
+        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
         console.log(`返回响应: ${sizeInfo}`);
         console.log(`========== 截图工具调用结束(成功) ==========`);
-        return [textResponse, result.base64];
+        return [textResponse, firstFrame.base64];
     }
     GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
     GlobalConfig.LTPdefinition.push(...screenshotTools);

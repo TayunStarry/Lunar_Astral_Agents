@@ -7,16 +7,9 @@ import "time"
 // =============================================================================
 
 // SearchConfig 搜索智能体初始化配置
-// 调用方在 InitSearch 时一次性传入，后续 Search 调用复用此配置
+// 模型配置（URL、模型名、API Key）已迁移至 config 模块（lunar_config.json）
+// 调用方在 InitSearch 时仅需传入记忆库目录和上下文控制参数
 type SearchConfig struct {
-	// 多模态模型配置（用于视觉理解、摘要、报告生成）
-	MultimodalURL  string // 模型 API 地址（如 http://127.0.0.1:8080/v1）
-	MultimodalName string // 模型名称（如 system-multimodal）
-	MultimodalKey  string // API 密钥（可为空）
-	// 嵌入模型配置（用于记忆库检索、关键词去重）
-	EmbeddingURL  string // 嵌入服务 API 地址
-	EmbeddingName string // 嵌入模型名称（如 system-embedding）
-	EmbeddingKey  string // 嵌入服务 API 密钥（可为空）
 	// 记忆库存储目录
 	MemoryDBDir string // 记忆库数据存储根目录，默认 "local_data/database/memory"
 	// 上下文控制

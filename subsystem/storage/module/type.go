@@ -169,14 +169,10 @@ type KnowledgeDB struct {
 
 // MemoryDB 记忆库结构体（多集合架构，扁平化存储，v3 文档引用标签 UUID 架构）
 // 职责：嵌入服务连接、LLM 标签生成、集合管理、记忆 CRUD、维度锁定、持久化
+// 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
 // 存储布局：<baseDir>/<collectionName>/{metadata.json, documents_*.json, images_*.json, tags_*.json}
 type MemoryDB struct {
 	memoryInitialized bool                   // 记忆库实例是否初始化完成
-	embeddingBaseURL  string                 // 嵌入服务 base_url（OpenAI 兼容）
-	embeddingAPIKey   string                 // 嵌入服务 API Key
-	llmBaseURL        string                 // LLM 标签生成服务 base_url
-	llmAPIKey         string                 // LLM 标签生成服务 API Key
-	multimodalModel   string                 // 多模态模型名（用于标签生成）
 	httpClient        *http.Client           // HTTP 客户端（嵌入 + LLM 共享）
 	llmMu             sync.Mutex             // LLM 调用互斥锁（严格单线程）
 	baseDir           string                 // 记忆存储根目录绝对路径

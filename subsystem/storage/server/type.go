@@ -28,18 +28,15 @@ type memoryDeleteRequest struct {
 	ID string `json:"id"`
 }
 
-// memoryInitRequest v2 实例初始化请求（嵌入服务 + LLM 标签生成服务）
+// memoryInitRequest v2 实例初始化请求
+// 模型配置已迁移至 config 模块（lunar_config.json），此请求体不再需要模型参数
+// 保留结构体以兼容前端可能发送的空请求体
 type memoryInitRequest struct {
-	BaseURL         string `json:"base_url"`          // 嵌入服务 base_url
-	APIKey          string `json:"api_key"`           // 嵌入服务 API Key
-	LLMBaseURL      string `json:"llm_base_url"`      // LLM 标签生成服务 base_url
-	LLMAPIKey       string `json:"llm_api_key"`       // LLM 标签生成服务 API Key
-	MultimodalModel string `json:"multimodal_model"`  // 多模态模型名
 }
 
-// memoryCollectionRequest 创建/打开集合请求（集合级锁定模型）
+// memoryCollectionRequest 创建/打开集合请求
+// 模型名从 config 模块（lunar_config.json memory.embedding_model）读取，不再通过请求体传入
 type memoryCollectionRequest struct {
-	ModelName      string `json:"model_name"`
 	CollectionType string `json:"collection_type,omitempty"` // 集合类型："text" 或 "image"
 }
 

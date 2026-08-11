@@ -90,14 +90,12 @@
         }
 
         // ==== 初始化记忆库实例 ====
-        // POST /memory/init { base_url, api_key }
+        // POST /memory/init（模型配置已迁移至 lunar_config.json，不再通过请求体传入）
         async initMemory() {
-            var baseUrl = this.getMemoryBaseUrl();
-            var apiKey = this.getConfig().key;
             var resp = await fetch('/memory/init', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base_url: baseUrl, api_key: apiKey })
+                body: JSON.stringify({})
             });
             if (!resp.ok) {
                 var errText = await resp.text();

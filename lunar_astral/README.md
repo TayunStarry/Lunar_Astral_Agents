@@ -1,6 +1,6 @@
 # 核心系统——星图·月华（lunar_astral）
 
-AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、TTS 语音合成与图像生成功能。
+AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图像生成功能。
 
 ---
 
@@ -17,7 +17,6 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 | 功能 | 说明 |
 |------|------|
 | AI 智能对话 | 基于本地 GGUF 模型的角色扮演对话，支持多模态输入（文本/图片/视频） |
-| Live2D 角色 | 实时 Live2D 模型渲染，角色表情与动作展示 |
 | TTS 语音合成 | 文本转语音，AI 回复实时合成音频 |
 | 图像生成 | 基于 stable-diffusion.cpp 的文生图 |
 | 富文本渲染 | 对话中 Markdown / Mermaid / ECharts / KaTeX 渲染 |
@@ -32,7 +31,7 @@ AI 桌面智能体核心系统，集成多模态对话、Live2D 角色展示、T
 | `adapters/` | Go↔JS 适配器层，基于 goja 运行时将 Go 能力（文件/数据库/网络/图像）暴露为 JS 可调用函数 |
 | `model/` | 模型服务层，管理 llama-server 进程生命周期、TTS 引擎调用、请求队列 |
 | `server/` | HTTP 服务层，路由注册、CORS、初始化流程、消息/图像/视频处理 |
-| `hierarchy/` | 前端资源层，Go embed 嵌入：goja 智能体 JS、Live2D 引擎、角色 Prompt、Web 界面 |
+| `hierarchy/` | 前端资源层，Go embed 嵌入：goja 智能体 JS、角色 Prompt、Web 界面 |
 | `websocket/` | WebSocket 通信层，连接管理、读写泵、广播推送 |
 | `server_side/` | TypeScript 智能体源码（配置/控制/文件/数学/模型子模块），编译为 agentSystem.js |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
@@ -77,7 +76,7 @@ main.go
                                                     WebSocket 推送
                                                               │
                                                               ▼
-                                                    前端渲染 (Markdown/Mermaid/Live2D)
+                                                    前端渲染 (Markdown/Mermaid/ECharts)
 ```
 
 ### 双层配置架构
@@ -105,7 +104,7 @@ AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 �
 
 ### 前端界面（hierarchy/assets/client/）
 
-基于原生 HTML/CSS/JavaScript 的单页 Web 应用，通过 WebView 嵌入桌面窗口。核心模块：`app.js`（主逻辑+Live2D）、`chat.js`（富文本渲染）、`socket.js`（WebSocket）、`tts.js`（语音播放）。
+基于原生 HTML/CSS/JavaScript 的单页 Web 应用，通过 WebView 嵌入桌面窗口。核心模块：`app.js`（主逻辑）、`chat.js`（富文本渲染）、`socket.js`（WebSocket）、`tts.js`（语音播放）。
 
 ### AI 提示词（assets/prompts/）
 

@@ -10,9 +10,6 @@
 ## 项目缓存
 node_modules/
 local_data/embed_cache/
-local_data/lunar_config.json
-subsystem/bridge_adapter/local_data/lunar_config.json
-subsystem/volume_archive/local_data/lunar_config.json
 the_crashed_cpp_project/
 embedded_data/
 

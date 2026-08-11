@@ -2,7 +2,7 @@ import { Config, PostMessage, ToolCall } from '../index';
 /** 全局配置 */
 export class GlobalConfig {
 	/** 自定义配置项 */
-	public static customConfig: Config = { cloud: {}, server: {} };
+	public static customConfig: Config = { agent: {}, server: {} };
 	/** 未读记录列表 */
 	public static unreadRecords: PostMessage[] = [];
 	/** 支持的图片文件扩展名 */
@@ -41,25 +41,25 @@ export class GlobalConfig {
 	public static LTPfunction = new Map<string, (args?: Record<string, any> | string) => Promise<string[]>>();
 	/** LTP协议工具包-函数定义 */
 	public static LTPdefinition: ToolCall[] = [];
-	/** 系统URL */
+	/** 系统URL（从 agent 配置读取多模态服务地址，未配置时回退到本地服务） */
 	public static get systemUrl(): string {
-		return url()[0] + '/v1';
+		return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
 	};
 	/** 文件服务URL */
 	public static get fileServiceUrl(): string {
 		return url()[0];
 	};
-	/** 获取 系统 API 密钥 */
+	/** 获取 系统 API 密钥（从 agent 配置读取） */
 	public static get SystemKey(): string {
-		return GlobalConfig.customConfig?.cloud?.cloud_model_key || 'key-520-1314-2000-02-18';
+		return GlobalConfig.customConfig?.agent?.multimodal_key || 'key-520-1314-2000-02-18';
 	};
-	/** 获取 多模态模型名称 */
+	/** 获取 多模态模型名称（从 agent 配置读取） */
 	public static get MultimodalName(): string {
-		return GlobalConfig.customConfig?.cloud?.multimodal_model_name || "system-multimodal";
+		return GlobalConfig.customConfig?.agent?.multimodal_model || "system-multimodal";
 	};
-	/** 获取 嵌入模型名称（固定使用本地模型） */
+	/** 获取 嵌入模型名称（从 agent 配置读取） */
 	public static get EmbeddingName(): string {
-		return "system-embedding";
+		return GlobalConfig.customConfig?.agent?.embedding_model || "system-embedding";
 	};
 	/** 获取 用户名 */
 	public static get userName(): string {

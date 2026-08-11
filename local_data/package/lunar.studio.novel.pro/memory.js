@@ -57,13 +57,9 @@
 
         // ==== 初始化记忆库实例 ====
         async _initInstance() {
-            var baseUrl = this.app.config.getMemoryBaseUrl();
-            var apiKey = this.app.config.getConfig().key;
             try {
-                await this._request('POST', 'init', {
-                    base_url: baseUrl,
-                    api_key: apiKey
-                });
+                // 模型配置已迁移至 lunar_config.json，不再通过请求体传入
+                await this._request('POST', 'init', {});
             } catch (e) {
                 // 已初始化不算错误
                 if (!e.message.includes('已初始化')) {
@@ -80,12 +76,9 @@
                 await this._request('GET', tableName + '/stats');
                 return;
             } catch (e) {
-                // 集合不存在，创建之
+                // 集合不存在，创建之（嵌入模型名从 memory.embedding_model 配置读取）
             }
-            var modelName = this.app.state.config.embeddingModel || 'system-embedding';
-            await this._request('POST', tableName, {
-                model_name: modelName
-            });
+            await this._request('POST', tableName, {});
         }
 
         // ==== 添加知识点 ====

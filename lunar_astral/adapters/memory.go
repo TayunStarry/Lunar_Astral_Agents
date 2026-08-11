@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"config"
 	"context"
 	"fmt"
 	"logger"
@@ -22,20 +23,14 @@ import (
 //   - memoryAddImage 简化为 2 参数（LLM 自动生成标签）
 
 // memoryInit 初始化记忆库实例并创建指定集合
-// 参数: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType
+// 模型配置全部从 lunar_config.json 的 memory 配置组读取
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 8 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 8 个: baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel, modelName, collectionName, collectionType")})
+	if len(call.Arguments) < 2 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 2 个: collectionName, collectionType")})
 	}
 
-	baseURL, _ := call.Argument(0).Export().(string)
-	apiKey, _ := call.Argument(1).Export().(string)
-	llmBaseURL, _ := call.Argument(2).Export().(string)
-	llmAPIKey, _ := call.Argument(3).Export().(string)
-	multimodalModel, _ := call.Argument(4).Export().(string)
-	modelName, _ := call.Argument(5).Export().(string)
-	collectionName, _ := call.Argument(6).Export().(string)
-	collectionType, _ := call.Argument(7).Export().(string)
+	collectionName, _ := call.Argument(0).Export().(string)
+	collectionType, _ := call.Argument(1).Export().(string)
 
 	if collectionType == "" {
 		collectionType = module.CollectionTypeText
@@ -44,14 +39,15 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	// 确保全局 MemoryDB 实例已初始化（幂等，若 crystal_astral 已初始化则复用）
 	module.InitMemoryDB("local_data/database/memory")
 
-	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务）
-	if err := module.MemoryInitInstance(baseURL, apiKey, llmBaseURL, llmAPIKey, multimodalModel); err != nil {
+	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务，模型配置从 config 模块读取）
+	if err := module.MemoryInitInstance(); err != nil {
 		logger.Error("LunarCore", "记忆库实例初始化失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
-	// 第二步：创建/打开集合
+	// 第二步：创建/打开集合（嵌入模型名从 memory.embedding_model 配置读取）
 	ctx := context.Background()
+	modelName := *config.MemoryEmbeddingModel
 	if err := module.CollectionInit(ctx, collectionName, modelName, collectionType); err != nil {
 		logger.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})

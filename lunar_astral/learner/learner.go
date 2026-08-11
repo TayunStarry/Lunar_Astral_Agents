@@ -23,22 +23,14 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 	})
 
 	vm.Set("learnerInit", func(call goja.FunctionCall) goja.Value {
-			if len(call.Arguments) < 6 {
-				return vm.ToValue([]any{false, fmt.Errorf("learnerInit 参数不足, 需至少 6 个: systemURL, systemKey, modelName, embeddingURL, embeddingKey, embeddingName[, memoryDBDir]")})
-			}
+		// 模型配置全部从 lunar_config.json 读取
 
-			systemURL := call.Argument(0).String()
-			systemKey := call.Argument(1).String()
-			modelName := call.Argument(2).String()
-			embeddingURL := call.Argument(3).String()
-			embeddingKey := call.Argument(4).String()
-			embeddingName := call.Argument(5).String()
-			memoryDBDir := "local_data/database/memory" // 默认值
-			if len(call.Arguments) >= 7 {
-				if dir := call.Argument(6).String(); dir != "" {
-					memoryDBDir = dir
-				}
+		memoryDBDir := "local_data/database/memory" // 默认值
+		if len(call.Arguments) >= 1 {
+			if dir := call.Argument(0).String(); dir != "" {
+				memoryDBDir = dir
 			}
+		}
 
 		runtimeMutex.Lock()
 		defer runtimeMutex.Unlock()
@@ -48,16 +40,10 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 			return vm.ToValue([]any{true, nil})
 		}
 
-		// 构建 lunar_chromedp 搜索配置（MaxContextTokens 用默认值）
-			config := lunar_chromedp.SearchConfig{
-				MultimodalURL:  systemURL,
-				MultimodalName: modelName,
-				MultimodalKey:  systemKey,
-				EmbeddingURL:   embeddingURL,
-				EmbeddingName:  embeddingName,
-				EmbeddingKey:   embeddingKey,
-				MemoryDBDir:    memoryDBDir,
-			}
+		// 构建 lunar_chromedp 搜索配置（模型配置从 config 模块读取）
+		config := lunar_chromedp.SearchConfig{
+			MemoryDBDir: memoryDBDir,
+		}
 
 		// 初始化 lunar_chromedp 搜索智能体（包含记忆库初始化、浏览器启动）
 		if err := lunar_chromedp.InitSearch(config); err != nil {
@@ -66,7 +52,7 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 		}
 
 		learnerInitialized = true
-		logger.Info("Learner", "学习者初始化完成, model=%s", modelName)
+		logger.Info("Learner", "学习者初始化完成 (模型配置从 lunar_config.json 读取)")
 		return vm.ToValue([]any{true, nil})
 	})
 

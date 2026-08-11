@@ -2,6 +2,7 @@ package module
 
 import (
 	"bytes"
+	"config"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,7 +38,8 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	if !d.memoryInitialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	if d.embeddingBaseURL == "" {
+	embeddingURL := *config.MemoryEmbeddingURL
+	if embeddingURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
 	}
 	if len(texts) == 0 {
@@ -54,20 +56,20 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	}
 
 	// base_url 约定已含 /v1 前缀（与 chat completions 一致），仅追加 /embeddings
-	apiURL := strings.TrimRight(d.embeddingBaseURL, "/") + "/embeddings"
+	apiURL := strings.TrimRight(embeddingURL, "/") + "/embeddings"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if d.embeddingAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+d.embeddingAPIKey)
-	}
+	if *config.MemoryEmbeddingKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.MemoryEmbeddingKey)
+		}
 
-	resp, err := d.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("请求嵌入服务失败: %w", err)
-	}
+		resp, err := d.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("请求嵌入服务失败: %w", err)
+		}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
@@ -163,9 +165,10 @@ type chatMessageResp struct {
 // isImage 为 true 时使用多模态 vision 格式请求
 // 最多重试 MaxTagRetries 次，全部失败则返回错误
 func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage bool) ([]string, error) {
-	if d.llmBaseURL == "" {
-		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
-	}
+		llmURL := *config.MemoryMultimodalURL
+		if llmURL == "" {
+			return nil, fmt.Errorf("LLM 服务 base_url 未配置")
+		}
 
 	var lastErr error
 	for attempt := 0; attempt < MaxTagRetries; attempt++ {
@@ -188,7 +191,8 @@ func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage boo
 
 // generateTagsOnce 单次 LLM 标签生成尝试
 func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage bool) ([]string, error) {
-	apiURL := strings.TrimRight(d.llmBaseURL, "/") + "/chat/completions"
+		llmURL := *config.MemoryMultimodalURL
+		apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
 
 	var messages []chatMessage
 
@@ -232,25 +236,25 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 	}
 
 	reqBody := chatRequest{
-		Model:       d.multimodalModel,
-		Messages:    messages,
-		MaxTokens:   200,
-		Temperature: 0.3,
-	}
+			Model:       *config.MemoryMultimodalModel,
+			Messages:    messages,
+			MaxTokens:   200,
+			Temperature: 0.3,
+		}
 
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("序列化 LLM 请求失败: %w", err)
-	}
+		bodyBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("序列化 LLM 请求失败: %w", err)
+		}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if d.llmAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+d.llmAPIKey)
-	}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if *config.MemoryMultimodalKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*config.MemoryMultimodalKey)
+		}
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
