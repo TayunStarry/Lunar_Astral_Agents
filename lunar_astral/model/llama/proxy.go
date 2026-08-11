@@ -177,7 +177,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		proxyToLocal(w, r)
 		return
 	}
-	if *config.AgentMultimodalURL != "" {
+	if *config.AgentMultimodalURL != "" && *config.AgentMultimodalURL != "http://127.0.0.1:36789/v1" {
 		ProxyToCloud(w, r)
 		return
 	}

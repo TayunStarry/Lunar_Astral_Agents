@@ -146,7 +146,7 @@ export class ModelBuilder extends ConfigModifier {
 		};
 		/** 构建请求头 */
 		const headers: AuthHeaders = {
-			Authorization: `Bearer ${encodeURIComponent(GlobalConfig.SystemKey)}`,
+			Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
 			"Content-Type": "application/json",
 		};
 		/** 构建模型请求 */
@@ -159,7 +159,7 @@ export class ModelBuilder extends ConfigModifier {
 		/** 定义API端点 */
 		const endpoint = "/chat/completions";
 		/** 直接调用Go函数处理请求 */
-		const [result, error] = syncFetch({ url: GlobalConfig.systemUrl + endpoint, execute: modelRequest });
+		const [result, error] = syncFetch({ url: GlobalConfig.MultimodalUrl + endpoint, execute: modelRequest });
 		// 抛出请求级错误
 		if (error) throw error;
 		// 检查云端错误响应（网关返回 {error: {...}} 而非正常 choices）

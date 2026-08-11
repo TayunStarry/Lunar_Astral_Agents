@@ -24,7 +24,7 @@ var agentSystem = (function (exports) {
         static visionExtensions = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
         static LTPfunction = new Map();
         static LTPdefinition = [];
-        static get systemUrl() {
+        static get MultimodalUrl() {
             return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
         }
         ;
@@ -32,7 +32,7 @@ var agentSystem = (function (exports) {
             return url()[0];
         }
         ;
-        static get SystemKey() {
+        static get MultimodalKey() {
             return GlobalConfig.customConfig?.agent?.multimodal_key || 'key-520-1314-2000-02-18';
         }
         ;
@@ -562,7 +562,7 @@ var agentSystem = (function (exports) {
                 delete requestBody.tools;
             }
             const headers = {
-                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.SystemKey)}`,
+                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
                 "Content-Type": "application/json",
             };
             const modelRequest = {
@@ -572,7 +572,7 @@ var agentSystem = (function (exports) {
                 body: JSON.stringify(requestBody)
             };
             const endpoint = "/chat/completions";
-            const [result, error] = syncFetch({ url: GlobalConfig.systemUrl + endpoint, execute: modelRequest });
+            const [result, error] = syncFetch({ url: GlobalConfig.MultimodalUrl + endpoint, execute: modelRequest });
             if (error)
                 throw error;
             if (result?.body?.error) {
@@ -1938,7 +1938,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return [];
             const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
             if (error) {
-                console.error('[组织者] 记忆库查询失败:', error);
+                console.error('[记忆者] 记忆库查询失败:', error);
                 return [];
             }
             return results || [];
@@ -1951,13 +1951,13 @@ ${JSON.stringify(newInfo, null, 2)}
             const uniqueIds = [...new Set(ids.filter(id => id && id.trim()))];
             if (uniqueIds.length === 0)
                 return;
-            console.log(`[组织者] 删除 ${uniqueIds.length} 条旧档案`);
+            console.log(`[记忆者] 删除 ${uniqueIds.length} 条旧档案`);
             for (const id of uniqueIds) {
                 const [, error] = memoryDelete('lunar_messages', id.trim());
                 if (error)
-                    console.error(`[组织者] 删除记录 ${id} 失败:`, error);
+                    console.error(`[记忆者] 删除记录 ${id} 失败:`, error);
                 else
-                    console.log(`[组织者] 已删除记录 ${id}`);
+                    console.log(`[记忆者] 已删除记录 ${id}`);
             }
         }
         writeArchive(content) {
@@ -1965,9 +1965,9 @@ ${JSON.stringify(newInfo, null, 2)}
                 return;
             const [, error] = memoryAdd('lunar_messages', 'assistant', content.trim());
             if (error)
-                console.error('[组织者] 写入档案失败:', error);
+                console.error('[记忆者] 写入档案失败:', error);
             else
-                console.log(`[组织者] 已写入档案: ${content.slice(0, 60)}...`);
+                console.log(`[记忆者] 已写入档案: ${content.slice(0, 60)}...`);
         }
         parseJsonResponse(content) {
             try {
@@ -1976,7 +1976,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return JSON.parse(jsonStr);
             }
             catch (error) {
-                console.error('[组织者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
+                console.error('[记忆者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
                 return null;
             }
         }
@@ -1988,7 +1988,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return response.body?.choices?.[0]?.message?.content || '';
             }
             catch (error) {
-                console.error('[组织者] LLM 推理失败:', error);
+                console.error('[记忆者] LLM 推理失败:', error);
                 return '';
             }
         }
@@ -1999,21 +1999,21 @@ ${JSON.stringify(newInfo, null, 2)}
             return this.parseJsonResponse(content);
         }
     }
-    class OrganizeRole extends Toolchain {
+    class MemoryRole extends Toolchain {
         ARCHIVE_QUERY_TOPK = 50;
         constructor() {
-            super(fileView('prompts/organizeRole.md')[0]);
+            super(fileView('prompts/memoryRole.md')[0]);
         }
-        organizeHistoricalRecords() {
-            console.log('[组织者] 开始档案收集与整理');
+        memorizeHistoricalRecords() {
+            console.log('[记忆者] 开始档案收集与整理');
             if (GlobalConfig.unreadRecords.length === 0) {
-                console.log('[组织者] 没有未读记录需要整理');
+                console.log('[记忆者] 没有未读记录需要整理');
                 return;
             }
             if (!BaseConfig.memoryReady) {
                 BaseConfig.initMemory();
                 if (!BaseConfig.memoryReady) {
-                    console.warn('[组织者] 记忆库未就绪，保留未读记录待下次整理');
+                    console.warn('[记忆者] 记忆库未就绪，保留未读记录待下次整理');
                     return;
                 }
             }
@@ -2022,27 +2022,27 @@ ${JSON.stringify(newInfo, null, 2)}
                 this.processPersonArchives(records);
                 this.processEventArchives(records);
                 this.processSelfArchive(records);
-                console.log('[组织者] 档案整理完成');
+                console.log('[记忆者] 档案整理完成');
                 GlobalConfig.unreadRecords = [];
             }
             catch (error) {
-                console.error('[组织者] 档案整理失败，保留未读记录待下次重试:', error);
+                console.error('[记忆者] 档案整理失败，保留未读记录待下次重试:', error);
             }
         }
         processPersonArchives(records) {
-            console.log('[组织者] === 阶段一：人物档案处理 ===');
+            console.log('[记忆者] === 阶段一：人物档案处理 ===');
             const prompt = this.buildPersonExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[组织者] 人物档案提取未获得有效结果');
+                console.log('[记忆者] 人物档案提取未获得有效结果');
                 return;
             }
             const result = this.parseJsonResponse(content);
             if (!result || !result.items || result.items.length === 0) {
-                console.log('[组织者] 未提取到人物信息');
+                console.log('[记忆者] 未提取到人物信息');
                 return;
             }
-            console.log(`[组织者] 提取到 ${result.items.length} 个人物档案`);
+            console.log(`[记忆者] 提取到 ${result.items.length} 个人物档案`);
             for (const person of result.items) {
                 if (!person.name)
                     continue;
@@ -2051,15 +2051,15 @@ ${JSON.stringify(newInfo, null, 2)}
         }
         processSinglePersonArchive(newInfo) {
             const prefix = `${PERSON_PREFIX}${newInfo.name}]`;
-            console.log(`[组织者] 处理人物档案: ${newInfo.name}`);
+            console.log(`[记忆者] 处理人物档案: ${newInfo.name}`);
             const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatPersonArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log(`[组织者] 新增人物档案: ${newInfo.name}`);
+                console.log(`[记忆者] 新增人物档案: ${newInfo.name}`);
                 return;
             }
-            console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[记忆者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const oldArchive = this.parsePersonArchive(record.content);
                 if (!oldArchive) {
@@ -2072,29 +2072,29 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatPersonArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log(`[组织者] 合并更新人物档案: ${merged.name}`);
+                    console.log(`[记忆者] 合并更新人物档案: ${merged.name}`);
                 }
                 else {
                     const archiveText = this.formatPersonArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+                    console.log(`[记忆者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
         }
         processEventArchives(records) {
-            console.log('[组织者] === 阶段二：事件档案处理 ===');
+            console.log('[记忆者] === 阶段二：事件档案处理 ===');
             const prompt = this.buildEventExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[组织者] 事件档案提取未获得有效结果');
+                console.log('[记忆者] 事件档案提取未获得有效结果');
                 return;
             }
             const result = this.parseJsonResponse(content);
             if (!result || !result.items || result.items.length === 0) {
-                console.log('[组织者] 未提取到事件信息');
+                console.log('[记忆者] 未提取到事件信息');
                 return;
             }
-            console.log(`[组织者] 提取到 ${result.items.length} 个事件档案`);
+            console.log(`[记忆者] 提取到 ${result.items.length} 个事件档案`);
             for (const event of result.items) {
                 if (!event.name)
                     continue;
@@ -2103,15 +2103,15 @@ ${JSON.stringify(newInfo, null, 2)}
         }
         processSingleEventArchive(newInfo) {
             const prefix = `${EVENT_PREFIX}${newInfo.name}]`;
-            console.log(`[组织者] 处理事件档案: ${newInfo.name}`);
+            console.log(`[记忆者] 处理事件档案: ${newInfo.name}`);
             const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatEventArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log(`[组织者] 新增事件档案: ${newInfo.name}`);
+                console.log(`[记忆者] 新增事件档案: ${newInfo.name}`);
                 return;
             }
-            console.log(`[组织者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[记忆者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const mergePrompt = this.buildEventMergePrompt(record.content, newInfo);
                 const merged = this.runMergeLLM(mergePrompt);
@@ -2119,37 +2119,37 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatEventArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log(`[组织者] 合并更新事件档案: ${merged.name}`);
+                    console.log(`[记忆者] 合并更新事件档案: ${merged.name}`);
                 }
                 else {
                     const archiveText = this.formatEventArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log(`[组织者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
+                    console.log(`[记忆者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
                 }
             }
         }
         processSelfArchive(records) {
-            console.log('[组织者] === 阶段三：自我档案处理 ===');
+            console.log('[记忆者] === 阶段三：自我档案处理 ===');
             const prompt = this.buildSelfExtractPrompt(records);
             const content = this.runLLM(prompt);
             if (!content) {
-                console.log('[组织者] 自我档案提取未获得有效结果');
+                console.log('[记忆者] 自我档案提取未获得有效结果');
                 return;
             }
             const newInfo = this.parseJsonResponse(content);
             if (!newInfo || (!newInfo.mood && !newInfo.clothing && !newInfo.activity && !newInfo.needs)) {
-                console.log('[组织者] 未提取到有效的自我信息');
+                console.log('[记忆者] 未提取到有效的自我信息');
                 return;
             }
-            console.log('[组织者] 处理自我档案');
+            console.log('[记忆者] 处理自我档案');
             const existingRecords = this.queryArchiveByPrefix(SELF_PREFIX, this.ARCHIVE_QUERY_TOPK);
             if (existingRecords.length === 0) {
                 const archiveText = this.formatSelfArchive(newInfo);
                 this.writeArchive(archiveText);
-                console.log('[组织者] 新增自我档案');
+                console.log('[记忆者] 新增自我档案');
                 return;
             }
-            console.log(`[组织者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
+            console.log(`[记忆者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
             for (const record of existingRecords) {
                 const mergePrompt = this.buildSelfMergePrompt(record.content, newInfo);
                 const merged = this.runMergeLLM(mergePrompt);
@@ -2157,17 +2157,17 @@ ${JSON.stringify(newInfo, null, 2)}
                     this.deleteRecords([record.id]);
                     const archiveText = this.formatSelfArchive(merged);
                     this.writeArchive(archiveText);
-                    console.log('[组织者] 合并更新自我档案');
+                    console.log('[记忆者] 合并更新自我档案');
                 }
                 else {
                     const archiveText = this.formatSelfArchive(newInfo);
                     this.writeArchive(archiveText);
-                    console.log('[组织者] 合并失败，新信息作为补充写入');
+                    console.log('[记忆者] 合并失败，新信息作为补充写入');
                 }
             }
         }
         persistDiscardedMessages(discarded) {
-            console.log('[组织者] 开始持久化被抛弃的消息');
+            console.log('[记忆者] 开始持久化被抛弃的消息');
             if (!BaseConfig.memoryReady)
                 BaseConfig.initMemory();
             if (!BaseConfig.memoryReady)
@@ -2184,7 +2184,7 @@ ${JSON.stringify(newInfo, null, 2)}
                 return [];
             const [results, error] = memoryQuery('lunar_messages', queryText, topK);
             if (error) {
-                console.error('[组织者] 查询历史记录失败:', error);
+                console.error('[记忆者] 查询历史记录失败:', error);
                 return [];
             }
             if (!results || results.length === 0)
@@ -2518,7 +2518,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         musicianRole = new MusicianRole();
         viewerRole = new ViewerRole();
         actorRole = new ActorRole();
-        organizeRole = new OrganizeRole();
+        memoryRole = new MemoryRole();
         unreadContext = [];
         unreadVideoUrl = [];
         finalResponse = "";
@@ -2620,9 +2620,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
             if (actorPath)
                 results.push(actorPath);
-            const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
-            if (organizePath)
-                results.push(organizePath);
+            const memoryPath = this.memoryRole.dumpContext('记忆者', `${dir}\\agent_debug_记忆者.json`);
+            if (memoryPath)
+                results.push(memoryPath);
             const indexData = {
                 timestamp: new Date().toLocaleString('zh-CN', {
                     year: 'numeric', month: '2-digit', day: '2-digit',
@@ -2699,7 +2699,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     else
                         this.errorCount = 0;
                     if (GlobalConfig.unreadRecords.length > 30)
-                        this.organizeRole.organizeHistoricalRecords();
+                        this.memoryRole.memorizeHistoricalRecords();
                     const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
                     if (!textChunks.length)
                         throw new Error('清洗后的文本为空');
@@ -2745,7 +2745,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             this.musicianRole.coverContext([]);
             this.viewerRole.coverContext([]);
             this.actorRole.coverContext([]);
-            this.organizeRole.coverContext([]);
+            this.memoryRole.coverContext([]);
             this.unreadContext = [];
             this.unreadVideoUrl = [];
         }
@@ -3489,9 +3489,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.FileToBase64 = FileToBase64;
     exports.GlobalConfig = GlobalConfig;
     exports.LearnerRole = LearnerRole;
+    exports.MemoryRole = MemoryRole;
     exports.ModelBuilder = ModelBuilder;
     exports.MusicianRole = MusicianRole;
-    exports.OrganizeRole = OrganizeRole;
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
