@@ -7,9 +7,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// screenshotCapture 执行屏幕截图、压缩缩放并返回处理后的图片数据
+// screenshotCapture 执行屏幕截图、压缩缩放并返回处理后的图片数据数组
 // 参数: displayIndex, region, scale, format, quality
-// 返回值: [map[string]any, error] 包含 base64/format/width/height 的结果对象和错误信息
+// 返回值: [Array<Object>, error] 包含 base64/format/width/height 的结果对象数组和错误信息
 // 注意：此函数内部已集成 ResizeImage 处理，返回的 base64 字段格式为 "data:image/[format];base64,[data]"
 func (class *Runtime) screenshotCapture(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {

@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
+import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
 
 declare global {
     /**
@@ -77,12 +77,14 @@ declare global {
     function keyframe(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
     /**
      * 调整图片大小
-     * 
+     *
+     * 静态图返回单元素数组，动态图(GIF/APNG/WebP帧数>2)返回多帧base64数组
+     *
      * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据
-     * 
-     * @returns {[ResizeImageResult, Error | null]} 包含调整后的图片结果的元组，[调整后的图片结果, 错误信息]
+     *
+     * @returns {[ResizeImageResults, Error | null]} 包含调整后的图片结果数组的元组，[调整后的图片结果数组, 错误信息]
      */
-    function resizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResult, Error | null];
+    function resizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResults, Error | null];
     /**
      * 生成图片
      * 
@@ -225,9 +227,9 @@ declare global {
      *
      * @param {number} [quality] JPEG 质量 1-100
      *
-     * @returns {[ResizeImageResult, Error | null]} 包含处理结果的元组，[结果对象(base64/format/width/height), 错误信息]
+     * @returns {[ResizeImageResults, Error | null]} 包含处理结果的元组，[结果对象数组(base64/format/width/height), 错误信息]
      */
-    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [ResizeImageResult, Error | null];
+    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [ResizeImageResults, Error | null];
     /**
      * 获取所有显示器信息
      *

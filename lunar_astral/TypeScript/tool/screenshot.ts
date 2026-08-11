@@ -1,4 +1,4 @@
-import { ToolCall, GlobalConfig, ResizeImageResult } from '../index';
+import { ToolCall, GlobalConfig, ResizeImageResult, ResizeImageResults } from '../index';
 
 // ==== 工具定义 ====
 
@@ -54,32 +54,36 @@ async function handleScreenshot(args?: Record<string, any> | string): Promise<st
 	console.log(`最终参数: display=${displayIndex}, region="${region || ''}", scale="${scale || ''}", format="${captureFormat}"`);
 	console.log(`准备执行截图操作...`);
 
-	// Go 层统一处理截图捕获 + 图片压缩缩放，返回包含 base64/format/width/height 的结果对象
-	const [result, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0) as [ResizeImageResult, Error | null];
+	// Go 层统一处理截图捕获 + 图片压缩缩放，返回包含 base64/format/width/height 的结果对象数组
+	const [results, captureErr] = screenshotCapture(displayIndex, region || '', scale || '', captureFormat, 0) as [ResizeImageResults, Error | null];
 	if (captureErr) {
 		console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
 		console.log(`========== 截图工具调用结束(失败) ==========`);
 		return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
 	}
 
-	console.log(`截图处理成功: ${result?.width}x${result?.height}, 格式=${result?.format}`);
-
-	if (!result || !result.base64) {
+	if (!results || results.length === 0) {
 		console.error(`截图失败: 未获取到截图数据`);
 		console.log(`========== 截图工具调用结束(失败) ==========`);
 		return ['截图失败：未获取到截图数据', ''];
 	}
 
-	// 将处理后的图片推送到前端，base64 格式为 "data:image/[format];base64,[data]"
-	pushImage([result.base64]);
-	console.log(`图片已推送: ${result.width}x${result.height}, 格式=${result.format}, 数据长度=${result.base64.length} 字节`);
+	// 取第一帧作为主要结果信息
+	const firstFrame = results[0];
+	console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
 
-	// 返回文本响应 + base64 图片数据
-	const sizeInfo = `${result.width}x${result.height}`;
-	const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}），图片已展示给用户。`;
+	// 将所有帧的 base64 推送到前端
+	const base64List = results.map((r: ResizeImageResult) => r.base64);
+	pushImage(base64List);
+	console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+
+	// 返回文本响应 + 首帧 base64 图片数据
+	const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
+	const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
+	const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
 	console.log(`返回响应: ${sizeInfo}`);
 	console.log(`========== 截图工具调用结束(成功) ==========`);
-	return [textResponse, result.base64];
+	return [textResponse, firstFrame.base64];
 }
 
 // ==== 模块级注册 ====

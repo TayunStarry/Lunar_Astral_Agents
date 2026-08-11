@@ -1,4 +1,4 @@
-import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole } from '../index';
+import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole, ResizeImageResult } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -128,7 +128,7 @@ export class AgentDefine {
 			const newContent: Array<ImageContent | AudioContent | TextContent> = [];
 			// 遍历消息内容中的每个项
 			for (let item of message.content) {
-				/// 如果是文本项或音频项,直接添加到新内容数组
+				// 如果是文本项或音频项,直接添加到新内容数组
 				if (item.type == 'text' || item.type == 'input_audio') newContent.push(item);
 				// 检查是否为支持的视频文件格式
 				else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
@@ -136,17 +136,16 @@ export class AgentDefine {
 					await this.analysisVideoFile(item.image_url.url, '');
 				}
 				else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
-					console.log(item.image_url.url);
 					// 获取图片文件内容
 					const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
 					// 检查请求是否成功
 					if (error) throw new Error('获取图片文件失败');
-					/** 缩放图片 */
-					const [resizedBlob, error1] = resizeImage(response.body);
+					/** 缩放图片，返回图片数据数组（动态图多帧，静态图单帧） */
+					const [resizedImages, error1] = resizeImage(response.body);
 					// 检查缩放是否成功
 					if (error1) throw new Error('缩放图片失败');
-					// 添加到新内容数组
-					newContent.push({ type: 'image_url', image_url: { url: resizedBlob.base64 } });
+					// 遍历缩放结果，每帧作为独立的 image_url 内容项添加
+					resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
 				}
 			}
 			// 替换消息内容
@@ -182,12 +181,12 @@ export class AgentDefine {
 		if (learnerPath) results.push(learnerPath);
 
 		// 绘制者
-			const painterPath = this.painterRole.dumpContext('绘制者', `${dir}\\agent_debug_绘制者.json`);
-			if (painterPath) results.push(painterPath);
+		const painterPath = this.painterRole.dumpContext('绘制者', `${dir}\\agent_debug_绘制者.json`);
+		if (painterPath) results.push(painterPath);
 
-			// 演奏者
-			const musicianPath = this.musicianRole.dumpContext('演奏者', `${dir}\\agent_debug_演奏者.json`);
-			if (musicianPath) results.push(musicianPath);
+		// 演奏者
+		const musicianPath = this.musicianRole.dumpContext('演奏者', `${dir}\\agent_debug_演奏者.json`);
+		if (musicianPath) results.push(musicianPath);
 
 		// 观影者
 		const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
@@ -198,7 +197,7 @@ export class AgentDefine {
 		if (actorPath) results.push(actorPath);
 
 		// 组织者
-			const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
+		const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
 		if (organizePath) results.push(organizePath);
 
 		// 生成汇总索引文件

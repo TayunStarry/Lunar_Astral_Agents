@@ -115,7 +115,7 @@ func HandleGetDisplays(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(displays)
 }
 
-// HandleResizeImage 处理图片缩放请求
+// HandleResizeImage 处理图片缩放请求，返回图片数据数组（动态图多帧，静态图单帧）
 func HandleResizeImage(w http.ResponseWriter, r *http.Request) {
 	// 只允许POST方法
 	if r.Method != "POST" {

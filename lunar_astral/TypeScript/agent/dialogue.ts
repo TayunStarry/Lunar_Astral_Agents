@@ -41,75 +41,34 @@ export class DialogueRole extends ModelBuilder {
 		// 更新消息内容
 		this.updateMessageContent(cache, source);
 	}
-	/** 格式化历史消息 */
+	/** 格式化历史消息：图片总数≥20时先摘要再扁平化为纯文本 */
 	public formatHistoricalMessages(source: AgentDefine) {
 		// 如果消息数组为空,则不处理
 		if (this.messages.length === 0) return;
-		/** 扁平化后的消息数组，严格保持原始时间顺序 */
-		const flattenedMessages: PostMessage[] = [];
-		/** 判断消息是否为音频消息（input_audio 类型） */
-		const isAudioMessage = (c: any): boolean => c.type === 'input_audio';
-		// 遍历原始消息数组，将嵌套结构转换为扁平结构
-		for (const message of this.messages) {
-			// 消息内容为数组时，根据是否含音频采取不同策略
-			if (typeof message.content !== 'string') {
-				// 检查消息是否包含音频内容
-				if (message.content.some(isAudioMessage)) {
-					flattenedMessages.push(message);
-					continue;
-				}
-				// 非音频消息（图片等）：按原逻辑拆分每个内容项为独立消息
-				// 但若消息同时包含文本和图片，保留合并结构（避免多模态代理因
-				// 文本缺少媒体标记而报错："number of media markers does not match"）
-				const hasText = message.content.some((c: any) => c.type === 'text');
-				const hasImage = message.content.some((c: any) => c.type === 'image_url');
-				if (hasText && hasImage) {
-					flattenedMessages.push(message);
-					continue;
-				}
-				for (const content of message.content) {
-					// 文本内容项：提取为纯文本消息
-					if (content.type === 'text') flattenedMessages.push({ role: message.role, content: content.text });
-					// 视觉内容项：保留为单条消息（内容为单元素数组）
-					else flattenedMessages.push({ role: message.role, content: [content] });
-				}
-			}
-			else flattenedMessages.push(message);
-		}
-		/** 视觉消息总数 */
-		const visionCount = flattenedMessages.filter(m => { if (!Array.isArray(m.content) || m.content.some(isAudioMessage)) return false; }).length;
-		// 视觉消息数量<=10，无需摘要，直接使用扁平化结果
-		if (visionCount <= 10) this.messages = flattenedMessages;
-		// 视觉消息数量>10，需要对连续的视觉消息组分批摘要以减少上下文长度
-		else {
-			/** 处理后的最终消息数组 */
+		/** 整个消息队列中的图片帧总数 */
+		const totalImages = this.countTotalImages(this.messages);
+		// 图片帧数≥20：对每个多媒体消息摘要图片，最终全部扁平化为纯文本
+		if (totalImages >= 20) {
+			/** 处理后的纯文本消息数组 */
 			const processedMessages: PostMessage[] = [];
-			/** 当前连续视觉消息的缓冲区 */
-			let visionBuffer: PostMessage[] = [];
-			// 遍历扁平化后的消息数组
-			for (const message of flattenedMessages) {
-				// 判断当前消息是否为视觉消息（内容为数组类型，且非音频消息）
-				const isVisionMessage = Array.isArray(message.content) && !message.content.some(isAudioMessage);
-				// 累积连续的视觉消息到缓冲区
-				if (isVisionMessage) visionBuffer.push(message);
-				else {
-					// 遇到非视觉消息，先处理缓冲区中累积的视觉消息
-					// 这确保视觉消息的摘要结果出现在正确的位置（在当前文本消息之前）
-					if (visionBuffer.length > 0) {
-						this.processVisionBuffer(visionBuffer, processedMessages, source);
-						visionBuffer = [];
-					}
+			// 遍历所有消息对象
+			for (const message of this.messages) {
+				// 已是纯文本：直接保留
+				if (typeof message.content === 'string') {
 					processedMessages.push(message);
+					continue;
 				}
+				/** 对多媒体消息执行图片摘要，合并为纯文本 */
+				const textResult = this.summarizeMessageImages(message, source);
+				// 如果摘要结果为空或仅包含空格,则跳过
+				if (!textResult || textResult.trim() === '') continue;
+				// 保留摘要结果
+				processedMessages.push({ role: message.role, content: textResult });
 			}
-			// 处理末尾可能残留的视觉消息缓冲区
-			if (visionBuffer.length > 0) {
-				this.processVisionBuffer(visionBuffer, processedMessages, source);
-			}
-			// 覆写处理器模型的上下文为处理后的消息数组
 			this.messages = processedMessages;
 		}
-		// 续写提示词逻辑：所有场景共享
+		// 如果处理后消息数组为空（摘要全部失败等极端情况），跳过续写
+		if (this.messages.length === 0) return;
 		/** 最新消息的角色 */
 		const latestRole = this.messages.slice(-1)[0].role;
 		// 如果最新消息是用户或工具,则不处理
@@ -119,28 +78,44 @@ export class DialogueRole extends ModelBuilder {
 		// 添加随机拼接的提示词到处理器模型的上下文
 		this.writeContext({ role: 'user', content: prompt });
 	}
-	/** 处理连续视觉消息缓冲区 */
-	private processVisionBuffer(buffer: PostMessage[], output: PostMessage[], source: AgentDefine): void {
-		// 连续视觉消息<=10条，直接追加到输出数组，保持原始顺序
-		if (buffer.length <= 10) {
-			output.push(...buffer);
-			return;
-		}
-		// 连续视觉消息>10条，分批摘要处理，每批最多10条
-		for (let i = 0; i < buffer.length; i += 10) {
-			/** 截取当前批次的视觉消息（每批次最多10条） */
-			const batchFrames = buffer.slice(i, i + 10);
-			// 覆盖描述角色的上下文，传入当前批次的视觉消息
-			source.descriptionRole.coverContext(batchFrames);
-			/** 执行描述角色的模型运行，获取总结请求响应 */
+	/** 对单个多媒体消息中的图片执行摘要，返回合并后的纯文本；无内容时返回 null */
+	private summarizeMessageImages(message: PostMessage, source: AgentDefine): string | null {
+		if (typeof message.content === 'string') return message.content;
+		/** 消息中的图片内容项 */
+		const imageItems = message.content.filter((c: any) => c.type === 'image_url');
+		/** 消息中的文本内容项 */
+		const textItems = message.content.filter((c: any) => c.type === 'text');
+		/** 原始文本部分 */
+		const textPart = textItems.map((c: any) => c.text).join('\n');
+		// 无图片时直接返回文本
+		if (imageItems.length === 0) return textPart || null;
+		try {
+			// 将图片包装为独立消息，喂给描述角色进行摘要
+			source.descriptionRole.coverContext({ role: 'user', content: imageItems });
+			/** 运行描述角色模型，获取图片摘要 */
 			const summaryRequest = source.descriptionRole.run([], []);
-			/** 模型总结结果 */
+			/** 图片摘要结果 */
 			const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-			// 过滤空字符串和仅包含空格的字符串，将摘要作为用户消息插入到当前位置
+			// 检查摘要结果是否有效
 			if (summary && summary.trim().length > 0) {
-				output.push({ role: 'user', content: summary });
+				return textPart ? `${textPart}\n[图片描述：${summary}]` : `[图片描述：${summary}]`;
 			}
+			// 摘要为空时仅保留文本
+			return textPart || null;
 		}
+		catch (error) {
+			console.error('[对话者] 图片摘要异常:', error);
+			return textPart || null;
+		}
+	}
+	/** 统计单条消息中的 image_url 项数量 */
+	private countImagesInMessage(message: PostMessage): number {
+		if (typeof message.content === 'string') return 0;
+		return message.content.filter((c: any) => c.type === 'image_url').length;
+	}
+	/** 统计消息数组中所有图片帧的总数 */
+	private countTotalImages(messages: PostMessage[]): number {
+		return messages.reduce((sum, m) => sum + this.countImagesInMessage(m), 0);
 	}
 	/** 处理聊天消息响应 */
 	protected analyzeMessageResponse(message: ModelResponseBody, cache: ChatCache): void {

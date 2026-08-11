@@ -143,7 +143,8 @@ func detectBrowserPath() string {
 
 // ExecuteSearch 在指定搜索引擎上执行搜索，返回搜索结果列表
 // 按 engineFallbackOrder 顺序尝试，首个返回非空结果的引擎即为有效引擎
-func ExecuteSearch(query string) ([]SearchResult, error) {
+// maxResults 控制每个搜索引擎返回的最大结果数
+func ExecuteSearch(query string, maxResults int) ([]SearchResult, error) {
 	if err := ensureBrowser(); err != nil {
 		return nil, err
 	}
@@ -152,7 +153,7 @@ func ExecuteSearch(query string) ([]SearchResult, error) {
 	for _, engine := range engineFallbackOrder {
 		fmt.Printf("[%s] 尝试使用 %s 搜索: %s\n", ModuleName, engine, query)
 
-		results, err := searchOnEngine(engine, query)
+		results, err := searchOnEngine(engine, query, maxResults)
 		if err != nil {
 			fmt.Printf("[%s] %s 搜索失败: %v\n", ModuleName, engine, err)
 			lastErr = err
@@ -174,7 +175,7 @@ func ExecuteSearch(query string) ([]SearchResult, error) {
 }
 
 // searchOnEngine 在单个搜索引擎上执行搜索
-func searchOnEngine(engine string, query string) ([]SearchResult, error) {
+func searchOnEngine(engine string, query string, maxResults int) ([]SearchResult, error) {
 	searchURL := searchEngineURLs[engine] + url.QueryEscape(query)
 
 	browserMutex.Lock()
@@ -210,11 +211,11 @@ func searchOnEngine(engine string, query string) ([]SearchResult, error) {
 	// 根据引擎选择解析器
 	switch engine {
 	case "bing":
-		return parseBingResults(pageHTML), nil
+		return parseBingResults(pageHTML, maxResults), nil
 	case "baidu":
-		return parseBaiduResults(pageHTML), nil
+		return parseBaiduResults(pageHTML, maxResults), nil
 	case "sogou":
-		return parseSogouResults(pageHTML), nil
+		return parseSogouResults(pageHTML, maxResults), nil
 	default:
 		return nil, fmt.Errorf("不支持的搜索引擎: %s", engine)
 	}
@@ -226,7 +227,7 @@ func searchOnEngine(engine string, query string) ([]SearchResult, error) {
 
 // parseBingResults 解析 Bing 搜索结果页 HTML
 // Bing 结果结构：<li class="b_algo"> → <h2><a href="...">标题</a></h2> + <p>摘要</p>
-func parseBingResults(pageHTML string) []SearchResult {
+func parseBingResults(pageHTML string, maxResults int) []SearchResult {
 	doc, err := html.Parse(strings.NewReader(pageHTML))
 	if err != nil {
 		return nil
@@ -267,19 +268,19 @@ func parseBingResults(pageHTML string) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-			results = append(results, result)
-			if len(results) >= SearchResultsPerQuery {
-				break
+				results = append(results, result)
+				if len(results) >= maxResults {
+					break
+				}
 			}
 		}
+
+		return results
 	}
 
-	return results
-}
-
-// parseBaiduResults 解析百度搜索结果页 HTML
-// 百度结果结构：<div class="result c-container"> → <h3 class="t"><a>标题</a></h3> + <span class="content-right_*">摘要</span>
-func parseBaiduResults(pageHTML string) []SearchResult {
+	// parseBaiduResults 解析百度搜索结果页 HTML
+	// 百度结果结构：<div class="result c-container"> → <h3 class="t"><a>标题</a></h3> + <span class="content-right_*">摘要</span>
+	func parseBaiduResults(pageHTML string, maxResults int) []SearchResult {
 	doc, err := html.Parse(strings.NewReader(pageHTML))
 	if err != nil {
 		return nil
@@ -323,19 +324,19 @@ func parseBaiduResults(pageHTML string) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-			results = append(results, result)
-			if len(results) >= SearchResultsPerQuery {
-				break
+				results = append(results, result)
+				if len(results) >= maxResults {
+					break
+				}
 			}
 		}
+
+		return results
 	}
 
-	return results
-}
-
-// parseSogouResults 解析搜狗搜索结果页 HTML
-// 搜狗结果结构：<div class="rb"> 或 <div class="vrwrap"> → <h3 class="vrTitle"><a>标题</a></h3> + <p>摘要</p>
-func parseSogouResults(pageHTML string) []SearchResult {
+	// parseSogouResults 解析搜狗搜索结果页 HTML
+	// 搜狗结果结构：<div class="rb"> 或 <div class="vrwrap"> → <h3 class="vrTitle"><a>标题</a></h3> + <p>摘要</p>
+	func parseSogouResults(pageHTML string, maxResults int) []SearchResult {
 	doc, err := html.Parse(strings.NewReader(pageHTML))
 	if err != nil {
 		return nil
@@ -382,19 +383,19 @@ func parseSogouResults(pageHTML string) []SearchResult {
 		}
 
 		if result.Title != "" && result.URL != "" {
-			results = append(results, result)
-			if len(results) >= SearchResultsPerQuery {
-				break
+				results = append(results, result)
+				if len(results) >= maxResults {
+					break
+				}
 			}
 		}
+
+		return results
 	}
 
-	return results
-}
-
-// =============================================================================
-// 网页内容提取
-// =============================================================================
+	// =============================================================================
+	// 网页内容提取
+	// =============================================================================
 
 // ExtractPageContent 导航到指定 URL 并提取页面内容
 // 先提取 DOM 文本，根据文本量判定为 text 或 visual 类型
@@ -460,6 +461,58 @@ func ExtractPageContent(targetURL string) (*PageContent, error) {
 	}
 
 	return content, nil
+}
+
+// =============================================================================
+// 快速搜索 — 纯视觉提取
+// =============================================================================
+
+// ExtractPageVisualOnly 导航到指定 URL 并仅获取滚动截图，不提取 DOM 文本
+// 用于快速搜索模式：跳过文本提取和内容类型判定，直接获取视觉内容
+// maxScreenshots 为最大截图数，传入 0 则使用默认值 MaxScreenshotsPerPage
+func ExtractPageVisualOnly(targetURL string, maxScreenshots int) (*PageContent, error) {
+	if err := ensureBrowser(); err != nil {
+		return nil, err
+	}
+
+	browserMutex.Lock()
+	ctx := browserCtx
+	browserMutex.Unlock()
+
+	// 阶段1：导航（使用 PageLoadTimeout）
+	loadCtx, loadCancel := context.WithTimeout(ctx, PageLoadTimeout)
+	defer loadCancel()
+
+	var finalURL string
+	if err := chromedp.Run(loadCtx,
+		chromedp.Navigate(targetURL),
+		chromedp.WaitReady("body", chromedp.ByQuery),
+		chromedp.Sleep(2*time.Second), // 等待懒加载和动态内容
+		chromedp.Location(&finalURL),
+	); err != nil {
+		return nil, fmt.Errorf("页面加载失败 %s: %w", targetURL, err)
+	}
+
+	fmt.Printf("[%s] 快速视觉提取: %s\n", ModuleName, finalURL)
+
+	// 阶段2：截图（使用 QueryTimeout，因为多页滚动截图可能耗时较长）
+	if maxScreenshots <= 0 {
+		maxScreenshots = MaxScreenshotsPerPage
+	}
+	screenshotCtx, screenshotCancel := context.WithTimeout(ctx, QueryTimeout)
+	defer screenshotCancel()
+
+	screenshots, err := CapturePageScreenshots(screenshotCtx, maxScreenshots)
+	if err != nil {
+		return nil, fmt.Errorf("快速截图失败 %s: %w", targetURL, err)
+	}
+
+	return &PageContent{
+		URL:         finalURL,
+		ContentType: "visual",
+		Screenshots: screenshots,
+		// TextContent 留空，快速搜索模式不使用文本
+	}, nil
 }
 
 // extractDOMText 从当前页面提取 DOM 文本内容

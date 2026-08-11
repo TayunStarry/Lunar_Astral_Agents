@@ -118,9 +118,8 @@ func GetDisplays() []map[string]int {
 	return displays
 }
 
-// processGIF 处理GIF图片：抽取帧、缩放到512x512、纵向拼接至多5帧为长图
-// 若拼接不可行则回退到首帧编码输出
-func processGIF(imgData []byte) (map[string]any, error) {
+// processGIF 处理GIF图片：帧数>2时截取至多15帧独立返回；帧数≤2时按静态图处理
+func processGIF(imgData []byte) ([]map[string]any, error) {
 	// 1. 解码GIF
 	gifImg, err := gif.DecodeAll(bytes.NewReader(imgData))
 	if err != nil {
@@ -136,36 +135,44 @@ func processGIF(imgData []byte) (map[string]any, error) {
 
 	logger.Info("Screenshot", "processGIF: GIF帧数=%d", frameCount)
 
-	// 2. 选取至多5帧，尽量均分
-	selectedIndices := selectFrameIndices(frameCount, 5)
-	logger.Info("Screenshot", "processGIF: 选取帧索引=%v", selectedIndices)
+	// 2. 帧数≤2：按静态图处理，取首帧缩放输出
+	if frameCount <= 2 {
+		logger.Info("Screenshot", "processGIF: 帧数≤2，按静态图处理首帧")
+		palettedFrame := gifImg.Image[0]
+		bounds := palettedFrame.Bounds()
+		rgba := image.NewRGBA(bounds)
+		draw.Draw(rgba, bounds, palettedFrame, bounds.Min, draw.Over)
+		resized := resizeToMax1024(rgba)
+		result, err := encodeFrameToMap(resized, "png")
+		if err != nil {
+			return nil, err
+		}
+		return []map[string]any{result}, nil
+	}
 
-	// 3. 逐帧转换为RGBA并缩放到512x512
-	frames := make([]*image.RGBA, 0, len(selectedIndices))
+	// 3. 动态图（帧数>2）：选取至多15帧，均分采样
+	selectedIndices := selectFrameIndices(frameCount, 15)
+	logger.Info("Screenshot", "processGIF: 动态图%d帧→选取%d帧索引=%v", frameCount, len(selectedIndices), selectedIndices)
+
+	// 4. 逐帧转换为RGBA、缩放到1024、编码输出
+	results := make([]map[string]any, 0, len(selectedIndices))
 	for _, idx := range selectedIndices {
 		palettedFrame := gifImg.Image[idx]
-		// 将Paletted图像绘制到RGBA（考虑GIF的位移偏移）
 		bounds := palettedFrame.Bounds()
 		rgba := image.NewRGBA(bounds)
 		draw.Draw(rgba, bounds, palettedFrame, bounds.Min, draw.Over)
 
-		// 缩放到512x512
-		resized := ResizeToFit(rgba, 512, 512)
-		frames = append(frames, resized)
+		resized := resizeToMax1024(rgba)
+		result, err := encodeFrameToMap(resized, "png")
+		if err != nil {
+			logger.Error("Screenshot", "processGIF: 第%d帧编码失败: %v", idx, err)
+			return nil, fmt.Errorf("GIF第%d帧编码失败: %v", idx, err)
+		}
+		results = append(results, result)
 	}
 
-	// 4. 尝试纵向拼接
-	concatenated, err := verticallyConcatFrames(frames)
-	if err != nil {
-		// 拼接不可行，回退到首帧
-		logger.Info("Screenshot", "processGIF: 纵向拼接失败(%v)，回退到首帧", err)
-		return encodeSingleFrame(frames[0], "gif")
-	}
-
-	logger.Info("Screenshot", "processGIF: 纵向拼接完成 尺寸=%dx%d",
-		concatenated.Bounds().Dx(), concatenated.Bounds().Dy())
-
-	return encodeSingleFrame(concatenated, "gif")
+	logger.Info("Screenshot", "processGIF: 处理完成 输出%d帧", len(results))
+	return results, nil
 }
 
 // selectFrameIndices 从total帧中选取最多maxCount帧，尽量在长度方向均分
@@ -226,18 +233,17 @@ func verticallyConcatFrames(frames []*image.RGBA) (*image.RGBA, error) {
 	return result, nil
 }
 
-// encodeSingleFrame 将单帧RGBA图像编码输出为PNG格式
-func encodeSingleFrame(img *image.RGBA, _ string) (map[string]any, error) {
+// encodeFrameToMap 将单帧RGBA图像编码为PNG并构造响应map
+func encodeFrameToMap(img *image.RGBA, _ string) (map[string]any, error) {
 	width := img.Bounds().Dx()
 	height := img.Bounds().Dy()
 
 	buf := &bytes.Buffer{}
-	// GIF帧可能包含透明度，统一输出PNG
 	outputFormat := "png"
 	contentType := "image/png"
 
 	if err := png.Encode(buf, img); err != nil {
-		logger.Error("Screenshot", "encodeSingleFrame: PNG编码失败: %v", err)
+		logger.Error("Screenshot", "encodeFrameToMap: PNG编码失败: %v", err)
 		return nil, fmt.Errorf("PNG编码失败: %v", err)
 	}
 
@@ -252,15 +258,16 @@ func encodeSingleFrame(img *image.RGBA, _ string) (map[string]any, error) {
 		"height": height,
 	}
 
-	logger.Info("Screenshot", "encodeSingleFrame: 编码完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+	logger.Info("Screenshot", "encodeFrameToMap: 编码完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
 		outputFormat, width, height, len(buf.Bytes()))
 	return response, nil
 }
 
 // ResizeImage 图片预处理：格式验证、非JPG/PNG转码、等比例缩放到1024、编码输出
 // 仅输出JPG或PNG格式的base64数据
-// GIF格式特殊处理：帧抽取→缩放→纵向拼接→编码输出
-func ResizeImage(imgData []byte) (map[string]any, error) {
+// 动态图(GIF/APNG/WebP)帧数>2时：截取至多15帧→逐帧缩放→返回base64数组
+// 静态图或帧数≤2时：返回单元素数组
+func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	// 1. 输入验证
 	if len(imgData) == 0 {
 		logger.Error("Screenshot", "ResizeImage: 图片数据为空")
@@ -280,10 +287,10 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 
 	var processedData []byte
 
-	// 3. 格式处理：GIF特殊处理，JPG/PNG直接使用，否则FFmpeg转码
+	// 3. 格式处理：动态图特殊处理，JPG/PNG直接使用，否则FFmpeg转码
 	switch originalFormat {
 	case "gif":
-		// GIF特殊处理：帧抽取→缩放→纵向拼接→编码输出
+		// GIF动态图处理：帧数>2→截取至多15帧独立返回；帧数≤2→静态处理
 		logger.Info("Screenshot", "ResizeImage: 检测到GIF格式，启动GIF帧处理流程")
 		result, err := processGIF(imgData)
 		if err != nil {
@@ -291,8 +298,40 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 			return nil, fmt.Errorf("GIF处理失败: %v", err)
 		}
 		return result, nil
-	case "jpeg", "png":
+	case "png":
+		// 检测是否为APNG动态图
+		if isAPNG(imgData) {
+			logger.Info("Screenshot", "ResizeImage: 检测到APNG动态图，启动FFmpeg帧提取")
+			result, err := processAnimatedWithFFmpeg(imgData)
+			if err != nil {
+				logger.Error("Screenshot", "ResizeImage: APNG处理失败: %v", err)
+				return nil, fmt.Errorf("APNG处理失败: %v", err)
+			}
+			return result, nil
+		}
 		processedData = imgData
+	case "jpeg":
+		processedData = imgData
+	case "webp":
+		// 检测是否为动态WebP
+		if isAnimatedWebP(imgData) {
+			logger.Info("Screenshot", "ResizeImage: 检测到动态WebP，启动FFmpeg帧提取")
+			result, err := processAnimatedWithFFmpeg(imgData)
+			if err != nil {
+				logger.Error("Screenshot", "ResizeImage: 动态WebP处理失败: %v", err)
+				return nil, fmt.Errorf("动态WebP处理失败: %v", err)
+			}
+			return result, nil
+		}
+		// 静态WebP：FFmpeg转码为PNG
+		logger.Info("Screenshot", "ResizeImage: 静态WebP，启动FFmpeg转码")
+		converted, err := convertImageWithFFmpeg(imgData)
+		if err != nil {
+			logger.Error("Screenshot", "ResizeImage: WebP转码失败: %v", err)
+			return nil, fmt.Errorf("WebP转码失败: %v", err)
+		}
+		processedData = converted
+		logger.Info("Screenshot", "ResizeImage: WebP转码完成，转换后大小=%d bytes", len(processedData))
 	default:
 		logger.Info("Screenshot", "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
 		converted, err := convertImageWithFFmpeg(imgData)
@@ -364,7 +403,7 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 	base64Data := base64.StdEncoding.EncodeToString(buf.Bytes())
 	base64WithHeader := fmt.Sprintf("data:%s;base64,%s", contentType, base64Data)
 
-	// 9. 构造响应
+	// 9. 构造响应（单帧数组）
 	response := map[string]any{
 		"image":  buf.Bytes(),
 		"base64": base64WithHeader,
@@ -375,7 +414,7 @@ func ResizeImage(imgData []byte) (map[string]any, error) {
 
 	logger.Info("Screenshot", "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
 		outputFormat, newWidth, newHeight, len(buf.Bytes()))
-	return response, nil
+	return []map[string]any{response}, nil
 }
 
 // detectImageFormat 通过文件头魔数检测图片格式
@@ -463,6 +502,207 @@ func convertImageWithFFmpeg(input []byte) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// isAPNG 检测PNG数据是否为动态PNG（APNG）
+// 通过扫描PNG chunk，检测是否存在acTL（Animation Control）chunk
+func isAPNG(data []byte) bool {
+	// PNG签名: 8字节
+	if len(data) < 8+4+4+4 {
+		return false
+	}
+	// 跳过PNG签名(8字节)，从第一个chunk开始扫描
+	offset := 8
+	// 限制扫描100个chunk，防止恶意数据
+	for i := 0; i < 100 && offset+12 <= len(data); i++ {
+		// chunk结构: 4字节长度 + 4字节类型 + 数据 + 4字节CRC
+		chunkLen := int(data[offset])<<24 | int(data[offset+1])<<16 | int(data[offset+2])<<8 | int(data[offset+3])
+		chunkType := string(data[offset+4 : offset+8])
+
+		if chunkType == "acTL" {
+			return true
+		}
+		// 跳转到下一个chunk: 4(length) + 4(type) + chunkLen(data) + 4(CRC)
+		offset += 12 + chunkLen
+	}
+	return false
+}
+
+// isAnimatedWebP 检测WebP数据是否为动态WebP
+// 通过扫描RIFF容器中的chunk，检测是否存在ANIM chunk
+func isAnimatedWebP(data []byte) bool {
+	// RIFF容器最小长度: RIFF(4) + size(4) + WEBP(4) + chunk(4+4) = 20
+	if len(data) < 20 {
+		return false
+	}
+	// 检查RIFF头
+	if string(data[0:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
+		return false
+	}
+	// 从第一个chunk开始扫描（偏移12字节跳过RIFF头+WEBP标识）
+	offset := 12
+	fileEnd := 8 + int(data[4]) | int(data[5])<<8 | int(data[6])<<16 | int(data[7])<<24
+
+	// 限制扫描100个chunk
+	for i := 0; i < 100 && offset+8 <= len(data) && offset+8 <= fileEnd; i++ {
+		chunkType := string(data[offset : offset+4])
+		chunkSize := int(data[offset+4]) | int(data[offset+5])<<8 | int(data[offset+6])<<16 | int(data[offset+7])<<24
+
+		if chunkType == "ANIM" {
+			return true
+		}
+		// 跳转到下一个chunk（注意chunk大小奇偶填充）
+		offset += 8 + chunkSize
+		if chunkSize%2 == 1 {
+			offset++ // 奇数大小会有1字节填充
+		}
+	}
+	return false
+}
+
+// processAnimatedWithFFmpeg 使用FFmpeg提取动态图帧，截取至多15帧，逐帧缩放后返回base64数组
+// 支持APNG和动态WebP格式
+func processAnimatedWithFFmpeg(imgData []byte) ([]map[string]any, error) {
+	// 1. 使用FFmpeg提取所有帧
+	frames, err := extractFramesWithFFmpeg(imgData)
+	if err != nil {
+		return nil, fmt.Errorf("FFmpeg帧提取失败: %v", err)
+	}
+
+	frameCount := len(frames)
+	if frameCount == 0 {
+		return nil, fmt.Errorf("动态图无帧数据")
+	}
+
+	logger.Info("Screenshot", "processAnimatedWithFFmpeg: 提取到%d帧", frameCount)
+
+	// 2. 帧数≤2：按静态图处理
+	if frameCount <= 2 {
+		logger.Info("Screenshot", "processAnimatedWithFFmpeg: 帧数≤2，按静态图处理")
+		rgba := ToRGBA(frames[0])
+		resized := resizeToMax1024(rgba)
+		result, err := encodeFrameToMap(resized, "png")
+		if err != nil {
+			return nil, err
+		}
+		return []map[string]any{result}, nil
+	}
+
+	// 3. 动态图：选取至多15帧
+	selectedIndices := selectFrameIndices(frameCount, 15)
+	logger.Info("Screenshot", "processAnimatedWithFFmpeg: %d帧→选取%d帧", frameCount, len(selectedIndices))
+
+	// 4. 逐帧缩放并编码
+	results := make([]map[string]any, 0, len(selectedIndices))
+	for _, idx := range selectedIndices {
+		rgba := ToRGBA(frames[idx])
+		// 尺寸验证
+		bounds := rgba.Bounds()
+		if bounds.Dx() > 16384 || bounds.Dy() > 16384 {
+			logger.Info("Screenshot", "processAnimatedWithFFmpeg: 第%d帧尺寸异常(%dx%d)，跳过", idx, bounds.Dx(), bounds.Dy())
+			continue
+		}
+		resized := resizeToMax1024(rgba)
+		result, err := encodeFrameToMap(resized, "png")
+		if err != nil {
+			logger.Error("Screenshot", "processAnimatedWithFFmpeg: 第%d帧编码失败: %v", idx, err)
+			return nil, fmt.Errorf("第%d帧编码失败: %v", idx, err)
+		}
+		results = append(results, result)
+	}
+
+	logger.Info("Screenshot", "processAnimatedWithFFmpeg: 处理完成 输出%d帧", len(results))
+	return results, nil
+}
+
+// extractFramesWithFFmpeg 使用FFmpeg从动态图中提取所有帧，返回解码后的image.Image切片
+// 通过image2pipe管道输出PNG流，然后按PNG签名分割为独立帧
+func extractFramesWithFFmpeg(input []byte) ([]image.Image, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	ffmpegPath := "ffmpeg"
+	if *config.FfmpegPath != "" {
+		ffmpegPath = *config.FfmpegPath
+	}
+
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-i", "pipe:0",
+		"-f", "image2pipe",
+		"-vcodec", "png",
+		"pipe:1",
+	)
+
+	stdoutBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	cmd.Stdin = bytes.NewReader(input)
+	cmd.Stdout = stdoutBuf
+	cmd.Stderr = errBuf
+
+	err := cmd.Run()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("FFmpeg帧提取超时（60秒）")
+		}
+		return nil, fmt.Errorf("FFmpeg帧提取失败: %v, stderr: %s", err, errBuf.String())
+	}
+
+	if stdoutBuf.Len() == 0 {
+		return nil, fmt.Errorf("FFmpeg帧提取输出为空")
+	}
+
+	return splitPNGFrames(stdoutBuf.Bytes())
+}
+
+// splitPNGFrames 按PNG文件签名分割连续PNG流为独立帧
+// PNG签名: 89 50 4E 47 0D 0A 1A 0A
+func splitPNGFrames(data []byte) ([]image.Image, error) {
+	pngSig := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+
+	var frames []image.Image
+	offset := 0
+
+	for offset < len(data) {
+		// 查找下一个PNG签名
+		idx := bytes.Index(data[offset:], pngSig)
+		if idx == -1 {
+			break
+		}
+		idx += offset
+
+		// 查找下一个PNG签名（确定当前帧结束位置）
+		nextIdx := bytes.Index(data[idx+len(pngSig):], pngSig)
+		var frameData []byte
+		if nextIdx == -1 {
+			frameData = data[idx:]
+		} else {
+			frameData = data[idx : idx+len(pngSig)+nextIdx]
+		}
+
+		// 解码PNG帧
+		img, _, err := image.Decode(bytes.NewReader(frameData))
+		if err != nil {
+			logger.Error("Screenshot", "splitPNGFrames: 解码第%d帧失败: %v", len(frames), err)
+			offset = idx + len(frameData)
+			continue
+		}
+
+		frames = append(frames, img)
+		offset = idx + len(frameData)
+
+		// 安全限制：最多读取300帧
+		if len(frames) >= 300 {
+			logger.Info("Screenshot", "splitPNGFrames: 已达300帧上限，停止读取")
+			break
+		}
+	}
+
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("未能从PNG流中解析出任何帧")
+	}
+
+	logger.Info("Screenshot", "splitPNGFrames: 成功解析%d帧", len(frames))
+	return frames, nil
 }
 
 // resizeToMax1024 等比例缩放图片，长宽均不超过1024像素

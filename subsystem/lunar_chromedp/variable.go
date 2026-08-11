@@ -24,8 +24,9 @@ const (
 	BrowserMaxMemMB         = 2048             // 浏览器内存上限（MB）
 	BrowserMaxCPUPercent    = 80.0             // 浏览器 CPU 占用上限（%）
 	BrowserCPUHighDuration  = 5 * time.Second  // CPU 持续高占用阈值
-	SearchResultsPerQuery   = 5                // 每个关键词取前 5 条结果
-	PageLoadTimeout         = 15 * time.Second // 页面加载超时
+	SearchResultsPerQuery      = 5                // 每个关键词取前 5 条结果
+	QuickSearchResultsPerQuery = 5                // 快速搜索每个关键词取前 5 条结果
+	PageLoadTimeout            = 15 * time.Second // 页面加载超时
 )
 
 // 字典网站关键词黑名单 — 搜索智能体具备字典能力，无需浪费 token 在字典网站
@@ -112,6 +113,14 @@ var (
 
 	// aiGenerateReport 基于所有摘要生成最终搜索报告
 	aiGenerateReport func(query string, summaries []string, sources []string) (string, error)
+
+	// aiDecideSearchMode 判定是否使用快速视觉搜索模式
+	// 返回: useQuickSearch（是否使用快速搜索）, reasoning（判定理由）, error
+	aiDecideSearchMode func(query string) (useQuickSearch bool, reasoning string, err error)
+
+	// aiSummarizeVisualContent 纯视觉摘要：仅基于截图生成页面内容摘要
+	// 与 aiSummarizeContent 的区别：不接收文本内容，仅接收截图
+	aiSummarizeVisualContent func(screenshots [][]byte) (summary string, err error)
 )
 
 // =============================================================================

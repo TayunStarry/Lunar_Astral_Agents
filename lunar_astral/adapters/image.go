@@ -40,8 +40,9 @@ func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
-// resizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果
-// 返回值: [Object, error] 缩放结果和错误信息
+// resizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果数组
+// 动态图（GIF/APNG/WebP帧数>2）返回多帧base64数组；静态图返回单元素数组
+// 返回值: [Array<Object>, error] 缩放结果数组和错误信息
 func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
@@ -82,12 +83,12 @@ func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("不支持的图片数据类型")})
 	}
 
-	// 调用图片缩放函数
-	result, err := image.ResizeImage(bytesData)
+	// 调用图片缩放函数，返回图片数据数组
+	results, err := image.ResizeImage(bytesData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}
-	return class.runtime.ToValue([]any{result, nil})
+	return class.runtime.ToValue([]any{results, nil})
 }
 
 // generateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果

@@ -24,6 +24,9 @@ func init() {
 	aiJudgeMemory = judgeMemory
 	aiEvaluateSufficiency = evaluateSufficiency
 	aiGenerateReport = generateReport
+	// 快速搜索模式钩子
+	aiDecideSearchMode = decideSearchMode
+	aiSummarizeVisualContent = summarizeVisualContent
 }
 
 // =============================================================================
@@ -281,6 +284,36 @@ func summarizeContent(textContent string, screenshots [][]byte) (string, error) 
 }
 
 // =============================================================================
+// Hook 实现：纯视觉内容摘要（快速搜索专用）
+// =============================================================================
+
+// summarizeVisualContent 仅基于页面截图生成内容摘要，不接收文本
+// 用于快速搜索模式：跳过 DOM 文本提取，直接通过多模态模型理解页面视觉内容
+func summarizeVisualContent(screenshots [][]byte) (string, error) {
+	if len(screenshots) == 0 {
+		return "（页面无截图内容）", nil
+	}
+
+	systemPrompt := `你是一个网页视觉内容分析专家。根据提供的网页截图，生成一段简洁的页面内容摘要。
+
+要求：
+1. 从截图中提取页面展示的核心信息和关键内容
+2. 摘要长度控制在200字以内
+3. 使用中文输出
+4. 如果截图无法辨认有效内容，注明"页面内容不清晰"
+5. 以客观第三人称描述，不添加主观评价
+6. 如果截图显示的是错误页、404、验证码等，直接说明`
+
+	userPrompt := "请基于以上网页截图生成内容摘要。"
+	resp, err := callAI(systemPrompt, userPrompt, screenshots)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(resp), nil
+}
+
+// =============================================================================
 // Hook 实现：记忆判定
 // =============================================================================
 
@@ -308,6 +341,57 @@ func judgeMemory(memoryContext string, query string) (bool, bool, error) {
 	}
 
 	return parseJudgeResponse(resp)
+}
+
+// =============================================================================
+// Hook 实现：搜索模式判定（快速搜索 vs 深度搜索）
+// =============================================================================
+
+// decideSearchMode 判定用户查询是否适合快速视觉搜索模式
+// 快速搜索适合：视觉对比、产品外观、UI设计、页面截图类查询
+// 深度搜索适合：研究类、事实核查、多源验证、学术类查询
+// 返回：(是否使用快速搜索, 判定理由, 错误)
+func decideSearchMode(query string) (bool, string, error) {
+	systemPrompt := `你是一个搜索策略专家。根据用户问题，判断最适合的搜索模式。
+
+两种模式说明：
+1. 【快速视觉搜索】：直接浏览网页截图，适合视觉类查询（产品外观、设计参考、UI对比、页面截图等）
+2. 【深度文本搜索】：提取网页文本并深度分析，适合研究类查询（事实核查、多源验证、学术问题、复杂推理等）
+
+判定标准：
+- 问题涉及视觉对比、外观、设计、界面 → 快速视觉搜索
+- 问题涉及概念、原理、数据、分析、论证 → 深度文本搜索
+- 问题简单直接、不需要深入分析 → 快速视觉搜索
+- 问题需要多角度验证、信息整合 → 深度文本搜索
+
+请严格按以下格式回复（仅回复两行，不要多余内容）：
+模式：快速/深度
+理由：一句话简述判定依据`
+
+	resp, err := callAI(systemPrompt, query, nil)
+	if err != nil {
+		return false, "", err
+	}
+
+	return parseModeDecisionResponse(resp)
+}
+
+// parseModeDecisionResponse 解析 AI 的模式判定响应
+func parseModeDecisionResponse(resp string) (useQuick bool, reasoning string, err error) {
+	lines := strings.Split(strings.TrimSpace(resp), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "模式：") || strings.HasPrefix(lower, "模式:") {
+			useQuick = strings.Contains(lower, "快速")
+		}
+		if strings.HasPrefix(lower, "理由：") || strings.HasPrefix(lower, "理由:") {
+			reasoning = strings.TrimPrefix(line, "理由：")
+			reasoning = strings.TrimPrefix(reasoning, "理由:")
+			reasoning = strings.TrimSpace(reasoning)
+		}
+	}
+	return useQuick, reasoning, nil
 }
 
 // =============================================================================

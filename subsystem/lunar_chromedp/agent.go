@@ -146,6 +146,20 @@ func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error)
 		return memoryResult, nil
 	}
 
+	// ---- Phase 1.5: 搜索模式判定 ----
+	if aiDecideSearchMode != nil {
+		useQuick, reasoning, err := aiDecideSearchMode(query)
+		if err != nil {
+			fmt.Printf("[%s] 搜索模式判定失败: %v，回退深度搜索\n", ModuleName, err)
+		} else if useQuick {
+			fmt.Printf("[%s] AI 判定使用快速视觉搜索模式: %s\n", ModuleName, reasoning)
+			return a.executeQuickSearchPipeline(query)
+		} else {
+			fmt.Printf("[%s] AI 判定使用深度搜索模式: %s\n", ModuleName, reasoning)
+		}
+	}
+	// 如果 aiDecideSearchMode 为 nil（未注册），直接走现有深度搜索流程
+
 	// ---- Phase 2: 初始搜索 ----
 	initialSummaries, initialSources, err := a.phaseInitialSearch(query)
 	if err != nil {
@@ -186,6 +200,117 @@ func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error)
 
 	// ---- Phase 4: 报告生成 ----
 	report, err := a.phaseGenerateReport(query, searchRounds)
+	if err != nil {
+		return nil, err
+	}
+
+	// ---- Phase 5: 记忆存储 ----
+	a.phaseStoreToMemory(query, report)
+
+	return report, nil
+}
+
+// =============================================================================
+// 快速搜索流水线（视觉优先，单轮搜索）
+// =============================================================================
+
+// executeQuickSearchPipeline 执行快速视觉搜索：单轮搜索 + 纯截图摘要 + 跳过深度搜索
+// 流程：原始查询直接搜索 → 截图提取 → 视觉摘要 → 报告生成 → 记忆存储
+func (a *SearchAgent) executeQuickSearchPipeline(query string) (*SearchReport, error) {
+	fmt.Printf("[%s] [快速搜索] 使用原始查询作为关键词: %s\n", ModuleName, query)
+
+	// 使用原始查询作为唯一关键词
+	a.usedKeywords = []string{query}
+
+	// ---- 搜索获取最多 15 条结果 ----
+	results, err := ExecuteSearch(query, QuickSearchResultsPerQuery)
+	if err != nil {
+		return nil, fmt.Errorf("快速搜索执行失败: %w", err)
+	}
+
+	if len(results) == 0 {
+		return &SearchReport{
+			Query:       query,
+			Answer:      "月华找不到你想要的信息",
+			FromMemory:  false,
+			GeneratedAt: time.Now(),
+		}, nil
+	}
+
+	// 去重（按 URL）
+	seenURLs := make(map[string]bool)
+	var uniqueResults []SearchResult
+	for _, r := range results {
+		if !seenURLs[r.URL] {
+			seenURLs[r.URL] = true
+			uniqueResults = append(uniqueResults, r)
+		}
+	}
+
+	// 过滤字典网站
+	uniqueResults = filterDictionarySites(uniqueResults)
+	fmt.Printf("[%s] [快速搜索] 去重过滤后共 %d 条结果\n", ModuleName, len(uniqueResults))
+
+	// ---- 视觉提取 + 截图摘要 ----
+	var unreachableCount int
+	for i, result := range uniqueResults {
+		fmt.Printf("[%s] [快速搜索] 处理结果 [%d/%d]: %s\n", ModuleName, i+1, len(uniqueResults), result.Title)
+
+		// 仅截图，不提取 DOM 文本
+		content, extractErr := ExtractPageVisualOnly(result.URL, MaxScreenshotsPerPage)
+		if extractErr != nil {
+			fmt.Printf("[%s] 页面不可达: %s (%v)，跳过\n", ModuleName, result.URL, extractErr)
+			unreachableCount++
+			continue
+		}
+
+		// 准备截图数据
+		var screenshotData [][]byte
+		for _, ss := range content.Screenshots {
+			screenshotData = append(screenshotData, ss.ImageData)
+		}
+
+		if len(screenshotData) == 0 {
+			fmt.Printf("[%s] 页面无截图数据: %s，跳过\n", ModuleName, result.URL)
+			continue
+		}
+
+		// 纯视觉 AI 摘要
+		var summary string
+		if aiSummarizeVisualContent != nil {
+			summary, extractErr = aiSummarizeVisualContent(screenshotData)
+			if extractErr != nil {
+				fmt.Printf("[%s] 视觉摘要生成失败: %v，使用占位摘要\n", ModuleName, extractErr)
+				summary = fmt.Sprintf("（页面: %s，共 %d 张截图）", result.URL, len(screenshotData))
+			}
+		} else {
+			// 降级：无 AI 时使用占位描述
+			summary = fmt.Sprintf("（页面: %s，共 %d 张截图）", result.URL, len(screenshotData))
+		}
+
+		if summary != "" {
+			a.accumulatedSummaries = append(a.accumulatedSummaries, summary)
+			a.accumulatedSources = append(a.accumulatedSources, content.URL)
+		}
+	}
+
+	// 全部不可达
+	if len(uniqueResults) > 0 && len(a.accumulatedSummaries) == 0 {
+		return nil, fmt.Errorf("所有搜索结果页面均不可达 (%d 条)", len(uniqueResults))
+	}
+
+	if len(a.accumulatedSummaries) == 0 {
+		return &SearchReport{
+			Query:       query,
+			Answer:      "月华找不到你想要的信息",
+			FromMemory:  false,
+			GeneratedAt: time.Now(),
+		}, nil
+	}
+
+	// ---- Phase 4: 报告生成（跳过 Phase 2.5 和 Phase 3）----
+	fmt.Printf("[%s] [快速搜索] 共获得 %d 条视觉摘要，直接生成报告\n", ModuleName, len(a.accumulatedSummaries))
+	report, err := a.phaseGenerateReport(query, 1) // searchRounds = 1
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +561,7 @@ func (a *SearchAgent) executeSearchAndExtract(keywords []string) (summaries []st
 	// 合并所有关键词的搜索结果
 	var allResults []SearchResult
 	for _, kw := range keywords {
-		results, searchErr := ExecuteSearch(kw)
+		results, searchErr := ExecuteSearch(kw, SearchResultsPerQuery)
 		if searchErr != nil {
 			fmt.Printf("[%s] 关键词 '%s' 搜索失败: %v\n", ModuleName, kw, searchErr)
 			continue

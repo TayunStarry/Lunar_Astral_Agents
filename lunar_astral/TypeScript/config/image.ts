@@ -30,7 +30,7 @@ export interface KeyFrame {
 	data: string;
 }
 
-/** 缩放图片结果接口 */
+/** 缩放图片结果接口（单帧） */
 export interface ResizeImageResult {
 	/** 缩放后的图片数据 */
 	image: Uint8Array;
@@ -43,6 +43,9 @@ export interface ResizeImageResult {
 	/** 缩放后的图片高度 */
 	height: number;
 }
+
+/** 缩放图片返回类型：静态图返回单元素数组，动态图(GIF/APNG/WebP帧数>2)返回多帧数组 */
+export type ResizeImageResults = ResizeImageResult[];
 
 /** 图片生成参数接口 */
 export interface GenerateImageParams {
