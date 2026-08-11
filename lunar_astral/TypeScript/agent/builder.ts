@@ -120,14 +120,12 @@ export class ModelBuilder extends ConfigModifier {
 		const rawMessages: PostMessage[] = [
 			// 系统提示词
 			{ role: 'system', content: this.systemPrompt },
-			// 用户上下文占位符
-			{ role: 'user', content: '[上下文]' },
+			// 运行时消息
+			...this.runtimeMessages,
 			// 追加的上下文(rag消息)
 			...appendContext,
 			// 早期历史消息
 			...this.messages.slice(0, -1),
-			// 运行时消息
-			...this.runtimeMessages,
 			// 最新消息
 			...this.messages.slice(-1)
 		];

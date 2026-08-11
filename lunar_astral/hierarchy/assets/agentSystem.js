@@ -28,10 +28,6 @@ var agentSystem = (function (exports) {
             return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
         }
         ;
-        static get fileServiceUrl() {
-            return url()[0];
-        }
-        ;
         static get MultimodalKey() {
             return GlobalConfig.customConfig?.agent?.multimodal_key || 'key-520-1314-2000-02-18';
         }
@@ -544,10 +540,9 @@ var agentSystem = (function (exports) {
         run(appendContext, toolCall) {
             const rawMessages = [
                 { role: 'system', content: this.systemPrompt },
-                { role: 'user', content: '[上下文]' },
+                ...this.runtimeMessages,
                 ...appendContext,
                 ...this.messages.slice(0, -1),
-                ...this.runtimeMessages,
                 ...this.messages.slice(-1)
             ];
             const requestBody = {
