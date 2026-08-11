@@ -1,4 +1,4 @@
-import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, OrganizeRole, ResizeImageResult } from '../index';
+import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, MemoryRole, ResizeImageResult } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -18,8 +18,8 @@ export class AgentDefine {
 	public viewerRole: ViewerRole = new ViewerRole();
 	/** 行动者角色(3D动画/位移/空间感知) */
 	public actorRole: ActorRole = new ActorRole();
-	/** 组织者角色(组织记忆) */
-	protected organizeRole: OrganizeRole = new OrganizeRole();
+	/** 记忆者角色(组织记忆) */
+	protected memoryRole: MemoryRole = new MemoryRole();
 	/** 未读上下文 */
 	public unreadContext: PostMessage[] = [];
 	/** 未读视频文件 */
@@ -155,7 +155,7 @@ export class AgentDefine {
 	/**
 	 * 一键导出所有子智能体的运行时上下文到本地文件（覆写模式）
 	 *
-	 * 将对话者、学习者、绘制者、演奏者、组织者的上下文分别导出为独立 JSON 文件，
+	 * 将对话者、学习者、绘制者、演奏者、记忆者的上下文分别导出为独立 JSON 文件，
 	 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
 	 *
 	 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
@@ -196,9 +196,9 @@ export class AgentDefine {
 		const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
 		if (actorPath) results.push(actorPath);
 
-		// 组织者
-		const organizePath = this.organizeRole.dumpContext('组织者', `${dir}\\agent_debug_组织者.json`);
-		if (organizePath) results.push(organizePath);
+		// 记忆者
+		const memoryPath = this.memoryRole.dumpContext('记忆者', `${dir}\\agent_debug_记忆者.json`);
+		if (memoryPath) results.push(memoryPath);
 
 		// 生成汇总索引文件
 		const indexData = {

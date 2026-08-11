@@ -24,7 +24,7 @@ export * from './agent/dialogue';
 export * from './agent/painter';
 export * from './agent/musician';
 export * from './agent/learner';
-export * from './agent/organize';
+export * from './agent/memory';
 export * from './agent/viewer';
 export * from './agent/actor';
 export * from './agent/define';

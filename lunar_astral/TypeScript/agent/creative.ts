@@ -46,7 +46,7 @@ export abstract class CreativeRoleBase<TDetail> extends ModelBuilder {
 	/**
 	 * 覆写 writeContext：子智能体淘汰的消息不进入 GlobalConfig.unreadRecords
 	 *
-	 * 对话者淘汰的历史记录才能进入 unreadRecords 供组织者归档。
+	 * 对话者淘汰的历史记录才能进入 unreadRecords 供记忆者归档。
 	 */
 	public writeContext(context: PostMessage): this {
 		const cleaned = this.stripReasoningContent(context);
