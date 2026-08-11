@@ -26,10 +26,10 @@ Lunar_Astral_Agents/
 ├── lunar_astral/          # 核心系统：星图·月华（AI 桌面智能体）
 ├── crystal_astral/        # 扩展系统：星图·琉璃（工具集扩展）
 ├── subsystem/             # 公共子系统 + 独立 AI 引擎 + 运维工具
-│   ├── config/            # 全局配置中枢
-│   ├── browser/           # WebView 窗口管理
-│   ├── storage/           # 文件管理 + SQLite 数据库
-│   ├── image/             # 图像生成 + 截图 + 视频关键帧
+│   ├── general_config/     # 全局配置中枢
+│   ├── browser_client/     # WebView 窗口管理
+│   ├── file_manager/       # 文件管理 + SQLite 数据库
+│   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
 │   ├── qwen3_tts_lunar/   # 语音合成（C++ GGML 引擎）
 │   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
 │   ├── lunar_chromedp/    # 智能网络检索
@@ -146,9 +146,10 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
 |--------|------|------|
 | 星图·月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心 |
 | 星图·琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统 |
-| 配置管理 | [subsystem/config/](subsystem/config/) | 全局配置中枢 |
-| 文件管理 | [subsystem/storage/](subsystem/storage/) | 文件 CRUD + SQLite |
-| 图像处理 | [subsystem/image/](subsystem/image/README.md) | 图像生成 + 截图 + 视频关键帧 |
+| 配置管理 | [subsystem/general_config/](subsystem/general_config/) | 全局配置中枢 |
+| 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件 CRUD + SQLite |
+| 图像处理 | [subsystem/image_processor/](subsystem/image_processor/README.md) | 图像生成 + 截图 + 视频关键帧 |
+| 网络检索 | [subsystem/lunar_chromedp/](subsystem/lunar_chromedp/README.md) | AI 多引擎搜索智能体 |
 | 语音合成 | [subsystem/qwen3_tts_lunar/](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS |
 | 语音识别 | [subsystem/qwen_asr_lunar/](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR |
 | 项目架构 | [ARCHITECTURE.md](ARCHITECTURE.md) | 完整架构说明 |

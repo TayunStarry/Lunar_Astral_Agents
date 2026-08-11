@@ -1,4 +1,4 @@
-# 子系统——图像处理（image）
+# 子系统——图像处理（image_processor）
 
 图像生成与视频关键帧提取的共享库模块，封装 stable-diffusion.cpp 调用流程与视频帧截取逻辑，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
 
@@ -18,7 +18,7 @@
 
 ## 功能概述
 
-`image` 子系统是图像生成与视频处理能力的共享库，为星图·月华提供文生图和视频关键帧提取能力。
+`image_processor` 子系统是图像生成与视频处理能力的共享库，为星图·月华提供文生图和视频关键帧提取能力。
 
 | 功能 | 说明 |
 |------|------|
@@ -57,8 +57,8 @@
 <div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
   <ul style="list-style-type: none; padding-left: 0;">
     <li><code>image</code></li>
-    <li style="padding-left: 1.5em;"><code>config</code> <span style="color: #6a737d;">(../config) — 配置管理（扩散模型路径、图像参数）</span></li>
-    <li style="padding-left: 1.5em;"><code>logger</code> <span style="color: #6a737d;">(../logger) — 彩色终端日志</span></li>
+    <li style="padding-left: 1.5em;"><code>general_config</code> <span style="color: #6a737d;">(../general_config) — 配置管理（扩散模型路径、图像参数）</span></li>
+    <li style="padding-left: 1.5em;"><code>general_logger</code> <span style="color: #6a737d;">(../general_logger) — 彩色终端日志</span></li>
     <li style="padding-left: 1.5em;"><strong>外部依赖</strong>
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>sd-cli.exe</code> <span style="color: #6a737d;">— stable-diffusion.cpp 命令行引擎</span></li>
@@ -263,7 +263,7 @@ func main() {
 
 ### Q: sd-cli.exe 在哪里？
 
-sd-cli.exe 由 [sd_lunar 子系统](../sd_lunar/README.md) 编译生成，位于 `cpp/build/bin/sd-cli.exe`。图像生成模块通过 [config 子系统](../config/README.md) 中的 `VisualEngine` 路径配置找到它。
+sd-cli.exe 由 [sd_lunar 子系统](../../the_crashed_cpp_project/sd_lunar/README.md) 编译生成，位于 `cpp/build/bin/sd-cli.exe`。图像生成模块通过 [general_config 子系统](../general_config/README.md) 中的 `VisualEngine` 路径配置找到它。
 
 ### Q: 图像生成速度慢怎么办？
 
@@ -287,6 +287,6 @@ sd-cli.exe 由 [sd_lunar 子系统](../sd_lunar/README.md) 编译生成，位于
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
-- [配置管理子系统](../config/README.md) —— `DiffusionModel`、`VisualEngine`、`FfmpegPath` 配置
-- [SD 图像生成引擎](../sd_lunar/README.md) —— stable-diffusion.cpp C++ 推理引擎
+- [配置管理子系统](../general_config/README.md) —— `DiffusionModel`、`VisualEngine`、`FfmpegPath` 配置
+- [SD 图像生成引擎](../../the_crashed_cpp_project/sd_lunar/README.md) —— stable-diffusion.cpp C++ 推理引擎
 - [星图·月华](../../lunar_astral/README.md) —— image 子系统的主要集成使用方

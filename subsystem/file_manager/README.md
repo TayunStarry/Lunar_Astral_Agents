@@ -1,4 +1,4 @@
-# 子系统——文件管理（storage）
+# 子系统——文件管理（file_manager）
 
 本地文件存储与 SQLite 数据库管理模块，提供文件 CRUD、ZIP 归档、数据库批量操作等功能，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
 
@@ -18,7 +18,7 @@
 
 ## 功能概述
 
-`storage` 子系统提供完整的本地文件与数据库管理能力：
+`file_manager` 子系统提供完整的本地文件与数据库管理能力：
 
 | 功能 | 说明 |
 |------|------|
@@ -345,6 +345,6 @@ SQLite 原生支持 INTEGER、REAL、TEXT、BLOB、NULL 五种类型。建表时
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
-- [配置管理子系统](../config/README.md) —— `LocalDir`、`Database` 路径配置
+- [配置管理子系统](../general_config/README.md) —— `LocalDir`、`Database` 路径配置
 - [星图·琉璃](../../crystal_astral/README.md) —— 文件管理 HTTP 端点使用方
 - [星图·月华](../../lunar_astral/README.md) —— 适配器层调用方

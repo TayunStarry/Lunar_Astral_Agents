@@ -39,7 +39,7 @@
 | `ws.go` | WebSocket 通信 |
 | `assets/` | 前端静态资源（index.html + script.js + style.css） |
 
-**Go 模块依赖**：`config`、`browser`、`storage`、`image`、`logger`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`
 
 ---
 
@@ -157,6 +157,6 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 - [项目主文档](../README.md) — 环境要求、整体架构
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
 - [星图·月华](../lunar_astral/README.md) — AI 智能体核心系统
-- [配置管理](../subsystem/config/README.md) — 全局配置
-- [文件管理](../subsystem/storage/README.md) — 文件与数据库详情
-- [图像处理](../subsystem/image/README.md) — 截图与图像生成详情
+- [配置管理](../subsystem/general_config/README.md) — 全局配置
+- [文件管理](../subsystem/file_manager/README.md) — 文件与数据库详情
+- [图像处理](../subsystem/image_processor/README.md) — 截图与图像生成详情

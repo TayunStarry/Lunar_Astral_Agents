@@ -1,4 +1,4 @@
-# 子系统——配置管理（config）
+# 子系统——配置管理（general_config）
 
 全局配置中枢模块，负责聚合所有命令行参数与 JSON 配置文件，为其他子系统提供统一的配置访问点。
 
@@ -17,7 +17,7 @@
 
 ## 功能概述
 
-`config` 模块是星月智能平台的**基础设施层**，不实现任何业务逻辑，仅负责：
+`general_config` 模块是星月智能平台的**基础设施层**，不实现任何业务逻辑，仅负责：
 
 1. 定义并聚合所有**命令行参数**（Go `flag` 包）
 2. 通过 **JSON 配置文件** (`lunar_config.json`) 覆盖默认值
@@ -252,4 +252,4 @@ MinPort          ModelPort         ProxyPort        MaxPort
 - [项目主文档](../../README.md) —— 环境要求与编译流程
 - [星图·月华](../../lunar_astral/README.md) —— 配置使用方
 - [星图·琉璃](../../crystal_astral/README.md) —— 配置使用方
-- [网页前端子系统](../browser/README.md) —— WebView 窗口参数使用
+- [网页前端子系统](../browser_client/README.md) —— WebView 窗口参数使用

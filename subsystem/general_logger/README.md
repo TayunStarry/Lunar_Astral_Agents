@@ -1,4 +1,4 @@
-# 子系统——彩色终端日志（logger）
+# 子系统——彩色终端日志（general_logger）
 
 轻量级彩色终端日志输出模块，提供分级日志格式化与 ANSI 颜色渲染，为所有子系统提供统一的日志输出规范。
 
@@ -17,7 +17,7 @@
 
 ## 功能概述
 
-`logger` 模块是星月智能平台的**基础设施层**，为所有子系统提供统一的彩色终端日志输出。
+`general_logger` 模块是星月智能平台的**基础设施层**，为所有子系统提供统一的彩色终端日志输出。
 
 | 特性 | 说明 |
 |------|------|
@@ -175,7 +175,7 @@ logger.SetOutput(f)
 
 ### Q: 为什么 Info 日志没有输出？
 
-Info 级别日志仅在开发模式下输出。请确认已调用 `logger.SetDevMode(true)`。在星月智能平台中，开发模式由 [config 子系统](../config/README.md) 的 `Developer` 标志控制。
+Info 级别日志仅在开发模式下输出。请确认已调用 `logger.SetDevMode(true)`。在星月智能平台中，开发模式由 [general_config 子系统](../general_config/README.md) 的 `Developer` 标志控制。
 
 ### Q: 日志颜色在 Windows 终端中不显示？
 
@@ -200,7 +200,4 @@ replace logger => ../logger
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
-- [配置管理子系统](../config/README.md) —— Developer 开发模式配置
-- [HTTPS 代理子系统](../proxy/README.md) —— logger 的使用方
-- [GGUF 元数据查看器](../gguf_metadata_viewer/README.md) —— logger 的使用方
-- [分卷归档子系统](../volume_archive/README.md) —— logger 的使用方
+- [配置管理子系统](../general_config/README.md) —— Developer 开发模式配置

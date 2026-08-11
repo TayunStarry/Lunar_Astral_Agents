@@ -27,7 +27,7 @@
 │                           │                                    │
 │  ┌────────────────────────┼────────────────────────────────┐   │
 │  │           公共子系统 (subsystem/)                         │   │
-│  │  config · browser · storage · image · logger             │   │
+│  │  general_config · browser_client · file_manager · image_processor · general_logger             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │           独立 AI 引擎 (subsystem/)                      │   │
@@ -72,11 +72,11 @@ Lunar_Astral_Agents/
 │   └── assets/            # 前端静态资源（embed 嵌入）
 │
 ├── subsystem/             # 可复用子系统
-│   ├── config/            # 全局配置中枢
-│   ├── browser/           # WebView 窗口 + IP 发现
-│   ├── storage/           # 文件管理 + SQLite 数据库
-│   ├── image/             # 图像生成 + 截图 + 视频关键帧
-│   ├── logger/            # 彩色终端日志
+│   ├── general_config/     # 全局配置中枢
+│   ├── browser_client/     # WebView 窗口 + IP 发现
+│   ├── file_manager/       # 文件管理 + SQLite 数据库
+│   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
+│   ├── general_logger/     # 彩色终端日志
 │   ├── lunar_chromedp/    # 智能网络检索（Chromedp）
 │   ├── qwen3_tts_lunar/   # 语音合成（C++ GGML 引擎）
 │   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
@@ -103,7 +103,7 @@ Lunar_Astral_Agents/
 | `websocket/` | 实时双向通信，连接管理、读写泵、广播推送 |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
 
-**Go 模块依赖**：`config`、`browser`、`storage`、`image`、`logger`、`lunar_chromedp`、`qwen3_tts_lunar`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts_lunar`
 
 **数据流**：前端 UI → HTTP POST `/write/message` → Go 服务层 → goja JS 智能体 → llama-server (GGUF 推理) → WebSocket 推送 → 前端渲染
 
@@ -118,7 +118,7 @@ Lunar_Astral_Agents/
 | `handler.go` | 代理转发处理器（模型列表/对话/completions） |
 | `assets/` | 前端静态资源（毛玻璃风格 UI） |
 
-**Go 模块依赖**：`config`、`browser`、`storage`、`image`、`logger`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`
 
 琉璃通过智能路由将 AI 请求代理到月华后端（localhost:56789），同时直接服务自己的文件管理、数据库、截图等工具界面。
 
@@ -130,11 +130,11 @@ Lunar_Astral_Agents/
 
 | 子系统 | 功能 | 依赖方 |
 |--------|------|--------|
-| `config` | 全局配置中枢，命令行参数 + JSON 双层配置 | 所有 Go 模块 |
-| `browser` | WebView 窗口管理 + 本地 IP 自动发现 | 月华、琉璃 |
-| `storage` | 文件 CRUD + SQLite 数据库 + ZIP 归档 | 月华、琉璃 |
-| `image` | 扩散图像生成 + 截图（多显示器/区域）+ 视频关键帧提取 | 月华、琉璃 |
-| `logger` | 彩色终端日志输出 | 所有 Go 模块 |
+| `general_config` | 全局配置中枢，命令行参数 + JSON 双层配置 | 所有 Go 模块 |
+| `browser_client` | WebView 窗口管理 + 本地 IP 自动发现 | 月华、琉璃 |
+| `file_manager` | 文件 CRUD + SQLite 数据库 + ZIP 归档 | 月华、琉璃 |
+| `image_processor` | 扩散图像生成 + 截图（多显示器/区域）+ 视频关键帧提取 | 月华、琉璃 |
+| `general_logger` | 彩色终端日志输出 | 所有 Go 模块 |
 
 ### 独立 AI 引擎
 
@@ -157,10 +157,10 @@ Lunar_Astral_Agents/
 ### Go Module 依赖图
 
 ```
-lunar_astral → config, browser, storage, image, logger, lunar_chromedp, qwen3_tts_lunar
-crystal_astral → config, browser, storage, image, logger
-environment_repair → config
-lunar_chromedp → storage, config
+lunar_astral → general_config, browser_client, file_manager, image_processor, general_logger, lunar_chromedp, qwen3_tts_lunar
+crystal_astral → general_config, browser_client, file_manager, image_processor, general_logger
+environment_repair → general_config
+lunar_chromedp → file_manager, general_config
 ```
 
 ### 数据流

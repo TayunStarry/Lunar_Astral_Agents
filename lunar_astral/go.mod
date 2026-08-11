@@ -12,7 +12,7 @@ require (
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
 	LunarSubsystem/lunar_chromedp v0.0.0
-	qwen3_tts_lunar v0.0.0
+	LunarSubsystem/qwen3_tts_lunar v0.0.0
 )
 
 require (
@@ -53,7 +53,7 @@ replace LunarSubsystem/file_manager => ../subsystem/file_manager
 
 replace LunarSubsystem/browser_client => ../subsystem/browser_client
 
-replace qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
+replace LunarSubsystem/qwen3_tts_lunar => ../subsystem/qwen3_tts_lunar
 
 replace LunarSubsystem/general_logger => ../subsystem/general_logger
 

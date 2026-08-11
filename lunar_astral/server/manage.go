@@ -3,9 +3,10 @@ package server
 import (
 	"LunarSubsystem/browser_client"
 	"LunarSubsystem/general_config"
-	"context"
-	image "LunarSubsystem/image_processor/server"
 	"LunarSubsystem/general_logger"
+	image "LunarSubsystem/image_processor/server"
+	"LunarSubsystem/qwen3_tts_lunar/module"
+	"context"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
 	"lunar_astral/hierarchy"
@@ -17,7 +18,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"qwen3_tts_lunar/module"
 	"syscall"
 	"time"
 )

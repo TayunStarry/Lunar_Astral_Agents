@@ -31,7 +31,7 @@
 
 **功能**：文件管理、SQLite 数据库可视化 CRUD、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、外部应用加载器。
 
-**技术栈**：Go 后端 + 原生 HTML/CSS/JS 前端（毛玻璃风格），复用 storage 和 image 子系统。
+**技术栈**：Go 后端 + 原生 HTML/CSS/JS 前端（毛玻璃风格），复用 file_manager 和 image_processor 子系统。
 
 **运行**：`.\Crystal_Astral.exe`，自动随机端口（10000~40000），WebView 窗口（1500×1050）。AI 请求自动代理到月华后端。
 

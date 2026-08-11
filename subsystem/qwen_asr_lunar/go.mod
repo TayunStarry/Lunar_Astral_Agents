@@ -1,4 +1,4 @@
-module qwen-asr-server
+module LunarSubsystem/qwen_asr_lunar
 
 go 1.24.4
 

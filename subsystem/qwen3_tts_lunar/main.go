@@ -3,11 +3,11 @@ package main
 import (
 	"LunarSubsystem/general_config"
 	"LunarSubsystem/general_logger"
+	"LunarSubsystem/qwen3_tts_lunar/module"
 	"context"
 	"flag"
 	"fmt"
 	"os"
-	"qwen3_tts_lunar/module"
 	"time"
 )
 

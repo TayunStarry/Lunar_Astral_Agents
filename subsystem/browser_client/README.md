@@ -1,4 +1,4 @@
-# 子系统——网页前端（browser）
+# 子系统——网页前端（browser_client）
 
 桌面 WebView 窗口管理与本地网络 IP 自动发现模块，负责在桌面上启动嵌入式浏览器窗口。
 
@@ -16,7 +16,7 @@
 
 ## 功能概述
 
-`browser` 模块提供两种浏览器启动方式：
+`browser_client` 模块提供两种浏览器启动方式：
 
 | 方式 | 说明 |
 |------|------|
@@ -166,7 +166,7 @@ default:
 
 ### Q: 如何修改 WebView 窗口样式？
 
-通过 [config 子系统](../config/README.md) 中的 WebView 参数调整窗口标题、大小、可调整性等属性。
+通过 [general_config 子系统](../general_config/README.md) 中的 WebView 参数调整窗口标题、大小、可调整性等属性。
 
 ### Q: IP 发现返回了错误的 IP 怎么办？
 
@@ -179,13 +179,13 @@ ip, _ := browser.GetLocalIP([]string{"10.0.0."})
 
 ### Q: 如何强制使用系统浏览器？
 
-在 [config 子系统](../config/README.md) 中将 `config.AllowBrowser` 设为 `true`，同时确保调用代码正确处理了 WebView 不支持的场景。
+在 [general_config 子系统](../general_config/README.md) 中将 `config.AllowBrowser` 设为 `true`，同时确保调用代码正确处理了 WebView 不支持的场景。
 
 ---
 
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
-- [配置管理子系统](../config/README.md) —— WebView 窗口参数配置
+- [配置管理子系统](../general_config/README.md) —— WebView 窗口参数配置
 - [星图·月华](../../lunar_astral/README.md) —— browser 的主要使用方
 - [星图·琉璃](../../crystal_astral/README.md) —— browser 的使用方
