@@ -17,8 +17,7 @@
 		"bridging_keywords": [
 			"月华",
 			"3826713076"
-		],
-		"debug_mode": false
+		]
 	},
 	"agent": {
 		"embedding_model": "system-embedding",

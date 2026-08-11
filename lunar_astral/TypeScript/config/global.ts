@@ -63,6 +63,6 @@ export class GlobalConfig {
 	};
 	/** 获取 调试模式开关 */
 	public static get debugMode(): boolean {
-		return GlobalConfig.customConfig?.server?.debug_mode ?? false;
+		return GlobalConfig.customConfig?.server?.developer ?? false;
 	};
 };
