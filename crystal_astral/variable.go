@@ -1,8 +1,8 @@
 package main
 
 import (
-	storage "LunarSubsystem/FileManager/server"
-	image_server "LunarSubsystem/ImageProcessor/server"
+	file "LunarSubsystem/FileManager/server"
+	image "LunarSubsystem/ImageProcessor/server"
 	"embed"
 )
 
@@ -50,37 +50,37 @@ var animCache = &AnimationListCache{}
 var SystemEndpoints = []SystemEndpoint{
 	// ==== 应用与资源 ====
 	{Path: "/load/application", Handler: loadApplicationHandler, Method: "POST", Description: "加载应用"},
-	{Path: "/background", Handler: storage.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
+	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
 
 	// ==== 文件操作 ====
-	{Path: "/file/read/", Handler: storage.ReadHandler, Method: "GET", Description: "文件读取"},
-	{Path: "/file/write", Handler: storage.SaveHandler, Method: "POST", Description: "文件保存"},
-	{Path: "/file/delete/", Handler: storage.DeleteHandler, Method: "DELETE", Description: "文件删除"},
-	{Path: "/file/list/", Handler: storage.FileListHandler, Method: "POST", Description: "文件列表"},
-	{Path: "/file/download/", Handler: storage.DownloadHandler, Method: "GET", Description: "文件下载"},
-	{Path: "/file/preview", Handler: storage.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
-	{Path: "/file/archive", Handler: storage.ArchiveHandler, Method: "POST", Description: "文件归档"},
+	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取"},
+	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存"},
+	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除"},
+	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表"},
+	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载"},
+	{Path: "/file/preview", Handler: file.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
+	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},
 
 	// ==== 扩展包管理 ====
-	{Path: "/file/package/install", Handler: storage.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
-	{Path: "/file/package/export", Handler: storage.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
-	{Path: "/file/package/delete", Handler: storage.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
+	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
+	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
+	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
 
 	// ==== 知识库与记忆库 ====
-	{Path: "/knowledge/", Handler: storage.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
-	{Path: "/memory/", Handler: storage.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
+	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
+	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
 
 	// ==== 文件整理 ====
-	{Path: "/file/organize", Handler: storage.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
+	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 
 	// ==== 截图与图像处理 ====
-	{Path: "/capture", Handler: image_server.HandleScreenshot, Method: "POST", Description: "通用截图"},
-	{Path: "/keyframe", Handler: image_server.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
-	{Path: "/capture/display/", Handler: image_server.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
-	{Path: "/capture/region", Handler: image_server.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
-	{Path: "/capture/displays", Handler: image_server.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
-	{Path: "/resize", Handler: image_server.HandleResizeImage, Method: "POST", Description: "图片缩放"},
+	{Path: "/capture", Handler: image.HandleScreenshot, Method: "POST", Description: "通用截图"},
+	{Path: "/keyframe", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
+	{Path: "/capture/display/", Handler: image.HandleScreenshotDisplay, Method: "GET", Description: "屏幕截图"},
+	{Path: "/capture/region", Handler: image.HandleScreenshotRegion, Method: "POST", Description: "区域截图"},
+	{Path: "/capture/displays", Handler: image.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
+	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
 	{Path: "/convert/image", Handler: convertImageHandler, Method: "POST", Description: "单张图片格式转换"},
 	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
 	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
@@ -89,8 +89,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
 	{Path: "/gguf/metadata", Handler: ggufMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
-	{Path: "/generate", Handler: image_server.GenerateHandler, Method: "POST", Description: "图像生成"},
-	{Path: "/generate/wait", Handler: image_server.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
+	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图像生成"},
+	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
 
 	// ==== 月华服务 ====
 	{Path: "/lunar/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},

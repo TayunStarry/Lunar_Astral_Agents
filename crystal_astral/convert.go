@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -78,7 +78,7 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 	// 执行转换
 	err := convertImage(req.Path, outputPath, targetFormat, quality)
 	if err != nil {
-		logger.Error("ConvertImage", "转换失败 %s: %v", filepath.Base(req.Path), err)
+		LoggerGeneral.Error("ConvertImage", "转换失败 %s: %v", filepath.Base(req.Path), err)
 		writeJSON(w, http.StatusInternalServerError, ConvertImageResponse{
 			Success: false,
 			Error:   fmt.Sprintf("转换失败: %v", err),
@@ -89,11 +89,11 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 	// 删除源文件
 	if req.DeleteSource {
 		if err := os.Remove(req.Path); err != nil {
-			logger.Warn("ConvertImage", "删除源文件失败 %s: %v", req.Path, err)
+			LoggerGeneral.Warn("ConvertImage", "删除源文件失败 %s: %v", req.Path, err)
 		}
 	}
 
-	logger.Info("ConvertImage", "转换成功: %s -> %s", filepath.Base(req.Path), filepath.Base(outputPath))
+	LoggerGeneral.Info("ConvertImage", "转换成功: %s -> %s", filepath.Base(req.Path), filepath.Base(outputPath))
 	writeJSON(w, http.StatusOK, ConvertImageResponse{
 		Success:    true,
 		OutputPath: outputPath,
@@ -223,7 +223,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 
 		err := convertImage(inputPath, outputPath, targetFormat, quality)
 		if err != nil {
-			logger.Error("BatchConvert", "转换失败 %s: %v", entry.Name(), err)
+			LoggerGeneral.Error("BatchConvert", "转换失败 %s: %v", entry.Name(), err)
 			results = append(results, BatchConvertResult{
 				Path:    inputPath,
 				Success: false,
@@ -243,7 +243,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	logger.Info("BatchConvert", "批量转换完成: 成功 %d, 失败 %d", successCount, failCount)
+	LoggerGeneral.Info("BatchConvert", "批量转换完成: 成功 %d, 失败 %d", successCount, failCount)
 	writeJSON(w, http.StatusOK, BatchConvertResponse{
 		Success:      true,
 		Results:      results,

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"lunar_astral/server"
+	"LunarAstral/server"
 	"net/http"
 	"os"
 )

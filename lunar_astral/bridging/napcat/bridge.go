@@ -3,10 +3,9 @@ package napcat
 // 桥接器生命周期管理：配置加载、定时扫描、连接管理
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"os"
-
-	logger "LunarSubsystem/LoggerGeneral"
 )
 
 // LoadBridgingConfig 从配置文件加载桥接器配置
@@ -50,11 +49,11 @@ func setBridgeState(state BridgeState) {
 // 只允许连接一次：成功则持续服务，失败或断开则直接放弃该机制，不再重试
 func StartBridgeScanner() {
 	if !IsBridgingEnabled() {
-		logger.SubInfo("LunarCore", "Napcat", "桥接器未启用 (bridging_path 为空或 bridging_type 非 napcat)")
+		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未启用 (bridging_path 为空或 bridging_type 非 napcat)")
 		return
 	}
 
-	logger.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, target=%d, keywords=%v",
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, target=%d, keywords=%v",
 		bridgeConfig.BridgingPath, bridgeConfig.BridgingTarget, bridgeConfig.BridgingKeywords)
 
 	// 单次连接尝试，成功后阻塞服务直至断开，失败后不再重试
@@ -63,13 +62,13 @@ func StartBridgeScanner() {
 
 	// 走到这里说明连接失败或连接已断开，直接放弃桥接机制
 	setBridgeState(BridgeFailed)
-	logger.SubError("LunarCore", "Napcat", "适配器连接失败或已断开，放弃桥接机制: %v", err)
+	LoggerGeneral.SubError("LunarCore", "Napcat", "适配器连接失败或已断开，放弃桥接机制: %v", err)
 }
 
 // StopBridge 停止桥接器
 func StopBridge() {
 	setBridgeState(BridgeDisconnected)
-	logger.SubInfo("LunarCore", "Napcat", "桥接器已停止")
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器已停止")
 }
 
 // HandleAgentResponse 处理智能体的文本响应消息，转发回QQ群聊
@@ -77,40 +76,40 @@ func StopBridge() {
 func HandleAgentResponse(msgType string, content string) {
 	// 乐谱消息不转发
 	if msgType == "music" {
-		logger.SubInfo("LunarCore", "Napcat", "乐谱消息已拦截，跳过转发")
+		LoggerGeneral.SubInfo("LunarCore", "Napcat", "乐谱消息已拦截，跳过转发")
 		return
 	}
 
 	if GetBridgeState() != BridgeConnected {
-		logger.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过消息转发")
+		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过消息转发")
 		return
 	}
 
 	groupID := bridgeConfig.BridgingTarget
 	if groupID == 0 {
-		logger.SubError("LunarCore", "Napcat", "目标群号为空，无法转发消息")
+		LoggerGeneral.SubError("LunarCore", "Napcat", "目标群号为空，无法转发消息")
 		return
 	}
 
 	if err := SendGroupTextMessage(groupID, content); err != nil {
-		logger.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", groupID, err)
+		LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", groupID, err)
 	}
 }
 
 // HandleAgentImageResponse 处理智能体的图片响应消息，转发回QQ群聊
 func HandleAgentImageResponse(images []string) {
 	if GetBridgeState() != BridgeConnected {
-		logger.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过图片转发")
+		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过图片转发")
 		return
 	}
 
 	groupID := bridgeConfig.BridgingTarget
 	if groupID == 0 {
-		logger.SubError("LunarCore", "Napcat", "目标群号为空，无法转发图片")
+		LoggerGeneral.SubError("LunarCore", "Napcat", "目标群号为空，无法转发图片")
 		return
 	}
 
 	if err := SendGroupImageMessage(groupID, images); err != nil {
-		logger.SubError("LunarCore", "Napcat", "转发图片到群 %d 失败: %v", groupID, err)
+		LoggerGeneral.SubError("LunarCore", "Napcat", "转发图片到群 %d 失败: %v", groupID, err)
 	}
 }

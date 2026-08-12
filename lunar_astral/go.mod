@@ -1,4 +1,4 @@
-module lunar_astral
+module LunarAstral
 
 go 1.26
 

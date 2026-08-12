@@ -1,10 +1,10 @@
 package websocket
 
 import (
+	"LunarAstral/adapters"
+	"LunarAstral/bridging/napcat"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
-	"lunar_astral/adapters"
-	"lunar_astral/bridging/napcat"
 	"net/http"
 
 	"github.com/gorilla/websocket"

@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"LunarAstral/adapters"
+	"LunarAstral/websocket"
 	"encoding/json"
 	"io"
-	"lunar_astral/adapters"
-	"lunar_astral/websocket"
 	"net/http"
 )
 

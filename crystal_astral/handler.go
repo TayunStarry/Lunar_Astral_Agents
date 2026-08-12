@@ -1,8 +1,8 @@
 package main
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -24,7 +24,7 @@ import (
 func getProxyHandler() *httputil.ReverseProxy {
 	proxyURL, err := url.Parse("http://localhost:36789")
 	if err != nil {
-		logger.Error("CrystalAstral", "解析代理 URL 失败: %v", err)
+		LoggerGeneral.Error("CrystalAstral", "解析代理 URL 失败: %v", err)
 		return nil
 	}
 	return httputil.NewSingleHostReverseProxy(proxyURL)
@@ -110,13 +110,13 @@ func loadApplicationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("CrystalAstral", "Application started: %s", req.Path)
+	LoggerGeneral.Info("CrystalAstral", "Application started: %s", req.Path)
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			logger.Error("CrystalAstral", "Application %s exited with error: %v", req.Path, err)
+			LoggerGeneral.Error("CrystalAstral", "Application %s exited with error: %v", req.Path, err)
 		} else {
-			logger.Info("CrystalAstral", "Application %s exited successfully", req.Path)
+			LoggerGeneral.Info("CrystalAstral", "Application %s exited successfully", req.Path)
 		}
 	}()
 
@@ -398,11 +398,11 @@ func ggufMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fileName := filepath.Base(req.FilePath)
-	logger.Info("GGUF", "正在解析 GGUF 文件: %s", req.FilePath)
+	LoggerGeneral.Info("GGUF", "正在解析 GGUF 文件: %s", req.FilePath)
 
 	metadata, err := parseGGUFFile(req.FilePath)
 	if err != nil {
-		logger.Error("GGUF", "解析失败: %v", err)
+		LoggerGeneral.Error("GGUF", "解析失败: %v", err)
 		writeJSON(w, http.StatusUnprocessableEntity, GGUFMetadataResponse{
 			Success: false,
 			Error:   fmt.Sprintf("GGUF 解析失败: %v", err),
@@ -410,7 +410,7 @@ func ggufMetadataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("GGUF", "解析成功: %s (%d 项元数据)", fileName, len(metadata))
+	LoggerGeneral.Info("GGUF", "解析成功: %s (%d 项元数据)", fileName, len(metadata))
 
 	// 转换为 JSON 友好的格式
 	jsonMetadata := make(map[string]string, len(metadata))
@@ -448,7 +448,7 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	execDir := filepath.Dir(execPath)
-	packageDir := filepath.Join(execDir, *config.LocalDir, "package")
+	packageDir := filepath.Join(execDir, *GeneralConfig.LocalDir, "package")
 
 	entries, err := os.ReadDir(packageDir)
 	if err != nil {
@@ -476,7 +476,7 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 
 		var pkg PackageInfo
 		if err := json.Unmarshal(data, &pkg); err != nil {
-			logger.Warn("CrystalAstral", "解析包配置失败 %s: %v", configPath, err)
+			LoggerGeneral.Warn("CrystalAstral", "解析包配置失败 %s: %v", configPath, err)
 			continue
 		}
 
@@ -512,7 +512,7 @@ func yuehuaCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", *config.BasicPort)
+	addr := fmt.Sprintf("127.0.0.1:%d", *GeneralConfig.BasicPort)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	available := err == nil
 	if conn != nil {
@@ -566,13 +566,13 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
-			logger.Error("CrystalAstral", "月华服务退出: %v", err)
+			LoggerGeneral.Error("CrystalAstral", "月华服务退出: %v", err)
 		} else {
-			logger.Info("CrystalAstral", "月华服务已退出")
+			LoggerGeneral.Info("CrystalAstral", "月华服务已退出")
 		}
 	}()
 
-	logger.Info("CrystalAstral", "月华服务已启动: %s", exePath)
+	LoggerGeneral.Info("CrystalAstral", "月华服务已启动: %s", exePath)
 	writeJSON(w, http.StatusOK, LunarStartResponse{
 		Success: true,
 		Message: "月华服务启动成功",

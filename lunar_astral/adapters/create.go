@@ -1,11 +1,11 @@
 package adapters
 
 import (
+	"LunarAstral/hierarchy"
+	"LunarAstral/learner"
 	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
-	"lunar_astral/hierarchy"
-	"lunar_astral/learner"
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"

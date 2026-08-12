@@ -1,11 +1,11 @@
 package main
 
 import (
-	browser "LunarSubsystem/BrowserClient"
-	module "LunarSubsystem/FileManager/module"
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/BrowserClient"
+	file "LunarSubsystem/FileManager/module"
+	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 	"io"
@@ -56,9 +56,9 @@ func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 
 // reloadPageParameters 重新加载页面参数
 func reloadPageParameters() {
-	*config.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
-	*config.WebViewWidth = 1500
-	*config.WebViewHeight = 1050
+	*GeneralConfig.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
+	*GeneralConfig.WebViewWidth = 1500
+	*GeneralConfig.WebViewHeight = 1050
 }
 
 // initMemoryDatabase 自动初始化记忆库实例与默认集合（v2 标签向量架构）
@@ -66,30 +66,30 @@ func reloadPageParameters() {
 // 失败仅打印警告，不阻断服务启动，用户仍可通过记忆库面板手动初始化
 func initMemoryDatabase() {
 	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务，模型配置从 config 模块读取）
-	if err := module.MemoryInitInstance(); err != nil {
-		logger.Warn("CrystalAstral", "记忆库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
+	if err := file.MemoryInitInstance(); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "记忆库实例初始化失败: %v (可手动通过记忆库面板初始化)", err)
 		return
 	}
-	logger.Info("CrystalAstral", "记忆库实例初始化完成 (模型配置从 lunar_config.json 读取)")
+	LoggerGeneral.Info("CrystalAstral", "记忆库实例初始化完成 (模型配置从 lunar_config.json 读取)")
 
 	// 第二步：创建/打开默认集合（探针文本嵌入定维度，含网络请求，加超时保护）
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := module.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName, module.CollectionTypeText); err != nil {
-		logger.Warn("CrystalAstral", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", defaultMemoryCollection, err)
+	if err := file.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName, file.CollectionTypeText); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", defaultMemoryCollection, err)
 		return
 	}
-	logger.Info("CrystalAstral", "集合 [%s] 创建成功, 模型: %s", defaultMemoryCollection, defaultMemoryModelName)
+	LoggerGeneral.Info("CrystalAstral", "集合 [%s] 创建成功, 模型: %s", defaultMemoryCollection, defaultMemoryModelName)
 }
 
 // StartServer 启动服务器
 func StartServer(port int, root http.FileSystem, name string) error {
 	// 初始化知识库（SQLite）
-	if err := module.InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
-		logger.Warn("CrystalAstral", "知识库初始化失败: %v (不影响服务启动)", err)
+	if err := file.InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "知识库初始化失败: %v (不影响服务启动)", err)
 	}
 	// 初始化记忆库存储目录（仅准备本地存储结构，不产生网络请求）
-	module.InitMemoryDB(*config.MemoryDBDir)
+	file.InitMemoryDB(*GeneralConfig.MemoryDBDir)
 	// 自动初始化记忆库实例与默认集合（与 lunar_astral 的 JS agent 行为对齐）
 	// 模型配置从 lunar_config.json 的 agent 配置组读取
 	initMemoryDatabase()
@@ -120,14 +120,14 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		Handler: httpMux,
 	}
 
-	logger.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
+	LoggerGeneral.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
 	reloadPageParameters()
-	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
-	go browser.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
+	go BrowserClient.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("CrystalAstral", "%s 运行失败: %v", name, err)
+			LoggerGeneral.Error("CrystalAstral", "%s 运行失败: %v", name, err)
 		}
 	}()
 
@@ -136,20 +136,20 @@ func StartServer(port int, root http.FileSystem, name string) error {
 
 	select {
 	case <-quit:
-		logger.Info("CrystalAstral", "%s 接收到中断信号，正在关闭...", name)
-	case <-browser.WebViewClosed():
-		logger.Info("CrystalAstral", "%s 检测到 WebView 关闭，正在关闭...", name)
+		LoggerGeneral.Info("CrystalAstral", "%s 接收到中断信号，正在关闭...", name)
+	case <-BrowserClient.WebViewClosed():
+		LoggerGeneral.Info("CrystalAstral", "%s 检测到 WebView 关闭，正在关闭...", name)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("CrystalAstral", "%s 关闭失败: %v", name, err)
+		LoggerGeneral.Error("CrystalAstral", "%s 关闭失败: %v", name, err)
 	}
 
-	browser.CloseWebView()
-	logger.Info("CrystalAstral", "%s 已成功关闭", name)
+	BrowserClient.CloseWebView()
+	LoggerGeneral.Info("CrystalAstral", "%s 已成功关闭", name)
 
 	return nil
 }

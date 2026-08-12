@@ -1,4 +1,4 @@
-module crystal_astral
+module CrystalAstral
 
 go 1.24.4
 

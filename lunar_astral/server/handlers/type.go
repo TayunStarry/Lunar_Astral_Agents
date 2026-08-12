@@ -1,8 +1,8 @@
 package handlers
 
 import (
+	"LunarAstral/adapters"
 	"encoding/json"
-	"lunar_astral/adapters"
 )
 
 // ProxyRequest 定义代理请求的结构

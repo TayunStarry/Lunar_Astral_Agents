@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"flag"
 	"math/rand"
 )
@@ -14,6 +14,6 @@ func main() {
 	name := "< 星月智能 > 星图.琉璃 在此为您提供服务支持"
 	// 启动服务
 	if err := StartServer(port, Gethierarchy(), name); err != nil {
-		logger.Error("CrystalAstral", "%s 启动失败: %v", name, err)
+		LoggerGeneral.Error("CrystalAstral", "%s 启动失败: %v", name, err)
 	}
 }

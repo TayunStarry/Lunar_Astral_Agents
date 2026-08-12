@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -40,13 +40,13 @@ func (h *StudioHub) Run() {
 		select {
 		case client := <-h.Register:
 			h.Clients[client] = true
-			logger.Info("StudioHub", "客户端已连接，当前连接数: %d", len(h.Clients))
+			LoggerGeneral.Info("StudioHub", "客户端已连接，当前连接数: %d", len(h.Clients))
 
 		case client := <-h.Unregister:
 			if _, ok := h.Clients[client]; ok {
 				delete(h.Clients, client)
 				close(client.Send)
-				logger.Info("StudioHub", "客户端已断开，当前连接数: %d", len(h.Clients))
+				LoggerGeneral.Info("StudioHub", "客户端已断开，当前连接数: %d", len(h.Clients))
 			}
 
 		case message := <-h.Broadcast:
@@ -70,7 +70,7 @@ func (h *StudioHub) Run() {
 func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.Error("StudioHub", "WebSocket 升级失败: %v", err)
+		LoggerGeneral.Error("StudioHub", "WebSocket 升级失败: %v", err)
 		return
 	}
 
@@ -109,7 +109,7 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					logger.Error("StudioHub", "WebSocket 读取错误: %v", err)
+					LoggerGeneral.Error("StudioHub", "WebSocket 读取错误: %v", err)
 				}
 				break
 			}
@@ -169,7 +169,7 @@ func cacheAnimationList(msg []byte) {
 	defer animCache.Unlock()
 	animCache.Actions = parsed.Payload.ActionDefinitions
 	animCache.UpdatedAt = time.Now().UnixMilli()
-	logger.Info("StudioHub", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
+	LoggerGeneral.Info("StudioHub", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
 }
 
 // HandleGetAnimations 返回当前缓存的可用动作列表
