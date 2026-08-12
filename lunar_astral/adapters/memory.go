@@ -2,8 +2,8 @@ package adapters
 
 import (
 	"LunarSubsystem/FileManager/module"
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 
@@ -41,15 +41,15 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 
 	// 第一步：实例初始化（嵌入服务 + LLM 标签生成服务，模型配置从 config 模块读取）
 	if err := module.MemoryInitInstance(); err != nil {
-		logger.Error("LunarCore", "记忆库实例初始化失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "记忆库实例初始化失败: %v", err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
 	// 第二步：创建/打开集合（嵌入模型名从 memory.embedding_model 配置读取）
 	ctx := context.Background()
-	modelName := *config.MemoryEmbeddingModel
+	modelName := *GeneralConfig.MemoryEmbeddingModel
 	if err := module.CollectionInit(ctx, collectionName, modelName, collectionType); err != nil {
-		logger.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
@@ -70,7 +70,7 @@ func (class *Runtime) memoryAdd(call goja.FunctionCall) goja.Value {
 	ctx := context.Background()
 	id, err := module.MemoryAddMessage(ctx, collectionName, role, content)
 	if err != nil {
-		logger.Error("LunarCore", "集合 [%s] 添加消息失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 添加消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
@@ -91,7 +91,7 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 	ctx := context.Background()
 	results, err := module.MemoryQueryMessagesWithContent(ctx, collectionName, queryText, topK)
 	if err != nil {
-		logger.Error("LunarCore", "集合 [%s] 查询消息失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 查询消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 
@@ -126,7 +126,7 @@ func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
 	ctx := context.Background()
 	err := module.MemoryDeleteMessage(ctx, collectionName, id)
 	if err != nil {
-		logger.Error("LunarCore", "集合 [%s] 删除消息失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 删除消息失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
 
@@ -146,7 +146,7 @@ func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
 	ctx := context.Background()
 	id, err := module.MemoryAddImage(ctx, collectionName, base64Image)
 	if err != nil {
-		logger.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
+		LoggerGeneral.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{nil, err})
 	}
 

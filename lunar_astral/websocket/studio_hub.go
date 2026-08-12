@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -38,7 +38,7 @@ func StartStudioHub(mux *http.ServeMux) {
 	StudioHubInstance = NewStudioHub()
 	go StudioHubInstance.Run()
 	mux.HandleFunc("/ws/studio", StudioHubInstance.HandleWebSocket)
-	logger.SubInfo("LunarCore", "StudioHub", "引擎通信中枢已启动: /ws/studio")
+	LoggerGeneral.SubInfo("LunarCore", "StudioHub", "引擎通信中枢已启动: /ws/studio")
 }
 
 // Run 启动集线器主循环
@@ -47,13 +47,13 @@ func (h *StudioHub) Run() {
 		select {
 		case client := <-h.Register:
 			h.Clients[client] = true
-			logger.SubInfo("LunarCore", "StudioHub", "引擎客户端已连接，当前连接数: %d", len(h.Clients))
+			LoggerGeneral.SubInfo("LunarCore", "StudioHub", "引擎客户端已连接，当前连接数: %d", len(h.Clients))
 
 		case client := <-h.Unregister:
 			if _, ok := h.Clients[client]; ok {
 				delete(h.Clients, client)
 				close(client.Send)
-				logger.SubInfo("LunarCore", "StudioHub", "引擎客户端已断开，当前连接数: %d", len(h.Clients))
+				LoggerGeneral.SubInfo("LunarCore", "StudioHub", "引擎客户端已断开，当前连接数: %d", len(h.Clients))
 			}
 
 		case message := <-h.Broadcast:
@@ -75,7 +75,7 @@ func (h *StudioHub) Run() {
 func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgraderStudio.Upgrade(w, r, nil)
 	if err != nil {
-		logger.SubError("LunarCore", "StudioHub", "WebSocket 升级失败: %v", err)
+		LoggerGeneral.SubError("LunarCore", "StudioHub", "WebSocket 升级失败: %v", err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					logger.SubError("LunarCore", "StudioHub", "WebSocket 读取错误: %v", err)
+					LoggerGeneral.SubError("LunarCore", "StudioHub", "WebSocket 读取错误: %v", err)
 				}
 				break
 			}
@@ -158,7 +158,7 @@ func cacheAnimationList(msg []byte) {
 	defer animCache.Unlock()
 	animCache.Actions = parsed.Payload.ActionDefinitions
 	animCache.UpdatedAt = time.Now().UnixMilli()
-	logger.SubInfo("LunarCore", "StudioHub", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
+	LoggerGeneral.SubInfo("LunarCore", "StudioHub", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
 }
 
 // HandleGetAnimations 返回当前缓存的可用动作列表

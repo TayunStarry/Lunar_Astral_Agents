@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"sync"
 
@@ -42,10 +42,10 @@ var GetAnimCacheFunc func() interface{}
 
 func init() {
 	PushMessageFunc = func(msgType string, data interface{}) {
-		logger.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
+		LoggerGeneral.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
 	}
 	StudioBroadcastFunc = func([]byte) {
-		logger.Error("LunarCore", "StudioBroadcastFunc 未初始化")
+		LoggerGeneral.Error("LunarCore", "StudioBroadcastFunc 未初始化")
 	}
 	GetAnimCacheFunc = func() interface{} {
 		return nil

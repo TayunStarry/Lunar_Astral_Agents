@@ -1,9 +1,9 @@
 package adapters
 
 import (
-	browser "LunarSubsystem/BrowserClient"
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/BrowserClient"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
@@ -20,8 +20,8 @@ import (
 // 返回值: [Array<string>, error] 地址列表和错误信息
 func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	// 如果当前地址已缓存，直接返回
-	if len(config.ServerAddress) > 0 {
-		return class.runtime.ToValue([]any{config.ServerAddress, nil})
+	if len(GeneralConfig.ServerAddress) > 0 {
+		return class.runtime.ToValue([]any{GeneralConfig.ServerAddress, nil})
 	}
 
 	// 默认兜底地址
@@ -31,50 +31,50 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get("http://ip-api.com/json/?lang=zh-CN&fields=status,message,regionName,city")
 	if err != nil {
-		logger.Error("LunarCore", "获取位置失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "获取位置失败: %v", err)
 		return class.runtime.ToValue([]any{defaultAddr, err})
 	}
 	defer resp.Body.Close()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		logger.Error("LunarCore", "获取位置失败: %s", resp.Status)
+		LoggerGeneral.Error("LunarCore", "获取位置失败: %s", resp.Status)
 		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("HTTP状态异常: %s", resp.Status)})
 	}
 
 	// 解析JSON响应
 	var data IPInfo
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		logger.Error("LunarCore", "解析位置信息失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "解析位置信息失败: %v", err)
 		return class.runtime.ToValue([]any{defaultAddr, err})
 	}
 
 	// 检查API返回状态
 	if data.Status != "success" {
-		logger.Error("LunarCore", "获取位置失败: %s", data.Message)
+		LoggerGeneral.Error("LunarCore", "获取位置失败: %s", data.Message)
 		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("API返回失败: %s", data.Message)})
 	}
 
 	// 确保省份和城市信息存在
 	if data.RegionName == "" || data.City == "" {
-		logger.Error("LunarCore", "获取位置失败: 省份或城市信息缺失")
+		LoggerGeneral.Error("LunarCore", "获取位置失败: 省份或城市信息缺失")
 		return class.runtime.ToValue([]any{defaultAddr, fmt.Errorf("省份或城市信息缺失")})
 	}
 
 	// 缓存当前地址
-	config.ServerAddress = []string{data.RegionName, data.City}
-	return class.runtime.ToValue([]any{config.ServerAddress, nil})
+	GeneralConfig.ServerAddress = []string{data.RegionName, data.City}
+	return class.runtime.ToValue([]any{GeneralConfig.ServerAddress, nil})
 }
 
 // url 适配TypeScript调用的系统URL获取功能，返回系统访问地址
 // 返回值: [string, error] 系统URL和错误信息
 func (class *Runtime) url(call goja.FunctionCall) goja.Value {
-	ip, err := browser.GetLocalIP([]string{})
+	ip, err := BrowserClient.GetLocalIP([]string{})
 	if err != nil {
-		logger.Error("LunarCore", "获取本地IP失败: %v", err)
-		return class.runtime.ToValue([]any{fmt.Sprintf("http://localhost:%d", *config.BasicPort), nil})
+		LoggerGeneral.Error("LunarCore", "获取本地IP失败: %v", err)
+		return class.runtime.ToValue([]any{fmt.Sprintf("http://localhost:%d", *GeneralConfig.BasicPort), nil})
 	}
-	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *config.BasicPort), nil})
+	return class.runtime.ToValue([]any{fmt.Sprintf("http://%s:%d", ip, *GeneralConfig.BasicPort), nil})
 }
 
 // syncFetch 适配TypeScript调用的网络请求代理功能，处理HTTP请求并返回统一格式响应

@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 	"lunar_astral/hierarchy"
@@ -147,7 +147,7 @@ func RunAgentContext() error {
 	runtime.RunOnLoop(func(vm *goja.Runtime) {
 		_, err = vm.RunString(systemJSContent)
 		if err != nil {
-			logger.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
+			LoggerGeneral.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
 	})
@@ -157,7 +157,7 @@ func RunAgentContext() error {
 // RunOnAgentLoop 在 agent 事件循环中执行函数（供外部模块调用）
 func RunOnAgentLoop(fn func(vm *goja.Runtime)) {
 	if runtime == nil {
-		logger.Error("LunarCore", "JavaScript 运行时未初始化，无法执行操作")
+		LoggerGeneral.Error("LunarCore", "JavaScript 运行时未初始化，无法执行操作")
 		return
 	}
 	runtime.RunOnLoop(fn)

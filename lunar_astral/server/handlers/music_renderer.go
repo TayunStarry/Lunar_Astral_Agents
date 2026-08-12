@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,7 +37,7 @@ type MusicRenderResponse struct {
 // getFluidSynthPath 获取 FluidSynth 可执行文件路径
 func getFluidSynthPath() string {
 	// 项目规范路径：local_data/package/fluidsynth/
-	localPath := filepath.Join(*config.LocalDir, "package", "fluidsynth", "fluidsynth.exe")
+	localPath := filepath.Join(*GeneralConfig.LocalDir, "package", "fluidsynth", "fluidsynth.exe")
 	// 转为绝对路径，确保 exec.Command 能正确解析（相对路径在 CreateProcess 时可能失败）
 	if absPath, err := filepath.Abs(localPath); err == nil {
 		localPath = absPath
@@ -54,7 +54,7 @@ func getFluidSynthPath() string {
 
 // getAbc2midiPath 获取 abc2midi 可执行文件路径
 func getAbc2midiPath() string {
-	localPath := filepath.Join(*config.LocalDir, "package", "fluidsynth", "abc2midi.exe")
+	localPath := filepath.Join(*GeneralConfig.LocalDir, "package", "fluidsynth", "abc2midi.exe")
 	if absPath, err := filepath.Abs(localPath); err == nil {
 		localPath = absPath
 	}
@@ -70,7 +70,7 @@ func getAbc2midiPath() string {
 // getSoundFontPath 获取 SoundFont 文件路径
 func getSoundFontPath() string {
 	// 项目规范路径：local_data/package/soundfonts/
-	sfDir := filepath.Join(*config.LocalDir, "package", "soundfonts")
+	sfDir := filepath.Join(*GeneralConfig.LocalDir, "package", "soundfonts")
 	if absDir, err := filepath.Abs(sfDir); err == nil {
 		sfDir = absDir
 	}
@@ -98,7 +98,7 @@ func getSoundFontPath() string {
 // getOutputDir 获取音频输出目录
 func getOutputDir() string {
 	// 项目规范路径：local_data/audios/
-	outputDir := filepath.Join(*config.LocalDir, "audios")
+	outputDir := filepath.Join(*GeneralConfig.LocalDir, "audios")
 	if absDir, err := filepath.Abs(outputDir); err == nil {
 		outputDir = absDir
 	}
@@ -204,7 +204,7 @@ func RenderMusicInternal(abcNotation string, title string) (audioURL string, fil
 	log.Printf("[音乐渲染] 渲染完成: %s, 耗时: %v", wavPath, duration)
 
 	// 构建音频 URL
-	wavRelPath := strings.Replace(wavPath, filepath.ToSlash(*config.LocalDir)+"/", "", 1)
+	wavRelPath := strings.Replace(wavPath, filepath.ToSlash(*GeneralConfig.LocalDir)+"/", "", 1)
 	wavRelPath = filepath.ToSlash(wavRelPath)
 	audioURL = "/file/read/" + wavRelPath
 	fileName = baseName + ".wav"

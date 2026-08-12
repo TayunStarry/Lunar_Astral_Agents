@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 
 	"github.com/dop251/goja"
@@ -14,7 +14,7 @@ func LoadLTPXTool(name, defJSON, jsCode string) {
 	pendingLoads = append(pendingLoads, &LTPXToolInfo{
 		Name: name, Definition: defJSON, JS: jsCode,
 	})
-	logger.Info("LunarCore", "LTPX 工具 %s 已加入待加载队列", name)
+	LoggerGeneral.Info("LunarCore", "LTPX 工具 %s 已加入待加载队列", name)
 }
 
 // UnloadLTPXTool 将工具加入待卸载队列（由 HTTP handler 调用）
@@ -22,7 +22,7 @@ func UnloadLTPXTool(name string) {
 	ltpMutex.Lock()
 	defer ltpMutex.Unlock()
 	pendingUnloads = append(pendingUnloads, name)
-	logger.Info("LunarCore", "LTPX 工具 %s 已加入待卸载队列", name)
+	LoggerGeneral.Info("LunarCore", "LTPX 工具 %s 已加入待卸载队列", name)
 }
 
 // getLTPXToolStatus 返回当前工具状态（供 JS 端 getLTPXToolStatus 调用）
@@ -71,14 +71,14 @@ func applyLTPXLoad(vm *goja.Runtime, info *LTPXToolInfo) {
 	// 执行工具 JS 代码（工具会自行注册到 GlobalConfig.LTPfunction）
 	_, err := vm.RunString(info.JS)
 	if err != nil {
-		logger.Error("LunarCore", "LTPX 执行工具代码失败 %s: %v", info.Name, err)
+		LoggerGeneral.Error("LunarCore", "LTPX 执行工具代码失败 %s: %v", info.Name, err)
 		return
 	}
 
 	// 注入工具定义到 GlobalConfig.LTPdefinition
 	_, err = vm.RunString(`agentSystem.GlobalConfig.LTPdefinition.push(` + info.Definition + `);`)
 	if err != nil {
-		logger.Error("LunarCore", "LTPX 注入工具定义失败 %s: %v", info.Name, err)
+		LoggerGeneral.Error("LunarCore", "LTPX 注入工具定义失败 %s: %v", info.Name, err)
 		return
 	}
 
@@ -86,7 +86,7 @@ func applyLTPXLoad(vm *goja.Runtime, info *LTPXToolInfo) {
 	loadedTools[info.Name] = info
 	ltpMutex.Unlock()
 
-	logger.Info("LunarCore", "LTPX 工具加载成功: %s", info.Name)
+	LoggerGeneral.Info("LunarCore", "LTPX 工具加载成功: %s", info.Name)
 }
 
 // applyLTPXUnload 在 goja 事件循环中执行工具卸载
@@ -103,7 +103,7 @@ func applyLTPXUnload(vm *goja.Runtime, name string) {
 		})();
 	`)
 	if err != nil {
-		logger.Error("LunarCore", "LTPX 移除工具定义失败 %s: %v", name, err)
+		LoggerGeneral.Error("LunarCore", "LTPX 移除工具定义失败 %s: %v", name, err)
 	}
 
 	// 从 GlobalConfig.LTPfunction 中移除
@@ -113,14 +113,14 @@ func applyLTPXUnload(vm *goja.Runtime, name string) {
 		})();
 	`)
 	if err != nil {
-		logger.Error("LunarCore", "LTPX 移除工具函数失败 %s: %v", name, err)
+		LoggerGeneral.Error("LunarCore", "LTPX 移除工具函数失败 %s: %v", name, err)
 	}
 
 	ltpMutex.Lock()
 	delete(loadedTools, name)
 	ltpMutex.Unlock()
 
-	logger.Info("LunarCore", "LTPX 工具卸载成功: %s", name)
+	LoggerGeneral.Info("LunarCore", "LTPX 工具卸载成功: %s", name)
 }
 
 // ProcessPendingLTPXChanges 在 goja 事件循环中处理所有待处理的加载/卸载
@@ -128,7 +128,7 @@ func applyLTPXUnload(vm *goja.Runtime, name string) {
 func ProcessPendingLTPXChanges(vm *goja.Runtime, statusJSON string) {
 	var status LTPXStatus
 	if err := json.Unmarshal([]byte(statusJSON), &status); err != nil {
-		logger.Error("LunarCore", "LTPX 解析状态失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "LTPX 解析状态失败: %v", err)
 		return
 	}
 

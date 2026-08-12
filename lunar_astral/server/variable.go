@@ -2,7 +2,7 @@ package server
 
 import (
 	storage "LunarSubsystem/FileManager/server"
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
 	tts "LunarSubsystem/Qwen3-TTS/module"
 	"fmt"
@@ -21,8 +21,8 @@ var httpMux *http.ServeMux
 
 // CORSAllowedOrigins 定义允许跨域访问的来源列表
 var CORSAllowedOrigins = []string{
-	fmt.Sprintf("http://localhost:%d", *config.BasicPort),
-	fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort),
+	fmt.Sprintf("http://localhost:%d", *GeneralConfig.BasicPort),
+	fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort),
 }
 
 // 请求映射，键为请求ID，值为请求上下文

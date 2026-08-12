@@ -3,7 +3,7 @@ package napcat
 // 消息解析与处理逻辑
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,7 +14,7 @@ import (
 func HandleNapcatMessage(rawMessage []byte) {
 	var napcatMsg NapcatMessage
 	if err := json.Unmarshal(rawMessage, &napcatMsg); err != nil {
-		logger.SubError("LunarCore", "Napcat", "解析消息失败: %v", err)
+		LoggerGeneral.SubError("LunarCore", "Napcat", "解析消息失败: %v", err)
 		return
 	}
 
@@ -51,12 +51,12 @@ func HandleNapcatMessage(rawMessage []byte) {
 
 	// 关键词检测
 	if !containsKeyword(contentStr) {
-		logger.SubInfo("LunarCore", "Napcat", "群 %d: 消息不含触发关键词，仅缓存 (当前 %d 条)", napcatMsg.GroupID, GetCacheSize())
+		LoggerGeneral.SubInfo("LunarCore", "Napcat", "群 %d: 消息不含触发关键词，仅缓存 (当前 %d 条)", napcatMsg.GroupID, GetCacheSize())
 		return
 	}
 
 	// 触发关键词 → 将缓存消息推送给智能体
-	logger.SubInfo("LunarCore", "Napcat", "群 %d: 检测到触发关键词 (发送者: %s)", napcatMsg.GroupID, napcatMsg.Sender.Nickname)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "群 %d: 检测到触发关键词 (发送者: %s)", napcatMsg.GroupID, napcatMsg.Sender.Nickname)
 
 	// 构建推送内容：将缓存中的消息构建为 OpenAI 格式
 	cachedMessages := GetCachedMessages()
@@ -66,7 +66,7 @@ func HandleNapcatMessage(rawMessage []byte) {
 	if SendMessageToAgent != nil {
 		SendMessageToAgent(openAIMessages)
 	} else {
-		logger.SubError("LunarCore", "Napcat", "SendMessageToAgent 回调未注册，无法推送消息")
+		LoggerGeneral.SubError("LunarCore", "Napcat", "SendMessageToAgent 回调未注册，无法推送消息")
 	}
 
 	// 推送后清空缓存

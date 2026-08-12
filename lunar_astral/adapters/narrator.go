@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"encoding/base64"
 	"fmt"
@@ -66,11 +66,11 @@ func (class *Runtime) tts(call goja.FunctionCall) goja.Value {
 	// 执行TTS合成
 	audioData, err := doTTSSynthesize(req)
 	if err != nil {
-		logger.Error("LunarCore", "TTS合成失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "TTS合成失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
 	}
 
-	logger.SubInfo("LunarCore", "TTS", "合成完成: [%s] 长度=%d", text, len(audioData))
+	LoggerGeneral.SubInfo("LunarCore", "TTS", "合成完成: [%s] 长度=%d", text, len(audioData))
 	return class.runtime.ToValue([]any{audioData, nil})
 }
 

@@ -3,14 +3,13 @@ package napcat
 // Napcat WebSocket/HTTP 客户端实现
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-
-	logger "LunarSubsystem/LoggerGeneral"
 
 	"github.com/gorilla/websocket"
 )
@@ -21,7 +20,7 @@ func ConnectToNapcatWebSocket(messageHandler func([]byte)) error {
 	url := bridgeConfig.BridgingPath
 	token := bridgeConfig.BridgingToken
 
-	logger.SubInfo("LunarCore", "Napcat", "正在连接: %s", url)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "正在连接: %s", url)
 
 	headers := http.Header{}
 	if token != "" {
@@ -36,7 +35,7 @@ func ConnectToNapcatWebSocket(messageHandler func([]byte)) error {
 
 	// 连接成功，立即设置状态为已连接
 	setBridgeState(BridgeConnected)
-	logger.SubInfo("LunarCore", "Napcat", "成功连接到 napcat 服务器")
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "成功连接到 napcat 服务器")
 
 	for {
 		_, message, err := conn.ReadMessage()
@@ -100,7 +99,7 @@ func SendGroupTextMessage(groupID int64, content string) error {
 		return err
 	}
 
-	logger.SubInfo("LunarCore", "Napcat", "发送群消息响应: %s", respBody)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "发送群消息响应: %s", respBody)
 	return nil
 }
 
@@ -151,7 +150,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 		return err
 	}
 
-	logger.SubInfo("LunarCore", "Napcat", "发送群图片消息响应: %s", respBody)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "发送群图片消息响应: %s", respBody)
 	return nil
 }
 

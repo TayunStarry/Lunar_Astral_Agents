@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"time"
 
@@ -45,12 +45,12 @@ func (class *Runtime) sendToEngine(call goja.FunctionCall) goja.Value {
 
 	cmdJSON, err := json.Marshal(cmd)
 	if err != nil {
-		logger.Error("LunarCore", "[引擎桥接] 命令序列化失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "[引擎桥接] 命令序列化失败: %v", err)
 		return class.runtime.ToValue(false)
 	}
 
 	StudioBroadcastFunc(cmdJSON)
-	logger.Info("LunarCore", "[引擎桥接] 命令已广播: type=%s", msgType)
+	LoggerGeneral.Info("LunarCore", "[引擎桥接] 命令已广播: type=%s", msgType)
 	return class.runtime.ToValue(true)
 }
 
@@ -65,7 +65,7 @@ func (class *Runtime) getAvailableActions(call goja.FunctionCall) goja.Value {
 
 	body, err := json.Marshal(cache)
 	if err != nil {
-		logger.Warn("LunarCore", "[引擎桥接] 动画缓存序列化失败: %v", err)
+		LoggerGeneral.Warn("LunarCore", "[引擎桥接] 动画缓存序列化失败: %v", err)
 		return class.runtime.ToValue("{}")
 	}
 

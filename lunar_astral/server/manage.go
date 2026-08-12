@@ -1,10 +1,10 @@
 package server
 
 import (
-	browser "LunarSubsystem/BrowserClient"
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/BrowserClient"
+	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"lunar_astral/adapters"
@@ -25,14 +25,14 @@ import (
 // InitializeServer 初始化服务器配置和组件
 func InitializeServer() {
 	// 设置日志开发模式
-	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
 	// 设置MIME类型映射
-	for ext, mimeType := range config.MimeMap {
+	for ext, mimeType := range GeneralConfig.MimeMap {
 		mime.AddExtensionType(ext, mimeType)
 	}
 	// 创建本地目录
-	if err := os.MkdirAll(*config.LocalDir, 0755); err != nil {
-		logger.Fatal("LunarCore", "%v", err)
+	if err := os.MkdirAll(*GeneralConfig.LocalDir, 0755); err != nil {
+		LoggerGeneral.Fatal("LunarCore", "%v", err)
 	}
 	// 注册HTTP处理器
 	registerHandlers()
@@ -56,9 +56,9 @@ func registerHandlers() {
 	httpMux = http.NewServeMux()
 	// 处理根路径请求
 	var fileServer http.Handler
-	if *config.Developer {
+	if *GeneralConfig.Developer {
 		fileServer = http.FileServer(http.Dir("./lunar_astral/hierarchy/assets/client"))
-		logger.Info("LunarCore", "使用开发模式，直接读取文件系统")
+		LoggerGeneral.Info("LunarCore", "使用开发模式，直接读取文件系统")
 	} else {
 		fileServer = http.FileServer(hierarchy.Gethierarchy())
 	}
@@ -85,9 +85,9 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 	// 阻塞等待系统信号或 WebView 关闭信号，当接收到任一信号时继续执行后续代码
 	select {
 	case <-quit:
-		logger.Info("LunarCore", "接收到中断信号，正在关闭...")
-	case <-browser.WebViewClosed():
-		logger.Info("LunarCore", "检测到 WebView 关闭，正在关闭...")
+		LoggerGeneral.Info("LunarCore", "接收到中断信号，正在关闭...")
+	case <-BrowserClient.WebViewClosed():
+		LoggerGeneral.Info("LunarCore", "检测到 WebView 关闭，正在关闭...")
 	}
 	// 执行服务器关闭流程
 	shutdownServer(server)
@@ -95,8 +95,8 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 
 // initTTSEngine 初始化TTS语音合成引擎
 func initTTSEngine() {
-	modelDir := *config.LocalDir + "/models/Qwen3-TTS"
-	refAudio := *config.LocalDir + "/audios/lunar-template.wav"
+	modelDir := *GeneralConfig.LocalDir + "/models/Qwen3-TTS"
+	refAudio := *GeneralConfig.LocalDir + "/audios/lunar-template.wav"
 	module.InitTTSEngine(modelDir, refAudio)
 }
 
@@ -105,15 +105,15 @@ func initBridgeAdapter() {
 	// 构建配置文件路径
 	exePath, err := os.Executable()
 	if err != nil {
-		logger.Error("LunarCore", "获取可执行文件路径失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "获取可执行文件路径失败: %v", err)
 		return
 	}
 	exeDir := filepath.Dir(exePath)
-	configPath := filepath.Join(exeDir, *config.LocalDir, "lunar_config.json")
+	configPath := filepath.Join(exeDir, *GeneralConfig.LocalDir, "lunar_config.json")
 
 	// 加载桥接配置
 	if err := napcat.LoadBridgingConfig(configPath); err != nil {
-		logger.Error("LunarCore", "加载桥接配置失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "加载桥接配置失败: %v", err)
 		return
 	}
 
@@ -135,7 +135,7 @@ func initBridgeAdapter() {
 // shutdownServer 优雅关闭服务器
 func shutdownServer(server *http.Server) {
 	// 打印服务器正在关闭的信息
-	logger.Info("LunarCore", "正在关闭...")
+	LoggerGeneral.Info("LunarCore", "正在关闭...")
 	// 创建一个带有 5 秒超时的上下文，用于控制服务器关闭的时间
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	// 确保在函数结束时取消上下文，释放资源
@@ -149,12 +149,12 @@ func shutdownServer(server *http.Server) {
 	// 关闭WebSocket服务器
 	websocket.CloseWebSocketServer()
 	// 关闭WebView窗口（若未关闭则主动关闭）
-	browser.CloseWebView()
+	BrowserClient.CloseWebView()
 	// 优雅地关闭服务器，等待所有活跃连接处理完成或超时
 	if err := server.Shutdown(ctx); err != nil {
 		// 如果关闭服务器时出错，打印错误信息并终止程序
-		logger.Fatal("LunarCore", "%v", err)
+		LoggerGeneral.Fatal("LunarCore", "%v", err)
 	}
 	// 打印服务器已安全关闭的信息
-	logger.Info("LunarCore", "已安全关闭")
+	LoggerGeneral.Info("LunarCore", "已安全关闭")
 }

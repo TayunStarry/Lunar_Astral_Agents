@@ -2,7 +2,7 @@ package learner
 
 import (
 	"LunarSubsystem/AgentSearch"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -46,12 +46,12 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 
 		// 初始化 lunar_chromedp 搜索智能体（包含记忆库初始化、浏览器启动）
 		if err := AgentSearch.InitSearch(config); err != nil {
-			logger.Error("Learner", "学习者初始化失败: %v", err)
+			LoggerGeneral.Error("Learner", "学习者初始化失败: %v", err)
 			return vm.ToValue([]any{false, fmt.Errorf("学习者初始化失败: %v", err)})
 		}
 
 		learnerInitialized = true
-		logger.Info("Learner", "学习者初始化完成 (模型配置从 lunar_config.json 读取)")
+		LoggerGeneral.Info("Learner", "学习者初始化完成 (模型配置从 lunar_config.json 读取)")
 		return vm.ToValue([]any{true, nil})
 	})
 
@@ -77,16 +77,16 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 		// 执行搜索
 		report, err := AgentSearch.Search(query)
 		if err != nil {
-			logger.Error("Learner", "搜索执行失败: %v", err)
+			LoggerGeneral.Error("Learner", "搜索执行失败: %v", err)
 			return vm.ToValue([]any{nil, err})
 		}
 
 		// 格式化为可读报告
 		formatted := formatSearchReport(report)
 		// 将完整搜索报告打印到终端日志，便于查看搜索产物
-		logger.Info("Learner", "==== 搜索报告开始 (query=%q, answer=%d字符, 来源%d个) ====\n%s\n==== 搜索报告结束 ====",
+		LoggerGeneral.Info("Learner", "==== 搜索报告开始 (query=%q, answer=%d字符, 来源%d个) ====\n%s\n==== 搜索报告结束 ====",
 			query, len([]rune(report.Answer)), len(report.UsedSources), formatted)
-		logger.Info("Learner", "搜索完成, query=%q, answer=%d字符", query, len([]rune(report.Answer)))
+		LoggerGeneral.Info("Learner", "搜索完成, query=%q, answer=%d字符", query, len([]rune(report.Answer)))
 		return vm.ToValue([]any{formatted, nil})
 	})
 
@@ -121,7 +121,7 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 			return vm.ToValue([]any{false, fmt.Errorf("写入文件失败: %v", err)})
 		}
 
-		logger.Info("Learner", "Go 层上下文快照已导出: %s", outputPath)
+		LoggerGeneral.Info("Learner", "Go 层上下文快照已导出: %s", outputPath)
 		return vm.ToValue([]any{true, nil})
 	})
 }

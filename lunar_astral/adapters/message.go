@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 
 	"github.com/dop251/goja"
@@ -47,7 +47,7 @@ func renderMusicAudio(abcNotation string) {
 	// 调用注册的渲染函数
 	audioURL, fileName, err := MusicRenderFunc(abcNotation, title)
 	if err != nil {
-		logger.Error("LunarCore", "音乐音频渲染失败: %v", err)
+		LoggerGeneral.Error("LunarCore", "音乐音频渲染失败: %v", err)
 		return
 	}
 	if audioURL == "" {
@@ -56,7 +56,7 @@ func renderMusicAudio(abcNotation string) {
 	}
 
 	// 将音频 URL 推送到前端
-	logger.Info("LunarCore", "音乐音频渲染完成: %s", audioURL)
+	LoggerGeneral.Info("LunarCore", "音乐音频渲染完成: %s", audioURL)
 	audioData, _ := json.Marshal(map[string]string{
 		"type":      "audio_ready",
 		"audio_url": audioURL,
@@ -172,7 +172,7 @@ func (class *Runtime) pushAgentEvent(eventType string, data string) goja.Value {
 		},
 	}
 	UnreadContext = append(UnreadContext, message)
-	logger.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
+	LoggerGeneral.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
 	return class.runtime.ToValue(true)
 }
 
@@ -198,5 +198,5 @@ func PushAgentEventToContext(eventType string, data string) {
 		},
 	}
 	UnreadContext = append(UnreadContext, message)
-	logger.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
+	LoggerGeneral.Info("LunarCore", "[智能体事件] %s: %s", eventType, data)
 }

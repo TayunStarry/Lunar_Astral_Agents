@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
@@ -20,7 +20,7 @@ func (c *WSClient) shutdown() {
 		count := len(wsClients)
 		wsMutex.Unlock()
 		c.conn.Close()
-		logger.SubInfo("LunarCore", "WebSocket", "客户端断开, 当前连接数: %d", count)
+		LoggerGeneral.SubInfo("LunarCore", "WebSocket", "客户端断开, 当前连接数: %d", count)
 	})
 }
 
@@ -33,14 +33,14 @@ func (c *WSClient) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logger.SubError("LunarCore", "WebSocket", "读取错误: %v", err)
+				LoggerGeneral.SubError("LunarCore", "WebSocket", "读取错误: %v", err)
 			}
 			return
 		}
 
 		var msg WSMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
-			logger.SubError("LunarCore", "WebSocket", "消息解析错误: %v", err)
+			LoggerGeneral.SubError("LunarCore", "WebSocket", "消息解析错误: %v", err)
 			continue
 		}
 
@@ -61,7 +61,7 @@ func (c *WSClient) writePump() {
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				logger.SubError("LunarCore", "WebSocket", "写入错误: %v", err)
+				LoggerGeneral.SubError("LunarCore", "WebSocket", "写入错误: %v", err)
 				return
 			}
 		case <-c.done:
@@ -73,7 +73,7 @@ func (c *WSClient) writePump() {
 func WSHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := Upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		logger.SubError("LunarCore", "WebSocket", "升级失败: %v", err)
+		LoggerGeneral.SubError("LunarCore", "WebSocket", "升级失败: %v", err)
 		return
 	}
 
@@ -87,7 +87,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 	wsClients[client] = true
 	wsMutex.Unlock()
 
-	logger.SubInfo("LunarCore", "WebSocket", "新客户端连接, 当前连接数: %d", len(wsClients))
+	LoggerGeneral.SubInfo("LunarCore", "WebSocket", "新客户端连接, 当前连接数: %d", len(wsClients))
 
 	go client.writePump()
 	go client.readPump()
@@ -116,7 +116,7 @@ func CloseWebSocketServer() {
 	for _, c := range clients {
 		c.shutdown()
 	}
-	logger.SubInfo("LunarCore", "WebSocket", "已关闭所有连接")
+	LoggerGeneral.SubInfo("LunarCore", "WebSocket", "已关闭所有连接")
 }
 
 // BroadcastMessage 广播消息：拷贝当前客户端快照后逐一阻塞发送
@@ -138,7 +138,7 @@ func BroadcastMessage(msgType string, data any) {
 
 	msgBytes, err := json.Marshal(response)
 	if err != nil {
-		logger.SubError("LunarCore", "WebSocket", "消息序列化失败: %v", err)
+		LoggerGeneral.SubError("LunarCore", "WebSocket", "消息序列化失败: %v", err)
 		return
 	}
 
@@ -164,12 +164,12 @@ func bridgeToQQ(response WSResponse) {
 		// Data 可能是任意结构体，通过 JSON 序列化/反序列化提取字段
 		dataBytes, err := json.Marshal(response.Data)
 		if err != nil {
-			logger.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
+			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
 			return
 		}
 		var dataMap map[string]interface{}
 		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
-			logger.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
+			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
 			return
 		}
 		msgType, _ := dataMap["type"].(string)
@@ -181,12 +181,12 @@ func bridgeToQQ(response WSResponse) {
 		// 图片消息：提取 base64 编码的图片列表并转发到QQ群
 		dataBytes, err := json.Marshal(response.Data)
 		if err != nil {
-			logger.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)
+			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)
 			return
 		}
 		var dataMap map[string]interface{}
 		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
-			logger.SubError("LunarCore", "WebSocket", "桥接解析图片数据失败: %v", err)
+			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接解析图片数据失败: %v", err)
 			return
 		}
 		// 提取 images 数组

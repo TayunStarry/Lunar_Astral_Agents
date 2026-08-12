@@ -1,9 +1,9 @@
 package server
 
 import (
-	browser "LunarSubsystem/BrowserClient"
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/BrowserClient"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,12 +14,12 @@ func StartServerListener(server *http.Server) {
 	// 为服务器添加 CORS 中间件
 	server.Handler = CORSMiddleware(httpMux)
 	//拼接服务器监听地址
-	addr := fmt.Sprintf(":%d", *config.BasicPort)
+	addr := fmt.Sprintf(":%d", *GeneralConfig.BasicPort)
 	// 监听指定端口
 	listener, err := net.Listen("tcp", addr)
 	// 处理监听失败的情况
 	if err != nil {
-		logger.Fatal("LunarCore", "端口 %d 已被占用, 无法启动服务器, 请检查端口号配置", *config.BasicPort)
+		LoggerGeneral.Fatal("LunarCore", "端口 %d 已被占用, 无法启动服务器, 请检查端口号配置", *GeneralConfig.BasicPort)
 	}
 	// 关闭监听器
 	defer listener.Close()
@@ -27,7 +27,7 @@ func StartServerListener(server *http.Server) {
 	go startClientLoading()
 	// 启动服务器监听循环
 	if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
-		logger.Fatal("LunarCore", "服务器运行失败: %v", err)
+		LoggerGeneral.Fatal("LunarCore", "服务器运行失败: %v", err)
 	}
 }
 
@@ -56,7 +56,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 // startClientLoading 启动客户端加载任务
 func startClientLoading() {
 	// 优先使用 127.0.0.1 访问本地服务，避免防火墙拦截和跨网段问题
-	clientURL := fmt.Sprintf("http://127.0.0.1:%d", *config.BasicPort)
+	clientURL := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
 	// 打开浏览器访问
-	browser.OpenBrowser(clientURL)
+	BrowserClient.OpenBrowser(clientURL)
 }

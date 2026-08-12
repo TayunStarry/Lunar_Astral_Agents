@@ -1,8 +1,8 @@
 package llama
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"bufio"
 	"context"
 	"fmt"
@@ -37,7 +37,7 @@ func Init() {
 		// 重复惩罚系数：1.0表示无惩罚
 		"--repeat_penalty", "1.0",
 		// 服务器监听端口
-		"--port", strconv.Itoa(*config.ModelPort),
+		"--port", strconv.Itoa(*GeneralConfig.ModelPort),
 		// 并行请求处理数
 		"--parallel", "1",
 		// 批处理大小
@@ -56,24 +56,24 @@ func Init() {
 		"--sleep-idle-seconds", "900",
 	}
 
-	logger.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *config.ModelPort)
+	LoggerGeneral.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *GeneralConfig.ModelPort)
 
-	cmd := exec.Command(*config.InferEngine, args...)
+	cmd := exec.Command(*GeneralConfig.InferEngine, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		logger.Error("LlamaProxy", "创建标准输出管道失败: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "创建标准输出管道失败: %v", err)
 		return
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		logger.Error("LlamaProxy", "创建标准错误管道失败: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "创建标准错误管道失败: %v", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		logger.Error("LlamaProxy", "启动 llama-server 失败: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "启动 llama-server 失败: %v", err)
 		return
 	}
 
@@ -86,11 +86,11 @@ func Init() {
 
 	select {
 	case <-serverReady:
-		logger.Info("LlamaProxy", "llama-server 已成功启动并准备就绪")
+		LoggerGeneral.Info("LlamaProxy", "llama-server 已成功启动并准备就绪")
 	case <-ctx.Done():
-		logger.Error("LlamaProxy", "llama-server 启动超时")
+		LoggerGeneral.Error("LlamaProxy", "llama-server 启动超时")
 		if err := cmd.Process.Kill(); err != nil {
-			logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
+			LoggerGeneral.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
 		}
 		return
 	}
@@ -104,13 +104,13 @@ func Close() {
 		return
 	}
 
-	logger.Info("LlamaProxy", "正在关闭 llama-server...")
+	LoggerGeneral.Info("LlamaProxy", "正在关闭 llama-server...")
 
 	// 直接 Kill 子进程（Signal(nil) 在 Windows 上不可用，跳过无效的空信号检查）
 	if err := serverProcess.Process.Kill(); err != nil {
-		logger.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "终止 llama-server 进程失败: %v", err)
 	} else {
-		logger.Info("LlamaProxy", "llama-server 已终止")
+		LoggerGeneral.Info("LlamaProxy", "llama-server 已终止")
 	}
 }
 
@@ -128,13 +128,13 @@ func readOutput(reader io.ReadCloser, prefix string) {
 		line, err := scanner.ReadString('\n')
 		if err != nil {
 			if err != io.EOF {
-				logger.Error("LlamaProxy", "[%s] 读取失败: %v", prefix, err)
+				LoggerGeneral.Error("LlamaProxy", "[%s] 读取失败: %v", prefix, err)
 			}
 			return
 		}
 		line = strings.TrimSpace(line)
-		if *config.Developer {
-			logger.Info("LlamaProxy", "[%s] %s", prefix, line)
+		if *GeneralConfig.Developer {
+			LoggerGeneral.Info("LlamaProxy", "[%s] %s", prefix, line)
 		}
 		checkReadySignal(line)
 	}
@@ -164,10 +164,10 @@ func checkReadySignal(line string) {
 func waitForProcessExit(cmd *exec.Cmd) {
 	if err := cmd.Wait(); err != nil {
 		if !strings.Contains(err.Error(), "signal: killed") {
-			logger.Error("LlamaProxy", "llama-server 进程异常退出: %v", err)
+			LoggerGeneral.Error("LlamaProxy", "llama-server 进程异常退出: %v", err)
 		}
 	} else {
-		logger.Info("LlamaProxy", "llama-server 进程正常退出")
+		LoggerGeneral.Info("LlamaProxy", "llama-server 进程正常退出")
 	}
 }
 
@@ -177,7 +177,7 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
 		proxyToLocal(w, r)
 		return
 	}
-	if *config.AgentMultimodalURL != "" && *config.AgentMultimodalURL != "http://127.0.0.1:36789/v1" {
+	if *GeneralConfig.AgentMultimodalURL != "" && *GeneralConfig.AgentMultimodalURL != "http://127.0.0.1:36789/v1" {
 		ProxyToCloud(w, r)
 		return
 	}
@@ -192,7 +192,7 @@ func isEmbeddingRequest(r *http.Request) bool {
 
 // proxyToLocal 将请求反向代理到本地 llama.cpp 服务器
 func proxyToLocal(w http.ResponseWriter, r *http.Request) {
-	targetURL := fmt.Sprintf("http://localhost:%d", *config.ModelPort)
+	targetURL := fmt.Sprintf("http://localhost:%d", *GeneralConfig.ModelPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		http.Error(w, "llama[ERROR] -> 解析目标 URL 失败", http.StatusInternalServerError)
@@ -202,7 +202,7 @@ func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		logger.Error("LlamaProxy", "代理错误: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "代理错误: %v", err)
 		http.Error(w, "llama[ERROR] -> 代理失败", http.StatusBadGateway)
 	}
 
@@ -211,14 +211,14 @@ func proxyToLocal(w http.ResponseWriter, r *http.Request) {
 
 // ProxyToCloud 将请求反向代理到云服务器
 func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
-	target, err := url.Parse(*config.AgentMultimodalURL)
+	target, err := url.Parse(*GeneralConfig.AgentMultimodalURL)
 	if err != nil {
 		http.Error(w, "GGUF模块[ERROR] -> 解析云服务器 URL 失败", http.StatusInternalServerError)
 		return
 	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		logger.Error("LlamaProxy", "云代理错误: %v", err)
+		LoggerGeneral.Error("LlamaProxy", "云代理错误: %v", err)
 		http.Error(w, "GGUF模块[ERROR] -> 云代理失败", http.StatusBadGateway)
 	}
 	// 自定义 Director 函数，保留原始请求路径并注入认证头
@@ -227,10 +227,10 @@ func ProxyToCloud(w http.ResponseWriter, r *http.Request) {
 		req.URL.Host = target.Host
 		req.Host = target.Host
 		// 注入云模型密钥认证头
-		if *config.AgentMultimodalKey != "" {
-			req.Header.Set("Authorization", "Bearer "+*config.AgentMultimodalKey)
+		if *GeneralConfig.AgentMultimodalKey != "" {
+			req.Header.Set("Authorization", "Bearer "+*GeneralConfig.AgentMultimodalKey)
 		}
 	}
-	logger.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *config.AgentMultimodalURL, r.URL.Path)
+	LoggerGeneral.Info("LlamaProxy", "云代理: %s %s -> %s%s", r.Method, r.URL.Path, *GeneralConfig.AgentMultimodalURL, r.URL.Path)
 	proxy.ServeHTTP(w, r)
 }

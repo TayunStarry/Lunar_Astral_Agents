@@ -1,8 +1,8 @@
 package model
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -13,13 +13,13 @@ func GetModels() []AgentModels {
 	// 用于存储模型信息的切片
 	models := []AgentModels{}
 	// 加读锁，防止并发修改模型端口映射
-	config.ModelMapMutex.RLock()
+	GeneralConfig.ModelMapMutex.RLock()
 	// 函数结束时解锁
-	defer config.ModelMapMutex.RUnlock()
+	defer GeneralConfig.ModelMapMutex.RUnlock()
 	// 存储模型名称的切片
 	var modelNames []string
 	// 遍历模型端口映射，获取所有模型名称
-	for modelName := range config.ModelPortMap {
+	for modelName := range GeneralConfig.ModelPortMap {
 		modelNames = append(modelNames, modelName)
 	}
 	// 遍历模型名称，构造模型信息
@@ -32,11 +32,11 @@ func GetModels() []AgentModels {
 // GetModelPort 根据模型名称获取对应端口（加读锁）
 func GetModelPort(modelName string) (int, bool) {
 	// 加读锁，防止并发修改模型端口映射时出现数据竞争
-	config.ModelMapMutex.RLock()
+	GeneralConfig.ModelMapMutex.RLock()
 	// 函数结束时解锁，确保锁一定会被释放
-	defer config.ModelMapMutex.RUnlock()
+	defer GeneralConfig.ModelMapMutex.RUnlock()
 	// 从模型端口映射中查找指定模型的端口号
-	port, exists := config.ModelPortMap[modelName]
+	port, exists := GeneralConfig.ModelPortMap[modelName]
 	// 返回端口号和是否存在的标志
 	return port, exists
 }
@@ -81,7 +81,7 @@ func GetBusyResponse() string {
 // ProcessAgentRequest 处理与模型相关的请求
 func ProcessAgentRequest(modelName string) (string, error) {
 	// 检查系统是否繁忙，如果已就绪的模型数量小于最大模型数量，返回系统繁忙响应
-	if config.ModelReady < config.MaxModelAmount {
+	if GeneralConfig.ModelReady < GeneralConfig.MaxModelAmount {
 		return GetBusyResponse(), fmt.Errorf("system_busy")
 	}
 	// 队列控制
@@ -128,7 +128,7 @@ func ProcessAgentRequest(modelName string) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("无法找到模型: %s", modelName)
 	}
-	logger.Info("LunarCore", "模型[%s : %d]", modelName, port)
+	LoggerGeneral.Info("LunarCore", "模型[%s : %d]", modelName, port)
 	// 这里不直接代理，而是返回端口信息，由handlers处理代理
 	return fmt.Sprintf("%d", port), nil
 }
