@@ -1,7 +1,7 @@
 package module
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"archive/zip"
 	"bytes"
 	"fmt"
@@ -62,7 +62,7 @@ func CreateZip(files []*multipart.FileHeader, zipName string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("关闭ZIP写入器失败: %w", err)
 	}
-	logger.SubInfo("FileManager", "Archive", "成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
+	LoggerGeneral.SubInfo("FileManager", "Archive", "成功创建ZIP文件: %s, 包含 %d 个文件", zipName, len(files))
 	// 从缓冲区获取 ZIP 文件的字节数据
 	return zipBuffer.Bytes(), nil
 }
@@ -180,6 +180,6 @@ func PackageDirZip(dirPath string, packageName string) ([]byte, error) {
 		return nil, fmt.Errorf("关闭 ZIP 写入器失败: %w", err)
 	}
 
-	logger.SubInfo("FileManager", "Archive", "成功打包目录: %s -> %s.ltpx (%d 字节)", dirPath, packageName, buf.Len())
+	LoggerGeneral.SubInfo("FileManager", "Archive", "成功打包目录: %s -> %s.ltpx (%d 字节)", dirPath, packageName, buf.Len())
 	return buf.Bytes(), nil
 }

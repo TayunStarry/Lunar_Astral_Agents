@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -24,7 +24,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 		return "", "", fmt.Errorf("无效的文件名")
 	}
 	// 拼接文件的完整路径
-	fullPath := filepath.Join(*config.LocalDir, fileName)
+	fullPath := filepath.Join(*GeneralConfig.LocalDir, fileName)
 	// 创建文件所在的目录
 	if mkdirErr := os.MkdirAll(filepath.Dir(fullPath), 0755); mkdirErr != nil {
 		return "", "", fmt.Errorf("创建目录失败: %w", mkdirErr)
@@ -50,7 +50,7 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 			// 构建新的文件名，包含时间戳
 			fileName = filepath.Join(filepath.Dir(fileName), fmt.Sprintf("%s_%s%s", name, timestamp, ext))
 			// 更新文件的完整路径
-			fullPath = filepath.Join(*config.LocalDir, fileName)
+			fullPath = filepath.Join(*GeneralConfig.LocalDir, fileName)
 		}
 	}
 	// 创建文件
@@ -67,9 +67,9 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 	}
 	// 同步文件内容到磁盘
 	if err := file.Sync(); err != nil {
-		logger.SubError("FileManager", "Save", "同步失败: %s, %v", fullPath, err)
+		LoggerGeneral.SubError("FileManager", "Save", "同步失败: %s, %v", fullPath, err)
 	}
-	logger.SubInfo("FileManager", "Save", "成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
+	LoggerGeneral.SubInfo("FileManager", "Save", "成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 	return fileName, fullPath, nil
 }
 

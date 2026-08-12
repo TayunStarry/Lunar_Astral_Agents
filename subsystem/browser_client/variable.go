@@ -1,4 +1,4 @@
-package browser
+package BrowserClient
 
 import (
 	"sync"

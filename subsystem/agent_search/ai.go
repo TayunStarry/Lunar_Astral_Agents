@@ -1,7 +1,7 @@
 package AgentSearch
 
 import (
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -68,14 +68,14 @@ func callAI(systemPrompt string, userPrompt string, images [][]byte) (string, er
 		messages = append(messages, chatMessage{Role: "user", Content: userPrompt})
 	}
 
-	return callChatAPI(*config.SearchMultimodalURL, *config.SearchMultimodalModel, *config.SearchMultimodalKey, messages, maxTokens)
+	return callChatAPI(*GeneralConfig.SearchMultimodalURL, *GeneralConfig.SearchMultimodalModel, *GeneralConfig.SearchMultimodalKey, messages, maxTokens)
 }
 
 // callEmbedding 调用嵌入 API，返回文本的嵌入向量
 // 模型配置（URL、模型名、API Key）从 config 模块（lunar_config.json）读取
 func callEmbedding(text string) ([]float32, error) {
 	body := embeddingRequest{
-		Model: *config.SearchEmbeddingModel,
+		Model: *GeneralConfig.SearchEmbeddingModel,
 		Input: text,
 	}
 
@@ -84,14 +84,14 @@ func callEmbedding(text string) ([]float32, error) {
 		return nil, fmt.Errorf("序列化嵌入请求失败: %w", err)
 	}
 
-	baseURL := normalizeBaseURL(*config.SearchEmbeddingURL)
+	baseURL := normalizeBaseURL(*GeneralConfig.SearchEmbeddingURL)
 	req, err := http.NewRequest("POST", baseURL+"/embeddings", bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *config.SearchEmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.SearchEmbeddingKey)
+	if *GeneralConfig.SearchEmbeddingKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.SearchEmbeddingKey)
 	}
 
 	resp, err := aiHTTPClient.Do(req)

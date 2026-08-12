@@ -2,7 +2,7 @@ package server
 
 import (
 	"LunarSubsystem/FileManager/module"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -57,5 +57,5 @@ func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("FileManager", "知识库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
+	LoggerGeneral.Info("FileManager", "知识库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
 }

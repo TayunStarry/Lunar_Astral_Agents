@@ -1,4 +1,4 @@
-package browser
+package BrowserClient
 
 type ipCandidate struct {
 	IP        string

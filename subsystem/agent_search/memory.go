@@ -2,7 +2,7 @@ package AgentSearch
 
 import (
 	"LunarSubsystem/FileManager/module"
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	"context"
 	"fmt"
 	"strings"
@@ -32,7 +32,7 @@ func initMemoryCollection() error {
 		if err := module.MemoryInitInstance(); err != nil {
 			return fmt.Errorf("记忆库实例初始化失败: %w", err)
 		}
-		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, *config.SearchEmbeddingModel, *config.SearchMultimodalModel)
+		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, *GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchMultimodalModel)
 	}
 
 	// 检查 search_memory 集合状态
@@ -47,7 +47,7 @@ func initMemoryCollection() error {
 	dim := getIntField(info, "embedding_dimension")
 	count := getIntField(info, "document_count")
 	fmt.Printf("[%s] 记忆集合 '%s' 已存在 (模型=%s 维度=%d 文档=%d)\n",
-		ModuleName, searchMemoryCollection, *config.SearchEmbeddingModel, dim, count)
+		ModuleName, searchMemoryCollection, *GeneralConfig.SearchEmbeddingModel, dim, count)
 
 	// 检查维度是否匹配
 	if module.MemoryHasSyncMismatch(searchMemoryCollection) {
@@ -64,7 +64,7 @@ func initMemoryCollection() error {
 // createCollection 创建 search_memory 集合
 // 模型名从 config 模块读取
 func createCollection() error {
-	modelName := *config.SearchEmbeddingModel
+	modelName := *GeneralConfig.SearchEmbeddingModel
 	ctx := context.Background()
 	if err := module.CollectionInit(ctx, searchMemoryCollection, modelName, module.CollectionTypeText); err != nil {
 		return fmt.Errorf("创建记忆集合 '%s' 失败: %w", searchMemoryCollection, err)

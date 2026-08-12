@@ -1,7 +1,7 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -38,7 +38,7 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	if !d.memoryInitialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
 	}
-	embeddingURL := *config.MemoryEmbeddingURL
+	embeddingURL := *GeneralConfig.MemoryEmbeddingURL
 	if embeddingURL == "" {
 		return nil, fmt.Errorf("嵌入服务 base_url 未配置")
 	}
@@ -62,8 +62,8 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 		return nil, fmt.Errorf("创建嵌入请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *config.MemoryEmbeddingKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.MemoryEmbeddingKey)
+	if *GeneralConfig.MemoryEmbeddingKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.MemoryEmbeddingKey)
 	}
 
 	resp, err := d.httpClient.Do(req)
@@ -165,7 +165,7 @@ type chatMessageResp struct {
 // isImage 为 true 时使用多模态 vision 格式请求
 // 最多重试 MaxTagRetries 次，全部失败则返回错误
 func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage bool) ([]string, error) {
-	llmURL := *config.MemoryMultimodalURL
+	llmURL := *GeneralConfig.MemoryMultimodalURL
 	if llmURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
@@ -191,7 +191,7 @@ func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage boo
 
 // generateTagsOnce 单次 LLM 标签生成尝试
 func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage bool) ([]string, error) {
-	llmURL := *config.MemoryMultimodalURL
+	llmURL := *GeneralConfig.MemoryMultimodalURL
 	apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
 
 	var messages []chatMessage
@@ -236,7 +236,7 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 	}
 
 	reqBody := chatRequest{
-		Model:       *config.MemoryMultimodalModel,
+		Model:       *GeneralConfig.MemoryMultimodalModel,
 		Messages:    messages,
 		MaxTokens:   200,
 		Temperature: 0.3,
@@ -252,8 +252,8 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 		return nil, fmt.Errorf("创建 LLM 请求失败: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if *config.MemoryMultimodalKey != "" {
-		req.Header.Set("Authorization", "Bearer "+*config.MemoryMultimodalKey)
+	if *GeneralConfig.MemoryMultimodalKey != "" {
+		req.Header.Set("Authorization", "Bearer "+*GeneralConfig.MemoryMultimodalKey)
 	}
 
 	resp, err := d.httpClient.Do(req)

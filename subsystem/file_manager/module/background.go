@@ -1,7 +1,7 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/GeneralConfig"
 	"fmt"
 	"io"
 	"math/rand"
@@ -13,7 +13,7 @@ import (
 
 // GetRandomBackgroundImage 从 background 目录中随机选择一个背景图片文件名
 func GetRandomBackgroundImage() (string, error) {
-	backgroundDir := filepath.Join(*config.LocalDir, "images/background")
+	backgroundDir := filepath.Join(*GeneralConfig.LocalDir, "images/background")
 	entries, err := os.ReadDir(backgroundDir)
 	if err != nil {
 		return "", err

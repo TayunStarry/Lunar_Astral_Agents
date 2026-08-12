@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"io"
 	"mime"
@@ -18,9 +18,9 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 		return nil, 0, "", fmt.Errorf("未指定文件路径")
 	}
 	// 拼接配置中的本地目录和请求的文件路径，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, filePath))
 	// 检查拼接后的路径是否在配置的本地目录下
-	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*GeneralConfig.LocalDir)) {
 		return nil, 0, "", fmt.Errorf("访问被拒绝")
 	}
 	// 获取文件信息与错误内容
@@ -41,7 +41,7 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	ext := strings.ToLower(filepath.Ext(fullPath))
 	// 获取 Content-Type：优先使用自定义映射，其次使用标准库自动识别，最后使用默认值
 	mimeType := "application/octet-stream"
-	if mt, ok := config.MimeMap[ext]; ok {
+	if mt, ok := GeneralConfig.MimeMap[ext]; ok {
 		mimeType = mt
 	} else if mt := mime.TypeByExtension(ext); mt != "" {
 		mimeType = mt
@@ -52,6 +52,6 @@ func ReadFile(filePath string) (io.ReadCloser, int64, string, error) {
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("打开文件失败")
 	}
-	logger.SubInfo("FileManager", "Read", "成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
+	LoggerGeneral.SubInfo("FileManager", "Read", "成功读取: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 	return file, fileInfo.Size(), mimeType, nil
 }

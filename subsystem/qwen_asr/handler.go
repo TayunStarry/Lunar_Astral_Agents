@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -69,11 +69,11 @@ func (h *AsrHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
-	logger.Info("ASREngine", "Received ASR request")
+	LoggerGeneral.Info("ASREngine", "Received ASR request")
 
 	err := r.ParseMultipartForm(32 << 20) // 32MB max
 	if err != nil {
-		logger.Error("ASREngine", "Failed to parse form: %v", err)
+		LoggerGeneral.Error("ASREngine", "Failed to parse form: %v", err)
 		h.sendJSON(w, http.StatusBadRequest, AsrResponse{
 			Status: "error",
 			Error:  "Failed to parse form data",
@@ -83,7 +83,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("audio")
 	if err != nil {
-		logger.Error("ASREngine", "Failed to get audio file: %v", err)
+		LoggerGeneral.Error("ASREngine", "Failed to get audio file: %v", err)
 		h.sendJSON(w, http.StatusBadRequest, AsrResponse{
 			Status: "error",
 			Error:  "Missing audio file (use form field 'audio')",
@@ -94,7 +94,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 
 	audioData, err := io.ReadAll(file)
 	if err != nil {
-		logger.Error("ASREngine", "Failed to read audio data: %v", err)
+		LoggerGeneral.Error("ASREngine", "Failed to read audio data: %v", err)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status: "error",
 			Error:  "Failed to read audio data",
@@ -103,7 +103,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
-		logger.Error("ASREngine", "Failed to create upload dir: %v", err)
+		LoggerGeneral.Error("ASREngine", "Failed to create upload dir: %v", err)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status: "error",
 			Error:  "Server error",
@@ -119,7 +119,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	if isValidWav(audioData) {
 		wavData = audioData
 	} else {
-		logger.Info("ASREngine", "Non-WAV format detected (filename: %s), converting to WAV", header.Filename)
+		LoggerGeneral.Info("ASREngine", "Non-WAV format detected (filename: %s), converting to WAV", header.Filename)
 		srcExt := ext
 		if srcExt != ".webm" && srcExt != ".ogg" && srcExt != ".mp4" && srcExt != ".m4a" && srcExt != ".weba" {
 			srcExt = ".webm"
@@ -127,7 +127,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 		var err error
 		wavData, err = convertToWav(audioData, srcExt)
 		if err != nil {
-			logger.Error("ASREngine", "Failed to convert audio: %v", err)
+			LoggerGeneral.Error("ASREngine", "Failed to convert audio: %v", err)
 			h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 				Status: "error",
 				Error:  fmt.Sprintf("Audio conversion failed: %v", err),
@@ -138,7 +138,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := os.WriteFile(tmpPath, wavData, 0644); err != nil {
-		logger.Error("ASREngine", "Failed to save audio file: %v", err)
+		LoggerGeneral.Error("ASREngine", "Failed to save audio file: %v", err)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status: "error",
 			Error:  "Failed to save audio file",
@@ -147,11 +147,11 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.Remove(tmpPath)
 
-	logger.Info("ASREngine", "Processing audio file: %s (%d bytes, format=%s)", header.Filename, len(wavData), ext)
+	LoggerGeneral.Info("ASREngine", "Processing audio file: %s (%d bytes, format=%s)", header.Filename, len(wavData), ext)
 
 	text, err := h.asr.TranscribeWavFile(tmpPath)
 	if err != nil {
-		logger.Error("ASREngine", "ASR transcription failed: %v", err)
+		LoggerGeneral.Error("ASREngine", "ASR transcription failed: %v", err)
 		h.sendJSON(w, http.StatusInternalServerError, AsrResponse{
 			Status:      "error",
 			Error:       fmt.Sprintf("Transcription failed: %v", err),
@@ -161,7 +161,7 @@ func (h *AsrHandler) handleAsr(w http.ResponseWriter, r *http.Request) {
 	}
 
 	confidence := estimateConfidence(text)
-	logger.Info("ASREngine", "Transcription complete: %s (confidence: %.2f)", text, confidence)
+	LoggerGeneral.Info("ASREngine", "Transcription complete: %s (confidence: %.2f)", text, confidence)
 
 	h.sendJSON(w, http.StatusOK, AsrResponse{
 		Status:      "success",

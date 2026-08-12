@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"database/sql"
 	"fmt"
 	"os"
@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	logger.SetDevMode(*config.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
 }
 
 // InitKnowledgeDB 初始化知识库（SQLite）
@@ -30,7 +30,7 @@ func InitKnowledgeDB(dbPath string) error {
 	}
 
 	KnowledgeDatabase = db
-	logger.Info("FileManager", "知识库初始化完成: %s", dbPath)
+	LoggerGeneral.Info("FileManager", "知识库初始化完成: %s", dbPath)
 	return nil
 }
 
@@ -59,15 +59,15 @@ func (d *KnowledgeDB) initKnowledge(dbPath string) error {
 
 	_, err = db.Exec("PRAGMA synchronous = NORMAL")
 	if err != nil {
-		logger.Error("FileManager", "设置SQLite同步模式失败: %v", err)
+		LoggerGeneral.Error("FileManager", "设置SQLite同步模式失败: %v", err)
 	}
 	_, err = db.Exec("PRAGMA cache_size = 10000")
 	if err != nil {
-		logger.Error("FileManager", "设置SQLite缓存大小失败: %v", err)
+		LoggerGeneral.Error("FileManager", "设置SQLite缓存大小失败: %v", err)
 	}
 	_, err = db.Exec("PRAGMA foreign_keys = ON")
 	if err != nil {
-		logger.Error("FileManager", "启用外键约束失败: %v", err)
+		LoggerGeneral.Error("FileManager", "启用外键约束失败: %v", err)
 	}
 
 	d.knowledgeDB = db
@@ -875,7 +875,7 @@ func (d *KnowledgeDB) executeGetTableCount(table string) OperationResult {
 // EnsureKnowledgeInitialized 确保知识库已初始化并连接可用
 func EnsureKnowledgeInitialized() error {
 	if KnowledgeDatabase == nil || !KnowledgeDatabase.IsKnowledgeInitialized() {
-		if err := InitKnowledgeDB(*config.KnowledgeDBPath); err != nil {
+		if err := InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
 			return err
 		}
 	}

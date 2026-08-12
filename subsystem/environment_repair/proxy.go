@@ -1,6 +1,7 @@
 package main
 
 import (
+	"LunarSubsystem/GeneralConfig"
 	"bufio"
 	"crypto/rand"
 	"crypto/rsa"
@@ -22,8 +23,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	config "LunarSubsystem/GeneralConfig"
 )
 
 // ==== HTTPS 代理服务器 ====
@@ -34,29 +33,29 @@ func RunHTTPSProxy() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// 1. 获取后端端口
-	fmt.Printf("请输入后端 HTTP 服务端口 [默认 %d]: ", *config.BasicPort)
-	backendPort := *config.BasicPort
+	fmt.Printf("请输入后端 HTTP 服务端口 [默认 %d]: ", *GeneralConfig.BasicPort)
+	backendPort := *GeneralConfig.BasicPort
 	if scanner.Scan() {
 		input := strings.TrimSpace(scanner.Text())
 		if input != "" {
 			if v, err := strconv.Atoi(input); err == nil && v > 0 && v < 65536 {
 				backendPort = v
 			} else {
-				fmt.Printf("  输入无效，使用默认端口: %d\n", *config.BasicPort)
+				fmt.Printf("  输入无效，使用默认端口: %d\n", *GeneralConfig.BasicPort)
 			}
 		}
 	}
 
 	// 2. 获取代理端口
-	fmt.Printf("请输入代理 HTTPS 监听端口 [默认 %d]: ", *config.ProxyPort)
-	proxyPort := *config.ProxyPort
+	fmt.Printf("请输入代理 HTTPS 监听端口 [默认 %d]: ", *GeneralConfig.ProxyPort)
+	proxyPort := *GeneralConfig.ProxyPort
 	if scanner.Scan() {
 		input := strings.TrimSpace(scanner.Text())
 		if input != "" {
 			if v, err := strconv.Atoi(input); err == nil && v > 0 && v < 65536 {
 				proxyPort = v
 			} else {
-				fmt.Printf("  输入无效，使用默认端口: %d\n", *config.ProxyPort)
+				fmt.Printf("  输入无效，使用默认端口: %d\n", *GeneralConfig.ProxyPort)
 			}
 		}
 	}
@@ -207,7 +206,7 @@ func loadOrGenerateCert() (tls.Certificate, error) {
 	// 优先尝试从磁盘加载
 	cert, err := loadCertFromDisk()
 	if err == nil {
-		fmt.Printf("  从磁盘加载证书成功: %s\n", *config.CertFile)
+		fmt.Printf("  从磁盘加载证书成功: %s\n", *GeneralConfig.CertFile)
 		return cert, nil
 	}
 	fmt.Printf("  磁盘证书不可用 (%v)，将重新生成\n", err)
@@ -218,11 +217,11 @@ func loadOrGenerateCert() (tls.Certificate, error) {
 
 // loadCertFromDisk 从磁盘加载证书并验证有效性
 func loadCertFromDisk() (tls.Certificate, error) {
-	certPEM, err := os.ReadFile(*config.CertFile)
+	certPEM, err := os.ReadFile(*GeneralConfig.CertFile)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("读取证书文件失败: %w", err)
 	}
-	keyPEM, err := os.ReadFile(*config.KeyFile)
+	keyPEM, err := os.ReadFile(*GeneralConfig.KeyFile)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("读取私钥文件失败: %w", err)
 	}
@@ -298,7 +297,7 @@ func generateAndSaveCert() (tls.Certificate, error) {
 	if err := saveCertToDisk(certPEM, keyPEM); err != nil {
 		fmt.Printf("  [WARN] 证书持久化失败: %v（证书仅在内存中可用）\n", err)
 	} else {
-		fmt.Printf("  证书已持久化: %s\n", *config.CertFile)
+		fmt.Printf("  证书已持久化: %s\n", *GeneralConfig.CertFile)
 	}
 
 	return tls.X509KeyPair(certPEM, keyPEM)
@@ -306,16 +305,16 @@ func generateAndSaveCert() (tls.Certificate, error) {
 
 // saveCertToDisk 将证书和私钥写入磁盘
 func saveCertToDisk(certPEM, keyPEM []byte) error {
-	certDirPath := filepath.Dir(*config.CertFile)
+	certDirPath := filepath.Dir(*GeneralConfig.CertFile)
 	if err := os.MkdirAll(certDirPath, 0755); err != nil {
 		return fmt.Errorf("创建证书目录失败: %w", err)
 	}
 
-	if err := os.WriteFile(*config.CertFile, certPEM, 0644); err != nil {
+	if err := os.WriteFile(*GeneralConfig.CertFile, certPEM, 0644); err != nil {
 		return fmt.Errorf("写入证书文件失败: %w", err)
 	}
 
-	if err := os.WriteFile(*config.KeyFile, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(*GeneralConfig.KeyFile, keyPEM, 0600); err != nil {
 		return fmt.Errorf("写入私钥文件失败: %w", err)
 	}
 

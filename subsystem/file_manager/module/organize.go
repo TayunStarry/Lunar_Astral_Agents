@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"io"
 	"os"
@@ -17,8 +17,8 @@ func ExecuteOrganize(req OrganizeRequest) OrganizeResponse {
 	}
 
 	// 解析基础路径
-	basePath := filepath.Clean(filepath.Join(*config.LocalDir, req.BasePath))
-	localDir := filepath.Clean(*config.LocalDir)
+	basePath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, req.BasePath))
+	localDir := filepath.Clean(*GeneralConfig.LocalDir)
 
 	// 验证基础路径在 LocalDir 内
 	if !strings.HasPrefix(basePath, localDir) {
@@ -125,11 +125,11 @@ func executeMove(basePath, source, target, localDir string) error {
 			return fmt.Errorf("移动文件失败: %w", copyErr)
 		}
 		if err := os.RemoveAll(srcPath); err != nil {
-			logger.SubError("FileManager", "Organize", "删除源文件失败: %s, %v", srcPath, err)
+			LoggerGeneral.SubError("FileManager", "Organize", "删除源文件失败: %s, %v", srcPath, err)
 		}
 	}
 
-	logger.SubInfo("FileManager", "Organize", "移动: %s -> %s", source, target)
+	LoggerGeneral.SubInfo("FileManager", "Organize", "移动: %s -> %s", source, target)
 	return nil
 }
 
@@ -159,7 +159,7 @@ func executeRename(basePath, source, target, localDir string) error {
 		return fmt.Errorf("重命名失败: %w", err)
 	}
 
-	logger.SubInfo("FileManager", "Organize", "重命名: %s -> %s", source, target)
+	LoggerGeneral.SubInfo("FileManager", "Organize", "重命名: %s -> %s", source, target)
 	return nil
 }
 
@@ -215,7 +215,7 @@ func executeMerge(basePath, source, target, localDir string) error {
 	remaining, _ := os.ReadDir(srcPath)
 	if len(remaining) == 0 {
 		if err := os.Remove(srcPath); err != nil {
-			logger.SubError("FileManager", "Organize", "删除空源目录失败: %s, %v", srcPath, err)
+			LoggerGeneral.SubError("FileManager", "Organize", "删除空源目录失败: %s, %v", srcPath, err)
 		}
 	}
 
@@ -223,7 +223,7 @@ func executeMerge(basePath, source, target, localDir string) error {
 		return fmt.Errorf("部分文件合并失败: %s", strings.Join(moveErrors, "; "))
 	}
 
-	logger.SubInfo("FileManager", "Organize", "合并: %s -> %s", source, target)
+	LoggerGeneral.SubInfo("FileManager", "Organize", "合并: %s -> %s", source, target)
 	return nil
 }
 
@@ -243,7 +243,7 @@ func executeDelete(basePath, source, localDir string) error {
 		return fmt.Errorf("删除失败: %w", err)
 	}
 
-	logger.SubInfo("FileManager", "Organize", "删除: %s", source)
+	LoggerGeneral.SubInfo("FileManager", "Organize", "删除: %s", source)
 	return nil
 }
 

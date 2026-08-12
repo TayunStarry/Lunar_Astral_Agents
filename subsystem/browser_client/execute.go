@@ -1,7 +1,7 @@
-package browser
+package BrowserClient
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"net"
 	"os/exec"
@@ -127,7 +127,7 @@ func GetLocalIP(preferredNetworks []string) (string, error) {
 
 // OpenSystemBrowser 在系统默认浏览器中打开指定 URL
 func OpenSystemBrowser(url string) {
-	logger.SubInfo("BrowserClient", "OpenSystemBrowser", "使用系统浏览器打开: %s", url)
+	LoggerGeneral.SubInfo("BrowserClient", "OpenSystemBrowser", "使用系统浏览器打开: %s", url)
 	var cmd string
 	var args []string
 
@@ -144,18 +144,18 @@ func OpenSystemBrowser(url string) {
 	}
 
 	if err := exec.Command(cmd, args...).Start(); err != nil {
-		logger.SubError("BrowserClient", "OpenSystemBrowser", "%v 建议手动访问: %s", err, url)
+		LoggerGeneral.SubError("BrowserClient", "OpenSystemBrowser", "%v 建议手动访问: %s", err, url)
 	}
 }
 
 // OpenBrowser 使用浏览器打开指定 URL
 func OpenBrowser(url string) {
-	logger.SubInfo("BrowserClient", "OpenBrowser", "开始选择浏览器")
+	LoggerGeneral.SubInfo("BrowserClient", "OpenBrowser", "开始选择浏览器")
 	if !IsWebViewSupported() {
-		logger.SubInfo("BrowserClient", "OpenBrowser", "webview 不支持，回退到系统浏览器")
+		LoggerGeneral.SubInfo("BrowserClient", "OpenBrowser", "webview 不支持，回退到系统浏览器")
 		OpenSystemBrowser(url)
 		return
 	}
-	logger.SubInfo("BrowserClient", "OpenBrowser", "启动 webview 专用线程")
+	LoggerGeneral.SubInfo("BrowserClient", "OpenBrowser", "启动 webview 专用线程")
 	go StartWebViewBrowser(url)
 }

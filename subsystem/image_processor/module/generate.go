@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -64,21 +64,21 @@ func ProcessTask(task GenerateTask) {
 	task.Status = "running"
 	TaskStatus[taskID] = &task
 	TaskStatusMu.Unlock()
-	logger.Info("ImageProcessor", "开始处理任务: %s", taskID)
+	LoggerGeneral.Info("ImageProcessor", "开始处理任务: %s", taskID)
 
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
 	outputFilename := fmt.Sprintf("%s.png", timestamp)
-	outputPath := filepath.Join(*config.LocalDir, "images/generated", outputFilename)
+	outputPath := filepath.Join(*GeneralConfig.LocalDir, "images/generated", outputFilename)
 
 	// 确保输出目录存在
-	os.MkdirAll(filepath.Join(*config.LocalDir, "images/generated"), 0755)
+	os.MkdirAll(filepath.Join(*GeneralConfig.LocalDir, "images/generated"), 0755)
 
 	// 构建命令参数
 	args := []string{
-		"--diffusion-model", *config.DiffusionModel,
-		"--vae", *config.VariationalModel,
-		"--llm", *config.PromptAnalysisModel,
+		"--diffusion-model", *GeneralConfig.DiffusionModel,
+		"--vae", *GeneralConfig.VariationalModel,
+		"--llm", *GeneralConfig.PromptAnalysisModel,
 		"--diffusion-fa",
 		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
@@ -96,7 +96,7 @@ func ProcessTask(task GenerateTask) {
 
 	// 图生图参数
 	if task.InitImg != "" && task.InitImg != "null" {
-		initImgPath := filepath.Join(*config.LocalDir, task.InitImg)
+		initImgPath := filepath.Join(*GeneralConfig.LocalDir, task.InitImg)
 		if _, err := os.Stat(initImgPath); err == nil {
 			args = append(args, "--init-img", initImgPath)
 			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
@@ -113,17 +113,17 @@ func ProcessTask(task GenerateTask) {
 	}
 	// 超分参数
 	if task.AllowSuperResolution {
-		args = append(args, "--upscale-model", *config.RealESRGANModel)
+		args = append(args, "--upscale-model", *GeneralConfig.RealESRGANModel)
 		args = append(args, "--hires-denoising-strength", "0.55")
 	}
 	// 多模态提示词模型
-	if *config.PromptMmprojModel != "" {
-		args = append(args, "--llm_vision", *config.PromptMmprojModel)
+	if *GeneralConfig.PromptMmprojModel != "" {
+		args = append(args, "--llm_vision", *GeneralConfig.PromptMmprojModel)
 	}
 
 	// 显示命令参数，正确分组
-	logger.Info("ImageProcessor", "执行命令参数:")
-	logger.Info("ImageProcessor", "  程序: %s", *config.VisualEngine)
+	LoggerGeneral.Info("ImageProcessor", "执行命令参数:")
+	LoggerGeneral.Info("ImageProcessor", "  程序: %s", *GeneralConfig.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -144,21 +144,21 @@ func ProcessTask(task GenerateTask) {
 		}
 
 		if isValueParam {
-			logger.Info("ImageProcessor", "  参数: %s %s", current, value)
+			LoggerGeneral.Info("ImageProcessor", "  参数: %s %s", current, value)
 		} else {
-			logger.Info("ImageProcessor", "  参数: %s", current)
+			LoggerGeneral.Info("ImageProcessor", "  参数: %s", current)
 		}
 	}
 
 	// 执行命令
-	cmd := exec.Command(*config.VisualEngine, args...)
+	cmd := exec.Command(*GeneralConfig.VisualEngine, args...)
 
 	// 捕获标准输出和错误输出
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
-		logger.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
+		LoggerGeneral.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
 		TaskStatusMu.Lock()
 		task.Status = "failed"
 		task.Error = err.Error()
@@ -203,12 +203,12 @@ func ProcessTask(task GenerateTask) {
 
 	TaskStatusMu.Lock()
 	if err != nil {
-		logger.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
+		LoggerGeneral.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
 		task.Status = "failed"
 		task.Error = err.Error()
 	} else {
-		logger.Info("ImageProcessor", "任务[%s]已完成", taskID)
-		logger.Info("ImageProcessor", "生成结果: ./%s", outputPath)
+		LoggerGeneral.Info("ImageProcessor", "任务[%s]已完成", taskID)
+		LoggerGeneral.Info("ImageProcessor", "生成结果: ./%s", outputPath)
 		task.Status = "completed"
 		task.ResultPath = outputPath
 	}
@@ -263,7 +263,7 @@ func RemoveWaitClient(taskID string) {
 // GenerateImage 生成图片并等待完成，返回图片路径和base64编码
 func GenerateImage(prompt, negativePrompt string, batchSize, width, height, steps int, strength, cfgScale float64, seed int64, initImg string, allowSuperResolution bool) (map[string]any, error) {
 	// 检查是否允许使用扩散生成
-	if !*config.AllowDiffusion {
+	if !*GeneralConfig.AllowDiffusion {
 		return nil, fmt.Errorf("未启用[扩散生成]功能")
 	}
 

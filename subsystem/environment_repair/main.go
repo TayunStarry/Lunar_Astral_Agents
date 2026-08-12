@@ -1,13 +1,12 @@
 package main
 
 import (
+	"LunarSubsystem/GeneralConfig"
 	"bufio"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-
-	config "LunarSubsystem/GeneralConfig"
 )
 
 func main() {
@@ -118,8 +117,8 @@ func promptPortRange() PortRange {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// 默认端口范围（与 config 子系统默认值一致）
-	defaultStart := *config.MinPort
-	defaultEnd := *config.MaxPort
+	defaultStart := *GeneralConfig.MinPort
+	defaultEnd := *GeneralConfig.MaxPort
 
 	fmt.Printf("请输入起始端口 [默认 %d]: ", defaultStart)
 	if scanner.Scan() {

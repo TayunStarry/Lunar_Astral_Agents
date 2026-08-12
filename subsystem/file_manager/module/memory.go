@@ -1,7 +1,8 @@
 package module
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -13,8 +14,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	config "LunarSubsystem/GeneralConfig"
 )
 
 // =============================================================================
@@ -26,7 +25,7 @@ import (
 func generateUUID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		logger.Warn("FileManager", "crypto/rand 失败, 退化为时间戳 UUID: %v", err)
+		LoggerGeneral.Warn("FileManager", "crypto/rand 失败, 退化为时间戳 UUID: %v", err)
 		t := time.Now().UnixNano()
 		for i := 0; i < 16; i++ {
 			b[i] = byte(t >> (i * 4))
@@ -133,13 +132,13 @@ func (d *MemoryDB) collectionInitFromMeta(ctx context.Context, name, modelName, 
 
 	// 版本缺失或过低
 	if meta.Version < CurrentVersion {
-		logger.Warn("FileManager", "集合 %s 版本 %d < %d，触发重建", name, meta.Version, CurrentVersion)
+		LoggerGeneral.Warn("FileManager", "集合 %s 版本 %d < %d，触发重建", name, meta.Version, CurrentVersion)
 		needRebuild = true
 	}
 
 	// 嵌入模型缺失或不匹配
 	if meta.EmbeddingModel == "" || meta.EmbeddingModel != modelName {
-		logger.Warn("FileManager", "集合 %s 嵌入模型不匹配 [%s] vs [%s]，触发重建", name, meta.EmbeddingModel, modelName)
+		LoggerGeneral.Warn("FileManager", "集合 %s 嵌入模型不匹配 [%s] vs [%s]，触发重建", name, meta.EmbeddingModel, modelName)
 		needRebuild = true
 	}
 
@@ -150,7 +149,7 @@ func (d *MemoryDB) collectionInitFromMeta(ctx context.Context, name, modelName, 
 			return fmt.Errorf("探针嵌入失败: %w", err)
 		}
 		if meta.EmbeddingDimension != 0 && meta.EmbeddingDimension != probeDim {
-			logger.Warn("FileManager", "集合 %s 嵌入维度不匹配 [%d] vs [%d]，触发重建", name, meta.EmbeddingDimension, probeDim)
+			LoggerGeneral.Warn("FileManager", "集合 %s 嵌入维度不匹配 [%d] vs [%d]，触发重建", name, meta.EmbeddingDimension, probeDim)
 			needRebuild = true
 		}
 		meta.EmbeddingDimension = probeDim
@@ -171,7 +170,7 @@ func (d *MemoryDB) collectionInitFromMeta(ctx context.Context, name, modelName, 
 		Model:           modelName,
 		Dimension:       meta.EmbeddingDimension,
 		CollectionType:  collectionType,
-		MultimodalModel: *config.MemoryMultimodalModel,
+		MultimodalModel: *GeneralConfig.MemoryMultimodalModel,
 		collDir:         collDir,
 		metaPath:        metaPath,
 	}
@@ -203,7 +202,7 @@ func (d *MemoryDB) collectionInitNew(ctx context.Context, name, modelName, colle
 		Model:           modelName,
 		Dimension:       probeDim,
 		CollectionType:  collectionType,
-		MultimodalModel: *config.MemoryMultimodalModel,
+		MultimodalModel: *GeneralConfig.MemoryMultimodalModel,
 		Documents:       make([]Document, 0),
 		TagVectors:      make([]TagVector, 0),
 		collDir:         collDir,
@@ -224,7 +223,7 @@ func (d *MemoryDB) collectionInitNew(ctx context.Context, name, modelName, colle
 
 // collectionInitRebuild 清空旧数据并重建集合
 func (d *MemoryDB) collectionInitRebuild(ctx context.Context, name, modelName, collectionType, collDir, metaPath string) error {
-	logger.Warn("FileManager", "集合 %s 触发重建，清空所有旧数据", name)
+	LoggerGeneral.Warn("FileManager", "集合 %s 触发重建，清空所有旧数据", name)
 
 	// 删除所有旧数据文件
 	patterns := []string{"documents_*.json", "images_*.json", "tags_*.json", "contents_*.json", "embeddings_*.json", "base64_*.json", "documents.json"}
@@ -263,7 +262,7 @@ func (d *MemoryDB) getCollection(name string) (*Collection, error) {
 func (d *MemoryDB) loadAllCollections() {
 	entries, err := os.ReadDir(d.baseDir)
 	if err != nil {
-		logger.Error("FileManager", "读取记忆库目录失败: %v", err)
+		LoggerGeneral.Error("FileManager", "读取记忆库目录失败: %v", err)
 		return
 	}
 
@@ -281,11 +280,11 @@ func (d *MemoryDB) loadAllCollections() {
 
 		// v2 版本检查
 		if meta.Version < CurrentVersion {
-			logger.Warn("FileManager", "集合 %s 版本过低 (%d < %d)，跳过加载", name, meta.Version, CurrentVersion)
+			LoggerGeneral.Warn("FileManager", "集合 %s 版本过低 (%d < %d)，跳过加载", name, meta.Version, CurrentVersion)
 			continue
 		}
 		if meta.EmbeddingModel == "" || meta.EmbeddingDimension == 0 {
-			logger.Warn("FileManager", "集合 %s 元数据不完整，跳过加载", name)
+			LoggerGeneral.Warn("FileManager", "集合 %s 元数据不完整，跳过加载", name)
 			continue
 		}
 
@@ -306,11 +305,11 @@ func (d *MemoryDB) loadAllCollections() {
 		}
 
 		if err := c.loadDocumentsFromFile(); err != nil {
-			logger.Error("FileManager", "加载集合 %s 文档失败: %v", name, err)
+			LoggerGeneral.Error("FileManager", "加载集合 %s 文档失败: %v", name, err)
 			continue
 		}
 		if err := c.loadTagsFromFile(); err != nil {
-			logger.Error("FileManager", "加载集合 %s 标签向量失败: %v", name, err)
+			LoggerGeneral.Error("FileManager", "加载集合 %s 标签向量失败: %v", name, err)
 			continue
 		}
 		c.updateLastModTime()
@@ -319,7 +318,7 @@ func (d *MemoryDB) loadAllCollections() {
 		d.collections[name] = c
 		d.collectionsMu.Unlock()
 
-		logger.Info("FileManager", "已加载集合 %s (%s, %d 文档, %d 标签)", name, collType, len(c.Documents), len(c.TagVectors))
+		LoggerGeneral.Info("FileManager", "已加载集合 %s (%s, %d 文档, %d 标签)", name, collType, len(c.Documents), len(c.TagVectors))
 	}
 }
 
@@ -876,14 +875,14 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 		tags, err := d.generateTags(ctx, content, isImage)
 		d.llmMu.Unlock()
 		if err != nil {
-			logger.Warn("FileManager", "重建标签失败 [%s]: %v", doc.ID, err)
+			LoggerGeneral.Warn("FileManager", "重建标签失败 [%s]: %v", doc.ID, err)
 			continue
 		}
 
 		// 嵌入标签
 		tagVecs, err := d.embedTexts(ctx, modelName, tags)
 		if err != nil {
-			logger.Warn("FileManager", "嵌入标签失败 [%s]: %v", doc.ID, err)
+			LoggerGeneral.Warn("FileManager", "嵌入标签失败 [%s]: %v", doc.ID, err)
 			continue
 		}
 

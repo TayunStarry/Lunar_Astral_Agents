@@ -1,7 +1,7 @@
 package main
 
 import (
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"net"
 	"net/http"
@@ -35,7 +35,7 @@ func registerHandlers() {
 
 	for _, endpoint := range endpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
-		logger.Info("QWEN-TTS", "注册端点: %s [%s] - %s", endpoint.Path, endpoint.Method, endpoint.Description)
+		LoggerGeneral.Info("QWEN-TTS", "注册端点: %s [%s] - %s", endpoint.Path, endpoint.Method, endpoint.Description)
 	}
 }
 
@@ -50,15 +50,15 @@ func startServer(addr string) {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	logger.Info("QWEN-TTS", "HTTP服务器启动于 http://%s", addr)
+	LoggerGeneral.Info("QWEN-TTS", "HTTP服务器启动于 http://%s", addr)
 
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatal("QWEN-TTS", "服务器启动失败: %v", err)
+		LoggerGeneral.Fatal("QWEN-TTS", "服务器启动失败: %v", err)
 	}
 }
 
 func waitForServerReady(addr string, timeoutSeconds int) bool {
-	logger.Info("QWEN-TTS", "等待服务就绪: %s (最多 %d 秒)", addr, timeoutSeconds)
+	LoggerGeneral.Info("QWEN-TTS", "等待服务就绪: %s (最多 %d 秒)", addr, timeoutSeconds)
 
 	target := addr
 	if target[0] == ':' {
@@ -69,13 +69,13 @@ func waitForServerReady(addr string, timeoutSeconds int) bool {
 		conn, err := net.DialTimeout("tcp", target, 500*time.Millisecond)
 		if err == nil {
 			conn.Close()
-			logger.Info("QWEN-TTS", "服务已就绪")
+			LoggerGeneral.Info("QWEN-TTS", "服务已就绪")
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	logger.Error("QWEN-TTS", "服务就绪超时")
+	LoggerGeneral.Error("QWEN-TTS", "服务就绪超时")
 	return false
 }
 
@@ -92,6 +92,6 @@ func shutdownServer() {
 		for _, f := range files {
 			os.Remove(f)
 		}
-		logger.Info("QWEN-TTS", "清理临时上传文件")
+		LoggerGeneral.Info("QWEN-TTS", "清理临时上传文件")
 	}
 }

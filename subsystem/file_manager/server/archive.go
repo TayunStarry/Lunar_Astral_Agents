@@ -2,8 +2,8 @@ package server
 
 import (
 	"LunarSubsystem/FileManager/module"
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -260,7 +260,7 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 确定目标安装目录
-	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+	packageDir := filepath.Join(*GeneralConfig.LocalDir, "package", packageName)
 
 	// 如果目标目录已存在，先删除
 	if _, statErr := os.Stat(packageDir); statErr == nil {
@@ -311,18 +311,18 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 		// 确保父目录存在
 		parentDir := filepath.Dir(filePath)
 		if mkdirErr := os.MkdirAll(parentDir, 0755); mkdirErr != nil {
-			logger.Error("FileManager", "创建父目录失败 %s: %v", parentDir, mkdirErr)
+			LoggerGeneral.Error("FileManager", "创建父目录失败 %s: %v", parentDir, mkdirErr)
 			continue
 		}
 
 		// 写入文件
 		if writeErr := os.WriteFile(filePath, content, 0644); writeErr != nil {
-			logger.Error("FileManager", "写入文件失败 %s: %v", filePath, writeErr)
+			LoggerGeneral.Error("FileManager", "写入文件失败 %s: %v", filePath, writeErr)
 			continue
 		}
 	}
 
-	logger.Info("FileManager", "包安装成功: %s (ID: %s, 标题: %s)", packageName, metadata.ID, metadata.Title)
+	LoggerGeneral.Info("FileManager", "包安装成功: %s (ID: %s, 标题: %s)", packageName, metadata.ID, metadata.Title)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -364,7 +364,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 构建包目录路径
-	packageDir := filepath.Join(*config.LocalDir, "package", req.PackageName)
+	packageDir := filepath.Join(*GeneralConfig.LocalDir, "package", req.PackageName)
 
 	// 检查目录是否存在
 	if _, statErr := os.Stat(packageDir); os.IsNotExist(statErr) {
@@ -396,14 +396,14 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 		// 保存到指定目录
 		savePath := req.SavePath
 		if savePath == "" {
-			savePath = filepath.Join(*config.LocalDir, "package", "archive")
+			savePath = filepath.Join(*GeneralConfig.LocalDir, "package", "archive")
 		}
 		// 确保是相对路径
-		savePath = strings.TrimPrefix(savePath, *config.LocalDir)
+		savePath = strings.TrimPrefix(savePath, *GeneralConfig.LocalDir)
 		savePath = strings.TrimPrefix(savePath, "/")
 		savePath = strings.TrimPrefix(savePath, "\\")
 
-		fullSavePath := filepath.Join(*config.LocalDir, savePath, fileName)
+		fullSavePath := filepath.Join(*GeneralConfig.LocalDir, savePath, fileName)
 		if mkdirErr := os.MkdirAll(filepath.Dir(fullSavePath), 0755); mkdirErr != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -424,7 +424,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		logger.Info("FileManager", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
+		LoggerGeneral.Info("FileManager", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":   true,
@@ -486,10 +486,10 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	packageDir := filepath.Join(*config.LocalDir, "package", packageName)
+	packageDir := filepath.Join(*GeneralConfig.LocalDir, "package", packageName)
 
 	// 安全检查：确保在 package 目录下
-	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(*config.LocalDir, "package"))) {
+	if !strings.HasPrefix(filepath.Clean(packageDir), filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, "package"))) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -519,7 +519,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("FileManager", "包删除成功: %s", packageName)
+	LoggerGeneral.Info("FileManager", "包删除成功: %s", packageName)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":      true,

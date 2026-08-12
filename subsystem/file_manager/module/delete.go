@@ -1,8 +1,8 @@
 package module
 
 import (
-	config "LunarSubsystem/GeneralConfig"
-	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,9 +16,9 @@ func DeleteFile(filePath string) (string, error) {
 		return "", fmt.Errorf("未指定文件")
 	}
 	// 将配置中的本地目录和请求的文件路径拼接，并清理路径格式
-	fullPath := filepath.Clean(filepath.Join(*config.LocalDir, filePath))
+	fullPath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, filePath))
 	// 检查拼接后的完整路径是否在配置的本地目录下
-	if !strings.HasPrefix(fullPath, filepath.Clean(*config.LocalDir)) {
+	if !strings.HasPrefix(fullPath, filepath.Clean(*GeneralConfig.LocalDir)) {
 		return "", fmt.Errorf("访问被拒绝")
 	}
 	// 检查文件或目录是否存在
@@ -37,6 +37,6 @@ func DeleteFile(filePath string) (string, error) {
 	}
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
-	logger.SubInfo("FileManager", "Delete", "成功删除: %s", fullPath)
+	LoggerGeneral.SubInfo("FileManager", "Delete", "成功删除: %s", fullPath)
 	return fullPath, nil
 }

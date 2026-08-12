@@ -1,13 +1,12 @@
 package main
 
 import (
+	"LunarSubsystem/GeneralConfig"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-
-	config "LunarSubsystem/GeneralConfig"
 )
 
 // EnsureLocalData 启动时备用机制：检查 local_data 目录，从嵌入资源中补全缺失的文件。
@@ -26,7 +25,7 @@ func EnsureLocalData() error {
 		return fmt.Errorf("获取可执行文件路径失败: %w", err)
 	}
 	execDir := filepath.Dir(execPath)
-	localDataDir := filepath.Join(execDir, *config.LocalDir)
+	localDataDir := filepath.Join(execDir, *GeneralConfig.LocalDir)
 
 	// 确保根目录存在
 	if err := os.MkdirAll(localDataDir, 0755); err != nil {
