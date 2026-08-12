@@ -58,7 +58,7 @@
   <ul style="list-style-type: none; padding-left: 0;">
     <li><code>image</code></li>
     <li style="padding-left: 1.5em;"><code>general_config</code> <span style="color: #6a737d;">(../general_config) — 配置管理（扩散模型路径、图像参数）</span></li>
-    <li style="padding-left: 1.5em;"><code>general_logger</code> <span style="color: #6a737d;">(../general_logger) — 彩色终端日志</span></li>
+    <li style="padding-left: 1.5em;"><code>general_logger</code> <span style="color: #6a737d;">(../logger_general) — 彩色终端日志</span></li>
     <li style="padding-left: 1.5em;"><strong>外部依赖</strong>
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>sd-cli.exe</code> <span style="color: #6a737d;">— stable-diffusion.cpp 命令行引擎</span></li>

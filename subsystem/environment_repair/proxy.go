@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"LunarSubsystem/general_config"
+	config "LunarSubsystem/GeneralConfig"
 )
 
 // ==== HTTPS 代理服务器 ====

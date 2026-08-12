@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,6 +37,6 @@ func DeleteFile(filePath string) (string, error) {
 	}
 	// 从文件锁映射中删除该文件的锁
 	FileLocks.Delete(fullPath)
-	logger.SubInfo("Storage", "Delete", "成功删除: %s", fullPath)
+	logger.SubInfo("FileManager", "Delete", "成功删除: %s", fullPath)
 	return fullPath, nil
 }

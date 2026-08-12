@@ -1,7 +1,7 @@
-package lunar_chromedp
+package AgentSearch
 
 import (
-	"LunarSubsystem/general_config"
+	config "LunarSubsystem/GeneralConfig"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"

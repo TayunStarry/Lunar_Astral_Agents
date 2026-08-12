@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarSubsystem/image_processor/module"
+	"LunarSubsystem/ImageProcessor/module"
 	"fmt"
 
 	"github.com/dop251/goja"

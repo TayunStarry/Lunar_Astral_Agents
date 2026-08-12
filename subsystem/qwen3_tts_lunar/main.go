@@ -1,9 +1,9 @@
 package main
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
-	"LunarSubsystem/qwen3_tts_lunar/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"flag"
 	"fmt"

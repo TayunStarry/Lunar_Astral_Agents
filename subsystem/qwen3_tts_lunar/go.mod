@@ -1,11 +1,11 @@
-module LunarSubsystem/qwen3_tts_lunar
+module LunarSubsystem/Qwen3-TTS
 
 go 1.25.0
 
-replace LunarSubsystem/general_config => ../general_config
+replace LunarSubsystem/GeneralConfig => ../general_config
 
-require LunarSubsystem/general_config v0.0.0-00010101000000-000000000000
+require LunarSubsystem/GeneralConfig v0.0.0-00010101000000-000000000000
 
-require LunarSubsystem/general_logger v0.0.0
+require LunarSubsystem/LoggerGeneral v0.0.0
 
-replace LunarSubsystem/general_logger => ../general_logger
+replace LunarSubsystem/LoggerGeneral => ../logger_general

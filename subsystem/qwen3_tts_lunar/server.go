@@ -1,8 +1,8 @@
 package main
 
 import (
-	"LunarSubsystem/general_logger"
-	"LunarSubsystem/qwen3_tts_lunar/module"
+	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/Qwen3-TTS/module"
 	"net"
 	"net/http"
 	"os"

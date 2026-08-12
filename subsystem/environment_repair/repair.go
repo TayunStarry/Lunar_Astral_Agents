@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"LunarSubsystem/general_config"
+	config "LunarSubsystem/GeneralConfig"
 )
 
 // EnsureLocalData 启动时备用机制：检查 local_data 目录，从嵌入资源中补全缺失的文件。

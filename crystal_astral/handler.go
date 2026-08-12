@@ -1,8 +1,8 @@
 package main
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"

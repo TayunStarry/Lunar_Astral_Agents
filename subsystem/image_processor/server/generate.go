@@ -1,8 +1,8 @@
 package server
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/image_processor/module"
+	config "LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/ImageProcessor/module"
 	"encoding/json"
 	"fmt"
 	"net/http"

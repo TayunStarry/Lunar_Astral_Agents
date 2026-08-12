@@ -1,7 +1,7 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
+	config "LunarSubsystem/GeneralConfig"
 	"fmt"
 	"io"
 	"math/rand"

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 
 	"github.com/gorilla/websocket"
 )

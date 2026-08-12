@@ -1,9 +1,9 @@
-package lunar_chromedp
+package AgentSearch
 
 import (
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	"LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"strings"
 	"time"

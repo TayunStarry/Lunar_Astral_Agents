@@ -1,7 +1,7 @@
 package module
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"io"
 	"mime"
@@ -22,7 +22,7 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 	cleanPath := filepath.Clean(filePath)
 	if strings.Contains(cleanPath, "..") {
 		// 在已清理的路径中再次检测，防止编码绕过
-		logger.SubWarn("Storage", "Preview", "检测到路径遍历尝试: %s", filePath)
+		logger.SubWarn("FileManager", "Preview", "检测到路径遍历尝试: %s", filePath)
 		return nil, 0, "", "", fmt.Errorf("路径包含非法字符")
 	}
 
@@ -32,7 +32,7 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 		return nil, 0, "", "", fmt.Errorf("文件未找到")
 	}
 	if err != nil {
-		logger.SubError("Storage", "Preview", "获取文件信息失败: %s, %v", cleanPath, err)
+		logger.SubError("FileManager", "Preview", "获取文件信息失败: %s, %v", cleanPath, err)
 		return nil, 0, "", "", fmt.Errorf("获取文件信息失败")
 	}
 
@@ -44,7 +44,7 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 	// 5. 文件大小限制（最大 500MB，防止内存溢出）
 	const maxFileSize int64 = 500 * 1024 * 1024
 	if fileInfo.Size() > maxFileSize {
-		logger.SubWarn("Storage", "Preview", "文件过大被拒绝: %s, 大小: %d", cleanPath, fileInfo.Size())
+		logger.SubWarn("FileManager", "Preview", "文件过大被拒绝: %s, 大小: %d", cleanPath, fileInfo.Size())
 		return nil, 0, "", "", fmt.Errorf("文件大小超过限制 (最大 500MB)")
 	}
 
@@ -52,7 +52,7 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 	ext := strings.ToLower(filepath.Ext(cleanPath))
 	entry, ok := previewAllowlist[ext]
 	if !ok {
-		logger.SubWarn("Storage", "Preview", "文件类型不被允许: %s (扩展名: %s)", cleanPath, ext)
+		logger.SubWarn("FileManager", "Preview", "文件类型不被允许: %s (扩展名: %s)", cleanPath, ext)
 		return nil, 0, "", "", fmt.Errorf("不允许的文件类型: %s", ext)
 	}
 
@@ -69,10 +69,10 @@ func PreviewFile(filePath string) (io.ReadCloser, int64, string, string, error) 
 	// 8. 打开文件
 	file, err := os.Open(cleanPath)
 	if err != nil {
-		logger.SubError("Storage", "Preview", "打开文件失败: %s, %v", cleanPath, err)
+		logger.SubError("FileManager", "Preview", "打开文件失败: %s, %v", cleanPath, err)
 		return nil, 0, "", "", fmt.Errorf("打开文件失败")
 	}
 
-	logger.SubInfo("Storage", "Preview", "预览成功: %s, 类别: %s, 大小: %d 字节", cleanPath, entry.Category, fileInfo.Size())
+	logger.SubInfo("FileManager", "Preview", "预览成功: %s, 类别: %s, 大小: %d 字节", cleanPath, entry.Category, fileInfo.Size())
 	return file, fileInfo.Size(), mimeType, entry.Category, nil
 }

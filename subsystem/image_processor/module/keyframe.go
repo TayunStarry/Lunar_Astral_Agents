@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -53,7 +53,7 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 		return nil, fmt.Errorf("视频时长过长，最大支持1小时的视频")
 	}
 
-	logger.Info("LunarCore", "开始提取关键帧，视频时长: %.1f秒，提取频率: %.0ffps", duration, DefaultFPS)
+	logger.Info("ImageProcessor", "开始提取关键帧，视频时长: %.1f秒，提取频率: %.0ffps", duration, DefaultFPS)
 
 	startTime := time.Now()
 
@@ -64,7 +64,7 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 	}
 
 	extractElapsed := time.Since(startTime)
-	logger.Info("LunarCore", "帧提取完成，共 %d 帧，耗时: %v", len(allFrames), extractElapsed)
+	logger.Info("ImageProcessor", "帧提取完成，共 %d 帧，耗时: %v", len(allFrames), extractElapsed)
 
 	if len(allFrames) == 0 {
 		return nil, fmt.Errorf("未提取到任何帧，请检查视频文件是否正常")
@@ -87,7 +87,7 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 		// 编码并创建关键帧
 		frameFileName, frameDataBytes, err := CreateKeyframeFile(currImage, keyFrames)
 		if err != nil {
-			logger.Error("LunarCore", "创建关键帧文件失败(帧%d): %v", i, err)
+			logger.Error("ImageProcessor", "创建关键帧文件失败(帧%d): %v", i, err)
 			continue
 		}
 
@@ -100,7 +100,7 @@ func VideoKeyframeExtraction(inputFile string) ([]KeyFrame, error) {
 	}
 
 	totalElapsed := time.Since(startTime)
-	logger.Info("LunarCore", "关键帧筛选完成，从 %d 帧中保留 %d 帧，总耗时: %v",
+	logger.Info("ImageProcessor", "关键帧筛选完成，从 %d 帧中保留 %d 帧，总耗时: %v",
 		len(allFrames), len(keyFrames), totalElapsed)
 
 	if len(keyFrames) == 0 {
@@ -166,7 +166,7 @@ func extractAllFramesAtFPS(inputFile string, fps float64) ([]image.Image, error)
 		frameData := data[:eoiIdx]
 		img, err := jpeg.Decode(bytes.NewReader(frameData))
 		if err != nil {
-			logger.Warn("LunarCore", "解码帧%d失败（跳过）: %v", frameCount, err)
+			logger.Warn("ImageProcessor", "解码帧%d失败（跳过）: %v", frameCount, err)
 		} else {
 			frames = append(frames, img)
 			frameCount++

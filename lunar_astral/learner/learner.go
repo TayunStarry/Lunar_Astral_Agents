@@ -1,8 +1,8 @@
 package learner
 
 import (
-	"LunarSubsystem/general_logger"
-	chromedp "LunarSubsystem/lunar_chromedp"
+	"LunarSubsystem/AgentSearch"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,12 +40,12 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 		}
 
 		// 构建 lunar_chromedp 搜索配置（模型配置从 config 模块读取）
-		config := chromedp.SearchConfig{
+		config := AgentSearch.SearchConfig{
 			MemoryDBDir: memoryDBDir,
 		}
 
 		// 初始化 lunar_chromedp 搜索智能体（包含记忆库初始化、浏览器启动）
-		if err := chromedp.InitSearch(config); err != nil {
+		if err := AgentSearch.InitSearch(config); err != nil {
 			logger.Error("Learner", "学习者初始化失败: %v", err)
 			return vm.ToValue([]any{false, fmt.Errorf("学习者初始化失败: %v", err)})
 		}
@@ -75,7 +75,7 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 		}
 
 		// 执行搜索
-		report, err := chromedp.Search(query)
+		report, err := AgentSearch.Search(query)
 		if err != nil {
 			logger.Error("Learner", "搜索执行失败: %v", err)
 			return vm.ToValue([]any{nil, err})
@@ -127,7 +127,7 @@ func BindLearnerToRuntime(vm *goja.Runtime) {
 }
 
 // formatSearchReport 将 SearchReport 格式化为可读的 markdown 报告
-func formatSearchReport(report *chromedp.SearchReport) string {
+func formatSearchReport(report *AgentSearch.SearchReport) string {
 	if report == nil {
 		return "搜索未返回结果。"
 	}

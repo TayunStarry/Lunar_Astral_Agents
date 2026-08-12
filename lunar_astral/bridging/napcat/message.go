@@ -3,7 +3,7 @@ package napcat
 // 消息解析与处理逻辑
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"strconv"

@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"context"
 	"sync"
 

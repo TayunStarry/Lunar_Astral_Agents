@@ -1,13 +1,13 @@
-module LunarSubsystem/file_manager
+module LunarSubsystem/FileManager
 
 go 1.24.4
 
-require LunarSubsystem/general_config v0.0.0
+require LunarSubsystem/GeneralConfig v0.0.0
 
-replace LunarSubsystem/general_config => ../general_config
+replace LunarSubsystem/GeneralConfig => ../general_config
 
 require github.com/mattn/go-sqlite3 v1.14.33
 
-require LunarSubsystem/general_logger v0.0.0
+require LunarSubsystem/LoggerGeneral v0.0.0
 
-replace LunarSubsystem/general_logger => ../general_logger
+replace LunarSubsystem/LoggerGeneral => ../logger_general

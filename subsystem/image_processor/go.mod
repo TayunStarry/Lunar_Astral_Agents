@@ -1,10 +1,10 @@
-module LunarSubsystem/image_processor
+module LunarSubsystem/ImageProcessor
 
 go 1.24.4
 
 require (
-	LunarSubsystem/general_config v0.0.0
-	LunarSubsystem/general_logger v0.0.0
+	LunarSubsystem/GeneralConfig v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018
 	github.com/u2takey/ffmpeg-go v0.5.0
@@ -22,8 +22,8 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace LunarSubsystem/general_config => ../general_config
+replace LunarSubsystem/GeneralConfig => ../general_config
 
-replace LunarSubsystem/browser_client => ../browser_client
+replace LunarSubsystem/BrowserClient => ../browser_client
 
-replace LunarSubsystem/general_logger => ../general_logger
+replace LunarSubsystem/LoggerGeneral => ../logger_general

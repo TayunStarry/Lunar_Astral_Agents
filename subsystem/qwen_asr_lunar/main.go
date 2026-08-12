@@ -1,9 +1,9 @@
 package main
 
 import (
-	"LunarSubsystem/browser_client"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	browser "LunarSubsystem/BrowserClient"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"context"
 	"embed"
 	"fmt"

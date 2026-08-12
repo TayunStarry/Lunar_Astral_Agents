@@ -1,21 +1,21 @@
-module LunarSubsystem/lunar_chromedp
+module LunarSubsystem/AgentSearch
 
 go 1.26
 
 require (
-	LunarSubsystem/file_manager v0.0.0-00010101000000-000000000000
-	LunarSubsystem/general_config v0.0.0
-	LunarSubsystem/general_logger v0.0.0
+	LunarSubsystem/FileManager v0.0.0-00010101000000-000000000000
+	LunarSubsystem/GeneralConfig v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
 	github.com/chromedp/chromedp v0.16.0
 	github.com/shirou/gopsutil/v3 v3.20.10
 	golang.org/x/net v0.40.0
 )
 
-replace LunarSubsystem/file_manager => ../file_manager
+replace LunarSubsystem/FileManager => ../file_manager
 
-replace LunarSubsystem/general_config => ../general_config
+replace LunarSubsystem/GeneralConfig => ../general_config
 
-replace LunarSubsystem/general_logger => ../general_logger
+replace LunarSubsystem/LoggerGeneral => ../logger_general
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect

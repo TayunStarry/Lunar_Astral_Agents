@@ -12,7 +12,8 @@ node_modules/
 local_data/embed_cache/
 the_crashed_cpp_project/
 embedded_data/
-
+qwen_asr/
+qwen3_tts/
 ## 嵌入式资源目录（构建前由 local_data 同步生成，不纳入版本控制）
 crystal_astral/embedded_data/
 

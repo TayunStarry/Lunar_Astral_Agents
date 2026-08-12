@@ -1,9 +1,9 @@
 package server
 
 import (
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	"LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,7 +19,7 @@ const fallbackImageURL = "https://picsum.photos/1920/1080"
 func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 	filename, err := module.GetRandomBackgroundImage()
 	if err != nil {
-		logger.Warn("Storage", "获取随机背景图失败: %v，回退到网络图片", err)
+		logger.Warn("FileManager", "获取随机背景图失败: %v，回退到网络图片", err)
 		serveNetworkImage(w)
 		return
 	}
@@ -28,7 +28,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 	filePath := filepath.Join(backgroundDir, filename)
 	file, err := os.Open(filePath)
 	if err != nil {
-		logger.Warn("Storage", "打开背景图文件失败: %v，回退到网络图片", err)
+		logger.Warn("FileManager", "打开背景图文件失败: %v，回退到网络图片", err)
 		serveNetworkImage(w)
 		return
 	}
@@ -62,7 +62,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := module.CopyBuffer(w, file); err != nil {
-		logger.Error("Storage", "传输图片失败: %v", err)
+		logger.Error("FileManager", "传输图片失败: %v", err)
 	}
 }
 
@@ -70,7 +70,7 @@ func RandomBackgroundHandler(w http.ResponseWriter, _ *http.Request) {
 func serveNetworkImage(w http.ResponseWriter) {
 	resp, err := http.Get(fallbackImageURL)
 	if err != nil {
-		logger.Error("Storage", "获取网络图片失败: %v", err)
+		logger.Error("FileManager", "获取网络图片失败: %v", err)
 		http.Error(w, "无法获取背景图片", http.StatusInternalServerError)
 		return
 	}
@@ -85,6 +85,6 @@ func serveNetworkImage(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 
 	if _, err := io.Copy(w, resp.Body); err != nil {
-		logger.Error("Storage", "传输网络图片失败: %v", err)
+		logger.Error("FileManager", "传输网络图片失败: %v", err)
 	}
 }

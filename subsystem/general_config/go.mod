@@ -1,3 +1,3 @@
-module LunarSubsystem/general_config
+module LunarSubsystem/GeneralConfig
 
 go 1.24.4

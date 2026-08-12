@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/FileManager/module"
 	"bytes"
 	"encoding/base64"
 	"fmt"

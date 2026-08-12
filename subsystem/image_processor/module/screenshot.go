@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -123,21 +123,21 @@ func processGIF(imgData []byte) ([]map[string]any, error) {
 	// 1. 解码GIF
 	gifImg, err := gif.DecodeAll(bytes.NewReader(imgData))
 	if err != nil {
-		logger.Error("Screenshot", "processGIF: GIF解码失败: %v", err)
+		logger.Error("ImageProcessor", "processGIF: GIF解码失败: %v", err)
 		return nil, fmt.Errorf("GIF解码失败: %v", err)
 	}
 
 	frameCount := len(gifImg.Image)
 	if frameCount == 0 {
-		logger.Error("Screenshot", "processGIF: GIF无帧数据")
+		logger.Error("ImageProcessor", "processGIF: GIF无帧数据")
 		return nil, fmt.Errorf("GIF无帧数据")
 	}
 
-	logger.Info("Screenshot", "processGIF: GIF帧数=%d", frameCount)
+	logger.Info("ImageProcessor", "processGIF: GIF帧数=%d", frameCount)
 
 	// 2. 帧数≤2：按静态图处理，取首帧缩放输出
 	if frameCount <= 2 {
-		logger.Info("Screenshot", "processGIF: 帧数≤2，按静态图处理首帧")
+		logger.Info("ImageProcessor", "processGIF: 帧数≤2，按静态图处理首帧")
 		palettedFrame := gifImg.Image[0]
 		bounds := palettedFrame.Bounds()
 		rgba := image.NewRGBA(bounds)
@@ -152,7 +152,7 @@ func processGIF(imgData []byte) ([]map[string]any, error) {
 
 	// 3. 动态图（帧数>2）：选取至多15帧，均分采样
 	selectedIndices := selectFrameIndices(frameCount, 15)
-	logger.Info("Screenshot", "processGIF: 动态图%d帧→选取%d帧索引=%v", frameCount, len(selectedIndices), selectedIndices)
+	logger.Info("ImageProcessor", "processGIF: 动态图%d帧→选取%d帧索引=%v", frameCount, len(selectedIndices), selectedIndices)
 
 	// 4. 逐帧转换为RGBA、缩放到1024、编码输出
 	results := make([]map[string]any, 0, len(selectedIndices))
@@ -165,13 +165,13 @@ func processGIF(imgData []byte) ([]map[string]any, error) {
 		resized := resizeToMax1024(rgba)
 		result, err := encodeFrameToMap(resized, "png")
 		if err != nil {
-			logger.Error("Screenshot", "processGIF: 第%d帧编码失败: %v", idx, err)
+			logger.Error("ImageProcessor", "processGIF: 第%d帧编码失败: %v", idx, err)
 			return nil, fmt.Errorf("GIF第%d帧编码失败: %v", idx, err)
 		}
 		results = append(results, result)
 	}
 
-	logger.Info("Screenshot", "processGIF: 处理完成 输出%d帧", len(results))
+	logger.Info("ImageProcessor", "processGIF: 处理完成 输出%d帧", len(results))
 	return results, nil
 }
 
@@ -243,7 +243,7 @@ func encodeFrameToMap(img *image.RGBA, _ string) (map[string]any, error) {
 	contentType := "image/png"
 
 	if err := png.Encode(buf, img); err != nil {
-		logger.Error("Screenshot", "encodeFrameToMap: PNG编码失败: %v", err)
+		logger.Error("ImageProcessor", "encodeFrameToMap: PNG编码失败: %v", err)
 		return nil, fmt.Errorf("PNG编码失败: %v", err)
 	}
 
@@ -258,7 +258,7 @@ func encodeFrameToMap(img *image.RGBA, _ string) (map[string]any, error) {
 		"height": height,
 	}
 
-	logger.Info("Screenshot", "encodeFrameToMap: 编码完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+	logger.Info("ImageProcessor", "encodeFrameToMap: 编码完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
 		outputFormat, width, height, len(buf.Bytes()))
 	return response, nil
 }
@@ -270,20 +270,20 @@ func encodeFrameToMap(img *image.RGBA, _ string) (map[string]any, error) {
 func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	// 1. 输入验证
 	if len(imgData) == 0 {
-		logger.Error("Screenshot", "ResizeImage: 图片数据为空")
+		logger.Error("ImageProcessor", "ResizeImage: 图片数据为空")
 		return nil, fmt.Errorf("图片数据为空")
 	}
 	const maxImageSize = 50 * 1024 * 1024 // 50MB
 	if len(imgData) > maxImageSize {
-		logger.Error("Screenshot", "ResizeImage: 图片数据过大: %d bytes", len(imgData))
+		logger.Error("ImageProcessor", "ResizeImage: 图片数据过大: %d bytes", len(imgData))
 		return nil, fmt.Errorf("图片数据过大，超过50MB限制")
 	}
 
-	logger.Info("Screenshot", "ResizeImage: 开始处理，原始大小=%d bytes", len(imgData))
+	logger.Info("ImageProcessor", "ResizeImage: 开始处理，原始大小=%d bytes", len(imgData))
 
 	// 2. 文件头格式检测
 	originalFormat := detectImageFormat(imgData)
-	logger.Info("Screenshot", "ResizeImage: 检测到原始格式=%s", originalFormat)
+	logger.Info("ImageProcessor", "ResizeImage: 检测到原始格式=%s", originalFormat)
 
 	var processedData []byte
 
@@ -291,20 +291,20 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	switch originalFormat {
 	case "gif":
 		// GIF动态图处理：帧数>2→截取至多15帧独立返回；帧数≤2→静态处理
-		logger.Info("Screenshot", "ResizeImage: 检测到GIF格式，启动GIF帧处理流程")
+		logger.Info("ImageProcessor", "ResizeImage: 检测到GIF格式，启动GIF帧处理流程")
 		result, err := processGIF(imgData)
 		if err != nil {
-			logger.Error("Screenshot", "ResizeImage: GIF处理失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: GIF处理失败: %v", err)
 			return nil, fmt.Errorf("GIF处理失败: %v", err)
 		}
 		return result, nil
 	case "png":
 		// 检测是否为APNG动态图
 		if isAPNG(imgData) {
-			logger.Info("Screenshot", "ResizeImage: 检测到APNG动态图，启动FFmpeg帧提取")
+			logger.Info("ImageProcessor", "ResizeImage: 检测到APNG动态图，启动FFmpeg帧提取")
 			result, err := processAnimatedWithFFmpeg(imgData)
 			if err != nil {
-				logger.Error("Screenshot", "ResizeImage: APNG处理失败: %v", err)
+				logger.Error("ImageProcessor", "ResizeImage: APNG处理失败: %v", err)
 				return nil, fmt.Errorf("APNG处理失败: %v", err)
 			}
 			return result, nil
@@ -315,38 +315,38 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	case "webp":
 		// 检测是否为动态WebP
 		if isAnimatedWebP(imgData) {
-			logger.Info("Screenshot", "ResizeImage: 检测到动态WebP，启动FFmpeg帧提取")
+			logger.Info("ImageProcessor", "ResizeImage: 检测到动态WebP，启动FFmpeg帧提取")
 			result, err := processAnimatedWithFFmpeg(imgData)
 			if err != nil {
-				logger.Error("Screenshot", "ResizeImage: 动态WebP处理失败: %v", err)
+				logger.Error("ImageProcessor", "ResizeImage: 动态WebP处理失败: %v", err)
 				return nil, fmt.Errorf("动态WebP处理失败: %v", err)
 			}
 			return result, nil
 		}
 		// 静态WebP：FFmpeg转码为PNG
-		logger.Info("Screenshot", "ResizeImage: 静态WebP，启动FFmpeg转码")
+		logger.Info("ImageProcessor", "ResizeImage: 静态WebP，启动FFmpeg转码")
 		converted, err := convertImageWithFFmpeg(imgData)
 		if err != nil {
-			logger.Error("Screenshot", "ResizeImage: WebP转码失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: WebP转码失败: %v", err)
 			return nil, fmt.Errorf("WebP转码失败: %v", err)
 		}
 		processedData = converted
-		logger.Info("Screenshot", "ResizeImage: WebP转码完成，转换后大小=%d bytes", len(processedData))
+		logger.Info("ImageProcessor", "ResizeImage: WebP转码完成，转换后大小=%d bytes", len(processedData))
 	default:
-		logger.Info("Screenshot", "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
+		logger.Info("ImageProcessor", "ResizeImage: 非JPG/PNG格式(%s)，启动FFmpeg转码", originalFormat)
 		converted, err := convertImageWithFFmpeg(imgData)
 		if err != nil {
-			logger.Error("Screenshot", "ResizeImage: FFmpeg转码失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: FFmpeg转码失败: %v", err)
 			return nil, fmt.Errorf("FFmpeg转码失败（原始格式=%s）: %v", originalFormat, err)
 		}
 		processedData = converted
-		logger.Info("Screenshot", "ResizeImage: FFmpeg转码完成，转换后大小=%d bytes", len(processedData))
+		logger.Info("ImageProcessor", "ResizeImage: FFmpeg转码完成，转换后大小=%d bytes", len(processedData))
 	}
 
 	// 4. 解码图片
 	img, format, err := image.Decode(bytes.NewReader(processedData))
 	if err != nil {
-		logger.Error("Screenshot", "ResizeImage: 解码失败: %v", err)
+		logger.Error("ImageProcessor", "ResizeImage: 解码失败: %v", err)
 		return nil, fmt.Errorf("解码图片失败: %v", err)
 	}
 
@@ -357,7 +357,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		return nil, fmt.Errorf("图片尺寸无效: %dx%d", oriWidth, oriHeight)
 	}
 	if oriWidth > 16384 || oriHeight > 16384 {
-		logger.Error("Screenshot", "ResizeImage: 图片尺寸异常: %dx%d", oriWidth, oriHeight)
+		logger.Error("ImageProcessor", "ResizeImage: 图片尺寸异常: %dx%d", oriWidth, oriHeight)
 		return nil, fmt.Errorf("图片尺寸异常（%dx%d），超过16384px限制", oriWidth, oriHeight)
 	}
 
@@ -367,7 +367,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 
 	newWidth := resizedImg.Bounds().Dx()
 	newHeight := resizedImg.Bounds().Dy()
-	logger.Info("Screenshot", "ResizeImage: 缩放完成 %dx%d -> %dx%d", oriWidth, oriHeight, newWidth, newHeight)
+	logger.Info("ImageProcessor", "ResizeImage: 缩放完成 %dx%d -> %dx%d", oriWidth, oriHeight, newWidth, newHeight)
 
 	// 7. 编码输出（严格限制仅PNG/JPG）
 	buf := &bytes.Buffer{}
@@ -378,23 +378,23 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		outputFormat = "jpeg"
 		contentType = "image/jpeg"
 		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
-			logger.Error("Screenshot", "ResizeImage: JPEG编码失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: JPEG编码失败: %v", err)
 			return nil, fmt.Errorf("JPEG编码失败: %v", err)
 		}
 	case "png":
 		outputFormat = "png"
 		contentType = "image/png"
 		if err := png.Encode(buf, resizedImg); err != nil {
-			logger.Error("Screenshot", "ResizeImage: PNG编码失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: PNG编码失败: %v", err)
 			return nil, fmt.Errorf("PNG编码失败: %v", err)
 		}
 	default:
 		// 兜底：非预期格式统一输出为JPEG
-		logger.Info("Screenshot", "ResizeImage: 非标准解码格式(%s)，兜底输出JPEG", format)
+		logger.Info("ImageProcessor", "ResizeImage: 非标准解码格式(%s)，兜底输出JPEG", format)
 		outputFormat = "jpeg"
 		contentType = "image/jpeg"
 		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
-			logger.Error("Screenshot", "ResizeImage: JPEG兜底编码失败: %v", err)
+			logger.Error("ImageProcessor", "ResizeImage: JPEG兜底编码失败: %v", err)
 			return nil, fmt.Errorf("JPEG编码失败: %v", err)
 		}
 	}
@@ -412,7 +412,7 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 		"height": newHeight,
 	}
 
-	logger.Info("Screenshot", "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
+	logger.Info("ImageProcessor", "ResizeImage: 处理完成 格式=%s 尺寸=%dx%d 输出大小=%d bytes",
 		outputFormat, newWidth, newHeight, len(buf.Bytes()))
 	return []map[string]any{response}, nil
 }
@@ -574,11 +574,11 @@ func processAnimatedWithFFmpeg(imgData []byte) ([]map[string]any, error) {
 		return nil, fmt.Errorf("动态图无帧数据")
 	}
 
-	logger.Info("Screenshot", "processAnimatedWithFFmpeg: 提取到%d帧", frameCount)
+	logger.Info("ImageProcessor", "processAnimatedWithFFmpeg: 提取到%d帧", frameCount)
 
 	// 2. 帧数≤2：按静态图处理
 	if frameCount <= 2 {
-		logger.Info("Screenshot", "processAnimatedWithFFmpeg: 帧数≤2，按静态图处理")
+		logger.Info("ImageProcessor", "processAnimatedWithFFmpeg: 帧数≤2，按静态图处理")
 		rgba := ToRGBA(frames[0])
 		resized := resizeToMax1024(rgba)
 		result, err := encodeFrameToMap(resized, "png")
@@ -590,7 +590,7 @@ func processAnimatedWithFFmpeg(imgData []byte) ([]map[string]any, error) {
 
 	// 3. 动态图：选取至多15帧
 	selectedIndices := selectFrameIndices(frameCount, 15)
-	logger.Info("Screenshot", "processAnimatedWithFFmpeg: %d帧→选取%d帧", frameCount, len(selectedIndices))
+	logger.Info("ImageProcessor", "processAnimatedWithFFmpeg: %d帧→选取%d帧", frameCount, len(selectedIndices))
 
 	// 4. 逐帧缩放并编码
 	results := make([]map[string]any, 0, len(selectedIndices))
@@ -599,19 +599,19 @@ func processAnimatedWithFFmpeg(imgData []byte) ([]map[string]any, error) {
 		// 尺寸验证
 		bounds := rgba.Bounds()
 		if bounds.Dx() > 16384 || bounds.Dy() > 16384 {
-			logger.Info("Screenshot", "processAnimatedWithFFmpeg: 第%d帧尺寸异常(%dx%d)，跳过", idx, bounds.Dx(), bounds.Dy())
+			logger.Info("ImageProcessor", "processAnimatedWithFFmpeg: 第%d帧尺寸异常(%dx%d)，跳过", idx, bounds.Dx(), bounds.Dy())
 			continue
 		}
 		resized := resizeToMax1024(rgba)
 		result, err := encodeFrameToMap(resized, "png")
 		if err != nil {
-			logger.Error("Screenshot", "processAnimatedWithFFmpeg: 第%d帧编码失败: %v", idx, err)
+			logger.Error("ImageProcessor", "processAnimatedWithFFmpeg: 第%d帧编码失败: %v", idx, err)
 			return nil, fmt.Errorf("第%d帧编码失败: %v", idx, err)
 		}
 		results = append(results, result)
 	}
 
-	logger.Info("Screenshot", "processAnimatedWithFFmpeg: 处理完成 输出%d帧", len(results))
+	logger.Info("ImageProcessor", "processAnimatedWithFFmpeg: 处理完成 输出%d帧", len(results))
 	return results, nil
 }
 
@@ -682,7 +682,7 @@ func splitPNGFrames(data []byte) ([]image.Image, error) {
 		// 解码PNG帧
 		img, _, err := image.Decode(bytes.NewReader(frameData))
 		if err != nil {
-			logger.Error("Screenshot", "splitPNGFrames: 解码第%d帧失败: %v", len(frames), err)
+			logger.Error("ImageProcessor", "splitPNGFrames: 解码第%d帧失败: %v", len(frames), err)
 			offset = idx + len(frameData)
 			continue
 		}
@@ -692,7 +692,7 @@ func splitPNGFrames(data []byte) ([]image.Image, error) {
 
 		// 安全限制：最多读取300帧
 		if len(frames) >= 300 {
-			logger.Info("Screenshot", "splitPNGFrames: 已达300帧上限，停止读取")
+			logger.Info("ImageProcessor", "splitPNGFrames: 已达300帧上限，停止读取")
 			break
 		}
 	}
@@ -701,7 +701,7 @@ func splitPNGFrames(data []byte) ([]image.Image, error) {
 		return nil, fmt.Errorf("未能从PNG流中解析出任何帧")
 	}
 
-	logger.Info("Screenshot", "splitPNGFrames: 成功解析%d帧", len(frames))
+	logger.Info("ImageProcessor", "splitPNGFrames: 成功解析%d帧", len(frames))
 	return frames, nil
 }
 
@@ -773,7 +773,7 @@ func screenshotAllDisplaysOptimized() (*image.RGBA, error) {
 		displayImg, err := screenshot.CaptureDisplay(i)
 		if err != nil {
 			// 记录错误但继续处理其他显示器
-			logger.Error("Screenshot", "截取显示器 %d 失败: %v", i, err)
+			logger.Error("ImageProcessor", "截取显示器 %d 失败: %v", i, err)
 			continue
 		}
 

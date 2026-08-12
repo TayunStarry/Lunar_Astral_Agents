@@ -1,11 +1,11 @@
 package main
 
 import (
-	"LunarSubsystem/browser_client"
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
-	image "LunarSubsystem/image_processor/server"
+	browser "LunarSubsystem/BrowserClient"
+	module "LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	image "LunarSubsystem/ImageProcessor/server"
+	logger "LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 	"io"

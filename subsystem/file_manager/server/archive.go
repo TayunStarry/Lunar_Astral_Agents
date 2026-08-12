@@ -1,9 +1,9 @@
 package server
 
 import (
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	"LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -311,18 +311,18 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 		// 确保父目录存在
 		parentDir := filepath.Dir(filePath)
 		if mkdirErr := os.MkdirAll(parentDir, 0755); mkdirErr != nil {
-			logger.Error("Storage", "创建父目录失败 %s: %v", parentDir, mkdirErr)
+			logger.Error("FileManager", "创建父目录失败 %s: %v", parentDir, mkdirErr)
 			continue
 		}
 
 		// 写入文件
 		if writeErr := os.WriteFile(filePath, content, 0644); writeErr != nil {
-			logger.Error("Storage", "写入文件失败 %s: %v", filePath, writeErr)
+			logger.Error("FileManager", "写入文件失败 %s: %v", filePath, writeErr)
 			continue
 		}
 	}
 
-	logger.Info("Storage", "包安装成功: %s (ID: %s, 标题: %s)", packageName, metadata.ID, metadata.Title)
+	logger.Info("FileManager", "包安装成功: %s (ID: %s, 标题: %s)", packageName, metadata.ID, metadata.Title)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -424,7 +424,7 @@ func ExportPackageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		logger.Info("Storage", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
+		logger.Info("FileManager", "包导出成功: %s -> %s", req.PackageName, fullSavePath)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":   true,
@@ -519,7 +519,7 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("Storage", "包删除成功: %s", packageName)
+	logger.Info("FileManager", "包删除成功: %s", packageName)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":      true,

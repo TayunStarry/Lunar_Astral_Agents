@@ -1,7 +1,7 @@
 package server
 
 import (
-	"LunarSubsystem/image_processor/module"
+	"LunarSubsystem/ImageProcessor/module"
 	"encoding/json"
 	"fmt"
 	"net/http"

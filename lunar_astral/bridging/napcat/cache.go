@@ -2,7 +2,7 @@ package napcat
 
 // 消息缓存管理：FIFO策略，最大容量20条
 
-import "LunarSubsystem/general_logger"
+import logger "LunarSubsystem/LoggerGeneral"
 
 // AddCachedMessage 添加消息到缓存，超出容量时自动抛弃最老消息(FIFO)
 func AddCachedMessage(msg CachedMessage) {

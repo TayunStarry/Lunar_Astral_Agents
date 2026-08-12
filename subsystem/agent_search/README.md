@@ -83,7 +83,7 @@ lunar_chromedp
 ### 作为 Go 库集成
 
 ```go
-import "LunarSubsystem/lunar_chromedp"
+import "LunarSubsystem/AgentSearch"
 
 // 初始化搜索智能体（模型配置从 lunar_config.json 读取）
 cfg := lunar_chromedp.DefaultSearchConfig()

@@ -1,9 +1,9 @@
 package adapters
 
 import (
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	"LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 

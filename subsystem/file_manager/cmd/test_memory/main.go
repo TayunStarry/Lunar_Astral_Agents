@@ -9,7 +9,7 @@
 package main
 
 import (
-	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/FileManager/module"
 	"context"
 	"encoding/json"
 	"fmt"

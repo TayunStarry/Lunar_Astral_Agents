@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"LunarSubsystem/lunar_chromedp"
+	AgentSearch "LunarSubsystem/AgentSearch"
 )
 
 // TestResult 单次查询的测试结果
@@ -27,11 +27,11 @@ func main() {
 	fmt.Println("============================================")
 
 	// 配置：模型配置已迁移至 lunar_config.json，此处仅设置记忆库目录和上下文控制
-	config := lunar_chromedp.DefaultSearchConfig()
+	config := AgentSearch.DefaultSearchConfig()
 	config.MaxContextTokens = 16384
 
 	fmt.Println("\n[初始化] 正在连接模型服务器并启动浏览器...")
-	if err := lunar_chromedp.InitSearch(config); err != nil {
+	if err := AgentSearch.InitSearch(config); err != nil {
 		fmt.Printf("\n[错误] 初始化失败: %v\n", err)
 		os.Exit(1)
 	}
@@ -62,7 +62,7 @@ func main() {
 
 		startTime := time.Now()
 
-		report, err := lunar_chromedp.Search(query)
+		report, err := AgentSearch.Search(query)
 		elapsed := time.Since(startTime)
 
 		tr := TestResult{

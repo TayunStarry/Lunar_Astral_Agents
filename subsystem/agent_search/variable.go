@@ -1,4 +1,4 @@
-package lunar_chromedp
+package AgentSearch
 
 import (
 	"context"
@@ -14,16 +14,16 @@ import (
 
 // 搜索流程常量
 const (
-	MaxSearchRounds         = 8                // 深度搜索最大轮次
-	MaxScreenshotsPerPage   = 10               // 单页最大截图数
-	TextHeavyThreshold      = 500              // 文本密集型判定阈值（字符数）
-	MemorySimilarityMin     = 0.55             // 记忆库相似度最低阈值
-	KeywordDedupThreshold   = 0.85             // 关键词去重余弦相似度阈值
-	MaxContextTokensDefault = 16384            // 默认最大上下文 tokens
-	QueryTimeout            = 30 * time.Second // 单次浏览器操作超时
-	BrowserMaxMemMB         = 2048             // 浏览器内存上限（MB）
-	BrowserMaxCPUPercent    = 80.0             // 浏览器 CPU 占用上限（%）
-	BrowserCPUHighDuration  = 5 * time.Second  // CPU 持续高占用阈值
+	MaxSearchRounds            = 8                // 深度搜索最大轮次
+	MaxScreenshotsPerPage      = 10               // 单页最大截图数
+	TextHeavyThreshold         = 500              // 文本密集型判定阈值（字符数）
+	MemorySimilarityMin        = 0.55             // 记忆库相似度最低阈值
+	KeywordDedupThreshold      = 0.85             // 关键词去重余弦相似度阈值
+	MaxContextTokensDefault    = 16384            // 默认最大上下文 tokens
+	QueryTimeout               = 30 * time.Second // 单次浏览器操作超时
+	BrowserMaxMemMB            = 2048             // 浏览器内存上限（MB）
+	BrowserMaxCPUPercent       = 80.0             // 浏览器 CPU 占用上限（%）
+	BrowserCPUHighDuration     = 5 * time.Second  // CPU 持续高占用阈值
 	SearchResultsPerQuery      = 5                // 每个关键词取前 5 条结果
 	QuickSearchResultsPerQuery = 5                // 快速搜索每个关键词取前 5 条结果
 	PageLoadTimeout            = 15 * time.Second // 页面加载超时

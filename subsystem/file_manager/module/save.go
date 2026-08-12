@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -67,9 +67,9 @@ func SaveFile(fileName string, overwrite bool, body io.Reader) (string, string, 
 	}
 	// 同步文件内容到磁盘
 	if err := file.Sync(); err != nil {
-		logger.SubError("Storage", "Save", "同步失败: %s, %v", fullPath, err)
+		logger.SubError("FileManager", "Save", "同步失败: %s, %v", fullPath, err)
 	}
-	logger.SubInfo("Storage", "Save", "成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
+	logger.SubInfo("FileManager", "Save", "成功保存文件: %s, 覆盖: %t", fullPath, overwrite)
 	return fileName, fullPath, nil
 }
 

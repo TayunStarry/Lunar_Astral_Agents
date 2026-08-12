@@ -3,11 +3,11 @@ module crystal_astral
 go 1.24.4
 
 require (
-	LunarSubsystem/browser_client v0.0.0
-	LunarSubsystem/file_manager v0.0.0
-	LunarSubsystem/general_logger v0.0.0
-	LunarSubsystem/image_processor v0.0.0-00010101000000-000000000000
-	LunarSubsystem/general_config v0.0.0
+	LunarSubsystem/BrowserClient v0.0.0
+	LunarSubsystem/FileManager v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/ImageProcessor v0.0.0
+	LunarSubsystem/GeneralConfig v0.0.0
 	github.com/chai2010/webp v1.0.0
 	github.com/gorilla/websocket v1.5.3
 )
@@ -29,12 +29,12 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace LunarSubsystem/general_config => ../subsystem/general_config
+replace LunarSubsystem/GeneralConfig => ../subsystem/general_config
 
-replace LunarSubsystem/file_manager => ../subsystem/file_manager
+replace LunarSubsystem/FileManager => ../subsystem/file_manager
 
-replace LunarSubsystem/browser_client => ../subsystem/browser_client
+replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 
-replace LunarSubsystem/image_processor => ../subsystem/image_processor
+replace LunarSubsystem/ImageProcessor => ../subsystem/image_processor
 
-replace LunarSubsystem/general_logger => ../subsystem/general_logger
+replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general

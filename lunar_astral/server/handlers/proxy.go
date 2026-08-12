@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
 	"fmt"

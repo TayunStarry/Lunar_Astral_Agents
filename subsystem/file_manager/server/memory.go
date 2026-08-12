@@ -1,9 +1,9 @@
 package server
 
 import (
-	"LunarSubsystem/file_manager/module"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	"LunarSubsystem/FileManager/module"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -109,7 +109,7 @@ func handleMemoryInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("Storage", "记忆库实例初始化成功（模型配置从 lunar_config.json 读取）")
+	logger.Info("FileManager", "记忆库实例初始化成功（模型配置从 lunar_config.json 读取）")
 
 	writeSuccess(w, map[string]string{
 		"message": "记忆库实例初始化成功",
@@ -219,7 +219,7 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 	}
 
 	info := module.MemoryGetCollectionInfoWithType(collectionName)
-	logger.Info("Storage", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d",
+	logger.Info("FileManager", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d",
 		collectionName, collType, modelName, getIntField(info, "embedding_dimension"))
 
 	writeSuccess(w, memoryCollectionInfo{
@@ -249,7 +249,7 @@ func handleMemoryCollectionStats(w http.ResponseWriter, r *http.Request, collect
 	count := getIntField(info, "document_count")
 	mismatch := module.MemoryHasSyncMismatch(collectionName)
 
-	logger.Info("Storage", "集合 [%s] 统计: 文档数=%d, 标签数=%d, 维度不符=%v",
+	logger.Info("FileManager", "集合 [%s] 统计: 文档数=%d, 标签数=%d, 维度不符=%v",
 		collectionName, count, getIntField(info, "tag_count"), mismatch)
 
 	writeSuccess(w, memoryStatsData{
@@ -296,7 +296,7 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionNa
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
 			return
 		}
-		logger.Info("Storage", "集合 [%s] 添加图片成功, ID: %s", collectionName, id)
+		logger.Info("FileManager", "集合 [%s] 添加图片成功, ID: %s", collectionName, id)
 		writeSuccess(w, map[string]string{"id": id, "type": "image"})
 	} else {
 		// 文本文档添加
@@ -318,7 +318,7 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionNa
 			return
 		}
 
-		logger.Info("Storage", "集合 [%s] 添加消息成功, ID: %s, 角色: %s, 内容长度: %d",
+		logger.Info("FileManager", "集合 [%s] 添加消息成功, ID: %s, 角色: %s, 内容长度: %d",
 			collectionName, id, req.Role, len(req.Content))
 
 		writeSuccess(w, map[string]string{
@@ -367,7 +367,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 		})
 	}
 
-	logger.Info("Storage", "集合 [%s] 查询完成, 查询: %s, 结果数: %d",
+	logger.Info("FileManager", "集合 [%s] 查询完成, 查询: %s, 结果数: %d",
 		collectionName, queryText, len(results))
 
 	writeSuccess(w, memoryQueryData{
@@ -402,7 +402,7 @@ func handleMemoryDeleteMessage(w http.ResponseWriter, r *http.Request, collectio
 		return
 	}
 
-	logger.Info("Storage", "集合 [%s] 删除消息成功, ID: %s", collectionName, req.ID)
+	logger.Info("FileManager", "集合 [%s] 删除消息成功, ID: %s", collectionName, req.ID)
 
 	writeSuccess(w, map[string]string{
 		"id": req.ID,
@@ -470,7 +470,7 @@ func handleMemoryRebuild(w http.ResponseWriter, r *http.Request, collectionName 
 	}
 
 	count := module.MemoryGetEntryCount(collectionName)
-	logger.Info("Storage", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
+	logger.Info("FileManager", "集合 [%s] rebuild 完成, 剩余 %d 条文档", collectionName, count)
 
 	writeSuccess(w, map[string]interface{}{
 		"rebuilt": count,
@@ -495,7 +495,7 @@ func handleMemoryDeleteCollection(w http.ResponseWriter, r *http.Request, collec
 		return
 	}
 
-	logger.Info("Storage", "集合 [%s] 删除成功", collectionName)
+	logger.Info("FileManager", "集合 [%s] 删除成功", collectionName)
 
 	writeSuccess(w, map[string]string{
 		"message": fmt.Sprintf("集合 [%s] 已删除", collectionName),
@@ -519,7 +519,7 @@ func handleMemoryClearCollection(w http.ResponseWriter, r *http.Request, collect
 		return
 	}
 
-	logger.Info("Storage", "集合 [%s] 清空成功", collectionName)
+	logger.Info("FileManager", "集合 [%s] 清空成功", collectionName)
 
 	writeSuccess(w, map[string]string{
 		"message": fmt.Sprintf("集合 [%s] 已清空", collectionName),

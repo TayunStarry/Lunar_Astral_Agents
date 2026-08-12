@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"LunarSubsystem/image_processor/module"
+	"LunarSubsystem/ImageProcessor/module"
 	"encoding/base64"
 	"fmt"
 	"strings"

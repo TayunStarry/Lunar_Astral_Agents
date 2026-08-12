@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,7 +38,7 @@ func GetFileInfo(filePath string) (string, int64, error) {
 		return "", 0, fmt.Errorf("无法下载目录")
 	}
 
-	logger.SubInfo("Storage", "Download", "成功下载: %s, 大小: %d 字节", fullPath, fileInfo.Size())
+	logger.SubInfo("FileManager", "Download", "成功下载: %s, 大小: %d 字节", fullPath, fileInfo.Size())
 
 	return fullPath, fileInfo.Size(), nil
 }

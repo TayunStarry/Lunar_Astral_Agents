@@ -1,8 +1,8 @@
 package main
 
 import (
-	storage "LunarSubsystem/file_manager/server"
-	image_server "LunarSubsystem/image_processor/server"
+	storage "LunarSubsystem/FileManager/server"
+	image_server "LunarSubsystem/ImageProcessor/server"
 	"embed"
 )
 

@@ -1,7 +1,7 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
+	config "LunarSubsystem/GeneralConfig"
 	"bytes"
 	"context"
 	"encoding/json"

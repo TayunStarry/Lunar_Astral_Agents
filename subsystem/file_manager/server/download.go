@@ -1,7 +1,7 @@
 package server
 
 import (
-	"LunarSubsystem/file_manager/module"
+	"LunarSubsystem/FileManager/module"
 	"fmt"
 	"net/http"
 	"path/filepath"

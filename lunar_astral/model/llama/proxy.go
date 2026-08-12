@@ -1,8 +1,8 @@
 package llama
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"bufio"
 	"context"
 	"fmt"

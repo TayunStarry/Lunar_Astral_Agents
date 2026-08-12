@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -64,7 +64,7 @@ func ProcessTask(task GenerateTask) {
 	task.Status = "running"
 	TaskStatus[taskID] = &task
 	TaskStatusMu.Unlock()
-	logger.Info("LunarCore", "开始处理任务: %s", taskID)
+	logger.Info("ImageProcessor", "开始处理任务: %s", taskID)
 
 	// 构建输出文件名
 	timestamp := time.Now().Format("20060102_150405")
@@ -122,8 +122,8 @@ func ProcessTask(task GenerateTask) {
 	}
 
 	// 显示命令参数，正确分组
-	logger.Info("LunarCore", "执行命令参数:")
-	logger.Info("LunarCore", "  程序: %s", *config.VisualEngine)
+	logger.Info("ImageProcessor", "执行命令参数:")
+	logger.Info("ImageProcessor", "  程序: %s", *config.VisualEngine)
 
 	// 正确分组显示参数
 	for i := 0; i < len(args); i++ {
@@ -144,9 +144,9 @@ func ProcessTask(task GenerateTask) {
 		}
 
 		if isValueParam {
-			logger.Info("LunarCore", "  参数: %s %s", current, value)
+			logger.Info("ImageProcessor", "  参数: %s %s", current, value)
 		} else {
-			logger.Info("LunarCore", "  参数: %s", current)
+			logger.Info("ImageProcessor", "  参数: %s", current)
 		}
 	}
 
@@ -158,7 +158,7 @@ func ProcessTask(task GenerateTask) {
 	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
-		logger.Error("LunarCore", "任务[%s]执行失败: %v", taskID, err)
+		logger.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
 		TaskStatusMu.Lock()
 		task.Status = "failed"
 		task.Error = err.Error()
@@ -203,12 +203,12 @@ func ProcessTask(task GenerateTask) {
 
 	TaskStatusMu.Lock()
 	if err != nil {
-		logger.Error("LunarCore", "任务[%s]执行失败: %v", taskID, err)
+		logger.Error("ImageProcessor", "任务[%s]执行失败: %v", taskID, err)
 		task.Status = "failed"
 		task.Error = err.Error()
 	} else {
-		logger.Info("LunarCore", "任务[%s]已完成", taskID)
-		logger.Info("LunarCore", "生成结果: ./%s", outputPath)
+		logger.Info("ImageProcessor", "任务[%s]已完成", taskID)
+		logger.Info("ImageProcessor", "生成结果: ./%s", outputPath)
 		task.Status = "completed"
 		task.ResultPath = outputPath
 	}

@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,6 +61,6 @@ func GetFileList(path string) ([]FileInfo, error) {
 			Path:         relPath,
 		})
 	}
-	logger.SubInfo("Storage", "FileList", "成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
+	logger.SubInfo("FileManager", "FileList", "成功获取目录: %s, 包含 %d 个条目", fullPath, len(fileList))
 	return fileList, nil
 }

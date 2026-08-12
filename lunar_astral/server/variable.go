@@ -1,10 +1,10 @@
 package server
 
 import (
-	storage "LunarSubsystem/file_manager/server"
-	"LunarSubsystem/general_config"
-	image "LunarSubsystem/image_processor/server"
-	tts "LunarSubsystem/qwen3_tts_lunar/module"
+	storage "LunarSubsystem/FileManager/server"
+	config "LunarSubsystem/GeneralConfig"
+	image "LunarSubsystem/ImageProcessor/server"
+	tts "LunarSubsystem/Qwen3-TTS/module"
 	"fmt"
 	"lunar_astral/model"
 	"lunar_astral/model/llama"

@@ -1,7 +1,7 @@
 package module
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"container/list"
 	"crypto/sha256"
 	"encoding/json"

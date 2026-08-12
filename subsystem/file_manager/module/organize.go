@@ -1,8 +1,8 @@
 package module
 
 import (
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
+	config "LunarSubsystem/GeneralConfig"
+	logger "LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"io"
 	"os"
@@ -125,11 +125,11 @@ func executeMove(basePath, source, target, localDir string) error {
 			return fmt.Errorf("移动文件失败: %w", copyErr)
 		}
 		if err := os.RemoveAll(srcPath); err != nil {
-			logger.SubError("Storage", "Organize", "删除源文件失败: %s, %v", srcPath, err)
+			logger.SubError("FileManager", "Organize", "删除源文件失败: %s, %v", srcPath, err)
 		}
 	}
 
-	logger.SubInfo("Storage", "Organize", "移动: %s -> %s", source, target)
+	logger.SubInfo("FileManager", "Organize", "移动: %s -> %s", source, target)
 	return nil
 }
 
@@ -159,7 +159,7 @@ func executeRename(basePath, source, target, localDir string) error {
 		return fmt.Errorf("重命名失败: %w", err)
 	}
 
-	logger.SubInfo("Storage", "Organize", "重命名: %s -> %s", source, target)
+	logger.SubInfo("FileManager", "Organize", "重命名: %s -> %s", source, target)
 	return nil
 }
 
@@ -215,7 +215,7 @@ func executeMerge(basePath, source, target, localDir string) error {
 	remaining, _ := os.ReadDir(srcPath)
 	if len(remaining) == 0 {
 		if err := os.Remove(srcPath); err != nil {
-			logger.SubError("Storage", "Organize", "删除空源目录失败: %s, %v", srcPath, err)
+			logger.SubError("FileManager", "Organize", "删除空源目录失败: %s, %v", srcPath, err)
 		}
 	}
 
@@ -223,7 +223,7 @@ func executeMerge(basePath, source, target, localDir string) error {
 		return fmt.Errorf("部分文件合并失败: %s", strings.Join(moveErrors, "; "))
 	}
 
-	logger.SubInfo("Storage", "Organize", "合并: %s -> %s", source, target)
+	logger.SubInfo("FileManager", "Organize", "合并: %s -> %s", source, target)
 	return nil
 }
 
@@ -243,7 +243,7 @@ func executeDelete(basePath, source, localDir string) error {
 		return fmt.Errorf("删除失败: %w", err)
 	}
 
-	logger.SubInfo("Storage", "Organize", "删除: %s", source)
+	logger.SubInfo("FileManager", "Organize", "删除: %s", source)
 	return nil
 }
 

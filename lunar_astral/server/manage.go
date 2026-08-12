@@ -1,11 +1,11 @@
 package server
 
 import (
-	"LunarSubsystem/browser_client"
-	"LunarSubsystem/general_config"
-	"LunarSubsystem/general_logger"
-	image "LunarSubsystem/image_processor/server"
-	"LunarSubsystem/qwen3_tts_lunar/module"
+	browser "LunarSubsystem/BrowserClient"
+	config "LunarSubsystem/GeneralConfig"
+	image "LunarSubsystem/ImageProcessor/server"
+	logger "LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"

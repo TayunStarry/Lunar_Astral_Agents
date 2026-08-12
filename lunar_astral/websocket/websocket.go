@@ -1,8 +1,8 @@
 package websocket
 
 import (
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/json"
-	"LunarSubsystem/general_logger"
 	"lunar_astral/adapters"
 	"lunar_astral/bridging/napcat"
 	"net/http"

@@ -9,7 +9,7 @@ package module
 import "C"
 
 import (
-	"LunarSubsystem/general_logger"
+	logger "LunarSubsystem/LoggerGeneral"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
