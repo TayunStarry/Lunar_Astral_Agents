@@ -36,7 +36,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 | `server_side/` | TypeScript 智能体源码（配置/控制/文件/数学/模型子模块），编译为 agentSystem.js |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts_lunar`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts`
 
 ---
 
@@ -181,5 +181,5 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 - [星图·琉璃](../crystal_astral/README.md) — 扩展工具集
 - [配置管理](../subsystem/general_config/README.md) — 命令行参数与 JSON 配置
 - [网络检索](../subsystem/lunar_chromedp/README.md) — AI 搜索智能体详情
-- [语音合成](../subsystem/qwen3_tts_lunar/README.md) — TTS 引擎详情
+- [语音合成](../subsystem/qwen3_tts/README.md) — TTS 引擎详情
 - [语音识别](../subsystem/qwen_asr_lunar/README.md) — ASR 引擎详情

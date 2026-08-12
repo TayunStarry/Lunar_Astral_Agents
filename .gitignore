@@ -12,13 +12,10 @@ node_modules/
 local_data/embed_cache/
 the_crashed_cpp_project/
 embedded_data/
-## 嵌入式资源目录（构建前由 local_data 同步生成，不纳入版本控制）
-crystal_astral/embedded_data/
 
 ## Go 测试产物
 coverage
 coverage.out
-*.test.exe
 
 ## 本地数据（运行时生成）
 local_data/images/

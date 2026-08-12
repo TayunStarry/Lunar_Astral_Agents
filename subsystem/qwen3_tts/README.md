@@ -1,4 +1,4 @@
-# 独立系统——语音合成（qwen3_tts_lunar）
+# 独立系统——语音合成（qwen3_tts）
 
 基于 Qwen3-TTS 模型的本地文本转语音（Text-to-Speech）引擎，采用 C++ GGML 推理后端 + Go HTTP 服务的混合架构。
 
@@ -37,7 +37,7 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
 
 <div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
   <ul style="list-style-type: none; padding-left: 0;">
-    <li><strong>qwen3_tts_lunar/</strong></li>
+    <li><strong>qwen3_tts/</strong></li>
     <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口</span></li>
     <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
     <li style="padding-left: 1.5em;"><code>server.go</code> <span style="color: #6a737d;">— HTTP 服务器</span></li>
@@ -384,7 +384,7 @@ DisableCache=false? ──否──► 跳过缓存查询
 ### 编译步骤
 
 ```powershell
-cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
+cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 .\build.ps1
 ```
 
@@ -434,7 +434,7 @@ package main
 
 import (
     "os"
-    "qwen3_tts_lunar/module"
+    "qwen3_tts/module"
 )
 
 func main() {

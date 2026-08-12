@@ -4,7 +4,7 @@ go 1.25.0
 
 replace LunarSubsystem/GeneralConfig => ../general_config
 
-require LunarSubsystem/GeneralConfig v0.0.0-00010101000000-000000000000
+require LunarSubsystem/GeneralConfig v0.0.0
 
 require LunarSubsystem/LoggerGeneral v0.0.0
 

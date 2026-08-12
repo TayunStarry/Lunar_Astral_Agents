@@ -30,7 +30,7 @@ Lunar_Astral_Agents/
 │   ├── browser_client/     # WebView 窗口管理
 │   ├── file_manager/       # 文件管理 + SQLite 数据库
 │   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
-│   ├── qwen3_tts_lunar/   # 语音合成（C++ GGML 引擎）
+│   ├── qwen3_tts/   # 语音合成（C++ GGML 引擎）
 │   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
 │   ├── lunar_chromedp/    # 智能网络检索
 │   └── environment_repair/ # 运维工具箱
@@ -97,7 +97,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen_asr_lunar
 .\build.ps1
 
 # 语音合成（含 GGML + C++ 引擎 + Go 服务）
-cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
+cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 .\build.ps1
 ```
 
@@ -150,7 +150,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts_lunar
 | 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件 CRUD + SQLite |
 | 图像处理 | [subsystem/image_processor/](subsystem/image_processor/README.md) | 图像生成 + 截图 + 视频关键帧 |
 | 网络检索 | [subsystem/lunar_chromedp/](subsystem/lunar_chromedp/README.md) | AI 多引擎搜索智能体 |
-| 语音合成 | [subsystem/qwen3_tts_lunar/](subsystem/qwen3_tts_lunar/README.md) | Qwen3-TTS |
+| 语音合成 | [subsystem/qwen3_tts/](subsystem/qwen3_tts/README.md) | Qwen3-TTS |
 | 语音识别 | [subsystem/qwen_asr_lunar/](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR |
 | 项目架构 | [ARCHITECTURE.md](ARCHITECTURE.md) | 完整架构说明 |
 

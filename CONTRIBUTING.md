@@ -203,7 +203,7 @@ cd Lunar_Astral_Agents
 .\build.ps1
 
 # 编译子系统（按需）
-.\subsystem\qwen3_tts_lunar\build.ps1
+.\subsystem\qwen3_tts\build.ps1
 .\subsystem\qwen_asr_lunar\build.ps1
 ```
 

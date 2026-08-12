@@ -31,7 +31,7 @@
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │           独立 AI 引擎 (subsystem/)                      │   │
-│  │  qwen3_tts_lunar (C++ GGML) · qwen_asr_lunar (纯C)      │   │
+│  │  qwen3_tts (C++ GGML) · qwen_asr_lunar (纯C)      │   │
 │  │  lunar_chromedp (网络检索)                               │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
@@ -78,7 +78,7 @@ Lunar_Astral_Agents/
 │   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
 │   ├── general_logger/     # 彩色终端日志
 │   ├── lunar_chromedp/    # 智能网络检索（Chromedp）
-│   ├── qwen3_tts_lunar/   # 语音合成（C++ GGML 引擎）
+│   ├── qwen3_tts/   # 语音合成（C++ GGML 引擎）
 │   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
 │   └── environment_repair/ # 运维工具箱（资源补全/端口释放/HTTPS代理/打包）
 │
@@ -103,7 +103,7 @@ Lunar_Astral_Agents/
 | `websocket/` | 实时双向通信，连接管理、读写泵、广播推送 |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts_lunar`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts`
 
 **数据流**：前端 UI → HTTP POST `/write/message` → Go 服务层 → goja JS 智能体 → llama-server (GGUF 推理) → WebSocket 推送 → 前端渲染
 
@@ -140,7 +140,7 @@ Lunar_Astral_Agents/
 
 | 子系统 | 功能 | 技术栈 |
 |--------|------|--------|
-| `qwen3_tts_lunar` | Qwen3-TTS 文本转语音，支持音色克隆与流式输出 | C++ GGML 引擎 + Go HTTP/WS 服务 |
+| `qwen3_tts` | Qwen3-TTS 文本转语音，支持音色克隆与流式输出 | C++ GGML 引擎 + Go HTTP/WS 服务 |
 | `qwen_asr_lunar` | Qwen3-ASR 语音转文本，30 种语言，BF16 推理 | 纯 C 引擎 + OpenBLAS + Go HTTP |
 | `lunar_chromedp` | 智能网络检索：多引擎搜索 → 页面提取 → AI 摘要 → 记忆存储 | Chromedp + LLM API |
 
@@ -157,7 +157,7 @@ Lunar_Astral_Agents/
 ### Go Module 依赖图
 
 ```
-lunar_astral → general_config, browser_client, file_manager, image_processor, general_logger, lunar_chromedp, qwen3_tts_lunar
+lunar_astral → general_config, browser_client, file_manager, image_processor, general_logger, lunar_chromedp, qwen3_tts
 crystal_astral → general_config, browser_client, file_manager, image_processor, general_logger
 environment_repair → general_config
 lunar_chromedp → file_manager, general_config

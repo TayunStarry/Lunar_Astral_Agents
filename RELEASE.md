@@ -73,7 +73,7 @@
 
 ---
 
-### 6. 语音合成（qwen3_tts_lunar）— Qwen3-TTS 引擎
+### 6. 语音合成（qwen3_tts）— Qwen3-TTS 引擎
 
 **功能**：纯本地中文文本转语音，支持音色克隆（参考音频）、流式输出、LRU 缓存。支持 CUDA/Vulkan/Metal 多 GPU 后端加速。
 

@@ -45,7 +45,7 @@ var agentSystem = (function (exports) {
         }
         ;
         static get debugMode() {
-            return GlobalConfig.customConfig?.server?.debug_mode ?? false;
+            return GlobalConfig.customConfig?.server?.developer ?? false;
         }
         ;
     }

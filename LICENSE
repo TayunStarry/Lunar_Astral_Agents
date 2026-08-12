@@ -100,7 +100,7 @@ The Project includes or depends upon the following third-party components, each 
 
 | Component | License | Location in Project |
 |-----------|---------|---------------------|
-| ggml | MIT | `subsystem/qwen3_tts_lunar/cpp/ggml/` |
+| ggml | MIT | `subsystem/qwen3_tts/cpp/ggml/` |
 | highlight.js | BSD 3-Clause | `local_data/package/highlight/` |
 | Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
 | KaTeX | MIT | `local_data/package/katex/` |
@@ -235,7 +235,7 @@ For full terms of the Live2D Cubism SDK license, please refer to:
 
 | 组件 | 许可证 | 项目内位置 |
 |------|--------|-----------|
-| ggml | MIT | `subsystem/qwen3_tts_lunar/cpp/ggml/` |
+| ggml | MIT | `subsystem/qwen3_tts/cpp/ggml/` |
 | highlight.js | BSD 3-Clause | `local_data/package/highlight/` |
 | Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
 | KaTeX | MIT | `local_data/package/katex/` |
