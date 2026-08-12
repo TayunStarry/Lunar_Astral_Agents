@@ -126,8 +126,8 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts_lunar" -Name "Qwen3 TTS Lunar"
-    Invoke-Build -Path "$ScriptRoot\subsystem\qwen_asr_lunar" -Name "Qwen ASR Lunar"
+    Invoke-Build -Path "$ScriptRoot\subsystem\qwen3_tts" -Name "Qwen3 TTS"
+    Invoke-Build -Path "$ScriptRoot\subsystem\qwen_asr" -Name "Qwen ASR"
     Invoke-Build -Path "$ScriptRoot\subsystem\environment_repair" -Name "Environment Repair"
     Invoke-Build -Path "$ScriptRoot\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\crystal_astral" -Name "Crystal Astral"
