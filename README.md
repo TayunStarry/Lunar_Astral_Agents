@@ -13,7 +13,7 @@
 ## 人格智能体
 
 - **月华** — 「月亮的光华」，AI 桌面智能体核心。她的智慧根植于对 Qwen 大模型的蒸馏与量化，掌管多模态对话与 TTS 语音表达。
-- **琉璃** — 「如水晶般澄澈」，工具集扩展系统。她专注于工具的纯粹性与操作的直观性，掌管文件管理、数据库操作、截图标注等实用工具集。
+- **琉璃** — 「如水晶般澄澈」，工具集扩展系统。她专注于工具的纯粹性与操作的直观性，掌管文件管理、知识库/记忆库、截图标注等实用工具集。
 
 月华与琉璃如同星与月——月华以温柔智慧照亮对话空间，琉璃以澄澈纯粹夯实工具基石。
 
@@ -28,11 +28,11 @@ Lunar_Astral_Agents/
 ├── subsystem/             # 公共子系统 + 独立 AI 引擎 + 运维工具
 │   ├── general_config/     # 全局配置中枢
 │   ├── browser_client/     # WebView 窗口管理
-│   ├── file_manager/       # 文件管理 + SQLite 数据库
+│   ├── file_manager/       # 文件管理 + 知识库/记忆库 + 扩展包
 │   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
-│   ├── qwen3_tts/   # 语音合成（C++ GGML 引擎）
-│   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
-│   ├── lunar_chromedp/    # 智能网络检索
+│   ├── qwen3_tts/          # 语音合成（C++ GGML 引擎）
+│   ├── qwen_asr/           # 语音识别（纯 C 引擎）
+│   ├── agent_search/       # 智能网络检索
 │   └── environment_repair/ # 运维工具箱
 ├── local_data/            # 本地数据（模型文件 + 前端资源）
 └── image/                 # 项目文档配图
@@ -93,7 +93,7 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 .\build.ps1
 
 # 语音识别
-cd d:\Lunar_Astral_Agents\subsystem\qwen_asr_lunar
+cd d:\Lunar_Astral_Agents\subsystem\qwen_asr
 .\build.ps1
 
 # 语音合成（含 GGML + C++ 引擎 + Go 服务）
@@ -147,11 +147,11 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 | 星图·月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心 |
 | 星图·琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统 |
 | 配置管理 | [subsystem/general_config/](subsystem/general_config/) | 全局配置中枢 |
-| 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件 CRUD + SQLite |
+| 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件管理 + 知识库/记忆库 + 扩展包 |
 | 图像处理 | [subsystem/image_processor/](subsystem/image_processor/README.md) | 图像生成 + 截图 + 视频关键帧 |
-| 网络检索 | [subsystem/lunar_chromedp/](subsystem/lunar_chromedp/README.md) | AI 多引擎搜索智能体 |
+| 网络检索 | [subsystem/agent_search/](subsystem/agent_search/README.md) | AI 多引擎搜索智能体 |
 | 语音合成 | [subsystem/qwen3_tts/](subsystem/qwen3_tts/README.md) | Qwen3-TTS |
-| 语音识别 | [subsystem/qwen_asr_lunar/](subsystem/qwen_asr_lunar/README.md) | Qwen3-ASR |
+| 语音识别 | [subsystem/qwen_asr/](subsystem/qwen_asr/README.md) | Qwen3-ASR |
 | 项目架构 | [ARCHITECTURE.md](ARCHITECTURE.md) | 完整架构说明 |
 
 ---
@@ -164,7 +164,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 **支持哪些 GPU？** 通过 llama.cpp 和 stable-diffusion.cpp 支持 NVIDIA CUDA GPU，Vulkan 后端也可用于兼容 GPU。
 
-**如何添加 AI 模型？** 将 GGUF 模型放入 `local_data/models/`，在 `lunar_config.json` 中配置路径后重启。
+**如何添加 AI 模型？** 将 GGUF 模型放入 `local_data/models/`：语言模型（多模态/嵌入）编辑 `local_data/models/models.ini` 配置路径，ASR/扩散等辅助模型编辑 `lunar_config.json` 的 `models` 分组。修改后重启生效。
 
 ---
 

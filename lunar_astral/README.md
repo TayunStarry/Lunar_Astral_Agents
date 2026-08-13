@@ -33,10 +33,11 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 | `server/` | HTTP 服务层，路由注册、CORS、初始化流程、消息/图像/视频处理 |
 | `hierarchy/` | 前端资源层，Go embed 嵌入：goja 智能体 JS、角色 Prompt、Web 界面 |
 | `websocket/` | WebSocket 通信层，连接管理、读写泵、广播推送 |
-| `server_side/` | TypeScript 智能体源码（配置/控制/文件/数学/模型子模块），编译为 agentSystem.js |
+| `TypeScript/` | TypeScript 智能体源码（配置/控制/文件/数学/模型子模块），编译为 agentSystem.js |
+| `learner/` | 学习者智能体，自主搜索学习并沉淀为记忆 |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts`
+**Go 子系统依赖**（以 `LunarSubsystem/` 前缀引入）：`GeneralConfig`、`BrowserClient`、`FileManager`、`LoggerGeneral`、`ImageProcessor`、`AgentSearch`、`Qwen3-TTS`
 
 ---
 
@@ -46,19 +47,18 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ```
 main.go
-  ├── config.init()              ← 解析命令行 + JSON 配置
   ├── server.InitializeServer()
-  │   ├── registerHandlers()     ← 注册所有 HTTP 路由
-  │   ├── llama.Init()           ← 启动 llama-server + 等待就绪
-  │   ├── InitTTSEngine()        ← 初始化 TTS 引擎
-  │   ├── websocket.Setup()      ← 注册 /ws 端点
-  │   └── adapters.RunAgentContext()
-  │       ├── createAgentContext()  ← 创建 goja eventloop 运行时
-  │       ├── 注册适配器函数
-  │       └── 执行 agentSystem.js  ← TypeScript 编译的智能体代码
-  ├── SetupSignalHandling()      ← 系统信号监听
-  ├── StartServerListener()      ← 端口自动递增重试（最多 10 次）
-  └── WaitForShutdown()          ← 优雅关闭
+  │   ├── LoggerGeneral.SetDevMode()    ← 初始化日志（调试模式）
+  │   ├── registerHandlers()            ← 注册所有 HTTP 路由 + 启动图像任务协处理器
+  │   ├── llama.Init()                  ← 启动 llama-server + 等待就绪（5 分钟超时）
+  │   ├── initTTSEngine()               ← 初始化 Qwen3-TTS 语音引擎
+  │   ├── websocket.SetupWebSocketHandler() ← 注册 /ws、/ws/studio 端点
+  │   ├── adapters.MusicRenderFunc = ...    ← 注册音乐渲染回调（FluidSynth）
+  │   ├── adapters.RunAgentContext()    ← 创建 goja 运行时并执行 agentSystem.js
+  │   └── initBridgeAdapter()           ← 加载 NapCat 桥接配置并启动扫描
+  ├── SetupSignalHandling()             ← 系统信号监听
+  ├── StartServerListener()             ← 端口自动递增重试
+  └── WaitForShutdown()                 ← 优雅关闭（系统信号或 WebView 关闭）
 ```
 
 ### 核心数据流
@@ -92,11 +92,11 @@ main.go
 
 ### 适配器层（adapters/）
 
-Go↔JavaScript 双向桥接，基于 goja 运行时。暴露出 `saveFile()`、`readFile()`、`database()`、`url()`、`generateImage()` 等函数供 JS 智能体调用。
+Go↔JavaScript 双向桥接，基于 goja 运行时。暴露出 `saveFile()`、`readFile()`、`knowledge()`、`memoryQuery()`、`url()`、`generateImage()`、`keyframe()`、`resizeImage()`、`tts()`、`screenshotCapture()` 等函数供 JS 智能体调用。
 
 ### 模型代理层（model/llama/）
 
-管理 `llama-server.exe` 进程生命周期，启动参数：`--models-preset models.ini --n-gpu-layers 999 --ctx-size 16384 --flash-attn on`。支持就绪检测（5 分钟超时）、云端 API 切换、请求队列控制。
+管理 `llama-server.exe` 进程生命周期，启动参数：`--models-preset local_data/models/models.ini --flash-attn on --port <ModelPort> --parallel 1 --batch-size 2048 --ubatch-size 1024 --cache-type-k q8_0 --cache-type-v q8_0 --no-ui --sleep-idle-seconds 900`（含温度/采样等生成参数）。模型由 `models.ini` 预设文件管理（`[system-multimodal]` 多模态、`[system-embedding]` 嵌入）。支持就绪检测（5 分钟超时）、embedding 请求本地路由、多模态请求云端代理切换。
 
 ### TTS 引擎（model/tts/）
 
@@ -122,21 +122,27 @@ AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 �
 
 | 路径 | 方法 | 功能 |
 |------|------|------|
-| `/v1/models` | GET | 获取可用模型列表 |
-| `/v1/chat/completions` | POST | OpenAI 格式对话补全 |
-| `/write/message` | POST | 写入对话消息 |
-| `/generate` | POST | 扩散图像生成 |
-| `/video` | POST | 视频上传与关键帧提取 |
+| `/v1/` | ANY | 智能体代理接口（转发到 llama.cpp，支持所有 HTTP 方法） |
+| `/write/message` | POST | 消息写入队列 |
+| `/write/videourl` | POST | 视频 URL 写入 |
+| `/generate` / `/generate/wait` | POST / GET | 图像生成 / 等待生成结果 |
+| `/extract/keyframes` | POST | 视频关键帧提取 |
+| `/tts` | POST | TTS 语音合成 |
+| `/memory/` | ANY | 记忆库管理（实例初始化/集合管理/消息增删查） |
+| `/knowledge/` | POST | 知识库管理 |
+| `/file/...` | 多种 | 文件读写/列表/下载/归档/扩展包管理 |
+| `/music/render` | POST | ABC 乐谱渲染为 WAV 音频 |
+| `/api/engine/command` | POST | 智能体引擎命令转发 |
+| `/proxy` | POST | 代理访问服务 |
+| `/ltpx/load` `/ltpx/unload` `/ltpx/status` | POST/POST/GET | LTPX 工具包动态管理 |
 | `/ws` | GET | WebSocket 连接升级 |
 
 ### WebSocket 消息协议
 
 | 消息类型 | `type` 值 | 内容 |
 |---------|----------|------|
-| 上下文消息 | `context` | AI 对话文本 |
-| 图片消息 | `image` | 生成/上传的图片 |
-| TTS 音频 | `tts` | Base64 编码 WAV |
-| 情绪更新 | `emotion` | 情绪标签字符串 |
+| 上下文消息 | `context` | AI 对话文本（`type`/`content`/`audio` 字段；子类型含 thinking、response、music、music_audio 等） |
+| 图片消息 | `image` | 生成/上传的图片（`images` 数组） |
 
 ---
 
@@ -157,8 +163,7 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 
 ```powershell
 .\Lunar_Astral.exe                           # 直接运行
-.\Lunar_Astral.exe -developer                # 开发模式（直读文件系统）
-.\Lunar_Astral.exe -clear-port               # 清理端口后启动
+.\Lunar_Astral.exe -developer                # 调试模式（显示详细日志）
 .\Lunar_Astral.exe -basic-port 36800         # 指定基础端口
 ```
 
@@ -166,11 +171,11 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 
 ## 常见问题
 
-**如何切换语言模型？** 将 GGUF 模型放入 `local_data/models/`，编辑 `lunar_config.json` 配置 `MultimodalModel` 和 `MmprojModel` 路径。
+**如何切换语言模型？** 将 GGUF 模型放入 `local_data/models/`，编辑 `local_data/models/models.ini`：`[system-multimodal]` 段配置多模态模型的 `model` / `mmproj` 路径，`[system-embedding]` 段配置嵌入模型的 `model` 路径。修改后重启程序生效。
 
-**llama-server 启动失败？** 检查 `llama-server.exe` 是否存在、模型文件配置正确、端口未被占用、查看控制台 llama 日志。
+**llama-server 启动失败？** 检查 `llama-server.exe` 是否存在、`models.ini` 中模型路径配置正确、端口未被占用、查看控制台 llama 日志。
 
-**JS 智能体代码在哪里修改？** 源码位于 `server_side/` 目录（TypeScript），编译后生成 `hierarchy/assets/agentSystem.js`。修改后重新执行 `.\build.ps1`。
+**JS 智能体代码在哪里修改？** 源码位于 `TypeScript/` 目录，编译后生成 `hierarchy/assets/agentSystem.js`。修改后重新执行 `.\build.ps1`。
 
 ---
 
@@ -180,6 +185,6 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
 - [星图·琉璃](../crystal_astral/README.md) — 扩展工具集
 - [配置管理](../subsystem/general_config/README.md) — 命令行参数与 JSON 配置
-- [网络检索](../subsystem/lunar_chromedp/README.md) — AI 搜索智能体详情
+- [网络检索](../subsystem/agent_search/README.md) — AI 搜索智能体详情
 - [语音合成](../subsystem/qwen3_tts/README.md) — TTS 引擎详情
-- [语音识别](../subsystem/qwen_asr_lunar/README.md) — ASR 引擎详情
+- [语音识别](../subsystem/qwen_asr/README.md) — ASR 引擎详情

@@ -21,7 +21,7 @@
 
 **技术栈**：Go 后端 + TypeScript 智能体（goja 运行时）+ WebView2 前端。底层依赖 llama.cpp 进行 GGUF 模型推理。
 
-**运行**：`.\Lunar_Astral.exe`，可选 `-developer`（开发模式）、`-basic-port`（指定端口）等参数。
+**运行**：`.\Lunar_Astral.exe`，可选 `-developer`（调试模式）、`-basic-port`（指定端口）等参数。
 
 **依赖**：WebView2 Runtime（Win11 已预装），GGUF 格式模型文件。
 
@@ -51,7 +51,7 @@
 
 ---
 
-### 4. 搜索智能体（lunar_chromedp）— AI 网络搜索
+### 4. 搜索智能体（agent_search）— AI 网络搜索
 
 **功能**：基于 Chromedp 的多引擎搜索（Bing/百度/搜狗），页面内容提取 → AI 摘要 → 深度搜索 → 记忆存储。自动过滤字典网站。
 
@@ -61,7 +61,7 @@
 
 ---
 
-### 5. 语音识别（qwen_asr_lunar）— Qwen3-ASR 引擎
+### 5. 语音识别（qwen_asr）— Qwen3-ASR 引擎
 
 **功能**：纯本地语音识别，支持中/英/粤/日/韩等 30 种语言。双模型规模（0.6B/1.7B），BF16 高精度推理，AVX2/AVX-512/NEON SIMD 加速。
 
@@ -75,11 +75,11 @@
 
 ### 6. 语音合成（qwen3_tts）— Qwen3-TTS 引擎
 
-**功能**：纯本地中文文本转语音，支持音色克隆（参考音频）、流式输出、LRU 缓存。支持 CUDA/Vulkan/Metal 多 GPU 后端加速。
+**功能**：纯本地中文文本转语音，支持音色克隆（参考音频）、LRU 缓存。支持 CUDA/Vulkan/Metal 多 GPU 后端加速。
 
-**技术栈**：C++ GGML 推理引擎（DLL）+ Go HTTP/WebSocket 服务（CGO 调用）。
+**技术栈**：C++ GGML 推理引擎（DLL）+ Go HTTP 服务（CGO 调用）。
 
-**运行**：`.\Qwen3_TTS_Lunar.exe`，默认端口 36365。提供 HTTP API（`POST /tts/`）和 WebSocket 流式接口。
+**运行**：`.\Qwen3_TTS_Lunar.exe`，默认端口 36789（`-basic-port`）。提供 HTTP API（`POST /tts`、`POST /upload/`、`GET /health`）。
 
 **依赖**：GGUF 格式模型文件，参考音频文件，CUDA Toolkit（可选）。
 
@@ -101,7 +101,7 @@
 
 ## 快速开始
 
-1. 将 GGUF 模型文件放入 `local_data\models\`，编辑 `local_data\lunar_config.json` 配置模型路径
+1. 将 GGUF 模型放入 `local_data\models\`，编辑 `local_data\models\models.ini`（语言模型）与 `local_data\lunar_config.json`（辅助模型/API 配置）
 2. 启动核心智能体：`.\Lunar_Astral.exe`
 3. 启动扩展工具：`.\Crystal_Astral.exe`
 4. 独立模块（可选）：`.\Qwen_ASR_Lunar.exe` / `.\Qwen3_TTS_Lunar.exe`
@@ -113,34 +113,57 @@
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `-basic-port` | HTTP 服务端口 | 36789 |
-| `-developer` | 开发模式（直读文件系统） | false |
-| `-clear-port` | 启动前清理端口 | false |
-| `-allow-diffusion` | 启用图像生成 | true |
-| `-allow-multimodal` | 启用多模态模型 | true |
+| `-developer` | 调试模式（显示详细日志） | false |
+| `-allow-diffusion` | 启用扩散图像生成 | true |
+| `-allow-browser` | 允许打开系统浏览器 | true |
 
 ---
 
 ## 配置说明
 
-核心配置项（`lunar_config.json`）：
+核心配置项（`lunar_config.json`，五组结构）：
 
 ```json
 {
   "models": {
     "asr_model": "./local_data/models/Qwen3-ASR-0.6B",
-    "diffusion_model": "./local_data/models/z_image_turbo-Q4_K.gguf",
-    "prompt_analysis_model": "./local_data/models/Qwen3-4B-Instruct-Q4_K_M.gguf"
+    "diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
+    "variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
+    "prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+    "real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth"
   },
   "server": {
     "developer": false,
     "allow_diffusion": true
   },
-  "cloud": {
-    "cloud_model_url": "",
-    "multimodal_model_name": ""
+  "agent": {
+    "embedding_model": "system-embedding",
+    "embedding_url": "http://127.0.0.1:36789/v1",
+    "embedding_key": "",
+    "multimodal_model": "system-multimodal",
+    "multimodal_url": "http://127.0.0.1:36789/v1",
+    "multimodal_key": ""
+  },
+  "memory": {
+    "embedding_model": "system-embedding",
+    "embedding_url": "http://127.0.0.1:36789/v1",
+    "embedding_key": "",
+    "multimodal_model": "system-multimodal",
+    "multimodal_url": "http://127.0.0.1:36789/v1",
+    "multimodal_key": ""
+  },
+  "search": {
+    "embedding_model": "system-embedding",
+    "embedding_url": "http://127.0.0.1:36789/v1",
+    "embedding_key": "",
+    "multimodal_model": "system-multimodal",
+    "multimodal_url": "http://127.0.0.1:36789/v1",
+    "multimodal_key": ""
   }
 }
 ```
+
+> 语言模型本体（多模态/嵌入 GGUF）由 `local_data/models/models.ini` 预设文件管理，`lunar_config.json` 仅管理 ASR/扩散/超分等辅助模型与 API 连接配置。
 
 ---
 
@@ -157,7 +180,7 @@
 
 **内存不足**：使用量化模型（Q4_K_M），关闭不需要的功能（`allow_diffusion: false`），使用较小模型。
 
-**支持云端模型**：在 `lunar_config.json` 中配置 `cloud.cloud_model_url` 即可切换到 OpenAI 兼容 API。
+**支持云端模型**：在 `lunar_config.json` 的 `agent` 分组中，将 `multimodal_url` 指向 OpenAI 兼容云端 API（如 `https://api.xxx.com/v1`），并填写 `multimodal_key`，月华的模型代理层即自动将请求切换到云端。
 
 ---
 

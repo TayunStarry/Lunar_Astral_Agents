@@ -7,7 +7,7 @@
 ## 人格智能体
 
 - **月华** — AI 桌面智能体核心，掌管多模态对话、TTS 语音合成与图像生成
-- **琉璃** — 工具集扩展系统，掌管文件管理、数据库操作、截图标注、AI 代理转发
+- **琉璃** — 工具集扩展系统，掌管文件管理、知识库/记忆库、截图标注、AI 代理转发
 
 ---
 
@@ -21,18 +21,18 @@
 │  │  星图·月华              │  │  星图·琉璃              │        │
 │  │  AI 桌面智能体核心       │  │  工具集扩展系统         │        │
 │  │  adapters/server/model  │  │  handler/endpoint     │        │
-│  │  websocket/server_side  │  │  assets/              │        │
+│  │  websocket/TypeScript   │  │  assets/              │        │
 │  └───────────┬────────────┘  └───────────┬────────────┘        │
 │              └────────────┬─────────────┘                      │
 │                           │                                    │
 │  ┌────────────────────────┼────────────────────────────────┐   │
 │  │           公共子系统 (subsystem/)                         │   │
-│  │  general_config · browser_client · file_manager · image_processor · general_logger             │   │
+│  │  general_config · browser_client · file_manager · image_processor · logger_general             │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │           独立 AI 引擎 (subsystem/)                      │   │
-│  │  qwen3_tts (C++ GGML) · qwen_asr_lunar (纯C)      │   │
-│  │  lunar_chromedp (网络检索)                               │   │
+│  │  qwen3_tts (C++ GGML) · qwen_asr (纯C)      │   │
+│  │  agent_search (网络检索)                               │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │           运维工具 (subsystem/)                           │   │
@@ -56,7 +56,7 @@
 ```
 Lunar_Astral_Agents/
 ├── lunar_astral/          # 核心系统：星图·月华
-│   ├── adapters/          # Go↔JS 桥接层（goja CGO）
+│   ├── adapters/          # Go↔JS 桥接层（goja 运行时）
 │   ├── hierarchy/         # 前端资源（embed 嵌入）
 │   │   └── assets/
 │   │       ├── client/    # WebView 前端 UI
@@ -64,7 +64,7 @@ Lunar_Astral_Agents/
 │   │       └── agentSystem.js  # TypeScript 编译产物
 │   ├── model/             # 模型服务层（llama 代理 + TTS 引擎）
 │   ├── server/            # HTTP 服务层 + 请求处理器
-│   ├── server_side/       # TypeScript 智能体源码
+│   ├── TypeScript/        # TypeScript 智能体源码
 │   ├── websocket/         # WebSocket 实时通信
 │   └── bridging/          # QQ 群聊适配器（NapCat）
 │
@@ -74,12 +74,12 @@ Lunar_Astral_Agents/
 ├── subsystem/             # 可复用子系统
 │   ├── general_config/     # 全局配置中枢
 │   ├── browser_client/     # WebView 窗口 + IP 发现
-│   ├── file_manager/       # 文件管理 + SQLite 数据库
+│   ├── file_manager/       # 文件管理 + 知识库/记忆库 + 扩展包
 │   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
-│   ├── general_logger/     # 彩色终端日志
-│   ├── lunar_chromedp/    # 智能网络检索（Chromedp）
+│   ├── logger_general/     # 彩色终端日志
+│   ├── agent_search/    # 智能网络检索（Chromedp）
 │   ├── qwen3_tts/   # 语音合成（C++ GGML 引擎）
-│   ├── qwen_asr_lunar/    # 语音识别（纯 C 引擎）
+│   ├── qwen_asr/    # 语音识别（纯 C 引擎）
 │   └── environment_repair/ # 运维工具箱（资源补全/端口释放/HTTPS代理/打包）
 │
 ├── local_data/            # 本地运行时数据
@@ -99,11 +99,12 @@ Lunar_Astral_Agents/
 | `hierarchy/` | 前端资源容器，Go embed 嵌入，含角色 Prompt、Web 界面 |
 | `model/` | 模型服务层，管理 llama-server 进程生命周期、TTS 引擎调用、请求队列 |
 | `server/` | HTTP 服务入口，路由注册、CORS、初始化编排 |
-| `server_side/` | TypeScript 智能体源码，编译为 agentSystem.js 在 goja 中执行 |
+| `TypeScript/` | TypeScript 智能体源码，编译为 agentSystem.js 在 goja 中执行 |
 | `websocket/` | 实时双向通信，连接管理、读写泵、广播推送 |
 | `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
+| `learner/` | 学习者智能体，自主搜索学习并沉淀为记忆 |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`、`lunar_chromedp`、`qwen3_tts`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`logger_general`、`agent_search`、`qwen3_tts`
 
 **数据流**：前端 UI → HTTP POST `/write/message` → Go 服务层 → goja JS 智能体 → llama-server (GGUF 推理) → WebSocket 推送 → 前端渲染
 
@@ -115,12 +116,17 @@ Lunar_Astral_Agents/
 |------|------|
 | `main.go` | 程序入口，随机端口 + 启动服务器 |
 | `create.go` | 服务器创建、代理感知路由（`/v1/` 请求转发至月华 llama-proxy） |
-| `handler.go` | 代理转发处理器（模型列表/对话/completions） |
+| `handler.go` | 代理转发、GGUF 元数据解析、图片转换、月华服务启停 |
+| `gguf.go` | GGUF 模型文件解析 |
+| `convert.go` | 图片格式转换（单张/批量/列表） |
+| `ws.go` | StudioHub WebSocket 集线器 + 引擎命令桥接 |
+| `type.go` | 请求/响应类型定义 |
+| `variable.go` | 全局变量与 SystemEndpoints 路由表 |
 | `assets/` | 前端静态资源（毛玻璃风格 UI） |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`logger_general`
 
-琉璃通过智能路由将 AI 请求代理到月华后端（localhost:56789），同时直接服务自己的文件管理、数据库、截图等工具界面。
+琉璃通过智能路由将 AI 请求代理到月华后端（localhost:36789），同时直接服务自己的文件管理、知识库/记忆库、截图等工具界面。
 
 ---
 
@@ -132,17 +138,17 @@ Lunar_Astral_Agents/
 |--------|------|--------|
 | `general_config` | 全局配置中枢，命令行参数 + JSON 双层配置 | 所有 Go 模块 |
 | `browser_client` | WebView 窗口管理 + 本地 IP 自动发现 | 月华、琉璃 |
-| `file_manager` | 文件 CRUD + SQLite 数据库 + ZIP 归档 | 月华、琉璃 |
+| `file_manager` | 文件 CRUD + 知识库/记忆库 + ZIP 归档 + 扩展包管理 | 月华、琉璃 |
 | `image_processor` | 扩散图像生成 + 截图（多显示器/区域）+ 视频关键帧提取 | 月华、琉璃 |
-| `general_logger` | 彩色终端日志输出 | 所有 Go 模块 |
+| `logger_general` | 彩色终端日志输出 | 所有 Go 模块 |
 
 ### 独立 AI 引擎
 
 | 子系统 | 功能 | 技术栈 |
 |--------|------|--------|
-| `qwen3_tts` | Qwen3-TTS 文本转语音，支持音色克隆与流式输出 | C++ GGML 引擎 + Go HTTP/WS 服务 |
-| `qwen_asr_lunar` | Qwen3-ASR 语音转文本，30 种语言，BF16 推理 | 纯 C 引擎 + OpenBLAS + Go HTTP |
-| `lunar_chromedp` | 智能网络检索：多引擎搜索 → 页面提取 → AI 摘要 → 记忆存储 | Chromedp + LLM API |
+| `qwen3_tts` | Qwen3-TTS 文本转语音，支持音色克隆与 LRU 缓存 | C++ GGML 引擎 + Go HTTP 服务 |
+| `qwen_asr` | Qwen3-ASR 语音转文本，30 种语言，BF16 推理 | 纯 C 引擎 + OpenBLAS + Go HTTP |
+| `agent_search` | 智能网络检索：多引擎搜索 → 页面提取 → AI 摘要 → 记忆存储 | Chromedp + LLM API |
 
 ### 运维工具
 
@@ -157,10 +163,10 @@ Lunar_Astral_Agents/
 ### Go Module 依赖图
 
 ```
-lunar_astral → general_config, browser_client, file_manager, image_processor, general_logger, lunar_chromedp, qwen3_tts
-crystal_astral → general_config, browser_client, file_manager, image_processor, general_logger
+lunar_astral → general_config, browser_client, file_manager, image_processor, logger_general, agent_search, qwen3_tts
+crystal_astral → general_config, browser_client, file_manager, image_processor, logger_general
 environment_repair → general_config
-lunar_chromedp → file_manager, general_config
+agent_search → file_manager, general_config, logger_general
 ```
 
 ### 数据流

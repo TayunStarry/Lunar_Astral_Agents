@@ -1,6 +1,6 @@
 # 子系统——文件管理（file_manager）
 
-本地文件存储与 SQLite 数据库管理模块，提供文件 CRUD、ZIP 归档、数据库批量操作等功能，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
+本地文件存储、SQLite 知识库、向量记忆库与扩展包管理模块，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## 功能概述
 
-`file_manager` 子系统提供完整的本地文件与数据库管理能力：
+`file_manager` 子系统提供完整的本地文件与数据管理能力：
 
 | 功能 | 说明 |
 |------|------|
@@ -27,45 +27,53 @@
 | 文件删除 | 删除指定文件或目录 |
 | 文件下载 | 提供文件下载服务（Content-Disposition） |
 | 文件列表 | 列出指定目录下的文件和子目录 |
-| ZIP 归档 | 多文件 ZIP 压缩 + ZIP 解压 |
+| ZIP 归档 | 多文件 ZIP 压缩 + ZIP 解压 + 目录打包 |
+| 文件预览 | 全局文件预览（图片/视频/文本） |
 | 随机背景图 | 从图片目录随机选取背景图片 |
-| SQLite 数据库 | 批量增删改查/建表/删表/统计，支持事务 |
+| 文件整理 | 按文件类型自动分类整理目录（text/code/image/video/audio/archive） |
+| SQLite 知识库 | 批量增删改查/建表/删表/统计，支持事务与安全过滤 |
+| 向量记忆库 | 嵌入向量检索记忆库：集合管理、消息/图片存储、语义查询、标签重建 |
+| 扩展包管理 | 扩展包安装 / 导出 / 删除（`local_data/package/`） |
 
 ---
 
 ## 项目结构
 
-<div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
-  <ul style="list-style-type: none; padding-left: 0;">
-    <li><strong>storage/</strong></li>
-    <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— 模块定义（依赖 go-sqlite3）</span></li>
-    <li style="padding-left: 1.5em;"><strong>module/</strong> <span style="color: #6a737d;">— 核心业务逻辑层</span>
-      <ul style="list-style-type: none; padding-left: 1.5em;">
-        <li><code>type.go</code> <span style="color: #6a737d;">— 全部数据结构定义</span></li>
-        <li><code>save.go</code> <span style="color: #6a737d;">— 文件保存 + 并发文件锁</span></li>
-        <li><code>read.go</code> <span style="color: #6a737d;">— 文件读取 + MIME 类型检测</span></li>
-        <li><code>delete.go</code> <span style="color: #6a737d;">— 文件/目录删除</span></li>
-        <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载信息获取</span></li>
-        <li><code>filelist.go</code> <span style="color: #6a737d;">— 目录列表 + 标识符过滤</span></li>
-        <li><code>archive.go</code> <span style="color: #6a737d;">— ZIP 压缩/解压（全内存操作）</span></li>
-        <li><code>background.go</code> <span style="color: #6a737d;">— 随机背景图选取</span></li>
-        <li><code>database.go</code> <span style="color: #6a737d;">— SQLite 数据库完整封装（批量操作/事务/安全过滤）</span></li>
-      </ul>
-    </li>
-    <li style="padding-left: 1.5em;"><strong>server/</strong> <span style="color: #6a737d;">— HTTP 服务层</span>
-      <ul style="list-style-type: none; padding-left: 1.5em;">
-        <li><code>save.go</code> <span style="color: #6a737d;">— POST 保存处理器</span></li>
-        <li><code>read.go</code> <span style="color: #6a737d;">— GET 读取处理器</span></li>
-        <li><code>delete.go</code> <span style="color: #6a737d;">— DELETE 删除处理器</span></li>
-        <li><code>download.go</code> <span style="color: #6a737d;">— 文件下载处理器</span></li>
-        <li><code>filelist.go</code> <span style="color: #6a737d;">— 目录列表处理器</span></li>
-        <li><code>archive.go</code> <span style="color: #6a737d;">— POST 压缩 / PUT 解压</span></li>
-        <li><code>background.go</code> <span style="color: #6a737d;">— GET 随机背景图</span></li>
-        <li><code>database.go</code> <span style="color: #6a737d;">— POST 数据库批量操作</span></li>
-      </ul>
-    </li>
-  </ul>
-</div>
+### module/ — 核心业务逻辑层
+
+| 文件 | 职责 |
+|------|------|
+| `type.go` | 全部数据结构定义（KnowledgeRequest、MemoryQueryResult、OrganizeRequest 等） |
+| `variable.go` | 全局变量与常量 |
+| `save.go` | 文件保存 + 并发文件锁 + 文件名解码 |
+| `read.go` | 文件读取 + MIME 类型检测 |
+| `delete.go` | 文件/目录删除 |
+| `download.go` | 文件下载信息获取 |
+| `filelist.go` | 目录列表 |
+| `archive.go` | ZIP 压缩/解压 + 目录打包 |
+| `background.go` | 随机背景图选取 |
+| `preview.go` | 文件预览（图片/视频/文本） |
+| `organize.go` | 批量文件整理（按类型分类） |
+| `knowledge.go` | SQLite 知识库完整封装（批量操作/事务/安全过滤） |
+| `memory.go` | 向量记忆库（嵌入向量存储 + 语义检索 + 集合管理） |
+| `embedding.go` | 嵌入向量生成与相似度计算 |
+
+### server/ — HTTP 服务层
+
+| 文件 | 职责 |
+|------|------|
+| `save.go` | POST 保存处理器 |
+| `read.go` | GET 读取处理器 |
+| `delete.go` | DELETE 删除处理器 |
+| `download.go` | 文件下载处理器 |
+| `filelist.go` | 目录列表处理器 |
+| `archive.go` | POST 压缩 / PUT 解压 + 扩展包安装/导出/删除 |
+| `background.go` | GET 随机背景图 |
+| `preview.go` | 文件预览处理器 |
+| `organize.go` | 文件整理处理器 |
+| `knowledge.go` | 知识库批量操作处理器 |
+| `memory.go` | 记忆库统一端点处理器（/memory/ 子路由分发） |
+| `type.go` / `variable.go` | 请求/响应类型与辅助函数 |
 
 ---
 
@@ -76,14 +84,15 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │            HTTP 层（server/）                     │
-│  SaveHandler  ReadHandler  DeleteHandler  ...    │
+│  SaveHandler  ReadHandler  MemoryHandler  ...    │
 │  解析 HTTP 请求 → 调用 module 函数 → 写 HTTP 响应  │
 └──────────────────────┬──────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────┐
 │          业务逻辑层（module/）                     │
-│  文件操作: Save/file/read/file/delete/file/download/List/file/archive │
-│  数据库: CRUD/Table/Info + 事务 + 批量             │
+│  文件操作: 保存/读取/删除/下载/列表/归档/预览/整理    │
+│  知识库: 批量 CRUD/建表/统计 + 事务                 │
+│  记忆库: 集合管理 + 向量检索 + 标签重建             │
 │  安全机制: 路径防越权 / 文件名校验 / 并发文件锁      │
 └──────────────────────┬──────────────────────────┘
                        │
@@ -132,7 +141,7 @@ func GetFileLock(path string) *sync.Mutex {
 }
 ```
 
-### 2. SQLite 数据库引擎
+### 2. SQLite 知识库（KnowledgeDB）
 
 **初始化配置**：
 
@@ -143,11 +152,11 @@ busy_timeout: 10000ms
 PRAGMA: synchronous=NORMAL, cache_size=10000, foreign_keys=ON
 ```
 
-**批量操作 API**（`ExecuteDatabaseRequest`）：
+**批量操作 API**（`ExecuteKnowledgeRequest`）：
 
 ```go
-type DatabaseRequest struct {
-    Operations  []interface{}   // DataOperation | TableOperation | InfoOperation
+type KnowledgeRequest struct {
+    Operations  []interface{}   // 数据操作 | 表操作 | 信息操作
     Transaction bool            // 是否启用事务包裹
 }
 
@@ -195,7 +204,25 @@ type BatchResult struct {
 - 移除危险字符：`;` `'` `"` `\` `--` `/*` `*/` `(` `)` `[` `]`
 - 检测 SQL 关键字冲突（SELECT/INSERT/DROP 等），自动前缀 `_` 避免
 
-### 3. ZIP 压缩/解压
+### 3. 向量记忆库（MemoryDB）
+
+基于嵌入向量的语义记忆存储，提供集合（collection）化管理：
+
+- **实例初始化**：`/memory/init` 初始化嵌入服务与 LLM 标签生成服务
+- **集合管理**：创建/打开/删除集合、集合统计、清空、重建标签向量
+- **消息存储**：文本消息与图片的统一增删查（语义检索）
+- **文档分页**：`documents` 端点支持分页浏览集合内容
+- **跨进程安全**：JSON 文件存储，检测跨进程修改并自动重载
+
+### 4. 扩展包管理
+
+基于 ZIP 归档的扩展包安装体系：
+
+- **安装**：解压上传的归档到 `local_data/package/<包名>/` 目录
+- **导出**：将包目录打包导出
+- **删除**：移除已安装的扩展包
+
+### 5. ZIP 压缩/解压
 
 - **压缩**：全内存操作（`bytes.Buffer` → `zip.NewWriter`），Deflate 压缩
 - **解压**：读取全部内容到内存后返回文件列表（name/size/content/last_modified/extension）
@@ -204,21 +231,43 @@ type BatchResult struct {
 
 ## API 接口定义
 
+> `file_manager` 作为库集成，路由由宿主程序（如 crystal_astral）注册。
+
 ### RESTful 端点总览
 
-| 方法 | 路径 | 功能 | 特殊 Header/参数 |
-|------|------|------|-----------------|
-| POST | `/file/write/` | 保存文件 | `X-File-Name`(Base64), `X-Overwrite` |
-| GET | `/file/read/{path}` | 读取文件 | - |
-| DELETE | `/file/delete/{path}` | 删除文件/目录 | - |
-| GET | `/file/download/{path}` | 下载文件 | - |
-| POST | `/file/list/{path}` | 列出目录 | - |
-| POST | `/file/archive/` | 创建 ZIP | multipart: `files`, `zip_name` |
-| PUT | `/file/archive/` | 解压 ZIP | multipart: `zip_file` |
-| GET | `/background/` | 随机背景图 | - |
-| POST | `/database/` | 数据库批量操作 | JSON body（见下方） |
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| POST | `/file/write` | 保存文件（Header: `X-File-Name` Base64） |
+| GET | `/file/read/{path}` | 读取文件 |
+| DELETE | `/file/delete/{path}` | 删除文件/目录 |
+| GET | `/file/download/{path}` | 下载文件 |
+| POST | `/file/list/{path}` | 列出目录 |
+| POST | `/file/archive` | 创建 ZIP |
+| GET | `/file/preview` | 文件预览（图片/视频/文本） |
+| POST | `/file/organize` | 批量文件整理 |
+| POST | `/file/package/install` | 安装扩展包 |
+| POST | `/file/package/export` | 导出扩展包 |
+| POST | `/file/package/delete` | 删除扩展包 |
+| GET | `/background` | 随机背景图 |
+| POST | `/knowledge/` | 知识库批量操作 |
+| ANY | `/memory/` | 记忆库（初始化/集合/消息/文档/重建） |
 
-### 数据库操作请求格式
+### 记忆库端点（/memory/）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/memory/init` | 实例初始化（嵌入服务 + LLM 服务） |
+| GET | `/memory/stats` | 全局统计（聚合所有集合） |
+| GET | `/memory/collections` | 列出所有集合 |
+| POST | `/memory/{name}` | 创建/打开集合 |
+| DELETE | `/memory/{name}` | 删除集合 |
+| GET | `/memory/{name}/stats` | 集合统计 |
+| POST/GET/DELETE | `/memory/{name}/messages` | 消息/图片统一增删查 |
+| GET | `/memory/{name}/documents` | 文档分页列表 |
+| POST | `/memory/{name}/rebuild` | 重建标签向量 |
+| POST | `/memory/{name}/clear` | 清空集合 |
+
+### 知识库操作请求格式
 
 ```json
 {
@@ -228,15 +277,13 @@ type BatchResult struct {
       "table": "users",
       "columns": [
         {"name": "id", "type": "INTEGER", "primary_key": true},
-        {"name": "name", "type": "TEXT", "not_null": true},
-        {"name": "email", "type": "TEXT"}
-      ],
-      "indexes": [{"name": "idx_name", "columns": ["name"]}]
+        {"name": "name", "type": "TEXT", "not_null": true}
+      ]
     },
     {
       "type": "insert",
       "table": "users",
-      "data": {"name": "Alice", "email": "alice@example.com"}
+      "data": {"name": "Alice"}
     },
     {
       "type": "select",
@@ -245,24 +292,10 @@ type BatchResult struct {
       "order_by": "name ASC",
       "limit": 10,
       "offset": 0
-    },
-    {
-      "type": "count",
-      "table": "users"
     }
   ],
   "transaction": true
 }
-```
-
-### 文件保存请求格式
-
-```
-POST /file/write/
-Headers:
-  X-File-Name: <Base64 编码的文件名>  
-  X-Overwrite: true/false (可选)
-Body: <原始文件字节流>
 ```
 
 ---
@@ -275,31 +308,40 @@ Body: <原始文件字节流>
 package main
 
 import (
-    storage "storage/module"
+    "strings"
+
+    "LunarSubsystem/FileManager/module"
 )
 
 func main() {
-    // 初始化数据库
-    storage.InitDatabase()
+    // 初始化知识库
+    _ = module.InitKnowledgeDB("local_data/knowledge.db")
 
-    // 批量操作
-    req := storage.DatabaseRequest{
+    // 知识库批量操作
+    req := module.KnowledgeRequest{
         Operations: []interface{}{
-            storage.DataOperation{
-                Type:  "select",
-                Table: "messages",
-                Where: map[string]interface{}{"role": "user"},
-                Limit: 10,
+            map[string]interface{}{
+                "type":  "select",
+                "table": "messages",
+                "where": map[string]interface{}{"role": "user"},
+                "limit": 10,
             },
         },
         Transaction: false,
     }
-    result := storage.ExecuteDatabaseRequest(req)
+    result := module.ExecuteKnowledgeRequest(req)
 
-    // 文件操作
-    data := []byte("Hello World")
-    storage.SaveFile("test.txt", data, false)
-    content, mimeType, _ := storage.ReadFile("test.txt")
+    // 文件保存 / 读取
+    data := strings.NewReader("Hello World")
+    _, _, _ = module.SaveFile("test.txt", false, data)
+    content, size, mimeType, _ := module.ReadFile("test.txt")
+    _ = content
+    _ = size
+    _ = mimeType
+
+    // 记忆库（向量检索）
+    _ = module.InitMemoryDB("local_data/memory")
+    _ = module.MemoryAddMessage(nil, "lunar_messages", "user", "你好")
 }
 ```
 
@@ -307,17 +349,22 @@ func main() {
 
 ```bash
 # 保存文件
-curl -X POST http://localhost:36789/file/write/ \
+curl -X POST http://localhost:PORT/file/write \
   -H "X-File-Name: $(echo -n 'example.txt' | base64)" \
   --data-binary @example.txt
 
 # 读取文件
-curl http://localhost:36789/file/read/example.txt
+curl http://localhost:PORT/file/read/example.txt
 
-# 数据库操作
-curl -X POST http://localhost:36789/database/ \
+# 知识库操作
+curl -X POST http://localhost:PORT/knowledge/ \
   -H "Content-Type: application/json" \
   -d '{"operations":[{"type":"tables"}],"transaction":false}'
+
+# 记忆库初始化
+curl -X POST http://localhost:PORT/memory/init \
+  -H "Content-Type: application/json" \
+  -d '{}'
 ```
 
 ---
@@ -332,9 +379,10 @@ curl -X POST http://localhost:36789/database/ \
 
 模块层对所有路径执行 `filepath.Clean` + `strings.HasPrefix` 检查，确保实际访问的路径始终在以 `config.LocalDir` 为根的子目录内。
 
-### Q: 数据库支持哪些数据类型？
+### Q: 知识库和记忆库有什么区别？
 
-SQLite 原生支持 INTEGER、REAL、TEXT、BLOB、NULL 五种类型。建表时建议使用这些类型确保兼容性。
+- **知识库**（KnowledgeDB）：普通 SQLite 数据库，适合结构化数据（表/行/列）的批量增删改查。
+- **记忆库**（MemoryDB）：基于嵌入向量的语义记忆存储，适合自然语言消息的语义检索，支持图片记忆与集合管理。
 
 ### Q: 事务失败会自动回滚吗？
 

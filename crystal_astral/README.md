@@ -1,6 +1,6 @@
 # 扩展系统——星图·琉璃（crystal_astral）
 
-工具集扩展程序，提供文件管理、数据库管理、截图标注、AI 代理转发与应用加载等综合功能。
+工具集扩展程序，提供文件管理、知识库/记忆库、截图标注、图片处理、AI 代理转发、模型元数据解析与引擎命令桥接等综合功能。
 
 ---
 
@@ -10,7 +10,7 @@
 
 琉璃的性格如同水晶一般清透明澈、轻盈灵动。她不做无谓的修饰，而是以最简洁直接的方式完成每一项任务。在技术上，琉璃追求操作的纯粹性与工具的直观性——每一个功能都经过精心打磨，如同水晶的每一面都折射出清晰的光芒。
 
-如果说月华是平台温柔的「面容」，那么琉璃便是平台坚实的「双手」——她以水晶般的澄澈透明，承载起文件管理、数据库操作、截图标注、AI 代理转发等每一项实用工具。
+如果说月华是平台温柔的「面容」，那么琉璃便是平台坚实的「双手」——她以水晶般的澄澈透明，承载起文件管理、知识库操作、截图标注、AI 代理转发等每一项实用工具。
 
 ---
 
@@ -18,10 +18,16 @@
 
 | 功能 | 说明 |
 |------|------|
-| 文件管理 | 本地文件浏览、上传、下载、删除、文本编辑 |
-| 数据库管理 | SQLite 数据库可视化操作（CRUD/建表/查询） |
-| 截图标注 | 多显示器截图 + 区域截图 + 图片缩放标注 |
+| 文件管理 | 本地文件浏览、上传、下载、删除、编辑、预览、归档 |
+| 扩展包管理 | 扩展包的安装、导出、删除与包目录扫描 |
+| 知识库 | SQLite 知识库管理（CRUD/建表/查询） |
+| 记忆库 | 向量记忆库（实例初始化/集合管理/消息增删查/文档列表/重建） |
+| 文件整理 | 批量文件整理操作 |
+| 截图与图像处理 | 多显示器截图 + 区域截图 + 图片缩放 + 关键帧提取 + 图片格式转换 |
 | AI 代理转发 | OpenAI 格式 API 代理，支持外部模型接入 |
+| GGUF 元数据解析 | 解析 GGUF 模型文件头信息与元数据 |
+| 引擎命令桥接 | StudioHub WebSocket 集线器，桥接智能体引擎命令与动画动作 |
+| 月华服务管理 | 检测月华服务状态、一键启动 |
 | 应用加载器 | 从界面启动外部 .exe / .ps1 / .bat 程序 |
 | 随机背景图 | 本地图片库随机选取桌面背景 |
 
@@ -32,14 +38,16 @@
 | 文件 | 职责 |
 |------|------|
 | `main.go` | 程序入口，随机端口（10000~40000）+ 启动服务器 |
-| `create.go` | 服务器创建、代理感知路由、应用启动 |
-| `handler.go` | 代理转发处理器（模型列表/对话/completions） |
+| `create.go` | 服务器创建、代理感知路由、应用启动、StudioHub 初始化 |
+| `handler.go` | 代理转发（模型列表/对话）、GGUF 元数据、图片转换、月华服务启停 |
+| `gguf.go` | GGUF 模型文件解析 |
+| `convert.go` | 图片格式转换（单张/批量/列表） |
+| `ws.go` | StudioHub WebSocket 集线器 + 引擎命令桥接 |
 | `type.go` | 请求/响应类型定义 |
-| `variable.go` | 全局变量与常量 |
-| `ws.go` | WebSocket 通信 |
+| `variable.go` | 全局变量、常量与 SystemEndpoints 路由表 |
 | `assets/` | 前端静态资源（index.html + script.js + style.css） |
 
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`general_logger`
+**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`logger_general`（另含 `gorilla/websocket`、`chai2010/webp`）
 
 ---
 
@@ -52,8 +60,10 @@ main.go
   ├── flag.Parse()
   ├── rand.Intn(30001)+10000     ← 随机端口（10000~40000）
   └── StartServer(port, fs, name)
-      ├── 注册 SystemEndpoints 路由
-      ├── 创建代理感知 Handler (/v1/ → 月华 llama-proxy)
+      ├── 初始化 StudioHubInstance 集线器
+      ├── 注册 SystemEndpoints 路由（见 API 接口）
+      ├── 注册 /ws/studio WebSocket 端点
+      ├── 创建代理感知 Handler (/v1/ 等 → 月华 llama-proxy)
       ├── reloadPageParameters() ← 窗口尺寸 1500×1050
       ├── browser.OpenBrowser()  ← 自动打开 WebView
       ├── http.ListenAndServe()  ← 异步启动 HTTP
@@ -62,39 +72,74 @@ main.go
 
 ### 代理感知路由
 
-琉璃通过智能路由根据请求路径自动分发：
+琉璃通过智能路由根据请求路径自动分发，代理目标统一为月华后端（`http://localhost:36789`）：
 
 ```
 请求 → proxyAwareHandler
-  ├── /v1/ 开头      → 代理到月华后端
-  ├── /generate 开头  → 同上
-  ├── /write/message  → 同上
-  └── 其他路径        → 直接服务静态文件
+  ├── /v1/ 开头          → 代理到月华后端
+  ├── /tts 开头          → 代理到月华后端（由其转发至 TTS 服务）
+  ├── /write/message 开头 → 代理到月华后端
+  ├── /ltpx/ 开头        → 代理到月华后端
+  └── 其他路径            → 直接服务静态文件
 ```
+
+### StudioHub 引擎桥接
+
+`/ws/studio` 是工作室 WebSocket 集线器端点：
+
+- 前端组件（如动作控制面板）通过 WebSocket 实时收发消息
+- 集线器拦截 `animation_list` 消息并缓存动作定义（`animCache`），供智能体查询
+- `/api/engine/command` 接收智能体后端的引擎命令并转发到 StudioHub 广播
+- `/api/engine/animations` 返回缓存的可用动作列表
 
 ---
 
 ## API 接口
 
-### 文件管理
+端点由 `SystemEndpoints` 路由表统一注册，按功能域分组：
+
+### 应用与资源
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/file/write` | 保存文件（Header: `X-File-Name`） |
-| GET | `/file/read/{path}` | 读取文件内容 |
-| DELETE | `/file/delete/{path}` | 删除文件或目录 |
-| GET | `/file/download/{path}` | 下载文件 |
-| POST | `/file/list/{path}` | 列出目录内容 |
-| POST | `/file/archive` | 创建或解压 ZIP 归档 |
+| POST | `/load/application` | 加载外部应用程序（.exe / .ps1 / .bat） |
 | GET | `/background` | 获取随机背景图片 |
 
-### 数据库管理
+### 文件操作
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/database/` | 批量数据库操作（insert/update/delete/select/create/drop） |
+| GET | `/file/read/{path}` | 读取文件内容 |
+| POST | `/file/write` | 保存文件（Header: `X-File-Name`） |
+| DELETE | `/file/delete/{path}` | 删除文件或目录 |
+| POST | `/file/list/{path}` | 列出目录内容 |
+| GET | `/file/download/{path}` | 下载文件 |
+| GET | `/file/preview` | 全局文件预览（图片/视频/文本） |
+| POST | `/file/archive` | 文件归档（ZIP） |
 
-### 截图
+### 扩展包管理
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/file/package/install` | 安装扩展包 |
+| POST | `/file/package/export` | 导出扩展包 |
+| POST | `/file/package/delete` | 删除扩展包 |
+| GET | `/api/packages` | 扫描包目录 |
+
+### 知识库与记忆库
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/knowledge/` | 知识库管理（insert/update/delete/select/create/drop） |
+| ANY | `/memory/` | 记忆库（实例初始化/集合管理/消息增删查/文档列表/重建） |
+
+### 文件整理
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/file/organize` | 批量文件整理操作 |
+
+### 截图与图像处理
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
@@ -102,22 +147,41 @@ main.go
 | GET | `/capture/display/{index}` | 指定显示器截图 |
 | POST | `/capture/region` | 区域截图 |
 | GET | `/capture/displays` | 获取显示器列表 |
-| POST | `/resize` | 图片缩放到 1080p |
+| POST | `/resize` | 图片缩放 |
+| POST | `/keyframe` | 视频关键帧提取 |
+| POST | `/convert/image` | 单张图片格式转换 |
+| POST | `/convert/batch` | 批量图片格式转换 |
+| POST | `/convert/list` | 列出文件夹中的图片文件 |
 
-### 应用管理
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/load/application` | 启动外部应用程序 |
-
-支持的启动方式：`.exe` 直接执行、`.ps1` PowerShell 执行、`.bat` CMD 窗口执行。
-
-### AI 代理
+### AI 模型与推理
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/proxy/chat` | 代理 OpenAI 对话请求 |
 | POST | `/proxy/models` | 代理查询模型列表 |
+| POST | `/proxy/chat` | 代理 OpenAI 对话请求 |
+| POST | `/gguf/metadata` | GGUF 模型元数据解析 |
+| POST | `/generate` | 图像生成 |
+| GET | `/generate/wait` | 图像生成任务等待 |
+
+### 月华服务
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/lunar/check` | 检测月华服务状态（端口 36789） |
+| POST | `/lunar/start` | 启动月华服务（Lunar_Astral.exe） |
+
+### 引擎命令桥接
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/api/engine/command` | 智能体引擎命令转发 |
+| GET | `/api/engine/animations` | 查询引擎可用动作列表 |
+
+### WebSocket
+
+| 端点 | 说明 |
+|------|------|
+| `/ws/studio` | StudioHub 工作室实时通信（广播引擎命令、缓存动画动作） |
 
 ---
 
@@ -144,7 +208,7 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 
 ## 常见问题
 
-**琉璃和月华有什么区别？** 月华是 AI 智能体核心系统（角色对话、TTS），琉璃是工具集扩展系统（文件管理、数据库、截图、AI 代理）。琉璃启动时自动连接到月华后端进行 AI 请求代理。
+**琉璃和月华有什么区别？** 月华是 AI 智能体核心系统（角色对话、TTS），琉璃是工具集扩展系统（文件管理、知识库/记忆库、截图、图片处理、AI 代理）。琉璃启动时自动连接到月华后端进行 AI 请求代理。
 
 **端口为什么是随机的？** 琉璃设计为可多实例并行运行，随机端口避免端口冲突。
 
@@ -158,5 +222,5 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
 - [星图·月华](../lunar_astral/README.md) — AI 智能体核心系统
 - [配置管理](../subsystem/general_config/README.md) — 全局配置
-- [文件管理](../subsystem/file_manager/README.md) — 文件与数据库详情
-- [图像处理](../subsystem/image_processor/README.md) — 截图与图像生成详情
+- [文件管理](../subsystem/file_manager/README.md) — 文件、知识库、记忆库与扩展包详情
+- [图像处理](../subsystem/image_processor/README.md) — 截图、关键帧与图像生成详情

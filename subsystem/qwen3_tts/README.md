@@ -24,11 +24,11 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
 
 | 特性 | 说明 |
 |------|------|
-| 文本转语音 | 支持中文文本合成，支持流式输出 |
+| 文本转语音 | 支持中文文本合成 |
 | 音色克隆 | 通过参考音频（reference audio）控制合成音色 |
 | GPU 加速 | 通过 CUDA、Vulkan、Metal 等多后端加速推理 |
 | 本地运行 | 纯 C++/Go 实现，无需 Python 环境 |
-| 纯后端服务 | 仅提供 HTTP/WebSocket API，无前端界面 |
+| 纯后端服务 | 仅提供 HTTP API，无前端界面 |
 | 音频缓存 | LRU + singleflight 缓存机制，避免重复合成 |
 
 ---
@@ -52,7 +52,6 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
         <li><code>variable.go</code> <span style="color: #6a737d;">— 全局变量与缓存实例</span></li>
         <li><code>cache.go</code> <span style="color: #6a737d;">— LRU 缓存与单飞机制实现</span></li>
         <li><code>generate.go</code> <span style="color: #6a737d;">— 语音生成核心逻辑（集成缓存）</span></li>
-        <li><code>stream.go</code> <span style="color: #6a737d;">— 流式音频输出（集成缓存）</span></li>
       </ul>
     </li>
     <li style="padding-left: 1.5em;">
@@ -96,9 +95,8 @@ Qwen3-TTS Lunar 是一个全本地化的语音合成引擎，支持将中文文�
 ```
 ┌──────────────────────────────────────────────┐
 │                Go 服务层                       │
-│  main.go → HTTP API → WebSocket 推送          │
+│  main.go → HTTP API                  │
 │  module/generate.go → CGO 调用 C++ 引擎       │
-│  module/stream.go   → 流式音频输出管理         │
 └────────────────────┬─────────────────────────┘
                      │ CGO
 ┌────────────────────▼─────────────────────────┐
@@ -150,8 +148,7 @@ WAV 封装 → .wav 文件/流
 | [type.go](module/type.go) | `TTSCache`, `CacheEntry`, `InflightCall` | 类型定义集中管理（含缓存类型） |
 | [variable.go](module/variable.go) | `ttsCache`, `synthFunc` | 全局变量与缓存实例 |
 | [cache.go](module/cache.go) | `NewTTSCache()`, `ComputeCacheKey()`, `Get()`, `Set()` | LRU 缓存与单飞机制实现 |
-| [generate.go](module/generate.go) | `SynthesizeText()`, `synthesizeWithCache()`, `TTSHandler()` | CGO 调用 C++ 引擎生成音频、缓存集成、HTTP 请求处理 |
-| [stream.go](module/stream.go) | `TTSStreamHandler()`, `SynthesizeTextStreaming()` | WebSocket 流式音频输出管理（集成缓存） |
+| [generate.go](module/generate.go) | `InitTTSEngine()`, `SynthesizeText()`, `EncodePCMToWAV()`, `TTSHandler()`, `UploadHandler()`, `HealthHandler()` | CGO 调用 C++ 引擎生成音频、缓存集成、HTTP 请求处理 |
 
 ### C++ 层 (cpp/src/)
 
@@ -222,7 +219,6 @@ DisableCache=false? ──否──► 跳过缓存查询
 | 缓存键 | 基于文本、参考音频、语言ID、采样参数的 SHA256 哈希 |
 | 强制更新 | `disable_cache=true` 时跳过缓存查询但仍更新缓存 |
 | 线程安全 | 基于 `sync.RWMutex` 保护并发访问 |
-| 流式缓存 | 流式合成完成后缓存完整音频，下次请求可直接返回 |
 
 ### 缓存控制
 
@@ -246,12 +242,11 @@ DisableCache=false? ──否──► 跳过缓存查询
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/tts/` | 文本转语音生成 |
-| GET | `/tts/stream` | 流式音频输出（WebSocket） |
+| POST | `/tts` | 文本转语音生成 |
 | POST | `/upload/` | 参考音频上传 |
 | GET | `/health` | 健康检查 |
 
-默认端口：`36365`
+默认端口：`36789`（即 `-basic-port` 默认值，可加 `-basic-port <端口>` 修改）
 
 ### 语音生成请求
 
@@ -313,70 +308,6 @@ DisableCache=false? ──否──► 跳过缓存查询
 }
 ```
 
-### 流式语音合成（WebSocket）
-
-端点：`ws://localhost:36365/tts/stream`
-
-客户端连接 WebSocket 后，发送 JSON 请求：
-
-```json
-{
-  "text": "这是一段较长的文本，将以流式方式输出音频段。",
-  "ref_audio": "",              // 可选，参考音频文件路径
-  "language_id": 2055,          // 可选，语言ID
-  "chunk_frames": 50,           // 可选，每帧音频样本数（默认50）
-  "temperature": 0.8,           // 可选，生成随机性控制
-  "top_k": 0,                   // 可选，Top-K 采样
-  "top_p": 0.9,                 // 可选，Top-P 采样
-  "max_tokens": 0,              // 可选，最大生成 token 数
-  "repetition_penalty": 1.1,    // 可选，重复惩罚
-  "threads": 0,                 // 可选，线程数
-  "disable_cache": false        // 可选，禁用缓存
-}
-```
-
-服务端通过 WebSocket 逐帧返回 JSON 消息：
-
-```json
-// 音频块
-{
-  "type": "audio_chunk",
-  "audio": "base64_encoded_pcm16_data...",
-  "chunk_index": 1,
-  "total_samples": 12000,
-  "sample_rate": 24000
-}
-
-// 最终块
-{
-  "type": "audio_chunk",
-  "audio": "base64_encoded_pcm16_data...",
-  "chunk_index": 5,
-  "total_samples": 60000,
-  "sample_rate": 24000,
-  "is_final": true,
-  "total_chunks": 5
-}
-
-// 合成完成
-{
-  "type": "final",
-  "chunk_index": 5,
-  "total_chunks": 5,
-  "total_samples": 60000,
-  "sample_rate": 24000,
-  "is_final": true
-}
-
-// 错误
-{
-  "type": "error",
-  "error": "错误信息"
-}
-```
-
-> 注意：流式输出的 `audio` 字段为 base64 编码的 PCM16 原始数据（非 WAV 封装），客户端需自行封装 WAV 头或使用 Web Audio API 直接播放。
-
 ---
 
 ## 编译与运行
@@ -421,7 +352,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 .\Qwen3_TTS_Lunar.exe
 ```
 
-程序启动后作为后台 HTTP 服务运行，通过 `http://localhost:36365` 提供 TTS API 接口。
+程序启动后作为后台 HTTP 服务运行，通过 `http://localhost:36789` 提供 TTS API 接口。
 
 ---
 
@@ -459,51 +390,21 @@ func main() {
 
 ```bash
 # 文本转语音
-curl -X POST http://localhost:36365/tts/ \
+curl -X POST http://localhost:36789/tts/ \
   -H "Content-Type: application/json" \
   -d '{"text": "你好，很高兴认识你！"}'
 
 # 上传参考音频
-curl -X POST http://localhost:36365/upload/ \
+curl -X POST http://localhost:36789/upload/ \
   -F "audio=@reference.wav"
 
 # 使用自定义参考音频合成
-curl -X POST http://localhost:36365/tts/ \
+curl -X POST http://localhost:36789/tts/ \
   -H "Content-Type: application/json" \
   -d '{"text": "你好，很高兴认识你！", "ref_audio": "/path/to/uploaded_audio.wav"}'
 
 # 健康检查
-curl http://localhost:36365/health
-```
-
-### WebSocket 流式调用（JavaScript）
-
-```javascript
-const ws = new WebSocket('ws://localhost:36365/tts/stream');
-
-ws.onopen = () => {
-    ws.send(JSON.stringify({
-        text: '这是一段较长的文本，将以流式方式输出音频段。',
-        chunk_frames: 50
-    }));
-};
-
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    switch (data.type) {
-        case 'audio_chunk':
-            // data.audio: base64 编码的 PCM16 音频数据
-            // data.chunk_index: 当前块序号
-            // data.sample_rate: 采样率 (24000)
-            break;
-        case 'final':
-            // 合成完成
-            break;
-        case 'error':
-            // data.error: 错误信息
-            break;
-    }
-};
+curl http://localhost:36789/health
 ```
 
 ---
@@ -525,7 +426,7 @@ Qwen3-TTS 的 GGUF 格式模型可从 Hugging Face 或 ModelScope 获取。将�
 ### Q: 生成速度慢怎么办？
 
 1. 启用 GPU 加速（CUDA/Vulkan）
-2. 减少生成长度或使用流式输出降低初始延迟
+2. 减少单次生成长度
 3. 使用量化模型（Q4_K_M 等）减少推理计算量
 
 ---
@@ -533,6 +434,6 @@ Qwen3-TTS 的 GGUF 格式模型可从 Hugging Face 或 ModelScope 获取。将�
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与编译流程
-- [配置管理子系统](../config/README.md) —— 模型路径配置
+- [配置管理子系统](../general_config/README.md) —— 模型路径配置
 - [星图·月华](../../lunar_astral/README.md) —— TTS 引擎的集成使用方
-- [语音识别独立系统](../qwen_asr_lunar/README.md) —— ASR 语音转文本引擎
+- [语音识别独立系统](../qwen_asr/README.md) —— ASR 语音转文本引擎

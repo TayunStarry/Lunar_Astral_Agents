@@ -36,7 +36,8 @@
 
 | 文件 | 职责 |
 |------|------|
-| [type.go](type.go) | 核心类型定义与全局状态（单例 WebView + 互斥锁 + 命令通道） |
+| [type.go](type.go) | 核心类型定义（IP 候选结构） |
+| [variable.go](variable.go) | 全局状态（单例 WebView + 互斥锁 + 通道） |
 | [execute.go](execute.go) | IP 发现逻辑 + 浏览器入口函数 |
 | [webView.go](webView.go) | WebView 嵌入式窗口创建与管理 |
 
@@ -82,13 +83,13 @@ OpenBrowser(url)
 ### WebView 单例管理
 
 ```go
-// 全局状态（type.go）
+// 全局状态（variable.go）
 var (
-    webviewMutex     sync.Mutex       // 互斥锁保护共享状态
-    webviewInstance  webview.WebView  // 单例实例
-    webviewRunning   bool             // 防重入标记
-    webviewCmdCh     chan webviewCmd  // 命令通道（容量1，非阻塞）
-    webviewClosedCh  chan struct{}    // 关闭通知通道
+    webviewMutex       sync.Mutex       // 互斥锁保护共享状态
+    webviewInstance    webview.WebView  // 单例实例
+    webviewRunning     bool             // 防重入标记
+    webviewClosedCh    chan struct{}    // 外部关闭通知通道
+    webviewCleanupDone chan struct{}    // 清理完成信号（同步重开）
 )
 ```
 
@@ -110,6 +111,7 @@ var (
 | `CloseWebView()` | 安全关闭 WebView 窗口 |
 | `WebViewClosed() chan struct{}` | 返回关闭通知通道（用于等待窗口关闭） |
 | `IsWebViewSupported() bool` | 检查平台是否支持 WebView |
+| `IsWebViewRunning() bool` | 检查 WebView 是否正在运行 |
 | `GetLocalIP(preferredNetworks []string) (string, error)` | 获取最佳本地 IP |
 
 ### 使用示例
@@ -117,40 +119,26 @@ var (
 ```go
 package main
 
-import "browser"
+import "LunarSubsystem/BrowserClient"
 
 func main() {
     // 方式 1：简单打开 URL
-    browser.OpenBrowser("http://localhost:36789")
+    BrowserClient.OpenBrowser("http://localhost:36789")
 
     // 方式 2：获取局域网 IP 后打开
-    ip, err := browser.GetLocalIP([]string{})
+    ip, err := BrowserClient.GetLocalIP([]string{})
     if err != nil {
         panic(err)
     }
     url := fmt.Sprintf("http://%s:36789", ip)
-    browser.OpenBrowser(url)
+    BrowserClient.OpenBrowser(url)
 
     // 方式 3：等待 WebView 关闭
     go func() {
-        browser.StartWebViewBrowser("http://localhost:36789")
+        BrowserClient.StartWebViewBrowser("http://localhost:36789")
     }()
-    <-browser.WebViewClosed()
+    <-BrowserClient.WebViewClosed()
     fmt.Println("WebView 已关闭")
-}
-```
-
-### 命令通道接口
-
-WebView 支持通过命令通道进行运行时控制：
-
-```go
-// 发送命令（非阻塞）
-select {
-case webviewCmdCh <- cmd:
-    // 命令发送成功
-default:
-    // 通道已满，命令被丢弃
 }
 ```
 
@@ -174,12 +162,12 @@ default:
 
 ```go
 // 优先返回 10.0.0.x 网段的 IP
-ip, _ := browser.GetLocalIP([]string{"10.0.0."})
+ip, _ := BrowserClient.GetLocalIP([]string{"10.0.0."})
 ```
 
 ### Q: 如何强制使用系统浏览器？
 
-在 [general_config 子系统](../general_config/README.md) 中将 `config.AllowBrowser` 设为 `true`，同时确保调用代码正确处理了 WebView 不支持的场景。
+`OpenBrowser()` 内部会自动检测 WebView 支持情况并回退到系统浏览器，无需手动干预。也可通过 [general_config 子系统](../general_config/README.md) 的 `-allow-browser=false` 命令行参数禁用浏览器。
 
 ---
 

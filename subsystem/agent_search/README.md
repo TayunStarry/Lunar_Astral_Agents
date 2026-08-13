@@ -1,4 +1,4 @@
-# 子系统——智能网络检索（lunar_chromedp）
+# 子系统——智能网络检索（agent_search）
 
 基于 Chromedp 的 AI 驱动网络搜索智能体，为月华提供多引擎搜索、页面内容提取、AI 摘要与记忆存储能力。
 
@@ -6,7 +6,7 @@
 
 ## 功能概述
 
-`lunar_chromedp` 子系统是一个完整的搜索智能体，通过 Chromedp 控制浏览器执行网络搜索，结合 AI 模型进行内容理解与摘要。
+`agent_search` 子系统是一个完整的搜索智能体，通过 Chromedp 控制浏览器执行网络搜索，结合 AI 模型进行内容理解与摘要。
 
 | 功能 | 说明 |
 |------|------|
@@ -64,10 +64,10 @@ Phase 5  记忆存储 → 搜索结果以自然语言文本存入记忆库
 ### 依赖关系
 
 ```
-lunar_chromedp
+agent_search
   ├── general_config    ← 模型配置（多模态模型 URL、嵌入模型 URL、API Key）
   ├── file_manager      ← 记忆库存储（向量检索 + 文本存储）
-  └── general_logger    ← 彩色终端日志输出
+  └── logger_general    ← 彩色终端日志输出
 ```
 
 ### 钩子注册机制
@@ -86,14 +86,14 @@ lunar_chromedp
 import "LunarSubsystem/AgentSearch"
 
 // 初始化搜索智能体（模型配置从 lunar_config.json 读取）
-cfg := lunar_chromedp.DefaultSearchConfig()
-if err := lunar_chromedp.InitSearch(cfg); err != nil {
+cfg := AgentSearch.DefaultSearchConfig()
+if err := AgentSearch.InitSearch(cfg); err != nil {
     log.Fatal(err)
 }
-defer lunar_chromedp.CloseBrowser()
+defer AgentSearch.CloseBrowser()
 
 // 执行搜索（阻塞，串行执行）
-report, err := lunar_chromedp.Search("Go 语言最新版本有哪些特性？")
+report, err := AgentSearch.Search("Go 语言最新版本有哪些特性？")
 if err != nil {
     log.Fatal(err)
 }
@@ -103,7 +103,7 @@ fmt.Println(report.Answer)
 ### 命令行测试
 
 ```powershell
-cd d:\Lunar_Astral_Agents\subsystem\lunar_chromedp\cmd\search_test
+cd d:\Lunar_Astral_Agents\subsystem\agent_search\cmd\search_test
 go run .
 ```
 

@@ -1,4 +1,4 @@
-# 独立系统——语音识别（qwen_asr_lunar）
+# 独立系统——语音识别（qwen_asr）
 
 基于 Qwen3-ASR 模型的本地语音识别（Automatic Speech Recognition）引擎，采用纯 C 语言推理引擎 + Go HTTP 服务的混合架构，支持 0.6B 和 1.7B 两种模型规模。
 
@@ -47,7 +47,7 @@ Qwen ASR Lunar 是一个全本地化的语音识别引擎，支持多语言音�
 
 <div style="font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace; font-size: 0.9em; line-height: 1.6;">
   <ul style="list-style-type: none; padding-left: 0;">
-    <li><strong>qwen_asr_lunar/</strong></li>
+    <li><strong>qwen_asr/</strong></li>
     <li style="padding-left: 1.5em;"><code>main.go</code> <span style="color: #6a737d;">— 程序入口（HTTP + WebView）</span></li>
     <li style="padding-left: 1.5em;"><code>go.mod</code> <span style="color: #6a737d;">— Go 模块定义</span></li>
     <li style="padding-left: 1.5em;"><code>asr.go</code> <span style="color: #6a737d;">— Go↔C 桥接层（CGO 绑定）</span></li>
@@ -233,7 +233,7 @@ Content-Type: multipart/form-data
 ### 编译
 
 ```powershell
-cd d:\Lunar_Astral_Agents\subsystem\qwen_asr_lunar
+cd d:\Lunar_Astral_Agents\subsystem\qwen_asr
 
 # 编译（可选 OpenBLAS 加速）
 .\build.ps1
@@ -281,27 +281,23 @@ curl -X POST http://localhost:PORT/asr \
 
 ### Go 代码集成
 
+> qwen_asr 是独立可执行程序（`package main`），以下调用方式即 `main.go` 内部的实际用法，供集成方参考。
+
 ```go
-package main
-
-import "qwen_asr_lunar"
-
-func main() {
-    // 初始化 ASR 引擎
-    asr, err := qwen_asr_lunar.New("path/to/model/dir")
-    if err != nil {
-        panic(err)
-    }
-    defer asr.Close()
-
-    // 文件转写
-    text, err := asr.TranscribeWavFile("audio.wav")
-    fmt.Println(text)
-
-    // 设置语言提示（可选）
-    asr.SetLanguage("zh")
-    asr.SetPrompt("以下是中文普通话的转写结果。")
+// 初始化 ASR 引擎
+asr, err := New("path/to/model/dir")
+if err != nil {
+    panic(err)
 }
+defer asr.Close()
+
+// 文件转写
+text, err := asr.TranscribeWavFile("audio.wav")
+fmt.Println(text)
+
+// 设置语言提示（可选）
+asr.SetLanguage("zh")
+asr.SetPrompt("以下是中文普通话的转写结果。")
 ```
 
 ---
@@ -340,6 +336,6 @@ $env:CGO_LDFLAGS = "-L./openblas/lib -lopenblas -fopenmp"
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与编译流程
-- [配置管理子系统](../config/README.md) —— 模型路径配置
+- [配置管理子系统](../general_config/README.md) —— 模型路径配置
 - [语音合成独立系统](../qwen3_tts/README.md) —— TTS 文本转语音引擎
 - [星图·月华](../../lunar_astral/README.md) —— ASR 引擎可集成使用方
