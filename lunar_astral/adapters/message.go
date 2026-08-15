@@ -7,17 +7,6 @@ import (
 	"github.com/dop251/goja"
 )
 
-// MusicRenderFunc 音乐渲染回调函数，由 server/handlers 包初始化时注册
-// 参数：abcNotation ABC乐谱, title 标题
-// 返回：audioURL 音频URL, fileName 文件名, err 错误
-var MusicRenderFunc func(abcNotation string, title string) (audioURL string, fileName string, err error)
-
-func init() {
-	MusicRenderFunc = func(abcNotation string, title string) (string, string, error) {
-		return "", "", nil // 默认空实现，渲染功能由 handlers 包注册
-	}
-}
-
 func (class *Runtime) pushContext(msgType string, content string, audio string) goja.Value {
 	data := PushContextData{
 		Type:    msgType,
@@ -26,86 +15,7 @@ func (class *Runtime) pushContext(msgType string, content string, audio string) 
 	}
 	PushMessageFunc("context", data)
 
-	// 拦截音乐类型消息：当 ABC 乐谱推送到前端时，
-	// 自动触发后端 FluidSynth + SoundFont 音频渲染管线
-	if msgType == "music" {
-		go renderMusicAudio(content)
-	}
-
 	return class.runtime.ToValue(true)
-}
-
-// renderMusicAudio 异步渲染音乐音频
-func renderMusicAudio(abcNotation string) {
-	if abcNotation == "" {
-		return
-	}
-
-	// 提取标题
-	title := extractABCTitle(abcNotation)
-
-	// 调用注册的渲染函数
-	audioURL, fileName, err := MusicRenderFunc(abcNotation, title)
-	if err != nil {
-		LoggerGeneral.Error("LunarCore", "音乐音频渲染失败: %v", err)
-		return
-	}
-	if audioURL == "" {
-		// 渲染函数未注册或依赖不满足，静默跳过
-		return
-	}
-
-	// 将音频 URL 推送到前端
-	LoggerGeneral.Info("LunarCore", "音乐音频渲染完成: %s", audioURL)
-	audioData, _ := json.Marshal(map[string]string{
-		"type":      "audio_ready",
-		"audio_url": audioURL,
-		"file_name": fileName,
-	})
-	PushMessageFunc("context", PushContextData{
-		Type:    "music_audio",
-		Content: string(audioData),
-	})
-}
-
-// extractABCTitle 从 ABC 乐谱中提取标题
-func extractABCTitle(abcNotation string) string {
-	for _, line := range splitLines(abcNotation) {
-		if len(line) > 2 && line[:2] == "T:" {
-			return trimSpace(line[2:])
-		}
-	}
-	return "music"
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			line := s[start:i]
-			if len(line) > 0 && line[len(line)-1] == '\r' {
-				line = line[:len(line)-1]
-			}
-			lines = append(lines, line)
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
-
-func trimSpace(s string) string {
-	start, end := 0, len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
 }
 
 func (class *Runtime) pushImage(images []string) goja.Value {

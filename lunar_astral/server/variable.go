@@ -90,9 +90,6 @@ var SystemEndpoints = []SystemEndpoint{
 	// 智能体控制接口
 	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
 	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
-	// 音乐渲染相关接口
-	{Path: "/music/render", Handler: handlers.MusicRenderHandler, Method: "POST", Description: "ABC乐谱渲染为WAV音频"},
-	{Path: "/music/deps", Handler: handlers.MusicDepsHandler, Method: "GET", Description: "音乐渲染依赖状态查询"},
 	// 引擎桥接接口
 	{Path: "/api/engine/command", Handler: handlers.EngineCommandHandler, Method: "POST", Description: "智能体引擎命令转发"},
 	{Path: "/api/engine/animations", Handler: contact.HandleGetAnimations, Method: "GET", Description: "查询引擎可用动作列表"},

@@ -43,7 +43,7 @@ export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 			type: "function",
 			function: {
 				name: "compose_music",
-				description: "创作音乐作品并生成ABC记谱法格式的乐谱，后端将通过SoundFont专业音色库渲染为真实乐器音色的音频。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
+				description: "创作音乐作品并生成ABC记谱法格式的乐谱，前端音乐播放器将使用Tone.js合成真实乐器音色播放。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
 				parameters: {
 					type: "object",
 					properties: {
@@ -73,7 +73,7 @@ export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 						},
 						"abc_notation": {
 							type: "string",
-							description: `ABC记谱法格式的完整乐谱。后端使用FluidSynth+SoundFont渲染真实乐器音色，GM标准乐器编号确保音色正确。
+							description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用Tone.js合成真实乐器音色。
 
 === 基础格式 ===
 X:1
@@ -107,13 +107,7 @@ K:调号
 力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
 运音法: .断奏 >重音 -保持
 
-=== GM乐器编号（通过 %%prog 声部 程序号 指定） ===
-钢琴0  竖琴46  吉他24  大提琴42  小提琴40
-长笛73  单簧管71  双簧管68  小号56  合成器80
-示例: %%prog 1 0  %%prog 2 42
-
 === 完整示例：钢琴独奏（含和弦伴奏） ===
-%%prog 1 0
 X:1
 T:晨光曲
 M:4/4
@@ -124,8 +118,6 @@ K:C
 !mf! [V:2] [C,,E,,G,,]4 | [F,,A,,C,]4 | [G,,B,,D,]4 | [C,,E,,G,,]4 |
 
 === 完整示例：钢琴+大提琴二重奏 ===
-%%prog 1 0
-%%prog 2 42
 X:1
 T:夜色温柔
 M:4/4
@@ -219,9 +211,7 @@ K:Am
 	 * 处理音乐创作工具调用
 	 *
 	 * 接收 LLM 生成的 ABC 记谱法乐谱，注入乐器指令后：
-	 * 1. 将 ABC 乐谱推送到前端进行乐谱可视化
-	 * 2. 请求后端 /music/render 接口将 ABC→MIDI→WAV（FluidSynth + SoundFont）
-	 * 3. 将渲染后的音频 URL 推送到前端播放
+	 * 将 ABC 乐谱推送到前端，由音乐播放器进行乐谱可视化与 Tone.js 合成播放
 	 */
 	private handleComposeMusic(args: ComposeMusicParams): string {
 		try {
@@ -258,11 +248,8 @@ K:Am
 				console.warn('[演奏者] 推送乐谱到前端失败');
 			}
 
-			// Go 后端会自动拦截 'music' 类型消息，触发 FluidSynth + SoundFont 音频渲染
-			// 渲染完成后通过 'music_audio' 类型推送音频 URL 到前端
-
-			console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
-			return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，音频正在通过 SoundFont 专业音色库渲染，稍后将自动播放。`;
+			console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}`);
+			return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，可通过音乐播放器查看和播放。`;
 		}
 		catch (error) {
 			console.error('[演奏者] 音乐创作处理异常:', error);
@@ -276,7 +263,6 @@ K:Am
 	 * 创建独立的 Tone.js 合成器，实现真正的多乐器并行演奏。
 	 *
 	 * 指令格式：`%%voice 1 钢琴`、`%%voice 2 小提琴` ...
-	 * 同时保留 `%%instrument` 指令作为兼容标记（前端优先解析 %%voice）。
 	 */
 	private injectInstrumentDirective(abcNotation: string, instruments: string): string {
 		if (!instruments) return abcNotation;
@@ -286,30 +272,14 @@ K:Am
 			.map(s => s.trim())
 			.filter(Boolean);
 		if (list.length === 0) return abcNotation;
-		// 已包含 %%voice 或 %%prog 指令则不重复注入
-		if (/^%%(?:voice|prog)\s+/m.test(abcNotation)) return abcNotation;
+		// 已包含 %%voice 指令则不重复注入
+		if (/^%%voice\s+/m.test(abcNotation)) return abcNotation;
 
-		// GM 乐器程序号映射（与 abc_midi.go 中的 gmInstrumentMap 一致）
-		const gmPrograms: Record<string, number> = {
-			'钢琴': 0, 'piano': 0,
-			'竖琴': 46, 'harp': 46,
-			'吉他': 24, 'guitar': 24,
-			'大提琴': 42, 'cello': 42,
-			'小提琴': 40, 'violin': 40,
-			'长笛': 73, 'flute': 73,
-			'单簧管': 71, 'clarinet': 71,
-			'双簧管': 68, 'oboe': 68,
-			'小号': 56, 'trumpet': 56,
-			'合成器': 80, 'synth': 80,
-		};
-
-		// 构建 %%prog N 程序号 + %%voice N 乐器名 指令行
+		// 构建 %%voice N 乐器名 指令行
 		const directives: string[] = [];
 		for (let i = 0; i < list.length; i++) {
 			const inst = list[i];
 			const voiceNum = i + 1;
-			const prog = gmPrograms[inst.toLowerCase()] ?? gmPrograms[inst] ?? 0;
-			directives.push(`%%prog ${voiceNum} ${prog}`);
 			directives.push(`%%voice ${voiceNum} ${inst}`);
 		}
 		const directive = directives.join('\n') + '\n';

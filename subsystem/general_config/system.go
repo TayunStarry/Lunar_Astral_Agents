@@ -8,6 +8,10 @@ import (
 // Developer 调试模式开关，用于开启调试日志
 var Developer = flag.Bool("developer", false, "启用调试模式, 显示详细日志")
 
+// SyncFetchTimeout syncFetch 网络请求超时时间（秒），默认 300 秒。
+// 用于防止模型重载/推理期间 HTTP 请求无限挂起，阻塞 goja 事件循环。
+var SyncFetchTimeout = flag.Int("sync-fetch-timeout", 300, "syncFetch 网络请求超时时间(秒)")
+
 // 系统运行状态变量
 var (
 	// ModelReady 表示模型是否准备就绪的状态标识，0 可表示未准备就绪。

@@ -5,7 +5,6 @@ import (
 	"LunarAstral/bridging/napcat"
 	"LunarAstral/hierarchy"
 	"LunarAstral/model/llama"
-	"LunarAstral/server/handlers"
 	"LunarAstral/websocket"
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/GeneralConfig"
@@ -42,8 +41,6 @@ func InitializeServer() {
 	initTTSEngine()
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
-	// 注册音乐渲染回调（FluidSynth + SoundFont）
-	adapters.MusicRenderFunc = handlers.RenderMusicInternal
 	// 运行智能体上下文
 	adapters.RunAgentContext()
 	// 初始化桥接适配器
@@ -128,8 +125,9 @@ func initBridgeAdapter() {
 		}
 	}
 
-	// 启动桥接器定时扫描
-	napcat.StartBridgeScanner()
+	// 启动桥接器连接（异步执行，避免阻塞 HTTP 服务器启动）
+	// StartBridgeScanner 内部会阻塞读取 WebSocket 消息，必须放到独立 goroutine 中
+	go napcat.StartBridgeScanner()
 }
 
 // shutdownServer 优雅关闭服务器

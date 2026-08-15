@@ -145,8 +145,9 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 		req.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	}
 
-	// 发送请求（支持自签名证书）
+	// 发送请求（支持自签名证书，设置超时防止模型重载期间无限挂起）
 	client := &http.Client{
+		Timeout: time.Duration(*GeneralConfig.SyncFetchTimeout) * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		},

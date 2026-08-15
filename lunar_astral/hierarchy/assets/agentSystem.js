@@ -1213,7 +1213,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "compose_music",
-                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，后端将通过SoundFont专业音色库渲染为真实乐器音色的音频。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
+                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，前端音乐播放器将使用Tone.js合成真实乐器音色播放。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
                     parameters: {
                         type: "object",
                         properties: {
@@ -1243,7 +1243,7 @@ var agentSystem = (function (exports) {
                             },
                             "abc_notation": {
                                 type: "string",
-                                description: `ABC记谱法格式的完整乐谱。后端使用FluidSynth+SoundFont渲染真实乐器音色，GM标准乐器编号确保音色正确。
+                                description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用Tone.js合成真实乐器音色。
 
 === 基础格式 ===
 X:1
@@ -1277,13 +1277,7 @@ K:调号
 力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
 运音法: .断奏 >重音 -保持
 
-=== GM乐器编号（通过 %%prog 声部 程序号 指定） ===
-钢琴0  竖琴46  吉他24  大提琴42  小提琴40
-长笛73  单簧管71  双簧管68  小号56  合成器80
-示例: %%prog 1 0  %%prog 2 42
-
 === 完整示例：钢琴独奏（含和弦伴奏） ===
-%%prog 1 0
 X:1
 T:晨光曲
 M:4/4
@@ -1294,8 +1288,6 @@ K:C
 !mf! [V:2] [C,,E,,G,,]4 | [F,,A,,C,]4 | [G,,B,,D,]4 | [C,,E,,G,,]4 |
 
 === 完整示例：钢琴+大提琴二重奏 ===
-%%prog 1 0
-%%prog 2 42
 X:1
 T:夜色温柔
 M:4/4
@@ -1417,8 +1409,8 @@ K:Am
                 if (!pushSuccess) {
                     console.warn('[演奏者] 推送乐谱到前端失败');
                 }
-                console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}，后端音频渲染已自动触发`);
-                return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，音频正在通过 SoundFont 专业音色库渲染，稍后将自动播放。`;
+                console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}`);
+                return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，可通过音乐播放器查看和播放。`;
             }
             catch (error) {
                 console.error('[演奏者] 音乐创作处理异常:', error);
@@ -1435,26 +1427,12 @@ K:Am
                 .filter(Boolean);
             if (list.length === 0)
                 return abcNotation;
-            if (/^%%(?:voice|prog)\s+/m.test(abcNotation))
+            if (/^%%voice\s+/m.test(abcNotation))
                 return abcNotation;
-            const gmPrograms = {
-                '钢琴': 0, 'piano': 0,
-                '竖琴': 46, 'harp': 46,
-                '吉他': 24, 'guitar': 24,
-                '大提琴': 42, 'cello': 42,
-                '小提琴': 40, 'violin': 40,
-                '长笛': 73, 'flute': 73,
-                '单簧管': 71, 'clarinet': 71,
-                '双簧管': 68, 'oboe': 68,
-                '小号': 56, 'trumpet': 56,
-                '合成器': 80, 'synth': 80,
-            };
             const directives = [];
             for (let i = 0; i < list.length; i++) {
                 const inst = list[i];
                 const voiceNum = i + 1;
-                const prog = gmPrograms[inst.toLowerCase()] ?? gmPrograms[inst] ?? 0;
-                directives.push(`%%prog ${voiceNum} ${prog}`);
                 directives.push(`%%voice ${voiceNum} ${inst}`);
             }
             const directive = directives.join('\n') + '\n';
@@ -2595,7 +2573,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         dumpAllContexts(outputDir) {
             if (!GlobalConfig.debugMode)
                 return [];
-            const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
+            const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\documents\\debug';
             const results = [];
             const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
             if (dialoguePath)
@@ -2641,7 +2619,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     class LunarAgent extends AgentDefine {
         speakWeight = 1;
         silenceCount = 0;
-        errorCount = 0;
+        reasoningInProgress = false;
         async batchProcessVideoFiles(userNeeds) {
             if (this.unreadVideoUrl.length === 0)
                 return;
@@ -2662,75 +2640,69 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             this.speakWeight--;
             return this.finalResponse;
         }
-        async thinkingChainProcess() {
-            while (true) {
-                try {
-                    this.syncLTPXToolStatus();
-                    await this.pullExternalMessages();
-                    const dueItems = checkDueItems();
-                    for (const item of dueItems) {
-                        this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
-                    }
-                    const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-                    const messageType = messageLength === 0 ? 'response' : 'active';
-                    const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
-                    if (messageLength === 0 && !allowSpeak) {
-                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        continue;
-                    }
-                    if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
-                        this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        continue;
-                    }
-                    this.silenceCount = 0;
-                    if (messageLength === 0)
-                        this.speakWeight = 0;
-                    await this.batchProcessVideoFiles();
-                    await this.createChatMessage();
-                    if (!this.finalResponse.trim().length)
-                        throw new Error('消息响应为空');
-                    else
-                        this.errorCount = 0;
-                    if (GlobalConfig.unreadRecords.length > 30)
-                        this.memoryRole.memorizeHistoricalRecords();
-                    const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
-                    if (!textChunks.length)
-                        throw new Error('清洗后的文本为空');
-                    if (actionBlocks.length)
-                        console.log('[动作区]', actionBlocks.join(' | '));
-                    if (emotionBlocks.length)
-                        console.log('[情感区]', emotionBlocks.join(' | '));
-                    for (const thinking of thinkingBlocks) {
-                        pushContext(messageType, thinking, '');
-                    }
-                    for (const code of codeBlocks) {
-                        pushContext(messageType, code, '');
-                    }
-                    for (const chunk of textChunks) {
-                        let audio = '';
-                        const [audioData, err] = tts(chunk.tts);
-                        if (!err && audioData)
-                            audio = audioData;
-                        pushContext(messageType, chunk.display, audio);
-                    }
-                    this.dumpAllContexts();
+        async thoughtLoopTickEvent() {
+            if (this.reasoningInProgress)
+                return;
+            try {
+                this.reasoningInProgress = true;
+                this.syncLTPXToolStatus();
+                await this.pullExternalMessages();
+                for (const item of checkDueItems()) {
+                    this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
                 }
-                catch (error) {
-                    const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
-                    if (readErr)
-                        console.error('读取提示音失败:', readErr);
-                    console.error(error.message, ' || ', error.stack);
-                    this.errorCount++;
-                    pushContext('active', this.randomDefaultMessage, promptSound);
-                    if (this.errorCount >= 3) {
-                        this.resetAgentState();
-                        this.errorCount = 0;
-                        continue;
-                    }
+                const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
+                const messageType = messageLength === 0 ? 'response' : 'active';
+                const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
+                if (messageLength === 0 && !allowSpeak) {
+                    this.silenceCount = Math.min(this.silenceCount + 1, 100);
+                    this.reasoningInProgress = false;
+                    return;
                 }
+                if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
+                    this.silenceCount = Math.min(this.silenceCount + 1, 100);
+                    this.reasoningInProgress = false;
+                    return;
+                }
+                this.silenceCount = 0;
+                if (messageLength === 0)
+                    this.speakWeight = 0;
+                await this.batchProcessVideoFiles();
+                await this.createChatMessage();
+                if (!this.finalResponse.trim().length)
+                    throw new Error('消息响应为空');
+                if (GlobalConfig.unreadRecords.length > 30)
+                    this.memoryRole.memorizeHistoricalRecords();
+                const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
+                if (!textChunks.length)
+                    throw new Error('清洗后的文本为空');
+                if (actionBlocks.length)
+                    console.log('[动作区]', actionBlocks.join(' | '));
+                if (emotionBlocks.length)
+                    console.log('[情感区]', emotionBlocks.join(' | '));
+                for (const thinking of thinkingBlocks) {
+                    pushContext(messageType, thinking, '');
+                }
+                for (const code of codeBlocks) {
+                    pushContext(messageType, code, '');
+                }
+                for (const chunk of textChunks) {
+                    let audio = '';
+                    const [audioData, err] = tts(chunk.tts);
+                    if (!err && audioData)
+                        audio = audioData;
+                    pushContext(messageType, chunk.display, audio);
+                }
+                this.dumpAllContexts();
             }
+            catch (error) {
+                const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+                if (readErr)
+                    console.error('读取提示音失败:', readErr);
+                console.error(error.message, ' || ', error.stack);
+                pushContext('active', this.randomDefaultMessage, promptSound);
+                this.resetAgentState();
+            }
+            this.reasoningInProgress = false;
         }
         resetAgentState() {
             this.descriptionRole.coverContext([]);
@@ -2785,12 +2757,39 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         constructor() {
             super();
             AgentDefine.instance = this;
-            this.thinkingChainProcess();
+            setInterval(() => this.thoughtLoopTickEvent(), 1000);
         }
     }
     const AgentRuntime = new LunarAgent();
-    const initializationMessage = { type: 'text', text: '你好呀~' };
-    AgentRuntime.messageWrite('user', [initializationMessage], 1500);
+    function buildRandomEntranceLines() {
+        const initializationGreetings = {
+            morning: ['月华，早上好呀~', '早安呀，月华~', '月华，起床啦~'],
+            afternoon: ['月华，下午好~', '月华，中午好呀~', '月华在吗~'],
+            evening: ['月华，晚上好呀~', '月华，晚上好~', '月华在不在呀~'],
+            night: ['月华，这么晚还没睡吗~', '月华，夜深啦~', '月华还在吗~'],
+        };
+        const initializationTopics = [
+            '今天陪我聊聊天吧',
+            '今天有什么新鲜事吗',
+            '准备好了吗，我们开始吧',
+            '想你了，月华~',
+            '今天也要元气满满哦',
+            '一起来做点有趣的事吧',
+        ];
+        const currentHour = new Date().getHours();
+        let greetingPool = initializationGreetings.night;
+        if (currentHour >= 5 && currentHour < 11)
+            greetingPool = initializationGreetings.morning;
+        else if (currentHour >= 11 && currentHour < 17)
+            greetingPool = initializationGreetings.afternoon;
+        else if (currentHour >= 17 && currentHour < 23)
+            greetingPool = initializationGreetings.evening;
+        const greeting = greetingPool[RandomFloor(0, greetingPool.length - 1)];
+        const topic = initializationTopics[RandomFloor(0, initializationTopics.length - 1)];
+        return greeting + topic;
+    }
+    const initializationMessage = [{ type: 'text', text: buildRandomEntranceLines() }];
+    AgentRuntime.messageWrite('user', initializationMessage, 1500);
 
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [

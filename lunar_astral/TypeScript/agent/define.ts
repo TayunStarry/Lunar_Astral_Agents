@@ -158,14 +158,14 @@ export class AgentDefine {
 	 * 将对话者、学习者、绘制者、演奏者、记忆者的上下文分别导出为独立 JSON 文件，
 	 * 同时生成一份汇总索引文件，方便统一查看所有智能体状态。
 	 *
-	 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\debug）
+	 * @param outputDir 输出目录（默认 d:\Lunar_Astral_Agents\local_data\documents\debug）
 	 * @returns 导出文件路径数组
 	 */
 	public dumpAllContexts(outputDir?: string): string[] {
 		// 调试模式关闭时跳过导出
 		if (!GlobalConfig.debugMode) return [];
 
-		const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\debug';
+		const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\documents\\debug';
 		const results: string[] = [];
 
 		// 对话者
