@@ -17,30 +17,18 @@
     <!-- 网格视图 -->
     <div class="page-grid" id="pageGrid"></div>
 
-    <!-- 底部操作区：单行排列，琉璃助手居中 -->
-    <div class="bottom-actions">
-        <button class="config-page-btn" data-config="models" title="模型配置">
-            <i class="fas fa-robot"></i>
-        </button>
-        <button class="config-page-btn" data-config="server" title="服务器配置">
-            <i class="fas fa-server"></i>
-        </button>
-        <button class="config-page-btn" data-config="project_archiving" title="项目归档">
-            <i class="fas fa-file-archive"></i>
-        </button>
-        <button class="crystal-btn" id="crystalBtn" title="琉璃助手">
+    <!-- 常驻侧边栏：仅图标、无边框 -->
+    <aside class="sidebar">
+        <button class="sidebar-btn sidebar-btn-crystal" id="crystalBtn" title="呼叫琉璃">
             <i class="fas fa-gem"></i>
         </button>
-        <button class="config-page-btn" data-config="cloud" title="云端配置">
-            <i class="fas fa-cloud"></i>
-        </button>
-        <button class="config-page-btn" data-config="qq_adapter" title="QQ适配器">
-            <i class="fab fa-qq"></i>
-        </button>
-        <button class="call-yuehua-btn" id="callYuehuaBtn" title="呼叫月华">
+        <button class="sidebar-btn sidebar-btn-yuehua" id="callYuehuaBtn" title="呼叫月华">
             <i class="fas fa-moon"></i>
         </button>
-    </div>
+        <button class="sidebar-btn sidebar-btn-config" id="configBtn" title="查看配置">
+            <i class="fas fa-sliders-h"></i>
+        </button>
+    </aside>
 
     <!-- 聊天模态框 -->
     <div class="modal-overlay" id="chatModal">
@@ -106,6 +94,28 @@
             <div class="modal-footer">
                 <button class="btn-glass btn-glass-cancel" id="exportCancelBtn">取消</button>
                 <button class="btn-glass btn-glass-primary" id="exportConfirmBtn">确认导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置编辑模态框（自动分页） -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal config-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-sliders-h"></i> 查看配置</h3>
+                <button class="modal-close" id="configModalClose">&times;</button>
+            </div>
+            <div class="modal-body config-modal-body">
+                <div class="config-pages" id="configPages"></div>
+            </div>
+            <div class="config-pagination">
+                <button class="btn-glass btn-glass-cancel" id="configPrevBtn" title="上一页"><i class="fas fa-chevron-left"></i></button>
+                <span class="config-page-indicator" id="configPageIndicator">第 1 / 1 页</span>
+                <button class="btn-glass btn-glass-cancel" id="configNextBtn" title="下一页"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-glass btn-glass-cancel" id="configCancelBtn">取消</button>
+                <button class="btn-glass btn-glass-primary" id="configSaveBtn">保存</button>
             </div>
         </div>
     </div>

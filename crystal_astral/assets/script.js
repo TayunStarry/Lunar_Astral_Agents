@@ -30,6 +30,15 @@ const callYuehuaModal = document.getElementById('callYuehuaModal');
 const callYuehuaModalClose = document.getElementById('callYuehuaModalClose');
 const callYuehuaMessage = document.getElementById('callYuehuaMessage');
 const callYuehuaStatus = document.getElementById('callYuehuaStatus');
+const configBtn = document.getElementById('configBtn');
+const configModal = document.getElementById('configModal');
+const configModalClose = document.getElementById('configModalClose');
+const configPages = document.getElementById('configPages');
+const configPageIndicator = document.getElementById('configPageIndicator');
+const configPrevBtn = document.getElementById('configPrevBtn');
+const configNextBtn = document.getElementById('configNextBtn');
+const configCancelBtn = document.getElementById('configCancelBtn');
+const configSaveBtn = document.getElementById('configSaveBtn');
 
 let currentPackageName = null;
 const defaultSendBtnHTML = sendBtn.innerHTML;
@@ -156,21 +165,12 @@ const labelMap = {
     'plan-3': '方案三'
 };
 
-const topLevelKeys = ['models', 'server', 'cloud', 'qq_adapter', 'project_archiving'];
-const iconForSection = {
-    models: 'robot', server: 'server', cloud: 'cloud',
-    qq_adapter: 'qq', project_archiving: 'file-archive'
-};
+function getTopLevelKeys() {
+    return configData && typeof configData === 'object' ? Object.keys(configData) : [];
+}
 
 // ===== 配置工具函数 =====
 function getLabel(key) { return labelMap[key] || key; }
-
-function getValueByPath(path) {
-    const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
-    let current = configData;
-    for (const part of parts) current = current[part];
-    return current;
-}
 
 function setValueByPath(path, value) {
     const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.');
@@ -323,7 +323,7 @@ function initTools() {
                 parameters: {
                     type: 'object',
                     properties: {
-                        section: { type: 'string', description: '要获取的配置节名称，如 models、server、cloud、qq_adapter、project_archiving。不传则返回全部', enum: topLevelKeys }
+                        section: { type: 'string', description: '要获取的配置节名称，如 models、server、agent 等。不传则返回全部', enum: getTopLevelKeys() }
                     },
                     required: []
                 }
@@ -617,7 +617,7 @@ ${JSON.stringify(configData, null, 2)}
 }
 \`\`\`
 
-当前可编辑的顶级配置节：${topLevelKeys.join('、')}`;
+当前可编辑的顶级配置节：${getTopLevelKeys().join('、')}`;
 }
 
 // ===== AI 工具调用处理 =====
@@ -720,20 +720,6 @@ async function saveConfig() {
     }
 }
 
-function resetConfig() {
-    if (!originalConfig) return;
-    configData = JSON.parse(JSON.stringify(originalConfig));
-    // 刷新所有打开的配置模态框
-    topLevelKeys.forEach(key => {
-        const body = document.getElementById(`configBody_${key}`);
-        if (body) {
-            body.innerHTML = '';
-            body.appendChild(createSectionBubbles(key, configData[key], key));
-        }
-    });
-    addMessage('system', '配置已重置');
-}
-
 function collectConfigFromModals() {
     document.querySelectorAll('[data-path]').forEach(el => {
         const path = el.dataset.path;
@@ -772,226 +758,156 @@ function applyConfigChanges() {
     if (pendingConfigChanges) {
         configData = JSON.parse(JSON.stringify(pendingConfigChanges.merged));
         originalConfig = JSON.parse(JSON.stringify(configData));
-        refreshAllConfigModals();
         saveConfig();
         addMessage('system', '配置已成功更新！');
     }
     closePreviewModal();
 }
 
-// ===== 配置模态框系统 =====
+// ===== 配置编辑模态框（自动分页） =====
+const CONFIG_BUBBLE_MIN_WIDTH = 240; // 单个气泡最小宽度
+const CONFIG_BUBBLE_ROW_HEIGHT = 120; // 单个气泡行高
+const CONFIG_BUBBLE_GAP = 12;
+let configPageSize = 8; // 单页条数，运行时根据可用空间动态计算
+let configEntries = [];
+let configCurrentPage = 0;
+let configTotalPages = 1;
 
-/**
- * 创建配置模态框 DOM（5 个顶级配置节各一个）
- * 首次调用时动态创建，后续复用
- */
-function ensureConfigModals() {
-    topLevelKeys.forEach(key => {
-        const modalId = `configModal_${key}`;
-        if (document.getElementById(modalId)) return;
+// 将配置递归展开为扁平的叶子项列表
+function flattenConfigEntries(data, basePath = '') {
+    const result = [];
+    Object.keys(data).forEach(key => {
+        const value = data[key];
+        const path = basePath ? `${basePath}.${key}` : key;
 
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-        overlay.id = modalId;
-
-        overlay.innerHTML = `
-            <div class="modal config-modal">
-                <div class="modal-header">
-                    <h3><i class="fas fa-${iconForSection[key] || 'cube'}"></i> ${getLabel(key)}</h3>
-                    <button class="modal-close" data-close="${modalId}">&times;</button>
-                </div>
-                <div class="modal-body config-modal-body" id="configBody_${key}"></div>
-                <div class="modal-footer">
-                    <button class="btn-glass btn-glass-cancel" data-close="${modalId}">取消</button>
-                    <button class="btn-glass btn-glass-primary" data-save="${key}">保存</button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
-
-        // 绑定关闭事件
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeConfigModal(key);
-        });
-        overlay.querySelector('[data-close]').addEventListener('click', () => closeConfigModal(key));
-        overlay.querySelector('.btn-glass-cancel').addEventListener('click', () => closeConfigModal(key));
-        overlay.querySelector('.btn-glass-primary').addEventListener('click', () => {
-            saveConfigFromModal(key);
-        });
-    });
-}
-
-function openConfigModal(key) {
-    ensureConfigModals();
-    const modal = document.getElementById(`configModal_${key}`);
-    if (!modal) return;
-
-    // 构建配置表单内容
-    const body = document.getElementById(`configBody_${key}`);
-    body.innerHTML = '';
-    const data = configData[key];
-    if (data && typeof data === 'object') {
-        body.appendChild(createSectionBubbles(key, data, key));
-    }
-
-    modal.classList.add('active');
-}
-
-function closeConfigModal(key) {
-    const modal = document.getElementById(`configModal_${key}`);
-    if (modal) modal.classList.remove('active');
-}
-
-function saveConfigFromModal(key) {
-    collectConfigFromModals();
-    saveConfig();
-    closeConfigModal(key);
-}
-
-function refreshAllConfigModals() {
-    topLevelKeys.forEach(key => {
-        const body = document.getElementById(`configBody_${key}`);
-        if (body && body.children.length > 0) {
-            body.innerHTML = '';
-            const data = configData[key];
-            if (data) body.appendChild(createSectionBubbles(key, data, key));
+        if (Array.isArray(value)) {
+            value.forEach((item, idx) => {
+                const itemPath = `${path}[${idx}]`;
+                if (item !== null && typeof item === 'object') {
+                    result.push(...flattenConfigEntries(item, itemPath));
+                } else {
+                    result.push({ path: itemPath, key, index: idx, value: item });
+                }
+            });
+        } else if (value !== null && typeof value === 'object') {
+            result.push(...flattenConfigEntries(value, path));
+        } else {
+            result.push({ path, key, value });
         }
     });
+    return result;
 }
 
-function refreshConfigModalForKey(key) {
-    const body = document.getElementById(`configBody_${key}`);
-    if (!body) return;
-    body.innerHTML = '';
-    const data = configData[key];
-    if (data) body.appendChild(createSectionBubbles(key, data, key));
+function entryLabel(entry) {
+    const base = getLabel(entry.key);
+    return entry.index !== undefined ? `${base}[${entry.index}]` : base;
 }
 
-// ===== 配置气泡表单构建 =====
-function createSectionBubbles(sectionKey, data, basePath) {
-    const wrap = document.createElement('div');
-    wrap.className = 'config-bubble-grid';
-    Object.keys(data).forEach(fieldKey => {
-        const value = data[fieldKey];
-        const path = `${basePath}.${fieldKey}`;
-        wrap.appendChild(createBubble(fieldKey, value, path));
-    });
-    return wrap;
-}
-
-function createBubble(key, value, path) {
+function createFlatEntryBubble(entry) {
     const bubble = document.createElement('div');
     bubble.className = 'config-bubble';
 
-    if (Array.isArray(value)) {
-        bubble.classList.add('bubble-array');
-        bubble.appendChild(createArrayContent(key, value, path));
-    } else if (typeof value === 'object' && value !== null) {
-        bubble.classList.add('bubble-object');
-        bubble.appendChild(createObjectContent(key, value, path));
+    const label = document.createElement('span');
+    label.className = 'bubble-label';
+    label.textContent = entryLabel(entry);
+    bubble.appendChild(label);
+
+    const pathHint = document.createElement('span');
+    pathHint.className = 'bubble-path';
+    pathHint.textContent = entry.path;
+    bubble.appendChild(pathHint);
+
+    if (typeof entry.value === 'boolean') {
+        const sw = document.createElement('label');
+        sw.className = 'config-switch';
+        sw.innerHTML = `<input type="checkbox" data-path="${entry.path}" ${entry.value ? 'checked' : ''}><span class="config-slider"></span>`;
+        bubble.appendChild(sw);
+    } else if (typeof entry.value === 'number') {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'bubble-input';
+        input.value = entry.value;
+        input.dataset.path = entry.path;
+        bubble.appendChild(input);
     } else {
-        bubble.appendChild(createPrimitiveContent(key, value, path));
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'bubble-input';
+        input.value = entry.value === null ? '' : entry.value;
+        input.placeholder = entry.value === null ? 'null' : '';
+        input.dataset.path = entry.path;
+        bubble.appendChild(input);
     }
     return bubble;
 }
 
-function createPrimitiveContent(key, value, path) {
-    const frag = document.createDocumentFragment();
-    const label = document.createElement('span');
-    label.className = 'bubble-label';
-    label.textContent = getLabel(key);
-    frag.appendChild(label);
+// 根据配置容器可用宽高，动态计算单页可容纳的条数
+function computeConfigPageSize() {
+    const w = configPages.clientWidth;
+    const h = configPages.clientHeight;
+    if (!w || !h) return configPageSize;
 
-    if (typeof value === 'boolean') {
-        const sw = document.createElement('label');
-        sw.className = 'config-switch';
-        sw.innerHTML = `
-            <input type="checkbox" data-path="${path}" ${value ? 'checked' : ''}>
-            <span class="config-slider"></span>
-        `;
-        frag.appendChild(sw);
-    } else if (typeof value === 'number') {
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.className = 'bubble-input';
-        input.value = value;
-        input.dataset.path = path;
-        frag.appendChild(input);
-    } else {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'bubble-input';
-        input.value = value === null ? '' : value;
-        input.placeholder = value === null ? 'null' : '';
-        input.dataset.path = path;
-        frag.appendChild(input);
-    }
-    return frag;
+    const cols = Math.max(1, Math.floor((w + CONFIG_BUBBLE_GAP) / (CONFIG_BUBBLE_MIN_WIDTH + CONFIG_BUBBLE_GAP)));
+    const rows = Math.max(1, Math.floor((h + CONFIG_BUBBLE_GAP) / (CONFIG_BUBBLE_ROW_HEIGHT + CONFIG_BUBBLE_GAP)));
+    return Math.max(1, cols * rows);
 }
 
-function createArrayContent(key, items, path) {
-    const frag = document.createDocumentFragment();
-    const header = document.createElement('div');
-    header.className = 'array-header';
-    header.innerHTML = `<span>${getLabel(key)}</span>`;
-    const addBtn = document.createElement('button');
-    addBtn.className = 'btn-glass-small add';
-    addBtn.innerHTML = '<i class="fas fa-plus"></i> 添加';
-    addBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const arr = getValueByPath(path);
-        arr.push('');
-        refreshConfigModalForKey(path.split('.')[0]);
-    });
-    header.appendChild(addBtn);
-    frag.appendChild(header);
+function renderConfigPage() {
+    const start = configCurrentPage * configPageSize;
+    const pageEntries = configEntries.slice(start, start + configPageSize);
 
-    const list = document.createElement('div');
-    list.className = 'array-list';
-    items.forEach((item, idx) => {
-        const row = document.createElement('div');
-        row.className = 'array-item';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'bubble-input';
-        input.value = item;
-        input.dataset.path = `${path}[${idx}]`;
-        row.appendChild(input);
+    configPages.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'config-bubble-grid';
+    pageEntries.forEach(entry => grid.appendChild(createFlatEntryBubble(entry)));
+    configPages.appendChild(grid);
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn-glass-small danger';
-        delBtn.innerHTML = '<i class="fas fa-trash"></i>';
-        delBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const arr = getValueByPath(path);
-            arr.splice(idx, 1);
-            refreshConfigModalForKey(path.split('.')[0]);
+    configPageIndicator.textContent = `第 ${configCurrentPage + 1} / ${configTotalPages} 页`;
+    configPrevBtn.disabled = configCurrentPage <= 0;
+    configNextBtn.disabled = configCurrentPage >= configTotalPages - 1;
+}
+
+function gotoConfigPage(page) {
+    // 先收集当前页编辑，再按最新内容重新分页
+    collectConfigFromModals();
+    configEntries = flattenConfigEntries(configData || {});
+    configTotalPages = Math.max(1, Math.ceil(configEntries.length / configPageSize));
+    configCurrentPage = Math.max(0, Math.min(page, configTotalPages - 1));
+    renderConfigPage();
+}
+
+function openConfigModal() {
+    configModal.classList.add('active');
+    // 等待布局完成后测量可用空间，确定单页条数
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            configPageSize = computeConfigPageSize();
+            configEntries = flattenConfigEntries(configData || {});
+            configTotalPages = Math.max(1, Math.ceil(configEntries.length / configPageSize));
+            configCurrentPage = 0;
+            renderConfigPage();
         });
-        row.appendChild(delBtn);
-        list.appendChild(row);
     });
-    frag.appendChild(list);
-    return frag;
 }
 
-function createObjectContent(key, obj, path) {
-    const frag = document.createDocumentFragment();
-    const title = document.createElement('div');
-    title.className = 'object-title';
-    title.textContent = getLabel(key);
-    frag.appendChild(title);
-
-    const innerGrid = document.createElement('div');
-    innerGrid.className = 'bubble-grid-nested';
-    Object.keys(obj).forEach(subKey => {
-        const subValue = obj[subKey];
-        const subPath = `${path}.${subKey}`;
-        innerGrid.appendChild(createBubble(subKey, subValue, subPath));
-    });
-    frag.appendChild(innerGrid);
-    return frag;
+function closeConfigModal() {
+    configModal.classList.remove('active');
 }
+
+// 模态框尺寸变化时，重新计算单页条数并重排
+const configResizeObserver = new ResizeObserver(() => {
+    if (!configModal.classList.contains('active')) return;
+    const newSize = computeConfigPageSize();
+    if (newSize !== configPageSize) {
+        collectConfigFromModals();
+        configEntries = flattenConfigEntries(configData || {});
+        configPageSize = newSize;
+        configTotalPages = Math.max(1, Math.ceil(configEntries.length / configPageSize));
+        configCurrentPage = Math.min(configCurrentPage, configTotalPages - 1);
+        renderConfigPage();
+    }
+});
+configResizeObserver.observe(configPages);
 
 // ===== LTPX 工具加载/卸载 =====
 async function handleLoadPackage(packageName) {
@@ -1132,12 +1048,20 @@ chatInput.addEventListener('keydown', (e) => {
 
 sendBtn.addEventListener('click', handleSend);
 
-// 配置按钮 → 打开对应配置模态框
-document.querySelector('.bottom-actions').addEventListener('click', (e) => {
-    const btn = e.target.closest('.config-page-btn');
-    if (!btn) return;
-    const configKey = btn.dataset.config;
-    if (configKey) openConfigModal(configKey);
+// 查看配置按钮 → 打开自动分页配置模态框
+configBtn.addEventListener('click', openConfigModal);
+
+// 配置模态框：关闭 / 分页 / 保存
+configModalClose.addEventListener('click', closeConfigModal);
+configCancelBtn.addEventListener('click', closeConfigModal);
+configModal.addEventListener('click', (e) => {
+    if (e.target === configModal) closeConfigModal();
+});
+configPrevBtn.addEventListener('click', () => gotoConfigPage(configCurrentPage - 1));
+configNextBtn.addEventListener('click', () => gotoConfigPage(configCurrentPage + 1));
+configSaveBtn.addEventListener('click', async () => {
+    await saveConfig();
+    closeConfigModal();
 });
 
 // 全局拖拽上传
