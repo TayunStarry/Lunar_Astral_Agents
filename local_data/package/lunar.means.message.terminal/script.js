@@ -1,38 +1,211 @@
-// ---------- WebSocket 配置 ----------
+// ============================================================
+//  星月智能 · 消息终端 — 前端交互脚本
+//  职责：WebSocket 实时收发、消息渲染、TTS 播放、乐谱播放、
+//        标签页过滤、全文搜索、文件拖放、消息 JSON 持久化
+// ============================================================
 
-const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${protocol}//${window.location.hostname}:36789/ws`;
-const MAX_RECONNECT_ATTEMPTS = 10;
+// ---------- 常量配置 ----------
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_PROTOCOL}//${window.location.hostname}:36789/ws`;
+const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const USER_NAME = '你';
 const ASSISTANT_NAME = '月华';
+const MESSAGES_FILE_PATH = 'package/lunar.means.message.terminal/messages.json';
+const MAX_PERSISTED_MESSAGES = 200;
 
-// DOM 元素
+// ---------- DOM 引用 ----------
 const messageArea = document.getElementById('messageArea');
 const emptyState = document.getElementById('emptyState');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const toastContainer = document.getElementById('toastContainer');
 const dragOverlay = document.getElementById('dragOverlay');
-const appContainer = document.getElementById('appContainer');
-const statusDot = document.getElementById('statusDot');
-const statusTextSpan = document.getElementById('statusText');
 const themeToggle = document.getElementById('themeToggle');
+const clearBtn = document.getElementById('clearBtn');
+const attachBtn = document.getElementById('attachBtn');
+const fileInput = document.getElementById('fileInput');
+const tabBar = document.getElementById('tabBar');
+const searchInput = document.getElementById('searchInput');
+const searchCount = document.getElementById('searchCount');
+const searchPrev = document.getElementById('searchPrev');
+const searchNext = document.getElementById('searchNext');
+const searchClear = document.getElementById('searchClear');
+const pendingAttachments = document.getElementById('pendingAttachments');
 
-// 状态变量
-let messageIdCounter = 0;
+// ---------- 状态变量 ----------
 let ws = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
 let manualClose = false;
-let mermaidInitialized = false;
-let dragCounter = 0;
+let backendConnected = false;
 let isDarkMode = false;
+let currentTab = 'all';
+let messages = [];            // 持久化的消息对象列表
+let dragCounter = 0;
+let searchQuery = '';
+let searchMatches = [];
+let currentMatchIndex = -1;
+let saveTimer = null;
+let mermaidInitialized = false;
+let pendingFiles = [];        // 待发送附件（悬浮气泡）
+let isSending = false;        // 是否正在发送
 
-// ---------- 辅助函数 ----------
-function generateMessageId() {
-    messageIdCounter++;
-    return `msg-${Date.now()}-${messageIdCounter}-${Math.random().toString(36).slice(2, 8)}`;
+// ---------- 音频播放队列（TTS） ----------
+class AudioQueueManager {
+    constructor() {
+        this.audioContext = null;
+        this.currentSource = null;
+        this.queue = [];
+        this.playing = false;
+    }
+
+    enqueue(audioBase64) {
+        if (!audioBase64) return;
+        this.queue.push(audioBase64);
+        if (!this.playing) this.playNext();
+    }
+
+    playNext() {
+        if (this.queue.length === 0) {
+            this.playing = false;
+            this.currentSource = null;
+            return;
+        }
+        this.playing = true;
+        const base64 = this.queue.shift();
+        try {
+            const arrayBuffer = this.base64ToArrayBuffer(base64);
+            this.decodeAndPlay(arrayBuffer);
+        } catch (err) {
+            console.warn('音频处理失败', err);
+            this.playNext();
+        }
+    }
+
+    decodeAndPlay(arrayBuffer) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        this.audioContext.decodeAudioData(
+            arrayBuffer,
+            (buffer) => this.playAudioBuffer(buffer),
+            (err) => {
+                console.warn('音频解码失败', err);
+                this.playNext();
+            }
+        );
+    }
+
+    playAudioBuffer(audioBuffer) {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.audioContext.destination);
+        this.currentSource = source;
+        source.onended = () => {
+            this.currentSource = null;
+            this.playNext();
+        };
+        source.start();
+    }
+
+    stop() {
+        if (this.currentSource) {
+            try {
+                this.currentSource.onended = null;
+                this.currentSource.stop();
+            } catch (e) { /* 已停止 */ }
+            this.currentSource = null;
+        }
+        this.queue = [];
+        this.playing = false;
+    }
+
+    base64ToArrayBuffer(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+}
+const AudioQueue = new AudioQueueManager();
+
+// ---------- 音乐播放器 iframe 桥接（BroadcastChannel） ----------
+const musicChannel = new BroadcastChannel('lunar-astral-music');
+let musicIframe = null;
+let musicReady = false;
+const musicPendingQueue = [];
+
+function initMusicRenderer() {
+    if (document.getElementById('music-renderer-frame')) return;
+    musicIframe = document.createElement('iframe');
+    musicIframe.id = 'music-renderer-frame';
+    musicIframe.src = '/file/read/package/music_libs/music_renderer.html';
+    musicIframe.allow = 'autoplay';
+    musicIframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:1000;pointer-events:none;background:transparent;display:none;';
+    document.body.appendChild(musicIframe);
+
+    musicChannel.onmessage = (event) => {
+        const msg = event.data;
+        if (!msg || !msg.type) return;
+        switch (msg.type) {
+            case 'ready':
+                musicReady = true;
+                musicChannel.postMessage({ type: 'theme', darkMode: document.body.classList.contains('dark-mode') });
+                while (musicPendingQueue.length) musicChannel.postMessage(musicPendingQueue.shift());
+                break;
+            case 'closed':
+                hideMusicIframe();
+                break;
+            case 'state':
+                if (msg.playing || msg.paused) showMusicIframe();
+                break;
+        }
+    };
+}
+
+function postMusicMessage(msg) {
+    if (!musicReady) {
+        musicPendingQueue.push(msg);
+        return;
+    }
+    musicChannel.postMessage(msg);
+}
+
+function showMusicIframe() {
+    if (musicIframe) {
+        musicIframe.style.display = 'block';
+        musicIframe.style.pointerEvents = 'auto';
+    }
+}
+
+function hideMusicIframe() {
+    if (musicIframe) {
+        musicIframe.style.display = 'none';
+        musicIframe.style.pointerEvents = 'none';
+    }
+}
+
+function renderMusicScore(abcNotation) {
+    if (!abcNotation) return;
+    showMusicIframe();
+    postMusicMessage({ type: 'render', abcNotation });
+}
+
+function playRenderedAudio(audioUrl, fileName) {
+    if (!audioUrl) return;
+    showMusicIframe();
+    postMusicMessage({ type: 'play_audio', audioUrl, fileName });
+}
+
+// ---------- 通用工具 ----------
+function generateId() {
+    return `msg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function getTimeString() {
@@ -41,7 +214,7 @@ function getTimeString() {
 
 function escapeHtml(str) {
     const div = document.createElement('div');
-    div.textContent = str;
+    div.textContent = str == null ? '' : String(str);
     return div.innerHTML;
 }
 
@@ -49,360 +222,623 @@ function showToast(msg, type = 'info') {
     const toast = document.createElement('div');
     toast.className = 'toast';
     const icons = { info: 'fa-circle-info', success: 'fa-check-circle', error: 'fa-exclamation-triangle' };
-    toast.innerHTML = `<i class="fas ${icons[type]}" style="margin-right:8px;"></i>${escapeHtml(msg)}`;
+    toast.innerHTML = `<i class="fas ${icons[type] || icons.info}" style="margin-right:8px;"></i>${escapeHtml(msg)}`;
     toastContainer.appendChild(toast);
     setTimeout(() => toast.remove(), 2800);
 }
 
 function updateEmptyState() {
-    const messages = messageArea.querySelectorAll('.message');
-    emptyState.classList.toggle('hidden', messages.length !== 0);
+    emptyState.classList.toggle('hidden', messages.length > 0);
 }
 
 function scrollToBottom(smooth = true) {
-    messageArea.scrollTo({ top: messageArea.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+    messageArea.scrollTo({ top: messageArea.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
 }
 
 async function copyToClipboard(text) {
     try {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(text || '');
         return true;
     } catch {
         return false;
     }
 }
 
-function updateConnectionStatusUI(connected) {
-    if (statusDot && statusTextSpan) {
-        if (connected) {
-            statusDot.classList.add('connected');
-            statusTextSpan.textContent = '已连接';
-        } else {
-            statusDot.classList.remove('connected');
-            statusTextSpan.textContent = '未连接';
-        }
-    }
+function encodeFilePath(path) {
+    // 路径为 ASCII，直接 base64 编码
+    return btoa(unescape(encodeURIComponent(path)));
 }
 
-// ---------- Markdown 与渲染库初始化 ----------
-if (typeof marked !== 'undefined') {
-    marked.setOptions({
-        breaks: true,
-        gfm: true
+// ---------- 文件上传辅助 ----------
+function getFileCategory(file) {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type.startsWith('audio/')) return 'audio';
+    const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+    const textExts = ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'toml', 'csv', 'html', 'htm', 'css', 'js', 'ts', 'jsx', 'tsx', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'py', 'rb', 'sh', 'ps1', 'bat', 'log'];
+    if (textExts.includes(ext)) return 'text';
+    return 'other';
+}
+
+async function calculateFileHash(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const arrayBuffer = e.target.result;
+                const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const fullHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                resolve(fullHash.substring(0, 16));
+            } catch {
+                resolve(encodeFilePath(file.name).slice(-16));
+            }
+        };
+        reader.onerror = () => resolve(encodeFilePath(file.name).slice(-16));
+        reader.readAsArrayBuffer(file);
     });
 }
 
-function initMermaid() {
-    if (mermaidInitialized) return;
-    if (typeof mermaid !== 'undefined') {
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: isDarkMode ? 'dark' : 'default',
-            securityLevel: 'loose',
-            fontFamily: 'inherit'
-        });
-        mermaidInitialized = true;
+// 保存文件到服务器，返回可访问的 fileUrl
+async function saveFile(file) {
+    const category = getFileCategory(file);
+    const prefix = (category === 'image' || category === 'video' || category === 'audio') ? 'images/' : 'documents/';
+    const fileHash = await calculateFileHash(file);
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase() || '.bin';
+    const newFileName = `${fileHash}${ext}`;
+    const res = await fetch('/file/write', {
+        method: 'POST',
+        headers: {
+            'X-File-Name': encodeFilePath(prefix + newFileName),
+            'X-Overwrite': 'true'
+        },
+        body: file
+    });
+    if (!res.ok) throw new Error('文件上传失败');
+    const result = await res.json();
+    return `${window.location.origin}/file/read/${result.filename}`;
+}
+
+function fileToRawBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result;
+            if (typeof result !== 'string' || !result.startsWith('data:')) {
+                reject(new Error('读取文件失败'));
+                return;
+            }
+            resolve(result.slice(result.indexOf(',') + 1));
+        };
+        reader.onerror = () => reject(reader.error || new Error('FileReader error'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function getAudioFormat(file) {
+    const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
+    if (ext === 'wav') return 'wav';
+    if (ext === 'mp3') return 'mp3';
+    return null;
+}
+
+function updateConnectionStatusUI(state) {
+    if (state === 'connected') {
+        sendButton.classList.add('connected');
+    } else {
+        sendButton.classList.remove('connected');
     }
 }
 
-function highlightCodeInContainer(container) {
-    if (typeof hljs === 'undefined') return;
-    const blocks = container.querySelectorAll('pre code');
-    blocks.forEach(block => {
-        if (block.parentElement.classList.contains('hljs')) return;
-        const languageClass = Array.from(block.classList).find(c => c.startsWith('language-'));
-        if (languageClass) {
-            const lang = languageClass.replace('language-', '');
-            if (lang === 'echarts' || lang === 'mermaid') return;
-        }
+// ---------- Markdown / 图表 / 数学渲染 ----------
+async function ensureMarked() {
+    if (window.marked) return true;
+    for (let i = 0; i < 50; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        if (window.marked) return true;
+    }
+    return false;
+}
+
+function initMermaid() {
+    if (mermaidInitialized || !window.mermaid) return;
+    window.mermaid.initialize({
+        startOnLoad: false,
+        theme: isDarkMode ? 'dark' : 'default',
+        securityLevel: 'loose',
+        fontFamily: 'inherit'
+    });
+    mermaidInitialized = true;
+}
+
+function processThinkTags(html) {
+    return html.replace(/<think>([\s\S]*?)<\/think>/gi, (match, content) => {
+        return `<div class="think-block"><div class="think-summary"><i class="fas fa-chevron-right toggle-icon"></i> 思考过程</div><div class="think-content">${content}</div></div>`;
+    });
+}
+
+async function renderMarkdown(rawContent) {
+    let html = processThinkTags(rawContent);
+    if (window.marked) {
+        html = await window.marked.parse(html);
+    } else {
+        html = '<p>' + escapeHtml(rawContent).replace(/\n/g, '<br>') + '</p>';
+    }
+    return html;
+}
+
+function highlightCode(container) {
+    if (!window.hljs) return;
+    container.querySelectorAll('pre code').forEach((block) => {
+        if (block.parentElement && block.parentElement.classList.contains('hljs')) return;
+        const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
+        if (langClass && (langClass === 'language-echarts' || langClass === 'language-mermaid')) return;
         try {
-            hljs.highlightElement(block);
+            window.hljs.highlightElement(block);
         } catch (e) {
             console.warn('代码高亮失败', e);
         }
     });
 }
 
-function renderEChartsInContainer(container) {
-    if (typeof echarts === 'undefined') return;
-    const blocks = container.querySelectorAll('code.language-echarts');
-    blocks.forEach(block => {
+function renderECharts(container) {
+    if (!window.echarts) return;
+    container.querySelectorAll('pre code.language-echarts').forEach((block) => {
         try {
-            const cleanCode = block.textContent.trim().replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-            let config = JSON.parse(cleanCode);
-            if (!config.series) config.series = [{ type: 'line', data: [12, 28, 35, 42] }];
+            const clean = block.textContent.trim();
+            const config = JSON.parse(clean);
             const chartDiv = document.createElement('div');
             chartDiv.className = 'echarts-container';
-            // 创建内部容器用于 ECharts
-            const innerDiv = document.createElement('div');
-            innerDiv.style.width = '100%';
-            innerDiv.style.height = '100%';
-            chartDiv.appendChild(innerDiv);
-            block.parentNode.replaceChild(chartDiv, block);
-            const chart = echarts.init(innerDiv);
-            chart.setOption(config);
-            chartDiv._echartsInstance = chart;
-            // 延迟调用 resize 确保 DOM 布局完成
-            setTimeout(() => {
-                chart.resize();
-            }, 100);
-            window.addEventListener('resize', () => chart.resize());
-        } catch (err) {
-            console.warn('echarts渲染出错', err);
-        }
-    });
-}
-
-async function renderMermaidInContainer(container) {
-    if (typeof mermaid === 'undefined' || !mermaidInitialized) return;
-    // marked 渲染 ```mermaid 后生成 <pre><code class="language-mermaid"> 结构
-    const blocks = container.querySelectorAll('pre code.language-mermaid');
-    for (const block of Array.from(blocks)) {
-        const textContent = block.textContent || '';
-        if (textContent.trim().length <= 0) continue;
-
-        let svg;
-        try {
-            await mermaid.parse(textContent);
-            const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-            ({ svg } = await mermaid.render(id, textContent));
-        } catch (e) {
-            console.error('Mermaid parse/render error:', e, '\nSource:', textContent);
-            // 显示错误信息而非静默跳过
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'mermaid-error';
-            errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Mermaid 渲染失败：${escapeHtml(e.message || String(e))}`;
+            const inner = document.createElement('div');
+            inner.style.width = '100%';
+            inner.style.height = '100%';
+            chartDiv.appendChild(inner);
             const pre = block.parentElement;
             if (pre && pre.tagName === 'PRE') {
-                pre.replaceWith(errorDiv);
+                pre.replaceWith(chartDiv);
             } else {
-                block.replaceWith(errorDiv);
+                block.replaceWith(chartDiv);
             }
-            continue;
+            const chart = window.echarts.init(inner);
+            chart.setOption(config);
+            chartDiv._echartsInstance = chart;
+            setTimeout(() => chart.resize(), 100);
+            window.addEventListener('resize', () => chart.resize());
+        } catch (e) {
+            console.warn('ECharts 渲染失败', e);
         }
-
-        // viewBox 调整，若出错则直接使用原始 svg
-        let finalSvg = svg;
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(svg, 'image/svg+xml');
-            const svgEl = doc.documentElement;
-            const chartType = svgEl.getAttribute('aria-roledescription');
-            if (chartType === 'flowchart' || chartType === 'classDiagram') {
-                const vb = svgEl.getAttribute('viewBox');
-                if (vb) {
-                    const v = vb.split(/\s+/).map(parseFloat);
-                    if (v.length === 4 && v.every(n => !isNaN(n))) {
-                        if (chartType === 'flowchart') {
-                            v[0] *= 0.45; v[1] *= 0.45;
-                            v[2] *= 1.05; v[3] *= 1.05;
-                        } else {
-                            v[0] *= 0; v[1] *= 0.35;
-                            v[2] *= 1.05; v[3] *= 1.25;
-                        }
-                        svgEl.setAttribute('viewBox', v.join(' '));
-                    }
-                }
-                finalSvg = new XMLSerializer().serializeToString(svgEl);
-            }
-        } catch (adjustErr) {
-            console.warn('ViewBox adjust failed, using raw SVG:', adjustErr);
-        }
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'mermaid-container';
-        wrapper.innerHTML = finalSvg;
-        const pre = block.parentElement;
-        if (pre && pre.tagName === 'PRE') {
-            pre.replaceWith(wrapper);
-        } else {
-            block.replaceWith(wrapper);
-        }
-    }
-}
-
-function renderKaTeX(container) {
-    if (typeof window.renderMathInElement === 'function') {
-        window.renderMathInElement(container, {
-            delimiters: [
-                { left: '$$', right: '$$', display: true },
-                { left: '$', right: '$', display: false },
-                { left: '\\(', right: '\\)', display: false },
-                { left: '\\[', right: '\\]', display: true }
-            ],
-            throwOnError: false
-        });
-    }
-}
-
-function processThinkTags(html) {
-    return html.replace(/<think>([\s\S]*?)<\/think>/gi, (match, content) => {
-        return `<div class="think-block"><div class="think-summary" onclick="this.parentElement.classList.toggle('open')"><i class="fas fa-chevron-right toggle-icon"></i> 思考过程</div><div class="think-content">${content}</div></div>`;
     });
 }
 
-async function renderContentAsync(rawContent) {
-    if (!rawContent) return '';
-    let withThink = processThinkTags(rawContent);
-    if (typeof marked !== 'undefined') {
-        withThink = await marked.parse(withThink);
-    } else {
-        withThink = '<p>' + escapeHtml(withThink).replace(/\n/g, '<br>') + '</p>';
-    }
-    return withThink;
-}
-
-// ---------- 消息操作绑定（复制返回原始内容） ----------
-function bindMessageActions(msgEl, rawContent) {
-    const copyBtn = msgEl.querySelector('[data-action="copy"]');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', async () => {
-            // 优先使用保存的原始内容，次选文本内容
-            let text = rawContent || '';
-            if (!text) {
-                const contentDiv = msgEl.querySelector('.markdown-content');
-                if (contentDiv) text = contentDiv.textContent;
+async function renderMermaid(container) {
+    if (!window.mermaid || !mermaidInitialized) return;
+    const blocks = Array.from(container.querySelectorAll('pre code.language-mermaid'));
+    for (const block of blocks) {
+        const code = (block.textContent || '').trim();
+        if (!code) continue;
+        try {
+            await window.mermaid.parse(code);
+            const id = `mermaid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+            const { svg } = await window.mermaid.render(id, code);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-container';
+            wrapper.innerHTML = svg;
+            const pre = block.parentElement;
+            if (pre && pre.tagName === 'PRE') {
+                pre.replaceWith(wrapper);
+            } else {
+                block.replaceWith(wrapper);
             }
-            const success = await copyToClipboard(text);
-            showToast(success ? '消息已复制' : '复制失败', success ? 'success' : 'error');
-        });
-    }
-    const delBtn = msgEl.querySelector('[data-action="delete"]');
-    if (delBtn) {
-        delBtn.addEventListener('click', () => {
-            msgEl.style.opacity = '0';
-            msgEl.style.transform = 'scale(0.95)';
-            msgEl.style.transition = '0.2s';
-            msgEl.addEventListener('transitionend', () => {
-                msgEl.remove();
-                updateEmptyState();
-            }, { once: true });
-            showToast('消息已删除', 'info');
-        });
+        } catch (e) {
+            console.error('Mermaid 渲染失败', e);
+            const errDiv = document.createElement('div');
+            errDiv.className = 'mermaid-error';
+            errDiv.textContent = `Mermaid 渲染失败：${e.message || String(e)}`;
+            const pre = block.parentElement;
+            if (pre && pre.tagName === 'PRE') {
+                pre.replaceWith(errDiv);
+            } else {
+                block.replaceWith(errDiv);
+            }
+        }
     }
 }
 
-// 创建消息骨架，并存储原始内容
-function createMessageElementSkeleton({ id, role, imageSrc, isFile = false, borderColor = null, content = '' }) {
-    const el = document.createElement('div');
-    el.className = `message ${role === 'user' ? 'user-message' : 'assistant-message'}`;
-    if (isFile && borderColor) el.classList.add('file-message');
-    const displayName = role === 'user' ? USER_NAME : ASSISTANT_NAME;
-    const time = getTimeString();
-
-    if (imageSrc) {
-        const safeSrc = imageSrc.replace(/\\/g, '/');
-        el.innerHTML = `
-            <div class="message-header">
-                <span>${escapeHtml(displayName)}</span>
-                <span style="font-size:0.7rem;">${time}</span>
-            </div>
-            <div class="labeled-image-container" style="--image-label: '${escapeHtml('图片文件')}';">
-                <img src="${safeSrc}" alt="image" style="border-color: ${borderColor || '#5b6cd4'};" onclick="if(window.previewImage) previewImage('${safeSrc}','')" loading="lazy">
-            </div>
-            <div class="message-actions-panel">
-                <button class="chat-action-button copy_message_button" data-action="copy" title="复制"><i class="fas fa-copy"></i></button>
-                <button class="chat-action-button delete_message_button" data-action="delete"><i class="fas fa-trash"></i></button>
-            </div>
-        `;
-    } else {
-        el.innerHTML = `
-            <div class="message-header">
-                <span>${escapeHtml(displayName)}</span>
-                <span style="font-size:0.7rem;">${time}</span>
-            </div>
-            <div class="markdown-content"></div>
-            <div class="message-actions-panel">
-                <button class="chat-action-button copy_message_button" data-action="copy"><i class="fas fa-copy"></i></button>
-                <button class="chat-action-button delete_message_button" data-action="delete"><i class="fas fa-trash"></i></button>
-            </div>
-        `;
+function renderMath(container) {
+    if (typeof window.renderMathInElement === 'function') {
+        try {
+            window.renderMathInElement(container, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false },
+                    { left: '\\(', right: '\\)', display: false },
+                    { left: '\\[', right: '\\]', display: true }
+                ],
+                throwOnError: false
+            });
+        } catch (e) {
+            console.warn('KaTeX 渲染失败', e);
+        }
     }
-    // 关键：将原始内容存储到 dataset 中
-    el.dataset.rawContent = content || '';
-    bindMessageActions(el, content || '');
+}
+
+async function fillMarkdownContent(el, content) {
+    const contentDiv = el.querySelector('.markdown-content');
+    if (!contentDiv || !content) return;
+    contentDiv.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 加载中...';
+    const html = await renderMarkdown(content);
+    contentDiv.innerHTML = html;
+    contentDiv.querySelectorAll('table').forEach(t => t.classList.add('markdown-table'));
+    highlightCode(contentDiv);
+    renderECharts(contentDiv);
+    await renderMermaid(contentDiv);
+    renderMath(contentDiv);
+}
+
+// ---------- 消息渲染 ----------
+const CATEGORY_META = {
+    text: { label: '文本', icon: 'fa-align-left', cls: 'badge-text' },
+    image: { label: '图片', icon: 'fa-image', cls: 'badge-image' },
+    voice: { label: '语音', icon: 'fa-volume-high', cls: 'badge-voice' },
+    music: { label: '乐谱', icon: 'fa-music', cls: 'badge-music' },
+    action: { label: '行动', icon: 'fa-person-running', cls: 'badge-action' }
+};
+
+function buildCategoryBadges(categories) {
+    return (categories || []).map(cat => {
+        const meta = CATEGORY_META[cat];
+        if (!meta) return '';
+        return `<span class="message-category-badge ${meta.cls}"><i class="fas ${meta.icon}"></i>${meta.label}</span>`;
+    }).join('');
+}
+
+function buildImageBlock(msg) {
+    const grid = document.createElement('div');
+    grid.className = 'image-grid';
+    const container = document.createElement('div');
+    container.className = 'labeled-image-container';
+    container.style.setProperty('--image-label', `'${msg.imageLabel || '图片'}'`);
+    const img = document.createElement('img');
+    img.src = msg.imageSrc;
+    img.alt = msg.imageLabel || '图片';
+    img.loading = 'lazy';
+    img.addEventListener('click', () => {
+        if (typeof window.previewImage === 'function') window.previewImage(msg.imageSrc, msg.imageLabel || '图片');
+    });
+    container.appendChild(img);
+    grid.appendChild(container);
+    return grid;
+}
+
+function buildVideoBlock(msg) {
+    const container = document.createElement('div');
+    container.className = 'video-container';
+    const video = document.createElement('video');
+    video.src = msg.videoSrc;
+    video.controls = true;
+    video.playsInline = true;
+    container.appendChild(video);
+    return container;
+}
+
+function buildAudioFileBlock(msg) {
+    const audio = document.createElement('audio');
+    audio.className = 'message-audio-player';
+    audio.controls = true;
+    audio.src = msg.audioSrc;
+    return audio;
+}
+
+function buildAttachmentBlock(att) {
+    if (!att) return null;
+    if (att.type === 'image') {
+        const grid = document.createElement('div');
+        grid.className = 'image-grid';
+        const container = document.createElement('div');
+        container.className = 'labeled-image-container';
+        container.style.setProperty('--image-label', `'${att.label || '图片'}'`);
+        const img = document.createElement('img');
+        img.src = att.src;
+        img.alt = att.label || '图片';
+        img.loading = 'lazy';
+        img.addEventListener('click', () => {
+            if (typeof window.previewImage === 'function') window.previewImage(att.src, att.label || '图片');
+        });
+        container.appendChild(img);
+        grid.appendChild(container);
+        return grid;
+    }
+    if (att.type === 'video') {
+        const container = document.createElement('div');
+        container.className = 'video-container';
+        const video = document.createElement('video');
+        video.src = att.src;
+        video.controls = true;
+        video.playsInline = true;
+        container.appendChild(video);
+        return container;
+    }
+    if (att.type === 'audio') {
+        const audio = document.createElement('audio');
+        audio.className = 'message-audio-player';
+        audio.controls = true;
+        audio.src = att.src;
+        return audio;
+    }
+    return null;
+}
+
+function buildMusicCard(msg) {
+    const card = document.createElement('div');
+    card.className = 'music-card';
+    const header = document.createElement('div');
+    header.className = 'music-card-header';
+    const title = document.createElement('div');
+    title.className = 'music-card-title';
+    title.innerHTML = '<i class="fas fa-music"></i> 乐谱';
+    const playBtn = document.createElement('button');
+    playBtn.className = 'music-play-btn';
+    playBtn.innerHTML = '<i class="fas fa-play"></i> 播放';
+    playBtn.addEventListener('click', () => renderMusicScore(msg.abcNotation));
+    header.appendChild(title);
+    header.appendChild(playBtn);
+    const preview = document.createElement('div');
+    preview.className = 'music-abc-preview';
+    preview.textContent = msg.abcNotation || '';
+    card.appendChild(header);
+    card.appendChild(preview);
+    return card;
+}
+
+function buildAudioReplay(msg) {
+    const btn = document.createElement('button');
+    btn.className = 'audio-replay-btn';
+    btn.title = '重播语音';
+    btn.innerHTML = '<i class="fas fa-volume-up"></i> 重播语音';
+    btn.addEventListener('click', () => {
+        AudioQueue.enqueue(msg.audio);
+        btn.classList.add('replaying');
+        setTimeout(() => btn.classList.remove('replaying'), 600);
+    });
+    return btn;
+}
+
+function buildActionsPanel(msg) {
+    const panel = document.createElement('div');
+    panel.className = 'message-actions-panel';
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'chat-action-button copy_message_button';
+    copyBtn.title = '复制';
+    copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+    copyBtn.addEventListener('click', () => copyMessage(msg));
+    const delBtn = document.createElement('button');
+    delBtn.className = 'chat-action-button delete_message_button';
+    delBtn.title = '删除';
+    delBtn.innerHTML = '<i class="fas fa-trash"></i>';
+    delBtn.addEventListener('click', () => deleteMessage(msg.id));
+    panel.appendChild(copyBtn);
+    panel.appendChild(delBtn);
+    return panel;
+}
+
+function computeSearchText(msg) {
+    const parts = [];
+    if (msg.content) parts.push(msg.content);
+    if (msg.imageLabel) parts.push(msg.imageLabel);
+    if (msg.abcNotation) parts.push(msg.abcNotation);
+    if (msg.attachments && msg.attachments.length) {
+        msg.attachments.forEach(att => { if (att.label) parts.push(att.label); });
+    }
+    return parts.join(' ').toLowerCase();
+}
+
+function renderMessageElement(msg) {
+    const el = document.createElement('div');
+    el.className = `message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`;
+    el.dataset.id = msg.id;
+    el.dataset.categories = (msg.categories || ['text']).join(',');
+    el.dataset.searchText = computeSearchText(msg);
+    if (msg.categories && msg.categories.includes('action')) el.classList.add('action-message');
+
+    const displayName = msg.role === 'user' ? USER_NAME : ASSISTANT_NAME;
+    const header = document.createElement('div');
+    header.className = 'message-header';
+    header.innerHTML = `
+        <span class="header-name">${escapeHtml(displayName)}</span>
+        ${buildCategoryBadges(msg.categories)}
+        <span class="header-time">${msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : getTimeString()}</span>
+    `;
+    el.appendChild(header);
+
+    // 图片块
+    if (msg.imageSrc) el.appendChild(buildImageBlock(msg));
+
+    // 视频块
+    if (msg.videoSrc) el.appendChild(buildVideoBlock(msg));
+
+    // 音频文件块
+    if (msg.audioSrc) el.appendChild(buildAudioFileBlock(msg));
+
+    // 文本内容容器
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'markdown-content';
+    el.appendChild(contentDiv);
+
+    // 多附件（用户拖入的图片/视频/音频）
+    if (msg.attachments && msg.attachments.length) {
+        msg.attachments.forEach(att => {
+            const block = buildAttachmentBlock(att);
+            if (block) el.appendChild(block);
+        });
+    }
+
+    // 乐谱卡片
+    if (msg.abcNotation) el.appendChild(buildMusicCard(msg));
+
+    // 语音重播按钮
+    if (msg.audio) el.appendChild(buildAudioReplay(msg));
+
+    // 操作按钮
+    el.appendChild(buildActionsPanel(msg));
+
+    messageArea.appendChild(el);
+
+    if (msg.content) fillMarkdownContent(el, msg.content);
     return el;
 }
 
-// 填充消息内容（异步）
-async function populateMessageContent(msgEl, content, role) {
-    if (!content) return;
-    const contentDiv = msgEl.querySelector('.markdown-content');
-    if (contentDiv) {
-        contentDiv.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 加载中...';
-        const html = await renderContentAsync(content);
-        contentDiv.innerHTML = html;
-        contentDiv.querySelectorAll('table').forEach(t => t.classList.add('markdown-table'));
-        highlightCodeInContainer(contentDiv);
-        renderEChartsInContainer(contentDiv);
-        await renderMermaidInContainer(contentDiv);
-        renderKaTeX(contentDiv);
-    }
+// ---------- 消息增删与持久化 ----------
+async function copyMessage(msg) {
+    let text = msg.content || '';
+    if (!text && msg.imageSrc) text = msg.imageSrc;
+    if (!text && msg.abcNotation) text = msg.abcNotation;
+    const ok = await copyToClipboard(text);
+    showToast(ok ? '已复制' : '复制失败', ok ? 'success' : 'error');
 }
 
-// 添加消息到界面（统一入口）
-async function addMessageToArea(opts) {
-    const { id, role, content, imageSrc, isFile = false, borderColor = null } = opts;
-    const msgEl = createMessageElementSkeleton({ id, role, imageSrc, isFile, borderColor, content });
-    messageArea.appendChild(msgEl);
+function deleteMessage(id) {
+    const el = messageArea.querySelector(`.message[data-id="${id}"]`);
+    if (el) el.remove();
+    messages = messages.filter(m => m.id !== id);
+    updateEmptyState();
+    schedulePersist();
+    showToast('消息已删除', 'info');
+}
+
+function addMessage(msg) {
+    messages.push(msg);
+    if (messages.length > MAX_PERSISTED_MESSAGES) {
+        const removed = messages.shift();
+        const oldEl = messageArea.querySelector(`.message[data-id="${removed.id}"]`);
+        if (oldEl) oldEl.remove();
+    }
+    renderMessageElement(msg);
     updateEmptyState();
     scrollToBottom(true);
-
-    if (!imageSrc && content) {
-        await populateMessageContent(msgEl, content, role);
-        scrollToBottom(true);
-    }
-    return msgEl;
+    applyFilters();
+    schedulePersist();
 }
 
-function handleWebSocketMessage(data) {
-    const msgType = data.type || '';
-    if (msgType === 'context' && data.data?.content) {
-        addMessageToArea({ id: generateMessageId(), role: 'assistant', content: String(data.data.content) });
+async function persistMessages() {
+    const data = JSON.stringify(messages, null, 2);
+    try {
+        await fetch('/file/write', {
+            method: 'POST',
+            headers: {
+                'X-File-Name': encodeFilePath(MESSAGES_FILE_PATH),
+                'X-Overwrite': 'true'
+            },
+            body: data
+        });
+    } catch (e) {
+        console.warn('消息持久化失败', e);
+    }
+}
+
+function schedulePersist() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persistMessages, 800);
+}
+
+async function loadPersistedMessages() {
+    try {
+        const res = await fetch('/file/read/package/lunar.means.message.terminal/messages.json');
+        if (!res.ok) return;
+        const list = await res.json();
+        if (!Array.isArray(list)) return;
+        messages = list;
+        list.forEach(msg => renderMessageElement(msg));
+        updateEmptyState();
+        scrollToBottom(false);
+        applyFilters();
+    } catch (e) {
+        // 无持久化文件或读取失败，从空状态开始
+    }
+}
+
+// ---------- WebSocket 消息处理 ----------
+function handleWebSocketMessage(msg) {
+    const type = msg.type || '';
+    const data = msg.data || {};
+
+    if (type === 'context') {
+        const subType = data.type || 'response';
+        const content = data.content || '';
+        const audio = data.audio || '';
+
+        if (subType === 'music') {
+            addMessage({ id: generateId(), role: 'assistant', categories: ['music'], content: '', abcNotation: content, timestamp: Date.now() });
+            return;
+        }
+        if (subType === 'music_audio') {
+            try {
+                const audioData = JSON.parse(content || '{}');
+                if (audioData.type === 'audio_ready' && audioData.audio_url) {
+                    playRenderedAudio(audioData.audio_url, audioData.file_name);
+                }
+            } catch (e) {
+                console.warn('乐谱音频数据解析失败', e);
+            }
+            return;
+        }
+        if (subType === 'action' || subType === 'action_block' || subType === 'emotion') {
+            addMessage({ id: generateId(), role: 'assistant', categories: ['action'], content, actionType: subType, timestamp: Date.now() });
+            return;
+        }
+
+        // 文本 / 思考 / 代码等上下文消息（可能携带 TTS 音频）
+        const categories = ['text'];
+        if (audio) categories.push('voice');
+        addMessage({ id: generateId(), role: 'assistant', categories, content, audio: audio || '', timestamp: Date.now() });
+        if (audio) AudioQueue.enqueue(audio);
         return;
     }
-    if (msgType === 'image' && (data.data?.images || data.images)) {
-        const images = data.data?.images || data.images;
+
+    if (type === 'image') {
+        const images = data.images || [];
         images.forEach(img => {
-            let src = (img.startsWith('data:') || img.startsWith('http')) ? img : 'data:image/png;base64,' + img;
-            addMessageToArea({ id: generateMessageId(), role: 'assistant', content: data.data?.prompt || '', imageSrc: src, borderColor: '#7b8cd6' });
+            const src = (img.startsWith('data:') || img.startsWith('http')) ? img : ('data:image/jpeg;base64,' + img);
+            addMessage({ id: generateId(), role: 'assistant', categories: ['image'], content: '', imageSrc: src, imageLabel: '图片', timestamp: Date.now() });
         });
         return;
     }
-    if (data.content) {
-        addMessageToArea({ id: generateMessageId(), role: 'assistant', content: String(data.content) });
-        return;
-    }
-    addMessageToArea({ id: generateMessageId(), role: 'assistant', content: '```json\n' + JSON.stringify(data, null, 2) + '\n```' });
+
+    // 未知格式：以 JSON 文本兜底展示
+    addMessage({ id: generateId(), role: 'assistant', categories: ['text'], content: '```json\n' + JSON.stringify(msg, null, 2) + '\n```', timestamp: Date.now() });
 }
 
-// WebSocket 连接管理
+// ---------- WebSocket 连接管理 ----------
 function connectWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     try {
-        ws = new WebSocket(wsUrl);
+        ws = new WebSocket(WS_URL);
     } catch (err) {
         scheduleReconnect();
         return;
     }
+
     ws.onopen = () => {
         reconnectAttempts = 0;
-        showToast('WebSocket 已连接', 'success');
-        updateConnectionStatusUI(true);
+        backendConnected = true;
+        updateConnectionStatusUI('connected');
     };
+
     ws.onmessage = (event) => {
         try {
             const parsed = JSON.parse(event.data);
             handleWebSocketMessage(parsed);
         } catch {
-            addMessageToArea({ id: generateMessageId(), role: 'assistant', content: event.data });
+            addMessage({ id: generateId(), role: 'assistant', categories: ['text'], content: event.data, timestamp: Date.now() });
         }
     };
+
     ws.onerror = () => {
-        updateConnectionStatusUI(false);
+        updateConnectionStatusUI('disconnected');
     };
+
     ws.onclose = () => {
-        updateConnectionStatusUI(false);
+        backendConnected = false;
+        updateConnectionStatusUI('disconnected');
         if (!manualClose) scheduleReconnect();
     };
 }
@@ -410,7 +846,9 @@ function connectWebSocket() {
 function scheduleReconnect() {
     if (manualClose) return;
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        showToast('重连失败，请刷新页面', 'error');
+        backendConnected = false;
+        updateConnectionStatusUI('failed');
+        showToast('后端连接失败，已进入本地模式', 'error');
         return;
     }
     const delay = RECONNECT_BASE_DELAY * Math.pow(1.5, reconnectAttempts);
@@ -420,80 +858,443 @@ function scheduleReconnect() {
     }, delay);
 }
 
-function sendLocalMessage() {
-    const text = messageInput.value.trim();
-    if (!text) return;
-    addMessageToArea({ id: generateMessageId(), role: 'user', content: text });
-    messageInput.value = '';
-    messageInput.style.height = 'auto';
-    messageInput.focus();
-    scrollToBottom(true);
+// ---------- 标签页过滤 ----------
+function setupTabEvents() {
+    tabBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab');
+        if (!btn) return;
+        tabBar.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        currentTab = btn.dataset.tab;
+        applyFilters();
+    });
 }
 
-async function handleDroppedFiles(files) {
-    for (const file of files) {
-        if (file.type.startsWith('image/')) {
-            const dataUrl = await new Promise(resolve => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(file);
-            });
-            addMessageToArea({ id: generateMessageId(), role: 'user', content: file.name, imageSrc: dataUrl, isFile: true, borderColor: '#5b6cd4' });
-        } else {
-            const text = await file.text();
-            const preview = text.slice(0, 50000);
-            addMessageToArea({ id: generateMessageId(), role: 'user', content: `**📄 ${escapeHtml(file.name)}**\n\`\`\`\n${preview}\n\`\`\``, isFile: true, borderColor: '#9080e0' });
+// ---------- 搜索 ----------
+function clearHighlights() {
+    document.querySelectorAll('.search-highlight').forEach(mark => {
+        const parent = mark.parentNode;
+        if (parent) {
+            parent.replaceChild(document.createTextNode(mark.textContent), mark);
+            parent.normalize();
         }
+    });
+}
+
+function highlightTextInNode(root, query) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (!node.nodeValue || !node.nodeValue.toLowerCase().includes(query)) return NodeFilter.FILTER_REJECT;
+            const parent = node.parentElement;
+            if (!parent || parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' || parent.classList.contains('search-highlight')) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    textNodes.forEach(node => {
+        const text = node.nodeValue;
+        const lower = text.toLowerCase();
+        const qlen = query.length;
+        const frag = document.createDocumentFragment();
+        let i = 0;
+        let idx;
+        while ((idx = lower.indexOf(query, i)) !== -1) {
+            if (idx > i) frag.appendChild(document.createTextNode(text.slice(i, idx)));
+            const mark = document.createElement('span');
+            mark.className = 'search-highlight';
+            mark.textContent = text.slice(idx, idx + qlen);
+            frag.appendChild(mark);
+            i = idx + qlen;
+        }
+        if (i < text.length) frag.appendChild(document.createTextNode(text.slice(i)));
+        node.parentNode.replaceChild(frag, node);
+    });
+}
+
+function applyFilters() {
+    clearHighlights();
+    searchMatches = [];
+    currentMatchIndex = -1;
+
+    const q = searchQuery;
+    messageArea.querySelectorAll('.message').forEach(el => {
+        const cats = (el.dataset.categories || '').split(',');
+        const tabOk = currentTab === 'all' || cats.includes(currentTab);
+        const searchOk = !q || (el.dataset.searchText || '').includes(q);
+        el.style.display = (tabOk && searchOk) ? '' : 'none';
+    });
+
+    if (q) {
+        messageArea.querySelectorAll('.message').forEach(el => {
+            if (el.style.display === 'none') return;
+            const targets = el.querySelectorAll('.markdown-content, .music-abc-preview, .labeled-image-container');
+            targets.forEach(t => highlightTextInNode(t, q));
+        });
+        searchMatches = Array.from(document.querySelectorAll('.search-highlight'));
     }
+
+    updateSearchUI();
+}
+
+function updateSearchUI() {
+    const q = searchQuery;
+    searchClear.hidden = !q;
+    searchPrev.hidden = !q || searchMatches.length === 0;
+    searchNext.hidden = !q || searchMatches.length === 0;
+    if (q) {
+        searchCount.hidden = false;
+        searchCount.textContent = searchMatches.length ? `${currentMatchIndex + 1}/${searchMatches.length}` : '0/0';
+    } else {
+        searchCount.hidden = true;
+    }
+}
+
+function goToMatch(delta) {
+    if (!searchMatches.length) return;
+    currentMatchIndex = (currentMatchIndex + delta + searchMatches.length) % searchMatches.length;
+    searchMatches.forEach(m => m.classList.remove('current'));
+    const current = searchMatches[currentMatchIndex];
+    current.classList.add('current');
+    current.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    updateSearchUI();
+}
+
+function setupSearchEvents() {
+    searchInput.addEventListener('input', () => {
+        searchQuery = searchInput.value.trim().toLowerCase();
+        currentMatchIndex = -1;
+        applyFilters();
+    });
+    searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        searchQuery = '';
+        applyFilters();
+        searchInput.focus();
+    });
+    searchPrev.addEventListener('click', () => goToMatch(-1));
+    searchNext.addEventListener('click', () => goToMatch(1));
+}
+
+// ---------- 消息发送 ----------
+async function sendMessages(payload) {
+    const res = await fetch('/write/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: payload })
+    });
+    if (!res.ok) throw new Error('发送失败');
+    return res.json();
+}
+
+function setSendingState(sending) {
+    isSending = sending;
+    if (sendButton) {
+        sendButton.disabled = sending;
+        sendButton.innerHTML = sending ? '<i class="fas fa-spinner fa-pulse"></i>' : '<i class="fas fa-paper-plane"></i>';
+    }
+}
+
+async function handleSend() {
+    if (isSending) return;
+    const text = messageInput.value.trim();
+    const hasPending = pendingFiles.length > 0;
+    if (!text && !hasPending) return;
+
+    setSendingState(true);
+
+    try {
+        const contentBlocks = [];
+        const attachments = [];
+        const historyTextParts = [];
+        const categories = new Set();
+
+        if (text) {
+            categories.add('text');
+            historyTextParts.push(text);
+        }
+
+        for (const pf of pendingFiles) {
+            const category = pf.category;
+            if (category === 'image' || category === 'video') {
+                try {
+                    const fileUrl = await saveFile(pf.file);
+                    contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
+                    attachments.push({ type: category, src: fileUrl, label: pf.name });
+                    categories.add('image');
+                } catch (err) {
+                    showToast(`无法上传 ${pf.name}`, 'error');
+                }
+            } else if (category === 'audio') {
+                // 音频：wav/mp3 以 input_audio 形式推送，其余仅本地展示
+                try {
+                    const base64Data = await fileToRawBase64(pf.file);
+                    const format = getAudioFormat(pf.file);
+                    if (format) {
+                        contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
+                    } else {
+                        showToast(`音频 ${pf.name} 仅支持 wav/mp3，已跳过发送`, 'error');
+                    }
+                } catch (err) {
+                    showToast(`无法读取音频 ${pf.name}`, 'error');
+                }
+                // 历史记录使用独立 blob URL，避免被清理撤销
+                attachments.push({ type: 'audio', src: URL.createObjectURL(pf.file), label: pf.name });
+                categories.add('voice');
+            } else if (category === 'text') {
+                try {
+                    const fileUrl = await saveFile(pf.file);
+                    const rawText = await readFileAsText(pf.file);
+                    const preview = rawText.slice(0, 50000);
+                    const block = `【文件 ${pf.name}】\n内容：\n\`\`\`\n${preview}\n\`\`\`\n访问链接：${fileUrl}`;
+                    contentBlocks.push({ type: 'text', text: block });
+                    historyTextParts.push(block);
+                } catch (err) {
+                    showToast(`无法读取文件 ${pf.name}`, 'error');
+                }
+                categories.add('text');
+            } else {
+                try {
+                    const fileUrl = await saveFile(pf.file);
+                    const block = `【文件 ${pf.name}】访问链接：${fileUrl}`;
+                    contentBlocks.push({ type: 'text', text: block });
+                    historyTextParts.push(block);
+                } catch (err) {
+                    showToast(`无法上传文件 ${pf.name}`, 'error');
+                }
+                categories.add('text');
+            }
+        }
+
+        // 组装并显示到历史记录
+        const userMsg = {
+            id: generateId(),
+            role: 'user',
+            categories: categories.size ? Array.from(categories) : ['text'],
+            content: historyTextParts.join('\n\n'),
+            attachments: attachments.length ? attachments : undefined,
+            timestamp: Date.now()
+        };
+        addMessage(userMsg);
+
+        // 推送到后端
+        if (backendConnected) {
+            if (contentBlocks.length) {
+                const openAIContent = (contentBlocks.length === 1 && contentBlocks[0].type === 'text')
+                    ? contentBlocks[0].text
+                    : contentBlocks;
+                await sendMessages([{ role: 'user', content: openAIContent }]);
+            } else if (text) {
+                await sendMessages([{ role: 'user', content: text }]);
+            }
+        } else {
+            showToast('离线模式：内容仅本地渲染', 'info');
+        }
+    } catch (err) {
+        showToast('发送失败：' + (err.message || err), 'error');
+    } finally {
+        // 无论成功或失败都清理输入与待发送附件（消息已进入历史记录）
+        messageInput.value = '';
+        autoResizeTextarea();
+        clearPendingFiles();
+        messageInput.focus();
+        setSendingState(false);
+    }
+}
+
+function autoResizeTextarea() {
+    messageInput.style.height = 'auto';
+    messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+}
+
+function setupInputEvents() {
+    messageInput.addEventListener('input', autoResizeTextarea);
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    });
+    sendButton.addEventListener('click', handleSend);
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+        const files = e.target.files;
+        if (files && files.length) addPendingFiles(Array.from(files));
+        fileInput.value = '';
+    });
+    clearBtn.addEventListener('click', () => {
+        if (messages.length === 0) return;
+        messageArea.querySelectorAll('.message').forEach(el => el.remove());
+        messages = [];
+        updateEmptyState();
+        schedulePersist();
+        showToast('已清空消息', 'info');
+    });
+}
+
+// ---------- 文件拖放 / 待发送附件（悬浮气泡） ----------
+async function addPendingFiles(files) {
+    for (const file of files) {
+        const category = getFileCategory(file);
+        const entry = { file, category, name: file.name, previewUrl: null };
+        if (category === 'image') {
+            entry.previewUrl = await readFileAsDataUrl(file);
+        } else if (category === 'video' || category === 'audio') {
+            entry.previewUrl = URL.createObjectURL(file);
+        }
+        pendingFiles.push(entry);
+    }
+    renderPendingAttachments();
+}
+
+function renderPendingAttachments() {
+    pendingAttachments.innerHTML = '';
+    if (!pendingFiles.length) {
+        pendingAttachments.hidden = true;
+        return;
+    }
+    pendingAttachments.hidden = false;
+
+    const icons = { audio: 'fa-music', text: 'fa-file-alt', other: 'fa-file' };
+
+    pendingFiles.forEach((pf, index) => {
+        const item = document.createElement('div');
+        item.className = 'pending-attachment-item';
+
+        const preview = document.createElement('div');
+        preview.className = 'pending-attachment-preview';
+        if (pf.category === 'image') {
+            const img = document.createElement('img');
+            img.src = pf.previewUrl;
+            img.alt = pf.name;
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+            preview.appendChild(img);
+        } else if (pf.category === 'video') {
+            const video = document.createElement('video');
+            video.src = pf.previewUrl;
+            video.muted = true;
+            video.playsInline = true;
+            video.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+            preview.appendChild(video);
+        } else {
+            preview.innerHTML = `<i class="fas ${icons[pf.category] || icons.other}"></i>`;
+        }
+
+        const name = document.createElement('div');
+        name.className = 'pending-attachment-name';
+        name.textContent = pf.name;
+        name.title = pf.name;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'pending-attachment-remove';
+        removeBtn.title = '移除';
+        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        removeBtn.addEventListener('click', () => removePendingFile(index));
+
+        item.appendChild(preview);
+        item.appendChild(name);
+        item.appendChild(removeBtn);
+        pendingAttachments.appendChild(item);
+    });
+}
+
+function removePendingFile(index) {
+    const removed = pendingFiles.splice(index, 1)[0];
+    if (removed && removed.previewUrl && removed.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(removed.previewUrl);
+    }
+    renderPendingAttachments();
+}
+
+function clearPendingFiles() {
+    pendingFiles.forEach(pf => {
+        if (pf.previewUrl && pf.previewUrl.startsWith('blob:')) URL.revokeObjectURL(pf.previewUrl);
+    });
+    pendingFiles = [];
+    renderPendingAttachments();
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+    });
 }
 
 function setupDragEvents() {
     document.addEventListener('dragenter', (e) => {
+        e.preventDefault();
         dragCounter++;
-        if (dragCounter === 1 && e.dataTransfer?.types?.includes('Files')) dragOverlay.classList.add('active');
+        if (dragCounter === 1 && e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+            dragOverlay.classList.add('active');
+        }
     });
-    document.addEventListener('dragleave', () => {
+    document.addEventListener('dragover', (e) => e.preventDefault());
+    document.addEventListener('dragleave', (e) => {
+        e.preventDefault();
         dragCounter--;
         if (dragCounter === 0) dragOverlay.classList.remove('active');
     });
-    document.addEventListener('dragover', (e) => e.preventDefault());
     document.addEventListener('drop', (e) => {
         e.preventDefault();
         dragCounter = 0;
         dragOverlay.classList.remove('active');
-        const files = e.dataTransfer?.files;
-        if (files && files.length) handleDroppedFiles(files);
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) addPendingFiles(Array.from(files));
     });
 }
 
-function setupInputEvents() {
-    messageInput.addEventListener('input', function () {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 200) + 'px';
-    });
-    messageInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendLocalMessage();
-        }
-    });
-    sendButton.addEventListener('click', sendLocalMessage);
+// ---------- 主题切换 ----------
+function loadTheme() {
+    const saved = localStorage.getItem('message_terminal_theme');
+    if (saved === 'dark') {
+        isDarkMode = true;
+        document.body.classList.add('dark-mode');
+        themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+    }
 }
 
-function setupImagePreview() {
+function toggleTheme() {
+    isDarkMode = !isDarkMode;
+    document.body.classList.toggle('dark-mode', isDarkMode);
+    themeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    localStorage.setItem('message_terminal_theme', isDarkMode ? 'dark' : 'light');
+    mermaidInitialized = false;
+    initMermaid();
+    if (musicReady) musicChannel.postMessage({ type: 'theme', darkMode: isDarkMode });
+}
+
+function setupThemeToggle() {
+    themeToggle.addEventListener('click', toggleTheme);
+}
+
+// ---------- 事件委托 ----------
+function setupMessageAreaDelegation() {
     messageArea.addEventListener('click', (e) => {
-        const img = e.target.closest('img');
-        if (img && typeof previewImage === 'function') {
-            const src = img.getAttribute('src');
-            const alt = img.getAttribute('alt') || '图片';
-            previewImage(src, alt);
+        const summary = e.target.closest('.think-summary');
+        if (summary) {
+            summary.parentElement.classList.toggle('open');
         }
     });
 }
 
+// ---------- 清理 ----------
 function cleanup() {
     manualClose = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    AudioQueue.stop();
     if (ws) {
         ws.onclose = null;
         ws.close();
@@ -502,46 +1303,29 @@ function cleanup() {
     document.querySelectorAll('.echarts-container').forEach(c => {
         if (c._echartsInstance) c._echartsInstance.dispose();
     });
+    if (musicIframe) {
+        musicIframe.remove();
+        musicIframe = null;
+    }
+    musicChannel.close();
 }
 
-function init() {
+// ---------- 初始化 ----------
+async function init() {
     loadTheme();
-    initMermaid();
+    setupThemeToggle();
+    setupTabEvents();
+    setupSearchEvents();
     setupDragEvents();
     setupInputEvents();
-    setupImagePreview();
-    setupThemeToggle();
+    setupMessageAreaDelegation();
+    initMusicRenderer();
+    await ensureMarked();
+    initMermaid();
+    await loadPersistedMessages();
     updateEmptyState();
     connectWebSocket();
     window.addEventListener('beforeunload', cleanup);
-}
-
-// ---------- 暗色模式 ----------
-function loadTheme() {
-    const saved = localStorage.getItem('message_terminal_theme');
-    if (saved === 'dark') {
-        isDarkMode = true;
-        document.body.classList.add('dark-mode');
-        if (themeToggle) themeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-    }
-}
-
-function toggleTheme() {
-    isDarkMode = !isDarkMode;
-    document.body.classList.toggle('dark-mode', isDarkMode);
-    if (themeToggle) {
-        themeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    }
-    localStorage.setItem('message_terminal_theme', isDarkMode ? 'dark' : 'light');
-    // 重新初始化 mermaid 以匹配主题
-    mermaidInitialized = false;
-    initMermaid();
-}
-
-function setupThemeToggle() {
-    if (themeToggle) {
-        themeToggle.addEventListener('click', toggleTheme);
-    }
 }
 
 if (document.readyState === 'loading') {

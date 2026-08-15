@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>『 星月智能 』星图-琉璃</title>
+    <title>『 星月智能 』消息终端</title>
     <!-- 标准样式库 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <!-- 项目私有样式 -->
@@ -14,45 +14,73 @@
 
 <body>
     <div class="app-container" id="appContainer">
-        <!-- 优雅头部 -->
-        <div class="glass-header">
-            <div class="brand">
-                <i class="fas fa-comment-dots brand-icon"></i>
-                <span>星月智能 · 消息终端</span>
-            </div>
-            <div class="header-actions">
-                <button class="theme-toggle-btn" id="themeToggle" title="切换主题">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <div class="connection-status" id="connectionStatus">
-                    <span class="status-dot" id="statusDot"></span>
-                    <span id="statusText">未连接</span>
+        <!-- 主体两列布局 -->
+        <div class="content-row">
+            <!-- 左侧栏：品牌 + 标签 + 状态显示 -->
+            <aside class="sidebar">
+                <div class="brand">
+                    <i class="fas fa-comment-dots brand-icon"></i>
+                    <span>星月智能 · 消息终端</span>
                 </div>
-            </div>
+
+                <nav class="tab-bar" id="tabBar" role="tablist" aria-label="消息分类">
+                    <button class="tab active" data-tab="all" role="tab"><i class="fas fa-layer-group"></i>全部</button>
+                    <button class="tab" data-tab="text" role="tab"><i class="fas fa-align-left"></i>文本</button>
+                    <button class="tab" data-tab="image" role="tab"><i class="fas fa-image"></i>图片</button>
+                    <button class="tab" data-tab="voice" role="tab"><i class="fas fa-volume-high"></i>语音</button>
+                    <button class="tab" data-tab="music" role="tab"><i class="fas fa-music"></i>乐谱</button>
+                    <button class="tab" data-tab="action" role="tab"><i class="fas fa-person-running"></i>行动</button>
+                </nav>
+            </aside>
+
+            <!-- 右侧主显示区 -->
+            <section class="main-panel">
+                <main class="message-area" id="messageArea" role="log" aria-live="polite">
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-state-icon">
+                            <i class="fas fa-cloud-moon"></i>
+                        </div>
+                        <p class="empty-state-text">等待消息</p>
+                        <p class="empty-state-subtext">连接 WebSocket 后将实时显示推送内容</p>
+                    </div>
+                    <!-- 动态消息列表 -->
+                </main>
+            </section>
         </div>
 
-        <!-- 消息展示区 -->
-        <main class="message-area" id="messageArea" role="log" aria-live="polite">
-            <div class="empty-state" id="emptyState">
-                <div class="empty-state-icon">
-                    <i class="fas fa-cloud-moon"></i>
-                </div>
-                <p class="empty-state-text">等待消息</p>
-                <p class="empty-state-subtext">WebSocket 连接后将显示推送内容</p>
-            </div>
-            <!-- 动态消息列表 -->
-        </main>
-
-        <!-- 底部输入栏 -->
+        <!-- 底部输入栏（横跨全宽） -->
         <footer class="input-area">
+            <div class="pending-attachments" id="pendingAttachments" hidden></div>
             <div class="input-wrapper">
-                <textarea id="messageInput" class="message-input" placeholder="输入需要渲染的文本… (Enter 执行渲染, Shift+Enter 换行)"
+                <button class="attach-btn" id="attachBtn" title="添加文件（图片 / 视频 / 文本）">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <button class="attach-btn" id="themeToggle" title="切换主题">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <input type="file" id="fileInput" multiple accept="*/*" hidden />
+                <textarea id="messageInput" class="message-input" placeholder="输入文字消息… (Enter 发送, Shift+Enter 换行)"
                     rows="1"></textarea>
-                <button id="sendButton" class="send-button" title="执行渲染（仅本地展示）">
+                <button id="sendButton" class="send-button" title="发送消息">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
         </footer>
+
+        <!-- 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容显示） -->
+        <div class="top-controls">
+            <button class="header-btn" id="clearBtn" title="清空消息">
+                <i class="fas fa-broom"></i>
+            </button>
+            <div class="search-box" role="search">
+                <i class="fas fa-search search-icon"></i>
+                <input id="searchInput" class="search-input" type="text" placeholder="搜索消息内容…" autocomplete="off" />
+                <span class="search-count" id="searchCount" hidden></span>
+                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i class="fas fa-chevron-up"></i></button>
+                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i class="fas fa-chevron-down"></i></button>
+                <button class="search-clear" id="searchClear" title="清除搜索" hidden><i class="fas fa-times"></i></button>
+            </div>
+        </div>
 
         <!-- 通知容器 -->
         <div class="toast-container" id="toastContainer" aria-live="assertive"></div>
@@ -64,6 +92,7 @@
             </div>
         </div>
     </div>
+
     <!-- 标准脚本库 -->
     <script src="/file/read/package/standard_dependency/script.js"></script>
     <!-- Mermaid 流程图库 -->

@@ -2445,7 +2445,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
             if (parts.length === 0)
                 return '月华完成了行动任务';
-            return parts.join('，') + '。';
+            const summary = parts.join('，') + '。';
+            pushContext('action', summary, '');
+            return summary;
         }
         handlePlayAction(args) {
             const actionName = args.action_name || '';
@@ -2676,9 +2678,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 if (!textChunks.length)
                     throw new Error('清洗后的文本为空');
                 if (actionBlocks.length)
-                    console.log('[动作区]', actionBlocks.join(' | '));
+                    pushContext('action_block', actionBlocks.join(' | '), '');
                 if (emotionBlocks.length)
-                    console.log('[情感区]', emotionBlocks.join(' | '));
+                    pushContext('emotion', emotionBlocks.join(' | '), '');
                 for (const thinking of thinkingBlocks) {
                     pushContext(messageType, thinking, '');
                 }

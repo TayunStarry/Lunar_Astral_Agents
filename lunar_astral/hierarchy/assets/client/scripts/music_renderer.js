@@ -41,7 +41,7 @@ export function initMusicRenderer() {
 
     iframe = document.createElement('iframe');
     iframe.id = 'music-renderer-frame';
-    iframe.src = '../music_renderer.html';
+    iframe.src = '/file/read/package/music_libs/music_renderer.html';
     iframe.allow = 'autoplay';
     iframe.style.cssText = `
         position: fixed;

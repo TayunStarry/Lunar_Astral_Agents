@@ -165,7 +165,10 @@ export class ActorRole extends CreativeRoleBase<ActionDetail> {
 		}
 
 		if (parts.length === 0) return '月华完成了行动任务';
-		return parts.join('，') + '。';
+		const summary = parts.join('，') + '。';
+		// 将行动者消息推送到前端「行动」标签
+		pushContext('action', summary, '');
+		return summary;
 	}
 
 	/** 执行预设动作 */
