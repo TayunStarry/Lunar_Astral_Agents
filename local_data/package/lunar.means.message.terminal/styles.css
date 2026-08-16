@@ -1160,6 +1160,316 @@ body {
     border: 1px solid var(--glass-border);
 }
 
+/* ========== 画板页 ========== */
+.drawboard-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: none;
+    align-items: stretch;
+    justify-content: stretch;
+    background: rgba(10, 12, 20, 0.55);
+    backdrop-filter: blur(8px);
+}
+
+.drawboard-overlay.active {
+    display: flex;
+}
+
+.drawboard {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    overflow: hidden;
+}
+
+.drawboard-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--panel-header-bg);
+    flex-shrink: 0;
+}
+
+.drawboard-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.drawboard-title i {
+    color: var(--accent-color);
+}
+
+.drawboard-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.drawboard-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.12);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: inherit;
+    transition: 0.2s;
+}
+
+.dark-mode .drawboard-btn {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.drawboard-btn:hover {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
+/* 工具栏 */
+.drawboard-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.drawboard-tool {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    transition: 0.15s;
+}
+
+.drawboard-tool:hover {
+    background: rgba(157, 107, 255, 0.12);
+    color: var(--accent-color);
+}
+
+.drawboard-tool.active {
+    background: rgba(157, 107, 255, 0.2);
+    border-color: rgba(157, 107, 255, 0.4);
+    color: var(--accent-color);
+}
+
+.drawboard-tool:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 颜色与线宽 */
+.drawboard-colorbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.drawboard-color {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+.drawboard-color.active {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.35);
+    transform: scale(1.12);
+}
+
+.drawboard-size-sep {
+    width: 1px;
+    height: 22px;
+    background: var(--border-color);
+    margin: 0 4px;
+}
+
+.drawboard-size {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 6px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: 0.15s;
+}
+
+.drawboard-size.active {
+    background: rgba(157, 107, 255, 0.2);
+    border-color: rgba(157, 107, 255, 0.4);
+    color: var(--accent-color);
+}
+
+/* 画布区域 */
+.drawboard-canvas-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background: rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    cursor: crosshair;
+}
+
+.dark-mode .drawboard-canvas-wrap {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#drawboardBg,
+#drawboardLayer,
+#drawboardPreview {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 100%;
+    max-height: 100%;
+}
+
+#drawboardBg {
+    display: none;
+}
+
+.drawboard-canvas-wrap.has-image #drawboardBg {
+    display: block;
+}
+
+#drawboardLayer {
+    display: block;
+    cursor: crosshair;
+}
+
+#drawboardPreview {
+    display: block;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.drawboard-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    pointer-events: none;
+    font-size: 0.9rem;
+}
+
+.drawboard-placeholder i {
+    font-size: 44px;
+    opacity: 0.5;
+}
+
+.drawboard-canvas-wrap.has-image .drawboard-placeholder {
+    display: none;
+}
+
+/* 底部发送区 */
+.drawboard-footer {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-color);
+    background: var(--panel-header-bg);
+    flex-shrink: 0;
+}
+
+.drawboard-input {
+    flex: 1;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    max-height: 120px;
+}
+
+.drawboard-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.16);
+}
+
+.drawboard-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.drawboard-send {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, #fbbf24, #ef4444);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.drawboard-send:hover {
+    background: linear-gradient(135deg, #f59e0b, #dc2626);
+    transform: translateY(-1px);
+}
+
+.drawboard-send:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* ========== 响应式 ========== */
 @media (max-width: 1024px) {
     .sidebar {

@@ -24,11 +24,8 @@
         <!-- 顶部工具栏 -->
         <header class="toolbar">
             <div class="toolbar-left">
-                <button id="buildBtn" class="btn-glass btn-glass-primary">
-                    <i class="fas fa-hammer"></i> 构建
-                </button>
-                <button id="continueBtn" class="btn-glass btn-glass-primary">
-                    <i class="fas fa-pen-fancy"></i> 续写下一章
+                <button id="writeBtn" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-feather-alt"></i> 开始创作
                 </button>
                 <button id="stopBtn" class="btn-glass btn-glass-danger" disabled>
                     <i class="fas fa-stop-circle"></i> 中断
@@ -38,7 +35,6 @@
                 <button id="editChapterBtn" class="btn-glass" disabled title="仅可编辑已审核通过的章节">
                     <i class="fas fa-edit"></i> 编辑
                 </button>
-                <button id="configBtn" class="btn-glass"><i class="fas fa-cog"></i> 配置</button>
                 <button id="resetBtn" class="btn-glass btn-glass-danger"><i class="fas fa-undo-alt"></i> 重置</button>
             </div>
             <div class="toolbar-right">
@@ -80,13 +76,20 @@
                                 </h3>
                                 <div class="panel-body" id="creativeBody">
                                     <div class="import-zone" id="importZone">
-                                        <i class="fas fa-cloud-upload-alt"></i>
-                                        <p>拖拽 .txt/.md 文件到此处，或点击选择</p>
-                                        <input type="file" id="fileInput" accept=".txt,.md,.json" style="display:none">
-                                        <button id="selectFileBtn" class="btn-glass btn-glass-small"><i class="fas fa-folder-open"></i> 选择文件</button>
+                                        <input type="file" id="fileInput" accept=".txt,.md,.json,.jpg,.jpeg,.png" style="display:none">
+                                        <div class="image-preview" id="imagePreview" style="display:none;">
+                                            <img id="imagePreviewImg" alt="图片预览">
+                                            <div class="image-preview-meta">
+                                                <span id="imagePreviewName"></span>
+                                                <button id="removeImageBtn" class="btn-glass btn-glass-small btn-glass-danger" type="button"><i class="fas fa-times"></i> 移除</button>
+                                            </div>
+                                        </div>
+                                        <textarea id="rawTextInput" class="panel-textarea import-textarea" placeholder="在此输入原始大纲/创意引导/前情提要，或拖拽文件到此处..." rows="4"></textarea>
                                     </div>
-                                    <textarea id="rawTextInput" class="panel-textarea" placeholder="或在此直接输入原始大纲/创意引导/前情提要..." rows="4"></textarea>
-                                    <button id="extractOutlineBtn" class="btn-glass btn-glass-primary btn-block"><i class="fas fa-magic"></i> AI 提取纲要</button>
+                                    <div class="import-actions">
+                                        <button id="selectFileBtn" class="btn-glass"><i class="fas fa-folder-open"></i> 选择文件</button>
+                                        <button id="extractOutlineBtn" class="btn-glass btn-glass-primary"><i class="fas fa-magic"></i> AI 提取纲要</button>
+                                    </div>
                                     <div class="import-hint" id="importHint" style="display:none;"></div>
                                 </div>
                             </div>
@@ -219,7 +222,7 @@
                 <div class="glass-panel progress-panel" id="progressPanel">
                     <span class="progress-title"><i class="fas fa-stream"></i> 生成进度</span>
                     <span class="progress-current" id="progressCurrentStep">—</span>
-                    <span class="progress-message" id="progressMessage">点击「构建」开始第 1 章</span>
+                    <span class="progress-message" id="progressMessage">点击「开始创作」开始第 1 章</span>
                 </div>
 
                 <!-- 章节导航 -->
@@ -238,7 +241,7 @@
                     <div class="empty-state">
                         <i class="fas fa-feather-alt"></i>
                         <h3>小说工作室 Pro</h3>
-                        <p>在左侧面板导入素材并提取纲要，然后点击「构建」开始创作</p>
+                        <p>在左侧面板导入素材并提取纲要，然后点击「开始创作」</p>
                     </div>
                 </div>
                 <textarea class="chapter-edit-area glass-panel" id="chapterEditArea" style="display:none;"></textarea>
@@ -278,33 +281,6 @@
 
     <!-- Toast 提示 -->
     <div class="toast" id="toast"><i class="fas fa-info-circle"></i><span id="toastMessage"></span></div>
-
-    <!-- AI 配置模态框 -->
-    <div class="modal-overlay" id="configModal">
-        <div class="modal glass-panel">
-            <div class="modal-header">
-                <h3><i class="fas fa-cog"></i> AI 配置</h3>
-                <button class="modal-close" id="configModalClose">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="config-item">
-                    <label>API 地址（供记忆库调用，AI 聊天走内置代理）</label>
-                    <input type="text" id="aiUrlInput" class="config-input" placeholder="http://localhost:36789" value="http://localhost:36789">
-                </div>
-                <div class="config-item">
-                    <label>模型名称</label>
-                    <input type="text" id="aiNameInput" class="config-input" placeholder="system-multimodal" value="system-multimodal">
-                </div>
-                <div class="config-item">
-                    <label>API Key</label>
-                    <input type="password" id="aiKeyInput" class="config-input" placeholder="2000-0218" value="2000-0218">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="configSaveBtn" class="btn-glass btn-glass-primary"><i class="fas fa-save"></i> 保存并初始化</button>
-            </div>
-        </div>
-    </div>
 
     <!-- 导出弹窗 -->
     <div class="modal-overlay" id="exportModal">

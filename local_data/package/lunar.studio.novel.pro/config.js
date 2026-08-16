@@ -1,19 +1,22 @@
 /**
  * AI 配置管理模块
- * 管理 AI Name/Key、聊天/嵌入 API 调用封装、记忆库初始化
- * 
- * AI 调用始终走同源代理 /v1/ 路由，避免 CORS 问题
- * 用户配置的 URL 仅用于记忆库 init 的 base_url
+ * 从 lunar_config.json 的 agent 分组读取多模态/嵌入模型配置，
+ * 封装聊天/嵌入 API 调用。
+ *
+ * AI 调用始终走同源代理 /v1/ 路由，避免 CORS 问题。
  */
 
 (function(global) {
     'use strict';
 
-    // ==== 默认 AI 配置 ====
-    var DEFAULT_AI_CONFIG = {
-        url: 'http://localhost:36789',
-        name: 'system-multimodal',
-        key: '2000-0218'
+    // ==== 默认 agent 配置（读取失败时兜底） ====
+    var DEFAULT_AGENT_CONFIG = {
+        multimodal_model: 'system-multimodal',
+        multimodal_url: 'http://127.0.0.1:36789/v1',
+        multimodal_key: '',
+        embedding_model: 'system-embedding',
+        embedding_url: 'http://127.0.0.1:36789/v1',
+        embedding_key: ''
     };
 
     // ==== 同源代理路径 ====
@@ -24,30 +27,47 @@
     class ConfigManager {
         constructor(app) {
             this.app = app;
-            this._configResolve = null;
+            this.agentConfig = null;
         }
 
-        // ==== 获取当前 AI 配置 ====
+        // ==== 从 lunar_config.json 读取 agent 配置 ====
+        async loadAgentConfig() {
+            try {
+                var resp = await fetch('/file/read/lunar_config.json');
+                if (!resp.ok) throw new Error('读取配置文件失败: ' + resp.status);
+                var data = await resp.json();
+                this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG, data.agent || {});
+            } catch (e) {
+                console.warn('AI 配置加载失败，使用默认配置:', e);
+                this.agentConfig = Object.assign({}, DEFAULT_AGENT_CONFIG);
+            }
+        }
+
+        // ==== 获取多模态模型配置（保持 {url,name,key} 兼容形态） ====
         getConfig() {
-            return this.app.state.config.ai;
+            var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
+            return {
+                url: cfg.multimodal_url || '',
+                name: cfg.multimodal_model || 'system-multimodal',
+                key: cfg.multimodal_key || ''
+            };
         }
 
-        // ==== 从 AI URL 中剥离 /v1，供记忆库 init 使用 ====
-        // 例: "http://localhost:36789/v1" → "http://localhost:36789"
-        // 例: "http://localhost:36789" → "http://localhost:36789"
-        getMemoryBaseUrl() {
-            return (this.getConfig().url || '').replace(/\/v1\/?$/, '');
+        // ==== 获取嵌入模型名 ====
+        getEmbeddingModel() {
+            var cfg = this.agentConfig || DEFAULT_AGENT_CONFIG;
+            return cfg.embedding_model || 'system-embedding';
         }
 
         // ==== 聊天 API 调用（始终走同源代理） ====
-        // POST /v1/chat/completions
         // 返回: { content, inputTokens, outputTokens, totalTokens }
+        // options.imageUrl 存在时，将图片以多模态 image_url 附加到末条用户消息
         async callChat(messages, options) {
             var config = this.getConfig();
             var opt = options || {};
             var body = {
                 model: config.name,
-                messages: messages,
+                messages: this._buildMessages(messages, opt.imageUrl),
                 temperature: opt.temperature !== undefined ? opt.temperature : 0.7,
                 max_tokens: opt.maxTokens || 4096,
                 stream: false
@@ -72,14 +92,30 @@
             };
         }
 
+        // ==== 构造多模态消息 ====
+        _buildMessages(messages, imageUrl) {
+            if (!imageUrl) return messages;
+            return messages.map(function(m, idx) {
+                if (m.role === 'user' && idx === messages.length - 1) {
+                    return {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: m.content },
+                            { type: 'image_url', image_url: { url: imageUrl } }
+                        ]
+                    };
+                }
+                return m;
+            });
+        }
+
         // ==== 嵌入 API 调用（始终走同源代理） ====
-        // POST /v1/embeddings
         // 返回: { embedding, tokens }
         async callEmbed(text) {
             var resp = await fetch(PROXY_EMBED_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: 'system-embedding', input: text })
+                body: JSON.stringify({ model: this.getEmbeddingModel(), input: text })
             });
             if (!resp.ok) throw new Error('嵌入调用失败: ' + resp.status);
             var data = await resp.json();
@@ -87,72 +123,6 @@
                 embedding: (data.data && data.data[0] && data.data[0].embedding) || null,
                 tokens: (data.usage && data.usage.prompt_tokens) || 0
             };
-        }
-
-        // ==== 初始化记忆库实例 ====
-        // POST /memory/init（模型配置已迁移至 lunar_config.json，不再通过请求体传入）
-        async initMemory() {
-            var resp = await fetch('/memory/init', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
-            if (!resp.ok) {
-                var errText = await resp.text();
-                throw new Error('记忆库初始化失败: ' + errText);
-            }
-            return await resp.json();
-        }
-
-        // ==== 确保 AI 已配置（首次进入时弹出配置模态框） ====
-        async ensureConfigured() {
-            var config = this.getConfig();
-            if (!config.url || !config.name) {
-                await this.showConfigModal();
-            }
-        }
-
-        // ==== 显示 AI 配置模态框 ====
-        showConfigModal() {
-            var self = this;
-            return new Promise(function(resolve) {
-                var modal = document.getElementById('configModal');
-                var urlInput = document.getElementById('aiUrlInput');
-                var nameInput = document.getElementById('aiNameInput');
-                var keyInput = document.getElementById('aiKeyInput');
-                var config = self.getConfig();
-                urlInput.value = config.url || DEFAULT_AI_CONFIG.url;
-                nameInput.value = config.name || DEFAULT_AI_CONFIG.name;
-                keyInput.value = config.key || DEFAULT_AI_CONFIG.key;
-                modal.classList.add('active');
-                self._configResolve = resolve;
-            });
-        }
-
-        // ==== 保存 AI 配置（由模态框保存按钮调用） ====
-        async saveConfig() {
-            var urlInput = document.getElementById('aiUrlInput');
-            var nameInput = document.getElementById('aiNameInput');
-            var keyInput = document.getElementById('aiKeyInput');
-            this.app.state.config.ai = {
-                url: urlInput.value.trim() || DEFAULT_AI_CONFIG.url,
-                name: nameInput.value.trim() || DEFAULT_AI_CONFIG.name,
-                key: keyInput.value.trim() || DEFAULT_AI_CONFIG.key
-            };
-            await this.app.saveState();
-            // 初始化记忆库
-            try {
-                await this.initMemory();
-            } catch (e) {
-                console.warn('记忆库初始化失败:', e);
-            }
-            // 关闭模态框
-            document.getElementById('configModal').classList.remove('active');
-            if (this._configResolve) {
-                this._configResolve();
-                this._configResolve = null;
-            }
-            this.app.showToast('AI 配置已保存');
         }
 
         // ==== Token 跟踪记录 ====

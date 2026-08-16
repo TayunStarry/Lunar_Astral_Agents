@@ -29,7 +29,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 | 目录 | 职责 |
 |------|------|
 | `adapters/` | Go↔JS 适配器层，基于 goja 运行时将 Go 能力（文件/数据库/网络/图像）暴露为 JS 可调用函数 |
-| `model/` | 模型服务层，管理 llama-server 进程生命周期、TTS 引擎调用、请求队列 |
+| `model/` | 模型服务层，管理 llama-server 进程生命周期与请求队列（TTS 引擎由独立子系统 qwen3_tts 提供） |
 | `server/` | HTTP 服务层，路由注册、CORS、初始化流程、消息/图像/视频处理 |
 | `hierarchy/` | 前端资源层，Go embed 嵌入：goja 智能体 JS、角色 Prompt、Web 界面 |
 | `websocket/` | WebSocket 通信层，连接管理、读写泵、广播推送 |
@@ -53,7 +53,6 @@ main.go
   │   ├── llama.Init()                  ← 启动 llama-server + 等待就绪（5 分钟超时）
   │   ├── initTTSEngine()               ← 初始化 Qwen3-TTS 语音引擎
   │   ├── websocket.SetupWebSocketHandler() ← 注册 /ws、/ws/studio 端点
-  │   ├── adapters.MusicRenderFunc = ...    ← 注册音乐渲染回调（FluidSynth）
   │   ├── adapters.RunAgentContext()    ← 创建 goja 运行时并执行 agentSystem.js
   │   └── initBridgeAdapter()           ← 加载 NapCat 桥接配置并启动扫描
   ├── SetupSignalHandling()             ← 系统信号监听
@@ -98,9 +97,9 @@ Go↔JavaScript 双向桥接，基于 goja 运行时。暴露出 `saveFile()`、
 
 管理 `llama-server.exe` 进程生命周期，启动参数：`--models-preset local_data/models/models.ini --flash-attn on --port <ModelPort> --parallel 1 --batch-size 2048 --ubatch-size 1024 --cache-type-k q8_0 --cache-type-v q8_0 --no-ui --sleep-idle-seconds 900`（含温度/采样等生成参数）。模型由 `models.ini` 预设文件管理（`[system-multimodal]` 多模态、`[system-embedding]` 嵌入）。支持就绪检测（5 分钟超时）、embedding 请求本地路由、多模态请求云端代理切换。
 
-### TTS 引擎（model/tts/）
+### TTS 引擎（subsystem/qwen3_tts）
 
-AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 → WebSocket 推送 → 前端播放。底层由 Qwen3-TTS 独立引擎提供。
+AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 → WebSocket 推送 → 前端播放。TTS 引擎由独立子系统 `LunarSubsystem/Qwen3-TTS/module` 提供（`server/variable.go` 引入该模块并注册 `/tts` 端点）。
 
 ### 前端界面（hierarchy/assets/client/）
 
@@ -111,10 +110,14 @@ AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 �
 | 文件 | 用途 |
 |------|------|
 | `dialogueRole.md` | 月华角色基础人设与对话风格 |
-| `descriptionRole.md` | 场景/物品描述角色 |
-| `organizeRole.md` | 整理角色设定 |
+| `descriptionRole.md` | 视频关键帧描述指南 |
 | `painterRole.md` | 画师角色设定 |
 | `selfAppearance.md` | 角色外观自我描述 |
+| `viewerRole.md` | 观影者角色 |
+| `actorRole.md` | 行动者角色 |
+| `memoryRole.md` | 组织者角色设定（记忆整理） |
+| `musicianRole.md` | 音乐作曲家角色 |
+| `learner*.md` | 学习者智能体系列（研究报告 / 查询推理完善 / 策略评估 / 搜索内容评估 / 记忆更新） |
 
 ---
 
@@ -131,7 +134,6 @@ AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 �
 | `/memory/` | ANY | 记忆库管理（实例初始化/集合管理/消息增删查） |
 | `/knowledge/` | POST | 知识库管理 |
 | `/file/...` | 多种 | 文件读写/列表/下载/归档/扩展包管理 |
-| `/music/render` | POST | ABC 乐谱渲染为 WAV 音频 |
 | `/api/engine/command` | POST | 智能体引擎命令转发 |
 | `/proxy` | POST | 代理访问服务 |
 | `/ltpx/load` `/ltpx/unload` `/ltpx/status` | POST/POST/GET | LTPX 工具包动态管理 |

@@ -34,8 +34,7 @@ Lunar_Astral_Agents/
 │   ├── qwen_asr/           # 语音识别（纯 C 引擎）
 │   ├── agent_search/       # 智能网络检索
 │   └── environment_repair/ # 运维工具箱
-├── local_data/            # 本地数据（模型文件 + 前端资源）
-└── image/                 # 项目文档配图
+└── local_data/            # 本地数据（模型文件 + 前端资源）
 ```
 
 > 详细架构参见 [ARCHITECTURE.md](ARCHITECTURE.md)。
@@ -56,10 +55,10 @@ Lunar_Astral_Agents/
 
 | 工具 | 最低版本 | 用途 |
 |------|---------|------|
-| Go | ≥ 1.25.0 | Go 后端编译 |
+| Go | ≥ 1.26.0 | Go 后端编译 |
 | Node.js | ≥ 20.x | TypeScript 前端编译 |
 | GCC (MinGW-w64) | ≥ 8.1.0 | C/C++ 编译（ASR/TTS） |
-| CMake | ≥ 3.29.0 | C++ 项目构建（TTS） |
+| CMake | ≥ 3.14.0 | C++ 项目构建（TTS） |
 
 ### 运行时依赖
 
@@ -131,7 +130,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 |------|------|
 | 前端 UI | HTML5 + CSS3 + JavaScript，WebView 嵌入 |
 | AI 智能体 | TypeScript（goja 运行时） |
-| 后端服务 | Go 1.25，HTTP API + WebSocket |
+| 后端服务 | Go 1.26，HTTP API + WebSocket |
 | 文本推理 | llama.cpp，GGUF 格式 |
 | 图像生成 | stable-diffusion.cpp |
 | 语音合成 | Qwen3-TTS，C++ GGML 引擎 |

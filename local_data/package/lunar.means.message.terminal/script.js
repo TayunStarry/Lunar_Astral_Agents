@@ -33,6 +33,21 @@ const searchNext = document.getElementById('searchNext');
 const searchClear = document.getElementById('searchClear');
 const pendingAttachments = document.getElementById('pendingAttachments');
 
+// ---------- 画板 DOM 引用 ----------
+const openDrawboardBtn = document.getElementById('openDrawboardBtn');
+const drawboardOverlay = document.getElementById('drawboardOverlay');
+const importBgBtn = document.getElementById('importBgBtn');
+const bgFileInput = document.getElementById('bgFileInput');
+const clearDrawBtn = document.getElementById('clearDrawBtn');
+const closeDrawboardBtn = document.getElementById('closeDrawboardBtn');
+const undoDrawBtn = document.getElementById('undoDrawBtn');
+const drawboardCanvasWrap = document.getElementById('drawboardCanvasWrap');
+const drawboardBg = document.getElementById('drawboardBg');
+const drawboardLayer = document.getElementById('drawboardLayer');
+const drawboardPreview = document.getElementById('drawboardPreview');
+const drawboardInput = document.getElementById('drawboardInput');
+const drawboardSendBtn = document.getElementById('drawboardSendBtn');
+
 // ---------- 状态变量 ----------
 let ws = null;
 let reconnectAttempts = 0;
@@ -1021,7 +1036,7 @@ async function handleSend() {
                 try {
                     const fileUrl = await saveFile(pf.file);
                     contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
-                    attachments.push({ type: category, src: fileUrl, label: pf.name });
+                    attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                     categories.add('image');
                 } catch (err) {
                     showToast(`无法上传 ${pf.name}`, 'error');
@@ -1290,6 +1305,359 @@ function setupMessageAreaDelegation() {
     });
 }
 
+// ============================================================
+//  画板页 — 绘制图形 + 导入背景图 + 合并为图片发送给 AI
+// ============================================================
+
+const DRAWBOARD_DEFAULT_W = 800;
+const DRAWBOARD_DEFAULT_H = 600;
+
+const drawboard = {
+    bgCtx: null,
+    layerCtx: null,
+    previewCtx: null,
+    currentTool: 'draw',
+    currentColor: '#e74c3c',
+    currentSize: 8,
+    isDrawing: false,
+    hasImage: false,
+    dirty: false,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    history: []
+};
+
+function initDrawboardCanvas() {
+    drawboardBg.width = drawboardLayer.width = drawboardPreview.width = DRAWBOARD_DEFAULT_W;
+    drawboardBg.height = drawboardLayer.height = drawboardPreview.height = DRAWBOARD_DEFAULT_H;
+    drawboard.bgCtx = drawboardBg.getContext('2d', { willReadFrequently: true });
+    drawboard.layerCtx = drawboardLayer.getContext('2d', { willReadFrequently: true });
+    drawboard.previewCtx = drawboardPreview.getContext('2d', { willReadFrequently: true });
+}
+
+function resizeDrawboardCanvases(w, h) {
+    drawboardBg.width = drawboardLayer.width = drawboardPreview.width = w;
+    drawboardBg.height = drawboardLayer.height = drawboardPreview.height = h;
+}
+
+function openDrawboard() {
+    drawboardOverlay.classList.add('active');
+    drawboardOverlay.setAttribute('aria-hidden', 'false');
+    setTimeout(() => drawboardInput.focus(), 50);
+}
+
+function closeDrawboard() {
+    drawboardOverlay.classList.remove('active');
+    drawboardOverlay.setAttribute('aria-hidden', 'true');
+}
+
+function getDrawboardPos(e) {
+    const rect = drawboardLayer.getBoundingClientRect();
+    return {
+        x: (e.clientX - rect.left) * (drawboardLayer.width / (rect.width || 1)),
+        y: (e.clientY - rect.top) * (drawboardLayer.height / (rect.height || 1))
+    };
+}
+
+function updateDrawboardUndo() {
+    undoDrawBtn.disabled = drawboard.history.length === 0;
+}
+
+function saveDrawboardSnapshot() {
+    if (drawboardLayer.width > 0 && drawboardLayer.height > 0) {
+        drawboard.history.push(drawboard.layerCtx.getImageData(0, 0, drawboardLayer.width, drawboardLayer.height));
+        if (drawboard.history.length > 30) drawboard.history.shift();
+    }
+    updateDrawboardUndo();
+}
+
+function undoDrawboard() {
+    if (!drawboard.history.length) return;
+    drawboard.layerCtx.putImageData(drawboard.history.pop(), 0, 0);
+    updateDrawboardUndo();
+}
+
+function setDrawboardTool(tool, btn) {
+    drawboard.currentTool = tool;
+    document.querySelectorAll('.drawboard-tool[data-tool]').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    drawboardLayer.style.cursor = tool === 'text' ? 'text' : 'crosshair';
+}
+
+function setDrawboardColor(color, el) {
+    drawboard.currentColor = color;
+    document.querySelectorAll('.drawboard-color').forEach(c => c.classList.remove('active'));
+    if (el) el.classList.add('active');
+}
+
+function setDrawboardSize(size, el) {
+    drawboard.currentSize = parseInt(size, 10);
+    document.querySelectorAll('.drawboard-size').forEach(s => s.classList.remove('active'));
+    if (el) el.classList.add('active');
+}
+
+async function importDrawboardBackground(file) {
+    try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const img = await new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => reject(new Error('图片加载失败'));
+            image.src = dataUrl;
+        });
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        resizeDrawboardCanvases(w, h);
+        drawboard.bgCtx.clearRect(0, 0, w, h);
+        drawboard.bgCtx.drawImage(img, 0, 0);
+        drawboard.layerCtx.clearRect(0, 0, w, h);
+        drawboard.previewCtx.clearRect(0, 0, w, h);
+        drawboard.hasImage = true;
+        drawboard.dirty = false;
+        drawboard.history = [];
+        drawboardCanvasWrap.classList.add('has-image');
+        updateDrawboardUndo();
+        showToast('背景图已导入', 'success');
+    } catch (err) {
+        showToast('背景图导入失败：' + (err.message || err), 'error');
+    }
+}
+
+function clearDrawboard() {
+    resizeDrawboardCanvases(DRAWBOARD_DEFAULT_W, DRAWBOARD_DEFAULT_H);
+    drawboard.bgCtx.clearRect(0, 0, DRAWBOARD_DEFAULT_W, DRAWBOARD_DEFAULT_H);
+    drawboard.layerCtx.clearRect(0, 0, DRAWBOARD_DEFAULT_W, DRAWBOARD_DEFAULT_H);
+    drawboard.previewCtx.clearRect(0, 0, DRAWBOARD_DEFAULT_W, DRAWBOARD_DEFAULT_H);
+    drawboard.hasImage = false;
+    drawboard.dirty = false;
+    drawboard.history = [];
+    drawboardCanvasWrap.classList.remove('has-image');
+    updateDrawboardUndo();
+    showToast('画板已清空', 'info');
+}
+
+function drawboardStart(e) {
+    if (e.button !== 0) return;
+    drawboard.isDrawing = true;
+    saveDrawboardSnapshot();
+    const p = getDrawboardPos(e);
+    drawboard.startX = drawboard.lastX = p.x;
+    drawboard.startY = drawboard.lastY = p.y;
+    if (drawboard.currentTool === 'draw') {
+        drawboard.layerCtx.beginPath();
+        drawboard.layerCtx.moveTo(p.x, p.y);
+    }
+}
+
+function drawboardMove(e) {
+    if (!drawboard.isDrawing) return;
+    const p = getDrawboardPos(e);
+    if (drawboard.currentTool === 'draw') {
+        drawboard.layerCtx.lineTo(p.x, p.y);
+        drawboard.layerCtx.strokeStyle = drawboard.currentColor;
+        drawboard.layerCtx.lineWidth = drawboard.currentSize;
+        drawboard.layerCtx.lineCap = drawboard.layerCtx.lineJoin = 'round';
+        drawboard.layerCtx.stroke();
+    } else if (drawboard.currentTool !== 'text') {
+        drawboard.previewCtx.clearRect(0, 0, drawboardPreview.width, drawboardPreview.height);
+        drawShapePreview(drawboard.previewCtx, p.x, p.y);
+    }
+    drawboard.lastX = p.x;
+    drawboard.lastY = p.y;
+}
+
+function drawboardStop(e) {
+    if (!drawboard.isDrawing) return;
+    drawboard.isDrawing = false;
+    const p = e ? getDrawboardPos(e) : { x: drawboard.lastX, y: drawboard.lastY };
+
+    if (drawboard.currentTool === 'draw') {
+        drawboard.dirty = true;
+    } else if (drawboard.currentTool === 'text') {
+        const text = prompt('输入文本:', '标注');
+        if (text) {
+            drawboard.layerCtx.font = `bold ${20 + drawboard.currentSize * 3}px sans-serif`;
+            drawboard.layerCtx.fillStyle = drawboard.currentColor;
+            drawboard.layerCtx.fillText(text, p.x, p.y);
+            drawboard.dirty = true;
+        }
+    } else {
+        drawboard.layerCtx.drawImage(drawboardPreview, 0, 0);
+        drawboard.previewCtx.clearRect(0, 0, drawboardPreview.width, drawboardPreview.height);
+        drawboard.dirty = true;
+    }
+}
+
+function drawShapePreview(ctx, x, y) {
+    const { startX, startY, currentColor, currentSize } = drawboard;
+    ctx.strokeStyle = currentColor;
+    ctx.lineWidth = currentSize;
+    ctx.lineCap = 'round';
+    switch (drawboard.currentTool) {
+        case 'line':
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            break;
+        case 'rect':
+            ctx.strokeRect(startX, startY, x - startX, y - startY);
+            break;
+        case 'circle': {
+            const rx = Math.abs(x - startX) / 2;
+            const ry = Math.abs(y - startY) / 2;
+            ctx.beginPath();
+            ctx.ellipse(startX + (x - startX) / 2, startY + (y - startY) / 2, rx, ry, 0, 0, 2 * Math.PI);
+            ctx.stroke();
+            break;
+        }
+        case 'arrow':
+            drawArrowShape(ctx, startX, startY, x, y);
+            break;
+    }
+}
+
+function drawArrowShape(ctx, fromX, fromY, toX, toY) {
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const angle = Math.atan2(dy, dx);
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const head = Math.min(24, len * 0.25) * (drawboard.currentSize / 8);
+    ctx.strokeStyle = ctx.fillStyle = drawboard.currentColor;
+    ctx.lineWidth = drawboard.currentSize;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX - head * Math.cos(angle), toY - head * Math.sin(angle));
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - head * Math.cos(angle - Math.PI / 6), toY - head * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - head * Math.cos(angle + Math.PI / 6), toY - head * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+}
+
+function getDrawboardMergedBlob() {
+    return new Promise((resolve) => {
+        const temp = document.createElement('canvas');
+        temp.width = drawboardLayer.width || DRAWBOARD_DEFAULT_W;
+        temp.height = drawboardLayer.height || DRAWBOARD_DEFAULT_H;
+        const ctx = temp.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, temp.width, temp.height);
+        if (drawboard.hasImage) ctx.drawImage(drawboardBg, 0, 0);
+        ctx.drawImage(drawboardLayer, 0, 0);
+        temp.toBlob(resolve, 'image/png');
+    });
+}
+
+function setDrawboardSending(sending) {
+    drawboardSendBtn.disabled = sending;
+    drawboardSendBtn.innerHTML = sending ? '<i class="fas fa-spinner fa-pulse"></i>' : '<i class="fas fa-paper-plane"></i>';
+}
+
+async function sendDrawboardMessage() {
+    const text = drawboardInput.value.trim();
+    if (!text) {
+        showToast('请输入文字内容', 'warning');
+        return;
+    }
+    if (!drawboard.hasImage && !drawboard.dirty) {
+        showToast('请先导入背景图或进行绘制', 'warning');
+        return;
+    }
+
+    setDrawboardSending(true);
+    try {
+        const blob = await getDrawboardMergedBlob();
+        if (!blob) throw new Error('合并画板失败');
+        const file = new File([blob], `drawboard-${Date.now()}.png`, { type: 'image/png' });
+        const fileUrl = await saveFile(file);
+        const relSrc = fileUrl.replace(window.location.origin, '');
+
+        const userMsg = {
+            id: generateId(),
+            role: 'user',
+            categories: ['text', 'image'],
+            content: text,
+            attachments: [{ type: 'image', src: relSrc, label: '画板' }],
+            timestamp: Date.now()
+        };
+        addMessage(userMsg);
+
+        if (backendConnected) {
+            const content = [
+                { type: 'text', text },
+                { type: 'image_url', image_url: { url: fileUrl } }
+            ];
+            await sendMessages([{ role: 'user', content }]);
+        } else {
+            showToast('离线模式：画板消息仅本地展示', 'info');
+        }
+
+        drawboardInput.value = '';
+    } catch (err) {
+        showToast('发送失败：' + (err.message || err), 'error');
+    } finally {
+        setDrawboardSending(false);
+    }
+}
+
+function setupDrawboard() {
+    initDrawboardCanvas();
+
+    openDrawboardBtn.addEventListener('click', openDrawboard);
+    closeDrawboardBtn.addEventListener('click', closeDrawboard);
+    drawboardOverlay.addEventListener('click', (e) => {
+        if (e.target === drawboardOverlay) closeDrawboard();
+    });
+
+    importBgBtn.addEventListener('click', () => bgFileInput.click());
+    bgFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) importDrawboardBackground(file);
+        bgFileInput.value = '';
+    });
+    clearDrawBtn.addEventListener('click', clearDrawboard);
+    undoDrawBtn.addEventListener('click', undoDrawboard);
+
+    document.querySelectorAll('.drawboard-tool[data-tool]').forEach(btn => {
+        btn.addEventListener('click', () => setDrawboardTool(btn.dataset.tool, btn));
+    });
+    document.querySelectorAll('.drawboard-color').forEach(el => {
+        el.addEventListener('click', () => setDrawboardColor(el.dataset.color, el));
+    });
+    document.querySelectorAll('.drawboard-size').forEach(el => {
+        el.addEventListener('click', () => setDrawboardSize(el.dataset.size, el));
+    });
+
+    setDrawboardTool('draw', document.querySelector('.drawboard-tool[data-tool="draw"]'));
+    setDrawboardColor('#e74c3c', document.querySelector('.drawboard-color[data-color="#e74c3c"]'));
+    setDrawboardSize('8', document.querySelector('.drawboard-size[data-size="8"]'));
+
+    drawboardLayer.addEventListener('mousedown', drawboardStart);
+    drawboardLayer.addEventListener('mousemove', drawboardMove);
+    drawboardLayer.addEventListener('mouseup', drawboardStop);
+    drawboardLayer.addEventListener('mouseleave', drawboardStop);
+
+    drawboardSendBtn.addEventListener('click', sendDrawboardMessage);
+    drawboardInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendDrawboardMessage();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && drawboardOverlay.classList.contains('active')) {
+            closeDrawboard();
+        }
+    });
+}
+
 // ---------- 清理 ----------
 function cleanup() {
     manualClose = true;
@@ -1319,6 +1687,7 @@ async function init() {
     setupDragEvents();
     setupInputEvents();
     setupMessageAreaDelegation();
+    setupDrawboard();
     initMusicRenderer();
     await ensureMarked();
     initMermaid();

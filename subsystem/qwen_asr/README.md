@@ -4,16 +4,6 @@
 
 ---
 
-<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音识别-0.webp" alt="独立模块-语音识别-0" width="360"></p>
-
-*图：语音识别主界面*
-
-<p style="float: right; margin: 0 0 16px 16px;"><img src="../../image/独立模块-语音识别-1.webp" alt="独立模块-语音识别-1" width="360"></p>
-
-*图：语音识别结果展示*
-
----
-
 ## 目录
 
 - [功能概述](#功能概述)

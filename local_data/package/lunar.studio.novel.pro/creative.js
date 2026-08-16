@@ -6,11 +6,16 @@
 (function(global) {
     'use strict';
 
+    // ==== 文本框占位提示（文本素材 / 图片参考文本） ====
+    var TEXT_PLACEHOLDER = '在此输入原始大纲/创意引导/前情提要，或拖拽文件到此处...';
+    var IMAGE_REFERENCE_PLACEHOLDER = '（可选）输入参考文本，告诉 AI 你希望从什么角度理解这张图片、看到怎样的故事...';
+
     // ==== CreativeBuilder 类 ====
     class CreativeBuilder {
         constructor(app) {
             this.app = app;
             this._extracting = false;
+            this.imageDataUrl = null;
         }
 
         // ==== 文件选择回调 ====
@@ -34,8 +39,14 @@
             var el = this.app.elements;
             var ext = file.name.split('.').pop().toLowerCase();
 
+            // 图片导入（单张 JPG/PNG）
+            if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                await this._importImage(file);
+                return;
+            }
+
             if (!['txt', 'md', 'json'].includes(ext)) {
-                this.app.showToast('仅支持 .txt / .md / .json 文件');
+                this.app.showToast('仅支持 .txt / .md / .json / .jpg / .png 文件');
                 return;
             }
 
@@ -51,13 +62,38 @@
                     }
                 }
 
-                // 普通文本：填入输入框
+                // 普通文本：填入输入框，并清除已导入的图片（恢复文本占位提示）
                 el.rawTextInput.value = text;
-                this._showImportHint('已导入文件: ' + file.name + ' (' + text.length + ' 字)');
-                this.app.showToast('文件内容已导入，可点击「AI 提取纲要」');
+                this.clearImage();
             } catch (e) {
                 this.app.showToast('读取文件失败: ' + e.message);
             }
+        }
+
+        // ==== 导入单张图片（生成预览并保存 base64） ====
+        async _importImage(file) {
+            var el = this.app.elements;
+            try {
+                var dataUrl = await this._readFileDataURL(file);
+                this.imageDataUrl = dataUrl;
+                el.rawTextInput.value = '';
+                el.rawTextInput.placeholder = IMAGE_REFERENCE_PLACEHOLDER;
+                el.imagePreviewImg.src = dataUrl;
+                el.imagePreviewName.textContent = file.name;
+                el.imagePreview.style.display = '';
+            } catch (e) {
+                this.app.showToast('图片读取失败: ' + e.message);
+            }
+        }
+
+        // ==== 移除已导入的图片 ====
+        clearImage() {
+            var el = this.app.elements;
+            this.imageDataUrl = null;
+            el.imagePreviewImg.src = '';
+            el.imagePreviewName.textContent = '';
+            el.imagePreview.style.display = 'none';
+            el.rawTextInput.placeholder = TEXT_PLACEHOLDER;
         }
 
         // ==== 读取文件文本 ====
@@ -67,6 +103,16 @@
                 reader.onload = function(e) { resolve(e.target.result); };
                 reader.onerror = function() { reject(new Error('FileReader 错误')); };
                 reader.readAsText(file, 'UTF-8');
+            });
+        }
+
+        // ==== 读取文件为 data URL（用于图片预览/多模态输入） ====
+        _readFileDataURL(file) {
+            return new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onload = function(e) { resolve(e.target.result); };
+                reader.onerror = function() { reject(new Error('FileReader 错误')); };
+                reader.readAsDataURL(file);
             });
         }
 
@@ -165,14 +211,23 @@
             if (this._extracting) return;
 
             var el = this.app.elements;
-            var rawText = (el.rawTextInput.value || '').trim();
+            var input = (el.rawTextInput.value || '').trim();
+            var imageDataUrl = this.imageDataUrl || null;
 
-            // 允许从右侧已有纲要+手动输入来提取
-            // 如果输入框为空但右侧已有大纲，则基于大纲提取
-            if (!rawText) {
+            // 图片模式：文本框内容作为"参考文本"（角度引导）；文本模式：作为"文本素材"
+            var rawText = '';
+            var referenceText = '';
+            if (imageDataUrl) {
+                referenceText = input;
+            } else {
+                rawText = input;
+            }
+
+            // 无图片且无输入时，回退到右侧已有大纲
+            if (!rawText && !referenceText && !imageDataUrl) {
                 var existingOutline = (el.outlineInput.value || '').trim();
                 if (!existingOutline) {
-                    this.app.showToast('请先输入或导入原始文本');
+                    this.app.showToast('请先输入文本、导入文件或上传图片');
                     return;
                 }
                 rawText = existingOutline;
@@ -183,9 +238,9 @@
             el.extractOutlineBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 提取中...';
 
             try {
-                // 步骤 1: 提取总体大纲
+                // 步骤 1: 提取总体大纲（支持图片输入）
                 this.app.showToast('正在提取总体大纲...');
-                var outline = await this._extractStep('extract_outline', { rawText: rawText });
+                var outline = await this._extractStep('extract_outline', { rawText: rawText, referenceText: referenceText }, imageDataUrl);
                 if (outline) {
                     el.outlineInput.value = outline;
                     this.app.state.outline = outline;
@@ -232,16 +287,21 @@
         }
 
         // ==== 单步提取：总体大纲 / 评判标准 ====
-        async _extractStep(promptName, vars) {
+        async _extractStep(promptName, vars, imageUrl) {
             var prompt = await global.PromptLoader.loadAndFill(promptName, vars);
+            var systemContent = '你是一位专业的小说创作顾问。请严格按照用户要求的格式输出，不要添加额外解释。';
+            if (imageUrl) {
+                systemContent = '你是一位专业的小说创作顾问，具备图像理解能力。请结合用户提供的图片与文本提取信息，并严格按照用户要求的格式输出，不要添加额外解释。';
+            }
             var messages = [
-                { role: 'system', content: '你是一位专业的小说创作顾问。请严格按照用户要求的格式输出，不要添加额外解释。' },
+                { role: 'system', content: systemContent },
                 { role: 'user', content: prompt }
             ];
 
             var result = await this.app.config.callChat(messages, {
                 temperature: 0.7,
-                maxTokens: 4096
+                maxTokens: 4096,
+                imageUrl: imageUrl
             });
 
             // 记录 token

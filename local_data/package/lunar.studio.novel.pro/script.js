@@ -19,12 +19,6 @@
             initialized: false,
             phase: PHASE.IDLE,
             config: {
-                ai: {
-                    url: 'http://localhost:36789/v1',
-                    name: 'system-multimodal',
-                    key: '2000-0218'
-                },
-                embeddingModel: 'system-embedding',
                 wordMin: 3000,
                 wordMax: 4000,
                 paragraphTarget: 400,
@@ -86,8 +80,8 @@
             // 4. 加载状态
             await this.loadState();
 
-            // 5. 确保 AI 配置
-            await this.config.ensureConfigured();
+            // 5. 从 lunar_config.json 加载 AI 配置
+            await this.config.loadAgentConfig();
 
             // 6. 初始化记忆库
             try {
@@ -133,11 +127,12 @@
         // ==== DOM 缓存 ====
         cacheElements() {
             var ids = [
-                'buildBtn', 'continueBtn', 'stopBtn', 'exportBtn', 'editChapterBtn',
-                'configBtn', 'resetBtn',
+                'writeBtn', 'stopBtn', 'exportBtn', 'editChapterBtn',
+                'resetBtn',
                 'statusDot', 'statusText',
                 'importZone', 'fileInput', 'selectFileBtn', 'rawTextInput',
                 'extractOutlineBtn', 'importHint',
+                'imagePreview', 'imagePreviewImg', 'imagePreviewName', 'removeImageBtn',
                 'outlineInput', 'criteriaInput', 'chapterOutlinesList', 'editOutlinesBtn',
                 'outlineStatus', 'criteriaStatus', 'chapterOutlinesStatus',
                 'confirmInitBtn', 'confirmInitHint', 'confirmSection',
@@ -157,7 +152,6 @@
                 'humanApprovalCard', 'openApprovalBtn', 'approvalHint',
                 'reviewTab', 'reviewBadge', 'reviewInline', 'reviewEmpty', 'pageReview',
                 'sidebarTabs', 'pageCreative', 'pageOutlines', 'pageKnowledge',
-                'configModal', 'configModalClose', 'aiUrlInput', 'aiNameInput', 'aiKeyInput', 'configSaveBtn',
                 'exportModal', 'exportCancelBtn', 'exportConfirmBtn', 'exportModalClose',
                 'interruptModal', 'interruptCancelBtn', 'interruptConfirmBtn', 'interruptModalClose',
                 'toast', 'toastMessage'
@@ -173,12 +167,10 @@
             var self = this;
 
             // 工具栏
-            this.elements.buildBtn.addEventListener('click', function() { self.onBuild(); });
-            this.elements.continueBtn.addEventListener('click', function() { self.onContinue(); });
+            this.elements.writeBtn.addEventListener('click', function() { self.onWrite(); });
             this.elements.stopBtn.addEventListener('click', function() { self.showInterruptModal(); });
             this.elements.exportBtn.addEventListener('click', function() { self.showExportModal(); });
             this.elements.editChapterBtn.addEventListener('click', function() { self.toggleEditChapter(); });
-            this.elements.configBtn.addEventListener('click', function() { self.config.showConfigModal(); });
             this.elements.resetBtn.addEventListener('click', function() { self.resetState(); });
 
             // 知识库 Tab 切换
@@ -196,13 +188,6 @@
                     var page = tab.dataset.page;
                     self.switchSidebarPage(page);
                 });
-            });
-
-            // AI 配置模态框
-            this.elements.configModalClose.addEventListener('click', function() { self.closeConfigModal(); });
-            this.elements.configSaveBtn.addEventListener('click', function() { self.config.saveConfig(); });
-            this.elements.configModal.addEventListener('click', function(e) {
-                if (e.target === self.elements.configModal) self.closeConfigModal();
             });
 
             // 导出模态框
@@ -225,6 +210,7 @@
             this.elements.extractOutlineBtn.addEventListener('click', function() { self.creative.extractOutline(); });
             this.elements.selectFileBtn.addEventListener('click', function() { self.elements.fileInput.click(); });
             this.elements.fileInput.addEventListener('change', function(e) { self.creative.onFileSelected(e); });
+            this.elements.removeImageBtn.addEventListener('click', function() { self.creative.clearImage(); });
             this.elements.confirmInitBtn.addEventListener('click', function() { self.creative.confirmInit(); });
             this.elements.importZone.addEventListener('dragover', function(e) { e.preventDefault(); self.elements.importZone.classList.add('drag-over'); });
             this.elements.importZone.addEventListener('dragleave', function() { self.elements.importZone.classList.remove('drag-over'); });
@@ -302,7 +288,6 @@
                     var data = await resp.json();
                     this.state = Object.assign(createDefaultState(), data);
                     this.state.config = Object.assign(createDefaultState().config, data.config || {});
-                    this.state.config.ai = Object.assign(createDefaultState().config.ai, (data.config && data.config.ai) || {});
                     // 中间阶段重置为 IDLE
                     var midPhases = [PHASE.BUILDING, PHASE.GENERATING_PARAGRAPHS, PHASE.POLISHING_PARAGRAPHS, PHASE.WORD_REVIEW, PHASE.CONTENT_REVIEW, PHASE.CHAPTER_REVIEW, PHASE.FINAL_POLISH, PHASE.HUMAN_REVIEW, PHASE.GENERATING_SUMMARY];
                     if (midPhases.includes(this.state.phase) || this.state.phase === PHASE.INTERRUPTED) {
@@ -355,8 +340,12 @@
         renderToolbar() {
             var phase = this.state.phase;
             var isBusy = phase !== PHASE.IDLE && phase !== PHASE.INTERRUPTED;
-            this.elements.buildBtn.disabled = isBusy || !this.state.initialized;
-            this.elements.continueBtn.disabled = isBusy || !this.state.initialized;
+            var hasChapters = this.state.chapters.length > 0;
+            var isInterrupted = phase === PHASE.INTERRUPTED;
+            this.elements.writeBtn.disabled = isBusy || !this.state.initialized;
+            this.elements.writeBtn.innerHTML = isInterrupted
+                ? '<i class="fas fa-play-circle"></i> 继续生成'
+                : (hasChapters ? '<i class="fas fa-pen-nib"></i> 续写下一章' : '<i class="fas fa-feather-alt"></i> 开始创作');
             this.elements.stopBtn.disabled = !isBusy || this.pendingStop;
             var phaseNames = {};
             phaseNames[PHASE.IDLE] = '就绪';
@@ -548,11 +537,6 @@
             this.elements.aiSummaryPane.classList.toggle('active', tabName === 'aiSummary');
         }
 
-        // ==== 配置模态框 ====
-        closeConfigModal() {
-            this.elements.configModal.classList.remove('active');
-        }
-
         // ==== 导出模态框 ====
         showExportModal() { this.elements.exportModal.classList.add('active'); }
         closeExportModal() { this.elements.exportModal.classList.remove('active'); }
@@ -647,21 +631,8 @@
             this.state.config.paragraphTarget = parseInt(this.elements.paragraphTarget.value) || 400;
         }
 
-        // ==== 构建/续写 ====
-        async onBuild() {
-            this.collectConfig();
-            this.state.chapterIndex = 0;
-            this.state.chapters = [];
-            this.state.currentDraft = null;
-            this.state.nextDirection = '';
-            this.state.nextCriteria = '';
-            this.state.interruptContext = null;
-            this.state.callLog = [];
-            this.pendingStop = false;
-            if (this.workflow) await this.workflow.startChapter();
-        }
-
-        async onContinue() {
+        // ==== 开始创作 / 续写下一章 / 继续生成 ====
+        async onWrite() {
             this.collectConfig();
             if (this.state.phase === PHASE.INTERRUPTED) {
                 this.state.phase = PHASE.IDLE;

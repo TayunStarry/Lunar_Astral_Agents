@@ -55,9 +55,6 @@
                 <button class="attach-btn" id="attachBtn" title="添加文件（图片 / 视频 / 文本）">
                     <i class="fas fa-paperclip"></i>
                 </button>
-                <button class="attach-btn" id="themeToggle" title="切换主题">
-                    <i class="fas fa-moon"></i>
-                </button>
                 <input type="file" id="fileInput" multiple accept="*/*" hidden />
                 <textarea id="messageInput" class="message-input" placeholder="输入文字消息… (Enter 发送, Shift+Enter 换行)"
                     rows="1"></textarea>
@@ -69,15 +66,23 @@
 
         <!-- 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容显示） -->
         <div class="top-controls">
+            <button class="header-btn" id="openDrawboardBtn" title="打开画板">
+                <i class="fas fa-palette"></i>
+            </button>
             <button class="header-btn" id="clearBtn" title="清空消息">
                 <i class="fas fa-broom"></i>
+            </button>
+            <button class="header-btn" id="themeToggle" title="切换主题">
+                <i class="fas fa-moon"></i>
             </button>
             <div class="search-box" role="search">
                 <i class="fas fa-search search-icon"></i>
                 <input id="searchInput" class="search-input" type="text" placeholder="搜索消息内容…" autocomplete="off" />
                 <span class="search-count" id="searchCount" hidden></span>
-                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i class="fas fa-chevron-up"></i></button>
-                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i class="fas fa-chevron-down"></i></button>
+                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i
+                        class="fas fa-chevron-up"></i></button>
+                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i
+                        class="fas fa-chevron-down"></i></button>
                 <button class="search-clear" id="searchClear" title="清除搜索" hidden><i class="fas fa-times"></i></button>
             </div>
         </div>
@@ -89,6 +94,72 @@
             <div class="drag-overlay-content">
                 <i class="fas fa-cloud-upload-alt"></i>
                 <p>释放文件到消息列表</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画板页（全屏覆盖层） -->
+    <div class="drawboard-overlay" id="drawboardOverlay" aria-hidden="true">
+        <div class="drawboard">
+            <div class="drawboard-header">
+                <span class="drawboard-title"><i class="fas fa-palette"></i> 画板</span>
+                <div class="drawboard-header-actions">
+                    <button class="drawboard-btn" id="importBgBtn" title="导入背景图">
+                        <i class="fas fa-image"></i> 背景
+                    </button>
+                    <button class="drawboard-btn" id="clearDrawBtn" title="清空画板">
+                        <i class="fas fa-eraser"></i> 清空
+                    </button>
+                    <button class="drawboard-btn" id="closeDrawboardBtn" title="关闭">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <input type="file" id="bgFileInput" accept="image/*" hidden />
+            </div>
+
+            <div class="drawboard-toolbar">
+                <button class="drawboard-tool" data-tool="draw" title="画笔"><i class="fas fa-pencil-alt"></i></button>
+                <button class="drawboard-tool" data-tool="line" title="直线"><i
+                        class="fas fa-grip-lines-vertical"></i></button>
+                <button class="drawboard-tool" data-tool="rect" title="矩形"><i class="fas fa-vector-square"></i></button>
+                <button class="drawboard-tool" data-tool="circle" title="圆形"><i class="far fa-circle"></i></button>
+                <button class="drawboard-tool" data-tool="arrow" title="箭头"><i
+                        class="fas fa-long-arrow-alt-right"></i></button>
+                <button class="drawboard-tool" data-tool="text" title="文本"><i class="fas fa-font"></i></button>
+                <button class="drawboard-tool" id="undoDrawBtn" title="撤销" disabled><i class="fas fa-undo"></i></button>
+            </div>
+
+            <div class="drawboard-colorbar">
+                <div class="drawboard-color" data-color="#e74c3c" style="background:#e74c3c"></div>
+                <div class="drawboard-color" data-color="#3498db" style="background:#3498db"></div>
+                <div class="drawboard-color" data-color="#2ecc71" style="background:#2ecc71"></div>
+                <div class="drawboard-color" data-color="#f1c40f" style="background:#f1c40f"></div>
+                <div class="drawboard-color" data-color="#9b59b6" style="background:#9b59b6"></div>
+                <div class="drawboard-color" data-color="#ffffff" style="background:#ffffff"></div>
+                <div class="drawboard-color" data-color="#000000" style="background:#000000"></div>
+                <span class="drawboard-size-sep"></span>
+                <div class="drawboard-size" data-size="4">S</div>
+                <div class="drawboard-size" data-size="8">M</div>
+                <div class="drawboard-size" data-size="16">L</div>
+                <div class="drawboard-size" data-size="24">XL</div>
+            </div>
+
+            <div class="drawboard-canvas-wrap" id="drawboardCanvasWrap">
+                <canvas id="drawboardBg"></canvas>
+                <canvas id="drawboardLayer"></canvas>
+                <canvas id="drawboardPreview"></canvas>
+                <div class="drawboard-placeholder" id="drawboardPlaceholder">
+                    <i class="fas fa-image"></i>
+                    <p>点击「背景」导入图片，或直接在画布上绘制</p>
+                </div>
+            </div>
+
+            <div class="drawboard-footer">
+                <textarea id="drawboardInput" class="drawboard-input" placeholder="描述这幅画面 / 想对 AI 说什么… (Enter 发送)"
+                    rows="1"></textarea>
+                <button id="drawboardSendBtn" class="drawboard-send" title="发送给 AI">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
             </div>
         </div>
     </div>

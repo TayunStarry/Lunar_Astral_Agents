@@ -245,7 +245,7 @@ MinPort          ModelPort         ProxyPort        MaxPort
     "user_name": null,
     "developer": false,
     "allow_diffusion": true,
-    "bridging_type": "napcat-0",
+    "bridging_type": "napcat",
     "bridging_path": "ws://localhost:4567",
     "bridging_token": "",
     "bridging_target": 906314036,

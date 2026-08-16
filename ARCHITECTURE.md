@@ -85,8 +85,6 @@ Lunar_Astral_Agents/
 ├── local_data/            # 本地运行时数据
 │   ├── models/            # AI 模型文件（GGUF/SafeTensors）
 │   └── package/           # 前端共享资源库（UI 模块 + 第三方库）
-│
-└── image/                 # 项目文档配图
 ```
 
 ---
@@ -97,7 +95,7 @@ Lunar_Astral_Agents/
 |------|------|
 | `adapters/` | Go↔JS 双向桥接，基于 goja 运行时将 Go 能力暴露为 JS 可调用函数 |
 | `hierarchy/` | 前端资源容器，Go embed 嵌入，含角色 Prompt、Web 界面 |
-| `model/` | 模型服务层，管理 llama-server 进程生命周期、TTS 引擎调用、请求队列 |
+| `model/` | 模型服务层，管理 llama-server 进程生命周期与请求队列（TTS 引擎由独立子系统 qwen3_tts 提供） |
 | `server/` | HTTP 服务入口，路由注册、CORS、初始化编排 |
 | `TypeScript/` | TypeScript 智能体源码，编译为 agentSystem.js 在 goja 中执行 |
 | `websocket/` | 实时双向通信，连接管理、读写泵、广播推送 |
@@ -190,7 +188,7 @@ agent_search → file_manager, general_config, logger_general
 |------|------|
 | 前端 UI | HTML5 + CSS3 + Vanilla JS (ES6+)，玻璃拟态风格，WebView 嵌入 |
 | AI 智能体 | TypeScript → goja 运行时（Go 进程中执行） |
-| 后端服务 | Go 1.25，HTTP API + WebSocket |
+| 后端服务 | Go 1.26，HTTP API + WebSocket |
 | 文本推理 | llama.cpp (llama-server)，GGUF 格式 |
 | 图像生成 | stable-diffusion.cpp，GGUF 格式 |
 | 语音合成 | Qwen3-TTS，C++ GGML 引擎 |

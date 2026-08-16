@@ -191,19 +191,22 @@ body {
 }
 .panel-textarea::placeholder { color:rgba(120,120,120,0.5); }
 .panel-textarea[readonly] { opacity:0.7; cursor:default; }
-.config-item { margin-bottom:1rem; }
-.config-item:last-child { margin-bottom:0; }
-.config-item label { display:block; font-size:0.75rem; font-weight:500; color:var(--text-secondary); margin-bottom:0.3rem; }
 
 /* ==================== 9. 创意构建 ==================== */
 .import-zone {
     border:2px dashed var(--glass-border); border-radius:var(--radius-md);
-    padding:1.2rem 0.8rem; text-align:center; cursor:pointer; transition:var(--transition);
+    padding:1rem 0.8rem; text-align:center; cursor:default; transition:var(--transition);
     margin-bottom:0.5rem;
 }
 .import-zone:hover { border-color:var(--brand); background:rgba(108,155,207,0.06); }
-.import-zone i { font-size:24px; color:var(--brand); margin-bottom:6px; display:block; }
-.import-zone p { margin:0 0 6px; font-size:0.78rem; color:var(--text-secondary); }
+.import-zone.drag-over { border-color:var(--accent); background:rgba(157,107,255,0.10); box-shadow:0 0 0 3px rgba(157,107,255,0.12); }
+.import-textarea { margin:0; min-height:70px; text-align:left; }
+.import-actions { display:flex; gap:0.5rem; }
+.import-actions .btn-glass { flex:1; }
+.image-preview { display:flex; flex-direction:column; gap:0.4rem; margin-bottom:0.5rem; text-align:left; }
+.image-preview img { width:100%; max-height:180px; object-fit:contain; border-radius:var(--radius-sm); background:rgba(0,0,0,0.05); border:1px solid var(--glass-border); }
+.image-preview-meta { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; font-size:0.72rem; color:var(--text-secondary); }
+.image-preview-meta span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .import-hint { font-size:0.78rem; color:var(--success); padding:0.4rem 0.6rem; background:rgba(32,201,151,0.08); border-radius:var(--radius-sm); border-left:3px solid var(--success); }
 .chapter-outlines-summary { max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; margin-bottom:0.4rem; }
 .outline-summary-item { display:flex; align-items:flex-start; gap:0.5rem; padding:0.3rem 0.5rem; background:var(--glass-bg-dim); border-radius:var(--radius-sm); font-size:0.78rem; line-height:1.4; }
