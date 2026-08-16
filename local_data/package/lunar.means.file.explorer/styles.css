@@ -742,9 +742,9 @@ body {
 
 /* ---- 文本预览模态框 ---- */
 .text-modal-content {
-    width: 88%;
-    max-width: 920px;
-    max-height: 86vh;
+    width: 92%;
+    max-width: 1400px;
+    height: 96vh;
     display: flex;
     flex-direction: column;
     padding: 24px;
