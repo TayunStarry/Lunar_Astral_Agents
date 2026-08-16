@@ -454,7 +454,7 @@ function updateFileGrid(files, selectedFiles, isSearching, searchResults, curren
     const pageFiles = sortedFiles.slice(start, start + pageSize);
 
     // 渲染当前页
-    pageFiles.forEach((file, index) => {
+    pageFiles.forEach((file) => {
         const fileCard = createFileCard(
             file,
             selectedFiles,
@@ -464,7 +464,6 @@ function updateFileGrid(files, selectedFiles, isSearching, searchResults, curren
             callbacks.onDownload,
             callbacks.onDelete
         );
-        fileCard.style.animationDelay = `${index * 0.04}s`;
         fileGrid.appendChild(fileCard);
     });
 
@@ -1047,44 +1046,6 @@ async function traverseAllFiles(startPath = '') {
     }
 
     return allFiles;
-}
-
-/**
- * 将搜索索引保存到根目录下的 file_query.index
- * @param {Array} indexData - 文件/目录列表
- * @returns {Promise<void>}
- */
-async function saveIndexToFile(indexData) {
-    //  TODO: 由于不再需要索引文件，所以停用索引加载功能
-    if (true) return;
-    try {
-        const jsonStr = JSON.stringify(indexData);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const file = new File([blob], 'file_query.index', { type: 'application/json' });
-        setTimeout(() => showToast('正在构建搜索索引，请稍后...', 'info'), 2000);
-        // 上传到根目录（currentPath 为空）
-        await uploadFile(file, '', () => { }, true);
-    }
-    catch (error) {
-        console.error('保存索引文件失败:', error);
-    }
-}
-
-/**
- * 从根目录加载 file_query.index
- * @returns {Promise<Array|null>} 返回文件列表数组，若文件不存在或解析失败则返回 null
- */
-async function loadIndexFromFile() {
-    try {
-        const response = await fetch('/file/read/file_query.index');
-        if (!response.ok) return null;
-        const data = await response.json();
-        return Array.isArray(data) ? data : null;
-    }
-    catch (error) {
-        console.warn('读取索引文件失败，将重新构建索引:', error);
-        return null;
-    }
 }
 
 /**
@@ -1735,7 +1696,7 @@ class FileManager {
         /** @type {number} 当前页码 */
         this.currentPage = 1;
         /** @type {number} 每页显示数量 */
-        this.pageSize = 10;
+        this.pageSize = 24;
     }
 
     /**
@@ -1744,19 +1705,6 @@ class FileManager {
     init() {
         bindEvents(this);
         this.loadFiles();
-        this.loadIndexIfExists();
-    }
-    /** 尝试从本地索引文件加载 allFiles */
-    async loadIndexIfExists() {
-        try {
-            const cached = await loadIndexFromFile();
-            if (cached && Array.isArray(cached) && cached.length > 0) {
-                this.allFiles = cached;
-                showToast('✅ 已从本地索引文件加载' + cached.length + '条记录', 'info');
-            }
-        }
-        // 忽略错误，搜索时再重建
-        catch (error) { }
     }
     /**
      * 加载文件列表
@@ -1882,8 +1830,6 @@ class FileManager {
         try {
             if (this.allFiles.length === 0) {
                 this.allFiles = await traverseAllFiles();
-                // 将索引保存到文件
-                saveIndexToFile(this.allFiles);
             }
 
             this.searchResults = this.allFiles.filter(
@@ -2050,6 +1996,5 @@ class FileManager {
 document.addEventListener('DOMContentLoaded', () => {
     // 初始化文件管理器
     const fileManager = new FileManager();
-    //  TODO: 由于不在需要索引文件，所以停用索引加载功能
     fileManager.init();
 });

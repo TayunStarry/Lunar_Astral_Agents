@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>『 星月智能 』星图-琉璃</title>
+    <title>『 星月智能 』文件管理</title>
     <!-- 标准样式库 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <!-- 标准脚本库 -->
@@ -13,81 +13,93 @@
     <link rel="stylesheet" href="styles.css">
     <!-- 项目私有脚本 -->
     <script defer src="script.js"></script>
-    <!-- 标准脚本引用 -->
 </head>
 
 <body>
-    <div class="bg-overlay"></div>
-    <div class="bg-credit">『 星月智能 』- 轻量级神经网络本地部署平台</div>
+    <div class="background"></div>
+    <div class="glass-effect"></div>
 
-    <div class="container">
-        <header class="header">
-            <h1><i class="fas fa-folder-open"></i> 星月智能<small
-                    style="font-weight:300;font-size:0.7em;margin-left:6px;">文件管理</small></h1>
+    <div class="app">
+        <header class="app-header">
+            <div class="brand">
+                <span class="brand-icon"><i class="fas fa-folder-open"></i></span>
+                <span class="brand-name">文件管理</span>
+            </div>
+
+            <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="search-input" placeholder="搜索文件或文件夹..." class="search-input" autocomplete="off">
+                <button id="search-clear" class="search-clear" style="display: none;" aria-label="清除搜索">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
             <div class="header-actions">
-                <div class="search-section">
-                    <div class="search-box">
-                        <input type="text" id="search-input" placeholder="搜索文件或文件夹..." class="search-input">
-                        <button id="search-clear" class="search-clear" style="display: none;">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="upload-section">
-                    <label for="file-upload" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> 上传文件
-                    </label>
-                    <input type="file" id="file-upload" multiple style="display: none;">
-                    <label for="zip-upload" class="btn btn-info">
-                        <i class="fas fa-file-archive"></i> 上传解压
-                    </label>
-                    <input type="file" id="zip-upload" accept=".zip" style="display: none;">
-                    <button id="new-folder" class="btn btn-secondary">
-                        <i class="fas fa-folder-plus"></i> 新建文件夹
+                <label for="file-upload" class="btn btn-primary">
+                    <i class="fas fa-upload"></i><span>上传文件</span>
+                </label>
+                <input type="file" id="file-upload" multiple style="display: none;">
+                <label for="zip-upload" class="btn btn-ghost">
+                    <i class="fas fa-file-archive"></i><span>上传解压</span>
+                </label>
+                <input type="file" id="zip-upload" accept=".zip" style="display: none;">
+                <button id="new-folder" class="btn btn-ghost">
+                    <i class="fas fa-folder-plus"></i><span>新建文件夹</span>
+                </button>
+                <button id="qrcode-button" class="btn btn-icon btn-ghost" title="生成二维码">
+                    <i class="fas fa-qrcode"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <div class="toolbar">
+                <nav class="breadcrumb" aria-label="面包屑导航">
+                    <button id="back-button" class="btn btn-small btn-ghost back-button" style="display: none;">
+                        <i class="fas fa-arrow-left"></i>
                     </button>
-                    <button id="qrcode-button" class="btn btn-accent">
-                        <i class="fas fa-qrcode"></i> 二维码
-                    </button>
-                </div>
-                <div class="batch-actions" style="display: none;">
-                    <button id="batch-delete" class="btn btn-danger">
+                </nav>
+                <div class="batch-actions">
+                    <button id="batch-delete" class="btn btn-small btn-danger">
                         <i class="fas fa-trash"></i> 批量删除
                     </button>
-                    <button id="batch-compress" class="btn btn-success">
+                    <button id="batch-compress" class="btn btn-small btn-secondary">
                         <i class="fas fa-compress"></i> 压缩所选
                     </button>
                 </div>
             </div>
-        </header>
 
-        <main class="file-manager">
-            <div class="breadcrumb">
-                <button id="back-button" class="btn btn-small btn-secondary" style="margin-right: 10px; display: none;">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-                <a href="#" data-path="" class="breadcrumb-item">
-                    <i class="fas fa-home"></i> 根目录
-                </a>
+            <div class="content-area">
+                <div class="file-grid" id="file-grid"></div>
             </div>
 
-            <div class="stats-horizontal">
-                <div class="stat-item">
-                    <span class="stat-label">当前文件总数</span>
-                    <span id="total-files" class="stat-value">0</span>
+            <div class="main-footer">
+                <div class="stats-horizontal">
+                    <div class="stat-item">
+                        <span class="stat-icon stat-icon--file"><i class="fas fa-file"></i></span>
+                        <div class="stat-text">
+                            <span id="total-files" class="stat-value">0</span>
+                            <span class="stat-label">文件</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon stat-icon--folder"><i class="fas fa-folder"></i></span>
+                        <div class="stat-text">
+                            <span id="total-folders" class="stat-value">0</span>
+                            <span class="stat-label">文件夹</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon stat-icon--size"><i class="fas fa-database"></i></span>
+                        <div class="stat-text">
+                            <span id="total-size" class="stat-value">0 B</span>
+                            <span class="stat-label">当前层级大小</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="stat-label">文件夹数量</span>
-                    <span id="total-folders" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">当前层级大小</span>
-                    <span id="total-size" class="stat-value">0 B</span>
-                </div>
-            </div>
 
-            <div class="file-grid" id="file-grid"></div>
-            <!-- 新增分页导航 -->
-            <div class="pagination" id="pagination"></div>
+                <div class="pagination" id="pagination"></div>
+            </div>
 
             <div class="upload-progress" id="upload-progress" style="display: none;">
                 <div class="progress-bar">
@@ -115,13 +127,13 @@
             </div>
             <div class="text-modal-controls">
                 <div class="text-modal-control-group">
-                    <button id="text-modal-edit" class="btn btn-small btn-info">
+                    <button id="text-modal-edit" class="btn btn-small btn-ghost">
                         <i class="fas fa-edit"></i> 编辑
                     </button>
-                    <button id="text-modal-copy" class="btn btn-small btn-secondary">
+                    <button id="text-modal-copy" class="btn btn-small btn-ghost">
                         <i class="fas fa-copy"></i> 复制
                     </button>
-                    <button id="text-modal-download" class="btn btn-small btn-secondary">
+                    <button id="text-modal-download" class="btn btn-small btn-ghost">
                         <i class="fas fa-download"></i> 下载
                     </button>
                 </div>
