@@ -23,13 +23,56 @@ type FrameData struct {
 	Timestamp int
 }
 
-// ScreenshotRequest 截图请求参数
-type ScreenshotRequest struct {
-	DisplayIndex int    `json:"display_index"` // -1表示所有显示器
-	Region       string `json:"region"`        // "x,y,width,height"
-	Scale        string `json:"scale"`         // "width,height" 或 "0.5"
-	Format       string `json:"format"`        // png, jpg, jpeg
-	Quality      int    `json:"quality"`       // JPEG质量 1-100
+// CaptureMode 截图模式
+type CaptureMode string
+
+const (
+	// ModeAuto 默认模式：优先捕获焦点窗口，识别失败时降级为多屏拼接全屏
+	ModeAuto CaptureMode = "auto"
+	// ModeWindow 强制捕获焦点窗口，识别失败直接报错
+	ModeWindow CaptureMode = "window"
+	// ModeFullscreen 多屏拼接全屏截图
+	ModeFullscreen CaptureMode = "fullscreen"
+	// ModeDisplay 指定显示器截图
+	ModeDisplay CaptureMode = "display"
+	// ModeRegion 绝对屏幕坐标区域截图
+	ModeRegion CaptureMode = "region"
+)
+
+// CaptureRequest 统一截图请求
+type CaptureRequest struct {
+	Mode         CaptureMode `json:"mode"`          // 截图模式，默认 auto
+	DisplayIndex int         `json:"display_index"` // mode=display 时生效，-1 表示全部
+
+	// 窗口相对精准区域（mode=auto/window）
+	// 触发条件：Width>0 && Height>0；OffsetX/OffsetY 缺省为 0（窗口左上角）
+	OffsetX int `json:"offset_x"`
+	OffsetY int `json:"offset_y"`
+	Width   int `json:"width"`
+	Height  int `json:"height"`
+
+	// 绝对屏幕坐标区域（mode=region）
+	RegionX int `json:"region_x"`
+	RegionY int `json:"region_y"`
+	RegionW int `json:"region_w"`
+	RegionH int `json:"region_h"`
+
+	// 输出参数
+	Format  string `json:"format"`  // png / jpeg，默认取 general_config
+	Quality int    `json:"quality"` // JPEG 质量 1-100，默认取 general_config
+	Scale   string `json:"scale"`   // 可选缩放：比例（0.5）或指定宽高（800,600），仅 HTTP 直出路径使用
+}
+
+// CaptureResult 统一截图结果
+type CaptureResult struct {
+	Image        []byte      `json:"-"`                // 原始图像字节（HTTP 直出）
+	Format       string      `json:"format"`           // png / jpeg
+	ContentType  string      `json:"content_type"`     // image/png / image/jpeg
+	Width        int         `json:"width"`            // 最终宽度（缩放后）
+	Height       int         `json:"height"`           // 最终高度（缩放后）
+	Mode         CaptureMode `json:"mode"`             // 实际采用的模式（含降级后）
+	DisplayIndex int         `json:"display_index,omitempty"`
+	WindowTitle  string      `json:"window_title,omitempty"` // 焦点窗口标题（window 模式）
 }
 
 // GenerateTask 生成任务结构体

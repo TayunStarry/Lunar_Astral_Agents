@@ -32,6 +32,15 @@ const searchPrev = document.getElementById('searchPrev');
 const searchNext = document.getElementById('searchNext');
 const searchClear = document.getElementById('searchClear');
 const pendingAttachments = document.getElementById('pendingAttachments');
+const voiceToggleBtn = document.getElementById('voiceToggleBtn');
+
+// ---------- 截图 DOM 引用 ----------
+const captureBtn = document.getElementById('captureBtn');
+const captureModal = document.getElementById('captureModal');
+const capturePreviewImg = document.getElementById('capturePreviewImg');
+const captureToSendBtn = document.getElementById('captureToSendBtn');
+const captureToDrawboardBtn = document.getElementById('captureToDrawboardBtn');
+const captureCloseBtn = document.getElementById('captureCloseBtn');
 
 // ---------- 画板 DOM 引用 ----------
 const openDrawboardBtn = document.getElementById('openDrawboardBtn');
@@ -65,6 +74,9 @@ let saveTimer = null;
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
 let isSending = false;        // 是否正在发送
+let autoPlayVoice = true;     // 收到语音消息时是否自动播放
+let captureFile = null;       // 当前截图的 File 对象
+let capturePreviewUrl = null; // 当前截图预览 blob URL
 
 // ---------- 音频播放队列（TTS） ----------
 class AudioQueueManager {
@@ -805,7 +817,7 @@ function handleWebSocketMessage(msg) {
         const categories = ['text'];
         if (audio) categories.push('voice');
         addMessage({ id: generateId(), role: 'assistant', categories, content, audio: audio || '', timestamp: Date.now() });
-        if (audio) AudioQueue.enqueue(audio);
+        if (audio && autoPlayVoice) AudioQueue.enqueue(audio);
         return;
     }
 
@@ -1295,6 +1307,100 @@ function setupThemeToggle() {
     themeToggle.addEventListener('click', toggleTheme);
 }
 
+// ---------- 语音自动播放开关 ----------
+function loadVoiceAutoPlay() {
+    autoPlayVoice = localStorage.getItem('message_terminal_autoplay') !== 'off';
+    updateVoiceToggleUI();
+}
+
+function toggleVoiceAutoPlay() {
+    autoPlayVoice = !autoPlayVoice;
+    localStorage.setItem('message_terminal_autoplay', autoPlayVoice ? 'on' : 'off');
+    updateVoiceToggleUI();
+    if (!autoPlayVoice) AudioQueue.stop();
+}
+
+function updateVoiceToggleUI() {
+    voiceToggleBtn.classList.toggle('active', autoPlayVoice);
+    voiceToggleBtn.title = autoPlayVoice ? '自动播放语音：开' : '自动播放语音：关';
+    voiceToggleBtn.innerHTML = autoPlayVoice ? '<i class="fas fa-volume-up"></i>' : '<i class="fas fa-volume-mute"></i>';
+}
+
+function setupVoiceToggle() {
+    voiceToggleBtn.addEventListener('click', toggleVoiceAutoPlay);
+}
+
+// ---------- 截图功能 ----------
+async function captureScreen() {
+    showToast('正在截图…', 'info');
+    try {
+        const res = await fetch('/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'fullscreen', format: 'png' })
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || `截图失败 (${res.status})`);
+        }
+        const blob = await res.blob();
+        const file = new File([blob], `screenshot-${Date.now()}.png`, { type: blob.type || 'image/png' });
+        openCaptureModal(file);
+    } catch (err) {
+        showToast('截图失败：' + (err.message || err), 'error');
+    }
+}
+
+function openCaptureModal(file) {
+    captureFile = file;
+    capturePreviewUrl = URL.createObjectURL(file);
+    capturePreviewImg.src = capturePreviewUrl;
+    captureModal.classList.add('active');
+    captureModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeCaptureModal() {
+    captureModal.classList.remove('active');
+    captureModal.setAttribute('aria-hidden', 'true');
+    if (capturePreviewUrl) {
+        URL.revokeObjectURL(capturePreviewUrl);
+        capturePreviewUrl = null;
+    }
+    captureFile = null;
+    capturePreviewImg.removeAttribute('src');
+}
+
+async function sendCaptureToPending() {
+    const file = captureFile;
+    if (!file) return;
+    closeCaptureModal();
+    await addPendingFiles([file]);
+    showToast('截图已加入待发送列表', 'success');
+}
+
+async function sendCaptureToDrawboard() {
+    const file = captureFile;
+    if (!file) return;
+    closeCaptureModal();
+    openDrawboard();
+    await importDrawboardBackground(file);
+}
+
+function setupCapture() {
+    captureBtn.addEventListener('click', captureScreen);
+    captureToSendBtn.addEventListener('click', sendCaptureToPending);
+    captureToDrawboardBtn.addEventListener('click', sendCaptureToDrawboard);
+    captureCloseBtn.addEventListener('click', closeCaptureModal);
+    captureModal.addEventListener('click', (e) => {
+        if (e.target === captureModal) closeCaptureModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && captureModal.classList.contains('active')) {
+            closeCaptureModal();
+        }
+    });
+}
+
 // ---------- 事件委托 ----------
 function setupMessageAreaDelegation() {
     messageArea.addEventListener('click', (e) => {
@@ -1682,12 +1788,15 @@ function cleanup() {
 async function init() {
     loadTheme();
     setupThemeToggle();
+    loadVoiceAutoPlay();
+    setupVoiceToggle();
     setupTabEvents();
     setupSearchEvents();
     setupDragEvents();
     setupInputEvents();
     setupMessageAreaDelegation();
     setupDrawboard();
+    setupCapture();
     initMusicRenderer();
     await ensureMarked();
     initMermaid();

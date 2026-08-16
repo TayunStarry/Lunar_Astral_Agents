@@ -6,111 +6,64 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
-// HandleScreenshot 处理截图请求
-func HandleScreenshot(w http.ResponseWriter, r *http.Request) {
-	var req module.ScreenshotRequest
+// HandleCapture 处理统一截图请求
+// 支持 POST（JSON 请求体，对齐 module.CaptureRequest）与 GET（查询参数）
+func HandleCapture(w http.ResponseWriter, r *http.Request) {
+	req := module.CaptureRequest{}
 
-	// 解析请求参数
 	if r.Method == "POST" {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "无效的请求参数", http.StatusBadRequest)
 			return
 		}
 	} else {
-		// GET请求从查询参数获取
-		req.DisplayIndex, _ = strconv.Atoi(r.URL.Query().Get("display"))
-		req.Region = r.URL.Query().Get("region")
-		req.Scale = r.URL.Query().Get("scale")
-		req.Format = r.URL.Query().Get("format")
-		req.Quality, _ = strconv.Atoi(r.URL.Query().Get("quality"))
+		// GET 从查询参数解析
+		q := r.URL.Query()
+		if m := q.Get("mode"); m != "" {
+			req.Mode = module.CaptureMode(m)
+		}
+		req.DisplayIndex, _ = strconv.Atoi(q.Get("display_index"))
+		req.OffsetX, _ = strconv.Atoi(q.Get("offset_x"))
+		req.OffsetY, _ = strconv.Atoi(q.Get("offset_y"))
+		req.Width, _ = strconv.Atoi(q.Get("width"))
+		req.Height, _ = strconv.Atoi(q.Get("height"))
+		req.RegionX, _ = strconv.Atoi(q.Get("region_x"))
+		req.RegionY, _ = strconv.Atoi(q.Get("region_y"))
+		req.RegionW, _ = strconv.Atoi(q.Get("region_w"))
+		req.RegionH, _ = strconv.Atoi(q.Get("region_h"))
+		req.Format = q.Get("format")
+		req.Quality, _ = strconv.Atoi(q.Get("quality"))
+		req.Scale = q.Get("scale")
 	}
 
-	// 执行截图
-	imgData, filename, contentType, err := module.Screenshot(req)
+	result, err := module.Capture(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 设置响应头
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
-
-	// 返回图片数据
-	w.Write(imgData)
+	w.Header().Set("Content-Type", result.ContentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", captureFilename(result)))
+	w.Write(result.Image)
 }
 
-// HandleScreenshotDisplay 截图特定显示器
-func HandleScreenshotDisplay(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 {
-		http.Error(w, "无效的URL", http.StatusBadRequest)
-		return
+// captureFilename 根据截图结果构造文件名
+func captureFilename(result module.CaptureResult) string {
+	switch result.Mode {
+	case module.ModeWindow:
+		return fmt.Sprintf("screenshot_window.%s", result.Format)
+	case module.ModeDisplay:
+		return fmt.Sprintf("screenshot_d%d.%s", result.DisplayIndex, result.Format)
+	default:
+		return fmt.Sprintf("screenshot.%s", result.Format)
 	}
-
-	displayIndex, err := strconv.Atoi(parts[3])
-	if err != nil || displayIndex < 0 {
-		http.Error(w, "无效的显示器索引", http.StatusBadRequest)
-		return
-	}
-
-	req := module.ScreenshotRequest{
-		DisplayIndex: displayIndex,
-		Format:       r.URL.Query().Get("format"),
-		Scale:        r.URL.Query().Get("scale"),
-		Quality:      0, // 使用默认值
-	}
-
-	// 执行截图
-	imgData, filename, contentType, err := module.Screenshot(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
-	w.Write(imgData)
-}
-
-// HandleScreenshotRegion 处理区域截图
-func HandleScreenshotRegion(w http.ResponseWriter, r *http.Request) {
-	region := r.URL.Query().Get("region")
-	scale := r.URL.Query().Get("scale")
-	format := r.URL.Query().Get("format")
-	quality, _ := strconv.Atoi(r.URL.Query().Get("quality"))
-
-	if region == "" {
-		http.Error(w, "需要region参数 (x,y,width,height)", http.StatusBadRequest)
-		return
-	}
-
-	req := module.ScreenshotRequest{
-		Region:  region,
-		Scale:   scale,
-		Format:  format,
-		Quality: quality,
-	}
-
-	// 执行截图
-	imgData, filename, contentType, err := module.Screenshot(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
-	w.Write(imgData)
 }
 
 // HandleGetDisplays 获取所有显示器信息
 func HandleGetDisplays(w http.ResponseWriter, r *http.Request) {
 	displays := module.GetDisplays()
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(displays)
 }

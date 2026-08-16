@@ -278,7 +278,7 @@ func main() {
 
 	subTest("添加图片（LLM 自动生成标签）")
 	start := time.Now()
-	imgID, err := module.MemoryAddImage(ctx, testImageCollection, testImageBase64)
+	imgID, err := module.MemoryAddImage(ctx, testImageCollection, testImageBase64, module.RecognitionAuto, "")
 	elapsed := time.Since(start)
 	if check(err, fmt.Sprintf("添加图片 (耗时 %v)", elapsed.Round(time.Millisecond))) {
 		info("  图片 UUID: %s", imgID)

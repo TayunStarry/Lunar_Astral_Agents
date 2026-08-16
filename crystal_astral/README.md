@@ -143,9 +143,7 @@ main.go
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
-| POST | `/capture` | 通用截图（区域/显示器/全屏） |
-| GET | `/capture/display/{index}` | 指定显示器截图 |
-| POST | `/capture/region` | 区域截图 |
+| POST/GET | `/capture` | 统一截图（auto/window/fullscreen/display/region 五种模式） |
 | GET | `/capture/displays` | 获取显示器列表 |
 | POST | `/resize` | 图片缩放 |
 | POST | `/keyframe` | 视频关键帧提取 |

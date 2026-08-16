@@ -1479,6 +1479,19 @@ body {
     transform: scale(1.1);
 }
 
+/* ========== 识别取向 ========== */
+
+.orientation-custom-group {
+    padding: 0.6rem 0.8rem;
+    background: rgba(120, 100, 210, 0.06);
+    border: 1px solid rgba(120, 100, 210, 0.18);
+    border-radius: var(--radius-md);
+}
+
+.orientation-custom-group .form-label {
+    margin-bottom: 0.35rem;
+}
+
 /* ========== 图片卡片 ========== */
 
 .image-card .doc-body {

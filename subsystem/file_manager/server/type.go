@@ -19,9 +19,11 @@ type ExportPackageRequest struct {
 // memoryAddRequest v2 统一添加请求（text 和 image 共用）
 // 若 Image 字段非空，则视为图片文档；否则为文本文档
 type memoryAddRequest struct {
-	Role    string `json:"role,omitempty"`    // 消息角色，text 文档使用
-	Content string `json:"content,omitempty"` // 文本内容，text 文档使用
-	Image   string `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	Role                   string `json:"role,omitempty"`                    // 消息角色，text 文档使用
+	Content                string `json:"content,omitempty"`                 // 文本内容，text 文档使用
+	Image                  string `json:"image,omitempty"`                   // 图片 base64 数据，image 文档使用
+	RecognitionOrientation string `json:"recognition_orientation,omitempty"` // 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom）
+	RecognitionCustom      string `json:"recognition_custom,omitempty"`      // 自定义识别取向参考文本（仅 custom 使用）
 }
 
 type memoryDeleteRequest struct {

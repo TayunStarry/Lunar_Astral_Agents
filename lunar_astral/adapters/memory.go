@@ -20,7 +20,7 @@ import (
 //   - memoryInit 新增 LLM 配置参数和 collectionType
 //   - memoryInitImage 已移除（统一到 memoryInit）
 //   - memoryQueryImage 已移除（统一到 memoryQuery）
-//   - memoryAddImage 简化为 2 参数（LLM 自动生成标签）
+//   - memoryAddImage 简化为 2 必选参数 + 2 可选识别取向参数（LLM 自动生成标签）
 
 // memoryInit 初始化记忆库实例并创建指定集合
 // 模型配置全部从 lunar_config.json 的 memory 配置组读取
@@ -134,7 +134,7 @@ func (class *Runtime) memoryDelete(call goja.FunctionCall) goja.Value {
 }
 
 // memoryAddImage 向 image 类型集合添加图片文档（LLM 自动生成标签）
-// 参数: collectionName, base64Image
+// 参数: collectionName, base64Image, [orientation, custom]
 func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryAddImage 参数不足, 需 2 个: collectionName, base64Image")})
@@ -143,8 +143,18 @@ func (class *Runtime) memoryAddImage(call goja.FunctionCall) goja.Value {
 	collectionName, _ := call.Argument(0).Export().(string)
 	base64Image, _ := call.Argument(1).Export().(string)
 
+	// 可选参数：识别取向与自定义参考文本（不传时默认自动处理）
+	orientation := ""
+	custom := ""
+	if len(call.Arguments) > 2 {
+		orientation, _ = call.Argument(2).Export().(string)
+	}
+	if len(call.Arguments) > 3 {
+		custom, _ = call.Argument(3).Export().(string)
+	}
+
 	ctx := context.Background()
-	id, err := module.MemoryAddImage(ctx, collectionName, base64Image)
+	id, err := module.MemoryAddImage(ctx, collectionName, base64Image, orientation, custom)
 	if err != nil {
 		LoggerGeneral.Error("LunarCore", "图片集合 [%s] 添加图片失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{nil, err})

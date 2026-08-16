@@ -26,79 +26,6 @@ func init() {
 	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
 }
 
-// Screenshot 执行截图操作
-func Screenshot(req ScreenshotRequest) ([]byte, string, string, error) {
-	// 检查频率限制
-	if err := checkScreenshotRateLimit(); err != nil {
-		return nil, "", "", err
-	}
-
-	// 使用默认值
-	if req.Format == "" {
-		req.Format = *GeneralConfig.Format
-	}
-	if req.Quality == 0 {
-		req.Quality = *GeneralConfig.JPEGQuality
-	}
-
-	var img *image.RGBA
-	var err error
-
-	// 获取显示器数量
-	displayCount := screenshot.NumActiveDisplays()
-
-	// 根据参数决定截图方式
-	if req.Region != "" {
-		// 区域截图
-		rect, err2 := parseRegion(req.Region)
-		if err2 != nil {
-			return nil, "", "", err2
-		}
-		img, err = screenshot.CaptureRect(rect)
-	} else if req.DisplayIndex >= 0 && req.DisplayIndex < displayCount {
-		// 指定显示器
-		img, err = screenshot.CaptureDisplay(req.DisplayIndex)
-	} else if req.DisplayIndex == -1 && displayCount > 1 {
-		// 所有显示器拼接
-		img, err = screenshotAllDisplaysOptimized()
-	} else {
-		// 默认第一个显示器
-		img, err = screenshot.CaptureDisplay(0)
-	}
-
-	if err != nil {
-		return nil, "", "", fmt.Errorf("截图失败: %v", err)
-	}
-
-	// 缩放处理
-	img, err = applyScale(img, req.Scale)
-	if err != nil {
-		return nil, "", "", fmt.Errorf("缩放失败: %v", err)
-	}
-
-	// 编码图片
-	buf := &bytes.Buffer{}
-	var filename string
-
-	if req.DisplayIndex >= 0 {
-		filename = fmt.Sprintf("screenshot_d%d.%s", req.DisplayIndex, req.Format)
-	} else {
-		filename = fmt.Sprintf("screenshot.%s", req.Format)
-	}
-
-	if err := encodeImage(buf, img, req.Format, req.Quality); err != nil {
-		return nil, "", "", err
-	}
-
-	// 更新最后截图时间
-	ScreenshotMutex.Lock()
-	LastCapture = time.Now().UnixNano()
-	ScreenshotMutex.Unlock()
-
-	contentType := getContentType(req.Format)
-	return buf.Bytes(), filename, contentType, nil
-}
-
 // GetDisplays 获取所有显示器信息
 func GetDisplays() []map[string]int {
 	n := screenshot.NumActiveDisplays()
@@ -194,43 +121,6 @@ func selectFrameIndices(total, maxCount int) []int {
 		indices = append(indices, idx)
 	}
 	return indices
-}
-
-// verticallyConcatFrames 将多帧图片纵向拼接为一张长图
-func verticallyConcatFrames(frames []*image.RGBA) (*image.RGBA, error) {
-	if len(frames) == 0 {
-		return nil, fmt.Errorf("无帧数据可拼接")
-	}
-
-	// 统一宽度为第一帧宽度
-	targetWidth := frames[0].Bounds().Dx()
-	totalHeight := 0
-	for _, f := range frames {
-		totalHeight += f.Bounds().Dy()
-	}
-
-	if totalHeight > 16384 {
-		return nil, fmt.Errorf("拼接后高度%d超过16384px限制", totalHeight)
-	}
-
-	// 创建拼接画布
-	result := image.NewRGBA(image.Rect(0, 0, targetWidth, totalHeight))
-
-	currentY := 0
-	for _, f := range frames {
-		frameBounds := f.Bounds()
-		// 居中绘制（帧宽度可能不同）
-		offsetX := (targetWidth - frameBounds.Dx()) / 2
-		draw.Draw(result,
-			image.Rect(offsetX, currentY, offsetX+frameBounds.Dx(), currentY+frameBounds.Dy()),
-			f,
-			image.Point{0, 0},
-			draw.Over,
-		)
-		currentY += frameBounds.Dy()
-	}
-
-	return result, nil
 }
 
 // encodeFrameToMap 将单帧RGBA图像编码为PNG并构造响应map
@@ -708,25 +598,6 @@ func splitPNGFrames(data []byte) ([]image.Image, error) {
 // resizeToMax1024 等比例缩放图片，长宽均不超过1024像素
 func resizeToMax1024(img *image.RGBA) *image.RGBA {
 	return ResizeToFit(img, 1024, 1024)
-}
-
-// 解析区域字符串
-func parseRegion(regionStr string) (image.Rectangle, error) {
-	parts := strings.Split(regionStr, ",")
-	if len(parts) != 4 {
-		return image.Rectangle{}, fmt.Errorf("区域格式应为 'x,y,width,height'")
-	}
-
-	x, _ := strconv.Atoi(parts[0])
-	y, _ := strconv.Atoi(parts[1])
-	width, _ := strconv.Atoi(parts[2])
-	height, _ := strconv.Atoi(parts[3])
-
-	if width <= 0 || height <= 0 {
-		return image.Rectangle{}, fmt.Errorf("宽高必须大于0")
-	}
-
-	return image.Rect(x, y, x+width, y+height), nil
 }
 
 // 截取所有显示器并拼接（优化版）

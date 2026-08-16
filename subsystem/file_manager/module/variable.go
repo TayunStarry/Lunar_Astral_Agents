@@ -29,8 +29,17 @@ const (
 	MaxTagRetries     = 3    // LLM 标签生成最大重试次数
 )
 
-// MemoryChunkSize 已废弃，保留兼容旧版迁移逻辑
-const MemoryChunkSize = 100
+// 图片识别取向常量 — 决定图片标签生成的描述角度与方式
+const (
+	RecognitionAuto       = "auto"       // 自动处理（默认）：综合性系统描述，由多模态模型自主决定重点
+	RecognitionEmotion    = "emotion"    // 情绪表达：专注识别图片所表达的情绪
+	RecognitionText       = "text"       // 文本内容：专注识别图片中的文字信息
+	RecognitionColor      = "color"      // 色彩风格：专注分析主要配色、次要配色及点缀色
+	RecognitionAppearance = "appearance" // 衣着发型：着重人物衣着、发型、身材、发色及瞳色
+	RecognitionSpecies    = "species"    // 物种识别：着重事物种类与关键识别特征
+	RecognitionPosture    = "posture"    // 姿态动作：重点表达肢体动作及人物表情
+	RecognitionCustom     = "custom"     // 自定义：以用户文本作为识别取向参考
+)
 
 // FileLocks 用于存储文件路径对应的互斥锁
 var FileLocks sync.Map

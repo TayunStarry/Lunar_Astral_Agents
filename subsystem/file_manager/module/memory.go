@@ -355,7 +355,7 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 
 	// 2. LLM 生成标签（单线程 + 同步阻塞）
 	d.llmMu.Lock()
-	tags, err := d.generateTags(ctx, content, false)
+	tags, err := d.generateTags(ctx, content, false, RecognitionAuto, "")
 	d.llmMu.Unlock()
 	if err != nil {
 		return "", fmt.Errorf("标签生成失败: %w", err)
@@ -409,8 +409,9 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 
 // MemoryAddImage 添加图片到记忆库，同步阻塞等待 LLM 标签生成完成
 // base64Image 为完整的 data:image/...;base64,... 格式
+// orientation/custom 指定图片识别取向，为空时默认自动处理
 // v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
-func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string) (string, error) {
+func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
@@ -424,7 +425,7 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 
 	// 2. LLM 生成标签（单线程 + 同步阻塞）
 	d.llmMu.Lock()
-	tags, err := d.generateTags(ctx, base64Image, true)
+	tags, err := d.generateTags(ctx, base64Image, true, orientation, custom)
 	d.llmMu.Unlock()
 	if err != nil {
 		return "", fmt.Errorf("标签生成失败: %w", err)
@@ -872,7 +873,7 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 
 		// LLM 生成标签
 		d.llmMu.Lock()
-		tags, err := d.generateTags(ctx, content, isImage)
+		tags, err := d.generateTags(ctx, content, isImage, RecognitionAuto, "")
 		d.llmMu.Unlock()
 		if err != nil {
 			LoggerGeneral.Warn("FileManager", "重建标签失败 [%s]: %v", doc.ID, err)
@@ -1305,11 +1306,11 @@ func MemoryAddMessageSilent(ctx context.Context, collectionName, role, content s
 }
 
 // MemoryAddImage 全局添加图片
-func MemoryAddImage(ctx context.Context, collectionName, base64Image string) (string, error) {
+func MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	if globalMemoryDB == nil {
 		return "", fmt.Errorf("全局 MemoryDB 未初始化")
 	}
-	return globalMemoryDB.MemoryAddImage(ctx, collectionName, base64Image)
+	return globalMemoryDB.MemoryAddImage(ctx, collectionName, base64Image, orientation, custom)
 }
 
 // MemoryQueryMessages 全局查询消息

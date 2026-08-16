@@ -120,7 +120,6 @@ type TagVector struct {
 type collectionMeta struct {
 	EmbeddingModel      string `json:"embedding_model"`       // 锁定的嵌入模型名
 	EmbeddingDimension  int    `json:"embedding_dimension"`   // 锁定的向量维度
-	ChunkCount          int    `json:"chunk_count,omitempty"` // 已废弃，保留兼容
 	MultimodalModel     string `json:"multimodal_model"`      // 标签生成多模态模型名
 	Type                string `json:"type"`                  // 集合类型："text" 或 "image"
 	Version             int    `json:"version"`               // 数据格式版本号（v3 = 3）

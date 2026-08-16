@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams } from './index';
+import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams, ScreenshotParams } from './index';
 
 declare global {
     /**
@@ -196,6 +196,20 @@ declare global {
      */
     function memoryDelete(collectionName: string, id: string): [boolean, Error | null];
     /**
+     * 向 image 类型集合添加图片文档（LLM 自动生成标签）
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} base64Image 图片 base64 数据（data:image/...;base64,...）
+     *
+     * @param {string} [orientation] 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom），默认 auto
+     *
+     * @param {string} [custom] 自定义识别取向参考文本（仅 orientation 为 custom 时使用）
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[图片文档ID, 错误信息]
+     */
+    function memoryAddImage(collectionName: string, base64Image: string, orientation?: string, custom?: string): [string, Error | null];
+    /**
      * 文本转语音生成
      * 
      * 接收文本输入参数，调用TTS合成引擎生成音频数据，进行Base64编码后通过WebSocket广播至所有已连接的客户端
@@ -213,19 +227,13 @@ declare global {
      * Go 层统一完成截图捕获 + 图片压缩缩放 + base64 编码，
      * 返回的 base64 字段格式为 "data:image/[format];base64,[data]"
      *
-     * @param {number} displayIndex 显示器索引（-1 表示所有显示器，0 表示主显示器）
-     *
-     * @param {string} [region] 截图区域，格式为 "x,y,width,height"
-     *
-     * @param {string} [scale] 缩放参数，如 "0.5" 或 "800,600"
-     *
-     * @param {string} [format] 图片格式，"png" 或 "jpg"
-     *
-     * @param {number} [quality] JPEG 质量 1-100
+     * @param {ScreenshotParams} [params] 截图参数对象，字段对齐 CaptureRequest
+     *   mode / display_index / offset_x / offset_y / width / height /
+     *   region_x / region_y / region_w / region_h / format / quality / scale
      *
      * @returns {[ResizeImageResults, Error | null]} 包含处理结果的元组，[结果对象数组(base64/format/width/height), 错误信息]
      */
-    function screenshotCapture(displayIndex: number, region?: string, scale?: string, format?: string, quality?: number): [ResizeImageResults, Error | null];
+    function screenshotCapture(params?: ScreenshotParams): [ResizeImageResults, Error | null];
     /**
      * 获取所有显示器信息
      *

@@ -16,7 +16,7 @@ import (
 // =============================================================================
 // v2 记忆库端点 — 统一 text/image 架构，标签向量中介检索
 // 存储布局：<MemoryDBDir>/<collectionName>/{metadata.json, documents_*.json, images_*.json, tags_*.json}
-// URL 布局：/memory/<collectionName>/...（移除了旧版 collections/ 中间层和 images 专用端点）
+// URL 布局：/memory/<collectionName>/...
 // =============================================================================
 
 // MemoryHandler 记忆库统一分发器
@@ -291,12 +291,12 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionNa
 
 	if req.Image != "" {
 		// 图片文档添加
-		id, err := module.MemoryAddImage(ctx, collectionName, req.Image)
+		id, err := module.MemoryAddImage(ctx, collectionName, req.Image, req.RecognitionOrientation, req.RecognitionCustom)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
 			return
 		}
-		LoggerGeneral.Info("FileManager", "集合 [%s] 添加图片成功, ID: %s", collectionName, id)
+		LoggerGeneral.Info("FileManager", "集合 [%s] 添加图片成功, ID: %s, 识别取向: %s", collectionName, id, req.RecognitionOrientation)
 		writeSuccess(w, map[string]string{"id": id, "type": "image"})
 	} else {
 		// 文本文档添加

@@ -123,6 +123,9 @@ var D = {
     imageUploadPreview: $('image-upload-preview'),
     btnRemoveImage: $('btn-remove-image'),
     btnAddImageSubmit: $('btn-add-image-submit'),
+    imageOrientation: $('image-orientation'),
+    imageOrientationCustomGroup: $('image-orientation-custom-group'),
+    imageOrientationCustom: $('image-orientation-custom'),
 
     // Batch import modal
     modalBatchImport:  $('modal-batch-import'),
@@ -134,6 +137,9 @@ var D = {
     batchProgressText: $('batch-progress-text'),
     batchLog:          $('batch-log'),
     btnStartBatch:     $('btn-start-batch'),
+    batchOrientation:  $('batch-orientation'),
+    batchOrientationCustomGroup: $('batch-orientation-custom-group'),
+    batchOrientationCustom: $('batch-orientation-custom'),
 
     // Toast
     toastContainer: $('toast-container')
@@ -188,6 +194,9 @@ function bindGlobalEvents() {
         e.stopPropagation();
         clearImageUpload();
     });
+    D.imageOrientation.addEventListener('change', function () {
+        toggleOrientationCustomGroup(D.imageOrientation, D.imageOrientationCustomGroup);
+    });
     // Drag and drop for image upload
     D.imageUploadArea.addEventListener('dragover', function (e) {
         e.preventDefault();
@@ -208,6 +217,9 @@ function bindGlobalEvents() {
     D.btnBatchImport.addEventListener('click', showBatchImportModal);
     D.btnScanPath.addEventListener('click', handleScanPath);
     D.btnStartBatch.addEventListener('click', handleStartBatch);
+    D.batchOrientation.addEventListener('change', function () {
+        toggleOrientationCustomGroup(D.batchOrientation, D.batchOrientationCustomGroup);
+    });
 
     // Rebuild
     D.btnRebuild.addEventListener('click', handleRebuild);
@@ -1298,6 +1310,22 @@ async function copyToClipboard(text) {
 
 // ========== 图片上传与添加 v2 ==========
 
+// toggleOrientationCustomGroup 切换自定义取向输入框的显隐
+function toggleOrientationCustomGroup(selectEl, groupEl) {
+    if (!selectEl || !groupEl) return;
+    groupEl.style.display = selectEl.value === 'custom' ? 'block' : 'none';
+}
+
+// getImageOrientation 读取识别取向与自定义参考文本
+function getImageOrientation(selectEl, customEl) {
+    var orientation = (selectEl && selectEl.value) ? selectEl.value : 'auto';
+    var custom = '';
+    if (orientation === 'custom' && customEl) {
+        custom = customEl.value.trim();
+    }
+    return { orientation: orientation, custom: custom };
+}
+
 function showAddImageModal() {
     if (!App.initialized) {
         showToast('记忆库未初始化，请先完成初始化', 'error');
@@ -1308,6 +1336,9 @@ function showAddImageModal() {
         return;
     }
     clearImageUpload();
+    D.imageOrientation.value = 'auto';
+    D.imageOrientationCustom.value = '';
+    toggleOrientationCustomGroup(D.imageOrientation, D.imageOrientationCustomGroup);
     D.modalAddImage.style.display = 'flex';
 }
 
@@ -1366,12 +1397,18 @@ async function handleAddImage() {
     D.btnAddImageSubmit.disabled = true;
     showBtnLoading(D.btnAddImageSubmit, true, '添加中...');
 
+    var orientation = getImageOrientation(D.imageOrientation, D.imageOrientationCustom);
+
     try {
         // v2: 统一使用 /messages 端点，LLM 自动生成标签
         var resp = await fetch(API.collection(App.currentCollection).MESSAGES, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: App.imageBase64 })
+            body: JSON.stringify({
+                image: App.imageBase64,
+                recognition_orientation: orientation.orientation,
+                recognition_custom: orientation.custom
+            })
         });
         var result = await resp.json();
 
@@ -1413,6 +1450,9 @@ function showBatchImportModal() {
     }
 
     D.batchPath.value = '';
+    D.batchOrientation.value = 'auto';
+    D.batchOrientationCustom.value = '';
+    toggleOrientationCustomGroup(D.batchOrientation, D.batchOrientationCustomGroup);
     D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件</div>';
     D.batchProgress.style.display = 'none';
     D.batchLog.style.display = 'none';
@@ -1503,6 +1543,7 @@ async function handleStartBatch() {
     var successCount = 0;
     var failCount = 0;
     var total = App.batchFiles.length;
+    var orientation = getImageOrientation(D.batchOrientation, D.batchOrientationCustom);
 
     for (var i = 0; i < total; i++) {
         if (!App.batchRunning) break;
@@ -1526,7 +1567,11 @@ async function handleStartBatch() {
             var addResp = await fetch(API.collection(App.currentCollection).MESSAGES, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64 })
+                body: JSON.stringify({
+                    image: base64,
+                    recognition_orientation: orientation.orientation,
+                    recognition_custom: orientation.custom
+                })
             });
             var addResult = await addResp.json();
 

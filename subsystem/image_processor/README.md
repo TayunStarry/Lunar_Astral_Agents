@@ -24,7 +24,7 @@
 |------|------|
 | 扩散图像生成 | 调用 stable-diffusion.cpp 命令行引擎，支持文生图 / 图生图 / 超分，异步任务队列 |
 | 视频关键帧提取 | 从视频文件中智能提取关键帧图片 |
-| 屏幕截图 | 跨平台屏幕捕获（全屏 / 指定显示器 / 区域截图），支持缩放与格式转换 |
+| 屏幕截图 | 统一截图接口（auto/window/fullscreen/display/region 五种模式），焦点窗口优先、失败降级全屏，支持窗口相对精准区域与缩放格式转换 |
 | 图像格式处理 | Base64 编解码、像素格式转换、缩放裁剪、着色处理 |
 
 ---
@@ -39,7 +39,10 @@
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>generate.go</code> <span style="color: #6a737d;">— 扩散图像生成逻辑（异步任务队列 + sd-cli 引擎）</span></li>
         <li><code>keyframe.go</code> <span style="color: #6a737d;">— 视频关键帧提取（FFmpeg 辅助）</span></li>
-        <li><code>screenshot.go</code> <span style="color: #6a737d;">— 屏幕截图与图片缩放（kbinani/screenshot）</span></li>
+        <li><code>capture.go</code> <span style="color: #6a737d;">— 统一截图入口与优先级路由</span></li>
+        <li><code>capture_windows.go</code> <span style="color: #6a737d;">— 焦点窗口捕获（Windows 专用，build tag 隔离）</span></li>
+        <li><code>capture_stub.go</code> <span style="color: #6a737d;">— 非 Windows 平台窗口捕获占位（返回明确错误）</span></li>
+        <li><code>screenshot.go</code> <span style="color: #6a737d;">— 显示器/全屏/区域捕获底层实现与图片缩放（kbinani/screenshot）</span></li>
         <li><code>type.go</code> <span style="color: #6a737d;">— 数据类型定义</span></li>
         <li><code>variable.go</code> <span style="color: #6a737d;">— 全局变量与初始化</span></li>
       </ul>
@@ -66,7 +69,8 @@
       <ul style="list-style-type: none; padding-left: 1.5em;">
         <li><code>sd-cli.exe</code> <span style="color: #6a737d;">— stable-diffusion.cpp 命令行引擎</span></li>
         <li><code>ffmpeg</code> <span style="color: #6a737d;">— 视频解码与帧提取（ffmpeg-go 封装）</span></li>
-        <li><code>kbinani/screenshot</code> <span style="color: #6a737d;">— 跨平台屏幕捕获</span></li>
+        <li><code>kbinani/screenshot</code> <span style="color: #6a737d;">— 跨平台屏幕捕获（显示器/全屏/区域）</span></li>
+        <li><code>lxn/win</code> <span style="color: #6a737d;">— Windows Win32 API 封装（焦点窗口捕获）</span></li>
       </ul>
     </li>
   </ul>
@@ -82,7 +86,7 @@
 ┌─────────────────────────────────────────────────┐
 │            HTTP 层（server/）                     │
 │  GenerateHandler  ExtractKeyFramesHandler  ...   │
-│  HandleScreenshot  HandleScreenshotRegion  ...   │
+│  HandleCapture  HandleGetDisplays  HandleResize  │
 │  解析 HTTP 请求 → 调用 module 函数 → 写 HTTP 响应  │
 └──────────────────────┬──────────────────────────┘
                        │
@@ -90,16 +94,16 @@
 │          业务逻辑层（module/）                     │
 │  图像生成: prompt → sd-cli 引擎 → JPEG 输出        │
 │  关键帧提取: 视频 → FFmpeg 解码 → 帧图片           │
-│  屏幕截图: 显示器 → kbinani/screenshot → 图像     │
+│  屏幕截图: CaptureRequest → 优先级路由 → 图像      │
 │  安全机制: 路径校验 / 格式验证 / 超时控制           │
 └──────────────────────┬──────────────────────────┘
                        │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-     ┌─────────┐  ┌──────────┐  ┌──────────┐
-     │ sd-cli  │  │  ffmpeg  │  │screenshot│
-     │外部引擎 │  │外部工具   │  │ 截图库   │
-     └─────────┘  └──────────┘  └──────────┘
+          ┌────────────┼────────────┬────────────┐
+          ▼            ▼            ▼            ▼
+     ┌─────────┐  ┌──────────┐  ┌──────────┐ ┌──────────┐
+     │ sd-cli  │  │  ffmpeg  │  │screenshot│ │ lxn/win  │
+     │外部引擎 │  │外部工具   │  │ 截图库   │ │窗口捕获  │
+     └─────────┘  └──────────┘  └──────────┘ └──────────┘
 ```
 
 ### 图像生成流水线
@@ -147,15 +151,22 @@ module.VideoKeyframeExtraction()
 ### 屏幕截图流程
 
 ```
-HTTP 请求（ScreenshotRequest）
-    │  (display_index, region, scale, format, quality)
+HTTP 请求（CaptureRequest）
+    │  (mode, display_index, offset_x/y, width/height, region_x/y/w/h, format, quality, scale)
     ▼
-module.Screenshot()
+module.Capture()
     │
-    ├── kbinani/screenshot 捕获显示器画面（-1 表示所有显示器）
-    ├── 按 region / scale 裁剪缩放
-    ├── 编码为指定格式（png / jpg / jpeg）
-    └── 返回图像字节 + 格式 + 尺寸
+    ├── ① 频率限制 + 默认值填充（format/quality/mode）
+    ├── ② 按 mode 优先级路由：
+    │      auto    → 焦点窗口优先，失败降级为多屏拼接全屏
+    │      window  → 强制焦点窗口，失败直接报错
+    │      fullscreen → 多屏拼接全屏
+    │      display → 指定显示器
+    │      region  → 绝对屏幕坐标区域
+    ├── ③ 窗口相对精准区域覆盖（mode=auto/window 且 width>0 && height>0）
+    ├── ④ 按 scale 缩放
+    ├── ⑤ 编码为指定格式（png / jpeg）
+    └── 返回 CaptureResult（图像字节 + 格式 + 尺寸 + 模式 + 窗口标题）
 ```
 
 ---
@@ -184,17 +195,40 @@ module.Screenshot()
 | `CreateKeyframeFile(currImage, keyFrames) (string, []byte, error)` | 生成关键帧文件 |
 | `IsSupportedVideoFormat(filename) bool` | 校验视频格式支持 |
 
-### module/screenshot.go — 屏幕截图
+### module/capture.go — 统一截图入口
 
 | 函数 | 说明 |
 |------|------|
-| `Screenshot(req ScreenshotRequest) ([]byte, string, string, error)` | 核心截图函数：返回（图像字节、格式、尺寸） |
+| `Capture(req CaptureRequest) (CaptureResult, error)` | 统一截图入口：按 mode 优先级路由并返回结构化结果 |
+| `captureFocusedWindow(req CaptureRequest) (*image.RGBA, string, error)` | 捕获焦点窗口，含窗口相对精准区域覆盖 |
+| `captureDisplay(index int) (*image.RGBA, error)` | 捕获指定显示器 |
+| `captureRegion(req CaptureRequest) (*image.RGBA, error)` | 捕获绝对屏幕坐标区域 |
+| `normalizeFormat(format string) string` | 归一化格式名称（jpg/jpeg → jpeg） |
+
+### module/capture_windows.go — 焦点窗口捕获（`//go:build windows`）
+
+| 函数 | 说明 |
+|------|------|
+| `captureForegroundWindow() (*image.RGBA, string, error)` | 捕获焦点窗口整窗（Win32 GetWindowDC + BitBlt） |
+| `captureForegroundWindowRegion(offsetX, offsetY, width, height int) (*image.RGBA, string, error)` | 捕获焦点窗口相对精准子区域 |
+
+### module/capture_stub.go — 非 Windows 占位（`//go:build !windows`）
+
+| 函数 | 说明 |
+|------|------|
+| `captureForegroundWindow()` / `captureForegroundWindowRegion(...)` | 返回「窗口截图仅在 Windows 平台可用」明确错误 |
+
+### module/screenshot.go — 底层捕获与缩放
+
+| 函数 | 说明 |
+|------|------|
 | `GetDisplays() []map[string]int` | 枚举显示器列表 |
-| `ResizeImage(imgData) ([]map[string]any, error)` | 图片缩放 |
+| `screenshotAllDisplaysOptimized() (*image.RGBA, error)` | 多屏拼接全屏截图 |
+| `ResizeImage(imgData) ([]map[string]any, error)` | 图片缩放（模型输入路径，≤1024px） |
 | `ToRGBA(img) *image.RGBA` | 任意图像转 RGBA |
 | `ResizeToFit(img, maxWidth, maxHeight) *image.RGBA` | 等比缩放至指定尺寸 |
 
-`ScreenshotRequest` 字段：`display_index`（显示器索引，-1 全部）、`region`（区域 `x,y,width,height`）、`scale`（缩放 `width,height` 或 `0.5`）、`format`（png/jpg/jpeg）、`quality`（JPEG 质量 1-100）
+`CaptureRequest` 字段：`mode`（auto/window/fullscreen/display/region）、`display_index`、`offset_x/offset_y/width/height`（窗口相对精准区域）、`region_x/region_y/region_w/region_h`（绝对屏幕区域）、`format`、`quality`、`scale`
 
 ---
 
@@ -209,9 +243,7 @@ module.Screenshot()
 | POST | `/generate` | 扩散图像生成（异步任务） |
 | GET | `/generate/wait` | 轮询 / 等待生成任务完成 |
 | POST | `/keyframe` | 视频关键帧提取 |
-| POST | `/capture` | 通用截图（按 ScreenshotRequest 参数） |
-| GET | `/capture/display/` | 指定显示器全屏截图 |
-| POST | `/capture/region` | 区域截图 |
+| POST | `/capture` | 统一截图（auto/window/fullscreen/display/region） |
 | GET | `/capture/displays` | 屏幕列表 |
 | POST | `/resize` | 图片缩放 |
 
@@ -273,27 +305,59 @@ Content-Type: multipart/form-data
 
 ### 截图请求
 
+`/capture` 支持 `POST`（JSON 请求体）与 `GET`（查询参数）两种方式，字段对齐 `module.CaptureRequest`。
+
 ```json
-// POST /capture
+// POST /capture（焦点窗口优先，失败自动降级全屏）
 {
-  "display_index": -1,      // -1 全部显示器，0/1/2 指定显示器
-  "region": "",             // 可选，"x,y,width,height" 区域截图
-  "scale": "",              // 可选，"width,height" 或 "0.5" 缩放
-  "format": "png",          // png / jpg / jpeg
-  "quality": 90             // JPEG 质量 1-100
+  "mode": "auto",           // auto / window / fullscreen / display / region，缺省 auto
+  "display_index": 0,       // mode=display 时生效，-1 表示全部
+  "offset_x": 0,            // 窗口相对 X 偏移（mode=auto/window，配合 width/height）
+  "offset_y": 0,            // 窗口相对 Y 偏移
+  "width": 800,             // 窗口相对区域宽度（>0 且 height>0 时启用精准区域）
+  "height": 600,            // 窗口相对区域高度
+  "region_x": 100,          // 绝对屏幕区域 X（mode=region）
+  "region_y": 100,          // 绝对屏幕区域 Y
+  "region_w": 400,          // 绝对屏幕区域宽度
+  "region_h": 300,          // 绝对屏幕区域高度
+  "format": "png",          // png / jpg，缺省取 general_config
+  "quality": 90,            // JPEG 质量 1-100，缺省取 general_config
+  "scale": ""               // 可选缩放："0.5" 或 "800,600"
 }
 ```
 
 ### 截图响应
 
-```json
-{
-  "success": true,
-  "image": "data:image/png;base64,...",
-  "format": "png",
-  "size": "1920x1080"
+`/capture` 直接返回图片二进制（`Content-Type` 为 `image/png` 或 `image/jpeg`），文件名按实际模式生成（`screenshot.png` / `screenshot_window.png` / `screenshot_d0.png`）。Go 层 `module.Capture` 则返回结构化 `CaptureResult`：
+
+```go
+type CaptureResult struct {
+    Image        []byte      // 原始图像字节
+    Format       string      // png / jpeg
+    ContentType  string      // image/png / image/jpeg
+    Width        int         // 最终宽度（缩放后）
+    Height       int         // 最终高度（缩放后）
+    Mode         CaptureMode // 实际采用的模式（含降级后）
+    DisplayIndex int         // display 模式下的显示器索引
+    WindowTitle  string      // 焦点窗口标题（window 模式）
 }
 ```
+
+### 接口迁移指南
+
+本次改造已统一截图入口并移除旧接口，旧字段 / 旧端点映射如下：
+
+| 旧接口 | 新接口 |
+|--------|--------|
+| `module.Screenshot(ScreenshotRequest)` | `module.Capture(CaptureRequest)` |
+| `ScreenshotRequest.display_index = -1`（全部显示器） | `mode = "fullscreen"` |
+| `ScreenshotRequest.display_index = N`（指定显示器） | `mode = "display"` + `display_index = N` |
+| `ScreenshotRequest.region = "x,y,w,h"` | `mode = "region"` + `region_x/region_y/region_w/region_h` |
+| `GET /capture/display/{index}` | `GET /capture?mode=display&display_index={index}` |
+| `POST /capture/region` | `POST /capture`（`mode = "region"` + 区域字段） |
+| 无窗口能力 | `mode = "auto"`（焦点窗口优先）或 `"window"`（强制窗口） |
+
+`scale`、`format`、`quality` 字段语义保持不变；`module.Screenshot` 已移除，返回类型由 `([]byte, string, string, error)` 改为结构化的 `CaptureResult`。
 
 ---
 
@@ -331,15 +395,28 @@ func main() {
     }
     fmt.Println(len(frames))
 
-    // 屏幕截图（所有显示器）
-    imgBytes, format, size, err := module.Screenshot(module.ScreenshotRequest{
-        DisplayIndex: -1,
-        Format:       "png",
+    // 统一截图（焦点窗口优先，失败降级全屏）
+    result, err := module.Capture(module.CaptureRequest{
+        Mode:   module.ModeAuto,
+        Format: "png",
     })
     if err != nil {
         panic(err)
     }
-    fmt.Println(format, size, len(imgBytes))
+    fmt.Println(result.Mode, result.Format, result.Width, result.Height, result.WindowTitle)
+
+    // 窗口相对精准区域截图
+    result, err = module.Capture(module.CaptureRequest{
+        Mode:    module.ModeWindow,
+        OffsetX: 0,
+        OffsetY: 0,
+        Width:   800,
+        Height:  600,
+    })
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(len(result.Image))
 }
 ```
 
@@ -370,7 +447,8 @@ sd-cli.exe 是 stable-diffusion.cpp 的命令行引擎，需自行编译或获�
 
 ### Q: 截图功能在哪些平台可用？
 
-截图基于 `kbinani/screenshot` 库，支持 Windows、macOS、Linux（X11）等主流桌面平台；无显示器环境（如远程会话）可能无法捕获画面。
+- **焦点窗口捕获**（`auto`/`window` 模式）仅 Windows 平台可用，通过 `//go:build windows` 隔离实现（`lxn/win`），非 Windows 平台返回明确错误。
+- **全屏 / 显示器 / 区域截图**基于 `kbinani/screenshot` 库，支持 Windows、macOS、Linux（X11）等主流桌面平台；无显示器环境（如远程会话）可能无法捕获画面。
 
 ---
 

@@ -312,7 +312,25 @@
                         </button>
                     </div>
                 </div>
-                <p class="modal-hint">LLM 将自动分析图片内容并生成中文标签，用于语义检索。</p>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-crosshairs"></i> 识别取向</label>
+                    <select id="image-orientation" class="form-select">
+                        <option value="auto">自动处理 · 综合描述，模型自主决定重点</option>
+                        <option value="emotion">情绪表达 · 专注识别图片情绪</option>
+                        <option value="text">文本内容 · 专注识别图片文字</option>
+                        <option value="color">色彩风格 · 主要/次要/点缀配色</option>
+                        <option value="appearance">衣着发型 · 衣着、发型、身材、发色瞳色</option>
+                        <option value="species">物种识别 · 事物种类与识别特征</option>
+                        <option value="posture">姿态动作 · 肢体动作与人物表情</option>
+                        <option value="custom">自定义 · 输入参考文本</option>
+                    </select>
+                </div>
+                <div class="form-group orientation-custom-group" id="image-orientation-custom-group" style="display:none;">
+                    <label class="form-label"><i class="fa-solid fa-pen-to-square"></i> 自定义取向参考</label>
+                    <textarea id="image-orientation-custom" class="form-textarea" rows="3"
+                        placeholder="输入指导图片识别取向和描述方式的参考文本..."></textarea>
+                </div>
+                <p class="modal-hint">识别取向决定多模态模型描述图片的角度，不指定时默认「自动处理」。</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary modal-close-btn" data-close="modal-add-image">取消</button>
@@ -342,6 +360,24 @@
                             <i class="fa-solid fa-magnifying-glass"></i> 扫描
                         </button>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label"><i class="fa-solid fa-crosshairs"></i> 识别取向（应用于全部图片）</label>
+                    <select id="batch-orientation" class="form-select">
+                        <option value="auto">自动处理 · 综合描述，模型自主决定重点</option>
+                        <option value="emotion">情绪表达 · 专注识别图片情绪</option>
+                        <option value="text">文本内容 · 专注识别图片文字</option>
+                        <option value="color">色彩风格 · 主要/次要/点缀配色</option>
+                        <option value="appearance">衣着发型 · 衣着、发型、身材、发色瞳色</option>
+                        <option value="species">物种识别 · 事物种类与识别特征</option>
+                        <option value="posture">姿态动作 · 肢体动作与人物表情</option>
+                        <option value="custom">自定义 · 输入参考文本</option>
+                    </select>
+                </div>
+                <div class="form-group orientation-custom-group" id="batch-orientation-custom-group" style="display:none;">
+                    <label class="form-label"><i class="fa-solid fa-pen-to-square"></i> 自定义取向参考</label>
+                    <textarea id="batch-orientation-custom" class="form-textarea" rows="3"
+                        placeholder="输入指导图片识别取向和描述方式的参考文本..."></textarea>
                 </div>
                 <div class="batch-file-list" id="batch-file-list">
                     <div class="batch-empty-hint">
