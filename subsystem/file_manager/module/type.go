@@ -210,3 +210,41 @@ type OrganizeResponse struct {
 	FailCount    int              `json:"fail_count"`
 	Error        string           `json:"error,omitempty"`
 }
+
+// =============================================================================
+// 文件移动类型定义（/file/move）
+// =============================================================================
+
+// MoveItemRequest 文件移动请求
+// Sources 为相对 LocalDir 的源路径列表；TargetDir 为目标文件夹（相对 LocalDir，空表示根目录）
+// ConflictStrategy 冲突策略: "ask"（预检冲突并返回，不执行移动）/ "auto_rename"（自动添加序号重命名）/ "overwrite"（覆盖同名项）
+type MoveItemRequest struct {
+	Sources          []string `json:"sources"`           // 源路径列表（相对 LocalDir）
+	TargetDir        string   `json:"target_dir"`        // 目标文件夹（相对 LocalDir，空表示根目录）
+	ConflictStrategy string   `json:"conflict_strategy"` // 冲突策略: ask / auto_rename / overwrite
+	CreateDirs       bool     `json:"create_dirs"`       // 目标文件夹不存在时是否自动创建
+}
+
+// MoveConflict 移动冲突项（ask 预检时返回）
+type MoveConflict struct {
+	Source string `json:"source"` // 源路径
+	Target string `json:"target"` // 目标路径
+	IsDir  bool   `json:"is_dir"` // 冲突项是否为文件夹
+}
+
+// MoveItemResult 单个移动结果
+type MoveItemResult struct {
+	Source   string `json:"source"`   // 源路径
+	Target   string `json:"target"`   // 最终目标路径（冲突重命名后为实际路径）
+	Conflict bool   `json:"conflict"` // 是否检测到同名冲突
+	Renamed  bool   `json:"renamed"`  // 是否因冲突自动重命名
+	Error    string `json:"error,omitempty"`
+}
+
+// MoveResponse 文件移动响应
+type MoveResponse struct {
+	Success   bool             `json:"success"`
+	Results   []MoveItemResult `json:"results,omitempty"`
+	Conflicts []MoveConflict   `json:"conflicts,omitempty"` // ask 预检冲突列表
+	Error     string           `json:"error,omitempty"`
+}

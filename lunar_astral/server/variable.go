@@ -65,6 +65,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
+	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
+	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
 	// 知识库相关接口
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
 	// 记忆库相关接口（多集合 RESTful 架构）
@@ -72,6 +74,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// 图片生成相关接口
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
+	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
 	// 视频处理相关接口
 	{Path: "/extract/keyframes", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
 	// 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法）

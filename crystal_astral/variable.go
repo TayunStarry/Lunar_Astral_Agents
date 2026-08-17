@@ -60,6 +60,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载"},
 	{Path: "/file/preview", Handler: file.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},
+	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
 
 	// ==== 扩展包管理 ====
 	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},

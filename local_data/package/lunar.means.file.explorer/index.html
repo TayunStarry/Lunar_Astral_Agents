@@ -34,7 +34,35 @@
                 </button>
             </div>
 
+            <!-- 顶部统计信息（实时更新） -->
+            <div class="header-stats" id="header-stats">
+                <div class="stat-item" title="当前层级的文件数量">
+                    <span class="stat-icon stat-icon--file"><i class="fas fa-file"></i></span>
+                    <div class="stat-text">
+                        <span id="total-files" class="stat-value">0</span>
+                        <span class="stat-label">文件</span>
+                    </div>
+                </div>
+                <div class="stat-item" title="当前层级的文件夹数量">
+                    <span class="stat-icon stat-icon--folder"><i class="fas fa-folder"></i></span>
+                    <div class="stat-text">
+                        <span id="total-folders" class="stat-value">0</span>
+                        <span class="stat-label">文件夹</span>
+                    </div>
+                </div>
+                <div class="stat-item" title="当前层级文件总大小">
+                    <span class="stat-icon stat-icon--size"><i class="fas fa-database"></i></span>
+                    <div class="stat-text">
+                        <span id="total-size" class="stat-value">0 B</span>
+                        <span class="stat-label">大小</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="header-actions">
+                <button id="smart-organize-btn" class="btn btn-accent" style="display: none;" title="智能整理当前目录文件">
+                    <i class="fas fa-wand-magic-sparkles"></i><span>智能整理</span>
+                </button>
                 <label for="file-upload" class="btn btn-primary">
                     <i class="fas fa-upload"></i><span>上传文件</span>
                 </label>
@@ -60,6 +88,9 @@
                     </button>
                 </nav>
                 <div class="batch-actions">
+                    <button id="batch-move" class="btn btn-small btn-secondary">
+                        <i class="fas fa-folder-open"></i> 移动到
+                    </button>
                     <button id="batch-delete" class="btn btn-small btn-danger">
                         <i class="fas fa-trash"></i> 批量删除
                     </button>
@@ -74,30 +105,6 @@
             </div>
 
             <div class="main-footer">
-                <div class="stats-horizontal">
-                    <div class="stat-item">
-                        <span class="stat-icon stat-icon--file"><i class="fas fa-file"></i></span>
-                        <div class="stat-text">
-                            <span id="total-files" class="stat-value">0</span>
-                            <span class="stat-label">文件</span>
-                        </div>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon stat-icon--folder"><i class="fas fa-folder"></i></span>
-                        <div class="stat-text">
-                            <span id="total-folders" class="stat-value">0</span>
-                            <span class="stat-label">文件夹</span>
-                        </div>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-icon stat-icon--size"><i class="fas fa-database"></i></span>
-                        <div class="stat-text">
-                            <span id="total-size" class="stat-value">0 B</span>
-                            <span class="stat-label">当前层级大小</span>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="pagination" id="pagination"></div>
             </div>
 
@@ -180,6 +187,83 @@
                 </button>
                 <button class="btn" id="action-modal-confirm">
                     <i class="fas fa-check"></i> 确认
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动目标选择模态框 -->
+    <div class="modal" id="move-modal">
+        <div class="modal-content move-modal-content">
+            <button class="modal-close-btn" id="move-modal-close" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="action-modal-icon info">
+                <i class="fas fa-folder-open"></i>
+            </div>
+            <h3 class="action-modal-title" id="move-modal-title">移动项目</h3>
+            <p class="action-modal-message" id="move-modal-message">请选择目标文件夹</p>
+            <div class="move-folder-list" id="move-folder-list"></div>
+            <div class="action-modal-input-group">
+                <label class="action-modal-label" for="move-modal-path">或手动输入目标路径（相对根目录）</label>
+                <input type="text" id="move-modal-path" class="action-modal-input" autocomplete="off" placeholder="例如: docs/archive">
+                <p class="action-modal-hint" id="move-modal-hint">点击上方文件夹可直接选择</p>
+            </div>
+            <div class="action-modal-buttons">
+                <button class="btn btn-secondary" id="move-modal-cancel">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+                <button class="btn btn-primary" id="move-modal-confirm">
+                    <i class="fas fa-arrow-right"></i> 移动
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动冲突处理模态框 -->
+    <div class="modal" id="conflict-modal">
+        <div class="modal-content conflict-modal-content">
+            <button class="modal-close-btn" id="conflict-modal-close" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="action-modal-icon warning">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3 class="action-modal-title">移动冲突</h3>
+            <p class="action-modal-message" id="conflict-message"></p>
+            <div class="action-modal-buttons">
+                <button class="btn btn-secondary" id="conflict-cancel">
+                    <i class="fas fa-times"></i> 取消
+                </button>
+                <button class="btn btn-success" id="conflict-overwrite">
+                    <i class="fas fa-arrow-right"></i> 覆盖
+                </button>
+                <button class="btn btn-primary" id="conflict-rename">
+                    <i class="fas fa-copy"></i> 自动重命名
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 智能整理模态框 -->
+    <div class="modal" id="organize-modal">
+        <div class="modal-content organize-modal-content">
+            <button class="modal-close-btn" id="organize-modal-close" aria-label="关闭">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="organize-title">
+                <i class="fas fa-wand-magic-sparkles"></i> 智能整理
+            </h3>
+            <div class="organize-progress-wrap">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="organize-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div class="organize-status" id="organize-status">准备中...</div>
+            </div>
+            <div class="organize-log" id="organize-log"></div>
+            <div class="action-modal-buttons" id="organize-actions" style="display: none;">
+                <button class="btn btn-secondary" id="organize-close-btn">
+                    <i class="fas fa-times"></i> 关闭
                 </button>
             </div>
         </div>

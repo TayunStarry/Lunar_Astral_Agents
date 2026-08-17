@@ -240,6 +240,12 @@ function updateStats(files, isSearching = false, searchResults = []) {
     totalFilesElement.textContent = fileCount;
     totalFoldersElement.textContent = folders;
     totalSizeElement.textContent = formatFileSize(totalSize);
+
+    // 智能整理按钮：非搜索状态且当前层级文件数达到阈值时显示
+    const organizeBtn = document.getElementById('smart-organize-btn');
+    if (organizeBtn) {
+        organizeBtn.style.display = (!isSearching && fileCount >= ORGANIZE_THRESHOLD) ? 'inline-flex' : 'none';
+    }
 }
 
 /**
@@ -310,6 +316,7 @@ function createFileCard(file, selectedFiles, onToggleSelection, onFileClick, onR
     const card = document.createElement('div');
     card.className = 'file-card';
     card.dataset.path = file.path;
+    card.draggable = true;
 
     // 复选框
     const checkbox = document.createElement('input');
@@ -1049,6 +1056,680 @@ async function traverseAllFiles(startPath = '') {
 }
 
 /**
+ * 文件移动模块
+ * 负责文件移动的模态框交互、冲突处理与拖放移动
+ */
+
+
+/** 待确认的移动参数（冲突模态框重试时使用） */
+let pendingMoveArgs = null;
+
+/**
+ * 打开移动目标选择模态框
+ * @param {FileManager} fileManager - 文件管理器实例
+ */
+async function showMoveModal(fileManager) {
+    if (fileManager.selectedFiles.size === 0) {
+        showToast('请先选择要移动的项目', 'info');
+        return;
+    }
+
+    const folderList = document.getElementById('move-folder-list');
+    folderList.innerHTML = '';
+
+    // 当前层级的子文件夹列表（渲染为可点击的 chip）
+    const folders = fileManager.files.filter(f => f.isDir);
+    if (folders.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'move-folder-empty';
+        empty.innerHTML = '<i class="fas fa-folder-open"></i> 当前层级没有子文件夹，可手动输入目标路径';
+        folderList.appendChild(empty);
+    } else {
+        folders.forEach(folder => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'move-folder-chip';
+            chip.dataset.path = folder.path;
+            chip.innerHTML = `<i class="fas fa-folder"></i> ${folder.name}`;
+            chip.addEventListener('click', () => {
+                folderList.querySelectorAll('.move-folder-chip').forEach(c => c.classList.remove('selected'));
+                chip.classList.add('selected');
+                document.getElementById('move-modal-path').value = folder.path;
+            });
+            folderList.appendChild(chip);
+        });
+    }
+
+    document.getElementById('move-modal-title').textContent = `移动 ${fileManager.selectedFiles.size} 个项目`;
+    document.getElementById('move-modal-message').textContent = '请选择目标文件夹（子文件夹或手动输入路径）';
+    document.getElementById('move-modal-path').value = '';
+    document.getElementById('move-modal').classList.add('show');
+}
+
+/**
+ * 关闭移动目标选择模态框
+ */
+function closeMoveModal() {
+    document.getElementById('move-modal').classList.remove('show');
+}
+
+/**
+ * 调用后端文件移动接口
+ * @param {Array<string>} sources - 源路径列表（相对 LocalDir）
+ * @param {string} targetDir - 目标文件夹（相对 LocalDir，空表示根目录）
+ * @param {string} strategy - 冲突策略: ask / auto_rename / overwrite
+ * @returns {Promise<Object|null>} 后端响应，失败返回 null
+ */
+async function callMoveApi(sources, targetDir, strategy) {
+    try {
+        const response = await fetch('/file/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sources: sources,
+                target_dir: targetDir,
+                conflict_strategy: strategy,
+                create_dirs: false
+            })
+        });
+        if (!response.ok) throw new Error('移动请求失败');
+        return await response.json();
+    } catch (error) {
+        showToast(`移动失败: ${error.message}`, 'error');
+        console.error('移动失败:', error);
+        return null;
+    }
+}
+
+/**
+ * 发起一次移动并处理结果（ask 预检到冲突时转冲突处理模态框）
+ * @param {FileManager} fileManager - 文件管理器实例
+ * @param {Array<string>} sources - 源路径列表
+ * @param {string} targetDir - 目标文件夹
+ * @param {string} strategy - 冲突策略
+ */
+async function performMove(fileManager, sources, targetDir, strategy) {
+    const result = await callMoveApi(sources, targetDir, strategy);
+    if (!result) return;
+
+    // 预检到同名冲突：弹出冲突处理模态框
+    if (result.conflicts && result.conflicts.length > 0) {
+        pendingMoveArgs = { fileManager, sources, targetDir };
+        showConflictModal(result.conflicts);
+        return;
+    }
+
+    if (result.success) {
+        showToast('移动成功', 'success');
+        fileManager.selectedFiles.clear();
+        fileManager.updateBatchActions();
+        await fileManager.loadFiles();
+    } else {
+        showToast(`移动失败: ${result.error || '未知错误'}`, 'error');
+    }
+}
+
+/**
+ * 显示移动冲突处理模态框
+ * @param {Array<Object>} conflicts - 冲突列表（含 source / target / is_dir）
+ */
+function showConflictModal(conflicts) {
+    const listHtml = conflicts.map(c => {
+        const name = c.source.replace(/\\/g, '/').split('/').pop();
+        return `<div class="conflict-item">${c.is_dir ? '<i class="fas fa-folder"></i>' : '<i class="fas fa-file"></i>'} ${name} → ${c.target}</div>`;
+    }).join('');
+    document.getElementById('conflict-message').innerHTML =
+        `目标位置存在 <strong>${conflicts.length}</strong> 个同名项目：<br>${listHtml}<br>请选择处理方式：`;
+    document.getElementById('conflict-modal').classList.add('show');
+}
+
+/**
+ * 关闭冲突处理模态框
+ */
+function closeConflictModal() {
+    document.getElementById('conflict-modal').classList.remove('show');
+    pendingMoveArgs = null;
+}
+
+/**
+ * 智能整理模块
+ * 当当前层级文件数 ≥ ORGANIZE_THRESHOLD 时提供「智能整理」按钮，
+ * 通过多模态 AI 识别文件并生成 移动/重命名 方案后自动执行。
+ */
+
+
+/** 智能整理触发阈值（当前层级文件数达到该值显示按钮） */
+const ORGANIZE_THRESHOLD = 50;
+/** 整理 AI 模型名（与全项目约定一致，硬编码） */
+const ORGANIZE_MODEL = 'system-multimodal';
+/** 文本内容取样长度（开头 / 结尾各 2000 字） */
+const TEXT_SAMPLE_LEN = 2000;
+
+/** 整理文件类别映射 */
+const ORGANIZE_CATEGORIES = {
+    text: ['.txt', '.md', '.log', '.csv', '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.html', '.css', '.js', '.ts', '.jsx', '.tsx', '.vue', '.go', '.py', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.sh', '.bat', '.ps1', '.sql', '.pem'],
+    image: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.ico', '.tiff', '.tif', '.avif']
+};
+
+/** 智能整理是否进行中 */
+let isOrganizing = false;
+
+/**
+ * 获取文件的整理类别
+ * @param {string} name - 文件名
+ * @returns {string} text / image / other
+ */
+function getOrganizeCategory(name) {
+    const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+    for (const [cat, exts] of Object.entries(ORGANIZE_CATEGORIES)) {
+        if (exts.includes(ext)) return cat;
+    }
+    return 'other';
+}
+
+/**
+ * 读取文本文件内容样本（开头 2000 字 + 结尾 2000 字，不足 4000 字取全部）
+ * @param {string} relativePath - 相对路径
+ * @returns {Promise<string>}
+ */
+async function readTextSample(relativePath) {
+    const response = await fetch(`/file/read/${relativePath}`);
+    if (!response.ok) throw new Error('读取文本失败');
+    const text = await response.text();
+    if (text.length <= TEXT_SAMPLE_LEN * 2) return text;
+    return text.substring(0, TEXT_SAMPLE_LEN) +
+        '\n\n......[中间内容省略]......\n\n' +
+        text.substring(text.length - TEXT_SAMPLE_LEN);
+}
+
+/**
+ * 通过 /resize 处理图片，返回去除 data URI 前缀的 base64
+ * @param {string} relativePath - 图片相对路径
+ * @returns {Promise<string>}
+ */
+async function resizeImageData(relativePath) {
+    // 先从服务器获取图片 Blob（/resize 需要服务端来源的数据）
+    const fetchResponse = await fetch(`/file/read/${relativePath}`);
+    if (!fetchResponse.ok) throw new Error('获取图片失败');
+    const blob = await fetchResponse.blob();
+
+    const formData = new FormData();
+    formData.append('image', blob);
+    const resizeResponse = await fetch('/resize', { method: 'POST', body: formData });
+    if (!resizeResponse.ok) throw new Error('图片缩放失败');
+
+    // /resize 返回帧数组，每帧含带 data URI 前缀的 base64，取第一帧
+    const resizeData = await resizeResponse.json();
+    const frames = Array.isArray(resizeData) ? resizeData : (resizeData.frames || []);
+    const frame = frames[0] || {};
+    let base64 = frame.base64 || resizeData.base64 || '';
+    base64 = base64.replace(/^data:image\/\w+;base64,/, '');
+    return base64;
+}
+
+/**
+ * 预处理单个文件，构造提交给 AI 的文件描述
+ * @param {Object} file - 文件对象
+ * @returns {Promise<Object>}
+ */
+async function preprocessOrganizeFile(file) {
+    const category = getOrganizeCategory(file.name);
+    const meta = {
+        name: file.name,
+        size: formatFileSize(file.size),
+        ext: file.name.slice(file.name.lastIndexOf('.')).toLowerCase(),
+        category: category
+    };
+
+    switch (category) {
+        case 'image': {
+            try {
+                const base64 = await resizeImageData(file.path);
+                return { ...meta, type: 'image', base64 };
+            } catch (err) {
+                return { ...meta, type: 'meta', note: `图片预处理失败: ${err.message}` };
+            }
+        }
+        case 'text': {
+            try {
+                const content = await readTextSample(file.path);
+                return { ...meta, type: 'text', content };
+            } catch (err) {
+                return { ...meta, type: 'meta', note: `文本读取失败: ${err.message}` };
+            }
+        }
+        default:
+            return { ...meta, type: 'meta' };
+    }
+}
+
+/**
+ * 调用多模态 AI 接口
+ * @param {Array<Object>} messages - 消息数组
+ * @returns {Promise<string>} AI 返回的文本内容
+ */
+async function callOrganizeAI(messages) {
+    const response = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            model: ORGANIZE_MODEL,
+            messages: messages,
+            stream: false
+        })
+    });
+    if (!response.ok) throw new Error(`AI 调用失败: ${response.statusText}`);
+    const data = await response.json();
+    // OpenAI 兼容响应
+    if (data.choices && data.choices[0]) {
+        return data.choices[0].message.content;
+    }
+    // 代理包装响应
+    if (data.success && data.data && data.data.choices) {
+        return data.data.choices[0].message.content;
+    }
+    throw new Error('AI 响应格式异常');
+}
+
+/**
+ * 执行整理操作（/file/organize）
+ * @param {string} basePath - 工作目录基础路径（相对 LocalDir）
+ * @param {Array<Object>} operations - 操作列表
+ * @returns {Promise<Object>}
+ */
+async function executeOrganizeOperations(basePath, operations) {
+    const response = await fetch('/file/organize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_path: basePath, operations: operations })
+    });
+    if (!response.ok) throw new Error('执行整理操作失败');
+    return await response.json();
+}
+
+/**
+ * 更新整理进度条与状态文字
+ * @param {number} percent - 进度百分比
+ * @param {string} status - 状态文字
+ */
+function setOrganizeProgress(percent, status) {
+    document.getElementById('organize-progress-fill').style.width = `${percent}%`;
+    document.getElementById('organize-status').textContent = status;
+}
+
+/**
+ * 追加整理日志
+ * @param {string} message - 日志内容
+ * @param {string} type - 日志类型: info / success / error / warning
+ */
+function addOrganizeLog(message, type = 'info') {
+    const log = document.getElementById('organize-log');
+    const item = document.createElement('div');
+    item.className = `organize-log-item ${type}`;
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        info: 'fa-circle-info',
+        warning: 'fa-exclamation-triangle'
+    };
+    item.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span>${message}</span>`;
+    log.appendChild(item);
+    log.scrollTop = log.scrollHeight;
+}
+
+/**
+ * 启动智能整理流程
+ * @param {FileManager} fileManager - 文件管理器实例
+ */
+async function startSmartOrganize(fileManager) {
+    if (isOrganizing) return;
+
+    const targetFiles = fileManager.files.filter(f => !f.isDir);
+    if (targetFiles.length === 0) {
+        showToast('当前层级没有可整理的文件', 'info');
+        return;
+    }
+
+    isOrganizing = true;
+    const modal = document.getElementById('organize-modal');
+    const actionsEl = document.getElementById('organize-actions');
+    document.getElementById('organize-log').innerHTML = '';
+    actionsEl.style.display = 'none';
+    modal.classList.add('show');
+
+    try {
+        // 阶段 1: 预处理文件
+        const folders = fileManager.files.filter(f => f.isDir).map(f => f.name);
+        addOrganizeLog(`开始整理当前层级 ${targetFiles.length} 个文件...`);
+        addOrganizeLog(`当前文件夹列表: ${folders.length ? folders.join('、') : '（无）'}`);
+
+        const fileDataList = [];
+        for (let i = 0; i < targetFiles.length; i++) {
+            const file = targetFiles[i];
+            setOrganizeProgress(Math.round((i / targetFiles.length) * 45), `预处理文件 (${i + 1}/${targetFiles.length}): ${file.name}`);
+            const data = await preprocessOrganizeFile(file);
+            if (data.type === 'meta' && data.note) {
+                addOrganizeLog(`降级处理: ${file.name} — ${data.note}`, 'warning');
+            }
+            fileDataList.push(data);
+        }
+
+        // 阶段 2: 逐文件 AI 决策（每次携带当前已知文件夹列表，含上一文件拟新增的文件夹）
+        const knownFolders = [...folders]; // 已知文件夹集合（整理过程中持续累积）
+        const operations = [];
+        for (let i = 0; i < fileDataList.length; i++) {
+            const file = fileDataList[i];
+            setOrganizeProgress(5 + Math.round((i / fileDataList.length) * 65), `AI 处理文件 (${i + 1}/${fileDataList.length}): ${file.name}`);
+            addOrganizeLog(`AI 处理文件 (${i + 1}/${fileDataList.length}): ${file.name}`);
+            try {
+                const decision = await askFileDecision(file, knownFolders);
+                const op = buildFileOperation(file.name, decision, knownFolders);
+                if (op) {
+                    operations.push(op);
+                    addOrganizeLog(`决定: ${file.name} → ${op.type === 'move' ? `移动到「${op.target}」` : `重命名为「${op.target}」`}`, 'success');
+                } else {
+                    addOrganizeLog(`决定: ${file.name} 保持不动`, 'info');
+                }
+            } catch (err) {
+                addOrganizeLog(`${file.name} AI 处理失败: ${err.message}，跳过`, 'error');
+            }
+        }
+
+        if (operations.length === 0) {
+            addOrganizeLog('AI 未生成任何整理操作，文件可能已足够整洁', 'warning');
+            setOrganizeProgress(100, '整理完成（无操作）');
+            showToast('智能整理完成，未产生操作', 'info');
+            return;
+        }
+
+        // 阶段 3: AI 全局审核文件夹分布（判定重复/不合理的文件夹并改写移动操作）
+        setOrganizeProgress(72, 'AI 审核文件夹分布是否合理...');
+        addOrganizeLog('AI 审核文件夹分布（检查重复/不合理文件夹）...');
+        try {
+            const distributionText = summarizeFolderDistribution(operations, knownFolders);
+            const corrections = await auditFolderDistribution(distributionText);
+            if (corrections.length > 0) {
+                addOrganizeLog(`AI 判定 ${corrections.length} 处文件夹分布需修正`, 'warning');
+                corrections.forEach(c => {
+                    addOrganizeLog(`修正建议: 「${c.from}」→「${c.to}」（${c.reason || '分布不合理'}）`, 'warning');
+                });
+                const adjusted = applyFolderCorrections(operations, corrections);
+                if (adjusted.adjustCount > 0) {
+                    operations.length = 0;
+                    operations.push(...adjusted.operations);
+                    addOrganizeLog(`已改写 ${adjusted.adjustCount} 处操作目标`, 'success');
+                }
+            } else {
+                addOrganizeLog('AI 审核通过：文件夹分布合理', 'success');
+            }
+        } catch (err) {
+            addOrganizeLog(`分布审核失败: ${err.message}，按当前方案执行`, 'warning');
+        }
+
+        // 阶段 4: 执行整理操作
+        addOrganizeLog(`共 ${operations.length} 个操作，开始执行...`);
+        setOrganizeProgress(85, '正在执行整理操作...');
+        const result = await executeOrganizeOperations(fileManager.currentPath, operations);
+        setOrganizeProgress(100, '整理完成');
+
+        const successCount = result.success_count || 0;
+        const failCount = result.fail_count || 0;
+        if (successCount > 0) {
+            addOrganizeLog(`执行成功 ${successCount} 个操作`, 'success');
+        }
+        if (failCount > 0) {
+            addOrganizeLog(`执行失败 ${failCount} 个操作，详见下方日志`, 'error');
+            (result.results || []).filter(r => !r.success).forEach(r => {
+                addOrganizeLog(`失败: ${r.source} → ${r.target || ''}（${r.error || '未知错误'}）`, 'error');
+            });
+        }
+        showToast(`智能整理完成：${successCount} 成功，${failCount} 失败`, failCount ? 'warning' : 'success');
+        await fileManager.loadFiles();
+    } catch (err) {
+        addOrganizeLog(`整理流程失败: ${err.message}`, 'error');
+        setOrganizeProgress(100, '整理失败');
+        showToast('智能整理失败', 'error');
+        console.error('智能整理失败:', err);
+    } finally {
+        actionsEl.style.display = 'flex';
+        isOrganizing = false;
+    }
+}
+
+/**
+ * 逐文件 AI 决策与分布审核辅助函数
+ * 每个文件独立询问 AI（携带当前已知文件夹列表，含之前文件拟新增的文件夹），
+ * 全部处理完成后再次调用 AI 审核文件夹分布并改写不合理的移动操作
+ */
+
+/**
+ * 询问 AI 对单个文件的处理决定
+ * @param {Object} file - 预处理后的文件描述
+ * @param {Array<string>} knownFolders - 当前已知文件夹列表（含拟新增的）
+ * @returns {Promise<{rename_to: string|null, target_folder: string|null}>}
+ */
+async function askFileDecision(file, knownFolders) {
+    const messages = buildFileDecisionMessages(file, knownFolders);
+    const response = await callOrganizeAI(messages);
+    return parseOrganizeDecision(response);
+}
+
+/**
+ * 组装单文件决策的 AI 消息（多模态内容数组，图片以 image_url 提交）
+ * @param {Object} file - 预处理后的文件描述
+ * @param {Array<string>} knownFolders - 当前已知文件夹列表
+ * @returns {Array<Object>} 消息数组
+ */
+function buildFileDecisionMessages(file, knownFolders) {
+    const system = [
+        '你是文件整理助手。当前正在进行逐个文件的智能整理，你会依次看到每个待整理的文件。',
+        '对当前这个文件，你需要决定：',
+        '1. rename_to：是否重命名（保持扩展名不变；无需重命名时为 null）；',
+        '2. target_folder：放到哪个文件夹（从「当前已知文件夹」中选择，或新建一个语义清晰的新文件夹名；留在当前目录时为 null）。',
+        '规则：',
+        '- 优先复用「当前已知文件夹」，语义匹配时不要重复新建同义文件夹；',
+        '- 新建的文件夹名会加入「当前已知文件夹」，供后续文件复用；',
+        '- 只返回 JSON 对象，不要输出其他内容，格式：{"rename_to":"新文件名或null","target_folder":"文件夹名或null"}'
+    ].join('\n');
+
+    const userParts = [
+        { type: 'text', text: `当前已知文件夹列表：${knownFolders.length ? knownFolders.join('、') : '（无，可新建）'}\n请决定下列文件的整理方式：` }
+    ];
+    if (file.type === 'image' && file.base64) {
+        userParts.push({ type: 'text', text: `文件：${file.name}（${file.size}，${file.ext}）` });
+        userParts.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${file.base64}` } });
+    } else if (file.type === 'text' && file.content) {
+        userParts.push({ type: 'text', text: `文件：${file.name}（${file.size}，${file.ext}）\n内容样本：\n${file.content}` });
+    } else {
+        const note = file.note ? ` — ${file.note}` : '';
+        userParts.push({ type: 'text', text: `文件：${file.name}（${file.size}，${file.ext}）${note}` });
+    }
+
+    return [
+        { role: 'system', content: system },
+        { role: 'user', content: userParts }
+    ];
+}
+
+/**
+ * 解析 AI 返回的单文件决策 JSON（兼容 ```json 代码块包裹）
+ * @param {string} response - AI 响应文本
+ * @returns {{rename_to: string|null, target_folder: string|null}}
+ */
+function parseOrganizeDecision(response) {
+    const cleaned = response.replace(/```json\s*|```\s*/g, '').trim();
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    const obj = match ? JSON.parse(match[0]) : JSON.parse(cleaned);
+    return {
+        rename_to: obj.rename_to != null ? String(obj.rename_to).trim() : null,
+        target_folder: obj.target_folder != null ? String(obj.target_folder).trim() : null
+    };
+}
+
+/**
+ * 根据 AI 决策生成整理操作（move / rename），并将拟新增文件夹加入 knownFolders
+ * @param {string} fileName - 原文件名
+ * @param {{rename_to: string|null, target_folder: string|null}} decision - AI 决策
+ * @param {Array<string>} knownFolders - 当前已知文件夹列表（会被追加新增文件夹）
+ * @returns {Object|null} 操作对象或 null（保持不动）
+ */
+function buildFileOperation(fileName, decision, knownFolders) {
+    const dotIdx = fileName.lastIndexOf('.');
+    const ext = dotIdx >= 0 ? fileName.slice(dotIdx) : '';
+
+    // 重命名（保持扩展名不变）
+    let finalName = fileName;
+    let renamed = false;
+    if (decision.rename_to && decision.rename_to !== fileName) {
+        let newName = decision.rename_to;
+        if (ext && !newName.toLowerCase().endsWith(ext.toLowerCase())) {
+            newName += ext;
+        }
+        if (newName && newName !== fileName) {
+            finalName = newName;
+            renamed = true;
+        }
+    }
+
+    // 目标文件夹（去除首尾斜杠）
+    const folder = decision.target_folder
+        ? decision.target_folder.replace(/^\/+|\/+$/g, '').replace(/\\/g, '/')
+        : '';
+
+    if (folder && folder !== '.') {
+        // 拟新增的文件夹加入已知集合，供后续文件复用
+        if (!knownFolders.includes(folder)) {
+            knownFolders.push(folder);
+        }
+        const target = `${folder}/${finalName}`;
+        if (target !== fileName) {
+            return { type: 'move', source: fileName, target: target };
+        }
+        return null;
+    }
+
+    if (renamed) {
+        return { type: 'rename', source: fileName, target: finalName };
+    }
+    return null;
+}
+
+/**
+ * 汇总整理后拟形成的文件夹分布（各文件夹将放入的文件数量与类型）
+ * @param {Array<Object>} operations - 操作列表
+ * @param {Array<string>} knownFolders - 已知文件夹列表
+ * @returns {string} 分布描述文本
+ */
+function summarizeFolderDistribution(operations, knownFolders) {
+    const stats = {};
+    for (const folder of knownFolders) {
+        stats[folder] = { count: 0, types: new Set() };
+    }
+    let rootCount = 0;
+    const rootTypes = new Set();
+
+    for (const op of operations) {
+        if (!op || op.type !== 'move' || !op.target) continue;
+        const target = String(op.target).replace(/\\/g, '/');
+        const idx = target.lastIndexOf('/');
+        const folder = idx >= 0 ? target.slice(0, idx) : '';
+        const fileExt = idx >= 0 ? target.slice(idx + 1) : target;
+        const ext = fileExt.slice(fileExt.lastIndexOf('.') + 1).toLowerCase() || '无';
+        if (folder && stats[folder]) {
+            stats[folder].count++;
+            stats[folder].types.add(ext);
+        } else {
+            rootCount++;
+            rootTypes.add(ext);
+        }
+    }
+
+    const lines = ['本次整理后拟形成的文件夹分布：'];
+    for (const folder of knownFolders) {
+        if (stats[folder].count > 0) {
+            lines.push(`- ${folder}：${stats[folder].count} 个文件（${Array.from(stats[folder].types).join('、')}）`);
+        }
+    }
+    if (rootCount > 0) {
+        lines.push(`- （当前目录，保持不动）：${rootCount} 个文件（${Array.from(rootTypes).join('、')}）`);
+    }
+    if (lines.length === 1) {
+        lines.push('- （无文件被移动到文件夹）');
+    }
+    return lines.join('\n');
+}
+
+/**
+ * 调用 AI 审核文件夹分布，返回需修正的合并/调整建议
+ * @param {string} distributionText - 分布描述文本
+ * @returns {Promise<Array<{from: string, to: string, reason: string}>>}
+ */
+async function auditFolderDistribution(distributionText) {
+    const system = [
+        '你是文件整理审核助手。以下是本次整理后拟形成的文件夹分布，请检查是否存在分布不合理：',
+        '1. 语义重复的文件夹（同义、近义或可合并）→ 应合并；',
+        '2. 功能不合适的文件夹（命名混乱、粒度不当）→ 应调整；',
+        '3. 层级不合理的文件夹 → 应调整。',
+        '只返回 JSON 数组，不要输出其他内容，格式：[{"from":"被合并/被调整的文件夹名","to":"保留的目标文件夹名","reason":"原因"}]',
+        '没有需要修正的问题时返回 []'
+    ].join('\n');
+
+    const messages = [
+        { role: 'system', content: system },
+        { role: 'user', content: distributionText }
+    ];
+    const response = await callOrganizeAI(messages);
+    return parseFolderCorrections(response);
+}
+
+/**
+ * 解析 AI 返回的修正建议 JSON 数组（兼容 ```json 代码块包裹）
+ * @param {string} response - AI 响应文本
+ * @returns {Array<{from: string, to: string, reason: string}>}
+ */
+function parseFolderCorrections(response) {
+    const cleaned = response.replace(/```json\s*|```\s*/g, '').trim();
+    const match = cleaned.match(/\[[\s\S]*\]/);
+    const arr = match ? JSON.parse(match[0]) : JSON.parse(cleaned);
+    return (Array.isArray(arr) ? arr : []).filter(c => {
+        return c && c.from && c.to && String(c.from).trim() !== String(c.to).trim();
+    }).map(c => ({
+        from: String(c.from).trim(),
+        to: String(c.to).trim(),
+        reason: c.reason ? String(c.reason) : ''
+    }));
+}
+
+/**
+ * 应用修正建议：将操作中 target 以 from 开头的路径替换为 to
+ * @param {Array<Object>} operations - 操作列表
+ * @param {Array<{from: string, to: string}>} corrections - 修正建议
+ * @returns {{operations: Array<Object>, adjustCount: number}}
+ */
+function applyFolderCorrections(operations, corrections) {
+    let adjustCount = 0;
+    const adjustedOps = operations.map(op => {
+        if (!op || !op.target) return op;
+        const rawTarget = String(op.target).replace(/\\/g, '/');
+        let newTarget = rawTarget;
+        let changed = false;
+        for (const c of corrections) {
+            const prefix = c.from + '/';
+            if (newTarget === c.from || newTarget.startsWith(prefix)) {
+                newTarget = c.to + newTarget.slice(c.from.length);
+                changed = true;
+            }
+        }
+        if (changed) {
+            adjustCount++;
+            return { ...op, target: newTarget };
+        }
+        return op;
+    });
+    return { operations: adjustedOps, adjustCount: adjustCount };
+}
+
+/**
  * 模态框处理模块
  * 负责文件管理器的所有模态框相关功能
  */
@@ -1526,6 +2207,18 @@ function handleKeyboardEvent(event, currentMediaList, currentMediaIndex, onMedia
             qrcodeModal.classList.remove('show');
         }
 
+        // 移动目标选择 / 冲突处理模态框
+        const moveModal = document.getElementById('move-modal');
+        if (moveModal.classList.contains('show')) closeMoveModal();
+        const conflictModal = document.getElementById('conflict-modal');
+        if (conflictModal.classList.contains('show')) closeConflictModal();
+
+        // 智能整理模态框（进行中不允许关闭）
+        const organizeModal = document.getElementById('organize-modal');
+        if (organizeModal.classList.contains('show') && !isOrganizing) {
+            organizeModal.classList.remove('show');
+        }
+
         return currentMediaIndex;
     }
 
@@ -1625,6 +2318,112 @@ function bindEvents(fileManager) {
     // 批量压缩
     document.getElementById('batch-compress').addEventListener('click', async () => {
         await batchCompress(fileManager.files, fileManager.selectedFiles);
+    });
+
+    // 批量移动
+    document.getElementById('batch-move').addEventListener('click', () => {
+        showMoveModal(fileManager);
+    });
+
+    // 移动模态框：确认 / 取消 / 关闭 / 点击遮罩
+    document.getElementById('move-modal-confirm').addEventListener('click', async () => {
+        const targetDir = document.getElementById('move-modal-path').value.trim();
+        if (!targetDir) {
+            showToast('请选择或输入目标文件夹', 'info');
+            return;
+        }
+        const sources = Array.from(fileManager.selectedFiles);
+        closeMoveModal();
+        await performMove(fileManager, sources, targetDir, 'ask');
+    });
+    document.getElementById('move-modal-cancel').addEventListener('click', closeMoveModal);
+    document.getElementById('move-modal-close').addEventListener('click', closeMoveModal);
+    document.getElementById('move-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('move-modal')) closeMoveModal();
+    });
+
+    // 冲突处理模态框：自动重命名 / 覆盖 / 取消
+    document.getElementById('conflict-rename').addEventListener('click', async () => {
+        const args = pendingMoveArgs;
+        closeConflictModal();
+        if (args) await performMove(args.fileManager, args.sources, args.targetDir, 'auto_rename');
+    });
+    document.getElementById('conflict-overwrite').addEventListener('click', async () => {
+        const args = pendingMoveArgs;
+        closeConflictModal();
+        if (args) await performMove(args.fileManager, args.sources, args.targetDir, 'overwrite');
+    });
+    document.getElementById('conflict-cancel').addEventListener('click', closeConflictModal);
+    document.getElementById('conflict-modal-close').addEventListener('click', closeConflictModal);
+    document.getElementById('conflict-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('conflict-modal')) closeConflictModal();
+    });
+
+    // 智能整理
+    document.getElementById('smart-organize-btn').addEventListener('click', () => {
+        startSmartOrganize(fileManager);
+    });
+    document.getElementById('organize-close-btn').addEventListener('click', () => {
+        document.getElementById('organize-modal').classList.remove('show');
+    });
+    document.getElementById('organize-modal-close').addEventListener('click', () => {
+        if (!isOrganizing) document.getElementById('organize-modal').classList.remove('show');
+    });
+
+    // 拖放移动：在文件网格上通过事件委托处理
+    const fileGrid = document.getElementById('file-grid');
+    fileGrid.addEventListener('dragstart', (e) => {
+        const card = e.target.closest('.file-card');
+        if (!card || !card.dataset.path) return;
+        const path = card.dataset.path;
+        // 拖拽选中项时移动全部选中项，否则移动单个
+        const movePaths = (fileManager.selectedFiles.has(path) && fileManager.selectedFiles.size > 1)
+            ? Array.from(fileManager.selectedFiles)
+            : [path];
+        e.dataTransfer.setData('text/plain', path);
+        e.dataTransfer.setData('application/x-fm-move', JSON.stringify(movePaths));
+        e.dataTransfer.effectAllowed = 'move';
+        card.classList.add('dragging');
+    });
+    fileGrid.addEventListener('dragend', (e) => {
+        const card = e.target.closest('.file-card');
+        if (card) card.classList.remove('dragging');
+        fileGrid.querySelectorAll('.file-card.drop-target').forEach(c => c.classList.remove('drop-target'));
+    });
+    fileGrid.addEventListener('dragover', (e) => {
+        const card = e.target.closest('.file-card');
+        fileGrid.querySelectorAll('.file-card.drop-target').forEach(c => { if (c !== card) c.classList.remove('drop-target'); });
+        // 仅文件夹卡片允许作为投放目标
+        if (card && card.dataset.path) {
+            const targetFile = fileManager.files.find(f => f.path === card.dataset.path);
+            if (targetFile && targetFile.isDir) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                card.classList.add('drop-target');
+            }
+        }
+    });
+    fileGrid.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileGrid.querySelectorAll('.file-card.drop-target').forEach(c => c.classList.remove('drop-target'));
+        const targetCard = e.target.closest('.file-card');
+        const movePathsRaw = e.dataTransfer.getData('application/x-fm-move');
+        if (!targetCard || !movePathsRaw) return;
+        const targetFile = fileManager.files.find(f => f.path === targetCard.dataset.path);
+        if (!targetFile || !targetFile.isDir) return;
+
+        let sourcePaths;
+        try {
+            sourcePaths = JSON.parse(movePathsRaw);
+        } catch (err) {
+            sourcePaths = [e.dataTransfer.getData('text/plain')];
+        }
+        const validPaths = sourcePaths.filter(p => p && p !== targetFile.path);
+        if (validPaths.length === 0) {
+            showToast('没有可移动的项目', 'info');
+            return;
+        }
+        performMove(fileManager, validPaths, targetFile.path, 'ask');
     });
 
     // 返回按钮
