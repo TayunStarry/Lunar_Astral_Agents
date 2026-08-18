@@ -10,6 +10,12 @@
         <!-- 视频容器 -->
         <video class="video-preview" id="modal-video" controls style="display: none;"></video>
 
+        <!-- 音频容器：波形图 + 原生控制条 -->
+        <div class="audio-preview-wrap" style="display: none;">
+            <canvas class="audio-waveform" id="audio-waveform"></canvas>
+            <audio class="audio-preview" id="modal-audio" controls></audio>
+        </div>
+
         <!-- 控制栏 - 横板布局，居中于底部上方 -->
         <div class="image-controls">
             <!-- 独立圆形气泡显示缩放百分比 -->

@@ -87,6 +87,52 @@ function isAudioFile(filename) {
 }
 
 /**
+ * 可重编码的图片格式扩展名列表（png / jpg / jpeg / webp）
+ */
+const CONVERTIBLE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+/**
+ * 检查文件是否为可重编码的图片文件
+ * @param {string} filename - 文件名
+ * @returns {boolean} - 是否可重编码
+ */
+function isConvertibleImage(filename) {
+    const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
+    return CONVERTIBLE_IMAGE_EXTS.includes(ext);
+}
+
+/**
+ * 检查文件是否为 GGUF 模型文件
+ * @param {string} filename - 文件名
+ * @returns {boolean} - 是否为 GGUF 文件
+ */
+function isGGUFFile(filename) {
+    const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
+    return ext === '.gguf';
+}
+
+/**
+ * 检查文件是否为 ZIP 压缩包
+ * @param {string} filename - 文件名
+ * @returns {boolean} - 是否为 ZIP 文件
+ */
+function isZipFile(filename) {
+    const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
+    return ext === '.zip';
+}
+
+/**
+ * HTML 转义（用于安全渲染后端返回的元数据文本）
+ * @param {string} str - 原始文本
+ * @returns {string} - 转义后的文本
+ */
+function mediaEscapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+/**
  * 检查文件是否为文本文件
  * @param {string} filename - 文件名
  * @returns {boolean} - 是否为文本文件
@@ -241,10 +287,22 @@ function updateStats(files, isSearching = false, searchResults = []) {
     totalFoldersElement.textContent = folders;
     totalSizeElement.textContent = formatFileSize(totalSize);
 
-    // 智能整理按钮：非搜索状态且当前层级文件数达到阈值时显示
+    // 智能整理 / 哈希命名按钮：非搜索状态且当前层级文件数达到阈值时显示
     const organizeBtn = document.getElementById('smart-organize-btn');
+    const showOrganize = (!isSearching && fileCount >= ORGANIZE_THRESHOLD);
     if (organizeBtn) {
-        organizeBtn.style.display = (!isSearching && fileCount >= ORGANIZE_THRESHOLD) ? 'inline-flex' : 'none';
+        organizeBtn.style.display = showOrganize ? 'inline-flex' : 'none';
+    }
+    const hashRenameBtn = document.getElementById('hash-rename-btn');
+    if (hashRenameBtn) {
+        hashRenameBtn.style.display = showOrganize ? 'inline-flex' : 'none';
+    }
+
+    // 图片转码按钮：非搜索状态且当前层级存在可重编码的图片文件时显示
+    const convertBtn = document.getElementById('image-convert-btn');
+    if (convertBtn) {
+        const hasConvertible = !isSearching && targetFiles.some(f => !f.isDir && isConvertibleImage(f.name));
+        convertBtn.style.display = hasConvertible ? 'inline-flex' : 'none';
     }
 }
 
@@ -475,6 +533,7 @@ function updateFileGrid(files, selectedFiles, isSearching, searchResults, curren
     });
 
     renderPagination(totalPages, currentPage, callbacks.onPageChange);
+    updateBatchActions(selectedFiles);
 }
 
 /**
@@ -544,7 +603,9 @@ function renderPagination(totalPages, currentPage, onPageChange) {
  */
 function updateBatchActions(selectedFiles) {
     const batchActions = document.querySelector('.batch-actions');
-    if (selectedFiles.size > 0) {
+    // 有可操作项目（当前视图非空）或已有选中项时显示批量操作栏
+    const hasVisibleItems = document.querySelectorAll('.file-card').length > 0;
+    if (hasVisibleItems || selectedFiles.size > 0) {
         batchActions.classList.add('show');
     } else {
         batchActions.classList.remove('show');
@@ -912,91 +973,48 @@ async function batchDelete(selectedFiles, onComplete) {
 }
 
 /**
- * 批量压缩
- * @param {Array} files - 所有文件列表
- * @param {Set} selectedFiles - 选中的文件集合
+ * 批量压缩（ZIP 保存到服务器当前层级，支持文件夹）
+ * @param {Object} fileManager - 文件管理器实例
  */
-async function batchCompress(files, selectedFiles) {
+async function batchCompress(fileManager) {
+    const selectedFiles = fileManager.selectedFiles;
     if (selectedFiles.size === 0) {
         showToast('请先选择要压缩的文件', 'info');
         return;
     }
 
-    try {
-        const selectedFileObjects = files.filter(file => selectedFiles.has(file.path));
-        const formData = new FormData();
+    const files = fileManager.files;
+    const currentPath = fileManager.currentPath || '';
 
-        for (const fileObj of selectedFileObjects) {
-            if (fileObj.isDir) continue;
-            const response = await fetch(`/file/read/${fileObj.path}`);
-            const blob = await response.blob();
-            const file = new File([blob], fileObj.name, { type: blob.type });
-            formData.append('files', file);
-        }
+    try {
+        // 收集选中项的相对路径（文件与文件夹均支持，文件夹递归打包）
+        const selectedPaths = files
+            .filter(file => selectedFiles.has(file.path))
+            .map(file => file.path);
 
         const zipName = `压缩文件_${new Date().getTime()}.zip`;
-        formData.append('zip_name', zipName);
 
-        const response = await fetch('/file/archive', {
+        const response = await fetch('/file/archive/create', {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                paths: selectedPaths,
+                zip_name: zipName,
+                save_path: currentPath
+            })
         });
 
         if (!response.ok) throw new Error('压缩失败');
 
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = zipName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || '压缩失败');
 
-        showToast(`成功压缩 ${selectedFiles.size} 个项目`, 'success');
+        showToast(`成功压缩 ${selectedFiles.size} 个项目到 ${result.path}`, 'success');
+        await fileManager.loadFiles();
+        fileManager.updateStats();
     } catch (error) {
         showToast('压缩失败', 'error');
         console.error('压缩失败:', error);
-    }
-}
-
-/**
- * 处理 ZIP 文件上传解压
- * @param {File} file - 要上传的 ZIP 文件
- * @param {string} currentPath - 当前路径
- * @param {Function} onComplete - 完成回调
- */
-async function handleZipUpload(file, currentPath, onComplete) {
-    if (!file) return;
-
-    try {
-        const formData = new FormData();
-        formData.append('zip_file', file);
-
-        const response = await fetch('/file/archive', {
-            method: 'PUT',
-            body: formData
-        });
-
-        if (!response.ok) throw new Error('解压失败');
-
-        const result = await response.json();
-
-        for (const extractedFile of result.extracted_files) {
-            if (extractedFile.is_dir) continue;
-            const contentBytes = Uint8Array.from(atob(extractedFile.content), c => c.charCodeAt(0));
-            const blob = new Blob([contentBytes]);
-            const uploadFileObj = new File([blob], extractedFile.name, { type: getFileType(extractedFile.extension) });
-            await uploadFile(uploadFileObj, currentPath, () => { }, false);
-        }
-
-        showToast(`成功解压 ${result.total_files} 个文件`, 'success');
-        onComplete();
-    }
-    catch (error) {
-        showToast('解压失败', 'error');
-        console.error('解压失败:', error);
     }
 }
 
@@ -1375,6 +1393,49 @@ function addOrganizeLog(message, type = 'info') {
     item.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span>${message}</span>`;
     log.appendChild(item);
     log.scrollTop = log.scrollHeight;
+}
+
+/**
+ * 哈希命名：基于文件内容 MD5 的前 16 位重命名当前层级全部文件
+ * 重名（内容相同或与已有条目冲突）时在文件名后追加 '+'
+ * @param {Object} fileManager - 文件管理器实例
+ */
+async function startHashRename(fileManager) {
+    const targetFiles = fileManager.files.filter(f => !f.isDir);
+    if (targetFiles.length === 0) {
+        showToast('当前层级没有可命名的文件', 'info');
+        return;
+    }
+
+    const confirmed = await showConfirmModal(
+        '确认哈希命名',
+        `将基于文件内容 MD5 的前 16 位重命名当前层级的全部 ${targetFiles.length} 个文件？\n重复内容将在文件名后追加 '+' 区分。`,
+        'warning'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch('/file/hash-rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: fileManager.currentPath || '' })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || '哈希命名失败');
+        }
+
+        const renamedCount = result.renamed || 0;
+        const unchangedCount = (result.results || []).filter(r => r.unchanged).length;
+        const message = `哈希命名完成：${renamedCount} 个文件已重命名`
+            + (unchangedCount ? `，${unchangedCount} 个已是哈希名` : '');
+        showToast(message, 'success');
+        await fileManager.loadFiles();
+        fileManager.updateStats();
+    } catch (error) {
+        showToast(error.message || '哈希命名失败', 'error');
+        console.error('哈希命名失败:', error);
+    }
 }
 
 /**
@@ -2129,55 +2190,6 @@ async function saveTextFile(file, content, currentPath) {
 }
 
 /**
- * 显示二维码模态框
- */
-async function showQRCode() {
-    try {
-        const currentUrl = window.location.origin;
-        const qrcodeContainer = document.getElementById('qrcode-container');
-        const qrcodeUrl = document.getElementById('qrcode-url');
-        const qrcodeModal = document.getElementById('qrcode-modal');
-
-        // 清空二维码容器
-        qrcodeContainer.innerHTML = '';
-
-        // 生成二维码
-        new QRCode(qrcodeContainer, {
-            text: currentUrl,
-            width: 256,
-            height: 256,
-            colorDark: '#000000',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.H
-        });
-
-        // 显示URL
-        qrcodeUrl.textContent = currentUrl;
-
-        // 显示模态框
-        qrcodeModal.classList.add('show');
-    } catch (error) {
-        showToast('生成二维码失败', 'error');
-        console.error('生成二维码失败:', error);
-    }
-}
-
-/**
- * 关闭二维码模态框
- * @param {Event} event - 点击事件对象
- */
-function closeQRCodeModal(event) {
-    const modal = document.getElementById('qrcode-modal');
-    if (
-        event.target === modal ||
-        event.target.closest('.modal-close-btn') ||
-        event.target.classList.contains('close')
-    ) {
-        modal.classList.remove('show');
-    }
-}
-
-/**
  * 检查是否在媒体预览中
  * @returns {boolean} - 是否在媒体预览中
  */
@@ -2202,11 +2214,6 @@ function handleKeyboardEvent(event, currentMediaList, currentMediaIndex, onMedia
             currentEditFile = null;
         }
 
-        const qrcodeModal = document.getElementById('qrcode-modal');
-        if (qrcodeModal.classList.contains('show')) {
-            qrcodeModal.classList.remove('show');
-        }
-
         // 移动目标选择 / 冲突处理模态框
         const moveModal = document.getElementById('move-modal');
         if (moveModal.classList.contains('show')) closeMoveModal();
@@ -2218,6 +2225,14 @@ function handleKeyboardEvent(event, currentMediaList, currentMediaIndex, onMedia
         if (organizeModal.classList.contains('show') && !isOrganizing) {
             organizeModal.classList.remove('show');
         }
+
+        // 图片转码 / GGUF 预览 / ZIP 预览模态框
+        const convertModal = document.getElementById('convert-modal');
+        if (convertModal.classList.contains('show')) closeConvertModal();
+        const ggufModal = document.getElementById('gguf-modal');
+        if (ggufModal.classList.contains('show')) closeGGUFModal();
+        const zipModal = document.getElementById('zip-modal');
+        if (zipModal.classList.contains('show')) closeZipModal();
 
         return currentMediaIndex;
     }
@@ -2279,6 +2294,504 @@ function handleKeyboardEvent(event, currentMediaList, currentMediaIndex, onMedia
 
 
 /**
+ * 图片转码与 GGUF 预览模块
+ * 参考 lunar.means.image.converter 与 lunar.means.gguf.viewer 扩展包实现
+ */
+
+
+// ==== GGUF 模型元数据预览 ====
+
+/** GGUF 摘要字段中文映射 */
+const GGUF_LABEL_MAP = {
+    'Model Name': '模型名称',
+    'Architecture': '架构',
+    'Quantization': '量化方式',
+    'Quant Version': '量化版本',
+    'Context Length': '上下文长度',
+    'Embedding Dim': '嵌入维度',
+    'Block Count': '层数',
+    'Attention Heads': '注意力头数',
+    'KV Heads': 'KV 头数',
+    'FFN Dim': 'FFN 维度',
+    'Vocab Size': '词表大小'
+};
+
+/** GGUF 摘要字段展示顺序 */
+const GGUF_KEY_ORDER = [
+    'Model Name', 'Architecture', 'Quantization', 'Quant Version',
+    'Context Length', 'Embedding Dim', 'Block Count',
+    'Attention Heads', 'KV Heads', 'FFN Dim', 'Vocab Size'
+];
+
+/**
+ * 展示 GGUF 模型预览模态框
+ * @param {Object} file - 文件对象（path 为相对 LocalDir 的路径）
+ */
+async function showGGUFModal(file) {
+    const modal = document.getElementById('gguf-modal');
+    const pathEl = document.getElementById('gguf-file-path');
+    const cardsEl = document.getElementById('gguf-summary-cards');
+    const bodyEl = document.getElementById('gguf-metadata-body');
+
+    document.getElementById('gguf-search-input').value = '';
+    document.getElementById('gguf-metadata-count').textContent = '';
+    pathEl.textContent = file.path;
+    cardsEl.innerHTML = '<div class="gguf-loading"><i class="fas fa-spinner fa-spin"></i> 正在解析模型元数据...</div>';
+    bodyEl.innerHTML = '';
+    modal.classList.add('show');
+
+    try {
+        const response = await fetch('/gguf/metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: file.path })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            cardsEl.innerHTML = `<div class="gguf-error"><i class="fas fa-exclamation-triangle"></i> ${mediaEscapeHTML(data.error || '解析失败，请检查文件格式')}</div>`;
+            return;
+        }
+
+        pathEl.textContent = data.filePath || file.path;
+        renderGGUFSummary(cardsEl, data.summary);
+        document.getElementById('gguf-metadata-count').textContent = `（${data.count} 项）`;
+        renderGGUFMetadataTable(bodyEl, data.metadata);
+    } catch (err) {
+        cardsEl.innerHTML = '<div class="gguf-error"><i class="fas fa-exclamation-triangle"></i> 网络请求失败，请检查服务是否正常运行</div>';
+    }
+}
+
+/**
+ * 关闭 GGUF 预览模态框
+ */
+function closeGGUFModal() {
+    document.getElementById('gguf-modal').classList.remove('show');
+}
+
+/**
+ * 渲染 GGUF 摘要卡片
+ * @param {HTMLElement} container - 卡片容器
+ * @param {Object} summary - 摘要字段映射
+ */
+function renderGGUFSummary(container, summary) {
+    container.innerHTML = '';
+    if (!summary) {
+        container.innerHTML = '<div class="gguf-error"><i class="fas fa-inbox"></i> 无摘要信息</div>';
+        return;
+    }
+
+    const orderedKeys = GGUF_KEY_ORDER.filter(k => summary[k]);
+    for (const key of Object.keys(summary)) {
+        if (!orderedKeys.includes(key)) orderedKeys.push(key);
+    }
+
+    for (const key of orderedKeys) {
+        const value = summary[key];
+        if (value === undefined || value === '') continue;
+        const label = GGUF_LABEL_MAP[key] || key;
+        const card = document.createElement('div');
+        card.className = 'gguf-summary-card';
+        card.innerHTML = `
+            <div class="gguf-summary-label">${mediaEscapeHTML(label)}</div>
+            <div class="gguf-summary-value">${mediaEscapeHTML(String(value))}</div>
+        `;
+        container.appendChild(card);
+    }
+}
+
+/**
+ * 渲染 GGUF 元数据表格
+ * @param {HTMLElement} tbody - 表格主体
+ * @param {Object} metadata - 元数据键值映射
+ */
+function renderGGUFMetadataTable(tbody, metadata) {
+    tbody.innerHTML = '';
+    const keys = Object.keys(metadata || {}).sort();
+    if (keys.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" class="gguf-empty"><i class="fas fa-inbox"></i> 暂无元数据</td></tr>';
+        return;
+    }
+    for (const key of keys) {
+        const value = metadata[key];
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-key', key.toLowerCase());
+        tr.setAttribute('data-value', String(value).toLowerCase());
+        const tdKey = document.createElement('td');
+        tdKey.textContent = key;
+        const tdValue = document.createElement('td');
+        tdValue.textContent = value;
+        const numValue = Number(value);
+        if (!isNaN(numValue) && String(value).trim() !== '') {
+            tdValue.className = 'gguf-value-number';
+        } else if (value === 'true' || value === 'false') {
+            tdValue.className = 'gguf-value-bool';
+        } else {
+            tdValue.className = 'gguf-value-string';
+        }
+        tr.appendChild(tdKey);
+        tr.appendChild(tdValue);
+        tbody.appendChild(tr);
+    }
+}
+
+// ==== 图片转码 ====
+
+/** 图片转码状态 */
+const convertState = {
+    mode: 'batch',       // batch 批量 / selected 选中
+    sourceFormat: 'all', // all / png / jpeg / webp
+    targetFormat: 'jpeg',
+    deleteSource: true,  // 默认转换后删除源文件
+    quality: 90
+};
+
+/**
+ * 打开图片转码模态框
+ * @param {FileManager} fileManager - 文件管理器实例
+ */
+function openConvertModal(fileManager) {
+    // 统计当前层级可转码图片与选中图片
+    const folderImages = fileManager.files.filter(f => !f.isDir && isConvertibleImage(f.name));
+    const selectedImages = Array.from(fileManager.selectedFiles)
+        .map(path => fileManager.files.find(f => f.path === path))
+        .filter(f => f && !f.isDir && isConvertibleImage(f.name));
+
+    // 有选中的图片时默认「转换选中图片」，否则默认「批量转换」
+    convertState.mode = selectedImages.length > 0 ? 'selected' : 'batch';
+    convertState.sourceFormat = 'all';
+    convertState.targetFormat = 'jpeg';
+
+    updateConvertModeTabs();
+    updateConvertModeHint(folderImages, selectedImages);
+    setConvertTabActive('convert-source-tabs', 'all');
+    setConvertTabActive('convert-target-tabs', 'jpeg');
+
+    const resultEl = document.getElementById('convert-result');
+    resultEl.style.display = 'none';
+    resultEl.innerHTML = '';
+
+    document.getElementById('convert-modal').classList.add('show');
+}
+
+/**
+ * 关闭图片转码模态框
+ */
+function closeConvertModal() {
+    document.getElementById('convert-modal').classList.remove('show');
+}
+
+/**
+ * 更新转换模式选项卡高亮
+ */
+function updateConvertModeTabs() {
+    document.querySelectorAll('#convert-mode-tabs .convert-mode-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.mode === convertState.mode);
+    });
+}
+
+/**
+ * 更新模式提示文案
+ * @param {Array<Object>} folderImages - 当前层级可转码图片列表
+ * @param {Array<Object>} selectedImages - 选中的可转码图片列表
+ */
+function updateConvertModeHint(folderImages, selectedImages) {
+    const hintEl = document.getElementById('convert-mode-hint');
+    const sourceSection = document.getElementById('convert-source-section');
+    if (convertState.mode === 'selected') {
+        if (selectedImages.length > 0) {
+            hintEl.innerHTML = `<i class="fas fa-check"></i> 将转换选中的 ${selectedImages.length} 张图片`;
+        } else {
+            hintEl.innerHTML = '<i class="fas fa-info-circle"></i> 未勾选图片文件，可先勾选文件卡片右上角的复选框，即可只转换指定的图片';
+        }
+        sourceSection.style.display = 'none';
+    } else {
+        const total = folderImages.length;
+        hintEl.innerHTML = `<i class="fas fa-info-circle"></i> 将批量转换当前层级全部 ${total} 张可转码图片（也可以先勾选部分图片，只转换所选）`;
+        sourceSection.style.display = '';
+    }
+}
+
+/**
+ * 切换格式选项卡高亮
+ * @param {string} containerId - 选项卡容器 ID
+ * @param {string} format - 选中格式
+ */
+function setConvertTabActive(containerId, format) {
+    document.querySelectorAll(`#${containerId} .convert-tab`).forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.format === format);
+    });
+}
+
+/**
+ * 开始执行图片转码
+ * @param {FileManager} fileManager - 文件管理器实例
+ */
+async function startImageConvert(fileManager) {
+    const targetFormat = convertState.targetFormat;
+    const deleteSource = document.getElementById('convert-delete-source').checked;
+    const quality = parseInt(document.getElementById('convert-quality').value, 10) || 90;
+    const resultEl = document.getElementById('convert-result');
+
+    const folderImages = fileManager.files.filter(f => !f.isDir && isConvertibleImage(f.name));
+    const selectedImages = Array.from(fileManager.selectedFiles)
+        .map(path => fileManager.files.find(f => f.path === path))
+        .filter(f => f && !f.isDir && isConvertibleImage(f.name));
+
+    // 批量模式需要源格式；选中模式逐张转换无需源格式过滤
+    const sourceFormat = convertState.mode === 'batch' ? convertState.sourceFormat : 'all';
+
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<div class="convert-progress"><i class="fas fa-spinner fa-spin"></i> 正在转换，请稍候...</div>';
+
+    try {
+        if (convertState.mode === 'batch') {
+            await batchImageConvert(fileManager, folderImages, sourceFormat, targetFormat, deleteSource, quality, resultEl);
+        } else {
+            if (selectedImages.length === 0) {
+                resultEl.innerHTML = '<div class="convert-error"><i class="fas fa-info-circle"></i> 未勾选任何图片文件，请先勾选要转换的图片</div>';
+                return;
+            }
+            await selectedImageConvert(selectedImages, targetFormat, deleteSource, quality, resultEl);
+        }
+
+        await fileManager.loadFiles();
+        fileManager.updateStats();
+    } catch (err) {
+        resultEl.innerHTML = `<div class="convert-error"><i class="fas fa-exclamation-triangle"></i> 转换流程失败: ${mediaEscapeHTML(err.message || '未知错误')}</div>`;
+    }
+}
+
+/**
+ * 批量转换：POST /convert/batch
+ * @param {FileManager} fileManager - 文件管理器实例
+ */
+async function batchImageConvert(fileManager, folderImages, sourceFormat, targetFormat, deleteSource, quality, resultEl) {
+    const response = await fetch('/convert/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            folder: fileManager.currentPath || '.',
+            source_format: sourceFormat,
+            target_format: targetFormat,
+            delete_source: deleteSource,
+            quality: quality
+        })
+    });
+    if (!response.ok) throw new Error('批量转换请求失败');
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || '批量转换失败');
+
+    let html = `<div class="convert-summary"><i class="fas fa-check-circle"></i> 批量转换完成：成功 ${data.success_count}，失败 ${data.fail_count}，共 ${data.total} 项</div>`;
+    const failed = (data.results || []).filter(r => !r.success);
+    if (failed.length > 0) {
+        html += '<div class="convert-fail-list">';
+        failed.forEach(r => {
+            html += `<div class="convert-fail-item"><i class="fas fa-times-circle"></i> ${mediaEscapeHTML(r.path.split(/[\\/]/).pop())} — ${mediaEscapeHTML(r.error || '未知错误')}</div>`;
+        });
+        html += '</div>';
+    }
+    resultEl.innerHTML = html;
+}
+
+/**
+ * 逐个转换选中的图片：POST /convert/image
+ * @param {Array<Object>} selectedImages - 选中的可转码图片
+ */
+async function selectedImageConvert(selectedImages, targetFormat, deleteSource, quality, resultEl) {
+    const results = [];
+    const targetExt = '.' + (targetFormat === 'jpeg' ? 'jpg' : targetFormat);
+
+    for (let i = 0; i < selectedImages.length; i++) {
+        const file = selectedImages[i];
+        const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+        resultEl.innerHTML = `<div class="convert-progress"><i class="fas fa-spinner fa-spin"></i> 正在转换 (${i + 1}/${selectedImages.length}): ${mediaEscapeHTML(file.name)}</div>`;
+
+        // 源格式与目标格式相同则跳过
+        if (ext === targetExt) {
+            results.push({ name: file.name, success: false, error: '源格式与目标格式相同，无需转换' });
+            continue;
+        }
+
+        try {
+            const response = await fetch('/convert/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    path: file.path,
+                    target_format: targetFormat,
+                    delete_source: deleteSource,
+                    quality: quality
+                })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                results.push({ name: file.name, success: false, error: data.error || '转换失败' });
+            } else {
+                results.push({ name: file.name, success: true });
+            }
+        } catch (err) {
+            results.push({ name: file.name, success: false, error: err.message || '网络请求失败' });
+        }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    let html = `<div class="convert-summary"><i class="fas fa-check-circle"></i> 选中图片转换完成：成功 ${successCount}，失败 ${results.length - successCount}</div>`;
+    const failed = results.filter(r => !r.success);
+    if (failed.length > 0) {
+        html += '<div class="convert-fail-list">';
+        failed.forEach(r => {
+            html += `<div class="convert-fail-item"><i class="fas fa-times-circle"></i> ${mediaEscapeHTML(r.name)} — ${mediaEscapeHTML(r.error || '未知错误')}</div>`;
+        });
+        html += '</div>';
+    }
+    resultEl.innerHTML = html;
+}
+
+/**
+ * 格式化字节大小
+ * @param {number} bytes - 字节数
+ * @returns {string} 人类可读大小
+ */
+function zipFormatSize(bytes) {
+    if (!bytes && bytes !== 0) return '-';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+/**
+ * 展示 ZIP 压缩包预览模态框
+ * @param {Object} file - ZIP 文件对象
+ * @param {Object} fileManager - 文件管理器实例
+ */
+async function showZipModal(file, fileManager) {
+    const modal = document.getElementById('zip-modal');
+    const filePathEl = document.getElementById('zip-file-path');
+    const summaryEl = document.getElementById('zip-summary-cards');
+    const entryBody = document.getElementById('zip-entry-body');
+    const entryCount = document.getElementById('zip-entry-count');
+    const resultEl = document.getElementById('zip-extract-result');
+    const pathInput = document.getElementById('zip-extract-path');
+    const hintEl = document.getElementById('zip-extract-hint');
+
+    filePathEl.textContent = file.path || file.name;
+    summaryEl.innerHTML = '<div class="zip-loading"><i class="fas fa-spinner fa-spin"></i> 正在读取压缩包信息...</div>';
+    entryBody.innerHTML = '';
+    entryCount.textContent = '';
+    resultEl.innerHTML = '';
+    hintEl.innerHTML = '';
+
+    // 默认解压路径：当前路径/压缩包名/
+    const baseName = (file.name || '').replace(/\.zip$/i, '');
+    const dirParts = [];
+    if (fileManager.currentPath) dirParts.push(fileManager.currentPath);
+    dirParts.push(baseName);
+    pathInput.value = dirParts.join('/') + '/';
+
+    modal.classList.add('show');
+
+    try {
+        const response = await fetch('/file/archive/metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: file.path })
+        });
+        if (!response.ok) throw new Error('读取失败');
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || '读取失败');
+
+        // 摘要卡片
+        const dirCount = data.entries.filter(e => e.isDir).length;
+        const fileCount = data.file_count - dirCount;
+        const cards = [
+            { label: '压缩包大小', value: zipFormatSize(data.zip_size) },
+            { label: '解压后大小', value: zipFormatSize(data.total_size) },
+            { label: '文件数', value: fileCount },
+            { label: '文件夹数', value: dirCount }
+        ];
+        summaryEl.innerHTML = cards.map(c =>
+            `<div class="zip-summary-card"><div class="zip-summary-label">${c.label}</div><div class="zip-summary-value">${c.value}</div></div>`
+        ).join('');
+
+        entryCount.textContent = `（${data.file_count} 个条目）`;
+
+        // 条目列表
+        if (data.entries.length === 0) {
+            entryBody.innerHTML = '<tr><td colspan="4" class="zip-empty">压缩包为空</td></tr>';
+        } else {
+            entryBody.innerHTML = data.entries.map(entry => {
+                const icon = entry.isDir
+                    ? '<i class="fas fa-folder" style="color: var(--accent);"></i>'
+                    : '<i class="fas fa-file" style="color: var(--text-muted);"></i>';
+                const type = entry.isDir ? '文件夹' : '文件';
+                return `<tr>
+                    <td class="zip-entry-name">${icon} <span>${mediaEscapeHTML(entry.name)}</span></td>
+                    <td>${type}</td>
+                    <td>${zipFormatSize(entry.size)}</td>
+                    <td>${zipFormatSize(entry.compressed)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        hintEl.innerHTML = `<i class="fas fa-info-circle"></i> 将解压到：${mediaEscapeHTML(pathInput.value)}`;
+    } catch (error) {
+        summaryEl.innerHTML = `<div class="zip-error"><i class="fas fa-exclamation-triangle"></i> ${mediaEscapeHTML(error.message || '读取压缩包信息失败')}</div>`;
+        console.error('读取 ZIP 元数据失败:', error);
+    }
+}
+
+/**
+ * 关闭 ZIP 预览模态框
+ */
+function closeZipModal() {
+    document.getElementById('zip-modal').classList.remove('show');
+    document.getElementById('zip-extract-result').innerHTML = '';
+}
+
+/**
+ * 执行 ZIP 解压
+ * @param {Object} fileManager - 文件管理器实例
+ */
+async function startZipExtract(fileManager) {
+    const resultEl = document.getElementById('zip-extract-result');
+    const filePath = document.getElementById('zip-file-path').textContent;
+    const targetDir = document.getElementById('zip-extract-path').value.trim();
+
+    if (!targetDir) {
+        resultEl.innerHTML = '<div class="zip-error"><i class="fas fa-exclamation-triangle"></i> 请输入解压路径</div>';
+        return;
+    }
+
+    resultEl.innerHTML = '<div class="zip-progress"><i class="fas fa-spinner fa-spin"></i> 正在解压...</div>';
+
+    try {
+        const response = await fetch('/file/archive/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filePath, target_dir: targetDir })
+        });
+        if (!response.ok) throw new Error('解压失败');
+        const data = await response.json();
+        if (!data.success) throw new Error(data.error || '解压失败');
+
+        resultEl.innerHTML = `<div class="zip-success"><i class="fas fa-check-circle"></i> 已解压 ${data.file_count} 个文件到 ${mediaEscapeHTML(data.target_dir)}</div>`;
+        showToast(`解压完成：${data.file_count} 个文件`, 'success');
+
+        // 解压完成后刷新文件列表并关闭模态框
+        setTimeout(async () => {
+            await fileManager.loadFiles();
+            fileManager.updateStats();
+            closeZipModal();
+        }, 800);
+    } catch (error) {
+        resultEl.innerHTML = `<div class="zip-error"><i class="fas fa-exclamation-triangle"></i> ${mediaEscapeHTML(error.message || '解压失败')}</div>`;
+        console.error('解压失败:', error);
+    }
+}
+
+/**
  * 绑定事件
  * @param {Object} fileManager - 文件管理器实例
  */
@@ -2286,14 +2799,6 @@ function bindEvents(fileManager) {
     // 文件上传
     document.getElementById('file-upload').addEventListener('change', async (e) => {
         await handleFileUpload(e.target.files, fileManager.currentPath, async () => {
-            await fileManager.loadFiles();
-        });
-        e.target.value = '';
-    });
-
-    // ZIP 上传解压
-    document.getElementById('zip-upload').addEventListener('change', async (e) => {
-        await handleZipUpload(e.target.files[0], fileManager.currentPath, async () => {
             await fileManager.loadFiles();
         });
         e.target.value = '';
@@ -2317,12 +2822,22 @@ function bindEvents(fileManager) {
 
     // 批量压缩
     document.getElementById('batch-compress').addEventListener('click', async () => {
-        await batchCompress(fileManager.files, fileManager.selectedFiles);
+        await batchCompress(fileManager);
     });
 
     // 批量移动
     document.getElementById('batch-move').addEventListener('click', () => {
         showMoveModal(fileManager);
+    });
+
+    // 全选当前层级所有项目
+    document.getElementById('batch-select-all').addEventListener('click', () => {
+        fileManager.selectAllVisible();
+    });
+
+    // 取消全选
+    document.getElementById('batch-clear').addEventListener('click', () => {
+        fileManager.clearSelection();
     });
 
     // 移动模态框：确认 / 取消 / 关闭 / 点击遮罩
@@ -2363,11 +2878,85 @@ function bindEvents(fileManager) {
     document.getElementById('smart-organize-btn').addEventListener('click', () => {
         startSmartOrganize(fileManager);
     });
+
+    // 哈希命名
+    document.getElementById('hash-rename-btn').addEventListener('click', () => {
+        startHashRename(fileManager);
+    });
     document.getElementById('organize-close-btn').addEventListener('click', () => {
         document.getElementById('organize-modal').classList.remove('show');
     });
     document.getElementById('organize-modal-close').addEventListener('click', () => {
         if (!isOrganizing) document.getElementById('organize-modal').classList.remove('show');
+    });
+
+    // 图片转码
+    document.getElementById('image-convert-btn').addEventListener('click', () => {
+        openConvertModal(fileManager);
+    });
+    document.getElementById('convert-modal-close').addEventListener('click', closeConvertModal);
+    document.getElementById('convert-modal-cancel').addEventListener('click', closeConvertModal);
+    document.getElementById('convert-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('convert-modal')) closeConvertModal();
+    });
+    document.querySelectorAll('#convert-mode-tabs .convert-mode-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            convertState.mode = tab.dataset.mode;
+            updateConvertModeTabs();
+            const folderImages = fileManager.files.filter(f => !f.isDir && isConvertibleImage(f.name));
+            const selectedImages = Array.from(fileManager.selectedFiles)
+                .map(path => fileManager.files.find(f => f.path === path))
+                .filter(f => f && !f.isDir && isConvertibleImage(f.name));
+            updateConvertModeHint(folderImages, selectedImages);
+        });
+    });
+    document.querySelectorAll('#convert-source-tabs .convert-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            convertState.sourceFormat = tab.dataset.format;
+            setConvertTabActive('convert-source-tabs', tab.dataset.format);
+        });
+    });
+    document.querySelectorAll('#convert-target-tabs .convert-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            convertState.targetFormat = tab.dataset.format;
+            setConvertTabActive('convert-target-tabs', tab.dataset.format);
+        });
+    });
+    document.getElementById('convert-start').addEventListener('click', () => {
+        startImageConvert(fileManager);
+    });
+
+    // GGUF 预览
+    document.getElementById('gguf-modal-close').addEventListener('click', closeGGUFModal);
+    document.getElementById('gguf-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('gguf-modal')) closeGGUFModal();
+    });
+    document.getElementById('gguf-search-input').addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        const rows = document.querySelectorAll('#gguf-metadata-body tr[data-key]');
+        rows.forEach(row => {
+            const key = row.getAttribute('data-key') || '';
+            const value = row.getAttribute('data-value') || '';
+            row.style.display = (key.includes(query) || value.includes(query)) ? '' : 'none';
+        });
+    });
+
+    // ZIP 预览与解压
+    document.getElementById('zip-modal-close').addEventListener('click', closeZipModal);
+    document.getElementById('zip-modal').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('zip-modal')) closeZipModal();
+    });
+    document.getElementById('zip-extract-btn').addEventListener('click', () => {
+        startZipExtract(fileManager);
+    });
+    // 路径输入时实时更新提示
+    document.getElementById('zip-extract-path').addEventListener('input', (e) => {
+        const hintEl = document.getElementById('zip-extract-hint');
+        if (e.target.value.trim()) {
+            hintEl.innerHTML = `<i class="fas fa-info-circle"></i> 将解压到：${mediaEscapeHTML(e.target.value.trim())}`;
+        } else {
+            hintEl.innerHTML = '';
+        }
     });
 
     // 拖放移动：在文件网格上通过事件委托处理
@@ -2431,19 +3020,9 @@ function bindEvents(fileManager) {
         fileManager.goBack();
     });
 
-    // 二维码按钮
-    document.getElementById('qrcode-button').addEventListener('click', async () => {
-        await showQRCode();
-    });
-
     // 文本模态框点击关闭
     document.getElementById('text-modal').addEventListener('click', (e) => {
         closeTextModal(e);
-    });
-
-    // 二维码模态框点击关闭
-    document.getElementById('qrcode-modal').addEventListener('click', (e) => {
-        closeQRCodeModal(e);
     });
 
     // 搜索输入
@@ -2653,7 +3232,13 @@ class FileManager {
         if (file.isDir) {
             this.navigateToDirectory(file);
         } else {
-            if (isImageFile(file.name) || isVideoFile(file.name) || isAudioFile(file.name)) {
+            if (isGGUFFile(file.name)) {
+                // GGUF 模型文件：解析元数据作为预览
+                showGGUFModal(file);
+            } else if (isZipFile(file.name)) {
+                // ZIP 压缩包：预览元数据并支持解压
+                showZipModal(file, this);
+            } else if (isImageFile(file.name) || isVideoFile(file.name) || isAudioFile(file.name)) {
                 const mediaIndex = this.currentMediaList.findIndex(media => media.path === file.path);
                 this.currentMediaIndex = mediaIndex;
                 previewImage(`/file/read/${file.path}`, file.name);
@@ -2753,6 +3338,31 @@ class FileManager {
         }
 
         updateFileCardSelection(file, isSelected);
+        this.updateBatchActions();
+    }
+
+    /**
+     * 全选当前层级（或搜索结果）中的所有项目
+     */
+    selectAllVisible() {
+        const displayFiles = this.isSearching ? this.searchResults : this.files;
+        for (const file of displayFiles) {
+            this.selectedFiles.add(file.path);
+            updateFileCardSelection(file, true);
+        }
+        this.updateBatchActions();
+    }
+
+    /**
+     * 取消全选
+     */
+    clearSelection() {
+        for (const file of this.files) {
+            if (this.selectedFiles.has(file.path)) {
+                updateFileCardSelection(file, false);
+            }
+        }
+        this.selectedFiles.clear();
         this.updateBatchActions();
     }
 

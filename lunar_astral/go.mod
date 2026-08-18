@@ -3,21 +3,23 @@ module LunarAstral
 go 1.26
 
 require (
+	LunarSubsystem/AgentSearch v0.0.0
 	LunarSubsystem/BrowserClient v0.0.0
 	LunarSubsystem/FileManager v0.0.0
-	LunarSubsystem/LoggerGeneral v0.0.0
-	LunarSubsystem/ImageProcessor v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
+	LunarSubsystem/ImageProcessor v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/MediaTools v0.0.0
+	LunarSubsystem/Qwen3-TTS v0.0.0
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
-	LunarSubsystem/AgentSearch v0.0.0
-	LunarSubsystem/Qwen3-TTS v0.0.0
 )
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
+	github.com/chai2010/webp v1.0.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f // indirect
 	github.com/chromedp/chromedp v0.16.0 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
@@ -50,6 +52,8 @@ require (
 replace LunarSubsystem/GeneralConfig => ../subsystem/general_config
 
 replace LunarSubsystem/FileManager => ../subsystem/file_manager
+
+replace LunarSubsystem/MediaTools => ../subsystem/media_tools
 
 replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 

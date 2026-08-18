@@ -248,3 +248,79 @@ type MoveResponse struct {
 	Conflicts []MoveConflict   `json:"conflicts,omitempty"` // ask 预检冲突列表
 	Error     string           `json:"error,omitempty"`
 }
+
+// ZipEntryInfo ZIP 压缩包内条目信息
+type ZipEntryInfo struct {
+	Name       string `json:"name"`       // 条目路径（含子目录）
+	Size       int64  `json:"size"`       // 解压后大小
+	Compressed int64  `json:"compressed"` // 压缩后大小
+	IsDir      bool   `json:"isDir"`      // 是否为目录
+}
+
+// ZipMetadataRequest ZIP 元数据查询请求
+type ZipMetadataRequest struct {
+	Path string `json:"path"` // ZIP 文件路径（相对 LocalDir）
+}
+
+// ZipMetadataResponse ZIP 元数据查询响应
+type ZipMetadataResponse struct {
+	Success   bool           `json:"success"`
+	Error     string         `json:"error,omitempty"`
+	Path      string         `json:"path"`       // 压缩包相对 LocalDir 的路径
+	FileCount int            `json:"file_count"` // 条目总数
+	TotalSize int64          `json:"total_size"` // 解压后总大小
+	ZipSize   int64          `json:"zip_size"`   // 压缩包文件大小
+	Entries   []ZipEntryInfo `json:"entries"`    // 条目列表
+}
+
+// ExtractZipRequest ZIP 解压请求
+type ExtractZipRequest struct {
+	Path      string `json:"path"`       // ZIP 文件路径（相对 LocalDir）
+	TargetDir string `json:"target_dir"` // 目标目录（相对 LocalDir，空表示 LocalDir 根目录）
+}
+
+// ExtractZipResponse ZIP 解压响应
+type ExtractZipResponse struct {
+	Success   bool   `json:"success"`
+	Error     string `json:"error,omitempty"`
+	TargetDir string `json:"target_dir"` // 实际解压目录（相对 LocalDir）
+	FileCount int    `json:"file_count"` // 解压出的文件数
+}
+
+// CreateZipRequest 服务端压缩请求
+type CreateZipRequest struct {
+	Paths    []string `json:"paths"`     // 相对 LocalDir 的文件/目录路径列表
+	ZipName  string   `json:"zip_name"`  // ZIP 文件名（缺省为 archive.zip，自动补全 .zip 后缀）
+	SavePath string   `json:"save_path"` // 保存目录（相对 LocalDir，空表示 LocalDir 根目录）
+}
+
+// ZipCreateResponse 服务端压缩响应
+type ZipCreateResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Path    string `json:"path"` // 压缩包相对 LocalDir 的路径
+	Name    string `json:"name"` // 压缩包文件名
+	Size    int    `json:"size"` // 压缩包大小（字节）
+}
+
+// HashRenameRequest 哈希命名请求
+type HashRenameRequest struct {
+	Path string `json:"path"` // 目标目录路径（相对 LocalDir，空表示根目录）
+}
+
+// HashRenameItem 单个文件的哈希命名结果
+type HashRenameItem struct {
+	OldName   string `json:"old_name"`  // 原文件名
+	NewName   string `json:"new_name"`  // 新文件名（MD5 前 16 位 + 原扩展名）
+	Hash      string `json:"hash"`      // 文件内容 MD5 的前 16 位
+	Duplicate bool   `json:"duplicate"` // 是否因重名追加了 '+'
+	Unchanged bool   `json:"unchanged"` // 是否无需改动（已是哈希名）
+}
+
+// HashRenameResponse 哈希命名响应
+type HashRenameResponse struct {
+	Success bool             `json:"success"`
+	Error   string           `json:"error,omitempty"`
+	Results []HashRenameItem `json:"results"` // 全部文件的处理结果
+	Renamed int              `json:"renamed"` // 实际重命名的文件数
+}

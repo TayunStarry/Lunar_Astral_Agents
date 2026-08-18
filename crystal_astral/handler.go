@@ -354,82 +354,6 @@ func normalizeProxyURL(rawURL string) string {
 	return strings.TrimRight(rawURL, "/")
 }
 
-// ggufMetadataHandler 处理 GGUF 模型元数据解析请求
-func ggufMetadataHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req GGUFMetadataRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, GGUFMetadataResponse{
-			Success: false,
-			Error:   "无效的请求体",
-		})
-		return
-	}
-
-	if req.FilePath == "" {
-		writeJSON(w, http.StatusBadRequest, GGUFMetadataResponse{
-			Success: false,
-			Error:   "文件路径不能为空",
-		})
-		return
-	}
-
-	// 文件类型校验：仅支持 .gguf 扩展名（大小写不敏感）
-	ext := strings.ToLower(filepath.Ext(req.FilePath))
-	if ext != ".gguf" {
-		writeJSON(w, http.StatusBadRequest, GGUFMetadataResponse{
-			Success: false,
-			Error:   "仅支持 .gguf 格式的模型文件，当前路径扩展名为: " + ext,
-		})
-		return
-	}
-
-	// 检查文件是否存在
-	if _, err := os.Stat(req.FilePath); os.IsNotExist(err) {
-		writeJSON(w, http.StatusNotFound, GGUFMetadataResponse{
-			Success: false,
-			Error:   fmt.Sprintf("文件不存在: %s", req.FilePath),
-		})
-		return
-	}
-
-	fileName := filepath.Base(req.FilePath)
-	LoggerGeneral.Info("GGUF", "正在解析 GGUF 文件: %s", req.FilePath)
-
-	metadata, err := parseGGUFFile(req.FilePath)
-	if err != nil {
-		LoggerGeneral.Error("GGUF", "解析失败: %v", err)
-		writeJSON(w, http.StatusUnprocessableEntity, GGUFMetadataResponse{
-			Success: false,
-			Error:   fmt.Sprintf("GGUF 解析失败: %v", err),
-		})
-		return
-	}
-
-	LoggerGeneral.Info("GGUF", "解析成功: %s (%d 项元数据)", fileName, len(metadata))
-
-	// 转换为 JSON 友好的格式
-	jsonMetadata := make(map[string]string, len(metadata))
-	for key, value := range metadata {
-		jsonMetadata[key] = formatGGUFValue(value)
-	}
-
-	summary := extractGGUFSummary(metadata, fileName)
-
-	writeJSON(w, http.StatusOK, GGUFMetadataResponse{
-		Success:  true,
-		FileName: fileName,
-		FilePath: req.FilePath,
-		Summary:  summary,
-		Metadata: jsonMetadata,
-		Count:    len(metadata),
-	})
-}
-
 // scanPackagesHandler 扫描包目录，自动发现所有包含 metadata.json 的子文件夹
 func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -577,4 +501,11 @@ func yuehuaStartHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "月华服务启动成功",
 	})
+}
+
+// writeJSON 写入JSON响应
+func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
 }

@@ -8,6 +8,7 @@ import (
 	file "LunarSubsystem/FileManager/server"
 	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
+	media "LunarSubsystem/MediaTools/server"
 	tts "LunarSubsystem/Qwen3-TTS/module"
 	"fmt"
 	"net/http"
@@ -60,9 +61,13 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表查询"},
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载操作"},
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
+	{Path: "/file/archive/create", Handler: file.CreateZipHandler, Method: "POST", Description: "服务端压缩（支持文件夹）"},
+	{Path: "/file/archive/metadata", Handler: file.ZipMetadataHandler, Method: "POST", Description: "ZIP压缩包元数据查询"},
+	{Path: "/file/archive/extract", Handler: file.ExtractZipHandler, Method: "POST", Description: "ZIP解压到服务器目录"},
 	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
 	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
+	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
 	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
@@ -75,6 +80,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
 	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
+	// 媒体工具接口（GGUF 元数据 + 图片转码）
+	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
+	{Path: "/convert/image", Handler: media.ConvertImageHandler, Method: "POST", Description: "单张图片格式转换"},
+	{Path: "/convert/batch", Handler: media.BatchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
+	{Path: "/convert/list", Handler: media.ListImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
 	// 视频处理相关接口
 	{Path: "/extract/keyframes", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
 	// 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法）

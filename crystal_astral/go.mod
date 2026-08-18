@@ -5,15 +5,16 @@ go 1.24.4
 require (
 	LunarSubsystem/BrowserClient v0.0.0
 	LunarSubsystem/FileManager v0.0.0
-	LunarSubsystem/LoggerGeneral v0.0.0
-	LunarSubsystem/ImageProcessor v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
-	github.com/chai2010/webp v1.0.0
+	LunarSubsystem/ImageProcessor v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/MediaTools v0.0.0
 	github.com/gorilla/websocket v1.5.3
 )
 
 require (
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
+	github.com/chai2010/webp v1.0.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
@@ -32,6 +33,8 @@ require (
 replace LunarSubsystem/GeneralConfig => ../subsystem/general_config
 
 replace LunarSubsystem/FileManager => ../subsystem/file_manager
+
+replace LunarSubsystem/MediaTools => ../subsystem/media_tools
 
 replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 

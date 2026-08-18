@@ -21,6 +21,31 @@ class MultimediaPreview {
 		 */
 		this.video = null;
 		/**
+		 * 音频元素
+		 * @type {HTMLAudioElement|null}
+		 */
+		this.audio = null;
+		/**
+		 * 音频容器元素
+		 * @type {HTMLDivElement|null}
+		 */
+		this.audioWrap = null;
+		/**
+		 * 波形图画布元素
+		 * @type {HTMLCanvasElement|null}
+		 */
+		this.waveformCanvas = null;
+		/**
+		 * 波形图峰值数据（柱状 min/max）
+		 * @type {Array<{min: number, max: number}>|null}
+		 */
+		this.waveformPeaks = null;
+		/**
+		 * 波形图绘制循环 ID
+		 * @type {number}
+		 */
+		this.waveformLoop = 0;
+		/**
 		 * 图片容器元素
 		 * @type {HTMLDivElement|null}
 		 */
@@ -146,6 +171,9 @@ class MultimediaPreview {
 		// 获取元素引用
 		this.img = this.modal.querySelector('.image-preview');
 		this.video = this.modal.querySelector('.video-preview');
+		this.audio = this.modal.querySelector('.audio-preview');
+		this.audioWrap = this.modal.querySelector('.audio-preview-wrap');
+		this.waveformCanvas = this.modal.querySelector('.audio-waveform');
 		this.imgContainer = this.modal.querySelector('.image-drag-container');
 		this.zoomInfo = this.modal.querySelector('.zoom-info');
 		// 初始化状态
@@ -161,15 +189,35 @@ class MultimediaPreview {
 		/** 视频模式隐藏重置按钮分隔线 */
 		const resetDivider = this.modal.querySelectorAll('.control-divider')[1];
 		// 根据媒体类型设置显示
-		if (this.mediaType === 'video' || this.mediaType === 'audio') {
-			// 显示视频/音频，隐藏图片
+		if (this.mediaType === 'video') {
+			// 显示视频，隐藏图片与音频容器
 			this.img.style.display = 'none';
 			this.video.style.display = 'block';
+			if (this.audioWrap) this.audioWrap.style.display = 'none';
 			this.video.src = path;
 			this.video.load();
-			// 视频/音频模式不需要拖拽容器
+			// 视频模式不需要拖拽容器
 			if (this.imgContainer) this.imgContainer.style.display = 'none';
-			// 视频/音频模式隐藏缩放控制
+			// 视频模式隐藏缩放控制
+			if (zoomGroup) zoomGroup.style.display = 'none';
+			if (resetBtn) resetBtn.style.display = 'none';
+			if (zoomDivider) zoomDivider.style.display = 'none';
+			if (resetDivider) resetDivider.style.display = 'none';
+		}
+		else if (this.mediaType === 'audio') {
+			// 显示音频（波形图 + 控制条），隐藏图片与视频
+			this.img.style.display = 'none';
+			this.video.style.display = 'none';
+			if (this.audioWrap) this.audioWrap.style.display = 'flex';
+			if (this.audio) {
+				this.audio.src = path;
+				this.audio.load();
+			}
+			// 异步加载并绘制波形图
+			this.loadWaveform(path);
+			// 音频模式不需要拖拽容器
+			if (this.imgContainer) this.imgContainer.style.display = 'none';
+			// 音频模式隐藏缩放控制
 			if (zoomGroup) zoomGroup.style.display = 'none';
 			if (resetBtn) resetBtn.style.display = 'none';
 			if (zoomDivider) zoomDivider.style.display = 'none';
@@ -226,9 +274,12 @@ class MultimediaPreview {
 		// 图片模式绑定关闭按钮事件
 		this.modal.querySelector('.close-button').addEventListener('click', () => this.close());
 		// 视频/音频播放相关事件
-		if ((this.mediaType === 'video' || this.mediaType === 'audio') && this.video) {
-			// 视频/音频播放错误处理
-			this.video.addEventListener('error',
+		if (this.mediaType === 'video' || this.mediaType === 'audio') {
+			/** 当前媒体元素（视频或音频） */
+			const mediaEl = this.mediaType === 'video' ? this.video : this.audio;
+			if (!mediaEl) return;
+			// 媒体加载错误处理
+			mediaEl.addEventListener('error',
 				e => {
 					console.error('媒体加载错误:', e);
 					/** 媒体模式显示信息栏 */
@@ -237,23 +288,27 @@ class MultimediaPreview {
 					if (infoElement) infoElement.textContent = `❌ ${this.mediaType === 'video' ? '视频' : '音频'}加载失败，格式可能不受支持`;
 				}
 			);
-			// 视频/音频加载完成
-			this.video.addEventListener('loadeddata',
+			// 媒体加载完成
+			mediaEl.addEventListener('loadeddata',
 				() => {
 					/** 媒体模式显示信息栏 */
 					const infoElement = this.modal.querySelector('.image-info');
 					// 媒体模式显示信息栏是否存在
 					if (!infoElement) return;
 					/** 媒体时长 */
-					const duration = this.video.duration;
+					const duration = mediaEl.duration;
 					/** 媒体时长分钟数 */
 					const minutes = Math.floor(duration / 60);
 					/** 媒体时长秒数 */
 					const seconds = Math.floor(duration % 60);
 					// 媒体模式显示信息栏
-					infoElement.textContent = `${this.video.src.split('/').pop()} ( ${minutes} : ${seconds.toString().padStart(2, '0')} )`;
+					infoElement.textContent = `${mediaEl.src.split('/').pop()} ( ${minutes} : ${seconds.toString().padStart(2, '0')} )`;
 				}
 			);
+			// 音频模式：波形图点击跳转进度
+			if (this.mediaType === 'audio' && this.waveformCanvas) {
+				this.waveformCanvas.addEventListener('click', e => this.seekWaveform(e));
+			}
 		}
 	};
 	/**
@@ -419,6 +474,131 @@ class MultimediaPreview {
 		}
 	}
 	/**
+	 * 加载音频波形图数据
+	 * 通过 Web Audio API 解码音频并计算峰值柱状数据，解码失败时隐藏波形图（原生控制条仍可播放）
+	 * @async
+	 * @param {string} path - 音频文件路径
+	 * @returns {Promise<void>}
+	 */
+	async loadWaveform(path) {
+		const canvas = this.waveformCanvas;
+		if (!canvas || !this.audio) return;
+		try {
+			const response = await fetch(path);
+			if (!response.ok) throw new Error('获取音频数据失败');
+			const arrayBuffer = await response.arrayBuffer();
+			/** 全局共享的音频解码上下文 */
+			if (!MultimediaPreview._audioDecodeCtx) {
+				MultimediaPreview._audioDecodeCtx = new (window.AudioContext || window.webkitAudioContext)();
+			}
+			const audioBuffer = await MultimediaPreview._audioDecodeCtx.decodeAudioData(arrayBuffer);
+			/** 左声道数据 */
+			const channelData = audioBuffer.getChannelData(0);
+			/** 波形柱数量 */
+			const bars = 512;
+			/** 每个柱覆盖的采样数 */
+			const blockSize = Math.floor(channelData.length / bars);
+			/** 峰值柱状数据 */
+			const peaks = [];
+			for (let i = 0; i < bars; i++) {
+				let min = 1;
+				let max = -1;
+				for (let j = 0; j < blockSize; j++) {
+					const value = channelData[i * blockSize + j];
+					if (value < min) min = value;
+					if (value > max) max = value;
+				}
+				peaks.push({ min: Math.max(-1, min), max: Math.min(1, max) });
+			}
+			this.waveformPeaks = peaks;
+			// 首次绘制并启动循环
+			this.drawWaveform();
+			this.startWaveformLoop();
+		}
+		catch (error) {
+			console.error('波形图加载失败:', error);
+			// 解码失败（如不支持的格式）时隐藏波形图，音频仍可通过原生控制条播放
+			canvas.style.display = 'none';
+		}
+	}
+	/**
+	 * 启动波形图绘制循环（播放进度实时高亮）
+	 * @returns {void}
+	 */
+	startWaveformLoop() {
+		// 先取消旧循环，避免重复启动
+		if (this.waveformLoop) cancelAnimationFrame(this.waveformLoop);
+		const loop = () => {
+			this.drawWaveform();
+			this.waveformLoop = requestAnimationFrame(loop);
+		};
+		this.waveformLoop = requestAnimationFrame(loop);
+	}
+	/**
+	 * 绘制波形图
+	 * 未播放部分为半透明白，已播放部分高亮，并绘制播放光标线
+	 * @returns {void}
+	 */
+	drawWaveform() {
+		const canvas = this.waveformCanvas;
+		if (!canvas || !this.waveformPeaks || !this.audio) return;
+		/** 画布实际显示尺寸 */
+		const rect = canvas.getBoundingClientRect();
+		/** 设备像素比 */
+		const dpr = window.devicePixelRatio || 1;
+		/** 逻辑宽度 */
+		const width = Math.max(1, Math.floor(rect.width));
+		/** 逻辑高度 */
+		const height = Math.max(1, Math.floor(rect.height));
+		// 按设备像素比设置画布物理尺寸，避免模糊
+		if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+			canvas.width = Math.floor(width * dpr);
+			canvas.height = Math.floor(height * dpr);
+		}
+		/** 绘图上下文 */
+		const ctx = canvas.getContext('2d');
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+		/** 峰值数据 */
+		const peaks = this.waveformPeaks;
+		/** 播放进度（0~1） */
+		const duration = this.audio.duration;
+		const progress = isFinite(duration) && duration > 0 ? this.audio.currentTime / duration : 0;
+		/** 每个柱的宽度 */
+		const barWidth = canvas.width / peaks.length;
+		/** 柱间距 */
+		const gap = Math.max(1, barWidth * 0.2);
+		/** 中线 Y 坐标 */
+		const midY = canvas.height / 2;
+		for (let i = 0; i < peaks.length; i++) {
+			const peak = peaks[i];
+			// 已播放部分高亮，未播放部分半透明
+			ctx.fillStyle = (i / peaks.length) <= progress ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.3)';
+			/** 柱顶部 Y 坐标 */
+			const top = midY - Math.abs(peak.max) * midY * 0.9;
+			/** 柱高度 */
+			const barHeight = Math.max(2, Math.abs(peak.max - peak.min) * midY * 0.9);
+			ctx.fillRect(i * barWidth + gap / 2, top, Math.max(1, barWidth - gap), barHeight);
+		}
+		// 绘制播放光标线
+		if (progress > 0 && progress < 1) {
+			ctx.fillStyle = 'rgba(120, 190, 255, 0.9)';
+			ctx.fillRect(progress * canvas.width - 0.5, 0, 1, canvas.height);
+		}
+	}
+	/**
+	 * 点击波形图跳转播放进度
+	 * @param {MouseEvent} e - 鼠标事件对象
+	 * @returns {void}
+	 */
+	seekWaveform(e) {
+		if (!this.audio || !isFinite(this.audio.duration) || this.audio.duration <= 0) return;
+		/** 画布显示尺寸 */
+		const rect = this.waveformCanvas.getBoundingClientRect();
+		/** 点击位置比例 */
+		const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+		this.audio.currentTime = ratio * this.audio.duration;
+	}
+	/**
 	 * 处理键盘按键事件
 	 * @param {KeyboardEvent} e - 键盘事件对象
 	 * @returns {void}
@@ -432,11 +612,12 @@ class MultimediaPreview {
 		// 禁用默认行为
 		e.preventDefault();
 		// 视频/音频模式下，空格键控制播放/暂停
-		if ((this.mediaType === 'video' || this.mediaType === 'audio') && this.video) switch (e.key) {
+		const mediaEl = this.mediaType === 'video' ? this.video : this.audio;
+		if ((this.mediaType === 'video' || this.mediaType === 'audio') && mediaEl) switch (e.key) {
 			// 播放/暂停视频/音频
 			case ' ':
-				if (this.video.paused) this.video.play();
-				else this.video.pause();
+				if (mediaEl.paused) mediaEl.play();
+				else mediaEl.pause();
 				break;
 			// 关闭预览
 			case 'Escape': this.close(); break;
@@ -462,9 +643,15 @@ class MultimediaPreview {
 	close() {
 		if (this.modal && this.modal.parentNode) {
 			// 停止视频/音频播放
-			if (this.video && (this.mediaType === 'video' || this.mediaType === 'audio')) {
-				this.video.pause();
-				this.video.currentTime = 0;
+			const mediaEl = this.mediaType === 'video' ? this.video : this.audio;
+			if (mediaEl && (this.mediaType === 'video' || this.mediaType === 'audio')) {
+				mediaEl.pause();
+				mediaEl.currentTime = 0;
+			}
+			// 停止波形图绘制循环
+			if (this.waveformLoop) {
+				cancelAnimationFrame(this.waveformLoop);
+				this.waveformLoop = 0;
 			}
 			// 移除事件监听器
 			document.removeEventListener('keydown', this.handleKeyDown);
@@ -476,6 +663,10 @@ class MultimediaPreview {
 			this.modal = null;
 			this.img = null;
 			this.video = null;
+			this.audio = null;
+			this.audioWrap = null;
+			this.waveformCanvas = null;
+			this.waveformPeaks = null;
 			this.imgContainer = null;
 			this.zoomInfo = null;
 		}

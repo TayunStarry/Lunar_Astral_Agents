@@ -1,30 +1,35 @@
-package main
+// 图片格式转换 HTTP 处理器
+package server
 
 import (
 	"LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/MediaTools/module"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
-	"image/png"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/chai2010/webp"
 )
 
-// convertImageHandler 处理单张图片格式转换
-func convertImageHandler(w http.ResponseWriter, r *http.Request) {
+// writeJSON 写入JSON响应
+func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
+}
+
+// ConvertImageHandler 处理单张图片格式转换
+// 请求体: {"path": "...", "target_format": "png|jpeg|webp", "delete_source": bool, "quality": int}
+func ConvertImageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req ConvertImageRequest
+	var req module.ConvertImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, ConvertImageResponse{
+		writeJSON(w, http.StatusBadRequest, module.ConvertImageResponse{
 			Success: false,
 			Error:   "无效的请求体",
 		})
@@ -32,7 +37,7 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Path == "" || req.TargetFormat == "" {
-		writeJSON(w, http.StatusBadRequest, ConvertImageResponse{
+		writeJSON(w, http.StatusBadRequest, module.ConvertImageResponse{
 			Success: false,
 			Error:   "path 和 target_format 为必填项",
 		})
@@ -45,7 +50,7 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 		targetFormat = "jpeg"
 	}
 	if targetFormat != "png" && targetFormat != "jpeg" && targetFormat != "webp" {
-		writeJSON(w, http.StatusBadRequest, ConvertImageResponse{
+		writeJSON(w, http.StatusBadRequest, module.ConvertImageResponse{
 			Success: false,
 			Error:   "不支持的目标格式，仅支持 png、jpeg、webp",
 		})
@@ -58,28 +63,38 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 		quality = 90
 	}
 
-	// 检查源文件是否存在
-	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
-		writeJSON(w, http.StatusBadRequest, ConvertImageResponse{
+	// 解析为本地绝对路径并校验范围
+	fullPath := module.ResolvePath(req.Path)
+	if !module.IsWithinLocalDir(fullPath) {
+		writeJSON(w, http.StatusForbidden, module.ConvertImageResponse{
 			Success: false,
-			Error:   fmt.Sprintf("文件不存在: %s", req.Path),
+			Error:   "访问被拒绝：路径超出本地目录范围",
+		})
+		return
+	}
+
+	// 检查源文件是否存在
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		writeJSON(w, http.StatusBadRequest, module.ConvertImageResponse{
+			Success: false,
+			Error:   fmt.Sprintf("文件不存在: %s", fullPath),
 		})
 		return
 	}
 
 	// 生成输出路径
-	ext := strings.ToLower(filepath.Ext(req.Path))
+	ext := strings.ToLower(filepath.Ext(fullPath))
 	outputExt := "." + targetFormat
 	if targetFormat == "jpeg" {
 		outputExt = ".jpg"
 	}
-	outputPath := strings.TrimSuffix(req.Path, ext) + outputExt
+	outputPath := strings.TrimSuffix(fullPath, ext) + outputExt
 
 	// 执行转换
-	err := convertImage(req.Path, outputPath, targetFormat, quality)
+	err := module.ConvertImage(fullPath, outputPath, targetFormat, quality)
 	if err != nil {
-		LoggerGeneral.Error("ConvertImage", "转换失败 %s: %v", filepath.Base(req.Path), err)
-		writeJSON(w, http.StatusInternalServerError, ConvertImageResponse{
+		LoggerGeneral.Error("ConvertImage", "转换失败 %s: %v", filepath.Base(fullPath), err)
+		writeJSON(w, http.StatusInternalServerError, module.ConvertImageResponse{
 			Success: false,
 			Error:   fmt.Sprintf("转换失败: %v", err),
 		})
@@ -88,28 +103,29 @@ func convertImageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 删除源文件
 	if req.DeleteSource {
-		if err := os.Remove(req.Path); err != nil {
-			LoggerGeneral.Warn("ConvertImage", "删除源文件失败 %s: %v", req.Path, err)
+		if err := os.Remove(fullPath); err != nil {
+			LoggerGeneral.Warn("ConvertImage", "删除源文件失败 %s: %v", fullPath, err)
 		}
 	}
 
-	LoggerGeneral.Info("ConvertImage", "转换成功: %s -> %s", filepath.Base(req.Path), filepath.Base(outputPath))
-	writeJSON(w, http.StatusOK, ConvertImageResponse{
+	LoggerGeneral.Info("ConvertImage", "转换成功: %s -> %s", filepath.Base(fullPath), filepath.Base(outputPath))
+	writeJSON(w, http.StatusOK, module.ConvertImageResponse{
 		Success:    true,
 		OutputPath: outputPath,
 	})
 }
 
-// batchConvertHandler 处理批量图片格式转换
-func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
+// BatchConvertHandler 处理批量图片格式转换
+// 请求体: {"folder": "...", "source_format": "all|png|jpeg|webp", "target_format": "png|jpeg|webp", "delete_source": bool, "quality": int}
+func BatchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req BatchConvertRequest
+	var req module.BatchConvertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, BatchConvertResponse{
+		writeJSON(w, http.StatusBadRequest, module.BatchConvertResponse{
 			Success: false,
 			Error:   "无效的请求体",
 		})
@@ -117,19 +133,29 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Folder == "" || req.TargetFormat == "" {
-		writeJSON(w, http.StatusBadRequest, BatchConvertResponse{
+		writeJSON(w, http.StatusBadRequest, module.BatchConvertResponse{
 			Success: false,
 			Error:   "folder 和 target_format 为必填项",
 		})
 		return
 	}
 
-	// 检查文件夹是否存在
-	info, err := os.Stat(req.Folder)
-	if err != nil || !info.IsDir() {
-		writeJSON(w, http.StatusBadRequest, BatchConvertResponse{
+	// 解析为本地绝对路径并校验范围
+	folderPath := module.ResolvePath(req.Folder)
+	if !module.IsWithinLocalDir(folderPath) {
+		writeJSON(w, http.StatusForbidden, module.BatchConvertResponse{
 			Success: false,
-			Error:   fmt.Sprintf("文件夹不存在: %s", req.Folder),
+			Error:   "访问被拒绝：路径超出本地目录范围",
+		})
+		return
+	}
+
+	// 检查文件夹是否存在
+	info, err := os.Stat(folderPath)
+	if err != nil || !info.IsDir() {
+		writeJSON(w, http.StatusBadRequest, module.BatchConvertResponse{
+			Success: false,
+			Error:   fmt.Sprintf("文件夹不存在: %s", folderPath),
 		})
 		return
 	}
@@ -141,7 +167,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 		targetFormat = "jpeg"
 	}
 	if targetFormat != "png" && targetFormat != "jpeg" && targetFormat != "webp" {
-		writeJSON(w, http.StatusBadRequest, BatchConvertResponse{
+		writeJSON(w, http.StatusBadRequest, module.BatchConvertResponse{
 			Success: false,
 			Error:   "不支持的目标格式，仅支持 png、jpeg、webp",
 		})
@@ -156,7 +182,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	// 确定源格式扩展名
 	var sourceExts []string
 	if sourceFormat == "" || sourceFormat == "all" {
-		for ext := range supportedFormats {
+		for ext := range module.SupportedFormats {
 			sourceExts = append(sourceExts, ext)
 		}
 	} else {
@@ -164,8 +190,8 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 		if sourceFormat == "jpeg" {
 			ext = ".jpg"
 		}
-		if !supportedFormats[ext] {
-			writeJSON(w, http.StatusBadRequest, BatchConvertResponse{
+		if !module.SupportedFormats[ext] {
+			writeJSON(w, http.StatusBadRequest, module.BatchConvertResponse{
 				Success: false,
 				Error:   "不支持的源格式，仅支持 png、jpg、jpeg、webp",
 			})
@@ -179,16 +205,16 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 扫描文件夹
-	entries, err := os.ReadDir(req.Folder)
+	entries, err := os.ReadDir(folderPath)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, BatchConvertResponse{
+		writeJSON(w, http.StatusInternalServerError, module.BatchConvertResponse{
 			Success: false,
 			Error:   fmt.Sprintf("读取文件夹失败: %v", err),
 		})
 		return
 	}
 
-	var results []BatchConvertResult
+	var results []module.BatchConvertResult
 	successCount := 0
 	failCount := 0
 
@@ -209,7 +235,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		inputPath := filepath.Join(req.Folder, entry.Name())
+		inputPath := filepath.Join(folderPath, entry.Name())
 		outputExt := "." + targetFormat
 		if targetFormat == "jpeg" {
 			outputExt = ".jpg"
@@ -221,10 +247,10 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		err := convertImage(inputPath, outputPath, targetFormat, quality)
+		err := module.ConvertImage(inputPath, outputPath, targetFormat, quality)
 		if err != nil {
 			LoggerGeneral.Error("BatchConvert", "转换失败 %s: %v", entry.Name(), err)
-			results = append(results, BatchConvertResult{
+			results = append(results, module.BatchConvertResult{
 				Path:    inputPath,
 				Success: false,
 				Error:   err.Error(),
@@ -234,7 +260,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 			if req.DeleteSource {
 				os.Remove(inputPath)
 			}
-			results = append(results, BatchConvertResult{
+			results = append(results, module.BatchConvertResult{
 				Path:       inputPath,
 				Success:    true,
 				OutputPath: outputPath,
@@ -244,7 +270,7 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	LoggerGeneral.Info("BatchConvert", "批量转换完成: 成功 %d, 失败 %d", successCount, failCount)
-	writeJSON(w, http.StatusOK, BatchConvertResponse{
+	writeJSON(w, http.StatusOK, module.BatchConvertResponse{
 		Success:      true,
 		Results:      results,
 		Total:        len(results),
@@ -253,8 +279,9 @@ func batchConvertHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// listImagesHandler 列出文件夹中所有支持的图片文件
-func listImagesHandler(w http.ResponseWriter, r *http.Request) {
+// ListImagesHandler 列出文件夹中所有支持的图片文件
+// 请求体: {"folder": "..."}
+func ListImagesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -264,7 +291,7 @@ func listImagesHandler(w http.ResponseWriter, r *http.Request) {
 		Folder string `json:"folder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, ListImagesResponse{
+		writeJSON(w, http.StatusBadRequest, module.ListImagesResponse{
 			Success: false,
 			Error:   "无效的请求体",
 		})
@@ -272,102 +299,63 @@ func listImagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Folder == "" {
-		writeJSON(w, http.StatusBadRequest, ListImagesResponse{
+		writeJSON(w, http.StatusBadRequest, module.ListImagesResponse{
 			Success: false,
 			Error:   "folder 为必填项",
 		})
 		return
 	}
 
-	info, err := os.Stat(req.Folder)
-	if err != nil || !info.IsDir() {
-		writeJSON(w, http.StatusBadRequest, ListImagesResponse{
+	folderPath := module.ResolvePath(req.Folder)
+	if !module.IsWithinLocalDir(folderPath) {
+		writeJSON(w, http.StatusForbidden, module.ListImagesResponse{
 			Success: false,
-			Error:   fmt.Sprintf("文件夹不存在: %s", req.Folder),
+			Error:   "访问被拒绝：路径超出本地目录范围",
 		})
 		return
 	}
 
-	entries, err := os.ReadDir(req.Folder)
+	info, err := os.Stat(folderPath)
+	if err != nil || !info.IsDir() {
+		writeJSON(w, http.StatusBadRequest, module.ListImagesResponse{
+			Success: false,
+			Error:   fmt.Sprintf("文件夹不存在: %s", folderPath),
+		})
+		return
+	}
+
+	entries, err := os.ReadDir(folderPath)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, ListImagesResponse{
+		writeJSON(w, http.StatusInternalServerError, module.ListImagesResponse{
 			Success: false,
 			Error:   fmt.Sprintf("读取文件夹失败: %v", err),
 		})
 		return
 	}
 
-	var files []ImageFileInfo
+	var files []module.ImageFileInfo
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if !supportedFormats[ext] {
+		if !module.SupportedFormats[ext] {
 			continue
 		}
 		format := ext[1:] // 去掉点号
 		if format == "jpg" {
 			format = "jpeg"
 		}
-		files = append(files, ImageFileInfo{
+		files = append(files, module.ImageFileInfo{
 			Name:   entry.Name(),
-			Path:   filepath.Join(req.Folder, entry.Name()),
+			Path:   filepath.Join(folderPath, entry.Name()),
 			Format: format,
 		})
 	}
 
-	writeJSON(w, http.StatusOK, ListImagesResponse{
+	writeJSON(w, http.StatusOK, module.ListImagesResponse{
 		Success: true,
 		Files:   files,
-		Folder:  req.Folder,
+		Folder:  folderPath,
 	})
-}
-
-// convertImage 执行图片格式转换
-func convertImage(inputPath, outputPath, targetFormat string, quality int) error {
-	// 打开源文件
-	inputFile, err := os.Open(inputPath)
-	if err != nil {
-		return fmt.Errorf("无法打开源文件: %v", err)
-	}
-	defer inputFile.Close()
-
-	// 解码图片
-	img, _, err := image.Decode(inputFile)
-	if err != nil {
-		return fmt.Errorf("无法解码图片: %v", err)
-	}
-
-	// 创建输出文件
-	outputFile, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("无法创建输出文件: %v", err)
-	}
-	defer outputFile.Close()
-
-	// 根据目标格式编码
-	switch targetFormat {
-	case "png":
-		err = png.Encode(outputFile, img)
-	case "jpeg":
-		err = jpeg.Encode(outputFile, img, &jpeg.Options{Quality: quality})
-	case "webp":
-		err = webp.Encode(outputFile, img, &webp.Options{Quality: float32(quality)})
-	default:
-		return fmt.Errorf("不支持的目标格式: %s", targetFormat)
-	}
-
-	if err != nil {
-		return fmt.Errorf("编码失败: %v", err)
-	}
-
-	return nil
-}
-
-// writeJSON 写入JSON响应
-func writeJSON(w http.ResponseWriter, statusCode int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(data)
 }

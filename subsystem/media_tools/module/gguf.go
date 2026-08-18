@@ -1,4 +1,5 @@
-package main
+// GGUF 模型文件元数据解析
+package module
 
 import (
 	"encoding/binary"
@@ -9,8 +10,8 @@ import (
 	"strings"
 )
 
-// parseGGUFMetadata 从 io.Reader 解析 GGUF 格式的元数据
-func parseGGUFMetadata(reader io.Reader) (map[string]any, error) {
+// ParseGGUFMetadata 从 io.Reader 解析 GGUF 格式的元数据
+func ParseGGUFMetadata(reader io.Reader) (map[string]any, error) {
 	magicBytes := make([]byte, 4)
 	if _, err := io.ReadFull(reader, magicBytes); err != nil {
 		return nil, fmt.Errorf("读取文件魔数失败: %w", err)
@@ -80,15 +81,15 @@ func parseGGUFMetadata(reader io.Reader) (map[string]any, error) {
 	return metadata, nil
 }
 
-// parseGGUFFile 解析指定路径的 GGUF 文件
-func parseGGUFFile(filePath string) (map[string]any, error) {
+// ParseGGUFFile 解析指定路径的 GGUF 文件
+func ParseGGUFFile(filePath string) (map[string]any, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("无法打开文件 %s: %w", filePath, err)
 	}
 	defer file.Close()
 
-	return parseGGUFMetadata(file)
+	return ParseGGUFMetadata(file)
 }
 
 // ggufReadString 读取 GGUF 格式的字符串
@@ -107,43 +108,43 @@ func ggufReadString(reader io.Reader, endian binary.ByteOrder) (string, error) {
 // ggufReadValue 根据类型读取 GGUF 值
 func ggufReadValue(reader io.Reader, valueType uint32, endian binary.ByteOrder, version uint32) (any, error) {
 	switch valueType {
-	case ggufTypeUint8:
+	case GGUFTypeUint8:
 		var val uint8
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeInt8:
+	case GGUFTypeInt8:
 		var val int8
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeUint16:
+	case GGUFTypeUint16:
 		var val uint16
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeInt16:
+	case GGUFTypeInt16:
 		var val int16
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeUint32:
+	case GGUFTypeUint32:
 		var val uint32
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeInt32:
+	case GGUFTypeInt32:
 		var val int32
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeFloat32:
+	case GGUFTypeFloat32:
 		var val float32
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeBool:
+	case GGUFTypeBool:
 		var b uint8
 		if err := binary.Read(reader, endian, &b); err != nil {
 			return nil, err
 		}
 		return b == 1, nil
-	case ggufTypeString:
+	case GGUFTypeString:
 		return ggufReadString(reader, endian)
-	case ggufTypeArray:
+	case GGUFTypeArray:
 		var elemType uint32
 		if err := binary.Read(reader, endian, &elemType); err != nil {
 			return nil, err
@@ -161,15 +162,15 @@ func ggufReadValue(reader io.Reader, valueType uint32, endian binary.ByteOrder, 
 			arr[i] = elem
 		}
 		return arr, nil
-	case ggufTypeUint64:
+	case GGUFTypeUint64:
 		var val uint64
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeInt64:
+	case GGUFTypeInt64:
 		var val int64
 		err := binary.Read(reader, endian, &val)
 		return val, err
-	case ggufTypeFloat64:
+	case GGUFTypeFloat64:
 		var val float64
 		err := binary.Read(reader, endian, &val)
 		return val, err
@@ -178,8 +179,8 @@ func ggufReadValue(reader io.Reader, valueType uint32, endian binary.ByteOrder, 
 	}
 }
 
-// formatGGUFValue 将 GGUF 元数据值格式化为字符串
-func formatGGUFValue(value any) string {
+// FormatGGUFValue 将 GGUF 元数据值格式化为字符串
+func FormatGGUFValue(value any) string {
 	switch v := value.(type) {
 	case string:
 		return v
@@ -201,7 +202,7 @@ func formatGGUFValue(value any) string {
 				parts = append(parts, fmt.Sprintf("... (%d items)", len(v)))
 				break
 			}
-			parts = append(parts, formatGGUFValue(elem))
+			parts = append(parts, FormatGGUFValue(elem))
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	default:
@@ -209,8 +210,8 @@ func formatGGUFValue(value any) string {
 	}
 }
 
-// extractGGUFSummary 从元数据中提取模型摘要
-func extractGGUFSummary(metadata map[string]any, filename string) map[string]string {
+// ExtractGGUFSummary 从元数据中提取模型摘要
+func ExtractGGUFSummary(metadata map[string]any, filename string) map[string]string {
 	summary := make(map[string]string)
 
 	if name, ok := getGGUFString(metadata, "general.name"); ok {
@@ -228,54 +229,54 @@ func extractGGUFSummary(metadata map[string]any, filename string) map[string]str
 	}
 
 	if qv := getGGUFAny(metadata, "general.quantization_version"); qv != nil {
-		summary["Quant Version"] = formatGGUFValue(qv)
+		summary["Quant Version"] = FormatGGUFValue(qv)
 	}
 
 	// 上下文长度
 	if ctxLen := getGGUFAny(metadata, "llama.context_length"); ctxLen != nil {
-		summary["Context Length"] = formatGGUFValue(ctxLen)
+		summary["Context Length"] = FormatGGUFValue(ctxLen)
 	} else if ctxLen = getGGUFAny(metadata, "qwen2.context_length"); ctxLen != nil {
-		summary["Context Length"] = formatGGUFValue(ctxLen)
+		summary["Context Length"] = FormatGGUFValue(ctxLen)
 	}
 
 	// 嵌入维度
 	if embLen := getGGUFAny(metadata, "llama.embedding_length"); embLen != nil {
-		summary["Embedding Dim"] = formatGGUFValue(embLen)
+		summary["Embedding Dim"] = FormatGGUFValue(embLen)
 	} else if embLen = getGGUFAny(metadata, "qwen2.embedding_length"); embLen != nil {
-		summary["Embedding Dim"] = formatGGUFValue(embLen)
+		summary["Embedding Dim"] = FormatGGUFValue(embLen)
 	}
 
 	// 层数
 	if blockCount := getGGUFAny(metadata, "llama.block_count"); blockCount != nil {
-		summary["Block Count"] = formatGGUFValue(blockCount)
+		summary["Block Count"] = FormatGGUFValue(blockCount)
 	} else if blockCount = getGGUFAny(metadata, "qwen2.block_count"); blockCount != nil {
-		summary["Block Count"] = formatGGUFValue(blockCount)
+		summary["Block Count"] = FormatGGUFValue(blockCount)
 	}
 
 	// 注意力头数
 	if headCount := getGGUFAny(metadata, "llama.attention.head_count"); headCount != nil {
-		summary["Attention Heads"] = formatGGUFValue(headCount)
+		summary["Attention Heads"] = FormatGGUFValue(headCount)
 	} else if headCount = getGGUFAny(metadata, "qwen2.attention.head_count"); headCount != nil {
-		summary["Attention Heads"] = formatGGUFValue(headCount)
+		summary["Attention Heads"] = FormatGGUFValue(headCount)
 	}
 
 	// KV 头数
 	if headCountKV := getGGUFAny(metadata, "llama.attention.head_count_kv"); headCountKV != nil {
-		summary["KV Heads"] = formatGGUFValue(headCountKV)
+		summary["KV Heads"] = FormatGGUFValue(headCountKV)
 	} else if headCountKV = getGGUFAny(metadata, "qwen2.attention.head_count_kv"); headCountKV != nil {
-		summary["KV Heads"] = formatGGUFValue(headCountKV)
+		summary["KV Heads"] = FormatGGUFValue(headCountKV)
 	}
 
 	// FFN 维度
 	if ffnLen := getGGUFAny(metadata, "llama.feed_forward_length"); ffnLen != nil {
-		summary["FFN Dim"] = formatGGUFValue(ffnLen)
+		summary["FFN Dim"] = FormatGGUFValue(ffnLen)
 	} else if ffnLen = getGGUFAny(metadata, "qwen2.feed_forward_length"); ffnLen != nil {
-		summary["FFN Dim"] = formatGGUFValue(ffnLen)
+		summary["FFN Dim"] = FormatGGUFValue(ffnLen)
 	}
 
 	// 词表大小
 	if vocabSize := getGGUFAny(metadata, "tokenizer.ggml.token_count"); vocabSize != nil {
-		summary["Vocab Size"] = formatGGUFValue(vocabSize)
+		summary["Vocab Size"] = FormatGGUFValue(vocabSize)
 	}
 
 	return summary

@@ -183,3 +183,188 @@ func PackageDirZip(dirPath string, packageName string) ([]byte, error) {
 	LoggerGeneral.SubInfo("FileManager", "Archive", "成功打包目录: %s -> %s.ltpx (%d 字节)", dirPath, packageName, buf.Len())
 	return buf.Bytes(), nil
 }
+
+// CreateZipFromPaths 将服务器本地的文件/目录路径列表打包为 ZIP 字节数据
+// localDir: LocalDir 绝对路径；paths: 相对 localDir 的文件/目录路径列表
+// ZIP 内部路径保留相对 localDir 的层级结构（目录条目一并打包，保留空目录）
+func CreateZipFromPaths(localDir string, paths []string, zipName string) ([]byte, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("未选择文件")
+	}
+	if zipName == "" {
+		zipName = "archive.zip"
+	}
+	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+		zipName += ".zip"
+	}
+
+	baseDir := filepath.Clean(localDir)
+	basePrefix := baseDir + string(os.PathSeparator)
+	var zipBuffer bytes.Buffer
+	zipWriter := zip.NewWriter(&zipBuffer)
+
+	// 打包单个相对路径（文件或目录），ZIP 内路径保留相对 localDir 的层级
+	packOne := func(relPath string) error {
+		// 安全校验：拼接后的绝对路径必须位于 LocalDir 内（防目录遍历）
+		fullPath := filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(relPath)))
+		if fullPath != baseDir && !strings.HasPrefix(fullPath, basePrefix) {
+			return fmt.Errorf("路径越界: %s", relPath)
+		}
+		info, err := os.Stat(fullPath)
+		if err != nil {
+			return fmt.Errorf("路径不存在: %s: %w", relPath, err)
+		}
+		// ZIP 内路径（去除 baseDir 前缀，统一 "/" 分隔符）
+		zipRel := strings.TrimPrefix(fullPath, baseDir)
+		zipRel = strings.TrimPrefix(filepath.ToSlash(zipRel), "/")
+		if zipRel == "" {
+			return fmt.Errorf("无效路径: %s", relPath)
+		}
+
+		if !info.IsDir() {
+			// 单文件：直接写入 ZIP
+			zipEntry, createErr := zipWriter.Create(zipRel)
+			if createErr != nil {
+				return fmt.Errorf("创建ZIP条目失败 %s: %w", zipRel, createErr)
+			}
+			src, openErr := os.Open(fullPath)
+			if openErr != nil {
+				return fmt.Errorf("打开文件失败 %s: %w", fullPath, openErr)
+			}
+			_, copyErr := io.Copy(zipEntry, src)
+			src.Close()
+			if copyErr != nil {
+				return fmt.Errorf("写入ZIP内容失败 %s: %w", zipRel, copyErr)
+			}
+			return nil
+		}
+
+		// 目录：递归打包，ZIP 内保留目录层级（含文件夹名）
+		return filepath.WalkDir(fullPath, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			rel, relErr := filepath.Rel(fullPath, path)
+			if relErr != nil {
+				return fmt.Errorf("获取相对路径失败: %w", relErr)
+			}
+			zipPath := zipRel
+			if rel != "." {
+				zipPath = filepath.ToSlash(filepath.Join(zipRel, rel))
+			}
+			if d.IsDir() {
+				// 目录条目以 "/" 结尾，保留空目录
+				_, createErr := zipWriter.Create(zipPath + "/")
+				if createErr != nil {
+					return fmt.Errorf("创建ZIP目录条目失败 %s: %w", zipPath, createErr)
+				}
+				return nil
+			}
+			zipEntry, createErr := zipWriter.Create(zipPath)
+			if createErr != nil {
+				return fmt.Errorf("创建ZIP条目失败 %s: %w", zipPath, createErr)
+			}
+			src, openErr := os.Open(path)
+			if openErr != nil {
+				return fmt.Errorf("打开文件失败 %s: %w", path, openErr)
+			}
+			_, copyErr := io.Copy(zipEntry, src)
+			src.Close()
+			if copyErr != nil {
+				return fmt.Errorf("写入ZIP内容失败 %s: %w", zipPath, copyErr)
+			}
+			return nil
+		})
+	}
+
+	for _, p := range paths {
+		if err := packOne(p); err != nil {
+			zipWriter.Close()
+			return nil, err
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		return nil, fmt.Errorf("关闭ZIP写入器失败: %w", err)
+	}
+	LoggerGeneral.SubInfo("FileManager", "Archive", "成功创建ZIP文件: %s, 包含 %d 个路径", zipName, len(paths))
+	return zipBuffer.Bytes(), nil
+}
+
+// ReadZipFileList 读取 ZIP 文件内条目信息（不读取文件内容）
+// zipPath: ZIP 文件绝对路径
+func ReadZipFileList(zipPath string) ([]ZipEntryInfo, error) {
+	zipReader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return nil, fmt.Errorf("打开ZIP文件失败: %w", err)
+	}
+	defer zipReader.Close()
+
+	entries := make([]ZipEntryInfo, 0, len(zipReader.File))
+	for _, zipFile := range zipReader.File {
+		info := zipFile.FileInfo()
+		entries = append(entries, ZipEntryInfo{
+			Name:       zipFile.Name,
+			Size:       info.Size(),
+			Compressed: int64(zipFile.CompressedSize64),
+			IsDir:      info.IsDir(),
+		})
+	}
+	return entries, nil
+}
+
+// ExtractZipToDir 将 ZIP 文件解压到目标目录
+// zipPath: ZIP 文件绝对路径；targetDir: 目标目录绝对路径（需已校验在 LocalDir 内）
+// 返回解压出的文件数
+func ExtractZipToDir(zipPath string, targetDir string) (int, error) {
+	zipReader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return 0, fmt.Errorf("打开ZIP文件失败: %w", err)
+	}
+	defer zipReader.Close()
+
+	// 创建目标根目录
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return 0, fmt.Errorf("创建解压目录失败: %w", err)
+	}
+
+	baseDir := filepath.Clean(targetDir) + string(os.PathSeparator)
+	fileCount := 0
+	for _, zipFile := range zipReader.File {
+		// 防止 ZIP 路径穿越（zip-slip）
+		destPath := filepath.Clean(filepath.Join(targetDir, filepath.FromSlash(zipFile.Name)))
+		if destPath != filepath.Clean(targetDir) && !strings.HasPrefix(destPath, baseDir) {
+			LoggerGeneral.SubWarn("FileManager", "Archive", "跳过越界条目: %s", zipFile.Name)
+			continue
+		}
+
+		if zipFile.FileInfo().IsDir() {
+			if err := os.MkdirAll(destPath, 0755); err != nil {
+				return fileCount, fmt.Errorf("创建目录失败 %s: %w", destPath, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return fileCount, fmt.Errorf("创建父目录失败 %s: %w", destPath, err)
+		}
+
+		rc, err := zipFile.Open()
+		if err != nil {
+			return fileCount, fmt.Errorf("打开ZIP内文件失败 %s: %w", zipFile.Name, err)
+		}
+		outFile, err := os.Create(destPath)
+		if err != nil {
+			rc.Close()
+			return fileCount, fmt.Errorf("创建输出文件失败 %s: %w", destPath, err)
+		}
+		_, copyErr := io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+		if copyErr != nil {
+			return fileCount, fmt.Errorf("写入文件失败 %s: %w", destPath, copyErr)
+		}
+		fileCount++
+	}
+	return fileCount, nil
+}

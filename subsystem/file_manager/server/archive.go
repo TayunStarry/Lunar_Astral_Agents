@@ -63,6 +63,37 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
 		zipName += ".zip"
 	}
+	// 若提供了 save_path（相对 LocalDir 的目录路径），则将 ZIP 保存到服务器并返回 JSON
+	savePath := r.FormValue("save_path")
+	if savePath != "" {
+		saveDir := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, savePath))
+		if !strings.HasPrefix(saveDir, filepath.Clean(*GeneralConfig.LocalDir)) {
+			http.Error(w, "Archive请求[ERROR] -> 保存路径越界", http.StatusBadRequest)
+			return
+		}
+		if err := os.MkdirAll(saveDir, 0755); err != nil {
+			http.Error(w, "Archive请求[ERROR] -> 创建保存目录失败: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fullSavePath := filepath.Join(saveDir, zipName)
+		if err := os.WriteFile(fullSavePath, zipData, 0644); err != nil {
+			http.Error(w, "Archive请求[ERROR] -> 保存ZIP文件失败: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		relPath, relErr := filepath.Rel(*GeneralConfig.LocalDir, fullSavePath)
+		if relErr != nil {
+			relPath = zipName
+		}
+		relPath = filepath.ToSlash(relPath)
+		LoggerGeneral.SubInfo("FileManager", "Archive", "ZIP已保存到服务器: %s (%d 字节)", fullSavePath, len(zipData))
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"path":    relPath,
+			"name":    zipName,
+			"size":    len(zipData),
+		})
+		return
+	}
 	// 设置响应头，指定响应内容类型为 ZIP 文件
 	w.Header().Set("Content-Type", "application/zip")
 	// 设置响应头，指定文件下载时的文件名
@@ -76,6 +107,71 @@ func createZip(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Archive请求[ERROR] -> 发送ZIP文件失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+// CreateZipHandler 服务端压缩：根据相对 LocalDir 的路径列表在服务器本地创建 ZIP 并保存
+// 支持文件与文件夹（递归打包，保留目录层级），返回压缩包相对路径
+func CreateZipHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req module.CreateZipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	if len(req.Paths) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "未选择文件"})
+		return
+	}
+
+	zipName := req.ZipName
+	if zipName == "" {
+		zipName = "archive.zip"
+	}
+	if !strings.HasSuffix(strings.ToLower(zipName), ".zip") {
+		zipName += ".zip"
+	}
+
+	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	zipData, err := module.CreateZipFromPaths(localDir, req.Paths, zipName)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 保存目录（相对 LocalDir，空则保存到 LocalDir 根目录）
+	saveDir := localDir
+	if req.SavePath != "" {
+		saveDir = filepath.Clean(filepath.Join(localDir, filepath.FromSlash(req.SavePath)))
+		if saveDir != localDir && !strings.HasPrefix(saveDir, localDir+string(os.PathSeparator)) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "保存路径越界"})
+			return
+		}
+	}
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": "创建保存目录失败: " + err.Error()})
+		return
+	}
+	fullSavePath := filepath.Join(saveDir, zipName)
+	if err := os.WriteFile(fullSavePath, zipData, 0644); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": "保存ZIP文件失败: " + err.Error()})
+		return
+	}
+	relPath, relErr := filepath.Rel(localDir, fullSavePath)
+	if relErr != nil {
+		relPath = zipName
+	}
+	relPath = filepath.ToSlash(relPath)
+	LoggerGeneral.SubInfo("FileManager", "Archive", "服务端ZIP已保存: %s (%d 字节)", fullSavePath, len(zipData))
+	writeJSON(w, http.StatusOK, module.ZipCreateResponse{
+		Success: true,
+		Path:    relPath,
+		Name:    zipName,
+		Size:    len(zipData),
+	})
 }
 
 // extractZip 解压 ZIP 文件并返回文件列表给客户端
@@ -525,5 +621,117 @@ func DeletePackageHandler(w http.ResponseWriter, r *http.Request) {
 		"success":      true,
 		"message":      fmt.Sprintf("包 '%s' 已删除", packageName),
 		"package_name": packageName,
+	})
+}
+
+// ZipMetadataHandler 查询服务器上 ZIP 文件的元数据
+func ZipMetadataHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req module.ZipMetadataRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	if req.Path == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "路径不能为空"})
+		return
+	}
+
+	// 校验路径在 LocalDir 内且为 .zip 文件
+	fullPath := filepath.Clean(filepath.Join(*GeneralConfig.LocalDir, filepath.FromSlash(req.Path)))
+	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	if !strings.HasPrefix(fullPath, localDir) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "路径越界"})
+		return
+	}
+	if strings.ToLower(filepath.Ext(fullPath)) != ".zip" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "仅支持 .zip 压缩包"})
+		return
+	}
+	stat, err := os.Stat(fullPath)
+	if err != nil || stat.IsDir() {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "error": "文件不存在"})
+		return
+	}
+
+	entries, err := module.ReadZipFileList(fullPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
+
+	var totalSize int64
+	for _, entry := range entries {
+		if !entry.IsDir {
+			totalSize += entry.Size
+		}
+	}
+	relPath, _ := filepath.Rel(localDir, fullPath)
+	writeJSON(w, http.StatusOK, module.ZipMetadataResponse{
+		Success:   true,
+		Path:      filepath.ToSlash(relPath),
+		FileCount: len(entries),
+		TotalSize: totalSize,
+		ZipSize:   stat.Size(),
+		Entries:   entries,
+	})
+}
+
+// ExtractZipHandler 将服务器上的 ZIP 文件解压到指定目录
+func ExtractZipHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req module.ExtractZipRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "请求体解析失败: " + err.Error()})
+		return
+	}
+	if req.Path == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "路径不能为空"})
+		return
+	}
+
+	localDir := filepath.Clean(*GeneralConfig.LocalDir)
+	// 校验 ZIP 路径在 LocalDir 内且为 .zip 文件
+	zipPath := filepath.Clean(filepath.Join(localDir, filepath.FromSlash(req.Path)))
+	if !strings.HasPrefix(zipPath, localDir) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "ZIP路径越界"})
+		return
+	}
+	if strings.ToLower(filepath.Ext(zipPath)) != ".zip" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "仅支持 .zip 压缩包"})
+		return
+	}
+	if stat, err := os.Stat(zipPath); err != nil || stat.IsDir() {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "error": "文件不存在"})
+		return
+	}
+
+	// 校验目标目录在 LocalDir 内
+	targetDir := filepath.Clean(filepath.Join(localDir, filepath.FromSlash(req.TargetDir)))
+	if !strings.HasPrefix(targetDir, localDir) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "解压路径越界"})
+		return
+	}
+
+	fileCount, err := module.ExtractZipToDir(zipPath, targetDir)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "error": err.Error()})
+		return
+	}
+
+	relTarget, _ := filepath.Rel(localDir, targetDir)
+	LoggerGeneral.SubInfo("FileManager", "Archive", "ZIP解压完成: %s -> %s (%d 个文件)", zipPath, targetDir, fileCount)
+	writeJSON(w, http.StatusOK, module.ExtractZipResponse{
+		Success:   true,
+		TargetDir: filepath.ToSlash(relTarget),
+		FileCount: fileCount,
 	})
 }

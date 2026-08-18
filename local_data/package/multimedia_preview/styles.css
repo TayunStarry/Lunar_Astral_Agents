@@ -58,6 +58,36 @@
     object-fit: contain;
 }
 
+/* 音频容器样式 - 波形图 + 原生控制条 */
+.audio-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    width: 90%;
+    max-width: 900px;
+    padding: 30px 40px;
+    background: linear-gradient(145deg, rgba(24, 24, 34, 0.95), rgba(14, 14, 22, 0.95));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.audio-waveform {
+    width: 100%;
+    height: 160px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+}
+
+.audio-preview {
+    width: 100%;
+    height: 44px;
+    outline: none;
+}
+
 /* 控制面板样式 - 横板布局，位于底部 */
 .image-controls {
     position: fixed;

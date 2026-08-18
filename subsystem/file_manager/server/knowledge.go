@@ -9,7 +9,7 @@ import (
 )
 
 // writeJSON 写入 JSON 响应，设置指定状态码
-func writeJSON(w http.ResponseWriter, statusCode int, resp map[string]interface{}) {
+func writeJSON(w http.ResponseWriter, statusCode int, resp any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(resp)

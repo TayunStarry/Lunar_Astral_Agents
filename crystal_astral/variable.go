@@ -3,25 +3,8 @@ package main
 import (
 	file "LunarSubsystem/FileManager/server"
 	image "LunarSubsystem/ImageProcessor/server"
+	media "LunarSubsystem/MediaTools/server"
 	"embed"
-)
-
-// ==== GGUF 值类型常量 ====
-
-const (
-	ggufTypeUint8   uint32 = 0
-	ggufTypeInt8    uint32 = 1
-	ggufTypeUint16  uint32 = 2
-	ggufTypeInt16   uint32 = 3
-	ggufTypeUint32  uint32 = 4
-	ggufTypeInt32   uint32 = 5
-	ggufTypeFloat32 uint32 = 6
-	ggufTypeBool    uint32 = 7
-	ggufTypeString  uint32 = 8
-	ggufTypeArray   uint32 = 9
-	ggufTypeUint64  uint32 = 10
-	ggufTypeInt64   uint32 = 11
-	ggufTypeFloat64 uint32 = 12
 )
 
 // ==== 记忆库自动初始化默认值 ====
@@ -60,12 +43,16 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载"},
 	{Path: "/file/preview", Handler: file.PreviewHandler, Method: "GET", Description: "全局文件预览（图片/视频/文本）"},
 	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档"},
+	{Path: "/file/archive/create", Handler: file.CreateZipHandler, Method: "POST", Description: "服务端压缩（支持文件夹）"},
+	{Path: "/file/archive/metadata", Handler: file.ZipMetadataHandler, Method: "POST", Description: "ZIP压缩包元数据查询"},
+	{Path: "/file/archive/extract", Handler: file.ExtractZipHandler, Method: "POST", Description: "ZIP解压到服务器目录"},
 	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
 
 	// ==== 扩展包管理 ====
 	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
 	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
+	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
 
 	// ==== 知识库与记忆库 ====
@@ -80,14 +67,14 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/keyframe", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
 	{Path: "/capture/displays", Handler: image.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
 	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
-	{Path: "/convert/image", Handler: convertImageHandler, Method: "POST", Description: "单张图片格式转换"},
-	{Path: "/convert/batch", Handler: batchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
-	{Path: "/convert/list", Handler: listImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
+	{Path: "/convert/image", Handler: media.ConvertImageHandler, Method: "POST", Description: "单张图片格式转换"},
+	{Path: "/convert/batch", Handler: media.BatchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
+	{Path: "/convert/list", Handler: media.ListImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
 
 	// ==== AI 模型与推理 ====
 	{Path: "/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
-	{Path: "/gguf/metadata", Handler: ggufMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
+	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图像生成"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
 
@@ -102,14 +89,6 @@ var SystemEndpoints = []SystemEndpoint{
 
 // proxyPrefixes 要代理的路径前缀
 var proxyPrefixes = []string{"/v1/", "/write/message", "/tts", "/tts/stream", "/ltpx/"}
-
-// supportedFormats 支持的图片格式
-var supportedFormats = map[string]bool{
-	".png":  true,
-	".jpg":  true,
-	".jpeg": true,
-	".webp": true,
-}
 
 // fileCategoryMap 文件扩展名到分类的映射
 var fileCategoryMap = map[string]string{
