@@ -71,8 +71,8 @@ export interface TextMessage {
 export interface MultimodalMessage {
 	/** 消息角色（通常为 'user'） */
 	role: PostMessageRole;
-	/** 混合内容数组，可包含图片、音频和文本 */
-	content: Array<ImageContent | AudioContent | TextContent>;
+	/** 混合内容数组，可包含图片和文本 */
+	content: Array<ImageContent | TextContent>;
 }
 
 /** 工具调用响应消息 */
@@ -96,29 +96,6 @@ export interface ImageContent {
 	};
 }
 
-/**
- * 音频内容块
- *
- * 对应 llama.cpp OpenAI 兼容 API 的 input_audio 类型。
- * 关键约束：
- * 1. input_audio.data 必须为纯 base64 字符串（不带 "data:audio/xxx;base64," 前缀），
- *    因为 llama.cpp 的 handle_media 在 accept_base64_uri=false 时直接对 data 字段
- *    执行 base64_decode，任何 data: 前缀都会导致解码失败。
- * 2. input_audio.format 必须为 "wav" 或 "mp3"，llama.cpp 的 oaicompat_chat_params_parse
- *    会严格校验此字段，缺失或非法值会抛出 "input_audio.format must be either 'wav' or 'mp3'" 错误。
- */
-export interface AudioContent {
-	/** 内容类型，固定为 'input_audio' */
-	type: 'input_audio';
-	/** 音频数据容器 */
-	input_audio: {
-		/** 纯 base64 编码的音频数据（无 data URL 前缀） */
-		data: string;
-		/** 音频格式，llama.cpp 仅支持 "wav" 和 "mp3" */
-		format: 'wav' | 'mp3';
-	};
-}
-
 /** 文本内容块 */
 export interface TextContent {
 	/** 内容类型，固定为 'text' */
@@ -128,7 +105,7 @@ export interface TextContent {
 }
 
 /** 消息内容类型 */
-export type MessageContent = ImageContent | AudioContent | TextContent;
+export type MessageContent = ImageContent | TextContent;
 /**
  * 模型对话完成响应结构
  * 对应 OpenAI Chat Completions API 响应格式

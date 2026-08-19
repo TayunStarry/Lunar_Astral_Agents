@@ -7,8 +7,6 @@ export class DialogueRole extends ModelBuilder {
 		try {
 			// 对消息中的图片文件进行压缩与解析处理
 			await source.LiteImageFile();
-			// 绘制者、演奏者和学习者已改为通过工具调用返回描述（dispatch_*），
-			// 不再通过 consumeHistory() 向对话者传递摘要
 			// 将未读上下文数组中的消息添加到处理器模型的上下文
 			source.unreadContext.forEach(context => this.writeContext(context));
 			// 清空未读上下文数组
@@ -20,7 +18,7 @@ export class DialogueRole extends ModelBuilder {
 			// 从向量数据库查询相关历史消息作为 RAG 上下文
 			this.queryRagMessages();
 			/** 向处理器模型发送请求并等待响应 */
-			const response = this.run(this.ragMessages, [...GlobalConfig.LTPdefinition]);
+			const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
 			// 处理响应文本内容
 			this.analyzeMessageResponse(response.body, cache);
 			// 如果有工具调用,处理它们并重新发送请求

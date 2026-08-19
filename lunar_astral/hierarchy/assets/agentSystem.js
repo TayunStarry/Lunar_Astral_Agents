@@ -542,8 +542,7 @@ var agentSystem = (function (exports) {
                 { role: 'system', content: this.systemPrompt },
                 ...this.runtimeMessages,
                 ...appendContext,
-                ...this.messages.slice(0, -1),
-                ...this.messages.slice(-1)
+                ...this.messages
             ];
             const requestBody = {
                 model: GlobalConfig.MultimodalName,
@@ -583,12 +582,13 @@ var agentSystem = (function (exports) {
         }
         queryRagMessages() {
             const userMessages = this.getLatestUserMessages();
+            const returnEvent = () => { this.ragMessages = []; return this; };
             if (userMessages.length === 0)
-                return this;
+                returnEvent();
             if (!BaseConfig.memoryReady)
                 BaseConfig.initMemory();
             if (!BaseConfig.memoryReady)
-                return this;
+                returnEvent();
             const allResults = [];
             for (const userMessage of userMessages) {
                 const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
@@ -601,13 +601,12 @@ var agentSystem = (function (exports) {
                 }
             }
             if (allResults.length === 0)
-                return this;
+                returnEvent();
             const seen = new Map();
             for (const r of allResults) {
                 const existing = seen.get(r.content);
-                if (!existing || r.similarity > existing.similarity) {
+                if (!existing || r.similarity > existing.similarity)
                     seen.set(r.content, r);
-                }
             }
             const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
             console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
@@ -764,7 +763,7 @@ var agentSystem = (function (exports) {
                 this.formatHistoricalMessages(source);
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, [...GlobalConfig.LTPdefinition]);
+                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -2554,18 +2553,22 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     continue;
                 const newContent = [];
                 for (let item of message.content) {
-                    if (item.type == 'text' || item.type == 'input_audio')
+                    if (item.type == 'text')
                         newContent.push(item);
                     else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                         await this.analysisVideoFile(item.image_url.url, '');
                     }
                     else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
                         const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
-                        if (error)
-                            throw new Error('获取图片文件失败');
+                        if (error) {
+                            console.error('[获取图片文件失败]:', error.message, error.stack);
+                            continue;
+                        }
                         const [resizedImages, error1] = resizeImage(response.body);
-                        if (error1)
-                            throw new Error('缩放图片失败');
+                        if (error1) {
+                            console.error('[缩放图片失败]:', error1.message, error1.stack);
+                            continue;
+                        }
                         resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
                     }
                 }

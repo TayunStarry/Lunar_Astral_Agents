@@ -124,10 +124,8 @@ export class ModelBuilder extends ConfigModifier {
 			...this.runtimeMessages,
 			// 追加的上下文(rag消息)
 			...appendContext,
-			// 早期历史消息
-			...this.messages.slice(0, -1),
-			// 最新消息
-			...this.messages.slice(-1)
+			// 历史消息
+			...this.messages
 		];
 		/** 构建发给推理模型的请求体 */
 		const requestBody = {
@@ -178,16 +176,19 @@ export class ModelBuilder extends ConfigModifier {
 	public queryRagMessages(): this {
 		/** 获取最新的5条用户消息作为查询条件 */
 		const userMessages = this.getLatestUserMessages();
-		// 如果没有用户消息，直接返回
-		if (userMessages.length === 0) return this;
+		/** 清理RAG消息并返回 */
+		const returnEvent = () => { this.ragMessages = []; return this; }
+		// 如果没有用户消息，清理RAG消息并返回
+		if (userMessages.length === 0) returnEvent();
 		// 初始化 记忆库
 		if (!BaseConfig.memoryReady) BaseConfig.initMemory();
-		// 如果初始化失败，直接返回
-		if (!BaseConfig.memoryReady) return this;
+		// 如果初始化失败，清理RAG消息并返回
+		if (!BaseConfig.memoryReady) returnEvent();
 		/** 所有查询结果汇总（含相似度分数） */
 		const allResults: { id: string, role: string, content: string, similarity: number }[] = [];
 		// 对每条用户消息分别查询 记忆库
 		for (const userMessage of userMessages) {
+			// 获取 记忆库 查询结果
 			const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
 			// 单条查询失败则跳过，继续处理下一条
 			if (error) {
@@ -199,16 +200,14 @@ export class ModelBuilder extends ConfigModifier {
 				allResults.push(...results);
 			}
 		}
-		// 如果没有任何结果，直接返回
-		if (allResults.length === 0) return this;
+		// 如果没有任何结果，清理RAG消息并返回
+		if (allResults.length === 0) returnEvent();
 		/** 基于内容去重，保留相似度最高的记录 */
 		const seen = new Map<string, { id: string, role: string, content: string, similarity: number }>();
 		// 遍历所有结果，对相同内容只保留相似度最高的
 		for (const r of allResults) {
 			const existing = seen.get(r.content);
-			if (!existing || r.similarity > existing.similarity) {
-				seen.set(r.content, r);
-			}
+			if (!existing || r.similarity > existing.similarity) seen.set(r.content, r);
 		}
 		// 按相似度降序排列，确保相关度最高的结果在最前面
 		const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);

@@ -1,4 +1,4 @@
-import { GlobalConfig, ImageContent, AudioContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, MemoryRole, ResizeImageResult } from '../index';
+import { GlobalConfig, ImageContent, TextContent, PostMessage, fetchDocumentCallback, getPromptFromKnowledge, savePromptToKnowledge, ModelBuilder, DialogueRole, PainterRole, MusicianRole, LearnerRole, ViewerRole, ActorRole, RandomFloor, MemoryRole, ResizeImageResult } from '../index';
 
 /** 智能体定义 */
 export class AgentDefine {
@@ -125,11 +125,11 @@ export class AgentDefine {
 			// 跳过纯文本消息
 			if (typeof message.content === 'string') continue;
 			/** 新内容数组 */
-			const newContent: Array<ImageContent | AudioContent | TextContent> = [];
+			const newContent: Array<ImageContent | TextContent> = [];
 			// 遍历消息内容中的每个项
 			for (let item of message.content) {
-				// 如果是文本项或音频项,直接添加到新内容数组
-				if (item.type == 'text' || item.type == 'input_audio') newContent.push(item);
+				// 如果是文本项,直接添加到新内容数组
+				if (item.type == 'text') newContent.push(item);
 				// 检查是否为支持的视频文件格式
 				else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
 					// 处理视频文件
@@ -139,11 +139,17 @@ export class AgentDefine {
 					// 获取图片文件内容
 					const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
 					// 检查请求是否成功
-					if (error) throw new Error('获取图片文件失败');
+					if (error) {
+						console.error('[获取图片文件失败]:', error.message, error.stack);
+						continue;
+					};
 					/** 缩放图片，返回图片数据数组（动态图多帧，静态图单帧） */
 					const [resizedImages, error1] = resizeImage(response.body);
 					// 检查缩放是否成功
-					if (error1) throw new Error('缩放图片失败');
+					if (error1) {
+						console.error('[缩放图片失败]:', error1.message, error1.stack);
+						continue;
+					};
 					// 遍历缩放结果，每帧作为独立的 image_url 内容项添加
 					resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
 				}
