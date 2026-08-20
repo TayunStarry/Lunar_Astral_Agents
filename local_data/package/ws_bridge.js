@@ -1,17 +1,19 @@
-// ==== ws_bridge.js — WebSocket 广播桥接器 ====
-// 用途：替代 BroadcastChannel，通过 WebSocket 服务端中继实现跨组件通信
+// ==== ws_bridge.js — 引擎/工作室统一通信客户端 ====
+// 用途：替代 BroadcastChannel，采用与常规前端一致的联络策略：
+//   - 接收：WebSocket 连接 /ws，后端无差别广播 {type,data} 格式消息，客户端自行过滤
+//   - 发送：HTTP POST /write/engine（格式与 /write/message 同构），后端本地广播 + 转发智能体侧
 // 用法：const channel = new WsBridge('integrated-studio-bus');
-//       channel.postMessage(msg);  // 发送消息
-//       channel.onmessage = (event) => { ... };  // 接收消息
+//       channel.postMessage(msg);  // 发送消息（POST /write/engine）
+//       channel.onmessage = (event) => { ... };  // 接收消息（ws /ws 下行）
 // 兼容性：API 与 BroadcastChannel 完全一致，迁移时无需修改业务逻辑
 //
 // 特性：
 //   - 自动重连（指数退避，最大延迟 30 秒）
 //   - 连接状态跟踪（readyState 属性）
-//   - 超时保护（60 秒读取超时，10 秒写入超时）
+//   - 发送不依赖 ws 连接状态（走 HTTP，连接未就绪时仍可发送）
 
 class WsBridge {
-    /** 频道名称（用于标识，不影响 WebSocket 路由） */
+    /** 频道名称（保留参数，兼容 BroadcastChannel API） */
     #name;
     /** WebSocket 实例 */
     #ws = null;
@@ -29,10 +31,8 @@ class WsBridge {
     #onmessage = null;
     /** 连接状态：0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED */
     #readyState = 0;
-    /** WebSocket URL（自动从当前页面 host 推导） */
+    /** WebSocket URL（自动从当前页面 host 推导，连接同源 /ws） */
     #url;
-    /** 连接建立前的出站消息缓冲队列 */
-    #pendingMessages = [];
     /** onmessage 设置前收到的入站消息缓冲队列 */
     #incomingBuffer = [];
 
@@ -42,9 +42,9 @@ class WsBridge {
      */
     constructor(name) {
         this.#name = name || 'integrated-studio-bus';
-        // WebSocket 连接地址：ws://<host>/ws/studio
+        // WebSocket 连接地址：ws://<host>/ws（与常规前端一致的标准通道）
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.#url = `${protocol}//${window.location.host}/ws/studio`;
+        this.#url = `${protocol}//${window.location.host}/ws`;
         this.#connect();
     }
 
@@ -86,24 +86,18 @@ class WsBridge {
 
     /**
      * 发送消息（兼容 BroadcastChannel API）
+     * 通过 HTTP POST /write/engine 提交：后端广播给所有 /ws 客户端（模块间互通）并转发智能体侧
      * @param {*} message - 任意可序列化的消息对象
      */
     postMessage(message) {
-        if (this.#readyState === 1) {
-            // WebSocket.OPEN
-            try {
-                this.#ws.send(JSON.stringify(message));
-            } catch (err) {
-                console.warn('[WsBridge] 发送消息失败:', err);
-            }
-        } else if (this.#readyState === 0) {
-            // WebSocket.CONNECTING — 缓冲消息，连接建立后自动冲刷
-            this.#pendingMessages.push(message);
-            console.debug('[WsBridge] 消息已缓冲（等待连接）:', this.#name, message.type);
-        } else {
-            // CLOSING 或 CLOSED，丢弃消息
-            console.debug('[WsBridge] 连接未就绪，消息已丢弃:', this.#name);
-        }
+        const payload = JSON.stringify(message);
+        fetch('/write/engine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+        }).catch(err => {
+            console.warn('[WsBridge] 消息发送失败:', err);
+        });
     }
 
     /**
@@ -146,8 +140,6 @@ class WsBridge {
             this.#readyState = 1; // OPEN
             this.#reconnectAttempts = 0;
             console.debug('[WsBridge] 已连接:', this.#name);
-            // 冲刷缓冲队列中的消息
-            this.#flushPending();
         };
 
         this.#ws.onmessage = (event) => {
@@ -178,21 +170,6 @@ class WsBridge {
                 this.#scheduleReconnect();
             }
         };
-    }
-
-    /** 冲刷缓冲队列中的消息（连接建立后调用） */
-    #flushPending() {
-        if (this.#pendingMessages.length === 0) return;
-        console.debug(`[WsBridge] 冲刷 ${this.#pendingMessages.length} 条缓冲消息:`, this.#name);
-        const msgs = this.#pendingMessages;
-        this.#pendingMessages = [];
-        for (const msg of msgs) {
-            try {
-                this.#ws.send(JSON.stringify(msg));
-            } catch (err) {
-                console.warn('[WsBridge] 冲刷消息失败:', err);
-            }
-        }
     }
 
     /** 安排重连（指数退避） */

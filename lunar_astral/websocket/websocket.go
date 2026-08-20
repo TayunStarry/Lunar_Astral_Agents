@@ -6,6 +6,7 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -95,14 +96,12 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 func SetupWebSocketHandler(mux *http.ServeMux) {
 	adapters.PushMessageFunc = BroadcastMessage
-	adapters.StudioBroadcastFunc = StudioBroadcast
 	adapters.GetAnimCacheFunc = func() interface{} {
 		animCache.RLock()
 		defer animCache.RUnlock()
 		return animCache
 	}
 	mux.HandleFunc("/ws", WSHandler)
-	StartStudioHub(mux)
 }
 
 func CloseWebSocketServer() {
@@ -202,4 +201,35 @@ func bridgeToQQ(response WSResponse) {
 			}
 		}
 	}
+}
+
+// ==== 动画列表缓存 ====
+
+// animationListMessage 引擎广播的 animation_list 消息结构（仅解析需要的字段）
+type animationListMessage struct {
+	Type    string `json:"type"`
+	Payload struct {
+		ActionDefinitions []ActionDefinition `json:"actionDefinitions"`
+	} `json:"payload"`
+}
+
+// CacheAnimationList 尝试从引擎消息中提取 animation_list 的动作定义并缓存
+// 供智能体 getAvailableActions 动态查询；非 animation_list 消息被静默忽略
+func CacheAnimationList(msg []byte) {
+	var parsed animationListMessage
+	if err := json.Unmarshal(msg, &parsed); err != nil {
+		return
+	}
+	if parsed.Type != "animation_list" {
+		return
+	}
+	if len(parsed.Payload.ActionDefinitions) == 0 {
+		return
+	}
+
+	animCache.Lock()
+	defer animCache.Unlock()
+	animCache.Actions = parsed.Payload.ActionDefinitions
+	animCache.UpdatedAt = time.Now().UnixMilli()
+	LoggerGeneral.SubInfo("LunarCore", "WebSocket", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
 }

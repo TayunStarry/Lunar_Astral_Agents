@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 	"net/http/httputil"
-	"sync"
 
 	"github.com/gorilla/websocket"
 )
@@ -96,25 +95,11 @@ type StudioClient struct {
 }
 
 // StudioHub 工作室 WebSocket 消息中枢
-// 职责：接受所有客户端连接，将任意客户端发来的 JSON 消息广播给所有已连接客户端
-// 设计原则：不解析消息内容，纯粹转发 JSON 字节流（哑中继）
-// 注：animation_list 类型消息会被额外捕获并缓存，供智能体查询可用动作
+// 职责：接受所有客户端连接（/ws），将任意客户端发来的 JSON 消息广播给所有已连接客户端
+// 设计原则：不解析消息内容，纯粹转发 JSON 字节流（无差别广播，客户端自行过滤）
 type StudioHub struct {
 	Clients    map[*StudioClient]bool // 已注册的客户端集合
 	Broadcast  chan []byte            // 广播消息通道
 	Register   chan *StudioClient     // 客户端注册通道
 	Unregister chan *StudioClient     // 客户端注销通道
-}
-
-// ActionDefinition 动作定义（从引擎 ACTION_DEFINITIONS 同步）
-type ActionDefinition struct {
-	Name          string `json:"name"`           // 动作名称（如 "荡秋千"）
-	MouseTracking bool   `json:"mouseTracking"`  // 是否需要鼠标追踪
-}
-
-// AnimationListCache 动画列表缓存（从引擎 animation_list 消息中提取）
-type AnimationListCache struct {
-	sync.RWMutex
-	Actions   []ActionDefinition `json:"actions"`    // 可用动作列表
-	UpdatedAt int64              `json:"updated_at"` // 最后更新时间（Unix 毫秒）
 }

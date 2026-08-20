@@ -1701,15 +1701,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     const actorRole = new ActorRole();
     const dialogueRole = new DialogueRole();
     const viewerRole = new ViewerRole();
-    const defaultAnswers = [
-        '月华摔疼了，要等星光阁哥哥来修……',
-        '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
-        '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
-        '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
-        '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
-    ];
     function randomDefaultMessage() {
-        return defaultAnswers[RandomFloor(0, defaultAnswers.length - 1)];
+        return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
     async function analysisVideoFile(videoUrl, userNeeds) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
@@ -1725,19 +1718,15 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             throw new Error('提取关键帧失败');
         }
         console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
-        const keyframes = images.map((frame) => ({
-            data: frame.data,
-            timestamp: frame.timestamp || ''
-        }));
+        const keyframes = images.map(frame => ({ data: frame.data, timestamp: frame.timestamp || '' }));
         console.log('[观影者] 开始观看视频...');
         const videoSummary = await viewerRole.watchVideo(keyframes);
         console.log('[观影者] 视频观看完成');
         if (videoSummary && videoSummary.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
         }
-        else {
-            GlobalConfig.unreadContext.push({ role: 'user', content: defaultAnswers[RandomFloor(0, defaultAnswers.length - 1)] });
-        }
+        else
+            GlobalConfig.unreadContext.push({ role: 'user', content: randomDefaultMessage() });
         if (userNeeds.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
         }

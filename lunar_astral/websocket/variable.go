@@ -28,10 +28,6 @@ var wsMutex sync.RWMutex
 // WebSocket 广播通道，用于发送消息给所有客户端
 var wsBroadcaster = make(chan WSMessage, 256)
 
-// ==== StudioHub 全局变量 ====
-
-// StudioHubInstance 引擎 WebSocket 集线器全局实例
-var StudioHubInstance *StudioHub
-
 // animCache 动画列表缓存（从引擎 animation_list 消息中提取的动作定义）
+// 由 /write/engine 引擎消息更新，供智能体 getAvailableActions 动态查询
 var animCache = &AnimationListCache{}

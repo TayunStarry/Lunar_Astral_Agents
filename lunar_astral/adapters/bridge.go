@@ -8,7 +8,9 @@ import (
 	"github.com/dop251/goja"
 )
 
-// ==== 引擎桥接器：Agent → 本地 StudioHub → 引擎（自包含，不依赖 crystal_astral） ====
+// ==== 引擎桥接器：Agent → 标准 ws 广播 → 引擎 ====
+// 引擎命令经 PushMessageFunc 以 {type:"engine", data:EngineCommand} 广播给所有 /ws 客户端
+// 引擎所在域的枢纽（如 crystal_astral 上游桥）接收后转发给本地引擎客户端
 
 // 引擎命令消息格式（与 engine.js 的 handleChannelMessage 对齐）
 type EngineCommand struct {
@@ -22,7 +24,7 @@ const engineCommandSource = "lunar-agent"
 
 // sendToEngine 向引擎发送命令（供 JS 运行时调用）
 // 用法：sendToEngine('action', '{"action": "荡秋千"}')
-// 消息直接广播到本地 StudioHub，无需经过 crystal_astral
+// 消息以标准 ws 广播推送，经上游桥转发后由引擎按 data.type 过滤处理
 func (class *Runtime) sendToEngine(call goja.FunctionCall) goja.Value {
 	msgType := call.Argument(0).String()
 	payloadStr := call.Argument(1).String()
@@ -43,20 +45,14 @@ func (class *Runtime) sendToEngine(call goja.FunctionCall) goja.Value {
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	cmdJSON, err := json.Marshal(cmd)
-	if err != nil {
-		LoggerGeneral.Error("LunarCore", "[引擎桥接] 命令序列化失败: %v", err)
-		return class.runtime.ToValue(false)
-	}
-
-	StudioBroadcastFunc(cmdJSON)
+	PushMessageFunc("engine", cmd)
 	LoggerGeneral.Info("LunarCore", "[引擎桥接] 命令已广播: type=%s", msgType)
 	return class.runtime.ToValue(true)
 }
 
 // getAvailableActions 查询引擎当前可用的动作列表（供 JS 运行时调用）
 // 返回值：JSON 字符串，格式为 {"actions":[...], "updated_at":...}
-// 数据来源于本地 StudioHub 从引擎 animation_list 消息中提取的缓存
+// 数据来源于引擎 animation_list 消息经 /write/engine 更新后的缓存
 func (class *Runtime) getAvailableActions(call goja.FunctionCall) goja.Value {
 	cache := GetAnimCacheFunc()
 	if cache == nil {

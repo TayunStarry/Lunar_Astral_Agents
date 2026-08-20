@@ -40,23 +40,7 @@ type WSResponse struct {
 	Image any `json:"image,omitempty"`
 }
 
-// ==== StudioHub：引擎通信中枢（独立于 /ws 的 /ws/studio 端点） ====
-
-// StudioClient 引擎 WebSocket 客户端连接
-type StudioClient struct {
-	Conn *websocket.Conn
-	Send chan []byte
-}
-
-// StudioHub 引擎消息中枢
-// 职责：接受所有引擎客户端连接，将任意客户端发来的消息广播给所有已连接客户端
-// 同时从消息中提取 animation_list 动作定义并缓存，供智能体动态查询
-type StudioHub struct {
-	Clients    map[*StudioClient]bool
-	Broadcast  chan []byte
-	Register   chan *StudioClient
-	Unregister chan *StudioClient
-}
+// ==== 动画列表缓存（由 /write/engine 引擎消息更新，供智能体动态查询） ====
 
 // ActionDefinition 动作定义（从引擎 ACTION_DEFINITIONS 同步）
 type ActionDefinition struct {

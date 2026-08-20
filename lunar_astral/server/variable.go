@@ -94,6 +94,8 @@ var SystemEndpoints = []SystemEndpoint{
 	// 消息队列相关接口
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
+	// 引擎消息总线（格式与 /write/message 同构，供引擎/工作室系统消息分发）
+	{Path: "/write/engine", Handler: handlers.EngineMessageHandler, Method: "POST", Description: "引擎系统消息（动画列表/遥测等）"},
 	// TTS语音服务相关接口
 	{Path: "/tts", Handler: tts.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
 	// LTPX 工具动态管理接口
@@ -103,7 +105,4 @@ var SystemEndpoints = []SystemEndpoint{
 	// 智能体控制接口
 	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
 	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
-	// 引擎桥接接口
-	{Path: "/api/engine/command", Handler: handlers.EngineCommandHandler, Method: "POST", Description: "智能体引擎命令转发"},
-	{Path: "/api/engine/animations", Handler: contact.HandleGetAnimations, Method: "GET", Description: "查询引擎可用动作列表"},
 }

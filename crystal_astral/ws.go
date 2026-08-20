@@ -50,8 +50,6 @@ func (h *StudioHub) Run() {
 			}
 
 		case message := <-h.Broadcast:
-			// 检查是否为 animation_list 消息，缓存动作定义供智能体查询
-			cacheAnimationList(message)
 			for client := range h.Clients {
 				select {
 				case client.Send <- message:
@@ -121,9 +119,10 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 }
 
-// HandleEngineCommand 接收来自 lunar_astral 后端的引擎命令，直接转发到 StudioHub
-// 实现 Agent → StudioHub → Engine 的直接通信路径，绕过前端
-func HandleEngineCommand(w http.ResponseWriter, r *http.Request) {
+// StudioEngineHandler 接收引擎/工作室消息（POST /write/engine，格式与 /write/message 同构）
+// 职责：将原始消息广播给所有本地 /ws 客户端（模块间互通，客户端自行过滤）
+// 注：crystal_astral 与 lunar_astral 为独立实现，此处不做跨后端转发
+func StudioEngineHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -133,56 +132,15 @@ func HandleEngineCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
 		return
 	}
-	if StudioHubInstance == nil {
-		http.Error(w, "StudioHub not initialized", http.StatusServiceUnavailable)
-		return
+	defer r.Body.Close()
+
+	if StudioHubInstance != nil {
+		StudioHubInstance.Broadcast <- body
 	}
-	StudioHubInstance.Broadcast <- body
-	w.WriteHeader(http.StatusOK)
-}
-
-// ==== 动画列表缓存（从引擎 animation_list 消息中提取） ====
-
-// animationListMessage 引擎广播的 animation_list 消息结构（仅解析需要的字段）
-type animationListMessage struct {
-	Type    string `json:"type"`
-	Payload struct {
-		ActionDefinitions []ActionDefinition `json:"actionDefinitions"`
-	} `json:"payload"`
-}
-
-// cacheAnimationList 尝试从消息中提取 animation_list 的动作定义并缓存
-// 非 animation_list 类型的消息会被静默忽略
-func cacheAnimationList(msg []byte) {
-	var parsed animationListMessage
-	if err := json.Unmarshal(msg, &parsed); err != nil {
-		return
-	}
-	if parsed.Type != "animation_list" {
-		return
-	}
-	if len(parsed.Payload.ActionDefinitions) == 0 {
-		return
-	}
-
-	animCache.Lock()
-	defer animCache.Unlock()
-	animCache.Actions = parsed.Payload.ActionDefinitions
-	animCache.UpdatedAt = time.Now().UnixMilli()
-	LoggerGeneral.Info("StudioHub", "动画列表缓存已更新: %d 个动作", len(animCache.Actions))
-}
-
-// HandleGetAnimations 返回当前缓存的可用动作列表
-// 供 lunar_astral 后端查询，用于智能体动态构建工具定义
-func HandleGetAnimations(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	animCache.RLock()
-	defer animCache.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(animCache)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"length":  len(body),
+	})
 }

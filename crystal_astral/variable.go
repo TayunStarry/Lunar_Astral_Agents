@@ -22,12 +22,8 @@ const (
 var EmbeddedFiles embed.FS
 
 // StudioHubInstance 工作室 WebSocket 集线器全局实例
-// 在 StartServer() 中初始化，供所有前端组件通过 /ws/studio 端点连接
+// 在 StartServer() 中初始化，供所有前端组件通过 /ws 端点连接（无差别广播）
 var StudioHubInstance *StudioHub
-
-// animCache 动画列表缓存（从引擎 animation_list 消息中提取的动作定义）
-// 由 StudioHub.Run() 中 cacheAnimationList() 更新，由 HandleGetAnimations 读取
-var animCache = &AnimationListCache{}
 
 // SystemEndpoints 系统端点列表
 var SystemEndpoints = []SystemEndpoint{
@@ -82,13 +78,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/lunar/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},
 	{Path: "/lunar/start", Handler: yuehuaStartHandler, Method: "POST", Description: "启动月华服务"},
 
-	// ==== 引擎命令桥接 ====
-	{Path: "/api/engine/command", Handler: HandleEngineCommand, Method: "POST", Description: "智能体引擎命令转发"},
-	{Path: "/api/engine/animations", Handler: HandleGetAnimations, Method: "GET", Description: "查询引擎可用动作列表"},
+	// ==== 引擎消息总线 ====
+	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},
 }
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/write/message", "/tts", "/tts/stream", "/ltpx/"}
+var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/ltpx/"}
 
 // fileCategoryMap 文件扩展名到分类的映射
 var fileCategoryMap = map[string]string{

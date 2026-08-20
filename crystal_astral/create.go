@@ -97,10 +97,10 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	image.StartTaskProcessor()
 	httpMux := http.NewServeMux()
 
-	// 初始化工作室 WebSocket 集线器（哑中继，不解析消息内容）
+	// 初始化工作室 WebSocket 集线器（无差别广播：收到任意消息转发给所有 /ws 客户端，客户端自行过滤）
 	StudioHubInstance = NewStudioHub()
 	go StudioHubInstance.Run()
-	httpMux.HandleFunc("/ws/studio", StudioHubInstance.HandleWebSocket)
+	httpMux.HandleFunc("/ws", StudioHubInstance.HandleWebSocket)
 
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {

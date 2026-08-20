@@ -1,7 +1,7 @@
 // ==== engine.js — 复合引擎工作室 · 引擎层入口 ====
 //
 // 职责：
-//   - BroadcastChannel 双向通信（频道名通过 URL ?channel= 参数指定）
+//   - 统一通信（ws /ws 接收 + POST /write/engine 发送，频道名通过 URL ?channel= 参数指定）
 //   - 初始化顺序：Renderer → AnimationRuntime → AnimGroupRuntime →
 //     SpecialAnimationRuntime → MovementController → BodyRotationInterpreter →
 //     PhysicsManager → CharacterPhysics
@@ -54,7 +54,7 @@ if (currentMode === 'editor') {
     document.body.classList.add('mode-editor');
 }
 
-// ==== 广播频道（通过 WebSocket 中继，替代 BroadcastChannel） ====
+// ==== 广播频道（统一通信客户端：ws /ws 接收 + POST /write/engine 发送） ====
 const channel = new WsBridge(CHANNEL_NAME);
 
 // ==== 核心模块 ====
@@ -258,10 +258,17 @@ async function init() {
     bindKeyboard();
     bindBlur();
 
-    // 18. 监听 BroadcastChannel
+    // 18. 监听广播频道（ws 下行：模块间消息 + 智能体引擎命令）
     channel.onmessage = (event) => {
-        const msg = event.data;
-        if (!msg || msg.source === SOURCE_ENGINE) return; // 忽略自己发的
+        const raw = event.data;
+        if (!raw || raw.source === SOURCE_ENGINE) return; // 忽略自己发的
+        // 智能体引擎命令包装：{type:"engine", data:{type, payload, source}} → 解包为 {type, payload, source}
+        let msg = raw;
+        if (raw.type === 'engine' && raw.data && raw.data.type) {
+            msg = { type: raw.data.type, source: raw.data.source, payload: raw.data.payload };
+        } else if (raw.type === 'context') {
+            return; // pushContext 为展示类消息（对话/动作摘要），引擎不执行
+        }
         handleChannelMessage(msg);
     };
 

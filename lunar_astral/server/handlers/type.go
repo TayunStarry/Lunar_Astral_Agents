@@ -75,3 +75,13 @@ type AgentEventRequest struct {
 	Event string `json:"event"` // 事件类型: movement_complete, action_started
 	Data  string `json:"data"`  // 事件数据 JSON 字符串
 }
+
+// EngineMessage 引擎系统消息（经 /write/engine 提交）
+// 格式与 /write/message 同构：顶层带 type/source/payload/timestamp，
+// 与对话消息（{messages:[...]}）区分，由服务端按 type 分发
+type EngineMessage struct {
+	Type      string          `json:"type"`   // 消息类型: animation_list / telemetry / ...
+	Source    string          `json:"source"` // 消息来源: engine / base / *-panel
+	Payload   json.RawMessage `json:"payload"`
+	Timestamp int64           `json:"timestamp"`
+}
