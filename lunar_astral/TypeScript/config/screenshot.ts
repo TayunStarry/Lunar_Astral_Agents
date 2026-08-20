@@ -28,17 +28,3 @@ export interface ScreenshotParams {
 	/** JPEG 质量 1-100 */
 	quality?: number;
 }
-
-/** 显示器信息接口 */
-export interface DisplayInfo {
-	/** 显示器索引 */
-	index: number;
-	/** 显示器 X 坐标 */
-	x: number;
-	/** 显示器 Y 坐标 */
-	y: number;
-	/** 显示器宽度 */
-	width: number;
-	/** 显示器高度 */
-	height: number;
-}

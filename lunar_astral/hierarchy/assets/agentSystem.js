@@ -3,27 +3,19 @@ var agentSystem = (function (exports) {
 
     class GlobalConfig {
         static customConfig = { agent: {}, server: {} };
-        static unreadRecords = [];
         static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
         static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
-        static fileValidExtensions = [
-            '.txt', '.md', '.log', '.ini', '.conf',
-            '.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.c', '.cpp', '.h',
-            '.cs', '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.dart',
-            '.json', '.csv', '.xml', '.yaml', '.yml',
-            '.html', '.htm', '.css', '.scss', '.less', '.sass', '.styl',
-            '.env', '.properties', '.toml',
-            ...this.imageFormatsExtensions,
-            ...this.videoFormatsExtensions
-        ];
-        static fileValidTypes = [
-            'application/json',
-            'application/xml',
-            'application/x-yaml'
-        ];
-        static visionExtensions = [...this.imageFormatsExtensions, ...this.videoFormatsExtensions];
         static LTPfunction = new Map();
         static LTPdefinition = [];
+        static unreadRecords = [];
+        static unreadContext = [];
+        static unreadVideoUrl = [];
+        static speakWeight = 1;
+        static silenceCount = 0;
+        static reasoningInProgress = false;
+        static finalResponse = "";
+        static memoryReady = false;
+        static currentAddress = [];
         static get MultimodalUrl() {
             return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
         }
@@ -49,11 +41,6 @@ var agentSystem = (function (exports) {
         }
         ;
     }
-
-    const ThinkType = [
-        /<think>([\s\S]*?)<\/think>([\s\S]*)/,
-        /<\|thought_start\|>([\s\S]*?)<\|thought_end\|>([\s\S]*)/,
-    ];
 
     function Clamp({ min, max }, value) {
         return Math.max(min, Math.min(max, value));
@@ -455,63 +442,25 @@ var agentSystem = (function (exports) {
         }
     }
 
-    let currentAddress = [];
-    class BaseConfig {
+    class ModelBuilder {
         stream = false;
         enableTools = true;
         messages = [];
         ragMessages = [];
         runtimeMessages = [];
         systemPrompt = "你的名字叫做月华, 是一个女孩子";
-        static memoryReady = false;
-        constructor() { }
-        static initMemory() {
-            if (BaseConfig.memoryReady)
-                return;
-            const [_, err] = memoryInit('lunar_messages', 'text');
-            if (err)
-                console.error('记忆库初始化失败:', err);
-            else
-                BaseConfig.memoryReady = true;
-        }
-    }
-    class PromptProcessor extends BaseConfig {
         promptCompletion(prompt) {
             let addressText = "";
-            if (currentAddress.length === 0) {
+            if (GlobalConfig.currentAddress.length === 0) {
                 const addressResult = address();
-                currentAddress = addressResult[0];
-                addressText = currentAddress.join(' ');
+                GlobalConfig.currentAddress = addressResult[0];
+                addressText = GlobalConfig.currentAddress.join(' ');
             }
             else
-                addressText = currentAddress.join(' ');
+                addressText = GlobalConfig.currentAddress.join(' ');
             return prompt
                 .replace(/{name}/g, GlobalConfig.userName)
                 .replace(/{current-address}/g, addressText);
-        }
-        extractTextFromMessages(messages) {
-            return messages.map(message => {
-                if (typeof message.content === 'string') {
-                    return message.content;
-                }
-                else if (Array.isArray(message.content)) {
-                    const textContents = message.content
-                        .filter(item => item.type === 'text')
-                        .map(item => item.text);
-                    return textContents.join(' ');
-                }
-                return '';
-            }).filter(text => text.trim() !== '');
-        }
-    }
-    class ConfigModifier extends PromptProcessor {
-        setStream(stream = false) {
-            this.stream = stream;
-            return this;
-        }
-        setEnableTools(enable = true) {
-            this.enableTools = enable;
-            return this;
         }
         writeContext(context) {
             const cleaned = this.stripReasoningContent(context);
@@ -535,8 +484,6 @@ var agentSystem = (function (exports) {
             this.messages = Array.isArray(context) ? context : [context];
             return this;
         }
-    }
-    class ModelBuilder extends ConfigModifier {
         run(appendContext, toolCall) {
             const rawMessages = [
                 { role: 'system', content: this.systemPrompt },
@@ -580,111 +527,8 @@ var agentSystem = (function (exports) {
             }
             return result;
         }
-        queryRagMessages() {
-            const userMessages = this.getLatestUserMessages();
-            const returnEvent = () => { this.ragMessages = []; return this; };
-            if (userMessages.length === 0)
-                returnEvent();
-            if (!BaseConfig.memoryReady)
-                BaseConfig.initMemory();
-            if (!BaseConfig.memoryReady)
-                returnEvent();
-            const allResults = [];
-            for (const userMessage of userMessages) {
-                const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
-                if (error) {
-                    console.error('记忆库查询失败:', error);
-                    continue;
-                }
-                if (results && results.length > 0) {
-                    allResults.push(...results);
-                }
-            }
-            if (allResults.length === 0)
-                returnEvent();
-            const seen = new Map();
-            for (const r of allResults) {
-                const existing = seen.get(r.content);
-                if (!existing || r.similarity > existing.similarity)
-                    seen.set(r.content, r);
-            }
-            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
-            console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content }));
-            return this;
-        }
-        getLatestUserMessages() {
-            const userTexts = [];
-            for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
-                const message = this.messages[i];
-                if (message.role === 'user') {
-                    if (typeof message.content === 'string') {
-                        userTexts.unshift(message.content);
-                    }
-                    else if (Array.isArray(message.content)) {
-                        const textContent = message.content
-                            .filter(item => item.type === 'text')
-                            .map(item => item.text)
-                            .join(' ');
-                        if (textContent.trim())
-                            userTexts.unshift(textContent);
-                    }
-                }
-            }
-            return userTexts;
-        }
         constructor(prompt) {
-            super();
             this.systemPrompt = this.promptCompletion(prompt);
-        }
-        dumpContext(roleName, outputPath) {
-            const timestamp = new Date().toLocaleString('zh-CN', {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-            });
-            const snapshot = {
-                timestamp,
-                role: roleName,
-                systemPrompt: this.systemPrompt,
-                messagesCount: this.messages.length,
-                messages: this.messages.map((msg, idx) => {
-                    const content = typeof msg.content === 'string'
-                        ? msg.content
-                        : JSON.stringify(msg.content);
-                    return {
-                        index: idx,
-                        role: msg.role,
-                        contentPreview: content.length > 500 ? content.slice(0, 500) + '...' : content,
-                        contentLength: content.length,
-                    };
-                }),
-                ragMessagesCount: this.ragMessages.length,
-                ragMessages: this.ragMessages.map((msg, idx) => ({
-                    index: idx,
-                    role: msg.role,
-                    contentPreview: typeof msg.content === 'string'
-                        ? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
-                        : JSON.stringify(msg.content).slice(0, 300),
-                })),
-                runtimeMessagesCount: this.runtimeMessages.length,
-                runtimeMessages: this.runtimeMessages.map((msg, idx) => ({
-                    index: idx,
-                    role: msg.role,
-                    contentPreview: typeof msg.content === 'string'
-                        ? (msg.content.length > 300 ? msg.content.slice(0, 300) + '...' : msg.content)
-                        : JSON.stringify(msg.content).slice(0, 300),
-                })),
-                stream: this.stream,
-                enableTools: this.enableTools,
-            };
-            const path = outputPath || `agent_debug_${roleName}.json`;
-            const [, error] = saveDebugFile(path, JSON.stringify(snapshot, null, 2));
-            if (error) {
-                console.error(`[${roleName}] 导出上下文失败:`, error);
-                return '';
-            }
-            console.log(`[${roleName}] 上下文快照已导出: ${path}`);
-            return path;
         }
     }
 
@@ -755,12 +599,12 @@ var agentSystem = (function (exports) {
     }
 
     class DialogueRole extends ModelBuilder {
-        async callMultimediaAndToolParsing(cache, source) {
+        async generateDialogue(cache) {
             try {
-                await source.LiteImageFile();
-                source.unreadContext.forEach(context => this.writeContext(context));
-                source.unreadContext = [];
-                this.formatHistoricalMessages(source);
+                await LiteImageFile();
+                GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
+                GlobalConfig.unreadContext = [];
+                this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
                 const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
@@ -769,16 +613,16 @@ var agentSystem = (function (exports) {
                     this.writeContext(response.body.choices?.[0]?.message);
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
                     if (hasProcessedToolCalls)
-                        return await this.callMultimediaAndToolParsing(cache, source);
+                        return await this.generateDialogue(cache);
                 }
                 this.writeContext(response.body.choices?.[0]?.message);
             }
             catch (error) {
                 console.error('请求处理错误:', error);
             }
-            this.updateMessageContent(cache, source);
+            this.updateMessageContent(cache);
         }
-        formatHistoricalMessages(source) {
+        formatHistoricalMessages() {
             if (this.messages.length === 0)
                 return;
             const totalImages = this.countTotalImages(this.messages);
@@ -789,7 +633,7 @@ var agentSystem = (function (exports) {
                         processedMessages.push(message);
                         continue;
                     }
-                    const textResult = this.summarizeMessageImages(message, source);
+                    const textResult = this.summarizeMessageImages(message);
                     if (!textResult || textResult.trim() === '')
                         continue;
                     processedMessages.push({ role: message.role, content: textResult });
@@ -801,10 +645,9 @@ var agentSystem = (function (exports) {
             const latestRole = this.messages.slice(-1)[0].role;
             if (latestRole === 'user' || latestRole === 'tool')
                 return;
-            const prompt = this.buildContinuationPrompt();
-            this.writeContext({ role: 'user', content: prompt });
+            this.writeContext({ role: 'user', content: "继续" });
         }
-        summarizeMessageImages(message, source) {
+        summarizeMessageImages(message) {
             if (typeof message.content === 'string')
                 return message.content;
             const imageItems = message.content.filter((c) => c.type === 'image_url');
@@ -813,8 +656,8 @@ var agentSystem = (function (exports) {
             if (imageItems.length === 0)
                 return textPart || null;
             try {
-                source.descriptionRole.coverContext({ role: 'user', content: imageItems });
-                const summaryRequest = source.descriptionRole.run([], []);
+                descriptionRole.coverContext({ role: 'user', content: imageItems });
+                const summaryRequest = descriptionRole.run([], []);
                 const summary = summaryRequest.body?.choices?.[0]?.message?.content;
                 if (summary && summary.trim().length > 0) {
                     return textPart ? `${textPart}\n[图片描述：${summary}]` : `[图片描述：${summary}]`;
@@ -905,65 +748,66 @@ var agentSystem = (function (exports) {
             return hasToolCalls;
         }
         ;
-        updateMessageContent(state, source) {
+        updateMessageContent(state) {
             if (state.thinkingContent.trim() !== "") {
                 const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
-                source.finalResponse = state.descriptionContent;
+                GlobalConfig.finalResponse = state.descriptionContent;
                 console.log(newThinkTag);
             }
             else
-                source.finalResponse = state.descriptionContent;
-            return source.finalResponse;
+                GlobalConfig.finalResponse = state.descriptionContent;
+            return GlobalConfig.finalResponse;
         }
-        buildContinuationPrompt() {
-            const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-            const interests = [
-                '旅行', '游戏', '音乐', '电影', '书籍', '动漫', '美食', '运动',
-                '摄影', '绘画', '手工', '编程', '天文', '历史', '哲学', '科技',
-                '宠物', '园艺', '穿搭', '舞蹈', '乐器', '写作', '钓鱼', '骑行',
-            ];
-            const doing = [
-                '正在喝一杯热茶', '正在窗边发呆', '刚刚整理完房间', '正在浏览网页',
-                '正在听一首新歌', '刚刚看完一段视频', '正在翻看旧照片', '正在写日记',
-                '正在做手工', '正在画一幅画', '正在弹琴', '正在做一道菜',
-                '正在散步', '正在看窗外的风景', '正在刷手机', '正在整理书架',
-            ];
-            const wantTo = [
-                '想去海边看日落', '想学一门新乐器', '想去看一场演唱会', '想去爬山',
-                '想养一只猫', '想尝试做一道新菜', '想去看极光', '想去逛博物馆',
-                '想学画画', '想去露营', '想写一首诗', '想去看一场电影',
-                '想去游乐园', '想学跳舞', '想去看樱花', '想开一家小店',
-            ];
-            const location = [
-                '坐在窗边的书桌前', '窝在沙发里', '躺在草地上', '站在阳台上',
-                '靠在床头', '坐在咖啡馆的角落', '在公园的长椅上', '在图书馆里',
-                '在厨房里', '在工作室里', '在花园里', '在天台上',
-            ];
-            const action = [
-                '伸了个懒腰', '托着下巴', '揉了揉眼睛', '转着手里的笔',
-                '轻轻哼着歌', '翘着二郎腿', '抱着抱枕', '拨弄着头发',
-                '用手指敲着桌面', '晃着双脚', '靠在椅背上', '侧着头',
-            ];
-            const mood = [
-                '心情很放松', '觉得有点无聊', '心情特别好', '有点小期待',
-                '感觉懒洋洋的', '很平静', '有点好奇', '心情不错',
-                '稍微有点困', '精神很好', '有点怀旧', '感觉很温暖',
-            ];
-            const pools = [
-                { label: '兴趣', items: interests },
-                { label: '正在做', items: doing },
-                { label: '想做', items: wantTo },
-                { label: '位置', items: location },
-                { label: '动作', items: action },
-                { label: '心情', items: mood },
-            ];
-            const count = 2 + Math.floor(Math.random() * 2);
-            const shuffled = [...pools].sort(() => Math.random() - 0.5);
-            const selected = shuffled.slice(0, count);
-            const parts = selected.map(p => pick(p.items));
-            const prefix = pick(['你', '现在你', '此刻你', '这会儿你',]);
-            const suffix = pick(['，聊点什么吧~', '，来聊聊吧~', '，说说看吧~', '，展开聊聊？', '，有什么想说的吗？', '，分享一下呗~',]);
-            return `${prefix}${parts.join('，')}${suffix}`;
+        getLatestUserMessages() {
+            const userTexts = [];
+            for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
+                const message = this.messages[i];
+                if (message.role === 'user') {
+                    if (typeof message.content === 'string') {
+                        userTexts.unshift(message.content);
+                    }
+                    else if (Array.isArray(message.content)) {
+                        const textContent = message.content
+                            .filter(item => item.type === 'text')
+                            .map(item => item.text)
+                            .join(' ');
+                        if (textContent.trim())
+                            userTexts.unshift(textContent);
+                    }
+                }
+            }
+            return userTexts;
+        }
+        queryRagMessages() {
+            const userMessages = this.getLatestUserMessages();
+            const returnEvent = () => { this.ragMessages = []; return this; };
+            if (userMessages.length === 0)
+                returnEvent();
+            if (!ensureMemoryReady())
+                returnEvent();
+            const allResults = [];
+            for (const userMessage of userMessages) {
+                const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
+                if (error) {
+                    console.error('记忆库查询失败:', error);
+                    continue;
+                }
+                if (results && results.length > 0) {
+                    allResults.push(...results);
+                }
+            }
+            if (allResults.length === 0)
+                returnEvent();
+            const seen = new Map();
+            for (const r of allResults) {
+                const existing = seen.get(r.content);
+                if (!existing || r.similarity > existing.similarity)
+                    seen.set(r.content, r);
+            }
+            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
+            console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content }));
+            return this;
         }
         constructor() {
             super(fileView('prompts/dialogueRole.md')[0]);
@@ -1542,639 +1386,6 @@ K:Am
         }
     }
 
-    const PERSON_PREFIX = '[人物档案 - ';
-    const EVENT_PREFIX = '[事件档案 - ';
-    const SELF_PREFIX = '[自我档案]';
-    class Prompt extends ModelBuilder {
-        currentLocation = '';
-        getCurrentLocation() {
-            if (this.currentLocation)
-                return this.currentLocation;
-            const [addressResult, error] = address();
-            if (error || !addressResult || addressResult.length === 0) {
-                this.currentLocation = '未知地点';
-            }
-            else {
-                this.currentLocation = addressResult.join(' ');
-            }
-            return this.currentLocation;
-        }
-        getCurrentTime() {
-            return new Date().toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-        }
-        formatMessages(records) {
-            return records.map((msg, idx) => {
-                const content = typeof msg.content === 'string'
-                    ? msg.content
-                    : JSON.stringify(msg.content);
-                const preview = content.length > 600 ? content.slice(0, 600) + '...' : content;
-                return `[消息${idx + 1}] 角色:${msg.role} | ${preview}`;
-            }).join('\n');
-        }
-        buildPersonExtractPrompt(records) {
-            const currentTime = this.getCurrentTime();
-            const currentLocation = this.getCurrentLocation();
-            return `请从以下对话消息中提取所有人物信息，为每个人物生成一份档案。
-
-【对话消息】
-${this.formatMessages(records)}
-
-【系统上下文】
-- 当前时间: ${currentTime}
-- 当前位置: ${currentLocation}
-
-【提取规则】
-1. 从消息中识别所有被提及的人物（包括说话者自身），为每个独立人物生成一份档案
-2. 同一个人物不要重复提取
-3. 若某字段在消息中未提及，则留空（不要编造）
-4. 字段说明：
-   - name: 人物名称（必填，如"月华"、"星光阁"）
-   - nickname: 外号或别名
-   - gender: 性别
-   - personality: 性格特征描述
-   - clothing: 服饰特点描述
-   - location: 当前所在地点
-   - dietaryPrefs: 饮食偏好
-   - currentActivity: 当前正在进行的活动
-
-【输出格式】
-请输出 JSON 对象，包含 items 数组：
-\`\`\`json
-{
-  "items": [
-    {
-      "name": "人物名称",
-      "nickname": "外号",
-      "gender": "性别",
-      "personality": "性格特征",
-      "clothing": "服饰特点",
-      "location": "所在地点",
-      "dietaryPrefs": "饮食偏好",
-      "currentActivity": "当前活动"
-    }
-  ]
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        buildPersonMergePrompt(existingArchive, newInfo) {
-            return `请将以下人物档案的新信息合并到已有档案中，补充和更新档案内容。
-
-【已有档案】
-${existingArchive}
-
-【新信息】
-${JSON.stringify(newInfo, null, 2)}
-
-【合并规则】
-1. 保留已有档案中所有仍然有效的信息
-2. 用新信息补充和更新对应字段
-3. 若新信息与已有信息冲突，以新信息为准（新信息更有时效性）
-4. 不要删除已有档案中未与新信息冲突的字段
-
-【输出格式】
-请输出合并后的完整档案 JSON：
-\`\`\`json
-{
-  "name": "人物名称",
-  "nickname": "外号",
-  "gender": "性别",
-  "personality": "性格特征",
-  "clothing": "服饰特点",
-  "location": "所在地点",
-  "dietaryPrefs": "饮食偏好",
-  "currentActivity": "当前活动"
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        buildEventExtractPrompt(records) {
-            const currentTime = this.getCurrentTime();
-            const currentLocation = this.getCurrentLocation();
-            return `请从以下对话消息中提取所有事件信息，为每个独立事件生成一份档案。
-
-【对话消息】
-${this.formatMessages(records)}
-
-【系统上下文】
-- 当前时间: ${currentTime}
-- 当前位置: ${currentLocation}
-
-【提取规则】
-1. 从消息中识别所有已发生或正在发生的事件
-2. 仅提取具有明确信息的事件，不要编造
-3. 字段说明：
-   - name: 事件简称（必填，如"星月祭典"、"代码审查"）
-   - type: 事件类型（如"社交活动"、"工作会议"、"个人事务"）
-   - time: 发生时间（从消息中提取，若无则使用当前时间）
-   - location: 发生地点
-   - keyNotes: 关键注意事项或重要细节
-
-【输出格式】
-请输出 JSON 对象，包含 items 数组：
-\`\`\`json
-{
-  "items": [
-    {
-      "name": "事件简称",
-      "type": "事件类型",
-      "time": "发生时间",
-      "location": "发生地点",
-      "keyNotes": "关键注意事项"
-    }
-  ]
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        buildEventMergePrompt(existingArchive, newInfo) {
-            return `请将以下事件档案的新信息合并到已有档案中，补充和更新档案内容。
-
-【已有档案】
-${existingArchive}
-
-【新信息】
-${JSON.stringify(newInfo, null, 2)}
-
-【合并规则】
-1. 保留已有档案中所有仍然有效的信息
-2. 用新信息补充和更新对应字段
-3. 若新信息与已有信息冲突，以新信息为准
-
-【输出格式】
-请输出合并后的完整档案 JSON：
-\`\`\`json
-{
-  "name": "事件简称",
-  "type": "事件类型",
-  "time": "发生时间",
-  "location": "发生地点",
-  "keyNotes": "关键注意事项"
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        buildSelfExtractPrompt(records) {
-            return `请从以下对话消息中提取关于"月华"（即说话者自身）的当前状态信息。
-
-【对话消息】
-${this.formatMessages(records)}
-
-【提取规则】
-1. 仅提取关于月华自身的信息
-2. 字段说明：
-   - mood: 当前心情状态（如"开心"、"疲惫"、"专注"）
-   - clothing: 当前服饰描述
-   - activity: 正在进行的活动
-   - needs: 当前需求或期望获取的物品/信息
-3. 若某字段在消息中未提及，则留空
-
-【输出格式】
-请输出 JSON 对象：
-\`\`\`json
-{
-  "mood": "心情状态",
-  "clothing": "服饰描述",
-  "activity": "正在进行的活动",
-  "needs": "当前需求"
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        buildSelfMergePrompt(existingArchive, newInfo) {
-            return `请将以下自我档案的新信息合并到已有档案中，补充和更新档案内容。
-
-【已有档案】
-${existingArchive}
-
-【新信息】
-${JSON.stringify(newInfo, null, 2)}
-
-【合并规则】
-1. 保留已有档案中所有仍然有效的信息
-2. 用新信息补充和更新对应字段
-3. 若新信息与已有信息冲突，以新信息为准
-
-【输出格式】
-请输出合并后的完整档案 JSON：
-\`\`\`json
-{
-  "mood": "心情状态",
-  "clothing": "服饰描述",
-  "activity": "正在进行的活动",
-  "needs": "当前需求"
-}
-\`\`\`
-
-仅输出 JSON，不要包含其他说明文字。`;
-        }
-        formatPersonArchive(archive) {
-            const fields = [];
-            if (archive.name)
-                fields.push(`名称: ${archive.name}`);
-            if (archive.nickname)
-                fields.push(`外号: ${archive.nickname}`);
-            if (archive.gender)
-                fields.push(`性别: ${archive.gender}`);
-            if (archive.personality)
-                fields.push(`性格: ${archive.personality}`);
-            if (archive.clothing)
-                fields.push(`服饰: ${archive.clothing}`);
-            if (archive.location)
-                fields.push(`地点: ${archive.location}`);
-            if (archive.dietaryPrefs)
-                fields.push(`饮食: ${archive.dietaryPrefs}`);
-            if (archive.currentActivity)
-                fields.push(`活动: ${archive.currentActivity}`);
-            return `${PERSON_PREFIX}${archive.name}]\n${fields.join('\n')}`;
-        }
-        formatEventArchive(archive) {
-            const fields = [];
-            if (archive.name)
-                fields.push(`事件: ${archive.name}`);
-            if (archive.type)
-                fields.push(`类型: ${archive.type}`);
-            if (archive.time)
-                fields.push(`时间: ${archive.time}`);
-            if (archive.location)
-                fields.push(`地点: ${archive.location}`);
-            if (archive.keyNotes)
-                fields.push(`注意事项: ${archive.keyNotes}`);
-            return `${EVENT_PREFIX}${archive.name}]\n${fields.join('\n')}`;
-        }
-        formatSelfArchive(archive) {
-            const fields = [];
-            if (archive.mood)
-                fields.push(`心情: ${archive.mood}`);
-            if (archive.clothing)
-                fields.push(`服饰: ${archive.clothing}`);
-            if (archive.activity)
-                fields.push(`活动: ${archive.activity}`);
-            if (archive.needs)
-                fields.push(`需求: ${archive.needs}`);
-            return `${SELF_PREFIX}\n${fields.join('\n')}`;
-        }
-        parsePersonArchive(content) {
-            try {
-                const result = { name: '' };
-                const lines = content.replace(PERSON_PREFIX, '').replace(/\]$/, '').split('\n');
-                const headerMatch = content.match(/\[人物档案 - (.+?)\]/);
-                if (headerMatch)
-                    result.name = headerMatch[1];
-                for (const line of lines) {
-                    if (line.startsWith('名称: '))
-                        result.name = result.name || line.slice(4);
-                    else if (line.startsWith('外号: '))
-                        result.nickname = line.slice(4);
-                    else if (line.startsWith('性别: '))
-                        result.gender = line.slice(4);
-                    else if (line.startsWith('性格: '))
-                        result.personality = line.slice(4);
-                    else if (line.startsWith('服饰: '))
-                        result.clothing = line.slice(4);
-                    else if (line.startsWith('地点: '))
-                        result.location = line.slice(4);
-                    else if (line.startsWith('饮食: '))
-                        result.dietaryPrefs = line.slice(4);
-                    else if (line.startsWith('活动: '))
-                        result.currentActivity = line.slice(4);
-                }
-                return result.name ? result : null;
-            }
-            catch {
-                return null;
-            }
-        }
-        parseEventArchive(content) {
-            try {
-                const result = { name: '' };
-                const headerMatch = content.match(/\[事件档案 - (.+?)\]/);
-                if (headerMatch)
-                    result.name = headerMatch[1];
-                const lines = content.replace(EVENT_PREFIX, '').replace(/\]$/, '').split('\n');
-                for (const line of lines) {
-                    if (line.startsWith('事件: '))
-                        result.name = result.name || line.slice(4);
-                    else if (line.startsWith('类型: '))
-                        result.type = line.slice(4);
-                    else if (line.startsWith('时间: '))
-                        result.time = line.slice(4);
-                    else if (line.startsWith('地点: '))
-                        result.location = line.slice(4);
-                    else if (line.startsWith('注意事项: '))
-                        result.keyNotes = line.slice(4);
-                }
-                return result.name ? result : null;
-            }
-            catch {
-                return null;
-            }
-        }
-        parseSelfArchive(content) {
-            try {
-                const result = {};
-                const lines = content.replace(SELF_PREFIX, '').split('\n');
-                for (const line of lines) {
-                    if (line.startsWith('心情: '))
-                        result.mood = line.slice(4);
-                    else if (line.startsWith('服饰: '))
-                        result.clothing = line.slice(4);
-                    else if (line.startsWith('活动: '))
-                        result.activity = line.slice(4);
-                    else if (line.startsWith('需求: '))
-                        result.needs = line.slice(4);
-                }
-                return (result.mood || result.clothing || result.activity || result.needs) ? result : null;
-            }
-            catch {
-                return null;
-            }
-        }
-    }
-    class Toolchain extends Prompt {
-        queryMemory(queryText, topK = 10) {
-            if (!queryText || queryText.trim().length === 0)
-                return [];
-            const [results, error] = memoryQuery('lunar_messages', queryText.trim(), topK);
-            if (error) {
-                console.error('[记忆者] 记忆库查询失败:', error);
-                return [];
-            }
-            return results || [];
-        }
-        queryArchiveByPrefix(prefix, topK = 50) {
-            const allResults = this.queryMemory(prefix, topK);
-            return allResults.filter(r => r.content.startsWith(prefix));
-        }
-        deleteRecords(ids) {
-            const uniqueIds = [...new Set(ids.filter(id => id && id.trim()))];
-            if (uniqueIds.length === 0)
-                return;
-            console.log(`[记忆者] 删除 ${uniqueIds.length} 条旧档案`);
-            for (const id of uniqueIds) {
-                const [, error] = memoryDelete('lunar_messages', id.trim());
-                if (error)
-                    console.error(`[记忆者] 删除记录 ${id} 失败:`, error);
-                else
-                    console.log(`[记忆者] 已删除记录 ${id}`);
-            }
-        }
-        writeArchive(content) {
-            if (!content || content.trim().length === 0)
-                return;
-            const [, error] = memoryAdd('lunar_messages', 'assistant', content.trim());
-            if (error)
-                console.error('[记忆者] 写入档案失败:', error);
-            else
-                console.log(`[记忆者] 已写入档案: ${content.slice(0, 60)}...`);
-        }
-        parseJsonResponse(content) {
-            try {
-                const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-                const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
-                return JSON.parse(jsonStr);
-            }
-            catch (error) {
-                console.error('[记忆者] JSON 解析失败:', error, '原始内容:', content.slice(0, 200));
-                return null;
-            }
-        }
-        runLLM(prompt) {
-            this.coverContext({ role: 'user', content: prompt });
-            this.runtimeMessages = [];
-            try {
-                const response = this.run([], []);
-                return response.body?.choices?.[0]?.message?.content || '';
-            }
-            catch (error) {
-                console.error('[记忆者] LLM 推理失败:', error);
-                return '';
-            }
-        }
-        runMergeLLM(prompt) {
-            const content = this.runLLM(prompt);
-            if (!content)
-                return null;
-            return this.parseJsonResponse(content);
-        }
-    }
-    class MemoryRole extends Toolchain {
-        ARCHIVE_QUERY_TOPK = 50;
-        constructor() {
-            super(fileView('prompts/memoryRole.md')[0]);
-        }
-        memorizeHistoricalRecords() {
-            console.log('[记忆者] 开始档案收集与整理');
-            if (GlobalConfig.unreadRecords.length === 0) {
-                console.log('[记忆者] 没有未读记录需要整理');
-                return;
-            }
-            if (!BaseConfig.memoryReady) {
-                BaseConfig.initMemory();
-                if (!BaseConfig.memoryReady) {
-                    console.warn('[记忆者] 记忆库未就绪，保留未读记录待下次整理');
-                    return;
-                }
-            }
-            const records = [...GlobalConfig.unreadRecords];
-            try {
-                this.processPersonArchives(records);
-                this.processEventArchives(records);
-                this.processSelfArchive(records);
-                console.log('[记忆者] 档案整理完成');
-                GlobalConfig.unreadRecords = [];
-            }
-            catch (error) {
-                console.error('[记忆者] 档案整理失败，保留未读记录待下次重试:', error);
-            }
-        }
-        processPersonArchives(records) {
-            console.log('[记忆者] === 阶段一：人物档案处理 ===');
-            const prompt = this.buildPersonExtractPrompt(records);
-            const content = this.runLLM(prompt);
-            if (!content) {
-                console.log('[记忆者] 人物档案提取未获得有效结果');
-                return;
-            }
-            const result = this.parseJsonResponse(content);
-            if (!result || !result.items || result.items.length === 0) {
-                console.log('[记忆者] 未提取到人物信息');
-                return;
-            }
-            console.log(`[记忆者] 提取到 ${result.items.length} 个人物档案`);
-            for (const person of result.items) {
-                if (!person.name)
-                    continue;
-                this.processSinglePersonArchive(person);
-            }
-        }
-        processSinglePersonArchive(newInfo) {
-            const prefix = `${PERSON_PREFIX}${newInfo.name}]`;
-            console.log(`[记忆者] 处理人物档案: ${newInfo.name}`);
-            const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
-            if (existingRecords.length === 0) {
-                const archiveText = this.formatPersonArchive(newInfo);
-                this.writeArchive(archiveText);
-                console.log(`[记忆者] 新增人物档案: ${newInfo.name}`);
-                return;
-            }
-            console.log(`[记忆者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
-            for (const record of existingRecords) {
-                const oldArchive = this.parsePersonArchive(record.content);
-                if (!oldArchive) {
-                    this.deleteRecords([record.id]);
-                    continue;
-                }
-                const mergePrompt = this.buildPersonMergePrompt(record.content, newInfo);
-                const merged = this.runMergeLLM(mergePrompt);
-                if (merged && merged.name) {
-                    this.deleteRecords([record.id]);
-                    const archiveText = this.formatPersonArchive(merged);
-                    this.writeArchive(archiveText);
-                    console.log(`[记忆者] 合并更新人物档案: ${merged.name}`);
-                }
-                else {
-                    const archiveText = this.formatPersonArchive(newInfo);
-                    this.writeArchive(archiveText);
-                    console.log(`[记忆者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
-                }
-            }
-        }
-        processEventArchives(records) {
-            console.log('[记忆者] === 阶段二：事件档案处理 ===');
-            const prompt = this.buildEventExtractPrompt(records);
-            const content = this.runLLM(prompt);
-            if (!content) {
-                console.log('[记忆者] 事件档案提取未获得有效结果');
-                return;
-            }
-            const result = this.parseJsonResponse(content);
-            if (!result || !result.items || result.items.length === 0) {
-                console.log('[记忆者] 未提取到事件信息');
-                return;
-            }
-            console.log(`[记忆者] 提取到 ${result.items.length} 个事件档案`);
-            for (const event of result.items) {
-                if (!event.name)
-                    continue;
-                this.processSingleEventArchive(event);
-            }
-        }
-        processSingleEventArchive(newInfo) {
-            const prefix = `${EVENT_PREFIX}${newInfo.name}]`;
-            console.log(`[记忆者] 处理事件档案: ${newInfo.name}`);
-            const existingRecords = this.queryArchiveByPrefix(prefix, this.ARCHIVE_QUERY_TOPK);
-            if (existingRecords.length === 0) {
-                const archiveText = this.formatEventArchive(newInfo);
-                this.writeArchive(archiveText);
-                console.log(`[记忆者] 新增事件档案: ${newInfo.name}`);
-                return;
-            }
-            console.log(`[记忆者] 发现 ${newInfo.name} 的旧档案 ${existingRecords.length} 条，执行合并`);
-            for (const record of existingRecords) {
-                const mergePrompt = this.buildEventMergePrompt(record.content, newInfo);
-                const merged = this.runMergeLLM(mergePrompt);
-                if (merged && merged.name) {
-                    this.deleteRecords([record.id]);
-                    const archiveText = this.formatEventArchive(merged);
-                    this.writeArchive(archiveText);
-                    console.log(`[记忆者] 合并更新事件档案: ${merged.name}`);
-                }
-                else {
-                    const archiveText = this.formatEventArchive(newInfo);
-                    this.writeArchive(archiveText);
-                    console.log(`[记忆者] 合并失败，新信息作为补充写入: ${newInfo.name}`);
-                }
-            }
-        }
-        processSelfArchive(records) {
-            console.log('[记忆者] === 阶段三：自我档案处理 ===');
-            const prompt = this.buildSelfExtractPrompt(records);
-            const content = this.runLLM(prompt);
-            if (!content) {
-                console.log('[记忆者] 自我档案提取未获得有效结果');
-                return;
-            }
-            const newInfo = this.parseJsonResponse(content);
-            if (!newInfo || (!newInfo.mood && !newInfo.clothing && !newInfo.activity && !newInfo.needs)) {
-                console.log('[记忆者] 未提取到有效的自我信息');
-                return;
-            }
-            console.log('[记忆者] 处理自我档案');
-            const existingRecords = this.queryArchiveByPrefix(SELF_PREFIX, this.ARCHIVE_QUERY_TOPK);
-            if (existingRecords.length === 0) {
-                const archiveText = this.formatSelfArchive(newInfo);
-                this.writeArchive(archiveText);
-                console.log('[记忆者] 新增自我档案');
-                return;
-            }
-            console.log(`[记忆者] 发现自我旧档案 ${existingRecords.length} 条，执行合并`);
-            for (const record of existingRecords) {
-                const mergePrompt = this.buildSelfMergePrompt(record.content, newInfo);
-                const merged = this.runMergeLLM(mergePrompt);
-                if (merged && (merged.mood || merged.clothing || merged.activity || merged.needs)) {
-                    this.deleteRecords([record.id]);
-                    const archiveText = this.formatSelfArchive(merged);
-                    this.writeArchive(archiveText);
-                    console.log('[记忆者] 合并更新自我档案');
-                }
-                else {
-                    const archiveText = this.formatSelfArchive(newInfo);
-                    this.writeArchive(archiveText);
-                    console.log('[记忆者] 合并失败，新信息作为补充写入');
-                }
-            }
-        }
-        persistDiscardedMessages(discarded) {
-            console.log('[记忆者] 开始持久化被抛弃的消息');
-            if (!BaseConfig.memoryReady)
-                BaseConfig.initMemory();
-            if (!BaseConfig.memoryReady)
-                return;
-            for (const message of discarded) {
-                const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-                memoryAdd('lunar_messages', message.role, content);
-            }
-        }
-        queryHistoricalRecords(queryText, topK = 10) {
-            if (!BaseConfig.memoryReady)
-                BaseConfig.initMemory();
-            if (!BaseConfig.memoryReady)
-                return [];
-            const [results, error] = memoryQuery('lunar_messages', queryText, topK);
-            if (error) {
-                console.error('[记忆者] 查询历史记录失败:', error);
-                return [];
-            }
-            if (!results || results.length === 0)
-                return [];
-            return results.map((r) => ({
-                id: r.id,
-                role: r.role,
-                content: r.content
-            }));
-        }
-        getHistoricalContext(maxResults = 5) {
-            const records = this.queryHistoricalRecords('近期对话 重要事件', maxResults);
-            if (records.length === 0)
-                return '';
-            return records.map(r => r.content).join('\n');
-        }
-    }
-
     class ViewerRole extends ModelBuilder {
         BATCH_SIZE = 20;
         SECONDARY_SUMMARY_INTERVAL = 5;
@@ -2483,289 +1694,264 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
 
-    class AgentDefine {
-        static instance;
-        descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
-        dialogueRole = new DialogueRole();
-        learnerRole = new LearnerRole();
-        painterRole = new PainterRole();
-        musicianRole = new MusicianRole();
-        viewerRole = new ViewerRole();
-        actorRole = new ActorRole();
-        memoryRole = new MemoryRole();
-        unreadContext = [];
-        unreadVideoUrl = [];
-        finalResponse = "";
-        defaultAnswers = [
-            '月华摔疼了，要等星光阁哥哥来修……',
-            '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
-            '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
-            '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
-            '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
-        ];
-        get randomDefaultMessage() {
-            return this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)];
+    const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
+    const learnerRole = new LearnerRole();
+    const painterRole = new PainterRole();
+    const musicianRole = new MusicianRole();
+    const actorRole = new ActorRole();
+    const dialogueRole = new DialogueRole();
+    const viewerRole = new ViewerRole();
+    const defaultAnswers = [
+        '月华摔疼了，要等星光阁哥哥来修……',
+        '糟糕啦，请告诉星光阁哥哥，月华遇到麻烦了！',
+        '完蛋啦！快给星光阁哥哥传个信儿——月华碰上事儿啦，急得像热锅上的蚂蚁转圈圈呢！',
+        '完犊子！快帮我给星光阁哥哥递句话——月华摊上事儿啦，十万火急',
+        '救命！快给星光阁哥哥递个加急小纸条：月华那边遇到麻烦啦，速来捞人！',
+    ];
+    function randomDefaultMessage() {
+        return defaultAnswers[RandomFloor(0, defaultAnswers.length - 1)];
+    }
+    async function analysisVideoFile(videoUrl, userNeeds) {
+        const cachedPrompt = getPromptFromKnowledge(videoUrl);
+        if (cachedPrompt) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
+            console.log('[观影者] 命中视频缓存，直接返回');
+            return;
         }
-        constructor() {
-            fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+        console.log('[观影者] 开始提取视频关键帧...');
+        const [images, error] = keyframe(videoUrl, './cache');
+        if (images.length === 0 || error) {
+            console.error('[观影者] 关键帧提取失败:', error);
+            throw new Error('提取关键帧失败');
         }
-        async analysisVideoFile(videoUrl, userNeeds) {
-            const cachedPrompt = getPromptFromKnowledge(videoUrl);
-            if (cachedPrompt) {
-                this.unreadContext.push({ role: 'user', content: cachedPrompt });
-                console.log('[观影者] 命中视频缓存，直接返回');
-                return;
-            }
-            console.log('[观影者] 开始提取视频关键帧...');
-            const [images, error] = keyframe(videoUrl, './cache');
-            if (images.length === 0 || error) {
-                console.error('[观影者] 关键帧提取失败:', error);
-                throw new Error('提取关键帧失败');
-            }
-            console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
-            const keyframes = images.map((frame) => ({
-                data: frame.data,
-                timestamp: frame.timestamp || ''
-            }));
-            console.log('[观影者] 开始观看视频...');
-            const videoSummary = await this.viewerRole.watchVideo(keyframes);
-            console.log('[观影者] 视频观看完成');
-            if (videoSummary && videoSummary.trim().length > 0) {
-                this.unreadContext.push({ role: 'user', content: videoSummary });
-            }
-            else {
-                this.unreadContext.push({
-                    role: 'user',
-                    content: this.defaultAnswers[RandomFloor(0, this.defaultAnswers.length - 1)]
-                });
-            }
-            if (userNeeds.trim().length > 0) {
-                this.unreadContext.push({ role: 'user', content: userNeeds });
-            }
-            if (videoSummary) {
-                savePromptToKnowledge(videoUrl, videoSummary);
-                console.log('[观影者] 观后感已缓存');
-            }
+        console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
+        const keyframes = images.map((frame) => ({
+            data: frame.data,
+            timestamp: frame.timestamp || ''
+        }));
+        console.log('[观影者] 开始观看视频...');
+        const videoSummary = await viewerRole.watchVideo(keyframes);
+        console.log('[观影者] 视频观看完成');
+        if (videoSummary && videoSummary.trim().length > 0) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
         }
-        async LiteImageFile() {
-            for (let message of this.unreadContext) {
-                if (typeof message.content === 'string')
-                    continue;
-                const newContent = [];
-                for (let item of message.content) {
-                    if (item.type == 'text')
-                        newContent.push(item);
-                    else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
-                        await this.analysisVideoFile(item.image_url.url, '');
-                    }
-                    else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
-                        const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
-                        if (error) {
-                            console.error('[获取图片文件失败]:', error.message, error.stack);
-                            continue;
-                        }
-                        const [resizedImages, error1] = resizeImage(response.body);
-                        if (error1) {
-                            console.error('[缩放图片失败]:', error1.message, error1.stack);
-                            continue;
-                        }
-                        resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
-                    }
-                }
-                message.content = newContent;
-            }
+        else {
+            GlobalConfig.unreadContext.push({ role: 'user', content: defaultAnswers[RandomFloor(0, defaultAnswers.length - 1)] });
         }
-        dumpAllContexts(outputDir) {
-            if (!GlobalConfig.debugMode)
-                return [];
-            const dir = outputDir || 'd:\\Lunar_Astral_Agents\\local_data\\documents\\debug';
-            const results = [];
-            const dialoguePath = this.dialogueRole.dumpContext('对话者', `${dir}\\agent_debug_对话者.json`);
-            if (dialoguePath)
-                results.push(dialoguePath);
-            const learnerPath = this.learnerRole.dumpContext(this.dialogueRole.messages, this.unreadContext, `${dir}\\agent_debug_学习者.json`);
-            if (learnerPath)
-                results.push(learnerPath);
-            const painterPath = this.painterRole.dumpContext('绘制者', `${dir}\\agent_debug_绘制者.json`);
-            if (painterPath)
-                results.push(painterPath);
-            const musicianPath = this.musicianRole.dumpContext('演奏者', `${dir}\\agent_debug_演奏者.json`);
-            if (musicianPath)
-                results.push(musicianPath);
-            const viewerPath = this.viewerRole.dumpContext('观影者', `${dir}\\agent_debug_观影者.json`);
-            if (viewerPath)
-                results.push(viewerPath);
-            const actorPath = this.actorRole.dumpContext('行动者', `${dir}\\agent_debug_行动者.json`);
-            if (actorPath)
-                results.push(actorPath);
-            const memoryPath = this.memoryRole.dumpContext('记忆者', `${dir}\\agent_debug_记忆者.json`);
-            if (memoryPath)
-                results.push(memoryPath);
-            const indexData = {
-                timestamp: new Date().toLocaleString('zh-CN', {
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-                }),
-                unreadContextCount: this.unreadContext.length,
-                unreadVideoUrlCount: this.unreadVideoUrl.length,
-                unreadRecordsCount: GlobalConfig.unreadRecords.length,
-                finalResponse: this.finalResponse,
-                exportedFiles: results,
-            };
-            const indexPath = `${dir}\\agent_debug_index.json`;
-            const [, indexError] = saveDebugFile(indexPath, JSON.stringify(indexData, null, 2));
-            if (!indexError)
-                results.push(indexPath);
-            console.log(`[智能体] 已导出 ${results.length} 个上下文文件到 ${dir}`);
-            return results;
+        if (userNeeds.trim().length > 0) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
+        }
+        if (videoSummary) {
+            savePromptToKnowledge(videoUrl, videoSummary);
+            console.log('[观影者] 观后感已缓存');
         }
     }
-
-    class LunarAgent extends AgentDefine {
-        speakWeight = 1;
-        silenceCount = 0;
-        reasoningInProgress = false;
-        async batchProcessVideoFiles(userNeeds) {
-            if (this.unreadVideoUrl.length === 0)
-                return;
-            for (const videoUrl of this.unreadVideoUrl) {
-                try {
-                    await this.analysisVideoFile(videoUrl, userNeeds || '');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+    async function LiteImageFile() {
+        for (let message of GlobalConfig.unreadContext) {
+            if (typeof message.content === 'string')
+                continue;
+            const newContent = [];
+            for (let item of message.content) {
+                if (item.type == 'text')
+                    newContent.push(item);
+                else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                    await analysisVideoFile(item.image_url.url, '');
                 }
-                catch (error) {
-                    continue;
+                else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
+                    const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                    if (error) {
+                        console.error('[获取图片文件失败]:', error.message, error.stack);
+                        continue;
+                    }
+                    const [resizedImages, error1] = resizeImage(response.body);
+                    if (error1) {
+                        console.error('[缩放图片失败]:', error1.message, error1.stack);
+                        continue;
+                    }
+                    resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
                 }
             }
-            this.unreadVideoUrl = [];
+            message.content = newContent;
         }
-        async createChatMessage() {
-            const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
-            await this.dialogueRole.callMultimediaAndToolParsing(cache, this);
-            this.speakWeight--;
-            return this.finalResponse;
-        }
-        async thoughtLoopTickEvent() {
-            if (this.reasoningInProgress)
-                return;
+    }
+    async function batchProcessVideoFiles(userNeeds) {
+        if (GlobalConfig.unreadVideoUrl.length === 0)
+            return;
+        for (const videoUrl of GlobalConfig.unreadVideoUrl) {
             try {
-                this.reasoningInProgress = true;
-                this.syncLTPXToolStatus();
-                await this.pullExternalMessages();
-                for (const item of checkDueItems()) {
-                    this.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
-                }
-                const messageLength = this.unreadContext.length + this.unreadVideoUrl.length;
-                const messageType = messageLength === 0 ? 'response' : 'active';
-                const allowSpeak = RandomFloor(15, 100) < this.speakWeight;
-                if (messageLength === 0 && !allowSpeak) {
-                    this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                    this.reasoningInProgress = false;
-                    return;
-                }
-                if (messageLength === 0 && allowSpeak && this.silenceCount < 30) {
-                    this.silenceCount = Math.min(this.silenceCount + 1, 100);
-                    this.reasoningInProgress = false;
-                    return;
-                }
-                this.silenceCount = 0;
-                if (messageLength === 0)
-                    this.speakWeight = 0;
-                await this.batchProcessVideoFiles();
-                await this.createChatMessage();
-                if (!this.finalResponse.trim().length)
-                    throw new Error('消息响应为空');
-                if (GlobalConfig.unreadRecords.length > 30)
-                    this.memoryRole.memorizeHistoricalRecords();
-                const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(this.finalResponse);
-                if (!textChunks.length)
-                    throw new Error('清洗后的文本为空');
-                if (actionBlocks.length)
-                    pushContext('action_block', actionBlocks.join(' | '), '');
-                if (emotionBlocks.length)
-                    pushContext('emotion', emotionBlocks.join(' | '), '');
-                for (const thinking of thinkingBlocks) {
-                    pushContext(messageType, thinking, '');
-                }
-                for (const code of codeBlocks) {
-                    pushContext(messageType, code, '');
-                }
-                for (const chunk of textChunks) {
-                    let audio = '';
-                    const [audioData, err] = tts(chunk.tts);
-                    if (!err && audioData)
-                        audio = audioData;
-                    pushContext(messageType, chunk.display, audio);
-                }
-                this.dumpAllContexts();
+                await analysisVideoFile(videoUrl, userNeeds || '');
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
             catch (error) {
-                const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
-                if (readErr)
-                    console.error('读取提示音失败:', readErr);
-                console.error(error.message, ' || ', error.stack);
-                pushContext('active', this.randomDefaultMessage, promptSound);
-                this.resetAgentState();
-            }
-            this.reasoningInProgress = false;
-        }
-        resetAgentState() {
-            this.descriptionRole.coverContext([]);
-            this.dialogueRole.coverContext([]);
-            this.learnerRole.messages = [];
-            this.painterRole.coverContext([]);
-            this.musicianRole.coverContext([]);
-            this.viewerRole.coverContext([]);
-            this.actorRole.coverContext([]);
-            this.memoryRole.coverContext([]);
-            this.unreadContext = [];
-            this.unreadVideoUrl = [];
-        }
-        syncLTPXToolStatus() {
-            try {
-                const statusJSON = getLTPXToolStatus();
-                if (!statusJSON || statusJSON === '{}')
-                    return;
-                const status = JSON.parse(statusJSON);
-                if ((status.pendingLoads && status.pendingLoads.length > 0) ||
-                    (status.pendingUnloads && status.pendingUnloads.length > 0)) {
-                    processLTPXChanges(statusJSON);
-                }
-            }
-            catch (e) {
-                console.error('LTPX 工具状态同步失败:', e);
+                continue;
             }
         }
-        async pullExternalMessages() {
-            pullContext().forEach(message => this.writeMessage(message.role, message.content));
-            pullVideoUrl().forEach(videoUrl => { this.writeVideoUrl(videoUrl); });
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        GlobalConfig.unreadVideoUrl = [];
+    }
+    async function createChatMessage() {
+        const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
+        await dialogueRole.generateDialogue(cache);
+        GlobalConfig.speakWeight--;
+        return GlobalConfig.finalResponse;
+    }
+    async function thoughtLoopTickEvent() {
+        if (GlobalConfig.reasoningInProgress)
+            return;
+        try {
+            GlobalConfig.reasoningInProgress = true;
+            syncLTPXToolStatus();
+            await pullExternalMessages();
+            for (const item of checkDueItems()) {
+                GlobalConfig.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+            }
+            const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
+            const messageType = messageLength === 0 ? 'response' : 'active';
+            const allowSpeak = RandomFloor(15, 100) < GlobalConfig.speakWeight;
+            if (messageLength === 0 && !allowSpeak) {
+                GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
+                GlobalConfig.reasoningInProgress = false;
+                return;
+            }
+            if (messageLength === 0 && allowSpeak && GlobalConfig.silenceCount < 30) {
+                GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
+                GlobalConfig.reasoningInProgress = false;
+                return;
+            }
+            GlobalConfig.silenceCount = 0;
+            if (messageLength === 0)
+                GlobalConfig.speakWeight = 0;
+            await batchProcessVideoFiles();
+            await createChatMessage();
+            if (!GlobalConfig.finalResponse.trim().length)
+                throw new Error('消息响应为空');
+            const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+            if (!textChunks.length)
+                throw new Error('清洗后的文本为空');
+            if (actionBlocks.length)
+                pushContext('action_block', actionBlocks.join(' | '), '');
+            if (emotionBlocks.length)
+                pushContext('emotion', emotionBlocks.join(' | '), '');
+            for (const thinking of thinkingBlocks) {
+                pushContext(messageType, thinking, '');
+            }
+            for (const code of codeBlocks) {
+                pushContext(messageType, code, '');
+            }
+            for (const chunk of textChunks) {
+                let audio = '';
+                const [audioData, err] = tts(chunk.tts);
+                if (!err && audioData)
+                    audio = audioData;
+                pushContext(messageType, chunk.display, audio);
+            }
+            if (GlobalConfig.unreadRecords.length >= 1)
+                memorizeUnreadRecords();
         }
-        writeMessage(role, messages) {
-            this.unreadContext.push({ role, content: messages });
-            this.speakWeight += RandomFloor(1, 3);
-            if (typeof messages === 'string')
-                messages = [{ type: 'text', text: messages }];
-            messages.forEach(message => { if (message.type === 'text')
-                console.log(message.text); });
+        catch (error) {
+            const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+            if (readErr)
+                console.error('读取提示音失败:', readErr);
+            console.error(error.message, ' || ', error.stack);
+            pushContext('active', randomDefaultMessage(), promptSound);
+            resetAgentState();
         }
-        writeVideoUrl(videoUrl) {
-            console.log('写入视频文件:' + videoUrl);
-            this.unreadVideoUrl.push(videoUrl);
-            this.speakWeight += RandomFloor(1, 3);
+        GlobalConfig.reasoningInProgress = false;
+    }
+    async function pullExternalMessages() {
+        pullContext().forEach(message => writeMessage(message.role, message.content));
+        pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    async function messageWrite(role, messages, timeout) {
+        await new Promise(resolve => setTimeout(resolve, timeout));
+        if (messages.length > 0)
+            writeMessage(role, messages);
+    }
+    function writeMessage(role, messages) {
+        GlobalConfig.unreadContext.push({ role, content: messages });
+        GlobalConfig.speakWeight += RandomFloor(1, 3);
+        if (typeof messages === 'string')
+            messages = [{ type: 'text', text: messages }];
+        messages.forEach(message => { if (message.type === 'text')
+            console.log(message.text); });
+    }
+    function writeVideoUrl(videoUrl) {
+        console.log('写入视频文件:' + videoUrl);
+        GlobalConfig.unreadVideoUrl.push(videoUrl);
+        GlobalConfig.speakWeight += RandomFloor(1, 3);
+    }
+    function resetAgentState() {
+        descriptionRole.coverContext([]);
+        dialogueRole.coverContext([]);
+        learnerRole.messages = [];
+        painterRole.coverContext([]);
+        musicianRole.coverContext([]);
+        viewerRole.coverContext([]);
+        actorRole.coverContext([]);
+        GlobalConfig.unreadContext = [];
+        GlobalConfig.unreadVideoUrl = [];
+    }
+    function syncLTPXToolStatus() {
+        try {
+            const statusJSON = getLTPXToolStatus();
+            if (!statusJSON || statusJSON === '{}')
+                return;
+            const status = JSON.parse(statusJSON);
+            if ((status.pendingLoads && status.pendingLoads.length > 0) ||
+                (status.pendingUnloads && status.pendingUnloads.length > 0)) {
+                processLTPXChanges(statusJSON);
+            }
         }
-        async messageWrite(role, messages, timeout) {
-            await new Promise(resolve => setTimeout(resolve, timeout));
-            if (messages.length > 0)
-                this.writeMessage(role, messages);
-        }
-        constructor() {
-            super();
-            AgentDefine.instance = this;
-            setInterval(() => this.thoughtLoopTickEvent(), 1000);
+        catch (e) {
+            console.error('LTPX 工具状态同步失败:', e);
         }
     }
-    const AgentRuntime = new LunarAgent();
+    function extractTextFromMessage(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        if (Array.isArray(message.content)) {
+            return message.content
+                .filter(item => item.type === 'text')
+                .map(item => item.text)
+                .join(' ');
+        }
+        return '';
+    }
+    function initMemory() {
+        if (GlobalConfig.memoryReady)
+            return;
+        const [_, err] = memoryInit('lunar_messages', 'text');
+        if (err)
+            console.error('记忆库初始化失败:', err);
+        else
+            GlobalConfig.memoryReady = true;
+    }
+    function ensureMemoryReady() {
+        if (!GlobalConfig.memoryReady)
+            initMemory();
+        return GlobalConfig.memoryReady;
+    }
+    function memorizeUnreadRecords() {
+        if (GlobalConfig.unreadRecords.length === 0)
+            return;
+        if (!ensureMemoryReady()) {
+            console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
+            return;
+        }
+        let written = 0;
+        for (const message of GlobalConfig.unreadRecords) {
+            const content = extractTextFromMessage(message).trim();
+            if (!content)
+                continue;
+            const [, error] = memoryAdd('lunar_messages', message.role, content);
+            if (error)
+                console.error('[记忆] 写入记忆库失败:', error);
+            else
+                written++;
+        }
+        console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
+        GlobalConfig.unreadRecords = [];
+    }
     function buildRandomEntranceLines() {
         const initializationGreetings = {
             morning: ['月华，早上好呀~', '早安呀，月华~', '月华，起床啦~'],
@@ -2793,8 +1979,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         const topic = initializationTopics[RandomFloor(0, initializationTopics.length - 1)];
         return greeting + topic;
     }
+    fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+    setInterval(() => thoughtLoopTickEvent(), 1000);
     const initializationMessage = [{ type: 'text', text: buildRandomEntranceLines() }];
-    AgentRuntime.messageWrite('user', initializationMessage, 1500);
+    messageWrite('user', initializationMessage, 1500);
 
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [
@@ -3258,12 +2446,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['行动任务调度失败：任务描述不能为空，请提供具体的行动需求', ''];
         }
-        const instance = AgentDefine.instance;
-        if (!instance || !instance.actorRole) {
+        if (!actorRole) {
             return ['行动任务调度失败：行动者子智能体未就绪，请稍后重试', ''];
         }
         console.log(`[智能体控制] 调度行动者: ${description}`);
-        const result = await instance.actorRole.createCreativeWork(description.trim());
+        const result = await actorRole.createCreativeWork(description.trim());
         console.log(`[智能体控制] 行动者完成: ${result}`);
         return [result, ''];
     }
@@ -3272,12 +2459,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
         }
-        const instance = AgentDefine.instance;
-        if (!instance || !instance.painterRole) {
+        if (!painterRole) {
             return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
         }
         console.log(`[智能体控制] 调度绘制者: ${description}`);
-        const result = await instance.painterRole.createCreativeWork(description.trim());
+        const result = await painterRole.createCreativeWork(description.trim());
         console.log(`[智能体控制] 绘制者完成: ${result}`);
         return [result, ''];
     }
@@ -3286,12 +2472,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
         }
-        const instance = AgentDefine.instance;
-        if (!instance || !instance.musicianRole) {
+        if (!musicianRole) {
             return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
         }
         console.log(`[智能体控制] 调度演奏者: ${description}`);
-        const result = await instance.musicianRole.createCreativeWork(description.trim());
+        const result = await musicianRole.createCreativeWork(description.trim());
         console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
@@ -3300,12 +2485,11 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
             return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
         }
-        const instance = AgentDefine.instance;
-        if (!instance || !instance.learnerRole) {
+        if (!learnerRole) {
             return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
         }
         console.log(`[智能体控制] 调度学习者: ${description}`);
-        const result = await instance.learnerRole.createCreativeWork(description.trim());
+        const result = await learnerRole.createCreativeWork(description.trim());
         console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
         return [result, ''];
     }
@@ -3503,8 +2687,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
 
     exports.ActorRole = ActorRole;
-    exports.AgentDefine = AgentDefine;
-    exports.BaseConfig = BaseConfig;
     exports.CalculateMedian = CalculateMedian;
     exports.CalculateModes = CalculateModes;
     exports.Clamp = Clamp;
@@ -3513,24 +2695,32 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.FileToBase64 = FileToBase64;
     exports.GlobalConfig = GlobalConfig;
     exports.LearnerRole = LearnerRole;
-    exports.MemoryRole = MemoryRole;
+    exports.LiteImageFile = LiteImageFile;
     exports.ModelBuilder = ModelBuilder;
     exports.MusicianRole = MusicianRole;
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
-    exports.ThinkType = ThinkType;
     exports.ViewerRole = ViewerRole;
+    exports.actorRole = actorRole;
     exports.agentControlTools = agentControlTools;
     exports.calculateFileHash = calculateFileHash;
     exports.checkDueItems = checkDueItems;
     exports.cleanTextForTTS = cleanTextForTTS;
+    exports.descriptionRole = descriptionRole;
+    exports.ensureMemoryReady = ensureMemoryReady;
+    exports.extractTextFromMessage = extractTextFromMessage;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
     exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
+    exports.learnerRole = learnerRole;
+    exports.memorizeUnreadRecords = memorizeUnreadRecords;
+    exports.musicianRole = musicianRole;
+    exports.painterRole = painterRole;
     exports.parseContent = parseContent;
     exports.queryFromKnowledge = queryFromKnowledge;
+    exports.randomDefaultMessage = randomDefaultMessage;
     exports.removeEmojiSymbols = removeEmojiSymbols;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToKnowledge = savePromptToKnowledge;

@@ -73,22 +73,3 @@ export interface FileListItem {
 	/** 文件的完整路径 */
 	path: string;
 }
-
-/** 状态显示类型 */
-export type ShowStatusType = 'success' | 'error';
-
-/** 任务状态属性 */
-export interface TaskStatus {
-	/** 任务当前状态 */
-	status: 'completed' | 'failed' | 'running';
-	/** 任务唯一标识符 */
-	task_id: string;
-	/** 错误信息（仅当任务失败时提供） */
-	error?: string;
-}
-
-/** 思考标签类型 */
-export const ThinkType = [
-	/<think>([\s\S]*?)<\/think>([\s\S]*)/,
-	/<\|thought_start\|>([\s\S]*?)<\|thought_end\|>([\s\S]*)/,
-];

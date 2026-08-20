@@ -1,0 +1,394 @@
+import {
+    getPromptFromKnowledge,
+    savePromptToKnowledge,
+    fetchDocumentCallback,
+    PostMessageRole,
+    MessageContent,
+    checkDueItems,
+    parseContent,
+    GlobalConfig,
+    ImageContent,
+    TextContent,
+    PostMessage,
+    ModelBuilder,
+    PainterRole,
+    MusicianRole,
+    DialogueRole,
+    LearnerRole,
+    RandomFloor,
+    ViewerRole,
+    ChatCache,
+    ActorRole,
+} from '../index';
+
+/** 描述者角色(视觉内容描述) */
+export const descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
+/** 学习者角色(深度调研与信息查证) */
+export const learnerRole: LearnerRole = new LearnerRole();
+/** 绘制者角色(图片生成) */
+export const painterRole: PainterRole = new PainterRole();
+/** 演奏者角色(演奏音乐) */
+export const musicianRole: MusicianRole = new MusicianRole();
+/** 行动者角色(3D动画/位移/空间感知) */
+export const actorRole: ActorRole = new ActorRole();
+/** 对话者角色(与用户交互) */
+const dialogueRole: DialogueRole = new DialogueRole();
+/** 观影者角色(视频观看) */
+const viewerRole: ViewerRole = new ViewerRole();
+/** 随机回答 */
+export function randomDefaultMessage(): string {
+    return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
+}
+/** 处理视频文件（观影者智能体） */
+async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
+    // 缓存检查：如果已处理过该视频，直接返回缓存结果
+    const cachedPrompt = getPromptFromKnowledge(videoUrl);
+    if (cachedPrompt) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
+        console.log('[观影者] 命中视频缓存，直接返回');
+        return;
+    }
+    // 第一步：提取关键帧
+    console.log('[观影者] 开始提取视频关键帧...');
+    const [images, error] = keyframe(videoUrl, './cache');
+    if (images.length === 0 || error) {
+        console.error('[观影者] 关键帧提取失败:', error);
+        throw new Error('提取关键帧失败');
+    }
+    console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
+    // 第二步：将关键帧转换为观影者所需格式
+    /** 关键帧数据数组 */
+    const keyframes = images.map(frame => ({ data: frame.data, timestamp: frame.timestamp || '' }));
+    // 第三步：调用观影者智能体观看视频
+    console.log('[观影者] 开始观看视频...');
+    const videoSummary = await viewerRole.watchVideo(keyframes);
+    console.log('[观影者] 视频观看完成');
+    // 第四步：将观后感添加到未读上下文
+    if (videoSummary && videoSummary.trim().length > 0) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
+    }
+    else GlobalConfig.unreadContext.push({ role: 'user', content: randomDefaultMessage() });
+    // 如果用户需求非空，追加到上下文
+    if (userNeeds.trim().length > 0) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
+    }
+    // 第五步：缓存观后感
+    if (videoSummary) {
+        savePromptToKnowledge(videoUrl, videoSummary);
+        console.log('[观影者] 观后感已缓存');
+    }
+}
+/** 处理图片文件 */
+export async function LiteImageFile(): Promise<void> {
+    // 遍历未读上下文数组中的每个消息
+    for (let message of GlobalConfig.unreadContext) {
+        // 跳过纯文本消息
+        if (typeof message.content === 'string') continue;
+        /** 新内容数组 */
+        const newContent: Array<ImageContent | TextContent> = [];
+        // 遍历消息内容中的每个项
+        for (let item of message.content) {
+            // 如果是文本项,直接添加到新内容数组
+            if (item.type == 'text') newContent.push(item);
+            // 检查是否为支持的视频文件格式
+            else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
+                // 处理视频文件
+                await analysisVideoFile(item.image_url.url, '');
+            }
+            else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
+                // 获取图片文件内容
+                const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
+                // 检查请求是否成功
+                if (error) {
+                    console.error('[获取图片文件失败]:', error.message, error.stack);
+                    continue;
+                };
+                /** 缩放图片，返回图片数据数组（动态图多帧，静态图单帧） */
+                const [resizedImages, error1] = resizeImage(response.body);
+                // 检查缩放是否成功
+                if (error1) {
+                    console.error('[缩放图片失败]:', error1.message, error1.stack);
+                    continue;
+                };
+                // 遍历缩放结果，每帧作为独立的 image_url 内容项添加
+                resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
+            }
+        }
+        // 替换消息内容
+        message.content = newContent;
+    }
+}
+/** 批量处理视频文件 */
+async function batchProcessVideoFiles(userNeeds?: string): Promise<void> {
+    // 如果未读视频文件数组为空，直接返回
+    if (GlobalConfig.unreadVideoUrl.length === 0) return;
+    //  遍历未读视频文件数组
+    for (const videoUrl of GlobalConfig.unreadVideoUrl) {
+        try {
+            // 处理视频文件
+            await analysisVideoFile(videoUrl, userNeeds || '');
+            // 等待1秒，避免对服务器造成过大压力
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        catch (error) { continue; }
+    }
+    // 清空未读视频文件数组
+    GlobalConfig.unreadVideoUrl = [];
+}
+/** 创建聊天消息 */
+async function createChatMessage(): Promise<string> {
+    /** 初始化聊天缓存 */
+    const cache: ChatCache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
+    // 发送请求并获取响应
+    await dialogueRole.generateDialogue(cache);
+    // 减少发言权重
+    GlobalConfig.speakWeight--;
+    // 返回最终应答
+    return GlobalConfig.finalResponse;
+}
+/** 思考循环事件 */
+async function thoughtLoopTickEvent(): Promise<void> {
+    // 如果正在思考中，直接返回
+    if (GlobalConfig.reasoningInProgress) return;
+    // 思考循环开始
+    try {
+        // 标记为思考中
+        GlobalConfig.reasoningInProgress = true;
+        // 查询 LTPX 工具状态，同步加载/卸载
+        syncLTPXToolStatus();
+        // 拉取外部消息
+        await pullExternalMessages();
+        // 检查计划表到期项，将到期计划内容写入上下文
+        for (const item of checkDueItems()) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` })
+        }
+        /** 消息长度 */
+        const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
+        /** 消息类型 */
+        const messageType = messageLength === 0 ? 'response' : 'active';
+        /** 是否允许发言 */
+        const allowSpeak = RandomFloor(15, 100) < GlobalConfig.speakWeight;
+        // 如果消息长度为0，且不允许发言，跳过当前循环
+        if (messageLength === 0 && !allowSpeak) {
+            // 沉默计数+1（上限100）
+            GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
+            // 标记为思考完成
+            GlobalConfig.reasoningInProgress = false;
+            // 进入下一次循环
+            return;
+        }
+        // 如果消息长度为0，且允许发言，但沉默计数不足30，跳过当前循环
+        if (messageLength === 0 && allowSpeak && GlobalConfig.silenceCount < 30) {
+            // 沉默计数+1（上限100）
+            GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
+            // 标记为思考完成
+            GlobalConfig.reasoningInProgress = false;
+            // 进入下一次循环
+            return;
+        }
+        // 允许发言，重置沉默计数和发言权重
+        GlobalConfig.silenceCount = 0;
+        // 如果消息长度为0，发言权重设为0
+        if (messageLength === 0) GlobalConfig.speakWeight = 0;
+        // 批量处理视频文件
+        await batchProcessVideoFiles();
+        // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
+        await createChatMessage();
+        // 如果消息响应为空，抛出异常
+        if (!GlobalConfig.finalResponse.trim().length) throw new Error('消息响应为空');
+        /** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
+        const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+        // 如果正文切片为空，抛出异常
+        if (!textChunks.length) throw new Error('清洗后的文本为空');
+        // 动作区与情感区独立推送到前端「行动」标签，不参与语音合成
+        if (actionBlocks.length) pushContext('action_block', actionBlocks.join(' | '), '');
+        if (emotionBlocks.length) pushContext('emotion', emotionBlocks.join(' | '), '');
+        // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
+        for (const thinking of thinkingBlocks) {
+            pushContext(messageType, thinking, '');
+        }
+        // 第二步：按顺序逐一发送代码块内容（不参与语音合成）
+        for (const code of codeBlocks) {
+            pushContext(messageType, code, '');
+        }
+        // 第三步：按顺序逐一发送正文切片，display用于显示，tts用于合成语音
+        for (const chunk of textChunks) {
+            /** 语音合成结果 */
+            let audio = '';
+            /** 语音合成 */
+            const [audioData, err] = tts(chunk.tts);
+            // 如果语音合成成功，将结果赋值给audio
+            if (!err && audioData) audio = audioData;
+            // 推送消息（包含显示内容和语音数据）
+            pushContext(messageType, chunk.display, audio);
+        }
+        // 消息缓冲池非空时，触发信息记忆流程：逐个写入记忆库后清空
+        if (GlobalConfig.unreadRecords.length >= 1) memorizeUnreadRecords();
+    }
+    catch (error) {
+        /** 获取提示音数据 */
+        const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+        // 如果读取提示音失败，打印错误信息
+        if (readErr) console.error('读取提示音失败:', readErr);
+        // 打印错误信息
+        console.error((error as Error).message, ' || ', (error as Error).stack);
+        // 推送兜底消息
+        pushContext('active', randomDefaultMessage(), promptSound);
+        // 重置智能体状态
+        resetAgentState();
+    }
+    // 标记为思考完成
+    GlobalConfig.reasoningInProgress = false;
+}
+/** 拉取外部消息 */
+async function pullExternalMessages() {
+    // 合并消息
+    pullContext().forEach(message => writeMessage(message.role, message.content))
+    // 合并视频URL
+    pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); })
+    // 等待1秒
+    await new Promise(resolve => setTimeout(resolve, 1000));
+}
+/** 测试消息写入 */
+async function messageWrite(role: PostMessageRole, messages: Array<MessageContent>, timeout: number) {
+    // 等待指定超时时间
+    await new Promise(resolve => setTimeout(resolve, timeout));
+    // 如果消息数组非空，写入消息
+    if (messages.length > 0) writeMessage(role, messages);
+}
+/** 写入消息 */
+function writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
+    // 从外部写入消息
+    GlobalConfig.unreadContext.push({ role, content: messages });
+    // 增加随机的发言权重
+    GlobalConfig.speakWeight += RandomFloor(1, 3);
+    // 如果消息是字符串，将其转换为文本消息
+    if (typeof messages === 'string') messages = [{ type: 'text', text: messages }];
+    // 打印文本消息
+    messages.forEach(message => { if (message.type === 'text') console.log(message.text); })
+}
+/** 写入视频文件 */
+function writeVideoUrl(videoUrl: string) {
+    console.log('写入视频文件:' + videoUrl);
+    // 从外部写入视频文件
+    GlobalConfig.unreadVideoUrl.push(videoUrl);
+    // 增加随机的发言权重
+    GlobalConfig.speakWeight += RandomFloor(1, 3);
+}
+/** 错误累积达阈值后重置智能体状态 */
+function resetAgentState(): void {
+    // 清空全部子智能体的messages
+    descriptionRole.coverContext([]);
+    dialogueRole.coverContext([]);
+    learnerRole.messages = [];
+    painterRole.coverContext([]);
+    musicianRole.coverContext([]);
+    viewerRole.coverContext([]);
+    actorRole.coverContext([]);
+    // 清除主智能体的unreadContext和unreadVideoUrl
+    GlobalConfig.unreadContext = [];
+    GlobalConfig.unreadVideoUrl = [];
+}
+/** 同步 LTPX 工具状态：查询 Go 层状态并执行加载/卸载 */
+function syncLTPXToolStatus(): void {
+    try {
+        const statusJSON = getLTPXToolStatus();
+        if (!statusJSON || statusJSON === '{}') return;
+        const status = JSON.parse(statusJSON);
+        // 处理待加载和待卸载
+        if ((status.pendingLoads && status.pendingLoads.length > 0) ||
+            (status.pendingUnloads && status.pendingUnloads.length > 0)) {
+            processLTPXChanges(statusJSON);
+        }
+    }
+    catch (e) {
+        console.error('LTPX 工具状态同步失败:', e);
+    }
+}
+/** 从消息中提取全部文本内容（多模态消息剔除图片，仅保留文本项；无文本时返回空字符串） */
+export function extractTextFromMessage(message: PostMessage): string {
+    // 纯文本消息和工具响应消息直接返回
+    if (typeof message.content === 'string') return message.content;
+    // 多模态消息：提取所有文本内容并拼接，剔除图片等非文本项
+    if (Array.isArray(message.content)) {
+        return message.content
+            .filter(item => item.type === 'text')
+            .map(item => item.text)
+            .join(' ');
+    }
+    return '';
+}
+/** 初始化记忆库 */
+function initMemory(): void {
+    if (GlobalConfig.memoryReady) return;
+    const [_, err] = memoryInit('lunar_messages', 'text');
+    if (err) console.error('记忆库初始化失败:', err);
+    else GlobalConfig.memoryReady = true;
+}
+/** 确保记忆库已初始化，返回是否就绪 */
+export function ensureMemoryReady(): boolean {
+    if (!GlobalConfig.memoryReady) initMemory();
+    return GlobalConfig.memoryReady;
+}
+/** 记忆未读消息到记忆库 */
+export function memorizeUnreadRecords(): void {
+    // 缓冲池为空时跳过
+    if (GlobalConfig.unreadRecords.length === 0) return;
+    // 记忆库未就绪时保留缓冲消息，等待下次触发
+    if (!ensureMemoryReady()) {
+        console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
+        return;
+    }
+    // 逐个消息写入记忆库（仅文本内容，保留角色信息）
+    let written = 0;
+    for (const message of GlobalConfig.unreadRecords) {
+        const content = extractTextFromMessage(message).trim();
+        if (!content) continue;
+        const [, error] = memoryAdd('lunar_messages', message.role, content);
+        if (error) console.error('[记忆] 写入记忆库失败:', error);
+        else written++;
+    }
+    console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
+    // 清空消息缓冲池
+    GlobalConfig.unreadRecords = [];
+}
+/** 构建随机的问候语和话题 */
+function buildRandomEntranceLines(): string {
+    /** 初始化问候语变体（按时段划分，用户 → 月华） */
+    const initializationGreetings: Record<string, string[]> = {
+        morning: ['月华，早上好呀~', '早安呀，月华~', '月华，起床啦~'],
+        afternoon: ['月华，下午好~', '月华，中午好呀~', '月华在吗~'],
+        evening: ['月华，晚上好呀~', '月华，晚上好~', '月华在不在呀~'],
+        night: ['月华，这么晚还没睡吗~', '月华，夜深啦~', '月华还在吗~'],
+    };
+    /** 初始化话题变体（用户 → 月华） */
+    const initializationTopics: string[] = [
+        '今天陪我聊聊天吧',
+        '今天有什么新鲜事吗',
+        '准备好了吗，我们开始吧',
+        '想你了，月华~',
+        '今天也要元气满满哦',
+        '一起来做点有趣的事吧',
+    ];
+    /** 当前小时 */
+    const currentHour = new Date().getHours();
+    /** 根据当前时段选择的问候语池 */
+    let greetingPool = initializationGreetings.night;
+    if (currentHour >= 5 && currentHour < 11) greetingPool = initializationGreetings.morning;
+    else if (currentHour >= 11 && currentHour < 17) greetingPool = initializationGreetings.afternoon;
+    else if (currentHour >= 17 && currentHour < 23) greetingPool = initializationGreetings.evening;
+    /** 随机选择一个问候语 */
+    const greeting = greetingPool[RandomFloor(0, greetingPool.length - 1)];
+    /** 随机选择一个话题 */
+    const topic = initializationTopics[RandomFloor(0, initializationTopics.length - 1)];
+    // 拼接问候语和话题
+    return greeting + topic;
+};
+// 初始化 自定义配置 信息
+fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+// 每秒执行一次思考循环
+setInterval(() => thoughtLoopTickEvent(), 1000);
+/** 初始化消息（按时段的随机问候语 + 随机话题拼接） */
+const initializationMessage: MessageContent[] = [{ type: 'text', text: buildRandomEntranceLines() }];
+// 向模型发送用户消息
+messageWrite('user', initializationMessage, 1500);

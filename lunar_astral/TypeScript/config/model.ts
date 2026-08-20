@@ -25,34 +25,6 @@ export interface AuthHeaders {
 	'Content-Type': 'application/json';
 }
 
-/** 模型推理请求负载 */
-export interface InferencePayload {
-	/** 要使用的模型名称 */
-	model: string;
-	/**
-	 * 对话消息列表（兼容旧版字段）
-	 * @deprecated 建议使用 `messages` 字段
-	 */
-	messages?: (PostMessage | string)[];
-	/** 对话消息列表（标准字段） */
-	input?: (PostMessage | string)[];
-	/** 是否启用流式响应 */
-	stream: boolean;
-	/** 可用的工具定义数组，最多支持 128 个工具 */
-	tools?: ToolCall[];
-	/** 工具调用选择策略 */
-	tool_choice?: string;
-}
-
-/** 嵌入向量响应结构 */
-export interface EmbeddingResponse {
-	/** 响应数据数组 */
-	data: Array<{
-		/** 文本的嵌入向量 */
-		embedding: number[];
-	}>;
-}
-
 /** 模型消息角色类型 */
 export type PostMessageRole = 'user' | 'assistant' | 'system' | 'tool';
 

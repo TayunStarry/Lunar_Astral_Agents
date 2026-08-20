@@ -1,4 +1,4 @@
-import { ToolCall, GlobalConfig, AgentDefine } from '../index';
+import { ToolCall, GlobalConfig, actorRole, painterRole, musicianRole, learnerRole } from '../index';
 
 // ==== 工具定义 ====
 
@@ -89,13 +89,12 @@ async function handleDispatchActor(args?: Record<string, any> | string): Promise
 		return ['行动任务调度失败：任务描述不能为空，请提供具体的行动需求', ''];
 	}
 
-	const instance = AgentDefine.instance;
-	if (!instance || !instance.actorRole) {
+	if (!actorRole) {
 		return ['行动任务调度失败：行动者子智能体未就绪，请稍后重试', ''];
 	}
 
 	console.log(`[智能体控制] 调度行动者: ${description}`);
-	const result = await instance.actorRole.createCreativeWork(description.trim());
+	const result = await actorRole.createCreativeWork(description.trim());
 	console.log(`[智能体控制] 行动者完成: ${result}`);
 	return [result, ''];
 }
@@ -108,13 +107,12 @@ async function handleDispatchPainter(args?: Record<string, any> | string): Promi
 		return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
 	}
 
-	const instance = AgentDefine.instance;
-	if (!instance || !instance.painterRole) {
+	if (!painterRole) {
 		return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
 	}
 
 	console.log(`[智能体控制] 调度绘制者: ${description}`);
-	const result = await instance.painterRole.createCreativeWork(description.trim());
+	const result = await painterRole.createCreativeWork(description.trim());
 	console.log(`[智能体控制] 绘制者完成: ${result}`);
 	return [result, ''];
 }
@@ -127,13 +125,12 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 		return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
 	}
 
-	const instance = AgentDefine.instance;
-	if (!instance || !instance.musicianRole) {
+	if (!musicianRole) {
 		return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
 	}
 
 	console.log(`[智能体控制] 调度演奏者: ${description}`);
-	const result = await instance.musicianRole.createCreativeWork(description.trim());
+	const result = await musicianRole.createCreativeWork(description.trim());
 	console.log(`[智能体控制] 演奏者完成: ${result}`);
 	return [result, ''];
 }
@@ -146,13 +143,12 @@ async function handleDispatchLearner(args?: Record<string, any> | string): Promi
 		return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
 	}
 
-	const instance = AgentDefine.instance;
-	if (!instance || !instance.learnerRole) {
+	if (!learnerRole) {
 		return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
 	}
 
 	console.log(`[智能体控制] 调度学习者: ${description}`);
-	const result = await instance.learnerRole.createCreativeWork(description.trim());
+	const result = await learnerRole.createCreativeWork(description.trim());
 	console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
 	return [result, ''];
 }

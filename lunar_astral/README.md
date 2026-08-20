@@ -115,7 +115,6 @@ AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 �
 | `selfAppearance.md` | 角色外观自我描述 |
 | `viewerRole.md` | 观影者角色 |
 | `actorRole.md` | 行动者角色 |
-| `memoryRole.md` | 组织者角色设定（记忆整理） |
 | `musicianRole.md` | 音乐作曲家角色 |
 | `learner*.md` | 学习者智能体系列（研究报告 / 查询推理完善 / 策略评估 / 搜索内容评估 / 记忆更新） |
 

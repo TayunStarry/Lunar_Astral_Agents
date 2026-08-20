@@ -3,7 +3,6 @@
 export * from './config/global';
 export * from './config/model';
 export * from './config/tool';
-export * from './config/history';
 export * from './config/config';
 export * from './config/knowledge';
 export * from './config/image';
@@ -24,11 +23,9 @@ export * from './agent/dialogue';
 export * from './agent/painter';
 export * from './agent/musician';
 export * from './agent/learner';
-export * from './agent/memory';
 export * from './agent/viewer';
 export * from './agent/actor';
-export * from './agent/define';
-export * from './agent/agent';
+export * from './agent/constructor';
 
 export * from './tool/schedule';
 export * from './tool/screenshot';
