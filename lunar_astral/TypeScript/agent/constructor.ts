@@ -200,9 +200,20 @@ async function thoughtLoopTickEvent(): Promise<void> {
         const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
         // 如果正文切片为空，抛出异常
         if (!textChunks.length) throw new Error('清洗后的文本为空');
-        // 动作区与情感区独立推送到前端「行动」标签，不参与语音合成
-        if (actionBlocks.length) pushContext('action_block', actionBlocks.join(' | '), '');
-        if (emotionBlocks.length) pushContext('emotion', emotionBlocks.join(' | '), '');
+        // 获取动作区内容，推送至前端「行动」标签，不参与语音合成
+        if (actionBlocks.length) {
+            await actorRole.createCreativeWork(actionBlocks.join(' | '));
+        };
+        // 情感区：基于情感内容从图片记忆库检索表情包，发送对话前推送到前端（emotion 由表情包系统代理）
+        if (emotionBlocks.length) {
+            const sticker = await queryEmotionSticker(emotionBlocks.join(' '));
+            if (sticker) pushImage([sticker], true);
+        }
+        // 无情感区时，以 10% 概率用对话正文内容检索表情包
+        else if (Math.random() < 0.1) {
+            const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
+            if (sticker) pushImage([sticker], true);
+        }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
         for (const thinking of thinkingBlocks) {
             pushContext(messageType, thinking, '');
@@ -305,6 +316,32 @@ function syncLTPXToolStatus(): void {
         console.error('LTPX 工具状态同步失败:', e);
     }
 }
+/** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
+const STICKER_COLLECTION = 'stickers';
+/** 表情包集合是否已确认就绪（避免重复初始化） */
+let stickerCollectionReady = false;
+
+/** 基于查询文本从表情包记忆库检索表情包图片，返回 base64；无结果或失败时返回 null */
+async function queryEmotionSticker(query: string): Promise<string | null> {
+    if (!query || !query.trim()) return null;
+    try {
+        // 首次使用时确保表情包集合存在（幂等：已存在则直接打开，不清空数据）
+        if (!stickerCollectionReady) {
+            const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+            if (!ready) return null;
+            stickerCollectionReady = true;
+        }
+        const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 1);
+        if (error || !results || results.length === 0) return null;
+        // image 类型集合的查询结果携带 image 字段（base64 图片数据）
+        const image = (results[0] as { image?: string }).image;
+        return image || null;
+    } catch (error) {
+        console.error('[表情包] 检索失败:', error);
+        return null;
+    }
+}
+
 /** 从消息中提取全部文本内容（多模态消息剔除图片，仅保留文本项；无文本时返回空字符串） */
 export function extractTextFromMessage(message: PostMessage): string {
     // 纯文本消息和工具响应消息直接返回

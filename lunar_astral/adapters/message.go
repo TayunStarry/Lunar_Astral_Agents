@@ -18,10 +18,31 @@ func (class *Runtime) pushContext(msgType string, content string, audio string) 
 	return class.runtime.ToValue(true)
 }
 
-func (class *Runtime) pushImage(images []string) goja.Value {
+// pushImage 推送图片（供 JS 运行时调用）
+// 用法：pushImage(images)；表情包可选：pushImage(images, true)
+// 第二个参数 isSticker 标记图片是否为表情包，前端据此决定角标显示
+func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
+	// 解析图片数组（兼容 []string / []any）
+	var images []string
+	if arg := call.Argument(0); !goja.IsUndefined(arg) && !goja.IsNull(arg) {
+		if exported := arg.Export(); exported != nil {
+			for _, v := range exported.([]interface{}) {
+				if s, ok := v.(string); ok && s != "" {
+					images = append(images, s)
+				}
+			}
+		}
+	}
+	// 解析表情包标记（可选参数，缺失时按普通图片处理，保持旧版兼容）
+	isSticker := false
+	if arg := call.Argument(1); !goja.IsUndefined(arg) && !goja.IsNull(arg) {
+		isSticker = arg.ToBoolean()
+	}
+
 	data := PushImageData{
-		Type:   "image",
-		Images: images,
+		Type:    "image",
+		Images:  images,
+		Sticker: isSticker,
 	}
 	PushMessageFunc("image", data)
 	return class.runtime.ToValue(true)

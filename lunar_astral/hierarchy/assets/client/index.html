@@ -2,87 +2,221 @@
 <html lang="zh-CN">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, minimum-scale=0.5, maximum-scale=0.8">
-	<title>『 星月智能 - 月华 』</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>『 星月智能 』消息终端</title>
     <!-- 标准样式库 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
-    <!-- 标准脚本库 -->
-    <script src="/file/read/package/standard_dependency/script.js"></script>
     <!-- 项目私有样式 -->
-    <link rel="stylesheet" href="styles/variables.css">
-    <link rel="stylesheet" href="styles/base.css">
-    <link rel="stylesheet" href="styles/layout.css">
-    <link rel="stylesheet" href="styles/input-area.css">
-    <link rel="stylesheet" href="styles/toast.css">
-    <link rel="stylesheet" href="styles/modal.css">
-    <link rel="stylesheet" href="styles/messages.css">
-    <link rel="stylesheet" href="styles/syntax-highlight.css">
-    <!-- 项目私有脚本 -->
-	<script src="./scripts/app.js" type="module"></script>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="table.css">
 </head>
 
 <body>
-	<!-- 毛玻璃叠加层（保留背景模糊） -->
-	<div class="glass-effect"></div>
-	<!-- 主容器 -->
-	<div class="container">
-		<div class="main-container-panel" id="mainContainerPanel">
-			<!-- 3D渲染器展示区 -->
-			<div class="renderer-wrapper" id="rendererWrapper">
-				<div class="renderer-container" id="rendererContainer">
-					<iframe id="rendererFrame" src="/file/read/package/simple_physics/index.html?channel=lunar-astral-renderer" allow="autoplay"></iframe>
-					<div class="model-intel" id="modelIntel"></div>
-				</div>
-			</div>
-			<!-- 底部输入区 -->
-			<div class="input-container" id="inputContainer">
-				<div class="file-preview-area" id="filePreviewArea"></div>
-				<div class="input-wrapper">
-					<div class="function-menu-wrapper" id="functionMenuWrapper">
-						<button class="btn-glass" id="functionMenuButton" title="功能菜单">
-							<i class="fas fa-bars"></i>
-						</button>
-						<div class="function-menu-dropdown" id="functionMenuDropdown">
-							<button class="dropdown-item" id="chatHistoryItem">
-								<i class="fas fa-comments"></i>
-								<span>聊天记录</span>
-							</button>
-							<button class="dropdown-item" id="voiceChatItem">
-								<i class="fas fa-microphone"></i>
-								<span>语音对话</span>
-							</button>
-							<button class="dropdown-item" id="fileImportItem">
-								<i class="fas fa-file-import"></i>
-								<span>文件导入</span>
-							</button>
-						</div>
-					</div>
-					<input type="file" id="fileImportInput" multiple accept="*/*" style="display:none">
-					<textarea class="message-input" id="messageInput" placeholder="想要聊些什么吗？" rows="1"></textarea>
-					<button class="btn-glass btn-send" id="sendButton" title="消息发送">
-						<i class="fas fa-paper-plane"></i>
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
-	<!-- 消息记录模态框 -->
-	<div class="modal-overlay" id="modalOverlay">
-		<div class="modal-content" id="modalContent">
-			<div class="modal-header">
-				<h3>消息记录</h3>
-				<button class="modal-close btn-glass" id="modalClose">
-					<i class="fas fa-times"></i>
-				</button>
-			</div>
-			<div class="modal-body" id="modalBody"></div>
-		</div>
-	</div>
-	<!-- 通用悬浮消息组件 -->
-	<div class="toast-container" id="toastContainer"></div>
-	<!-- 错误提示条 -->
-	<div class="error-toast" id="errorToast"></div>
+    <div class="app-container" id="appContainer">
+        <!-- 主体两列布局 -->
+        <div class="content-row">
+            <!-- 左侧栏：品牌 + 标签 + 状态显示 -->
+            <aside class="sidebar">
+
+                <!-- 渲染引擎嵌入区（消息类型列表上方） -->
+                <div class="renderer-panel">
+                    <iframe class="renderer-frame" id="rendererFrame" data-src="/file/read/package/simple_physics/index.html?channel=message-terminal-renderer" allow="autoplay" title="渲染引擎"></iframe>
+                </div>
+
+                <nav class="tab-bar" id="tabBar" role="tablist" aria-label="消息分类">
+                    <button class="tab active" data-tab="all" role="tab"><i class="fas fa-layer-group"></i>全部</button>
+                    <button class="tab" data-tab="text" role="tab"><i class="fas fa-align-left"></i>文本</button>
+                    <button class="tab" data-tab="image" role="tab"><i class="fas fa-image"></i>图片</button>
+                    <button class="tab" data-tab="voice" role="tab"><i class="fas fa-volume-high"></i>语音</button>
+                    <button class="tab" data-tab="music" role="tab"><i class="fas fa-music"></i>乐谱</button>
+                    <button class="tab" data-tab="action" role="tab"><i class="fas fa-person-running"></i>行动</button>
+                </nav>
+            </aside>
+
+            <!-- 右侧主显示区 -->
+            <section class="main-panel">
+                <main class="message-area" id="messageArea" role="log" aria-live="polite">
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-state-icon">
+                            <i class="fas fa-cloud-moon"></i>
+                        </div>
+                        <p class="empty-state-text">等待消息</p>
+                        <p class="empty-state-subtext">连接 WebSocket 后将实时显示推送内容</p>
+                    </div>
+                    <!-- 动态消息列表 -->
+                </main>
+
+                <!-- 右下角滚动控制（聊天输入框上方，竖版排列） -->
+                <div class="scroll-controls" id="scrollControls">
+                    <button class="scroll-ctrl-btn" id="scrollTopBtn" title="滚动到顶部">
+                        <i class="fas fa-angles-up"></i>
+                    </button>
+                    <button class="scroll-ctrl-btn" id="scrollBottomBtn" title="滚动到底部">
+                        <i class="fas fa-angles-down"></i>
+                    </button>
+                    <button class="scroll-ctrl-btn" id="jumpUserBtn" title="跳转到用户发言">
+                        <i class="fas fa-user"></i>
+                    </button>
+                    <div class="user-jump-panel" id="userJumpPanel" hidden>
+                        <div class="user-jump-header"><i class="fas fa-user"></i> 用户发言</div>
+                        <div class="user-jump-list" id="userJumpList"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 底部输入栏（横跨全宽） -->
+        <footer class="input-area">
+            <div class="pending-attachments" id="pendingAttachments" hidden></div>
+            <div class="input-wrapper">
+                <button class="attach-btn" id="attachBtn" title="添加文件（图片 / 视频 / 文本）">
+                    <i class="fas fa-paperclip"></i>
+                </button>
+                <button class="attach-btn" id="captureBtn" title="全屏截图">
+                    <i class="fas fa-camera"></i>
+                </button>
+                <button class="attach-btn" id="openDrawboardBtn" title="打开画板">
+                    <i class="fas fa-palette"></i>
+                </button>
+                <input type="file" id="fileInput" multiple accept="*/*" hidden />
+                <textarea id="messageInput" class="message-input" placeholder="输入文字消息… (Enter 发送, Shift+Enter 换行)"
+                    rows="1"></textarea>
+                <button id="sendButton" class="send-button" title="发送消息">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </footer>
+
+        <!-- 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容显示） -->
+        <div class="top-controls">
+            <button class="header-btn active" id="voiceToggleBtn" title="自动播放语音：开">
+                <i class="fas fa-volume-up"></i>
+            </button>
+            <button class="header-btn" id="clearBtn" title="清空消息">
+                <i class="fas fa-broom"></i>
+            </button>
+            <button class="header-btn" id="themeToggle" title="切换主题">
+                <i class="fas fa-moon"></i>
+            </button>
+            <div class="search-box" role="search">
+                <i class="fas fa-search search-icon"></i>
+                <input id="searchInput" class="search-input" type="text" placeholder="搜索消息内容…" autocomplete="off" />
+                <span class="search-count" id="searchCount" hidden></span>
+                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i
+                        class="fas fa-chevron-up"></i></button>
+                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i
+                        class="fas fa-chevron-down"></i></button>
+                <button class="search-clear" id="searchClear" title="清除搜索" hidden><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <!-- 通知容器 -->
+        <div class="toast-container" id="toastContainer" aria-live="assertive"></div>
+        <!-- 拖拽遮罩 -->
+        <div class="drag-overlay" id="dragOverlay" aria-hidden="true">
+            <div class="drag-overlay-content">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>释放文件到消息列表</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 截图选择模态框 -->
+    <div class="capture-modal" id="captureModal" aria-hidden="true">
+        <div class="capture-modal-content">
+            <div class="capture-modal-header">
+                <span class="capture-modal-title"><i class="fas fa-camera"></i> 截图预览</span>
+                <button class="capture-modal-close" id="captureCloseBtn" title="关闭">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="capture-modal-preview">
+                <img id="capturePreviewImg" alt="截图预览" />
+            </div>
+            <div class="capture-modal-actions">
+                <button class="capture-action-btn" id="captureToSendBtn" title="作为待发送图片">
+                    <i class="fas fa-paper-plane"></i> 待发送
+                </button>
+                <button class="capture-action-btn primary" id="captureToDrawboardBtn" title="送到画板">
+                    <i class="fas fa-palette"></i> 画板
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画板页（全屏覆盖层） -->
+    <div class="drawboard-overlay" id="drawboardOverlay" aria-hidden="true">
+        <div class="drawboard">
+            <div class="drawboard-header">
+                <span class="drawboard-title"><i class="fas fa-palette"></i> 画板</span>
+                <div class="drawboard-header-actions">
+                    <button class="drawboard-btn" id="importBgBtn" title="导入背景图">
+                        <i class="fas fa-image"></i> 背景
+                    </button>
+                    <button class="drawboard-btn" id="clearDrawBtn" title="清空画板">
+                        <i class="fas fa-eraser"></i> 清空
+                    </button>
+                    <button class="drawboard-btn" id="closeDrawboardBtn" title="关闭">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <input type="file" id="bgFileInput" accept="image/*" hidden />
+            </div>
+
+            <div class="drawboard-toolbar">
+                <button class="drawboard-tool" data-tool="draw" title="画笔"><i class="fas fa-pencil-alt"></i></button>
+                <button class="drawboard-tool" data-tool="line" title="直线"><i
+                        class="fas fa-grip-lines-vertical"></i></button>
+                <button class="drawboard-tool" data-tool="rect" title="矩形"><i class="fas fa-vector-square"></i></button>
+                <button class="drawboard-tool" data-tool="circle" title="圆形"><i class="far fa-circle"></i></button>
+                <button class="drawboard-tool" data-tool="arrow" title="箭头"><i
+                        class="fas fa-long-arrow-alt-right"></i></button>
+                <button class="drawboard-tool" data-tool="text" title="文本"><i class="fas fa-font"></i></button>
+                <button class="drawboard-tool" id="undoDrawBtn" title="撤销" disabled><i class="fas fa-undo"></i></button>
+            </div>
+
+            <div class="drawboard-colorbar">
+                <div class="drawboard-color" data-color="#e74c3c" style="background:#e74c3c"></div>
+                <div class="drawboard-color" data-color="#3498db" style="background:#3498db"></div>
+                <div class="drawboard-color" data-color="#2ecc71" style="background:#2ecc71"></div>
+                <div class="drawboard-color" data-color="#f1c40f" style="background:#f1c40f"></div>
+                <div class="drawboard-color" data-color="#9b59b6" style="background:#9b59b6"></div>
+                <div class="drawboard-color" data-color="#ffffff" style="background:#ffffff"></div>
+                <div class="drawboard-color" data-color="#000000" style="background:#000000"></div>
+                <span class="drawboard-size-sep"></span>
+                <div class="drawboard-size" data-size="4">S</div>
+                <div class="drawboard-size" data-size="8">M</div>
+                <div class="drawboard-size" data-size="16">L</div>
+                <div class="drawboard-size" data-size="24">XL</div>
+            </div>
+
+            <div class="drawboard-canvas-wrap" id="drawboardCanvasWrap">
+                <canvas id="drawboardBg"></canvas>
+                <canvas id="drawboardLayer"></canvas>
+                <canvas id="drawboardPreview"></canvas>
+                <div class="drawboard-placeholder" id="drawboardPlaceholder">
+                    <i class="fas fa-image"></i>
+                    <p>点击「背景」导入图片，或直接在画布上绘制</p>
+                </div>
+            </div>
+
+            <div class="drawboard-footer">
+                <textarea id="drawboardInput" class="drawboard-input" placeholder="描述这幅画面 / 想对 AI 说什么… (Enter 发送)"
+                    rows="1"></textarea>
+                <button id="drawboardSendBtn" class="drawboard-send" title="发送给 AI">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- Mermaid 流程图库 -->
+    <script src="/file/read/package/mermaid.min.js"></script>
+    <!-- 项目私有脚本 -->
+    <script defer src="script.js"></script>
 </body>
 
 </html>

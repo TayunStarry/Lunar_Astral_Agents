@@ -338,9 +338,30 @@ func (c *Collection) docCount() int {
 	return len(c.Documents)
 }
 
+// findExistingDocument 在集合中查找相同内容的文档（精确匹配）
+// content 非空时匹配文本文档的 Content，image 非空时匹配图片文档的 Image
+// 返回已存在文档的 ID，不存在返回空字符串
+func (c *Collection) findExistingDocument(content, image string) string {
+	if content == "" && image == "" {
+		return ""
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, doc := range c.Documents {
+		if content != "" && doc.Content == content {
+			return doc.ID
+		}
+		if image != "" && doc.Image == image {
+			return doc.ID
+		}
+	}
+	return ""
+}
+
 // MemoryAddMessage 添加文本消息到记忆库，同步阻塞等待 LLM 标签生成完成
 // 返回生成的文档 UUID，LLM 标签生成失败则不存储文档
 // v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
+// v4: 写入前先去重，内容已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
 func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -348,6 +369,12 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 	}
 	if c.CollectionType != CollectionTypeText {
 		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
+	}
+
+	// 0. 去重检查：相同文本内容已存在则视为已完成
+	if existingID := c.findExistingDocument(content, ""); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
 	}
 
 	// 1. 生成 UUID
@@ -368,11 +395,11 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 	}
 
 	// 4. v3: 去重匹配，获取标签 UUID
-	tagUUIDs := c.processTagVectors(tags, tagVecs)
+	UUIDtag := c.processTagVectors(tags, tagVecs)
 
 	// 5. 添加文档（含 TagUUIDs）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TagUUIDs: tagUUIDs})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -387,6 +414,7 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 }
 
 // MemoryAddMessageSilent 添加消息但不生成标签（用于内部导入，无 LLM 开销）
+// 写入前先去重，内容已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
 func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, role, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -394,6 +422,12 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 	}
 	if c.CollectionType != CollectionTypeText {
 		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
+	}
+
+	// 去重检查：相同文本内容已存在则视为已完成
+	if existingID := c.findExistingDocument(content, ""); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
 	}
 
 	id := generateUUID()
@@ -411,6 +445,7 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 // base64Image 为完整的 data:image/...;base64,... 格式
 // orientation/custom 指定图片识别取向，为空时默认自动处理
 // v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
+// v4: 写入前先去重，图片已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
 func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -418,6 +453,12 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 	}
 	if c.CollectionType != CollectionTypeImage {
 		return "", fmt.Errorf("集合 %s 类型为 %s，不支持图片添加", collectionName, c.CollectionType)
+	}
+
+	// 0. 去重检查：相同图片已存在则视为已完成
+	if existingID := c.findExistingDocument("", base64Image); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同图片 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
 	}
 
 	// 1. 生成 UUID
@@ -442,7 +483,7 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 
 	// 5. 添加文档（含 TagUUIDs）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TagUUIDs: tagUUIDs})
+	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TAGS: tagUUIDs})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -609,7 +650,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 	for _, doc := range c.Documents {
 		var sum float32
 		var matchCount int
-		for _, tagUUID := range doc.TagUUIDs {
+		for _, tagUUID := range doc.TAGS {
 			if score, ok := tagScoreMap[tagUUID]; ok {
 				sum += score
 				matchCount++
@@ -780,7 +821,7 @@ func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 		tagUUIDSet[tv.UUID] = struct{}{}
 	}
 	for _, doc := range c.Documents {
-		for _, tagUUID := range doc.TagUUIDs {
+		for _, tagUUID := range doc.TAGS {
 			if _, ok := tagUUIDSet[tagUUID]; !ok {
 				return true // 文档引用了不存在的标签（悬空引用）
 			}
@@ -894,7 +935,7 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 		c.mu.Lock()
 		for j := range c.Documents {
 			if c.Documents[j].ID == doc.ID {
-				c.Documents[j].TagUUIDs = tagUUIDs
+				c.Documents[j].TAGS = tagUUIDs
 				break
 			}
 		}

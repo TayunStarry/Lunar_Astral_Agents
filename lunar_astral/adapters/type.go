@@ -78,8 +78,9 @@ type PushContextData struct {
 
 // PushImageData 推送图片数据
 type PushImageData struct {
-	Type   string   `json:"type"`
-	Images []string `json:"images"`
+	Type    string   `json:"type"`              // 图片类型
+	Sticker bool     `json:"sticker,omitempty"` // 是否作为表情包发送
+	Images  []string `json:"images"`            // 图片URL列表
 }
 
 // AgentPositionData 智能体3D位置数据

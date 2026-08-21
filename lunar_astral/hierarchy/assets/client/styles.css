@@ -200,6 +200,26 @@ body {
     filter: drop-shadow(0 0 6px rgba(108, 155, 207, 0.3));
 }
 
+/* ========== 渲染引擎嵌入区（品牌栏下方、消息类型列表上方） ========== */
+.renderer-panel {
+    flex-shrink: 0;
+    height: min(42vh, 360px);
+    margin: 12px;
+    position: relative;
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.renderer-frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+}
+
 /* 通用侧栏按钮 */
 .header-btn {
     background: rgba(0, 0, 0, 0.15);

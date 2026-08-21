@@ -17,7 +17,6 @@ const (
 // ==== 全局变量 ====
 
 // EmbeddedFiles 嵌入的静态资源文件系统
-//
 //go:embed assets/*
 var EmbeddedFiles embed.FS
 
@@ -71,8 +70,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/proxy/models", Handler: modelsProxyHandler, Method: "POST", Description: "模型查询代理"},
 	{Path: "/proxy/chat", Handler: chatProxyHandler, Method: "POST", Description: "对话代理"},
 	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
-	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图像生成"},
-	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "图像生成等待"},
 
 	// ==== 月华服务 ====
 	{Path: "/lunar/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},
@@ -83,7 +80,7 @@ var SystemEndpoints = []SystemEndpoint{
 }
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/ltpx/"}
+var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/generate", "/ltpx/"}
 
 // fileCategoryMap 文件扩展名到分类的映射
 var fileCategoryMap = map[string]string{

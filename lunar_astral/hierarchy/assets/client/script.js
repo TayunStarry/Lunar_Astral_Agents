@@ -11,7 +11,7 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const USER_NAME = '你';
 const ASSISTANT_NAME = '月华';
-const MESSAGES_FILE_PATH = 'package/lunar.means.message.terminal/messages.json';
+const MESSAGES_FILE_PATH = 'lunar_messages.json';
 const MAX_PERSISTED_MESSAGES = 200;
 
 // ---------- DOM 引用 ----------
@@ -876,7 +876,7 @@ function schedulePersist() {
 
 async function loadPersistedMessages() {
     try {
-        const res = await fetch('/file/read/package/lunar.means.message.terminal/messages.json');
+        const res = await fetch('/file/read/lunar_messages.json');
         if (!res.ok) return;
         const list = await res.json();
         if (!Array.isArray(list)) return;
@@ -919,7 +919,7 @@ function handleWebSocketMessage(msg) {
             }
             return;
         }
-        if (subType === 'action' || subType === 'action_block' || subType === 'emotion') {
+        if (subType === 'action') {
             addMessage({ id: generateId(), role: 'assistant', categories: ['action'], content, actionType: subType, timestamp: Date.now() });
             return;
         }
@@ -934,9 +934,10 @@ function handleWebSocketMessage(msg) {
 
     if (type === 'image') {
         const images = data.images || [];
+        const isSticker = !!data.sticker;
         images.forEach(img => {
             const src = (img.startsWith('data:') || img.startsWith('http')) ? img : ('data:image/jpeg;base64,' + img);
-            addMessage({ id: generateId(), role: 'assistant', categories: ['image'], content: '', imageSrc: src, imageLabel: '图片', timestamp: Date.now() });
+            addMessage({ id: generateId(), role: 'assistant', categories: ['image'], content: '', imageSrc: src, imageLabel: isSticker ? '表情包' : '图片', timestamp: Date.now() });
         });
         return;
     }
@@ -1896,6 +1897,13 @@ function cleanup() {
 }
 
 // ---------- 初始化 ----------
+/** 渲染引擎 iframe：指向智能体所在后端（36789），与主 WebSocket 连接保持一致 */
+function setupRendererFrame() {
+    const frame = document.getElementById('rendererFrame');
+    if (!frame || !frame.dataset.src) return;
+    frame.src = `${frame.dataset.src}&ws=${window.location.hostname}:36789`;
+}
+
 async function init() {
     loadTheme();
     setupThemeToggle();
@@ -1910,6 +1918,7 @@ async function init() {
     setupCapture();
     setupScrollControls();
     initMusicRenderer();
+    setupRendererFrame();
     await ensureMarked();
     initMermaid();
     await loadPersistedMessages();

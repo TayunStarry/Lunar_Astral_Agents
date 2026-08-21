@@ -39,12 +39,19 @@ class WsBridge {
     /**
      * 构造函数
      * @param {string} name - 频道名称（保留参数，兼容 BroadcastChannel API）
+     * 连接地址默认同源 /ws；可通过 URL 参数 ?ws=host:port 覆盖目标后端（用于嵌入页指定智能体所在端口）
      */
     constructor(name) {
         this.#name = name || 'integrated-studio-bus';
-        // WebSocket 连接地址：ws://<host>/ws（与常规前端一致的标准通道）
+        // WebSocket 连接地址：默认同源 /ws（与常规前端一致的标准通道）
+        // 支持 URL 参数 ?ws=host[:port] 覆盖目标后端（如消息终端嵌入引擎时指向智能体所在端口 36789）
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.#url = `${protocol}//${window.location.host}/ws`;
+        const wsParam = new URLSearchParams(window.location.search).get('ws');
+        if (wsParam) {
+            this.#url = /^wss?:\/\//i.test(wsParam) ? wsParam : `${protocol}//${wsParam}/ws`;
+        } else {
+            this.#url = `${protocol}//${window.location.host}/ws`;
+        }
         this.#connect();
     }
 

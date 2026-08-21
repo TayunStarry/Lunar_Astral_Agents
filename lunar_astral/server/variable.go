@@ -7,7 +7,6 @@ import (
 	file "LunarSubsystem/FileManager/server"
 	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
-	media "LunarSubsystem/MediaTools/server"
 	tts "LunarSubsystem/Qwen3-TTS/module"
 	"fmt"
 	"net/http"
@@ -54,8 +53,9 @@ var wsBroadcaster = make(chan WSMessage, 256)
 
 // SystemEndpoints 存储所有系统端点配置
 var SystemEndpoints = []SystemEndpoint{
-	// 文件读写相关接口
+	// ==== 应用与资源 ====
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
+	// ==== 文件操作 ====
 	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
 	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表查询"},
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载操作"},
@@ -71,37 +71,34 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
 	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
 	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
-	// 知识库相关接口
+	// ==== 知识库与记忆库 ====
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
-	// 记忆库相关接口（多集合 RESTful 架构）
 	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
-	// 图片生成相关接口
+	// ==== 图片生成 ====
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
+	// ==== 截图与图像处理 ====
+	{Path: "/capture", Handler: image.HandleCapture, Method: "ANY", Description: "统一截图（auto/window/fullscreen/display/region）"},
+	{Path: "/keyframe", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
+	{Path: "/capture/displays", Handler: image.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
 	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
-	// 媒体工具接口（GGUF 元数据 + 图片转码）
-	{Path: "/gguf/metadata", Handler: media.GGUFMetadataHandler, Method: "POST", Description: "GGUF模型元数据解析"},
-	{Path: "/convert/image", Handler: media.ConvertImageHandler, Method: "POST", Description: "单张图片格式转换"},
-	{Path: "/convert/batch", Handler: media.BatchConvertHandler, Method: "POST", Description: "批量图片格式转换"},
-	{Path: "/convert/list", Handler: media.ListImagesHandler, Method: "POST", Description: "列出文件夹中的图片文件"},
-	// 视频处理相关接口
 	{Path: "/extract/keyframes", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
-	// 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法）
+	// ==== 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法） ====
 	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
-	// 代理请求接口
+	// ==== 代理请求接口 ====
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
-	// 消息队列相关接口
+	// ==== 消息队列相关接口 ====
 	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
 	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
-	// 引擎消息总线（格式与 /write/message 同构，供引擎/工作室系统消息分发）
+	// ==== 引擎消息总线（格式与 /write/message 同构，供引擎/工作室系统消息分发） ====
 	{Path: "/write/engine", Handler: handlers.EngineMessageHandler, Method: "POST", Description: "引擎系统消息（动画列表/遥测等）"},
-	// TTS语音服务相关接口
+	// ==== TTS语音服务相关接口 ====
 	{Path: "/tts", Handler: tts.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	// LTPX 工具动态管理接口
+	// ==== LTPX 工具动态管理接口 ====
 	{Path: "/ltpx/load", Handler: handlers.LTPXLoadHandler, Method: "POST", Description: "加载LTPX工具包"},
 	{Path: "/ltpx/unload", Handler: handlers.LTPXUnloadHandler, Method: "POST", Description: "卸载LTPX工具包"},
 	{Path: "/ltpx/status", Handler: handlers.LTPXStatusHandler, Method: "GET", Description: "查询LTPX工具状态"},
-	// 智能体控制接口
+	// ==== 智能体控制接口 ====
 	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
 	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
 }

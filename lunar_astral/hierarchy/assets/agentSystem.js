@@ -800,13 +800,14 @@ var agentSystem = (function (exports) {
                 returnEvent();
             const seen = new Map();
             for (const r of allResults) {
-                const existing = seen.get(r.content);
+                const content = r.content || '';
+                const existing = seen.get(content);
                 if (!existing || r.similarity > existing.similarity)
-                    seen.set(r.content, r);
+                    seen.set(content, r);
             }
             const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
             console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content }));
+            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content || '' }));
             return this;
         }
         constructor() {
@@ -1816,10 +1817,20 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
             if (!textChunks.length)
                 throw new Error('清洗后的文本为空');
-            if (actionBlocks.length)
-                pushContext('action_block', actionBlocks.join(' | '), '');
-            if (emotionBlocks.length)
-                pushContext('emotion', emotionBlocks.join(' | '), '');
+            if (actionBlocks.length) {
+                await actorRole.createCreativeWork(actionBlocks.join(' | '));
+            }
+            ;
+            if (emotionBlocks.length) {
+                const sticker = await queryEmotionSticker(emotionBlocks.join(' '));
+                if (sticker)
+                    pushImage([sticker], true);
+            }
+            else if (Math.random() < 0.1) {
+                const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
+                if (sticker)
+                    pushImage([sticker], true);
+            }
             for (const thinking of thinkingBlocks) {
                 pushContext(messageType, thinking, '');
             }
@@ -1893,6 +1904,29 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         catch (e) {
             console.error('LTPX 工具状态同步失败:', e);
+        }
+    }
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
+    async function queryEmotionSticker(query) {
+        if (!query || !query.trim())
+            return null;
+        try {
+            if (!stickerCollectionReady) {
+                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+                if (!ready)
+                    return null;
+                stickerCollectionReady = true;
+            }
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 1);
+            if (error || !results || results.length === 0)
+                return null;
+            const image = results[0].image;
+            return image || null;
+        }
+        catch (error) {
+            console.error('[表情包] 检索失败:', error);
+            return null;
         }
     }
     function extractTextFromMessage(message) {

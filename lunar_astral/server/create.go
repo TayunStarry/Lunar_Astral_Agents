@@ -57,6 +57,8 @@ func CORSMiddleware(next http.Handler) http.Handler {
 func startClientLoading() {
 	// 优先使用 127.0.0.1 访问本地服务，避免防火墙拦截和跨网段问题
 	clientURL := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
+	*GeneralConfig.WebViewWidth = 1080
+	*GeneralConfig.WebViewHeight = 810
 	// 打开浏览器访问
 	BrowserClient.OpenBrowser(clientURL)
 }

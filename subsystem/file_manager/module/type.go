@@ -101,11 +101,11 @@ type DocumentEntry struct {
 // Document 统一文档结构（text 和 image 共用）
 // v3: 新增 TagUUIDs 字段，存储引用的标签向量 UUID
 type Document struct {
-	ID       string   `json:"id"`                  // 文档 UUID v4
-	Role     string   `json:"role,omitempty"`      // 消息角色，text 文档使用
-	Content  string   `json:"content,omitempty"`   // 文本内容，text 文档使用
-	Image    string   `json:"image,omitempty"`     // 图片 base64 数据，image 文档使用
-	TagUUIDs []string `json:"tag_uuids,omitempty"` // v3: 引用的标签向量 UUID 列表
+	ID      string   `json:"id"`                // 文档 UUID v4
+	Role    string   `json:"role,omitempty"`    // 消息角色，text 文档使用
+	Content string   `json:"content,omitempty"` // 文本内容，text 文档使用
+	Image   string   `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	TAGS    []string `json:"tags,omitempty"`    // v3: 引用的标签向量 UUID 列表
 }
 
 // TagVector 标签向量条目 — 标签文本的嵌入向量，拥有独立 UUID

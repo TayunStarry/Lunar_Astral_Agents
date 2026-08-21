@@ -117,8 +117,9 @@ declare global {
      * 推送图片
      * 
      * @param {string[]} imageData 图片数据列表（base64编码）
+     * @param {boolean} [isSticker=false] 是否为表情包（前端据此决定角标显示）
      */
-    function pushImage(imageData: string[]): boolean;
+    function pushImage(imageData: string[], isSticker?: boolean): boolean;
     /**
      * 获取缓存的智能体3D位置（由前端遥测数据更新）
      *
@@ -182,9 +183,9 @@ declare global {
      *
      * @param {number} topK 返回的最相关结果数量
      *
-     * @returns {[Array<{id: string, role: string, content: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列
+     * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image）
      */
-    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content: string, similarity: number }>, Error | null];
+    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number }>, Error | null];
     /**
      * 从指定集合删除消息
      *

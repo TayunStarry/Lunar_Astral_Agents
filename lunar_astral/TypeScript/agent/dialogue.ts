@@ -257,7 +257,7 @@ export class DialogueRole extends ModelBuilder {
         // 确保记忆库已就绪，初始化失败则清理RAG消息并返回
         if (!ensureMemoryReady()) returnEvent();
         /** 所有查询结果汇总（含相似度分数） */
-        const allResults: { id: string, role: string, content: string, similarity: number }[] = [];
+        const allResults: { id: string, role: string, content?: string, image?: string, similarity: number }[] = [];
         // 对每条用户消息分别查询 记忆库
         for (const userMessage of userMessages) {
             // 获取 记忆库 查询结果
@@ -275,18 +275,19 @@ export class DialogueRole extends ModelBuilder {
         // 如果没有任何结果，清理RAG消息并返回
         if (allResults.length === 0) returnEvent();
         /** 基于内容去重，保留相似度最高的记录 */
-        const seen = new Map<string, { id: string, role: string, content: string, similarity: number }>();
+        const seen = new Map<string, { id: string, role: string, content?: string, image?: string, similarity: number }>();
         // 遍历所有结果，对相同内容只保留相似度最高的
         for (const r of allResults) {
-            const existing = seen.get(r.content);
-            if (!existing || r.similarity > existing.similarity) seen.set(r.content, r);
+            const content = r.content || '';
+            const existing = seen.get(content);
+            if (!existing || r.similarity > existing.similarity) seen.set(content, r);
         }
         // 按相似度降序排列，确保相关度最高的结果在最前面
         const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
         // 输出排序验证信息
         console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
         // 写入 ragMessages
-        this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content }));
+        this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content || '' }));
         return this;
     }
     /** 构造函数 */
