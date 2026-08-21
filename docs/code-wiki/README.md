@@ -33,7 +33,7 @@
 
 | 文档 | 内容 | 相关源文档 |
 |------|------|-----------|
-| [01-项目架构总览](01-项目架构总览.md) | 系统分层、数据流、技术栈 | [README](../../README.md)、[ARCHITECTURE](../../ARCHITECTURE.md) |
+| [01-项目架构总览](01-项目架构总览.md) | 架构入口、前端共享资源机制、章节导航 | [README](../../README.md)、[ARCHITECTURE](../../ARCHITECTURE.md) |
 | [02-核心系统-星图月华](02-核心系统-星图月华.md) | Go 后端 + TS 智能体 | [lunar_astral/README](../../lunar_astral/README.md) |
 | [03-扩展系统-星图琉璃](03-扩展系统-星图琉璃.md) | 工具集成扩展 + 代理路由 | [crystal_astral/README](../../crystal_astral/README.md) |
 | [04-公共子系统](04-公共子系统.md) | 五基础子系统 | [subsystem/*/README](../../subsystem/) |

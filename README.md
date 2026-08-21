@@ -163,7 +163,7 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 | 章节 | 内容 |
 |------|------|
-| [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) | 系统分层、数据流、技术栈 |
+| [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) | 架构入口、前端共享资源、章节导航 |
 | [02 核心系统·月华](docs/code-wiki/02-核心系统-星图月华.md) | Go 后端 + TypeScript 智能体 |
 | [03 扩展系统·琉璃](docs/code-wiki/03-扩展系统-星图琉璃.md) | 工具集扩展 + 代理路由 |
 | [04 公共子系统](docs/code-wiki/04-公共子系统.md) | 配置/浏览器/文件/图像/日志 |

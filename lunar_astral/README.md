@@ -45,20 +45,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ### 启动时序
 
-```
-main.go
-  ├── server.InitializeServer()
-  │   ├── LoggerGeneral.SetDevMode()    ← 初始化日志（调试模式）
-  │   ├── registerHandlers()            ← 注册所有 HTTP 路由 + 启动图像任务协处理器
-  │   ├── llama.Init()                  ← 启动 llama-server + 等待就绪（5 分钟超时）
-  │   ├── initTTSEngine()               ← 初始化 Qwen3-TTS 语音引擎
-  │   ├── websocket.SetupWebSocketHandler() ← 注册 /ws、/ws/studio 端点
-  │   ├── adapters.RunAgentContext()    ← 创建 goja 运行时并执行 agentSystem.js
-  │   └── initBridgeAdapter()           ← 加载 NapCat 桥接配置并启动扫描
-  ├── SetupSignalHandling()             ← 系统信号监听
-  ├── StartServerListener()             ← 端口自动递增重试
-  └── WaitForShutdown()                 ← 优雅关闭（系统信号或 WebView 关闭）
-```
+启动调用链与各步骤对应实现，见 [Code Wiki 02 §2 启动时序](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
 
 ### 核心数据流
 

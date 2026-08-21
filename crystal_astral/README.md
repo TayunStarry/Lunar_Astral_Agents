@@ -57,20 +57,7 @@
 
 ### 启动时序
 
-```
-main.go
-  ├── flag.Parse()
-  ├── rand.Intn(30001)+10000     ← 随机端口（10000~40000）
-  └── StartServer(port, fs, name)
-      ├── 初始化 StudioHubInstance 集线器
-      ├── 注册 SystemEndpoints 路由（见 API 接口）
-      ├── 注册 /ws/studio WebSocket 端点
-      ├── 创建代理感知 Handler (/v1/ 等 → 月华 llama-proxy)
-      ├── reloadPageParameters() ← 窗口尺寸 1500×1050
-      ├── browser.OpenBrowser()  ← 自动打开 WebView
-      ├── http.ListenAndServe()  ← 异步启动 HTTP
-      └── 等待信号优雅退出
-```
+启动调用链与各步骤对应实现，见 [Code Wiki 03 §2 启动与路由](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
 
 ### 代理感知路由
 
