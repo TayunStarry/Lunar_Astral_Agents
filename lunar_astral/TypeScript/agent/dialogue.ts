@@ -258,10 +258,10 @@ export class DialogueRole extends ModelBuilder {
         if (!ensureMemoryReady()) returnEvent();
         /** 所有查询结果汇总（含相似度分数） */
         const allResults: { id: string, role: string, content?: string, image?: string, similarity: number }[] = [];
-        // 对每条用户消息分别查询 记忆库
+        // 对每条用户消息分别查询 记忆库（每次取相关度最高的前10条）
         for (const userMessage of userMessages) {
             // 获取 记忆库 查询结果
-            const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
+            const [results, error] = memoryQuery('lunar_messages', userMessage, 10);
             // 单条查询失败则跳过，继续处理下一条
             if (error) {
                 console.error('记忆库查询失败:', error);
@@ -286,8 +286,8 @@ export class DialogueRole extends ModelBuilder {
         const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
         // 输出排序验证信息
         console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-        // 写入 ragMessages
-        this.ragMessages = uniqueResults.map(r => ({ role: r.role as PostMessageRole, content: r.content || '' }));
+        // 写入 ragMessages：去重后按相关度取前32条
+        this.ragMessages = uniqueResults.slice(0, 32).map(r => ({ role: r.role as PostMessageRole, content: r.content || '' }));
         return this;
     }
     /** 构造函数 */

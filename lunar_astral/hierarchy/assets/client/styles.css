@@ -317,6 +317,23 @@ body {
     gap: 10px;
 }
 
+/* 靠近显示机制：默认移出屏幕右侧，鼠标靠近时滑入，离开 1.5 秒后滑出 */
+.top-controls,
+.scroll-controls {
+    transform: translateX(calc(100% + 24px)); 
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .35s ease, visibility 0s .35s;
+}
+
+.top-controls.revealed,
+.scroll-controls.revealed {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform .35s ease, visibility 0s;
+}
+
 /* 搜索框 */
 .search-box {
     display: flex;

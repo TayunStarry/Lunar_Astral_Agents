@@ -464,9 +464,9 @@ var agentSystem = (function (exports) {
         }
         writeContext(context) {
             const cleaned = this.stripReasoningContent(context);
-            if (this.messages.length >= 40) {
-                const discarded = this.messages.slice(0, this.messages.length - 39);
-                this.messages = this.messages.slice(-39).concat(cleaned);
+            if (this.messages.length >= 64) {
+                const discarded = this.messages.slice(0, this.messages.length - 63);
+                this.messages = this.messages.slice(-63).concat(cleaned);
                 GlobalConfig.unreadRecords.push(...discarded);
             }
             else
@@ -787,7 +787,7 @@ var agentSystem = (function (exports) {
                 returnEvent();
             const allResults = [];
             for (const userMessage of userMessages) {
-                const [results, error] = memoryQuery('lunar_messages', userMessage, 5);
+                const [results, error] = memoryQuery('lunar_messages', userMessage, 10);
                 if (error) {
                     console.error('记忆库查询失败:', error);
                     continue;
@@ -807,7 +807,7 @@ var agentSystem = (function (exports) {
             }
             const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
             console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-            this.ragMessages = uniqueResults.map(r => ({ role: r.role, content: r.content || '' }));
+            this.ragMessages = uniqueResults.slice(0, 32).map(r => ({ role: r.role, content: r.content || '' }));
             return this;
         }
         constructor() {

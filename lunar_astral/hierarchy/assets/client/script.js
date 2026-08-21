@@ -58,6 +58,8 @@ const drawboardInput = document.getElementById('drawboardInput');
 const drawboardSendBtn = document.getElementById('drawboardSendBtn');
 
 // ---------- 滚动控制 DOM 引用 ----------
+const topControls = document.querySelector('.top-controls');
+const scrollControls = document.getElementById('scrollControls');
 const scrollTopBtn = document.getElementById('scrollTopBtn');
 const scrollBottomBtn = document.getElementById('scrollBottomBtn');
 const jumpUserBtn = document.getElementById('jumpUserBtn');
@@ -353,6 +355,70 @@ function closeUserJumpPanel() {
 function toggleUserJumpPanel() {
     if (userJumpPanel.hidden) openUserJumpPanel();
     else closeUserJumpPanel();
+}
+
+// ---------- 靠近显示机制 ----------
+/** 靠近显示：默认隐藏，鼠标接近元素时显示，离开 1.5 秒后隐藏 */
+function setupProximityReveal() {
+    const targets = [topControls, scrollControls];
+    const THRESHOLD = 120;   // 靠近阈值（像素）
+    const HIDE_DELAY = 1500; // 离开后隐藏延迟（毫秒）
+    const timers = new Map();
+
+    const reveal = (el) => el.classList.add('revealed');
+    const conceal = (el) => {
+        el.classList.remove('revealed');
+        timers.delete(el);
+    };
+    const scheduleHide = (el) => {
+        if (timers.has(el)) return;
+        timers.set(el, setTimeout(() => conceal(el), HIDE_DELAY));
+    };
+
+    // 鼠标移动：靠近元素显示位置则滑入，离开则开始滑出计时
+    document.addEventListener('mousemove', (e) => {
+        for (const el of targets) {
+            // 元素显示位置的视口坐标（offset 系列不受 translateX 位移影响，保证隐藏时检测基准不变）
+            const pr = (el.offsetParent || document.body).getBoundingClientRect();
+            const left = pr.left + el.offsetLeft;
+            const top = pr.top + el.offsetTop;
+            const right = left + el.offsetWidth;
+            const bottom = top + el.offsetHeight;
+            // 鼠标到元素包围盒的最近距离（鼠标在盒内时为 0）
+            const dx = Math.max(left - e.clientX, 0, e.clientX - right);
+            const dy = Math.max(top - e.clientY, 0, e.clientY - bottom);
+            const dist = Math.hypot(dx, dy);
+            if (dist < THRESHOLD) {
+                clearTimeout(timers.get(el));
+                timers.delete(el);
+                reveal(el);
+            } else {
+                scheduleHide(el);
+            }
+        }
+    });
+
+    // 搜索框聚焦时保持顶部控制区显示（纯键盘搜索不受影响）
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('focusin', () => {
+            clearTimeout(timers.get(topControls));
+            timers.delete(topControls);
+            reveal(topControls);
+        });
+        searchInput.addEventListener('focusout', () => scheduleHide(topControls));
+    }
+
+    // 用户跳转面板打开时保持滚动控制区显示
+    document.addEventListener('click', (e) => {
+        if (!userJumpPanel.hidden) {
+            clearTimeout(timers.get(scrollControls));
+            timers.delete(scrollControls);
+            reveal(scrollControls);
+        } else {
+            scheduleHide(scrollControls);
+        }
+    });
 }
 
 function setupScrollControls() {
@@ -1917,6 +1983,7 @@ async function init() {
     setupDrawboard();
     setupCapture();
     setupScrollControls();
+    setupProximityReveal();
     initMusicRenderer();
     setupRendererFrame();
     await ensureMarked();
