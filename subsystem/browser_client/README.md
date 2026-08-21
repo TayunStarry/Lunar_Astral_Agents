@@ -1,5 +1,7 @@
 # 子系统——网页前端（browser_client）
 
+> 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 桌面 WebView 窗口管理与本地网络 IP 自动发现模块，负责在桌面上启动嵌入式浏览器窗口。
 
 ---

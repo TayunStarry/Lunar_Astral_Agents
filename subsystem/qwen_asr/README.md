@@ -1,5 +1,7 @@
 # 独立系统——语音识别（qwen_asr）
 
+> 📚 代码级文档参见 [Code Wiki 05·独立AI引擎与运维工具](../../docs/code-wiki/05-独立AI引擎与运维工具.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 基于 Qwen3-ASR 模型的本地语音识别（Automatic Speech Recognition）引擎，采用纯 C 语言推理引擎 + Go HTTP 服务的混合架构，支持 0.6B 和 1.7B 两种模型规模。
 
 ---

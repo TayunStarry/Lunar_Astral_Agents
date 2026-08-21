@@ -2,6 +2,8 @@
 
 基于 **Go + TypeScript + C/C++** 的纯本地化桌面 AI 智能体平台，零 Python 依赖。
 
+> 📚 **代码级细节**：本文从架构层面概述系统；要深入具体类与函数，请配合 [Code Wiki 综合文档门户](docs/code-wiki/README.md)（尤其 [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) 与 [07 依赖关系](docs/code-wiki/07-依赖关系.md)）阅读，两套文档互相超链接、查漏补缺。
+
 ---
 
 ## 人格智能体

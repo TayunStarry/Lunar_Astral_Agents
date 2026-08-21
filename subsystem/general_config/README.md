@@ -1,5 +1,7 @@
 # 子系统——配置管理（general_config）
 
+> 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 全局配置中枢模块，负责聚合所有命令行参数与 JSON 配置文件，为其他子系统提供统一的配置访问点。
 
 ---

@@ -155,6 +155,27 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 ---
 
+## 代码文档（Code Wiki）
+
+面向代码理解的文档体系，深入剖析各模块的关键类与函数、依赖关系与构建运行方式。
+
+> 📚 入口：[docs/code-wiki/（综合文档门户）](docs/code-wiki/README.md)
+
+| 章节 | 内容 |
+|------|------|
+| [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) | 系统分层、数据流、技术栈 |
+| [02 核心系统·月华](docs/code-wiki/02-核心系统-星图月华.md) | Go 后端 + TypeScript 智能体 |
+| [03 扩展系统·琉璃](docs/code-wiki/03-扩展系统-星图琉璃.md) | 工具集扩展 + 代理路由 |
+| [04 公共子系统](docs/code-wiki/04-公共子系统.md) | 配置/浏览器/文件/图像/日志 |
+| [05 独立 AI 引擎与运维](docs/code-wiki/05-独立AI引擎与运维工具.md) | TTS / ASR / 搜索 / 运维 |
+| [06 前端资源库](docs/code-wiki/06-前端资源库.md) | 标准依赖库与自定义模块 |
+| [07 依赖关系](docs/code-wiki/07-依赖关系.md) | Go 模块图、三方库、端点 |
+| [08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md) | 环境、编译、运行、配置 |
+
+> 两套文档详见门户 [docs/code-wiki/README.md](docs/code-wiki/README.md)，其中互相超链接、查漏补缺。
+
+---
+
 ## 常见问题
 
 **需要 Python 吗？** 不需要。所有 AI 推理均由纯 C/C++ 或 Go 实现的本地引擎完成。

@@ -182,6 +182,8 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 
 ## 相关文档
 
+> 📚 **代码级文档**：见 [Code Wiki 02·核心系统-月华](../docs/code-wiki/02-核心系统-星图月华.md)，综合入口 [Code Wiki 门户](../docs/code-wiki/README.md)。
+
 - [项目主文档](../README.md) — 环境要求、整体架构
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
 - [星图·琉璃](../crystal_astral/README.md) — 扩展工具集

@@ -1,5 +1,7 @@
 # 子系统——智能网络检索（agent_search）
 
+> 📚 代码级文档参见 [Code Wiki 05·独立AI引擎与运维工具](../../docs/code-wiki/05-独立AI引擎与运维工具.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 基于 Chromedp 的 AI 驱动网络搜索智能体，为月华提供多引擎搜索、页面内容提取、AI 摘要与记忆存储能力。
 
 ---

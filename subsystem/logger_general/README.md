@@ -1,5 +1,7 @@
 # 子系统——彩色终端日志（logger_general）
 
+> 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 轻量级彩色终端日志输出模块，提供分级日志格式化与 ANSI 颜色渲染，为所有子系统提供统一的日志输出规范。
 
 ---

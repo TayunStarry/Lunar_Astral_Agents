@@ -1,5 +1,7 @@
 # 子系统——文件管理（file_manager）
 
+> 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 本地文件存储、SQLite 知识库、向量记忆库与扩展包管理模块，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
 
 ---

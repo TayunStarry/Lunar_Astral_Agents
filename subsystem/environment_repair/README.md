@@ -1,5 +1,7 @@
 # 子系统——环境修复工具（environment_repair）
 
+> 📚 代码级文档参见 [Code Wiki 05·独立AI引擎与运维工具](../../docs/code-wiki/05-独立AI引擎与运维工具.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 星月智能平台的运维工具箱，以交互式终端菜单提供资源补全、端口释放、HTTPS 代理与分卷打包四项功能。
 
 ---

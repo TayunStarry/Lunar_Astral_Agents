@@ -1,5 +1,7 @@
 # 子系统——图像处理（image_processor）
 
+> 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
+
 图像生成、视频关键帧提取与屏幕截图的共享库模块，封装 stable-diffusion.cpp 调用流程、视频帧截取逻辑与跨平台截图能力，采用 Module（逻辑层）+ Server（HTTP 层）二层架构。
 
 ---
