@@ -4,11 +4,25 @@ import { ToolCall, GlobalConfig } from '../index';
 interface ScheduleItem {
 	/** 唯一标识 */
 	id: string;
-	/** 预约执行时间 (ISO 8601 格式) */
+	/** 执行时间：一次性任务为 ISO 8601 完整时间；每日任务为 "HH:MM" 每日执行时间 */
 	time: string;
 	/** 计划工作内容 */
 	content: string;
+	/** 任务类型：once 一次性（完成后移除）/ daily 每日任务（完成后不移除） */
+	type?: 'once' | 'daily';
+	/** 最近完成日期（YYYY-MM-DD），每日任务"每天只执行一次"的判定依据 */
+	completedDate?: string;
 }
+
+/** 预设每日任务：每天早上/白天/晚上的定时问候（固定ID保证幂等，不会重复创建） */
+const PRESET_DAILY_TASKS: ScheduleItem[] = [
+	{ id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早上好问候' },
+	{ id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水了"的问候' },
+	{ id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候' },
+	{ id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水了"的问候' },
+	{ id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送下午好问候' },
+	{ id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候' },
+];
 
 /** 计划表存储路径 */
 const SCHEDULE_FILE_PATH = 'database/schedule.json';
@@ -179,6 +193,21 @@ function formatISO(date: Date): string {
 	return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
 }
 
+/** 格式化为日期字符串 (YYYY-MM-DD)，用于每日任务"今日已执行"判定 */
+function formatDate(date: Date): string {
+	const y = date.getFullYear();
+	const mo = String(date.getMonth() + 1).padStart(2, '0');
+	const d = String(date.getDate()).padStart(2, '0');
+	return `${y}-${mo}-${d}`;
+}
+
+/** 计算每日任务"今天"的执行时间点；time 非 "HH:MM" 格式时返回 null */
+function dailyTaskTime(item: ScheduleItem, now: Date): Date | null {
+	const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return null;
+	return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+}
+
 // ==== 初始化 ====
 
 /**
@@ -188,6 +217,16 @@ function formatISO(date: Date): string {
 export function initSchedules(): void {
 	const raw = loadSchedulesFromDisk();
 
+	// 幂等合并预设每日任务：固定ID缺失时补充，保证每天定时问候存在
+	const existingIds = new Set(raw.map(item => item.id));
+	let added = 0;
+	for (const preset of PRESET_DAILY_TASKS) {
+		if (!existingIds.has(preset.id)) {
+			raw.push({ ...preset });
+			added++;
+		}
+	}
+
 	if (raw.length === 0) {
 		// 确保空文件存在
 		saveSchedulesToDisk([]);
@@ -196,10 +235,12 @@ export function initSchedules(): void {
 		return;
 	}
 
-	/** 是否需要回写（时间格式被修正） */
-	let needsRewrite = false;
+	/** 是否需要回写（时间格式被修正或补充了预设任务） */
+	let needsRewrite = added > 0;
 
 	for (const item of raw) {
+		// 每日任务 time 为 "HH:MM"（每日执行时间），跳过完整时间归一化
+		if (item.type === 'daily') continue;
 		const normalized = normalizeTime(item.time);
 		if (normalized && normalized !== item.time) {
 			item.time = normalized;
@@ -211,6 +252,7 @@ export function initSchedules(): void {
 
 	if (needsRewrite) {
 		saveSchedulesToDisk(scheduleCache);
+		if (added > 0) console.log(`[计划表] 已补充 ${added} 个预设每日任务`);
 		console.log('[计划表] 已修正历史数据中的非标准时间格式');
 	}
 	console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
@@ -356,18 +398,32 @@ async function handleQuerySchedule(args?: Record<string, any> | string): Promise
 
 /**
  * 检查到期计划项（仅使用内存缓存，不读取磁盘）。
- * 返回已到期的计划项列表，并从缓存和磁盘中移除。
+ * 一次性任务到期后从缓存和磁盘移除；每日任务完成后不移除，仅标记"今日已执行"。
+ * 同一时间段多个每日任务激活时，仅执行距离当前时间最近的一个，其余标记"今日已执行"（不执行）。
  */
 export function checkDueItems(): ScheduleItem[] {
 	if (scheduleCache.length === 0) return [];
 
 	const now = new Date();
-	/** 已到期的计划项 */
-	const dueItems: ScheduleItem[] = [];
-	/** 未到期的计划项 */
+	/** 今天日期（YYYY-MM-DD），用于每日任务"今日已执行"判定 */
+	const todayStr = formatDate(now);
+	/** 已到期的普通计划项（完成后移除） */
+	const dueOnce: ScheduleItem[] = [];
+	/** 今日到期且尚未执行的每日任务 */
+	const dueDaily: ScheduleItem[] = [];
+	/** 未到期或保留的计划项 */
 	const remaining: ScheduleItem[] = [];
 
 	for (const item of scheduleCache) {
+		// 每日任务：今天该时点已到且今天未执行过 → 到期候选；任务本身永远保留
+		if (item.type === 'daily') {
+			const todayTime = dailyTaskTime(item, now);
+			if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
+				dueDaily.push(item);
+			}
+			remaining.push(item);
+			continue;
+		}
 		const itemTime = new Date(item.time);
 		if (isNaN(itemTime.getTime())) {
 			console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
@@ -375,20 +431,45 @@ export function checkDueItems(): ScheduleItem[] {
 			continue;
 		}
 		if (now >= itemTime) {
-			dueItems.push(item);
+			dueOnce.push(item);
 			console.log(`[计划表] 触发到期计划项: [${item.id}] ${item.time} - ${item.content}`);
 		} else {
 			remaining.push(item);
 		}
 	}
 
-	// 如果有到期项，更新缓存和磁盘
-	if (dueItems.length > 0) {
+	/** 本周期实际执行的计划项 */
+	const executed: ScheduleItem[] = [...dueOnce];
+
+	// 每日任务冲突处理：同一时间段多个任务激活时，仅执行距离当前时间最近的一个；
+	// 所有到期的每日任务（含被执行的）均标记"今日已执行"，通过完成时间字段判定
+	if (dueDaily.length > 0) {
+		// 按与当前时间的距离升序，距离最近的一个执行
+		dueDaily.sort((a, b) => {
+			const ta = dailyTaskTime(a, now)!.getTime();
+			const tb = dailyTaskTime(b, now)!.getTime();
+			return Math.abs(now.getTime() - ta) - Math.abs(now.getTime() - tb);
+		});
+		const chosen = dueDaily.shift()!;
+		console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+		executed.push(chosen);
+		// 其余到期的每日任务标记"今日已执行"（不执行）
+		for (const d of dueDaily) {
+			console.log(`[计划表] 每日任务冲突，标记今日已执行(不执行): [${d.id}] ${d.time} - ${d.content}`);
+		}
+		// 所有到期的每日任务（含被执行的）均标记今日完成
+		for (const d of [chosen, ...dueDaily]) {
+			d.completedDate = todayStr;
+		}
+	}
+
+	// 有变更时更新缓存和磁盘
+	if (executed.length > 0) {
 		scheduleCache = remaining;
 		saveSchedulesToDisk(scheduleCache);
 	}
 
-	return dueItems;
+	return executed;
 }
 
 // ==== 模块级注册 ====

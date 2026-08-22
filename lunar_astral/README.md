@@ -26,18 +26,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ## 项目结构
 
-| 目录 | 职责 |
-|------|------|
-| `adapters/` | Go↔JS 适配器层，基于 goja 运行时将 Go 能力（文件/数据库/网络/图像）暴露为 JS 可调用函数 |
-| `model/` | 模型服务层，管理 llama-server 进程生命周期与请求队列（TTS 引擎由独立子系统 qwen3_tts 提供） |
-| `server/` | HTTP 服务层，路由注册、CORS、初始化流程、消息/图像/视频处理 |
-| `hierarchy/` | 前端资源层，Go embed 嵌入：goja 智能体 JS、角色 Prompt、Web 界面 |
-| `websocket/` | WebSocket 通信层，连接管理、读写泵、广播推送 |
-| `TypeScript/` | TypeScript 智能体源码（配置/控制/文件/数学/模型子模块），编译为 agentSystem.js |
-| `learner/` | 学习者智能体，自主搜索学习并沉淀为记忆 |
-| `bridging/` | QQ 群聊适配器，NapCat ↔ 月华消息转发 |
-
-**Go 子系统依赖**（以 `LunarSubsystem/` 前缀引入）：`GeneralConfig`、`BrowserClient`、`FileManager`、`LoggerGeneral`、`ImageProcessor`、`AgentSearch`、`Qwen3-TTS`
+`lunar_astral/` 主目录职责（`adapters/`、`model/`、`server/`、`hierarchy/`、`websocket/`、`TypeScript/`、`learner/`、`bridging/`）及 Go 子系统依赖清单一并见 [Code Wiki 02 §1 目录总览](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
 
 ---
 
@@ -65,72 +54,19 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
                                                     前端渲染 (Markdown/Mermaid/ECharts)
 ```
 
-### 双层配置架构
+### 核心模块
 
-1. **命令行参数**（`-basic-port`、`-developer` 等）—— 最高优先级
-2. **`lunar_config.json`** 配置文件 —— 覆盖默认值
+月华的核心能力由以下模块承载，其代码级细节（各目录逐文件职责、llama 启动参数、TS 智能体子模块、前端界面与角色提示词、TTS 链路）见 [Code Wiki 02 §3 Go 后端模块](docs/code-wiki/02-核心系统-星图月华.md)、[§4 TypeScript 智能体](docs/code-wiki/02-核心系统-星图月华.md) 与 [§5 前端界面](docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
 
-> 详细配置项见 [配置管理子系统文档](../subsystem/general_config/README.md)。
+### 配置
 
----
-
-## 核心模块
-
-### 适配器层（adapters/）
-
-Go↔JavaScript 双向桥接，基于 goja 运行时。暴露出 `saveFile()`、`readFile()`、`knowledge()`、`memoryQuery()`、`url()`、`generateImage()`、`keyframe()`、`resizeImage()`、`tts()`、`screenshotCapture()` 等函数供 JS 智能体调用。
-
-### 模型代理层（model/llama/）
-
-管理 `llama-server.exe` 进程生命周期，启动参数：`--models-preset local_data/models/models.ini --flash-attn on --port <ModelPort> --parallel 1 --batch-size 2048 --ubatch-size 1024 --cache-type-k q8_0 --cache-type-v q8_0 --no-ui --sleep-idle-seconds 900`（含温度/采样等生成参数）。模型由 `models.ini` 预设文件管理（`[system-multimodal]` 多模态、`[system-embedding]` 嵌入）。支持就绪检测（5 分钟超时）、embedding 请求本地路由、多模态请求云端代理切换。
-
-### TTS 引擎（subsystem/qwen3_tts）
-
-AI 回复文本 → 按标点分句 → TTS 引擎合成 WAV → 音频缓存 → WebSocket 推送 → 前端播放。TTS 引擎由独立子系统 `LunarSubsystem/Qwen3-TTS/module` 提供（`server/variable.go` 引入该模块并注册 `/tts` 端点）。
-
-### 前端界面（hierarchy/assets/client/）
-
-基于原生 HTML/CSS/JavaScript 的单页 Web 应用，通过 WebView 嵌入桌面窗口。核心模块：`app.js`（主逻辑）、`chat.js`（富文本渲染）、`socket.js`（WebSocket）、`tts.js`（语音播放）。
-
-### AI 提示词（assets/prompts/）
-
-| 文件 | 用途 |
-|------|------|
-| `dialogueRole.md` | 月华角色基础人设与对话风格 |
-| `descriptionRole.md` | 视频关键帧描述指南 |
-| `painterRole.md` | 画师角色设定 |
-| `selfAppearance.md` | 角色外观自我描述 |
-| `viewerRole.md` | 观影者角色 |
-| `actorRole.md` | 行动者角色 |
-| `musicianRole.md` | 音乐作曲家角色 |
-| `learner*.md` | 学习者智能体系列（研究报告 / 查询推理完善 / 策略评估 / 搜索内容评估 / 记忆更新） |
+采用「命令行参数 + `lunar_config.json` 双层配置」；命令行参数最高优先级，JSON 按字段增量覆盖默认值。详细配置项见 [配置管理子系统（general_config）](../subsystem/general_config/README.md)。
 
 ---
 
 ## API 接口
 
-| 路径 | 方法 | 功能 |
-|------|------|------|
-| `/v1/` | ANY | 智能体代理接口（转发到 llama.cpp，支持所有 HTTP 方法） |
-| `/write/message` | POST | 消息写入队列 |
-| `/write/videourl` | POST | 视频 URL 写入 |
-| `/generate` / `/generate/wait` | POST / GET | 图像生成 / 等待生成结果 |
-| `/extract/keyframes` | POST | 视频关键帧提取 |
-| `/tts` | POST | TTS 语音合成 |
-| `/memory/` | ANY | 记忆库管理（实例初始化/集合管理/消息增删查） |
-| `/knowledge/` | POST | 知识库管理 |
-| `/file/...` | 多种 | 文件读写/列表/下载/归档/扩展包管理 |
-| `/api/engine/command` | POST | 智能体引擎命令转发 |
-| `/proxy` | POST | 代理访问服务 |
-| `/ltpx/load` `/ltpx/unload` `/ltpx/status` | POST/POST/GET | LTPX 工具包动态管理 |
-| `/ws` | GET | WebSocket 连接升级 |
-
-### WebSocket 消息协议
-
-| 消息类型 | `type` 值 | 内容 |
-|---------|----------|------|
-| 上下文消息 | `context` | AI 对话文本（`type`/`content`/`audio` 字段；子类型含 thinking、response、music、music_audio 等） |
-| 图片消息 | `image` | 生成/上传的图片（`images` 数组） |
+完整端点表与本机 WebSocket 消息协议见 [Code Wiki 02 §6 HTTP API 与 WebSocket 协议](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
 
 ---
 

@@ -24,7 +24,6 @@ local_data/documents/
 local_data/database/
 workspace/
 status.json
-lunar_messages.json
 
 ## 系统文件
 desktop.ini

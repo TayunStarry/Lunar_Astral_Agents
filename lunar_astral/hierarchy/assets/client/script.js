@@ -11,7 +11,7 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const USER_NAME = '你';
 const ASSISTANT_NAME = '月华';
-const MESSAGES_FILE_PATH = 'lunar_messages.json';
+const MESSAGES_FILE_PATH = 'database/messages.json';
 const MAX_PERSISTED_MESSAGES = 200;
 
 // ---------- DOM 引用 ----------
@@ -942,7 +942,7 @@ function schedulePersist() {
 
 async function loadPersistedMessages() {
     try {
-        const res = await fetch('/file/read/lunar_messages.json');
+        const res = await fetch('/file/read/database/messages.json');
         if (!res.ok) return;
         const list = await res.json();
         if (!Array.isArray(list)) return;

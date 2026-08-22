@@ -464,9 +464,9 @@ var agentSystem = (function (exports) {
         }
         writeContext(context) {
             const cleaned = this.stripReasoningContent(context);
-            if (this.messages.length >= 64) {
-                const discarded = this.messages.slice(0, this.messages.length - 63);
-                this.messages = this.messages.slice(-63).concat(cleaned);
+            if (this.messages.length >= 48) {
+                const discarded = this.messages.slice(0, this.messages.length - 47);
+                this.messages = this.messages.slice(-47).concat(cleaned);
                 GlobalConfig.unreadRecords.push(...discarded);
             }
             else
@@ -642,8 +642,7 @@ var agentSystem = (function (exports) {
             }
             if (this.messages.length === 0)
                 return;
-            const latestRole = this.messages.slice(-1)[0].role;
-            if (latestRole === 'user' || latestRole === 'tool')
+            if (this.messages.slice(-1)[0].role === 'user')
                 return;
             this.writeContext({ role: 'user', content: "继续" });
         }
@@ -1736,6 +1735,29 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             console.log('[观影者] 观后感已缓存');
         }
     }
+    async function summarizeDynamicImages(frames) {
+        if (frames.length === 0)
+            return '';
+        const summaries = [];
+        const BATCH_SIZE = 8;
+        for (let i = 0; i < frames.length; i += BATCH_SIZE) {
+            const batch = frames.slice(i, i + BATCH_SIZE);
+            try {
+                descriptionRole.coverContext({
+                    role: 'user',
+                    content: batch.map(frame => ({ type: 'image_url', image_url: { url: frame } }))
+                });
+                const summaryRequest = descriptionRole.run([], []);
+                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+                if (summary && summary.trim().length > 0)
+                    summaries.push(summary.trim());
+            }
+            catch (error) {
+                console.error('[动态图摘要] 批次摘要失败:', error);
+            }
+        }
+        return summaries.join('\n');
+    }
     async function LiteImageFile() {
         for (let message of GlobalConfig.unreadContext) {
             if (typeof message.content === 'string')
@@ -1756,6 +1778,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     const [resizedImages, error1] = resizeImage(response.body);
                     if (error1) {
                         console.error('[缩放图片失败]:', error1.message, error1.stack);
+                        continue;
+                    }
+                    if (resizedImages.length > 1) {
+                        newContent.push({ type: 'text', text: await summarizeDynamicImages(resizedImages.map(image => image.base64)) || '' });
                         continue;
                     }
                     resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
@@ -1808,23 +1834,26 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 return;
             }
             GlobalConfig.silenceCount = 0;
-            if (messageLength === 0)
+            if (messageLength === 0) {
+                pullPoolContext().forEach(message => writeMessage(message.role, message.content));
                 GlobalConfig.speakWeight = 0;
+            }
             await batchProcessVideoFiles();
             await createChatMessage();
-            if (!GlobalConfig.finalResponse.trim().length)
-                throw new Error('消息响应为空');
+            if (!GlobalConfig.finalResponse.trim().length) {
+                pushContext(messageType, randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                return;
+            }
+            ;
             const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
             if (!textChunks.length)
                 throw new Error('清洗后的文本为空');
-            if (actionBlocks.length) {
-                await actorRole.createCreativeWork(actionBlocks.join(' | '));
-            }
-            ;
-            if (emotionBlocks.length) {
-                const sticker = await queryEmotionSticker(emotionBlocks.join(' '));
+            if (actionBlocks.length || emotionBlocks.length) {
+                await actorRole.createCreativeWork(actionBlocks.join('|') || emotionBlocks.join('|'));
+                const sticker = await queryEmotionSticker(emotionBlocks.join('|') || actionBlocks.join('|'));
                 if (sticker)
                     pushImage([sticker], true);
+                console.log(emotionBlocks.join(' | ') + actionBlocks.join(' | ') + ' : ' + sticker.length);
             }
             else if (Math.random() < 0.1) {
                 const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
@@ -1861,11 +1890,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         pullContext().forEach(message => writeMessage(message.role, message.content));
         pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); });
         await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    async function messageWrite(role, messages, timeout) {
-        await new Promise(resolve => setTimeout(resolve, timeout));
-        if (messages.length > 0)
-            writeMessage(role, messages);
     }
     function writeMessage(role, messages) {
         GlobalConfig.unreadContext.push({ role, content: messages });
@@ -1975,38 +1999,17 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
         GlobalConfig.unreadRecords = [];
     }
-    function buildRandomEntranceLines() {
-        const initializationGreetings = {
-            morning: ['月华，早上好呀~', '早安呀，月华~', '月华，起床啦~'],
-            afternoon: ['月华，下午好~', '月华，中午好呀~', '月华在吗~'],
-            evening: ['月华，晚上好呀~', '月华，晚上好~', '月华在不在呀~'],
-            night: ['月华，这么晚还没睡吗~', '月华，夜深啦~', '月华还在吗~'],
-        };
-        const initializationTopics = [
-            '今天陪我聊聊天吧',
-            '今天有什么新鲜事吗',
-            '准备好了吗，我们开始吧',
-            '想你了，月华~',
-            '今天也要元气满满哦',
-            '一起来做点有趣的事吧',
-        ];
-        const currentHour = new Date().getHours();
-        let greetingPool = initializationGreetings.night;
-        if (currentHour >= 5 && currentHour < 11)
-            greetingPool = initializationGreetings.morning;
-        else if (currentHour >= 11 && currentHour < 17)
-            greetingPool = initializationGreetings.afternoon;
-        else if (currentHour >= 17 && currentHour < 23)
-            greetingPool = initializationGreetings.evening;
-        const greeting = greetingPool[RandomFloor(0, greetingPool.length - 1)];
-        const topic = initializationTopics[RandomFloor(0, initializationTopics.length - 1)];
-        return greeting + topic;
-    }
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
     setInterval(() => thoughtLoopTickEvent(), 1000);
-    const initializationMessage = [{ type: 'text', text: buildRandomEntranceLines() }];
-    messageWrite('user', initializationMessage, 1500);
 
+    const PRESET_DAILY_TASKS = [
+        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早上好问候' },
+        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水了"的问候' },
+        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候' },
+        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水了"的问候' },
+        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送下午好问候' },
+        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候' },
+    ];
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [
         {
@@ -2147,16 +2150,38 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         const s = String(date.getSeconds()).padStart(2, '0');
         return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
     }
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${d}`;
+    }
+    function dailyTaskTime(item, now) {
+        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!match)
+            return null;
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+    }
     function initSchedules() {
         const raw = loadSchedulesFromDisk();
+        const existingIds = new Set(raw.map(item => item.id));
+        let added = 0;
+        for (const preset of PRESET_DAILY_TASKS) {
+            if (!existingIds.has(preset.id)) {
+                raw.push({ ...preset });
+                added++;
+            }
+        }
         if (raw.length === 0) {
             saveSchedulesToDisk([]);
             scheduleCache = [];
             console.log('[计划表] 初始化完成，计划表为空');
             return;
         }
-        let needsRewrite = false;
+        let needsRewrite = added > 0;
         for (const item of raw) {
+            if (item.type === 'daily')
+                continue;
             const normalized = normalizeTime(item.time);
             if (normalized && normalized !== item.time) {
                 item.time = normalized;
@@ -2166,6 +2191,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         scheduleCache = raw;
         if (needsRewrite) {
             saveSchedulesToDisk(scheduleCache);
+            if (added > 0)
+                console.log(`[计划表] 已补充 ${added} 个预设每日任务`);
             console.log('[计划表] 已修正历史数据中的非标准时间格式');
         }
         console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
@@ -2268,9 +2295,19 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         if (scheduleCache.length === 0)
             return [];
         const now = new Date();
-        const dueItems = [];
+        const todayStr = formatDate(now);
+        const dueOnce = [];
+        const dueDaily = [];
         const remaining = [];
         for (const item of scheduleCache) {
+            if (item.type === 'daily') {
+                const todayTime = dailyTaskTime(item, now);
+                if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
+                    dueDaily.push(item);
+                }
+                remaining.push(item);
+                continue;
+            }
             const itemTime = new Date(item.time);
             if (isNaN(itemTime.getTime())) {
                 console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
@@ -2278,18 +2315,35 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 continue;
             }
             if (now >= itemTime) {
-                dueItems.push(item);
+                dueOnce.push(item);
                 console.log(`[计划表] 触发到期计划项: [${item.id}] ${item.time} - ${item.content}`);
             }
             else {
                 remaining.push(item);
             }
         }
-        if (dueItems.length > 0) {
+        const executed = [...dueOnce];
+        if (dueDaily.length > 0) {
+            dueDaily.sort((a, b) => {
+                const ta = dailyTaskTime(a, now).getTime();
+                const tb = dailyTaskTime(b, now).getTime();
+                return Math.abs(now.getTime() - ta) - Math.abs(now.getTime() - tb);
+            });
+            const chosen = dueDaily.shift();
+            console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+            executed.push(chosen);
+            for (const d of dueDaily) {
+                console.log(`[计划表] 每日任务冲突，标记今日已执行(不执行): [${d.id}] ${d.time} - ${d.content}`);
+            }
+            for (const d of [chosen, ...dueDaily]) {
+                d.completedDate = todayStr;
+            }
+        }
+        if (executed.length > 0) {
             scheduleCache = remaining;
             saveSchedulesToDisk(scheduleCache);
         }
-        return dueItems;
+        return executed;
     }
     initSchedules();
     GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
@@ -2523,6 +2577,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     GlobalConfig.LTPdefinition.push(...agentControlTools);
 
     const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
+    const KAOMOJI_MARKS = '_^･・。.、；;～~ノﾉゞヾω￣▽△□○●☆★°´｀♪♫＞＜><｡一≧≦∇∀ﾟ⌒⌣◕';
+    const KAOMOJI_REGEX = new RegExp(`[<＜＼]?[（(](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[${KAOMOJI_MARKS}](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[）)](?:[<＜>＞／\u30ce\u309e\u266a\u266b]*)?` +
+        `|[>＜^TtOo0vV][_\\-=^><。.・oO][<＞^TtOo0vV]`, 'gu');
+    const EMOTION_REGEX = new RegExp(`${EMOJI_REGEX.source}|${KAOMOJI_REGEX.source}`, 'gu');
     function extractThinkingBlocks(text) {
         const blocks = [];
         const regex = /<think>([\s\S]*?)<\/think>/gi;
@@ -2576,7 +2634,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
     function extractEmotionBlocks(text) {
         const blocks = [];
-        const regex = new RegExp(EMOJI_REGEX.source, 'gu');
+        const regex = new RegExp(EMOTION_REGEX.source, 'gu');
         let match;
         let lastEnd = -1;
         let current = '';
@@ -2593,7 +2651,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         if (current.length > 0)
             blocks.push(current);
-        const remaining = text.replace(new RegExp(EMOJI_REGEX.source, 'gu'), '');
+        const remaining = text.replace(regex, '');
         return [blocks, remaining];
     }
     function cleanTextForTTS(text) {
@@ -2701,9 +2759,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], emotionBlocks: [], textChunks: [] };
         const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
-        const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterCode);
-        const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterAction);
-        const displayText = removeEmojiSymbols(textAfterEmotion);
+        const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterCode);
+        const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterEmotion);
+        const displayText = removeEmojiSymbols(textAfterAction);
         const displayChunks = splitSentences(displayText);
         const textChunks = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
         return { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks };

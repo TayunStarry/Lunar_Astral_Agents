@@ -37,19 +37,7 @@
 
 ## 项目结构
 
-| 文件 | 职责 |
-|------|------|
-| `main.go` | 程序入口，随机端口（10000~40000）+ 启动服务器 |
-| `create.go` | 服务器创建、代理感知路由、应用启动、StudioHub 初始化 |
-| `handler.go` | 代理转发（模型列表/对话）、GGUF 元数据、图片转换、月华服务启停 |
-| `gguf.go` | GGUF 模型文件解析 |
-| `convert.go` | 图片格式转换（单张/批量/列表） |
-| `ws.go` | StudioHub WebSocket 集线器 + 引擎命令桥接 |
-| `type.go` | 请求/响应类型定义 |
-| `variable.go` | 全局变量、常量与 SystemEndpoints 路由表 |
-| `assets/` | 前端静态资源（index.html + script.js + style.css） |
-
-**Go 模块依赖**：`general_config`、`browser_client`、`file_manager`、`image_processor`、`logger_general`（另含 `gorilla/websocket`、`chai2010/webp`）
+`crystal_astral/` 各文件职责（`main.go`、`create.go`、`handler.go`、`gguf.go`、`convert.go`、`ws.go`、`type.go`、`variable.go` 及 `assets/`）与 Go 模块依赖见 [Code Wiki 03 §1 目录总览](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
 
 ---
 
@@ -59,116 +47,15 @@
 
 启动调用链与各步骤对应实现，见 [Code Wiki 03 §2 启动与路由](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
 
-### 代理感知路由
+### 代理与引擎桥接
 
-琉璃通过智能路由根据请求路径自动分发，代理目标统一为月华后端（`http://localhost:36789`）：
-
-```
-请求 → proxyAwareHandler
-  ├── /v1/ 开头          → 代理到月华后端
-  ├── /tts 开头          → 代理到月华后端（由其转发至 TTS 服务）
-  ├── /write/message 开头 → 代理到月华后端
-  ├── /ltpx/ 开头        → 代理到月华后端
-  └── 其他路径            → 直接服务静态文件
-```
-
-### StudioHub 引擎桥接
-
-`/ws/studio` 是工作室 WebSocket 集线器端点：
-
-- 前端组件（如动作控制面板）通过 WebSocket 实时收发消息
-- 集线器拦截 `animation_list` 消息并缓存动作定义（`animCache`），供智能体查询
-- `/api/engine/command` 接收智能体后端的引擎命令并转发到 StudioHub 广播
-- `/api/engine/animations` 返回缓存的可用动作列表
+琉璃通过**智能路由**依据请求路径自动分发：`/v1/`、`/tts`、`/write/message`、`/ltpx/` 等前缀代理到月华后端（`http://localhost:36789`），其余路径直接服务本地静态资源；`StudioHub` WebSocket 集线器负责引擎命令与动画动作的桥接与广播。代理感知路由的分发规则与 StudioHub 实现细节见 [Code Wiki 03 §2.2](../docs/code-wiki/03-扩展系统-星图琉璃.md) 与 [§3.4](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
 
 ---
 
 ## API 接口
 
-端点由 `SystemEndpoints` 路由表统一注册，按功能域分组：
-
-### 应用与资源
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/load/application` | 加载外部应用程序（.exe / .ps1 / .bat） |
-| GET | `/background` | 获取随机背景图片 |
-
-### 文件操作
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/file/read/{path}` | 读取文件内容 |
-| POST | `/file/write` | 保存文件（Header: `X-File-Name`） |
-| DELETE | `/file/delete/{path}` | 删除文件或目录 |
-| POST | `/file/list/{path}` | 列出目录内容 |
-| GET | `/file/download/{path}` | 下载文件 |
-| GET | `/file/preview` | 全局文件预览（图片/视频/文本） |
-| POST | `/file/archive` | 文件归档（ZIP） |
-
-### 扩展包管理
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/file/package/install` | 安装扩展包 |
-| POST | `/file/package/export` | 导出扩展包 |
-| POST | `/file/package/delete` | 删除扩展包 |
-| GET | `/api/packages` | 扫描包目录 |
-
-### 知识库与记忆库
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/knowledge/` | 知识库管理（insert/update/delete/select/create/drop） |
-| ANY | `/memory/` | 记忆库（实例初始化/集合管理/消息增删查/文档列表/重建） |
-
-### 文件整理
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/file/organize` | 批量文件整理操作 |
-
-### 截图与图像处理
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST/GET | `/capture` | 统一截图（auto/window/fullscreen/display/region 五种模式） |
-| GET | `/capture/displays` | 获取显示器列表 |
-| POST | `/resize` | 图片缩放 |
-| POST | `/keyframe` | 视频关键帧提取 |
-| POST | `/convert/image` | 单张图片格式转换 |
-| POST | `/convert/batch` | 批量图片格式转换 |
-| POST | `/convert/list` | 列出文件夹中的图片文件 |
-
-### AI 模型与推理
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/proxy/models` | 代理查询模型列表 |
-| POST | `/proxy/chat` | 代理 OpenAI 对话请求 |
-| POST | `/gguf/metadata` | GGUF 模型元数据解析 |
-| POST | `/generate` | 图像生成 |
-| GET | `/generate/wait` | 图像生成任务等待 |
-
-### 月华服务
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| GET | `/lunar/check` | 检测月华服务状态（端口 36789） |
-| POST | `/lunar/start` | 启动月华服务（Lunar_Astral.exe） |
-
-### 引擎命令桥接
-
-| 方法 | 端点 | 说明 |
-|------|------|------|
-| POST | `/api/engine/command` | 智能体引擎命令转发 |
-| GET | `/api/engine/animations` | 查询引擎可用动作列表 |
-
-### WebSocket
-
-| 端点 | 说明 |
-|------|------|
-| `/ws/studio` | StudioHub 工作室实时通信（广播引擎命令、缓存动画动作） |
+完整端点表（按功能域分组）见 [Code Wiki 03 §4 端点总览](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
 
 ---
 

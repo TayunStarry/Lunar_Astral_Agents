@@ -67,11 +67,9 @@ export class DialogueRole extends ModelBuilder {
         }
         // 如果处理后消息数组为空（摘要全部失败等极端情况），跳过续写
         if (this.messages.length === 0) return;
-        /** 最新消息的角色 */
-        const latestRole = this.messages.slice(-1)[0].role;
-        // 如果最新消息是用户或工具,则不处理
-        if (latestRole === 'user' || latestRole === 'tool') return;
-        // 添加随机拼接的提示词到处理器模型的上下文
+        // 判定最后一条消息是否是用户消息
+        if (this.messages.slice(-1)[0].role === 'user') return;
+        // 如果不是用户消息就补充一条默认用户消息
         this.writeContext({ role: 'user', content: "继续" });
     }
     /** 对单个多媒体消息中的图片执行摘要，返回合并后的纯文本；无内容时返回 null */

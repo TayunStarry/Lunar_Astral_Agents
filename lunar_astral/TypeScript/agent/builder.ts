@@ -38,9 +38,9 @@ export class ModelBuilder {
 	/** 写入上下文（自动剥离 reasoning_content，避免回传触发模型无限推理） */
 	public writeContext(context: PostMessage): this {
 		const cleaned = this.stripReasoningContent(context);
-		if (this.messages.length >= 64) {
-			const discarded = this.messages.slice(0, this.messages.length - 63);
-			this.messages = this.messages.slice(-63).concat(cleaned);
+		if (this.messages.length >= 48) {
+			const discarded = this.messages.slice(0, this.messages.length - 47);
+			this.messages = this.messages.slice(-47).concat(cleaned);
 			GlobalConfig.unreadRecords.push(...discarded);
 		}
 		else this.messages.push(cleaned);

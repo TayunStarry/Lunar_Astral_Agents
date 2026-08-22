@@ -78,6 +78,34 @@ async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<v
         console.log('[观影者] 观后感已缓存');
     }
 }
+/** 动态图逐帧摘要：将多帧图片分批喂给描述者角色，生成文本摘要（仿照视频分批逐帧处理流程） */
+async function summarizeDynamicImages(frames: string[]): Promise<string> {
+    if (frames.length === 0) return '';
+    /** 摘要结果片段 */
+    const summaries: string[] = [];
+    /** 单批最大帧数，避免单次请求超限 */
+    const BATCH_SIZE = 8;
+    // 分批逐帧处理：每批图片喂给描述者角色，汇总各批摘要
+    for (let i = 0; i < frames.length; i += BATCH_SIZE) {
+        const batch = frames.slice(i, i + BATCH_SIZE);
+        try {
+            // 将本批帧包装为多模态内容项
+            descriptionRole.coverContext({
+                role: 'user',
+                content: batch.map(frame => ({ type: 'image_url', image_url: { url: frame } }))
+            });
+            /** 运行描述角色模型，获取本批摘要 */
+            const summaryRequest = descriptionRole.run([], []);
+            /** 本批摘要结果 */
+            const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+            if (summary && summary.trim().length > 0) summaries.push(summary.trim());
+        }
+        catch (error) {
+            console.error('[动态图摘要] 批次摘要失败:', error);
+        }
+    }
+    return summaries.join('\n');
+}
 /** 处理图片文件 */
 export async function LiteImageFile(): Promise<void> {
     // 遍历未读上下文数组中的每个消息
@@ -110,7 +138,12 @@ export async function LiteImageFile(): Promise<void> {
                     console.error('[缩放图片失败]:', error1.message, error1.stack);
                     continue;
                 };
-                // 遍历缩放结果，每帧作为独立的 image_url 内容项添加
+                // 动态图（多帧）：仿照视频逐帧摘要为文本消息，不再直接将原图返回消息列表
+                if (resizedImages.length > 1) {
+                    newContent.push({ type: 'text', text: await summarizeDynamicImages(resizedImages.map(image => image.base64)) || '' });
+                    continue;
+                }
+                // 静态图：遍历缩放结果，每帧作为独立的 image_url 内容项添加
                 resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
             }
         }
@@ -188,28 +221,33 @@ async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 允许发言，重置沉默计数和发言权重
         GlobalConfig.silenceCount = 0;
-        // 如果消息长度为0，发言权重设为0
-        if (messageLength === 0) GlobalConfig.speakWeight = 0;
+        // 如果消息长度为0，表示当前循环为主动发言循环
+        if (messageLength === 0) {
+            // 主动发言流程：从消息池拉取上下文作为主动发起的话题
+            pullPoolContext().forEach(message => writeMessage(message.role, message.content));
+            // 主动发言后：发言权重设为0
+            GlobalConfig.speakWeight = 0;
+        }
         // 批量处理视频文件
         await batchProcessVideoFiles();
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
         // 如果消息响应为空，抛出异常
-        if (!GlobalConfig.finalResponse.trim().length) throw new Error('消息响应为空');
+        if (!GlobalConfig.finalResponse.trim().length) {
+            pushContext(messageType, randomDefaultMessage(), tts(randomDefaultMessage())[0])
+            return
+        };
         /** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
         const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
         // 如果正文切片为空，抛出异常
         if (!textChunks.length) throw new Error('清洗后的文本为空');
-        // 获取动作区内容，推送至前端「行动」标签，不参与语音合成
-        if (actionBlocks.length) {
-            await actorRole.createCreativeWork(actionBlocks.join(' | '));
-        };
-        // 情感区：基于情感内容从图片记忆库检索表情包，发送对话前推送到前端（emotion 由表情包系统代理）
-        if (emotionBlocks.length) {
-            const sticker = await queryEmotionSticker(emotionBlocks.join(' '));
+        // 如果拆分出行为或情绪
+        if (actionBlocks.length || emotionBlocks.length) {
+            await actorRole.createCreativeWork(actionBlocks.join('|') || emotionBlocks.join('|'));
+            const sticker = await queryEmotionSticker(emotionBlocks.join('|') || actionBlocks.join('|'));
             if (sticker) pushImage([sticker], true);
+            console.log(emotionBlocks.join(' | ') + actionBlocks.join(' | ') + ' : ' + sticker.length)
         }
-        // 无情感区时，以 10% 概率用对话正文内容检索表情包
         else if (Math.random() < 0.1) {
             const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
             if (sticker) pushImage([sticker], true);
@@ -259,13 +297,6 @@ async function pullExternalMessages() {
     pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); })
     // 等待1秒
     await new Promise(resolve => setTimeout(resolve, 1000));
-}
-/** 测试消息写入 */
-async function messageWrite(role: PostMessageRole, messages: Array<MessageContent>, timeout: number) {
-    // 等待指定超时时间
-    await new Promise(resolve => setTimeout(resolve, timeout));
-    // 如果消息数组非空，写入消息
-    if (messages.length > 0) writeMessage(role, messages);
 }
 /** 写入消息 */
 function writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
@@ -320,7 +351,6 @@ function syncLTPXToolStatus(): void {
 const STICKER_COLLECTION = 'stickers';
 /** 表情包集合是否已确认就绪（避免重复初始化） */
 let stickerCollectionReady = false;
-
 /** 基于查询文本从表情包记忆库检索表情包图片，返回 base64；无结果或失败时返回 null */
 async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;
@@ -341,7 +371,6 @@ async function queryEmotionSticker(query: string): Promise<string | null> {
         return null;
     }
 }
-
 /** 从消息中提取全部文本内容（多模态消息剔除图片，仅保留文本项；无文本时返回空字符串） */
 export function extractTextFromMessage(message: PostMessage): string {
     // 纯文本消息和工具响应消息直接返回
@@ -389,43 +418,7 @@ export function memorizeUnreadRecords(): void {
     // 清空消息缓冲池
     GlobalConfig.unreadRecords = [];
 }
-/** 构建随机的问候语和话题 */
-function buildRandomEntranceLines(): string {
-    /** 初始化问候语变体（按时段划分，用户 → 月华） */
-    const initializationGreetings: Record<string, string[]> = {
-        morning: ['月华，早上好呀~', '早安呀，月华~', '月华，起床啦~'],
-        afternoon: ['月华，下午好~', '月华，中午好呀~', '月华在吗~'],
-        evening: ['月华，晚上好呀~', '月华，晚上好~', '月华在不在呀~'],
-        night: ['月华，这么晚还没睡吗~', '月华，夜深啦~', '月华还在吗~'],
-    };
-    /** 初始化话题变体（用户 → 月华） */
-    const initializationTopics: string[] = [
-        '今天陪我聊聊天吧',
-        '今天有什么新鲜事吗',
-        '准备好了吗，我们开始吧',
-        '想你了，月华~',
-        '今天也要元气满满哦',
-        '一起来做点有趣的事吧',
-    ];
-    /** 当前小时 */
-    const currentHour = new Date().getHours();
-    /** 根据当前时段选择的问候语池 */
-    let greetingPool = initializationGreetings.night;
-    if (currentHour >= 5 && currentHour < 11) greetingPool = initializationGreetings.morning;
-    else if (currentHour >= 11 && currentHour < 17) greetingPool = initializationGreetings.afternoon;
-    else if (currentHour >= 17 && currentHour < 23) greetingPool = initializationGreetings.evening;
-    /** 随机选择一个问候语 */
-    const greeting = greetingPool[RandomFloor(0, greetingPool.length - 1)];
-    /** 随机选择一个话题 */
-    const topic = initializationTopics[RandomFloor(0, initializationTopics.length - 1)];
-    // 拼接问候语和话题
-    return greeting + topic;
-};
 // 初始化 自定义配置 信息
 fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
 // 每秒执行一次思考循环
 setInterval(() => thoughtLoopTickEvent(), 1000);
-/** 初始化消息（按时段的随机问候语 + 随机话题拼接） */
-const initializationMessage: MessageContent[] = [{ type: 'text', text: buildRandomEntranceLines() }];
-// 向模型发送用户消息
-messageWrite('user', initializationMessage, 1500);

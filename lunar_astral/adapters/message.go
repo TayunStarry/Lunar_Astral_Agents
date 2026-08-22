@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"LunarAstral/bridging/napcat"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 
@@ -77,6 +78,22 @@ func (class *Runtime) pullVideoUrl() goja.Value {
 	UnreadVideoUrl = make([]string, 0)
 	// 返回拉取到的视频URL
 	return class.runtime.ToValue(url)
+}
+
+// pullPoolContext 拉取桥接器缓存消息池（供智能体自主发言时主动读取）
+// 消息筛选与关键词判定由 bridging/napcat 完成，此处仅取出缓存并清空
+func (class *Runtime) pullPoolContext() goja.Value {
+	openAIMessages := napcat.PullCachedMessagesAsOpenAI()
+	if len(openAIMessages) == 0 {
+		return class.runtime.ToValue([]any{})
+	}
+	// 定义响应格式
+	var response []any
+	// 将OpenAI格式消息序列化为响应
+	msgJson, _ := json.Marshal(openAIMessages)
+	json.Unmarshal(msgJson, &response)
+	// 返回拉取到的缓存消息
+	return class.runtime.ToValue(response)
 }
 
 // getAgentPosition 获取缓存的智能体3D位置（由前端遥测数据更新）

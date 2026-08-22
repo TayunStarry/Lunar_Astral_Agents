@@ -224,3 +224,15 @@ func containsKeyword(content string) bool {
 	}
 	return false
 }
+
+// PullCachedMessagesAsOpenAI 供智能体主动读取缓存消息：取出全部缓存并构建 OpenAI 格式，然后清空缓存队列
+func PullCachedMessagesAsOpenAI() []map[string]interface{} {
+	cachedMessages := GetCachedMessages()
+	if len(cachedMessages) == 0 {
+		return nil
+	}
+	openAIMessages := buildOpenAIMessages(cachedMessages)
+	ClearCachedMessages()
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "智能体主动拉取缓存消息 %d 条，已清空缓存队列", len(cachedMessages))
+	return openAIMessages
+}

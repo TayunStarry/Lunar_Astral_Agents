@@ -1,6 +1,6 @@
 # 星月智能（Lunar Astral Agents）—— 发行版说明
 
-**版本**：v2026.08.10  
+**版本**：v2026.08.22
 **适用平台**：Windows 10/11（64 位）
 
 ---
@@ -19,21 +19,17 @@
 
 **功能**：多模态 AI 角色对话、TTS 语音合成、文生图、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、QQ 群聊适配器。
 
-**技术栈**：Go 后端 + TypeScript 智能体（goja 运行时）+ WebView2 前端。底层依赖 llama.cpp 进行 GGUF 模型推理。
+**运行**：`.\Lunar_Astral.exe`。
 
-**运行**：`.\Lunar_Astral.exe`，可选 `-developer`（调试模式）、`-basic-port`（指定端口）等参数。
-
-**依赖**：WebView2 Runtime（Win11 已预装），GGUF 格式模型文件。
+**依赖**：WebView2 Runtime（Win11 已预装），GGUF 格式语言模型。
 
 ---
 
 ### 2. 星图·琉璃（crystal_astral）— 工具集扩展程序
 
-**功能**：文件管理、SQLite 数据库可视化 CRUD、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、外部应用加载器。
+**功能**：文件管理、数据库可视化、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、外部应用加载器。
 
-**技术栈**：Go 后端 + 原生 HTML/CSS/JS 前端（毛玻璃风格），复用 file_manager 和 image_processor 子系统。
-
-**运行**：`.\Crystal_Astral.exe`，自动随机端口（10000~40000），WebView 窗口（1500×1050）。AI 请求自动代理到月华后端。
+**运行**：`.\Crystal_Astral.exe`，自动随机端口，WebView 窗口打开，AI 请求自动代理到月华后端。
 
 **依赖**：WebView2 Runtime。
 
@@ -41,11 +37,9 @@
 
 ### 3. 环境修复工具（environment_repair）— 运维工具箱
 
-**功能**：资源补全修复（从内嵌资源释放缺失文件）、端口占用释放、HTTPS 反向代理（自动 TLS 证书 + WebSocket 隧道 + CORS）、分卷打包归档。
+**功能**：资源补全修复、端口占用释放、HTTPS 反向代理（自动 TLS 证书）、分卷打包归档。
 
-**技术栈**：Go 命令行程序，交互式终端菜单。
-
-**运行**：`.\Environment_Repair.exe`，终端交互式菜单选择功能。
+**运行**：`.\Environment_Repair.exe`，交互式终端菜单。
 
 **依赖**：7z（仅打包功能需要）。
 
@@ -53,35 +47,29 @@
 
 ### 4. 搜索智能体（agent_search）— AI 网络搜索
 
-**功能**：基于 Chromedp 的多引擎搜索（Bing/百度/搜狗），页面内容提取 → AI 摘要 → 深度搜索 → 记忆存储。自动过滤字典网站。
+**功能**：多引擎搜索（Bing/百度/搜狗），页面提取 → AI 摘要 → 深度搜索 → 记忆存储，自动过滤字典网站。
 
-**技术栈**：Go 库，通过 Chromedp 控制浏览器，调用多模态模型进行视觉理解与摘要。
-
-**依赖**：Chrome/Edge 浏览器，多模态模型 API 与嵌入模型 API。
+**依赖**：Chrome/Edge 浏览器，多模态与嵌入模型 API。
 
 ---
 
 ### 5. 语音识别（qwen_asr）— Qwen3-ASR 引擎
 
-**功能**：纯本地语音识别，支持中/英/粤/日/韩等 30 种语言。双模型规模（0.6B/1.7B），BF16 高精度推理，AVX2/AVX-512/NEON SIMD 加速。
+**功能**：纯本地语音识别，支持 30 种语言，双模型规模（0.6B/1.7B）、高精度推理与 SIMD 加速。
 
-**技术栈**：纯 C 推理引擎 + Go HTTP 服务（CGO 桥接），浏览器端 MediaRecorder API 录音。
+**运行**：`.\Qwen_ASR_Lunar.exe`，自动打开录音界面并提供 HTTP API。
 
-**运行**：`.\Qwen_ASR_Lunar.exe`，自动打开 WebView 窗口（648×960），提供 HTTP API（`POST /asr`）。
-
-**依赖**：SafeTensors 格式模型文件，FFmpeg（可选），OpenBLAS（可选加速）。
+**依赖**：SafeTensors 模型文件；FFmpeg / OpenBLAS（可选）。
 
 ---
 
 ### 6. 语音合成（qwen3_tts）— Qwen3-TTS 引擎
 
-**功能**：纯本地中文文本转语音，支持音色克隆（参考音频）、LRU 缓存。支持 CUDA/Vulkan/Metal 多 GPU 后端加速。
+**功能**：纯本地中文文本转语音，支持音色克隆、LRU 缓存，CUDA/Vulkan/Metal 多后端加速。
 
-**技术栈**：C++ GGML 推理引擎（DLL）+ Go HTTP 服务（CGO 调用）。
+**运行**：`.\Qwen3_TTS_Lunar.exe`，后台 HTTP 服务（默认端口 36789）。
 
-**运行**：`.\Qwen3_TTS_Lunar.exe`，默认端口 36789（`-basic-port`）。提供 HTTP API（`POST /tts`、`POST /upload/`、`GET /health`）。
-
-**依赖**：GGUF 格式模型文件，参考音频文件，CUDA Toolkit（可选）。
+**依赖**：GGUF 模型文件、参考音频；CUDA Toolkit（可选）。
 
 ---
 
@@ -92,8 +80,8 @@
 | 操作系统 | Windows 10 21H2+（64 位） | Windows 11 |
 | CPU | x86_64，支持 AVX2 | 4 核以上 |
 | 内存 | 8 GB | 16 GB |
-| 显卡 | 无要求（纯 CPU 可运行） | NVIDIA CUDA 12.x（显存 4GB+） |
-| 磁盘 | 10 GB | SSD 20 GB+ |
+| 显卡 | 无要求（纯 CPU 可运行） | NVIDIA CUDA 12.x（显存 8GB+） |
+| 磁盘 | 20 GB | SSD 40 GB+ |
 
 **运行时依赖**：WebView2 Runtime（Win11 已预装）、NVIDIA CUDA（可选）、FFmpeg（可选）。
 
@@ -101,75 +89,22 @@
 
 ## 快速开始
 
-1. 将 GGUF 模型放入 `local_data\models\`，编辑 `local_data\models\models.ini`（语言模型）与 `local_data\lunar_config.json`（辅助模型/API 配置）
+1. 将 GGUF 模型放入 `local_data\models\`，语言模型编辑 `local_data\models\models.ini`，辅助模型/API 配置编辑 `local_data\lunar_config.json`。
 2. 启动核心智能体：`.\Lunar_Astral.exe`
 3. 启动扩展工具：`.\Crystal_Astral.exe`
 4. 独立模块（可选）：`.\Qwen_ASR_Lunar.exe` / `.\Qwen3_TTS_Lunar.exe`
 
 ---
 
-## 命令行参数
+## 命令行参数与配置
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-basic-port` | HTTP 服务端口 | 36789 |
-| `-developer` | 调试模式（显示详细日志） | false |
-| `-allow-diffusion` | 启用扩散图像生成 | true |
-| `-allow-browser` | 允许打开系统浏览器 | true |
-
----
-
-## 配置说明
-
-核心配置项（`lunar_config.json`，五组结构）：
-
-```json
-{
-  "models": {
-    "asr_model": "./local_data/models/Qwen3-ASR-0.6B",
-    "diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
-    "variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
-    "prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-    "real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth"
-  },
-  "server": {
-    "developer": false,
-    "allow_diffusion": true
-  },
-  "agent": {
-    "embedding_model": "system-embedding",
-    "embedding_url": "http://127.0.0.1:36789/v1",
-    "embedding_key": "",
-    "multimodal_model": "system-multimodal",
-    "multimodal_url": "http://127.0.0.1:36789/v1",
-    "multimodal_key": ""
-  },
-  "memory": {
-    "embedding_model": "system-embedding",
-    "embedding_url": "http://127.0.0.1:36789/v1",
-    "embedding_key": "",
-    "multimodal_model": "system-multimodal",
-    "multimodal_url": "http://127.0.0.1:36789/v1",
-    "multimodal_key": ""
-  },
-  "search": {
-    "embedding_model": "system-embedding",
-    "embedding_url": "http://127.0.0.1:36789/v1",
-    "embedding_key": "",
-    "multimodal_model": "system-multimodal",
-    "multimodal_url": "http://127.0.0.1:36789/v1",
-    "multimodal_key": ""
-  }
-}
-```
-
-> 语言模型本体（多模态/嵌入 GGUF）由 `local_data/models/models.ini` 预设文件管理，`lunar_config.json` 仅管理 ASR/扩散/超分等辅助模型与 API 连接配置。
+运行参数（如 `-developer` 调试模式、`-basic-port` 指定端口）与 `lunar_config.json` 的分组结构、各项默认值，详见代码文档 [Code Wiki 08 构建运行与配置](../docs/code-wiki/08-构建运行与配置.md)，此处不重复。
 
 ---
 
 ## 下载
 
-> 链接：[https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#](https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#)  
+> 链接：[https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#](https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#)
 > 提取码：**klKs**
 
 ---
@@ -180,7 +115,7 @@
 
 **内存不足**：使用量化模型（Q4_K_M），关闭不需要的功能（`allow_diffusion: false`），使用较小模型。
 
-**支持云端模型**：在 `lunar_config.json` 的 `agent` 分组中，将 `multimodal_url` 指向 OpenAI 兼容云端 API（如 `https://api.xxx.com/v1`），并填写 `multimodal_key`，月华的模型代理层即自动将请求切换到云端。
+**支持云端模型**：在 `lunar_config.json` 的 `agent` 分组，将 `multimodal_url` 指向 OpenAI 兼容云端 API 并填写 `multimodal_key`，月华模型代理层即自动切换请求到云端。
 
 ---
 

@@ -14,7 +14,7 @@ export interface ParsedContent {
 	codeBlocks: string[];
 	/** 动作区内容（全角/半角括号包裹，不参与显示与语音合成） */
 	actionBlocks: string[];
-	/** 情感区内容（emoji表情，不参与显示与语音合成） */
+	/** 情感区内容（emoji表情与颜文字，不参与显示与语音合成） */
 	emotionBlocks: string[];
 	/** 清洗并切片后的正文内容，每个切片包含display和tts两个版本 */
 	textChunks: TextChunk[];
@@ -22,6 +22,22 @@ export interface ParsedContent {
 
 /** emoji 表情正则（覆盖常见 emoji 区段，含变体选择符与 ZWJ） */
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
+
+/** 颜文字特征字符（眼/嘴/泪滴/手等高频符号，用于区分颜文字与普通括号动作） */
+const KAOMOJI_MARKS = '_^･・。.、；;～~ノﾉゞヾω￣▽△□○●☆★°´｀♪♫＞＜><｡一≧≦∇∀ﾟ⌒⌣◕';
+/**
+ * 颜文字正则：
+ * - 括号包裹型：(^_^)、(>_<)、(T_T)、(・ω・)、（￣▽￣）、<(￣︶￣)> 等，
+ *   内层须含颜文字特征字符且不含中文句子，避免误吞 (挥手) 等动作区
+ * - 裸脸型：>_<、^_^、T_T、o_o 等三段式眼-口-眼
+ */
+const KAOMOJI_REGEX = new RegExp(
+	`[<＜＼]?[（(](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[${KAOMOJI_MARKS}](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[）)](?:[<＜>＞／\u30ce\u309e\u266a\u266b]*)?` +
+	`|[>＜^TtOo0vV][_\\-=^><。.・oO][<＞^TtOo0vV]`,
+	'gu'
+);
+/** 情感区正则（emoji 表情 + 颜文字） */
+const EMOTION_REGEX = new RegExp(`${EMOJI_REGEX.source}|${KAOMOJI_REGEX.source}`, 'gu');
 
 /** 从原始文本中提取思考区内容 */
 function extractThinkingBlocks(text: string): [string[], string] {
@@ -118,21 +134,21 @@ function extractActionBlocks(text: string): [string[], string] {
 }
 
 /**
- * 从原始文本中提取情感区内容（emoji 表情）
+ * 从原始文本中提取情感区内容（emoji 表情与颜文字）
  *
- * 连续的 emoji 字符会被合并为一条情感记录
- * 同时从原始文本中移除这些 emoji
+ * 连续的 emoji/颜文字字符会被合并为一条情感记录
+ * 同时从原始文本中移除这些情感内容
  *
- * @param text - 原始文本（应已移除思考区、代码块、动作区）
- * @returns [提取的情感区内容数组（emoji字符串）, 移除emoji后的文本]
+ * @param text - 原始文本（应已移除思考区、代码块）
+ * @returns [提取的情感区内容数组, 移除情感内容后的文本]
  */
 function extractEmotionBlocks(text: string): [string[], string] {
 	const blocks: string[] = [];
-	const regex = new RegExp(EMOJI_REGEX.source, 'gu');
+	const regex = new RegExp(EMOTION_REGEX.source, 'gu');
 	let match: RegExpExecArray | null;
-	/** 上一次匹配结束位置，用于判断是否连续 emoji */
+	/** 上一次匹配结束位置，用于判断是否连续 */
 	let lastEnd = -1;
-	/** 当前累积的连续 emoji 字符串 */
+	/** 当前累积的连续情感字符串 */
 	let current = '';
 	while ((match = regex.exec(text)) !== null) {
 		// 若本次匹配紧跟上次匹配（中间无其他字符），合并为同一条情感记录
@@ -147,7 +163,7 @@ function extractEmotionBlocks(text: string): [string[], string] {
 	}
 	// 存入最后一条累积记录
 	if (current.length > 0) blocks.push(current);
-	const remaining = text.replace(new RegExp(EMOJI_REGEX.source, 'gu'), '');
+	const remaining = text.replace(regex, '');
 	return [blocks, remaining];
 }
 
@@ -317,12 +333,12 @@ export function parseContent(rawText: string): ParsedContent {
 	const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
 	/** 提取代码块内容（不参与显示与语音合成） */
 	const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
-	/** 提取动作区内容（全角/半角括号包裹）（不参与显示与语音合成） */
-	const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterCode);
-	/** 提取情感区内容（emoji表情）（不参与显示与语音合成） */
-	const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterAction);
+	/** 先提取情感区内容（emoji表情与颜文字），避免颜文字的括号被动作区误吞（不参与显示与语音合成） */
+	const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterCode);
+	/** 再提取动作区内容（全角/半角括号包裹）（不参与显示与语音合成） */
+	const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterEmotion);
 	/** 清洗用于显示的文本（兜底移除残留emoji） */
-	const displayText = removeEmojiSymbols(textAfterEmotion);
+	const displayText = removeEmojiSymbols(textAfterAction);
 	/** 对清洗后的文本执行智能切片 */
 	const displayChunks = splitSentences(displayText);
 	/** 为每个切片生成显示文本和TTS文本 */

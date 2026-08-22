@@ -38,6 +38,11 @@ func GetBridgeState() BridgeState {
 	return bridgeState
 }
 
+// GetBridgingKeywords 获取桥接器关键词列表（供入站消息关键词检测使用）
+func GetBridgingKeywords() []string {
+	return bridgeConfig.BridgingKeywords
+}
+
 // setBridgeState 设置桥接器状态
 func setBridgeState(state BridgeState) {
 	bridgeStateMutex.Lock()
