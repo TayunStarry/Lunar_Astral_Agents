@@ -14,24 +14,32 @@ import (
 
 // 搜索流程常量
 const (
-	MaxSearchRounds            = 8                // 深度搜索最大轮次
-	MaxScreenshotsPerPage      = 6                // 单页最大截图数（每帧一次滚动，降载至 6 帧）
-	TextHeavyThreshold         = 500              // 文本密集型判定阈值（字符数）
-	MemorySimilarityMin        = 0.55             // 记忆库相似度最低阈值
-	MemoryDirectAnswerMin      = 0.72             // 直接复用记忆答案的最低相似度阈值（低于则继续网络搜索）
-	KeywordDedupThreshold      = 0.85             // 关键词去重余弦相似度阈值
-	MaxContextTokensDefault    = 16384            // 默认最大上下文 tokens
-	QueryTimeout               = 30 * time.Second // 单次浏览器操作超时
-	BrowserMaxMemMB            = 2048             // 浏览器内存上限（MB）
-	BrowserMaxCPUPercent       = 80.0             // 浏览器 CPU 占用上限（%）
-	BrowserCPUHighDuration     = 5 * time.Second  // CPU 持续高占用阈值
-	SearchResultsPerQuery      = 5                // 每个关键词取前 5 条结果
-	QuickSearchResultsPerQuery = 5                // 快速搜索每个关键词取前 5 条结果
-	SingleSearchResults        = 10               // 统一搜索模式：每轮进入搜索引擎并提取的前 N 条链接（TopN）
-	EmbedRelevanceThreshold    = 0.5              // 摘要与初始查询嵌入余弦相似度阈值（≥此值视为相关）
-	PageLoadTimeout            = 15 * time.Second // 页面加载超时（搜索页）
-	PageFastSkipTimeout        = 10 * time.Second // 单页内容提取超时：打不开直接跳过，不再重启重试
-	MaxBrowserRetryAttempts    = 3                // 浏览器加载/操作失败时最多重启重试次数
+	// 单页最大截图数（每帧一次滚动，降载至 6 帧）
+	MaxScreenshotsPerPage = 6
+	// 文本密集型判定阈值（字符数）
+	TextHeavyThreshold = 500
+	// 记忆库相似度最低阈值
+	MemorySimilarityMin = 0.55
+	// 直接复用记忆答案的最低相似度阈值（低于则继续网络搜索）
+	MemoryDirectAnswerMin = 0.72
+	// 默认最大上下文 tokens
+	MaxContextTokensDefault = 16384
+	// 单次浏览器操作超时（秒）
+	QueryTimeout = 30 * time.Second
+	// 浏览器内存上限（MB）
+	BrowserMaxMemMB = 4096
+	// 浏览器 CPU 占用上限（%）
+	BrowserMaxCPUPercent = 80.0
+	// CPU 持续高占用阈值
+	BrowserCPUHighDuration = 5 * time.Second
+	// 统一搜索模式：每轮进入搜索引擎并提取的前 N 条链接（TopN）
+	SingleSearchResults = 10
+	// 摘要与初始查询嵌入余弦相似度阈值（≥此值视为相关）
+	EmbedRelevanceThreshold = 0.5
+	// 单页内容提取超时：打不开直接跳过，不再重启重试
+	PageFastSkipTimeout = 10 * time.Second
+	// 浏览器加载/操作失败时最多重启重试次数
+	MaxBrowserRetryAttempts = 3
 )
 
 // 字典网站关键词黑名单 — 搜索智能体具备字典能力，无需浪费 token 在字典网站
@@ -104,36 +112,15 @@ var (
 	// aiJudgeMemory 判定记忆库内容是否足以回答用户问题
 	aiJudgeMemory func(memoryContext string, query string) (sufficient bool, timeSensitive bool, err error)
 
-	// aiGenerateKeywords 将自然语言查询转化为结构化搜索关键词
-	aiGenerateKeywords func(query string) ([]string, error)
-
-	// aiGenerateDeepKeywords 基于已有上下文生成新的深度搜索关键词
-	aiGenerateDeepKeywords func(query string, accumulatedSummaries string, usedKeywords []string) ([]string, error)
-
 	// aiSummarizeContent 对网页内容进行摘要（文本或截图）
 	aiSummarizeContent func(content string, screenshots [][]byte) (string, error)
-
-	// aiEvaluateSufficiency 评估当前积累的信息是否足以回答用户问题
-	aiEvaluateSufficiency func(query string, accumulatedSummaries string) (sufficient bool, reasoning string, err error)
 
 	// aiGenerateReport 基于所有摘要生成最终搜索报告
 	aiGenerateReport func(query string, summaries []string, sources []string) (string, error)
 
-	// aiDecideSearchMode 判定是否使用快速视觉搜索模式
-	// 返回: useQuickSearch（是否使用快速搜索）, reasoning（判定理由）, error
-	aiDecideSearchMode func(query string) (useQuickSearch bool, reasoning string, err error)
-
 	// aiSummarizeVisualContent 纯视觉摘要：仅基于截图生成页面内容摘要
 	// 与 aiSummarizeContent 的区别：不接收文本内容，仅接收截图
 	aiSummarizeVisualContent func(screenshots [][]byte) (summary string, err error)
-
-	// aiEvaluateRelevance 判断单条网页摘要是否与用户查询直接相关
-	// 返回: relevant（是否相关）, error
-	aiEvaluateRelevance func(query string, itemText string) (relevant bool, err error)
-
-	// aiJudgeSummary 判断单条页面摘要是否能够用于解答用户问题
-	// 输入：原始问题、页面摘要、相关历史记忆（参考，未必相关）；返回: usable（能否解答）, error
-	aiJudgeSummary func(query string, summary string, memoryReference string) (usable bool, err error)
 
 	// aiEnhanceSearchText 基于原始问题推测真实意图，产出一条强化后的搜索文本
 	// 输入：原始问题、第一轮失败覆盖的摘要、相关记忆提示；输出：强化搜索文本
@@ -197,15 +184,6 @@ const searchMemoryCollection = "search_memory"
 
 var (
 	aiHTTPClient = &http.Client{Timeout: 120 * time.Second}
-)
-
-// =============================================================================
-// 关键词去重缓存
-// =============================================================================
-
-var (
-	keywordEmbedMu    sync.RWMutex
-	keywordEmbedCache = make(map[string][]float32) // 关键词 → 嵌入向量
 )
 
 // =============================================================================

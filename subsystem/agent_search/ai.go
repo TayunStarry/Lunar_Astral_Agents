@@ -19,19 +19,11 @@ import (
 func init() {
 	// 注册 AI 调用钩子到 agent.go
 	aiCall = callAI
-	aiGenerateKeywords = generateKeywords
-	aiGenerateDeepKeywords = generateDeepKeywords
 	aiSummarizeContent = summarizeContent
 	aiJudgeMemory = judgeMemory
-	aiEvaluateSufficiency = evaluateSufficiency
 	aiGenerateReport = generateReport
-	// 快速搜索模式钩子
-	aiDecideSearchMode = decideSearchMode
 	aiSummarizeVisualContent = summarizeVisualContent
-	// 相关性判定
-	aiEvaluateRelevance = evaluateRelevance
 	// 统一网络搜索钩子
-	aiJudgeSummary = judgeSummary
 	aiEnhanceSearchText = enhanceSearchText
 	// 新流程：关键词+实体提取、综合判定
 	aiExtractKeywords = extractKeywordsAndEntities
@@ -193,30 +185,6 @@ func callChatAPI(baseURL, modelName, apiKey string, messages []chatMessage, maxT
 	return chatResp.Choices[0].Message.Content, nil
 }
 
-// =============================================================================
-// Hook 实现：单条结果相关性判定（用于过滤无关搜索结果）
-// =============================================================================
-
-// evaluateRelevance 判断单条网页内容摘要是否与用户查询直接相关
-func evaluateRelevance(query string, itemText string) (bool, error) {
-	systemPrompt := `你是一个搜索结果相关性判断专家。判断给定的网页内容摘要是否与用户的搜索问题直接相关。
-
-判定"相关"的标准：
-- 内容直接介绍用户要查的特定对象（地点、人物、作品、事件、产品）本身 → 相关
-- 内容提供了该对象的具体信息（位置、历史、构成、评价等）→ 相关
-- 内容与用户问题中的实体完全不同、只是泛泛的城市/背景介绍、或明显跑题（如健康体重计算器、他国旅行安全公告、与本实体无关的词条）→ 不相关
-
-请严格按以下格式回复（仅一行，不要多余内容）：
-相关：是/否`
-
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n网页内容摘要：\n%s", query, truncateText(itemText, 800))
-	resp, err := callAI(systemPrompt, userPrompt, nil)
-	if err != nil {
-		return false, err
-	}
-	return parseYesNoResponse(resp), nil
-}
-
 // parseYesNoResponse 解析 AI 的"是/否"判定响应（兼容中英文冒号）
 func parseYesNoResponse(resp string) bool {
 	lower := strings.ToLower(resp)
@@ -224,33 +192,6 @@ func parseYesNoResponse(resp string) bool {
 		return true
 	}
 	return false
-}
-
-// =============================================================================
-// Hook 实现：统一网络搜索（摘要能否解答判定 + 强化搜索文本生成）
-// =============================================================================
-
-// judgeSummary 判断单条页面摘要是否【能够帮助解答】用户问题
-// memoryReference 为记忆库检索到的相关历史记录（仅作参考，若与问题不符需忽略），用于辅助校准它能否契合用户需求。
-// 返回: usable（能否解答）, error
-func judgeSummary(query string, summary string, memoryReference string) (bool, error) {
-	systemPrompt := `你是一个搜索答案判定专家。判断给定的网页内容摘要是否能够帮助解答用户的问题。
-
-判定"能解答"的标准：
-- 摘要包含与用户问题直接相关且具体的信息（位置、历史、构成、数据、评价等）→ 能解答
-- 摘要能明显支撑用户问题的关键点 → 能解答
-- 摘要与用户问题无关、仅是相近话题的泛泛背景、或明显是用户要查对象之外的内容 → 不能解答
-- 若用户问"某物在哪里"，而摘要未给出该物的位置 → 不能解答
-- 摘要若只是"快递查询/物流/在线工具/地图/工商查询/学信网"等与问题无关的工具页 → 不能解答
-相关历史记忆仅供参考，若其中内容与当前问题不符，应忽略，不要因此误判为能解答。`
-
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n网页内容摘要：\n%s\n\n相关历史记忆（供参考）：\n%s",
-		query, truncateText(summary, 800), truncateText(memoryReference, 2000))
-	resp, err := callAI(systemPrompt, userPrompt, nil)
-	if err != nil {
-		return false, err
-	}
-	return parseYesNoResponse(resp), nil
 }
 
 // enhanceSearchText 推测用户真实意图，产出一条【强化后的搜索词】
@@ -355,70 +296,6 @@ func judgeComprehensive(query string, memoryReference string, summaries string) 
 		return false, err
 	}
 	return parseYesNoResponse(resp), nil
-}
-
-// =============================================================================
-// Hook 实现：关键词生成
-// =============================================================================
-
-// generateKeywords 将自然语言查询转化为搜索关键词
-func generateKeywords(query string) ([]string, error) {
-	systemPrompt := `你是一个搜索关键词优化专家。将用户的问题转化为1-3个精确的搜索引擎关键词。
-
-规则：
-1. 每个关键词应为独立的搜索短语，用换行分隔
-2. 必须保留并重复用户的【核心实体名】（地点、人物、作品、产品等专有名词），不要把它替换成泛称
-3. 初始关键词应直接查询实体本身（如"xxx是什么/介绍/位置"），不要一上来就搜极其冷门的细分词
-4. 对不同角度生成不同侧重点的关键词，但都要带实体名
-5. 优先使用中文关键词（中文实体保持中文），技术类才用英文
-6. 不要添加编号、引号或其他格式标记
-
-示例：
-用户问："最新的Go语言Web框架有哪些？"
-输出：
-Go语言 web框架 2026 最新
-Go web framework 对比
-Golang http 路由库`
-
-	resp, err := callAI(systemPrompt, query, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return parseKeywordResponse(resp), nil
-}
-
-// generateDeepKeywords 基于已有上下文生成深度搜索关键词（含嵌入向量去重）
-func generateDeepKeywords(query string, accumulatedSummaries string, usedKeywords []string) ([]string, error) {
-	// 截断上下文防止超出 token 限制
-	contextSummary := truncateText(accumulatedSummaries, 2000)
-
-	systemPrompt := `你是一个深度搜索策略专家。根据用户原始问题和已经获取的信息，生成1-2个新的搜索关键词，从不同角度补充缺失的信息。
-
-规则：
-1. 生成的关键词必须是之前搜索没有覆盖的角度
-2. 用换行分隔每个关键词
-3. 【必须始终保留用户问题的核心实体/专有名词】，每个关键词都要以此为锚点，不得凭空转向其他对象
-4. 聚焦于"还缺少什么信息"，针对该实体补充位置、历史、构成、评价等具体维度
-5. 严禁跑题：不要生成与该实体无关的话题（例如用户问某寺院/景点时，不得生成他国地名、泛健康、泛旅行等）
-6. 不要添加编号或其他格式标记`
-
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n已获取的信息摘要：\n%s\n\n已使用的关键词：%s\n\n请生成新的补充搜索关键词：",
-		query, contextSummary, strings.Join(usedKeywords, ", "))
-
-	resp, err := callAI(systemPrompt, userPrompt, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	candidates := parseKeywordResponse(resp)
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	// 嵌入向量去重：仅对比本次查询已使用的关键词（含本批已通过候选），
-	// 保证重复关键词只搜索一次，非重复关键词正常保留
-	return dedupKeywordsByEmbedding(candidates, usedKeywords)
 }
 
 // =============================================================================
@@ -528,81 +405,6 @@ func judgeMemory(memoryContext string, query string) (bool, bool, error) {
 }
 
 // =============================================================================
-// Hook 实现：搜索模式判定（快速搜索 vs 深度搜索）
-// =============================================================================
-
-// decideSearchMode 判定用户查询是否适合快速视觉搜索模式
-// 快速搜索适合：视觉对比、产品外观、UI设计、页面截图类查询
-// 深度搜索适合：研究类、事实核查、多源验证、学术类查询
-// 返回：(是否使用快速搜索, 判定理由, 错误)
-func decideSearchMode(query string) (bool, string, error) {
-	systemPrompt := `你是一个搜索策略专家。根据用户问题，判断最适合的搜索模式。
-
-两种模式说明：
-1. 【快速视觉搜索】：直接浏览网页截图，适用【必须以"看图片"为主】的查询（产品外观、设计风格、UI/界面、海报、实物照片、视觉对比等）
-2. 【深度文本搜索】：提取网页文本并深度分析，适用信息型/事实型查询（位置在哪、有什么历史/背景、概念原理、数据分析、多源验证、学术问题）
-
-判定标准：
-- 是否"需要看图"是唯一关键：查询目的就是看外观/设计/界面等视觉内容 → 快速视觉搜索
-- 【位置、在哪、介绍、历史、背景、是什么、怎么用、数据】，以及一切都与"看图"无关的问题 → 深度文本搜索
-- 不要因为问题"简单直接"就误判为快速搜索；"某地在哪/某寺在哪/某景点介绍"属于位置与介绍类，必须用深度搜索
-
-请严格按以下格式回复（仅回复两行，不要多余内容）：
-模式：快速/深度
-理由：一句话简述判定依据`
-
-	resp, err := callAI(systemPrompt, query, nil)
-	if err != nil {
-		return false, "", err
-	}
-
-	return parseModeDecisionResponse(resp)
-}
-
-// parseModeDecisionResponse 解析 AI 的模式判定响应
-func parseModeDecisionResponse(resp string) (useQuick bool, reasoning string, err error) {
-	lines := strings.Split(strings.TrimSpace(resp), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		lower := strings.ToLower(line)
-		if strings.HasPrefix(lower, "模式：") || strings.HasPrefix(lower, "模式:") {
-			useQuick = strings.Contains(lower, "快速")
-		}
-		if strings.HasPrefix(lower, "理由：") || strings.HasPrefix(lower, "理由:") {
-			reasoning = strings.TrimPrefix(line, "理由：")
-			reasoning = strings.TrimPrefix(reasoning, "理由:")
-			reasoning = strings.TrimSpace(reasoning)
-		}
-	}
-	return useQuick, reasoning, nil
-}
-
-// =============================================================================
-// Hook 实现：信息充分性评估
-// =============================================================================
-
-// evaluateSufficiency 评估当前积累的信息是否足以回答用户问题
-func evaluateSufficiency(query string, accumulatedSummaries string) (bool, string, error) {
-	systemPrompt := `你是一个信息充分性评估专家。判断当前积累的搜索摘要是否包含了足够的信息来全面回答用户的问题。
-
-评估标准：
-- 如果信息覆盖了问题的所有关键方面 → 足够
-- 如果存在明显的信息缺口 → 不足
-
-请严格按以下格式回复：
-判定：足够/不足
-理由：一句话简述判定依据`
-
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n已收集的信息摘要：\n%s", query, truncateText(accumulatedSummaries, 4000))
-	resp, err := callAI(systemPrompt, userPrompt, nil)
-	if err != nil {
-		return false, "", err
-	}
-
-	return parseSufficiencyResponse(resp)
-}
-
-// =============================================================================
 // Hook 实现：报告生成
 // =============================================================================
 
@@ -643,89 +445,6 @@ func generateReport(query string, summaries []string, sources []string) (string,
 }
 
 // =============================================================================
-// 嵌入向量去重
-// =============================================================================
-
-// dedupKeywordsByEmbedding 对候选关键词进行嵌入向量去重
-// 余弦相似度 > KeywordDedupThreshold 视为重复，仅保留首次出现的关键词（保证只搜索一次）
-// dedup 基准为本次查询已使用的关键词 usedKeywords 以及本批已通过候选，避免跨查询残留误伤
-func dedupKeywordsByEmbedding(candidates []string, usedKeywords []string) ([]string, error) {
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	// 构建本次查询的去重参照：已使用关键词 + 本批已通过的候选
-	refCache := make(map[string][]float32)
-	for _, uk := range usedKeywords {
-		uk = strings.TrimSpace(uk)
-		if uk == "" {
-			continue
-		}
-		if emb, err := getOrComputeEmbedding(uk); err == nil {
-			refCache[uk] = emb
-		}
-	}
-
-	var filtered []string
-
-	for _, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-
-		// 获取候选词嵌入
-		candidateEmb, err := getOrComputeEmbedding(candidate)
-		if err != nil {
-			fmt.Printf("[%s] 关键词嵌入失败 '%s': %v，保留该关键词\n", ModuleName, candidate, err)
-			filtered = append(filtered, candidate)
-			continue
-		}
-
-		// 与本次查询已用关键词/本批已通过候选比较
-		isDuplicate := false
-		for refKW, refEmb := range refCache {
-			sim := cosineSimilarity32(candidateEmb, refEmb)
-			if sim >= float32(KeywordDedupThreshold) {
-				fmt.Printf("[%s] 关键词去重: '%s' 与 '%s' 相似度=%.2f，仅搜索一次\n",
-					ModuleName, candidate, refKW, sim)
-				isDuplicate = true
-				break
-			}
-		}
-
-		if !isDuplicate {
-			filtered = append(filtered, candidate)
-			// 本批已通过的关键词也加入参照，避免本批内部重复搜索
-			refCache[candidate] = candidateEmb
-		}
-	}
-
-	return filtered, nil
-}
-
-// getOrComputeEmbedding 获取关键词的嵌入向量（优先从缓存读取）
-func getOrComputeEmbedding(keyword string) ([]float32, error) {
-	keywordEmbedMu.RLock()
-	if emb, ok := keywordEmbedCache[keyword]; ok {
-		keywordEmbedMu.RUnlock()
-		return emb, nil
-	}
-	keywordEmbedMu.RUnlock()
-
-	emb, err := callEmbedding(keyword)
-	if err != nil {
-		return nil, err
-	}
-
-	keywordEmbedMu.Lock()
-	keywordEmbedCache[keyword] = emb
-	keywordEmbedMu.Unlock()
-
-	return emb, nil
-}
-
-// =============================================================================
 // 响应解析辅助函数
 // =============================================================================
 
@@ -759,24 +478,6 @@ func parseJudgeResponse(resp string) (sufficient bool, timeSensitive bool, err e
 		}
 	}
 	return sufficient, timeSensitive, nil
-}
-
-// parseSufficiencyResponse 解析 AI 的充分性评估响应
-func parseSufficiencyResponse(resp string) (sufficient bool, reasoning string, err error) {
-	lines := strings.Split(strings.TrimSpace(resp), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		lower := strings.ToLower(line)
-		if strings.HasPrefix(lower, "判定：") || strings.HasPrefix(lower, "判定:") {
-			sufficient = strings.Contains(lower, "足够")
-		}
-		if strings.HasPrefix(lower, "理由：") || strings.HasPrefix(lower, "理由:") {
-			reasoning = strings.TrimPrefix(line, "理由：")
-			reasoning = strings.TrimPrefix(reasoning, "理由:")
-			reasoning = strings.TrimSpace(reasoning)
-		}
-	}
-	return sufficient, reasoning, nil
 }
 
 // =============================================================================

@@ -3,7 +3,6 @@ package AgentSearch
 import (
 	"LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
-	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"strings"
 	"time"
@@ -888,35 +887,6 @@ func tryRestartBrowser() error {
 // =============================================================================
 // 通用辅助函数
 // =============================================================================
-
-// logProgress 输出搜索进度到终端日志
-// 根据阶段类型使用不同的 logger 层级：
-//   - 正常阶段 → logger.SubInfo
-//   - 警告/错误 → logger.SubWarn / logger.SubError
-func logProgress(event ProgressEvent) {
-	switch event.Phase {
-	case "memory_lookup":
-		LoggerGeneral.Info(ModuleName, "[记忆检索] %s", event.Message)
-	case "searching":
-		LoggerGeneral.SubInfo(ModuleName, "搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
-	case "extracting":
-		LoggerGeneral.SubInfo(ModuleName, "提取", "%s", event.Message)
-	case "summarizing":
-		LoggerGeneral.SubInfo(ModuleName, "摘要", "%s", event.Message)
-	case "evaluating":
-		LoggerGeneral.Info(ModuleName, "[充分性评估] %s", event.Message)
-	case "deep_search":
-		LoggerGeneral.SubInfo(ModuleName, "深度搜索", "[轮次 %d/%d] %s", event.Round, event.Total, event.Message)
-	case "generating_report":
-		LoggerGeneral.Info(ModuleName, "[报告生成] %s", event.Message)
-	case "warning":
-		LoggerGeneral.Warn(ModuleName, "%s", event.Message)
-	case "error":
-		LoggerGeneral.Error(ModuleName, "%s", event.Message)
-	default:
-		LoggerGeneral.Info(ModuleName, "%s", event.Message)
-	}
-}
 
 // truncateText 截断文本到指定最大字符数（保留完整 rune）
 func truncateText(text string, maxLen int) string {

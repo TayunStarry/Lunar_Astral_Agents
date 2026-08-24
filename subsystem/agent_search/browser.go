@@ -496,68 +496,6 @@ func ExtractPageContent(targetURL string) (*PageContent, error) {
 	return content, nil
 }
 
-// =============================================================================
-// 快速搜索 — 纯视觉提取
-// =============================================================================
-
-// ExtractPageVisualOnly 导航到指定 URL 并仅获取滚动截图，不提取 DOM 文本
-// 用于快速搜索模式：跳过文本提取和内容类型判定，直接获取视觉内容
-// maxScreenshots 为最大截图数，传入 0 则使用默认值 MaxScreenshotsPerPage
-func ExtractPageVisualOnly(targetURL string, maxScreenshots int) (*PageContent, error) {
-	if err := ensureBrowser(); err != nil {
-		return nil, err
-	}
-
-	browserMutex.Lock()
-	ctx := browserCtx
-	browserMutex.Unlock()
-
-	// 阶段1：导航（失败时重启浏览器重试）
-	var finalURL string
-	navErr := withBrowserRetry("页面加载", func() error {
-		browserMutex.Lock()
-		cctx := browserCtx
-		browserMutex.Unlock()
-
-		loadCtx, loadCancel := context.WithTimeout(cctx, PageLoadTimeout)
-		defer loadCancel()
-
-		finalURL = ""
-		if err := chromedp.Run(loadCtx,
-			chromedp.Navigate(targetURL),
-			chromedp.WaitReady("body", chromedp.ByQuery),
-			chromedp.Sleep(2*time.Second), // 等待懒加载和动态内容
-			chromedp.Location(&finalURL),
-		); err != nil {
-			return fmt.Errorf("页面加载失败 %s: %w", targetURL, err)
-		}
-		fmt.Printf("[%s] 快速视觉提取: %s\n", ModuleName, finalURL)
-		return nil
-	})
-	if navErr != nil {
-		return nil, navErr
-	}
-
-	// 阶段2：截图（使用 QueryTimeout，因为多页滚动截图可能耗时较长）
-	if maxScreenshots <= 0 {
-		maxScreenshots = MaxScreenshotsPerPage
-	}
-	screenshotCtx, screenshotCancel := context.WithTimeout(ctx, QueryTimeout)
-	defer screenshotCancel()
-
-	screenshots, err := CapturePageScreenshots(screenshotCtx, maxScreenshots)
-	if err != nil {
-		return nil, fmt.Errorf("快速截图失败 %s: %w", targetURL, err)
-	}
-
-	return &PageContent{
-		URL:         finalURL,
-		ContentType: "visual",
-		Screenshots: screenshots,
-		// TextContent 留空，快速搜索模式不使用文本
-	}, nil
-}
-
 // extractDOMText 从当前页面提取 DOM 文本内容
 func extractDOMText(ctx context.Context) (string, error) {
 	var text string

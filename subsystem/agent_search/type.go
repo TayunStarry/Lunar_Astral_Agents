@@ -70,14 +70,6 @@ type MemorySearchRecord struct {
 	Timestamp   int64    `json:"timestamp"`    // Unix 时间戳
 }
 
-// ProgressEvent 搜索进度事件（用于终端日志）
-type ProgressEvent struct {
-	Phase   string // 阶段标识：memory_lookup / searching / extracting / summarizing / evaluating / deep_search / generating_report
-	Message string // 进度描述
-	Round   int    // 当前搜索轮次（从 1 开始）
-	Total   int    // 总轮次（深度搜索阶段有效）
-}
-
 // chatMessage OpenAI 兼容消息格式
 type chatMessage struct {
 	Role    string      `json:"role"`
