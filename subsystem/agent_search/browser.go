@@ -90,6 +90,31 @@ func ensureBrowser() error {
 	return LaunchBrowser()
 }
 
+// withBrowserRetry 执行浏览器操作，失败时清理资源并重启浏览器后重试（最多 MaxBrowserRetryAttempts 次）
+// fn 每次重试都会重新执行，因此其内部必须每次都重新从 browserCtx 创建上下文，以使用重启后的浏览器
+// 仅当前置浏览器可用但运行期加载/导航失败这类可恢复场景触发重试；从根上无法启动时由调用方透传错误
+func withBrowserRetry(operationName string, fn func() error) error {
+	var lastErr error
+	for attempt := 1; attempt <= MaxBrowserRetryAttempts; attempt++ {
+		if err := fn(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		fmt.Printf("[%s] %s 失败 (第 %d/%d 次): %v\n",
+			ModuleName, operationName, attempt, MaxBrowserRetryAttempts, lastErr)
+
+		if attempt < MaxBrowserRetryAttempts {
+			fmt.Printf("[%s] 清理资源并重启浏览器后重试...\n", ModuleName)
+			if restartErr := tryRestartBrowser(); restartErr != nil {
+				fmt.Printf("[%s] 浏览器重启失败: %v\n", ModuleName, restartErr)
+			}
+		}
+	}
+	return lastErr
+}
+
 // buildBrowserOpts 构建 chromedp 浏览器启动选项
 func buildBrowserOpts() []chromedp.ExecAllocatorOption {
 	opts := []chromedp.ExecAllocatorOption{
@@ -178,34 +203,42 @@ func ExecuteSearch(query string, maxResults int) ([]SearchResult, error) {
 func searchOnEngine(engine string, query string, maxResults int) ([]SearchResult, error) {
 	searchURL := searchEngineURLs[engine] + url.QueryEscape(query)
 
-	browserMutex.Lock()
-	browserQueryCount++
-	ctx := browserCtx
-	browserMutex.Unlock()
-
-	// 创建带超时的搜索上下文
-	searchCtx, cancel := context.WithTimeout(ctx, QueryTimeout)
-	defer cancel()
-
-	// 导航到搜索结果页并等待加载
-	var currentURL string
-	if err := chromedp.Run(searchCtx,
-		chromedp.Navigate(searchURL),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Sleep(1*time.Second), // 等待动态内容渲染
-		chromedp.Location(&currentURL),
-	); err != nil {
-		return nil, fmt.Errorf("导航到搜索页失败: %w", err)
-	}
-
-	fmt.Printf("[%s] 搜索页加载完成: %s\n", ModuleName, currentURL)
-
-	// 获取页面 HTML
 	var pageHTML string
-	if err := chromedp.Run(searchCtx,
-		chromedp.OuterHTML("html", &pageHTML, chromedp.ByQuery),
-	); err != nil {
-		return nil, fmt.Errorf("获取页面 HTML 失败: %w", err)
+	var currentURL string
+	err := withBrowserRetry(engine+" 搜索", func() error {
+		browserMutex.Lock()
+		browserQueryCount++
+		ctx := browserCtx
+		browserMutex.Unlock()
+
+		// 创建带超时的搜索上下文
+		searchCtx, cancel := context.WithTimeout(ctx, QueryTimeout)
+		defer cancel()
+
+		// 导航到搜索结果页并等待加载
+		currentURL = ""
+		if err := chromedp.Run(searchCtx,
+			chromedp.Navigate(searchURL),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.Sleep(1*time.Second), // 等待动态内容渲染
+			chromedp.Location(&currentURL),
+		); err != nil {
+			return fmt.Errorf("导航到搜索页失败: %w", err)
+		}
+
+		fmt.Printf("[%s] 搜索页加载完成: %s\n", ModuleName, currentURL)
+
+		// 获取页面 HTML
+		pageHTML = ""
+		if err := chromedp.Run(searchCtx,
+			chromedp.OuterHTML("html", &pageHTML, chromedp.ByQuery),
+		); err != nil {
+			return fmt.Errorf("获取页面 HTML 失败: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// 根据引擎选择解析器
@@ -410,20 +443,20 @@ func ExtractPageContent(targetURL string) (*PageContent, error) {
 	ctx := browserCtx
 	browserMutex.Unlock()
 
-	loadCtx, cancel := context.WithTimeout(ctx, PageLoadTimeout)
+	// 导航到目标页面：单次 10 秒超时，打不开直接跳过（不重启浏览器重试，避免对无法访问的站点反复浪费重试时间）
+	var finalURL string
+	loadCtx, cancel := context.WithTimeout(ctx, PageFastSkipTimeout)
 	defer cancel()
 
-	// 导航到目标页面
-	var finalURL string
+	finalURL = ""
 	if err := chromedp.Run(loadCtx,
 		chromedp.Navigate(targetURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Sleep(2*time.Second), // 等待懒加载和动态内容
+		chromedp.Sleep(1*time.Second), // 等待懒加载和动态内容
 		chromedp.Location(&finalURL),
 	); err != nil {
-		return nil, fmt.Errorf("页面加载失败 %s: %w", targetURL, err)
+		return nil, fmt.Errorf("页面加载超时/失败 %s: %w", targetURL, err)
 	}
-
 	fmt.Printf("[%s] 页面加载完成: %s\n", ModuleName, finalURL)
 
 	// 提取 DOM 文本
@@ -479,21 +512,31 @@ func ExtractPageVisualOnly(targetURL string, maxScreenshots int) (*PageContent, 
 	ctx := browserCtx
 	browserMutex.Unlock()
 
-	// 阶段1：导航（使用 PageLoadTimeout）
-	loadCtx, loadCancel := context.WithTimeout(ctx, PageLoadTimeout)
-	defer loadCancel()
-
+	// 阶段1：导航（失败时重启浏览器重试）
 	var finalURL string
-	if err := chromedp.Run(loadCtx,
-		chromedp.Navigate(targetURL),
-		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Sleep(2*time.Second), // 等待懒加载和动态内容
-		chromedp.Location(&finalURL),
-	); err != nil {
-		return nil, fmt.Errorf("页面加载失败 %s: %w", targetURL, err)
-	}
+	navErr := withBrowserRetry("页面加载", func() error {
+		browserMutex.Lock()
+		cctx := browserCtx
+		browserMutex.Unlock()
 
-	fmt.Printf("[%s] 快速视觉提取: %s\n", ModuleName, finalURL)
+		loadCtx, loadCancel := context.WithTimeout(cctx, PageLoadTimeout)
+		defer loadCancel()
+
+		finalURL = ""
+		if err := chromedp.Run(loadCtx,
+			chromedp.Navigate(targetURL),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.Sleep(2*time.Second), // 等待懒加载和动态内容
+			chromedp.Location(&finalURL),
+		); err != nil {
+			return fmt.Errorf("页面加载失败 %s: %w", targetURL, err)
+		}
+		fmt.Printf("[%s] 快速视觉提取: %s\n", ModuleName, finalURL)
+		return nil
+	})
+	if navErr != nil {
+		return nil, navErr
+	}
 
 	// 阶段2：截图（使用 QueryTimeout，因为多页滚动截图可能耗时较长）
 	if maxScreenshots <= 0 {

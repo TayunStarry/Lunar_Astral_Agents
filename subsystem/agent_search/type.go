@@ -145,6 +145,16 @@ type SearchAgent struct {
 	accumulatedSummaries []string
 	// 搜索过程中积累的来源 URL
 	accumulatedSources []string
+	// 增强搜索时使用的记忆提示（被判定为相关的历史记录，避免重复探索错误方向）
+	memoryHints []string
+	// 本次查询尝试过的页面 URL（含搜索失败的页面，用于失败经验记录）
+	attemptedPages []string
+	// 从查询中提取的核心完整实体名（用于标题初筛与摘要关键词比对）
+	coreEntities []string
+	// 初始查询（关键词拼接）的嵌入向量，用于摘要相关性打分
+	queryEmbedding []float32
+	// 初始查询语句（关键词数组空格拼接）
+	initialQuery string
 }
 
 // memoryEntry 记忆检索中间结果

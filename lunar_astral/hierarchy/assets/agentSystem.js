@@ -1822,7 +1822,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
             const messageType = messageLength === 0 ? 'response' : 'active';
-            const allowSpeak = RandomFloor(15, 100) < GlobalConfig.speakWeight;
+            const allowSpeak = RandomFloor(5, 100) < GlobalConfig.speakWeight;
             if (messageLength === 0 && !allowSpeak) {
                 GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
                 GlobalConfig.reasoningInProgress = false;
@@ -1845,20 +1845,16 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 return;
             }
             ;
-            const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
-            if (!textChunks.length)
+            const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+            const validMessage = textChunks.map(chunk => chunk.display).join('').trim();
+            if (!validMessage.length)
                 throw new Error('清洗后的文本为空');
-            if (actionBlocks.length || emotionBlocks.length) {
-                await actorRole.createCreativeWork(actionBlocks.join('|') || emotionBlocks.join('|'));
-                const sticker = await queryEmotionSticker(emotionBlocks.join('|') || actionBlocks.join('|'));
-                if (sticker)
-                    pushImage([sticker], true);
-                console.log(emotionBlocks.join(' | ') + actionBlocks.join(' | ') + ' : ' + sticker.length);
+            if (actionBlocks.length) {
+                await actorRole.createCreativeWork(actionBlocks.join('|'));
+                pushImage([await queryEmotionSticker(actionBlocks.join('|'))], true);
             }
-            else if (Math.random() < 0.1) {
-                const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
-                if (sticker)
-                    pushImage([sticker], true);
+            else if (validMessage.length <= 35 && Math.random() < 0.55) {
+                pushImage([await queryEmotionSticker(validMessage)], true);
             }
             for (const thinking of thinkingBlocks) {
                 pushContext(messageType, thinking, '');
@@ -2756,15 +2752,16 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
     function parseContent(rawText) {
         if (!rawText)
-            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], emotionBlocks: [], textChunks: [] };
+            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [] };
         const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
         const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
         const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterCode);
-        const [actionBlocks, textAfterAction] = extractActionBlocks(textAfterEmotion);
+        const [actionZoneBlocks, textAfterAction] = extractActionBlocks(textAfterEmotion);
+        const actionBlocks = [...actionZoneBlocks, ...emotionBlocks];
         const displayText = removeEmojiSymbols(textAfterAction);
         const displayChunks = splitSentences(displayText);
         const textChunks = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
-        return { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks };
+        return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
     }
 
     exports.ActorRole = ActorRole;

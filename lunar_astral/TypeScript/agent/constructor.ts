@@ -200,7 +200,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         /** 消息类型 */
         const messageType = messageLength === 0 ? 'response' : 'active';
         /** 是否允许发言 */
-        const allowSpeak = RandomFloor(15, 100) < GlobalConfig.speakWeight;
+        const allowSpeak = RandomFloor(5, 100) < GlobalConfig.speakWeight;
         // 如果消息长度为0，且不允许发言，跳过当前循环
         if (messageLength === 0 && !allowSpeak) {
             // 沉默计数+1（上限100）
@@ -237,20 +237,22 @@ async function thoughtLoopTickEvent(): Promise<void> {
             pushContext(messageType, randomDefaultMessage(), tts(randomDefaultMessage())[0])
             return
         };
-        /** 解析原始文本：拆分思考区、代码块、动作区、情感区、正文切片（含display和tts双版本） */
-        const { thinkingBlocks, codeBlocks, actionBlocks, emotionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+        /** 解析原始文本：拆分思考区、代码块、行动区、正文切片（含display和tts双版本） */
+        const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+        /** 清洗并合并后的正文消息 */
+        const validMessage = textChunks.map(chunk => chunk.display).join('').trim();
         // 如果正文切片为空，抛出异常
-        if (!textChunks.length) throw new Error('清洗后的文本为空');
-        // 如果拆分出行为或情绪
-        if (actionBlocks.length || emotionBlocks.length) {
-            await actorRole.createCreativeWork(actionBlocks.join('|') || emotionBlocks.join('|'));
-            const sticker = await queryEmotionSticker(emotionBlocks.join('|') || actionBlocks.join('|'));
-            if (sticker) pushImage([sticker], true);
-            console.log(emotionBlocks.join(' | ') + actionBlocks.join(' | ') + ' : ' + sticker.length)
+        if (!validMessage.length) throw new Error('清洗后的文本为空');
+        // 如果解析出行动区内容（动作区与情感区合并），分别交给行动者推理动作、记忆库匹配表情包
+        if (actionBlocks.length) {
+            // 调用行动者推理动作
+            await actorRole.createCreativeWork(actionBlocks.join('|'));
+            // 从记忆库匹配表情包并推送图片数据
+            pushImage([await queryEmotionSticker(actionBlocks.join('|'))], true);
         }
-        else if (Math.random() < 0.1) {
-            const sticker = await queryEmotionSticker(textChunks.map(chunk => chunk.display).join(' '));
-            if (sticker) pushImage([sticker], true);
+        // 未解析出行动区内容，且正文长度小于等于35字时，按概率基于正文推理表情包
+        else if (validMessage.length <= 35 && Math.random() < 0.55) {
+            pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
         for (const thinking of thinkingBlocks) {

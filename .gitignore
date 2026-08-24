@@ -21,7 +21,7 @@ coverage.out
 ## 本地数据（运行时生成）
 local_data/images/
 local_data/documents/
-local_data/database/
+database/
 workspace/
 status.json
 

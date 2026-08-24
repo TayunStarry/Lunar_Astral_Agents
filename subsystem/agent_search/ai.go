@@ -28,6 +28,14 @@ func init() {
 	// 快速搜索模式钩子
 	aiDecideSearchMode = decideSearchMode
 	aiSummarizeVisualContent = summarizeVisualContent
+	// 相关性判定
+	aiEvaluateRelevance = evaluateRelevance
+	// 统一网络搜索钩子
+	aiJudgeSummary = judgeSummary
+	aiEnhanceSearchText = enhanceSearchText
+	// 新流程：关键词+实体提取、综合判定
+	aiExtractKeywords = extractKeywordsAndEntities
+	aiJudgeComprehensive = judgeComprehensive
 }
 
 // =============================================================================
@@ -186,6 +194,170 @@ func callChatAPI(baseURL, modelName, apiKey string, messages []chatMessage, maxT
 }
 
 // =============================================================================
+// Hook 实现：单条结果相关性判定（用于过滤无关搜索结果）
+// =============================================================================
+
+// evaluateRelevance 判断单条网页内容摘要是否与用户查询直接相关
+func evaluateRelevance(query string, itemText string) (bool, error) {
+	systemPrompt := `你是一个搜索结果相关性判断专家。判断给定的网页内容摘要是否与用户的搜索问题直接相关。
+
+判定"相关"的标准：
+- 内容直接介绍用户要查的特定对象（地点、人物、作品、事件、产品）本身 → 相关
+- 内容提供了该对象的具体信息（位置、历史、构成、评价等）→ 相关
+- 内容与用户问题中的实体完全不同、只是泛泛的城市/背景介绍、或明显跑题（如健康体重计算器、他国旅行安全公告、与本实体无关的词条）→ 不相关
+
+请严格按以下格式回复（仅一行，不要多余内容）：
+相关：是/否`
+
+	userPrompt := fmt.Sprintf("用户问题：%s\n\n网页内容摘要：\n%s", query, truncateText(itemText, 800))
+	resp, err := callAI(systemPrompt, userPrompt, nil)
+	if err != nil {
+		return false, err
+	}
+	return parseYesNoResponse(resp), nil
+}
+
+// parseYesNoResponse 解析 AI 的"是/否"判定响应（兼容中英文冒号）
+func parseYesNoResponse(resp string) bool {
+	lower := strings.ToLower(resp)
+	if strings.Contains(lower, "是") && !strings.Contains(lower, "否") {
+		return true
+	}
+	return false
+}
+
+// =============================================================================
+// Hook 实现：统一网络搜索（摘要能否解答判定 + 强化搜索文本生成）
+// =============================================================================
+
+// judgeSummary 判断单条页面摘要是否【能够帮助解答】用户问题
+// memoryReference 为记忆库检索到的相关历史记录（仅作参考，若与问题不符需忽略），用于辅助校准它能否契合用户需求。
+// 返回: usable（能否解答）, error
+func judgeSummary(query string, summary string, memoryReference string) (bool, error) {
+	systemPrompt := `你是一个搜索答案判定专家。判断给定的网页内容摘要是否能够帮助解答用户的问题。
+
+判定"能解答"的标准：
+- 摘要包含与用户问题直接相关且具体的信息（位置、历史、构成、数据、评价等）→ 能解答
+- 摘要能明显支撑用户问题的关键点 → 能解答
+- 摘要与用户问题无关、仅是相近话题的泛泛背景、或明显是用户要查对象之外的内容 → 不能解答
+- 若用户问"某物在哪里"，而摘要未给出该物的位置 → 不能解答
+- 摘要若只是"快递查询/物流/在线工具/地图/工商查询/学信网"等与问题无关的工具页 → 不能解答
+相关历史记忆仅供参考，若其中内容与当前问题不符，应忽略，不要因此误判为能解答。`
+
+	userPrompt := fmt.Sprintf("用户问题：%s\n\n网页内容摘要：\n%s\n\n相关历史记忆（供参考）：\n%s",
+		query, truncateText(summary, 800), truncateText(memoryReference, 2000))
+	resp, err := callAI(systemPrompt, userPrompt, nil)
+	if err != nil {
+		return false, err
+	}
+	return parseYesNoResponse(resp), nil
+}
+
+// enhanceSearchText 推测用户真实意图，产出一条【强化后的搜索词】
+// 结合上一轮未能解答的摘要与相关历史记忆提示，避开方向，转向可能命中的新角度
+func enhanceSearchText(query string, priorSummaries string, memoryHints string) (string, error) {
+	systemPrompt := `你是一个搜索意图分析与关键词优化专家。基于用户的原始请求文本，合理推测用户真正想查的是什么，产出一条强化后的搜索词，用于解决搜索引擎对原始表述理解偏差、结果不相关的问题。
+
+要求：
+1. 只输出一条搜索词，不要编号、不要引号、不要多余文字
+2. 保留原始请求中的核心实体/专有名词和关键限定词
+3. 去除"查询/帮我查/我想知道"等口语套话，提炼成更精确、利于搜索引擎命中的短语
+4. 结合"上一轮未能解答的内容"与"相关历史记忆提示"，避免再撞上相同方向，补充地点/年代/分类等限定词转向可能命中的新角度
+5. 若记忆提示显示某方向已尝试且失败，就不要沿用该方向`
+
+	userPrompt := fmt.Sprintf(
+		"用户的原始请求：%s\n\n上一轮已尝试的页面摘要（未能解答）：\n%s\n\n相关历史记忆提示：\n%s\n\n请输出一条强化后的搜索词：",
+		query, truncateText(priorSummaries, 1500), truncateText(memoryHints, 1500))
+	return callAI(systemPrompt, userPrompt, nil)
+}
+
+// =============================================================================
+// Hook 实现：关键词 + 核心实体提取（新流程步骤1）
+// =============================================================================
+
+// keywordExtractionResult 关键词提取的 JSON 响应结构
+type keywordExtractionResult struct {
+	Entities []string `json:"entities"`
+	Keywords []string `json:"keywords"`
+}
+
+// extractKeywordsAndEntities 从用户查询中提取【核心完整实体名】与【搜索关键词数组】
+// entities：用于标题初筛和摘要关键词精确比对的完整实体名词
+// keywords：用于空格拼接成初始查询语句
+func extractKeywordsAndEntities(query string) ([]string, []string, error) {
+	systemPrompt := `你是一个搜索关键词与实体提取专家。从用户问题中提取两类信息，输出 JSON。
+
+1. entities（核心实体）：问题指向的【独立的、简短的】专有名词。
+   - 每个元素是一个独立专名（通常 2-5 个汉字），多个核心对象要拆成多个数组元素。例如"南京南站""原神""终末地"各自是一个元素。
+   - 严禁把一句话或一个短语塞进一个元素，严禁用空格/标点把多个词连成一个元素。
+   - 只保留实体名本身，不要带"模组/小说/游戏/卡池/下载/介绍/信息/最新"等类别词或泛化词；这些词放到 keywords。
+   - 遇到自造昵称/网名/作品名要整体保留（如"钛宇星光阁"不要拆字）。
+2. keywords（搜索关键词）：用于拼接查询语句的词（包含核心实体与必要限定词，如"最新""卡池""在哪里""介绍"）。
+
+输出格式（只输出 JSON，不要任何多余文字）：
+{"entities":["实体1","实体2"],"keywords":["关键词1","关键词2","关键词3"]}`
+
+	userPrompt := fmt.Sprintf("用户问题：%s", query)
+	resp, err := callAI(systemPrompt, userPrompt, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	entities, keywords := parseKeywordExtractionResponse(resp)
+	return entities, keywords, nil
+}
+
+// parseKeywordExtractionResponse 解析关键词提取 JSON，兼容 markdown 代码块包裹与非严格 JSON
+func parseKeywordExtractionResponse(resp string) ([]string, []string) {
+	clean := strings.TrimSpace(resp)
+	clean = strings.TrimPrefix(clean, "```json")
+	clean = strings.TrimPrefix(clean, "```")
+	clean = strings.TrimSuffix(clean, "```")
+	clean = strings.TrimSpace(clean)
+
+	start := strings.Index(clean, "{")
+	end := strings.LastIndex(clean, "}")
+	if start >= 0 && end > start {
+		clean = clean[start : end+1]
+	}
+
+	var res keywordExtractionResult
+	if err := json.Unmarshal([]byte(clean), &res); err != nil {
+		// 解析失败时回退：整行作为关键词，实体留空（标题初筛自动放行）
+		return nil, parseKeywordResponse(resp)
+	}
+
+	return res.Entities, res.Keywords
+}
+
+// =============================================================================
+// Hook 实现：综合判定（新流程步骤8）
+// =============================================================================
+
+// judgeComprehensive 综合判定多份网页摘要拼接后是否足以解答用户问题
+// 放宽判定标准：主体信息能回答核心诉求即可，不要求百分百完整，避免"有答案却说不知道"
+func judgeComprehensive(query string, memoryReference string, summaries string) (bool, error) {
+	systemPrompt := `你是一个搜索答案综合判定专家。判断给出的多份网页摘要拼接后，是否足以解答用户的问题。
+
+判定"能解答"的标准：
+- 信息覆盖了问题的核心诉求（对象本身、位置、历史、构成、数据、最新动态等关键点）→ 能解答
+- 只要主体信息能回答用户问题，即使部分细节缺失，也算能解答（不要过分要求完整）
+- 信息与用户问题主题不同、只是泛泛背景或工具页、不足以支撑回答 → 不能解答
+- 相关历史记忆仅供参考，若与当前问题不符应忽略
+
+请严格按以下格式回复（仅一行，不要多余内容）：
+解答：是/否`
+
+	userPrompt := fmt.Sprintf("用户问题：%s\n\n网页摘要（拼接）：\n%s\n\n相关历史记忆（供参考）：\n%s",
+		query, truncateText(summaries, 4000), truncateText(memoryReference, 1500))
+	resp, err := callAI(systemPrompt, userPrompt, nil)
+	if err != nil {
+		return false, err
+	}
+	return parseYesNoResponse(resp), nil
+}
+
+// =============================================================================
 // Hook 实现：关键词生成
 // =============================================================================
 
@@ -195,17 +367,18 @@ func generateKeywords(query string) ([]string, error) {
 
 规则：
 1. 每个关键词应为独立的搜索短语，用换行分隔
-2. 提取核心概念，去除冗余修饰词
-3. 优先使用英文关键词（如果问题本身是英文或技术类）
-4. 对不同角度的查询，生成不同侧重点的关键词
-5. 不要添加编号、引号或其他格式标记
+2. 必须保留并重复用户的【核心实体名】（地点、人物、作品、产品等专有名词），不要把它替换成泛称
+3. 初始关键词应直接查询实体本身（如"xxx是什么/介绍/位置"），不要一上来就搜极其冷门的细分词
+4. 对不同角度生成不同侧重点的关键词，但都要带实体名
+5. 优先使用中文关键词（中文实体保持中文），技术类才用英文
+6. 不要添加编号、引号或其他格式标记
 
 示例：
 用户问："最新的Go语言Web框架有哪些？"
 输出：
-best Go web frameworks 2026
-Go web framework comparison
-Golang HTTP router library`
+Go语言 web框架 2026 最新
+Go web framework 对比
+Golang http 路由库`
 
 	resp, err := callAI(systemPrompt, query, nil)
 	if err != nil {
@@ -225,9 +398,10 @@ func generateDeepKeywords(query string, accumulatedSummaries string, usedKeyword
 规则：
 1. 生成的关键词必须是之前搜索没有覆盖的角度
 2. 用换行分隔每个关键词
-3. 不要重复已有信息中已经包含的内容方向
-4. 聚焦于"还缺少什么信息"来生成补充性搜索词
-5. 不要添加编号或其他格式标记`
+3. 【必须始终保留用户问题的核心实体/专有名词】，每个关键词都要以此为锚点，不得凭空转向其他对象
+4. 聚焦于"还缺少什么信息"，针对该实体补充位置、历史、构成、评价等具体维度
+5. 严禁跑题：不要生成与该实体无关的话题（例如用户问某寺院/景点时，不得生成他国地名、泛健康、泛旅行等）
+6. 不要添加编号或其他格式标记`
 
 	userPrompt := fmt.Sprintf("用户问题：%s\n\n已获取的信息摘要：\n%s\n\n已使用的关键词：%s\n\n请生成新的补充搜索关键词：",
 		query, contextSummary, strings.Join(usedKeywords, ", "))
@@ -242,8 +416,9 @@ func generateDeepKeywords(query string, accumulatedSummaries string, usedKeyword
 		return nil, nil
 	}
 
-	// 嵌入向量去重：拒绝与已用关键词余弦相似度 > 0.85 的候选词
-	return dedupKeywordsByEmbedding(candidates)
+	// 嵌入向量去重：仅对比本次查询已使用的关键词（含本批已通过候选），
+	// 保证重复关键词只搜索一次，非重复关键词正常保留
+	return dedupKeywordsByEmbedding(candidates, usedKeywords)
 }
 
 // =============================================================================
@@ -328,9 +503,12 @@ func summarizeVisualContent(screenshots [][]byte) (string, error) {
 func judgeMemory(memoryContext string, query string) (bool, bool, error) {
 	systemPrompt := `你是一个信息充分性评估专家。根据历史搜索记录和用户当前问题，做出两个判断：
 
-1. 历史记录中的信息是否足以回答用户问题？（是/否）
-2. 用户问题是否有时效性要求，需要最新的信息？（是/否）
+判断1：历史记录是否【直接、明确】回答了用户的同一个问题/同一个对象（同一地点、人物、作品、事件、产品）？
+- 只有当历史记录所问的东西与用户现在问的是同一个特定对象，且答案确实覆盖了提问内容时才判为"是"
+- 仅是与问题"背景相似"或"提到同一个城市"但主题不同的记录，不算直接回答，判为"否"
+- 例如：用户现在问"牛首山"，历史记录里只有"南京南站"或"南京旅游汇总"，不算直接回答
 
+判断2：用户问题是否有时效性要求，需要最新的信息？（是/否）
 时效性判断标准：
 - 询问"今天"、"最新"、"当前"、"现在"等时间敏感词 → 是
 - 询问新闻、天气、股价、赛事等实时信息 → 是
@@ -361,14 +539,13 @@ func decideSearchMode(query string) (bool, string, error) {
 	systemPrompt := `你是一个搜索策略专家。根据用户问题，判断最适合的搜索模式。
 
 两种模式说明：
-1. 【快速视觉搜索】：直接浏览网页截图，适合视觉类查询（产品外观、设计参考、UI对比、页面截图等）
-2. 【深度文本搜索】：提取网页文本并深度分析，适合研究类查询（事实核查、多源验证、学术问题、复杂推理等）
+1. 【快速视觉搜索】：直接浏览网页截图，适用【必须以"看图片"为主】的查询（产品外观、设计风格、UI/界面、海报、实物照片、视觉对比等）
+2. 【深度文本搜索】：提取网页文本并深度分析，适用信息型/事实型查询（位置在哪、有什么历史/背景、概念原理、数据分析、多源验证、学术问题）
 
 判定标准：
-- 问题涉及视觉对比、外观、设计、界面 → 快速视觉搜索
-- 问题涉及概念、原理、数据、分析、论证 → 深度文本搜索
-- 问题简单直接、不需要深入分析 → 快速视觉搜索
-- 问题需要多角度验证、信息整合 → 深度文本搜索
+- 是否"需要看图"是唯一关键：查询目的就是看外观/设计/界面等视觉内容 → 快速视觉搜索
+- 【位置、在哪、介绍、历史、背景、是什么、怎么用、数据】，以及一切都与"看图"无关的问题 → 深度文本搜索
+- 不要因为问题"简单直接"就误判为快速搜索；"某地在哪/某寺在哪/某景点介绍"属于位置与介绍类，必须用深度搜索
 
 请严格按以下格式回复（仅回复两行，不要多余内容）：
 模式：快速/深度
@@ -470,10 +647,23 @@ func generateReport(query string, summaries []string, sources []string) (string,
 // =============================================================================
 
 // dedupKeywordsByEmbedding 对候选关键词进行嵌入向量去重
-// 余弦相似度 > KeywordDedupThreshold 视为与已用关键词重复，拒绝
-func dedupKeywordsByEmbedding(candidates []string) ([]string, error) {
+// 余弦相似度 > KeywordDedupThreshold 视为重复，仅保留首次出现的关键词（保证只搜索一次）
+// dedup 基准为本次查询已使用的关键词 usedKeywords 以及本批已通过候选，避免跨查询残留误伤
+func dedupKeywordsByEmbedding(candidates []string, usedKeywords []string) ([]string, error) {
 	if len(candidates) == 0 {
 		return nil, nil
+	}
+
+	// 构建本次查询的去重参照：已使用关键词 + 本批已通过的候选
+	refCache := make(map[string][]float32)
+	for _, uk := range usedKeywords {
+		uk = strings.TrimSpace(uk)
+		if uk == "" {
+			continue
+		}
+		if emb, err := getOrComputeEmbedding(uk); err == nil {
+			refCache[uk] = emb
+		}
 	}
 
 	var filtered []string
@@ -492,26 +682,22 @@ func dedupKeywordsByEmbedding(candidates []string) ([]string, error) {
 			continue
 		}
 
-		// 与所有已用关键词比较
+		// 与本次查询已用关键词/本批已通过候选比较
 		isDuplicate := false
-		keywordEmbedMu.RLock()
-		for usedKW, usedEmb := range keywordEmbedCache {
-			sim := cosineSimilarity32(candidateEmb, usedEmb)
+		for refKW, refEmb := range refCache {
+			sim := cosineSimilarity32(candidateEmb, refEmb)
 			if sim >= float32(KeywordDedupThreshold) {
-				fmt.Printf("[%s] 关键词去重: '%s' 与 '%s' 相似度=%.2f，拒绝\n",
-					ModuleName, candidate, usedKW, sim)
+				fmt.Printf("[%s] 关键词去重: '%s' 与 '%s' 相似度=%.2f，仅搜索一次\n",
+					ModuleName, candidate, refKW, sim)
 				isDuplicate = true
 				break
 			}
 		}
-		keywordEmbedMu.RUnlock()
 
 		if !isDuplicate {
 			filtered = append(filtered, candidate)
-			// 缓存通过的关键词嵌入
-			keywordEmbedMu.Lock()
-			keywordEmbedCache[candidate] = candidateEmb
-			keywordEmbedMu.Unlock()
+			// 本批已通过的关键词也加入参照，避免本批内部重复搜索
+			refCache[candidate] = candidateEmb
 		}
 	}
 

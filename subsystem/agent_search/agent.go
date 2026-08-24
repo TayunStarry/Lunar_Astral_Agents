@@ -121,109 +121,160 @@ func Search(query string) (*SearchReport, error) {
 // 搜索流水线
 // =============================================================================
 
-// executeSearchPipeline 执行完整的搜索流水线
+// executeSearchPipeline 执行完整搜索流水线（统一单一模式）
+// 流程：记忆优先匹配 → 不满足（无匹配/时效性/用户明确要求搜索）则进入统一网络搜索
+// 网络搜索：原始输入 → 搜索引擎前15条 → 逐页滚动截图(≤10帧) → 逐页视觉摘要 → 逐条判定能否解答
+//        → 可解答则生成报告并入库；全部不可解答则进入增强搜索再跑一轮；仍失败则返回"月华不知道"并记录失败经验
 func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error) {
 	// 重置搜索状态
 	a.usedKeywords = nil
 	a.accumulatedSummaries = nil
 	a.accumulatedSources = nil
+	a.memoryHints = nil
+	a.attemptedPages = nil
+	a.coreEntities = nil
+	a.queryEmbedding = nil
+	a.initialQuery = ""
 
-	// ---- Phase 1: 记忆检索 ----
-	memoryResult := a.phaseMemoryLookup(query)
-	if memoryResult != nil {
-		// 记忆足够且无时效性冲突，直接返回
-		return memoryResult, nil
-	}
-
-	// ---- Phase 1.5: 搜索模式判定 ----
-	if aiDecideSearchMode != nil {
-		useQuick, reasoning, err := aiDecideSearchMode(query)
-		if err != nil {
-			fmt.Printf("[%s] 搜索模式判定失败: %v，回退深度搜索\n", ModuleName, err)
-		} else if useQuick {
-			fmt.Printf("[%s] AI 判定使用快速视觉搜索模式: %s\n", ModuleName, reasoning)
-			return a.executeQuickSearchPipeline(query)
-		} else {
-			fmt.Printf("[%s] AI 判定使用深度搜索模式: %s\n", ModuleName, reasoning)
+	// ---- 步骤1：AI 提取核心实体 + 关键词数组 ----
+	// ---- 步骤2：关键词空格拼接成初始查询语句 ----
+	initialQuery := ""
+	if aiExtractKeywords != nil {
+		entities, keywords, err := aiExtractKeywords(query)
+		if err == nil && len(keywords) > 0 {
+			a.coreEntities = entities
+			initialQuery = buildInitialQuery(keywords)
+			a.initialQuery = initialQuery
+			a.usedKeywords = append(a.usedKeywords, keywords...)
+			fmt.Printf("[%s] [关键词提取] 核心实体: %v\n", ModuleName, entities)
+			fmt.Printf("[%s] [关键词提取] 初始查询: %s\n", ModuleName, initialQuery)
+		} else if err != nil {
+			fmt.Printf("[%s] [关键词提取] 失败，回退规则清洗: %v\n", ModuleName, err)
 		}
 	}
-	// 如果 aiDecideSearchMode 为 nil（未注册），直接走现有深度搜索流程
-
-	// ---- Phase 2: 初始搜索 ----
-	initialSummaries, initialSources, err := a.phaseInitialSearch(query)
-	if err != nil {
-		return nil, err
+	if strings.TrimSpace(initialQuery) == "" {
+		initialQuery = cleanSearchText(query)
+		a.initialQuery = initialQuery
 	}
 
-	if len(initialSummaries) == 0 {
-		return &SearchReport{
-			Query:       query,
-			Answer:      "月华找不到你想要的信息",
-			FromMemory:  false,
-			GeneratedAt: time.Now(),
-		}, nil
+	// ---- 步骤3：对初始查询语句做向量嵌入 ----
+	if emb, err := callEmbedding(initialQuery); err == nil {
+		a.queryEmbedding = emb
+	} else {
+		fmt.Printf("[%s] [关键词提取] 初始查询嵌入失败: %v\n", ModuleName, err)
 	}
 
-	a.accumulatedSummaries = append(a.accumulatedSummaries, initialSummaries...)
-	a.accumulatedSources = append(a.accumulatedSources, initialSources...)
-
-	// ---- Phase 2.5: 信息充分性评估 ----
-	sufficient, _, err := a.evaluateInformation(query)
-	if err != nil {
-		fmt.Printf("[%s] 信息评估失败: %v，继续深度搜索\n", ModuleName, err)
-		sufficient = false
+	// ---- 步骤4：用初始查询在记忆库检索 ----
+	if r := a.phaseMemoryLookup(query, initialQuery); r != nil {
+		return r, nil
 	}
 
-	// ---- Phase 3: 深度搜索 ----
-	searchRounds := 1
-	if !sufficient {
-		fmt.Printf("[%s] 初始搜索信息不足，启动深度搜索（最多 %d 轮）\n", ModuleName, MaxSearchRounds-1)
-		deepSummaries, deepSources, deepRounds := a.phaseDeepSearch(query)
-		searchRounds += deepRounds
-
-		if len(deepSummaries) > 0 {
-			a.accumulatedSummaries = append(a.accumulatedSummaries, deepSummaries...)
-			a.accumulatedSources = append(a.accumulatedSources, deepSources...)
-		}
-	}
-
-	// ---- Phase 4: 报告生成 ----
-	report, err := a.phaseGenerateReport(query, searchRounds)
-	if err != nil {
-		return nil, err
-	}
-
-	// ---- Phase 5: 记忆存储 ----
-	a.phaseStoreToMemory(query, report)
-
-	return report, nil
+	// ---- 步骤5-10：统一网络搜索 ----
+	return a.phaseNetworkSearch(query, initialQuery, 1, "")
 }
 
 // =============================================================================
-// 快速搜索流水线（视觉优先，单轮搜索）
+// 统一网络搜索（单一模式）
 // =============================================================================
 
-// executeQuickSearchPipeline 执行快速视觉搜索：单轮搜索 + 纯截图摘要 + 跳过深度搜索
-// 流程：原始查询直接搜索 → 截图提取 → 视觉摘要 → 报告生成 → 记忆存储
-func (a *SearchAgent) executeQuickSearchPipeline(query string) (*SearchReport, error) {
-	fmt.Printf("[%s] [快速搜索] 使用原始查询作为关键词: %s\n", ModuleName, query)
-
-	// 使用原始查询作为唯一关键词
-	a.usedKeywords = []string{query}
-
-	// ---- 搜索获取最多 15 条结果 ----
-	results, err := ExecuteSearch(query, QuickSearchResultsPerQuery)
-	if err != nil {
-		return nil, fmt.Errorf("快速搜索执行失败: %w", err)
+// phaseNetworkSearch 统一网络搜索
+// attempt=1：用用户原始输入（清洗套话后）搜索 → 逐页混合提取 → 摘要 → 逐条判定能否解答
+// 全部无法解答且 attempt=1 → 增强搜索（模型推测真实意图产出强化文本）再执行一轮 attempt=2
+// 增强轮仍无法解答 → 用"原始完整句"兜底再搜一次（应对"钛宇星光阁"这类专名与常见字冲突的歧义）
+// 全部失败 → 返回"月华不知道"，并把失败经验记入记忆库供下次规避相同错误方向
+func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int, priorExperience string) (*SearchReport, error) {
+	type searchCandidate struct {
+		text string
+	}
+	var candidates []searchCandidate
+	if attempt > 1 {
+		refined, err := a.enhanceSearchText(query, priorExperience)
+		if err != nil || strings.TrimSpace(refined) == "" {
+			refined = initialQuery
+		}
+		fmt.Printf("[%s] [网络搜索] 增强搜索文本: %s\n", ModuleName, refined)
+		candidates = append(candidates, searchCandidate{text: refined})
+		// 专名歧义兜底：强化文本不同于初始查询与原始问题，再加搜一次原始完整句，
+		// 应对"钛宇星光阁"这类与常见字冲突、只有完整口语化表达才能被正确识别的昵称。
+		if refined != initialQuery && refined != query {
+			candidates = append(candidates, searchCandidate{text: query})
+		}
+	} else {
+		candidates = append(candidates, searchCandidate{text: initialQuery})
 	}
 
-	if len(results) == 0 {
-		return &SearchReport{
-			Query:       query,
-			Answer:      "月华找不到你想要的信息",
-			FromMemory:  false,
-			GeneratedAt: time.Now(),
-		}, nil
+	var lastAttempted []string
+	var sawFallback bool
+	for _, cd := range candidates {
+		validSums, validSrcs, attemptedSums, fallback := a.searchTextAndJudge(query, cd.text)
+		if len(attemptedSums) > 0 {
+			lastAttempted = attemptedSums
+		}
+		if fallback {
+			sawFallback = true
+			fmt.Printf("[%s] [网络搜索] 检测到 Bing 工具站兜底，跳过本候选，转下一轮\n", ModuleName)
+			continue
+		}
+		if len(validSums) == 0 {
+			continue
+		}
+
+		// ---- 步骤8：调用 AI 综合判定拼接后的摘要能否回答 ----
+		memoryReference := strings.Join(a.memoryHints, "\n")
+		answerable := true
+		if aiJudgeComprehensive != nil {
+			ok, err := aiJudgeComprehensive(query, memoryReference, strings.Join(validSums, "\n\n---\n\n"))
+			if err == nil {
+				answerable = ok
+			} else {
+				fmt.Printf("[%s] [网络搜索] 综合判定失败（默认判为可解答）: %v\n", ModuleName, err)
+				answerable = true
+			}
+		}
+		if answerable {
+			a.accumulatedSummaries = validSums
+			a.accumulatedSources = validSrcs
+			fmt.Printf("[%s] [网络搜索] 综合判定可解答（%d 份摘要），生成调查报告\n", ModuleName, len(validSums))
+			report, err := a.phaseGenerateReport(query, attempt)
+			if err != nil {
+				return nil, err
+			}
+			a.phaseStoreToMemory(query, report)
+			return report, nil
+		}
+		fmt.Printf("[%s] [网络搜索] 综合判定不足以解答，尝试下一候选/增强搜索\n", ModuleName)
+	}
+
+	// ---- 全部无法解答 → 增强搜索再试一轮 ----
+	if attempt < 2 {
+		prior := strings.Join(lastAttempted, "\n")
+		if sawFallback {
+			fmt.Printf("[%s] [网络搜索] 检测到工具站兜底，进入增强搜索换词重试\n", ModuleName)
+		} else {
+			fmt.Printf("[%s] [网络搜索] 全部摘要均无法解答，进入增强搜索\n", ModuleName)
+		}
+		return a.phaseNetworkSearch(query, initialQuery, attempt+1, prior)
+	}
+
+	// ---- 增强后仍无法解答 → 月华不知道 + 记录失败经验 ----
+	return a.phaseUnknownAnswer(query)
+}
+
+// searchTextAndJudge 用给定搜索文本执行一轮 搜索→混合提取→摘要+相关性判定
+// clean 为 true 时先剥离口语套话；为 false 时按原文直搜（用于专名歧义兜底）
+// 判断时参考记忆库 topk（memoryReference），并在摘要阶段顺带判定相关性，无关页面直接跳过。
+// 返回: 可用摘要/来源、本轮尝试过的摘要、是否存在可解答项、是否触发工具站兜底
+func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, validSrcs, attemptedSums []string, fallback bool) {
+	if strings.TrimSpace(searchText) == "" {
+		searchText = cleanSearchText(query)
+	}
+	fmt.Printf("[%s] [网络搜索] 搜索: %s\n", ModuleName, searchText)
+	a.usedKeywords = append(a.usedKeywords, searchText)
+
+	results, err := ExecuteSearch(searchText, SingleSearchResults)
+	if err != nil {
+		fmt.Printf("[%s] [网络搜索] 搜索执行失败: %v\n", ModuleName, err)
+		return nil, nil, nil, false
 	}
 
 	// 去重（按 URL）
@@ -234,80 +285,243 @@ func (a *SearchAgent) executeQuickSearchPipeline(query string) (*SearchReport, e
 			seenURLs[r.URL] = true
 			uniqueResults = append(uniqueResults, r)
 		}
+		if len(uniqueResults) >= SingleSearchResults {
+			break
+		}
 	}
-
-	// 过滤字典网站
 	uniqueResults = filterDictionarySites(uniqueResults)
-	fmt.Printf("[%s] [快速搜索] 去重过滤后共 %d 条结果\n", ModuleName, len(uniqueResults))
+	fmt.Printf("[%s] [网络搜索] 过滤后共 %d 条结果\n", ModuleName, len(uniqueResults))
+	if len(uniqueResults) == 0 {
+		return nil, nil, nil, false
+	}
 
-	// ---- 视觉提取 + 截图摘要 ----
-	var unreachableCount int
-	for i, result := range uniqueResults {
-		fmt.Printf("[%s] [快速搜索] 处理结果 [%d/%d]: %s\n", ModuleName, i+1, len(uniqueResults), result.Title)
+	// Bing 工具站兜底感知：若大量结果是快递/物流/在线工具/whois/学信网/地图等固定工具站，
+	// 判断为触发了工具站兜底——不再逐页提取白费时间，直接标记由上层换词重试。
+	if detectSearchFallback(uniqueResults) {
+		fmt.Printf("[%s] [网络搜索] ⚠ 检测到 Bing 工具站兜底（多数结果为工具站），跳过本页提取\n", ModuleName)
+		return nil, nil, nil, true
+	}
 
-		// 仅截图，不提取 DOM 文本
-		content, extractErr := ExtractPageVisualOnly(result.URL, MaxScreenshotsPerPage)
+	// ---- 步骤6：标题初筛（用核心实体完整名过滤无关标题） ----
+	uniqueResults = a.filterByTitleEntities(uniqueResults)
+	fmt.Printf("[%s] [网络搜索] 标题初筛后共 %d 条结果\n", ModuleName, len(uniqueResults))
+	if len(uniqueResults) == 0 {
+		return nil, nil, nil, false
+	}
+
+	// ---- 步骤7：逐页混合提取 → 摘要 → 嵌入打分 + 关键词比对 ----
+	for i, r := range uniqueResults {
+		fmt.Printf("[%s] [网络搜索] 提取 [%d/%d]: %s\n", ModuleName, i+1, len(uniqueResults), r.Title)
+
+		content, extractErr := ExtractPageContent(r.URL)
 		if extractErr != nil {
-			fmt.Printf("[%s] 页面不可达: %s (%v)，跳过\n", ModuleName, result.URL, extractErr)
-			unreachableCount++
+			fmt.Printf("[%s] [网络搜索] 页面打不开，跳过: %s (%v)\n", ModuleName, r.URL, extractErr)
+			continue
+		}
+		if strings.Contains(content.URL, "chrome-error://") {
+			fmt.Printf("[%s] [网络搜索] 页面加载失败(错误页)，跳过: %s\n", ModuleName, content.URL)
 			continue
 		}
 
-		// 准备截图数据
-		var screenshotData [][]byte
-		for _, ss := range content.Screenshots {
-			screenshotData = append(screenshotData, ss.ImageData)
-		}
-
-		if len(screenshotData) == 0 {
-			fmt.Printf("[%s] 页面无截图数据: %s，跳过\n", ModuleName, result.URL)
-			continue
-		}
-
-		// 纯视觉 AI 摘要
 		var summary string
-		if aiSummarizeVisualContent != nil {
-			summary, extractErr = aiSummarizeVisualContent(screenshotData)
-			if extractErr != nil {
-				fmt.Printf("[%s] 视觉摘要生成失败: %v，使用占位摘要\n", ModuleName, extractErr)
-				summary = fmt.Sprintf("（页面: %s，共 %d 张截图）", result.URL, len(screenshotData))
+		if strings.TrimSpace(content.TextContent) != "" && aiSummarizeContent != nil {
+			summary, _ = aiSummarizeContent(content.TextContent, nil)
+		} else if content.ContentType == "visual" && aiSummarizeVisualContent != nil {
+			var screens [][]byte
+			for _, ss := range content.Screenshots {
+				screens = append(screens, ss.ImageData)
 			}
+			if len(screens) > 0 {
+				summary, _ = aiSummarizeVisualContent(screens)
+			}
+		}
+		if strings.TrimSpace(summary) == "" {
+			fmt.Printf("[%s] [网络搜索] 页面无可用内容，跳过: %s\n", ModuleName, content.URL)
+			continue
+		}
+
+		a.attemptedPages = append(a.attemptedPages, content.URL)
+		attemptedSums = append(attemptedSums, summary)
+
+		// 嵌入打分 + 核心实体关键词比对，满足其一即视为有效信息
+		if valid, sim := a.isSummaryValid(summary); valid {
+			validSums = append(validSums, summary)
+			validSrcs = append(validSrcs, content.URL)
+			fmt.Printf("[%s] [网络搜索] 摘要有效(相似度=%.2f)，保留\n", ModuleName, sim)
 		} else {
-			// 降级：无 AI 时使用占位描述
-			summary = fmt.Sprintf("（页面: %s，共 %d 张截图）", result.URL, len(screenshotData))
-		}
-
-		if summary != "" {
-			a.accumulatedSummaries = append(a.accumulatedSummaries, summary)
-			a.accumulatedSources = append(a.accumulatedSources, content.URL)
+			fmt.Printf("[%s] [网络搜索] 摘要与查询无关(相似度=%.2f)，跳过该页: %s\n", ModuleName, sim, truncateText(summary, 50))
 		}
 	}
 
-	// 全部不可达
-	if len(uniqueResults) > 0 && len(a.accumulatedSummaries) == 0 {
-		return nil, fmt.Errorf("所有搜索结果页面均不可达 (%d 条)", len(uniqueResults))
+	return validSums, validSrcs, attemptedSums, false
+}
+
+// filterByTitleEntities 步骤6：用核心实体完整名过滤标题
+// 仅当提取到了核心实体时生效；标题不含任意核心实体完整名的结果直接淘汰。
+// 实体为空时放行（回退到仅靠嵌入打分），避免误杀标题碎片化的有效页面。
+func (a *SearchAgent) filterByTitleEntities(results []SearchResult) []SearchResult {
+	if len(a.coreEntities) == 0 {
+		return results
+	}
+	kept := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		if containsAnyEntity(r.Title, a.coreEntities) {
+			kept = append(kept, r)
+		} else {
+			fmt.Printf("[%s] [网络搜索] 标题不含核心实体，初筛跳过: %s\n", ModuleName, truncateText(r.Title, 50))
+		}
+	}
+	return kept
+}
+
+// isSummaryValid 步骤7：判定单条摘要是否构成有效信息
+// 条件一：摘要包含核心实体完整名 → 直接有效（硬命中，解决搜索引擎歧义）
+// 条件二：摘要与初始查询的嵌入余弦相似度过阈值 → 有效
+// 返回 (是否有效, 嵌入相似度)
+func (a *SearchAgent) isSummaryValid(summary string) (bool, float32) {
+	if containsAnyEntity(summary, a.coreEntities) {
+		return true, 1.0
+	}
+	if len(a.queryEmbedding) > 0 {
+		if emb, err := callEmbedding(truncateText(summary, 200)); err == nil {
+			sim := cosineSimilarity32(a.queryEmbedding, emb)
+			if sim >= float32(EmbedRelevanceThreshold) {
+				return true, sim
+			}
+			return false, sim
+		}
+	}
+	return false, 0
+}
+
+// containsAnyEntity 判断文本是否包含任一核心实体名
+// 做分隔符归一化（如"钛宇·星光阁"/"钛宇-星光阁"与"钛宇星光阁"视为相同），
+// 并对含空格的长实体按分隔符拆分为多个 token 逐个匹配，避免长串实体误杀相关标题。
+func containsAnyEntity(text string, entities []string) bool {
+	normText := normalizeForMatch(text)
+	for _, e := range entities {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		for _, tok := range splitEntityTokens(e) {
+			nt := normalizeForMatch(tok)
+			if len([]rune(nt)) >= 2 && strings.Contains(normText, nt) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// normalizeForMatch 归一化文本用于实体匹配：转小写并移除常见分隔符与空白
+func normalizeForMatch(s string) string {
+	s = strings.ToLower(s)
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '　', '·', '-', '_', '/', '\\', '.', '、', '，', ',', '（', '）', '(', ')', '《', '》', '"', '\'':
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// splitEntityTokens 将实体按分隔符切分为独立 token
+func splitEntityTokens(e string) []string {
+	f := func(r rune) bool {
+		switch r {
+		case ' ', '　', '·', '-', '_', '/', '\\', '.', '、', '，', ',', '（', '）', '(', ')', '《', '》':
+			return true
+		}
+		return false
+	}
+	return strings.FieldsFunc(e, f)
+}
+
+// buildInitialQuery 将关键词数组去重后以空格拼接为初始查询语句
+func buildInitialQuery(keywords []string) string {
+	seen := make(map[string]bool)
+	var parts []string
+	for _, k := range keywords {
+		k = strings.TrimSpace(k)
+		if k == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		parts = append(parts, k)
+	}
+	return strings.Join(parts, " ")
+}
+
+// detectSearchFallback 检测搜索结果是否为 Bing 工具站兜底
+// 当绝大多数（≥2/3）结果是快递/物流/在线工具/whois/学信网/地图等固定工具站时，判定为触发了工具站兜底。
+func detectSearchFallback(results []SearchResult) bool {
+	if len(results) == 0 {
+		return false
+	}
+	markers := []string{
+		"快递", "物流", "运单", "货运", "kuaidi", "ickd", "zto",
+		"17track", "17TRACK", "IP地址", "在线工具", "whois", "域名查询",
+		"站长工具", "学信网", "chsi", "map.baidu", "爱企查", "工商查询",
+	}
+	var hit int
+	for _, r := range results {
+		blob := strings.ToLower(r.Title + " " + r.URL)
+		for _, m := range markers {
+			if strings.Contains(blob, m) {
+				hit++
+				break
+			}
+		}
+	}
+	return hit*3 >= len(results)*2 // ≥ 2/3 为工具站
+}
+
+// enhanceSearchText 基于原始问题推测真实意图，产出强化后的搜索文本
+// priorExperience 为上一轮已尝试的页面摘要；memoryHints 为相关的历史记忆提示
+func (a *SearchAgent) enhanceSearchText(query string, priorExperience string) (string, error) {
+	if aiEnhanceSearchText == nil {
+		return query, nil
+	}
+	return aiEnhanceSearchText(query, priorExperience, strings.Join(a.memoryHints, "\n"))
+}
+
+// phaseUnknownAnswer 增强搜索后仍无法解答：返回"月华不知道"，并把失败经验记入记忆库
+func (a *SearchAgent) phaseUnknownAnswer(query string) (*SearchReport, error) {
+	fmt.Printf("[%s] [网络搜索] 增强搜索仍无法解答，返回月华不知道\n", ModuleName)
+
+	if memoryStore != nil {
+		record := MemorySearchRecord{
+			Question: query,
+			Keywords: a.usedKeywords,
+			KeyFindings: fmt.Sprintf("该问题未能得到解答。本次尝试的搜索文本：%s；尝试过的页面：%s",
+				strings.Join(a.usedKeywords, "、"), strings.Join(a.attemptedPages, "、")),
+			Answer:    "（月华不知道：该问题未得到解答）",
+			Timestamp: time.Now().Unix(),
+		}
+		if err := memoryStore(record); err != nil {
+			fmt.Printf("[%s] 失败经验记忆存储失败: %v\n", ModuleName, err)
+		} else {
+			fmt.Printf("[%s] 已把失败经验记入记忆库\n", ModuleName)
+		}
 	}
 
-	if len(a.accumulatedSummaries) == 0 {
-		return &SearchReport{
-			Query:       query,
-			Answer:      "月华找不到你想要的信息",
-			FromMemory:  false,
-			GeneratedAt: time.Now(),
-		}, nil
+	return &SearchReport{
+		Query:       query,
+		Answer:      "月华不知道该问题的答案",
+		FromMemory:  false,
+		GeneratedAt: time.Now(),
+	}, nil
+}
+
+// reportNotFound 构造"未找到信息"的占位报告
+func (a *SearchAgent) reportNotFound(query string) *SearchReport {
+	return &SearchReport{
+		Query:       query,
+		Answer:      "月华找不到你想要的信息",
+		FromMemory:  false,
+		GeneratedAt: time.Now(),
 	}
-
-	// ---- Phase 4: 报告生成（跳过 Phase 2.5 和 Phase 3）----
-	fmt.Printf("[%s] [快速搜索] 共获得 %d 条视觉摘要，直接生成报告\n", ModuleName, len(a.accumulatedSummaries))
-	report, err := a.phaseGenerateReport(query, 1) // searchRounds = 1
-	if err != nil {
-		return nil, err
-	}
-
-	// ---- Phase 5: 记忆存储 ----
-	a.phaseStoreToMemory(query, report)
-
-	return report, nil
 }
 
 // =============================================================================
@@ -316,15 +530,28 @@ func (a *SearchAgent) executeQuickSearchPipeline(query string) (*SearchReport, e
 
 // phaseMemoryLookup 查询记忆库，判定是否可以直接使用历史答案
 // 返回非 nil 表示记忆足够，跳过后续搜索直接返回
-func (a *SearchAgent) phaseMemoryLookup(query string) *SearchReport {
+// 规则：无匹配 → nil；时效性需求 → nil；用户明确要求搜索/网络 → nil；匹配且足够 → 返回记忆答案
+func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchReport {
 	if memoryLookup == nil {
 		fmt.Printf("[%s] 记忆库未集成，跳过记忆检索\n", ModuleName)
 		return nil
 	}
 
+	// 用户明确要求"搜索/网络查询"，跳过记忆直接网络搜索
+	if hasExplicitWebIntent(query) {
+		fmt.Printf("[%s] 用户明确要求搜索/网络查询，跳过记忆，直接进入网络搜索\n", ModuleName)
+		return nil
+	}
+
 	fmt.Printf("[%s] [阶段 1/5] 记忆检索中...\n", ModuleName)
 
-	entries, err := memoryLookup(query, 5)
+	// 用清洗后的初始查询（关键词拼接）检索记忆，去除口语噪声，提升召回质量
+	lookupText := initialQuery
+	if strings.TrimSpace(lookupText) == "" {
+		lookupText = query
+	}
+
+	entries, err := memoryLookup(lookupText, 5)
 	if err != nil {
 		fmt.Printf("[%s] 记忆检索失败: %v，继续网络搜索\n", ModuleName, err)
 		return nil
@@ -345,6 +572,19 @@ func (a *SearchAgent) phaseMemoryLookup(query string) *SearchReport {
 
 	if len(relevantEntries) == 0 {
 		fmt.Printf("[%s] 记忆库结果相似度过低（< %.0f%%），继续网络搜索\n", ModuleName, MemorySimilarityMin*100)
+		return nil
+	}
+
+	// 把相关记忆作为增强搜索的提示（即使不能直接作答，也能帮忙避开错误方向）
+	for _, e := range relevantEntries {
+		a.memoryHints = append(a.memoryHints, e.Content)
+	}
+
+	// 直接复用门槛：只有最佳匹配足够相似才允许用记忆直接作答。
+	// 否则（相似但不对应同一实体）误用历史答案会造成张冠李戴，继续走网络搜索更稳妥。
+	if relevantEntries[0].Similarity < float32(MemoryDirectAnswerMin) {
+		fmt.Printf("[%s] 记忆库最佳匹配相似度 %.0f%% < 直接复用门槛 %.0f%%，继续网络搜索\n",
+			ModuleName, relevantEntries[0].Similarity*100, MemoryDirectAnswerMin*100)
 		return nil
 	}
 
@@ -374,10 +614,21 @@ func (a *SearchAgent) phaseMemoryLookup(query string) *SearchReport {
 	}
 
 	if sufficient {
+		// 从相关记忆中筛选出"非失败记录"作为可复用答案。
+		// 历史"未解答/信息不足"的失败记录不应作为答案直接返回（它们只作失败经验提示）。
+		bestAnswer := ""
+		for _, e := range relevantEntries {
+			if !isFailedMemoryContent(e.Content) {
+				bestAnswer = e.Content
+				break
+			}
+		}
+		if bestAnswer == "" {
+			fmt.Printf("[%s] 相关记忆均为失败记录，继续网络搜索\n", ModuleName)
+			return nil
+		}
 		fmt.Printf("[%s] 记忆库内容足够回答，跳过网络搜索\n", ModuleName)
 
-		// 从记忆记录中提取答案（取相似度最高的记录的 Content 作为答案）
-		bestAnswer := relevantEntries[0].Content
 		return &SearchReport{
 			Query:       query,
 			Answer:      bestAnswer,
@@ -390,92 +641,59 @@ func (a *SearchAgent) phaseMemoryLookup(query string) *SearchReport {
 	return nil
 }
 
-// =============================================================================
-// Phase 2: 初始搜索
-// =============================================================================
-
-// phaseInitialSearch 执行初始搜索：生成关键词 → 搜索 → 提取内容 → 摘要
-func (a *SearchAgent) phaseInitialSearch(query string) (summaries []string, sources []string, err error) {
-	fmt.Printf("[%s] [阶段 2/5] 初始网络搜索...\n", ModuleName)
-
-	// 生成搜索关键词
-	keywords, err := a.generateKeywords(query)
-	if err != nil {
-		return nil, nil, fmt.Errorf("关键词生成失败: %w", err)
+// isFailedMemoryContent 判断记忆记录内容是否为"未解答/信息不足"的失败记录
+// 这类记录不应作为答案直接复用，只能作为失败经验提示（memoryHints）用于避开错误方向。
+func isFailedMemoryContent(content string) bool {
+	for _, m := range []string{
+		"月华不知道该问题的答案",
+		"月华找不到你想要的信息",
+		"该问题未能得到解答",
+		"未能得到解答",
+		"不足以确定",
+		"信息不足",
+		"无法解答",
+	} {
+		if strings.Contains(content, m) {
+			return true
+		}
 	}
-	a.usedKeywords = append(a.usedKeywords, keywords...)
-
-	fmt.Printf("[%s] 搜索关键词: %v\n", ModuleName, keywords)
-
-	// 执行搜索并处理结果
-	return a.executeSearchAndExtract(keywords)
+	return false
 }
 
-// =============================================================================
-// Phase 3: 深度搜索
-// =============================================================================
-
-// phaseDeepSearch 执行多轮深度搜索，返回积累的摘要和实际执行轮数
-func (a *SearchAgent) phaseDeepSearch(query string) (summaries []string, sources []string, rounds int) {
-	for round := 1; round < MaxSearchRounds; round++ {
-		fmt.Printf("[%s] [阶段 3/5] 深度搜索 第 %d/%d 轮...\n", ModuleName, round, MaxSearchRounds-1)
-
-		// 生成新的搜索关键词（基于已有摘要，排除已用过的高相似度关键词）
-		keywords, err := a.generateDeepKeywords(query)
-		if err != nil {
-			fmt.Printf("[%s] 深度关键词生成失败: %v，终止深度搜索\n", ModuleName, err)
-			break
-		}
-
-		if len(keywords) == 0 {
-			fmt.Printf("[%s] 无法生成新的搜索角度，终止深度搜索\n", ModuleName)
-			break
-		}
-
-		fmt.Printf("[%s] 深度搜索关键词: %v\n", ModuleName, keywords)
-		a.usedKeywords = append(a.usedKeywords, keywords...)
-
-		// 执行搜索
-		roundSummaries, roundSources, err := a.executeSearchAndExtract(keywords)
-		if err != nil {
-			fmt.Printf("[%s] 深度搜索执行失败: %v\n", ModuleName, err)
-			continue
-		}
-
-		if len(roundSummaries) == 0 {
-			fmt.Printf("[%s] 本轮无有效结果\n", ModuleName)
-			rounds++
-			continue
-		}
-
-		// 筛选有价值的结果（AI 评估每条摘要的相关性）
-		valuableSummaries, valuableSources := a.filterValuableResults(query, roundSummaries, roundSources)
-		if len(valuableSummaries) == 0 {
-			fmt.Printf("[%s] 本轮结果与查询无关，已舍弃\n", ModuleName)
-			rounds++
-			continue
-		}
-
-		summaries = append(summaries, valuableSummaries...)
-		sources = append(sources, valuableSources...)
-		rounds++
-
-		// 评估信息是否已足够
-		sufficient, reasoning, err := a.evaluateInformation(query)
-		if err != nil {
-			fmt.Printf("[%s] 信息评估失败: %v\n", ModuleName, err)
-			continue
-		}
-
-		fmt.Printf("[%s] 信息充分性评估: %s\n", ModuleName, reasoning)
-
-		if sufficient {
-			fmt.Printf("[%s] 信息已足够，结束深度搜索\n", ModuleName)
-			break
+// hasExplicitWebIntent 判断用户是否明确要求走网络搜索/查询，而不是查记忆
+func hasExplicitWebIntent(query string) bool {
+	for _, kw := range []string{
+		"网上搜索", "去网上查", "上网查", "网络搜索", "网络查询",
+		"帮我搜索", "实时查询", "在搜索引擎", "搜索一下最新", "查一下最新",
+	} {
+		if strings.Contains(query, kw) {
+			return true
 		}
 	}
+	return false
+}
 
-	return summaries, sources, rounds
+// cleanSearchText 剥离用户口语套话，提取核心实体与关键词用于搜索引擎
+// 原因：Bing 对"查询一下…信息/在哪里/是什么"这类完整口语句会返回工具站兜底页，
+// 只有把核心实体+限定词直接喂给搜索引擎才能命中真实、有序的网页结果。
+func cleanSearchText(raw string) string {
+	s := raw
+	for _, chatter := range []string{
+		"替我查询一下", "帮我查询一下", "请帮我查一下", "帮我搜索一下", "帮我搜一下",
+		"查询一下", "帮我查询", "我来查一下", "想问一下", "我想问一下", "麻烦查一下", "帮忙查一下",
+		"查询", "帮我查", "帮我搜", "搜索一下", "想知道", "想了解", "请问", "请查询",
+		"的信息", "的信息资料", "相关情报", "的情报", "情报资料", "资料介绍",
+		"在哪里", "在哪儿", "在什么地方", "是什么", "是什么意思", "是哪里", "有哪些", "哪些",
+		"有什么", "有没有", "怎么样", "如何", "情况", "信息",
+	} {
+		s = strings.ReplaceAll(s, chatter, " ")
+	}
+
+	// 清理残留标点与多余空白
+	replacer := strings.NewReplacer("，", " ", ",", " ", "。", "", "？", "", "？", "", "！", "", "!", "", "？", "")
+	s = replacer.Replace(s)
+	s = strings.Join(strings.Fields(s), " ")
+	return strings.TrimSpace(s)
 }
 
 // =============================================================================
@@ -523,6 +741,12 @@ func (a *SearchAgent) phaseStoreToMemory(query string, report *SearchReport) {
 		return
 	}
 
+	// 拒绝把"信息不足/未找到"的低质量结果写入记忆库，避免后续查询误复用无效答案
+	if isLowQualityAnswer(report) {
+		fmt.Printf("[%s] 本次结果为信息不足/未找到，不入记忆库\n", ModuleName)
+		return
+	}
+
 	fmt.Printf("[%s] [阶段 5/5] 存储搜索结果到记忆库...\n", ModuleName)
 
 	record := MemorySearchRecord{
@@ -544,154 +768,33 @@ func (a *SearchAgent) phaseStoreToMemory(query string, report *SearchReport) {
 // 内部辅助方法
 // =============================================================================
 
-// executeSearchAndExtract 执行搜索 → 提取页面内容 → AI 摘要
-// 返回有效摘要列表和来源 URL 列表
-func (a *SearchAgent) executeSearchAndExtract(keywords []string) (summaries []string, sources []string, err error) {
-	// 合并所有关键词的搜索结果
-	var allResults []SearchResult
-	for _, kw := range keywords {
-		results, searchErr := ExecuteSearch(kw, SearchResultsPerQuery)
-		if searchErr != nil {
-			fmt.Printf("[%s] 关键词 '%s' 搜索失败: %v\n", ModuleName, kw, searchErr)
-			continue
-		}
-		allResults = append(allResults, results...)
+// isLowQualityAnswer 判断报告是否为"信息不足/未找到"的低质量结果
+// 此类结果不应写入记忆库，否则会被后续相似查询误复用
+func isLowQualityAnswer(report *SearchReport) bool {
+	if report == nil {
+		return true
 	}
 
-	if len(allResults) == 0 {
-		return nil, nil, fmt.Errorf("所有关键词均无搜索结果")
+	// 明确的无结果占位
+	if strings.Contains(report.Answer, "找不到你想要的信息") {
+		return true
 	}
 
-	// 去重（按 URL）
-	seenURLs := make(map[string]bool)
-	var uniqueResults []SearchResult
-	for _, r := range allResults {
-		if !seenURLs[r.URL] {
-			seenURLs[r.URL] = true
-			uniqueResults = append(uniqueResults, r)
+	// 信息不足/未包含等失效表述
+	for _, marker := range []string{
+		"未包含", "未找到", "没有找到", "无法回答", "不足以回答",
+	} {
+		if strings.Contains(report.Answer, marker) {
+			return true
 		}
 	}
 
-	fmt.Printf("[%s] 去重后共 %d 条搜索结果\n", ModuleName, len(uniqueResults))
-
-	// 过滤字典网站（搜索智能体自身具备字典能力，无需查阅外部字典网站）
-	uniqueResults = filterDictionarySites(uniqueResults)
-	fmt.Printf("[%s] 过滤字典网站后剩余 %d 条结果\n", ModuleName, len(uniqueResults))
-
-	// 提取每个页面内容并摘要
-	var unreachableCount int
-	for i, result := range uniqueResults {
-		fmt.Printf("[%s] 处理结果 [%d/%d]: %s\n", ModuleName, i+1, len(uniqueResults), result.Title)
-
-		content, extractErr := ExtractPageContent(result.URL)
-		if extractErr != nil {
-			fmt.Printf("[%s] 页面不可达: %s (%v)，跳过\n", ModuleName, result.URL, extractErr)
-			unreachableCount++
-			continue
-		}
-
-		// 准备截图数据（仅 visual 类型）
-		var screenshotData [][]byte
-		if content.ContentType == "visual" && len(content.Screenshots) > 0 {
-			for _, ss := range content.Screenshots {
-				screenshotData = append(screenshotData, ss.ImageData)
-			}
-		}
-
-		// AI 摘要
-		var summary string
-		if aiSummarizeContent != nil {
-			summary, extractErr = aiSummarizeContent(content.TextContent, screenshotData)
-			if extractErr != nil {
-				fmt.Printf("[%s] 摘要生成失败: %v，使用原始文本\n", ModuleName, extractErr)
-				summary = truncateText(content.TextContent, 500)
-			}
-		} else {
-			// 无 AI 时直接使用清洗后的文本（截断到合理长度）
-			summary = truncateText(content.TextContent, 500)
-		}
-
-		if summary != "" {
-			summaries = append(summaries, summary)
-			sources = append(sources, content.URL)
-		}
+	// 完全无来源且无答案
+	if len(report.UsedSources) == 0 && strings.TrimSpace(report.Answer) == "" {
+		return true
 	}
 
-	// 全部不可达
-	if len(uniqueResults) > 0 && len(summaries) == 0 {
-		return nil, nil, fmt.Errorf("所有搜索结果页面均不可达 (%d 条)", len(uniqueResults))
-	}
-
-	return summaries, sources, nil
-}
-
-// generateKeywords 调用 AI 生成初始搜索关键词
-func (a *SearchAgent) generateKeywords(query string) ([]string, error) {
-	if aiGenerateKeywords != nil {
-		return aiGenerateKeywords(query)
-	}
-
-	// 降级方案：直接使用原始查询作为关键词
-	fmt.Printf("[%s] 关键词生成未集成，使用原始查询作为关键词\n", ModuleName)
-	return []string{query}, nil
-}
-
-// generateDeepKeywords 调用 AI 生成深度搜索关键词
-func (a *SearchAgent) generateDeepKeywords(query string) ([]string, error) {
-	if aiGenerateDeepKeywords == nil {
-		return nil, nil
-	}
-
-	accumulatedText := strings.Join(a.accumulatedSummaries, "\n")
-	return aiGenerateDeepKeywords(query, accumulatedText, a.usedKeywords)
-}
-
-// evaluateInformation 调用 AI 评估当前积累的信息是否足以回答用户问题
-func (a *SearchAgent) evaluateInformation(query string) (sufficient bool, reasoning string, err error) {
-	if aiEvaluateSufficiency == nil {
-		// 无 AI 时简单判定：有至少 1 条摘要就认为足够
-		return len(a.accumulatedSummaries) > 0, "默认判定", nil
-	}
-
-	accumulatedText := strings.Join(a.accumulatedSummaries, "\n\n---\n\n")
-	return aiEvaluateSufficiency(query, accumulatedText)
-}
-
-// filterValuableResults 筛选与查询相关的有效摘要
-// 对每条摘要调用 AI 评估相关性，丢弃无关结果
-func (a *SearchAgent) filterValuableResults(query string, summaries []string, sources []string) ([]string, []string) {
-	if aiEvaluateSufficiency == nil || len(summaries) <= 1 {
-		// 无法评估时保留全部
-		return summaries, sources
-	}
-
-	var filteredSummaries []string
-	var filteredSources []string
-
-	for i, summary := range summaries {
-		// 将单条摘要作为上下文评估相关性
-		relevant, _, err := aiEvaluateSufficiency(query, summary)
-		if err != nil {
-			// 评估失败，保守保留
-			filteredSummaries = append(filteredSummaries, summary)
-			if i < len(sources) {
-				filteredSources = append(filteredSources, sources[i])
-			}
-			continue
-		}
-
-		if relevant || len(summaries) == 1 {
-			// 相关 或 唯一结果（保留最后一条）
-			filteredSummaries = append(filteredSummaries, summary)
-			if i < len(sources) {
-				filteredSources = append(filteredSources, sources[i])
-			}
-		} else {
-			fmt.Printf("[%s] 舍弃无关结果: %s\n", ModuleName, truncateText(summary, 80))
-		}
-	}
-
-	return filteredSummaries, filteredSources
+	return false
 }
 
 // filterDictionarySites 过滤字典/词典类网站
@@ -758,19 +861,28 @@ func ensureBrowserHealthy() error {
 	return tryRestartBrowser()
 }
 
-// tryRestartBrowser 尝试重启浏览器
+// tryRestartBrowser 尝试重启浏览器，每次清理资源后重试，最多 MaxBrowserRetryAttempts 次
 func tryRestartBrowser() error {
 	fmt.Printf("[%s] 正在重启浏览器...\n", ModuleName)
 
-	CloseBrowser()
-	ResetCPUTracking() // 重置 CPU 追踪状态
+	var lastErr error
+	for attempt := 1; attempt <= MaxBrowserRetryAttempts; attempt++ {
+		CloseBrowser()
+		ResetCPUTracking() // 重置 CPU 追踪状态
 
-	if err := LaunchBrowser(); err != nil {
-		return fmt.Errorf("月华的浏览器崩了，找不到你想要的内容")
+		if err := LaunchBrowser(); err != nil {
+			lastErr = err
+			fmt.Printf("[%s] 浏览器重启第 %d/%d 次失败: %v\n",
+				ModuleName, attempt, MaxBrowserRetryAttempts, err)
+			continue
+		}
+
+		fmt.Printf("[%s] 浏览器重启成功\n", ModuleName)
+		return nil
 	}
 
-	fmt.Printf("[%s] 浏览器重启成功\n", ModuleName)
-	return nil
+	return fmt.Errorf("月华的浏览器重启 %d 次仍失败，找不到你想要的内容: %v",
+		MaxBrowserRetryAttempts, lastErr)
 }
 
 // =============================================================================

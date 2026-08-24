@@ -103,6 +103,15 @@ func SendGroupTextMessage(groupID int64, content string) error {
 	return nil
 }
 
+// normalizeBase64Image 规整图片数据：剥掉 "data:image/xxx;base64," 前缀
+// NapCat 的 base64:// 仅接受纯 base64，而本系统的图片数据统一携带 data URI 前缀
+func normalizeBase64Image(img string) string {
+	if idx := strings.Index(img, "base64,"); idx >= 0 {
+		return img[idx+len("base64,"):]
+	}
+	return img
+}
+
 // SendGroupImageMessage 发送群图片消息（base64 编码）
 func SendGroupImageMessage(groupID int64, images []string) error {
 	baseURL := getNapcatHTTPBaseURL()
@@ -114,7 +123,7 @@ func SendGroupImageMessage(groupID int64, images []string) error {
 		message = append(message, map[string]interface{}{
 			"type": "image",
 			"data": map[string]string{
-				"file": "base64://" + img,
+				"file": "base64://" + normalizeBase64Image(img),
 			},
 		})
 	}
