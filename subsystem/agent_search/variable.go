@@ -21,7 +21,7 @@ const (
 	// 记忆库相似度最低阈值
 	MemorySimilarityMin = 0.55
 	// 直接复用记忆答案的最低相似度阈值（低于则继续网络搜索）
-	MemoryDirectAnswerMin = 0.72
+	MemoryDirectAnswerMin = 0.70
 	// 默认最大上下文 tokens
 	MaxContextTokensDefault = 16384
 	// 单次浏览器操作超时（秒）

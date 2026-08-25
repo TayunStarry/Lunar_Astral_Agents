@@ -100,12 +100,6 @@ declare global {
      */
     function pullContext(): MultimodalMessage[];
     /**
-     * 拉取缓存消息池（未命中关键词的入站消息，供自主发言时主动读取）
-     * 
-     * @returns {MultimodalMessage[]} 缓存消息列表
-     */
-    function pullPoolContext(): MultimodalMessage[];
-    /**
      * 拉取视频URL
      * 
      * @returns {string[]} 视频URL列表

@@ -45,7 +45,6 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册消息操作适配器
 	vm.Set("pullVideoUrl", adapters.pullVideoUrl)
 	vm.Set("pullContext", adapters.pullContext)
-	vm.Set("pullPoolContext", adapters.pullPoolContext)
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
 

@@ -94,7 +94,7 @@ report, err := AgentSearch.Search("查询南京南站是哪里，有哪些便捷
 | `TextHeavyThreshold` | 500 | 文本密集型判定阈值（字符数） |
 | `EmbedRelevanceThreshold` | 0.5 | 摘要与查询嵌入余弦相似度阈值 |
 | `MemorySimilarityMin` | 0.55 | 记忆库相似度准入阈值 |
-| `MemoryDirectAnswerMin` | 0.72 | 直接复用记忆答案的最低相似度 |
+| `MemoryDirectAnswerMin` | 0.70 | 直接复用记忆答案的最低相似度 |
 | `PageFastSkipTimeout` | 10s | 单页提取超时，超时直接跳过 |
 | `BrowserMaxMemMB` | 4096 | 浏览器内存上限，超标触发重启 |
 

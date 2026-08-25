@@ -2,7 +2,6 @@ package napcat
 
 import (
 	"encoding/json"
-	"sync"
 )
 
 // ==================== 桥接器配置类型 ====================
@@ -147,22 +146,6 @@ type GroupPool struct {
 	GroupID   int64
 	GroupName string
 	Entries   []GroupPoolEntry
-}
-
-// ==================== 缓存类型（供智能体主动拉取，兼容既有接口） ====================
-
-// CachedMessage 缓存的单条消息
-type CachedMessage struct {
-	UserID    int64       // 发送者QQ号
-	Nickname  string      // 发送者昵称
-	Content   interface{} // string 或 []map[string]interface{} (OpenAI多模态格式)
-	HasImages bool        // 是否包含图片
-}
-
-// MessageCache 消息缓存容器
-type MessageCache struct {
-	Messages []CachedMessage
-	mu       sync.RWMutex
 }
 
 // ==================== 桥接器状态类型 ====================

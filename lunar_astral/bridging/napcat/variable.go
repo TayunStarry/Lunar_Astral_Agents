@@ -45,14 +45,6 @@ var groupNameCache = make(map[int64]string)
 // groupMutex 保护群聊缓存池与群名称缓存的并发访问
 var groupMutex sync.Mutex
 
-// ==== 消息缓存全局变量（供智能体主动拉取，兼容既有接口） ====
-
-// messageCache 消息缓存实例
-var messageCache = &MessageCache{}
-
-// maxCacheSize 最大缓存容量
-const maxCacheSize = 20
-
 // ==== Napcat 客户端全局变量 ====
 
 // httpClient Napcat HTTP API 客户端
