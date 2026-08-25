@@ -17,10 +17,6 @@ export class GlobalConfig {
 	public static unreadContext: PostMessage[] = [];
 	/** 未读视频URL */
 	public static unreadVideoUrl: string[] = [];
-	/** 发言权重 */
-	public static speakWeight: number = 1;
-	/** 沉默计数（连续不允许发言的循环次数） */
-	public static silenceCount: number = 0;
 	/** 是否正在思考中 */
 	public static reasoningInProgress: boolean = false;
 	/** 最终响应 */

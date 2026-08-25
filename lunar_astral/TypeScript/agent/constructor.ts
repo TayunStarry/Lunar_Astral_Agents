@@ -39,6 +39,10 @@ const viewerRole: ViewerRole = new ViewerRole();
 export function randomDefaultMessage(): string {
     return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
 }
+/** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
+const STICKER_COLLECTION = 'stickers';
+/** 表情包集合是否已确认就绪（避免重复初始化） */
+let stickerCollectionReady = false;
 /** 处理视频文件（观影者智能体） */
 async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
     // 缓存检查：如果已处理过该视频，直接返回缓存结果
@@ -174,8 +178,6 @@ async function createChatMessage(): Promise<string> {
     const cache: ChatCache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
     // 发送请求并获取响应
     await dialogueRole.generateDialogue(cache);
-    // 减少发言权重
-    GlobalConfig.speakWeight--;
     // 返回最终应答
     return GlobalConfig.finalResponse;
 }
@@ -197,36 +199,12 @@ async function thoughtLoopTickEvent(): Promise<void> {
         }
         /** 消息长度 */
         const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
-        /** 消息类型 */
-        const messageType = messageLength === 0 ? 'response' : 'active';
-        /** 是否允许发言 */
-        const allowSpeak = RandomFloor(5, 100) < GlobalConfig.speakWeight;
-        // 如果消息长度为0，且不允许发言，跳过当前循环
-        if (messageLength === 0 && !allowSpeak) {
-            // 沉默计数+1（上限100）
-            GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
-            // 标记为思考完成
-            GlobalConfig.reasoningInProgress = false;
-            // 进入下一次循环
-            return;
-        }
-        // 如果消息长度为0，且允许发言，但沉默计数不足30，跳过当前循环
-        if (messageLength === 0 && allowSpeak && GlobalConfig.silenceCount < 30) {
-            // 沉默计数+1（上限100）
-            GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
-            // 标记为思考完成
-            GlobalConfig.reasoningInProgress = false;
-            // 进入下一次循环
-            return;
-        }
-        // 允许发言，重置沉默计数和发言权重
-        GlobalConfig.silenceCount = 0;
-        // 如果消息长度为0，表示当前循环为主动发言循环
+        // 如果消息长度为0，跳过当前循环
         if (messageLength === 0) {
-            // 主动发言流程：从消息池拉取上下文作为主动发起的话题
-            pullPoolContext().forEach(message => writeMessage(message.role, message.content));
-            // 主动发言后：发言权重设为0
-            GlobalConfig.speakWeight = 0;
+            // 标记为思考完成
+            GlobalConfig.reasoningInProgress = false;
+            // 进入下一次循环
+            return;
         }
         // 批量处理视频文件
         await batchProcessVideoFiles();
@@ -234,7 +212,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         await createChatMessage();
         // 如果消息响应为空，抛出异常
         if (!GlobalConfig.finalResponse.trim().length) {
-            pushContext(messageType, randomDefaultMessage(), tts(randomDefaultMessage())[0])
+            pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0])
             return
         };
         /** 解析原始文本：拆分思考区、代码块、行动区、正文切片（含display和tts双版本） */
@@ -248,7 +226,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
             // 调用行动者推理动作
             await actorRole.createCreativeWork(actionBlocks.join('|'));
             // 从记忆库匹配表情包并推送图片数据
-            pushImage([await queryEmotionSticker(actionBlocks.join('|'))], true);
+            pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 未解析出行动区内容，且正文长度小于等于35字时，按概率基于正文推理表情包
         else if (validMessage.length <= 35 && Math.random() < 0.55) {
@@ -256,11 +234,11 @@ async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
         for (const thinking of thinkingBlocks) {
-            pushContext(messageType, thinking, '');
+            pushContext('text', thinking, '');
         }
         // 第二步：按顺序逐一发送代码块内容（不参与语音合成）
         for (const code of codeBlocks) {
-            pushContext(messageType, code, '');
+            pushContext('text', code, '');
         }
         // 第三步：按顺序逐一发送正文切片，display用于显示，tts用于合成语音
         for (const chunk of textChunks) {
@@ -271,7 +249,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
             // 如果语音合成成功，将结果赋值给audio
             if (!err && audioData) audio = audioData;
             // 推送消息（包含显示内容和语音数据）
-            pushContext(messageType, chunk.display, audio);
+            pushContext('text', chunk.display, audio);
         }
         // 消息缓冲池非空时，触发信息记忆流程：逐个写入记忆库后清空
         if (GlobalConfig.unreadRecords.length >= 1) memorizeUnreadRecords();
@@ -284,7 +262,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         // 打印错误信息
         console.error((error as Error).message, ' || ', (error as Error).stack);
         // 推送兜底消息
-        pushContext('active', randomDefaultMessage(), promptSound);
+        pushContext('text', randomDefaultMessage(), promptSound);
         // 重置智能体状态
         resetAgentState();
     }
@@ -304,20 +282,19 @@ async function pullExternalMessages() {
 function writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
     // 从外部写入消息
     GlobalConfig.unreadContext.push({ role, content: messages });
-    // 增加随机的发言权重
-    GlobalConfig.speakWeight += RandomFloor(1, 3);
     // 如果消息是字符串，将其转换为文本消息
     if (typeof messages === 'string') messages = [{ type: 'text', text: messages }];
     // 打印文本消息
-    messages.forEach(message => { if (message.type === 'text') console.log(message.text); })
+    for (const message of messages) {
+        if (message.type === 'text') console.log('收到文本: ' + message.text);
+        else console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+    }
 }
 /** 写入视频文件 */
 function writeVideoUrl(videoUrl: string) {
-    console.log('写入视频文件:' + videoUrl);
+    console.log('收到视频: ' + videoUrl);
     // 从外部写入视频文件
     GlobalConfig.unreadVideoUrl.push(videoUrl);
-    // 增加随机的发言权重
-    GlobalConfig.speakWeight += RandomFloor(1, 3);
 }
 /** 错误累积达阈值后重置智能体状态 */
 function resetAgentState(): void {
@@ -349,10 +326,6 @@ function syncLTPXToolStatus(): void {
         console.error('LTPX 工具状态同步失败:', e);
     }
 }
-/** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
-const STICKER_COLLECTION = 'stickers';
-/** 表情包集合是否已确认就绪（避免重复初始化） */
-let stickerCollectionReady = false;
 /** 基于查询文本从表情包记忆库检索表情包图片，返回 base64；无结果或失败时返回 null */
 async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;
@@ -407,13 +380,21 @@ export function memorizeUnreadRecords(): void {
         console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
         return;
     }
-    // 逐个消息写入记忆库（仅文本内容，保留角色信息）
+    /** 成功写入的消息数量 */
     let written = 0;
+    // 遍历未读消息缓冲池
     for (const message of GlobalConfig.unreadRecords) {
+        // 过滤掉工具调用消息
+        if (message.role === 'tool') continue;
+        /** 提取文本内容并过滤空字符串 */
         const content = extractTextFromMessage(message).trim();
-        if (!content) continue;
+        // 过滤掉空字符串或长度小于等于5的消息
+        if (!content || content.length <= 5) continue;
+        /** 写入记忆库 */
         const [, error] = memoryAdd('lunar_messages', message.role, content);
+        // 记录写入失败的错误信息
         if (error) console.error('[记忆] 写入记忆库失败:', error);
+        // 记录成功写入的消息数量
         else written++;
     }
     console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);

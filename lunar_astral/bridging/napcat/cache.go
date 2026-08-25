@@ -16,7 +16,7 @@ func AddCachedMessage(msg CachedMessage) {
 		messageCache.Messages = messageCache.Messages[len(messageCache.Messages)-maxCacheSize:]
 	}
 
-	LoggerGeneral.SubInfo("LunarCore", "Napcat", "群 %d 缓存消息数: %d/%d", msg.GroupID, len(messageCache.Messages), maxCacheSize)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "用户 %d 缓存消息数: %d/%d", msg.UserID, len(messageCache.Messages), maxCacheSize)
 }
 
 // GetCachedMessages 获取所有缓存消息的只读副本

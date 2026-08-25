@@ -409,8 +409,10 @@ func judgeMemory(memoryContext string, query string) (bool, bool, error) {
 // =============================================================================
 
 // generateReport 基于所有摘要生成最终搜索报告
+// 报告正文只包含【核心答案】【详细分析】【补充说明】，不含来源链接；
+// sources 仅作为内部参考资料（供 AI 校准措辞），不进入输出正文。
 func generateReport(query string, summaries []string, sources []string) (string, error) {
-	// 构建来源列表
+	// 构建来源列表（仅内部参考，不写入报告正文）
 	var sourcesText strings.Builder
 	for i, src := range sources {
 		sourcesText.WriteString(fmt.Sprintf("%d. %s\n", i+1, src))
@@ -421,19 +423,20 @@ func generateReport(query string, summaries []string, sources []string) (string,
 
 	systemPrompt := `你是一个专业的搜索报告生成专家。基于用户问题和收集到的信息摘要，生成一份结构清晰、内容准确的搜索答案报告。
 
-报告格式要求：
+报告格式要求（仅输出以下三个部分，顺序固定）：
 1. 【核心答案】：用1-2句话直接回答用户问题
 2. 【详细分析】：展开说明关键信息，分点陈述
-3. 【信息来源】：列出引用来源编号
-4. 【补充说明】：如有必要，补充相关注意事项或延伸信息
+3. 【补充说明】：如有必要，补充相关注意事项或延伸信息
 
-要求：
+硬性要求：
+- 报告中不得包含任何来源、链接、URL 或引用编号（信息来源仅作内部参考，不得出现在正文中）
+- 若需提及出处，用"根据多家公开来源"这类概括表述，不要给出具体网址
 - 语言精炼，避免冗余
 - 客观准确，不添加未经证实的信息
 - 如果信息不足以完全回答，诚实说明
 - 使用中文输出`
 
-	userPrompt := fmt.Sprintf("用户问题：%s\n\n收集到的信息摘要：\n%s\n\n信息来源：\n%s\n\n请生成搜索报告。",
+	userPrompt := fmt.Sprintf("用户问题：%s\n\n收集到的信息摘要：\n%s\n\n信息来源（仅供内部参考，不要写入报告）：\n%s\n\n请生成搜索报告。",
 		query, truncateText(combinedSummaries, 6000), sourcesText.String())
 
 	resp, err := callAI(systemPrompt, userPrompt, nil)

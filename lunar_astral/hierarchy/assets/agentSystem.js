@@ -10,8 +10,6 @@ var agentSystem = (function (exports) {
         static unreadRecords = [];
         static unreadContext = [];
         static unreadVideoUrl = [];
-        static speakWeight = 1;
-        static silenceCount = 0;
         static reasoningInProgress = false;
         static finalResponse = "";
         static memoryReady = false;
@@ -1704,6 +1702,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
     async function analysisVideoFile(videoUrl, userNeeds) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
@@ -1807,7 +1807,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await dialogueRole.generateDialogue(cache);
-        GlobalConfig.speakWeight--;
         return GlobalConfig.finalResponse;
     }
     async function thoughtLoopTickEvent() {
@@ -1821,27 +1820,14 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 GlobalConfig.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
             }
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
-            const messageType = messageLength === 0 ? 'response' : 'active';
-            const allowSpeak = RandomFloor(5, 100) < GlobalConfig.speakWeight;
-            if (messageLength === 0 && !allowSpeak) {
-                GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
-                GlobalConfig.reasoningInProgress = false;
-                return;
-            }
-            if (messageLength === 0 && allowSpeak && GlobalConfig.silenceCount < 30) {
-                GlobalConfig.silenceCount = Math.min(GlobalConfig.silenceCount + 1, 100);
-                GlobalConfig.reasoningInProgress = false;
-                return;
-            }
-            GlobalConfig.silenceCount = 0;
             if (messageLength === 0) {
-                pullPoolContext().forEach(message => writeMessage(message.role, message.content));
-                GlobalConfig.speakWeight = 0;
+                GlobalConfig.reasoningInProgress = false;
+                return;
             }
             await batchProcessVideoFiles();
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
-                pushContext(messageType, randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
                 return;
             }
             ;
@@ -1857,17 +1843,17 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
             for (const thinking of thinkingBlocks) {
-                pushContext(messageType, thinking, '');
+                pushContext('text', thinking, '');
             }
             for (const code of codeBlocks) {
-                pushContext(messageType, code, '');
+                pushContext('text', code, '');
             }
             for (const chunk of textChunks) {
                 let audio = '';
                 const [audioData, err] = tts(chunk.tts);
                 if (!err && audioData)
                     audio = audioData;
-                pushContext(messageType, chunk.display, audio);
+                pushContext('text', chunk.display, audio);
             }
             if (GlobalConfig.unreadRecords.length >= 1)
                 memorizeUnreadRecords();
@@ -1877,7 +1863,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             if (readErr)
                 console.error('读取提示音失败:', readErr);
             console.error(error.message, ' || ', error.stack);
-            pushContext('active', randomDefaultMessage(), promptSound);
+            pushContext('text', randomDefaultMessage(), promptSound);
             resetAgentState();
         }
         GlobalConfig.reasoningInProgress = false;
@@ -1889,16 +1875,18 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
     function writeMessage(role, messages) {
         GlobalConfig.unreadContext.push({ role, content: messages });
-        GlobalConfig.speakWeight += RandomFloor(1, 3);
         if (typeof messages === 'string')
             messages = [{ type: 'text', text: messages }];
-        messages.forEach(message => { if (message.type === 'text')
-            console.log(message.text); });
+        for (const message of messages) {
+            if (message.type === 'text')
+                console.log('收到文本: ' + message.text);
+            else
+                console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+        }
     }
     function writeVideoUrl(videoUrl) {
-        console.log('写入视频文件:' + videoUrl);
+        console.log('收到视频: ' + videoUrl);
         GlobalConfig.unreadVideoUrl.push(videoUrl);
-        GlobalConfig.speakWeight += RandomFloor(1, 3);
     }
     function resetAgentState() {
         descriptionRole.coverContext([]);
@@ -1926,8 +1914,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             console.error('LTPX 工具状态同步失败:', e);
         }
     }
-    const STICKER_COLLECTION = 'stickers';
-    let stickerCollectionReady = false;
     async function queryEmotionSticker(query) {
         if (!query || !query.trim())
             return null;
@@ -1983,8 +1969,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         let written = 0;
         for (const message of GlobalConfig.unreadRecords) {
+            if (message.role === 'tool')
+                continue;
             const content = extractTextFromMessage(message).trim();
-            if (!content)
+            if (!content || content.length <= 5)
                 continue;
             const [, error] = memoryAdd('lunar_messages', message.role, content);
             if (error)

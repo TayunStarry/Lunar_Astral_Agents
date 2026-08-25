@@ -397,9 +397,15 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 	// 4. v3: 去重匹配，获取标签 UUID
 	UUIDtag := c.processTagVectors(tags, tagVecs)
 
-	// 5. 添加文档（含 TagUUIDs）
+	// 4.5 v4: 嵌入正文内容，用于二阶段检索的内容级重排
+	contentVec, err := d.embedText(ctx, c.Model, content)
+	if err != nil {
+		return "", fmt.Errorf("内容嵌入失败: %w", err)
+	}
+
+	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -481,9 +487,15 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 	// 4. v3: 去重匹配，获取标签 UUID
 	tagUUIDs := c.processTagVectors(tags, tagVecs)
 
-	// 5. 添加文档（含 TagUUIDs）
+	// 4.5 v4: 嵌入标签拼接文本作为图片内容向量（image 无法直接用文本嵌入模型）
+	contentVec, err := d.embedText(ctx, c.Model, strings.Join(tags, " "))
+	if err != nil {
+		return "", fmt.Errorf("图片内容嵌入失败: %w", err)
+	}
+
+	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TAGS: tagUUIDs})
+	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TAGS: tagUUIDs, Embedding: contentVec})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -564,13 +576,11 @@ func (d *MemoryDB) MemoryQueryMessages(ctx context.Context, collectionName, quer
 }
 
 // MemoryQueryMessagesWithContent 查询记忆库，返回 topK 条带内容的查询结果
-// 使用标签向量中介检索算法：
+// 使用二阶段检索算法（v4）：
 //  1. 嵌入查询文本
-//  2. 与所有标签向量计算余弦相似度
-//  3. 取 topK 个最相似标签
-//  4. 收集关联 UUID 并统计频次
-//  5. 得分 = 频次 / 去重 UUID 总数
-//  6. 按得分降序 + 原始插入顺序返回
+//  2. 阶段一（标签召回）：与标签向量算余弦，按放宽池取候选文档
+//  3. 阶段二（内容重排）：候选文档内容余弦与标签得分融合排序
+//  4. 低于 DocRankThreshold 过滤，按融合得分降序 + 原始插入顺序返回
 func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectionName, queryText string, topK int) ([]MemoryQueryResult, error) {
 	if topK <= 0 {
 		return nil, nil
@@ -583,20 +593,20 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 
 	c.reloadIfChanged()
 
-	// 1. 嵌入查询文本
-	queryVec, err := d.embedText(ctx, c.Model, queryText)
+	// 1. 嵌入查询文本（query 语义：Qwen3 指令感知前缀）
+	queryVec, err := d.embedQuery(ctx, c.Model, queryText)
 	if err != nil {
 		return nil, fmt.Errorf("查询嵌入失败: %w", err)
 	}
 
-	// 2-6. 标签向量匹配查询
+	// 2-4. 二阶段检索
 	return c.queryTopK(queryVec, topK), nil
 }
 
-// queryTopK 标签向量中介检索核心算法 (v3: 文档引用标签 UUID)
-// 流程: 嵌入查询 → 匹配标签 → 取标签 UUID → 筛选文档 → 平均评分排序
-// 评分: 所有匹配标签的余弦相似度取平均值（多标签命中取均分）
-// 例如: 文档A被标签1(0.5)和标签2(0.8)同时命中 → 得分 (0.5+0.8)/2 = 0.65
+// queryTopK 标签向量中介检索核心算法 (v4: 二阶段检索)
+// 阶段一（标签召回）: 嵌入查询 → 与全量标签算余弦 → 取放宽后的标签候选池 → 命中候选文档
+// 阶段二（内容重排）: 对候选文档计算内容余弦，与标签命中得分融合后排序
+// 融合得分 = TagScoreWeight*标签均分 + ContentScoreWeight*内容余弦，低于 DocRankThreshold 过滤
 func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -605,7 +615,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		return nil
 	}
 
-	// 步骤 1: 计算所有标签向量的相似度并取 topK
+	// ---- 阶段一：标签候选召回（放宽池，保证召回） ----
 	type tagScored struct {
 		idx   int
 		score float32
@@ -619,34 +629,36 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 		return tagScores[i].score > tagScores[j].score
 	})
 
-	actualTagK := topK
-	if actualTagK > len(tagScores) {
-		actualTagK = len(tagScores)
+	tagPoolSize := topK * TagPoolMultiplier
+	if tagPoolSize < MinTagPool {
+		tagPoolSize = MinTagPool
+	}
+	if tagPoolSize > len(tagScores) {
+		tagPoolSize = len(tagScores)
 	}
 
-	// 步骤 2: 构建 标签UUID → 相似度 映射（topK 标签）
-	tagScoreMap := make(map[string]float32, actualTagK)
-	for i := 0; i < actualTagK; i++ {
+	// 标签UUID → 最高相似度（放宽后的候选池）
+	tagScoreMap := make(map[string]float32, tagPoolSize)
+	for i := 0; i < tagPoolSize; i++ {
 		uuid := c.TagVectors[tagScores[i].idx].UUID
-		// 同一 UUID 可能被多个标签命中（去重后不存在），取最高分
 		if existing, ok := tagScoreMap[uuid]; !ok || tagScores[i].score > existing {
 			tagScoreMap[uuid] = tagScores[i].score
 		}
 	}
 
-	// 步骤 3: 筛选包含这些标签的文档，计算匹配标签的余弦相似度平均值
-	type docScored struct {
+	// 候选文档 + 标签命中均分
+	type docCandidate struct {
 		doc      Document
-		avgScore float32
+		tagScore float32
 		order    int
 	}
 
-	docOrder := make(map[string]int)
+	docOrder := make(map[string]int, len(c.Documents))
 	for i, doc := range c.Documents {
 		docOrder[doc.ID] = i
 	}
 
-	docScores := make([]docScored, 0)
+	candidates := make([]docCandidate, 0)
 	for _, doc := range c.Documents {
 		var sum float32
 		var matchCount int
@@ -657,34 +669,52 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 			}
 		}
 		if matchCount > 0 {
-			docScores = append(docScores, docScored{
+			candidates = append(candidates, docCandidate{
 				doc:      doc,
-				avgScore: sum / float32(matchCount),
+				tagScore: sum / float32(matchCount),
 				order:    docOrder[doc.ID],
 			})
 		}
 	}
 
-	if len(docScores) == 0 {
+	if len(candidates) == 0 {
 		return nil
 	}
 
-	// 步骤 4: 按平均得分降序排列，平局按原始插入顺序
-	sort.SliceStable(docScores, func(i, j int) bool {
-		if docScores[i].avgScore != docScores[j].avgScore {
-			return docScores[i].avgScore > docScores[j].avgScore
+	// ---- 阶段二：内容级重排 ----
+	type ranked struct {
+		idx   int
+		fused float32
+	}
+	rankedList := make([]ranked, 0, len(candidates))
+	for i, cand := range candidates {
+		contentScore := cosineSimilarity(queryVec, cand.doc.Embedding)
+		fused := TagScoreWeight*cand.tagScore + ContentScoreWeight*contentScore
+		if fused < DocRankThreshold {
+			continue
 		}
-		return docScores[i].order < docScores[j].order
+		rankedList = append(rankedList, ranked{idx: i, fused: fused})
+	}
+
+	if len(rankedList) == 0 {
+		return nil
+	}
+
+	sort.SliceStable(rankedList, func(i, j int) bool {
+		if rankedList[i].fused != rankedList[j].fused {
+			return rankedList[i].fused > rankedList[j].fused
+		}
+		return candidates[rankedList[i].idx].order < candidates[rankedList[j].idx].order
 	})
 
-	// 步骤 5: 返回前 topK 条
-	if topK > len(docScores) {
-		topK = len(docScores)
+	if topK > len(rankedList) {
+		topK = len(rankedList)
 	}
 
 	results := make([]MemoryQueryResult, topK)
 	for i := 0; i < topK; i++ {
-		doc := &docScores[i].doc
+		cand := &candidates[rankedList[i].idx]
+		doc := &cand.doc
 		role := doc.Role
 		if doc.Image != "" {
 			role = "image"
@@ -694,7 +724,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 			Role:       role,
 			Content:    doc.Content,
 			Image:      doc.Image,
-			Similarity: docScores[i].avgScore,
+			Similarity: rankedList[i].fused,
 		}
 	}
 	return results
@@ -931,11 +961,23 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 		// v3: 去重匹配，获取标签 UUID
 		tagUUIDs := c.processTagVectors(tags, tagVecs)
 
-		// v3: 更新文档的 TagUUIDs
+		// v4: 嵌入内容向量（text 为正文，image 为标签拼接）
+		repText := doc.Content
+		if isImage {
+			repText = strings.Join(tags, " ")
+		}
+		contentVec, err := d.embedText(ctx, modelName, repText)
+		if err != nil {
+			LoggerGeneral.Warn("FileManager", "嵌入内容失败 [%s]: %v", doc.ID, err)
+			continue
+		}
+
+		// v3/v4: 更新文档的 TagUUIDs 与内容嵌入
 		c.mu.Lock()
 		for j := range c.Documents {
 			if c.Documents[j].ID == doc.ID {
 				c.Documents[j].TAGS = tagUUIDs
+				c.Documents[j].Embedding = contentVec
 				break
 			}
 		}

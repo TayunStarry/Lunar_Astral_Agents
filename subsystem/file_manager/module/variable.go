@@ -22,11 +22,16 @@ const (
 	TagsChunkSize      = 100 // 标签向量分块大小（条/块）
 )
 
-// v3 记忆库配置常量
+// v4 记忆库配置常量
 const (
-	CurrentVersion    = 3    // 当前数据格式版本号（v3: 文档引用标签 UUID）
-	TagDedupThreshold = 0.85 // 标签向量去重阈值（余弦相似度）
-	MaxTagRetries     = 3    // LLM 标签生成最大重试次数
+	CurrentVersion     = 4    // 当前数据格式版本号（v4: 文档内容嵌入 + 二阶段检索）
+	TagDedupThreshold  = 0.85 // 标签向量去重阈值（余弦相似度）
+	MaxTagRetries      = 3    // LLM 标签生成最大重试次数
+	TagPoolMultiplier  = 4    // 标签候选池放大倍数（相对 topK，用于放宽召回）
+	MinTagPool         = 10   // 标签候选池最小规模
+	DocRankThreshold   = 0.30 // 文档融合得分门槛（低于此值不返回）
+	TagScoreWeight     = 0.3  // 融合评分：标签命中权重（内容主导）
+	ContentScoreWeight = 0.7  // 融合评分：内容余弦权重（Qwen3 实测相关 0.6-0.75 / 不相关 <0.09，信号更强）
 )
 
 // 图片识别取向常量 — 决定图片标签生成的描述角度与方式

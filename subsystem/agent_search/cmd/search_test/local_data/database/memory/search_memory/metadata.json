@@ -3,7 +3,7 @@
     "embedding_dimension": 1024,
     "multimodal_model": "system-multimodal",
     "type": "text",
-    "version": 3,
+    "version": 4,
     "documents_chunk_count": 1,
     "images_chunk_count": 0,
     "tags_chunk_count": 2

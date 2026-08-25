@@ -99,13 +99,14 @@ type DocumentEntry struct {
 }
 
 // Document 统一文档结构（text 和 image 共用）
-// v3: 新增 TagUUIDs 字段，存储引用的标签向量 UUID
+// v4: 新增 Embedding 字段，存储文档内容嵌入向量，用于二阶段检索的内容级重排
 type Document struct {
-	ID      string   `json:"id"`                // 文档 UUID v4
-	Role    string   `json:"role,omitempty"`    // 消息角色，text 文档使用
-	Content string   `json:"content,omitempty"` // 文本内容，text 文档使用
-	Image   string   `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
-	TAGS    []string `json:"tags,omitempty"`    // v3: 引用的标签向量 UUID 列表
+	ID        string    `json:"id"`                // 文档 UUID v4
+	Role      string    `json:"role,omitempty"`    // 消息角色，text 文档使用
+	Content   string    `json:"content,omitempty"` // 文本内容，text 文档使用
+	Image     string    `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
+	TAGS      []string  `json:"tags,omitempty"`    // v3: 引用的标签向量 UUID 列表
+	Embedding []float32 `json:"embedding,omitempty"` // v4: 文档内容嵌入向量（text 为正文，image 为标签拼接）
 }
 
 // TagVector 标签向量条目 — 标签文本的嵌入向量，拥有独立 UUID

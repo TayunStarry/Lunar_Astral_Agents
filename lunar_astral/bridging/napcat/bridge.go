@@ -1,6 +1,6 @@
 package napcat
 
-// 桥接器生命周期管理：配置加载、定时扫描、连接管理
+// 桥接器生命周期与 AI 回应转发
 
 import (
 	"LunarSubsystem/LoggerGeneral"
@@ -38,11 +38,6 @@ func GetBridgeState() BridgeState {
 	return bridgeState
 }
 
-// GetBridgingKeywords 获取桥接器关键词列表（供入站消息关键词检测使用）
-func GetBridgingKeywords() []string {
-	return bridgeConfig.BridgingKeywords
-}
-
 // setBridgeState 设置桥接器状态
 func setBridgeState(state BridgeState) {
 	bridgeStateMutex.Lock()
@@ -58,8 +53,8 @@ func StartBridgeScanner() {
 		return
 	}
 
-	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, target=%d, keywords=%v",
-		bridgeConfig.BridgingPath, bridgeConfig.BridgingTarget, bridgeConfig.BridgingKeywords)
+	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, targets=%v",
+		bridgeConfig.BridgingPath, bridgeConfig.BridgingUsers)
 
 	// 单次连接尝试，成功后阻塞服务直至断开，失败后不再重试
 	setBridgeState(BridgeConnecting)
@@ -76,45 +71,84 @@ func StopBridge() {
 	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器已停止")
 }
 
-// HandleAgentResponse 处理智能体的文本响应消息，转发回QQ群聊
-// 严格保持乐谱消息不转发策略
+// NotifyAgentIdle 由智能体上下文拉取层调用：当智能体本轮无待处理消息（拉取为空）时通知桥接器。
+// 若存在已推送且已收到回应的请求，则认为上一轮QQ对话已回应完，推进队列中的下一条请求。
+func NotifyAgentIdle() {
+	flowMutex.Lock()
+	if awaitingResponse && responseStarted {
+		awaitingResponse = false
+		responseStarted = false
+		flowMutex.Unlock()
+		pumpNext()
+		return
+	}
+	flowMutex.Unlock()
+}
+
+// HandleAgentResponse 处理智能体的文本回应，转发到对应会话目标
 func HandleAgentResponse(msgType string, content string) {
+	flowMutex.Lock()
+	if !awaitingResponse {
+		// 无活跃QQ请求（如前端对话），不转发
+		flowMutex.Unlock()
+		return
+	}
+	target := currentTarget
+	responseStarted = true
+	flowMutex.Unlock()
+
 	// 乐谱消息不转发
 	if msgType == "music" {
 		LoggerGeneral.SubInfo("LunarCore", "Napcat", "乐谱消息已拦截，跳过转发")
 		return
 	}
-
 	if GetBridgeState() != BridgeConnected {
 		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过消息转发")
 		return
 	}
-
-	groupID := bridgeConfig.BridgingTarget
-	if groupID == 0 {
-		LoggerGeneral.SubError("LunarCore", "Napcat", "目标群号为空，无法转发消息")
-		return
-	}
-
-	if err := SendGroupTextMessage(groupID, content); err != nil {
-		LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", groupID, err)
-	}
+	dispatchText(target, content)
 }
 
-// HandleAgentImageResponse 处理智能体的图片响应消息，转发回QQ群聊
+// HandleAgentImageResponse 处理智能体的图片回应，转发到对应会话目标
 func HandleAgentImageResponse(images []string) {
+	flowMutex.Lock()
+	if !awaitingResponse {
+		flowMutex.Unlock()
+		return
+	}
+	target := currentTarget
+	responseStarted = true
+	flowMutex.Unlock()
+
 	if GetBridgeState() != BridgeConnected {
 		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未连接，跳过图片转发")
 		return
 	}
+	dispatchImage(target, images)
+}
 
-	groupID := bridgeConfig.BridgingTarget
-	if groupID == 0 {
-		LoggerGeneral.SubError("LunarCore", "Napcat", "目标群号为空，无法转发图片")
+// dispatchText 将文本回应转发到目标会话
+func dispatchText(target BridgeTarget, content string) {
+	if target.IsGroup {
+		if err := SendGroupTextMessage(target.ID, content); err != nil {
+			LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", target.ID, err)
+		}
 		return
 	}
+	if err := SendPrivateTextMessage(target.ID, content); err != nil {
+		LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息给用户 %d 失败: %v", target.ID, err)
+	}
+}
 
-	if err := SendGroupImageMessage(groupID, images); err != nil {
-		LoggerGeneral.SubError("LunarCore", "Napcat", "转发图片到群 %d 失败: %v", groupID, err)
+// dispatchImage 将图片回应转发到目标会话
+func dispatchImage(target BridgeTarget, images []string) {
+	if target.IsGroup {
+		if err := SendGroupImageMessage(target.ID, images); err != nil {
+			LoggerGeneral.SubError("LunarCore", "Napcat", "转发图片到群 %d 失败: %v", target.ID, err)
+		}
+		return
+	}
+	if err := SendPrivateImageMessage(target.ID, images); err != nil {
+		LoggerGeneral.SubError("LunarCore", "Napcat", "转发图片给用户 %d 失败: %v", target.ID, err)
 	}
 }

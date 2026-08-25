@@ -53,6 +53,8 @@ func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
 func (class *Runtime) pullContext() goja.Value {
 	// 如果未处理的上下文消息为空，返回空数组
 	if len(UnreadContext) == 0 {
+		// 通知桥接器：智能体本轮无待处理消息（用于判断上一轮QQ对话是否已回应完）
+		napcat.NotifyAgentIdle()
 		return class.runtime.ToValue([]PostMessage{})
 	}
 	ctxJson, _ := json.Marshal(UnreadContext)

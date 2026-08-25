@@ -23,7 +23,7 @@ type TestResult struct {
 
 func main() {
 	fmt.Println("============================================")
-	fmt.Println("  搜索智能体 — 集成测试 v2")
+	fmt.Println("  搜索智能体 — 集成测试 v4")
 	fmt.Println("============================================")
 
 	// 配置：模型配置已迁移至 lunar_config.json，此处仅设置记忆库目录和上下文控制

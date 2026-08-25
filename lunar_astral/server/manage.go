@@ -116,13 +116,18 @@ func initBridgeAdapter() {
 
 	// 注册桥接器消息回调
 	napcat.SendMessageToAgent = func(messages []map[string]interface{}) {
-		// 将QQ群消息（OpenAI格式）推送到智能体上下文
+		// 将QQ消息（OpenAI格式）推送到智能体上下文
 		for _, msg := range messages {
 			adapters.UnreadContext = append(adapters.UnreadContext, adapters.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 			})
 		}
+	}
+
+	// 注册桥接器视频地址回调：写入智能体未读视频队列
+	napcat.SendVideoToAgent = func(urls []string) {
+		adapters.UnreadVideoUrl = append(adapters.UnreadVideoUrl, urls...)
 	}
 
 	// 启动桥接器连接（异步执行，避免阻塞 HTTP 服务器启动）

@@ -966,7 +966,7 @@ function handleWebSocketMessage(msg) {
     const data = msg.data || {};
 
     if (type === 'context') {
-        const subType = data.type || 'response';
+        const subType = data.type || 'text';
         const content = data.content || '';
         const audio = data.audio || '';
 

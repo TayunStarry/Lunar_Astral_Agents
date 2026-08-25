@@ -141,7 +141,7 @@ func BroadcastMessage(msgType string, data any) {
 		return
 	}
 
-	// 桥接适配器：将智能体响应转发到QQ群聊
+	// 桥接适配器：将智能体响应转发到QQ（私聊或群聊）
 	bridgeToQQ(response)
 
 	for _, c := range clients {
@@ -152,7 +152,7 @@ func BroadcastMessage(msgType string, data any) {
 	}
 }
 
-// bridgeToQQ 将智能体广播的响应消息转发到QQ群聊（如果桥接器已连接）
+// bridgeToQQ 将智能体广播的响应消息转发到QQ（如果桥接器已连接）
 func bridgeToQQ(response WSResponse) {
 	if !napcat.IsBridgingEnabled() {
 		return
@@ -177,7 +177,7 @@ func bridgeToQQ(response WSResponse) {
 			go napcat.HandleAgentResponse(msgType, content)
 		}
 	case "image":
-		// 图片消息：提取 base64 编码的图片列表并转发到QQ群
+		// 图片消息：提取 base64 编码的图片列表并转发到QQ
 		dataBytes, err := json.Marshal(response.Data)
 		if err != nil {
 			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)

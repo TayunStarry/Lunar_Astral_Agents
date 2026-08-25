@@ -114,7 +114,7 @@ declare global {
     /**
      * 推送上下文
      * 
-     * @param {string} msgType 消息类型
+     * @param {string} msgType 消息类型（text=文本 / music=乐谱 / action=动作）
      * 
      * @param {string} data 消息内容
      */

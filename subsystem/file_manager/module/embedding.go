@@ -31,9 +31,10 @@ type embeddingResponse struct {
 	} `json:"error,omitempty"` // 错误响应载荷
 }
 
-// embedTexts 批量调用 /v1/embeddings 获取嵌入向量
+// embedTexts 批量调用 /v1/embeddings 获取嵌入向量（document 语义：裸文本，不加前缀）
 // model 参数指定嵌入模型名（通常为集合锁定的 Model 字段）
 // 返回向量切片与输入文本切片等长且一一对应
+// 注：Qwen3-Embedding 为指令感知模型，仅查询侧需要 Instruct/Query 前缀，见 embedQuery
 func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string) ([][]float32, error) {
 	if !d.memoryInitialized {
 		return nil, fmt.Errorf("记忆库未初始化, 请先调用 MemoryInitInstance")
@@ -104,13 +105,24 @@ func (d *MemoryDB) embedTexts(ctx context.Context, model string, texts []string)
 	return result, nil
 }
 
-// embedText 嵌入单条文本，返回对应向量
+// embedText 嵌入单条文本，返回对应向量（document 语义：裸文本，不加前缀）
 func (d *MemoryDB) embedText(ctx context.Context, model string, text string) ([]float32, error) {
 	vecs, err := d.embedTexts(ctx, model, []string{text})
 	if err != nil {
 		return nil, err
 	}
 	return vecs[0], nil
+}
+
+// queryInstruction Qwen3-Embedding 检索指令（官方推荐的英文任务描述）
+// 与文档侧裸文本嵌入配合，官方评估显示使用指令可获得 1%~5% 性能提升
+const queryInstruction = "Given a web search query, retrieve relevant passages that answer the query"
+
+// embedQuery 嵌入查询文本（query 语义：带 Qwen3-Embedding 指令感知前缀）
+// 官方规范：Query 侧为 "Instruct: {任务描述}\nQuery:{查询}"，Document 侧保持裸文本
+// 文档向量已以裸文本嵌入，查询向量加前缀后新旧文档向量空间保持一致，无需重建
+func (d *MemoryDB) embedQuery(ctx context.Context, model string, text string) ([]float32, error) {
+	return d.embedText(ctx, model, "Instruct: "+queryInstruction+"\nQuery:"+text)
 }
 
 // =============================================================================
@@ -164,10 +176,10 @@ type chatMessageResp struct {
 // generateTags 调用 LLM 为内容生成中文标签，返回标签数组
 // isImage 为 true 时使用多模态 vision 格式请求
 // orientation/custom 仅对图片生效，用于指定识别取向（文本内容固定使用自动处理）
+// 图片默认(auto)模式使用单轮调用，prompt 内同时覆盖情绪/文本(OCR)/人物特征/种类/色彩/姿态等维度
 // 最多重试 MaxTagRetries 次，全部失败则返回错误
 func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage bool, orientation string, custom string) ([]string, error) {
-	llmURL := *GeneralConfig.MemoryMultimodalURL
-	if llmURL == "" {
+	if *GeneralConfig.MemoryMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
 	}
 
@@ -403,16 +415,19 @@ func imageTagSystemPrompt(orientation string, custom string) string {
 		rules = "参考用户提供的自定义取向描述来确定图片描述角度与方式：\n" + strings.TrimSpace(custom) + "\n"
 		countRule = "输出 3-10 个与自定义取向相关的标签。"
 		example = "示例输出：[\"标签1\",\"标签2\",\"标签3\"]"
-	default: // RecognitionAuto 及未知取向统一走自动处理
-		rules = "1. 描述图片的整体内容主题和风格特点\n" +
-			"2. 提取画面中的文字信息（OCR）：如有可见文字，生成对应标签\n" +
-			"3. 若图片包含人物，额外提取以下特征：\n" +
+	default: // RecognitionAuto 及未知取向统一走自动处理，单轮内同时覆盖多维度
+		rules = "请在一轮回答中同时覆盖以下维度生成标签：\n" +
+			"1. 整体内容主题与风格特点\n" +
+			"2. 情绪表达（如：喜悦、悲伤、愤怒、平静、惊讶、温暖、宁静）\n" +
+			"3. 文字信息（OCR）：如有可见文字，提取其内容或排版特征\n" +
+			"4. 若图片包含人物，提取人物特征：\n" +
 			"   - 面部表情（如：微笑、严肃、惊讶、悲伤、愤怒）\n" +
 			"   - 肢体动作（如：站立、挥手、奔跑、坐着、跳舞）\n" +
 			"   - 头发颜色（如：黑色头发、金色头发、棕色头发、红色头发）\n" +
 			"   - 服饰风格与颜色（如：白色连衣裙、黑色西装、休闲T恤、校服）\n" +
-			"4. 描述画面的色彩倾向和情感氛围\n"
-		countRule = "输出 5-15 个标签。"
+			"5. 事物种类与关键识别特征（如：黑猫、猫科、建筑物、海边）\n" +
+			"6. 色彩倾向与情感氛围\n"
+		countRule = "输出 8-18 个标签。"
 		example = "示例输出：[\"自然风景\",\"日落\",\"暖色调\",\"海边\",\"宁静\",\"白色连衣裙\",\"微笑\",\"黑色长发\",\"站立\",\"夕阳余晖\"]"
 	}
 
