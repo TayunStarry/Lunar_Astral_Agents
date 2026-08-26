@@ -1,0 +1,28 @@
+{
+	"models": "模型配置",
+	"server": "服务器配置",
+	"agent": "智能体配置",
+	"memory": "记忆库配置",
+	"search": "搜索配置",
+
+	"asr_model": "语音识别模型",
+	"diffusion_model": "扩散模型",
+	"variational_model": "变分模型",
+	"prompt_analysis_model": "提示词精炼模型",
+	"real_esrgan_model": "图像增强模型",
+
+	"user_name": "用户名",
+	"developer": "开发者模式",
+	"allow_diffusion": "允许扩散",
+	"bridging_type": "桥接类型",
+	"bridging_path": "桥接地址",
+	"bridging_token": "桥接令牌",
+	"bridging_users": "桥接用户",
+
+	"embedding_model": "嵌入模型名称",
+	"embedding_url": "嵌入模型地址",
+	"embedding_key": "嵌入模型密钥",
+	"multimodal_model": "多模态模型名称",
+	"multimodal_url": "多模态模型地址",
+	"multimodal_key": "多模态模型密钥"
+}

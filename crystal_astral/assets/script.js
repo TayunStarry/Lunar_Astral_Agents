@@ -125,45 +125,22 @@ function addCodeCopyButtons(container) {
     });
 }
 
-// ===== 配置管理：标签映射 =====
-const labelMap = {
-    'models': '模型配置',
-    'server': '服务器配置',
-    'cloud': '云端配置',
-    'qq_adapter': 'QQ适配器',
-    'project_archiving': '项目归档',
-    'diffusion_model': '扩散模型',
-    'variational_model': '变分模型',
-    'prompt_analysis_model': '提示词精炼模型',
-    'asr_model': '语音识别模型',
-    'developer': '开发者模式',
-    'clear_port': '清理端口',
-    'allow_diffusion': '允许扩散',
-    'cloud_model_url': '云端模型地址',
-    'cloud_model_key': '云端模型密钥',
-    'multimodal_model_name': '多模态模型名称',
-    'embedding_model_name': '嵌入模型名称',
-    'user_name': '用户名',
-    'napcat_ws_server': 'Napcat WS服务器',
-    'napcat_ws_token': 'Napcat WS令牌',
-    'lunar_core_url': 'Lunar Core地址',
-    'lunar_ws_server': 'Lunar WS服务器',
-    'poll_interval': '轮询间隔',
-    'listen_group_ids': '监听群组ID',
-    'trigger_keywords': '触发关键词',
-    'display_logs': '显示日志',
-    'default_reply': '默认回复',
-    'sevenzip_paths': '7z路径',
-    'defaults': '默认设置',
-    'output_path': '输出路径',
-    'part_size_mb': '分卷大小(MB)',
-    'compression_level': '压缩级别',
-    'package_plan': '打包方案',
-    'exclude': '排除文件',
-    'plan-1': '方案一',
-    'plan-2': '方案二',
-    'plan-3': '方案三'
-};
+// ===== 配置管理：标签映射（本地化翻译） =====
+// 标签映射已抽离为独立文件，由 local_data/config_labels.json 提供，
+// 通过 /file/read/ 接口加载，避免随前端脚本一起编译、便于维护
+let labelMap = {};
+
+async function loadConfigLabels() {
+    try {
+        const response = await fetch('/file/read/config_labels.json');
+        if (response.ok) {
+            const data = await response.json();
+            labelMap = data && typeof data === 'object' ? data : {};
+        }
+    } catch (error) {
+        console.error('加载配置标签本地化文件失败，将显示原始配置键名:', error);
+    }
+}
 
 function getTopLevelKeys() {
     return configData && typeof configData === 'object' ? Object.keys(configData) : [];
@@ -1328,6 +1305,7 @@ callYuehuaModal.addEventListener('click', (e) => {
 
 // ===== 启动 =====
 async function initApp() {
+    await loadConfigLabels();
     await loadConfig();
     await loadSystemPrompt();
     await loadPages();

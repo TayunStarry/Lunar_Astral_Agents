@@ -1155,12 +1155,30 @@ func atomicWriteJSON(path string, data interface{}) error {
 		return fmt.Errorf("写入临时文件失败: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
+	// Windows 上目标文件（尤其高频写的 metadata.json）可能被瞬时占用（并发读/AV 扫描/连续 rename），
+	// 直接 rename 会偶发 "Access is denied"。先短暂重试，再尝试移除目标后重命名。
+	if err := substituteRename(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("重命名临时文件失败: %w", err)
 	}
 
 	return nil
+}
+
+// substituteRename 替换式重命名：短暂重试 + 移除目标兜底，规避 Windows 目标文件占用导致 Access denied
+func substituteRename(tmpPath, path string) error {
+	for attempt := 0; attempt < 5; attempt++ {
+		if err := os.Rename(tmpPath, path); err == nil {
+			return nil
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	// 兜底：先移除旧目标再重命名
+	_ = os.Remove(path)
+	if err := os.Rename(tmpPath, path); err == nil {
+		return nil
+	}
+	return fmt.Errorf("rename %s %s", tmpPath, path)
 }
 
 // =============================================================================
