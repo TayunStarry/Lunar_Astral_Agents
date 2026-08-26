@@ -25,7 +25,7 @@ export const agentControlTools: ToolCall[] = [
 		type: "function",
 		function: {
 			name: "dispatch_painter",
-			description: "向绘制者子智能体发布绘画创作任务。绘制者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+			description: "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
 			parameters: {
 				type: "object",
 				properties: {
@@ -59,13 +59,13 @@ export const agentControlTools: ToolCall[] = [
 		type: "function",
 		function: {
 			name: "dispatch_learner",
-			description: "向学习者子智能体发布学习研究任务。学习者会执行网络搜索和记忆库查询，收集信息后生成结构化的研究报告。适用于需要查证事实、搜索资料、研究分析等场景。",
+			description: "向检索者子智能体发布检索/研究任务。检索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
 			parameters: {
 				type: "object",
 				properties: {
 					description: {
 						type: "string",
-						description: "学习研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，搜索结果越准确。"
+						description: "检索/研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，检索结果越准确。"
 					}
 				},
 				required: ["description"]

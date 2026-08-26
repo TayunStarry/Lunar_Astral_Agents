@@ -129,6 +129,306 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const CODE_PATH_PREFIX = '*标题> ';
+    function codeHeader(path) {
+        return `${CODE_PATH_PREFIX}${path}*\n`;
+    }
+    const BRACE_LANGS = {
+        ts: true, js: true, tsx: true, jsx: true, go: true,
+        java: true, c: true, h: true, cpp: true, cxx: true, hpp: true, cs: true,
+    };
+    function resolveCodeLang(fileType) {
+        const t = (fileType || "").toLowerCase().replace(/^\./, "");
+        if (BRACE_LANGS[t])
+            return t;
+        if (t === "python")
+            return "py";
+        return null;
+    }
+    function stripStringsAndComments(line, lang) {
+        let out = "";
+        let i = 0;
+        let blockComment = false;
+        const n = line.length;
+        const pyHash = lang === "py";
+        while (i < n) {
+            const c = line[i];
+            const next = line[i + 1];
+            if (blockComment) {
+                if (c === "*" && next === "/") {
+                    blockComment = false;
+                    i += 2;
+                }
+                else
+                    i++;
+                continue;
+            }
+            if ((c === "/" && next === "/") || (pyHash && c === "#"))
+                break;
+            if (c === "/" && next === "*") {
+                blockComment = true;
+                i += 2;
+                continue;
+            }
+            if (c === '"' || c === "'" || c === "`") {
+                const quote = c;
+                i++;
+                while (i < n && line[i] !== quote) {
+                    if (line[i] === "\\")
+                        i++;
+                    i++;
+                }
+                i++;
+                continue;
+            }
+            if (c === "{" || c === "}")
+                out += c;
+            i++;
+        }
+        return out;
+    }
+    function braceDelta(line, lang) {
+        const clean = stripStringsAndComments(line, lang);
+        let d = 0;
+        for (const ch of clean) {
+            if (ch === "{")
+                d++;
+            else if (ch === "}")
+                d--;
+        }
+        return d;
+    }
+    function indentLevel(line) {
+        const m = /^[ \t]*/.exec(line);
+        if (!m)
+            return 0;
+        return (m[0].match(/\t/g)?.length ?? 0) * 4 + m[0].length;
+    }
+    function isInsignificant(line, lang) {
+        if (!line.trim())
+            return true;
+        if (/^\s*#/.test(line))
+            return true;
+        if (/^\s*(?:\/\/|\/\*|\*\/)/.test(line))
+            return true;
+        return false;
+    }
+    function detectTsJs(line) {
+        const t = line.trim();
+        let m = /^(?:export\s+)?(?:abstract\s+|default\s+)?(?:class|interface|type|enum|namespace)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^(?:export\s+)?(?:async\s+)?function\s*(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^(?:(?:public|private|protected|static|async|readonly|abstract)\s+)*(\w+)\s*\([^)]*\)\s*[:{]/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|function|return|new|typeof|instanceof|delete|void)\b/.test(t)) {
+            return { kind: "method", name: m[1] };
+        }
+        return null;
+    }
+    function detectGo(line) {
+        const t = line.trim();
+        let m = /^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^type\s+(\w+)\s+(?:struct|interface)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        return null;
+    }
+    function detectPython(line) {
+        const t = line.trim();
+        if (t.startsWith("#"))
+            return null;
+        let m = /^def\s+(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^class\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        return null;
+    }
+    function detectBraceClassLang(line) {
+        const t = line.trim();
+        let m = /^(?:(?:public|private|protected|static|final|abstract|sealed|internal|readonly)\s+)*(?:class|interface|enum|@\w+\s+)?(?:class|interface|enum|struct|record)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^(?:(?:public|private|protected|static|final|synchronized|native|abstract|virtual|override|async|internal)\s+)*[\w<>\[\],?.\s]+\s+(\w+)\s*\([^)]*\)\s*\{/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|return|new|else|do|try|synchronized)\b/.test(t)) {
+            return { kind: "method", name: m[1] };
+        }
+        return null;
+    }
+    function detectCpp(line) {
+        const t = line.trim();
+        let m = /^(?:template\s*<[^>]*>\s*)?(?:class|struct|union|namespace)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^[\w:*&<>{},\s]+\s+(\w+)::(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "method", name: `${m[1]}::${m[2]}` };
+        m = /^(?:static\s+|inline\s+|extern\s+|virtual\s+|const\s+|unsigned\s+|signed\s+)*[\w:*&<>{},\s]+\s+(\w+)\s*\([^)]*\)\s*(?:const\s*)?\{/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|return|new|sizeof|else|do|try)\b/.test(t)) {
+            return { kind: "func", name: m[1] };
+        }
+        return null;
+    }
+    function detectDeclaration(line, lang) {
+        switch (lang) {
+            case "ts":
+            case "js":
+            case "tsx":
+            case "jsx": return detectTsJs(line);
+            case "go": return detectGo(line);
+            case "py": return detectPython(line);
+            case "java":
+            case "cs": return detectBraceClassLang(line);
+            case "c":
+            case "h":
+            case "cpp":
+            case "cxx":
+            case "hpp": return detectCpp(line);
+            default: return null;
+        }
+    }
+    function splitCodeFile(content, lang, idealLen) {
+        const text = (content ?? "").replace(/\r\n/g, "\n");
+        if (!text.trim())
+            return [];
+        const lines = text.split("\n");
+        const brace = !!(BRACE_LANGS[lang]);
+        const meta = [];
+        let running = 0;
+        for (const line of lines) {
+            const startLvl = brace ? running : 0;
+            const d = brace ? braceDelta(line, lang) : 0;
+            if (brace) {
+                meta.push({ lvl: startLvl, braceDelta: d, decl: detectDeclaration(line, lang), text: line });
+                running += d;
+            }
+            else {
+                const lvl = indentLevel(line);
+                meta.push({ lvl, braceDelta: 0, decl: detectPython(line), text: line });
+            }
+        }
+        const sections = [];
+        const preamble = [];
+        const stack = [];
+        const closeScope = (top) => {
+            const content = top.lines.length > 0 ? top.lines.join("\n") : top.headerLine;
+            sections.push({ level: stack.length, title: top.name, content: content.trimEnd() + "\n", path: top.path });
+        };
+        for (let i = 0; i < meta.length; i++) {
+            const m = meta[i];
+            if (brace) {
+                while (stack.length && m.lvl <= stack[stack.length - 1].openLevel) {
+                    const top = stack.pop();
+                    closeScope(top);
+                }
+            }
+            else {
+                if (!isInsignificant(m.text)) {
+                    while (stack.length && m.lvl <= stack[stack.length - 1].openLevel) {
+                        const top = stack.pop();
+                        closeScope(top);
+                    }
+                }
+            }
+            if (m.decl) {
+                const parentPath = stack.length ? stack[stack.length - 1].path : "";
+                const path = parentPath ? `${parentPath} / ${m.decl.name}` : m.decl.name;
+                stack.push({
+                    kind: m.decl.kind, name: m.decl.name,
+                    openLevel: m.lvl, headerLine: m.text, lines: [], path,
+                });
+                continue;
+            }
+            if (stack.length)
+                stack[stack.length - 1].lines.push(m.text);
+            else
+                preamble.push(m.text);
+        }
+        while (stack.length)
+            closeScope(stack.pop());
+        const output = [];
+        const pre = preamble.join("\n").trimEnd();
+        if (pre)
+            output.push((CODE_PATH_PREFIX + "*文件头\n" + pre).trimEnd() + "\n");
+        const pushSection = (path, body) => {
+            const header = codeHeader(path);
+            if (body.length <= idealLen) {
+                const piece = (header + body).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+                return;
+            }
+            const chunks = splitLines(body, idealLen);
+            for (const c of chunks) {
+                const piece = (header + c).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+            }
+        };
+        for (const s of sections) {
+            pushSection(s.path, s.content);
+        }
+        return output;
+    }
+    function splitLines(text, idealLen) {
+        const result = [];
+        let buffer = "";
+        const flush = () => { if (buffer.trim())
+            result.push(buffer.trimEnd() + "\n"); buffer = ""; };
+        const ls = text.replace(/\r\n/g, "\n").split("\n");
+        for (const line of ls) {
+            const append = (buffer === "" ? "" : "\n") + line;
+            if ((buffer + append).length <= idealLen) {
+                buffer += append;
+                continue;
+            }
+            if (buffer.trim())
+                flush();
+            if (line.length > idealLen) {
+                for (let o = 0; o < line.length; o += idealLen) {
+                    result.push(line.slice(o, o + idealLen).trimEnd() + "\n");
+                }
+            }
+            else
+                buffer = line;
+        }
+        if (buffer.trim())
+            flush();
+        return result;
+    }
+    const STOP_WORDS = new Set([
+        "the", "a", "an", "this", "that", "with", "from", "for", "and", "or", "of", "to", "in", "on", "is", "are", "at", "by", "as", "be",
+        "if", "then", "else", "when", "while", "return", "new", "const", "let", "var", "func", "func ", "function", "class", "struct",
+        "type", "package", "import", "export", "default", "interface", "impl", "for_import", "base", "main",
+    ]);
+    function extractCodeTags(path, lang) {
+        const tags = [lang];
+        for (const seg of path.split("/")) {
+            const token = seg.trim();
+            if (!token)
+                continue;
+            const name = token.split("(")[0].trim();
+            const idMatch = name.match(/[A-Za-z_][A-Za-z0-9_$]*((?:<[^>]*>)?|(?:::[\w]+)*)/);
+            if (idMatch && !STOP_WORDS.has(idMatch[0].toLowerCase())) {
+                tags.push(idMatch[0]);
+                tags.push(idMatch[0].toLowerCase());
+            }
+            else if (name && !STOP_WORDS.has(name.toLowerCase())) {
+                tags.push(name);
+                tags.push(name.toLowerCase());
+            }
+        }
+        return tags;
+    }
+
     function splitTextToStrings(input, options = {}) {
         const option = {
             idealLen: options.idealLen ?? 1024,
@@ -136,10 +436,16 @@ var agentSystem = (function (exports) {
             pathOnNewLine: options.pathOnNewLine ?? true,
             skipTitleOnly: options.skipTitleOnly ?? true,
             includeOriginalTitle: options.includeOriginalTitle ?? false,
+            lang: options.lang ?? "",
         };
         const text = (input ?? "").replace(/\r\n/g, "\n");
         if (!text.trim())
             return [];
+        if (option.lang) {
+            const codeLang = resolveCodeLang(option.lang);
+            if (codeLang)
+                return splitCodeFile(text, codeLang, option.idealLen);
+        }
         const isMarkdown = looksLikeMarkdown(text);
         if (!isMarkdown) {
             return splitPlainText(text, option.idealLen);
@@ -1692,6 +1998,243 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
 
+    const FILE_WHITELIST = ['ts', 'js', 'tsx', 'jsx', 'go', 'py', 'java', 'c', 'h', 'cpp', 'cxx', 'hpp', 'cs', 'md', 'txt', 'json'];
+    const SLICE_LEN = 1024;
+    const QUERY_TOP_K = 10;
+    const FENCE = '```';
+    function contentHash(input) {
+        const s = input.replace(/^\uFEFF/, '');
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            h1 = Math.imul(h1 ^ c, 2654435761);
+            h2 = Math.imul(h2 ^ c, 1597334677);
+            h1 = (h1 << 13) | (h1 >>> 19);
+            h2 = (h2 << 7) | (h2 >>> 25);
+        }
+        return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+    }
+    function extOf(fileName) {
+        const t = (fileName || '').split('.').pop() || '';
+        return t.toLowerCase();
+    }
+    function looksLikeFileHeader(firstLine) {
+        return /^[A-Za-z0-9_\-.]+\.\w+$/.test(firstLine.trim());
+    }
+    function pathFromChunk(chunk) {
+        const m = /^\*[^*]*>\s*([\s\S]*?)\*(?:\n|$)/.exec(chunk);
+        return m ? m[1].trim() : '';
+    }
+    function tagsForCodeChunk(chunk, codeLang, fileName) {
+        const path = pathFromChunk(chunk);
+        const name = (fileName || '').replace(/\.[^.]+$/, '') || fileName;
+        const tags = extractCodeTags(path, codeLang);
+        if (name && !tags.includes(name))
+            tags.push(name);
+        if (name && !tags.includes(name.toLowerCase()))
+            tags.push(name.toLowerCase());
+        return tags;
+    }
+    function tagsForTextChunk(chunk, fileName, fileExt) {
+        const tags = [(fileExt || 'text').toLowerCase()];
+        const base = (fileName || '').replace(/\.[^.]+$/, '') || fileName;
+        if (base)
+            tags.push(base);
+        const path = pathFromChunk(chunk);
+        if (path) {
+            for (const seg of path.split('/')) {
+                const name = seg.split('(')[0].trim();
+                if (name && name.length <= 64)
+                    tags.push(name);
+            }
+        }
+        return [...new Set(tags)];
+    }
+    function collectionHasData(collection) {
+        try {
+            const [results, err] = memoryQuery(collection, '文件内容 结构 概览 摘要', 1);
+            return !err && Array.isArray(results) && results.length > 0;
+        }
+        catch {
+            return false;
+        }
+    }
+    async function importFileBlock(fileName, content) {
+        const ext = extOf(fileName);
+        if (!FILE_WHITELIST.includes(ext))
+            return { id: '', skipped: true };
+        const codeLang = resolveCodeLang(ext);
+        const key = `#${fileName}`;
+        const collection = 'file_' + contentHash(content);
+        const [initOk, initErr] = memoryInit(collection, 'text');
+        if (!initOk) {
+            console.error(`[阅读者] 集合初始化失败 ${collection}:`, initErr);
+            return { id: '', skipped: true };
+        }
+        if (getPromptFromKnowledge(key) && collectionHasData(collection))
+            return { id: key, skipped: false };
+        savePromptToKnowledge(key, '');
+        const chunks = splitTextToStrings(content, { idealLen: SLICE_LEN, lang: codeLang || undefined });
+        let written = 0;
+        for (const chunk of chunks) {
+            try {
+                if (codeLang) {
+                    const tags = tagsForCodeChunk(chunk, codeLang, fileName);
+                    const [, err] = memoryAddWithTags(collection, 'user', chunk, tags);
+                    if (err) {
+                        console.error(`[阅读者] 写入代码切片失败:`, err);
+                        continue;
+                    }
+                }
+                else {
+                    const tags = tagsForTextChunk(chunk, fileName, ext);
+                    const [, err] = memoryAddWithTags(collection, 'user', chunk, tags);
+                    if (err) {
+                        console.error(`[阅读者] 写入文本切片失败:`, err);
+                        continue;
+                    }
+                }
+                written++;
+            }
+            catch (error) {
+                console.error(`[阅读者] 切片写入抛异常（已跳过该片，继续后续入库）:`, error);
+            }
+        }
+        const index = { collection, name: fileName, ext, lang: codeLang, chunkCount: written, processedAt: Date.now() };
+        savePromptToKnowledge(key, JSON.stringify(index));
+        console.log(`[阅读者] 已导入 ${key} → 集合 ${collection}，切片 ${written} 片`);
+        return { id: key, skipped: false };
+    }
+    async function processImportBlocksInText(raw) {
+        if (!raw.includes(FENCE))
+            return { text: raw, imported: [] };
+        let out = '';
+        let i = 0;
+        const imported = [];
+        while (true) {
+            const start = raw.indexOf(FENCE, i);
+            if (start < 0) {
+                out += raw.slice(i);
+                break;
+            }
+            out += raw.slice(i, start);
+            const rest = raw.slice(start + FENCE.length);
+            const nl = rest.indexOf('\n');
+            const eol = nl < 0 ? rest.length : nl;
+            const firstLine = rest.slice(0, eol).trim();
+            if (!looksLikeFileHeader(firstLine)) {
+                out += FENCE;
+                i = start + FENCE.length;
+                continue;
+            }
+            const closeIdx = rest.lastIndexOf(FENCE);
+            if (closeIdx <= eol) {
+                out += raw.slice(start, start + FENCE.length);
+                i = start + FENCE.length;
+                continue;
+            }
+            const content = rest.slice(eol + 1, closeIdx);
+            const res = await importFileBlock(firstLine, content);
+            if (res.skipped) {
+                out += raw.slice(start, start + FENCE.length + closeIdx + FENCE.length);
+            }
+            else {
+                out += `月华收到了${firstLine}文件`;
+                if (res.id && !imported.includes(res.id))
+                    imported.push(res.id);
+            }
+            i = start + FENCE.length + closeIdx + FENCE.length;
+        }
+        return { text: out, imported };
+    }
+    function processReferencesInText(raw) {
+        if (!raw.includes('(#'))
+            return { text: raw, changed: false };
+        const refs = [];
+        const re = /\(#([\w.-]+)\)/g;
+        let m;
+        while ((m = re.exec(raw)))
+            refs.push({ id: m[1], start: m.index, end: m.index + m[0].length });
+        if (refs.length === 0)
+            return { text: raw, changed: false };
+        let changed = false;
+        const parts = [];
+        const lead = raw.slice(0, refs[0].start).trim();
+        if (lead)
+            parts.push(lead + "\n");
+        for (let i = 0; i < refs.length; i++) {
+            const ref = refs[i];
+            const gapStart = ref.end;
+            const gapEnd = i + 1 < refs.length ? refs[i + 1].start : raw.length;
+            let query = raw.slice(gapStart, gapEnd).trim();
+            query = query.replace(/^[：:]/, '').trim();
+            const key = `#${ref.id}`;
+            let index = null;
+            const cached = getPromptFromKnowledge(key);
+            if (cached) {
+                try {
+                    index = JSON.parse(cached);
+                }
+                catch {
+                    index = null;
+                }
+            }
+            if (!index) {
+                parts.push(raw.slice(ref.start, gapEnd));
+                continue;
+            }
+            const [ok2] = memoryInit(index.collection, 'text');
+            if (!ok2) {
+                parts.push(raw.slice(ref.start, gapEnd));
+                continue;
+            }
+            const [results, qErr] = memoryQuery(index.collection, query || '文件总体内容概括', QUERY_TOP_K);
+            const snippets = qErr ? [] : (results || [])
+                .map(r => (r.content || '').trim()).filter(Boolean);
+            const joined = snippets.length > 0 ? snippets.join('\n---\n') : '（无相关片段）';
+            let block = `【文件 ${key}】\n${joined}\n`;
+            if (query)
+                block += `\n用户问题：${query}\n`;
+            parts.push(block);
+            changed = true;
+        }
+        return { text: parts.join('').trimEnd(), changed };
+    }
+    async function processMessage(message) {
+        if (typeof message.content === 'string') {
+            const res = await processImportBlocksInText(message.content);
+            const ref = processReferencesInText(res.text);
+            if (res.text !== ref.text)
+                message.content = ref.text;
+            return { changed: res.text !== message.content || ref.changed, imported: res.imported };
+        }
+        if (Array.isArray(message.content)) {
+            const textParts = message.content.filter(it => it.type === 'text').map(it => it.text);
+            const others = message.content.filter(it => it.type !== 'text');
+            if (textParts.length === 0)
+                return { changed: false, imported: [] };
+            const raw = textParts.join('\n');
+            const imp = await processImportBlocksInText(raw);
+            const ref = processReferencesInText(imp.text);
+            const newText = ref.text;
+            if (newText !== raw || imp.imported.length > 0) {
+                message.content = [...others, { type: 'text', text: newText }];
+            }
+            return { changed: true, imported: imp.imported };
+        }
+        return { changed: false, imported: [] };
+    }
+    async function processUnreadFiles() {
+        for (const message of GlobalConfig.unreadContext) {
+            try {
+                await processMessage(message);
+            }
+            catch (error) {
+                console.error('[阅读者] 处理消息失败:', error);
+            }
+        }
+    }
+
     const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     const learnerRole = new LearnerRole();
     const painterRole = new PainterRole();
@@ -1825,6 +2368,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 return;
             }
             await batchProcessVideoFiles();
+            await processUnreadFiles();
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
                 pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
@@ -1837,7 +2381,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 throw new Error('清洗后的文本为空');
             if (actionBlocks.length) {
                 await actorRole.createCreativeWork(actionBlocks.join('|'));
-                pushImage([await queryEmotionSticker(actionBlocks.join('|'))], true);
+                pushImage([await queryEmotionSticker(validMessage)], true);
             }
             else if (validMessage.length <= 35 && Math.random() < 0.55) {
                 pushImage([await queryEmotionSticker(validMessage)], true);
@@ -1924,10 +2468,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     return null;
                 stickerCollectionReady = true;
             }
-            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 1);
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
             if (error || !results || results.length === 0)
                 return null;
-            const image = results[0].image;
+            const image = results[RandomFloor(0, results.length - 1)].image;
             return image || null;
         }
         catch (error) {
@@ -2451,7 +2995,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             type: "function",
             function: {
                 name: "dispatch_painter",
-                description: "向绘制者子智能体发布绘画创作任务。绘制者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+                description: "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -2485,13 +3029,13 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             type: "function",
             function: {
                 name: "dispatch_learner",
-                description: "向学习者子智能体发布学习研究任务。学习者会执行网络搜索和记忆库查询，收集信息后生成结构化的研究报告。适用于需要查证事实、搜索资料、研究分析等场景。",
+                description: "向检索者子智能体发布检索/研究任务。检索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
                 parameters: {
                     type: "object",
                     properties: {
                         description: {
                             type: "string",
-                            description: "学习研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，搜索结果越准确。"
+                            description: "检索/研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，检索结果越准确。"
                         }
                     },
                     required: ["description"]
@@ -2785,6 +3329,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.musicianRole = musicianRole;
     exports.painterRole = painterRole;
     exports.parseContent = parseContent;
+    exports.processUnreadFiles = processUnreadFiles;
     exports.queryFromKnowledge = queryFromKnowledge;
     exports.randomDefaultMessage = randomDefaultMessage;
     exports.removeEmojiSymbols = removeEmojiSymbols;

@@ -32,6 +32,7 @@ const searchPrev = document.getElementById('searchPrev');
 const searchNext = document.getElementById('searchNext');
 const searchClear = document.getElementById('searchClear');
 const pendingAttachments = document.getElementById('pendingAttachments');
+const fileRefChips = document.getElementById('fileRefChips');
 const voiceToggleBtn = document.getElementById('voiceToggleBtn');
 
 // ---------- 截图 DOM 引用 ----------
@@ -82,6 +83,7 @@ let currentMatchIndex = -1;
 let saveTimer = null;
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
+let referencedFiles = [];     // 已加载到输入框的文件引用（[#文件名.ext]:）
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
 let captureFile = null;       // 当前截图的 File 对象
@@ -455,7 +457,7 @@ function getFileCategory(file) {
     if (file.type.startsWith('video/')) return 'video';
     if (file.type.startsWith('audio/')) return 'audio';
     const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
-    const textExts = ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'toml', 'csv', 'html', 'htm', 'css', 'js', 'ts', 'jsx', 'tsx', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'py', 'rb', 'sh', 'ps1', 'bat', 'log'];
+    const textExts = ['txt', 'md', 'json', 'xml', 'yaml', 'yml', 'toml', 'csv', 'html', 'htm', 'css', 'js', 'ts', 'jsx', 'tsx', 'go', 'rs', 'java', 'c', 'cpp', 'cxx', 'h', 'hpp', 'cs', 'py', 'rb', 'sh', 'ps1', 'bat', 'log'];
     if (textExts.includes(ext)) return 'text';
     return 'other';
 }
@@ -666,8 +668,23 @@ async function fillMarkdownContent(el, content) {
     const contentDiv = el.querySelector('.markdown-content');
     if (!contentDiv || !content) return;
     contentDiv.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> 加载中...';
-    const html = await renderMarkdown(content);
+    // 文件引用格式统一为 `(#name):`。它是普通括号文本，markdown 解析天然保留，
+    // 故无需占位绕过（`[x]:` 才会触发参考式链接定义）。渲染前占位、渲染后还原为按钮。
+    const refs = [];
+    const tokenContent = content.replace(/\((#[A-Za-z0-9_.\-]+)\)(?::)?/g, (m, name) => {
+        refs.push('#' + name.replace(/^#/, ''));
+        return '\uE000' + (refs.length - 1) + '\uE001';
+    });
+    let html = await renderMarkdown(tokenContent);
+    html = html.replace(/\uE000(\d+)\uE001/g, (match, idx) => {
+        const ref = refs[+idx];
+        const name = ref.slice(1);
+        return `<span class="file-ref-inline" data-ref="${ref}" title="点击载入文件引用 ${ref}"><i class="fas fa-file-alt"></i><span class="file-ref-inline-name">${name}</span></span>`;
+    });
     contentDiv.innerHTML = html;
+    contentDiv.querySelectorAll('.file-ref-inline').forEach(btn => {
+        btn.addEventListener('click', () => addFileReference(btn.dataset.ref));
+    });
     contentDiv.querySelectorAll('table').forEach(t => t.classList.add('markdown-table'));
     highlightCode(contentDiv);
     renderECharts(contentDiv);
@@ -864,6 +881,9 @@ function renderMessageElement(msg) {
     contentDiv.className = 'markdown-content';
     el.appendChild(contentDiv);
 
+    // 文件导入引用图标（按钮）：点击载入输入框
+    if (msg.fileRef) el.appendChild(buildFileRefBlock(msg.fileRef));
+
     // 多附件（用户拖入的图片/视频/音频）
     if (msg.attachments && msg.attachments.length) {
         msg.attachments.forEach(att => {
@@ -883,8 +903,67 @@ function renderMessageElement(msg) {
 
     messageArea.appendChild(el);
 
-    if (msg.content) return fillMarkdownContent(el, msg.content);
+    if (msg.content && !msg.fileRef) return fillMarkdownContent(el, msg.content);
     return Promise.resolve(el);
+}
+
+// ---------- 文件引用（阅读者智能体） ----------
+/** 构建消息内可点击的文件图标块：点击将引用 `#fileName.ext` 载入输入框 */
+function buildFileRefBlock(refId) {
+    const pill = document.createElement('div');
+    pill.className = 'file-ref-pill';
+    pill.title = `点击载入文件引用 ${refId}`;
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-file-alt';
+    const name = document.createElement('span');
+    name.className = 'file-ref-name';
+    name.textContent = refId;
+    pill.appendChild(icon);
+    pill.appendChild(name);
+    pill.addEventListener('click', () => addFileReference(refId));
+    return pill;
+}
+
+/** 将文件引用加入输入框（去重），并渲染图标条 */
+function addFileReference(refId) {
+    if (!refId) return;
+    if (!referencedFiles.includes(refId)) referencedFiles.push(refId);
+    renderFileRefChips();
+    messageInput.focus();
+}
+
+function removeFileReference(index) {
+    referencedFiles.splice(index, 1);
+    renderFileRefChips();
+}
+
+/** 渲染输入框上方的文件引用图标条（输入框仍显示为文件图标） */
+function renderFileRefChips() {
+    fileRefChips.innerHTML = '';
+    if (!referencedFiles.length) {
+        fileRefChips.hidden = true;
+        return;
+    }
+    fileRefChips.hidden = false;
+    referencedFiles.forEach((refId, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'file-ref-chip';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-file-alt';
+        const name = document.createElement('span');
+        name.className = 'file-ref-chip-name';
+        name.textContent = refId;
+        name.title = refId;
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'pending-attachment-remove';
+        removeBtn.title = '移除引用';
+        removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        removeBtn.addEventListener('click', () => removeFileReference(idx));
+        chip.appendChild(icon);
+        chip.appendChild(name);
+        chip.appendChild(removeBtn);
+        fileRefChips.appendChild(chip);
+    });
 }
 
 // ---------- 消息增删与持久化 ----------
@@ -987,6 +1066,16 @@ function handleWebSocketMessage(msg) {
         }
         if (subType === 'action') {
             addMessage({ id: generateId(), role: 'assistant', categories: ['action'], content, actionType: subType, timestamp: Date.now() });
+            return;
+        }
+
+        // 文件导入通知：渲染为可点击的文件图标（按钮），点击载入输入框
+        const fileNotice = /^\[文件已导入\]\s*(#[\w.-]+)$/.exec(content.trim());
+        if (fileNotice) {
+            addMessage({
+                id: generateId(), role: 'assistant', categories: ['text', 'file'],
+                content: fileNotice[0], fileRef: fileNotice[1], timestamp: Date.now()
+            });
             return;
         }
 
@@ -1205,20 +1294,15 @@ async function handleSend() {
     if (isSending) return;
     const text = messageInput.value.trim();
     const hasPending = pendingFiles.length > 0;
-    if (!text && !hasPending) return;
+    if (!text && referencedFiles.length === 0 && !hasPending) return;
 
     setSendingState(true);
 
     try {
-        const contentBlocks = [];
-        const attachments = [];
-        const historyTextParts = [];
+        const contentBlocks = [];      // 多模态文本块（img/video/audio/other）
+        const attachments = [];        // 本地附件预览
         const categories = new Set();
-
-        if (text) {
-            categories.add('text');
-            historyTextParts.push(text);
-        }
+        const textFiles = [];          // 文本文件围栏块 {name, block}
 
         for (const pf of pendingFiles) {
             const category = pf.category;
@@ -1249,60 +1333,80 @@ async function handleSend() {
                 categories.add('voice');
             } else if (category === 'text') {
                 try {
-                    const fileUrl = await saveFile(pf.file);
+                    // 文本文件 → 构造阅读者可解析的围栏块 ```fileName\n全文\n```（发送全文入库）
                     const rawText = await readFileAsText(pf.file);
-                    const preview = rawText.slice(0, 50000);
-                    const block = `【文件 ${pf.name}】\n内容：\n\`\`\`\n${preview}\n\`\`\`\n访问链接：${fileUrl}`;
-                    contentBlocks.push({ type: 'text', text: block });
-                    historyTextParts.push(block);
+                    if (rawText.trim()) {
+                        textFiles.push({ name: pf.name, block: `\`\`\`${pf.name}\n${rawText}\n\`\`\`` });
+                        categories.add('text');
+                    }
                 } catch (err) {
                     showToast(`无法读取文件 ${pf.name}`, 'error');
                 }
-                categories.add('text');
             } else {
                 try {
                     const fileUrl = await saveFile(pf.file);
                     const block = `【文件 ${pf.name}】访问链接：${fileUrl}`;
                     contentBlocks.push({ type: 'text', text: block });
-                    historyTextParts.push(block);
+                    attachments.push({ type: 'other', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
+                    categories.add('text');
                 } catch (err) {
                     showToast(`无法上传文件 ${pf.name}`, 'error');
                 }
-                categories.add('text');
             }
         }
+        // ---- 组装引用与主用户文本（一次导入/引用只显示一个气泡）----
+        // 引用来源：手动载入（referencedFiles）+ 导入文本文件且带文字时的自动引用
+        // 统一规范化为 `[#fileName.ext]:` 引用块（reader 仅识别带 # 的引用）
+        const rawRefIds = [...referencedFiles];
+        if (text && textFiles.length) {
+            for (const tf of textFiles) rawRefIds.push(tf.name);
+        }
+        const refNames = [...new Set(rawRefIds.map(id => id.replace(/^#/, '')))];
+        const refText = refNames.map(name => `(#${name}):`).join('');
+        // 主用户文本：有引用 → 「[文件按钮] 用户输入」；仅导入无文字 → 「已将文件x交给月华」；否则普通文字
+        let userText;
+        if (refText) userText = refText + text;
+        else if (text) userText = text;
+        else if (textFiles.length) userText = `已将文件${textFiles.map(t => t.name).join('、')}交给月华`;
+        else userText = '';
+        if (userText || textFiles.length) categories.add('text');
 
-        // 组装并显示到历史记录
-        const userMsg = {
+        // ---- 组装发送给后端的消息数组（顺序：围栏块 → 主用户消息）----
+        // 前端在发送前即已知文件ID，直接自构造引用，无需等待后端推送
+        const sendPayload = [];
+        for (const tf of textFiles) sendPayload.push({ role: 'user', content: tf.block });
+        if (userText || contentBlocks.length) {
+            const mainContent = contentBlocks.length
+                ? [...(userText ? [{ type: 'text', text: userText }] : []), ...contentBlocks]
+                : userText;
+            sendPayload.push({ role: 'user', content: mainContent });
+        }
+
+        // ---- 本地历史展示（单个气泡）----
+        addMessage({
             id: generateId(),
             role: 'user',
             categories: categories.size ? Array.from(categories) : ['text'],
-            content: historyTextParts.join('\n\n'),
+            content: userText,
             attachments: attachments.length ? attachments : undefined,
             timestamp: Date.now()
-        };
-        addMessage(userMsg);
+        });
 
         // 推送到后端
         if (backendConnected) {
-            if (contentBlocks.length) {
-                const openAIContent = (contentBlocks.length === 1 && contentBlocks[0].type === 'text')
-                    ? contentBlocks[0].text
-                    : contentBlocks;
-                await sendMessages([{ role: 'user', content: openAIContent }]);
-            } else if (text) {
-                await sendMessages([{ role: 'user', content: text }]);
-            }
+            if (sendPayload.length) await sendMessages(sendPayload);
         } else {
             showToast('离线模式：内容仅本地渲染', 'info');
         }
     } catch (err) {
         showToast('发送失败：' + (err.message || err), 'error');
     } finally {
-        // 无论成功或失败都清理输入与待发送附件（消息已进入历史记录）
+        // 无论成功或失败都清理输入与待发送附件、文件引用（消息已进入历史记录）
         messageInput.value = '';
         autoResizeTextarea();
         clearPendingFiles();
+        referencedFiles = [];
+        renderFileRefChips();
         messageInput.focus();
         setSendingState(false);
     }

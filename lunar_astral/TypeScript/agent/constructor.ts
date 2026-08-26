@@ -1,3 +1,4 @@
+import { match } from 'assert';
 import {
     getPromptFromKnowledge,
     savePromptToKnowledge,
@@ -19,6 +20,7 @@ import {
     ViewerRole,
     ChatCache,
     ActorRole,
+    processUnreadFiles,
 } from '../index';
 
 /** 描述者角色(视觉内容描述) */
@@ -208,6 +210,8 @@ async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 批量处理视频文件
         await batchProcessVideoFiles();
+        // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
+        await processUnreadFiles();
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
         // 如果消息响应为空，抛出异常
@@ -336,12 +340,16 @@ async function queryEmotionSticker(query: string): Promise<string | null> {
             if (!ready) return null;
             stickerCollectionReady = true;
         }
-        const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 1);
+        /** 查询表情包记忆库 */
+        const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+        // 查询失败或无结果时返回 null
         if (error || !results || results.length === 0) return null;
-        // image 类型集合的查询结果携带 image 字段（base64 图片数据）
-        const image = (results[0] as { image?: string }).image;
+        /** 在查询结果中随机选择一个结果 */
+        const image = (results[RandomFloor(0, results.length - 1)] as { image?: string }).image;
+        // 返回随机选择的图片或 null
         return image || null;
-    } catch (error) {
+    }
+    catch (error) {
         console.error('[表情包] 检索失败:', error);
         return null;
     }

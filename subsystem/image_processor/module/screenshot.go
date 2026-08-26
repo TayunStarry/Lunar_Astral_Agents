@@ -23,7 +23,7 @@ import (
 )
 
 func init() {
-	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
 }
 
 // GetDisplays 获取所有显示器信息

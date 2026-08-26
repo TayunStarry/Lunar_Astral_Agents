@@ -122,7 +122,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 
 	LoggerGeneral.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
 	reloadPageParameters()
-	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
 	go BrowserClient.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
 
 	go func() {

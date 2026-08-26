@@ -51,6 +51,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册记忆库适配器 v2
 	vm.Set("memoryInit", adapters.memoryInit)
 	vm.Set("memoryAdd", adapters.memoryAdd)
+	vm.Set("memoryAddWithTags", adapters.memoryAddWithTags)
 	vm.Set("memoryQuery", adapters.memoryQuery)
 	vm.Set("memoryDelete", adapters.memoryDelete)
 	vm.Set("memoryAddImage", adapters.memoryAddImage)

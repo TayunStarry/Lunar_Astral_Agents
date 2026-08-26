@@ -175,6 +175,20 @@ declare global {
      */
     function memoryAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
     /**
+     * 向指定集合添加消息，携带调用方提供的显式标签（跳过 LLM 标签生成）
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} role 消息角色 (user/assistant/system/tool)
+     *
+     * @param {string} content 消息文本内容
+     *
+     * @param {string[]} tags 显式标签数组（如启发式提取的 Function/Class 名）
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[文档ID, 错误信息]
+     */
+    function memoryAddWithTags(collectionName: string, role: string, content: string, tags: string[]): [string, Error | null];
+    /**
      * 从指定集合查询相关消息
      *
      * @param {string} collectionName 集合名称

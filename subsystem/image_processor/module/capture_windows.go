@@ -155,19 +155,12 @@ func dibToRGBA(hdc win.HDC, bitmap win.HBITMAP, width, height int) (*image.RGBA,
 		return nil, fmt.Errorf("GetDIBits 失败")
 	}
 
+	// 将 DIB 位图数据视为 []byte 直接索引，避免 unsafe.Pointer(uintptr) 往返转换
+	data := unsafe.Slice((*byte)(memptr), width*height*4)
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	i := 0
-	src := uintptr(memptr)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			v0 := *(*byte)(unsafe.Pointer(src))
-			v1 := *(*byte)(unsafe.Pointer(src + 1))
-			v2 := *(*byte)(unsafe.Pointer(src + 2))
-			// BGRA -> RGBA，A 置 255
-			img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = v2, v1, v0, 255
-			i += 4
-			src += 4
-		}
+	for i := 0; i < width*height*4; i += 4 {
+		// BGRA -> RGBA，A 置 255
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = data[i+2], data[i+1], data[i], 255
 	}
 	return img, nil
 }

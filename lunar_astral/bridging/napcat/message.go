@@ -417,13 +417,14 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 		return "", true, "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
 	}
 
-	// 文本文件 → 读取内容作为文本处理
+	// 文本文件 → 打包为阅读者可识别的文件围栏块 ```fileName\n全文\n```
+	// 阅读者会在思考循环前将其切片入库，并把围栏块置换为 [已导入文件 #fileName]
 	if isTextFile(fileName) {
 		text := strings.TrimSpace(string(data))
 		if text == "" {
 			return describeFile(fileName, fileData.FileSize), false, ""
 		}
-		return "[文件内容] " + fileName + "\n" + text + "\n", false, ""
+		return "```" + fileName + "\n" + text + "\n```", false, ""
 	}
 
 	// 其他类型 → 保留接口，仅回传文件大小与名称

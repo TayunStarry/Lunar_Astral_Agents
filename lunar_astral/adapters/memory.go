@@ -77,6 +77,45 @@ func (class *Runtime) memoryAdd(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{id, nil})
 }
 
+// memoryAddWithTags 添加消息到指定集合，携带调用方提供的显式标签（跳过 LLM 标签生成）
+// 参数: collectionName, role, content, tags(字符串数组)
+// 返回: [id, error]；tags 为空时返回错误
+func (class *Runtime) memoryAddWithTags(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 4 {
+		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 参数不足, 需 4 个: collectionName, role, content, tags")})
+	}
+
+	collectionName, _ := call.Argument(0).Export().(string)
+	role, _ := call.Argument(1).Export().(string)
+	content, _ := call.Argument(2).Export().(string)
+
+	// 解析 tags 字符串数组
+	exportedTags := call.Argument(3).Export()
+	rawTags, ok := exportedTags.([]interface{})
+	if !ok {
+		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 第 4 个参数需为字符串数组 tags")})
+	}
+	tags := make([]string, 0, len(rawTags))
+	for _, t := range rawTags {
+		if s, ok := t.(string); ok && s != "" {
+			tags = append(tags, s)
+		}
+	}
+
+	if len(collectionName) == 0 || len(tags) == 0 {
+		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 需提供集合名与至少一个标签")})
+	}
+
+	ctx := context.Background()
+	id, err := module.MemoryAddMessageWithTags(ctx, collectionName, role, content, tags)
+	if err != nil {
+		LoggerGeneral.Error("LunarCore", "集合 [%s] 添加消息(显式标签)失败: %v", collectionName, err)
+		return class.runtime.ToValue([]any{false, err})
+	}
+
+	return class.runtime.ToValue([]any{id, nil})
+}
+
 // memoryQuery 查询指定集合的相关消息（text 和 image 统一）
 // 参数: collectionName, queryText, topK
 func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {

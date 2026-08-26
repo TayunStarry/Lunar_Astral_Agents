@@ -24,7 +24,7 @@ import (
 // InitializeServer 初始化服务器配置和组件
 func InitializeServer() {
 	// 设置日志开发模式
-	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
 	// 设置MIME类型映射
 	for ext, mimeType := range GeneralConfig.MimeMap {
 		mime.AddExtensionType(ext, mimeType)

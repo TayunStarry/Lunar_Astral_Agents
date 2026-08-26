@@ -1040,6 +1040,100 @@ body {
     background: #e23a4a;
 }
 
+/* ---- 文件引用（阅读者智能体） ---- */
+.file-ref-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    background: var(--glass-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-lg);
+    color: var(--accent-color);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+}
+.file-ref-pill:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.18);
+}
+.file-ref-pill i {
+    font-size: 1.2rem;
+}
+.file-ref-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+/* 文本内嵌的文件引用按钮（[#file.ext]: 渲染而来） */
+.file-ref-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    margin: 0 2px;
+    background: rgba(157, 107, 255, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: 999px;
+    color: var(--accent-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+.file-ref-inline:hover {
+    background: rgba(157, 107, 255, 0.22);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.18);
+}
+.file-ref-inline i {
+    font-size: 0.9rem;
+}
+
+.file-refs {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+}
+.file-refs[hidden] {
+    display: none;
+}
+.file-ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(157, 107, 255, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: 999px;
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    position: relative;
+}
+.file-ref-chip > i {
+    font-size: 1rem;
+}
+.file-ref-chip-name {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
 .input-wrapper {
     display: flex;
     align-items: flex-end;

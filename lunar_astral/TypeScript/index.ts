@@ -25,6 +25,7 @@ export * from './agent/musician';
 export * from './agent/learner';
 export * from './agent/viewer';
 export * from './agent/actor';
+export * from './agent/reader';
 export * from './agent/constructor';
 
 export * from './tool/schedule';

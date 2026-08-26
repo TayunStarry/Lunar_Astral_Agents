@@ -1,4 +1,6 @@
 /** 文本分割选项 */
+import { resolveCodeLang, splitCodeFile } from "./code_split";
+/** 文本分割选项 */
 type SplitOptions = {
 	/** 理想的分割长度，默认从 SliderAPI.messageSliceLengthSlider 获取 */
 	idealLen?: number;
@@ -10,6 +12,9 @@ type SplitOptions = {
 	skipTitleOnly?: boolean;
 	/** 是否在内容中包含原始标题，默认 false */
 	includeOriginalTitle?: boolean;
+	/** 指定代码语言（如 "go"/"ts"/"py"...，来自 resolveCodeLang 支持的扩展名）。
+	 *  传入后将走代码感知拆分（捕获 Function/Class），否则按 MD/普通文本拆分。 */
+	lang?: string;
 };
 
 /** 解析后的 Markdown 标题段落 */
@@ -45,11 +50,17 @@ export function splitTextToStrings(input: string, options: SplitOptions = {}): s
 		pathOnNewLine: options.pathOnNewLine ?? true,
 		skipTitleOnly: options.skipTitleOnly ?? true,
 		includeOriginalTitle: options.includeOriginalTitle ?? false,
+		lang: options.lang ?? "",
 	};
 	/** 统一换行符，避免 Windows 换行导致后续处理不一致 */
 	const text = (input ?? "").replace(/\r\n/g, "\n");
 	// 空文本直接返回空数组，避免无意义处理
 	if (!text.trim()) return [];
+	// 若显式指定了代码语言，走代码感知拆分（捕获 Function/Class）
+	if (option.lang) {
+		const codeLang = resolveCodeLang(option.lang);
+		if (codeLang) return splitCodeFile(text, codeLang, option.idealLen);
+	}
 	/** 判断是否为 Markdown：通过常见语法特征快速识别 */
 	const isMarkdown = looksLikeMarkdown(text);
 	// 按类型分流：普通文本直接按长度拆分；Markdown 需保留结构

@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 )
 
 const (
@@ -16,9 +15,7 @@ const (
 )
 
 var (
-	mu        sync.RWMutex
-	devMode   bool
-	stdLog    = log.New(os.Stdout, "", 0)
-	startTime = time.Now()
-	logFile   *os.File
+	mu      sync.RWMutex
+	devMode bool
+	stdLog  = log.New(os.Stdout, "", 0)
 )

@@ -102,6 +102,10 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name, modelName, collecti
 	d.collectionsMu.Lock()
 	if _, exists := d.collections[name]; exists {
 		d.collectionsMu.Unlock()
+		// 集合已在缓存，但磁盘目录可能被外部清理；补齐目录，避免后续持久化失败
+		if err := os.MkdirAll(filepath.Join(d.baseDir, name), 0755); err != nil {
+			return fmt.Errorf("确保集合目录存在失败: %w", err)
+		}
 		return nil
 	}
 	d.collectionsMu.Unlock()
@@ -398,6 +402,65 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 	UUIDtag := c.processTagVectors(tags, tagVecs)
 
 	// 4.5 v4: 嵌入正文内容，用于二阶段检索的内容级重排
+	contentVec, err := d.embedText(ctx, c.Model, content)
+	if err != nil {
+		return "", fmt.Errorf("内容嵌入失败: %w", err)
+	}
+
+	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
+	c.mu.Lock()
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec})
+	c.mu.Unlock()
+
+	// 6. 持久化
+	if err := c.saveDocumentsToFile(); err != nil {
+		return "", fmt.Errorf("保存文档失败: %w", err)
+	}
+	if err := c.saveTagsToFile(); err != nil {
+		return "", fmt.Errorf("保存标签向量失败: %w", err)
+	}
+
+	return id, nil
+}
+
+// MemoryAddMessageWithTags 添加文本消息并携带显式标签（跳过 LLM 标签生成）
+// 与 MemoryAddMessage 的不同点：标签直接由调用方提供（如阅读者智能体的启发式标签），
+// 后端仅负责嵌入标签、去重匹配标签向量、嵌入正文内容并持久化。
+// 适用于代码文件等可启发式提取标签的场景，避免逐片 LLM 标签的开销。
+// 返回生成的文档 UUID；tags 为空时返回错误（携带标签的入库路径必须提供标签）。
+func (d *MemoryDB) MemoryAddMessageWithTags(ctx context.Context, collectionName, role, content string, tags []string) (string, error) {
+	c, err := d.getCollection(collectionName)
+	if err != nil {
+		return "", err
+	}
+	if c.CollectionType != CollectionTypeText {
+		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
+	}
+
+	// 0. 校验显式标签非空
+	if len(tags) == 0 {
+		return "", fmt.Errorf("MemoryAddMessageWithTags 需提供至少一个显式标签")
+	}
+
+	// 1. 去重检查：相同文本内容已存在则视为已完成
+	if existingID := c.findExistingDocument(content, ""); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
+	}
+
+	// 2. 生成 UUID
+	id := generateUUID()
+
+	// 3. 嵌入显式标签
+	tagVecs, err := d.embedTexts(ctx, c.Model, tags)
+	if err != nil {
+		return "", fmt.Errorf("标签嵌入失败: %w", err)
+	}
+
+	// 4. 去重匹配，获取标签 UUID
+	UUIDtag := c.processTagVectors(tags, tagVecs)
+
+	// 4.5 嵌入正文内容，用于二阶段检索的内容级重排
 	contentVec, err := d.embedText(ctx, c.Model, content)
 	if err != nil {
 		return "", fmt.Errorf("内容嵌入失败: %w", err)
@@ -1080,6 +1143,13 @@ func atomicWriteJSON(path string, data interface{}) error {
 		return fmt.Errorf("JSON 序列化失败: %w", err)
 	}
 
+	// 确保目标目录存在：集合目录可能被外部清理或重建遗漏，缺失时自动创建，避免写临时文件失败
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("确保目录存在失败: %w", err)
+		}
+	}
+
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, jsonBytes, 0644); err != nil {
 		return fmt.Errorf("写入临时文件失败: %w", err)
@@ -1386,6 +1456,14 @@ func MemoryAddMessageSilent(ctx context.Context, collectionName, role, content s
 		return "", fmt.Errorf("全局 MemoryDB 未初始化")
 	}
 	return globalMemoryDB.MemoryAddMessageSilent(ctx, collectionName, role, content)
+}
+
+// MemoryAddMessageWithTags 全局添加消息（携带显式标签，跳过 LLM 标签生成）
+func MemoryAddMessageWithTags(ctx context.Context, collectionName, role, content string, tags []string) (string, error) {
+	if globalMemoryDB == nil {
+		return "", fmt.Errorf("全局 MemoryDB 未初始化")
+	}
+	return globalMemoryDB.MemoryAddMessageWithTags(ctx, collectionName, role, content, tags)
 }
 
 // MemoryAddImage 全局添加图片

@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	LoggerGeneral.SetDevMode(*GeneralConfig.Developer, "local_data/documents/debug")
+	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
 }
 
 // InitKnowledgeDB 初始化知识库（SQLite）
