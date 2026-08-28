@@ -8,7 +8,7 @@
 	},
 	"server": {
 		"user_name": null,
-		"developer": true,
+		"developer": false,
 		"allow_diffusion": true,
 		"bridging_type": "napcat",
 		"bridging_path": "ws://localhost:4567",

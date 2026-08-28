@@ -21,5 +21,7 @@
 	"embedding_key": "嵌入模型密钥",
 	"multimodal_model": "多模态模型名称",
 	"multimodal_url": "多模态模型地址",
-	"multimodal_key": "多模态模型密钥"
+	"multimodal_key": "多模态模型密钥",
+	"bridging_group_trigger_probability": "无关键词时群聊的触发概率",
+	"bridging_group_keywords": "群聊关键词"
 }

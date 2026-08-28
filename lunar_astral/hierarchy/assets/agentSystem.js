@@ -2296,7 +2296,10 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                         continue;
                     }
                     if (resizedImages.length > 1) {
-                        newContent.push({ type: 'text', text: await summarizeDynamicImages(resizedImages.map(image => image.base64)) || '' });
+                        const visualSummary = await summarizeDynamicImages(resizedImages.map(image => image.base64));
+                        if (visualSummary && visualSummary.trim().length > 0) {
+                            GlobalConfig.unreadContext.push({ role: 'assistant', content: visualSummary.trim() });
+                        }
                         continue;
                     }
                     resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
@@ -2331,9 +2334,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             GlobalConfig.reasoningInProgress = true;
             syncLTPXToolStatus();
             await pullExternalMessages();
-            for (const item of checkDueItems()) {
-                GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` });
-            }
+            checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }));
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
             if (messageLength === 0) {
                 GlobalConfig.reasoningInProgress = false;
@@ -2348,7 +2349,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
             ;
             const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
-            const validMessage = textChunks.map(chunk => chunk.display).join('').trim();
+            const validMessage = textChunks.map(chunk => chunk.display).join('\n').trim();
             if (!validMessage.length)
                 throw new Error('清洗后的文本为空');
             if (actionBlocks.length) {
@@ -2358,12 +2359,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             else if (validMessage.length <= 35 && Math.random() < 0.3) {
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
-            for (const thinking of thinkingBlocks) {
-                pushContext('text', thinking, '');
-            }
-            for (const code of codeBlocks) {
-                pushContext('text', code, '');
-            }
+            thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''));
+            codeBlocks.forEach(code => pushContext('text', code, ''));
             for (const chunk of textChunks) {
                 let audio = '';
                 const [audioData, err] = tts(chunk.tts);
