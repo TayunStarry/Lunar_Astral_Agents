@@ -35,21 +35,31 @@ func writeSuccess(w http.ResponseWriter, data interface{}) {
 // 知识库操作端点 — SQL 关系型数据库（SQLite）
 // =============================================================================
 
-// KnowledgeHandler 处理知识库批量操作请求
+// KnowledgeHandler 处理知识库请求
 // 路由：POST /knowledge/
+// 载荷统一为原生 SQL：{"sql": "...", "params": []}
+// 数据操作不再使用结构化 JSON 操作封装，全部回归原生 SQL 语句
 func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "知识库请求[ERROR] -> 不允许的请求方法")
 		return
 	}
 
-	var req module.KnowledgeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var raw struct {
+		SQL    string `json:"sql"`
+		Params []any  `json:"params"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("知识库请求[ERROR] -> 解析请求失败: %v", err))
 		return
 	}
 
-	result := module.ExecuteKnowledgeRequest(req)
+	if raw.SQL == "" {
+		writeError(w, http.StatusBadRequest, "知识库请求[ERROR] -> SQL 语句不能为空")
+		return
+	}
+
+	result := module.ExecuteSQL(raw.SQL, raw.Params)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {
@@ -57,5 +67,5 @@ func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	LoggerGeneral.Info("FileManager", "知识库批量操作成功，执行 %d 个操作，耗时 %dms", result.Operations, result.TotalTime)
+	LoggerGeneral.Info("FileManager", "知识库原生SQL执行完成：%s，耗时 %dms", raw.SQL, result.TotalTime)
 }

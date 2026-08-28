@@ -39,36 +39,6 @@ type BatchResult struct {
 	Operations int               `json:"operations"`      // 操作次数
 }
 
-// ColumnDefinition 列定义
-type ColumnDefinition struct {
-	Name          string      `json:"name"`                     // 列名
-	Type          string      `json:"type"`                     // 列类型
-	PrimaryKey    bool        `json:"primary_key,omitempty"`    // 是否主键
-	AutoIncrement bool        `json:"auto_increment,omitempty"` // 是否自动递增
-	NotNull       bool        `json:"not_null,omitempty"`       // 是否非空
-	Unique        bool        `json:"unique,omitempty"`         // 是否唯一
-	Default       interface{} `json:"default,omitempty"`        // 默认值
-}
-
-// TableDefinition 表定义
-type TableDefinition struct {
-	Columns []ColumnDefinition `json:"columns"`           // 列定义列表
-	Indexes []IndexDefinition  `json:"indexes,omitempty"` // 索引定义列表
-}
-
-// IndexDefinition 索引定义
-type IndexDefinition struct {
-	Name    string   `json:"name"`             // 索引名称
-	Columns []string `json:"columns"`          // 索引列名列表
-	Unique  bool     `json:"unique,omitempty"` // 是否唯一
-}
-
-// KnowledgeRequest 知识库请求
-type KnowledgeRequest struct {
-	Operations  []interface{} `json:"operations"`            // 知识库操作列表 ，每个元素可以是DataOperation, TableOperation, InfoOperation
-	Transaction bool          `json:"transaction,omitempty"` // 是否开启事务，默认 false
-}
-
 // =============================================================================
 // v3 记忆库类型定义 — 文档引用标签 UUID 架构
 // 核心变更：引用方向反转，TagVector 不再存储文档 UUID

@@ -1,4 +1,4 @@
-import type { KeyFrame, FileListItem, KnowledgeRequest, BatchResult, ProxyFetchConfig, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams, ScreenshotParams } from './index';
+import type { KeyFrame, FileListItem, ProxyFetchConfig, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, MultimodalMessage, TTSParams, ScreenshotParams } from './index';
 
 declare global {
     /**
@@ -38,13 +38,25 @@ declare global {
      */
     function fileView(filePath: string): [string, Error | null];
     /**
-     * 执行知识库请求
+     * 读取指定知识库表的全部条目（JSON 落盘格式 [key,text][]）
      *
-     * @param {KnowledgeRequest} request 知识库请求对象
+     * 一个表对应 local_data/database/knowledge 下的一个 JSON 文件，数据按键去重。
      *
-     * @returns {[BatchResult, Error | null]} 包含知识库操作结果的元组，[操作结果, 错误信息]
+     * @param {string} table 表名（即 JSON 文件名，不含扩展名）
+     *
+     * @returns {[Array<[string, string]>, Error | null]} 包含条目数组的元组，[[key, text],...]
      */
-    function knowledge(request: KnowledgeRequest): [BatchResult, Error | null];
+    function knowledgeLoad(table: string): [Array<[string, string]>, Error | null];
+    /**
+     * 将指定知识库表的条目数组写回对应 JSON 文件（覆写，自动建目录）
+     *
+     * @param {string} table 表名（即 JSON 文件名，不含扩展名）
+     *
+     * @param {Array<[string, string]>} entries [key, text] 条目数组
+     *
+     * @returns {[boolean, Error | null]} 包含写入结果的元组，[是否成功, 错误信息]
+     */
+    function knowledgeSave(table: string, entries: Array<[string, string]>): [boolean, Error | null];
     /**
      * 获取系统访问URL
      * 

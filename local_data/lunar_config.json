@@ -17,7 +17,13 @@
 			1965304849,
 			1628993759,
 			3970426755,
-			262221051
+			262221051,
+			906314036
+		],
+		"bridging_group_trigger_probability": 0.3,
+		"bridging_group_keywords": [
+			"月华",
+			"姐姐"
 		]
 	},
 	"agent": {

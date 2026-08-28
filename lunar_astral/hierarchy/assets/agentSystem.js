@@ -660,88 +660,60 @@ var agentSystem = (function (exports) {
         return new Promise(process);
     }
 
-    function queryFromKnowledge(operations, createTableOperation) {
-        const requestBody = { operations, transaction: false };
-        let [result, error] = knowledge(requestBody);
-        if (error)
-            throw new Error('知识库查询失败');
-        if (!result.success || !result.results[0].success) {
-            const errorMessage = result.error || result.results[0].error || '';
-            if (errorMessage.includes('no such table') && createTableOperation) {
-                const createTableRequest = { operations: [createTableOperation], transaction: false };
-                let [createTableResult, tableError] = knowledge(createTableRequest);
-                if (tableError)
-                    throw tableError;
-                if (!createTableResult.success)
-                    throw new Error('创建表失败');
-                [result, error] = knowledge(requestBody);
-                if (error)
-                    throw error;
-                if (!result.success || !result.results[0].success)
-                    throw new Error('知识库查询失败');
-            }
-            else
-                throw new Error('知识库查询失败');
+    function loadKnowledge(table) {
+        const [entries, error] = knowledgeLoad(table);
+        const map = new Map();
+        if (error || !Array.isArray(entries)) {
+            if (error)
+                console.error(`[知识库] 读取表 ${table} 失败:`, error);
+            return map;
         }
-        return result;
+        for (const pair of entries) {
+            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
+                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
+            }
+        }
+        return map;
+    }
+    function saveKnowledge(table, map) {
+        const [ok, error] = knowledgeSave(table, [...map.entries()]);
+        if (error)
+            console.error(`[知识库] 写入表 ${table} 失败:`, error);
+        return !error && !!ok;
     }
     function getPromptFromKnowledge(key) {
         try {
-            const operations = [
-                {
-                    type: 'select',
-                    table: 'KeyPrompt',
-                    filter: {
-                        IndexKey: key
-                    },
-                    limit: 1
-                }
-            ];
-            const createTableOperation = {
-                type: 'create',
-                table: 'KeyPrompt',
-                definition: {
-                    columns: [
-                        { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-                        { name: "IndexKey", type: "TEXT" },
-                        { name: "Prompt", type: "TEXT" }
-                    ]
-                }
-            };
-            const result = queryFromKnowledge(operations, createTableOperation);
-            if (result.success && result.results[0].success && result.results[0].rows) {
-                return result.results[0].rows[0].Prompt;
-            }
-            return null;
+            return loadKnowledge('video_summary').get(key) ?? null;
         }
         catch (error) {
+            console.error('[知识库] 读取视频摘要失败:', error);
             return null;
         }
     }
     function savePromptToKnowledge(key, prompt) {
         try {
-            const existingPrompt = getPromptFromKnowledge(key);
-            const operations = [];
-            if (existingPrompt)
-                operations.push({ type: 'update', table: 'KeyPrompt', data: { Prompt: prompt }, filter: { IndexKey: key } });
-            else
-                operations.push({ type: 'insert', table: 'KeyPrompt', data: { IndexKey: key, Prompt: prompt } });
-            const createTableOperation = {
-                type: 'create',
-                table: 'KeyPrompt',
-                definition: {
-                    columns: [
-                        { name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-                        { name: "IndexKey", type: "TEXT" },
-                        { name: "Prompt", type: "TEXT" }
-                    ]
-                }
-            };
-            const result = queryFromKnowledge(operations, createTableOperation);
-            return result.success && result.results[0].success;
+            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
         }
         catch (error) {
-            console.error('向知识库存储提示词失败:', error);
+            console.error('[知识库] 存储视频摘要失败:', error);
+            return false;
+        }
+    }
+    function getFileIndexFromKnowledge(key) {
+        try {
+            return loadKnowledge('file_mapping').get(key) ?? null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取文件映射失败:', error);
+            return null;
+        }
+    }
+    function saveFileIndexToKnowledge(key, value) {
+        try {
+            return saveKnowledge('file_mapping', loadKnowledge('file_mapping').set(key, value));
+        }
+        catch (error) {
+            console.error('[知识库] 写入文件映射失败:', error);
             return false;
         }
     }
@@ -2071,9 +2043,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             console.error(`[阅读者] 集合初始化失败 ${collection}:`, initErr);
             return { id: '', skipped: true };
         }
-        if (getPromptFromKnowledge(key) && collectionHasData(collection))
+        if (getFileIndexFromKnowledge(key) && collectionHasData(collection))
             return { id: key, skipped: false };
-        savePromptToKnowledge(key, '');
+        saveFileIndexToKnowledge(key, '');
         const chunks = splitTextToStrings(content, { idealLen: SLICE_LEN, lang: codeLang || undefined });
         let written = 0;
         for (const chunk of chunks) {
@@ -2101,7 +2073,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
         }
         const index = { collection, name: fileName, ext, lang: codeLang, chunkCount: written, processedAt: Date.now() };
-        savePromptToKnowledge(key, JSON.stringify(index));
+        saveFileIndexToKnowledge(key, JSON.stringify(index));
         console.log(`[阅读者] 已导入 ${key} → 集合 ${collection}，切片 ${written} 片`);
         return { id: key, skipped: false };
     }
@@ -2170,7 +2142,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             query = query.replace(/^[：:]/, '').trim();
             const key = `#${ref.id}`;
             let index = null;
-            const cached = getPromptFromKnowledge(key);
+            const cached = getFileIndexFromKnowledge(key);
             if (cached) {
                 try {
                     index = JSON.parse(cached);
@@ -2360,7 +2332,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             syncLTPXToolStatus();
             await pullExternalMessages();
             for (const item of checkDueItems()) {
-                GlobalConfig.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` });
+                GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` });
             }
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
             if (messageLength === 0) {
@@ -2518,6 +2490,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             const content = extractTextFromMessage(message).trim();
             if (!content || content.length <= 5)
                 continue;
+            if (content.includes(SCHEDULE_TRIGGER_PREFIX))
+                continue;
             const [, error] = memoryAdd('lunar_messages', message.role, content);
             if (error)
                 console.error('[记忆] 写入记忆库失败:', error);
@@ -2530,13 +2504,15 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
     setInterval(() => thoughtLoopTickEvent(), 1000);
 
+    const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
     const PRESET_DAILY_TASKS = [
-        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早上好问候' },
-        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水了"的问候' },
-        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候' },
-        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水了"的问候' },
-        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送下午好问候' },
-        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候' },
+        { id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
+        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
+        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候，关心其午餐情况' },
+        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送傍晚问候，关心一天收尾与晚间安排' },
+        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候，祝其好眠' },
     ];
     const SCHEDULE_FILE_PATH = 'database/schedule.json';
     const scheduleTools = [
@@ -3311,6 +3287,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.PainterRole = PainterRole;
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
+    exports.SCHEDULE_TRIGGER_PREFIX = SCHEDULE_TRIGGER_PREFIX;
     exports.ViewerRole = ViewerRole;
     exports.actorRole = actorRole;
     exports.agentControlTools = agentControlTools;
@@ -3322,6 +3299,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.extractTextFromMessage = extractTextFromMessage;
     exports.fetchDocumentCallback = fetchDocumentCallback;
     exports.getFileContent = getFileContent;
+    exports.getFileIndexFromKnowledge = getFileIndexFromKnowledge;
     exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
     exports.learnerRole = learnerRole;
@@ -3330,9 +3308,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.painterRole = painterRole;
     exports.parseContent = parseContent;
     exports.processUnreadFiles = processUnreadFiles;
-    exports.queryFromKnowledge = queryFromKnowledge;
     exports.randomDefaultMessage = randomDefaultMessage;
     exports.removeEmojiSymbols = removeEmojiSymbols;
+    exports.saveFileIndexToKnowledge = saveFileIndexToKnowledge;
     exports.saveImageToServer = saveImageToServer;
     exports.savePromptToKnowledge = savePromptToKnowledge;
     exports.scheduleTools = scheduleTools;

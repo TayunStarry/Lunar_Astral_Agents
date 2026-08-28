@@ -14,14 +14,21 @@ interface ScheduleItem {
 	completedDate?: string;
 }
 
-/** 预设每日任务：每天早上/白天/晚上的定时问候（固定ID保证幂等，不会重复创建） */
+/**
+ * 计划表触发消息统一前缀：计划到期触发时，提醒内容统一以该前缀开头。
+ * 供 memorizeUnreadRecords() 运行时识别并过滤计划表自动消息，避免被当作普通用户发言写入长期记忆。
+ */
+export const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
+
+/** 预设每日任务：每天按「早/中/晚」节奏安排的定时关怀 */
 const PRESET_DAILY_TASKS: ScheduleItem[] = [
-	{ id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早上好问候' },
-	{ id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水了"的问候' },
-	{ id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候' },
-	{ id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水了"的问候' },
-	{ id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送下午好问候' },
-	{ id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候' },
+	{ id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
+	{ id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
+	{ id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水啦"的补水提醒' },
+	{ id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候，关心其午餐情况' },
+	{ id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水啦"的补水提醒' },
+	{ id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送傍晚问候，关心一天收尾与晚间安排' },
+	{ id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候，祝其好眠' },
 ];
 
 /** 计划表存储路径 */

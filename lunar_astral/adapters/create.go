@@ -26,8 +26,9 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("fileList", adapters.fileList)
 	vm.Set("saveDebugFile", adapters.saveDebugFile)
 
-	// 注册知识库操作适配器
-	vm.Set("knowledge", adapters.knowledge)
+	// 注册知识库操作适配器（JSON 文件存储）
+	vm.Set("knowledgeLoad", adapters.knowledgeLoad)
+	vm.Set("knowledgeSave", adapters.knowledgeSave)
 
 	// 注册网络操作适配器
 	vm.Set("url", adapters.url)

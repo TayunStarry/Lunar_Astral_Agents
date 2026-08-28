@@ -8,10 +8,12 @@ import (
 
 // BridgingConfig 桥接器配置，从 lunar_config.json 的 server 段读取
 type BridgingConfig struct {
-	BridgingType  string  `json:"bridging_type"`
-	BridgingPath  string  `json:"bridging_path"`
-	BridgingToken string  `json:"bridging_token"`
-	BridgingUsers []int64 `json:"bridging_users"` // 允许响应的用户QQ号 / 群号列表
+	BridgingType                    string   `json:"bridging_type"`
+	BridgingPath                    string   `json:"bridging_path"`
+	BridgingToken                   string   `json:"bridging_token"`
+	BridgingUsers                   []int64  `json:"bridging_users"`                     // 允许响应的用户QQ号 / 群号列表
+	BridgingGroupTriggerProbability *float64 `json:"bridging_group_trigger_probability"` // 群聊未触发关键词时的随机应答概率(0~1)，未配置默认 0.3
+	BridgingGroupKeywords           []string `json:"bridging_group_keywords"`            // 群聊触发关键词列表
 }
 
 // ==================== Napcat 消息类型 ====================
@@ -83,6 +85,12 @@ type FileData struct {
 // ForwardData 合并转发消息数据
 type ForwardData struct {
 	ID string `json:"id"`
+}
+
+// RedPacketInfo 红包感知信息（NapCat 无领取红包接口，仅识别并告知 AI）
+type RedPacketInfo struct {
+	IsRedPacket bool   // 是否为红包消息
+	Blessing    string // 祝福语（可能为空）
 }
 
 // ForwardMessage 合并转发消息中的单条消息

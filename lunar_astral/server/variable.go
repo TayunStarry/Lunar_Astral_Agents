@@ -56,33 +56,17 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== 应用与资源 ====
 	{Path: "/background", Handler: file.RandomBackgroundHandler, Method: "GET", Description: "随机背景图片"},
 	// ==== 文件操作 ====
-	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除操作"},
-	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表查询"},
-	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载操作"},
-	{Path: "/file/archive", Handler: file.ArchiveHandler, Method: "POST", Description: "文件归档处理"},
-	{Path: "/file/archive/create", Handler: file.CreateZipHandler, Method: "POST", Description: "服务端压缩（支持文件夹）"},
-	{Path: "/file/archive/metadata", Handler: file.ZipMetadataHandler, Method: "POST", Description: "ZIP压缩包元数据查询"},
-	{Path: "/file/archive/extract", Handler: file.ExtractZipHandler, Method: "POST", Description: "ZIP解压到服务器目录"},
-	{Path: "/file/package/install", Handler: file.InstallPackageHandler, Method: "POST", Description: "安装扩展包"},
-	{Path: "/file/package/export", Handler: file.ExportPackageHandler, Method: "POST", Description: "导出扩展包"},
-	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
-	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
-	{Path: "/file/move", Handler: file.MoveHandler, Method: "POST", Description: "文件移动操作（含冲突处理）"},
-	{Path: "/file/organize", Handler: file.OrganizeHandler, Method: "POST", Description: "批量文件整理操作"},
-	// ==== 知识库与记忆库 ====
-	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
+	// ==== 记忆库 ====
 	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
 	// ==== 图片生成 ====
 	{Path: "/generate", Handler: image.GenerateHandler, Method: "POST", Description: "图片生成服务"},
 	{Path: "/generate/wait", Handler: image.GenerateWaitHandler, Method: "GET", Description: "等待生成结果"},
 	// ==== 截图与图像处理 ====
 	{Path: "/capture", Handler: image.HandleCapture, Method: "ANY", Description: "统一截图（auto/window/fullscreen/display/region）"},
-	{Path: "/keyframe", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频关键帧提取"},
 	{Path: "/capture/displays", Handler: image.HandleGetDisplays, Method: "GET", Description: "屏幕列表"},
 	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
-	{Path: "/extract/keyframes", Handler: image.ExtractKeyFramesHandler, Method: "POST", Description: "视频切片提取"},
 	// ==== 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法） ====
 	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
 	// ==== 代理请求接口 ====

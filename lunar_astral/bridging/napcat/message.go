@@ -76,10 +76,12 @@ func handleGroupMessage(msg NapcatMessage) {
 	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs}
 
 	atSelf := containsAtSelf(msg.Message, msg.SelfID)
-	mentioned := strings.Contains(textContent, "月华")
-	randomTrigger := rand.Float64() < 0.3
+	mentioned := containsAnyKeyword(textContent, bridgeConfig.BridgingGroupKeywords)
+	redPacket := containsRedPacket(msg.Message)
+	triggerProbability := groupTriggerProbability()
+	randomTrigger := triggerProbability > 0 && rand.Float64() < triggerProbability
 
-	if atSelf || mentioned || randomTrigger {
+	if atSelf || mentioned || redPacket || randomTrigger {
 		// 触发：将缓存池连同当前消息一并发送给月华（至多20条）
 		entries := snapshotGroupPool(msg.GroupID)
 		entries = append(entries, entry)
@@ -107,6 +109,101 @@ func isAllowedTarget(id int64) bool {
 		}
 	}
 	return false
+}
+
+// groupTriggerProbability 群聊随机应答概率：未配置时默认 0.3
+func groupTriggerProbability() float64 {
+	if bridgeConfig.BridgingGroupTriggerProbability != nil {
+		return *bridgeConfig.BridgingGroupTriggerProbability
+	}
+	return 0.3
+}
+
+// containsAnyKeyword 判断文本是否包含关键词列表中的任意一个
+func containsAnyKeyword(text string, keywords []string) bool {
+	for _, kw := range keywords {
+		if kw != "" && strings.Contains(text, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsRedPacket 判断消息段中是否包含红包消息
+func containsRedPacket(segments []MessageSegment) bool {
+	for _, segment := range segments {
+		if info := parseRedPacket(segment); info.IsRedPacket {
+			return true
+		}
+	}
+	return false
+}
+
+// parseRedPacket 从 custom/json 消息段中识别红包并提取祝福语
+// 兼容多种结构：data.content / data.data 为 JSON 字符串，或 data 本身即红包 JSON 对象
+func parseRedPacket(segment MessageSegment) RedPacketInfo {
+	if segment.Type != "custom" && segment.Type != "json" {
+		return RedPacketInfo{}
+	}
+
+	var raw string
+	var wrapper struct {
+		Content json.RawMessage `json:"content"`
+		Data    json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(segment.Data, &wrapper); err == nil {
+		for _, field := range []json.RawMessage{wrapper.Content, wrapper.Data} {
+			if len(field) == 0 {
+				continue
+			}
+			var s string
+			if json.Unmarshal(field, &s) == nil {
+				raw = s
+			} else {
+				raw = string(field)
+			}
+			if raw != "" {
+				break
+			}
+		}
+	}
+	if raw == "" {
+		raw = string(segment.Data)
+	}
+	if raw == "" {
+		return RedPacketInfo{}
+	}
+
+	lower := strings.ToLower(raw)
+	if !strings.Contains(lower, "red_packet") &&
+		!strings.Contains(lower, "redenvelope") &&
+		!strings.Contains(raw, "红包") {
+		return RedPacketInfo{}
+	}
+
+	info := RedPacketInfo{IsRedPacket: true}
+	var payload map[string]interface{}
+	if json.Unmarshal([]byte(raw), &payload) == nil {
+		info.Blessing = extractBlessing(payload)
+	}
+	return info
+}
+
+// extractBlessing 从红包 payload 中递归提取祝福语
+func extractBlessing(payload map[string]interface{}) string {
+	for _, key := range []string{"title", "message", "wording", "best_wishes", "bless"} {
+		if v, ok := payload[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	for _, key := range []string{"redEnvelope", "red_envelope", "redPacket", "red_packet"} {
+		if nested, ok := payload[key].(map[string]interface{}); ok {
+			if b := extractBlessing(nested); b != "" {
+				return b
+			}
+		}
+	}
+	return ""
 }
 
 // resolveNickname 解析私聊用户昵称：优先 sender.nickname，其次 card，最后通过接口查询
@@ -354,6 +451,15 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 			if json.Unmarshal(segment.Data, &forwardData) == nil {
 				appendContent(&contentArray, &contentStr, processForwardSegment(forwardData.ID))
 			}
+		case "custom", "json":
+			// 红包以自定义消息到达，识别后渲染为文本告知 AI
+			if info := parseRedPacket(segment); info.IsRedPacket {
+				text := "[红包]"
+				if info.Blessing != "" {
+					text += " 祝福语: " + info.Blessing
+				}
+				appendContent(&contentArray, &contentStr, text+" ")
+			}
 		default:
 			// 忽略其余消息段类型
 		}
@@ -538,6 +644,10 @@ func extractSegmentText(segments []MessageSegment) string {
 			sb.WriteString("[文件]")
 		case "face":
 			sb.WriteString("[表情]")
+		case "custom", "json":
+			if info := parseRedPacket(segment); info.IsRedPacket {
+				sb.WriteString("[红包]")
+			}
 		}
 	}
 	return sb.String()

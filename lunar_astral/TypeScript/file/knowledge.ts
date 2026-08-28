@@ -1,134 +1,110 @@
-import { KnowledgeOperation, KnowledgeRequest, BatchResult, DataOperation } from '../index';
+/** 知识表名：一个表对应 local_data/database/knowledge 下的一个 JSON 文件（格式 [key,text][]） */
+type KnowledgeTable = 'video_summary' | 'file_mapping';
 
 /**
- * 向知识库查询数据
+ * 读取整表 [key,text][] 条目并构建 Map（Map 天然按 key 去重）
  *
- * @param {KnowledgeOperation[]} operations - 知识库操作列表
- *
- * @param {KnowledgeOperation} [createTableOperation] - 表不存在时创建表的操作
- *
- * @returns {BatchResult} - 知识库查询结果
+ * @param table 表名（即 JSON 文件名，不含扩展名）
+ * @returns 键值 Map，读取失败或文件不存在时返回空 Map
  */
-export function queryFromKnowledge(operations: KnowledgeOperation[], createTableOperation: KnowledgeOperation): BatchResult {
-	/** 构建知识库查询请求体 */
-	const requestBody: KnowledgeRequest = { operations, transaction: false };
-	/** 发送知识库查询请求 */
-	let [result, error] = knowledge(requestBody);
-	// 检查响应状态是否成功
-	if (error) throw new Error('知识库查询失败');
-	// 检查查询结果是否有效
-	if (!result.success || !result.results[0].success) {
-		/** 提取错误信息 */
-		const errorMessage = result.error || result.results[0].error || '';
-		// 检查是否是因为表不存在的错误，并且提供了创建表的操作
-		if (errorMessage.includes('no such table') && createTableOperation) {
-			/** 构建创建表请求体 */
-			const createTableRequest: KnowledgeRequest = { operations: [createTableOperation], transaction: false };
-			/** 发送创建表请求 */
-			let [createTableResult, tableError] = knowledge(createTableRequest);
-			// 检查创建表响应状态是否成功
-			if (tableError) throw tableError;
-			/** 检查创建表操作是否成功 */
-			if (!createTableResult.success) throw new Error('创建表失败');
-			// 重新执行原始查询操作
-			[result, error] = knowledge(requestBody);
-			// 检查重新执行查询响应状态是否成功
-			if (error) throw error;
-			// 检查重新执行查询操作是否成功
-			if (!result.success || !result.results[0].success) throw new Error('知识库查询失败');
-		}
-		else throw new Error('知识库查询失败');
+function loadKnowledge(table: KnowledgeTable): Map<string, string> {
+	const [entries, error] = knowledgeLoad(table);
+	const map = new Map<string, string>();
+	if (error || !Array.isArray(entries)) {
+		if (error) console.error(`[知识库] 读取表 ${table} 失败:`, error);
+		return map;
 	}
-	// 返回查询结果
-	return result;
+	for (const pair of entries) {
+		if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
+			map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
+		}
+	}
+	return map;
 }
 
 /**
- * 从知识库中获取提示词
+ * 将 Map 写回对应表对应的 JSON 文件（[key,text][] 落盘，按键去重）
  *
- * @param {string} key - 索引键
+ * @param table 表名（即 JSON 文件名，不含扩展名）
+ * @param map 待持久化的键值 Map
+ * @returns 是否成功
+ */
+function saveKnowledge(table: KnowledgeTable, map: Map<string, string>): boolean {
+	const [ok, error] = knowledgeSave(table, [...map.entries()]);
+	if (error) console.error(`[知识库] 写入表 ${table} 失败:`, error);
+	return !error && !!ok;
+}
+
+// =============================================================================
+// 视频摘要缓存（原 KeyPrompt 表）— 存观影者生成的视频观后感，按键为视频 URL
+// =============================================================================
+
+/**
+ * 从知识库中获取视频摘要（视频观后感缓存）
  *
- * @description 从知识库中查询指定索引键对应的提示词
- *
- * @returns {string | null} - 提示词或null
+ * @param {string} key 索引键（视频 URL）
+ * @returns {string | null} 摘要或 null
  */
 export function getPromptFromKnowledge(key: string): string | null {
 	try {
-		/** 定义知识库操作对象数组 */
-		const operations: KnowledgeOperation[] = [
-			{
-				type: 'select',
-				table: 'KeyPrompt',
-				filter: {
-					IndexKey: key
-				},
-				limit: 1
-			}
-		];
-		/** 定义创建表操作 */
-		const createTableOperation: KnowledgeOperation = {
-			type: 'create',
-			table: 'KeyPrompt',
-			definition: {
-				columns: [
-					{ name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-					{ name: "IndexKey", type: "TEXT" },
-					{ name: "Prompt", type: "TEXT" }
-				]
-			}
-		};
-		/** 解析知识库查询响应 */
-		const result: BatchResult = queryFromKnowledge(operations, createTableOperation);
-		// 检查查询结果是否有效
-		if (result.success && result.results[0].success && result.results[0].rows) {
-			return result.results[0].rows[0].Prompt as string;
-		}
-		// 查询结果为空，返回null
-		return null;
+		return loadKnowledge('video_summary').get(key) ?? null;
 	}
 	catch (error) {
+		console.error('[知识库] 读取视频摘要失败:', error);
 		return null;
 	}
 }
 
 /**
- * 向知识库中存储提示词
+ * 向知识库中存储视频摘要（存在则更新，按键去重）
  *
- * @param {string} key - 索引键
- *
- * @param {string} prompt - 提示词
- *
- * @returns {boolean} - 是否成功
+ * @param {string} key 索引键（视频 URL）
+ * @param {string} prompt 视频摘要
+ * @returns {boolean} 是否成功
  */
 export function savePromptToKnowledge(key: string, prompt: string): boolean {
 	try {
-		/** 检查是否存在相同索引键的记录 */
-		const existingPrompt = getPromptFromKnowledge(key);
-		/** 定义知识库操作对象数组 */
-		const operations: DataOperation[] = [];
-		// 更新现有记录
-		if (existingPrompt) operations.push({ type: 'update', table: 'KeyPrompt', data: { Prompt: prompt }, filter: { IndexKey: key } });
-		// 插入新记录
-		else operations.push({ type: 'insert', table: 'KeyPrompt', data: { IndexKey: key, Prompt: prompt } });
-		/** 定义创建表操作 */
-		const createTableOperation: KnowledgeOperation = {
-			type: 'create',
-			table: 'KeyPrompt',
-			definition: {
-				columns: [
-					{ name: "ID", type: "INTEGER", primary_key: true, auto_increment: true },
-					{ name: "IndexKey", type: "TEXT" },
-					{ name: "Prompt", type: "TEXT" }
-				]
-			}
-		};
-		/** 解析知识库查询响应 */
-		const result: BatchResult = queryFromKnowledge(operations, createTableOperation);
-		// 检查操作是否成功
-		return result.success && result.results[0].success;
+		return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
 	}
 	catch (error) {
-		console.error('向知识库存储提示词失败:', error);
+		console.error('[知识库] 存储视频摘要失败:', error);
+		return false;
+	}
+}
+
+// =============================================================================
+// 文件映射表（原 FileMapping 表）— 存放“识别ID #fileName.ext → 文件索引”的映射
+// =============================================================================
+
+/**
+ * 从文件映射表获取索引值
+ *
+ * @param {string} key 识别ID（#fileName.ext）
+ * @returns {string | null} 索引 JSON 或 null
+ */
+export function getFileIndexFromKnowledge(key: string): string | null {
+	try {
+		return loadKnowledge('file_mapping').get(key) ?? null;
+	}
+	catch (error) {
+		console.error('[知识库] 读取文件映射失败:', error);
+		return null;
+	}
+}
+
+/**
+ * 向文件映射表写入索引值（存在则更新，按键去重）
+ *
+ * @param {string} key 识别ID（#fileName.ext）
+ * @param {string} value 索引 JSON（传入空串可清除残留索引）
+ * @returns {boolean} 是否成功
+ */
+export function saveFileIndexToKnowledge(key: string, value: string): boolean {
+	try {
+		return saveKnowledge('file_mapping', loadKnowledge('file_mapping').set(key, value));
+	}
+	catch (error) {
+		console.error('[知识库] 写入文件映射失败:', error);
 		return false;
 	}
 }

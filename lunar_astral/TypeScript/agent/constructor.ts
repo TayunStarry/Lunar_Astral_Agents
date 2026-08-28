@@ -6,6 +6,7 @@ import {
     PostMessageRole,
     MessageContent,
     checkDueItems,
+    SCHEDULE_TRIGGER_PREFIX,
     parseContent,
     GlobalConfig,
     ImageContent,
@@ -197,7 +198,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         await pullExternalMessages();
         // 检查计划表到期项，将到期计划内容写入上下文
         for (const item of checkDueItems()) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: `[计划提醒] 预约时间已到，请执行以下计划：${item.content}` })
+            GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` })
         }
         /** 消息长度 */
         const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
@@ -225,7 +226,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         const validMessage = textChunks.map(chunk => chunk.display).join('').trim();
         // 如果正文切片为空，抛出异常
         if (!validMessage.length) throw new Error('清洗后的文本为空');
-        // 如果解析出行动区内容（动作区与情感区合并），分别交给行动者推理动作、记忆库匹配表情包
+        // 如果解析出行动区内容，分别交给行动者推理动作、记忆库匹配表情包
         if (actionBlocks.length) {
             // 调用行动者推理动作
             await actorRole.createCreativeWork(actionBlocks.join('|'));
@@ -396,8 +397,10 @@ export function memorizeUnreadRecords(): void {
         if (message.role === 'tool') continue;
         /** 提取文本内容并过滤空字符串 */
         const content = extractTextFromMessage(message).trim();
-        // 过滤掉空字符串或长度小于等于5的消息
+        // 过滤掉空字符串、长度小于等于5的消息
         if (!content || content.length <= 5) continue;
+        // 过滤掉计划表触发的自动消息（统一前缀），避免写入长期记忆
+        if (content.includes(SCHEDULE_TRIGGER_PREFIX)) continue;
         /** 写入记忆库 */
         const [, error] = memoryAdd('lunar_messages', message.role, content);
         // 记录写入失败的错误信息

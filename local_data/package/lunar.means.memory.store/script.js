@@ -21,6 +21,7 @@ var API = {
 };
 
 var PAGE_SIZE = 12;
+var MAX_DOCS = 100000; // 已取消分页：一次性拉取该集合全部文档的上限
 
 var App = {
     initialized: false,
@@ -44,13 +45,8 @@ function $(id) {
 }
 
 var D = {
-    // Header
-    hdrCollections: $('hdr-collections'),
-    hdrCount:       $('hdr-count'),
-    hdrDot:         $('hdr-status-dot'),
-    hdrLabel:       $('hdr-status-label'),
+    // 侧栏通用
     syncWarn:       $('sync-warn'),
-    btnRefresh:     $('btn-refresh'),
     btnRebuildSync: $('btn-rebuild-sync'),
 
     // Init
@@ -154,8 +150,7 @@ function init() {
 }
 
 function bindGlobalEvents() {
-    // Header
-    D.btnRefresh.addEventListener('click', refreshAll);
+    // 侧栏同步重建
     D.btnRebuildSync.addEventListener('click', handleRebuildSync);
 
     // Init
@@ -317,33 +312,23 @@ async function loadGlobalStats() {
         if (result.success && result.data) {
             var data = result.data;
             App.initialized = data.initialized;
-            updateStatusDot(data.initialized);
 
             if (data.initialized) {
                 D.initCard.style.display = 'none';
                 D.appBody.style.display = 'flex';
-                D.hdrCount.textContent = data.document_count || 0;
-                D.hdrCollections.textContent = '--';
                 loadCollections();
             } else {
                 showInitCard();
             }
         } else {
             App.initialized = false;
-            updateStatusDot(false);
             showInitCard();
         }
     } catch (err) {
         App.initialized = false;
-        updateStatusDot(false);
         showInitCard();
         showToast('无法连接到记忆库服务', 'error');
     }
-}
-
-function updateStatusDot(ok) {
-    D.hdrDot.className = 'status-dot ' + (ok ? 'connected' : 'disconnected');
-    D.hdrLabel.textContent = ok ? '已连接' : '未连接';
 }
 
 function showInitCard() {
@@ -423,7 +408,6 @@ async function loadCollections() {
         if (result.success && result.data) {
             var collections = result.data.collections || [];
             App.collections = collections;
-            D.hdrCollections.textContent = collections.length;
 
             if (collections.length > 0) {
                 var found = false;
@@ -787,9 +771,17 @@ async function executeRebuild() {
 
 // ========== 文档列表 ==========
 
+// 加载态：
+// - 文本集合：显示横向骨架条；
+// - 图片集合：自身已逐张渐进加载（每张图的 shimmer 占位 + 淡入），无需再叠加加载占位网格。
 function setLoading(loading) {
     if (loading) {
-        D.loadingState.style.display = 'flex';
+        if (App.isImageCollection) {
+            D.loadingState.style.display = 'none';
+        } else {
+            D.loadingState.innerHTML = '<div class="skeleton-card"></div>'.repeat(4);
+            D.loadingState.style.display = 'flex';
+        }
         D.emptyState.style.display = 'none';
         D.emptyColState.style.display = 'none';
         D.errorState.style.display = 'none';
@@ -824,6 +816,9 @@ function setError(msg) {
     D.pagination.style.display = 'none';
 }
 
+// ========== 加载文档（已取消分页：一次性拉取当前集合全部文档） ==========
+// 服务端单次返回有上限（当前 max=100），这里循环分片拉取并拼接，
+// 向量查询 top_k 为 50。若服务端将来放宽上限，循环会在首轮拉全后自动结束。
 async function loadDocuments() {
     if (!App.initialized || !App.currentCollection) {
         showEmptyCollectionState();
@@ -831,38 +826,44 @@ async function loadDocuments() {
     }
 
     setLoading(true);
-    var offset = (App.page - 1) * PAGE_SIZE;
 
     try {
-        var resp = await fetch(API.collection(App.currentCollection).DOCS + '?offset=' + offset + '&limit=' + PAGE_SIZE);
-        var result = await resp.json();
+        var all = [];
+        var total = 0;
+        var offset = 0;
+        var pageLimit = 100; // 单次请求上限，与服务端保持一致
 
-        if (result.success && result.data) {
-            var data = result.data;
-            App.totalDocs = data.total || 0;
-            D.hdrCount.textContent = App.totalDocs;
+        while (true) {
+            var resp = await fetch(API.collection(App.currentCollection).DOCS + '?offset=' + offset + '&limit=' + pageLimit);
+            var result = await resp.json();
 
-            // Update collection count in sidebar
-            var col = findCollection(App.currentCollection);
-            if (col) {
-                col.count = App.totalDocs;
-                updateCollectionStats(col);
-                renderCollectionList();
-            }
-
-            App.totalPages = Math.max(1, Math.ceil(App.totalDocs / PAGE_SIZE));
-            if (App.page > App.totalPages) {
-                App.page = App.totalPages;
-                loadDocuments();
+            if (!result.success || !result.data) {
+                setError(result.error || '加载失败');
                 return;
             }
 
-            App.documents = data.documents || [];
-            renderList(App.documents, false);
-            renderPagination();
-        } else {
-            setError(result.error || '加载失败');
+            total = result.data.total || 0;
+            var docs = result.data.documents || [];
+            all = all.concat(docs);
+            offset += docs.length;
+
+            // 已拉全（本次不足一页 或 已达总数）
+            if (docs.length === 0 || all.length >= total) break;
         }
+
+        App.totalDocs = total;
+
+        // Update collection count in sidebar
+        var col = findCollection(App.currentCollection);
+        if (col) {
+            col.count = App.totalDocs;
+            updateCollectionStats(col);
+            renderCollectionList();
+        }
+
+        App.documents = all;
+        renderList(all, false);
+        renderPagination();
     } catch (err) {
         setError('加载文档列表失败: ' + err.message);
         showToast('加载文档列表失败', 'error');
@@ -889,6 +890,57 @@ function renderList(docs, isSearch) {
     }
 
     D.docList.innerHTML = html;
+
+    // 渲染完成后，为图片卡片填充尺寸徽标（宽 × 高）
+    initImageSizeBadges();
+
+    // 图片渐进式加载：每 10ms 给一张图片赋值 src，逐张显示，避免一次性解码大量大图导致卡顿
+    loadImagesSequentially();
+}
+
+// ========== 图片渐进式加载（10ms/张） ==========
+function loadImagesSequentially() {
+    var imgs = D.docList.querySelectorAll('img.image-preview-thumb[data-src]');
+    var i = 0;
+
+    function next() {
+        if (i >= imgs.length) return;
+        var img = imgs[i++];
+        var src = img.getAttribute('data-src');
+        img.addEventListener('load', function () { img.classList.add('loaded'); });
+        img.removeAttribute('data-src');
+        img.src = src;
+        setTimeout(next, 10);
+    }
+    next();
+}
+
+// ========== 图片尺寸徽标 ==========
+// 图片卡片右上角不再显示「图片」文字，改为显示实际图片尺寸。
+function initImageSizeBadges() {
+    var cards = D.docList.querySelectorAll('.doc-card.image-card');
+    for (var i = 0; i < cards.length; i++) {
+        (function (card) {
+            var img = card.querySelector('img.image-preview-thumb');
+            var badge = card.querySelector('.img-size-badge');
+            if (!img || !badge) return;
+
+            var apply = function () {
+                if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                    badge.textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+                }
+            };
+
+            if (img.complete && img.naturalWidth > 0) {
+                apply();
+            } else {
+                img.addEventListener('load', apply);
+                img.addEventListener('error', function () {
+                    badge.textContent = '';
+                });
+            }
+        })(cards[i]);
+    }
 }
 
 function renderCard(doc, isSearch) {
@@ -911,7 +963,7 @@ function renderCard(doc, isSearch) {
 	            imgSimBadge = '<span class="sim-badge ' + simCls + '" title="累加余弦相似度">' + simPercent + '%</span>';
 	        }
         return '<div class="' + cardCls + ' image-card" data-doc-id="' + esc(doc.id) + '">' +
-            '<span class="doc-role-badge image">图片</span>' +
+            '<span class="img-size-badge" title="图片尺寸"></span>' +
             imgSimBadge +
             '<div class="doc-body">' +
             '<div class="doc-id-row">' +
@@ -925,7 +977,7 @@ function renderCard(doc, isSearch) {
             '</div>' +
             '</div>' +
             (imageSrc
-                ? '<div class="image-preview-container"><img src="' + escAttr(imageSrc) + '" class="image-preview-thumb" alt="图片" loading="lazy"></div>'
+                ? '<div class="image-preview-container"><img data-src="' + escAttr(imageSrc) + '" class="image-preview-thumb" alt="图片" decoding="async"></div>'
                 : '<div class="image-preview-container"><span class="image-placeholder"><i class="fa-solid fa-image"></i> 图片数据将通过搜索加载</span></div>') +
             '</div>' +
             '</div>';
@@ -956,31 +1008,14 @@ function renderCard(doc, isSearch) {
         '</div>';
 }
 
+// ========== 分页（已取消，改为一次性加载全部） ==========
 function renderPagination() {
-    if (App.totalPages <= 1) {
-        D.pagination.style.display = 'none';
-        return;
-    }
-
-    D.pagination.style.display = 'flex';
-    D.pageInfo.textContent = '第 ' + App.page + ' 页 / 共 ' + App.totalPages + ' 页';
-    D.btnPrev.disabled = App.page <= 1;
-    D.btnNext.disabled = App.page >= App.totalPages;
+    D.pagination.style.display = 'none';
 }
 
-function goPrevPage() {
-    if (App.page > 1) {
-        App.page--;
-        App.searchMode ? executeSearch(App.searchQuery) : loadDocuments();
-    }
-}
+function goPrevPage() { /* 分页已取消 */ }
 
-function goNextPage() {
-    if (App.page < App.totalPages) {
-        App.page++;
-        App.searchMode ? executeSearch(App.searchQuery) : loadDocuments();
-    }
-}
+function goNextPage() { /* 分页已取消 */ }
 
 // ========== 搜索 ==========
 
@@ -1030,7 +1065,8 @@ async function executeSearch(query) {
     if (!App.initialized || !App.currentCollection) return;
 
     setLoading(true);
-    var topK = PAGE_SIZE;
+    // 检索时主内容区只展示 Top-N 条最相关的命中结果
+    var topK = 15;
 
     try {
         // v2: 统一使用 /messages 端点（text 和 image 共用）
@@ -1042,9 +1078,7 @@ async function executeSearch(query) {
             var data = result.data;
             App.searchResults = data.results || [];
             App.totalDocs = data.total_found || App.searchResults.length;
-            D.hdrCount.textContent = App.totalDocs;
 
-            App.totalPages = Math.max(1, Math.ceil(App.totalDocs / PAGE_SIZE));
             renderList(App.searchResults, true);
             renderPagination();
             showToast('搜索完成，找到 ' + App.totalDocs + ' 条结果', 'info');

@@ -1,6 +1,6 @@
 import { GlobalConfig } from '../config/global';
 import { PostMessage, TextContent } from '../config/model';
-import { getPromptFromKnowledge, savePromptToKnowledge } from '../file/knowledge';
+import { getFileIndexFromKnowledge, saveFileIndexToKnowledge } from '../file/knowledge';
 import { splitTextToStrings } from '../file/split';
 import { resolveCodeLang, extractCodeTags } from '../file/code_split';
 
@@ -15,7 +15,7 @@ const QUERY_TOP_K = 10;
 /** 文件围栏块起始标记：```file.ext */
 const FENCE = '```';
 
-/** 文件索引结构（存于 KeyPrompt，键为识别ID #fileName.ext） */
+/** 文件索引结构（存于 FileMapping 表，键为识别ID #fileName.ext） */
 type FileIndex = {
 	collection: string;
 	name: string;
@@ -116,8 +116,8 @@ async function importFileBlock(fileName: string, content: string): Promise<{ id:
 	// 文件级去重：仅当该索引指向的集合实际仍有文档时才复用。
 	// 否则（集合被删除 / 首次导入）清除可能残留的旧索引并重新入库，
 	// 避免“索引还在但集合已空”导致重导一直被跳过、记忆库变空。
-	if (getPromptFromKnowledge(key) && collectionHasData(collection)) return { id: key, skipped: false };
-	savePromptToKnowledge(key, '');
+	if (getFileIndexFromKnowledge(key) && collectionHasData(collection)) return { id: key, skipped: false };
+	saveFileIndexToKnowledge(key, '');
 
 	// 切片：指定 lang 时走代码感知拆分（捕获 Function/Class），否则走 MD/普通文本拆分
 	const chunks = splitTextToStrings(content, { idealLen: SLICE_LEN, lang: codeLang || undefined });
@@ -142,9 +142,9 @@ async function importFileBlock(fileName: string, content: string): Promise<{ id:
 		}
 	}
 
-	// 登记索引：识别ID → 索引信息（KeyPrompt 精确键）
+	// 登记索引：识别ID → 索引信息（FileMapping 精确键）
 	const index: FileIndex = { collection, name: fileName, ext, lang: codeLang, chunkCount: written, processedAt: Date.now() };
-	savePromptToKnowledge(key, JSON.stringify(index));
+	saveFileIndexToKnowledge(key, JSON.stringify(index));
 
 	console.log(`[阅读者] 已导入 ${key} → 集合 ${collection}，切片 ${written} 片`);
 	return { id: key, skipped: false };
@@ -223,7 +223,7 @@ function processReferencesInText(raw: string): { text: string; changed: boolean 
 		// 读取文件索引
 		const key = `#${ref.id}`;
 		let index: FileIndex | null = null;
-		const cached = getPromptFromKnowledge(key);
+		const cached = getFileIndexFromKnowledge(key);
 		if (cached) { try { index = JSON.parse(cached); } catch { index = null; } }
 
 		if (!index) {
