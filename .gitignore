@@ -12,7 +12,7 @@ node_modules/
 local_data/embed_cache/
 the_crashed_cpp_project/
 embedded_data/
-local_data\package\lunar.means.message.terminal\messages.json
+bridge_probe/
 
 ## Go 测试产物
 coverage

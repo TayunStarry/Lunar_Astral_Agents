@@ -197,9 +197,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         // 拉取外部消息
         await pullExternalMessages();
         // 检查计划表到期项，将到期计划内容写入上下文
-        for (const item of checkDueItems()) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` })
-        }
+        checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }))
         /** 消息长度 */
         const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
         // 如果消息长度为0，跳过当前循环
@@ -223,7 +221,7 @@ async function thoughtLoopTickEvent(): Promise<void> {
         /** 解析原始文本：拆分思考区、代码块、行动区、正文切片（含display和tts双版本） */
         const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
         /** 清洗并合并后的正文消息 */
-        const validMessage = textChunks.map(chunk => chunk.display).join('').trim();
+        const validMessage = textChunks.map(chunk => chunk.display).join('\n').trim();
         // 如果正文切片为空，抛出异常
         if (!validMessage.length) throw new Error('清洗后的文本为空');
         // 如果解析出行动区内容，分别交给行动者推理动作、记忆库匹配表情包
@@ -234,17 +232,13 @@ async function thoughtLoopTickEvent(): Promise<void> {
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 未解析出行动区内容，且正文长度小于等于35字时，按概率基于正文推理表情包
-        else if (validMessage.length <= 35 && Math.random() < 0.55) {
+        else if (validMessage.length <= 35 && Math.random() < 0.3) {
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
-        for (const thinking of thinkingBlocks) {
-            pushContext('text', thinking, '');
-        }
+        thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''))
         // 第二步：按顺序逐一发送代码块内容（不参与语音合成）
-        for (const code of codeBlocks) {
-            pushContext('text', code, '');
-        }
+        codeBlocks.forEach(code => pushContext('text', code, ''))
         // 第三步：按顺序逐一发送正文切片，display用于显示，tts用于合成语音
         for (const chunk of textChunks) {
             /** 语音合成结果 */

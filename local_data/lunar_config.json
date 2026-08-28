@@ -8,7 +8,7 @@
 	},
 	"server": {
 		"user_name": null,
-		"developer": false,
+		"developer": true,
 		"allow_diffusion": true,
 		"bridging_type": "napcat",
 		"bridging_path": "ws://localhost:4567",
@@ -20,7 +20,7 @@
 			262221051,
 			906314036
 		],
-		"bridging_group_trigger_probability": 0.3,
+		"bridging_group_trigger_probability": 0.2,
 		"bridging_group_keywords": [
 			"月华",
 			"姐姐"

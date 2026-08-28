@@ -2355,7 +2355,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 await actorRole.createCreativeWork(actionBlocks.join('|'));
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
-            else if (validMessage.length <= 35 && Math.random() < 0.55) {
+            else if (validMessage.length <= 35 && Math.random() < 0.3) {
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
             for (const thinking of thinkingBlocks) {

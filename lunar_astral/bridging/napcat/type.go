@@ -29,6 +29,7 @@ type NapcatMessage struct {
 	MessageType string           `json:"message_type"`
 	Message     []MessageSegment `json:"message"`
 	RawMessage  string           `json:"raw_message"`
+	Raw         json.RawMessage  `json:"raw"` // NTQQ 原始消息，红包等特殊消息承载于此
 }
 
 // Sender 发送者信息
@@ -87,10 +88,31 @@ type ForwardData struct {
 	ID string `json:"id"`
 }
 
-// RedPacketInfo 红包感知信息（NapCat 无领取红包接口，仅识别并告知 AI）
+// RedPacketInfo 红包感知信息（NapCat 无领取红包接口，仅识别并告知 AI；口令红包可通过复读口令领取）
 type RedPacketInfo struct {
 	IsRedPacket bool   // 是否为红包消息
-	Blessing    string // 祝福语（可能为空）
+	IsPhrase    bool   // 是否为口令红包（可在聊天中复读口令领取）
+	Blessing    string // 祝福语 / 口令
+	BillNo      string // 红包流水号
+}
+
+// WalletElement NTQQ 钱包元素（红包），承载于 raw.elements[].walletElement
+type WalletElement struct {
+	RedType       int            `json:"redType"`       // 1=群聊手气/口令, 2=私聊/普通
+	BillNo        string         `json:"billNo"`        // 红包流水号
+	Authkey       string         `json:"authkey"`       // 领取密钥（当前未使用）
+	Sessiontype   int            `json:"sessiontype"`   // 0=私聊, 1=群聊
+	MsgType       int            `json:"msgType"`       // 2=普通/私聊, 3=手气, 6=口令
+	RedChannel    int            `json:"redChannel"`    // 1=普通/手气, 32=口令
+	GrabbedAmount string         `json:"grabbedAmount"` // 已领取金额
+	Receiver      WalletReceiver `json:"receiver"`      // 红包卡片文案
+}
+
+// WalletReceiver 红包卡片接收方文案
+type WalletReceiver struct {
+	Title   string `json:"title"`   // 祝福语 / 口令
+	Notice  string `json:"notice"`  // 形如 "[QQ红包]恭喜发财"
+	Content string `json:"content"` // 固定为 "QQ红包"
 }
 
 // ForwardMessage 合并转发消息中的单条消息

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // maxGroupPoolSize 单个群聊缓存池的最大容量
@@ -52,7 +53,13 @@ func handlePrivateMessage(msg NapcatMessage) {
 	nickname := resolveNickname(msg.UserID, msg.Sender)
 	content, hasImages, videoURLs := parseMessageSegments(msg.Message)
 
-	message := buildUserMessage(nickname+" : ", content, hasImages)
+	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
+	if rp := parseRawRedPacket(msg.Raw); rp != nil {
+		content = buildRedPacketText(rp)
+		hasImages = false
+	}
+
+	message := buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)
 
 	enqueueRequest(BridgeRequest{
 		Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
@@ -73,15 +80,22 @@ func handleGroupMessage(msg NapcatMessage) {
 	content, hasImages, videoURLs := parseMessageSegments(msg.Message)
 	textContent := contentToText(content)
 
+	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
+	redPacket := parseRawRedPacket(msg.Raw)
+	if redPacket != nil {
+		content = buildRedPacketText(redPacket)
+		hasImages = false
+		textContent = contentToText(content)
+	}
+
 	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs}
 
 	atSelf := containsAtSelf(msg.Message, msg.SelfID)
 	mentioned := containsAnyKeyword(textContent, bridgeConfig.BridgingGroupKeywords)
-	redPacket := containsRedPacket(msg.Message)
 	triggerProbability := groupTriggerProbability()
 	randomTrigger := triggerProbability > 0 && rand.Float64() < triggerProbability
 
-	if atSelf || mentioned || redPacket || randomTrigger {
+	if atSelf || mentioned || redPacket != nil || randomTrigger {
 		// 触发：将缓存池连同当前消息一并发送给月华（至多20条）
 		entries := snapshotGroupPool(msg.GroupID)
 		entries = append(entries, entry)
@@ -90,11 +104,21 @@ func handleGroupMessage(msg NapcatMessage) {
 		}
 		clearGroupPool(msg.GroupID)
 
-		enqueueRequest(BridgeRequest{
+		req := BridgeRequest{
 			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
 			Messages:  buildGroupMessages(groupName, entries),
 			VideoURLs: collectGroupVideoURLs(entries),
-		})
+		}
+
+		if redPacket != nil && redPacket.IsPhrase {
+			// 口令红包：等待随机 0.5~3 秒再推送，让月华复读口令领取红包
+			go func() {
+				time.Sleep(randomRedPacketDelay())
+				enqueueRequest(req)
+			}()
+		} else {
+			enqueueRequest(req)
+		}
 	} else {
 		// 未触发：累积到缓存池
 		addToGroupPool(msg.GroupID, groupName, entry)
@@ -129,81 +153,55 @@ func containsAnyKeyword(text string, keywords []string) bool {
 	return false
 }
 
-// containsRedPacket 判断消息段中是否包含红包消息
-func containsRedPacket(segments []MessageSegment) bool {
-	for _, segment := range segments {
-		if info := parseRedPacket(segment); info.IsRedPacket {
-			return true
+// parseRawRedPacket 从 raw.elements 中识别红包（walletElement），非红包返回 nil
+func parseRawRedPacket(raw json.RawMessage) *RedPacketInfo {
+	if len(raw) == 0 {
+		return nil
+	}
+	var payload struct {
+		Elements []struct {
+			Wallet *WalletElement `json:"walletElement"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil
+	}
+	for _, e := range payload.Elements {
+		if e.Wallet == nil {
+			continue
+		}
+		return &RedPacketInfo{
+			IsRedPacket: true,
+			IsPhrase:    e.Wallet.RedChannel == 32 || e.Wallet.MsgType == 6,
+			Blessing:    walletBlessing(e.Wallet),
+			BillNo:      e.Wallet.BillNo,
 		}
 	}
-	return false
+	return nil
 }
 
-// parseRedPacket 从 custom/json 消息段中识别红包并提取祝福语
-// 兼容多种结构：data.content / data.data 为 JSON 字符串，或 data 本身即红包 JSON 对象
-func parseRedPacket(segment MessageSegment) RedPacketInfo {
-	if segment.Type != "custom" && segment.Type != "json" {
-		return RedPacketInfo{}
+// walletBlessing 提取红包祝福语：receiver.title 优先，notice 去掉 "[QQ红包]" 前缀兜底
+func walletBlessing(w *WalletElement) string {
+	if w.Receiver.Title != "" {
+		return w.Receiver.Title
 	}
-
-	var raw string
-	var wrapper struct {
-		Content json.RawMessage `json:"content"`
-		Data    json.RawMessage `json:"data"`
+	if notice := strings.TrimPrefix(w.Receiver.Notice, "[QQ红包]"); notice != "" {
+		return notice
 	}
-	if err := json.Unmarshal(segment.Data, &wrapper); err == nil {
-		for _, field := range []json.RawMessage{wrapper.Content, wrapper.Data} {
-			if len(field) == 0 {
-				continue
-			}
-			var s string
-			if json.Unmarshal(field, &s) == nil {
-				raw = s
-			} else {
-				raw = string(field)
-			}
-			if raw != "" {
-				break
-			}
-		}
-	}
-	if raw == "" {
-		raw = string(segment.Data)
-	}
-	if raw == "" {
-		return RedPacketInfo{}
-	}
-
-	lower := strings.ToLower(raw)
-	if !strings.Contains(lower, "red_packet") &&
-		!strings.Contains(lower, "redenvelope") &&
-		!strings.Contains(raw, "红包") {
-		return RedPacketInfo{}
-	}
-
-	info := RedPacketInfo{IsRedPacket: true}
-	var payload map[string]interface{}
-	if json.Unmarshal([]byte(raw), &payload) == nil {
-		info.Blessing = extractBlessing(payload)
-	}
-	return info
+	return w.Receiver.Content
 }
 
-// extractBlessing 从红包 payload 中递归提取祝福语
-func extractBlessing(payload map[string]interface{}) string {
-	for _, key := range []string{"title", "message", "wording", "best_wishes", "bless"} {
-		if v, ok := payload[key].(string); ok && v != "" {
-			return v
-		}
+// buildRedPacketText 将红包信息渲染为文本（口令红包附带复读领取指令）
+func buildRedPacketText(rp *RedPacketInfo) string {
+	if rp.IsPhrase {
+		return fmt.Sprintf("[口令红包] 口令：『%s』，请直接复读口令领取红包 ", rp.Blessing)
 	}
-	for _, key := range []string{"redEnvelope", "red_envelope", "redPacket", "red_packet"} {
-		if nested, ok := payload[key].(map[string]interface{}); ok {
-			if b := extractBlessing(nested); b != "" {
-				return b
-			}
-		}
-	}
-	return ""
+	return fmt.Sprintf("[红包] 祝福语: %s ", rp.Blessing)
+}
+
+// randomRedPacketDelay 领取口令红包前的随机等待时间（0.5~3 秒）
+func randomRedPacketDelay() time.Duration {
+	return time.Duration(500+rand.Intn(2500)) * time.Millisecond
 }
 
 // resolveNickname 解析私聊用户昵称：优先 sender.nickname，其次 card，最后通过接口查询
@@ -302,7 +300,7 @@ func clearGroupPool(groupID int64) {
 func buildGroupMessages(groupName string, entries []GroupPoolEntry) []map[string]interface{} {
 	messages := make([]map[string]interface{}, 0, len(entries))
 	for _, e := range entries {
-		prefix := fmt.Sprintf("[ %s - %s ]: ", groupName, e.Nickname)
+		prefix := fmt.Sprintf("[群聊: %s][用户: %s]: ", groupName, e.Nickname)
 		messages = append(messages, buildUserMessage(prefix, e.Content, e.HasImages))
 	}
 	return messages
@@ -451,15 +449,6 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 			if json.Unmarshal(segment.Data, &forwardData) == nil {
 				appendContent(&contentArray, &contentStr, processForwardSegment(forwardData.ID))
 			}
-		case "custom", "json":
-			// 红包以自定义消息到达，识别后渲染为文本告知 AI
-			if info := parseRedPacket(segment); info.IsRedPacket {
-				text := "[红包]"
-				if info.Blessing != "" {
-					text += " 祝福语: " + info.Blessing
-				}
-				appendContent(&contentArray, &contentStr, text+" ")
-			}
 		default:
 			// 忽略其余消息段类型
 		}
@@ -542,10 +531,12 @@ func describeFile(fileName string, sizeRaw json.RawMessage) string {
 	var sb strings.Builder
 	sb.WriteString("[文件]")
 	if fileName != "" {
-		sb.WriteString(" 名称: " + fileName)
+		sb.WriteString(" 名称: ")
+		sb.WriteString(fileName)
 	}
 	if size := fileSizeText(sizeRaw); size != "" {
-		sb.WriteString(" 大小: " + size)
+		sb.WriteString(" 大小: ")
+		sb.WriteString(size)
 	}
 	sb.WriteString(" ")
 	return sb.String()
@@ -616,7 +607,10 @@ func processForwardSegment(id string) string {
 		if len(segments) == 0 {
 			segments = msg.Content
 		}
-		sb.WriteString(sender + ": " + extractSegmentText(segments) + "\n")
+		sb.WriteString(sender)
+		sb.WriteString(": ")
+		sb.WriteString(extractSegmentText(segments))
+		sb.WriteString("\n")
 	}
 	return sb.String()
 }
@@ -634,7 +628,9 @@ func extractSegmentText(segments []MessageSegment) string {
 		case "at":
 			var atData AtData
 			if json.Unmarshal(segment.Data, &atData) == nil {
-				sb.WriteString("@" + atData.QQ + " ")
+				sb.WriteString("@")
+				sb.WriteString(atData.QQ)
+				sb.WriteString(" ")
 			}
 		case "image":
 			sb.WriteString("[图片]")
@@ -644,10 +640,6 @@ func extractSegmentText(segments []MessageSegment) string {
 			sb.WriteString("[文件]")
 		case "face":
 			sb.WriteString("[表情]")
-		case "custom", "json":
-			if info := parseRedPacket(segment); info.IsRedPacket {
-				sb.WriteString("[红包]")
-			}
 		}
 	}
 	return sb.String()
