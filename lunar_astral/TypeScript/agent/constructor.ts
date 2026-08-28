@@ -147,7 +147,12 @@ export async function LiteImageFile(): Promise<void> {
                 };
                 // 动态图（多帧）：仿照视频逐帧摘要为文本消息，不再直接将原图返回消息列表
                 if (resizedImages.length > 1) {
-                    newContent.push({ type: 'text', text: await summarizeDynamicImages(resizedImages.map(image => image.base64)) || '' });
+                    /** 月华对动态图的视觉感知摘要 */
+                    const visualSummary = await summarizeDynamicImages(resizedImages.map(image => image.base64));
+                    if (visualSummary && visualSummary.trim().length > 0) {
+                        // 以月华自身所见（assistant 角色）注入上下文，而非用户告知
+                        GlobalConfig.unreadContext.push({ role: 'assistant', content: visualSummary.trim() });
+                    }
                     continue;
                 }
                 // 静态图：遍历缩放结果，每帧作为独立的 image_url 内容项添加
