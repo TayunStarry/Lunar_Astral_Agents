@@ -10,9 +10,32 @@
 	<!-- 标准脚本库 -->
 	<script src="/file/read/package/standard_dependency/script.js"></script>
 	<!-- 项目私有样式 -->
-	<link rel="stylesheet" href="styles.css">
-	<!-- 项目私有脚本 -->
-	<script defer src="script.js"></script>
+	<link rel="stylesheet" href="css/styles.css">
+	<!-- 项目私有脚本（按依赖顺序加载 js/ 分类目录下的拆分模块） -->
+	<script defer src="js/common/utils.js"></script>
+	<script defer src="js/common/file-type.js"></script>
+	<script defer src="js/ui/ui-status.js"></script>
+	<script defer src="js/ui/ui-grid.js"></script>
+	<script defer src="js/operations/file-ops.js"></script>
+	<script defer src="js/operations/file-rename.js"></script>
+	<script defer src="js/operations/file-batch.js"></script>
+	<script defer src="js/operations/file-move.js"></script>
+	<script defer src="js/organize/organize-utils.js"></script>
+	<script defer src="js/organize/organize-decision.js"></script>
+	<script defer src="js/organize/organize-audit.js"></script>
+	<script defer src="js/organize/organize-run.js"></script>
+	<script defer src="js/modals/modals.js"></script>
+	<script defer src="js/modals/modal-text.js"></script>
+	<script defer src="js/preview/gguf.js"></script>
+	<script defer src="js/preview/convert.js"></script>
+	<script defer src="js/preview/zip.js"></script>
+	<script defer src="js/ui/events.js"></script>
+	<script defer src="js/core/file-manager.js"></script>
+	<script defer src="js/core/file-manager-actions.js"></script>
+	<script defer src="js/core/file-manager-selection.js"></script>
+	<script defer src="js/ltpx/ltpx-helpers.js"></script>
+	<script defer src="js/ltpx/ltpx-handler.js"></script>
+	<script defer src="js/core/main.js"></script>
 </head>
 
 <body>

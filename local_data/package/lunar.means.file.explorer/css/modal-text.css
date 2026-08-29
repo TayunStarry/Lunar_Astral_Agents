@@ -1,0 +1,110 @@
+/* ============================================================
+   modal-text.css · 文本预览模态框样式
+   文本文件预览 / 编辑 / 语法高亮
+   ============================================================ */
+
+/* ---- 文本预览模态框 ---- */
+.text-modal-content {
+    width: 92%;
+    max-width: 1400px;
+    height: 96vh;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    overflow: hidden;
+}
+
+.text-modal-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.text-modal-header h3 {
+    margin: 0 0 10px 0;
+    font-size: 17px;
+    color: var(--text);
+    padding-right: 40px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-modal-header-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.text-modal-file-info {
+    font-size: 13px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.text-modal-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.text-modal-control-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.text-modal-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+}
+
+#text-modal-content {
+    margin: 0;
+    padding: 16px;
+    font-family: 'Cascadia Code', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--text);
+    background: transparent;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.text-modal-editor {
+    display: none;
+    width: 100%;
+    height: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-family: 'Cascadia Code', 'Fira Code', 'SFMono-Regular', Consolas, monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+    resize: none;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.text-modal-editor:focus {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--accent);
+}

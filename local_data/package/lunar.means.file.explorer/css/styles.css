@@ -1,0 +1,34 @@
+/* ============================================================
+   文件管理器 · 简约风格样式表（样式拆分聚合入口）
+   设计语言：浅色基调 + 留白克制 + 全屏应用布局
+   按功能与职责拆分到以下子文件，由本文件 @import 聚合：
+   - base.css        设计变量 / 全局重置 / 背景层 / 应用外壳 / 滚动条 / 无障碍
+   - header.css      顶部栏（品牌 / 搜索框 / 头部按钮 / 统计信息）
+   - buttons.css     按钮基础与全部变体
+   - layout.css      主区布局与工具栏（面包屑 + 批量操作）
+   - file-grid.css   文件网格与卡片
+   - footer.css      底部栏（统计 / 分页 / 上传进度）
+   - modals.css      模态框通用 + 操作 / 移动 / 冲突处理模态框
+   - modal-text.css  文本预览模态框
+   - organize.css    智能整理模态框
+   - convert.css     图片转码模态框
+   - gguf.css        GGUF 模型预览模态框
+   - zip.css         ZIP 压缩包预览 / 解压模态框
+   - toast.css       Toast 通知
+   - responsive.css  响应式设计
+   ============================================================ */
+
+@import url('base.css');
+@import url('header.css');
+@import url('buttons.css');
+@import url('layout.css');
+@import url('file-grid.css');
+@import url('footer.css');
+@import url('modals.css');
+@import url('modal-text.css');
+@import url('organize.css');
+@import url('convert.css');
+@import url('gguf.css');
+@import url('zip.css');
+@import url('toast.css');
+@import url('responsive.css');

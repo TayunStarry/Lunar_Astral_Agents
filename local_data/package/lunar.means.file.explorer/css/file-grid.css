@@ -1,0 +1,114 @@
+/* ============================================================
+   file-grid.css · 文件网格与卡片样式
+   文件网格、卡片状态（选中 / 拖拽 / 投放目标）、复选框、图标、缩略图、名称、元信息、操作
+   ============================================================ */
+
+.file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    padding: 16px;
+    align-content: start;
+}
+
+.file-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.32);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    cursor: pointer;
+    transition: background 0.15s var(--ease), border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
+}
+
+.file-card:hover {
+    background: rgba(255, 255, 255, 0.44);
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.file-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 拖拽移动状态 */
+.file-card.dragging {
+    opacity: 0.45;
+    border-style: dashed;
+}
+
+.file-card.drop-target {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.file-card.drop-target .file-icon i.fa-folder {
+    color: var(--accent);
+}
+
+.file-checkbox {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+.file-icon {
+    font-size: 42px;
+    text-align: center;
+    color: var(--accent);
+    padding: 8px 0;
+    margin-bottom: 12px;
+}
+
+.file-icon i.fa-folder {
+    color: var(--warning);
+}
+
+.file-thumbnail {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: var(--surface-2);
+}
+
+.file-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 6px;
+    padding-right: 20px;
+}
+
+.file-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 12px;
+}
+
+.file-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.file-actions .btn {
+    flex: 1;
+}

@@ -1,0 +1,282 @@
+/* ============================================================
+   zip.css · ZIP 压缩包预览 / 解压模态框样式
+   摘要卡片、条目表格、解压路径输入、进度 / 成功 / 错误状态
+   ============================================================ */
+
+/* ---- ZIP 压缩包预览/解压模态框 ---- */
+.zip-modal-content {
+    padding: 24px 24px 20px;
+    width: 92%;
+    max-width: 680px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.zip-modal-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding-right: 36px;
+}
+
+.zip-modal-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.zip-modal-title i {
+    color: var(--accent);
+}
+
+.zip-file-path {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    word-break: break-all;
+    font-family: var(--font-mono, monospace);
+}
+
+.zip-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.zip-summary-card {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    min-width: 0;
+}
+
+.zip-summary-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zip-summary-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.4;
+}
+
+.zip-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.zip-table-header > span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.zip-table-header > span span {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.zip-entry-wrap {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    min-height: 0;
+}
+
+.zip-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.zip-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface-3);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+}
+
+.zip-table thead th:first-child {
+    width: 44%;
+}
+
+.zip-table thead th:nth-child(3),
+.zip-table thead th:nth-child(4) {
+    width: 17%;
+}
+
+.zip-table tbody td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.zip-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.zip-table tbody tr:hover {
+    background: var(--accent-soft);
+}
+
+.zip-entry-name {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.zip-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 20px;
+    font-size: 13px;
+}
+
+.zip-extract-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border-strong);
+}
+
+.zip-extract-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zip-extract-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex: none;
+}
+
+.zip-extract-row input {
+    flex: 1;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.zip-extract-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.zip-extract-row input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.zip-extract-hint {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.zip-extract-hint i {
+    color: var(--accent);
+    flex: none;
+}
+
+.zip-extract-result {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.zip-loading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 18px;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.zip-loading i {
+    color: var(--accent);
+}
+
+.zip-progress {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+}
+
+.zip-progress i {
+    color: var(--accent);
+}
+
+.zip-success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.zip-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--danger);
+    word-break: break-all;
+    line-height: 1.6;
+}
+
+.zip-error i {
+    flex: none;
+    margin-top: 2px;
+}

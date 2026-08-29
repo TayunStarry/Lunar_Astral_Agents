@@ -1,0 +1,281 @@
+/* ============================================================
+   modals.css · 模态框通用与操作类模态框样式
+   通用模态框、操作确认/输入模态框、移动目标选择、冲突处理
+   ============================================================ */
+
+/* ---- 模态框通用 ---- */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background: rgba(16, 24, 40, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
+}
+
+.modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    position: relative;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    animation: modalIn 0.22s var(--ease);
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 8px;
+    background: var(--surface-3);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease);
+    z-index: 10;
+}
+
+.modal-close-btn:hover {
+    background: var(--surface-3);
+    color: var(--text);
+}
+
+/* ---- 操作确认 / 输入模态框 ---- */
+.action-modal-content {
+    padding: 30px 28px 24px;
+    width: 92%;
+    max-width: 440px;
+    text-align: center;
+}
+
+.action-modal-icon {
+    width: 54px;
+    height: 54px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.action-modal-icon.danger {
+    background: var(--danger-soft);
+}
+
+.action-modal-icon.danger i {
+    color: var(--danger);
+}
+
+.action-modal-icon.warning {
+    background: #fef3e2;
+}
+
+.action-modal-icon.warning i {
+    color: var(--warning);
+}
+
+.action-modal-icon.info i {
+    color: var(--accent);
+}
+
+.action-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 8px 0;
+    line-height: 1.4;
+}
+
+.action-modal-message {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0 0 20px 0;
+    line-height: 1.6;
+    word-break: break-word;
+    white-space: pre-line;
+}
+
+.action-modal-input-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.action-modal-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.action-modal-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: var(--surface-2);
+    color: var(--text);
+    transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+.action-modal-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    background: var(--surface);
+}
+
+.action-modal-input.error {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.action-modal-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 6px 0 0 0;
+    min-height: 18px;
+}
+
+.action-modal-hint.error {
+    color: var(--danger);
+}
+
+.action-modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.action-modal-buttons .btn {
+    flex: 1;
+    min-width: 100px;
+    padding: 10px 20px;
+    justify-content: center;
+}
+
+/* ---- 移动目标选择模态框 ---- */
+.move-modal-content {
+    padding: 30px 28px 24px;
+    width: 92%;
+    max-width: 460px;
+    text-align: center;
+}
+
+.move-folder-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 18px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.move-folder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s var(--ease);
+}
+
+.move-folder-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.move-folder-chip.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.move-folder-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 13px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* ---- 冲突处理模态框 ---- */
+.conflict-modal-content {
+    padding: 30px 28px 24px;
+    width: 92%;
+    max-width: 440px;
+    text-align: center;
+}
+
+.conflict-modal-content .action-modal-message {
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.8;
+}
+
+.conflict-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 0 3px 16px;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.conflict-item i {
+    color: var(--warning);
+    width: 16px;
+    flex: none;
+}

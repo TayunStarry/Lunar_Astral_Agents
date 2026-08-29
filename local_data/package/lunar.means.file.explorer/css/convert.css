@@ -1,0 +1,235 @@
+/* ============================================================
+   convert.css · 图片转码模态框样式
+   转换模式选项卡、格式选项卡、选项、进度、结果、失败列表
+   ============================================================ */
+
+/* ---- 图片转码模态框 ---- */
+.convert-modal-content {
+    padding: 26px 26px 22px;
+    width: 92%;
+    max-width: 520px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.convert-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-right: 36px;
+}
+
+.convert-title i {
+    color: var(--accent);
+}
+
+.convert-mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.convert-mode-tab {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: all 0.15s var(--ease);
+}
+
+.convert-mode-tab:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.convert-mode-tab.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.convert-mode-hint {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 14px 0;
+    min-height: 20px;
+    line-height: 1.5;
+    word-break: break-all;
+}
+
+.convert-mode-hint i {
+    color: var(--accent);
+    flex: none;
+}
+
+.convert-section {
+    margin-bottom: 14px;
+}
+
+.convert-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.convert-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.convert-tab {
+    padding: 7px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s var(--ease);
+}
+
+.convert-tab:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.convert-tab.active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.convert-options {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.convert-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.convert-option input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.convert-quality {
+    width: 76px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 13px;
+    text-align: center;
+}
+
+.convert-quality:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.convert-result {
+    margin: 4px 0 16px 0;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.convert-progress {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+}
+
+.convert-progress i {
+    color: var(--accent);
+}
+
+.convert-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: var(--success-soft, rgba(16, 185, 129, 0.1));
+    color: var(--success);
+    font-weight: 600;
+}
+
+.convert-fail-list {
+    margin-top: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    padding: 8px 12px;
+}
+
+.convert-fail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    color: var(--danger);
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.convert-fail-item i {
+    flex: none;
+    margin-top: 2px;
+}
+
+.convert-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--danger);
+    word-break: break-all;
+    line-height: 1.6;
+}
+
+.convert-error i {
+    flex: none;
+    margin-top: 2px;
+}

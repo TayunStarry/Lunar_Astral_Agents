@@ -1,0 +1,85 @@
+/* ============================================================
+   organize.css · 智能整理模态框样式
+   进度条、状态文字、操作日志、汇总
+   ============================================================ */
+
+/* ---- 智能整理模态框 ---- */
+.organize-modal-content {
+    padding: 28px 26px 24px;
+    width: 94%;
+    max-width: 560px;
+}
+
+.organize-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 18px 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding-right: 36px;
+}
+
+.organize-title i {
+    color: var(--accent);
+}
+
+.organize-progress-wrap {
+    margin-bottom: 16px;
+}
+
+.organize-status {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    min-height: 20px;
+    line-height: 1.5;
+}
+
+.organize-log {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.organize-log-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+.organize-log-item.success {
+    color: var(--success);
+}
+
+.organize-log-item.error {
+    color: var(--danger);
+}
+
+.organize-log-item.warning {
+    color: var(--warning);
+}
+
+.organize-log-item .organize-log-arrow {
+    color: var(--accent);
+    flex: none;
+}
+
+.organize-summary {
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-strong);
+    font-weight: 600;
+    color: var(--text);
+}

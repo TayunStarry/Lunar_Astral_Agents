@@ -1,0 +1,156 @@
+/* ============================================================
+   base.css · 基础样式
+   设计变量、全局重置、背景层、应用外壳、滚动条、选区、无障碍
+   ============================================================ */
+
+/* ---- CSS 自定义属性 ---- */
+:root {
+    /* 背景与表面 */
+    --bg: #f5f7fb;
+    --surface: #ffffff;
+    --surface-2: #f7f9fc;
+    --surface-3: #eef1f6;
+
+    /* 边框 */
+    --border: #e6eaf1;
+    --border-strong: #d4dae4;
+
+    /* 文字 */
+    --text: #1f2530;
+    --text-secondary: #5b6472;
+    --text-muted: #8a93a3;
+
+    /* 品牌色 */
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-soft: #eaf1fe;
+
+    /* 语义色 */
+    --danger: #e5484d;
+    --danger-soft: #fdecec;
+    --success: #18a058;
+    --success-soft: #e8f7ef;
+    --warning: #f59e0b;
+
+    /* 圆角 */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --shadow-md: 0 6px 18px rgba(16, 24, 40, 0.08);
+    --shadow-lg: 0 18px 50px rgba(16, 24, 40, 0.16);
+
+    /* 过渡 */
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* 磨砂玻璃 */
+    --glass-bg: rgba(255, 255, 255, 0.22);
+    --glass-bg-hover: rgba(255, 255, 255, 0.34);
+    --glass-bg-strong: rgba(255, 255, 255, 0.42);
+    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-blur: 20px;
+}
+
+/* ---- 全局重置 ---- */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text);
+    line-height: 1.5;
+    background: var(--bg);
+    overflow: hidden;
+}
+
+/* ---- 背景层：背景图 + 磨砂叠加 + 端点光晕 ---- */
+.background {
+    position: fixed;
+    inset: 0;
+    background: url('/background') center/cover no-repeat;
+    filter: blur(8px) brightness(0.92);
+    transform: scale(1.06);
+    z-index: -2;
+}
+
+.glass-effect {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(5px) saturate(180%);
+    -webkit-backdrop-filter: blur(5px) saturate(180%);
+    z-index: -1;
+}
+
+.glass-effect::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse 600px 400px at 15% 20%, rgba(59, 130, 246, 0.16), transparent),
+        radial-gradient(ellipse 500px 350px at 85% 75%, rgba(157, 107, 255, 0.14), transparent),
+        radial-gradient(ellipse 420px 320px at 50% 45%, rgba(32, 201, 151, 0.08), transparent);
+}
+
+/* ---- 应用外壳：占满全屏 ---- */
+.app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ---- 滚动条 ---- */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d4dae4;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #b9c2cf;
+}
+
+/* ---- 选择文本 ---- */
+::selection {
+    background-color: var(--accent-soft);
+    color: var(--text);
+}
+
+/* ---- 无障碍 ---- */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

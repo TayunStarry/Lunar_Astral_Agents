@@ -1,0 +1,84 @@
+/* ============================================================
+   responsive.css · 响应式设计
+   窄屏（≤860px / ≤560px）下的布局调整
+   ============================================================ */
+
+@media (max-width: 860px) {
+    .app-header {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 12px 16px;
+        gap: 10px;
+    }
+
+    .search-box {
+        order: 3;
+        flex-basis: 100%;
+        max-width: none;
+    }
+
+    .header-stats {
+        order: 4;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .header-actions {
+        margin-left: auto;
+    }
+
+    .app-main {
+        padding: 12px 14px 0;
+        gap: 10px;
+    }
+
+    .file-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .main-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .stats-horizontal {
+        justify-content: space-between;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 560px) {
+    .brand-name {
+        display: none;
+    }
+
+    .header-actions .btn span {
+        display: none;
+    }
+
+    .header-actions .btn:not(.btn-icon) {
+        width: 38px;
+        padding: 0;
+    }
+
+    .file-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    .file-thumbnail {
+        height: 100px;
+    }
+
+    .text-modal-content {
+        width: 96%;
+        padding: 16px;
+    }
+
+    .text-modal-header-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

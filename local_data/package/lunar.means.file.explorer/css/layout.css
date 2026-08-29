@@ -1,0 +1,100 @@
+/* ============================================================
+   layout.css · 主区布局与工具栏样式
+   主内容区、工具栏（面包屑 + 批量操作）、内容区容器
+   ============================================================ */
+
+/* ---- 主内容区 ---- */
+.app-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 24px 0;
+    gap: 12px;
+}
+
+/* ---- 工具栏（面包屑 + 批量操作） ---- */
+.toolbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 38px;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 4px 6px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.back-button {
+    margin-right: 4px;
+}
+
+.breadcrumb-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.breadcrumb-item:hover {
+    background: var(--glass-bg-hover);
+    color: var(--text);
+}
+
+.breadcrumb-item::after {
+    content: '/';
+    margin-left: 8px;
+    color: var(--text-muted);
+}
+
+.breadcrumb-item:last-child::after {
+    display: none;
+}
+
+.breadcrumb-item:last-child {
+    color: var(--text);
+    font-weight: 600;
+    cursor: default;
+}
+
+/* 批量操作默认隐藏，选中后显示 */
+.batch-actions {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.batch-actions.show {
+    display: flex;
+}
+
+/* ---- 内容区（文件网格滚动） ---- */
+.content-area {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-md);
+}
