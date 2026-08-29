@@ -18,13 +18,15 @@ var (
 	runtime       *eventloop.EventLoop
 )
 
-// ==== LTPX 工具管理全局变量 ====
+// ==== LTPX 远程（琉璃）工具链全局变量 ====
 
 var (
-	ltpMutex       sync.RWMutex
-	loadedTools    = make(map[string]*LTPXToolInfo)
-	pendingLoads   []*LTPXToolInfo
-	pendingUnloads []string
+	// ltpRemoteMutex 保护琉璃联络 URL 与工具链的并发读写
+	ltpRemoteMutex sync.RWMutex
+	// ltpRemoteURL 琉璃的唯一联络 URL（兼容多开：以最新注册的琉璃进程为准，只记录一个）
+	ltpRemoteURL string
+	// ltpRemoteTools 最近一次从琉璃拉取的工具链（琉璃可能动态增删 LTPX 插件）
+	ltpRemoteTools []LTPXRemoteToolDef
 )
 
 // ==== 消息推送全局变量 ====

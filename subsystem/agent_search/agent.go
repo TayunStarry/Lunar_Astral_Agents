@@ -208,6 +208,10 @@ func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int
 		validSums, validSrcs, attemptedSums, fallback := a.searchTextAndJudge(query, cd.text)
 		if len(attemptedSums) > 0 {
 			lastAttempted = attemptedSums
+			// ---- 本轮10个网页摘要完成 → 携带关键词标签注入记忆库 ----
+			// 跳过 LLM 标签生成（节省开销），即使当前查询判定不相关，
+			// 也可能对未来其他相关查询有召回价值。
+			a.injectPageSummariesToMemory(attemptedSums)
 		}
 		if fallback {
 			sawFallback = true
@@ -353,6 +357,63 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 	}
 
 	return validSums, validSrcs, attemptedSums, false
+}
+
+// =============================================================================
+// 页面摘要携带标签注入记忆库
+// =============================================================================
+
+// injectPageSummariesToMemory 将本轮收集的所有页面摘要携带搜索关键词标签注入记忆库
+// 使用 MemoryAddMessageWithTags 跳过 LLM 标签生成，节省 LLM 调用开销
+// 即使摘要被判为与当前查询不相关，也可能对未来相关查询（不同关键词组合）有价值
+// tags = 去重后的 coreEntities + usedKeywords（核心实体优先，提高标签质量）
+func (a *SearchAgent) injectPageSummariesToMemory(summaries []string) {
+	if memoryStorePageSummary == nil || len(summaries) == 0 {
+		return
+	}
+
+	// 构造标签集合：核心实体 + 使用的关键词，去重
+	tagSet := make(map[string]bool)
+	var tags []string
+	for _, e := range a.coreEntities {
+		e = strings.TrimSpace(e)
+		if e != "" && !tagSet[e] {
+			tagSet[e] = true
+			tags = append(tags, e)
+		}
+	}
+	for _, k := range a.usedKeywords {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		// 多词关键词按空格拆为单个标签（和 buildInitialQuery 一致），提高标签召回面
+		for _, part := range strings.Fields(k) {
+			part = strings.TrimSpace(part)
+			if len([]rune(part)) >= 2 && !tagSet[part] {
+				tagSet[part] = true
+				tags = append(tags, part)
+			}
+		}
+	}
+	if len(tags) == 0 {
+		return
+	}
+	// 限制标签数量上限（避免单次嵌入标签过多拖慢入库）
+	if len(tags) > 12 {
+		tags = tags[:12]
+	}
+
+	fmt.Printf("[%s] [摘要入库] %d 份页面摘要，携带 %d 个标签: %v\n",
+		ModuleName, len(summaries), len(tags), tags)
+
+	injected := 0
+	for _, s := range summaries {
+		if err := memoryStorePageSummary(s, tags); err == nil {
+			injected++
+		}
+	}
+	fmt.Printf("[%s] [摘要入库] 完成：成功 %d/%d\n", ModuleName, injected, len(summaries))
 }
 
 // filterByTitleEntities 步骤6：用核心实体完整名过滤标题

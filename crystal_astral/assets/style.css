@@ -1149,3 +1149,64 @@ body {
     .page-card h3 { font-size: 12px; }
     .page-card p { font-size: 9px; }
 }
+
+/* ===== 包执行覆盖层（LTPX AtoA：包页面在 iframe 中执行，琉璃仅中转展示） ===== */
+.ltpx-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1500;
+    backdrop-filter: blur(6px);
+}
+
+.ltpx-overlay.active { display: flex; }
+
+.ltpx-frame-wrap {
+    width: 92vw;
+    height: 92vh;
+    max-width: 98vw;
+    max-height: 98vh;
+    background: rgba(255, 255, 255, 0.28);
+    backdrop-filter: blur(20px) saturate(170%);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 14px 46px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: modalIn 0.25s ease;
+}
+
+.ltpx-frame-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.ltpx-frame-title {
+    font-size: 15px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ltpx-frame-title i { margin-right: 8px; color: #ffd27a; }
+
+.ltpx-frame {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    border: none;
+    background: transparent;
+}
+
+@media (max-width: 768px) {
+    .ltpx-frame-wrap { width: 96vw; height: 94vh; }
+}

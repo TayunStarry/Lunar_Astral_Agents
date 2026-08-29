@@ -12,24 +12,24 @@ export * from './math/basis';
 export * from './math/vector';
 
 
-export * from './file/read';
-export * from './file/split';
-export * from './file/encoder';
-export * from './file/knowledge';
+export * from './file/io/read';
+export * from './file/split/interface';
+export * from './file/io/encoder';
+export * from './file/io/knowledge';
 
-export * from './agent/builder';
-export * from './agent/creative';
-export * from './agent/dialogue';
-export * from './agent/painter';
-export * from './agent/musician';
-export * from './agent/learner';
-export * from './agent/viewer';
-export * from './agent/actor';
-export * from './agent/reader';
+export * from './agent/base/builder';
+export * from './agent/base/creative';
+export * from './agent/roles/dialogue';
+export * from './agent/roles/painter';
+export * from './agent/roles/musician';
+export * from './agent/roles/learner';
+export * from './agent/roles/viewer';
+export * from './agent/roles/actor';
+export * from './agent/roles/reader';
 export * from './agent/constructor';
 
 export * from './tool/schedule';
 export * from './tool/screenshot';
 export * from './tool/agent-control';
 
-export * from './file/parser';
+export * from './file/parse/interface';

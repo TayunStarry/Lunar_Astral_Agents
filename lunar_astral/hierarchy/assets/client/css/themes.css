@@ -1,0 +1,113 @@
+/* ========== 主题变量（亮色 / 暗色） ========== */
+
+/* ---- 亮色主题变量 ---- */
+:root {
+    /* 玻璃面板 */
+    --glass-bg: rgba(255, 255, 255, 0.28);
+    --glass-border: rgba(255, 255, 255, 0.45);
+    --glass-blur: 18px;
+    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.10);
+
+    /* 品牌色 */
+    --brand-color: #6c9bcf;
+    --accent-color: #9d6bff;
+    --accent-hover: #7b52e0;
+
+    /* 文字 */
+    --text-primary: rgba(15, 30, 15, 1);
+    --text-secondary: rgba(80, 80, 80, 1);
+    --text-muted: rgba(120, 120, 130, 1);
+
+    /* 面板 */
+    --panel-bg: rgba(250, 250, 250, 0.85);
+    --panel-header-bg: rgba(255, 255, 255, 0.35);
+
+    /* 消息气泡 */
+    --user-bubble: linear-gradient(135deg, rgba(220, 230, 255, 0.85), rgba(200, 215, 255, 0.8));
+    --assistant-bubble: rgba(245, 248, 255, 0.65);
+
+    /* 代码高亮 */
+    --hljs-bg: rgba(252, 249, 240, 0.9);
+    --hljs-text: #24292e;
+    --code-inline-bg: rgba(0, 0, 0, 0.06);
+    --code-inline-color: #9b3727;
+    --code-inline-border: rgba(0, 0, 0, 0.1);
+
+    /* 圆角 */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    /* 过渡 */
+    --transition: all 0.45s ease;
+
+    /* 边框 */
+    --border-color: rgba(225, 230, 240, 1);
+
+    /* 拖拽遮罩 */
+    --drag-overlay-bg: rgba(255, 255, 255, 0.7);
+    --drag-overlay-text: rgba(15, 30, 15, 1);
+
+    /* Mermaid */
+    --mermaid-bg: rgba(255, 255, 255, 0.6);
+
+    /* 分类徽标 */
+    --badge-text-bg: rgba(108, 155, 207, 0.16);
+    --badge-text-color: #5a8abf;
+    --badge-image-bg: rgba(32, 201, 151, 0.16);
+    --badge-image-color: #159c77;
+    --badge-voice-bg: rgba(251, 191, 36, 0.18);
+    --badge-voice-color: #b8860b;
+    --badge-music-bg: rgba(157, 107, 255, 0.18);
+    --badge-music-color: #7b52e0;
+    --badge-action-bg: rgba(255, 107, 156, 0.16);
+    --badge-action-color: #d0457c;
+
+    /* 搜索高亮 */
+    --search-highlight-bg: rgba(255, 214, 92, 0.55);
+    --search-highlight-text: inherit;
+}
+
+/* ---- 暗色主题覆写 ---- */
+.dark-mode {
+    --glass-bg: rgba(38, 38, 42, 0.75);
+    --glass-border: rgba(80, 80, 90, 0.55);
+    --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.25);
+
+    --text-primary: rgba(244, 244, 245, 1);
+    --text-secondary: rgba(180, 180, 180, 1);
+    --text-muted: rgba(140, 140, 150, 1);
+
+    --panel-bg: rgba(38, 38, 42, 0.85);
+    --panel-header-bg: rgba(50, 50, 58, 0.6);
+
+    --user-bubble: linear-gradient(135deg, rgba(60, 70, 120, 0.85), rgba(50, 60, 110, 0.8));
+    --assistant-bubble: rgba(50, 52, 60, 0.75);
+
+    --hljs-bg: rgba(30, 30, 38, 0.9);
+    --hljs-text: #e6edf3;
+    --code-inline-bg: rgba(255, 255, 255, 0.1);
+    --code-inline-color: #f0a0a0;
+    --code-inline-border: rgba(255, 255, 255, 0.15);
+
+    --border-color: rgba(80, 80, 80, 1);
+
+    --drag-overlay-bg: rgba(20, 20, 30, 0.8);
+    --drag-overlay-text: rgba(244, 244, 245, 1);
+
+    --mermaid-bg: rgba(50, 50, 60, 0.6);
+
+    --badge-text-bg: rgba(108, 155, 207, 0.2);
+    --badge-text-color: #8fb8e8;
+    --badge-image-bg: rgba(32, 201, 151, 0.2);
+    --badge-image-color: #4fd1a5;
+    --badge-voice-bg: rgba(251, 191, 36, 0.2);
+    --badge-voice-color: #eab308;
+    --badge-music-bg: rgba(157, 107, 255, 0.22);
+    --badge-music-color: #b794f4;
+    --badge-action-bg: rgba(255, 107, 156, 0.2);
+    --badge-action-color: #f472b6;
+
+    --search-highlight-bg: rgba(234, 179, 8, 0.45);
+}

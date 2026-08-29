@@ -1,0 +1,187 @@
+/* ========== 消息区域 / 空状态 / 消息气泡 / 徽标 / 操作按钮 / 行动消息 ========== */
+
+/* ========== 消息区域 ========== */
+.message-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 72px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    scroll-behavior: smooth;
+}
+
+/* ========== 空状态 ========== */
+.empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 16px;
+    opacity: 0.65;
+    color: var(--text-muted);
+}
+
+.empty-state.hidden {
+    display: none;
+}
+
+.empty-state-icon {
+    font-size: 68px;
+    background: var(--glass-bg);
+    width: 118px;
+    height: 118px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 80px;
+    backdrop-filter: blur(12px);
+    animation: floatSoft 4s ease-in-out infinite;
+    color: var(--brand-color);
+}
+
+@keyframes floatSoft {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+    100% { transform: translateY(0px); }
+}
+
+.empty-state-text {
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.empty-state-subtext {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* ========== 消息气泡 ========== */
+.message {
+    max-width: 82%;
+    min-width: 220px;
+    padding: 12px 18px;
+    border-radius: var(--radius-xl);
+    position: relative;
+    backdrop-filter: blur(12px);
+    transition: transform 0.2s ease, box-shadow 0.2s;
+    animation: messageSlide 0.3s ease-out;
+    color: var(--text-primary);
+}
+
+@keyframes messageSlide {
+    from { opacity: 0; transform: translateY(14px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.message.user-message {
+    align-self: flex-end;
+    background: var(--user-bubble);
+    border-bottom-right-radius: 10px;
+    border-left: 4px solid rgba(255, 255, 255, 0.5);
+}
+
+.message.assistant-message {
+    align-self: flex-start;
+    background: var(--assistant-bubble);
+    backdrop-filter: blur(14px);
+    border-bottom-left-radius: 10px;
+    border-right: 4px solid rgba(255, 255, 255, 0.5);
+}
+
+.message.file-message {
+    border: 2px solid var(--accent-color);
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.85;
+    letter-spacing: 0.3px;
+    color: var(--text-secondary);
+}
+
+.message-header .header-name {
+    font-weight: 600;
+}
+
+.message-header .header-time {
+    margin-left: auto;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+/* 分类徽标 */
+.message-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 40px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.message-category-badge.badge-text { background: var(--badge-text-bg); color: var(--badge-text-color); }
+.message-category-badge.badge-image { background: var(--badge-image-bg); color: var(--badge-image-color); }
+.message-category-badge.badge-voice { background: var(--badge-voice-bg); color: var(--badge-voice-color); }
+.message-category-badge.badge-music { background: var(--badge-music-bg); color: var(--badge-music-color); }
+.message-category-badge.badge-action { background: var(--badge-action-bg); color: var(--badge-action-color); }
+
+/* ========== 操作按钮 ========== */
+.message-actions-panel {
+    position: absolute;
+    top: -14px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: 0.15s ease;
+    z-index: 5;
+}
+
+.message:hover .message-actions-panel {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.chat-action-button {
+    background: rgba(30, 35, 50, 0.75);
+    backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(255, 255, 255, 0.3);
+    width: 30px;
+    height: 30px;
+    border-radius: 30px;
+    color: white;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: 0.15s;
+}
+
+.chat-action-button:hover {
+    background: var(--accent-color);
+    transform: scale(1.08);
+}
+
+.delete_message_button:hover {
+    background: #dc3545 !important;
+}
+
+/* ========== 行动消息 ========== */
+.action-message .markdown-content {
+    border-left: 3px solid var(--badge-action-color);
+    padding-left: 12px;
+    font-style: italic;
+}

@@ -1,0 +1,100 @@
+/* ========== 响应式 ========== */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .content-row {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        align-items: center;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand {
+        padding: 10px 16px;
+        font-size: 0.95rem;
+        border-bottom: none;
+        flex-shrink: 0;
+    }
+
+    .tab-bar {
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 8px 12px;
+        gap: 6px;
+        flex: 1;
+    }
+
+    .tab {
+        width: auto;
+        padding: 6px 12px;
+        border-radius: 40px;
+        font-size: 0.82rem;
+    }
+
+    .tab i {
+        width: auto;
+    }
+
+    .message-area {
+        padding: 64px 16px 16px;
+    }
+
+    .message {
+        max-width: 92%;
+    }
+
+    .input-area {
+        padding: 10px 14px 14px;
+    }
+
+    .search-box {
+        width: 220px;
+    }
+
+    .echarts-container {
+        height: 260px;
+    }
+}
+
+@media (max-width: 480px) {
+    .brand span {
+        font-size: 0.9rem;
+    }
+
+    .message {
+        max-width: 95%;
+        min-width: 150px;
+    }
+
+    .input-wrapper {
+        padding: 6px;
+    }
+
+    .send-button,
+    .attach-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .search-box {
+        width: 200px;
+        right: 12px;
+        top: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0s !important;
+    }
+}

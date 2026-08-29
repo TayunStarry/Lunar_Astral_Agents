@@ -21,7 +21,7 @@ const (
 	// 记忆库相似度最低阈值
 	MemorySimilarityMin = 0.55
 	// 直接复用记忆答案的最低相似度阈值（低于则继续网络搜索）
-	MemoryDirectAnswerMin = 0.70
+	MemoryDirectAnswerMin = 0.62
 	// 默认最大上下文 tokens
 	MaxContextTokensDefault = 16384
 	// 单次浏览器操作超时（秒）
@@ -149,6 +149,10 @@ var (
 
 	// memoryInitCollection 初始化 search_memory 集合
 	memoryInitCollection func() error
+
+	// memoryStorePageSummary 将单页页面摘要携带显式标签注入记忆库（跳过 LLM 标签生成）
+	// 标签由调用方提供，通常是本轮搜索使用的关键词 + 核心实体，节省 LLM 标签生成开销
+	memoryStorePageSummary func(summary string, tags []string) error
 )
 
 // =============================================================================

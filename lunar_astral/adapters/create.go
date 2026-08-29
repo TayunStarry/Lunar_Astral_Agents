@@ -64,9 +64,13 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("screenshotCapture", adapters.screenshotCapture)
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
 
-	// 注册 LTPX 工具动态管理函数
-	vm.Set("getLTPXToolStatus", adapters.getLTPXToolStatusForJS)
-	vm.Set("processLTPXChanges", adapters.processLTPXChangesForJS)
+	// 注册 LTPX 远程（琉璃）工具链协调函数
+	// getLTPXRemoteStatus: 思考链起点调用，向琉璃心跳并拉取最新工具链，返回 JSON
+	// callLTPXRemoteTool:  琉璃工具函数实现转发，转发到琉璃执行并返回文本
+	// clearLTPXRemoteTools: 琉璃离线时清空缓存工具链
+	vm.Set("getLTPXRemoteStatus", adapters.getLTPXRemoteStatusForJS)
+	vm.Set("callLTPXRemoteTool", adapters.callLTPXRemoteToolForJS)
+	vm.Set("clearLTPXRemoteTools", adapters.clearLTPXRemoteToolsForJS)
 
 	// 注册智能体控制适配器
 	vm.Set("getAgentPosition", adapters.getAgentPosition)

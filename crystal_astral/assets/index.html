@@ -165,6 +165,17 @@
         </div>
     </div>
 
+    <!-- 包执行覆盖层（LTPX AtoA：工具由前端包自身执行，琉璃仅中转展示） -->
+    <div class="ltpx-overlay" id="ltpxOverlay">
+        <div class="ltpx-frame-wrap">
+            <div class="ltpx-frame-header">
+                <span class="ltpx-frame-title" id="ltpxFrameTitle"><i class="fas fa-cube"></i> 包执行中...</span>
+                <button class="modal-close" id="ltpxFrameCloseBtn" title="关闭">&times;</button>
+            </div>
+            <iframe class="ltpx-frame" id="ltpxFrame" src="about:blank" title="LTPX 包执行"></iframe>
+        </div>
+    </div>
+
     <!-- 拖放覆盖层 -->
     <div class="drop-overlay" id="dropOverlay">
         <div class="drop-content">

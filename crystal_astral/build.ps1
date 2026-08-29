@@ -41,7 +41,7 @@ try {
 
     # 仅 Windows 平台使用 windowsgui 头部（隐藏控制台窗口）
     $ldflags = "-s -w"
-    if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
+    # if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
     
     $buildArgs = @(
         "build",

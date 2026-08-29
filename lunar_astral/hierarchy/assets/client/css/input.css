@@ -1,0 +1,293 @@
+/* ========== 底部输入区 / 待发送附件 / 文件引用 / 发送按钮 ========== */
+
+/* ========== 底部输入区 ========== */
+.input-area {
+    padding: 12px 20px 16px;
+    background: var(--panel-header-bg);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+/* ---- 待发送附件悬浮气泡 ---- */
+.pending-attachments {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    overflow-x: auto;
+    animation: pendingIn 0.25s ease-out;
+}
+
+.pending-attachments[hidden] {
+    display: none;
+}
+
+@keyframes pendingIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.pending-attachment-item {
+    position: relative;
+    flex-shrink: 0;
+    width: 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.pending-attachment-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--glass-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    overflow: hidden;
+}
+
+.pending-attachment-name {
+    max-width: 88px;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pending-attachment-remove {
+    position: absolute;
+    top: -6px;
+    right: -4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #dc3545;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: 0.15s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.pending-attachment-remove:hover {
+    transform: scale(1.15);
+    background: #e23a4a;
+}
+
+/* ---- 文件引用（阅读者智能体） ---- */
+.file-ref-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    background: var(--glass-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-lg);
+    color: var(--accent-color);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+}
+.file-ref-pill:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.18);
+}
+.file-ref-pill i {
+    font-size: 1.2rem;
+}
+.file-ref-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+/* 文本内嵌的文件引用按钮（[#file.ext]: 渲染而来） */
+.file-ref-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    margin: 0 2px;
+    background: rgba(157, 107, 255, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: 999px;
+    color: var(--accent-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+.file-ref-inline:hover {
+    background: rgba(157, 107, 255, 0.22);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.18);
+}
+.file-ref-inline i {
+    font-size: 0.9rem;
+}
+
+.file-refs {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--glass-border);
+}
+.file-refs[hidden] {
+    display: none;
+}
+.file-ref-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(157, 107, 255, 0.12);
+    border: 1px solid var(--accent-color);
+    border-radius: 999px;
+    color: var(--accent-color);
+    font-size: 0.8rem;
+    position: relative;
+}
+.file-ref-chip > i {
+    font-size: 1rem;
+}
+.file-ref-chip-name {
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 600;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    padding: 8px;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.18), var(--shadow-glass);
+}
+
+.attach-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    transition: 0.2s;
+    flex-shrink: 0;
+}
+
+.attach-btn:hover {
+    background: rgba(157, 107, 255, 0.12);
+    color: var(--accent-color);
+}
+
+.message-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    font-size: 0.95rem;
+    padding: 10px 0;
+    color: var(--text-primary);
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.5;
+    max-height: 140px;
+}
+
+.message-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.send-button {
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+    font-size: 1rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.send-button:hover {
+    background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    color: #475569;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.send-button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.send-button.connected {
+    border-radius: 18px;
+    color: #fff;
+    background: linear-gradient(135deg, #10b981, #3b82f6);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
+}
+
+.send-button.connected:hover {
+    background: linear-gradient(135deg, #059669, #2563eb);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.5);
+}
+
+.send-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

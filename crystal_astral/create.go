@@ -131,6 +131,15 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		}
 	}()
 
+	// LTPX 远端（月华）注册：琉璃启动时一次性向月华提交联络 URL。
+	// 月华固定端口，琉璃随机端口；多开时月华以最新注册为准。
+	// 注册结果同步决定启动语音（月华在线→工具包已发送；离线→无法交给月华）。
+	go func() {
+		// 给 HTTP 服务极短的启动宽限，确保月华探测时端口已就绪
+		time.Sleep(200 * time.Millisecond)
+		registerToLunar(port)
+	}()
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 

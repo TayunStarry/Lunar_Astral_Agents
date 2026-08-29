@@ -5,6 +5,8 @@ import (
 	image "LunarSubsystem/ImageProcessor/server"
 	media "LunarSubsystem/MediaTools/server"
 	"embed"
+	"sync"
+	"time"
 )
 
 // ==== 记忆库自动初始化默认值 ====
@@ -23,6 +25,39 @@ var EmbeddedFiles embed.FS
 // StudioHubInstance 工作室 WebSocket 集线器全局实例
 // 在 StartServer() 中初始化，供所有前端组件通过 /ws 端点连接（无差别广播）
 var StudioHubInstance *StudioHub
+
+// ==== LTPX 远程（月华调用）状态 ====
+
+// startupVoiceMutex 保护启动语音决策的并发读写
+var startupVoiceMutex sync.RWMutex
+
+// lastStartupVoice 最近一次启动时的语音决策（前端读取以自动播放对应语音）
+// 默认 Voice 为空串表示「尚未决策」，前端在收到决策前不播放语音
+var lastStartupVoice = StartupVoice{}
+
+// ==== LTPX 动态工具链（来自包的 AtoA 能力） ====
+
+// ltpToolchainMutex 保护工具链注册表与工具名→包名映射的并发读写
+var ltpToolchainMutex sync.RWMutex
+
+// ltpAtoaTools 从包元数据扫描收集的「智能体式」工具链（随包增删动态变化）
+var ltpAtoaTools []LTPXRemoteToolDef
+
+// ltpToolPackageMap 工具名 → 提供该工具的包目录名（用于 /ltpx/call 路由到对应包）
+var ltpToolPackageMap = map[string]string{}
+
+// ==== LTPX 待定调用（转发前端包执行） ====
+
+// ltpPendingMutex 保护待定调用注册表的并发读写
+var ltpPendingMutex sync.Mutex
+
+// ltpPendingCalls 待定调用注册表：request_id → 结果通道（前端包执行完毕回执后解除阻塞）
+var ltpPendingCalls = map[string]chan LTPXRemoteCallResponse{}
+
+// ltpCallTimeout 等待前端包执行工具结果的最大时长
+const ltpCallTimeout = 120 * time.Second
+
+//==== 音频辅助 ====
 
 // SystemEndpoints 系统端点列表
 var SystemEndpoints = []SystemEndpoint{
@@ -74,12 +109,19 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/lunar/check", Handler: yuehuaCheckHandler, Method: "GET", Description: "检测月华服务状态"},
 	{Path: "/lunar/start", Handler: yuehuaStartHandler, Method: "POST", Description: "启动月华服务"},
 
+	// ==== LTPX 远程（月华调用琉璃）接口 ====
+	{Path: "/ltpx/ping", Handler: ltpRemotePingHandler, Method: "GET", Description: "月华探测琉璃是否在线"},
+	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
+	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
+	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
+	{Path: "/lunar/sync/startup-voice", Handler: ltpStartupVoiceHandler, Method: "GET", Description: "前端读取启动语音决策"},
+
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},
 }
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/generate", "/ltpx/"}
+var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/generate"}
 
 // fileCategoryMap 文件扩展名到分类的映射
 var fileCategoryMap = map[string]string{

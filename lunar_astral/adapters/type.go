@@ -55,18 +55,38 @@ type LTPXPackageInfo struct {
 	Tools       []map[string]any `json:"tools"`
 }
 
-// LTPXToolInfo 已加载工具的内部状态
-type LTPXToolInfo struct {
-	Name       string `json:"name"`
-	Definition string `json:"definition"` // 工具定义 JSON 字符串
-	JS         string `json:"js"`         // tool.js 源码
+// LTPXRemoteToolDef 琉璃工具链中的单个工具定义
+// 琉璃对外统一暴露「智能体式」工具：接受字符串指令，返回文本结果（含操作结果与推荐后续操作）
+type LTPXRemoteToolDef struct {
+	Name        string `json:"name"`        // 工具名（注入月华 LTPdefinition）
+	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
+	AppID       string `json:"app_id"`      // 关联的琉璃应用标识（如 lunar.means.file.explorer）
+	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
 }
 
-// LTPXStatus 工具状态查询结果
-type LTPXStatus struct {
-	Loaded         []string        `json:"loaded"`
-	PendingLoads   []*LTPXToolInfo `json:"pendingLoads"`
-	PendingUnloads []string        `json:"pendingUnloads"`
+// LTPXRemoteRegisterRequest 琉璃启动时提交联络 URL 的请求体
+type LTPXRemoteRegisterRequest struct {
+	URL string `json:"url"` // 琉璃自身可访问的地址（如 http://localhost:XXXXX）
+}
+
+// LTPXRemoteStatusResult 月华同步琉璃工具链的返回结果
+type LTPXRemoteStatusResult struct {
+	Online bool                `json:"online"` // 琉璃是否在线
+	URL    string              `json:"url"`    // 当前记录的琉璃 URL（空表示未注册）
+	Tools  []LTPXRemoteToolDef `json:"tools"`  // 最新工具链
+}
+
+// LTPXRemoteCallRequest 月华请求调用琉璃工具的请求体
+type LTPXRemoteCallRequest struct {
+	Tool      string         `json:"tool"`   // 工具名
+	Arguments map[string]any `json:"arguments"` // 工具参数
+}
+
+// LTPXRemoteCallResponse 琉璃执行工具后的返回体
+type LTPXRemoteCallResponse struct {
+	Success bool   `json:"success"`
+	Text    string `json:"text"` // 操作结果文本（含推荐后续操作）
+	Error   string `json:"error,omitempty"`
 }
 
 // PushContextData 推送上下文数据

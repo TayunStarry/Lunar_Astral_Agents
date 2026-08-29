@@ -268,21 +268,27 @@ declare global {
      */
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
     /**
-     * 获取 LTPX 工具状态
-     * 返回当前已加载工具列表和待处理的加载/卸载操作
-     * 
-     * @returns {string} JSON 字符串，包含 loaded、pendingLoads、pendingUnloads
+     * 获取琉璃（远程 LTPX）在线状态与最新工具链
+     * 思考链起点调用：主动向琉璃心跳，若在线则拉取最新工具链写入内部缓存并返回
+     *
+     * @returns {string} JSON 字符串：{ online: boolean, url: string, tools: [{name,description,app_id,parameters}] }
      */
-    function getLTPXToolStatus(): string;
+    function getLTPXRemoteStatus(): string;
     /**
-     * 处理 LTPX 工具变更（加载/卸载）
-     * 在 goja 事件循环中执行工具的注册和注销
-     * 
-     * @param {string} statusJSON 工具状态 JSON 字符串
-     * 
-     * @returns {boolean} 是否处理成功
+     * 转发工具调用到琉璃（远程 LTPX）
+     *
+     * @param {string} toolName 琉璃工具名
+     * @param {string} argumentsJSON 工具参数 JSON 字符串
+     *
+     * @returns {Promise<string>} 异步返回琉璃的文本结果；失败时 resolve 以「【琉璃工具调用失败】」开头的错误文本
      */
-    function processLTPXChanges(statusJSON: string): boolean;
+    function callLTPXRemoteTool(toolName: string, argumentsJSON: string): Promise<string>;
+    /**
+     * 清空内部缓存的琉璃工具链（琉璃离线时调用）
+     *
+     * @returns {boolean} 是否成功
+     */
+    function clearLTPXRemoteTools(): boolean;
     /**
      * 初始化学习者智能体
      * 模型配置从 lunar_config.json 读取

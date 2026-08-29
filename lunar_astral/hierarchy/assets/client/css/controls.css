@@ -1,0 +1,120 @@
+/* ========== 顶部控制区 / 靠近显示 / 搜索框 ========== */
+
+/* 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容） */
+.top-controls {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 靠近显示机制：默认移出屏幕右侧，鼠标靠近时滑入，离开 1.5 秒后滑出 */
+.top-controls,
+.scroll-controls {
+    transform: translateX(calc(100% + 24px)); 
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .35s ease, visibility 0s .35s;
+}
+
+.top-controls.revealed,
+.scroll-controls.revealed {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform .35s ease, visibility 0s;
+}
+
+/* 搜索框 */
+.search-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 280px;
+    max-width: 55vw;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 40px;
+    padding: 6px 8px 6px 14px;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, width 0.3s ease;
+}
+
+.search-box:focus-within {
+    width: 340px;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.16), var(--shadow-glass);
+}
+
+.search-icon {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.search-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0 2px;
+}
+
+.search-nav-btn,
+.search-clear {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    transition: 0.15s;
+    flex-shrink: 0;
+}
+
+.search-nav-btn:hover,
+.search-clear:hover {
+    background: rgba(157, 107, 255, 0.15);
+    color: var(--accent-color);
+}
+
+/* 搜索高亮 */
+.search-highlight {
+    background: var(--search-highlight-bg);
+    color: var(--search-highlight-text);
+    border-radius: 3px;
+    padding: 0 1px;
+    box-shadow: 0 0 0 1px rgba(255, 200, 40, 0.35);
+}
+
+.search-highlight.current {
+    background: var(--accent-color);
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(157, 107, 255, 0.5);
+}

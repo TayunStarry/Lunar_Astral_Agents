@@ -217,8 +217,6 @@ function getRandomDefaultIcon() {
 function renderPageGrid() {
     pageGrid.innerHTML = '';
     pages.forEach(page => {
-        const hasLTPX = page.tags && page.tags.includes('LTPX');
-
         const card = document.createElement('div');
         card.className = 'page-card';
         card.dataset.pageId = page.id;
@@ -238,14 +236,6 @@ function renderPageGrid() {
             <h3>${page.title}</h3>
             <p>${page.description}</p>
             <div class="card-actions">
-                ${hasLTPX ? `
-                <button class="card-btn card-btn-load" title="加载包" data-action="load" data-package="${page.package_name || ''}">
-                    <i class="fas fa-download"></i> 加载
-                </button>
-                <button class="card-btn card-btn-unload" title="卸载包" data-action="unload" data-package="${page.package_name || ''}">
-                    <i class="fas fa-upload"></i> 卸载
-                </button>
-                ` : ''}
                 <button class="card-btn card-btn-export" title="导出包" data-action="export" data-package="${page.package_name || ''}">
                     <i class="fas fa-box"></i> 导出
                 </button>
@@ -270,8 +260,6 @@ function renderPageGrid() {
             const pkgName = btn.dataset.package;
             if (action === 'delete') openDeleteModal(pkgName);
             else if (action === 'export') openExportModal(pkgName);
-            else if (action === 'load') handleLoadPackage(pkgName);
-            else if (action === 'unload') handleUnloadPackage(pkgName);
         });
     });
 }
@@ -886,82 +874,6 @@ const configResizeObserver = new ResizeObserver(() => {
 });
 configResizeObserver.observe(configPages);
 
-// ===== LTPX 工具加载/卸载 =====
-async function handleLoadPackage(packageName) {
-    if (!packageName) {
-        addMessage('system', '无法获取包名信息');
-        return;
-    }
-    addMessage('system', `正在加载工具包【${packageName}】...`);
-
-    try {
-        const metaResp = await fetch(`/file/read/package/${packageName}/metadata.json`);
-        if (!metaResp.ok) throw new Error('读取 metadata.json 失败');
-        const metadata = await metaResp.json();
-
-        const toolResp = await fetch(`/file/read/package/${packageName}/tool.js`);
-        if (!toolResp.ok) throw new Error('读取 tool.js 失败');
-        const toolJS = await toolResp.text();
-
-        const toolDef = metadata.tools && metadata.tools.length > 0
-            ? metadata.tools[0]
-            : null;
-        if (!toolDef) throw new Error('工具定义为空');
-
-        const resp = await fetch('/ltpx/load', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: packageName,
-                tool_definition: JSON.stringify(toolDef),
-                tool_js: toolJS
-            })
-        });
-        const result = await resp.json();
-
-        if (result.success) {
-            new Audio('/file/read/audios/enable_tool_package.wav').play().catch(() => {});
-            addMessage('system', `工具包【${packageName}】加载成功`);
-        } else {
-            new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
-            addMessage('system', `加载失败: ${result.message}`);
-        }
-    } catch (error) {
-        new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
-        console.error('Error loading package:', error);
-        addMessage('system', `加载工具包失败: ${error.message}`);
-    }
-}
-
-async function handleUnloadPackage(packageName) {
-    if (!packageName) {
-        addMessage('system', '无法获取包名信息');
-        return;
-    }
-    addMessage('system', `正在卸载工具包【${packageName}】...`);
-
-    try {
-        const resp = await fetch('/ltpx/unload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: packageName })
-        });
-        const result = await resp.json();
-
-        if (result.success) {
-            new Audio('/file/read/audios/disable_tool_package.wav').play().catch(() => {});
-            addMessage('system', `工具包【${packageName}】卸载成功`);
-        } else {
-            new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
-            addMessage('system', `卸载失败: ${result.message}`);
-        }
-    } catch (error) {
-        new Audio('/file/read/audios/tool_package_failed.wav').play().catch(() => {});
-        console.error('Error unloading package:', error);
-        addMessage('system', `卸载工具包失败: ${error.message}`);
-    }
-}
-
 // ===== 安装扩展包 =====
 async function installPackage(file) {
     addMessage('system', `正在安装扩展包【${file.name}】...`);
@@ -1212,6 +1124,161 @@ previewModal.addEventListener('click', (e) => {
     if (e.target === previewModal) closePreviewModal();
 });
 
+// ===== 包执行覆盖层（LTPX AtoA：包页面在 iframe 中执行，琉璃仅中转展示与回执） =====
+const ltpxOverlay = document.getElementById('ltpxOverlay');
+const ltpxFrame = document.getElementById('ltpxFrame');
+const ltpxFrameTitle = document.getElementById('ltpxFrameTitle');
+const ltpxFrameCloseBtn = document.getElementById('ltpxFrameCloseBtn');
+let activeLTPXCall = null;   // 当前等待回执的 ltpx_call（含 request_id/tool/arguments）
+let ltpxFrameReady = false;  // iframe 当前文档是否已加载完成（就绪后再投递指令）
+let ltpxFrameApp = '';       // iframe 当前已加载的包 ID（同一包重复调用时直接投递，避免重新加载）
+
+// 收到月华的 ltpx_call：打开对应包页面并投递执行指令
+function openLTPXPackage(msg) {
+    activeLTPXCall = msg;
+    ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (msg.app_id || '包') + ' 执行中...';
+    if (ltpxFrameApp === msg.app_id && ltpxFrameReady) {
+        // 同一包页面已就绪：直接投递执行，无需重新加载（相同 src 不会触发 load 事件）
+        deliverLTPXRun();
+    } else {
+        ltpxFrameReady = false;
+        ltpxFrameApp = msg.app_id;
+        ltpxFrame.src = '/file/read/package/' + encodeURIComponent(msg.app_id) + '/index.html';
+    }
+    ltpxOverlay.classList.add('active');
+}
+
+// 向包页面投递执行指令（仅在 iframe 加载完成后执行一次）
+function deliverLTPXRun() {
+    if (!activeLTPXCall || !ltpxFrameReady) return;
+    const win = ltpxFrame.contentWindow;
+    if (!win) return;
+    win.postMessage({
+        type: 'ltpx_run',
+        request_id: activeLTPXCall.request_id,
+        tool: activeLTPXCall.tool,
+        arguments: activeLTPXCall.arguments
+    }, '*');
+}
+
+// iframe 加载完成后投递（保证包内部监听器已注册）
+ltpxFrame.addEventListener('load', () => {
+    ltpxFrameReady = true;
+    deliverLTPXRun();
+});
+
+// 关闭覆盖层（若包尚未回执，琉璃端会因超时向月华返回错误）
+function closeLTPXOverlay() {
+    ltpxOverlay.classList.remove('active');
+    activeLTPXCall = null;
+}
+ltpxFrameCloseBtn.addEventListener('click', closeLTPXOverlay);
+ltpxOverlay.addEventListener('click', (e) => { if (e.target === ltpxOverlay) closeLTPXOverlay(); });
+
+// 包执行完毕通过 window.parent.postMessage 回传，主窗口代为上报 /ltpx/result
+window.addEventListener('message', (event) => {
+    if (!event.data || typeof event.data !== 'object') return;
+    if (event.data.type !== 'ltpx_result') return;
+    const { request_id, success, text, error, keep_open } = event.data;
+    fetch('/ltpx/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            request_id: request_id,
+            success: !!success,
+            text: text || '',
+            error: error || '',
+            keep_open: !!keep_open
+        })
+    }).catch(e => console.warn('上报 LTPX 执行结果失败:', e));
+    if (activeLTPXCall && activeLTPXCall.request_id === request_id) {
+        if (keep_open) {
+            // 包要求保持页面展示（如文件管理器执行后停留在目标路径/选中状态），不自动关闭
+            activeLTPXCall = null; // 等待状态已结束，覆盖层保留供用户查看/手动关闭，后续调用可复用该页面
+            ltpxFrameTitle.innerHTML = '<i class="fas fa-check-circle"></i> ' + (ltpxFrameApp || '包') + ' 执行完成';
+        } else {
+            closeLTPXOverlay();
+        }
+    }
+});
+
+// ===== 启动语音（新版 LTPX：琉璃启动时告知月华工具链状态） =====
+const STARTUP_VOICE_SENT = '/file/read/audios/enable_tool_package.wav';
+const STARTUP_VOICE_FAILED = '/file/read/audios/tool_package_failed.wav';
+let playedStartupVoiceSeq = null; // 已播放的启动语音决策序号（后端每次进程启动分配新序号）
+
+// 依据语音决策播放对应语音（同一决策仅播放一次，避免 WS 重连重复播放）
+function playStartupVoice(voice, seq) {
+    if (!seq || seq === playedStartupVoiceSeq) return;
+    playedStartupVoiceSeq = seq;
+    if (voice === 'sent') {
+        new Audio(STARTUP_VOICE_SENT).play().catch(() => {});
+    } else {
+        new Audio(STARTUP_VOICE_FAILED).play().catch(() => {});
+    }
+}
+
+// 读取启动语音决策并播放（可重复调用，seq 去重保证只播一次）
+async function loadStartupVoiceOnce() {
+    try {
+        const resp = await fetch('/lunar/sync/startup-voice', { method: 'GET' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data && data.seq && (data.voice === 'sent' || data.voice === 'failed')) {
+            playStartupVoice(data.voice, data.seq);
+        }
+    } catch (e) {
+        console.warn('读取启动语音决策失败:', e);
+    }
+}
+// 页面加载即尝试播放（不等 initApp 的配置加载链，避免语音滞后）；seq 去重保证幂等
+loadStartupVoiceOnce();
+
+// ===== WebSocket 客户端（连接琉璃 /ws，接收文件管理器与启动语音广播） =====
+let ws = null;
+let wsRetry = 0;
+const WS_MAX_RETRY = 5;
+const WS_RETRY_INTERVAL = 3000;
+
+function establishWebSocket() {
+    try {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(proto + '//' + window.location.host + '/ws');
+    } catch (e) {
+        console.error('WebSocket 创建失败:', e);
+        return;
+    }
+
+    ws.onopen = () => {
+        wsRetry = 0;
+        console.log('琉璃 WS 已连接');
+        // 启动语音兜底：注册广播可能早于本连接建立，重连后重新拉取本次启动决策
+        loadStartupVoiceOnce();
+    };
+
+    ws.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+        if (!msg || typeof msg !== 'object') return;
+
+        if (msg.type === 'ltpx_call') {
+            // 月华调用琉璃工具：打开对应包页面并投递执行
+            openLTPXPackage(msg);
+        } else if (msg.type === 'lunar_sync' && msg.action === 'startup_voice') {
+            playStartupVoice(msg.voice, msg.seq);
+        }
+    };
+
+    ws.onclose = () => {
+        if (wsRetry < WS_MAX_RETRY) {
+            wsRetry++;
+            setTimeout(establishWebSocket, WS_RETRY_INTERVAL);
+        }
+    };
+
+    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+}
+
 // ===== 呼叫月华 =====
 const YUEHUA_WAKEUP_AUDIO = '/file/read/audios/start_lunar.wav';
 const YUEHUA_CALLING_AUDIO = '/file/read/audios/call_lunar.wav';
@@ -1310,5 +1377,7 @@ async function initApp() {
     await loadSystemPrompt();
     await loadPages();
     initMarked();
+    establishWebSocket();
+    loadStartupVoiceOnce();
 }
 initApp();

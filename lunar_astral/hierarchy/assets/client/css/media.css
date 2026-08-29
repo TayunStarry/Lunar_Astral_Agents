@@ -1,0 +1,158 @@
+/* ========== 图片 / 视频 / 音频 / 语音重播 / 音乐卡片 ========== */
+
+/* ========== 图片容器 ========== */
+.image-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.labeled-image-container {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.labeled-image-container img {
+    max-width: 100%;
+    max-height: 360px;
+    border-radius: var(--radius-lg);
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    transition: 0.2s;
+    display: block;
+}
+
+.labeled-image-container img:hover {
+    transform: scale(1.01);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+}
+
+.labeled-image-container::after {
+    content: var(--image-label, "图片");
+    position: absolute;
+    bottom: 8px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    padding: 3px 12px;
+    border-radius: 40px;
+    font-size: 0.7rem;
+    color: white;
+    pointer-events: none;
+}
+
+/* 视频容器 */
+.video-container {
+    position: relative;
+    max-width: 100%;
+    margin: 8px 0;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: #000;
+}
+
+.video-container video {
+    display: block;
+    max-width: 100%;
+    max-height: 380px;
+    border-radius: var(--radius-lg);
+}
+
+/* 音频播放器（文件） */
+.message-audio-player {
+    display: block;
+    width: 100%;
+    margin: 8px 0;
+    border-radius: var(--radius-md);
+}
+
+/* 语音重播按钮 */
+.audio-replay-btn {
+    background: rgba(157, 107, 255, 0.15);
+    border: 1px solid rgba(157, 107, 255, 0.3);
+    border-radius: 40px;
+    padding: 3px 10px;
+    color: var(--accent-color);
+    cursor: pointer;
+    font-size: 0.72rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: 0.15s;
+}
+
+.audio-replay-btn:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+.audio-replay-btn.replaying {
+    animation: pulse 0.6s ease;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+/* ========== 音乐卡片 ========== */
+.music-card {
+    margin: 8px 0;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: var(--badge-music-bg);
+    border: 1px solid rgba(157, 107, 255, 0.25);
+}
+
+.music-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.music-card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--badge-music-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.music-play-btn {
+    background: linear-gradient(135deg, var(--accent-color), var(--brand-color));
+    border: none;
+    border-radius: 40px;
+    padding: 6px 14px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: 0.2s;
+    flex-shrink: 0;
+}
+
+.music-play-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(157, 107, 255, 0.35);
+}
+
+.music-abc-preview {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 160px;
+    overflow: hidden;
+    position: relative;
+}

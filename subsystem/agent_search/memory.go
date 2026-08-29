@@ -17,6 +17,7 @@ func init() {
 	memoryInitCollection = initMemoryCollection
 	memoryLookup = lookupMemory
 	memoryStore = storeMemoryRecord
+	memoryStorePageSummary = storePageSummaryWithTags
 }
 
 // =============================================================================
@@ -140,6 +141,42 @@ func storeMemoryRecord(record MemorySearchRecord) error {
 
 	fmt.Printf("[%s] 记忆记录已存储 ID=%s 问题='%s'\n",
 		ModuleName, id, truncateText(record.Question, 50))
+	return nil
+}
+
+// =============================================================================
+// Hook 实现：页面摘要携带标签入库（跳过 LLM 标签生成）
+// =============================================================================
+
+// storePageSummaryWithTags 将单页页面摘要以显式标签方式注入 search_memory 集合
+// 跳过 LLM 标签生成，直接使用调用方提供的关键词/实体作为标签，节省 LLM 调用开销。
+// 即使当前查询判定该摘要不相关，也可能对未来其他相关查询有价值。
+func storePageSummaryWithTags(summary string, tags []string) error {
+	if !module.IsMemoryInitialized() {
+		return fmt.Errorf("记忆库未初始化")
+	}
+	if len(tags) == 0 {
+		return nil // 无标签则跳过，避免空标签入库
+	}
+	// 过短的摘要不入库（无效内容，浪费存储空间与检索时间）
+	if len([]rune(strings.TrimSpace(summary))) < 20 {
+		return nil
+	}
+
+	// 构建自然语言文本（格式与完整答案不同，便于区分来源）
+	content := fmt.Sprintf("页面摘要：%s\n来源关键词：%s",
+		truncateText(summary, 400), strings.Join(tags, "、"))
+
+	ctx := context.Background()
+
+	// 调用携带标签入库 API（跳过 LLM 标签生成）
+	id, err := module.MemoryAddMessageWithTags(ctx, searchMemoryCollection, "page_summary", content, tags)
+	if err != nil {
+		return fmt.Errorf("页面摘要记忆存储失败: %w", err)
+	}
+
+	fmt.Printf("[%s] 页面摘要已入记忆库 ID=%s 标签=%v\n",
+		ModuleName, id, tags)
 	return nil
 }
 

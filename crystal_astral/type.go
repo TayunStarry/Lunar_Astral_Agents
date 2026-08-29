@@ -88,6 +88,52 @@ type ModelProxyResponse struct {
 
 // ==== WebSocket 工作室消息中枢 ====
 
+// ==== LTPX 远程（月华调用）协议类型 ====
+
+// LTPXRemoteToolDef 对外暴露的「智能体式」工具定义（新增版 LTPX）
+// 统一接收字符串指令，返回文本结果（含操作结果与推荐后续操作）
+type LTPXRemoteToolDef struct {
+	Name        string `json:"name"`        // 工具名
+	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
+	AppID       string `json:"app_id"`      // 关联的应用标识（如 file.manager）
+	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
+}
+
+// LTPXRemoteCallRequest 月华请求调用琉璃工具的请求体
+type LTPXRemoteCallRequest struct {
+	Tool      string         `json:"tool"`      // 工具名
+	Arguments map[string]any `json:"arguments"` // 工具参数
+}
+
+// LTPXRemoteCallResponse 琉璃执行工具后的返回体
+type LTPXRemoteCallResponse struct {
+	Success bool   `json:"success"`
+	Text    string `json:"text"` // 操作结果文本（含推荐后续操作）
+	Error   string `json:"error,omitempty"`
+}
+
+// LTPXResultRequest 前端包执行完毕后向琉璃回执结果的请求体
+type LTPXResultRequest struct {
+	RequestID string `json:"request_id"`        // 调用请求 ID（ltpx_call 广播时下发）
+	Success   bool   `json:"success"`           // 是否执行成功
+	Text      string `json:"text,omitempty"`    // 操作结果文本
+	Error     string `json:"error,omitempty"`   // 错误信息
+	KeepOpen  bool   `json:"keep_open,omitempty"` // 包是否要求执行后保持页面展示（如文件管理器）
+}
+
+// LunarRegisterResponse 月华返回的注册响应
+type LunarRegisterResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+}
+
+// StartupVoice 启动时语音决策（由前端读取以自动播放对应语音）
+type StartupVoice struct {
+	Voice string `json:"voice"` // "sent"（工具包已发送）/ "failed"（无法交给月华）
+	Lunar bool   `json:"lunar"` // 月华是否在线
+	Seq   int64  `json:"seq"`   // 决策序号（每次琉璃进程启动递增），前端据此去重，避免 WS 重连导致重复播放
+}
+
 // StudioClient 工作室 WebSocket 客户端连接
 type StudioClient struct {
 	Conn *websocket.Conn // WebSocket 连接

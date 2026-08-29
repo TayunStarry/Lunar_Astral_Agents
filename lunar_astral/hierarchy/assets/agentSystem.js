@@ -145,6 +145,7 @@ var agentSystem = (function (exports) {
             return "py";
         return null;
     }
+
     function stripStringsAndComments(line, lang) {
         let out = "";
         let i = 0;
@@ -213,6 +214,7 @@ var agentSystem = (function (exports) {
             return true;
         return false;
     }
+
     function detectTsJs(line) {
         const t = line.trim();
         let m = /^(?:export\s+)?(?:abstract\s+|default\s+)?(?:class|interface|type|enum|namespace)\s+(\w+)/.exec(t);
@@ -295,6 +297,7 @@ var agentSystem = (function (exports) {
             default: return null;
         }
     }
+
     function splitCodeFile(content, lang, idealLen) {
         const text = (content ?? "").replace(/\r\n/g, "\n");
         if (!text.trim())
@@ -429,29 +432,6 @@ var agentSystem = (function (exports) {
         return tags;
     }
 
-    function splitTextToStrings(input, options = {}) {
-        const option = {
-            idealLen: options.idealLen ?? 1024,
-            pathPrefix: options.pathPrefix ?? "*标题> ",
-            pathOnNewLine: options.pathOnNewLine ?? true,
-            skipTitleOnly: options.skipTitleOnly ?? true,
-            includeOriginalTitle: options.includeOriginalTitle ?? false,
-            lang: options.lang ?? "",
-        };
-        const text = (input ?? "").replace(/\r\n/g, "\n");
-        if (!text.trim())
-            return [];
-        if (option.lang) {
-            const codeLang = resolveCodeLang(option.lang);
-            if (codeLang)
-                return splitCodeFile(text, codeLang, option.idealLen);
-        }
-        const isMarkdown = looksLikeMarkdown(text);
-        if (!isMarkdown) {
-            return splitPlainText(text, option.idealLen);
-        }
-        return splitMarkdown(text, option);
-    }
     function splitPlainText(text, idealLen) {
         const results = [];
         let currentIndex = 0;
@@ -504,6 +484,7 @@ var agentSystem = (function (exports) {
         }
         return results;
     }
+
     function splitMarkdown(text, option) {
         const sections = parseMarkdownSections(text);
         if (sections.length === 0) {
@@ -604,6 +585,30 @@ var agentSystem = (function (exports) {
     function formatPath(path, option) {
         const wholePath = `${option.pathPrefix}${path}*\n`;
         return option.pathOnNewLine ? wholePath : `${option.pathPrefix}${path}* `;
+    }
+
+    function splitTextToStrings(input, options = {}) {
+        const option = {
+            idealLen: options.idealLen ?? 1024,
+            pathPrefix: options.pathPrefix ?? "*标题> ",
+            pathOnNewLine: options.pathOnNewLine ?? true,
+            skipTitleOnly: options.skipTitleOnly ?? true,
+            includeOriginalTitle: options.includeOriginalTitle ?? false,
+            lang: options.lang ?? "",
+        };
+        const text = (input ?? "").replace(/\r\n/g, "\n");
+        if (!text.trim())
+            return [];
+        if (option.lang) {
+            const codeLang = resolveCodeLang(option.lang);
+            if (codeLang)
+                return splitCodeFile(text, codeLang, option.idealLen);
+        }
+        const isMarkdown = looksLikeMarkdown(text);
+        if (!isMarkdown) {
+            return splitPlainText(text, option.idealLen);
+        }
+        return splitMarkdown(text, option);
     }
     function looksLikeMarkdown(text) {
         const hasHeading = /(^|\n)#{1,6}\s+\S/.test(text);
@@ -2217,8 +2222,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
-    const STICKER_COLLECTION = 'stickers';
-    let stickerCollectionReady = false;
+
     async function analysisVideoFile(videoUrl, userNeeds) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
@@ -2322,6 +2326,140 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         GlobalConfig.unreadVideoUrl = [];
     }
+
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
+    async function queryEmotionSticker(query) {
+        if (!query || !query.trim())
+            return null;
+        try {
+            if (!stickerCollectionReady) {
+                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+                if (!ready)
+                    return null;
+                stickerCollectionReady = true;
+            }
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+            if (error || !results || results.length === 0)
+                return null;
+            const image = results[RandomFloor(0, results.length - 1)].image;
+            return image || null;
+        }
+        catch (error) {
+            console.error('[表情包] 检索失败:', error);
+            return null;
+        }
+    }
+    function extractTextFromMessage(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        if (Array.isArray(message.content)) {
+            return message.content
+                .filter(item => item.type === 'text')
+                .map(item => item.text)
+                .join(' ');
+        }
+        return '';
+    }
+    function initMemory() {
+        if (GlobalConfig.memoryReady)
+            return;
+        const [_, err] = memoryInit('lunar_messages', 'text');
+        if (err)
+            console.error('记忆库初始化失败:', err);
+        else
+            GlobalConfig.memoryReady = true;
+    }
+    function ensureMemoryReady() {
+        if (!GlobalConfig.memoryReady)
+            initMemory();
+        return GlobalConfig.memoryReady;
+    }
+    function memorizeUnreadRecords() {
+        if (GlobalConfig.unreadRecords.length === 0)
+            return;
+        if (!ensureMemoryReady()) {
+            console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
+            return;
+        }
+        let written = 0;
+        for (const message of GlobalConfig.unreadRecords) {
+            if (message.role === 'tool')
+                continue;
+            const content = extractTextFromMessage(message).trim();
+            if (!content || content.length <= 5)
+                continue;
+            if (content.includes(SCHEDULE_TRIGGER_PREFIX))
+                continue;
+            const [, error] = memoryAdd('lunar_messages', message.role, content);
+            if (error)
+                console.error('[记忆] 写入记忆库失败:', error);
+            else
+                written++;
+        }
+        console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
+        GlobalConfig.unreadRecords = [];
+    }
+
+    const injectedLTPXRemoteTools = new Set();
+    function syncLTPXRemoteStatus() {
+        try {
+            const statusJSON = getLTPXRemoteStatus();
+            if (!statusJSON || statusJSON === '{}') {
+                removeAllLTPXRemoteTools();
+                return;
+            }
+            const status = JSON.parse(statusJSON);
+            if (!status.online) {
+                removeAllLTPXRemoteTools();
+                clearLTPXRemoteTools();
+                return;
+            }
+            const names = new Set();
+            const known = new Map();
+            (status.tools || []).forEach(t => { if (t && t.name) {
+                names.add(t.name);
+                known.set(t.name, t);
+            } });
+            injectedLTPXRemoteTools.forEach(name => { if (!names.has(name))
+                removeLTPXRemoteTool(name); });
+            names.forEach(name => { if (!injectedLTPXRemoteTools.has(name))
+                injectLTPXRemoteTool(known.get(name)); });
+        }
+        catch (e) {
+            console.error('LTPX 远程（琉璃）工具状态同步失败:', e);
+        }
+    }
+    function injectLTPXRemoteTool(tool) {
+        const name = tool.name;
+        GlobalConfig.LTPfunction.set(name, async (args) => {
+            const argsJSON = typeof args === 'string' ? args : JSON.stringify(args || {});
+            const text = await callLTPXRemoteTool(name, argsJSON);
+            if (typeof text === 'string' && text.startsWith('【琉璃工具调用失败】'))
+                removeLTPXRemoteTool(name);
+            return [text, ''];
+        });
+        GlobalConfig.LTPdefinition.push({
+            type: 'function',
+            function: { name, description: tool.description || '', parameters: tool.parameters },
+        });
+        injectedLTPXRemoteTools.add(name);
+        console.log(`LTPX 已注入琉璃远程工具: ${name}`);
+    }
+    function removeLTPXRemoteTool(name) {
+        for (let i = GlobalConfig.LTPdefinition.length - 1; i >= 0; i--) {
+            const def = GlobalConfig.LTPdefinition[i];
+            if (def.type === 'function' && def.function?.name === name)
+                GlobalConfig.LTPdefinition.splice(i, 1);
+        }
+        GlobalConfig.LTPfunction.delete(name);
+        injectedLTPXRemoteTools.delete(name);
+        console.log(`LTPX 已移除琉璃远程工具: ${name}`);
+    }
+    function removeAllLTPXRemoteTools() {
+        [...injectedLTPXRemoteTools].forEach(removeLTPXRemoteTool);
+    }
+
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await dialogueRole.generateDialogue(cache);
@@ -2332,14 +2470,14 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             return;
         try {
             GlobalConfig.reasoningInProgress = true;
-            syncLTPXToolStatus();
             await pullExternalMessages();
-            checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }));
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
             if (messageLength === 0) {
+                checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }));
                 GlobalConfig.reasoningInProgress = false;
                 return;
             }
+            syncLTPXRemoteStatus();
             await batchProcessVideoFiles();
             await processUnreadFiles();
             await createChatMessage();
@@ -2412,92 +2550,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         GlobalConfig.unreadContext = [];
         GlobalConfig.unreadVideoUrl = [];
     }
-    function syncLTPXToolStatus() {
-        try {
-            const statusJSON = getLTPXToolStatus();
-            if (!statusJSON || statusJSON === '{}')
-                return;
-            const status = JSON.parse(statusJSON);
-            if ((status.pendingLoads && status.pendingLoads.length > 0) ||
-                (status.pendingUnloads && status.pendingUnloads.length > 0)) {
-                processLTPXChanges(statusJSON);
-            }
-        }
-        catch (e) {
-            console.error('LTPX 工具状态同步失败:', e);
-        }
-    }
-    async function queryEmotionSticker(query) {
-        if (!query || !query.trim())
-            return null;
-        try {
-            if (!stickerCollectionReady) {
-                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
-                if (!ready)
-                    return null;
-                stickerCollectionReady = true;
-            }
-            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
-            if (error || !results || results.length === 0)
-                return null;
-            const image = results[RandomFloor(0, results.length - 1)].image;
-            return image || null;
-        }
-        catch (error) {
-            console.error('[表情包] 检索失败:', error);
-            return null;
-        }
-    }
-    function extractTextFromMessage(message) {
-        if (typeof message.content === 'string')
-            return message.content;
-        if (Array.isArray(message.content)) {
-            return message.content
-                .filter(item => item.type === 'text')
-                .map(item => item.text)
-                .join(' ');
-        }
-        return '';
-    }
-    function initMemory() {
-        if (GlobalConfig.memoryReady)
-            return;
-        const [_, err] = memoryInit('lunar_messages', 'text');
-        if (err)
-            console.error('记忆库初始化失败:', err);
-        else
-            GlobalConfig.memoryReady = true;
-    }
-    function ensureMemoryReady() {
-        if (!GlobalConfig.memoryReady)
-            initMemory();
-        return GlobalConfig.memoryReady;
-    }
-    function memorizeUnreadRecords() {
-        if (GlobalConfig.unreadRecords.length === 0)
-            return;
-        if (!ensureMemoryReady()) {
-            console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
-            return;
-        }
-        let written = 0;
-        for (const message of GlobalConfig.unreadRecords) {
-            if (message.role === 'tool')
-                continue;
-            const content = extractTextFromMessage(message).trim();
-            if (!content || content.length <= 5)
-                continue;
-            if (content.includes(SCHEDULE_TRIGGER_PREFIX))
-                continue;
-            const [, error] = memoryAdd('lunar_messages', message.role, content);
-            if (error)
-                console.error('[记忆] 写入记忆库失败:', error);
-            else
-                written++;
-        }
-        console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
-        GlobalConfig.unreadRecords = [];
-    }
+
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
     setInterval(() => thoughtLoopTickEvent(), 1000);
 
@@ -2594,7 +2647,46 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             }
         }
     ];
-    let scheduleCache = [];
+
+    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+    function formatISO(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const mi = String(date.getMinutes()).padStart(2, '0');
+        const s = String(date.getSeconds()).padStart(2, '0');
+        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+    }
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${d}`;
+    }
+    function normalizeTime(raw) {
+        if (!raw || raw.trim().length === 0) {
+            return null;
+        }
+        const trimmed = raw.trim();
+        const stdDate = new Date(trimmed);
+        if (!isNaN(stdDate.getTime())) {
+            return formatISO(stdDate);
+        }
+        const cnMatch = trimmed.match(CN_DATE_REGEX);
+        if (cnMatch) {
+            const [, year, month, day, hour, minute, second] = cnMatch;
+            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
+        }
+        return null;
+    }
+    function dailyTaskTime(item, now) {
+        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!match)
+            return null;
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+    }
+
     function loadSchedulesFromDisk() {
         const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
         if (readErr) {
@@ -2625,44 +2717,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             return false;
         }
     }
-    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
-    function normalizeTime(raw) {
-        if (!raw || raw.trim().length === 0) {
-            return null;
-        }
-        const trimmed = raw.trim();
-        const stdDate = new Date(trimmed);
-        if (!isNaN(stdDate.getTime())) {
-            return formatISO(stdDate);
-        }
-        const cnMatch = trimmed.match(CN_DATE_REGEX);
-        if (cnMatch) {
-            const [, year, month, day, hour, minute, second] = cnMatch;
-            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
-        }
-        return null;
-    }
-    function formatISO(date) {
-        const y = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const h = String(date.getHours()).padStart(2, '0');
-        const mi = String(date.getMinutes()).padStart(2, '0');
-        const s = String(date.getSeconds()).padStart(2, '0');
-        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
-    }
-    function formatDate(date) {
-        const y = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${mo}-${d}`;
-    }
-    function dailyTaskTime(item, now) {
-        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
-        if (!match)
-            return null;
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
-    }
+
+    let scheduleCache = [];
     function initSchedules() {
         const raw = loadSchedulesFromDisk();
         const existingIds = new Set(raw.map(item => item.id));
@@ -3077,84 +3133,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     GlobalConfig.LTPfunction.set('dispatch_learner', handleDispatchLearner);
     GlobalConfig.LTPdefinition.push(...agentControlTools);
 
-    const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
-    const KAOMOJI_MARKS = '_^･・。.、；;～~ノﾉゞヾω￣▽△□○●☆★°´｀♪♫＞＜><｡一≧≦∇∀ﾟ⌒⌣◕';
-    const KAOMOJI_REGEX = new RegExp(`[<＜＼]?[（(](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[${KAOMOJI_MARKS}](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[）)](?:[<＜>＞／\u30ce\u309e\u266a\u266b]*)?` +
-        `|[>＜^TtOo0vV][_\\-=^><。.・oO][<＞^TtOo0vV]`, 'gu');
-    const EMOTION_REGEX = new RegExp(`${EMOJI_REGEX.source}|${KAOMOJI_REGEX.source}`, 'gu');
-    function extractThinkingBlocks(text) {
-        const blocks = [];
-        const regex = /<think>([\s\S]*?)<\/think>/gi;
-        let match;
-        while ((match = regex.exec(text)) !== null) {
-            const content = match[1].trim();
-            if (content.length > 0)
-                blocks.push(content);
-        }
-        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-        return [blocks, remaining];
-    }
-    function extractCodeBlocks(text) {
-        const blocks = [];
-        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
-        let match;
-        while ((match = codeBlockRegex.exec(text)) !== null) {
-            blocks.push(match[0]);
-        }
-        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
-        return [blocks, remaining];
-    }
-    function extractActionBlocks(text) {
-        const blocks = [];
-        const stack = [];
-        const ranges = [];
-        for (let i = 0; i < text.length; i++) {
-            const ch = text[i];
-            if (ch === '(' || ch === '\uFF08')
-                stack.push(i);
-            else if (ch === ')' || ch === '\uFF09') {
-                if (stack.length === 0)
-                    continue;
-                const start = stack.pop();
-                if (stack.length !== 0)
-                    continue;
-                const content = text.slice(start + 1, i).trim();
-                if (content.length > 0)
-                    blocks.push(content);
-                ranges.push([start, i + 1]);
-            }
-        }
-        let remaining = '';
-        let lastEnd = 0;
-        for (const [start, end] of ranges) {
-            remaining += text.slice(lastEnd, start);
-            lastEnd = end;
-        }
-        remaining += text.slice(lastEnd);
-        return [blocks, remaining];
-    }
-    function extractEmotionBlocks(text) {
-        const blocks = [];
-        const regex = new RegExp(EMOTION_REGEX.source, 'gu');
-        let match;
-        let lastEnd = -1;
-        let current = '';
-        while ((match = regex.exec(text)) !== null) {
-            if (current.length > 0 && match.index === lastEnd) {
-                current += match[0];
-            }
-            else {
-                if (current.length > 0)
-                    blocks.push(current);
-                current = match[0];
-            }
-            lastEnd = match.index + match[0].length;
-        }
-        if (current.length > 0)
-            blocks.push(current);
-        const remaining = text.replace(regex, '');
-        return [blocks, remaining];
-    }
     function cleanTextForTTS(text) {
         if (!text)
             return '';
@@ -3255,6 +3233,86 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
         return result;
     }
+
+    const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
+    const KAOMOJI_MARKS = '_^･・。.、；;～~ノﾉゞヾω￣▽△□○●☆★°´｀♪♫＞＜><｡一≧≦∇∀ﾟ⌒⌣◕';
+    const KAOMOJI_REGEX = new RegExp(`[<＜＼]?[（(](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[${KAOMOJI_MARKS}](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[）)](?:[<＜>＞／\u30ce\u309e\u266a\u266b]*)?` +
+        `|[>＜^TtOo0vV][_\\-=^><。.・oO][<＞^TtOo0vV]`, 'gu');
+    const EMOTION_REGEX = new RegExp(`${EMOJI_REGEX.source}|${KAOMOJI_REGEX.source}`, 'gu');
+    function extractThinkingBlocks(text) {
+        const blocks = [];
+        const regex = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const content = match[1].trim();
+            if (content.length > 0)
+                blocks.push(content);
+        }
+        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        return [blocks, remaining];
+    }
+    function extractCodeBlocks(text) {
+        const blocks = [];
+        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+            blocks.push(match[0]);
+        }
+        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        return [blocks, remaining];
+    }
+    function extractActionBlocks(text) {
+        const blocks = [];
+        const stack = [];
+        const ranges = [];
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '(' || ch === '\uFF08')
+                stack.push(i);
+            else if (ch === ')' || ch === '\uFF09') {
+                if (stack.length === 0)
+                    continue;
+                const start = stack.pop();
+                if (stack.length !== 0)
+                    continue;
+                const content = text.slice(start + 1, i).trim();
+                if (content.length > 0)
+                    blocks.push(content);
+                ranges.push([start, i + 1]);
+            }
+        }
+        let remaining = '';
+        let lastEnd = 0;
+        for (const [start, end] of ranges) {
+            remaining += text.slice(lastEnd, start);
+            lastEnd = end;
+        }
+        remaining += text.slice(lastEnd);
+        return [blocks, remaining];
+    }
+    function extractEmotionBlocks(text) {
+        const blocks = [];
+        const regex = new RegExp(EMOTION_REGEX.source, 'gu');
+        let match;
+        let lastEnd = -1;
+        let current = '';
+        while ((match = regex.exec(text)) !== null) {
+            if (current.length > 0 && match.index === lastEnd) {
+                current += match[0];
+            }
+            else {
+                if (current.length > 0)
+                    blocks.push(current);
+                current = match[0];
+            }
+            lastEnd = match.index + match[0].length;
+        }
+        if (current.length > 0)
+            blocks.push(current);
+        const remaining = text.replace(regex, '');
+        return [blocks, remaining];
+    }
+
     function parseContent(rawText) {
         if (!rawText)
             return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [] };
