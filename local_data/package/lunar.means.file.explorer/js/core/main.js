@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = event.data;
         if (!data || typeof data !== 'object' || data.type !== 'ltpx_run') return;
         try {
-            const result = await handleLTPXInstruction(fileManager, (data.arguments || {}).instruction || '');
+            const result = await runLTPXAgent(fileManager, (data.arguments || {}).instruction || '回到根目录');
             postLTPXResult(data.request_id, result.success, result.text, result.error);
         } catch (e) {
             console.error('LTPX AtoA 执行失败:', e);

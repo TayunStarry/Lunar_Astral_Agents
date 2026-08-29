@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
+	"unsafe"
 )
 
 // ==== LTPX 远程（月华调用）协议实现 ====
@@ -216,33 +218,56 @@ func ltpRemoteResultHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// ltpStartupVoiceHandler 前端读取启动语音决策（GET /lunar/sync/startup-voice）
-func ltpStartupVoiceHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+// playStartupVoice 由后端直接播放启动语音 WAV（winmm PlaySoundW，SND_ASYNC 异步播放）
+// 前端 WebView 受浏览器自动播放策略限制（必须用户交互后才允许发声），
+// 因此启动语音改由后端原生进程播放，绕开自动播放限制，无需用户点击。
+// 音频文件位于 {LocalDir}/audios/ 下，voice 为文件名（如 enable_tool_package.wav）。
+func playStartupVoice(fileName string) {
+	if fileName == "" {
 		return
 	}
-	startupVoiceMutex.RLock()
-	voice := lastStartupVoice
-	startupVoiceMutex.RUnlock()
-	jsonOK(w, http.StatusOK, voice)
+	execPath, err := os.Executable()
+	if err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "定位可执行目录失败，无法播放启动语音 %s: %v", fileName, err)
+		return
+	}
+	execDir := filepath.Dir(execPath)
+	audioPath := filepath.Join(execDir, *GeneralConfig.LocalDir, "audios", fileName)
+	pathPtr, err := syscall.UTF16PtrFromString(audioPath)
+	if err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "启动语音路径转换失败 %s: %v", audioPath, err)
+		return
+	}
+	// SND_FILENAME=0x00020000 SND_ASYNC=0x0001 SND_NODEFAULT=0x0002
+	flags := uintptr(0x00020000 | 0x0001 | 0x0002)
+	ret, _, _ := procPlaySoundW.Call(uintptr(unsafe.Pointer(pathPtr)), 0, flags)
+	if ret == 0 {
+		LoggerGeneral.Warn("CrystalAstral", "启动语音播放失败（PlaySoundW 返回 0）: %s", audioPath)
+		return
+	}
+	LoggerGeneral.Info("CrystalAstral", "已由后端播放启动语音: %s", audioPath)
 }
 
-// setStartupVoice 记录启动语音决策（含月华在线状态），每次决策分配新的序号供前端去重
-func setStartupVoice(lunarOnline bool) {
+// setStartupVoice 记录启动语音决策（含月华在线状态），并立即由后端播放对应语音
+// voice 取值：sent（工具包已推送，月华在线）/ failed（无法交给月华，月华离线）/ disable（工具包停用，琉璃关闭）
+func setStartupVoice(voice string, lunarOnline bool) {
 	startupVoiceMutex.Lock()
-	switch {
-	case lunarOnline:
-		lastStartupVoice = StartupVoice{Voice: "sent", Lunar: true, Seq: time.Now().UnixNano()}
-	default:
-		lastStartupVoice = StartupVoice{Voice: "failed", Lunar: false, Seq: time.Now().UnixNano()}
-	}
+	lastStartupVoice = StartupVoice{Voice: voice, Lunar: lunarOnline, Seq: time.Now().UnixNano()}
 	startupVoiceMutex.Unlock()
+	// 直接由后端播放，前端不再参与（避免 WebView 自动播放限制）
+	switch voice {
+	case "sent":
+		playStartupVoice("enable_tool_package.wav")
+	case "failed":
+		playStartupVoice("tool_package_failed.wav")
+	case "disable":
+		playStartupVoice("disable_tool_package.wav")
+	}
 }
 
 // registerToLunar 琉璃启动时一次性向月华提交联络 URL（POST /ltpx/register）
 // 月华固定端口（BasicPort），琉璃随机端口；多开时月华以最新注册为准。
-// 注册结果同时决定启动语音：月华在线 → 工具包已发送；离线 → 无法交给月华。
+// 注册结果同时决定启动语音：月华在线且 URL 推送成功 → 工具包已发送；离线/推送失败 → 无法交给月华。
 func registerToLunar(port int) (bool, error) {
 	if StudioHubInstance == nil {
 		return false, nil
@@ -254,34 +279,40 @@ func registerToLunar(port int) (bool, error) {
 	respBody, status, err := ltpHTTPPost(lunarURL, payload)
 	if err != nil || status != http.StatusOK {
 		LoggerGeneral.Warn("CrystalAstral", "向月华注册联络 URL 失败(或月华离线): %v (status=%d)", err, status)
-		setStartupVoice(false)
-		// 离线：广播一次启动语音决策，前端连接后可自动播放
-		broadcastStartupVoice(false)
+		// 月华离线：后端直接播放「无法交给月华」语音
+		setStartupVoice("failed", false)
 		return false, err
 	}
 
-	_ = respBody
+	// 校验月华响应：仅当 HTTP 200 且 success=true 才视为「URL 推送成功」（月华在线）
+	var regResp LunarRegisterResponse
+	if err := json.Unmarshal(respBody, &regResp); err != nil || !regResp.Success {
+		LoggerGeneral.Warn("CrystalAstral", "月华未确认 LTPX 注册 (success=%v, err=%v)，按推送失败处理", regResp.Success, err)
+		setStartupVoice("failed", false)
+		return false, fmt.Errorf("月华未确认 LTPX 注册")
+	}
+
 	LoggerGeneral.Info("CrystalAstral", "LTPX 已向月华注册联络 URL: %s (月华在线)", selfURL)
-	setStartupVoice(true)
-	broadcastStartupVoice(true)
+	// 月华在线：后端直接播放「工具包已发送」语音
+	setStartupVoice("sent", true)
 	return true, nil
 }
 
-// broadcastStartupVoice 将启动语音决策广播到前端 /ws，使其自动播放对应语音
-func broadcastStartupVoice(lunarOnline bool) {
+// notifyToolPackageDisabled 优雅关闭时由后端播放「工具包停用」语音（disable_tool_package.wav）
+// 仅当本次启动月华在线（启动语音为 sent）时播放；离线时无需停用提示。
+// 播放采用异步（SND_ASYNC），随后等待 3 秒再关闭服务器，确保停用语音完整播放完毕
+// （前端浏览器窗口关闭或收到中断信号后均适用）。
+func notifyToolPackageDisabled() {
 	startupVoiceMutex.RLock()
-	sv := lastStartupVoice
+	enabled := lastStartupVoice.Voice == "sent"
 	startupVoiceMutex.RUnlock()
-	msg, _ := json.Marshal(map[string]any{
-		"type":   "lunar_sync",
-		"action": "startup_voice",
-		"voice":  sv.Voice,
-		"lunar":  sv.Lunar,
-		"seq":    sv.Seq,
-	})
-	if StudioHubInstance != nil {
-		StudioHubInstance.Broadcast <- msg
+	if !enabled {
+		return
 	}
+	LoggerGeneral.Info("CrystalAstral", "月华在线期间琉璃关闭，后端播放工具包停用语音")
+	setStartupVoice("disable", true)
+	// 等待 3 秒再关闭服务器，确保停用语音播放完毕
+	time.Sleep(3 * time.Second)
 }
 
 // ltpHTTPPost 小型 HTTP POST 辅助（JSON 请求体）

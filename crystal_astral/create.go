@@ -150,6 +150,10 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		LoggerGeneral.Info("CrystalAstral", "%s 检测到 WebView 关闭，正在关闭...", name)
 	}
 
+	// 月华在线期间关闭琉璃：由后端直接播放「工具包停用」语音 disable_tool_package.wav
+	// （浏览器窗口关闭后等待 3 秒再关服务器，确保语音完整播放完毕，见 notifyToolPackageDisabled）
+	notifyToolPackageDisabled()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

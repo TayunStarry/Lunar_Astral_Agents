@@ -6,6 +6,7 @@ import (
 	media "LunarSubsystem/MediaTools/server"
 	"embed"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -26,14 +27,22 @@ var EmbeddedFiles embed.FS
 // 在 StartServer() 中初始化，供所有前端组件通过 /ws 端点连接（无差别广播）
 var StudioHubInstance *StudioHub
 
-// ==== LTPX 远程（月华调用）状态 ====
+// ==== 启动语音（后端直接播放） ====
 
 // startupVoiceMutex 保护启动语音决策的并发读写
 var startupVoiceMutex sync.RWMutex
 
-// lastStartupVoice 最近一次启动时的语音决策（前端读取以自动播放对应语音）
-// 默认 Voice 为空串表示「尚未决策」，前端在收到决策前不播放语音
+// lastStartupVoice 最近一次启动时的语音决策（由后端直接播放对应语音，前端不再播放）
+// 默认 Voice 为空串表示「尚未决策」
 var lastStartupVoice = StartupVoice{}
+
+// ==== winmm 播放（后端播放启动语音 WAV，绕开浏览器自动播放限制） ====
+
+// winmmDLL Windows 多媒体库（winmm.dll），提供 PlaySoundW 播放 WAV 音频
+var winmmDLL = syscall.NewLazyDLL("winmm.dll")
+
+// procPlaySoundW PlaySoundW 函数句柄：从文件播放 WAV（SND_FILENAME）
+var procPlaySoundW = winmmDLL.NewProc("PlaySoundW")
 
 // ==== LTPX 动态工具链（来自包的 AtoA 能力） ====
 
@@ -114,7 +123,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
 	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
-	{Path: "/lunar/sync/startup-voice", Handler: ltpStartupVoiceHandler, Method: "GET", Description: "前端读取启动语音决策"},
 
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},

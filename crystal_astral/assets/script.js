@@ -1202,39 +1202,7 @@ window.addEventListener('message', (event) => {
     }
 });
 
-// ===== 启动语音（新版 LTPX：琉璃启动时告知月华工具链状态） =====
-const STARTUP_VOICE_SENT = '/file/read/audios/enable_tool_package.wav';
-const STARTUP_VOICE_FAILED = '/file/read/audios/tool_package_failed.wav';
-let playedStartupVoiceSeq = null; // 已播放的启动语音决策序号（后端每次进程启动分配新序号）
-
-// 依据语音决策播放对应语音（同一决策仅播放一次，避免 WS 重连重复播放）
-function playStartupVoice(voice, seq) {
-    if (!seq || seq === playedStartupVoiceSeq) return;
-    playedStartupVoiceSeq = seq;
-    if (voice === 'sent') {
-        new Audio(STARTUP_VOICE_SENT).play().catch(() => {});
-    } else {
-        new Audio(STARTUP_VOICE_FAILED).play().catch(() => {});
-    }
-}
-
-// 读取启动语音决策并播放（可重复调用，seq 去重保证只播一次）
-async function loadStartupVoiceOnce() {
-    try {
-        const resp = await fetch('/lunar/sync/startup-voice', { method: 'GET' });
-        if (!resp.ok) return;
-        const data = await resp.json();
-        if (data && data.seq && (data.voice === 'sent' || data.voice === 'failed')) {
-            playStartupVoice(data.voice, data.seq);
-        }
-    } catch (e) {
-        console.warn('读取启动语音决策失败:', e);
-    }
-}
-// 页面加载即尝试播放（不等 initApp 的配置加载链，避免语音滞后）；seq 去重保证幂等
-loadStartupVoiceOnce();
-
-// ===== WebSocket 客户端（连接琉璃 /ws，接收文件管理器与启动语音广播） =====
+// ===== WebSocket 客户端（连接琉璃 /ws，接收文件管理器等 LTPX 调用广播） =====
 let ws = null;
 let wsRetry = 0;
 const WS_MAX_RETRY = 5;
@@ -1251,9 +1219,6 @@ function establishWebSocket() {
 
     ws.onopen = () => {
         wsRetry = 0;
-        console.log('琉璃 WS 已连接');
-        // 启动语音兜底：注册广播可能早于本连接建立，重连后重新拉取本次启动决策
-        loadStartupVoiceOnce();
     };
 
     ws.onmessage = (event) => {
@@ -1264,8 +1229,6 @@ function establishWebSocket() {
         if (msg.type === 'ltpx_call') {
             // 月华调用琉璃工具：打开对应包页面并投递执行
             openLTPXPackage(msg);
-        } else if (msg.type === 'lunar_sync' && msg.action === 'startup_voice') {
-            playStartupVoice(msg.voice, msg.seq);
         }
     };
 
@@ -1276,7 +1239,7 @@ function establishWebSocket() {
         }
     };
 
-    ws.onerror = () => { try { ws.close(); } catch (e) {} };
+    ws.onerror = () => { try { ws.close(); } catch (e) { } };
 }
 
 // ===== 呼叫月华 =====
@@ -1378,6 +1341,5 @@ async function initApp() {
     await loadPages();
     initMarked();
     establishWebSocket();
-    loadStartupVoiceOnce();
 }
 initApp();

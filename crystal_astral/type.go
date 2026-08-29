@@ -127,11 +127,11 @@ type LunarRegisterResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-// StartupVoice 启动时语音决策（由前端读取以自动播放对应语音）
+// StartupVoice 启动时语音决策（由后端直接播放对应语音，前端不再参与播放）
 type StartupVoice struct {
-	Voice string `json:"voice"` // "sent"（工具包已发送）/ "failed"（无法交给月华）
+	Voice string `json:"voice"` // "sent"（工具包已发送，月华在线）/ "failed"（无法交给月华）/ "disable"（工具包停用，琉璃关闭）
 	Lunar bool   `json:"lunar"` // 月华是否在线
-	Seq   int64  `json:"seq"`   // 决策序号（每次琉璃进程启动递增），前端据此去重，避免 WS 重连导致重复播放
+	Seq   int64  `json:"seq"`   // 决策序号（每次琉璃进程启动递增），记录顺序供后续决策判断
 }
 
 // StudioClient 工作室 WebSocket 客户端连接

@@ -61,8 +61,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 从记忆库匹配表情包并推送图片数据
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
-        // 未解析出行动区内容，且正文长度小于等于35字时，按概率基于正文推理表情包
-        else if (validMessage.length <= 35 && Math.random() < 0.3) {
+        // 未解析出行动区内容，且正文长度小于等于36字时，按概率基于正文推理表情包
+        else if (validMessage.length <= 36 && Math.random() < 0.15) {
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）

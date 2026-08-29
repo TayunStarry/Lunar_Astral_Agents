@@ -3,7 +3,6 @@
 	"title": "实时搜索",
 	"description": "查询实时天气与搜索最新新闻",
 	"tags": [
-		"LTP2",
 		"LTPX"
 	],
 	"url": "/file/read/package/lunar.skill.search/tool.md",
