@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 )
 
 // StartServerListener 启动服务器监听循环
@@ -59,6 +60,8 @@ func startClientLoading() {
 	clientURL := fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.BasicPort)
 	*GeneralConfig.WebViewWidth = 1080
 	*GeneralConfig.WebViewHeight = 810
+	// 窗口图标（相对路径按「可执行文件目录→当前工作目录」解析，exe 输出在仓库根目录）
+	*GeneralConfig.WebViewIconPath = filepath.Join("lunar_astral", "icon.ico")
 	// 打开浏览器访问
 	BrowserClient.OpenBrowser(clientURL)
 }

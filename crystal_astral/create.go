@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -59,6 +60,8 @@ func reloadPageParameters() {
 	*GeneralConfig.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
 	*GeneralConfig.WebViewWidth = 1500
 	*GeneralConfig.WebViewHeight = 1050
+	// 窗口图标（相对路径按「可执行文件目录→当前工作目录」解析，exe 输出在仓库根目录）
+	*GeneralConfig.WebViewIconPath = filepath.Join("crystal_astral", "icon.ico")
 }
 
 // initMemoryDatabase 自动初始化记忆库实例与默认集合（v2 标签向量架构）

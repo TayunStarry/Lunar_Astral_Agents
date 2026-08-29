@@ -47,6 +47,19 @@
 
 通过 [general_config 子系统](../general_config/README.md) 中的 WebView 参数调整窗口标题、大小、可调整性等属性。
 
+除基础属性外，Windows 平台还支持设置**窗口图标**与**标题栏样式**：
+
+| 参数 | 说明 | 适用系统 |
+|------|------|----------|
+| `-webview-icon` | 窗口图标 `.ico` 文件路径（空则不设置，使用默认图标） | Win10/11 |
+| `-webview-caption-color` | 标题栏背景色，格式 `#RRGGBB` | Win11 |
+| `-webview-border-color` | 窗口边框色，格式 `#RRGGBB` | Win11 |
+| `-webview-dark-titlebar` | 标题栏深色模式开关 | Win10 1809+/Win11 |
+
+相对图标路径按「可执行文件所在目录 → 当前工作目录」顺序解析（如 `crystal_astral/icon.ico` 相对仓库根目录下的 exe 可直接命中）。加载失败会在日志中输出实际尝试的路径。
+
+示例：`.\Lunar_Astral.exe -webview-icon icon.ico -webview-caption-color "#202124" -webview-dark-titlebar`
+
 ### Q: 如何强制使用系统浏览器？
 
 入口函数会自动检测 WebView 支持情况并回退到系统浏览器，无需手动干预。也可通过 [general_config 子系统](../general_config/README.md) 的命令行参数禁用浏览器。

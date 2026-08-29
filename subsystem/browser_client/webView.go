@@ -82,7 +82,10 @@ func StartWebViewBrowser(url string) {
 		return
 	}
 
-	// 5. 退出时清理资源并发送关闭通知（必须在 UnlockOSThread 之前执行）
+	// 5. 应用窗口图标与标题栏样式（需在主线程、Run 之前调用）
+	applyWindowStyle(w)
+
+	// 6. 退出时清理资源并发送关闭通知（必须在 UnlockOSThread 之前执行）
 	defer func() {
 		LoggerGeneral.Info("BrowserClient", "开始清理资源")
 		webviewMutex.Lock()
@@ -109,14 +112,14 @@ func StartWebViewBrowser(url string) {
 		runtime.UnlockOSThread()
 	}()
 
-	// 6. 等待后端服务就绪
+	// 7. 等待后端服务就绪
 	waitForServer(url)
 
-	// 7. 导航到目标 URL
+	// 8. 导航到目标 URL
 	LoggerGeneral.Info("BrowserClient", "开始导航到 %s", url)
 	navigateWebView(url)
 
-	// 8. 运行事件循环（会阻塞直到窗口关闭）
+	// 9. 运行事件循环（会阻塞直到窗口关闭）
 	LoggerGeneral.Info("BrowserClient", "进入 Run 循环")
 	w.Run()
 	LoggerGeneral.Info("BrowserClient", "Run 循环结束，窗口已关闭")
