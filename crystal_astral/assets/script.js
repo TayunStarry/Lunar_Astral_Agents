@@ -312,23 +312,33 @@ function initTools() {
 }
 
 // ===== 页面打开 =====
+// 打开统一走覆盖层 iframe（与月华调用共用同一 iframe），不再整页跳转
 function openPage(page) {
     if (page.tags && page.tags.includes('LTPX') && page.url && page.url.endsWith('.md')) {
         addMessage('system', `已为您打开工具文档【${page.title}】`);
         const viewerUrl = '/file/read/package/tool_viewer/index.html?url='
             + encodeURIComponent(page.url)
             + '&title=' + encodeURIComponent(page.title);
-        window.open(viewerUrl, '_self');
+        openPageInFrame(viewerUrl, page.title);
         return;
     }
 
     if (page.path) {
+        // 外部原生应用（exe/ps1/bat）无法在 iframe 中嵌入，保持独立启动
         addMessage('system', `已为您启动【${page.title}】`);
         loadApplication(page.path);
-    } else {
+        return;
+    }
+
+    if (page.url && /^https?:\/\//i.test(page.url)) {
+        // 外部链接（如 Git 仓库）受跨站限制无法可靠 iframe 嵌入，保持原窗口跳转
         addMessage('system', `已为您打开【${page.title}】`);
         window.open(page.url, '_self');
+        return;
     }
+
+    addMessage('system', `已为您打开【${page.title}】`);
+    openPageInFrame(page.url, page.title, page.id);
 }
 
 async function loadApplication(path) {
@@ -1132,6 +1142,18 @@ const ltpxFrameCloseBtn = document.getElementById('ltpxFrameCloseBtn');
 let activeLTPXCall = null;   // 当前等待回执的 ltpx_call（含 request_id/tool/arguments）
 let ltpxFrameReady = false;  // iframe 当前文档是否已加载完成（就绪后再投递指令）
 let ltpxFrameApp = '';       // iframe 当前已加载的包 ID（同一包重复调用时直接投递，避免重新加载）
+
+// 统一打开页面到覆盖层 iframe：用户点击应用图标与月华调用共用同一个 iframe。
+// 手动打开时置空待定回执，并记录来源包 ID（月华随后调用同包工具时可直接复用已加载页面）。
+function openPageInFrame(url, title, appId) {
+    if (!url) return;
+    ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (title || '页面');
+    ltpxFrameReady = false;
+    activeLTPXCall = null;       // 手动打开不等待任何回执
+    ltpxFrameApp = appId || '';  // 记录来源包 ID，便于月华同包调用复用已加载页面
+    ltpxFrame.src = url;
+    ltpxOverlay.classList.add('active');
+}
 
 // 收到月华的 ltpx_call：打开对应包页面并投递执行指令
 function openLTPXPackage(msg) {

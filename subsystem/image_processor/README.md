@@ -2,7 +2,7 @@
 
 > 📚 代码级文档参见 [Code Wiki 04·公共子系统](../../docs/code-wiki/04-公共子系统.md)，入口 [Code Wiki 门户](../../docs/code-wiki/README.md)。
 
-图像生成、视频关键帧提取与屏幕截图的共享库模块，为星图·月华提供图像相关能力。
+图像生成、视频关键帧提取与屏幕截图的共享库模块，为钛宇-月华提供图像相关能力。
 
 ---
 
@@ -66,4 +66,4 @@ sd-cli.exe 是 stable-diffusion.cpp 的命令行引擎，需自行编译或获�
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
 - [配置管理子系统](../general_config/README.md) —— 扩散模型、引擎与 FFmpeg 路径配置
-- [星图·月华](../../lunar_astral/README.md) —— image_processor 子系统的主要集成使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— image_processor 子系统的主要集成使用方

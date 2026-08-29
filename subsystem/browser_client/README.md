@@ -24,7 +24,7 @@
 
 ## 运行与使用方式
 
-`browser_client` 作为库被宿主程序（星图·月华、星图·琉璃）调用，在需要展示前端页面时由其打开 WebView 窗口，不可用时自动回退系统浏览器。入口函数、IP 发现机制与各调用方式见 [Code Wiki 04 §4.2](../../docs/code-wiki/04-公共子系统.md)，此处不重复。
+`browser_client` 作为库被宿主程序（钛宇-月华、钛宇-琉璃）调用，在需要展示前端页面时由其打开 WebView 窗口，不可用时自动回退系统浏览器。入口函数、IP 发现机制与各调用方式见 [Code Wiki 04 §4.2](../../docs/code-wiki/04-公共子系统.md)，此处不重复。
 
 ---
 
@@ -70,5 +70,5 @@
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
 - [配置管理子系统](../general_config/README.md) —— WebView 窗口参数配置
-- [星图·月华](../../lunar_astral/README.md) —— browser 的主要使用方
-- [星图·琉璃](../../crystal_astral/README.md) —— browser 的使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— browser 的主要使用方
+- [钛宇-琉璃](../../crystal_astral/README.md) —— browser 的使用方

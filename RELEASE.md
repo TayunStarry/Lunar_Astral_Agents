@@ -15,7 +15,7 @@
 
 ## 项目组成
 
-### 1. 星图·月华（lunar_astral）— AI 桌面智能体核心
+### 1. 钛宇-月华（lunar_astral）— AI 桌面智能体核心
 
 **功能**：多模态 AI 角色对话、TTS 语音合成、文生图、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、QQ 群聊适配器。
 
@@ -25,7 +25,7 @@
 
 ---
 
-### 2. 星图·琉璃（crystal_astral）— 工具集扩展程序
+### 2. 钛宇-琉璃（crystal_astral）— 工具集扩展程序
 
 **功能**：文件管理、数据库可视化、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、外部应用加载器。
 

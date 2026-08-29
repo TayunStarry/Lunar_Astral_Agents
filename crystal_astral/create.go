@@ -57,7 +57,7 @@ func copyBuffer(dst io.Writer, src io.Reader) (int64, error) {
 
 // reloadPageParameters 重新加载页面参数
 func reloadPageParameters() {
-	*GeneralConfig.WebViewTitle = "星月智能 -> 轻量级-神经网络-本地部署方案"
+	*GeneralConfig.WebViewTitle = "[星月智能] : 钛宇-琉璃"
 	*GeneralConfig.WebViewWidth = 1500
 	*GeneralConfig.WebViewHeight = 1050
 	// 窗口图标（相对路径按「可执行文件目录→当前工作目录」解析，exe 输出在仓库根目录）
@@ -126,7 +126,9 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	LoggerGeneral.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
 	reloadPageParameters()
 	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
-	go BrowserClient.OpenBrowser(fmt.Sprintf("http://localhost%s", serverAddr))
+	// 使用带「返回主页面」悬浮按钮的 webview 打开：
+	// 应用被外部链接 _self 跳转走后，仍能通过悬浮按钮回到琉璃主页面
+	go BrowserClient.OpenBrowserWithReturnButton(fmt.Sprintf("http://localhost%s", serverAddr), fmt.Sprintf("http://localhost%s/", serverAddr))
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

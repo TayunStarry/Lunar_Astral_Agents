@@ -1,4 +1,4 @@
-# 核心系统——星图·月华（lunar_astral）
+# 核心系统——钛宇-月华（lunar_astral）
 
 AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图像生成功能。
 
@@ -26,7 +26,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ## 项目结构
 
-`lunar_astral/` 主目录职责（`adapters/`、`model/`、`server/`、`hierarchy/`、`websocket/`、`TypeScript/`、`learner/`、`bridging/`）及 Go 子系统依赖清单一并见 [Code Wiki 02 §1 目录总览](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
+`lunar_astral/` 主目录职责（`adapters/`、`model/`、`server/`、`hierarchy/`、`websocket/`、`TypeScript/`、`learner/`、`bridging/`）及 Go 子系统依赖清单一并见 [Code Wiki 02 §1 目录总览](../docs/code-wiki/02-核心系统-钛宇-月华.md)，此处不重复。
 
 ---
 
@@ -34,7 +34,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ### 启动时序
 
-启动调用链与各步骤对应实现，见 [Code Wiki 02 §2 启动时序](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
+启动调用链与各步骤对应实现，见 [Code Wiki 02 §2 启动时序](../docs/code-wiki/02-核心系统-钛宇-月华.md)，此处不重复。
 
 ### 核心数据流
 
@@ -56,7 +56,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ### 核心模块
 
-月华的核心能力由以下模块承载，其代码级细节（各目录逐文件职责、llama 启动参数、TS 智能体子模块、前端界面与角色提示词、TTS 链路）见 [Code Wiki 02 §3 Go 后端模块](docs/code-wiki/02-核心系统-星图月华.md)、[§4 TypeScript 智能体](docs/code-wiki/02-核心系统-星图月华.md) 与 [§5 前端界面](docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
+月华的核心能力由以下模块承载，其代码级细节（各目录逐文件职责、llama 启动参数、TS 智能体子模块、前端界面与角色提示词、TTS 链路）见 [Code Wiki 02 §3 Go 后端模块](docs/code-wiki/02-核心系统-钛宇-月华.md)、[§4 TypeScript 智能体](docs/code-wiki/02-核心系统-钛宇-月华.md) 与 [§5 前端界面](docs/code-wiki/02-核心系统-钛宇-月华.md)，此处不重复。
 
 ### 配置
 
@@ -66,7 +66,7 @@ AI 桌面智能体核心系统，集成多模态对话、TTS 语音合成与图�
 
 ## API 接口
 
-完整端点表与本机 WebSocket 消息协议见 [Code Wiki 02 §6 HTTP API 与 WebSocket 协议](../docs/code-wiki/02-核心系统-星图月华.md)，此处不重复。
+完整端点表与本机 WebSocket 消息协议见 [Code Wiki 02 §6 HTTP API 与 WebSocket 协议](../docs/code-wiki/02-核心系统-钛宇-月华.md)，此处不重复。
 
 ---
 
@@ -105,11 +105,11 @@ cd d:\Lunar_Astral_Agents\lunar_astral
 
 ## 相关文档
 
-> 📚 **代码级文档**：见 [Code Wiki 02·核心系统-月华](../docs/code-wiki/02-核心系统-星图月华.md)，综合入口 [Code Wiki 门户](../docs/code-wiki/README.md)。
+> 📚 **代码级文档**：见 [Code Wiki 02·核心系统-月华](../docs/code-wiki/02-核心系统-钛宇-月华.md)，综合入口 [Code Wiki 门户](../docs/code-wiki/README.md)。
 
 - [项目主文档](../README.md) — 环境要求、整体架构
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
-- [星图·琉璃](../crystal_astral/README.md) — 扩展工具集
+- [钛宇-琉璃](../crystal_astral/README.md) — 扩展工具集
 - [配置管理](../subsystem/general_config/README.md) — 命令行参数与 JSON 配置
 - [网络检索](../subsystem/agent_search/README.md) — AI 搜索智能体详情
 - [语音合成](../subsystem/qwen3_tts/README.md) — TTS 引擎详情

@@ -51,7 +51,9 @@ func waitForServer(rawURL string) {
 }
 
 // StartWebViewBrowser 在主线程启动 webview（需在已锁定的 OS 线程中调用）
-func StartWebViewBrowser(url string) {
+// initJS 为可选的页面注入脚本：通过 WebView2 AddScriptToExecuteOnDocumentCreated
+// 在每个新文档创建时执行（如注入「返回主页面」悬浮按钮），为空则不注入。
+func StartWebViewBrowser(url string, initJS string) {
 	// 1. 通知调用者我们将进入主线程循环（此函数必须在专用 goroutine 中调用）
 	LoggerGeneral.Info("BrowserClient", "准备进入主线程 webview 循环")
 	runtime.LockOSThread() // 确保当前 goroutine 固定在一个系统线程
@@ -84,6 +86,12 @@ func StartWebViewBrowser(url string) {
 
 	// 5. 应用窗口图标与标题栏样式（需在主线程、Run 之前调用）
 	applyWindowStyle(w)
+
+	// 5.1 注册页面注入脚本（在每个新文档创建时执行，见 StartWebViewBrowser 注释）
+	if initJS != "" {
+		LoggerGeneral.SubInfo("BrowserClient", "StartWebViewBrowser", "注册页面注入脚本")
+		w.Init(initJS)
+	}
 
 	// 6. 退出时清理资源并发送关闭通知（必须在 UnlockOSThread 之前执行）
 	defer func() {

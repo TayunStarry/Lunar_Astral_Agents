@@ -26,7 +26,7 @@
 
 ## 运行与使用方式
 
-`file_manager` 作为一个库集成到宿主程序（星图·月华、星图·琉璃）中，HTTP 路由由宿主程序注册。文件保存、读取、知识库/记忆库操作通过对应 HTTP 端点调用，完整端点表与请求/响应格式见 [Code Wiki 04 §4.3](../../docs/code-wiki/04-公共子系统.md)，此处不重复。
+`file_manager` 作为一个库集成到宿主程序（钛宇-月华、钛宇-琉璃）中，HTTP 路由由宿主程序注册。文件保存、读取、知识库/记忆库操作通过对应 HTTP 端点调用，完整端点表与请求/响应格式见 [Code Wiki 04 §4.3](../../docs/code-wiki/04-公共子系统.md)，此处不重复。
 
 ---
 
@@ -58,5 +58,5 @@
 
 - [项目主文档](../../README.md) —— 环境要求与整体架构
 - [配置管理子系统](../general_config/README.md) —— `LocalDir`、`Database` 路径配置
-- [星图·琉璃](../../crystal_astral/README.md) —— 文件管理 HTTP 端点使用方
-- [星图·月华](../../lunar_astral/README.md) —— 适配器层调用方
+- [钛宇-琉璃](../../crystal_astral/README.md) —— 文件管理 HTTP 端点使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— 适配器层调用方

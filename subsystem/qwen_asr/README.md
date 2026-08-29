@@ -75,4 +75,4 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen_asr
 - [项目主文档](../../README.md) —— 环境要求与编译流程
 - [配置管理子系统](../general_config/README.md) —— 模型路径配置
 - [语音合成独立系统](../qwen3_tts/README.md) —— TTS 文本转语音引擎
-- [星图·月华](../../lunar_astral/README.md) —— ASR 引擎可集成使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— ASR 引擎可集成使用方

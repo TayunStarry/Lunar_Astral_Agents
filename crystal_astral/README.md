@@ -1,6 +1,6 @@
-# 扩展系统——星图·琉璃（crystal_astral）
+# 扩展系统——钛宇-琉璃（crystal_astral）
 
-> 📚 代码级文档参见 [Code Wiki 03·扩展系统-琉璃](../docs/code-wiki/03-扩展系统-星图琉璃.md)，综合入口 [Code Wiki 门户](../docs/code-wiki/README.md)。
+> 📚 代码级文档参见 [Code Wiki 03·扩展系统-琉璃](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md)，综合入口 [Code Wiki 门户](../docs/code-wiki/README.md)。
 
 工具集扩展程序，提供文件管理、知识库/记忆库、截图标注、图片处理、AI 代理转发、模型元数据解析与引擎命令桥接等综合功能。
 
@@ -37,7 +37,7 @@
 
 ## 项目结构
 
-`crystal_astral/` 各文件职责（`main.go`、`create.go`、`handler.go`、`gguf.go`、`convert.go`、`ws.go`、`type.go`、`variable.go` 及 `assets/`）与 Go 模块依赖见 [Code Wiki 03 §1 目录总览](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
+`crystal_astral/` 各文件职责（`main.go`、`create.go`、`handler.go`、`gguf.go`、`convert.go`、`ws.go`、`type.go`、`variable.go` 及 `assets/`）与 Go 模块依赖见 [Code Wiki 03 §1 目录总览](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md)，此处不重复。
 
 ---
 
@@ -45,17 +45,17 @@
 
 ### 启动时序
 
-启动调用链与各步骤对应实现，见 [Code Wiki 03 §2 启动与路由](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
+启动调用链与各步骤对应实现，见 [Code Wiki 03 §2 启动与路由](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md)，此处不重复。
 
 ### 代理与引擎桥接
 
-琉璃通过**智能路由**依据请求路径自动分发：`/v1/`、`/tts`、`/write/message`、`/ltpx/` 等前缀代理到月华后端（`http://localhost:36789`），其余路径直接服务本地静态资源；`StudioHub` WebSocket 集线器负责引擎命令与动画动作的桥接与广播。代理感知路由的分发规则与 StudioHub 实现细节见 [Code Wiki 03 §2.2](../docs/code-wiki/03-扩展系统-星图琉璃.md) 与 [§3.4](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
+琉璃通过**智能路由**依据请求路径自动分发：`/v1/`、`/tts`、`/write/message`、`/ltpx/` 等前缀代理到月华后端（`http://localhost:36789`），其余路径直接服务本地静态资源；`StudioHub` WebSocket 集线器负责引擎命令与动画动作的桥接与广播。代理感知路由的分发规则与 StudioHub 实现细节见 [Code Wiki 03 §2.2](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md) 与 [§3.4](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md)，此处不重复。
 
 ---
 
 ## API 接口
 
-完整端点表（按功能域分组）见 [Code Wiki 03 §4 端点总览](../docs/code-wiki/03-扩展系统-星图琉璃.md)，此处不重复。
+完整端点表（按功能域分组）见 [Code Wiki 03 §4 端点总览](../docs/code-wiki/03-扩展系统-钛宇-琉璃.md)，此处不重复。
 
 ---
 
@@ -94,7 +94,7 @@ cd d:\Lunar_Astral_Agents\crystal_astral
 
 - [项目主文档](../README.md) — 环境要求、整体架构
 - [项目架构说明](../ARCHITECTURE.md) — 完整架构
-- [星图·月华](../lunar_astral/README.md) — AI 智能体核心系统
+- [钛宇-月华](../lunar_astral/README.md) — AI 智能体核心系统
 - [配置管理](../subsystem/general_config/README.md) — 全局配置
 - [文件管理](../subsystem/file_manager/README.md) — 文件、知识库、记忆库与扩展包详情
 - [图像处理](../subsystem/image_processor/README.md) — 截图、关键帧与图像生成详情

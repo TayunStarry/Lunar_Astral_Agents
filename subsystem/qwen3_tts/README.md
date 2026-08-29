@@ -87,5 +87,5 @@ Qwen3-TTS 的 GGUF 格式模型可从 Hugging Face 或 ModelScope 获取。将�
 
 - [项目主文档](../../README.md) —— 环境要求与编译流程
 - [配置管理子系统](../general_config/README.md) —— 模型路径配置
-- [星图·月华](../../lunar_astral/README.md) —— TTS 引擎的集成使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— TTS 引擎的集成使用方
 - [语音识别独立系统](../qwen_asr/README.md) —— ASR 语音转文本引擎

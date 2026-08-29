@@ -58,6 +58,6 @@
 ## 相关文档
 
 - [项目主文档](../../README.md) —— 环境要求与编译流程
-- [星图·月华](../../lunar_astral/README.md) —— 配置使用方
-- [星图·琉璃](../../crystal_astral/README.md) —— 配置使用方
+- [钛宇-月华](../../lunar_astral/README.md) —— 配置使用方
+- [钛宇-琉璃](../../crystal_astral/README.md) —— 配置使用方
 - [网页前端子系统](../browser_client/README.md) —— WebView 窗口参数使用

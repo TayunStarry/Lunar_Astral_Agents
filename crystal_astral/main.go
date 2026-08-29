@@ -11,7 +11,7 @@ func main() {
 	// 生成10000~40000之间的随机端口
 	port := rand.Intn(30001) + 10000
 	// 服务名称
-	name := "< 星月智能 > 星图.琉璃 在此为您提供服务支持"
+	name := "< 星月智能 > 钛宇-琉璃 在此为您提供服务支持"
 	// 启动服务
 	if err := StartServer(port, Gethierarchy(), name); err != nil {
 		LoggerGeneral.Error("CrystalAstral", "%s 启动失败: %v", name, err)

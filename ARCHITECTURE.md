@@ -20,7 +20,7 @@
 │                     星月智能平台                              │
 │                                                              │
 │  ┌───────────────────────┐  ┌───────────────────────┐        │
-│  │  星图·月华              │  │  星图·琉璃              │        │
+│  │  钛宇-月华              │  │  钛宇-琉璃              │        │
 │  │  AI 桌面智能体核心       │  │  工具集扩展系统         │        │
 │  │  adapters/server/model  │  │  handler/endpoint     │        │
 │  │  websocket/TypeScript   │  │  assets/              │        │
@@ -57,7 +57,7 @@
 
 ```
 Lunar_Astral_Agents/
-├── lunar_astral/          # 核心系统：星图·月华
+├── lunar_astral/          # 核心系统：钛宇-月华
 │   ├── adapters/          # Go↔JS 桥接层（goja 运行时）
 │   ├── hierarchy/         # 前端资源（embed 嵌入）
 │   │   └── assets/
@@ -70,7 +70,7 @@ Lunar_Astral_Agents/
 │   ├── websocket/         # WebSocket 实时通信
 │   └── bridging/          # QQ 群聊适配器（NapCat）
 │
-├── crystal_astral/        # 扩展系统：星图·琉璃
+├── crystal_astral/        # 扩展系统：钛宇-琉璃
 │   └── assets/            # 前端静态资源（embed 嵌入）
 │
 ├── subsystem/             # 可复用子系统

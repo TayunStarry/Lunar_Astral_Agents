@@ -23,8 +23,8 @@
 
 ```
 Lunar_Astral_Agents/
-├── lunar_astral/          # 核心系统：星图·月华（AI 桌面智能体）
-├── crystal_astral/        # 扩展系统：星图·琉璃（工具集扩展）
+├── lunar_astral/          # 核心系统：钛宇-月华（AI 桌面智能体）
+├── crystal_astral/        # 扩展系统：钛宇-琉璃（工具集扩展）
 ├── subsystem/             # 公共子系统 + 独立 AI 引擎 + 运维工具
 │   ├── general_config/     # 全局配置中枢
 │   ├── browser_client/     # WebView 窗口管理
@@ -106,8 +106,8 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 | 文件 | 系统 | 说明 |
 |------|------|------|
-| `Lunar_Astral.exe` | 星图·月华 | AI 桌面智能体主程序 |
-| `Crystal_Astral.exe` | 星图·琉璃 | 工具集扩展程序 |
+| `Lunar_Astral.exe` | 钛宇-月华 | AI 桌面智能体主程序 |
+| `Crystal_Astral.exe` | 钛宇-琉璃 | 工具集扩展程序 |
 | `Qwen_ASR_Lunar.exe` | 语音识别 | 独立语音识别程序 |
 | `Qwen3_TTS_Lunar.exe` | 语音合成 | 独立语音合成程序 |
 
@@ -143,8 +143,8 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 | 子系统 | 文档 | 功能 |
 |--------|------|------|
-| 星图·月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心 |
-| 星图·琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统 |
+| 钛宇-月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心 |
+| 钛宇-琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统 |
 | 配置管理 | [subsystem/general_config/](subsystem/general_config/) | 全局配置中枢 |
 | 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件管理 + 知识库/记忆库 + 扩展包 |
 | 图像处理 | [subsystem/image_processor/](subsystem/image_processor/README.md) | 图像生成 + 截图 + 视频关键帧 |
@@ -164,8 +164,8 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 | 章节 | 内容 |
 |------|------|
 | [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) | 架构入口、前端共享资源、章节导航 |
-| [02 核心系统·月华](docs/code-wiki/02-核心系统-星图月华.md) | Go 后端 + TypeScript 智能体 |
-| [03 扩展系统·琉璃](docs/code-wiki/03-扩展系统-星图琉璃.md) | 工具集扩展 + 代理路由 |
+| [02 核心系统·月华](docs/code-wiki/02-核心系统-钛宇-月华.md) | Go 后端 + TypeScript 智能体 |
+| [03 扩展系统·琉璃](docs/code-wiki/03-扩展系统-钛宇-琉璃.md) | 工具集扩展 + 代理路由 |
 | [04 公共子系统](docs/code-wiki/04-公共子系统.md) | 配置/浏览器/文件/图像/日志 |
 | [05 独立 AI 引擎与运维](docs/code-wiki/05-独立AI引擎与运维工具.md) | TTS / ASR / 搜索 / 运维 |
 | [06 前端资源库](docs/code-wiki/06-前端资源库.md) | 标准依赖库与自定义模块 |

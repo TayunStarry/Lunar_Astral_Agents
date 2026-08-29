@@ -2,6 +2,7 @@ package BrowserClient
 
 import (
 	"LunarSubsystem/LoggerGeneral"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -157,5 +158,64 @@ func OpenBrowser(url string) {
 		return
 	}
 	LoggerGeneral.SubInfo("BrowserClient", "OpenBrowser", "启动 webview 专用线程")
-	go StartWebViewBrowser(url)
+	go StartWebViewBrowser(url, "")
+}
+
+// OpenBrowserWithReturnButton 与 OpenBrowser 相同，但额外向每个非主页面的顶层页面注入
+// 「返回主页面」悬浮按钮，用于外部页面跳转后回到主页面（如琉璃应用被 _self 跳转走的情况）。
+// mainURL 为点击悬浮按钮时导航回的目标地址（主页面 URL）。
+func OpenBrowserWithReturnButton(url string, mainURL string) {
+	LoggerGeneral.SubInfo("BrowserClient", "OpenBrowserWithReturnButton", "开始选择浏览器")
+	if !IsWebViewSupported() {
+		LoggerGeneral.SubInfo("BrowserClient", "OpenBrowserWithReturnButton", "webview 不支持，回退到系统浏览器")
+		OpenSystemBrowser(url)
+		return
+	}
+	LoggerGeneral.SubInfo("BrowserClient", "OpenBrowserWithReturnButton", "启动 webview 专用线程")
+	go StartWebViewBrowser(url, buildReturnButtonJS(mainURL))
+}
+
+// buildReturnButtonJS 生成「返回主页面」悬浮按钮注入脚本。
+// 通过 webview.Init 注入，在 WebView2 每个新文档创建时执行：
+//   - 仅顶层页面显示（iframe 内不注入，避免干扰 LTPX 覆盖层中的包页面）
+//   - 主页面自身不显示（按根路径 pathname == '/' 判断）
+//   - 点击后导航回 mainURL
+func buildReturnButtonJS(mainURL string) string {
+	homeJSON, _ := json.Marshal(mainURL)
+	return `(function () {
+    if (window.top !== window.self) return; // iframe 内不注入
+    var p = window.location.pathname;
+    if (p === '/' || p === '') return;      // 主页面自身不注入
+    if (document.getElementById('crystal-return-home')) return; // 避免重复注入
+
+    var home = ` + string(homeJSON) + `;
+    var btn = document.createElement('div');
+    btn.id = 'crystal-return-home';
+    btn.title = '返回琉璃主页面';
+    btn.setAttribute('role', 'button');
+    btn.innerHTML = '<span style="font-size:14px;line-height:1">&#9670;</span><span>返回琉璃</span>';
+    btn.style.cssText = [
+        'position:fixed', 'right:18px', 'bottom:18px', 'z-index:2147483647',
+        'display:flex', 'align-items:center', 'gap:7px',
+        'padding:10px 18px', 'border-radius:999px', 'cursor:pointer',
+        'font:600 13px/1 "Microsoft YaHei","PingFang SC",sans-serif', 'color:#fff',
+        'background:rgba(120,140,255,0.92)',
+        'box-shadow:0 4px 18px rgba(0,0,0,0.28),inset 0 0 0 1px rgba(255,255,255,0.25)',
+        'backdrop-filter:blur(8px)', '-webkit-backdrop-filter:blur(8px)',
+        'user-select:none', '-webkit-user-select:none',
+        'opacity:0.92', 'transition:transform .15s ease,box-shadow .15s ease,opacity .2s ease'
+    ].join(';') + ';';
+    btn.onmouseenter = function () { btn.style.transform = 'scale(1.05)'; btn.style.opacity = '1'; };
+    btn.onmouseleave = function () { btn.style.transform = 'scale(1)'; btn.style.opacity = '0.92'; };
+    btn.onclick = function () {
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.5';
+        window.location.href = home;
+    };
+    function mount() {
+        if (document.body) { document.body.appendChild(btn); }
+        else { setTimeout(mount, 50); }
+    }
+    mount();
+})();`
 }

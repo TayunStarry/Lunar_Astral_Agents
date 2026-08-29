@@ -16,8 +16,8 @@
 |------|------|------|
 | [根 README](../../README.md) | 总览 → [01](01-项目架构总览.md) | 项目简介、环境要求、编译、子系统导航 |
 | [ARCHITECTURE.md](../../ARCHITECTURE.md) | 架构图 → [01](01-项目架构总览.md) | 系统分层、模块职责、依赖图 |
-| [月亮核心 README](../../lunar_astral/README.md) | → [02](02-核心系统-星图月华.md) | 月华启动时序、模块、API |
-| [琉璃扩展 README](../../crystal_astral/README.md) | → [03](03-扩展系统-星图琉璃.md) | 琉璃功能与代理路由 |
+| [月亮核心 README](../../lunar_astral/README.md) | → [02](02-核心系统-钛宇-月华.md) | 月华启动时序、模块、API |
+| [琉璃扩展 README](../../crystal_astral/README.md) | → [03](03-扩展系统-钛宇-琉璃.md) | 琉璃功能与代理路由 |
 | [general_config](../../subsystem/general_config/README.md) | → [04](04-公共子系统.md) | 全局配置中枢 |
 | [browser_client](../../subsystem/browser_client/README.md) | → [04](04-公共子系统.md) | WebView 窗口 |
 | [file_manager](../../subsystem/file_manager/README.md) | → [04](04-公共子系统.md) | 文件/知识库/记忆库 |
@@ -34,8 +34,8 @@
 | 文档 | 内容 | 相关源文档 |
 |------|------|-----------|
 | [01-项目架构总览](01-项目架构总览.md) | 架构入口、前端共享资源机制、章节导航 | [README](../../README.md)、[ARCHITECTURE](../../ARCHITECTURE.md) |
-| [02-核心系统-星图月华](02-核心系统-星图月华.md) | Go 后端 + TS 智能体 | [lunar_astral/README](../../lunar_astral/README.md) |
-| [03-扩展系统-星图琉璃](03-扩展系统-星图琉璃.md) | 工具集成扩展 + 代理路由 | [crystal_astral/README](../../crystal_astral/README.md) |
+| [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) | Go 后端 + TS 智能体 | [lunar_astral/README](../../lunar_astral/README.md) |
+| [03-扩展系统-钛宇-琉璃](03-扩展系统-钛宇-琉璃.md) | 工具集成扩展 + 代理路由 | [crystal_astral/README](../../crystal_astral/README.md) |
 | [04-公共子系统](04-公共子系统.md) | 五基础子系统 | [subsystem/*/README](../../subsystem/) |
 | [05-独立AI引擎与运维工具](05-独立AI引擎与运维工具.md) | TTS/ASR/搜索/运维 | [subsystem/*/README](../../subsystem/) |
 | [06-前端资源库](06-前端资源库.md) | standard_dependency 与自定义模块 | [package/](../../local_data/package/) |
