@@ -398,11 +398,14 @@ func buildMiniLTPToolDesc(id, title, description string) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("驱动「" + readable + "」模块页面(DeepSeek mini-LTP 通用页面操作工具)。")
+	b.WriteString("驱动「")
+	b.WriteString(readable)
+	b.WriteString("」模块页面(DeepSeek mini-LTP 通用页面操作工具)。")
 	if desc != "" {
 		// 精炼补充该模块是什么：截断避免过长
-		d := conciseText(desc, 90)
-		b.WriteString("该模块：" + d + "。")
+		b.WriteString("该模块：")
+		b.WriteString(conciseText(desc, 90))
+		b.WriteString("。")
 	}
 	b.WriteString("接受自然语言指令，智能体自动识别意图并依次执行点击、输入文本、按键(键入/短按/长按)、滑动/滚动、元素捕获、下拉选择等页面操作，操作完成后返回执行结果。")
 	return b.String()
