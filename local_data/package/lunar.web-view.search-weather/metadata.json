@@ -1,0 +1,29 @@
+{
+	"id": "lunar.web-view.search-weather",
+	"title": "实时天气与新闻",
+	"description": "实时天气与新闻查询模块：查询指定城市天气与当日新闻摘要，支持月华自然语言调用与手动查询",
+	"tags": [
+		"LTPX"
+	],
+	"tools": [
+		{
+			"type": "function",
+			"function": {
+				"name": "realtime_query",
+				"description": "实时天气与新闻查询：接受自然语言指令，由查询智能体自动识别意图并执行——查询指定城市天气（当前气温/体感/天气状况/湿度/风力/未来2天预报）或获取当日新闻摘要",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"instruction": {
+							"type": "string",
+							"description": "要执行的查询指令（自然语言），例如：查询北京今天的天气；上海热不热；今天有什么新闻"
+						}
+					},
+					"required": [
+						"instruction"
+					]
+				}
+			}
+		}
+	]
+}

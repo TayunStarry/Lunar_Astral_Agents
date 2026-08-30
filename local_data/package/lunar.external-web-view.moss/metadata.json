@@ -1,0 +1,10 @@
+{
+	"id": "lunar.studio.moss",
+	"icon": "icon.webp",
+	"title": "MOSS Studio",
+	"description": "打开 MOSS Studio AI 内容创作平台，支持语音合成、音色库、图视频生成、数字人等功能",
+	"url": "https://studio-next.mosi.cn/",
+	"tags": [
+		"Studio"
+	]
+}

@@ -1,9 +1,0 @@
-{
-	"id": "lunar.studio.tts",
-	"icon": "/file/read/package/lunar.studio.tts/icon.webp",
-	"title": "语音合成",
-	"description": "基于通义千问的文本转语音合成",
-	"tags": [
-		"Studio"
-	]
-}

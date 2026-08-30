@@ -1,0 +1,9 @@
+{
+	"id": "lunar.means.knowledge.base",
+	"icon": "icon.webp",
+	"title": "知识库",
+	"description": "SQLite 知识数据库可视化管理",
+	"tags": [
+		"App"
+	]
+}

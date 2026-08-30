@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』实时天气与新闻</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<!-- 标准脚本库 -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<div class="app">
+		<main class="app-main">
+			<!-- 左栏：查询输入 + 历史记录（占满剩余高度） -->
+			<aside class="left-col">
+				<section class="panel panel-input">
+					<div class="panel-title"><i class="fas fa-hand-pointer"></i> 查询</div>
+					<input type="text" id="cityInput" placeholder="输入城市，如 北京、上海、Tokyo" autocomplete="off">
+					<div class="query-btns">
+						<button class="btn btn-primary" id="weatherBtn"><i class="fas fa-cloud-sun-rain"></i> 查询天气</button>
+						<button class="btn btn-secondary" id="newsBtn"><i class="fas fa-newspaper"></i> 新闻</button>
+					</div>
+					<div class="query-hint">
+						<i class="fas fa-circle-info"></i>
+						也可通过月华呼叫琉璃，用自然语言直接查询（如「查询北京今天的天气」「今天有什么新闻」）。
+					</div>
+				</section>
+
+				<section class="panel panel-history">
+					<div class="panel-title">
+						<i class="fas fa-clock-rotate-left"></i> 历史记录
+						<button class="btn btn-ghost btn-clear" id="clearHistoryBtn" title="清空历史"><i class="fas fa-broom"></i></button>
+					</div>
+					<div class="history-list" id="historyList">
+						<div class="history-empty">暂无查询记录。</div>
+					</div>
+				</section>
+			</aside>
+
+			<!-- 右栏：查询结果 + 操作步骤（占满剩余宽度） -->
+			<section class="right-col">
+				<section class="panel panel-result">
+					<div class="panel-title"><i class="fas fa-display"></i> 查询结果</div>
+					<div class="result-body" id="resultBody">
+						<div class="result-empty"><i class="fas fa-circle-info"></i> 暂无结果，请手动查询或等待月华指令。</div>
+					</div>
+				</section>
+
+				<section class="panel panel-step">
+					<div class="panel-title">
+						<i class="fas fa-list-ul"></i> 月华操作步骤
+						<button class="btn btn-ghost btn-clear" id="clearStepBtn" title="清空步骤"><i class="fas fa-broom"></i></button>
+					</div>
+					<div class="step-list" id="stepList">
+						<div class="step-empty">暂无月华操作记录。</div>
+					</div>
+				</section>
+			</section>
+		</main>
+	</div>
+
+	<script src="ltpx-agent.js"></script>
+	<script src="script.js"></script>
+</body>
+
+</html>

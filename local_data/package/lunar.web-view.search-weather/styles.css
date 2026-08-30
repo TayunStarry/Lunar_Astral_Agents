@@ -1,0 +1,569 @@
+/* ===== 实时天气与新闻模块 - 玻璃风样式（左右双栏布局） ===== */
+
+:root {
+    --sw-accent: #7c9bff;
+    --sw-accent-warm: #ffd27a;
+    --sw-text: #e8ecff;
+    --sw-text-dim: #a9b3d8;
+    --sw-panel: rgba(22, 28, 58, 0.45);
+    --sw-panel-border: rgba(255, 255, 255, 0.14);
+    --sw-danger: #ff8a9b;
+    --sw-success: #7fe0b8;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, 'Segoe UI', sans-serif;
+    color: var(--sw-text);
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+}
+
+.app {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 14px 22px 20px;
+}
+
+/* ===== 主区：左右双栏 ===== */
+.app-main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 16px;
+}
+
+/* 左栏：固定宽度，输入 + 历史占满剩余高度 */
+.left-col {
+    flex: 0 0 320px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* 右栏：占满剩余宽度，结果 + 步骤纵向排布 */
+.right-col {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ===== 面板 ===== */
+.panel {
+    background: var(--sw-panel);
+    border: 1px solid var(--sw-panel-border);
+    border-radius: 18px;
+    padding: 16px 18px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.25);
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sw-accent);
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.panel-title .btn-clear {
+    margin-left: auto;
+}
+
+/* 输入面板：不随高度伸缩 */
+.panel-input {
+    flex-shrink: 0;
+}
+
+/* 历史面板：占满左栏剩余高度，列表可滚动 */
+.panel-history {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 结果面板：占满右栏剩余高度，内容可滚动 */
+.panel-result {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 步骤面板：固定在下部，上限高度，可滚动 */
+.panel-step {
+    flex-shrink: 0;
+    max-height: 42%;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== 按钮 ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #7c9bff, #5b7bf0);
+    box-shadow: 0 4px 14px rgba(124, 155, 255, 0.35);
+}
+
+.btn-secondary {
+    background: rgba(124, 155, 255, 0.22);
+    border: 1px solid rgba(124, 155, 255, 0.35);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--sw-text-dim);
+    padding: 4px 8px;
+}
+
+.btn-ghost:hover {
+    color: var(--sw-text);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== 查询输入区 ===== */
+#cityInput {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--sw-text);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--sw-panel-border);
+    border-radius: 10px;
+    outline: none;
+    margin-bottom: 10px;
+}
+
+#cityInput::placeholder {
+    color: var(--sw-text-dim);
+}
+
+#cityInput:focus {
+    border-color: var(--sw-accent);
+    box-shadow: 0 0 0 3px rgba(124, 155, 255, 0.2);
+}
+
+.query-btns {
+    display: flex;
+    gap: 10px;
+}
+
+.query-btns .btn {
+    flex: 1;
+}
+
+.query-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--sw-text-dim);
+    line-height: 1.6;
+}
+
+.query-hint i {
+    margin-right: 6px;
+    color: var(--sw-accent);
+}
+
+/* ===== 历史记录 ===== */
+.history-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--sw-text-dim);
+    font-size: 13px;
+}
+
+.history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--sw-panel-border);
+}
+
+.history-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+    color: #fff;
+}
+
+.history-icon.h-weather { background: #7c9bff; }
+.history-icon.h-news { background: #ffb46b; }
+.history-icon.h-agent { background: #b48cff; }
+.history-icon.h-error { background: #ff6b81; }
+
+.history-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-title {
+    font-size: 13px;
+    color: var(--sw-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-time {
+    font-size: 11px;
+    color: var(--sw-text-dim);
+    margin-top: 2px;
+}
+
+/* ===== 结果区 ===== */
+.result-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.result-empty,
+.result-error,
+.result-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 12px;
+    color: var(--sw-text-dim);
+    font-size: 13px;
+}
+
+.result-error {
+    color: var(--sw-danger);
+}
+
+.result-error i {
+    font-size: 28px;
+}
+
+.result-empty i {
+    font-size: 28px;
+    opacity: 0.5;
+}
+
+.spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: var(--sw-accent);
+    border-radius: 50%;
+    animation: sw-spin 0.8s linear infinite;
+}
+
+@keyframes sw-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 天气卡片 */
+.weather-block {
+    animation: sw-fade 0.3s ease;
+}
+
+.weather-city {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.weather-city i {
+    color: var(--sw-accent-warm);
+    margin-right: 6px;
+}
+
+.weather-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 14px;
+}
+
+.weather-temp {
+    font-size: 52px;
+    font-weight: 700;
+    line-height: 1;
+    background: linear-gradient(135deg, #fff, var(--sw-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.weather-unit {
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.weather-cond {
+    font-size: 18px;
+    color: var(--sw-accent-warm);
+}
+
+.weather-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.weather-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--sw-panel-border);
+    padding: 7px 12px;
+    border-radius: 10px;
+}
+
+.weather-meta-item i {
+    color: var(--sw-accent);
+}
+
+.weather-forecast {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.forecast-card {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--sw-panel-border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+}
+
+.forecast-date {
+    font-size: 12px;
+    color: var(--sw-text-dim);
+    margin-bottom: 6px;
+}
+
+.forecast-cond {
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.forecast-temp {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--sw-accent);
+}
+
+.weather-source {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--sw-text-dim);
+    text-align: right;
+}
+
+/* 新闻列表 */
+.news-block {
+    animation: sw-fade 0.3s ease;
+}
+
+.news-header {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--sw-accent-warm);
+    margin-bottom: 10px;
+}
+
+.news-header i {
+    margin-right: 6px;
+}
+
+.news-item {
+    display: flex;
+    gap: 10px;
+    padding: 9px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.news-item:last-child {
+    border-bottom: none;
+}
+
+.news-index {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--sw-accent), #5b7bf0);
+    border-radius: 50%;
+}
+
+/* ===== 步骤面板 ===== */
+.step-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.step-empty {
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--sw-text-dim);
+    font-size: 13px;
+}
+
+.step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 6px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.step-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.step-icon {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 11px;
+    color: #fff;
+    margin-top: 1px;
+}
+
+.step-info .step-icon { background: #7c9bff; }
+.step-thinking .step-icon { background: #b48cff; }
+.step-tool .step-icon { background: #ffb46b; }
+.step-tool-result .step-icon { background: #5fd4a4; }
+.step-done .step-icon { background: #45c98a; }
+.step-error .step-icon { background: #ff6b81; }
+.step-warn .step-icon { background: #ffc860; }
+
+.step-text {
+    flex: 1;
+    word-break: break-word;
+    color: var(--sw-text);
+}
+
+.step-error .step-text { color: var(--sw-danger); }
+
+.step-time {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--sw-text-dim);
+    padding-top: 2px;
+}
+
+/* ===== 动画 ===== */
+@keyframes sw-fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 响应式：窄屏改为上下单栏 ===== */
+@media (max-width: 760px) {
+    body {
+        overflow: auto;
+    }
+    .app {
+        height: auto;
+        min-height: 100vh;
+    }
+    .app-main {
+        flex-direction: column;
+    }
+    .left-col {
+        flex: 0 0 auto;
+    }
+    .panel-history {
+        max-height: 220px;
+    }
+    .panel-step {
+        max-height: 240px;
+    }
+    .right-col {
+        min-height: 0;
+    }
+    .panel-result {
+        min-height: 260px;
+    }
+}

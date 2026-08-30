@@ -1,9 +1,0 @@
-{
-    "id": "lunar.studio.translate",
-    "title": "智能翻译",
-    "description": "AI驱动的多语言翻译工具，支持逐行键值对翻译与全文翻译，内置14种样式转换器",
-    "icon":"/file/read/package/lunar.studio.translate/icon.webp",
-    "tags": [
-        "Tool"
-    ]
-}
