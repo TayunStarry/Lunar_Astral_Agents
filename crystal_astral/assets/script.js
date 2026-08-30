@@ -208,7 +208,7 @@ async function loadPages() {
 }
 
 // ===== 网格渲染 =====
-const DEFAULT_ICON_COUNT = 12;
+const DEFAULT_ICON_COUNT = 8;
 
 function getRandomDefaultIcon() {
     return `/default/icon (${Math.floor(Math.random() * DEFAULT_ICON_COUNT) + 1}).webp`;
