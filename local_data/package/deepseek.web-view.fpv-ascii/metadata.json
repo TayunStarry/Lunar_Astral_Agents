@@ -1,0 +1,9 @@
+{
+	"id": "deepseek.fpv-ascii",
+	"icon": "icon.webp",
+	"title": "ASCII FPV · 楼宇穿越",
+	"description": "全画面由彩色 ASCII 字符拼成的第一视角飞行模拟：自研软件光栅化渲染无缝城市，支持键盘与 Xbox 手柄、HUD 与碰撞",
+	"tags": [
+		"DeepSeek-Demo"
+	]
+}

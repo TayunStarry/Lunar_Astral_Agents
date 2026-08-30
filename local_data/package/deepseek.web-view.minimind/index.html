@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transformer 推理原理分析仪 · minimind-3 (Qwen3)</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2307 0b10'/><path d='M2 12L8 3l6 9z' fill='%2335e0ff'/></svg>">
+</head>
+<body>
+<div id="loadOverlay">
+  <h1>TRANSFORMER INFERENCE ANALYZER</h1>
+  <div class="lsys">minimind-3 · QWEN3 ARCH · WEB EDITION</div>
+  <div class="spin"></div>
+  <div class="loadbar"><i id="loadBarFill"></i></div>
+  <div id="loadMsg">INITIALIZING…</div>
+  <div class="corner">UNITS: FLOAT32 // SCALE: 1/√96 // HEADS: 8Q+4KV GQA // LAYERS: 8 // VOCAB: 6400</div>
+</div>
+
+<div id="app">
+  <!-- ══════════ TOP BAR ══════════ -->
+  <header id="topbar">
+    <span class="led ok" id="ledModel"></span>
+    <span class="logo">Transformer&nbsp;Analyzer<small id="tbArch">Qwen3ForCausalLM</small></span>
+    <div class="tb-sep"></div>
+    <span class="tb-item">权重 <b id="tbParams">63.9M FP16→FP32</b></span>
+    <span class="tb-item">后端 <b id="tbBackend">—</b></span>
+    <span class="tb-item">加载 <b id="tbLoadTime">—</b></span>
+    <div class="spacer"></div>
+    <button id="btnSelfTest">交叉验证</button>
+    <button id="btnDoc">📖 原理文档</button>
+  </header>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <main id="main">
+
+    <!-- ─────── LEFT: control column ─────── -->
+    <section class="col" id="colLeft">
+      <div class="panel">
+        <div class="panel-head">◈ Module01 · 输入与运行 <span class="sub">input &amp; run</span></div>
+        <div class="panel-body">
+          <label class="field">
+            <span class="fl">模式 mode</span>
+            <select id="selMode">
+              <option value="chat">对话模板（Chat·推荐）</option>
+              <option value="completion">纯文本续写（Base LM）</option>
+            </select>
+          </label>
+          <div id="chatFields">
+            <label class="field"><span class="fl">系统提示 system</span>
+              <textarea id="inpSystem" rows="2">你是一个乐于助人的AI助手。</textarea></label>
+          </div>
+          <label class="field"><span class="fl">输入文本 input <b id="tokCount">0 tok</b></span>
+            <textarea id="inpText" rows="4" spellcheck="false">你好，请用一句话介绍自己。</textarea></label>
+          <button id="btnRun" class="primary" style="width:100%">▶ 预填并推理首 Token</button>
+          <div class="divider"></div>
+          <div class="row3">
+            <button id="btnStep" disabled title="采样并推进一步">单步 +1 Token</button>
+            <button id="btnAuto" disabled>自动播放 ▸</button>
+            <button id="btnReset" class="danger">重置</button>
+          </div>
+          <label class="check" style="margin-top:6px"><input type="checkbox" id="chkGreedy"> 贪心解码（始终取最大概率）</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">◈ Module02 · 解码参数 <span class="sub">sampling</span></div>
+        <div class="panel-body">
+          <label class="field"><span class="fl">温度 temperature <b id="vTemp">0.90</b></span>
+            <input type="range" id="rTemp" min="10" max="200" value="90"></label>
+          <label class="field"><span class="fl">Top-P 截断 <b id="vTopP">1.00</b></span>
+            <input type="range" id="rTopP" min="5" max="100" value="100"></label>
+          <label class="field"><span class="fl">Top-K 截断 <b id="vTopK">∞ (64)</b></span>
+            <input type="range" id="rTopK" min="1" max="100" value="100"></label>
+          <label class="field"><span class="fl">重复惩罚 repeat penalty <b id="vRep">1.00</b></span>
+            <input type="range" id="rRep" min="100" max="180" value="100"></label>
+          <label class="field"><span class="fl">自动播放间隔 ms <b id="vDelay">600</b></span>
+            <input type="range" id="rDelay" min="80" max="2000" step="20" value="600"></label>
+          <label class="field"><span class="fl">最大生成长度 <b id="vMaxNew">48</b></span>
+            <input type="range" id="rMaxNew" min="4" max="128" value="48"></label>
+          <div class="divider"></div>
+          <div class="mini-head">资源 · 精度与捕获</div>
+          <label class="field"><span class="fl">权重精度 precision <b id="vPrec">FP32</b></span>
+            <select id="selPrec">
+              <option value="fp32" selected>FP32（全精度）</option>
+              <option value="int8">INT8（逐通道对称量化 · W8A16）</option>
+            </select></label>
+          <label class="check" style="display:flex;margin-bottom:6px" title="关闭后：散点/热力图/演算台不再更新，但可跑满上下文（仅保留 KV Cache）">
+            <input type="checkbox" id="chkCapture" checked> 可视化捕获（散点/热力图/演算台数据源）</label>
+          <label class="field"><span class="fl">可视化窗口（超出丢弃更早捕获） <b id="vVizWin">128</b></span>
+            <select id="selVizWin">
+              <option value="64">64 tokens（最省内存）</option>
+              <option value="128" selected>128 tokens</option>
+              <option value="192">192 tokens</option>
+              <option value="256">256 tokens</option>
+              <option value="0">全部保留（内存随上下文平方增长）</option>
+            </select></label>
+          <label class="field"><span class="fl">上下文限制 ctx limit <b id="vCtxLim">512</b>（改变后对新会话生效）</span>
+            <select id="selCtxLim">
+              <option value="128">128</option>
+              <option value="224">224</option>
+              <option value="512" selected>512（默认）</option>
+              <option value="1024">1024</option>
+              <option value="2048">2048（KV/ RoPE 硬上限）</option>
+            </select></label>
+          <div id="memWarn" class="memwarn"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">◈ SYS · 遥测 <span class="sub">telemetry</span></div>
+        <div class="panel-body tight">
+          <div class="meters">
+            <div class="meter"><div class="mv" id="mToks">0</div><div class="mk">tokens</div></div>
+            <div class="meter"><div class="mv" id="mRate">—</div><div class="mk">tok/s</div></div>
+            <div class="meter"><div class="mv" id="mCtx">0%</div><div class="mk">ctx used</div></div>
+            <div class="meter"><div class="mv" id="mRAM">—</div><div class="mk">cap mem</div></div>
+          </div>
+          <div class="mem-lines" id="memLines"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="split split-v" id="splitL" title="⟷ 拖拽调整左栏宽度"></div>
+
+    <!-- ─────── CENTER: visualization stack ─────── -->
+    <section class="col" id="colCenter">
+      <div id="centerTop">
+      <div class="panel">
+        <div class="panel-head">◈ Module04 · Token 序列 <span class="sub">click to select Query / Key</span>
+          <div class="spacer"></div>
+          <span class="tb-item">■<span style="color:var(--cyan)">Q</span>&nbsp;■<span style="color:var(--amber)">K</span></span>
+        </div>
+        <div class="panel-body tight" style="max-height:132px">
+          <div id="tokenStrip"></div>
+          <div class="tok-meta" id="pairStatus">查询 Query：<b>—</b>　键 Key：<b>—</b>　(选中后下方联动)</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">◈ Module05 · Transformer 前向流水线 <span class="sub">data-flow monitor — 点击方块跳转对应面板</span></div>
+        <div class="panel-body tight"><canvas id="flowCanvas" class="viz" height="210"></canvas></div>
+      </div>
+      </div>
+
+      <div class="split split-h" id="splitC" title="⇕ 拖拽调整上/下区域高度"></div>
+
+      <div class="panel" id="centerTabs" style="flex:1 1 300px; min-height:220px">
+        <div class="tabbar">
+          <button data-tab="calc" class="active">④ 成对注意力演算台</button>
+          <button data-tab="heatmap">② 注意力矩阵</button>
+          <button data-tab="scatter">③ QKV 散点观测</button>
+          <button data-tab="mlp">⑤ FFN/SwiGLU 视图</button>
+        </div>
+
+        <!-- calc tab -->
+        <div class="tabpage" id="tab-calc">
+          <div class="calc-grid" style="padding:8px">
+            <div class="calc-side">
+              <div class="stage"><h4><span class="no">A</span>选择坐标</h4><div class="stbody">
+                <label class="field"><span class="fl">层 layer <b id="vLayer">7</b></span>
+                  <input type="range" id="cLayer" class="viz-range" min="0" max="7" value="7"></label>
+                <label class="field"><span class="fl">头 head (Q) <b id="vHead">0</b></span>
+                  <input type="range" id="cHead" min="0" max="7" value="0"></label>
+                <div class="row2">
+                  <label class="field"><span class="fl">Query token</span>
+                    <select id="cQuery"></select></label>
+                  <label class="field"><span class="fl">Key token</span>
+                    <select id="cKey"></select></label>
+                </div>
+                <div class="note">GQA 提示：头 <code>h</code> 与 KV 组 <code>KV(h)=⌊h/2⌋</code> 共享 K/V（4 组供 8 头使用）。</div>
+              </div></div>
+              <div class="stage"><h4><span class="no">E</span>因果掩码检查</h4><div class="stbody" id="maskCheck"></div></div>
+              <div class="stage"><h4><span class="no">F</span>注意力输出去向</h4><div class="stbody" id="outFlowNote"></div></div>
+            </div>
+
+            <div>
+              <div class="stage"><h4><span class="no">B</span>取向量 → 点积（第①步：dim-by-dot 累加）</h4>
+                <div class="stbody">
+                  <div class="formula" id="fDot"></div>
+                  <canvas id="dotBars" class="viz" height="120"></canvas>
+                  <div class="note" style="margin-top:4px">条形 = 各维度 q<sub>d</sub>·k<sub>d</sub> 贡献；右下数字为累计和。悬停查看维度明细。RoPE 已在投影后施加 —— 二者内积只依赖相对位置 m<sub>i</sub>−m<sub>j</sub>。</div>
+                </div></div>
+
+              <div class="stage"><h4><span class="no">C</span>缩放 Softmax（第②③步）</h4>
+                <div class="stbody">
+                  <div class="formula" id="fSoft"></div>
+                  <canvas id="softRow" class="viz" height="96"></canvas>
+                </div></div>
+
+              <div class="stage"><h4><span class="no">D</span>加权求和 Σ w·v（第④步）</h4>
+                <div class="stbody">
+                  <div class="formula" id="fSum"></div>
+                  <canvas id="sumViz" class="viz" height="110"></canvas>
+                  <div class="note" style="margin-top:4px">上排：<b>v_j</b> 按 w 缩放后的贡献比例；下排：最终该头输出向量 o=Σw<sub>t</sub>v<sub>t</sub>（每维由所有参与者的加权和组成）。</div>
+                </div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- heatmap tab -->
+        <div class="tabpage" id="tab-heatmap" hidden>
+          <div class="panel-body tight" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim)">
+              层 <input type="range" id="hmLayer" min="0" max="7" value="7" style="width:110px"> <b id="hmLv" style="color:var(--cyan)">7</b>
+              头 <input type="range" id="hmHead" min="0" max="7" value="0" style="width:110px"> <b id="hmHd" style="color:var(--cyan)">0</b>
+              <label class="check"><input type="checkbox" id="hmAllHeads"> 8头平铺</label>
+              <span style="margin-left:auto">点击热力图单元格 ⇒ 设定演算台 Query/Key</span>
+            </div>
+            <canvas id="heatCanvas" class="viz" style="height:460px"></canvas>
+            <div class="note">行=Query（当前 token 关注谁），列=Key。颜色越亮 ⇒ softmax 权重越大；下三角以外区域被<b>因果掩码</b>屏蔽（未来不可见）。</div>
+          </div>
+        </div>
+
+        <!-- scatter tab -->
+        <div class="tabpage" id="tab-scatter" hidden>
+          <div class="panel-body tight" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim)">
+              向量类型
+              <select id="scVec" style="width:auto">
+                <option value="q">Q（post-RoPE, 头 h）</option>
+                <option value="k">K（post-RoPE, KV组 g）</option>
+                <option value="v">V（KV组 g）</option>
+                <option value="e">Embedding 输入</option>
+                <option value="ho">残差流·末端 hidden</option>
+              </select>
+              层 <input type="range" id="scLayer" min="0" max="7" value="7" style="width:90px"><b id="scLv" style="color:var(--cyan)">7</b>
+              头/KV组 <input type="range" id="scHead" min="0" max="3" value="0" style="width:90px"><b id="scHd" style="color:var(--cyan)">0</b>
+              维度 X <input type="number" id="scDX" value="0" min="-3" max="95" style="width:56px">
+              Y <input type="number" id="scDY" value="1" min="-3" max="95" style="width:56px">
+              <label class="check"><input type="checkbox" id="scPCA"> PCA 投影(前两主成分)</label>
+            </div>
+            <canvas id="scatterCanvas" class="viz" style="height:460px;image-rendering:auto"></canvas>
+            <div class="note" id="scatterNote">每个点 = 一个 token 在所选层的 Q 或 K 或 V 向量在该二维平面上的取值（默认展示 head/KV 组的前两个维度，负数维 = −1..−95 表示倒数）。hover 查看 token 文本。</div>
+          </div>
+        </div>
+
+        <!-- mlp tab -->
+        <div class="tabpage" id="tab-mlp" hidden>
+          <div class="panel-body tight" style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim)">
+              层 <input type="range" id="mpLayer" min="0" max="7" value="7" style="width:110px"><b id="mpLv" style="color:var(--cyan)">7</b>
+              Token <select id="mpTok" style="width:auto"></select>
+            </div>
+            <canvas id="swigluCanvas" class="viz" style="height:260px"></canvas>
+            <div class="formula" id="fSwiglu"></div>
+            <div class="note">SwiGLU 门控：<code>s = silu(gate) ⊙ up</code>、<code>out = s @ W_down</code>。左图 gate/up/s 三组幅度谱；中门控率分布；右侧输出贡献。原始激活可悬停读取。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="split split-v" id="splitR" title="⟷ 拖拽调整右栏宽度"></div>
+
+    <!-- ─────── RIGHT: prediction column ─────── -->
+    <section class="col" id="colRight">
+      <div class="panel">
+        <div class="panel-head">◈ Module06 · 下一 Token 预测 <span class="sub">logits → P(token|prefix)</span></div>
+        <div class="panel-body" style="padding:6px 8px">
+          <table class="cand-table" id="candTable">
+            <thead><tr><th>#</th><th>Token</th><th>P raw</th><th>P post</th><th>cum</th></tr></thead>
+            <tbody id="candBody"></tbody>
+          </table>
+          <div class="entropy-meter" style="margin-top:6px">熵 H
+            <div class="gauge"><i id="entFill" style="width:0%"></i></div>
+            <b id="entVal" style="color:var(--txt)">—</b> bits / ppl <b id="pplVal" style="color:var(--txt)">—</b>
+          </div>
+          <canvas id="probCurve" class="viz" style="height:88px;margin-top:6px"></canvas>
+          <div class="note" id="candHint" style="margin-top:4px">点击任意候选可强制选定该 token（观察其后续行为）；灰行 = 被 Top-K/P 过滤或重复惩罚修改过的项。</div>
+        </div>
+      </div>
+
+      <div class="split split-h" id="splitChat" title="⇕ 拖拽调整预测/对话区高度"></div>
+
+      <div class="panel" id="chatPanel" style="flex:1 1 240px; min-height:160px">
+        <div class="panel-head">◈ Module07 · 对话生成 <span class="sub">chat · autoregressive</span>
+          <div class="spacer"></div>
+          <label class="check" title="发送后模型自动连续输出；关闭后每点一次「单步 +1 Token」输出一个 Token"><input type="checkbox" id="chkStream" checked> 连续输出</label>
+        </div>
+        <div class="panel-body chat-body"><div id="chatStream"><div class="msg system">尚未开始 —— 在左侧输入并发送，或点击预设/「预填并推理首 Token」</div></div></div>
+        <div class="chat-input-row">
+          <textarea id="chatInput" rows="1" placeholder="追问一句…（Enter 发送 / Shift+Enter 换行）"></textarea>
+          <button id="btnSend" class="primary">发送 ▸</button>
+        </div>
+      </div>
+
+      <div class="panel" style="flex:0 0 150px">
+        <div class="panel-head">◈ SYS · 运行日志 <span class="sub">console</span></div>
+        <div id="logConsole"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ══════════ STATUS BAR ══════════ -->
+  <footer id="statusbar">
+    <span>POS <b id="sbPos">0</b></span>
+    <span>LAYER <b id="sbLayer">–</b> · HEAD <b id="sbHead">–</b> · KV组 <b id="sbGroup">–</b></span>
+    <span>SCORE(q,k)/√d <b id="sbScore">–</b></span>
+    <span>P(next) <b id="sbProb">–</b></span>
+    <div class="spacer"></div>
+    <span>MODEL: minimind-3 (<span id="sbMode">chat</span>) · ENGINE: self-contained JS+TF.js ·
+      快捷键: <kbd>S</kbd> 单步 · <kbd>A</kbd> 自动 · <kbd>R</kbd> 重置</span>
+  </footer>
+</div>
+
+<!-- ══════════ DOCS OVERLAY（原理文档 · 内嵌同一 HTML） ══════════ -->
+<div id="docOverlay">
+  <button id="docClose" class="btn">✕ 关闭文档 (Esc)</button>
+<nav class="doc">
+
+<h1>Transformer 大语言模型推理原理 · 详解</h1>
+<div class="subt">配套文档 —— Transformer Inference Analyzer（minimind-3 / Qwen3 架构 · 浏览器端完整复现）&nbsp;&nbsp;·&nbsp;&nbsp;公式均可与本页面各仪表盘实测数字互相对照</div>
+
+<div class="toc">
+<a href="#s0">§0　导读：本文与演示页面的对应关系</a><br>
+<a href="#s1">§1　从文字到向量：分词与嵌入（Tokenization → Embedding）</a><br>
+<a href="#s2">§2　位置信息：从正弦编码到 RoPE 旋转位置编码</a><br>
+<a href="#s3">§3　自注意力机制：Q、K、V 与缩放点积注意力</a><br>
+<a href="#s4">§4　多头注意力、GQA 与因果掩码</a><br>
+<a href="#s5">§5　Transformer Block 全貌：残差、RMSNorm 与 SwiGLU 前馈网络</a><br>
+<a href="#s6">§6　输出头：logits、softmax 与解码采样策略</a><br>
+<a href="#s7">§7　推理系统工程：Prefill、KV Cache 与复杂度</a><br>
+<a href="#s7">§7　推理系统工程：Prefill、KV Cache 与复杂度（含 §7.6 INT8 量化）</a><br>
+<a href="#s8">§8　本页面的工程实现与数值验证</a><br>
+<a href="#s9">§9　术语速查表与延伸阅读</a><br>
+</div>
+
+<h2 id="s0"><span class="no">§0</span>导读：本文与演示页面的对应关系</h2>
+<p>本站点加载了一个<b>真实</b>的开源大语言模型 —— <code>minimind-3</code>（Qwen3ForCausalLM 架构，约 6390 万参数，FP16 权重 122&nbsp;MB），并在浏览器里<b>从零复现了它的全部推理计算</b>：不依赖任何云端 API，矩阵乘法由 TensorFlow.js（WebGL）或内置的纯 JavaScript 内核完成，计算结果与 HuggingFace <code>transformers</code> 参考实现逐位对齐（见 <a href="#s8">§8</a>）。</p>
+<p>因此，你在页面上看到的每一个数字都不是"演示用假数据"，而是模型真实的前向计算中间量。下表给出本文各章节与页面仪表盘的对应关系，建议<b>边读文章边操作页面</b>：</p>
+<table class="spec">
+<tr><th>章节</th><th>概念</th><th>页面仪表盘</th></tr>
+<tr><td>§1</td><td>分词 / 字节级 BPE / 词嵌入</td><td>MODULE01 输入（token 计数）· MODULE04 Token 序列</td></tr>
+<tr><td>§2</td><td>RoPE 旋转位置编码</td><td>MODULE05 流水线 RoPE 方块 · ③ QKV 散点（PCA 观察旋转轨迹）</td></tr>
+<tr><td>§3</td><td>缩放点积注意力逐步计算</td><td>④ 成对注意力演算台（B/C/D 三个阶段）</td></tr>
+<tr><td>§4</td><td>多头 / GQA / 因果掩码 / 注意力矩阵</td><td>② 注意力矩阵 · 演算台 A/E 区</td></tr>
+<tr><td>§5</td><td>残差 / RMSNorm / SwiGLU</td><td>⑤ FFN 视图 · MODULE05 流水线</td></tr>
+<tr><td>§6</td><td>logits → 概率 → 采样</td><td>MODULE06 下一 Token 预测 · MODULE02 解码参数</td></tr>
+<tr><td>§7</td><td>Prefill / KV Cache / 自回归</td><td>MODULE07 对话生成 · 「单步 +1 Token」按钮 · 遥测面板</td></tr>
+</table>
+
+<h2 id="s1"><span class="no">§1</span>从文字到向量：分词与嵌入</h2>
+
+<h3>1.1 为什么需要 Token</h3>
+<p>神经网络只能运算数字，因此文本必须先被切成离散单元并映射为整数编号。切分粒度有三种极端：按<b>字符</b>切（序列太长）、按<b>词</b>切（词表爆炸、无法处理新词）。现代 LLM 采用折中方案 <b>BPE（Byte Pair Encoding，字节对编码）</b>：从字节级基础词表出发，迭代地把语料中最高频的相邻符号对合并成新符号，最终得到一张大小可控的词表（minimind-3 为 <code>6400</code>）。</p>
+<p>minimind-3 使用 <b>字节级 BPE</b>（GPT-2 风格）：任何 UTF-8 文本先编码为字节流，每个字节都对应词表中的一个基础符号，因此<b>任何字符串都能被表示</b>，不存在"未知词"。编码流程：</p>
+<div class="formula-block">
+文本 → UTF-8 字节 → 字节↔可见字符双射映射<br>
+→ 预分词（正则切分：单词 / 数字 / 标点 / 空白四类片段）<br>
+→ 每个片段内按<b>合并秩</b>自底向上合并 → 查词表得 id 序列
+</div>
+<p>例如「北京是中国的」被切分为 <code>['北京', '是中国', '的']</code> → id <code>[5412, 5081, 296]</code>。你可以在页面上方 MODULE04 的 Token 序列条里直接数出每个输入被切成了多少 token、每块对应的文本。</p>
+
+<h3>1.2 嵌入矩阵：把 id 变成几何</h3>
+<p>词表中的每个 id 对应嵌入矩阵 <code>E ∈ R<sup>V×d</sup></code> 中的一行（V=词表大小 6400，d=模型维度 768）。推理的第一步就是<b>查表</b>：</p>
+<div class="formula-block">
+x<sub>t</sub> = E[id<sub>t</sub>] ∈ R<sup>768</sup><span class="cmt">　—— 每个 token 变成 768 维向量</span>
+</div>
+<p>这个向量是可学习的：训练中语义相近的词的嵌入向量会被拉到相近的方向。页面 ③ QKV 散点观测中选择「Embedding 输入」，把每个 token 的嵌入向量投影到任意两维（或 PCA 前两主成分）上，就能直观看到 token 在高维空间中的分布。</p>
+
+<div class="panel-note"><span class="tag">SPEC · minimind-3 实测参数</span>
+词表 V=6400 · 模型维度 d=768 · 嵌入矩阵 6400×768 ≈ 4.92M 参数 · 与输出投影层<b>共享权重</b>（tied embedding，见 §6.1）。</div>
+
+<h2 id="s2"><span class="no">§2</span>位置信息：从正弦编码到 RoPE</h2>
+
+<h3>2.1 为什么注意力天生"失明"于顺序</h3>
+<p>§3 将看到，注意力本质是一次<b>集合运算</b>：把 47 个 token 交换顺序，注意力输出也跟着交换顺序，而每个 token 自己的输出内容不变 —— 即注意力对语序完全对称。但"北京吃烤鸭"与"烤鸭吃北京"显然不同，必须显式注入位置信息。</p>
+
+<h3>2.2 RoPE：把位置变成旋转</h3>
+<p>minimind-3（Qwen3 系）采用 <b>RoPE（Rotary Position Embedding，旋转位置编码）</b>。思想：不把位置加到向量上，而是把 Q/K 向量按位置<b>旋转</b>。对 head_dim=96 的向量切成 48 个二维平面，第 <em>i</em> 个平面以角速度</p>
+<div class="formula-block">
+θ<sub>i</sub> = base<sup>−2i/96</sup>,　base = <span class="num">1,000,000</span><span class="cmt">　（低维平面转得快 ≈ 编码细粒度局部位置；高维转得慢 ≈ 编码长程位置）</span>
+</div>
+<p>旋转。位置为 m 的 token，其 Q/K 向量的第 i 个平面被旋转 m·θ<sub>i</sub> 弧度：</p>
+<div class="formula-block">
+<span class="fn">RoPE</span>(q, m)<sub>2i,2i+1</sub> =
+<span class="op">[</span> cos(mθ<sub>i</sub>)·q<sub>2i</sub> − sin(mθ<sub>i</sub>)·q<sub>2i+1</sub>,　sin(mθ<sub>i</sub>)·q<sub>2i</sub> + cos(mθ<sub>i</sub>)·q<sub>2i+1</sub> <span class="op">]</span>
+</div>
+<p><b>关键性质</b>：两个旋转后的向量做内积，只依赖位置<b>差</b> m−n：</p>
+<div class="formula-block">
+⟨RoPE(q,m), RoPE(k,n)⟩ = ⟨R(m)q, R(n)k⟩ = q<sup>T</sup> R(m)<sup>T</sup>R(n) k = q<sup>T</sup>R(n−m) k
+</div>
+<p>也就是说注意力分数天然携带"这两个 token 隔多远"的信息，且形式仍是普通内积 —— 无需额外参数、可外推、相对位置感知。这是 RoPE 成为现代 LLM 标配的原因。</p>
+
+<div class="panel-note"><span class="tag">页面实证 · 很好看的现象</span>
+在「③ QKV 散点观测」中勾选 <span class="kbd2">PCA 投影</span>、向量类型选 <span class="kbd2">Q（post-RoPE）</span>：所有 token 的 Q 向量在主成分平面上排成一条平滑的<b>对角轨迹</b> —— 这正是随位置递增的旋转角在低维投影下的样子。句首 token 在线的一端，最新 token 在另一端。改成 K 或 V 则看不到这种规律（V 不做 RoPE）。</div>
+
+<h3>2.3 逐头归一化（Qwen3 特有）</h3>
+<p>Qwen3 在 RoPE 之前，对每个头独立的 96 维 Q 向量做一次 <b>RMSNorm</b>（权重 <code>q_norm</code>、<code>k_norm</code>，各自独立，V 不做）：</p>
+<div class="formula-block">
+q′<sub>h</sub> = <span class="fn">RMSNorm</span><sub>96</sub>(q<sub>h</sub>) ⊙ γ<sub>q</sub><span class="cmt">　—— 稳定各头分数尺度，Qwen3 论文指出其有助于训练稳定性</span>
+</div>
+
+<h2 id="s3"><span class="no">§3</span>自注意力：Q、K、V 与缩放点积注意力</h2>
+
+<h3>3.1 直觉：一次"软查询"</h3>
+<p>要更新第 i 个 token 的表示，模型需要从整个上下文中<b>检索</b>相关信息。把每个 token 投影成三种角色：</p>
+<ul>
+<li><b>Query（查询）q<sub>i</sub></b>：我在找什么？——"需求描述"</li>
+<li><b>Key（键）k<sub>j</sub></b>：我能提供什么标签？——"索引卡片"</li>
+<li><b>Value（值）v<sub>j</sub></b>：我实际携带的内容。——"仓库货物"</li>
+</ul>
+<p>匹配度 = q<sub>i</sub> 与 k<sub>j</sub> 的内积；按匹配度把所有 v<sub>j</sub> <b>加权求和</b>，就得到 token i 的新表示。三种角色由三个可学习矩阵从同一输入变换而来：</p>
+<div class="formula-block">
+Q = h·W<sub>q</sub><sup>T</sup>　(K = h·W<sub>k</sub><sup>T</sup>　V = h·W<sub>v</sub><sup>T</sup>)<span class="cmt">　h 为 RMSNorm 后的隐状态；minimind-3 无偏置项</span>
+</div>
+
+<h3>3.2 缩放点积注意力：完整公式</h3>
+<div class="formula-block">
+<span class="fn">Attention</span>(Q,K,V) = <span class="fn">softmax</span><span class="op">(</span> QK<sup>T</sup> / <span class="num">√d<sub>head</sub></span> <span class="op">)</span> V<br>
+<span class="cmt">对应本页演算台四个阶段：①取向量→点积 ②除以 √96 ③对整行 softmax ④按权重加权和 V</span>
+</div>
+<p>逐步拆解（页面 ④ 成对注意力演算台把每一步都变成可交互数字）：</p>
+<p><b>① 点积</b>　score<sub>ij</sub><sup>raw</sup> = q<sub>i</sub>·k<sub>j</sub> = Σ<sub>d=1..96</sub> q<sub>d</sub>k<sub>d</sub>。96 次乘法 95 次加法，页面上每根绿色/红色柱就是一个维度的贡献（正/负）。</p>
+<p><b>② 缩放</b>　除以 √d<sub>head</sub> = √96 ≈ 9.798。<em>为什么必须除？</em>设 q、k 各分量独立、均值 0、方差 1，则点积的方差为：</p>
+<div class="formula-block">
+Var(q·k) = Σ<sub>d</sub> Var(q<sub>d</sub>k<sub>d</sub>) = d<sub>head</sub> = <span class="num">96</span><span class="cmt">　→ 标准差 ≈ 9.8</span>
+</div>
+<p>不做缩放时，维度越高分数越"尖"，softmax 进入饱和区 → 梯度趋近 0（one-hot 附近无法学习）。除以 √d 恰好把方差归一回 1，使 softmax 始终工作在敏感区。</p>
+<p><b>③ Softmax 归一化</b>　对第 i 行的所有分数做指数归一，得到"注意力权重"分布 w<sub>ij</sub>：</p>
+<div class="formula-block">
+w<sub>ij</sub> = exp(s<sub>ij</sub> − s<sub>i,max</sub>) / Σ<sub>t≤i</sub> exp(s<sub>it</sub> − s<sub>i,max</sub>)<span class="cmt">　减最大值仅为防 exp 溢出，不改变结果</span>
+</div>
+<p>权重非负、行和恒为 1（页面上每行右下角实时显示"行和=1.000000"，这正是 softmax 的守恒律）。它回答："为了更新 token i，我该把 100% 的注意力预算怎么分配给之前每个 token？"</p>
+<p><b>④ 加权和</b>　输出 o<sub>i</sub> = Σ<sub>j≤i</sub> w<sub>ij</sub>·v<sub>j</sub>。注意 softmax 只作用在"分数"上；v 向量按权重<b>线性</b>混合 —— 这保证了输出仍在 V 的凸包内、数值稳定。</p>
+
+<div class="panel-note"><span class="tag">演算台 · 动手实验建议</span>
+① 选一个代词作 Query（如"我"），观察注意力权重是否集中于它指代的名词；② 把 Key 选到 Query <b>之后</b>的 token，E 区会显示"因果掩码屏蔽"；③ 用行分布条形图对比第 1 层与第 7 层同一天的分布宽度 —— 浅层常出现"对角线+首 token"模式，深层分布更语义化。</div>
+
+<h2 id="s4"><span class="no">§4</span>多头注意力、GQA 与因果掩码</h2>
+
+<h3>4.1 多头：在多个子空间同时检索</h3>
+<p>单次 96 维内积只能表达一种"关系"。把 768 维切成 <b>8 个头</b>（每头 96 维），各自独立做注意力，再拼接：
+
+<div class="formula-block">
+MHA(h) = <span class="fn">Concat</span>(head<sub>0</sub>,…,head<sub>7</sub>)·W<sub>o</sub><sup>T</sup>,　head<sub>h</sub> = <span class="fn">Attn</span>(h·W<sub>q</sub><sup>T</sup>|<sub>h</sub>, h·W<sub>k</sub><sup>T</sup>|<sub>h</sub>, h·W<sub>v</sub><sup>T</sup>|<sub>h</sub>)
+</div>
+<p>不同头可以专门化：有的头盯语法结构（关注前一个词/标点），有的头做指代消解，有的头几乎只看句首。页面「② 注意力矩阵」切到 <span class="kbd2">8 头平铺</span> 能直接对比 8 个头的"性格"。</p>
+
+<h3>4.2 GQA：8 个头共享 4 组 KV</h3>
+<p>minimind-3 是 <b>GQA（Grouped-Query Attention）</b>：8 个 Q 头，但只有 <b>4 组 K/V 头</b>，每相邻 2 个 Q 头共享一组 KV（KV(h) = ⌊h/2⌋）。收益立竿见影 —— KV Cache 体积减半（§7.3），推理显存与带宽近乎减半，而质量损失极小。这也是本页演算台里 Key 向量只按 KV0..KV3 四组选择的原因。</p>
+
+<h3>4.3 因果掩码：不许偷看未来</h3>
+<p>语言模型的目标是 P(next&nbsp;token | 前文)，所以位置 i <b>不允许</b>注意 j&gt;i。实现上把违规分数置 −∞：</p>
+<div class="formula-block">
+s<sub>ij</sub> ← −∞　若 j &gt; i<span class="cmt">　softmax 后权重严格为 0 → 注意力矩阵呈下三角</span>
+</div>
+<p>这一个掩码让同一个模型既能并行训练（一次算所有位置的损失）又能自回归生成。页面热力图中被屏蔽的右上三角以暗色斜线纹标注，点击合法格即可把 (i,j) 送进演算台。</p>
+
+<h2 id="s5"><span class="no">§5</span>Transformer Block 全貌：残差、RMSNorm 与 SwiGLU</h2>
+
+<h3>5.1 一个 Block 的完整数据流</h3>
+<div class="formula-block">
+u = x + W<sub>o</sub><sup>T</sup>·<span class="fn">MHA</span>(<span class="fn">RMSNorm</span>(x))<span class="cmt">　—— 注意力子层 + 残差</span><br>
+y = u + W<sub>down</sub>·( <span class="fn">silu</span>(W<sub>gate</sub>·<span class="fn">RMSNorm</span>(u)) ⊙ (W<sub>up</sub>·<span class="fn">RMSNorm</span>(u)) )<span class="cmt">　—— FFN 子层 + 残差</span>
+</div>
+<p>以上结构垂直堆叠 <b>8 次</b>（L0→L7），最后接一个全局 RMSNorm 与输出头。</p>
+
+<h3>5.2 残差连接：梯度的高速公路</h3>
+<p>残差 x ← x + f(x) 让每层只需学习"<b>修正量</b>"而非完整表示。直观上信息可以无损耗地直达深层；优化角度上梯度可通过加法直通浅层，这是百层网络可训练的关键。</p>
+
+<h3>5.3 RMSNorm：LayerNorm 的极简版</h3>
+<div class="formula-block">
+<span class="fn">RMSNorm</span>(x)<sub>d</sub> = x<sub>d</sub> / <span class="fn">RMS</span>(x) · γ<sub>d</sub>,　<span class="fn">RMS</span>(x)=<span class="fn">√</span>( (1/d)Σx<sub>d</sub><sup>2</sup> + <span class="num">1e−6</span> )
+</div>
+<p>相比 LayerNorm 省去均值中心化（均值项作用很小），计算更省、效果相当，是 LLaMA/Qwen 系的标准选择。模型中共出现三种位置：每层输入侧两个 + 最终一个，每个都是 768 维可学习缩放 γ。注意 RMSNorm <b>不改变方向只调尺度</b> —— 归一化后所有向量 RMS=1。</p>
+
+<h3>5.4 SwiGLU 前馈网络：带门的记忆槽</h3>
+<p>FFN 占模型约 2/3 参数量（768→2432→768，三层投影共 ≈5.6M/层）。它被普遍理解为<b>键值式记忆库</b>：W<sub>up</sub>/W<sub>down</sub> 存储知识片段，而 <b>W<sub>gate</sub> 提供逐维开关</b>：</p>
+<div class="formula-block">
+<span class="fn">FFN</span>(h) = ( <span class="fn">silu</span>(h·W<sub>gate</sub><sup>T</sup>) ⊙ (h·W<sub>up</sub><sup>T</sup>) ) ·W<sub>down</sub><sup>T</sup>,　<span class="fn">silu</span>(x)=x·<span class="fn">σ</span>(x)= x/(1+e<sup>−x</sup>)
+</div>
+<p>silu 平滑非负门控（负值衰减、正值放行），⊙ 逐维相乘实现"哪些通道参与当前 token"的动态选择 —— 比 ReLU 版 FFN 收敛更快、下游表现更好。页面「⑤ FFN/SwiGLU 视图」实时重算 gate/up/激活三组 2432 维幅度谱，可观察不同 token 激活的通道集合差异。</p>
+
+<h2 id="s6"><span class="no">§6</span>输出头：logits、softmax 与采样</h2>
+
+<h3>6.1 Tied Embedding 输出头</h3>
+<div class="formula-block">
+z = <span class="fn">RMSNorm</span><sub>final</sub>(x) · E<sup>T</sup> ∈ R<sup>6400</sup><span class="cmt">　z 即 logits；E 正是 §1 的嵌入矩阵 —— 输入输出共用，参数省 4.9M</span>
+</div>
+<p>logit<sub>v</sub> 的直觉：最终隐状态与词表第 v 个词的嵌入"有多同向"。页面 MODULE06 顶部的整词表 log-scale 曲线就是 6400 维 logits 经 softmax 后按大小排序的分布。</p>
+
+<h3>6.2 从 logits 到概率：softmax 与温度</h3>
+<div class="formula-block">
+P(v|prefix) = exp(z<sub>v</sub>/T) / Σ<sub>u</sub> exp(z<sub>u</sub>/T)
+</div>
+<p>温度 T 重参数化分布尖锐度：T→0 退化为 argmax（贪心），T=1 为训练分布，T&gt;1 更平（更随机）。数学上 T 与"除以 logits 标准差"等价，因此它精确控制熵。</p>
+
+<h3>6.3 截断采样与重复惩罚</h3>
+<ul>
+<li><b>Top-K</b>：只保留分数前 K 个候选再归一化。</li>
+<li><b>Top-P（核采样）</b>：按概率降序累加，保留累计恰达 P 的最小集合 —— 候选数量随分布形状自适应：分布尖时几乎只剩 1 个，分布平时保留很多。</li>
+<li><b>重复惩罚</b>：对已出现过的 token，正 logit 除以、负 logit 乘以惩罚系数 λ（λ&gt;1 抑制复读）。</li>
+</ul>
+<p>页面上每个候选行同时显示 <b>P raw</b>（未截断）与 <b>P post</b>（截断+温度后），被过滤项置灰 —— 可以直观看到 Top-P 如何"剪枝"。小模型纯文本续写常陷入复读循环，把 λ 拉到 1.3 或降温即可观察到分布被重塑、循环被打破的全过程。</p>
+
+<h3>6.4 贪心 vs 随机：怎么选？</h3>
+<p>贪心解码每步取 argmax：确定、可复现，适合事实型问答与测试；但可能陷入循环、文本呆板。随机采样（温度+Top-P）更有创造性，适合对话与写作，代价是不可复现（页面采样器使用可播种的 PRNG）。工程上还常配合<b>存在惩罚/频率惩罚</b>、<b>beam search</b>（舍弃，现代对话模型几乎不用）等。</p>
+
+<h3>6.5 困惑度（Perplexity）</h3>
+<div class="formula-block">
+PPL = exp( −(1/N) Σ<sub>t</sub> ln P(x<sub>t</sub>|x<sub>&lt;t</sub>) )
+</div>
+<p>即"模型平均在多少个等概率候选中犹豫"。页面右上角实时显示下一步分布的熵（bits）与 PPL —— 单步 PPL=1 意味着模型 100% 确定（如成语接龙的下一个字），PPL 很大则表示有多种合理解。</p>
+
+<h2 id="s7"><span class="no">§7</span>推理系统工程：Prefill、KV Cache 与复杂度</h2>
+
+<h3>7.1 两个阶段</h3>
+<ul>
+<li><b>Prefill（预填）</b>：整段 prompt 一次性并行前向。注意力为 T×T 全矩阵计算，GPU 利用率高；产出自回归的<b>第一个</b>分布。</li>
+<li><b>Decode（解码）</b>：此后每步只有 1 个新 token 前向，注意力行向量 × 缓存矩阵。显存带宽瓶颈，是量化/投机解码等优化的主战场。</li>
+</ul>
+
+<h3>7.2 KV Cache：用空间换时间的核心</h3>
+<p>自回归生成中，前缀 token 的 K/V 每步都被重复使用。若每步重算整段序列，第 t 步成本 O(t²)；缓存后只需 O(t)。minimind-3 每层的 K/V 缓存为：</p>
+<div class="formula-block">
+KV bytes/层 = 2 · n<sub>kv</sub> · d<sub>head</sub> · ctx · 4B = 2·4·96·ctx·4B = <span class="num">3072·ctx</span> B<br>
+全模型（8 层）ctx=224 时 ≈ <span class="num">5.25 MB</span><span class="cmt">　—— 若非 GQA（8 组 KV）将翻倍至 10.5MB；70B 模型上该技术节省的是 GB 级</span>
+</div>
+<p>页面每一步解码都严格使用缓存：可以在「交叉验证」里确认缓存路径与一次性整段前向 logits 偏差为 0（本工程实测 Δ=0）。</p>
+
+<h3>7.3 复杂度与上下文窗口</h3>
+<p>注意力计算/显存均为 O(T²)（prefill 阶段），FFN 为 O(T·d·d<sub>ffn</sub>)；长上下文优化的研究（FlashAttention、MQA/GQA、滑窗、稀疏注意力）几乎都围绕这个平方项。页面上下文限制默认 <b>512</b>、可调至 2048（KV Cache 与 RoPE 表按 2048 预分配），遥测面板实时显示占用率与内存预估。</p>
+
+<h3>7.4 内存账单：权重、KV Cache 与可视化捕获</h3>
+<p>普通 LLM 服务常驻内存只有两块：<b>权重</b>和 <b>KV Cache</b>。而本页面为了"把中间量给你看"，多出第三块——<b>可视化捕获池</b>，它才是吃内存的大头：</p>
+<div class="formula-block">
+① 权重常驻　= 参数量 × 4B = 63.9M × 4B ≈ <span class="num">256MB</span>（FP32；WebGL 后端另有同量 GPU 副本）。<b>本页面 v2 起内嵌的就是 INT8 权重</b>（文件夹仅 83MB、常驻 61MB，见 §7.6）；加载原始 FP16/FP32 时为 244MB<br>
+② KV Cache　= 2 × 层数 × KV头数 × 头维 × ctx × 4B = 2×8×4×96×T×4B ≈ <span class="num">24.6KB × T</span><br>
+<span class="cmt">　T=512 → 12.6MB；T=2048 → 50MB —— 这就是 GQA 把 KV 头从 8 砍到 4 的直接收益（否则翻倍）</span><br>
+③ 捕获池·线性项 = 每 token（嵌入+残差流+final-norm 3×768；每层 ln1/ln2/两路贡献/Q 共 5×768）<br>
+　≈ (3 + 8×5) × 768 × 4B ≈ <span class="num">132KB / token</span><br>
+④ 捕获池·二次项 = 注意力权重行（8层×8头 × 行长 t 的三角阵）≈ 64 × T²/2 × 4B<br>
+<span class="cmt">　T=512 全保留 → 约 33MB；T=2048 全保留 → 约 537MB —— 二次项是真正的炸弹</span>
+</div>
+<p><b>为什么捕获池这么大？</b>因为服务端推理算完就丢，而教学分析仪要把"每层每头的注意力矩阵、每个 token 的残差流、Q/K/V 向量"全部留在内存里随取随看 —— 相当于把一次前向的所有中间激活都缓存下来。工程上给出了三个阀门（MODULE02「资源」区）：</p>
+<ul>
+<li><b>可视化捕获开关</b>（默认开）：关闭后仅保留权重 + KV Cache，可跑满 2048 上下文，代价是散点/热力图/演算台停止更新；</li>
+<li><b>可视化窗口 W</b>（默认 128）：只保留最近 W 个 token 的捕获，二次项从 64×T²/2 变为 64×W×T/2 —— T=2048、W=128 时从 537MB 骤降到约 64MB；更早的 token 沙盘数据被"滚动丢弃"，但 KV Cache 完整保留，生成质量不受任何影响；</li>
+<li><b>内存预估警示</b>：遥测面板按上面②③④式实时估算"满上下文"开销，超过 150MB 黄色提醒、超过 400MB 红色预警。</li>
+</ul>
+
+<h3>7.5 一句话总结推理循环</h3>
+<div class="panel-note"><span class="tag">LOOP · 直到 EOS</span>
+分布 = softmax(最终隐状态·E<sup>T</sup>) → 采样/贪心选 token → 查嵌入 → 追加进 KV Cache → 回到开头。页面的「单步 +1 Token」「自动播放」就是这个循环的手动档与自动档。</div>
+
+<h2 id="s8"><span class="no">§8</span>本页面的工程实现与数值验证</h2>
+
+<h3>8.1 实现栈</h3>
+<table class="spec">
+<tr><th>组件</th><th>实现</th><th>说明</th></tr>
+<tr><td>权重加载</td><td>js/st.js</td><td>自研 safetensors 解析器，FP16→FP32 逐位解码（90 张量，含 subnormal/Inf 处理）；传输层三级自动回退：<b>内嵌 JS 权重（base64 分块，双击零交互）→ HTTP fetch → file:// 文件夹授权</b></td></tr>
+<tr><td>分词器</td><td>js/tok.js</td><td>字节级 BPE 完整实现（预分词正则与 HF Rust 实现逐 token 对齐）</td></tr>
+<tr><td>模型前向</td><td>js/model.js</td><td>RoPE / 逐头 RMSNorm / GQA / 因果掩码 / KV Cache / SwiGLU，全部按 HF 布局</td></tr>
+<tr><td>矩阵乘法</td><td>js/mat.js</td><td>TensorFlow.js WebGL 路径 + 纯 JS 分块内核（双路径可交叉验证）</td></tr>
+<tr><td>可视化</td><td>js/viz.js / ui.js</td><td>原生 Canvas 2D，零图表库依赖</td></tr>
+</table>
+
+<h3>8.2 数值验证（工程可信度）</h3>
+<p>页面所有计算与 HuggingFace <code>transformers</code>（FP32、eager attention）参考输出逐项比对：</p>
+<ul>
+<li>分词：62 条对抗用例（混合中英、emoji、全角标点、多空格、换行、撇号收缩……）<b>62/62</b> 完全一致；</li>
+<li>logits：两段中英 prompt 末位 6400 维 logits <b>max|Δ| ≈ 4×10⁻⁵</b>（FP16 权重量化噪声量级），Top-5 完全一致；</li>
+<li>注意力权重：任取层2头5查询行，max|Δw| ≈ 10⁻⁶，行和恒等于 1；</li>
+<li>逐层残差流：8 层全部对齐至 3×10⁻³ 以内；</li>
+<li>KV Cache 等价性：分步解码 vs 整段一次前向，logits <b>Δ=0</b>。</li>
+</ul>
+<p>浏览器内点击顶栏「交叉验证」可随时复核 TF 路径与纯 JS 路径的一致性。</p>
+
+<h3>7.6 权重量化（INT8）：把 244MB 压到 61MB</h3>
+<p>部署侧最常用的压缩手段是<b>权重量化</b>：把 FP32 权重存成 8 位整数，计算时再反量化。本页面在 MODULE02「精度」下拉里实现了工业界标准的 <b>W8A16 逐通道对称量化</b>（权重 INT8、激活 FP32），可实时切换并对照：</p>
+<div class="formula-block">
+对每个输出通道 o（权重矩阵的一行）：<br>
+scale[o] = max<sub>i</sub>|W[o,i]| / <span class="num">127</span><br>
+q[o,i] = <span class="fn">round</span>(W[o,i] / scale[o]) ∈ [−127, 127]<br>
+计算时：y[t,o] = scale[o] × Σ<sub>i</sub> x[t,i] × q[o,i]<span class="cmt">　—— 整数只在存储层，乘加仍在 FP32/FP64 累加</span>
+</div>
+<p><b>本页面的内嵌格式（v2）</b>：构建脚本 <code>tools/gen_weights_int8.py</code> 直接把量化后的 int8 数据 + 逐通道 scale 打包成普通 JS 文件（<code>js/weights/q_XX.js</code>，共 57 个张量 + FP32 归一化参数）——磁盘从 164MB 降到 <b>83MB</b>，常驻内存从 244MB 降到 <b>61MB</b>，且双击打开零交互。原始 FP16 权重（<code>minimind-3/model.safetensors</code>）保留在原处，供 FP32 基线对照与重新生成使用。</p>
+<p><b>为什么逐通道而不是整个张量一个 scale？</b>Transformer 权重里存在少数"离群通道"（数值比其他行大一个数量级）。若全张量共享 scale，离群值会把 scale 抬高，其余 99% 的权重被压到极小的整数区间，误差爆炸；逐行 scale 让每一行的满量程都被利用。<b>为什么对称（zero-point=0）？</b>权重分布近似零均值对称，不需要偏移，省掉 offset 项且整数乘加更干净。</p>
+<p><b>误差从哪来、有多大？</b>每个权重被舍入到相邻格点，误差 ≤ scale/2，且与权重值无关地均匀分布。本页 minimind-3 实测（可在顶栏「交叉验证」复现）：</p>
+<table class="spec">
+<tr><th>指标</th><th>FP32 基线</th><th>INT8（W8A16）</th></tr>
+<tr><td>权重大小</td><td>244MB</td><td><b>61.2MB（3.98×）</b></td></tr>
+<tr><td>单权重最大量化误差</td><td>—</td><td>8.8×10⁻⁴</td></tr>
+<tr><td>末位 logits max|Δ|</td><td>—</td><td>0.44（量程 ±15，约 3%）</td></tr>
+<tr><td>Top-1 / Top-5 一致性</td><td>—</td><td><b>一致 / 5-of-5</b></td></tr>
+</table>
+<p>直觉解释：768 维点积中 768 个独立舍入误差按 <b>√768 ≈ 28 倍</b> 相互抵消（误差平均化），再被 softmax 的归一化进一步吸收 —— 所以"每个权重都变了"但"输出几乎没变"。这也是为什么 INT8 权重量化几乎无损、成为推理部署的默认动作。真正的挑战在别处：<b>激活离群值</b>（某些通道动辄上百，迫使 LLM.int8 这类混合精度方案）与 <b>KV Cache 量化</b>（会影响长上下文的注意力分布，本页 KV 保持 FP32）。</p>
+<div class="panel-note"><span class="tag">动手实验</span>
+① 默认（双击打开）加载的就是 <b>INT8 内嵌原生权重</b> —— 看 SYS 遥测权重行 61MB；② 点顶栏「交叉验证」→ 报告 TF/JS 后端一致性（INT8 模式下同样 2.77e-5 量级）；③ 用 <code>./start.sh</code> 以 HTTP 模式运行时，可在精度下拉选「FP32（从 minimind-3/ 原始权重加载）」→ 自动拉取 122MB 原始权重并执行 <b>FP32↔INT8 对照</b>（max|Δlogits|、Top-1、分布重合度 ≈98%）。</div>
+
+<h2 id="s9"><span class="no">§9</span>术语速查表与延伸阅读</h2>
+<table class="spec">
+<tr><th>术语</th><th>一句话解释</th></tr>
+<tr><td>logits</td><td>softmax 之前的原始打分向量（未归一化）</td></tr>
+<tr><td>head / GQA / MQA</td><td>注意力并行子空间 / 8Q 共享 4KV / 所有 Q 共享 1KV</td></tr>
+<tr><td>Prefill / Decode</td><td>整段并行前向 / 单 token 逐步生成</td></tr>
+<tr><td>KV Cache</td><td>缓存历史 K/V 使每步只算新 token</td></tr>
+<tr><td>Pre-LN / RMSNorm</td><td>子层前置归一化布局 / 以均方根缩放的归一化</td></tr>
+<tr><td>SwiGLU</td><td>silu 门控 + 逐维相乘的前馈网络</td></tr>
+<tr><td>RoPE</td><td>把绝对位置变为 Q/K 旋转、内积只依赖相对位置</td></tr>
+<tr><td>温度 / Top-P</td><td>分布尖锐度旋钮 / 概率质量截断采样</td></tr>
+<tr><td>PPL</td><td>困惑度，平均等效候选数</td></tr>
+<tr><td>EOS</td><td>结束符（本模型为 &lt;|im_end|&gt;，id=2）</td></tr>
+</table>
+
+<h3>延伸阅读</h3>
+<ul>
+<li>Vaswani et al., <em>Attention Is All You Need</em>, NeurIPS 2017 —— Transformer 原始论文</li>
+<li>Su et al., <em>RoFormer: Enhanced Transformer with Rotary Position Embedding</em> —— RoPE</li>
+<li>Shazeer, <em>GLU Variants Improve Transformer</em> —— SwiGLU</li>
+<li>Zhang &amp; Sennrich, <em>Root Mean Square Layer Normalization</em> —— RMSNorm</li>
+<li>Ainslie et al., <em>GQA: Training Generalized Multi-Query Transformer</em> —— GQA</li>
+<li>Qwen3 技术报告；jingyaogong/minimind 项目 —— 本页面加载模型的来源</li>
+<li>页面源码 <code>js/model.js</code> 的逐行注释 —— 最好的一份"运行中的教材"</li>
+</ul>
+
+<div class="panel-note"><span class="tag">COLPHON</span>
+本文所有公式中的超参数（768 / 8头 / 4KV / 96维 / 6400词表 / θ=10⁶ / 8层 / 2432）均与 minimind-3 权重文件一致，可在浏览器 DevTools 中输入 <span class="kbd2">window._DSH_UI.m</span> 亲自查验。
+</div>
+
+</nav>
+</div>
+
+<div id="tooltip"></div>
+
+<script src="js/vendor/tf.min.js"></script>
+<!-- WEIGHTS:BEGIN (generated by tools/gen_weights_int8.py) -->
+<script src="js/weights/q_00.js"></script>
+<script src="js/weights/q_01.js"></script>
+<script src="js/weights/q_02.js"></script>
+<script src="js/weights/q_03.js"></script>
+<script src="js/weights/q_04.js"></script>
+<script src="js/weights/q_05.js"></script>
+<script src="js/weights/q_06.js"></script>
+<script src="js/weights/q_07.js"></script>
+<script src="js/weights/q_08.js"></script>
+<script src="js/weights/q_09.js"></script>
+<script src="js/weights/q_10.js"></script>
+<script src="js/weights/q_11.js"></script>
+<script src="js/weights/q_12.js"></script>
+<script src="js/weights/q_13.js"></script>
+<script src="js/weights/q_14.js"></script>
+<script src="js/weights/q_15.js"></script>
+<script src="js/weights/q_16.js"></script>
+<script src="js/weights/q_17.js"></script>
+<script src="js/weights/q_18.js"></script>
+<script src="js/weights/q_19.js"></script>
+<script src="js/weights/q_20.js"></script>
+<script src="js/weights/q_21.js"></script>
+<script src="js/weights/q_22.js"></script>
+<script src="js/weights/q_23.js"></script>
+<script src="js/weights/q_24.js"></script>
+<script src="js/weights/q_25.js"></script>
+<script src="js/weights/q_26.js"></script>
+<script src="js/weights/q_27.js"></script>
+<script src="js/weights/q_28.js"></script>
+<script src="js/weights/q_29.js"></script>
+<script src="js/weights/q_30.js"></script>
+<script src="js/weights/q_31.js"></script>
+<script src="js/weights/q_32.js"></script>
+<script src="js/weights/q_33.js"></script>
+<script src="js/weights/q_34.js"></script>
+<script src="js/weights/q_35.js"></script>
+<script src="js/weights/q_36.js"></script>
+<script src="js/weights/q_37.js"></script>
+<script src="js/weights/q_38.js"></script>
+<script src="js/weights/q_39.js"></script>
+<script src="js/weights/q_40.js"></script>
+<script src="js/weights/q_41.js"></script>
+<script src="js/weights/q_42.js"></script>
+<script src="js/weights/q_43.js"></script>
+<script src="js/weights/q_44.js"></script>
+<script src="js/weights/q_45.js"></script>
+<script src="js/weights/q_46.js"></script>
+<script src="js/weights/q_47.js"></script>
+<script src="js/weights/q_48.js"></script>
+<script src="js/weights/q_49.js"></script>
+<script src="js/weights/q_50.js"></script>
+<script src="js/weights/q_51.js"></script>
+<script src="js/weights/q_52.js"></script>
+<script src="js/weights/q_53.js"></script>
+<script src="js/weights/q_54.js"></script>
+<script src="js/weights/q_55.js"></script>
+<script src="js/weights/q_56.js"></script>
+<script src="js/weights/misc.js"></script>
+<script src="js/weights/config.js"></script>
+<script src="js/weights/tokenizer.js"></script>
+<!-- WEIGHTS:END -->
+<!-- WEIGHTS:BEGIN (generated by tools/gen_weights_js.py) -->
+<script src="js/weights/w_00.js"></script>
+<script src="js/weights/w_01.js"></script>
+<script src="js/weights/w_02.js"></script>
+<script src="js/weights/w_03.js"></script>
+<script src="js/weights/w_04.js"></script>
+<script src="js/weights/w_05.js"></script>
+<script src="js/weights/w_06.js"></script>
+<script src="js/weights/w_07.js"></script>
+<script src="js/weights/w_08.js"></script>
+<script src="js/weights/w_09.js"></script>
+<script src="js/weights/w_10.js"></script>
+<script src="js/weights/w_11.js"></script>
+<script src="js/weights/w_12.js"></script>
+<script src="js/weights/w_13.js"></script>
+<script src="js/weights/w_14.js"></script>
+<script src="js/weights/config.js"></script>
+<script src="js/weights/tokenizer.js"></script>
+<!-- WEIGHTS:END -->
+<script>
+/* HTTP 下走 ES Module 源码；file:// 双击打开时 ES Module 会被 CORS 拦截，
+   自动降级到预打包的经典脚本 js/app.bundle.js（功能完全一致）。 */
+(function () {
+  var s = document.createElement('script');
+  if (location.protocol === 'file:') {
+    s.src = 'js/app.bundle.js';
+  } else {
+    s.type = 'module';
+    s.src = 'js/main.js';
+  }
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>

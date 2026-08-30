@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ASCII FPV · 楼宇穿越</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden;
+    font-family:"Cascadia Mono","Consolas","DejaVu Sans Mono","Courier New",monospace;color:#7dffb0}
+  #screen{display:block;position:absolute;left:0;top:0;background:#000}
+  #overlay{position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.80);z-index:10;cursor:pointer}
+  #panel{border:1px solid #1f7a4d;padding:20px 26px;max-width:660px;background:#000806;
+    box-shadow:0 0 40px #063d24 inset,0 0 30px #021;line-height:1.75;font-size:14px}
+  #panel h1{margin:0 0 4px;font-size:20px;color:#9dffcb;letter-spacing:3px}
+  #panel h2{margin:0 0 14px;font-size:12px;color:#2f9a63;letter-spacing:2px;font-weight:400}
+  #panel table{border-collapse:collapse;margin:6px 0 10px}
+  #panel td{padding:1px 14px 1px 0;font-size:13px;color:#8fe8b8}
+  kbd{display:inline-block;min-width:16px;text-align:center;border:1px solid #2f9a63;border-bottom-width:2px;
+    padding:0 5px;border-radius:3px;color:#d6ffe8;background:#04140d;font-size:12px}
+  .dim{color:#39875f}
+  .go{margin-top:12px;color:#c9ffe2;letter-spacing:2px;animation:bl 1.1s steps(2) infinite}
+  @keyframes bl{50%{opacity:.25}}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<div id="overlay"><div id="panel">
+  <h1>ASCII&nbsp;FPV&nbsp;&nbsp;楼宇穿越</h1>
+  <h2>全部画面由彩色 ASCII 字符排列而成 · 非真 3D 渲染</h2>
+  <table>
+    <tr><td><kbd>W</kbd> / <kbd>S</kbd></td><td>减小 / 增加俯仰角（±45° 限幅）</td></tr>
+    <tr><td><kbd>A</kbd> / <kbd>D</kbd></td><td>滚转角速率控制（±45° 限幅）</td></tr>
+    <tr><td><kbd>方向键</kbd></td><td>视角偏移（水平转头 / 俯仰视角，不影响飞行）</td></tr>
+    <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td>加速 / 减速（10 ~ 50 m/s）</td></tr>
+    <tr><td><kbd>R</kbd></td><td>坠机后重生</td></tr>
+    <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>字符密度（分辨率）</td></tr>
+    <tr><td><kbd>H</kbd> / <kbd>C</kbd> / <kbd>P</kbd></td><td>HUD 开关 / 碰撞开关 / 暂停</td></tr>
+    <tr><td><kbd>Y</kbd></td><td>角度限制切换（有限 ±45° ⇄ 无限·可回环）</td></tr>
+    <tr><td><kbd>L</kbd></td><td>自动回正开关（松手回平 / 纯 acro 保持）</td></tr>
+    <tr><td><kbd>E</kbd></td><td>一键回正（按一下自动回平到水平）</td></tr>
+    <tr><td><kbd>-</kbd> <kbd>+</kbd></td><td>灵敏度调节（0.5 ~ 2.5）</td></tr>
+    <tr><td colspan="2" style="padding-top:8px;color:#2f9a63;letter-spacing:2px">— — Xbox 手柄 — —</td></tr>
+    <tr><td><kbd>左摇杆</kbd></td><td>姿态（有限）/ 速率（无限）——推多少动多少</td></tr>
+    <tr><td><kbd>右摇杆</kbd></td><td>视角偏移（水平转头 / 俯仰视角，不影响飞行）</td></tr>
+    <tr><td><kbd>RT</kbd> / <kbd>LT</kbd></td><td>线性油门：越深越快 / 越深越慢</td></tr>
+    <tr><td><kbd>A</kbd> <kbd>B</kbd> <kbd>X</kbd></td><td>重生 / HUD / 碰撞</td></tr>
+    <tr><td><kbd>菜单键</kbd></td><td>暂停（正面右上角，三条横线图标）</td></tr>
+    <tr><td><kbd>Y</kbd></td><td>角度限制切换（有限 ±45° ⇄ 无限·可回环）</td></tr>
+    <tr><td><kbd>Back</kbd></td><td>自动回正开关（正面左上角，两个方块图标）</td></tr>
+    <tr><td><kbd>左摇杆按下</kbd></td><td>一键回正（按一下自动回平到水平）</td></tr>
+    <tr><td><kbd>十字键上下</kbd></td><td>灵敏度调节（0.5 ~ 2.5）</td></tr>
+    <tr><td><kbd>LB</kbd> <kbd>RB</kbd> · <kbd>十字键左右</kbd></td><td>字符密度</td></tr>
+  </table>
+  <div class="dim">滚转 45° 时偏航角速度线性到达 90°/s，构成协调转弯。<br>
+  灰蓝色 <b>#</b> 为楼房（琥珀色为亮着的窗户），绿色 <b>&amp;</b> 为树木，灰色 <b>=</b> 与黄色虚线为道路，天空为黑底。</div>
+  <div class="go">▶ 点击任意处 / 按任意键 起飞</div>
+</div></div>
+<script>
+'use strict';
+//=====================================================================
+// ASCII FPV —— 用彩色 ASCII 字符“排”出来的第一视角飞行
+//   · 自写软件光栅化器：透视投影 + 1/z 深度缓冲 + 逐字符着色
+//   · 输出目标不是像素而是「字符单元格」，每格 = 1 个字符 + 1 个颜色
+//=====================================================================
+
+//------------------------- 小工具 -------------------------
+var DEG = Math.PI / 180;
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function mod(a, n) { return ((a % n) + n) % n; }
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash3(a, b, c) {
+  var h = Math.imul(a ^ 0x9E3779B9, 2246822519);
+  h = Math.imul(h ^ b ^ 0x85EBCA6B, 3266489917);
+  h = Math.imul(h ^ c ^ 0x27D4EB2F, 668265263);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+function pad(v, n) { var s = String(v); while (s.length < n) s = ' ' + s; return s; }
+function sgnNum(v) { var r = Math.round(v); return (r < 0 ? '-' : '+') + pad(Math.abs(r), 2).replace(' ', '0'); }
+
+//------------------------- 调色板与「材质」 -------------------------
+// 每种材质占用 LEVELS 个连续调色板槽位：亮度等级 → (颜色, 字符)
+var LEVELS = 14;
+var PAL = [];
+function makeMat(rgb, ramp, ambient) {
+  if (ambient === undefined) ambient = 0.26;
+  var base = PAL.length;
+  var chars = new Uint16Array(LEVELS);
+  for (var i = 0; i < LEVELS; i++) {
+    var t = i / (LEVELS - 1);
+    var k = ambient + (1 - ambient) * t;
+    PAL.push('rgb(' + (rgb[0] * k | 0) + ',' + (rgb[1] * k | 0) + ',' + (rgb[2] * k | 0) + ')');
+    chars[i] = ramp.charCodeAt(Math.min(ramp.length - 1, Math.round(t * (ramp.length - 1))));
+  }
+  return { pal: base, chars: chars };
+}
+function solid(r, g, b) { PAL.push('rgb(' + r + ',' + g + ',' + b + ')'); return PAL.length - 1; }
+
+var WALLRAMP = " .:-=+*###";
+var M_WALL = [
+  makeMat([150, 172, 208], WALLRAMP),   // 冷蓝玻璃幕墙
+  makeMat([200, 180, 156], WALLRAMP),   // 砂岩
+  makeMat([138, 146, 160], WALLRAMP),   // 混凝土灰
+  makeMat([118, 168, 182], WALLRAMP)    // 青灰
+];
+var M_ROOF  = makeMat([132, 106,  88], " ...::;;;++");   // 屋顶：暖褐灰、砾石面
+var M_WINL  = makeMat([255, 214, 118], " ..:=+*#%@@");   // 亮窗
+var M_WIND  = makeMat([46,  62,  96],  " ...:::;;;;");   // 暗窗
+var M_ROAD  = makeMat([78,  90, 116],  " ..::----==");   // 沥青：深冷灰
+var M_WALK  = makeMat([176, 176, 182], " ...::::;;;");   // 人行道：亮灰
+var M_MARK  = makeMat([238, 200,  84], " ..::====##");   // 道路标线：明黄
+var M_GRASS = makeMat([60,  94,  56],  "  ...,,,,''");   // 草地
+var M_LEAF  = makeMat([88, 184,  92],  " .,:;o*&%@@");   // 树冠
+var M_TRUNK = makeMat([140, 100,  62], " ..::||||##");   // 树干
+
+var C_HUD  = solid(70, 255, 158);
+var C_HUD2 = solid(24, 132, 82);
+var C_WARN = solid(255, 92, 68);
+var C_WHT  = solid(214, 240, 255);
+var C_AMB  = solid(255, 190, 70);
+
+//------------------------- 世界（可无限平铺的城市） -------------------------
+var BLOCK = 64;      // 街区间距 (m)
+var ROADW = 16;      // 道路宽度 (m)
+var TILES = 24;      // 24x24 个街区模板 → 1536m 周期，无缝无限平铺
+var blocks = new Array(TILES * TILES);
+
+function mkTree(x, z, rnd) {
+  var h = 7 + rnd() * 7.5;
+  return { x: x, z: z, h: h, r: h * (0.28 + 0.10 * rnd()), seed: (rnd() * 1e9) | 0 };
+}
+function genWorld() {
+  for (var bz = 0; bz < TILES; bz++) {
+    for (var bx = 0; bx < TILES; bx++) {
+      var rnd = mulberry32((bx * 73856093) ^ (bz * 19349663) ^ 0x5f3a71);
+      var buildings = [], trees = [];
+      // 城区高度分布：形成高楼群与低矮区
+      var dh = (Math.sin(bx * 0.62 + 0.7) * Math.cos(bz * 0.51 - 1.1) + 1) / 2;
+      var i0 = ROADW + 5, i1 = BLOCK - 3, span = i1 - i0;   // 可建面积（离路边留出人行道）
+      function hgt(big) {
+        var h = 11 + Math.pow(dh, 1.7) * (big ? 155 : 96) * (0.55 + 0.9 * rnd());
+        if (dh > 0.72 && rnd() > 0.72) h *= 1.45;
+        return Math.min(h, 215);
+      }
+      function push(x, z, w, d, h) {
+        buildings.push({
+          x: x, z: z, w: w, d: d, h: h,
+          mat: (rnd() * 4) | 0, seed: (rnd() * 1e9) | 0, lit: 0.14 + rnd() * 0.42
+        });
+      }
+      if (rnd() < 0.20) {                       // 整街区一栋塔楼
+        var w = span * (0.68 + 0.30 * rnd()), d = span * (0.68 + 0.30 * rnd());
+        push(i0 + (span - w) * rnd(), i0 + (span - d) * rnd(), w, d, hgt(true));
+      } else {                                  // 四象限分布
+        var half = span / 2;
+        for (var q = 0; q < 4; q++) {
+          var qx = i0 + (q & 1) * half, qz = i0 + (q >> 1) * half;
+          if (rnd() < 0.20) {                   // 空地 / 小公园
+            var nt = 2 + ((rnd() * 4) | 0);
+            for (var k = 0; k < nt; k++) trees.push(mkTree(qx + 2 + rnd() * (half - 4), qz + 2 + rnd() * (half - 4), rnd));
+            continue;
+          }
+          var bw = half * (0.52 + 0.42 * rnd()), bd = half * (0.52 + 0.42 * rnd());
+          push(qx + (half - 2 - bw) * rnd(), qz + (half - 2 - bd) * rnd(), bw, bd, hgt(false));
+        }
+      }
+      // 沿街行道树（种在人行道内侧）
+      var line = ROADW - 1.4;
+      for (var t = 0; t < 7; t++) {
+        var p = ROADW + 4 + t * 8.6;
+        if (p > BLOCK - 3) break;
+        if (rnd() < 0.62) trees.push(mkTree(p + rnd() * 1.6, line - rnd() * 1.2, rnd));
+        if (rnd() < 0.62) trees.push(mkTree(line - rnd() * 1.2, p + rnd() * 1.6, rnd));
+      }
+      blocks[bz * TILES + bx] = { buildings: buildings, trees: trees };
+    }
+  }
+}
+genWorld();
+
+//------------------------- 飞行状态 -------------------------
+var START = { x: ROADW * 0.5, y: 48, z: -56, yaw: 0, pitch: 0, roll: 0, spd: 26 };
+var camX, camY, camZ, yaw, pitch, roll, spd;
+var flown = 0, best = 0, crashed = 0, paused = false, hudOn = true, collideOn = true, fpsVal = 0;
+try { best = parseFloat(localStorage.getItem('asciifpv.best') || '0') || 0; } catch (e) { }
+var bestSaved = best;
+function respawn() {
+  camX = START.x; camY = START.y; camZ = START.z;
+  yaw = START.yaw; pitch = START.pitch; roll = START.roll; spd = START.spd;
+  flown = 0; crashed = 0;
+}
+respawn();
+
+// 机体基向量（世界系：X 东 / Y 上 / Z 北）
+var fwX, fwY, fwZ, rtX, rtY, rtZ, upX, upY, upZ;
+// 视角偏移后的基向量（仅渲染使用，飞行物理不受影响）
+var vfwX, vfwY, vfwZ, vrtX, vrtY, vrtZ, vupX, vupY, vupZ;
+function updateBasis() {
+  var sy = Math.sin(yaw * DEG), cy = Math.cos(yaw * DEG);
+  var sp = Math.sin(pitch * DEG), cp = Math.cos(pitch * DEG);
+  var sr = Math.sin(roll * DEG), cr = Math.cos(roll * DEG);
+  var f0x = sy, f0z = cy;             // 航向前向
+  var r0x = cy, r0z = -sy;            // 航向右向
+  fwX = f0x * cp; fwY = sp; fwZ = f0z * cp;                 // 俯仰后的前向
+  var u1x = -f0x * sp, u1y = cp, u1z = -f0z * sp;            // 俯仰后的上向
+  rtX = r0x * cr - u1x * sr; rtY = -u1y * sr; rtZ = r0z * cr - u1z * sr;
+  upX = u1x * cr + r0x * sr; upY = u1y * cr;                 upZ = u1z * cr + r0z * sr;
+  // 视角偏移：先绕机体上向转 viewYaw（水平转头），再绕机体右向转 viewPitch（俯仰视角）。
+  // 仅当有偏移时才计算，零偏移时直接用姿态基向量。
+  if (viewYaw !== 0 || viewPitch !== 0) {
+    var vy = viewYaw * DEG, vp = viewPitch * DEG;
+    var cyv = Math.cos(vy), syv = Math.sin(vy);
+    var cpv = Math.cos(vp), spv = Math.sin(vp);
+    // 绕上向旋转（偏航视角）：前向/右向在上向平面内转
+    var f0 = { x: fwX, y: fwY, z: fwZ }, r0 = { x: rtX, y: rtY, z: rtZ };
+    // 旋转公式：绕轴 u 旋转，把前向和右向分解为 u 分量 + 垂直分量
+    // 绕 up 轴：v' = v*cos + (u×v)*sin + u*(u·v)(1-cos)
+    var dotF = upX * f0.x + upY * f0.y + upZ * f0.z;
+    var dotR = upX * r0.x + upY * r0.y + upZ * r0.z;
+    // 叉积 u×v
+    var cF = { x: upY * f0.z - upZ * f0.y, y: upZ * f0.x - upX * f0.z, z: upX * f0.y - upY * f0.x };
+    var cR = { x: upY * r0.z - upZ * r0.y, y: upZ * r0.x - upX * r0.z, z: upX * r0.y - upY * r0.x };
+    function rotUp(v, c, d) {
+      return {
+        x: v.x * cyv + c.x * syv + upX * d * (1 - cyv),
+        y: v.y * cyv + c.y * syv + upY * d * (1 - cyv),
+        z: v.z * cyv + c.z * syv + upZ * d * (1 - cyv)
+      };
+    }
+    var f1 = rotUp(f0, cF, dotF), r1 = rotUp(r0, cR, dotR);
+    // 再绕右向旋转（俯仰视角）：前向/上向在右向平面内转
+    function rotRight(v, c, d) {
+      return {
+        x: v.x * cpv + c.x * spv + r1.x * d * (1 - cpv),
+        y: v.y * cpv + c.y * spv + r1.y * d * (1 - cpv),
+        z: v.z * cpv + c.z * spv + r1.z * d * (1 - cpv)
+      };
+    }
+    // 上向绕右向旋转
+    var cU = { x: r1.y * upZ - r1.z * upY, y: r1.z * upX - r1.x * upZ, z: r1.x * upY - r1.y * upX };
+    var dotU = r1.x * upX + r1.y * upY + r1.z * upZ;
+    var u1 = rotRight({ x: upX, y: upY, z: upZ }, cU, dotU);
+    var f2 = rotRight(f1, { x: r1.y * f1.z - r1.z * f1.y, y: r1.z * f1.x - r1.x * f1.z, z: r1.x * f1.y - r1.y * f1.x }, r1.x * f1.x + r1.y * f1.y + r1.z * f1.z);
+    vfwX = f2.x; vfwY = f2.y; vfwZ = f2.z;
+    vrtX = r1.x; vrtY = r1.y; vrtZ = r1.z;
+    vupX = u1.x; vupY = u1.y; vupZ = u1.z;
+  } else {
+    vfwX = fwX; vfwY = fwY; vfwZ = fwZ;
+    vrtX = rtX; vrtY = rtY; vrtZ = rtZ;
+    vupX = upX; vupY = upY; vupZ = upZ;
+  }
+}
+
+//------------------------- 字符画屏幕 -------------------------
+var FONT = '"Cascadia Mono","Consolas","DejaVu Sans Mono","Courier New",monospace';
+var canvas = document.getElementById('screen');
+var ctx = canvas.getContext('2d', { alpha: false });
+var COLS = 0, ROWS = 0, cellW = 10, cellH = 18, offX = 0, offY = 0, baseY = 14;
+var FONTSPEC = '16px ' + FONT, LSPACE = '0px', hasLS = ('letterSpacing' in ctx);
+var chars, colr, zbuf;
+var targetCols = 152;
+var FOVX = 86 * DEG, NEAR = 0.45, VIEW = 620, FOGD = 420;
+var cxF = 0, cyF = 0, sxS = 1, syS = 1, hTan = 1, vTan = 1;
+
+function setupGrid() {
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var cssW = Math.max(320, window.innerWidth), cssH = Math.max(240, window.innerHeight);
+  canvas.width = Math.floor(cssW * dpr); canvas.height = Math.floor(cssH * dpr);
+  canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
+  var fpx = Math.max(7, canvas.width / (targetCols * 0.6));
+  FONTSPEC = fpx.toFixed(2) + 'px ' + FONT;
+  if (hasLS) ctx.letterSpacing = '0px';
+  ctx.font = FONTSPEC;
+  var adv = ctx.measureText('MMMMMMMMMM').width / 10;
+  if (hasLS) { cellW = Math.max(4, Math.round(adv)); LSPACE = (cellW - adv).toFixed(3) + 'px'; }
+  else { cellW = Math.max(4, adv); LSPACE = '0px'; }
+  cellH = Math.max(6, Math.round(fpx * 1.08));
+  baseY = Math.round(cellH * 0.80);
+  COLS = Math.max(40, Math.floor(canvas.width / cellW));
+  ROWS = Math.max(20, Math.floor(canvas.height / cellH));
+  offX = Math.floor((canvas.width - COLS * cellW) / 2);
+  offY = Math.floor((canvas.height - ROWS * cellH) / 2);
+  chars = new Uint16Array(COLS * ROWS);
+  colr = new Uint16Array(COLS * ROWS);
+  zbuf = new Float32Array(COLS * ROWS);
+  cxF = COLS * 0.5; cyF = ROWS * 0.5;
+  sxS = (COLS * 0.5) / Math.tan(FOVX * 0.5);
+  syS = sxS * (cellW / cellH);
+  hTan = (COLS * 0.5) / sxS * 1.15;
+  vTan = (ROWS * 0.5) / syS * 1.15;
+}
+
+//------------------------- 着色核心 -------------------------
+var OUT_C = 32, OUT_S = 0;
+function setStyle(m, b, ch) {
+  var lv = (b * LEVELS) | 0;
+  if (lv < 0) lv = 0; else if (lv >= LEVELS) lv = LEVELS - 1;
+  OUT_S = m.pal + lv;
+  OUT_C = ch > 0 ? ch : m.chars[lv];
+}
+function fogAt(d) { return Math.exp(-d / FOGD); }
+
+var WINU = 4.6, WINV = 3.7;
+var FACE = { kind: 0, mat: M_WALL[0], light: 1, uMax: 1, vMax: 1, seed: 0, lit: 0.3 };
+function shadeFace(u, v, dist) {
+  var fg = fogAt(dist);
+  var ppc = dist / sxS;                        // 该处 1 个字符格约等于多少米
+  if (FACE.kind === 0) {                       // ── 墙面
+    var b = FACE.light * fg;
+    var eW = Math.min(2.4, 0.5 + 0.55 * ppc);  // 轮廓棱线随距离加宽，远处楼体也成形
+    if (u < eW || u > FACE.uMax - eW || v > FACE.vMax - eW) {
+      setStyle(FACE.mat, b * 1.55 + 0.10, 35); return;
+    }
+    if (v > 4.4 && v < FACE.vMax - 2.0 && ppc < 2.6) {             // 窗格
+      var wu = u - Math.floor(u / WINU) * WINU, wv = v - Math.floor(v / WINV) * WINV;
+      if (wu > 1.15 && wu < WINU - 1.15 && wv > 0.95 && wv < WINV - 1.0) {
+        if (hash3(FACE.seed, Math.floor(u / WINU), Math.floor(v / WINV)) < FACE.lit) setStyle(M_WINL, fg * 1.05, 0);
+        else setStyle(M_WIND, fg * 0.5, 0);
+        return;
+      }
+    }
+    setStyle(FACE.mat, b, 0);
+  } else {                                     // ── 屋顶
+    var rb = FACE.light * fg;
+    var pW = Math.min(3.6, 0.9 + 0.8 * ppc);                       // 女儿墙
+    if (u < pW || u > FACE.uMax - pW || v < pW || v > FACE.vMax - pW) { setStyle(M_ROOF, rb * 1.3 + 0.08, 35); return; }
+    var n = hash3(FACE.seed ^ 0x77, Math.floor(u * 0.5), Math.floor(v * 0.5));
+    if (n > 0.9) { setStyle(M_ROOF, rb * 1.25, 61); return; }       // 屋顶设备
+    setStyle(M_ROOF, rb * (0.78 + 0.3 * n), 0);
+  }
+}
+
+//------------------------- 多边形光栅化 -------------------------
+var PVB = [], CVB = [], SPB = [], pvN = 0;
+for (var _i = 0; _i < 12; _i++) { PVB.push(new Float64Array(5)); CVB.push(new Float64Array(5)); SPB.push(new Float64Array(5)); }
+function pv(wx, wy, wz, u, v) {
+  var dx = wx - camX, dy = wy - camY, dz = wz - camZ, a = PVB[pvN++];
+  a[0] = dx * rtX + dy * rtY + dz * rtZ;
+  a[1] = dx * upX + dy * upY + dz * upZ;
+  a[2] = dx * fwX + dy * fwY + dz * fwZ;
+  a[3] = u; a[4] = v;
+}
+function rasterTri(A, B, C) {
+  var minX = Math.floor(Math.min(A[0], B[0], C[0])); if (minX < 0) minX = 0;
+  var maxX = Math.ceil(Math.max(A[0], B[0], C[0])); if (maxX > COLS - 1) maxX = COLS - 1;
+  var minY = Math.floor(Math.min(A[1], B[1], C[1])); if (minY < 0) minY = 0;
+  var maxY = Math.ceil(Math.max(A[1], B[1], C[1])); if (maxY > ROWS - 1) maxY = ROWS - 1;
+  if (minX > maxX || minY > maxY) return;
+  var area = (B[0] - A[0]) * (C[1] - A[1]) - (B[1] - A[1]) * (C[0] - A[0]);
+  if (area > -1e-9 && area < 1e-9) return;
+  var inv = 1 / area;
+  for (var y = minY; y <= maxY; y++) {
+    var py = y + 0.5, row = y * COLS;
+    for (var x = minX; x <= maxX; x++) {
+      var px = x + 0.5;
+      var w0 = ((B[0] - px) * (C[1] - py) - (B[1] - py) * (C[0] - px)) * inv;
+      if (w0 < -1e-7) continue;
+      var w1 = ((C[0] - px) * (A[1] - py) - (C[1] - py) * (A[0] - px)) * inv;
+      if (w1 < -1e-7) continue;
+      var w2 = 1 - w0 - w1;
+      if (w2 < -1e-7) continue;
+      var iz = w0 * A[2] + w1 * B[2] + w2 * C[2];
+      var idx = row + x;
+      if (iz <= zbuf[idx]) continue;
+      var uu = (w0 * A[3] + w1 * B[3] + w2 * C[3]) / iz;
+      var vv = (w0 * A[4] + w1 * B[4] + w2 * C[4]) / iz;
+      shadeFace(uu, vv, 1 / iz);
+      chars[idx] = OUT_C; colr[idx] = OUT_S; zbuf[idx] = iz;   // 不透明面：空格也遮挡
+    }
+  }
+}
+function drawPoly() {
+  var n = pvN; pvN = 0;
+  var src = PVB, cnt = n, i, k, need = false;
+  for (i = 0; i < n; i++) if (PVB[i][2] < NEAR) { need = true; break; }
+  if (need) {                                   // 近裁剪面 Sutherland-Hodgman
+    cnt = 0;
+    for (i = 0; i < n; i++) {
+      var A = PVB[i], B = PVB[(i + 1) % n];
+      var ia = A[2] >= NEAR, ib = B[2] >= NEAR;
+      if (ia) { CVB[cnt++].set(A); if (cnt >= 11) break; }
+      if (ia !== ib) {
+        var t = (NEAR - A[2]) / (B[2] - A[2]), o = CVB[cnt++];
+        for (k = 0; k < 5; k++) o[k] = A[k] + (B[k] - A[k]) * t;
+        o[2] = NEAR;
+        if (cnt >= 11) break;
+      }
+    }
+    src = CVB;
+  }
+  if (cnt < 3) return;
+  for (i = 0; i < cnt; i++) {
+    var s = SPB[i], a = src[i], iz = 1 / a[2];
+    s[0] = cxF + a[0] * iz * sxS; s[1] = cyF - a[1] * iz * syS;
+    s[2] = iz; s[3] = a[3] * iz; s[4] = a[4] * iz;
+  }
+  for (i = 1; i + 1 < cnt; i++) rasterTri(SPB[0], SPB[i], SPB[i + 1]);
+}
+function drawLine3D(ax, ay, az, bx, by, bz, ch, mat, bright) {
+  var x0 = ax - camX, y0 = ay - camY, z0 = az - camZ;
+  var X0 = x0 * rtX + y0 * rtY + z0 * rtZ, Y0 = x0 * upX + y0 * upY + z0 * upZ, Z0 = x0 * fwX + y0 * fwY + z0 * fwZ;
+  var x1 = bx - camX, y1 = by - camY, z1 = bz - camZ;
+  var X1 = x1 * rtX + y1 * rtY + z1 * rtZ, Y1 = x1 * upX + y1 * upY + z1 * upZ, Z1 = x1 * fwX + y1 * fwY + z1 * fwZ;
+  if (Z0 < NEAR && Z1 < NEAR) return;
+  var t;
+  if (Z0 < NEAR) { t = (NEAR - Z0) / (Z1 - Z0); X0 += (X1 - X0) * t; Y0 += (Y1 - Y0) * t; Z0 = NEAR; }
+  else if (Z1 < NEAR) { t = (NEAR - Z1) / (Z0 - Z1); X1 += (X0 - X1) * t; Y1 += (Y0 - Y1) * t; Z1 = NEAR; }
+  var p0x = cxF + X0 / Z0 * sxS, p0y = cyF - Y0 / Z0 * syS, i0 = 1 / Z0;
+  var p1x = cxF + X1 / Z1 * sxS, p1y = cyF - Y1 / Z1 * syS, i1 = 1 / Z1;
+  var n = Math.ceil(Math.max(Math.abs(p1x - p0x), Math.abs(p1y - p0y)));
+  if (n < 1) n = 1; if (n > 400) return;
+  for (var kk = 0; kk <= n; kk++) {
+    var tt = kk / n, px = p0x + (p1x - p0x) * tt, py = p0y + (p1y - p0y) * tt, iz = i0 + (i1 - i0) * tt;
+    if (px < 0 || py < 0) continue;
+    var xi = px | 0, yi = py | 0;
+    if (xi >= COLS || yi >= ROWS) continue;
+    var idx = yi * COLS + xi;
+    if (iz <= zbuf[idx]) continue;
+    setStyle(mat, bright * fogAt(1 / iz), ch);
+    if (OUT_C !== 32) { chars[idx] = OUT_C; colr[idx] = OUT_S; zbuf[idx] = iz; }
+  }
+}
+
+//------------------------- 地面（逐字符投射光线） -------------------------
+function shadeGround(wx, wz, dist) {
+  var mx = wx - Math.floor(wx / BLOCK) * BLOCK, mz = wz - Math.floor(wz / BLOCK) * BLOCK;
+  var fg = fogAt(dist);
+  var rX = mx < ROADW, rZ = mz < ROADW;
+  if (rX || rZ) {
+    var sw = Math.min(3.4, 1.7 + 0.55 * (dist / sxS));   // 远处人行道加宽，路网仍成线
+    var eX = rX ? Math.min(mx, ROADW - mx) : 99, eZ = rZ ? Math.min(mz, ROADW - mz) : 99;
+    if (Math.min(eX, eZ) < sw) { setStyle(M_WALK, fg * 0.95, 0); return; }   // 人行道
+    if (dist < 175) {                                                          // 中心虚线
+      if (rX && !rZ && Math.abs(mx - ROADW * 0.5) < 0.6 && (wz - Math.floor(wz / 9) * 9) < 4.5) { setStyle(M_MARK, fg * 1.1, 61); return; }
+      if (rZ && !rX && Math.abs(mz - ROADW * 0.5) < 0.6 && (wx - Math.floor(wx / 9) * 9) < 4.5) { setStyle(M_MARK, fg * 1.1, 61); return; }
+    }
+    setStyle(M_ROAD, fg * 0.88, 0); return;
+  }
+  var det = dist < 110 ? 1 : Math.max(0, 1 - (dist - 110) / 170);
+  var gs = 0.55 / (1 + dist / 220);                        // 远处纹理变粗，减少抖动
+  var n0 = hash3(Math.floor(wx * gs), Math.floor(wz * gs), 7);
+  if (n0 < 0.40) { setStyle(M_GRASS, 0, 0); return; }       // 留黑底，画面更透气
+  var nn = 0.5 + (n0 - 0.5) * det;
+  setStyle(M_GRASS, fg * (0.45 + 0.6 * nn), 0);
+}
+function drawGround() {
+  if (camY <= 0.05) return;
+  for (var y = 0; y < ROWS; y++) {
+    var b = (cyF - (y + 0.5)) / syS, row = y * COLS;
+    var dyR = b * upY, byX = b * upX, byZ = b * upZ;
+    for (var x = 0; x < COLS; x++) {
+      var a = ((x + 0.5) - cxF) / sxS;
+      var dY = a * rtY + dyR + fwY;
+      if (dY > -1e-4) continue;
+      var t = camY / -dY;
+      if (t < NEAR || t > VIEW) continue;
+      var wx = camX + t * (a * rtX + byX + fwX);
+      var wz = camZ + t * (a * rtZ + byZ + fwZ);
+      var dist = t * Math.sqrt(a * a + b * b + 1);
+      shadeGround(wx, wz, dist);
+      var idx = row + x;
+      chars[idx] = OUT_C; colr[idx] = OUT_S; zbuf[idx] = 1 / t;
+    }
+  }
+}
+
+//------------------------- 楼房 / 树木 -------------------------
+function quadWall(xa, za, xb, zb, h, mat, b, light) {
+  var len = Math.sqrt((xb - xa) * (xb - xa) + (zb - za) * (zb - za));
+  FACE.kind = 0; FACE.mat = mat; FACE.light = light; FACE.uMax = len; FACE.vMax = h;
+  FACE.seed = b.seed; FACE.lit = b.lit;
+  pvN = 0;
+  pv(xa, 0, za, 0, 0); pv(xb, 0, zb, len, 0); pv(xb, h, zb, len, h); pv(xa, h, za, 0, h);
+  drawPoly();
+}
+function drawBuilding(b, ox, oz) {
+  var x0 = ox + b.x, z0 = oz + b.z, x1 = x0 + b.w, z1 = z0 + b.d, h = b.h;
+  var dx = (x0 + x1) * 0.5 - camX, dy = h * 0.5 - camY, dz = (z0 + z1) * 0.5 - camZ;
+  var rad = 0.5 * Math.sqrt(b.w * b.w + b.d * b.d + h * h);
+  var zc = dx * fwX + dy * fwY + dz * fwZ;
+  if (zc < -rad) return;
+  var d2 = dx * dx + dy * dy + dz * dz;
+  if (d2 > (VIEW + rad) * (VIEW + rad)) return;
+  var lim = zc > 1 ? zc : 1;
+  if (Math.abs(dx * rtX + dy * rtY + dz * rtZ) - rad > lim * hTan) return;
+  if (Math.abs(dx * upX + dy * upY + dz * upZ) - rad > lim * vTan) return;
+  var mat = M_WALL[b.mat];
+  if (camX > x1) quadWall(x1, z0, x1, z1, h, mat, b, 0.88);
+  if (camX < x0) quadWall(x0, z1, x0, z0, h, mat, b, 0.50);
+  if (camZ > z1) quadWall(x1, z1, x0, z1, h, mat, b, 0.45);
+  if (camZ < z0) quadWall(x0, z0, x1, z0, h, mat, b, 0.72);
+  if (camY > h) {
+    FACE.kind = 1; FACE.mat = M_ROOF; FACE.light = 1.0; FACE.uMax = b.w; FACE.vMax = b.d;
+    FACE.seed = b.seed; FACE.lit = b.lit;
+    pvN = 0;
+    pv(x0, h, z0, 0, 0); pv(x1, h, z0, b.w, 0); pv(x1, h, z1, b.w, b.d); pv(x0, h, z1, 0, b.d);
+    drawPoly();
+  }
+}
+function drawTree(t, ox, oz) {
+  var wx = ox + t.x, wz = oz + t.z, fyc = t.h * 0.70;
+  var dx = wx - camX, dy = fyc - camY, dz = wz - camZ;
+  var zc = dx * fwX + dy * fwY + dz * fwZ;
+  if (zc < NEAR + t.r) return;
+  var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (dist > 330) return;
+  var xc = dx * rtX + dy * rtY + dz * rtZ, yc = dx * upX + dy * upY + dz * upZ;
+  var px = cxF + xc / zc * sxS, py = cyF - yc / zc * syS;
+  var rpx = sxS * t.r / zc, rpy = syS * t.r / zc;
+  if (px < -rpx - 2 || px > COLS + rpx + 2 || py < -rpy - 2 || py > ROWS + rpy + 2) return;
+  var fg = fogAt(dist);
+  var ex = rpx < 0.5 ? 0.5 : rpx, ey = rpy < 0.5 ? 0.5 : rpy;
+  var x0 = Math.floor(px - ex); if (x0 < 0) x0 = 0;
+  var x1 = Math.ceil(px + ex); if (x1 > COLS - 1) x1 = COLS - 1;
+  var y0 = Math.floor(py - ey); if (y0 < 0) y0 = 0;
+  var y1 = Math.ceil(py + ey); if (y1 > ROWS - 1) y1 = ROWS - 1;
+  for (var y = y0; y <= y1; y++) {
+    var ny = (y + 0.5 - py) / ey;
+    for (var x = x0; x <= x1; x++) {
+      var nx = (x + 0.5 - px) / ex;
+      var q = nx * nx + ny * ny;
+      if (q > 1) continue;
+      var zz = zc - t.r * Math.sqrt(1 - q) * 0.9, iz = 1 / zz;
+      var idx = y * COLS + x;
+      if (iz <= zbuf[idx]) continue;
+      var nse = hash3(t.seed, (nx * 3.5 + 16) | 0, (ny * 3.5 + 16) | 0);
+      setStyle(M_LEAF, fg * (0.55 + 0.45 * (1 - q)) * (0.72 + 0.5 * nse), 0);
+      if (OUT_C !== 32) { chars[idx] = OUT_C; colr[idx] = OUT_S; zbuf[idx] = iz; }   // 树冠有缝隙
+    }
+  }
+  if (rpx > 0.9) drawLine3D(wx, 0, wz, wx, t.h * 0.62, wz, 124, M_TRUNK, 0.95);
+}
+function drawCity() {
+  var range = VIEW + 40;
+  var bx0 = Math.floor((camX - range) / BLOCK), bx1 = Math.floor((camX + range) / BLOCK);
+  var bz0 = Math.floor((camZ - range) / BLOCK), bz1 = Math.floor((camZ + range) / BLOCK);
+  for (var bz = bz0; bz <= bz1; bz++) {
+    for (var bx = bx0; bx <= bx1; bx++) {
+      var ox = bx * BLOCK, oz = bz * BLOCK;
+      var dx = ox + BLOCK * 0.5 - camX, dz = oz + BLOCK * 0.5 - camZ;
+      if (dx * dx + dz * dz > (range + 50) * (range + 50)) continue;
+      var dy = 45 - camY;
+      if (dx * fwX + dy * fwY + dz * fwZ < -95) continue;
+      var blk = blocks[mod(bz, TILES) * TILES + mod(bx, TILES)];
+      var i, arr = blk.buildings;
+      for (i = 0; i < arr.length; i++) drawBuilding(arr[i], ox, oz);
+      if (dx * dx + dz * dz < 340 * 340) {
+        arr = blk.trees;
+        for (i = 0; i < arr.length; i++) drawTree(arr[i], ox, oz);
+      }
+    }
+  }
+}
+
+//------------------------- HUD（字符叠加层） -------------------------
+function hudCh(x, y, ch, st) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+  var i = y * COLS + x; chars[i] = ch; colr[i] = st; zbuf[i] = 1e18;
+}
+function hudStr(x, y, s, st) {
+  for (var i = 0; i < s.length; i++) { var c = s.charCodeAt(i); if (c !== 32) hudCh(x + i, y, c, st); }
+}
+function hudStrOp(x, y, s, st) {
+  for (var i = 0; i < s.length; i++) hudCh(x + i, y, s.charCodeAt(i), st);
+}
+function hudRow(y, ch, st) { for (var x = 0; x < COLS; x++) hudCh(x, y, ch, st); }
+
+function drawHorizon() {
+  // 世界「上」向在相机系中的分量 → 地平线（视线 ⟂ 该向量）
+  var Ux = rtY, Uy = upY, Uz = fwY, i;
+  if (Math.abs(Uy) >= Math.abs(Ux) * 0.55) {
+    for (i = 0; i < COLS; i++) {
+      var a = (i + 0.5 - cxF) / sxS;
+      var bb = -(Uz + a * Ux) / Uy;
+      var py = Math.round(cyF - bb * syS - 0.5);
+      if (Math.abs(i - cxF) < 4.5) continue;
+      hudCh(i, py, 45, C_HUD2);
+    }
+  } else {
+    for (i = 0; i < ROWS; i++) {
+      var b2 = (cyF - (i + 0.5)) / syS;
+      var aa = -(Uz + b2 * Uy) / Ux;
+      var pxx = Math.round(cxF + aa * sxS - 0.5);
+      if (Math.abs(i - cyF) < 2.5) continue;
+      hudCh(pxx, i, 124, C_HUD2);
+    }
+  }
+}
+function ladderPt(azDeg, elDeg, out) {
+  var ca = Math.cos(azDeg * DEG), sa = Math.sin(azDeg * DEG);
+  var ce = Math.cos(elDeg * DEG), se = Math.sin(elDeg * DEG);
+  var dx = sa * ce, dy = se, dz = ca * ce;
+  var Z = dx * fwX + dy * fwY + dz * fwZ;
+  if (Z < 0.08) return false;
+  out[0] = cxF + (dx * rtX + dy * rtY + dz * rtZ) / Z * sxS;
+  out[1] = cyF - (dx * upX + dy * upY + dz * upZ) / Z * syS;
+  return true;
+}
+var LP0 = [0, 0], LP1 = [0, 0];
+function drawLadder() {
+  for (var k = -40; k <= 40; k += 10) {
+    if (k === 0) continue;
+    for (var s = -1; s <= 1; s += 2) {
+      if (!ladderPt(yaw + s * 4.5, k, LP0)) continue;
+      if (!ladderPt(yaw + s * 14, k, LP1)) continue;
+      var n = Math.ceil(Math.max(Math.abs(LP1[0] - LP0[0]), Math.abs(LP1[1] - LP0[1])));
+      if (n < 1) n = 1; if (n > 200) continue;
+      for (var i = 0; i <= n; i++) {
+        if (k < 0 && (i & 1)) continue;                    // 负俯仰用虚线
+        var t = i / n;
+        hudCh(Math.round(LP0[0] + (LP1[0] - LP0[0]) * t - 0.5),
+              Math.round(LP0[1] + (LP1[1] - LP0[1]) * t - 0.5), k > 0 ? 45 : 46, C_HUD2);
+      }
+      var lb = pad(Math.abs(k), 2);
+      hudStr(Math.round(LP1[0] - 0.5) + (s > 0 ? 1 : -3), Math.round(LP1[1] - 0.5), lb, C_HUD2);
+    }
+  }
+}
+function drawHUD() {
+  var cx = Math.round(cxF - 0.5), cy = Math.round(cyF - 0.5);
+  var hdg = Math.round(mod(yaw, 360)) % 360;
+  drawHorizon();
+  drawLadder();
+
+  // 中心准星
+  hudStr(cx - 10, cy, "-----", C_HUD);
+  hudStr(cx + 6, cy, "-----", C_HUD);
+  hudStr(cx - 2, cy, "[+]", C_HUD);
+
+  // 航向带（顶部）
+  var half = Math.min(38, (COLS >> 2));
+  var a0 = Math.ceil((hdg - half * 2) / 10) * 10;
+  for (var a = a0; a <= hdg + half * 2; a += 10) {
+    var xx = cx + Math.round((a - hdg) / 2);
+    var av = mod(a, 360);
+    hudCh(xx, 0, (av % 30 === 0) ? 124 : 39, C_HUD2);
+    if (av % 30 === 0) {
+      var lab = av === 0 ? " N " : av === 90 ? " E " : av === 180 ? " S " : av === 270 ? " W " : pad(av, 3).replace(/ /g, '0');
+      hudStr(xx - 1, 1, lab, C_HUD2);
+    }
+  }
+  hudStrOp(cx - 2, 2, "[" + pad(hdg, 3).replace(/ /g, '0') + "]", C_WHT);
+
+  // 速度带（左）1 行 = 2 m/s
+  var TX = 9, rowsHalf = Math.min(10, (ROWS >> 2));
+  hudStr(TX - 5, cy - rowsHalf - 2, "SPD", C_HUD2);
+  for (var v = Math.ceil((spd - rowsHalf * 2) / 5) * 5; v <= spd + rowsHalf * 2; v += 5) {
+    if (v < 0) continue;
+    var vy = cy - Math.round((v - spd) / 2);
+    if (vy < 3 || vy > ROWS - 5) continue;
+    if (v % 10 === 0) { hudStr(TX - 1, vy, "--", C_HUD2); hudStr(TX - 5, vy, pad(v, 3), C_HUD2); }
+    else hudCh(TX, vy, 45, C_HUD2);
+  }
+  hudStrOp(TX - 5, cy, "[" + pad(Math.round(spd), 3) + "]", C_WHT);
+
+  // 高度带（右）1 行 = 5 m
+  var AX = COLS - 10;
+  hudStr(AX + 2, cy - rowsHalf - 2, "ALT", C_HUD2);
+  var alt = camY;
+  for (var h = Math.ceil((alt - rowsHalf * 5) / 10) * 10; h <= alt + rowsHalf * 5; h += 10) {
+    if (h < 0) continue;
+    var hy = cy - Math.round((h - alt) / 5);
+    if (hy < 3 || hy > ROWS - 5) continue;
+    if (h % 20 === 0) { hudStr(AX - 1, hy, "--", C_HUD2); hudStr(AX + 2, hy, pad(h, 3), C_HUD2); }
+    else hudCh(AX, hy, 45, C_HUD2);
+  }
+  hudStrOp(AX + 1, cy, "[" + pad(Math.round(alt), 3) + "]", C_WHT);
+
+  // 滚转刻度（底部）
+  var by = ROWS - 6, sc = Math.min(18, (COLS >> 3));
+  var ticks = [-45, -30, -15, 0, 15, 30, 45];
+  for (var ti = 0; ti < ticks.length; ti++) {
+    var tx = cx + Math.round(ticks[ti] / 45 * sc);
+    hudCh(tx, by, ticks[ti] === 0 ? 43 : 39, C_HUD2);
+  }
+  hudCh(cx + Math.round(roll / 45 * sc), by - 1, 94, Math.abs(roll) > 44 ? C_AMB : C_HUD);
+
+  // 底部状态栏（键盘提示 + 手柄提示两行）
+  hudRow(ROWS - 4, 45, C_HUD2);
+  hudRow(ROWS - 3, 32, C_HUD2);
+  hudRow(ROWS - 2, 32, C_HUD2);
+  var line = 'SPD ' + pad(spd.toFixed(1), 4) + ' M/S   ALT ' + pad(Math.round(camY), 3) +
+    ' M   HDG ' + pad(hdg, 3).replace(/ /g, '0') + '   BNK ' + sgnNum(roll) + '   PIT ' + sgnNum(pitch) +
+    '   VS ' + sgnNum(spd * Math.sin(pitch * DEG)) + ' M/S   DIST ' + (flown / 1000).toFixed(2) +
+    ' KM   BEST ' + (best / 1000).toFixed(2) + ' KM';
+  hudStrOp(1, ROWS - 2, line.substring(0, COLS - 2), C_HUD);
+  var hint = 'KEY: W/S PIT  A/D ROL  Z/X THR  ARROW VIEW  R RST  [ ] DENS  H HUD  C CRASH:' +
+    (collideOn ? 'ON' : 'OFF') + '  P PAUSE  Y LIM:' + (angleLimit ? 'LIM' : 'FREE') +
+    '  L AUTO:' + (autoLevel ? 'ON' : 'OFF') + '  E LVL  -/+ SENS:' + sens.toFixed(1);
+  hudStrOp(1, ROWS - 1, hint.substring(0, COLS - 2), C_HUD2);
+  var padHint = 'PAD: L-STK ATT/FREE  RT/LT THR  R-STK VIEW  A RST  B HUD  X CRASH  MENU PAUSE  Y LIM  BACK AUTO:' +
+    (autoLevel ? 'ON' : 'OFF') + '  L3 LVL  DPAD-UD SENS';
+  hudStrOp(1, ROWS - 3, padHint.substring(0, COLS - 2), C_HUD2);
+  var tag = COLS + 'x' + ROWS + ' CHARS  ' + pad(fpsVal, 3) + ' FPS';
+  if (COLS - 2 - tag.length > hint.length + 3) hudStrOp(COLS - 2 - tag.length, ROWS - 1, tag, C_HUD2);
+
+  if (angleLimit) {
+    if (Math.abs(roll) > 44.5) hudStr(cx - 4, cy - 3, "BANK LIM", C_AMB);
+    if (Math.abs(pitch) > 44.5) hudStr(cx - 5, cy + 3, "PITCH LIM", C_AMB);
+  } else {
+    if (Math.abs(roll) > 170) hudStr(cx - 4, cy - 3, "BANK 180", C_AMB);
+    if (Math.abs(pitch) > 170) hudStr(cx - 5, cy + 3, "PITCH 180", C_AMB);
+  }
+  if (camY < 25 && !crashed) hudStr(cx - 5, cy + 5, "LOW  ALT", C_WARN);
+  if (paused) hudStrOp(cx - 3, cy - 5, " PAUSE ", C_AMB);
+}
+function hudBox(x, y, w, h) {
+  for (var j = 0; j <= h; j++) {
+    for (var i = 0; i <= w; i++) {
+      var ch = 32, st = C_WARN;
+      if ((j === 0 || j === h) && (i === 0 || i === w)) ch = 43;
+      else if (j === 0 || j === h) ch = 45;
+      else if (i === 0 || i === w) ch = 124;
+      hudCh(x + i, y + j, ch, st);
+    }
+  }
+}
+function drawCrash() {
+  var cx = Math.round(cxF - 0.5), cy = Math.round(cyF - 0.5);
+  var w = 30, h = 6, x = cx - (w >> 1), y = cy - (h >> 1);
+  hudBox(x, y, w, h);
+  hudStrOp(x + 9, y + 1, "* CRASHED *", C_WARN);
+  hudStrOp(x + 4, y + 2, "DIST " + pad((flown / 1000).toFixed(2), 6) + " KM", C_WHT);
+  hudStrOp(x + 4, y + 3, "BEST " + pad((best / 1000).toFixed(2), 6) + " KM", C_WHT);
+  hudStrOp(x + 5, y + 5, "PRESS  R  TO RESPAWN", C_AMB);
+}
+
+//------------------------- 输出到画布 -------------------------
+function blit() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = FONTSPEC;
+  if (hasLS) ctx.letterSpacing = LSPACE;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  for (var y = 0; y < ROWS; y++) {
+    var row = y * COLS, yy = offY + y * cellH + baseY, x = 0;
+    while (x < COLS) {
+      var c = chars[row + x];
+      if (c === 32 || c === 0) { x++; continue; }
+      var st = colr[row + x], x2 = x + 1;
+      while (x2 < COLS) { var c2 = chars[row + x2]; if (c2 === 32 || c2 === 0 || colr[row + x2] !== st) break; x2++; }
+      ctx.fillStyle = PAL[st];
+      ctx.fillText(String.fromCharCode.apply(null, chars.subarray(row + x, row + x2)), offX + x * cellW, yy);
+      x = x2;
+    }
+  }
+}
+function render() {
+  updateBasis();
+  // 渲染使用视角偏移后的基向量：保存姿态基向量，临时替换为视角版本。
+  // 所有绘制函数（地面/城市/HUD）共用这一套，物理下一帧自行重算。
+  var sfwX = fwX, sfwY = fwY, sfwZ = fwZ, srtX = rtX, srtY = rtY, srtZ = rtZ, supX = upX, supY = upY, supZ = upZ;
+  fwX = vfwX; fwY = vfwY; fwZ = vfwZ;
+  rtX = vrtX; rtY = vrtY; rtZ = vrtZ;
+  upX = vupX; upY = vupY; upZ = vupZ;
+  chars.fill(32); colr.fill(0); zbuf.fill(0);
+  drawGround();
+  drawCity();
+  if (hudOn) drawHUD();
+  if (crashed) drawCrash();
+  blit();
+  // 恢复姿态基向量（物理帧使用）
+  fwX = sfwX; fwY = sfwY; fwZ = sfwZ;
+  rtX = srtX; rtY = srtY; rtZ = srtZ;
+  upX = supX; upY = supY; upZ = supZ;
+}
+
+//------------------------- 飞行力学 -------------------------
+var PITCH_RATE = 28, ROLL_RATE = 72, ACC = 9, LIMIT = 45, YAW_AT_LIMIT = 90;
+var keys = Object.create(null);
+// 角度限制开关：true=有限(±45°，姿态自稳)，false=无限（速率模式，可回环/连续滚转）
+var angleLimit = true;
+// 自动回正开关：true=松手自动回平；false=松手保持当前姿态（纯 acro）
+var autoLevel = true;
+// 一键回正：按 E / L3 触发一次，自动回平到水平后结束（无需长按）
+var levelActive = false;
+// 灵敏度：0.5~2.5，作用于姿态响应/角速率/键盘转向速率
+var sens = 1.0;
+var SENS_MIN = 0.5, SENS_MAX = 2.5, SENS_STEP = 0.1;
+// 手柄控制：有限=姿态目标角（松手回正）；无限=角速率（推着持续转，松手保持）
+var padAttitude = false;          // 手柄是否接管姿态
+var padRollTgt = 0, padPitchTgt = 0;   // 姿态目标角（有限模式）
+var padRollRate = 0, padPitchRate = 0; // 角速率（无限模式）
+var PAD_RATE_MAX = 360;           // 无限模式最大角速率 (°/s)，满推 = 每秒一整圈
+var padThrottle = 0;              // 线性油门：RT-LT 差值 (-1..1)
+var ATT_RATE = 3.2;               // 姿态响应速度（/s），越大越快跟随摇杆
+// 视角偏移（右摇杆）：只影响渲染，不影响飞行物理
+var viewYaw = 0, viewPitch = 0;         // 视角偏移角（度）
+var VIEW_YAW_MAX = 80, VIEW_PITCH_MAX = 60;   // 视角范围
+function physics(dt) {
+  // 一键回正（E / L3 触发一次）：无视 autoLevel、无视输入，强制回平到水平。
+  // 回平到位（roll/pitch 都 < 1°）后结束；结束后玩家输入立即接管。
+  if (levelActive) {
+    var lv = Math.min(1, ATT_RATE * sens * dt);
+    roll += (0 - roll) * lv;
+    pitch += (0 - pitch) * lv;
+    if (Math.abs(roll) < 1 && Math.abs(pitch) < 1) levelActive = false;
+    // 回正期间仍允许油门与视角，但不做姿态积分
+  } else if (padAttitude) {
+    if (angleLimit) {
+      // 有限模式：姿态自稳。摇杆=目标角，平滑趋近。
+      // autoLevel=true：松手目标=0 → 自动回正；false：松手保持当前姿态。
+      var att = Math.min(1, ATT_RATE * sens * dt);
+      if (padRollTgt !== 0) roll += (padRollTgt - roll) * att;
+      else if (autoLevel) roll += (0 - roll) * att;
+      if (padPitchTgt !== 0) pitch += (padPitchTgt - pitch) * att;
+      else if (autoLevel) pitch += (0 - pitch) * att;
+      roll = clamp(roll, -LIMIT, LIMIT);
+      pitch = clamp(pitch, -LIMIT, LIMIT);
+    } else {
+      // 无限模式：速率控制（可做完整 360° 筋斗/连续滚转）。
+      // autoLevel=true：松手自动回平；false：松手保持（纯 acro）。
+      roll += padRollRate * dt;
+      pitch += padPitchRate * dt;
+      var att = Math.min(1, ATT_RATE * sens * dt);
+      if (padRollRate === 0 && autoLevel) roll += (0 - roll) * att;
+      if (padPitchRate === 0 && autoLevel) pitch += (0 - pitch) * att;
+      roll = mod(roll + 180, 360) - 180;    // 归一到 ±180，避免无界增长
+      pitch = mod(pitch + 180, 360) - 180;
+    }
+  } else {
+    if (keys.KeyA) roll -= ROLL_RATE * sens * dt;
+    if (keys.KeyD) roll += ROLL_RATE * sens * dt;
+    if (keys.KeyW) pitch -= PITCH_RATE * sens * dt;
+    if (keys.KeyS) pitch += PITCH_RATE * sens * dt;
+    // 键盘 autoLevel：无输入时按开关决定回正或保持
+    if (autoLevel) {
+      var att = Math.min(1, ATT_RATE * sens * dt);
+      if (!keys.KeyA && !keys.KeyD) roll += (0 - roll) * att;
+      if (!keys.KeyW && !keys.KeyS) pitch += (0 - pitch) * att;
+    }
+    if (angleLimit) {
+      roll = clamp(roll, -LIMIT, LIMIT);
+      pitch = clamp(pitch, -LIMIT, LIMIT);
+    } else {
+      roll = mod(roll + 180, 360) - 180;
+      pitch = mod(pitch + 180, 360) - 180;
+    }
+  }
+  // 线性协调转弯：滚转 45° ⇒ 偏航 90°/s
+  yaw = mod(yaw + (roll / LIMIT) * YAW_AT_LIMIT * dt, 360);
+  if (padThrottle !== 0) spd += padThrottle * ACC * 1.6 * dt;
+  else if (keys.KeyZ) spd += ACC * dt;
+  else if (keys.KeyX) spd -= ACC * dt;
+  spd = clamp(spd, 10, 50);
+
+  updateBasis();
+  camX += fwX * spd * dt; camY += fwY * spd * dt; camZ += fwZ * spd * dt;
+  flown += spd * dt;
+  if (flown > best) {                                   // 记录实时刷新（街机式 BEST）
+    best = flown;
+    if (best - bestSaved > 500) { bestSaved = best; try { localStorage.setItem('asciifpv.best', String(best)); } catch (e) { } }
+  }
+  if (camY > 480) { camY = 480; if (pitch > 0) pitch = 0; }
+
+  if (collideOn) {
+    var hit = collide();
+    if (hit) {
+      crashed = hit;
+      bestSaved = best;
+      try { localStorage.setItem('asciifpv.best', String(best)); } catch (e) { }
+    }
+  } else if (camY < 1.2) { camY = 1.2; if (pitch < 0) pitch = 0; }
+}
+function collide() {
+  if (camY < 1.2) return 1;
+  var bxA = Math.floor(camX / BLOCK), bzA = Math.floor(camZ / BLOCK);
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      var blk = blocks[mod(bzA + j, TILES) * TILES + mod(bxA + i, TILES)];
+      var ox = (bxA + i) * BLOCK, oz = (bzA + j) * BLOCK, arr = blk.buildings;
+      for (var k = 0; k < arr.length; k++) {
+        var b = arr[k];
+        if (camX > ox + b.x - 1.1 && camX < ox + b.x + b.w + 1.1 &&
+            camZ > oz + b.z - 1.1 && camZ < oz + b.z + b.d + 1.1 && camY < b.h + 0.7) return 2;
+      }
+    }
+  }
+  return 0;
+}
+
+//------------------------- 输入与主循环 -------------------------
+var overlay = document.getElementById('overlay');
+var started = false;
+function start() {
+  if (started) return;
+  started = true;
+  if (overlay) overlay.style.display = 'none';
+}
+var HANDLED = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, KeyZ: 1, KeyX: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1 };
+// 方向键不再映射为飞行控制（WASD 专属），改为视角控制（类似手柄右摇杆）
+var ALIAS = {};
+// 键盘视角状态：方向键按住时更新视角偏移，松开回中
+var keyViewX = 0, keyViewY = 0;
+function keyViewApply() {
+  // 手柄连接时右摇杆接管视角；无手柄时方向键控制视角
+  if (!gamepad) {
+    viewYaw = keyViewX * VIEW_YAW_MAX;
+    viewPitch = keyViewY * VIEW_PITCH_MAX;
+  }
+}
+
+//------------------------- Xbox 手柄支持 -------------------------
+// 基于浏览器原生 Gamepad API：无需任何驱动/库，直连 XInput 手柄。
+// 摇杆带死区（防漂移），扳机/按钮在每帧轮询，边沿触发的一次性动作
+// （重生/开关/暂停）用上一帧按钮快照检测。
+var PAD_DEAD = 0.14;                 // 摇杆死区
+var gamepad = null;                  // 当前活动手柄
+var padBtnsPrev = null;              // 上一帧按钮按下快照（边沿检测）
+var padAxesPrev = null;              // 上一帧摇杆快照（避免重复触发）
+function padButton(padObj, idx) {
+  return padObj && padObj.buttons && padObj.buttons[idx] ? padObj.buttons[idx].value : 0;
+}
+function padPressed(idx) {
+  var now = padButton(gamepad, idx) > 0.5 ? 1 : 0;
+  var prev = padBtnsPrev ? padBtnsPrev[idx] : 0;
+  if (padBtnsPrev) padBtnsPrev[idx] = now;
+  return now === 1 && prev === 0;
+}
+function pollPad() {
+  var list;
+  try { list = navigator.getGamepads ? navigator.getGamepads() : []; }
+  catch (e) { return; }
+  if (gamepad && list[gamepad.index]) { gamepad = list[gamepad.index]; return; }   // 手柄仍插着
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].connected) { gamepad = list[i]; padBtnsPrev = new Uint8Array(list[i].buttons ? list[i].buttons.length : 32); padAxesPrev = new Float32Array(16); return; }
+  }
+  gamepad = null;                                                       // 未检测到手柄
+}
+function padAxis(axisIdx) {
+  if (!gamepad || !gamepad.axes || axisIdx >= gamepad.axes.length) return 0;
+  var v = gamepad.axes[axisIdx] || 0;
+  return Math.abs(v) < PAD_DEAD ? 0 : v;
+}
+// 每帧读取手柄。姿态/油门直接写入目标值（线性），按钮走边沿触发。
+function applyPad() {
+  pollPad();
+  if (!gamepad) { padAttitude = false; padThrottle = 0; viewYaw = 0; viewPitch = 0; return false; }
+  var any = false;
+  // 左摇杆：X → 滚转，Y → 俯仰（轴值带符号：上/左为负）。
+  // 有限模式：摇杆位置 = 目标角度（姿态）。无限模式：摇杆位置 = 角速率（acro）。
+  // 灵敏度 sens 作用于无限模式的角速率（有限模式经 ATT_RATE 在 physics 中生效）。
+  var lx = padAxis(0), ly = padAxis(1);
+  if (angleLimit) {
+    padRollTgt = lx * LIMIT;
+    padPitchTgt = ly * LIMIT;
+  } else {
+    padRollRate = lx * PAD_RATE_MAX * sens;
+    padPitchRate = ly * PAD_RATE_MAX * sens;
+  }
+  padAttitude = true;
+  if (lx !== 0 || ly !== 0) any = true;
+  // 右摇杆：视角偏移（只影响渲染，不影响飞行）。X→水平转头，Y→垂直抬头/低头。
+  var rx = padAxis(2), ry = padAxis(3);
+  viewYaw = rx * VIEW_YAW_MAX;
+  viewPitch = ry * VIEW_PITCH_MAX;
+  if (rx !== 0 || ry !== 0) any = true;
+  // 扳机线性油门：RT(7) − LT(6)，差值 (-1..1)，越深越快。
+  var rt = padButton(gamepad, 7), lt = padButton(gamepad, 6);
+  padThrottle = rt - lt;
+  if (padThrottle !== 0) any = true;
+  // 一次性动作（边沿触发）：
+  // A→重生, B→HUD, X→碰撞, MENU(Start)→暂停, Y→角度限制切换,
+  // Back(8)→自动回正开关, L3(10)按下→一键回正, 十字键上下→灵敏度, LB/RB→密度
+  if (padPressed(0)) { respawn(); any = true; }
+  if (padPressed(1)) { hudOn = !hudOn; any = true; }
+  if (padPressed(2)) { collideOn = !collideOn; crashed = 0; any = true; }
+  if (padPressed(9)) { paused = !paused; any = true; }
+  if (padPressed(3)) { angleLimit = !angleLimit; any = true; }
+  if (padPressed(8)) { autoLevel = !autoLevel; any = true; }
+  if (padPressed(10)) { levelActive = true; any = true; }
+  if (padPressed(12)) { sens = clamp(sens + SENS_STEP, SENS_MIN, SENS_MAX); any = true; }
+  if (padPressed(13)) { sens = clamp(sens - SENS_STEP, SENS_MIN, SENS_MAX); any = true; }
+  if (padPressed(4)) { targetCols = clamp(targetCols - 16, 64, 264); setupGrid(); any = true; }
+  if (padPressed(5)) { targetCols = clamp(targetCols + 16, 64, 264); setupGrid(); any = true; }
+  // 十字键左右也调密度（12=上/13=下 已用于灵敏度，14=左/15=右 保持密度）
+  var dpL = padButton(gamepad, 14), dpR = padButton(gamepad, 15);
+  if (dpL > 0.5 && padAxesPrev && padAxesPrev[14] <= 0.5) { targetCols = clamp(targetCols - 16, 64, 264); setupGrid(); any = true; }
+  if (dpR > 0.5 && padAxesPrev && padAxesPrev[15] <= 0.5) { targetCols = clamp(targetCols + 16, 64, 264); setupGrid(); any = true; }
+  if (padAxesPrev) { padAxesPrev[14] = dpL; padAxesPrev[15] = dpR; }
+  return any;
+}
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('keydown', function (e) {
+    var code = ALIAS[e.code] || e.code;
+    if (HANDLED[e.code]) e.preventDefault();
+    start();
+    keys[code] = 1;
+    // 方向键：视角控制（类似手柄右摇杆）
+    if (code === 'ArrowLeft') keyViewX = -1;
+    else if (code === 'ArrowRight') keyViewX = 1;
+    else if (code === 'ArrowUp') keyViewY = -1;   // 上 = 抬头（与右摇杆一致）
+    else if (code === 'ArrowDown') keyViewY = 1;
+    if (code === 'KeyR') { respawn(); }
+    else if (code === 'KeyH') hudOn = !hudOn;
+    else if (code === 'KeyP') paused = !paused;
+    else if (code === 'KeyC') { collideOn = !collideOn; crashed = 0; }
+    else if (code === 'KeyY') angleLimit = !angleLimit;
+    else if (code === 'KeyL') autoLevel = !autoLevel;
+    else if (code === 'KeyE') { levelActive = true; }
+    else if (code === 'Minus') sens = clamp(sens - SENS_STEP, SENS_MIN, SENS_MAX);
+    else if (code === 'Equal') sens = clamp(sens + SENS_STEP, SENS_MIN, SENS_MAX);
+    else if (code === 'BracketLeft') { targetCols = clamp(targetCols - 16, 64, 264); setupGrid(); }
+    else if (code === 'BracketRight') { targetCols = clamp(targetCols + 16, 64, 264); setupGrid(); }
+  });
+  window.addEventListener('keyup', function (e) {
+    var code = ALIAS[e.code] || e.code;
+    keys[code] = 0;
+    // 方向键松开：视角回中
+    if (e.code === 'ArrowLeft' && keyViewX < 0) keyViewX = 0;
+    else if (e.code === 'ArrowRight' && keyViewX > 0) keyViewX = 0;
+    else if (e.code === 'ArrowUp' && keyViewY < 0) keyViewY = 0;
+    else if (e.code === 'ArrowDown' && keyViewY > 0) keyViewY = 0;
+  });
+  window.addEventListener('blur', function () { keys = Object.create(null); keyViewX = 0; keyViewY = 0; });
+  window.addEventListener('resize', function () { setupGrid(); });
+  if (overlay) overlay.addEventListener('mousedown', function () { start(); });
+}
+
+var acc = 0, last = 0, fpsT = 0, fpsN = 0;
+var STEP = 1 / 120;
+function frame(now) {
+  var dt = (now - last) / 1000;
+  last = now;
+  if (!(dt > 0) || dt > 0.25) dt = 0.016;
+  // 手柄输入每帧合并进 keys；有输入则视为"起飞"操作
+  if (applyPad()) start();
+  // 键盘方向键视角（无手柄时生效，手柄右摇杆已由 applyPad 处理）
+  keyViewApply();
+  if (started && !paused && !crashed) {
+    acc += dt;
+    if (acc > 0.12) acc = 0.12;
+    while (acc >= STEP) { physics(STEP); acc -= STEP; }
+  }
+  render();
+  fpsN++; fpsT += dt;
+  if (fpsT > 0.5) { fpsVal = Math.round(fpsN / fpsT); fpsT = 0; fpsN = 0; }
+  requestAnimationFrame(frame);
+}
+
+setupGrid();
+render();
+if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function (t) { last = t; frame(t + 16); });
+
+//------------------------- 离线自检接口（供 Node 测试用） -------------------------
+globalThis.__ASCIIFPV__ = {
+  setCam: function (o) {
+    if (o.x !== undefined) camX = o.x; if (o.y !== undefined) camY = o.y; if (o.z !== undefined) camZ = o.z;
+    if (o.yaw !== undefined) yaw = o.yaw; if (o.pitch !== undefined) pitch = o.pitch;
+    if (o.roll !== undefined) roll = o.roll; if (o.spd !== undefined) spd = o.spd;
+    updateBasis();
+  },
+  step: function (dt) { physics(dt); },
+  pad: function () { return applyPad(); },
+  render: function () { render(); },
+  info: function () {
+    return { COLS: COLS, ROWS: ROWS, cellW: cellW, cellH: cellH, camX: camX, camY: camY, camZ: camZ,
+             yaw: yaw, pitch: pitch, roll: roll, spd: spd, crashed: crashed, pal: PAL.length };
+  },
+  dump: function () {
+    var out = [];
+    for (var y = 0; y < ROWS; y++) {
+      var line = '';
+      for (var x = 0; x < COLS; x++) line += String.fromCharCode(chars[y * COLS + x] || 32);
+      out.push(line.replace(/\s+$/, ''));
+    }
+    return out.join('\n');
+  }
+};
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v3d52b47920f24c319d37e2661827c42b1787588026925" integrity="sha512-d9sL6GJLXn6fInD1+TVXhTcQOsmxeHfmHAvwGDIxp5TO+uo1fiWW7mHomMj4MLRlCsJDTqXzWLHJFFlPCEIj/A==" data-cf-beacon='{"version":"2024.11.0","token":"4fefd53add854ea4b22475a4d86bdd4c","r":1}' crossorigin="anonymous"></script>
+</body>
+</html>

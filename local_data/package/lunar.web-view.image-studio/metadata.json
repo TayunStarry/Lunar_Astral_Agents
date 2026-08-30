@@ -1,9 +1,9 @@
 {
-	"id": "lunar.studio.image.generation",
+	"id": "lunar.image-studio",
 	"icon": "icon.webp",
 	"title": "图像生成",
 	"description": "AI 图像生成与参数配置",
 	"tags": [
-		"Studio"
+		"WebView-App"
 	]
 }

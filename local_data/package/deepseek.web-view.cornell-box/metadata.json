@@ -1,0 +1,9 @@
+{
+	"id": "deepseek.cornell-box",
+	"icon": "icon.webp",
+	"title": "Cornell Box · 全局光照路径追踪",
+	"description": "基于 Cornell Box 参考场景的无偏蒙特卡洛路径追踪：面光源直接采样+MIS、GGX 微表面、玻璃折射/色散、渐进累积，可调曝光/色调映射/景深",
+	"tags": [
+		"DeepSeek-Demo"
+	]
+}

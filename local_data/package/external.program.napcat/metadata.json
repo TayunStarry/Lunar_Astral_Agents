@@ -1,0 +1,10 @@
+{
+	"id": "napcat.adapter",
+	"icon": "icon.webp",
+	"title": "NapCat QQ 适配器",
+	"description": "启动 NapCat QQ 适配器",
+	"path": "D:/NapCat.Shell.Windows.OneKey/NapCat.41785.Shell/napcat.bat",
+	"tags": [
+		"Windows-EXE"
+	]
+}

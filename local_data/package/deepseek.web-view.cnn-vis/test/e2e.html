@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>E2E-RUNNING</title></head>
+<body>
+<pre id="RESULTS">PENDING</pre>
+<iframe id="app" src="../index.html" style="width:1400px;height:900px"></iframe>
+<script>
+'use strict';
+const results = [];
+const ok = (name, cond, detail) => {
+  results.push(`[${cond ? 'PASS' : 'FAIL'}] ${name}${detail ? '  -- ' + detail : ''}`);
+  return cond;
+};
+const $ = id => appDoc.getElementById(id);
+let appDoc, appWin, failed = false;
+
+window.onerror = (m) => { results.push('[FAIL] 顶层JS错误: ' + m); failed = true; };
+
+const frame = document.getElementById('app');
+frame.addEventListener('error', () => { results.push('[FAIL] iframe 加载失败'); failed = true; });
+
+function pe(type, x, y) {
+  return new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, pointerId: 1 });
+}
+
+async function run() {
+  appDoc = frame.contentDocument;
+  appWin = frame.contentWindow;
+
+  // 1. 启动与自动推理 (boot 会自动载入示例 7)
+  let tries = 0;
+  while (tries++ < 300 && !(appWin.CNNDBG && appWin.CNNDBG.state.LAST)) {
+    await new Promise(r => setTimeout(r, 50));
+  }
+  const st = appWin.CNNDBG && appWin.CNNDBG.state;
+  if (!ok('引擎与权重加载 (CNNEngine + CNNDBG)', !!appWin.CNNEngine && !!st)) return finish();
+  if (!ok('自动推理完成 (LAST 就绪)', !!st.LAST)) return finish();
+
+  const psum = st.LAST.probs.reduce((a, b) => a + b, 0);
+  ok('softmax Σ=1', Math.abs(psum - 1) < 1e-4, 'Σ=' + psum.toFixed(6));
+  ok('示例7 预测=7', $('predDigit').textContent === '7', 'got ' + $('predDigit').textContent);
+  ok('logits[7] 为最大', Math.max(...st.LAST.logits) === st.LAST.logits[7]);
+  ok('LED 状态灯全绿', $('ledModel').className.includes('ok') &&
+      $('ledEngine').className.includes('ok') && $('ledInput').className.includes('ok'));
+
+  // 2. 画廊点选联动
+  const big1Before = $('big1').toDataURL();
+  const kernBefore = $('kernTable').firstChild.textContent;
+  $('gal1').children[5].click();
+  const kernAfter = $('kernTable').firstChild.textContent;
+  ok('缩略图点选 → 核表联动', kernBefore !== kernAfter, `${kernBefore} -> ${kernAfter}`);
+  ok('缩略图点选 → 大图联动', $('big1').toDataURL() !== big1Before);
+  ok('选中态样式', $('gal1').children[5].classList.contains('sel'));
+
+  // 3. 卷积动画单步
+  appWin.CNNDBG.macStep(); appWin.CNNDBG.macStep(); appWin.CNNDBG.macStep();
+  ok('MAC 动画计算行更新', $('macCalc').textContent.includes('ReLU'), $('macCalc').textContent.slice(0, 60));
+  const mo = $('macOut').getContext('2d').getImageData(0, 0, 240, 240).data;
+  let lit = 0;
+  for (let i = 0; i < mo.length; i += 4) if (mo[i] + mo[i + 1] + mo[i + 2] > 30) lit++;
+  ok('输出特征图已点亮像素', lit >= 3, lit + ' px');
+  ok('PATCH 表已填充', $('macPatch').querySelectorAll('.maccell').length === 9);
+
+  // 4. 手绘 → 重新推理
+  const pad = $('pad'), r = pad.getBoundingClientRect();
+  const cx = r.left + r.width * 0.5, cy = r.top + r.height * 0.55;
+  pad.dispatchEvent(pe('pointerdown', cx, cy));
+  for (let i = 0; i < 10; i++)
+    pad.dispatchEvent(pe('pointermove', cx - 36 + i * 8, cy - 24 + i * 5));
+  pad.dispatchEvent(pe('pointerup', cx, cy));
+  const inkBefore = st.PAD.reduce((a, b) => a + b, 0);
+  ok('手写笔迹写入缓冲', inkBefore > 3, 'ink=' + inkBefore.toFixed(1));
+  $('btnRun').click();
+  await new Promise(r2 => setTimeout(r2, 120));
+  const st2 = appWin.CNNDBG.state;
+  ok('手绘后重新推理', !!st2.LAST && $('predDigit').textContent.length === 1,
+     'pred=' + $('predDigit').textContent);
+  ok('STG00 统计行更新', $('st0stats').textContent.includes('标准化'));
+
+  // 5. Dropout 模拟
+  $('chkDropout').click();
+  ok('Dropout 模拟开启', $('st6stats').textContent.includes('Dropout'));
+  $('chkDropout').click();
+  ok('Dropout 模拟关闭恢复', !$('st6stats').textContent.includes('模拟模式'));
+
+  // 6. Softmax 温度
+  const t = $('tTemp'); t.value = '0.5';
+  t.dispatchEvent(new Event('input', { bubbles: true }));
+  ok('温度滑杆生效', $('tempVal').textContent === 'T = 0.50', $('tempVal').textContent);
+  ok('TOP-3 行渲染', $('top3').textContent.includes('TOP-3'));
+
+  // 7. 3D 场景与联动
+  const viz = appWin.CNNDBG.state.viz;
+  ok('3D 场景已建立', !!viz && viz.groups.length >= 7, viz ? viz.groups.length + ' 组' : '无');
+  const selBefore = JSON.stringify(appWin.CNNDBG.state.SEL);
+  viz.onSelect('conv2', 3);
+  ok('3D 点击 → 2D 联动', JSON.stringify(appWin.CNNDBG.state.SEL) !== selBefore &&
+     appWin.CNNDBG.state.SEL.conv2 === 3);
+  ok('展平色带高亮跟随', $('st5stats').textContent.includes('第 3 通道'));
+
+  // 8. 示例切换
+  const sel = $('selSample'); sel.value = '3';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise(r2 => setTimeout(r2, 120));
+  ok('示例数字 3 加载并推理', $('predDigit').textContent.length === 1,
+     'pred=' + $('predDigit').textContent);
+
+  finish();
+}
+
+function finish() {
+  const pass = results.filter(l => l.startsWith('[PASS]')).length;
+  const fail = results.filter(l => l.startsWith('[FAIL]')).length;
+  results.unshift(`E2E 结果: ${pass} 通过 / ${fail} 失败`);
+  document.getElementById('RESULTS').textContent = results.join('\n');
+  document.title = fail ? 'E2E_FAIL' : 'E2E_PASS';
+}
+frame.addEventListener('load', () => setTimeout(run, 200));
+</script>
+</body>
+</html>

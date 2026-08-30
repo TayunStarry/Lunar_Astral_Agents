@@ -227,9 +227,11 @@ function renderPageGrid() {
             : null;
         const isLtpTag = displayTag && /^LTP[0-9A-Za-z]+$/.test(displayTag);
         const isGitTag = displayTag === 'Git';
+        const isDeepSeekTag = displayTag === 'DeepSeek';
+        const isDeepSeekDemoTag = displayTag === 'DeepSeek-Demo';
 
         card.innerHTML = `
-            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}${isGitTag ? ' card-tag-git' : ''}">${displayTag}</span>` : ''}
+            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}${isGitTag ? ' card-tag-git' : ''}${isDeepSeekTag ? ' card-tag-deepseek' : ''}${isDeepSeekDemoTag ? ' card-tag-deepseek-demo' : ''}">${displayTag}</span>` : ''}
             <div class="icon">
                 <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
             </div>

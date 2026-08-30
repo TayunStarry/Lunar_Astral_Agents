@@ -1,5 +1,6 @@
 {
-	"id": "lunar.web-view.search-weather",
+	"id": "lunar.search-weather",
+	"icon": "icon.webp",
 	"title": "实时天气与新闻",
 	"description": "实时天气与新闻查询模块：查询指定城市天气与当日新闻摘要，支持月华自然语言调用与手动查询",
 	"tags": [

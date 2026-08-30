@@ -1,0 +1,9 @@
+{
+	"id": "deepseek.cnn-vis",
+	"icon": "icon.webp",
+	"title": "CNN-VIS · 手写数字推理过程可视化",
+	"description": "在浏览器中逐层可视化 CNN 识别手写数字的全过程：卷积/池化/全连接/Softmax，3D 特征图可交互，纯 JS 引擎离线推理",
+	"tags": [
+		"DeepSeek-Demo"
+	]
+}

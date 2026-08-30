@@ -1,0 +1,9 @@
+{
+	"id": "deepseek.minimind",
+	"icon": "icon.webp",
+	"title": "MiniMind-3 · Transformer 推理原理分析仪",
+	"description": "浏览器本地运行真实 MiniMind-3（Qwen3 ≈63.9M 参数）权重，分词/嵌入/RoPE/注意力/SwiGLU/采样逐层可观察、可干预、可验证的 Transformer 大模型推理可视化",
+	"tags": [
+		"DeepSeek-Demo"
+	]
+}
