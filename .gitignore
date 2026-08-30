@@ -13,6 +13,7 @@ local_data/embed_cache/
 the_crashed_cpp_project/
 embedded_data/
 bridge_probe/
+deepseek.web-view.*
 
 ## Go 测试产物
 coverage

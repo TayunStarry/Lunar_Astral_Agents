@@ -214,6 +214,18 @@ function getRandomDefaultIcon() {
     return `/default/icon (${Math.floor(Math.random() * DEFAULT_ICON_COUNT) + 1}).webp`;
 }
 
+// 标签 → 卡片角标修饰类（无对应样式的标签回退默认紫色）
+function getTagModifierClass(tag) {
+    switch (tag) {
+        case 'LTPX': return 'card-tag-ltp';
+        case 'mini-LTP': return 'card-tag-mini-ltp';
+        case 'Git': return 'card-tag-git';
+        case 'DeepSeek': return 'card-tag-deepseek';
+        case 'DeepSeek-Demo': return 'card-tag-deepseek-demo';
+        default: return '';
+    }
+}
+
 function renderPageGrid() {
     pageGrid.innerHTML = '';
     pages.forEach(page => {
@@ -221,17 +233,14 @@ function renderPageGrid() {
         card.className = 'page-card';
         card.dataset.pageId = page.id;
 
-        // 标签：有多个时随机显示一个
+        // 标签：有多个时随机显示一个；修饰类由 switch 映射
         const displayTag = (page.tags && page.tags.length > 0)
             ? page.tags[Math.floor(Math.random() * page.tags.length)]
             : null;
-        const isLtpTag = displayTag && /^LTP[0-9A-Za-z]+$/.test(displayTag);
-        const isGitTag = displayTag === 'Git';
-        const isDeepSeekTag = displayTag === 'DeepSeek';
-        const isDeepSeekDemoTag = displayTag === 'DeepSeek-Demo';
+        const tagModifier = displayTag ? getTagModifierClass(displayTag) : '';
 
         card.innerHTML = `
-            ${displayTag ? `<span class="card-tag${isLtpTag ? ' card-tag-ltp' : ''}${isGitTag ? ' card-tag-git' : ''}${isDeepSeekTag ? ' card-tag-deepseek' : ''}${isDeepSeekDemoTag ? ' card-tag-deepseek-demo' : ''}">${displayTag}</span>` : ''}
+            ${displayTag ? `<span class="card-tag${tagModifier ? ' ' + tagModifier : ''}">${displayTag}</span>` : ''}
             <div class="icon">
                 <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
             </div>
@@ -246,7 +255,6 @@ function renderPageGrid() {
                 </button>
             </div>
         `;
-
         card.addEventListener('click', (e) => {
             if (e.target.closest('.card-btn')) return;
             openPage(page);
@@ -1157,20 +1165,62 @@ function openPageInFrame(url, title, appId) {
     ltpxOverlay.classList.add('active');
 }
 
+// 将包 ID 解析为包目录名：LTPX 广播携带的是 metadata.id，而资源按目录名（package_name）定位
+function resolvePackageDir(appId) {
+    const p = pages.find(x => x.id === appId);
+    return (p && p.package_name) || appId;
+}
+
+// 判断包是否为 mini-LTP（带 mini-LTP 标签）
+function isMiniLTPPage(appId) {
+    const p = pages.find(x => x.id === appId);
+    return !!(p && p.tags && p.tags.includes('mini-LTP'));
+}
+
 // 收到月华的 ltpx_call：打开对应包页面并投递执行指令
 function openLTPXPackage(msg) {
     activeLTPXCall = msg;
     ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (msg.app_id || '包') + ' 执行中...';
+    // 同一包页面已就绪（已加载 + agent 已注入）时直接投递，不重新加载，保持页面状态
+    // （mini-LTP 与普通包一致；仅首次或换包时才加载/注入）
     if (ltpxFrameApp === msg.app_id && ltpxFrameReady) {
-        // 同一包页面已就绪：直接投递执行，无需重新加载（相同 src 不会触发 load 事件）
         deliverLTPXRun();
-    } else {
-        ltpxFrameReady = false;
-        ltpxFrameApp = msg.app_id;
-        ltpxFrame.src = '/file/read/package/' + encodeURIComponent(msg.app_id) + '/index.html';
+        ltpxOverlay.classList.add('active');
+        return;
     }
+    // 首次加载该包 or 切换到其它包：加载页面
+    ltpxFrameReady = false;
+    ltpxFrameApp = msg.app_id;
+    const base = '/file/read/package/' + encodeURIComponent(resolvePackageDir(msg.app_id)) + '/index.html';
+    ltpxFrame.src = isMiniLTPPage(msg.app_id) ? base + '?t=' + Date.now() : base;
     ltpxOverlay.classList.add('active');
 }
+
+// 向 iframe 注入通用页面操作智能体（仅 mini-LTP 包；未注入时执行一次）
+function injectFrameAgent(win, callback) {
+    try {
+        fetch('/mini-ltp-agent.js').then(r => r.ok ? r.text() : '').then(code => {
+            try {
+                if (code && win && win.document && !win.document.__miniLTPAgentInjected) {
+                    const s = win.document.createElement('script');
+                    s.textContent = code;
+                    win.document.head.appendChild(s); // 同步执行，agent 完成 AtoA 注册
+                    win.document.__miniLTPAgentInjected = true;
+                }
+            } catch (e) { console.warn('mini-LTP 智能体注入异常:', e); }
+            callback();
+        }).catch(e => { console.warn('mini-LTP 智能体加载失败:', e); callback(); });
+    } catch (e) { console.warn('mini-LTP 注入异常:', e); callback(); }
+}
+
+// iframe 加载完成后统一处理：置就绪 →（mini-LTP）注入 agent → 投递待定指令
+function handleFrameLoad(appId) {
+    const win = ltpxFrame.contentWindow;
+    const finish = () => { ltpxFrameReady = true; deliverLTPXRun(); };
+    if (isMiniLTPPage(appId)) injectFrameAgent(win, finish);
+    else finish();
+}
+ltpxFrame.onload = () => handleFrameLoad(ltpxFrameApp);
 
 // 向包页面投递执行指令（仅在 iframe 加载完成后执行一次）
 function deliverLTPXRun() {
@@ -1184,12 +1234,6 @@ function deliverLTPXRun() {
         arguments: activeLTPXCall.arguments
     }, '*');
 }
-
-// iframe 加载完成后投递（保证包内部监听器已注册）
-ltpxFrame.addEventListener('load', () => {
-    ltpxFrameReady = true;
-    deliverLTPXRun();
-});
 
 // 关闭覆盖层（若包尚未回执，琉璃端会因超时向月华返回错误）
 function closeLTPXOverlay() {
@@ -1356,6 +1400,283 @@ callYuehuaModalClose.addEventListener('click', () => {
 callYuehuaModal.addEventListener('click', (e) => {
     if (e.target === callYuehuaModal) callYuehuaModal.classList.remove('active');
 });
+
+// ===== 创建模块 =====
+const createModuleBtn = document.getElementById('createModuleBtn');
+const createModuleModal = document.getElementById('createModuleModal');
+const createModuleModalClose = document.getElementById('createModuleModalClose');
+const createModuleCancelBtn = document.getElementById('createModuleCancelBtn');
+const createModuleSubmitBtn = document.getElementById('createModuleSubmitBtn');
+const moduleUrlInput = document.getElementById('moduleUrlInput');
+const moduleZipInput = document.getElementById('moduleZipInput');
+const moduleIdInput = document.getElementById('moduleIdInput');
+const moduleTitleInput = document.getElementById('moduleTitleInput');
+const moduleDescInput = document.getElementById('moduleDescInput');
+const moduleMiniLtp = document.getElementById('moduleMiniLtp');
+const moduleAiGenBtn = document.getElementById('moduleAiGenBtn');
+const iconStickerQuery = document.getElementById('iconStickerQuery');
+const iconStickerSearchBtn = document.getElementById('iconStickerSearchBtn');
+const iconStickerResults = document.getElementById('iconStickerResults');
+const iconStickerStatus = document.getElementById('iconStickerStatus');
+const iconManualInput = document.getElementById('iconManualInput');
+
+let moduleSource = 'url';           // 当前来源：url / zip
+let selectedStickerData = null;     // 选中的 sticker base64 dataURL
+
+function openCreateModuleModal() {
+    createModuleModal.classList.add('active');
+    setModuleSource('url');
+    selectedStickerData = null;
+    iconStickerResults.innerHTML = '';
+    iconStickerStatus.textContent = '';
+    setTimeout(() => moduleUrlInput.focus(), 100);
+}
+
+function closeCreateModuleModal() {
+    createModuleModal.classList.remove('active');
+}
+
+function setModuleSource(src) {
+    moduleSource = src;
+    document.querySelectorAll('.source-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.source === src);
+    });
+    document.getElementById('sourceUrlGroup').style.display = src === 'url' ? 'block' : 'none';
+    document.getElementById('sourceZipGroup').style.display = src === 'zip' ? 'block' : 'none';
+}
+
+// 来源切换
+document.querySelectorAll('.source-tab').forEach(tab => {
+    tab.addEventListener('click', () => setModuleSource(tab.dataset.source));
+});
+
+// 图标方式切换（留空 / 记忆库 stickers / 手动指定）
+document.querySelectorAll('input[name="moduleIconMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        const mode = document.querySelector('input[name="moduleIconMode"]:checked').value;
+        document.getElementById('iconStickerGroup').style.display = mode === 'sticker' ? 'block' : 'none';
+        document.getElementById('iconManualGroup').style.display = mode === 'manual' ? 'block' : 'none';
+    });
+});
+
+// 打开 / 关闭
+createModuleBtn.addEventListener('click', openCreateModuleModal);
+createModuleModalClose.addEventListener('click', closeCreateModuleModal);
+createModuleCancelBtn.addEventListener('click', closeCreateModuleModal);
+createModuleModal.addEventListener('click', (e) => {
+    if (e.target === createModuleModal) closeCreateModuleModal();
+});
+
+// ===== AI 自动生成 id / title / description（AI 服务可用时） =====
+// 先调用 /api/module/inspect 提取项目真实内容（README/title/文件清单），再交给 AI 生成
+async function inspectModuleProject() {
+    const url = moduleUrlInput.value.trim();
+    const zipFile = (moduleZipInput.files && moduleZipInput.files[0]) || null;
+    if (!url && !zipFile) return null;
+    try {
+        if (zipFile) {
+            const fd = new FormData();
+            if (url) fd.append('url', url);
+            fd.append('zip_file', zipFile);
+            const resp = await fetch('/api/module/inspect', { method: 'POST', body: fd });
+            return await resp.json();
+        }
+        const resp = await fetch('/api/module/inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+        return await resp.json();
+    } catch (e) {
+        console.warn('检查项目内容失败:', e);
+        return null;
+    }
+}
+
+function buildInspectPrompt(project) {
+    const lines = [];
+    if (!project) return '';
+    if (project.name) lines.push('项目名：' + project.name);
+    if (project.url) lines.push('来源：' + project.url);
+    (project.fields || []).forEach(f => {
+        if (f.key === 'title' && f.text) lines.push('页面标题：' + f.text);
+        else if (f.key === 'README' && f.text) lines.push('README 摘要：\n' + f.text);
+        else if (f.key === 'filenames' && f.text) lines.push('文件清单：\n' + f.text);
+        else if (f.key === 'url' && f.text) lines.push('来源 URL：' + f.text);
+    });
+    return lines.join('\n\n');
+}
+
+async function aiGenerateModuleInfo() {
+    const url = moduleUrlInput.value.trim();
+    const zipName = (moduleZipInput.files && moduleZipInput.files[0]) ? moduleZipInput.files[0].name : '';
+    if (!url && !zipName) {
+        addMessage('system', '请先填写 URL/路径或选择 ZIP 文件，再使用 AI 生成');
+        return;
+    }
+    moduleAiGenBtn.disabled = true;
+    moduleAiGenBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析并生成中...';
+    try {
+        // 1) 提取项目真实内容
+        const project = await inspectModuleProject();
+        const projectText = buildInspectPrompt(project);
+        const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
+        const prompt = '请根据以下 HTML 项目信息，生成合理的模块元信息。只返回 JSON，不要任何额外文字、解释或 markdown 代码块标记。\n'
+            + '【项目信息】\n' + (projectText || (url || zipName))
+            + '\n\n【要求】JSON 格式：{"id": "deepseek.xxx", "title": "简洁中文标题", "description": "一句话准确描述项目核心功能（依据 README 与页面标题）"}。'
+            + '\nid 只允许小写字母、数字、点和短横线，以 deepseek. 开头；title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造。';
+        const response = await fetch('/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: modelName, messages: [{ role: 'user', content: prompt }] })
+        });
+        if (!response.ok) throw new Error('AI 服务不可用');
+        const data = await response.json();
+        const content = data.choices && data.choices[0] && data.choices[0].message
+            ? data.choices[0].message.content : '';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('AI 返回格式无效');
+        const info = JSON.parse(jsonMatch[0]);
+        if (info.id) moduleIdInput.value = info.id;
+        if (info.title) moduleTitleInput.value = info.title;
+        if (info.description) moduleDescInput.value = info.description;
+        addMessage('system', '已通过 AI 生成模块信息，请确认后创建');
+    } catch (e) {
+        console.error('AI 生成模块信息失败:', e);
+        addMessage('system', 'AI 生成失败：' + (e.message || 'AI 服务不可用'));
+    } finally {
+        moduleAiGenBtn.disabled = false;
+        moduleAiGenBtn.innerHTML = '<i class="fas fa-magic"></i> AI 生成';
+    }
+}
+moduleAiGenBtn.addEventListener('click', aiGenerateModuleInfo);
+
+// ===== 记忆库 stickers 搜索（图标） =====
+async function searchIconStickers() {
+    const q = iconStickerQuery.value.trim();
+    if (!q) {
+        iconStickerStatus.textContent = '请输入要匹配的图标描述';
+        return;
+    }
+    iconStickerSearchBtn.disabled = true;
+    iconStickerStatus.textContent = '正在搜索记忆库 stickers...';
+    iconStickerResults.innerHTML = '';
+    try {
+        const resp = await fetch('/memory/stickers/messages?query=' + encodeURIComponent(q) + '&top_k=12');
+        const payload = await resp.json();
+        // 记忆库统一返回 { data: { results: [...] }, success }:结果嵌套在 data 中
+        const data = payload ? (payload.data || payload) : null;
+        const results = (data && data.results) || [];
+        if (!results.length) {
+            iconStickerStatus.textContent = '记忆库 stickers 中未找到匹配图片，可换个描述试试';
+            return;
+        }
+        iconStickerStatus.textContent = '找到 ' + results.length + ' 张，点击选择：';
+        results.forEach(r => {
+            if (!r.image) return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'sticker-option';
+            const img = document.createElement('img');
+            img.src = r.image;
+            img.alt = r.content || 'sticker';
+            btn.appendChild(img);
+            btn.addEventListener('click', () => {
+                selectedStickerData = r.image;
+                document.querySelectorAll('.sticker-option').forEach(o => o.classList.remove('selected'));
+                btn.classList.add('selected');
+                iconStickerStatus.textContent = '已选择一张 sticker 作为图标';
+            });
+            iconStickerResults.appendChild(btn);
+        });
+    } catch (e) {
+        console.error('搜索 stickers 失败:', e);
+        iconStickerStatus.textContent = '搜索失败（记忆库可能未初始化）';
+    } finally {
+        iconStickerSearchBtn.disabled = false;
+    }
+}
+iconStickerSearchBtn.addEventListener('click', searchIconStickers);
+iconStickerQuery.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') searchIconStickers();
+});
+
+// ===== 提交创建 =====
+function collectModuleBase() {
+    return {
+        package_name: '',
+        id: moduleIdInput.value.trim(),
+        title: moduleTitleInput.value.trim(),
+        description: moduleDescInput.value.trim(),
+        icon: '',
+        mini_ltp: moduleMiniLtp.checked,
+        tags: []
+    };
+}
+
+async function submitCreateModule() {
+    const title = moduleTitleInput.value.trim();
+    if (!title) {
+        addMessage('system', '请填写模块标题');
+        return;
+    }
+    const iconMode = document.querySelector('input[name="moduleIconMode"]:checked').value;
+    const base = collectModuleBase();
+    if (iconMode === 'sticker' && selectedStickerData) base.icon = selectedStickerData;
+    else if (iconMode === 'manual') base.icon = iconManualInput.value.trim();
+
+    createModuleSubmitBtn.disabled = true;
+    createModuleSubmitBtn.textContent = '创建中...';
+    try {
+        let data;
+        if (moduleSource === 'zip') {
+            const file = moduleZipInput.files && moduleZipInput.files[0];
+            if (!file) {
+                addMessage('system', '请选择 ZIP 文件');
+                return;
+            }
+            const fd = new FormData();
+            fd.append('data', JSON.stringify(base));
+            fd.append('zip_file', file);
+            const resp = await fetch('/api/module/create', { method: 'POST', body: fd });
+            data = await resp.json();
+        } else {
+            const urlOrPath = moduleUrlInput.value.trim();
+            if (!urlOrPath) {
+                addMessage('system', '请填写 URL 或本地路径');
+                return;
+            }
+            const body = { ...base };
+            if (/^https?:\/\//i.test(urlOrPath)) {
+                body.url = urlOrPath;
+            } else if (/\.(exe|ps1|bat|cmd|lnk)$/i.test(urlOrPath)) {
+                body.path = urlOrPath;
+            } else {
+                body.url = urlOrPath;
+            }
+            const resp = await fetch('/api/module/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            data = await resp.json();
+        }
+        if (data && data.success) {
+            addMessage('system', data.message + '（已刷新应用列表）');
+            closeCreateModuleModal();
+            setTimeout(() => loadPages(), 400);
+        } else {
+            addMessage('system', '创建失败：' + ((data && data.message) || '未知错误'));
+        }
+    } catch (e) {
+        console.error('创建模块失败:', e);
+        addMessage('system', '创建模块时发生网络错误');
+    } finally {
+        createModuleSubmitBtn.disabled = false;
+        createModuleSubmitBtn.textContent = '创建模块';
+    }
+}
+createModuleSubmitBtn.addEventListener('click', submitCreateModule);
 
 // ===== 启动 =====
 async function initApp() {

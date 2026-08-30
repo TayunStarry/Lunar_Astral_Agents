@@ -4,6 +4,29 @@
 	"title": "ASCII FPV · 楼宇穿越",
 	"description": "全画面由彩色 ASCII 字符拼成的第一视角飞行模拟：自研软件光栅化渲染无缝城市，支持键盘与 Xbox 手柄、HUD 与碰撞",
 	"tags": [
-		"DeepSeek-Demo"
+		"DeepSeek-Demo",
+		"LTPX",
+		"mini-LTP"
+	],
+	"tools": [
+		{
+			"function": {
+				"description": "操作「ASCII FPV 楼宇穿越 模拟器」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
+				"name": "lunar_ascii_fpv",
+				"parameters": {
+					"properties": {
+						"instruction": {
+							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部",
+							"type": "string"
+						}
+					},
+					"required": [
+						"instruction"
+					],
+					"type": "object"
+				}
+			},
+			"type": "function"
+		}
 	]
 }

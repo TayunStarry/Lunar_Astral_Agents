@@ -94,6 +94,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
+	{Path: "/api/module/create", Handler: moduleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 mini-LTP 注入智能体）"},
+	{Path: "/api/module/inspect", Handler: moduleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（README/title/文件清单，供 AI 生成模块元信息）"},
 
 	// ==== 知识库与记忆库 ====
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
@@ -123,6 +125,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
 	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
+	{Path: "/mini-ltp-agent.js", Handler: miniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（前端动态注入 mini-LTP 包）"},
 
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},

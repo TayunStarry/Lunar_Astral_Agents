@@ -28,6 +28,9 @@
         <button class="sidebar-btn sidebar-btn-config" id="configBtn" title="查看配置">
             <i class="fas fa-sliders-h"></i>
         </button>
+        <button class="sidebar-btn sidebar-btn-create" id="createModuleBtn" title="创建模块">
+            <i class="fas fa-plus-circle"></i>
+        </button>
     </aside>
 
     <!-- 聊天模态框 -->
@@ -94,6 +97,88 @@
             <div class="modal-footer">
                 <button class="btn-glass btn-glass-cancel" id="exportCancelBtn">取消</button>
                 <button class="btn-glass btn-glass-primary" id="exportConfirmBtn">确认导出</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建模块模态框 -->
+    <div class="modal-overlay" id="createModuleModal">
+        <div class="modal create-module-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-plus-circle"></i> 创建模块</h3>
+                <button class="modal-close" id="createModuleModalClose">&times;</button>
+            </div>
+            <div class="modal-body create-module-body">
+                <!-- 来源 -->
+                <div class="form-group">
+                    <label>模块来源</label>
+                    <div class="source-tabs">
+                        <button type="button" class="source-tab active" data-source="url">URL / 路径</button>
+                        <button type="button" class="source-tab" data-source="zip">ZIP 上传</button>
+                    </div>
+                </div>
+                <div class="form-group" id="sourceUrlGroup">
+                    <label for="moduleUrlInput">URL 或 本地路径</label>
+                    <input type="text" id="moduleUrlInput" class="modal-input"
+                        placeholder="https://example.com 或 C:\path\to\index.html（支持 http/https、本地 HTML 文件/目录、exe/ps1/bat）">
+                </div>
+                <div class="form-group" id="sourceZipGroup" style="display:none;">
+                    <label for="moduleZipInput">ZIP 文件（HTML 项目）</label>
+                    <input type="file" id="moduleZipInput" class="modal-input" accept=".zip">
+                    <p class="field-hint">上传包含 index.html 的 HTML 项目压缩包</p>
+                </div>
+
+                <!-- 元信息（手动或 AI 生成） -->
+                <div class="form-group meta-ai-row">
+                    <label>模块信息</label>
+                    <button type="button" class="btn-glass btn-glass-primary btn-sm" id="moduleAiGenBtn">
+                        <i class="fas fa-magic"></i> AI 生成
+                    </button>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="moduleIdInput" class="modal-input" placeholder="id（如 lunar.my-module，可留空自动生成）">
+                </div>
+                <div class="form-group">
+                    <input type="text" id="moduleTitleInput" class="modal-input" placeholder="title（模块名称）">
+                </div>
+                <div class="form-group">
+                    <textarea id="moduleDescInput" class="modal-input" rows="2" placeholder="description（模块功能描述）"></textarea>
+                </div>
+
+                <!-- 图标 -->
+                <div class="form-group">
+                    <label>图标</label>
+                    <div class="radio-group icon-radio-group">
+                        <label class="radio-label"><input type="radio" name="moduleIconMode" value="none" checked> 留空（随机默认图标）</label>
+                        <label class="radio-label"><input type="radio" name="moduleIconMode" value="sticker"> 从记忆库 stickers 匹配</label>
+                        <label class="radio-label"><input type="radio" name="moduleIconMode" value="manual"> 手动指定（URL / 相对路径）</label>
+                    </div>
+                </div>
+                <div class="form-group" id="iconStickerGroup" style="display:none;">
+                    <div class="sticker-search-row">
+                        <input type="text" id="iconStickerQuery" class="modal-input" placeholder="描述想要的图标，如：蓝色水晶、月亮">
+                        <button type="button" class="btn-glass btn-glass-primary btn-sm" id="iconStickerSearchBtn">搜索</button>
+                    </div>
+                    <div class="sticker-results" id="iconStickerResults"></div>
+                    <p class="field-hint" id="iconStickerStatus"></p>
+                </div>
+                <div class="form-group" id="iconManualGroup" style="display:none;">
+                    <input type="text" id="iconManualInput" class="modal-input" placeholder="图标 URL 或相对路径，如 https://.../icon.webp 或 icon.webp">
+                </div>
+
+                <!-- mini-LTP -->
+                <div class="form-group mini-ltp-row">
+                    <label class="mini-ltp-label">启用 mini-LTP 功能</label>
+                    <label class="config-switch">
+                        <input type="checkbox" id="moduleMiniLtp">
+                        <span class="config-slider"></span>
+                    </label>
+                </div>
+                <p class="field-hint">开启后注入通用页面操作智能体，月华可通过 AtoA 用自然语言指挥该页面执行点击/输入/滑动等操作（需本地 HTML 项目）。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-glass btn-glass-cancel" id="createModuleCancelBtn">取消</button>
+                <button class="btn-glass btn-glass-primary" id="createModuleSubmitBtn">创建模块</button>
             </div>
         </div>
     </div>

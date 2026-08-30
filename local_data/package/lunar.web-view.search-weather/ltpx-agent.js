@@ -18,8 +18,6 @@
 
 // ===== 智能体常量与状态 =====
 
-/** AI 模型名（与全项目约定一致，硬编码，由后端 /v1 代理解析实际配置） */
-const SW_AGENT_MODEL = 'system-multimodal';
 /** 独立上下文历史：最多保留的对话轮数（1 轮 = 用户指令 + 智能体答复） */
 const SW_AGENT_MAX_ROUNDS = 40;
 /** 单条指令允许的最大工具调用循环次数（防模型无限调用工具） */
@@ -27,6 +25,30 @@ const SW_AGENT_MAX_TOOL_LOOPS = 8;
 
 /** 已完成的对话历史：数组元素为 { user, assistant }（各为纯文本） */
 let swAgentHistory = [];
+
+/** 模型配置加载 Promise（从 lunar_config.json 的 agent 字段读取，不硬编码） */
+let swModelConfigPromise = null;
+
+/**
+ * 读取 lunar_config.json 的 agent.multimodal_model 作为模型名
+ * （通过 /file/read/ 文件接口；读取失败回退默认占位值，仍走同源 /v1 代理解析）
+ * @returns {Promise<string>}
+ */
+async function loadSWAgentModel() {
+    if (swModelConfigPromise) return swModelConfigPromise;
+    swModelConfigPromise = (async () => {
+        try {
+            const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
+            const cfg = await resp.json();
+            const agent = (cfg && cfg.agent) || {};
+            return (agent.multimodal_model && String(agent.multimodal_model)) || 'system-multimodal';
+        } catch (e) {
+            return 'system-multimodal';
+        }
+    })();
+    return swModelConfigPromise;
+}
 
 // ===== 数据获取（智能体工具与手动操作共用） =====
 
@@ -140,11 +162,12 @@ function buildSWSystemPrompt() {
  * @returns {Promise<Object>} OpenAI 响应中的 message 对象
  */
 async function callSWModel(messages) {
+    const model = await loadSWAgentModel();
     const response = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: SW_AGENT_MODEL,
+            model: model,
             messages: messages,
             tools: swAgentTools,
             stream: false

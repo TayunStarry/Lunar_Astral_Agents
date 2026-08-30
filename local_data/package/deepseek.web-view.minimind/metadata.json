@@ -4,6 +4,29 @@
 	"title": "MiniMind-3 · Transformer 推理原理分析仪",
 	"description": "浏览器本地运行真实 MiniMind-3（Qwen3 ≈63.9M 参数）权重，分词/嵌入/RoPE/注意力/SwiGLU/采样逐层可观察、可干预、可验证的 Transformer 大模型推理可视化",
 	"tags": [
-		"DeepSeek-Demo"
+		"DeepSeek-Demo",
+		"LTPX",
+		"mini-LTP"
+	],
+	"tools": [
+		{
+			"type": "function",
+			"function": {
+				"name": "mini_ltp_deepseek_minimind",
+				"description": "操作「MiniMind-3 · Transformer 推理原理分析仪」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"instruction": {
+							"type": "string",
+							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部"
+						}
+					},
+					"required": [
+						"instruction"
+					]
+				}
+			}
+		}
 	]
 }

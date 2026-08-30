@@ -30,6 +30,48 @@ type PackageInfo struct {
 	PackageName string   `json:"package_name,omitempty"` // 包的名称，用于显示在应用列表中，描述应用的功能或来源
 }
 
+// ModuleCreateRequest 创建模块请求体（琉璃前端「创建模块」弹窗提交）
+type ModuleCreateRequest struct {
+	PackageName string   `json:"package_name"` // 包目录名（可选，缺省由标题/ID 推导）
+	ID          string   `json:"id"`           // 包 ID（可选，缺省自动生成 module.<包名>）
+	Title       string   `json:"title"`        // 包标题
+	Description string   `json:"description"`  // 包描述
+	Icon        string   `json:"icon"`         // 图标：空 / data:image/...;base64（记忆库 sticker）/ 相对路径或 URL
+	URL         string   `json:"url"`          // 外部链接(http/https) 或 本地 HTML 文件/目录路径
+	Path        string   `json:"path"`         // 本地程序路径（exe/ps1/bat/cmd/lnk）
+	MiniLTP     bool     `json:"mini_ltp"`     // 是否启用 mini-LTP（注入通用页面操作智能体 + 标签 + AtoA 工具）
+	Tags        []string `json:"tags"`         // 附加标签
+	ZipPath     string   `json:"-"`            // 内部：ZIP 上传解压前的临时文件路径（不参与 JSON 序列化）
+}
+
+// ModuleCreateResponse 创建模块响应体
+type ModuleCreateResponse struct {
+	Success     bool   `json:"success"`
+	Message     string `json:"message"`
+	PackageName string `json:"package_name,omitempty"`
+	PackageID   string `json:"package_id,omitempty"`
+}
+
+// ModuleInspectField 提取出的项目元信息片段
+type ModuleInspectField struct {
+	Key  string `json:"key"`  // 字段名（title / README / filenames）
+	Text string `json:"text"` // 片段内容（截断）
+}
+
+// ModuleInspectRequest 项目内容检查请求体：URL/路径（JSON）或 ZIP（multipart）
+type ModuleInspectRequest struct {
+	URL     string `json:"url"` // 外部链接或本地路径（可为空，配合 zip_file）
+	ZipFile string `json:"-"`   // 内部：上传的 ZIP 临时路径
+}
+
+// ModuleInspectResponse 项目内容检查响应体
+type ModuleInspectResponse struct {
+	Success  bool                `json:"success"`
+	Message  string              `json:"message,omitempty"`
+	Name     string              `json:"name,omitempty"`     // 项目名（目录/文件名）
+	Fields   []ModuleInspectField `json:"fields,omitempty"`  // 提取到的元信息片段
+}
+
 // proxyAwareHandler 代理感知处理程序
 // 用于在处理请求时根据路径判断是否需要通过代理转发
 type proxyAwareHandler struct {

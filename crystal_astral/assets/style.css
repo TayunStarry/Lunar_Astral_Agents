@@ -145,6 +145,12 @@ body {
     border-color: rgba(220, 53, 69, 0.45);
 }
 
+/* mini-LTP 标签 —— 深绯红系（与 LTPX 亮红区分） */
+.card-tag-mini-ltp {
+    background: rgba(185, 28, 28, 0.65);
+    border-color: rgba(185, 28, 28, 0.45);
+}
+
 .card-tag-git {
     background: rgba(30, 30, 30, 0.75);
     border-color: rgba(60, 60, 60, 0.5);
@@ -281,6 +287,9 @@ body {
 
 .sidebar-btn-config { color: #b8f5d8; }
 .sidebar-btn-config:hover { filter: drop-shadow(0 0 10px rgba(120, 230, 180, 0.85)); }
+
+.sidebar-btn-create { color: #ffb8d8; }
+.sidebar-btn-create:hover { filter: drop-shadow(0 0 10px rgba(255, 150, 200, 0.85)); }
 
 .sidebar-btn.loading {
     pointer-events: none;
@@ -1027,6 +1036,148 @@ body {
 
 .config-switch input:checked + .config-slider:before {
     transform: translateX(20px);
+}
+
+/* ===== 创建模块模态框 ===== */
+.create-module-modal {
+    width: 460px;
+    max-width: 94vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.create-module-body {
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* 来源标签页 */
+.source-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.source-tab {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.source-tab:hover { background: rgba(255, 255, 255, 0.22); }
+
+.source-tab.active {
+    background: rgba(0, 120, 255, 0.45);
+    border-color: rgba(0, 120, 255, 0.6);
+}
+
+/* 小号按钮 */
+.btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+/* 表单辅助文案 */
+.field-hint {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 6px;
+    line-height: 1.5;
+}
+
+/* AI 生成行 */
+.meta-ai-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.meta-ai-row label {
+    margin-bottom: 0;
+}
+
+/* 图标三种方式的搜索区 */
+.sticker-search-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.sticker-search-row .modal-input {
+    flex: 1;
+}
+
+.sticker-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+    gap: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.sticker-option {
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background: rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.sticker-option img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sticker-option:hover { transform: scale(1.05); }
+
+.sticker-option.selected {
+    border-color: #4db8ff;
+    box-shadow: 0 0 10px rgba(77, 184, 255, 0.5);
+}
+
+.icon-preview {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
+.icon-preview img {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    object-fit: contain;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* mini-LTP 开关行 */
+.mini-ltp-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.mini-ltp-label {
+    margin-bottom: 0 !important;
 }
 
 /* 配置分页 */
