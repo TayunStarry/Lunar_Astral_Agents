@@ -11,12 +11,12 @@
 	"tools": [
 		{
 			"function": {
-				"description": "操作「ASCII FPV 楼宇穿越 模拟器」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
-				"name": "lunar_ascii_fpv",
+				"description": "「ASCII FPV」第一视角飞行模拟模块：彩色 ASCII 字符渲染的楼宇穿越飞行，支持键盘与手柄操控、HUD 与碰撞。接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入文本、按键、滑动、元素捕获等页面操作，返回执行结果。",
+				"name": "ascii_fpv",
 				"parameters": {
 					"properties": {
 						"instruction": {
-							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部",
+							"description": "要驱动该模块执行的自然语言操作指令，例如：按键 R 重生；按键 W 向前飞行；按键 Enter 开始游戏；长按 Shift 加速",
 							"type": "string"
 						}
 					},

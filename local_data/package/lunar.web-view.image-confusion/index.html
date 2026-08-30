@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>图像混淆</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* 避免拖动时选中文字，不影响输入框 */
+        }
+
+        :root {
+            --bg: #f4f4f1;          /* 页面底色 · 暖白 */
+            --panel: #ffffff;       /* 面板 · 纯白 */
+            --border: #e4e4df;      /* 细分隔线 */
+            --border-strong: #cfcfc8;
+            --ink: #1a1a18;         /* 主文字 · 近黑 */
+            --ink-dim: #8f8f88;     /* 次级文字 · 灰 */
+            --ink-faint: #b6b6ae;   /* 弱文字 */
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--ink);
+            font-family: 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 双栏容器：铺满视口，无头部/底部 */
+        .app {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* ---------- 左侧栏：操作 + 历史记录 ---------- */
+        .sidebar {
+            width: 316px;
+            min-width: 260px;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            padding: 32px 26px;
+            overflow: hidden;
+        }
+
+        .brand {
+            margin-bottom: 36px;
+        }
+        .brand .mark {
+            font-size: 21px;
+            font-weight: 600;
+            letter-spacing: 6px;
+            color: var(--ink);
+        }
+        .brand .sub {
+            display: block;
+            margin-top: 8px;
+            font-size: 10px;
+            letter-spacing: 4px;
+            color: var(--ink-dim);
+            text-transform: uppercase;
+        }
+
+        /* 操作按钮 */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+        .btn {
+            height: 44px;
+            border: 1px solid var(--ink);
+            border-radius: 2px;
+            background: transparent;
+            color: var(--ink);
+            font-size: 12px;
+            letter-spacing: 2px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.18s ease, color 0.18s ease;
+        }
+        .btn:hover {
+            background: var(--ink);
+            color: #fff;
+        }
+        .btn:active {
+            opacity: 0.75;
+        }
+        .btn-solid {
+            width: 100%;
+            background: var(--ink);
+            color: #fff;
+        }
+        .btn-solid:hover {
+            background: #000;
+        }
+        .file-label {
+            position: relative;
+        }
+        .file-label input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* 历史记录区（占据左侧剩余高度，可滚动） */
+        .history-panel {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            margin-top: 28px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+        .history-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .section-label {
+            font-size: 11px;
+            letter-spacing: 3px;
+            color: var(--ink-dim);
+            text-transform: uppercase;
+        }
+        .clear-btn {
+            border: none;
+            background: transparent;
+            color: var(--ink-faint);
+            font-size: 12px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            padding: 4px 6px;
+            transition: color 0.18s ease;
+        }
+        .clear-btn:hover {
+            color: var(--ink);
+        }
+        .history-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            margin-top: 6px;
+        }
+        .history-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .history-list::-webkit-scrollbar-thumb {
+            background: var(--border-strong);
+        }
+        .history-empty {
+            padding: 28px 0;
+            text-align: center;
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: var(--ink-faint);
+        }
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 6px;
+            border-left: 2px solid transparent;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .history-item:hover {
+            background: var(--bg);
+        }
+        .history-item.active {
+            background: var(--bg);
+            border-left-color: var(--ink);
+        }
+        .history-item .thumb {
+            width: 42px;
+            height: 42px;
+            border-radius: 2px;
+            object-fit: cover;
+            filter: grayscale(100%);
+            border: 1px solid var(--border);
+            background: var(--bg);
+            flex-shrink: 0;
+        }
+        .history-item .meta {
+            min-width: 0;
+            flex: 1;
+        }
+        .history-item .h-label {
+            font-size: 13px;
+            color: var(--ink);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .history-item .h-time {
+            margin-top: 3px;
+            font-size: 11px;
+            color: var(--ink-dim);
+            letter-spacing: 1px;
+        }
+        .history-item .h-type {
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: var(--ink-dim);
+            flex-shrink: 0;
+        }
+
+        /* ---------- 右侧栏：图片展示区 ---------- */
+        .stage {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: background 0.18s ease;
+        }
+        .stage.drag-over {
+            background: #ecece6;
+        }
+        .stage.drag-over::after {
+            content: '';
+            position: absolute;
+            inset: 16px;
+            border: 1px dashed var(--ink);
+            pointer-events: none;
+        }
+        .stage-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+        }
+        #display-img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border: 1px solid var(--border-strong);
+            background: #fff;
+            transition: opacity 0.18s ease;
+        }
+        .placeholder {
+            text-align: center;
+            pointer-events: none;
+        }
+        .placeholder .frame {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            border: 1px solid var(--border-strong);
+            position: relative;
+        }
+        .placeholder .frame::before {
+            content: '';
+            position: absolute;
+            inset: 12px;
+            border: 1px solid var(--border-strong);
+        }
+        .placeholder .text {
+            font-size: 13px;
+            letter-spacing: 2px;
+            color: var(--ink-dim);
+        }
+        .placeholder .hint {
+            margin-top: 14px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: var(--ink-faint);
+        }
+        .placeholder .hint span + span {
+            margin-left: 18px;
+        }
+
+        /* 展示区信息角标（悬浮，不占布局） */
+        .stage-info {
+            position: absolute;
+            right: 18px;
+            bottom: 14px;
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            letter-spacing: 1px;
+            color: var(--ink-faint);
+        }
+
+        @media (max-width: 760px) {
+            .app {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                max-height: 42vh;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                padding: 20px;
+            }
+            .stage {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <!-- 左侧栏：操作 + 历史记录 -->
+    <aside class="sidebar">
+        <div class="brand">
+            <span class="mark">灰阶混淆</span>
+            <span class="sub">Gray Scramble</span>
+        </div>
+
+        <div class="controls">
+            <label class="btn btn-solid file-label">
+                选择图片
+                <input type="file" accept="image/*" id="ipt">
+            </label>
+            <div class="controls-grid">
+                <button id="enc" class="btn">混淆</button>
+                <button id="dec" class="btn">解混淆</button>
+                <button id="re" class="btn">还原</button>
+            </div>
+        </div>
+
+        <div class="history-panel">
+            <div class="history-head">
+                <span class="section-label">历史记录</span>
+                <button id="clearHistory" class="clear-btn">清空</button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+        </div>
+    </aside>
+
+    <!-- 右侧栏：图片展示区（支持拖拽 / 粘贴） -->
+    <main class="stage" id="dropzone">
+        <div class="stage-inner">
+            <img id="display-img" alt="预览区域" style="display: none;">
+            <div id="imgPlaceholder" class="placeholder">
+                <div class="frame"></div>
+                <div class="text">拖拽图片至此，或点击左侧选择图片</div>
+                <div class="hint">
+                    <span>支持拖拽</span>
+                    <span>Ctrl+V 粘贴</span>
+                    <span>Gilbert 曲线 · 黄金偏移</span>
+                </div>
+            </div>
+        </div>
+        <div class="stage-info">
+            <span id="stageSize">—</span>
+            <span>JPEG 0.95</span>
+        </div>
+    </main>
+</div>
+
+<script>
+    // ==========================================================
+    // 1. 希尔伯特曲线 (广义gilbert) 算法 (保持原始逻辑)
+    // ==========================================================
+    function gilbert2d(width, height) {
+        const coordinates = [];
+        if (width >= height) {
+            generate2d(0, 0, width, 0, 0, height, coordinates);
+        } else {
+            generate2d(0, 0, 0, height, width, 0, coordinates);
+        }
+        return coordinates;
+    }
+
+    function generate2d(x, y, ax, ay, bx, by, coordinates) {
+        const w = Math.abs(ax + ay);
+        const h = Math.abs(bx + by);
+        const dax = Math.sign(ax), day = Math.sign(ay);
+        const dbx = Math.sign(bx), dby = Math.sign(by);
+
+        if (h === 1) {
+            for (let i = 0; i < w; i++) {
+                coordinates.push([x, y]);
+                x += dax;
+                y += day;
+            }
+            return;
+        }
+        if (w === 1) {
+            for (let i = 0; i < h; i++) {
+                coordinates.push([x, y]);
+                x += dbx;
+                y += dby;
+            }
+            return;
+        }
+
+        let ax2 = Math.floor(ax / 2), ay2 = Math.floor(ay / 2);
+        let bx2 = Math.floor(bx / 2), by2 = Math.floor(by / 2);
+        const w2 = Math.abs(ax2 + ay2);
+        const h2 = Math.abs(bx2 + by2);
+
+        if (2 * w > 3 * h) {
+            if ((w2 % 2) && (w > 2)) {
+                ax2 += dax;
+                ay2 += day;
+            }
+            generate2d(x, y, ax2, ay2, bx, by, coordinates);
+            generate2d(x + ax2, y + ay2, ax - ax2, ay - ay2, bx, by, coordinates);
+        } else {
+            if ((h2 % 2) && (h > 2)) {
+                bx2 += dbx;
+                by2 += dby;
+            }
+            generate2d(x, y, bx2, by2, ax2, ay2, coordinates);
+            generate2d(x + bx2, y + by2, ax, ay, bx - bx2, by - by2, coordinates);
+            generate2d(x + (ax - dax) + (bx2 - dbx), y + (ay - day) + (by2 - dby),
+                -bx2, -by2, -(ax - ax2), -(ay - ay2), coordinates);
+        }
+    }
+
+    // ==========================================================
+    // 2. 全局 DOM 元素 & 核心变量
+    // ==========================================================
+    const img = document.getElementById("display-img");
+    const placeholderDiv = document.getElementById("imgPlaceholder");
+    const iptFile = document.getElementById("ipt");
+    const dropZone = document.getElementById("dropzone");
+    const historyList = document.getElementById("historyList");
+    const stageSize = document.getElementById("stageSize");
+
+    // 存储原始图片文件 (用于还原、同步input)
+    let currentOriginalFile = null;
+    // 历史记录: { type, label, url, time }
+    const historyRecords = [];
+
+    const TYPE_TEXT = { enc: '混淆', dec: '解混淆', res: '还原', load: '载入' };
+
+    // 某个 blob URL 是否仍被历史记录引用（被引用则不能 revoke，否则缩略图失效）
+    function isReferencedByHistory(url) {
+        return url && url.startsWith('blob:') && historyRecords.some(r => r.url === url);
+    }
+
+    // 安全释放：跳过当前正在展示的图片
+    function revokeUrl(url) {
+        if (url && url.startsWith('blob:') && url !== img.src) {
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    // 统一的图片显示管理
+    function setImageSrc(src) {
+        const prev = (img.src && img.src.startsWith('blob:')) ? img.src : null;
+        img.src = src;
+        img.style.display = "inline-block";
+        if (placeholderDiv) placeholderDiv.style.display = "none";
+        img.onerror = () => {
+            img.style.display = "none";
+            if (placeholderDiv) placeholderDiv.style.display = "flex";
+            stageSize.textContent = "—";
+        };
+        img.onload = () => {
+            img.style.display = "inline-block";
+            if (placeholderDiv) placeholderDiv.style.display = "none";
+            stageSize.textContent = img.naturalWidth + ' × ' + img.naturalHeight;
+        };
+        // 释放上一张 blob，但若它仍被历史记录引用则保留
+        if (prev && prev !== src && !isReferencedByHistory(prev)) {
+            URL.revokeObjectURL(prev);
+        }
+    }
+
+    // 辅助: 刷新预览并管理原始文件同步
+    function updateImageFromFile(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            console.warn("无效图片文件");
+            return false;
+        }
+        // 更新存储的原始文件
+        currentOriginalFile = file;
+        // 同步更新 file input 的 files 对象 (使还原按钮能够直接使用 ipt.files)
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        iptFile.files = dataTransfer.files;
+        // 显示图片
+        const url = URL.createObjectURL(file);
+        setImageSrc(url);
+        pushHistory('load', url, file.name || '载入图片');
+        return true;
+    }
+
+    // 重置为原始文件 (还原功能)
+    function restoreOriginal() {
+        if (currentOriginalFile) {
+            const originalUrl = URL.createObjectURL(currentOriginalFile);
+            setImageSrc(originalUrl);
+            pushHistory('res', originalUrl, currentOriginalFile.name || '原始图片');
+        } else if (iptFile.files.length > 0) {
+            // 后备: 如果存了原始的file对象丢失, 从input读取
+            const fallbackFile = iptFile.files[0];
+            if (fallbackFile) {
+                currentOriginalFile = fallbackFile;
+                const url = URL.createObjectURL(fallbackFile);
+                setImageSrc(url);
+                pushHistory('res', url, fallbackFile.name || '原始图片');
+            } else {
+                alert("没有可还原的原始图片，请先选择一张图片");
+            }
+        } else {
+            alert("请先选择图片，再使用还原");
+        }
+    }
+
+    // ==========================================================
+    // 3. 历史记录管理
+    // ==========================================================
+    function formatTime(date) {
+        const p = n => String(n).padStart(2, '0');
+        return p(date.getHours()) + ':' + p(date.getMinutes()) + ':' + p(date.getSeconds());
+    }
+
+    function pushHistory(type, url, label) {
+        // 移除旧的同 url 记录，避免重复（仅释放仍未被展示的旧引用）
+        const idx = historyRecords.findIndex(r => r.url === url);
+        if (idx !== -1) {
+            revokeUrl(historyRecords[idx].url);
+            historyRecords.splice(idx, 1);
+        }
+        const record = { type, label, url, time: formatTime(new Date()) };
+        historyRecords.unshift(record);
+        renderHistory();
+    }
+
+    function renderHistory() {
+        if (historyRecords.length === 0) {
+            historyList.innerHTML = '<div class="history-empty">暂无记录</div>';
+            return;
+        }
+        historyList.innerHTML = '';
+        historyRecords.forEach((rec, i) => {
+            const item = document.createElement('div');
+            item.className = 'history-item' + (i === 0 ? ' active' : '');
+            item.innerHTML = `
+                <img class="thumb" loading="lazy" draggable="false" src="${rec.url}" alt="缩略图">
+                <div class="meta">
+                    <div class="h-label">${escapeHtml(rec.label)}</div>
+                    <div class="h-time">${rec.time}</div>
+                </div>
+                <span class="h-type">${TYPE_TEXT[rec.type] || '载入'}</span>
+            `;
+            // 点击历史项：回显该结果图
+            item.addEventListener('click', () => {
+                setImageSrc(rec.url);
+                document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+            });
+            historyList.appendChild(item);
+        });
+    }
+
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    // 清空历史（释放除当前展示外的 blob）
+    document.getElementById('clearHistory').addEventListener('click', () => {
+        historyRecords.forEach(r => revokeUrl(r.url));
+        historyRecords.length = 0;
+        renderHistory();
+    });
+
+    // ==========================================================
+    // 4. 混淆 & 解混淆 (基于gilbert曲线 + 黄金比例偏移)
+    // ==========================================================
+    function encrypt(imgElement) {
+        if (!imgElement || !imgElement.src || imgElement.src === "") {
+            alert("请先加载图片");
+            return;
+        }
+        const cvs = document.createElement("canvas");
+        const width = cvs.width = imgElement.naturalWidth;
+        const height = cvs.height = imgElement.naturalHeight;
+        if (width === 0 || height === 0) {
+            alert("图片尺寸无效，请重新上传");
+            return;
+        }
+        const ctx = cvs.getContext("2d");
+        ctx.drawImage(imgElement, 0, 0, width, height);
+        const imgdata = ctx.getImageData(0, 0, width, height);
+        const imgdata2 = new ImageData(width, height);
+        const curve = gilbert2d(width, height);
+        const totalPixels = width * height;
+        const offset = Math.round((Math.sqrt(5) - 1) / 2 * totalPixels);
+        for (let i = 0; i < totalPixels; i++) {
+            const old_pos = curve[i];
+            const new_pos = curve[(i + offset) % totalPixels];
+            const old_p = 4 * (old_pos[0] + old_pos[1] * width);
+            const new_p = 4 * (new_pos[0] + new_pos[1] * width);
+            imgdata2.data.set(imgdata.data.slice(old_p, old_p + 4), new_p);
+        }
+        ctx.putImageData(imgdata2, 0, 0);
+        cvs.toBlob(blob => {
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                setImageSrc(url);
+                pushHistory('enc', url, '混淆 ' + width + ' × ' + height);
+            } else {
+                alert("混淆生成失败");
+            }
+        }, "image/jpeg", 0.95);
+    }
+
+    function decrypt(imgElement) {
+        if (!imgElement || !imgElement.src || imgElement.src === "") {
+            alert("请先加载图片");
+            return;
+        }
+        const cvs = document.createElement("canvas");
+        const width = cvs.width = imgElement.naturalWidth;
+        const height = cvs.height = imgElement.naturalHeight;
+        if (width === 0 || height === 0) {
+            alert("图片尺寸无效");
+            return;
+        }
+        const ctx = cvs.getContext("2d");
+        ctx.drawImage(imgElement, 0, 0, width, height);
+        const imgdata = ctx.getImageData(0, 0, width, height);
+        const imgdata2 = new ImageData(width, height);
+        const curve = gilbert2d(width, height);
+        const totalPixels = width * height;
+        const offset = Math.round((Math.sqrt(5) - 1) / 2 * totalPixels);
+        for (let i = 0; i < totalPixels; i++) {
+            const old_pos = curve[i];
+            const new_pos = curve[(i + offset) % totalPixels];
+            const old_p = 4 * (old_pos[0] + old_pos[1] * width);
+            const new_p = 4 * (new_pos[0] + new_pos[1] * width);
+            // 解混淆: 逆向映射
+            imgdata2.data.set(imgdata.data.slice(new_p, new_p + 4), old_p);
+        }
+        ctx.putImageData(imgdata2, 0, 0);
+        cvs.toBlob(blob => {
+            if (blob) {
+                const url = URL.createObjectURL(blob);
+                setImageSrc(url);
+                pushHistory('dec', url, '解混淆 ' + width + ' × ' + height);
+            } else {
+                alert("解混淆失败");
+            }
+        }, "image/jpeg", 0.95);
+    }
+
+    // ==========================================================
+    // 5. 拖拽上传逻辑
+    // ==========================================================
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlightDrag(isActive) {
+        dropZone.classList.toggle('drag-over', isActive);
+    }
+
+    function handleDrop(e) {
+        preventDefaults(e);
+        highlightDrag(false);
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                updateImageFromFile(file);
+            } else {
+                alert("请拖拽图片文件 (jpg/png/webp等)");
+            }
+        }
+    }
+
+    function handleDragOver(e) {
+        preventDefaults(e);
+        highlightDrag(true);
+    }
+
+    function handleDragLeave(e) {
+        highlightDrag(false);
+    }
+
+    // 粘贴上传 (Ctrl+V)
+    function handlePaste(e) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.type.indexOf('image') !== -1) {
+                const blob = item.getAsFile();
+                if (blob) {
+                    // 包装成 File 对象 (保留原名)
+                    const file = new File([blob], "paste-image.png", { type: blob.type });
+                    updateImageFromFile(file);
+                    e.preventDefault();
+                    return;
+                }
+            }
+        }
+    }
+
+    // ==========================================================
+    // 6. 事件绑定
+    // ==========================================================
+    // 文件选择器 change 事件
+    iptFile.onchange = () => {
+        if (iptFile.files.length > 0) {
+            const selectedFile = iptFile.files[0];
+            if (selectedFile.type.startsWith('image/')) {
+                updateImageFromFile(selectedFile);
+            } else {
+                alert("请选择图片格式文件");
+                iptFile.value = "";
+            }
+        }
+    };
+
+    // 按钮绑定事件
+    const btnEnc = document.getElementById("enc");
+    const btnDec = document.getElementById("dec");
+    const btnRestore = document.getElementById("re");
+
+    btnEnc.onclick = () => {
+        if (!img.src || img.src === "" || img.style.display === "none") {
+            alert("没有可处理的图片，请先选择或拖拽图片");
+            return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => encrypt(img)));
+    };
+
+    btnDec.onclick = () => {
+        if (!img.src || img.src === "" || img.style.display === "none") {
+            alert("没有可处理的图片，请先选择或拖拽图片");
+            return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => decrypt(img)));
+    };
+
+    btnRestore.onclick = () => {
+        if (currentOriginalFile || iptFile.files.length > 0) {
+            restoreOriginal();
+        } else {
+            alert("暂无原始图片记录，请先选择/拖拽/粘贴一张图片");
+        }
+    };
+
+    // 注册拖拽事件 & 粘贴事件
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+    dropZone.addEventListener('dragover', handleDragOver);
+    dropZone.addEventListener('dragleave', handleDragLeave);
+    dropZone.addEventListener('drop', handleDrop);
+
+    // 全局粘贴监听 (复制图片上传)
+    document.addEventListener('paste', handlePaste);
+
+    // 清理资源 (页面关闭前释放所有 blob URL)
+    window.addEventListener('beforeunload', () => {
+        if (img.src && img.src.startsWith('blob:')) {
+            URL.revokeObjectURL(img.src);
+        }
+        historyRecords.forEach(r => URL.revokeObjectURL(r.url));
+    });
+
+    // 初始占位
+    function initPlaceholder() {
+        if (!img.src || img.src === "") {
+            img.style.display = "none";
+            if (placeholderDiv) placeholderDiv.style.display = "flex";
+        }
+    }
+    initPlaceholder();
+    renderHistory();
+
+    console.log("灰阶混淆已就绪 | 支持拖拽/粘贴 | 历史记录已启用");
+</script>
+</body>
+</html>

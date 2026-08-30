@@ -1,0 +1,31 @@
+{
+	"description": "提供基于图像处理技术的混淆功能项目。",
+	"icon": "icon.webp",
+	"id": "lunar.image_confusion",
+	"tags": [
+		"LTPX",
+		"mini-LTP"
+	],
+	"title": "图像混淆",
+	"tools": [
+		{
+			"function": {
+				"description": "「图像混淆」图像处理模块：对图片执行混淆与反混淆处理并展示效果。接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入文本、按键、滑动、元素捕获等页面操作，返回执行结果。",
+				"name": "image_confusion",
+				"parameters": {
+					"properties": {
+						"instruction": {
+							"description": "要驱动该模块执行的自然语言操作指令，例如：上传图片；点击混淆按钮；调整灰阶强度滑块；查看处理结果",
+							"type": "string"
+						}
+					},
+					"required": [
+						"instruction"
+					],
+					"type": "object"
+				}
+			},
+			"type": "function"
+		}
+	]
+}

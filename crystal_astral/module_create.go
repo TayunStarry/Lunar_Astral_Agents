@@ -218,13 +218,13 @@ func moduleCreateHandler(w http.ResponseWriter, r *http.Request) {
 			"type": "function",
 			"function": map[string]any{
 				"name":        sanitizeToolSlug(id),
-				"description": "操作「" + title + "」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
+				"description": buildMiniLTPToolDesc(id, title, description),
 				"parameters": map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"instruction": map[string]any{
 							"type":        "string",
-							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部",
+							"description": "要驱动该模块执行的自然语言操作指令，例如：点击开始按钮；把城市切换到雨天；按下 W 键向前；滑动到页面底部",
 						},
 					},
 					"required": []string{"instruction"},
@@ -382,6 +382,30 @@ func reprTitle(html string) string {
 		return ""
 	}
 	return strings.TrimSpace(m[1])
+}
+
+// buildMiniLTPToolDesc 生成 mini-LTP 页面操作工具的增强描述。
+// 相比粗糙的"操作 XX 页面"模板，它把「这是驱动什么模块、该模块做什么、能对页面做什么」讲清楚，
+// 让月华在工具链中一眼看懂该工具的用途，避免多工具间取舍困难。
+func buildMiniLTPToolDesc(id, title, description string) string {
+	title = strings.TrimSpace(title)
+	desc := strings.TrimSpace(description)
+
+	// 工具名人类可读：把 id/lower 的段用 . 还原为可读短语
+	readable := title
+	if readable == "" {
+		readable = strings.ReplaceAll(strings.TrimSpace(id), "_", " ")
+	}
+
+	var b strings.Builder
+	b.WriteString("驱动「" + readable + "」模块页面(DeepSeek mini-LTP 通用页面操作工具)。")
+	if desc != "" {
+		// 精炼补充该模块是什么：截断避免过长
+		d := conciseText(desc, 90)
+		b.WriteString("该模块：" + d + "。")
+	}
+	b.WriteString("接受自然语言指令，智能体自动识别意图并依次执行点击、输入文本、按键(键入/短按/长按)、滑动/滚动、元素捕获、下拉选择等页面操作，操作完成后返回执行结果。")
+	return b.String()
 }
 
 // conciseText 截取文本前 maxRune 个字符（按 UTF-8 字节安全）

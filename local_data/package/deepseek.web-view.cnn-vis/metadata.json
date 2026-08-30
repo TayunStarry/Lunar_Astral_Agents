@@ -12,14 +12,14 @@
 		{
 			"type": "function",
 			"function": {
-				"name": "mini_ltp_deepseek_cnn_vis",
-				"description": "操作「CNN-VIS · 手写数字推理过程可视化」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
+				"name": "cnn_vis",
+				"description": "「CNN-VIS」手写数字推理可视化模块：逐层可视化 CNN 识别手写数字的卷积/池化/全连接/Softmax 全过程，3D 特征图可交互。接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入文本、按键、滑动、元素捕获等页面操作，返回执行结果。",
 				"parameters": {
 					"type": "object",
 					"properties": {
 						"instruction": {
 							"type": "string",
-							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部"
+							"description": "要驱动该模块执行的自然语言操作指令，例如：在画板手写数字；点击识别按钮；点击下一层查看特征图"
 						}
 					},
 					"required": [

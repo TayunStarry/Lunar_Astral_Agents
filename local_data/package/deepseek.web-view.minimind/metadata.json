@@ -12,14 +12,14 @@
 		{
 			"type": "function",
 			"function": {
-				"name": "mini_ltp_deepseek_minimind",
-				"description": "操作「MiniMind-3 · Transformer 推理原理分析仪」页面：接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入、按键、滑动、元素捕获等操作，返回执行结果。",
+				"name": "minimind_transformer",
+				"description": "「MiniMind-3」Transformer 推理可视化模块：浏览器本地运行真实大模型权重，逐层可观察/干预/验证的推理过程演示。接受自然语言指令，由通用页面操作智能体识别意图并依次执行点击、输入文本、按键、滑动、元素捕获等页面操作，返回执行结果。",
 				"parameters": {
 					"type": "object",
 					"properties": {
 						"instruction": {
 							"type": "string",
-							"description": "自然语言操作指令，例如：点击搜索按钮；输入 hello 到搜索框；按键 Enter；滑动到底部"
+							"description": "要驱动该模块执行的自然语言操作指令，例如：在输入框输入提示词；点击生成开始推理；点击下一步逐层查看"
 						}
 					},
 					"required": [
