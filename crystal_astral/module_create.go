@@ -26,9 +26,9 @@ import (
 //   2. 本地 HTML 文件/目录         → 复制为 index.html（本地 HTML 项目）
 //   3. 本地程序（exe/ps1/bat/lnk） → metadata.path
 //   4. ZIP 上传                    → 解压到包目录（本地 HTML 项目）
-// 开启 mini-LTP 时：
+// 开启 Mini-LTP 时：
 //   · 在 index.html 中内联注入通用页面操作智能体（mini_ltp_agent.js）+ AtoA 适配
-//   · metadata.tags 追加 LTPX、mini-LTP
+//   · metadata.tags 追加 AtoA、Mini-LTP
 //   · metadata.tools 提供「自然语言指令」工具，供月华 AtoA 调用
 // ============================================================================
 
@@ -156,9 +156,9 @@ func moduleCreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// mini-LTP 仅适用于本地 HTML 项目
+	// Mini-LTP 仅适用于本地 HTML 项目
 	if req.MiniLTP && req.ZipPath == "" && !isLocalHTML && !isLocalDir {
-		jsonOK(w, http.StatusBadRequest, ModuleCreateResponse{Success: false, Message: "mini-LTP 仅支持本地 HTML 项目（本地路径或 ZIP）"})
+		jsonOK(w, http.StatusBadRequest, ModuleCreateResponse{Success: false, Message: "Mini-LTP 仅支持本地 HTML 项目（本地路径或 ZIP）"})
 		return
 	}
 
@@ -204,32 +204,26 @@ func moduleCreateHandler(w http.ResponseWriter, r *http.Request) {
 		hasIndexHTML = true
 	}
 
-	// ---- 6. mini-LTP：仅登记标签与工具；智能体由琉璃前端在 iframe 加载时动态注入（不改动包 HTML） ----
+	// ---- 6. Mini-LTP：仅登记标签与工具；智能体由琉璃前端在 iframe 加载时动态注入（不改动包 HTML） ----
 	var tags []string
 	tags = append(tags, req.Tags...)
 	var tools []map[string]any
 	if req.MiniLTP {
 		if !hasIndexHTML {
-			jsonOK(w, http.StatusBadRequest, ModuleCreateResponse{Success: false, Message: "开启 mini-LTP 需要本地 HTML 项目（缺少 index.html）"})
+			jsonOK(w, http.StatusBadRequest, ModuleCreateResponse{Success: false, Message: "开启 Mini-LTP 需要本地 HTML 项目（缺少 index.html）"})
 			return
 		}
-		tags = append(tags, "LTPX", "mini-LTP")
+		tags = append(tags, "Mini-LTP")
+		// AtoA 工具名：优先用调用方提供的功能性名称（描述该工具是什么，如 flight_simulator / music_editor），
+		// 缺省回退为包 ID 推导名。两者都经 sanitizeToolSlug 归一化（小写、下划线、去非法字符）。
+		// 收敛协议下 metadata.tools 采用简化格式：仅声明工具名与功能简述（参数 schema 由 use_the_program 统一提供）。
+		toolName := sanitizeToolSlug(req.ToolName)
+		if toolName == "" {
+			toolName = sanitizeToolSlug(id)
+		}
 		tools = append(tools, map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        sanitizeToolSlug(id),
-				"description": buildMiniLTPToolDesc(id, title, description),
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"instruction": map[string]any{
-							"type":        "string",
-							"description": "要驱动该模块执行的自然语言操作指令，例如：点击开始按钮；把城市切换到雨天；按下 W 键向前；滑动到页面底部",
-						},
-					},
-					"required": []string{"instruction"},
-				},
-			},
+			"name":        toolName,
+			"description": buildMiniLTPToolDesc(id, title, description),
 		})
 	}
 
@@ -269,7 +263,7 @@ func moduleCreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	LoggerGeneral.Info("CrystalAstral", "创建模块成功: %s (ID: %s, 标题: %s, mini-LTP: %v)", packageName, id, title, req.MiniLTP)
+	LoggerGeneral.Info("CrystalAstral", "创建模块成功: %s (ID: %s, 标题: %s, Mini-LTP: %v)", packageName, id, title, req.MiniLTP)
 	jsonOK(w, http.StatusOK, ModuleCreateResponse{
 		Success:     true,
 		Message:     fmt.Sprintf("模块「%s」创建成功", title),
@@ -356,7 +350,7 @@ func saveModuleIcon(packageDir, icon string) string {
 }
 
 // miniLTPAgentHandler GET /mini-ltp-agent.js
-// 供琉璃前端在 iframe 加载 mini-LTP 包时动态注入通用页面操作智能体。
+// 供琉璃前端在 iframe 加载 Mini-LTP 包时动态注入通用页面操作智能体。
 // 智能体源码从内嵌资源读取（go:embed assets/*），随二进制发布、版本一致；
 // 包 index.html 保持原样，不改动原本项目代码。
 func miniLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
@@ -374,6 +368,46 @@ func miniLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// sharedInputHandler GET /shared-input.js
+// 统一键鼠操作共享模块（SharedInput）：承载 Self-LTP 与 Mini-LTP 两个网页操作智能体
+// 共享的全部页面操作原语（DOM 工具/元素捕获/模拟交互/视觉截图）。
+// 智能体由琉璃前端动态注入时，必须先注入本共享模块，再注入智能体脚本。
+// 源码从内嵌资源读取（go:embed assets/*），随二进制发布、版本一致。
+func sharedInputHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	data, err := EmbeddedFiles.ReadFile("assets/shared_input.js")
+	if err != nil {
+		http.Error(w, "读取共享模块资源失败", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(data)
+}
+
+// selfLTPAgentHandler GET /self-ltp-agent.js
+// 供琉璃前端在 iframe 加载 Self-LTP 包时动态注入自主页面操作智能体。
+// 与 Mini-LTP 同源（复用页面操作原语），差异在于 Self-LTP 不接入 AtoA：
+// 智能体自动挂载「开始/停止 + 初始任务输入框」控制面板，由用户在页面上直接驱动。
+// 智能体源码从内嵌资源读取（go:embed assets/*），包 index.html 保持原样。
+func selfLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	data, err := EmbeddedFiles.ReadFile("assets/self_ltp_agent.js")
+	if err != nil {
+		http.Error(w, "读取自主智能体资源失败", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(data)
+}
+
 // reprTitle 从 HTML 中提取 <title> 内容
 func reprTitle(html string) string {
 	re := regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
@@ -384,31 +418,21 @@ func reprTitle(html string) string {
 	return strings.TrimSpace(m[1])
 }
 
-// buildMiniLTPToolDesc 生成 mini-LTP 页面操作工具的增强描述。
-// 相比粗糙的"操作 XX 页面"模板，它把「这是驱动什么模块、该模块做什么、能对页面做什么」讲清楚，
-// 让月华在工具链中一眼看懂该工具的用途，避免多工具间取舍困难。
+// buildMiniLTPToolDesc 生成 Mini-LTP 页面操作工具的一句能力简介。
+// 收敛协议下，聚合工具 use_the_program 的清单逐条取工具描述的首句，
+// 因此生成的描述必须是「一句话能力简介」——以模块名称为对象、取用户描述首句作为能力，
+// 保证月华看清单时能一眼识别该工具用途，且不会因多句模板被首句截断而丢失关键信息。
 func buildMiniLTPToolDesc(id, title, description string) string {
-	title = strings.TrimSpace(title)
-	desc := strings.TrimSpace(description)
-
-	// 工具名人类可读：把 id/lower 的段用 . 还原为可读短语
-	readable := title
+	readable := strings.TrimSpace(title)
 	if readable == "" {
-		readable = strings.ReplaceAll(strings.TrimSpace(id), "_", " ")
+		readable = strings.TrimSpace(strings.ReplaceAll(id, "_", " "))
 	}
-
-	var b strings.Builder
-	b.WriteString("驱动「")
-	b.WriteString(readable)
-	b.WriteString("」模块页面(DeepSeek mini-LTP 通用页面操作工具)。")
-	if desc != "" {
-		// 精炼补充该模块是什么：截断避免过长
-		b.WriteString("该模块：")
-		b.WriteString(conciseText(desc, 90))
-		b.WriteString("。")
+	// 取用户描述首句作为能力简介：天然压缩为一句，且与聚合工具的截断规则保持一致
+	desc := ltpxFirstSentence(description)
+	if desc == "" {
+		return "操作「" + readable + "」页面。"
 	}
-	b.WriteString("接受自然语言指令，智能体自动识别意图并依次执行点击、输入文本、按键(键入/短按/长按)、滑动/滚动、元素捕获、下拉选择等页面操作，操作完成后返回执行结果。")
-	return b.String()
+	return "操作「" + readable + "」：" + desc
 }
 
 // conciseText 截取文本前 maxRune 个字符（按 UTF-8 字节安全）

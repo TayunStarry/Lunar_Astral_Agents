@@ -1,7 +1,7 @@
 // ---------- 聚合导出（保持原公共 API） ----------
-export { descriptionRole, learnerRole, painterRole, musicianRole, actorRole, randomDefaultMessage } from './roles/roles';
+export { descriptionRole, learnerRole, painterRole, musicianRole, actorRole, viewerRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 export { LiteImageFile } from './capabilities/media';
-export { extractTextFromMessage, ensureMemoryReady, memorizeUnreadRecords } from './capabilities/memory';
+export { extractTextFromMessage, ensureMemoryReady } from './capabilities/memory';
 
 // ---------- 启动副作用：加载自定义配置，并每秒驱动一次思考循环 ----------
 import { GlobalConfig, fetchDocumentCallback } from '../index';

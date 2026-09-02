@@ -1,6 +1,7 @@
 package main
 
 import (
+	"LunarSubsystem/FaceLTP"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -42,8 +44,10 @@ func ltpRemotePingHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, http.StatusOK, map[string]any{"ok": true, "name": "crystal_astral"})
 }
 
-// scanAtoaToolchain 扫描包目录，收集「提供 AtoA 能力」的包（metadata.json 含非空 tools 数组）的工具链
-// 返回：工具定义列表（含 app_id=包 ID）、工具名→包 ID 映射（供调用路由）
+// scanAtoaToolchain 扫描包目录，收集「提供 AtoA 能力」的包（metadata.json 含非空 tools 数组）的工具链。
+// 每个包 tools 使用简化格式：仅声明工具名与功能简述（{name, description}），
+// 具体的参数 schema 由 use_the_program 聚合工具统一提供，避免各包重复携带相同的 instruction 参数定义。
+// 返回：原始工具定义列表（含 app_id=包 ID）、工具名→包 ID 映射（供调用路由）
 func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 	defs := []LTPXRemoteToolDef{}
 	pkgMap := map[string]string{}
@@ -73,12 +77,8 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 		var meta struct {
 			ID    string `json:"id"`
 			Tools []struct {
-				Type     string `json:"type"`
-				Function struct {
-					Name        string `json:"name"`
-					Description string `json:"description"`
-					Parameters  any    `json:"parameters"`
-				} `json:"function"`
+				Name        string `json:"name"`
+				Description string `json:"description"`
 			} `json:"tools"`
 		}
 		if err := json.Unmarshal(data, &meta); err != nil {
@@ -91,19 +91,90 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 		}
 
 		for _, t := range meta.Tools {
-			if t.Type != "function" || t.Function.Name == "" {
+			if t.Name == "" {
 				continue
 			}
 			defs = append(defs, LTPXRemoteToolDef{
-				Name:        t.Function.Name,
-				Description: t.Function.Description,
+				Name:        t.Name,
+				Description: t.Description,
 				AppID:       meta.ID,
-				Parameters:  t.Function.Parameters,
 			})
-			pkgMap[t.Function.Name] = meta.ID
+			pkgMap[t.Name] = meta.ID
 		}
 	}
 	return defs, pkgMap
+}
+
+// use_the_program 聚合工具常量名：月华只需记住这一个工具名，具体目标工具经参数 tool 指定，
+// 从而避免在多工具链中精确背诵/生成工具名导致的「工具迷航」。
+const useTheProgramToolName = "use_the_program"
+
+// faceLTPToolName Face-LTP 内置桌面智能体的工具名（非包声明，作为琉璃固有工具选项）
+const faceLTPToolName = "face_ltp_desktop_agent"
+
+// faceLTPToolDescription Face-LTP 内置桌面智能体的默认固有描述
+const faceLTPToolDescription = "面向 Windows 桌面的通用智能体：搜索并启动程序、激活窗口、模拟鼠标点击/键入/滚轮滚动，并通过多模态视觉识别理解屏幕内容并定位操作目标"
+
+// buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
+// 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
+// 参数 schema 统一为 {tool, instruction} 两个必填项。
+func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
+	var b strings.Builder
+	b.WriteString("使用本工具可以调用以下应用程序（tool 参数指定要使用的目标工具，instruction 传入对该工具的自然语言指令，工具会自动识别意图并执行）：")
+	for _, d := range defs {
+		b.WriteString("\n- ")
+		b.WriteString(d.Name)
+		if d.Description != "" {
+			b.WriteString("：")
+			b.WriteString(ltpxFirstSentence(d.Description))
+		}
+	}
+	// 已有工具清单时不追加说明；无可用工具则明确提示
+	count := len(defs)
+	if count > 0 {
+		b.WriteString("\n\n请根据用户需求从上述清单中选择合适的 tool，并填入对应的自然语言 instruction。")
+	}
+	return LTPXRemoteToolDef{
+		Name:        useTheProgramToolName,
+		Description: b.String(),
+		AppID:       "",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"tool": map[string]any{
+					"type":        "string",
+					"description": "要使用的目标工具名（从描述清单中选择，如 weather_news_query 或 file_manager）",
+				},
+				"instruction": map[string]any{
+					"type":        "string",
+					"description": "要对目标工具发出的自然语言指令，例如：查询北京今天的天气；把 README.md 移动到 docs 目录",
+				},
+			},
+			"required": []string{"tool", "instruction"},
+		},
+	}
+}
+
+// ltpxFirstSentence 截取工具描述的首句（按中英文句号/分号切分），避免聚合清单过长占用上下文
+func ltpxFirstSentence(desc string) string {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return ""
+	}
+	// 跳过开头的定式引导语（如「驱动/接受」等），直接取首句
+	var end = len(desc)
+	for i, r := range desc {
+		if r == '。' || r == '；' || r == ';' || r == '.' || r == '！' || r == '？' {
+			end = i + 1
+			break
+		}
+	}
+	s := strings.TrimSpace(desc[:end])
+	if len([]rune(s)) > 60 {
+		runes := []rune(s)
+		s = string(runes[:60]) + "…"
+	}
+	return s
 }
 
 // ltpRemoteToolsHandler 月华拉取琉璃工具链（GET /ltpx/tools）
@@ -113,20 +184,21 @@ func ltpRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	tools, _ := scanAtoaToolchain()
-	names := make([]string, 0, len(tools))
-	for _, t := range tools {
-		names = append(names, t.Name)
-	}
-	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，返回 %d 个工具: %v", len(tools), names)
+	defs, _ := scanAtoaToolchain()
+	// 内置 Face-LTP 桌面智能体作为固有工具选项，追加到工具清单
+	defs = append(defs, LTPXRemoteToolDef{Name: faceLTPToolName, Description: faceLTPToolDescription})
+	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
+	aggTool := buildUseTheProgram(defs)
+	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
 	jsonOK(w, http.StatusOK, map[string]any{
 		"app_id": "crystal_astral",
-		"tools":  tools,
+		"tools":  []LTPXRemoteToolDef{aggTool},
 	})
 }
 
 // ltpRemoteCallHandler 月华调用琉璃工具（POST /ltpx/call）
-// 按工具名路由到对应包 → 登记待定调用 → 通过 /ws 广播给前端 → 等待包执行回执
+// use_the_program 聚合工具：从 arguments.tool 解析目标工具 → 路由到对应包 → 登记待定调用
+// → 通过 /ws 广播给前端 → 等待包执行回执
 func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -143,11 +215,39 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 路由：工具名 → 提供该工具的包 ID
+	// 解析目标工具名：月华统一调用 use_the_program，实际目标工具在 arguments.tool 中
+	targetTool := req.Tool
+	if req.Tool == useTheProgramToolName {
+		if raw, ok := req.Arguments["tool"]; ok {
+			if s, sok := raw.(string); sok && s != "" {
+				targetTool = s
+			}
+		}
+	}
+	if targetTool == "" {
+		jsonOK(w, http.StatusBadRequest, LTPXRemoteCallResponse{Success: false, Error: "use_the_program 需在 arguments 提供 tool 目标工具名"})
+		return
+	}
+
+	// 内置 Face-LTP 桌面智能体：不依赖任何包，直接调用进程内模块
+	if targetTool == faceLTPToolName {
+		instruction := ""
+		if raw, exists := req.Arguments["instruction"]; exists {
+			if s, sok := raw.(string); sok {
+				instruction = s
+			}
+		}
+		resp := FaceLTP.Run(instruction)
+		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Face-LTP 智能体（工具=%s）：%s", targetTool, instruction)
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: resp.Success, Text: resp.Text, Error: resp.Error})
+		return
+	}
+
+	// 路由：目标工具名 → 提供该工具的包 ID
 	_, toolPkgMap := scanAtoaToolchain()
-	appID := toolPkgMap[req.Tool]
+	appID := toolPkgMap[targetTool]
 	if appID == "" {
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: "未找到提供工具 " + req.Tool + " 的包（该包可能已卸载）"})
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: "未找到提供工具 " + targetTool + " 的包（该包可能已卸载）"})
 		return
 	}
 
@@ -158,16 +258,16 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	ltpPendingCalls[requestID] = done
 	ltpPendingMutex.Unlock()
 
-	// 广播给前端：前端负责打开对应包页面并投递执行
+	// 广播给前端：前端负责打开对应包页面并投递执行（tool 传实际目标工具名便于前端复用同包页面）
 	msg, _ := json.Marshal(map[string]any{
 		"type":       "ltpx_call",
 		"request_id": requestID,
-		"tool":       req.Tool,
+		"tool":       targetTool,
 		"app_id":     appID,
 		"arguments":  req.Arguments,
 	})
 	argsJSON, _ := json.Marshal(req.Arguments)
-	LoggerGeneral.Info("CrystalAstral", "月华调用 LTPX 工具 → %s (app=%s, request_id=%s)\n请求参数: %s", req.Tool, appID, requestID, string(argsJSON))
+	LoggerGeneral.Info("CrystalAstral", "月华调用 LTPX 工具 → %s (app=%s, request_id=%s)\n请求参数: %s", targetTool, appID, requestID, string(argsJSON))
 	if StudioHubInstance != nil {
 		StudioHubInstance.Broadcast <- msg
 	}
@@ -175,14 +275,14 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	// 等待前端包回执
 	select {
 	case resp := <-done:
-		LoggerGeneral.Info("CrystalAstral", "LTPX 工具 %s (request_id=%s) 执行完成: success=%v\ntext: %s\nerror: %s", req.Tool, requestID, resp.Success, resp.Text, resp.Error)
+		LoggerGeneral.Info("CrystalAstral", "LTPX 工具 %s (request_id=%s) 执行完成: success=%v\ntext: %s\nerror: %s", targetTool, requestID, resp.Success, resp.Text, resp.Error)
 		jsonOK(w, http.StatusOK, resp)
 	case <-time.After(ltpCallTimeout):
 		ltpPendingMutex.Lock()
 		delete(ltpPendingCalls, requestID)
 		ltpPendingMutex.Unlock()
-		LoggerGeneral.Warn("CrystalAstral", "LTPX 工具 %s (request_id=%s) 等待回执超时（120s）", req.Tool, requestID)
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: "等待琉璃前端包执行工具 " + req.Tool + " 超时（琉璃页面可能未打开）"})
+		LoggerGeneral.Warn("CrystalAstral", "LTPX 工具 %s (request_id=%s) 等待回执超时（120s）", targetTool, requestID)
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: "等待琉璃前端包执行工具 " + targetTool + " 超时（琉璃页面可能未打开）"})
 	}
 }
 

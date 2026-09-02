@@ -26,6 +26,7 @@ export * from './agent/roles/learner';
 export * from './agent/roles/viewer';
 export * from './agent/roles/actor';
 export * from './agent/roles/reader';
+export * from './agent/roles/memorizer';
 export * from './agent/constructor';
 
 export * from './tool/schedule';

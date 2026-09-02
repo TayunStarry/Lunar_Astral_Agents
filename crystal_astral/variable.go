@@ -20,6 +20,7 @@ const (
 // ==== 全局变量 ====
 
 // EmbeddedFiles 嵌入的静态资源文件系统
+//
 //go:embed assets/*
 var EmbeddedFiles embed.FS
 
@@ -94,13 +95,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/file/package/delete", Handler: file.DeletePackageHandler, Method: "POST", Description: "删除扩展包"},
 	{Path: "/file/hash-rename", Handler: file.HashRenameHandler, Method: "POST", Description: "哈希命名（MD5前16位）"},
 	{Path: "/api/packages", Handler: scanPackagesHandler, Method: "GET", Description: "扫描包目录"},
-	{Path: "/api/module/create", Handler: moduleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 mini-LTP 注入智能体）"},
+	{Path: "/api/module/create", Handler: moduleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
 	{Path: "/api/module/inspect", Handler: moduleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（README/title/文件清单，供 AI 生成模块元信息）"},
 
 	// ==== 知识库与记忆库 ====
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
 	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},
-
 
 	// ==== 截图与图像处理 ====
 	{Path: "/capture", Handler: image.HandleCapture, Method: "ANY", Description: "统一截图（auto/window/fullscreen/display/region）"},
@@ -125,7 +125,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
 	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
-	{Path: "/mini-ltp-agent.js", Handler: miniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（前端动态注入 mini-LTP 包）"},
+	{Path: "/mini-ltp-agent.js", Handler: miniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（前端动态注入 Mini-LTP 包）"},
+	{Path: "/shared-input.js", Handler: sharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块（Self-LTP 与 Mini-LTP 智能体共享的页面操作原语）"},
+	{Path: "/self-ltp-agent.js", Handler: selfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（前端动态注入 Self-LTP 包，自带开始/停止控制面板）"},
 
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},

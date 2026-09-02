@@ -1,0 +1,15 @@
+{
+	"description": "验证 Mini-LTP 点击与按键效果的测试台：显示随机内容按钮云与响应按键的虚拟键盘，实时反馈被点中的按钮和按下的按键及按住时长",
+	"icon": "icon.jpg",
+	"id": "lunar.click-monitor",
+	"tags": [
+		"Mini-LTP"
+	],
+	"title": "点击监控 · 虚拟键盘测试台",
+	"tools": [
+		{
+			"name": "click_monitor",
+			"description": "可视化按键点击效果的<虚拟键盘>模拟器"
+		}
+	]
+}

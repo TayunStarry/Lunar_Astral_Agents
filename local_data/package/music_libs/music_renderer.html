@@ -6,8 +6,6 @@
     <title>Music Renderer</title>
     <!-- Font Awesome 图标 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
-    <!-- 音频引擎 -->
-    <script src="/file/read/package/music_libs/tone.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -39,7 +37,7 @@
 
         /* ===== 主面板 ===== */
         .music-modal {
-            width: 720px;
+            width: 760px;
             max-width: 95vw;
             max-height: 90vh;
             background: rgba(250, 250, 250, 0.88);
@@ -311,6 +309,55 @@
             color: #b794f4;
         }
 
+        /* 乐器标签 */
+        .music-voice-tags {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .music-voice-tag {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9d6bff;
+            background: rgba(157, 107, 255, 0.1);
+            border: 1px solid rgba(157, 107, 255, 0.22);
+            border-radius: 20px;
+            padding: 3px 10px;
+            white-space: nowrap;
+        }
+        .dark-mode .music-voice-tag {
+            background: rgba(157, 107, 255, 0.16);
+            color: #b794f4;
+        }
+
+        /* ===== 效果器行 ===== */
+        .music-fx-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 20px;
+            border-bottom: 1px solid rgba(157, 107, 255, 0.1);
+            background: rgba(157, 107, 255, 0.05);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        .dark-mode .music-fx-bar {
+            background: rgba(20, 20, 28, 0.25);
+        }
+        .music-fx-slider {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: rgba(157, 107, 255, 0.75);
+            white-space: nowrap;
+        }
+        .music-fx-slider input[type=range] {
+            width: 90px;
+            accent-color: #9d6bff;
+        }
+
         /* ===== 底部控制栏 ===== */
         .music-modal-footer {
             display: flex;
@@ -477,6 +524,7 @@
             .music-modal-header { padding: 10px 14px; }
             .music-modal-settings { padding: 8px 14px; gap: 12px; }
             .music-modal-footer { padding: 10px 14px; }
+            .music-fx-bar { padding: 6px 14px; }
             .music-visualizer-container { min-height: 150px; }
             .music-title-scroll-text { font-size: 18px; }
             .music-history-panel { right: 6px; top: 50px; width: 250px; max-height: 300px; }
@@ -490,6 +538,7 @@
             .music-setting-label { font-size: 11px; }
             .music-setting-select { font-size: 11px; }
             .music-setting-value { font-size: 11px; }
+            .music-fx-slider input[type=range] { width: 70px; }
             .music-title-scroll-text { font-size: 16px; letter-spacing: 1px; }
         }
     </style>
@@ -541,6 +590,25 @@
                     <label class="music-setting-label"><i class="fas fa-clock"></i> 拍号</label>
                     <span class="music-setting-value" id="music-setting-meter">4/4</span>
                 </div>
+                <div class="music-setting">
+                    <label class="music-setting-label"><i class="fas fa-sliders-h"></i> 效果</label>
+                    <select class="music-setting-select" id="music-setting-fx">
+                        <option value="lofi" selected>标准 LOFI</option>
+                        <option value="warm">温暖钢琴厅</option>
+                        <option value="dream">梦幻氛围</option>
+                        <option value="clean">干净明亮</option>
+                        <option value="dark">暗黑深夜</option>
+                        <option value="manual">手动精调</option>
+                    </select>
+                </div>
+                <div class="music-voice-tags" id="music-voice-tags"></div>
+            </div>
+            <div class="music-fx-bar" id="music-fx-bar">
+                <div class="music-fx-slider">混响 <input type="range" id="fx-reverb" min="0" max="100" value="32"></div>
+                <div class="music-fx-slider">饱和 <input type="range" id="fx-saturation" min="0" max="100" value="28"></div>
+                <div class="music-fx-slider">低通 <input type="range" id="fx-filter" min="400" max="18000" step="100" value="8200"></div>
+                <div class="music-fx-slider">压缩 <input type="range" id="fx-compression" min="0" max="100" value="30"></div>
+                <div class="music-fx-slider">音量 <input type="range" id="fx-master" min="0" max="150" value="90"></div>
             </div>
             <div class="music-modal-footer">
                 <span class="music-time" id="music-time-current">00:00</span>
@@ -566,13 +634,13 @@
 
     <script>
     /**
-     * 音乐渲染器 - 独立页面
+     * 音乐渲染器 - 独立页面（采样级合成引擎）
      *
-     * 负责接收 ABC 记谱法乐谱，使用 Tone.js 合成音频播放，
-     * 提供音频可视化、进度控制、速度调节、下载等功能。
-     * 通过 BroadcastChannel API 与主应用双向通讯。
+     * 参考 lofi-studio 方案重构：使用 Web Audio 离线预渲染"采样级音色库"，
+     * 播放时按音高移调（playbackRate）实时演奏，并经过统一的混音器效果链
+     * （卷积混响 / 反馈延迟 / 磁带饱和 / 复古低通 / 颤音 / 压缩 / 磁带底噪）。
      *
-     * 通讯协议：
+     * 通讯协议（与主应用一致，BroadcastChannel）：
      *   接收（主应用 → 本页）：
      *     { type: 'render', abcNotation: string }  加载并渲染乐谱
      *     { type: 'close' }                         关闭播放器
@@ -587,7 +655,536 @@
     // ==== 广播频道 ====
     const channel = new BroadcastChannel('lunar-astral-music');
 
-    // ==== 状态 ====
+    // ==== 基础工具 ====
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const midiToFreq = m => 440 * Math.pow(2, (m - 69) / 12);
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const isBlackKey = m => { const p = ((m % 12) + 12) % 12; return [1, 3, 6, 8, 10].includes(p); };
+    const pitchName = m => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+    function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+    const pick = (rng, a) => a[Math.floor(rng() * a.length)];
+    function downloadBlob(blob, name) { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 500); }
+
+    /* ---------------- 音色定义（采样级） ---------------- */
+    /* 每种乐器预渲染若干"基音样本"，播放时用 playbackRate 移调。
+       base: 用于采样的基音 MIDI 集合；dur: 采样时长(秒)；loop: 循环区间(秒) */
+    const INSTRUMENTS = {
+        piano:       { name: '温暖钢琴',  color: '#d8a657', base: [48, 60, 72, 84], dur: 6, loop: null },
+        piano_stac:  { name: '钢琴·跳音', color: '#e0b877', base: [48, 60, 72, 84], dur: 2, loop: null },
+        epiano:      { name: '复古电钢琴', color: '#c98f5a', base: [48, 60, 72, 84], dur: 5, loop: null },
+        epiano_bell: { name: '电钢·钟铃', color: '#e0a877', base: [48, 60, 72, 84], dur: 4, loop: null },
+        harp:        { name: '清澈竖琴',  color: '#e0c877', base: [48, 60, 72, 84], dur: 5, loop: null },
+        bass:        { name: '温柔贝斯',  color: '#8f9ad8', base: [36, 48, 60], dur: 3, loop: [0.5, 2.85] },
+        pad:         { name: '氛围铺底',  color: '#7fa8c9', base: [48, 60, 72], dur: 6, loop: [1.1, 5.85] },
+        cello:       { name: '温暖大提琴', color: '#c98f7f', base: [40, 52, 64], dur: 5, loop: [0.4, 4.85] },
+        violin:      { name: '明亮小提琴', color: '#c97f9f', base: [60, 72, 84], dur: 4, loop: [0.4, 3.85] },
+        flute:       { name: '清透长笛',  color: '#8fc9d8', base: [60, 72, 84], dur: 4, loop: [0.3, 3.85] },
+        clarinet:    { name: '柔润单簧管', color: '#b8a0d8', base: [55, 67, 79], dur: 4, loop: [0.3, 3.85] },
+        oboe:        { name: '明亮双簧管', color: '#d8a0a0', base: [60, 72, 84], dur: 4, loop: [0.3, 3.85] },
+        trumpet:     { name: '嘹亮小号',  color: '#d8c060', base: [55, 67, 79], dur: 4, loop: [0.3, 3.85] },
+        sax:         { name: 'LOFI萨克斯', color: '#c97f7f', base: [48, 60, 72], dur: 5, loop: [0.6, 4.85] },
+        sax_air:     { name: '萨克斯·气音', color: '#e09090', base: [48, 60, 72], dur: 4, loop: [0.6, 3.0] },
+        guitar:      { name: '尼龙吉他',  color: '#b9a86f', base: [48, 60, 72], dur: 5, loop: null },
+        chip:        { name: '8Bit芯片',   color: '#7fc97f', base: [48, 60, 72], dur: 3, loop: [0.25, 2.85] },
+        drums:       { name: '复古鼓组',  color: '#c9c2a6', base: [60], dur: 0, loop: null, type: 'drums' },
+    };
+    const DRUM_MAP = { 36: 'kick', 38: 'snare', 42: 'chat', 46: 'ohat', 41: 'tomLo', 47: 'tomHi', 45: 'tomHi' };
+
+    /* ---------------- 音色库缓存 ---------------- */
+    let samples = {};       // instrument -> { baseNote -> AudioBuffer }
+    let drumBufs = {};      // drumName -> AudioBuffer
+    let samplesReady = false;
+
+    /* ---------------- 合成构建器 ---------------- */
+    function makeNoiseBuffer(ctx, seconds) {
+        const rate = ctx.sampleRate, len = Math.max(1, Math.floor(rate * seconds));
+        const buf = ctx.createBuffer(1, len, rate), d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        return buf;
+    }
+    function renderSample(buildFn, midi, durSec, rate) {
+        const len = Math.ceil(durSec * rate);
+        const ctx = new OfflineAudioContext(1, len, rate);
+        buildFn(ctx, ctx.destination, midiToFreq(midi), durSec, midi);
+        return ctx.startRendering();
+    }
+    /* 拨弦瞬态：短促的"叮"声起音 */
+    function pluckTransient(ctx, dest, f, amount) {
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.008);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = clamp(f * 1.5, 300, 2600); bp.Q.value = 0.9;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(amount, 0);
+        g.gain.exponentialRampToValueAtTime(0.0001, 0.035);
+        n.connect(bp); bp.connect(g); g.connect(dest); n.start(0);
+    }
+    /* 温暖钢琴 —— 加性合成 + 微失谐 + 锤击瞬态 */
+    function buildPiano(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9200; lp.Q.value = 0.4;
+        out.connect(lp); lp.connect(dest);
+        const P = [
+            [1.000, 1.00, 7.0], [2.000, 0.52, 4.2], [3.000, 0.30, 2.6], [4.000, 0.19, 1.8],
+            [5.000, 0.12, 1.2], [6.000, 0.08, 0.9], [7.000, 0.055, 0.7], [8.000, 0.035, 0.5]
+        ];
+        for (const p of P) {
+            const o = ctx.createOscillator(); o.type = 'sine';
+            const inh = 1 + 0.0006 * p[0] * p[0];
+            o.frequency.value = f * p[0] * inh; o.detune.value = (Math.random() * 1.4 - 0.7);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, 0);
+            g.gain.exponentialRampToValueAtTime(p[1], 0.004);
+            g.gain.exponentialRampToValueAtTime(0.0001, p[2]);
+            o.connect(g); g.connect(out); o.start(0); o.stop(dur + 0.05);
+        }
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.02);
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+        const ng = ctx.createGain(); ng.gain.setValueAtTime(0.12, 0); ng.gain.exponentialRampToValueAtTime(0.0001, 0.03);
+        n.connect(hp); hp.connect(ng); ng.connect(out); n.start(0);
+    }
+    /* 复古电钢琴 —— 音叉式金属铃音 */
+    function buildEPiano(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5600; lp.Q.value = 0.5;
+        out.connect(lp); lp.connect(dest);
+        const P = [[1, 1.0, 3.2], [2, 0.48, 1.3], [3, 0.22, 0.7], [4, 0.12, 0.45], [5, 0.06, 0.3]];
+        for (const p of P) {
+            const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * p[0];
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, 0); g.gain.exponentialRampToValueAtTime(p[1], 0.003);
+            g.gain.exponentialRampToValueAtTime(0.0001, p[2]);
+            o.connect(g); g.connect(out); o.start(0); o.stop(dur + 0.05);
+        }
+        const t = ctx.createOscillator(); t.type = 'sine'; t.frequency.value = f * 6.8;
+        const tg = ctx.createGain(); tg.gain.setValueAtTime(0.0001, 0); tg.gain.exponentialRampToValueAtTime(0.14, 0.002);
+        tg.gain.exponentialRampToValueAtTime(0.0001, 0.12);
+        t.connect(tg); tg.connect(out); t.start(0);
+    }
+    /* 清澈竖琴 —— 明亮拨弦，丰富泛音 + 长延音 */
+    function buildHarp(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7500; lp.Q.value = 0.4;
+        out.connect(lp); lp.connect(dest);
+        const P = [[1, 1.0, 3.5], [2, 0.65, 1.8], [3, 0.45, 1.1], [4, 0.32, 0.7], [5, 0.22, 0.5], [6, 0.14, 0.35], [7, 0.09, 0.25]];
+        for (const p of P) {
+            const o = ctx.createOscillator(); o.type = 'sine';
+            o.frequency.value = f * p[0] * (1 + 0.0004 * p[0] * p[0]);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, 0);
+            g.gain.exponentialRampToValueAtTime(p[1], 0.003);
+            g.gain.exponentialRampToValueAtTime(0.0001, p[2]);
+            o.connect(g); g.connect(out); o.start(0); o.stop(dur + 0.05);
+        }
+        pluckTransient(ctx, out, f, 0.35);
+    }
+    /* 温柔贝斯 —— 正弦+三角低通 */
+    function buildBass(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 820; lp.Q.value = 0.7;
+        const env = ctx.createGain();
+        const s1 = ctx.createOscillator(); s1.type = 'sine'; s1.frequency.value = f;
+        const s2 = ctx.createOscillator(); s2.type = 'triangle'; s2.frequency.value = f; s2.detune.value = 3;
+        const s3 = ctx.createOscillator(); s3.type = 'sine'; s3.frequency.value = f * 2;
+        const g1 = ctx.createGain(); g1.gain.value = 1.0;
+        const g2 = ctx.createGain(); g2.gain.value = 0.32;
+        const g3 = ctx.createGain(); g3.gain.value = 0.14;
+        s1.connect(g1); s2.connect(g2); s3.connect(g3);
+        g1.connect(out); g2.connect(out); g3.connect(out);
+        out.connect(env); env.connect(lp); lp.connect(dest);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.exponentialRampToValueAtTime(0.9, 0.012);
+        env.gain.setValueAtTime(0.9, Math.max(0.03, dur - 0.15));
+        env.gain.exponentialRampToValueAtTime(0.0001, dur);
+        [s1, s2, s3].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 氛围铺底 —— 失谐锯齿合唱 + 慢起音 + 滤波扫动 */
+    function buildPad(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = 0.6;
+        const env = ctx.createGain();
+        const oscs = [0, -7, 7, -13, 13];
+        for (const det of oscs) {
+            const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+            const g = ctx.createGain(); g.gain.value = 0.2;
+            o.connect(g); g.connect(out); o.start(0); o.stop(dur + 0.05);
+        }
+        const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = f / 2;
+        const sg = ctx.createGain(); sg.gain.value = 0.4; sub.connect(sg); sg.connect(out); sub.start(0); sub.stop(dur + 0.05);
+        out.connect(lp); lp.connect(env); env.connect(dest);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.75, 0.7);
+        env.gain.setValueAtTime(0.75, Math.max(0.8, dur - 0.8));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 0.13;
+        const lg = ctx.createGain(); lg.gain.value = 420;
+        lfo.connect(lg); lg.connect(lp.frequency); lfo.start(0);
+    }
+    /* 温暖大提琴 —— 弓弦锯齿 + 泛音 + 颤音 */
+    function buildCello(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.6;
+        const env = ctx.createGain();
+        out.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f * 1.005;
+        const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = f;
+        const g1 = ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        const gs = ctx.createGain(); gs.gain.value = 0.7;
+        o1.connect(g1); o2.connect(g2); sub.connect(gs);
+        g1.connect(out); g2.connect(out); gs.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 4.5;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(5, 0.5);
+        vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune); vib.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.85, 0.12);
+        env.gain.setValueAtTime(0.8, Math.max(0.2, dur - 0.3));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2, sub].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 明亮小提琴 —— 弓弦 + 高共振峰 + 快速颤音 */
+    function buildViolin(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2600; bp.Q.value = 1.2;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6000; lp.Q.value = 0.5;
+        const env = ctx.createGain();
+        out.connect(bp); bp.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f * 1.004;
+        const g1 = ctx.createGain(); g1.gain.value = 0.45;
+        const g2 = ctx.createGain(); g2.gain.value = 0.25;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 5.8;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(8, 0.3);
+        vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune); vib.start(0);
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, dur + 0.1); n.loop = true;
+        const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 5000; nf.Q.value = 0.6;
+        const ng = ctx.createGain(); ng.gain.value = 0.06;
+        n.connect(nf); nf.connect(ng); ng.connect(out); n.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.8, 0.07);
+        env.gain.setValueAtTime(0.75, Math.max(0.1, dur - 0.25));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 清透长笛 —— 近纯音 + 气息噪声 + 轻颤音 */
+    function buildFlute(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5000; lp.Q.value = 0.5;
+        const env = ctx.createGain();
+        out.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+        const g1 = ctx.createGain(); g1.gain.value = 0.9;
+        const g2 = ctx.createGain(); g2.gain.value = 0.12;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, dur + 0.1); n.loop = true;
+        const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 4500; nf.Q.value = 0.8;
+        const ng = ctx.createGain(); ng.gain.value = 0.05;
+        n.connect(nf); nf.connect(ng); ng.connect(out); n.start(0);
+        const vib = ctx.createOscillator(); vib.frequency.value = 4.5;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(3, 0.4);
+        vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune); vib.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.8, 0.09);
+        env.gain.setValueAtTime(0.75, Math.max(0.12, dur - 0.3));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 柔润单簧管 —— 方波奇次谐波 + 低通 */
+    function buildClarinet(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; lp.Q.value = 0.7;
+        const env = ctx.createGain();
+        out.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'square'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2;
+        const o3 = ctx.createOscillator(); o3.type = 'sine'; o3.frequency.value = f * 3;
+        const g1 = ctx.createGain(); g1.gain.value = 0.5;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        const g3 = ctx.createGain(); g3.gain.value = 0.12;
+        o1.connect(g1); o2.connect(g2); o3.connect(g3); g1.connect(out); g2.connect(out); g3.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 4.5;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(3, 0.4);
+        vib.connect(vg); vg.connect(o1.detune); vib.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.8, 0.08);
+        env.gain.setValueAtTime(0.75, Math.max(0.12, dur - 0.3));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2, o3].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 明亮双簧管 —— 锯齿 + 高共振峰（簧片穿透感） */
+    function buildOboe(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2000; bp.Q.value = 1.4;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500; lp.Q.value = 0.5;
+        const env = ctx.createGain();
+        out.connect(bp); bp.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f * 2;
+        const g1 = ctx.createGain(); g1.gain.value = 0.6;
+        const g2 = ctx.createGain(); g2.gain.value = 0.3;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.8, 0.06);
+        env.gain.setValueAtTime(0.78, Math.max(0.1, dur - 0.25));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 嘹亮小号 —— 锯齿 + 方形泛音 + 铜管共振 */
+    function buildTrumpet(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1200; bp.Q.value = 0.8;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3800; lp.Q.value = 0.6;
+        const env = ctx.createGain();
+        out.connect(bp); bp.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = f * 2;
+        const g1 = ctx.createGain(); g1.gain.value = 0.6;
+        const g2 = ctx.createGain(); g2.gain.value = 0.2;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 5.2;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(6, 0.3);
+        vib.connect(vg); vg.connect(o1.detune); vib.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.85, 0.04);
+        env.gain.setValueAtTime(0.8, Math.max(0.08, dur - 0.2));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* LOFI 萨克斯 —— 双锯齿失谐 + 共振峰 + 颤音 + 气息 */
+    function buildSax(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const preLp = ctx.createBiquadFilter(); preLp.type = 'lowpass'; preLp.frequency.value = 2600; preLp.Q.value = 0.5;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1150; bp.Q.value = 1.1;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2100;
+        const env = ctx.createGain();
+        out.connect(preLp); preLp.connect(bp); bp.connect(lp); lp.connect(env); env.connect(dest);
+        const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = f * 1.002;
+        const g1 = ctx.createGain(); g1.gain.value = 0.40;
+        const g2 = ctx.createGain(); g2.gain.value = 0.22;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 5.0;
+        const vg = ctx.createGain(); vg.gain.setValueAtTime(0, 0); vg.gain.linearRampToValueAtTime(6, 0.4);
+        vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune); vib.start(0);
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, dur + 0.1); n.loop = true;
+        const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 3000; nf.Q.value = 0.7;
+        const ng = ctx.createGain(); ng.gain.value = 0.05;
+        n.connect(nf); nf.connect(ng); ng.connect(out); n.start(0);
+        env.gain.setValueAtTime(0.0001, 0);
+        env.gain.linearRampToValueAtTime(0.8, 0.06);
+        env.gain.setValueAtTime(0.72, Math.max(0.1, dur - 0.2));
+        env.gain.linearRampToValueAtTime(0.0001, dur);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 尼龙吉他 —— 泛音按序衰减 + 拨弦瞬态 */
+    function buildGuitar(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const body = ctx.createBiquadFilter(); body.type = 'peaking'; body.frequency.value = 190; body.gain.value = 2.5; body.Q.value = 0.9;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6200; lp.Q.value = 0.4;
+        out.connect(body); body.connect(lp); lp.connect(dest);
+        const P = [[1, 1.00, 3.0], [2, 0.40, 1.5], [3, 0.19, 0.85], [4, 0.10, 0.5], [5, 0.05, 0.32], [6, 0.024, 0.2]];
+        for (const p of P) {
+            const o = ctx.createOscillator(); o.type = 'sine';
+            o.frequency.value = f * p[0] * (1 + 0.00015 * p[0] * p[0]);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, 0);
+            g.gain.exponentialRampToValueAtTime(p[1], 0.004);
+            g.gain.exponentialRampToValueAtTime(0.0001, p[2]);
+            o.connect(g); g.connect(out);
+            o.start(0); o.stop(dur + 0.05);
+        }
+        pluckTransient(ctx, out, f, 0.22);
+    }
+    /* 8Bit 芯片 —— 方波脉冲 + 颤音 */
+    function buildChip(ctx, dest, f, dur) {
+        const out = ctx.createGain();
+        const o1 = ctx.createOscillator(); o1.type = 'square'; o1.frequency.value = f;
+        const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = f * 2;
+        const g1 = ctx.createGain(); g1.gain.value = 0.6;
+        const g2 = ctx.createGain(); g2.gain.value = 0.18;
+        o1.connect(g1); o2.connect(g2); g1.connect(out); g2.connect(out);
+        const vib = ctx.createOscillator(); vib.frequency.value = 6.5;
+        const vg = ctx.createGain(); vg.gain.value = 3; vib.connect(vg); vg.connect(o1.detune); vg.connect(o2.detune); vib.start(0);
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0.0001, 0); env.gain.linearRampToValueAtTime(0.7, 0.005);
+        env.gain.setValueAtTime(0.7, Math.max(0.02, dur - 0.06)); env.gain.linearRampToValueAtTime(0.0001, dur);
+        out.connect(env); env.connect(dest);
+        [o1, o2].forEach(o => { o.start(0); o.stop(dur + 0.05); });
+    }
+    /* 鼓组 —— 合成打击 */
+    function renderDrum(buildFn, durSec, rate) {
+        const ctx = new OfflineAudioContext(1, Math.ceil(durSec * rate), rate);
+        buildFn(ctx, ctx.destination);
+        return ctx.startRendering();
+    }
+    function buildKick(ctx, dest) {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(160, 0); o.frequency.exponentialRampToValueAtTime(44, 0.1);
+        const g = ctx.createGain(); g.gain.setValueAtTime(1.0, 0); g.gain.exponentialRampToValueAtTime(0.0001, 0.4);
+        o.connect(g); g.connect(dest); o.start(0); o.stop(0.45);
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.02);
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 4000;
+        const ng = ctx.createGain(); ng.gain.setValueAtTime(0.35, 0); ng.gain.exponentialRampToValueAtTime(0.0001, 0.02);
+        n.connect(hp); hp.connect(ng); ng.connect(dest); n.start(0);
+    }
+    function buildSnare(ctx, dest) {
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.3);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.8;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.9, 0); g.gain.exponentialRampToValueAtTime(0.0001, 0.2);
+        n.connect(bp); bp.connect(g); g.connect(dest); n.start(0);
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 190;
+        const og = ctx.createGain(); og.gain.setValueAtTime(0.7, 0); og.gain.exponentialRampToValueAtTime(0.0001, 0.1);
+        o.connect(og); og.connect(dest); o.start(0); o.stop(0.12);
+    }
+    function buildClosedHat(ctx, dest) {
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.1);
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7600;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.6, 0); g.gain.exponentialRampToValueAtTime(0.0001, 0.06);
+        n.connect(hp); hp.connect(g); g.connect(dest); n.start(0);
+    }
+    function buildOpenHat(ctx, dest) {
+        const n = ctx.createBufferSource(); n.buffer = makeNoiseBuffer(ctx, 0.7);
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6400;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.55, 0); g.gain.exponentialRampToValueAtTime(0.0001, 0.55);
+        n.connect(hp); hp.connect(g); g.connect(dest); n.start(0);
+    }
+    function buildTom(ctx, dest, hi) {
+        const o = ctx.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(hi ? 210 : 150, 0); o.frequency.exponentialRampToValueAtTime(hi ? 90 : 70, 0.3);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.9, 0); g.gain.exponentialRampToValueAtTime(0.0001, 0.4);
+        o.connect(g); g.connect(dest); o.start(0); o.stop(0.45);
+    }
+
+    const SYNTH_BUILDERS = {
+        piano: buildPiano, piano_stac: buildPiano, epiano: buildEPiano, epiano_bell: buildEPiano,
+        harp: buildHarp, bass: buildBass, pad: buildPad,
+        cello: buildCello, violin: buildViolin, flute: buildFlute,
+        clarinet: buildClarinet, oboe: buildOboe, trumpet: buildTrumpet,
+        sax: buildSax, sax_air: buildSax, guitar: buildGuitar, chip: buildChip,
+    };
+
+    /* 构建采样音色库（离线渲染，各基音一个样本） */
+    async function buildSampleLibrary() {
+        const rate = 44100;
+        const jobs = [];
+        for (const name in INSTRUMENTS) {
+            const spec = INSTRUMENTS[name];
+            if (spec.type === 'drums') continue;
+            samples[name] = {};
+            for (const b of spec.base) {
+                jobs.push(renderSample(SYNTH_BUILDERS[name], b, spec.dur, rate).then(buf => { samples[name][b] = buf; }));
+            }
+        }
+        drumBufs.kick = await renderDrum(buildKick, 0.6, rate);
+        drumBufs.snare = await renderDrum(buildSnare, 0.5, rate);
+        drumBufs.chat = await renderDrum(buildClosedHat, 0.3, rate);
+        drumBufs.ohat = await renderDrum(buildOpenHat, 0.8, rate);
+        drumBufs.tomLo = await renderDrum(ctx => buildTom(ctx, ctx.destination, false), 0.6, rate);
+        drumBufs.tomHi = await renderDrum(ctx => buildTom(ctx, ctx.destination, true), 0.6, rate);
+        await Promise.all(jobs);
+        samplesReady = true;
+    }
+
+    /* ---------------- 混音器（效果链） ---------------- */
+    function makeSaturationCurve(k) {
+        if (k < 0.02) return null;
+        const n = 1024, curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+            const x = i / (n - 1) * 2 - 1;
+            curve[i] = Math.tanh(k * x) / Math.tanh(k);
+        }
+        return curve;
+    }
+    /* 卷积混响 IR：15ms 预延迟 + 一阶低通去刺，温润不金属 */
+    function makeIR(ctx, seconds, decay) {
+        const rate = ctx.sampleRate, len = Math.floor(rate * seconds);
+        const ir = ctx.createBuffer(2, len, rate);
+        const preDelay = Math.floor(rate * 0.015);
+        for (let c = 0; c < 2; c++) {
+            const d = ir.getChannelData(c);
+            let lp = 0;
+            for (let i = 0; i < len; i++) {
+                if (i < preDelay) { d[i] = 0; continue; }
+                const white = Math.random() * 2 - 1;
+                lp += 0.3 * (white - lp);
+                const t = (i - preDelay) / (len - preDelay);
+                d[i] = lp * Math.pow(1 - t, decay);
+            }
+        }
+        return ir;
+    }
+    /* 磁带底噪循环 */
+    function makeNoiseLoop(ctx) {
+        const rate = ctx.sampleRate, len = rate * 2;
+        const buf = ctx.createBuffer(2, len, rate);
+        for (let c = 0; c < 2; c++) {
+            const d = buf.getChannelData(c);
+            let last = 0;
+            for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = 0.98 * last + 0.02 * w; d[i] = last * 2.2; }
+        }
+        return buf;
+    }
+    function buildMixer(ctx, dest) {
+        const m = {};
+        m.masterIn = ctx.createGain(); m.masterIn.gain.value = 1;
+        m.busDry = ctx.createGain(); m.busDry.gain.value = 1;
+        m.busDry.connect(m.masterIn);
+        m.reverbIn = ctx.createGain(); m.reverbIn.gain.value = 0;
+        m.convolver = ctx.createConvolver(); m.convolver.buffer = makeIR(ctx, 2.8, 3.2);
+        m.reverbReturn = ctx.createGain(); m.reverbReturn.gain.value = 1;
+        m.reverbIn.connect(m.convolver); m.convolver.connect(m.reverbReturn); m.reverbReturn.connect(m.masterIn);
+        m.delayIn = ctx.createGain(); m.delayIn.gain.value = 0;
+        m.delay = ctx.createDelay(3); m.delay.delayTime.value = 0.45;
+        m.delayFbLp = ctx.createBiquadFilter(); m.delayFbLp.type = 'lowpass'; m.delayFbLp.frequency.value = 2600;
+        m.delayFb = ctx.createGain(); m.delayFb.gain.value = 0.4;
+        m.delayWet = ctx.createGain(); m.delayWet.gain.value = 1;
+        m.delayIn.connect(m.delay);
+        m.delay.connect(m.delayFbLp); m.delayFbLp.connect(m.delayFb); m.delayFb.connect(m.delay);
+        m.delay.connect(m.delayWet); m.delayWet.connect(m.masterIn);
+        m.filter = ctx.createBiquadFilter(); m.filter.type = 'lowpass'; m.filter.frequency.value = 16000; m.filter.Q.value = 0.6;
+        m.sat = ctx.createWaveShaper(); m.sat.curve = null; m.sat.oversample = '2x';
+        m.trem = ctx.createGain(); m.trem.gain.value = 1;
+        m.lfo = ctx.createOscillator(); m.lfo.frequency.value = 4.5;
+        m.lfoGain = ctx.createGain(); m.lfoGain.gain.value = 0;
+        m.lfo.connect(m.lfoGain); m.lfoGain.connect(m.trem.gain); m.lfo.start(0);
+        m.comp = ctx.createDynamicsCompressor();
+        m.comp.threshold.value = -18; m.comp.knee.value = 20; m.comp.ratio.value = 4; m.comp.attack.value = 0.003; m.comp.release.value = 0.25;
+        m.master = ctx.createGain(); m.master.gain.value = 0.9;
+        m.tape = ctx.createGain(); m.tape.gain.value = 0;
+        m.tapeSrc = ctx.createBufferSource(); m.tapeSrc.buffer = makeNoiseLoop(ctx); m.tapeSrc.loop = true; m.tapeSrc.connect(m.tape); m.tapeSrc.start(0);
+        m.tape.connect(m.master);
+        m.masterIn.connect(m.filter); m.filter.connect(m.sat); m.sat.connect(m.trem);
+        m.trem.connect(m.comp); m.comp.connect(m.master); m.master.connect(dest);
+        return m;
+    }
+    const FX_PRESETS = {
+        lofi:  { noise: 12, saturation: 28, filter: 8200, reverb: 32, compression: 30, delay: 14, tremolo: 6 },
+        warm:  { noise: 8,  saturation: 22, filter: 6800, reverb: 46, compression: 26, delay: 12, tremolo: 4 },
+        dream: { noise: 8,  saturation: 16, filter: 10000, reverb: 62, compression: 18, delay: 36, tremolo: 14 },
+        clean: { noise: 2,  saturation: 5,  filter: 16000, reverb: 14, compression: 22, delay: 4,  tremolo: 0 },
+        dark:  { noise: 20, saturation: 32, filter: 3600, reverb: 46, compression: 46, delay: 20, tremolo: 8 },
+    };
+    let fxState = { ...FX_PRESETS.lofi, master: 0.9 };
+
+    function applyFx() {
+        const m = Engine.mixer; if (!m || !Engine.ctx) return;
+        const now = Engine.ctx.currentTime;
+        m.filter.frequency.setTargetAtTime(fxState.filter, now, 0.03);
+        m.sat.curve = makeSaturationCurve(fxState.saturation / 100 * 8);
+        m.reverbIn.gain.setTargetAtTime(fxState.reverb / 100 * 0.85, now, 0.03);
+        m.delayIn.gain.setTargetAtTime(fxState.delay / 100 * 0.7, now, 0.03);
+        m.delay.delayTime.setTargetAtTime(60 / (state.bpm || 100) * 0.75, now, 0.03);
+        m.comp.threshold.setTargetAtTime(-6 - (fxState.compression / 100) * 24, now, 0.03);
+        m.comp.ratio.setTargetAtTime(1 + (fxState.compression / 100) * 9, now, 0.03);
+        const depth = fxState.tremolo / 100 * 0.5;
+        m.trem.gain.setTargetAtTime(1 - depth, now, 0.03);
+        m.lfoGain.gain.setTargetAtTime(depth, now, 0.03);
+        if (Engine.playing) m.tape.gain.setTargetAtTime(fxState.noise / 100 * 0.03, now, 0.03);
+        m.master.gain.setTargetAtTime(fxState.master, now, 0.03);
+    }
+
+    /* ---------------- 状态 ---------------- */
     const state = {
         abcNotation: '',
         title: '',
@@ -597,374 +1194,101 @@
         bpm: 120,
         key: 'C',
         meter: '4/4',
-        /** 当前使用的乐器名称（显示用，多声部时为逗号分隔） */
         instruments: '钢琴',
-        /** 声部→乐器名映射（来自 %%voice 指令），如 {1:'钢琴', 2:'小提琴'} */
         voiceInstruments: new Map([[1, '钢琴']]),
-        /** 声部→合成器运行时映射，如 {1: {synth, reverb, effects, presetKey, instrumentName}} */
+        /** 声部→合成预设键映射，如 {1: {presetKey, instrumentName, volume}} */
         voices: {},
+        /** 解析后的音符：{voice, midi, time, duration, velocity, articulation} */
         notes: [],
-        /** 旧字段保留用于兼容（单声部场景指向 voices[1]） */
-        toneSynth: null,
-        toneReverb: null,
-        /** 当前主声部预设键名（用于 UI 下拉框显示） */
-        currentPresetKey: 'piano',
-        /** 效果链节点缓存（单声部兼容，多声部时存在 voices[N].effects） */
-        _effectNodes: [],
         /** 最近一次 seek 的时间（用于乐器切换时恢复进度） */
         _lastSeekTime: 0,
         animationId: null,
         history: [],
     };
 
-    // ==== 乐器音色映射表 ====
-    // 每个预设包含：keywords、label、factory、effects、velocityRange、defaultArticulation
-    // 核心升级：使用 FMSynth/AMSynth 替代基础振荡器，产生更丰富、更有辨识度的音色
-    // FMSynth = 频率调制合成（harmonicity × modulationIndex 控制谐波结构）
-    // AMSynth = 振幅调制合成（harmonicity 控制边带频率）
-    // 每种乐器的 harmonicity 和 modulationIndex 都根据其声学特性调校
-    const INSTRUMENT_PRESETS = {
-        // ── 钢琴：FM 合成，harmonicity=3 产生钢琴特有的泛音结构 ──
-        piano: {
-            keywords: ['钢琴', 'piano', '电子琴', 'keyboard', '键盘'],
-            label: '钢琴',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 3,
-                modulationIndex: 10,
-                oscillator: { type: 'sine' },
-                envelope: { attack: 0.005, decay: 0.4, sustain: 0.15, release: 1.5 },
-                modulation: { type: 'square' },
-                modulationEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.8 },
-                volume: -8,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.5, wet: 0.22 }),
-                chorus: new Tone.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.15, wet: 0.12 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 5500, Q: 0.7 }),
-            }),
-            velocityRange: [0.25, 0.95],
-            defaultArticulation: 'default',
-        },
-        // ── 小提琴：FM 合成 + 颤音效果，锯齿波载波模拟弓弦摩擦 ──
-        violin: {
-            keywords: ['小提琴', 'violin', 'fiddle', '弓弦'],
-            label: '小提琴',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 2,
-                modulationIndex: 5,
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.12, decay: 0.15, sustain: 0.75, release: 0.6 },
-                modulation: { type: 'sine' },
-                modulationEnvelope: { attack: 0.15, decay: 0.1, sustain: 0.6, release: 0.4 },
-                volume: -12,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.30 }),
-                vibrato: new Tone.Vibrato({ frequency: 5.5, depth: 0.08, wet: 0.6 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 4000, Q: 1.2 }),
-            }),
-            velocityRange: [0.20, 0.90],
-            defaultArticulation: 'legato',
-        },
-        // ── 长笛：FM 合成低调制指数，接近纯音 + 气息质感 ──
-        flute: {
-            keywords: ['长笛', 'flute', '笛子', '竹笛', '横笛'],
-            label: '长笛',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 1,
-                modulationIndex: 2,
-                oscillator: { type: 'sine' },
-                envelope: { attack: 0.15, decay: 0.08, sustain: 0.80, release: 0.45 },
-                modulation: { type: 'sine' },
-                modulationEnvelope: { attack: 0.18, decay: 0.08, sustain: 0.6, release: 0.3 },
-                volume: -8,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.8, wet: 0.32 }),
-                vibrato: new Tone.Vibrato({ frequency: 4.2, depth: 0.05, wet: 0.45 }),
-            }),
-            velocityRange: [0.25, 0.80],
-            defaultArticulation: 'legato',
-        },
-        // ── 大提琴：FM 合成低 harmonicity，温暖厚实 ──
-        cello: {
-            keywords: ['大提琴', 'cello', 'violoncello'],
-            label: '大提琴',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 1.5,
-                modulationIndex: 4,
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.18, decay: 0.2, sustain: 0.65, release: 1.2 },
-                modulation: { type: 'triangle' },
-                modulationEnvelope: { attack: 0.2, decay: 0.15, sustain: 0.5, release: 0.9 },
-                volume: -10,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 3.0, wet: 0.28 }),
-                vibrato: new Tone.Vibrato({ frequency: 4.0, depth: 0.06, wet: 0.5 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 2200, Q: 1.5 }),
-            }),
-            velocityRange: [0.20, 0.92],
-            defaultArticulation: 'legato',
-        },
-        // ── 吉他：FMSynth 模拟拨弦（高调制指数 + 极短衰减 = 拨弦质感） ──
-        // 注意：Tone.PluckSynth 不继承 Monophonic，无法用于 PolySynth
-        guitar: {
-            keywords: ['吉他', 'guitar', '木吉他', '电吉他', '贝斯', 'bass'],
-            label: '吉他',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 2,
-                modulationIndex: 15,
-                oscillator: { type: 'triangle' },
-                envelope: { attack: 0.001, decay: 0.35, sustain: 0.0, release: 0.8 },
-                modulation: { type: 'square' },
-                modulationEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.0, release: 0.25 },
-                volume: -4,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.5, wet: 0.18 }),
-                chorus: new Tone.Chorus({ frequency: 2.0, delayTime: 4, depth: 0.12, wet: 0.10 }),
-            }),
-            velocityRange: [0.25, 0.92],
-            defaultArticulation: 'default',
-        },
-        // ── 竖琴：FMSynth 模拟拨弦（较慢衰减 + 高共振延音） ──
-        harp: {
-            keywords: ['竖琴', 'harp', '里拉琴'],
-            label: '竖琴',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 1.5,
-                modulationIndex: 8,
-                oscillator: { type: 'sine' },
-                envelope: { attack: 0.002, decay: 0.6, sustain: 0.05, release: 1.8 },
-                modulation: { type: 'triangle' },
-                modulationEnvelope: { attack: 0.002, decay: 0.25, sustain: 0.0, release: 0.5 },
-                volume: -4,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 4.0, wet: 0.45 }),
-                chorus: new Tone.Chorus({ frequency: 1.2, delayTime: 5, depth: 0.18, wet: 0.15 }),
-            }),
-            velocityRange: [0.30, 0.85],
-            defaultArticulation: 'default',
-        },
-        // ── 单簧管：FM 合成方波载波，产生奇次谐波（单簧管声学特征） ──
-        clarinet: {
-            keywords: ['单簧管', 'clarinet', '黑管', '竖笛'],
-            label: '单簧管',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 3,
-                modulationIndex: 3,
-                oscillator: { type: 'square' },
-                envelope: { attack: 0.08, decay: 0.12, sustain: 0.78, release: 0.5 },
-                modulation: { type: 'sine' },
-                modulationEnvelope: { attack: 0.1, decay: 0.08, sustain: 0.5, release: 0.3 },
-                volume: -14,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.2, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 2800, Q: 1.0 }),
-                vibrato: new Tone.Vibrato({ frequency: 4.8, depth: 0.04, wet: 0.35 }),
-            }),
-            velocityRange: [0.22, 0.88],
-            defaultArticulation: 'legato',
-        },
-        // ── 双簧管：FM 合成高调制指数，穿透性音色 ──
-        oboe: {
-            keywords: ['双簧管', 'oboe', '英国管'],
-            label: '双簧管',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 2,
-                modulationIndex: 8,
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.09, decay: 0.1, sustain: 0.80, release: 0.45 },
-                modulation: { type: 'square' },
-                modulationEnvelope: { attack: 0.08, decay: 0.06, sustain: 0.6, release: 0.3 },
-                volume: -14,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.22 }),
-                filter: new Tone.Filter({ type: 'bandpass', frequency: 1500, Q: 2.2 }),
-                vibrato: new Tone.Vibrato({ frequency: 5.2, depth: 0.05, wet: 0.4 }),
-            }),
-            velocityRange: [0.25, 0.90],
-            defaultArticulation: 'legato',
-        },
-        // ── 小号：FM 合成锯齿波载波 + 喇叭形滤波包络 ──
-        trumpet: {
-            keywords: ['小号', 'trumpet', '号角', '铜管'],
-            label: '小号',
-            factory: () => new Tone.PolySynth(Tone.FMSynth, {
-                harmonicity: 1,
-                modulationIndex: 7,
-                oscillator: { type: 'sawtooth' },
-                envelope: { attack: 0.04, decay: 0.12, sustain: 0.80, release: 0.35 },
-                modulation: { type: 'sine' },
-                modulationEnvelope: { attack: 0.03, decay: 0.15, sustain: 0.7, release: 0.25 },
-                volume: -12,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 1.8, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 5000, Q: 1.5 }),
-            }),
-            velocityRange: [0.28, 0.95],
-            defaultArticulation: 'default',
-        },
-        // ── 合成器：AM 合成厚锯齿波 + 合唱，模拟模拟合成铺底 ──
-        synth: {
-            keywords: ['合成器', 'synth', '电子', '电子琴'],
-            label: '合成器',
-            factory: () => new Tone.PolySynth(Tone.AMSynth, {
-                harmonicity: 2.5,
-                oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
-                envelope: { attack: 0.03, decay: 0.2, sustain: 0.55, release: 0.9 },
-                modulation: { type: 'square' },
-                modulationEnvelope: { attack: 0.02, decay: 0.1, sustain: 0.4, release: 0.6 },
-                volume: -10,
-            }),
-            effects: () => ({
-                reverb: new Tone.Reverb({ decay: 2.0, wet: 0.20 }),
-                chorus: new Tone.Chorus({ frequency: 3.0, delayTime: 2.5, depth: 0.25, wet: 0.25 }),
-                filter: new Tone.Filter({ type: 'lowpass', frequency: 4500, Q: 0.8 }),
-            }),
-            velocityRange: [0.20, 0.95],
-            defaultArticulation: 'default',
-        },
+    /* ---------------- 乐器匹配 ---------------- */
+    /* 乐器名称 → 采样预设键（参考 musician.ts 的乐器词表） */
+    const INSTRUMENT_KEYWORDS = {
+        piano: ['钢琴', 'piano', '键盘', 'keyboard', '电子琴'],
+        epiano: ['电钢琴', '电钢', 'epiano', '复古钢琴'],
+        epiano_bell: ['钟铃', '钢片琴', 'celesta', '钟琴'],
+        harp: ['竖琴', 'harp', '里拉', '箜篌'],
+        bass: ['贝斯', 'bass', '低音提琴', 'double bass'],
+        pad: ['铺底', '氛围', 'pad', '弦乐群', '弦乐', 'strings', '合成器垫'],
+        cello: ['大提琴', 'cello', 'violoncello'],
+        violin: ['小提琴', 'violin', 'fiddle', '中提琴', 'viola'],
+        flute: ['长笛', 'flute', '笛子', '竹笛', '横笛'],
+        clarinet: ['单簧管', 'clarinet', '黑管', '竖笛'],
+        oboe: ['双簧管', 'oboe', '英国管'],
+        trumpet: ['小号', 'trumpet', '号角', '铜管', '大号', 'tuba'],
+        sax: ['萨克斯', 'sax', '萨克斯风'],
+        guitar: ['吉他', 'guitar', '木吉他', '电吉他', '曼陀林'],
+        chip: ['8bit', '8位', '芯片', 'chip', '电子', 'synth', '合成器'],
+        drums: ['鼓', 'drums', '打击', '打击乐', '架子鼓', 'drum', 'percussion'],
     };
+    function matchInstrumentPreset(name) {
+        if (!name) return 'piano';
+        const n = name.toLowerCase().trim();
+        for (const [key, kws] of Object.entries(INSTRUMENT_KEYWORDS)) {
+            if (kws.some(kw => n.includes(kw) || kw.includes(n))) return key;
+        }
+        return 'piano';
+    }
 
-    /** 默认预设（未知乐器时使用，比原硬编码 triangle 更柔和） */
-    const DEFAULT_PRESET_KEY = 'piano';
-
-    // ==== 乐器音域范围表（MIDI 音符号数） ====
-    // 用于多乐器单声部场景的回退策略：按音高将音符分配到最合适的乐器
-    // 参考 General MIDI 各乐器的典型音域
-    const INSTRUMENT_PITCH_RANGES = {
-        cello:    { low: 36, high: 72 },  // C2-C4 大提琴低音区
-        bass:     { low: 28, high: 55 },  // E1-G3 贝斯
-        guitar:   { low: 40, high: 76 },  // E3-E5 吉他
-        harp:     { low: 40, high: 84 },  // E3-C6 竖琴
-        piano:    { low: 36, high: 96 },  // C2-C7 钢琴全音域
-        clarinet: { low: 50, high: 80 },  // D3-G#4 单簧管
-        oboe:     { low: 58, high: 84 },  // Bb3-C6 双簧管
-        trumpet:  { low: 54, high: 84 },  // F#3-C6 小号
-        violin:   { low: 55, high: 96 },  // G3-C7 小提琴
-        flute:    { low: 60, high: 96 },  // C4-C7 长笛
-        synth:    { low: 36, high: 96 },  // 合成器全音域
-    };
-
-    // ==== 表达引擎 ====
-    // 核心目标：消除"打点计数器"感，为每个音符注入人性化表达
-    // 包括：力度变化、时序偏移、运音法、动态轮廓、乐句呼吸
+    /* ---------------- 表达引擎 ---------------- */
+    /* 为每个音符注入力度变化、时序偏移、运音法，消除"打点计数器"感 */
     const ExpressionEngine = {
-        // 确定性伪随机：相同种子总是返回相同结果（保证 seek 后表现一致）
         pseudoRandom(seed) {
             const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
             return x - Math.floor(x);
         },
-
-        // 解析拍号得到每小节拍数
         parseBeatsPerMeasure(meter) {
             if (!meter) return 4;
             const parts = meter.split('/');
             return parseInt(parts[0]) || 4;
         },
-
-        // 计算音符在小节中的节拍位置（0-based 浮点数）
         getBeatPosition(timeSeconds, bpm, beatsPerMeasure) {
-            const secondsPerBeat = 60 / bpm;
-            const totalBeats = timeSeconds / secondsPerBeat;
+            const totalBeats = timeSeconds / (60 / bpm);
             return totalBeats % beatsPerMeasure;
         },
-
-        // 计算乐句位置（0-1，0=乐句开头，0.5=高点，1=结尾）
-        // 使用 8 拍为一个乐句单位的正弦弧线
         getPhrasePosition(timeSeconds, bpm) {
-            const secondsPerBeat = 60 / bpm;
-            const phraseBeats = 8; // 2 小节的乐句单位（4/4 拍）
-            const phraseDuration = phraseBeats * secondsPerBeat;
+            const phraseDuration = 8 * (60 / bpm);
             const pos = (timeSeconds % phraseDuration) / phraseDuration;
             return pos;
         },
-
-        // 计算单个音符的力度（velocity, 0-1）
-        // 综合：力度记号 + 节拍强调 + 乐句轮廓 + 乐器动态范围 + 随机人性化
         getVelocity(noteIndex, voiceId, beatPosition, phrasePosition, dynamics, presetKey) {
-            const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
-            const [vMin, vMax] = preset.velocityRange || [0.2, 0.9];
-
-            // 1. 基础力度（来自 ABC 力度记号）
             const dynamicMap = { pp: 0.15, p: 0.30, mp: 0.45, mf: 0.60, f: 0.80, ff: 0.95 };
             let base = dynamicMap[dynamics] || 0.60;
-
-            // 2. 节拍强调：强拍略响
             const beatNum = Math.floor(beatPosition);
             const beatsPerMeasure = this.parseBeatsPerMeasure(state.meter);
-            if (beatNum === 0) base *= 1.10;          // 强拍
-            else if (beatsPerMeasure === 4 && beatNum === 2) base *= 1.05; // 次强拍
-            else if (beatsPerMeasure === 3 && beatNum === 1) base *= 1.03; // 3/4 拍第二拍微弱
-
-            // 3. 乐句轮廓：正弦弧线——起句渐强，句中高点，收句渐弱
+            if (beatNum === 0) base *= 1.10;
+            else if (beatsPerMeasure === 4 && beatNum === 2) base *= 1.05;
+            else if (beatsPerMeasure === 3 && beatNum === 1) base *= 1.03;
             const phraseCurve = Math.sin(phrasePosition * Math.PI);
             base *= 0.88 + phraseCurve * 0.20;
-
-            // 4. 随机人性化 ±12%（确定性，每次播放一致）
             const rand = this.pseudoRandom(noteIndex * 7 + voiceId * 31 + 13);
             base *= 1 + (rand - 0.5) * 0.24;
-
-            // 映射到乐器动态范围
-            return Math.max(vMin, Math.min(vMax, vMin + base * (vMax - vMin)));
+            return clamp(base, 0.05, 1.0);
         },
-
-        // 计算时序偏移（秒）—— 消除机器人感
-        // 强拍微提前，弱拍微延后，再加随机抖动
         getTimingOffset(noteIndex, voiceId, beatPosition) {
             const beatNum = Math.floor(beatPosition);
-            // 强拍提前 12ms，弱拍延后 5ms
             const beatOffset = beatNum === 0 ? -0.012 : 0.005;
-            // 随机偏移 ±18ms
             const randOffset = (this.pseudoRandom(noteIndex * 11 + voiceId * 23 + 7) - 0.5) * 0.036;
             return beatOffset + randOffset;
         },
-
-        // 计算持续时间乘数（基于运音法）
-        getDurationMultiplier(articulation, presetKey) {
-            const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
-            const defaultArt = preset.defaultArticulation || 'default';
-            const art = articulation || defaultArt;
-
-            const map = {
-                staccato: 0.35,
-                staccatissimo: 0.20,
-                tenuto: 1.05,
-                accent: 0.80,
-                legato: 0.95,
-                default: 0.85,  // 默认略微断开
-            };
-            return map[art] || map[defaultArt];
+        getDurationMultiplier(articulation) {
+            const map = { staccato: 0.35, staccatissimo: 0.20, tenuto: 1.05, accent: 0.80, legato: 0.95 };
+            return map[articulation] || 0.85;
         },
-
-        // 对原始音符应用完整的表达处理，返回增强后的音符
         applyExpression(notes) {
             const bpm = state.bpm;
             const beatsPerMeasure = this.parseBeatsPerMeasure(state.meter);
-
-            // 构建声部→预设键映射
-            const voicePresetMap = {};
-            for (const [voiceId, instrumentName] of state.voiceInstruments) {
-                voicePresetMap[voiceId] = matchInstrumentPreset(instrumentName);
-            }
-
             return notes.map((n, index) => {
-                const presetKey = voicePresetMap[n.voice] || DEFAULT_PRESET_KEY;
                 const beatPos = this.getBeatPosition(n.time, bpm, beatsPerMeasure);
                 const phrasePos = this.getPhrasePosition(n.time, bpm);
-
-                const velocity = this.getVelocity(
-                    index, n.voice, beatPos, phrasePos, n.dynamics, presetKey
-                );
+                const velocity = this.getVelocity(index, n.voice, beatPos, phrasePos, n.dynamics, 'piano');
                 const timingOffset = this.getTimingOffset(index, n.voice, beatPos);
-                const durationMul = this.getDurationMultiplier(n.articulation, presetKey);
-
+                const durationMul = this.getDurationMultiplier(n.articulation);
                 return {
                     ...n,
                     velocity,
@@ -975,7 +1299,7 @@
         },
     };
 
-    // ==== DOM 缓存 ====
+    /* ---------------- DOM 缓存 ---------------- */
     const el = {
         overlay: document.getElementById('music-modal-overlay'),
         title: document.getElementById('music-title'),
@@ -995,6 +1319,8 @@
         speedSelect: document.getElementById('music-setting-speed'),
         keyDisplay: document.getElementById('music-setting-key'),
         meterDisplay: document.getElementById('music-setting-meter'),
+        fxSelect: document.getElementById('music-setting-fx'),
+        voiceTags: document.getElementById('music-voice-tags'),
         historyPanel: document.getElementById('music-history-panel'),
         historyList: document.getElementById('music-history-list'),
     };
@@ -1008,13 +1334,11 @@
     channel.onmessage = (event) => {
         const msg = event.data;
         if (!msg || !msg.type) return;
-
         switch (msg.type) {
             case 'render':
                 renderMusicScore(msg.abcNotation);
                 break;
             case 'play_audio':
-                // 后端 FluidSynth + SoundFont 渲染的 WAV 音频
                 playRenderedAudio(msg.audioUrl, msg.fileName);
                 break;
             case 'close':
@@ -1030,7 +1354,6 @@
     function init() {
         initCanvas();
         bindEvents();
-        // 通知主应用页面已就绪
         postToParent({ type: 'ready' });
     }
 
@@ -1067,11 +1390,11 @@
         el.btnHistoryClose.addEventListener('click', () => {
             el.historyPanel.style.display = 'none';
         });
-        el.btnDownload.addEventListener('click', downloadScore);
+        el.btnDownload.addEventListener('click', downloadAudio);
 
         el.speedSelect.addEventListener('change', () => {
-            if (state.isPlaying) {
-                const currentRealTime = Tone.Transport.seconds * (state._speed || 1);
+            if (state.isPlaying || state.isPaused) {
+                const currentRealTime = Engine.position();
                 seekTo(currentRealTime);
             }
             notifyState();
@@ -1085,6 +1408,27 @@
             seekTo(seekTime);
         });
 
+        // 效果器
+        el.fxSelect.addEventListener('change', () => {
+            const p = FX_PRESETS[el.fxSelect.value];
+            if (!p) return;
+            fxState = { ...p, master: fxState.master };
+            syncFxUI();
+            applyFx();
+        });
+        ['fx-reverb', 'fx-saturation', 'fx-filter', 'fx-compression', 'fx-master'].forEach(id => {
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.addEventListener('input', () => {
+                const keyMap = { 'fx-reverb': 'reverb', 'fx-saturation': 'saturation', 'fx-filter': 'filter', 'fx-compression': 'compression', 'fx-master': 'master' };
+                const key = keyMap[id];
+                if (key === 'master') fxState.master = parseFloat(input.value) / 100;
+                else fxState[key] = parseFloat(input.value);
+                el.fxSelect.value = 'manual';
+                applyFx();
+            });
+        });
+
         document.addEventListener('keydown', (e) => {
             if (!el.overlay.classList.contains('visible')) return;
             if (e.code === 'Space') {
@@ -1094,6 +1438,18 @@
                 hideMusicModal();
             }
         });
+    }
+
+    function syncFxUI() {
+        const v = {
+            'fx-reverb': fxState.reverb, 'fx-saturation': fxState.saturation,
+            'fx-filter': fxState.filter, 'fx-compression': fxState.compression,
+            'fx-master': Math.round(fxState.master * 100),
+        };
+        for (const id in v) {
+            const input = document.getElementById(id);
+            if (input) input.value = v[id];
+        }
     }
 
     // ==== 状态通知 ====
@@ -1114,13 +1470,13 @@
             return;
         }
 
-        if (!window.Tone) {
-            console.error('[音乐渲染器] Tone.js 库未加载');
-            postToParent({ type: 'error', message: '音频引擎未加载，请刷新页面后重试' });
+        if (!samplesReady) {
+            console.warn('[音乐渲染器] 音色库仍在生成');
+            postToParent({ type: 'error', message: '音色库仍在生成，请稍候再播放' });
             return;
         }
 
-        stopPlayback();
+        Engine.stopAll();
 
         state.abcNotation = abcNotation;
 
@@ -1142,13 +1498,9 @@
         // 解析声部→乐器映射（来自 musician.ts 注入的 %%voice 指令）
         state.voiceInstruments = parseVoiceInstruments(abcNotation);
         state.instruments = Array.from(state.voiceInstruments.values()).join(',');
-        // 主声部预设键名（用于 UI 下拉框显示）
-        const firstInstrument = state.voiceInstruments.get(1) || Array.from(state.voiceInstruments.values())[0];
-        state.currentPresetKey = matchInstrumentPreset(firstInstrument);
-        console.log(`[音乐渲染器] 声部乐器映射:`, Object.fromEntries(state.voiceInstruments));
 
-        // 解析多声部音符（支持 [V:N] 标记）
-        const parseResult = parseABCNotesMultiVoice(abcNotation);
+        // 解析多声部音符（支持 [V:N] 标记与 [CEG] 和弦）
+        const parseResult = parseABCNotes(abcNotation);
         state.notes = parseResult.notes;
         if (state.notes.length === 0) {
             console.warn('[音乐渲染器] 无法解析 ABC 乐谱中的音符');
@@ -1156,20 +1508,14 @@
             return;
         }
 
-        // 回退策略：单声部多乐器时按音高分配音符到各乐器
-        const hasMultipleVoices = new Set(state.notes.map(n => n.voice)).size > 1;
-        if (!hasMultipleVoices && state.voiceInstruments.size > 1) {
-            console.log('[音乐渲染器] 单声部多乐器场景，启用按音高分配回退策略');
-            state.notes = distributeNotesByPitch(state.notes, state.voiceInstruments);
+        state.totalDuration = Math.max(...Object.values(parseResult.voiceTimes), 0) + 0.5;
+        if (state.totalDuration <= 0.5 && state.notes.length > 0) {
+            const lastNote = state.notes[state.notes.length - 1];
+            state.totalDuration = lastNote.time + lastNote.duration + 0.5;
         }
 
-        // 总时长 = 所有声部结束时间的最大值
-        state.totalDuration = Math.max(...Object.values(parseResult.voiceTimes), 0);
-        // 回退：若 voiceTimes 异常，使用最后一个音符的结束时间
-        if (state.totalDuration <= 0 && state.notes.length > 0) {
-            const lastNote = state.notes[state.notes.length - 1];
-            state.totalDuration = lastNote.time + lastNote.duration;
-        }
+        // 构建声部运行时（合成器预设 + 音量）
+        buildVoiceRuntimes();
 
         updateUI();
         resetPlaybackState();
@@ -1179,6 +1525,22 @@
         const voiceCount = new Set(state.notes.map(n => n.voice)).size;
         console.log(`[音乐渲染器] 乐谱就绪: "${state.title}", ${state.notes.length} 个音符, ${voiceCount} 个声部, ${state.totalDuration.toFixed(1)}s`);
         notifyState();
+    }
+
+    /** 构建每个声部的运行时信息 */
+    function buildVoiceRuntimes() {
+        state.voices = {};
+        for (const [voiceId, instrumentName] of state.voiceInstruments) {
+            const presetKey = matchInstrumentPreset(instrumentName);
+            const spec = INSTRUMENTS[presetKey] || INSTRUMENTS.piano;
+            state.voices[voiceId] = {
+                presetKey,
+                instrumentName,
+                color: spec.color,
+                volume: presetKey === 'drums' ? 0.8 : 0.9,
+            };
+            console.log(`[音乐渲染器] 声部 ${voiceId}: ${instrumentName} → ${spec.name}`);
+        }
     }
 
     // ==== UI 更新 ====
@@ -1191,6 +1553,17 @@
         el.timeCurrent.textContent = '00:00';
         el.progressFill.style.width = '0%';
         el.speedSelect.value = '1';
+        renderVoiceTags();
+    }
+
+    function renderVoiceTags() {
+        const tags = [];
+        for (const [voiceId, instrumentName] of state.voiceInstruments) {
+            const v = state.voices[voiceId];
+            const specName = v ? INSTRUMENTS[v.presetKey].name : instrumentName;
+            tags.push(`<span class="music-voice-tag">声部${voiceId} · ${escapeHtmlSafe(specName)}</span>`);
+        }
+        el.voiceTags.innerHTML = tags.join('');
     }
 
     function resetPlaybackState() {
@@ -1213,71 +1586,32 @@
 
     function startPlayback() {
         if (!state.abcNotation || state.notes.length === 0) return;
-        Tone.start().then(() => {
+        if (!samplesReady) { notifyState(); return; }
+        Engine.ensureCtx();
+        Engine.ctx.resume().then(() => {
             if (state.isPaused) {
-                resumePlayback();
+                // 已排程（暂停中），直接恢复
+                state.isPlaying = true;
+                state.isPaused = false;
             } else {
-                beginNewPlayback();
+                Engine.scheduleAll(0);
+                state.isPlaying = true;
+                state.isPaused = false;
             }
+            updatePlayButton();
+            startAnimation();
+            hideScrollingTitle();
             notifyState();
+        }).catch(() => {
+            // 自动播放被阻止：等用户再次点击
+            state.isPaused = true;
+            updatePlayButton();
         });
-    }
-
-    function beginNewPlayback() {
-        disposeSynth();
-
-        // 为所有声部创建独立的合成器实例（多乐器并行）
-        createSynthsForVoices(state.voiceInstruments);
-
-        Tone.Transport.bpm.value = 60;
-
-        const speed = parseFloat(el.speedSelect.value);
-        const timeScale = 1 / speed;
-
-        // 应用表达引擎：为每个音符计算 velocity、时序偏移、运音法
-        const expressiveNotes = ExpressionEngine.applyExpression(state.notes);
-
-        // 多声部并行调度：每个音符发送到其所属声部的合成器，携带 velocity
-        expressiveNotes.forEach(({ note, duration, time, voice, velocity }) => {
-            const voiceData = state.voices[voice] || state.voices[1];
-            if (!voiceData || !voiceData.synth) return;
-
-            const scheduledTime = time * timeScale;
-            const noteDuration = duration * timeScale;
-            const vel = velocity || 0.7;
-            Tone.Transport.schedule((t) => {
-                voiceData.synth.triggerAttackRelease(note, noteDuration, t, vel);
-            }, scheduledTime);
-        });
-
-        const adjustedTotal = state.totalDuration * timeScale;
-        Tone.Transport.schedule(() => {
-            stopPlayback();
-            notifyState();
-        }, adjustedTotal + 0.1);
-
-        state._speed = speed;
-        state._timeScale = timeScale;
-
-        Tone.Transport.start();
-        state.isPlaying = true;
-        state.isPaused = false;
-        updatePlayButton();
-        startAnimation();
-        hideScrollingTitle();
-    }
-
-    function resumePlayback() {
-        Tone.Transport.start();
-        state.isPlaying = true;
-        state.isPaused = false;
-        updatePlayButton();
-        startAnimation();
-        hideScrollingTitle();
     }
 
     function pausePlayback() {
-        Tone.Transport.pause();
+        if (!Engine.ctx) return;
+        try { Engine.ctx.suspend(); } catch (e) { }
         state.isPlaying = false;
         state.isPaused = true;
         updatePlayButton();
@@ -1286,8 +1620,7 @@
     }
 
     function stopPlayback() {
-        Tone.Transport.stop();
-        Tone.Transport.cancel();
+        Engine.stopAll();
         state.isPlaying = false;
         state.isPaused = false;
         updatePlayButton();
@@ -1300,61 +1633,14 @@
 
     function seekTo(seconds) {
         if (state.totalDuration <= 0) return;
-
-        const wasPlaying = state.isPlaying;
-        // 记录当前进度，供乐器切换时恢复
         state._lastSeekTime = seconds;
-
-        Tone.Transport.stop();
-        Tone.Transport.cancel();
-        disposeSynth();
-
-        // 为所有声部创建独立的合成器实例（多乐器并行）
-        createSynthsForVoices(state.voiceInstruments);
-
-        Tone.Transport.bpm.value = 60;
-
-        const speed = parseFloat(el.speedSelect.value);
-        const timeScale = 1 / speed;
-
-        // 应用表达引擎：为每个音符计算 velocity、时序偏移、运音法
-        const expressiveNotes = ExpressionEngine.applyExpression(state.notes);
-
-        // 多声部并行调度：跳过已播放的音符，剩余音符携带 velocity
-        expressiveNotes.forEach(({ note, duration, time, voice, velocity }) => {
-            const noteEnd = time + duration;
-            if (noteEnd <= seconds) return;
-
-            const voiceData = state.voices[voice] || state.voices[1];
-            if (!voiceData || !voiceData.synth) return;
-
-            let scheduledTime = (time - seconds) * timeScale;
-            if (scheduledTime < 0) scheduledTime = 0;
-
-            let remainingDuration = duration;
-            if (time < seconds) {
-                remainingDuration = noteEnd - seconds;
-            }
-            const noteDuration = remainingDuration * timeScale;
-            const vel = velocity || 0.7;
-
-            Tone.Transport.schedule((t) => {
-                voiceData.synth.triggerAttackRelease(note, noteDuration, t, vel);
-            }, scheduledTime);
-        });
-
-        const remainingReal = state.totalDuration - seconds;
-        const adjustedRemaining = remainingReal * timeScale;
-        Tone.Transport.schedule(() => {
-            stopPlayback();
-            notifyState();
-        }, adjustedRemaining + 0.1);
-
-        state._speed = speed;
-        state._timeScale = timeScale;
-
+        const wasPlaying = state.isPlaying;
+        Engine.stopAll();
+        if (!Engine.ctx) Engine.ensureCtx();
+        // 暂停态也先排程（resume 前不发声）
+        Engine.scheduleAll(Math.min(Math.max(0, seconds), state.totalDuration - 0.05));
         if (wasPlaying) {
-            Tone.Transport.start();
+            Engine.ctx.resume();
             state.isPlaying = true;
             state.isPaused = false;
             updatePlayButton();
@@ -1372,20 +1658,143 @@
         notifyState();
     }
 
-    // ==== 乐器元信息解析 ====
+    // ==== 音频引擎（采样级播放） ====
+    const Engine = {
+        ctx: null,
+        mixer: null,
+        voiceNodes: {},
+        playing: false,
+        scheduled: [],
+        startCtxTime: 0,
+        startPos: 0,
+        _endTimer: null,
 
-    /**
-     * 从 ABC 乐谱头部解析声部乐器映射
-     *
-     * 优先解析 `%%voice N 乐器名` 指令（musician.ts 注入的多声部格式），
-     * 回退到 `%%instrument 乐器1,乐器2` 格式（兼容旧版）。
-     *
-     * @param {string} abcNotation - ABC 乐谱文本
-     * @returns {Map<number, string>} 声部ID→乐器名映射，如 {1:'钢琴', 2:'小提琴'}
-     */
+        ensureCtx() {
+            if (this.ctx) return;
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.mixer = buildMixer(this.ctx, this.ctx.destination);
+            this.rebuildVoiceNodes();
+            applyFx();
+        },
+        rebuildVoiceNodes() {
+            if (!this.ctx) return;
+            for (const id in this.voiceNodes) {
+                const n = this.voiceNodes[id];
+                try { n.gain.disconnect(); n.pan.disconnect(); } catch (e) { }
+            }
+            this.voiceNodes = {};
+            for (const vid in state.voices) {
+                const v = state.voices[vid];
+                const gain = this.ctx.createGain(); gain.gain.value = v.volume;
+                const pan = this.ctx.createStereoPanner(); pan.pan.value = 0;
+                gain.connect(pan);
+                pan.connect(this.mixer.busDry);
+                pan.connect(this.mixer.reverbIn);
+                pan.connect(this.mixer.delayIn);
+                this.voiceNodes[vid] = { gain, pan };
+            }
+        },
+        /** 当前播放位置（真实秒） */
+        position() {
+            if (!this.ctx) return 0;
+            return this.ctx.currentTime - this.startCtxTime + this.startPos;
+        },
+        /** 停止所有已排程音源，保留 AudioContext */
+        stopAll() {
+            if (this._endTimer) { clearTimeout(this._endTimer); this._endTimer = null; }
+            for (const s of this.scheduled) {
+                try { s.gain.gain.cancelScheduledValues(this.ctx.currentTime); s.gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.03); s.src.stop(this.ctx.currentTime + 0.06); } catch (e) { }
+            }
+            this.scheduled = [];
+            if (this.mixer && this.ctx) this.mixer.tape.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
+        },
+        /** 从指定位置（真实秒）重新排程整首乐曲 */
+        scheduleAll(fromPos) {
+            this.stopAll();
+            if (!this.ctx) this.ensureCtx();
+            this.startCtxTime = this.ctx.currentTime + 0.06;
+            this.startPos = fromPos;
+            const speed = parseFloat(el.speedSelect.value) || 1;
+            const timeScale = 1 / speed;
+            const notes = ExpressionEngine.applyExpression(state.notes);
+            const beatDur = 60 / state.bpm;
+
+            for (const n of notes) {
+                const noteEnd = n.time + n.duration;
+                if (noteEnd <= fromPos) continue;
+                const when = this.startCtxTime + (n.time - fromPos) * timeScale;
+                if (when < this.ctx.currentTime - 0.02) continue;
+                const remaining = n.time < fromPos ? noteEnd - fromPos : n.duration;
+                if (remaining <= 0) continue;
+                this.scheduleNote(n, when, remaining * timeScale, beatDur);
+            }
+
+            const remainingReal = state.totalDuration - fromPos;
+            const ms = Math.max(100, remainingReal * timeScale * 1000 + 400);
+            this._endTimer = setTimeout(() => {
+                if (state.isPlaying) {
+                    this.stopAll();
+                    state.isPlaying = false;
+                    state.isPaused = false;
+                    updatePlayButton();
+                    stopAnimation();
+                    showScrollingTitle();
+                    el.progressFill.style.width = '100%';
+                    el.timeCurrent.textContent = formatTime(state.totalDuration);
+                    notifyState();
+                }
+            }, ms);
+
+            if (this.mixer) this.mixer.tape.gain.setTargetAtTime(fxState.noise / 100 * 0.03, this.ctx.currentTime, 0.1);
+        },
+        scheduleNote(n, when, durSec, beatDur) {
+            const v = state.voices[n.voice] || Object.values(state.voices)[0];
+            if (!v) return;
+            const vn = this.voiceNodes[n.voice] || Object.values(this.voiceNodes)[0];
+            if (!vn) return;
+            const presetKey = v.presetKey;
+
+            let srcBuf, rate;
+            if (presetKey === 'drums') {
+                const dn = DRUM_MAP[n.midi] || 'kick';
+                srcBuf = drumBufs[dn]; rate = 1;
+            } else {
+                const spec = INSTRUMENTS[presetKey] || INSTRUMENTS.piano;
+                const bases = spec.base; let b = bases[0];
+                for (const x of bases) { if (n.midi >= x) b = x; else break; }
+                b = Math.min(b, bases[bases.length - 1]);
+                srcBuf = samples[presetKey] ? samples[presetKey][b] : null;
+                rate = Math.pow(2, (n.midi - b) / 12);
+            }
+            if (!srcBuf) return;
+
+            const src = this.ctx.createBufferSource();
+            src.buffer = srcBuf; src.playbackRate.value = rate;
+            const spec = INSTRUMENTS[presetKey] || INSTRUMENTS.piano;
+            if (spec.loop) { src.loop = true; src.loopStart = spec.loop[0]; src.loopEnd = spec.loop[1]; }
+
+            const g = this.ctx.createGain();
+            const level = Math.pow(n.velocity != null ? n.velocity : 0.75, 1.3) * 0.95;
+            const durN = spec.type === 'drums' ? Math.max(durSec * 2, 0.15) : durSec;
+            g.gain.setValueAtTime(0.0001, when);
+            g.gain.linearRampToValueAtTime(level, when + 0.006);
+            const holdEnd = Math.max(when + 0.008, when + durN - 0.05);
+            g.gain.setValueAtTime(level, holdEnd);
+            g.gain.linearRampToValueAtTime(0.0001, when + durN + 0.05);
+
+            src.connect(g); g.connect(vn.gain);
+            src.start(when); src.stop(when + durN + 0.08);
+            this.scheduled.push({ src, gain: g });
+        },
+    };
+
+    function disposeSynth() {
+        // 采样引擎无需释放合成器，仅停止播放
+    }
+
+    // ==== ABC 解析（多声部 + 和弦 + 力度 + 运音法） ====
     function parseVoiceInstruments(abcNotation) {
         const voiceMap = new Map();
-        // 优先解析 %%voice N 乐器名
         const voiceRegex = /^%%voice\s+(\d+)\s+(.+)$/gm;
         let match;
         while ((match = voiceRegex.exec(abcNotation)) !== null) {
@@ -1394,360 +1803,174 @@
             if (instrument) voiceMap.set(voiceId, instrument);
         }
         if (voiceMap.size > 0) return voiceMap;
-
-        // 回退：解析 %%instrument 乐器1,乐器2（旧版兼容）
         const instMatch = abcNotation.match(/^%%instrument\s+(.+)$/m);
         if (instMatch) {
-            const instruments = instMatch[1]
-                .replace(/，/g, ',')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
+            const instruments = instMatch[1].replace(/，/g, ',').split(',').map(s => s.trim()).filter(Boolean);
             instruments.forEach((inst, i) => voiceMap.set(i + 1, inst));
         }
         if (voiceMap.size === 0) voiceMap.set(1, '钢琴');
         return voiceMap;
     }
 
-    /**
-     * 解析 ABC 乐谱中的多声部音符
-     *
-     * 支持 ABC 标准的 `[V:N]` 声部标记。每个声部维护独立的时间轴，
-     * 各声部并行演奏。无 `[V:N]` 标记时所有音符归入声部 1。
-     *
-     * 算法：
-     * 1. 提取 K: 行之后的音乐主体
-     * 2. 按 `[V:N]` 标记分段，每段属于对应声部
-     * 3. 每个声部独立累加时间（并行演奏）
-     *
-     * @param {string} abcNotation - ABC 乐谱文本
-     * @returns {{notes: Array, voiceTimes: Object}} 音符数组与各声部结束时间
-     */
-    function parseABCNotesMultiVoice(abcNotation) {
+    /* ABC 音名 → MIDI 音高
+       ABC 约定：大写 C = C4 = MIDI 60，小写 = 高八度，' 升八度，, 降八度 */
+    function abcNoteToMidi(accidental, noteName, octave) {
+        const pc = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        let midi = (noteName === noteName.toUpperCase() ? 60 : 72) + (pc[noteName.toUpperCase()] || 0);
+        for (const ch of octave) {
+            if (ch === "'") midi += 12;
+            else if (ch === ',') midi -= 12;
+        }
+        if (accidental.includes('^')) midi += 1;
+        if (accidental.includes('_')) midi -= 1;
+        return midi;
+    }
+
+    /* 解析时值后缀（如 "", "2", "/2", "3/4"）→ 相对默认时值的倍数 */
+    function parseDurationFactor(numStr, fracStr) {
+        let factor = 1;
+        if (numStr) factor *= parseInt(numStr);
+        if (fracStr && fracStr.startsWith('/')) {
+            const f = parseInt(fracStr.substring(1));
+            if (f > 0) factor /= f;
+        }
+        return factor;
+    }
+
+    function parseABCNotes(abcNotation) {
         const notes = [];
+        const voiceTimes = {};
 
         const lengthMatch = abcNotation.match(/^L:\s*(\d+)\/(\d+)/m);
         let defaultDuration = 0.125;
         if (lengthMatch) {
-            defaultDuration = parseInt(lengthMatch[1]) / parseInt(lengthMatch[2]);
+            const d1 = parseInt(lengthMatch[1]), d2 = parseInt(lengthMatch[2]);
+            if (d2 > 0) defaultDuration = d1 / d2;
         }
 
         const tempoMatch = abcNotation.match(/^Q:\s*(\d+)\/(\d+)=(\d+)/m);
-        let bpm = 120;
-        let beatDuration = 0.25;
+        let bpm = 120, beatDuration = 0.25;
         if (tempoMatch) {
-            beatDuration = parseInt(tempoMatch[1]) / parseInt(tempoMatch[2]);
+            const q1 = parseInt(tempoMatch[1]), q2 = parseInt(tempoMatch[2]);
+            if (q2 > 0) beatDuration = q1 / q2;
             bpm = parseInt(tempoMatch[3]);
         }
-
         const secondsPerBeat = 60 / bpm;
         const defaultSeconds = defaultDuration / beatDuration * secondsPerBeat;
 
         const keyIndex = abcNotation.search(/^K:.*$/m);
         if (keyIndex === -1) return { notes, voiceTimes: { 1: 0 } };
 
-        const musicBody = abcNotation.substring(keyIndex).replace(/^K:.*$/m, '').trim();
+        const musicBody = abcNotation.substring(keyIndex).replace(/^K:.*$/m, '');
+        // 移除注释
+        const body = musicBody.split('\n').map(l => l.replace(/%.*$/, '')).join('\n');
+        // 按 [V:N] 标记分段
+        const segments = body.split(/(?=\[V:\s*\d+\])/);
 
-        // 按 [V:N] 标记分段（保留标记本身）
-        const segments = musicBody.split(/(?=\[V:\d+\])/);
-
-        const voiceTimes = { 1: 0 };
         let currentVoice = 1;
+        let currentDynamics = 'mf';
+        let pendingArticulation = null;
 
-        // 表情状态跟踪（力度和运音法持续到被覆盖为止）
-        let currentDynamics = 'mf';  // 默认中强
-        let currentArticulation = null;  // 无特殊运音法
+        // 音符/和弦/休止符/记号 token
+        const tokenRe = /\[[^\[\]]*\](?:\d+\/?\d*)?|[\^_=]*[a-gA-G][,'^_=]*\d*\/?\d*|z\d*\/?\d*|![a-zA-Z]+!|[.>-]/g;
+        const noteRe = /([\^_=]*)([a-gA-G])([,'^_=]*)(\d*)(\/?\d*)/;
+        const chordNoteRe = /([\^_=]*)([a-gA-G])([,'^_=]*)(\d*)(\/?\d*)/g;
 
-        // 预扫描：提取表情记号位置（力度、运音法）
-        // ABC 力度记号：!pp! !p! !mp! !mf! !f! !ff!
-        // ABC 运音法：. (staccato) > (accent) - (tenuto) ~ (roll/trill)
-        const dynamicRegex = /!(pp|p|mp|mf|f|ff)!/g;
-        const articulationRegex = /([.>-])/g;
-
-        const noteRegex = /([\^=_]*)([a-gA-G])([,']*)(\d*)(\/?\d*)/g;
-
-        for (const segment of segments) {
-            const voiceMatch = segment.match(/^\[V:(\d+)\]/);
-            if (voiceMatch) {
-                currentVoice = parseInt(voiceMatch[1]);
+        for (const seg of segments) {
+            let body = seg;
+            const vm = body.match(/^\[V:\s*(\d+)\s*\]/);
+            if (vm) {
+                currentVoice = parseInt(vm[1]);
                 if (voiceTimes[currentVoice] === undefined) voiceTimes[currentVoice] = 0;
+                // 移除声部标记，避免被当作和弦块解析而推进时间
+                body = body.replace(/^\[V:\s*\d+\s*\]\s*/, '');
             }
 
-            noteRegex.lastIndex = 0;
-            let match;
-            let lastIndex = 0;
-            while ((match = noteRegex.exec(segment)) !== null) {
-                // 扫描此音符之前的文本，提取表情记号
-                const textBefore = segment.substring(lastIndex, match.index);
-                lastIndex = match.index + match[0].length;
+            tokenRe.lastIndex = 0;
+            let m;
+            while ((m = tokenRe.exec(body)) !== null) {
+                const tok = m[0];
 
-                // 更新力度记号（最后一个生效）
-                let dynMatch;
-                dynamicRegex.lastIndex = 0;
-                while ((dynMatch = dynamicRegex.exec(textBefore)) !== null) {
-                    currentDynamics = dynMatch[1];
+                // 力度记号 !pp! !p! !mp! !mf! !f! !ff!
+                if (tok.startsWith('!')) {
+                    const d = tok.slice(1, -1).toLowerCase();
+                    if (['pp', 'p', 'mp', 'mf', 'f', 'ff'].includes(d)) currentDynamics = d;
+                    continue;
                 }
-
-                // 更新运音法（紧邻音符前的一个记号生效）
-                const lastArtMatch = textBefore.match(/([.>-])\s*$/);
-                if (lastArtMatch) {
-                    const artMap = { '.': 'staccato', '>': 'accent', '-': 'tenuto' };
-                    currentArticulation = artMap[lastArtMatch[1]] || null;
-                } else {
-                    // 运音法仅作用于紧跟其后的一个音符
-                    currentArticulation = null;
+                // 运音法 . > -
+                if (tok === '.' || tok === '>' || tok === '-') {
+                    pendingArticulation = { '.': 'staccato', '>': 'accent', '-': 'tenuto' }[tok];
+                    continue;
                 }
-
-                const accidental = match[1];
-                const noteName = match[2];
-                const octave = match[3];
-                const durationNum = match[4];
-                const durationFrac = match[5];
-
-                let duration = defaultSeconds;
-                if (durationNum) {
-                    duration = defaultSeconds * parseInt(durationNum);
+                // 休止符
+                if (tok.startsWith('z')) {
+                    const zf = tok.substring(1).match(/^(\d*)(\/?\d*)/) || ['', '', ''];
+                    voiceTimes[currentVoice] += defaultSeconds * parseDurationFactor(zf[1], zf[2]);
+                    continue;
                 }
-                if (durationFrac && durationFrac.startsWith('/')) {
-                    const fracVal = parseInt(durationFrac.substring(1));
-                    if (fracVal > 0) duration = defaultSeconds / fracVal;
+                // 和弦块 [CEG] 或 [CEG]2 —— 同刻发声
+                if (tok.startsWith('[')) {
+                    const closeIdx = tok.indexOf(']');
+                    const inner = tok.slice(1, closeIdx);
+                    const after = tok.slice(closeIdx + 1);
+                    let chordDur = defaultSeconds;
+                    const af = after.match(/^(\d*)(\/?\d*)/);
+                    if (af && (af[1] || af[2])) chordDur = defaultSeconds * parseDurationFactor(af[1], af[2]);
+                    const baseTime = voiceTimes[currentVoice] || 0;
+                    chordNoteRe.lastIndex = 0;
+                    let nm;
+                    while ((nm = chordNoteRe.exec(inner)) !== null) {
+                        let dur = chordDur;
+                        if (nm[4] || nm[5]) dur = defaultSeconds * parseDurationFactor(nm[4], nm[5]);
+                        notes.push({
+                            voice: currentVoice,
+                            midi: abcNoteToMidi(nm[1], nm[2], nm[3]),
+                            time: baseTime,
+                            duration: dur,
+                            dynamics: currentDynamics,
+                            articulation: pendingArticulation || null,
+                        });
+                    }
+                    voiceTimes[currentVoice] = baseTime + chordDur;
+                    pendingArticulation = null;
+                    continue;
                 }
-
-                // 音符格式：音名 + 升降号 + 八度数字（如 "C#3"、"Db4"）
-                // 此顺序匹配 noteToNumber 正则 /^([A-Ga-g])([#b]?)(\d+)$/
-                // 且 Tone.js triggerAttackRelease 也接受此格式
-                let fullNote = noteName;
-                if (accidental.includes('^')) fullNote += '#';
-                if (accidental.includes('_')) fullNote += 'b';
-                if (noteName === noteName.toLowerCase()) {
-                    fullNote += '4';
-                } else {
-                    fullNote += '3';
+                // 单音符
+                const nm = tok.match(noteRe);
+                if (nm) {
+                    const dur = defaultSeconds * parseDurationFactor(nm[4], nm[5]);
+                    const t = voiceTimes[currentVoice] || 0;
+                    notes.push({
+                        voice: currentVoice,
+                        midi: abcNoteToMidi(nm[1], nm[2], nm[3]),
+                        time: t,
+                        duration: dur,
+                        dynamics: currentDynamics,
+                        articulation: pendingArticulation || null,
+                    });
+                    voiceTimes[currentVoice] = t + dur;
+                    pendingArticulation = null;
                 }
-                if (octave.includes("'")) fullNote = fullNote.replace(/(\d+)$/, m => String(parseInt(m) + 1));
-                if (octave.includes(',')) fullNote = fullNote.replace(/(\d+)$/, m => String(parseInt(m) - 1));
-
-                const time = voiceTimes[currentVoice] || 0;
-                notes.push({
-                    note: fullNote,
-                    duration,
-                    time,
-                    voice: currentVoice,
-                    dynamics: currentDynamics,
-                    articulation: currentArticulation,
-                });
-                voiceTimes[currentVoice] = time + duration;
             }
         }
 
         return { notes, voiceTimes };
     }
 
-    /**
-     * 回退策略：单声部多乐器场景下按音高分配音符到各乐器
-     *
-     * 当乐谱没有 [V:N] 标记（单声部）但指定了多个乐器时，
-     * 将每个音符分配到音域最匹配的乐器对应的声部。
-     *
-     * @param {Array} notes - 原始音符数组（voice 全为 1）
-     * @param {Map<number, string>} voiceMap - 声部→乐器映射
-     * @returns {Array} 重新分配 voice 后的音符数组
-     */
-    function distributeNotesByPitch(notes, voiceMap) {
-        if (voiceMap.size <= 1) return notes;
-
-        // 构建声部→{presetKey, range, center} 映射
-        const voiceRanges = [];
-        for (const [voiceId, instrumentName] of voiceMap) {
-            const presetKey = matchInstrumentPreset(instrumentName);
-            const range = INSTRUMENT_PITCH_RANGES[presetKey] || { low: 0, high: 127 };
-            voiceRanges.push({ voiceId, presetKey, range, center: (range.low + range.high) / 2 });
-        }
-        // 按音域中心从低到高排序
-        voiceRanges.sort((a, b) => a.center - b.center);
-
-        // 计算相邻乐器音域中心的分界点
-        // 分界点 = 两个相邻中心的中点，音符按分界点分配到最近的乐器
-        const boundaries = [];
-        for (let i = 0; i < voiceRanges.length - 1; i++) {
-            boundaries.push((voiceRanges[i].center + voiceRanges[i + 1].center) / 2);
-        }
-
-        return notes.map(n => {
-            const pitch = noteToNumber(n.note);
-
-            // 按分界点分配：找到 pitch 落在哪个区间
-            let voiceIdx = 0;
-            for (let i = 0; i < boundaries.length; i++) {
-                if (pitch > boundaries[i]) voiceIdx = i + 1;
-                else break;
-            }
-
-            return { ...n, voice: voiceRanges[voiceIdx].voiceId };
-        });
-    }
-
-    /**
-     * 根据乐器名称匹配预设键名
-     *
-     * 遍历 INSTRUMENT_PRESETS 的 keywords 数组，返回首个匹配的预设键名。
-     * 支持中英文模糊匹配（包含子串即视为匹配）。
-     *
-     * @param {string} instrumentName - 乐器名称（如 "钢琴"、"violin"）
-     * @returns {string} 预设键名（如 "piano"、"violin"），未匹配则返回 DEFAULT_PRESET_KEY
-     */
-    function matchInstrumentPreset(instrumentName) {
-        if (!instrumentName) return DEFAULT_PRESET_KEY;
-        const name = instrumentName.toLowerCase().trim();
-        for (const [key, preset] of Object.entries(INSTRUMENT_PRESETS)) {
-            if (preset.keywords.some(kw => name.includes(kw.toLowerCase()) || kw.toLowerCase().includes(name))) {
-                return key;
-            }
-        }
-        return DEFAULT_PRESET_KEY;
-    }
-
-    /**
-     * 根据预设键名创建合成器与效果链（独立实例）
-     *
-     * 创建顺序：合成器 → 效果链节点（filter/vibrato）→ reverb → destination
-     * 返回完整的合成器对象供多声部并行使用。
-     *
-     * @param {string} presetKey - 预设键名
-     * @returns {{synth: object, reverb: object, effects: Array}} 合成器、混响与效果节点数组
-     */
-    function createSynthForInstrument(presetKey) {
-        const preset = INSTRUMENT_PRESETS[presetKey] || INSTRUMENT_PRESETS[DEFAULT_PRESET_KEY];
-        const synth = preset.factory();
-        const effects = preset.effects();
-
-        // 效果节点连接顺序：synth → filter → vibrato → reverb → destination
-        let lastNode = synth;
-        const effectNodes = [];
-
-        if (effects.filter) {
-            synth.connect(effects.filter);
-            lastNode = effects.filter;
-            effectNodes.push(effects.filter);
-        }
-        if (effects.vibrato) {
-            lastNode.connect(effects.vibrato);
-            lastNode = effects.vibrato;
-            effectNodes.push(effects.vibrato);
-        }
-        if (effects.reverb) {
-            lastNode.connect(effects.reverb);
-            effects.reverb.toDestination();
-            effectNodes.push(effects.reverb);
-        } else {
-            lastNode.toDestination();
-        }
-
-        return { synth, reverb: effects.reverb || null, effects: effectNodes };
-    }
-
-    /**
-     * 为所有声部创建独立的合成器实例
-     *
-     * 遍历 state.voiceInstruments 映射，为每个声部创建对应的合成器与效果链。
-     * 每个声部拥有完全独立的合成器实例，实现真正的多乐器并行演奏。
-     *
-     * @param {Map<number, string>} voiceInstruments - 声部ID→乐器名映射
-     */
-    function createSynthsForVoices(voiceInstruments) {
-        disposeAllSynths();
-        state.voices = {};
-
-        for (const [voiceId, instrumentName] of voiceInstruments) {
-            const presetKey = matchInstrumentPreset(instrumentName);
-            const { synth, reverb, effects } = createSynthForInstrument(presetKey);
-            state.voices[voiceId] = {
-                synth,
-                reverb,
-                effects,
-                presetKey,
-                instrumentName,
-            };
-            console.log(`[音乐渲染器] 声部 ${voiceId}: ${instrumentName} → 预设 ${presetKey}`);
-        }
-
-        // 兼容旧字段：toneSynth 指向声部 1 的合成器
-        const firstVoice = state.voices[1] || Object.values(state.voices)[0];
-        if (firstVoice) {
-            state.toneSynth = firstVoice.synth;
-            state.toneReverb = firstVoice.reverb;
-            state._effectNodes = firstVoice.effects;
-            state.currentPresetKey = firstVoice.presetKey;
-        }
-    }
-
-    /**
-     * 释放所有声部的合成器与效果节点
-     */
-    function disposeAllSynths() {
-        for (const voiceId in state.voices) {
-            const v = state.voices[voiceId];
-            if (v.synth) {
-                try { v.synth.dispose(); } catch (e) { /* 已释放 */ }
-            }
-            if (v.effects && v.effects.length > 0) {
-                v.effects.forEach(node => {
-                    try { node.dispose(); } catch (e) { /* 已释放 */ }
-                });
-            }
-        }
-        state.voices = {};
-        state.toneSynth = null;
-        state.toneReverb = null;
-        state._effectNodes = [];
-    }
-
-    function disposeSynth() {
-        disposeAllSynths();
-    }
-
-    // ==== 后端音频播放（FluidSynth + SoundFont 渲染的 WAV） ====
-
-    /** 当前 HTML5 Audio 实例（后端渲染音频） */
+    // ==== 后端音频播放（HTML5 Audio） ====
     let _renderedAudio = null;
-    /** 后端渲染的音频 URL（供下载使用，即使 Audio 对象被释放也不丢失） */
     let _renderedAudioUrl = null;
-    /** 后端渲染的文件名 */
     let _renderedAudioName = null;
 
-    /**
-     * 播放后端渲染的 WAV 音频
-     *
-     * 当后端 FluidSynth + SoundFont 渲染完成时，前端收到音频 URL，
-     * 使用 HTML5 Audio API 直接播放，音质远超前端 Tone.js 合成。
-     * 同时更新 UI 进度条和时间显示。
-     */
     function playRenderedAudio(audioUrl, fileName) {
         console.log(`[音乐渲染器] 收到后端渲染音频: ${audioUrl}`);
-
-        // 停止前端合成器播放（如果正在进行）
-        if (state.isPlaying) {
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
-            state.isPlaying = false;
-            state.isPaused = false;
-        }
-        disposeSynth();
-
-        // 停止之前的渲染音频
-        if (_renderedAudio) {
-            _renderedAudio.pause();
-            _renderedAudio = null;
-        }
-
-        // 保存音频 URL 和文件名（供下载使用）
+        if (state.isPlaying || state.isPaused) Engine.stopAll();
+        stopAnimation();
+        if (_renderedAudio) { _renderedAudio.pause(); _renderedAudio = null; }
         _renderedAudioUrl = audioUrl;
         _renderedAudioName = fileName || 'music.wav';
-
-        // 创建 HTML5 Audio 实例
         const audio = new Audio(audioUrl);
         _renderedAudio = audio;
-
         audio.addEventListener('loadedmetadata', () => {
             state.totalDuration = audio.duration;
             state.isPlaying = true;
@@ -1759,14 +1982,12 @@
             hideScrollingTitle();
             console.log(`[音乐渲染器] 后端音频加载完成，时长: ${audio.duration.toFixed(1)}s`);
         });
-
         audio.addEventListener('timeupdate', () => {
             if (!audio.duration) return;
             const progress = (audio.currentTime / audio.duration) * 100;
             el.progressFill.style.width = progress + '%';
             el.timeCurrent.textContent = formatTime(audio.currentTime);
         });
-
         audio.addEventListener('ended', () => {
             state.isPlaying = false;
             state.isPaused = false;
@@ -1774,38 +1995,25 @@
             showScrollingTitle();
             notifyState();
         });
-
-        audio.addEventListener('error', (e) => {
-            console.error('[音乐渲染器] 后端音频播放失败:', e);
-            postToParent({ type: 'error', message: '音频播放失败，将使用前端合成器' });
-            // 回退：如果有 ABC 乐谱数据，使用前端合成器
-            if (state.abcNotation) {
-                console.log('[音乐渲染器] 回退到前端合成器播放');
-                beginNewPlayback();
-            }
+        audio.addEventListener('error', () => {
+            console.error('[音乐渲染器] 后端音频播放失败');
+            postToParent({ type: 'error', message: '音频播放失败' });
+            if (state.abcNotation) beginFallback();
         });
-
-        audio.play().catch(err => {
-            console.warn('[音乐渲染器] 音频自动播放被阻止:', err);
-        });
+        audio.play().catch(err => console.warn('[音乐渲染器] 音频自动播放被阻止:', err));
     }
 
-    /**
-     * 检查当前是否正在播放后端渲染音频
-     */
-    function isPlayingRenderedAudio() {
-        return _renderedAudio !== null && !_renderedAudio.paused;
+    function beginFallback() {
+        stopPlayback();
+        startPlayback();
     }
 
     // ==== 进度动画 ====
     function startAnimation() {
         stopAnimation();
         function tick() {
-            if (!state.isPlaying) {
-                state.animationId = null;
-                return;
-            }
-            const realTime = Tone.Transport.seconds * (state._speed || 1);
+            if (!state.isPlaying) { state.animationId = null; return; }
+            const realTime = Engine.position();
             if (state.totalDuration > 0) {
                 const progress = Math.min(100, (realTime / state.totalDuration) * 100);
                 el.progressFill.style.width = progress + '%';
@@ -1848,10 +2056,8 @@
         const dpr = window.devicePixelRatio || 1;
         const w = canvas.width / dpr;
         const h = canvas.height / dpr;
-
         if (w <= 0 || h <= 0) return;
         ctx.clearRect(0, 0, w, h);
-
         if (state.notes.length === 0) return;
 
         ctx.strokeStyle = 'rgba(157, 107, 255, 0.08)';
@@ -1866,13 +2072,11 @@
         const windowStart = Math.max(0, currentTime - 2);
         const windowEnd = Math.min(state.totalDuration, currentTime + 2);
         const windowDuration = windowEnd - windowStart;
-
         if (windowDuration <= 0) return;
 
         const barWidth = Math.max(2, w / 80);
-        const timeSlots = new Map();
         const slotSize = windowDuration / 60;
-
+        const timeSlots = new Map();
         state.notes.forEach(note => {
             if (note.time + note.duration < windowStart || note.time > windowEnd) return;
             const slot = Math.floor((note.time - windowStart) / slotSize);
@@ -1882,17 +2086,14 @@
 
         timeSlots.forEach((notes, slot) => {
             const x = (slot / 60) * w;
-            const normalizedPitch = (noteToNumber(notes[0].note) - 48) / 36;
+            const normalizedPitch = (notes[0].midi - 48) / 36;
             const barHeight = h * 0.15 + normalizedPitch * h * 0.7;
-
             const distFromCenter = Math.abs((slot / 60) * windowDuration - (currentTime - windowStart));
             const alpha = Math.max(0.15, 1 - distFromCenter / (windowDuration / 2));
-
             const isNearCurrent = distFromCenter < 0.3;
             const hue = isNearCurrent ? 270 : 260;
             const saturation = isNearCurrent ? '80%' : '60%';
             const lightness = isNearCurrent ? '65%' : '50%';
-
             ctx.fillStyle = `hsla(${hue}, ${saturation}, ${lightness}, ${alpha})`;
             ctx.fillRect(x, h / 2 - barHeight / 2, barWidth, barHeight);
         });
@@ -1909,16 +2110,6 @@
         ctx.shadowBlur = 0;
     }
 
-    function noteToNumber(note) {
-        const notes = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-        const match = note.match(/^([A-Ga-g])([#b]?)(\d+)$/);
-        if (!match) return 60;
-        let base = notes[match[1].toUpperCase()] || 0;
-        if (match[2] === '#') base++;
-        if (match[2] === 'b') base--;
-        return base + (parseInt(match[3]) + 1) * 12;
-    }
-
     // ==== 滚动标题 ====
     function showScrollingTitle() {
         if (el.titleScroll) el.titleScroll.style.display = 'flex';
@@ -1927,50 +2118,130 @@
         if (el.titleScroll) el.titleScroll.style.display = 'none';
     }
 
-    // ==== 下载 ====
-    function downloadScore() {
-        const safeName = state.title.replace(/[\\/:*?"<>|]/g, '_');
-
-        // 优先下载后端渲染的 WAV 音频（fetch→blob 确保触发下载而非浏览器直接播放）
-        if (_renderedAudioUrl) {
-            fetch(_renderedAudioUrl)
-                .then(res => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return res.blob();
-                })
-                .then(blob => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = _renderedAudioName || `${safeName}.wav`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                })
-                .catch(err => {
-                    console.warn('[音乐渲染器] WAV 下载失败，回退到 ABC 文件:', err);
-                    downloadABCFile(safeName);
-                });
-            return;
+    // ==== 下载（WAV 离线渲染 + ABC 回退） ====
+    function encodeWAV(channels, sampleRate, bitDepth) {
+        const numCh = channels.length, frames = channels[0].length;
+        const bytesPerSample = bitDepth / 8, blockAlign = numCh * bytesPerSample;
+        const dataSize = frames * blockAlign;
+        const buf = new ArrayBuffer(44 + dataSize), view = new DataView(buf);
+        const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+        writeStr(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); writeStr(8, 'WAVE');
+        writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+        view.setUint16(22, numCh, true); view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * blockAlign, true); view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitDepth, true); writeStr(36, 'data'); view.setUint32(40, dataSize, true);
+        let off = 44;
+        for (let i = 0; i < frames; i++) {
+            for (let c = 0; c < numCh; c++) {
+                let s = clamp(channels[c][i], -1, 1);
+                s += (Math.random() * 2 - 1) / 65536;
+                s = clamp(s, -1, 1);
+                view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                off += bytesPerSample;
+            }
         }
-
-        // 回退：下载 ABC 乐谱文件
-        downloadABCFile(safeName);
+        return new Blob([buf], { type: 'audio/wav' });
     }
 
-    /** 下载 ABC 乐谱文件 */
+    async function exportWAV() {
+        if (!samplesReady) return null;
+        if (state.notes.length === 0) return null;
+        const sampleRate = 44100, bitDepth = 16;
+        const endBeat = state.totalDuration;
+        const beatDur = 60 / state.bpm;
+        const durSec = endBeat + 0.5;
+        const len = Math.ceil(durSec * sampleRate);
+        const ctx = new OfflineAudioContext(2, len, sampleRate);
+        const m = buildMixer(ctx, ctx.destination);
+        // 应用效果
+        m.filter.frequency.value = fxState.filter;
+        m.sat.curve = makeSaturationCurve(fxState.saturation / 100 * 8);
+        m.reverbIn.gain.value = fxState.reverb / 100 * 0.85;
+        m.delayIn.gain.value = fxState.delay / 100 * 0.7;
+        m.delay.delayTime.value = 60 / state.bpm * 0.75;
+        m.comp.threshold.value = -6 - (fxState.compression / 100) * 24;
+        m.comp.ratio.value = 1 + (fxState.compression / 100) * 9;
+        m.trem.gain.value = 1 - (fxState.tremolo / 100 * 0.5);
+        m.lfoGain.gain.value = fxState.tremolo / 100 * 0.5;
+        m.tape.gain.value = fxState.noise / 100 * 0.03;
+        m.master.gain.value = fxState.master;
+
+        const voiceNodes = {};
+        for (const vid in state.voices) {
+            const v = state.voices[vid];
+            const gain = ctx.createGain(); gain.gain.value = v.volume;
+            gain.connect(m.busDry); gain.connect(m.reverbIn); gain.connect(m.delayIn);
+            voiceNodes[vid] = { gain };
+        }
+
+        const speed = parseFloat(el.speedSelect.value) || 1;
+        const timeScale = 1 / speed;
+        const notes = ExpressionEngine.applyExpression(state.notes);
+        for (const n of notes) {
+            const vn = voiceNodes[n.voice] || Object.values(voiceNodes)[0];
+            if (!vn) continue;
+            const v = state.voices[n.voice] || Object.values(state.voices)[0];
+            const presetKey = v.presetKey;
+            let srcBuf, rate;
+            if (presetKey === 'drums') {
+                const dn = DRUM_MAP[n.midi] || 'kick';
+                srcBuf = drumBufs[dn]; rate = 1;
+            } else {
+                const spec = INSTRUMENTS[presetKey] || INSTRUMENTS.piano;
+                const bases = spec.base; let b = bases[0];
+                for (const x of bases) { if (n.midi >= x) b = x; else break; }
+                b = Math.min(b, bases[bases.length - 1]);
+                srcBuf = samples[presetKey] ? samples[presetKey][b] : null;
+                rate = Math.pow(2, (n.midi - b) / 12);
+            }
+            if (!srcBuf) continue;
+            const when = n.time * timeScale;
+            const src = ctx.createBufferSource(); src.buffer = srcBuf; src.playbackRate.value = rate;
+            const spec = INSTRUMENTS[presetKey] || INSTRUMENTS.piano;
+            if (spec.loop) { src.loop = true; src.loopStart = spec.loop[0]; src.loopEnd = spec.loop[1]; }
+            const g = ctx.createGain();
+            const level = Math.pow(n.velocity != null ? n.velocity : 0.75, 1.3) * 0.95;
+            const durN = spec.type === 'drums' ? Math.max(n.duration * timeScale * 2, 0.15) : n.duration * timeScale;
+            g.gain.setValueAtTime(0.0001, when); g.gain.linearRampToValueAtTime(level, when + 0.006);
+            g.gain.setValueAtTime(level, Math.max(when + 0.008, when + durN - 0.05));
+            g.gain.linearRampToValueAtTime(0.0001, when + durN + 0.05);
+            src.connect(g); g.connect(vn.gain);
+            src.start(when); src.stop(when + durN + 0.08);
+        }
+
+        const rendered = await ctx.startRendering();
+        const channels = [rendered.getChannelData(0), rendered.getChannelData(1)];
+        return encodeWAV(channels, sampleRate, bitDepth);
+    }
+
+    function downloadAudio() {
+        const safeName = state.title.replace(/[\\/:*?"<>|]/g, '_');
+        if (_renderedAudioUrl) {
+            fetch(_renderedAudioUrl)
+                .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
+                .then(blob => downloadBlob(blob, _renderedAudioName || `${safeName}.wav`))
+                .catch(err => { console.warn('[音乐渲染器] WAV 下载失败，回退到 ABC:', err); downloadABCFile(safeName); });
+            return;
+        }
+        const btn = el.btnDownload;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        exportWAV().then(blob => {
+            if (blob) downloadBlob(blob, `${safeName}.wav`);
+            else downloadABCFile(safeName);
+        }).catch(err => {
+            console.warn('[音乐渲染器] WAV 离线渲染失败，回退到 ABC:', err);
+            downloadABCFile(safeName);
+        }).finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-download"></i>';
+        });
+    }
+
     function downloadABCFile(safeName) {
         if (!state.abcNotation) return;
         const blob = new Blob([state.abcNotation], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}.abc`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadBlob(blob, `${safeName}.abc`);
     }
 
     // ==== 播放按钮 ====
@@ -2019,14 +2290,12 @@
             el.historyList.innerHTML = '<div class="music-history-empty">暂无创作历史</div>';
             return;
         }
-
         el.historyList.innerHTML = state.history.map((item, index) => `
             <div class="music-history-item" data-index="${index}">
                 <span class="music-history-title">${escapeHtmlSafe(item.title)}</span>
                 <span class="music-history-time">${item.time}</span>
             </div>
         `).join('');
-
         el.historyList.querySelectorAll('.music-history-item').forEach(item => {
             item.addEventListener('click', () => {
                 const index = parseInt(item.dataset.index);
@@ -2055,6 +2324,9 @@
 
     // ==== 启动 ====
     init();
+    buildSampleLibrary().then(() => {
+        console.log('[音乐渲染器] 采样音色库就绪');
+    });
     </script>
 </body>
 </html>

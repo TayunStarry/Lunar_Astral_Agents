@@ -1,4 +1,4 @@
-import { GlobalConfig, PostMessage, SCHEDULE_TRIGGER_PREFIX, RandomFloor } from '../../index';
+import { GlobalConfig, PostMessage, RandomFloor } from '../../index';
 
 /** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
 const STICKER_COLLECTION = 'stickers';
@@ -56,37 +56,4 @@ function initMemory(): void {
 export function ensureMemoryReady(): boolean {
     if (!GlobalConfig.memoryReady) initMemory();
     return GlobalConfig.memoryReady;
-}
-
-/** 记忆未读消息到记忆库 */
-export function memorizeUnreadRecords(): void {
-    // 缓冲池为空时跳过
-    if (GlobalConfig.unreadRecords.length === 0) return;
-    // 记忆库未就绪时保留缓冲消息，等待下次触发
-    if (!ensureMemoryReady()) {
-        console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
-        return;
-    }
-    /** 成功写入的消息数量 */
-    let written = 0;
-    // 遍历未读消息缓冲池
-    for (const message of GlobalConfig.unreadRecords) {
-        // 过滤掉工具调用消息
-        if (message.role === 'tool') continue;
-        /** 提取文本内容并过滤空字符串 */
-        const content = extractTextFromMessage(message).trim();
-        // 过滤掉空字符串、长度小于等于5的消息
-        if (!content || content.length <= 5) continue;
-        // 过滤掉计划表触发的自动消息（统一前缀），避免写入长期记忆
-        if (content.includes(SCHEDULE_TRIGGER_PREFIX)) continue;
-        /** 写入记忆库 */
-        const [, error] = memoryAdd('lunar_messages', message.role, content);
-        // 记录写入失败的错误信息
-        if (error) console.error('[记忆] 写入记忆库失败:', error);
-        // 记录成功写入的消息数量
-        else written++;
-    }
-    console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
-    // 清空消息缓冲池
-    GlobalConfig.unreadRecords = [];
 }

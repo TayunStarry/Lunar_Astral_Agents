@@ -96,7 +96,7 @@ function initMusicRenderer() {
     if (document.getElementById('music-renderer-frame')) return;
     musicIframe = document.createElement('iframe');
     musicIframe.id = 'music-renderer-frame';
-    musicIframe.src = '/file/read/package/music_libs/music_renderer.html';
+    musicIframe.src = '/file/read/package/music_libs/music_renderer.html?v=2';
     musicIframe.allow = 'autoplay';
     musicIframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:1000;pointer-events:none;background:transparent;display:none;';
     document.body.appendChild(musicIframe);

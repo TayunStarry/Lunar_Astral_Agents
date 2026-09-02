@@ -78,25 +78,82 @@ function buildAttachmentBlock(att) {
     return null;
 }
 
+/** 从 ABC 乐谱头部解析卡片展示信息（标题/乐器/速度/调式/拍号） */
+function parseMusicCardInfo(abcNotation) {
+    const info = { title: '', instruments: [], tempo: 0, key: '', meter: '' };
+    if (!abcNotation) return info;
+    const titleMatch = abcNotation.match(/^T:\s*(.+)/m);
+    info.title = titleMatch ? titleMatch[1].trim() : '未命名作品';
+    const voiceRegex = /^%%voice\s+(\d+)\s+(.+)$/gm;
+    let m;
+    while ((m = voiceRegex.exec(abcNotation)) !== null) {
+        const inst = (m[2] || '').trim();
+        if (inst) info.instruments.push(inst);
+    }
+    if (info.instruments.length === 0) {
+        const instMatch = abcNotation.match(/^%%instrument\s+(.+)$/m);
+        if (instMatch) info.instruments = instMatch[1].split(/[,，]/).map(s => s.trim()).filter(Boolean);
+    }
+    if (info.instruments.length === 0) info.instruments = ['钢琴'];
+    const tempoMatch = abcNotation.match(/^Q:\s*[^=]*=\s*(\d+)/m);
+    info.tempo = tempoMatch ? parseInt(tempoMatch[1]) : 0;
+    const keyMatch = abcNotation.match(/^K:\s*(.+)/m);
+    info.key = keyMatch ? keyMatch[1].trim() : '';
+    const meterMatch = abcNotation.match(/^M:\s*(.+)/m);
+    info.meter = meterMatch ? meterMatch[1].trim() : '';
+    return info;
+}
+
+function makeMusicChip(icon, text) {
+    const chip = document.createElement('span');
+    chip.className = 'music-card-chip';
+    chip.innerHTML = `<i class="fas ${icon}"></i>${escapeHtml(text)}`;
+    return chip;
+}
+
 function buildMusicCard(msg) {
     const card = document.createElement('div');
     card.className = 'music-card';
+    const info = parseMusicCardInfo(msg.abcNotation);
+
     const header = document.createElement('div');
     header.className = 'music-card-header';
     const title = document.createElement('div');
     title.className = 'music-card-title';
-    title.innerHTML = '<i class="fas fa-music"></i> 乐谱';
+    title.innerHTML = '<i class="fas fa-music"></i> ' + escapeHtml(info.title);
     const playBtn = document.createElement('button');
     playBtn.className = 'music-play-btn';
     playBtn.innerHTML = '<i class="fas fa-play"></i> 播放';
     playBtn.addEventListener('click', () => renderMusicScore(msg.abcNotation));
     header.appendChild(title);
     header.appendChild(playBtn);
+    card.appendChild(header);
+
+    // 元信息：乐器 / 速度 / 调式 / 拍号
+    const meta = document.createElement('div');
+    meta.className = 'music-card-meta';
+    info.instruments.forEach(inst => meta.appendChild(makeMusicChip('fa-saxophone', inst)));
+    if (info.tempo > 0) meta.appendChild(makeMusicChip('fa-tachometer-alt', `${info.tempo} BPM`));
+    if (info.key) meta.appendChild(makeMusicChip('fa-music', info.key + (info.key === info.key.toLowerCase() ? '小调' : '大调')));
+    if (info.meter) meta.appendChild(makeMusicChip('fa-clock', info.meter));
+    card.appendChild(meta);
+
+    // 乐谱预览（默认折叠，点击展开）
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'music-abc-wrap';
     const preview = document.createElement('div');
     preview.className = 'music-abc-preview';
     preview.textContent = msg.abcNotation || '';
-    card.appendChild(header);
-    card.appendChild(preview);
+    const toggle = document.createElement('button');
+    toggle.className = 'music-abc-toggle';
+    toggle.innerHTML = '<i class="fas fa-chevron-down"></i> 展开乐谱';
+    toggle.addEventListener('click', () => {
+        const expanded = preview.classList.toggle('expanded');
+        toggle.innerHTML = expanded ? '<i class="fas fa-chevron-up"></i> 收起乐谱' : '<i class="fas fa-chevron-down"></i> 展开乐谱';
+    });
+    previewWrap.appendChild(preview);
+    previewWrap.appendChild(toggle);
+    card.appendChild(previewWrap);
     return card;
 }
 

@@ -178,7 +178,7 @@ async function loadConfig() {
 
 async function loadSystemPrompt() {
     try {
-        const response = await fetch('/liuli_system_prompt.md');
+        const response = await fetch('/system_prompt.md');
         if (!response.ok) throw new Error('加载系统提示词失败');
         const raw = await response.text();
         SYSTEM_PROMPT = processSystemPrompt(raw);
@@ -202,129 +202,379 @@ async function loadPages() {
     try {
         const response = await fetch('/api/packages');
         pages = await response.json();
+        await loadLayout();
+        const changed = buildLayout();
         renderPageGrid();
-        initTools();
+        if (changed) await persistLayout();
     } catch (error) { console.error('Failed to load pages:', error); }
 }
 
-// ===== 网格渲染 =====
+// ===== 网格渲染：预设网格布局页（应用图标分配到空格位置，可拖动摆放，位置 JSON 持久化） =====
 const DEFAULT_ICON_COUNT = 8;
 
 function getRandomDefaultIcon() {
     return `/default/icon (${Math.floor(Math.random() * DEFAULT_ICON_COUNT) + 1}).webp`;
 }
 
-// 标签 → 卡片角标修饰类（无对应样式的标签回退默认紫色）
+// 标签 → 卡片角标色彩修饰类（不同标签不同配色，无对应样式的标签回退默认紫色）
 function getTagModifierClass(tag) {
     switch (tag) {
-        case 'LTPX': return 'card-tag-ltp';
-        case 'mini-LTP': return 'card-tag-mini-ltp';
+        case 'Zero-LTP': return 'card-tag-zero-ltp';
+        case 'Node-LTP': return 'card-tag-node-ltp';
+        case 'Mini-LTP': return 'card-tag-mini-ltp';
+        case 'Self-LTP': return 'card-tag-self-ltp';
         case 'Git': return 'card-tag-git';
         case 'DeepSeek': return 'card-tag-deepseek';
-        case 'DeepSeek-Demo': return 'card-tag-deepseek-demo';
+        case 'DS-Demo': return 'card-tag-deepseek-demo';
         default: return '';
     }
 }
 
+/* 布局持久化：扁平数组 layout，数组下标即网格槽位，元素为页面 id 或 null（null 表示空格）。
+   通过 /file/read + /file/write 读写到本地 JSON（desktop_layout.json）。 */
+const GRID_LAYOUT_FILE = 'desktop_layout.json';
+let layout = [];
+
+// 读取 CSS 定义的响应式列数（--grid-cols）
+function getGridCols() {
+    const v = parseInt(getComputedStyle(pageGrid).getPropertyValue('--grid-cols'), 10);
+    return Number.isFinite(v) && v > 0 ? v : 6;
+}
+
+async function loadLayout() {
+    try {
+        const resp = await fetch('/file/read/' + encodeURIComponent(GRID_LAYOUT_FILE));
+        if (resp.ok) {
+            const data = await resp.json();
+            if (Array.isArray(data)) layout = data;
+        }
+    } catch (e) { console.warn('读取桌面布局失败，使用默认排布:', e); }
+    if (!Array.isArray(layout)) layout = [];
+}
+
+async function persistLayout() {
+    try {
+        const blob = new Blob([JSON.stringify(layout)], { type: 'application/json' });
+        await fetch('/file/write', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-File-Name': encodeFileName(GRID_LAYOUT_FILE),
+                'X-Overwrite': 'true'
+            },
+            body: blob
+        });
+    } catch (e) { console.error('保存桌面布局失败:', e); }
+}
+
+/* 系统加载或新增应用时，图标从前到后填充到空位；已删除应用对应的槽位置为空格。
+   返回布局是否发生变化（供调用方决定是否持久化）。 */
+function buildLayout() {
+    const validIds = new Set(pages.map(p => p.id));
+    // 保留下仍然存在的 id 与空格，删除已不存在的 id
+    const next = layout.map(id => (id && validIds.has(id)) ? id : null);
+    const placed = new Set(next.filter(Boolean));
+    const newIds = pages.map(p => p.id).filter(id => !placed.has(id));
+    // 新应用从前到后填充第一个空位，无空位则追加到末尾
+    for (const id of newIds) {
+        const nullIdx = next.indexOf(null);
+        if (nullIdx === -1) next.push(id);
+        else next[nullIdx] = id;
+    }
+    let changed = next.length !== layout.length;
+    if (!changed) {
+        for (let i = 0; i < next.length; i++) {
+            if ((next[i] ?? null) !== (layout[i] ?? null)) { changed = true; break; }
+        }
+    }
+    layout = next;
+    return changed;
+}
+
 function renderPageGrid() {
+    const pageById = new Map(pages.map(p => [p.id, p]));
+    const cols = getGridCols();
+    // 补齐最后一行的空格，保持预设网格满格可放置
+    const rem = layout.length % cols;
+    if (rem !== 0) for (let i = 0; i < cols - rem; i++) layout.push(null);
+
     pageGrid.innerHTML = '';
-    pages.forEach(page => {
-        const card = document.createElement('div');
-        card.className = 'page-card';
-        card.dataset.pageId = page.id;
-
-        // 标签：有多个时随机显示一个；修饰类由 switch 映射
-        const displayTag = (page.tags && page.tags.length > 0)
-            ? page.tags[Math.floor(Math.random() * page.tags.length)]
-            : null;
-        const tagModifier = displayTag ? getTagModifierClass(displayTag) : '';
-
-        card.innerHTML = `
-            ${displayTag ? `<span class="card-tag${tagModifier ? ' ' + tagModifier : ''}">${displayTag}</span>` : ''}
-            <div class="icon">
-                <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
-            </div>
-            <h3>${page.title}</h3>
-            <p>${page.description}</p>
-            <div class="card-actions">
-                <button class="card-btn card-btn-export" title="导出包" data-action="export" data-package="${page.package_name || ''}">
-                    <i class="fas fa-box"></i> 导出
-                </button>
-                <button class="card-btn card-btn-delete" title="删除包" data-action="delete" data-package="${page.package_name || ''}">
-                    <i class="fas fa-trash-alt"></i> 删除
-                </button>
-            </div>
-        `;
-        card.addEventListener('click', (e) => {
-            if (e.target.closest('.card-btn')) return;
-            openPage(page);
-        });
-
-        pageGrid.appendChild(card);
-    });
-
-    document.querySelectorAll('.card-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const action = btn.dataset.action;
-            const pkgName = btn.dataset.package;
-            if (action === 'delete') openDeleteModal(pkgName);
-            else if (action === 'export') openExportModal(pkgName);
-        });
+    layout.forEach((id, index) => {
+        const slot = document.createElement('div');
+        slot.className = 'grid-slot';
+        slot.dataset.index = index;
+        if (id) {
+            const page = pageById.get(id);
+            if (page) {
+                slot.classList.add('grid-slot-filled');
+                slot.appendChild(buildPageCard(page));
+            } else {
+                slot.classList.add('grid-slot-empty');
+            }
+        } else {
+            slot.classList.add('grid-slot-empty');
+        }
+        pageGrid.appendChild(slot);
     });
 }
 
-function initTools() {
-    window.tools = [
-        {
-            type: 'function',
-            function: {
-                name: 'open_page',
-                description: '根据用户要求或自己的判断，定位到对应的功能页面',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        page_id: { type: 'string', description: '要定位的页面 ID，需从现有页面列表中选择', enum: pages.map(p => p.id) }
-                    },
-                    required: ['page_id']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'get_config',
-                description: '获取当前系统配置的全部或指定部分内容',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        section: { type: 'string', description: '要获取的配置节名称，如 models、server、agent 等。不传则返回全部', enum: getTopLevelKeys() }
-                    },
-                    required: []
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'modify_config',
-                description: '修改系统配置项，会自动弹出确认对话框让用户确认变更',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        changes: { type: 'object', description: '要修改的配置变更对象，键为配置路径，值为新值。支持嵌套对象' }
-                    },
-                    required: ['changes']
-                }
-            }
+const SELF_LTP_TAG = 'Self-LTP';
+
+function buildPageCard(page) {
+    const card = document.createElement('div');
+    card.className = 'page-card';
+    card.dataset.pageId = page.id;
+    card.draggable = true;
+
+    const isSelfLTP = !!(page.tags && page.tags.includes(SELF_LTP_TAG));
+    // 未选中时，右上角显示一个随机标签（按标签类型着色）
+    const displayTag = (page.tags && page.tags.length > 0)
+        ? page.tags[Math.floor(Math.random() * page.tags.length)]
+        : null;
+    const tagModifier = displayTag ? getTagModifierClass(displayTag) : '';
+
+    // 只显示应用图标与应用名称（description 不展示在前端，仅供 AI 理解项目）
+    card.innerHTML = `
+        ${displayTag ? `<span class="card-tag${tagModifier ? ' ' + tagModifier : ''}">${displayTag}</span>` : ''}
+        <div class="icon">
+            <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
+        </div>
+        <h3>${page.title}</h3>
+        <button class="card-gear" title="设置"><i class="fas fa-cog"></i></button>
+        <div class="card-menu">
+            <button class="card-menu-item" data-action="export"><i class="fas fa-box"></i> 导出</button>
+            <button class="card-menu-item" data-action="delete"><i class="fas fa-trash-alt"></i> 删除</button>
+            <button class="card-menu-item" data-action="archive"><i class="fas fa-archive"></i> 归档</button>
+            <button class="card-menu-item card-menu-assistant" data-action="assistant">
+                <i class="fas fa-robot"></i> ${isSelfLTP ? '手动' : '助理'}
+            </button>
+        </div>
+    `;
+
+    // 单击 = 选中（持续闪烁）；已选中状态下再次单击 = 进入页面
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.card-gear') || e.target.closest('.card-menu')) return;
+        if (card.classList.contains('selected')) {
+            openPage(page);
+        } else {
+            selectCard(card);
         }
-    ];
+    });
+    // 齿轮：切换管理菜单
+    card.querySelector('.card-gear').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const menu = card.querySelector('.card-menu');
+        const willOpen = !menu.classList.contains('active');
+        closeAllCardMenus();
+        if (willOpen) menu.classList.add('active');
+    });
+    // 菜单项处理
+    card.querySelectorAll('.card-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleCardMenuAction(item.dataset.action, page, card);
+        });
+    });
+    return card;
+}
+
+// 当前选中的卡片（单实例，点击选中后显示齿轮）
+let selectedCard = null;
+
+function selectCard(card) {
+    if (selectedCard && selectedCard !== card) {
+        selectedCard.classList.remove('selected');
+        selectedCard.querySelector('.card-menu')?.classList.remove('active');
+    }
+    selectedCard = card;
+    // 通过 .selected 触发持续的慢速高亮闪烁（隐藏标签、显示设置按钮）
+    card.classList.remove('selected');
+    void card.offsetWidth;
+    card.classList.add('selected');
+}
+
+function closeAllCardMenus() {
+    pageGrid.querySelectorAll('.page-card.selected').forEach(c => {
+        c.querySelector('.card-menu')?.classList.remove('active');
+    });
+}
+
+async function handleCardMenuAction(action, page, card) {
+    const pkgName = page.package_name;
+    switch (action) {
+        case 'export':
+            openExportModal(pkgName);
+            break;
+        case 'delete':
+            openDeleteModal(pkgName);
+            break;
+        case 'archive':
+            await archivePackage(pkgName);
+            break;
+        case 'assistant':
+            await toggleSelfLTP(page, card);
+            break;
+    }
+}
+
+// 归档：先执行一次导出备份，导出成功后再删除当前包
+async function archivePackage(pkgName) {
+    if (!pkgName) { addMessage('system', '无法获取包名信息'); return; }
+    addMessage('system', `正在归档【${pkgName}】：先导出备份，再删除原包...`);
+    try {
+        const resp = await fetch('/file/package/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ package_name: pkgName, action: 'save' })
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            addMessage('system', `归档导出失败: ${data.message || ''}`);
+            return;
+        }
+        const delResp = await fetch('/file/package/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ package_name: pkgName })
+        });
+        const delData = await delResp.json();
+        if (delData.success) {
+            addMessage('system', '归档完成：已备份到 ' + (data.save_path || pkgName + '.ltpx') + ' 并删除原包');
+        } else {
+            addMessage('system', `备份成功但删除失败: ${delData.message || ''}`);
+        }
+        setTimeout(() => loadPages(), 400);
+    } catch (e) {
+        console.error('归档失败:', e);
+        addMessage('system', '归档时发生网络错误');
+    }
+}
+
+// 助理/手动：切换包的 Self-LTP 标签，以启用/停用界面自动操作助理
+async function toggleSelfLTP(page, card) {
+    const pkgName = page.package_name;
+    if (!pkgName) { addMessage('system', '无法获取包名信息'); return; }
+    try {
+        const readResp = await fetch('/file/read/package/' + encodeURIComponent(pkgName) + '/metadata.json');
+        if (!readResp.ok) throw new Error('读取包元信息失败');
+        const meta = await readResp.json();
+        const tags = Array.isArray(meta.tags) ? meta.tags.slice() : [];
+        const has = tags.includes(SELF_LTP_TAG);
+        if (has) {
+            meta.tags = tags.filter(t => t !== SELF_LTP_TAG);
+        } else {
+            meta.tags = tags.concat(SELF_LTP_TAG);
+        }
+        const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
+        const writeResp = await fetch('/file/write', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-File-Name': encodeFileName('package/' + pkgName + '/metadata.json'),
+                'X-Overwrite': 'true'
+            },
+            body: blob
+        });
+        if (!writeResp.ok) throw new Error('写入包元信息失败');
+        addMessage('system', has
+            ? `已取消【${page.title}】的 Self-LTP 界面自动操作助理`
+            : `已为【${page.title}】启用 Self-LTP 界面自动操作助理`);
+        setTimeout(() => loadPages(), 300);
+    } catch (e) {
+        console.error('切换 Self-LTP 标签失败:', e);
+        addMessage('system', '切换 Self-LTP 标签失败: ' + (e.message || ''));
+    }
+}
+
+// ===== 网格拖动摆放 =====
+let gridDragSrc = null;   // 拖动中的源槽位下标
+
+function setupGridDrag() {
+    pageGrid.addEventListener('dragstart', (e) => {
+        const slot = e.target.closest('.grid-slot');
+        const card = e.target.closest('.page-card');
+        if (!slot || !card) return;
+        gridDragSrc = parseInt(slot.dataset.index, 10);
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('application/x-liuli-grid', String(gridDragSrc)); } catch (err) { }
+        e.dataTransfer.setData('text/plain', String(gridDragSrc));
+        requestAnimationFrame(() => card.classList.add('dragging'));
+    });
+
+    pageGrid.addEventListener('dragover', (e) => {
+        const types = e.dataTransfer ? e.dataTransfer.types : [];
+        const isGridDrag = Array.prototype.indexOf.call(types, 'application/x-liuli-grid') !== -1
+            || typeof gridDragSrc === 'number';
+        if (!isGridDrag) { e.preventDefault(); return; }
+        const slot = e.target.closest('.grid-slot');
+        if (!slot) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        clearDragState();
+        slot.classList.add('drag-over');
+    });
+
+    pageGrid.addEventListener('drop', (e) => {
+        const slot = e.target.closest('.grid-slot');
+        if (typeof gridDragSrc !== 'number' || !slot) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const dstIdx = parseInt(slot.dataset.index, 10);
+        if (gridDragSrc === dstIdx) { gridDragSrc = null; clearDragState(); return; }
+        // 拖到空格 → 图标移动到空位；拖到另一应用图标 → 两图标互换位置
+        const srcId = layout[gridDragSrc] ?? null;
+        const dstId = layout[dstIdx] ?? null;
+        layout[gridDragSrc] = dstId;
+        layout[dstIdx] = srcId;
+        gridDragSrc = null;
+        clearDragState();
+        persistLayout().then(() => renderPageGrid());
+    });
+
+    pageGrid.addEventListener('dragend', () => {
+        gridDragSrc = null;
+        clearDragState();
+    });
+}
+
+function clearDragState() {
+    pageGrid.querySelectorAll('.page-card.dragging, .grid-slot.drag-over')
+        .forEach(el => el.classList.remove('dragging', 'drag-over'));
+}
+
+// 构建结构化操作指令（附加到系统提示词）：不再依赖范式函数调用（避免多模态模型后端卡死），
+// 改由琉璃在需要执行操作时输出一个 JSON 动作对象，前端解析后执行。
+function buildActionInstruction() {
+    const pageList = pages
+        .map(p => ({ id: p.id, title: p.title }))
+        .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    return `【可打开的应用列表】
+当用户想打开某个应用/功能页面时，从以下列表中选择最匹配的 id。
+${JSON.stringify(pageList, null, 2)}
+
+【结构化操作输出规则】
+你需要用一个 JSON 对象来表达"要执行的操作"，并且只把 JSON 放在单独的代码块中(\`\`\`json ... \`\`\`)，不要夹杂其它文字。支持的动作：
+1. 打开应用：
+\`\`\`json
+{"action": "open_page", "page_id": "上面列表中的某个 id"}
+\`\`\`
+2. 查看配置（不传 section 则查看全部）：
+\`\`\`json
+{"action": "get_config", "section": "server"}
+\`\`\`
+3. 修改配置（系统会弹出确认框）：
+\`\`\`json
+{"action": "modify_config", "changes": {"server": {"port": 8080}}}
+\`\`\`
+4. 不需要执行任何操作、只是普通聊天回答时，直接正常回复文字即可，不要输出 JSON。
+
+请注意：如果用户只是闲聊或询问，请正常用文字回复；只有当用户明确要求打开应用、查看或修改配置时才输出对应的 JSON 动作。`;
 }
 
 // ===== 页面打开 =====
 // 打开统一走覆盖层 iframe（与月华调用共用同一 iframe），不再整页跳转
 function openPage(page) {
-    if (page.tags && page.tags.includes('LTPX') && page.url && page.url.endsWith('.md')) {
+    if (page.tags && page.url && page.url.endsWith('.md')) {
         addMessage('system', `已为您打开工具文档【${page.title}】`);
         const viewerUrl = '/file/read/package/tool_viewer/index.html?url='
             + encodeURIComponent(page.url)
@@ -367,7 +617,9 @@ async function loadApplication(path) {
 }
 
 // ===== 搜索定位 =====
-function locateAndHighlightCard(pageId, onHighlightEnd) {
+// 琉璃选中的卡片与用户点击选中一致：滚动到卡片并进入持续高亮闪烁的选中态。
+// 用户在高亮闪烁状态下再次点击卡片即进入页面。
+function locateAndHighlightCard(pageId) {
     const card = document.querySelector(`.page-card[data-page-id="${pageId}"]`);
     if (!card) return;
 
@@ -376,17 +628,7 @@ function locateAndHighlightCard(pageId, onHighlightEnd) {
     }
 
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    card.classList.remove('highlight');
-    void card.offsetWidth;
-    card.classList.add('highlight');
-
-    // 监听高亮动画结束后执行回调（如打开页面）
-    const onAnimEnd = () => {
-        card.removeEventListener('animationend', onAnimEnd);
-        card.classList.remove('highlight');
-        if (onHighlightEnd) onHighlightEnd();
-    };
-    card.addEventListener('animationend', onAnimEnd);
+    selectCard(card);
 }
 
 function fadeOutChatModal() {
@@ -540,34 +782,31 @@ async function handleSend() {
     sendBtn.classList.add('loading');
     sendBtn.innerHTML = '';
 
-    // 构建增强版系统提示词，附加当前配置信息
-    const enhancedSystemPrompt = SYSTEM_PROMPT + '\n\n' + buildConfigContext();
+    // 构建增强版系统提示词，附加当前配置信息与结构化操作指令
+    const enhancedSystemPrompt = SYSTEM_PROMPT + '\n\n' + buildConfigContext() + '\n\n' + buildActionInstruction();
     const allMessages = [{ role: 'system', content: enhancedSystemPrompt }, ...messages];
 
     try {
-        const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
+        const modelName = configData?.agent?.multimodal_model || 'system-multimodal';
         const response = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: modelName, messages: allMessages, tools: window.tools })
+            body: JSON.stringify({ model: modelName, messages: allMessages })
         });
 
         if (!response.ok) throw new Error('Network response was not ok');
 
         const data = await response.json();
         const assistantMessage = data.choices[0].message;
+        const replyContent = assistantMessage.content || '';
 
-        if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-            for (const toolCall of assistantMessage.tool_calls) {
-                await handleToolCall(toolCall);
-            }
-            if (assistantMessage.content) {
-                addMessage('assistant', assistantMessage.content);
-            }
+        // 解析结构化操作对象；若命中则执行动作（不把 JSON 原样展示给用户），否则当作普通回复
+        const action = parseStructuredAction(replyContent);
+        if (action) {
+            await executeStructuredAction(action);
         } else {
-            const replyContent = assistantMessage.content || '';
             addMessage('assistant', replyContent);
-            // 解析回复中的 JSON 配置变更
+            // 兼容旧格式：解析回复中的 JSON 代码块配置变更
             parseConfigChangeFromReply(replyContent);
         }
     } catch (error) {
@@ -589,9 +828,11 @@ function buildConfigContext() {
 ${JSON.stringify(configData, null, 2)}
 
 【配置修改指南】
-如果用户要求修改配置，你可以：
-1. 使用 modify_config 工具直接提交配置变更
-2. 或在回复中使用 \`\`\`json 代码块包含配置变更对象，系统会自动弹出确认对话框
+如果用户要求修改配置，你可以输出结构化动作：
+\`\`\`json
+{"action": "modify_config", "changes": {"server": {"port": 8080}}}
+\`\`\`
+系统会自动弹出确认对话框；也可以在普通回复中用 \`\`\`json 代码块包含配置变更对象，系统同样会弹出确认框。
 
 配置变更 JSON 示例：
 \`\`\`json
@@ -605,38 +846,56 @@ ${JSON.stringify(configData, null, 2)}
 当前可编辑的顶级配置节：${getTopLevelKeys().join('、')}`;
 }
 
-// ===== AI 工具调用处理 =====
-async function handleToolCall(toolCall) {
-    const fnName = toolCall.function.name;
-    const args = JSON.parse(toolCall.function.arguments);
+// ===== 结构化操作：解析与执行（替代范式函数调用，规避多模态模型后端卡死） =====
+function parseStructuredAction(content) {
+    if (!content || typeof content !== 'string') return null;
+    let text = content;
+    const fence = text.match(/```json\s*([\s\S]*?)```/);
+    if (fence) text = fence[1].trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+        const obj = JSON.parse(m[0]);
+        if (obj && typeof obj.action === 'string') return obj;
+    } catch (e) { /* 不是合法 JSON 动作，按普通回复处理 */ }
+    return null;
+}
 
-    switch (fnName) {
+async function executeStructuredAction(action) {
+    switch (action.action) {
         case 'open_page': {
-            const page = pages.find(p => p.id === args.page_id);
+            const page = pages.find(p => p.id === action.page_id);
             if (page) {
-                locateAndHighlightCard(args.page_id, () => openPage(page));
+                // 选中该应用（持续闪烁），由用户在高亮状态下再次点击进入页面
+                locateAndHighlightCard(action.page_id);
+            } else {
+                addMessage('system', '抱歉，没有找到对应的应用页面');
             }
             break;
         }
         case 'get_config': {
-            if (args.section) {
-                const sectionData = configData[args.section];
-                addMessage('system', `【${getLabel(args.section)}】配置已获取`);
-                addMessage('assistant', `当前${getLabel(args.section)}配置如下：\n\`\`\`json\n${JSON.stringify(sectionData, null, 2)}\n\`\`\``);
+            if (action.section) {
+                const sectionData = configData ? configData[action.section] : undefined;
+                addMessage('system', `【${getLabel(action.section)}】配置已获取`);
+                addMessage('assistant', `当前${getLabel(action.section)}配置如下：\n\`\`\`json\n${JSON.stringify(sectionData ?? null, null, 2)}\n\`\`\``);
             } else {
-                addMessage('assistant', `当前全部配置如下：\n\`\`\`json\n${JSON.stringify(configData, null, 2)}\n\`\`\``);
+                addMessage('assistant', `当前全部配置如下：\n\`\`\`json\n${JSON.stringify(configData ?? {}, null, 2)}\n\`\`\``);
             }
             break;
         }
         case 'modify_config': {
-            if (args.changes) {
+            if (action.changes) {
                 const originalSnapshot = JSON.parse(JSON.stringify(configData));
-                const mergedConfig = deepMerge(originalSnapshot, args.changes);
-                showPreviewModal(originalSnapshot, args.changes, mergedConfig);
+                const mergedConfig = deepMerge(originalSnapshot, action.changes);
+                showPreviewModal(originalSnapshot, action.changes, mergedConfig);
                 addMessage('system', '已生成配置变更预览，请在弹窗中确认');
             }
             break;
         }
+        default:
+            // 未知动作：当作普通文字展示
+            addMessage('assistant', JSON.stringify(action));
+            break;
     }
 }
 
@@ -973,8 +1232,11 @@ configSaveBtn.addEventListener('click', async () => {
     closeConfigModal();
 });
 
-// 全局拖拽上传
+// 全局拖拽上传（仅文件拖入时显示覆盖层；应用图标内部的拖动摆放不触发）
 document.addEventListener('dragover', (e) => {
+    const types = e.dataTransfer ? e.dataTransfer.types : [];
+    const isFiles = Array.prototype.indexOf.call(types, 'Files') !== -1;
+    if (!isFiles) return;
     e.preventDefault();
     dropOverlay.classList.add('active');
 });
@@ -1171,10 +1433,16 @@ function resolvePackageDir(appId) {
     return (p && p.package_name) || appId;
 }
 
-// 判断包是否为 mini-LTP（带 mini-LTP 标签）
+// 判断包是否为 Mini-LTP（带 Mini-LTP 标签）
 function isMiniLTPPage(appId) {
     const p = pages.find(x => x.id === appId);
-    return !!(p && p.tags && p.tags.includes('mini-LTP'));
+    return !!(p && p.tags && p.tags.includes('Mini-LTP'));
+}
+
+// 判断包是否为 Self-LTP（带 Self-LTP 标签，自主驾驶，不接入 AtoA）
+function isSelfLTPPage(appId) {
+    const p = pages.find(x => x.id === appId);
+    return !!(p && p.tags && p.tags.includes('Self-LTP'));
 }
 
 // 收到月华的 ltpx_call：打开对应包页面并投递执行指令
@@ -1182,7 +1450,7 @@ function openLTPXPackage(msg) {
     activeLTPXCall = msg;
     ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (msg.app_id || '包') + ' 执行中...';
     // 同一包页面已就绪（已加载 + agent 已注入）时直接投递，不重新加载，保持页面状态
-    // （mini-LTP 与普通包一致；仅首次或换包时才加载/注入）
+    // （Mini-LTP 与普通包一致；仅首次或换包时才加载/注入）
     if (ltpxFrameApp === msg.app_id && ltpxFrameReady) {
         deliverLTPXRun();
         ltpxOverlay.classList.add('active');
@@ -1196,28 +1464,42 @@ function openLTPXPackage(msg) {
     ltpxOverlay.classList.add('active');
 }
 
-// 向 iframe 注入通用页面操作智能体（仅 mini-LTP 包；未注入时执行一次）
-function injectFrameAgent(win, callback) {
+// 向 iframe 注入一段 JS 源码（url 提供的脚本）；注入成功后才回调。
+// 供共享模块与智能体按序注入：先注 /shared-input.js，再注智能体脚本。
+function injectFrameJS(win, url, injectedKey, label, callback) {
     try {
-        fetch('/mini-ltp-agent.js').then(r => r.ok ? r.text() : '').then(code => {
+        fetch(url).then(r => (r.ok ? r.text() : '')).then(code => {
             try {
-                if (code && win && win.document && !win.document.__miniLTPAgentInjected) {
+                if (code && win && win.document && !win.document[injectedKey]) {
                     const s = win.document.createElement('script');
                     s.textContent = code;
-                    win.document.head.appendChild(s); // 同步执行，agent 完成 AtoA 注册
-                    win.document.__miniLTPAgentInjected = true;
+                    win.document.head.appendChild(s); // 同步执行
+                    win.document[injectedKey] = true;
                 }
-            } catch (e) { console.warn('mini-LTP 智能体注入异常:', e); }
+            } catch (e) { console.warn((label || '') + ' 注入异常:', e); }
             callback();
-        }).catch(e => { console.warn('mini-LTP 智能体加载失败:', e); callback(); });
-    } catch (e) { console.warn('mini-LTP 注入异常:', e); callback(); }
+        }).catch(e => { console.warn((label || '') + ' 加载失败:', e); callback(); });
+    } catch (e) { console.warn((label || '') + ' 注入异常:', e); callback(); }
 }
 
-// iframe 加载完成后统一处理：置就绪 →（mini-LTP）注入 agent → 投递待定指令
+// 向 iframe 注入通用页面操作智能体（仅 Mini-LTP 包）：先注共享键鼠模块，再注智能体
+function injectFrameAgent(win, callback) {
+    injectFrameJS(win, '/shared-input.js', '__sharedInputInjected', 'shared-input',
+        () => injectFrameJS(win, '/mini-ltp-agent.js', '__miniLTPAgentInjected', 'Mini-LTP 智能体', callback));
+}
+
+// 向 iframe 注入自主页面操作智能体（仅 Self-LTP 包）：先注共享键鼠模块，再注智能体
+function injectSelfLTPAgent(win, callback) {
+    injectFrameJS(win, '/shared-input.js', '__sharedInputInjected', 'shared-input',
+        () => injectFrameJS(win, '/self-ltp-agent.js', '__selfLTPAgentInjected', 'Self-LTP 智能体', callback));
+}
+
+// iframe 加载完成后统一处理：置就绪 →（Mini-LTP / Self-LTP）注入 agent → 投递待定指令
 function handleFrameLoad(appId) {
     const win = ltpxFrame.contentWindow;
     const finish = () => { ltpxFrameReady = true; deliverLTPXRun(); };
     if (isMiniLTPPage(appId)) injectFrameAgent(win, finish);
+    else if (isSelfLTPPage(appId)) injectSelfLTPAgent(win, finish);
     else finish();
 }
 ltpxFrame.onload = () => handleFrameLoad(ltpxFrameApp);
@@ -1523,8 +1805,9 @@ async function aiGenerateModuleInfo() {
         const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
         const prompt = '请根据以下 HTML 项目信息，生成合理的模块元信息。只返回 JSON，不要任何额外文字、解释或 markdown 代码块标记。\n'
             + '【项目信息】\n' + (projectText || (url || zipName))
-            + '\n\n【要求】JSON 格式：{"id": "deepseek.xxx", "title": "简洁中文标题", "description": "一句话准确描述项目核心功能（依据 README 与页面标题）"}。'
-            + '\nid 只允许小写字母、数字、点和短横线，以 deepseek. 开头；title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造。';
+            + '\n\n【要求】JSON 格式：{"id": "deepseek.xxx", "title": "简洁中文标题", "description": "一句话准确描述项目核心功能（依据 README 与页面标题）", "tool_name": "英文小写下划线单词，描述这个工具是什么（不是应用名称）"}。'
+            + '\nid 只允许小写字母、数字、点和短横线，以 deepseek. 开头；title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造；'
+            + '\ntool_name 必须用最准确的词语形容这个工具的类型与用途（如飞行模拟器→fpv_flight_simulator、音乐编辑器→lofi_music_editor、文件管理器→file_manager、天气查询→weather_news_query），只允许小写字母、数字和下划线，禁止使用应用的中文名或品牌名。';
         const response = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1540,6 +1823,7 @@ async function aiGenerateModuleInfo() {
         if (info.id) moduleIdInput.value = info.id;
         if (info.title) moduleTitleInput.value = info.title;
         if (info.description) moduleDescInput.value = info.description;
+        if (info.tool_name) moduleToolNameInput.value = info.tool_name;
         addMessage('system', '已通过 AI 生成模块信息，请确认后创建');
     } catch (e) {
         console.error('AI 生成模块信息失败:', e);
@@ -1608,6 +1892,7 @@ function collectModuleBase() {
         id: moduleIdInput.value.trim(),
         title: moduleTitleInput.value.trim(),
         description: moduleDescInput.value.trim(),
+        tool_name: moduleToolNameInput.value.trim(),
         icon: '',
         mini_ltp: moduleMiniLtp.checked,
         tags: []
@@ -1685,6 +1970,7 @@ async function initApp() {
     await loadSystemPrompt();
     await loadPages();
     initMarked();
+    setupGridDrag();
     establishWebSocket();
 }
 initApp();

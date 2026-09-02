@@ -1,8 +1,8 @@
 import { GlobalConfig, ChatCache, processUnreadFiles, checkDueItems, SCHEDULE_TRIGGER_PREFIX, parseContent, PostMessageRole, MessageContent } from '../index';
-import { descriptionRole, learnerRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, randomDefaultMessage } from './roles/roles';
+import { descriptionRole, learnerRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { batchProcessVideoFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
-import { queryEmotionSticker, memorizeUnreadRecords } from './capabilities/memory';
+import { queryEmotionSticker } from './capabilities/memory';
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -80,8 +80,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 推送消息（包含显示内容和语音数据）
             pushContext('text', chunk.display, audio);
         }
-        // 消息缓冲池非空时，触发信息记忆流程：逐个写入记忆库后清空
-        if (GlobalConfig.unreadRecords.length >= 1) memorizeUnreadRecords();
+        // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
+        if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
     }
     catch (error) {
         /** 获取提示音数据 */
@@ -139,6 +139,7 @@ function resetAgentState(): void {
     musicianRole.coverContext([]);
     viewerRole.coverContext([]);
     actorRole.coverContext([]);
+    memorizerRole.coverContext([]);
     // 清除主智能体的unreadContext和unreadVideoUrl
     GlobalConfig.unreadContext = [];
     GlobalConfig.unreadVideoUrl = [];

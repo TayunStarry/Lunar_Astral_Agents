@@ -39,7 +39,8 @@ type ModuleCreateRequest struct {
 	Icon        string   `json:"icon"`         // 图标：空 / data:image/...;base64（记忆库 sticker）/ 相对路径或 URL
 	URL         string   `json:"url"`          // 外部链接(http/https) 或 本地 HTML 文件/目录路径
 	Path        string   `json:"path"`         // 本地程序路径（exe/ps1/bat/cmd/lnk）
-	MiniLTP     bool     `json:"mini_ltp"`     // 是否启用 mini-LTP（注入通用页面操作智能体 + 标签 + AtoA 工具）
+	MiniLTP     bool     `json:"mini_ltp"`     // 是否启用 Mini-LTP（注入通用页面操作智能体 + 标签 + AtoA 工具）
+	ToolName    string   `json:"tool_name"`    // AtoA 工具名（可选；描述该工具是什么的功能性英文名，缺省由包 ID 推导）
 	Tags        []string `json:"tags"`         // 附加标签
 	ZipPath     string   `json:"-"`            // 内部：ZIP 上传解压前的临时文件路径（不参与 JSON 序列化）
 }
@@ -66,10 +67,10 @@ type ModuleInspectRequest struct {
 
 // ModuleInspectResponse 项目内容检查响应体
 type ModuleInspectResponse struct {
-	Success  bool                `json:"success"`
-	Message  string              `json:"message,omitempty"`
-	Name     string              `json:"name,omitempty"`     // 项目名（目录/文件名）
-	Fields   []ModuleInspectField `json:"fields,omitempty"`  // 提取到的元信息片段
+	Success bool                 `json:"success"`
+	Message string               `json:"message,omitempty"`
+	Name    string               `json:"name,omitempty"`   // 项目名（目录/文件名）
+	Fields  []ModuleInspectField `json:"fields,omitempty"` // 提取到的元信息片段
 }
 
 // proxyAwareHandler 代理感知处理程序
@@ -156,10 +157,10 @@ type LTPXRemoteCallResponse struct {
 
 // LTPXResultRequest 前端包执行完毕后向琉璃回执结果的请求体
 type LTPXResultRequest struct {
-	RequestID string `json:"request_id"`        // 调用请求 ID（ltpx_call 广播时下发）
-	Success   bool   `json:"success"`           // 是否执行成功
-	Text      string `json:"text,omitempty"`    // 操作结果文本
-	Error     string `json:"error,omitempty"`   // 错误信息
+	RequestID string `json:"request_id"`          // 调用请求 ID（ltpx_call 广播时下发）
+	Success   bool   `json:"success"`             // 是否执行成功
+	Text      string `json:"text,omitempty"`      // 操作结果文本
+	Error     string `json:"error,omitempty"`     // 错误信息
 	KeepOpen  bool   `json:"keep_open,omitempty"` // 包是否要求执行后保持页面展示（如文件管理器）
 }
 

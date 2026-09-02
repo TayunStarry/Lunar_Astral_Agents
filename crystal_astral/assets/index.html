@@ -144,6 +144,9 @@
                 <div class="form-group">
                     <textarea id="moduleDescInput" class="modal-input" rows="2" placeholder="description（模块功能描述）"></textarea>
                 </div>
+                <div class="form-group">
+                    <input type="text" id="moduleToolNameInput" class="modal-input" placeholder="tool_name（英文，描述这是什么工具，如 flight_simulator / music_editor，可留空）">
+                </div>
 
                 <!-- 图标 -->
                 <div class="form-group">
@@ -166,9 +169,9 @@
                     <input type="text" id="iconManualInput" class="modal-input" placeholder="图标 URL 或相对路径，如 https://.../icon.webp 或 icon.webp">
                 </div>
 
-                <!-- mini-LTP -->
+                <!-- Mini-LTP -->
                 <div class="form-group mini-ltp-row">
-                    <label class="mini-ltp-label">启用 mini-LTP 功能</label>
+                    <label class="mini-ltp-label">启用 Mini-LTP 功能</label>
                     <label class="config-switch">
                         <input type="checkbox" id="moduleMiniLtp">
                         <span class="config-slider"></span>
@@ -250,7 +253,7 @@
         </div>
     </div>
 
-    <!-- 包执行覆盖层（LTPX AtoA：工具由前端包自身执行，琉璃仅中转展示） -->
+    <!-- 包执行覆盖层 -->
     <div class="ltpx-overlay" id="ltpxOverlay">
         <div class="ltpx-frame-wrap">
             <div class="ltpx-frame-header">

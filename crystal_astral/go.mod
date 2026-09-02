@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	LunarSubsystem/BrowserClient v0.0.0
+	LunarSubsystem/FaceLTP v0.0.0
 	LunarSubsystem/FileManager v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
@@ -31,6 +32,8 @@ require (
 )
 
 replace LunarSubsystem/GeneralConfig => ../subsystem/general_config
+
+replace LunarSubsystem/FaceLTP => ../subsystem/face_ltp
 
 replace LunarSubsystem/FileManager => ../subsystem/file_manager
 

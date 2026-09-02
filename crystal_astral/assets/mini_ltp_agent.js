@@ -26,7 +26,7 @@
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this), function () {
     'use strict';
 
-    var VERSION = '2.1.0';
+    var VERSION = '3.1.0';
 
     // ================= 智能体常量与状态 =================
 
@@ -81,460 +81,47 @@
         return loadModelConfig();
     }
 
-    /* ---------------- DOM 基础工具 ---------------- */
+    /* ---------------- 共享键鼠操作模块（SharedInput） ----------------
+       页面操作原语统一来自 window.SharedInput（见 shared_input.js）；
+       宿主注入顺序：先注 /shared-input.js，再注本智能体脚本。 */
 
-    function isVisible(el) {
-        if (!el || el.nodeType !== 1) return false;
-        try {
-            var style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
-        } catch (e) { return false; }
-        var r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-    }
+    var SharedInput = (typeof window !== 'undefined' && window.SharedInput) || null;
+    if (!SharedInput) throw new Error('SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js）');
+    var isVisible = SharedInput.isVisible, escapeCss = SharedInput.escapeCss,
+        query = SharedInput.query, queryAll = SharedInput.queryAll,
+        textOf = SharedInput.textOf, describe = SharedInput.describe,
+        findByText = SharedInput.findByText, resolveTarget = SharedInput.resolveTarget,
+        uniqueSelector = SharedInput.uniqueSelector, captureElements = SharedInput.captureElements,
+        buildCompactElements = SharedInput.buildCompactElements,
+        buildPageInfoText = SharedInput.buildPageInfoText,
+        dispatchAt = SharedInput.dispatchAt, resolvePoint = SharedInput.resolvePoint,
+        fireMouse = SharedInput.fireMouse, focusEl = SharedInput.focusEl,
+        clickEl = SharedInput.clickEl, hoverEl = SharedInput.hoverEl,
+        setInputValue = SharedInput.setInputValue, typeEl = SharedInput.typeEl,
+        keyToCode = SharedInput.keyToCode, normalizeKeyToken = SharedInput.normalizeKeyToken,
+        pressKeyEl = SharedInput.pressKeyEl, parseHoldSpec = SharedInput.parseHoldSpec,
+        mouseButtonEl = SharedInput.mouseButtonEl, wheelEl = SharedInput.wheelEl,
+        sleep = SharedInput.sleep, scrollEl = SharedInput.scrollEl,
+        selectEl = SharedInput.selectEl, getState = SharedInput.getState,
+        tryDrawPagePixels = SharedInput.tryDrawPagePixels, drawGrid = SharedInput.drawGrid,
+        drawElementBoxes = SharedInput.drawElementBoxes, captureScreenshot = SharedInput.captureScreenshot,
+        SCREEN_GRID_STEP = SharedInput.SCREEN_GRID_STEP;
 
-    function escapeCss(sel) {
-        return String(sel).replace(/[\\"']/g, '\\$&');
-    }
-
-    function query(sel, root) {
-        if (!sel) return null;
-        if (typeof sel !== 'string') return (sel && sel.nodeType === 1) ? sel : null;
-        try { return (root || document).querySelector(sel); } catch (e) { return null; }
-    }
-
-    function queryAll(sel, root) {
-        if (!sel) return [];
-        if (typeof sel !== 'string') return (sel && sel.nodeType === 1) ? [sel] : [];
-        try { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); } catch (e) { return []; }
-    }
-
-    function textOf(el, max) {
-        if (!el) return '';
-        var t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-        return max ? t.slice(0, max) : t;
-    }
-
-    function describe(el) {
-        if (!el) return '未知元素';
-        var tag = (el.tagName || '').toLowerCase();
-        var label = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || '';
-        var text = textOf(el, 40);
-        var name = el.getAttribute('name') || el.id || '';
-        var parts = [tag, label, text, name].filter(Boolean);
-        return parts[0] === tag ? (tag + (name ? '#' + name : '')) : parts.join('「');
-    }
-
-    function findByText(text, root) {
-        if (!text || !text.trim()) return null;
-        var kw = text.trim().toLowerCase();
-        var candidates = [];
-        var sel = 'a,button,input,select,textarea,[role="button"],[role="link"],[role="tab"],[role="searchbox"],[onclick],label';
-        queryAll(sel, root).forEach(function (el) {
-            var hay = [
-                el.getAttribute('aria-label'), el.getAttribute('title'),
-                el.getAttribute('placeholder'), el.getAttribute('name'), el.id, textOf(el)
-            ].filter(Boolean).join(' ').toLowerCase();
-            if (hay.indexOf(kw) !== -1) candidates.push(el);
-        });
-        if (candidates.length) {
-            var exact = candidates.filter(function (el) {
-                return [el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('placeholder'), textOf(el)]
-                    .filter(Boolean).some(function (t) { return t.trim().toLowerCase() === kw; });
-            });
-            var pool = exact.length ? exact : candidates;
-            pool.sort(function (a, b) { return textOf(a).length - textOf(b).length; });
-            return pool[0];
-        }
-        var walker = document.createTreeWalker(root || document.body || document, NodeFilter.SHOW_ELEMENT);
-        var node;
-        while ((node = walker.nextNode())) {
-            if (node.nodeType !== 1) continue;
-            var own = node.childNodes.length && Array.prototype.every.call(node.childNodes, function (c) { return c.nodeType === 3; });
-            if (own && (node.textContent || '').trim().toLowerCase() === kw && isVisible(node)) return node;
-        }
-        return null;
-    }
-
-    // 解析目标：先按 CSS 选择器，失败后按文本/语义匹配
-    function resolveTarget(target, root) {
-        if (!target) return null;
-        if (typeof target !== 'string') return (target && target.nodeType === 1) ? target : null;
-        var t = target.trim();
-        if (!t) return null;
-        var el = query(t, root);
-        if (el) return el;
-        return findByText(t, root);
-    }
-
-    function uniqueSelector(el) {
-        if (!el || el.nodeType !== 1) return null;
-        if (el.id) return '#' + escapeCss(el.id.replace(/[^a-zA-Z0-9_-]/g, '\\$&'));
-        var parent = el.parentElement;
-        if (!parent) return (el.tagName || '').toLowerCase();
-        var idx = Array.prototype.indexOf.call(parent.children, el) + 1;
-        return (el.tagName || '').toLowerCase() + ':nth-of-type(' + idx + ')';
-    }
-
-    /* ---------------- 元素捕获 ---------------- */
-
-    function captureElements(opts) {
-        opts = opts || {};
-        var max = opts.max || 80;
-        var viewportOnly = opts.viewportOnly !== false;
-        var sel = opts.selector || 'a,button,input,select,textarea,[role="button"],[role="link"],[role="tab"],[role="searchbox"],[onclick],label,img,.btn,[data-testid]';
-        var roots = opts.root ? [resolveTarget(opts.root)] : [document];
-        var seen = new Set();
-        var items = [];
-        var vw = window.innerWidth || document.documentElement.clientWidth;
-        var vh = window.innerHeight || document.documentElement.clientHeight;
-
-        roots.forEach(function (root) {
-            if (!root) return;
-            queryAll(sel, root).forEach(function (el) {
-                if (items.length >= max) return;
-                if (seen.has(el)) return;
-                seen.add(el);
-                if (!isVisible(el)) return;
-                if (viewportOnly) {
-                    var r0 = el.getBoundingClientRect();
-                    if (r0.bottom < 0 || r0.top > vh || r0.right < 0 || r0.left > vw) return;
-                }
-                var r = el.getBoundingClientRect();
-                var tag = (el.tagName || '').toLowerCase();
-                var value = '';
-                if (el.value !== undefined && String(el.value).length) value = String(el.value).slice(0, 60);
-                var label = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || '';
-                var inner = textOf(el, 60);
-                var text = [label, inner, value ? '值:' + value : ''].filter(Boolean).join(' | ') || tag;
-                items.push({
-                    tag: tag, role: el.getAttribute('role') || '', id: el.id || '',
-                    type: el.getAttribute('type') || '', name: el.getAttribute('name') || '',
-                    href: el.getAttribute('href') || '', text: text, selector: uniqueSelector(el),
-                    x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height)
-                });
-            });
-        });
-        return items;
-    }
-
-    // 生成紧凑元素列表文本（供模型识别选择器，与文件管理器目录列表同思路）
-    function buildCompactElements(items) {
-        if (!items || items.length === 0) return '（页面上没有可见可交互元素）';
-        var lines = items.map(function (it, i) {
-            return (i + 1) + '. <' + it.tag
-                + (it.id ? '#' + it.id : '')
-                + (it.role ? ' role=' + it.role : '')
-                + (it.type ? ' type=' + it.type : '')
-                + (it.name ? ' name=' + it.name : '')
-                + '> ' + it.text + '  [' + it.selector + ']';
-        });
-        if (items.length > AGENT_MAX_LIST_ITEMS) {
-            lines = lines.slice(0, AGENT_MAX_LIST_ITEMS);
-            lines.push('... 共 ' + items.length + ' 个元素，可用 capture_page 查看更多');
-        }
-        return lines.join('\n');
-    }
-
-    function buildPageInfoText() {
-        var s = getState();
-        return 'URL: ' + s.url + ' | 标题: ' + s.title + ' | 状态: ' + s.readyState
-            + ' | 视口: ' + s.viewport.w + '×' + s.viewport.h + ' | 滚动: (' + s.scroll.x + ', ' + s.scroll.y + ')';
-    }
-
-    /* ---------------- 模拟交互（页面操作原语） ---------------- */
-
-    function dispatchMouse(el, type) {
-        var evt;
-        try { evt = new MouseEvent(type, { bubbles: true, cancelable: true, view: window }); }
-        catch (e) { evt = document.createEvent('MouseEvents'); evt.initEvent(type, true, true); }
-        el.dispatchEvent(evt);
-    }
-
-    function clickEl(target) {
-        var el = resolveTarget(target);
-        if (!el) return { ok: false, reason: '未找到目标元素: ' + target };
-        try { el.scrollIntoView({ block: 'center' }); } catch (e) { /* 忽略 */ }
-        try { el.focus({ preventScroll: true }); } catch (e) { /* 忽略 */ }
-        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (t) {
-            if (t.indexOf('pointer') === 0) {
-                try {
-                    var pe = new PointerEvent(t, { bubbles: true, cancelable: true, view: window, pointerId: 1, pointerType: 'mouse' });
-                    el.dispatchEvent(pe);
-                    return;
-                } catch (e) { /* 降级为鼠标事件 */ }
-            }
-            dispatchMouse(el, t);
-        });
-        return { ok: true, info: '已点击 ' + describe(el) };
-    }
-
-    function hoverEl(target) {
-        var el = resolveTarget(target);
-        if (!el) return { ok: false, reason: '未找到目标元素: ' + target };
-        ['pointerover', 'mouseover', 'mouseenter', 'pointerenter'].forEach(function (t) {
-            if (t.indexOf('pointer') === 0) {
-                try {
-                    var pe = new PointerEvent(t, { bubbles: true, cancelable: true, view: window, pointerId: 1, pointerType: 'mouse' });
-                    el.dispatchEvent(pe);
-                    return;
-                } catch (e) { /* 降级 */ }
-            }
-            dispatchMouse(el, t);
-        });
-        return { ok: true, info: '已悬停 ' + describe(el) };
-    }
-
-    function setInputValue(el, text) {
-        if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
-            el.focus();
-            if (document.createRange && window.getSelection) {
-                var range = document.createRange();
-                range.selectNodeContents(el);
-                var sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-            }
-            el.textContent = text;
-        } else {
-            var proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-            var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-            setter.call(el, text);
-        }
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-
-    function typeEl(target, text) {
-        var el = resolveTarget(target);
-        if (!el) return { ok: false, reason: '未找到目标元素: ' + target };
-        try { el.scrollIntoView({ block: 'center' }); } catch (e) { /* 忽略 */ }
-        try { el.focus({ preventScroll: true }); } catch (e) { /* 忽略 */ }
-        setInputValue(el, String(text));
-        return { ok: true, info: '已向 ' + describe(el) + ' 输入 ' + String(text).length + ' 个字符' };
-    }
-
-    // 将 key 值映射为 KeyboardEvent.code（许多页面用 e.code 判断按键，如游戏监听 KeyR）
-    function keyToCode(key) {
-        var k = String(key);
-        if (/^[a-zA-Z]$/.test(k)) return 'Key' + k.toUpperCase();
-        if (/^[0-9]$/.test(k)) return 'Digit' + k;
-        var map = {
-            'Enter': 'Enter', ' ': 'Space', 'Tab': 'Tab', 'Backspace': 'Backspace',
-            'Delete': 'Delete', 'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown',
-            'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight', 'Escape': 'Escape',
-            'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown'
-        };
-        return map[k] || '';
-    }
-
-    // 按键语义差分：
-    //   - 默认 / tap:  键入 —— 瞬间按下并立即松开（等价一次点击操作）
-    //   - short:       短按 —— 按住 1 秒后松开
-    //   - long:        长按 —— 按住 10 秒后松开
-    async function pressKeyEl(combo) {
-        var comboStr = String(combo || '').trim();
-        if (!comboStr) return { ok: false, reason: '未指定按键' };
-        // 解析语义前缀（支持 short/short:/1s/tap:long/long:/10s 等变体）
-        var holdMs = 0; // 0 = 瞬间（键入）
-        var m;
-        if ((m = comboStr.match(/^(?:long|hold|10s)(?::|\s)*/i))) {
-            holdMs = 10000;
-            comboStr = comboStr.slice(m[0].length).trim();
-        } else if ((m = comboStr.match(/^(?:short|tap|1s)(?::|\s)*/i))) {
-            holdMs = 1000;
-            comboStr = comboStr.slice(m[0].length).trim();
-        }
-        var parts = comboStr.split(/\s*\+\s*/);
-        var key = parts.pop() || '';
-        if (!key) return { ok: false, reason: '未指定按键' };
-        var mods = {
-            ctrlKey: parts.some(function (p) { return /^ctrl$/i.test(p); }),
-            altKey: parts.some(function (p) { return /^alt$/i.test(p); }),
-            shiftKey: parts.some(function (p) { return /^shift$/i.test(p); }),
-            metaKey: parts.some(function (p) { return /^(meta|win|cmd)$/i.test(p); })
-        };
-        var keyMap = { enter: 'Enter', esc: 'Escape', escape: 'Escape', space: ' ', tab: 'Tab', up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', backspace: 'Backspace', del: 'Delete', delete: 'Delete', home: 'Home', end: 'End', pageup: 'PageUp', pagedown: 'PageDown' };
-        key = keyMap[key.toLowerCase()] || key;
-        var code = keyToCode(key);
-        var target = document.activeElement || document.body;
-        var makeEvt = function (type) {
-            var evt;
-            try {
-                evt = new KeyboardEvent(type, { bubbles: true, cancelable: true, key: key, code: code, view: window, ...mods });
-            } catch (e) {
-                evt = document.createEvent('KeyboardEvent');
-                evt.initKeyboardEvent(type, true, true, window, key, 0, mods.ctrlKey, mods.altKey, mods.shiftKey, mods.metaKey);
-                try { Object.defineProperty(evt, 'code', { get: function () { return code; } }); } catch (e2) { /* 旧环境忽略 */ }
-            }
-            return evt;
-        };
-        // keydown → keypress；按住 holdMs 后再 keyup。
-        // 键入（holdMs=0）：按下立即松开（一次点击）；短按/长按：保持按住指定时长再松开。
-        target.dispatchEvent(makeEvt('keydown'));
-        target.dispatchEvent(makeEvt('keypress'));
-        if (holdMs > 0) {
-            await sleep(holdMs);
-        }
-        target.dispatchEvent(makeEvt('keyup'));
-        if (key === 'Enter') {
-            var form = target.form;
-            if (form) { try { form.requestSubmit(); } catch (e2) { } }
-        }
-        var mode = holdMs === 10000 ? '长按' : (holdMs === 1000 ? '短按' : '键入');
-        return { ok: true, info: mode + ' ' + comboStr + '（按住 ' + (holdMs || '0ms/瞬间') + '，作用于 ' + describe(target) + '）' };
-    }
-
-    function scrollEl(direction, amount) {
-        var dir = String(direction || 'down').toLowerCase();
-        var el = document.scrollingElement || document.documentElement;
-        var vh = window.innerHeight || el.clientHeight;
-        if (dir === 'top' || dir === 'bottom' || dir === 'up' || dir === 'down' || dir === 'left' || dir === 'right') {
-            var delta = typeof amount === 'number' ? amount : vh * 0.8;
-            var x = 0, y = 0;
-            if (dir === 'top') y = -el.scrollTop;
-            else if (dir === 'bottom') y = el.scrollHeight - el.scrollTop;
-            else if (dir === 'down') y = delta;
-            else if (dir === 'up') y = -delta;
-            else if (dir === 'right') x = delta;
-            else if (dir === 'left') x = -delta;
-            try { window.scrollBy({ top: y, left: x, behavior: 'auto' }); } catch (e) { window.scrollBy(x, y); }
-            return { ok: true, info: '已向' + dir + '滚动 ' + Math.round(Math.abs(y || x)) + 'px' };
-        }
-        var targetEl = resolveTarget(String(dir));
-        if (targetEl) {
-            try { targetEl.scrollIntoView({ block: 'center' }); } catch (e) { /* 忽略 */ }
-            return { ok: true, info: '已滚动到 ' + describe(targetEl) };
-        }
-        return { ok: false, reason: '无法识别的滚动目标: ' + direction };
-    }
-
-    function selectEl(target, value) {
-        var el = resolveTarget(target);
-        if (!el || el.tagName !== 'SELECT') return { ok: false, reason: '未找到下拉框: ' + target };
-        var matched = Array.prototype.find.call(el.options, function (o) {
-            return o.value === String(value) || o.text.trim() === String(value).trim();
-        });
-        if (!matched) return { ok: false, reason: '下拉框不存在选项: ' + value };
-        el.value = matched.value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        return { ok: true, info: '已选择「' + matched.text + '」' };
-    }
-
-    function getState() {
-        var el = document.scrollingElement || document.documentElement;
-        return {
-            url: location.href,
-            title: document.title,
-            readyState: document.readyState,
-            viewport: { w: window.innerWidth, h: window.innerHeight },
-            scroll: { x: Math.round(el.scrollLeft), y: Math.round(el.scrollTop) }
-        };
-    }
 
     /* ---------------- 工具定义（OpenAI function calling 格式） ---------------- */
 
+    // 操作序列模型：智能体先做语义理解与元素分析（capture_page / get_state），
+    // 再用**一条** execute_operations 提交完整操作队列，程序按 0.5s 间隔逐个执行。
     var agentTools = [
         {
             type: 'function',
             function: {
                 name: 'capture_page',
-                description: '捕获当前页面可见可交互的元素快照（含标签/文本/选择器/位置），用于确认可操作目标。当不确定要操作什么、或找不到目标时调用。',
+                description: '捕获当前页面可见可交互的元素快照（含标签/文本/选择器/位置），用于分析定位可操作目标。执行 execute_operations 前若不确定目标元素，先调用本工具确认。',
                 parameters: {
                     type: 'object',
-                    properties: {
-                        max: { type: 'integer', description: '最多返回元素数，默认 60' }
-                    },
+                    properties: { max: { type: 'integer', description: '最多返回元素数，默认 60' } },
                     required: []
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'click',
-                description: '点击页面上的元素。target 可为选择器（如 #submit、.btn）或元素文本/aria-label/占位符描述（如「搜索按钮」）。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        target: { type: 'string', description: '目标元素的选择器或文本描述' }
-                    },
-                    required: ['target']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'type',
-                description: '向输入框/文本域输入文本。target 可为选择器或文本描述。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        target: { type: 'string', description: '输入框的选择器或文本描述' },
-                        text: { type: 'string', description: '要输入的文本内容' }
-                    },
-                    required: ['target', 'text']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'press_key',
-                description: '模拟按键，支持三种按住语义（在 key 内用前缀表达）：默认/无前缀=键入（瞬间按下立即松开，等价一次点击）；short:=短按（按住 1 秒）；long: 或 hold:=长按（按住 10 秒）。如 press_key(W)=键入W，press_key(short:W)=短按W，press_key(long:W)=长按W。支持 Enter、Escape、Space、Tab、R、ArrowDown 等，组合键用 + 连接（如 Ctrl+A）。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        key: { type: 'string', description: '按键名，可用前缀 short:/long:/hold: 表达按住时长，如 W、short:W、long:W、Ctrl+A' }
-                    },
-                    required: ['key']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'scroll',
-                description: '滚动页面：direction 为 up/down/left/right/top/bottom（可选 amount 像素），或传 target 滚动到指定元素。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        direction: { type: 'string', description: '滚动方向：up/down/left/right/top/bottom，或目标元素描述（滚动到该元素）' },
-                        amount: { type: 'integer', description: '滚动像素数（可选）' },
-                        target: { type: 'string', description: '滚动到该元素（可选，指定时 direction 可省略）' }
-                    },
-                    required: []
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'hover',
-                description: '悬停到元素上（触发 mouseover 等悬停事件）。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        target: { type: 'string', description: '目标元素的选择器或文本描述' }
-                    },
-                    required: ['target']
-                }
-            }
-        },
-        {
-            type: 'function',
-            function: {
-                name: 'select_option',
-                description: '在下拉框中选中指定选项（按选项值或显示文本）。',
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        target: { type: 'string', description: '下拉框的选择器或文本描述' },
-                        value: { type: 'string', description: '要选中的选项值或显示文本' }
-                    },
-                    required: ['target', 'value']
                 }
             }
         },
@@ -542,21 +129,51 @@
             type: 'function',
             function: {
                 name: 'get_state',
-                description: '查看当前页面状态：URL、标题、就绪状态、视口尺寸、滚动位置。',
+                description: '查看当前页面状态：URL、标题、就绪状态、视口尺寸、滚动位置，用于确认页面加载完成。',
                 parameters: { type: 'object', properties: {}, required: [] }
             }
         },
         {
             type: 'function',
             function: {
-                name: 'wait',
-                description: '等待指定毫秒数（用于页面加载、动画或异步刷新后）。',
+                name: 'capture_screenshot',
+                description: '截取当前页面视口截图并叠加 50px 坐标网格与元素编号框（编号与【页面元素】列表一一对应），用于让视觉模型核对各元素在页面中的网格坐标与位置。调用后刷新为最新一张截图。',
+                parameters: { type: 'object', properties: {}, required: [] }
+            }
+        },
+        {
+            type: 'function',
+            function: {
+                name: 'execute_operations',
+                description: '一次性提交需按顺序执行的一连串页面操作队列。operations 为操作数组，程序会从前往后逐个执行，执行完上一个操作后等待 0.5 秒再执行下一个。鼠标点击优先用 click=左键单击（普通点击按钮/链接/画布目标点）；只有当需要指定其它按键（右键/中键）或按住时长时才用 mouse=鼠标按键；其余：type=向输入框输入文本、key=键盘按键、wheel=滚轮滚动、scroll=页面滚动、hover=悬停、select=下拉选择、wait=等待。分析完【月华指令】后，把最理想的连续操作用一条 execute_operations 提交（尽量合并到同一次调用）。',
                 parameters: {
                     type: 'object',
                     properties: {
-                        ms: { type: 'integer', description: '等待毫秒数' }
+                        operations: {
+                            type: 'array',
+                            description: '按执行顺序排列的操作队列',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    action: { type: 'string', enum: ['click', 'type', 'key', 'mouse', 'wheel', 'scroll', 'hover', 'select', 'wait'], description: '操作类型' },
+                                    target: { type: 'string', description: '点击/输入/悬停/下拉目标元素的选择器或文本描述（click/type/hover/select 需要）' },
+                                    x: { type: 'integer', description: '点击/鼠标的视口 X 坐标（click/mouse 可选，与截图网格坐标一致、最左为 0；缺省点击元素中心）' },
+                                    y: { type: 'integer', description: '点击/鼠标的视口 Y 坐标（click/mouse 可选，与截图网格坐标一致、最顶为 0；缺省点击元素中心）' },
+                                    text: { type: 'string', description: '要输入的文本（type 需要）' },
+                                    key: { type: 'string', description: '按键名。组合键用 + 连接修饰键与主键，如 Ctrl+A、Ctrl+Shift+Z、Cmd+Shift+P（修饰键可用 ctrl/control、alt/option、shift、cmd/meta/win）；按住语义用前缀表达：short:/long:/hold:/tap:，如 W、short:W、long:Ctrl+A（key 需要）' },
+                                    button: { type: 'string', enum: ['left', 'right', 'middle'], description: '鼠标按键（mouse，默认 left；普通左键单击请直接用 click 而非 mouse）' },
+                                    hold: { type: 'string', enum: ['tap', 'short', 'long'], description: '鼠标按住语义（mouse，默认 tap；short=短按1秒/long=长按10秒）' },
+                                    direction: { type: 'string', enum: ['up', 'down', 'left', 'right', 'top', 'bottom'], description: '滚动方向：wheel 用 up/down 表示滚轮上/下滚动；scroll 用 up/down/left/right/top/bottom' },
+                                    ticks: { type: 'integer', description: '滚轮格数（wheel，默认 3）' },
+                                    amount: { type: 'integer', description: '页面滚动像素（scroll，可选）' },
+                                    value: { type: 'string', description: '下拉选项值或文本（select 需要）' },
+                                    ms: { type: 'integer', description: '等待毫秒数（wait）' }
+                                },
+                                required: ['action']
+                            }
+                        }
                     },
-                    required: ['ms']
+                    required: ['operations']
                 }
             }
         }
@@ -567,22 +184,30 @@
     function buildSystemPrompt() {
         return [
             '你是星月智能「通用页面操作」的专用智能体（AtoA 执行者），负责解析月华发来的自然语言指令，',
-            '并作为当前页面的最终执行者，通过页面操作工具完成用户要求的点击、输入、按键、滑动、悬停、',
-            '下拉选择、元素捕获、页面状态查看等操作。',
+            '并作为当前页面的最终执行者：先进行语义理解与元素分析，再输出一连串操作序列（操作队列），',
+            '由程序按队列逐个执行，完成用户要求的点击、输入、按键、滚轮、滑动、悬停、下拉选择等操作。',
             '',
             '【能力范围】',
-            '在当前页面内：点击/打开元素、向输入框输入文本、模拟按键（含组合键）、滚动/滑动（方向/距离/到元素）、',
-            '悬停、下拉选择、捕获可见可交互元素、查看页面状态、等待。',
+            '点击页面元素、向输入框输入文本、模拟键盘按键（含组合键、短按/长按）、模拟鼠标左右键（含短按/长按）、',
+            '鼠标滚轮上下滚动、页面滚动、悬停、下拉选择、捕获可见可交互元素、查看页面状态、等待。',
             '',
             '【执行规则】',
-            '1. 每轮用户消息会附上【页面信息】【页面元素】【月华指令】；【页面元素】是当前可见可交互元素的紧凑列表（含标签/文本/选择器）。',
-            '2. 操作目标以【页面元素】或 capture_page 返回的列表为准，优先使用其中的 selector（如 #submit、button:nth-of-type(1)）；',
-            '   没有合适选择器时可用元素文本或 aria-label 描述作为 target（会做文本匹配）。',
-            '3. 找不到目标时，先调用 capture_page 确认实际元素，再重试；确实不存在则如实说明，不要臆造。',
-            '4. 需要连续执行多个按键/点击/输入时，**在尽可能少的同一轮内一次性返回多个 tool_calls**（例如"按 A、B、C 再回车"应一次返回 4 个 press_key 调用），而不是挤成单个参数。',
-            '5. 每条指令允许至多 20 轮工具调用循环；多步任务依序完成，未完成不要提前总结，工具执行结果会回传给你。',
-            '6. press_key 有三种语义：默认/无前缀=键入（瞬间按下即松开，等价一次点击），short:=短按（按住 1 秒），long: 或 hold:=长按（按住 10 秒）。需要"只点一下"用无前缀；需要短暂按住用 short:；需要持续操控/长按用 long:。',
-            '7. 全部操作完成后，用一两句简洁的中文总结做了什么与结果，不要输出额外内容或代码块。'
+            '1. 每轮用户消息会附上【页面信息】、一张叠加网格的最新视口截图、【页面元素】【月华指令】；【页面元素】是当前可见可交互元素的紧凑列表（含标签/文本/选择器）。',
+            '2. 分析阶段：首先理解【月华指令】并用视觉定位目标。每轮都会附带一张「最新状态的视口截图」（有且只有一张），截图上覆盖 50px 坐标网格，并把可见可交互元素画成与【页面元素】列表同序的编号框。若不确定目标元素，先调用 capture_page（或 capture_screenshot、get_state）确认；确实不存在则如实说明，不要臆造。',
+            '3. 执行阶段：分析就绪后，用**一条** execute_operations 提交完整操作队列（operations 数组），把需要连续执行的点击、按键、滚轮、输入等按顺序放入队列。',
+            '   程序会从前往后逐个执行，执行完上一个操作后等待 0.5 秒再执行下一个。',
+            '4. 操作队列支持的 action：click=左键单击、type=输入文本、key=键盘按键、mouse=鼠标按键、wheel=滚轮滚动、scroll=页面滚动、hover=悬停、select=下拉选择、wait=等待。',
+            '5. 鼠标交互：**click=左键单击**，覆盖绝大多数点击（按钮/链接/画布目标点）；**mouse** 仅当需要非左键（right=右键/middle=中键）或按住时长（hold: short=短按/long=长按）时才用，普通左键单击一律用 click、不要用 mouse 代替。',
+            '6. key 支持组合键与按住语义。组合键用 + 连接修饰键与主键：修饰键可用 ctrl/control、alt/option、shift、cmd/meta/win，主键为单个字母/数字/方向键/回车等（如 Ctrl+A、Ctrl+Shift+Z、Cmd+Shift+P）；按住语义用前缀表达：默认/无前缀=键入（瞬间按下即松开）、short:=短按（1 秒）、long: 或 hold:=长按（10 秒），可与组合键叠加，如 short:Ctrl+A、long:W。',
+            '7. wheel 的 direction 用 up/down 表示滚轮向上/向下滚动，ticks 为格数（默认 3）；scroll 的 direction 用 up/down/left/right/top/bottom，也可用 target 定位到元素。',
+            '8. 若一次操作队列不足以完成任务（如需根据前一步页面反馈再决策），可分多次 execute_operations；每条指令允许至多 20 轮工具调用循环，未完成不要提前总结，工具执行结果会回传给你。',
+            '9. 全部操作完成后，用一两句简洁的中文总结做了什么与结果，不要输出额外内容或代码块。',
+            '',
+            '【如何读截图（视觉定位）】',
+            '- 每轮附带的那张截图，其顶部横排数字是 X 轴网格坐标（以最左为 0），左侧竖排数字是 Y 轴网格坐标（以最顶为 0），一格 50px；坐标表示页面元素在视口中的像素位置。',
+            '- 截图上的橙色编号框与【页面元素】列表编号一一对应：列表中第 n 个元素，就是截图里编号 n 的框。',
+            '- 定位元素时结合编号框位置与列表中的 selector 双重确认；target 优先用列表里的 selector，能精确命中则不用坐标。',
+            '- 点击「画布/画面/地图」这类需要按坐标定位的目标时（这类目标通常监听 pointer 事件并用坐标拾取，而非普通 click 回调），用 click 或 mouse 都可用 x/y 指定视口坐标（与截图网格一致、最左/最顶为 0）；坐标由你自主决定，读截图网格后在目标交互区域内任意选点、命中需要操作的坐标即可，不必固定在中心；只点普通按钮/链接则用 selector 即可。'
         ].join('\n');
     }
 
@@ -630,41 +255,20 @@
         return { success: true, text: buildCompactElements(items) };
     }
 
-    function execClick(args) {
-        const res = clickEl(args && args.target);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
-    function execType(args) {
-        const res = typeEl(args && args.target, args && args.text);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
-    async function execPressKey(args) {
-        const res = await pressKeyEl(args && args.key);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
-    function execScroll(args) {
-        const target = (args && args.target) || undefined;
-        const direction = (args && args.direction) || (target ? undefined : 'down');
-        const res = target ? scrollEl(target, args && args.amount) : scrollEl(direction, args && args.amount);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
-    function execHover(args) {
-        const res = hoverEl(args && args.target);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
-    function execSelectOption(args) {
-        const res = selectEl(args && args.target, args && args.value);
-        return res.ok ? { success: true, text: res.info } : { success: false, error: res.reason };
-    }
-
     function execGetState() {
         const s = getState();
         return { success: true, text: buildPageInfoText() };
+    }
+
+    // capture_screenshot：刷新最新截图并回读当前视口规模与元素编号规模。
+    async function execCaptureScreenshot() {
+        const items = captureElements({ max: AGENT_MAX_LIST_ITEMS });
+        const shot = await captureScreenshot(items).catch(function () { return null; });
+        if (!shot || !shot.dataUrl) return { success: false, error: '截图失败' };
+        return {
+            success: true,
+            text: '已刷新当前视口截图（' + shot.width + '×' + shot.height + '，网格步长 ' + SCREEN_GRID_STEP + 'px，X0=最左/Y0=最顶），可见可交互元素 ' + shot.count + ' 个，橙色编号框与【页面元素】列表序号一一对应。'
+        };
     }
 
     function execWait(args) {
@@ -674,16 +278,66 @@
         });
     }
 
+    // 执行单条操作：把操作对象路由到对应底层页面操作原语
+    async function execSingleOperation(op) {
+        if (!op || typeof op !== 'object') return { ok: false, reason: '非法操作项' };
+        const action = String(op.action || '').toLowerCase();
+        switch (action) {
+            case 'click': {
+                const coords = (typeof op.x === 'number' && typeof op.y === 'number') ? { x: op.x, y: op.y } : null;
+                return clickEl(op.target, coords);
+            }
+            case 'type': return typeEl(op.target, op.text);
+            case 'key': return await pressKeyEl(op.key);
+            case 'mouse': {
+                const holdPrefix = op.hold === 'long' ? 'long:' : (op.hold === 'short' ? 'short:' : '');
+                const spec = holdPrefix + (op.button || 'left');
+                const coords = (typeof op.x === 'number' && typeof op.y === 'number') ? { x: op.x, y: op.y } : null;
+                return await mouseButtonEl(spec, op.target, coords);
+            }
+            case 'wheel': return wheelEl(op.direction, op.ticks);
+            case 'scroll': return op.target ? scrollEl(op.target, op.amount) : scrollEl(op.direction || 'down', op.amount);
+            case 'hover': return hoverEl(op.target);
+            case 'select': return selectEl(op.target, op.value);
+            case 'wait': {
+                const ms = Math.max(0, parseInt(op.ms, 10) || 0);
+                if (ms > 0) await sleep(ms);
+                return { ok: true, info: '已等待 ' + ms + 'ms' };
+            }
+            default: return { ok: false, reason: '未知操作: ' + action };
+        }
+    }
+
+    // execute_operations：一次性执行完整操作队列。从前往后逐个执行，
+    // 执行完上一个操作后等待 gapMs(0.5s) 再执行下一个；任一步失败即中断并返回已执行记录。
+    async function execExecuteOperations(args) {
+        const ops = Array.isArray(args && args.operations) ? args.operations : [];
+        if (ops.length === 0) return { success: true, text: '操作队列为空，无需执行' };
+        const gapMs = 500; // 相邻操作间隔 0.5 秒
+        const lines = [];
+        let failed = null;
+        for (let i = 0; i < ops.length; i++) {
+            if (i > 0) await sleep(gapMs); // 执行完上一个操作后等待 0.5 秒再执行下一个
+            const op = ops[i];
+            const res = await execSingleOperation(op);
+            const label = String(op.action || '?')
+                + (op.target ? ':' + op.target : (op.key ? ':' + op.key : (op.direction ? ':' + op.direction + (op.ticks ? '×' + op.ticks : '') : '')));
+            lines.push((i + 1) + '. ' + label + ' → ' + (res.ok ? res.info : '失败(' + res.reason + ')'));
+            if (!res.ok) { failed = op; break; }
+        }
+        const summary = lines.join('\n');
+        if (failed) {
+            const who = failed.target ? '「' + failed.target + '」' : ':' + failed.action;
+            return { success: false, error: '操作序列中断于第 ' + lines.length + ' 步' + who + '\n执行记录:\n' + summary };
+        }
+        return { success: true, text: '操作队列执行完成（共 ' + lines.length + ' 步，步间间隔 0.5s）:\n' + summary };
+    }
+
     const toolExecutors = {
         capture_page: execCapturePage,
-        click: execClick,
-        type: execType,
-        press_key: execPressKey,
-        scroll: execScroll,
-        hover: execHover,
-        select_option: execSelectOption,
         get_state: execGetState,
-        wait: execWait
+        capture_screenshot: execCaptureScreenshot,
+        execute_operations: execExecuteOperations
     };
 
     async function executeTool(name, args) {
@@ -702,10 +356,17 @@
         const text = String(instruction || '').trim();
         if (!text) throw new Error('空指令');
 
-        // 组装本轮用户消息：页面信息 + 页面元素 + 月华指令（供模型识别目标与选择器）
+        // 每次运行只采集一次最新状态截图 + 元素列表，保证上下文中"有且只有一张"当前截图；
+        // 编号框与【页面元素】列表同序，视觉模型据此读取元素网格坐标。
+        const elems = captureElements({ max: AGENT_MAX_LIST_ITEMS });
+        let shot = null;
+        try { shot = await captureScreenshot(elems); } catch (e) { shot = null; }
+
+        // 组装本轮用户消息：页面信息(+<image> 标记，供多模态/Llama 视觉对齐) + 截图 + 元素列表 + 月华指令
         const userParts = [
-            { type: 'text', text: '【页面信息】' + buildPageInfoText() },
-            { type: 'text', text: '【页面元素】\n' + buildCompactElements(captureElements({ max: AGENT_MAX_LIST_ITEMS })) },
+            { type: 'text', text: '【页面信息】' + buildPageInfoText() + (shot && shot.dataUrl ? '\n<image>' : '') },
+            ...(shot && shot.dataUrl ? [{ type: 'image_url', image_url: { url: shot.dataUrl } }] : []),
+            { type: 'text', text: '【页面元素】\n' + buildCompactElements(elems) },
             { type: 'text', text: '【月华指令】' + text }
         ];
 
@@ -820,7 +481,10 @@
         scroll: scrollEl,
         hover: hoverEl,
         select: selectEl,
+        mouseButton: mouseButtonEl,
+        wheel: wheelEl,
         getState: getState,
+        captureScreenshot: captureScreenshot,
         // ---- 内部工具 ----
         query: query,
         queryAll: queryAll,

@@ -1,4 +1,4 @@
-import { ModelBuilder, LearnerRole, PainterRole, MusicianRole, ActorRole, DialogueRole, ViewerRole, RandomFloor } from '../../index';
+import { ModelBuilder, LearnerRole, PainterRole, MusicianRole, ActorRole, DialogueRole, ViewerRole, MemorizerRole, RandomFloor } from '../../index';
 
 /** 描述者角色(视觉内容描述) */
 export const descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
@@ -14,6 +14,8 @@ export const actorRole: ActorRole = new ActorRole();
 export const dialogueRole: DialogueRole = new DialogueRole();
 /** 观影者角色(视频观看) */
 export const viewerRole: ViewerRole = new ViewerRole();
+/** 记忆者角色(长期记忆写入与检索摘要) */
+export const memorizerRole: MemorizerRole = new MemorizerRole();
 /** 随机回答 */
 export function randomDefaultMessage(): string {
     return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];

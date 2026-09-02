@@ -59,8 +59,21 @@ export class ModelBuilder {
 		this.messages = Array.isArray(context) ? context : [context];
 		return this;
 	}
+	/** 追加一段文本到系统提示词末尾（若已包含则跳过，避免重复注入） */
+	public appendPrompt(content: string): this {
+		const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+		if (this.systemPrompt.includes(block)) return this;
+		this.systemPrompt = this.systemPrompt.replace(/\s*$/, '') + block;
+		return this;
+	}
+	/** 从系统提示词中移除指定文本段（不存在时无操作） */
+	public removePrompt(content: string): this {
+		const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+		this.systemPrompt = this.systemPrompt.replace(block, '');
+		return this;
+	}
 	/** 运行模型，可输入额外的上下文补充 */
-	public run(appendContext: PostMessage[], toolCall: ToolCall[]): modelResponse {
+	public run(appendContext: PostMessage[], toolCall: ToolCall[], useTools: boolean = false): modelResponse {
 		/** 模型请求体消息列表（拼接所有来源） */
 		const rawMessages: PostMessage[] = [
 			// 系统提示词
@@ -78,7 +91,7 @@ export class ModelBuilder {
 			messages: rawMessages,
 			stream: this.stream,
 			tools: toolCall,
-			tool_choice: 'auto',
+			tool_choice: useTools ? 'required' : (this.enableTools ? 'auto' : 'none'),
 		};
 		// 如果禁用工具调用或没有工具调用，删除 tool_choice 和 tools 字段
 		if (!this.enableTools || toolCall.length === 0) {

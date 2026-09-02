@@ -1,4 +1,4 @@
-import { GlobalConfig, ChatCache, ModelResponseBody, ModelBuilder, PostMessage, LiteImageFile, descriptionRole, PostMessageRole, ensureMemoryReady } from '../../index';
+import { GlobalConfig, ChatCache, ModelResponseBody, ModelBuilder, PostMessage, LiteImageFile, descriptionRole, memorizerRole } from '../../index';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -7,6 +7,9 @@ export class DialogueRole extends ModelBuilder {
         try {
             // 对消息中的图片文件进行压缩与解析处理
             await LiteImageFile();
+            /** 检查是否强制使用工具调用 */
+            const useTools = GlobalConfig.unreadContext.some(context => context.role == 'user' && typeof context.content === 'string' && context.content.startsWith('<律令>:'))
+            if (useTools) console.log('强制月华使用工具调用中...');
             // 将未读上下文数组中的消息添加到处理器模型的上下文
             GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
             // 清空未读上下文数组
@@ -18,7 +21,7 @@ export class DialogueRole extends ModelBuilder {
             // 从向量数据库查询相关历史消息作为 RAG 上下文
             this.queryRagMessages();
             /** 向处理器模型发送请求并等待响应 */
-            const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
+            const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition, useTools);
             // 处理响应文本内容
             this.analyzeMessageResponse(response.body, cache);
             // 如果有工具调用,处理它们并重新发送请求
@@ -244,48 +247,27 @@ export class DialogueRole extends ModelBuilder {
         }
         return userTexts;
     }
-    /** 从 记忆库 查询相关消息并填充 ragMessages */
+    /**
+     * 从 记忆库 检索并生成摘要，填充 ragMessages
+     *
+     * 由记忆者智能体承接：继承原有搜索机制检索长期记忆，对命中的内容碎片做一次
+     * 总结与摘要，输出一篇硬切断 4096 的连贯摘要（摘要不回写记忆库），
+     * 替代以往将碎片直接写入 rag 数组的做法。
+     */
     public queryRagMessages(): this {
         /** 获取最新的5条用户消息作为查询条件 */
         const userMessages = this.getLatestUserMessages();
         /** 清理RAG消息并返回 */
-        const returnEvent = () => { this.ragMessages = []; return this; }
+        const clear = () => { this.ragMessages = []; return this; };
         // 如果没有用户消息，清理RAG消息并返回
-        if (userMessages.length === 0) returnEvent();
-        // 确保记忆库已就绪，初始化失败则清理RAG消息并返回
-        if (!ensureMemoryReady()) returnEvent();
-        /** 所有查询结果汇总（含相似度分数） */
-        const allResults: { id: string, role: string, content?: string, image?: string, similarity: number }[] = [];
-        // 对每条用户消息分别查询 记忆库（每次取相关度最高的前10条）
-        for (const userMessage of userMessages) {
-            // 获取 记忆库 查询结果
-            const [results, error] = memoryQuery('lunar_messages', userMessage, 10);
-            // 单条查询失败则跳过，继续处理下一条
-            if (error) {
-                console.error('记忆库查询失败:', error);
-                continue;
-            }
-            if (results && results.length > 0) {
-                // 记忆库 已按相似度降序返回结果
-                allResults.push(...results);
-            }
-        }
-        // 如果没有任何结果，清理RAG消息并返回
-        if (allResults.length === 0) returnEvent();
-        /** 基于内容去重，保留相似度最高的记录 */
-        const seen = new Map<string, { id: string, role: string, content?: string, image?: string, similarity: number }>();
-        // 遍历所有结果，对相同内容只保留相似度最高的
-        for (const r of allResults) {
-            const content = r.content || '';
-            const existing = seen.get(content);
-            if (!existing || r.similarity > existing.similarity) seen.set(content, r);
-        }
-        // 按相似度降序排列，确保相关度最高的结果在最前面
-        const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
-        // 输出排序验证信息
-        console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-        // 写入 ragMessages：去重后按相关度取前32条
-        this.ragMessages = uniqueResults.slice(0, 32).map(r => ({ role: r.role as PostMessageRole, content: r.content || '' }));
+        if (userMessages.length === 0) return clear();
+        /** 由记忆者智能体检索长期记忆并生成摘要 */
+        const digest = memorizerRole.queryRagSummary(userMessages);
+        // 检索无命中或摘要失败时，清理RAG消息并返回
+        if (!digest) return clear();
+        // 将连贯摘要作为一条用户消息注入 ragMessages（替换碎片式上下文；
+        // 用 user 角色而非 system，符合 OpenAI 协议建议——避免消息队列中堆积多条系统消息）
+        this.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
         return this;
     }
     /** 构造函数 */

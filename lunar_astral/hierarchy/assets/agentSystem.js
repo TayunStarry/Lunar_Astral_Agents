@@ -765,7 +765,19 @@ var agentSystem = (function (exports) {
             this.messages = Array.isArray(context) ? context : [context];
             return this;
         }
-        run(appendContext, toolCall) {
+        appendPrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            if (this.systemPrompt.includes(block))
+                return this;
+            this.systemPrompt = this.systemPrompt.replace(/\s*$/, '') + block;
+            return this;
+        }
+        removePrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            this.systemPrompt = this.systemPrompt.replace(block, '');
+            return this;
+        }
+        run(appendContext, toolCall, useTools = false) {
             const rawMessages = [
                 { role: 'system', content: this.systemPrompt },
                 ...this.runtimeMessages,
@@ -777,7 +789,7 @@ var agentSystem = (function (exports) {
                 messages: rawMessages,
                 stream: this.stream,
                 tools: toolCall,
-                tool_choice: 'auto',
+                tool_choice: useTools ? 'required' : (this.enableTools ? 'auto' : 'none'),
             };
             if (!this.enableTools || toolCall.length === 0) {
                 delete requestBody.tool_choice;
@@ -883,12 +895,15 @@ var agentSystem = (function (exports) {
         async generateDialogue(cache) {
             try {
                 await LiteImageFile();
+                const useTools = GlobalConfig.unreadContext.some(context => context.role == 'user' && typeof context.content === 'string' && context.content.startsWith('<律令>:'));
+                if (useTools)
+                    console.log('强制月华使用工具调用中...');
                 GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
                 this.queryRagMessages();
-                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
+                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition, useTools);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -1337,7 +1352,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "compose_music",
-                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，前端音乐播放器将使用Tone.js合成真实乐器音色播放。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
+                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，前端音乐播放器使用采样级音色库（真实乐器合成+LOFI效果链）播放。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
                     parameters: {
                         type: "object",
                         properties: {
@@ -1347,7 +1362,7 @@ var agentSystem = (function (exports) {
                             },
                             "instruments": {
                                 type: "string",
-                                description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'等。"
+                                description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、复古电钢琴、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)、萨克斯(sax)、贝斯(bass/低音提琴)、合成器(8bit/电子)、鼓组(打击乐)、氛围铺底(弦乐群)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'、'钢琴,贝斯,鼓组'三重奏等。"
                             },
                             "tempo": {
                                 type: "number",
@@ -1367,7 +1382,7 @@ var agentSystem = (function (exports) {
                             },
                             "abc_notation": {
                                 type: "string",
-                                description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用Tone.js合成真实乐器音色。
+                                description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用采样级音色库（温暖钢琴/复古电钢/清澈竖琴/尼龙吉他/大提琴/小提琴/长笛/单簧管/双簧管/小号/萨克斯/贝斯/8Bit/鼓组/氛围铺底）合成并经过LOFI混音效果链（混响/延迟/磁带饱和/压缩）处理。
 
 === 基础格式 ===
 X:1
@@ -1392,10 +1407,12 @@ K:调号
 2. 分解和弦(琶音): C,,2 E,2 G,2 c2 | F,,2 A,2 C2 f2 |
 3. 阿尔贝蒂低音: C,2 G,2 E,2 G,2 | F,2 C2 A,2 C2 |
 
-=== 多声部记谱（多乐器时必须使用） ===
-[V:1] = 第一个乐器（通常是旋律声部）
-[V:2] = 第二个乐器（通常是和弦伴奏/低音声部）
-各声部小节对齐、同步演奏。
+=== 多声部记谱（推荐！多乐器时让每个乐器对应一个声部） ===
+[V:1] = 旋律声部（主旋律乐器，如钢琴/小提琴/长笛/萨克斯）
+[V:2] = 和弦伴奏声部（钢琴/竖琴/吉他，用柱式或分解和弦）
+[V:3] = 低音声部（贝斯/大提琴，根音支撑，可选）
+[V:4] = 鼓组声部（鼓/打击乐，节奏骨架，可选）
+各声部小节对齐、同步演奏。声部越多，音乐层次越丰满。
 
 === 表情记号（使音乐富有表现力！） ===
 力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
@@ -1423,10 +1440,12 @@ K:Am
 
 关键原则:
 - 必须包含和弦伴奏，不可只有单音旋律线
+- 两个及以上乐器时，务必用 [V:N] 分为多个声部，各声部小节对齐、同步演奏
 - 左手/第二声部使用和弦或分解和弦提供和声支撑
+- 可选加入贝斯（低音根音）与鼓组（节奏骨架），让音乐更有层次
 - 合理使用力度变化（开头mp、高潮f、结尾p）
 - 旋律要有乐句呼吸感（每4-8小节一个乐句，句末用稍长时值或休止）`
-                            }
+                            },
                         },
                         required: [
                             "title",
@@ -2402,19 +2421,17 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
 
     const injectedLTPXRemoteTools = new Set();
+    const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"，不得凭空编造操作结果，必须等待工具真实返回。';
     function syncLTPXRemoteStatus() {
         try {
             const statusJSON = getLTPXRemoteStatus();
-            if (!statusJSON || statusJSON === '{}') {
-                removeAllLTPXRemoteTools();
-                return;
-            }
-            const status = JSON.parse(statusJSON);
-            if (!status.online) {
+            if (!statusJSON || statusJSON === '{}' || !JSON.parse(statusJSON).online) {
+                dialogueRole.removePrompt(USE_THE_PROGRAM_PROMPT);
                 removeAllLTPXRemoteTools();
                 clearLTPXRemoteTools();
                 return;
             }
+            const status = JSON.parse(statusJSON);
             const names = new Set();
             const known = new Map();
             (status.tools || []).forEach(t => { if (t && t.name) {
@@ -2425,6 +2442,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 removeLTPXRemoteTool(name); });
             names.forEach(name => { if (!injectedLTPXRemoteTools.has(name))
                 injectLTPXRemoteTool(known.get(name)); });
+            dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
         }
         catch (e) {
             console.error('LTPX 远程（琉璃）工具状态同步失败:', e);

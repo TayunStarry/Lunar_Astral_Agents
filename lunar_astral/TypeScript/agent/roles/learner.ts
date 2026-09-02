@@ -1,4 +1,4 @@
-import { GlobalConfig, PostMessage } from '../../index';
+import { PostMessage } from '../../index';
 
 /** 学习者是否已初始化 */
 let learnerInitialized = false;

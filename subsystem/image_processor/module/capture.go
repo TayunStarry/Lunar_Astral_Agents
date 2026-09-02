@@ -141,6 +141,15 @@ func captureRegion(req CaptureRequest) (*image.RGBA, error) {
 	return screenshot.CaptureRect(rect)
 }
 
+// CaptureScreenRegionRGBA 截取屏幕绝对坐标区域的原始 RGBA（基于屏幕 DC，可正确截到硬件加速窗口内容），
+// 供外部智能体对指定窗口区域截图并叠加坐标标注使用，体积小于全屏截图。
+func CaptureScreenRegionRGBA(x, y, w, h int) (*image.RGBA, error) {
+	if w <= 0 || h <= 0 {
+		return nil, fmt.Errorf("区域宽高必须大于 0")
+	}
+	return screenshot.CaptureRect(image.Rect(x, y, x+w, y+h))
+}
+
 // normalizeFormat 归一化图片格式名称（jpg/jpeg → jpeg）
 func normalizeFormat(format string) string {
 	switch strings.ToLower(format) {
