@@ -66,9 +66,9 @@ func (class *Runtime) address(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{GeneralConfig.ServerAddress, nil})
 }
 
-// url 适配TypeScript调用的系统URL获取功能，返回系统访问地址
+// getEnvironmentUrl 适配TypeScript调用的系统URL获取功能，返回系统访问地址
 // 返回值: [string, error] 系统URL和错误信息
-func (class *Runtime) url(call goja.FunctionCall) goja.Value {
+func (class *Runtime) getEnvironmentUrl(call goja.FunctionCall) goja.Value {
 	ip, err := BrowserClient.GetLocalIP([]string{})
 	if err != nil {
 		LoggerGeneral.Error("LunarCore", "获取本地IP失败: %v", err)

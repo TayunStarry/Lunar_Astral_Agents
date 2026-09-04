@@ -4,17 +4,14 @@ import (
 	"LunarAstral/hierarchy"
 	"LunarAstral/learner"
 	"LunarSubsystem/LoggerGeneral"
-	"context"
+	"LunarSubsystem/LunarGoja"
 	"fmt"
 
 	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/console"
-	"github.com/dop251/goja_nodejs/eventloop"
-	"github.com/dop251/goja_nodejs/process"
-	"github.com/dop251/goja_nodejs/require"
 )
 
-// registerAdaptersToRuntime 注册适配器函数到指定的JavaScript运行时环境
+// registerAdaptersToRuntime 注册自定义适配器函数到通用 goja 运行时环境
+// 标准环境（console/process/require、fetch/getNetworkInterfaces/WebSocket）已由 lunar_goja 内置
 func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 创建Runtime实例，用于存储JavaScript运行时实例
 	adapters := &Runtime{runtime: vm}
@@ -31,7 +28,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("knowledgeSave", adapters.knowledgeSave)
 
 	// 注册网络操作适配器
-	vm.Set("url", adapters.url)
+	vm.Set("url", adapters.getEnvironmentUrl)
 	vm.Set("address", adapters.address)
 	vm.Set("syncFetch", adapters.syncFetch)
 
@@ -49,7 +46,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
 
-	// 注册记忆库适配器 v2
+	// 注册记忆库适配器
 	vm.Set("memoryInit", adapters.memoryInit)
 	vm.Set("memoryAdd", adapters.memoryAdd)
 	vm.Set("memoryAddWithTags", adapters.memoryAddWithTags)
@@ -58,16 +55,13 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("memoryAddImage", adapters.memoryAddImage)
 
 	// 注册TTS语音合成适配器
-	vm.Set("tts", adapters.tts)
+	vm.Set("tts", adapters.textToSpeech)
 
 	// 注册截图子系统适配器
 	vm.Set("screenshotCapture", adapters.screenshotCapture)
 	vm.Set("screenshotGetDisplays", adapters.screenshotGetDisplays)
 
 	// 注册 LTPX 远程（琉璃）工具链协调函数
-	// getLTPXRemoteStatus: 思考链起点调用，向琉璃心跳并拉取最新工具链，返回 JSON
-	// callLTPXRemoteTool:  琉璃工具函数实现转发，转发到琉璃执行并返回文本
-	// clearLTPXRemoteTools: 琉璃离线时清空缓存工具链
 	vm.Set("getLTPXRemoteStatus", adapters.getLTPXRemoteStatusForJS)
 	vm.Set("callLTPXRemoteTool", adapters.callLTPXRemoteToolForJS)
 	vm.Set("clearLTPXRemoteTools", adapters.clearLTPXRemoteToolsForJS)
@@ -84,58 +78,13 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	learner.BindLearnerToRuntime(vm)
 }
 
-// createAgentContext 创建并初始化JavaScript运行时环境
-func createAgentContext() error {
-	runtimeMutex.Lock()
-	defer runtimeMutex.Unlock()
-
-	// 如果运行时已存在，返回错误
-	if runtime != nil {
-		return fmt.Errorf("JavaScript运行时已存在")
-	}
-
-	// 创建上下文，用于控制运行时生命周期
-	runtimeCtx, runtimeCancel = context.WithCancel(context.Background())
-
-	// 初始化require模块系统
-	registry := require.NewRegistry()
-
-	// 加载eventloop模块
-	runtime = eventloop.NewEventLoop(eventloop.WithRegistry(registry))
-
-	// 启动eventloop
-	runtime.Start()
-
-	// 在eventloop中初始化运行时环境
-	done := make(chan error, 1)
-	runtime.RunOnLoop(func(vm *goja.Runtime) {
-		// 加载console模块
-		console.Enable(vm)
-
-		// 加载process模块
-		process.Enable(vm)
-
-		// 注册适配器函数到JavaScript环境
-		registerAdaptersToRuntime(vm)
-
-		done <- nil
-	})
-
-	// 等待初始化完成
-	err := <-done
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // RunAgentContext 加载并运行嵌入式文件系统中的JavaScript文件
 func RunAgentContext() error {
 	runtimeMutex.Lock()
-	// 如果运行时不存在，先创建
-	if runtime == nil {
+	// 如果运行时不存在，先创建并初始化
+	if !LunarGoja.IsReady() {
 		runtimeMutex.Unlock()
-		if err := createAgentContext(); err != nil {
+		if err := LunarGoja.Init(registerAdaptersToRuntime); err != nil {
 			return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> 创建运行时环境失败: %v", err)
 		}
 	} else {
@@ -149,8 +98,8 @@ func RunAgentContext() error {
 	}
 
 	systemJSContent := string(systemJS)
-	// 在eventloop中执行JavaScript代码
-	runtime.RunOnLoop(func(vm *goja.Runtime) {
+	// 在事件循环中执行JavaScript代码
+	LunarGoja.RunOnLoop(func(vm *goja.Runtime) {
 		_, err = vm.RunString(systemJSContent)
 		if err != nil {
 			LoggerGeneral.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
@@ -162,33 +111,9 @@ func RunAgentContext() error {
 
 // RunOnAgentLoop 在 agent 事件循环中执行函数（供外部模块调用）
 func RunOnAgentLoop(fn func(vm *goja.Runtime)) {
-	if runtime == nil {
+	if !LunarGoja.IsReady() {
 		LoggerGeneral.Error("LunarCore", "JavaScript 运行时未初始化，无法执行操作")
 		return
 	}
-	runtime.RunOnLoop(fn)
-}
-
-// CloseAgentContext 关闭JavaScript运行时环境
-func CloseAgentContext() {
-	runtimeMutex.Lock()
-	defer runtimeMutex.Unlock()
-
-	// 如果运行时不存在，直接返回
-	if runtime == nil {
-		return
-	}
-
-	// 停止eventloop
-	runtime.Stop()
-
-	// 取消运行时上下文
-	if runtimeCancel != nil {
-		runtimeCancel()
-	}
-
-	// 清空运行时引用
-	runtimeCtx = nil
-	runtimeCancel = nil
-	runtime = nil
+	LunarGoja.RunOnLoop(fn)
 }

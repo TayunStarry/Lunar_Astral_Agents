@@ -9,10 +9,10 @@ import (
 	"github.com/dop251/goja"
 )
 
-// tts 适配TypeScript调用的文本转语音功能
+// textToSpeech 适配TypeScript调用的文本转语音功能
 // 接收文本参数，调用TTS合成引擎生成音频，Base64编码后通过WebSocket广播至所有客户端
 // 返回值: [string, Error | null] 包含合成结果的元组，[音频Base64编码, 错误信息]
-func (class *Runtime) tts(call goja.FunctionCall) goja.Value {
+func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足：需要提供文本内容")})
 	}

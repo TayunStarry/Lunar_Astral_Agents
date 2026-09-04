@@ -1075,34 +1075,13 @@ var agentSystem = (function (exports) {
         }
         queryRagMessages() {
             const userMessages = this.getLatestUserMessages();
-            const returnEvent = () => { this.ragMessages = []; return this; };
+            const clear = () => { this.ragMessages = []; return this; };
             if (userMessages.length === 0)
-                returnEvent();
-            if (!ensureMemoryReady())
-                returnEvent();
-            const allResults = [];
-            for (const userMessage of userMessages) {
-                const [results, error] = memoryQuery('lunar_messages', userMessage, 10);
-                if (error) {
-                    console.error('记忆库查询失败:', error);
-                    continue;
-                }
-                if (results && results.length > 0) {
-                    allResults.push(...results);
-                }
-            }
-            if (allResults.length === 0)
-                returnEvent();
-            const seen = new Map();
-            for (const r of allResults) {
-                const content = r.content || '';
-                const existing = seen.get(content);
-                if (!existing || r.similarity > existing.similarity)
-                    seen.set(content, r);
-            }
-            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
-            console.log(`[RAG] 查询到 ${uniqueResults.length} 条相关消息，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
-            this.ragMessages = uniqueResults.slice(0, 32).map(r => ({ role: r.role, content: r.content || '' }));
+                return clear();
+            const digest = memorizerRole.queryRagSummary(userMessages);
+            if (!digest)
+                return clear();
+            this.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
             return this;
         }
         constructor() {
@@ -2231,6 +2210,144 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         }
     }
 
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
+    async function queryEmotionSticker(query) {
+        if (!query || !query.trim())
+            return null;
+        try {
+            if (!stickerCollectionReady) {
+                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+                if (!ready)
+                    return null;
+                stickerCollectionReady = true;
+            }
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+            if (error || !results || results.length === 0)
+                return null;
+            const image = results[RandomFloor(0, results.length - 1)].image;
+            return image || null;
+        }
+        catch (error) {
+            console.error('[表情包] 检索失败:', error);
+            return null;
+        }
+    }
+    function extractTextFromMessage(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        if (Array.isArray(message.content)) {
+            return message.content
+                .filter(item => item.type === 'text')
+                .map(item => item.text)
+                .join(' ');
+        }
+        return '';
+    }
+    function initMemory() {
+        if (GlobalConfig.memoryReady)
+            return;
+        const [_, err] = memoryInit('lunar_messages', 'text');
+        if (err)
+            console.error('记忆库初始化失败:', err);
+        else
+            GlobalConfig.memoryReady = true;
+    }
+    function ensureMemoryReady() {
+        if (!GlobalConfig.memoryReady)
+            initMemory();
+        return GlobalConfig.memoryReady;
+    }
+
+    const MEMORY_COLLECTION = 'lunar_messages';
+    const RAG_SUMMARY_HARD_LIMIT = 4096;
+    const RAG_PER_QUERY_TOP_K = 10;
+    const RAG_MAX_RECORDS = 32;
+    class MemorizerRole extends ModelBuilder {
+        constructor() {
+            super(fileView('prompts/memorizerRole.md')[0]);
+        }
+        persistUnreadRecords() {
+            if (GlobalConfig.unreadRecords.length === 0)
+                return;
+            if (!ensureMemoryReady()) {
+                console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
+                return;
+            }
+            let written = 0;
+            for (const message of GlobalConfig.unreadRecords) {
+                if (message.role === 'tool')
+                    continue;
+                const content = extractTextFromMessage(message).trim();
+                if (!content || content.length <= 5)
+                    continue;
+                if (content.includes(SCHEDULE_TRIGGER_PREFIX))
+                    continue;
+                const [, error] = memoryAdd(MEMORY_COLLECTION, message.role, content);
+                if (error)
+                    console.error('[记忆] 写入记忆库失败:', error);
+                else
+                    written++;
+            }
+            console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
+            GlobalConfig.unreadRecords = [];
+        }
+        queryRagSummary(userMessages) {
+            if (!userMessages || userMessages.length === 0)
+                return '';
+            if (!ensureMemoryReady())
+                return '';
+            const records = this.retrieveRagRecords(userMessages);
+            if (records.length === 0) {
+                console.log('[记忆] 检索未命中任何相关记录');
+                return '';
+            }
+            return this.summarizeRecords(records);
+        }
+        retrieveRagRecords(userMessages) {
+            const allResults = [];
+            for (const userMessage of userMessages) {
+                const [results, error] = memoryQuery(MEMORY_COLLECTION, userMessage, RAG_PER_QUERY_TOP_K);
+                if (error) {
+                    console.error('记忆库查询失败:', error);
+                    continue;
+                }
+                if (results && results.length > 0)
+                    allResults.push(...results);
+            }
+            const seen = new Map();
+            for (const r of allResults) {
+                const content = r.content || '';
+                const existing = seen.get(content);
+                if (!existing || r.similarity > existing.similarity)
+                    seen.set(content, r);
+            }
+            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
+            console.log(`[记忆] 检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+            return uniqueResults.slice(0, RAG_MAX_RECORDS);
+        }
+        summarizeRecords(records) {
+            const fragments = records
+                .map((r, i) => `--- 片段 ${i + 1}（${r.role}）---\n${r.content || '(空)'}`)
+                .join('\n\n');
+            this.coverContext({ role: 'user', content: `请整理以下从长期记忆检索到的内容碎片，输出一篇连贯的中文摘要。\n\n${fragments}` });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[记忆] 摘要推理失败:', error);
+                return '';
+            }
+            let digest = (response.body?.choices?.[0]?.message?.content || '').trim();
+            if (digest.length > RAG_SUMMARY_HARD_LIMIT)
+                digest = digest.slice(0, RAG_SUMMARY_HARD_LIMIT);
+            console.log(`[记忆] 已生成摘要（${digest.length}/${RAG_SUMMARY_HARD_LIMIT} 字）`);
+            return digest;
+        }
+    }
+
     const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     const learnerRole = new LearnerRole();
     const painterRole = new PainterRole();
@@ -2238,6 +2355,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     const actorRole = new ActorRole();
     const dialogueRole = new DialogueRole();
     const viewerRole = new ViewerRole();
+    const memorizerRole = new MemorizerRole();
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
@@ -2346,80 +2464,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         GlobalConfig.unreadVideoUrl = [];
     }
 
-    const STICKER_COLLECTION = 'stickers';
-    let stickerCollectionReady = false;
-    async function queryEmotionSticker(query) {
-        if (!query || !query.trim())
-            return null;
-        try {
-            if (!stickerCollectionReady) {
-                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
-                if (!ready)
-                    return null;
-                stickerCollectionReady = true;
-            }
-            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
-            if (error || !results || results.length === 0)
-                return null;
-            const image = results[RandomFloor(0, results.length - 1)].image;
-            return image || null;
-        }
-        catch (error) {
-            console.error('[表情包] 检索失败:', error);
-            return null;
-        }
-    }
-    function extractTextFromMessage(message) {
-        if (typeof message.content === 'string')
-            return message.content;
-        if (Array.isArray(message.content)) {
-            return message.content
-                .filter(item => item.type === 'text')
-                .map(item => item.text)
-                .join(' ');
-        }
-        return '';
-    }
-    function initMemory() {
-        if (GlobalConfig.memoryReady)
-            return;
-        const [_, err] = memoryInit('lunar_messages', 'text');
-        if (err)
-            console.error('记忆库初始化失败:', err);
-        else
-            GlobalConfig.memoryReady = true;
-    }
-    function ensureMemoryReady() {
-        if (!GlobalConfig.memoryReady)
-            initMemory();
-        return GlobalConfig.memoryReady;
-    }
-    function memorizeUnreadRecords() {
-        if (GlobalConfig.unreadRecords.length === 0)
-            return;
-        if (!ensureMemoryReady()) {
-            console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
-            return;
-        }
-        let written = 0;
-        for (const message of GlobalConfig.unreadRecords) {
-            if (message.role === 'tool')
-                continue;
-            const content = extractTextFromMessage(message).trim();
-            if (!content || content.length <= 5)
-                continue;
-            if (content.includes(SCHEDULE_TRIGGER_PREFIX))
-                continue;
-            const [, error] = memoryAdd('lunar_messages', message.role, content);
-            if (error)
-                console.error('[记忆] 写入记忆库失败:', error);
-            else
-                written++;
-        }
-        console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
-        GlobalConfig.unreadRecords = [];
-    }
-
     const injectedLTPXRemoteTools = new Set();
     const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"，不得凭空编造操作结果，必须等待工具真实返回。';
     function syncLTPXRemoteStatus() {
@@ -2525,7 +2569,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 pushContext('text', chunk.display, audio);
             }
             if (GlobalConfig.unreadRecords.length >= 1)
-                memorizeUnreadRecords();
+                memorizerRole.persistUnreadRecords();
         }
         catch (error) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
@@ -2565,6 +2609,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         musicianRole.coverContext([]);
         viewerRole.coverContext([]);
         actorRole.coverContext([]);
+        memorizerRole.coverContext([]);
         GlobalConfig.unreadContext = [];
         GlobalConfig.unreadVideoUrl = [];
     }
@@ -3355,6 +3400,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.GlobalConfig = GlobalConfig;
     exports.LearnerRole = LearnerRole;
     exports.LiteImageFile = LiteImageFile;
+    exports.MemorizerRole = MemorizerRole;
     exports.ModelBuilder = ModelBuilder;
     exports.MusicianRole = MusicianRole;
     exports.PainterRole = PainterRole;
@@ -3376,7 +3422,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
     exports.learnerRole = learnerRole;
-    exports.memorizeUnreadRecords = memorizeUnreadRecords;
+    exports.memorizerRole = memorizerRole;
     exports.musicianRole = musicianRole;
     exports.painterRole = painterRole;
     exports.parseContent = parseContent;
@@ -3391,6 +3437,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
     exports.toBtoaString = toBtoaString;
+    exports.viewerRole = viewerRole;
 
     return exports;
 

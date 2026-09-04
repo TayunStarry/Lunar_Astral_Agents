@@ -10,6 +10,7 @@ import (
 	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
 	"LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/LunarGoja"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"mime"
@@ -144,7 +145,7 @@ func shutdownServer(server *http.Server) {
 	// 确保在函数结束时取消上下文，释放资源
 	defer cancel()
 	// 关闭JavaScript运行时
-	adapters.CloseAgentContext()
+	LunarGoja.Close()
 	// 关闭桥接适配器
 	napcat.StopBridge()
 	// 关闭llama.cpp服务器

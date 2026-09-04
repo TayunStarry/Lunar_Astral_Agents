@@ -2,21 +2,14 @@ package adapters
 
 import (
 	"LunarSubsystem/LoggerGeneral"
-	"context"
 	"sync"
-
-	"github.com/dop251/goja_nodejs/eventloop"
 )
 
-// ==== JavaScript 运行时全局变量 ====
+// ==== JavaScript 运行时上下文保护锁 ====
 
-// 全局变量，存储JavaScript运行时实例
-var (
-	runtimeMutex  sync.Mutex
-	runtimeCtx    context.Context
-	runtimeCancel context.CancelFunc
-	runtime       *eventloop.EventLoop
-)
+// runtimeMutex 保护 JavaScript 运行时上下文的创建与检查
+// （运行时实例本身由通用模块 lunar_goja 持有）
+var runtimeMutex sync.Mutex
 
 // ==== LTPX 远程（琉璃）工具链全局变量 ====
 

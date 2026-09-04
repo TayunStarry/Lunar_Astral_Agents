@@ -9,9 +9,9 @@ require (
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
 	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/LunarGoja v0.0.0
 	LunarSubsystem/Qwen3-TTS v0.0.0
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
-	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
 )
 
@@ -23,6 +23,7 @@ require (
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
+	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
@@ -58,6 +59,8 @@ replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 replace LunarSubsystem/Qwen3-TTS => ../subsystem/qwen3_tts
 
 replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general
+
+replace LunarSubsystem/LunarGoja => ../subsystem/lunar_goja
 
 replace LunarSubsystem/ImageProcessor => ../subsystem/image_processor
 
