@@ -60,11 +60,9 @@ LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可
 
 **模型与约束**：模型调用走琉璃后端 `/v1` 代理，参数从 `lunar_config.json` 的 `agent` 字段读取（**不硬编码**）；自然语言理解完全由 LLM 完成，**禁止正则/规则引擎**模拟。
 
-**版本演进**：v1（LTPX 生态重构引入）→ **v2.0.0**（现行）。
-
 ---
 
-### 1.5 Face-LTP —— 桌面 WindowAgent（已弃用）
+### 1.5 Face-LTP —— 桌面 WindowAgent
 
 **定位**：曾把 AtoA 能力从「页面」延伸到「桌面」的 WindowAgent 分支，面向桌面内容与应用程序执行**点击、键入、滚动**等操作。
 
@@ -75,10 +73,6 @@ LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可
 - **截图验证循环**：每个工具执行后必做截图确认实际生效，禁止未验证即报成功；
 - 原子输入+发送 `type_and_send`（防焦点丢失）、`open_folder`（explorer.exe）、`close_window`（WM_CLOSE）、`press_drag`（鼠标拖拽）、`press_key('ctrl+tab')` 循环任务管理器标签等；
 - 严格 48 消息上下文，`agents/` 子包承载提示词优化、规划、验证、上下文接力等子智能体。
-
-**状态**：❌ **已弃用并整体移除**。经对比测试（与 LTP8 Auto-LTP 属「进阶对决」，二者互不调用），`window_agent`(Auto-LTP) 采用率与多场景稳定度更优，`subsystem/face_ltp` 已从代码库删除，`crystal_astral` 不再 import/require 之。详见 [03 §3.6](03-扩展系统-钛宇-琉璃.md)。
-
-**版本演进**：v1（LTPX 生态重构引入）→ **废弃**（重构为 Auto-LTP 时删除）。
 
 ---
 
@@ -101,22 +95,20 @@ LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可
 
 **模型**：从 `lunar_config.json` 的 `agent` 字段读取（不硬编码）。
 
-**版本演进**：v1（重构 Face-LTP 为 Auto-LTP 时引入，替换 LTP7）。
-
 ---
 
 ## 2. 版本演进（协议版本史）
 
 | 版本 | 载体/文件名 | 说明 | 状态 |
 |------|-----------|------|------|
-| LTP 1.0 | `*.ltp` / `.ltp1` | 将「工具定义 + js 函数实现 + 工具文档」打包为一个 **md 文本文件**放入指定目录供运行时自动加载；可通过 `import * as from "system.js"` 调用月华函数、甚至改写月华运行机制。 | **整套链路已废弃** |
-| LTP 2.0 | `*.ltp2` / `.ltpx` | 即 **Zero-LTP**。引入琉璃对工具进行显示与管理，全面投入 WebApp 生态。曾规划「在琉璃界面点击加载工具 → 向月华注册/卸载工具」的链路，**该链路已移除**，仅保留 web UI 的加载与运行支持。 | 现行基座 |
-| LTP 3.0 | `*.ltp3` | 为 YuTong 项目预留，因该项目组织架构重构与调整而**废弃**。 | 已废弃 |
+| LTP 1.0 | `*.ltp` / `.ltp1` | 将「工具定义 + js 函数实现 + 工具文档」打包为一个 **md 文本文件**放入指定目录供运行时自动加载；可通过 `import * as from "system.js"` 调用月华函数、甚至改写月华运行机制。 | **已废弃** |
+| LTP 2.0 | `*.ltp2` / `.ltpx` | 即 **Zero-LTP**。引入琉璃对工具进行显示与管理，全面投入 WebApp 生态。曾规划「在琉璃界面点击加载工具 → 向月华注册/卸载工具」的链路，**该链路已移除**，仅保留 web UI 的加载与运行支持。 | 现行 |
+| LTP 3.0 | `*.ltp3` | 为 YuTong 项目预留，因该项目组织架构重构与调整而**废弃**。 | **已废弃** |
 | LTP 4.0(标识) | `.ltpx`（`ltp4` 仅用于版本标识，不再作后缀） | 沿用 LTP2 的组织架构，引入并针对专门 webApp 特定开发的、适配 Lunar AtoA 的 webAgent（即 **Node-LTP**）；放弃 LTP2 的工具调用/加载链路。 | 现行 |
-| LTP 5.0(标识) | `.ltpx` | 基于 LTP2 的组织架构与 LTP3 的 AtoA 协议，开发的**通用** webAgent（即 **Mini-LTP**）。 | 现行 |
-| LTP 6.0(标识) | `.ltpx` + `self_ltp_agent.js` | **Self-LTP**：基于页面最小化嵌入的**自主**页面操作智能体，不接入 AtoA，由页面（开始/停止）按钮 + 文本框触发；多轮自循环（计划 → 执行 → 验证 → 重试 → 确认 → 结束）。 | 现行（v2.0.0） |
-| LTP 7.0(标识) | WindowAgent（`subsystem/face_ltp`） | **Face-LTP**：面向桌面的通用智能体（UIA 优先 + 坐标/键鼠兜底 + 截图验证循环），工具 `face_ltp_desktop_agent`。 | **已废弃**（被 LTP8 替代，已删除） |
-| LTP 8.0(标识) | WindowAgent（`subsystem/auto_ltp`） | **Auto-LTP**：桌面闭环自治智能体，多角色编排（编纂 → 启动 → 执行循环），工具 `window_agent`。 | 现行 |
+| LTP 5.0(标识) | WebAgent | 基于 LTP2 的组织架构与 LTP3 的 AtoA 协议，开发的**通用** webAgent（即 **Mini-LTP**）。 | 现行 |
+| LTP 6.0(标识) | WebAgent | **Self-LTP**：基于页面最小化嵌入的**自主**页面操作智能体，不接入 AtoA，由页面（开始/停止）按钮 + 文本框触发；多轮自循环（计划 → 执行 → 验证 → 重试 → 确认 → 结束）。 | 现行 |
+| LTP 7.0(标识) | WindowAgent | **Face-LTP**：面向桌面的通用智能体（UIA 优先 + 坐标/键鼠兜底 + 截图验证循环），工具 `face_ltp_desktop_agent`。 | **已废弃** |
+| LTP 8.0(标识) | WindowAgent | **Auto-LTP**：桌面闭环自治智能体，多角色编排（编纂 → 启动 → 执行循环），工具 `window_agent`。 | 现行 |
 
 > 结论：现行 **AtoA 时代** 放弃了 LTP1 的「md 单文件 + 直接脚本注入」与 LTP2 的「琉璃手动注册/卸载」链路，统一收敛为「包自声明工具 + LLM 智能体自执行 + 结果回执」的新协议。
 
