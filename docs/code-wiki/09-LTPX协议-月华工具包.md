@@ -13,12 +13,12 @@ LTPX 按「后端宿主 + 载体形态 + 交互方式」分为多个分支，命
 
 | 分支 | 适配 Lunar AtoA | 载体 | 定位 | 状态 |
 |------|----------------|------|------|------|
-| **Zero-LTP** | —（协议基座） | 本地包页面 | 基础的协议版本（*.ltpx 格式：zip 压缩 + html/md 可视化页面），以 LunarSystem 为后端 | 现行 |
-| **Node-LTP** | 是 | webApp 页面 | 专为特定 web 前端应用特调的专用 webAgent | 现行 |
-| **Mini-LTP** | 是 | 最小化嵌入页面 | 基于「页面最小化嵌入」原则的通用页面操作智能体，含键盘/鼠标/滚动/组合键模拟 | 现行 |
-| **Self-LTP** | 否 | 最小化嵌入页面 | 由用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务；智能体完成操作后自动唤起自己规划下一步 / 等待 / 结束 | 暂未实现 |
-| **Face-LTP** | 是 | WindowAgent | 面向**桌面**内容与应用程序的通用智能体（点击、键入、滚动等） | 暂未实现 |
-| **Auto-LTP** | 是 | WindowAgent | 根据初始指令持续规划每一步做什么，并等待操作返回的通用智能体 | 暂未实现 |
+| **Zero-LTP** | —（协议基座） | 本地包页面 | 基础的协议版本（*.ltpx 格式：zip 压缩 + html/md 可视化页面），以 LunarSystem 为后端 | ✅ 已实现 |
+| **Node-LTP** | 是 | webApp 页面 | 专为特定 web 前端应用特调的专用 webAgent | ✅ 已实现 |
+| **Mini-LTP** | 是 | 最小化嵌入页面 | 基于「页面最小化嵌入」原则的通用页面操作智能体，含键盘/鼠标/滚动/组合键模拟 | ✅ 已实现 |
+| **Self-LTP** | 否 | 最小化嵌入页面 | 由用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务；智能体完成操作后自动唤起自己规划下一步 / 等待 / 结束 | ✅ 已实现 |
+| **Face-LTP** | 是 | WindowAgent | 面向**桌面**内容与应用程序的通用智能体（点击、键入、滚动等） | ❌ 已弃用 |
+| **Auto-LTP** | 是 | WindowAgent | 根据初始指令持续规划每一步做什么，并等待操作返回的通用智能体 | ✅ 已实现 |
 
 > 各分支共享同一 AtoA 协议骨架与包管理机制，差异集中在载体形态（本地页面 / webApp / 桌面窗口）与是否自带自我规划能力。
 
@@ -38,10 +38,70 @@ LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可
 - 工具集：`capture_page / click / type / key / mouse / wheel / scroll / hover / select / wait`，支持组合键（`Ctrl+A`/`Cmd+Shift+P`）与三态按住（键入 / 短按 / 长按）。
 - 每次运行只注入**一张**最新视口截图（覆盖 50px 坐标网格 + 与【页面元素】列表同序的编号框），供多模态视觉定位元素坐标。
 
-### 1.4 Self-LTP / Face-LTP / Auto-LTP —— 规划中
-- **Self-LTP**：不再接入 Lunar AtoA，改由用户在页面上点「开始/停止」并输入初始任务；智能体发布一组页面操作后**自动唤起自己**，基于当前页面内容规划下一步 / 等待指定时长 / 决定结束任务。
-- **Face-LTP**：把 AtoA 能力从「页面」延伸到「桌面」，作为 WindowAgent 操作桌面内容与应用程序。
-- **Auto-LTP**：作为 WindowAgent，依据初始指令持续规划每一步行动，并等待操作返回再继续，形成闭环自治。
+### 1.4 Self-LTP —— 自主页面操作智能体
+
+**定位**：不接入 Lunar AtoA 的「自主页面操作」分支。用户通过页面上的（开始/停止）按钮 + 文本框指定【初始任务】，智能体在目标页面内**多轮自循环执行**，完成操作后自动唤起自己规划下一步 / 等待指定时长 / 决定结束任务。
+
+**载体与实现**：[self_ltp_agent.js](../../crystal_astral/assets/self_ltp_agent.js)（v2.0.0）。琉璃经 `/self-ltp-agent.js` 在 iframe 加载 Self-LTP 包后动态注入（自带开始/停止控制面板），不动包源码；包声明时 `tags` 追加 `"Self-LTP"`（如 `deepseek.web-view.voxel-disaster`）。
+
+**核心机制**（区别于一次性批处理）：
+1. **计划**：收到初始任务先调用 `set_plan` 拆解为一连串计划项，记录为「任务历史」；
+2. **执行**：多轮循环，**每轮只调用一个原子操作工具**（一次一个操作）；
+3. **验证**：每个操作执行后重新观测页面（最新截图 + 元素），判断是否真正生效；
+4. **重试**：某步未命中/效果不正确时用同一操作重试（可多次），或先 `wait` 再试，未确认完成绝不跳下一步；
+5. **确认**：关键步骤用 `confirm_step(no, passed)` 明确标记完成或需重试；
+6. **结束**：全部完成时用 `finish` 总结。
+
+**工具集**：`set_plan / capture_page / get_state / capture_screenshot / click / type_text / press_key / mouse_press / hover / select_option / scroll_page / scroll_wheel / wait / confirm_step / finish`。
+
+**页面操作原语**：统一来自共享模块 `window.SharedInput`（`/shared-input.js`，与 Mini-LTP 共享）。
+
+**关键行为约定**：x/y 坐标按截图网格（`SCREEN_GRID_STEP`）编号读取；`mouse_press` 派发完整事件序列（pointerdown/mousedown → pointerup/mouseup → click）并注入 x/y；复合指令按连词（然后/接着/接下来/之后/随后/并且/同时）与标点拆分逐步执行；运行于目标页面内时「打开/进入页面」步骤识别为「页面已打开」；单字符「输入 X」无输入框时回退按键；`press_key` 支持三态按住（默认/短按 `short:`/长按 `long:`）与组合键（`Ctrl+A`、`Cmd+Shift+P`）及修饰键别名；执行后回执 `keep_open: true` 保持页面打开供用户观察。
+
+**模型与约束**：模型调用走琉璃后端 `/v1` 代理，参数从 `lunar_config.json` 的 `agent` 字段读取（**不硬编码**）；自然语言理解完全由 LLM 完成，**禁止正则/规则引擎**模拟。
+
+**版本演进**：v1（LTPX 生态重构引入）→ **v2.0.0**（现行）。
+
+---
+
+### 1.5 Face-LTP —— 桌面 WindowAgent（已弃用）
+
+**定位**：曾把 AtoA 能力从「页面」延伸到「桌面」的 WindowAgent 分支，面向桌面内容与应用程序执行**点击、键入、滚动**等操作。
+
+**载体与实现（历史）**：`subsystem/face_ltp`（进程内库模块，CGO，Windows），工具名 **`face_ltp_desktop_agent`**，作为琉璃固有工具经 `/ltpx/call` 暴露给月华。
+
+**核心机制（历史设计）**：
+- **UIA 优先**：`uia_dump / uia_find / uia_click / uia_input` 优先于坐标工具；坐标/键鼠仅作 UIA 失败时的兜底；
+- **截图验证循环**：每个工具执行后必做截图确认实际生效，禁止未验证即报成功；
+- 原子输入+发送 `type_and_send`（防焦点丢失）、`open_folder`（explorer.exe）、`close_window`（WM_CLOSE）、`press_drag`（鼠标拖拽）、`press_key('ctrl+tab')` 循环任务管理器标签等；
+- 严格 48 消息上下文，`agents/` 子包承载提示词优化、规划、验证、上下文接力等子智能体。
+
+**状态**：❌ **已弃用并整体移除**。经对比测试（与 LTP8 Auto-LTP 属「进阶对决」，二者互不调用），`window_agent`(Auto-LTP) 采用率与多场景稳定度更优，`subsystem/face_ltp` 已从代码库删除，`crystal_astral` 不再 import/require 之。详见 [03 §3.6](03-扩展系统-钛宇-琉璃.md)。
+
+**版本演进**：v1（LTPX 生态重构引入）→ **废弃**（重构为 Auto-LTP 时删除）。
+
+---
+
+### 1.6 Auto-LTP —— 桌面闭环自治智能体
+
+**定位**：桌面 WindowAgent 的「闭环自治」分支。依据初始指令**持续规划每一步行动**，等待操作返回再继续，直至任务完成。
+
+**载体与实现**：`subsystem/auto_ltp`（进程内库模块，CGO，Windows），工具名 **`window_agent`**，作为琉璃内置桌面智能体随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=window_agent` + `instruction`）调用，路由见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)（`AutoLTP.Run(instruction)`）。
+
+**核心机制**（多角色编排，`host.go` `Run`）：
+1. **提示词编纂者**（无工具）：`editorPhase` 优化/完善用户指令；
+2. **软件启动者**：`launcherPhase`——`DTLaunchProgram` 启动程序后立即 `DTActivateWindow` 将新窗口置前；
+3. **执行循环**（上限 30 轮）：**视觉理解者**（无工具，只读自动注入截图）→ **UIA 理解者**（读 UI 树/定向查询）→ **任务规划者**（无工具，决策 complete/action）→ **仅启用一个操作者**（`operationPhase`）→ **进度书记者**（截图 + 记录）。
+
+每个角色**独立全新上下文、工具白名单物理隔离**；`HandoffRecord` 为跨轮次唯一信息媒介。
+
+**能力**：视觉 + UIA 双路理解界面、按名称/控件类型定位元素、`Invoke/Value/SelectionItem` 直接操作、坐标/键鼠兜底；`type_and_send` 无应用限制（可用于 QQ）；排除终端输入保护。
+
+**可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`（读到/想了/决策/做了什么），截图归档 `local_data/images/moment`。
+
+**模型**：从 `lunar_config.json` 的 `agent` 字段读取（不硬编码）。
+
+**版本演进**：v1（重构 Face-LTP 为 Auto-LTP 时引入，替换 LTP7）。
 
 ---
 
@@ -53,9 +113,12 @@ LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可
 | LTP 2.0 | `*.ltp2` / `.ltpx` | 即 **Zero-LTP**。引入琉璃对工具进行显示与管理，全面投入 WebApp 生态。曾规划「在琉璃界面点击加载工具 → 向月华注册/卸载工具」的链路，**该链路已移除**，仅保留 web UI 的加载与运行支持。 | 现行基座 |
 | LTP 3.0 | `*.ltp3` | 为 YuTong 项目预留，因该项目组织架构重构与调整而**废弃**。 | 已废弃 |
 | LTP 4.0(标识) | `.ltpx`（`ltp4` 仅用于版本标识，不再作后缀） | 沿用 LTP2 的组织架构，引入并针对专门 webApp 特定开发的、适配 Lunar AtoA 的 webAgent（即 **Node-LTP**）；放弃 LTP2 的工具调用/加载链路。 | 现行 |
-| LTP 5.0(标识) | `.ltpx` | 基于 LTP2 的组织架构与 LTP3 的 AtoA 协议，开发的**通用** webAgent。 | 现行 |
+| LTP 5.0(标识) | `.ltpx` | 基于 LTP2 的组织架构与 LTP3 的 AtoA 协议，开发的**通用** webAgent（即 **Mini-LTP**）。 | 现行 |
+| LTP 6.0(标识) | `.ltpx` + `self_ltp_agent.js` | **Self-LTP**：基于页面最小化嵌入的**自主**页面操作智能体，不接入 AtoA，由页面（开始/停止）按钮 + 文本框触发；多轮自循环（计划 → 执行 → 验证 → 重试 → 确认 → 结束）。 | 现行（v2.0.0） |
+| LTP 7.0(标识) | WindowAgent（`subsystem/face_ltp`） | **Face-LTP**：面向桌面的通用智能体（UIA 优先 + 坐标/键鼠兜底 + 截图验证循环），工具 `face_ltp_desktop_agent`。 | **已废弃**（被 LTP8 替代，已删除） |
+| LTP 8.0(标识) | WindowAgent（`subsystem/auto_ltp`） | **Auto-LTP**：桌面闭环自治智能体，多角色编排（编纂 → 启动 → 执行循环），工具 `window_agent`。 | 现行 |
 
-> 结论：现行 **AtoA 时代**（LTP4/LTP5）放弃了 LTP1 的「md 单文件 + 直接脚本注入」与 LTP2 的「琉璃手动注册/卸载」链路，统一收敛为「包自声明工具 + LLM 智能体自执行 + 结果回执」的新协议。
+> 结论：现行 **AtoA 时代** 放弃了 LTP1 的「md 单文件 + 直接脚本注入」与 LTP2 的「琉璃手动注册/卸载」链路，统一收敛为「包自声明工具 + LLM 智能体自执行 + 结果回执」的新协议。
 
 ---
 
