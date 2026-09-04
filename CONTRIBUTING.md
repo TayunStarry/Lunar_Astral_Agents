@@ -198,14 +198,9 @@ import (
 # 克隆仓库
 git clone https://github.com/你的用户名/Lunar_Astral_Agents.git
 cd Lunar_Astral_Agents
-
-# 编译核心系统
-.\build.ps1
-
-# 编译子系统（按需）
-.\subsystem\qwen3_tts\build.ps1
-.\subsystem\qwen_asr\build.ps1
 ```
+
+一键编译全部 / 单独编译 / 交叉编译命令见 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)，此处不重复。
 
 ---
 

@@ -73,43 +73,7 @@ Lunar_Astral_Agents/
 
 ## 编译流程
 
-### 一键编译全部
-
-```powershell
-cd d:\Lunar_Astral_Agents
-.\build.ps1
-```
-
-### 单独编译
-
-```powershell
-# 核心系统——月华（含前端 TypeScript 编译）
-cd d:\Lunar_Astral_Agents\lunar_astral
-.\build.ps1
-
-# 扩展系统——琉璃
-cd d:\Lunar_Astral_Agents\crystal_astral
-.\build.ps1
-
-# 语音识别
-cd d:\Lunar_Astral_Agents\subsystem\qwen_asr
-.\build.ps1
-
-# 语音合成（含 GGML + C++ 引擎 + Go 服务）
-cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
-.\build.ps1
-```
-
-各 `build.ps1` 均为自包含脚本，内部自动处理所有前置步骤。
-
-### 编译产物
-
-| 文件 | 系统 | 说明 |
-|------|------|------|
-| `Lunar_Astral.exe` | 钛宇-月华 | AI 桌面智能体主程序 |
-| `Crystal_Astral.exe` | 钛宇-琉璃 | 工具集扩展程序 |
-| `Qwen_ASR_Lunar.exe` | 语音识别 | 独立语音识别程序 |
-| `Qwen3_TTS_Lunar.exe` | 语音合成 | 独立语音合成程序 |
+> 一键编译全部 / 单独编译 / 双架构交叉编译 / 编译产物清单等完整构建说明，统一见 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)，此处不再复述。
 
 ---
 
