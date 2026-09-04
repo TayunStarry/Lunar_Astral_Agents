@@ -380,8 +380,8 @@ func checkBackendHealth(targetURL string) bool {
 
 // isWebSocketUpgrade 检测请求是否为 WebSocket 升级请求
 func isWebSocketUpgrade(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get("Connection")) == "upgrade" &&
-		strings.ToLower(r.Header.Get("Upgrade")) == "websocket"
+	return strings.EqualFold(r.Header.Get("Connection"), "upgrade") &&
+		strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
 // handleWebSocketProxy 处理 WebSocket 代理：劫持客户端连接，建立到后端的 TCP 隧道，双向转发数据

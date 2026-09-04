@@ -1,6 +1,9 @@
-# stable-diffusion.cpp 参数文档（中文翻译）
+# 11 stable-diffusion.cpp 参数参考
 
-> stable-diffusion.cpp version unknown, commit 3633072
+> [🏠 文档地图](README.md) | [◀ 上一章](10-llama.cpp-参数参考.md)
+> 覆盖：`local_data/models/document/` 下原 stable-diffusion.cpp 参数文档（中/英文两版已合并为本节，原文件已删除）
+
+本文为 stable-diffusion.cpp `sd-cli` 命令行参数的中文速查表（commit 3633072），由上游 `--help` 输出整理翻译。与项目相关的图像生成管线见 [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) 与 [04-公共子系统](04-公共子系统.md) §4.4。
 
 ## CLI 选项 (CLI Options)
 

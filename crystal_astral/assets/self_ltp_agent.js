@@ -682,6 +682,8 @@
             '#selfltp-runbtn.running{background:linear-gradient(135deg,#ff5a4e,#ff3b30);}',
             '#selfltp-runbtn:hover{transform:scale(1.06);}',
             '#selfltp-runbtn:active{transform:scale(0.95);}',
+            '#selfltp-runbtn .selfltp-spinner{display:block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.35);border-top-color:#fff;border-radius:50%;animation:selfltp-spin .8s linear infinite;}',
+            '@keyframes selfltp-spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}',
             /* 历史记录下拉（任务历史 + 运行日志） */
             '#selfltp-drop{position:absolute;top:calc(100% + 10px);right:0;width:340px;max-width:calc(100vw - 24px);display:none;background:rgba(255,255,255,0.82);-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);border:1px solid rgba(255,255,255,0.9);border-radius:16px;box-shadow:0 10px 32px rgba(110,120,140,0.22);overflow:hidden;}',
             '#selfltp-drop.show{display:block;}',
@@ -761,7 +763,7 @@
             task.disabled = on;
             runBtn.classList.toggle('idle', !on);
             runBtn.classList.toggle('running', on);
-            runBtn.innerHTML = on ? '&#9632;' : '&#9654;';
+            runBtn.innerHTML = on ? '<span class="selfltp-spinner"></span>' : '&#9654;';
             runBtn.title = on ? '停止' : '开始';
         };
 

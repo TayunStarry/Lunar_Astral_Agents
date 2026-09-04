@@ -125,7 +125,8 @@ body {
 
 /* 选中态：持续慢速高亮闪烁（用户点击选中与琉璃选中共用） */
 .page-card.selected {
-    border-color: rgba(255, 215, 0, 0.85);
+    border-width: 2px;
+    border-color: rgba(255, 215, 0, 0.9);
     animation: cardBlink 1.8s ease-in-out infinite;
 }
 
@@ -143,7 +144,7 @@ body {
     }
 }
 
-/* 未选中：右上角显示随机标签；选中后隐藏标签，改显同款样式的设置按钮 */
+/* 未选中：右上角显示随机标签；选中后隐藏标签，改为黑色无背景齿轮按钮 */
 .page-card .card-gear {
     display: none;
 }
@@ -154,23 +155,20 @@ body {
 
 .page-card .card-gear {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    height: 32px;
-    padding: 0 14px;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.68);
-    backdrop-filter: blur(6px);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
+    background: transparent;
+    border: none;
+    color: #000;
+    font-size: 14px;
     cursor: pointer;
     z-index: 15;
-    transition: transform 0.15s, background 0.15s;
+    border-radius: 8px;
+    transition: background 0.15s, transform 0.15s;
 }
 
 .page-card.selected .card-gear {
@@ -178,65 +176,96 @@ body {
 }
 
 .page-card.selected .card-gear:hover {
-    background: rgba(0, 0, 0, 0.85);
-    transform: scale(1.05);
+    background: rgba(0, 0, 0, 0.08);
+    transform: scale(1.1);
 }
 
-/* 管理菜单（导出 / 删除 / 归档 / 助理·手动）—— 从右上角设置按钮下方展开 */
-.card-menu {
+/* 设置面板：点击齿轮后，整卡变为黑色磨砂卡片，隐藏应用图标，内容为若干操作按钮 */
+.page-card .card-settings {
     position: absolute;
-    top: 34px;
-    right: 8px;
+    inset: 0;
+    z-index: 30;
+    border-radius: 14px;
+    background: rgba(20, 24, 36, 0.55);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
     display: none;
     flex-direction: column;
-    gap: 3px;
-    padding: 6px;
-    min-width: 110px;
-    border-radius: 10px;
-    background: rgba(18, 22, 38, 0.94);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    z-index: 20;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 14px 14px;
+    box-sizing: border-box;
 }
 
-.card-menu.active {
+.page-card.settings-open .card-settings {
     display: flex;
 }
 
-.card-menu-item {
+/* 打开设置面板时，隐藏底层图标、标题与右上角黑色齿轮，避免透过磨砂显示 */
+.page-card.settings-open .icon,
+.page-card.settings-open h3 {
+    visibility: hidden;
+}
+
+.page-card.settings-open .card-gear {
+    display: none;
+}
+
+.card-settings-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 7px;
-    padding: 7px 10px;
-    border: none;
-    border-radius: 6px;
+    justify-content: center;
     background: transparent;
+    border: none;
     color: #fff;
-    font-size: 12px;
+    font-size: 14px;
     cursor: pointer;
-    font-family: inherit;
-    text-align: left;
-    white-space: nowrap;
+    z-index: 5;
+    border-radius: 8px;
     transition: background 0.15s;
 }
 
-.card-menu-item:hover {
-    background: rgba(255, 255, 255, 0.14);
+.card-settings-close:hover {
+    background: rgba(255, 255, 255, 0.12);
 }
 
-.card-menu-item i {
-    width: 14px;
-    text-align: center;
-    opacity: 0.85;
+.card-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 10px;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, transform 0.15s;
 }
 
-.card-menu-assistant {
+.card-settings-item:hover {
+    background: rgba(255, 255, 255, 0.16);
+    transform: scale(1.02);
+}
+
+.card-settings-item i {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.card-settings-assistant {
     color: #7ee0c6;
 }
 
-.card-menu-assistant:hover {
+.card-settings-assistant:hover {
     background: rgba(126, 224, 198, 0.18);
 }
 

@@ -3,8 +3,8 @@ module CrystalAstral
 go 1.24.4
 
 require (
+	LunarSubsystem/AutoLTP v0.0.0-00010101000000-000000000000
 	LunarSubsystem/BrowserClient v0.0.0
-	LunarSubsystem/FaceLTP v0.0.0
 	LunarSubsystem/FileManager v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
@@ -14,6 +14,7 @@ require (
 )
 
 require (
+	github.com/auuunya/go-element v1.0.1 // indirect
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
 	github.com/chai2010/webp v1.0.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
@@ -33,7 +34,7 @@ require (
 
 replace LunarSubsystem/GeneralConfig => ../subsystem/general_config
 
-replace LunarSubsystem/FaceLTP => ../subsystem/face_ltp
+replace LunarSubsystem/AutoLTP => ../subsystem/auto_ltp
 
 replace LunarSubsystem/FileManager => ../subsystem/file_manager
 

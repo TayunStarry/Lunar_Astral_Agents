@@ -341,11 +341,12 @@ function buildPageCard(page) {
         </div>
         <h3>${page.title}</h3>
         <button class="card-gear" title="设置"><i class="fas fa-cog"></i></button>
-        <div class="card-menu">
-            <button class="card-menu-item" data-action="export"><i class="fas fa-box"></i> 导出</button>
-            <button class="card-menu-item" data-action="delete"><i class="fas fa-trash-alt"></i> 删除</button>
-            <button class="card-menu-item" data-action="archive"><i class="fas fa-archive"></i> 归档</button>
-            <button class="card-menu-item card-menu-assistant" data-action="assistant">
+        <div class="card-settings">
+            <button class="card-settings-close" title="返回"><i class="fas fa-cog"></i></button>
+            <button class="card-settings-item" data-action="export"><i class="fas fa-box"></i> 导出</button>
+            <button class="card-settings-item" data-action="delete"><i class="fas fa-trash-alt"></i> 删除</button>
+            <button class="card-settings-item" data-action="archive"><i class="fas fa-archive"></i> 归档</button>
+            <button class="card-settings-item card-settings-assistant" data-action="assistant">
                 <i class="fas fa-robot"></i> ${isSelfLTP ? '手动' : '助理'}
             </button>
         </div>
@@ -353,23 +354,27 @@ function buildPageCard(page) {
 
     // 单击 = 选中（持续闪烁）；已选中状态下再次单击 = 进入页面
     card.addEventListener('click', (e) => {
-        if (e.target.closest('.card-gear') || e.target.closest('.card-menu')) return;
+        if (e.target.closest('.card-gear') || e.target.closest('.card-settings')) return;
         if (card.classList.contains('selected')) {
             openPage(page);
         } else {
             selectCard(card);
         }
     });
-    // 齿轮：切换管理菜单
+    // 黑色齿轮：打开设置面板（整卡变黑磨砂，显示操作按钮）
     card.querySelector('.card-gear').addEventListener('click', (e) => {
         e.stopPropagation();
-        const menu = card.querySelector('.card-menu');
-        const willOpen = !menu.classList.contains('active');
-        closeAllCardMenus();
-        if (willOpen) menu.classList.add('active');
+        if (card.classList.contains('selected')) {
+            card.classList.add('settings-open');
+        }
     });
-    // 菜单项处理
-    card.querySelectorAll('.card-menu-item').forEach(item => {
+    // 白色齿轮：关闭设置面板，还原应用卡片样式
+    card.querySelector('.card-settings-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.remove('settings-open');
+    });
+    // 设置面板内的操作按钮
+    card.querySelectorAll('.card-settings-item').forEach(item => {
         item.addEventListener('click', (e) => {
             e.stopPropagation();
             handleCardMenuAction(item.dataset.action, page, card);
@@ -383,20 +388,13 @@ let selectedCard = null;
 
 function selectCard(card) {
     if (selectedCard && selectedCard !== card) {
-        selectedCard.classList.remove('selected');
-        selectedCard.querySelector('.card-menu')?.classList.remove('active');
+        selectedCard.classList.remove('selected', 'settings-open');
     }
     selectedCard = card;
-    // 通过 .selected 触发持续的慢速高亮闪烁（隐藏标签、显示设置按钮）
+    // 通过 .selected 触发持续的慢速高亮闪烁（隐藏标签、显示黑色齿轮按钮）
     card.classList.remove('selected');
     void card.offsetWidth;
     card.classList.add('selected');
-}
-
-function closeAllCardMenus() {
-    pageGrid.querySelectorAll('.page-card.selected').forEach(c => {
-        c.querySelector('.card-menu')?.classList.remove('active');
-    });
 }
 
 async function handleCardMenuAction(action, page, card) {

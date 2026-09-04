@@ -14,7 +14,6 @@ the_crashed_cpp_project/
 embedded_data/
 bridge_probe/
 deepseek.web-view.*
-lunar_decoder/
 
 ## Go 测试产物
 coverage

@@ -1,3 +1,5 @@
+github.com/auuunya/go-element v1.0.1 h1:cwTjR0EoI6PvJSLBmlUAZ+00Dd4FHxgTvI/9b10kb1o=
+github.com/auuunya/go-element v1.0.1/go.mod h1:P2YGqdgcwe3r8b+xjnRjvFeL7VtlGAKfh7dmBqk6tHY=
 github.com/aws/aws-sdk-go v1.38.20 h1:QbzNx/tdfATbdKfubBpkt84OM6oBkxQZRw6+bW2GyeA=
 github.com/aws/aws-sdk-go v1.38.20/go.mod h1:hcU610XS61/+aQV88ixoOzUoG7v3b31pl2zKMmprdro=
 github.com/chai2010/webp v1.0.0 h1:64IosJhW2aYYWvqZiexusoDQFTSfzcJA7DU6na7RKHM=

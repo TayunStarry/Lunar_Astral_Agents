@@ -1,11 +1,10 @@
-module LunarSubsystem/FaceLTP
+module LunarSubsystem/AutoLTP
 
 go 1.24.4
 
 require (
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
-	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
 )
 
 require (
@@ -19,8 +18,13 @@ require (
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
-	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 	golang.org/x/sys v0.41.0 // indirect
+)
+
+require (
+	github.com/auuunya/go-element v1.0.1
+	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
+	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 )
 
 replace LunarSubsystem/GeneralConfig => ../general_config

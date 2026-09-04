@@ -1,7 +1,7 @@
 package main
 
 import (
-	"LunarSubsystem/FaceLTP"
+	"LunarSubsystem/AutoLTP"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
@@ -109,11 +109,11 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 // 从而避免在多工具链中精确背诵/生成工具名导致的「工具迷航」。
 const useTheProgramToolName = "use_the_program"
 
-// faceLTPToolName Face-LTP 内置桌面智能体的工具名（非包声明，作为琉璃固有工具选项）
-const faceLTPToolName = "face_ltp_desktop_agent"
+// windowAgentToolName Auto-LTP 内置桌面智能体的工具名（多角色编排式桌面智能体，当前主用）
+const windowAgentToolName = "window_agent"
 
-// faceLTPToolDescription Face-LTP 内置桌面智能体的默认固有描述
-const faceLTPToolDescription = "面向 Windows 桌面的通用智能体：搜索并启动程序、激活窗口、模拟鼠标点击/键入/滚轮滚动，并通过多模态视觉识别理解屏幕内容并定位操作目标"
+// windowAgentToolDescription Auto-LTP 内置桌面智能体的默认固有描述
+const windowAgentToolDescription = "面向 Windows 桌面的编排式桌面智能体：先拆解任务为结构化计划，视觉+UIA 双重理解界面，再由独立角色逐步执行操作"
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
@@ -185,8 +185,8 @@ func ltpRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defs, _ := scanAtoaToolchain()
-	// 内置 Face-LTP 桌面智能体作为固有工具选项，追加到工具清单
-	defs = append(defs, LTPXRemoteToolDef{Name: faceLTPToolName, Description: faceLTPToolDescription})
+	// 内置 Auto-LTP 桌面智能体作为固有工具选项（face_ltp 已弃用并移除）
+	defs = append(defs, LTPXRemoteToolDef{Name: windowAgentToolName, Description: windowAgentToolDescription})
 	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
 	aggTool := buildUseTheProgram(defs)
 	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
@@ -229,17 +229,25 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 内置 Face-LTP 桌面智能体：不依赖任何包，直接调用进程内模块
-	if targetTool == faceLTPToolName {
+	// 内置 Auto-LTP 桌面智能体（window_agent）：进程内调用多角色编排智能体
+	if targetTool == windowAgentToolName {
 		instruction := ""
 		if raw, exists := req.Arguments["instruction"]; exists {
 			if s, sok := raw.(string); sok {
 				instruction = s
 			}
 		}
-		resp := FaceLTP.Run(instruction)
-		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Face-LTP 智能体（工具=%s）：%s", targetTool, instruction)
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: resp.Success, Text: resp.Text, Error: resp.Error})
+		text, err := AutoLTP.Run(instruction)
+		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Auto-LTP 智能体（工具=%s）：%s", targetTool, instruction)
+		if err != nil {
+			jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Text: text, Error: err.Error()})
+			return
+		}
+		success := err == nil && !strings.HasPrefix(text, "已达到最大执行轮次")
+		if text == "" {
+			text = "任务已执行完成"
+		}
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: success, Text: text})
 		return
 	}
 

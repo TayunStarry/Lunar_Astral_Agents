@@ -37,7 +37,7 @@ Lunar_Astral_Agents/
 └── local_data/            # 本地数据（模型文件 + 前端资源）
 ```
 
-> 详细架构参见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+> 详细架构（架构图、文件夹结构、技术栈）见 [Code Wiki 01 项目架构总览](docs/code-wiki/01-项目架构总览.md)。
 
 ---
 
@@ -141,17 +141,20 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 
 ## 子系统导航
 
-| 子系统 | 文档 | 功能 |
-|--------|------|------|
-| 钛宇-月华 | [lunar_astral/README.md](lunar_astral/README.md) | AI 桌面智能体核心 |
-| 钛宇-琉璃 | [crystal_astral/README.md](crystal_astral/README.md) | 工具集扩展系统 |
-| 配置管理 | [subsystem/general_config/](subsystem/general_config/) | 全局配置中枢 |
-| 文件管理 | [subsystem/file_manager/](subsystem/file_manager/) | 文件管理 + 知识库/记忆库 + 扩展包 |
-| 图像处理 | [subsystem/image_processor/](subsystem/image_processor/README.md) | 图像生成 + 截图 + 视频关键帧 |
-| 网络检索 | [subsystem/agent_search/](subsystem/agent_search/README.md) | AI 多引擎搜索智能体 |
-| 语音合成 | [subsystem/qwen3_tts/](subsystem/qwen3_tts/README.md) | Qwen3-TTS |
-| 语音识别 | [subsystem/qwen_asr/](subsystem/qwen_asr/README.md) | Qwen3-ASR |
-| 项目架构 | [ARCHITECTURE.md](ARCHITECTURE.md) | 完整架构说明 |
+> 各模块的详细文档已统一收录于 [Code Wiki](docs/code-wiki/README.md)，下表为模块定位速览。
+
+| 子系统 | Code Wiki 章节 | 功能 |
+|--------|----------|------|
+| 钛宇-月华 | [02](docs/code-wiki/02-核心系统-钛宇-月华.md) | AI 桌面智能体核心 |
+| 钛宇-琉璃 | [03](docs/code-wiki/03-扩展系统-钛宇-琉璃.md) | 工具集扩展系统 |
+| 配置管理 | [04](docs/code-wiki/04-公共子系统.md) | 全局配置中枢 |
+| 文件管理 | [04](docs/code-wiki/04-公共子系统.md) | 文件管理 + 知识库/记忆库 + 扩展包 |
+| 图像处理 | [04](docs/code-wiki/04-公共子系统.md) | 图像生成 + 截图 + 视频关键帧 |
+| 网络检索 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | AI 多引擎搜索智能体 |
+| 语音合成 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | Qwen3-TTS |
+| 语音识别 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | Qwen3-ASR |
+| 前端资源库 | [06](docs/code-wiki/06-前端资源库.md) | 共享前端资源与扩展包 |
+| 项目架构 | [01](docs/code-wiki/01-项目架构总览.md) | 完整架构说明 |
 
 ---
 
@@ -166,11 +169,13 @@ cd d:\Lunar_Astral_Agents\subsystem\qwen3_tts
 | [01 项目架构总览](docs/code-wiki/01-项目架构总览.md) | 架构入口、前端共享资源、章节导航 |
 | [02 核心系统·月华](docs/code-wiki/02-核心系统-钛宇-月华.md) | Go 后端 + TypeScript 智能体 |
 | [03 扩展系统·琉璃](docs/code-wiki/03-扩展系统-钛宇-琉璃.md) | 工具集扩展 + 代理路由 |
-| [04 公共子系统](docs/code-wiki/04-公共子系统.md) | 配置/浏览器/文件/图像/日志 |
+| [04 公共子系统](docs/code-wiki/04-公共子系统.md) | 配置/浏览器/文件/图像/日志/编解码 |
 | [05 独立 AI 引擎与运维](docs/code-wiki/05-独立AI引擎与运维工具.md) | TTS / ASR / 搜索 / 运维 |
-| [06 前端资源库](docs/code-wiki/06-前端资源库.md) | 标准依赖库与自定义模块 |
+| [06 前端资源库](docs/code-wiki/06-前端资源库.md) | 标准依赖库与自定义模块、扩展包总览 |
 | [07 依赖关系](docs/code-wiki/07-依赖关系.md) | Go 模块图、三方库、端点 |
 | [08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md) | 环境、编译、运行、配置 |
+| [09 LTPX 协议](docs/code-wiki/09-LTPX协议-月华工具包.md) | 工具包协议与 AtoA 调用链 |
+| [10 llama.cpp 参数](docs/code-wiki/10-llama.cpp-参数参考.md) / [11 sd.cpp 参数](docs/code-wiki/11-stable-diffusion.cpp-参数参考.md) | 引擎 CLI 参数速查 |
 
 > 两套文档详见门户 [docs/code-wiki/README.md](docs/code-wiki/README.md)，其中互相超链接、查漏补缺。
 

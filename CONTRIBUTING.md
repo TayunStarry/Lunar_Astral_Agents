@@ -33,7 +33,7 @@
 
 ## 开始前的准备
 
-1. **阅读文档**: 通读 [README.md](README.md) 和 [ARCHITECTURE.md](ARCHITECTURE.md)，了解项目的整体架构与各子系统职责
+1. **阅读文档**: 通读 [README.md](README.md) 与 [Code Wiki 综合文档门户](docs/code-wiki/README.md)（尤其 [01 项目架构总览](docs/code-wiki/01-项目架构总览.md)），了解项目的整体架构与各子系统职责
 2. **分叉仓库**: 将项目 Fork 到你的 GitHub 账户下，在 Fork 后的仓库中进行开发
 3. **创建分支**: 基于 `main` 分支创建功能分支，命名建议 `feat/描述` 或 `fix/描述`
 

@@ -98,7 +98,7 @@
 
 ## 命令行参数与配置
 
-运行参数（如 `-developer` 调试模式、`-basic-port` 指定端口）与 `lunar_config.json` 的分组结构、各项默认值，详见代码文档 [Code Wiki 08 构建运行与配置](../docs/code-wiki/08-构建运行与配置.md)，此处不重复。
+运行参数（如 `-developer` 调试模式、`-basic-port` 指定端口）与 `lunar_config.json` 的分组结构、各项默认值，详见代码文档 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)，此处不重复。
 
 ---
 

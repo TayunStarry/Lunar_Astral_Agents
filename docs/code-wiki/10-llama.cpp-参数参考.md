@@ -1,4 +1,9 @@
-# llama.cpp 参数文档（中文翻译）
+# 10 llama.cpp 参数参考
+
+> [🏠 文档地图](README.md) | [◀ 上一章](09-LTPX协议-月华工具包.md)
+> 覆盖：`local_data/models/document/` 下原 llama.cpp 参数文档（中/英文两版已合并为本节，原文件已删除）
+
+本文为 llama.cpp `llama-server` 命令行参数的中文速查表，由上游 `--help` 输出整理翻译。与项目相关的启动参数形态见 [08-构建运行与配置](08-构建运行与配置.md) 与 [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) §3.3。
 
 ## 通用参数 (Common Params)
 
@@ -138,7 +143,7 @@
 |------|------|
 | `--spec-draft-hf`, `-hfd`, `-hfrd`, `--hf-repo-draft <user>/<model>[:quant]` | 与 `--hf-repo` 相同，但用于草稿模型（默认：未使用）<br>环境变量：`LLAMA_ARG_SPEC_DRAFT_HF_REPO` |
 | `--spec-draft-threads`, `-td`, `--threads-draft N` | 生成时使用的线程数（默认：同 `--threads`） |
-| `--spec-draft-threads-batch`, `-tbd`, `--threads-batch-draft N` | 批量和提示处理时使用的线程数（默认：同 `--threads-draft`） |
+| `--spec-draft-threads-batch`, `-tbd`, `--threads-batch-draft N` | 批量和提示处理时使用的线程数（默认：同 `--spec-draft-threads`） |
 | `--spec-draft-cpu-mask`, `-Cd`, `--cpu-mask-draft M` | 草稿模型 CPU 亲和性掩码。与 cpu-range-draft 互补（默认：同 `--cpu-mask`） |
 | `--spec-draft-cpu-range`, `-Crd`, `--cpu-range-draft lo-hi` | CPU 亲和性范围。与 `--cpu-mask-draft` 互补 |
 | `--spec-draft-cpu-strict`, `--cpu-strict-draft <0\|1>` | 草稿模型使用严格的 CPU 放置（默认：同 `--cpu-strict`） |
@@ -243,7 +248,7 @@
 | `--models-max N` | 对于路由服务器，同时加载的最大模型数量（默认：4，0 = 无限制）<br>环境变量：`LLAMA_ARG_MODELS_MAX` |
 | `--models-autoload`, `--no-models-autoload` | 对于路由服务器，是否自动加载模型（默认：启用）<br>环境变量：`LLAMA_ARG_MODELS_AUTOLOAD` |
 | `--jinja`, `--no-jinja` | 是否使用 jinja 模板引擎进行聊天（默认：启用）<br>环境变量：`LLAMA_ARG_JINJA` |
-| `--reasoning-format FORMAT` | 控制是否允许和/或从响应中提取思考标签，以及它们以哪种格式返回；其中之一：<br>- none：将思考保留在 `message.content` 中不解析<br>- deepseek：将思考放在 `message.reasoning_content` 中<br>- deepseek-legacy：在 `message.content` 中保留 `<think>` 标签，同时填充 `message.reasoning_content`<br>（默认：auto）<br>环境变量：`LLAMA_ARG_THINK` |
+| `--reasoning-format FORMAT` | 控制是否允许和/或从响应中提取思考标签，以及它们以哪种格式返回；其中之一：<br>- none：将思考保留在 `message.content` 中不解析<br>- deepseek：将思考放在 `message.reasoning_content` 中<br>- deepseek-legacy：在 `message.content` 中保留 ` thinking` 标签，同时填充 `message.reasoning_content`<br>（默认：auto）<br>环境变量：`LLAMA_ARG_THINK` |
 | `-rea`, `--reasoning [on\|off\|auto]` | 在聊天中使用推理/思考（'on', 'off', 或 'auto'，默认：'auto'（从模板检测））<br>环境变量：`LLAMA_ARG_REASONING` |
 | `--reasoning-budget N` | 思考的 token 预算：-1 表示无限制，0 表示立即结束，N>0 表示 token 预算（默认：-1）<br>环境变量：`LLAMA_ARG_THINK_BUDGET` |
 | `--reasoning-budget-message MESSAGE` | 当思考预算耗尽时注入到思考结束标签之前的消息（默认：无）<br>环境变量：`LLAMA_ARG_THINK_BUDGET_MESSAGE` |

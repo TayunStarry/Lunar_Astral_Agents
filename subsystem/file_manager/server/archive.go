@@ -648,7 +648,7 @@ func ZipMetadataHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "路径越界"})
 		return
 	}
-	if strings.ToLower(filepath.Ext(fullPath)) != ".zip" {
+	if !strings.EqualFold(filepath.Ext(fullPath), ".zip") {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "仅支持 .zip 压缩包"})
 		return
 	}
