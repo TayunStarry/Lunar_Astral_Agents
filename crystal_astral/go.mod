@@ -8,6 +8,7 @@ require (
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
 	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/LunarDecoder v0.0.0
 	LunarSubsystem/MediaTools v0.0.0
 	github.com/auuunya/go-element v1.0.1
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
@@ -48,5 +49,7 @@ replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 replace LunarSubsystem/ImageProcessor => ../subsystem/image_processor
 
 replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general
+
+replace LunarSubsystem/LunarDecoder => ../subsystem/lunar_decoder
 
 replace LunarSubsystem/LunarGoja => ../subsystem/lunar_goja

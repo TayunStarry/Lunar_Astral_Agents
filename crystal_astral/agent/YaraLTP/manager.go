@@ -129,14 +129,18 @@ func (e *engine) unloadPackage(id string) {
 	p.unload()
 }
 
-// reloadPackage 重载一个插件。
+// reloadPackage 重载一个插件：先从注册表移除旧实例并卸载，再新建实例加载，
+// 避免 loadPackage 因看到残留旧实例而跳过重新加载（导致插件永久 loaded=false）。
 func (e *engine) reloadPackage(id string) error {
-	e.mu.RLock()
+	e.mu.Lock()
 	p := e.plugins[id]
-	e.mu.RUnlock()
 	if p == nil {
+		e.mu.Unlock()
 		return fmt.Errorf("插件 %s 未加载", id)
 	}
+	delete(e.plugins, id)
+	delete(e.byDir, p.DirName)
+	e.mu.Unlock()
 	p.unload()
 	e.loadPackage(id, p.DirName, p.Root, p.Title)
 	return nil

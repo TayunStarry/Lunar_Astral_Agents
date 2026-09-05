@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LTP3 权限密钥生成器</title>
+<style>
+  :root {
+    --side-bg: #24282f; --side-border: #2f343d;
+    --side-text: #e8eaee; --side-muted: #8b929d;
+    --page-bg: #eceef1; --card: #ffffff;
+    --border: #dfe3e8; --text: #2b2f36; --text-sub: #7a8089;
+    --accent: #3b82f6; --accent-hover: #2f6fe0; --danger: #d64545;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(16,24,40,.06), 0 1px 2px rgba(16,24,40,.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background: var(--page-bg); color: var(--text); line-height: 1.5;
+  }
+
+  /* 布局：侧边栏 + 主区 */
+  .layout { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar {
+    width: 228px; flex-shrink: 0; background: var(--side-bg);
+    border-right: 1px solid var(--side-border);
+    display: flex; flex-direction: column; padding: 26px 18px 20px; color: var(--side-text);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 30px; }
+  .brand-dot {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg, #4f7cf0, #2f4f9e);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: #fff;
+  }
+  .brand h1 { font-size: 16px; font-weight: 600; }
+  .brand p { font-size: 12px; color: var(--side-muted); margin-top: 2px; }
+  .steps { display: flex; flex-direction: column; gap: 6px; }
+  .step-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border-radius: 9px; font-size: 13px; color: var(--side-muted); cursor: pointer;
+    transition: background .15s; border: none; background: transparent; text-align: left; width: 100%;
+  }
+  .step-item:hover { background: #2a2f38; }
+  .step-item .no {
+    width: 22px; height: 22px; border-radius: 50%; background: #323844;
+    color: var(--side-muted); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+  }
+  .step-item.active { background: #2f3540; color: var(--side-text); }
+  .step-item.active .no { background: var(--accent); color: #fff; }
+  .step-item.done .no { background: #3a4a63; color: #9cc0ff; }
+  .side-foot { margin-top: auto; border-top: 1px solid var(--side-border); padding-top: 14px; }
+  .side-summary { font-size: 12px; color: var(--side-muted); margin-bottom: 6px; }
+  .side-summary b { color: var(--side-text); font-weight: 600; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 30px 40px 22px; }
+  .main-head { margin-bottom: 22px; flex-shrink: 0; }
+  .main-head h1 { font-size: 21px; font-weight: 600; }
+  .main-head p { color: var(--text-sub); font-size: 13px; margin-top: 6px; }
+
+  /* 多页翻页 */
+  .page { display: none; flex: 1; min-height: 0; }
+  .page.active { display: flex; flex-direction: column; }
+
+  /* 统一输入面板（输入区即选择区，不分块） */
+  .input-panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 26px 28px; flex: 1; min-height: 0;
+    display: flex; flex-direction: column; gap: 18px;
+    overflow: hidden;
+  }
+  .perm-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  select, input[type=text] {
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff; color: var(--text); font-size: 13px; outline: none; min-width: 250px;
+  }
+  select:focus, input[type=text]:focus { border-color: var(--accent); }
+  .btn {
+    padding: 9px 16px; border: none; border-radius: 8px; font-size: 13px;
+    cursor: pointer; background: #f0f2f5; color: var(--text); transition: background .15s;
+  }
+  .btn:hover { background: #e6e9ee; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #eef2f7; border: 1px solid #dbe2ea; border-radius: 999px;
+    padding: 4px 12px; font-size: 12px;
+  }
+  .chip button {
+    border: none; background: none; cursor: pointer; color: var(--text-sub);
+    font-size: 14px; line-height: 1; padding: 0 2px;
+  }
+  .chip button:hover { color: var(--danger); }
+  .empty-hint { color: var(--text-sub); font-size: 12px; }
+
+  .drop-zone {
+    border: 1.5px dashed #c6ccd4; border-radius: 12px; padding: 20px;
+    text-align: center; color: var(--text-sub); font-size: 13px;
+    background: #fafbfc; cursor: pointer; transition: border-color .15s, background .15s;
+    /* 拖拽区占据该页全部剩余空间；脚本卡片在其内部 */
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  .drop-zone:hover { border-color: var(--accent); background: #f6f8fb; }
+  .drop-zone.dragging { border-color: var(--accent); background: #eef4ff; }
+  .dz-head { text-align: center; flex-shrink: 0; }
+  .dz-head .dz-icon { font-size: 26px; display: block; margin-bottom: 8px; color: #aab2bd; line-height: 1; }
+  .dz-head .dz-main { font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .dz-head .dz-sub { font-size: 12px; }
+
+  /* 脚本卡片网格：位于拖拽区内部，占据剩余空间并允许滚动 */
+  .file-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px; align-content: start; overflow-y: auto; min-height: 0;
+    margin-top: 16px; padding-top: 16px; border-top: 1px dashed #dfe3e8;
+  }
+  .file-card {
+    border: 1px solid var(--border); border-radius: 10px; background: #fafbfc;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .file-card .fc-name {
+    font-size: 13px; font-weight: 600; word-break: break-all;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .file-card .fc-name::before {
+    content: "JS"; font-size: 10px; font-weight: 700; color: #fff;
+    background: #7d93c2; border-radius: 5px; padding: 2px 5px; flex-shrink: 0;
+  }
+  .file-card .fc-meta { display: flex; justify-content: space-between; align-items: center; }
+  .file-card .fc-size { color: var(--text-sub); font-size: 12px; }
+  .file-card .fc-rm {
+    border: none; background: none; cursor: pointer; color: var(--text-sub);
+    font-size: 14px; line-height: 1; padding: 0 2px;
+  }
+  .file-card .fc-rm:hover { color: var(--danger); }
+
+  .gen-area { display: flex; justify-content: flex-end; flex-shrink: 0; }
+
+  /* 结果面板 */
+  .result-panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 24px 28px; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px;
+    overflow: hidden;
+  }
+  .kv { font-size: 13px; color: var(--text-sub); }
+  .kv b { color: var(--text); font-weight: 600; }
+  textarea {
+    width: 100%; min-height: 140px; resize: none; flex: 1;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font: 12px/1.5 Consolas, "Courier New", monospace; color: var(--text);
+    background: #fafbfc; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .result-actions { display: flex; gap: 10px; }
+  .ok-tip { color: #16a34a; font-size: 13px; }
+  .err-tip { color: var(--danger); font-size: 13px; white-space: pre-wrap; }
+
+  /* 校验页 */
+  .verify-form { display: flex; flex-direction: column; gap: 14px; }
+  .verify-form label.field-label { font-size: 13px; color: var(--text); }
+  .verify-out { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+  .verify-block {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
+    background: #fafbfc; font: 12px/1.5 Consolas, monospace; display: flex; gap: 12px; align-items: baseline;
+  }
+  .verify-block .vi { color: var(--text-sub); flex-shrink: 0; }
+  .verify-block .vt { word-break: break-all; }
+  .verify-block .vp { color: var(--accent); font-weight: 600; flex-shrink: 0; }
+  .perm-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .perm-tags .chip { background: #e8f0fe; border-color: #c9dcfb; }
+
+  /* 底部翻页 */
+  .pager { display: flex; justify-content: space-between; gap: 10px; padding-top: 14px; flex-shrink: 0; }
+  .pager .spacer { flex: 1; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- 侧边栏（深灰） -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-dot">K</div>
+      <div><h1>LTP3 Keygen</h1><p>权限密钥生成与校验</p></div>
+    </div>
+    <nav class="steps">
+      <button class="step-item active" data-page="1"><span class="no">1</span>输入与选择</button>
+      <button class="step-item" data-page="2"><span class="no">2</span>生成密钥</button>
+      <button class="step-item" data-page="3"><span class="no">3</span>校验密钥</button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-summary">已选权限 <b id="sidePermCnt">0</b></div>
+      <div class="side-summary">已选脚本 <b id="sideFileCnt">0</b></div>
+    </div>
+  </aside>
+
+  <!-- 主显示区（多页翻页） -->
+  <main class="main">
+    <div class="main-head">
+      <h1>LTP3 权限密钥生成器</h1>
+      <p>拼接全部脚本 → 128 位哈希 → 每权限一条密钥整体加密，脚本被篡改即无法解码。</p>
+    </div>
+
+    <!-- 页 1：输入与选择（输入区即选择区） -->
+    <div class="page active" id="page1">
+      <div class="input-panel">
+        <div class="perm-row">
+          <select id="permSelect"></select>
+          <button class="btn" id="permAddBtn">＋ 添加</button>
+        </div>
+        <div class="chips" id="permChips"></div>
+        <div class="empty-hint" id="permEmpty">尚未选择权限</div>
+
+        <div class="drop-zone" id="dropZone">
+          <div class="dz-head">
+            <span class="dz-icon">⬆</span>
+            <div class="dz-main">把插件脚本拖到这里</div>
+            <div class="dz-sub">仅支持 .js / .mjs / .cjs，可多文件（点击区域亦可选择文件）</div>
+          </div>
+          <div class="file-grid" id="fileGrid"></div>
+          <input type="file" id="fileInput" multiple accept=".js,.mjs,.cjs" style="display:none;">
+        </div>
+
+        <div class="gen-area">
+          <button class="btn btn-primary" id="genBtn">生成 permissions.key</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页 2：生成结果 -->
+    <div class="page" id="page2">
+      <div class="result-panel">
+        <div class="kv">脚本哈希（128 位截断）：<b id="rHash"></b></div>
+        <div class="kv">参与脚本：<b id="rFiles"></b> 个 · 密钥长度：<b id="rLen"></b></div>
+        <div id="genStatus"></div>
+        <textarea id="rKey" readonly></textarea>
+        <div class="result-actions">
+          <button class="btn" id="copyBtn">复制</button>
+          <button class="btn btn-primary" id="dlBtn">下载 permissions.key</button>
+          <button class="btn" id="toVerifyBtn" style="margin-left:auto;">去校验 →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页 3：校验密钥 -->
+    <div class="page" id="page3">
+      <div class="result-panel">
+        <div class="verify-form">
+          <div>
+            <label class="field-label">脚本哈希密钥（hex 32 字符）</label>
+            <input type="text" id="vKey" placeholder="粘贴密钥生成器显示的脚本哈希">
+          </div>
+          <div>
+            <label class="field-label">permissions.key 密文（粘贴，或点击下方选择文件自动读取）</label>
+            <textarea id="vCipher" placeholder="粘贴 permissions.key 内容..."></textarea>
+            <button class="btn btn-sm" id="vPickFile" style="margin-top:8px;">选择 permissions.key 文件</button>
+            <input type="file" id="vFile" accept=".key,.txt" style="display:none;">
+          </div>
+          <div>
+            <button class="btn btn-primary" id="vBtn">校验解码</button>
+          </div>
+        </div>
+        <div id="vStatus"></div>
+        <div class="verify-out" id="vOut"></div>
+      </div>
+    </div>
+
+    <!-- 底部翻页 -->
+    <div class="pager">
+      <button class="btn" id="prevBtn">← 上一步</button>
+      <span class="spacer"></span>
+      <button class="btn" id="nextBtn">下一步 →</button>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { perms: [], files: [], page: 1 };
+const STEP_NAMES = ['输入与选择', '生成密钥', '校验密钥'];
+
+function setPage(n) {
+  state.page = n;
+  [1, 2, 3].forEach(i => $('page' + i).classList.toggle('active', i === n));
+  document.querySelectorAll('.step-item').forEach(el => {
+    const p = +el.dataset.page;
+    el.classList.toggle('active', p === n);
+    el.classList.toggle('done', p < n);
+  });
+  $('prevBtn').disabled = n === 1;
+  $('nextBtn').disabled = n === 3;
+}
+function refreshSide() {
+  $('sidePermCnt').textContent = state.perms.length;
+  $('sideFileCnt').textContent = state.files.length;
+  document.querySelectorAll('.step-item').forEach(el => {
+    const p = +el.dataset.page;
+    el.classList.toggle('done', (p === 1 && (state.perms.length || state.files.length)) || p < state.page);
+  });
+}
+document.querySelectorAll('.step-item').forEach(el => el.onclick = () => setPage(+el.dataset.page));
+$('prevBtn').onclick = () => setPage(Math.max(1, state.page - 1));
+$('nextBtn').onclick = () => setPage(Math.min(3, state.page + 1));
+
+/* ---- 权限 ---- */
+fetch('/api/perms').then(r => r.json()).then(({permissions}) => {
+  const sel = $('permSelect');
+  permissions.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+});
+$('permAddBtn').onclick = () => {
+  const v = $('permSelect').value;
+  if (v && !state.perms.includes(v)) { state.perms.push(v); renderPerms(); }
+};
+function renderPerms() {
+  const box = $('permChips');
+  box.innerHTML = '';
+  state.perms.forEach(p => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = p + ' <button title="移除">×</button>';
+    chip.querySelector('button').onclick = () => { state.perms = state.perms.filter(x => x !== p); renderPerms(); };
+    box.appendChild(chip);
+  });
+  $('permEmpty').style.display = state.perms.length ? 'none' : '';
+  refreshSide();
+}
+
+/* ---- 脚本：拖入 + 点击选择，卡片展示 ---- */
+const dropZone = $('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragging'); addFiles(e.dataTransfer.files); });
+dropZone.addEventListener('click', () => $('fileInput').click());
+$('fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+
+function addFiles(list) {
+  const accepted = Array.from(list).filter(f => /\.(js|mjs|cjs)$/i.test(f.name));
+  state.files = state.files.concat(accepted);
+  renderFiles();
+}
+function renderFiles() {
+  const grid = $('fileGrid');
+  grid.innerHTML = '';
+  state.files.forEach((f, i) => {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    const name = document.createElement('div');
+    name.className = 'fc-name';
+    name.textContent = f.name;
+    const meta = document.createElement('div');
+    meta.className = 'fc-meta';
+    const size = document.createElement('span');
+    size.className = 'fc-size';
+    size.textContent = (f.size / 1024).toFixed(1) + ' KB';
+    const rm = document.createElement('button');
+    rm.className = 'fc-rm'; rm.title = '移除'; rm.textContent = '×';
+    rm.onclick = (ev) => { ev.stopPropagation(); state.files.splice(i, 1); renderFiles(); };
+    meta.appendChild(size); meta.appendChild(rm);
+    card.appendChild(name); card.appendChild(meta);
+    card.addEventListener('click', (ev) => ev.stopPropagation()); // 卡片点击不触发拖拽区选文件
+    grid.appendChild(card);
+  });
+  refreshSide();
+}
+
+/* ---- 生成 ---- */
+$('genBtn').onclick = async () => {
+  const status = $('genStatus');
+  status.innerHTML = '';
+  if (!state.perms.length) { status.innerHTML = '<div class="err-tip">请先选择至少 1 个权限</div>'; return; }
+  if (!state.files.length) { status.innerHTML = '<div class="err-tip">请先拖入插件脚本</div>'; return; }
+
+  const btn = $('genBtn');
+  btn.disabled = true; btn.textContent = '生成中…';
+  try {
+    const fd = new FormData();
+    fd.append('permissions', JSON.stringify(state.perms));
+    state.files.forEach(f => fd.append('files', f));
+    const resp = await fetch('/api/gen', { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!data.success) { status.innerHTML = '<div class="err-tip">' + (data.error || '生成失败') + '</div>'; return; }
+
+    $('rHash').textContent = data.hash;
+    $('rFiles').textContent = data.file_count;
+    $('rLen').textContent = data.length;
+    $('rKey').value = data.key;
+    status.innerHTML = '<div class="ok-tip">生成成功</div>';
+    setPage(2);
+  } catch (err) {
+    status.innerHTML = '<div class="err-tip">请求失败: ' + err.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '生成 permissions.key';
+  }
+};
+$('copyBtn').onclick = () => { $('rKey').select(); navigator.clipboard && navigator.clipboard.writeText($('rKey').value); };
+$('dlBtn').onclick = () => {
+  const blob = new Blob([$('rKey').value], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'permissions.key'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+$('toVerifyBtn').onclick = () => { $('vKey').value = $('rHash').textContent; $('vCipher').value = $('rKey').value; setPage(3); };
+
+/* ---- 校验 ---- */
+$('vPickFile').onclick = () => $('vFile').click();
+$('vFile').onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { $('vCipher').value = rd.result; };
+  rd.readAsText(f);
+  e.target.value = '';
+};
+$('vBtn').onclick = async () => {
+  const status = $('vStatus');
+  const out = $('vOut');
+  status.innerHTML = ''; out.innerHTML = '';
+  const key = $('vKey').value.trim();
+  const cipher = $('vCipher').value.trim();
+  if (!key) { status.innerHTML = '<div class="err-tip">请填写脚本哈希密钥</div>'; return; }
+  if (!cipher) { status.innerHTML = '<div class="err-tip">请粘贴密文或选择 permissions.key 文件</div>'; return; }
+
+  const btn = $('vBtn');
+  btn.disabled = true; btn.textContent = '校验中…';
+  try {
+    const resp = await fetch('/api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, cipher })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      status.innerHTML = '<div class="err-tip">' + (data.error || '校验失败') + '</div>';
+      return;
+    }
+    status.innerHTML = '<div class="ok-tip">解码成功</div>';
+    const plain = document.createElement('div');
+    plain.className = 'kv';
+    plain.textContent = '明文长度 ' + data.plain.length + '，共分割出 ' + data.blocks.length + ' 条密钥字符串：';
+    out.appendChild(plain);
+    (data.blocks || []).forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'verify-block';
+      const idx = document.createElement('span'); idx.className = 'vi'; idx.textContent = '#' + b.index + ' len=' + b.len;
+      const txt = document.createElement('span'); txt.className = 'vt'; txt.textContent = b.text;
+      row.appendChild(idx); row.appendChild(txt);
+      if (b.perm) {
+        const p = document.createElement('span'); p.className = 'vp'; p.textContent = '→ ' + b.perm;
+        row.appendChild(p);
+      }
+      out.appendChild(row);
+    });
+    if (data.perms && data.perms.length) {
+      const tagRow = document.createElement('div');
+      tagRow.className = 'perm-tags';
+      data.perms.forEach(p => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = p;
+        tagRow.appendChild(chip);
+      });
+      out.appendChild(tagRow);
+    }
+  } catch (err) {
+    status.innerHTML = '<div class="err-tip">请求失败: ' + err.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '校验解码';
+  }
+};
+
+setPage(1);
+refreshSide();
+</script>
+</body>
+</html>

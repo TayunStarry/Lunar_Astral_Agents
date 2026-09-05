@@ -1,4 +1,4 @@
-﻿package YaraLTP
+package YaraLTP
 
 // ==== 纯计算 API：encoding / time / crypto ====
 
@@ -8,6 +8,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -160,56 +161,57 @@ func bindCrypto(vm *goja.Runtime, parent *goja.Object) {
 	parent.Set("crypto", o)
 }
 
-// ed25519PrivFromArg 把 PEM(PKCS8) 或原始 64 字节私钥转为 ed25519.PrivateKey。
+// ed25519PrivFromArg 把 PEM(PKCS8，含单行字面 "\n" 形态) 或原始 32/64 字节私钥
+// 转为 ed25519.PrivateKey。PKCS8 用 crypto/x509 标准解析，兼容短 DER（如 MC4C... 形式）。
 func ed25519PrivFromArg(v any) (ed25519.PrivateKey, error) {
 	s := toString(v)
-	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(strings.TrimSpace(s), "\\n", "\n")
 	b, _ := toBytes(v)
 	if strings.Contains(s, "BEGIN") {
 		der, err := parsePEM(s)
 		if err != nil {
 			return nil, err
 		}
-		priv := ed25519.NewKeyFromSeed(der)
-		return priv, nil
+		return keyFromDER(der)
 	}
-	if len(b) == 64 {
-		return ed25519.NewKeyFromSeed(b[:32]), nil
+	return keyFromDER(b)
+}
+
+// keyFromDER 从 DER 字节解析 ed25519 私钥：优先 PKCS8，其次按 32/64 字节原始 seed。
+func keyFromDER(der []byte) (ed25519.PrivateKey, error) {
+	if len(der) > 0 {
+		if k, err := x509.ParsePKCS8PrivateKey(der); err == nil {
+			if pk, ok := k.(ed25519.PrivateKey); ok {
+				return pk, nil
+			}
+		}
 	}
-	if len(b) == 32 {
-		return ed25519.NewKeyFromSeed(b), nil
+	if len(der) == 64 {
+		return ed25519.NewKeyFromSeed(der[:32]), nil
+	}
+	if len(der) == 32 {
+		return ed25519.NewKeyFromSeed(der), nil
 	}
 	return nil, fmt.Errorf("无效的 Ed25519 私钥格式")
 }
 
-// parsePEM 简易解析 PKCS8 PRIVATE KEY 块。
+// parsePEM 提取 PKCS8 PRIVATE KEY 块内的 DER。
+// 兼容真实多行 PEM 与单行内用字面 "\n" 转义的多行 PEM（插件 config.yaml 常见形态）。
 func parsePEM(pemStr string) ([]byte, error) {
-	lines := strings.Split(pemStr, "\n")
+	pemStr = strings.ReplaceAll(pemStr, "\\n", "\n")
 	var b64 strings.Builder
-	in := false
-	for _, ln := range lines {
+	for _, ln := range strings.Split(pemStr, "\n") {
 		ln = strings.TrimSpace(ln)
-		if strings.Contains(ln, "BEGIN PRIVATE KEY") {
-			in = true
+		if strings.HasPrefix(ln, "-----") {
 			continue
 		}
-		if strings.Contains(ln, "END PRIVATE KEY") {
-			in = false
-			break
-		}
-		if in && ln != "" {
-			b64.WriteString(ln)
-		}
+		b64.WriteString(ln)
 	}
 	raw, err := base64.StdEncoding.DecodeString(b64.String())
 	if err != nil {
 		return nil, err
 	}
-	// 尝试直接从 DER 取第 32~64 字节（PKCS8 32字节种子在固定偏移，宽松处理）
-	if len(raw) >= 64 {
-		return raw[32:64], nil
-	}
-	return nil, fmt.Errorf("PEM 内容过短")
+	return raw, nil
 }
 
 // jwtSign 用 Ed25519 生成 JWT（EdDSA）。

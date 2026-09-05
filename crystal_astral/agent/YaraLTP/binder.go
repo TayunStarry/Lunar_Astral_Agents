@@ -8,9 +8,10 @@ import (
 	"github.com/dop251/goja"
 )
 
-// bindYara 为插件注入完整 yara 全局 API（权限模型：本实现未做声明即授权过滤，所有 API 恒可见）。
+// bindYara 为插件注入 yara 全局 API，并按授权权限集合裁剪未授权的命名空间/方法。
 func bindYara(p *plugin) {
 	vm := p.vm
+	p.granted = p.verifyPermissions()
 	yara := vm.NewObject()
 
 	bindLogger(vm, yara)
@@ -37,7 +38,77 @@ func bindYara(p *plugin) {
 	bindAsync(p, yara)
 	bindEmoji(p, yara)
 
+	pruneYaraByPerms(yara, p.granted)
 	vm.Set("yara", yara)
+}
+
+// pruneYaraByPerms 依据插件已授权权限集合裁剪 yara 对象：
+// 多权限命名空间按方法粒度裁剪，其余命名空间整体移除。未授权 API 呈 undefined，
+// 插件脚本若在顶层使用会触发加载失败并给出权限密钥提示。
+func pruneYaraByPerms(yara *goja.Object, granted map[string]bool) {
+	anyGranted := func(perms ...string) bool {
+		for _, perm := range perms {
+			if granted[perm] {
+				return true
+			}
+		}
+		return false
+	}
+	// 方法级裁剪（多权限命名空间）
+	delMethod := func(ns, m string, perms ...string) {
+		if anyGranted(perms...) {
+			return
+		}
+		if obj, ok := yara.Get(ns).(*goja.Object); ok {
+			obj.Delete(m)
+		}
+	}
+	delMethod("send", "text", "send.text")
+	delMethod("send", "image", "send.image")
+	delMethod("send", "emoji", "send.emoji")
+	delMethod("send", "hybrid", "send.hybrid")
+	delMethod("event", "publish", "event.publish")
+	delMethod("api", "call", "api.call")
+	delMethod("config", "setFile", "plugin.config.write")
+	delMethod("file", "write", "plugin.file.write")
+	delMethod("file", "readData", "data.directory.read")
+	delMethod("file", "writeData", "data.directory.write")
+	delMethod("file", "listData", "data.directory.read")
+	delMethod("file", "getDataPath", "data.directory.read")
+	delMethod("network", "tcpConnect", "network.tcp")
+	delMethod("network", "udpConnect", "network.udp")
+	delMethod("network", "udpListen", "network.udp")
+
+	// 命名空间级裁剪
+	namespacePerms := map[string][]string{
+		"send":         {"send.text", "send.image", "send.emoji", "send.hybrid"},
+		"event":        {"event.subscribe", "event.publish"},
+		"hook":         {"hook.register"},
+		"command":      {"command.register"},
+		"tool":         {"tool.register"},
+		"eventHandler": {"event_handler.register"},
+		"llmProvider":  {"llm_provider.register"},
+		"api":          {"api.register", "api.call"},
+		"http":         {"http.request"},
+		"network":      {"network.tcp", "network.udp"},
+		"platform":     {"platform.command"},
+		"encoding":     {"encoding.use"},
+		"time":         {"time.use"},
+		"crypto":       {"crypto.use"},
+		"model":        {"model.access"},
+		"config":       {"plugin.config.read", "plugin.config.write"},
+		"file":         {"plugin.file.read", "plugin.file.write", "data.directory.read", "data.directory.write"},
+		"database":     {"database.read"},
+		"knowledge":    {"knowledge.search"},
+		"image":        {"plugin.file.read"},
+		"async":        {"async_task.execute"},
+		"emoji":        {"emoji.access"},
+	}
+	for ns, perms := range namespacePerms {
+		if !anyGranted(perms...) {
+			yara.Delete(ns)
+		}
+	}
 }
 
 // newObj 在 VM 中创建普通对象。

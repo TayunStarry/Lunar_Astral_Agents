@@ -30,6 +30,34 @@ const DefaultConfigFile = "config.yaml"
 // DataDirName 插件运行时数据目录（热重载/清理不涉及；本实现为局部目录）。
 const DataDirName = "data"
 
+// KeyFileName 插件权限密钥文件名：每权限一条 32 字符密钥字符串以 '+' 连接成明文报文后，
+// 用脚本哈希整体加密成一段密文写入该文件（分隔符与密钥边界在密文中不可见）。
+const KeyFileName = "permissions.key"
+
+// AllPermissionNames 引擎支持的权限名全集（密钥生成器下拉与引擎校验共用）。
+var AllPermissionNames = []string{
+	"event.subscribe", "event.publish",
+	"hook.register",
+	"command.register",
+	"tool.register",
+	"event_handler.register",
+	"llm_provider.register",
+	"api.register", "api.call",
+	"send.text", "send.image", "send.emoji", "send.hybrid",
+	"http.request",
+	"network.tcp", "network.udp",
+	"platform.command",
+	"encoding.use", "time.use", "crypto.use",
+	"model.access",
+	"plugin.config.read", "plugin.config.write",
+	"plugin.file.read", "plugin.file.write",
+	"data.directory.read", "data.directory.write",
+	"database.read",
+	"knowledge.search",
+	"async_task.execute",
+	"emoji.access",
+}
+
 // routeHookPriority 权重默认值（eventHandler.weight）。
 const defaultEventHandlerWeight = 100
 
@@ -92,30 +120,30 @@ var YaraEvents = map[string]string{
 // ==== YaraHooks 全局钩子常量（注入每个插件沙箱，权威源：LTP3协议文档/yara.d.ts） ====
 
 var YaraHooks = map[string]string{
-	"CHAT_RECEIVE_BEFORE_PROCESS": "chat.receive.before_process",
-	"CHAT_RECEIVE_AFTER_PROCESS":  "chat.receive.after_process",
-	"CHAT_COMMAND_BEFORE_EXECUTE": "chat.command.before_execute",
-	"CHAT_COMMAND_AFTER_EXECUTE":  "chat.command.after_execute",
-	"EMOJI_CHAT_BEFORE_SELECT":    "emoji.chat.before_select",
-	"EMOJI_CHAT_AFTER_SELECT":     "emoji.chat.after_select",
+	"CHAT_RECEIVE_BEFORE_PROCESS":            "chat.receive.before_process",
+	"CHAT_RECEIVE_AFTER_PROCESS":             "chat.receive.after_process",
+	"CHAT_COMMAND_BEFORE_EXECUTE":            "chat.command.before_execute",
+	"CHAT_COMMAND_AFTER_EXECUTE":             "chat.command.after_execute",
+	"EMOJI_CHAT_BEFORE_SELECT":               "emoji.chat.before_select",
+	"EMOJI_CHAT_AFTER_SELECT":                "emoji.chat.after_select",
 	"EMOJI_REGISTER_AFTER_BUILD_DESCRIPTION": "emoji.register.after_build_description",
 	"EMOJI_REGISTER_AFTER_BUILD_EMOTION":     "emoji.register.after_build_emotion",
-	"SEND_SERVICE_AFTER_BUILD_MESSAGE": "send_service.after_build_message",
-	"SEND_SERVICE_BEFORE_SEND":        "send_service.before_send",
-	"SEND_SERVICE_AFTER_SEND":         "send_service.after_send",
-	"CHAT_PLANNER_BEFORE_REQUEST":     "chat.planner.before_request",
-	"CHAT_PLANNER_AFTER_RESPONSE":     "chat.planner.after_response",
-	"CHAT_REPLYER_BEFORE_REQUEST":     "chat.replyer.before_request",
-	"CHAT_REPLYER_BEFORE_MODEL_REQUEST": "chat.replyer.before_model_request",
-	"CHAT_REPLYER_AFTER_RESPONSE":      "chat.replyer.after_response",
-	"JARGON_QUERY_BEFORE_SEARCH":       "jargon.query.before_search",
-	"JARGON_QUERY_AFTER_SEARCH":        "jargon.query.after_search",
-	"JARGON_EXTRACT_BEFORE_PERSIST":    "jargon.extract.before_persist",
-	"JARGON_INFERENCE_BEFORE_FINALIZE": "jargon.inference.before_finalize",
-	"EXPRESSION_SELECT_BEFORE_SELECT":  "expression.select.before_select",
-	"EXPRESSION_SELECT_AFTER_SELECTION": "expression.select.after_selection",
-	"EXPRESSION_LEARN_AFTER_EXTRACT":   "expression.learn.after_extract",
-	"EXPRESSION_LEARN_BEFORE_UPSERT":   "expression.learn.before_upsert",
+	"SEND_SERVICE_AFTER_BUILD_MESSAGE":       "send_service.after_build_message",
+	"SEND_SERVICE_BEFORE_SEND":               "send_service.before_send",
+	"SEND_SERVICE_AFTER_SEND":                "send_service.after_send",
+	"CHAT_PLANNER_BEFORE_REQUEST":            "chat.planner.before_request",
+	"CHAT_PLANNER_AFTER_RESPONSE":            "chat.planner.after_response",
+	"CHAT_REPLYER_BEFORE_REQUEST":            "chat.replyer.before_request",
+	"CHAT_REPLYER_BEFORE_MODEL_REQUEST":      "chat.replyer.before_model_request",
+	"CHAT_REPLYER_AFTER_RESPONSE":            "chat.replyer.after_response",
+	"JARGON_QUERY_BEFORE_SEARCH":             "jargon.query.before_search",
+	"JARGON_QUERY_AFTER_SEARCH":              "jargon.query.after_search",
+	"JARGON_EXTRACT_BEFORE_PERSIST":          "jargon.extract.before_persist",
+	"JARGON_INFERENCE_BEFORE_FINALIZE":       "jargon.inference.before_finalize",
+	"EXPRESSION_SELECT_BEFORE_SELECT":        "expression.select.before_select",
+	"EXPRESSION_SELECT_AFTER_SELECTION":      "expression.select.after_selection",
+	"EXPRESSION_LEARN_AFTER_EXTRACT":         "expression.learn.after_extract",
+	"EXPRESSION_LEARN_BEFORE_UPSERT":         "expression.learn.before_upsert",
 }
 
 // baseDir 计算 LTP3 包根目录（可执行目录/local_data/package）。

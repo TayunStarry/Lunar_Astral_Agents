@@ -1,4 +1,4 @@
-﻿# Lunar Astral Agents - 统一构建脚本
+# Lunar Astral Agents - 统一构建脚本
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
@@ -130,6 +130,7 @@ try {
     Invoke-Build -Path "$ScriptRoot\environment_repair" -Name "Environment Repair"
     Invoke-Build -Path "$ScriptRoot\..\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\..\crystal_astral" -Name "Crystal Astral"
+    Invoke-Build -Path "$ScriptRoot\ltp3_keygen" -Name "LTP3 Keygen"
 
     Write-Host ""
     Write-Host "  全部构建成功完成！" -ForegroundColor Green

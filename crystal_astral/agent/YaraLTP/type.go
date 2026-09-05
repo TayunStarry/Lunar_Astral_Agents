@@ -107,8 +107,10 @@ type plugin struct {
 	MainPath   string // index.js 绝对路径
 	ConfigPath string // config.yaml 绝对路径
 	DataDir    string // data/ 绝对路径
+	KeyPath    string // permissions.key 绝对路径
 
 	config map[string]any // 解析后的 config.yaml 内容
+	granted map[string]bool // 本次加载经脚本哈希校验通过的权限集合
 
 	vm  *goja.Runtime
 	mu  sync.Mutex // 串行化同一插件所有 JS 执行（goja 非线程安全）

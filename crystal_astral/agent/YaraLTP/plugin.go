@@ -23,6 +23,7 @@ func newPlugin(dirName, root, id, title string) *plugin {
 		MainPath:   filepath.Join(root, DefaultMain),
 		ConfigPath: filepath.Join(root, DefaultConfigFile),
 		DataDir:    filepath.Join(root, DataDirName),
+		KeyPath:    filepath.Join(root, KeyFileName),
 
 		hooks:        map[string][]*hookSub{},
 		events:       map[string][]*eventSub{},
@@ -98,7 +99,11 @@ func (p *plugin) load() error {
 
 	// 6. 执行主脚本（顶层注册各订阅/指令/工具）
 	if _, rerr := vm.RunString(string(code)); rerr != nil {
-		p.loadErr = fmt.Sprintf("index.js 执行失败: %v", rerr)
+		hint := ""
+		if len(p.granted) == 0 {
+			hint = "（可能缺少权限密钥 " + KeyFileName + "，或脚本被篡改导致密钥无法解码）"
+		}
+		p.loadErr = fmt.Sprintf("index.js 执行失败: %v%s", rerr, hint)
 		p.vm = nil
 		return fmt.Errorf("%s", p.loadErr)
 	}
@@ -144,6 +149,7 @@ func (p *plugin) unload() {
 	}
 	p.vm = nil
 	p.loaded = false
+	p.granted = nil
 	// 清空注册表
 	p.hooks = map[string][]*hookSub{}
 	p.events = map[string][]*eventSub{}
