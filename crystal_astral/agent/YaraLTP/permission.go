@@ -11,6 +11,7 @@ package YaraLTP
 //   整体解码失败、或分割出的名称不在权限名单 → 视为密钥与脚本不对应/脚本被篡改，拒绝该权限。
 
 import (
+	"slices"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -19,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	lunardecoder "LunarSubsystem/LunarDecoder"
 )
@@ -34,12 +36,7 @@ const perPermissionKeyLen = 32
 
 // permValid 判断权限名是否为引擎支持的合法权限。
 func permValid(name string) bool {
-	for _, n := range AllPermissionNames {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllPermissionNames, name)
 }
 
 // scriptsHash 拼接插件根目录下全部 .js 脚本（相对路径排序，跳过 data/ 目录），
@@ -80,7 +77,13 @@ func scriptsHash(root string) (string, error) {
 
 // verifyPermissions 读取插件 permissions.key，用脚本哈希整体解码 → 按分隔符分割 →
 // 去掉填充得到权限名集合。密钥缺失 / 整体解码失败 / 名称非法时拒绝对应权限。
+// 开发模式（GeneralConfig.Developer）开启时跳过校验，默认授予全部权限，便于插件开发。
 func (p *plugin) verifyPermissions() map[string]bool {
+	if *GeneralConfig.Developer {
+		LoggerGeneral.Info(ServiceName, "开发模式已启用，插件 %s 默认授予全部权限（跳过权限密钥校验）", p.ID)
+		return allPermissionSet()
+	}
+
 	granted := map[string]bool{}
 	keyStr, err := scriptsHash(p.Root)
 	if err != nil {
@@ -118,4 +121,13 @@ func (p *plugin) verifyPermissions() map[string]bool {
 		LoggerGeneral.Warn(ServiceName, "插件 %s 权限密钥无法与脚本对应或脚本被篡改，已拒绝全部权限", p.ID)
 	}
 	return granted
+}
+
+// allPermissionSet 返回全部权限名集合。
+func allPermissionSet() map[string]bool {
+	set := map[string]bool{}
+	for _, n := range AllPermissionNames {
+		set[n] = true
+	}
+	return set
 }
