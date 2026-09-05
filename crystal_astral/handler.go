@@ -412,9 +412,20 @@ func scanPackagesHandler(w http.ResponseWriter, r *http.Request) {
 			pkg.Icon = "/file/read/package/" + entry.Name() + "/" + pkg.Icon
 		}
 
-		// 如果未指定 url，自动生成默认路径
+		// 如果未指定 url，自动生成默认入口：包内 index.html 优先，
+		// index.html 不存在时回退 README.md（前端 openPage 识别 .md 后经 tool_viewer 渲染）
 		if pkg.URL == "" && pkg.Path == "" {
-			pkg.URL = "/file/read/package/" + entry.Name() + "/index.html"
+			dir := filepath.Join(packageDir, entry.Name())
+			suffix := "index.html"
+			if !fileExists(filepath.Join(dir, "index.html")) {
+				for _, cand := range []string{"README.md", "readme.md"} {
+					if fileExists(filepath.Join(dir, cand)) {
+						suffix = cand
+						break
+					}
+				}
+			}
+			pkg.URL = "/file/read/package/" + entry.Name() + "/" + suffix
 		}
 
 		packages = append(packages, pkg)

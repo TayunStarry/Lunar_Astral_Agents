@@ -1,5 +1,5 @@
 import { GlobalConfig, ChatCache, processUnreadFiles, checkDueItems, SCHEDULE_TRIGGER_PREFIX, parseContent, PostMessageRole, MessageContent } from '../index';
-import { descriptionRole, learnerRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+import { descriptionRole, searcherRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { batchProcessVideoFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { queryEmotionSticker } from './capabilities/memory';
@@ -134,7 +134,7 @@ function resetAgentState(): void {
     // 清空全部子智能体的messages
     descriptionRole.coverContext([]);
     dialogueRole.coverContext([]);
-    learnerRole.messages = [];
+    searcherRole.messages = [];
     painterRole.coverContext([]);
     musicianRole.coverContext([]);
     viewerRole.coverContext([]);

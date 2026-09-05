@@ -3,6 +3,7 @@ package AgentSearch
 import (
 	"LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 	"strings"
@@ -33,7 +34,7 @@ func initMemoryCollection() error {
 		if err := module.MemoryInitInstance(); err != nil {
 			return fmt.Errorf("记忆库实例初始化失败: %w", err)
 		}
-		fmt.Printf("[%s] 记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", ModuleName, *GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchMultimodalModel)
+		LoggerGeneral.Info(ModuleName, "记忆库实例已初始化 (嵌入=%s, LLM=%s)\n", *GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchMultimodalModel)
 	}
 
 	// 检查 search_memory 集合状态
@@ -41,18 +42,17 @@ func initMemoryCollection() error {
 
 	if info == nil {
 		// 集合不存在，创建新集合
-		fmt.Printf("[%s] 记忆集合 '%s' 不存在，正在创建...\n", ModuleName, searchMemoryCollection)
+		LoggerGeneral.Info(ModuleName, "记忆集合 '%s' 不存在，正在创建...\n", searchMemoryCollection)
 		return createCollection()
 	}
 
 	dim := getIntField(info, "embedding_dimension")
 	count := getIntField(info, "document_count")
-	fmt.Printf("[%s] 记忆集合 '%s' 已存在 (模型=%s 维度=%d 文档=%d)\n",
-		ModuleName, searchMemoryCollection, *GeneralConfig.SearchEmbeddingModel, dim, count)
+	LoggerGeneral.Info(ModuleName, "记忆集合 '%s' 已存在 (模型=%s 维度=%d 文档=%d)\n", searchMemoryCollection, *GeneralConfig.SearchEmbeddingModel, dim, count)
 
 	// 检查维度是否匹配
 	if module.MemoryHasSyncMismatch(searchMemoryCollection) {
-		fmt.Printf("[%s] 记忆集合维度不匹配，销毁并重建...\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "记忆集合维度不匹配，销毁并重建...\n")
 		if err := module.MemoryDeleteCollection(searchMemoryCollection); err != nil {
 			return fmt.Errorf("删除旧记忆集合失败: %w", err)
 		}
@@ -78,8 +78,7 @@ func createCollection() error {
 
 	dim := getIntField(info, "embedding_dimension")
 	count := getIntField(info, "document_count")
-	fmt.Printf("[%s] 记忆集合 '%s' 创建完成 (模型=%s 维度=%d 文档=%d)\n",
-		ModuleName, searchMemoryCollection, modelName, dim, count)
+	LoggerGeneral.Info(ModuleName, "记忆集合 '%s' 创建完成 (模型=%s 维度=%d 文档=%d)\n", searchMemoryCollection, modelName, dim, count)
 	return nil
 }
 
@@ -111,8 +110,7 @@ func lookupMemory(query string, topK int) ([]memoryEntry, error) {
 		})
 	}
 
-	fmt.Printf("[%s] 记忆检索完成，查询='%s'，找到 %d 条结果\n",
-		ModuleName, truncateText(query, 50), len(entries))
+	LoggerGeneral.Info(ModuleName, "记忆检索完成，查询='%s'，找到 %d 条结果\n", truncateText(query, 50), len(entries))
 
 	return entries, nil
 }
@@ -139,8 +137,7 @@ func storeMemoryRecord(record MemorySearchRecord) error {
 		return fmt.Errorf("存储记忆记录失败: %w", err)
 	}
 
-	fmt.Printf("[%s] 记忆记录已存储 ID=%s 问题='%s'\n",
-		ModuleName, id, truncateText(record.Question, 50))
+	LoggerGeneral.Info(ModuleName, "记忆记录已存储 ID=%s 问题='%s'\n", id, truncateText(record.Question, 50))
 	return nil
 }
 
@@ -175,8 +172,7 @@ func storePageSummaryWithTags(summary string, tags []string) error {
 		return fmt.Errorf("页面摘要记忆存储失败: %w", err)
 	}
 
-	fmt.Printf("[%s] 页面摘要已入记忆库 ID=%s 标签=%v\n",
-		ModuleName, id, tags)
+	LoggerGeneral.Info(ModuleName, "页面摘要已入记忆库 ID=%s 标签=%v\n", id, tags)
 	return nil
 }
 

@@ -216,7 +216,7 @@ func extractZip(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// InstallPackageHandler 处理 .ltpx / .ltp2 包安装请求
+// InstallPackageHandler 处理 .ltpx 包安装请求
 // 将上传的归档文件解压并安装到 local_data/package/<包名>/ 目录下
 func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -254,12 +254,12 @@ func InstallPackageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 验证文件扩展名
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".ltpx" && ext != ".ltp2" && ext != ".zip" {
+	if ext != ".ltpx" && ext != ".zip" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(PackageInstallResponse{
 			Success: false,
-			Message: "不支持的文件类型: " + ext + "，仅支持 .ltpx、.ltp2、.zip",
+			Message: "不支持的文件类型: " + ext + "，仅支持 .ltpx、.zip",
 		})
 		return
 	}

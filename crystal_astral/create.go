@@ -6,6 +6,7 @@ import (
 	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/ImageProcessor/server"
 	"LunarSubsystem/LoggerGeneral"
+	"CrystalAstral/agent/YaraLTP"
 	"context"
 	"fmt"
 	"io"
@@ -105,6 +106,24 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	go StudioHubInstance.Run()
 	httpMux.HandleFunc("/ws", StudioHubInstance.HandleWebSocket)
 
+	// LTP3（YaraFlow）引擎：注入出站发送函数 + 初始化并加载插件 + 启动入站信封消费
+	YaraLTP.SetSend(func(data []byte) {
+		if StudioHubInstance != nil {
+			select {
+			case StudioHubInstance.Broadcast <- data:
+			default:
+			}
+		}
+	})
+	if err := YaraLTP.Init(); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "LTP3 引擎初始化失败: %v (不影响服务启动)", err)
+	}
+	go func() {
+		for data := range StudioHubInstance.Inbound {
+			YaraLTP.HandleIn(data)
+		}
+	}()
+
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {
 		httpMux.HandleFunc(endpoint.Path, endpoint.Handler)
@@ -167,6 +186,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 
 	BrowserClient.CloseWebView()
+	YaraLTP.Close()
 	LoggerGeneral.Info("CrystalAstral", "%s 已成功关闭", name)
 
 	return nil

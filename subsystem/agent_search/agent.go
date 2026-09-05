@@ -3,6 +3,7 @@ package AgentSearch
 import (
 	"LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"strings"
 	"time"
@@ -49,7 +50,7 @@ func InitSearch(cfg SearchConfig) error {
 		if !strings.Contains(strings.ToUpper(resp), "OK") {
 			return fmt.Errorf("多模态模型响应异常，未返回预期内容")
 		}
-		fmt.Printf("[%s] 多模态模型连接验证通过: %s\n", ModuleName, *GeneralConfig.SearchMultimodalModel)
+		LoggerGeneral.Info(ModuleName, "多模态模型连接验证通过: %s\n", *GeneralConfig.SearchMultimodalModel)
 	}
 
 	// 验证嵌入模型连通性 + 初始化 search_memory 集合
@@ -62,7 +63,7 @@ func InitSearch(cfg SearchConfig) error {
 			return fmt.Errorf("嵌入模型连通性测试/记忆集合初始化失败 [%s @ %s]: %w",
 				*GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchEmbeddingURL, err)
 		}
-		fmt.Printf("[%s] 嵌入模型连接验证通过: %s\n", ModuleName, *GeneralConfig.SearchEmbeddingModel)
+		LoggerGeneral.Info(ModuleName, "嵌入模型连接验证通过: %s\n", *GeneralConfig.SearchEmbeddingModel)
 	}
 
 	// 启动浏览器
@@ -80,10 +81,10 @@ func InitSearch(cfg SearchConfig) error {
 	activeConfig = &cfg
 	configMutex.Unlock()
 
-	fmt.Printf("[%s] 搜索智能体初始化完成\n", ModuleName)
-	fmt.Printf("[%s]   多模态: %s @ %s\n", ModuleName, *GeneralConfig.SearchMultimodalModel, *GeneralConfig.SearchMultimodalURL)
-	fmt.Printf("[%s]   嵌入:   %s @ %s\n", ModuleName, *GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchEmbeddingURL)
-	fmt.Printf("[%s]   上下文上限: %d tokens\n", ModuleName, cfg.MaxContextTokens)
+	LoggerGeneral.Info(ModuleName, "搜索智能体初始化完成\n")
+	LoggerGeneral.Info(ModuleName, "  多模态: %s @ %s\n", *GeneralConfig.SearchMultimodalModel, *GeneralConfig.SearchMultimodalURL)
+	LoggerGeneral.Info(ModuleName, "  嵌入:   %s @ %s\n", *GeneralConfig.SearchEmbeddingModel, *GeneralConfig.SearchEmbeddingURL)
+	LoggerGeneral.Info(ModuleName, "  上下文上限: %d tokens\n", cfg.MaxContextTokens)
 
 	return nil
 }
@@ -105,7 +106,7 @@ func Search(query string) (*SearchReport, error) {
 	queryMutex.Lock()
 	defer queryMutex.Unlock()
 
-	fmt.Printf("\n[%s] ===== 开始搜索: %s =====\n", ModuleName, query)
+	LoggerGeneral.Info(ModuleName, "===== 开始搜索: %s =====\n", query)
 
 	// 浏览器健康检查
 	if err := ensureBrowserHealthy(); err != nil {
@@ -123,7 +124,8 @@ func Search(query string) (*SearchReport, error) {
 // executeSearchPipeline 执行完整搜索流水线（统一单一模式）
 // 流程：记忆优先匹配 → 不满足（无匹配/时效性/用户明确要求搜索）则进入统一网络搜索
 // 网络搜索：原始输入 → 搜索引擎前15条 → 逐页滚动截图(≤10帧) → 逐页视觉摘要 → 逐条判定能否解答
-//        → 可解答则生成报告并入库；全部不可解答则进入增强搜索再跑一轮；仍失败则返回"月华不知道"并记录失败经验
+//
+//	→ 可解答则生成报告并入库；全部不可解答则进入增强搜索再跑一轮；仍失败则返回"月华不知道"并记录失败经验
 func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error) {
 	// 重置搜索状态
 	a.usedKeywords = nil
@@ -145,10 +147,10 @@ func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error)
 			initialQuery = buildInitialQuery(keywords)
 			a.initialQuery = initialQuery
 			a.usedKeywords = append(a.usedKeywords, keywords...)
-			fmt.Printf("[%s] [关键词提取] 核心实体: %v\n", ModuleName, entities)
-			fmt.Printf("[%s] [关键词提取] 初始查询: %s\n", ModuleName, initialQuery)
+			LoggerGeneral.Info(ModuleName, "[关键词提取] 核心实体: %v\n", entities)
+			LoggerGeneral.Info(ModuleName, "[关键词提取] 初始查询: %s\n", initialQuery)
 		} else if err != nil {
-			fmt.Printf("[%s] [关键词提取] 失败，回退规则清洗: %v\n", ModuleName, err)
+			LoggerGeneral.Info(ModuleName, "[关键词提取] 失败，回退规则清洗: %v\n", err)
 		}
 	}
 	if strings.TrimSpace(initialQuery) == "" {
@@ -160,7 +162,7 @@ func (a *SearchAgent) executeSearchPipeline(query string) (*SearchReport, error)
 	if emb, err := callEmbedding(initialQuery); err == nil {
 		a.queryEmbedding = emb
 	} else {
-		fmt.Printf("[%s] [关键词提取] 初始查询嵌入失败: %v\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "[关键词提取] 初始查询嵌入失败: %v\n", err)
 	}
 
 	// ---- 步骤4：用初始查询在记忆库检索 ----
@@ -191,7 +193,7 @@ func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int
 		if err != nil || strings.TrimSpace(refined) == "" {
 			refined = initialQuery
 		}
-		fmt.Printf("[%s] [网络搜索] 增强搜索文本: %s\n", ModuleName, refined)
+		LoggerGeneral.Info(ModuleName, "[网络搜索] 增强搜索文本: %s\n", refined)
 		candidates = append(candidates, searchCandidate{text: refined})
 		// 专名歧义兜底：强化文本不同于初始查询与原始问题，再加搜一次原始完整句，
 		// 应对"钛宇星光阁"这类与常见字冲突、只有完整口语化表达才能被正确识别的昵称。
@@ -215,7 +217,7 @@ func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int
 		}
 		if fallback {
 			sawFallback = true
-			fmt.Printf("[%s] [网络搜索] 检测到 Bing 工具站兜底，跳过本候选，转下一轮\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 检测到 Bing 工具站兜底，跳过本候选，转下一轮\n")
 			continue
 		}
 		if len(validSums) == 0 {
@@ -230,14 +232,14 @@ func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int
 			if err == nil {
 				answerable = ok
 			} else {
-				fmt.Printf("[%s] [网络搜索] 综合判定失败（默认判为可解答）: %v\n", ModuleName, err)
+				LoggerGeneral.Info(ModuleName, "[网络搜索] 综合判定失败（默认判为可解答）: %v\n", err)
 				answerable = true
 			}
 		}
 		if answerable {
 			a.accumulatedSummaries = validSums
 			a.accumulatedSources = validSrcs
-			fmt.Printf("[%s] [网络搜索] 综合判定可解答（%d 份摘要），生成调查报告\n", ModuleName, len(validSums))
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 综合判定可解答（%d 份摘要），生成调查报告\n", len(validSums))
 			report, err := a.phaseGenerateReport(query, attempt)
 			if err != nil {
 				return nil, err
@@ -245,16 +247,16 @@ func (a *SearchAgent) phaseNetworkSearch(query, initialQuery string, attempt int
 			a.phaseStoreToMemory(query, report)
 			return report, nil
 		}
-		fmt.Printf("[%s] [网络搜索] 综合判定不足以解答，尝试下一候选/增强搜索\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "[网络搜索] 综合判定不足以解答，尝试下一候选/增强搜索\n")
 	}
 
 	// ---- 全部无法解答 → 增强搜索再试一轮 ----
 	if attempt < 2 {
 		prior := strings.Join(lastAttempted, "\n")
 		if sawFallback {
-			fmt.Printf("[%s] [网络搜索] 检测到工具站兜底，进入增强搜索换词重试\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 检测到工具站兜底，进入增强搜索换词重试\n")
 		} else {
-			fmt.Printf("[%s] [网络搜索] 全部摘要均无法解答，进入增强搜索\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 全部摘要均无法解答，进入增强搜索\n")
 		}
 		return a.phaseNetworkSearch(query, initialQuery, attempt+1, prior)
 	}
@@ -271,12 +273,12 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 	if strings.TrimSpace(searchText) == "" {
 		searchText = cleanSearchText(query)
 	}
-	fmt.Printf("[%s] [网络搜索] 搜索: %s\n", ModuleName, searchText)
+	LoggerGeneral.Info(ModuleName, "[网络搜索] 搜索: %s\n", searchText)
 	a.usedKeywords = append(a.usedKeywords, searchText)
 
 	results, err := ExecuteSearch(searchText, SingleSearchResults)
 	if err != nil {
-		fmt.Printf("[%s] [网络搜索] 搜索执行失败: %v\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "[网络搜索] 搜索执行失败: %v\n", err)
 		return nil, nil, nil, false
 	}
 
@@ -293,7 +295,7 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 		}
 	}
 	uniqueResults = filterDictionarySites(uniqueResults)
-	fmt.Printf("[%s] [网络搜索] 过滤后共 %d 条结果\n", ModuleName, len(uniqueResults))
+	LoggerGeneral.Info(ModuleName, "[网络搜索] 过滤后共 %d 条结果\n", len(uniqueResults))
 	if len(uniqueResults) == 0 {
 		return nil, nil, nil, false
 	}
@@ -301,28 +303,28 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 	// Bing 工具站兜底感知：若大量结果是快递/物流/在线工具/whois/学信网/地图等固定工具站，
 	// 判断为触发了工具站兜底——不再逐页提取白费时间，直接标记由上层换词重试。
 	if detectSearchFallback(uniqueResults) {
-		fmt.Printf("[%s] [网络搜索] ⚠ 检测到 Bing 工具站兜底（多数结果为工具站），跳过本页提取\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "[网络搜索] ⚠ 检测到 Bing 工具站兜底（多数结果为工具站），跳过本页提取\n")
 		return nil, nil, nil, true
 	}
 
 	// ---- 步骤6：标题初筛（用核心实体完整名过滤无关标题） ----
 	uniqueResults = a.filterByTitleEntities(uniqueResults)
-	fmt.Printf("[%s] [网络搜索] 标题初筛后共 %d 条结果\n", ModuleName, len(uniqueResults))
+	LoggerGeneral.Info(ModuleName, "[网络搜索] 标题初筛后共 %d 条结果\n", len(uniqueResults))
 	if len(uniqueResults) == 0 {
 		return nil, nil, nil, false
 	}
 
 	// ---- 步骤7：逐页混合提取 → 摘要 → 嵌入打分 + 关键词比对 ----
 	for i, r := range uniqueResults {
-		fmt.Printf("[%s] [网络搜索] 提取 [%d/%d]: %s\n", ModuleName, i+1, len(uniqueResults), r.Title)
+		LoggerGeneral.Info(ModuleName, "[网络搜索] 提取 [%d/%d]: %s\n", i+1, len(uniqueResults), r.Title)
 
 		content, extractErr := ExtractPageContent(r.URL)
 		if extractErr != nil {
-			fmt.Printf("[%s] [网络搜索] 页面打不开，跳过: %s (%v)\n", ModuleName, r.URL, extractErr)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 页面打不开，跳过: %s (%v)\n", r.URL, extractErr)
 			continue
 		}
 		if strings.Contains(content.URL, "chrome-error://") {
-			fmt.Printf("[%s] [网络搜索] 页面加载失败(错误页)，跳过: %s\n", ModuleName, content.URL)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 页面加载失败(错误页)，跳过: %s\n", content.URL)
 			continue
 		}
 
@@ -339,7 +341,7 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 			}
 		}
 		if strings.TrimSpace(summary) == "" {
-			fmt.Printf("[%s] [网络搜索] 页面无可用内容，跳过: %s\n", ModuleName, content.URL)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 页面无可用内容，跳过: %s\n", content.URL)
 			continue
 		}
 
@@ -350,9 +352,9 @@ func (a *SearchAgent) searchTextAndJudge(query, searchText string) (validSums, v
 		if valid, sim := a.isSummaryValid(summary); valid {
 			validSums = append(validSums, summary)
 			validSrcs = append(validSrcs, content.URL)
-			fmt.Printf("[%s] [网络搜索] 摘要有效(相似度=%.2f)，保留\n", ModuleName, sim)
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 摘要有效(相似度=%.2f)，保留\n", sim)
 		} else {
-			fmt.Printf("[%s] [网络搜索] 摘要与查询无关(相似度=%.2f)，跳过该页: %s\n", ModuleName, sim, truncateText(summary, 50))
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 摘要与查询无关(相似度=%.2f)，跳过该页: %s\n", sim, truncateText(summary, 50))
 		}
 	}
 
@@ -404,8 +406,7 @@ func (a *SearchAgent) injectPageSummariesToMemory(summaries []string) {
 		tags = tags[:12]
 	}
 
-	fmt.Printf("[%s] [摘要入库] %d 份页面摘要，携带 %d 个标签: %v\n",
-		ModuleName, len(summaries), len(tags), tags)
+	LoggerGeneral.Info(ModuleName, "[摘要入库] %d 份页面摘要，携带 %d 个标签: %v\n", len(summaries), len(tags), tags)
 
 	injected := 0
 	for _, s := range summaries {
@@ -413,7 +414,7 @@ func (a *SearchAgent) injectPageSummariesToMemory(summaries []string) {
 			injected++
 		}
 	}
-	fmt.Printf("[%s] [摘要入库] 完成：成功 %d/%d\n", ModuleName, injected, len(summaries))
+	LoggerGeneral.Info(ModuleName, "[摘要入库] 完成：成功 %d/%d\n", injected, len(summaries))
 }
 
 // filterByTitleEntities 步骤6：用核心实体完整名过滤标题
@@ -428,7 +429,7 @@ func (a *SearchAgent) filterByTitleEntities(results []SearchResult) []SearchResu
 		if containsAnyEntity(r.Title, a.coreEntities) {
 			kept = append(kept, r)
 		} else {
-			fmt.Printf("[%s] [网络搜索] 标题不含核心实体，初筛跳过: %s\n", ModuleName, truncateText(r.Title, 50))
+			LoggerGeneral.Info(ModuleName, "[网络搜索] 标题不含核心实体，初筛跳过: %s\n", truncateText(r.Title, 50))
 		}
 	}
 	return kept
@@ -548,7 +549,7 @@ func (a *SearchAgent) enhanceSearchText(query string, priorExperience string) (s
 
 // phaseUnknownAnswer 增强搜索后仍无法解答：返回"月华不知道"，并把失败经验记入记忆库
 func (a *SearchAgent) phaseUnknownAnswer(query string) (*SearchReport, error) {
-	fmt.Printf("[%s] [网络搜索] 增强搜索仍无法解答，返回月华不知道\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "[网络搜索] 增强搜索仍无法解答，返回月华不知道\n")
 
 	if memoryStore != nil {
 		record := MemorySearchRecord{
@@ -560,9 +561,9 @@ func (a *SearchAgent) phaseUnknownAnswer(query string) (*SearchReport, error) {
 			Timestamp: time.Now().Unix(),
 		}
 		if err := memoryStore(record); err != nil {
-			fmt.Printf("[%s] 失败经验记忆存储失败: %v\n", ModuleName, err)
+			LoggerGeneral.Info(ModuleName, "失败经验记忆存储失败: %v\n", err)
 		} else {
-			fmt.Printf("[%s] 已把失败经验记入记忆库\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "已把失败经验记入记忆库\n")
 		}
 	}
 
@@ -593,17 +594,17 @@ func (a *SearchAgent) reportNotFound(query string) *SearchReport {
 // 规则：无匹配 → nil；时效性需求 → nil；用户明确要求搜索/网络 → nil；匹配且足够 → 返回记忆答案
 func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchReport {
 	if memoryLookup == nil {
-		fmt.Printf("[%s] 记忆库未集成，跳过记忆检索\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "记忆库未集成，跳过记忆检索\n")
 		return nil
 	}
 
 	// 用户明确要求"搜索/网络查询"，跳过记忆直接网络搜索
 	if hasExplicitWebIntent(query) {
-		fmt.Printf("[%s] 用户明确要求搜索/网络查询，跳过记忆，直接进入网络搜索\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "用户明确要求搜索/网络查询，跳过记忆，直接进入网络搜索\n")
 		return nil
 	}
 
-	fmt.Printf("[%s] [阶段 1/5] 记忆检索中...\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "[阶段 1/5] 记忆检索中...\n")
 
 	// 用清洗后的初始查询（关键词拼接）检索记忆，去除口语噪声，提升召回质量
 	lookupText := initialQuery
@@ -613,12 +614,12 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 
 	entries, err := memoryLookup(lookupText, 5)
 	if err != nil {
-		fmt.Printf("[%s] 记忆检索失败: %v，继续网络搜索\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "记忆检索失败: %v，继续网络搜索\n", err)
 		return nil
 	}
 
 	if len(entries) == 0 {
-		fmt.Printf("[%s] 记忆库无相关记录\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "记忆库无相关记录\n")
 		return nil
 	}
 
@@ -631,7 +632,7 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 	}
 
 	if len(relevantEntries) == 0 {
-		fmt.Printf("[%s] 记忆库结果相似度过低（< %.0f%%），继续网络搜索\n", ModuleName, MemorySimilarityMin*100)
+		LoggerGeneral.Info(ModuleName, "记忆库结果相似度过低（< %.0f%%），继续网络搜索\n", MemorySimilarityMin*100)
 		return nil
 	}
 
@@ -643,8 +644,7 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 	// 直接复用门槛：只有最佳匹配足够相似才允许用记忆直接作答。
 	// 否则（相似但不对应同一实体）误用历史答案会造成张冠李戴，继续走网络搜索更稳妥。
 	if relevantEntries[0].Similarity < float32(MemoryDirectAnswerMin) {
-		fmt.Printf("[%s] 记忆库最佳匹配相似度 %.0f%% < 直接复用门槛 %.0f%%，继续网络搜索\n",
-			ModuleName, relevantEntries[0].Similarity*100, MemoryDirectAnswerMin*100)
+		LoggerGeneral.Info(ModuleName, "记忆库最佳匹配相似度 %.0f%% < 直接复用门槛 %.0f%%，继续网络搜索\n", relevantEntries[0].Similarity*100, MemoryDirectAnswerMin*100)
 		return nil
 	}
 
@@ -658,18 +658,18 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 
 	// AI 判定：记忆是否足够
 	if aiJudgeMemory == nil {
-		fmt.Printf("[%s] AI 判定未集成，跳过记忆评估\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "AI 判定未集成，跳过记忆评估\n")
 		return nil
 	}
 
 	sufficient, timeSensitive, err := aiJudgeMemory(memContext.String(), query)
 	if err != nil {
-		fmt.Printf("[%s] 记忆评估失败: %v，继续网络搜索\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "记忆评估失败: %v，继续网络搜索\n", err)
 		return nil
 	}
 
 	if timeSensitive {
-		fmt.Printf("[%s] 查询具有时效性要求，跳过记忆结果，执行网络搜索\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "查询具有时效性要求，跳过记忆结果，执行网络搜索\n")
 		return nil
 	}
 
@@ -684,10 +684,10 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 			}
 		}
 		if bestAnswer == "" {
-			fmt.Printf("[%s] 相关记忆均为失败记录，继续网络搜索\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "相关记忆均为失败记录，继续网络搜索\n")
 			return nil
 		}
-		fmt.Printf("[%s] 记忆库内容足够回答，跳过网络搜索\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "记忆库内容足够回答，跳过网络搜索\n")
 
 		return &SearchReport{
 			Query:       query,
@@ -697,7 +697,7 @@ func (a *SearchAgent) phaseMemoryLookup(query, initialQuery string) *SearchRepor
 		}
 	}
 
-	fmt.Printf("[%s] 记忆库内容不足，继续网络搜索\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "记忆库内容不足，继续网络搜索\n")
 	return nil
 }
 
@@ -762,7 +762,7 @@ func cleanSearchText(raw string) string {
 
 // phaseGenerateReport 基于所有积累的摘要生成最终搜索报告
 func (a *SearchAgent) phaseGenerateReport(query string, searchRounds int) (*SearchReport, error) {
-	fmt.Printf("[%s] [阶段 4/5] 报告生成中...\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "[阶段 4/5] 报告生成中...\n")
 
 	if aiGenerateReport == nil {
 		// 无 AI 时返回原始摘要拼接
@@ -803,11 +803,11 @@ func (a *SearchAgent) phaseStoreToMemory(query string, report *SearchReport) {
 
 	// 拒绝把"信息不足/未找到"的低质量结果写入记忆库，避免后续查询误复用无效答案
 	if isLowQualityAnswer(report) {
-		fmt.Printf("[%s] 本次结果为信息不足/未找到，不入记忆库\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "本次结果为信息不足/未找到，不入记忆库\n")
 		return
 	}
 
-	fmt.Printf("[%s] [阶段 5/5] 存储搜索结果到记忆库...\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "[阶段 5/5] 存储搜索结果到记忆库...\n")
 
 	record := MemorySearchRecord{
 		Question:    query,
@@ -818,9 +818,9 @@ func (a *SearchAgent) phaseStoreToMemory(query string, report *SearchReport) {
 	}
 
 	if err := memoryStore(record); err != nil {
-		fmt.Printf("[%s] 记忆存储失败: %v\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "记忆存储失败: %v\n", err)
 	} else {
-		fmt.Printf("[%s] 搜索结果已存入 search_memory\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "搜索结果已存入 search_memory\n")
 	}
 }
 
@@ -867,7 +867,7 @@ func filterDictionarySites(results []SearchResult) []SearchResult {
 	filtered := make([]SearchResult, 0, len(results))
 	for _, r := range results {
 		if isDictionarySite(r.URL, r.Title) {
-			fmt.Printf("[%s] 过滤字典网站: %s\n", ModuleName, r.URL)
+			LoggerGeneral.Info(ModuleName, "过滤字典网站: %s\n", r.URL)
 			continue
 		}
 		filtered = append(filtered, r)
@@ -915,15 +915,14 @@ func ensureBrowserHealthy() error {
 		return nil
 	}
 
-	fmt.Printf("[%s] 浏览器不健康 (内存=%dMB CPU=%.1f%%)，尝试重启...\n",
-		ModuleName, health.MemMB, health.CPUPercent)
+	LoggerGeneral.Info(ModuleName, "浏览器不健康 (内存=%dMB CPU=%.1f%%)，尝试重启...\n", health.MemMB, health.CPUPercent)
 
 	return tryRestartBrowser()
 }
 
 // tryRestartBrowser 尝试重启浏览器，每次清理资源后重试，最多 MaxBrowserRetryAttempts 次
 func tryRestartBrowser() error {
-	fmt.Printf("[%s] 正在重启浏览器...\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "正在重启浏览器...\n")
 
 	var lastErr error
 	for attempt := 1; attempt <= MaxBrowserRetryAttempts; attempt++ {
@@ -932,12 +931,11 @@ func tryRestartBrowser() error {
 
 		if err := LaunchBrowser(); err != nil {
 			lastErr = err
-			fmt.Printf("[%s] 浏览器重启第 %d/%d 次失败: %v\n",
-				ModuleName, attempt, MaxBrowserRetryAttempts, err)
+			LoggerGeneral.Info(ModuleName, "浏览器重启第 %d/%d 次失败: %v\n", attempt, MaxBrowserRetryAttempts, err)
 			continue
 		}
 
-		fmt.Printf("[%s] 浏览器重启成功\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "浏览器重启成功\n")
 		return nil
 	}
 

@@ -1,6 +1,7 @@
 package AgentSearch
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"context"
 	"fmt"
@@ -40,8 +41,7 @@ func CapturePageScreenshots(ctx context.Context, maxPages int) ([]PageScreenshot
 		viewportWidth = 1920
 	}
 
-	fmt.Printf("[%s] 页面总高度=%.0fpx 视口高度=%.0fpx 最大截图=%d\n",
-		ModuleName, pageHeight, viewportHeight, maxPages)
+	LoggerGeneral.Info(ModuleName, "页面总高度=%.0fpx 视口高度=%.0fpx 最大截图=%d\n", pageHeight, viewportHeight, maxPages)
 
 	var screenshots []PageScreenshot
 
@@ -57,8 +57,7 @@ func CapturePageScreenshots(ctx context.Context, maxPages int) ([]PageScreenshot
 
 		// 如果当前位置超过页面高度，停止
 		if currentScrollY >= pageHeight-10 {
-			fmt.Printf("[%s] 已到达页面底部 (scrollY=%.0f, pageHeight=%.0f)，停止截图\n",
-				ModuleName, currentScrollY, pageHeight)
+			LoggerGeneral.Info(ModuleName, "已到达页面底部 (scrollY=%.0f, pageHeight=%.0f)，停止截图\n", currentScrollY, pageHeight)
 			break
 		}
 
@@ -69,18 +68,17 @@ func CapturePageScreenshots(ctx context.Context, maxPages int) ([]PageScreenshot
 		}
 		screenshots = append(screenshots, screenshot)
 
-		fmt.Printf("[%s] 第 %d 页截图完成 (%dx%d) scrollY=%.0f\n",
-			ModuleName, page+1, screenshot.Width, screenshot.Height, currentScrollY)
+		LoggerGeneral.Info(ModuleName, "第 %d 页截图完成 (%dx%d) scrollY=%.0f\n", page+1, screenshot.Width, screenshot.Height, currentScrollY)
 
 		// 滚动到下一屏
 		if err := scrollOnePage(ctx, viewportHeight); err != nil {
-			fmt.Printf("[%s] 滚动失败（可能已到底部）: %v\n", ModuleName, err)
+			LoggerGeneral.Info(ModuleName, "滚动失败（可能已到底部）: %v\n", err)
 			break
 		}
 
 		// 等待懒加载内容渲染
 		if err := waitForRender(ctx); err != nil {
-			fmt.Printf("[%s] 等待渲染超时: %v\n", ModuleName, err)
+			LoggerGeneral.Info(ModuleName, "等待渲染超时: %v\n", err)
 			// 不阻断，继续截图
 		}
 
@@ -90,14 +88,13 @@ func CapturePageScreenshots(ctx context.Context, maxPages int) ([]PageScreenshot
 			chromedp.Evaluate(`window.scrollY`, &newScrollY),
 		); err == nil {
 			if newScrollY <= currentScrollY+5 {
-				fmt.Printf("[%s] 滚动位置未变化 (%.0f→%.0f)，已到页面底部\n",
-					ModuleName, currentScrollY, newScrollY)
+				LoggerGeneral.Info(ModuleName, "滚动位置未变化 (%.0f→%.0f)，已到页面底部\n", currentScrollY, newScrollY)
 				break
 			}
 		}
 	}
 
-	fmt.Printf("[%s] 分页截图完成，共 %d 页\n", ModuleName, len(screenshots))
+	LoggerGeneral.Info(ModuleName, "分页截图完成，共 %d 页\n", len(screenshots))
 	return screenshots, nil
 }
 

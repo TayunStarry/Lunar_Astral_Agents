@@ -1,9 +1,9 @@
-import { ModelBuilder, LearnerRole, PainterRole, MusicianRole, ActorRole, DialogueRole, ViewerRole, MemorizerRole, RandomFloor } from '../../index';
+import { ModelBuilder, SearcherRole, PainterRole, MusicianRole, ActorRole, DialogueRole, ViewerRole, MemorizerRole, RandomFloor } from '../../index';
 
 /** 描述者角色(视觉内容描述) */
 export const descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
-/** 学习者角色(深度调研与信息查证) */
-export const learnerRole: LearnerRole = new LearnerRole();
+/** 搜索者角色(深度调研与信息查证) */
+export const searcherRole: SearcherRole = new SearcherRole();
 /** 绘制者角色(图片生成) */
 export const painterRole: PainterRole = new PainterRole();
 /** 演奏者角色(演奏音乐) */

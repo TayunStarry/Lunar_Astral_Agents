@@ -1,7 +1,7 @@
 package AgentSearch
 
 import (
-	"fmt"
+	"LunarSubsystem/LoggerGeneral"
 	"os"
 	"time"
 
@@ -37,7 +37,7 @@ func monitorBrowserHealth() BrowserHealth {
 	if len(chromeProcs) == 0 {
 		health.IsRunning = false
 		health.Healthy = false
-		fmt.Printf("[%s] 浏览器健康检查: 未找到 Chrome 进程\n", ModuleName)
+		LoggerGeneral.Info(ModuleName, "浏览器健康检查: 未找到 Chrome 进程\n")
 		return health
 	}
 
@@ -77,14 +77,12 @@ func monitorBrowserHealth() BrowserHealth {
 
 	if totalMemMB > BrowserMaxMemMB {
 		health.Healthy = false
-		fmt.Printf("[%s] 浏览器内存超标: %dMB > %dMB\n",
-			ModuleName, totalMemMB, BrowserMaxMemMB)
+		LoggerGeneral.Info(ModuleName, "浏览器内存超标: %dMB > %dMB\n", totalMemMB, BrowserMaxMemMB)
 	}
 
 	if isCPUSustainedHigh() {
 		health.Healthy = false
-		fmt.Printf("[%s] 浏览器 CPU 持续高占用: %.1f%% > %.0f%% 已持续 >= %v\n",
-			ModuleName, health.CPUPercent, BrowserMaxCPUPercent, BrowserCPUHighDuration)
+		LoggerGeneral.Info(ModuleName, "浏览器 CPU 持续高占用: %.1f%% > %.0f%% 已持续 >= %v\n", health.CPUPercent, BrowserMaxCPUPercent, BrowserCPUHighDuration)
 	}
 
 	return health
@@ -95,7 +93,7 @@ func monitorBrowserHealth() BrowserHealth {
 func findChromeProcesses() []*process.Process {
 	procs, err := process.Processes()
 	if err != nil {
-		fmt.Printf("[%s] 获取进程列表失败: %v\n", ModuleName, err)
+		LoggerGeneral.Info(ModuleName, "获取进程列表失败: %v\n", err)
 		return nil
 	}
 

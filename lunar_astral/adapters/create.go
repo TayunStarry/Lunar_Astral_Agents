@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"LunarAstral/hierarchy"
-	"LunarAstral/learner"
 	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/LunarGoja"
 	"fmt"
@@ -74,8 +73,11 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("sendToEngine", adapters.sendToEngine)
 	vm.Set("getAvailableActions", adapters.getAvailableActions)
 
-	// 注册学习者智能体适配器
-	learner.BindLearnerToRuntime(vm)
+	// 注册搜索智能体适配器
+	vm.Set("searchInit", adapters.searchInit)
+	vm.Set("searchIsReady", adapters.searchIsReady)
+	vm.Set("searchExecute", adapters.searchExecute)
+	vm.Set("searchDumpContext", adapters.searchDumpContext)
 }
 
 // RunAgentContext 加载并运行嵌入式文件系统中的JavaScript文件

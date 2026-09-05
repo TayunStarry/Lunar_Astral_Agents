@@ -22,7 +22,7 @@ export * from './agent/base/creative';
 export * from './agent/roles/dialogue';
 export * from './agent/roles/painter';
 export * from './agent/roles/musician';
-export * from './agent/roles/learner';
+export * from './agent/roles/search';
 export * from './agent/roles/viewer';
 export * from './agent/roles/actor';
 export * from './agent/roles/reader';

@@ -105,11 +105,10 @@ The Project includes or depends upon the following third-party components, each 
 | Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
 | KaTeX | MIT | `local_data/package/katex/` |
 | 7-Zip | GNU LGPL 2.1+ | `local_data/package/archive/` |
-| pixi.js (PixiJS) | MIT | `local_data/package/pixi.5.3.12.min.js` |
 | marked.js | MIT | `local_data/package/marked.min.js` |
 | Mermaid.js | MIT | `local_data/package/mermaid.min.js` |
 | Apache ECharts | Apache 2.0 | `local_data/package/echarts.min.js` |
-| OpenBLAS | BSD 3-Clause | `subsystem/qwen_asr_lunar/openblas/` |
+| OpenBLAS | BSD 3-Clause | `subsystem/qwen_asr/openblas/` |
 | QRCode.js | MIT | `local_data/package/qrcode.min.js` |
 
 **(b) Runtime / Dynamic Dependencies (required at runtime, not bundled):**
@@ -120,23 +119,9 @@ The Project includes or depends upon the following third-party components, each 
 | stable-diffusion.cpp | MIT | https://github.com/leejet/stable-diffusion.cpp |
 | FFmpeg | LGPL / GPL | https://ffmpeg.org |
 
-**(c) Live2D Cubism SDK — Special Notice:**
+**(c) Go Module Dependencies:** The Project's Go source code imports various open-source Go modules (including but not limited to `github.com/gorilla/websocket`, `github.com/dop251/goja`, `github.com/webview/webview_go`, `github.com/mattn/go-sqlite3`, etc.), each governed by its own open-source license (typically MIT, BSD, or Apache 2.0). Refer to the respective `go.mod` files in each module directory for the full list of Go dependencies.
 
-The Project incorporates **Live2D Cubism SDK for Web** (`live2dcubismcore.min.js`, `pixi-live2d-display-cubism4.min.js`), which is proprietary software provided by Live2D Inc. The Live2D Cubism SDK is distributed under the **Live2D Proprietary License**, which is separate from and independent of this License.
-
-**IMPORTANT — Stacking Relationship:** The non-commercial restrictions of this License and the Live2D Cubism SDK license apply **cumulatively** (i.e., they are stacked). You must comply with **both** this License **and** the Live2D Cubism SDK license simultaneously. In particular:
-
-- Even if your use qualifies as Non-Commercial Use under this License, you must still obtain appropriate authorization from Live2D Inc. if your use of the Live2D Cubism SDK exceeds the scope permitted by the Live2D Free License.
-- Conversely, compliance with the Live2D Cubism SDK license does not grant you any rights to use the Project for commercial purposes under this License.
-
-For full terms of the Live2D Cubism SDK license, please refer to:
-- Live2D Cubism SDK Release License: https://www.live2d.com/en/download/cubism-sdk/releaselicense/
-- Live2D Free Material License: https://www.live2d.com/en/download/cubism-sdk/freelicense/
-- Live2D Cubism SDK for Web: https://www.live2d.com/en/download/cubism-sdk/download-web/
-
-**(d) Go Module Dependencies:** The Project's Go source code imports various open-source Go modules (including but not limited to `github.com/gorilla/websocket`, `github.com/dop251/goja`, `github.com/webview/webview_go`, `github.com/mattn/go-sqlite3`, etc.), each governed by its own open-source license (typically MIT, BSD, or Apache 2.0). Refer to the respective `go.mod` files in each module directory for the full list of Go dependencies.
-
-**(e) No Implied Re-licensing:** Nothing in this License shall be construed as imposing the non-commercial restriction of this License upon any third-party component. Third-party components are and remain governed exclusively by their respective original licenses. Users are responsible for reviewing and complying with all applicable third-party licenses.
+**(d) No Implied Re-licensing:** Nothing in this License shall be construed as imposing the non-commercial restriction of this License upon any third-party component. Third-party components are and remain governed exclusively by their respective original licenses. Users are responsible for reviewing and complying with all applicable third-party licenses.
 
 ---
 
@@ -240,11 +225,10 @@ For full terms of the Live2D Cubism SDK license, please refer to:
 | Font Awesome Free | CC BY 4.0 / SIL OFL 1.1 / MIT | `local_data/package/fontAwesome/` |
 | KaTeX | MIT | `local_data/package/katex/` |
 | 7-Zip | GNU LGPL 2.1+ | `local_data/package/archive/` |
-| pixi.js (PixiJS) | MIT | `local_data/package/pixi.5.3.12.min.js` |
 | marked.js | MIT | `local_data/package/marked.min.js` |
 | Mermaid.js | MIT | `local_data/package/mermaid.min.js` |
 | Apache ECharts | Apache 2.0 | `local_data/package/echarts.min.js` |
-| OpenBLAS | BSD 3-Clause | `subsystem/qwen_asr_lunar/openblas/` |
+| OpenBLAS | BSD 3-Clause | `subsystem/qwen_asr/openblas/` |
 | QRCode.js | MIT | `local_data/package/qrcode.min.js` |
 
 **(b) 运行时/动态依赖（运行时需要，未捆绑）：**
@@ -255,23 +239,9 @@ For full terms of the Live2D Cubism SDK license, please refer to:
 | stable-diffusion.cpp | MIT | https://github.com/leejet/stable-diffusion.cpp |
 | FFmpeg | LGPL / GPL | https://ffmpeg.org |
 
-**(c) Live2D Cubism SDK — 特别提示：**
+**(c) Go 模块依赖：** 本项目的 Go 源代码导入各类开源 Go 模块（包括但不限于 `github.com/gorilla/websocket`、`github.com/dop251/goja`、`github.com/webview/webview_go`、`github.com/mattn/go-sqlite3` 等），各模块受其自身开源许可证（通常为 MIT、BSD 或 Apache 2.0）约束。各模块目录下的 `go.mod` 文件中列出了完整的 Go 依赖项列表。
 
-本项目集成了 **Live2D Cubism SDK for Web**（`live2dcubismcore.min.js`、`pixi-live2d-display-cubism4.min.js`），该 SDK 为 Live2D Inc. 提供的专有软件。Live2D Cubism SDK 依据 **Live2D 专有许可证** 分发，该许可证独立于本许可证。
-
-**重要 — 叠加关系：** 本许可证的非商业限制与 Live2D Cubism SDK 许可证 **叠加适用**。您必须 **同时** 遵守本许可证 **和** Live2D Cubism SDK 许可证。特别注意：
-
-- 即使您的使用在本许可证下构成非商业用途，若您对 Live2D Cubism SDK 的使用超出 Live2D 免费许可证允许的范围，您仍须另外获得 Live2D Inc. 的适当授权。
-- 反之，遵守 Live2D Cubism SDK 许可证并不授予您在本许可证下将项目用于商业目的的任何权利。
-
-Live2D Cubism SDK 许可条款完整内容请参阅：
-- Live2D Cubism SDK 发布许可证：https://www.live2d.com/en/download/cubism-sdk/releaselicense/
-- Live2D 免费素材许可证：https://www.live2d.com/en/download/cubism-sdk/freelicense/
-- Live2D Cubism SDK for Web：https://www.live2d.com/en/download/cubism-sdk/download-web/
-
-**(d) Go 模块依赖：** 本项目的 Go 源代码导入各类开源 Go 模块（包括但不限于 `github.com/gorilla/websocket`、`github.com/dop251/goja`、`github.com/webview/webview_go`、`github.com/mattn/go-sqlite3` 等），各模块受其自身开源许可证（通常为 MIT、BSD 或 Apache 2.0）约束。各模块目录下的 `go.mod` 文件中列出了完整的 Go 依赖项列表。
-
-**(e) 不构成再许可：** 本许可证中的任何内容均不得解释为将本许可证的非商业限制施加于任何第三方组件。第三方组件仅受其各自原始许可证的排他性约束。用户有责任查阅并遵守所有适用的第三方许可证。
+**(d) 不构成再许可：** 本许可证中的任何内容均不得解释为将本许可证的非商业限制施加于任何第三方组件。第三方组件仅受其各自原始许可证的排他性约束。用户有责任查阅并遵守所有适用的第三方许可证。
 
 ---
 

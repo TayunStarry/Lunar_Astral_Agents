@@ -1568,52 +1568,52 @@ K:Am
         }
     }
 
-    let learnerInitialized = false;
-    function ensureLearnerInitialized() {
-        if (learnerInitialized)
+    let searchInitialized = false;
+    function ensureSearcherInitialized() {
+        if (searchInitialized)
             return true;
-        if (!learnerIsReady()) {
-            const [success, err] = learnerInit();
+        if (!searchIsReady()) {
+            const [success, err] = searchInit();
             if (err) {
-                console.error('[学习者] 初始化失败:', err);
+                console.error('[搜索者] 初始化失败:', err);
                 return false;
             }
         }
-        learnerInitialized = true;
-        console.log('[学习者] 初始化完成');
+        searchInitialized = true;
+        console.log('[搜索者] 初始化完成');
         return true;
     }
-    class LearnerRole {
+    class SearcherRole {
         messages = [];
         async createCreativeWork(taskDescription) {
             if (!taskDescription || taskDescription.trim().length === 0) {
-                return '研究任务调度失败：任务描述不能为空，请提供具体的学习研究需求';
+                return '研究任务调度失败：任务描述不能为空，请提供具体的搜索研究需求';
             }
-            if (!ensureLearnerInitialized()) {
-                return '研究任务调度失败：学习者子智能体未就绪，请稍后重试';
+            if (!ensureSearcherInitialized()) {
+                return '研究任务调度失败：搜索者子智能体未就绪，请稍后重试';
             }
-            console.log('[学习者] 开始执行研究:', taskDescription);
-            const [report, error] = learnerExecute(taskDescription.trim());
+            console.log('[搜索者] 开始执行研究:', taskDescription);
+            const [report, error] = searchExecute(taskDescription.trim());
             if (error) {
-                console.error('[学习者] 执行失败:', error);
+                console.error('[搜索者] 执行失败:', error);
                 return `研究任务执行失败：${error}`;
             }
             if (report && report.trim().length > 0) {
                 this.messages.push({ role: 'assistant', content: report });
-                console.log('[学习者] 研究完成，报告已生成');
+                console.log('[搜索者] 研究完成，报告已生成');
                 return report;
             }
             return '研究任务完成，但未找到相关信息。';
         }
         dumpContext(dialogueMessages, unreadContext, outputPath) {
-            const path = outputPath || 'agent_debug_学习者.json';
+            const path = outputPath || 'agent_debug_搜索者.json';
             const timestamp = new Date().toLocaleString('zh-CN', {
                 year: 'numeric', month: '2-digit', day: '2-digit',
                 hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
             });
             const snapshot = {
                 timestamp,
-                role: '学习者',
+                role: '搜索者',
                 ownMessagesCount: this.messages.length,
                 ownMessages: this.messages.map((msg, idx) => {
                     const content = typeof msg.content === 'string'
@@ -1648,19 +1648,19 @@ K:Am
                         contentPreview: content.length > 300 ? content.slice(0, 300) + '...' : content,
                     };
                 }),
-                learnerInitialized,
+                searchInitialized,
             };
             const [, error] = saveDebugFile(path, JSON.stringify(snapshot, null, 2));
             if (error) {
-                console.error('[学习者] 导出 TS 层上下文失败:', error);
+                console.error('[搜索者] 导出 TS 层上下文失败:', error);
                 return '';
             }
             const goPath = path.replace('.json', '_go.json');
-            const [, goError] = learnerDumpContext('', goPath);
+            const [, goError] = searchDumpContext('', goPath);
             if (goError) {
-                console.error('[学习者] 导出 Go 层上下文失败:', goError);
+                console.error('[搜索者] 导出 Go 层上下文失败:', goError);
             }
-            console.log('[学习者] 上下文快照已导出:', path);
+            console.log('[搜索者] 上下文快照已导出:', path);
             return path;
         }
     }
@@ -2349,7 +2349,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     }
 
     const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
-    const learnerRole = new LearnerRole();
+    const searcherRole = new SearcherRole();
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
     const actorRole = new ActorRole();
@@ -2604,7 +2604,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     function resetAgentState() {
         descriptionRole.coverContext([]);
         dialogueRole.coverContext([]);
-        learnerRole.messages = [];
+        searcherRole.messages = [];
         painterRole.coverContext([]);
         musicianRole.coverContext([]);
         viewerRole.coverContext([]);
@@ -3120,8 +3120,8 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         {
             type: "function",
             function: {
-                name: "dispatch_learner",
-                description: "向检索者子智能体发布检索/研究任务。检索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
+                name: "dispatch_searcher",
+                description: "向搜索者子智能体发布检索/研究任务。搜索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
                 parameters: {
                     type: "object",
                     properties: {
@@ -3177,23 +3177,23 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
-    async function handleDispatchLearner(args) {
+    async function handleDispatchSearcher(args) {
         const { description } = parseArgs(args);
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
+            return ['搜索研究任务调度失败：研究描述不能为空，请提供具体的搜索研究需求', ''];
         }
-        if (!learnerRole) {
-            return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
+        if (!searcherRole) {
+            return ['搜索研究任务调度失败：搜索者子智能体未就绪，请稍后重试', ''];
         }
-        console.log(`[智能体控制] 调度学习者: ${description}`);
-        const result = await learnerRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
+        console.log(`[智能体控制] 调度搜索者: ${description}`);
+        const result = await searcherRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 搜索者完成，报告长度: ${result.length} 字符`);
         return [result, ''];
     }
     GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
     GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-    GlobalConfig.LTPfunction.set('dispatch_learner', handleDispatchLearner);
+    GlobalConfig.LTPfunction.set('dispatch_searcher', handleDispatchSearcher);
     GlobalConfig.LTPdefinition.push(...agentControlTools);
 
     function cleanTextForTTS(text) {
@@ -3398,7 +3398,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.DialogueRole = DialogueRole;
     exports.FileToBase64 = FileToBase64;
     exports.GlobalConfig = GlobalConfig;
-    exports.LearnerRole = LearnerRole;
     exports.LiteImageFile = LiteImageFile;
     exports.MemorizerRole = MemorizerRole;
     exports.ModelBuilder = ModelBuilder;
@@ -3407,6 +3406,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.RandomFloat = RandomFloat;
     exports.RandomFloor = RandomFloor;
     exports.SCHEDULE_TRIGGER_PREFIX = SCHEDULE_TRIGGER_PREFIX;
+    exports.SearcherRole = SearcherRole;
     exports.ViewerRole = ViewerRole;
     exports.actorRole = actorRole;
     exports.agentControlTools = agentControlTools;
@@ -3421,7 +3421,6 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.getFileIndexFromKnowledge = getFileIndexFromKnowledge;
     exports.getPromptFromKnowledge = getPromptFromKnowledge;
     exports.initSchedules = initSchedules;
-    exports.learnerRole = learnerRole;
     exports.memorizerRole = memorizerRole;
     exports.musicianRole = musicianRole;
     exports.painterRole = painterRole;
@@ -3434,6 +3433,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     exports.savePromptToKnowledge = savePromptToKnowledge;
     exports.scheduleTools = scheduleTools;
     exports.screenshotTools = screenshotTools;
+    exports.searcherRole = searcherRole;
     exports.splitSentences = splitSentences;
     exports.splitTextToStrings = splitTextToStrings;
     exports.toBtoaString = toBtoaString;

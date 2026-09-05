@@ -290,37 +290,37 @@ declare global {
      */
     function clearLTPXRemoteTools(): boolean;
     /**
-     * 初始化学习者智能体
+     * 初始化搜索者智能体
      * 模型配置从 lunar_config.json 读取
      *
      * @param {string} [memoryDBDir] 记忆库数据存储目录（可选，默认 'local_data/database/memory'）
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function learnerInit(memoryDBDir?: string): [boolean, Error | null];
+    function searchInit(memoryDBDir?: string): [boolean, Error | null];
     /**
-     * 执行学习者研究
+     * 执行搜索者研究
      *
      * @param {string} query 研究查询字符串
      *
      * @returns {[string, Error | null]} 包含研究结果的元组，[研究报告文本, 错误信息]
      */
-    function learnerExecute(query: string): [string, Error | null];
+    function searchExecute(query: string): [string, Error | null];
     /**
-     * 检查学习者智能体是否已初始化
+     * 检查搜索者智能体是否已初始化
      *
      * @returns {boolean} 是否已初始化
      */
-    function learnerIsReady(): boolean;
+    function searchIsReady(): boolean;
     /**
-     * 导出学习者 Go 层运行时上下文到文件（覆写模式）
+     * 导出搜索者 Go 层运行时上下文到文件（覆写模式）
      *
      * @param {string} query 当前查询字符串（可为空）
      * @param {string} outputPath 输出文件路径
      *
      * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
      */
-    function learnerDumpContext(query: string, outputPath: string): [string, Error | null];
+    function searchDumpContext(query: string, outputPath: string): [string, Error | null];
     /**
      * 将调试内容写入本地文件（覆写模式）
      * 用于各子智能体导出上下文快照

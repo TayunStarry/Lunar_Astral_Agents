@@ -53,3 +53,9 @@ var agentPosition AgentPositionData
 
 // agentPositionMutex 保护 agentPosition 的并发访问
 var agentPositionMutex sync.RWMutex
+
+// searchRuntimeMutex 保护初始化状态的并发访问
+var searchRuntimeMutex sync.Mutex
+
+// searchInitialized 标记搜索者是否已初始化
+var searchInitialized bool

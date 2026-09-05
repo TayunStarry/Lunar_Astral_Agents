@@ -1,0 +1,12 @@
+{
+  "id": "com.yaraflow.weather",
+  "title": "yaraflow-weather",
+  "author": "月白清风",
+  "version": "1.0.0",
+  "type": "tool",
+  "description": "天气查询工具插件，支持多API提供者自动回退（和风天气 → Open-Meteo → wttr.in），LLM可通过Function Calling主动调用",
+  "tags": [
+    "LTP3"
+  ],
+  "icon": ""
+}

@@ -1,4 +1,4 @@
-import { ToolCall, GlobalConfig, actorRole, painterRole, musicianRole, learnerRole } from '../index';
+import { ToolCall, GlobalConfig, actorRole, painterRole, musicianRole, searcherRole } from '../index';
 
 // ==== 工具定义 ====
 
@@ -58,8 +58,8 @@ export const agentControlTools: ToolCall[] = [
 	{
 		type: "function",
 		function: {
-			name: "dispatch_learner",
-			description: "向检索者子智能体发布检索/研究任务。检索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
+			name: "dispatch_searcher",
+			description: "向搜索者子智能体发布检索/研究任务。搜索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
 			parameters: {
 				type: "object",
 				properties: {
@@ -135,21 +135,21 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 	return [result, ''];
 }
 
-/** 处理学习者调度工具 */
-async function handleDispatchLearner(args?: Record<string, any> | string): Promise<string[]> {
+/** 处理搜索者调度工具 */
+async function handleDispatchSearcher(args?: Record<string, any> | string): Promise<string[]> {
 	const { description } = parseArgs(args);
 
 	if (!description || typeof description !== 'string' || description.trim().length === 0) {
-		return ['学习研究任务调度失败：研究描述不能为空，请提供具体的学习研究需求', ''];
+		return ['搜索研究任务调度失败：研究描述不能为空，请提供具体的搜索研究需求', ''];
 	}
 
-	if (!learnerRole) {
-		return ['学习研究任务调度失败：学习者子智能体未就绪，请稍后重试', ''];
+	if (!searcherRole) {
+		return ['搜索研究任务调度失败：搜索者子智能体未就绪，请稍后重试', ''];
 	}
 
-	console.log(`[智能体控制] 调度学习者: ${description}`);
-	const result = await learnerRole.createCreativeWork(description.trim());
-	console.log(`[智能体控制] 学习者完成，报告长度: ${result.length} 字符`);
+	console.log(`[智能体控制] 调度搜索者: ${description}`);
+	const result = await searcherRole.createCreativeWork(description.trim());
+	console.log(`[智能体控制] 搜索者完成，报告长度: ${result.length} 字符`);
 	return [result, ''];
 }
 
@@ -159,6 +159,6 @@ async function handleDispatchLearner(args?: Record<string, any> | string): Promi
 GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
 GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
 GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-GlobalConfig.LTPfunction.set('dispatch_learner', handleDispatchLearner);
+GlobalConfig.LTPfunction.set('dispatch_searcher', handleDispatchSearcher);
 // 注册智能体控制工具到 LTPdefinition 列表
 GlobalConfig.LTPdefinition.push(...agentControlTools);

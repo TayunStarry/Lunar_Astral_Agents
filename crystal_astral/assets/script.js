@@ -49,7 +49,7 @@ const VALID_FILE_TYPES = [
     'application/json', 'application/xml', 'application/javascript', 'text/markdown'
 ];
 
-const PACKAGE_FILE_EXTENSIONS = ['.ltpx', '.ltp2'];
+const PACKAGE_FILE_EXTENSIONS = ['.ltpx'];
 
 // ===== Markdown 渲染配置 =====
 function initMarked() {
@@ -337,7 +337,7 @@ function buildPageCard(page) {
     card.innerHTML = `
         ${displayTag ? `<span class="card-tag${tagModifier ? ' ' + tagModifier : ''}">${displayTag}</span>` : ''}
         <div class="icon">
-            <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
+            <img src="${page.icon || getRandomDefaultIcon()}" alt="${page.title}" draggable="false" onerror="this.onerror=null;this.src=getRandomDefaultIcon()">
         </div>
         <h3>${page.title}</h3>
         <button class="card-gear" title="设置"><i class="fas fa-cog"></i></button>

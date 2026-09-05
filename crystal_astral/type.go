@@ -189,6 +189,7 @@ type StudioClient struct {
 type StudioHub struct {
 	Clients    map[*StudioClient]bool // 已注册的客户端集合
 	Broadcast  chan []byte            // 广播消息通道
+	Inbound    chan []byte            // 引擎入站通道（转发给 LTP3 引擎等内部消费者）
 	Register   chan *StudioClient     // 客户端注册通道
 	Unregister chan *StudioClient     // 客户端注销通道
 }

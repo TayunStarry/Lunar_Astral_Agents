@@ -133,9 +133,30 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 字段约定：
 - `id`：应用唯一标识，LTPX 广播携带它来路由包；
-- `tags`：`AtoA`（标记适配 Lunar AtoA 链路、可被月华调用；**LTPX 是数据格式（`.ltpx` 包），不作为标签**）+ 分支标签（`Mini-LTP` 通用页面操作 / `Node-LTP` 专用 webApp / `Self-LTP` 自主）等；
+- `tags`：分支/类别标签数组，各标签涵义与示例见 [§3.1 标签语义与示例](#31-标签tags语义与示例)；
 - `icon`：**相对路径** `icon.webp`（禁止绝对/跨包路径）；
 - `tools[]`：`name + description`，供月华脚本将其归一化为 OpenAI function schema 注册给模型。
+
+### 3.1 标签（tags）语义与示例
+
+`tags` 用于声明包的**分支归属**（LTP 分支标签）与**类别**（DS-Demo / DeepSeek / Git 等非 LTP 标签），供琉璃前端渲染卡片角标。**是否可被月华 AtoA 调用与 tags 无关**——由 `metadata.json` 中是否存在非空 `tools[]` 数组决定（`scanAtoaToolchain` 动态扫描，见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。完整包清单与 tags 见 [06 §6.7.1](06-前端资源库.md)。
+
+**LTP 分支标签（决定智能体分支）**
+
+| 标签 | 含义 | 适配 AtoA | 当前使用示例 |
+|------|------|-----------|--------------|
+| `Zero-LTP` | 协议基座：本地包页面（`.ltpx`），以 LunarSystem 为后端，经 web UI 加载/运行，不内嵌专用智能体 | —（协议基座） | `lunar.web-view.image-studio`、`knowledge-studio`、`memory-studio`、`novel-studio`、`translate-studio`、`tts-studio` |
+| `Node-LTP` | 专用 WebApp 智能体：为特定 web 应用深度定制指令理解、选择器策略与操作序列 | ✅ | `lunar.web-view.file-explorer`、`search-weather` |
+| `Mini-LTP` | 通用页面操作智能体：页面最小化嵌入 + DOM 感知 + 键鼠/滚动/组合键，经 iframe 动态注入 | ✅ | `lunar.web-view.click-monitor`、`image-confusion`；`deepseek.web-view.*` 多数演示包 |
+| `Self-LTP` | 自主页面操作智能体：不接入 AtoA，用户经页面（开始/停止）+ 文本框触发，多轮自循环 | — | `deepseek.web-view.voxel-disaster` |
+
+**非 LTP 类别标签**
+
+| 标签 | 含义 | 当前使用示例 |
+|------|------|--------------|
+| `DS-Demo` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
+| `DeepSeek` | 外部 DeepSeek API / 聊天页面 | `external.web-view.deepseek_api`、`deepseek_chat` |
+| `Git` | 外部代码托管平台入口 | `external.web-view.github`、`gitee`、`gitcode` |
 
 ---
 

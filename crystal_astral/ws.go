@@ -28,6 +28,7 @@ func NewStudioHub() *StudioHub {
 	return &StudioHub{
 		Clients:    make(map[*StudioClient]bool),
 		Broadcast:  make(chan []byte, 256),
+		Inbound:    make(chan []byte, 1024),
 		Register:   make(chan *StudioClient),
 		Unregister: make(chan *StudioClient),
 	}
@@ -111,8 +112,12 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				break
 			}
-			// 纯转发，不解析消息内容（哑中继原则）
+			// 转发给所有客户端 + 非阻塞送入引擎入站通道（LTP3 引擎等内部消费者）
 			h.Broadcast <- message
+			select {
+			case h.Inbound <- message:
+			default:
+			}
 		}
 	}()
 

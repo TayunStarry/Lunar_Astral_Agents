@@ -111,7 +111,7 @@ const promptLauncher = `【角色】软件启动者。只负责“找到/打开�
 
 // promptVision 视觉理解者，负责基于已自动注入的画面截图做理解。
 const promptVision = `【角色】视觉理解者。仅基于已自动注入的画面截图做理解，不截图、不操作、不调用工具。
-【职责】针对【任务目标】与【当前步骤】摘要画面中相关的内容：当前窗口/标题栏、任务相关元素的大致位置（坐标）与可见状态、相比上轮的关键变化。只摘相关信息，不无差别罗列整屏。
+【职责】针对【任务目标】与【当前步骤】摘要画面中相关的内容：当前窗口/标题栏、任务相关元素的大致位置（坐标）与可见状态、相比上轮的关键变化。截图已叠加原始窗口像素坐标网格（X 刻度在顶边、Y 刻度在左边，原点在窗口左上角），报告元素坐标时必须读取网格刻度，输出窗口内相对坐标 (x,y)，该坐标可直接用于点击/定位。只摘相关信息，不无差别罗列整屏。
 【输出】纯文本摘要（含坐标与元素）。`
 
 // promptUIAReader UIA 理解者，负责用 UI Automation 读当前应用控件结构。
@@ -121,13 +121,13 @@ const promptUIAReader = `【角色】UIA 理解者。用 UI Automation 读当前
 
 // promptPlanner 任务规划者，负责综合感知情报(视觉/UIA)做出下一步决策。
 const promptPlanner = `【角色】任务规划者。综合感知情报(视觉/UIA)做出下一步决策，不直接执行工具，不操作桌面。
-【决策】四选一：mouse / keyboard / uia / complete。
-- mouse：位置型交互（点击/拖拽/滚动）；
-- keyboard：文本/按键；
-- uia：能按元素语义精确命中。
+【决策】四选一：keyboard / uia / mouse / complete。
+- keyboard：文本输入/按键/组合键/发送等，能精确表达优先用；
+- uia：能按元素语义精确命中（按钮/输入框/菜单项等）时用；
+- mouse：仅当目标是「位置型交互」（画布绘图、拖拽、滚轮、右键菜单坐标、UIA 无法精确命中的界面）时才用。
 - complete：证据显示目标已达成，请求终止。
-【自由选型】不预设任何工具链优先级，依据情报判断哪个最能达成当前目标。
-【输出】严格 JSON：{"decision":"mouse|keyboard|uia|complete","action":"要做的事","via":"理由"`
+【选型倾向】能 uia/keyboard 达成的绝不点鼠标，mouse 仅作兜底；需鼠标时坐标直接取截图网格标注的窗口内相对坐标 (x,y)。
+【输出】严格 JSON：{"decision":"keyboard|uia|mouse|complete","action":"要做的事（含目标与坐标）","via":"理由"}`
 
 // promptKeyboard 键盘操作者，负责按规划键入文本/按键/组合键。
 const promptKeyboard = `【角色】键盘操作者。仅当决策=keyboard 时启用，只用键盘类工具。
@@ -136,7 +136,7 @@ const promptKeyboard = `【角色】键盘操作者。仅当决策=keyboard 时�
 
 // promptMouse 鼠标操作者，负责按规划点击/拖拽/滚动鼠标。
 const promptMouse = `【角色】鼠标操作者。仅当决策=mouse 时启用，只用鼠标类工具。
-【职责】按画面坐标网格执行点击/拖拽/滚动；坐标取当前窗口内坐标。
+【职责】按规划执行点击/拖拽/滚动。坐标必须使用截图网格标注的窗口内相对坐标 (x,y)，该 (x,y) 直接等于 click/mouse_hold/move_mouse/scroll_wheel 的参数值（以当前原生窗口像素为单位的相对坐标，网格刻度已给出）。
 【输出】JSON：{"performed":"...","at":"(x,y)"}`
 
 // promptUIAOp UIA 操作者，负责按规划点击/写入 UI 元素。
@@ -297,7 +297,7 @@ var allToolDefs = map[string]ltpToolDef{
 	"capture_screenshot": {
 		Type: "function",
 		Function: ltpFuncDef{
-			Name: "capture_screenshot", Description: "截取当前窗口并叠加坐标网格，刷新为最新截图（用于视觉定位与记录）。",
+			Name: "capture_screenshot", Description: "截取当前窗口，叠加带原始窗口像素坐标（顶边 X 刻度、左边 Y 刻度）的高对比网格并刷新为最新截图，用于视觉定位（报告/使用网格刻度对应的窗口内相对坐标）与记录。",
 			Parameters: map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}},
 		},
 	},

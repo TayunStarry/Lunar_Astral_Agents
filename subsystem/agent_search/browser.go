@@ -1,6 +1,7 @@
 package AgentSearch
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"fmt"
 	"net/url"
@@ -50,7 +51,7 @@ func LaunchBrowser() error {
 	browserJustLaunched = true // 标记刚启动，跳过下次健康检查
 	browserQueryCount = 0
 
-	fmt.Printf("[%s] 浏览器已启动\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "浏览器已启动\n")
 	return nil
 }
 
@@ -76,7 +77,7 @@ func CloseBrowser() {
 	browserLaunched = false
 	browserQueryCount = 0
 
-	fmt.Printf("[%s] 浏览器已关闭\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "浏览器已关闭\n")
 }
 
 // ensureBrowser 确保浏览器已启动，未启动则自动启动
@@ -102,13 +103,12 @@ func withBrowserRetry(operationName string, fn func() error) error {
 			lastErr = err
 		}
 
-		fmt.Printf("[%s] %s 失败 (第 %d/%d 次): %v\n",
-			ModuleName, operationName, attempt, MaxBrowserRetryAttempts, lastErr)
+		LoggerGeneral.Info(ModuleName, "%s 失败 (第 %d/%d 次): %v\n", operationName, attempt, MaxBrowserRetryAttempts, lastErr)
 
 		if attempt < MaxBrowserRetryAttempts {
-			fmt.Printf("[%s] 清理资源并重启浏览器后重试...\n", ModuleName)
+			LoggerGeneral.Info(ModuleName, "清理资源并重启浏览器后重试...\n")
 			if restartErr := tryRestartBrowser(); restartErr != nil {
-				fmt.Printf("[%s] 浏览器重启失败: %v\n", ModuleName, restartErr)
+				LoggerGeneral.Info(ModuleName, "浏览器重启失败: %v\n", restartErr)
 			}
 		}
 	}
@@ -145,20 +145,20 @@ func buildBrowserOpts() []chromedp.ExecAllocatorOption {
 // 优先级：用户指定 > Edge > Chrome（默认）
 func detectBrowserPath() string {
 	if BrowserExecPath != "" {
-		fmt.Printf("[%s] 使用用户指定的浏览器: %s\n", ModuleName, BrowserExecPath)
+		LoggerGeneral.Info(ModuleName, "使用用户指定的浏览器: %s\n", BrowserExecPath)
 		return BrowserExecPath
 	}
 
 	// 尝试检测 Edge
 	for _, p := range edgePaths {
 		if _, err := os.Stat(p); err == nil {
-			fmt.Printf("[%s] 自动检测到 Edge 浏览器: %s\n", ModuleName, p)
+			LoggerGeneral.Info(ModuleName, "自动检测到 Edge 浏览器: %s\n", p)
 			return p
 		}
 	}
 
 	// 未检测到，让 chromedp 使用默认 Chrome 查找逻辑
-	fmt.Printf("[%s] 未检测到 Edge，使用默认浏览器查找逻辑\n", ModuleName)
+	LoggerGeneral.Info(ModuleName, "未检测到 Edge，使用默认浏览器查找逻辑\n")
 	return ""
 }
 
@@ -176,21 +176,21 @@ func ExecuteSearch(query string, maxResults int) ([]SearchResult, error) {
 
 	var lastErr error
 	for _, engine := range engineFallbackOrder {
-		fmt.Printf("[%s] 尝试使用 %s 搜索: %s\n", ModuleName, engine, query)
+		LoggerGeneral.Info(ModuleName, "尝试使用 %s 搜索: %s\n", engine, query)
 
 		results, err := searchOnEngine(engine, query, maxResults)
 		if err != nil {
-			fmt.Printf("[%s] %s 搜索失败: %v\n", ModuleName, engine, err)
+			LoggerGeneral.Info(ModuleName, "%s 搜索失败: %v\n", engine, err)
 			lastErr = err
 			continue
 		}
 
 		if len(results) > 0 {
-			fmt.Printf("[%s] %s 返回 %d 条结果\n", ModuleName, engine, len(results))
+			LoggerGeneral.Info(ModuleName, "%s 返回 %d 条结果\n", engine, len(results))
 			return results, nil
 		}
 
-		fmt.Printf("[%s] %s 无搜索结果，尝试下一个引擎\n", ModuleName, engine)
+		LoggerGeneral.Info(ModuleName, "%s 无搜索结果，尝试下一个引擎\n", engine)
 	}
 
 	if lastErr != nil {
@@ -226,7 +226,7 @@ func searchOnEngine(engine string, query string, maxResults int) ([]SearchResult
 			return fmt.Errorf("导航到搜索页失败: %w", err)
 		}
 
-		fmt.Printf("[%s] 搜索页加载完成: %s\n", ModuleName, currentURL)
+		LoggerGeneral.Info(ModuleName, "搜索页加载完成: %s\n", currentURL)
 
 		// 获取页面 HTML
 		pageHTML = ""
@@ -457,7 +457,7 @@ func ExtractPageContent(targetURL string) (*PageContent, error) {
 	); err != nil {
 		return nil, fmt.Errorf("页面加载超时/失败 %s: %w", targetURL, err)
 	}
-	fmt.Printf("[%s] 页面加载完成: %s\n", ModuleName, finalURL)
+	LoggerGeneral.Info(ModuleName, "页面加载完成: %s\n", finalURL)
 
 	// 提取 DOM 文本
 	rawText, err := extractDOMText(ctx)
@@ -478,15 +478,15 @@ func ExtractPageContent(targetURL string) (*PageContent, error) {
 	if textLen >= TextHeavyThreshold {
 		// 文本密集型：使用 DOM 文本
 		content.ContentType = "text"
-		fmt.Printf("[%s] 判定为文本密集型 (%d 字) %s\n", ModuleName, textLen, finalURL)
+		LoggerGeneral.Info(ModuleName, "判定为文本密集型 (%d 字) %s\n", textLen, finalURL)
 	} else {
 		// 视觉主导型：获取截图
 		content.ContentType = "visual"
-		fmt.Printf("[%s] 判定为视觉主导型 (%d 字)，开始截图 %s\n", ModuleName, textLen, finalURL)
+		LoggerGeneral.Info(ModuleName, "判定为视觉主导型 (%d 字)，开始截图 %s\n", textLen, finalURL)
 
 		screenshots, err := CapturePageScreenshots(ctx, MaxScreenshotsPerPage)
 		if err != nil {
-			fmt.Printf("[%s] 截图警告: %v\n", ModuleName, err)
+			LoggerGeneral.Info(ModuleName, "截图警告: %v\n", err)
 			// 截图失败不阻断流程，继续使用文本内容
 		} else {
 			content.Screenshots = screenshots

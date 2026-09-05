@@ -1,5 +1,5 @@
 // ---------- 聚合导出（保持原公共 API） ----------
-export { descriptionRole, learnerRole, painterRole, musicianRole, actorRole, viewerRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+export { descriptionRole, searcherRole, painterRole, musicianRole, actorRole, viewerRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 export { LiteImageFile } from './capabilities/media';
 export { extractTextFromMessage, ensureMemoryReady } from './capabilities/memory';
 
