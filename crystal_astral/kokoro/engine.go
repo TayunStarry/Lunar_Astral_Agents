@@ -1,12 +1,11 @@
-package module
+package kokoro
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	logger "LunarSubsystem/LoggerGeneral"
 
 	"github.com/yalue/onnxruntime_go"
 )
@@ -126,7 +125,8 @@ func voiceLang(name string) string {
 }
 
 // Synthesize 文本转语音，返回 24kHz float32 采样与音素序列
-func (e *Engine) Synthesize(text, voiceName string, speed float32, lang string) ([]float32, string, error) {
+// mix 提供 ≥2 个音色时启用音色融合（加权平均 style 向量），优先于 voiceName
+func (e *Engine) Synthesize(text, voiceName string, speed float32, lang string, mix []MixVoice) ([]float32, string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil, "", fmt.Errorf("文本内容不能为空")
@@ -134,9 +134,41 @@ func (e *Engine) Synthesize(text, voiceName string, speed float32, lang string) 
 	if voiceName == "" {
 		voiceName = defaultVoiceName
 	}
-	voice, ok := e.voices[voiceName]
-	if !ok {
-		return nil, "", fmt.Errorf("音色 %s 不存在，可用: %s", voiceName, strings.Join(e.voiceOrder[:min(10, len(e.voiceOrder))], ", "))
+	var voice *Voice
+	var mixWeights []voiceWeight
+	if len(mix) > 0 {
+		// 音色融合：校验音色存在并归一化权重
+		var total float64
+		for _, m := range mix {
+			v, ok := e.voices[m.Voice]
+			if !ok {
+				return nil, "", fmt.Errorf("混合音色 %s 不存在，可用: %s", m.Voice, strings.Join(e.voiceOrder[:min(10, len(e.voiceOrder))], ", "))
+			}
+			if m.Weight < 0 {
+				m.Weight = 0
+			}
+			total += m.Weight
+			mixWeights = append(mixWeights, voiceWeight{voice: v, weight: float32(m.Weight)})
+		}
+		if len(mixWeights) < 2 {
+			return nil, "", fmt.Errorf("音色混合至少需要 2 个音色")
+		}
+		if total <= 0 {
+			// 权重全为 0：等权混合
+			for i := range mixWeights {
+				mixWeights[i].weight = 1
+			}
+			total = float64(len(mixWeights))
+		}
+		for i := range mixWeights {
+			mixWeights[i].weight /= float32(total)
+		}
+	} else {
+		var ok bool
+		voice, ok = e.voices[voiceName]
+		if !ok {
+			return nil, "", fmt.Errorf("音色 %s 不存在，可用: %s", voiceName, strings.Join(e.voiceOrder[:min(10, len(e.voiceOrder))], ", "))
+		}
 	}
 	if speed == 0 {
 		// 请求未指定语速时使用默认值
@@ -149,41 +181,102 @@ func (e *Engine) Synthesize(text, voiceName string, speed float32, lang string) 
 		speed = MaxSpeed
 	}
 
-	// 1. 文本 -> 音素
-	phonemes, err := e.phonemize(text, lang)
-	if err != nil {
-		return nil, "", err
+	// 1. 滤除不可合成字符（Emoji、控制符、格式符等）
+	cleaned := sanitizeText(text)
+	if removed := len([]rune(text)) - len([]rune(cleaned)); removed > 0 {
+		LoggerGeneral.SubInfo("KOKORO-TTS", "TEXT", "滤除 %d 个不可合成字符", removed)
 	}
-	if phonemes == "" {
+	if strings.TrimSpace(cleaned) == "" {
+		return nil, "", fmt.Errorf("净化后文本内容不能为空")
+	}
+
+	// 2. 解析韵律提示符并逐段音素化
+	//    [↑] 升调 / [↓] 降调（作用于其前文本段）、[•N] 停顿 N*0.01 秒
+	segs := parseProsody(cleaned)
+	var units []prosodyUnit
+	var phonemeParts []string
+	for _, s := range segs {
+		if strings.TrimSpace(s.Text) == "" {
+			// 纯停顿段
+			units = append(units, prosodyUnit{pauseAfter: s.PauseAfter})
+			continue
+		}
+		phonemes, err := e.phonemize(s.Text, lang)
+		if err != nil {
+			return nil, "", err
+		}
+		if phonemes == "" {
+			units = append(units, prosodyUnit{pauseAfter: s.PauseAfter})
+			continue
+		}
+		phonemeParts = append(phonemeParts, phonemes)
+		units = append(units, prosodyUnit{phonemes: phonemes, rise: s.Rise, fall: s.Fall, pauseAfter: s.PauseAfter})
+	}
+	if len(units) == 0 {
 		return nil, "", fmt.Errorf("文本未能生成音素")
 	}
 
-	// 2. 按上下文长度分块
-	batches := splitPhonemes(phonemes, ContextLength)
-
-	// 3. 逐块推理并拼接
+	// 3. 逐段推理并拼接（onnx 会话非并发安全，需持锁）
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	var audio []float32
+	for _, u := range units {
+		if u.phonemes == "" {
+			// 纯停顿段：直接插入静音
+			audio = append(audio, make([]float32, pauseSamples(u.pauseAfter))...)
+			continue
+		}
+		segAudio, err := e.synthesizePhonemes(u.phonemes, voice, speed, mixWeights)
+		if err != nil {
+			return nil, strings.Join(phonemeParts, " "), err
+		}
+		// 应用升调/降调（音高偏移，保持时长不变）
+		switch {
+		case u.rise:
+			segAudio = pitchShift(segAudio, RiseFactor)
+		case u.fall:
+			segAudio = pitchShift(segAudio, FallFactor)
+		}
+		audio = append(audio, segAudio...)
+		if u.pauseAfter > 0 {
+			audio = append(audio, make([]float32, pauseSamples(u.pauseAfter))...)
+		}
+	}
+	if len(audio) == 0 {
+		return nil, strings.Join(phonemeParts, " "), fmt.Errorf("合成结果为空")
+	}
+	return audio, strings.Join(phonemeParts, " "), nil
+}
+
+// synthesizePhonemes 将音素串按上下文长度分块并逐块推理拼接（需在 e.mu 保护下调用）
+func (e *Engine) synthesizePhonemes(phonemes string, voice *Voice, speed float32, mix []voiceWeight) ([]float32, error) {
+	batches := splitPhonemes(phonemes, ContextLength)
 
 	var audio []float32
 	for i, batch := range batches {
 		if i > 0 {
 			audio = append(audio, make([]float32, int(float32(SampleRate)*BatchPauseSeconds))...)
 		}
-		samples, err := e.runBatch(batch, voice, speed)
+		samples, err := e.runBatch(batch, voice, speed, mix)
 		if err != nil {
-			return nil, phonemes, fmt.Errorf("第 %d 块合成失败: %w", i+1, err)
+			return nil, fmt.Errorf("第 %d 块合成失败: %w", i+1, err)
 		}
 		audio = append(audio, samples...)
 	}
-	if len(audio) == 0 {
-		return nil, phonemes, fmt.Errorf("合成结果为空")
-	}
-	return audio, phonemes, nil
+	return audio, nil
+}
+
+// voiceWeight 音色混合分量（已解析的音色引用 + 归一化权重）
+type voiceWeight struct {
+	// voice 音色引用
+	voice *Voice
+	// weight 归一化后的融合权重（和为 1）
+	weight float32
 }
 
 // runBatch 运行单块推理
-func (e *Engine) runBatch(phonemes string, voice *Voice, speed float32) ([]float32, error) {
+func (e *Engine) runBatch(phonemes string, voice *Voice, speed float32, mix []voiceWeight) ([]float32, error) {
 	tokens := e.tokenizer.Tokenize(phonemes)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("音素不在模型词表中")
@@ -194,8 +287,19 @@ func (e *Engine) runBatch(phonemes string, voice *Voice, speed float32) ([]float
 	inputData = append(inputData, tokens...)
 	inputData = append(inputData, 0)
 
-	// 音色按音素数量选行
-	style := styleFor(voice, len(tokens))
+	// 音色按音素数量选行；混合时对各音色行做加权平均
+	var style []float32
+	if len(mix) > 0 {
+		style = make([]float32, StyleDim)
+		for _, mw := range mix {
+			row := styleFor(mw.voice, len(tokens))
+			for j := 0; j < StyleDim; j++ {
+				style[j] += row[j] * mw.weight
+			}
+		}
+	} else {
+		style = styleFor(voice, len(tokens))
+	}
 
 	inputTensor, err := onnxruntime_go.NewTensor(onnxruntime_go.Shape{1, int64(len(inputData))}, inputData)
 	if err != nil {
@@ -224,6 +328,10 @@ func (e *Engine) runBatch(phonemes string, voice *Voice, speed float32) ([]float
 	}
 
 	wave, ok := outputs[0].(*onnxruntime_go.Tensor[float32])
+	// 释放未被使用的 duration 输出张量（当前合成不取用，及时销毁避免资源泄漏）
+	if outputs[1] != nil {
+		_ = outputs[1].Destroy()
+	}
 	if !ok {
 		// 类型断言失败时 wave 必为 nil；释放实际分配的输出对象避免泄漏
 		if outputs[0] != nil {
@@ -343,5 +451,5 @@ func isEnglishSpan(s string) bool {
 
 // LogAvailable 输出引擎信息
 func (e *Engine) LogAvailable() {
-	logger.Info("KOKORO-TTS", "引擎就绪，音色 %d 个，示例: %s", len(e.voiceOrder), strings.Join(e.voiceOrder[:min(5, len(e.voiceOrder))], ", "))
+	LoggerGeneral.Info("KOKORO-TTS", "引擎就绪，音色 %d 个，示例: %s", len(e.voiceOrder), strings.Join(e.voiceOrder[:min(5, len(e.voiceOrder))], ", "))
 }

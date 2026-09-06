@@ -400,38 +400,6 @@ textarea:focus {
     filter: brightness(1.1);
 }
 
-/* ---------- 服务连接条 ---------- */
-.connect-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 14px;
-}
-
-.connect-bar .api-input {
-    flex: 1;
-    min-width: 0;
-}
-
-.service-status {
-    flex-shrink: 0;
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.2);
-    color: var(--text-dim);
-}
-
-.service-status.online {
-    background: rgba(52, 211, 153, 0.18);
-    color: var(--ok);
-}
-
-.service-status.offline {
-    background: rgba(248, 113, 113, 0.18);
-    color: var(--err);
-}
-
 /* ---------- 音频均衡器 ---------- */
 .eq-wrap {
     margin-top: 16px;
@@ -694,6 +662,7 @@ textarea:focus {
 }
 
 .voice-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -704,6 +673,25 @@ textarea:focus {
     cursor: pointer;
     transition: all 0.2s;
     user-select: none;
+}
+
+/* 音色卡片右上角混合勾选框 */
+.voice-check {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 14px;
+    height: 14px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    z-index: 2;
+}
+
+.voice-card .voice-name {
+    font-size: 13px;
+    font-weight: 600;
+    word-break: break-all;
+    padding-right: 18px;
 }
 
 .voice-card:hover {
@@ -719,12 +707,6 @@ textarea:focus {
 .voice-card.busy {
     opacity: 0.6;
     pointer-events: none;
-}
-
-.voice-card .voice-name {
-    font-size: 13px;
-    font-weight: 600;
-    word-break: break-all;
 }
 
 .voice-card .voice-meta {
@@ -912,6 +894,63 @@ textarea:focus {
 }
 
 .dict-del-btn:hover {
+    background: rgba(248, 113, 113, 0.15);
+}
+
+/* ---------- 音色混合 ---------- */
+.mix-tools {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.mix-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mix-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: var(--input-bg);
+}
+
+.mix-row-name {
+    font-weight: 600;
+    font-size: 13px;
+    min-width: 80px;
+    word-break: break-all;
+}
+
+.mix-slider {
+    flex: 1;
+    min-width: 0;
+}
+
+.mix-row-weight {
+    font-size: 12px;
+    color: var(--primary);
+    min-width: 42px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.mix-row-del {
+    border: none;
+    background: transparent;
+    color: var(--err);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.mix-row-del:hover {
     background: rgba(248, 113, 113, 0.15);
 }
 

@@ -1,6 +1,8 @@
-package module
+package kokoro
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/yanyiwu/gojieba"
@@ -34,9 +36,42 @@ var notErhua = map[string]struct{}{
 	"红孩儿": {}, "花儿": {}, "虫儿": {}, "马儿": {}, "鸟儿": {}, "猪儿": {}, "猫儿": {}, "狗儿": {}, "少儿": {},
 }
 
+// jiebaDictDir 定位 gojieba 词典目录：
+// -trimpath 构建会让 gojieba 内部 runtime.Caller 只返回相对模块路径，导致词典目录解析失败；
+// 这里显式从模块缓存定位（GOMODCACHE / GOPATH / 用户主目录），保证任意构建方式可用。
+func jiebaDictDir() string {
+	const rel = "github.com/yanyiwu/gojieba@v1.4.7/deps/cppjieba/dict"
+	var candidates []string
+	if v := os.Getenv("GOMODCACHE"); v != "" {
+		candidates = append(candidates, filepath.Join(v, rel))
+	}
+	if v := os.Getenv("GOPATH"); v != "" {
+		candidates = append(candidates, filepath.Join(v, "pkg", "mod", rel))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, "go", "pkg", "mod", rel))
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(filepath.Join(c, "jieba.dict.utf8")); err == nil {
+			return c
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return rel
+}
+
 // newZhFrontend 初始化中文前端（加载 jieba 分词）
 func newZhFrontend() (*zhFrontend, error) {
-	j := gojieba.NewJieba()
+	dictDir := jiebaDictDir()
+	j := gojieba.NewJieba(
+		filepath.Join(dictDir, "jieba.dict.utf8"),
+		filepath.Join(dictDir, "hmm_model.utf8"),
+		filepath.Join(dictDir, "user.dict.utf8"),
+		filepath.Join(dictDir, "idf.utf8"),
+		filepath.Join(dictDir, "stop_words.utf8"),
+	)
 	f := &zhFrontend{
 		jieba: j,
 		punc:  make(map[string]struct{}),

@@ -165,14 +165,6 @@
                     </div>
                 </div>
 
-                <!-- 服务连接 -->
-                <div class="connect-bar">
-                    <span id="service-status" class="service-status">未连接</span>
-                    <input type="text" id="api-base-input" class="glass-input api-input" placeholder="http://127.0.0.1:36789" spellcheck="false">
-                    <button id="connect-btn" class="btn-glass" title="连接服务">
-                        <i class="fas fa-plug"></i><span>连接</span>
-                    </button>
-                </div>
             </section>
         </aside>
 
@@ -185,6 +177,7 @@
                     <button class="tab" data-tab="af"><i class="fas fa-female"></i><span>英文女</span><em class="tab-count" id="count-af"></em></button>
                     <button class="tab" data-tab="bf"><i class="fas fa-male"></i><span>英文男</span><em class="tab-count" id="count-bf"></em></button>
                     <button class="tab" data-tab="dict"><i class="fas fa-book"></i><span>读音词典</span><em class="tab-count" id="count-dict"></em></button>
+                    <button class="tab" data-tab="mix"><i class="fas fa-blender"></i><span>音色混合</span><em class="tab-count" id="count-mix"></em></button>
                 </div>
 
                 <div class="tab-panels">
@@ -234,6 +227,21 @@
                             <span class="dict-hint">支持数字调（gao1 xing4）或声调符号（gāo xìng）；无调默认轻声 5；音节数与字数须一致</span>
                         </div>
                         <div class="dict-list" id="dict-list"></div>
+                    </div>
+
+                    <!-- 音色混合 -->
+                    <div class="tab-panel" id="panel-mix">
+                        <p class="panel-hint">在上方音色标签页勾选至少 2 个音色卡片，拖动滑杆调整融合比例（权重自动归一化）后试听</p>
+                        <div class="mix-tools">
+                            <button id="mix-clear-btn" class="btn-glass">
+                                <i class="fas fa-eraser"></i><span>清空选择</span>
+                            </button>
+                            <button id="mix-synth-btn" class="btn-glass btn-glass-primary">
+                                <i class="fas fa-flask"></i><span>试听混合音色</span>
+                            </button>
+                        </div>
+                        <div id="mix-empty" class="dict-empty">尚未勾选音色 — 请在上方标签页勾选音色卡片</div>
+                        <div class="mix-list" id="mix-list"></div>
                     </div>
 
                 </div>

@@ -540,6 +540,79 @@ function clearDragState() {
         .forEach(el => el.classList.remove('dragging', 'drag-over'));
 }
 
+// ===== 网格行管理：新增/移除空行 与 按标签快速排序 =====
+// 标签分组顺序，与 docs/code-wiki/09-LTPX协议-月华工具包.md §3.1 的标签表顺序一致
+const TAG_SORT_ORDER = ['Zero-LTP', 'Node-LTP', 'Mini-LTP', 'Self-LTP', 'DeepSeek', 'DeepDemos'];
+
+// 取包的分组下标：命中列表中多个标签时取顺序最先者；不含列表标签或标签为空归入最后分组
+function getTagSortGroup(page) {
+    const tags = page.tags || [];
+    for (let i = 0; i < TAG_SORT_ORDER.length; i++) {
+        if (tags.includes(TAG_SORT_ORDER[i])) return i;
+    }
+    return TAG_SORT_ORDER.length;
+}
+
+// 新增空行：在网格底部追加一整行空槽位
+function addEmptyRow() {
+    const cols = getGridCols();
+    for (let i = 0; i < cols; i++) layout.push(null);
+    persistLayout().then(() => renderPageGrid());
+}
+
+// 移除空行：从布局末尾向前查找最后一个整行空槽位（连续 cols 个 null）并移除
+function removeEmptyRow() {
+    const cols = getGridCols();
+    for (let end = layout.length; end >= cols; end--) {
+        let allEmpty = true;
+        for (let i = end - cols; i < end; i++) {
+            if (layout[i] !== null) { allEmpty = false; break; }
+        }
+        if (allEmpty) {
+            layout.splice(end - cols, cols);
+            persistLayout().then(() => renderPageGrid());
+            return;
+        }
+    }
+    addMessage('system', '没有可移除的空行');
+}
+
+// 快速排序：按标签分组排列，每组内保持当前相对顺序；
+// 每完成一个标签分组的排列后，本组图标先补满整行，再另起一整行空行分隔下一组；
+// 最后分组为不含列表标签的包
+function quickSortLayout() {
+    const pageById = new Map(pages.map(p => [p.id, p]));
+    // 以当前布局顺序为基准，补充尚未占位的包，保证分组内顺序稳定
+    const placed = layout.filter(id => id !== null && pageById.has(id));
+    const rest = pages.map(p => p.id).filter(id => !placed.includes(id));
+    const ordered = [...placed, ...rest];
+
+    const groups = [];
+    for (let g = 0; g <= TAG_SORT_ORDER.length; g++) groups.push([]);
+    ordered.forEach(id => groups[getTagSortGroup(pageById.get(id))].push(id));
+    const nonEmpty = groups.filter(g => g.length > 0);
+
+    const cols = getGridCols();
+    const next = [];
+    nonEmpty.forEach((groupIds, gi) => {
+        next.push(...groupIds);
+        // 本组图标补满整行，不足一行用空槽补齐
+        const rem = next.length % cols;
+        if (rem !== 0) for (let i = 0; i < cols - rem; i++) next.push(null);
+        // 非最后一组：另起一整行空行分隔下一组
+        if (gi < nonEmpty.length - 1) {
+            for (let i = 0; i < cols; i++) next.push(null);
+        }
+    });
+    layout = next;
+    persistLayout().then(() => renderPageGrid());
+}
+
+// 新增空行 / 移除空行 / 快速排序 按钮
+document.getElementById('addEmptyRowBtn').addEventListener('click', addEmptyRow);
+document.getElementById('removeEmptyRowBtn').addEventListener('click', removeEmptyRow);
+document.getElementById('quickSortBtn').addEventListener('click', quickSortLayout);
+
 // 构建结构化操作指令（附加到系统提示词）：不再依赖范式函数调用（避免多模态模型后端卡死），
 // 改由琉璃在需要执行操作时输出一个 JSON 动作对象，前端解析后执行。
 function buildActionInstruction() {
@@ -803,9 +876,16 @@ async function handleSend() {
         if (action) {
             await executeStructuredAction(action);
         } else {
-            addMessage('assistant', replyContent);
             // 兼容旧格式：解析回复中的 JSON 代码块配置变更
             parseConfigChangeFromReply(replyContent);
+            // 正文回复：提取可播报正文，先经 /tts（qwenTTS）合成语音并播放，
+            // 音频合成完成并开始播放后再显示消息文本；无可播报正文或合成失败则直接显示
+            const speechText = extractSpeechText(replyContent);
+            if (speechText) {
+                await speakAssistantText(speechText, () => addMessage('assistant', replyContent));
+            } else {
+                addMessage('assistant', replyContent);
+            }
         }
     } catch (error) {
         console.error('Error:', error);
@@ -815,6 +895,56 @@ async function handleSend() {
         sendBtn.classList.remove('loading');
         sendBtn.innerHTML = defaultSendBtnHTML;
     }
+}
+
+// ===== 琉璃语音播报：正文回复经 /tts（qwenTTS）合成并播放，播放开始后再显示消息文本 =====
+// 参考音频（音色来源）：相对 local_data 目录，与 qwenTTS 引擎默认路径约定一致（月华进程 cwd 为项目根目录）
+const TTS_REF_AUDIO = 'local_data/audios/crystal-template.wav';
+let ttsPlayback = null; // 当前正在播放的琉璃语音（新回复播放前先停止上一段）
+
+// 提取用于语音播报的正文：多模态数组取文本片段，剔除 markdown 代码块与常见标记，只播报自然语言正文
+function extractSpeechText(content) {
+    let text = content;
+    if (Array.isArray(text)) {
+        text = text.filter(i => i.type === 'text').map(i => i.text || '').join('\n');
+    }
+    if (typeof text !== 'string') return '';
+    return text
+        .replace(/```[\s\S]*?```/g, ' ')           // 剔除代码块（含 JSON 配置）
+        .replace(/`([^`]*)`/g, '$1')               // 行内代码取原文
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')       // 剔除图片
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')    // 链接只读文字
+        .replace(/(\*\*|__)(.*?)\1/g, '$2')         // 粗体
+        .replace(/(\*|_)(.*?)\1/g, '$2')            // 斜体
+        .replace(/^#{1,6}\s*/gm, '')                // 标题符号
+        .replace(/^\s*[-*+]\s+/gm, '')              // 列表符号
+        .replace(/^\s*>\s?/gm, '')                  // 引用符号
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+// 对正文文本执行语音合成并播放；音频合成完成并开始播放时回调 onPlayStart。
+// 合成/播放任一环节失败均立即回调 onPlayStart，保证聊天正文不会被阻塞丢失。
+async function speakAssistantText(text, onPlayStart) {
+    try {
+        const res = await fetch('/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, ref_audio: TTS_REF_AUDIO })
+        });
+        const result = await res.json();
+        if (result.success && result.audio) {
+            if (ttsPlayback) { try { ttsPlayback.pause(); } catch (e) { } }
+            ttsPlayback = new Audio('data:audio/wav;base64,' + result.audio);
+            ttsPlayback.play()
+                .then(() => onPlayStart())   // 播放已开始 → 显示消息文本
+                .catch(() => onPlayStart()); // 自动播放被拦截等 → 仍显示文本
+            return;
+        }
+    } catch (e) {
+        console.warn('琉璃语音合成失败:', e);
+    }
+    onPlayStart();
 }
 
 // ===== 构建配置上下文（附加到系统提示词） =====

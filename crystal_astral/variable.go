@@ -1,6 +1,7 @@
 package main
 
 import (
+	kokoro "CrystalAstral/kokoro"
 	file "LunarSubsystem/FileManager/server"
 	image "LunarSubsystem/ImageProcessor/server"
 	media "LunarSubsystem/MediaTools/server"
@@ -131,6 +132,13 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},
+
+	// ==== Kokoro 语音合成（内嵌引擎，同源 /kokoro/* 端点） ====
+	{Path: "/kokoro/tts", Handler: kokoroHandler(kokoro.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},
+	{Path: "/kokoro/voices", Handler: kokoroHandler(kokoro.VoicesHandler), Method: "GET", Description: "Kokoro 音色列表"},
+	{Path: "/kokoro/dict", Handler: kokoroHandler(kokoro.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
+	{Path: "/kokoro/dict/guess", Handler: kokoroHandler(kokoro.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
+	{Path: "/kokoro/health", Handler: kokoroHandler(kokoro.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
 }
 
 // proxyPrefixes 要代理的路径前缀

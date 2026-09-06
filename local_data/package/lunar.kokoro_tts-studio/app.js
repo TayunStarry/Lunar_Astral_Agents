@@ -5,9 +5,6 @@
 
 // ==== DOM 引用聚合 ====
 const elements = {
-    apiBaseInput: document.getElementById('api-base-input'),
-    connectBtn: document.getElementById('connect-btn'),
-    serviceStatus: document.getElementById('service-status'),
     presetChips: document.getElementById('preset-chips'),
     textInput: document.getElementById('text-input'),
     charCount: document.getElementById('char-count'),
@@ -63,11 +60,16 @@ const elements = {
     dictGuessBtn: document.getElementById('dict-guess-btn'),
     dictAddBtn: document.getElementById('dict-add-btn'),
     dictList: document.getElementById('dict-list'),
+    // 音色混合
+    countMix: document.getElementById('count-mix'),
+    mixList: document.getElementById('mix-list'),
+    mixEmpty: document.getElementById('mix-empty'),
+    mixClearBtn: document.getElementById('mix-clear-btn'),
+    mixSynthBtn: document.getElementById('mix-synth-btn'),
 };
 
 // ==== 状态 ====
 const state = {
-    apiBase: localStorage.getItem('kokoro_api_base') || 'http://127.0.0.1:36789',
     voices: [],
     selectedVoice: '',
     currentAudioBase64: null,
@@ -76,6 +78,7 @@ const state = {
     playing: false,
     editingWord: '',          // 读音词典当前正在编辑的词语（空 = 新增模式）
     dictEntries: null,        // 读音词典全量条目（供搜索过滤）
+    mixSelection: {},         // 音色混合选择（音色名 -> 权重百分比）
     eqCtx: null,              // 均衡器 AudioContext
     eqLowFilter: null,
     eqMidFilter: null,
@@ -84,8 +87,12 @@ const state = {
 };
 
 // ==== 常量 ====
-const API_KEY = 'kokoro_api_base';
 const SAMPLE_VOICE_TEXT = '你好，欢迎使用星月智能语音助手。';
+
+// 拼接 /kokoro/* 同源端点（琉璃内嵌引擎，直接同源调用）
+function kokoroUrl(path) {
+    return '/kokoro/' + path;
+}
 
 // 音色分组（前缀 -> 标签页 key / 语言徽标）
 const VOICE_GROUPS = [
@@ -99,7 +106,6 @@ const VOICE_GROUPS = [
 // 初始化
 // ============================================================
 function init() {
-    elements.apiBaseInput.value = state.apiBase;
     bindEvents();
     elements.textInput.focus();
     updateCharCount();
@@ -108,12 +114,6 @@ function init() {
 }
 
 function bindEvents() {
-    // 连接服务
-    elements.connectBtn.addEventListener('click', loadVoices);
-    elements.apiBaseInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loadVoices();
-    });
-
     // 预设文本
     elements.presetChips.addEventListener('click', (e) => {
         const chip = e.target.closest('.chip');
@@ -169,6 +169,10 @@ function bindEvents() {
         renderDictList(state.dictEntries || {}, getDictFilter());
     });
 
+    // 音色混合
+    elements.mixClearBtn.addEventListener('click', clearMixSelection);
+    elements.mixSynthBtn.addEventListener('click', synthesizeMixSpeech);
+
     // 均衡器
     elements.eqLowSlider.addEventListener('input', () => { updateEQ(); updateEQVisualizer(); });
     elements.eqLowMode.addEventListener('change', () => { updateEQ(); updateEQVisualizer(); });
@@ -193,48 +197,24 @@ function switchTab(key) {
         p.classList.toggle('active', p.id === 'panel-' + key);
     });
     if (key === 'dict') loadDictEntries();
+    if (key === 'mix') renderMixList();
 }
 
 // ============================================================
 // 服务连接与音色加载
 // ============================================================
 async function loadVoices() {
-    const base = elements.apiBaseInput.value.trim().replace(/\/+$/, '');
-    if (!base) {
-        showStatus('请填写 Kokoro 服务地址', 'error');
-        return;
-    }
-    state.apiBase = base;
-    localStorage.setItem(API_KEY, base);
-
-    setStatusUI('connecting');
     showStatus('正在连接 Kokoro 服务…', 'info');
     try {
-        const res = await fetch(`${state.apiBase}/voices`);
+        const res = await fetch(kokoroUrl('voices'));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || '获取音色失败');
         state.voices = data.voices || [];
         renderVoices();
-        setStatusUI('online', state.voices.length);
         showStatus(`连接成功，共 ${state.voices.length} 种音色`, 'success');
     } catch (err) {
-        setStatusUI('offline');
         showStatus('无法连接 Kokoro 服务: ' + err.message, 'error');
-    }
-}
-
-function setStatusUI(mode, count) {
-    const el = elements.serviceStatus;
-    el.classList.remove('online', 'offline');
-    if (mode === 'online') {
-        el.classList.add('online');
-        el.textContent = `已连接 · ${count} 音色`;
-    } else if (mode === 'offline') {
-        el.classList.add('offline');
-        el.textContent = '连接失败';
-    } else {
-        el.textContent = '连接中…';
     }
 }
 
@@ -250,6 +230,7 @@ function renderVoices() {
         const tab = elements.tabCounts[g.key];
         tab.textContent = list.length;
     }
+    syncMixCheckboxes();
 }
 
 function createVoiceCard(name, badge) {
@@ -257,6 +238,7 @@ function createVoiceCard(name, badge) {
     card.className = 'voice-card';
     card.dataset.voice = name;
     card.innerHTML = `
+        <input type="checkbox" class="voice-check" title="勾选加入音色混合">
         <div class="voice-name">${name}</div>
         <div class="voice-meta">
             <span class="group-badge badge-${badge}">${badge === 'zh' ? '中文' : '英文'}</span>
@@ -264,7 +246,14 @@ function createVoiceCard(name, badge) {
                 <i class="fas fa-play"></i>
             </button>
         </div>`;
-    card.addEventListener('click', () => {
+    const check = card.querySelector('.voice-check');
+    check.checked = !!state.mixSelection[name];
+    check.addEventListener('change', (e) => {
+        e.stopPropagation();
+        toggleMixVoice(name, check.checked);
+    });
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.voice-check')) return;
         selectVoice(name);
         auditionVoice(name);
     });
@@ -316,7 +305,7 @@ async function synthesizeSpeech(voiceOverride, textOverride) {
     startWaveform();
 
     try {
-        const res = await fetch(`${state.apiBase}/tts`, {
+        const res = await fetch(kokoroUrl('tts'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, voice, speed, lang }),
@@ -498,7 +487,7 @@ function showStatus(message, type) {
 async function loadDictEntries() {
     elements.dictList.innerHTML = '<div class="dict-empty">加载中…</div>';
     try {
-        const res = await fetch(`${state.apiBase}/dict`);
+        const res = await fetch(kokoroUrl('dict'));
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         state.dictEntries = data.entries || {};
@@ -580,7 +569,7 @@ async function addDictEntry() {
         return;
     }
     try {
-        const res = await fetch(`${state.apiBase}/dict`, {
+        const res = await fetch(kokoroUrl('dict'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ word, pinyin }),
@@ -602,7 +591,7 @@ async function addDictEntry() {
 
 async function deleteDictEntry(word) {
     try {
-        const res = await fetch(`${state.apiBase}/dict?word=${encodeURIComponent(word)}`, { method: 'DELETE' });
+        const res = await fetch(kokoroUrl('dict?word=' + encodeURIComponent(word)), { method: 'DELETE' });
         const data = await res.json();
         if (!data.success) {
             showStatus('删除失败: ' + (data.error || '未知错误'), 'error');
@@ -622,7 +611,7 @@ async function guessDictReading() {
         return;
     }
     try {
-        const res = await fetch(`${state.apiBase}/dict/guess?word=${encodeURIComponent(word)}`);
+        const res = await fetch(kokoroUrl('dict/guess?word=' + encodeURIComponent(word)));
         const data = await res.json();
         if (!data.success) {
             showStatus('查询失败: ' + (data.error || '未知错误'), 'error');
@@ -647,6 +636,136 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============================================================
+// 音色混合（多音色加权平均 style 向量）
+// ============================================================
+
+// 勾选/取消音色卡片
+function toggleMixVoice(name, checked) {
+    if (checked) {
+        if (!(name in state.mixSelection)) state.mixSelection[name] = 100;
+    } else {
+        delete state.mixSelection[name];
+    }
+    rebalanceMixWeights();
+    updateMixBadge();
+    renderMixList();
+}
+
+// 勾选变化时按等权重新分配默认比例
+function rebalanceMixWeights() {
+    const names = Object.keys(state.mixSelection);
+    if (names.length === 0) return;
+    const each = Math.floor(100 / names.length);
+    names.forEach((n, i) => {
+        state.mixSelection[n] = (i === names.length - 1) ? 100 - each * (names.length - 1) : each;
+    });
+}
+
+// 更新混合标签页数量徽标
+function updateMixBadge() {
+    const n = Object.keys(state.mixSelection).length;
+    elements.countMix.textContent = n > 0 ? n : '';
+}
+
+// 渲染混合列表（每个音色一行：名称 + 比例滑杆 + 删除）
+function renderMixList() {
+    const names = Object.keys(state.mixSelection);
+    const list = elements.mixList;
+    elements.mixEmpty.classList.toggle('hidden', names.length > 0);
+    list.innerHTML = '';
+    names.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'mix-row';
+        const w = state.mixSelection[name];
+        row.innerHTML = `
+            <span class="mix-row-name">${escapeHtml(name)}</span>
+            <input type="range" class="glass-slider mix-slider" min="1" max="100" value="${w}">
+            <span class="mix-row-weight">${w}%</span>
+            <button class="mix-row-del" title="移除">
+                <i class="fas fa-xmark"></i>
+            </button>`;
+        row.querySelector('.mix-slider').addEventListener('input', (e) => {
+            state.mixSelection[name] = parseInt(e.target.value, 10);
+            row.querySelector('.mix-row-weight').textContent = state.mixSelection[name] + '%';
+        });
+        row.querySelector('.mix-row-del').addEventListener('click', () => {
+            delete state.mixSelection[name];
+            syncMixCheckboxes();
+            updateMixBadge();
+            renderMixList();
+        });
+        list.appendChild(row);
+    });
+}
+
+// 让所有音色卡片的复选框与当前选择同步
+function syncMixCheckboxes() {
+    document.querySelectorAll('.voice-check').forEach(cb => {
+        const card = cb.closest('.voice-card');
+        cb.checked = !!state.mixSelection[card.dataset.voice];
+    });
+}
+
+// 清空混合选择
+function clearMixSelection() {
+    state.mixSelection = {};
+    syncMixCheckboxes();
+    updateMixBadge();
+    renderMixList();
+    showStatus('已清空音色混合选择', 'success');
+}
+
+// 合成混合音色
+async function synthesizeMixSpeech() {
+    const names = Object.keys(state.mixSelection);
+    if (names.length < 2) {
+        showStatus('请至少勾选 2 个音色（在音色标签页勾选卡片）', 'error');
+        return;
+    }
+    const text = elements.textInput.value.trim();
+    if (!text) {
+        showStatus('请输入要合成的文本', 'error');
+        elements.textInput.focus();
+        return;
+    }
+    if (state.synthesizing) return;
+
+    const speed = parseFloat(elements.speedInput.value);
+    const lang = elements.langSelect.value;
+    const mix = names.map(n => ({ voice: n, weight: state.mixSelection[n] }));
+
+    state.synthesizing = true;
+    elements.mixSynthBtn.disabled = true;
+    showStatus(`正在合成混合音色（${names.length} 个音色）…`, 'info');
+    startWaveform();
+
+    try {
+        const res = await fetch(kokoroUrl('tts'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, mix, speed, lang }),
+        });
+        const result = await res.json();
+        if (result.success && result.audio) {
+            loadAudio(result.audio);
+            if (elements.currentVoiceLabel) {
+                elements.currentVoiceLabel.textContent = '混合音色';
+            }
+            elements.audioPlayer.play().catch(() => {});
+            showStatus('混合音色合成成功: ' + (result.voice || ''), 'success');
+        } else {
+            showStatus('合成失败: ' + (result.error || '服务端错误'), 'error');
+        }
+    } catch (err) {
+        showStatus('请求失败: ' + err.message, 'error');
+    } finally {
+        state.synthesizing = false;
+        elements.mixSynthBtn.disabled = false;
+        stopWaveform();
+    }
 }
 
 // ============================================================

@@ -1,4 +1,4 @@
-package module
+package kokoro
 
 import (
 	"sync"
@@ -44,10 +44,20 @@ type TTSRequest struct {
 	Text string `json:"text"`
 	// Voice 音色名称（如 zf_001 / zm_031 / af_maple），为空则使用默认音色
 	Voice string `json:"voice,omitempty"`
+	// Mix 音色混合列表（≥2 个时启用音色融合，优先级高于 Voice）
+	Mix []MixVoice `json:"mix,omitempty"`
 	// Speed 语速倍率（0.5 ~ 2.0），默认为 1.0
 	Speed float32 `json:"speed,omitempty"`
 	// Lang 语言强制指定（zh / en / auto），默认为 auto 自动识别
 	Lang string `json:"lang,omitempty"`
+}
+
+// MixVoice 音色混合分量
+type MixVoice struct {
+	// Voice 音色名称
+	Voice string `json:"voice"`
+	// Weight 融合权重（相对权重，引擎自动归一化；省略或为 0 时按等权处理）
+	Weight float64 `json:"weight,omitempty"`
 }
 
 // TTSResponse 语音合成响应
@@ -100,4 +110,30 @@ type GuessResponse struct {
 	Pinyin string `json:"pinyin"`
 	// InDict 是否命中用户词典
 	InDict bool `json:"in_dict"`
+}
+
+// ProsodySeg 韵律分段（文本 + 语气/停顿提示）
+//   Rise/Fall 由紧接其后的 [↑]/[↓] 提示符设置
+//   PauseAfter 由紧接其后的 [•N] 提示符设置（N*0.01 秒）
+type ProsodySeg struct {
+	// Text 该段文本（可为空，表示纯停顿段）
+	Text string
+	// Rise 升调提示 [↑]
+	Rise bool
+	// Fall 降调提示 [↓]
+	Fall bool
+	// PauseAfter 段后停顿秒数（[•N] 解析结果）
+	PauseAfter float32
+}
+
+// prosodyUnit 合成单元（韵律分段 + 音素化结果）
+type prosodyUnit struct {
+	// phonemes 该段音素串（为空表示纯停顿段）
+	phonemes string
+	// rise 升调标记
+	rise bool
+	// fall 降调标记
+	fall bool
+	// pauseAfter 段后停顿秒数
+	pauseAfter float32
 }

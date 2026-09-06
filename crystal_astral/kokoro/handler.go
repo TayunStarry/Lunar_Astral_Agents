@@ -1,8 +1,9 @@
-package module
+package kokoro
 
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -37,7 +38,7 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	samples, phonemes, err := engine.Synthesize(req.Text, req.Voice, req.Speed, req.Lang)
+	samples, phonemes, err := engine.Synthesize(req.Text, req.Voice, req.Speed, req.Lang, req.Mix)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(TTSResponse{Success: false, Error: err.Error()})
@@ -50,6 +51,30 @@ func TTSHandler(w http.ResponseWriter, r *http.Request) {
 	voice := req.Voice
 	if voice == "" {
 		voice = defaultVoiceName
+	}
+	if len(req.Mix) > 0 {
+		// 混合音色的显示名（按归一化比例回显）：zf_001×38%+zm_031×62%
+		var total float64
+		for _, m := range req.Mix {
+			w := m.Weight
+			if w < 0 {
+				w = 0
+			}
+			total += w
+		}
+		var parts []string
+		if total <= 0 {
+			// 引擎等权混合
+			for _, m := range req.Mix {
+				parts = append(parts, fmt.Sprintf("%s×%.0f%%", m.Voice, 100.0/float64(len(req.Mix))))
+			}
+		} else {
+			for _, m := range req.Mix {
+				pct := 100.0 * m.Weight / total
+				parts = append(parts, fmt.Sprintf("%s×%.0f%%", m.Voice, pct))
+			}
+		}
+		voice = "mix:" + strings.Join(parts, "+")
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -84,13 +109,14 @@ func VoicesHandler(w http.ResponseWriter, r *http.Request) {
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	engine := GetEngine()
-	status := "ok"
 	if engine == nil {
-		status = "not_ready"
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{"status": "not_ready", "service": "kokoro-tts"})
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  status,
+		"status":  "ok",
 		"service": "kokoro-tts",
 		"voices":  len(engine.voiceOrder),
 	})

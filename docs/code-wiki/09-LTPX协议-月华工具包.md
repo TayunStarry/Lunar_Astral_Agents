@@ -158,8 +158,8 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 | 标签 | 含义 | 当前使用示例 |
 |------|------|--------------|
-| `DeepDemos` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
 | `DeepSeek` | 外部 DeepSeek API / 聊天页面 | `external.web-view.deepseek_api`、`deepseek_chat` |
+| `DeepDemos` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
 
 ---
 

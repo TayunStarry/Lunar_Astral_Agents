@@ -1,6 +1,7 @@
-package module
+package kokoro
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
-
-	logger "LunarSubsystem/LoggerGeneral"
 )
 
 // PronunciationDict 用户读音词典（词语 -> 带调拼音，如 "行长": "hang2 zhang3"）
@@ -33,7 +32,7 @@ func LoadPronunciationDict(path string) (*PronunciationDict, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &d.entries); err != nil {
-		logger.SubWarn("KOKORO-TTS", "DICT", "读音词典解析失败，使用空词典: %v", err)
+		LoggerGeneral.SubWarn("KOKORO-TTS", "DICT", "读音词典解析失败，使用空词典: %v", err)
 		d.entries = make(map[string]string)
 	}
 	return d, nil

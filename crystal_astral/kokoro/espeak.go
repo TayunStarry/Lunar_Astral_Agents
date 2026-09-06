@@ -1,13 +1,12 @@
-package module
+package kokoro
 
 import (
+	"LunarSubsystem/LoggerGeneral"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
-
-	logger "LunarSubsystem/LoggerGeneral"
 )
 
 // espeakBinding espeak-ng 可执行文件封装（与参考实现 phonemizer 相同的 CLI 调用方式）
@@ -27,7 +26,7 @@ func initEspeak(dir string) bool {
 	}
 	exe := filepath.Join(dir, "espeak-ng.exe")
 	if _, err := os.Stat(exe); err != nil {
-		logger.SubWarn("KOKORO-TTS", "ESPEAK", "espeak-ng.exe 不存在，英文音素化不可用: %s", exe)
+		LoggerGeneral.SubWarn("KOKORO-TTS", "ESPEAK", "espeak-ng.exe 不存在，英文音素化不可用: %s", exe)
 		return false
 	}
 	espeakLib = &espeakBinding{
@@ -49,7 +48,7 @@ func espeakPhonemize(text string) string {
 	cmd.Env = append([]string{"ESPEAK_DATA_PATH=" + espeakLib.dataPath}, envWithoutEspeakData()...)
 	out, err := cmd.Output()
 	if err != nil {
-		logger.SubWarn("KOKORO-TTS", "ESPEAK", "音素化失败: %v", err)
+		LoggerGeneral.SubWarn("KOKORO-TTS", "ESPEAK", "音素化失败: %v", err)
 		return ""
 	}
 	return strings.TrimSpace(string(out))

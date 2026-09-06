@@ -14,6 +14,9 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/gorilla/websocket v1.5.3
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
+	github.com/mozillazg/go-pinyin v0.21.0
+	github.com/yalue/onnxruntime_go v1.36.0
+	github.com/yanyiwu/gojieba v1.4.7
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8
 )
 

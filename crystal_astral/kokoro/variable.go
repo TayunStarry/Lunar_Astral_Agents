@@ -1,4 +1,4 @@
-package module
+package kokoro
 
 import "sync"
 
@@ -31,4 +31,10 @@ const (
 	DefaultSpeed = 1.25
 	// BatchPauseSeconds 批次之间的静音时长（秒）
 	BatchPauseSeconds = 0.2
+	// MaxPauseSteps 停顿提示 [•N] 的最大 N（超过按此截断，对应最大停顿 20 秒）
+	MaxPauseSteps = 2000
+	// RiseFactor 升调提示 [↑] 音高偏移因子（>1 音高升高，约 +1.4 半音）
+	RiseFactor = 1.08
+	// FallFactor 降调提示 [↓] 音高偏移因子（<1 音高降低，约 -1.3 半音）
+	FallFactor = 0.92
 )

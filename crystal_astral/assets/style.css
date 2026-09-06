@@ -551,6 +551,30 @@ body {
     filter: drop-shadow(0 0 10px rgba(255, 150, 200, 0.85));
 }
 
+.sidebar-btn-add-row {
+    color: #9edbff;
+}
+
+.sidebar-btn-add-row:hover {
+    filter: drop-shadow(0 0 10px rgba(130, 205, 255, 0.85));
+}
+
+.sidebar-btn-remove-row {
+    color: #ffc49b;
+}
+
+.sidebar-btn-remove-row:hover {
+    filter: drop-shadow(0 0 10px rgba(255, 175, 120, 0.85));
+}
+
+.sidebar-btn-sort {
+    color: #d9c2ff;
+}
+
+.sidebar-btn-sort:hover {
+    filter: drop-shadow(0 0 10px rgba(190, 150, 255, 0.85));
+}
+
 .sidebar-btn.loading {
     pointer-events: none;
 }
