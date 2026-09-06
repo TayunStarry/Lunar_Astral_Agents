@@ -9,21 +9,20 @@
 
 ## 项目缓存
 node_modules/
-local_data/embed_cache/
-the_crashed_cpp_project/
 embedded_data/
 bridge_probe/
-deepseek.web-view.*
+deepdemos.*
+com.yaraflow.*
 
 ## Go 测试产物
 coverage
 coverage.out
 
 ## 本地数据（运行时生成）
-local_data/images/
 local_data/documents/
+local_data/models/
+local_data/images/
 database/
-workspace/
 status.json
 
 ## 系统文件
@@ -69,11 +68,13 @@ Thumbs.db
 *.pth
 *.gguf
 *.safetensors
+*.onnx
 
 ## 压缩包
 *.7z
 *.7z.*
 *.zip
+*.ltpx
 
 ## 数据库文件
 *.db

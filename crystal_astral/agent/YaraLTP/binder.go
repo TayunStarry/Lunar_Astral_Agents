@@ -23,7 +23,7 @@ func bindYara(p *plugin) {
 	bindApi(p, yara)
 	bindLLMProvider(p, yara)
 	bindSend(p, yara)
-	bindHTTP(vm, yara)
+	bindHTTP(p, yara)
 	bindNetwork(vm, yara)
 	bindPlatform(vm, yara)
 	bindEncoding(vm, yara)

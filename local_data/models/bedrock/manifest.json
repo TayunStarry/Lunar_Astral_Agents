@@ -1,5 +1,8 @@
 {
-    "model": "index.bbmodel",
+    "model": "index_geometry.json",
+    "model_format": "bedrock_geometry",
+    "model_version": "1.21.0",
+    "texture": "index_texture.png",
     "animations": [
         "animation/实体动画_基础动画.json",
         "animation/实体动画_待机动画.json",

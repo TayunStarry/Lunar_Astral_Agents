@@ -20,8 +20,10 @@ import (
 	"github.com/dop251/goja"
 )
 
-// bindHTTP 注入 yara.http（get/post/download）。
-func bindHTTP(vm *goja.Runtime, parent *goja.Object) {
+// bindHTTP 注入 yara.http（get/post/download）。download 需插件上下文，
+// 以便图片保存到插件自身 data 目录（与 readData/loadValid 的路径语义一致）。
+func bindHTTP(p *plugin, parent *goja.Object) {
+	vm := p.vm
 	o := newObj(vm)
 
 	objSetFn(o, "get", func(call goja.FunctionCall) goja.Value {
@@ -39,7 +41,7 @@ func bindHTTP(vm *goja.Runtime, parent *goja.Object) {
 		url := argString(call, 0)
 		savePath := argString(call, 1)
 		timeout := httpTimeoutArg(call, 2)
-		return vm.ToValue(doHTTPDownload(url, savePath, timeout))
+		return vm.ToValue(doHTTPDownload(url, savePath, timeout, p.DataDir))
 	})
 
 	parent.Set("http", o)
@@ -205,7 +207,7 @@ func doHTTP(req *http.Request, headers map[string]string, timeoutSec int) any {
 	}
 }
 
-func doHTTPDownload(url, savePath string, timeoutSec int) any {
+func doHTTPDownload(url, savePath string, timeoutSec int, dataDir string) any {
 	if blockSSRF(hostOf(url)) {
 		return map[string]any{"error": "禁止访问本地/内网地址"}
 	}
@@ -222,10 +224,16 @@ func doHTTPDownload(url, savePath string, timeoutSec int) any {
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
+	// 默认文件名取 URL 末段；空 savePath 时退化。
 	if savePath == "" {
 		savePath = filepath.Base(strings.TrimRight(url, "/"))
 	}
-	full := filepath.Join("local_data", "downloads", savePath)
+	// 保存到插件自身 data 目录（与 readData/loadValid 的路径语义一致），
+	// 避免图片落盘到全局 downloads 目录导致插件读不到新文件。
+	full, err := safeResolve(dataDir, "data", savePath)
+	if err != nil {
+		return map[string]any{"error": err.Error()}
+	}
 	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
 		return map[string]any{"error": err.Error()}
 	}

@@ -1,0 +1,15 @@
+{
+	"description": "提供基于图像处理技术的混淆功能项目。",
+	"icon": "icon.webp",
+	"id": "lunar.image_confusion",
+	"tags": [
+		"Zero-LTP"
+	],
+	"title": "图像混淆",
+	"tools": [
+		{
+			"name": "image_grayscale_processor",
+			"description": "对图片执行混淆与反混淆处理的<图像混淆>小程序"
+		}
+	]
+}

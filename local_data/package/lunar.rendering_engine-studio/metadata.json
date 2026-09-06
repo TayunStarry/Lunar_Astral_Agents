@@ -1,0 +1,9 @@
+{
+	"id": "lunar.rendering_engine-studio",
+	"icon": "icon.webp",
+	"title": "月岩引擎",
+	"description": "基于 three.js 和 cannon-es.js 并采取 Bedrock 风格几何渲染的超轻量化渲染引擎",
+	"tags": [
+		"Zero-LTP"
+	]
+}

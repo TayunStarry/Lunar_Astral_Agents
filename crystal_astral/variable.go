@@ -134,7 +134,7 @@ var SystemEndpoints = []SystemEndpoint{
 }
 
 // proxyPrefixes 要代理的路径前缀
-var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/generate"}
+var proxyPrefixes = []string{"/v1/", "/write/message", "/write/videourl", "/tts", "/tts/stream", "/generate", "/voices", "/dict"}
 
 // fileCategoryMap 文件扩展名到分类的映射
 var fileCategoryMap = map[string]string{

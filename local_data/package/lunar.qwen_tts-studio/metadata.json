@@ -1,0 +1,9 @@
+{
+	"id": "lunar.qwen_tts-studio",
+	"icon": "icon.webp",
+	"title": "语音合成 · Qwen",
+	"description": "基于 Qwen3-TTS 的语言合成引擎的前端页面",
+	"tags": [
+		"Zero-LTP"
+	]
+}

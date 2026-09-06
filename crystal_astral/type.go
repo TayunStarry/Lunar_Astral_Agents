@@ -20,14 +20,15 @@ type LoadApplicationResponse struct {
 
 // PackageInfo 包配置信息
 type PackageInfo struct {
-	ID          string   `json:"id"`                     // 包ID，唯一标识一个应用
-	Icon        string   `json:"icon,omitempty"`         // 包图标路径
-	Title       string   `json:"title"`                  // 包标题，显示在应用列表中
-	Description string   `json:"description"`            // 包描述，显示在应用列表中，描述应用的功能
-	URL         string   `json:"url,omitempty"`          // 包的URL，用于下载应用
-	Path        string   `json:"path,omitempty"`         // 包的本地路径，用于加载应用
-	Tags        []string `json:"tags,omitempty"`         // 包的标签，用于分类应用
-	PackageName string   `json:"package_name,omitempty"` // 包的名称，用于显示在应用列表中，描述应用的功能或来源
+	ID                  string   `json:"id"`                              // 包ID，唯一标识一个应用
+	Icon                string   `json:"icon,omitempty"`                  // 包图标路径
+	Title               string   `json:"title"`                           // 包标题，显示在应用列表中
+	Description         string   `json:"description"`                     // 包描述，显示在应用列表中，描述应用的功能
+	URL                 string   `json:"url,omitempty"`                   // 包的URL，用于下载应用
+	Path                string   `json:"path,omitempty"`                  // 包的本地路径，用于加载应用
+	Tags                []string `json:"tags,omitempty"`                  // 包的标签，用于分类应用
+	PackageName         string   `json:"package_name,omitempty"`          // 包的名称，用于显示在应用列表中，描述应用的功能或来源
+	BackgroundRetention bool     `json:"background_retention,omitempty"`  // 后台保活：显式 true 时关闭覆盖层后保留 iframe，下次打开同包时复用页面以继承操作进度
 }
 
 // ModuleCreateRequest 创建模块请求体（琉璃前端「创建模块」弹窗提交）

@@ -6,9 +6,76 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"sync"
 
 	"LunarSubsystem/LoggerGeneral"
 )
+
+// ==== 入站分发 worker 池 ====
+// 把 ltp3/* 信封从串行消费者解耦为后台 worker 并发分发：单个慢工具/慢钩子不再
+// 阻塞 ping、其它插件调用与其它群聊。同插件调用仍由该插件自身的互斥锁串行化，
+// 保证 goja 虚拟机不被并发访问（不同插件之间则真正并行）。
+
+// inboundMu 保护 inboundJobs / inboundStop 的启停操作。
+var inboundMu sync.Mutex
+
+// startInboundWorkers 启动入站分发 worker 池（Init 时调用，幂等）。
+func startInboundWorkers() {
+	inboundMu.Lock()
+	defer inboundMu.Unlock()
+	if inboundJobs != nil {
+		return
+	}
+	jobs := make(chan *InMessage, inboundQueueCap)
+	stop := make(chan struct{})
+	inboundJobs = jobs
+	inboundStop = stop
+	for i := 0; i < inboundWorkerCount; i++ {
+		go func() {
+			for {
+				select {
+				case msg := <-jobs:
+					if msg == nil {
+						return
+					}
+					processIn(msg)
+				case <-stop:
+					return
+				}
+			}
+		}()
+	}
+}
+
+// stopInboundWorkers 停止 worker 池（Close 时调用）。仅关闭停止信号，
+// 不等待正在执行的慢调用，避免关停被长时间挂起。
+func stopInboundWorkers() {
+	inboundMu.Lock()
+	defer inboundMu.Unlock()
+	if inboundStop == nil {
+		return
+	}
+	close(inboundStop)
+	inboundJobs = nil
+	inboundStop = nil
+}
+
+// dispatchInbound 把入站信封交给 worker 池异步处理；队列满时回退为直接后台处理，
+// 保证调用方（串行消费者）永不阻塞。
+func dispatchInbound(msg *InMessage) {
+	inboundMu.Lock()
+	jobs := inboundJobs
+	inboundMu.Unlock()
+	if jobs == nil {
+		go processIn(msg)
+		return
+	}
+	select {
+	case jobs <- msg:
+	default:
+		go processIn(msg)
+	}
+}
 
 // emitBus 把结构化消息 JSON 化后由发送函数广播到 /ws（client 端按 request_id 过滤做单播配对）。
 func emitBus(v any) {
@@ -34,6 +101,7 @@ func SetSend(fn func([]byte)) {
 }
 
 // HandleIn 处理从 /ws 集线器收到的请求信封（type 前缀 ltp3/）。
+// 解析后投入入站 worker 池异步分发，避免单个慢调用阻塞整个消费者与其它调用。
 func HandleIn(raw []byte) {
 	var msg InMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
@@ -46,21 +114,34 @@ func HandleIn(raw []byte) {
 	if Engine == nil {
 		return
 	}
-	switch t {
+	dispatchInbound(&msg)
+}
+
+// processIn 在 worker 协程中执行一条 ltp3/* 信封的分发，并广播对应回执。
+func processIn(msg *InMessage) {
+	if Engine == nil || msg == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			LoggerGeneral.Error(ServiceName, "处理 ltp3/%s 崩溃: %v", msg.Type, r)
+		}
+	}()
+	switch strings.TrimSpace(msg.Type) {
 	case "ltp3/hook":
-		handleHookIn(&msg)
+		handleHookIn(msg)
 	case "ltp3/event":
-		handleEventIn(&msg)
+		handleEventIn(msg)
 	case "ltp3/command":
-		handleCommandIn(&msg)
+		handleCommandIn(msg)
 	case "ltp3/tool":
-		handleToolIn(&msg)
+		handleToolIn(msg)
 	case "ltp3/manage":
-		handleManageIn(&msg)
+		handleManageIn(msg)
 	case "ltp3/ping":
 		emitBus(pongMessage{Type: "ltp3/pong", RequestID: msg.RequestID, Engine: ServiceName, Plugins: Engine.pluginCount()})
 	default:
-		emitBus(outMessage{Type: "ltp3/error", RequestID: msg.RequestID, Error: "未知类型 " + t})
+		emitBus(outMessage{Type: "ltp3/error", RequestID: msg.RequestID, Error: "未知类型 " + msg.Type})
 	}
 }
 

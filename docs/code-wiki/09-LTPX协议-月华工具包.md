@@ -125,6 +125,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
   "title": "图像混淆",
   "icon": "icon.webp",
   "tags": ["Mini-LTP"],
+  "background_retention": true,
   "tools": [
     { "name": "image_grayscale_processor", "description": "对图片执行混淆与反混淆处理的<图像混淆>小程序" }
   ]
@@ -135,11 +136,14 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 - `id`：应用唯一标识，LTPX 广播携带它来路由包；
 - `tags`：分支/类别标签数组，各标签涵义与示例见 [§3.1 标签语义与示例](#31-标签tags语义与示例)；
 - `icon`：**相对路径** `icon.webp`（禁止绝对/跨包路径）；
+- `background_retention`（布尔，**可缺省**，缺省视为 `false`，兼容旧版包）：后台保活开关。显式置 `true` 时，琉璃关闭覆盖层后**不释放**该包对应的 `<iframe>` 内容；若下次打开的页面仍是当前包，琉璃**优先复用**已加载的 iframe 页面而非重新加载，从而最大化继承之前嵌入式页面的操作进度（如输入内容、选中状态、已注入的 Mini/Self-LTP 智能体上下文等）。缺省或为 `false` 时，关闭/隐藏覆盖层即从页面中**卸载**该 `<iframe>` 并回到默认空闲欢迎页（`/ltpx_welcome.html`），避免 Mini-LTP / Self-LTP 等注入脚本的高负载页面意外驻留后台；下次打开该包将重新加载页面，进度不保留。
+
+> 说明：嵌入式 iframe 的初始/空闲页为琉璃内置的本地欢迎页 `assets/ltpx_welcome.html`（对外 `/ltpx_welcome.html`）。关闭非保活包后 iframe 会回到该欢迎页，而非残留高负载页面。（不可将 `https://gitee.com/...` 等外站设为空闲页——Gitee 返回 `X-Frame-Options: SAMEORIGIN`，禁止被 iframe 嵌入，直接设置只会显示「拒绝连接」。）
 - `tools[]`：`name + description`，供月华脚本将其归一化为 OpenAI function schema 注册给模型。
 
 ### 3.1 标签（tags）语义与示例
 
-`tags` 用于声明包的**分支归属**（LTP 分支标签）与**类别**（DS-Demo / DeepSeek / Git 等非 LTP 标签），供琉璃前端渲染卡片角标。**是否可被月华 AtoA 调用与 tags 无关**——由 `metadata.json` 中是否存在非空 `tools[]` 数组决定（`scanAtoaToolchain` 动态扫描，见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。完整包清单与 tags 见 [06 §6.7.1](06-前端资源库.md)。
+`tags` 用于声明包的**分支归属**（LTP 分支标签）与**类别**（DeepDemos / DeepSeek / Git 等非 LTP 标签），供琉璃前端渲染卡片角标。**是否可被月华 AtoA 调用与 tags 无关**——由 `metadata.json` 中是否存在非空 `tools[]` 数组决定（`scanAtoaToolchain` 动态扫描，见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。完整包清单与 tags 见 [06 §6.7.1](06-前端资源库.md)。
 
 **LTP 分支标签（决定智能体分支）**
 
@@ -154,9 +158,8 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 | 标签 | 含义 | 当前使用示例 |
 |------|------|--------------|
-| `DS-Demo` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
+| `DeepDemos` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
 | `DeepSeek` | 外部 DeepSeek API / 聊天页面 | `external.web-view.deepseek_api`、`deepseek_chat` |
-| `Git` | 外部代码托管平台入口 | `external.web-view.github`、`gitee`、`gitcode` |
 
 ---
 

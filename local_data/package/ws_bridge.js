@@ -2,7 +2,7 @@
 // 用途：替代 BroadcastChannel，采用与常规前端一致的联络策略：
 //   - 接收：WebSocket 连接 /ws，后端无差别广播 {type,data} 格式消息，客户端自行过滤
 //   - 发送：HTTP POST /write/engine（格式与 /write/message 同构），后端本地广播 + 转发智能体侧
-// 用法：const channel = new WsBridge('integrated-studio-bus');
+// 用法：const channel = new WsBridge('lunar-engine-bus');
 //       channel.postMessage(msg);  // 发送消息（POST /write/engine）
 //       channel.onmessage = (event) => { ... };  // 接收消息（ws /ws 下行）
 // 兼容性：API 与 BroadcastChannel 完全一致，迁移时无需修改业务逻辑
@@ -42,7 +42,7 @@ class WsBridge {
      * 连接地址默认同源 /ws；可通过 URL 参数 ?ws=host:port 覆盖目标后端（用于嵌入页指定智能体所在端口）
      */
     constructor(name) {
-        this.#name = name || 'integrated-studio-bus';
+        this.#name = name || 'lunar-engine-bus';
         // WebSocket 连接地址：默认同源 /ws（与常规前端一致的标准通道）
         // 支持 URL 参数 ?ws=host[:port] 覆盖目标后端（如消息终端嵌入引擎时指向智能体所在端口 36789）
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

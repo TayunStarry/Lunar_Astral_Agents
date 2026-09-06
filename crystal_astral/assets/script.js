@@ -219,13 +219,13 @@ function getRandomDefaultIcon() {
 // 标签 → 卡片角标色彩修饰类（不同标签不同配色，无对应样式的标签回退默认紫色）
 function getTagModifierClass(tag) {
     switch (tag) {
+        case 'LTP3': return 'card-tag-ltp3';
         case 'Zero-LTP': return 'card-tag-zero-ltp';
         case 'Node-LTP': return 'card-tag-node-ltp';
         case 'Mini-LTP': return 'card-tag-mini-ltp';
         case 'Self-LTP': return 'card-tag-self-ltp';
-        case 'Git': return 'card-tag-git';
         case 'DeepSeek': return 'card-tag-deepseek';
-        case 'DS-Demo': return 'card-tag-deepseek-demo';
+        case 'DeepDemos': return 'card-tag-deepdemos';
         default: return '';
     }
 }
@@ -1412,11 +1412,20 @@ const ltpxFrameCloseBtn = document.getElementById('ltpxFrameCloseBtn');
 let activeLTPXCall = null;   // 当前等待回执的 ltpx_call（含 request_id/tool/arguments）
 let ltpxFrameReady = false;  // iframe 当前文档是否已加载完成（就绪后再投递指令）
 let ltpxFrameApp = '';       // iframe 当前已加载的包 ID（同一包重复调用时直接投递，避免重新加载）
+const LTPX_WELCOME_SRC = '/ltpx_welcome.html'; // 嵌入式 iframe 的默认空闲页（关闭非保活包后回到此页）
 
 // 统一打开页面到覆盖层 iframe：用户点击应用图标与月华调用共用同一个 iframe。
 // 手动打开时置空待定回执，并记录来源包 ID（月华随后调用同包工具时可直接复用已加载页面）。
+// 后台保活（background_retention=true）的包：关闭后 iframe 内容保留，再次打开同一包时
+// 不复载页面，直接复用已就绪的 iframe，最大程度继承上次嵌入式页面的操作进度。
 function openPageInFrame(url, title, appId) {
     if (!url) return;
+    if (isBackgroundRetained(appId) && ltpxFrameApp === appId && ltpxFrameReady) {
+        ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (title || '页面');
+        activeLTPXCall = null;       // 手动打开不等待任何回执
+        ltpxOverlay.classList.add('active');
+        return;
+    }
     ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (title || '页面');
     ltpxFrameReady = false;
     activeLTPXCall = null;       // 手动打开不等待任何回执
@@ -1441,6 +1450,15 @@ function isMiniLTPPage(appId) {
 function isSelfLTPPage(appId) {
     const p = pages.find(x => x.id === appId);
     return !!(p && p.tags && p.tags.includes('Self-LTP'));
+}
+
+// 判断包是否声明后台保活（metadata.json 中 background_retention 显式为 true）：
+// 字段可缺省（默认 false，兼容旧版包），显式 true 时关闭覆盖层后保留 iframe，
+// 下次打开同一包时复用已加载页面而非重新加载，最大化继承嵌入式页面的操作进度。
+function isBackgroundRetained(appId) {
+    if (!appId) return false;
+    const p = pages.find(x => x.id === appId);
+    return !!(p && p.background_retention === true);
 }
 
 // 收到月华的 ltpx_call：打开对应包页面并投递执行指令
@@ -1515,10 +1533,18 @@ function deliverLTPXRun() {
     }, '*');
 }
 
-// 关闭覆盖层（若包尚未回执，琉璃端会因超时向月华返回错误）
+// 关闭覆盖层（若包尚未回执，琉璃端会因超时向月华返回错误）。
+// 后台保活策略：仅 background_retention 显式 true 的包保留 iframe 供下次复用；
+// 其余（未设定或显式 false）关闭时直接卸载 iframe 页面并回到欢迎页，
+// 避免 Mini-LTP / Self-LTP 等注入脚本的高负载页面意外驻留后台占用资源。
 function closeLTPXOverlay() {
     ltpxOverlay.classList.remove('active');
     activeLTPXCall = null;
+    if (!isBackgroundRetained(ltpxFrameApp)) {
+        ltpxFrameReady = false;
+        ltpxFrameApp = '';
+        ltpxFrame.src = LTPX_WELCOME_SRC; // 回到默认空闲页，释放已嵌入包页面的 JS/DOM 上下文
+    }
 }
 ltpxFrameCloseBtn.addEventListener('click', closeLTPXOverlay);
 ltpxOverlay.addEventListener('click', (e) => { if (e.target === ltpxOverlay) closeLTPXOverlay(); });

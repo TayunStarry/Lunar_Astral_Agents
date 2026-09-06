@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 - 琉璃 』嵌入式空闲页</title>
+    <!-- 标准样式库（提供 Font Awesome 图标） -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        html {
+            background: transparent;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+            color: #3a4256;
+            background: transparent;
+            /* 透出底层琉璃页面 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 24px;
+        }
+
+        .card {
+            width: 88%;
+            max-width: 700px;
+            padding: 34px 40px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 20px 60px rgba(90, 110, 180, 0.18);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 42px;
+        }
+
+        .gem {
+            color: #4a9ceb;
+        }
+
+        .moon {
+            color: #9a7ae4;
+            margin-left: 6px;
+        }
+
+        .gear {
+            color: #5fb6ef;
+            margin-left: 6px;
+        }
+
+        h1 {
+            margin-top: 14px;
+            font-size: 26px;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #3a7bd5, #8e6fd8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .subtitle {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #7d89a6;
+            letter-spacing: 4px;
+        }
+
+        .desc {
+            margin-top: 18px;
+            font-size: 13px;
+            line-height: 1.8;
+            color: #5a6780;
+        }
+
+        .desc b {
+            color: #4a52a0;
+            font-weight: 600;
+        }
+
+        .proto {
+            margin-top: 18px;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.8;
+            color: #4c5770;
+            background: rgba(255, 255, 255, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 14px;
+            padding: 16px 18px;
+        }
+
+        .proto .tag {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 999px;
+            margin-right: 8px;
+            color: #fff;
+        }
+
+        .tag-ltpx {
+            background: linear-gradient(90deg, #3a7bd5, #5fb6ef);
+        }
+
+        .tag-atoa {
+            background: linear-gradient(90deg, #8e6fd8, #b692e8);
+        }
+
+        .proto p {
+            margin-top: 8px;
+        }
+
+        .links {
+            margin-top: 22px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 18px;
+            font-size: 13px;
+            color: #3a4a72;
+            text-decoration: none;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(90, 110, 180, 0.25);
+            box-shadow: 0 6px 18px rgba(90, 110, 180, 0.12);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(90, 110, 180, 0.2);
+        }
+
+        .link i {
+            color: #5a6ca0;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 11px;
+            color: #93a0bd;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <span class="gem"><i class="fas fa-gem"></i></span>
+            <span class="moon"><i class="fas fa-moon"></i></span>
+            <span class="gear"><i class="fas fa-cogs"></i></span>
+        </div>
+        <h1>星月智能 · 琉璃</h1>
+        <div class="subtitle">LTPX 空白工作台</div>
+        <p class="desc">
+            此区域用于承载本地扩展包（<b>.ltpx</b>）或<b>月华 AtoA</b> 调用的嵌入式运行页面。
+        </p>
+        <p class="desc">
+            当（<b>background_retention</b> 未开启）的包页面被关闭时，将显示该页面，
+        </p>
+        <p class="desc">
+            该机制用于确保高负载的嵌入式页面不会被意外保留在后台。
+        </p>
+
+        <div class="proto">
+            <div>
+                <span class="tag tag-ltpx">LTPX</span>
+                <b>月华工具包协议</b>
+            </div>
+            <p>Lunar Tool Package——规定「如何把第三方工具注册给月华、并让 AI 智能体调用」的统一规范。
+                以「包 = 页面 + 元数据 + 工具定义」的形态承载，包含 Zero / Node / Mini / Self / Auto / Yara 等多个分支。</p>
+
+            <div style="margin-top:12px;">
+                <span class="tag tag-atoa">AtoA</span>
+                <b>智能体对智能体</b>
+            </div>
+            <p>Agent-to-Agent——月华不靠正则或规则引擎模拟操作，而是把自然语言指令交给目标包的
+                <b>专用 LLM 智能体</b>，由智能体自行理解意图、多步执行页面操作，完成后把结果回传月华。
+            </p>
+        </div>
+
+        <div class="links">
+            <a class="link" href="https://gitee.com/TayunStarry/Lunar-Astral-Agents" target="_blank" rel="noopener">
+                <i class="fab fa-gitee"></i> Gitee
+            </a>
+            <a class="link" href="https://github.com/TayunStarry/Lunar_Astral_Agents" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> GitHub
+            </a>
+            <a class="link" href="https://gitcode.com/TayunStarry/Lunar_Astral_Agents" target="_blank" rel="noopener">
+                <i class="fab fa-gitcode"></i> GitCode
+            </a>
+        </div>
+
+        <div class="footer">Lunar Astral Agents · Liuli</div>
+    </div>
+
+    <!-- 标准依赖库保持可用 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+</body>
+
+</html>

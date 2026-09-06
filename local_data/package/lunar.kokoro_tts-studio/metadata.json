@@ -1,0 +1,9 @@
+{
+	"id": "lunar.kokoro_tts-studio",
+	"icon": "icon.webp",
+	"title": "语音合成 · Kokoro",
+	"description": "基于 Kokoro-82M 的语音合成引擎的前端页面",
+	"tags": [
+		"Zero-LTP"
+	]
+}

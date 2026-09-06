@@ -22,6 +22,7 @@ func Init() error {
 	Engine = newEngine()
 	Engine.LoadAll()
 	Engine.startReconcile()
+	startInboundWorkers()
 	initDone = true
 	LoggerGeneral.Info(ServiceName, "LTP3 引擎已初始化，插件数: %d", Engine.pluginCount())
 	return nil
@@ -30,6 +31,7 @@ func Init() error {
 // Close 关闭引擎：停止对账循环并卸载全部插件。
 func Close() {
 	if Engine != nil {
+		stopInboundWorkers()
 		Engine.stopReconcile()
 		Engine.shutdown()
 	}

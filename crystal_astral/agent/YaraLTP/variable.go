@@ -67,6 +67,19 @@ const reconcileInterval = 3 * time.Second
 // httpDefaultTimeout 插件 HTTP 请求默认超时（秒），与协议文档一致。
 const httpDefaultTimeout = 120
 
+// inboundWorkerCount 入站分发 worker 协程数量：不同插件/不同群聊的调用并发执行，
+// 单个慢工具/慢钩子不再阻塞其它调用。
+const inboundWorkerCount = 16
+
+// inboundQueueCap 入站分发排队缓冲长度；队列满时回退为直接后台执行。
+const inboundQueueCap = 512
+
+// inboundJobs 入站分发 job 通道；inboundStop 停止信号（startInboundWorkers 创建）。
+var (
+	inboundJobs  chan *InMessage
+	inboundStop  chan struct{}
+)
+
 // scriptExecBudget 单插件串行队列排队上限（防御性）。
 const execQueueCap = 256
 

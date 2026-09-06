@@ -26,7 +26,7 @@
 | [03-扩展系统-钛宇-琉璃](03-扩展系统-钛宇-琉璃.md) | crystal_astral | 琉璃人格与功能、启动/代理路由、逐文件函数表、StudioHub、内置桌面智能体 window_agent、端点总览、运行与 FAQ |
 | [04-公共子系统](04-公共子系统.md) | subsystem 基础模块 | general_config · browser_client · file_manager · image_processor · logger_general · lunar_decoder 的原理、关键文件与函数、运行方式、FAQ |
 | [05-独立AI引擎与运维工具](05-独立AI引擎与运维工具.md) | subsystem 引擎/运维 | agent_search · qwen3_tts · qwen_asr · environment_repair 的推理管线、关键函数、编译运行、FAQ |
-| [06-前端资源库](06-前端资源库.md) | local_data/package | standard_dependency 注入清单、自定义模块与关键类、扩展包总览（含 DS-Demo 演示包） |
+| [06-前端资源库](06-前端资源库.md) | local_data/package | standard_dependency 注入清单、自定义模块与关键类、扩展包总览（含 DeepDemos 演示包） |
 | [07-依赖关系](07-依赖关系.md) | 全项目 | Go 模块依赖图、三方库、外部工具、前后端通信端点、WebSocket 链路 |
 | [08-构建运行与配置](08-构建运行与配置.md) | 全项目 | 环境要求、构建命令具体形态、双层配置结构、模型切换 |
 | [09-LTPX协议-月华工具包](09-LTPX协议-月华工具包.md) | LTPX 生态 | 工具包协议、分支与版本演进、包注册元数据、AtoA 调用链路 |

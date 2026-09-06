@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』元素操纵</title>
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/ws_bridge.js"></script>
+    <style>
+        :root {
+            --glass-bg: rgba(255,255,255,0.28);
+            --glass-border: rgba(255,255,255,0.35);
+            --glass-blur: 18px;
+            --radius-md: 0.75rem;
+            --text-primary: rgba(15,30,15,1);
+            --text-secondary: rgba(80,80,80,1);
+            --accent: #9d6bff;
+            --success: #20c997;
+            --danger: #dc3545;
+            --warning: #fbbf24;
+            --transition: all 0.45s ease;
+        }
+        .dark-mode {
+            --text-primary: rgba(244,244,245,1);
+            --text-secondary: rgba(180,180,180,1);
+            --glass-bg: rgba(38,38,42,0.82);
+            --glass-border: rgba(80,80,80,0.6);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: transparent;
+            font-family: 'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+            font-size: 13px; color: var(--text-primary);
+            overflow-y: auto; overflow-x: hidden;
+            scrollbar-width: none;
+        }
+        body::-webkit-scrollbar { display: none; }
+
+        .panel { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+        .panel-title {
+            font-size: 14px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px;
+            padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);
+        }
+        .panel-title i { color: var(--accent); }
+        .panel-title .badge {
+            margin-left: auto; font-size: 11px; padding: 2px 8px;
+            background: rgba(157,107,255,0.15); border-radius: 10px;
+            color: var(--accent); font-weight: 500;
+        }
+
+        .glass-card {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border-radius: var(--radius-md); padding: 10px 12px;
+            transition: var(--transition);
+        }
+        .card-title {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; color: var(--text-secondary);
+            margin-bottom: 8px; padding-bottom: 6px;
+            border-bottom: 1px dashed var(--glass-border);
+        }
+        .card-title i { color: var(--accent); }
+        .card-title .card-actions { margin-left: auto; display: flex; gap: 4px; }
+
+        .field { margin-bottom: 8px; }
+        .field:last-child { margin-bottom: 0; }
+        .field-label {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;
+        }
+        .field-value { color: var(--accent); font-weight: 600; font-family: 'SF Mono','Consolas',monospace; }
+
+        select, input[type="text"], input[type="number"] {
+            width: 100%; padding: 6px 8px;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px; color: var(--text-primary);
+            font-size: 12px; outline: none;
+            font-family: inherit;
+        }
+        .dark-mode select, .dark-mode input[type="text"], .dark-mode input[type="number"] {
+            background: rgba(20,20,24,0.4);
+        }
+        select:focus, input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+        input[type="number"] { font-family: 'SF Mono','Consolas',monospace; text-align: center; }
+        input[type="number"]::-webkit-inner-spin-button { display: none; }
+
+        input[type="range"] {
+            width: 100%; height: 4px; background: rgba(157,107,255,0.2);
+            border-radius: 2px; appearance: none; -webkit-appearance: none; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none; -webkit-appearance: none;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid #fff;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid #fff;
+        }
+
+        input[type="color"] {
+            width: 32px; height: 24px; padding: 0;
+            border: 1px solid var(--glass-border); border-radius: 6px;
+            cursor: pointer; background: transparent;
+        }
+
+        .coord-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .coord-field { display: flex; flex-direction: column; gap: 3px; }
+        .coord-label { font-size: 11px; text-align: center; font-weight: 600; }
+        .coord-label.x { color: #dc3545; }
+        .coord-label.y { color: #20c997; }
+        .coord-label.z { color: #6c9bcf; }
+
+        .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .btn {
+            flex: 1; min-width: 60px; padding: 6px 10px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); color: var(--text-primary);
+            font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            transition: var(--transition);
+            backdrop-filter: blur(var(--glass-blur));
+        }
+        .btn:hover { background: rgba(157,107,255,0.15); border-color: var(--accent); }
+        .btn.btn-primary { background: rgba(157,107,255,0.25); border-color: var(--accent); color: var(--accent); }
+        .btn.btn-success { background: rgba(32,201,151,0.2); border-color: var(--success); color: var(--success); }
+        .btn.btn-warn { background: rgba(251,191,36,0.2); border-color: var(--warning); color: var(--warning); }
+        .btn.btn-danger { background: rgba(220,53,69,0.2); border-color: var(--danger); color: var(--danger); }
+        .btn.btn-icon { flex: 0 0 auto; min-width: 28px; padding: 4px 8px; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .elem-list { max-height: 280px; overflow-y: auto; scrollbar-width: none; }
+        .elem-list::-webkit-scrollbar { display: none; }
+        .list-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 8px; margin-bottom: 4px;
+            border-radius: 6px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.1);
+            font-size: 12px; transition: var(--transition);
+        }
+        .dark-mode .list-item { background: rgba(255,255,255,0.04); }
+        .list-item:hover { background: rgba(157,107,255,0.1); border-color: var(--accent); }
+        .list-item.selected { background: rgba(157,107,255,0.18); border-color: var(--accent); }
+        .list-item .type-icon { flex-shrink: 0; }
+        .list-item .type-icon.prim { color: var(--accent); }
+        .list-item .type-icon.compound { color: var(--warning); }
+        .list-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .list-item .meta { font-size: 10px; opacity: 0.6; flex-shrink: 0; }
+        .list-item .ops { display: flex; gap: 2px; flex-shrink: 0; }
+        .list-item .ops button {
+            background: transparent; border: none; cursor: pointer;
+            padding: 2px 4px; font-size: 11px; color: var(--text-secondary);
+            border-radius: 4px;
+        }
+        .list-item .ops button:hover { color: var(--accent); background: rgba(157,107,255,0.15); }
+        .list-item .ops button.danger:hover { color: var(--danger); background: rgba(220,53,69,0.15); }
+
+        .toggle-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; padding: 4px 0;
+        }
+        .toggle {
+            position: relative; width: 32px; height: 18px;
+            background: rgba(80,80,80,0.4); border-radius: 10px; cursor: pointer;
+            transition: var(--transition);
+        }
+        .toggle::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: #fff; transition: var(--transition);
+        }
+        .toggle.active { background: var(--accent); }
+        .toggle.active::after { left: 16px; }
+
+        .empty-state {
+            text-align: center; padding: 16px 10px;
+            color: var(--text-secondary); font-size: 12px;
+        }
+        .empty-state i { font-size: 20px; display: block; margin-bottom: 6px; opacity: 0.5; }
+
+        .toast-container {
+            position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 6px;
+            pointer-events: none;
+        }
+        .toast {
+            padding: 8px 14px; border-radius: 8px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--glass-blur));
+            font-size: 12px; color: var(--text-primary);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            animation: toast-in 0.3s ease, toast-out 0.3s ease 2.4s forwards;
+            pointer-events: auto;
+        }
+        .toast.success { border-color: var(--success); color: var(--success); }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+
+        .sep { border-top: 1px dashed var(--glass-border); margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="panel-title">
+            <i class="fas fa-shapes"></i><span>元素操纵</span>
+            <span class="badge" id="badge-count">0 项</span>
+        </div>
+
+        <!-- 图元创建 -->
+        <div class="glass-card">
+            <div class="card-title"><i class="fas fa-cube"></i><span>图元创建</span></div>
+            <div class="field">
+                <select id="select-type">
+                    <option value="cube">立方体</option>
+                    <option value="sphere">球体</option>
+                    <option value="cylinder">圆柱体</option>
+                    <option value="cone">圆锥体</option>
+                    <option value="plane">平面</option>
+                    <option value="torus">圆环</option>
+                    <option value="dodecahedron">十二面体</option>
+                    <option value="octahedron">八面体</option>
+                    <option value="tetrahedron">四面体</option>
+                    <option value="torusKnot">环结</option>
+                    <option value="ring">圆环面</option>
+                </select>
+            </div>
+            <div id="params-container"></div>
+            <div class="field">
+                <div class="field-label">
+                    <span><i class="fas fa-palette"></i> 颜色</span>
+                    <input type="color" id="input-color" value="#ffffff">
+                </div>
+            </div>
+            <div class="field">
+                <div class="field-label">
+                    <span><i class="fas fa-adjust"></i> 透明度</span>
+                    <span class="field-value" id="val-opacity">1.00</span>
+                </div>
+                <input type="range" id="slider-opacity" min="0.1" max="1.0" step="0.05" value="1.0">
+            </div>
+            <div class="field">
+                <div class="field-label"><span><i class="fas fa-map-marker-alt"></i> 位置</span></div>
+                <div class="coord-row">
+                    <div class="coord-field">
+                        <span class="coord-label x">X</span>
+                        <input type="number" id="input-x" value="0" step="0.5">
+                    </div>
+                    <div class="coord-field">
+                        <span class="coord-label y">Y</span>
+                        <input type="number" id="input-y" value="2" step="0.5">
+                    </div>
+                    <div class="coord-field">
+                        <span class="coord-label z">Z</span>
+                        <input type="number" id="input-z" value="0" step="0.5">
+                    </div>
+                </div>
+            </div>
+            <div class="field">
+                <div class="toggle-row">
+                    <span><i class="fas fa-anchor"></i> 锚定（静态）</span>
+                    <div class="toggle" id="toggle-anchored"></div>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btn-add" type="button">
+                    <i class="fas fa-plus"></i><span>添加图元</span>
+                </button>
+                <button class="btn btn-danger" id="btn-clear" type="button">
+                    <i class="fas fa-trash"></i><span>清空</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 统一元素列表 -->
+        <div class="glass-card">
+            <div class="card-title">
+                <i class="fas fa-list"></i><span>元素列表</span>
+                <span class="card-actions">
+                    <button class="btn btn-icon btn-success" id="btn-make-compound" title="将选中图元合并为组合体">
+                        <i class="fas fa-object-group"></i>
+                    </button>
+                </span>
+            </div>
+            <div class="elem-list" id="elem-list">
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <span>暂无元素</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 选中编辑 -->
+        <div class="glass-card" id="edit-card" style="display:none;">
+            <div class="card-title">
+                <i class="fas fa-mouse-pointer"></i><span>选中编辑</span>
+                <span class="field-value" id="edit-target-name" style="margin-left:auto;">-</span>
+            </div>
+            <!-- 编辑模式 -->
+            <div class="field">
+                <div class="field-label"><span>编辑模式</span><span class="field-value" id="edit-mode-label">位移</span></div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btn-mode-translate" type="button"><i class="fas fa-arrows-alt"></i> 位移(1)</button>
+                    <button class="btn" id="btn-mode-rotate" type="button"><i class="fas fa-sync-alt"></i> 旋转(2)</button>
+                    <button class="btn" id="btn-mode-scale" type="button"><i class="fas fa-expand-arrows-alt"></i> 缩放(3)</button>
+                </div>
+            </div>
+            <div class="field">
+                <div class="field-label">
+                    <span>当前位置</span>
+                    <span class="field-value" id="edit-position">0, 0, 0</span>
+                </div>
+            </div>
+            <!-- 纹理（仅图元可见，组合体隐藏） -->
+            <div id="texture-section">
+                <div class="sep"></div>
+                <div class="field">
+                    <div class="field-label"><span><i class="fas fa-image"></i> 纹理</span></div>
+                    <div class="btn-row" style="margin-bottom:6px;">
+                        <select id="tex-uuid-select" style="flex:1;">
+                            <option value="">-- 请选择纹理 --</option>
+                        </select>
+                        <button class="btn btn-icon" id="btn-tex-refresh" type="button" title="刷新纹理列表">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btn-tex-apply" type="button">
+                        <i class="fas fa-check"></i><span>应用纹理</span>
+                    </button>
+                    <button class="btn btn-warn" id="btn-tex-clear" type="button">
+                        <i class="fas fa-eraser"></i><span>清除纹理</span>
+                    </button>
+                </div>
+            </div>
+            <div class="sep"></div>
+            <!-- 物理控制 -->
+            <div class="btn-row">
+                <button class="btn btn-success" id="btn-physics-enable" type="button"><i class="fas fa-play"></i> 启用物理化</button>
+                <button class="btn btn-danger" id="btn-physics-disable" type="button"><i class="fas fa-stop"></i> 禁用物理化</button>
+            </div>
+            <div class="btn-row" style="margin-top:6px;">
+                <button class="btn btn-warn" id="btn-unload-all" type="button"><i class="fas fa-unlink"></i> 卸载全部物理</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // ==== 元素操纵面板 ====
+        const CHANNEL_NAME = 'lunar-engine-bus';
+        const SOURCE = 'elements-panel';
+        const channel = new WsBridge(CHANNEL_NAME);
+
+        const PRIM_PARAMS = {
+            cube: [
+                { key: 'w', label: '宽度', min: 0.1, max: 100, step: 0.1, default: 10 },
+                { key: 'h', label: '高度', min: 0.1, max: 100, step: 0.1, default: 10 },
+                { key: 'd', label: '深度', min: 0.1, max: 100, step: 0.1, default: 10 },
+            ],
+            sphere: [
+                { key: 'r', label: '半径', min: 0.1, max: 50, step: 0.1, default: 5 },
+                { key: 'seg', label: '分段', min: 4, max: 128, step: 1, default: 32 },
+            ],
+            cylinder: [
+                { key: 'rt', label: '顶半径', min: 0, max: 50, step: 0.1, default: 5 },
+                { key: 'rb', label: '底半径', min: 0, max: 50, step: 0.1, default: 5 },
+                { key: 'h', label: '高度', min: 0.1, max: 100, step: 0.1, default: 10 },
+                { key: 'seg', label: '分段', min: 4, max: 128, step: 1, default: 32 },
+            ],
+            cone: [
+                { key: 'r', label: '半径', min: 0.1, max: 50, step: 0.1, default: 5 },
+                { key: 'h', label: '高度', min: 0.1, max: 100, step: 0.1, default: 10 },
+                { key: 'seg', label: '分段', min: 4, max: 128, step: 1, default: 32 },
+            ],
+            plane: [
+                { key: 'w', label: '宽度', min: 0.1, max: 200, step: 0.1, default: 10 },
+                { key: 'h', label: '高度', min: 0.1, max: 200, step: 0.1, default: 10 },
+            ],
+            torus: [
+                { key: 'r', label: '大半径', min: 0.1, max: 50, step: 0.1, default: 5 },
+                { key: 't', label: '管半径', min: 0.02, max: 20, step: 0.02, default: 2 },
+            ],
+            dodecahedron: [{ key: 'r', label: '半径', min: 0.1, max: 50, step: 0.1, default: 5 }],
+            octahedron: [{ key: 'r', label: '半径', min: 0.1, max: 50, step: 0.1, default: 5 }],
+            tetrahedron: [{ key: 'r', label: '半径', min: 0.1, max: 50, step: 0.1, default: 5 }],
+            torusKnot: [
+                { key: 'r', label: '大半径', min: 0.1, max: 50, step: 0.1, default: 5 },
+                { key: 't', label: '管半径', min: 0.02, max: 20, step: 0.02, default: 1.5 },
+            ],
+            ring: [
+                { key: 'inner', label: '内半径', min: 0, max: 50, step: 0.05, default: 3 },
+                { key: 'outer', label: '外半径', min: 0.1, max: 50, step: 0.05, default: 5 },
+            ],
+        };
+
+        const PRIM_NAMES = {
+            cube: '立方体', sphere: '球体', cylinder: '圆柱体', cone: '圆锥体',
+            plane: '平面', torus: '圆环', dodecahedron: '十二面体',
+            octahedron: '八面体', tetrahedron: '四面体', torusKnot: '环结', ring: '圆环面',
+        };
+
+        const elements = {
+            selectType: document.getElementById('select-type'),
+            paramsContainer: document.getElementById('params-container'),
+            inputColor: document.getElementById('input-color'),
+            sliderOpacity: document.getElementById('slider-opacity'),
+            valOpacity: document.getElementById('val-opacity'),
+            inputX: document.getElementById('input-x'),
+            inputY: document.getElementById('input-y'),
+            inputZ: document.getElementById('input-z'),
+            toggleAnchored: document.getElementById('toggle-anchored'),
+            btnAdd: document.getElementById('btn-add'),
+            btnClear: document.getElementById('btn-clear'),
+            elemList: document.getElementById('elem-list'),
+            btnMakeCompound: document.getElementById('btn-make-compound'),
+            badgeCount: document.getElementById('badge-count'),
+            // 纹理
+            texUuidSelect: document.getElementById('tex-uuid-select'),
+            btnTexRefresh: document.getElementById('btn-tex-refresh'),
+            btnTexApply: document.getElementById('btn-tex-apply'),
+            btnTexClear: document.getElementById('btn-tex-clear'),
+            textureSection: document.getElementById('texture-section'),
+            // 编辑
+            editCard: document.getElementById('edit-card'),
+            editTargetName: document.getElementById('edit-target-name'),
+            editModeLabel: document.getElementById('edit-mode-label'),
+            editPosition: document.getElementById('edit-position'),
+            btnModeTranslate: document.getElementById('btn-mode-translate'),
+            btnModeRotate: document.getElementById('btn-mode-rotate'),
+            btnModeScale: document.getElementById('btn-mode-scale'),
+            btnPhysicsEnable: document.getElementById('btn-physics-enable'),
+            btnPhysicsDisable: document.getElementById('btn-physics-disable'),
+            btnUnloadAll: document.getElementById('btn-unload-all'),
+            toastContainer: document.getElementById('toast-container'),
+        };
+
+        // 统一元素列表：{ id, name, type: 'primitive'|'compound', primType, color, selected }
+        const state = {
+            currentType: 'cube',
+            params: {},
+            anchored: false,
+            primitiveOpacity: 1.0,
+            items: [],        // unified list of all elements
+            selectedId: null,  // single selection
+            selectedPrimIds: new Set(), // multi-select for compound creation
+            textureList: [],   // [{uuid, name, thumbnail}]
+            editMode: 'translate',
+        };
+
+        function init() {
+            bindEvents();
+            renderParams('cube');
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+            broadcast('texture_list_request', {});
+        }
+
+        function bindEvents() {
+            elements.selectType.addEventListener('change', () => {
+                state.currentType = elements.selectType.value;
+                renderParams(state.currentType);
+            });
+
+            elements.toggleAnchored.addEventListener('click', () => {
+                state.anchored = !state.anchored;
+                elements.toggleAnchored.classList.toggle('active', state.anchored);
+            });
+
+            elements.sliderOpacity.addEventListener('input', () => {
+                state.primitiveOpacity = parseFloat(elements.sliderOpacity.value);
+                elements.valOpacity.textContent = state.primitiveOpacity.toFixed(2);
+            });
+
+            elements.btnAdd.addEventListener('click', addPrimitive);
+            elements.btnClear.addEventListener('click', clearAll);
+            elements.btnMakeCompound.addEventListener('click', makeCompound);
+
+            // 纹理
+            elements.btnTexRefresh.addEventListener('click', () => broadcast('texture_list_request', {}));
+            elements.btnTexApply.addEventListener('click', applyTexture);
+            elements.btnTexClear.addEventListener('click', clearTexture);
+
+            // 编辑控制
+            elements.btnModeTranslate.addEventListener('click', () => setEditMode('translate'));
+            elements.btnModeRotate.addEventListener('click', () => setEditMode('rotate'));
+            elements.btnModeScale.addEventListener('click', () => setEditMode('scale'));
+            elements.btnPhysicsEnable.addEventListener('click', () => {
+                if (state.selectedId) broadcast('element_physics_enable', { id: state.selectedId });
+                showToast('物理化已启用', 'success');
+            });
+            elements.btnPhysicsDisable.addEventListener('click', () => {
+                if (state.selectedId) broadcast('element_physics_disable', { id: state.selectedId });
+                showToast('物理化已禁用', 'success');
+            });
+            elements.btnUnloadAll.addEventListener('click', () => {
+                if (confirm('确认卸载全部非角色图元/组合体的物理效果并对齐网格？')) {
+                    broadcast('unload_all_physics', {});
+                    showToast('已卸载全部物理', 'success');
+                }
+            });
+
+            channel.onmessage = (event) => {
+                const msg = event.data;
+                if (!msg || msg.source === SOURCE) return;
+                handleChannelMessage(msg);
+            };
+        }
+
+        function handleChannelMessage(msg) {
+            switch (msg.type) {
+                case 'primitive_created':
+                    onPrimitiveCreated(msg.payload);
+                    break;
+                case 'primitive_removed':
+                    onPrimitiveRemoved(msg.payload);
+                    break;
+                case 'compounds_list':
+                    onCompoundsList(msg.payload?.compounds ?? []);
+                    break;
+                case 'compound_created':
+                    showToast('组合体已创建', 'success');
+                    break;
+                case 'compound_dissolved':
+                    onCompoundDissolved(msg.payload);
+                    break;
+                case 'compound_op_result':
+                    showToast(msg.payload?.message || '操作完成', msg.payload?.ok ? 'success' : 'error');
+                    break;
+                case 'texture_op_result':
+                    showToast(msg.payload?.action === 'apply' ? '纹理已应用' : '纹理已清除',
+                              msg.payload?.ok ? 'success' : 'error');
+                    break;
+                case 'texture_list':
+                    onTextureList(msg.payload?.textures ?? []);
+                    break;
+                case 'primitive_spawn_info':
+                    if (msg.payload?.position) {
+                        elements.inputX.value = msg.payload.position.x.toFixed(1);
+                        elements.inputY.value = msg.payload.position.y.toFixed(1);
+                        elements.inputZ.value = msg.payload.position.z.toFixed(1);
+                    }
+                    break;
+                case 'theme_changed':
+                    document.body.classList.toggle('dark-mode', msg.payload?.dark === true);
+                    break;
+                case 'element_selected': {
+                    const { id, position } = msg.payload || {};
+                    state.selectedId = id;
+                    showEditCard(id);
+                    if (position) elements.editPosition.textContent = `${position.x}, ${position.y}, ${position.z}`;
+                    renderElemList();
+                    break;
+                }
+                case 'element_deselected': {
+                    state.selectedId = null;
+                    // 不清空 selectedPrimIds，保留面板侧多选状态
+                    elements.editCard.style.display = 'none';
+                    renderElemList();
+                    break;
+                }
+                case 'element_transform': {
+                    const { position, mode } = msg.payload || {};
+                    if (position) elements.editPosition.textContent = `${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`;
+                    if (mode) setEditMode(mode, true);
+                    break;
+                }
+                case 'edit_mode_changed': {
+                    setEditMode(msg.payload?.mode || 'translate', true);
+                    break;
+                }
+                case 'all_physics_unloaded': {
+                    showToast('已卸载全部图元物理', 'success');
+                    break;
+                }
+            }
+        }
+
+        // ==== 编辑模式 ====
+        const MODE_LABELS = { translate: '位移', rotate: '旋转', scale: '缩放' };
+
+        function setEditMode(mode, fromEngine = false) {
+            state.editMode = mode;
+            elements.editModeLabel.textContent = MODE_LABELS[mode] || mode;
+            elements.btnModeTranslate.classList.toggle('btn-primary', mode === 'translate');
+            elements.btnModeRotate.classList.toggle('btn-primary', mode === 'rotate');
+            elements.btnModeScale.classList.toggle('btn-primary', mode === 'scale');
+            if (!fromEngine) broadcast('element_edit_mode', { mode });
+        }
+
+        // ==== 显示编辑卡片 ====
+        function showEditCard(id) {
+            elements.editCard.style.display = '';
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+            elements.editTargetName.textContent = item.name;
+            // 组合体隐藏纹理区域
+            elements.textureSection.style.display = item.type === 'compound' ? 'none' : '';
+        }
+
+        // ==== 图元创建 ====
+        function renderParams(type) {
+            const defs = PRIM_PARAMS[type] || [];
+            state.params = {};
+            defs.forEach(d => { state.params[d.key] = d.default; });
+
+            elements.paramsContainer.innerHTML = defs.map(d => `
+                <div class="field">
+                    <div class="field-label">
+                        <span>${d.label}</span>
+                        <span class="field-value" id="param-val-${d.key}">${d.default}</span>
+                    </div>
+                    <input type="range" id="param-${d.key}"
+                           min="${d.min}" max="${d.max}" step="${d.step}" value="${d.default}">
+                </div>
+            `).join('');
+
+            defs.forEach(d => {
+                const slider = document.getElementById(`param-${d.key}`);
+                const val = document.getElementById(`param-val-${d.key}`);
+                slider.addEventListener('input', () => {
+                    state.params[d.key] = parseFloat(slider.value);
+                    val.textContent = d.step < 1 ? parseFloat(slider.value).toFixed(2) : slider.value;
+                });
+            });
+        }
+
+        function addPrimitive() {
+            const spec = {
+                type: state.currentType,
+                params: { ...state.params },
+                color: parseInt(elements.inputColor.value.replace('#', ''), 16),
+                physics: { anchored: state.anchored },
+                opacity: state.primitiveOpacity,
+            };
+            broadcast('primitive_add', { spec });
+        }
+
+        function onPrimitiveCreated(payload) {
+            if (!payload) return;
+            // 防止重复添加（如 panel_ready 同步时）
+            if (state.items.some(i => i.id === payload.id)) return;
+            state.items.push({
+                id: payload.id,
+                name: PRIM_NAMES[payload.type] || payload.type,
+                type: 'primitive',
+                primType: payload.type,
+                color: payload.color ?? 0x9d6bff,
+            });
+            renderElemList();
+        }
+
+        function onPrimitiveRemoved(payload) {
+            const id = payload?.id;
+            state.items = state.items.filter(i => i.id !== id);
+            state.selectedPrimIds.delete(id);
+            if (state.selectedId === id) {
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
+            renderElemList();
+        }
+
+        // ==== 组合体列表同步 ====
+        function onCompoundsList(compounds) {
+            // 移除旧组合体条目，重新添加
+            state.items = state.items.filter(i => i.type !== 'compound');
+            for (const c of compounds) {
+                state.items.push({
+                    id: c.id,
+                    name: c.name || '组合体',
+                    type: 'compound',
+                    memberCount: c.memberIds?.length || 0,
+                    anchored: c.anchored,
+                });
+            }
+            renderElemList();
+        }
+
+        function onCompoundDissolved(payload) {
+            const { compoundId, childIds } = payload || {};
+            // 从列表移除组合体
+            state.items = state.items.filter(i => i.id !== compoundId);
+            // 子图元重新出现在列表中 — 请求引擎重新广播所有图元信息
+            channel.postMessage({ type: 'panel_ready', source: SOURCE, timestamp: Date.now() });
+            if (state.selectedPrimIds.has(compoundId)) {
+                state.selectedPrimIds.delete(compoundId);
+            }
+            if (state.selectedId === compoundId) {
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
+            showToast('组合体已解散', 'success');
+            renderElemList();
+        }
+
+        function removeElement(id) {
+            const item = state.items.find(i => i.id === id);
+            if (!item) return;
+            if (item.type === 'compound') {
+                // 组合体：解散还是删除整个？这里直接移除（包含子图元）
+                if (confirm('确认删除此组合体（含子图元）？')) {
+                    broadcast('primitive_remove', { id });
+                }
+            } else {
+                broadcast('primitive_remove', { id });
+            }
+            // 同时取消选中
+            if (state.selectedId === id) {
+                broadcast('element_deselect', {});
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+            }
+        }
+
+        function dissolveCompound(id) {
+            if (confirm('确认解散此组合体？子图元将回归独立列表。')) {
+                broadcast('compound_dissolve', { id });
+            }
+        }
+
+        function clearAll() {
+            if (!confirm('确认清空所有图元与组合体？')) return;
+            for (const item of [...state.items]) {
+                if (item.type === 'compound') {
+                    broadcast('compound_dissolve', { id: item.id });
+                }
+            }
+            for (const item of [...state.items]) {
+                if (item.type === 'primitive') {
+                    broadcast('primitive_remove', { id: item.id });
+                }
+            }
+            state.items = [];
+            state.selectedPrimIds.clear();
+            state.selectedId = null;
+            elements.editCard.style.display = 'none';
+            renderElemList();
+        }
+
+        // ==== 统一元素列表 ====
+        function renderElemList() {
+            const primitives = state.items.filter(i => i.type === 'primitive');
+            const compounds = state.items.filter(i => i.type === 'compound');
+            elements.badgeCount.textContent = `${state.items.length} 项`;
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+
+            if (state.items.length === 0) {
+                elements.elemList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><span>暂无元素</span></div>';
+                return;
+            }
+
+            // 先图元后组合体
+            const ordered = [...primitives, ...compounds];
+            elements.elemList.innerHTML = ordered.map(item => {
+                const isSelected = state.selectedPrimIds.has(item.id);
+                const iconClass = item.type === 'compound' ? 'fas fa-cubes type-icon compound' : 'fas fa-cube type-icon prim';
+                const meta = item.type === 'compound'
+                    ? `${item.memberCount ?? 0} 图元 · ${item.anchored ? '静态' : '动态'}`
+                    : item.id;
+                const compoundOps = item.type === 'compound'
+                    ? `<button class="dissolve" title="解散组合体"><i class="fas fa-undo"></i></button>` : '';
+                return `
+                    <div class="list-item ${isSelected ? 'selected' : ''}" data-id="${escapeHtml(item.id)}" data-type="${item.type}">
+                        <i class="${iconClass}"></i>
+                        <span class="name">${escapeHtml(item.name)}</span>
+                        <span class="meta">${meta}</span>
+                        <span class="ops">
+                            ${compoundOps}
+                            <button class="danger remove" title="删除"><i class="fas fa-times"></i></button>
+                        </span>
+                    </div>
+                `;
+            }).join('');
+
+            elements.elemList.querySelectorAll('.list-item').forEach(el => {
+                const id = el.dataset.id;
+                const type = el.dataset.type;
+                // 单击切换选中
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('button')) return;
+                    toggleSelectItem(id, type);
+                });
+                // 双击取消选中
+                el.addEventListener('dblclick', (e) => {
+                    if (e.target.closest('button')) return;
+                    deselectItem(id);
+                });
+                // 删除按钮
+                el.querySelector('button.remove').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeElement(id);
+                });
+                // 解散按钮（组合体）
+                const dissolveBtn = el.querySelector('button.dissolve');
+                if (dissolveBtn) {
+                    dissolveBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dissolveCompound(id);
+                    });
+                }
+            });
+        }
+
+        function toggleSelectItem(id, type) {
+            if (state.selectedPrimIds.has(id)) {
+                // 已选中 → 取消选中
+                deselectItem(id);
+                return;
+            }
+            // 选中该项
+            if (type === 'primitive') {
+                state.selectedPrimIds.add(id);
+            }
+            state.selectedId = id;
+
+            if (state.selectedPrimIds.size >= 2) {
+                // 多选模式：隐藏编辑卡，不发送 element_select
+                elements.editCard.style.display = 'none';
+                broadcast('element_deselect', {});
+                state.selectedId = null;
+            } else {
+                // 单选模式：显示编辑卡
+                broadcast('element_select', { id });
+                showEditCard(id);
+            }
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+            renderElemList();
+        }
+
+        function deselectItem(id) {
+            state.selectedPrimIds.delete(id);
+            if (state.selectedPrimIds.size === 1) {
+                // 从多选恢复到单选：显示编辑卡
+                const remainingId = Array.from(state.selectedPrimIds)[0];
+                state.selectedId = remainingId;
+                broadcast('element_select', { id: remainingId });
+                showEditCard(remainingId);
+            } else if (state.selectedPrimIds.size === 0) {
+                // 全部取消选中
+                state.selectedId = null;
+                elements.editCard.style.display = 'none';
+                broadcast('element_deselect', {});
+            }
+            elements.btnMakeCompound.disabled = state.selectedPrimIds.size < 2;
+            renderElemList();
+        }
+
+        // ==== 组合体创建 ====
+        function makeCompound() {
+            const ids = Array.from(state.selectedPrimIds);
+            if (ids.length < 2) {
+                showToast('请至少选择 2 个图元', 'error');
+                return;
+            }
+            const name = prompt('组合体名称：', `组合体 ${state.items.filter(i => i.type === 'compound').length + 1}`);
+            if (name === null) return;
+            const anchored = confirm('组合体是否锚定（静态）？\n确定=锚定，取消=动态');
+            broadcast('compound_create', { meshIds: ids, name: name || undefined, anchored });
+            // 从列表中移除已合并的图元
+            state.items = state.items.filter(i => !state.selectedPrimIds.has(i.id));
+            state.selectedPrimIds.clear();
+            state.selectedId = null;
+            elements.editCard.style.display = 'none';
+            renderElemList();
+        }
+
+        // ==== 纹理 ====
+        function onTextureList(textures) {
+            state.textureList = textures || [];
+            const prev = elements.texUuidSelect.value;
+            elements.texUuidSelect.innerHTML = '<option value="">-- 请选择纹理 --</option>';
+            state.textureList.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.uuid;
+                opt.textContent = t.name || t.uuid;
+                elements.texUuidSelect.appendChild(opt);
+            });
+            if (prev && state.textureList.some(t => t.uuid === prev)) {
+                elements.texUuidSelect.value = prev;
+            }
+        }
+
+        function applyTexture() {
+            if (!state.selectedId) {
+                showToast('请先选中一个图元', 'error');
+                return;
+            }
+            const item = state.items.find(i => i.id === state.selectedId);
+            if (item?.type === 'compound') {
+                showToast('组合体不能应用纹理', 'error');
+                return;
+            }
+            const uuid = elements.texUuidSelect.value;
+            if (!uuid) {
+                showToast('请选择纹理', 'error');
+                return;
+            }
+            broadcast('texture_apply', { id: state.selectedId, textureUUID: uuid, repeatU: 1, repeatV: 1 });
+        }
+
+        function clearTexture() {
+            if (!state.selectedId) {
+                showToast('请先选中一个图元', 'error');
+                return;
+            }
+            broadcast('texture_clear', { id: state.selectedId });
+        }
+
+        // ==== Toast ====
+        function showToast(message, type = '') {
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.textContent = message;
+            elements.toastContainer.appendChild(el);
+            setTimeout(() => el.remove(), 2800);
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function broadcast(type, payload) {
+            channel.postMessage({ type, source: SOURCE, payload, timestamp: Date.now() });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』语音合成 · Kokoro</title>
+    <!-- 标准依赖 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- 背景层 -->
+    <div class="background-layer"></div>
+    <div class="glass-effect"></div>
+
+    <div class="workspace">
+
+        <!-- ==================== 左栏 ==================== -->
+        <aside class="col-left">
+
+            <!-- 左上：文本输入 + 预设文本 -->
+            <section class="glass-panel block-text">
+                <div class="preset-chips" id="preset-chips">
+                    <button class="chip active" data-text="你好，欢迎使用星月智能语音助手。今天天气很好，我们去公园散步吧。">中文短句</button>
+                    <button class="chip" data-text="大家好，人生就像一场旅行，不必在乎目的地，在乎的是沿途的风景以及看风景的心情。">中文长句</button>
+                    <button class="chip" data-text="Hello! Welcome to the Kokoro text to speech studio. Have a wonderful day!">英文</button>
+                    <button class="chip" data-text="大家好，我是 Kokoro 语音引擎。Let's explore the voices together!">中英混合</button>
+                </div>
+                <div class="textarea-wrapper">
+                    <textarea id="text-input" placeholder="输入要合成的文本，点击右侧任意音色卡片即可试听……"></textarea>
+                </div>
+            </section>
+
+            <!-- 左下：调音器 + 音频播放 -->
+            <section class="glass-panel block-player">
+                <div class="params-row">
+                    <div class="param-item">
+                        <label>语速 <span id="speed-value">1.25</span></label>
+                        <input type="range" id="speed-input" class="glass-slider" min="0.5" max="2" step="0.05" value="1.25">
+                    </div>
+                    <div class="param-item">
+                        <label>语言</label>
+                        <select id="lang-select" class="glass-input">
+                            <option value="auto">自动识别</option>
+                            <option value="zh">中文</option>
+                            <option value="en">英文</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 音频均衡器 -->
+                <div class="eq-wrap">
+                    <div class="eq-title">
+                        <i class="fas fa-wave-square"></i>
+                        <span>音频均衡器</span>
+                        <button id="eq-reset-btn" class="eq-reset-btn" title="重置均衡器">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                    </div>
+                    <div class="eq-controls">
+                        <div class="eq-visualizer" id="eq-visualizer">
+                            <svg class="eq-svg" viewBox="0 0 100 240" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect class="eq-bar eq-bar-low" x="12" y="225" width="20" height="15" rx="4" id="eq-vis-low" />
+                                <rect class="eq-bar eq-bar-mid" x="40" y="225" width="20" height="15" rx="4" id="eq-vis-mid" />
+                                <rect class="eq-bar eq-bar-high" x="68" y="225" width="20" height="15" rx="4" id="eq-vis-high" />
+                                <rect class="eq-baseline" x="8" y="237" width="84" height="3" rx="1.5" />
+                            </svg>
+                        </div>
+                        <div class="eq-panels">
+                            <div class="eq-section">
+                                <div class="eq-section-header">
+                                    <span class="eq-label"><span class="eq-dot low-dot"></span>低频 200Hz</span>
+                                    <div class="eq-mode-select">
+                                        <select id="eq-low-mode" class="eq-select">
+                                            <option value="boost">增强</option>
+                                            <option value="cut">削弱</option>
+                                        </select>
+                                        <select id="eq-low-multi" class="eq-select">
+                                            <option value="1">×1</option>
+                                            <option value="2">×2</option>
+                                            <option value="3" selected>×3</option>
+                                            <option value="5">×5</option>
+                                            <option value="10">×10</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="eq-slider-row">
+                                    <span class="eq-db-value" id="eq-low-value">0dB</span>
+                                    <div class="eq-slider-track">
+                                        <input type="range" id="eq-low-slider" class="glass-slider eq-slider" min="0" max="12" step="0.5" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="eq-section">
+                                <div class="eq-section-header">
+                                    <span class="eq-label"><span class="eq-dot mid-dot"></span>中频 1kHz</span>
+                                    <div class="eq-mode-select">
+                                        <select id="eq-mid-mode" class="eq-select">
+                                            <option value="boost">增强</option>
+                                            <option value="cut">削弱</option>
+                                        </select>
+                                        <select id="eq-mid-multi" class="eq-select">
+                                            <option value="1">×1</option>
+                                            <option value="2">×2</option>
+                                            <option value="3" selected>×3</option>
+                                            <option value="5">×5</option>
+                                            <option value="10">×10</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="eq-slider-row">
+                                    <span class="eq-db-value" id="eq-mid-value">0dB</span>
+                                    <div class="eq-slider-track">
+                                        <input type="range" id="eq-mid-slider" class="glass-slider eq-slider" min="0" max="12" step="0.5" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="eq-section">
+                                <div class="eq-section-header">
+                                    <span class="eq-label"><span class="eq-dot high-dot"></span>高频 8kHz</span>
+                                    <div class="eq-mode-select">
+                                        <select id="eq-high-mode" class="eq-select">
+                                            <option value="boost">增强</option>
+                                            <option value="cut">削弱</option>
+                                        </select>
+                                        <select id="eq-high-multi" class="eq-select">
+                                            <option value="1">×1</option>
+                                            <option value="2">×2</option>
+                                            <option value="3" selected>×3</option>
+                                            <option value="5">×5</option>
+                                            <option value="10">×10</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="eq-slider-row">
+                                    <span class="eq-db-value" id="eq-high-value">0dB</span>
+                                    <div class="eq-slider-track">
+                                        <input type="range" id="eq-high-slider" class="glass-slider eq-slider" min="0" max="12" step="0.5" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="player-card">
+                    <div class="waveform-stage" id="waveform"></div>
+                    <audio id="audio-player" preload="auto"></audio>
+                    <div class="player-controls">
+                        <button id="play-pause-btn" class="ctrl-btn" title="播放/暂停">
+                            <i class="fas fa-play icon-play"></i>
+                            <i class="fas fa-pause icon-pause hidden"></i>
+                        </button>
+                        <div class="progress-area">
+                            <input type="range" id="progress-bar" class="glass-slider progress-slider" min="0" max="100" value="0">
+                            <span id="time-display" class="time-label">0:00 / 0:00</span>
+                        </div>
+                        <button id="download-btn" class="btn-glass btn-download" title="下载 WAV">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 服务连接 -->
+                <div class="connect-bar">
+                    <span id="service-status" class="service-status">未连接</span>
+                    <input type="text" id="api-base-input" class="glass-input api-input" placeholder="http://127.0.0.1:36789" spellcheck="false">
+                    <button id="connect-btn" class="btn-glass" title="连接服务">
+                        <i class="fas fa-plug"></i><span>连接</span>
+                    </button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- ==================== 右栏 ==================== -->
+        <main class="col-right">
+            <section class="glass-panel panel-tabs">
+                <div class="tab-bar" id="tab-bar">
+                    <button class="tab active" data-tab="zf"><i class="fas fa-female"></i><span>中文女</span><em class="tab-count" id="count-zf"></em></button>
+                    <button class="tab" data-tab="zm"><i class="fas fa-male"></i><span>中文男</span><em class="tab-count" id="count-zm"></em></button>
+                    <button class="tab" data-tab="af"><i class="fas fa-female"></i><span>英文女</span><em class="tab-count" id="count-af"></em></button>
+                    <button class="tab" data-tab="bf"><i class="fas fa-male"></i><span>英文男</span><em class="tab-count" id="count-bf"></em></button>
+                    <button class="tab" data-tab="dict"><i class="fas fa-book"></i><span>读音词典</span><em class="tab-count" id="count-dict"></em></button>
+                </div>
+
+                <div class="tab-panels">
+
+                    <!-- 中文女声 -->
+                    <div class="tab-panel active" id="panel-zf">
+                        <p class="panel-hint">点击音色卡片，立即用左侧文本合成试听</p>
+                        <div class="voice-grid" id="voice-grid-zf"></div>
+                    </div>
+
+                    <!-- 中文男声 -->
+                    <div class="tab-panel" id="panel-zm">
+                        <p class="panel-hint">点击音色卡片，立即用左侧文本合成试听</p>
+                        <div class="voice-grid" id="voice-grid-zm"></div>
+                    </div>
+
+                    <!-- 英文女声 -->
+                    <div class="tab-panel" id="panel-af">
+                        <p class="panel-hint">点击音色卡片，立即用左侧文本合成试听</p>
+                        <div class="voice-grid" id="voice-grid-af"></div>
+                    </div>
+
+                    <!-- 英文男声 -->
+                    <div class="tab-panel" id="panel-bf">
+                        <p class="panel-hint">点击音色卡片，立即用左侧文本合成试听</p>
+                        <div class="voice-grid" id="voice-grid-bf"></div>
+                    </div>
+
+                    <!-- 读音词典 -->
+                    <div class="tab-panel" id="panel-dict">
+                        <div class="dict-search-row">
+                            <i class="fas fa-magnifying-glass"></i>
+                            <input type="text" id="dict-search-input" class="glass-input" placeholder="搜索词典条目（按词语过滤）…" spellcheck="false">
+                            <span id="dict-count" class="dict-count"></span>
+                        </div>
+                        <div class="dict-form">
+                            <div class="dict-input-row">
+                                <input type="text" id="dict-word-input" class="glass-input" placeholder="词语，如：高兴" spellcheck="false">
+                                <input type="text" id="dict-pinyin-input" class="glass-input" placeholder="拼音，如：gao1 xing4" spellcheck="false">
+                                <button id="dict-guess-btn" class="btn-glass" title="查询当前读音">
+                                    <i class="fas fa-magnifying-glass"></i>
+                                </button>
+                                <button id="dict-add-btn" class="btn-glass btn-glass-primary">
+                                    <i class="fas fa-plus"></i><span>添加</span>
+                                </button>
+                            </div>
+                            <span class="dict-hint">支持数字调（gao1 xing4）或声调符号（gāo xìng）；无调默认轻声 5；音节数与字数须一致</span>
+                        </div>
+                        <div class="dict-list" id="dict-list"></div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="status-message" class="status-toast"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

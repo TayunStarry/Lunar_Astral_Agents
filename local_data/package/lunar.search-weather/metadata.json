@@ -1,0 +1,16 @@
+{
+	"id": "lunar.search-weather",
+	"icon": "icon.webp",
+	"title": "实时资讯",
+	"description": "实时天气与新闻查询模块：查询指定城市天气与当日新闻摘要",
+	"tags": [
+		"Node-LTP"
+	],
+	"tools": [
+		{
+			"name": "weather_news_query",
+			"description": "查询指定城市天气或获取当日新闻摘要的小程序"
+		}
+	],
+	"background_retention": true
+}

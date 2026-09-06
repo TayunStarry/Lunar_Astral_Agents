@@ -14,22 +14,36 @@ import (
 func bindLogger(vm *goja.Runtime, parent *goja.Object) {
 	o := newObj(vm)
 	objSetFn(o, "info", func(call goja.FunctionCall) goja.Value {
-		LoggerGeneral.Info(ServiceName, "%s", fmt.Sprintf(argString(call, 0), argExport(call, 1)))
+		LoggerGeneral.Info(ServiceName, "%s", logMessage(call))
 		return goja.Undefined()
 	})
 	objSetFn(o, "warn", func(call goja.FunctionCall) goja.Value {
-		LoggerGeneral.Warn(ServiceName, "%s", fmt.Sprintf(argString(call, 0), argExport(call, 1)))
+		LoggerGeneral.Warn(ServiceName, "%s", logMessage(call))
 		return goja.Undefined()
 	})
 	objSetFn(o, "error", func(call goja.FunctionCall) goja.Value {
-		LoggerGeneral.Error(ServiceName, "%s", fmt.Sprintf(argString(call, 0), argExport(call, 1)))
+		LoggerGeneral.Error(ServiceName, "%s", logMessage(call))
 		return goja.Undefined()
 	})
 	objSetFn(o, "debug", func(call goja.FunctionCall) goja.Value {
-		LoggerGeneral.Info(ServiceName, "[debug] %s", fmt.Sprintf(argString(call, 0), argExport(call, 1)))
+		LoggerGeneral.Info(ServiceName, "[debug] %s", logMessage(call))
 		return goja.Undefined()
 	})
 	parent.Set("logger", o)
+}
+
+// logMessage 组装 logger 消息：仅当存在后续参数时按 fmt 占位符插值，
+// 否则把首个参数当作纯文本原样输出，避免含 % 的 URL/JSON 等被 Sprintf 破坏。
+func logMessage(call goja.FunctionCall) string {
+	msg := argString(call, 0)
+	if len(call.Arguments) <= 1 {
+		return msg
+	}
+	args := make([]any, 0, len(call.Arguments)-1)
+	for i := 1; i < len(call.Arguments); i++ {
+		args = append(args, argExport(call, i))
+	}
+	return fmt.Sprintf(msg, args...)
 }
 
 // bindEvent 注入 yara.event（订阅/发布）。
