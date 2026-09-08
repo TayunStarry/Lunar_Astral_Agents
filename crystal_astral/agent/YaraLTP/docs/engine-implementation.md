@@ -218,4 +218,3 @@ YaraLTP.Run(string) (string, error) // yara_ltp 工具：文本路由到默认�
 - 插件编写 → `plugin-dev-guide.md`（本文档所在目录）
 - 事件客户端接入 → `client-dev-guide.md`
 - 插件代码补全 → `yara.d.ts`
-- 规范来源 → `../LTP3协议文档/`（PLUGIN_SYSTEM / PLUGIN_DEV_GUIDE / PLUGIN_AI_BOUNDARIES）

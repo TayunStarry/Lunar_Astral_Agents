@@ -17,6 +17,14 @@ var bridgeState BridgeState = BridgeDisconnected
 // bridgeStateMutex 保护桥接器状态的并发访问
 var bridgeStateMutex sync.RWMutex
 
+// ==== 断线重连策略 ====
+
+// bridgeReconnectInterval 断联后重连的等待间隔
+const bridgeReconnectInterval = 5 * time.Second
+
+// bridgeMaxReconnectAttempts 单次断联允许的最大重连次数
+const bridgeMaxReconnectAttempts = 3
+
 // ==== 单线程收发流程状态 ====
 
 // requestQueue 待推送给月华的请求队列（FIFO）

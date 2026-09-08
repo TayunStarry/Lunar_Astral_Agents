@@ -6,6 +6,7 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"os"
+	"time"
 )
 
 // LoadBridgingConfig 从配置文件加载桥接器配置
@@ -46,7 +47,7 @@ func setBridgeState(state BridgeState) {
 }
 
 // StartBridgeScanner 启动桥接器连接
-// 只允许连接一次：成功则持续服务，失败或断开则直接放弃该机制，不再重试
+// 成功后持续服务；断联时每隔 5 秒重连 1 次，单次断联最多重试 3 次
 func StartBridgeScanner() {
 	if !IsBridgingEnabled() {
 		LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器未启用 (bridging_path 为空或 bridging_type 非 napcat)")
@@ -56,13 +57,42 @@ func StartBridgeScanner() {
 	LoggerGeneral.SubInfo("LunarCore", "Napcat", "桥接器配置: path=%s, targets=%v",
 		bridgeConfig.BridgingPath, bridgeConfig.BridgingUsers)
 
-	// 单次连接尝试，成功后阻塞服务直至断开，失败后不再重试
+	// 维持连接并处理断线重连，重试耗尽后放弃桥接机制
 	setBridgeState(BridgeConnecting)
-	err := ConnectToNapcatWebSocket(HandleNapcatMessage)
+	err := connectWithRetry()
 
-	// 走到这里说明连接失败或连接已断开，直接放弃桥接机制
 	setBridgeState(BridgeFailed)
-	LoggerGeneral.SubError("LunarCore", "Napcat", "适配器连接失败或已断开，放弃桥接机制: %v", err)
+	LoggerGeneral.SubError("LunarCore", "Napcat", "适配器重试 %d 次后仍无法连接，放弃桥接机制: %v", bridgeMaxReconnectAttempts, err)
+}
+
+// connectWithRetry 维持桥接连接：断联时每隔 5 秒重连 1 次，单次断联最多重试 3 次
+// 连接成功后重连机会重置，下一次断联重新获得 3 次重连机会
+func connectWithRetry() error {
+	var lastErr error
+	for {
+		// 连接并阻塞读取消息，断开时返回错误，进入重连流程
+		lastErr = ConnectToNapcatWebSocket(HandleNapcatMessage)
+		if lastErr == nil {
+			return nil
+		}
+
+		// 单次断联最多重试 3 次，全部失败则放弃桥接机制
+		reconnected := false
+		for attempt := 1; attempt <= bridgeMaxReconnectAttempts; attempt++ {
+			LoggerGeneral.SubInfo("LunarCore", "Napcat", "连接已断开，%d 秒后进行第 %d/%d 次重连",
+				bridgeReconnectInterval/time.Second, attempt, bridgeMaxReconnectAttempts)
+			time.Sleep(bridgeReconnectInterval)
+			setBridgeState(BridgeConnecting)
+			lastErr = ConnectToNapcatWebSocket(HandleNapcatMessage)
+			if lastErr == nil {
+				reconnected = true
+				break
+			}
+		}
+		if !reconnected {
+			return lastErr
+		}
+	}
 }
 
 // StopBridge 停止桥接器

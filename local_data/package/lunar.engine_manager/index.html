@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』LTP3 引擎管理器</title>
+    <!-- 标准依赖 -->
+    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- 背景层（无头部，双栏铺满视口） -->
+    <div class="background-layer"></div>
+    <div class="glass-effect"></div>
+
+    <div class="workspace">
+
+        <!-- ==================== 左栏：可视化编程流程构建 ==================== -->
+        <aside class="col-left">
+
+            <!-- 模块面板（调色板） -->
+            <section class="panel panel-palette">
+                <div class="panel-title">
+                    <i class="fas fa-puzzle-piece"></i> 交互模块
+                    <span class="hint">点击或拖入下方画布，自上而下依次执行</span>
+                </div>
+                <div class="palette" id="palette">
+                    <button class="palette-chip chip-hook" data-type="hook" draggable="true"
+                        title="在钩子点发布消息，分发给所有订阅该钩子的插件">
+                        <i class="fas fa-link"></i> 钩子
+                    </button>
+                    <button class="palette-chip chip-event" data-type="event" draggable="true"
+                        title="发布系统/自定义事件给订阅插件">
+                        <i class="fas fa-bolt"></i> 事件
+                    </button>
+                    <button class="palette-chip chip-command" data-type="command" draggable="true"
+                        title="调用插件注册的指令（名称精确匹配，未命中回退正则匹配整段文本）">
+                        <i class="fas fa-terminal"></i> 指令
+                    </button>
+                    <button class="palette-chip chip-tool" data-type="tool" draggable="true"
+                        title="调用插件注册的 Agent 工具（tool + 参数）">
+                        <i class="fas fa-wrench"></i> 工具
+                    </button>
+                    <button class="palette-chip chip-manage" data-type="manage" draggable="true"
+                        title="引擎/插件管理：列表 / 对账 / 重载 / 卸载">
+                        <i class="fas fa-cog"></i> 管理
+                    </button>
+                    <button class="palette-chip chip-ping" data-type="ping" draggable="true"
+                        title="探测引擎在线状态与已加载插件数">
+                        <i class="fas fa-heartbeat"></i> 探测
+                    </button>
+                    <button class="palette-chip chip-delay" data-type="delay" draggable="true"
+                        title="流程执行中等待指定毫秒后再进入下一模块">
+                        <i class="fas fa-hourglass-half"></i> 等待
+                    </button>
+                </div>
+            </section>
+
+            <!-- 流程画布：上方节点视图（蛇形网格）+ 下方选中节点详情 -->
+            <section class="panel panel-flow">
+                <div class="panel-title">
+                    <i class="fas fa-project-diagram"></i> 流程画布
+                    <span class="hint">点击节点卡片查看/编辑详情</span>
+                    <span class="flow-status" id="flowStatus"></span>
+                </div>
+                <div class="flow-body">
+                    <div class="node-grid" id="nodeGrid">
+                        <div class="flow-empty" id="flowEmpty">
+                            从上方选择模块，构建向引擎发起的交互流程<br>
+                            <span>模块按蛇形顺序执行；红色边框表示尚未设置，点击卡片弹出详情</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flow-actions">
+                    <button class="btn-primary" id="runFlowBtn" title="按顺序运行所有启用模块">
+                        <i class="fas fa-play"></i> 运行全部
+                    </button>
+                    <button class="btn-ghost" id="saveFlowBtn" title="保存当前流程到本地">
+                        <i class="fas fa-save"></i>
+                    </button>
+                    <button class="btn-ghost" id="loadFlowBtn" title="加载已保存的流程">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                    <button class="btn-ghost btn-danger" id="clearFlowBtn" title="清空流程">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </section>
+        </aside>
+
+        <!-- ==================== 右栏：引擎状态 / 插件 / 回显 ==================== -->
+        <main class="col-right">
+
+            <!-- 引擎状态 -->
+            <section class="panel panel-status">
+                <div class="panel-title"><i class="fas fa-server"></i> 引擎状态</div>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="status-dot" id="wsDot"></span>
+                        WebSocket：<span id="wsState">未连接</span>
+                    </div>
+                    <div class="status-item">引擎：<span id="engineName">—</span></div>
+                    <div class="status-item">插件数：<span id="pluginCount">—</span></div>
+                    <div class="status-item">本地流程：<span id="flowSaved">无</span></div>
+                </div>
+                <div class="status-actions">
+                    <button class="btn-ghost" id="reconnectBtn" title="重新建立 WebSocket 连接">
+                        <i class="fas fa-sync-alt"></i> 重新连接
+                    </button>
+                    <button class="btn-ghost" id="pingBtn" title="发送 ltp3/ping 探测">
+                        <i class="fas fa-heartbeat"></i> 探测
+                    </button>
+                    <button class="btn-ghost" id="listBtn" title="发送 ltp3/manage list">
+                        <i class="fas fa-list"></i> 列表
+                    </button>
+                    <button class="btn-ghost" id="scanBtn" title="发送 ltp3/manage scan 强制对账">
+                        <i class="fas fa-search"></i> 对账
+                    </button>
+                    <button class="btn-ghost" id="reloadAllBtn" title="发送 ltp3/manage reload 全部重载">
+                        <i class="fas fa-redo-alt"></i> 全部重载
+                    </button>
+                </div>
+            </section>
+
+            <!-- 插件列表 -->
+            <section class="panel panel-plugins">
+                <div class="panel-title">
+                    <i class="fas fa-cubes"></i> 插件
+                    <span class="plugin-count-badge" id="pluginCountBadge">0</span>
+                    <span class="hint">引擎内已加载的 LTP3 插件</span>
+                </div>
+                <div class="plugin-list" id="pluginList"></div>
+            </section>
+
+            <!-- 引擎回显（收到的返回 / 状态信息） -->
+            <section class="panel panel-log">
+                <div class="panel-title">
+                    <i class="fas fa-comments"></i> 引擎回显
+                    <div class="log-filters" id="logFilters">
+                        <button class="filter-chip active" data-filter="all">全部</button>
+                        <button class="filter-chip" data-filter="recv">接收</button>
+                        <button class="filter-chip" data-filter="send">发送</button>
+                        <button class="filter-chip" data-filter="error">错误</button>
+                    </div>
+                    <button class="btn-ghost btn-mini" id="clearLogBtn" title="清空回显日志">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                <div class="log-list" id="logList">
+                    <div class="empty-tip">等待引擎消息……连接后将自动探测并列出插件</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 详情模态框（节点详情 / 引擎回显详情共用） -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-box">
+            <div class="modal-topbar" id="detailModalTop"></div>
+            <div class="modal-content" id="detailModalContent"></div>
+        </div>
+    </div>
+
+    <div class="toast-wrap" id="toastWrap"></div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

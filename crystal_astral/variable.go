@@ -46,6 +46,9 @@ var winmmDLL = syscall.NewLazyDLL("winmm.dll")
 // procPlaySoundW PlaySoundW 函数句柄：从文件播放 WAV（SND_FILENAME）
 var procPlaySoundW = winmmDLL.NewProc("PlaySoundW")
 
+// procMCISendStringW MCI 命令函数句柄：播放 MP3 等 PlaySoundW 不支持的格式（MCI 设备命令）
+var procMCISendStringW = winmmDLL.NewProc("mciSendStringW")
+
 // ==== LTPX 动态工具链（来自包的 AtoA 能力） ====
 
 // ltpToolchainMutex 保护工具链注册表与工具名→包名映射的并发读写

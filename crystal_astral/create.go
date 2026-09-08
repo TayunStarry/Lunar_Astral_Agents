@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -88,6 +89,13 @@ func initMemoryDatabase() {
 
 // StartServer 启动服务器
 func StartServer(port int, root http.FileSystem, name string) error {
+	// 同步绑定端口：被占用时立即返回错误（由调用方播放失败音效并退出），
+	// 避免异步 ListenAndServe 仅在日志中报错、程序继续空转
+	serverAddr := fmt.Sprintf(":%d", port)
+	ln, err := net.Listen("tcp", serverAddr)
+	if err != nil {
+		return fmt.Errorf("监听端口 %s 失败(端口可能被占用): %w", serverAddr, err)
+	}
 	// 初始化知识库（SQLite）
 	if err := file.InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
 		LoggerGeneral.Warn("CrystalAstral", "知识库初始化失败: %v (不影响服务启动)", err)
@@ -120,9 +128,17 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 	go func() {
 		for data := range StudioHubInstance.Inbound {
+			// LTP9 调试信封先消费，其余交给 LTP3（YaraFlow）引擎
+			if ltp9HandleInbound(data) {
+				continue
+			}
 			YaraLTP.HandleIn(data)
 		}
 	}()
+	// LTP9 引擎：接入项目记忆库/SQLite，并注入前端智能体（Mini-LTP/Node-LTP）真实通道
+	if err := BridgeLTP9(); err != nil {
+		LoggerGeneral.Warn("CrystalAstral", "LTP9 引擎初始化失败: %v (不影响服务启动)", err)
+	}
 
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {
@@ -136,7 +152,6 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 	httpMux.Handle("/", proxyHandler)
 
-	serverAddr := fmt.Sprintf(":%d", port)
 	server := &http.Server{
 		Addr:    serverAddr,
 		Handler: httpMux,
@@ -150,7 +165,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	go BrowserClient.OpenBrowserWithReturnButton(fmt.Sprintf("http://localhost%s", serverAddr), fmt.Sprintf("http://localhost%s/", serverAddr))
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			LoggerGeneral.Error("CrystalAstral", "%s 运行失败: %v", name, err)
 		}
 	}()

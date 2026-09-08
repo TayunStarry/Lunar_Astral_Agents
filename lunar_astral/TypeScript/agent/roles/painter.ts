@@ -166,7 +166,8 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	/** 构建绘画作品摘要，使用月华话术格式 */
 	protected buildSummary(paintings: PaintingDetail[]): string {
 		if (paintings.length === 0) return '月华没有绘制任何作品';
-		const parts: string[] = [];
+		// TODO : 事件 -> 绘制画作前
+			const parts: string[] = [];
 		for (let i = 0; i < paintings.length; i++) {
 			const p = paintings[i];
 			if (p.toolName === 'self_portrait') {

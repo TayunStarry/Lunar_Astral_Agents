@@ -7,7 +7,7 @@ import { resolveCodeLang, extractCodeTags } from '../../file/split/code-split';
 /** 阅读者智能体：处理用户推送的长文本/文本文件，切片入库，并在被引用时查询整理 */
 
 /** 可入库的文件扩展名白名单 */
-const FILE_WHITELIST = ['ts','js','tsx','jsx','go','py','java','c','h','cpp','cxx','hpp','cs','md','txt','json'];
+const FILE_WHITELIST = ['ts', 'js', 'tsx', 'jsx', 'go', 'py', 'java', 'c', 'h', 'cpp', 'cxx', 'hpp', 'cs', 'md', 'txt', 'json'];
 /** 切片理想长度（后端无前端 Slider，按默认 1024 处理） */
 const SLICE_LEN = 1024;
 /** 查询时每个文件返回的片段数 */
@@ -198,7 +198,7 @@ async function processImportBlocksInText(raw: string): Promise<{ text: string; i
 /** 解析消息文本中的 `(#file.ext)` 引用，并调用阅读者查询整理 */
 function processReferencesInText(raw: string): { text: string; changed: boolean } {
 	if (!raw.includes('(#')) return { text: raw, changed: false };
-
+	// TODO : 事件 -> 阅读文件前
 	// 收集所有引用块 (id)，id 为 fileName.ext 内部名（不含#与括号）
 	type Ref = { id: string; start: number; end: number };
 	const refs: Ref[] = [];
@@ -284,7 +284,8 @@ export async function processUnreadFiles(): Promise<void> {
 	for (const message of GlobalConfig.unreadContext) {
 		try {
 			await processMessage(message);
-		} catch (error) {
+		}
+		catch (error) {
 			console.error('[阅读者] 处理消息失败:', error);
 		}
 	}

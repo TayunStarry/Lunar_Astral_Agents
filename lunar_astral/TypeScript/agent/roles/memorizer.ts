@@ -80,6 +80,7 @@ export class MemorizerRole extends ModelBuilder {
 			console.log('[记忆] 检索未命中任何相关记录');
 			return '';
 		}
+		// TODO : 事件 -> 构建记忆前
 		// 总结与摘要
 		return this.summarizeRecords(records);
 	}

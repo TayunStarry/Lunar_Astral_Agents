@@ -29,12 +29,18 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 如果消息长度为0，跳过当前循环
         if (messageLength === 0) {
             // 检查计划表到期项，将到期计划内容写入上下文
-            checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }));
+            checkDueItems().forEach(
+                item => {
+                    // TODO : 事件 -> 执行计划前
+                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` })
+                }
+            );
             // 标记为思考完成
             GlobalConfig.reasoningInProgress = false;
             // 进入下一次循环
             return;
         }
+        // TODO : 事件 -> 收到消息前
         // 同步琉璃（远程 LTPX）状态：在线则注入工具链，离线则移除
         syncLTPXRemoteStatus();
         // 批量处理视频文件
@@ -56,6 +62,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         if (!validMessage.length) throw new Error('清洗后的文本为空');
         // 如果解析出行动区内容，分别交给行动者推理动作、记忆库匹配表情包
         if (actionBlocks.length) {
+            // TODO : 事件 -> 做出行动前
             // 调用行动者推理动作
             await actorRole.createCreativeWork(actionBlocks.join('|'));
             // 从记忆库匹配表情包并推送图片数据
@@ -63,6 +70,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 未解析出行动区内容，且正文长度小于等于36字时，按概率基于正文推理表情包
         else if (validMessage.length <= 36 && Math.random() < 0.15) {
+            // TODO : 事件 -> 表达情感前
+            // 从记忆库匹配表情包并推送图片数据
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）

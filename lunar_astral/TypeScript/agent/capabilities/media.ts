@@ -125,6 +125,7 @@ export async function LiteImageFile(): Promise<void> {
 export async function batchProcessVideoFiles(userNeeds?: string): Promise<void> {
     // 如果未读视频文件数组为空，直接返回
     if (GlobalConfig.unreadVideoUrl.length === 0) return;
+    // TODO : 事件 -> 观看视频前
     //  遍历未读视频文件数组
     for (const videoUrl of GlobalConfig.unreadVideoUrl) {
         try {

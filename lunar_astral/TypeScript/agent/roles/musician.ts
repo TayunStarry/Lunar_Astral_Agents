@@ -196,6 +196,7 @@ K:Am
 	/** 构建音乐作品摘要，使用月华话术格式 */
 	protected buildSummary(pieces: MusicPieceDetail[]): string {
 		if (pieces.length === 0) return '月华没有演奏任何作品';
+		// TODO : 事件 -> 演奏音乐前
 		const parts: string[] = [];
 		for (let i = 0; i < pieces.length; i++) {
 			const p = pieces[i];
