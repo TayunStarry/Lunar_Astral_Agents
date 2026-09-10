@@ -3,6 +3,7 @@ import { PostMessage, TextContent } from '../../config/model';
 import { getFileIndexFromKnowledge, saveFileIndexToKnowledge } from '../../file/io/knowledge';
 import { splitTextToStrings } from '../../file/split/interface';
 import { resolveCodeLang, extractCodeTags } from '../../file/split/code-split';
+import { interactEvent } from '../capabilities/ltp-event';
 
 /** 阅读者智能体：处理用户推送的长文本/文本文件，切片入库，并在被引用时查询整理 */
 
@@ -197,10 +198,15 @@ async function processImportBlocksInText(raw: string): Promise<{ text: string; i
 
 /** 解析消息文本中的 `(#file.ext)` 引用，并调用阅读者查询整理 */
 function processReferencesInText(raw: string): { text: string; changed: boolean } {
-	if (!raw.includes('(#')) return { text: raw, changed: false };
-	// TODO : 事件 -> 阅读文件前
-	// 收集所有引用块 (id)，id 为 fileName.ext 内部名（不含#与括号）
-	type Ref = { id: string; start: number; end: number };
+    if (!raw.includes('(#')) return { text: raw, changed: false };
+    // 事件 -> 阅读文件前：推送原文，插件可经 return.text 改写待阅读消息文本后再解析引用
+    const feedback: { text?: string } = interactEvent('read_file_before', { text: raw }).return;
+    if (feedback && typeof feedback.text === 'string' && feedback.text !== raw) {
+        raw = feedback.text;
+        if (!raw.includes('(#')) return { text: raw, changed: false };
+    }
+    // 收集所有引用块 (id)，id 为 fileName.ext 内部名（不含#与括号）
+    type Ref = { id: string; start: number; end: number };
 	const refs: Ref[] = [];
 	const re = /\(#([\w.-]+)\)/g;
 	let m: RegExpExecArray | null;

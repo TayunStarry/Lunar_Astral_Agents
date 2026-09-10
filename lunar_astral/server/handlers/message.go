@@ -3,7 +3,6 @@ package handlers
 import (
 	"LunarAstral/adapters"
 	"LunarAstral/websocket"
-	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -169,9 +168,6 @@ func EngineMessageHandler(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(msg.Payload, &tp); err == nil && tp.Character != nil {
 			adapters.UpdateAgentPosition(tp.Character.X, tp.Character.Y, tp.Character.Z)
 		}
-	default:
-		// 其他引擎消息（模块间互发等）由 crystal_astral 转发广播，智能体侧忽略
-		LoggerGeneral.Info("LunarCore", "[引擎消息] 已忽略: type=%s source=%s", msg.Type, msg.Source)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

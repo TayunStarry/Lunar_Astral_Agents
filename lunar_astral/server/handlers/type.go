@@ -28,12 +28,6 @@ type ProxyResponse struct {
 	Body       json.RawMessage   `json:"body"`       // 响应体
 }
 
-// LTPXRemoteRegisterResponse 琉璃注册联络 URL 的响应
-type LTPXRemoteRegisterResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
 // MessageBatchRequest 消息批量写入请求
 type MessageBatchRequest struct {
 	Messages []adapters.PostMessage `json:"messages"`

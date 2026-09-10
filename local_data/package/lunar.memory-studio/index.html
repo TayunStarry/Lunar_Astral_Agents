@@ -1,176 +1,192 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 』记忆库</title>
     <!-- 标准样式库 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
-    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/standard_dependency/script.js"></script>
     <!-- 项目私有样式 -->
     <link rel="stylesheet" href="styles.css">
     <!-- 项目私有脚本 -->
     <script defer src="script.js"></script>
 </head>
-
 <body>
-    <!-- 玻璃风背景装饰光斑 -->
-    <div class="bg-orbs" aria-hidden="true">
-        <span class="orb orb-1"></span>
-        <span class="orb orb-2"></span>
-        <span class="orb orb-3"></span>
-        <span class="orb orb-4"></span>
-    </div>
+    <!-- 背景层 + 玻璃蒙层 -->
+    <div class="background"></div>
+    <div class="glass-effect"></div>
 
     <!-- 未初始化时的引导卡片 -->
-    <section class="init-card init-wrap" id="init-card" style="display:none;">
+    <section class="init-card" id="init-card" style="display:none;">
         <div class="card-head">
-            <h2 class="card-title"><i class="fa-solid fa-plug"></i> 初始化记忆库</h2>
+            <h2 class="card-title"><i class="fas fa-plug"></i> 初始化记忆库</h2>
         </div>
-        <div class="card-body init-form-body">
-            <div class="form-group" style="flex:1">
-                <label class="field-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
-                <input type="text" id="init-collection-name" class="input" placeholder="lunar_messages" value="lunar_messages">
+        <div class="card-body">
+            <div class="form-group">
+                <label class="form-label" for="init-collection-name"><i class="fas fa-tag"></i> 集合名称</label>
+                <input type="text" id="init-collection-name" class="glass-input" placeholder="lunar_messages" value="lunar_messages">
             </div>
-            <button id="btn-init" class="btn btn-primary btn-init-inline">
-                <i class="fa-solid fa-bolt"></i> 初始化连接
+            <button id="btn-init" class="btn-glass btn-glass-primary btn-init-inline">
+                <i class="fas fa-bolt"></i> 初始化连接
             </button>
             <p class="init-hint">
-                <i class="fa-solid fa-circle-info"></i>
+                <i class="fas fa-circle-info"></i>
                 模型地址与多模态模型配置已迁移至 <code>lunar_config.json</code>，无需在此手动填写。
             </p>
         </div>
     </section>
 
-    <!-- 双列主布局：左侧工具操作栏 / 右侧主显示区 -->
+    <!-- 双列布局：左侧侧栏 / 右侧主显示区 -->
     <div class="layout" id="app-body" style="display:none;">
 
         <!-- ===== 左侧：工具操作栏 ===== -->
-        <aside class="sidebar">
+        <aside class="panel sidebar">
+            <header class="panel-header">
+                <span class="panel-title"><i class="fas fa-database"></i> 记忆库</span>
+                <div class="panel-header-right">
+                    <button class="btn-glass btn-sm" id="themeToggle" title="切换深色/浅色模式">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="panel-body sidebar-body">
 
-            <!-- 同步异常警告（内嵌侧栏） -->
-            <div class="sync-warning" id="sync-warn" style="display:none;">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <span class="sync-text">检测到索引条目与向量数据异常，可能导致列表显示不完整！</span>
-                <button id="btn-rebuild-sync" class="btn btn-warn btn-sm">
-                    <i class="fa-solid fa-arrows-rotate"></i> 重建
-                </button>
-            </div>
+                <!-- 同步异常警告 -->
+                <div class="sync-warning" id="sync-warn" style="display:none;">
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span class="sync-text">检测到索引条目与向量数据异常，可能导致列表显示不完整！</span>
+                    <button id="btn-rebuild-sync" class="btn-glass btn-sm btn-warn">
+                        <i class="fas fa-arrows-rotate"></i> 重建
+                    </button>
+                </div>
 
-            <!-- 当前集合统计 -->
-            <section class="sb-group">
-                <h3 class="sb-title">当前集合</h3>
-                <div class="stats-body">
-                    <div class="stat-row">
-                        <span class="stat-label"><i class="fa-solid fa-tag"></i> 名称</span>
-                        <span class="stat-value stat-name" id="stat-name">--</span>
+                <!-- 当前集合统计 -->
+                <section class="sb-section">
+                    <div class="subsection-header">
+                        <span class="panel-title"><i class="fas fa-sliders"></i> 当前集合</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label"><i class="fa-solid fa-microchip"></i> 模型</span>
-                        <span class="stat-value stat-name" id="stat-model">--</span>
+                        <span class="stat-label"><i class="fas fa-tag"></i> 名称</span>
+                        <span class="stat-value" id="stat-name">--</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label"><i class="fa-solid fa-vector-square"></i> 维度</span>
+                        <span class="stat-label"><i class="fas fa-microchip"></i> 模型</span>
+                        <span class="stat-value" id="stat-model">--</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label"><i class="fas fa-vector-square"></i> 维度</span>
                         <span class="stat-value" id="stat-dim">--</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label"><i class="fa-solid fa-cubes"></i> 类型</span>
+                        <span class="stat-label"><i class="fas fa-cubes"></i> 类型</span>
                         <span class="stat-value" id="stat-type">--</span>
                     </div>
                     <div class="stat-row">
-                        <span class="stat-label"><i class="fa-solid fa-file-lines"></i> 文档数</span>
+                        <span class="stat-label"><i class="fas fa-file-lines"></i> 文档数</span>
                         <span class="stat-value" id="stat-count">--</span>
                     </div>
                     <div class="stats-actions">
-                        <button id="btn-add-doc" class="btn btn-primary btn-sm" title="向当前集合添加文档">
-                            <i class="fa-solid fa-plus"></i> 添加文档
+                        <button id="btn-add-doc" class="btn-glass btn-glass-primary btn-sm btn-full" title="向当前集合添加文档">
+                            <i class="fas fa-plus"></i> 添加文档
                         </button>
-                        <button id="btn-batch-import" class="btn btn-light btn-sm" title="批量导入图片到当前集合" style="display:none;">
-                            <i class="fa-solid fa-folder-open"></i> 批量
+                        <button id="btn-batch-import" class="btn-glass btn-sm btn-full" title="批量导入图片到当前集合" style="display:none;">
+                            <i class="fas fa-folder-open"></i> 批量
                         </button>
-                        <button id="btn-rebuild" class="btn btn-light btn-sm" title="重建当前集合索引">
-                            <i class="fa-solid fa-arrows-rotate"></i> 重建
+                        <button id="btn-rebuild" class="btn-glass btn-sm btn-full" title="重建当前集合索引">
+                            <i class="fas fa-arrows-rotate"></i> 重建
                         </button>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- 集合列表 -->
-            <section class="sb-group sb-group-grow">
-                <div class="sb-title-row">
-                    <h3 class="sb-title">集合列表</h3>
-                </div>
-                <div class="collection-list" id="collection-list"></div>
-                <div class="collection-list-footer">
-                    <button id="btn-create-collection" class="btn btn-accent-ghost btn-sm btn-block">
-                        <i class="fa-solid fa-folder-plus"></i> 创建集合
-                    </button>
-                </div>
-            </section>
+                <div class="panel-separator"></div>
 
-            <!-- 侧边栏底部操作 -->
-            <section class="sb-group sb-group-danger">
-                <button id="btn-clear-collection" class="btn btn-danger-soft btn-block">
-                    <i class="fa-solid fa-eraser"></i> 清空当前集合
+                <!-- 集合列表 -->
+                <section class="sb-section sb-section-grow">
+                    <div class="subsection-header">
+                        <span class="panel-title"><i class="fas fa-folder-tree"></i> 集合列表</span>
+                    </div>
+                    <div class="collection-list" id="collection-list"></div>
+                    <div class="collection-list-footer">
+                        <button id="btn-create-collection" class="btn-glass btn-full">
+                            <i class="fas fa-folder-plus"></i> 创建集合
+                        </button>
+                    </div>
+                </section>
+
+                <div class="panel-separator"></div>
+
+                <!-- 清空当前集合 -->
+                <button id="btn-clear-collection" class="btn-glass btn-clear btn-full">
+                    <i class="fas fa-eraser"></i> 清空当前集合
                 </button>
-            </section>
+            </div>
         </aside>
 
         <!-- ===== 右侧：主显示区 ===== -->
-        <main class="content">
-            <!-- 搜索工具栏 -->
-            <div class="search-bar">
-                <div class="search-box">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <main class="panel content">
+            <header class="panel-header">
+                <span class="panel-title"><i class="fas fa-file-lines"></i> 文档内容</span>
+                <div class="panel-header-right">
+                    <span class="char-count" id="resultCount"></span>
+                </div>
+            </header>
+            <div class="panel-body content-body">
+
+                <!-- 搜索工具栏 -->
+                <div class="search-row">
+                    <i class="fas fa-magnifying-glass"></i>
                     <input type="text" id="search-input" class="search-input"
-                        placeholder="输入关键词搜索文档...（Ctrl+K 聚焦搜索）">
+                        placeholder="输入关键词搜索文档...（Ctrl+K 聚焦搜索）" autocomplete="off" spellcheck="false">
                     <button id="btn-clear-search" class="btn-clear-input" style="display:none;" title="清除搜索">
-                        <i class="fa-solid fa-xmark"></i>
+                        <i class="fas fa-xmark"></i>
                     </button>
-                    <button id="btn-search" class="btn-search"><i class="fa-solid fa-magnifying-glass"></i> 搜索</button>
-                </div>
-            </div>
-
-            <!-- 内容区域 -->
-            <div id="content-area">
-                <div id="loading-state" class="loading-state" style="display:none;">
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
+                    <button id="btn-search" class="btn-glass btn-glass-primary btn-sm">
+                        <i class="fas fa-magnifying-glass"></i> 搜索
+                    </button>
                 </div>
 
-                <div id="empty-state" class="empty-state" style="display:none;">
-                    <div class="empty-icon"><i class="fa-solid fa-inbox"></i></div>
-                    <p class="empty-title">暂无文档</p>
-                    <p class="empty-desc">点击左侧「添加文档」按钮开始构建记忆库</p>
+                <!-- 内容区域 -->
+                <div id="content-area">
+                    <div id="loading-state" class="loading-state" style="display:none;">
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                        <div class="skeleton-card"></div>
+                    </div>
+
+                    <div id="empty-state" class="empty-state" style="display:none;">
+                        <div class="empty-icon"><i class="fas fa-inbox"></i></div>
+                        <p class="empty-title">暂无文档</p>
+                        <p class="empty-desc">点击左侧「添加文档」按钮开始构建记忆库</p>
+                    </div>
+
+                    <div id="empty-collection-state" class="empty-state" style="display:none;">
+                        <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
+                        <p class="empty-title">未选择集合</p>
+                        <p class="empty-desc">请从左侧选择或创建一个集合</p>
+                    </div>
+
+                    <div id="error-state" class="error-state" style="display:none;">
+                        <div class="error-icon"><i class="fas fa-circle-exclamation"></i></div>
+                        <p class="error-title">加载失败</p>
+                        <p class="error-msg"></p>
+                    </div>
+
+                    <div class="doc-list" id="doc-list"></div>
                 </div>
 
-                <div id="empty-collection-state" class="empty-state" style="display:none;">
-                    <div class="empty-icon"><i class="fa-solid fa-folder-open"></i></div>
-                    <p class="empty-title">未选择集合</p>
-                    <p class="empty-desc">请从左侧选择或创建一个集合</p>
+                <!-- 分页（当前一次性加载全部，默认隐藏） -->
+                <div class="pagination-bar" id="pagination" style="display:none;">
+                    <button id="btn-prev" class="btn-glass btn-sm" disabled>
+                        <i class="fas fa-chevron-left"></i> 上一页
+                    </button>
+                    <span class="page-info" id="page-info">第 1 页 / 共 1 页</span>
+                    <button id="btn-next" class="btn-glass btn-sm" disabled>
+                        下一页 <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
-
-                <div id="error-state" class="error-state" style="display:none;">
-                    <div class="error-icon"><i class="fa-solid fa-circle-exclamation"></i></div>
-                    <p class="error-title">加载失败</p>
-                    <p class="error-msg"></p>
-                </div>
-
-                <div class="doc-list" id="doc-list"></div>
-            </div>
-
-            <!-- 分页 -->
-            <div class="pagination-bar" id="pagination" style="display:none;">
-                <button id="btn-prev" class="btn-page" disabled>
-                    <i class="fa-solid fa-chevron-left"></i> 上一页
-                </button>
-                <span class="page-info" id="page-info">第 1 页 / 共 1 页</span>
-                <button id="btn-next" class="btn-page" disabled>
-                    下一页 <i class="fa-solid fa-chevron-right"></i>
-                </button>
             </div>
         </main>
     </div>
@@ -183,8 +199,8 @@
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer">
-                <button id="modal-cancel" class="btn btn-ghost">取消</button>
-                <button id="modal-confirm" class="btn btn-danger">确认</button>
+                <button id="modal-cancel" class="btn-glass btn-clear">取消</button>
+                <button id="modal-confirm" class="btn-danger">确认</button>
             </div>
         </div>
     </div>
@@ -193,31 +209,31 @@
     <div class="modal-overlay" id="modal-add-doc" style="display:none;">
         <div class="modal-card modal-add-doc-card">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-file-circle-plus"></i> 添加文档</h3>
-                <button class="icon-btn modal-close-btn" data-close="modal-add-doc" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
+                <h3><i class="fas fa-file-circle-plus"></i> 添加文档</h3>
+                <button class="modal-close-btn" data-close="modal-add-doc" title="关闭">
+                    <i class="fas fa-xmark"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-tag"></i> 角色</label>
-                    <select id="add-role" class="form-select">
+                    <label class="form-label" for="add-role"><i class="fas fa-tag"></i> 角色</label>
+                    <select id="add-role" class="glass-select">
                         <option value="user">用户 (user)</option>
                         <option value="assistant">助手 (assistant)</option>
                         <option value="system">系统 (system)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-pen-to-square"></i> 文档内容</label>
-                    <textarea id="add-content" class="form-textarea" rows="6"
+                    <label class="form-label" for="add-content"><i class="fas fa-pen-to-square"></i> 文档内容</label>
+                    <textarea id="add-content" class="glass-textarea" rows="6"
                         placeholder="输入要向量化存储的文档内容...&#10;按 Ctrl+Enter 快速提交"></textarea>
                 </div>
-                <p class="modal-hint"><i class="fa-solid fa-keyboard"></i> Ctrl+Enter 快速提交 · Esc 关闭</p>
+                <p class="modal-hint"><i class="fas fa-keyboard"></i> Ctrl+Enter 快速提交 · Esc 关闭</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-ghost modal-close-btn" data-close="modal-add-doc">取消</button>
-                <button id="btn-add-submit" class="btn btn-primary">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> 添加到记忆库
+                <button class="btn-glass btn-clear modal-close-btn" data-close="modal-add-doc">取消</button>
+                <button id="btn-add-submit" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-cloud-arrow-up"></i> 添加到记忆库
                 </button>
             </div>
         </div>
@@ -227,29 +243,29 @@
     <div class="modal-overlay" id="modal-create-collection" style="display:none;">
         <div class="modal-card">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-folder-plus"></i> 创建集合</h3>
-                <button class="icon-btn modal-close-btn" data-close="modal-create-collection" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
+                <h3><i class="fas fa-folder-plus"></i> 创建集合</h3>
+                <button class="modal-close-btn" data-close="modal-create-collection" title="关闭">
+                    <i class="fas fa-xmark"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-tag"></i> 集合名称</label>
-                    <input type="text" id="create-col-name" class="form-input" placeholder="仅允许字母、数字、下划线、连字符" maxlength="64">
+                    <label class="form-label" for="create-col-name"><i class="fas fa-tag"></i> 集合名称</label>
+                    <input type="text" id="create-col-name" class="glass-input" placeholder="仅允许字母、数字、下划线、连字符" maxlength="64">
                 </div>
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-cubes"></i> 集合类型</label>
-                    <select id="create-col-type" class="form-select">
+                    <label class="form-label" for="create-col-type"><i class="fas fa-cubes"></i> 集合类型</label>
+                    <select id="create-col-type" class="glass-select">
                         <option value="text">文本文档 (text)</option>
                         <option value="image">图片记忆 (image)</option>
                     </select>
                 </div>
-                <p class="modal-hint"><i class="fa-solid fa-circle-info"></i> 集合名称不可与已有集合重复，且不可使用保留字（init/stats/collections）。</p>
+                <p class="modal-hint"><i class="fas fa-circle-info"></i> 集合名称不可与已有集合重复，且不可使用保留字（init/stats/collections）。</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-ghost modal-close-btn" data-close="modal-create-collection">取消</button>
-                <button id="btn-create-submit" class="btn btn-primary">
-                    <i class="fa-solid fa-check"></i> 创建
+                <button class="btn-glass btn-clear modal-close-btn" data-close="modal-create-collection">取消</button>
+                <button id="btn-create-submit" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-check"></i> 创建
                 </button>
             </div>
         </div>
@@ -259,29 +275,29 @@
     <div class="modal-overlay" id="modal-add-image" style="display:none;">
         <div class="modal-card modal-add-doc-card">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-image"></i> 添加图片</h3>
-                <button class="icon-btn modal-close-btn" data-close="modal-add-image" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
+                <h3><i class="fas fa-image"></i> 添加图片</h3>
+                <button class="modal-close-btn" data-close="modal-add-image" title="关闭">
+                    <i class="fas fa-xmark"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-upload"></i> 选择图片</label>
+                    <label class="form-label"><i class="fas fa-upload"></i> 选择图片</label>
                     <div class="image-upload-area" id="image-upload-area">
                         <input type="file" id="add-image-file" accept="image/*" style="display:none;">
                         <div class="image-upload-placeholder" id="image-upload-placeholder">
-                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <i class="fas fa-cloud-arrow-up"></i>
                             <span>点击或拖拽上传图片</span>
                         </div>
                         <img id="image-upload-preview" class="image-upload-preview" style="display:none;" alt="预览">
                         <button id="btn-remove-image" class="btn-remove-image" style="display:none;" title="移除图片">
-                            <i class="fa-solid fa-xmark"></i>
+                            <i class="fas fa-xmark"></i>
                         </button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-crosshairs"></i> 识别取向</label>
-                    <select id="image-orientation" class="form-select">
+                    <label class="form-label" for="image-orientation"><i class="fas fa-crosshairs"></i> 识别取向</label>
+                    <select id="image-orientation" class="glass-select">
                         <option value="auto">自动处理 · 综合描述，模型自主决定重点</option>
                         <option value="emotion">情绪表达 · 专注识别图片情绪</option>
                         <option value="text">文本内容 · 专注识别图片文字</option>
@@ -293,16 +309,16 @@
                     </select>
                 </div>
                 <div class="form-group orientation-custom-group" id="image-orientation-custom-group" style="display:none;">
-                    <label class="field-label"><i class="fa-solid fa-pen-to-square"></i> 自定义取向参考</label>
-                    <textarea id="image-orientation-custom" class="form-textarea" rows="3"
+                    <label class="form-label" for="image-orientation-custom"><i class="fas fa-pen-to-square"></i> 自定义取向参考</label>
+                    <textarea id="image-orientation-custom" class="glass-textarea" rows="3"
                         placeholder="输入指导图片识别取向和描述方式的参考文本..."></textarea>
                 </div>
-                <p class="modal-hint"><i class="fa-solid fa-circle-info"></i> 识别取向决定多模态模型描述图片的角度，不指定时默认「自动处理」。</p>
+                <p class="modal-hint"><i class="fas fa-circle-info"></i> 识别取向决定多模态模型描述图片的角度，不指定时默认「自动处理」。</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-ghost modal-close-btn" data-close="modal-add-image">取消</button>
-                <button id="btn-add-image-submit" class="btn btn-primary">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> 添加到图片记忆库
+                <button class="btn-glass btn-clear modal-close-btn" data-close="modal-add-image">取消</button>
+                <button id="btn-add-image-submit" class="btn-glass btn-glass-primary">
+                    <i class="fas fa-cloud-arrow-up"></i> 添加到图片记忆库
                 </button>
             </div>
         </div>
@@ -312,25 +328,25 @@
     <div class="modal-overlay" id="modal-batch-import" style="display:none;">
         <div class="modal-card modal-batch-card">
             <div class="modal-header">
-                <h3><i class="fa-solid fa-folder-open"></i> 批量导入</h3>
-                <button class="icon-btn modal-close-btn" data-close="modal-batch-import" title="关闭">
-                    <i class="fa-solid fa-xmark"></i>
+                <h3><i class="fas fa-folder-open"></i> 批量导入</h3>
+                <button class="modal-close-btn" data-close="modal-batch-import" title="关闭">
+                    <i class="fas fa-xmark"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-folder"></i> 图片目录路径</label>
+                    <label class="form-label" for="batch-path"><i class="fas fa-folder"></i> 图片目录路径</label>
                     <div class="batch-path-row">
-                        <input type="text" id="batch-path" class="form-input"
+                        <input type="text" id="batch-path" class="glass-input"
                             placeholder="输入图片所在目录的绝对路径，如：D:\images\photos">
-                        <button id="btn-scan-path" class="btn btn-primary btn-sm">
-                            <i class="fa-solid fa-magnifying-glass"></i> 扫描
+                        <button id="btn-scan-path" class="btn-glass btn-glass-primary btn-sm">
+                            <i class="fas fa-magnifying-glass"></i> 扫描
                         </button>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label class="field-label"><i class="fa-solid fa-crosshairs"></i> 识别取向（应用于全部图片）</label>
-                    <select id="batch-orientation" class="form-select">
+                    <label class="form-label" for="batch-orientation"><i class="fas fa-crosshairs"></i> 识别取向（应用于全部图片）</label>
+                    <select id="batch-orientation" class="glass-select">
                         <option value="auto">自动处理 · 综合描述，模型自主决定重点</option>
                         <option value="emotion">情绪表达 · 专注识别图片情绪</option>
                         <option value="text">文本内容 · 专注识别图片文字</option>
@@ -342,13 +358,13 @@
                     </select>
                 </div>
                 <div class="form-group orientation-custom-group" id="batch-orientation-custom-group" style="display:none;">
-                    <label class="field-label"><i class="fa-solid fa-pen-to-square"></i> 自定义取向参考</label>
-                    <textarea id="batch-orientation-custom" class="form-textarea" rows="3"
+                    <label class="form-label" for="batch-orientation-custom"><i class="fas fa-pen-to-square"></i> 自定义取向参考</label>
+                    <textarea id="batch-orientation-custom" class="glass-textarea" rows="3"
                         placeholder="输入指导图片识别取向和描述方式的参考文本..."></textarea>
                 </div>
                 <div class="batch-file-list" id="batch-file-list">
                     <div class="batch-empty-hint">
-                        <i class="fa-solid fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件
+                        <i class="fas fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件
                     </div>
                 </div>
                 <div class="batch-progress" id="batch-progress" style="display:none;">
@@ -360,15 +376,15 @@
                 <div class="batch-log" id="batch-log" style="display:none;"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-ghost modal-close-btn" data-close="modal-batch-import">关闭</button>
-                <button id="btn-start-batch" class="btn btn-primary" disabled>
-                    <i class="fa-solid fa-play"></i> 开始导入
+                <button class="btn-glass btn-clear modal-close-btn" data-close="modal-batch-import">关闭</button>
+                <button id="btn-start-batch" class="btn-glass btn-glass-primary" disabled>
+                    <i class="fas fa-play"></i> 开始导入
                 </button>
             </div>
         </div>
     </div>
 
-    <div id="toast-container" class="toast-container"></div>
+    <!-- Toast 提示 -->
+    <div id="toast" class="toast"></div>
 </body>
-
 </html>

@@ -1,7 +1,10 @@
 {
   "id": "lunar.engine_manager-ltp9",
-  "title": "『 星月智能 』LTP9 引擎测试",
-  "description": "LTP9 引擎可视化测试：蓝图式节点编排（启动节点/拖拽/数据连线/逻辑门），真实测 事件/广播/跨包调用/agent/数据库/记忆库/文件/加解密/JWT/LLM/同步HTTP/等待",
+  "title": "『 星月智能 』LTP9 引擎",
+  "description": "LTP9 引擎可视化管理：蓝图式节点编排（启动节点/拖拽/数据连线/逻辑控制）",
   "icon": "icon.webp",
-  "tags": ["Zero-LTP"]
+  "tags": [
+    "Zero-LTP"
+  ],
+  "background_retention": true
 }

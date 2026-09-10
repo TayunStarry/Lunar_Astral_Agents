@@ -4,6 +4,7 @@ package YaraLTP
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -98,6 +99,13 @@ func SetSend(fn func([]byte)) {
 	sendMu.Lock()
 	sendOut = fn
 	sendMu.Unlock()
+}
+
+// SetPlatformCommand 注入平台命令执行器（yara.platform.sendCommand 的真实后端，由宿主注入）。
+func SetPlatformCommand(fn func(cmd string, args map[string]any) (any, error)) {
+	platformCmdMu.Lock()
+	platformCmdInvoker = fn
+	platformCmdMu.Unlock()
 }
 
 // HandleIn 处理从 /ws 集线器收到的请求信封（type 前缀 ltp3/）。
@@ -278,18 +286,25 @@ func (e *engine) DispatchTool(name string, params map[string]any, ctx map[string
 	all := []hookOutcome{}
 	for _, p := range snap {
 		td := p.tools[name]
-		p.mu.Lock()
-		old := p.currentRequestID
-		p.currentRequestID = requestID
-		res, err := p.callFn(td.handler, params, ctx)
-		p.currentRequestID = old
-		p.mu.Unlock()
+		r := runGuarded(watchdogTimeout, func() (any, error) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			old := p.currentRequestID
+			p.currentRequestID = requestID
+			res, err := p.callFn(td.handler, params, ctx)
+			p.currentRequestID = old
+			return res, err
+		})
 		oc := hookOutcome{PluginID: p.ID, Handled: true}
-		if err != nil {
-			oc.Error = err.Error()
+		if r.timed {
+			oc.Error = fmt.Sprintf("执行超时(>%s)", watchdogTimeout)
+			LoggerGeneral.Warn(ServiceName, "看门狗: 插件 %s 工具 %s 执行超时(%s)，已跳过", p.ID, name, watchdogTimeout)
+			summary.Errored++
+		} else if r.err != nil {
+			oc.Error = r.err.Error()
 			summary.Errored++
 		} else {
-			oc.Result = res
+			oc.Result = r.v
 		}
 		summary.Subscribed++
 		all = append(all, oc)
@@ -315,18 +330,26 @@ func (e *engine) DispatchCommand(name string, match []string, ctx map[string]any
 	summary := dispatchSummary{AllowContinue: true}
 	all := []hookOutcome{}
 	for _, p := range snap {
-		p.mu.Lock()
-		old := p.currentRequestID
-		p.currentRequestID = requestID
-		res, err := p.runCommand(name, match, ctx)
-		p.currentRequestID = old
-		p.mu.Unlock()
+		r := runGuarded(watchdogTimeout, func() (any, error) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			old := p.currentRequestID
+			p.currentRequestID = requestID
+			res, err := p.runCommand(name, match, ctx)
+			p.currentRequestID = old
+			return res, err
+		})
 		oc := hookOutcome{PluginID: p.ID, Handled: true}
-		if err != nil {
-			oc.Error = err.Error()
-			summary.Errored++
+		if r.timed {
+			oc.Error = fmt.Sprintf("执行超时(>%s)", watchdogTimeout)
+			LoggerGeneral.Warn(ServiceName, "看门狗: 插件 %s 指令 %s 执行超时(%s)，已跳过", p.ID, name, watchdogTimeout)
+		} else if r.err != nil {
+			oc.Error = r.err.Error()
 		} else {
-			oc.Result = res
+			oc.Result = r.v
+		}
+		if oc.Error != "" {
+			summary.Errored++
 		}
 		summary.Subscribed++
 		all = append(all, oc)
@@ -347,31 +370,44 @@ func (e *engine) dispatchCommandByRegex(text string, _ []string, ctx map[string]
 	}
 	e.mu.RUnlock()
 	for _, p := range candidates {
-		p.mu.Lock()
-		for _, cd := range p.commands {
-			reg, err := regexp.Compile(cd.pattern)
-			if err != nil || reg == nil {
-				continue
+		r := runGuarded(watchdogTimeout, func() (any, error) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			for _, cd := range p.commands {
+				reg, err := regexp.Compile(cd.pattern)
+				if err != nil || reg == nil {
+					continue
+				}
+				matched := reg.FindStringSubmatch(text)
+				if matched == nil {
+					continue
+				}
+				old := p.currentRequestID
+				p.currentRequestID = requestID
+				res, rerr := p.callFn(cd.handler, matched, ctx)
+				p.currentRequestID = old
+				return res, rerr
 			}
-			matched := reg.FindStringSubmatch(text)
-			if matched == nil {
-				continue
-			}
-			old := p.currentRequestID
-			p.currentRequestID = requestID
-			res, rerr := p.callFn(cd.handler, matched, ctx)
-			p.currentRequestID = old
-			oc := hookOutcome{PluginID: p.ID, Handled: true}
-			if rerr != nil {
-				oc.Error = rerr.Error()
-			} else {
-				oc.Result = res
-			}
+			return nil, nil // 无匹配指令
+		})
+		oc := hookOutcome{PluginID: p.ID, Handled: true}
+		switch {
+		case r.timed:
+			oc.Error = fmt.Sprintf("执行超时(>%s)", watchdogTimeout)
+			LoggerGeneral.Warn(ServiceName, "看门狗: 插件 %s 指令正则匹配执行超时(%s)，已跳过", p.ID, watchdogTimeout)
+			summary.Subscribed++
+		case r.err != nil:
+			oc.Error = r.err.Error()
 			summary.Subscribed++
 			all = append(all, oc)
-			break
+		default:
+			if r.v != nil {
+				oc.Result = r.v
+				summary.Subscribed++
+				all = append(all, oc)
+			}
+			// r.v == nil 表示该插件未匹配到任何指令，不产生 outcome
 		}
-		p.mu.Unlock()
 	}
 	return all, summary
 }

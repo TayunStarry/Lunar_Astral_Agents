@@ -62,7 +62,7 @@ type plugin struct {
 - **跨插件 API**：`yara.api.call("插件ID.方法名", params)` 由 `manager.callCrossPlugin` 解析分段名，锁定并调用目标插件公开 API。
 - **async**：`yara.async.run` 在后台上 goroutine，仍经该插件互斥锁串行执行，因此不会与其它 JS 并发触碰 VM。
 
-> 说明：当前未启用 30s 看门狗硬打断（协议文档定义）；`setTimeout` 等天然被沙箱禁用（无事件循环）。
+> 说明：超时保护使用**30s 看门狗**——hook/event/command/tool 分发均为每个插件回调独立超时（`runGuarded`），单个死循环插件会被跳过而不卡住整条分发线程；`setTimeout` 等天然被沙箱禁用（无事件循环）。
 
 ---
 
@@ -178,7 +178,7 @@ YaraLTP.SetSend(func(data []byte){ StudioHubInstance.Broadcast <- data })
 | `crypto.*` | crypto/ed25519、crypto/*、encoding/base64/hex |
 | `image.*` | 图片魔数校验 + 插件目录读取 |
 
-未接入后端（返回占位/空）：`platform.sendCommand`（真实平台在客户端侧）、`emoji.*`、`image.getCached`。
+已接入后端（全部真实实现）：`emoji.*`（复用项目记忆库 `stickers` image 集合）、`image.getCached`（读插件 `data/cache/`）、`database.*`、`knowledge.*`。`platform.sendCommand` 由宿主经 `SetPlatformCommand` 注入真实命令执行器；未注入时返回明确错误提示。
 
 ---
 
@@ -206,9 +206,9 @@ YaraLTP.Run(string) (string, error) // yara_ltp 工具：文本路由到默认�
 
 ## 十、已知边界与取舍
 
-- **沙箱超时**：协议定义 30s 看门狗，当前实现未做硬打断；靠插件串行锁保证同一插件内无并发。
+- **沙箱超时**：已实现 **30s 看门狗**——hook/event/command/tool 分发对每个插件回调独立限时（`runGuarded`），单插件死循环不再卡住整条分发线程（见 §三）。超时后无法强杀已挂起 goroutine，但分发器不被其阻塞。
 - **跨插件反向死锁**：`yara.api.call` 若出现 A→B→A 反向调用会死锁（单向调用正常）；本插件自调用不加锁已规避自锁。
-- **平台能力占位**：`platform.sendCommand`、`emoji.*` 等需真实客户端侧承接，引擎返回明确占位/空。
+- **平台能力占位**：`platform.sendCommand` 需真实客户端侧承接，经 `SetPlatformCommand` 注入；未注入返回明确错误提示。`emoji.*` / `image.getCached` 已接入记忆库 `stickers` 集合与插件 `data/cache/`。
 - **日志合规**：引擎不向本地落盘任何日志（沿用项目"不做本盘日志"约束），仅走 `LoggerGeneral` 供运行期查看。
 
 ---

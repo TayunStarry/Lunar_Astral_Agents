@@ -76,9 +76,9 @@ LTP3 采用**密钥授权**替代旧的 `plugin.json` 权限声明。插件包�
 - **独立沙箱**：每个插件一个独立 goja VM，全局作用域互不可见；插件之间仅能通过 `yara.api.call` 跨插件调用（`插件ID.方法名`）。
 - **禁用浏览器/Node API**：`require`、`import`、`fetch`、`setTimeout`、`setInterval`、`document`、`window`、`process`、`globalThis` 均不存在。请用 `yara.http`（网络）、`yara.time.sleep`（同步延时）。
 - **串行执行**：同一插件的所有 JS 执行严格串行（引擎持插件互斥锁），请勿在同步循环里长阻塞；耗时工作用 `yara.async.run`（引擎负责入队、不会打断同插件其它调用，但会等待其结束）。
-- **超时**：协议文档定义 30s 看门狗；当前实现未启用硬性打断，仍建议不必要的长循环。
+- **超时**：引擎对每个插件的 hook/event/command/tool 回调执行 **30s 看门狗**超时，单个死循环插件会被跳过而不卡住整条分发线程；请勿在同步循环里长阻塞，耗时工作用 `yara.async.run`。
 - **路径隔离**：`yara.file` 只能访问插件目录（`/` 根）与 `data/` 运行时目录，越界（路径穿越）会被拒绝。
-- **网络安全**：`yara.http` / `yara.network` 禁止访问本地/内网地址（SSRF 防护）。`yara.platform.sendCommand` 因真实平台在客户端侧，当前返回 `{ success:false, error:"未接入" }`；`yara.emoji` 因无表情库后端，返回空结构。
+- **网络安全**：`yara.http` / `yara.network` 禁止访问本地/内网地址（SSRF 防护）。`yara.platform.sendCommand` 由宿主注入真实命令执行器（未注入时返回明确错误提示，真实命令能力在客户端侧）；`yara.emoji` 复用项目记忆库 `stickers`（image 型）集合；`yara.image.getCached` 读插件 `data/cache/` 目录缓存图片。
 
 ---
 

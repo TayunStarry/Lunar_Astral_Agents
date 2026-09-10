@@ -92,7 +92,7 @@ function Sync-EmbeddedData {
 
     # 2. 同步 images/background 与 images/placeholder
 
-    $imgDirs = @("background", "placeholder")
+    $imgDirs = @("background", "placeholder","icon")
 
     foreach ($imgDir in $imgDirs) {
 

@@ -202,6 +202,7 @@ async function loadPages() {
     try {
         const response = await fetch('/api/packages');
         pages = await response.json();
+        await loadDefaultIconPool(); // 先加载真实图标池，再渲染卡片，保证兜底图标基于真实数量
         await loadLayout();
         const changed = buildLayout();
         renderPageGrid();
@@ -210,10 +211,26 @@ async function loadPages() {
 }
 
 // ===== 网格渲染：预设网格布局页（应用图标分配到空格位置，可拖动摆放，位置 JSON 持久化） =====
-const DEFAULT_ICON_COUNT = 8;
+// 兜底应用图标：从 local_data/images/icon 真实文件池随机选取（/file/list 获取真实数量，/file/read 读图）
+const DEFAULT_ICON_DIR = 'images/icon';
+let defaultIconPool = [];
+
+async function loadDefaultIconPool() {
+    try {
+        const resp = await fetch('/file/list/' + DEFAULT_ICON_DIR, { method: 'POST' });
+        if (!resp.ok) return;
+        const items = await resp.json();
+        const pool = (items || [])
+            .filter(it => !it.isDir && /\.(webp|png|jpe?g|gif|bmp)$/i.test(it.name || ''))
+            .map(it => '/file/read/' + DEFAULT_ICON_DIR + '/' + it.name);
+        if (pool.length) defaultIconPool = pool;
+    } catch (e) { /* 池加载失败时保持已有池 */ }
+}
 
 function getRandomDefaultIcon() {
-    return `/default/icon (${Math.floor(Math.random() * DEFAULT_ICON_COUNT) + 1}).webp`;
+    if (defaultIconPool.length) return defaultIconPool[Math.floor(Math.random() * defaultIconPool.length)];
+    // 池尚未就绪时的即时兜底（按 1..9 猜测常见命名，随池加载完成自然淘汰）
+    return '/file/read/' + DEFAULT_ICON_DIR + '/icon (' + (Math.floor(Math.random() * 9) + 1) + ').webp';
 }
 
 // 标签 → 卡片角标色彩修饰类（不同标签不同配色，无对应样式的标签回退默认紫色）
@@ -1537,8 +1554,17 @@ previewModal.addEventListener('click', (e) => {
 // ===== 包执行覆盖层（LTPX AtoA：包页面在 iframe 中执行，琉璃仅中转展示与回执） =====
 const ltpxOverlay = document.getElementById('ltpxOverlay');
 const ltpxFrame = document.getElementById('ltpxFrame');
-const ltpxFrameTitle = document.getElementById('ltpxFrameTitle');
-const ltpxFrameCloseBtn = document.getElementById('ltpxFrameCloseBtn');
+const ltpxIsland = document.getElementById('ltpxIsland');
+const ltpxIslandText = document.getElementById('ltpxIslandText');
+const ltpxIslandIcon = document.getElementById('ltpxIslandIcon');
+
+// 灵动岛状态文本：图标状态随执行状态切换，文本即灵动岛宽度来源（动态伸缩）
+function updateLTPXIsland(text, iconClass) {
+    if (ltpxIslandText) ltpxIslandText.textContent = text;
+    if (ltpxIslandIcon && iconClass) {
+        ltpxIslandIcon.setAttribute('class', 'fas ' + iconClass + ' ltpx-island-icon');
+    }
+}
 let activeLTPXCall = null;   // 当前等待回执的 ltpx_call（含 request_id/tool/arguments）
 let ltpxFrameReady = false;  // iframe 当前文档是否已加载完成（就绪后再投递指令）
 let ltpxFrameApp = '';       // iframe 当前已加载的包 ID（同一包重复调用时直接投递，避免重新加载）
@@ -1551,12 +1577,12 @@ const LTPX_WELCOME_SRC = '/ltpx_welcome.html'; // 嵌入式 iframe 的默认空�
 function openPageInFrame(url, title, appId) {
     if (!url) return;
     if (isBackgroundRetained(appId) && ltpxFrameApp === appId && ltpxFrameReady) {
-        ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (title || '页面');
+        updateLTPXIsland(title || '页面', 'fa-cube');
         activeLTPXCall = null;       // 手动打开不等待任何回执
         ltpxOverlay.classList.add('active');
         return;
     }
-    ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (title || '页面');
+    updateLTPXIsland(title || '页面', 'fa-cube');
     ltpxFrameReady = false;
     activeLTPXCall = null;       // 手动打开不等待任何回执
     ltpxFrameApp = appId || '';  // 记录来源包 ID，便于月华同包调用复用已加载页面
@@ -1594,7 +1620,7 @@ function isBackgroundRetained(appId) {
 // 收到月华的 ltpx_call：打开对应包页面并投递执行指令
 function openLTPXPackage(msg) {
     activeLTPXCall = msg;
-    ltpxFrameTitle.innerHTML = '<i class="fas fa-cube"></i> ' + (msg.app_id || '包') + ' 执行中...';
+    updateLTPXIsland((msg.app_id || '包') + ' 执行中...', 'fa-cube');
     // 同一包页面已就绪（已加载 + agent 已注入）时直接投递，不重新加载，保持页面状态
     // （Mini-LTP 与普通包一致；仅首次或换包时才加载/注入）
     if (ltpxFrameApp === msg.app_id && ltpxFrameReady) {
@@ -1676,7 +1702,7 @@ function closeLTPXOverlay() {
         ltpxFrame.src = LTPX_WELCOME_SRC; // 回到默认空闲页，释放已嵌入包页面的 JS/DOM 上下文
     }
 }
-ltpxFrameCloseBtn.addEventListener('click', closeLTPXOverlay);
+ltpxIsland.addEventListener('click', closeLTPXOverlay);
 ltpxOverlay.addEventListener('click', (e) => { if (e.target === ltpxOverlay) closeLTPXOverlay(); });
 
 // 包执行完毕通过 window.parent.postMessage 回传，主窗口代为上报 /ltpx/result
@@ -1699,7 +1725,7 @@ window.addEventListener('message', (event) => {
         if (keep_open) {
             // 包要求保持页面展示（如文件管理器执行后停留在目标路径/选中状态），不自动关闭
             activeLTPXCall = null; // 等待状态已结束，覆盖层保留供用户查看/手动关闭，后续调用可复用该页面
-            ltpxFrameTitle.innerHTML = '<i class="fas fa-check-circle"></i> ' + (ltpxFrameApp || '包') + ' 执行完成';
+            updateLTPXIsland((ltpxFrameApp || '包') + ' 执行完成', 'fa-check-circle');
         } else {
             closeLTPXOverlay();
         }

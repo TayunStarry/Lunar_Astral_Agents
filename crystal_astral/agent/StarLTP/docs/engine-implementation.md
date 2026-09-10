@@ -129,8 +129,9 @@ unload(pluginID): 调用 onUnload → 停止事件循环 → 清空订阅器/导
 
 沙箱基于 goja（支持 ES2022+/部分 ES2023）。常用能力：
 - 类、可选链（`a?.b`）、空值合并 `??`、逻辑赋值、`Array.prototype.at`、BigInt 等；插件以**回调注册**为统一入口。
-- **同步约束**：事件订阅回调、`engine.export` 导出的函数均为**同步函数**，返回普通对象；需要网络时使用阻塞式 `engine.http.get/post`，需要等待时使用 `engine.sleep(ms)`。
-- `fetch` / `WebSocket` 全局以 Promise / 事件回调形态存在（`allow-network` 门控），供需要异步连接的场景使用；事件/导出主链路保持同步。
+- **沙箱全局**：注入 `console`（log/info/warn/error/debug，输出走引擎日志）与定时器（`setTimeout`/`setInterval`/`setImmediate` 及对应 clear）。
+- **同步为主、异步可用**：事件订阅回调、`engine.export` 导出的函数优先写成**同步函数**返回普通对象；需要网络时用阻塞式 `engine.http.get/post`，需要等待时用 `engine.sleep(ms)`。
+- `fetch` / `WebSocket` 全局以 Promise / 事件回调形态存在（`allow-network` 门控），供需要异步连接的场景使用。**异步亦被支持**：若回调/导出函数返回 pending Promise（如 `async` 函数、`await fetch` 的结果），`callFn` 会让出插件事件循环并定时轮询直到 Promise 兑现或超时（`callAwaitTimeout`，默认 90s），因此 `engine.export` 的跨插件调用（`engine.call`）、事件订阅器等也能正确承接 `async/await`。
 
 ### 4.4 定时器与时间戳（来自 goja_nodejs/eventloop）
 
@@ -178,25 +179,26 @@ ws.send(text); ws.close()
 
 以下命名空间由引擎绑定器按 `allow-*` 注入每个沙箱。**未获权限的能力对应命名空间为 `undefined`**，脚本调用即触发 TypeError；获得权限的调用被拒时返回带 `error` 的对象。
 
-### 5.1 事件订阅器 `engine.event.<topic>`
+### 5.1 事件订阅器 `engine.event`
 
-LTP9 以**事件订阅器** `engine.event.<topic>.subscribe/unsubscribe` 承接插件的事件订阅与管理。同一个事件的订阅器**可重复 subscribe**（允许多个回调），按**优先级 + 时间顺序**串行派发；订阅回调**可拦截、改写客户端触发该事件时的参数，以及撤回该事件**。
+LTP9 以**事件订阅器** `engine.event.subscribe(topic, handler, priority)` 承接插件的事件订阅与管理。同一个事件的订阅器**可重复 subscribe**（允许多个回调），按**优先级 + 时间顺序**串行派发；订阅回调**可拦截、改写客户端触发该事件时的参数，以及撤回该事件**。发布方向见 §5.14 `engine.event.publish`。
 
 ```js
-// 订阅某事件；返回订阅 id（引擎按单调递增分配）
-let id = engine.event.xxxx.subscribe((event) => {
+// 订阅某事件（topic 为主题字符串）；返回订阅 id（引擎按单调递增分配）
+let id = engine.event.subscribe("weather.query", (event) => {
   // event = { type: topic, payload: 客户端触发负载 }
   // 放行：返回任意业务结果对象（非 Promise）
   return { handled: true, note: "ok" }
   // 拦截：返回 { intercept:true } 停止该插件后续订阅器处理；
   // 改写：返回 { modifiedData:{...} } 供下游订阅器（含其他插件）读取改写后的负载；
+  // 回传：返回 { return:<业务结果> } 把本次事件的业务结果回执给客户端（不参与负载链）；
   // 撤回：返回 { cancel:true } 使本次事件不再派发，回执标记为已撤回。
 }, 0)  // 可选优先级：仅支持正整数，0 最高；未设置则按时间顺序
 // 取消订阅
-engine.event.xxxx.unsubscribe(id)
+engine.event.unsubscribe("weather.query", id)
 ```
 
-- 事件名（topic）命名空间：`engine.event.signal`、`engine.event.xxxx`。
+- 事件名（topic）为主题字符串（任意合法主题，如 `weather.query` / `signal` / `execute_search_before`）。
 - **派发顺序**：订阅器按优先级升序（数值小者优先，`0` 最高）排列；同优先级按订阅时间顺序；未设置优先级的订阅排在所有设置者之后并按各自时间顺序。若全部未设置优先级，则纯粹按订阅时间顺序派发。
 - 引擎把客户端触发的原始负载构造为事件对象 `{type, payload}`，按上述顺序串行传入所有订阅器，最后汇总结果回执客户端。
 
@@ -227,7 +229,7 @@ engine.database.query(sql, params?)   // 读 → { success, rows: [{列名:值}.
 engine.database.exec(sql, params?)    // 写（INSERT/UPDATE/DELETE）→ { success, rows_affected }
 ```
 
-接入项目 SQLite（mattn/go-sqlite3），所有插件共享 `local_data/database/ltp9.db`（WAL 模式）。`allow-database` 控制。
+接入项目 SQLite（mattn/go-sqlite3），所有插件共享 `local_data/database/knowledge.db`（WAL 模式）。`allow-database` 控制。
 
 ### 5.5 向量记忆库 `engine.memory`
 
@@ -299,13 +301,22 @@ engine.sleep(ms)                              // 同步阻塞等待
 
 - `engine.http` 由 `allow-network` 控制；`engine.sleep` 为常驻基础能力。
 
-### 5.13 扩展能力（JWT / LLM / 图像 / 发送 / WebSocket）
+### 5.13 扩展能力（JWT / 摘要 / 图像 / LLM / 发送 / WebSocket）
 
 以下能力由宿主注入真实通道或读取本地配置，按 `allow-*` 授权后注入：
 
 ```js
 // JWT 签名（allow-certificate，HS256/EdDSA/none；kid 可选写入 JWT 头）
 engine.crypto.signJWT({ sub: "project", iat: now, exp: now + 900 }, secret, "HS256")
+
+// 摘要 / HMAC / Ed25519（allow-certificate，均为小写十六进制）
+engine.crypto.md5("text")            // Hex MD5
+engine.crypto.sha1("text")           // Hex SHA-1
+engine.crypto.sha256("text")         // Hex SHA-256
+engine.crypto.hmacSha1(key, data)    // Hex HMAC-SHA1
+engine.crypto.hmacSha256(key, data)  // Hex HMAC-SHA256
+const sig = engine.crypto.ed25519Sign(pemOrSeed, data) // base64url 签名
+const j = engine.crypto.generateJWT(claims, pemOrSeed, kid) // EdDSA JWT
 
 // LLM 对话（allow-agent，读取 lunar_config.json 的 agent.multimodal_model/multimodal_url/multimodal_key）
 engine.llm.chat([{ role: "user", content: "..." }], { temperature: 0.7 })
@@ -327,6 +338,73 @@ engine.ws.publish(JSON.stringify({ ... }))     // { success:true }
 - `engine.image` / `engine.llm` / `engine.send` / `engine.ws` 未获对应权限时对应命名空间为 `undefined`，脚本调用即 `TypeError`。
 - 宿主真实通道由 `SetSendInvoker`（发送）与 `SetWsServer`（WebSocket 传输）注入；未注入时返回 `未注入发送通道` / `未注入 WebSocket 传输`。
 
+### 5.14 事件发布 `engine.event.publish`（常驻）
+
+对称补齐 LTP9 「事件订阅器总线」缺失的**发布**方向：插件可主动在总线上发起一个事件，派发给其它订阅该主题的插件订阅器，并转发给宿主 `outbound`（供外部客户端 / 前端消费）。
+
+```js
+engine.event.publish("weather.query", { city: "北京" })   // 发布到主题 weather.query
+```
+
+- **异步 fire-and-forget**：`publish` 自身不阻塞、无回执；按订阅器优先级/顺序在各目标插件自己的 loop 内同步派发。
+- **跳过发起插件自身**（避免回调内等待自身回调造成自锁 / 自循环）；插件想让自己也消费可自行 `engine.call` 或在 `engine.export` 内处理。
+- 复用宿主 `outbound`（= `engine.signal` 同一通路）转发 payload，外部 Go 程序可用既有收包逻辑消费。
+
+### 5.15 工具注册 `engine.tool`（allow-agent）
+
+插件可注册 **LLM / AtoA 可调用的函数工具**，宿主或外部队列经 `star.CallTool(pluginID, name, args)` 触发：
+
+```js
+engine.tool.register("get_weather", {
+  description: "查询指定城市实时天气",
+  parameters: [{ name: "city", type: "string", description: "城市名称", required: true }]
+}, function (params) {
+  // params.city ...
+  return { city: params.city, temperature: 25, condition: "晴" };
+});
+
+const defs = engine.tool.getDefinitions(); // 已注册工具定义（name/description/parameters）
+```
+
+- 注册覆盖同名工具；`handler` 为同步函数，参数 `params` 为一对象，返回任意业务结果。
+- 与 `engine.llm.chat({ tools })` 形成完整闭环：`engine.llm.chat` 可把工具定义交给模型，模型返回 `tool_calls` 后由宿主按 `tool_calls.function.name` + 解析参数调用 `CallTool` 并回填。
+- `PluginState.Tools` 暴露各插件已注册工具名，供前端引擎管理器动态下拉。
+
+### 5.16 平台上下文 `engine.platform`（allow-send）
+
+由宿主注入 `SetPlatformResolver(func(method string, args map[string]any) (any, error))` 实现；未注入时返回错误提示：
+
+```js
+engine.platform.getName()                        // → { success, value: 平台名 }
+engine.platform.getGroupId()                     // → { success, value: 当前群 ID }
+engine.platform.lookupUser(groupId, name)        // → { success, value: 用户标识或 null }
+```
+
+### 5.17 表情包 `engine.emoji`（allow-memory）
+
+LTP9 表情包**不新增独立存储**，复用项目记忆库的 `stickers`（image 型）集合，与月华侧「表情包记忆库」数据互通：
+
+```js
+engine.emoji.search("开心", { limit: 3 })   // → { success, results: [{ image, similarity }] }
+engine.emoji.store(base64Image)            // → { success, id }，标签由记忆库 LLM 自动生成
+engine.emoji.random("happy")               // → { success, image }，按语义随机返回一张
+```
+
+- 首次调用惰性初始化 `stickers` 集合（`CollectionInit(..., CollectionTypeImage)`）；`store` 用 `module.MemoryAddImage`（同步等待 LLM 标签，耗时操作）。
+- 对应后端 `ltp9/test` 动作 `emoji`（op: `search` / `store` / `random`）。
+
+### 5.18 文本嵌入 `engine.llm.embed`（allow-agent）
+
+读取 `lunar_config.json` 的 `agent.embedding_*` 文本嵌入模型，调用 OpenAI 兼容 `/v1/embeddings`：
+
+```js
+engine.llm.embed("琉璃")                     // → { success: true, embedding: [0.1, ...] }
+engine.llm.embed(["a", "b"])                // → { success: true, embeddings: [[...], [...]] }
+engine.llm.embed("x", { text: "y" })        // 兼容 opts.text 追加
+```
+
+返回嵌入向量与前序文本一一对应；`embed` 与 `chat` 共用 `allow-agent` 门控。
+
 ---
 
 ## 6. 权限系统（`allow-*`）
@@ -340,11 +418,13 @@ LTP9 用**权限密钥 + 沙箱注入控制**双层实现。权限声明由 `per
 | `allow-memory` | `engine.memory.*` | 向量记忆库读写 |
 | `allow-network` | `engine.http.*` / `fetch` / `WebSocket` / `engine.image.download` | 同步/异步网络与图片下载 |
 | `allow-call` | `engine.call(包ID).run` | 调用其他插件函数 |
-| `allow-agent` | `engine.agent(包ID).run` / `engine.llm.chat` | 前端智能体 / LLM 对话 |
+| `allow-agent` | `engine.agent(包ID).run` / `engine.llm.chat` / `engine.llm.embed` / `engine.tool.*` | 前端智能体 / LLM 对话 / 文本嵌入 / Agent 工具注册 |
 | `allow-signal` | `engine.signal.*` / `engine.frontEvent.signal` | 广播收发 |
-| `allow-certificate` | `engine.encoder` / `engine.decoder` / `engine.crypto.signJWT` | 加解密 + JWT 签名 |
-| `allow-send` | `engine.send.text/image/hybrid` | 发送到会话（宿主注入，经 /ws 桥接） |
+| `allow-certificate` | `engine.encoder` / `engine.decoder` / `engine.crypto.*` | 加解密 + JWT/摘要/HMAC/Ed25519 签名 |
+| `allow-send` | `engine.send.text/image/hybrid` / `engine.platform.*` | 发送到会话 + 平台上下文（宿主注入，经 /ws 桥接） |
 | `allow-socket` | `engine.ws.expose/publish` | WebSocket 服务端（宿主注入传输） |
+
+> `engine.memory.*` 负责向量记忆库读写（`allow-memory`），`engine.emoji.*`（表情包）复用 `allow-memory`（内部访问记忆库 stickers 集合）。
 
 > 基础能力（`engine.event` / `engine.config` / `engine.time` / `engine.sleep` / `engine.export`）常驻注入，不参与 `allow-*` 开关。
 
@@ -383,8 +463,9 @@ LTP9 用**权限密钥 + 沙箱注入控制**双层实现。权限声明由 `per
        - 返回 { cancel:true }      → 本事件标记为「已撤回」，停止派发
        - 返回 { intercept:true }   → 停止派发该插件后续订阅器（认为已被消费）
        - 返回 { modifiedData:X }   → 用 X 替换负载，供下游订阅器与后续插件读取
+       - 返回 { return:X }         → 记录业务结果 X 供客户端消费（同主题取最后一个非 null 者），不影响负载链
        - 返回其他对象              → 放行，继续派发
-  4. 汇总各订阅器结果（Outcome）与汇总标记（subscribed/errored/intercepted/canceled）回执给客户端
+  4. 汇总各订阅器结果（Outcome）与汇总标记（subscribed/errored/intercepted/canceled/returned）回执给客户端
 ```
 
 **宿主 Go 接口**（客户端直接调用，不经 WebSocket 链路）：
@@ -404,12 +485,13 @@ Broadcast(payload any) / BroadcastTo(pluginID string, payload any) // 等价 eng
 |------|------|------|
 | host 入口 | `host.go` | 包级入口 `Init/Close/Rescan` + 公开 Go 接口（Emit/Call/Agent/Broadcast）+ 宿主通道注入（SetOutbound/SetAgentInvoker/SetSendInvoker/SetWsServer） |
 | 管理器 | `engine.go` | 插件扫描/加载/卸载/对账（reconcile），`pluginID → sandbox` 映射 |
-| 沙箱 | `plugin.go` | 每插件独立 goja 事件循环：加载/卸载、同步回调执行（callFn 同步阻塞）、事件派发（intercept/modifiedData/cancel） |
+| 沙箱 | `plugin.go` | 每插件独立 goja 事件循环：加载/卸载、同步回调执行（callFn 同步阻塞）、事件派发（intercept/modifiedData/return/cancel） |
 | 绑定器 | `binder.go` | 按 `allow-*` 把 §5 全部 `engine.*` + 网络全局注入沙箱 |
 | 权限 | `permission.go` | `permissions.key` 哈希解密校验（代码哈希即解密密钥）+ `allow-*` 能力开关 |
 | 配置 | `yaml.go` | config.yaml 极简 YAML 解析/序列化（启动注入 + setFile 回写） |
-| 能力实现 | `api.go` / `api_ext.go` | 广播、跨包调用、加解密、文件、记忆库、数据库、JWT、图像、LLM、发送、WebSocket 服务端的 Go 侧实现 |
-| 网络 | `api_net.go` / `api_ws.go` | 同步 `engine.http`、全局 `fetch`（Promise）与 WebSocket 客户端（事件回调） |
+| 能力实现 | `api.go` / `api_ext.go` | 广播、跨包调用、加解密、文件、记忆库、数据库、摘要/HMAC/Ed25519/JWT、图像、LLM、发送、WebSocket 服务端的 Go 侧实现 |
+| 网络 | `api_net.go` / `api_network.go` / `api_ws.go` | `api_net.go`：同步 `engine.http` 与全局 `fetch`（共用 `doLTP9Fetch`）+ 全局 WebSocket **客户端**；`api_network.go`：`engine.network` 套接字（TCP/UDP/DNS）；`api_ws.go`：`engine.ws` WebSocket **服务端**（宿主注入 `WsBridge`） |
+| 指令/异步/编解码/探针 | `api_command.go` / `api_async.go` / `api_encoding.go` / `api_probe.go` | `engine.command` 指令系统、`engine.async` 后台子任务、`engine.encoding` 编解码、`engine.network`/`probe` 前端可视化探针 |
 | 类型/常量 | `type.go` / `variable.go` | 类型定义与常量/变量集中管理 |
 
 ---
@@ -421,10 +503,12 @@ Broadcast(payload any) / BroadcastTo(pluginID string, payload any) // 等价 eng
 | goja 运行时 / 事件循环 | `goja_nodejs/eventloop` | 每插件 `eventloop.NewEventLoop()`（内部 `goja.New()`，自带定时器） |
 | setTimeout / setInterval / clearTimeout 等 | `goja_nodejs/eventloop` | `NewEventLoop()` 构造时已注入，无需自实现；时间戳由引擎暴露 `engine.time` |
 | 加解密 | `subsystem/lunar_decoder` | `EncodeFilesWithKeyString` / `DecodeFilesWithKeyString` |
-| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `engine.memory` / `engine.database` |
-| 同步/异步网络 | `net/http` + `github.com/gorilla/websocket` | `api_net.go` / `api_ws.go` 自实现 |
+| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `engine.memory` / `engine.database`；`engine.emoji` 复用其 `stickers`（image 型）集合 |
+| 同步 `engine.http` / 全局 `fetch` | `net/http` | `api_net.go` 共用 `doLTP9Fetch` |
+| WebSocket 客户端 / 服务端 | `github.com/gorilla/websocket` | 客户端 `api_net.go`；服务端 `api_ws.go`（`engine.ws`，宿主注入 `WsBridge`） |
+| 文本嵌入 / LLM | lunar_config.json 的 `agent.embedding_*` / `agent.multimodal_*` | `engine.llm.embed` / `engine.llm.chat` |
 | 前端智能体调用 | Mini-LTP / Node-LTP | `engine.agent(包ID).run` 经宿主 `SetAgentInvoker` 路由到对应 WebAgent |
-| 密钥生成 | `subsystem/ltp9_keygen` | 与引擎 `permission.go` 规则一致地生成 `permissions.key` |
+| 密钥生成 | `subsystem/ltp9_keygen` | 与引擎 `variable.go`（`AllowPermissionNames`）规则一致地生成 `permissions.key` |
 
 ---
 
@@ -450,10 +534,15 @@ crystal_astral/agent/StarLTP/
 ├── binder.go          # engine.* / 网络全局绑定（按 allow-* 注入）
 ├── permission.go      # permissions.key 校验 + allow-* 开关
 ├── yaml.go            # config.yaml 极简 YAML 解析/序列化
-├── api.go             # 广播 / 跨包调用 / 加解密 / 文件 / 记忆库 / 数据库
-├── api_ext.go         # 扩展能力：JWT / LLM / 图像 / 发送 / WebSocket 服务端
-├── api_net.go         # 同步 engine.http + 全局 fetch
-├── api_ws.go          # 全局 WebSocket 客户端
+├── api.go             # 广播 / 跨包调用 / 加解密 / 文件 / 记忆库 / 数据库 / 表情包
+├── api_ext.go         # 扩展能力：JWT / LLM / 图像 / 发送 / WebSocket 服务端（Go 侧）
+├── api_net.go         # 同步 engine.http + 全局 fetch（共用 doLTP9Fetch）+ WebSocket 客户端
+├── api_network.go     # engine.network 套接字（TCP/UDP/DNS）
+├── api_ws.go          # engine.ws WebSocket 服务端（宿主注入 WsBridge）
+├── api_command.go     # engine.command 指令系统
+├── api_async.go       # engine.async 后台子任务
+├── api_encoding.go    # engine.encoding 编解码
+├── api_probe.go       # 前端可视化测试探针
 ├── type.go            # 类型定义集中
 ├── variable.go        # 常量/变量集中
 └── docs/              # engine-implementation.md + code_completion.d.ts（插件层类型声明）
@@ -470,7 +559,7 @@ crystal_astral/agent/StarLTP/
 
 覆盖点：
 1. 单插件加载 + 订阅事件被客户端触发，收到并回执。
-2. 事件订阅器支持拦截（intercept）、改写（modifiedData）、撤回（cancel），汇总回执含对应标记。
+2. 事件订阅器支持拦截（intercept）、改写（modifiedData）、业务回传（return）、撤回（cancel），汇总回执含对应标记。
 3. `engine.config` 正确注入 config.yaml；`setFile` 回写磁盘。
 4. 未授权能力不注入（命名空间为 undefined）；`permissions.key` 授权与代码哈希绑定生效。
 5. `engine.call` 指向不存在包返回 `xxx 包拒绝响应`。

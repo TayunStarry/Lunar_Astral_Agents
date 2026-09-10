@@ -1,4 +1,4 @@
-﻿package YaraLTP
+package YaraLTP
 
 // ==== 资源类 API：config / file / database / knowledge / image ====
 
@@ -192,8 +192,24 @@ func bindImage(p *plugin, parent *goja.Object) {
 	vm := p.vm
 	o := newObj(vm)
 	objSetFn(o, "getCached", func(call goja.FunctionCall) goja.Value {
-		// 主程序图片缓存未接入，返回 null 由插件走 loadValid/URL 兜底。
-		return vm.ToValue(nil)
+		// 从插件缓存目录 data/cache/<name> 读取已缓存图片，命中且为合法图片时返回 base64，否则返回 null。
+		name := argString(call, 0)
+		if name == "" {
+			return vm.ToValue(nil)
+		}
+		cacheDir := filepath.Join(p.DataDir, "cache")
+		path, err := safeResolve(cacheDir, "data/cache", name)
+		if err != nil {
+			return vm.ToValue(nil)
+		}
+		b, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return vm.ToValue(nil)
+		}
+		if !isImageMagic(b) {
+			return vm.ToValue(nil)
+		}
+		return vm.ToValue(base64.StdEncoding.EncodeToString(b))
 	})
 	objSetFn(o, "loadValid", func(call goja.FunctionCall) goja.Value {
 		path, err := safeResolve(p.Root, "plugin", argString(call, 0))

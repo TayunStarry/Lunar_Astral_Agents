@@ -64,6 +64,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("getLTPXRemoteStatus", adapters.getLTPXRemoteStatusForJS)
 	vm.Set("callLTPXRemoteTool", adapters.callLTPXRemoteToolForJS)
 	vm.Set("clearLTPXRemoteTools", adapters.clearLTPXRemoteToolsForJS)
+	// 注册 LTPX 事件交互：月华在每个事件触发点同步推送负载到琉璃，接收插件处理结果
+	vm.Set("ltpInteractEvent", adapters.interactLTPXEventForJS)
 
 	// 注册智能体控制适配器
 	vm.Set("getAgentPosition", adapters.getAgentPosition)

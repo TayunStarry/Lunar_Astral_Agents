@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/json"
@@ -15,8 +16,9 @@ import (
 
 // LTPX 远程（琉璃）工具链协调
 // 设计要点（新版 LTPX 协议）：
-//   1. 琉璃启动时一次性向月华提交其联络 URL（多开时以最新注册为准，只记录一个）
-//   2. 月华在每条思考链起点主动向琉璃心跳并拉取最新工具链（琉璃可能动态增删 LTPX 插件）
+//   1. 琉璃不主动向月华推送；月华按固定引擎端口（36792=BasicPort+3）在每条思考链起点主动心跳并拉取工具链
+//   2. 月华在每个「xx事件发生前」触发点把原始负载同步推送到琉璃（/ltpx/event），
+//      经 LTP9 插件处理；琉璃离线 / 无插件订阅 / 插件未改写时回退使用原始数据
 //   3. 工具调用由月华转发到琉璃，琉璃执行并驱动其页面，返回文本结果
 //   4. 琉璃下线时，月华需将琉璃提供的工具从对话者可调用工具列表移除
 
@@ -26,7 +28,7 @@ const ltpRemoteHTTPTimeout = 8 * time.Second
 // 工具调用超时：需覆盖琉璃端 pending call 等待（120s）及浏览器 iframe 中转执行耗时
 const ltpRemoteCallTimeout = 150 * time.Second
 
-// RegisterLTPXRemoteURL 记录琉璃联络 URL（琉璃启动时调用；多开时以最新注册为准）
+// RegisterLTPXRemoteURL 记录琉璃联络 URL（兼容旧注册；多开时以最新注册为准）
 func RegisterLTPXRemoteURL(url string) {
 	url = strings.TrimRight(strings.TrimSpace(url), "/")
 	if url == "" {
@@ -38,15 +40,20 @@ func RegisterLTPXRemoteURL(url string) {
 	LoggerGeneral.Info("LunarCore", "LTPX 琉璃联络 URL 已注册: %s", url)
 }
 
-// GetLTPXRemoteURL 获取当前记录的琉璃联络 URL
+// GetLTPXRemoteURL 获取当前记录的琉璃联络 URL。
+// 琉璃默认不再主动注册，使用固定引擎端口（EnginePort，默认 36792）作为兜底地址。
 func GetLTPXRemoteURL() string {
 	ltpRemoteMutex.RLock()
-	defer ltpRemoteMutex.RUnlock()
-	return ltpRemoteURL
+	registered := ltpRemoteURL
+	ltpRemoteMutex.RUnlock()
+	if registered != "" {
+		return registered
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", *GeneralConfig.EnginePort)
 }
 
-// clearLTPXRemoteState 清空琉璃联络 URL 与工具链缓存（掉线/无响应时调用）
-// 琉璃重启后会通过 /ltpx/register 重新注册 URL，因此清空后不影响其再次上线
+// clearLTPXRemoteState 清空琉璃工具链缓存（掉线/无响应时调用），仅清空注册记录。
+// 琉璃为固定引擎端口，GetLTPXRemoteURL 会回退到固定端口，因此下次心跳仍会自动重试。
 func clearLTPXRemoteState(reason string) {
 	ltpRemoteMutex.Lock()
 	ltpRemoteURL = ""
@@ -214,7 +221,68 @@ func (class *Runtime) clearLTPXRemoteToolsForJS() goja.Value {
 	return class.runtime.ToValue(true)
 }
 
+// syncLTPXRemoteEvent 同步把事件负载推送到琉璃并接收插件处理结果（同步阻塞）。
+// 事件点触发时调用：客户端（月华 JS）把「xx事件发生前」的原始 payload 推到琉璃 /ltpx/event，
+// 琉璃经 LTP9 引擎派发到订阅该 topic 的插件处理；插件可经 return 回传业务结果，
+// 无插件订阅/未回传/琉璃离线时返回 returned=false（调用方回退本地默认处理）。
+func syncLTPXRemoteEvent(topic, payloadJSON string) LTPXRemoteEventResult {
+	target := GetLTPXRemoteURL()
+	if target == "" {
+		return LTPXRemoteEventResult{Online: false, Modified: false}
+	}
+	// 构造负载：优先解析为 JSON 对象，其次保留原始字符串
+	var payload any = map[string]any{}
+	if pj := strings.TrimSpace(payloadJSON); pj != "" && pj != "{}" {
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(pj), &obj); err == nil {
+			payload = obj
+		} else {
+			payload = pj
+		}
+	}
+	reqData, _ := json.Marshal(map[string]any{
+		"topic":   topic,
+		"payload": payload,
+	})
+	body, status, err := remoteEventPost(target+"/ltpx/event", reqData)
+	if err != nil || status != http.StatusOK {
+		// 琉璃离线/无响应：返回 returned=false，调用方回退本地默认处理
+		return LTPXRemoteEventResult{Online: false, Modified: false}
+	}
+	var resp struct {
+		OK       bool `json:"ok"`
+		Modified bool `json:"modified"`
+		Data     any  `json:"data"`
+		Returned bool `json:"returned"`
+		Return   any  `json:"return"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return LTPXRemoteEventResult{Online: true, Modified: false}
+	}
+	return LTPXRemoteEventResult{
+		Online:   resp.OK,
+		Modified: resp.Modified,
+		Data:     resp.Data,
+		Returned: resp.Returned,
+		Return:   resp.Return,
+	}
+}
+
+// interactLTPXEventForJS 供 JS 端在每个事件触发点同步推送事件并接收插件处理结果。
+// 参数：topic, payloadJSON；返回 JSON 字符串 {online, modified, data, returned, return}。
+// 同步阻塞：等待琉璃 LTP9 插件处理完成（LTP9 事件引擎同步执行），琉璃离线时快速失败。
+func (class *Runtime) interactLTPXEventForJS(topic string, payload string) goja.Value {
+	result := syncLTPXRemoteEvent(topic, payload)
+	data, _ := json.Marshal(result)
+	return class.runtime.ToValue(string(data))
+}
+
 // ==== 内部 HTTP 辅助 ====
+
+// 事件推送超时：琉璃在线且有插件认领时，给予 30 秒以覆盖耗时应用生成；
+// 琉璃离线时快速失败（HTTP 连接立即被拒绝）；
+// 无插件订阅时琉璃端 Emit 快速返回，不会让月华等满 30 秒。
+const ltpRemoteEventTimeout = 30 * time.Second
 
 func remoteGet(url string) ([]byte, int, error) {
 	client := &http.Client{Timeout: ltpRemoteHTTPTimeout}
@@ -232,6 +300,20 @@ func remoteGet(url string) ([]byte, int, error) {
 
 func remotePost(url string, payload []byte) ([]byte, int, error) {
 	client := &http.Client{Timeout: ltpRemoteCallTimeout}
+	resp, err := client.Post(url, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+func remoteEventPost(url string, payload []byte) ([]byte, int, error) {
+	client := &http.Client{Timeout: ltpRemoteEventTimeout}
 	resp, err := client.Post(url, "application/json", bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, err

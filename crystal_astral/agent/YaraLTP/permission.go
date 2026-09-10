@@ -98,12 +98,12 @@ func (p *plugin) verifyPermissions() map[string]bool {
 
 	// 整体解码按条解析：先解码整个 payload，再切分，最后去填充。
 	decoded, derr := lunardecoder.DecodeFilesWithKeyString([]lunardecoder.FileData{{Name: "perm", Data: raw}}, keyStr)
-	var payload string
-	if derr != nil {
-		payload = string(raw) // 解码失败时退化为把原始文件按同规则解析（兼容按条编码的旧文件）
-	} else if len(decoded) == 1 {
-		payload = string(decoded[0].Data)
+	if derr != nil || len(decoded) != 1 {
+		// 解码失败 → 代码与密钥不对应或密钥被篡改 → 拒绝全部权限（不退化到明文）
+		LoggerGeneral.Warn(ServiceName, "插件 %s 权限密钥解码失败，已拒绝全部权限", p.ID)
+		return granted
 	}
+	payload := string(decoded[0].Data)
 
 	for _, block := range strings.Split(payload, permSeparator) {
 		block = strings.TrimRight(block, permPadding)

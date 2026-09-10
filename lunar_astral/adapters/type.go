@@ -64,16 +64,20 @@ type LTPXRemoteToolDef struct {
 	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
 }
 
-// LTPXRemoteRegisterRequest 琉璃启动时提交联络 URL 的请求体
-type LTPXRemoteRegisterRequest struct {
-	URL string `json:"url"` // 琉璃自身可访问的地址（如 http://localhost:XXXXX）
-}
-
 // LTPXRemoteStatusResult 月华同步琉璃工具链的返回结果
 type LTPXRemoteStatusResult struct {
 	Online bool                `json:"online"` // 琉璃是否在线
 	URL    string              `json:"url"`    // 当前记录的琉璃 URL（空表示未注册）
 	Tools  []LTPXRemoteToolDef `json:"tools"`  // 最新工具链
+}
+
+// LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）
+type LTPXRemoteEventResult struct {
+	Online   bool `json:"online"`   // 琉璃是否在线（离线时调用方回退使用原始数据）
+	Modified bool `json:"modified"` // 是否有插件通过 modifiedData 改写了负载
+	Data     any  `json:"data"`     // 插件处理后的负载；未改写/离线时为 null（调用方用原始数据）
+	Returned bool `json:"returned"` // 是否有插件通过 return 回传了本次事件的业务结果
+	Return   any  `json:"return"`   // 插件经 return 回传的业务结果；无回传时为 null（调用方走本地默认处理）
 }
 
 // LTPXRemoteCallRequest 月华请求调用琉璃工具的请求体

@@ -1,7 +1,8 @@
 package main
 
 import (
-	kokoro "CrystalAstral/kokoro"
+	kokoro "CrystalAstral/kokoro_tts"
+	asr "CrystalAstral/qwen_asr"
 	file "LunarSubsystem/FileManager/server"
 	image "LunarSubsystem/ImageProcessor/server"
 	media "LunarSubsystem/MediaTools/server"
@@ -30,21 +31,12 @@ var EmbeddedFiles embed.FS
 var StudioHubInstance *StudioHub
 
 // ==== 启动语音（后端直接播放） ====
+// 已移除：重构后琉璃不再主动向月华推送工具列表，也不再播放启动/停用语音并进行关闭前的 3 秒等待。
 
-// startupVoiceMutex 保护启动语音决策的并发读写
-var startupVoiceMutex sync.RWMutex
-
-// lastStartupVoice 最近一次启动时的语音决策（由后端直接播放对应语音，前端不再播放）
-// 默认 Voice 为空串表示「尚未决策」
-var lastStartupVoice = StartupVoice{}
-
-// ==== winmm 播放（后端播放启动语音 WAV，绕开浏览器自动播放限制） ====
+// ==== winmm 播放（后端播放失败音效 WAV，绕开浏览器自动播放限制） ====
 
 // winmmDLL Windows 多媒体库（winmm.dll），提供 PlaySoundW 播放 WAV 音频
 var winmmDLL = syscall.NewLazyDLL("winmm.dll")
-
-// procPlaySoundW PlaySoundW 函数句柄：从文件播放 WAV（SND_FILENAME）
-var procPlaySoundW = winmmDLL.NewProc("PlaySoundW")
 
 // procMCISendStringW MCI 命令函数句柄：播放 MP3 等 PlaySoundW 不支持的格式（MCI 设备命令）
 var procMCISendStringW = winmmDLL.NewProc("mciSendStringW")
@@ -129,12 +121,16 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
 	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
+	{Path: "/ltpx/event", Handler: ltpRemoteEventHandler, Method: "POST", Description: "月华事件推送（xx事件发生前负载经 LTP9 插件处理，返回处理/原始数据）"},
 	{Path: "/mini-ltp-agent.js", Handler: miniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（前端动态注入 Mini-LTP 包）"},
 	{Path: "/shared-input.js", Handler: sharedInputHandler, Method: "GET", Description: "统一键鼠操作共享模块（Self-LTP 与 Mini-LTP 智能体共享的页面操作原语）"},
 	{Path: "/self-ltp-agent.js", Handler: selfLTPAgentHandler, Method: "GET", Description: "自主页面操作智能体脚本（前端动态注入 Self-LTP 包，自带开始/停止控制面板）"},
 
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},
+
+	// ==== 语音识别（Qwen3-ASR 内嵌引擎，模型懒加载） ====
+	{Path: "/asr", Handler: asr.Handler, Method: "POST", Description: "Qwen3-ASR 语音识别"},
 
 	// ==== Kokoro 语音合成（内嵌引擎，同源 /kokoro/* 端点） ====
 	{Path: "/kokoro/tts", Handler: kokoroHandler(kokoro.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},

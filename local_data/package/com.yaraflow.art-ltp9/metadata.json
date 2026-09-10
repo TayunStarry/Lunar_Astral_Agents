@@ -1,0 +1,13 @@
+{
+  "id": "com.yaraflow.art-ltp9",
+  "title": "LTP9 绘图",
+  "description": "根据提示词调用 OpenAI 兼容绘图后端生成图片，经 engine.signal 广播结果。对外经 engine.call 调用 generatePicture，也可订阅 art.generate 事件。",
+  "icon": "icon.webp",
+  "version": "1.0.0",
+  "tags": [
+    "LTP9"
+  ],
+  "engine": "ltp9",
+  "main": "execute.js",
+  "configFile": "config.yaml"
+}

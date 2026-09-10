@@ -170,15 +170,6 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		}
 	}()
 
-	// LTPX 远端（月华）注册：琉璃启动时一次性向月华提交联络 URL。
-	// 月华固定端口，琉璃随机端口；多开时月华以最新注册为准。
-	// 注册结果同步决定启动语音（月华在线→工具包已发送；离线→无法交给月华）。
-	go func() {
-		// 给 HTTP 服务极短的启动宽限，确保月华探测时端口已就绪
-		time.Sleep(200 * time.Millisecond)
-		registerToLunar(port)
-	}()
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -188,10 +179,6 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	case <-BrowserClient.WebViewClosed():
 		LoggerGeneral.Info("CrystalAstral", "%s 检测到 WebView 关闭，正在关闭...", name)
 	}
-
-	// 月华在线期间关闭琉璃：由后端直接播放「工具包停用」语音 disable_tool_package.wav
-	// （浏览器窗口关闭后等待 3 秒再关服务器，确保语音完整播放完毕，见 notifyToolPackageDisabled）
-	notifyToolPackageDisabled()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

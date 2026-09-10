@@ -78,8 +78,6 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/write/engine", Handler: handlers.EngineMessageHandler, Method: "POST", Description: "引擎系统消息（动画列表/遥测等）"},
 	// ==== TTS语音服务相关接口 ====
 	{Path: "/tts", Handler: tts.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	// ==== LTPX 远程（琉璃）协调接口 ====
-	{Path: "/ltpx/register", Handler: handlers.LTPXRemoteRegisterHandler, Method: "POST", Description: "琉璃启动时提交联络URL"},
 	// ==== 智能体控制接口 ====
 	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
 	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},

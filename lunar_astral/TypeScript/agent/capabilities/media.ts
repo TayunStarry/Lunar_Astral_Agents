@@ -1,5 +1,6 @@
-import { getPromptFromKnowledge, savePromptToKnowledge, ImageContent, TextContent, GlobalConfig } from '../../index';
+import { getPromptFromKnowledge, savePromptToKnowledge, ImageContent, TextContent, GlobalConfig, PostMessage } from '../../index';
 import { descriptionRole, viewerRole, randomDefaultMessage } from '../roles/roles';
+import { interactEvent } from './ltp-event';
 
 /** 处理视频文件（观影者智能体） */
 async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
@@ -125,9 +126,14 @@ export async function LiteImageFile(): Promise<void> {
 export async function batchProcessVideoFiles(userNeeds?: string): Promise<void> {
     // 如果未读视频文件数组为空，直接返回
     if (GlobalConfig.unreadVideoUrl.length === 0) return;
-    // TODO : 事件 -> 观看视频前
-    //  遍历未读视频文件数组
-    for (const videoUrl of GlobalConfig.unreadVideoUrl) {
+    // 事件 -> 观看视频前：推送待处理视频列表，插件可改写后再逐个观看
+    const feedback: PostMessage[] = interactEvent('watch_video_before', { userNeeds, videoUrls: GlobalConfig.unreadVideoUrl }).return;
+    // 如果插件返回了视频解析结果则直接添加到上下文数组中
+    if (feedback && Array.isArray(feedback) && feedback.every(r => r.content && r.role !== undefined)) {
+        GlobalConfig.unreadContext.push(...feedback);
+    }
+    // 否则遍历未读视频文件数组，逐个处理
+    else for (const videoUrl of GlobalConfig.unreadVideoUrl) {
         try {
             // 处理视频文件
             await analysisVideoFile(videoUrl, userNeeds || '');

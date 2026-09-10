@@ -1089,6 +1089,22 @@ var agentSystem = (function (exports) {
         }
     }
 
+    function interactEvent(topic, payload) {
+        try {
+            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
+            if (!resultJSON)
+                return {};
+            const res = JSON.parse(resultJSON);
+            if (res && res.online && res.returned && res.return !== null && res.return !== undefined) {
+                return { return: res.return };
+            }
+        }
+        catch (e) {
+            console.error('LTPX 事件交互失败:', e);
+        }
+        return {};
+    }
+
     class PainterRole extends CreativeRoleBase {
         defaultExpressionPrompt = [
             '温柔的表情,开心的笑容,脸颊泛红',
@@ -1231,6 +1247,10 @@ var agentSystem = (function (exports) {
         buildSummary(paintings) {
             if (paintings.length === 0)
                 return '月华没有绘制任何作品';
+            const feedback = interactEvent('draw_painting_before', { paintings }).return;
+            if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
+                paintings = feedback;
+            }
             const parts = [];
             for (let i = 0; i < paintings.length; i++) {
                 const p = paintings[i];
@@ -1479,6 +1499,10 @@ K:Am
         buildSummary(pieces) {
             if (pieces.length === 0)
                 return '月华没有演奏任何作品';
+            const feedback = interactEvent('play_music_before', { pieces }).return;
+            if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
+                pieces = feedback;
+            }
             const parts = [];
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
@@ -1592,8 +1616,10 @@ K:Am
             if (!ensureSearcherInitialized()) {
                 return '研究任务调度失败：搜索者子智能体未就绪，请稍后重试';
             }
-            console.log('[搜索者] 开始执行研究:', taskDescription);
-            const [report, error] = searchExecute(taskDescription.trim());
+            const feedback = interactEvent('execute_search_before', { query: taskDescription }).return;
+            let query = (feedback && typeof feedback.query === 'string') ? feedback.query : taskDescription;
+            console.log('[搜索者] 开始执行研究:', query);
+            const [report, error] = searchExecute(query.trim());
             if (error) {
                 console.error('[搜索者] 执行失败:', error);
                 return `研究任务执行失败：${error}`;
@@ -2125,6 +2151,12 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     function processReferencesInText(raw) {
         if (!raw.includes('(#'))
             return { text: raw, changed: false };
+        const feedback = interactEvent('read_file_before', { text: raw }).return;
+        if (feedback && typeof feedback.text === 'string' && feedback.text !== raw) {
+            raw = feedback.text;
+            if (!raw.includes('(#'))
+                return { text: raw, changed: false };
+        }
         const refs = [];
         const re = /\(#([\w.-]+)\)/g;
         let m;
@@ -2293,14 +2325,16 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             GlobalConfig.unreadRecords = [];
         }
         queryRagSummary(userMessages) {
-            if (!userMessages || userMessages.length === 0)
+            if (!userMessages || userMessages.length === 0 || !ensureMemoryReady())
                 return '';
-            if (!ensureMemoryReady())
-                return '';
-            const records = this.retrieveRagRecords(userMessages);
+            let records = this.retrieveRagRecords(userMessages);
             if (records.length === 0) {
                 console.log('[记忆] 检索未命中任何相关记录');
                 return '';
+            }
+            const feedback = interactEvent('build_memory_before', { userMessages, records }).return;
+            if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
+                records = feedback;
             }
             return this.summarizeRecords(records);
         }
@@ -2452,15 +2486,20 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     async function batchProcessVideoFiles(userNeeds) {
         if (GlobalConfig.unreadVideoUrl.length === 0)
             return;
-        for (const videoUrl of GlobalConfig.unreadVideoUrl) {
-            try {
-                await analysisVideoFile(videoUrl, userNeeds || '');
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            catch (error) {
-                continue;
-            }
+        const feedback = interactEvent('watch_video_before', { userNeeds, videoUrls: GlobalConfig.unreadVideoUrl }).return;
+        if (feedback && Array.isArray(feedback) && feedback.every(r => r.content && r.role !== undefined)) {
+            GlobalConfig.unreadContext.push(...feedback);
         }
+        else
+            for (const videoUrl of GlobalConfig.unreadVideoUrl) {
+                try {
+                    await analysisVideoFile(videoUrl, userNeeds || '');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                catch (error) {
+                    continue;
+                }
+            }
         GlobalConfig.unreadVideoUrl = [];
     }
 
@@ -2522,6 +2561,9 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         [...injectedLTPXRemoteTools].forEach(removeLTPXRemoteTool);
     }
 
+    function interactLTPXStart() {
+        syncLTPXRemoteStatus();
+    }
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await dialogueRole.generateDialogue(cache);
@@ -2535,11 +2577,25 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             await pullExternalMessages();
             const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
             if (messageLength === 0) {
-                checkDueItems().forEach(item => GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` }));
+                checkDueItems().forEach(item => {
+                    const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
+                    const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
+                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+                });
                 GlobalConfig.reasoningInProgress = false;
                 return;
             }
-            syncLTPXRemoteStatus();
+            interactLTPXStart();
+            const feedback = interactEvent('message_received_before', {
+                messages: GlobalConfig.unreadContext,
+                videos: GlobalConfig.unreadVideoUrl,
+            }).return;
+            if (feedback) {
+                if (Array.isArray(feedback.messages))
+                    GlobalConfig.unreadContext = feedback.messages;
+                if (Array.isArray(feedback.videos))
+                    GlobalConfig.unreadVideoUrl = feedback.videos;
+            }
             await batchProcessVideoFiles();
             await processUnreadFiles();
             await createChatMessage();
@@ -2553,11 +2609,15 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             if (!validMessage.length)
                 throw new Error('清洗后的文本为空');
             if (actionBlocks.length) {
-                await actorRole.createCreativeWork(actionBlocks.join('|'));
+                const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
+                const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
+                await actorRole.createCreativeWork(actBlocks.join('|'));
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
             else if (validMessage.length <= 36 && Math.random() < 0.15) {
-                pushImage([await queryEmotionSticker(validMessage)], true);
+                const feedback = interactEvent('express_emotions_before', { text: validMessage }).return;
+                const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
+                pushImage([await queryEmotionSticker(emoText)], true);
             }
             thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''));
             codeBlocks.forEach(code => pushContext('text', code, ''));

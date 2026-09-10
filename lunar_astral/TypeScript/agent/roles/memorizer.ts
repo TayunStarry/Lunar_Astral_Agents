@@ -1,5 +1,6 @@
 import { GlobalConfig, ModelBuilder, modelResponse, SCHEDULE_TRIGGER_PREFIX } from '../../index';
 import { ensureMemoryReady, extractTextFromMessage } from '../capabilities/memory';
+import { interactEvent } from '../capabilities/ltp-event';
 
 /** 长期记忆集合名 */
 const MEMORY_COLLECTION = 'lunar_messages';
@@ -12,10 +13,15 @@ const RAG_MAX_RECORDS = 32;
 
 /** 记忆检索记录（与 memoryQuery 返回结构对齐） */
 interface RagRecord {
+	/** 记忆记录唯一标识 */
 	id: string;
+	/** 记忆记录角色 */
 	role: string;
+	/** 记忆记录内容 */
 	content?: string;
+	/** 记忆记录图片 */
 	image?: string;
+	/** 记忆记录相似度 */
 	similarity: number;
 }
 
@@ -72,15 +78,21 @@ export class MemorizerRole extends ModelBuilder {
 	 * @returns 连贯摘要文本（≤4096 字），失败时为空字符串
 	 */
 	public queryRagSummary(userMessages: string[]): string {
-		if (!userMessages || userMessages.length === 0) return '';
-		if (!ensureMemoryReady()) return '';
+		// 条件不满足时跳过
+		if (!userMessages || userMessages.length === 0 || !ensureMemoryReady()) return '';
 		// 搜索结果
-		const records = this.retrieveRagRecords(userMessages);
+		let records = this.retrieveRagRecords(userMessages);
+		// 检索结果为空时跳过
 		if (records.length === 0) {
 			console.log('[记忆] 检索未命中任何相关记录');
 			return '';
 		}
-		// TODO : 事件 -> 构建记忆前
+		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再总结
+		const feedback: RagRecord[] = interactEvent('build_memory_before', { userMessages, records }).return;
+		// 如果插件返回了新的检索记录则直接使用
+		if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
+			records = feedback;
+		}
 		// 总结与摘要
 		return this.summarizeRecords(records);
 	}

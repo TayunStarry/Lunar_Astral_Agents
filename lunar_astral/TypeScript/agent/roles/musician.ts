@@ -1,4 +1,5 @@
 import { ToolCall, ToolCallItem, CreativeRoleBase } from '../../index';
+import { interactEvent } from '../capabilities/ltp-event';
 
 /**
  * 音乐创作参数接口
@@ -24,12 +25,19 @@ export interface ComposeMusicParams {
 
 /** 音乐创作详情记录（用于向对话者传递作品信息） */
 interface MusicPieceDetail {
+	/** 音乐作品标题 */
 	title: string;
+	/** 使用的乐器列表，多个乐器用逗号分隔 */
 	instruments: string;
+	/** 演奏速度（BPM） */
 	tempo: number;
+	/** 音乐段落结构描述 */
 	structure: string;
+	/** 调式，如 C大调、a小调 */
 	key: string;
+	/** 拍号，如 4/4、3/4 */
 	meter: string;
+	/** ABC记谱法格式的完整乐谱长度（小节） */
 	abcLength: number;
 }
 
@@ -47,33 +55,33 @@ export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 				parameters: {
 					type: "object",
 					properties: {
-					"title": {
-						type: "string",
-						description: "音乐作品标题"
-					},
-					"instruments": {
-						type: "string",
-						description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、复古电钢琴、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)、萨克斯(sax)、贝斯(bass/低音提琴)、合成器(8bit/电子)、鼓组(打击乐)、氛围铺底(弦乐群)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'、'钢琴,贝斯,鼓组'三重奏等。"
-					},
-					"tempo": {
-						type: "number",
-						description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
-					},
-					"structure": {
-						type: "string",
-						description: "音乐段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
-					},
-					"key": {
-						type: "string",
-						description: "调式，如 C、G、D、F、a、e、d"
-					},
-					"meter": {
-						type: "string",
-						description: "拍号，如 4/4、3/4、6/8"
-					},
-					"abc_notation": {
-						type: "string",
-						description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用采样级音色库（温暖钢琴/复古电钢/清澈竖琴/尼龙吉他/大提琴/小提琴/长笛/单簧管/双簧管/小号/萨克斯/贝斯/8Bit/鼓组/氛围铺底）合成并经过LOFI混音效果链（混响/延迟/磁带饱和/压缩）处理。
+						"title": {
+							type: "string",
+							description: "音乐作品标题"
+						},
+						"instruments": {
+							type: "string",
+							description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、复古电钢琴、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)、萨克斯(sax)、贝斯(bass/低音提琴)、合成器(8bit/电子)、鼓组(打击乐)、氛围铺底(弦乐群)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'、'钢琴,贝斯,鼓组'三重奏等。"
+						},
+						"tempo": {
+							type: "number",
+							description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
+						},
+						"structure": {
+							type: "string",
+							description: "音乐段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
+						},
+						"key": {
+							type: "string",
+							description: "调式，如 C、G、D、F、a、e、d"
+						},
+						"meter": {
+							type: "string",
+							description: "拍号，如 4/4、3/4、6/8"
+						},
+						"abc_notation": {
+							type: "string",
+							description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用采样级音色库（温暖钢琴/复古电钢/清澈竖琴/尼龙吉他/大提琴/小提琴/长笛/单簧管/双簧管/小号/萨克斯/贝斯/8Bit/鼓组/氛围铺底）合成并经过LOFI混音效果链（混响/延迟/磁带饱和/压缩）处理。
 
 === 基础格式 ===
 X:1
@@ -136,7 +144,7 @@ K:Am
 - 可选加入贝斯（低音根音）与鼓组（节奏骨架），让音乐更有层次
 - 合理使用力度变化（开头mp、高潮f、结尾p）
 - 旋律要有乐句呼吸感（每4-8小节一个乐句，句末用稍长时值或休止）`
-					},
+						},
 					},
 					required: [
 						"title",
@@ -195,9 +203,17 @@ K:Am
 	}
 	/** 构建音乐作品摘要，使用月华话术格式 */
 	protected buildSummary(pieces: MusicPieceDetail[]): string {
+		// 检查是否有作品
 		if (pieces.length === 0) return '月华没有演奏任何作品';
-		// TODO : 事件 -> 演奏音乐前
+		// 事件 -> 演奏音乐前：推送作品详情，插件可改写后再汇总
+		const feedback: MusicPieceDetail[] = interactEvent('play_music_before', { pieces }).return;
+		// 插件可改写作品详情，如添加乐器、速度、结构等
+		if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
+			pieces = feedback;
+		}
+		/** 汇总音乐作品详情 */
 		const parts: string[] = [];
+		// 汇总每个作品的详情
 		for (let i = 0; i < pieces.length; i++) {
 			const p = pieces[i];
 			let desc = `月华演奏了《${p.title}》`;

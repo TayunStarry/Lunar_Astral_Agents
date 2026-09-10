@@ -165,17 +165,13 @@ type LTPXResultRequest struct {
 	KeepOpen  bool   `json:"keep_open,omitempty"` // 包是否要求执行后保持页面展示（如文件管理器）
 }
 
-// LunarRegisterResponse 月华返回的注册响应
-type LunarRegisterResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-}
-
-// StartupVoice 启动时语音决策（由后端直接播放对应语音，前端不再参与播放）
-type StartupVoice struct {
-	Voice string `json:"voice"` // "sent"（工具包已发送，月华在线）/ "failed"（无法交给月华）/ "disable"（工具包停用，琉璃关闭）
-	Lunar bool   `json:"lunar"` // 月华是否在线
-	Seq   int64  `json:"seq"`   // 决策序号（每次琉璃进程启动递增），记录顺序供后续决策判断
+// LTPXRemoteEventRequest 月华事件推送请求体（POST /ltpx/event）
+// 月华在每个「xx事件发生前」触发点把原始负载推送到琉璃，经 LTP9 引擎派发到订阅插件。
+type LTPXRemoteEventRequest struct {
+	Topic   string `json:"topic,omitempty"` // 事件主题（如 message_received_before）
+	Event   string `json:"event,omitempty"` // 事件中文名（备用，优先用 topic）
+	Payload any    `json:"payload,omitempty"`
+	Time    int64  `json:"time,omitempty"` // 事件发生时间戳（Unix 秒）
 }
 
 // StudioClient 工作室 WebSocket 客户端连接

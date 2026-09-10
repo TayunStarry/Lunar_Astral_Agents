@@ -5,11 +5,17 @@ package main
 // 本文件把它们转交给 StarLTP 引擎（Emit/Call/PluginStates），并把结果回执经 /ws 广播给页面。
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	star "CrystalAstral/agent/StarLTP"
+	kokoro "CrystalAstral/kokoro_tts"
+	asr "CrystalAstral/qwen_asr"
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 )
 
@@ -28,6 +34,8 @@ func ltp9HandleInbound(data []byte) bool {
 		ltp9HandleEvent(m)
 	case "ltp9/call":
 		ltp9HandleCall(m)
+	case "ltp9/tool":
+		ltp9HandleTool(m)
 	case "ltp9/stats":
 		ltp9HandleStats(m)
 	case "ltp9/broadcast":
@@ -74,11 +82,30 @@ func ltp9HandleCall(m map[string]any) {
 	ltp9Broadcast(out)
 }
 
-// ltp9HandleStats 查询 LTP9 已加载插件状态。
+// ltp9HandleTool engine.tool：调用目标插件注册的工具。
+func ltp9HandleTool(m map[string]any) {
+	reqID, _ := m["request_id"].(string)
+	plugin, _ := m["plugin"].(string)
+	tool, _ := m["tool"].(string)
+	params, _ := m["params"].(map[string]any)
+	if params == nil {
+		params = map[string]any{}
+	}
+	res := map[string]any{}
+	if value, err := star.CallTool(plugin, tool, params); err != nil {
+		res["error"] = err.Error()
+	} else {
+		res["value"] = value
+	}
+	out, _ := json.Marshal(map[string]any{"type": "ltp9/result", "request_id": reqID, "plugin": plugin, "tool": tool, "result": res})
+	ltp9Broadcast(out)
+}
+
+// ltp9HandleStats 查询 LTP9 已加载插件状态 + Mini-LTP/Node-LTP 前端智能体包。
 func ltp9HandleStats(m map[string]any) {
 	reqID, _ := m["request_id"].(string)
 	plugins := star.PluginStates()
-	out, _ := json.Marshal(map[string]any{"type": "ltp9/stats_ack", "request_id": reqID, "plugins": plugins})
+	out, _ := json.Marshal(map[string]any{"type": "ltp9/stats_ack", "request_id": reqID, "plugins": plugins, "agent_plugins": star.AgentPackages()})
 	ltp9Broadcast(out)
 }
 
@@ -92,11 +119,11 @@ func ltp9HandleBroadcast(m map[string]any) {
 	ltp9Broadcast(out)
 }
 
-// ltp9HandleProbe 探测 LTP9 引擎链路：返回在线状态 + 已加载插件。
+// ltp9HandleProbe 探测 LTP9 引擎链路：返回在线状态 + 已加载插件 + 前端智能体包。
 func ltp9HandleProbe(m map[string]any) {
 	reqID, _ := m["request_id"].(string)
 	plugins := star.PluginStates()
-	out, _ := json.Marshal(map[string]any{"type": "ltp9/pong", "request_id": reqID, "engine": "ltp9", "plugins": plugins})
+	out, _ := json.Marshal(map[string]any{"type": "ltp9/pong", "request_id": reqID, "engine": "ltp9", "plugins": plugins, "agent_plugins": star.AgentPackages()})
 	ltp9Broadcast(out)
 }
 
@@ -112,7 +139,7 @@ func ltp9Broadcast(data []byte) {
 }
 
 // ltp9HandleTest 处理 ltp9/test 信封：按 action 分发到 StarLTP 探针接口，并回执 ltp9/test_ack。
-// action 集合：agent / broadcast_target / file / db / memory / crypto(encode|decode) / jwt / llm / http / sleep。
+// action 集合：agent / broadcast_target / file / db / memory / crypto(encode|decode) / jwt / llm / command / http / sleep。
 func ltp9HandleTest(m map[string]any) {
 	reqID, _ := m["request_id"].(string)
 	action, _ := m["action"].(string)
@@ -207,6 +234,82 @@ func ltp9HandleTest(m map[string]any) {
 			opts = map[string]any{}
 		}
 		ack(star.ProbeLLM(msgs, opts), nil)
+	case "embed":
+		opts := asMap("opts")
+		if opts == nil {
+			opts = map[string]any{}
+		}
+		ack(star.ProbeLLMEmbed(m["input"], opts), nil)
+	case "tool":
+		pluginID := asString("plugin")
+		tool := asString("tool")
+		if pluginID == "" || tool == "" {
+			ack(nil, fmt.Errorf("tool 需提供 plugin 与 tool"))
+			return
+		}
+		params := asMap("params")
+		if params == nil {
+			params = map[string]any{}
+		}
+		ack(star.ProbeTool(pluginID, tool, params), nil)
+	case "emoji":
+		op := asString("op")
+		if op == "" {
+			op = "search"
+		}
+		params := asMap("params")
+		if params == nil {
+			params = map[string]any{}
+		}
+		ack(star.ProbeEmoji(op, params), nil)
+	case "platform":
+		method := asString("method")
+		if method == "" {
+			method = asString("op")
+		}
+		if method == "" {
+			method = "getName"
+		}
+		params := asMap("params")
+		if params == nil {
+			params = map[string]any{}
+		}
+		ack(star.ProbePlatform(method, params), nil)
+	case "command":
+		// 指令触发：向目标插件（plugin 留空则向全部插件）派发指令文本
+		pluginID := asString("plugin")
+		text := asString("text")
+		if text == "" {
+			ack(nil, fmt.Errorf("command 需提供 text"))
+			return
+		}
+		context := asMap("context")
+		if pluginID == "" {
+			ack(star.CommandAll(text, context), nil)
+		} else {
+			ack(star.Command(pluginID, text, context))
+		}
+	case "network":
+		// 裸 TCP/UDP/DNS：resolveDNS/SRV 即时返回；connect/listen 建立套接字并登记句柄；sock* 操作句柄
+		op := asString("op")
+		if op == "" {
+			ack(nil, fmt.Errorf("network 需提供 op"))
+			return
+		}
+		args, _ := m["args"].(map[string]any)
+		if args == nil {
+			args = map[string]any{}
+		}
+		ack(star.ProbeNetwork(op, args), nil)
+	case "async":
+		// 异步子任务：run（可指定包+导出函数为任务体，否则耗时模拟）/ reportProgress / getStatus / list
+		op := asString("op")
+		if op == "" {
+			ack(nil, fmt.Errorf("async 需提供 op"))
+			return
+		}
+		params := asMap("params")
+		ack(star.ProbeAsync(op, params), nil)
 	case "http":
 		method := asString("method")
 		if method == "" {
@@ -219,6 +322,89 @@ func ltp9HandleTest(m map[string]any) {
 		ack(star.ProbeHTTP(method, asString("url"), asString("body"), headers), nil)
 	case "sleep":
 		ack(star.ProbeSleep(asFloat("ms")), nil)
+	case "kokoro_tts":
+		// Kokoro 语音合成：text → base64 WAV 音频（voice/speed/lang 可选，mix 可多音色混合）
+		text := asString("text")
+		if text == "" {
+			ack(nil, fmt.Errorf("kokoro_tts 需提供 text"))
+			return
+		}
+		if err := ensureKokoro(); err != nil {
+			ack(nil, err)
+			return
+		}
+		keng := kokoro.GetEngine()
+		if keng == nil {
+			ack(nil, fmt.Errorf("Kokoro 引擎未就绪"))
+			return
+		}
+		var mix []kokoro.MixVoice
+		if raw, ok := m["mix"].([]any); ok {
+			for _, item := range raw {
+				if im, ok := item.(map[string]any); ok {
+					mv, _ := im["voice"].(string)
+					var w float64
+					if f, ok := im["weight"].(float64); ok {
+						w = f
+					}
+					if mv != "" {
+						mix = append(mix, kokoro.MixVoice{Voice: mv, Weight: w})
+					}
+				}
+			}
+		}
+		samples, phonemes, serr := keng.Synthesize(text, asString("voice"), float32(asFloat("speed")), asString("lang"), mix)
+		if serr != nil {
+			ack(nil, serr)
+			return
+		}
+		ack(map[string]any{
+			"success":     true,
+			"audio":       base64.StdEncoding.EncodeToString(kokoro.EncodePCMToWAV(samples, kokoro.SampleRate)),
+			"phonemes":    phonemes,
+			"voice":       asString("voice"),
+			"sample_rate": kokoro.SampleRate,
+		}, nil)
+	case "qwen_tts":
+		// Qwen 语音合成：text → 经月华 /tts 代理合成 base64 音频（需月华服务在线）
+		text := asString("text")
+		if text == "" {
+			ack(nil, fmt.Errorf("qwen_tts 需提供 text"))
+			return
+		}
+		target := fmt.Sprintf("http://127.0.0.1:%d/tts", *GeneralConfig.EnginePort)
+		reqBody, _ := json.Marshal(map[string]any{"text": text, "ref_audio": asString("ref_audio")})
+		resp, err := http.Post(target, "application/json", strings.NewReader(string(reqBody)))
+		if err != nil {
+			ack(nil, fmt.Errorf("请求月华 /tts 失败: %w", err))
+			return
+		}
+		defer resp.Body.Close()
+		data, _ := io.ReadAll(resp.Body)
+		var parsed map[string]any
+		if json.Unmarshal(data, &parsed) == nil && parsed != nil {
+			parsed["status"] = resp.StatusCode
+			ack(parsed, nil)
+			return
+		}
+		ack(map[string]any{"status": resp.StatusCode, "body": string(data)}, nil)
+	case "qwen_asr":
+		// Qwen 语音识别：base64 音频 → 识别文本（wav 直接识别，其他格式经 ffmpeg 转 16k 单声道）
+		audioB64 := asString("audio")
+		if strings.TrimSpace(audioB64) == "" {
+			ack(nil, fmt.Errorf("qwen_asr 需提供 audio (base64)"))
+			return
+		}
+		format := asString("format")
+		if format == "" {
+			format = "wav"
+		}
+		text, confidence, terr := asr.TranscribeBase64(audioB64, format)
+		if terr != nil {
+			ack(nil, terr)
+			return
+		}
+		ack(map[string]any{"text": text, "confidence": confidence, "audio_format": "wav"}, nil)
 	default:
 		ack(nil, fmt.Errorf("未知 ltp9/test action: %s", action))
 	}

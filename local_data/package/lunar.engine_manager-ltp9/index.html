@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>『 星月智能 』LTP9 引擎测试</title>
+    <title>『 星月智能 』LTP9 引擎</title>
     <!-- 标准依赖 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
@@ -21,7 +21,7 @@
         <header class="topbar">
             <div class="brand">
                 <i class="fas fa-project-diagram"></i>
-                <span>LTP9 引擎可视化测试</span>
+                <span>LTP9 引擎</span>
             </div>
             <div class="ws-state" id="wsState">
                 <span class="status-dot" id="wsDot"></span>
@@ -49,19 +49,59 @@
             </div>
         </header>
 
-        <!-- ===== 主画布区 ===== -->
+        <!-- ===== 主画布区：左右侧边栏 + 中央画布 ===== -->
         <div class="main">
+            <!-- ===== 左侧边栏：节点模块（由左下圆形按钮控制折叠/展开，默认收起） ===== -->
+            <aside class="sidebar sidebar-left" id="nodeSidebar">
+                <div class="sidebar-panel">
+                    <div class="sidebar-head">
+                        <i class="fas fa-shapes"></i> 节点模块
+                        <button class="btn-ghost btn-mini sidebar-close" id="nodeSidebarClose" title="收起">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar-tabs" id="nodeTabs"></div>
+                    <div class="sidebar-body" id="nodeContent"></div>
+                </div>
+            </aside>
+
             <!-- ===== 中央画布 ===== -->
             <main class="canvas-wrap">
                 <div class="canvas" id="canvas">
                     <div class="canvas-hint" id="canvasHint">
-                        点击左下角「节点模块」添加节点；从节点下方输出端口拖到目标上方输入端口建立连线<br>
+                        从左侧「节点模块」拖拽节点放入画布；从节点下方输出端口拖到目标上方输入端口建立连线<br>
                         <span>点击节点编辑参数；时钟线决定执行顺序；双击连线删除</span>
                     </div>
                     <svg class="links-svg" id="linksSvg"></svg>
                     <div class="nodes-layer" id="nodesLayer"></div>
                 </div>
             </main>
+
+            <!-- ===== 右侧边栏：引擎日志（由右下圆形按钮控制折叠/展开，默认收起） ===== -->
+            <aside class="sidebar sidebar-right" id="logSidebar">
+                <div class="sidebar-panel">
+                    <div class="sidebar-head">
+                        <i class="fas fa-comments"></i> 引擎日志
+                        <button class="btn-ghost btn-mini sidebar-close" id="clearLogBtn" title="清空日志">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                        <button class="btn-ghost btn-mini sidebar-close" id="closeLogBtn" title="收起">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="sidebar-tools">
+                        <div class="log-filters" id="logFilters">
+                            <button class="filter-chip active" data-filter="all">全部</button>
+                            <button class="filter-chip" data-filter="send">发送</button>
+                            <button class="filter-chip" data-filter="recv">回执</button>
+                            <button class="filter-chip" data-filter="error">错误</button>
+                        </div>
+                    </div>
+                    <div class="sidebar-body" id="logList">
+                        <div class="empty-tip">暂无日志</div>
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 
@@ -77,46 +117,10 @@
         <span class="log-fab-badge" id="logCount">0</span>
     </button>
 
-    <!-- ===== 引擎日志悬浮窗 ===== -->
-    <div class="message-pop" id="logModal">
-        <div class="pop-head drag-handle">
-            <i class="fas fa-comments"></i> 引擎日志
-            <button class="btn-ghost btn-mini" id="clearLogBtn" title="清空日志">
-                <i class="fas fa-trash-alt"></i>
-            </button>
-            <button class="btn-ghost btn-mini" id="closeLogBtn" title="关闭日志">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="pop-tools">
-            <div class="log-filters" id="logFilters">
-                <button class="filter-chip active" data-filter="all">全部</button>
-                <button class="filter-chip" data-filter="send">发送</button>
-                <button class="filter-chip" data-filter="recv">回执</button>
-                <button class="filter-chip" data-filter="error">错误</button>
-            </div>
-        </div>
-        <div class="pop-body" id="logList">
-            <div class="empty-tip">暂无日志</div>
-        </div>
-    </div>
-
     <!-- ===== 节点模块按钮（左下角，圆形） ===== -->
     <button class="node-fab" id="nodeFab" title="节点模块：分类选择节点并加入画布">
         <i class="fas fa-shapes"></i>
     </button>
-
-    <!-- ===== 节点模块悬浮窗（按类型/功能分页） ===== -->
-    <div class="node-modal" id="nodeModal">
-        <div class="node-modal-head drag-handle">
-            <i class="fas fa-shapes"></i> 节点模块
-            <button class="btn-ghost btn-mini" id="nodeClose" title="关闭">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="node-modal-tabs" id="nodeTabs"></div>
-        <div class="node-modal-body" id="nodeContent"></div>
-    </div>
 
     <div class="toast-wrap" id="toastWrap"></div>
 

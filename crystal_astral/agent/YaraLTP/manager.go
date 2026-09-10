@@ -18,6 +18,31 @@ func newEngine() *engine {
 	}
 }
 
+// guarded 看门狗执行返回：v 为执行结果，err 为执行错误，timed 表示是否超时。
+type guarded[T any] struct {
+	v     T
+	err   error
+	timed bool
+}
+
+// runGuarded 在 goroutine 中执行 exec（exec 内部负责持有/释放插件锁），并在 timeout 内等待结果。
+// 超时返回 timed=true，调用方跳过该插件继续分发，避免单个死循环插件卡住整条分发线程。
+// 注：exec 需自行用插件互斥锁串行化同一插件的 VM 访问；超时后无法强杀正在执行的 goroutine，
+// 只能保证分发器不被其阻塞。
+func runGuarded[T any](timeout time.Duration, exec func() (T, error)) guarded[T] {
+	ch := make(chan guarded[T], 1)
+	go func() {
+		v, err := exec()
+		ch <- guarded[T]{v: v, err: err}
+	}()
+	select {
+	case r := <-ch:
+		return r
+	case <-time.After(timeout):
+		return guarded[T]{timed: true}
+	}
+}
+
 // LoadAll 扫描包根目录并加载全部 LTP3 包（启动时调用）。
 func (e *engine) LoadAll() {
 	e.root = packageRoot()
@@ -175,13 +200,27 @@ func (e *engine) DispatchHook(hookType string, payload any, ctx map[string]any, 
 	summary := dispatchSummary{AllowContinue: true}
 	all := []hookOutcome{}
 	for _, p := range snap {
-		p.mu.Lock()
-		old := p.currentRequestID
-		p.currentRequestID = requestID
-		outs := p.runHook(hookType, payload, ctx)
-		p.currentRequestID = old
-		p.mu.Unlock()
-		for _, oc := range outs {
+		r := runGuarded(watchdogTimeout, func() ([]hookOutcome, error) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			old := p.currentRequestID
+			p.currentRequestID = requestID
+			outs := p.runHook(hookType, payload, ctx)
+			p.currentRequestID = old
+			return outs, nil
+		})
+		if r.timed {
+			LoggerGeneral.Warn(ServiceName, "看门狗: 插件 %s 钩子 %s 执行超时(>%s)，已跳过", p.ID, hookType, watchdogTimeout)
+			summary.Errored++
+			summary.Subscribed++
+			continue
+		}
+		if r.err != nil {
+			summary.Errored++
+			summary.Subscribed++
+			continue
+		}
+		for _, oc := range r.v {
 			all = append(all, oc)
 			if oc.Error != "" {
 				summary.Errored++
@@ -217,11 +256,20 @@ func (e *engine) PublishEvent(topic string, payload any) int {
 
 	cnt := 0
 	for _, p := range snap {
-		p.mu.Lock()
-		subs := len(p.events[topic])
-		p.fireEventLocal(topic, payload)
-		p.mu.Unlock()
-		cnt += subs
+		r := runGuarded(watchdogTimeout, func() (int, error) {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			n := len(p.events[topic])
+			p.fireEventLocal(topic, payload)
+			return n, nil
+		})
+		if r.timed {
+			LoggerGeneral.Warn(ServiceName, "看门狗: 插件 %s 事件 %s 执行超时(>%s)，已跳过", p.ID, topic, watchdogTimeout)
+			continue
+		}
+		if r.err == nil {
+			cnt += r.v
+		}
 	}
 	return cnt
 }

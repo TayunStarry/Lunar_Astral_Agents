@@ -67,6 +67,10 @@ const reconcileInterval = 3 * time.Second
 // httpDefaultTimeout 插件 HTTP 请求默认超时（秒），与协议文档一致。
 const httpDefaultTimeout = 120
 
+// watchdogTimeout 看门狗：单次插件 JS 回调执行的最长等待。超过则视为该插件挂起，
+// 跳过其后续分发并继续处理其它插件，避免单个死循环插件卡住整条分发线程。
+const watchdogTimeout = 30 * time.Second
+
 // inboundWorkerCount 入站分发 worker 协程数量：不同插件/不同群聊的调用并发执行，
 // 单个慢工具/慢钩子不再阻塞其它调用。
 const inboundWorkerCount = 16
@@ -93,6 +97,13 @@ var sendOut func([]byte)
 
 // sendMu 保护 sendOut 的并发设置/读取。
 var sendMu sync.RWMutex
+
+// platformCmdMu 保护 platformCmdInvoker 的并发设置/读取。
+var platformCmdMu sync.RWMutex
+
+// platformCmdInvoker 平台命令执行器（yara.platform.sendCommand 的真实后端，由宿主 crystal_astral 注入）。
+// 未注入时 sendCommand 返回明确错误提示（真实命令能力在客户端侧）。
+var platformCmdInvoker func(cmd string, args map[string]any) (any, error)
 
 // reconcileStop 停止对账循环的信号通道（Close 时关闭）。
 var reconcileStop chan struct{}

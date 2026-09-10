@@ -402,14 +402,14 @@ body {
 .toolbar-toggle {
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     z-index: 101;
     width: 48px;
     height: 26px;
     border: 1px solid var(--panel-border);
     border-bottom: none;
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border-left: none;
+    border-radius: 0 var(--radius-md) 0 0;
     background: var(--toolbar-bg);
     backdrop-filter: blur(var(--glass-blur));
     color: var(--text-secondary);

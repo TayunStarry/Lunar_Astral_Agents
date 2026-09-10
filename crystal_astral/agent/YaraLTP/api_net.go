@@ -615,8 +615,20 @@ func ipStr(addr net.Addr) string {
 func bindPlatform(vm *goja.Runtime, parent *goja.Object) {
 	o := newObj(vm)
 	objSetFn(o, "sendCommand", func(call goja.FunctionCall) goja.Value {
-		// 平台命令需真实客户端承接，引擎层仅占位（返回未接入）。
-		return vm.ToValue(map[string]any{"success": false, "error": "平台命令未接入，属于真实客户端能力"})
+		// 平台命令由宿主注入的解析器执行；未注入时返回明确错误提示（真实命令能力在客户端侧）。
+		platformCmdMu.RLock()
+		inv := platformCmdInvoker
+		platformCmdMu.RUnlock()
+		if inv == nil {
+			return vm.ToValue(map[string]any{"success": false, "error": "平台命令通道未注入（需由宿主 crystal_astral SetPlatformCommand 提供）"})
+		}
+		cmd := argString(call, 0)
+		args := argMap(call, 1)
+		res, err := inv(cmd, args)
+		if err != nil {
+			return vm.ToValue(map[string]any{"success": false, "error": err.Error()})
+		}
+		return vm.ToValue(res)
 	})
 	objSetFn(o, "getName", func(call goja.FunctionCall) goja.Value {
 		return vm.ToValue("crystal_astral")

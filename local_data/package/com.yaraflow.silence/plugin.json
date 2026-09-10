@@ -1,0 +1,79 @@
+{
+  "manifestVersion": 1,
+  "id": "com.yaraflow.silence",
+  "name": "沉默插件",
+  "version": "1.0.0",
+  "type": "plugin",
+  "description": "使语瞳在合适的时候保持沉默（窥屏），支持LLM自主决策和手动命令控制。当群聊气氛不对、有人反感语瞳说话、或管理员需要语瞳安静时，插件会自动或手动进入沉默状态，暂时停止回复消息。",
+  "author": {
+    "name": "YaraFlow",
+    "url": "https://github.com/YaraFlow"
+  },
+  "license": "GPL-3.0",
+  "main": "index.js",
+  "permissions": [
+    "hook.register",
+    "command.register",
+    "tool.register",
+    "send.text",
+    "plugin.config.read",
+    "plugin.config.write",
+    "plugin.file.read",
+    "plugin.file.write",
+    "time.use"
+  ],
+  "config": {
+    "type": "yaml",
+    "configFile": "config.yaml",
+    "default": {},
+    "sections": [
+      {
+        "name": "components",
+        "label": "功能开关",
+        "description": "启用或禁用各功能模块",
+        "order": 0,
+        "fields": [
+          { "name": "enable_silence_tool", "type": "boolean", "description": "启用沉默工具（供LLM自主调用）", "default": true, "order": 0 },
+          { "name": "enable_silence_command", "type": "boolean", "description": "启用 /silence 手动命令", "default": true, "order": 1 },
+          { "name": "enable_silence_hook", "type": "boolean", "description": "启用沉默消息拦截Hook", "default": true, "order": 2 }
+        ]
+      },
+      {
+        "name": "permissions",
+        "label": "权限设置",
+        "description": "管理员用户配置，格式为 平台:ID（如 qq:123456）。留空表示无管理员",
+        "order": 1,
+        "fields": [
+          { "name": "white_or_black_list", "type": "select", "description": "管理员列表模式。whitelist=仅列表内用户可用，blacklist=列表内用户不可用", "default": "whitelist", "order": 0, "options": [{ "label": "白名单（仅列表内用户可用）", "value": "whitelist" }, { "label": "黑名单（列表内用户不可用）", "value": "blacklist" }] },
+          { "name": "admin_users", "type": "array", "description": "管理员用户列表，格式: 平台:用户ID，示例: qq:123456789", "default": [], "order": 1 }
+        ]
+      },
+      {
+        "name": "adjustment",
+        "label": "沉默参数",
+        "description": "沉默时间范围和限制",
+        "order": 2,
+        "fields": [
+          { "name": "low_case_min", "type": "integer", "description": "低级别沉默最小时间（秒），示例: 120", "default": 120, "order": 0 },
+          { "name": "low_case_max", "type": "integer", "description": "低级别沉默最大时间（秒），示例: 600", "default": 600, "order": 1 },
+          { "name": "medium_case_min", "type": "integer", "description": "中级别沉默最小时间（秒），示例: 600", "default": 600, "order": 2 },
+          { "name": "medium_case_max", "type": "integer", "description": "中级别沉默最大时间（秒），示例: 1200", "default": 1200, "order": 3 },
+          { "name": "serious_case_min", "type": "integer", "description": "高级别沉默最小时间（秒），示例: 1200", "default": 1200, "order": 4 },
+          { "name": "serious_case_max", "type": "integer", "description": "高级别沉默最大时间（秒），示例: 5400", "default": 5400, "order": 5 },
+          { "name": "max_action_silence_time", "type": "integer", "description": "通过LLM动作触发的最大沉默时间（秒），超过将被拒绝，示例: 10800", "default": 10800, "order": 6 }
+        ]
+      },
+      {
+        "name": "experimental",
+        "label": "实验性功能",
+        "description": "实验性功能，谨慎使用",
+        "order": 3,
+        "fields": [
+          { "name": "silence_special_check", "type": "boolean", "description": "启用针对特定用户或群聊的默认沉默功能（实验性）", "default": false, "order": 0 },
+          { "name": "silence_someone_list", "type": "array", "description": "默认沉默的用户ID列表，格式: 平台:用户ID，示例: qq:123456789", "default": [], "order": 1 },
+          { "name": "silence_group_list", "type": "array", "description": "默认沉默的群聊ID列表，格式: 平台:群号，示例: qq:123456789", "default": [], "order": 2 }
+        ]
+      }
+    ]
+  }
+}

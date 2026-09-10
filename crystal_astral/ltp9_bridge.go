@@ -33,7 +33,26 @@ func BridgeLTP9() error {
 		Serve:   ltp9WSServe,
 		Publish: ltp9WSPublish,
 	})
+	// engine.platform：注入平台上下文解析器（getName 返回本进程标识；群/用户由消息代理承接）
+	star.SetPlatformResolver(ltp9PlatformResolve)
 	return rerr
+}
+
+// ltp9PlatformResolve engine.platform 的宿主通道。
+// crystal_astral 为主进程（不直接持有单群会话上下文），
+// getName 返回本进程标识；getGroupId / lookupUser 由实际消息代理（napcat / lunar_astral）承接，
+// 当前返回空/ null，避免「未接入平台」错误，供插件安全降级。
+func ltp9PlatformResolve(method string, args map[string]any) (any, error) {
+	switch method {
+	case "getName":
+		return "crystal_astral", nil
+	case "getGroupId":
+		return "", nil
+	case "lookupUser":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("未知平台方法: %s", method)
+	}
 }
 
 // ltpPushSend engine.send 的宿主通道：把 image/text/hybrid 请求封装为枚举转发到 /ws 集线器。

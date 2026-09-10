@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -21,7 +24,8 @@ import (
 )
 
 // fetchTimeout 一次 fetch 的默认超时。
-const fetchTimeout = 60 * time.Second
+// 图像生成（如 Seedream 2K）耗时可达 40~120s，放宽默认超时避免误判客户端超时（status 0）。
+const fetchTimeout = 150 * time.Second
 
 // bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（allow-network 门控，由 plugin.load 调用）。
 func bindNetwork(vm *goja.Runtime, p *plugin) {
@@ -56,7 +60,7 @@ func bindNetwork(vm *goja.Runtime, p *plugin) {
 
 // httpGetSync 同步 GET：阻塞直到返回，回 {status, body} 或 {error}。供不用异步的插件使用。
 func httpGetSync(url string, headers map[string]any) map[string]any {
-	opts := map[string]any{"method": "GET", "timeout": 60}
+	opts := map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)}
 	if len(headers) > 0 {
 		opts["headers"] = headers
 	}
@@ -68,8 +72,41 @@ func httpGetSync(url string, headers map[string]any) map[string]any {
 }
 
 // httpPostSync 同步 POST：阻塞直到返回，返回 {status, body} 或 {error}。
+func httpDownloadSync(p *plugin, rawURL, savePath string) map[string]any {
+	if p == nil {
+		return map[string]any{"success": false, "error": "插件无效"}
+	}
+	// savePath 为空时按 URL 末段命名，非法则退化为 download.bin
+	if savePath == "" {
+		if u, uerr := url.Parse(rawURL); uerr == nil {
+			name := path.Base(u.Path)
+			if name == "." || name == "/" || name == "" {
+				name = "download.bin"
+			}
+			savePath = name
+		} else {
+			savePath = "download.bin"
+		}
+	}
+	real, serr := scopedPath(p, savePath)
+	if serr != nil {
+		return map[string]any{"success": false, "error": serr.Error()}
+	}
+	status, _, _, body, _, _, err := doLTP9Fetch(rawURL, map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)})
+	if err != nil {
+		return map[string]any{"success": false, "error": "下载失败: " + err.Error()}
+	}
+	if status < 200 || status >= 300 {
+		return map[string]any{"success": false, "error": fmt.Sprintf("下载状态: %d", status)}
+	}
+	if werr := os.WriteFile(real, body, 0644); werr != nil {
+		return map[string]any{"success": false, "error": werr.Error()}
+	}
+	return map[string]any{"success": true, "path": savePath, "size": len(body)}
+}
+
 func httpPostSync(url, body string, headers map[string]any) map[string]any {
-	opts := map[string]any{"method": "POST", "body": body, "timeout": 60}
+	opts := map[string]any{"method": "POST", "body": body, "timeout": float64(fetchTimeout / time.Second)}
 	if len(headers) > 0 {
 		opts["headers"] = headers
 	}

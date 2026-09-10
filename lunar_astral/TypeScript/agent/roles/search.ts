@@ -1,4 +1,5 @@
 import { PostMessage } from '../../index';
+import { interactEvent } from '../capabilities/ltp-event';
 
 /** 搜索者是否已初始化 */
 let searchInitialized = false;
@@ -43,10 +44,12 @@ export class SearcherRole {
 		if (!ensureSearcherInitialized()) {
 			return '研究任务调度失败：搜索者子智能体未就绪，请稍后重试';
 		}
-		// TODO : 事件 -> 执行搜索前
+		// 事件 -> 执行搜索前：推送研究需求，插件可经 return.query 改写查询后再执行
+		const feedback: { query?: string } = interactEvent('execute_search_before', { query: taskDescription }).return;
+		let query = (feedback && typeof feedback.query === 'string') ? feedback.query : taskDescription;
 
-		console.log('[搜索者] 开始执行研究:', taskDescription);
-		const [report, error] = searchExecute(taskDescription.trim());
+		console.log('[搜索者] 开始执行研究:', query);
+		const [report, error] = searchExecute(query.trim());
 
 		if (error) {
 			console.error('[搜索者] 执行失败:', error);

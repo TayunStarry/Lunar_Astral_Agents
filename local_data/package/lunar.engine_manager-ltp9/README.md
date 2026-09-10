@@ -15,6 +15,7 @@
 5. **运行 / 停止**：运行中「运行全部」按钮变为「停止运行」，可随时点击停止（含清除时钟/事件等待）。
 6. 逻辑门（AND/OR/NOT/NAND/NOR）**仅作门控**：按输入成败计算后决定是否放行下游。
 7. 回执显示在右下角「引擎日志」悬浮窗（有新日志时按钮高亮闪烁）。
+8. **保存 / 加载**：画布以 JSON 文件持久化到 `local_data/database/lunar.engine_manager_ltp9.graph.json`（与项目数据库同目录），启动时自动加载，不存在则载入示例。
 
 ## 能力节点
 | 节点 | 对应 engine 能力 | 后端信封 |
@@ -27,7 +28,7 @@
 | 全局/定向广播 | `engine.signal.all / target` | `ltp9/broadcast` / `ltp9/test action=broadcast_target` |
 | 跨包调用 | `engine.call(包ID).run` | `ltp9/call` |
 | 前端智能体 | `engine.agent(包ID).run`（Mini-LTP/Node-LTP） | `ltp9/test action=agent` |
-| 数据库 | `engine.database.query/exec`（SQLite ltp9.db） | `ltp9/test action=db` |
+| 数据库 | `engine.database.query/exec`（SQLite knowledge.db） | `ltp9/test action=db` |
 | 记忆库 | `engine.memory.store/search`（向量库 ltp9_memory） | `ltp9/test action=memory` |
 | 文件 | `engine.file.write/read/delete`（探针目录 database/ltp9_probe） | `ltp9/test action=file` |
 | 加密/解密 | `engine.encoder/decoder`（lunar_decoder 往返） | `ltp9/test action=crypto` |

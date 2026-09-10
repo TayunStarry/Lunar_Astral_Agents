@@ -6,6 +6,10 @@
 
 /* ---------- CSS Variables (设计令牌) ---------- */
 :root {
+    /* 背景渐变（与统一设计体系一致） */
+    --bg-gradient: linear-gradient(160deg, #c4cdd6 0%, #d5dbe3 25%, #e0e5ea 55%, #ccd4dc 100%);
+    --bg-glass-layer: rgba(255, 255, 255, 0.12);
+
     /* 玻璃效果 */
     --glass-bg: rgba(255, 255, 255, 0.28);
     --glass-border: rgba(255, 255, 255, 0.25);
@@ -46,6 +50,9 @@
 
 /* ---------- 暗色模式覆盖 ---------- */
 .dark-mode {
+    --bg-gradient: linear-gradient(160deg, #111114 0%, #16161a 25%, #1c1c21 55%, #131317 100%);
+    --bg-glass-layer: rgba(0, 0, 0, 0.30);
+
     --glass-bg: rgba(38, 38, 42, 0.75);
     --glass-border: rgba(255, 255, 255, 0.12);
     --glass-bg-strong: rgba(38, 38, 42, 0.85);
@@ -74,11 +81,11 @@ body {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background: #f0f2f5;
+    background: var(--bg-gradient);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    transition: var(--transition);
+    transition: background 0.45s ease;
 }
 
 code {
@@ -99,9 +106,8 @@ code {
     position: fixed;
     inset: 0;
     z-index: 0;
-    background: url('/background') center / cover no-repeat fixed;
-    filter: blur(8px);
-    transform: scale(1.05);
+    background: var(--bg-gradient);
+    transition: background 0.45s ease;
 }
 
 /* 第二层：半透明覆盖 + 模糊 */
@@ -109,13 +115,13 @@ code {
     position: fixed;
     inset: 0;
     z-index: 0;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--bg-glass-layer);
     backdrop-filter: blur(5px) saturate(180%);
     -webkit-backdrop-filter: blur(5px) saturate(180%);
 }
 
 .dark-mode .glass-effect {
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--bg-glass-layer);
 }
 
 /* 第三层：主内容 */

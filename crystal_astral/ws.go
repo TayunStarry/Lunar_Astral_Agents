@@ -21,6 +21,17 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// ==== WebSocket 心跳参数 ====
+// 此前读协程对每次读取都设固定 60s 读超时，页面闲置（不发消息）时连接会被超时断开，
+// 导致前端每隔一会儿就重连。现改为服务端定期发 ping、浏览器自动回 pong，
+// 收到 pong 即刷新读超时，闲置连接可长期维持。
+const (
+	wsWriteWait  = 10 * time.Second // 单次写入超时
+	wsPongWait   = 90 * time.Second // 最长等待一次 pong（服务端每 wsPingPeriod 发一次 ping）
+	wsPingPeriod = 30 * time.Second // 服务端发送 ping 的间隔
+	wsMaxMessage = 10 * 1024 * 1024 // 单条消息上限（支持 base64 图片数据）
+)
+
 // ==== 工作室集线器 ====
 
 // NewStudioHub 创建工作室集线器实例
@@ -83,28 +94,45 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// 写协程：将 Send 通道中的消息写入 WebSocket 连接
+	// 写协程：将 Send 通道中的消息写入 WebSocket 连接，并定时发心跳 ping 维持连接
 	go func() {
 		defer wg.Done()
 		defer conn.Close()
-		for message := range client.Send {
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				return
+		ticker := time.NewTicker(wsPingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case message, ok := <-client.Send:
+				conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+				if !ok {
+					return // Send 通道已关闭（集线器注销），退出
+				}
+				if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+					return
+				}
+			case <-ticker.C: // 心跳：浏览器自动回 pong → 读协程刷新读超时
+				conn.SetWriteDeadline(time.Now().Add(wsWriteWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
 			}
 		}
 	}()
 
-	// 读协程：从 WebSocket 连接读取消息并广播给所有客户端
+	// 读协程：从 WebSocket 连接读取消息并广播给所有客户端；收到 pong 刷新读超时
 	go func() {
 		defer wg.Done()
 		defer func() {
 			h.Unregister <- client
 			conn.Close()
 		}()
-		conn.SetReadLimit(10 * 1024 * 1024) // 10MB 最大消息大小（支持 base64 图片数据）
+		conn.SetReadLimit(wsMaxMessage)
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(wsPongWait))
+			return nil
+		})
+		conn.SetReadDeadline(time.Now().Add(wsPongWait))
 		for {
-			conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
@@ -112,7 +140,7 @@ func (h *StudioHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				break
 			}
-			// 转发给所有客户端 + 非阻塞送入引擎入站通道（LTP3 引擎等内部消费者）
+			// 控制帧（ping/pong）由 gorilla 内部处理，不会走到这里；仅数据帧继续广播
 			h.Broadcast <- message
 			select {
 			case h.Inbound <- message:

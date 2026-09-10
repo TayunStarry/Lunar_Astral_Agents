@@ -17,6 +17,12 @@ import (
 // callAwaitTimeout 等待异步导出函数（Promise）敲定的超时。
 const callAwaitTimeout = 90 * time.Second
 
+// callResult 一次回调执行的返回载体：out 为普通结果，err 为错误。
+type callResult struct {
+	out any
+	err error
+}
+
 // newPlugin 依据包目录构造插件实例，并为其创建独立事件循环（goja.New + 自带定时器）。
 func newPlugin(dir, root, id, title string) *plugin {
 	p := &plugin{
@@ -30,6 +36,9 @@ func newPlugin(dir, root, id, title string) *plugin {
 		KeyPath:    filepath.Join(root, KeyFileName),
 		events:     map[string][]*eventSub{},
 		exports:    map[string]jsFunc{},
+		commands:   map[string]*commandEntry{},
+		tools:      map[string]*toolEntry{},
+		asyncTasks: map[int]*asyncTask{},
 	}
 	_ = os.MkdirAll(p.DataDir, 0755)
 	// 启动插件独立事件循环（goja.New + 自带定时器）
@@ -40,8 +49,8 @@ func newPlugin(dir, root, id, title string) *plugin {
 
 // load 创建插件沙箱、绑定 engine.*、执行 execute.js、调用 onLoad。
 func (p *plugin) load() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	// 注意：加载全程不持有 p.mu。脚本在事件循环内执行，注册订阅/导出时会自己去拿 p.mu；
+	// 若此处持 p.mu 并等待脚本完成（<-loaded），会与脚本的 p.mu 申请构成循环死锁。
 	if p.loaded {
 		return nil
 	}
@@ -66,8 +75,15 @@ func (p *plugin) load() error {
 	}
 
 	// 3. 在插件事件循环内绑定 engine.* 并执行脚本（goja 只在 loop 线程内访问）
+	//    注意：RunOnLoop 是非阻塞的，必须等脚本顶层执行完才能返回，
+	//    否则 Init() 返回时订阅器/导出尚未注册，紧随其后的事件派发会漏注册（偶发须同步化）。
 	var runErr error
+	loaded := make(chan struct{})
 	loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
+		defer func() { close(loaded) }()
+		// 结构体→JS 对象按 json 标签映射字段名（rwResult 的 success/text/error 等小写契约）
+		vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", false))
+		vm.Set("console", bindConsole(vm))
 		vm.Set("engine", bindEngine(vm, p))
 		// 沙箱网络：fetch / WebSocket 全局（allow-network 门控）
 		if p.hasPerm("allow-network") {
@@ -83,11 +99,15 @@ func (p *plugin) load() error {
 		if v := vm.Get("onUnload"); isFunc(v) {
 			p.onUnload = v
 		}
+		if v := vm.Get("onConfigUpdate"); isFunc(v) {
+			p.onConfigUpdate = v
+		}
 	})
 	if !loopOK {
 		p.loadErr = "插件事件循环已终止，无法加载"
 		return fmt.Errorf("%s", p.loadErr)
 	}
+	<-loaded // 同步等待脚本顶层执行完成（订阅器/导出注册就绪）
 	if runErr != nil {
 		p.loadErr = fmt.Sprintf("execute.js 执行失败: %v", runErr)
 		return fmt.Errorf("%s", p.loadErr)
@@ -122,29 +142,27 @@ func (p *plugin) unload() {
 	}
 	p.loop.Stop()
 	p.loaded = false
-	p.onLoad, p.onUnload = nil, nil
+	p.onLoad, p.onUnload, p.onConfigUpdate = nil, nil, nil
 	p.config = nil
 	p.events = map[string][]*eventSub{}
 	p.exports = map[string]jsFunc{}
+	p.commands = map[string]*commandEntry{}
+	p.tools = map[string]*toolEntry{}
+	p.asyncTasks = map[int]*asyncTask{}
 	p.frontSignal = nil
 	p.granted = nil
 	LoggerGeneral.Info(ServiceName, "LTP9 插件已卸载: %s", p.ID)
 }
 
-// callFn 在插件事件循环内调用一个 JS 函数并同步返回其结果（同步阻塞，不做异步承诺）。
-// 事件订阅回调与导出函数均为同步函数，调用方在此阻塞直到回调返回并拿到普通值；
-// 若回调返回的 Promise 已敲定，取其 Result 返回；仍未敲定则按空结果兜底。
-// 返回后调用方才继续。
+// callFn 在插件事件循环内调用一个 JS 函数并同步返回其结果。
+// 若函数返回 Promise（async 函数 / await fetch/WebSocket），由后台 goroutine 通过反复
+// 短回插件 loop 的方式轮询，期间 loop 保持空闲可继续处理网络回调与微任务，直至敲定或超时。
 func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
-	type result struct {
-		out any
-		err error
-	}
-	done := make(chan result, 1)
+	done := make(chan callResult, 1)
 	p.loop.RunOnLoop(func(vm *goja.Runtime) {
 		f, ok := goja.AssertFunction(fn)
 		if !ok {
-			done <- result{err: fmt.Errorf("非函数对象")}
+			done <- callResult{err: fmt.Errorf("非函数对象")}
 			return
 		}
 		callArgs := make([]goja.Value, 0, len(args))
@@ -154,29 +172,26 @@ func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 		v, err := f(goja.Undefined(), callArgs...)
 		if err != nil {
 			if ex, ok := err.(*goja.Exception); ok {
-				done <- result{err: fmt.Errorf("%v", ex.Value())}
+				done <- callResult{err: fmt.Errorf("%v", ex.Value())}
 			} else {
-				done <- result{err: err}
+				done <- callResult{err: err}
 			}
 			return
 		}
-		// Promise 分支（同步阻塞语义；本包插件均已同步，通常不进入）
-		if pm, ok := v.Export().(*goja.Promise); ok {
-			if pm.State() == goja.PromiseStateRejected {
-				done <- result{err: fmt.Errorf("%s", pm.Result().String())}
-				return
-			}
-			if pm.State() == goja.PromiseStateFulfilled {
-				rv := pm.Result()
-				if rv != nil && !goja.IsUndefined(rv) && !goja.IsNull(rv) {
-					done <- result{out: rv.Export()}
-					return
-				}
-			}
-			done <- result{} // pending 兜底
+
+		// 非 Promise：直接返回导出结果
+		pm, ok := v.Export().(*goja.Promise)
+		if !ok {
+			done <- callResult{out: v.Export()}
 			return
 		}
-		done <- result{out: v.Export()}
+
+		// Promise：若已同步敲定则直接取结果；pending 则由后台轮询，让出 loop 处理异步回调
+		if pm.State() != goja.PromiseStatePending {
+			done <- settlePromise(pm)
+			return
+		}
+		go p.awaitPromise(pm, done)
 	})
 	select {
 	case res := <-done:
@@ -184,8 +199,51 @@ func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 			return nil, res.err
 		}
 		return res.out, nil
-	case <-time.After(callAwaitTimeout):
-		return nil, fmt.Errorf("函数调用超时（Promise 未在 %s 内敲定）", callAwaitTimeout)
+	case <-time.After(callAwaitTimeout + 10*time.Second): // 外层兜底超时
+		return nil, fmt.Errorf("函数调用总超时（含 eventloop 调度）")
+	}
+}
+
+// settlePromise 从已敲定的 Promise 提取结果（仅在插件 loop 线程内调用）。
+func settlePromise(pm *goja.Promise) callResult {
+	if pm.State() == goja.PromiseStateRejected {
+		return callResult{err: fmt.Errorf("%s", pm.Result().String())}
+	}
+	if pm.State() == goja.PromiseStateFulfilled {
+		rv := pm.Result()
+		if rv != nil && !goja.IsUndefined(rv) && !goja.IsNull(rv) {
+			return callResult{out: rv.Export()}
+		}
+		return callResult{out: nil}
+	}
+	return callResult{}
+}
+
+// awaitPromise 在插件事件循环之外等待 pending Promise 敲定。
+// 反复短回 p.loop（RunOnLoop 会顺带清空微任务队列），让 async 函数内的 await/fetch/WebSocket
+// 回调能在 loop 上真实继续执行并使 Promise 兑现；一旦敲定即把结果投回 done。
+func (p *plugin) awaitPromise(pm *goja.Promise, done chan callResult) {
+	guard := time.After(callAwaitTimeout)
+	for {
+		select {
+		case <-guard:
+			done <- callResult{err: fmt.Errorf("Promise 未在 %s 内敲定", callAwaitTimeout)}
+			return
+		case <-time.After(5 * time.Millisecond):
+		}
+		var r callResult
+		settled := false
+		p.loop.RunOnLoop(func(vm *goja.Runtime) {
+			if pm.State() == goja.PromiseStatePending {
+				return
+			}
+			settled = true
+			r = settlePromise(pm)
+		})
+		if settled {
+			done <- r
+			return
+		}
 	}
 }
 
@@ -286,5 +344,38 @@ func (p *plugin) callExport(fnName string, args []any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s 包拒绝响应：未导出函数 %s", p.ID, fnName)
 	}
-	return p.callFn(h, args)
+	return p.callFn(h, args...)
+}
+
+// registerTool 记录一次工具注册（engine.tool.register），覆盖同名工具。
+func (p *plugin) registerTool(t *toolEntry) {
+	p.mu.Lock()
+	p.tools[t.name] = t
+	p.mu.Unlock()
+}
+
+// callTool 调用插件注册的工具（CallTool 目标）。args 为参数对象，原样传给工具 handler。
+// 注意：取到 handler 后须先释放 p.mu 再 callFn，避免工具内 engine.signal.all 自锁。
+func (p *plugin) callTool(name string, args map[string]any) (any, error) {
+	p.mu.Lock()
+	t, ok := p.tools[name]
+	p.mu.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("%s 包未注册工具 %s", p.ID, name)
+	}
+	return p.callFn(t.handler, args)
+}
+
+// fireConfigUpdate 配置回写后触发 onConfigUpdate(scope, config, version) 生命周期回调。
+// 以 fire-and-forget 方式派发（入场即返回），避免 setFile 在多处上下文调用时造成重入等待。
+func (p *plugin) fireConfigUpdate(scope string, config any, version string) {
+	if p == nil || p.onConfigUpdate == nil || p.loop == nil {
+		return
+	}
+	cb := p.onConfigUpdate
+	p.loop.RunOnLoop(func(vm *goja.Runtime) {
+		if f, ok := goja.AssertFunction(cb); ok {
+			f(goja.Undefined(), vm.ToValue(scope), vm.ToValue(config), vm.ToValue(version))
+		}
+	})
 }

@@ -1,4 +1,5 @@
 import { ToolCall, RandomFloor, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, CreativeRoleBase } from '../../index';
+import { interactEvent } from '../capabilities/ltp-event';
 
 /** 绘画作品详情记录（用于向对话者传递作品信息） */
 interface PaintingDetail {
@@ -165,9 +166,15 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	}
 	/** 构建绘画作品摘要，使用月华话术格式 */
 	protected buildSummary(paintings: PaintingDetail[]): string {
+		// 检查是否有作品
 		if (paintings.length === 0) return '月华没有绘制任何作品';
-		// TODO : 事件 -> 绘制画作前
-			const parts: string[] = [];
+		// 事件 -> 绘制画作前：推送作品详情，插件可改写后再汇总
+		const feedback: PaintingDetail[] = interactEvent('draw_painting_before', { paintings }).return;
+		// 插件可改写作品详情，如添加乐器、速度、结构等
+		if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
+			paintings = feedback;
+		}
+		const parts: string[] = [];
 		for (let i = 0; i < paintings.length; i++) {
 			const p = paintings[i];
 			if (p.toolName === 'self_portrait') {

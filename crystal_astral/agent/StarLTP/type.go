@@ -4,6 +4,7 @@ package StarLTP
 
 import (
 	"encoding/json"
+	"regexp"
 	"sync"
 
 	"github.com/dop251/goja"
@@ -36,6 +37,7 @@ type plugin struct {
 	loadErr string
 	onLoad  jsFunc
 	onUnload jsFunc
+	onConfigUpdate jsFunc // config 回写后触发的生命周期回调（onConfigUpdate）
 
 	// 订阅 id 单调计数器（事件订阅器 + 前端信号订阅共用）
 	subSeq int
@@ -45,6 +47,40 @@ type plugin struct {
 	exports map[string]jsFunc
 	// 前端事件订阅器（engine.frontEvent.signal）
 	frontSignal []*eventSub
+
+	// 指令注册：指令名（含别名）→ 指令项（engine.command）
+	commands map[string]*commandEntry
+	// 工具注册：工具名 → 工具项（engine.tool，LLM/AutoA 可调用的函数工具）
+	tools map[string]*toolEntry
+	// 异步子任务：taskId → 任务状态（engine.async）
+	asyncMu    sync.Mutex
+	asyncSeq   int
+	asyncTasks map[int]*asyncTask
+}
+
+// commandEntry 单个指令项（engine.command.register 注册，engine 侧经 Command 触发）。
+type commandEntry struct {
+	name    string
+	re      *regexp.Regexp
+	handler jsFunc
+	aliases []string
+}
+
+// asyncTask 单个异步子任务状态（engine.async.run 创建）。
+type asyncTask struct {
+	id       int
+	status   string // running / done / timeout / error
+	progress any
+	data     any
+	fn       jsFunc
+}
+
+// toolEntry 单个工具项（engine.tool.register 注册，引擎侧经 CallTool 触发，LLM/AtoA 可调用）。
+type toolEntry struct {
+	name        string // 工具名（唯一标识，供 LLM tool_calls 与 CallTool 精确匹配）
+	description string // 工具描述（供 LLM 理解何时调用）
+	parameters  []any  // 参数定义数组（name/type/description/required 等，原样透传给 LLM）
+	handler     jsFunc // (params) 处理器，params 为调用参数对象
 }
 
 // eventSub 单个事件订阅项。
@@ -75,7 +111,7 @@ type Outcome struct {
 	PluginID string `json:"plugin_id"`
 	Error    string `json:"error,omitempty"`
 	Handled  bool   `json:"handled"`
-	Result   any    `json:"result,omitempty"` // 订阅回调返回对象（intercept/modifiedData…）
+	Result   any    `json:"result,omitempty"` // 订阅回调返回对象（intercept/modifiedData/cancel/return…）
 }
 
 // EmitSummary 一次事件分发的汇总。
@@ -91,15 +127,31 @@ type EmitResult struct {
 	Topic   string        `json:"topic"`
 	Outcomes []Outcome     `json:"outcomes"`
 	Summary EmitSummary   `json:"summary"`
+	// Data 沿订阅器 modifiedData 链更新后的最终负载；无插件改写时等于原始 payload。
+	Data any `json:"data,omitempty"`
+	// Modified 是否有任一订阅器通过 modifiedData 改写了负载（供调用方决定是否采用处理结果）。
+	Modified bool `json:"modified"`
+	// Returned 是否有任一订阅器通过 return 回传了业务结果（供调用方判断是否采用 Return）。
+	Returned bool `json:"returned"`
+	// Return 订阅器经 return 回传的业务结果；同主题多订阅器时以最后回传者为准，无回传时为 nil。
+	// 与 Modified 的区别：modifiedData 改写的是供下游订阅器读取的事件负载，
+	// return 是供事件发起方（客户端）消费的本次事件业务结果。
+	Return any `json:"return,omitempty"`
 }
 
-// PluginState 插件状态（供外部 Go 程序枚举）。
+// PluginState 插件状态（供外部 Go 程序枚举 / 前端引擎管理器填充动态选项）。
 type PluginState struct {
 	ID      string `json:"id"`
 	Title   string `json:"title"`
 	Loaded  bool   `json:"loaded"`
 	Error   string `json:"error,omitempty"`
 	Granted []string `json:"granted,omitempty"`
+	// Events 已订阅的事件主题（引擎侧注册的真实信息，供前端下拉填充）
+	Events []string `json:"events,omitempty"`
+	// Exports 导出的函数名（engine.export 注册的真实信息，供前端下拉填充）
+	Exports []string `json:"exports,omitempty"`
+	// Tools 已注册的工具名（engine.tool 注册的真实信息，供前端下拉填充）
+	Tools []string `json:"tools,omitempty"`
 }
 
 // ==== 扩展类型 ====
@@ -119,6 +171,8 @@ type rwResult struct {
 	Success bool   `json:"success"`
 	Text    string `json:"text,omitempty"`
 	Error   string `json:"error,omitempty"`
+	// ToolCalls LLM 响应中的工具调用（engine.llm.chat 返回；OpenAI 兼容 tool_calls 原样透传，供 AtoA 接头）
+	ToolCalls []any `json:"tool_calls,omitempty"`
 }
 
 func parseJSONArgs(s string) map[string]any {

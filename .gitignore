@@ -12,7 +12,8 @@ node_modules/
 embedded_data/
 bridge_probe/
 deepdemos.*
-com.yaraflow.*
+config.yaml
+status.json
 
 ## Go 测试产物
 coverage
@@ -23,7 +24,7 @@ local_data/documents/
 local_data/models/
 local_data/images/
 database/
-status.json
+bin/
 
 ## 系统文件
 desktop.ini

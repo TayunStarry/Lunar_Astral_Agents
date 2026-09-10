@@ -1,9 +1,14 @@
-// 全局变量
-let currentTaskId = null;
-let uploadedImagePath = null;
-let currentImageBase64 = null;
+/**
+ * 图像生成模块 - 页面逻辑
+ * 职责：
+ * - 配置生成参数（噪声强度 / 尺寸 / 步数 / 数量 / 权重 / 种子 / 超分）
+ * - 正面/负面提示词与参考图上传（/file/write）
+ * - 提交生成任务（POST /generate）并通过 EventSource 监听完成
+ * - 生成结果网格（/file/list 递归读取，支持下载 / 删除 / 预览 / 清空）
+ * - 智能优化：调用多模态模型优化提示词与参数（模型名不硬编码）
+ */
 
-// DOM元素引用
+// ===== DOM 引用 =====
 const elements = {
     prompt: document.getElementById('prompt'),
     negativePrompt: document.getElementById('negative-prompt'),
@@ -29,64 +34,40 @@ const elements = {
     refreshBtn: document.getElementById('refresh-btn'),
     clearAllBtn: document.getElementById('clear-all-btn'),
     fileGrid: document.getElementById('file-grid'),
+    resultCount: document.getElementById('resultCount'),
     taskStatus: document.getElementById('task-status'),
     taskMessage: document.getElementById('task-message'),
-    toastContainer: document.getElementById('toast-container')
+    toast: document.getElementById('toast'),
+    themeToggle: document.getElementById('themeToggle'),
+    themeIcon: document.getElementById('themeIcon')
 };
 
-// ==== 初始化入口 ====
-function initEventListeners() {
-    // 滑块值更新
-    elements.widthSlider.addEventListener('input', updateWidthValue);
-    elements.heightSlider.addEventListener('input', updateHeightValue);
-    elements.strengthSlider.addEventListener('input', updateStrengthValue);
+// ===== 全局状态 =====
+let currentTaskId = null;
+let uploadedImagePath = null;
+let currentImageBase64 = null;
 
-    // 智能优化
-    elements.optimizeBtn.addEventListener('click', optimizePromptAndParameters);
+// ===== 深色模式切换 =====
+const THEME_KEY = 'isTheme';
 
-    // 参考图上传
-    elements.uploadArea.addEventListener('click', () => elements.initImage.click());
-    elements.uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        elements.uploadArea.style.borderColor = 'rgba(102,126,234,0.8)';
-    });
-    elements.uploadArea.addEventListener('dragleave', () => {
-        elements.uploadArea.style.borderColor = 'rgba(255,255,255,0.5)';
-    });
-    elements.uploadArea.addEventListener('drop', handleDrop);
-
-    elements.initImage.addEventListener('change', handleImageSelect);
-    elements.clearImageBtn.addEventListener('click', clearReferenceImage);
-
-    // 底部操作按钮
-    elements.generateBtn.addEventListener('click', generateImage);
-    elements.resetBtn.addEventListener('click', resetParameters);
-    elements.refreshBtn.addEventListener('click', refreshPage);
-    elements.clearAllBtn.addEventListener('click', clearAllFiles);
-
-    // 超分按钮切换
-    elements.allowSuperResolution.addEventListener('click', () => {
-        const btn = elements.allowSuperResolution;
-        const isActive = btn.classList.toggle('active');
-        btn.innerHTML = isActive
-            ? '<i class="fas fa-check-circle"></i> 已启用超分'
-            : '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
-    });
-
-    // 键盘快捷键
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-
-    // 初始化显示值
-    updateWidthValue();
-    updateHeightValue();
-    updateStrengthValue();
-
-    // 加载默认数据
-    loadDefaultPrompts();
-    loadFileList();
+function applyTheme(dark) {
+    document.body.classList.toggle('dark-mode', dark);
+    if (elements.themeIcon) elements.themeIcon.className = 'fas ' + (dark ? 'fa-sun' : 'fa-moon');
+    if (elements.themeToggle) elements.themeToggle.title = dark ? '切换至浅色模式' : '切换至深色模式';
 }
 
-// ==== 参数值更新 ====
+// ===== Toast 提示 =====
+function showToast(message, type = 'info', duration = 3000) {
+    const icons = { success: 'fa-check-circle', error: 'fa-circle-xmark', info: 'fa-circle-info' };
+    elements.toast.className = 'toast ' + type + ' visible';
+    elements.toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i><span>' + message + '</span>';
+    clearTimeout(elements.toast._timer);
+    if (duration > 0) {
+        elements.toast._timer = setTimeout(() => elements.toast.classList.remove('visible'), duration);
+    }
+}
+
+// ===== 滑块值更新 =====
 function updateWidthValue() {
     elements.widthValue.textContent = elements.widthSlider.value;
 }
@@ -99,49 +80,44 @@ function updateStrengthValue() {
     elements.strengthValue.textContent = parseFloat(1 - elements.strengthSlider.value).toFixed(2);
 }
 
-// ==== 提示词加载 ====
+// ===== 提示词加载 =====
 async function loadDefaultPrompts() {
     try {
         const positiveResponse = await fetch('positive_prompt.md');
         if (positiveResponse.ok) {
             const positiveText = await positiveResponse.text();
             const cleanPositive = positiveText.replace(/^\s*\/\/.*$/gm, '').trim();
-            if (cleanPositive) {
-                elements.prompt.value = cleanPositive;
-            }
+            if (cleanPositive) elements.prompt.value = cleanPositive;
         }
 
         const negativeResponse = await fetch('negative_prompt.md');
         if (negativeResponse.ok) {
             const negativeText = await negativeResponse.text();
             const cleanNegative = negativeText.replace(/^\s*\/\/.*$/gm, '').trim();
-            if (cleanNegative) {
-                elements.negativePrompt.value = cleanNegative;
-            }
+            if (cleanNegative) elements.negativePrompt.value = cleanNegative;
         }
     } catch (error) {
         console.log('使用默认提示词:', error);
     }
 }
 
-// ==== 参考图片处理 ====
+// ===== 参考图片处理 =====
 function clearReferenceImage() {
-    if (confirm('确定要清除参考图片吗？')) {
-        elements.initImage.value = '';
-        elements.imagePreview.style.display = 'none';
-        elements.imagePreview.src = '';
-        elements.uploadPlaceholder.style.display = 'flex';
-        elements.clearImageBtn.style.display = 'none';
-        uploadedImagePath = null;
-        currentImageBase64 = null;
-        elements.uploadArea.style.borderColor = 'rgba(255,255,255,0.5)';
-        showToast('参考图片已清除', 'info');
-    }
+    if (!confirm('确定要清除参考图片吗？')) return;
+    elements.initImage.value = '';
+    elements.imagePreview.style.display = 'none';
+    elements.imagePreview.src = '';
+    elements.uploadPlaceholder.style.display = 'flex';
+    elements.clearImageBtn.style.display = 'none';
+    elements.uploadArea.classList.remove('drag-over');
+    uploadedImagePath = null;
+    currentImageBase64 = null;
+    showToast('参考图片已清除', 'info');
 }
 
 async function handleDrop(e) {
     e.preventDefault();
-    elements.uploadArea.style.borderColor = 'rgba(255,255,255,0.5)';
+    elements.uploadArea.classList.remove('drag-over');
     const files = e.dataTransfer.files;
     if (files.length > 0) {
         const file = files[0];
@@ -171,7 +147,7 @@ async function handleImageSelect(e) {
         elements.imagePreview.src = event.target.result;
         elements.imagePreview.style.display = 'block';
         elements.uploadPlaceholder.style.display = 'none';
-        elements.clearImageBtn.style.display = 'inline-block';
+        elements.clearImageBtn.style.display = 'inline-flex';
         currentImageBase64 = event.target.result;
     };
     reader.readAsDataURL(file);
@@ -200,70 +176,41 @@ async function uploadImage(file) {
         showToast('图片上传成功', 'success');
     } catch (error) {
         console.error('上传失败:', error);
-        showToast(`图片上传失败: ${error.message}`, 'error');
+        showToast('图片上传失败: ' + error.message, 'error');
     }
 }
 
-// ==== Toast 提示 ====
-function showToast(message, type = 'info', duration = 3000) {
-    const toast = document.createElement('div');
-    toast.className = `toast-glass toast-${type}`;
-
-    const iconMap = {
-        success: '<i class="fas fa-check-circle"></i>',
-        error: '<i class="fas fa-times-circle"></i>',
-        info: '<i class="fas fa-info-circle"></i>'
-    };
-
-    toast.innerHTML = `
-        <span class="toast-icon">${iconMap[type]}</span>
-        <span class="toast-message">${message}</span>
-        <button class="toast-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-    `;
-
-    elements.toastContainer.appendChild(toast);
-
-    if (duration > 0) {
-        setTimeout(() => {
-            toast.classList.add('toast-exit');
-            setTimeout(() => toast.remove(), 300);
-        }, duration);
-    }
-}
-
-// ==== 参数重置 ====
+// ===== 参数重置 =====
 function resetParameters() {
-    if (confirm('确定要重置所有参数吗？当前设置将会丢失。')) {
-        loadDefaultPrompts();
-        elements.initImage.value = '';
-        elements.imagePreview.style.display = 'none';
-        elements.imagePreview.src = '';
-        elements.uploadPlaceholder.style.display = 'flex';
-        elements.clearImageBtn.style.display = 'none';
-        elements.widthSlider.value = 512;
-        elements.heightSlider.value = 512;
-        elements.strengthSlider.value = 0.85;
-        elements.steps.value = 20;
-        elements.batchSize.value = 1;
-        elements.cfgScale.value = 1.0;
-        elements.seed.value = 0;
-        elements.allowSuperResolution.classList.remove('active');
-        elements.allowSuperResolution.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
+    if (!confirm('确定要重置所有参数吗？当前设置将会丢失。')) return;
+    loadDefaultPrompts();
+    elements.initImage.value = '';
+    elements.imagePreview.style.display = 'none';
+    elements.imagePreview.src = '';
+    elements.uploadPlaceholder.style.display = 'flex';
+    elements.clearImageBtn.style.display = 'none';
+    elements.widthSlider.value = 512;
+    elements.heightSlider.value = 512;
+    elements.strengthSlider.value = 0.85;
+    elements.steps.value = 20;
+    elements.batchSize.value = 1;
+    elements.cfgScale.value = 1.0;
+    elements.seed.value = 0;
+    elements.allowSuperResolution.checked = false;
 
-        updateWidthValue();
-        updateHeightValue();
-        updateStrengthValue();
-        uploadedImagePath = null;
-        currentImageBase64 = null;
-        showToast('参数已重置', 'info');
-    }
+    updateWidthValue();
+    updateHeightValue();
+    updateStrengthValue();
+    uploadedImagePath = null;
+    currentImageBase64 = null;
+    showToast('参数已重置', 'info');
 }
 
 function refreshPage() {
     location.reload();
 }
 
-// ==== 完成提示音 ====
+// ===== 完成提示音 =====
 function playCompletionSound() {
     try {
         const audio = new Audio('/file/read/audios/prompt-tone.mp3');
@@ -276,7 +223,7 @@ function playCompletionSound() {
     }
 }
 
-// ==== 图片生成 ====
+// ===== 图片生成 =====
 async function generateImage() {
     try {
         const generateData = {
@@ -290,7 +237,7 @@ async function generateImage() {
             seed: elements.seed.value === '0' ? Date.now() % 1000000000 : parseInt(elements.seed.value),
             cfg_scale: parseFloat(elements.cfgScale.value),
             init_img: uploadedImagePath || null,
-            allow_super_resolution: elements.allowSuperResolution.classList.contains('active')
+            allow_super_resolution: elements.allowSuperResolution.checked
         };
 
         if (!generateData.prompt) {
@@ -319,11 +266,11 @@ async function generateImage() {
 
         const result = await response.json();
         currentTaskId = result.task_id;
-        elements.taskMessage.textContent = `任务已排队 (位置: ${result.queue_pos})`;
+        elements.taskMessage.textContent = '任务已排队 (位置: ' + result.queue_pos + ')';
         waitForTaskCompletion();
     } catch (error) {
         console.error('生成失败:', error);
-        showToast(`生成失败: ${error.message}`, 'error');
+        showToast('生成失败: ' + error.message, 'error');
         elements.taskStatus.style.display = 'none';
         elements.generateBtn.disabled = false;
     }
@@ -331,8 +278,9 @@ async function generateImage() {
 
 function waitForTaskCompletion() {
     if (!currentTaskId) return;
+    let eventSource = null;
     try {
-        const eventSource = new EventSource(`/generate/wait?task_id=${currentTaskId}`);
+        eventSource = new EventSource('/generate/wait?task_id=' + currentTaskId);
 
         eventSource.onmessage = function (event) {
             try {
@@ -350,7 +298,7 @@ function waitForTaskCompletion() {
                     eventSource.close();
                 } else if (data.status === 'failed') {
                     elements.taskMessage.textContent = '生成失败';
-                    showToast(`生成失败: ${data.error}`, 'error');
+                    showToast('生成失败: ' + data.error, 'error');
                     elements.taskStatus.style.display = 'none';
                     elements.generateBtn.disabled = false;
                     currentTaskId = null;
@@ -383,18 +331,24 @@ function waitForTaskCompletion() {
     }
 }
 
-// ==== 文件列表管理 ====
+// ===== 文件列表管理 =====
 async function loadFileList() {
     try {
         elements.fileGrid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
         let allFiles = await getAllFilesRecursive('images/generated');
 
+        // 真实文件数量（排除占位符后用于计数展示）
+        const realCount = allFiles.length;
+        if (elements.resultCount) {
+            elements.resultCount.textContent = realCount > 0 ? realCount + ' 个文件' : '';
+        }
+
         if (allFiles.length === 0) {
             elements.fileGrid.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-state-icon"><i class="fas fa-folder-open"></i></div>
+                    <div><i class="fas fa-folder-open"></i></div>
                     <p>还没有生成任何文件</p>
-                    <p style="font-size: 0.9em; margin-top: 10px; color: #888;">点击"开始生成"按钮创建第一张图片</p>
+                    <p class="empty-hint">点击「开始生成」按钮创建第一张图片</p>
                 </div>`;
             return;
         }
@@ -402,7 +356,7 @@ async function loadFileList() {
         if (allFiles.length < 8) {
             const missingCount = 8 - allFiles.length;
             for (let i = 0; i < missingCount; i++) {
-                const imageUrl = `images/placeholder/unknown_file_icon-0${Math.floor(Math.random() * 4)}.webp`;
+                const imageUrl = 'images/placeholder/unknown_file_icon-0' + Math.floor(Math.random() * 4) + '.webp';
                 allFiles.push({ name: '*.png', path: imageUrl, size: 0, lastModified: new Date().toISOString(), isDir: false });
             }
         }
@@ -420,14 +374,14 @@ async function loadFileList() {
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
                 ? `<img src="/file/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/file/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/file/read/${path}', '${file.name}')">`
-                : `<div style="font-size: 48px; color: var(--primary-color); opacity: 0.3;">${iconHTML}</div>`;
+                : `<div style="font-size: 48px; color: var(--accent); opacity: 0.3;">${iconHTML}</div>`;
 
             return `
                 <div class="file-card">
                     <div class="file-card-header">
                         <div class="file-icon">${iconHTML}</div>
                         <div class="file-name" title="${displayPath}">
-                            <div style="font-size: 0.85em; color: var(--text-light); margin-bottom: 2px;">${pathParts.length > 1 ? pathParts.slice(0, -1).join('/') + '/' : ''}</div>
+                            <div class="file-path">${pathParts.length > 1 ? pathParts.slice(0, -1).join('/') + '/' : ''}</div>
                             <div style="font-weight: bold;">${pathParts[pathParts.length - 1]}</div>
                         </div>
                     </div>
@@ -448,18 +402,18 @@ async function loadFileList() {
         console.error('加载文件列表失败:', error);
         elements.fileGrid.innerHTML = `
             <div class="empty-state">
-                <div style="color: #dc3545; font-size: 36px;"><i class="fas fa-exclamation-circle"></i></div>
-                <p style="color: #dc3545;">加载文件列表失败</p>
-                <p style="font-size: 0.9em; margin-top: 10px; color: #666;">${error.message}</p>
-                <button onclick="loadFileList()" class="btn-glass btn-glass-secondary" style="margin-top: 15px;">重试</button>
+                <div style="color: var(--danger);"><i class="fas fa-circle-exclamation"></i></div>
+                <p style="color: var(--danger);">加载文件列表失败</p>
+                <p class="empty-hint">${error.message}</p>
+                <button onclick="loadFileList()" class="btn-glass btn-glass-primary" style="margin-top: 15px;">重试</button>
             </div>`;
     }
 }
 
 async function getAllFilesRecursive(dirPath) {
     try {
-        const response = await fetch(`/file/list/${dirPath}`);
-        if (!response.ok) throw new Error(`获取目录 ${dirPath} 失败: ${response.status}`);
+        const response = await fetch('/file/list/' + dirPath);
+        if (!response.ok) throw new Error('获取目录 ' + dirPath + ' 失败: ' + response.status);
         const items = await response.json();
         const allFiles = [];
         for (const item of items) {
@@ -472,7 +426,7 @@ async function getAllFilesRecursive(dirPath) {
         }
         return allFiles;
     } catch (error) {
-        console.error(`递归获取文件失败 (${dirPath}):`, error);
+        console.error('递归获取文件失败 (' + dirPath + '):', error);
         return [];
     }
 }
@@ -519,9 +473,9 @@ function formatDate(dateString) {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return '刚刚';
-    if (diffMins < 60) return `${diffMins}分钟前`;
-    if (diffHours < 24) return `${diffHours}小时前`;
-    if (diffDays < 7) return `${diffDays}天前`;
+    if (diffMins < 60) return diffMins + '分钟前';
+    if (diffHours < 24) return diffHours + '小时前';
+    if (diffDays < 7) return diffDays + '天前';
 
     return date.toLocaleDateString('zh-CN', {
         month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
@@ -532,7 +486,7 @@ async function downloadFile(path, filename) {
     try {
         showToast('开始下载...', 'info');
         const link = document.createElement('a');
-        link.href = `/file/download/${path}`;
+        link.href = '/file/download/' + path;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -540,15 +494,15 @@ async function downloadFile(path, filename) {
         showToast('下载链接已打开', 'info');
     } catch (error) {
         console.error('下载失败:', error);
-        showToast(`下载失败: ${error.message}`, 'error');
-        window.open(`/file/download/${path}`, '_blank');
+        showToast('下载失败: ' + error.message, 'error');
+        window.open('/file/download/' + path, '_blank');
     }
 }
 
 async function deleteFile(path) {
-    if (!confirm(`确定要删除文件吗？\n${path.replace(/^images\/generated[\\/]/, '')}`)) return;
+    if (!confirm('确定要删除文件吗？\n' + path.replace(/^images\/generated[\\/]/, ''))) return;
     try {
-        const response = await fetch(`/file/delete/${path}`, { method: 'DELETE' });
+        const response = await fetch('/file/delete/' + path, { method: 'DELETE' });
         if (response.ok) {
             showToast('文件删除成功', 'success');
             loadFileList();
@@ -558,7 +512,7 @@ async function deleteFile(path) {
         }
     } catch (error) {
         console.error('删除失败:', error);
-        showToast(`删除失败: ${error.message}`, 'error');
+        showToast('删除失败: ' + error.message, 'error');
     }
 }
 
@@ -576,32 +530,27 @@ async function clearAllFiles() {
         }
     } catch (error) {
         console.error('清空失败:', error);
-        showToast(`清空失败: ${error.message}`, 'error');
+        showToast('清空失败: ' + error.message, 'error');
     }
 }
 
-// ==== 图片预览 ====
+// ===== 图片预览 =====
 function previewImage(src, name) {
     const overlay = document.createElement('div');
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-        background: rgba(0,0,0,0.8); z-index: 2000;
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer;
-    `;
+    overlay.className = 'preview-overlay';
     overlay.innerHTML = `
-        <img src="${src}" alt="${name}" style="max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 8px;">
-        <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: white; font-size: 24px; cursor: pointer; width: 40px; height: 40px; border-radius: 50%;">×</button>
+        <img src="${src}" alt="${name}">
+        <button class="preview-close" title="关闭"><i class="fas fa-times"></i></button>
     `;
     overlay.addEventListener('click', (e) => {
-        if (e.target === overlay || e.target.tagName === 'BUTTON') {
+        if (e.target === overlay || e.target.classList.contains('preview-close')) {
             overlay.remove();
         }
     });
     document.body.appendChild(overlay);
 }
 
-// ==== 键盘快捷键 ====
+// ===== 键盘快捷键 =====
 function handleKeyboardShortcuts(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -612,15 +561,13 @@ function handleKeyboardShortcuts(e) {
         refreshPage();
     }
     if (e.key === 'Escape') {
-        const toasts = document.querySelectorAll('.toast-glass');
-        toasts.forEach(toast => {
-            toast.classList.add('toast-exit');
-            setTimeout(() => toast.remove(), 300);
-        });
+        elements.toast.classList.remove('visible');
+        const overlay = document.querySelector('.preview-overlay');
+        if (overlay) overlay.remove();
     }
 }
 
-// ==== 智能优化 ====
+// ===== 智能优化 =====
 async function optimizePromptAndParameters() {
     const prompt = elements.prompt.value.trim();
     if (!prompt) {
@@ -638,7 +585,7 @@ async function optimizePromptAndParameters() {
         showToast('优化完成！', 'success');
     } catch (error) {
         console.error('优化失败:', error);
-        showToast(`优化失败: ${error.message}`, 'error');
+        showToast('优化失败: ' + error.message, 'error');
     } finally {
         elements.optimizeBtn.disabled = false;
         elements.optimizeBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> 智能优化';
@@ -654,48 +601,38 @@ function buildOptimizationMessages(prompt) {
         strength: parseFloat(elements.strengthSlider.value),
         batch_size: parseInt(elements.batchSize.value),
         seed: elements.seed.value === '0' ? null : parseInt(elements.seed.value),
-        allow_super_resolution: elements.allowSuperResolution.classList.contains('active')
+        allow_super_resolution: elements.allowSuperResolution.checked
     };
 
-    let userMessage = `请优化以下提示词和参数设置：
-
-正面提示词：
-${prompt}
-
-当前参数：
-- 宽度: ${currentParams.width}
-- 高度: ${currentParams.height}
-- 迭代步数: ${currentParams.steps}
-- 提示词权重: ${currentParams.cfg_scale}
-- 噪声强度: ${currentParams.strength}
-- 生成数量: ${currentParams.batch_size}
-- 允许超分: ${currentParams.allow_super_resolution ? '是' : '否'}
-${currentParams.seed ? `- 随机种子: ${currentParams.seed}` : ''}`;
+    let userMessage = '请优化以下提示词和参数设置：\n\n'
+        + '正面提示词：\n' + prompt + '\n\n'
+        + '当前参数：\n'
+        + '- 宽度: ' + currentParams.width + '\n'
+        + '- 高度: ' + currentParams.height + '\n'
+        + '- 迭代步数: ' + currentParams.steps + '\n'
+        + '- 提示词权重: ' + currentParams.cfg_scale + '\n'
+        + '- 噪声强度: ' + currentParams.strength + '\n'
+        + '- 生成数量: ' + currentParams.batch_size + '\n'
+        + '- 允许超分: ' + (currentParams.allow_super_resolution ? '是' : '否') + '\n'
+        + (currentParams.seed ? '- 随机种子: ' + currentParams.seed + '\n' : '');
 
     if (currentImageBase64) {
-        userMessage += `
-
-参考图片：已提供（见附件）`;
+        userMessage += '\n参考图片：已提供（见附件）\n';
     }
 
-    userMessage += `
-
-请使用图像生成参数优化工具来优化这些设置，确保参数组合合理有效。`;
+    userMessage += '\n请使用图像生成参数优化工具来优化这些设置，确保参数组合合理有效。';
 
     const messages = [
         {
             role: 'system',
-            content: `你是一个专业的AI图像生成专家。请帮助用户优化他们的提示词和生成参数。
-
-当用户提供提示词和参数时，你必须使用"image_generation_parameters"工具来返回优化后的结果。
-
-优化原则：
-1. 正面提示词：增强细节描述，保持风格一致性，适当添加质量标签
-2. 负面提示词：补充常见的质量问题，确保覆盖全面
-3. 参数调整：根据提示词复杂度调整步数和CFG，风景建议更高分辨率，人物建议适当降低强度
-4. 所有参数必须在有效范围内：width/height(256-2048), steps(1-100), cfg_scale(0.1-3.0), strength(0.1-1.0), batch_size(1-8)
-
-请始终使用工具返回结果，不要仅做文字描述。`
+            content: '你是一个专业的AI图像生成专家。请帮助用户优化他们的提示词和生成参数。\n\n'
+                + '当用户提供提示词和参数时，你必须使用"image_generation_parameters"工具来返回优化后的结果。\n\n'
+                + '优化原则：\n'
+                + '1. 正面提示词：增强细节描述，保持风格一致性，适当添加质量标签\n'
+                + '2. 负面提示词：补充常见的质量问题，确保覆盖全面\n'
+                + '3. 参数调整：根据提示词复杂度调整步数和CFG，风景建议更高分辨率，人物建议适当降低强度\n'
+                + '4. 所有参数必须在有效范围内：width/height(256-2048), steps(1-100), cfg_scale(0.1-3.0), strength(0.1-1.0), batch_size(1-8)\n\n'
+                + '请始终使用工具返回结果，不要仅做文字描述。'
         },
         {
             role: 'user',
@@ -707,16 +644,8 @@ ${currentParams.seed ? `- 随机种子: ${currentParams.seed}` : ''}`;
         messages[1] = {
             role: 'user',
             content: [
-                {
-                    type: 'text',
-                    text: userMessage
-                },
-                {
-                    type: 'image_url',
-                    image_url: {
-                        url: currentImageBase64
-                    }
-                }
+                { type: 'text', text: userMessage },
+                { type: 'image_url', image_url: { url: currentImageBase64 } }
             ]
         };
     }
@@ -724,11 +653,29 @@ ${currentParams.seed ? `- 随机种子: ${currentParams.seed}` : ''}`;
     return messages;
 }
 
-async function callMultimodalModel(messages) {
-    const API_URL = '/v1/chat/completions';
+/** 模型配置读取（禁止硬编码）：lunar_config.json 的 agent.multimodal_model，失败回退 system-multimodal */
+let modelConfigPromise = null;
 
+async function loadModelName() {
+    if (modelConfigPromise) return modelConfigPromise;
+    modelConfigPromise = (async () => {
+        try {
+            const resp = await fetch('/file/read/lunar_config.json', { cache: 'no-store' });
+            if (!resp.ok) throw new Error('读取配置失败 HTTP ' + resp.status);
+            const cfg = await resp.json();
+            const agent = (cfg && cfg.agent) || {};
+            return (agent.multimodal_model && String(agent.multimodal_model)) || 'system-multimodal';
+        } catch (e) {
+            return 'system-multimodal';
+        }
+    })();
+    return modelConfigPromise;
+}
+
+async function callMultimodalModel(messages) {
+    const model = await loadModelName();
     const requestBody = {
-        model: 'system-multimodal',
+        model: model,
         messages: messages,
         tools: [
             {
@@ -739,59 +686,16 @@ async function callMultimodalModel(messages) {
                     parameters: {
                         type: 'object',
                         properties: {
-                            optimized_prompt: {
-                                type: 'string',
-                                description: '优化后的正面提示词'
-                            },
-                            optimized_negative_prompt: {
-                                type: 'string',
-                                description: '优化后的负面提示词'
-                            },
-                            width: {
-                                type: 'integer',
-                                description: '图像宽度 (256-2048)',
-                                minimum: 256,
-                                maximum: 2048
-                            },
-                            height: {
-                                type: 'integer',
-                                description: '图像高度 (256-2048)',
-                                minimum: 256,
-                                maximum: 2048
-                            },
-                            steps: {
-                                type: 'integer',
-                                description: '迭代步数 (1-100)',
-                                minimum: 1,
-                                maximum: 100
-                            },
-                            cfg_scale: {
-                                type: 'number',
-                                description: '提示词权重 (0.1-3.0)',
-                                minimum: 0.1,
-                                maximum: 3.0
-                            },
-                            strength: {
-                                type: 'number',
-                                description: '噪声强度/重绘幅度 (0.1-1.0)',
-                                minimum: 0.1,
-                                maximum: 1.0
-                            },
-                            batch_size: {
-                                type: 'integer',
-                                description: '生成数量 (1-8)',
-                                minimum: 1,
-                                maximum: 8
-                            },
-                            seed: {
-                                type: 'integer',
-                                description: '随机种子 (可选，不提供则随机)',
-                                minimum: 0
-                            },
-                            allow_super_resolution: {
-                                type: 'boolean',
-                                description: '是否启用超分 (默认 false)'
-                            }
+                            optimized_prompt: { type: 'string', description: '优化后的正面提示词' },
+                            optimized_negative_prompt: { type: 'string', description: '优化后的负面提示词' },
+                            width: { type: 'integer', description: '图像宽度 (256-2048)', minimum: 256, maximum: 2048 },
+                            height: { type: 'integer', description: '图像高度 (256-2048)', minimum: 256, maximum: 2048 },
+                            steps: { type: 'integer', description: '迭代步数 (1-100)', minimum: 1, maximum: 100 },
+                            cfg_scale: { type: 'number', description: '提示词权重 (0.1-3.0)', minimum: 0.1, maximum: 3.0 },
+                            strength: { type: 'number', description: '噪声强度/重绘幅度 (0.1-1.0)', minimum: 0.1, maximum: 1.0 },
+                            batch_size: { type: 'integer', description: '生成数量 (1-8)', minimum: 1, maximum: 8 },
+                            seed: { type: 'integer', description: '随机种子 (可选，不提供则随机)', minimum: 0 },
+                            allow_super_resolution: { type: 'boolean', description: '是否启用超分 (默认 false)' }
                         },
                         required: ['optimized_prompt', 'optimized_negative_prompt', 'width', 'height', 'steps', 'cfg_scale', 'strength', 'batch_size']
                     }
@@ -800,43 +704,38 @@ async function callMultimodalModel(messages) {
         ],
         tool_choice: {
             type: 'function',
-            function: {
-                name: 'image_generation_parameters'
-            }
+            function: { name: 'image_generation_parameters' }
         },
         temperature: 0.7
     };
 
-    const response = await fetch(API_URL, {
+    const response = await fetch('/v1/chat/completions', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`API调用失败: ${response.status} - ${errorText}`);
+        throw new Error('API调用失败: ' + response.status + ' - ' + errorText);
     }
 
     const result = await response.json();
+    // 兼容「OpenAI 原始响应」与「代理包装响应」两种格式
+    const message = (result.choices && result.choices[0] && result.choices[0].message)
+        ? result.choices[0].message
+        : (result.success && result.data && result.data.choices && result.data.choices[0] && result.data.choices[0].message)
+            ? result.data.choices[0].message
+            : null;
 
-    if (!result.choices || !result.choices[0]) {
-        throw new Error('无效的API响应格式');
-    }
-
-    const message = result.choices[0].message;
+    if (!message) throw new Error('无效的API响应格式');
 
     if (message.tool_calls && message.tool_calls[0]) {
         const toolCall = message.tool_calls[0];
         if (toolCall.function && toolCall.function.arguments) {
             try {
                 const args = JSON.parse(toolCall.function.arguments);
-                return {
-                    success: true,
-                    data: args
-                };
+                return { success: true, data: args };
             } catch (parseError) {
                 throw new Error('解析工具参数失败: ' + parseError.message);
             }
@@ -848,10 +747,7 @@ async function callMultimodalModel(messages) {
             const jsonMatch = message.content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const args = JSON.parse(jsonMatch[0]);
-                return {
-                    success: true,
-                    data: args
-                };
+                return { success: true, data: args };
             }
         } catch (parseError) {
             console.log('尝试直接解析content:', parseError);
@@ -908,15 +804,59 @@ function applyOptimizationResult(result) {
     }
 
     if (data.allow_super_resolution !== undefined) {
-        if (data.allow_super_resolution) {
-            elements.allowSuperResolution.classList.add('active');
-            elements.allowSuperResolution.innerHTML = '<i class="fas fa-check-circle"></i> 已启用超分';
-        } else {
-            elements.allowSuperResolution.classList.remove('active');
-            elements.allowSuperResolution.innerHTML = '<i class="fas fa-expand-arrows-alt"></i> 允许超分';
-        }
+        elements.allowSuperResolution.checked = !!data.allow_super_resolution;
     }
 }
 
-// ==== 启动 ====
+// ===== 事件绑定 =====
+function initEventListeners() {
+    // 深色模式
+    if (elements.themeToggle) {
+        elements.themeToggle.addEventListener('click', () => {
+            const dark = !document.body.classList.contains('dark-mode');
+            applyTheme(dark);
+            try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { }
+        });
+    }
+    applyTheme(localStorage.getItem(THEME_KEY) === 'dark');
+
+    // 滑块值更新
+    elements.widthSlider.addEventListener('input', updateWidthValue);
+    elements.heightSlider.addEventListener('input', updateHeightValue);
+    elements.strengthSlider.addEventListener('input', updateStrengthValue);
+
+    // 参考图上传
+    elements.uploadArea.addEventListener('click', () => elements.initImage.click());
+    elements.uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        elements.uploadArea.classList.add('drag-over');
+    });
+    elements.uploadArea.addEventListener('dragleave', () => {
+        elements.uploadArea.classList.remove('drag-over');
+    });
+    elements.uploadArea.addEventListener('drop', handleDrop);
+    elements.initImage.addEventListener('change', handleImageSelect);
+    elements.clearImageBtn.addEventListener('click', clearReferenceImage);
+
+    // 底部操作按钮
+    elements.generateBtn.addEventListener('click', generateImage);
+    elements.optimizeBtn.addEventListener('click', optimizePromptAndParameters);
+    elements.resetBtn.addEventListener('click', resetParameters);
+    elements.refreshBtn.addEventListener('click', refreshPage);
+    elements.clearAllBtn.addEventListener('click', clearAllFiles);
+
+    // 键盘快捷键
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+
+    // 初始化显示值
+    updateWidthValue();
+    updateHeightValue();
+    updateStrengthValue();
+
+    // 加载默认数据
+    loadDefaultPrompts();
+    loadFileList();
+}
+
+// ===== 启动 =====
 document.addEventListener('DOMContentLoaded', initEventListeners);

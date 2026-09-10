@@ -137,16 +137,44 @@ var D = {
     batchOrientationCustomGroup: $('batch-orientation-custom-group'),
     batchOrientationCustom: $('batch-orientation-custom'),
 
+    // Content header
+    resultCount: $('resultCount'),
+
+    // Theme
+    themeToggle: $('themeToggle'),
+    themeIcon: $('themeIcon'),
+
     // Toast
-    toastContainer: $('toast-container')
+    toast: $('toast')
 };
 
 // ========== 初始化 ==========
 
 function init() {
+    initTheme();
     bindGlobalEvents();
     bindKeyboard();
     loadGlobalStats();
+}
+
+// ========== 深色模式 ==========
+
+var THEME_KEY = 'msTheme';
+
+function initTheme() {
+    if (D.themeToggle) {
+        D.themeToggle.addEventListener('click', function () {
+            var dark = !document.body.classList.contains('dark-mode');
+            applyTheme(dark);
+            try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { }
+        });
+    }
+    applyTheme(localStorage.getItem(THEME_KEY) === 'dark');
+}
+
+function applyTheme(dark) {
+    document.body.classList.toggle('dark-mode', dark);
+    if (D.themeIcon) D.themeIcon.className = 'fas ' + (dark ? 'fa-sun' : 'fa-moon');
 }
 
 function bindGlobalEvents() {
@@ -502,11 +530,11 @@ function updateCollectionStats(col) {
 
 function updateAddButton() {
     if (App.isImageCollection) {
-        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-image"></i> 新增';
+        D.btnAddDoc.innerHTML = '<i class="fas fa-image"></i> 新增';
         D.btnAddDoc.title = '向当前图片集合添加图片';
         D.btnBatchImport.style.display = 'inline-flex';
     } else {
-        D.btnAddDoc.innerHTML = '<i class="fa-solid fa-plus"></i> 添加文档';
+        D.btnAddDoc.innerHTML = '<i class="fas fa-plus"></i> 添加文档';
         D.btnAddDoc.title = '向当前集合添加文档';
         D.btnBatchImport.style.display = 'none';
     }
@@ -555,11 +583,11 @@ function renderCollectionList() {
         var typeIcon = col.type === 'image' ? 'fa-image' : 'fa-folder';
         var typeCls = col.type === 'image' ? ' image-type' : '';
         html += '<div class="collection-item' + (isActive ? ' active' : '') + typeCls + '" data-col-name="' + esc(col.name) + '">' +
-            '<span class="col-icon"><i class="fa-solid ' + (isActive ? 'fa-folder-open' : typeIcon) + '"></i></span>' +
+            '<span class="col-icon"><i class="fas ' + (isActive ? 'fa-folder-open' : typeIcon) + '"></i></span>' +
             '<span class="col-name" title="' + esc(col.name) + '">' + esc(col.name) + '</span>' +
             '<span class="col-count">' + col.count + '</span>' +
             '<button class="btn-delete-col" data-col-name="' + esc(col.name) + '" title="删除集合">' +
-            '<i class="fa-solid fa-trash-can"></i>' +
+            '<i class="fas fa-trash-can"></i>' +
             '</button>' +
             '</div>';
     }
@@ -792,6 +820,7 @@ function setLoading(loading) {
 }
 
 function setEmpty() {
+    if (D.resultCount) D.resultCount.textContent = '';
     D.emptyState.style.display = 'flex';
     D.emptyColState.style.display = 'none';
     D.docList.style.display = 'none';
@@ -800,6 +829,7 @@ function setEmpty() {
 }
 
 function showEmptyCollectionState() {
+    if (D.resultCount) D.resultCount.textContent = '';
     D.emptyColState.style.display = 'flex';
     D.emptyState.style.display = 'none';
     D.docList.style.display = 'none';
@@ -852,6 +882,11 @@ async function loadDocuments() {
         }
 
         App.totalDocs = total;
+
+        // 更新头部文档计数
+        if (D.resultCount) {
+            D.resultCount.textContent = App.totalDocs > 0 ? App.totalDocs + ' 条文档' : '';
+        }
 
         // Update collection count in sidebar
         var col = findCollection(App.currentCollection);
@@ -971,14 +1006,14 @@ function renderCard(doc, isSearch) {
             '<div class="doc-actions-inline">' +
             (hasValidId
                 ? '<button class="btn-icon-sm btn-del" title="删除此图片" data-delete-id="' + esc(doc.id) + '">' +
-                '<i class="fa-solid fa-trash-can"></i>' +
+                '<i class="fas fa-trash-can"></i>' +
                 '</button>'
                 : '') +
             '</div>' +
             '</div>' +
             (imageSrc
                 ? '<div class="image-preview-container"><img data-src="' + escAttr(imageSrc) + '" class="image-preview-thumb" alt="图片" decoding="async"></div>'
-                : '<div class="image-preview-container"><span class="image-placeholder"><i class="fa-solid fa-image"></i> 图片数据将通过搜索加载</span></div>') +
+                : '<div class="image-preview-container"><span class="image-placeholder"><i class="fas fa-image"></i> 图片数据将通过搜索加载</span></div>') +
             '</div>' +
             '</div>';
     }
@@ -991,11 +1026,11 @@ function renderCard(doc, isSearch) {
         '<code class="doc-id-tag">' + esc(doc.id) + '</code>' +
         '<div class="doc-actions-inline">' +
         '<button class="btn-icon-sm btn-copy" title="复制内容" data-content="' + escAttr(doc.content) + '">' +
-        '<i class="fa-solid fa-copy"></i>' +
+        '<i class="fas fa-copy"></i>' +
         '</button>' +
         (hasValidId
             ? '<button class="btn-icon-sm btn-del" title="删除此文档" data-delete-id="' + esc(doc.id) + '">' +
-            '<i class="fa-solid fa-trash-can"></i>' +
+            '<i class="fas fa-trash-can"></i>' +
             '</button>'
             : '') +
         '</div>' +
@@ -1078,6 +1113,11 @@ async function executeSearch(query) {
             var data = result.data;
             App.searchResults = data.results || [];
             App.totalDocs = data.total_found || App.searchResults.length;
+
+            // 更新头部搜索计数
+            if (D.resultCount) {
+                D.resultCount.textContent = '找到 ' + App.totalDocs + ' 条结果';
+            }
 
             renderList(App.searchResults, true);
             renderPagination();
@@ -1185,7 +1225,7 @@ async function executeDeleteDoc(id, button) {
 
     if (button) {
         button.disabled = true;
-        button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     }
 
     try {
@@ -1216,14 +1256,14 @@ async function executeDeleteDoc(id, button) {
             showToast('删除失败: ' + (result.error || '未知错误'), 'error');
             if (button) {
                 button.disabled = false;
-                button.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                button.innerHTML = '<i class="fas fa-trash-can"></i>';
             }
         }
     } catch (err) {
         showToast('网络请求失败: ' + err.message, 'error');
         if (button) {
             button.disabled = false;
-            button.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+            button.innerHTML = '<i class="fas fa-trash-can"></i>';
         }
     }
 }
@@ -1275,20 +1315,11 @@ function showToast(message, type) {
     type = type || 'info';
     var icons = { success: 'fa-circle-check', error: 'fa-circle-exclamation', info: 'fa-circle-info', warn: 'fa-triangle-exclamation' };
 
-    var toast = document.createElement('div');
-    toast.className = 'toast ' + type;
-    toast.innerHTML = '<i class="fa-solid ' + (icons[type] || icons.info) + '"></i><span>' + esc(message) + '</span>';
-    D.toastContainer.appendChild(toast);
-
-    requestAnimationFrame(function () {
-        toast.classList.add('toast-visible');
-    });
-
-    setTimeout(function () {
-        toast.classList.add('toast-out');
-        toast.addEventListener('transitionend', function () {
-            if (toast.parentNode) toast.parentNode.removeChild(toast);
-        });
+    D.toast.className = 'toast ' + type + ' toast-visible';
+    D.toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i><span>' + esc(message) + '</span>';
+    clearTimeout(D.toast._timer);
+    D.toast._timer = setTimeout(function () {
+        D.toast.classList.remove('toast-visible');
     }, 3500);
 }
 
@@ -1319,7 +1350,7 @@ function showBtnLoading(btn, loading, text) {
     if (!btn) return;
     if (loading) {
         btn.dataset.originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (text || '处理中...');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (text || '处理中...');
     } else {
         btn.innerHTML = btn.dataset.originalText || text || btn.innerHTML;
     }
@@ -1487,7 +1518,7 @@ function showBatchImportModal() {
     D.batchOrientation.value = 'auto';
     D.batchOrientationCustom.value = '';
     toggleOrientationCustomGroup(D.batchOrientation, D.batchOrientationCustomGroup);
-    D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件</div>';
+    D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fas fa-arrow-up"></i> 输入路径后点击扫描，将列出目录中的图片文件</div>';
     D.batchProgress.style.display = 'none';
     D.batchLog.style.display = 'none';
     D.batchLog.innerHTML = '';
@@ -1531,12 +1562,12 @@ async function handleScanPath() {
             D.btnStartBatch.disabled = App.batchFiles.length === 0;
             showToast('扫描完成，找到 ' + App.batchFiles.length + ' 张图片', 'success');
         } else {
-            D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-circle-exclamation"></i> 目录不存在或无法访问</div>';
+            D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fas fa-circle-exclamation"></i> 目录不存在或无法访问</div>';
             App.batchFiles = [];
             D.btnStartBatch.disabled = true;
         }
     } catch (err) {
-        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-circle-exclamation"></i> 扫描失败: ' + esc(err.message) + '</div>';
+        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fas fa-circle-exclamation"></i> 扫描失败: ' + esc(err.message) + '</div>';
         App.batchFiles = [];
         D.btnStartBatch.disabled = true;
     } finally {
@@ -1547,7 +1578,7 @@ async function handleScanPath() {
 
 function renderBatchFileList() {
     if (App.batchFiles.length === 0) {
-        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fa-solid fa-inbox"></i> 目录中没有图片文件</div>';
+        D.batchFileList.innerHTML = '<div class="batch-empty-hint"><i class="fas fa-inbox"></i> 目录中没有图片文件</div>';
         return;
     }
 
@@ -1555,7 +1586,7 @@ function renderBatchFileList() {
     var maxShow = 20;
     for (var i = 0; i < Math.min(App.batchFiles.length, maxShow); i++) {
         var f = App.batchFiles[i];
-        html += '<div class="batch-file-item"><i class="fa-solid fa-image"></i> <span>' + esc(f.name) + '</span>' +
+        html += '<div class="batch-file-item"><i class="fas fa-image"></i> <span>' + esc(f.name) + '</span>' +
             '<span class="batch-file-status" id="batch-status-' + i + '">等待</span></div>';
     }
     if (App.batchFiles.length > maxShow) {

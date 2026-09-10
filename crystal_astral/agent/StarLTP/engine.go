@@ -136,7 +136,7 @@ func (e *engine) reloadPackage(id string) error {
 	return np.load()
 }
 
-// pluginStates 返回全部插件状态。
+// pluginStates 返回全部插件状态（含已注册事件主题与导出函数，供前端下拉填充）。
 func (e *engine) pluginStates() []PluginState {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -148,6 +148,23 @@ func (e *engine) pluginStates() []PluginState {
 				st.Granted = append(st.Granted, n)
 			}
 		}
+		// 事件/导出为运行时可变数据，读取时加锁；仅列出当前非空的订阅主题与已导出函数
+		p.mu.Lock()
+		for t, subs := range p.events {
+			if len(subs) > 0 {
+				st.Events = append(st.Events, t)
+			}
+		}
+		for n := range p.exports {
+			st.Exports = append(st.Exports, n)
+		}
+		for n := range p.tools {
+			st.Tools = append(st.Tools, n)
+		}
+		p.mu.Unlock()
+		sort.Strings(st.Events)
+		sort.Strings(st.Exports)
+		sort.Strings(st.Tools)
 		out = append(out, st)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

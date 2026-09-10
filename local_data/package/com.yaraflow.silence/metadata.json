@@ -1,0 +1,12 @@
+{
+	"id": "com.yaraflow.silence",
+	"title": "沉默是金",
+	"author": "YaraFlow",
+	"version": "1.0.0",
+	"type": "plugin",
+	"description": "使语瞳在合适的时候保持沉默（窥屏），支持LLM自主决策和手动命令控制。当群聊气氛不对、有人反感语瞳说话、或管理员需要语瞳安静时，插件会自动或手动进入沉默状态，暂时停止回复消息。",
+	"tags": [
+		"LTP3"
+	],
+	"icon": "icon.webp"
+}

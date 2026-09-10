@@ -5,7 +5,12 @@ package StarLTP
 // ==== 公开 Go 引擎接口（不经 WS 直接调用） ====
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"LunarSubsystem/LoggerGeneral"
 )
@@ -23,6 +28,42 @@ func Init() error {
 
 // Version 返回引擎构建版本标记（供运行实例自证是否最新）。
 func Version() string { return EngineBuild }
+
+// AgentPackages 扫描包根目录，返回带 Mini-LTP / Node-LTP 标签的包 ID（engine.agent 的可选目标）。
+// 这些包不参与 LTP9 引擎加载（reconcile 只加载 LTP9 标签），故单独按 metadata.json 标签扫描。
+func AgentPackages() []string {
+	root := packageRoot()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	out := []string{}
+	for _, ent := range entries {
+		if !ent.IsDir() {
+			continue
+		}
+		raw, rerr := os.ReadFile(filepath.Join(root, ent.Name(), "metadata.json"))
+		if rerr != nil {
+			continue
+		}
+		var m pkgMeta
+		if json.Unmarshal(raw, &m) != nil {
+			continue
+		}
+		id := m.ID
+		if id == "" {
+			id = ent.Name()
+		}
+		for _, t := range m.Tags {
+			if strings.EqualFold(t, "Mini-LTP") || strings.EqualFold(t, "Node-LTP") {
+				out = append(out, id)
+				break
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // Close 关闭引擎并卸载全部插件。
 func Close() {
@@ -64,6 +105,21 @@ func SetWsServer(bridge *WsBridge) {
 	wsMu.Unlock()
 }
 
+// SetPlatformResolver 注入平台能力解析器（engine.platform 的真实实现）。
+// method 取值 getName / getGroupId / lookupUser，args 为方法参数（lookupUser 含 groupId、name）。
+// 未注入时，engine.platform 返回错误提示。
+func SetPlatformResolver(fn func(method string, args map[string]any) (any, error)) {
+	platformMu.Lock()
+	platformResolver = fn
+	platformMu.Unlock()
+}
+
+// CallTool 由外部 Go 程序直接调用某个插件注册的工具（engine.tool 的 Go 侧入口，AtoA/LLM 接头用）。
+// 目标插件未注册该工具 → 返回 xxx 包未注册工具。
+func CallTool(pluginID, name string, args map[string]any) (any, error) {
+	return engineToolCall(pluginID, name, args)
+}
+
 // PluginStates 返回全部插件状态（供外部 Go 程序枚举）。
 func PluginStates() []PluginState {
 	if Engine == nil {
@@ -80,7 +136,7 @@ func Rescan() {
 }
 
 // Emit 由客户端（外部 Go 程序）直接发起一个事件，路由到所有订阅该 topic 的插件订阅器。
-// 返回各插件处理结果与汇总（含拦截/撤回状态）。
+// 返回各插件处理结果与汇总（含拦截/撤回状态），以及订阅器经 return 回传的业务结果。
 func Emit(topic string, payload any, requestID string) EmitResult {
 	result := EmitResult{Topic: topic}
 	if Engine == nil {
@@ -88,6 +144,10 @@ func Emit(topic string, payload any, requestID string) EmitResult {
 	}
 	summary := EmitSummary{}
 	cur := payload
+	modified := false
+	// returned 订阅器经 return 回传的业务结果（同主题多订阅器时取最后一个非 nil 者）
+	var returned any
+	hasReturn := false
 	for _, p := range Engine.snapshotPlugins() {
 		p.mu.Lock()
 		hasSubs := len(p.events[topic]) > 0
@@ -110,6 +170,12 @@ func Emit(topic string, payload any, requestID string) EmitResult {
 				// 改写：事件负载沿订阅器链向下游（含其余插件）传递
 				if v, has := m["modifiedData"]; has && v != nil {
 					cur = v
+					modified = true
+				}
+				// 回传：业务结果交给事件发起方消费，不参与负载链传递
+				if v, has := m["return"]; has && v != nil {
+					returned = v
+					hasReturn = true
 				}
 				if m["intercept"] == true {
 					summary.Intercepted = true
@@ -122,6 +188,10 @@ func Emit(topic string, payload any, requestID string) EmitResult {
 		result.Outcomes = append(result.Outcomes, outs...)
 	}
 	result.Summary = summary
+	result.Data = cur
+	result.Modified = modified
+	result.Returned = hasReturn
+	result.Return = returned
 	return result
 }
 

@@ -290,6 +290,19 @@ declare global {
      */
     function clearLTPXRemoteTools(): boolean;
     /**
+     * 同步推送事件到琉璃并接收插件处理结果（事件触发点调用）
+     *
+     * 把「xx事件发生前」的原始负载推送到琉璃 /ltpx/event，同步阻塞等待琉璃 LTP9
+     * 插件处理完成。琉璃离线 / 无插件订阅 / 插件未回传业务结果时 returned=false
+     * （调用方应回退本地默认处理）。
+     *
+     * @param {string} topic 事件主题（如 message_received_before）
+     * @param {string} payloadJSON 事件负载 JSON 字符串（可为 "{}"）
+     *
+     * @returns {string} JSON 字符串：{ online: boolean, modified: boolean, data: any, returned: boolean, return: any }
+     */
+    function ltpInteractEvent(topic: string, payloadJSON: string): string;
+    /**
      * 初始化搜索者智能体
      * 模型配置从 lunar_config.json 读取
      *

@@ -1,8 +1,15 @@
-import { GlobalConfig, ChatCache, processUnreadFiles, checkDueItems, SCHEDULE_TRIGGER_PREFIX, parseContent, PostMessageRole, MessageContent } from '../index';
+import { GlobalConfig, ChatCache, processUnreadFiles, checkDueItems, SCHEDULE_TRIGGER_PREFIX, parseContent, PostMessage, PostMessageRole, MessageContent } from '../index';
 import { descriptionRole, searcherRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { batchProcessVideoFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
+import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker } from './capabilities/memory';
+
+/** 思考链起点互动函数：拉取琉璃工具链（不推送时间/上下文，仅事件触发点推送事件） */
+function interactLTPXStart(): void {
+    // 工具拉取：同步琉璃状态，在线则注入工具链，离线则移除
+    syncLTPXRemoteStatus();
+}
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -31,8 +38,10 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 检查计划表到期项，将到期计划内容写入上下文
             checkDueItems().forEach(
                 item => {
-                    // TODO : 事件 -> 执行计划前
-                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${item.content}` })
+                    // 事件 -> 执行计划前：推送到期计划，插件可经 return.plan 改写计划内容
+                    const feedback: { plan?: string } = interactEvent('execution_schedule_before', { plan: item.content }).return;
+                    const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
+                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` })
                 }
             );
             // 标记为思考完成
@@ -40,9 +49,17 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 进入下一次循环
             return;
         }
-        // TODO : 事件 -> 收到消息前
-        // 同步琉璃（远程 LTPX）状态：在线则注入工具链，离线则移除
-        syncLTPXRemoteStatus();
+        // 拉取琉璃工具链
+        interactLTPXStart();
+        // 事件 -> 收到消息前：把待处理的消息上下文推送到琉璃，插件可经 return 改写后再消费
+        const feedback: { messages?: PostMessage[]; videos?: string[] } = interactEvent('message_received_before', {
+            messages: GlobalConfig.unreadContext,
+            videos: GlobalConfig.unreadVideoUrl,
+        }).return;
+        if (feedback) {
+            if (Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
+            if (Array.isArray(feedback.videos)) GlobalConfig.unreadVideoUrl = feedback.videos;
+        }
         // 批量处理视频文件
         await batchProcessVideoFiles();
         // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
@@ -62,17 +79,21 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         if (!validMessage.length) throw new Error('清洗后的文本为空');
         // 如果解析出行动区内容，分别交给行动者推理动作、记忆库匹配表情包
         if (actionBlocks.length) {
-            // TODO : 事件 -> 做出行动前
+            // 事件 -> 做出行动前：推送行动块，插件可经 return.actions 改写后再交给行动者
+            const feedback: { actions?: string[] } = interactEvent('take_action_before', { actions: actionBlocks }).return;
+            const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
             // 调用行动者推理动作
-            await actorRole.createCreativeWork(actionBlocks.join('|'));
+            await actorRole.createCreativeWork(actBlocks.join('|'));
             // 从记忆库匹配表情包并推送图片数据
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
         // 未解析出行动区内容，且正文长度小于等于36字时，按概率基于正文推理表情包
         else if (validMessage.length <= 36 && Math.random() < 0.15) {
-            // TODO : 事件 -> 表达情感前
+            // 事件 -> 表达情感前：推送正文，插件可经 return.text 改写表情参考文本
+            const feedback: { text?: string } = interactEvent('express_emotions_before', { text: validMessage }).return;
+            const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
             // 从记忆库匹配表情包并推送图片数据
-            pushImage([await queryEmotionSticker(validMessage)], true);
+            pushImage([await queryEmotionSticker(emoText)], true);
         }
         // 第一步：按顺序逐一发送思考区内容（不参与语音合成）
         thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''))

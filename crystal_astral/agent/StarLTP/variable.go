@@ -15,7 +15,7 @@ import (
 const ServiceName = "StarLTP"
 
 // EngineBuild 引擎构建标记：每次改动 callFn/导出回传逻辑时递增，供运行实例自证版本。
-const EngineBuild = "2026-09-08"
+const EngineBuild = "2026-09-10"
 
 // LTP9Tag metadata.json 标识 LTP9 包的标签。
 const LTP9Tag = "LTP9"
@@ -91,6 +91,16 @@ var wsMu sync.RWMutex
 
 // wsServicer WebSocket 服务端传输（engine.ws 真实实现，由主机注入）。
 var wsServicer *WsBridge
+
+// platformMu 保护 platformResolver 的并发读写。
+var platformMu sync.RWMutex
+
+// platformResolver 平台能力解析器（engine.platform 真实实现，由主机注入）。
+// method 取值 getName / getGroupId / lookupUser，args 为方法参数；未注入时 engine.platform 返回错误提示。
+var platformResolver func(method string, args map[string]any) (any, error)
+
+// StickerCollection LTP9 表情包记忆库集合名（image 型集合，复用项目记忆库的 stickers 约定）。
+const StickerCollection = "stickers"
 
 // ==== 模型/算法配置（从 lunar_config.json 的 agent 字段读取，不硬编码） ====
 

@@ -2,31 +2,29 @@ package main
 
 import (
 	"CrystalAstral/agent/AutoLTP"
+	star "CrystalAstral/agent/StarLTP"
 	"CrystalAstral/agent/YaraLTP"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 // ==== LTPX 远程（月华调用）协议实现 ====
 // 新版 LTPX 协议：琉璃作为「通用中转层」被月华调度，工具本身由前端包提供（AtoA）。
-//   1. 琉璃启动时一次性向月华提交联络 URL；月华在每条思考链起点心跳并拉取工具链
+//   1. 琉璃不主动向月华推送；月华在每条思考链起点按固定端口（36792）心跳并拉取工具链
 //   2. 工具链 = 动态扫描 local_data/package/*/metadata.json 中带 tools 定义的包（包自带 AtoA）
 //   3. 月华调用工具 → 琉璃按工具名路由到对应包 → 通过 /ws 广播给前端 → 前端打开包页面并
 //      postMessage 投递给包 → 包执行（含页面展示）→ 回执 /ltpx/result → 琉璃返回月华
-//   4. 琉璃核心不随包增删而改动：加载/卸载工具只影响扫描结果
+//   4. 月华在每个「xx事件发生前」触发点把原始负载 POST /ltpx/event 到琉璃，
+//      经 LTP9 插件处理；无插件订阅/未改写/琉璃离线时，月华回退使用原始数据
+//   5. 琉璃核心不随包增删而改动：加载/卸载工具只影响扫描结果
 
 // jsonOK 写入统一 JSON 响应
 func jsonOK(w http.ResponseWriter, status int, data any) {
@@ -356,114 +354,47 @@ func ltpRemoteResultHandler(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// playStartupVoice 由后端直接播放启动语音 WAV（winmm PlaySoundW，SND_ASYNC 异步播放）
-// 前端 WebView 受浏览器自动播放策略限制（必须用户交互后才允许发声），
-// 因此启动语音改由后端原生进程播放，绕开自动播放限制，无需用户点击。
-// 音频文件位于 {LocalDir}/audios/ 下，voice 为文件名（如 enable_tool_package.wav）。
-func playStartupVoice(fileName string) {
-	if fileName == "" {
+// ltpRemoteEventHandler 月华事件推送端点（POST /ltpx/event）。
+// 月华在每个「xx事件发生前」触发点调用：把原始负载推送到琉璃，
+// 经 LTP9 引擎派发到订阅该 topic 的插件；插件可经 return 回传业务结果，或经 modifiedData 改写负载。
+// 返回：无插件订阅 / 未回传 → returned=false；有插件经 return 回传 → returned=true 且 return=业务结果。
+// 月华据此决定采用插件回传的业务结果，或回退到本地默认处理。
+func ltpRemoteEventHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	execPath, err := os.Executable()
-	if err != nil {
-		LoggerGeneral.Warn("CrystalAstral", "定位可执行目录失败，无法播放启动语音 %s: %v", fileName, err)
+
+	var req LTPXRemoteEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonOK(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "无效的事件负载: " + err.Error()})
 		return
 	}
-	execDir := filepath.Dir(execPath)
-	audioPath := filepath.Join(execDir, *GeneralConfig.LocalDir, "audios", fileName)
-	pathPtr, err := syscall.UTF16PtrFromString(audioPath)
-	if err != nil {
-		LoggerGeneral.Warn("CrystalAstral", "启动语音路径转换失败 %s: %v", audioPath, err)
+	topic := req.Topic
+	if topic == "" {
+		topic = req.Event
+	}
+	if topic == "" {
+		jsonOK(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "topic/event 为必填项"})
 		return
 	}
-	// SND_FILENAME=0x00020000 SND_ASYNC=0x0001 SND_NODEFAULT=0x0002
-	flags := uintptr(0x00020000 | 0x0001 | 0x0002)
-	ret, _, _ := procPlaySoundW.Call(uintptr(unsafe.Pointer(pathPtr)), 0, flags)
-	if ret == 0 {
-		LoggerGeneral.Warn("CrystalAstral", "启动语音播放失败（PlaySoundW 返回 0）: %s", audioPath)
-		return
+	payload := req.Payload
+	if payload == nil {
+		payload = map[string]any{}
 	}
-	LoggerGeneral.Info("CrystalAstral", "已由后端播放启动语音: %s", audioPath)
-}
-
-// setStartupVoice 记录启动语音决策（含月华在线状态），并立即由后端播放对应语音
-// voice 取值：sent（工具包已推送，月华在线）/ failed（无法交给月华，月华离线）/ disable（工具包停用，琉璃关闭）
-func setStartupVoice(voice string, lunarOnline bool) {
-	startupVoiceMutex.Lock()
-	lastStartupVoice = StartupVoice{Voice: voice, Lunar: lunarOnline, Seq: time.Now().UnixNano()}
-	startupVoiceMutex.Unlock()
-	// 直接由后端播放，前端不再参与（避免 WebView 自动播放限制）
-	switch voice {
-	case "sent":
-		playStartupVoice("enable_tool_package.wav")
-	case "failed":
-		playStartupVoice("tool_package_failed.wav")
-	case "disable":
-		playStartupVoice("disable_tool_package.wav")
+	result := star.Emit(topic, payload, fmt.Sprintf("ltp9-ev-%d", time.Now().UnixNano()))
+	data := result.Data
+	if data == nil {
+		data = payload
 	}
-}
-
-// registerToLunar 琉璃启动时一次性向月华提交联络 URL（POST /ltpx/register）
-// 月华固定端口（BasicPort），琉璃随机端口；多开时月华以最新注册为准。
-// 注册结果同时决定启动语音：月华在线且 URL 推送成功 → 工具包已发送；离线/推送失败 → 无法交给月华。
-func registerToLunar(port int) (bool, error) {
-	if StudioHubInstance == nil {
-		return false, nil
-	}
-	selfURL := "http://127.0.0.1:" + strconv.Itoa(port)
-	lunarURL := "http://127.0.0.1:" + strconv.Itoa(*GeneralConfig.BasicPort) + "/ltpx/register"
-
-	payload, _ := json.Marshal(map[string]string{"url": selfURL})
-	respBody, status, err := ltpHTTPPost(lunarURL, payload)
-	if err != nil || status != http.StatusOK {
-		LoggerGeneral.Warn("CrystalAstral", "向月华注册联络 URL 失败(或月华离线): %v (status=%d)", err, status)
-		// 月华离线：后端直接播放「无法交给月华」语音
-		setStartupVoice("failed", false)
-		return false, err
-	}
-
-	// 校验月华响应：仅当 HTTP 200 且 success=true 才视为「URL 推送成功」（月华在线）
-	var regResp LunarRegisterResponse
-	if err := json.Unmarshal(respBody, &regResp); err != nil || !regResp.Success {
-		LoggerGeneral.Warn("CrystalAstral", "月华未确认 LTPX 注册 (success=%v, err=%v)，按推送失败处理", regResp.Success, err)
-		setStartupVoice("failed", false)
-		return false, fmt.Errorf("月华未确认 LTPX 注册")
-	}
-
-	LoggerGeneral.Info("CrystalAstral", "LTPX 已向月华注册联络 URL: %s (月华在线)", selfURL)
-	// 月华在线：后端直接播放「工具包已发送」语音
-	setStartupVoice("sent", true)
-	return true, nil
-}
-
-// notifyToolPackageDisabled 优雅关闭时由后端播放「工具包停用」语音（disable_tool_package.wav）
-// 仅当本次启动月华在线（启动语音为 sent）时播放；离线时无需停用提示。
-// 播放采用异步（SND_ASYNC），随后等待 3 秒再关闭服务器，确保停用语音完整播放完毕
-// （前端浏览器窗口关闭或收到中断信号后均适用）。
-func notifyToolPackageDisabled() {
-	startupVoiceMutex.RLock()
-	enabled := lastStartupVoice.Voice == "sent"
-	startupVoiceMutex.RUnlock()
-	if !enabled {
-		return
-	}
-	LoggerGeneral.Info("CrystalAstral", "月华在线期间琉璃关闭，后端播放工具包停用语音")
-	setStartupVoice("disable", true)
-	// 等待 3 秒再关闭服务器，确保停用语音播放完毕
-	time.Sleep(3 * time.Second)
-}
-
-// ltpHTTPPost 小型 HTTP POST 辅助（JSON 请求体）
-func ltpHTTPPost(url string, payload []byte) ([]byte, int, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, err
-	}
-	return body, resp.StatusCode, nil
+	LoggerGeneral.Info("CrystalAstral", "月华事件推送 %s (sub=%d, mod=%v, ret=%v)", topic, result.Summary.Subscribed, result.Modified, result.Returned)
+	jsonOK(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"topic":    topic,
+		"modified": result.Modified,
+		"data":     data,
+		"returned": result.Returned,
+		"return":   result.Return,
+		"summary":  result.Summary,
+	})
 }

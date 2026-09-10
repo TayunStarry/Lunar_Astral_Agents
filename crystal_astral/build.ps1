@@ -24,15 +24,60 @@ function Build-IconIfNeeded {
     if ($LASTEXITCODE -ne 0) { throw "rsrc 图标编译失败" }
 }
 
+# ---------- 关闭已启动的琉璃服务 ----------
+# 运行中的琉璃会占用输出可执行文件，不先关闭会导致覆盖写入失败
+function Stop-RunningCrystal {
+    $processes = Get-Process -Name "Crystal_Astral" -ErrorAction SilentlyContinue
+    if (-not $processes) {
+        Write-Host "未检测到运行中的琉璃服务" -ForegroundColor DarkGray
+        return
+    }
+
+    foreach ($process in $processes) {
+        try {
+            $process.Kill()
+            $process.WaitForExit(5000) | Out-Null
+            Write-Host "已关闭琉璃服务 (PID $($process.Id))" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "关闭琉璃服务失败 (PID $($process.Id)): $_" -ForegroundColor Yellow
+        }
+    }
+
+    # 等待进程退出并释放文件句柄
+    Start-Sleep -Milliseconds 500
+}
+
+# ---------- 清除目录内残留的可执行文件 ----------
+# 历史构建/手工复制可能在项目目录内留下 Crystal_Astral.exe，编译前统一清除
+function Remove-StaleExe {
+    $staleExe = Join-Path $PSScriptRoot "Crystal_Astral.exe"
+    if (Test-Path $staleExe) {
+        Remove-Item $staleExe -Force
+        Write-Host "已清除目录内残留的 Crystal_Astral.exe: $staleExe" -ForegroundColor Green
+    }
+}
+
 # ---------- 编译主流程 ----------
 try {
     # 编译图标
     Build-IconIfNeeded
 
-    # 启用CGO
-    $env:CGO_ENABLED = 1
+    # 关闭已启动的琉璃服务
+    Stop-RunningCrystal
+
+    # 清除目录内可能残留的 Crystal_Astral.exe
+    Remove-StaleExe
+
+    # 启用CGO：ASR 能力（qwen_asr）依赖 cgo 编译 C 源码并链接 OpenBLAS
+    $env:CGO_ENABLED = "1"
     $env:GOOS = $TargetOS
     $env:GOARCH = $TargetArch
+
+    # CGO 编译 C 源码需要 GCC（MinGW-w64）
+    if (-not (Get-Command gcc -ErrorAction SilentlyContinue)) {
+        throw "未找到 GCC，ASR 能力需要 CGO 编译器（请安装 MinGW-w64 或 TDM-GCC）"
+    }
 
     # 构建可执行文件
     $binaryName = "Crystal_Astral.exe"

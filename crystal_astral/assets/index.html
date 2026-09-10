@@ -265,11 +265,11 @@
     <!-- 包执行覆盖层 -->
     <div class="ltpx-overlay" id="ltpxOverlay">
         <div class="ltpx-frame-wrap">
-            <div class="ltpx-frame-header">
-                <span class="ltpx-frame-title" id="ltpxFrameTitle"><i class="fas fa-cube"></i> 包执行中...</span>
-                <button class="modal-close" id="ltpxFrameCloseBtn" title="关闭">&times;</button>
-            </div>
             <iframe class="ltpx-frame" id="ltpxFrame" src="/ltpx_welcome.html" title="LTPX 包执行"></iframe>
+            <div class="ltpx-island" id="ltpxIsland" title="点击关闭">
+                <i class="fas fa-circle ltpx-island-icon" id="ltpxIslandIcon"></i>
+                <span class="ltpx-island-text" id="ltpxIslandText">包执行中...</span>
+            </div>
         </div>
     </div>
 

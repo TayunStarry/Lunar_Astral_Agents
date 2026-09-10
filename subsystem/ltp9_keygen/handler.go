@@ -127,7 +127,7 @@ func jsonOK(w http.ResponseWriter, status int, v any) {
 }
 
 // decodePermissionPayload 校验密文：整体解码 → 按 '+' 分割 → 去 '/' 填充 → 权限名。
-// 规则与引擎 crystal_astral/agent/LTP9/permission.go 完全一致。
+// 规则与引擎 crystal_astral/agent/StarLTP/variable.go 完全一致。
 func decodePermissionPayload(cipher, keyStr string) (plain string, blocks []verifyBlock, perms []string, err error) {
 	decoded, derr := lunardecoder.DecodeFilesWithKeyString([]lunardecoder.FileData{{Name: "perm", Data: []byte(cipher)}}, keyStr)
 	if derr != nil {

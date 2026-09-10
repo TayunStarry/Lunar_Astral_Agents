@@ -17,6 +17,25 @@ const stepList = document.getElementById('stepList');
 const clearStepBtn = document.getElementById('clearStepBtn');
 const historyList = document.getElementById('historyList');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const themeLabel = document.getElementById('themeLabel');
+
+// ===== 深色/浅色模式切换 =====
+const THEME_KEY = 'swTheme';
+function applyTheme(dark) {
+    document.body.classList.toggle('dark-mode', dark);
+    if (themeIcon) themeIcon.className = 'fas ' + (dark ? 'fa-sun' : 'fa-moon');
+    if (themeLabel) themeLabel.textContent = dark ? '浅色' : '深色';
+}
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        const dark = !document.body.classList.contains('dark-mode');
+        applyTheme(dark);
+        try { localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light'); } catch (e) { }
+    });
+}
+applyTheme(localStorage.getItem(THEME_KEY) === 'dark');
 
 // ===== 步骤面板 =====
 const STEP_ICONS = {

@@ -55,18 +55,20 @@ type ModelConfig struct {
 
 // init 加载配置文件
 func init() {
-	// 过滤 Go 测试框架注入的 -test.* 标志，避免 flag.Parse() 因未知标志而失败
-	// Go 1.24+ 会在测试二进制中自动注入 -test.testlogfile 等标志
+	// 测试二进制会注入 -test.* 标志（Go 1.24+ 如 -test.testlogfile），本包 init 阶段它们尚未
+	// 注册（testing.Init 才注册），直接 flag.Parse() 会因标志未定义而失败。这里把它们从本次
+	// 解析列表剔除，但保持 os.Args 原样——测试框架（testing.Main）随后仍能读取自己的 -test.*
+	// 参数，否则 go test 的 -v/-run/-list 等会全部失效。
 	filtered := make([]string, 0, len(os.Args))
 	for _, arg := range os.Args {
 		if !strings.HasPrefix(arg, "-test.") {
 			filtered = append(filtered, arg)
 		}
 	}
-	os.Args = filtered
-
-	// 解析命令行参数
-	flag.Parse()
+	// 解析命令行参数（仅业务标志；无可解析参数时跳过）
+	if len(filtered) > 1 {
+		_ = flag.CommandLine.Parse(filtered[1:])
+	}
 	// 获取当前可执行文件的路径
 	exePath, err := os.Executable()
 	// 若获取失败，打印错误日志并直接返回

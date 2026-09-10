@@ -6,10 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	module "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
@@ -48,6 +50,107 @@ func engineBroadcast(target string, payload any) {
 			})
 		}
 	}
+}
+
+// ==== 事件发布 engine.event.publish ====
+// 插件在事件总线上主动发起事件：派发给其它插件的订阅器，并转发给宿主 outbound 供外部客户端消费。
+// 异步分发（fire-and-forget）：publish 自身不阻塞；跳过发起插件自身订阅器，避免回调内自锁/自循环。
+func enginePublish(from *plugin, topic string, payload any) {
+	if Engine == nil {
+		return
+	}
+	// 转发给宿主 outbound（外部客户端经 /ws 订阅消费）
+	Engine.mu.RLock()
+	outbound := Engine.outbound
+	Engine.mu.RUnlock()
+	if outbound != nil {
+		outbound(topic, payload)
+	}
+	// 派发给其它插件的订阅器（在各自 loop 内执行，不占用发起插件的 loop）
+	for _, q := range Engine.snapshotPlugins() {
+		if q == from {
+			continue
+		}
+		go q.fireEvent(topic, payload)
+	}
+}
+
+// ==== 表情包 engine.emoji（allow-memory，复用项目记忆库 stickers 集合） ====
+
+// stickerColOnce / stickerColErr 惰性确保表情包集合（image 型）就绪。
+var (
+	stickerColOnce sync.Once
+	stickerColErr  error
+)
+
+// ensureStickerCollection 确保项目记忆库与 stickers 集合（image 型）可访问。
+func ensureStickerCollection() error {
+	stickerColOnce.Do(func() {
+		if err := ensureMemory(); err != nil {
+			stickerColErr = err
+			return
+		}
+		if module.MemoryGetCollectionInfo(StickerCollection) == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.SearchEmbeddingModel, module.CollectionTypeImage)
+		}
+	})
+	return stickerColErr
+}
+
+// engineEmojiSearch 基于查询文本从 stickers 集合检索表情包，返回 { image, similarity } 列表。
+func engineEmojiSearch(query string, limit int) (any, error) {
+	if err := ensureStickerCollection(); err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	if strings.TrimSpace(query) == "" {
+		return rwResult{Success: false, Error: "query 必填"}, nil
+	}
+	results, err := module.MemoryQueryMessagesWithContent(context.Background(), StickerCollection, query, limit)
+	if err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	out := make([]map[string]any, 0, len(results))
+	for _, r := range results {
+		out = append(out, map[string]any{"image": r.Image, "similarity": r.Similarity})
+	}
+	return map[string]any{"success": true, "results": out}, nil
+}
+
+// engineEmojiStore 往 stickers 集合添加一张表情包图片（base64）。标签由记忆库 LLM 自动生成。
+func engineEmojiStore(image string) (any, error) {
+	if err := ensureStickerCollection(); err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	if strings.TrimSpace(image) == "" {
+		return rwResult{Success: false, Error: "image 必填"}, nil
+	}
+	id, err := module.MemoryAddImage(context.Background(), StickerCollection, image, "auto", "")
+	if err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	return map[string]any{"success": true, "id": id}, nil
+}
+
+// engineEmojiRandom 基于查询文本随机返回一张表情包图片；query 为空时按通用语义检索。
+func engineEmojiRandom(query string) (any, error) {
+	if err := ensureStickerCollection(); err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	q := query
+	if strings.TrimSpace(q) == "" {
+		q = "general"
+	}
+	results, err := module.MemoryQueryMessagesWithContent(context.Background(), StickerCollection, q, 3)
+	if err != nil {
+		return rwResult{Success: false, Error: err.Error()}, nil
+	}
+	if len(results) == 0 {
+		return rwResult{Success: false, Error: "无匹配的表情包"}, nil
+	}
+	pick := results[rand.Intn(len(results))]
+	return map[string]any{"success": true, "image": pick.Image}, nil
 }
 
 // ==== 跨包调用 engine.call ====
@@ -152,14 +255,17 @@ var memoryErr error
 // ensureMemory 惰性初始化项目记忆库实例并确保 ltp9 集合存在。
 func ensureMemory() error {
 	memoryOnce.Do(func() {
+		// 若宿主尚未初始化全局记忆库，则自建实例（baseDir 沿用项目 MemoryDBDir），
+		// 使 engine.memory 在引擎自足场景下也能工作，而不仅依赖宿主预先 InitMemoryDB。
 		if !module.IsMemoryInitialized() {
+			module.InitMemoryDB(*GeneralConfig.MemoryDBDir)
 			if err := module.MemoryInitInstance(); err != nil {
 				memoryErr = err
 				return
 			}
 		}
 		if module.MemoryGetCollectionInfo(ltp9MemoryCollection) == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 30_000_000_000)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.SearchEmbeddingModel, module.CollectionTypeText); err != nil {
 				memoryErr = err
@@ -221,7 +327,7 @@ var (
 	dbErr  error
 )
 
-// ensureDB 惰性打开 LTP9 SQLite 数据库文件（local_data/database/ltp9.db，与项目数据根目录一致）。
+// ensureDB 惰性打开 LTP9 SQLite 数据库文件（local_data/database/knowledge.db，与项目数据根目录一致）。
 func ensureDB() (*sql.DB, error) {
 	dbOnce.Do(func() {
 		execPath, err := os.Executable()
@@ -231,7 +337,7 @@ func ensureDB() (*sql.DB, error) {
 		}
 		dir := filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "database")
 		_ = os.MkdirAll(dir, 0755)
-		dbPath = filepath.Join(dir, "ltp9.db")
+		dbPath = filepath.Join(dir, "knowledge.db")
 		dbInst, dbErr = sql.Open("sqlite3", dbPath)
 		if dbErr != nil {
 			return

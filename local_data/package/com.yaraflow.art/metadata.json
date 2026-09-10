@@ -1,0 +1,12 @@
+{
+	"id": "com.yaraflow.art",
+	"title": "瞳瞳绘画",
+	"author": "YaraFlow",
+	"version": "1.0.0",
+	"type": "plugin",
+	"description": "根据聊天内容自主画图并发送到群聊。支持多个绘图后端切换、自我形象图生图（画自己）、引用聊天图片做参考图生图、每日次数上限零点自动重置。",
+	"tags": [
+		"LTP3"
+	],
+	"icon": "icon.webp"
+}
