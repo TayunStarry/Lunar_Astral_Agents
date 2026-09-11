@@ -10,6 +10,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 载入共享构建辅助（Go 工具链定位：PATH -> 常见目录 -> %USERPROFILE%\sdk\go*）
+$repoRoot = $PSScriptRoot
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
+}
+if (-not $repoRoot) { throw "未找到仓库根目录（subsystem\build_common.ps1）" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
+$Go = Resolve-Go -Purpose "构建 Lunar_Astral"
+
 # ---------- 图标资源处理 ----------
 function Build-IconIfNeeded {
     if ($TargetOS -ne "windows" -or -not (Test-Path "icon.ico")) {
@@ -117,7 +126,7 @@ try {
         "-ldflags", $ldflags,
         "-o", $outputPath
     )
-    $exitCode = Invoke-NativeCommand { go $buildArgs }
+    $exitCode = Invoke-NativeCommand { & $Go $buildArgs }
     if ($exitCode -ne 0) { throw "Go build 失败" }
 
     Write-Host "✓ Luna Astral 构建成功: $outputPath" -ForegroundColor Green

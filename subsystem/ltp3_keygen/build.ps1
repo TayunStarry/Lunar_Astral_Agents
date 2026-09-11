@@ -14,30 +14,15 @@ param(
 $ErrorActionPreference = "Stop"
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# ---------- 定位 Go 工具链（PATH 优先，其次常见安装目录） ----------
-function Find-Go {
-    $cmd = Get-Command go.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-
-    foreach ($c in @(
-        "C:\Program Files\Go\bin\go.exe",
-        "C:\Go\bin\go.exe",
-        (Join-Path $env:USERPROFILE "go\bin\go.exe")
-    )) {
-        if ($c -and (Test-Path $c)) { return $c }
-    }
-    if ($env:USERPROFILE) {
-        Get-ChildItem (Join-Path $env:USERPROFILE "sdk") -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "go*" } |
-            ForEach-Object { $p = Join-Path $_.FullName "bin\go.exe"; if (Test-Path $p) { return $p } }
-    }
-    return $null
+# 载入共享构建辅助（Go 工具链定位的唯一实现，见 subsystem/build_common.ps1）
+$repoRoot = $ScriptRoot
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
 }
+if (-not $repoRoot) { throw "未找到仓库根目录（subsystem\build_common.ps1）" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
 
-$Go = Find-Go
-if (-not $Go) {
-    throw "未找到 Go 工具链，请安装 Go 或将其加入 PATH"
-}
+$Go = Resolve-Go -Purpose "构建 LTP3Keygen"
 Write-Host "使用 Go: $Go"
 
 # ---------- 编译主流程 ----------

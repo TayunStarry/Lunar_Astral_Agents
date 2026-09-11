@@ -1,40 +1,12 @@
-/* ========== 顶部控制区 / 靠近显示 / 搜索框 ========== */
+/* ========== 搜索框 ========== */
 
-/* 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容） */
-.top-controls {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* 靠近显示机制：默认移出屏幕右侧，鼠标靠近时滑入，离开 1.5 秒后滑出 */
-.top-controls,
-.scroll-controls {
-    transform: translateX(calc(100% + 24px)); 
-    visibility: hidden;
-    pointer-events: none;
-    transition: transform .35s ease, visibility 0s .35s;
-}
-
-.top-controls.revealed,
-.scroll-controls.revealed {
-    transform: translateX(0);
-    visibility: visible;
-    pointer-events: auto;
-    transition: transform .35s ease, visibility 0s;
-}
-
-/* 搜索框 */
+/* 搜索框（位于右下角快速工具行内） */
 .search-box {
     display: flex;
     align-items: center;
     gap: 6px;
-    width: 280px;
-    max-width: 55vw;
+    width: 240px;
+    max-width: 42vw;
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -46,7 +18,7 @@
 }
 
 .search-box:focus-within {
-    width: 340px;
+    width: 300px;
     border-color: var(--accent-color);
     box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.16), var(--shadow-glass);
 }

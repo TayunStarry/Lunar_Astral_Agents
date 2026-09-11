@@ -186,7 +186,33 @@ func ltp9HandleTest(m map[string]any) {
 		if op == "" {
 			op = "write"
 		}
-		ack(star.ProbeFile(op, asString("path"), asString("data")), nil)
+		path := asString("path")
+		data := asString("data")
+		if op == "write_b64" {
+			// write_b64：把 base64（兼容 data URI 前缀与空白）解码为二进制后落盘，
+			// 供「保存二进制文件」场景使用；Go string→[]byte 无损，可直接写入原始字节。
+			payload := strings.TrimSpace(data)
+			if strings.HasPrefix(payload, "data:") {
+				if i := strings.Index(payload, ","); i >= 0 {
+					payload = payload[i+1:]
+				}
+			}
+			payload = strings.Map(func(r rune) rune {
+				switch r {
+				case ' ', '\t', '\r', '\n':
+					return -1
+				}
+				return r
+			}, payload)
+			raw, err := base64.StdEncoding.DecodeString(payload)
+			if err != nil {
+				ack(nil, fmt.Errorf("base64 解码失败: %w", err))
+				return
+			}
+			ack(star.ProbeFile("write", path, string(raw)), nil)
+			return
+		}
+		ack(star.ProbeFile(op, path, data), nil)
 	case "db":
 		op := asString("op")
 		if op == "" {
@@ -217,6 +243,37 @@ func ltp9HandleTest(m map[string]any) {
 		}
 		v := star.ProbeEncode(key, asString("content"))
 		ack(v, nil)
+	case "base64":
+		// Base64 编解码：encode 文本 → base64 字符串；decode base64 → 文本。
+		// 解码兼容 data URI（data:audio/wav;base64,...）：自动剥离前缀，并容忍粘贴混入的空白/换行。
+		op := asString("op")
+		if op == "" {
+			op = "encode"
+		}
+		content := asString("content")
+		if op == "decode" {
+			payload := strings.TrimSpace(content)
+			if strings.HasPrefix(payload, "data:") {
+				if i := strings.Index(payload, ","); i >= 0 {
+					payload = payload[i+1:]
+				}
+			}
+			payload = strings.Map(func(r rune) rune {
+				switch r {
+				case ' ', '\t', '\r', '\n':
+					return -1
+				}
+				return r
+			}, payload)
+			v, err := base64.StdEncoding.DecodeString(payload)
+			if err != nil {
+				ack(nil, fmt.Errorf("base64 解码失败: %w", err))
+				return
+			}
+			ack(map[string]any{"ok": true, "value": string(v)}, nil)
+			return
+		}
+		ack(map[string]any{"ok": true, "value": base64.StdEncoding.EncodeToString([]byte(content))}, nil)
 	case "jwt":
 		claims := asMap("claims")
 		if claims == nil {

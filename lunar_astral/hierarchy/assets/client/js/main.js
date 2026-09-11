@@ -53,7 +53,7 @@ async function init() {
     setupDrawboard();
     setupCapture();
     setupScrollControls();
-    setupProximityReveal();
+    setupCornerToggle();
     initMusicRenderer();
     setupRendererFrame();
     await ensureMarked();

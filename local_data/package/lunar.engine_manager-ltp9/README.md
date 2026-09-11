@@ -37,10 +37,26 @@
 | 同步 HTTP | `engine.http.get/post` | `ltp9/test action=http` |
 | 格式转换 | 多入单出：逐路提取字段 + `{{inN.字段}}` 模板组合（模板必填） | —（本地） |
 | 同步等待 | `engine.sleep` 语义（前端 await） | —（本地） |
+| 音频均衡器 | 本地三段均衡：低频/中频/高频 增益衰减 → 16bit PCM WAV | —（本地） |
+| 图像混淆 | 本地混淆/解混淆/还原（Gilbert 曲线 + 黄金比例偏移） | —（本地） |
 | 插件状态 / 探测 | `PluginStates` / 引擎在线 | `ltp9/stats` / `ltp9/probe` |
 
 > **数据流**：LLM 对话输入「用户文本」→ 输出「AI 应答」；加密 encode 输入明文+密钥 → 输出密文、decode 反之；
 > 跨包调用把上游输出作参数；文件读出内容、JWT 令牌、HTTP 响应、DB 行集等均可经输出端口传给下游。
+
+## 音频均衡器（音频均衡器节点）
+本地三段均衡，参数：低频增益(dB)/低频分频点(Hz)、中频增益(dB)/中频中心频率(Hz)/中频带宽 Q、高频增益(dB)/高频分频点(Hz)、总输出增益(dB)；
+每段增益范围 ±24dB（负数即衰减）。滤波器按 RBJ Cookbook 计算：低架 → 峰值 → 高架 串联，逐声道 Direct Form I 处理，输出 16bit PCM WAV。
+- 输入：上游音频（或本节点填写的 base64/data URI）。WAV/RIFF 由内置解析（PCM 8/16/24/32bit、IEEE float），webm/opus、mp3、ogg、m4a 交浏览器 `decodeAudioData`。
+- 输出：`data:audio/wav;base64,…`，可直接连「扬声器播放」或继续串联；卡片「播放」按钮可试听。WAV 输入采样率与声道数原样保留；压缩格式（webm/opus、mp3、ogg、m4a）经 Web Audio 解码后采样率随浏览器音频上下文（通常 48kHz）。处理后峰值超过 0dBFS 会钳位并在引擎日志提示削波。
+- 输出不写回参数，重复运行结果一致（避免巨大 base64 进入蓝图存档）。
+
+## 图像混淆（图像混淆节点）
+算法与工具包 `local_data/package/lunar.image-confusion/` 完全一致（同一偏移量，故可与该工具互相混淆/解混淆）：
+按广义 Gilbert（希尔伯特）曲线遍历像素形成一维序列，再以黄金比例偏移 `round((√5-1)/2 × 像素数)` 做环形置换；解混淆为同一置换的逆映射。
+- 运行模式：`confuse` 混淆 / `deconfuse` 解混淆 / `restore` 还原（不做像素变换，原样输出入线图像——节点无文件历史，对应参考工具的「还原」）。
+- 输出格式：`png` 无损（混淆→解混淆可逐像素还原）、`jpeg`（质量默认 0.95，与参考工具一致，有损）。
+- 输入/输出均为图像 base64 / data URI；运行收尾自动弹出结果图，卡片「图片」按钮可随时查看。输出不写回参数。
 
 ## 后端依赖
 - `crystal_astral/agent/StarLTP/api_probe.go`：Probe 系列测试接口（复用 api.go/api_ext.go/api_net.go 实现）。

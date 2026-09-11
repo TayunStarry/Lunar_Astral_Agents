@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("Debug", "Release")]
     [string]$BuildType = "Release",
 
@@ -88,10 +88,32 @@ function ggml-ok {
     return $true
 }
 
+$script:LastCMakeOutput = @()
+
+# 失败时把 cmake 的输出打回控制台。
+# 之前 run-cmake 只在 $EnableLog 为真时才写日志，于是未加 -EnableLog 时（编排器就是这种）
+# 错误信息被完全吞掉，只剩一句 "[FATAL] CMake build FAILED (exit code: 2)"，无法定位。
+function Show-CMakeOutput {
+    $lines = @($script:LastCMakeOutput)
+    if (-not $lines.Count) {
+        log "(cmake 未产生可捕获的输出)" "Red"
+        return
+    }
+    log "--- cmake output (tail) ---" "Red"
+    $startIdx = [Math]::Max(0, $lines.Count - 40)
+    for ($i = $startIdx; $i -lt $lines.Count; $i++) {
+        Write-Host ("  " + $lines[$i]) -ForegroundColor DarkRed
+    }
+}
+
 function die {
     param([string]$m, [int]$code = 1)
     log "[FATAL] $m" "Red"
-    log "Full log: $LogFile" "Red"
+    if ($EnableLog -and $LogFile -and (Test-Path $LogFile)) {
+        log "Full log: $LogFile" "Red"
+    } else {
+        log "未启用 -EnableLog，无日志文件；加 -EnableLog 可保留完整输出" "Yellow"
+    }
     exit $code
 }
 
@@ -99,6 +121,7 @@ function run-cmake {
     param([Parameter(ValueFromRemainingArguments=$true)][string[]]$ArgList)
     $output = & cmake @ArgList 2>&1
     $ec = $LASTEXITCODE
+    $script:LastCMakeOutput = @($output | ForEach-Object { "$_" })
     if ($output -and $EnableLog) {
         $output | ForEach-Object { Add-Content -Path $LogFile -Value $_ }
     }
@@ -157,6 +180,17 @@ try {
         log "Build directory exists, performing incremental build" "Green"
     }
 
+    # 目标平台校验：本库只产出 Windows DLL（MinGW）。-TargetOS 由此真正参与构建决策，
+    # 不再"声明了却从不使用"：非 Windows 目标直接跳过，而不是悄悄产出一个用不上的 Windows DLL。
+    # 注意：原生 Windows 构建下 CMake 本就会把 CMAKE_SYSTEM_NAME 设为 Windows，
+    # 显式传 -DCMAKE_SYSTEM_NAME=Windows 是多余的，且会扰动已有 CMakeCache
+    # （实测会把 CMAKE_C_COMPILER 变成 UNINITIALIZED）并触发一次无谓的全量重编，故不传。
+    if ($TargetOS -ne "windows") {
+        log "[SKIP] TargetOS=$TargetOS : qwen3tts.dll 仅支持 Windows/MinGW 目标" "Yellow"
+        exit 0
+    }
+    log "Target platform: $TargetOS" "Green"
+
     $bt = $BuildType.ToUpper()
     $cmakeConfigArgs = @(
         "-S", $CPP_SRC_DIR,
@@ -173,6 +207,19 @@ try {
         }
         $cmakeConfigArgs += "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$dllOutAbs"
         log "DLL runtime output directory: $dllOutAbs" "Green"
+
+        # 预检：目标 DLL 若已被占用（例如 Qwen3_TTS_Lunar.exe 正在运行并加载了它），
+        # 链接只会在最后一步失败、且仅报 exit code 2，很难定位。这里提前给出可操作的错误。
+        $dllProbe = Join-Path $dllOutAbs "qwen3tts.dll"
+        if (Test-Path $dllProbe) {
+            try {
+                $probeFs = [System.IO.File]::Open($dllProbe, [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+                $probeFs.Close()
+            } catch {
+                die "输出 DLL 被占用，无法写入: $dllProbe`n        请关闭正在使用它的程序（例如 Qwen3_TTS_Lunar.exe）后重试。"
+            }
+        }
     }
 
     if ($ci.Type -eq "MinGW") {
@@ -184,6 +231,7 @@ try {
 
     $ec = run-cmake @cmakeConfigArgs
     if ($ec -ne 0) {
+        Show-CMakeOutput
         die "CMake configure FAILED (exit code: $ec)"
     }
 
@@ -194,6 +242,7 @@ try {
 
     $ec = run-cmake @buildArgs
     if ($ec -ne 0) {
+        Show-CMakeOutput
         die "CMake build FAILED (exit code: $ec)"
     }
 

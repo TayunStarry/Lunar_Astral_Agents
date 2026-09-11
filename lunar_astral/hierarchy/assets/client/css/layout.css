@@ -193,3 +193,11 @@ body {
     border-color: rgba(157, 107, 255, 0.35);
     box-shadow: 0 2px 10px rgba(157, 107, 255, 0.12);
 }
+
+/* ========== 侧栏操作按钮（控制区显隐，矩形玻璃） ========== */
+.sidebar-actions {
+    flex-shrink: 0;
+    padding: 12px;
+    border-top: 1px solid var(--border-color);
+}
+

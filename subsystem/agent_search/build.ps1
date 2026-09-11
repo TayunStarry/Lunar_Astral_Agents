@@ -18,37 +18,15 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# --- 1. Locate Go toolchain ------------------------------------------------
-function Find-Go {
-    # 1) Go on PATH
-    $cmd = Get-Command go.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-
-    # 2) Scan user SDK dir and common install paths, pick the highest version
-    $found = @()
-    if ($env:USERPROFILE) {
-        Get-ChildItem (Join-Path $env:USERPROFILE "sdk") -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "go*" } |
-            ForEach-Object { $p = Join-Path $_.FullName "bin\go.exe"; if (Test-Path $p) { $found += $p } }
-    }
-    foreach ($c in @(
-        "C:\Program Files\Go\bin\go.exe",
-        "C:\Go\bin\go.exe",
-        "$env:USERPROFILE\go\bin\go.exe"
-    )) {
-        if ($c -and (Test-Path $c) -and ($found -notcontains $c)) { $found += $c }
-    }
-    if ($found.Count -eq 0) { return $null }
-
-    # Highest version first
-    return ($found | Sort-Object -Descending | Select-Object -First 1)
+# --- 1. Locate Go toolchain (shared implementation) -------------------------
+$repoRoot = $Root
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
 }
+if (-not $repoRoot) { throw "Repository root not found (subsystem\build_common.ps1)" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
 
-$Go = Find-Go
-if (-not $Go) {
-    Write-Error "Go toolchain not found. Install Go or add it to PATH."
-    exit 1
-}
+$Go = Resolve-Go -Purpose "building agent_search"
 Write-Host "Using Go: $Go"
 
 # --- 2. Clean build cache (optional) ---------------------------------------

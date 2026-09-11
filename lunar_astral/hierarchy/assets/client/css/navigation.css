@@ -1,16 +1,55 @@
-/* ========== 滚动控制（右下角竖版按钮） / 用户发言跳转面板 ========== */
+/* ========== 右下角控制区（直接平铺展示） / 用户发言跳转面板 ========== */
 
-/* ========== 滚动控制（右下角竖版按钮） ========== */
-.scroll-controls {
+/* 右下角控制区：以右下角为锚点 */
+.corner-controls {
     position: absolute;
     right: 18px;
     bottom: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    width: 0;
+    height: 0;
     z-index: 120;
 }
 
+/* 可收起的内容：锚定父节点右下角，从右向左滑入/滑出 */
+.corner-content {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    white-space: nowrap;
+    transform: translateX(calc(100% + 24px)); /* 初始移出右侧 */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform .35s ease, opacity .3s ease, visibility 0s .35s;
+}
+
+.corner-content.open {
+    transform: translateX(0);    /* 从右向左滑入到位 */
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform .35s ease, opacity .3s ease, visibility 0s;
+}
+
+/* 快捷工具行（语音 / 清空 / 主题 / 搜索） */
+.corner-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 滚动控制行（顶部 / 底部 / 跳用户） */
+.corner-scroll {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 滚动控制按钮 */
 .scroll-ctrl-btn {
     width: 40px;
     height: 40px;
@@ -45,13 +84,14 @@
     border-color: transparent;
 }
 
-/* 用户发言跳转面板 */
+/* 用户发言跳转面板（悬浮在控制区上方，右对齐弹出） */
 .user-jump-panel {
     position: absolute;
-    right: 52px;
-    bottom: 0;
+    right: 0;
+    bottom: calc(100% + 10px);
     width: 300px;
-    max-height: 380px;
+    max-width: 78vw;
+    max-height: 320px;
     display: flex;
     flex-direction: column;
     background: var(--panel-bg);

@@ -1,4 +1,4 @@
-# Qwen ASR Server Build Script for Windows
+﻿# Qwen ASR Server Build Script for Windows
 # Usage: .\build.ps1 [-UseBLAS] [-Release] [-Profile]
 param(
     [switch]$UseBLAS = $true,
@@ -7,6 +7,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# 载入共享构建辅助（Go 工具链定位：PATH -> 常见目录 -> %USERPROFILE%\sdk\go*）
+$repoRoot = $PSScriptRoot
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
+}
+if (-not $repoRoot) { throw "未找到仓库根目录（subsystem\build_common.ps1）" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
 
 Write-Host "=== Qwen ASR Server Build Script ===" -ForegroundColor Cyan
 Write-Host ""
@@ -33,14 +41,10 @@ Set-Location $PROJECT_DIR
 Build-IconIfNeeded
 
 Write-Host "[1/5] Checking Go installation..." -ForegroundColor Yellow
-try {
-    $goVersion = go version
-    Write-Host "  Found: $goVersion" -ForegroundColor Green
-} catch {
-    Write-Host "  ERROR: Go is not installed or not in PATH" -ForegroundColor Red
-    Write-Host "  Please install Go from https://go.dev/dl/" -ForegroundColor Red
-    exit 1
-}
+$Go = Resolve-Go -Purpose "构建 Qwen_ASR_Lunar"
+$goVersion = & $Go version
+Write-Host "  Found: $goVersion" -ForegroundColor Green
+Write-Host "  Go 路径: $Go" -ForegroundColor DarkGray
 
 Write-Host "[2/5] Checking GCC installation (required for CGO)..." -ForegroundColor Yellow
 try {
@@ -111,7 +115,7 @@ $env:CGO_LDFLAGS = $ldflags
 Write-Host "  CFLAGS: $cflags" -ForegroundColor DarkGray
 Write-Host "  LDFLAGS: $ldflags" -ForegroundColor DarkGray
 
-go build -o $OUTPUT_NAME -ldflags="-s -w -H windowsgui" .
+& $Go build -o $OUTPUT_NAME -ldflags="-s -w -H windowsgui" .
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "  Build successful: $OUTPUT_NAME" -ForegroundColor Green

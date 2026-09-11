@@ -24,6 +24,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# 载入共享构建辅助（Go 工具链定位：PATH -> 常见目录 -> %USERPROFILE%\sdk\go*）
+$repoRoot = $PSScriptRoot
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
+}
+if (-not $repoRoot) { throw "未找到仓库根目录（subsystem\build_common.ps1）" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
+$Go = Resolve-Go -Purpose "构建 Environment_Repair"
+
 
 
 # ---------- 同步嵌入资源 ----------
@@ -270,7 +279,7 @@ try {
 
     )
 
-    & go $buildArgs 2>&1 | Out-Host
+    & $Go $buildArgs 2>&1 | Out-Host
 
     if ($LASTEXITCODE -ne 0) { throw "Go build 失败" }
 

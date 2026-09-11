@@ -1,15 +1,30 @@
-# Lunar Astral Agents - 统一构建脚本
-
+﻿# Lunar Astral Agents - 统一构建脚本
+#
+# 注意：Qwen3 TTS 默认只编译 CPP 库（GGML + qwen3tts.dll），不编译它的 Go EXE；
+# 需要一并产出 Qwen3_TTS_Lunar.exe 时加 -WithGo。
+# 其余子系统（environment_repair / lunar_astral / crystal_astral / ltp9_keygen）
+# 没有 CPP 库，仍照常构建各自的 Go EXE。
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
 
     [ValidateSet("amd64", "arm64")]
-    [string]$TargetArch = "amd64"
+    [string]$TargetArch = "amd64",
+
+    # 透传给 qwen3_tts：额外构建 Qwen3_TTS_Lunar.exe（默认关闭）
+    [switch]$WithGo
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# 载入共享构建辅助（Go 工具链定位）
+$repoRoot = $ScriptRoot
+while ($repoRoot -and -not (Test-Path (Join-Path $repoRoot "subsystem\build_common.ps1"))) {
+    $repoRoot = Split-Path -Parent $repoRoot
+}
+if (-not $repoRoot) { throw "未找到仓库根目录（subsystem\build_common.ps1）" }
+. (Join-Path $repoRoot "subsystem\build_common.ps1")
 
 # ---------- 环境检查函数 ----------
 function Test-CommandExists {
@@ -20,12 +35,12 @@ function Test-CommandExists {
 function Check-GoEnvironment {
     Write-Host "[检查] Go 编程环境..." -ForegroundColor Cyan
 
-    if (-not (Test-CommandExists "go")) {
-        throw "未找到 Go 环境，请安装 Go (https://golang.org/dl/)"
-    }
-
-    $goVersion = go version 2>&1
+    # 复用共享定位：PATH -> 常见安装目录 -> %USERPROFILE%\sdk\go*（取最新版本）
+    # 注意 PATH 里通常没有 %USERPROFILE%\sdk 布局的 Go，只查 PATH 会误报"未安装"
+    $script:GoToolchain = Resolve-Go -Purpose "统一构建"
+    $goVersion = & $script:GoToolchain version 2>&1
     Write-Host "  OK $goVersion" -ForegroundColor Green
+    Write-Host "  Go 路径: $script:GoToolchain" -ForegroundColor DarkGray
 
     if ($TargetOS -eq "windows") {
         if (-not (Test-CommandExists "gcc")) {
@@ -74,7 +89,8 @@ function Check-RsrcTool {
 function Invoke-Build {
     param(
         [string]$Path,
-        [string]$Name
+        [string]$Name,
+        [hashtable]$ExtraArgs = @{}
     )
 
     Write-Host ""
@@ -89,8 +105,12 @@ function Invoke-Build {
     $originalLocation = Get-Location
     Set-Location -Path $Path
 
+    # TargetOS/TargetArch 为通用参数；ExtraArgs 用于透传子系统专属开关
+    $splat = @{ TargetOS = $TargetOS; TargetArch = $TargetArch }
+    foreach ($key in $ExtraArgs.Keys) { $splat[$key] = $ExtraArgs[$key] }
+
     try {
-        & $buildScript -TargetOS $TargetOS -TargetArch $TargetArch
+        & $buildScript @splat
     }
     catch {
         Set-Location -Path $originalLocation
@@ -125,12 +145,14 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    Invoke-Build -Path "$ScriptRoot\qwen3_tts" -Name "Qwen3 TTS"
-    Invoke-Build -Path "$ScriptRoot\qwen_asr" -Name "Qwen ASR"
+    # Qwen3 TTS 默认只出 CPP 库（GGML + qwen3tts.dll）；-WithGo 时才连 Go EXE 一起构建
+    $ttsArgs = @{}
+    if ($WithGo) { $ttsArgs['WithGo'] = $true }
+    Invoke-Build -Path "$ScriptRoot\qwen3_tts" -Name "Qwen3 TTS (CPP library)" -ExtraArgs $ttsArgs
     Invoke-Build -Path "$ScriptRoot\environment_repair" -Name "Environment Repair"
     Invoke-Build -Path "$ScriptRoot\..\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\..\crystal_astral" -Name "Crystal Astral"
-    Invoke-Build -Path "$ScriptRoot\ltp3_keygen" -Name "LTP3 Keygen"
+    Invoke-Build -Path "$ScriptRoot\ltp9_keygen" -Name "LTP9 Keygen"
 
     Write-Host ""
     Write-Host "  全部构建成功完成！" -ForegroundColor Green

@@ -1,0 +1,236 @@
+/* ==== 侧边栏（均位于画布左侧：节点模块 / 引擎日志，两者互斥只显示一个；由右侧按钮控制，默认收起） ==== */
+.sidebar {
+    display: flex;
+    min-height: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(8px);
+    flex: 0 0 0;
+    /* 收起时完全隐藏，不占空间 */
+    transition: flex-basis .25s ease;
+}
+
+/* 两个侧栏互斥显示，统一宽度 */
+.sidebar-left.open,
+.sidebar-log.open {
+    flex: 0 0 var(--sidebar-w);
+}
+
+.sidebar:not(.open) {
+    border-width: 0;
+}
+
+.sidebar-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sidebar-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sidebar-head i {
+    color: var(--accent);
+}
+
+.sidebar-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+}
+
+.sidebar-tools {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line);
+}
+
+.sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    align-content: start;
+}
+
+.sidebar-log .sidebar-body {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+/* ==== 节点分类标签 / 节点卡片 ==== */
+.node-tab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.node-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.node-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+    transition: all .15s;
+}
+
+.node-chip:hover {
+    background: rgba(255, 255, 255, 0.09);
+    transform: translateY(-1px);
+    border-color: var(--accent);
+}
+
+.node-chip:active {
+    cursor: grabbing;
+}
+
+.node-chip i {
+    width: 16px;
+    font-size: 14px;
+    text-align: center;
+}
+
+/* ==== 引擎日志（侧边栏面板内） ==== */
+.log-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+/* 行尾清空日志按钮：推到筛选行最右 */
+#clearLogBtn {
+    margin-left: auto;
+}
+
+.filter-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.filter-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* 日志卡片 */
+.log-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 9px 11px;
+    border-radius: 10px;
+    cursor: pointer;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
+    transition: all .15s;
+}
+
+.log-entry:hover {
+    box-shadow: 0 5px 14px rgba(0, 0, 0, .35);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.log-entry.error {
+    border-left-color: var(--err);
+}
+
+.log-entry.error:hover {
+    border-color: var(--err);
+}
+
+.log-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.log-type {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(148, 163, 184, .16);
+    color: #cbd5e1;
+}
+
+.log-type.t-send {
+    background: rgba(109, 92, 231, .18);
+    color: #c4b5fd;
+}
+
+.log-type.t-response {
+    background: rgba(34, 197, 94, .16);
+    color: #86efac;
+}
+
+.log-type.t-error {
+    background: rgba(239, 68, 68, .18);
+    color: #fca5a5;
+}
+
+.log-time {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.log-tag {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.log-summary {
+    font-size: 12px;
+    color: #e2e8f0;
+    word-break: break-all;
+    line-height: 1.5;
+}
+
+.log-json-hint {
+    font-size: 10px;
+    color: var(--muted);
+}
+
+.empty-tip {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 14px;
+    grid-column: 1 / -1;
+}

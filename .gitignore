@@ -14,6 +14,7 @@ bridge_probe/
 deepdemos.*
 config.yaml
 status.json
+.scratch/
 
 ## Go 测试产物
 coverage

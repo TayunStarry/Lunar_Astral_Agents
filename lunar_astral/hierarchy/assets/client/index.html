@@ -45,6 +45,13 @@
                     <button class="tab" data-tab="music" role="tab"><i class="fas fa-music"></i>乐谱</button>
                     <button class="tab" data-tab="action" role="tab"><i class="fas fa-person-running"></i>行动</button>
                 </nav>
+
+                <!-- 操作区显隐按钮（矩形玻璃按钮） -->
+                <div class="sidebar-actions">
+                    <button class="tab" id="cornerToggle">
+                        <i class="fas fa-sliders"></i><span>管理</span>
+                    </button>
+                </div>
             </aside>
 
             <!-- 右侧主显示区 -->
@@ -60,20 +67,51 @@
                     <!-- 动态消息列表 -->
                 </main>
 
-                <!-- 右下角滚动控制（聊天输入框上方，竖版排列） -->
-                <div class="scroll-controls" id="scrollControls">
-                    <button class="scroll-ctrl-btn" id="scrollTopBtn" title="滚动到顶部">
-                        <i class="fas fa-angles-up"></i>
-                    </button>
-                    <button class="scroll-ctrl-btn" id="scrollBottomBtn" title="滚动到底部">
-                        <i class="fas fa-angles-down"></i>
-                    </button>
-                    <button class="scroll-ctrl-btn" id="jumpUserBtn" title="跳转到用户发言">
-                        <i class="fas fa-user"></i>
-                    </button>
-                    <div class="user-jump-panel" id="userJumpPanel" hidden>
-                        <div class="user-jump-header"><i class="fas fa-user"></i> 用户发言</div>
-                        <div class="user-jump-list" id="userJumpList"></div>
+                <!-- 右下角控制区（由左侧栏按钮控制显隐） -->
+                <div class="corner-controls">
+                    <!-- 可收起的操作内容 -->
+                    <div class="corner-content" id="cornerContent">
+                        <!-- 快捷工具 + 搜索（语音 / 清空 / 主题 / 搜索） -->
+                        <div class="corner-tools">
+                            <button class="header-btn active" id="voiceToggleBtn" title="自动播放语音：开">
+                                <i class="fas fa-volume-up"></i>
+                            </button>
+                            <button class="header-btn" id="themeToggle" title="切换主题">
+                                <i class="fas fa-moon"></i>
+                            </button>
+                            <div class="search-box" role="search">
+                                <i class="fas fa-search search-icon"></i>
+                                <input id="searchInput" class="search-input" type="text" placeholder="搜索消息内容…"
+                                    autocomplete="off" />
+                                <span class="search-count" id="searchCount" hidden></span>
+                                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i
+                                        class="fas fa-chevron-up"></i></button>
+                                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i
+                                        class="fas fa-chevron-down"></i></button>
+                                <button class="search-clear" id="searchClear" title="清除搜索" hidden><i
+                                        class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <!-- 滚动控制行（顶部 / 底部 / 跳用户） -->
+                        <div class="corner-scroll">
+                            <button class="scroll-ctrl-btn" id="clearBtn" title="清空消息">
+                                <i class="fas fa-broom"></i>
+                            </button>
+                            <button class="scroll-ctrl-btn" id="scrollTopBtn" title="滚动到顶部">
+                                <i class="fas fa-angles-up"></i>
+                            </button>
+                            <button class="scroll-ctrl-btn" id="scrollBottomBtn" title="滚动到底部">
+                                <i class="fas fa-angles-down"></i>
+                            </button>
+                            <button class="scroll-ctrl-btn" id="jumpUserBtn" title="跳转到用户发言">
+                                <i class="fas fa-user"></i>
+                            </button>
+                        </div>
+                        <!-- 用户发言跳转面板 -->
+                        <div class="user-jump-panel" id="userJumpPanel" hidden>
+                            <div class="user-jump-header"><i class="fas fa-user"></i> 用户发言</div>
+                            <div class="user-jump-list" id="userJumpList"></div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -101,29 +139,6 @@
                 </button>
             </div>
         </footer>
-
-        <!-- 右上角控制区（清空按钮 + 搜索框，浮动，层级高于内容显示） -->
-        <div class="top-controls">
-            <button class="header-btn active" id="voiceToggleBtn" title="自动播放语音：开">
-                <i class="fas fa-volume-up"></i>
-            </button>
-            <button class="header-btn" id="clearBtn" title="清空消息">
-                <i class="fas fa-broom"></i>
-            </button>
-            <button class="header-btn" id="themeToggle" title="切换主题">
-                <i class="fas fa-moon"></i>
-            </button>
-            <div class="search-box" role="search">
-                <i class="fas fa-search search-icon"></i>
-                <input id="searchInput" class="search-input" type="text" placeholder="搜索消息内容…" autocomplete="off" />
-                <span class="search-count" id="searchCount" hidden></span>
-                <button class="search-nav-btn" id="searchPrev" title="上一个匹配" hidden><i
-                        class="fas fa-chevron-up"></i></button>
-                <button class="search-nav-btn" id="searchNext" title="下一个匹配" hidden><i
-                        class="fas fa-chevron-down"></i></button>
-                <button class="search-clear" id="searchClear" title="清除搜索" hidden><i class="fas fa-times"></i></button>
-            </div>
-        </div>
 
         <!-- 通知容器 -->
         <div class="toast-container" id="toastContainer" aria-live="assertive"></div>

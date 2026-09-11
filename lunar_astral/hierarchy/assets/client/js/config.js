@@ -57,8 +57,8 @@ const drawboardInput = document.getElementById('drawboardInput');
 const drawboardSendBtn = document.getElementById('drawboardSendBtn');
 
 // ---------- 滚动控制 DOM 引用 ----------
-const topControls = document.querySelector('.top-controls');
-const scrollControls = document.getElementById('scrollControls');
+const cornerContent = document.getElementById('cornerContent');
+const cornerToggle = document.getElementById('cornerToggle');
 const scrollTopBtn = document.getElementById('scrollTopBtn');
 const scrollBottomBtn = document.getElementById('scrollBottomBtn');
 const jumpUserBtn = document.getElementById('jumpUserBtn');

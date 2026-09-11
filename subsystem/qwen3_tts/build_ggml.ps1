@@ -1,4 +1,4 @@
-# build_ggml.ps1 - GGML Library Build Script
+﻿# build_ggml.ps1 - GGML Library Build Script
 # Compiles ggml library for Windows, producing static link artifacts
 param(
     [ValidateSet("Debug", "Release")]
@@ -209,6 +209,17 @@ function Build-GGML {
         Write-BuildLog "Vulkan acceleration disabled (-EnableVulkan:`$false)" "Yellow"
     }
 
+    # 目标平台校验：GGML 静态库只产出 Windows/MinGW 产物。-TargetOS 由此真正参与构建决策，
+    # 不再"声明了却从不使用"：非 Windows 目标直接跳过。
+    # 注意：原生 Windows 构建下 CMake 本就会把 CMAKE_SYSTEM_NAME 设为 Windows，
+    # 显式传 -DCMAKE_SYSTEM_NAME=Windows 是多余的，且会扰动已有 CMakeCache
+    # （实测会把 CMAKE_C_COMPILER 变成 UNINITIALIZED）并触发一次无谓的全量重编，故不传。
+    if ($TargetOS -ne "windows") {
+        Write-BuildLog "[SKIP] TargetOS=$TargetOS : GGML 静态库仅支持 Windows/MinGW 目标" "Yellow"
+        exit 0
+    }
+    Write-BuildLog "Target platform: $TargetOS" "Green"
+
     $buildTypeUpper = $BuildType.ToUpper()
     $cmakeConfigureArgs = @(
         "-S", $GGML_SRC_DIR,
@@ -259,7 +270,16 @@ function Build-GGML {
 
     if ($configureExitCode -ne 0) {
         Write-BuildLog "CMake configure FAILED (exit code: $configureExitCode)" "Red"
-        Write-BuildLog "See log file for details: $LogFile" "Red"
+        # 失败时必须把输出打出来：之前只在 $EnableLog 为真时写日志，
+        # 未加 -EnableLog 时（编排器就是这种）错误详情会被完全吞掉。
+        if ($configureOutput) {
+            foreach ($line in $configureOutput) { Write-Host "  $line" -ForegroundColor DarkRed }
+        }
+        if ($EnableLog -and $LogFile -and (Test-Path $LogFile)) {
+            Write-BuildLog "Full log: $LogFile" "Red"
+        } else {
+            Write-BuildLog "未启用 -EnableLog，无日志文件；加 -EnableLog 可保留完整输出" "Yellow"
+        }
         throw "CMake configure phase failed"
     }
 
@@ -290,7 +310,18 @@ function Build-GGML {
                 Write-BuildLog "  $err" "Red"
             }
         }
-        Write-BuildLog "Full log: $LogFile" "Red"
+        # 摘要为空时（例如错误信息不匹配上面的关键字）也要给出原始尾部输出
+        if (-not $errorLines -and $buildOutput) {
+            Write-BuildLog "--- cmake output (tail) ---" "Red"
+            $all = @($buildOutput)
+            $startIdx = [Math]::Max(0, $all.Count - 40)
+            for ($i = $startIdx; $i -lt $all.Count; $i++) { Write-Host ("  " + $all[$i]) -ForegroundColor DarkRed }
+        }
+        if ($EnableLog -and $LogFile -and (Test-Path $LogFile)) {
+            Write-BuildLog "Full log: $LogFile" "Red"
+        } else {
+            Write-BuildLog "未启用 -EnableLog，无日志文件；加 -EnableLog 可保留完整输出" "Yellow"
+        }
         throw "GGML build failed"
     }
 

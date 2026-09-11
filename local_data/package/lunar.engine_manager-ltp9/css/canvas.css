@@ -1,0 +1,361 @@
+/* ==== 画布 ==== */
+.canvas-wrap {
+    flex: 1;
+    min-width: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.canvas {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+    background-image: radial-gradient(var(--line) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.links-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.nodes-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    width: 0;
+    height: 0;
+}
+
+.canvas-hint {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.9;
+    pointer-events: none;
+}
+
+.canvas-hint span {
+    font-size: 12px;
+    opacity: .8;
+}
+
+/* ==== 节点 ==== */
+.node {
+    position: absolute;
+    width: 200px;
+    background: var(--panel-solid);
+    border: 1px solid #3b82f6;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+    overflow: visible;
+    transition: box-shadow .15s;
+    font-size: 12px;
+}
+
+.node:hover {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .5);
+}
+
+.node.running {
+    border-color: #facc15;
+    box-shadow: 0 0 0 2px rgba(250, 204, 21, .3), 0 8px 22px rgba(0, 0, 0, .5);
+}
+
+.node.done {
+    border-color: var(--ok);
+}
+
+.node.done.error {
+    border-color: var(--err);
+}
+
+.node.skip {
+    opacity: .6;
+    border-color: var(--muted);
+}
+
+.node.idle {
+    border-color: var(--line);
+}
+
+/* Ctrl+多选（封装复合节点）时的选中高亮 */
+.node.selected {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, .55), 0 8px 22px rgba(0, 0, 0, .5);
+}
+
+.node-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: move;
+    user-select: none;
+}
+
+.node-head i {
+    color: var(--nc, var(--accent));
+    font-size: 17px;
+    width: 18px;
+    text-align: center;
+}
+
+.node-label {
+    font-weight: 600;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.node-x {
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 3px;
+    font-size: 14px;
+}
+
+.node-x:hover {
+    color: var(--err);
+}
+
+.node-copy {
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 3px;
+    font-size: 14px;
+}
+
+.node-copy:hover {
+    color: var(--accent);
+}
+
+/* 节点卡片动作按钮（消息气泡 / 图片显示 / 播放音频 / 音频输入） */
+.node-actions {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 4px;
+}
+
+.node-act {
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 13px;
+}
+
+.node-act:hover {
+    color: var(--accent);
+}
+
+/* 节点上方弹出的消息气泡 / 图片展示浮层：宽度随内容自适应（图片按真实比例），至多约 30 行 */
+.node-pop {
+    position: absolute;
+    left: 0;
+    width: fit-content;
+    min-width: 160px;
+    max-width: 340px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    z-index: 60;
+    background: rgba(18, 22, 34, .96);
+    border: 1px solid rgba(139, 92, 246, .4);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+    border-radius: 8px;
+    padding: 8px 10px;
+    max-height: 560px;
+    overflow: auto;
+    font-size: 12px;
+    color: var(--fg, #e6ecf7);
+    line-height: 1.5;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.node-pop::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 16px;
+    border: 5px solid transparent;
+    border-top-color: rgba(139, 92, 246, .6);
+}
+
+.pop-img {
+    display: block;
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 5px;
+    object-fit: contain;
+}
+
+.node-pop .pop-text {
+    margin: 0;
+    font-family: inherit;
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+
+.node-body {
+    padding: 4px 10px 6px;
+    min-height: 22px;
+}
+
+.pv {
+    color: #b6c2d6;
+    font-size: 11px;
+    word-break: break-all;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* 文本显示节点的内容预览：最多 3 行，超出省略 */
+.pv-display {
+    -webkit-line-clamp: 3;
+    margin-top: 4px;
+    color: #f9a8d4;
+    background: rgba(244, 114, 182, .08);
+    border-radius: 5px;
+    padding: 3px 6px;
+}
+
+.node-status {
+    padding: 0 10px 7px;
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.node.running .node-status {
+    color: #facc15;
+    font-weight: 600;
+}
+
+.node.done .node-status {
+    color: var(--ok);
+}
+
+.node.done.error .node-status {
+    color: var(--err);
+}
+
+.node.skip {
+    opacity: .6;
+    border-color: var(--muted);
+}
+
+.node.skip .node-status {
+    color: var(--muted);
+}
+
+.port {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--panel-solid);
+    z-index: 6;
+}
+
+.port-in {
+    top: -7px;
+    cursor: crosshair;
+}
+
+.port-out {
+    bottom: -7px;
+    cursor: crosshair;
+}
+
+.port-in:hover {
+    border-color: var(--ok);
+}
+
+.port-out:hover {
+    background: var(--nc, var(--accent));
+    border-color: var(--nc, var(--accent));
+}
+
+/* ==== 连线 ==== */
+.link {
+    fill: none;
+    stroke: var(--line);
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    transition: stroke .2s;
+    cursor: pointer;
+}
+
+.link:hover {
+    stroke: var(--accent);
+    stroke-width: 4.2;
+}
+
+.link.running {
+    stroke: var(--ok);
+    stroke-width: 4;
+}
+
+.link.temp {
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-dasharray: 6 4;
+}
+
+/* 时钟线（执行激活）金色实线；信号线（仅参数）灰虚线与时钟线区分 */
+.link.clock {
+    stroke: #eab308;
+    stroke-width: 3.4;
+}
+
+.link.signal {
+    stroke: var(--muted);
+    stroke-width: 2.2;
+    stroke-dasharray: 7 5;
+}
+
+.link.clock.running {
+    stroke: var(--ok);
+}
+
+.link.signal.running {
+    stroke: var(--ok);
+}
+
+/* ==== 拖拽节点到画布时的高亮 ==== */
+.canvas.drag-over {
+    box-shadow: inset 0 0 0 2px var(--accent);
+    background-color: rgba(109, 92, 231, .07);
+}
+
+/* ==== 被选中打开设置面板的节点闪烁 ==== */
+.node.panel-active {
+    animation: nodeGlow 1.1s ease-in-out infinite;
+}
+
+@keyframes nodeGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 6px 3px rgba(34, 197, 94, .5);
+    }
+
+    50% {
+        box-shadow: 0 0 20px 8px rgba(34, 197, 94, .9);
+    }
+}

@@ -8,8 +8,11 @@
     <!-- 标准依赖 -->
     <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
     <script src="/file/read/package/standard_dependency/script.js"></script>
-    <!-- 项目私有样式 -->
-    <link rel="stylesheet" href="style.css">
+    <!-- 项目私有样式（按职能拆分） -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/canvas.css">
+    <link rel="stylesheet" href="css/modal.css">
 </head>
 
 <body>
@@ -43,6 +46,9 @@
                 <button class="btn-ghost" id="clearBtn" title="清空画布">
                     <i class="fas fa-trash-alt"></i>
                 </button>
+                <button class="btn-ghost" id="compositeBtn" title="封装复合节点：Ctrl+点击 多选节点后，打包为一个复合节点">
+                    <i class="fas fa-object-group"></i> 封装
+                </button>
                 <button class="btn-ghost" id="reconnectBtn" title="重连引擎">
                     <i class="fas fa-sync-alt"></i>
                 </button>
@@ -51,17 +57,38 @@
 
         <!-- ===== 主画布区：左右侧边栏 + 中央画布 ===== -->
         <div class="main">
-            <!-- ===== 左侧边栏：节点模块（由左下圆形按钮控制折叠/展开，默认收起） ===== -->
+            <!-- ===== 左侧边栏：节点模块（与引擎日志互斥，由右侧按钮控制折叠/展开，默认收起） ===== -->
             <aside class="sidebar sidebar-left" id="nodeSidebar">
                 <div class="sidebar-panel">
                     <div class="sidebar-head">
                         <i class="fas fa-shapes"></i> 节点模块
-                        <button class="btn-ghost btn-mini sidebar-close" id="nodeSidebarClose" title="收起">
-                            <i class="fas fa-times"></i>
-                        </button>
                     </div>
                     <div class="sidebar-tabs" id="nodeTabs"></div>
                     <div class="sidebar-body" id="nodeContent"></div>
+                </div>
+            </aside>
+
+            <!-- ===== 左侧边栏：引擎日志（与节点模块互斥，由右侧按钮控制折叠/展开，默认收起） ===== -->
+            <aside class="sidebar sidebar-log" id="logSidebar">
+                <div class="sidebar-panel">
+                    <div class="sidebar-head">
+                        <i class="fas fa-comments"></i> 引擎日志
+                    </div>
+                    <div class="sidebar-tools">
+                        <div class="log-filters" id="logFilters">
+                            <button class="filter-chip active" data-filter="all">全部</button>
+                            <button class="filter-chip" data-filter="send">发送</button>
+                            <button class="filter-chip" data-filter="recv">回执</button>
+                            <button class="filter-chip" data-filter="error">错误</button>
+                            <!-- 清空按钮不用 filter-chip 类：logFilters 的点击委托会按 data-filter 切换筛选 -->
+                            <button class="btn-ghost btn-mini" id="clearLogBtn" title="清空日志">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="sidebar-body" id="logList">
+                        <div class="empty-tip">暂无日志</div>
+                    </div>
                 </div>
             </aside>
 
@@ -70,38 +97,12 @@
                 <div class="canvas" id="canvas">
                     <div class="canvas-hint" id="canvasHint">
                         从左侧「节点模块」拖拽节点放入画布；从节点下方输出端口拖到目标上方输入端口建立连线<br>
-                        <span>点击节点编辑参数；时钟线决定执行顺序；双击连线删除</span>
+                        <span>点击节点编辑参数；时钟线传播激活（分支并行独立执行）；双击连线删除</span>
                     </div>
                     <svg class="links-svg" id="linksSvg"></svg>
                     <div class="nodes-layer" id="nodesLayer"></div>
                 </div>
             </main>
-
-            <!-- ===== 右侧边栏：引擎日志（由右下圆形按钮控制折叠/展开，默认收起） ===== -->
-            <aside class="sidebar sidebar-right" id="logSidebar">
-                <div class="sidebar-panel">
-                    <div class="sidebar-head">
-                        <i class="fas fa-comments"></i> 引擎日志
-                        <button class="btn-ghost btn-mini sidebar-close" id="clearLogBtn" title="清空日志">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                        <button class="btn-ghost btn-mini sidebar-close" id="closeLogBtn" title="收起">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="sidebar-tools">
-                        <div class="log-filters" id="logFilters">
-                            <button class="filter-chip active" data-filter="all">全部</button>
-                            <button class="filter-chip" data-filter="send">发送</button>
-                            <button class="filter-chip" data-filter="recv">回执</button>
-                            <button class="filter-chip" data-filter="error">错误</button>
-                        </div>
-                    </div>
-                    <div class="sidebar-body" id="logList">
-                        <div class="empty-tip">暂无日志</div>
-                    </div>
-                </div>
-            </aside>
         </div>
     </div>
 
@@ -111,20 +112,34 @@
         <div class="modal-body" id="modalBody"></div>
     </div>
 
-    <!-- ===== 悬浮日志按钮（右下角，不占空间；有新信息时高亮闪烁） ===== -->
-    <button class="log-fab" id="logFab" title="引擎日志（有新信息时高亮闪烁）">
-        <i class="fas fa-comments"></i>
-        <span class="log-fab-badge" id="logCount">0</span>
-    </button>
-
-    <!-- ===== 节点模块按钮（左下角，圆形） ===== -->
-    <button class="node-fab" id="nodeFab" title="节点模块：分类选择节点并加入画布">
-        <i class="fas fa-shapes"></i>
-    </button>
+    <!-- ===== 右侧纵向按钮组：引擎日志（上）/ 节点模块（下） ===== -->
+    <div class="fab-col">
+        <button class="log-fab" id="logFab" title="引擎日志（有新信息时高亮闪烁）">
+            <i class="fas fa-comments"></i>
+            <span class="log-fab-badge" id="logCount">0</span>
+        </button>
+        <button class="node-fab" id="nodeFab" title="节点模块：分类选择节点并加入画布">
+            <i class="fas fa-shapes"></i>
+        </button>
+    </div>
 
     <div class="toast-wrap" id="toastWrap"></div>
 
-    <script src="script.js"></script>
+    <!-- 脚本按职能拆分，加载顺序即依赖顺序；均为经典脚本共享全局作用域 -->
+    <script src="js/core.js"></script>
+    <script src="js/node-types.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/websocket.js"></script>
+    <script src="js/log.js"></script>
+    <script src="js/render.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/envelope.js"></script>
+    <script src="js/image-confusion.js"></script>
+    <script src="js/audio-equalizer.js"></script>
+    <script src="js/execute.js"></script>
+    <script src="js/persistence.js"></script>
+    <script src="js/main.js"></script>
 </body>
 
 </html>
