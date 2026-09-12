@@ -15,6 +15,7 @@ deepdemos.*
 config.yaml
 status.json
 .scratch/
+LTP9-StarLTP/
 
 ## Go 测试产物
 coverage

@@ -3,7 +3,7 @@
   "title": "LTP9 天气查询",
   "description": "查询指定城市的实时天气与未来2天预报，支持 Open-Meteo / wttr.in 自动回退（和风天气 API Key 可选）。对外经 engine.call 调用 queryWeather，也可订阅 weather.query 事件。",
   "icon": "icon.webp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "tags": [
     "LTP9"
   ],

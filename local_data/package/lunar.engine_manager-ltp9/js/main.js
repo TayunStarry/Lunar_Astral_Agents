@@ -6,6 +6,7 @@ const NODE_CATS = [
     { key: 'data', label: '数据安全', types: ['db', 'memory', 'file', 'crypto', 'base64', 'jwt', 'emoji'] },
     { key: 'ai', label: '网络通讯', types: ['llm', 'embed', 'http', 'network'] },
     { key: 'media', label: '语音系统', types: ['kokoro_tts', 'qwen_tts', 'qwen_asr', 'microphone', 'speaker', 'audio_eq'] },
+    { key: 'video', label: '视频处理', types: ['video_keyframe'] },
     { key: 'flow', label: '流程处理', types: ['wait', 'transform', 'extract', 'display', 'image_display', 'image_confuse', 'stats', 'limit'] },
     { key: 'gates', label: '逻辑控制', types: ['and', 'or', 'not', 'nand', 'nor'] }
 ];

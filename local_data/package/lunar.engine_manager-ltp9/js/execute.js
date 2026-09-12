@@ -237,6 +237,7 @@ async function runNode(node) {
         }
         else if (node.type === 'audio_eq') { await runAudioEqualizer(node); } // 音频均衡器：低频/中频/高频 增益衰减，输出 wav
         else if (node.type === 'image_confuse') { await runImageConfusion(node); } // 图像混淆：混淆 / 解混淆 / 还原
+        else if (node.type === 'video_keyframe') { await runVideoKeyframe(node); } // 视频抽帧：URL→/keyframe 关键帧→GIF base64
         else if (node.type === 'composite') { // 复合节点：换入内部子图复用同一执行器，完成后换出
             await runCompositeNode(node);
         }

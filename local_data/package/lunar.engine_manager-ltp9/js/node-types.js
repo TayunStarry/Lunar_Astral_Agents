@@ -254,6 +254,17 @@ const NODES = {
             { key: 'image', label: '图像 base64 / data URI（未连线时使用）', type: 'textarea', rows: 2, def: '' }
         ]
     },
+    video_keyframe: {
+        label: '视频抽帧', icon: 'fa-film', color: '#fb923c',
+        desc: '视频转GIF：拉取视频URL上传至琉璃 /keyframe 提取关键帧（每秒5帧+相似度去重，最长1小时），前端将关键帧序列量化合成 GIF 动图（中位切法调色板 + LZW 无损压缩）；输出 GIF base64（data URI），可连线到图像显示节点展示；<视频URL>可来自上游',
+        ins: [{ k: 'url', label: '视频URL' }], out: { k: 'gif', label: 'GIF(base64)', kind: 'image' },
+        fields: [
+            { key: 'url', label: '视频URL（未连线时使用）', type: 'text', ph: 'https://... 或 /file/read/...', def: '' },
+            { key: 'maxWidth', label: 'GIF 宽度上限(像素，等比缩放，16~1024)', type: 'number', def: 480 },
+            { key: 'delayMs', label: '帧间隔(毫秒，按 1/100 秒取整)', type: 'number', def: 200 },
+            { key: 'maxFrames', label: '最多帧数(0=不限制；GIF 体积随帧数增长)', type: 'number', def: 0 }
+        ]
+    },
     wait: {
         label: '同步等待', icon: 'fa-hourglass-half', color: '#94a3b8',
         desc: 'engine.sleep 语义：阻塞等待指定毫秒；无数据输入输出',
