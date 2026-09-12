@@ -1,259 +1,240 @@
 # 09 LTPX 协议 —— 月华工具包（Lunar Tool Package）
 
 > [🏠 文档地图](README.md) | [◀ 上一章](08-构建运行与配置.md)
-> 相关源文档：[月华 LTPX 协调层](../../lunar_astral/adapters/ltpx_remote.go) · [琉璃包加载/中转](../../crystal_astral/assets/script.js) · [Mini-LTP 智能体](../../crystal_astral/assets/mini_ltp_agent.js) · [包 metadata 示例](../../local_data/package/lunar.web-view.image-confusion/metadata.json)
+> 相关源文档：[月华 LTPX 协调层](../../lunar_astral/adapters/ltpx_remote.go) · [琉璃 LTPX 远端](../../crystal_astral/ltpx_remote.go) · [琉璃包加载/中转](../../crystal_astral/assets/script.js) · [Mini-LTP 智能体](../../crystal_astral/assets/mini_ltp_agent.js) · [Self-LTP 智能体](../../crystal_astral/assets/self_ltp_agent.js)
 
-**LTPX（Lunar Tool Package）= 月华工具包协议**，是控制系统内「如何把第三方工具注册给月华、并让 AI 智能体调用」的统称。核心思想是 **AtoA（Agent-to-Agent）**：月华把自然语言指令交给某个包的专用 LLM 智能体执行，由智能体自行理解意图并做多步页面操作，而非用正则/规则引擎模拟。
-
----
-
-## 1. 协议分支总览
-
-LTPX 按「后端宿主 + 载体形态 + 交互方式」分为多个分支，命名上以「-LTP」结尾：
-
-| 分支 | 适配 Lunar AtoA | 载体 | 定位 | 状态 |
-|------|----------------|------|------|------|
-| **Zero-LTP** | —（协议基座） | 本地包页面 | 基础的协议版本（*.ltpx 格式：zip 压缩 + html/md 可视化页面），以 LunarSystem 为后端 | ✅ 已实现 |
-| **Node-LTP** | 是 | WebApp 页面 | 专为特定 web 前端应用特调的专用 webAgent | ✅ 已实现 |
-| **Mini-LTP** | 是 | WebAgent | 基于「页面最小化嵌入」原则的通用页面操作智能体，含键盘/鼠标/滚动/组合键模拟 | ✅ 已实现 |
-| **Self-LTP** | 否 | WebAgent | 由用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务；智能体完成操作后自动唤起自己规划下一步 / 等待 / 结束 | ✅ 已实现 |
-| **Face-LTP** | 是 | WindowAgent | 面向**桌面**内容与应用程序的通用智能体（点击、键入、滚动等） | ❌ 已弃用 |
-| **Auto-LTP** | 是 | WindowAgent | 根据初始指令持续规划每一步做什么，并等待操作返回的通用智能体 | ✅ 已实现 |
-| **Yara-LTP** | 是 | CodeAgent | 面向 **LTP3（YaraFlow）** 而设计的兼容层<事件容器> | ✅ 已实现 |
-| **Star-LTP** | 是 | CodeAgent | **新一代 LTP9 引擎分支**，全同步事件模型 + 严格权限绑定，面向本地插件扩展生态 | ✅ 已实现（主线）
-
-> 各分支共享同一 AtoA 协议骨架与包管理机制，差异集中在载体形态（本地页面 / WebApp / 桌面窗口）与是否自带自我规划能力。
->
-> **两套命名的关系**：本章上表（Zero-LTP / Node-LTP / Mini-LTP / Self-LTP / Face-LTP / Auto-LTP / Yara-LTP）是「-LTP」**分支命名**；数字命名（LTP1–LTP9）是同一系列下的**路线规划编号**，两者一一对应（如 Zero-LTP = LTP2、Node-LTP = LTP4、Mini-LTP = LTP5、Self-LTP = LTP6、Face-LTP = LTP7、Auto-LTP = LTP8），详见 §2。数字**不是迭代版本号**，只用于给系列内多条并列分支做区分。
-
-### 1.1 Zero-LTP —— 协议基座
-LTPX 的基础版本，对应 `.ltpx` 包文件格式（zip 压缩 + html/md 可视化页面），调用 LunarSystem（月华）作为后端。它奠定了「包 = 页面 + 元数据 + 工具定义」的生态基础，其余分支均架构在其组织架构之上。
-
-### 1.2 Node-LTP —— 专用 WebApp 智能体
-适配 Lunar AtoA 协议的 WebAgent，为**专一**的 web 前端应用特调而设计。针对特定应用深度定制指令理解、选择器策略与操作序列，追求对目标应用的精准控制。
-
-- 包声明时 `tags` 追加 `"Node-LTP"`。
-
-### 1.3 Mini-LTP —— 通用页面操作智能体
-适配 Lunar AtoA 协议的 webAgent，基于**页面最小化嵌入**原则，是**通用**的页面操作智能体。它对任意网页主持通用的 DOM 感知与操作能力：**键盘模拟输入、鼠标模拟输入、滚动、组合键**等。典型实现在 [MiniLTP Agent](09-LTPX协议-月华工具包.md)（详见 §4）。
-
-- 包声明时 `tags` 追加 `"Mini-LTP"`。
-- 智能体以 iframe 最小化嵌入目标页面，不动包源码；琉璃在 iframe `load` 后动态注入智能体脚本再投递 `ltpx_run`。
-- 工具集：`capture_page / click / type / key / mouse / wheel / scroll / hover / select / wait`，支持组合键（`Ctrl+A`/`Cmd+Shift+P`）与三态按住（键入 / 短按 / 长按）。
-- 每次运行只注入**一张**最新视口截图（覆盖 50px 坐标网格 + 与【页面元素】列表同序的编号框），供多模态视觉定位元素坐标。
-
-### 1.4 Self-LTP —— 自主页面操作智能体
-
-**定位**：不接入 Lunar AtoA 的「自主页面操作」分支。用户通过页面上的（开始/停止）按钮 + 文本框指定【初始任务】，智能体在目标页面内**多轮自循环执行**，完成操作后自动唤起自己规划下一步 / 等待指定时长 / 决定结束任务。
-
-**载体与实现**：[self_ltp_agent.js](../../crystal_astral/assets/self_ltp_agent.js)（v2.0.0）。琉璃经 `/self-ltp-agent.js` 在 iframe 加载 Self-LTP 包后动态注入（自带开始/停止控制面板），不动包源码；包声明时 `tags` 追加 `"Self-LTP"`（如 `deepseek.web-view.voxel-disaster`）。
-
-**核心机制**（区别于一次性批处理）：
-1. **计划**：收到初始任务先调用 `set_plan` 拆解为一连串计划项，记录为「任务历史」；
-2. **执行**：多轮循环，**每轮只调用一个原子操作工具**（一次一个操作）；
-3. **验证**：每个操作执行后重新观测页面（最新截图 + 元素），判断是否真正生效；
-4. **重试**：某步未命中/效果不正确时用同一操作重试（可多次），或先 `wait` 再试，未确认完成绝不跳下一步；
-5. **确认**：关键步骤用 `confirm_step(no, passed)` 明确标记完成或需重试；
-6. **结束**：全部完成时用 `finish` 总结。
-
-**工具集**：`set_plan / capture_page / get_state / capture_screenshot / click / type_text / press_key / mouse_press / hover / select_option / scroll_page / scroll_wheel / wait / confirm_step / finish`。
-
-**页面操作原语**：统一来自共享模块 `window.SharedInput`（`/shared-input.js`，与 Mini-LTP 共享）。
-
-**关键行为约定**：x/y 坐标按截图网格（`SCREEN_GRID_STEP`）编号读取；`mouse_press` 派发完整事件序列（pointerdown/mousedown → pointerup/mouseup → click）并注入 x/y；复合指令按连词（然后/接着/接下来/之后/随后/并且/同时）与标点拆分逐步执行；运行于目标页面内时「打开/进入页面」步骤识别为「页面已打开」；单字符「输入 X」无输入框时回退按键；`press_key` 支持三态按住（默认/短按 `short:`/长按 `long:`）与组合键（`Ctrl+A`、`Cmd+Shift+P`）及修饰键别名；执行后回执 `keep_open: true` 保持页面打开供用户观察。
-
-**模型与约束**：模型调用走琉璃后端 `/v1` 代理，参数从 `lunar_config.json` 的 `agent` 字段读取（**不硬编码**）；自然语言理解完全由 LLM 完成，**禁止正则/规则引擎**模拟。
+**LTPX（Lunar Tool Package）= 月华工具包协议**，控制系统内「如何把工具注册给月华、并让 AI 智能体调用」。核心机制是 **AtoA（Agent-to-Agent）**：月华把自然语言指令交给目标包的专用 LLM 智能体执行，由智能体自行理解意图并完成多步操作。
 
 ---
 
-### 1.5 Face-LTP —— 桌面 WindowAgent
+## 1. 分支体系（LTP1–LTP9）
 
-**定位**：曾把 AtoA 能力从「页面」延伸到「桌面」的 WindowAgent 分支，面向桌面内容与应用程序执行**点击、键入、滚动**等操作。
+LTPX 按「后端宿主 + 载体形态 + 交互方式」分为多条并列分支，命名以「-LTP」结尾；「LTP+数字」（LTP1–LTP9）是同系列下的**路线编号**（不是版本号，分支间无升级取代关系），两种命名一一对应：
 
-**载体与实现（历史）**：`subsystem/face_ltp`（进程内库模块，CGO，Windows），工具名 **`face_ltp_desktop_agent`**，作为琉璃固有工具经 `/ltpx/call` 暴露给月华。
+| 路线 | 分支名 | 载体 | 定位 | 状态 |
+|------|--------|------|------|------|
+| LTP1 | — | `*.ltp.md` | 「工具定义 + js 实现 + 文档」单 md 文件载入 | 已废弃 |
+| LTP2 | **Zero-LTP** | `.ltpx` 包（zip + html/md 页面） | 协议基座：「包 = 页面 + 元数据 + 工具定义」，以 LunarSystem（月华）为后端，经 web UI 加载/运行 | 现行 |
+| LTP3 | **Yara-LTP** | CodeAgent（goja 沙箱插件） | YaraFlow 本地插件引擎，事件容器（hook/event/command）。见 §6 | 现行 |
+| LTP4 | **Node-LTP** | WebApp 页面 | 专为特定 web 前端应用特调的专用 webAgent | 现行 |
+| LTP5 | **Mini-LTP** | WebAgent | 通用页面操作智能体：页面最小化嵌入 + 键鼠/滚动/组合键模拟。见 §4 | 现行 |
+| LTP6 | **Self-LTP** | WebAgent | 自主页面操作智能体：页面内多轮自循环，不经月华调度。见 §5 | 现行 |
+| LTP7 | Face-LTP | WindowAgent | 面向桌面的通用智能体 | 已废弃 |
+| LTP8 | **Auto-LTP** | WindowAgent | 桌面闭环自治智能体（多角色编排）。见 §5.3 | 现行 |
+| LTP9 | **Star-LTP** | CodeAgent（goja 沙箱插件） | 插件层/引擎层/客户端三端、全同步事件模型、权限强绑定。见 §7 | 现行（主线） |
 
-**核心机制（历史设计）**：
-- **UIA 优先**：`uia_dump / uia_find / uia_click / uia_input` 优先于坐标工具；坐标/键鼠仅作 UIA 失败时的兜底；
-- **截图验证循环**：每个工具执行后必做截图确认实际生效，禁止未验证即报成功；
-- 原子输入+发送 `type_and_send`（防焦点丢失）、`open_folder`（explorer.exe）、`close_window`（WM_CLOSE）、`press_drag`（鼠标拖拽）、`press_key('ctrl+tab')` 循环任务管理器标签等；
-- 严格 48 消息上下文，`agents/` 子包承载提示词优化、规划、验证、上下文接力等子智能体。
-
----
-
-### 1.6 Auto-LTP —— 桌面闭环自治智能体
-
-**定位**：桌面 WindowAgent 的「闭环自治」分支。依据初始指令**持续规划每一步行动**，等待操作返回再继续，直至任务完成。
-
-**载体与实现**：`subsystem/auto_ltp`（进程内库模块，CGO，Windows），工具名 **`window_agent`**，作为琉璃内置桌面智能体随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=window_agent` + `instruction`）调用，路由见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)（`AutoLTP.Run(instruction)`）。
-
-**核心机制**（多角色编排，`host.go` `Run`）：
-1. **提示词编纂者**（无工具）：`editorPhase` 优化/完善用户指令；
-2. **软件启动者**：`launcherPhase`——`DTLaunchProgram` 启动程序后立即 `DTActivateWindow` 将新窗口置前；
-3. **执行循环**（上限 30 轮）：**视觉理解者**（无工具，只读自动注入截图）→ **UIA 理解者**（读 UI 树/定向查询）→ **任务规划者**（无工具，决策 complete/action）→ **仅启用一个操作者**（`operationPhase`）→ **进度书记者**（截图 + 记录）。
-
-每个角色**独立全新上下文、工具白名单物理隔离**；`HandoffRecord` 为跨轮次唯一信息媒介。
-
-**能力**：视觉 + UIA 双路理解界面、按名称/控件类型定位元素、`Invoke/Value/SelectionItem` 直接操作、坐标/键鼠兜底；`type_and_send` 无应用限制（可用于 QQ）；排除终端输入保护。
-
-**可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`（读到/想了/决策/做了什么），截图归档 `local_data/images/moment`。
-
-**模型**：从 `lunar_config.json` 的 `agent` 字段读取（不硬编码）。
+各分支共享同一包管理机制（`local_data/package/*/metadata.json` 动态扫描），差异集中在载体形态（本地页面 / WebApp / 桌面窗口 / 沙箱插件）与是否接入月华 AtoA 调度。
 
 ---
 
-## 2. 分支路线规划（LTP1–LTP9 系列）
+## 2. 包注册与元数据（metadata.json）
 
-> **关键澄清**：LTPX 的**数字部分不是迭代版本** —— LTP9 绝不是 LTP1 的「第九个大版本」，两者之间也**不存在升级取代关系**。编号中的数字指的是「月华工具包协议（Lunar Tool Package）」第 **x 条路线规划**，即一个系列下的**多条分支**，而非「一个程序的多次迭代」。分支之间多为**并列/派生**关系，共同共享同一 AtoA 协议骨架，差异集中在载体形态与是否自带自我规划能力。
-
-| 路线 | 载体/文件名 | 说明 | 状态 |
-|------|-----------|------|------|
-| **LTP1** | `*.ltp.md` | 将「工具定义 + js 函数实现 + 工具文档」打包为一个 **md 文本文件**放入指定目录供运行时自动加载；可通过 `import * as from "system.js"` 调用月华函数、甚至改写月华运行机制。 | **已废弃** |
-| **LTP2** | `.ltpx` | 即 **Zero-LTP**。引入琉璃对工具进行显示与管理，全面投入 WebApp 生态。曾规划「在琉璃界面点击加载工具 → 向月华注册/卸载工具」的链路，**该链路已移除**，仅保留 web UI 的加载与运行支持。 | 现行 |
-| **LTP3** | `*.ltp3` | **Yara-LTP / YaraFlow**：CodeAgent 兼容层<事件容器>，逐插件独立 goja 沙箱 + `ltp3/*` WS 信封分发（hook/event/command/manage/ping）。实现见 §6。 | 现行 |
-| **LTP4** | `.ltpx` | 沿用 LTP2 的组织架构，引入并针对专门 webApp 特定开发的、适配 Lunar AtoA 的 webAgent（即 **Node-LTP**）；放弃 LTP2 的工具调用/加载链路。 | 现行 |
-| **LTP5** | WebAgent | 基于 LTP2 的组织架构与 LTP3 的 AtoA 协议，开发的**通用** webAgent（即 **Mini-LTP**）。 | 现行 |
-| **LTP6** | WebAgent | **Self-LTP**：基于页面最小化嵌入的**自主**页面操作智能体，不接入 AtoA，由页面（开始/停止）按钮 + 文本框触发；多轮自循环（计划 → 执行 → 验证 → 重试 → 确认 → 结束）。 | 现行 |
-| **LTP7** | WindowAgent | **Face-LTP**：面向桌面的通用智能体（UIA 优先 + 坐标/键鼠兜底 + 截图验证循环），工具 `face_ltp_desktop_agent`。 | **已废弃** |
-| **LTP8** | WindowAgent | **Auto-LTP**：桌面闭环自治智能体，多角色编排（编纂 → 启动 → 执行循环），工具 `window_agent`。 | 现行 |
-| **LTP9** | goja CodeAgent | **Star-LTP**：新一代 LTP9 引擎，插件层/引擎层/客户端三端、每插件独立沙箱、`permissions.key` 权限强绑定、跨包调用与前端智能体调度。实现见 §7。 | 现行（主线） |
-
-> 各路线中的「已废弃/待适配」仅表示**该条路线不再推进或尚待适配**，**不代表**被更高编号路线取代 —— 它们是并列的分支，编号只用来给系列内的不同路线做区分。
->
-> 结论：现行 **AtoA 时代** 放弃了 LTP1 的「md 单文件 + 直接脚本注入」与 LTP2 的「琉璃手动注册/卸载」链路，统一收敛为「包自声明工具 + LLM 智能体自执行 + 结果回执」的新协议。
-
----
-
-## 3. 包注册与元数据（metadata.json）
-
-LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明身份与工具。工具链采用**动态扫描**：`GET /ltpx/tools` 每次请求扫描各包的 `metadata.json` 中 `tools` 数组；**琉璃核心不随包增删改动**。
+LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明身份与工具。工具链采用**动态扫描**：`GET /ltpx/tools` 每次请求扫描各包的 `metadata.json` 中 `tools` 数组，琉璃核心不随包增删改动。
 
 ```json
 {
-  "id": "lunar.image_confusion",
-  "title": "图像混淆",
+  "id": "lunar.click-monitor",
+  "title": "点击监控",
   "icon": "icon.webp",
   "tags": ["Mini-LTP"],
   "background_retention": true,
   "tools": [
-    { "name": "image_grayscale_processor", "description": "对图片执行混淆与反混淆处理的<图像混淆>小程序" }
+    { "name": "click_monitor", "description": "虚拟键盘按键可视化工具" }
   ]
 }
 ```
 
 字段约定：
-- `id`：应用唯一标识，LTPX 广播携带它来路由包；
-- `tags`：分支/类别标签数组，各标签涵义与示例见 [§3.1 标签语义与示例](#31-标签tags语义与示例)；
-- `icon`：**相对路径** `icon.webp`（禁止绝对/跨包路径）；
-- `background_retention`（布尔，**可缺省**，缺省视为 `false`，兼容旧版包）：后台保活开关。显式置 `true` 时，琉璃关闭覆盖层后**不释放**该包对应的 `<iframe>` 内容；若下次打开的页面仍是当前包，琉璃**优先复用**已加载的 iframe 页面而非重新加载，从而最大化继承之前嵌入式页面的操作进度（如输入内容、选中状态、已注入的 Mini/Self-LTP 智能体上下文等）。缺省或为 `false` 时，关闭/隐藏覆盖层即从页面中**卸载**该 `<iframe>` 并回到默认空闲欢迎页（`/ltpx_welcome.html`），避免 Mini-LTP / Self-LTP 等注入脚本的高负载页面意外驻留后台；下次打开该包将重新加载页面，进度不保留。
 
-> 说明：嵌入式 iframe 的初始/空闲页为琉璃内置的本地欢迎页 `assets/ltpx_welcome.html`（对外 `/ltpx_welcome.html`）。关闭非保活包后 iframe 会回到该欢迎页，而非残留高负载页面。（不可将 `https://gitee.com/...` 等外站设为空闲页——Gitee 返回 `X-Frame-Options: SAMEORIGIN`，禁止被 iframe 嵌入，直接设置只会显示「拒绝连接」。）
-- `tools[]`：`name + description`，供月华脚本将其归一化为 OpenAI function schema 注册给模型。
+| 字段 | 说明 |
+|------|------|
+| `id` | 包唯一标识，LTPX 广播与插件引擎装载均以它路由 |
+| `tags` | 分支/类别标签数组，语义见 §2.1 |
+| `icon` | **相对路径**（如 `icon.webp`） |
+| `background_retention` | 后台保活开关（布尔，缺省 `false`）。`true` 时琉璃关闭覆盖层后不释放该包的 `<iframe>`，再次打开优先复用已加载页面（保留输入内容、选中状态、已注入的智能体上下文）；`false` 时关闭即卸载 iframe 并回到空闲欢迎页 `/ltpx_welcome.html`，下次打开重新加载 |
+| `tools[]` | `name + description`，供月华归一化为 OpenAI function schema 注册给模型 |
 
-### 3.1 标签（tags）语义与示例
+嵌入式 iframe 的初始/空闲页为琉璃内置的 `assets/ltpx_welcome.html`（对外 `/ltpx_welcome.html`）。
 
-`tags` 用于声明包的**分支归属**（LTP 分支标签）与**类别**（DeepDemos / DeepSeek / Git 等非 LTP 标签），供琉璃前端渲染卡片角标。**是否可被月华 AtoA 调用与 tags 无关**——由 `metadata.json` 中是否存在非空 `tools[]` 数组决定（`scanAtoaToolchain` 动态扫描，见 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。完整包清单与 tags 见 [06 §6.7.1](06-前端资源库.md)。
+### 2.1 标签（tags）语义与示例
 
-**LTP 分支标签（决定智能体分支）**
+`tags` 声明包的**分支归属**（LTP 分支标签）与**类别**（DeepDemos / DeepSeek / Git 等）。**能否被月华 AtoA 调用与 tags 无关**——由 `metadata.json` 中是否存在非空 `tools[]` 决定（`scanAtoaToolchain` 动态扫描）。完整包清单见 [06 §6.7](06-前端资源库.md)。
 
-| 标签 | 含义 | 适配 AtoA | 当前使用示例 |
+**LTP 分支标签**
+
+| 标签 | 含义 | 接入 AtoA | 当前使用示例 |
 |------|------|-----------|--------------|
-| `Zero-LTP` | 协议基座：本地包页面（`.ltpx`），以 LunarSystem 为后端，经 web UI 加载/运行，不内嵌专用智能体 | —（协议基座） | `lunar.web-view.image-studio`、`knowledge-studio`、`memory-studio`、`novel-studio`、`translate-studio`、`tts-studio` |
-| `Node-LTP` | 专用 WebApp 智能体：为特定 web 应用深度定制指令理解、选择器策略与操作序列 | ✅ | `lunar.web-view.file-explorer`、`search-weather` |
-| `Mini-LTP` | 通用页面操作智能体：页面最小化嵌入 + DOM 感知 + 键鼠/滚动/组合键，经 iframe 动态注入 | ✅ | `lunar.web-view.click-monitor`、`image-confusion`；`deepseek.web-view.*` 多数演示包 |
-| `Self-LTP` | 自主页面操作智能体：不接入 AtoA，用户经页面（开始/停止）+ 文本框触发，多轮自循环 | — | `deepseek.web-view.voxel-disaster` |
+| `Zero-LTP` | 协议基座：本地包页面，经 web UI 加载/运行，不内嵌专用智能体 | — | `lunar.image-studio`、`lunar.novel-studio`、`lunar.engine_manager` 等 |
+| `Node-LTP` | 专用 WebApp 智能体：为特定 web 应用定制指令理解与操作序列 | ✅ | `lunar.file-explorer`、`lunar.search-weather` |
+| `Mini-LTP` | 通用页面操作智能体：iframe 最小化嵌入 + DOM 感知 + 键鼠/滚动/组合键 | ✅ | `lunar.click-monitor`、`deepdemos.anime-rubik-solver` 等 |
+| `Self-LTP` | 自主页面操作智能体：页面（开始/停止）按钮触发，多轮自循环 | — | `deepdemos.voxel-disaster` |
+| `LTP3` | YaraLTP 插件（CodeAgent，`index.js` + `config.yaml`） | 引擎装载 | `com.yaraflow.*` |
+| `LTP9` | StarLTP 插件（CodeAgent，`execute.js` + `config.yaml`） | 引擎装载 | `com.yaraflow.*-ltp9` |
 
 **非 LTP 类别标签**
 
-| 标签 | 含义 | 当前使用示例 |
-|------|------|--------------|
-| `DeepSeek` | 外部 DeepSeek API / 聊天页面 | `external.web-view.deepseek_api`、`deepseek_chat` |
-| `DeepDemos` | DeepSeek 演示包（自包含 web 演示/游戏，多为 Mini-LTP / Self-LTP 载体） | `deepseek.web-view.*` 全部演示包 |
+| 标签 | 含义 | 示例 |
+|------|------|------|
+| `DeepDemos` | 自包含 web 演示/游戏包 | `deepdemos.*` 全部演示包 |
+| `DeepSeek` | 外部 DeepSeek 页面入口 | `external.deepseek_api` |
+| `Windows-EXE` | 外部程序启动器 | `external.napcat` |
 
 ---
 
-## 4. 关键实现：MiniLTP Agent（通用页面操作智能体）
-
-入口 [mini_ltp_agent.js](../../crystal_astral/assets/mini_ltp_agent.js)，是一个内嵌 AtoA 集成层、运行在目标页面 iframe 内的通用操作智能体。
-
-- **多轮 function calling**：系统提示词 + 模块级独立上下文（保留最近 40 轮），LLM 通过工具循环逐次执行 → 以 `tool` 消息回填 → 直到无工具调用给出最终答复（上限截断防死循环）。
-- **模型非硬编码**：经 `fetch('/file/read/lunar_config.json')` 读取 `agent.multimodal_model` 作为请求 `model`，走同源 `/v1` 代理，失败仅回退占位值、不改写配置。
-- **操作队列**：建议一条 `execute_operations` 提交完整操作队列，程序从前往后逐个执行（步间 0.5s），失败即中断并上报已执行记录。
-- **视觉识图**：每轮注入**一张**最新视口截图，覆盖 50px 坐标网格 + 编号框（编号与【页面元素】列表同序），结合文本元素列表做双重定位。
-
----
-
-## 5. 现行 AtoA 调用链路（已实现）
+## 3. AtoA 调用链路
 
 ```
-月华 ──POST /ltpx/call(name, arguments)──▶ 琉璃（按工具名路由到提供该工具的包）
-   ──/ws 广播 ltpx_call ──▶ 琉璃前端 → 打开包 iframe（/file/read/package/<目录>/index.html 或 ltpxFrame）
-   ──postMessage ltpx_run ──▶ 包内 LLM 智能体多轮执行（function calling 循环）
-   ──postMessage ltpx_result ──▶ 琉璃前端 ──POST /ltpx/result ──▶ 月华
-   ──响应──▶ 返回给调用方
+月华（思考链起点）
+  ──GET /ltpx/ping──▶ 琉璃           心跳探测，失败则清空联络并缓存工具链
+  ──GET /ltpx/tools──▶ 琉璃          拉取最新工具链（含包页面工具 + 内置工具）
+  （工具链聚合为单一 use_the_program 工具注册给模型）
+月华 ──POST /ltpx/call(tool, arguments)──▶ 琉璃（按工具名路由）
+  ──/ws 广播 ltpx_call──▶ 琉璃前端 → 打开包 iframe（/file/read/package/<目录>/index.html）
+  ──postMessage ltpx_run──▶ 包内 LLM 智能体多轮执行（function calling 循环）
+  ──postMessage ltpx_result──▶ 琉璃前端 ──POST /ltpx/result──▶ 月华
+月华 ──响应──▶ 返回给调用方
 ```
 
-月华侧协调实现在 [adapters/ltpx_remote.go](../../lunar_astral/adapters/ltpx_remote.go)，琉璃侧链路在 [assets/script.js](../../crystal_astral/assets/script.js)。
+事件链路：月华在「事件发生前」触发点经 `POST /ltpx/event` 推送事件负载给琉璃（分发给订阅了该事件的包），并以 `{return: …}` 取回订阅方回执。
 
-**端点与超时：**
+**端点与超时**（月华侧协调实现在 [adapters/ltpx_remote.go](../../lunar_astral/adapters/ltpx_remote.go)，琉璃侧在 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）：
 
 | 端点 | 方向 | 说明 |
 |------|------|------|
 | `GET /ltpx/ping` | 月华→琉璃 | 心跳探测，失败则清空联络并缓存工具链 |
-| `GET /ltpx/tools` | 月华→琉璃 | 拉取最新工具链（思考链起点动态扫描） |
+| `GET /ltpx/tools` | 月华→琉璃 | 拉取最新工具链 |
 | `POST /ltpx/call` | 月华→琉璃 | 转发工具调用（tool + arguments） |
 | `POST /ltpx/result` | 琉璃→月华 | 回传智能体执行结果 |
+| `POST /ltpx/event` | 月华→琉璃 | 推送事件负载 |
 | `/ltpx/register` | 琉璃→月华 | 琉璃启动时注册联络 URL（多开以最新为准） |
 
-- 工具链同步：月华在思考链起点向琉璃心跳并拉取最新工具链（琉璃可能动态增删 LTPX 插件）。
-- 回执协议：`ltpx_result` 含 `request_id / success / text / error / keep_open`；执行后 `keep_open` 时页面保持打开供用户观察。
+- 工具链同步：月华在每次思考链起点向琉璃（固定引擎端口 `BasicPort+3` = 36792）心跳并拉取最新工具链。
+- 内置工具（无需包承载）：`window_agent`（→ Auto-LTP，见 §5.3）、`yara_ltp`（→ YaraLTP hook 路由）。
+- 超时：月华端 HTTP 请求 8s、工具调用等待 150s；琉璃端挂起调用登记 120s 超时。
+- 回执协议：`ltpx_result` 含 `request_id / success / text / error / keep_open`；`keep_open` 时执行页面保持打开供用户观察。
 
 ---
 
-## 6. LTP3（YaraFlow / Yara-LTP）
+## 4. Mini-LTP —— 通用页面操作智能体
 
-**定位**：CodeAgent 兼容层<事件容器>，面向 YaraFlow 项目的本地插件扩展。与 LTPX/AtoA 完全解耦——`metadata.json` 不含 `tools` 字段、不走 AtoA、不注入页面智能体。实现位于 `crystal_astral/agent/YaraLTP/`，配套密钥生成器 `subsystem/ltp3_keygen/`，插件样例 `local_data/package/com.yaraflow.*`（含 `index.js` + `config.yaml`）。
+入口 [mini_ltp_agent.js](../../crystal_astral/assets/mini_ltp_agent.js)，运行在目标页面 iframe 内的通用操作智能体，由琉璃在 iframe `load` 后动态注入，不改包源码。
 
-**载体与实现**：每插件独立 goja 沙箱，`config.yaml` 为唯一配置文件，插件逻辑为 `index.js`。引擎层结构见 `agent/YaraLTP/docs/engine-implementation.md`，主链路：
-- **识别**：`metadata.json` 的 `tags` 含 `LTP3` 且 `id` 非空即视为插件；按包 `id` 装载，对账环每 3s tick 驱动新增/删除。
-- **分发**：`ltp3/hook` → `hook_result`（`summary` 聚合 `subscribed/errored/allow_continue/aborted`，支持 `action:"abort"` 与 `allowContinue`）；`ltp3/event` → `event_ack`；`ltp3/command` → `command_result`（精确匹配 + 正则回退）；`manage` / `ping` 各带回执。
-- **WS 总线**：`bus.go` 经 `StudioHub.Inbound` 消费入站，`HandleIn` 只处理 `ltp3/*` 前缀，其余旁路；出站 `ltp3/send` 按 `request_id` 是否存在决定单播/广播。
-- **权限**：`permissions.key` 由脚本哈希（拼接根目录全部 `.js`、跳过 `data/`、排序后 `sha256[:16]` hex）加密 `allow-*` 清单，生成器带 `/api/verify` 自检（`handler.go:verifyHandler`）。
-
-**已知缺陷与未实现项（对照引擎 `engine-implementation.md`，标注已修复/仍存在）**：
-
-| 项 | 证据 | 状态 | 说明 |
-|----|------|------|------|
-| 权限解码失败**明文兜底** | `permission.go:99-106` | ✅ **已修复** | 改为整体解码失败即拒绝全部权限，**不再退化为明文**（与 LTP9 严格拒绝对齐）。 |
-| **30s 看门狗** | `manager.go` `runGuarded` + `variable.go watchdogTimeout` | ✅ **已实现** | hook/event/command/tool 分发对每个插件回调独立限时 30s；单个死循环插件被跳过，不再卡住整条分发线程。 |
-| 跨插件反向调用死锁 | `manager.callCrossPlugin` 未处理环 | ⚠️ 仍存在 | A→B→A 反向调用仍会死锁（单向正常）；同插件自调用不加锁已规避自锁。 |
-| `platform.sendCommand` / `emoji.*` / `image.getCached` 占位 | `api_misc.go` / `api_res.go` / `api_net.go` | ✅ **已实现** | `emoji.*` 复用记忆库 `stickers`（image 型）集合；`image.getCached` 读插件 `data/cache/`；`platform.sendCommand` 经 `SetPlatformCommand` 注入（未注入返回明确错误）。 |
-| `config.yaml` 子集解析器 | `yaml.go` | ⚠️ 仍存在 | 自研 YAML 子集解析（注释/嵌套/序列/内联/引号），复杂 YAML 语法未全覆盖。 |
+- **多轮 function calling**：系统提示词 + 独立上下文，LLM 经工具循环逐次执行 → `tool` 消息回填 → 直到无工具调用给出最终答复。
+- **模型配置**：经 `fetch('/file/read/lunar_config.json')` 读取 `agent.multimodal_model`，走同源 `/v1` 代理。
+- **操作队列**：一条 `execute_operations` 提交完整操作队列，程序从前往后逐个执行（步间 0.5s），失败即中断并上报已执行记录。
+- **工具集**：`capture_page / click / type / key / mouse / wheel / scroll / hover / select / wait`，支持组合键与三态按住（键入 / 短按 / 长按）。
+- **视觉定位**：每轮注入一张最新视口截图，覆盖 50px 坐标网格 + 与【页面元素】列表同序的编号框，结合文本元素列表双重定位。
+- **页面操作原语**：统一来自共享模块 `window.SharedInput`（`/shared-input.js`，与 Self-LTP 共享）。
 
 ---
 
-## 7. LTP9（Star-LTP / 新一代引擎分支）
+## 5. 自主与桌面智能体
 
-**定位**：新一代 CodeAgent 引擎分支——**插件层 / 引擎层 / 客户端**三端组织，每插件独立 goja 沙箱，**全同步阻塞事件模型**，`permissions.key` 权限强绑定，内置跨包调用与前端智能体调度。实现位于 `crystal_astral/agent/StarLTP/`，配套密钥生成器 `subsystem/ltp9_keygen/`，插件样例 `local_data/package/com.yaraflow.*-ltp9/`（`execute.js`），管理工作台前端 `local_data/package/lunar.engine_manager-ltp9/`。完整实现见 `agent/StarLTP/docs/engine-implementation.md`。
+### 5.1 Self-LTP —— 自主页面操作智能体
 
-**核心设计**（与 LTP3 的关键差异）：
-- **同步优先**：插件回调统一为同步函数返回普通对象；`engine.http.get/post`、`engine.sleep` 为阻塞式；`fetch`/`WebSocket` 以全局 Promise/事件回调存在（`allow-network` 门控）。**主链路事件系统完全同步阻塞**。
-- **三端组织**：客户端 `Emit(topic,payload)` → 引擎路由到订阅器 → 插件回调 → 汇总回执。订阅器支持优先级排序、`intercept/modifiedData/return/cancel`（`return` 为业务回传通道，月华各「xx事件发生前」触发点即以 `{return:…}` 取回插件结果）。
-- **API 面**（按 `allow-*` 注入，未授权为 `undefined`）：`engine.event/event.publish/signal/frontEvent/database/memory/file/call/agent/encoder/decoder/config/export/http/sleep/crypto/llm/image/send/ws/emoji/tool/platform/time`。
-- **权限强绑定**：`execute.js` 哈希 `sha256[:16]` hex 作解密密钥，解码 `permissions.key` 解出 `allow-*`；**解码失败/名称非法 → 拒绝全部权限，不退化为明文**（`permission.go:64-68`）；开发模式跳过校验。关键生成器 `ltp9_keygen` 哈希规则与引擎严格一致（读打包后 `execute.js`，`sha256[:16]` hex），自带 `/api/verify` 自检。
+入口 [self_ltp_agent.js](../../crystal_astral/assets/self_ltp_agent.js)。用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务，智能体在目标页面内**多轮自循环执行**，不经月华调度。
 
-**已知缺陷与未实现项（对照引擎 `engine-implementation.md`，标注已修复/仍存在）**：
+**核心循环**：收到初始任务先 `set_plan` 拆解为计划项 → 每轮只执行一个原子操作 → 执行后重新观测页面（截图 + 元素）验证是否生效 → 未生效用同一操作重试或 `wait` 后再试 → 关键步骤用 `confirm_step(no, passed)` 标记 → 全部完成后 `finish` 总结。
 
-| 项 | 证据 | 状态 | 说明 |
-|----|------|------|------|
-| 跨插件 `engine.call`/事件回调对 **async/promise 支持** | `plugin.go` `callFn`/`settlePromise`/`awaitPromise` | ✅ 已支持 | 回调/导出返回 pending Promise 时，`callFn` 让出插件事件循环并定时轮询直至兑现或超时（默认 90s），async/await、`await fetch` 均可正确承接。 |
-| 事件回调内 `await` 全局 fetch/WebSocket | `callFn` + `bindNetwork` | ✅ 已支持 | 采用「后台轮询短回 loop」而非阻塞 loop，pending Promise 能真实兑现，不再超时。 |
-| 文档 §8/§11 **文件布局 / http 处理器归因** | `engine-implementation.md` | ✅ 已修正 | 补列 `api_network.go / api_command.go / api_async.go / api_encoding.go / api_probe.go`；纠正 `api_ws.go` 为 WebSocket **服务端**（客户端在 `api_net.go`）。 |
-| 网络模块为自实现 `net/http`+gorilla-websocket | `api_net.go` / `api_network.go` / `api_ws.go` | 说明 | 自实现均为真实后端，非占位；§9 复用对照已按实际（`doLTP9Fetch` 共享、WS 客户端/服务端分置）更新。 |
+**工具集**：`set_plan / capture_page / get_state / capture_screenshot / click / type_text / press_key / mouse_press / hover / select_option / scroll_page / scroll_wheel / wait / confirm_step / finish`。
+
+**关键行为约定**：x/y 坐标按截图网格（`SCREEN_GRID_STEP`）编号读取；`mouse_press` 派发完整事件序列（pointerdown/mousedown → pointerup/mouseup → click）；复合指令按连词（然后/接着/并且/同时等）与标点拆分逐步执行；`press_key` 支持三态按住（默认/`short:`/`long:`）与组合键；执行后回执 `keep_open: true` 保持页面打开。
+
+**模型**：走琉璃同源 `/v1` 代理，参数从 `lunar_config.json` 的 `agent` 字段读取。
+
+### 5.2 Self-LTP 与 Mini-LTP 的关系
+
+两者共享 `window.SharedInput` 页面操作原语；差异在调度方式——Mini-LTP 由月华经 AtoA 调用并逐轮回传结果，Self-LTP 在页面内自主循环直至完成。
+
+### 5.3 Auto-LTP —— 桌面闭环自治智能体（window_agent）
+
+实现于 `crystal_astral/agent/AutoLTP`（CGO，Windows），工具名 **`window_agent`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=window_agent` + `instruction`）调用，路由 `AutoLTP.Run(instruction)`（[ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。
+
+**多角色编排**（`host.go` `Run`）：
+
+1. **提示词编纂者**（无工具）：优化/完善用户指令；
+2. **软件启动者**：`DTLaunchProgram` 启动程序后 `DTActivateWindow` 置前新窗口；
+3. **执行循环**（上限 30 轮）：视觉理解者（只读自动注入截图）→ UIA 理解者（读 UI 树/定向查询）→ 任务规划者（决策 complete/action）→ 单操作执行者 → 进度书记者（截图 + 记录）。
+
+每个角色**独立全新上下文、工具白名单物理隔离**；`HandoffRecord` 为跨轮次唯一信息媒介。
+
+**能力**：视觉 + UIA 双路理解界面、按名称/控件类型定位元素、`Invoke/Value/SelectionItem` 直接操作、坐标/键鼠兜底；`type_and_send` 原子输入发送。
+
+**可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`，截图归档 `local_data/images/moment`。
+
+**模型**：从 `lunar_config.json` 的 `agent` 字段读取。
+
+---
+
+## 6. LTP3 —— YaraLTP 插件引擎（YaraFlow）
+
+**定位**：CodeAgent 事件容器，面向 YaraFlow 项目的本地插件扩展。实现位于 `crystal_astral/agent/YaraLTP/`（15 个 Go 文件 + `docs/`），配套密钥生成器 `subsystem/ltp3_keygen`，插件样例 `local_data/package/com.yaraflow.*`。
+
+### 载体与装载
+
+- 每插件独立 goja 沙箱；插件 = `index.js`（逻辑）+ `config.yaml`（唯一配置文件）+ `permissions.key` + `plugin.json`；`metadata.json` 的 `tags` 含 `LTP3` 且 `id` 非空即视为插件。
+- 引擎按包 `id` 装载，对账循环周期性驱动新增/删除；默认 hook 主题 `chat.receive.after_process`。
+- 插件开发指南见 `agent/YaraLTP/docs/plugin-dev-guide.md`、客户端开发指南 `docs/client-dev-guide.md`、类型定义 `docs/yara.d.ts`。
+
+### 事件分发（WS 总线）
+
+`bus.go` 经 StudioHub.Inbound 消费入站，`HandleIn` 只处理 `ltp3/*` 前缀信封，其余旁路：
+
+| 信封 | 回执 | 说明 |
+|------|------|------|
+| `ltp3/hook` | `hook_result` | `summary` 聚合 `subscribed/errored/allow_continue/aborted`，支持 `action:"abort"` 与 `allowContinue` |
+| `ltp3/event` | `event_ack` | 事件通知 |
+| `ltp3/command` | `command_result` | 精确匹配 + 正则回退 |
+| `ltp3/manage` / `ltp3/ping` | 各带回执 | 管理与探活 |
+
+出站 `ltp3/send` 按 `request_id` 是否存在决定单播/广播。
+
+### 权限
+
+`permissions.key` 由脚本哈希（拼接根目录全部 `.js`、跳过 `data/`、排序后 `sha256` 截取 16 字节 hex）作为 `lunar_decoder` 密钥加密 `allow-*` 权限清单；解码失败即拒绝全部权限。密钥由 `subsystem/ltp3_keygen`（Web UI + `/api/gen`、`/api/verify`）生成。
+
+### 已知限制
+
+- 跨插件 `engine.call` 反向调用（A→B→A）会死锁（单向正常；同插件自调用已规避自锁）。
+- `config.yaml` 使用自研 YAML 子集解析器（注释/嵌套/序列/内联/引号），复杂 YAML 语法未全覆盖。
+
+---
+
+## 7. LTP9 —— StarLTP 插件引擎（主线）
+
+**定位**：新一代 CodeAgent 插件引擎——**插件层 / 引擎层 / 客户端**三端组织，每插件独立 goja 沙箱，**全同步阻塞事件模型**，`permissions.key` 权限强绑定，内置跨包调用与前端智能体调度。实现位于 `crystal_astral/agent/StarLTP/`（16 个 Go 文件 + `docs/engine-implementation.md`、`docs/code_completion.d.ts`），另有独立发布的模块副本 `subsystem/LTP9-StarLTP/`（独立 go.mod，供其他项目模块化引用）。配套：密钥生成器 `subsystem/ltp9_keygen`、插件样例 `local_data/package/com.yaraflow.*-ltp9/`、可视化测试工作台 `local_data/package/lunar.engine_manager-ltp9/`（见 [06 §6.3](06-前端资源库.md)）。
+
+### 核心设计
+
+- **同步优先**：插件回调统一为同步函数返回普通对象；`engine.http.get/post`、`engine.sleep` 为阻塞式；`fetch`/`WebSocket` 以全局 Promise/事件回调存在（`allow-network` 门控）。主链路事件系统完全同步阻塞；回调返回 pending Promise 时引擎让出插件事件循环并轮询至兑现或超时（默认 90s），支持 `await fetch` 等 async 用法。
+- **三端组织**：客户端 `Emit(topic, payload)` → 引擎路由到订阅器 → 插件回调 → 汇总回执。订阅器支持优先级排序、`intercept/modifiedData/return/cancel`（`return` 为业务回传通道，月华各「事件发生前」触发点即以 `{return:…}` 取回插件结果）。
+- **API 面**（按 `allow-*` 注入，未授权为 `undefined`）：`engine.event / event.publish / signal / frontEvent / database / memory / file / call / agent / encoder / decoder / config / export / http / sleep / crypto / llm / image / send / ws / emoji / tool / platform / time`。
+- **权限强绑定**：以打包后 `execute.js` 的 `sha256`（截取 16 字节 hex）为解密密钥解码 `permissions.key`，解出 `allow-*` 清单；**解码失败或权限名非法 → 拒绝全部权限**（`permission.go`）；开发模式跳过校验。权限名共 10 个：`allow-file / allow-database / allow-memory / allow-network / allow-call / allow-agent / allow-signal / allow-certificate / allow-send / allow-socket`。密钥由 `subsystem/ltp9_keygen` 生成（哈希规则与引擎一致，自带 `/api/verify` 自检）。
+
+### 宿主桥接（crystal_astral）
+
+| 文件 | 职责 |
+|------|------|
+| `ltp9_bridge.go` | `BridgeLTP9()`：`star.Init()` 扫描 `local_data/package` 中 `LTP9` 标签包；注入宿主通道——`SetAgentInvoker`（前端页面智能体调用）、`SetOutbound`（插件单向通知）、`SetSendInvoker`（`ltp9_send` 消息推送）、`SetWsServer`（`engine.ws` 传输）、`SetPlatformResolver`（平台名解析） |
+| `ltp9_debug.go` | 调试信封桥：消费 `/ws` 上 `ltp9/event|call|tool|stats|broadcast|probe|test`，分发到引擎 `Emit/Call/CallTool/PluginStates/Broadcast`，回执经 `/ws` 广播（`ltp9/result`、`ltp9/stats_ack`、`ltp9/broadcast_ack`、`ltp9/pong`） |
+| `ltp9_ws.go` | 插件 `engine.ws` 专用传输：惰性启动的独立 WS 服务（`127.0.0.1` 随机端口），按路径挂载插件 `onMessage` 回调 |
+
+### 插件结构
+
+```text
+com.yaraflow.<name>-ltp9/
+├── metadata.json      # tags 含 "LTP9"，engine: ltp9，main: execute.js
+├── execute.js         # 插件逻辑（同步回调 + engine.* API）
+├── config.yaml        # 插件配置
+├── permissions.key    # 加密权限清单
+└── data/              # 插件本地数据
+```
 
 ---
 
 ## 相关文档
+
 - [🛰 文档地图](README.md)
-- [后端 LTPX 协调与 /ltpx 端点](02-核心系统-钛宇-月华.md)
-- [琉璃与 /ltpx 代理路由、包加载](03-扩展系统-钛宇-琉璃.md)
+- [后端 LTPX 协调与适配器](02-核心系统-钛宇-月华.md)
+- [琉璃 LTPX 远端与内置引擎](03-扩展系统-钛宇-琉璃.md)
 - [前端资源库与扩展包目录](06-前端资源库.md)

@@ -5,12 +5,6 @@ import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker } from './capabilities/memory';
 
-/** 思考链起点互动函数：拉取琉璃工具链（不推送时间/上下文，仅事件触发点推送事件） */
-function interactLTPXStart(): void {
-    // 工具拉取：同步琉璃状态，在线则注入工具链，离线则移除
-    syncLTPXRemoteStatus();
-}
-
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
     /** 初始化聊天缓存 */
@@ -50,12 +44,10 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             return;
         }
         // 拉取琉璃工具链
-        interactLTPXStart();
+        syncLTPXRemoteStatus();
         // 事件 -> 收到消息前：把待处理的消息上下文推送到琉璃，插件可经 return 改写后再消费
-        const feedback: { messages?: PostMessage[]; videos?: string[] } = interactEvent('message_received_before', {
-            messages: GlobalConfig.unreadContext,
-            videos: GlobalConfig.unreadVideoUrl,
-        }).return;
+        const feedback: { messages?: PostMessage[]; videos?: string[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, }).return;
+        // 如果插件返回了新的消息上下文，更新全局上下文
         if (feedback) {
             if (Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
             if (Array.isArray(feedback.videos)) GlobalConfig.unreadVideoUrl = feedback.videos;
