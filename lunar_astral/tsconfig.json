@@ -40,7 +40,7 @@
     },
     // 需要编译的文件列表
     "include": [
-        "./TypeScript/index.ts"
+        "./TypeScript/agent/constructor.ts"
     ],
     // 排除的目录
     "exclude": [

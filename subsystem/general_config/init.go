@@ -23,6 +23,12 @@ type ModelConfig struct {
 	Server struct {
 		Developer      bool `json:"developer"`       // 是否为开发者模式
 		AllowDiffusion bool `json:"allow_diffusion"` // 是否允许加载扩散模型
+		// 画图前显存守卫：使用指针以便区分"未配置"与"显式关闭"，未配置时保持默认值（开启，阈值 8192 MiB）
+		ImageVRAMGuard    *bool `json:"image_vram_guard,omitempty"`
+		ImageVRAMGuardMiB *int  `json:"image_vram_guard_mib,omitempty"`
+		// sd.cpp 权重内存卸载模式（auto/always/off）与提示词编码器 CPU 运行开关
+		SDOffloadToCPU     *string `json:"sd_offload_to_cpu,omitempty"`
+		SDTextEncoderOnCPU *bool   `json:"sd_te_on_cpu,omitempty"`
 	} `json:"server"`
 	// 核心智能体模型配置（月华 Agent）
 	Agent struct {
@@ -185,5 +191,19 @@ func init() {
 		*AllowDiffusion = true
 	} else {
 		*AllowDiffusion = false
+	}
+	// 画图前显存守卫配置：仅在配置文件中显式给出时才覆盖默认值
+	if parameter.Server.ImageVRAMGuard != nil {
+		*ImageVRAMGuard = *parameter.Server.ImageVRAMGuard
+	}
+	if parameter.Server.ImageVRAMGuardMiB != nil {
+		*ImageVRAMGuardMiB = *parameter.Server.ImageVRAMGuardMiB
+	}
+	// sd.cpp 权重内存卸载与提示词编码器 CPU 运行配置：仅在配置文件中显式给出时才覆盖默认值
+	if parameter.Server.SDOffloadToCPU != nil && *parameter.Server.SDOffloadToCPU != "" {
+		*SDOffloadToCPU = *parameter.Server.SDOffloadToCPU
+	}
+	if parameter.Server.SDTextEncoderOnCPU != nil {
+		*SDTextEncoderOnCPU = *parameter.Server.SDTextEncoderOnCPU
 	}
 }

@@ -8,7 +8,9 @@ function removeNode(id) {
 // 复制节点：参数深拷贝 + 向右下偏移放置，并把原节点进/出连线一并复制到副本
 function duplicateNode(id) {
     const n = nodeById(id); if (!n) return null;
-    const copy = { id: newId(), type: n.type, x: n.x + 34, y: n.y + 34, params: JSON.parse(JSON.stringify(n.params || {})), running: false, _s: 'pending', outValue: null, enabled: n.enabled };
+    // 复合节点副本需重建子图节点 ID（避免两个副本并行执行时子图互相串扰），同时复制原节点进/出连线
+    const params = n.type === 'composite' ? cloneCompositeParams(n.params) : JSON.parse(JSON.stringify(n.params || {}));
+    const copy = { id: newId(), type: n.type, x: n.x + 34, y: n.y + 34, params, running: false, _s: 'pending', outValue: null, enabled: n.enabled };
     state.nodes.push(copy);
     state.links.slice().forEach(l => {
         if (l.from.node === id) state.links.push({ id: 'l' + seg(), from: { node: copy.id, port: l.from.port }, to: { node: l.to.node, port: l.to.port } });
@@ -121,6 +123,51 @@ function unpackComposite(node) {
     clearSelection();
     renderGraph();
     toast('已展开复合节点（' + restored.length + ' 节点）', 'success');
+}
+
+// ==== 复合节点库（保存到「节点模块 → 我的复合」） ====
+// 深拷贝复合节点参数，并为子图节点重建新 ID（含 inMap/outMap 的节点引用），
+// 保证同一模板生成的多个复合节点并行执行时子图互不串扰（nodeById 按视图栈顶优先查找）
+function cloneCompositeParams(params) {
+    const sg = params.subgraph || {};
+    const idMap = {};
+    const nodes = (sg.nodes || []).map(n => {
+        const nid = newId(); idMap[n.id] = nid;
+        return { id: nid, type: n.type, x: n.x, y: n.y, params: JSON.parse(JSON.stringify(n.params || {})) };
+    });
+    const links = (sg.links || []).map(l => ({
+        id: 'l' + seg(),
+        from: { node: idMap[l.from.node] || l.from.node, port: l.from.port },
+        to: { node: idMap[l.to.node] || l.to.node, port: l.to.port }
+    }));
+    return {
+        label: params.label || '复合节点', hint: params.hint || '封装的子流程',
+        subgraph: { nodes, links },
+        inMap: (params.inMap || []).map(m => Object.assign({}, m, { node: idMap[m.node] || m.node })),
+        outMap: params.outMap ? Object.assign({}, params.outMap, { node: idMap[params.outMap.node] || params.outMap.node }) : null
+    };
+}
+// 把画布上的复合节点收藏到节点模块列表（重名覆盖）
+function saveCompositeToLibrary(node, name) {
+    const params = JSON.parse(JSON.stringify(node.params || {}));
+    const idx = state.savedComposites.findIndex(c => c.name === name);
+    if (idx >= 0) state.savedComposites[idx] = { name, params };
+    else state.savedComposites.push({ name, params });
+    saveComposites().then(ok => { if (ok) { toast('已保存复合节点「' + name + '」到节点模块', 'success'); renderNodeModal(); } });
+}
+// 从节点模块列表移除
+function removeSavedComposite(name) {
+    if (!confirm('确定从节点模块删除「' + name + '」？')) return;
+    state.savedComposites = state.savedComposites.filter(c => c.name !== name);
+    saveComposites().then(ok => { if (ok) { toast('已删除「' + name + '」', 'success'); renderNodeModal(); } });
+}
+// 按收藏的复合节点生成一个可编辑的复合节点加入画布（子图 ID 重映射，多个实例互不干扰）
+function instantiateSavedComposite(saved, x, y) {
+    const params = cloneCompositeParams(saved.params || {});
+    const n = { id: newId(), type: 'composite', x, y, params, running: false, _s: 'pending', outValue: null, enabled: true };
+    state.nodes.push(n);
+    renderGraph();
+    return n;
 }
 
 // ==== 拖动 ====

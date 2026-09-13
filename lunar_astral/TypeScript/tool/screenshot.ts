@@ -1,4 +1,6 @@
-import { ToolCall, GlobalConfig, ResizeImageResult, ResizeImageResults } from '../index';
+import { ToolCall } from '../config/tool';
+import { GlobalConfig } from '../config/global';
+import { ResizeImageResult, ResizeImageResults } from '../config/image';
 
 // ==== 工具定义 ====
 

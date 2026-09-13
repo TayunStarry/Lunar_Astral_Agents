@@ -263,6 +263,14 @@ body {
     font-size: 11px;
 }
 
+/* 顶栏画布选择按钮：名称过长省略 */
+.canvas-btn .canvas-name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ==== toast ==== */
 .toast-wrap {
     position: fixed;

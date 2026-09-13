@@ -1,4 +1,6 @@
-import { ToolCall, GlobalConfig, actorRole, painterRole, musicianRole, searcherRole } from '../index';
+import { ToolCall } from '../config/tool';
+import { GlobalConfig } from '../config/global';
+import { actorRole, painterRole, musicianRole } from '../agent/roles/roles';
 
 // ==== 工具定义 ====
 
@@ -49,23 +51,6 @@ export const agentControlTools: ToolCall[] = [
 					description: {
 						type: "string",
 						description: "音乐需求描述，如'创作一首轻快的钢琴曲'、'写一首抒情的钢琴与大提琴二重奏'。描述越详细，音乐创作效果越好。"
-					}
-				},
-				required: ["description"]
-			}
-		}
-	},
-	{
-		type: "function",
-		function: {
-			name: "dispatch_searcher",
-			description: "向搜索者子智能体发布检索/研究任务。搜索者会执行网络搜索和记忆库查询，收集信息后返回可读的检索结果。适用于需要查证事实、搜索资料、研究分析等场景。",
-			parameters: {
-				type: "object",
-				properties: {
-					description: {
-						type: "string",
-						description: "检索/研究需求描述，如'搜索2024年诺贝尔物理学奖得主'、'调查人工智能最新进展'、'查一下量子计算的基本原理'。描述越清晰，检索结果越准确。"
 					}
 				},
 				required: ["description"]
@@ -135,30 +120,11 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 	return [result, ''];
 }
 
-/** 处理搜索者调度工具 */
-async function handleDispatchSearcher(args?: Record<string, any> | string): Promise<string[]> {
-	const { description } = parseArgs(args);
-
-	if (!description || typeof description !== 'string' || description.trim().length === 0) {
-		return ['搜索研究任务调度失败：研究描述不能为空，请提供具体的搜索研究需求', ''];
-	}
-
-	if (!searcherRole) {
-		return ['搜索研究任务调度失败：搜索者子智能体未就绪，请稍后重试', ''];
-	}
-
-	console.log(`[智能体控制] 调度搜索者: ${description}`);
-	const result = await searcherRole.createCreativeWork(description.trim());
-	console.log(`[智能体控制] 搜索者完成，报告长度: ${result.length} 字符`);
-	return [result, ''];
-}
-
 // ==== 模块级注册 ====
 
 // 注册智能体控制工具到 LTPfunction 映射表
 GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
 GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
 GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-GlobalConfig.LTPfunction.set('dispatch_searcher', handleDispatchSearcher);
 // 注册智能体控制工具到 LTPdefinition 列表
 GlobalConfig.LTPdefinition.push(...agentControlTools);

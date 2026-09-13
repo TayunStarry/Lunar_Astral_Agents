@@ -55,9 +55,9 @@ type AtData struct {
 	QQ string `json:"qq"`
 }
 
-// ReplyData 回复消息数据
+// ReplyData 回复消息数据（id 兼容字符串 / 数字两种 JSON 形态）
 type ReplyData struct {
-	ID string `json:"id"`
+	ID json.RawMessage `json:"id"`
 }
 
 // ImageData 图片消息数据
@@ -83,9 +83,27 @@ type FileData struct {
 	URL      string          `json:"url"`       // 文件直链（可能为空）
 }
 
-// ForwardData 合并转发消息数据
+// ForwardData 合并转发消息数据（id 兼容字符串 / 数字两种 JSON 形态）
 type ForwardData struct {
-	ID string `json:"id"`
+	ID json.RawMessage `json:"id"`
+}
+
+// FaceData QQ 商城表情消息数据（mface，携带表情名称）
+type FaceData struct {
+	ID   string `json:"id"`
+	Name string `json:"name"` // 商城表情名称
+}
+
+// JsonData JSON 卡片消息数据（小程序、邀请、分享卡片等）
+type JsonData struct {
+	Data string `json:"data"` // 完整 JSON 字符串
+}
+
+// ShareData 链接分享消息数据
+type ShareData struct {
+	URL     string `json:"url"`
+	Title   string `json:"title"`
+	Content string `json:"content"` // 摘要描述
 }
 
 // RedPacketInfo 红包感知信息（NapCat 无领取红包接口，仅识别并告知 AI；口令红包可通过复读口令领取）
@@ -126,6 +144,22 @@ type ForwardMessage struct {
 type ForwardSender struct {
 	UserID   int64  `json:"user_id"`
 	Nickname string `json:"nickname"`
+	Card     string `json:"card"` // 群名片（部分版本返回）
+}
+
+// MessageDetail get_msg 返回的完整消息（用于回复引用还原）
+type MessageDetail struct {
+	Sender     Sender           `json:"sender"`
+	Message    []MessageSegment `json:"message"`
+	Content    []MessageSegment `json:"content"` // 部分版本使用 content 字段承载消息段
+	RawMessage string           `json:"raw_message"`
+}
+
+// GroupMemberInfo 群成员信息（get_group_member_info / get_group_member_list 返回项）
+type GroupMemberInfo struct {
+	UserID   int64  `json:"user_id"`
+	Nickname string `json:"nickname"`
+	Card     string `json:"card"` // 群名片，可能为空
 }
 
 // NapcatWSResponse Napcat HTTP API 响应结构
@@ -151,9 +185,10 @@ type GetFileResponse struct {
 
 // BridgeTarget 会话目标（月华回应的接收方）
 type BridgeTarget struct {
-	ID        int64  // 用户QQ号或群号
-	IsGroup   bool   // 是否群聊
-	GroupName string // 群名称（群聊时用于消息前缀）
+	ID            int64  // 用户QQ号或群号
+	IsGroup       bool   // 是否群聊
+	GroupName     string // 群名称（群聊时用于消息前缀）
+	ReplyToUserID int64  // 群聊回应需要 @ 的发起者（被 @ 触发时设置，首次发言消费一次）
 }
 
 // BridgeRequest 一条待推送给月华的请求（群聊可能包含多条历史消息）

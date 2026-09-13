@@ -103,25 +103,6 @@ Lunar_Astral_Agents/
 
 ---
 
-## 子系统导航
-
-> 各模块的详细文档已统一收录于 [Code Wiki](docs/code-wiki/README.md)，下表为模块定位速览。
-
-| 子系统 | Code Wiki 章节 | 功能 |
-|--------|----------|------|
-| 钛宇-月华 | [02](docs/code-wiki/02-核心系统-钛宇-月华.md) | AI 桌面智能体核心 |
-| 钛宇-琉璃 | [03](docs/code-wiki/03-扩展系统-钛宇-琉璃.md) | 工具集扩展系统 |
-| 配置管理 | [04](docs/code-wiki/04-公共子系统.md) | 全局配置中枢 |
-| 文件管理 | [04](docs/code-wiki/04-公共子系统.md) | 文件管理 + 知识库/记忆库 + 扩展包 |
-| 图像处理 | [04](docs/code-wiki/04-公共子系统.md) | 图像生成 + 截图 + 视频关键帧 |
-| 网络检索 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | AI 多引擎搜索智能体 |
-| 语音合成 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | Qwen3-TTS |
-| 语音识别 | [05](docs/code-wiki/05-独立AI引擎与运维工具.md) | Qwen3-ASR |
-| 前端资源库 | [06](docs/code-wiki/06-前端资源库.md) | 共享前端资源与扩展包 |
-| 项目架构 | [01](docs/code-wiki/01-项目架构总览.md) | 完整架构说明 |
-
----
-
 ## 代码文档（Code Wiki）
 
 面向代码理解的文档体系，深入剖析各模块的关键类与函数、依赖关系与构建运行方式。
@@ -141,15 +122,13 @@ Lunar_Astral_Agents/
 | [09 LTPX 协议](docs/code-wiki/09-LTPX协议-月华工具包.md) | 工具包协议与 AtoA 调用链 |
 | [10 llama.cpp 参数](docs/code-wiki/10-llama.cpp-参数参考.md) / [11 sd.cpp 参数](docs/code-wiki/11-stable-diffusion.cpp-参数参考.md) | 引擎 CLI 参数速查 |
 
-> 两套文档详见门户 [docs/code-wiki/README.md](docs/code-wiki/README.md)，其中互相超链接、查漏补缺。
-
 ---
 
 ## 常见问题
 
 **需要 Python 吗？** 不需要。所有 AI 推理均由纯 C/C++ 或 Go 实现的本地引擎完成。
 
-**可以离线使用吗？** 完全支持。所有模型为本地 GGUF 格式，推理无需网络。
+**可以离线使用吗？** 完全支持。当前项目就是面向本地部署进行开发设计的。
 
 **支持哪些 GPU？** 通过 llama.cpp 和 stable-diffusion.cpp 支持 NVIDIA CUDA GPU，Vulkan 后端也可用于兼容 GPU。
 

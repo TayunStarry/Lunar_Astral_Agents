@@ -2,7 +2,7 @@
 //  计划表 — 入口聚合（初始化 / 工具处理 / 到期检查），保持公共 API 不变
 // ============================================================
 
-import { GlobalConfig } from '../index';
+import { GlobalConfig } from '../config/global';
 import type { ScheduleItem } from './schedule-defs';
 import { scheduleTools, PRESET_DAILY_TASKS } from './schedule-defs';
 import { normalizeTime, dailyTaskTime, formatDate } from './schedule-time';

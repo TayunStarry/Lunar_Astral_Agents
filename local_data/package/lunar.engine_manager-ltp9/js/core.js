@@ -4,7 +4,8 @@
 // ============================================================
 
 // ==== 常量 ====
-const FLOW_FILE = 'database/lunar.engine_manager_ltp9.graph.json'; // 画布持久化到本地文件（local_data/database/）
+const GRAPH_DIR = 'database/engine_graph'; // 画布存放目录（local_data/database/engine_graph/，多画布）
+const COMPOSITES_FILE = 'database/lunar.engine_manager_ltp9.composites.json'; // 保存的复合节点库（「节点模块 → 我的复合」）
 const WS_MAX_RETRY = 5;
 const WS_RETRY_INTERVAL = 3000;
 const NODE_W = 200;
@@ -34,7 +35,10 @@ const state = {
     filter: 'all', unread: 0, log: [],
     linkDrag: { from: null, x: 0, y: 0 },
     catalog: { plugins: [], events: [], exports: {}, tools: {}, agentPlugins: [] },
-    modalNodeId: null // 当前浮窗编辑的节点（catalog 刷新后重渲染用）
+    modalNodeId: null, // 当前浮窗编辑的节点（catalog 刷新后重渲染用）
+    canvasName: null, // 当前画布名称（对应 engine_graph/<名称>.json）
+    canvases: [], // 已存在的画布列表 [{name,size,modified}]
+    savedComposites: [] // 保存到节点模块的复合节点 [{name, params}]
 };
 
 // ==== DOM ====

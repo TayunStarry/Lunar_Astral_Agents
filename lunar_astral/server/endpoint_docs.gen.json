@@ -1,0 +1,501 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "月华 (Lunar Astral)",
+    "version": "1.0.0",
+    "x-service": "LunarAstral"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "externalDocs": {
+    "description": "可视化文档页面",
+    "url": "/api-docs?format=html"
+  },
+  "x-generated-from": [
+    "variable.go"
+  ],
+  "paths": {
+    "/api-docs": {
+      "get": {
+        "summary": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）",
+        "description": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）",
+        "operationId": "docsHandler",
+        "x-handler": "docsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/background": {
+      "get": {
+        "summary": "随机背景图片",
+        "description": "随机背景图片",
+        "operationId": "file.RandomBackgroundHandler",
+        "x-handler": "file.RandomBackgroundHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture": {
+      "delete": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_delete",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_get",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_head",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_options",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_patch",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_post",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_put",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture/displays": {
+      "get": {
+        "summary": "屏幕列表",
+        "description": "屏幕列表",
+        "operationId": "image.HandleGetDisplays",
+        "x-handler": "image.HandleGetDisplays",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/read/": {
+      "get": {
+        "summary": "文件读取操作",
+        "description": "文件读取操作",
+        "operationId": "file.ReadHandler",
+        "x-handler": "file.ReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/write": {
+      "post": {
+        "summary": "文件保存操作",
+        "description": "文件保存操作",
+        "operationId": "file.SaveHandler",
+        "x-handler": "file.SaveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/generate": {
+      "post": {
+        "summary": "图片生成服务",
+        "description": "图片生成服务",
+        "operationId": "image.GenerateHandler",
+        "x-handler": "image.GenerateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/generate/wait": {
+      "get": {
+        "summary": "等待生成结果",
+        "description": "等待生成结果",
+        "operationId": "image.GenerateWaitHandler",
+        "x-handler": "image.GenerateWaitHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/memory/": {
+      "delete": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_delete",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_get",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_head",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_options",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_patch",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_post",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_put",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy": {
+      "post": {
+        "summary": "代理访问服务",
+        "description": "代理访问服务",
+        "operationId": "handlers.ProxyHandler",
+        "x-handler": "handlers.ProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/resize": {
+      "post": {
+        "summary": "图片缩放",
+        "description": "图片缩放",
+        "operationId": "image.HandleResizeImage",
+        "x-handler": "image.HandleResizeImage",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/tts": {
+      "post": {
+        "summary": "TTS语音合成服务",
+        "description": "TTS语音合成服务",
+        "operationId": "tts.TTSHandler",
+        "x-handler": "tts.TTSHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/v1/": {
+      "delete": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_delete",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_get",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_head",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_options",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_patch",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_post",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_put",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/vram/guard": {
+      "post": {
+        "summary": "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存；请求体可选 threshold_mib）",
+        "description": "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存；请求体可选 threshold_mib）",
+        "operationId": "llama.VRAMGuardHandler",
+        "x-handler": "llama.VRAMGuardHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/agent_event": {
+      "post": {
+        "summary": "推送引擎事件到AI上下文",
+        "description": "推送引擎事件到AI上下文",
+        "operationId": "handlers.AgentEventHandler",
+        "x-handler": "handlers.AgentEventHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/agent_position": {
+      "post": {
+        "summary": "更新智能体3D位置",
+        "description": "更新智能体3D位置",
+        "operationId": "handlers.AgentPositionHandler",
+        "x-handler": "handlers.AgentPositionHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/engine": {
+      "post": {
+        "summary": "引擎系统消息（动画列表/遥测等）",
+        "description": "引擎系统消息（动画列表/遥测等）",
+        "operationId": "handlers.EngineMessageHandler",
+        "x-handler": "handlers.EngineMessageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/message": {
+      "post": {
+        "summary": "消息写入队列",
+        "description": "消息写入队列",
+        "operationId": "handlers.MessageBatchHandler",
+        "x-handler": "handlers.MessageBatchHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/videourl": {
+      "post": {
+        "summary": "视频URL写入",
+        "description": "视频URL写入",
+        "operationId": "handlers.VideoUrlBatchHandler",
+        "x-handler": "handlers.VideoUrlBatchHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "summary": "WebSocket 消息通道（服务端向已连接客户端广播，客户端自行过滤）",
+        "description": "WebSocket 消息通道（服务端向已连接客户端广播，客户端自行过滤）",
+        "x-method": "WS",
+        "x-websocket": true,
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    }
+  }
+}

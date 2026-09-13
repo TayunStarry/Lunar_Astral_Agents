@@ -274,11 +274,11 @@ const NODES = {
         label: '插件状态', icon: 'fa-cubes', color: '#f43f5e',
         desc: '查询引擎在线 + 已加载插件（含事件/导出/智能体包）；输出原始回执（含 ok/plugins 等完整字段），不做简化提取', ins: [], out: { k: 'rows', label: '插件列表' }, fields: []
     },
-    and: { label: '与 AND', icon: 'fa-gate', color: '#22c55e', gate: true, desc: '所有输入成功才放行', ins: port_ins4(), out: null, fields: [] },
-    or: { label: '或 OR', icon: 'fa-gate-open', color: '#a3e635', gate: true, desc: '任一路径成功即放行', ins: port_ins4(), out: null, fields: [] },
-    not: { label: '非 NOT', icon: 'fa-gate-xmark', color: '#facc15', gate: true, desc: '输入取反（单输入）', ins: port_ins4(), out: null, fields: [] },
-    nand: { label: '与非 NAND', icon: 'fa-gate-xmark', color: '#eab308', gate: true, desc: '非(全部成功)', ins: port_ins4(), out: null, fields: [] },
-    nor: { label: '或非 NOR', icon: 'fa-gate-xmark', color: '#ca8a04', gate: true, desc: '非(任一成功)', ins: port_ins4(), out: null, fields: [] },
+    and: { label: '与 AND', icon: 'fa-diagram-project', color: '#22c55e', gate: true, desc: '所有输入成功才放行', ins: port_ins4(), out: null, fields: [] },
+    or: { label: '或 OR', icon: 'fa-share-nodes', color: '#a3e635', gate: true, desc: '任一路径成功即放行', ins: port_ins4(), out: null, fields: [] },
+    not: { label: '非 NOT', icon: 'fa-right-left', color: '#facc15', gate: true, desc: '输入取反（单输入）', ins: port_ins4(), out: null, fields: [] },
+    nand: { label: '与非 NAND', icon: 'fa-code-branch', color: '#eab308', gate: true, desc: '非(全部成功)', ins: port_ins4(), out: null, fields: [] },
+    nor: { label: '或非 NOR', icon: 'fa-toggle-off', color: '#ca8a04', gate: true, desc: '非(任一成功)', ins: port_ins4(), out: null, fields: [] },
     tool: {
         label: '调用工具', icon: 'fa-wrench', color: '#0ea5e9',
         desc: 'engine.tool：调用目标插件注册的 LLM/AtoA 工具；目标包+工具名从引擎真实注册动态填充；<参数对象> 可来自上游',
@@ -375,7 +375,7 @@ const NODES = {
     },
     composite: {
         label: '复合节点', icon: 'fa-object-group', color: '#a78bfa',
-        desc: '自定义蓝图封装：把一段子流程打包为单个节点，降低复杂蓝图的搭建与阅读成本。由工具栏「封装」对 Ctrl+多选节点生成；外部入线→输入端口、外部出线→单输出端口；点「展开」还原为原始节点再编辑。注意：内部不建议使用时钟启动节点，内部连线不可成环',
+        desc: '自定义蓝图封装：把一段子流程打包为单个节点，降低复杂蓝图的搭建与阅读成本。由工具栏「封装」对 Ctrl+多选节点生成；外部入线→输入端口、外部出线→单输出端口；点「展开」还原为原始节点再编辑。参数面板可「保存到节点模块」收藏，之后可在左侧「我的复合」随时加入任意画布。注意：内部不建议使用时钟启动节点，内部连线不可成环',
         ins: [], out: { k: 'out', label: '输出' },
         fields: [
             { key: 'label', label: '复合节点名称（卡片标题）', type: 'text', def: '复合节点' },

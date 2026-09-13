@@ -160,7 +160,13 @@ func HandleAgentImageResponse(images []string) {
 // dispatchText 将文本回应转发到目标会话
 func dispatchText(target BridgeTarget, content string) {
 	if target.IsGroup {
-		if err := SendGroupTextMessage(target.ID, content); err != nil {
+		// 被 @ 触发的回应在首次发言时自动 @ 回发起者；取出后立即清零，整个回合只附加一次
+		flowMutex.Lock()
+		replyTo := currentTarget.ReplyToUserID
+		currentTarget.ReplyToUserID = 0
+		flowMutex.Unlock()
+
+		if err := SendGroupTextMessage(target.ID, content, replyTo); err != nil {
 			LoggerGeneral.SubError("LunarCore", "Napcat", "转发消息到群 %d 失败: %v", target.ID, err)
 		}
 		return

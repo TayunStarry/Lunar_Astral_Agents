@@ -138,6 +138,18 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/kokoro/dict", Handler: kokoroHandler(kokoro.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
 	{Path: "/kokoro/dict/guess", Handler: kokoroHandler(kokoro.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
 	{Path: "/kokoro/health", Handler: kokoroHandler(kokoro.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
+
+	// ==== WebView 深读代理（后端驱动的顶层 WebView 会话：导航/元素识别/滚动/截图/摘要） ====
+	{Path: "/webview/open", Handler: webviewOpenHandler, Method: "POST", Description: "创建 WebView 深读会话窗口（顶层窗口，不受嵌入限制）"},
+	{Path: "/webview/navigate", Handler: webviewNavigateHandler, Method: "POST", Description: "深读会话导航到指定 URL 并等待就绪"},
+	{Path: "/webview/eval", Handler: webviewEvalHandler, Method: "POST", Description: "深读会话页面上下文执行脚本并取回 JSON 结果（元素识别）"},
+	{Path: "/webview/ready", Handler: webviewReadyHandler, Method: "POST", Description: "等待深读会话页面就绪并返回状态"},
+	{Path: "/webview/screenshot", Handler: webviewScreenshotHandler, Method: "POST", Description: "深读会话窗口区域截图（dataURL 返回）"},
+	{Path: "/webview/close", Handler: webviewCloseHandler, Method: "POST", Description: "关闭深读会话窗口"},
+	{Path: "/webview/deepread", Handler: webviewDeepReadHandler, Method: "POST", Description: "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要"},
+
+	// ==== 自述文档 ====
+	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）"},
 }
 
 // proxyPrefixes 要代理的路径前缀

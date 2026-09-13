@@ -1,4 +1,8 @@
-import { ToolCall, RandomFloor, GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams, ToolCallItem, CreativeRoleBase } from '../../index';
+import { ToolCall } from '../../config/tool';
+import { RandomFloor } from '../../math/basis';
+import { GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams } from '../../config/image';
+import { ToolCallItem } from '../../config/model';
+import { CreativeRoleBase } from '../base/creative';
 import { interactEvent } from '../capabilities/ltp-event';
 
 /** 绘画作品详情记录（用于向对话者传递作品信息） */

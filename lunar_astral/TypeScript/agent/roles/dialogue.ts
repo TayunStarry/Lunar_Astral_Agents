@@ -1,4 +1,9 @@
-import { GlobalConfig, ChatCache, ModelResponseBody, ModelBuilder, PostMessage, LiteImageFile, descriptionRole, memorizerRole } from '../../index';
+import { GlobalConfig } from '../../config/global';
+import { ChatCache } from '../../config/config';
+import { ModelResponseBody, PostMessage } from '../../config/model';
+import { ModelBuilder } from '../base/builder';
+import { LiteImageFile } from '../capabilities/media';
+import type { MemorizerRole } from './memorizer';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -88,9 +93,9 @@ export class DialogueRole extends ModelBuilder {
         if (imageItems.length === 0) return textPart || null;
         try {
             // 将图片包装为独立消息，喂给描述角色进行摘要
-            descriptionRole.coverContext({ role: 'user', content: imageItems });
+            this.descriptionRole.coverContext({ role: 'user', content: imageItems });
             /** 运行描述角色模型，获取图片摘要 */
-            const summaryRequest = descriptionRole.run([], []);
+            const summaryRequest = this.descriptionRole.run([], []);
             /** 图片摘要结果 */
             const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             // 检查摘要结果是否有效
@@ -262,7 +267,7 @@ export class DialogueRole extends ModelBuilder {
         // 如果没有用户消息，清理RAG消息并返回
         if (userMessages.length === 0) return clear();
         /** 由记忆者智能体检索长期记忆并生成摘要 */
-        const digest = memorizerRole.queryRagSummary(userMessages);
+        const digest = this.memorizerRole.queryRagSummary(userMessages);
         // 检索无命中或摘要失败时，清理RAG消息并返回
         if (!digest) return clear();
         // 将连贯摘要作为一条用户消息注入 ragMessages（替换碎片式上下文；
@@ -270,8 +275,8 @@ export class DialogueRole extends ModelBuilder {
         this.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
         return this;
     }
-    /** 构造函数 */
-    public constructor() {
+    /** 构造函数（注入描述者与记忆者单例，避免 roles ↔ dialogue 循环引用） */
+    public constructor(private descriptionRole: ModelBuilder, private memorizerRole: MemorizerRole) {
         super(fileView('prompts/dialogueRole.md')[0]);
     }
 }

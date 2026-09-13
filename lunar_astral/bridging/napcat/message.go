@@ -4,6 +4,7 @@ package napcat
 
 import (
 	"LunarSubsystem/LoggerGeneral"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -12,10 +13,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // maxGroupPoolSize 单个群聊缓存池的最大容量
 const maxGroupPoolSize = 20
+
+// maxForwardDepth 合并转发消息的最大展开层数（超过则折叠为占位符）
+const maxForwardDepth = 3
+
+// maxReplyQuoteLen 回复引用摘要的最大字符数
+const maxReplyQuoteLen = 120
+
+// maxFileTextBytes 注入上下文的文本文件最大字节数（超出截断）
+const maxFileTextBytes = 64 * 1024
 
 // HandleNapcatMessage 处理从 Napcat 接收到的消息（私聊 / 群聊）
 func HandleNapcatMessage(rawMessage []byte) {
@@ -51,21 +62,34 @@ func handlePrivateMessage(msg NapcatMessage) {
 	}
 
 	nickname := resolveNickname(msg.UserID, msg.Sender)
-	content, hasImages, videoURLs := parseMessageSegments(msg.Message)
+	content, hasImages, videoURLs := parseMessageSegments(0, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
-	if rp := parseRawRedPacket(msg.Raw); rp != nil {
+	rp := parseRawRedPacket(msg.Raw)
+	if rp != nil {
 		content = buildRedPacketText(rp)
 		hasImages = false
+		videoURLs = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 {
+		// 无可理解内容的空消息（系统提示、空卡片等）直接忽略
+		return
 	}
 
-	message := buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)
-
-	enqueueRequest(BridgeRequest{
+	req := BridgeRequest{
 		Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
-		Messages:  []map[string]interface{}{message},
+		Messages:  []map[string]interface{}{buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)},
 		VideoURLs: videoURLs,
-	})
+	}
+
+	if rp != nil && rp.IsPhrase {
+		// 口令红包：等待随机 0.5~3 秒再推送，让月华复读口令领取红包
+		go func() {
+			time.Sleep(randomRedPacketDelay())
+			enqueueRequest(req)
+		}()
+		return
+	}
+	enqueueRequest(req)
 }
 
 // handleGroupMessage 处理群聊消息：内置缓存池与触发机制
@@ -76,22 +100,31 @@ func handleGroupMessage(msg NapcatMessage) {
 
 	groupName := resolveGroupName(msg.GroupID)
 	memberName := resolveMemberName(msg.Sender)
+	// 记录发言者名称，供入站 @ 渲染与出站 [对 xxx 说] 反向解析
+	cacheMemberName(msg.GroupID, msg.UserID, memberName)
+	warmGroupMembers(msg.GroupID)
 
-	content, hasImages, videoURLs := parseMessageSegments(msg.Message)
-	textContent := contentToText(content)
+	content, hasImages, videoURLs := parseMessageSegments(msg.GroupID, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	redPacket := parseRawRedPacket(msg.Raw)
 	if redPacket != nil {
 		content = buildRedPacketText(redPacket)
 		hasImages = false
-		textContent = contentToText(content)
+		videoURLs = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 {
+		// 无可理解内容的空消息不入池不触发
+		return
 	}
 
 	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs}
 
-	atSelf := containsAtSelf(msg.Message, msg.SelfID)
-	mentioned := containsAnyKeyword(textContent, bridgeConfig.BridgingGroupKeywords)
+	selfID := msg.SelfID
+	if selfID == 0 {
+		selfID, _ = resolveBotInfo()
+	}
+	atSelf := containsAtSelf(msg.Message, selfID)
+	mentioned := containsAnyKeyword(contentToText(content), bridgeConfig.BridgingGroupKeywords)
 	triggerProbability := groupTriggerProbability()
 	randomTrigger := triggerProbability > 0 && rand.Float64() < triggerProbability
 
@@ -108,6 +141,10 @@ func handleGroupMessage(msg NapcatMessage) {
 			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
 			Messages:  buildGroupMessages(groupName, entries),
 			VideoURLs: collectGroupVideoURLs(entries),
+		}
+		// 被 @ 触发的回应，首次发言自动 @ 回发起者
+		if atSelf {
+			req.Target.ReplyToUserID = msg.UserID
 		}
 
 		if redPacket != nil && redPacket.IsPhrase {
@@ -380,7 +417,8 @@ func pumpNext() {
 
 // parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 视频地址列表)
 // 纯文本返回 string，包含图片返回 []map[string]interface{}；视频地址写入第三返回值
-func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []string) {
+// groupID 用于 @ 目标与回复引用的成员名称解析（私聊传 0）
+func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}, bool, []string) {
 	var contentArray []map[string]interface{}
 	var contentStr string
 	var hasImages bool
@@ -396,17 +434,12 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 		case "at":
 			var atData AtData
 			if json.Unmarshal(segment.Data, &atData) == nil {
-				appendContent(&contentArray, &contentStr, "@"+atData.QQ+" ")
+				appendContent(&contentArray, &contentStr, "[对 "+resolveAtDisplay(groupID, atData.QQ)+" 说] ")
 			}
 		case "reply":
 			var replyData ReplyData
 			if json.Unmarshal(segment.Data, &replyData) == nil {
-				replyText, err := GetMessageContent(replyData.ID)
-				if err != nil || replyText == "" {
-					appendContent(&contentArray, &contentStr, "[回复] ")
-				} else {
-					appendContent(&contentArray, &contentStr, "[回复: "+replyText+"] ")
-				}
+				appendContent(&contentArray, &contentStr, renderReplyQuote(groupID, rawIDString(replyData.ID)))
 			}
 		case "image":
 			var imageData ImageData
@@ -429,6 +462,35 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 				}
 				appendContent(&contentArray, &contentStr, "[视频] ")
 			}
+		case "record":
+			appendContent(&contentArray, &contentStr, "[语音] ")
+		case "face":
+			appendContent(&contentArray, &contentStr, "[表情] ")
+		case "mface":
+			var faceData FaceData
+			if json.Unmarshal(segment.Data, &faceData) == nil && faceData.Name != "" {
+				appendContent(&contentArray, &contentStr, "[表情: "+faceData.Name+"] ")
+			} else {
+				appendContent(&contentArray, &contentStr, "[表情] ")
+			}
+		case "json":
+			var jsonData JsonData
+			if json.Unmarshal(segment.Data, &jsonData) == nil {
+				if title := extractJsonCardTitle(jsonData.Data); title != "" {
+					appendContent(&contentArray, &contentStr, "[卡片: "+title+"] ")
+				} else {
+					appendContent(&contentArray, &contentStr, "[卡片] ")
+				}
+			}
+		case "share":
+			var shareData ShareData
+			if json.Unmarshal(segment.Data, &shareData) == nil {
+				if shareData.Title != "" {
+					appendContent(&contentArray, &contentStr, "[链接: "+shareData.Title+"] ")
+				} else {
+					appendContent(&contentArray, &contentStr, "[链接] ")
+				}
+			}
 		case "file":
 			var fileData FileData
 			if json.Unmarshal(segment.Data, &fileData) == nil {
@@ -447,7 +509,7 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 		case "forward":
 			var forwardData ForwardData
 			if json.Unmarshal(segment.Data, &forwardData) == nil {
-				appendContent(&contentArray, &contentStr, processForwardSegment(forwardData.ID))
+				appendContent(&contentArray, &contentStr, processForwardSegment(groupID, rawIDString(forwardData.ID), 0))
 			}
 		default:
 			// 忽略其余消息段类型
@@ -460,12 +522,47 @@ func parseMessageSegments(segments []MessageSegment) (interface{}, bool, []strin
 	return contentStr, false, videoURLs
 }
 
-// resolveImageURL 获取图片的可访问地址：优先使用 url，其次通过接口下载为 base64 data URI
+// renderReplyQuote 通过 get_msg 还原被回复消息，渲染为 [回复 <发送者>: <内容摘要>]
+func renderReplyQuote(groupID int64, messageID string) string {
+	if messageID == "" {
+		return "[回复] "
+	}
+	detail, err := getMessageDetail(messageID)
+	if err != nil || detail == nil {
+		LoggerGeneral.SubError("LunarCore", "Napcat", "获取回复引用消息失败: %v", err)
+		return "[回复] "
+	}
+
+	sender := detail.Sender.Card
+	if sender == "" {
+		sender = detail.Sender.Nickname
+	}
+	if sender == "" {
+		sender = strconv.FormatInt(detail.Sender.UserID, 10)
+	}
+	segments := detail.Message
+	if len(segments) == 0 {
+		segments = detail.Content
+	}
+	summary := extractSegmentText(groupID, 0, segments)
+	if summary == "" {
+		return "[回复] "
+	}
+	if utf8.RuneCountInString(summary) > maxReplyQuoteLen {
+		summary = string([]rune(summary)[:maxReplyQuoteLen]) + "…"
+	}
+	return "[回复 " + sender + ": " + summary + "] "
+}
+
+// resolveImageURL 获取图片的可访问地址：优先使用 url，其次直接使用 http 引用，最后通过接口下载为 base64 data URI
 func resolveImageURL(imageData ImageData) string {
 	if imageData.URL != "" {
 		return imageData.URL
 	}
 	if imageData.File != "" {
+		if strings.HasPrefix(imageData.File, "http://") || strings.HasPrefix(imageData.File, "https://") {
+			return imageData.File
+		}
 		if bytes, err := getImageContent(imageData.File); err == nil && len(bytes) > 0 {
 			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(bytes)
 		}
@@ -479,6 +576,9 @@ func resolveVideoSource(videoData VideoData) string {
 		return videoData.URL
 	}
 	if videoData.File != "" {
+		if strings.HasPrefix(videoData.File, "http://") || strings.HasPrefix(videoData.File, "https://") {
+			return videoData.File
+		}
 		if source, err := getVideoSource(videoData.File); err == nil && source != "" {
 			return source
 		}
@@ -497,19 +597,28 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 	}
 
 	// 未提供文件标识时，仅回传名称与大小信息
-	if fileData.FileID == "" && fileData.File == "" {
+	if fileData.FileID == "" && fileData.File == "" && fileData.URL == "" {
 		return describeFile(fileName, fileData.FileSize), false, ""
 	}
 
-	data, err := getFileContent(fileData.FileID, fileData.File)
+	var data []byte
+	var err error
+	if fileData.FileID != "" || fileData.File != "" {
+		data, err = getFileContent(fileData.FileID, fileData.File)
+	} else {
+		data, err = downloadBytes(fileData.URL)
+	}
 	if err != nil || len(data) == 0 {
 		LoggerGeneral.SubError("LunarCore", "Napcat", "下载文件失败: %v", err)
 		return describeFile(fileName, fileData.FileSize), false, ""
 	}
 
-	// 图片文件 → 作为多媒体内容处理
-	if mime := imageMIME(fileName); mime != "" {
-		return "", true, "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
+	// 图片文件 → 作为多媒体内容处理（扩展名缺失时按文件头嗅探）
+	if mimeType := imageMIME(fileName); mimeType != "" {
+		return "", true, "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
+	}
+	if mimeType := sniffImageMIME(data); mimeType != "" {
+		return "", true, "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 	}
 
 	// 文本文件 → 打包为阅读者可识别的文件围栏块 ```fileName\n全文\n```
@@ -518,6 +627,9 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 		text := strings.TrimSpace(string(data))
 		if text == "" {
 			return describeFile(fileName, fileData.FileSize), false, ""
+		}
+		if len(text) > maxFileTextBytes {
+			text = strings.ToValidUTF8(text[:maxFileTextBytes], "") + "\n…（文件过长，内容已截断）"
 		}
 		return "```" + fileName + "\n" + text + "\n```", false, ""
 	}
@@ -588,18 +700,72 @@ func imageMIME(fileName string) string {
 	}
 }
 
-// processForwardSegment 展开合并转发消息，拼接为文本描述
-func processForwardSegment(id string) string {
+// sniffImageMIME 通过文件头识别常见图片格式，非图片返回空字符串
+func sniffImageMIME(data []byte) string {
+	switch {
+	case len(data) >= 8 && bytes.HasPrefix(data, []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}):
+		return "image/png"
+	case len(data) >= 3 && bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF}):
+		return "image/jpeg"
+	case len(data) >= 6 && (bytes.HasPrefix(data, []byte("GIF87a")) || bytes.HasPrefix(data, []byte("GIF89a"))):
+		return "image/gif"
+	case len(data) >= 12 && bytes.HasPrefix(data, []byte("RIFF")) && bytes.Equal(data[8:12], []byte("WEBP")):
+		return "image/webp"
+	case len(data) >= 2 && bytes.HasPrefix(data, []byte("BM")):
+		return "image/bmp"
+	default:
+		return ""
+	}
+}
+
+// extractJsonCardTitle 从 JSON 卡片数据中提取标题（小程序 / 分享卡片 / 邀请等）
+func extractJsonCardTitle(data string) string {
+	var payload map[string]interface{}
+	if json.Unmarshal([]byte(data), &payload) != nil {
+		return ""
+	}
+	if title, ok := payload["prompt"].(string); ok && title != "" {
+		return title
+	}
+	if meta, ok := payload["meta"].(map[string]interface{}); ok {
+		for _, v := range meta {
+			if m, ok := v.(map[string]interface{}); ok {
+				if title, ok := m["title"].(string); ok && title != "" {
+					return title
+				}
+			}
+		}
+	}
+	if title, ok := payload["title"].(string); ok && title != "" {
+		return title
+	}
+	return ""
+}
+
+// processForwardSegment 展开合并转发消息（含嵌套转发递归），拼接为文本描述
+func processForwardSegment(groupID int64, id string, depth int) string {
+	if id == "" {
+		return "[转发消息] "
+	}
+	if depth >= maxForwardDepth {
+		return "[嵌套转发消息（层级过深，省略）] "
+	}
 	messages, err := getForwardMessageContent(id)
 	if err != nil || len(messages) == 0 {
 		LoggerGeneral.SubError("LunarCore", "Napcat", "获取合并转发消息失败: %v", err)
 		return "[转发消息] "
 	}
 
+	indent := strings.Repeat("    ", depth)
 	var sb strings.Builder
-	sb.WriteString("[转发消息]\n")
+	if depth == 0 {
+		sb.WriteString("[转发消息]\n")
+	}
 	for _, msg := range messages {
-		sender := msg.Sender.Nickname
+		sender := msg.Sender.Card
+		if sender == "" {
+			sender = msg.Sender.Nickname
+		}
 		if sender == "" {
 			sender = strconv.FormatInt(msg.Sender.UserID, 10)
 		}
@@ -607,16 +773,47 @@ func processForwardSegment(id string) string {
 		if len(segments) == 0 {
 			segments = msg.Content
 		}
-		sb.WriteString(sender)
-		sb.WriteString(": ")
-		sb.WriteString(extractSegmentText(segments))
-		sb.WriteString("\n")
+		// 纯转发节点：递归展开为嵌套块
+		if nestedID := findNestedForward(segments); nestedID != "" {
+			sb.WriteString(indent + sender + " 转发了以下内容：\n")
+			sb.WriteString(processForwardSegment(groupID, nestedID, depth+1))
+			continue
+		}
+		sb.WriteString(indent + sender + ": " + extractSegmentText(groupID, depth, segments) + "\n")
 	}
 	return sb.String()
 }
 
-// extractSegmentText 从消息段列表中提取纯文本（用于群聊缓存与合并转发子消息的摘要）
-func extractSegmentText(segments []MessageSegment) string {
+// findNestedForward 若消息段为单个合并转发节点，返回其 ID，否则返回空
+func findNestedForward(segments []MessageSegment) string {
+	if len(segments) != 1 || segments[0].Type != "forward" {
+		return ""
+	}
+	var forwardData ForwardData
+	if json.Unmarshal(segments[0].Data, &forwardData) == nil {
+		return rawIDString(forwardData.ID)
+	}
+	return ""
+}
+
+// rawIDString 提取 JSON id 字段的字符串值（兼容 "123" 与 123 两种形态）
+func rawIDString(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var n int64
+	if json.Unmarshal(raw, &n) == nil {
+		return strconv.FormatInt(n, 10)
+	}
+	return ""
+}
+
+// extractSegmentText 从消息段列表中提取纯文本摘要（回复引用与合并转发子消息共用）
+func extractSegmentText(groupID int64, depth int, segments []MessageSegment) string {
 	var sb strings.Builder
 	for _, segment := range segments {
 		switch segment.Type {
@@ -628,18 +825,43 @@ func extractSegmentText(segments []MessageSegment) string {
 		case "at":
 			var atData AtData
 			if json.Unmarshal(segment.Data, &atData) == nil {
-				sb.WriteString("@")
-				sb.WriteString(atData.QQ)
-				sb.WriteString(" ")
+				sb.WriteString("[对 " + resolveAtDisplay(groupID, atData.QQ) + " 说] ")
 			}
 		case "image":
 			sb.WriteString("[图片]")
 		case "video":
 			sb.WriteString("[视频]")
+		case "record":
+			sb.WriteString("[语音]")
 		case "file":
-			sb.WriteString("[文件]")
-		case "face":
+			var fileData FileData
+			if json.Unmarshal(segment.Data, &fileData) == nil {
+				name := fileData.FileName
+				if name == "" {
+					name = fileData.Name
+				}
+				if name == "" {
+					name = fileData.File
+				}
+				if name != "" {
+					sb.WriteString("[文件: " + name + "]")
+				} else {
+					sb.WriteString("[文件]")
+				}
+			} else {
+				sb.WriteString("[文件]")
+			}
+		case "face", "mface":
 			sb.WriteString("[表情]")
+		case "forward":
+			var forwardData ForwardData
+			if json.Unmarshal(segment.Data, &forwardData) == nil {
+				sb.WriteString(processForwardSegment(groupID, rawIDString(forwardData.ID), depth+1))
+			}
+		case "json":
+			sb.WriteString("[卡片]")
+		case "share":
+			sb.WriteString("[链接]")
 		}
 	}
 	return sb.String()

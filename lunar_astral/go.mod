@@ -3,8 +3,8 @@ module LunarAstral
 go 1.26
 
 require (
-	LunarSubsystem/AgentSearch v0.0.0
 	LunarSubsystem/BrowserClient v0.0.0
+	LunarSubsystem/EndpointDocs v0.0.0
 	LunarSubsystem/FileManager v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
@@ -16,21 +16,12 @@ require (
 )
 
 require (
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/aws/aws-sdk-go v1.38.20 // indirect
-	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f // indirect
-	github.com/chromedp/chromedp v0.16.0 // indirect
-	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14 // indirect
 	github.com/gen2brain/shm v0.1.0 // indirect
-	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
-	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
-	github.com/gobwas/httphead v0.1.0 // indirect
-	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/jezek/xgb v1.1.1 // indirect
@@ -38,7 +29,7 @@ require (
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/mattn/go-sqlite3 v1.14.44 // indirect
-	github.com/shirou/gopsutil/v3 v3.20.10 // indirect
+	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
@@ -64,4 +55,4 @@ replace LunarSubsystem/LunarGoja => ../subsystem/lunar_goja
 
 replace LunarSubsystem/ImageProcessor => ../subsystem/image_processor
 
-replace LunarSubsystem/AgentSearch => ../subsystem/agent_search
+replace LunarSubsystem/EndpointDocs => ../subsystem/endpoint_docs

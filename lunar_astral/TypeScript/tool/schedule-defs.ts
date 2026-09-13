@@ -1,4 +1,4 @@
-import { ToolCall } from '../index';
+import { ToolCall } from '../config/tool';
 
 /** 计划表项 */
 export interface ScheduleItem {

@@ -1,4 +1,4 @@
-import { calculateFileHash, toBtoaString } from '../../index';
+import { calculateFileHash, toBtoaString } from './encoder';
 
 /**
  * 同步从指定路径读取文件内容，并对内容进行格式化处理

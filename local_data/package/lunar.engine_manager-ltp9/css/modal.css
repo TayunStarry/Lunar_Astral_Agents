@@ -127,3 +127,39 @@
 .ta.json {
     font-family: ui-monospace, Consolas, monospace;
 }
+
+/* ==== 画布管理浮窗 ==== */
+.row-inline {
+    display: flex;
+    gap: 8px;
+}
+
+.row-inline .inp {
+    flex: 1;
+}
+
+.canvas-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+}
+
+.canvas-row.active {
+    border-color: var(--accent);
+    background: rgba(109, 92, 231, 0.12);
+}
+
+.canvas-name {
+    flex: 1;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.canvas-actions {
+    display: inline-flex;
+    gap: 4px;
+}

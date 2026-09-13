@@ -50,8 +50,29 @@ var groupPools = make(map[int64]*GroupPool)
 // groupNameCache 群名称缓存
 var groupNameCache = make(map[int64]string)
 
-// groupMutex 保护群聊缓存池与群名称缓存的并发访问
+// memberNameCache 群成员名称缓存：群号 → (QQ号 → 群名片/昵称)
+// 供入站 @ 渲染为 [对 <用户名> 说]、出站 [对 <用户名> 说] 反向转换为真实 @ 段
+var memberNameCache = make(map[int64]map[int64]string)
+
+// memberListWarmed 已预取过成员列表的群（每进程最多拉取一次全量列表）
+var memberListWarmed = make(map[int64]bool)
+
+// groupMutex 保护群聊缓存池、群名称缓存与群成员名称缓存的并发访问
 var groupMutex sync.Mutex
+
+// ==== 当前登录账号信息缓存 ====
+
+// botInfoMutex 保护当前登录账号信息缓存
+var botInfoMutex sync.Mutex
+
+// botInfoLoaded 当前登录账号信息是否已成功加载（失败时下次调用重试）
+var botInfoLoaded bool
+
+// botUserID 当前登录账号 QQ 号
+var botUserID int64
+
+// botNickname 当前登录账号昵称
+var botNickname string
 
 // ==== Napcat 客户端全局变量 ====
 

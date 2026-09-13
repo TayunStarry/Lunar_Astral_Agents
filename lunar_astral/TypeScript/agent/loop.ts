@@ -1,5 +1,11 @@
-import { GlobalConfig, ChatCache, processUnreadFiles, checkDueItems, SCHEDULE_TRIGGER_PREFIX, parseContent, PostMessage, PostMessageRole, MessageContent } from '../index';
-import { descriptionRole, searcherRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+import { GlobalConfig } from '../config/global';
+import { ChatCache } from '../config/config';
+import { PostMessage, PostMessageRole, MessageContent } from '../config/model';
+import { processUnreadFiles } from './roles/reader';
+import { checkDueItems } from '../tool/schedule';
+import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
+import { parseContent } from '../file/parse/interface';
+import { descriptionRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { batchProcessVideoFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
@@ -13,6 +19,45 @@ async function createChatMessage(): Promise<string> {
     await dialogueRole.generateDialogue(cache);
     // 返回最终应答
     return GlobalConfig.finalResponse;
+}
+
+/** 已完成应答计数（用于周期性显存守卫） */
+let completedResponseCount = 0;
+
+/** 周期性显存守卫：每完成 N 次应答检查一次可用显存，不足时卸载本地模型，释放随上下文增长的 KV 缓存占用（下次应答会自动重载模型） */
+function guardChatVRAM(): void {
+    /** 守卫开关（默认开启） */
+    const enabled = GlobalConfig.customConfig?.server?.chat_vram_guard ?? true;
+    if (!enabled) return;
+    /** 检查间隔：每完成 N 次应答触发一次（默认 16） */
+    const interval = GlobalConfig.customConfig?.server?.chat_vram_guard_interval ?? 16;
+    // 非法间隔视为关闭守卫
+    if (!Number.isFinite(interval) || interval <= 0) return;
+    /** 可用显存阈值（MiB，默认 1024） */
+    const thresholdMiB = GlobalConfig.customConfig?.server?.chat_vram_guard_mib ?? 1024;
+    // 应答计数，未达到间隔时跳过
+    completedResponseCount++;
+    if (completedResponseCount % interval !== 0) return;
+    // 调用显存守卫端点，由 Go 层检测显存并按需卸载
+    const [result, error] = syncFetch({
+        url: url()[0] + '/vram/guard',
+        execute: {
+            method: 'POST',
+            crossDomain: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold_mib: thresholdMiB }),
+        },
+    });
+    // 守卫失败静默跳过，不影响应答流程
+    if (error) {
+        console.error('显存守卫执行失败:', error.message);
+        return;
+    }
+    if (result?.body?.triggered) {
+        console.log(`显存守卫: 可用显存 ${result.body.free_mib} MiB 低于阈值 ${result.body.threshold_mib} MiB, 已卸载模型: ${(result.body.unloaded || []).join(', ')}`);
+    } else if (GlobalConfig.debugMode) {
+        console.log(`显存守卫: 可用显存 ${result?.body?.free_mib} MiB, 无需卸载`);
+    }
 }
 
 /** 思考循环事件 */
@@ -104,6 +149,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         }
         // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
         if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
+        // 思考链业务结束：执行周期性显存守卫（应答计数达到间隔时检查显存并按需卸载模型）
+        guardChatVRAM();
     }
     catch (error) {
         /** 获取提示音数据 */
@@ -156,7 +203,6 @@ function resetAgentState(): void {
     // 清空全部子智能体的messages
     descriptionRole.coverContext([]);
     dialogueRole.coverContext([]);
-    searcherRole.messages = [];
     painterRole.coverContext([]);
     musicianRole.coverContext([]);
     viewerRole.coverContext([]);

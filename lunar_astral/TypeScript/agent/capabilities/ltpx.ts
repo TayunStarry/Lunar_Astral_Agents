@@ -1,4 +1,4 @@
-import { GlobalConfig } from '../../index';
+import { GlobalConfig } from '../../config/global';
 import { dialogueRole } from '../roles/roles';
 
 /** 已注入的琉璃（远程）工具名集合，用于在线状态变化时精确增删 */

@@ -103,6 +103,29 @@ try {
     # 清除目录内可能残留的 Lunar_Astral.exe
     Remove-StaleExe
 
+    # ---------- 编译时生成端点自述文档 ----------
+    # 调用共享生成器解析 server/variable.go 中的 SystemEndpoints 注册表，生成 server/endpoint_docs.gen.json
+    # （由 server 包经 go:embed 嵌入，经 /api-docs 端点对外提供）。
+    # 生成器运行在宿主平台，必须在下方设置 GOOS/GOARCH 之前执行
+    Write-Host "生成端点自述文档（编译时）..." -ForegroundColor DarkGray
+    $genDocArgs = @(
+        "run", "./cmd/generator",
+        "-service", "LunarAstral",
+        "-display", "月华 (Lunar Astral)",
+        "-src", (Join-Path $PSScriptRoot "server\variable.go"),
+        "-out", (Join-Path $PSScriptRoot "server\endpoint_docs.gen.json"),
+        "-docs-path", "/api-docs",
+        "-extra", "WS|/ws|WebSocket 消息通道（服务端向已连接客户端广播，客户端自行过滤）"
+    )
+    Push-Location (Join-Path $repoRoot "subsystem\endpoint_docs")
+    try {
+        $genExitCode = Invoke-NativeCommand { & $Go @genDocArgs }
+        if ($genExitCode -ne 0) { throw "端点自述文档生成失败" }
+    }
+    finally {
+        Pop-Location
+    }
+
     # 启用CGO
     $env:CGO_ENABLED = 1
     $env:GOOS = $TargetOS

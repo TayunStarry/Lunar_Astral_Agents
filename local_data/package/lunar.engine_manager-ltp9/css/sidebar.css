@@ -118,6 +118,19 @@
     text-align: center;
 }
 
+/* 「我的复合」芯片上的删除按钮 */
+.chip-del {
+    margin-left: auto;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 0 2px;
+}
+
+.chip-del:hover {
+    color: var(--err);
+}
+
 /* ==== 引擎日志（侧边栏面板内） ==== */
 .log-filters {
     display: flex;

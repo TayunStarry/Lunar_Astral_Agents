@@ -1,4 +1,7 @@
-import { GlobalConfig, ModelBuilder, modelResponse, SCHEDULE_TRIGGER_PREFIX } from '../../index';
+import { GlobalConfig } from '../../config/global';
+import { ModelBuilder } from '../base/builder';
+import { modelResponse } from '../../config/model';
+import { SCHEDULE_TRIGGER_PREFIX } from '../../tool/schedule-defs';
 import { ensureMemoryReady, extractTextFromMessage } from '../capabilities/memory';
 import { interactEvent } from '../capabilities/ltp-event';
 

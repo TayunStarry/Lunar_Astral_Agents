@@ -121,6 +121,35 @@ func ProcessTask(task GenerateTask) {
 		args = append(args, "--llm_vision", *GeneralConfig.PromptMmprojModel)
 	}
 
+	// 执行显存守卫：可用显存不足时先卸载月华模型, 并记录守卫后的可用显存
+	freeMiB := 0
+	if GeneralConfig.ImageVRAMGuardHook != nil {
+		free, err := GeneralConfig.ImageVRAMGuardHook()
+		freeMiB = free
+		if err != nil {
+			LoggerGeneral.Warn("ImageProcessor", "显存守卫执行失败: %v", err)
+		}
+	}
+
+	// 守卫后显存仍吃紧时, 让 sd.cpp 把权重驻留内存、按需载入显存（计算仍在 GPU）, 避免爆显存
+	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDOffloadToCPU)) {
+	case "always", "true":
+		args = append(args, "--offload-to-cpu")
+		LoggerGeneral.Info("ImageProcessor", "sd.cpp 权重内存卸载: always")
+	case "off", "false", "no":
+		// 显式禁用
+	default: // auto
+		if freeMiB > 0 && freeMiB < *GeneralConfig.ImageVRAMGuardMiB {
+			args = append(args, "--offload-to-cpu")
+			LoggerGeneral.Info("ImageProcessor", "可用显存 %d MiB 不足, sd.cpp 启用权重内存卸载", freeMiB)
+		}
+	}
+
+	// 提示词编码器（--llm）强制在 CPU 运行, 全程不占显存
+	if *GeneralConfig.SDTextEncoderOnCPU {
+		args = append(args, "--backend", "te=cpu")
+	}
+
 	// 显示命令参数，正确分组
 	LoggerGeneral.Info("ImageProcessor", "执行命令参数:")
 	LoggerGeneral.Info("ImageProcessor", "  程序: %s", *GeneralConfig.VisualEngine)

@@ -1,4 +1,6 @@
-import { ToolCall, ToolCallItem, CreativeRoleBase } from '../../index';
+import { ToolCall } from '../../config/tool';
+import { ToolCallItem } from '../../config/model';
+import { CreativeRoleBase } from '../base/creative';
 import { interactEvent } from '../capabilities/ltp-event';
 
 /**

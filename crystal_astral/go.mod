@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	LunarSubsystem/BrowserClient v0.0.0
+	LunarSubsystem/EndpointDocs v0.0.0
 	LunarSubsystem/FileManager v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/ImageProcessor v0.0.0
@@ -56,3 +57,5 @@ replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general
 replace LunarSubsystem/LunarDecoder => ../subsystem/lunar_decoder
 
 replace LunarSubsystem/LunarGoja => ../subsystem/lunar_goja
+
+replace LunarSubsystem/EndpointDocs => ../subsystem/endpoint_docs

@@ -1,4 +1,6 @@
-import { Config, PostMessage, ToolCall } from '../index';
+import { Config } from './config';
+import { PostMessage } from './model';
+import { ToolCall } from './tool';
 /** 全局配置 */
 export class GlobalConfig {
 	/** 自定义配置项 */

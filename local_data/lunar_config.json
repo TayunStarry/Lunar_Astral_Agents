@@ -10,6 +10,13 @@
 		"user_name": null,
 		"developer": false,
 		"allow_diffusion": true,
+		"image_vram_guard": true,
+		"image_vram_guard_mib": 8192,
+		"sd_offload_to_cpu": "always",
+		"sd_te_on_cpu": false,
+		"chat_vram_guard": true,
+		"chat_vram_guard_mib": 1024,
+		"chat_vram_guard_interval": 16,
 		"bridging_type": "napcat",
 		"bridging_path": "ws://localhost:4567",
 		"bridging_token": "ItlC2Nc1DfICVYq5",
@@ -49,5 +56,15 @@
 		"multimodal_model": "system-multimodal",
 		"multimodal_url": "http://127.0.0.1:36789/v1",
 		"multimodal_key": null
+	},
+	"web_search": {
+		"save_screenshots": true,
+		"screenshot_dir": "images/captures",
+		"max_pages": 5,
+		"max_results": 15,
+		"results_scroll_captures": 3,
+		"page_scroll_captures": 10,
+		"summary_max_chars": 4096,
+		"max_run_seconds": 360
 	}
 }

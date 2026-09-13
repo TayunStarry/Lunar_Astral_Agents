@@ -1,4 +1,6 @@
-import { GlobalConfig, PostMessage, ModelProtocol, AuthHeaders, modelResponse, ToolCall } from '../../index';
+import { GlobalConfig } from '../../config/global';
+import { PostMessage, ModelProtocol, AuthHeaders, modelResponse } from '../../config/model';
+import { ToolCall } from '../../config/tool';
 
 /** 模型构建器 */
 export class ModelBuilder {

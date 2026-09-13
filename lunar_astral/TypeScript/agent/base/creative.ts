@@ -1,4 +1,6 @@
-import { ToolCall, PostMessage, ModelBuilder, modelResponse, ToolCallItem } from '../../index';
+import { ToolCall } from '../../config/tool';
+import { PostMessage, modelResponse, ToolCallItem } from '../../config/model';
+import { ModelBuilder } from './builder';
 
 /**
  * 创作型子智能体基座

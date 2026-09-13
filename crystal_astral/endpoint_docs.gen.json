@@ -1,0 +1,960 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "琉璃 (Crystal Astral)",
+    "version": "1.0.0",
+    "x-service": "CrystalAstral"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "externalDocs": {
+    "description": "可视化文档页面",
+    "url": "/api-docs?format=html"
+  },
+  "x-generated-from": [
+    "variable.go"
+  ],
+  "paths": {
+    "/api-docs": {
+      "get": {
+        "summary": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）",
+        "description": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）",
+        "operationId": "docsHandler",
+        "x-handler": "docsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/module/create": {
+      "post": {
+        "summary": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
+        "description": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
+        "operationId": "moduleCreateHandler",
+        "x-handler": "moduleCreateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/module/inspect": {
+      "post": {
+        "summary": "检查 HTML 项目内容（README/title/文件清单，供 AI 生成模块元信息）",
+        "description": "检查 HTML 项目内容（README/title/文件清单，供 AI 生成模块元信息）",
+        "operationId": "moduleInspectHandler",
+        "x-handler": "moduleInspectHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/packages": {
+      "get": {
+        "summary": "扫描包目录",
+        "description": "扫描包目录",
+        "operationId": "scanPackagesHandler",
+        "x-handler": "scanPackagesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/asr": {
+      "post": {
+        "summary": "Qwen3-ASR 语音识别",
+        "description": "Qwen3-ASR 语音识别",
+        "operationId": "asr.Handler",
+        "x-handler": "asr.Handler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/background": {
+      "get": {
+        "summary": "随机背景图片",
+        "description": "随机背景图片",
+        "operationId": "file.RandomBackgroundHandler",
+        "x-handler": "file.RandomBackgroundHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture": {
+      "delete": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_delete",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_get",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_head",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_options",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_patch",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_post",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_put",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture/displays": {
+      "get": {
+        "summary": "屏幕列表",
+        "description": "屏幕列表",
+        "operationId": "image.HandleGetDisplays",
+        "x-handler": "image.HandleGetDisplays",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/batch": {
+      "post": {
+        "summary": "批量图片格式转换",
+        "description": "批量图片格式转换",
+        "operationId": "media.BatchConvertHandler",
+        "x-handler": "media.BatchConvertHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/image": {
+      "post": {
+        "summary": "单张图片格式转换",
+        "description": "单张图片格式转换",
+        "operationId": "media.ConvertImageHandler",
+        "x-handler": "media.ConvertImageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/list": {
+      "post": {
+        "summary": "列出文件夹中的图片文件",
+        "description": "列出文件夹中的图片文件",
+        "operationId": "media.ListImagesHandler",
+        "x-handler": "media.ListImagesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive": {
+      "post": {
+        "summary": "文件归档",
+        "description": "文件归档",
+        "operationId": "file.ArchiveHandler",
+        "x-handler": "file.ArchiveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/create": {
+      "post": {
+        "summary": "服务端压缩（支持文件夹）",
+        "description": "服务端压缩（支持文件夹）",
+        "operationId": "file.CreateZipHandler",
+        "x-handler": "file.CreateZipHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/extract": {
+      "post": {
+        "summary": "ZIP解压到服务器目录",
+        "description": "ZIP解压到服务器目录",
+        "operationId": "file.ExtractZipHandler",
+        "x-handler": "file.ExtractZipHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/metadata": {
+      "post": {
+        "summary": "ZIP压缩包元数据查询",
+        "description": "ZIP压缩包元数据查询",
+        "operationId": "file.ZipMetadataHandler",
+        "x-handler": "file.ZipMetadataHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/delete/": {
+      "delete": {
+        "summary": "文件删除",
+        "description": "文件删除",
+        "operationId": "file.DeleteHandler",
+        "x-handler": "file.DeleteHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/download/": {
+      "get": {
+        "summary": "文件下载",
+        "description": "文件下载",
+        "operationId": "file.DownloadHandler",
+        "x-handler": "file.DownloadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/hash-rename": {
+      "post": {
+        "summary": "哈希命名（MD5前16位）",
+        "description": "哈希命名（MD5前16位）",
+        "operationId": "file.HashRenameHandler",
+        "x-handler": "file.HashRenameHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/list/": {
+      "post": {
+        "summary": "文件列表",
+        "description": "文件列表",
+        "operationId": "file.FileListHandler",
+        "x-handler": "file.FileListHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/move": {
+      "post": {
+        "summary": "文件移动操作（含冲突处理）",
+        "description": "文件移动操作（含冲突处理）",
+        "operationId": "file.MoveHandler",
+        "x-handler": "file.MoveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/organize": {
+      "post": {
+        "summary": "批量文件整理操作",
+        "description": "批量文件整理操作",
+        "operationId": "file.OrganizeHandler",
+        "x-handler": "file.OrganizeHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/delete": {
+      "post": {
+        "summary": "删除扩展包",
+        "description": "删除扩展包",
+        "operationId": "file.DeletePackageHandler",
+        "x-handler": "file.DeletePackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/export": {
+      "post": {
+        "summary": "导出扩展包",
+        "description": "导出扩展包",
+        "operationId": "file.ExportPackageHandler",
+        "x-handler": "file.ExportPackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/install": {
+      "post": {
+        "summary": "安装扩展包",
+        "description": "安装扩展包",
+        "operationId": "file.InstallPackageHandler",
+        "x-handler": "file.InstallPackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/preview": {
+      "get": {
+        "summary": "全局文件预览（图片/视频/文本）",
+        "description": "全局文件预览（图片/视频/文本）",
+        "operationId": "file.PreviewHandler",
+        "x-handler": "file.PreviewHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/read/": {
+      "get": {
+        "summary": "文件读取",
+        "description": "文件读取",
+        "operationId": "file.ReadHandler",
+        "x-handler": "file.ReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/write": {
+      "post": {
+        "summary": "文件保存",
+        "description": "文件保存",
+        "operationId": "file.SaveHandler",
+        "x-handler": "file.SaveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/gguf/metadata": {
+      "post": {
+        "summary": "GGUF模型元数据解析",
+        "description": "GGUF模型元数据解析",
+        "operationId": "media.GGUFMetadataHandler",
+        "x-handler": "media.GGUFMetadataHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/keyframe": {
+      "post": {
+        "summary": "视频关键帧提取",
+        "description": "视频关键帧提取",
+        "operationId": "image.ExtractKeyFramesHandler",
+        "x-handler": "image.ExtractKeyFramesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/knowledge/": {
+      "post": {
+        "summary": "知识库管理",
+        "description": "知识库管理",
+        "operationId": "file.KnowledgeHandler",
+        "x-handler": "file.KnowledgeHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/dict": {
+      "delete": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "kokoroHandler(kokoro.DictHandler)_delete",
+        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "kokoroHandler(kokoro.DictHandler)_get",
+        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "kokoroHandler(kokoro.DictHandler)_post",
+        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/dict/guess": {
+      "get": {
+        "summary": "Kokoro 读音查询",
+        "description": "Kokoro 读音查询",
+        "operationId": "kokoroHandler(kokoro.GuessDictHandler)",
+        "x-handler": "kokoroHandler(kokoro.GuessDictHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/health": {
+      "get": {
+        "summary": "Kokoro 引擎健康检查",
+        "description": "Kokoro 引擎健康检查",
+        "operationId": "kokoroHandler(kokoro.HealthHandler)",
+        "x-handler": "kokoroHandler(kokoro.HealthHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/tts": {
+      "post": {
+        "summary": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
+        "description": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
+        "operationId": "kokoroHandler(kokoro.TTSHandler)",
+        "x-handler": "kokoroHandler(kokoro.TTSHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/voices": {
+      "get": {
+        "summary": "Kokoro 音色列表",
+        "description": "Kokoro 音色列表",
+        "operationId": "kokoroHandler(kokoro.VoicesHandler)",
+        "x-handler": "kokoroHandler(kokoro.VoicesHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/load/application": {
+      "post": {
+        "summary": "加载应用",
+        "description": "加载应用",
+        "operationId": "loadApplicationHandler",
+        "x-handler": "loadApplicationHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/call": {
+      "post": {
+        "summary": "月华调用琉璃工具（转发到前端对应包执行）",
+        "description": "月华调用琉璃工具（转发到前端对应包执行）",
+        "operationId": "ltpRemoteCallHandler",
+        "x-handler": "ltpRemoteCallHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/event": {
+      "post": {
+        "summary": "月华事件推送（xx事件发生前负载经 LTP9 插件处理，返回处理/原始数据）",
+        "description": "月华事件推送（xx事件发生前负载经 LTP9 插件处理，返回处理/原始数据）",
+        "operationId": "ltpRemoteEventHandler",
+        "x-handler": "ltpRemoteEventHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/ping": {
+      "get": {
+        "summary": "月华探测琉璃是否在线",
+        "description": "月华探测琉璃是否在线",
+        "operationId": "ltpRemotePingHandler",
+        "x-handler": "ltpRemotePingHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/result": {
+      "post": {
+        "summary": "前端包执行完毕后回执结果",
+        "description": "前端包执行完毕后回执结果",
+        "operationId": "ltpRemoteResultHandler",
+        "x-handler": "ltpRemoteResultHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/tools": {
+      "get": {
+        "summary": "月华拉取琉璃工具链（动态扫描包 AtoA 能力）",
+        "description": "月华拉取琉璃工具链（动态扫描包 AtoA 能力）",
+        "operationId": "ltpRemoteToolsHandler",
+        "x-handler": "ltpRemoteToolsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/lunar/check": {
+      "get": {
+        "summary": "检测月华服务状态",
+        "description": "检测月华服务状态",
+        "operationId": "yuehuaCheckHandler",
+        "x-handler": "yuehuaCheckHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/lunar/start": {
+      "post": {
+        "summary": "启动月华服务",
+        "description": "启动月华服务",
+        "operationId": "yuehuaStartHandler",
+        "x-handler": "yuehuaStartHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/memory/": {
+      "delete": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_delete",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_get",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_head",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_options",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_patch",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_post",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_put",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/mini-ltp-agent.js": {
+      "get": {
+        "summary": "通用页面操作智能体脚本（前端动态注入 Mini-LTP 包）",
+        "description": "通用页面操作智能体脚本（前端动态注入 Mini-LTP 包）",
+        "operationId": "miniLTPAgentHandler",
+        "x-handler": "miniLTPAgentHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy/chat": {
+      "post": {
+        "summary": "对话代理",
+        "description": "对话代理",
+        "operationId": "chatProxyHandler",
+        "x-handler": "chatProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy/models": {
+      "post": {
+        "summary": "模型查询代理",
+        "description": "模型查询代理",
+        "operationId": "modelsProxyHandler",
+        "x-handler": "modelsProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/resize": {
+      "post": {
+        "summary": "图片缩放",
+        "description": "图片缩放",
+        "operationId": "image.HandleResizeImage",
+        "x-handler": "image.HandleResizeImage",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/self-ltp-agent.js": {
+      "get": {
+        "summary": "自主页面操作智能体脚本（前端动态注入 Self-LTP 包，自带开始/停止控制面板）",
+        "description": "自主页面操作智能体脚本（前端动态注入 Self-LTP 包，自带开始/停止控制面板）",
+        "operationId": "selfLTPAgentHandler",
+        "x-handler": "selfLTPAgentHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/shared-input.js": {
+      "get": {
+        "summary": "统一键鼠操作共享模块（Self-LTP 与 Mini-LTP 智能体共享的页面操作原语）",
+        "description": "统一键鼠操作共享模块（Self-LTP 与 Mini-LTP 智能体共享的页面操作原语）",
+        "operationId": "sharedInputHandler",
+        "x-handler": "sharedInputHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/close": {
+      "post": {
+        "summary": "关闭深读会话窗口",
+        "description": "关闭深读会话窗口",
+        "operationId": "webviewCloseHandler",
+        "x-handler": "webviewCloseHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/deepread": {
+      "post": {
+        "summary": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "description": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "operationId": "webviewDeepReadHandler",
+        "x-handler": "webviewDeepReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/eval": {
+      "post": {
+        "summary": "深读会话页面上下文执行脚本并取回 JSON 结果（元素识别）",
+        "description": "深读会话页面上下文执行脚本并取回 JSON 结果（元素识别）",
+        "operationId": "webviewEvalHandler",
+        "x-handler": "webviewEvalHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/navigate": {
+      "post": {
+        "summary": "深读会话导航到指定 URL 并等待就绪",
+        "description": "深读会话导航到指定 URL 并等待就绪",
+        "operationId": "webviewNavigateHandler",
+        "x-handler": "webviewNavigateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/open": {
+      "post": {
+        "summary": "创建 WebView 深读会话窗口（顶层窗口，不受嵌入限制）",
+        "description": "创建 WebView 深读会话窗口（顶层窗口，不受嵌入限制）",
+        "operationId": "webviewOpenHandler",
+        "x-handler": "webviewOpenHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/ready": {
+      "post": {
+        "summary": "等待深读会话页面就绪并返回状态",
+        "description": "等待深读会话页面就绪并返回状态",
+        "operationId": "webviewReadyHandler",
+        "x-handler": "webviewReadyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/screenshot": {
+      "post": {
+        "summary": "深读会话窗口区域截图（dataURL 返回）",
+        "description": "深读会话窗口区域截图（dataURL 返回）",
+        "operationId": "webviewScreenshotHandler",
+        "x-handler": "webviewScreenshotHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/engine": {
+      "post": {
+        "summary": "引擎/工作室消息（本地 ws 广播）",
+        "description": "引擎/工作室消息（本地 ws 广播）",
+        "operationId": "StudioEngineHandler",
+        "x-handler": "StudioEngineHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "summary": "工作室 WebSocket 消息通道（无差别广播，客户端自行过滤）",
+        "description": "工作室 WebSocket 消息通道（无差别广播，客户端自行过滤）",
+        "x-method": "WS",
+        "x-websocket": true,
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    }
+  }
+}

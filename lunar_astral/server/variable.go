@@ -69,6 +69,8 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/resize", Handler: image.HandleResizeImage, Method: "POST", Description: "图片缩放"},
 	// ==== 智能体相关接口 - 代理到 llama.cpp 服务器（支持所有 HTTP 方法） ====
 	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
+	// ==== 显存守卫 ====
+	{Path: "/vram/guard", Handler: llama.VRAMGuardHandler, Method: "POST", Description: "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存；请求体可选 threshold_mib）"},
 	// ==== 代理请求接口 ====
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 	// ==== 消息队列相关接口 ====
@@ -81,4 +83,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== 智能体控制接口 ====
 	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
 	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
+
+	// ==== 自述文档 ====
+	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）"},
 }

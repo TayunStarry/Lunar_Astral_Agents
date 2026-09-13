@@ -29,6 +29,14 @@ function openNodeModal(node) {
         const ex = document.createElement('button'); ex.className = 'btn-ghost'; ex.innerHTML = '<i class="fas fa-box-open"></i> 展开复合节点';
         ex.addEventListener('click', () => { closeModal(); unpackComposite(node); });
         wrap.appendChild(ex);
+        const lib = document.createElement('button'); lib.className = 'btn-ghost'; lib.innerHTML = '<i class="fas fa-bookmark"></i> 保存到节点模块';
+        lib.title = '把当前复合节点收藏到左侧「节点模块 → 我的复合」，可随时加入任意画布（重名会覆盖）';
+        lib.addEventListener('click', () => {
+            const name = prompt('保存为节点模块名称（重名会覆盖）', node.params.label || '复合节点');
+            if (!name || !name.trim()) return;
+            saveCompositeToLibrary(node, name.trim());
+        });
+        wrap.appendChild(lib);
     }
     modalBody.appendChild(wrap);
     modal.classList.add('open');

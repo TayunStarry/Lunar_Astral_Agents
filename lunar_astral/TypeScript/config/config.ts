@@ -1,4 +1,5 @@
-import { AuthHeaders, ToolCall } from '../index';
+import { AuthHeaders } from './model';
+import { ToolCall } from './tool';
 
 /** 全局系统配置项 */
 export interface Config {
@@ -22,6 +23,12 @@ export interface Config {
 		user_name?: string;
 		/** 调试模式开关：开启时导出子智能体上下文日志 */
 		developer?: boolean;
+		/** 聊天显存守卫开关：周期性检查可用显存，不足时卸载本地模型释放 KV 缓存 */
+		chat_vram_guard?: boolean;
+		/** 聊天显存守卫阈值（MiB），可用显存低于该值时触发卸载 */
+		chat_vram_guard_mib?: number;
+		/** 显存守卫应答间隔：每完成 N 次应答检查一次 */
+		chat_vram_guard_interval?: number;
 	};
 }
 

@@ -1,6 +1,17 @@
-import { getPromptFromKnowledge, savePromptToKnowledge, ImageContent, TextContent, GlobalConfig, PostMessage } from '../../index';
-import { descriptionRole, viewerRole, randomDefaultMessage } from '../roles/roles';
+import { getPromptFromKnowledge, savePromptToKnowledge } from '../../file/io/knowledge';
+import { ImageContent, TextContent, PostMessage } from '../../config/model';
+import { GlobalConfig } from '../../config/global';
 import { interactEvent } from './ltp-event';
+import type { ModelBuilder } from '../base/builder';
+import type { ViewerRole } from '../roles/viewer';
+
+/** 角色单例注册表（由 roles.ts 在实例化后注入，解除 media → roles 的静态循环引用） */
+let mediaRoles: { descriptionRole: ModelBuilder; viewerRole: ViewerRole; randomDefaultMessage: () => string } | null = null;
+
+/** 注入角色单例（roles.ts 模块初始化时调用一次） */
+export function registerMediaRoles(roles: NonNullable<typeof mediaRoles>): void {
+	mediaRoles = roles;
+}
 
 /** 处理视频文件（观影者智能体） */
 async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<void> {
@@ -24,13 +35,13 @@ async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<v
     const keyframes = images.map(frame => ({ data: frame.data, timestamp: frame.timestamp || '' }));
     // 第三步：调用观影者智能体观看视频
     console.log('[观影者] 开始观看视频...');
-    const videoSummary = await viewerRole.watchVideo(keyframes);
+    const videoSummary = await mediaRoles!.viewerRole.watchVideo(keyframes);
     console.log('[观影者] 视频观看完成');
     // 第四步：将观后感添加到未读上下文
     if (videoSummary && videoSummary.trim().length > 0) {
         GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
     }
-    else GlobalConfig.unreadContext.push({ role: 'user', content: randomDefaultMessage() });
+    else GlobalConfig.unreadContext.push({ role: 'user', content: mediaRoles!.randomDefaultMessage() });
     // 如果用户需求非空，追加到上下文
     if (userNeeds.trim().length > 0) {
         GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
@@ -54,12 +65,12 @@ async function summarizeDynamicImages(frames: string[]): Promise<string> {
         const batch = frames.slice(i, i + BATCH_SIZE);
         try {
             // 将本批帧包装为多模态内容项
-            descriptionRole.coverContext({
+            mediaRoles!.descriptionRole.coverContext({
                 role: 'user',
                 content: batch.map(frame => ({ type: 'image_url', image_url: { url: frame } }))
             });
             /** 运行描述角色模型，获取本批摘要 */
-            const summaryRequest = descriptionRole.run([], []);
+            const summaryRequest = mediaRoles!.descriptionRole.run([], []);
             /** 本批摘要结果 */
             const summary = summaryRequest.body?.choices?.[0]?.message?.content;
             if (summary && summary.trim().length > 0) summaries.push(summary.trim());

@@ -1,4 +1,5 @@
-import { ModelBuilder, modelResponse, ImageContent } from '../../index';
+import { ModelBuilder } from '../base/builder';
+import { modelResponse, ImageContent } from '../../config/model';
 
 /** 关键帧数据 */
 interface KeyFrameData {
