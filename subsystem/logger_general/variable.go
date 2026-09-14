@@ -4,11 +4,10 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 )
 
-// interval 非开发者模式下每个 module 每秒最多输出的日志条数窗口
-const interval = time.Second
+// notSub 无子标题的日志函数（如 Info/Warn/Error/Fatal）使用的占位子标题
+const notSub = "not"
 
 const (
 	reset   = "\033[0m"
@@ -22,5 +21,7 @@ var (
 	mu         sync.RWMutex
 	devMode    bool
 	stdLog     = log.New(os.Stdout, "", 0)
-	lastLogAt  = make(map[string]time.Time)
+	hasLast    bool
+	lastModule string
+	lastSub    string
 )

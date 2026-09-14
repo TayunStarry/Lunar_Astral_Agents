@@ -29,8 +29,7 @@
 		],
 		"bridging_group_trigger_probability": 0.2,
 		"bridging_group_keywords": [
-			"月华",
-			"姐姐"
+			"月华"
 		]
 	},
 	"agent": {
@@ -58,7 +57,7 @@
 		"multimodal_key": null
 	},
 	"web_search": {
-		"save_screenshots": true,
+		"save_screenshots": false,
 		"screenshot_dir": "images/captures",
 		"max_pages": 5,
 		"max_results": 15,

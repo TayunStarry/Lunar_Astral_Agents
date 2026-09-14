@@ -89,9 +89,21 @@ func initMemoryDatabase() {
 
 // StartServer 启动服务器
 func StartServer(port int, root http.FileSystem, name string) error {
-	// 同步绑定端口：被占用时立即返回错误（由调用方播放失败音效并退出），
-	// 避免异步 ListenAndServe 仅在日志中报错、程序继续空转
-	serverAddr := fmt.Sprintf(":%d", port)
+	// 默认仅绑定 127.0.0.1 回环地址（浏览器/月华均经本机访问）：
+	// /ws 无鉴权且承载 LTP9 调试面（文件/数据库/指令/网络探针），对局域网开放等于开放控制面。
+	// 跨机部署时经 lunar_config.json 的 server.allow_lan 显式放开。
+	bindHost := "127.0.0.1"
+	if *GeneralConfig.AllowLAN {
+		bindHost = ""
+	}
+	serverAddr := fmt.Sprintf("%s:%d", bindHost, port)
+	// 对外展示/浏览器访问用的 URL：绑全部网卡（allow_lan）时用 localhost，
+	// 回环绑定时用 127.0.0.1（不可与 serverAddr 直接拼接，那会拼出 localhost127.0.0.1）
+	urlHost := bindHost
+	if urlHost == "" {
+		urlHost = "localhost"
+	}
+	serviceURL := fmt.Sprintf("http://%s:%d", urlHost, port)
 	ln, err := net.Listen("tcp", serverAddr)
 	if err != nil {
 		return fmt.Errorf("监听端口 %s 失败(端口可能被占用): %w", serverAddr, err)
@@ -157,12 +169,12 @@ func StartServer(port int, root http.FileSystem, name string) error {
 		Handler: httpMux,
 	}
 
-	LoggerGeneral.Info("CrystalAstral", "%s 正运行在 http://localhost%s", name, serverAddr)
+	LoggerGeneral.Info("CrystalAstral", "%s 正运行在 %s", name, serviceURL)
 	reloadPageParameters()
 	LoggerGeneral.SetDevMode(*GeneralConfig.Developer)
 	// 使用带「返回主页面」悬浮按钮的 webview 打开：
 	// 应用被外部链接 _self 跳转走后，仍能通过悬浮按钮回到琉璃主页面
-	go BrowserClient.OpenBrowserWithReturnButton(fmt.Sprintf("http://localhost%s", serverAddr), fmt.Sprintf("http://localhost%s/", serverAddr))
+	go BrowserClient.OpenBrowserWithReturnButton(serviceURL, serviceURL+"/")
 
 	go func() {
 		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {

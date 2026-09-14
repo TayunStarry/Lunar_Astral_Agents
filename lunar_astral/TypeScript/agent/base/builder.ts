@@ -11,7 +11,7 @@ export class ModelBuilder {
 	/** 消息列表 */
 	public messages: PostMessage[] = [];
 	/** RAG消息列表 */
-	protected ragMessages: PostMessage[] = [];
+	public ragMessages: PostMessage[] = [];
 	/** 运行时消息列表 */
 	protected runtimeMessages: PostMessage[] = [];
 	/** 系统提示 */

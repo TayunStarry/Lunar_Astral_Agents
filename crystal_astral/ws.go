@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -17,7 +18,18 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许所有来源（本地开发环境）
+		// 无 Origin 头：非浏览器客户端（月华等本地进程直连），放行
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		// 浏览器页面：仅放行同源请求（页面从本服务加载后连回自身 /ws）。
+		// 旧实现恒真，任意网页都能跨站连上 /ws 驱动 LTP9 调试面（文件/数据库/指令/网络探针）。
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		return u.Host == r.Host
 	},
 }
 

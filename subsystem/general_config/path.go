@@ -12,4 +12,6 @@ var (
 	KnowledgeDBPath = flag.String("knowledge-db", *LocalDir+"/database/knowledge.db", "知识库文件路径")
 	// MemoryDBDir  记忆库文件夹路径，统一数据库存储
 	MemoryDBDir = flag.String("memory-db", *LocalDir+"/database/memory", "记忆库文件夹路径")
+	// WebSearchCacheDBPath 网络搜索页面摘要缓存（Web-LTP）文件路径，独立于知识库的派生缓存
+	WebSearchCacheDBPath = flag.String("websearch-cache-db", *LocalDir+"/database/web_search_cache.db", "网络搜索页面摘要缓存文件路径")
 )

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/eventloop"
@@ -68,11 +69,12 @@ type commandEntry struct {
 
 // asyncTask 单个异步子任务状态（engine.async.run 创建）。
 type asyncTask struct {
-	id       int
-	status   string // running / done / timeout / error
-	progress any
-	data     any
-	fn       jsFunc
+	id        int
+	status    string // running / done / timeout / error
+	progress  any
+	data      any
+	fn        jsFunc
+	createdAt time.Time // 创建时刻（清理已终结的过期任务记录用）
 }
 
 // toolEntry 单个工具项（engine.tool.register 注册，引擎侧经 CallTool 触发，LLM/AtoA 可调用）。
@@ -99,6 +101,9 @@ type engine struct {
 	plugins map[string]*plugin // 插件 ID → 插件
 	root    string             // LTP9 包根目录
 	running bool
+
+	// reconcileStop 关闭对账循环（shutdown 时关闭；nil 表示循环未启动/已停止）
+	reconcileStop chan struct{}
 
 	// outboundSender 由外部 Go 程序注入：插件产生的单向通报/消息（engine.signal → Go 侧）。
 	outbound func(topic string, payload any)

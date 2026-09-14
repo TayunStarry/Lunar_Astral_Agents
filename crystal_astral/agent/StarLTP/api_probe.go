@@ -157,10 +157,21 @@ func ProbeSleep(ms float64) map[string]any {
 // sockSend/sockReceive/sockSendTo/sockClose 按句柄操作既有套接字。
 
 var (
-	netProbeMu   sync.Mutex
-	netProbeSeq  int
-	netProbes    = map[string]*netSock{}
+	netProbeMu  sync.Mutex
+	netProbeSeq int
+	// netProbes 探针套接字句柄表：显式 sockClose 或超员淘汰时才释放，
+	// 上限兜底防止前端反复 connect/listen 造成 fd 无限泄漏。
+	netProbes = map[string]*netProbeEntry{}
 )
+
+// netProbeMax 句柄表上限，超过时关闭并淘汰最旧句柄。
+const netProbeMax = 64
+
+// netProbeEntry 句柄 → 套接字 + 登记时刻（淘汰最旧用）。
+type netProbeEntry struct {
+	sock    *netSock
+	created time.Time
+}
 
 func netProbeArg(v map[string]any, k string) string { s, _ := v[k].(string); return s }
 func netProbeNum(v map[string]any, k string) float64 { f, _ := v[k].(float64); return f }
@@ -169,14 +180,32 @@ func netProbeSock(v map[string]any) (*netSock, string) {
 	h := netProbeArg(v, "handle")
 	netProbeMu.Lock()
 	defer netProbeMu.Unlock()
-	return netProbes[h], h
+	if e := netProbes[h]; e != nil {
+		return e.sock, h
+	}
+	return nil, h
 }
 func netProbeRegister(s *netSock) map[string]any {
 	netProbeMu.Lock()
 	defer netProbeMu.Unlock()
+	// 超员：关闭并淘汰最旧句柄
+	for len(netProbes) >= netProbeMax {
+		oldestKey := ""
+		var oldest time.Time
+		for h, e := range netProbes {
+			if oldestKey == "" || e.created.Before(oldest) {
+				oldestKey, oldest = h, e.created
+			}
+		}
+		if oldestKey == "" {
+			break
+		}
+		netProbes[oldestKey].sock.netSockClose()
+		delete(netProbes, oldestKey)
+	}
 	netProbeSeq++
 	h := "s" + fmt.Sprint(netProbeSeq)
-	netProbes[h] = s
+	netProbes[h] = &netProbeEntry{sock: s, created: time.Now()}
 	return map[string]any{"success": true, "handle": h}
 }
 
@@ -257,9 +286,10 @@ func ProbeAsync(op string, params map[string]any) map[string]any {
 	switch op {
 	case "run":
 		probeAsyncP.asyncMu.Lock()
+		asyncPrune(probeAsyncP)
 		probeAsyncP.asyncSeq++
 		id := probeAsyncP.asyncSeq
-		probeAsyncP.asyncTasks[id] = &asyncTask{id: id, status: "running"}
+		probeAsyncP.asyncTasks[id] = &asyncTask{id: id, status: "running", createdAt: time.Now()}
 		probeAsyncP.asyncMu.Unlock()
 
 		pluginID, _ := params["plugin"].(string)
@@ -325,6 +355,7 @@ func ProbeAsync(op string, params map[string]any) map[string]any {
 	case "list":
 		probeAsyncP.asyncMu.Lock()
 		defer probeAsyncP.asyncMu.Unlock()
+		asyncPrune(probeAsyncP)
 		out := []any{}
 		for _, t := range probeAsyncP.asyncTasks {
 			out = append(out, map[string]any{"taskId": t.id, "status": t.status, "progress": t.progress})

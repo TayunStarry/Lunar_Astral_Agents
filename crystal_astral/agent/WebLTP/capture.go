@@ -109,7 +109,7 @@ func scrollByViewport(sess *BrowserClient.WebViewSession) (scrollState, error) {
 
 // scrollToTop 回到页面顶部
 func scrollToTop(sess *BrowserClient.WebViewSession) error {
-	_, err := sess.EvalJSON(`return window.scrollTo(0, 0); JSON.stringify({y: window.scrollY});`, 4*time.Second)
+	_, err := sess.EvalJSON(`window.scrollTo(0, 0); return JSON.stringify({y: window.scrollY});`, 4*time.Second)
 	return err
 }
 
@@ -161,7 +161,7 @@ func extractScript(maxResults int) string {
     lis.forEach(function (li) {
         if (out.results.length >= %d) return;
         var a = li.querySelector('h2 a');
-        if (!a || !a.href) return;
+        if (!a || !a.href || seen[a.href]) return;
         var cap = li.querySelector('.b_caption p') || li.querySelector('.b_caption') || li.querySelector('p');
         out.results.push({
             title: (a.textContent || '').trim(),

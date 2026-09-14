@@ -22,6 +22,7 @@ LTPX 按「后端宿主 + 载体形态 + 交互方式」分为多条并列分支
 | LTP7 | Face-LTP | WindowAgent | 面向桌面的通用智能体 | 已废弃 |
 | LTP8 | **Auto-LTP** | WindowAgent | 桌面闭环自治智能体（多角色编排）。见 §5.3 | 现行 |
 | LTP9 | **Star-LTP** | CodeAgent（goja 沙箱插件） | 插件层/引擎层/客户端三端、全同步事件模型、权限强绑定。见 §7 | 现行（主线） |
+| LTP10 | **Web-LTP** | BrowserSession（顶层 WebView 会话） | 后端网络搜索智能体：真浏览器检索流水线（月华自然语言 → 搜索报告）。见 §5.4 | 现行 |
 
 各分支共享同一包管理机制（`local_data/package/*/metadata.json` 动态扫描），差异集中在载体形态（本地页面 / WebApp / 桌面窗口 / 沙箱插件）与是否接入月华 AtoA 调度。
 
@@ -109,8 +110,8 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 | `/ltpx/register` | 琉璃→月华 | 琉璃启动时注册联络 URL（多开以最新为准） |
 
 - 工具链同步：月华在每次思考链起点向琉璃（固定引擎端口 `BasicPort+3` = 36792）心跳并拉取最新工具链。
-- 内置工具（无需包承载）：`window_agent`（→ Auto-LTP，见 §5.3）、`yara_ltp`（→ YaraLTP hook 路由）。
-- 超时：月华端 HTTP 请求 8s、工具调用等待 150s；琉璃端挂起调用登记 120s 超时。
+- 内置工具（无需包承载）：`window_agent`（→ Auto-LTP，见 §5.3）、`web_search`（→ Web-LTP，见 §5.4）、`yara_ltp`（→ YaraLTP hook 路由）。
+- 超时：月华端 HTTP 请求 8s、工具调用等待 150s；琉璃端挂起调用登记 120s 超时（内置工具 `window_agent`/`web_search` 为进程内直跑，不受 120s 限制）。
 - 回执协议：`ltpx_result` 含 `request_id / success / text / error / keep_open`；`keep_open` 时执行页面保持打开供用户观察。
 
 ---
@@ -163,6 +164,35 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 **可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`，截图归档 `local_data/images/moment`。
 
 **模型**：从 `lunar_config.json` 的 `agent` 字段读取。
+
+### 5.4 Web-LTP —— 网络搜索智能体（web_search）
+
+实现于 `crystal_astral/agent/WebLTP/`，工具名 **`web_search`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=web_search` + `instruction`）调用，进程内直跑 `WebLTP.Run(instruction)`（不依赖任何前端包，不受 120s 挂起登记限制）。
+
+**固定流水线**（`host.go`）：
+
+```
+提炼检索词（模型，失败回退原指令）
+→ 打开真浏览器会话（BrowserClient.WebViewSession 顶层窗口，不受 X-Frame-Options 限制）
+→ 必应搜索 → 结果页滚动截图（≤3 张）→ 回到页顶
+→ DOM 元素识别结果页（li.b_algo：标题/链接/摘要，天然排除广告）
+→ 依次进入前 N 个结果页（≤10，指令「前N个」可覆盖）
+   → 逐页滚动截图（≤10 张/页，触底即止）
+   → 逐页情报摘要：DOM 提取文本为主 + 首屏截图互印证（同一次多模态调用），
+     硬切断 ≤4096 字符；模型失败以正文前段兜底
+→ 回到搜索引擎页（补一张截图）
+→ 汇编报告：以「月华打开了什么页面、看到了什么内容」的操作旅程口吻输出
+  （检索概述 → 逐页情报 → 综合结论）
+→ 关闭浏览器页面；窗口意外关闭时立即停止后续操作，以已采集信息收尾
+```
+
+**DOM 与视觉的分工**：DOM 提取（`eval` 在页面上下文执行，非 OCR）承担全部硬信息（数字/名称/结论，零识别误差）；截图承担版面观感、图表信息与「验证码/错误页/付费墙」识别，两者在同一次多模态调用中互相印证。
+
+**配置**：`lunar_config.json` 的 `web_search` 字段（每次运行热读取）——`save_screenshots`（截图是否落盘，默认 `false`）、`screenshot_dir`（相对 LocalDir）、`max_pages`（默认 3，硬上限 10）、`max_results`、`results_scroll_captures`、`page_scroll_captures`、`summary_max_chars`（≤4096）、`max_run_seconds`（总时长软上限，超时以已采集信息收尾）。
+
+**截图**：`PrintWindow(PW_CLIENTONLY|PW_RENDERFULLCONTENT)` 直接从窗口取内容，与窗口遮挡状态无关（最小化除外）；失败回退屏幕 DC 区域截图。落盘命名 `<序号>-<标签>-视口NN.jpg`。
+
+**端点支撑**：会话原语经 `/webview/*` 端点族暴露（[03 §4.11](03-扩展系统-钛宇-琉璃.md)），亦可供前端扩展包（如 `lunar.bing_search` 的 `backend_search`/`backend_deep_read` 工具）复用。
 
 ---
 

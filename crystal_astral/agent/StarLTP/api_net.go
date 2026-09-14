@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"github.com/dop251/goja"
 )
@@ -160,7 +161,8 @@ func doLTP9Fetch(urlStr string, opts map[string]any) (int, string, http.Header, 
 	if t, ok := opts["timeout"].(float64); ok && t > 0 {
 		timeout = time.Duration(t * float64(time.Second))
 	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	// TLS 默认校验服务端证书（防 MITM 篡改插件消费的数据）；server.insecure_tls 显式置 true 才跳过
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: *GeneralConfig.InsecureTLS}}
 	client := &http.Client{Timeout: timeout, Transport: transport}
 	if redirect, ok := opts["redirect"].(string); ok && redirect == "manual" {
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }

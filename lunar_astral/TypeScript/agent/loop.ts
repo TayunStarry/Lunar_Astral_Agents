@@ -60,6 +60,24 @@ function guardChatVRAM(): void {
     }
 }
 
+/** 更新远期记忆摘要 */
+function updatePreviousMemories(): void {
+    // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
+    if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
+    /** 获取最新的5条用户消息作为查询条件 */
+    const userMessages = dialogueRole.getLatestUserMessages();
+    /** 清理RAG消息并返回 */
+    const clear = () => { dialogueRole.ragMessages = []; };
+    // 如果没有用户消息，清理RAG消息并返回
+    if (userMessages.length === 0) return clear();
+    /** 由记忆者智能体检索长期记忆并生成摘要 */
+    const digest = memorizerRole.queryRagSummary(userMessages);
+    // 检索无命中或摘要失败时，清理RAG消息并返回
+    if (!digest) return clear();
+    // 将连贯摘要作为一条用户消息注入 ragMessages（替换碎片式上下文；
+    dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
+}
+
 /** 思考循环事件 */
 export async function thoughtLoopTickEvent(): Promise<void> {
     // 如果正在思考中，直接返回
@@ -147,8 +165,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 推送消息（包含显示内容和语音数据）
             pushContext('text', chunk.display, audio);
         }
-        // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
-        if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
+        // 更新远期记忆摘要
+        updatePreviousMemories();
         // 思考链业务结束：执行周期性显存守卫（应答计数达到间隔时检查显存并按需卸载模型）
         guardChatVRAM();
     }

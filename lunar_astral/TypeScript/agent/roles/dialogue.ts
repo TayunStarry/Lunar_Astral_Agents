@@ -3,7 +3,6 @@ import { ChatCache } from '../../config/config';
 import { ModelResponseBody, PostMessage } from '../../config/model';
 import { ModelBuilder } from '../base/builder';
 import { LiteImageFile } from '../capabilities/media';
-import type { MemorizerRole } from './memorizer';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
@@ -12,9 +11,6 @@ export class DialogueRole extends ModelBuilder {
         try {
             // 对消息中的图片文件进行压缩与解析处理
             await LiteImageFile();
-            /** 检查是否强制使用工具调用 */
-            const useTools = GlobalConfig.unreadContext.some(context => context.role == 'user' && typeof context.content === 'string' && context.content.startsWith('<律令>:'))
-            if (useTools) console.log('强制月华使用工具调用中...');
             // 将未读上下文数组中的消息添加到处理器模型的上下文
             GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
             // 清空未读上下文数组
@@ -23,10 +19,8 @@ export class DialogueRole extends ModelBuilder {
             this.formatHistoricalMessages();
             // 添加当前时间到运行时消息列表
             this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
-            // 从向量数据库查询相关历史消息作为 RAG 上下文
-            this.queryRagMessages();
             /** 向处理器模型发送请求并等待响应 */
-            const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition, useTools);
+            const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
             // 处理响应文本内容
             this.analyzeMessageResponse(response.body, cache);
             // 如果有工具调用,处理它们并重新发送请求
@@ -219,7 +213,7 @@ export class DialogueRole extends ModelBuilder {
         if (state.thinkingContent.trim() !== "") {
             /** 新的思考标签内容 */
             const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
-            // 合并为带有思考标签的描述内容
+            // 将最终消息设定为模型应答
             GlobalConfig.finalResponse = state.descriptionContent;
             // 打印思考标签内容
             console.log(newThinkTag);
@@ -237,46 +231,21 @@ export class DialogueRole extends ModelBuilder {
         for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
             /** 检查当前消息是否为用户消息 */
             const message = this.messages[i];
-            if (message.role === 'user') {
-                // 提取文本内容
-                if (typeof message.content === 'string') {
-                    userTexts.unshift(message.content);
-                } else if (Array.isArray(message.content)) {
-                    const textContent = message.content
-                        .filter(item => item.type === 'text')
-                        .map(item => item.text)
-                        .join(' ');
-                    if (textContent.trim()) userTexts.unshift(textContent);
-                }
+            // 跳过非用户消息
+            if (message.role !== 'user') continue;
+            // 提取文本内容
+            if (typeof message.content === 'string') userTexts.unshift(message.content);
+            else if (Array.isArray(message.content)) {
+                /** 提取文本内容 */
+                const textContent = message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
+                // 过滤空文本
+                if (textContent.trim()) userTexts.unshift(textContent);
             }
         }
         return userTexts;
     }
-    /**
-     * 从 记忆库 检索并生成摘要，填充 ragMessages
-     *
-     * 由记忆者智能体承接：继承原有搜索机制检索长期记忆，对命中的内容碎片做一次
-     * 总结与摘要，输出一篇硬切断 4096 的连贯摘要（摘要不回写记忆库），
-     * 替代以往将碎片直接写入 rag 数组的做法。
-     */
-    public queryRagMessages(): this {
-        /** 获取最新的5条用户消息作为查询条件 */
-        const userMessages = this.getLatestUserMessages();
-        /** 清理RAG消息并返回 */
-        const clear = () => { this.ragMessages = []; return this; };
-        // 如果没有用户消息，清理RAG消息并返回
-        if (userMessages.length === 0) return clear();
-        /** 由记忆者智能体检索长期记忆并生成摘要 */
-        const digest = this.memorizerRole.queryRagSummary(userMessages);
-        // 检索无命中或摘要失败时，清理RAG消息并返回
-        if (!digest) return clear();
-        // 将连贯摘要作为一条用户消息注入 ragMessages（替换碎片式上下文；
-        // 用 user 角色而非 system，符合 OpenAI 协议建议——避免消息队列中堆积多条系统消息）
-        this.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
-        return this;
-    }
-    /** 构造函数（注入描述者与记忆者单例，避免 roles ↔ dialogue 循环引用） */
-    public constructor(private descriptionRole: ModelBuilder, private memorizerRole: MemorizerRole) {
+    /** 构造函数 */
+    public constructor(private descriptionRole: ModelBuilder) {
         super(fileView('prompts/dialogueRole.md')[0]);
     }
 }

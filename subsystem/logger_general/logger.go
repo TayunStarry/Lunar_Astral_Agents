@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 )
 
 // SetDevMode 设置开发模式开关
-// v: 是否启用开发模式（开发者模式下所有日志输出到控制台且无频率限制）
+// v: 是否启用开发模式（开发者模式下所有日志输出到控制台且不受去重限制）
 func SetDevMode(v bool) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -21,24 +20,26 @@ func SetOutput(w *os.File) {
 	stdLog = log.New(w, "", 0)
 }
 
-// rateLimit 判断是否允许输出。
-// 开发者模式下所有日志无频率限制；非开发者模式下每个 module 一秒最多输出一条。
-func rateLimit(module string) bool {
+// shouldPrint 判断是否允许输出。
+// 开发者模式下所有日志无限制；非开发者模式下，若本次调用的 module 和 sub
+// 与上一次调用完全相同，则不输出。
+func shouldPrint(module, sub string) bool {
 	mu.Lock()
 	defer mu.Unlock()
 	if devMode {
 		return true
 	}
-	now := time.Now()
-	if last, ok := lastLogAt[module]; ok && now.Sub(last) < interval {
+	if hasLast && lastModule == module && lastSub == sub {
 		return false
 	}
-	lastLogAt[module] = now
+	hasLast = true
+	lastModule = module
+	lastSub = sub
 	return true
 }
 
 func Info(module, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, notSub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -46,7 +47,7 @@ func Info(module, format string, v ...any) {
 }
 
 func SubInfo(module, sub, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, sub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -54,7 +55,7 @@ func SubInfo(module, sub, format string, v ...any) {
 }
 
 func Warn(module, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, notSub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -62,7 +63,7 @@ func Warn(module, format string, v ...any) {
 }
 
 func SubWarn(module, sub, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, sub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -70,7 +71,7 @@ func SubWarn(module, sub, format string, v ...any) {
 }
 
 func Error(module, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, notSub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -78,7 +79,7 @@ func Error(module, format string, v ...any) {
 }
 
 func SubError(module, sub, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, sub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)
@@ -86,7 +87,7 @@ func SubError(module, sub, format string, v ...any) {
 }
 
 func Fatal(module, format string, v ...any) {
-	if !rateLimit(module) {
+	if !shouldPrint(module, notSub) {
 		return
 	}
 	msg := fmt.Sprintf(format, v...)

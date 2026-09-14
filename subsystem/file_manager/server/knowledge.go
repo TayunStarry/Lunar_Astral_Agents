@@ -37,7 +37,8 @@ func writeSuccess(w http.ResponseWriter, data interface{}) {
 
 // KnowledgeHandler 处理知识库请求
 // 路由：POST /knowledge/
-// 载荷统一为原生 SQL：{"sql": "...", "params": []}
+// 载荷统一为原生 SQL：{"sql": "...", "params": [], "db": "knowledge"}
+// db 可选：空或 "knowledge" → 知识库 knowledge.db；"web_search_cache" → 网络搜索页面摘要缓存
 // 数据操作不再使用结构化 JSON 操作封装，全部回归原生 SQL 语句
 func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -48,6 +49,7 @@ func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 	var raw struct {
 		SQL    string `json:"sql"`
 		Params []any  `json:"params"`
+		DB     string `json:"db"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("知识库请求[ERROR] -> 解析请求失败: %v", err))
@@ -59,7 +61,7 @@ func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := module.ExecuteSQL(raw.SQL, raw.Params)
+	result := module.ExecuteSQLOn(raw.DB, raw.SQL, raw.Params)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(result); err != nil {

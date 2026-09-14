@@ -12,6 +12,14 @@ var Developer = flag.Bool("developer", false, "启用调试模式, 显示详细�
 // 用于防止模型重载/推理期间 HTTP 请求无限挂起，阻塞 goja 事件循环。
 var SyncFetchTimeout = flag.Int("sync-fetch-timeout", 300, "syncFetch 网络请求超时时间(秒)")
 
+// AllowLAN 是否允许局域网访问引擎 HTTP/WS 服务。
+// 默认 false：引擎仅绑定 127.0.0.1 回环地址；置 true（lunar_config.json 的 server.allow_lan）才绑定全部网卡。
+var AllowLAN = flag.Bool("allow-lan", false, "允许局域网访问引擎服务（默认仅本机回环可访问）")
+
+// InsecureTLS 插件沙箱网络是否跳过 TLS 证书校验。
+// 默认 false：fetch/http/download 校验服务端证书；置 true（lunar_config.json 的 server.insecure_tls）恢复旧的跳过行为。
+var InsecureTLS = flag.Bool("insecure-tls", false, "插件网络请求跳过 TLS 证书校验（不推荐）")
+
 // 系统运行状态变量
 var (
 	// ModelReady 表示模型是否准备就绪的状态标识，0 可表示未准备就绪。

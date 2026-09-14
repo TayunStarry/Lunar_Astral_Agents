@@ -17,6 +17,13 @@ import (
 // callAwaitTimeout 等待异步导出函数（Promise）敲定的超时。
 const callAwaitTimeout = 90 * time.Second
 
+// pluginLoadTimeout 等待 execute.js 顶层执行完成的超时：goja 同步执行无法被打断，
+// 死循环脚本不再无限阻塞加载方（循环本身成为僵尸，由 unload 的 StopNoWait 兜底）。
+const pluginLoadTimeout = 30 * time.Second
+
+// unloadGraceTimeout 卸载时等待事件循环响应（探针回调）的宽限：超时视为循环卡死，改用 StopNoWait。
+const unloadGraceTimeout = 5 * time.Second
+
 // callResult 一次回调执行的返回载体：out 为普通结果，err 为错误。
 type callResult struct {
 	out any
@@ -107,7 +114,13 @@ func (p *plugin) load() error {
 		p.loadErr = "插件事件循环已终止，无法加载"
 		return fmt.Errorf("%s", p.loadErr)
 	}
-	<-loaded // 同步等待脚本顶层执行完成（订阅器/导出注册就绪）
+	// 同步等待脚本顶层执行完成（订阅器/导出注册就绪）；带超时防死循环脚本无限阻塞
+	select {
+	case <-loaded:
+	case <-time.After(pluginLoadTimeout):
+		p.loadErr = fmt.Sprintf("execute.js 顶层执行超过 %s 未完成（可能存在死循环），加载中止", pluginLoadTimeout)
+		return fmt.Errorf("%s", p.loadErr)
+	}
 	if runErr != nil {
 		p.loadErr = fmt.Sprintf("execute.js 执行失败: %v", runErr)
 		return fmt.Errorf("%s", p.loadErr)
@@ -126,21 +139,38 @@ func (p *plugin) load() error {
 	return nil
 }
 
-// unload 调用 onUnload 并停止插件事件循环。
+// unload 调用 onUnload 并终止插件事件循环。
+// 注意：全程不持有 p.mu —— goja_nodejs 的 Terminate/Stop 会同步等待事件循环退出，
+// 若此刻循环内正在执行的 JS 回调申请 p.mu（engine.* 绑定），持锁等待即构成死锁。
 func (p *plugin) unload() {
 	if p == nil {
 		return
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.onUnload != nil {
-		p.loop.RunOnLoop(func(vm *goja.Runtime) {
-			if f, ok := goja.AssertFunction(p.onUnload); ok {
-				f(goja.Undefined())
-			}
-		})
+	// 探针：确认事件循环仍可调度（被死循环卡死的循环无法在宽限期内响应）
+	canary := make(chan struct{})
+	ok := p.loop.RunOnLoop(func(vm *goja.Runtime) { close(canary) })
+	if ok {
+		select {
+		case <-canary:
+			// 循环存活：提交 onUnload 后 Terminate —— 停止唤醒时会先 runAux 同步执行 onUnload，
+			// 并取消全部 setTimeout/setInterval（Stop 不清理定时器，会泄漏其 goroutine）
+			p.loop.RunOnLoop(func(vm *goja.Runtime) {
+				if p.onUnload != nil {
+					if f, cbOK := goja.AssertFunction(p.onUnload); cbOK {
+						f(goja.Undefined())
+					}
+				}
+			})
+			p.loop.Terminate()
+		case <-time.After(unloadGraceTimeout):
+			// 循环已被 JS 死循环卡死：仅请求停止不等待（定时器 goroutine 泄漏优于卸载方挂死）
+			p.loop.StopNoWait()
+		}
+	} else {
+		// 循环已终止（重复卸载）：补一次 Terminate 清理残余定时器（对已终止循环立即返回）
+		p.loop.Terminate()
 	}
-	p.loop.Stop()
+	p.mu.Lock()
 	p.loaded = false
 	p.onLoad, p.onUnload, p.onConfigUpdate = nil, nil, nil
 	p.config = nil
@@ -151,6 +181,7 @@ func (p *plugin) unload() {
 	p.asyncTasks = map[int]*asyncTask{}
 	p.frontSignal = nil
 	p.granted = nil
+	p.mu.Unlock()
 	LoggerGeneral.Info(ServiceName, "LTP9 插件已卸载: %s", p.ID)
 }
 
@@ -159,7 +190,7 @@ func (p *plugin) unload() {
 // 短回插件 loop 的方式轮询，期间 loop 保持空闲可继续处理网络回调与微任务，直至敲定或超时。
 func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 	done := make(chan callResult, 1)
-	p.loop.RunOnLoop(func(vm *goja.Runtime) {
+	loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
 		f, ok := goja.AssertFunction(fn)
 		if !ok {
 			done <- callResult{err: fmt.Errorf("非函数对象")}
@@ -193,6 +224,10 @@ func (p *plugin) callFn(fn jsFunc, args ...any) (any, error) {
 		}
 		go p.awaitPromise(pm, done)
 	})
+	if !loopOK {
+		// 循环已终止（插件卸载中）：立即失败，不再等满外层兜底超时
+		return nil, fmt.Errorf("插件事件循环已终止，无法执行回调")
+	}
 	select {
 	case res := <-done:
 		if res.err != nil {
@@ -233,13 +268,18 @@ func (p *plugin) awaitPromise(pm *goja.Promise, done chan callResult) {
 		}
 		var r callResult
 		settled := false
-		p.loop.RunOnLoop(func(vm *goja.Runtime) {
+		loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
 			if pm.State() == goja.PromiseStatePending {
 				return
 			}
 			settled = true
 			r = settlePromise(pm)
 		})
+		if !loopOK {
+			// 循环已终止：Promise 永远不会在死循环上兑现，立即失败
+			done <- callResult{err: fmt.Errorf("插件事件循环已终止，Promise 无法敲定")}
+			return
+		}
 		if settled {
 			done <- r
 			return
@@ -301,8 +341,13 @@ func (p *plugin) removeEvent(topic string, id int) {
 // 注意：执行回调（callFn）时不得持有 p.mu，否则回调内的 engine.signal.all 会去 Lock 同一把锁而自锁。
 func (p *plugin) fireEvent(topic string, payload any) []Outcome {
 	p.mu.Lock()
+	loaded := p.loaded
 	subs := append([]*eventSub(nil), p.events[topic]...)
 	p.mu.Unlock()
+	// 加载未完成/加载失败/已卸载的插件不参与派发（防止半初始化或僵尸循环消费事件）
+	if !loaded {
+		return nil
+	}
 	// 按优先级（高者先）与时间顺序排序后派发，保证拦截参数按期望顺序命中
 	sort.SliceStable(subs, func(i, j int) bool { return subOrderLess(subs[i], subs[j]) })
 	out := make([]Outcome, 0, len(subs))

@@ -421,13 +421,13 @@ var agentSystem = (function (exports) {
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
         ];
         selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
-        defaultOutfitPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，侧腰位置悬挂着白色和深蓝的大缎带蝴蝶结，饰有圆润的白色珍珠装饰和金色高光，白色短袜，黑色系带低帮帆布鞋';
+        defaultOutfitPrompt = '穿着深蓝色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层深蓝色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋';
         roleTool = [
             {
                 type: "function",
                 function: {
                     name: "diffusion_generation",
-                    description: "根据文本描述生成图像。如需进行图像创作,请调用此函数",
+                    description: "根据文本描述生成与月华本人无关的图像。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象,绘制月华形象必须调用 self_portrait",
                     parameters: {
                         type: "object",
                         properties: {
@@ -454,7 +454,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "self_portrait",
-                    description: "生成自画像。调用此函数来创建自己的形象",
+                    description: "生成月华的自画像。凡是要求绘制月华、你自己、\"我\"的形象,无论用户如何描述服装、场景或风格,都必须且只能调用此函数,禁止调用 diffusion_generation",
                     parameters: {
                         type: "object",
                         properties: {
@@ -465,10 +465,6 @@ var agentSystem = (function (exports) {
                             "posture": {
                                 type: "string",
                                 description: "动作提示词,描述想要展现的姿势或动作"
-                            },
-                            "outfit": {
-                                type: "string",
-                                description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
                             },
                             "environment": {
                                 type: "string",
@@ -1055,19 +1051,14 @@ K:Am
 
     class DialogueRole extends ModelBuilder {
         descriptionRole;
-        memorizerRole;
         async generateDialogue(cache) {
             try {
                 await LiteImageFile();
-                const useTools = GlobalConfig.unreadContext.some(context => context.role == 'user' && typeof context.content === 'string' && context.content.startsWith('<律令>:'));
-                if (useTools)
-                    console.log('强制月华使用工具调用中...');
                 GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
-                this.queryRagMessages();
-                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition, useTools);
+                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
@@ -1221,37 +1212,21 @@ K:Am
             const userTexts = [];
             for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
                 const message = this.messages[i];
-                if (message.role === 'user') {
-                    if (typeof message.content === 'string') {
-                        userTexts.unshift(message.content);
-                    }
-                    else if (Array.isArray(message.content)) {
-                        const textContent = message.content
-                            .filter(item => item.type === 'text')
-                            .map(item => item.text)
-                            .join(' ');
-                        if (textContent.trim())
-                            userTexts.unshift(textContent);
-                    }
+                if (message.role !== 'user')
+                    continue;
+                if (typeof message.content === 'string')
+                    userTexts.unshift(message.content);
+                else if (Array.isArray(message.content)) {
+                    const textContent = message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
+                    if (textContent.trim())
+                        userTexts.unshift(textContent);
                 }
             }
             return userTexts;
         }
-        queryRagMessages() {
-            const userMessages = this.getLatestUserMessages();
-            const clear = () => { this.ragMessages = []; return this; };
-            if (userMessages.length === 0)
-                return clear();
-            const digest = this.memorizerRole.queryRagSummary(userMessages);
-            if (!digest)
-                return clear();
-            this.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
-            return this;
-        }
-        constructor(descriptionRole, memorizerRole) {
+        constructor(descriptionRole) {
             super(fileView('prompts/dialogueRole.md')[0]);
             this.descriptionRole = descriptionRole;
-            this.memorizerRole = memorizerRole;
         }
     }
 
@@ -1542,7 +1517,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     const MEMORY_COLLECTION = 'lunar_messages';
     const RAG_SUMMARY_HARD_LIMIT = 4096;
     const RAG_PER_QUERY_TOP_K = 10;
-    const RAG_MAX_RECORDS = 32;
+    const RAG_MAX_RECORDS = 24;
     class MemorizerRole extends ModelBuilder {
         constructor() {
             super(fileView('prompts/memorizerRole.md')[0]);
@@ -1635,7 +1610,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
     const actorRole = new ActorRole();
-    const dialogueRole = new DialogueRole(descriptionRole, memorizerRole);
+    const dialogueRole = new DialogueRole(descriptionRole);
     const viewerRole = new ViewerRole();
     registerMediaRoles({ descriptionRole, viewerRole, randomDefaultMessage });
     function randomDefaultMessage() {
@@ -3147,6 +3122,18 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
             console.log(`显存守卫: 可用显存 ${result?.body?.free_mib} MiB, 无需卸载`);
         }
     }
+    function updatePreviousMemories() {
+        if (GlobalConfig.unreadRecords.length >= 1)
+            memorizerRole.persistUnreadRecords();
+        const userMessages = dialogueRole.getLatestUserMessages();
+        const clear = () => { dialogueRole.ragMessages = []; };
+        if (userMessages.length === 0)
+            return clear();
+        const digest = memorizerRole.queryRagSummary(userMessages);
+        if (!digest)
+            return clear();
+        dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
+    }
     async function thoughtLoopTickEvent() {
         if (GlobalConfig.reasoningInProgress)
             return;
@@ -3203,8 +3190,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                     audio = audioData;
                 pushContext('text', chunk.display, audio);
             }
-            if (GlobalConfig.unreadRecords.length >= 1)
-                memorizerRole.persistUnreadRecords();
+            updatePreviousMemories();
             guardChatVRAM();
         }
         catch (error) {

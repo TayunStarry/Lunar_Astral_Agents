@@ -21,7 +21,7 @@
 |------|----------|------|
 | [01-项目架构总览](01-项目架构总览.md) | 全项目 | 人格智能体、整体架构图、文件夹结构、数据流、技术栈、前端共享资源机制 |
 | [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) | lunar_astral | 月华功能、启动时序、Go 各目录逐文件函数表、TS 智能体、HTTP/WS 协议、FAQ |
-| [03-扩展系统-钛宇-琉璃](03-扩展系统-钛宇-琉璃.md) | crystal_astral | 琉璃功能、启动/代理路由、逐文件函数表、内置智能体（Auto-LTP / StarLTP / YaraLTP）、端点总览、运行与 FAQ |
+| [03-扩展系统-钛宇-琉璃](03-扩展系统-钛宇-琉璃.md) | crystal_astral | 琉璃功能、启动/代理路由、逐文件函数表、内置智能体（Auto-LTP / Web-LTP / StarLTP / YaraLTP）、端点总览、运行与 FAQ |
 | [04-公共子系统](04-公共子系统.md) | subsystem 基础模块 | general_config · browser_client · file_manager · image_processor · logger_general · lunar_decoder · lunar_goja · media_tools 及辅助工具的原理、关键文件与函数、运行方式、FAQ |
 | [05-独立AI引擎与运维工具](05-独立AI引擎与运维工具.md) | subsystem 引擎/运维 | agent_search · qwen3_tts · qwen_asr · environment_repair 的推理管线、关键函数、编译运行、FAQ |
 | [06-前端资源库](06-前端资源库.md) | local_data/package | standard_dependency 注入清单、自定义模块与关键类、扩展包总览 |

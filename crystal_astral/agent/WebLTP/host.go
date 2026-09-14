@@ -7,7 +7,6 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -28,6 +27,7 @@ type PageIntel struct {
 	Captures   int
 	Failed     string // 打开/提取失败原因（空表示成功）
 	SummaryErr string // 模型摘要失败原因（此时摘要为文本前段兜底）
+	Cached     bool   // 摘要来自本地缓存（未重新访问网页，Captures 为 0）
 }
 
 // Run 执行一次网络搜索：月华自然语言指令 → 搜索报告（文本）。
@@ -60,29 +60,31 @@ func Run(instruction string) (string, error) {
 
 	saver := &shotSaver{
 		enabled: cfg.SaveScreenshots,
-		dir:     filepath.Join(LocalDirForScreenshots(), cfg.ScreenshotDir, runID),
+		dir:     filepath.Join(LocalDirForData(), cfg.ScreenshotDir, runID),
 	}
 
-	searchURL := "https://cn.bing.com/search?q=" + url.QueryEscape(query)
-	interrupted := false
-
-	// 3. 打开搜索结果页
-	if err := navTo(sess, searchURL, 20*time.Second, 1500*time.Millisecond); err != nil {
-		return "", fmt.Errorf("打开搜索结果页失败: %w", err)
+	// 3. 打开页面摘要缓存（SQL；不可用时为 nil，get/put 均兼容空值，全部实时访问）
+	var cache *PageCache
+	if cfg.cacheEnabled() {
+		if pc, perr := openPageCache(pageCachePath(), time.Duration(cfg.CacheTTLDays)*24*time.Hour); perr == nil {
+			cache = pc
+			defer pc.close()
+		} else {
+			LoggerGeneralWarn("页面摘要缓存不可用，本次全部实时访问: %v", perr)
+		}
 	}
 
-	// 4. 结果页滚动截图 → 回到页顶（首屏截图供报告汇编时视觉印证）
-	resultsCaptures, engineShot := scrollCapture(sess, cfg.ResultsScrollCaptures, "搜索结果页", saver, deadline)
-	_ = scrollToTop(sess)
-
-	// 5. 元素识别结果页（DOM 为主，截图为辅）
-	engine, extErr := extractPage(sess, cfg.MaxResults)
-	if extErr != nil {
-		return "", fmt.Errorf("结果页元素识别失败: %w", extErr)
+	// 4. 搜索引擎降级链（bing → baidu → sogou）：首个有效结果页胜出
+	interrupted := false // 浏览器窗口是否在中途被关闭
+	outcome, err := searchWithFallback(sess, query, cfg, saver, deadline)
+	if err != nil {
+		return "", err
 	}
-	LoggerGeneral.Info("CrystalAstral", "Web-LTP 结果页识别完成: %d 条结果, 截图 %d 张", len(engine.Results), resultsCaptures)
+	engine := outcome.Extract
+	engineShot := outcome.FirstShot
+	LoggerGeneral.Info("CrystalAstral", "Web-LTP 使用引擎 [%s]: %d 条结果", outcome.Engine.name, len(engine.Results))
 
-	// 6. 依次进入前 N 个结果页（指令可覆盖数量，硬上限 10）
+	// 5. 依次处理前 N 个结果页（指令可覆盖数量，硬上限 10）
 	n := cfg.MaxPages
 	if m := pageCountFromInstruction(instruction); m > 0 {
 		n = m
@@ -90,12 +92,10 @@ func Run(instruction string) (string, error) {
 	if n > webSearchPagesHardCap {
 		n = webSearchPagesHardCap
 	}
-	if n > len(engine.Results) {
-		n = len(engine.Results)
-	}
 
 	intels := []PageIntel{}
-	for i := 0; i < n; i++ {
+	visited := map[string]bool{} // 跨结果页 URL 去重：同一页面只进入一次流水线
+	for i := 0; i < len(engine.Results) && len(intels) < n; i++ {
 		if !sess.IsAlive() {
 			interrupted = true
 			break
@@ -104,7 +104,25 @@ func Run(instruction string) (string, error) {
 			break
 		}
 		hit := engine.Results[i]
+		key := normalizeURL(hit.URL)
+		if key == "" || visited[key] {
+			LoggerGeneral.Info("CrystalAstral", "Web-LTP 跳过重复/无效链接: %s", truncateRunes(hit.URL, 80))
+			continue
+		}
+		visited[key] = true
 		intel := PageIntel{Title: hit.Title, URL: hit.URL, Domain: domainOf(hit.URL)}
+
+		// 缓存命中（未过期）→ 复用已有摘要：不访问网页、不截图、不调用模型
+		if entry, ok := cache.get(key); ok {
+			intel.Title = firstNonEmpty(entry.Title, intel.Title)
+			intel.Domain = firstNonEmpty(entry.Domain, intel.Domain)
+			intel.Summary = entry.Summary
+			intel.Cached = true
+			intels = append(intels, intel)
+			LoggerGeneral.Info("CrystalAstral", "Web-LTP 页面 %d 命中缓存，复用摘要: %s (摘要 %d 字)",
+				len(intels), intel.Domain, len([]rune(intel.Summary)))
+			continue
+		}
 
 		if err := navTo(sess, hit.URL, 15*time.Second, 1200*time.Millisecond); err != nil {
 			intel.Failed = err.Error()
@@ -125,6 +143,11 @@ func Run(instruction string) (string, error) {
 			continue
 		}
 		intel.Title = firstNonEmpty(page.Title, intel.Title)
+		// 以导航后的最终 URL 为准（百度/搜狗结果为跳转链接，此处还原真实地址）
+		if u := strings.TrimSpace(page.URL); u != "" {
+			intel.URL = u
+			intel.Domain = domainOf(u)
+		}
 
 		summary, sumErr := summarizePage(query, hit, page, pageShot)
 		if sumErr != nil {
@@ -135,13 +158,21 @@ func Run(instruction string) (string, error) {
 			intel.Summary = hardCutRunes(summary, cfg.SummaryMaxChars)
 		}
 		intels = append(intels, intel)
+
+		// 摘要写缓存：以最终 URL 为键覆写；跳转型结果链接的地址不稳定，不作缓存键
+		if cache != nil && intel.Failed == "" {
+			cache.put(normalizeURL(intel.URL), intel.Title, intel.Domain, intel.Summary, query)
+			if k2 := normalizeURL(hit.URL); k2 != normalizeURL(intel.URL) && k2 != "" && !isRedirectWrapper(k2) {
+				cache.put(k2, intel.Title, intel.Domain, intel.Summary, query)
+			}
+		}
 		LoggerGeneral.Info("CrystalAstral", "Web-LTP 页面 %d/%d 完成: %s (摘要 %d 字, 截图 %d 张)",
-			i+1, n, intel.Domain, len([]rune(intel.Summary)), intel.Captures)
+			len(intels), n, intel.Domain, len([]rune(intel.Summary)), intel.Captures)
 	}
 
-	// 7. 回到搜索引擎页（窗口仍存活时），并补一张引擎页截图
+	// 6. 回到搜索引擎页（窗口仍存活时），并补一张引擎页截图
 	if sess.IsAlive() && !time.Now().After(deadline) {
-		if err := navTo(sess, searchURL, 15*time.Second, 1200*time.Millisecond); err == nil {
+		if err := navTo(sess, outcome.URL, 15*time.Second, 1200*time.Millisecond); err == nil {
 			if jpg, err := shotCapture(sess, 85); err == nil {
 				saver.save(jpg, "搜索引擎页-回访")
 				if engineShot == "" {
@@ -151,10 +182,11 @@ func Run(instruction string) (string, error) {
 		}
 	}
 
-	// 8. 汇编搜索报告（月华操作旅程口吻；附结果页首屏截图供视觉印证）
+	// 7. 汇编搜索报告（月华操作旅程口吻；附结果页首屏截图供视觉印证）
 	report := composeReport(reportInput{
 		Instruction: instruction,
 		Query:       query,
+		EngineName:  engineDisplayName(outcome.Engine.name),
 		Engine:      engine,
 		EngineShot:  engineShot,
 		Pages:       intels,
@@ -163,8 +195,8 @@ func Run(instruction string) (string, error) {
 		Interrupted: interrupted,
 		Elapsed:     time.Since(started).Truncate(time.Second).String(),
 	})
-	LoggerGeneral.Info("CrystalAstral", "Web-LTP 网络搜索完成: 检索词=%s, 页面=%d/%d, 截图=%d, 中断=%v, 耗时=%s",
-		query, len(intels), n, saver.count, interrupted, time.Since(started).Truncate(time.Second))
+	LoggerGeneral.Info("CrystalAstral", "Web-LTP 网络搜索完成: 引擎=%s, 检索词=%s, 页面=%d/%d, 截图=%d, 中断=%v, 耗时=%s",
+		outcome.Engine.name, query, len(intels), n, saver.count, interrupted, time.Since(started).Truncate(time.Second))
 	return report, nil
 }
 
@@ -240,8 +272,8 @@ func captureDirForReport(saver *shotSaver) string {
 	return saver.dir
 }
 
-// LocalDirForScreenshots 本地数据根目录（截图保存基于 LocalDir）
-func LocalDirForScreenshots() string {
+// LocalDirForData 本地数据根目录（截图保存与 SQL 缓存均基于 LocalDir）
+func LocalDirForData() string {
 	p := *localDirFlag()
 	if p == "" {
 		p = "local_data"

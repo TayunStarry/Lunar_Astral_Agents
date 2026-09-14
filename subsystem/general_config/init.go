@@ -29,6 +29,11 @@ type ModelConfig struct {
 		// sd.cpp 权重内存卸载模式（auto/always/off）与提示词编码器 CPU 运行开关
 		SDOffloadToCPU     *string `json:"sd_offload_to_cpu,omitempty"`
 		SDTextEncoderOnCPU *bool   `json:"sd_te_on_cpu,omitempty"`
+		// 是否允许局域网访问引擎 HTTP/WS 服务：未配置默认仅绑定 127.0.0.1 回环地址，
+		// 显式置 true 时才绑定全部网卡（跨机部署琉璃/月华时开启）
+		AllowLAN *bool `json:"allow_lan,omitempty"`
+		// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
+		InsecureTLS *bool `json:"insecure_tls,omitempty"`
 	} `json:"server"`
 	// 核心智能体模型配置（月华 Agent）
 	Agent struct {
@@ -205,5 +210,12 @@ func init() {
 	}
 	if parameter.Server.SDTextEncoderOnCPU != nil {
 		*SDTextEncoderOnCPU = *parameter.Server.SDTextEncoderOnCPU
+	}
+	// 引擎服务绑定范围与插件 TLS 校验：仅在配置文件中显式给出时才覆盖安全默认值
+	if parameter.Server.AllowLAN != nil {
+		*AllowLAN = *parameter.Server.AllowLAN
+	}
+	if parameter.Server.InsecureTLS != nil {
+		*InsecureTLS = *parameter.Server.InsecureTLS
 	}
 }

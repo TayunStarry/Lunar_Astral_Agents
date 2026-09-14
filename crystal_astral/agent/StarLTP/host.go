@@ -151,7 +151,11 @@ func Emit(topic string, payload any, requestID string) EmitResult {
 	for _, p := range Engine.snapshotPlugins() {
 		p.mu.Lock()
 		hasSubs := len(p.events[topic]) > 0
+		loaded := p.loaded
 		p.mu.Unlock()
+		if !loaded {
+			continue
+		}
 		if !hasSubs {
 			continue
 		}
@@ -186,6 +190,10 @@ func Emit(topic string, payload any, requestID string) EmitResult {
 			}
 		}
 		result.Outcomes = append(result.Outcomes, outs...)
+		// 撤回：事件不再向后续插件扩散（契约见 docs/code_completion.d.ts——cancel 含后续订阅器与其他插件）
+		if summary.Canceled {
+			break
+		}
 	}
 	result.Summary = summary
 	result.Data = cur

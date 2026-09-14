@@ -11,6 +11,11 @@
 # 背景：Go 工具链定位逻辑此前被复制在 agent_search / ltp3_keygen / ltp9_keygen 三个脚本里，
 # 且那份实现存在缺陷（安装多个 Go SDK 时会返回数组，见 Find-Go 注释）。这里收敛为唯一实现。
 
+# 将控制台输出编码统一为 UTF-8：Go/npm 等原生程序经管道输出 UTF-8 字节时，
+# PowerShell 默认按系统 OEM 代码页（中文系统为 GBK）解码，会把
+# "✓ 端点自述文档已生成" 之类输出显示成 "鉁?绔偣..." 乱码。
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+
 <#
 .SYNOPSIS
     定位 Go 工具链可执行文件。

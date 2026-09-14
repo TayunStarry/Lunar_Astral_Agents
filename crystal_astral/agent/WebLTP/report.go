@@ -12,6 +12,7 @@ import (
 type reportInput struct {
 	Instruction string
 	Query       string
+	EngineName  string // 胜出引擎中文名（必应/百度/搜狗，报告叙述用）
 	Engine      PageExtract
 	EngineShot  string // 结果页首屏截图 dataURL（供视觉印证，可为空）
 	Pages       []PageIntel
@@ -80,6 +81,9 @@ func composeReportByModel(in reportInput) (string, error) {
 		if p.Failed != "" {
 			item["failed"] = p.Failed
 		}
+		if p.Cached {
+			item["cached"] = true
+		}
 		pages = append(pages, item)
 	}
 	shotNote := fmt.Sprintf("共 %d 张过程截图（未启用本地保存）", in.Screenshots)
@@ -100,12 +104,14 @@ func composeReportByModel(in reportInput) (string, error) {
 		return "", err
 	}
 
-	system := "你是搜索报告撰写助手。月华刚刚亲自驾驶浏览器完成了一次网络搜索，逐页情报来自浏览器元素识别（准确可信）。" +
-		"请以叙述月华操作旅程的口吻编写搜索报告：『月华在必应搜索了……，结果页主要由……等站点组成；" +
-		"随后月华打开了……页面，看到了……』。结构：① 检索概述（检索词与结果页概览）；" +
-		"② 逐页情报（每页：来源域名 + 页面标题 + 关键要点，融数字/名称/结论；打开失败的页面如实说明）；" +
-		"③ 综合结论（围绕检索意图汇总结论与建议）。用简洁中文，可分点；" +
-		"若 interrupted 为 true，开头注明「浏览器窗口在中途被关闭，以下基于已采集信息」。只输出报告正文，不要代码块。"
+	engineName := firstNonEmpty(in.EngineName, "必应")
+	system := fmt.Sprintf("你是搜索报告撰写助手。月华刚刚亲自驾驶浏览器完成了一次网络搜索，逐页情报来自浏览器元素识别（准确可信）。"+
+		"请以叙述月华操作旅程的口吻编写搜索报告：『月华在%s搜索了……，结果页主要由……等站点组成；"+
+		"随后月华打开了……页面，看到了……』。结构：① 检索概述（检索词与结果页概览）；"+
+		"② 逐页情报（每页：来源域名 + 页面标题 + 关键要点，融数字/名称/结论；打开失败的页面如实说明；"+
+		"标记 cached 为 true 的页面是复用的本地缓存摘要，请如实表述为「此前已查看过该页面，本次直接调取了笔记」）；"+
+		"③ 综合结论（围绕检索意图汇总结论与建议）。用简洁中文，可分点；"+
+		"若 interrupted 为 true，开头注明「浏览器窗口在中途被关闭，以下基于已采集信息」。只输出报告正文，不要代码块。", engineName)
 
 	text := string(payload) + "\n\n随消息附有搜索结果页首屏截图（若有）：请据此描述结果页的整体版面观感" +
 		"（如顶部卡片、广告位与自然结果的分布），情报结论仍以 DOM 提取数据为准。"
@@ -118,12 +124,13 @@ func composeReportByModel(in reportInput) (string, error) {
 
 // composeReportFallback 确定性报告兜底（模型不可用时）
 func composeReportFallback(in reportInput) string {
+	engineName := firstNonEmpty(in.EngineName, "必应")
 	var b strings.Builder
 	b.WriteString("【网络搜索报告】")
 	if in.Interrupted {
 		b.WriteString("（浏览器窗口在中途被关闭，以下基于已采集信息）")
 	}
-	b.WriteString("\n\n检索词「" + in.Query + "」，必应结果页共识别 " + fmt.Sprint(len(in.Engine.Results)) + " 条结果，耗时 " + in.Elapsed + "。\n")
+	b.WriteString("\n\n检索词「" + in.Query + "」，" + engineName + "结果页共识别 " + fmt.Sprint(len(in.Engine.Results)) + " 条结果，耗时 " + in.Elapsed + "。\n")
 
 	if len(in.Engine.Results) > 0 {
 		b.WriteString("\n◆ 结果页概览：\n")
@@ -140,6 +147,10 @@ func composeReportFallback(in reportInput) string {
 		for i, p := range in.Pages {
 			if p.Failed != "" {
 				b.WriteString(fmt.Sprintf("%d. 打开了「%s」（%s）——页面打开失败：%s\n", i+1, p.Title, p.Domain, p.Failed))
+				continue
+			}
+			if p.Cached {
+				b.WriteString(fmt.Sprintf("%d. 月华此前已查看过「%s」（%s），本次直接调取缓存摘要：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary))
 				continue
 			}
 			b.WriteString(fmt.Sprintf("%d. 月华打开了「%s」（%s）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary))

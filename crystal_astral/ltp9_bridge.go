@@ -98,7 +98,15 @@ func ltpInvokeFrontAgent(appID, instruction string) (string, error) {
 		"tool":       "",
 		"arguments":  map[string]any{"instruction": instruction},
 	})
-	StudioHubInstance.Broadcast <- msg
+	// 非阻塞广播：总线拥塞时撤销登记并按调用失败处理，不阻塞插件事件循环/inbound 消费者
+	select {
+	case StudioHubInstance.Broadcast <- msg:
+	default:
+		ltpPendingMutex.Lock()
+		delete(ltpPendingCalls, requestID)
+		ltpPendingMutex.Unlock()
+		return "", fmt.Errorf("%s 包拒绝响应（前端总线广播缓冲已满）", appID)
+	}
 
 	select {
 	case resp := <-done:

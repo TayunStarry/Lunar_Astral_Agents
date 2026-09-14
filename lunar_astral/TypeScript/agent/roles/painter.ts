@@ -46,14 +46,14 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	/** 自我外观提示 */
 	private readonly selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0]
 	/** 默认服装提示词 */
-	private readonly defaultOutfitPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，侧腰位置悬挂着白色和深蓝的大缎带蝴蝶结，饰有圆润的白色珍珠装饰和金色高光，白色短袜，黑色系带低帮帆布鞋'
+	private readonly defaultOutfitPrompt = '穿着深蓝色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层深蓝色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋'
 	/** 绘画角色工具 */
 	private readonly roleTool: ToolCall[] = [
 		{
 			type: "function",
 			function: {
 				name: "diffusion_generation",
-				description: "根据文本描述生成图像。如需进行图像创作,请调用此函数",
+				description: "根据文本描述生成与月华本人无关的图像。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象,绘制月华形象必须调用 self_portrait",
 				parameters: {
 					type: "object",
 					properties: {
@@ -80,7 +80,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			type: "function",
 			function: {
 				name: "self_portrait",
-				description: "生成自画像。调用此函数来创建自己的形象",
+				description: "生成月华的自画像。凡是要求绘制月华、你自己、\"我\"的形象,无论用户如何描述服装、场景或风格,都必须且只能调用此函数,禁止调用 diffusion_generation",
 				parameters: {
 					type: "object",
 					properties: {
@@ -92,10 +92,10 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 							type: "string",
 							description: "动作提示词,描述想要展现的姿势或动作"
 						},
-						"outfit": {
-							type: "string",
-							description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
-						},
+						// "outfit": {
+						// 	type: "string",
+						// 	description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
+						// },
 						"environment": {
 							type: "string",
 							description: "环境提示词,描述背景环境或场景"

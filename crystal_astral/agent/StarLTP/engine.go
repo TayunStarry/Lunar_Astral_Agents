@@ -4,9 +4,12 @@ package StarLTP
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"LunarSubsystem/LoggerGeneral"
 )
@@ -41,13 +44,71 @@ func readMeta(root string) (pkgMeta, bool) {
 	return m, false
 }
 
-// LoadAll 扫描包根目录并加载全部 LTP9 插件（启动时调用）。
+// LoadAll 扫描包根目录并加载全部 LTP9 插件（启动时调用，幂等），并启动周期对账实现热加载/卸载。
 func (e *engine) LoadAll() {
 	e.root = packageRoot()
 	e.mu.Lock()
+	if e.running {
+		e.mu.Unlock()
+		return
+	}
 	e.running = true
+	e.reconcileStop = make(chan struct{})
 	e.mu.Unlock()
 	e.reconcile()
+	go e.reconcileLoop()
+}
+
+// reconcileLoop 周期对账：包目录指纹（目录名 + metadata/脚本/密钥/配置的 mtime 与大小）
+// 发生变化时重新扫描，实现插件热加载/卸载与失败重载（与 LTP3 YaraLTP 的对账机制对齐）。
+func (e *engine) reconcileLoop() {
+	e.mu.RLock()
+	stop := e.reconcileStop
+	e.mu.RUnlock()
+	ticker := time.NewTicker(reconcileInterval)
+	defer ticker.Stop()
+	last := e.fingerprint()
+	for {
+		select {
+		case <-ticker.C:
+			cur := e.fingerprint()
+			if cur == last {
+				continue
+			}
+			LoggerGeneral.Info(ServiceName, "检测到 LTP9 包目录变化，执行对账")
+			e.reconcile()
+			last = e.fingerprint()
+		case <-stop:
+			return
+		}
+	}
+}
+
+// fingerprint 计算包目录指纹；读取失败返回空串（下次与有效指纹比对必不相等，触发对账）。
+func (e *engine) fingerprint() string {
+	entries, err := os.ReadDir(e.root)
+	if err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(entries))
+	for _, ent := range entries {
+		if ent.IsDir() {
+			names = append(names, ent.Name())
+		}
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	for _, dir := range names {
+		b.WriteString(dir)
+		b.WriteByte('|')
+		for _, f := range []string{"metadata.json", DefaultMain, KeyFileName, DefaultConfigFile} {
+			if info, ierr := os.Stat(filepath.Join(e.root, dir, f)); ierr == nil {
+				fmt.Fprintf(&b, "%s=%d:%d,", f, info.ModTime().UnixNano(), info.Size())
+			}
+		}
+		b.WriteByte(';')
+	}
+	return b.String()
 }
 
 // reconcile 对账：扫描包目录，新增/移除插件。
@@ -77,9 +138,15 @@ func (e *engine) reconcile() {
 		}
 		seen[id] = dir
 		e.mu.RLock()
-		exists := e.plugins[id] != nil
+		existing := e.plugins[id]
 		e.mu.RUnlock()
-		if exists {
+		if existing != nil {
+			// 已存在的插件：此前加载失败的随目录变化重试（重建实例，避免向旧沙箱重复注册）
+			if !existing.loaded && existing.loadErr != "" {
+				if lerr := e.reloadPackage(id); lerr != nil {
+					LoggerGeneral.Warn(ServiceName, "LTP9 插件重试加载失败 %s: %v", id, lerr)
+				}
+			}
 			continue
 		}
 		p := newPlugin(dir, root, id, m.Title)
@@ -196,8 +263,14 @@ func (e *engine) setOutbound(fn func(topic string, payload any)) {
 	e.mu.Unlock()
 }
 
-// shutdown 卸载全部插件。
+// shutdown 停止对账循环并卸载全部插件。
 func (e *engine) shutdown() {
+	e.mu.Lock()
+	if e.reconcileStop != nil {
+		close(e.reconcileStop)
+		e.reconcileStop = nil
+	}
+	e.mu.Unlock()
 	e.mu.RLock()
 	ids := make([]string, 0, len(e.plugins))
 	for id := range e.plugins {

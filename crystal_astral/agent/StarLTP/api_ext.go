@@ -472,7 +472,11 @@ func previewStr(b []byte, n int) string {
 
 // ==== WebSocket engine.ws（allow-socket，传输由宿主注入的 WsBridge 提供） ====
 
+// wsHandlerTimeout 插件 WS handler 的单次执行超时。
+const wsHandlerTimeout = 10 * time.Second
+
 // engineWsServe 委托宿主挂载一个 WebSocket 端点；onMessage 内的 goja 回调在插件 loop 内执行。
+// 回调带超时：插件循环被死循环卡住时，连接处理不至被无限拖住。
 func engineWsServe(p *plugin, path string, handler jsFunc) (any, error) {
 	wsMu.RLock()
 	bridge := wsServicer
@@ -481,21 +485,29 @@ func engineWsServe(p *plugin, path string, handler jsFunc) (any, error) {
 		return rwResult{Success: false, Error: "未注入 WebSocket 传输"}, nil
 	}
 	addr, err := bridge.Serve(p.ID, path, func(msg string) string {
-		var res string
-		p.loop.RunOnLoop(func(vm *goja.Runtime) {
+		resCh := make(chan string, 1)
+		loopOK := p.loop.RunOnLoop(func(vm *goja.Runtime) {
 			f, ok := goja.AssertFunction(handler)
 			if !ok {
-				res = "handler not a function"
+				resCh <- "handler not a function"
 				return
 			}
 			v, cerr := f(goja.Undefined(), vm.ToValue(msg))
 			if cerr != nil {
-				res = "handler error: " + cerr.Error()
+				resCh <- "handler error: " + cerr.Error()
 				return
 			}
-			res = v.String()
+			resCh <- v.String()
 		})
-		return res
+		if !loopOK {
+			return "plugin loop terminated"
+		}
+		select {
+		case res := <-resCh:
+			return res
+		case <-time.After(wsHandlerTimeout):
+			return "handler timeout"
+		}
 	})
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil

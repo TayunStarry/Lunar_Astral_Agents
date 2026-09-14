@@ -15,6 +15,7 @@ import (
 
 	module "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
+	"LunarSubsystem/LoggerGeneral"
 	lunardecoder "LunarSubsystem/LunarDecoder"
 	"github.com/dop251/goja"
 
@@ -53,7 +54,12 @@ func engineBroadcast(target string, payload any) {
 }
 
 // ==== 事件发布 engine.event.publish ====
-// 插件在事件总线上主动发起事件：派发给其它插件的订阅器，并转发给宿主 outbound 供外部客户端消费。
+
+// publishDispatchSem 同时派发中的 publish 事件上限：插件互激 re-publish（A→B→A…）时
+// 兜底防止 goroutine 与 CPU 无限爆炸；满载后丢弃本次派发并告警。
+var publishDispatchSem = make(chan struct{}, 256)
+
+// enginePublish 插件在事件总线上主动发起事件：派发给其它插件的订阅器，并转发给宿主 outbound 供外部客户端消费。
 // 异步分发（fire-and-forget）：publish 自身不阻塞；跳过发起插件自身订阅器，避免回调内自锁/自循环。
 func enginePublish(from *plugin, topic string, payload any) {
 	if Engine == nil {
@@ -71,7 +77,16 @@ func enginePublish(from *plugin, topic string, payload any) {
 		if q == from {
 			continue
 		}
-		go q.fireEvent(topic, payload)
+		select {
+		case publishDispatchSem <- struct{}{}:
+		default:
+			LoggerGeneral.Warn(ServiceName, "事件发布派发并发已达上限，丢弃 topic=%s 发往 %s 的一次派发", topic, q.ID)
+			continue
+		}
+		go func(q *plugin) {
+			defer func() { <-publishDispatchSem }()
+			q.fireEvent(topic, payload)
+		}(q)
 	}
 }
 
@@ -201,9 +216,16 @@ func engineDecode(key, cipher string) (string, error) {
 
 // ==== 文件 engine.file（路径限定插件数据目录） ====
 
+// scopedPath 把插件给定的相对路径约束在插件数据目录内。
+// 用 filepath.Rel 判定越界（前缀 HasPrefix 会放行 "data" 同前缀的兄弟目录，如 ../database/）；
+// 绝对路径与含盘符/UNC 前缀的输入（Windows 下 Join 会拼出越界路径）直接拒绝。
 func scopedPath(p *plugin, path string) (string, error) {
+	if filepath.IsAbs(path) || filepath.VolumeName(path) != "" {
+		return "", fmt.Errorf("路径越界: %s", path)
+	}
 	clean := filepath.Clean(filepath.Join(p.DataDir, path))
-	if !strings.HasPrefix(clean, p.DataDir) {
+	rel, rerr := filepath.Rel(p.DataDir, clean)
+	if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return "", fmt.Errorf("路径越界: %s", path)
 	}
 	_ = os.MkdirAll(filepath.Dir(clean), 0755)

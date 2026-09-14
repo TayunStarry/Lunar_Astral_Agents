@@ -36,12 +36,27 @@ func bindAsync(vm *goja.Runtime, p *plugin) *goja.Object {
 	return a
 }
 
+// asyncTaskRetention 已终结任务记录的保留时长：过期后在下次 run/list 时清理，
+// 防止长驻插件的 asyncTasks 无限增长。
+const asyncTaskRetention = time.Hour
+
+// asyncPrune 清理已终结且超过保留期的任务记录（需持有 asyncMu）。
+func asyncPrune(p *plugin) {
+	cutoff := time.Now().Add(-asyncTaskRetention)
+	for id, t := range p.asyncTasks {
+		if t.status != "running" && t.createdAt.Before(cutoff) {
+			delete(p.asyncTasks, id)
+		}
+	}
+}
+
 // asyncRun 登记并启动一个异步子任务，返回 taskId。
 func asyncRun(p *plugin, fn jsFunc, data any, timeoutMs float64) (any, error) {
 	p.asyncMu.Lock()
+	asyncPrune(p)
 	p.asyncSeq++
 	id := p.asyncSeq
-	p.asyncTasks[id] = &asyncTask{id: id, status: "running", data: data, fn: fn}
+	p.asyncTasks[id] = &asyncTask{id: id, status: "running", data: data, fn: fn, createdAt: time.Now()}
 	p.asyncMu.Unlock()
 
 	go func() {
@@ -100,6 +115,7 @@ func asyncGetStatus(p *plugin, id int) map[string]any {
 func asyncList(p *plugin) []any {
 	p.asyncMu.Lock()
 	defer p.asyncMu.Unlock()
+	asyncPrune(p)
 	out := make([]any, 0, len(p.asyncTasks))
 	for _, ts := range p.asyncTasks {
 		out = append(out, map[string]any{"taskId": ts.id, "status": ts.status, "progress": ts.progress})

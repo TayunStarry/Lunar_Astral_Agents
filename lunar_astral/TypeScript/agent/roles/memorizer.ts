@@ -12,7 +12,7 @@ const RAG_SUMMARY_HARD_LIMIT = 4096;
 /** 每条用户消息查询记忆库时返回的相关度最高的记录数 */
 const RAG_PER_QUERY_TOP_K = 10;
 /** 去重后送入摘要的检索记录条数上限 */
-const RAG_MAX_RECORDS = 32;
+const RAG_MAX_RECORDS = 24;
 
 /** 记忆检索记录（与 memoryQuery 返回结构对齐） */
 interface RagRecord {

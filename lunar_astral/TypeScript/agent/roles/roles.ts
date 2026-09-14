@@ -18,8 +18,8 @@ export const painterRole: PainterRole = new PainterRole();
 export const musicianRole: MusicianRole = new MusicianRole();
 /** 行动者角色(3D动画/位移/空间感知) */
 export const actorRole: ActorRole = new ActorRole();
-/** 对话者角色(与用户交互)；注入描述者与记忆者单例，避免 roles ↔ dialogue 循环引用 */
-export const dialogueRole: DialogueRole = new DialogueRole(descriptionRole, memorizerRole);
+/** 对话者角色(与用户交互) */
+export const dialogueRole: DialogueRole = new DialogueRole(descriptionRole);
 /** 观影者角色(视频观看) */
 export const viewerRole: ViewerRole = new ViewerRole();
 /** 注入媒体模块所需的角色单例（media → roles 静态边解除） */

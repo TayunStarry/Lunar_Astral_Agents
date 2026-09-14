@@ -87,6 +87,11 @@ func (d *KnowledgeDB) Close() error {
 			return err
 		}
 	}
+	if d.webSearchCacheDB != nil {
+		if err := d.webSearchCacheDB.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -106,7 +111,8 @@ func (d *KnowledgeDB) Ping() error {
 
 // executeRawSQL 执行原生 SQL
 // 支持带参数的占位符（params 为 []any），自动区分查询类与写操作类语句
-func (d *KnowledgeDB) executeRawSQL(op map[string]interface{}, tx *sql.Tx) OperationResult {
+// dbHandle 为执行目标连接（knowledgeDB 或 webSearchCacheDB）
+func (d *KnowledgeDB) executeRawSQL(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	stmt, _ := op["sql"].(string)
 	stmt = strings.TrimSpace(stmt)
 
@@ -137,7 +143,7 @@ func (d *KnowledgeDB) executeRawSQL(op map[string]interface{}, tx *sql.Tx) Opera
 		if tx != nil {
 			rows, err = tx.Query(stmt, params...)
 		} else {
-			rows, err = d.knowledgeDB.Query(stmt, params...)
+			rows, err = dbHandle.Query(stmt, params...)
 		}
 		if err != nil {
 			return OperationResult{
@@ -197,7 +203,7 @@ func (d *KnowledgeDB) executeRawSQL(op map[string]interface{}, tx *sql.Tx) Opera
 	if tx != nil {
 		result, err = tx.Exec(stmt, params...)
 	} else {
-		result, err = d.knowledgeDB.Exec(stmt, params...)
+		result, err = dbHandle.Exec(stmt, params...)
 	}
 	if err != nil {
 		return OperationResult{
@@ -235,9 +241,17 @@ func EnsureKnowledgeInitialized() error {
 	return nil
 }
 
-// ExecuteSQL 全局包装 — 原生 SQL 直接执行
+// ExecuteSQL 全局包装 — 原生 SQL 直接执行（默认知识库数据源）
 // 自动区分查询类（返回 rows）与写操作类（返回 affected_rows / last_insert_id）
 func ExecuteSQL(stmt string, params []any) *BatchResult {
+	return ExecuteSQLOn("", stmt, params)
+}
+
+// ExecuteSQLOn 指定数据源执行原生 SQL
+// db 为空或 "knowledge" 时使用知识库（knowledge.db）；
+// "web_search_cache" 时使用网络搜索页面摘要缓存（web_search_cache.db，Web-LTP 的派生缓存）；
+// 其他取值返回错误。执行语义与 ExecuteSQL 一致。
+func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 	startTime := time.Now()
 	result := &BatchResult{
 		Success:    true,
@@ -246,7 +260,26 @@ func ExecuteSQL(stmt string, params []any) *BatchResult {
 		Results:    []OperationResult{{Success: false, Operation: "sql"}},
 	}
 
-	if err := EnsureKnowledgeInitialized(); err != nil {
+	var target *sql.DB
+	switch db {
+	case "", "knowledge":
+		if err := EnsureKnowledgeInitialized(); err != nil {
+			result.Success = false
+			result.Error = err.Error()
+			result.Results[0].Error = err.Error()
+			return result
+		}
+		target = KnowledgeDatabase.knowledgeDB
+	case "web_search_cache":
+		if err := EnsureWebSearchCacheInitialized(); err != nil {
+			result.Success = false
+			result.Error = err.Error()
+			result.Results[0].Error = err.Error()
+			return result
+		}
+		target = KnowledgeDatabase.webSearchCacheDB
+	default:
+		err := fmt.Errorf("未知的数据源: %q（可选 knowledge / web_search_cache）", db)
 		result.Success = false
 		result.Error = err.Error()
 		result.Results[0].Error = err.Error()
@@ -258,10 +291,51 @@ func ExecuteSQL(stmt string, params []any) *BatchResult {
 		op["params"] = params
 	}
 
-	opResult := KnowledgeDatabase.executeRawSQL(op, nil)
+	opResult := KnowledgeDatabase.executeRawSQL(target, op, nil)
 	result.Success = opResult.Success
 	result.Error = opResult.Error
 	result.Results[0] = opResult
 	result.TotalTime = time.Since(startTime).Milliseconds()
 	return result
+}
+
+// EnsureWebSearchCacheInitialized 确保网络搜索摘要缓存连接可用（懒加载）。
+// 缓存文件由 Web-LTP 在首次网络搜索时创建；文件不存在时返回可读错误而不创建空库。
+func EnsureWebSearchCacheInitialized() error {
+	if KnowledgeDatabase == nil {
+		KnowledgeDatabase = &KnowledgeDB{}
+	}
+	if KnowledgeDatabase.webSearchCacheDB != nil {
+		if err := KnowledgeDatabase.webSearchCacheDB.Ping(); err == nil {
+			return nil
+		}
+		// 连接失效（如文件被删除后重建），关闭旧连接重新打开
+		KnowledgeDatabase.webSearchCacheDB.Close()
+		KnowledgeDatabase.webSearchCacheDB = nil
+	}
+	return KnowledgeDatabase.initWebSearchCacheDB()
+}
+
+// initWebSearchCacheDB 打开网络搜索摘要缓存连接（WAL 模式，小连接池）
+func (d *KnowledgeDB) initWebSearchCacheDB() error {
+	dbPath := *GeneralConfig.WebSearchCacheDBPath
+	if _, err := os.Stat(dbPath); err != nil {
+		return fmt.Errorf("网络搜索缓存数据库不存在（完成一次网络搜索后自动创建）: %s", dbPath)
+	}
+
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
+	if err != nil {
+		return fmt.Errorf("连接搜索缓存SQLite失败: %v", err)
+	}
+	db.SetMaxOpenConns(2)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return fmt.Errorf("测试搜索缓存SQLite连接失败: %v", err)
+	}
+
+	d.webSearchCacheDB = db
+	LoggerGeneral.Info("FileManager", "网络搜索摘要缓存连接完成: %s", dbPath)
+	return nil
 }

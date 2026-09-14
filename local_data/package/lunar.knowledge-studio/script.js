@@ -1,12 +1,14 @@
 // ============================================================
 // 星月智能 · 知识库 — 统一助手主逻辑 v4
 // 左侧：输入 SQL/自然语言 + 审核；右侧：操作历史预览
-// 数据操作全部回归原生 SQL（POST /knowledge/ {sql, params}）
+// 数据操作全部回归原生 SQL（POST /knowledge/ {sql, params, db}）
+// db 可选数据源：knowledge（知识库）/ web_search_cache（网络搜索页面摘要缓存）
 // ============================================================
 
 // 全局变量
 let tables = [];
 let selectedTable = tables.length ? tables[0] : null;
+let currentDB = 'knowledge';  // 当前数据源：knowledge | web_search_cache
 let aiResult = null;          // { sql, explanation }
 let currentSQL = null;        // 当前审核中的待执行 SQL
 let history = [];             // 操作历史
@@ -15,6 +17,7 @@ let historySeq = 0;
 // DOM 元素
 const $ = (id) => document.getElementById(id);
 const elements = {
+    dbSelect: $('db-select'),
     tableSelect: $('table-select'),
     btnRefreshTables: $('btn-refresh-tables'),
     btnCreateTable: $('btn-create-table'),
@@ -73,7 +76,7 @@ async function runSQL(sql, params = []) {
     const response = await fetch(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql, params })
+        body: JSON.stringify({ sql, params, db: currentDB })
     });
     if (!response.ok) throw new Error(`HTTP错误! 状态码: ${response.status}`);
     const result = await response.json();
@@ -81,6 +84,19 @@ async function runSQL(sql, params = []) {
         throw new Error(result.error || 'SQL 执行失败');
     }
     return (result.results && result.results[0]) || { success: true };
+}
+
+// ============================================================
+// 数据源切换（knowledge / web_search_cache）：重置表选择并重新加载
+// ============================================================
+async function switchDatabase() {
+    const next = elements.dbSelect.value || 'knowledge';
+    if (next === currentDB) return;
+    currentDB = next;
+    selectedTable = null;
+    clearCurrentTable();
+    await refreshTables();
+    showToast(currentDB === 'web_search_cache' ? '已切换数据源：网络搜索缓存' : '已切换数据源：知识库', 'success');
 }
 
 // ============================================================
@@ -418,6 +434,7 @@ async function executeSql() {
         label: cls.label,
         icon: cls.icon,
         isWrite: cls.isWrite,
+        db: currentDB,
         sql,
         time: new Date(),
         timeText: formatTime(new Date()),
@@ -580,9 +597,10 @@ function renderHistory() {
 
         return `
             <div class="history-item ${statusCls}" data-seq="${rec.seq}">
-                <div class="hi-head" data-toggle="${rec.seq}">
-                    <span class="badge ${meta.cls}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</span>
-                    <div class="hi-sql">${escapeHtml(rec.sql)}</div>
+            <div class="hi-head" data-toggle="${rec.seq}">
+                <span class="badge ${meta.cls}"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</span>
+                ${rec.db === 'web_search_cache' ? '<span class="badge k-other"><i class="fa-solid fa-globe"></i> 缓存</span>' : ''}
+                <div class="hi-sql">${escapeHtml(rec.sql)}</div>
                     <span class="hi-summary"><i class="fa-solid ${statusIcon}"></i> ${escapeHtml(summary)}</span>
                     <span class="hi-time">${escapeHtml(rec.timeText)}</span>
                     ${hasRows ? '<i class="fa-solid fa-chevron-down hi-caret"></i>' : ''}
@@ -865,6 +883,7 @@ function hideConfirmDialog() {
 // ============================================================
 function bindEvents() {
     // 表控制
+    elements.dbSelect.addEventListener('change', switchDatabase);
     elements.btnRefreshTables.addEventListener('click', () => refreshTables());
     elements.btnCreateTable.addEventListener('click', showCreateTableDialog);
     elements.btnDropTable.addEventListener('click', confirmDropTable);

@@ -3,8 +3,14 @@ package WebLTP
 // Web-LTP · 网络搜索（web_search）内置智能体
 // 琉璃内置的独立 LTPX AtoA 能力（同 AutoLTP 模式）：月华下发自然语言检索要求，
 // 后端独立驱动真浏览器（BrowserClient.WebViewSession）完成：
-//   必应搜索 → 结果页滚动截图 → 回到页顶 → 依次进入前 N（≤10）个结果页
-//   → 每页滚动截图（≤10 张）→ 逐页情报摘要（硬切断 ≤4096 字符）→ 回到搜索引擎页
+//   搜索引擎降级链（bing → baidu → sogou，过滤字典站/工具站兜底并去重）
+//   → 结果页滚动截图 → 回到页顶
+//   → 依次进入前 N（≤10）个结果页（跨结果页 URL 去重）
+//     → 未过期缓存命中则直接复用 SQL 摘要（local_data/database/web_search_cache.db，默认 7 天，
+//       超期记录照常访问并用新摘要覆写）
+//     → 未命中则逐页滚动截图（≤10 张/页，触底即止）
+//     → 逐页情报摘要（硬切断 ≤4096 字符）；模型失败以正文前段兜底，成功后写缓存
+//   → 回到搜索引擎页
 //   → 以「月华打开了什么页面、看到了什么内容」的口吻汇编搜索报告 → 回传月华。
 // 不依赖任何前端包；业务完成后关闭浏览器页面；窗口中途被关闭则以已采集信息收尾。
 // 配置沿用主配置文件 lunar_config.json 的 web_search 字段（缺失字段使用默认值）。
@@ -36,6 +42,11 @@ type Config struct {
 	SummaryMaxChars int `json:"summary_max_chars"`
 	// 单次运行的总时长软上限（秒），超时后以已采集信息收尾
 	MaxRunSeconds int `json:"max_run_seconds"`
+	// 是否启用页面摘要缓存（SQLite，LocalDir/database/web_search_cache.db）。
+	// 未配置时默认开启；显式配置 false 关闭
+	CacheEnabled *bool `json:"cache_enabled"`
+	// 页面摘要缓存有效期（天），超过后重新访问网页并用新摘要覆写
+	CacheTTLDays int `json:"cache_ttl_days"`
 }
 
 const webSearchPagesHardCap = 10
@@ -89,10 +100,18 @@ func LoadConfig() Config {
 	if w.MaxRunSeconds <= 0 {
 		w.MaxRunSeconds = 360
 	}
+	if w.CacheTTLDays <= 0 {
+		w.CacheTTLDays = 7
+	}
 	if w.ScreenshotDir == "" {
 		w.ScreenshotDir = "captures/web_search"
 	}
 	return w
+}
+
+// cacheEnabled 缓存开关（未配置时默认开启）
+func (c Config) cacheEnabled() bool {
+	return c.CacheEnabled == nil || *c.CacheEnabled
 }
 
 // defaultConfig 默认配置
@@ -106,6 +125,7 @@ func defaultConfig() Config {
 		PageScrollCaptures:    10,
 		SummaryMaxChars:       4096,
 		MaxRunSeconds:         360,
+		CacheTTLDays:          7,
 	}
 }
 
