@@ -24,6 +24,7 @@ coverage.out
 local_data/documents/
 local_data/models/
 local_data/images/
+local_data/cache/
 database/
 bin/
 

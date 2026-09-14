@@ -40,6 +40,58 @@ func (class *Runtime) keyframe(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
+// videoMedia 将视频本地化并写入 llama-server 媒体目录，供观影者以 file:// 引用观看
+// 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径
+// 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）
+// 返回值: [Array<{file: string, start: number, end: number}>, error] 媒体片段列表和错误信息
+func (class *Runtime) videoMedia(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
+	}
+
+	inputFile, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("inputFile必须是字符串")})
+	}
+
+	segments, err := module.VideoToMedia(inputFile)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	// 转换为TypeScript可处理的格式
+	result := make([]map[string]any, len(segments))
+	for i, seg := range segments {
+		result[i] = map[string]any{
+			"file":  seg.File,
+			"start": seg.Start,
+			"end":   seg.End,
+		}
+	}
+
+	return class.runtime.ToValue([]any{result, nil})
+}
+
+// audioWav 将音频本地化并转换为 16kHz 单声道 WAV，返回 base64 编码
+// 输入支持 HTTP(S) URL、data:audio/xxx;base64 URI 与本地文件路径
+// 返回值: [string, error] WAV 音频的 base64 编码和错误信息
+func (class *Runtime) audioWav(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("参数不足")})
+	}
+
+	inputFile, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("inputFile必须是字符串")})
+	}
+
+	base64Data, err := module.AudioToWavBase64(inputFile)
+	if err != nil {
+		return class.runtime.ToValue([]any{"", err})
+	}
+	return class.runtime.ToValue([]any{base64Data, nil})
+}
+
 // resizeImage 适配TypeScript调用的图片缩放功能，处理图片数据并返回缩放结果数组
 // 动态图（GIF/APNG/WebP帧数>2）返回多帧base64数组；静态图返回单元素数组
 // 返回值: [Array<Object>, error] 缩放结果数组和错误信息

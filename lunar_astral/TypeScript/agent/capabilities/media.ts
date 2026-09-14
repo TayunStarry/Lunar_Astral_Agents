@@ -1,5 +1,5 @@
-import { getPromptFromKnowledge, savePromptToKnowledge } from '../../file/io/knowledge';
-import { ImageContent, TextContent, PostMessage } from '../../config/model';
+﻿﻿import { getPromptFromKnowledge, savePromptToKnowledge } from '../../file/io/knowledge';
+import { AudioContent, ImageContent, TextContent, PostMessage } from '../../config/model';
 import { GlobalConfig } from '../../config/global';
 import { interactEvent } from './ltp-event';
 import type { ModelBuilder } from '../base/builder';
@@ -19,25 +19,24 @@ async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<v
     const cachedPrompt = getPromptFromKnowledge(videoUrl);
     if (cachedPrompt) {
         GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
-        console.log('[观影者] 命中视频缓存，直接返回');
+        console.log('[影音者] 命中视频缓存，直接返回');
         return;
     }
-    // 第一步：提取关键帧
-    console.log('[观影者] 开始提取视频关键帧...');
-    const [images, error] = keyframe(videoUrl, './cache');
-    if (images.length === 0 || error) {
-        console.error('[观影者] 关键帧提取失败:', error);
-        throw new Error('提取关键帧失败');
+    // 第一步：视频本地化到 llama-server 媒体目录（长视频自动分段），获取 file:// 引用
+    console.log('[影音者] 开始将视频写入媒体目录...');
+    const [segments, mediaError] = videoMedia(videoUrl);
+    if (!segments || segments.length === 0 || mediaError) {
+        console.error('[影音者] 视频媒体化失败:', mediaError);
+        throw new Error('视频媒体化失败');
     }
-    console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
-    // 第二步：将关键帧转换为观影者所需格式
-    /** 关键帧数据数组 */
-    const keyframes = images.map(frame => ({ data: frame.data, timestamp: frame.timestamp || '' }));
-    // 第三步：调用观影者智能体观看视频
-    console.log('[观影者] 开始观看视频...');
-    const videoSummary = await mediaRoles!.viewerRole.watchVideo(keyframes);
-    console.log('[观影者] 视频观看完成');
-    // 第四步：将观后感添加到未读上下文
+    /** 媒体片段 file:// 引用列表（llama-server 端 ffmpeg 自动抽帧） */
+    const mediaUrls = segments.map(segment => `file://${segment.file}`);
+    console.log(`[影音者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
+    // 第二步：调用观影者智能体观看视频
+    console.log('[影音者] 开始观看视频...');
+    const videoSummary = await mediaRoles!.viewerRole.watchVideo(mediaUrls);
+    console.log('[影音者] 视频观看完成');
+    // 第三步：将视频理解文本添加到未读上下文
     if (videoSummary && videoSummary.trim().length > 0) {
         GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
     }
@@ -46,10 +45,10 @@ async function analysisVideoFile(videoUrl: string, userNeeds: string): Promise<v
     if (userNeeds.trim().length > 0) {
         GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
     }
-    // 第五步：缓存观后感
+    // 第四步：缓存视频理解文本
     if (videoSummary) {
         savePromptToKnowledge(videoUrl, videoSummary);
-        console.log('[观影者] 观后感已缓存');
+        console.log('[影音者] 视频理解文本已缓存');
     }
 }
 
@@ -94,6 +93,16 @@ export async function LiteImageFile(): Promise<void> {
         for (let item of message.content) {
             // 如果是文本项,直接添加到新内容数组
             if (item.type == 'text') newContent.push(item);
+            // 音频内容：交给影音者音频理解分支，理解文本写入未读上下文，音频块不再透传
+            else if ('input_audio' in item) {
+                const format = item.input_audio.format || 'wav';
+                try {
+                    await analysisAudioFile(`data:audio/${format};base64,${item.input_audio.data}`, '');
+                }
+                catch (error) {
+                    console.error('[影音者] 音频理解失败，跳过该音频:', error);
+                }
+            }
             // 检查是否为支持的视频文件格式
             else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                 // 处理视频文件
@@ -155,4 +164,104 @@ export async function batchProcessVideoFiles(userNeeds?: string): Promise<void> 
     }
     // 清空未读视频文件数组
     GlobalConfig.unreadVideoUrl = [];
+}
+
+/** 处理音频文件（影音者智能体，两段式：ASR 转写 → 内容理解） */
+async function analysisAudioFile(audioSource: string, userNeeds: string): Promise<void> {
+    // 缓存检查：URL 形式的音频按地址缓存（data URI 为一次性录音/上传，跳过缓存）
+    const cacheable = !audioSource.startsWith('data:');
+    const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
+    if (cachedPrompt) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
+        console.log('[影音者] 命中音频缓存，直接返回');
+        return;
+    }
+    // 第一步：将音频本地化并转换为 16kHz 单声道 WAV
+    console.log('[影音者] 开始转换音频...');
+    const [wavBase64, audioError] = audioWav(audioSource);
+    if (!wavBase64 || audioError) {
+        console.error('[影音者] 音频转换失败:', audioError);
+        throw new Error('音频转换失败');
+    }
+    // 第二步：调用语音识别模型转写（中英文统一走 ASR，多模态模型无需音频能力）
+    console.log('[影音者] 开始语音转写...');
+    const transcript = await transcribeAudio(wavBase64);
+    if (!transcript.trim()) {
+        console.error('[影音者] 语音转写为空');
+        throw new Error('语音转写为空');
+    }
+    console.log(`[影音者] 语音转写完成: ${transcript.substring(0, 50)}`);
+    // 第三步：调用影音者智能体基于转写文本生成音频理解
+    console.log('[影音者] 开始理解音频内容...');
+    const audioUnderstanding = await mediaRoles!.viewerRole.watchAudio(transcript);
+    console.log('[影音者] 音频理解完成');
+    // 第四步：将音频理解文本添加到未读上下文
+    if (audioUnderstanding && audioUnderstanding.trim().length > 0) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: audioUnderstanding });
+    }
+    else GlobalConfig.unreadContext.push({ role: 'user', content: `（该段音频转写为：${transcript}）` });
+    // 如果用户需求非空，追加到上下文
+    if (userNeeds.trim().length > 0) {
+        GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
+    }
+    // 第五步：缓存音频理解文本
+    if (audioUnderstanding && cacheable) {
+        savePromptToKnowledge(audioSource, audioUnderstanding);
+        console.log('[影音者] 音频理解文本已缓存');
+    }
+}
+
+/**
+ * 调用语音识别模型（system-asr）转写 16kHz WAV 音频
+ *
+ * @param wavBase64 16kHz 单声道 WAV 音频的 base64 编码
+ * @returns 转写文本（已剥离 ASR 输出的 "language xxx<asr_text>" 前缀）
+ */
+async function transcribeAudio(wavBase64: string): Promise<string> {
+    const [result, error] = syncFetch({
+        url: GlobalConfig.MultimodalUrl + '/chat/completions',
+        execute: {
+            method: 'POST',
+            crossDomain: true,
+            headers: {
+                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: GlobalConfig.AsrName,
+                messages: [{
+                    role: 'user',
+                    content: [{ type: 'input_audio', input_audio: { data: wavBase64, format: 'wav' } }]
+                }],
+                temperature: 0,
+            }),
+        },
+    });
+    if (error) {
+        console.error('[影音者] 语音转写请求失败:', error.message);
+        return '';
+    }
+    /** ASR 原始输出（形如 "language Chinese<asr_text>转写内容"） */
+    const raw = result?.body?.choices?.[0]?.message?.content || '';
+    // 剥离语言标记前缀，仅保留转写正文
+    const marker = '<asr_text>';
+    return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
+}
+
+/** 批量处理音频文件 */
+export async function batchProcessAudioFiles(userNeeds?: string): Promise<void> {
+    // 如果未读音频文件数组为空，直接返回
+    if (GlobalConfig.unreadAudioUrl.length === 0) return;
+    // 遍历未读音频文件数组，逐个处理
+    for (const audioSource of GlobalConfig.unreadAudioUrl) {
+        try {
+            // 处理音频文件
+            await analysisAudioFile(audioSource, userNeeds || '');
+            // 等待1秒，避免对服务器造成过大压力
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        catch (error) { continue; }
+    }
+    // 清空未读音频文件数组
+    GlobalConfig.unreadAudioUrl = [];
 }

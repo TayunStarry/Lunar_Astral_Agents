@@ -73,6 +73,13 @@ type VideoData struct {
 	FileSize json.RawMessage `json:"file_size"` // 可能是数字或字符串
 }
 
+// RecordData 语音消息数据（record）
+type RecordData struct {
+	File     string          `json:"file"`      // 语音文件引用，用于 get_record / get_file
+	URL      string          `json:"url"`       // 语音直链
+	FileSize json.RawMessage `json:"file_size"` // 可能是数字或字符串
+}
+
 // FileData 文件消息数据
 type FileData struct {
 	File     string          `json:"file"`      // 文件名或文件引用
@@ -196,6 +203,7 @@ type BridgeRequest struct {
 	Target    BridgeTarget
 	Messages  []map[string]interface{} // OpenAI 格式消息列表
 	VideoURLs []string                 // 视频地址列表，写入智能体 unreadVideoUrl
+	AudioURLs []string                 // 语音/音频地址列表，写入智能体 unreadAudioUrl
 }
 
 // GroupPoolEntry 群聊缓存池中的单条消息
@@ -204,6 +212,7 @@ type GroupPoolEntry struct {
 	Content   interface{} // string 或 []map[string]interface{}（OpenAI 多模态格式）
 	HasImages bool        // 是否包含图片
 	VideoURLs []string    // 视频地址列表
+	AudioURLs []string    // 语音/音频地址列表
 }
 
 // GroupPool 单个群聊的消息缓存池（FIFO，保留最新 maxGroupPoolSize 条）

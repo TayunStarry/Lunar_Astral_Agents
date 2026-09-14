@@ -23,6 +23,7 @@ const themeToggle = document.getElementById('themeToggle');
 const clearBtn = document.getElementById('clearBtn');
 const attachBtn = document.getElementById('attachBtn');
 const fileInput = document.getElementById('fileInput');
+const voiceBtn = document.getElementById('voiceBtn');
 const tabBar = document.getElementById('tabBar');
 const searchInput = document.getElementById('searchInput');
 const searchCount = document.getElementById('searchCount');

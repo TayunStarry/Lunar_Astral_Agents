@@ -3,6 +3,7 @@ package llama
 import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
+	"LunarSubsystem/ImageProcessor/module"
 	"bufio"
 	"context"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -54,6 +56,15 @@ func Init() {
 		"--no-ui",
 		// 空闲等待900秒后休眠服务器
 		"--sleep-idle-seconds", "900",
+		// 本地媒体目录：视频文件复制到此目录后通过 file:// 引用传给多模态模型
+		"--media-path", module.MediaDir(),
+		// 视频抽帧频率：0.5fps 控制视觉 token 消耗（60秒片段 = 30帧，适配 20480 上下文）
+		"--video-fps", "0.5",
+	}
+
+	// 若配置了 ffmpeg 路径，同步告知 llama-server 视频解码所需的 ffmpeg/ffprobe 所在目录
+	if *GeneralConfig.FfmpegPath != "" {
+		args = append(args, "--video-ffmpeg-dir", filepath.Dir(*GeneralConfig.FfmpegPath))
 	}
 
 	LoggerGeneral.Info("LlamaProxy", "正在启动 llama-server 端口: %d", *GeneralConfig.ModelPort)

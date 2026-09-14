@@ -82,6 +82,20 @@ func (class *Runtime) pullVideoUrl() goja.Value {
 	return class.runtime.ToValue(url)
 }
 
+// pullAudioUrl 拉取语音/音频URL
+func (class *Runtime) pullAudioUrl() goja.Value {
+	// 如果未处理的音频URL为空，返回空数组
+	if len(UnreadAudioUrl) == 0 {
+		return class.runtime.ToValue([]string{})
+	}
+	// 拷贝未处理的音频URL
+	url := append([]string{}, UnreadAudioUrl...)
+	// 清空未处理的音频URL
+	UnreadAudioUrl = make([]string, 0)
+	// 返回拉取到的音频URL
+	return class.runtime.ToValue(url)
+}
+
 // getAgentPosition 获取缓存的智能体3D位置（由前端遥测数据更新）
 func (class *Runtime) getAgentPosition() goja.Value {
 	agentPositionMutex.RLock()

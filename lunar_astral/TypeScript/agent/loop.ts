@@ -6,7 +6,7 @@ import { checkDueItems } from '../tool/schedule';
 import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
 import { parseContent } from '../file/parse/interface';
 import { descriptionRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
-import { batchProcessVideoFiles } from './capabilities/media';
+import { batchProcessVideoFiles, batchProcessAudioFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker } from './capabilities/memory';
@@ -89,7 +89,7 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 拉取外部消息
         await pullExternalMessages();
         /** 消息长度 */
-        const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
+        const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length + GlobalConfig.unreadAudioUrl.length;
         // 如果消息长度为0，跳过当前循环
         if (messageLength === 0) {
             // 检查计划表到期项，将到期计划内容写入上下文
@@ -109,14 +109,17 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 拉取琉璃工具链
         syncLTPXRemoteStatus();
         // 事件 -> 收到消息前：把待处理的消息上下文推送到琉璃，插件可经 return 改写后再消费
-        const feedback: { messages?: PostMessage[]; videos?: string[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, }).return;
+        const feedback: { messages?: PostMessage[]; videos?: string[]; audios?: string[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, audios: GlobalConfig.unreadAudioUrl }).return;
         // 如果插件返回了新的消息上下文，更新全局上下文
         if (feedback) {
             if (Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
             if (Array.isArray(feedback.videos)) GlobalConfig.unreadVideoUrl = feedback.videos;
+            if (Array.isArray(feedback.audios)) GlobalConfig.unreadAudioUrl = feedback.audios;
         }
         // 批量处理视频文件
         await batchProcessVideoFiles();
+        // 批量处理音频文件
+        await batchProcessAudioFiles();
         // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
         await processUnreadFiles();
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
@@ -192,6 +195,8 @@ async function pullExternalMessages() {
     pullContext().forEach(message => writeMessage(message.role, message.content))
     // 合并视频URL
     pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); })
+    // 合并音频URL
+    pullAudioUrl().forEach(audioUrl => { writeAudioUrl(audioUrl); })
     // 等待1秒
     await new Promise(resolve => setTimeout(resolve, 1000));
 }
@@ -205,7 +210,8 @@ function writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
     // 打印文本消息
     for (const message of messages) {
         if (message.type === 'text') console.log('收到文本: ' + message.text);
-        else console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+        else if (message.type === 'image_url') console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+        else if (message.type === 'input_audio') console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
     }
 }
 
@@ -214,6 +220,13 @@ function writeVideoUrl(videoUrl: string) {
     console.log('收到视频: ' + videoUrl);
     // 从外部写入视频文件
     GlobalConfig.unreadVideoUrl.push(videoUrl);
+}
+
+/** 写入音频文件 */
+function writeAudioUrl(audioUrl: string) {
+    console.log('收到音频: ' + audioUrl.substring(0, 80));
+    // 从外部写入音频文件
+    GlobalConfig.unreadAudioUrl.push(audioUrl);
 }
 
 /** 错误累积达阈值后重置智能体状态 */
@@ -226,7 +239,8 @@ function resetAgentState(): void {
     viewerRole.coverContext([]);
     actorRole.coverContext([]);
     memorizerRole.coverContext([]);
-    // 清除主智能体的unreadContext和unreadVideoUrl
+    // 清除主智能体的unreadContext、unreadVideoUrl和unreadAudioUrl
     GlobalConfig.unreadContext = [];
     GlobalConfig.unreadVideoUrl = [];
+    GlobalConfig.unreadAudioUrl = [];
 }

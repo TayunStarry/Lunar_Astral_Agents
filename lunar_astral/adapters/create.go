@@ -33,6 +33,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册图像处理适配器
 	vm.Set("keyframe", adapters.keyframe)
+	vm.Set("videoMedia", adapters.videoMedia)
+	vm.Set("audioWav", adapters.audioWav)
 	vm.Set("resizeImage", adapters.resizeImage)
 	vm.Set("generateImage", adapters.generateImage)
 
@@ -41,6 +43,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册消息操作适配器
 	vm.Set("pullVideoUrl", adapters.pullVideoUrl)
+	vm.Set("pullAudioUrl", adapters.pullAudioUrl)
 	vm.Set("pullContext", adapters.pullContext)
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)

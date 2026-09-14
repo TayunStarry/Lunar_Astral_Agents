@@ -62,7 +62,7 @@ func handlePrivateMessage(msg NapcatMessage) {
 	}
 
 	nickname := resolveNickname(msg.UserID, msg.Sender)
-	content, hasImages, videoURLs := parseMessageSegments(0, msg.Message)
+	content, hasImages, videoURLs, audioURLs := parseMessageSegments(0, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	rp := parseRawRedPacket(msg.Raw)
@@ -70,7 +70,8 @@ func handlePrivateMessage(msg NapcatMessage) {
 		content = buildRedPacketText(rp)
 		hasImages = false
 		videoURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 {
+		audioURLs = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 && len(audioURLs) == 0 {
 		// 无可理解内容的空消息（系统提示、空卡片等）直接忽略
 		return
 	}
@@ -79,6 +80,7 @@ func handlePrivateMessage(msg NapcatMessage) {
 		Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
 		Messages:  []map[string]interface{}{buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)},
 		VideoURLs: videoURLs,
+		AudioURLs: audioURLs,
 	}
 
 	if rp != nil && rp.IsPhrase {
@@ -104,7 +106,7 @@ func handleGroupMessage(msg NapcatMessage) {
 	cacheMemberName(msg.GroupID, msg.UserID, memberName)
 	warmGroupMembers(msg.GroupID)
 
-	content, hasImages, videoURLs := parseMessageSegments(msg.GroupID, msg.Message)
+	content, hasImages, videoURLs, audioURLs := parseMessageSegments(msg.GroupID, msg.Message)
 
 	// 红包感知：红包消息承载于 raw.elements[].walletElement（message 段为空）
 	redPacket := parseRawRedPacket(msg.Raw)
@@ -112,12 +114,13 @@ func handleGroupMessage(msg NapcatMessage) {
 		content = buildRedPacketText(redPacket)
 		hasImages = false
 		videoURLs = nil
-	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 {
+		audioURLs = nil
+	} else if strings.TrimSpace(contentToText(content)) == "" && !hasImages && len(videoURLs) == 0 && len(audioURLs) == 0 {
 		// 无可理解内容的空消息不入池不触发
 		return
 	}
 
-	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs}
+	entry := GroupPoolEntry{Nickname: memberName, Content: content, HasImages: hasImages, VideoURLs: videoURLs, AudioURLs: audioURLs}
 
 	selfID := msg.SelfID
 	if selfID == 0 {
@@ -141,6 +144,7 @@ func handleGroupMessage(msg NapcatMessage) {
 			Target:    BridgeTarget{ID: msg.GroupID, IsGroup: true, GroupName: groupName},
 			Messages:  buildGroupMessages(groupName, entries),
 			VideoURLs: collectGroupVideoURLs(entries),
+			AudioURLs: collectGroupAudioURLs(entries),
 		}
 		// 被 @ 触发的回应，首次发言自动 @ 回发起者
 		if atSelf {
@@ -352,6 +356,15 @@ func collectGroupVideoURLs(entries []GroupPoolEntry) []string {
 	return urls
 }
 
+// collectGroupAudioURLs 汇总群聊缓存池条目中的语音/音频地址
+func collectGroupAudioURLs(entries []GroupPoolEntry) []string {
+	var urls []string
+	for _, e := range entries {
+		urls = append(urls, e.AudioURLs...)
+	}
+	return urls
+}
+
 // contentToText 从解析结果（string 或 多模态数组）中提取纯文本
 func contentToText(content interface{}) string {
 	if s, ok := content.(string); ok {
@@ -413,16 +426,20 @@ func pumpNext() {
 	if SendVideoToAgent != nil && len(req.VideoURLs) > 0 {
 		SendVideoToAgent(req.VideoURLs)
 	}
+	if SendAudioToAgent != nil && len(req.AudioURLs) > 0 {
+		SendAudioToAgent(req.AudioURLs)
+	}
 }
 
-// parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 视频地址列表)
-// 纯文本返回 string，包含图片返回 []map[string]interface{}；视频地址写入第三返回值
+// parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 视频地址列表, 语音/音频地址列表)
+// 纯文本返回 string，包含图片返回 []map[string]interface{}；视频与语音地址分别写入后两个返回值
 // groupID 用于 @ 目标与回复引用的成员名称解析（私聊传 0）
-func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}, bool, []string) {
+func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}, bool, []string, []string) {
 	var contentArray []map[string]interface{}
 	var contentStr string
 	var hasImages bool
 	var videoURLs []string
+	var audioURLs []string
 
 	for _, segment := range segments {
 		switch segment.Type {
@@ -463,6 +480,12 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}
 				appendContent(&contentArray, &contentStr, "[视频] ")
 			}
 		case "record":
+			var recordData RecordData
+			if json.Unmarshal(segment.Data, &recordData) == nil {
+				if source := resolveAudioSource(recordData); source != "" {
+					audioURLs = append(audioURLs, source)
+				}
+			}
 			appendContent(&contentArray, &contentStr, "[语音] ")
 		case "face":
 			appendContent(&contentArray, &contentStr, "[表情] ")
@@ -517,9 +540,9 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}
 	}
 
 	if hasImages {
-		return contentArray, true, videoURLs
+		return contentArray, true, videoURLs, audioURLs
 	}
-	return contentStr, false, videoURLs
+	return contentStr, false, videoURLs, audioURLs
 }
 
 // renderReplyQuote 通过 get_msg 还原被回复消息，渲染为 [回复 <发送者>: <内容摘要>]
@@ -582,6 +605,43 @@ func resolveVideoSource(videoData VideoData) string {
 		if source, err := getVideoSource(videoData.File); err == nil && source != "" {
 			return source
 		}
+	}
+	return ""
+}
+
+// resolveAudioSource 获取语音的可访问地址
+// 优先 url 直链；其次通过 get_record 转码（QQ 语音为 silk/amr 格式，由 NapCat 转为通用音频）；
+// 最后退化 get_file 获取原始文件（url / 本地路径 / base64 data URI）
+func resolveAudioSource(recordData RecordData) string {
+	if recordData.URL != "" {
+		return recordData.URL
+	}
+	if recordData.File == "" {
+		return ""
+	}
+	if strings.HasPrefix(recordData.File, "http://") || strings.HasPrefix(recordData.File, "https://") {
+		return recordData.File
+	}
+	// get_record 转码：mp3 通用格式，语音理解管线可识别
+	if resp, err := callNapcatAPI("/get_record", map[string]interface{}{"file": recordData.File, "out_format": "mp3"}); err == nil {
+		var data GetFileResponse
+		if json.Unmarshal(resp.Data, &data) == nil {
+			if data.Base64 != "" {
+				return "data:audio/mp3;base64," + data.Base64
+			}
+			if data.URL != "" {
+				return data.URL
+			}
+			if data.File != "" {
+				return data.File
+			}
+		}
+	} else {
+		LoggerGeneral.SubError("LunarCore", "Napcat", "get_record 转码失败: %v", err)
+	}
+	// 退化 get_file 获取原始语音文件
+	if source, err := getVideoSource(recordData.File); err == nil && source != "" {
+		return source
 	}
 	return ""
 }

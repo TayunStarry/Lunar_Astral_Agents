@@ -54,7 +54,7 @@ async function handleSend() {
                     if (format) {
                         contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
                     } else {
-                        showToast(`音频 ${pf.name} 仅支持 wav/mp3，已跳过发送`, 'error');
+                        showToast(`音频 ${pf.name} 仅支持 wav/mp3/flac/ogg，已跳过发送`, 'error');
                     }
                 } catch (err) {
                     showToast(`无法读取音频 ${pf.name}`, 'error');

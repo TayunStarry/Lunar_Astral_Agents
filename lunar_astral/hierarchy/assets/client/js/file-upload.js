@@ -70,8 +70,8 @@ function fileToRawBase64(file) {
 
 function getAudioFormat(file) {
     const ext = file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase();
-    if (ext === 'wav') return 'wav';
-    if (ext === 'mp3') return 'mp3';
+    // 仅返回多模态模型音频解码器原生支持的格式
+    if (['wav', 'mp3', 'flac', 'ogg'].includes(ext)) return ext;
     return null;
 }
 

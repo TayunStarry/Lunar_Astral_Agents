@@ -70,19 +70,6 @@
         }
       }
     },
-    "/asr": {
-      "post": {
-        "summary": "Qwen3-ASR 语音识别",
-        "description": "Qwen3-ASR 语音识别",
-        "operationId": "asr.Handler",
-        "x-handler": "asr.Handler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/background": {
       "get": {
         "summary": "随机背景图片",

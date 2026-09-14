@@ -88,3 +88,7 @@ var SendMessageToAgent func(messages []map[string]interface{})
 // SendVideoToAgent 向智能体推送视频地址的回调函数，由服务器层注册
 // 参数为视频 URL / 本地路径列表，由智能体通过 pullVideoUrl 拉取并理解视频内容
 var SendVideoToAgent func(urls []string)
+
+// SendAudioToAgent 向智能体推送语音/音频地址的回调函数，由服务器层注册
+// 参数为语音 URL / 本地路径 / base64 data URI 列表，由智能体通过 pullAudioUrl 拉取并理解音频内容
+var SendAudioToAgent func(urls []string)

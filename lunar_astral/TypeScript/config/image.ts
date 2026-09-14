@@ -10,6 +10,16 @@ export interface KeyFrame {
 	data: string;
 }
 
+/** 视频媒体片段（llama-server 媒体目录内的分段） */
+export interface MediaSegment {
+	/** 媒体目录内的文件名（通过 file:// 引用） */
+	file: string;
+	/** 片段起始时间（秒） */
+	start: number;
+	/** 片段结束时间（秒） */
+	end: number;
+}
+
 /** 缩放图片结果接口（单帧） */
 export interface ResizeImageResult {
 	/** 缩放后的图片数据 */

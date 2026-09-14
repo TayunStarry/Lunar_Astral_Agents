@@ -338,11 +338,11 @@ const NODES = {
     },
     qwen_asr: {
         label: 'Qwen 语音识别', icon: 'fa-microphone', color: '#22d3ee',
-        desc: 'engine：Qwen3-ASR 识别 base64 音频为文本（内嵌引擎，首次请求懒加载；wav 直接识别，其他格式经 ffmpeg 转 16k 单声道）；<音频>可来自上游',
+        desc: 'engine：经月华 system-asr（Qwen3-ASR）HTTP 接口识别 base64 音频为文本，需月华服务在线；wav/mp3/flac/ogg 直接识别，其他格式由琉璃端 ffmpeg 转 16k 单声道；<音频>可来自上游',
         ins: [{ k: 'audio', label: '音频(base64)' }], out: { k: 'text', label: '识别文本' },
         fields: [
-            { key: 'audio', label: '音频 base64（WAV；其他格式需 ffmpeg）', type: 'textarea', rows: 3, def: '' },
-            { key: 'format', label: '源音频格式（非 wav 时转码用）', type: 'select', options: ['wav', 'webm', 'ogg', 'mp4', 'm4a', 'weba'], def: 'wav' }
+            { key: 'audio', label: '音频 base64（wav/mp3/flac/ogg）', type: 'textarea', rows: 3, def: '' },
+            { key: 'format', label: '源音频格式（非 wav/mp3/flac/ogg 时转码用）', type: 'select', options: ['wav', 'webm', 'ogg', 'mp4', 'm4a', 'weba'], def: 'wav' }
         ]
     },
     microphone: {

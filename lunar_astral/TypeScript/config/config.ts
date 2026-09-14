@@ -17,6 +17,8 @@ export interface Config {
 		multimodal_url?: string;
 		/** 多模态服务 API 密钥 */
 		multimodal_key?: string;
+		/** 语音识别模型名称 */
+		asr_model?: string;
 	};
 	server: {
 		/** 用户名 */

@@ -19,6 +19,8 @@ export class GlobalConfig {
 	public static unreadContext: PostMessage[] = [];
 	/** 未读视频URL */
 	public static unreadVideoUrl: string[] = [];
+	/** 未读语音/音频URL */
+	public static unreadAudioUrl: string[] = [];
 	/** 是否正在思考中 */
 	public static reasoningInProgress: boolean = false;
 	/** 最终响应 */
@@ -42,6 +44,10 @@ export class GlobalConfig {
 	/** 获取 嵌入模型名称（从 agent 配置读取） */
 	public static get EmbeddingName(): string {
 		return GlobalConfig.customConfig?.agent?.embedding_model || "system-embedding";
+	};
+	/** 获取 语音识别模型名称（从 agent 配置读取） */
+	public static get AsrName(): string {
+		return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
 	};
 	/** 获取 用户名 */
 	public static get userName(): string {

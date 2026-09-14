@@ -131,6 +131,11 @@ func initBridgeAdapter() {
 		adapters.UnreadVideoUrl = append(adapters.UnreadVideoUrl, urls...)
 	}
 
+	// 注册桥接器语音/音频地址回调：写入智能体未读音频队列
+	napcat.SendAudioToAgent = func(urls []string) {
+		adapters.UnreadAudioUrl = append(adapters.UnreadAudioUrl, urls...)
+	}
+
 	// 启动桥接器连接（异步执行，避免阻塞 HTTP 服务器启动）
 	// StartBridgeScanner 内部会阻塞读取 WebSocket 消息，必须放到独立 goroutine 中
 	go napcat.StartBridgeScanner()

@@ -49,6 +49,7 @@ async function init() {
     setupSearchEvents();
     setupDragEvents();
     setupInputEvents();
+    setupVoiceInput();
     setupMessageAreaDelegation();
     setupDrawboard();
     setupCapture();

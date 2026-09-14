@@ -59,7 +59,7 @@
 	"web_search": {
 		"save_screenshots": false,
 		"screenshot_dir": "images/captures",
-		"max_pages": 5,
+		"max_pages": 3,
 		"max_results": 15,
 		"results_scroll_captures": 3,
 		"page_scroll_captures": 10,

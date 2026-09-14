@@ -1,22 +1,10 @@
-import { ModelBuilder } from '../base/builder';
-import { modelResponse, ImageContent } from '../../config/model';
-
-/** 关键帧数据 */
-interface KeyFrameData {
-	/** 帧数据（base64 JPEG） */
-	data: string;
-	/** 时间戳 */
-	timestamp: string;
-}
+﻿﻿import { ModelBuilder } from '../base/builder';
+import { modelResponse } from '../../config/model';
 
 /** 观影者角色 */
 export class ViewerRole extends ModelBuilder {
-	/** 每批帧数 */
-	private readonly BATCH_SIZE = 20;
-	/** 二次摘要间隔（每5轮 = 100帧） */
-	private readonly SECONDARY_SUMMARY_INTERVAL = 5;
-	/** 最大轮数（40轮 × 20帧 = 800帧上限） */
-	private readonly MAX_ROUNDS = 40;
+	/** 拼接理解文本超过该长度时触发客观摘要（字符数） */
+	private readonly SUMMARY_THRESHOLD = 4096;
 
 	constructor() {
 		super(fileView('prompts/viewerRole.md')[0]);
@@ -25,101 +13,74 @@ export class ViewerRole extends ModelBuilder {
 	/**
 	 * 观看视频（主入口）
 	 *
-	 * 接收关键帧数组，分批处理，生成二次摘要和三次摘要，
-	 * 最终返回一份完整的视频观后感。
+	 * 接收 llama-server 媒体目录内的视频引用列表（file:// 形式），
+	 * 服务端通过 ffmpeg 自动抽帧（--video-fps 控制频率），
+	 * 逐段生成客观内容理解并直接拼接；仅当拼接结果超过
+	 * SUMMARY_THRESHOLD 时，触发一次无人格化的客观摘要。
 	 *
-	 * @param keyframes 关键帧数据数组
-	 * @returns 最终视频观后感摘要
+	 * @param mediaUrls 视频片段引用列表（file://<文件名>）
+	 * @returns 视频内容理解文本（拼接或摘要）
 	 */
-	public async watchVideo(keyframes: KeyFrameData[]): Promise<string> {
-		const totalFrames = Math.min(keyframes.length, this.MAX_ROUNDS * this.BATCH_SIZE);
-		const totalRounds = Math.ceil(totalFrames / this.BATCH_SIZE);
-
-		console.log(`[观影者] 开始观看视频，共 ${totalFrames} 帧，${totalRounds} 轮`);
-
-		/** 所有轮次的评价 */
-		const evaluations: string[] = [];
-		/** 二次摘要列表 */
-		const secondarySummaries: string[] = [];
-
-		for (let round = 0; round < totalRounds; round++) {
-			const start = round * this.BATCH_SIZE;
-			const batch = keyframes.slice(start, start + this.BATCH_SIZE);
-			if (batch.length === 0) break;
-
-			console.log(`[观影者] 第 ${round + 1}/${totalRounds} 轮，处理 ${batch.length} 帧`);
-
-			// 第一步：对当前批次生成评价
-			const evaluation = await this.evaluateBatch(batch, round + 1);
-			if (evaluation) {
-				evaluations.push(evaluation);
-				console.log(`[观影者] 第 ${round + 1} 轮评价完成`);
-			}
-
-			// 第二步：每5轮（或最后一轮）执行二次摘要
-			const isLastRound = round === totalRounds - 1;
-			const shouldSummarize = (round + 1) % this.SECONDARY_SUMMARY_INTERVAL === 0 || isLastRound;
-
-			if (shouldSummarize && evaluations.length > 0) {
-				const recentEvals = evaluations.slice(-this.SECONDARY_SUMMARY_INTERVAL);
-				const secondarySummary = await this.generateSecondarySummary(recentEvals);
-				if (secondarySummary) {
-					secondarySummaries.push(secondarySummary);
-					console.log(`[观影者] 二次摘要完成（第 ${secondarySummaries.length} 份）`);
-				}
-			}
-		}
-
-		// 第三步：全部批次完成后，执行三次摘要整合
-		if (secondarySummaries.length === 0) {
-			console.warn('[观影者] 未产生任何二次摘要');
+	public async watchVideo(mediaUrls: string[]): Promise<string> {
+		if (mediaUrls.length === 0) {
+			console.warn('[影音者] 未收到任何视频片段');
 			return '月华观看了这个视频，但没有获取到足够的信息。';
 		}
 
-		if (secondarySummaries.length === 1) {
-			console.log('[观影者] 仅一份摘要，直接返回');
-			return secondarySummaries[0];
+		console.log(`[影音者] 开始观看视频，共 ${mediaUrls.length} 个片段`);
+
+		/** 所有片段的内容理解 */
+		const understandings: string[] = [];
+
+		for (let index = 0; index < mediaUrls.length; index++) {
+			console.log(`[影音者] 观看第 ${index + 1}/${mediaUrls.length} 段`);
+			const understanding = await this.evaluateSegment(mediaUrls[index], index + 1, mediaUrls.length);
+			if (understanding.trim().length > 0) {
+				understandings.push(understanding);
+				console.log(`[影音者] 第 ${index + 1} 段理解完成`);
+			}
 		}
 
-		const finalSummary = await this.generateTertiarySummary(secondarySummaries);
-		console.log('[观影者] 三次摘要（最终观后感）完成');
-		return finalSummary || secondarySummaries.join('\n\n');
+		if (understandings.length === 0) {
+			console.warn('[影音者] 未产生任何片段理解');
+			return '月华观看了这个视频，但没有获取到足够的信息。';
+		}
+
+		/** 拼接所有片段的文本理解 */
+		const concatenated = understandings.join('\n\n');
+
+		// 拼接文本未超阈值时直接返回，不做任何总结
+		if (concatenated.length <= this.SUMMARY_THRESHOLD) {
+			console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
+			return concatenated;
+		}
+
+		// 超过阈值时触发无人格化的客观摘要
+		console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
+		const summary = await this.generateObjectiveSummary(concatenated);
+		console.log('[影音者] 客观摘要完成');
+		return summary || concatenated;
 	}
 
 	/**
-	 * 对一批关键帧生成评价
+	 * 观看一段视频并生成客观内容理解
 	 *
-	 * @param frames 关键帧批次（最多20帧）
-	 * @param round 当前轮次编号
-	 * @returns 评价文本
+	 * @param mediaUrl 视频片段引用（file://<文件名>）
+	 * @param index 片段序号（从1开始）
+	 * @param total 片段总数
+	 * @returns 该片段的客观内容理解文本
 	 */
-	private async evaluateBatch(frames: KeyFrameData[], round: number): Promise<string> {
-		/** 将关键帧转换为 ImageContent 数组 */
-		const imageContents: ImageContent[] = frames.map(frame => ({
-			type: 'image_url',
-			image_url: { url: `data:image/jpeg;base64,${frame.data}` }
-		}));
+	private async evaluateSegment(mediaUrl: string, index: number, total: number): Promise<string> {
+		/** 构建提示词：任务格式与行为准则由系统提示（viewerRole.md）定义 */
+		const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+		const prompt = `请观看这段视频${position}，按「片段理解任务」的格式输出该片段的客观内容理解。`;
 
-		/** 构建提示词 */
-		const prompt = `请观看以下视频的第 ${round} 批关键帧（共 ${frames.length} 帧），以月华的身份描述你的观影感受和发现的关键信息。
-时间范围：${frames[0]?.timestamp || '?'} ~ ${frames[frames.length - 1]?.timestamp || '?'}
-
-请按以下格式输出：
-【感受】
-（以月华的第一人称写2-4句话）
-
-【关键信息】
-- 人物：...
-- 场景：...
-- 事件：...
-- 变化：...`;
-
-		// 覆写上下文：用户消息包含提示词 + 图片
+		// 覆写上下文：文本提示词 + 视频引用（服务端自动抽帧解码）
 		this.coverContext({
 			role: 'user',
 			content: [
 				{ type: 'text', text: prompt },
-				...imageContents
+				{ type: 'image_url', image_url: { url: mediaUrl } }
 			]
 		});
 		this.runtimeMessages = [];
@@ -129,73 +90,65 @@ export class ViewerRole extends ModelBuilder {
 		try {
 			response = this.run([], []);
 		} catch (error) {
-			console.error(`[观影者] 第 ${round} 轮推理失败:`, error);
+			console.error(`[影音者] 第 ${index} 段推理失败:`, error);
 			return '';
 		}
 
 		const content = response.body?.choices?.[0]?.message?.content || '';
 		if (!content.trim()) {
-			console.warn(`[观影者] 第 ${round} 轮返回空内容`);
+			console.warn(`[影音者] 第 ${index} 段返回空内容`);
 		}
 		return content;
 	}
 
 	/**
-	 * 生成二次摘要（整合5轮评价）
+	 * 基于语音转写文本生成客观内容理解
 	 *
-	 * @param evaluations 最近5轮的评价文本
-	 * @returns 二次摘要
+	 * 音频转写由 system-asr 模型在上游完成（多模态模型无需音频能力），
+	 * 本方法仅消费转写文本，按系统提示的「音频理解任务」格式输出理解。
+	 *
+	 * @param transcript ASR 转写文本
+	 * @returns 音频内容理解文本
 	 */
-	private async generateSecondarySummary(evaluations: string[]): Promise<string> {
-		const prompt = `请将以下 ${evaluations.length} 段视频片段评价整合为一份连贯的摘要。
+	public async watchAudio(transcript: string): Promise<string> {
+		// 覆写上下文：转写文本（纯文本，音频块不再透传给多模态模型）
+		this.coverContext({
+			role: 'user',
+			content: `以下是系统语音识别模型对一段音频的转写文本，请按「音频理解任务」的格式输出该音频的客观内容理解。
 
-【评价内容】
-${evaluations.map((e, i) => `--- 片段${i + 1} ---\n${e}`).join('\n\n')}
-
-【整合要求】
-1. 保持月华的第一人称视角
-2. 使用活泼可爱的女孩语气
-3. 突出最重要的感受和发现
-4. 按时间线或逻辑线组织内容
-5. 字数控制在200-400字
-
-仅输出摘要内容，不要包含其他说明文字。`;
-
-		this.coverContext({ role: 'user', content: prompt });
+【转写文本】
+${transcript}`
+		});
 		this.runtimeMessages = [];
 
+		/** 调用模型 */
 		let response: modelResponse;
 		try {
 			response = this.run([], []);
 		} catch (error) {
-			console.error('[观影者] 二次摘要推理失败:', error);
+			console.error('[影音者] 音频理解推理失败:', error);
 			return '';
 		}
 
-		return response.body?.choices?.[0]?.message?.content || '';
+		const content = response.body?.choices?.[0]?.message?.content || '';
+		if (!content.trim()) {
+			console.warn('[影音者] 音频理解返回空内容');
+		}
+		return content;
 	}
 
 	/**
-	 * 生成三次摘要（最终观后感）
+	 * 生成无人格化的客观摘要
 	 *
-	 * @param secondarySummaries 所有二次摘要
-	 * @returns 最终观后感
+	 * @param concatenated 拼接后的全部片段理解文本
+	 * @returns 客观摘要文本
 	 */
-	private async generateTertiarySummary(secondarySummaries: string[]): Promise<string> {
-		const prompt = `请将以下 ${secondarySummaries.length} 份视频片段摘要整合为一份完整的视频观后感。
+	private async generateObjectiveSummary(concatenated: string): Promise<string> {
+		/** 构建提示词：整合要求由系统提示（viewerRole.md）的「客观摘要任务」定义 */
+		const prompt = `请按「客观摘要任务」的要求，将以下视频各片段的内容理解文本整合为一份客观摘要。
 
-【片段摘要】
-${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
-
-【整合要求】
-1. 以月华的身份，用第一人称视角写一份完整的观后感
-2. 使用活泼可爱的女孩语气
-3. 描述月华对整个视频的整体感受和印象
-4. 包含视频的主要内容概述、最打动月华的部分、月华的个人感受
-5. 字数控制在300-500字
-6. 结构清晰，有开头、主体和结尾
-
-仅输出观后感内容，不要包含其他说明文字。`;
+【理解文本】
+${concatenated}`;
 
 		this.coverContext({ role: 'user', content: prompt });
 		this.runtimeMessages = [];
@@ -204,7 +157,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
 		try {
 			response = this.run([], []);
 		} catch (error) {
-			console.error('[观影者] 三次摘要推理失败:', error);
+			console.error('[影音者] 客观摘要推理失败:', error);
 			return '';
 		}
 

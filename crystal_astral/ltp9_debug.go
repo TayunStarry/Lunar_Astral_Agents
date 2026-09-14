@@ -10,13 +10,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
+	"time"
 
 	star "CrystalAstral/agent/StarLTP"
 	kokoro "CrystalAstral/kokoro_tts"
-	asr "CrystalAstral/qwen_asr"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
+	ipmodule "LunarSubsystem/ImageProcessor/module"
 )
 
 // ltp9HandleInbound 尝试按 LTP9 调试信封处理一条 /ws 入站消息；返回 true 表示已消费（不再交给 LTP3）。
@@ -446,7 +449,8 @@ func ltp9HandleTest(m map[string]any) {
 		}
 		ack(map[string]any{"status": resp.StatusCode, "body": string(data)}, nil)
 	case "qwen_asr":
-		// Qwen 语音识别：base64 音频 → 识别文本（wav 直接识别，其他格式经 ffmpeg 转 16k 单声道）
+		// 语音识别：base64 音频 → 经月华 system-asr（Qwen3-ASR）HTTP 接口转写为文本
+		// wav/mp3/flac/ogg 由 llama-server 音频解码器直接识别；其他格式先经 ffmpeg 转为 16kHz 单声道 WAV
 		audioB64 := asString("audio")
 		if strings.TrimSpace(audioB64) == "" {
 			ack(nil, fmt.Errorf("qwen_asr 需提供 audio (base64)"))
@@ -456,13 +460,95 @@ func ltp9HandleTest(m map[string]any) {
 		if format == "" {
 			format = "wav"
 		}
-		text, confidence, terr := asr.TranscribeBase64(audioB64, format)
-		if terr != nil {
-			ack(nil, terr)
+		if !slices.Contains([]string{"wav", "mp3", "flac", "ogg"}, format) {
+			data, derr := base64.StdEncoding.DecodeString(audioB64)
+			if derr != nil {
+				ack(nil, fmt.Errorf("音频 base64 解码失败: %w", derr))
+				return
+			}
+			tempFile, terr := os.CreateTemp("", "ltp9_asr_*."+format)
+			if terr != nil {
+				ack(nil, fmt.Errorf("创建临时音频文件失败: %w", terr))
+				return
+			}
+			if _, werr := tempFile.Write(data); werr != nil {
+				tempFile.Close()
+				os.Remove(tempFile.Name())
+				ack(nil, fmt.Errorf("写入临时音频文件失败: %w", werr))
+				return
+			}
+			tempFile.Close()
+			converted, cerr := ipmodule.AudioToWavBase64(tempFile.Name())
+			os.Remove(tempFile.Name())
+			if cerr != nil {
+				ack(nil, fmt.Errorf("音频转码失败: %w", cerr))
+				return
+			}
+			audioB64 = converted
+			format = "wav"
+		}
+		text, aerr := transcribeViaYuehua(audioB64, format)
+		if aerr != nil {
+			ack(nil, aerr)
 			return
 		}
-		ack(map[string]any{"text": text, "confidence": confidence, "audio_format": "wav"}, nil)
+		ack(map[string]any{"text": text, "audio_format": format}, nil)
 	default:
 		ack(nil, fmt.Errorf("未知 ltp9/test action: %s", action))
 	}
+}
+
+// transcribeViaYuehua 经 HTTP 调用月华的语音识别接口（system-asr，Qwen3-ASR）转写音频
+// audioB64 为 llama-server 音频解码器原生支持格式（wav/mp3/flac/ogg）的 base64 编码
+// 返回剥离 "language xxx<asr_text>" 前缀后的转写正文
+func transcribeViaYuehua(audioB64 string, format string) (string, error) {
+	target := strings.TrimSuffix(*GeneralConfig.AgentMultimodalURL, "/") + "/chat/completions"
+	reqBody, _ := json.Marshal(map[string]any{
+		"model": *GeneralConfig.AgentASRModel,
+		"messages": []map[string]any{{
+			"role": "user",
+			"content": []map[string]any{{
+				"type":        "input_audio",
+				"input_audio": map[string]string{"data": audioB64, "format": format},
+			}},
+		}},
+		"temperature": 0,
+	})
+	req, err := http.NewRequest("POST", target, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return "", fmt.Errorf("构造语音识别请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if key := *GeneralConfig.AgentMultimodalKey; key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	// 首次请求会触发月华侧 ASR 模型按需加载，放宽超时
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("请求月华语音识别接口失败: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		LoggerGeneral.SubError("LunarCore", "LTP9", "月华语音识别返回 %d: %s", resp.StatusCode, string(data))
+		return "", fmt.Errorf("月华语音识别接口返回状态码 %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil || len(parsed.Choices) == 0 {
+		return "", fmt.Errorf("月华语音识别响应解析失败: %w", err)
+	}
+	raw := parsed.Choices[0].Message.Content
+	// 剥离 ASR 输出的语言标记前缀，仅保留转写正文
+	const marker = "<asr_text>"
+	if idx := strings.Index(raw, marker); idx >= 0 {
+		raw = raw[idx+len(marker):]
+	}
+	return strings.TrimSpace(raw), nil
 }

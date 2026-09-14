@@ -242,6 +242,9 @@
 | `--slots`, `--no-slots` | 暴露插槽监控端点（默认：启用）<br>环境变量：`LLAMA_ARG_ENDPOINT_SLOTS` |
 | `--slot-save-path PATH` | 保存插槽 KV 缓存的路径（默认：禁用） |
 | `--media-path PATH` | 用于加载本地媒体文件的目录；文件可以使用 file:// URL 通过相对路径访问（默认：禁用） |
+| `--video-fps N` | 视频抽帧的目标帧率（默认：4.0）<br>环境变量：`LLAMA_ARG_VIDEO_FPS` |
+| `--video-timestamp-interval N` | 视频文本时间戳的间隔，单位毫秒（默认：5000）<br>环境变量：`LLAMA_ARG_VIDEO_TIMESTAMP_INTERVAL` |
+| `--video-ffmpeg-dir DIR` | ffmpeg 与 ffprobe 可执行文件所在目录（默认：搜索 PATH）<br>环境变量：`LLAMA_ARG_VIDEO_FFMPEG_DIR` |
 | `--models-dir PATH` | 包含路由服务器模型的目录（默认：禁用）<br>环境变量：`LLAMA_ARG_MODELS_DIR` |
 | `--models-preset PATH` | 包含路由服务器模型预设的 INI 文件路径（默认：禁用）<br>环境变量：`LLAMA_ARG_MODELS_PRESET` |
 | `--models-max N` | 对于路由服务器，同时加载的最大模型数量（默认：4，0 = 无限制）<br>环境变量：`LLAMA_ARG_MODELS_MAX` |

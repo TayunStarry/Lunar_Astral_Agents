@@ -18,6 +18,8 @@ var (
 	AgentMultimodalURL = flag.String("agent-multimodal-url", "http://127.0.0.1:36789/v1", "核心智能体多模态服务 API 地址")
 	// AgentMultimodalKey 核心智能体多模态服务 API 密钥
 	AgentMultimodalKey = flag.String("agent-multimodal-key", "", "核心智能体多模态服务 API 密钥")
+	// AgentASRModel 核心智能体语音识别模型名称（月华 models.ini 中的预设名）
+	AgentASRModel = flag.String("agent-asr-model", "system-asr", "核心智能体语音识别模型名称")
 
 	// ==== 记忆库模型配置（memory） ====
 	// 用于记忆库的文本向量化、标签生成等

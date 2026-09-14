@@ -226,6 +226,19 @@
     color: var(--accent-color);
 }
 
+/* 语音输入按钮录音中状态：红色高亮 + 脉冲 */
+.attach-btn.recording {
+    background: rgba(255, 82, 82, 0.15);
+    color: #ff5252;
+    border-color: rgba(255, 82, 82, 0.4);
+    animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.35); }
+    50% { box-shadow: 0 0 0 6px rgba(255, 82, 82, 0); }
+}
+
 .message-input {
     flex: 1;
     background: transparent;

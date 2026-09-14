@@ -2,7 +2,6 @@ package main
 
 import (
 	kokoro "CrystalAstral/kokoro_tts"
-	asr "CrystalAstral/qwen_asr"
 	file "LunarSubsystem/FileManager/server"
 	image "LunarSubsystem/ImageProcessor/server"
 	media "LunarSubsystem/MediaTools/server"
@@ -129,8 +128,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== 引擎消息总线 ====
 	{Path: "/write/engine", Handler: StudioEngineHandler, Method: "POST", Description: "引擎/工作室消息（本地 ws 广播）"},
 
-	// ==== 语音识别（Qwen3-ASR 内嵌引擎，模型懒加载） ====
-	{Path: "/asr", Handler: asr.Handler, Method: "POST", Description: "Qwen3-ASR 语音识别"},
+	// ==== 语音识别：已移除内嵌 Qwen3-ASR 引擎，LTP9 qwen_asr 节点经 ltp9_debug 转发月华 system-asr HTTP 接口 ====
 
 	// ==== Kokoro 语音合成（内嵌引擎，同源 /kokoro/* 端点） ====
 	{Path: "/kokoro/tts", Handler: kokoroHandler(kokoro.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},

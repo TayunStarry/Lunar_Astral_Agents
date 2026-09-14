@@ -10,6 +10,7 @@ var agentSystem = (function (exports) {
         static unreadRecords = [];
         static unreadContext = [];
         static unreadVideoUrl = [];
+        static unreadAudioUrl = [];
         static reasoningInProgress = false;
         static finalResponse = "";
         static memoryReady = false;
@@ -28,6 +29,10 @@ var agentSystem = (function (exports) {
         ;
         static get EmbeddingName() {
             return GlobalConfig.customConfig?.agent?.embedding_model || "system-embedding";
+        }
+        ;
+        static get AsrName() {
+            return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
         }
         ;
         static get userName() {
@@ -224,20 +229,20 @@ var agentSystem = (function (exports) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
             GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
-            console.log('[观影者] 命中视频缓存，直接返回');
+            console.log('[影音者] 命中视频缓存，直接返回');
             return;
         }
-        console.log('[观影者] 开始提取视频关键帧...');
-        const [images, error] = keyframe(videoUrl, './cache');
-        if (images.length === 0 || error) {
-            console.error('[观影者] 关键帧提取失败:', error);
-            throw new Error('提取关键帧失败');
+        console.log('[影音者] 开始将视频写入媒体目录...');
+        const [segments, mediaError] = videoMedia(videoUrl);
+        if (!segments || segments.length === 0 || mediaError) {
+            console.error('[影音者] 视频媒体化失败:', mediaError);
+            throw new Error('视频媒体化失败');
         }
-        console.log(`[观影者] 关键帧提取完成，共 ${images.length} 帧`);
-        const keyframes = images.map(frame => ({ data: frame.data, timestamp: frame.timestamp || '' }));
-        console.log('[观影者] 开始观看视频...');
-        const videoSummary = await mediaRoles.viewerRole.watchVideo(keyframes);
-        console.log('[观影者] 视频观看完成');
+        const mediaUrls = segments.map(segment => `file://${segment.file}`);
+        console.log(`[影音者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
+        console.log('[影音者] 开始观看视频...');
+        const videoSummary = await mediaRoles.viewerRole.watchVideo(mediaUrls);
+        console.log('[影音者] 视频观看完成');
         if (videoSummary && videoSummary.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
         }
@@ -248,7 +253,7 @@ var agentSystem = (function (exports) {
         }
         if (videoSummary) {
             savePromptToKnowledge(videoUrl, videoSummary);
-            console.log('[观影者] 观后感已缓存');
+            console.log('[影音者] 视频理解文本已缓存');
         }
     }
     async function summarizeDynamicImages(frames) {
@@ -282,6 +287,15 @@ var agentSystem = (function (exports) {
             for (let item of message.content) {
                 if (item.type == 'text')
                     newContent.push(item);
+                else if ('input_audio' in item) {
+                    const format = item.input_audio.format || 'wav';
+                    try {
+                        await analysisAudioFile(`data:audio/${format};base64,${item.input_audio.data}`, '');
+                    }
+                    catch (error) {
+                        console.error('[影音者] 音频理解失败，跳过该音频:', error);
+                    }
+                }
                 else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
                     await analysisVideoFile(item.image_url.url, '');
                 }
@@ -327,6 +341,85 @@ var agentSystem = (function (exports) {
                 }
             }
         GlobalConfig.unreadVideoUrl = [];
+    }
+    async function analysisAudioFile(audioSource, userNeeds) {
+        const cacheable = !audioSource.startsWith('data:');
+        const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
+        if (cachedPrompt) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
+            console.log('[影音者] 命中音频缓存，直接返回');
+            return;
+        }
+        console.log('[影音者] 开始转换音频...');
+        const [wavBase64, audioError] = audioWav(audioSource);
+        if (!wavBase64 || audioError) {
+            console.error('[影音者] 音频转换失败:', audioError);
+            throw new Error('音频转换失败');
+        }
+        console.log('[影音者] 开始语音转写...');
+        const transcript = await transcribeAudio(wavBase64);
+        if (!transcript.trim()) {
+            console.error('[影音者] 语音转写为空');
+            throw new Error('语音转写为空');
+        }
+        console.log(`[影音者] 语音转写完成: ${transcript.substring(0, 50)}`);
+        console.log('[影音者] 开始理解音频内容...');
+        const audioUnderstanding = await mediaRoles.viewerRole.watchAudio(transcript);
+        console.log('[影音者] 音频理解完成');
+        if (audioUnderstanding && audioUnderstanding.trim().length > 0) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: audioUnderstanding });
+        }
+        else
+            GlobalConfig.unreadContext.push({ role: 'user', content: `（该段音频转写为：${transcript}）` });
+        if (userNeeds.trim().length > 0) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
+        }
+        if (audioUnderstanding && cacheable) {
+            savePromptToKnowledge(audioSource, audioUnderstanding);
+            console.log('[影音者] 音频理解文本已缓存');
+        }
+    }
+    async function transcribeAudio(wavBase64) {
+        const [result, error] = syncFetch({
+            url: GlobalConfig.MultimodalUrl + '/chat/completions',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: {
+                    Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: GlobalConfig.AsrName,
+                    messages: [{
+                            role: 'user',
+                            content: [{ type: 'input_audio', input_audio: { data: wavBase64, format: 'wav' } }]
+                        }],
+                    temperature: 0,
+                }),
+            },
+        });
+        if (error) {
+            console.error('[影音者] 语音转写请求失败:', error.message);
+            return '';
+        }
+        const raw = result?.body?.choices?.[0]?.message?.content || '';
+        const marker = '<asr_text>';
+        return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
+    }
+    async function batchProcessAudioFiles(userNeeds) {
+        if (GlobalConfig.unreadAudioUrl.length === 0)
+            return;
+        for (const audioSource of GlobalConfig.unreadAudioUrl) {
+            try {
+                await analysisAudioFile(audioSource, userNeeds || '');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            catch (error) {
+                continue;
+            }
+        }
+        GlobalConfig.unreadAudioUrl = [];
     }
 
     function RandomFloor(min, max) {
@@ -1231,74 +1324,47 @@ K:Am
     }
 
     class ViewerRole extends ModelBuilder {
-        BATCH_SIZE = 20;
-        SECONDARY_SUMMARY_INTERVAL = 5;
-        MAX_ROUNDS = 40;
+        SUMMARY_THRESHOLD = 4096;
         constructor() {
             super(fileView('prompts/viewerRole.md')[0]);
         }
-        async watchVideo(keyframes) {
-            const totalFrames = Math.min(keyframes.length, this.MAX_ROUNDS * this.BATCH_SIZE);
-            const totalRounds = Math.ceil(totalFrames / this.BATCH_SIZE);
-            console.log(`[观影者] 开始观看视频，共 ${totalFrames} 帧，${totalRounds} 轮`);
-            const evaluations = [];
-            const secondarySummaries = [];
-            for (let round = 0; round < totalRounds; round++) {
-                const start = round * this.BATCH_SIZE;
-                const batch = keyframes.slice(start, start + this.BATCH_SIZE);
-                if (batch.length === 0)
-                    break;
-                console.log(`[观影者] 第 ${round + 1}/${totalRounds} 轮，处理 ${batch.length} 帧`);
-                const evaluation = await this.evaluateBatch(batch, round + 1);
-                if (evaluation) {
-                    evaluations.push(evaluation);
-                    console.log(`[观影者] 第 ${round + 1} 轮评价完成`);
-                }
-                const isLastRound = round === totalRounds - 1;
-                const shouldSummarize = (round + 1) % this.SECONDARY_SUMMARY_INTERVAL === 0 || isLastRound;
-                if (shouldSummarize && evaluations.length > 0) {
-                    const recentEvals = evaluations.slice(-this.SECONDARY_SUMMARY_INTERVAL);
-                    const secondarySummary = await this.generateSecondarySummary(recentEvals);
-                    if (secondarySummary) {
-                        secondarySummaries.push(secondarySummary);
-                        console.log(`[观影者] 二次摘要完成（第 ${secondarySummaries.length} 份）`);
-                    }
-                }
-            }
-            if (secondarySummaries.length === 0) {
-                console.warn('[观影者] 未产生任何二次摘要');
+        async watchVideo(mediaUrls) {
+            if (mediaUrls.length === 0) {
+                console.warn('[影音者] 未收到任何视频片段');
                 return '月华观看了这个视频，但没有获取到足够的信息。';
             }
-            if (secondarySummaries.length === 1) {
-                console.log('[观影者] 仅一份摘要，直接返回');
-                return secondarySummaries[0];
+            console.log(`[影音者] 开始观看视频，共 ${mediaUrls.length} 个片段`);
+            const understandings = [];
+            for (let index = 0; index < mediaUrls.length; index++) {
+                console.log(`[影音者] 观看第 ${index + 1}/${mediaUrls.length} 段`);
+                const understanding = await this.evaluateSegment(mediaUrls[index], index + 1, mediaUrls.length);
+                if (understanding.trim().length > 0) {
+                    understandings.push(understanding);
+                    console.log(`[影音者] 第 ${index + 1} 段理解完成`);
+                }
             }
-            const finalSummary = await this.generateTertiarySummary(secondarySummaries);
-            console.log('[观影者] 三次摘要（最终观后感）完成');
-            return finalSummary || secondarySummaries.join('\n\n');
+            if (understandings.length === 0) {
+                console.warn('[影音者] 未产生任何片段理解');
+                return '月华观看了这个视频，但没有获取到足够的信息。';
+            }
+            const concatenated = understandings.join('\n\n');
+            if (concatenated.length <= this.SUMMARY_THRESHOLD) {
+                console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
+                return concatenated;
+            }
+            console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
+            const summary = await this.generateObjectiveSummary(concatenated);
+            console.log('[影音者] 客观摘要完成');
+            return summary || concatenated;
         }
-        async evaluateBatch(frames, round) {
-            const imageContents = frames.map(frame => ({
-                type: 'image_url',
-                image_url: { url: `data:image/jpeg;base64,${frame.data}` }
-            }));
-            const prompt = `请观看以下视频的第 ${round} 批关键帧（共 ${frames.length} 帧），以月华的身份描述你的观影感受和发现的关键信息。
-时间范围：${frames[0]?.timestamp || '?'} ~ ${frames[frames.length - 1]?.timestamp || '?'}
-
-请按以下格式输出：
-【感受】
-（以月华的第一人称写2-4句话）
-
-【关键信息】
-- 人物：...
-- 场景：...
-- 事件：...
-- 变化：...`;
+        async evaluateSegment(mediaUrl, index, total) {
+            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+            const prompt = `请观看这段视频${position}，按「片段理解任务」的格式输出该片段的客观内容理解。`;
             this.coverContext({
                 role: 'user',
                 content: [
                     { type: 'text', text: prompt },
-                    ...imageContents
+                    { type: 'image_url', image_url: { url: mediaUrl } }
                 ]
             });
             this.runtimeMessages = [];
@@ -1307,56 +1373,43 @@ K:Am
                 response = this.run([], []);
             }
             catch (error) {
-                console.error(`[观影者] 第 ${round} 轮推理失败:`, error);
+                console.error(`[影音者] 第 ${index} 段推理失败:`, error);
                 return '';
             }
             const content = response.body?.choices?.[0]?.message?.content || '';
             if (!content.trim()) {
-                console.warn(`[观影者] 第 ${round} 轮返回空内容`);
+                console.warn(`[影音者] 第 ${index} 段返回空内容`);
             }
             return content;
         }
-        async generateSecondarySummary(evaluations) {
-            const prompt = `请将以下 ${evaluations.length} 段视频片段评价整合为一份连贯的摘要。
+        async watchAudio(transcript) {
+            this.coverContext({
+                role: 'user',
+                content: `以下是系统语音识别模型对一段音频的转写文本，请按「音频理解任务」的格式输出该音频的客观内容理解。
 
-【评价内容】
-${evaluations.map((e, i) => `--- 片段${i + 1} ---\n${e}`).join('\n\n')}
-
-【整合要求】
-1. 保持月华的第一人称视角
-2. 使用活泼可爱的女孩语气
-3. 突出最重要的感受和发现
-4. 按时间线或逻辑线组织内容
-5. 字数控制在200-400字
-
-仅输出摘要内容，不要包含其他说明文字。`;
-            this.coverContext({ role: 'user', content: prompt });
+【转写文本】
+${transcript}`
+            });
             this.runtimeMessages = [];
             let response;
             try {
                 response = this.run([], []);
             }
             catch (error) {
-                console.error('[观影者] 二次摘要推理失败:', error);
+                console.error('[影音者] 音频理解推理失败:', error);
                 return '';
             }
-            return response.body?.choices?.[0]?.message?.content || '';
+            const content = response.body?.choices?.[0]?.message?.content || '';
+            if (!content.trim()) {
+                console.warn('[影音者] 音频理解返回空内容');
+            }
+            return content;
         }
-        async generateTertiarySummary(secondarySummaries) {
-            const prompt = `请将以下 ${secondarySummaries.length} 份视频片段摘要整合为一份完整的视频观后感。
+        async generateObjectiveSummary(concatenated) {
+            const prompt = `请按「客观摘要任务」的要求，将以下视频各片段的内容理解文本整合为一份客观摘要。
 
-【片段摘要】
-${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
-
-【整合要求】
-1. 以月华的身份，用第一人称视角写一份完整的观后感
-2. 使用活泼可爱的女孩语气
-3. 描述月华对整个视频的整体感受和印象
-4. 包含视频的主要内容概述、最打动月华的部分、月华的个人感受
-5. 字数控制在300-500字
-6. 结构清晰，有开头、主体和结尾
-
-仅输出观后感内容，不要包含其他说明文字。`;
+【理解文本】
+${concatenated}`;
             this.coverContext({ role: 'user', content: prompt });
             this.runtimeMessages = [];
             let response;
@@ -1364,7 +1417,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 response = this.run([], []);
             }
             catch (error) {
-                console.error('[观影者] 三次摘要推理失败:', error);
+                console.error('[影音者] 客观摘要推理失败:', error);
                 return '';
             }
             return response.body?.choices?.[0]?.message?.content || '';
@@ -3140,7 +3193,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         try {
             GlobalConfig.reasoningInProgress = true;
             await pullExternalMessages();
-            const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length;
+            const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length + GlobalConfig.unreadAudioUrl.length;
             if (messageLength === 0) {
                 checkDueItems().forEach(item => {
                     const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
@@ -3151,14 +3204,17 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
                 return;
             }
             syncLTPXRemoteStatus();
-            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, }).return;
+            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, audios: GlobalConfig.unreadAudioUrl }).return;
             if (feedback) {
                 if (Array.isArray(feedback.messages))
                     GlobalConfig.unreadContext = feedback.messages;
                 if (Array.isArray(feedback.videos))
                     GlobalConfig.unreadVideoUrl = feedback.videos;
+                if (Array.isArray(feedback.audios))
+                    GlobalConfig.unreadAudioUrl = feedback.audios;
             }
             await batchProcessVideoFiles();
+            await batchProcessAudioFiles();
             await processUnreadFiles();
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
@@ -3206,6 +3262,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
     async function pullExternalMessages() {
         pullContext().forEach(message => writeMessage(message.role, message.content));
         pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); });
+        pullAudioUrl().forEach(audioUrl => { writeAudioUrl(audioUrl); });
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
     function writeMessage(role, messages) {
@@ -3215,13 +3272,19 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         for (const message of messages) {
             if (message.type === 'text')
                 console.log('收到文本: ' + message.text);
-            else
+            else if (message.type === 'image_url')
                 console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+            else if (message.type === 'input_audio')
+                console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
         }
     }
     function writeVideoUrl(videoUrl) {
         console.log('收到视频: ' + videoUrl);
         GlobalConfig.unreadVideoUrl.push(videoUrl);
+    }
+    function writeAudioUrl(audioUrl) {
+        console.log('收到音频: ' + audioUrl.substring(0, 80));
+        GlobalConfig.unreadAudioUrl.push(audioUrl);
     }
     function resetAgentState() {
         descriptionRole.coverContext([]);
@@ -3233,6 +3296,7 @@ ${secondarySummaries.map((s, i) => `--- 摘要${i + 1} ---\n${s}`).join('\n\n')}
         memorizerRole.coverContext([]);
         GlobalConfig.unreadContext = [];
         GlobalConfig.unreadVideoUrl = [];
+        GlobalConfig.unreadAudioUrl = [];
     }
 
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);

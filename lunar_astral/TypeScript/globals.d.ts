@@ -1,5 +1,5 @@
 import type { FileListItem, ProxyFetchConfig } from './config/config';
-import type { KeyFrame, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
+import type { KeyFrame, MediaSegment, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
 import type { MultimodalMessage } from './config/model';
 import type { TTSParams } from './config/tool';
 import type { ScreenshotParams } from './config/screenshot';
@@ -91,6 +91,33 @@ declare global {
      * @returns {[KeyFrame[], Error | null]} 包含关键帧列表的元组，[关键帧列表, 错误信息]
      */
     function keyframe(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
+    /**
+     * 将视频本地化并写入 llama-server 媒体目录，供观影者以 file:// 引用观看
+     *
+     * 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
+     * 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）。
+     *
+     * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
+     */
+    function videoMedia(inputFile: string): [MediaSegment[], Error | null];
+    /**
+     * 将音频本地化并转换为 16kHz 单声道 WAV
+     *
+     * 输入支持 HTTP(S) URL、data:audio/xxx;base64 URI 与本地文件路径
+     *
+     * @param {string} inputFile 音频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[string, Error | null]} 包含转换结果的元组，[WAV音频的base64编码, 错误信息]
+     */
+    function audioWav(inputFile: string): [string, Error | null];
+    /**
+     * 拉取语音/音频URL
+     *
+     * @returns {string[]} 语音/音频URL列表
+     */
+    function pullAudioUrl(): string[];
     /**
      * 调整图片大小
      *

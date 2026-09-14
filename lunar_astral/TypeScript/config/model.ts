@@ -43,8 +43,8 @@ export interface TextMessage {
 export interface MultimodalMessage {
 	/** 消息角色（通常为 'user'） */
 	role: PostMessageRole;
-	/** 混合内容数组，可包含图片和文本 */
-	content: Array<ImageContent | TextContent>;
+	/** 混合内容数组，可包含音频、图片和文本 */
+	content: Array<ImageContent | AudioContent | TextContent>;
 }
 
 /** 工具调用响应消息 */
@@ -68,6 +68,19 @@ export interface ImageContent {
 	};
 }
 
+/** 音频内容块 */
+export interface AudioContent {
+	/** 内容类型，固定为 'input_audio' */
+	type: 'input_audio';
+	/** 音频数据（base64 编码）与格式 */
+	input_audio: {
+		/** 音频的 base64 编码数据 */
+		data: string;
+		/** 音频格式（wav/mp3/flac/ogg） */
+		format: string;
+	};
+}
+
 /** 文本内容块 */
 export interface TextContent {
 	/** 内容类型，固定为 'text' */
@@ -77,7 +90,7 @@ export interface TextContent {
 }
 
 /** 消息内容类型 */
-export type MessageContent = ImageContent | TextContent;
+export type MessageContent = ImageContent | AudioContent | TextContent;
 /**
  * 模型对话完成响应结构
  * 对应 OpenAI Chat Completions API 响应格式

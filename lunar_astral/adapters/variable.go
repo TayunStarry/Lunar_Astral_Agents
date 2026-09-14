@@ -46,6 +46,9 @@ var UnreadContext = make([]PostMessage, 0)
 // UnreadVideoUrl 未处理的视频URL
 var UnreadVideoUrl = make([]string, 0)
 
+// UnreadAudioUrl 未处理的语音/音频URL
+var UnreadAudioUrl = make([]string, 0)
+
 // ==== 智能体 3D 位置全局变量 ====
 
 // agentPosition 缓存的智能体最新3D位置（由前端遥测数据更新）
