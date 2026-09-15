@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarAstral/adapters"
+	"LunarAstral/engine"
 	"LunarAstral/websocket"
 	"encoding/json"
 	"io"
@@ -28,13 +28,13 @@ func MessageBatchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, msg := range req.Messages {
-		adapters.UnreadContext = append(adapters.UnreadContext, msg)
+		engine.UnreadContext = append(engine.UnreadContext, msg)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
 		Success: true,
-		Length:  len(adapters.UnreadContext),
+		Length:  len(engine.UnreadContext),
 	})
 }
 
@@ -58,13 +58,13 @@ func VideoUrlBatchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, url := range req.Urls {
-		adapters.UnreadVideoUrl = append(adapters.UnreadVideoUrl, url)
+		engine.UnreadVideoUrl = append(engine.UnreadVideoUrl, url)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
 		Success: true,
-		Length:  len(adapters.UnreadVideoUrl),
+		Length:  len(engine.UnreadVideoUrl),
 	})
 }
 
@@ -88,7 +88,7 @@ func AgentPositionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adapters.UpdateAgentPosition(req.X, req.Y, req.Z)
+	engine.UpdateAgentPosition(req.X, req.Y, req.Z)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
@@ -117,7 +117,7 @@ func AgentEventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adapters.PushAgentEventToContext(req.Event, req.Data)
+	engine.PushAgentEventToContext(req.Event, req.Data)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(BatchResponse{
@@ -166,7 +166,7 @@ func EngineMessageHandler(w http.ResponseWriter, r *http.Request) {
 			} `json:"character"`
 		}
 		if err := json.Unmarshal(msg.Payload, &tp); err == nil && tp.Character != nil {
-			adapters.UpdateAgentPosition(tp.Character.X, tp.Character.Y, tp.Character.Z)
+			engine.UpdateAgentPosition(tp.Character.X, tp.Character.Y, tp.Character.Z)
 		}
 	}
 

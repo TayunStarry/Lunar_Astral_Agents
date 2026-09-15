@@ -1,16 +1,16 @@
 package server
 
 import (
-	"LunarAstral/adapters"
+	"LunarAstral/engine"
 	"LunarAstral/bridging/napcat"
 	"LunarAstral/hierarchy"
 	"LunarAstral/model/llama"
 	"LunarAstral/websocket"
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/GeneralConfig"
-	image "LunarSubsystem/ImageProcessor/server"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/LunarGoja"
+	"LunarAstral/engine/container"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"mime"
@@ -43,7 +43,7 @@ func InitializeServer() {
 	// 注册WebSocket处理器
 	websocket.SetupWebSocketHandler(httpMux)
 	// 运行智能体上下文
-	adapters.RunAgentContext()
+	engine.RunAgentContext()
 	// 初始化桥接适配器
 	initBridgeAdapter()
 }
@@ -119,7 +119,7 @@ func initBridgeAdapter() {
 	napcat.SendMessageToAgent = func(messages []map[string]interface{}) {
 		// 将QQ消息（OpenAI格式）推送到智能体上下文
 		for _, msg := range messages {
-			adapters.UnreadContext = append(adapters.UnreadContext, adapters.PostMessage{
+			engine.UnreadContext = append(engine.UnreadContext, engine.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 			})
@@ -128,12 +128,12 @@ func initBridgeAdapter() {
 
 	// 注册桥接器视频地址回调：写入智能体未读视频队列
 	napcat.SendVideoToAgent = func(urls []string) {
-		adapters.UnreadVideoUrl = append(adapters.UnreadVideoUrl, urls...)
+		engine.UnreadVideoUrl = append(engine.UnreadVideoUrl, urls...)
 	}
 
 	// 注册桥接器语音/音频地址回调：写入智能体未读音频队列
 	napcat.SendAudioToAgent = func(urls []string) {
-		adapters.UnreadAudioUrl = append(adapters.UnreadAudioUrl, urls...)
+		engine.UnreadAudioUrl = append(engine.UnreadAudioUrl, urls...)
 	}
 
 	// 启动桥接器连接（异步执行，避免阻塞 HTTP 服务器启动）
@@ -150,7 +150,7 @@ func shutdownServer(server *http.Server) {
 	// 确保在函数结束时取消上下文，释放资源
 	defer cancel()
 	// 关闭JavaScript运行时
-	LunarGoja.Close()
+	container.Close()
 	// 关闭桥接适配器
 	napcat.StopBridge()
 	// 关闭llama.cpp服务器

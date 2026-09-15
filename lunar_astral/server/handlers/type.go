@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"LunarAstral/adapters"
+	"LunarAstral/engine"
 	"encoding/json"
 )
 
@@ -30,7 +30,7 @@ type ProxyResponse struct {
 
 // MessageBatchRequest 消息批量写入请求
 type MessageBatchRequest struct {
-	Messages []adapters.PostMessage `json:"messages"`
+	Messages []engine.PostMessage `json:"messages"`
 }
 
 // VideoUrlBatchRequest 视频URL批量写入请求

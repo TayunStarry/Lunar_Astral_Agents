@@ -4,7 +4,7 @@ import (
 	"LunarSubsystem/BrowserClient"
 	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
-	image "LunarSubsystem/ImageProcessor/server"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	"LunarSubsystem/LoggerGeneral"
 	"CrystalAstral/agent/YaraLTP"
 	"context"

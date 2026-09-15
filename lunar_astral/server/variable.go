@@ -6,7 +6,7 @@ import (
 	"LunarAstral/server/handlers"
 	file "LunarSubsystem/FileManager/server"
 	"LunarSubsystem/GeneralConfig"
-	image "LunarSubsystem/ImageProcessor/server"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	tts "LunarSubsystem/Qwen3-TTS/module"
 	"fmt"
 	"net/http"

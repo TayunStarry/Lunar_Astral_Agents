@@ -19,7 +19,7 @@ import (
 	kokoro "CrystalAstral/kokoro_tts"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	ipmodule "LunarSubsystem/ImageProcessor/module"
+	ipmodule "LunarSubsystem/MultimodalAnalysis/module"
 )
 
 // ltp9HandleInbound 尝试按 LTP9 调试信封处理一条 /ws 入站消息；返回 true 表示已消费（不再交给 LTP3）。

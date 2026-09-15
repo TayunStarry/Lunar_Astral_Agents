@@ -229,20 +229,23 @@ var agentSystem = (function (exports) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
             GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
-            console.log('[影音者] 命中视频缓存，直接返回');
+            console.log('[感知者] 命中视频缓存，直接返回');
             return;
         }
-        console.log('[影音者] 开始将视频写入媒体目录...');
+        console.log('[感知者] 开始将视频写入媒体目录...');
         const [segments, mediaError] = videoMedia(videoUrl);
         if (!segments || segments.length === 0 || mediaError) {
-            console.error('[影音者] 视频媒体化失败:', mediaError);
+            console.error('[感知者] 视频媒体化失败:', mediaError);
             throw new Error('视频媒体化失败');
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
-        console.log(`[影音者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
-        console.log('[影音者] 开始观看视频...');
-        const videoSummary = await mediaRoles.viewerRole.watchVideo(mediaUrls);
-        console.log('[影音者] 视频观看完成');
+        console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
+        await analysisMediaSegments(mediaUrls, videoUrl, userNeeds);
+    }
+    async function analysisMediaSegments(mediaUrls, cacheKey, userNeeds) {
+        console.log('[感知者] 开始观看...');
+        const videoSummary = await mediaRoles.perceiverRole.watchVideo(mediaUrls);
+        console.log('[感知者] 观看完成');
         if (videoSummary && videoSummary.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
         }
@@ -251,33 +254,27 @@ var agentSystem = (function (exports) {
         if (userNeeds.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
         }
-        if (videoSummary) {
-            savePromptToKnowledge(videoUrl, videoSummary);
-            console.log('[影音者] 视频理解文本已缓存');
+        if (videoSummary && cacheKey) {
+            savePromptToKnowledge(cacheKey, videoSummary);
+            console.log('[感知者] 理解文本已缓存');
         }
     }
-    async function summarizeDynamicImages(frames) {
-        if (frames.length === 0)
-            return '';
-        const summaries = [];
-        const BATCH_SIZE = 8;
-        for (let i = 0; i < frames.length; i += BATCH_SIZE) {
-            const batch = frames.slice(i, i + BATCH_SIZE);
-            try {
-                mediaRoles.descriptionRole.coverContext({
-                    role: 'user',
-                    content: batch.map(frame => ({ type: 'image_url', image_url: { url: frame } }))
-                });
-                const summaryRequest = mediaRoles.descriptionRole.run([], []);
-                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-                if (summary && summary.trim().length > 0)
-                    summaries.push(summary.trim());
-            }
-            catch (error) {
-                console.error('[动态图摘要] 批次摘要失败:', error);
-            }
+    async function analysisAnimatedImage(imageSource, cacheKey) {
+        const cachedPrompt = cacheKey ? getPromptFromKnowledge(cacheKey) : '';
+        if (cachedPrompt) {
+            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
+            console.log('[感知者] 命中动态图缓存，直接返回');
+            return;
         }
-        return summaries.join('\n');
+        console.log('[感知者] 检测到动态图，开始编码为视频...');
+        const [segments, mediaError] = animatedImageToVideo(imageSource);
+        if (!segments || segments.length === 0 || mediaError) {
+            console.error('[感知者] 动态图转视频失败:', mediaError);
+            throw new Error('动态图转视频失败');
+        }
+        const mediaUrls = segments.map(segment => `file://${segment.file}`);
+        console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
+        await analysisMediaSegments(mediaUrls, cacheKey, '');
     }
     async function LiteImageFile() {
         for (let message of GlobalConfig.unreadContext) {
@@ -293,28 +290,39 @@ var agentSystem = (function (exports) {
                         await analysisAudioFile(`data:audio/${format};base64,${item.input_audio.data}`, '');
                     }
                     catch (error) {
-                        console.error('[影音者] 音频理解失败，跳过该音频:', error);
+                        console.error('[感知者] 音频理解失败，跳过该音频:', error);
                     }
                 }
-                else if (item.image_url && GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format))) {
-                    await analysisVideoFile(item.image_url.url, '');
+                else if (item.image_url && (item.image_url.url.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format)))) {
+                    try {
+                        await analysisVideoFile(item.image_url.url, '');
+                    }
+                    catch (error) {
+                        console.error('[感知者] 视频理解失败，跳过该视频:', error);
+                    }
                 }
-                else if (item.image_url && !item.image_url.url.startsWith("data:image")) {
-                    const [response, error] = syncFetch({ url: item.image_url.url, execute: { crossDomain: true } });
-                    if (error) {
-                        console.error('[获取图片文件失败]:', error.message, error.stack);
-                        continue;
-                    }
-                    const [resizedImages, error1] = resizeImage(response.body);
-                    if (error1) {
-                        console.error('[缩放图片失败]:', error1.message, error1.stack);
-                        continue;
-                    }
-                    if (resizedImages.length > 1) {
-                        const visualSummary = await summarizeDynamicImages(resizedImages.map(image => image.base64));
-                        if (visualSummary && visualSummary.trim().length > 0) {
-                            GlobalConfig.unreadContext.push({ role: 'assistant', content: visualSummary.trim() });
+                else if (item.image_url) {
+                    const imageSource = item.image_url.url;
+                    const [isAnimated, animatedError] = isAnimatedImage(imageSource);
+                    if (animatedError)
+                        console.error('[动态图判定失败]:', animatedError.message);
+                    else if (isAnimated) {
+                        const cacheKey = imageSource.startsWith('data:') ? '' : imageSource;
+                        try {
+                            await analysisAnimatedImage(imageSource, cacheKey);
                         }
+                        catch (error) {
+                            console.error('[感知者] 动态图理解失败，跳过该图片:', error);
+                        }
+                        continue;
+                    }
+                    if (imageSource.toLowerCase().startsWith('data:image/')) {
+                        newContent.push(item);
+                        continue;
+                    }
+                    const [resizedImages, resizeError] = resizeImage(imageSource);
+                    if (resizeError) {
+                        console.error('[图片处理失败]:', resizeError.message, resizeError.stack);
                         continue;
                     }
                     resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
@@ -347,36 +355,29 @@ var agentSystem = (function (exports) {
         const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
         if (cachedPrompt) {
             GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
-            console.log('[影音者] 命中音频缓存，直接返回');
+            console.log('[感知者] 命中音频缓存，直接返回');
             return;
         }
-        console.log('[影音者] 开始转换音频...');
+        console.log('[感知者] 开始转换音频...');
         const [wavBase64, audioError] = audioWav(audioSource);
         if (!wavBase64 || audioError) {
-            console.error('[影音者] 音频转换失败:', audioError);
+            console.error('[感知者] 音频转换失败:', audioError);
             throw new Error('音频转换失败');
         }
-        console.log('[影音者] 开始语音转写...');
+        console.log('[感知者] 开始语音转写...');
         const transcript = await transcribeAudio(wavBase64);
         if (!transcript.trim()) {
-            console.error('[影音者] 语音转写为空');
+            console.error('[感知者] 语音转写为空');
             throw new Error('语音转写为空');
         }
-        console.log(`[影音者] 语音转写完成: ${transcript.substring(0, 50)}`);
-        console.log('[影音者] 开始理解音频内容...');
-        const audioUnderstanding = await mediaRoles.viewerRole.watchAudio(transcript);
-        console.log('[影音者] 音频理解完成');
-        if (audioUnderstanding && audioUnderstanding.trim().length > 0) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: audioUnderstanding });
-        }
-        else
-            GlobalConfig.unreadContext.push({ role: 'user', content: `（该段音频转写为：${transcript}）` });
+        console.log(`[感知者] 语音转写完成: ${transcript.substring(0, 50)}`);
+        GlobalConfig.unreadContext.push({ role: 'user', content: `【语音转写】${transcript}` });
         if (userNeeds.trim().length > 0) {
             GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
         }
-        if (audioUnderstanding && cacheable) {
-            savePromptToKnowledge(audioSource, audioUnderstanding);
-            console.log('[影音者] 音频理解文本已缓存');
+        if (cacheable) {
+            savePromptToKnowledge(audioSource, `【语音转写】${transcript}`);
+            console.log('[感知者] 语音转写文本已缓存');
         }
     }
     async function transcribeAudio(wavBase64) {
@@ -400,7 +401,7 @@ var agentSystem = (function (exports) {
             },
         });
         if (error) {
-            console.error('[影音者] 语音转写请求失败:', error.message);
+            console.error('[感知者] 语音转写请求失败:', error.message);
             return '';
         }
         const raw = result?.body?.choices?.[0]?.message?.content || '';
@@ -729,6 +730,7 @@ var agentSystem = (function (exports) {
 
     class MusicianRole extends CreativeRoleBase {
         MAX_ITERATIONS = 5;
+        abcSpecPrompt = fileView('prompts/musicianAbcSpec.md')[0];
         musicTool = [
             {
                 type: "function",
@@ -764,69 +766,7 @@ var agentSystem = (function (exports) {
                             },
                             "abc_notation": {
                                 type: "string",
-                                description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用采样级音色库（温暖钢琴/复古电钢/清澈竖琴/尼龙吉他/大提琴/小提琴/长笛/单簧管/双簧管/小号/萨克斯/贝斯/8Bit/鼓组/氛围铺底）合成并经过LOFI混音效果链（混响/延迟/磁带饱和/压缩）处理。
-
-=== 基础格式 ===
-X:1
-T:作品标题
-M:拍号
-L:默认音符时值(如 1/8)
-Q:速度标记(如 1/4=100)
-K:调号
-
-=== 音符规则 ===
-音名: C D E F G A B（大写=中低音区, 小写cdefgab=高八度, 加逗号=低八度如C,D,）
-升降号: ^升半音(如^C)  _降半音(如_B)
-时值: 数字后缀=倍数(C2=两倍)  /数字=分数(C/2=一半)
-小节线: | 分隔  || 双线  |] 结束
-休止符: z
-
-=== 和弦伴奏（核心要求！必须包含！） ===
-和弦用方括号包裹同时发音的音符，如 [CEG] 表示C大三和弦同时演奏。
-和弦必须贯穿全曲，形成完整的伴奏织体：
-
-1. 柱式和弦: [C,,E,,G,,]2 [C,,E,,G,,]2 | [F,,A,,C,]2 [G,,B,,D,]2 |
-2. 分解和弦(琶音): C,,2 E,2 G,2 c2 | F,,2 A,2 C2 f2 |
-3. 阿尔贝蒂低音: C,2 G,2 E,2 G,2 | F,2 C2 A,2 C2 |
-
-=== 多声部记谱（推荐！多乐器时让每个乐器对应一个声部） ===
-[V:1] = 旋律声部（主旋律乐器，如钢琴/小提琴/长笛/萨克斯）
-[V:2] = 和弦伴奏声部（钢琴/竖琴/吉他，用柱式或分解和弦）
-[V:3] = 低音声部（贝斯/大提琴，根音支撑，可选）
-[V:4] = 鼓组声部（鼓/打击乐，节奏骨架，可选）
-各声部小节对齐、同步演奏。声部越多，音乐层次越丰满。
-
-=== 表情记号（使音乐富有表现力！） ===
-力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
-运音法: .断奏 >重音 -保持
-
-=== 完整示例：钢琴独奏（含和弦伴奏） ===
-X:1
-T:晨光曲
-M:4/4
-L:1/8
-Q:1/4=90
-K:C
-!mp! [V:1] c2 e2 g2 e2 | f2 a2 g2 e2 | d2 f2 e2 d2 | c4 z4 |
-!mf! [V:2] [C,,E,,G,,]4 | [F,,A,,C,]4 | [G,,B,,D,]4 | [C,,E,,G,,]4 |
-
-=== 完整示例：钢琴+大提琴二重奏 ===
-X:1
-T:夜色温柔
-M:4/4
-L:1/8
-Q:1/4=80
-K:Am
-!mp! [V:1] e2 a2 c'2 a2 | d2 f2 e2 d2 | c2 e2 d2 ^c2 | A4 z4 |
-!p!   [V:2] [A,,2E,2A,2]2 | [D,,2A,,2D,2]2 | [E,,2B,,2E,2]2 | [A,,,2E,,2A,,2]2 |
-
-关键原则:
-- 必须包含和弦伴奏，不可只有单音旋律线
-- 两个及以上乐器时，务必用 [V:N] 分为多个声部，各声部小节对齐、同步演奏
-- 左手/第二声部使用和弦或分解和弦提供和声支撑
-- 可选加入贝斯（低音根音）与鼓组（节奏骨架），让音乐更有层次
-- 合理使用力度变化（开头mp、高潮f、结尾p）
-- 旋律要有乐句呼吸感（每4-8小节一个乐句，句末用稍长时值或休止）`
+                                description: this.abcSpecPrompt
                             },
                         },
                         required: [
@@ -1323,38 +1263,39 @@ K:Am
         }
     }
 
-    class ViewerRole extends ModelBuilder {
+    class PerceiverRole extends ModelBuilder {
         SUMMARY_THRESHOLD = 4096;
+        summaryTaskTemplate = fileView('prompts/perceiverSummaryTask.md')[0];
         constructor() {
-            super(fileView('prompts/viewerRole.md')[0]);
+            super(fileView('prompts/perceiverRole.md')[0]);
         }
         async watchVideo(mediaUrls) {
             if (mediaUrls.length === 0) {
-                console.warn('[影音者] 未收到任何视频片段');
+                console.warn('[感知者] 未收到任何视频片段');
                 return '月华观看了这个视频，但没有获取到足够的信息。';
             }
-            console.log(`[影音者] 开始观看视频，共 ${mediaUrls.length} 个片段`);
+            console.log(`[感知者] 开始观看视频，共 ${mediaUrls.length} 个片段`);
             const understandings = [];
             for (let index = 0; index < mediaUrls.length; index++) {
-                console.log(`[影音者] 观看第 ${index + 1}/${mediaUrls.length} 段`);
+                console.log(`[感知者] 观看第 ${index + 1}/${mediaUrls.length} 段`);
                 const understanding = await this.evaluateSegment(mediaUrls[index], index + 1, mediaUrls.length);
                 if (understanding.trim().length > 0) {
                     understandings.push(understanding);
-                    console.log(`[影音者] 第 ${index + 1} 段理解完成`);
+                    console.log(`[感知者] 第 ${index + 1} 段理解完成`);
                 }
             }
             if (understandings.length === 0) {
-                console.warn('[影音者] 未产生任何片段理解');
+                console.warn('[感知者] 未产生任何片段理解');
                 return '月华观看了这个视频，但没有获取到足够的信息。';
             }
             const concatenated = understandings.join('\n\n');
             if (concatenated.length <= this.SUMMARY_THRESHOLD) {
-                console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
+                console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
                 return concatenated;
             }
-            console.log(`[影音者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
+            console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
             const summary = await this.generateObjectiveSummary(concatenated);
-            console.log('[影音者] 客观摘要完成');
+            console.log('[感知者] 客观摘要完成');
             return summary || concatenated;
         }
         async evaluateSegment(mediaUrl, index, total) {
@@ -1373,43 +1314,17 @@ K:Am
                 response = this.run([], []);
             }
             catch (error) {
-                console.error(`[影音者] 第 ${index} 段推理失败:`, error);
+                console.error(`[感知者] 第 ${index} 段推理失败:`, error);
                 return '';
             }
             const content = response.body?.choices?.[0]?.message?.content || '';
             if (!content.trim()) {
-                console.warn(`[影音者] 第 ${index} 段返回空内容`);
-            }
-            return content;
-        }
-        async watchAudio(transcript) {
-            this.coverContext({
-                role: 'user',
-                content: `以下是系统语音识别模型对一段音频的转写文本，请按「音频理解任务」的格式输出该音频的客观内容理解。
-
-【转写文本】
-${transcript}`
-            });
-            this.runtimeMessages = [];
-            let response;
-            try {
-                response = this.run([], []);
-            }
-            catch (error) {
-                console.error('[影音者] 音频理解推理失败:', error);
-                return '';
-            }
-            const content = response.body?.choices?.[0]?.message?.content || '';
-            if (!content.trim()) {
-                console.warn('[影音者] 音频理解返回空内容');
+                console.warn(`[感知者] 第 ${index} 段返回空内容`);
             }
             return content;
         }
         async generateObjectiveSummary(concatenated) {
-            const prompt = `请按「客观摘要任务」的要求，将以下视频各片段的内容理解文本整合为一份客观摘要。
-
-【理解文本】
-${concatenated}`;
+            const prompt = this.summaryTaskTemplate.replace('{content}', concatenated);
             this.coverContext({ role: 'user', content: prompt });
             this.runtimeMessages = [];
             let response;
@@ -1417,7 +1332,7 @@ ${concatenated}`;
                 response = this.run([], []);
             }
             catch (error) {
-                console.error('[影音者] 客观摘要推理失败:', error);
+                console.error('[感知者] 客观摘要推理失败:', error);
                 return '';
             }
             return response.body?.choices?.[0]?.message?.content || '';
@@ -1636,11 +1551,12 @@ ${concatenated}`;
             console.log(`[记忆] 检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
             return uniqueResults.slice(0, RAG_MAX_RECORDS);
         }
+        summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
         summarizeRecords(records) {
             const fragments = records
                 .map((r, i) => `--- 片段 ${i + 1}（${r.role}）---\n${r.content || '(空)'}`)
                 .join('\n\n');
-            this.coverContext({ role: 'user', content: `请整理以下从长期记忆检索到的内容碎片，输出一篇连贯的中文摘要。\n\n${fragments}` });
+            this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
             this.runtimeMessages = [];
             let response;
             try {
@@ -1664,8 +1580,8 @@ ${concatenated}`;
     const musicianRole = new MusicianRole();
     const actorRole = new ActorRole();
     const dialogueRole = new DialogueRole(descriptionRole);
-    const viewerRole = new ViewerRole();
-    registerMediaRoles({ descriptionRole, viewerRole, randomDefaultMessage });
+    const perceiverRole = new PerceiverRole();
+    registerMediaRoles({ perceiverRole, randomDefaultMessage });
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
@@ -3291,7 +3207,7 @@ ${concatenated}`;
         dialogueRole.coverContext([]);
         painterRole.coverContext([]);
         musicianRole.coverContext([]);
-        viewerRole.coverContext([]);
+        perceiverRole.coverContext([]);
         actorRole.coverContext([]);
         memorizerRole.coverContext([]);
         GlobalConfig.unreadContext = [];
@@ -3310,8 +3226,8 @@ ${concatenated}`;
     exports.memorizerRole = memorizerRole;
     exports.musicianRole = musicianRole;
     exports.painterRole = painterRole;
+    exports.perceiverRole = perceiverRole;
     exports.randomDefaultMessage = randomDefaultMessage;
-    exports.viewerRole = viewerRole;
 
     return exports;
 

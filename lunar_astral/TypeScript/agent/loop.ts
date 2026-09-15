@@ -5,7 +5,7 @@ import { processUnreadFiles } from './roles/reader';
 import { checkDueItems } from '../tool/schedule';
 import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
 import { parseContent } from '../file/parse/interface';
-import { descriptionRole, painterRole, musicianRole, dialogueRole, viewerRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+import { descriptionRole, painterRole, musicianRole, dialogueRole, perceiverRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { batchProcessVideoFiles, batchProcessAudioFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
@@ -236,7 +236,7 @@ function resetAgentState(): void {
     dialogueRole.coverContext([]);
     painterRole.coverContext([]);
     musicianRole.coverContext([]);
-    viewerRole.coverContext([]);
+    perceiverRole.coverContext([]);
     actorRole.coverContext([]);
     memorizerRole.coverContext([]);
     // 清除主智能体的unreadContext、unreadVideoUrl和unreadAudioUrl

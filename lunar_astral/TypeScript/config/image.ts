@@ -1,15 +1,3 @@
-/** 关键帧结构 */
-export interface KeyFrame {
-	/** 关键帧文件名 */
-	filePath: string;
-	/** 关键帧时间戳 */
-	timestamp: string;
-	/** 关键帧编号 */
-	frameNum: number;
-	/** 关键帧图像数据 */
-	data: string;
-}
-
 /** 视频媒体片段（llama-server 媒体目录内的分段） */
 export interface MediaSegment {
 	/** 媒体目录内的文件名（通过 file:// 引用） */

@@ -29,7 +29,7 @@ Lunar_Astral_Agents/
 │   ├── general_config/     # 全局配置中枢
 │   ├── browser_client/     # WebView 窗口管理
 │   ├── file_manager/       # 文件管理 + 知识库/记忆库 + 扩展包
-│   ├── image_processor/    # 图像生成 + 截图 + 视频关键帧
+│   ├── multimodal_analysis/ # 多模态素材预处理（生成/截图/音视频与动态图转码）
 │   ├── qwen3_tts/          # 语音合成（C++ GGML 引擎）
 │   ├── qwen_asr/           # 语音识别（纯 C 引擎）
 │   ├── agent_search/       # 智能网络检索

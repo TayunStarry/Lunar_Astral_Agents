@@ -3,7 +3,7 @@ package main
 import (
 	kokoro "CrystalAstral/kokoro_tts"
 	file "LunarSubsystem/FileManager/server"
-	image "LunarSubsystem/ImageProcessor/server"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	media "LunarSubsystem/MediaTools/server"
 	"embed"
 	"sync"

@@ -36,14 +36,14 @@ function saveKnowledge(table: KnowledgeTable, map: Map<string, string>): boolean
 }
 
 // =============================================================================
-// 视频摘要缓存（原 KeyPrompt 表）— 存观影者生成的视频观后感，按键为视频 URL
+// 媒体理解缓存 — 存感知者生成的视频/动态图理解文本与语音转写文本，按键为媒体来源地址
 // =============================================================================
 
 /**
- * 从知识库中获取视频摘要（视频观后感缓存）
+ * 从知识库中获取媒体理解缓存
  *
- * @param {string} key 索引键（视频 URL）
- * @returns {string | null} 摘要或 null
+ * @param {string} key 索引键（媒体来源地址）
+ * @returns {string | null} 缓存文本或 null
  */
 export function getPromptFromKnowledge(key: string): string | null {
 	try {

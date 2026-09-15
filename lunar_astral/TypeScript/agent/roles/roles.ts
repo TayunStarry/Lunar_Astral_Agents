@@ -4,7 +4,7 @@ import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
 import { ActorRole } from './actor';
 import { DialogueRole } from './dialogue';
-import { ViewerRole } from './viewer';
+import { PerceiverRole } from './perceiver';
 import { MemorizerRole } from './memorizer';
 import { RandomFloor } from '../../math/basis';
 
@@ -20,10 +20,10 @@ export const musicianRole: MusicianRole = new MusicianRole();
 export const actorRole: ActorRole = new ActorRole();
 /** 对话者角色(与用户交互) */
 export const dialogueRole: DialogueRole = new DialogueRole(descriptionRole);
-/** 观影者角色(视频观看) */
-export const viewerRole: ViewerRole = new ViewerRole();
+/** 感知者角色(视频/动态图理解) */
+export const perceiverRole: PerceiverRole = new PerceiverRole();
 /** 注入媒体模块所需的角色单例（media → roles 静态边解除） */
-registerMediaRoles({ descriptionRole, viewerRole, randomDefaultMessage });
+registerMediaRoles({ perceiverRole, randomDefaultMessage });
 /** 随机回答 */
 export function randomDefaultMessage(): string {
     return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];

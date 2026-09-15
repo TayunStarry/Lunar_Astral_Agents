@@ -10,7 +10,7 @@ import '../tool/schedule';
 import '../tool/screenshot';
 
 // ---------- 聚合导出（保持原公共 API） ----------
-export { descriptionRole, painterRole, musicianRole, actorRole, viewerRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+export { descriptionRole, painterRole, musicianRole, actorRole, perceiverRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 export { LiteImageFile } from './capabilities/media';
 export { extractTextFromMessage, ensureMemoryReady } from './capabilities/memory';
 

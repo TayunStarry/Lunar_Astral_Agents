@@ -1,7 +1,7 @@
 package websocket
 
 import (
-	"LunarAstral/adapters"
+	"LunarAstral/engine"
 	"LunarAstral/bridging/napcat"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
@@ -95,8 +95,8 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func SetupWebSocketHandler(mux *http.ServeMux) {
-	adapters.PushMessageFunc = BroadcastMessage
-	adapters.GetAnimCacheFunc = func() interface{} {
+	engine.PushMessageFunc = BroadcastMessage
+	engine.GetAnimCacheFunc = func() interface{} {
 		animCache.RLock()
 		defer animCache.RUnlock()
 		return animCache

@@ -1,5 +1,5 @@
 import type { FileListItem, ProxyFetchConfig } from './config/config';
-import type { KeyFrame, MediaSegment, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
+import type { MediaSegment, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
 import type { MultimodalMessage } from './config/model';
 import type { TTSParams } from './config/tool';
 import type { ScreenshotParams } from './config/screenshot';
@@ -82,17 +82,7 @@ declare global {
      */
     function syncFetch(config: ProxyFetchConfig): [any, Error | null];
     /**
-     * 提取视频关键帧
-     * 
-     * @param {string} inputFile 视频文件路径
-     * 
-     * @param {string} cacheDir 缓存目录
-     * 
-     * @returns {[KeyFrame[], Error | null]} 包含关键帧列表的元组，[关键帧列表, 错误信息]
-     */
-    function keyframe(inputFile: string, cacheDir: string): [KeyFrame[], Error | null];
-    /**
-     * 将视频本地化并写入 llama-server 媒体目录，供观影者以 file:// 引用观看
+     * 将视频本地化并写入 llama-server 媒体目录，供感知者以 file:// 引用观看
      *
      * 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
      * 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）。
@@ -119,15 +109,40 @@ declare global {
      */
     function pullAudioUrl(): string[];
     /**
-     * 调整图片大小
+     * 标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → 输出 base64
      *
-     * 静态图返回单元素数组，动态图(GIF/APNG/WebP帧数>2)返回多帧base64数组
+     * 入参与 isAnimatedImage / animatedImageToVideo 一致，可传字节数据或来源地址
+     * （HTTP(S) URL、data:image URI、本地路径），地址类入参由 Go 侧下载/解码。
+     * 返回恒为单元素数组：动态图在此按首帧静态降级，动态图理解请先经
+     * isAnimatedImage 判定并走 animatedImageToVideo 的视频链路
      *
-     * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据
+     * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据或来源地址
      *
-     * @returns {[ResizeImageResults, Error | null]} 包含调整后的图片结果数组的元组，[调整后的图片结果数组, 错误信息]
+     * @returns {[ResizeImageResults, Error | null]} 包含处理结果数组的元组，[处理结果数组, 错误信息]
      */
     function resizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResults, Error | null];
+    /**
+     * 判断图片是否为动态图（多帧 GIF / APNG / 动态 WebP）
+     *
+     * 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径），
+     * 传入地址时由 Go 侧下载/解码后判定，无需 TypeScript 先取回字节
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
+     *
+     * @returns {[boolean, Error | null]} 是否动态图与错误信息
+     */
+    function isAnimatedImage(imgData: Blob | File | string | Uint8Array): [boolean, Error | null];
+    /**
+     * 将动态图编码为慢放视频并写入 llama-server 媒体目录
+     *
+     * 动态图多为数秒，直接交给固定抽帧频率的 llama-server 只能采到一两帧，
+     * 因此转码时按目标采样点数做等比例慢放，再以 file:// 交给感知者理解
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
+     *
+     * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
+     */
+    function animatedImageToVideo(imgData: Blob | File | string | Uint8Array): [MediaSegment[], Error | null];
     /**
      * 生成图片
      * 

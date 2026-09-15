@@ -3,7 +3,7 @@ package llama
 import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/ImageProcessor/module"
+	"LunarSubsystem/MultimodalAnalysis/module"
 	"bufio"
 	"context"
 	"fmt"

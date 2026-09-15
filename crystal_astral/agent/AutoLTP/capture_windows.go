@@ -14,7 +14,7 @@ import (
 	"image/png"
 	"strconv"
 
-	imageproc "LunarSubsystem/ImageProcessor/module"
+	imageproc "LunarSubsystem/MultimodalAnalysis/module"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"

@@ -488,11 +488,8 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}
 			}
 			appendContent(&contentArray, &contentStr, "[语音] ")
 		case "face":
-			appendContent(&contentArray, &contentStr, "[表情] ")
-		case "mface":
-			var faceData FaceData
-			if json.Unmarshal(segment.Data, &faceData) == nil && faceData.Name != "" {
-				appendContent(&contentArray, &contentStr, "[表情: "+faceData.Name+"] ")
+			if text := faceDisplayText(segment.Data); text != "" {
+				appendContent(&contentArray, &contentStr, "[表情: "+text+"] ")
 			} else {
 				appendContent(&contentArray, &contentStr, "[表情] ")
 			}
@@ -835,11 +832,17 @@ func processForwardSegment(groupID int64, id string, depth int) string {
 		}
 		// 纯转发节点：递归展开为嵌套块
 		if nestedID := findNestedForward(segments); nestedID != "" {
-			sb.WriteString(indent + sender + " 转发了以下内容：\n")
+			sb.WriteString(indent)
+			sb.WriteString(sender)
+			sb.WriteString(" 转发了以下内容：\n")
 			sb.WriteString(processForwardSegment(groupID, nestedID, depth+1))
 			continue
 		}
-		sb.WriteString(indent + sender + ": " + extractSegmentText(groupID, depth, segments) + "\n")
+		sb.WriteString(indent)
+		sb.WriteString(sender)
+		sb.WriteString(": ")
+		sb.WriteString(extractSegmentText(groupID, depth, segments))
+		sb.WriteString("\n")
 	}
 	return sb.String()
 }
@@ -885,7 +888,9 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment) str
 		case "at":
 			var atData AtData
 			if json.Unmarshal(segment.Data, &atData) == nil {
-				sb.WriteString("[对 " + resolveAtDisplay(groupID, atData.QQ) + " 说] ")
+				sb.WriteString("[对 ")
+				sb.WriteString(resolveAtDisplay(groupID, atData.QQ))
+				sb.WriteString(" 说] ")
 			}
 		case "image":
 			sb.WriteString("[图片]")
@@ -904,15 +909,23 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment) str
 					name = fileData.File
 				}
 				if name != "" {
-					sb.WriteString("[文件: " + name + "]")
+					sb.WriteString("[文件: ")
+					sb.WriteString(name)
+					sb.WriteString("]")
 				} else {
 					sb.WriteString("[文件]")
 				}
 			} else {
 				sb.WriteString("[文件]")
 			}
-		case "face", "mface":
-			sb.WriteString("[表情]")
+		case "face":
+			if text := faceDisplayText(segment.Data); text != "" {
+				sb.WriteString("[表情: ")
+				sb.WriteString(text)
+				sb.WriteString("]")
+			} else {
+				sb.WriteString("[表情]")
+			}
 		case "forward":
 			var forwardData ForwardData
 			if json.Unmarshal(segment.Data, &forwardData) == nil {

@@ -47,6 +47,8 @@ interface MusicPieceDetail {
 export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 	/** 音乐创作允许更多思考轮次，确保乐谱完整性与表现力 */
 	protected MAX_ITERATIONS = 5;
+	/** ABC 记谱法规范说明（compose_music 工具 abc_notation 参数的 description，来自 prompts/musicianAbcSpec.md） */
+	private readonly abcSpecPrompt = fileView('prompts/musicianAbcSpec.md')[0];
 	/** 音乐创作工具定义 */
 	private readonly musicTool: ToolCall[] = [
 		{
@@ -83,69 +85,7 @@ export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
 						},
 						"abc_notation": {
 							type: "string",
-							description: `ABC记谱法格式的完整乐谱。前端音乐播放器使用采样级音色库（温暖钢琴/复古电钢/清澈竖琴/尼龙吉他/大提琴/小提琴/长笛/单簧管/双簧管/小号/萨克斯/贝斯/8Bit/鼓组/氛围铺底）合成并经过LOFI混音效果链（混响/延迟/磁带饱和/压缩）处理。
-
-=== 基础格式 ===
-X:1
-T:作品标题
-M:拍号
-L:默认音符时值(如 1/8)
-Q:速度标记(如 1/4=100)
-K:调号
-
-=== 音符规则 ===
-音名: C D E F G A B（大写=中低音区, 小写cdefgab=高八度, 加逗号=低八度如C,D,）
-升降号: ^升半音(如^C)  _降半音(如_B)
-时值: 数字后缀=倍数(C2=两倍)  /数字=分数(C/2=一半)
-小节线: | 分隔  || 双线  |] 结束
-休止符: z
-
-=== 和弦伴奏（核心要求！必须包含！） ===
-和弦用方括号包裹同时发音的音符，如 [CEG] 表示C大三和弦同时演奏。
-和弦必须贯穿全曲，形成完整的伴奏织体：
-
-1. 柱式和弦: [C,,E,,G,,]2 [C,,E,,G,,]2 | [F,,A,,C,]2 [G,,B,,D,]2 |
-2. 分解和弦(琶音): C,,2 E,2 G,2 c2 | F,,2 A,2 C2 f2 |
-3. 阿尔贝蒂低音: C,2 G,2 E,2 G,2 | F,2 C2 A,2 C2 |
-
-=== 多声部记谱（推荐！多乐器时让每个乐器对应一个声部） ===
-[V:1] = 旋律声部（主旋律乐器，如钢琴/小提琴/长笛/萨克斯）
-[V:2] = 和弦伴奏声部（钢琴/竖琴/吉他，用柱式或分解和弦）
-[V:3] = 低音声部（贝斯/大提琴，根音支撑，可选）
-[V:4] = 鼓组声部（鼓/打击乐，节奏骨架，可选）
-各声部小节对齐、同步演奏。声部越多，音乐层次越丰满。
-
-=== 表情记号（使音乐富有表现力！） ===
-力度: !pp!极弱 !p!弱 !mp!中弱 !mf!中强 !f!强 !ff!极强
-运音法: .断奏 >重音 -保持
-
-=== 完整示例：钢琴独奏（含和弦伴奏） ===
-X:1
-T:晨光曲
-M:4/4
-L:1/8
-Q:1/4=90
-K:C
-!mp! [V:1] c2 e2 g2 e2 | f2 a2 g2 e2 | d2 f2 e2 d2 | c4 z4 |
-!mf! [V:2] [C,,E,,G,,]4 | [F,,A,,C,]4 | [G,,B,,D,]4 | [C,,E,,G,,]4 |
-
-=== 完整示例：钢琴+大提琴二重奏 ===
-X:1
-T:夜色温柔
-M:4/4
-L:1/8
-Q:1/4=80
-K:Am
-!mp! [V:1] e2 a2 c'2 a2 | d2 f2 e2 d2 | c2 e2 d2 ^c2 | A4 z4 |
-!p!   [V:2] [A,,2E,2A,2]2 | [D,,2A,,2D,2]2 | [E,,2B,,2E,2]2 | [A,,,2E,,2A,,2]2 |
-
-关键原则:
-- 必须包含和弦伴奏，不可只有单音旋律线
-- 两个及以上乐器时，务必用 [V:N] 分为多个声部，各声部小节对齐、同步演奏
-- 左手/第二声部使用和弦或分解和弦提供和声支撑
-- 可选加入贝斯（低音根音）与鼓组（节奏骨架），让音乐更有层次
-- 合理使用力度变化（开头mp、高潮f、结尾p）
-- 旋律要有乐句呼吸感（每4-8小节一个乐句，句末用稍长时值或休止）`
+							description: this.abcSpecPrompt
 						},
 					},
 					required: [

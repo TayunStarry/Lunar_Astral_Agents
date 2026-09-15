@@ -126,6 +126,9 @@ export class MemorizerRole extends ModelBuilder {
 		return uniqueResults.slice(0, RAG_MAX_RECORDS);
 	}
 
+	/** 记忆摘要任务模板（占位符 {fragments} 由检索片段填充） */
+	private readonly summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
+
 	/** 交给 LLM 对命中的内容碎片做总结与摘要，输出硬切断 4096 的连贯摘要 */
 	private summarizeRecords(records: RagRecord[]): string {
 		/** 摘要输入：标注角色 + 内容片段 */
@@ -134,7 +137,7 @@ export class MemorizerRole extends ModelBuilder {
 			.join('\n\n');
 
 		// 覆写为本次独立摘要任务（逐次覆盖，不累积历史）
-		this.coverContext({ role: 'user', content: `请整理以下从长期记忆检索到的内容碎片，输出一篇连贯的中文摘要。\n\n${fragments}` });
+		this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
 		this.runtimeMessages = [];
 
 		/** 模型响应 */

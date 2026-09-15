@@ -95,10 +95,17 @@ type ForwardData struct {
 	ID json.RawMessage `json:"id"`
 }
 
-// FaceData QQ 商城表情消息数据（mface，携带表情名称）
+// FaceData QQ 表情消息数据（face 段；大表情同样以 face 下发，faceType 标记类型）
 type FaceData struct {
-	ID   string `json:"id"`
-	Name string `json:"name"` // 商城表情名称
+	ID  json.RawMessage `json:"id"`  // 表情 id（兼容字符串 / 数字两种形态）
+	Raw *FaceRaw        `json:"raw"` // NTQQ 原始表情信息（缺失时为 nil）
+}
+
+// FaceRaw NTQQ 表情原始信息，字段用指针以区分"未提供"与"值为零"（faceIndex 0 为合法序号）
+type FaceRaw struct {
+	FaceIndex *int   `json:"faceIndex"` // NTQQ 表情序号，与 face 段的 id 同源
+	FaceText  string `json:"faceText"`  // NTQQ 表情文本，形如 "/呲牙"
+	FaceType  int    `json:"faceType"`  // 表情类型（2 为大表情 / 动画表情）
 }
 
 // JsonData JSON 卡片消息数据（小程序、邀请、分享卡片等）

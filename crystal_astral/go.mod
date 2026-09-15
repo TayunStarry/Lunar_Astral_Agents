@@ -7,7 +7,7 @@ require (
 	LunarSubsystem/EndpointDocs v0.0.0
 	LunarSubsystem/FileManager v0.0.0
 	LunarSubsystem/GeneralConfig v0.0.0
-	LunarSubsystem/ImageProcessor v0.0.0
+	LunarSubsystem/MultimodalAnalysis v0.0.0
 	LunarSubsystem/LoggerGeneral v0.0.0
 	LunarSubsystem/LunarDecoder v0.0.0
 	LunarSubsystem/MediaTools v0.0.0
@@ -50,12 +50,10 @@ replace LunarSubsystem/MediaTools => ../subsystem/media_tools
 
 replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
 
-replace LunarSubsystem/ImageProcessor => ../subsystem/image_processor
+replace LunarSubsystem/MultimodalAnalysis => ../subsystem/multimodal_analysis
 
 replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general
 
 replace LunarSubsystem/LunarDecoder => ../subsystem/lunar_decoder
-
-replace LunarSubsystem/LunarGoja => ../subsystem/lunar_goja
 
 replace LunarSubsystem/EndpointDocs => ../subsystem/endpoint_docs
