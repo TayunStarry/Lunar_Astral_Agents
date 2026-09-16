@@ -50,13 +50,12 @@ function handleMessage(raw) {
 }
 // updateCatalog 用引擎回执的插件状态填充动态选项：LTP9包ID / 已订阅事件主题 / 各包导出函数 / Mini-LTP·Node-LTP 智能体包
 function updateCatalog(plugins, agentPlugins) {
-    const c = { plugins: [], events: [], exports: {}, tools: {} };
+    const c = { plugins: [], events: [], exports: {} };
     const seen = new Set();
     (plugins || []).forEach(pl => {
         if (!pl || !pl.id) return;
         c.plugins.push(pl.id);
         c.exports[pl.id] = (pl.exports || []).slice().sort();
-        c.tools[pl.id] = (pl.tools || []).slice().sort();
         (pl.events || []).forEach(t => seen.add(t));
     });
     c.plugins.sort();

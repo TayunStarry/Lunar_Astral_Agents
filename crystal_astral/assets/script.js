@@ -236,7 +236,7 @@ function getRandomDefaultIcon() {
 // 标签 → 卡片角标色彩修饰类（不同标签不同配色，无对应样式的标签回退默认紫色）
 function getTagModifierClass(tag) {
     switch (tag) {
-        case 'LTP3': return 'card-tag-ltp3';
+        case 'LTP9': return 'card-tag-ltp9';
         case 'Zero-LTP': return 'card-tag-zero-ltp';
         case 'Node-LTP': return 'card-tag-node-ltp';
         case 'Mini-LTP': return 'card-tag-mini-ltp';
@@ -558,8 +558,9 @@ function clearDragState() {
 }
 
 // ===== 网格行管理：新增/移除空行 与 按标签快速排序 =====
-// 标签分组顺序，与 docs/code-wiki/09-LTPX协议-月华工具包.md §3.1 的标签表顺序一致
-const TAG_SORT_ORDER = ['Zero-LTP', 'Node-LTP', 'Mini-LTP', 'Self-LTP', 'DeepSeek', 'DeepDemos'];
+// 标签分组顺序，与 docs/code-wiki/09-LTPX协议-月华工具包.md §3.1 的标签表顺序一致；
+// 原 LTP3（YaraLTP）分组已由 LTP9（StarLTP / LTP9-Flash）取代
+const TAG_SORT_ORDER = ['Zero-LTP', 'Node-LTP', 'Mini-LTP', 'Self-LTP', 'LTP9', 'DeepSeek', 'DeepDemos'];
 
 // 取包的分组下标：命中列表中多个标签时取顺序最先者；不含列表标签或标签为空归入最后分组
 function getTagSortGroup(page) {

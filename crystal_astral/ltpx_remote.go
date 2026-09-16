@@ -2,9 +2,8 @@ package main
 
 import (
 	"CrystalAstral/agent/AutoLTP"
-	star "CrystalAstral/agent/StarLTP"
 	"CrystalAstral/agent/WebLTP"
-	"CrystalAstral/agent/YaraLTP"
+	star "CrystalAstral/engine/9.1-Flash"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
@@ -119,13 +118,7 @@ const windowAgentToolDescription = "面向 Windows 桌面的编排式桌面智�
 const webSearchToolName = "web_search"
 
 // webSearchToolDescription Web-LTP 内置网络搜索智能体的固有描述
-const webSearchToolDescription = "调用真实的浏览器与用户一同查阅互联网内容，获取信息"
-
-// yaraLTPToolName Yara-LTP 路由兼容层的内置固有工具名
-const yaraLTPToolName = "yara_ltp"
-
-// yaraLTPToolDescription Yara-LTP（LTP3 引擎）内置固有工具描述
-const yaraLTPToolDescription = "调用 LTP3 插件引擎, 执行自定义任务"
+const webSearchToolDescription = "调用(网页浏览器)去联网查询, 获取所需情报"
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
@@ -201,8 +194,6 @@ func ltpRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 	defs = append(defs, LTPXRemoteToolDef{Name: windowAgentToolName, Description: windowAgentToolDescription})
 	// 内置 Web-LTP 网络搜索智能体作为固有工具选项（真浏览器独立检索流水线）
 	defs = append(defs, LTPXRemoteToolDef{Name: webSearchToolName, Description: webSearchToolDescription})
-	// 内置 Yara-LTP 路由兼容层作为固有工具选项（goja 兼容层，消息路由到 yara 订阅器）
-	defs = append(defs, LTPXRemoteToolDef{Name: yaraLTPToolName, Description: yaraLTPToolDescription})
 	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
 	aggTool := buildUseTheProgram(defs)
 	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
@@ -283,27 +274,6 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if text == "" {
 			text = "搜索已完成"
-		}
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: true, Text: text})
-		return
-	}
-
-	// 内置 Yara-LTP 路由兼容层（yara_ltp）：进程内路由自然语言消息到 yara 事件/钩子订阅器
-	if targetTool == yaraLTPToolName {
-		instruction := ""
-		if raw, exists := req.Arguments["instruction"]; exists {
-			if s, sok := raw.(string); sok {
-				instruction = s
-			}
-		}
-		text, err := YaraLTP.Run(instruction)
-		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Yara-LTP 路由兼容层（工具=%s）：%s", targetTool, instruction)
-		if err != nil {
-			jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Text: text, Error: err.Error()})
-			return
-		}
-		if text == "" {
-			text = "路由完成"
 		}
 		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: true, Text: text})
 		return

@@ -76,15 +76,10 @@ function buildEnvelope(node) {
             if ((p.plugin || '').trim()) env.plugin = p.plugin.trim();
             return env;
         }
-        case 'tool': {
-            if (!(p.plugin || '').trim() || !(p.tool || '').trim()) { toast('请填写目标包与工具名', 'error'); return null; }
-            return { type: 'ltp9/tool', plugin: p.plugin.trim(), tool: p.tool.trim(), params: parseVal(gp(p, 'params')) || {} };
-        }
-        case 'platform': {
-            const method = p.method || 'getName';
-            const args = { groupId: s('groupId'), name: s('name') };
-            return { type: 'ltp9/test', action: 'platform', method, params: args };
-        }
+        case 'tool': case 'platform':
+            // LTP9-Flash 已移除 tool / platform 能力：节点不再产出信封
+            toast('该能力已在 LTP9-Flash 中移除：' + node.type, 'error');
+            return null;
         case 'emoji': {
             const op = p.op || 'search';
             const params = { query: s('query'), limit: Number(p.limit) || 5, image: s('image') };

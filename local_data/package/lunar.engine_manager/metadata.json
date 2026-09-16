@@ -1,8 +1,0 @@
-{
-  "id": "lunar.engine_manager",
-  "title": "LTP3 引擎管理器",
-  "description": "可视化编排 LTP3 引擎交互：以模块化节点构建钩子/事件/指令/工具/管理流程并执行，右侧实时回显引擎回执与插件状态",
-  "icon": "icon.webp",
-  "tags": ["Zero-LTP"],
-  "background_retention": true
-}

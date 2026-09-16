@@ -56,7 +56,6 @@ function fieldOptions(f, p) {
     if (f.dynamic === 'agentPlugins') return state.catalog.agentPlugins;
     if (f.dynamic === 'events') return state.catalog.events;
     if (f.dynamic === 'exports') return (state.catalog.exports[(p && p.plugin) || ''] || []);
-    if (f.dynamic === 'tools') return (state.catalog.tools[(p && p.plugin) || ''] || []);
     return f.options || [];
 }
 function buildField(f, p) {

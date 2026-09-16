@@ -1,12 +1,12 @@
 package main
 
 import (
+	star "CrystalAstral/engine/9.1-Flash"
 	"LunarSubsystem/BrowserClient"
 	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
-	image "LunarSubsystem/MultimodalAnalysis/server"
 	"LunarSubsystem/LoggerGeneral"
-	"CrystalAstral/agent/YaraLTP"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	"context"
 	"fmt"
 	"io"
@@ -126,31 +126,16 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	go StudioHubInstance.Run()
 	httpMux.HandleFunc("/ws", StudioHubInstance.HandleWebSocket)
 
-	// LTP3（YaraFlow）引擎：注入出站发送函数 + 初始化并加载插件 + 启动入站信封消费
-	YaraLTP.SetSend(func(data []byte) {
-		if StudioHubInstance != nil {
-			select {
-			case StudioHubInstance.Broadcast <- data:
-			default:
-			}
-		}
-	})
-	if err := YaraLTP.Init(); err != nil {
-		LoggerGeneral.Warn("CrystalAstral", "LTP3 引擎初始化失败: %v (不影响服务启动)", err)
-	}
-	go func() {
-		for data := range StudioHubInstance.Inbound {
-			// LTP9 调试信封先消费，其余交给 LTP3（YaraFlow）引擎
-			if ltp9HandleInbound(data) {
-				continue
-			}
-			YaraLTP.HandleIn(data)
-		}
-	}()
-	// LTP9 引擎：接入项目记忆库/SQLite，并注入前端智能体（Mini-LTP/Node-LTP）真实通道
+	// LTP9-Flash 引擎：注入宿主通道（前端智能体 / 单向通报 / 调试回执推送 / TTS·ASR 测试动作）
 	if err := BridgeLTP9(); err != nil {
 		LoggerGeneral.Warn("CrystalAstral", "LTP9 引擎初始化失败: %v (不影响服务启动)", err)
 	}
+	// /ws 入站消费：ltp9/* 调试信封由引擎消费，其余入站消息暂无其他消费者
+	go func() {
+		for data := range StudioHubInstance.Inbound {
+			star.HandleInbound(data)
+		}
+	}()
 
 	fsHandler := http.FileServer(root)
 	for _, endpoint := range SystemEndpoints {
@@ -200,7 +185,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 
 	BrowserClient.CloseWebView()
-	YaraLTP.Close()
+	star.Close()
 	LoggerGeneral.Info("CrystalAstral", "%s 已成功关闭", name)
 
 	return nil

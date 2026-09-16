@@ -2,7 +2,7 @@
 // 节点模块分类：类型 → 分页
 const NODE_CATS = [
     { key: 'start', label: '入口启动', types: ['start', 'event_start', 'clock_start'] },
-    { key: 'engine', label: '引擎交互', types: ['event', 'broadcast_all', 'broadcast_target', 'call', 'tool', 'command', 'agent', 'platform', 'async'] },
+    { key: 'engine', label: '引擎交互', types: ['event', 'broadcast_all', 'broadcast_target', 'call', 'command', 'agent', 'async'] },
     { key: 'data', label: '数据安全', types: ['db', 'memory', 'file', 'crypto', 'base64', 'jwt', 'emoji'] },
     { key: 'ai', label: '网络通讯', types: ['llm', 'embed', 'http', 'network'] },
     { key: 'media', label: '语音系统', types: ['kokoro_tts', 'qwen_tts', 'qwen_asr', 'microphone', 'speaker', 'audio_eq'] },

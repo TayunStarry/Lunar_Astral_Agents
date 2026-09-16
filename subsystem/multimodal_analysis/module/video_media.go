@@ -4,6 +4,7 @@ import (
 	"LunarSubsystem/GeneralConfig"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,16 @@ import (
 // llama-server 按视频抽帧频率（--video-fps，默认配置 0.5fps）抽取视觉 token，
 // 60 秒片段最多 30 帧，配合 20480 上下文窗口可安全容纳，避免提示超限。
 const MediaChunkSeconds = 60.0
+
+// MaxMediaWidth 媒体片段的最大宽度（像素）。
+// llama-server 的多模态批处理要求非因果注意力块整体落入单个 ubatch，
+// 高分辨率视频单帧的视觉 token 数会超出 n_ubatch 上限，触发 GGML 断言使多模态实例崩溃；
+// 重编码到 640px 后每帧 token 数降至安全范围（实测 Gemma 多模态约 100 token/帧）。
+const MaxMediaWidth = 640
+
+// NormalizedFPS 重编码片段的输出帧率：低帧率仅用于压缩重编码耗时，
+// 实际抽帧频率由 llama-server 端 --video-fps 决定，与此处互不影响
+const NormalizedFPS = 10
 
 // MediaSegment 媒体目录内的视频片段信息
 type MediaSegment struct {
@@ -79,8 +90,13 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 
 	// 以输入源稳定哈希作为媒体文件名，同一视频重复处理直接覆盖
 	hash := fmt.Sprintf("%x", sha1.Sum([]byte(inputFile)))
+	// 宽度超过安全上限（或探测失败）的源必须重编码归一化，防止 llama-server 端 n_ubatch 断言崩溃
+	needNormalize := true
+	if width, err := GetVideoWidth(localPath); err == nil && width > 0 && width <= MaxMediaWidth {
+		needNormalize = false
+	}
 	ext := strings.ToLower(filepath.Ext(localPath))
-	if !IsSupportedVideoFormat("v" + ext) {
+	if needNormalize || !IsSupportedVideoFormat("v"+ext) {
 		ext = ".mp4"
 	}
 
@@ -104,19 +120,24 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 			fileName = fmt.Sprintf("%s_seg%d%s", hash, i, ext)
 		}
 		outPath := filepath.Join(mediaDir, fileName)
-		if segments > 1 {
-			if err := cutVideoSegment(localPath, outPath, start, end-start); err != nil {
-				return nil, fmt.Errorf("切分视频片段%d失败: %w", i, err)
-			}
-		} else if err := copyFile(localPath, outPath); err != nil {
-			return nil, fmt.Errorf("复制视频到媒体目录失败: %w", err)
+		var err error
+		if needNormalize {
+			// 归一化重编码：输入侧定位片段起点，重编码后边界逐帧精确
+			err = normalizeVideoSegment(localPath, outPath, start, end-start)
+		} else if segments > 1 {
+			err = cutVideoSegment(localPath, outPath, start, end-start)
+		} else {
+			err = copyFile(localPath, outPath)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("写入视频片段%d失败: %w", i, err)
 		}
 		result = append(result, MediaSegment{File: fileName, Start: start, End: end})
 	}
 	return result, nil
 }
 
-// cutVideoSegment 使用 FFmpeg 流复制切分视频片段（不重编码，速度快）
+// cutVideoSegment 使用 FFmpeg 流复制切分视频片段（不重编码，速度快，仅用于已达安全分辨率的源）
 func cutVideoSegment(inputFile string, outFile string, start float64, duration float64) error {
 	// FFmpeg 覆盖输出需要 -y 标志，ffmpeg-go 无法正确传递布尔参数，改为提前删除旧文件
 	os.Remove(outFile)
@@ -133,6 +154,66 @@ func cutVideoSegment(inputFile string, outFile string, start float64, duration f
 		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
 	}
 	return stream.Run()
+}
+
+// normalizeVideoSegment 重编码视频片段到安全规格（宽度 ≤ MaxMediaWidth、帧率 NormalizedFPS、H.264/yuv420p）
+//
+// 输入侧 -ss 定位片段起点（重编码路径下高效且边界逐帧精确），
+// 仅保留视频流；缩放表达式中的逗号需转义，避免被 FFmpeg 当作滤镜分隔符。
+func normalizeVideoSegment(inputFile string, outFile string, start float64, duration float64) error {
+	// FFmpeg 覆盖输出需要 -y 标志，ffmpeg-go 无法正确传递布尔参数，改为提前删除旧文件
+	os.Remove(outFile)
+	input := ffmpeg.Input(inputFile)
+	if start > 0 {
+		input = ffmpeg.Input(inputFile, ffmpeg.KwArgs{"ss": fmt.Sprintf("%.3f", start)})
+	}
+	stream := input.Output(outFile, ffmpeg.KwArgs{
+		"t":        fmt.Sprintf("%.3f", duration),
+		"vf":       fmt.Sprintf("scale=trunc(min(%d\\,iw)/2)*2:-2,fps=%d,format=yuv420p", MaxMediaWidth, NormalizedFPS),
+		"c:v":      "libx264",
+		"preset":   "veryfast",
+		"crf":      "23",
+		"map":      "0:v:0",
+		"movflags": "+faststart",
+		"loglevel": "error",
+	})
+	if *GeneralConfig.FfmpegPath != "" {
+		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
+	}
+	if err := stream.Run(); err != nil {
+		return err
+	}
+	// 校验输出非空，防止半截文件进入媒体目录
+	if info, err := os.Stat(outFile); err != nil {
+		return fmt.Errorf("输出文件缺失: %w", err)
+	} else if info.Size() == 0 {
+		return fmt.Errorf("输出文件为空")
+	}
+	return nil
+}
+
+// GetVideoWidth 获取视频首条视频流的宽度（像素），无视频流或探测失败时返回错误
+func GetVideoWidth(inputFile string) (int, error) {
+	data, err := ffmpeg.Probe(inputFile)
+	if err != nil {
+		return 0, err
+	}
+	var output map[string]any
+	if err := json.Unmarshal([]byte(data), &output); err != nil {
+		return 0, fmt.Errorf("解析ffprobe输出失败: %w", err)
+	}
+	streams, ok := output["streams"].([]any)
+	if !ok {
+		return 0, fmt.Errorf("ffprobe输出中无streams字段")
+	}
+	for _, s := range streams {
+		if m, ok := s.(map[string]any); ok && m["codec_type"] == "video" {
+			if w, ok := m["width"].(float64); ok && w > 0 {
+				return int(w), nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("未找到视频流")
 }
 
 // copyFile 复制文件到目标路径

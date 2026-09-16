@@ -378,8 +378,8 @@ body {
     border-color: rgba(94, 17, 165, 0.45);
 }
 
-/* LTP3 标签 —— 深紫系（与 AtoA 亮红区分） */
-.card-tag-ltp3 {
+/* LTP9 标签 —— 深紫系（与 AtoA 亮红区分） */
+.card-tag-ltp9 {
     background: rgba(30, 30, 30, 0.75);
     border-color: rgba(60, 60, 60, 0.5);
 }

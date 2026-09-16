@@ -1266,19 +1266,26 @@ var agentSystem = (function (exports) {
     class PerceiverRole extends ModelBuilder {
         SUMMARY_THRESHOLD = 4096;
         summaryTaskTemplate = fileView('prompts/perceiverSummaryTask.md')[0];
+        MAX_SEGMENTS = 8;
+        RETRY_WAIT_MS = 25000;
+        MAX_ATTEMPTS = 2;
         constructor() {
             super(fileView('prompts/perceiverRole.md')[0]);
         }
         async watchVideo(mediaUrls) {
             if (mediaUrls.length === 0) {
                 console.warn('[感知者] 未收到任何视频片段');
-                return '月华观看了这个视频，但没有获取到足够的信息。';
+                return '';
             }
-            console.log(`[感知者] 开始观看视频，共 ${mediaUrls.length} 个片段`);
+            const watched = this.sampleSegments(mediaUrls);
+            if (watched.length < mediaUrls.length) {
+                console.log(`[感知者] 片段数 ${mediaUrls.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 段`);
+            }
+            console.log(`[感知者] 开始观看视频，共 ${watched.length} 个片段`);
             const understandings = [];
-            for (let index = 0; index < mediaUrls.length; index++) {
-                console.log(`[感知者] 观看第 ${index + 1}/${mediaUrls.length} 段`);
-                const understanding = await this.evaluateSegment(mediaUrls[index], index + 1, mediaUrls.length);
+            for (let index = 0; index < watched.length; index++) {
+                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 段`);
+                const understanding = await this.evaluateSegment(watched[index], index + 1, watched.length);
                 if (understanding.trim().length > 0) {
                     understandings.push(understanding);
                     console.log(`[感知者] 第 ${index + 1} 段理解完成`);
@@ -1286,7 +1293,7 @@ var agentSystem = (function (exports) {
             }
             if (understandings.length === 0) {
                 console.warn('[感知者] 未产生任何片段理解');
-                return '月华观看了这个视频，但没有获取到足够的信息。';
+                return '';
             }
             const concatenated = understandings.join('\n\n');
             if (concatenated.length <= this.SUMMARY_THRESHOLD) {
@@ -1295,8 +1302,21 @@ var agentSystem = (function (exports) {
             }
             console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
             const summary = await this.generateObjectiveSummary(concatenated);
-            console.log('[感知者] 客观摘要完成');
-            return summary || concatenated;
+            if (summary.trim().length > 0) {
+                console.log(`[感知者] 客观摘要完成（${summary.length} 字符）`);
+                return summary;
+            }
+            console.warn(`[感知者] 客观摘要失败，退回拼接理解文本（硬切断至 ${this.SUMMARY_THRESHOLD} 字符）`);
+            return concatenated.slice(0, this.SUMMARY_THRESHOLD);
+        }
+        sampleSegments(mediaUrls) {
+            if (mediaUrls.length <= this.MAX_SEGMENTS)
+                return mediaUrls;
+            const picked = [];
+            for (let i = 0; i < this.MAX_SEGMENTS; i++) {
+                picked.push(mediaUrls[Math.round(i * (mediaUrls.length - 1) / (this.MAX_SEGMENTS - 1))]);
+            }
+            return [...new Set(picked)];
         }
         async evaluateSegment(mediaUrl, index, total) {
             const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
@@ -1309,33 +1329,37 @@ var agentSystem = (function (exports) {
                 ]
             });
             this.runtimeMessages = [];
-            let response;
-            try {
-                response = this.run([], []);
+            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+                try {
+                    const response = this.run([], []);
+                    const content = response.body?.choices?.[0]?.message?.content || '';
+                    if (!content.trim()) {
+                        console.warn(`[感知者] 第 ${index} 段返回空内容`);
+                    }
+                    return content;
+                }
+                catch (error) {
+                    console.error(`[感知者] 第 ${index} 段第 ${attempt} 次推理失败:`, error);
+                    if (attempt < this.MAX_ATTEMPTS) {
+                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 段`);
+                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
+                    }
+                }
             }
-            catch (error) {
-                console.error(`[感知者] 第 ${index} 段推理失败:`, error);
-                return '';
-            }
-            const content = response.body?.choices?.[0]?.message?.content || '';
-            if (!content.trim()) {
-                console.warn(`[感知者] 第 ${index} 段返回空内容`);
-            }
-            return content;
+            return '';
         }
         async generateObjectiveSummary(concatenated) {
             const prompt = this.summaryTaskTemplate.replace('{content}', concatenated);
             this.coverContext({ role: 'user', content: prompt });
             this.runtimeMessages = [];
-            let response;
             try {
-                response = this.run([], []);
+                const response = this.run([], []);
+                return response.body?.choices?.[0]?.message?.content || '';
             }
             catch (error) {
                 console.error('[感知者] 客观摘要推理失败:', error);
                 return '';
             }
-            return response.body?.choices?.[0]?.message?.content || '';
         }
     }
 

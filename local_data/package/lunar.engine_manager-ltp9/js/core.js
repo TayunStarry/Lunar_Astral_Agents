@@ -34,7 +34,7 @@ const state = {
     doneWaiters: [],    // 子图执行完成回调栈（复合节点内部执行用）
     filter: 'all', unread: 0, log: [],
     linkDrag: { from: null, x: 0, y: 0 },
-    catalog: { plugins: [], events: [], exports: {}, tools: {}, agentPlugins: [] },
+    catalog: { plugins: [], events: [], exports: {}, agentPlugins: [] },
     modalNodeId: null, // 当前浮窗编辑的节点（catalog 刷新后重渲染用）
     canvasName: null, // 当前画布名称（对应 engine_graph/<名称>.json）
     canvases: [], // 已存在的画布列表 [{name,size,modified}]

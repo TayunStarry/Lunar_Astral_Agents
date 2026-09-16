@@ -1,0 +1,9 @@
+{
+  "id": "com.ltp9-flash.painting",
+  "title": "瞳瞳绘画",
+  "description": "根据提示词调用 OpenAI 兼容绘图后端生成图片，经 engine.signal 广播结果。对外经 engine.call 调用 generatePicture，也可订阅 art.generate 事件。",
+  "icon": "icon.webp",
+  "tags": [
+    "LTP9"
+  ]
+}

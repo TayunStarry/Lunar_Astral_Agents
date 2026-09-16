@@ -45,13 +45,13 @@ const NODES = {
     },
     broadcast_all: {
         label: '全局广播', icon: 'fa-share-alt', color: '#8b5cf6',
-        desc: 'engine.signal.all 向所有插件广播',
+        desc: 'signal.all 向所有插件广播',
         ins: [{ k: 'payload', label: '载荷' }], out: { k: 'result', label: '回执' },
         fields: [{ key: 'payload', label: '广播载荷 (JSON)', type: 'json', rows: 3, def: '{\n  "from": "engine_manager",\n  "hello": "广播测试"\n}' }]
     },
     broadcast_target: {
         label: '定向广播', icon: 'fa-bullseye', color: '#a855f7',
-        desc: 'engine.signal.target 仅向目标插件广播；目标包从引擎真实加载列表动态填充',
+        desc: 'signal.target 仅向目标插件广播；目标包从引擎真实加载列表动态填充',
         ins: [{ k: 'payload', label: '载荷' }], out: { k: 'result', label: '回执' },
         fields: [
             { key: 'target', label: '目标包ID（下拉=引擎真实加载）', type: 'text', ph: 'com.yaraflow.weather-ltp9', dynamic: 'plugins' },
@@ -60,7 +60,7 @@ const NODES = {
     },
     call: {
         label: '跨包调用', icon: 'fa-phone-alt', color: '#14b8a6',
-        desc: 'engine.call(包ID).run(函数名, 参数)；单参数框：JSON数组=多参数，单个文本/JSON=首个参数；【输入数据】连线则覆盖为首参；输出原始回执（ltp9/result 完整结构），不做简化提取',
+        desc: 'callFunction(包ID, 函数名, 参数)；单参数框：JSON数组=多参数，单个文本/JSON=首个参数；【输入数据】连线则覆盖为首参；输出原始回执（ltp9/result 完整结构），不做简化提取',
         ins: [{ k: 'input', label: '输入数据' }], out: { k: 'result', label: '返回值' },
         fields: [
             { key: 'plugin', label: '目标包（下拉=引擎真实加载）', type: 'text', ph: 'com.yaraflow.weather-ltp9', dynamic: 'plugins' },
@@ -70,7 +70,7 @@ const NODES = {
     },
     command: {
         label: '指令触发', icon: 'fa-terminal', color: '#0d9488',
-        desc: 'engine.command：向目标插件派发指令文本（插件留空=向全部插件派发）；插件从引擎真实加载列表动态填充',
+        desc: 'command.register：向目标插件派发指令文本（插件留空=向全部插件派发）；插件从引擎真实加载列表动态填充',
         ins: [{ k: 'text', label: '指令文本' }, { k: 'context', label: '上下文' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'plugin', label: '目标包ID（留空=全部插件；下拉=引擎真实加载）', type: 'text', ph: '留空派发给全部插件', dynamic: 'plugins' },
@@ -80,7 +80,7 @@ const NODES = {
     },
     agent: {
         label: 'LTPX', icon: 'fa-puzzle-piece', color: '#06b6d4',
-        desc: 'engine.agent(包ID).run(指令) → Mini-LTP / Node-LTP；【指令输入】作为自然语言',
+        desc: 'agent.synergy(包ID, 指令) → Mini-LTP / Node-LTP；【指令输入】作为自然语言',
         ins: [{ k: 'instruction', label: '指令文本' }], out: { k: 'text', label: '返回文本' },
         fields: [
             { key: 'plugin', label: 'LTPX 包ID（下拉=Mini-LTP/Node-LTP 包）', type: 'text', ph: 'com.example.webagent', dynamic: 'agentPlugins' },
@@ -89,7 +89,7 @@ const NODES = {
     },
     db: {
         label: '数据库', icon: 'fa-database', color: '#0ea5e9',
-        desc: 'engine.database.query/exec（共享 SQLite）；<SQL/参数> 可来自上游',
+        desc: 'database.query/exec（共享 SQLite）；<SQL/参数> 可来自上游',
         ins: [{ k: 'sql', label: 'SQL' }, { k: 'params', label: '参数' }], out: { k: 'rows', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['query', 'exec'], def: 'query' },
@@ -99,7 +99,7 @@ const NODES = {
     },
     memory: {
         label: '记忆库', icon: 'fa-brain', color: '#7c3aed',
-        desc: 'engine.memory.store/search（向量记忆库）；<参数对象> 可来自上游',
+        desc: 'memory.store/search（向量记忆库）；<参数对象> 可来自上游',
         ins: [{ k: 'params', label: '参数对象' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['store', 'search'], def: 'store' },
@@ -108,7 +108,7 @@ const NODES = {
     },
     file: {
         label: '文件', icon: 'fa-file-alt', color: '#f59e0b',
-        desc: 'engine.file.write/read/delete；write_b64 把上游 base64 解码为二进制落盘（兼容 data URI 前缀）；<路径/内容> 可来自上游，读出内容经输出传递',
+        desc: 'file.write/read/delete；write_b64 把上游 base64 解码为二进制落盘（兼容 data URI 前缀）；<路径/内容> 可来自上游，读出内容经输出传递',
         ins: [{ k: 'path', label: '路径' }, { k: 'data', label: '内容' }], out: { k: 'text', label: '内容' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['write', 'write_b64', 'read', 'delete'], def: 'write' },
@@ -137,7 +137,7 @@ const NODES = {
     },
     jwt: {
         label: 'JWT 签名', icon: 'fa-id-badge', color: '#e11d48',
-        desc: 'engine.crypto.signJWT（HS256/EdDSA/none）；<负载/KeyID> 可来自上游',
+        desc: 'hash.signJWT（HS256/EdDSA/none）；<负载/KeyID> 可来自上游',
         ins: [{ k: 'claims', label: '负载' }, { k: 'kid', label: 'KeyID' }], out: { k: 'token', label: '令牌' },
         fields: [
             { key: 'claims', label: '负载 claims (JSON)', type: 'json', rows: 2, def: '{\n  "sub": "project",\n  "iat": 1700000000,\n  "exp": 1700000900\n}' },
@@ -148,7 +148,7 @@ const NODES = {
     },
     llm: {
         label: 'LLM 对话', icon: 'fa-comment-dots', color: '#22c55e',
-        desc: 'engine.llm.chat；单消息框：无法解析为 JSON 视为一条用户消息；能解析且符合 [{role,content}] 消息数组格式视为消息列表；系统提示词自动前置',
+        desc: 'agent.chat；单消息框：无法解析为 JSON 视为一条用户消息；能解析且符合 [{role,content}] 消息数组格式视为消息列表；系统提示词自动前置',
         ins: [{ k: 'content', label: '消息内容' }], out: { k: 'answer', label: 'AI 应答' },
         fields: [
             { key: 'content', label: '消息内容（文本=一条用户消息；JSON数组 [{role,content}]=消息列表）', type: 'textarea', rows: 2, def: '用一句话介绍你自己' },
@@ -158,7 +158,7 @@ const NODES = {
     },
     http: {
         label: '同步 HTTP', icon: 'fa-globe', color: '#0891b2',
-        desc: 'engine.http.get/post；<URL/请求体/请求头> 可来自上游',
+        desc: 'http.get/post；<URL/请求体/请求头> 可来自上游',
         ins: [{ k: 'url', label: 'URL' }, { k: 'body', label: '请求体' }, { k: 'headers', label: '请求头' }], out: { k: 'resp', label: '响应' },
         fields: [
             { key: 'method', label: '方法', type: 'select', options: ['GET', 'POST'], def: 'GET' },
@@ -169,7 +169,7 @@ const NODES = {
     },
     network: {
         label: '网络 TCP/UDP/DNS', icon: 'fa-network-wired', color: '#0891b2',
-        desc: 'engine.network：resolveDNS/resolveSRV 即时返回；tcpConnect/udpConnect/udpListen 建立套接字并返回句柄；sockSend/Receive/SendTo/Close 按句柄操作；<句柄/数据> 可来自上游',
+        desc: 'network：resolveDNS/resolveSRV 即时返回；tcpConnect/udpConnect/udpListen 建立套接字并返回句柄；sockSend/Receive/SendTo/Close 按句柄操作；<句柄/数据> 可来自上游',
         ins: [{ k: 'handle', label: '套接字句柄' }, { k: 'data', label: '发送数据' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['resolveDNS', 'resolveSRV', 'tcpConnect', 'udpConnect', 'udpListen', 'sockSend', 'sockReceive', 'sockSendTo', 'sockClose'], def: 'resolveDNS' },
@@ -184,7 +184,7 @@ const NODES = {
     },
     async: {
         label: '异步子任务', icon: 'fa-tasks', color: '#6366f1',
-        desc: 'engine.async：run 以指定包导出的函数为任务体后台执行（不填包/函数则耗时模拟）；reportProgress 上报进度；getStatus/list 查询状态；<任务ID/进度> 可连线',
+        desc: 'async：run 以指定包导出的函数为任务体后台执行（不填包/函数则耗时模拟）；reportProgress 上报进度；getStatus/list 查询状态；<任务ID/进度> 可连线',
         ins: [{ k: 'taskId', label: '任务ID' }, { k: 'progress', label: '进度' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['run', 'reportProgress', 'getStatus', 'list'], def: 'run' },
@@ -267,7 +267,7 @@ const NODES = {
     },
     wait: {
         label: '同步等待', icon: 'fa-hourglass-half', color: '#94a3b8',
-        desc: 'engine.sleep 语义：阻塞等待指定毫秒；无数据输入输出',
+        desc: 'sleep 语义：阻塞等待指定毫秒；无数据输入输出',
         ins: [], out: null, fields: [{ key: 'ms', label: '等待毫秒', type: 'number', def: 800 }]
     },
     stats: {
@@ -279,29 +279,9 @@ const NODES = {
     not: { label: '非 NOT', icon: 'fa-right-left', color: '#facc15', gate: true, desc: '输入取反（单输入）', ins: port_ins4(), out: null, fields: [] },
     nand: { label: '与非 NAND', icon: 'fa-code-branch', color: '#eab308', gate: true, desc: '非(全部成功)', ins: port_ins4(), out: null, fields: [] },
     nor: { label: '或非 NOR', icon: 'fa-toggle-off', color: '#ca8a04', gate: true, desc: '非(任一成功)', ins: port_ins4(), out: null, fields: [] },
-    tool: {
-        label: '调用工具', icon: 'fa-wrench', color: '#0ea5e9',
-        desc: 'engine.tool：调用目标插件注册的 LLM/AtoA 工具；目标包+工具名从引擎真实注册动态填充；<参数对象> 可来自上游',
-        ins: [{ k: 'params', label: '参数对象' }], out: { k: 'result', label: '结果' },
-        fields: [
-            { key: 'plugin', label: '目标包（下拉=引擎真实加载）', type: 'text', ph: 'com.yaraflow.weather-ltp9', dynamic: 'plugins' },
-            { key: 'tool', label: '工具名（下拉=该包真实注册工具；先选包）', type: 'text', ph: 'get_weather', dynamic: 'tools' },
-            { key: 'params', label: '参数对象 (JSON)', type: 'json', rows: 2, def: '{\n  "city": "北京"\n}' }
-        ]
-    },
-    platform: {
-        label: '平台上下文', icon: 'fa-cube', color: '#6366f1',
-        desc: 'engine.platform：getName / getGroupId / lookupUser（宿主注入解析）；lookupUser 需配置群ID与昵称',
-        ins: [], out: { k: 'result', label: '结果' },
-        fields: [
-            { key: 'method', label: '方法', type: 'select', options: ['getName', 'getGroupId', 'lookupUser'], def: 'getName' },
-            { key: 'groupId', label: '群ID (lookupUser)', type: 'text', def: '' },
-            { key: 'name', label: '昵称 (lookupUser)', type: 'text', def: '' }
-        ]
-    },
     emoji: {
         label: '表情包', icon: 'fa-face-grin-hearts', color: '#ec4899',
-        desc: 'engine.emoji：search / store / random（复用记忆库 stickers 集合）；search 按语义检索、random 随机返回一张',
+        desc: 'memory.searchImage / storeImage / randomImage（图片记忆，复用记忆库 stickers 集合）；search 按语义检索、random 随机返回一张',
         ins: [{ k: 'query', label: '检索文本' }, { k: 'image', label: '图片 (store)' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['search', 'store', 'random'], def: 'search' },
@@ -312,7 +292,7 @@ const NODES = {
     },
     embed: {
         label: '文本嵌入', icon: 'fa-vector-square', color: '#22c55e',
-        desc: 'engine.llm.embed：计算文本向量（agent.embedding 文本嵌入模型）；<输入文本> 可来自上游，多文本传 JSON 字符串数组',
+        desc: 'agent.embed：计算文本向量（agent.embedding 文本嵌入模型）；<输入文本> 可来自上游，多文本传 JSON 字符串数组',
         ins: [{ k: 'input', label: '输入文本' }], out: { k: 'result', label: '向量' },
         fields: [{ key: 'input', label: '输入文本（字符串 或 JSON 字符串数组）', type: 'textarea', rows: 2, def: '星月智能' }]
     },

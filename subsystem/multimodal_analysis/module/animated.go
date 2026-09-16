@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"image/gif"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -143,8 +144,8 @@ func encodeAnimatedVideo(inputFile, outFile string, duration, target float64) er
 	slowFactor := animatedSlowFactor(duration, target)
 	filters := []string{
 		fmt.Sprintf("setpts=%.4f*PTS", slowFactor),
-		// H.264 需要偶数宽高与 yuv420p 像素格式
-		"scale=trunc(iw/2)*2:trunc(ih/2)*2",
+		// 与视频片段同规格：H.264 需要偶数宽高与 yuv420p 像素格式，宽度钳制到安全上限
+		fmt.Sprintf("scale=trunc(min(%d\\,iw)/2)*2:-2", MaxMediaWidth),
 		"format=yuv420p",
 	}
 	base := ffmpeg.KwArgs{
@@ -164,12 +165,8 @@ func encodeAnimatedVideo(inputFile, outFile string, duration, target float64) er
 	var lastErr error
 	for _, enc := range encoders {
 		args := ffmpeg.KwArgs{}
-		for key, value := range base {
-			args[key] = value
-		}
-		for key, value := range enc {
-			args[key] = value
-		}
+		maps.Copy(args, base)
+		maps.Copy(args, enc)
 		// ffmpeg-go 无法正确传递 -y 布尔参数，改为提前删除旧文件
 		os.Remove(outFile)
 		stream := ffmpeg.Input(inputFile).Output(outFile, args)
