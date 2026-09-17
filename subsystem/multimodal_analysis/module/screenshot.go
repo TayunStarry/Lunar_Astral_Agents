@@ -202,6 +202,70 @@ func ResizeImage(imgData []byte) ([]map[string]any, error) {
 	return []map[string]any{response}, nil
 }
 
+// StandardizeImageForPerception 静态图片标准化（感知者式入库预处理）：
+// 解码（GIF/APNG 取首帧，WebP 等非 JPG/PNG 经 FFmpeg 转码）→ 宽或高超过 maxDim
+// 时等比缩放（Lanczos）→ 统一编码 JPEG（Q90）/ PNG（PNG 源保留透明）→ 返回完整
+// data URI。供记忆库图片入库前调用，降低存储体积与 vision token 消耗。
+// 动态图的时序理解由 AnimatedImageToMedia 视频链路负责，此处仅取首帧静态降级。
+func StandardizeImageForPerception(imgData []byte, maxDim int) (string, error) {
+	if len(imgData) == 0 {
+		return "", fmt.Errorf("图片数据为空")
+	}
+	if maxDim <= 0 {
+		maxDim = 640
+	}
+	originalFormat := detectImageFormat(imgData)
+
+	var processedData []byte
+	switch originalFormat {
+	case "gif":
+		rgba, err := firstFrameOfGIF(imgData)
+		if err != nil {
+			return "", err
+		}
+		buf := &bytes.Buffer{}
+		if err := png.Encode(buf, rgba); err != nil {
+			return "", fmt.Errorf("GIF首帧编码失败: %v", err)
+		}
+		processedData = buf.Bytes()
+	case "jpeg", "png":
+		processedData = imgData
+	default:
+		converted, err := convertImageWithFFmpeg(imgData)
+		if err != nil {
+			return "", fmt.Errorf("转码失败（原始格式=%s）: %v", originalFormat, err)
+		}
+		processedData = converted
+	}
+
+	img, format, err := image.Decode(bytes.NewReader(processedData))
+	if err != nil {
+		return "", fmt.Errorf("解码图片失败: %v", err)
+	}
+	bounds := img.Bounds()
+	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
+		return "", fmt.Errorf("图片尺寸无效: %dx%d", bounds.Dx(), bounds.Dy())
+	}
+
+	rgbaImg := ToRGBA(img)
+	resizedImg := ResizeToFit(rgbaImg, maxDim, maxDim)
+
+	buf := &bytes.Buffer{}
+	var contentType string
+	if format == "png" {
+		contentType = "image/png"
+		if err := png.Encode(buf, resizedImg); err != nil {
+			return "", fmt.Errorf("PNG编码失败: %v", err)
+		}
+	} else {
+		contentType = "image/jpeg"
+		if err := jpeg.Encode(buf, resizedImg, &jpeg.Options{Quality: 90}); err != nil {
+			return "", fmt.Errorf("JPEG编码失败: %v", err)
+		}
+	}
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(buf.Bytes())), nil
+}
+
 // detectImageFormat 通过文件头魔数检测图片格式
 func detectImageFormat(data []byte) string {
 	if len(data) < 12 {

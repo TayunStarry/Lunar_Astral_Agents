@@ -1,9 +1,9 @@
 package engine
 
 import (
+	"LunarAstral/engine/container"
 	"LunarAstral/hierarchy"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarAstral/engine/container"
 	"fmt"
 
 	"github.com/dop251/goja"
@@ -22,7 +22,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("fileList", adapters.fileList)
 	vm.Set("saveDebugFile", adapters.saveDebugFile)
 
-	// 注册知识库操作适配器（JSON 文件存储）
+	// 注册知识库操作适配器（SQLite 存储，经共享子系统 knowledge.db 通道）
 	vm.Set("knowledgeLoad", adapters.knowledgeLoad)
 	vm.Set("knowledgeSave", adapters.knowledgeSave)
 

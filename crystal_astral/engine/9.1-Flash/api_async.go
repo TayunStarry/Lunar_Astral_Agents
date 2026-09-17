@@ -32,7 +32,8 @@ func bindAsync(vm *goja.Runtime, p *plugin) *goja.Object {
 	})
 	a.Set("reportProgress", func(id int, progress any) map[string]any { return asyncReportProgress(p, id, progress) })
 	a.Set("getStatus", func(id int) map[string]any { return asyncGetStatus(p, id) })
-	a.Set("list", func() []any { return asyncList(p) })
+	// Result 统一风格：任务列表包在 { success, tasks } 内
+	a.Set("list", func() map[string]any { return map[string]any{"success": true, "tasks": asyncList(p)} })
 	return a
 }
 

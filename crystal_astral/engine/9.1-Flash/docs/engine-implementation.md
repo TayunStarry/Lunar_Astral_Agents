@@ -11,13 +11,13 @@
 | 项 | LTP9-Flash |
 |----|------|
 | 载体 | CodeAgent（进程内 goja 兼容层/事件容器） |
-| 语言规范 | **ES2023+ 语法**（可选链、空值合并、类、BigInt 等）；插件回调统一为**同步函数**，切勿使用异步操作（`fetch`/WebSocket 等异步形态可用，回调/导出支持 Promise 敲定等待） |
+| 语言规范 | **ES2023+ 语法**（可选链、空值合并、类、BigInt 等）；插件回调统一为**同步函数**，切勿使用异步操作（回调/导出支持 Promise 敲定等待，但 `database.transaction` 回调内禁异步） |
 | 沙箱 | **每插件一个独立 goja Runtime**（`goja_nodejs/eventloop` 提供事件循环与定时器） |
 | 组织架构 | 插件层 / 引擎层 / 客户端（三端） |
 | 沙箱 API | **顶层全局**（见 §5），契约见 `docs/LTP 9.1 Flash.d.ts` |
 | 权限系统 | `allow-*`（文件 / 数据库 / 记忆库 / 网络 / 调用 / agent / 广播 / 加解密） |
 | 授权认证 | **`permissions.key`**：代码哈希作解密密钥，权限声明与代码强绑定 |
-| 内置能力 | 同步 `http`、同步 `sleep`、fetch/WebSocket 全局、定时器、时间戳、事件总线、广播、跨包调用、前端智能体调用、lunar-decoder 加解密 |
+| 内置能力 | 同步 `http`/`fetch`、同步 `sleep`、WebSocket 全局、定时器、时间戳、事件总线、广播、跨包调用、前端智能体调用、lunar-decoder 加解密 |
 
 **设计目标**：一个插件 = 一段（打包后的）js 运行在金属隔离的 goja 沙箱里，通过一组**顶层全局白名单 API** 与引擎互动；引擎负责权限校验、事件路由、跨端调度；客户端负责发起事件并**同步等待**脚本回调结果。
 
@@ -132,8 +132,8 @@ unload(pluginID): 停止事件循环（带存活探针与宽限）→ 清空订�
 ### 4.3 语言能力（同步回调模型）
 
 - **沙箱全局**：`console`（log/info/warn/error/debug，输出走引擎日志）与定时器（`setTimeout`/`setInterval`/`setImmediate` 及对应 clear，由 eventloop 注入）。
-- **同步为主、异步可用**：事件订阅回调、`exportFunction` 导出的函数优先写成**同步函数**返回普通对象；需要网络时用阻塞式 `http.get/post`，需要等待时用 `sleep(ms)`。
-- `fetch` / `WebSocket` 全局以 Promise / 事件回调形态存在（`allow-network` 门控）。若回调/导出函数返回 pending Promise（`async` 函数、`await fetch` 的结果），`callFn` 会让出插件事件循环并轮询直到 Promise 兑现或超时（默认 90s）。
+- **同步为主、异步可用**：事件订阅回调、`exportFunction` 导出的函数优先写成**同步函数**返回普通对象；需要网络时用阻塞式 `http.get/post` 或同步 `fetch`，需要等待时用 `sleep(ms)`。
+- `WebSocket` 全局以事件回调形态存在（`allow-network` 门控）。若回调/导出函数返回 pending Promise（`async` 函数），`callFn` 会让出插件事件循环并轮询直到 Promise 兑现或超时（默认 90s）；`database.transaction` 回调内返回 Promise 会立即回滚并报错。
 
 ### 4.4 定时器与时间戳（来自 goja_nodejs/eventloop）
 
@@ -146,20 +146,22 @@ const id = setTimeout(fn, ms)
 clearTimeout(id)
 ```
 
-### 4.5 网络模块（同步 + 异步双形态）
+### 4.5 网络模块（全同步形态）
 
 ```js
 // 同步形态（插件主链路推荐，allow-network）
-const r = http.get(url, headers?)     // 阻塞直到返回 → { status, body, error? }
+const r = http.get(url, headers?)     // 阻塞直到返回 → { success, status, body, error? }
 const r = http.post(url, body, headers?)
 const d = http.download(url, savePath?) // { success, path, size } / { success:false, error }
 
-// 异步全局形态（连接型场景，allow-network）
-const resp = await fetch(url, {method, headers, body})
-const ws = new WebSocket("wss://...")   // onopen / onmessage({data}) / onerror / onclose
+// 同步 fetch（同一 allow-network 门控，body 为 JSON 时自动解析为对象）
+const r = fetch(url, {method, headers, body})  // → { success, status, ok, url, headers, body, error? }
+
+// WebSocket 事件回调形态（连接型场景）
+const ws = new WebSocket("wss://...")   // onopen / onmessage({data: string | ArrayBuffer}) / onerror / onclose
 ```
 
-- `http` 与 `fetch` 共用同一套请求实现（`api_net.go`），`fetch`/`WebSocket` 的 resolve/reject 与事件回调排到该插件自己的 `eventloop` 线程。
+- `http`、`fetch` 共用同一套请求实现（`api_net.go` 的 `doLTP9Fetch`），全部同步阻塞；`WebSocket` 事件回调排到该插件自己的 `eventloop` 线程。
 - 裸 TCP/UDP/DNS 见 `network`（§5.13）。
 
 ---
@@ -167,6 +169,8 @@ const ws = new WebSocket("wss://...")   // onopen / onmessage({data}) / onerror 
 ## 5. 运行时 API（LTP9-Flash 顶层全局）
 
 以下全局由绑定器按 `allow-*` 注入每个沙箱。**未获权限的全局不注入**，脚本调用即触发 ReferenceError；获得权限的调用被拒时返回带 `error` 的结果对象。
+
+> **错误处理约定（统一 Result 风格）**：一切可失败操作返回 `{ success: boolean, error?: string, ...数据 }`（失败数据字段省略），由插件检查 `success`/`error`；仅参数用法错误（如 `fetch` 缺 url）抛 TypeError。失败不中断插件，由插件自行处置。
 
 ### 5.1 事件订阅器 `event`（常驻）
 
@@ -202,15 +206,30 @@ signal.unsubscribe(id)
 ```js
 database.query(sql, params?)   // 读 → { success, rows: [{列名:值}...] }
 database.exec(sql, params?)    // 写 → { success, rows_affected }（失败时 rows_affected 为 0）
+
+// 同步事务：回调接收 { query, exec }（绑定到事务）；正常返回提交，抛错/返回 Promise 回滚
+const r = database.transaction((tx) => {
+  tx.exec("INSERT INTO t(name) VALUES (?)", ["a"])
+  return tx.query("SELECT * FROM t")
+})  // → { success, result } / { success:false, error }
+
+// 按名称迁移：未应用则在事务内执行 upSql（支持多语句，禁含 BEGIN/COMMIT）并记录到 _migrations
+database.migrate("init-t", "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, name TEXT)")
+// → { success, applied }（applied=false 表示此前已应用，本次跳过）
+
+// 命名空间作用域：独立 <name>.db 文件（名称仅允许字母数字-_），真隔离
+const ns = database.namespace("myplugin")   // { query, exec, transaction, migrate }
+ns.query("SELECT * FROM t")
 ```
 
-接入项目 SQLite（mattn/go-sqlite3），所有插件共享 `local_data/database/knowledge.db`（WAL 模式）。
+接入项目 SQLite（mattn/go-sqlite3）。共享库为 `local_data/database/knowledge.db`（WAL 模式）；
+命名空间库为 `local_data/database/<name>.db`（每库自动建 `_migrations` 迁移记录表）。
 
 ### 5.4 向量记忆库 `memory`（allow-memory）
 
 ```js
 memory.store({ content, tags? })        // 写入 → { success, id }
-memory.search({ query, limit? })        // 检索 → Array<{ content, similarity }>（limit 默认 5，上限 50；基础设施错误抛 JS 异常）
+memory.search({ query, limit? })        // 检索 → { success, results: [{ content, similarity }] }（limit 默认 5，上限 50）
 memory.searchImage(query, { limit? })   // 图片语义检索 → { success, results: [{ image, similarity }] }
 memory.storeImage(base64)               // 添加图片（标签由记忆库 LLM 自动生成）→ { success, id }
 memory.randomImage(query?)              // 按语义随机返回一张 → { success, image }
@@ -231,50 +250,56 @@ file.delete(path)        // → { success } / { success:false, error }
 ### 5.6 配置 `config`（常驻）
 
 ```js
-config.read()          // → config.yaml 注入的对象；无配置时为 undefined
+config.read()          // → { success, config? }；config 为 config.yaml 注入对象，无配置时省略
 config.write(obj)      // 更新内存并同步写回 config.yaml
 ```
 
 ### 5.7 跨包函数调用 `callFunction`（allow-call）
 
 ```js
-let x = callFunction(pkgId, fnName, [args])   // 同步阻塞，直接返回目标函数值
+const r = callFunction(pkgId, fnName, [args])   // 同步阻塞 → { success:true, result } / { success:false, error }
+if (r.success) use(r.result)
 ```
 
 - 目标插件必须在其 execute.js 里 `exportFunction(fnName, (...args) => ...)`。
-- 目标插件不存在/未导出该函数 → 抛出 `xxx 包拒绝响应`。
+- 目标插件不存在/未导出该函数 → `{ success:false, error: "xxx 包拒绝响应…" }`（不抛异常）。
 
 ### 5.8 调用前端智能体 `agent`（allow-agent）
 
 ```js
 agent.chat(messages, opts?)   // OpenAI 兼容对话 → { success, text, tool_calls?, error? }
-                              // opts: { temperature?, max_tokens?, system?, tools? }
+                              // messages: PostMessage / ToolMessage（role='tool' 含 tool_call_id）
+                              // opts: { temperature?, max_tokens?, system?, tools?: ChatTool[] }
 agent.embed(input, opts?)     // 文本嵌入（单条 string 或数组）→ { success, embedding } / { success, embeddings }
-agent.synergy(pkgId, text)    // 调用前端智能体（Mini-LTP / Node-LTP），同步阻塞返回其执行文本
+agent.synergy(pkgId, text)    // 调用前端智能体（Mini-LTP / Node-LTP）→ { success, text } / { success:false, error }
+agent.search(instruction)     // Web-LTP 网络搜索（allow-agent 绑定 + allow-network 执行）→ { success, text: 报告 }
 ```
 
-- `agent.synergy` 目标包不存在或智能体不存在 → 抛出 `xxx 包拒绝响应`。
+- `agent.synergy` 目标包不存在或智能体不存在 → `{ success:false, error: "xxx 包拒绝响应" }`（不抛异常）。
+- `agent.search` 同 `agent.synergy` 一致的双权限模型：未授予 `allow-network` 时返回 `{ success:false, error }`（智能体本质多需联网，详见 §5.17）。
 - LLM 配置读取 `lunar_config.json` 的 `agent.multimodal_*` / `agent.embedding_*`（不硬编码）。
-- `agent.chat` 传 `tools` 时模型走函数调用：content 为空，`tool_calls` 原样透传。
+- `agent.chat` 传 `tools`（`ChatTool[]`，OpenAI 兼容函数定义）时模型走函数调用：content 为空，`tool_calls`（`ToolCall[]`）原样透传；执行结果以 `ToolMessage`（role='tool' + tool_call_id）回传继续对话。
 
 ### 5.9 编解码 `encoding`（allow-certificate）
 
 ```js
 encoding.base64Encode(data)          // → base64 字符串
-encoding.base64Decode(s)             // 失败返回 { error }（不抛异常）
-encoding.urlEncode(s) / urlDecode(s) // urlDecode 失败抛错
-encoding.lunarEncoder(key, content)  // 加密（桥 lunar_decoder，与 permissions.key 同源）
-encoding.lunarDecoder(key, cipher)   // 解密
+encoding.base64Decode(s)             // → { success, text } / { success:false, error }（不抛异常）
+encoding.urlEncode(s)                // → URL 编码字符串
+encoding.urlDecode(s)                // → { success, text } / { success:false, error }（不抛异常）
+encoding.lunarEncoder(key, content)  // 加密 → { success, text: 密文, error? }（桥 lunar_decoder，与 permissions.key 同源）
+encoding.lunarDecoder(key, cipher)   // 解密 → { success, text: 原文, error? }
 ```
 
 ### 5.10 哈希签名 `hash`（allow-certificate）
 
 ```js
 hash.signJWT(claims, secret, algorithm?, kid?) // HS256（默认）/ EdDSA(Ed25519) / none；kid 可选写入 JWT 头
+                                               // → { success, text: JWT } / { success:false, error }（不抛异常）
 hash.md5(s) / sha1(s) / sha256(s)              // 小写十六进制摘要
 hash.hmacSha1(key, s) / hmacSha256(key, s)     // 小写十六进制 MAC
-hash.ed25519Sign(privKeyPemOrSeed, data)       // base64url 签名；失败抛错
-hash.generateJWT(claims, privKeyPemOrSeed, kid?) // EdDSA JWT
+hash.ed25519Sign(privKeyPemOrSeed, data)       // → { success, text: base64url 签名, error? }（不抛异常）
+hash.generateJWT(claims, privKeyPemOrSeed, kid?) // EdDSA JWT → { success, text, error? }
 ```
 
 ### 5.11 图像 `image`（allow-file；download 另需 allow-network）
@@ -282,13 +307,19 @@ hash.generateJWT(claims, privKeyPemOrSeed, kid?) // EdDSA JWT
 ```js
 image.loadValid(path)            // 读插件数据目录图片并校验 → { success, text: base64 }
 image.download(url, fileName)    // 下载到数据目录并校验 → { success, text: base64 }；无 allow-network 返回 failure
+// 缩放 + 重编码：path 可为数据目录相对路径或 data:..;base64 内联数据
+image.resize(path, { max_dim? | width?, height?, format?='jpeg/png/webp', quality?=90 })  // → { success, text: dataURI, width, height, format }
+// 仅重编码（编码格式化，不改尺寸）
+image.convert(path, format, { quality?=90 })                                             // → { success, text: dataURI, width, height, format }
 ```
 
-### 5.12 时间与休眠（常驻）
+### 5.12 视频抽帧 `video`（allow-file；URL/dataURI 源另需 allow-network）
 
 ```js
-time.now() / time.nowMs()
-sleep(ms)   // 同步阻塞等待
+video.frames(source, { times? | count? | fps?=5, dedup?=true, max_dim?=640, format?='jpeg', quality?=85 })
+// source：相对数据目录路径 / http(s) URL / data:video;base64 URI
+// → { success, frames:[{ data:dataURI, timestamp, width, height, format, index }], count, skipped? }
+// 采样互斥优先级：times(显式秒) > count(等距帧数) > fps(均匀频率，超60帧自动等距抽样)
 ```
 
 ### 5.13 裸套接字 `network`（allow-network）
@@ -317,7 +348,7 @@ command.register(name, pattern, (match, context) => result, { aliases?: string[]
 async.run(taskFn, { timeout?, data? })  // taskFn 收到 ({ id, data })；→ { success, text: taskId }
 async.reportProgress(taskId, progress)
 async.getStatus(taskId)                 // → { success, taskId, status, progress }
-async.list()                            // → [{ taskId, status, progress }]
+async.list()                            // → { success, tasks: [{ taskId, status, progress }] }
 ```
 
 任务仍在插件事件循环线程内执行（复用 callFn）；超时看门狗仅标记状态。
@@ -328,6 +359,21 @@ async.list()                            // → [{ taskId, status, progress }]
 exportFunction("myFunction", (a, b) => { return a + b })   // 同步函数，供 callFunction 调用
 ```
 
+### 5.17 Web-LTP 网络搜索 `agent.search`（双权限：allow-agent 绑定 + allow-network 执行）
+
+```js
+agent.search(instruction)   // 自然语言指令 → 检索 → 多页面摘要 → 报告 → { success, text: 报告, error? }
+// instruction 可含「前N页/个」等数量要求，底层复用 Web-LTP 进程内搜索流水线
+// 无 allow-network 时返回 { success:false, error }
+```
+
+### 5.18 时间与休眠（常驻）
+
+```js
+time.now() / time.nowMs()
+sleep(ms)   // 同步阻塞等待
+```
+
 ---
 
 ## 6. 权限系统（`allow-*`）
@@ -336,12 +382,12 @@ LTP9-Flash 用**权限密钥 + 沙箱注入控制**双层实现。引擎经哈�
 
 | 权限 | 控制的全局 | 说明 |
 |------|-----------|------|
-| `allow-file` | `file.*` / `image.loadValid` | 文件读写删 + 读/校验图片 |
+| `allow-file` | `file.*` / `image.loadValid/resize/convert` / `video.frames` | 文件读写删 + 图片读/校验/缩放/转码 + 视频抽帧 |
 | `allow-database` | `database.*` | SQL 数据库读写 |
 | `allow-memory` | `memory.*` | 向量记忆库与图片记忆读写 |
-| `allow-network` | `http.*` / `network.*` / `fetch` / `WebSocket` / `image.download` | 同步/异步网络、裸套接字与图片下载 |
+| `allow-network` | `http.*` / `network.*` / `fetch` / `WebSocket` / `image.download` / `video.frames(URL源)` / `agent.search(执行)` | 同步/异步网络、裸套接字、图片下载、视频URL下载与 Web-LTP 搜索 |
 | `allow-call` | `callFunction` | 调用其他插件导出函数 |
-| `allow-agent` | `agent.*` | LLM 对话 / 文本嵌入 / 前端智能体 |
+| `allow-agent` | `agent.*` | LLM 对话 / 文本嵌入 / 前端智能体 / Web-LTP 搜索 |
 | `allow-signal` | `signal.*` | 广播收发 |
 | `allow-certificate` | `encoding.*` / `hash.*` | 编解码 + lunar 加解密 + JWT/摘要/HMAC/Ed25519 |
 | `allow-send` | （预留） | 保留权限名，Flash 当前未挂载能力 |
@@ -403,8 +449,9 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 | 绑定器 | `binder.go` | 按 `allow-*` 把 LTP9-Flash 顶层全局 + 网络全局注入沙箱 |
 | 权限 | `permission.go` | `permissions.key` 哈希解密校验（代码哈希即解密密钥）+ `allow-*` 能力开关 |
 | 配置 | `yaml.go` | config.yaml 极简 YAML 解析/序列化（启动注入 + config.write 回写） |
-| 能力实现 | `api.go` / `api_ext.go` | 广播、事件发布、跨包调用、文件、记忆库（文本+图片）、数据库、图像、LLM chat/embed 的 Go 侧实现 |
-| 网络 | `api_net.go` / `api_network.go` / `api_ws.go` | `api_net.go`：同步 `http` 与全局 `fetch`（共用 `doLTP9Fetch`）；`api_ws.go`：全局 WebSocket **客户端**；`api_network.go`：`network` 套接字（TCP/UDP/DNS） |
+| 能力实现 | `api.go` / `api_ext.go` | 广播、事件发布、跨包调用、文件、记忆库（文本+图片）、图像、LLM chat/embed 的 Go 侧实现 |
+| 数据库 | `api_database.go` | `database` query/exec/transaction/migrate/namespace（共享 knowledge.db + 命名空间独立库，句柄缓存） |
+| 网络 | `api_net.go` / `api_network.go` / `api_ws.go` | `api_net.go`：同步 `http` 与同步 `fetch`（共用 `doLTP9Fetch`）；`api_ws.go`：全局 WebSocket **客户端**（文本帧 string / 二进制帧 ArrayBuffer）；`api_network.go`：`network` 套接字（TCP/UDP/DNS） |
 | 指令/异步/编解码 | `api_command.go` / `api_async.go` / `api_encoding.go` | `command` 指令系统、`async` 后台子任务、`encoding` 编解码与 lunar 加解密桥 |
 | 探针 | `api_probe.go` | 前端可视化测试探针（ltp9/test 信封，复用各能力同源实现） |
 | 类型/常量 | `type.go` / `variable.go` | 类型定义与常量/变量集中管理 |
@@ -417,8 +464,8 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 |------|------|------|
 | goja 运行时 / 事件循环 | `goja_nodejs/eventloop` | 每插件 `eventloop.NewEventLoop()`（自带定时器） |
 | 加解密 | `subsystem/lunar_decoder` | `encoding.lunarEncoder/lunarDecoder` 与 permissions.key 同源 |
-| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `memory.*` / `database.*`；图片记忆复用 `stickers` 集合 |
-| 同步 `http` / 全局 `fetch` | `net/http` | `api_net.go` 共用 `doLTP9Fetch` |
+| 记忆库 / 数据库 | 项目 FileManager/module、SQLite（mattn/go-sqlite3） | `memory.*` / `database.*`（`api_database.go`：共享库 + 命名空间独立库）；图片记忆复用 `stickers` 集合 |
+| 同步 `http` / `fetch` | `net/http` | `api_net.go` 共用 `doLTP9Fetch`（参照 lunar_astral engine.syncFetch 的同步方案） |
 | WebSocket 客户端 | `github.com/gorilla/websocket` | `api_ws.go` |
 | LLM / 嵌入 | lunar_config.json 的 `agent.multimodal_*` / `agent.embedding_*` | `agent.chat` / `agent.embed` |
 | 前端智能体调用 | Mini-LTP / Node-LTP | `agent.synergy` 经宿主 `SetAgentInvoker` 路由 |
@@ -433,7 +480,7 @@ Command(pluginID, text string, context) / CommandAll(text, context) // 触发指
 - **路径沙箱化**：引擎对 `file` 路径做沙箱化校验，限定插件数据目录内。
 - **能力最小化**：权限经 `allow-*` 声明 + 代码哈希绑定授予；网络（`http`/`fetch`/`WebSocket`/`network`）统一由 `allow-network` 门控。
 - **同步回调线程安全**：一切 goja 操作协调到对应沙箱事件循环（`RunOnLoop`）执行；`callFn` 同步阻塞等待回调结果。
-- **拒绝响应**：`callFunction` / `agent.synergy` 目标不可达或未导出 → 抛出 `xxx 包拒绝响应`。
+- **拒绝响应**：`callFunction` / `agent.synergy` 目标不可达或未导出 → `{ success:false, error: "xxx 包拒绝响应" }`（Result 风格，不抛异常）。
 - **解码失败即拒绝**：`permissions.key` 解码失败或权限名非法时拒绝对应权限，不退化到明文。
 
 ---
@@ -450,9 +497,10 @@ crystal_astral/engine/9.1-Flash/
 ├── debug.go           # LTP9-Flash 调试信封（HandleInbound + ltp9/test 动作分发）
 ├── permission.go      # permissions.key 校验 + allow-* 开关
 ├── yaml.go            # config.yaml 极简 YAML 解析/序列化
-├── api.go             # 广播 / 事件发布 / 跨包调用 / 文件 / 记忆库 / 数据库
+├── api.go             # 广播 / 事件发布 / 跨包调用 / 文件 / 记忆库
+├── api_database.go    # database：query/exec/transaction/migrate/namespace
 ├── api_ext.go         # JWT / 摘要 / Ed25519 / 图像 / LLM（Go 侧）
-├── api_net.go         # 同步 http + 全局 fetch（共用 doLTP9Fetch）
+├── api_net.go         # 同步 http + 同步 fetch（共用 doLTP9Fetch）
 ├── api_ws.go          # 全局 WebSocket 客户端
 ├── api_network.go     # network 套接字（TCP/UDP/DNS）
 ├── api_command.go     # command 指令系统
@@ -477,7 +525,8 @@ crystal_astral/engine/9.1-Flash/
 2. 事件订阅器支持拦截（intercept）、改写（modifiedData）、业务回传（return）、撤回（cancel），汇总回执含对应标记。
 3. `config.read()` 正确注入 config.yaml；`config.write` 回写磁盘。
 4. 未授权全局不注入（脚本调用即 ReferenceError）；`permissions.key` 授权与代码哈希绑定生效。
-5. `callFunction` 指向不存在包抛出 `xxx 包拒绝响应`。
-6. `http` 同步请求与 `sleep` 阻塞行为正确；`fetch`/`WebSocket` 在 allow-network 下可用。
-7. `encoding.lunarEncoder/lunarDecoder` 与 `hash.signJWT` 往返复核。
-8. 插件脚本改动后：用 `subsystem/ltp9_keygen` 重新签发 `permissions.key`（或开发模式验证）。
+5. `callFunction` 指向不存在包 → `{ success:false, error }`（Result 风格）。
+6. `http`/`fetch` 同步请求与 `sleep` 阻塞行为正确；`WebSocket` 文本/二进制帧回调在 allow-network 下可用。
+7. `encoding.lunarEncoder/lunarDecoder` 与 `hash.signJWT` 往返复核（失败路径返回 Result，不抛异常）。
+8. `database.transaction` 提交/回滚（含回调抛错回滚）、`migrate` 幂等（二次调用 applied=false）、`namespace` 独立库隔离。
+9. 插件脚本改动后：用 `subsystem/ltp9_keygen` 重新签发 `permissions.key`（或开发模式验证）。

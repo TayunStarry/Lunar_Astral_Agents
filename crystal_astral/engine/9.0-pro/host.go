@@ -57,11 +57,11 @@ func Run(instruction string) (resultText string, err error) {
 	}
 	outs, summary := Engine.DispatchHook(defaultHookTopic, msg, nil, "")
 	b, _ := json.Marshal(map[string]any{
-		"hook":      defaultHookTopic,
-		"subscribed": summary.Subscribed,
-		"errored":   summary.Errored,
+		"hook":           defaultHookTopic,
+		"subscribed":     summary.Subscribed,
+		"errored":        summary.Errored,
 		"allow_continue": summary.AllowContinue,
-		"results":   outs,
+		"results":        outs,
 	})
 	return string(b), nil
 }

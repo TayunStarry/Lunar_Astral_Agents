@@ -30,20 +30,20 @@ type jsFunc = goja.Value
 
 // hookSub 一个插件内注册的 Hook 订阅项。
 type hookSub struct {
-	hookType   string
-	mode       string // blocking / observe
-	order      string // early / normal / late
+	hookType    string
+	mode        string // blocking / observe
+	order       string // early / normal / late
 	errorPolicy string // abort / skip / log
-	timeoutMs  int64
-	handler    jsFunc
+	timeoutMs   int64
+	handler     jsFunc
 }
 
 // eventSub 事件订阅项（event.subscribe 与 eventHandler.register 共用）。
 type eventSub struct {
-	name   string
-	weight int
+	name             string
+	weight           int
 	interceptMessage bool
-	handler jsFunc
+	handler          jsFunc
 }
 
 // commandDef 指令定义。
@@ -56,27 +56,27 @@ type commandDef struct {
 
 // toolDef 工具定义。
 type toolDef struct {
-	name             string
-	description      string
-	briefDescription string
+	name                string
+	description         string
+	briefDescription    string
 	detailedDescription string
-	visibility       string // visible / hidden / deferred
-	toolType         string // agent / autonomous / core
-	timeoutSeconds   int64
-	async            bool
-	hookType         string
-	pattern          string
-	parameters       []toolParam
-	handler          jsFunc
+	visibility          string // visible / hidden / deferred
+	toolType            string // agent / autonomous / core
+	timeoutSeconds      int64
+	async               bool
+	hookType            string
+	pattern             string
+	parameters          []toolParam
+	handler             jsFunc
 }
 
 // toolParam 工具参数。
 type toolParam struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Required    bool   `json:"required,omitempty"`
-	Default     any    `json:"default,omitempty"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Required    bool     `json:"required,omitempty"`
+	Default     any      `json:"default,omitempty"`
 	EnumValues  []string `json:"enumValues,omitempty"`
 }
 
@@ -91,9 +91,9 @@ type apiDef struct {
 
 // llmProvider 插件自定义 LLM 提供商。
 type llmProvider struct {
-	name    string
+	name       string
 	clientType string
-	handler jsFunc
+	handler    jsFunc
 }
 
 // ==== 插件（每插件独立 goja 沙箱） ====
@@ -109,16 +109,16 @@ type plugin struct {
 	DataDir    string // data/ 绝对路径
 	KeyPath    string // permissions.key 绝对路径
 
-	config map[string]any // 解析后的 config.yaml 内容
+	config  map[string]any  // 解析后的 config.yaml 内容
 	granted map[string]bool // 本次加载经脚本哈希校验通过的权限集合
 
-	vm  *goja.Runtime
-	mu  sync.Mutex // 串行化同一插件所有 JS 执行（goja 非线程安全）
+	vm *goja.Runtime
+	mu sync.Mutex // 串行化同一插件所有 JS 执行（goja 非线程安全）
 
-	loaded   bool
-	loadErr  string
-	onLoadFn jsFunc
-	onUnloadFn jsFunc
+	loaded           bool
+	loadErr          string
+	onLoadFn         jsFunc
+	onUnloadFn       jsFunc
 	onConfigUpdateFn jsFunc
 
 	hooks        map[string][]*hookSub
@@ -137,11 +137,11 @@ type plugin struct {
 
 // engine LTP3 引擎管理器：负责包扫描、虚拟机加载/卸载、事件与钩子分发。
 type engine struct {
-	mu       sync.RWMutex
-	plugins  map[string]*plugin // ID → 插件
-	byDir    map[string]string  // 包目录名 → ID
-	root     string             // 包根目录
-	running  bool
+	mu             sync.RWMutex
+	plugins        map[string]*plugin // ID → 插件
+	byDir          map[string]string  // 包目录名 → ID
+	root           string             // 包根目录
+	running        bool
 	busFingerprint string // 上次对账快照（目录名:校验，用于探测增删）
 }
 
@@ -157,10 +157,10 @@ type hookOutcome struct {
 
 // dispatchSummary 聚合后的分发汇总。
 type dispatchSummary struct {
-	Subscribed   int `json:"subscribed"`
-	Errored      int `json:"errored"`
+	Subscribed    int  `json:"subscribed"`
+	Errored       int  `json:"errored"`
 	AllowContinue bool `json:"allow_continue"`
-	Aborted      bool `json:"aborted"`
+	Aborted       bool `json:"aborted"`
 }
 
 // ==== WS 总线信封（engine ↔ 真实客户端） ====
@@ -251,16 +251,16 @@ type outMessage struct {
 
 // sendMessage 引擎 → 客户端：插件产生的消息发送请求。
 type sendMessage struct {
-	Type       string `json:"type"`
-	RequestID  string `json:"request_id,omitempty"` // 有值 → 单播回触发客户端；无值 → 默认广播
-	PluginID   string `json:"plugin_id,omitempty"`
-	Kind       string `json:"kind"` // text | image | emoji | hybrid
-	GroupID    string `json:"group_id,omitempty"`
-	Content    string `json:"content,omitempty"`
-	Image      string `json:"image,omitempty"`
-	Emoji      string `json:"emoji,omitempty"`
-	Segments   []any  `json:"segments,omitempty"`
-	Success    bool   `json:"success"`
+	Type      string `json:"type"`
+	RequestID string `json:"request_id,omitempty"` // 有值 → 单播回触发客户端；无值 → 默认广播
+	PluginID  string `json:"plugin_id,omitempty"`
+	Kind      string `json:"kind"` // text | image | emoji | hybrid
+	GroupID   string `json:"group_id,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Image     string `json:"image,omitempty"`
+	Emoji     string `json:"emoji,omitempty"`
+	Segments  []any  `json:"segments,omitempty"`
+	Success   bool   `json:"success"`
 }
 
 // lifecycleMessage 引擎 → 客户端：插件加载 / 卸载生命周期广播。

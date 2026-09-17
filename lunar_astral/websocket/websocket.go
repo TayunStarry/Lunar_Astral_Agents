@@ -1,8 +1,8 @@
 package websocket
 
 import (
-	"LunarAstral/engine"
 	"LunarAstral/bridging/napcat"
+	"LunarAstral/engine"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
 	"net/http"
@@ -96,7 +96,7 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 
 func SetupWebSocketHandler(mux *http.ServeMux) {
 	engine.PushMessageFunc = BroadcastMessage
-	engine.GetAnimCacheFunc = func() interface{} {
+	engine.GetAnimCacheFunc = func() any {
 		animCache.RLock()
 		defer animCache.RUnlock()
 		return animCache
@@ -166,7 +166,7 @@ func bridgeToQQ(response WSResponse) {
 			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接序列化数据失败: %v", err)
 			return
 		}
-		var dataMap map[string]interface{}
+		var dataMap map[string]any
 		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
 			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接解析数据失败: %v", err)
 			return
@@ -183,13 +183,13 @@ func bridgeToQQ(response WSResponse) {
 			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接序列化图片数据失败: %v", err)
 			return
 		}
-		var dataMap map[string]interface{}
+		var dataMap map[string]any
 		if err := json.Unmarshal(dataBytes, &dataMap); err != nil {
 			LoggerGeneral.SubError("LunarCore", "WebSocket", "桥接解析图片数据失败: %v", err)
 			return
 		}
 		// 提取 images 数组
-		if rawImages, ok := dataMap["images"].([]interface{}); ok {
+		if rawImages, ok := dataMap["images"].([]any); ok {
 			var images []string
 			for _, img := range rawImages {
 				if imgStr, ok := img.(string); ok {

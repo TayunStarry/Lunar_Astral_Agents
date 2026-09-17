@@ -82,8 +82,8 @@ var httpClient = &http.Client{Timeout: 10 * time.Second}
 // ==== 消息发送回调 ====
 
 // SendMessageToAgent 向智能体推送消息的回调函数，由服务器层注册
-// 参数为 OpenAI 格式消息列表 []map[string]interface{}
-var SendMessageToAgent func(messages []map[string]interface{})
+// 参数为 OpenAI 格式消息列表 []map[string]any
+var SendMessageToAgent func(messages []map[string]any)
 
 // SendVideoToAgent 向智能体推送视频地址的回调函数，由服务器层注册
 // 参数为视频 URL / 本地路径列表，由智能体通过 pullVideoUrl 拉取并理解视频内容

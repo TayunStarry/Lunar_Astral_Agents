@@ -29,9 +29,6 @@ var EmbeddedFiles embed.FS
 // 在 StartServer() 中初始化，供所有前端组件通过 /ws 端点连接（无差别广播）
 var StudioHubInstance *StudioHub
 
-// ==== 启动语音（后端直接播放） ====
-// 已移除：重构后琉璃不再主动向月华推送工具列表，也不再播放启动/停用语音并进行关闭前的 3 秒等待。
-
 // ==== winmm 播放（后端播放失败音效 WAV，绕开浏览器自动播放限制） ====
 
 // winmmDLL Windows 多媒体库（winmm.dll），提供 PlaySoundW 播放 WAV 音频

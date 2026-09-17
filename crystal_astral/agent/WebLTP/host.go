@@ -18,17 +18,6 @@ import (
 // runMu 串行化网络搜索运行（共享浏览器窗口与截图资源）
 var runMu sync.Mutex
 
-// PageIntel 单个结果页采集到的情报
-type PageIntel struct {
-	Title      string
-	URL        string
-	Domain     string
-	Summary    string // 已按配置硬切断（≤4096 字符）
-	Captures   int
-	Failed     string // 打开/提取失败原因（空表示成功）
-	SummaryErr string // 模型摘要失败原因（此时摘要为文本前段兜底）
-	Cached     bool   // 摘要来自本地缓存（未重新访问网页，Captures 为 0）
-}
 
 // Run 执行一次网络搜索：月华自然语言指令 → 搜索报告（文本）。
 // 全流程由程序自主依次完成，不依赖前端包；业务完成后关闭浏览器页面；
@@ -272,7 +261,7 @@ func captureDirForReport(saver *shotSaver) string {
 	return saver.dir
 }
 
-// LocalDirForData 本地数据根目录（截图保存与 SQL 缓存均基于 LocalDir）
+// LocalDirForData 本地数据根目录（截图保存基于 LocalDir；页面摘要缓存已统一到 knowledge.db）
 func LocalDirForData() string {
 	p := *localDirFlag()
 	if p == "" {

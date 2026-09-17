@@ -80,8 +80,8 @@ const inboundQueueCap = 512
 
 // inboundJobs 入站分发 job 通道；inboundStop 停止信号（startInboundWorkers 创建）。
 var (
-	inboundJobs  chan *InMessage
-	inboundStop  chan struct{}
+	inboundJobs chan *InMessage
+	inboundStop chan struct{}
 )
 
 // scriptExecBudget 单插件串行队列排队上限（防御性）。

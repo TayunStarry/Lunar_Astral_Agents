@@ -395,15 +395,15 @@ func toolDefToMap(t *toolDef) map[string]any {
 		})
 	}
 	return map[string]any{
-		"name":               t.name,
-		"description":        t.description,
-		"briefDescription":   t.briefDescription,
+		"name":                t.name,
+		"description":         t.description,
+		"briefDescription":    t.briefDescription,
 		"detailedDescription": t.detailedDescription,
-		"visibility":         t.visibility,
-		"toolType":           t.toolType,
-		"timeoutSeconds":     t.timeoutSeconds,
-		"async":              t.async,
-		"parameters":         params,
+		"visibility":          t.visibility,
+		"toolType":            t.toolType,
+		"timeoutSeconds":      t.timeoutSeconds,
+		"async":               t.async,
+		"parameters":          params,
 	}
 }
 

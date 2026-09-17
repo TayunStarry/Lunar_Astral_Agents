@@ -98,7 +98,9 @@ func chatComplete(messages, tools []map[string]any, baseURL, apiKey, model strin
 				Content any `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
-		Error *struct{ Message string `json:"message"` } `json:"error"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &cr); err != nil {
 		return "", fmt.Errorf("解析响应失败: %w", err)
@@ -176,7 +178,9 @@ func embedTexts(texts []string) ([][]float64, error) {
 		Data []struct {
 			Embedding []float64 `json:"embedding"`
 		} `json:"data"`
-		Error *struct{ Message string `json:"message"` } `json:"error"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &er); err != nil {
 		return nil, fmt.Errorf("解析嵌入响应失败: %w", err)

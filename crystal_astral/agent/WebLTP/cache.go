@@ -6,38 +6,25 @@ package WebLTP
 //   - 命中且未超过 TTL（默认 7 天）→ 跳过访问与摘要，直接复用；
 //   - 命中但超过 TTL → 视为未命中，照常访问网页并用新摘要覆写旧行；
 //   - 未命中 → 访问并写入。
-// 打开失败或摘要为空/过短的页面不写缓存。数据库位于 LocalDir/database/web_search_cache.db。
+// 打开失败或摘要为空/过短的页面不写缓存。数据库统一落在共享知识库
+// GeneralConfig.KnowledgeDBPath（默认 LocalDir/database/knowledge.db，表 web_ltp_page_cache），
+// 不保留旧版本缓存存储的迁移策略。
 
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"LunarSubsystem/GeneralConfig"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// pageCacheEntry 缓存条目
-type pageCacheEntry struct {
-	Title     string
-	Domain    string
-	Summary   string
-	QueryHint string
-	FetchedAt time.Time
-}
 
-// PageCache 页面摘要缓存（SQLite）。零值/nil 安全：get/put/close 均兼容 nil 接收者，
-// 缓存不可用时调用方无需分支处理。
-type PageCache struct {
-	db  *sql.DB
-	ttl time.Duration
-}
-
-// pageCachePath 缓存数据库路径（LocalDir/database/web_search_cache.db）
+// pageCachePath 缓存数据库路径（与共享知识库同库：GeneralConfig.KnowledgeDBPath，
+// 默认 LocalDir/database/knowledge.db）
 func pageCachePath() string {
-	return filepath.Join(LocalDirForData(), "database", "web_search_cache.db")
+	return *GeneralConfig.KnowledgeDBPath
 }
 
 // openPageCache 打开（必要时创建）缓存数据库
@@ -45,18 +32,11 @@ func openPageCache(path string, ttl time.Duration) (*PageCache, error) {
 	if ttl <= 0 {
 		ttl = 7 * 24 * time.Hour
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("创建缓存目录失败: %w", err)
-	}
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path+"?_busy_timeout=10000&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("打开缓存数据库失败: %w", err)
 	}
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("设置 WAL 模式失败: %w", err)
-	}
-	const schema = `CREATE TABLE IF NOT EXISTS page_cache (
+	const schema = `CREATE TABLE IF NOT EXISTS web_ltp_page_cache (
 		url        TEXT PRIMARY KEY,
 		title      TEXT NOT NULL DEFAULT '',
 		domain     TEXT NOT NULL DEFAULT '',
@@ -79,7 +59,7 @@ func (c *PageCache) get(rawURL string) (pageCacheEntry, bool) {
 	}
 	var fetchedAt int64
 	err := c.db.QueryRow(`SELECT title, domain, summary, query_hint, fetched_at
-		FROM page_cache WHERE url = ?`, rawURL).
+		FROM web_ltp_page_cache WHERE url = ?`, rawURL).
 		Scan(&entry.Title, &entry.Domain, &entry.Summary, &entry.QueryHint, &fetchedAt)
 	if err != nil {
 		return entry, false // 含 sql.ErrNoRows
@@ -99,7 +79,7 @@ func (c *PageCache) put(rawURL, title, domain, summary, queryHint string) {
 	if len([]rune(strings.TrimSpace(summary))) < 20 || strings.Contains(summary, "页面无可提取文本") {
 		return
 	}
-	_, err := c.db.Exec(`INSERT INTO page_cache (url, title, domain, summary, query_hint, fetched_at)
+	_, err := c.db.Exec(`INSERT INTO web_ltp_page_cache (url, title, domain, summary, query_hint, fetched_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			title = excluded.title,

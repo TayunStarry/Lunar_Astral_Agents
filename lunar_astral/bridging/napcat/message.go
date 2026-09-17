@@ -78,7 +78,7 @@ func handlePrivateMessage(msg NapcatMessage) {
 
 	req := BridgeRequest{
 		Target:    BridgeTarget{ID: msg.UserID, IsGroup: false},
-		Messages:  []map[string]interface{}{buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)},
+		Messages:  []map[string]any{buildUserMessage("[用户: "+nickname+"]: ", content, hasImages)},
 		VideoURLs: videoURLs,
 		AudioURLs: audioURLs,
 	}
@@ -338,8 +338,8 @@ func clearGroupPool(groupID int64) {
 }
 
 // buildGroupMessages 将群聊缓存池条目构建为 OpenAI 格式消息（带群聊前缀）
-func buildGroupMessages(groupName string, entries []GroupPoolEntry) []map[string]interface{} {
-	messages := make([]map[string]interface{}, 0, len(entries))
+func buildGroupMessages(groupName string, entries []GroupPoolEntry) []map[string]any {
+	messages := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
 		prefix := fmt.Sprintf("[群聊: %s][用户: %s]: ", groupName, e.Nickname)
 		messages = append(messages, buildUserMessage(prefix, e.Content, e.HasImages))
@@ -366,11 +366,11 @@ func collectGroupAudioURLs(entries []GroupPoolEntry) []string {
 }
 
 // contentToText 从解析结果（string 或 多模态数组）中提取纯文本
-func contentToText(content interface{}) string {
+func contentToText(content any) string {
 	if s, ok := content.(string); ok {
 		return s
 	}
-	if arr, ok := content.([]map[string]interface{}); ok {
+	if arr, ok := content.([]map[string]any); ok {
 		var sb strings.Builder
 		for _, item := range arr {
 			if item["type"] == "text" {
@@ -385,14 +385,14 @@ func contentToText(content interface{}) string {
 }
 
 // buildUserMessage 将内容与发送者前缀组装为单条 OpenAI 消息
-func buildUserMessage(prefix string, content interface{}, hasImages bool) map[string]interface{} {
+func buildUserMessage(prefix string, content any, hasImages bool) map[string]any {
 	if hasImages {
-		arr, _ := content.([]map[string]interface{})
-		withPrefix := append([]map[string]interface{}{{"type": "text", "text": prefix}}, arr...)
-		return map[string]interface{}{"role": "user", "content": withPrefix}
+		arr, _ := content.([]map[string]any)
+		withPrefix := append([]map[string]any{{"type": "text", "text": prefix}}, arr...)
+		return map[string]any{"role": "user", "content": withPrefix}
 	}
 	text, _ := content.(string)
-	return map[string]interface{}{"role": "user", "content": prefix + text}
+	return map[string]any{"role": "user", "content": prefix + text}
 }
 
 // enqueueRequest 将请求加入队列并尝试推进
@@ -432,10 +432,10 @@ func pumpNext() {
 }
 
 // parseMessageSegments 解析消息段列表，返回 (内容, 是否含图片, 视频地址列表, 语音/音频地址列表)
-// 纯文本返回 string，包含图片返回 []map[string]interface{}；视频与语音地址分别写入后两个返回值
+// 纯文本返回 string，包含图片返回 []map[string]any；视频与语音地址分别写入后两个返回值
 // groupID 用于 @ 目标与回复引用的成员名称解析（私聊传 0）
-func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}, bool, []string, []string) {
-	var contentArray []map[string]interface{}
+func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, []string, []string) {
+	var contentArray []map[string]any
 	var contentStr string
 	var hasImages bool
 	var videoURLs []string
@@ -465,7 +465,7 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}
 				if imgURL != "" {
 					hasImages = true
 					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]interface{}{
+					contentArray = append(contentArray, map[string]any{
 						"type":      "image_url",
 						"image_url": map[string]string{"url": imgURL},
 					})
@@ -518,7 +518,7 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (interface{}
 				if isImage {
 					hasImages = true
 					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]interface{}{
+					contentArray = append(contentArray, map[string]any{
 						"type":      "image_url",
 						"image_url": map[string]string{"url": dataURI},
 					})
@@ -620,7 +620,7 @@ func resolveAudioSource(recordData RecordData) string {
 		return recordData.File
 	}
 	// get_record 转码：mp3 通用格式，语音理解管线可识别
-	if resp, err := callNapcatAPI("/get_record", map[string]interface{}{"file": recordData.File, "out_format": "mp3"}); err == nil {
+	if resp, err := callNapcatAPI("/get_record", map[string]any{"file": recordData.File, "out_format": "mp3"}); err == nil {
 		var data GetFileResponse
 		if json.Unmarshal(resp.Data, &data) == nil {
 			if data.Base64 != "" {
@@ -777,16 +777,16 @@ func sniffImageMIME(data []byte) string {
 
 // extractJsonCardTitle 从 JSON 卡片数据中提取标题（小程序 / 分享卡片 / 邀请等）
 func extractJsonCardTitle(data string) string {
-	var payload map[string]interface{}
+	var payload map[string]any
 	if json.Unmarshal([]byte(data), &payload) != nil {
 		return ""
 	}
 	if title, ok := payload["prompt"].(string); ok && title != "" {
 		return title
 	}
-	if meta, ok := payload["meta"].(map[string]interface{}); ok {
+	if meta, ok := payload["meta"].(map[string]any); ok {
 		for _, v := range meta {
-			if m, ok := v.(map[string]interface{}); ok {
+			if m, ok := v.(map[string]any); ok {
 				if title, ok := m["title"].(string); ok && title != "" {
 					return title
 				}
@@ -942,9 +942,9 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment) str
 
 // appendContent 根据当前内容格式追加文本
 // 如果已经是数组格式（有图片），追加为 text 类型元素；否则追加到纯字符串
-func appendContent(contentArray *[]map[string]interface{}, contentStr *string, text string) {
+func appendContent(contentArray *[]map[string]any, contentStr *string, text string) {
 	if len(*contentArray) > 0 {
-		*contentArray = append(*contentArray, map[string]interface{}{
+		*contentArray = append(*contentArray, map[string]any{
 			"type": "text",
 			"text": text,
 		})
@@ -954,9 +954,9 @@ func appendContent(contentArray *[]map[string]interface{}, contentStr *string, t
 }
 
 // markMultimedia 首次遇到多媒体时将已累积的纯文本迁移到数组格式
-func markMultimedia(contentArray *[]map[string]interface{}, contentStr *string) {
+func markMultimedia(contentArray *[]map[string]any, contentStr *string) {
 	if len(*contentArray) == 0 && *contentStr != "" {
-		*contentArray = append(*contentArray, map[string]interface{}{
+		*contentArray = append(*contentArray, map[string]any{
 			"type": "text",
 			"text": *contentStr,
 		})

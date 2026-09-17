@@ -45,22 +45,6 @@ func resolveModel() {
 	})
 }
 
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"` // 字符串或多媒体片段数组（图文混排）
-}
-
-// contentPart 多媒体内容片段（文本或图片）
-type contentPart struct {
-	Type     string    `json:"type"`
-	Text     string    `json:"text,omitempty"`
-	ImageURL *imageURL `json:"image_url,omitempty"`
-}
-
-type imageURL struct {
-	URL string `json:"url"`
-}
-
 // textWithImage 构建图文混排的用户消息内容（dataURL 为空时退化为纯文本）
 func textWithImage(text, dataURL string) []contentPart {
 	parts := []contentPart{{Type: "text", Text: text}}

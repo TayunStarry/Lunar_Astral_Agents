@@ -1,4 +1,4 @@
-﻿package YaraLTP
+package YaraLTP
 
 // ==== LLM 模型 API：yara.model ====
 

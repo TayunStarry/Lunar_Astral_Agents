@@ -91,7 +91,7 @@ func (class *Runtime) memoryAddWithTags(call goja.FunctionCall) goja.Value {
 
 	// 解析 tags 字符串数组
 	exportedTags := call.Argument(3).Export()
-	rawTags, ok := exportedTags.([]interface{})
+	rawTags, ok := exportedTags.([]any)
 	if !ok {
 		return class.runtime.ToValue([]any{false, fmt.Errorf("memoryAddWithTags 第 4 个参数需为字符串数组 tags")})
 	}

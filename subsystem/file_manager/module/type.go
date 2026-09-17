@@ -137,6 +137,8 @@ type KnowledgeDB struct {
 	knowledgeDB          *sql.DB // 知识库 SQL 连接
 	knowledgeInitialized bool    // 知识库是否初始化完成
 	webSearchCacheDB     *sql.DB // 网络搜索摘要缓存 SQL 连接（懒加载，非 nil 即已就绪）
+	fileDBs              map[string]*sql.DB // 任意 *.db 懒打开连接缓存（键为数据库文件名去 .db）
+	fileDBsMu            sync.Mutex         // fileDBs 并发打开互斥锁
 }
 
 // MemoryDB 记忆库结构体（多集合架构，扁平化存储，v3 文档引用标签 UUID 架构）

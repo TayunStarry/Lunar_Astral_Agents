@@ -5,8 +5,10 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -72,6 +74,7 @@ func (d *KnowledgeDB) initKnowledge(dbPath string) error {
 
 	d.knowledgeDB = db
 	d.knowledgeInitialized = true
+	d.fileDBs = map[string]*sql.DB{}
 	return nil
 }
 
@@ -92,6 +95,15 @@ func (d *KnowledgeDB) Close() error {
 			return err
 		}
 	}
+	d.fileDBsMu.Lock()
+	for name, db := range d.fileDBs {
+		if err := db.Close(); err != nil {
+			d.fileDBsMu.Unlock()
+			return fmt.Errorf("关闭数据库 %s 失败: %v", name, err)
+		}
+	}
+	d.fileDBs = map[string]*sql.DB{}
+	d.fileDBsMu.Unlock()
 	return nil
 }
 
@@ -249,8 +261,9 @@ func ExecuteSQL(stmt string, params []any) *BatchResult {
 
 // ExecuteSQLOn 指定数据源执行原生 SQL
 // db 为空或 "knowledge" 时使用知识库（knowledge.db）；
-// "web_search_cache" 时使用网络搜索页面摘要缓存（web_search_cache.db，Web-LTP 的派生缓存）；
-// 其他取值返回错误。执行语义与 ExecuteSQL 一致。
+// "web_search_cache" 时使用网络搜索页面摘要缓存（web_search_cache.db，Web-LTP 的派生缓存，遗留只读）；
+// 其他取值视为 database 目录内的 *.db 文件路径（去 .db，支持子目录如 "sub/foo"）：文件必须已存在
+// 且为有效 SQLite 库，连接懒打开并缓存复用，不创建新文件。执行语义与 ExecuteSQL 一致。
 func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 	startTime := time.Now()
 	result := &BatchResult{
@@ -279,11 +292,14 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 		}
 		target = KnowledgeDatabase.webSearchCacheDB
 	default:
-		err := fmt.Errorf("未知的数据源: %q（可选 knowledge / web_search_cache）", db)
-		result.Success = false
-		result.Error = err.Error()
-		result.Results[0].Error = err.Error()
-		return result
+		fileDB, ferr := KnowledgeDatabase.ensureFileDB(db)
+		if ferr != nil {
+			result.Success = false
+			result.Error = ferr.Error()
+			result.Results[0].Error = ferr.Error()
+			return result
+		}
+		target = fileDB
 	}
 
 	op := map[string]any{"type": "sql", "sql": stmt}
@@ -338,4 +354,157 @@ func (d *KnowledgeDB) initWebSearchCacheDB() error {
 	d.webSearchCacheDB = db
 	LoggerGeneral.Info("FileManager", "网络搜索摘要缓存连接完成: %s", dbPath)
 	return nil
+}
+
+// =============================================================================
+// 知识条目通道（月华 knowledge 存储复用）与任意 *.db 数据源
+// =============================================================================
+
+// knowledgeValidName 库名/表名白名单（防路径穿越与表名拼接注入）
+var knowledgeValidName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// KnowledgeLoadEntries 读取指定表的全部条目（月华 knowledge 存储通道）。
+// 条目格式 [key, text][]，按 rowid 稳定排序；表不存在时返回空数组。
+func KnowledgeLoadEntries(table string) ([][]string, error) {
+	if !knowledgeValidName.MatchString(table) {
+		return nil, fmt.Errorf("无效的知识库表名: %q", table)
+	}
+	if err := EnsureKnowledgeInitialized(); err != nil {
+		return nil, err
+	}
+	rows, err := KnowledgeDatabase.knowledgeDB.Query("SELECT key, value FROM " + table + " ORDER BY rowid")
+	if err != nil {
+		if strings.Contains(err.Error(), "no such table") {
+			return [][]string{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	entries := [][]string{}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		entries = append(entries, []string{k, v})
+	}
+	return entries, rows.Err()
+}
+
+// KnowledgeReplaceEntries 以「全表替换」语义写入指定表（月华 knowledge 存储通道）。
+// 事务内：建表（幂等）→ 清空 → 逐条插入；任一步失败整体回滚。
+func KnowledgeReplaceEntries(table string, entries [][]string) error {
+	if !knowledgeValidName.MatchString(table) {
+		return fmt.Errorf("无效的知识库表名: %q", table)
+	}
+	if err := EnsureKnowledgeInitialized(); err != nil {
+		return err
+	}
+	tx, err := KnowledgeDatabase.knowledgeDB.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec("CREATE TABLE IF NOT EXISTS " + table + " (key TEXT PRIMARY KEY, value TEXT)"); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM " + table); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	stmt, err := tx.Prepare("INSERT OR REPLACE INTO " + table + " (key, value) VALUES (?, ?)")
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+	for _, pair := range entries {
+		if len(pair) == 0 {
+			continue
+		}
+		key := pair[0]
+		val := ""
+		if len(pair) >= 2 {
+			val = pair[1]
+		}
+		if _, err := stmt.Exec(key, val); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ensureFileDB 打开（或复用）database 目录内指定 *.db 的连接（懒加载，不创建文件）。
+// name 为相对 database 目录的文件路径去 .db（顶层如 "web_search_cache"，子目录如 "sub/foo"）；
+// 逐段校验名称白名单、文件存在性与 SQLite 魔数，全部通过才打开。
+func (d *KnowledgeDB) ensureFileDB(name string) (*sql.DB, error) {
+	if d == nil {
+		KnowledgeDatabase = &KnowledgeDB{}
+		d = KnowledgeDatabase
+	}
+	rel, err := knowledgeRelPath(name)
+	if err != nil {
+		return nil, err
+	}
+	d.fileDBsMu.Lock()
+	defer d.fileDBsMu.Unlock()
+	if db, ok := d.fileDBs[name]; ok {
+		return db, nil
+	}
+	dbDir := filepath.Clean(filepath.Dir(*GeneralConfig.KnowledgeDBPath))
+	dbPath := filepath.Clean(filepath.Join(dbDir, rel+".db"))
+	// 防穿越复核：最终路径必须仍位于 database 目录内
+	if !strings.HasPrefix(dbPath, dbDir+string(os.PathSeparator)) {
+		return nil, fmt.Errorf("非法数据库路径: %s", name)
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, fmt.Errorf("数据库文件不存在: %s", dbPath)
+	}
+	// 验证 SQLite 魔数，拒绝误传非 SQLite 文件
+	f, err := os.Open(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取数据库失败: %v", err)
+	}
+	magic := make([]byte, 16)
+	_, rerr := io.ReadFull(f, magic)
+	f.Close()
+	if rerr != nil {
+		return nil, fmt.Errorf("读取数据库头失败: %s", dbPath)
+	}
+	if string(magic) != "SQLite format 3\x00" {
+		return nil, fmt.Errorf("非有效的 SQLite 数据库: %s", dbPath)
+	}
+	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
+	if err != nil {
+		return nil, fmt.Errorf("连接 SQLite 失败: %v", err)
+	}
+	db.SetMaxOpenConns(2)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("测试 SQLite 连接失败: %v", err)
+	}
+	if d.fileDBs == nil {
+		d.fileDBs = map[string]*sql.DB{}
+	}
+	d.fileDBs[name] = db
+	LoggerGeneral.Info("FileManager", "数据源连接完成: %s", dbPath)
+	return db, nil
+}
+
+// knowledgeRelPath 校验并规整相对 database 目录的库文件路径（不含 .db 后缀）。
+// 仅允许「段/段/…」形式，每段为字母数字-_，返回以 / 分隔的规整路径。
+func knowledgeRelPath(name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("数据库名不能为空")
+	}
+	segs := strings.Split(filepath.ToSlash(name), "/")
+	for _, seg := range segs {
+		if !knowledgeValidName.MatchString(seg) {
+			return "", fmt.Errorf("非法数据库名: %q（仅允许字母数字-_）", name)
+		}
+	}
+	return strings.Join(segs, "/"), nil
 }

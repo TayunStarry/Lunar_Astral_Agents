@@ -1,16 +1,16 @@
 package server
 
 import (
-	"LunarAstral/engine"
 	"LunarAstral/bridging/napcat"
+	"LunarAstral/engine"
+	"LunarAstral/engine/container"
 	"LunarAstral/hierarchy"
 	"LunarAstral/model/llama"
 	"LunarAstral/websocket"
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/GeneralConfig"
-	image "LunarSubsystem/MultimodalAnalysis/server"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarAstral/engine/container"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	"LunarSubsystem/Qwen3-TTS/module"
 	"context"
 	"mime"
@@ -52,14 +52,7 @@ func InitializeServer() {
 func registerHandlers() {
 	// 创建独立的ServeMux实例
 	httpMux = http.NewServeMux()
-	// 处理根路径请求
-	var fileServer http.Handler
-	if *GeneralConfig.Developer {
-		fileServer = http.FileServer(http.Dir("./lunar_astral/hierarchy/assets/client"))
-		LoggerGeneral.Info("LunarCore", "使用开发模式，直接读取文件系统")
-	} else {
-		fileServer = http.FileServer(hierarchy.Gethierarchy())
-	}
+	var fileServer http.Handler = http.FileServer(hierarchy.Gethierarchy())
 	httpMux.Handle("/", http.StripPrefix("/", fileServer))
 	// 启动扩散生成任务协处理器
 	image.StartTaskProcessor()
@@ -116,7 +109,7 @@ func initBridgeAdapter() {
 	}
 
 	// 注册桥接器消息回调
-	napcat.SendMessageToAgent = func(messages []map[string]interface{}) {
+	napcat.SendMessageToAgent = func(messages []map[string]any) {
 		// 将QQ消息（OpenAI格式）推送到智能体上下文
 		for _, msg := range messages {
 			engine.UnreadContext = append(engine.UnreadContext, engine.PostMessage{

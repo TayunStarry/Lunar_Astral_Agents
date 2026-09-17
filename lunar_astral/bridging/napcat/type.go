@@ -208,7 +208,7 @@ type BridgeTarget struct {
 // BridgeRequest 一条待推送给月华的请求（群聊可能包含多条历史消息）
 type BridgeRequest struct {
 	Target    BridgeTarget
-	Messages  []map[string]interface{} // OpenAI 格式消息列表
+	Messages  []map[string]any // OpenAI 格式消息列表
 	VideoURLs []string                 // 视频地址列表，写入智能体 unreadVideoUrl
 	AudioURLs []string                 // 语音/音频地址列表，写入智能体 unreadAudioUrl
 }
@@ -216,7 +216,7 @@ type BridgeRequest struct {
 // GroupPoolEntry 群聊缓存池中的单条消息
 type GroupPoolEntry struct {
 	Nickname  string      // 发言用户昵称（群名片优先）
-	Content   interface{} // string 或 []map[string]interface{}（OpenAI 多模态格式）
+	Content   any // string 或 []map[string]any（OpenAI 多模态格式）
 	HasImages bool        // 是否包含图片
 	VideoURLs []string    // 视频地址列表
 	AudioURLs []string    // 语音/音频地址列表

@@ -27,7 +27,7 @@ func (class *Runtime) pushImage(call goja.FunctionCall) goja.Value {
 	var images []string
 	if arg := call.Argument(0); !goja.IsUndefined(arg) && !goja.IsNull(arg) {
 		if exported := arg.Export(); exported != nil {
-			for _, v := range exported.([]interface{}) {
+			for _, v := range exported.([]any) {
 				if s, ok := v.(string); ok && s != "" {
 					images = append(images, s)
 				}
@@ -100,7 +100,7 @@ func (class *Runtime) pullAudioUrl() goja.Value {
 func (class *Runtime) getAgentPosition() goja.Value {
 	agentPositionMutex.RLock()
 	defer agentPositionMutex.RUnlock()
-	return class.runtime.ToValue(map[string]interface{}{
+	return class.runtime.ToValue(map[string]any{
 		"x": agentPosition.X,
 		"y": agentPosition.Y,
 		"z": agentPosition.Z,

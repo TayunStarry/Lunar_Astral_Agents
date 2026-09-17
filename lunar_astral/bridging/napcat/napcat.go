@@ -79,7 +79,7 @@ func getNapcatHTTPBaseURL() string {
 }
 
 // callNapcatAPI 统一调用 Napcat HTTP API，返回完整响应
-func callNapcatAPI(action string, params map[string]interface{}) (*NapcatWSResponse, error) {
+func callNapcatAPI(action string, params map[string]any) (*NapcatWSResponse, error) {
 	url := getNapcatHTTPBaseURL() + action
 	token := bridgeConfig.BridgingToken
 
@@ -132,7 +132,7 @@ func SendPrivateTextMessage(userID int64, content string) error {
 		return nil
 	}
 	for _, chunk := range splitTextChunks(content, maxSendTextLen) {
-		if err := postMessage("/send_private_msg", map[string]interface{}{"user_id": userID}, textSegment(chunk)); err != nil {
+		if err := postMessage("/send_private_msg", map[string]any{"user_id": userID}, textSegment(chunk)); err != nil {
 			return err
 		}
 	}
@@ -151,7 +151,7 @@ func SendGroupTextMessage(groupID int64, content string, replyToUserID int64) er
 		if i == 0 {
 			replyTo = replyToUserID
 		}
-		if err := postMessage("/send_group_msg", map[string]interface{}{"group_id": groupID}, buildOutboundSegments(groupID, chunk, replyTo)); err != nil {
+		if err := postMessage("/send_group_msg", map[string]any{"group_id": groupID}, buildOutboundSegments(groupID, chunk, replyTo)); err != nil {
 			return err
 		}
 	}
@@ -160,7 +160,7 @@ func SendGroupTextMessage(groupID int64, content string, replyToUserID int64) er
 
 // SendPrivateImageMessage 发送私聊图片消息（base64 数据或 http 链接）
 func SendPrivateImageMessage(userID int64, images []string) error {
-	if err := postMessage("/send_private_msg", map[string]interface{}{"user_id": userID}, imageSegments(images)); err != nil {
+	if err := postMessage("/send_private_msg", map[string]any{"user_id": userID}, imageSegments(images)); err != nil {
 		return err
 	}
 	return nil
@@ -168,15 +168,15 @@ func SendPrivateImageMessage(userID int64, images []string) error {
 
 // SendGroupImageMessage 发送群图片消息（base64 数据或 http 链接）
 func SendGroupImageMessage(groupID int64, images []string) error {
-	if err := postMessage("/send_group_msg", map[string]interface{}{"group_id": groupID}, imageSegments(images)); err != nil {
+	if err := postMessage("/send_group_msg", map[string]any{"group_id": groupID}, imageSegments(images)); err != nil {
 		return err
 	}
 	return nil
 }
 
 // postMessage 组装消息段并调用发送接口
-func postMessage(action string, target map[string]interface{}, segments []map[string]interface{}) error {
-	params := map[string]interface{}{"message": segments}
+func postMessage(action string, target map[string]any, segments []map[string]any) error {
+	params := map[string]any{"message": segments}
 	for key, value := range target {
 		params[key] = value
 	}
@@ -185,32 +185,32 @@ func postMessage(action string, target map[string]interface{}, segments []map[st
 }
 
 // textSegment 纯文本消息段
-func textSegment(text string) []map[string]interface{} {
-	return []map[string]interface{}{
+func textSegment(text string) []map[string]any {
+	return []map[string]any{
 		{"type": "text", "data": map[string]string{"text": text}},
 	}
 }
 
 // atSegment @消息段
-func atSegment(qq string) map[string]interface{} {
-	return map[string]interface{}{
+func atSegment(qq string) map[string]any {
+	return map[string]any{
 		"type": "at",
 		"data": map[string]string{"qq": qq},
 	}
 }
 
 // imageSegments 将图片列表转为消息段：http 链接直接引用，base64 数据剥掉 data URI 前缀
-func imageSegments(images []string) []map[string]interface{} {
-	segments := make([]map[string]interface{}, 0, len(images))
+func imageSegments(images []string) []map[string]any {
+	segments := make([]map[string]any, 0, len(images))
 	for _, img := range images {
 		if strings.HasPrefix(img, "http://") || strings.HasPrefix(img, "https://") {
-			segments = append(segments, map[string]interface{}{
+			segments = append(segments, map[string]any{
 				"type": "image",
 				"data": map[string]string{"file": img},
 			})
 			continue
 		}
-		segments = append(segments, map[string]interface{}{
+		segments = append(segments, map[string]any{
 			"type": "image",
 			"data": map[string]string{"file": "base64://" + normalizeBase64Image(img)},
 		})
@@ -221,8 +221,8 @@ func imageSegments(images []string) []map[string]interface{} {
 // buildOutboundSegments 将回应文本组装为消息段：
 // 文本中的 [对 xxx 说] 转换为真实 @ 段，无法解析的提及保留原文；
 // replyToUserID 非零时在最前追加 @，与其重复的提及标记直接吞掉避免双重 @
-func buildOutboundSegments(groupID int64, text string, replyToUserID int64) []map[string]interface{} {
-	segments := make([]map[string]interface{}, 0, 4)
+func buildOutboundSegments(groupID int64, text string, replyToUserID int64) []map[string]any {
+	segments := make([]map[string]any, 0, 4)
 	replyToQQ := ""
 	if replyToUserID != 0 {
 		replyToQQ = strconv.FormatInt(replyToUserID, 10)
@@ -243,7 +243,7 @@ func buildOutboundSegments(groupID int64, text string, replyToUserID int64) []ma
 			continue
 		}
 		if loc[0] > lastIndex {
-			segments = append(segments, map[string]interface{}{
+			segments = append(segments, map[string]any{
 				"type": "text",
 				"data": map[string]string{"text": text[lastIndex:loc[0]]},
 			})
@@ -252,7 +252,7 @@ func buildOutboundSegments(groupID int64, text string, replyToUserID int64) []ma
 		lastIndex = loc[1]
 	}
 	if rest := text[lastIndex:]; rest != "" {
-		segments = append(segments, map[string]interface{}{
+		segments = append(segments, map[string]any{
 			"type": "text",
 			"data": map[string]string{"text": rest},
 		})
@@ -333,7 +333,7 @@ func normalizeBase64Image(img string) string {
 
 // getMessageDetail 通过 get_msg API 获取完整消息（发送者 + 消息段），用于回复引用还原
 func getMessageDetail(messageID string) (*MessageDetail, error) {
-	resp, err := callNapcatAPI("/get_msg", map[string]interface{}{"message_id": messageID})
+	resp, err := callNapcatAPI("/get_msg", map[string]any{"message_id": messageID})
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ func getMessageDetail(messageID string) (*MessageDetail, error) {
 // getFileContent 通过 get_file 接口下载文件，返回原始字节
 // fileID 优先，file 作为兜底标识
 func getFileContent(fileID, file string) ([]byte, error) {
-	params := map[string]interface{}{}
+	params := map[string]any{}
 	if fileID != "" {
 		params["file_id"] = fileID
 	} else if file != "" {
@@ -387,7 +387,7 @@ func getImageContent(file string) ([]byte, error) {
 		return nil, fmt.Errorf("图片缺少 file 标识")
 	}
 
-	if resp, err := callNapcatAPI("/get_image", map[string]interface{}{"file": file}); err == nil {
+	if resp, err := callNapcatAPI("/get_image", map[string]any{"file": file}); err == nil {
 		var data GetFileResponse
 		if json.Unmarshal(resp.Data, &data) == nil {
 			if data.Base64 != "" {
@@ -411,7 +411,7 @@ func getImageContent(file string) ([]byte, error) {
 
 // getForwardMessageContent 通过 get_forward_msg 接口展开合并转发消息
 func getForwardMessageContent(id string) ([]ForwardMessage, error) {
-	resp, err := callNapcatAPI("/get_forward_msg", map[string]interface{}{"message_id": id})
+	resp, err := callNapcatAPI("/get_forward_msg", map[string]any{"message_id": id})
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +427,7 @@ func getForwardMessageContent(id string) ([]ForwardMessage, error) {
 
 // getStrangerNickname 通过 get_stranger_info 接口查询用户昵称
 func getStrangerNickname(userID int64) (string, error) {
-	resp, err := callNapcatAPI("/get_stranger_info", map[string]interface{}{"user_id": userID})
+	resp, err := callNapcatAPI("/get_stranger_info", map[string]any{"user_id": userID})
 	if err != nil {
 		return "", err
 	}
@@ -443,7 +443,7 @@ func getStrangerNickname(userID int64) (string, error) {
 
 // getGroupName 通过 get_group_info 接口查询群名称
 func getGroupName(groupID int64) (string, error) {
-	resp, err := callNapcatAPI("/get_group_info", map[string]interface{}{"group_id": groupID})
+	resp, err := callNapcatAPI("/get_group_info", map[string]any{"group_id": groupID})
 	if err != nil {
 		return "", err
 	}
@@ -459,7 +459,7 @@ func getGroupName(groupID int64) (string, error) {
 
 // getGroupMemberInfo 通过 get_group_member_info 接口查询单个群成员信息
 func getGroupMemberInfo(groupID, userID int64) (*GroupMemberInfo, error) {
-	resp, err := callNapcatAPI("/get_group_member_info", map[string]interface{}{
+	resp, err := callNapcatAPI("/get_group_member_info", map[string]any{
 		"group_id": groupID,
 		"user_id":  userID,
 	})
@@ -476,7 +476,7 @@ func getGroupMemberInfo(groupID, userID int64) (*GroupMemberInfo, error) {
 
 // getGroupMemberList 通过 get_group_member_list 接口拉取全量群成员列表
 func getGroupMemberList(groupID int64) ([]GroupMemberInfo, error) {
-	resp, err := callNapcatAPI("/get_group_member_list", map[string]interface{}{"group_id": groupID})
+	resp, err := callNapcatAPI("/get_group_member_list", map[string]any{"group_id": groupID})
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +490,7 @@ func getGroupMemberList(groupID int64) ([]GroupMemberInfo, error) {
 
 // getVideoSource 通过 get_file 接口获取视频的可访问地址（URL 或本地文件路径）
 func getVideoSource(file string) (string, error) {
-	resp, err := callNapcatAPI("/get_file", map[string]interface{}{"file": file})
+	resp, err := callNapcatAPI("/get_file", map[string]any{"file": file})
 	if err != nil {
 		return "", err
 	}
@@ -603,7 +603,7 @@ func resolveBotInfo() (int64, string) {
 	botInfoMutex.Lock()
 	defer botInfoMutex.Unlock()
 	if !botInfoLoaded {
-		resp, err := callNapcatAPI("/get_login_info", map[string]interface{}{})
+		resp, err := callNapcatAPI("/get_login_info", map[string]any{})
 		if err == nil {
 			var data struct {
 				UserID   int64  `json:"user_id"`

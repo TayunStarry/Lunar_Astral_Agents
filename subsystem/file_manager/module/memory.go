@@ -515,6 +515,8 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 // orientation/custom 指定图片识别取向，为空时默认自动处理
 // v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
 // v4: 写入前先去重，图片已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
+// v5: 入库前先做感知者式标准化（静态图 640px 缩放/统一转码；动态图保留动画存储，
+//     理解走 AnimatedImageToMedia 慢放视频 + file:// 引用的 llama-server 视频链路）
 func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -524,8 +526,11 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 		return "", fmt.Errorf("集合 %s 类型为 %s，不支持图片添加", collectionName, c.CollectionType)
 	}
 
-	// 0. 去重检查：相同图片已存在则视为已完成
-	if existingID := c.findExistingDocument("", base64Image); existingID != "" {
+	// 0. 感知者式标准化：得到入库 URI（静态图缩放/转码；动态图保留动画）与视频理解引用
+	storeURI, mediaRefs, animated := standardizeMemoryImage(base64Image)
+
+	// 0.5 去重检查：标准化后的相同图片已存在则视为已完成
+	if existingID := c.findExistingDocument("", storeURI); existingID != "" {
 		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同图片 (ID=%s)，跳过重复写入", collectionName, existingID)
 		return existingID, nil
 	}
@@ -533,9 +538,19 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 	// 1. 生成 UUID
 	id := generateUUID()
 
-	// 2. LLM 生成标签（单线程 + 同步阻塞）
+	// 2. LLM 生成标签（单线程 + 同步阻塞）：动态图走 file:// 视频链路，静态图走单图
 	d.llmMu.Lock()
-	tags, err := d.generateTags(ctx, base64Image, true, orientation, custom)
+	var tags []string
+	if animated && len(mediaRefs) > 0 {
+		tags, err = d.generateTagsFromMedia(ctx, mediaRefs, orientation, custom)
+		if err != nil {
+			// 视频链路失败（如非 llama-server 后端）：回退单图理解再试一轮
+			LoggerGeneral.Warn("FileManager", "动态图视频理解失败（%v），回退单图理解", err)
+			tags, err = d.generateTags(ctx, storeURI, true, orientation, custom)
+		}
+	} else {
+		tags, err = d.generateTags(ctx, storeURI, true, orientation, custom)
+	}
 	d.llmMu.Unlock()
 	if err != nil {
 		return "", fmt.Errorf("标签生成失败: %w", err)
@@ -556,9 +571,9 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 		return "", fmt.Errorf("图片内容嵌入失败: %w", err)
 	}
 
-	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
+	// 5. 添加文档（含 TagUUIDs 与内容嵌入；存储标准化后的 data URI）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: base64Image, TAGS: tagUUIDs, Embedding: contentVec})
+	c.Documents = append(c.Documents, Document{ID: id, Image: storeURI, TAGS: tagUUIDs, Embedding: contentVec})
 	c.mu.Unlock()
 
 	// 6. 持久化

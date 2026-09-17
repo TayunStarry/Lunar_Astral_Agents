@@ -39,10 +39,11 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 	if p.hasPerm("allow-signal") {
 		vm.Set("signal", bindSignal(vm, p))
 	}
-	// 文件 + 图像（allow-file；image.download 运行时另需 allow-network）
+	// 文件 + 图像 + 视频（allow-file；image.download / video URL 源运行时另需 allow-network）
 	if p.hasPerm("allow-file") {
 		vm.Set("file", bindFile(vm, p))
 		vm.Set("image", bindImage(vm, p))
+		vm.Set("video", bindVideo(vm, p))
 	}
 	// 记忆库（allow-memory）
 	if p.hasPerm("allow-memory") {
@@ -57,15 +58,19 @@ func bindSandbox(vm *goja.Runtime, p *plugin) {
 		vm.Set("encoding", bindEncoding(vm))
 		vm.Set("hash", bindHash(vm))
 	}
-	// 跨包调用（allow-call）
+	// 跨包调用（allow-call）：Result 统一风格，目标不存在/未导出不抛异常
 	if p.hasPerm("allow-call") {
-		vm.Set("callFunction", func(pkgID, fnName string, args []any) (any, error) {
-			return engineCall(pkgID, fnName, args)
+		vm.Set("callFunction", func(pkgID, fnName string, args []any) map[string]any {
+			v, err := engineCall(pkgID, fnName, args)
+			if err != nil {
+				return map[string]any{"success": false, "error": err.Error()}
+			}
+			return map[string]any{"success": true, "result": v}
 		})
 	}
-	// 智能体（allow-agent）：LLM 对话 / 文本嵌入 / 前端智能体
+	// 智能体（allow-agent）：LLM 对话 / 文本嵌入 / 前端智能体 / Web-LTP 搜索（search 运行时另需 allow-network）
 	if p.hasPerm("allow-agent") {
-		vm.Set("agent", bindAgent(vm))
+		vm.Set("agent", bindAgent(vm, p))
 	}
 	// 网络（allow-network）：同步 http + 裸套接字 + 全局 fetch/WebSocket
 	if p.hasPerm("allow-network") {
@@ -193,24 +198,38 @@ func bindMemory(vm *goja.Runtime) *goja.Object {
 	return m
 }
 
-// bindDatabase database.query/exec（allow-database）。
+// bindDatabase database.query/exec/transaction/migrate/namespace（allow-database）。
+// transaction/migrate 操作共享库 knowledge.db；namespace(name) 返回独立 <name>.db 的作用域对象。
 func bindDatabase(vm *goja.Runtime) *goja.Object {
 	d := vm.NewObject()
 	d.Set("query", func(sql string, params []any) (any, error) { return databaseQuery(sql, params) })
 	d.Set("exec", func(sql string, params []any) (any, error) { return databaseExec(sql, params) })
+	// 同步事务：fn 接收 {query, exec}（绑定到事务）；正常返回提交，fn 抛错/返回 Promise 回滚
+	d.Set("transaction", func(fn goja.Value) (any, error) { return databaseTransaction(vm, fn) })
+	// 按名称迁移：未应用则在事务内执行 upSql（支持多语句）并记录到 _migrations
+	d.Set("migrate", func(name, upSQL string) (any, error) {
+		db, err := ensureDB()
+		if err != nil {
+			return rwResult{Success: false, Error: err.Error()}, nil
+		}
+		return dbMigrateOn(db, name, upSQL)
+	})
+	// 命名空间作用域：独立 <name>.db 文件，返回 {query, exec, transaction, migrate}
+	d.Set("namespace", func(name string) (any, error) { return databaseNamespace(vm, name) })
 	return d
 }
 
-// bindConfig config.read/write（常驻）。read 无配置时返回 undefined；write 同步写回 config.yaml。
+// bindConfig config.read/write（常驻）。read 返回 { success, config? }（无配置时省略 config）；
+// write 同步写回 config.yaml。
 func bindConfig(vm *goja.Runtime, p *plugin) *goja.Object {
 	c := vm.NewObject()
-	c.Set("read", func() any {
+	c.Set("read", func() map[string]any {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		if p.config == nil {
-			return goja.Undefined()
+			return map[string]any{"success": true}
 		}
-		return p.config
+		return map[string]any{"success": true, "config": p.config}
 	})
 	c.Set("write", func(v map[string]any) {
 		p.mu.Lock()
@@ -225,31 +244,62 @@ func bindConfig(vm *goja.Runtime, p *plugin) *goja.Object {
 // bindHash hash.*（allow-certificate）：摘要/HMAC/Ed25519/JWT 签名。
 func bindHash(vm *goja.Runtime) *goja.Object {
 	h := vm.NewObject()
-	h.Set("signJWT", func(claims map[string]any, secret, algorithm, kid string) (string, error) {
-		return engineSignJWT(claims, secret, algorithm, kid)
+	// 契约（Result 统一风格）：签名失败返回 { success:false, error }，不再抛异常
+	h.Set("signJWT", func(claims map[string]any, secret, algorithm, kid string) map[string]any {
+		s, err := engineSignJWT(claims, secret, algorithm, kid)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": s}
 	})
 	h.Set("md5", func(data string) string { return cryptoMD5(data) })
 	h.Set("sha1", func(data string) string { return cryptoSHA1(data) })
 	h.Set("sha256", func(data string) string { return cryptoSHA256(data) })
 	h.Set("hmacSha1", func(key, data string) string { return cryptoHMAC1(key, data) })
 	h.Set("hmacSha256", func(key, data string) string { return cryptoHMAC256(key, data) })
-	h.Set("ed25519Sign", func(priv, data string) (string, error) { return edgeSign(priv, data) })
-	h.Set("generateJWT", func(claims map[string]any, priv, kid string) (string, error) {
-		return edgeJWT(priv, kid, claims)
+	h.Set("ed25519Sign", func(priv, data string) map[string]any {
+		s, err := edgeSign(priv, data)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": s}
+	})
+	h.Set("generateJWT", func(claims map[string]any, priv, kid string) map[string]any {
+		s, err := edgeJWT(priv, kid, claims)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": s}
 	})
 	return h
 }
 
-// bindImage image.loadValid/download（allow-file；download 运行时另需 allow-network）。
+// bindImage image.loadValid/download/resize/convert（allow-file；download 运行时另需 allow-network）。
 func bindImage(vm *goja.Runtime, p *plugin) *goja.Object {
 	img := vm.NewObject()
 	img.Set("loadValid", func(path string) (any, error) { return engineImageLoadValid(p, path) })
 	img.Set("download", func(url, fileName string) (any, error) { return engineImageDownload(p, url, fileName) })
+	// resize 缩放（max_dim 等比 / width+height 精确）+ 可选编码格式；convert 仅重编码（编码格式化）
+	img.Set("resize", func(path string, opts map[string]any) (any, error) {
+		return engineImageResize(p, path, opts)
+	})
+	img.Set("convert", func(path, format string, opts map[string]any) (any, error) {
+		return engineImageConvert(p, path, format, opts)
+	})
 	return img
 }
 
-// bindAgent agent.chat/embed/synergy（allow-agent）。
-func bindAgent(vm *goja.Runtime) *goja.Object {
+// bindVideo video.frames：从视频抽帧（allow-file；URL/dataURI 源运行时另需 allow-network）。
+func bindVideo(vm *goja.Runtime, p *plugin) *goja.Object {
+	v := vm.NewObject()
+	v.Set("frames", func(source string, opts map[string]any) map[string]any {
+		return engineVideoFrames(p, source, opts)
+	})
+	return v
+}
+
+// bindAgent agent.chat/embed/synergy/search（allow-agent；search 运行时另需 allow-network）。
+func bindAgent(vm *goja.Runtime, p *plugin) *goja.Object {
 	a := vm.NewObject()
 	a.Set("chat", func(messages []any, opts map[string]any) (any, error) {
 		if opts == nil {
@@ -263,8 +313,19 @@ func bindAgent(vm *goja.Runtime) *goja.Object {
 		}
 		return engineLLMEmbed(input, opts)
 	})
-	// synergy 调用前端智能体（Mini-LTP / Node-LTP），同步阻塞返回其执行文本
-	a.Set("synergy", func(pkgID, text string) (any, error) { return engineAgent(pkgID, text) })
+	// synergy 调用前端智能体（Mini-LTP / Node-LTP），同步阻塞返回其执行文本；
+	// Result 统一风格：目标包不存在/拒绝响应返回 { success:false, error }，不抛异常
+	a.Set("synergy", func(pkgID, text string) map[string]any {
+		v, err := engineAgent(pkgID, text)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": fmt.Sprint(v)}
+	})
+	// search 调用进程内 Web-LTP 网络搜索（双权限：allow-agent 绑定 + allow-network 执行）
+	a.Set("search", func(instruction string) map[string]any {
+		return engineAgentSearch(p, instruction)
+	})
 	return a
 }
 

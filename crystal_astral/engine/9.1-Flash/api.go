@@ -4,7 +4,6 @@ package StarLTP
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"math/rand"
 	"os"
@@ -16,6 +15,7 @@ import (
 	module "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
+
 	"github.com/dop251/goja"
 
 	// SQLite 驱动
@@ -301,11 +301,11 @@ func memoryStore(v map[string]any) (any, error) {
 	return map[string]any{"success": true, "id": id}, nil
 }
 
-// memorySearch 按语义检索记忆，直接返回相似度降序的命中数组（契约：Array<MemoryHit>）；
-// 基础设施错误以 JS 异常抛出。
+// memorySearch 按语义检索记忆，返回 { success, results: [MemoryHit] }（Result 统一风格）；
+// 命中按相似度降序，基础设施错误不再抛异常。
 func memorySearch(v map[string]any) (any, error) {
 	if err := ensureMemory(); err != nil {
-		return nil, err
+		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	query, _ := v["query"].(string)
 	limit := 5
@@ -314,106 +314,13 @@ func memorySearch(v map[string]any) (any, error) {
 	}
 	results, err := module.MemoryQueryMessagesWithContent(context.Background(), ltp9MemoryCollection, query, limit)
 	if err != nil {
-		return nil, err
+		return rwResult{Success: false, Error: err.Error()}, nil
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, r := range results {
 		out = append(out, map[string]any{"content": r.Content, "similarity": r.Similarity})
 	}
-	return out, nil
+	return map[string]any{"success": true, "results": out}, nil
 }
 
-// ==== 数据库 database.query/exec（接入 SQLite） ====
-
-var (
-	dbOnce sync.Once
-	dbInst *sql.DB
-	dbPath string
-	dbErr  error
-)
-
-// ensureDB 惰性打开 LTP9 SQLite 数据库文件（local_data/database/knowledge.db，与项目数据根目录一致）。
-func ensureDB() (*sql.DB, error) {
-	dbOnce.Do(func() {
-		execPath, err := os.Executable()
-		if err != nil {
-			dbErr = err
-			return
-		}
-		dir := filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "database")
-		_ = os.MkdirAll(dir, 0755)
-		dbPath = filepath.Join(dir, "knowledge.db")
-		dbInst, dbErr = sql.Open("sqlite3", dbPath)
-		if dbErr != nil {
-			return
-		}
-		_, dbErr = dbInst.Exec("PRAGMA journal_mode=WAL;")
-	})
-	if dbInst == nil && dbErr == nil {
-		return nil, fmt.Errorf("数据库未初始化")
-	}
-	return dbInst, dbErr
-}
-
-func databaseQuery(q string, params []any) (any, error) {
-	db, err := ensureDB()
-	if err != nil {
-		return rwResult{Success: false, Error: err.Error()}, nil
-	}
-	args := anySlice(params)
-	rows, err := db.Query(q, args...)
-	if err != nil {
-		return rwResult{Success: false, Error: err.Error()}, nil
-	}
-	defer rows.Close()
-	cols, _ := rows.Columns()
-	out := []map[string]any{}
-	for rows.Next() {
-		vals := make([]any, len(cols))
-		ptrs := make([]any, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
-		}
-		if rows.Scan(ptrs...) != nil {
-			continue
-		}
-		row := map[string]any{}
-		for i, c := range cols {
-			row[c] = normalizeVal(vals[i])
-		}
-		out = append(out, row)
-	}
-	return map[string]any{"success": true, "rows": out}, nil
-}
-
-func databaseExec(q string, params []any) (any, error) {
-	db, err := ensureDB()
-	if err != nil {
-		return map[string]any{"success": false, "rows_affected": 0, "error": err.Error()}, nil
-	}
-	args := anySlice(params)
-	res, err := db.Exec(q, args...)
-	if err != nil {
-		return map[string]any{"success": false, "rows_affected": 0, "error": err.Error()}, nil
-	}
-	rows, _ := res.RowsAffected()
-	return map[string]any{"success": true, "rows_affected": rows}, nil
-}
-
-func anySlice(in []any) []any {
-	if in == nil {
-		return []any{}
-	}
-	return in
-}
-
-// normalizeVal 把 sqlite 返回的类型规整为 JS 友好值（[]byte → string）。
-func normalizeVal(v any) any {
-	switch t := v.(type) {
-	case []byte:
-		return string(t)
-	case int64:
-		return float64(t)
-	}
-	return v
-}
+// ==== 数据库 database.*（allow-database，实现在 api_database.go） ====

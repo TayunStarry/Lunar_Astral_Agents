@@ -1,0 +1,102 @@
+/* ============================================================
+   星月智能 · 知识库 — base.css
+   设计令牌（白 / 灰 / 黑） / 全局基础 / 主布局 / 响应式
+   ============================================================ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ===== 设计令牌 ===== */
+:root {
+    /* 灰阶 + 玻璃 */
+    --bg: #e9ebee;                      /* 背景图加载前的兜底底色 */
+    --glass-bg: rgba(255, 255, 255, 0.58);   /* 磨砂面板底 */
+    --glass-blur: 18px;                       /* 面板模糊强度 */
+    --glass-border: rgba(255, 255, 255, 0.72);
+    --surface: rgba(255, 255, 255, 0.60);    /* 卡片 / 控件底（半透明白） */
+    --surface-2: rgba(0, 0, 0, 0.05);        /* 次级灰面：表头 / 悬停 / 分段轨道 */
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    /* 文字 */
+    --text-1: #1a1a1a;                  /* 主文字 / 墨黑 */
+    --text-2: #565650;                  /* 次级文字 */
+    --text-3: #8f8f88;                  /* 弱化文字 / 区块标题 */
+    /* 墨黑主控件 */
+    --ink: #1a1a1a;
+    --ink-hover: #333333;
+    /* 语义色（仅点缀） */
+    --danger: #c9403a;
+    --danger-soft: rgba(201, 64, 58, 0.08);
+    --success: #1f9d61;
+    --warn: #b8860b;
+    /* 圆角 / 阴影 / 过渡 */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 28px rgba(0, 0, 0, 0.09);
+    --shadow-pop: 0 16px 48px rgba(0, 0, 0, 0.18);
+    --transition: all 0.18s ease;
+    /* 字体 */
+    --font-ui: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ===== 基础 ===== */
+html { height: 100%; font-size: 15px; -webkit-font-smoothing: antialiased; }
+
+body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    font-family: var(--font-ui);
+    color: var(--text-1);
+    line-height: 1.6;
+    background: var(--bg);
+}
+
+.mono { font-family: var(--font-mono); font-size: 0.8rem; }
+
+/* ===== 背景层：随机背景图 + 玻璃蒙层 ===== */
+.background {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: var(--bg) url('/background') center / cover no-repeat fixed;
+}
+.glass-effect {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: rgba(255, 255, 255, 0.22);
+    -webkit-backdrop-filter: blur(4px) saturate(150%);
+    backdrop-filter: blur(4px) saturate(150%);
+}
+
+/* ===== 主布局：双面板 ===== */
+.main-layout {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    height: 100vh;
+    gap: 14px;
+    padding: 14px;
+    max-width: 1760px;
+    margin: 0 auto;
+}
+/* 左窄右宽 */
+.side-panel { flex: 0 0 min(420px, 38%); min-width: 340px; }
+.main-panel { flex: 1; min-width: 0; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 860px) {
+    html { font-size: 14px; }
+    .main-layout { flex-direction: column; padding: 8px; gap: 8px; }
+    .side-panel { flex: 0 0 46%; min-width: 0; }
+    .main-panel { flex: 1; }
+}

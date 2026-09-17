@@ -1,10 +1,11 @@
 package StarLTP
 
-// ==== 沙箱网络：全局 fetch / WebSocket 客户端与同步 http ====
-// fetch 为标准形态（url + init，返回 Promise<Response>），resolve/reject 排在插件自身的
-// eventloop 上（p.loop），保证 Promise 在正确线程流转；WebSocket 客户端以 onopen/onmessage
-// 等事件回调形态提供（见 api_ws.go）。同步形态 http.get/post/download 由 binder 按
-// allow-network 注入。全部网络能力由 allow-network 门控。
+// ==== 沙箱网络：同步 fetch / WebSocket 客户端与同步 http ====
+// fetch 为同步形态（参照 lunar_astral engine.syncFetch 方案）：阻塞直到返回统一
+// Result 信封 { success, status, ok, url, headers, body, error? }，body 为 JSON 时自动
+// 解析为对象；WebSocket 客户端以 onopen/onmessage 等事件回调形态提供（见 api_ws.go）。
+// 同步形态 http.get/post/download 由 binder 按 allow-network 注入。全部网络能力由
+// allow-network 门控。
 
 import (
 	"bytes"
@@ -30,6 +31,7 @@ const fetchTimeout = 150 * time.Second
 
 // bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（allow-network 门控，由 bindSandbox 调用）。
 func bindNetwork(vm *goja.Runtime, p *plugin) {
+	// 同步 fetch：阻塞直到返回统一 Result 信封（Result 风格与 http.get/post 同构）
 	vm.Set("fetch", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 1 {
 			panic(vm.NewTypeError("fetch: url 参数缺失"))
@@ -41,25 +43,36 @@ func bindNetwork(vm *goja.Runtime, p *plugin) {
 				opts = m
 			}
 		}
-		promise, resolve, reject := vm.NewPromise()
-		go func() {
-			status, statusText, headerMap, body, finalURL, redirected, err := doLTP9Fetch(urlStr, opts)
-			p.loop.RunOnLoop(func(rvm *goja.Runtime) {
-				if err != nil {
-					LoggerGeneral.Error(ServiceName, "插件 %s fetch 失败(%s): %v", p.ID, urlStr, err)
-					reject(rvm.NewGoError(err))
-					return
-				}
-				resolve(buildLTP9FetchResponse(rvm, status, statusText, headerMap, body, finalURL, redirected))
-			})
-		}()
-		return vm.ToValue(promise)
+		status, _, headerMap, body, finalURL, _, err := doLTP9Fetch(urlStr, opts)
+		if err != nil {
+			LoggerGeneral.Error(ServiceName, "插件 %s fetch 失败(%s): %v", p.ID, urlStr, err)
+			return vm.ToValue(map[string]any{"success": false, "status": 0, "error": err.Error()})
+		}
+		// 响应头压平为小写键单值 map
+		hdrs := map[string]any{}
+		for key, values := range headerMap {
+			hdrs[strings.ToLower(key)] = strings.Join(values, ", ")
+		}
+		// body 为 JSON 时自动解析为对象（syncFetch 方案），失败回退原始文本
+		var parsed any
+		bodyVal := any(string(body))
+		if json.Unmarshal(body, &parsed) == nil {
+			bodyVal = parsed
+		}
+		return vm.ToValue(map[string]any{
+			"success": true,
+			"status":  status,
+			"ok":      status >= 200 && status < 300,
+			"url":     finalURL,
+			"headers": hdrs,
+			"body":    bodyVal,
+		})
 	})
 	// WebSocket 客户端全局（新）。
 	bindWebSocket(vm, p)
 }
 
-// httpGetSync 同步 GET：阻塞直到返回，回 {status, body} 或 {error}。供不用异步的插件使用。
+// httpGetSync 同步 GET：阻塞直到返回，回 { success, status, body } 或 { success:false, error }。供不用异步的插件使用。
 func httpGetSync(url string, headers map[string]any) map[string]any {
 	opts := map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)}
 	if len(headers) > 0 {
@@ -67,12 +80,12 @@ func httpGetSync(url string, headers map[string]any) map[string]any {
 	}
 	status, _, _, body, _, _, err := doLTP9Fetch(url, opts)
 	if err != nil {
-		return map[string]any{"status": 0, "body": "", "error": err.Error()}
+		return map[string]any{"success": false, "status": 0, "body": "", "error": err.Error()}
 	}
-	return map[string]any{"status": status, "body": string(body)}
+	return map[string]any{"success": true, "status": status, "body": string(body)}
 }
 
-// httpPostSync 同步 POST：阻塞直到返回，返回 {status, body} 或 {error}。
+// httpPostSync 同步 POST：阻塞直到返回，返回 { success, status, body } 或 { success:false, error }。
 func httpPostSync(url, body string, headers map[string]any) map[string]any {
 	opts := map[string]any{"method": "POST", "body": body, "timeout": float64(fetchTimeout / time.Second)}
 	if len(headers) > 0 {
@@ -80,9 +93,9 @@ func httpPostSync(url, body string, headers map[string]any) map[string]any {
 	}
 	status, _, _, b, _, _, err := doLTP9Fetch(url, opts)
 	if err != nil {
-		return map[string]any{"status": 0, "body": "", "error": err.Error()}
+		return map[string]any{"success": false, "status": 0, "body": "", "error": err.Error()}
 	}
-	return map[string]any{"status": status, "body": string(b)}
+	return map[string]any{"success": true, "status": status, "body": string(b)}
 }
 
 // httpDownloadSync 同步下载文件到插件数据目录（http.download），savePath 为空时按 URL 末段命名。
@@ -179,72 +192,4 @@ func doLTP9Fetch(urlStr string, opts map[string]any) (int, string, http.Header, 
 	}
 	finalURL := resp.Request.URL.String()
 	return resp.StatusCode, resp.Status, resp.Header, responseBody, finalURL, finalURL != urlStr, nil
-}
-
-// buildLTP9FetchResponse 构建 Response 对象（status/ok/headers + text/json/arrayBuffer）。
-func buildLTP9FetchResponse(vm *goja.Runtime, status int, statusText string, headerMap http.Header, body []byte, finalURL string, redirected bool) *goja.Object {
-	resp := vm.NewObject()
-	resp.Set("status", status)
-	resp.Set("statusText", statusText)
-	resp.Set("ok", status >= 200 && status < 300)
-	resp.Set("url", finalURL)
-	resp.Set("redirected", redirected)
-	resp.Set("headers", buildLTP9Headers(vm, headerMap))
-
-	resp.Set("text", func(goja.FunctionCall) goja.Value {
-		p, res, _ := vm.NewPromise()
-		res(vm.ToValue(string(body)))
-		return vm.ToValue(p)
-	})
-	resp.Set("json", func(goja.FunctionCall) goja.Value {
-		p, res, rej := vm.NewPromise()
-		var data any
-		if err := json.Unmarshal(body, &data); err != nil {
-			rej(vm.NewGoError(fmt.Errorf("JSON 解析失败: %v", err)))
-			return vm.ToValue(p)
-		}
-		res(vm.ToValue(data))
-		return vm.ToValue(p)
-	})
-	resp.Set("arrayBuffer", func(goja.FunctionCall) goja.Value {
-		p, res, _ := vm.NewPromise()
-		res(vm.NewArrayBuffer(body))
-		return vm.ToValue(p)
-	})
-	return resp
-}
-
-// buildLTP9Headers 构建 Headers 对象（get/has/entries/raw，小写键）。
-func buildLTP9Headers(vm *goja.Runtime, headerMap http.Header) *goja.Object {
-	lower := map[string][]string{}
-	for key, values := range headerMap {
-		lower[strings.ToLower(key)] = values
-	}
-	h := vm.NewObject()
-	h.Set("get", func(call goja.FunctionCall) goja.Value {
-		vals, ok := lower[strings.ToLower(call.Argument(0).String())]
-		if !ok {
-			return goja.Null()
-		}
-		return vm.ToValue(strings.Join(vals, ", "))
-	})
-	h.Set("has", func(call goja.FunctionCall) goja.Value {
-		_, ok := lower[strings.ToLower(call.Argument(0).String())]
-		return vm.ToValue(ok)
-	})
-	h.Set("entries", func(goja.FunctionCall) goja.Value {
-		pairs := make([]any, 0, len(lower))
-		for key, values := range lower {
-			pairs = append(pairs, []any{key, strings.Join(values, ", ")})
-		}
-		return vm.ToValue(pairs)
-	})
-	h.Set("raw", func(goja.FunctionCall) goja.Value {
-		raw := map[string]any{}
-		for key, values := range lower {
-			raw[key] = values
-		}
-		return vm.ToValue(raw)
-	})
-	return h
 }

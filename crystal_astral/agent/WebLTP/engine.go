@@ -16,14 +16,6 @@ import (
 	"time"
 )
 
-// searchEngine 单个搜索引擎定义
-type searchEngine struct {
-	name      string // 引擎标识（日志与报告用）
-	searchURL string // 检索页 URL 模板（查询词经 QueryEscape 拼接）
-	container string // 结果容器选择器（querySelectorAll，逗号分隔多个候选）
-	link      string // 容器内标题链接选择器
-	snippet   string // 容器内摘要选择器（querySelector 逗号分隔候选，取首个命中）
-}
 
 // engineFallbackOrder 搜索引擎降级顺序
 var engineFallbackOrder = []searchEngine{
@@ -50,13 +42,6 @@ var engineFallbackOrder = []searchEngine{
 	},
 }
 
-// searchOutcome 一次降级链搜索的胜出结果
-type searchOutcome struct {
-	Engine    searchEngine // 胜出引擎
-	URL       string       // 实际使用的检索页 URL（报告收尾回访用）
-	Extract   PageExtract  // 结果页提取（已过滤字典站并去重）
-	FirstShot string       // 结果页首屏截图 dataURL（可为空）
-}
 
 // searchWithFallback 依序尝试搜索引擎降级链，返回首个有效结果页。
 // 有效 = 导航成功 + 识别为搜索结果页 + 过滤字典站/去重后仍有结果 + 非工具站兜底。

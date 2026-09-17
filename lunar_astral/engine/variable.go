@@ -25,17 +25,17 @@ var (
 // ==== 消息推送全局变量 ====
 
 // PushMessageFunc 消息推送函数，由 websocket 包初始化时设置
-var PushMessageFunc func(msgType string, data interface{})
+var PushMessageFunc func(msgType string, data any)
 
 // GetAnimCacheFunc 获取动画缓存函数，由 websocket 包初始化时设置
 // 用于 getAvailableActions 读取缓存的动画列表
-var GetAnimCacheFunc func() interface{}
+var GetAnimCacheFunc func() any
 
 func init() {
-	PushMessageFunc = func(msgType string, data interface{}) {
+	PushMessageFunc = func(msgType string, data any) {
 		LoggerGeneral.Error("LunarCore", "PushMessageFunc 未初始化, 消息类型: %s", msgType)
 	}
-	GetAnimCacheFunc = func() interface{} {
+	GetAnimCacheFunc = func() any {
 		return nil
 	}
 }

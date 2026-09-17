@@ -204,9 +204,6 @@ func (d *MemoryDB) generateTags(ctx context.Context, content string, isImage boo
 
 // generateTagsOnce 单次 LLM 标签生成尝试
 func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage bool, orientation string, custom string) ([]string, error) {
-	llmURL := *GeneralConfig.MemoryMultimodalURL
-	apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
-
 	var messages []chatMessage
 
 	if isImage {
@@ -237,6 +234,65 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 		}
 		messages = []chatMessage{systemMsg, userMsg}
 	}
+
+	return d.postTagRequest(ctx, messages)
+}
+
+// generateTagsFromMedia 动态图标签生成：mediaRefs 为感知者式视频 file:// 引用
+//（AnimatedImageToMedia 慢放转码产物，llama-server 端 ffmpeg 抽帧），最多重试 MaxTagRetries 次
+func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
+	if *GeneralConfig.MemoryMultimodalURL == "" {
+		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
+	}
+
+	var lastErr error
+	for attempt := 0; attempt < MaxTagRetries; attempt++ {
+		tags, err := d.generateTagsFromMediaOnce(ctx, mediaRefs, orientation, custom)
+		if err == nil && len(tags) > 0 {
+			return tags, nil
+		}
+		lastErr = err
+		if attempt < MaxTagRetries-1 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Second):
+			}
+		}
+	}
+	return nil, fmt.Errorf("动态图标签生成失败（已重试 %d 次）: %w", MaxTagRetries, lastErr)
+}
+
+// generateTagsFromMediaOnce 单次动态图标签生成：
+// user 消息含 N 个 file:// 引用（image_url 形式，llama-server 端视频链路自动抽帧）
+// 与文本说明，综合动作过程与画面内容生成标签
+func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
+	// 动态图按识别取向定制系统提示词，并追加帧序列说明
+	orientation = normalizeImageOrientation(orientation, custom)
+	systemMsg := chatMessage{
+		Role: "system",
+		Content: imageTagSystemPrompt(orientation, custom) +
+			"\n\n本次输入不是单张静态图片，而是同一段动画（GIF/动图）经慢放视频链路按时间顺序抽取的采样帧序列。" +
+			"请综合各帧的画面内容与帧间的动作/变化过程生成标签，标签需覆盖动作与过程维度。",
+	}
+
+	parts := make([]chatContentPart, 0, len(mediaRefs)+1)
+	parts = append(parts, chatContentPart{Type: "text", Text: "以下是同一段动画按时间顺序抽取的采样帧，请综合动作过程与画面内容生成标签，以JSON数组格式返回"})
+	for _, ref := range mediaRefs {
+		parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &imageURL{URL: ref}})
+	}
+
+	messages := []chatMessage{
+		systemMsg,
+		{Role: "user", Content: parts},
+	}
+	return d.postTagRequest(ctx, messages)
+}
+
+// postTagRequest 发送标签生成请求并解析响应（消息构造与请求执行解耦，供静态/动态图分支复用）
+func (d *MemoryDB) postTagRequest(ctx context.Context, messages []chatMessage) ([]string, error) {
+	llmURL := *GeneralConfig.MemoryMultimodalURL
+	apiURL := strings.TrimRight(llmURL, "/") + "/chat/completions"
 
 	reqBody := chatRequest{
 		Model:       *GeneralConfig.MemoryMultimodalModel,

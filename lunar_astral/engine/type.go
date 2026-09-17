@@ -113,3 +113,11 @@ type AgentPositionData struct {
 	Y float64 `json:"y"`
 	Z float64 `json:"z"`
 }
+
+// 引擎命令消息格式（与 engine.js 的 handleChannelMessage 对齐）
+type EngineCommand struct {
+	Type      string `json:"type"`
+	Source    string `json:"source"`
+	Payload   any    `json:"payload"`
+	Timestamp int64  `json:"timestamp"`
+}

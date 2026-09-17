@@ -43,36 +43,14 @@ interface CancelResult {
 /** 订阅器可返回的结果（推荐 `{ return: 业务结果 }` 回传月华） */
 type HandlerResult = PassResult | InterceptResult | ModifyResult | CancelResult | Record<string, unknown>
 
-/** 默认事件主题（仅类型层，运行时直接用字符串） */
-declare enum defaultEventTopic {
-    /** 收到消息前 */
-    MESSAGE_RECEIVED_BEFORE = 'message_received_before',
-    /** 执行计划前 */
-    EXECUTION_SCHEDULE_BEFORE = 'execution_schedule_before',
-    /** 观看视频前 */
-    WATCH_VIDEO_BEFORE = 'watch_video_before',
-    /** 读取文件前 */
-    READ_FILE_BEFORE = 'read_file_before',
-    /** 做出行动前 */
-    TAKE_ACTION_BEFORE = 'take_action_before',
-    /** 表达情感前 */
-    EXPRESS_EMOTIONS_BEFORE = 'express_emotions_before',
-    /** 构建记忆前 */
-    BUILD_MEMORY_BEFORE = 'build_memory_before',
-    /** 演奏音乐前 */
-    PLAY_MUSIC_BEFORE = 'play_music_before',
-    /** 绘制画作前 */
-    DRAW_PAINTING_BEFORE = 'draw_painting_before',
-    /** 执行搜索前 */
-    EXECUTE_SEARCH_BEFORE = 'execute_search_before',
-}
-
 /** OpenAI 兼容消息 */
 interface PostMessage {
     /** 消息角色 */
     role: 'user' | 'assistant' | 'system' | 'tool'
     /** 消息内容 */
     content: string | Array<TextItem | ImageItem>
+    /** assistant 消息携带的函数调用（OpenAI 兼容 tool_calls） */
+    tool_calls?: ToolCall[]
 }
 
 /** 文本项 */
@@ -89,6 +67,43 @@ interface ImageItem {
     image_url: {
         url: string
     }
+}
+
+/** OpenAI 兼容函数工具定义（agent.chat 的 opts.tools 项） */
+interface ChatTool {
+    type: 'function'
+    /** 函数定义体 */
+    function: {
+        /** 函数名 */
+        name: string
+        /** 函数描述 */
+        description?: string
+        /** JSON Schema 形式的参数定义 */
+        parameters?: Record<string, unknown>
+    }
+}
+
+/** OpenAI 兼容模型函数调用（agent.chat 返回的 tool_calls 项） */
+interface ToolCall {
+    /** 调用 id（回传 tool 消息时填写 tool_call_id） */
+    id: string
+    type: 'function'
+    /** 调用详情 */
+    function: {
+        /** 函数名 */
+        name: string
+        /** JSON 字符串形式的实参 */
+        arguments: string
+    }
+}
+
+/** 工具结果消息（role='tool'，回传某次函数调用的执行结果） */
+interface ToolMessage {
+    role: 'tool'
+    /** 对应 ToolCall.id */
+    tool_call_id: string
+    /** 执行结果文本 */
+    content: string
 }
 
 /** 月华记忆检索记录 */
@@ -246,22 +261,30 @@ interface EventContract {
 /** 月华事件主题 */
 type EventTopic = keyof EventContract
 
+/** 默认事件主题常量（单源派生自 EventContract，避免双份维护；仅类型层，运行时直接用字符串） */
+declare const defaultEventTopic: { readonly [K in EventTopic]: K }
+
 /** 月华事件回传：`{ return }` 即把业务结果交回月华 */
 interface ReturnResult<R> {
     /** 业务结果，格式见 EventContract 对应事件 */
     return: R
 }
 
-/** fetch 响应体 */
-interface FetchResponse {
-    /** 状态码 */
+/** 同步 fetch 结果（统一 Result 信封；body 为 JSON 时自动解析为对象，否则为文本） */
+interface FetchResult {
+    /** 请求是否成功发出（传输层；HTTP 4xx/5xx 仍为 true，看 status/ok 判断） */
+    success: boolean
+    /** HTTP 状态码（传输失败时为 0） */
     status: number
-    /** 响应头（键名小写） */
-    headers: Record<string, string>
-    /** 以文本读取响应体 */
-    text(): Promise<string>
-    /** 解析为 JSON */
-    json(): Promise<unknown>
+    /** 2xx 便捷标记 */
+    ok?: boolean
+    /** 最终 URL（跟随重定向后） */
+    url?: string
+    /** 响应头（键名小写，多值逗号合并） */
+    headers?: Record<string, string>
+    /** 响应体（JSON 自动解析为对象，否则原始文本） */
+    body?: unknown
+    error?: string
 }
 
 /** fetch 请求配置 */
@@ -274,6 +297,29 @@ interface FetchInit {
     body?: string;
 }
 
+/** 数据库事务作用域对象（transaction 回调入参，操作落在当前事务内） */
+interface DatabaseTx {
+    /** 事务内 SELECT，返回 { success, rows } */
+    query(sql: string, params?: unknown[]): { success: boolean; rows: Array<Record<string, unknown>>; error?: string }
+    /** 事务内写语句，返回 { success, rows_affected } */
+    exec(sql: string, params?: unknown[]): { success: boolean; rows_affected: number; error?: string }
+}
+
+/** 命名空间数据库作用域（独立 <name>.db 文件，真隔离） */
+interface DatabaseScope {
+    /** SELECT 查询，返回 { success, rows } */
+    query(sql: string, params?: unknown[]): { success: boolean; rows: Array<Record<string, unknown>>; error?: string }
+    /** 写语句，返回 { success, rows_affected } */
+    exec(sql: string, params?: unknown[]): { success: boolean; rows_affected: number; error?: string }
+    /** 同步事务，语义同 database.transaction */
+    transaction(fn: (tx: DatabaseTx) => unknown): { success: boolean; result?: unknown; error?: string }
+    /** 按名称迁移，语义同 database.migrate（记录在本库 _migrations 表） */
+    migrate(name: string, upSql: string): { success: boolean; applied?: boolean; error?: string }
+}
+/**
+ * 跨包调用结果（判别联合：成功携带 result，失败携带 error）
+ */
+type CallResult<R> = { success: true; result: R } | { success: false; error: string }
 // ═══════════════════════════════════════════════════════════
 // 引擎能力
 // ═══════════════════════════════════════════════════════════
@@ -353,9 +399,9 @@ export const memory: {
      * 
      * @param v 查询参数；query 为待检索的文本，limit 最多返回条数（默认 5，上限 50）
      * 
-     * @returns 相似度降序的命中列表；每项含 content 与 similarity
+     * @returns { success, results: 相似度降序的命中列表 }，每项含 content 与 similarity
      */
-    search(v: { query: string; limit?: number }): Array<MemoryHit>
+    search(v: { query: string; limit?: number }): { success: boolean; results?: Array<MemoryHit>; error?: string }
     /**
      * 按查询语义检索图片
      * 
@@ -375,7 +421,7 @@ export const memory: {
     /** 基于查询语义随机返回一张图片 */
     randomImage(query?: string): { success: boolean; image?: string; error?: string }
 }
-/** SQLite 数据库（需要权限: allow-database） */
+/** SQLite 数据库（需要权限: allow-database）。query/exec/transaction/migrate 操作共享库 knowledge.db */
 export const database: {
     /**
      * 执行 SELECT 查询
@@ -396,16 +442,42 @@ export const database: {
      * 
      * @returns 含 success 与受影响行数 rows_affected 的结果
      */
-    exec(sql: string, params?: unknown[]): { success: boolean; rows_affected: number }
+    exec(sql: string, params?: unknown[]): { success: boolean; rows_affected: number; error?: string }
+    /**
+     * 同步事务：回调内执行 query/exec，全部成功则提交
+     * 
+     * @param fn 事务回调，接收 { query, exec }（绑定到事务）；正常返回即提交，
+     *          抛异常或返回 Promise 则回滚（事务内禁异步）
+     * 
+     * @returns { success, result: fn返回值 } 或 { success:false, error }
+     */
+    transaction(fn: (tx: DatabaseTx) => unknown): { success: boolean; result?: unknown; error?: string }
+    /**
+     * 按名称迁移：_migrations 表未记录则在事务内执行 upSql（支持多语句，禁含 BEGIN/COMMIT）并记录
+     * 
+     * @param name 迁移名（唯一标识）
+     * @param upSql 建表/改表 SQL
+     * 
+     * @returns { success, applied }（applied=false 表示此前已应用，本次跳过）
+     */
+    migrate(name: string, upSql: string): { success: boolean; applied?: boolean; error?: string }
+    /**
+     * 打开命名空间作用域：对应独立 <name>.db 文件（名称仅允许字母数字-_）
+     * 
+     * @param name 命名空间名
+     * 
+     * @returns 作用域对象 { query, exec, transaction, migrate }；名称非法时抛出
+     */
+    namespace(name: string): DatabaseScope
 }
 /** 插件配置（需要权限: allow-config） */
 export const config: {
     /**
      * 读取配置
      * 
-     * @returns config.yaml 引擎启动时解析注入的对象；无配置时返回 undefined
+     * @returns { success, config? }；config 为 config.yaml 引擎启动时解析注入的对象，无配置时省略
      */
-    read(): Record<string, unknown> | undefined
+    read(): { success: boolean; config?: Record<string, unknown> }
     /**
      * 编写配置
      * 
@@ -413,34 +485,38 @@ export const config: {
      */
     write(v: Record<string, unknown>): void
 }
-/** 编解码工具（需要权限: allow-certificate） */
+/** 编解码工具（需要权限: allow-certificate）。可失败方法统一 Result 风格，不抛异常 */
 export const encoding: {
     /** base64 编码；data 为 UTF-8 字符串 */
     base64Encode(data: any): string
-    /** base64 解码；失败返回 { error } */
-    base64Decode(s: string): any
+    /** base64 解码；返回 { success, text?, error? } */
+    base64Decode(s: string): { success: boolean; text?: string; error?: string }
     /** URL 编码（查询转义） */
     urlEncode(s: string): string
-    /** URL 解码；失败抛错 */
-    urlDecode(s: string): string
+    /** URL 解码；返回 { success, text?, error? } */
+    urlDecode(s: string): { success: boolean; text?: string; error?: string }
     /**
+     * 加密
+     * 
      * @param key 加解密密钥字符串
      * 
      * @param content 要加密的明文
      * 
-     * @returns 加密后的密文
+     * @returns { success, text: 密文, error? }
      */
-    lunarEncoder(key: string, content: string): string
+    lunarEncoder(key: string, content: string): { success: boolean; text?: string; error?: string }
     /**
+     * 解密
+     * 
      * @param key 加解密密钥字符串
      * 
      * @param cipher 要解密的密文
      * 
-     * @returns 解密后的原文
+     * @returns { success, text: 原文, error? }
      */
-    lunarDecoder(key: string, cipher: string): string
+    lunarDecoder(key: string, cipher: string): { success: boolean; text?: string; error?: string }
 }
-/** 哈希工具（需要权限: allow-certificate） */
+/** 哈希工具（需要权限: allow-certificate）。签名类方法统一 Result 风格 */
 export const hash: {
     /**
      * 生成 JWT 令牌
@@ -450,9 +526,9 @@ export const hash: {
      * @param algorithm 算法，默认 HS256；可选 HS256 / EdDSA(Ed25519) / none
      * @param kid 可选；非空时写入 JWT 头（多密钥按 Key ID 选择签名密钥）
      * 
-     * @returns JWT 字符串（header.payload.signature）
+     * @returns { success, text: JWT 字符串, error? }
      */
-    signJWT(claims: Record<string, unknown>, secret: string, algorithm?: string, kid?: string): string
+    signJWT(claims: Record<string, unknown>, secret: string, algorithm?: string, kid?: string): { success: boolean; text?: string; error?: string }
     /**
      * MD5 摘要
      * 
@@ -501,9 +577,9 @@ export const hash: {
      * @param privKeyPemOrSeed Ed25519 私钥（PEM(PKCS8) 或 32/64 字节原始字节）
      * @param data 待签名数据
      * 
-     * @returns base64url 签名；失败时抛出
+     * @returns { success, text: base64url 签名, error? }
      */
-    ed25519Sign(privKeyPemOrSeed: string, data: string): string
+    ed25519Sign(privKeyPemOrSeed: string, data: string): { success: boolean; text?: string; error?: string }
     /**
      * 生成 EdDSA (Ed25519) JWT
      * 
@@ -511,9 +587,9 @@ export const hash: {
      * @param privKeyPemOrSeed Ed25519 私钥（PEM(PKCS8) 或 32/64 字节原始字节）
      * @param kid 可选；非空时写入 JWT 头
      * 
-     * @returns JWT 字符串（header.payload.signature）
+     * @returns { success, text: JWT 字符串, error? }
      */
-    generateJWT(claims: Record<string, unknown>, privKeyPemOrSeed: string, kid?: string): string
+    generateJWT(claims: Record<string, unknown>, privKeyPemOrSeed: string, kid?: string): { success: boolean; text?: string; error?: string }
 }
 /** 图像处理（需要权限: allow-file；下载另需 allow-network） */
 export const image: {
@@ -534,21 +610,63 @@ export const image: {
      * @returns 成功返回 { success:true, text: base64 }；失败返回 failure
      */
     download(url: string, fileName: string): { success: boolean; text?: string; error?: string }
+    /**
+     * 缩放图片并按需重编码（宽超限时可选等比缩放 / 指定精确宽高）
+     *
+     * @param path 相对插件数据目录的路径，或 data:image/...;base64 内联数据
+     * @param opts 可选参数：
+     *             max_dim 等比缩放到不超过该边长（默认 0=不缩放）
+     *             width|height 精确目标宽高（两者需同时给出，与 max_dim 互斥）
+     *             format 输出编码格式（jpeg/png/webp，默认保留源格式；PNG 保透明）
+     *             quality jpeg/webp 质量（1-100，默认 90）
+     *
+     * @returns 成功返回 { success:true, text: data URI, width, height, format }；失败返回 failure
+     */
+    resize(path: string, opts?: { max_dim?: number; width?: number; height?: number; format?: 'jpeg' | 'png' | 'webp'; quality?: number }): { success: boolean; text?: string; width?: number; height?: number; format?: string; error?: string }
+    /**
+     * 仅重编码图片（编码格式化，不改尺寸）
+     *
+     * @param path 相对插件数据目录的路径，或 data:image/...;base64 内联数据
+     * @param format 目标编码格式（jpeg/png/webp）
+     * @param opts 可选参数 { quality? }；jpeg/webp 质量（1-100，默认 90）
+     *
+     * @returns 成功返回 { success:true, text: data URI, width, height, format }；失败返回 failure
+     */
+    convert(path: string, format: 'jpeg' | 'png' | 'webp', opts?: { quality?: number }): { success: boolean; text?: string; width?: number; height?: number; format?: string; error?: string }
+}
+/** 视频抽帧（需要权限: allow-file；http(s)/data URI 源运行时另需 allow-network） */
+export const video: {
+    /**
+     * 从视频抽取多帧并编码为图片
+     *
+     * @param source 相对插件数据目录的视频路径，或 http(s) URL，或 data:video/...;base64 URI
+     * @param opts 可选参数（采样方式三选一，互斥优先级：times > count > fps）：
+     *             times 显式时间点（秒）数组，精确抽取
+     *             count 等距采样帧数（1-60，默认不启用）
+     *             fps   均匀抽帧频率（默认 5），超 60 帧自动等距抽样
+     *             dedup 相邻帧相似度去重（默认 true）
+     *             max_dim 帧等比缩放的边长上限（默认 640，超出则缩放）
+     *             format 帧编码格式（jpeg/png/webp，默认 jpeg）
+     *             quality jpeg/webp 质量（1-100，默认 85）
+     *
+     * @returns 成功返回 { success:true, frames:[{ data:dataURI, timestamp, width, height, format, index }], count }；失败返回 failure
+     */
+    frames(source: string, opts?: { times?: number[]; count?: number; fps?: number; dedup?: boolean; max_dim?: number; format?: 'jpeg' | 'png' | 'webp'; quality?: number }): { success: boolean; frames?: Array<{ data: string; timestamp: string; width: number; height: number; format: string; index: number }>; count?: number; skipped?: number; error?: string }
 }
 /** 模型能力（需要权限: allow-agent） */
 export const agent: {
     /**
      * 调用 v1/chat/completions 生成回复文本
      * 
-     * @param messages OpenAI 消息数组 [{role, content}]
+     * @param messages OpenAI 消息数组（PostMessage / ToolMessage）
      * @param opts 可选参数 { temperature?, max_tokens?, system?, tools? }
      *             system  为系统提示词字符串（自动前置为一条 system 消息）
-     *             tools   为给模型提供的函数/工具定义数组
+     *             tools   为给模型提供的函数工具定义（OpenAI 兼容 ChatTool[]）
      * 
-     * @returns 成功返回 { success:true, text: 回复内容, tool_calls?: 模型函数调用 }；
+     * @returns 成功返回 { success:true, text: 回复内容, tool_calls?: ToolCall[] }；
      *          模型走函数调用时 content 为空，tool_calls 原样透传（供 AtoA 接头）；失败返回 failure
      */
-    chat(messages: Array<PostMessage>, opts?: { temperature?: number; max_tokens?: number; system?: string; tools?: unknown[] }): { success: boolean; text?: string; tool_calls?: unknown[]; error?: string }
+    chat(messages: Array<PostMessage | ToolMessage>, opts?: { temperature?: number; max_tokens?: number; system?: string; tools?: ChatTool[] }): { success: boolean; text?: string; tool_calls?: ToolCall[]; error?: string }
     /**
      * 计算文本的嵌入向量（读取 lunar_config.json 的 agent.embedding 字段的文本嵌入模型）
      * 
@@ -565,9 +683,18 @@ export const agent: {
      * 
      * @param text 要交给智能体的自然语言输入
      * 
-     * @returns 智能体执行结果文本；目标包不存在时抛出「xxx 包拒绝响应」
+     * @returns { success, text: 执行结果文本, error? }；目标包不存在/拒绝响应时 success=false
      */
-    synergy: (pkgId: string, text: string) => string
+    synergy: (pkgId: string, text: string) => { success: boolean; text?: string; error?: string }
+    /**
+     * 调用进程内 Web-LTP 网络搜索，返回自然语言搜索报告
+     *（双权限：绑定需 allow-agent，执行需 allow-network）
+     *
+     * @param instruction 自然语言搜索指令（可含「前N页/个」等数量要求）
+     *
+     * @returns { success, text: 搜索报告, error? }；无 allow-network 时 success=false
+     */
+    search(instruction: string): { success: boolean; text?: string; error?: string }
 }
 /** 事件处理 */
 export const event: {
@@ -585,6 +712,7 @@ export const event: {
      * @returns 订阅 id，用于后续 unsubscribe 退订
      */
     subscribe<T extends EventTopic>(topic: T, handler: (e: EventLoad<EventContract[T]['payload']>) => ReturnResult<EventContract[T]['return']> | HandlerResult, priority?: number): number
+    subscribe(topic: string, handler: (e: any[]) => HandlerResult, priority?: number): number
     /**
      * 按订阅 id 退订某个事件
      * 
@@ -625,6 +753,7 @@ export const time: {
  * @param fn 函数实现本体（同步，返回普通值；异步请用 engine.sleep/engine.http 阻塞式完成）
  */
 export const exportFunction: <F extends (...args: any[]) => any>(name: string, fn: F) => void
+
 /**
  * 跨包调用（allow-call）：调用目标插件导出的函数
  * 
@@ -632,13 +761,15 @@ export const exportFunction: <F extends (...args: any[]) => any>(name: string, f
  * 
  * @param name 目标插件已 export 的函数名
  * 
- * @param args 传给该函数的实参数组
+ * @param args 传给该函数的实参数组（按 exportFunction 实现的形参顺序展开）
  * 
- * @typeParam T 返回结果的类型
+ * @typeParam A 实参数组元组类型
  * 
- * @returns 目标函数返回值；目标包不存在或未导出时抛出「xxx 包拒绝响应」
+ * @typeParam R 目标函数返回值类型
+ * 
+ * @returns { success:true, result } 或 { success:false, error }（目标包不存在或未导出）
  */
-export const callFunction: <T = unknown>(pkgId: string, name: string, args: T) => T
+export const callFunction: <A extends unknown[], R = unknown>(pkgId: string, name: string, args: A) => CallResult<R>
 /** 同步休眠 */
 export const sleep: (ms: number) => void
 /** 同步 HTTP 请求 (需要权限: allow-network)*/
@@ -649,9 +780,9 @@ export const http: {
      * @param url 请求地址
      * @param headers 可选请求头
      * 
-     * @returns { status, body }；出错时含 error
+     * @returns { success, status, body }；传输失败时 success=false 含 error
      */
-    get(url: string, headers?: Record<string, string>): { status: number; body: string; error?: string }
+    get(url: string, headers?: Record<string, string>): { success: boolean; status: number; body: string; error?: string }
     /**
      * 同步 POST；阻塞直到返回
      * 
@@ -659,9 +790,9 @@ export const http: {
      * @param body 请求体（JSON 字符串）
      * @param headers 可选请求头
      * 
-     * @returns { status, body }；出错时含 error
+     * @returns { success, status, body }；传输失败时 success=false 含 error
      */
-    post(url: string, body: string, headers?: Record<string, string>): { status: number; body: string; error?: string }
+    post(url: string, body: string, headers?: Record<string, string>): { success: boolean; status: number; body: string; error?: string }
     /**
      * 同步下载任意文件到插件数据目录并落盘
      * 
@@ -706,21 +837,19 @@ export const async: {
     reportProgress(taskId: number, progress: unknown): { success: boolean; error?: string }
     /** 查询任务状态 */
     getStatus(taskId: number): { success: boolean; taskId?: number; status?: string; progress?: unknown; error?: string }
-    /** 枚举全部任务状态 */
-    list(): Array<{ taskId: number; status: string; progress?: unknown }>
+    /** 枚举全部任务状态，返回 { success, tasks } */
+    list(): { success: boolean; tasks?: Array<{ taskId: number; status: string; progress?: unknown }>; error?: string }
 }
 /**
- * 发起网络请求（Node 风格 fetch，返回 Promise；需要权限: allow-network）
+ * 发起网络请求（同步 fetch，阻塞直到返回；需要权限: allow-network）
  * 
  * @param input 请求 URL
  * 
  * @param init 请求配置；method 为请求方法，headers 为请求头，body 为请求体
  * 
- * @returns 解析完成的 fetch 响应（含 status/headers/text()/json()）
- * 
- * @remarks 若需要**同步**（非 Promise）网络调用，请改用 `engine.http.get/post`。
+ * @returns 统一 Result 信封 FetchResult（body 为 JSON 时自动解析为对象，否则为文本）
  */
-declare function fetch(input: string, init?: FetchInit): Promise<FetchResponse>
+declare function fetch(input: string, init?: FetchInit): FetchResult
 /**
  * WebSocket 客户端（全局 `WebSocket`，沙箱主动连服务器；需要权限: allow-network）
  * 
@@ -734,8 +863,8 @@ declare class WebSocket {
     readyState: number
     /** 连接成功打开后的回调 */
     onopen: (() => void) | null
-    /** 收到消息时的回调；参数为 { data: string } */
-    onmessage: ((ev: { data: string }) => void) | null
+    /** 收到消息时的回调；文本帧 data 为 string，二进制帧 data 为 ArrayBuffer */
+    onmessage: ((ev: { data: string | ArrayBuffer }) => void) | null
     /** 发生错误时的回调 */
     onerror: ((ev: { error: string }) => void) | null
     /** 连接关闭后的回调 */
@@ -798,14 +927,14 @@ declare function clearImmediate(id: number): void
 /** 控制台输出 */
 //@ts-ignore
 declare const console: {
-	/** 通用输出；@param a 任意个要打印的值 */
-	log(...a: any[]): void
-	/** 信息输出；@param a 任意个要打印的值 */
-	info(...a: any[]): void
-	/** 警告输出；@param a 任意个要打印的值 */
-	warn(...a: any[]): void
-	/** 错误输出；@param a 任意个要打印的值 */
-	error(...a: any[]): void
-	/** 调试输出；@param a 任意个要打印的值 */
-	debug(...a: any[]): void
+    /** 通用输出；@param a 任意个要打印的值 */
+    log(...a: any[]): void
+    /** 信息输出；@param a 任意个要打印的值 */
+    info(...a: any[]): void
+    /** 警告输出；@param a 任意个要打印的值 */
+    warn(...a: any[]): void
+    /** 错误输出；@param a 任意个要打印的值 */
+    error(...a: any[]): void
+    /** 调试输出；@param a 任意个要打印的值 */
+    debug(...a: any[]): void
 }

@@ -6,7 +6,7 @@ package WebLTP
 //   搜索引擎降级链（bing → baidu → sogou，过滤字典站/工具站兜底并去重）
 //   → 结果页滚动截图 → 回到页顶
 //   → 依次进入前 N（≤10）个结果页（跨结果页 URL 去重）
-//     → 未过期缓存命中则直接复用 SQL 摘要（local_data/database/web_search_cache.db，默认 7 天，
+//     → 未过期缓存命中则直接复用 SQL 摘要（knowledge.db 的 web_ltp_page_cache 表，默认 7 天，
 //       超期记录照常访问并用新摘要覆写）
 //     → 未命中则逐页滚动截图（≤10 张/页，触底即止）
 //     → 逐页情报摘要（硬切断 ≤4096 字符）；模型失败以正文前段兜底，成功后写缓存
@@ -24,30 +24,6 @@ import (
 	"path/filepath"
 )
 
-// Config 网络搜索配置（lunar_config.json 的 web_search 字段，缺失字段用默认值）
-type Config struct {
-	// 是否把滚动截图保存到本地目录（false 时截图仅用于计数，不落盘）
-	SaveScreenshots bool `json:"save_screenshots"`
-	// 截图保存目录（相对 LocalDir）
-	ScreenshotDir string `json:"screenshot_dir"`
-	// 依次进入的结果页数量上限（硬上限 10）
-	MaxPages int `json:"max_pages"`
-	// 结果页元素提取条数上限
-	MaxResults int `json:"max_results"`
-	// 搜索结果页的滚动截图张数上限
-	ResultsScrollCaptures int `json:"results_scroll_captures"`
-	// 单个结果页的滚动截图张数上限
-	PageScrollCaptures int `json:"page_scroll_captures"`
-	// 单页情报摘要的硬切断字符数（≤4096）
-	SummaryMaxChars int `json:"summary_max_chars"`
-	// 单次运行的总时长软上限（秒），超时后以已采集信息收尾
-	MaxRunSeconds int `json:"max_run_seconds"`
-	// 是否启用页面摘要缓存（SQLite，LocalDir/database/web_search_cache.db）。
-	// 未配置时默认开启；显式配置 false 关闭
-	CacheEnabled *bool `json:"cache_enabled"`
-	// 页面摘要缓存有效期（天），超过后重新访问网页并用新摘要覆写
-	CacheTTLDays int `json:"cache_ttl_days"`
-}
 
 const webSearchPagesHardCap = 10
 

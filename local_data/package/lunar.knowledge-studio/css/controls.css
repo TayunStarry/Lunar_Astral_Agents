@@ -1,0 +1,126 @@
+/* ============================================================
+   星月智能 · 知识库 — controls.css
+   按钮（白底描边 / 墨黑主按钮 / 危险）/ 下拉框 / 输入框 / 文本域
+   ============================================================ */
+
+/* ===== 基础按钮：磨砂白底描边 ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+    user-select: none;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink); }
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ===== 墨黑主按钮 ===== */
+.btn-primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: #fff;
+}
+.btn-primary:hover:not(:disabled) { background: var(--ink-hover); border-color: var(--ink-hover); }
+
+/* ===== 危险按钮 ===== */
+.btn-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) { background: #b23430; border-color: #b23430; }
+
+/* 白底危险描边（悬停反色填充） */
+.btn-danger-ghost { color: var(--danger); border-color: var(--border-strong); }
+.btn-danger-ghost:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+/* ===== 尺寸变体 ===== */
+.btn-sm { padding: 4px 10px; font-size: 0.72rem; }
+.btn-icon {
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.76rem;
+}
+.btn-run { min-width: 136px; padding: 9px 16px; }
+
+/* ===== 下拉框 ===== */
+select.input {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 512'%3E%3Cpath fill='%236b6b68' d='M137.4 374.6c12.5 12.5 32.8 12.5 45.3 0l128-128c9.2-9.2 11.9-22.9 6.9-34.9s-16.6-19.8-29.6-19.8L32 192c-12.9 0-24.6 7.8-29.6 19.8s-2.2 25.7 6.9 34.9l128 128z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 11px;
+    padding-right: 30px;
+    cursor: pointer;
+}
+
+/* ===== 输入框 / 文本域 ===== */
+.input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 0.82rem;
+    outline: none;
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+.input:focus { border-color: var(--ink); background: rgba(255, 255, 255, 0.85); }
+
+.textarea {
+    flex: 1 1 auto;         /* 自动占用左面板剩余高度 */
+    min-height: 120px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    color: var(--text-1);
+    font-family: inherit;
+    font-size: 0.84rem;
+    resize: none;
+    outline: none;
+    transition: var(--transition);
+    line-height: 1.55;
+}
+.textarea:focus { border-color: var(--ink); background: rgba(255, 255, 255, 0.85); }
+.textarea::placeholder { color: var(--text-3); }
+.textarea.code { font-family: var(--font-mono); font-size: 0.78rem; }
+
+/* ===== 字段标签与提示 ===== */
+.field-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+    font-weight: 650;
+    color: var(--text-2);
+    margin-bottom: 6px;
+}
+.field-hint { font-size: 0.7rem; color: var(--text-3); }

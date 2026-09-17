@@ -15,28 +15,39 @@ import (
 )
 
 // bindEncoding encoding.base64Encode/base64Decode/urlEncode/urlDecode/lunarEncoder/lunarDecoder。
+// 契约（Result 统一风格）：可失败方法返回 { success, text?, error? }，不再抛异常。
 func bindEncoding(vm *goja.Runtime) *goja.Object {
 	e := vm.NewObject()
 	e.Set("base64Encode", func(data string) string { return base64.StdEncoding.EncodeToString([]byte(data)) })
-	// 契约：base64Decode 失败返回 { error }（不抛异常）
-	e.Set("base64Decode", func(s string) any {
+	e.Set("base64Decode", func(s string) map[string]any {
 		b, err := base64.StdEncoding.DecodeString(s)
 		if err != nil {
-			return map[string]any{"error": err.Error()}
+			return map[string]any{"success": false, "error": err.Error()}
 		}
-		return string(b)
+		return map[string]any{"success": true, "text": string(b)}
 	})
 	e.Set("urlEncode", func(s string) string { return url.QueryEscape(s) })
-	// 契约：urlDecode 失败抛错
-	e.Set("urlDecode", func(s string) (string, error) {
+	e.Set("urlDecode", func(s string) map[string]any {
 		out, err := url.QueryUnescape(s)
 		if err != nil {
-			return "", err
+			return map[string]any{"success": false, "error": err.Error()}
 		}
-		return out, nil
+		return map[string]any{"success": true, "text": out}
 	})
-	e.Set("lunarEncoder", encodingLunarEncoder)
-	e.Set("lunarDecoder", encodingLunarDecoder)
+	e.Set("lunarEncoder", func(key, content string) map[string]any {
+		out, err := encodingLunarEncoder(key, content)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": out}
+	})
+	e.Set("lunarDecoder", func(key, cipher string) map[string]any {
+		out, err := encodingLunarDecoder(key, cipher)
+		if err != nil {
+			return map[string]any{"success": false, "error": err.Error()}
+		}
+		return map[string]any{"success": true, "text": out}
+	})
 	return e
 }
 

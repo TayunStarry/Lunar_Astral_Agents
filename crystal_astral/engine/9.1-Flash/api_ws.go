@@ -125,7 +125,8 @@ func (c *wsClient) run(target string) {
 
 func (c *wsClient) readLoop(conn *websocket.Conn) {
 	for {
-		_, data, err := conn.ReadMessage()
+		// 消息类型：TextMessage → string；BinaryMessage → ArrayBuffer（其余按文本兜底）
+		msgType, data, err := conn.ReadMessage()
 		if err != nil {
 			c.mu.Lock()
 			c.readyState = wsClosed
@@ -146,14 +147,21 @@ func (c *wsClient) readLoop(conn *websocket.Conn) {
 		cb := c.onmessage
 		c.mu.RUnlock()
 		if cb != nil {
-			payload := string(data)
+			binary := msgType == websocket.BinaryMessage
 			c.onLoop(func(vm *goja.Runtime) {
 				f, ok := goja.AssertFunction(cb)
 				if !ok {
 					return
 				}
+				// goja 值非线程安全：ArrayBuffer 须在 loop 线程内创建
+				var dataVal goja.Value
+				if binary {
+					dataVal = vm.ToValue(vm.NewArrayBuffer(data))
+				} else {
+					dataVal = vm.ToValue(string(data))
+				}
 				ev := vm.NewObject()
-				ev.Set("data", vm.ToValue(payload))
+				ev.Set("data", dataVal)
 				f(goja.Undefined(), ev)
 			})
 		}

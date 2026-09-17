@@ -11,12 +11,12 @@ package YaraLTP
 //   整体解码失败、或分割出的名称不在权限名单 → 视为密钥与脚本不对应/脚本被篡改，拒绝该权限。
 
 import (
-	"slices"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 

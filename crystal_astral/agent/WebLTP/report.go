@@ -8,19 +8,6 @@ import (
 	"strings"
 )
 
-// reportInput 报告汇编输入
-type reportInput struct {
-	Instruction string
-	Query       string
-	EngineName  string // 胜出引擎中文名（必应/百度/搜狗，报告叙述用）
-	Engine      PageExtract
-	EngineShot  string // 结果页首屏截图 dataURL（供视觉印证，可为空）
-	Pages       []PageIntel
-	Screenshots int
-	SaveDir     string
-	Interrupted bool
-	Elapsed     string
-}
 
 // summarizePage 单页情报摘要：DOM 提取文本为主 + 首屏截图为辅（同一次多模态调用互相印证）
 func summarizePage(query string, hit SearchHit, page PageExtract, shotDataURL string) (string, error) {
@@ -130,7 +117,15 @@ func composeReportFallback(in reportInput) string {
 	if in.Interrupted {
 		b.WriteString("（浏览器窗口在中途被关闭，以下基于已采集信息）")
 	}
-	b.WriteString("\n\n检索词「" + in.Query + "」，" + engineName + "结果页共识别 " + fmt.Sprint(len(in.Engine.Results)) + " 条结果，耗时 " + in.Elapsed + "。\n")
+	b.WriteString("\n\n检索词「")
+	b.WriteString(in.Query)
+	b.WriteString("」，")
+	b.WriteString(engineName)
+	b.WriteString("结果页共识别 ")
+	fmt.Fprint(&b, len(in.Engine.Results))
+	b.WriteString(" 条结果，耗时 ")
+	b.WriteString(in.Elapsed)
+	b.WriteString("。\n")
 
 	if len(in.Engine.Results) > 0 {
 		b.WriteString("\n◆ 结果页概览：\n")
@@ -138,7 +133,7 @@ func composeReportFallback(in reportInput) string {
 			if i >= 8 {
 				break
 			}
-			b.WriteString(fmt.Sprintf("%d. %s（%s）\n", i+1, hit.Title, domainOf(hit.URL)))
+			fmt.Fprintf(&b, "%d. %s（%s）\n", i+1, hit.Title, domainOf(hit.URL))
 		}
 	}
 
@@ -146,22 +141,28 @@ func composeReportFallback(in reportInput) string {
 		b.WriteString("\n◆ 逐页情报：\n")
 		for i, p := range in.Pages {
 			if p.Failed != "" {
-				b.WriteString(fmt.Sprintf("%d. 打开了「%s」（%s）——页面打开失败：%s\n", i+1, p.Title, p.Domain, p.Failed))
+				fmt.Fprintf(&b, "%d. 打开了「%s」（%s）——页面打开失败：%s\n", i+1, p.Title, p.Domain, p.Failed)
 				continue
 			}
 			if p.Cached {
-				b.WriteString(fmt.Sprintf("%d. 月华此前已查看过「%s」（%s），本次直接调取缓存摘要：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary))
+				fmt.Fprintf(&b, "%d. 月华此前已查看过「%s」（%s），本次直接调取缓存摘要：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary)
 				continue
 			}
-			b.WriteString(fmt.Sprintf("%d. 月华打开了「%s」（%s）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary))
+			fmt.Fprintf(&b, "%d. 月华打开了「%s」（%s）：\n%s\n", i+1, firstNonEmpty(p.Title, p.Domain), p.Domain, p.Summary)
 		}
 	}
 
 	if in.Screenshots > 0 {
 		if in.SaveDir != "" {
-			b.WriteString("\n◆ 过程截图：" + fmt.Sprint(in.Screenshots) + " 张，已保存到 " + in.SaveDir + "\n")
+			b.WriteString("\n◆ 过程截图：")
+			fmt.Fprint(&b, in.Screenshots)
+			b.WriteString(" 张，已保存到 ")
+			b.WriteString(in.SaveDir)
+			b.WriteString("\n")
 		} else {
-			b.WriteString("\n◆ 过程截图：" + fmt.Sprint(in.Screenshots) + " 张（未启用本地保存）\n")
+			b.WriteString("\n◆ 过程截图：")
+			fmt.Fprint(&b, in.Screenshots)
+			b.WriteString(" 张（未启用本地保存）\n")
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

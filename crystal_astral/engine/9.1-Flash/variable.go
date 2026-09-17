@@ -15,7 +15,7 @@ import (
 const ServiceName = "StarLTP"
 
 // EngineBuild 引擎构建标记：每次改动沙箱绑定/回调执行逻辑时递增，供运行实例自证版本。
-const EngineBuild = "2026-09-16"
+const EngineBuild = "2026-09-17"
 
 // LTP9Tag metadata.json 标识 LTP9 包的标签。
 const LTP9Tag = "LTP9"

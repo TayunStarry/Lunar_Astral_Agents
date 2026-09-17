@@ -42,13 +42,6 @@ func shotCapture(sess *BrowserClient.WebViewSession, quality int) ([]byte, error
 	return buf.Bytes(), nil
 }
 
-// shotSaver 截图落盘器（save_screenshots=false 时仅计数）
-type shotSaver struct {
-	enabled bool
-	dir     string
-	count   int
-	files   []string
-}
 
 // save 保存一张截图（按顺序编号命名），返回序号
 func (s *shotSaver) save(jpg []byte, label string) int {
@@ -80,13 +73,6 @@ func sanitizeFileName(s string) string {
 	return strings.Trim(s, "-")
 }
 
-// scrollState 一次滚动后的页面状态
-type scrollState struct {
-	Before   float64 `json:"before"`
-	After    float64 `json:"after"`
-	AtBottom bool    `json:"atBottom"`
-	Height   float64 `json:"height"`
-}
 
 // scrollByViewport 向下滚动约一屏，返回是否触底（EvalJSON 在页面上下文执行）
 func scrollByViewport(sess *BrowserClient.WebViewSession) (scrollState, error) {
