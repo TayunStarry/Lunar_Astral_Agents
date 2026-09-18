@@ -16,7 +16,7 @@ declare global {
      * 
      * @returns {[string, string, Error | null]} 包含保存结果的元组，[保存的文件名, 保存的文件路径, 错误信息]
      */
-    function saveFile(fileName: string, overwrite: boolean, fileData: Blob | File | FormData | string): [string, string, Error | null];
+    function saveFile(fileName: string, overwrite: boolean, fileData: Blob | File | FormData | string | Uint8Array): [string, string, Error | null];
     /**
      * 从磁盘中读取文件
      * 

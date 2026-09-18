@@ -41,7 +41,9 @@ async function handleSend() {
                 try {
                     const fileUrl = await saveFile(pf.file);
                     contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
-                    attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label: pf.name });
+                    // 参考图（律令 <参考图>）：图片附件的标签置为「参考图」，便于在消息记录中识别
+                    const label = (category === 'image' && text.includes('<参考图>')) ? '参考图' : pf.name;
+                    attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label });
                     categories.add('image');
                 } catch (err) {
                     showToast(`无法上传 ${pf.name}`, 'error');

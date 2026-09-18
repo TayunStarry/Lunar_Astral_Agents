@@ -10,6 +10,7 @@ import { batchProcessVideoFiles, batchProcessAudioFiles } from './capabilities/m
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker } from './capabilities/memory';
+import { processDecrees } from './decrees';
 
 /** 创建聊天消息 */
 async function createChatMessage(): Promise<string> {
@@ -122,6 +123,12 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         await batchProcessAudioFiles();
         // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
         await processUnreadFiles();
+        // 律令指令处理：命中已定义的 <指令> 时输出默认应答（含 TTS），剔除携带律令的消息，
+        // 跳过本轮 AI 应答；未读消息中的其他内容等待下个周期再解析
+        if (processDecrees()) {
+            GlobalConfig.reasoningInProgress = false;
+            return;
+        }
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
         // 如果消息响应为空，抛出异常

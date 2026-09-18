@@ -520,6 +520,7 @@ var agentSystem = (function (exports) {
         ];
         selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
         defaultOutfitPrompt = '穿着深蓝色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层深蓝色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋';
+        referenceImage = '';
         roleTool = [
             {
                 type: "function",
@@ -674,6 +675,11 @@ var agentSystem = (function (exports) {
                     negativePrompt: args.negative_prompt || '',
                     cfgScale: args.cfg_scale ?? 1.0,
                 };
+                if (this.referenceImage) {
+                    imageParams.initImg = this.referenceImage;
+                    imageParams.strength = 0.5;
+                    console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}`);
+                }
                 const [result, error] = generateImage(imageParams);
                 if (error) {
                     console.error('[绘制者] 图像生成失败:', error);
@@ -3088,6 +3094,105 @@ var agentSystem = (function (exports) {
         [...injectedLTPXRemoteTools].forEach(removeLTPXRemoteTool);
     }
 
+    function pushDecreeResponse(text) {
+        const [audio, err] = tts(text);
+        pushContext('text', text, (err || !audio) ? '' : audio);
+        console.log(`[律令] 默认应答: ${text}`);
+    }
+    function findLastImageUrl(messages) {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (typeof message.content === 'string')
+                continue;
+            for (let j = message.content.length - 1; j >= 0; j--) {
+                const item = message.content[j];
+                if (item.type === 'image_url' && item.image_url && item.image_url.url) {
+                    return item.image_url.url;
+                }
+            }
+        }
+        return '';
+    }
+    function saveReferenceImage(imageUrl) {
+        try {
+            const [resized, err] = resizeImage(imageUrl);
+            if (err || !resized || resized.length === 0)
+                return '';
+            const ref = resized[0];
+            const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
+            const relPath = `images/reference/ref_${Date.now()}.${ext}`;
+            const [, , saveErr] = saveFile(relPath, true, ref.image);
+            if (saveErr) {
+                console.error('[律令] 参考图保存失败:', saveErr);
+                return '';
+            }
+            console.log(`[律令] 参考图已保存: ${relPath}`);
+            return relPath;
+        }
+        catch (error) {
+            console.error('[律令] 参考图处理异常:', error);
+            return '';
+        }
+    }
+    const decreeRegistry = {
+        '全记住': () => {
+            GlobalConfig.unreadRecords.push(...dialogueRole.messages);
+            memorizerRole.persistUnreadRecords();
+            pushDecreeResponse('全部记住啦~');
+        },
+        '参考图': () => {
+            const imageUrl = findLastImageUrl(GlobalConfig.unreadContext);
+            if (imageUrl) {
+                const localPath = saveReferenceImage(imageUrl);
+                if (localPath) {
+                    painterRole.referenceImage = localPath;
+                    pushDecreeResponse('看到你的参考图啦, 下次我就依据这张图片来绘制啦~');
+                    return;
+                }
+            }
+            painterRole.referenceImage = '';
+            pushDecreeResponse('没看到参考图呢, 那我就自由发挥啦~');
+        },
+    };
+    function extractDecreeText(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        return message.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text)
+            .join('\n');
+    }
+    function matchKnownDecrees(text) {
+        const found = [];
+        for (const tag of Object.keys(decreeRegistry)) {
+            if (text.includes(`<${tag}>`))
+                found.push(tag);
+        }
+        return found;
+    }
+    function processDecrees() {
+        let hit = false;
+        const remaining = [];
+        for (const message of GlobalConfig.unreadContext) {
+            const decrees = matchKnownDecrees(extractDecreeText(message));
+            if (decrees.length === 0) {
+                remaining.push(message);
+                continue;
+            }
+            hit = true;
+            for (const tag of decrees) {
+                try {
+                    decreeRegistry[tag](message);
+                }
+                catch (error) {
+                    console.error(`[律令] 指令 <${tag}> 执行失败:`, error);
+                }
+            }
+        }
+        GlobalConfig.unreadContext = remaining;
+        return hit;
+    }
+
     async function createChatMessage() {
         const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
         await dialogueRole.generateDialogue(cache);
@@ -3166,6 +3271,10 @@ var agentSystem = (function (exports) {
             await batchProcessVideoFiles();
             await batchProcessAudioFiles();
             await processUnreadFiles();
+            if (processDecrees()) {
+                GlobalConfig.reasoningInProgress = false;
+                return;
+            }
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
                 pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
