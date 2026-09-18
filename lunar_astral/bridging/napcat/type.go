@@ -209,17 +209,17 @@ type BridgeTarget struct {
 type BridgeRequest struct {
 	Target    BridgeTarget
 	Messages  []map[string]any // OpenAI 格式消息列表
-	VideoURLs []string                 // 视频地址列表，写入智能体 unreadVideoUrl
-	AudioURLs []string                 // 语音/音频地址列表，写入智能体 unreadAudioUrl
+	VideoURLs []string         // 视频地址列表，写入智能体 unreadVideoUrl
+	AudioURLs []string         // 语音/音频地址列表，写入智能体 unreadAudioUrl
 }
 
 // GroupPoolEntry 群聊缓存池中的单条消息
 type GroupPoolEntry struct {
-	Nickname  string      // 发言用户昵称（群名片优先）
-	Content   any // string 或 []map[string]any（OpenAI 多模态格式）
-	HasImages bool        // 是否包含图片
-	VideoURLs []string    // 视频地址列表
-	AudioURLs []string    // 语音/音频地址列表
+	Nickname  string   // 发言用户昵称（群名片优先）
+	Content   any      // string 或 []map[string]any（OpenAI 多模态格式）
+	HasImages bool     // 是否包含图片
+	VideoURLs []string // 视频地址列表
+	AudioURLs []string // 语音/音频地址列表
 }
 
 // GroupPool 单个群聊的消息缓存池（FIFO，保留最新 maxGroupPoolSize 条）

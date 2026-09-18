@@ -49,6 +49,8 @@ async function sendDrawboardMessage() {
             timestamp: Date.now()
         };
         addMessage(userMsg);
+        // 用户发送消息时触发持久化（AI 消息不再自动写盘）
+        schedulePersist();
 
         if (backendConnected) {
             const content = [

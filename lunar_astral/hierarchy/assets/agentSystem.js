@@ -48,6 +48,7 @@ var agentSystem = (function (exports) {
     class ModelBuilder {
         stream = false;
         enableTools = true;
+        reasoningStrength = "low";
         messages = [];
         ragMessages = [];
         runtimeMessages = [];
@@ -99,7 +100,7 @@ var agentSystem = (function (exports) {
             this.systemPrompt = this.systemPrompt.replace(block, '');
             return this;
         }
-        run(appendContext, toolCall, useTools = false) {
+        run(appendContext, toolCall) {
             const rawMessages = [
                 { role: 'system', content: this.systemPrompt },
                 ...this.runtimeMessages,
@@ -111,7 +112,10 @@ var agentSystem = (function (exports) {
                 messages: rawMessages,
                 stream: this.stream,
                 tools: toolCall,
-                tool_choice: useTools ? 'required' : (this.enableTools ? 'auto' : 'none'),
+                tool_choice: 'auto',
+                chat_template_kwargs: {
+                    reasoning_strength: this.reasoningStrength
+                }
             };
             if (!this.enableTools || toolCall.length === 0) {
                 delete requestBody.tool_choice;
@@ -1233,7 +1237,7 @@ var agentSystem = (function (exports) {
         ;
         updateMessageContent(state) {
             if (state.thinkingContent.trim() !== "") {
-                const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
+                const newThinkTag = '\n<think>\n' + state.thinkingContent + '\n</think>\n';
                 GlobalConfig.finalResponse = state.descriptionContent;
                 console.log(newThinkTag);
             }
@@ -1578,7 +1582,13 @@ var agentSystem = (function (exports) {
         summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
         summarizeRecords(records) {
             const fragments = records
-                .map((r, i) => `--- 片段 ${i + 1}（${r.role}）---\n${r.content || '(空)'}`)
+                .map((r, i) => {
+                let header = `--- 片段 ${i + 1}（${r.role}`;
+                if (r.timestamp)
+                    header += `，${new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })}`;
+                header += `）---`;
+                return `${header}\n${r.content || '(空)'}`;
+            })
                 .join('\n\n');
             this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
             this.runtimeMessages = [];

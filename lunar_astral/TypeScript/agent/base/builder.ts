@@ -8,6 +8,8 @@ export class ModelBuilder {
 	protected stream: boolean = false;
 	/** 是否启用工具调用 */
 	protected enableTools: boolean = true;
+	/** 推理强度 */
+	protected reasoningStrength: string = "low";
 	/** 消息列表 */
 	public messages: PostMessage[] = [];
 	/** RAG消息列表 */
@@ -75,7 +77,7 @@ export class ModelBuilder {
 		return this;
 	}
 	/** 运行模型，可输入额外的上下文补充 */
-	public run(appendContext: PostMessage[], toolCall: ToolCall[], useTools: boolean = false): modelResponse {
+	public run(appendContext: PostMessage[], toolCall: ToolCall[]): modelResponse {
 		/** 模型请求体消息列表（拼接所有来源） */
 		const rawMessages: PostMessage[] = [
 			// 系统提示词
@@ -93,7 +95,10 @@ export class ModelBuilder {
 			messages: rawMessages,
 			stream: this.stream,
 			tools: toolCall,
-			tool_choice: useTools ? 'required' : (this.enableTools ? 'auto' : 'none'),
+			tool_choice: 'auto',
+			chat_template_kwargs: {
+				reasoning_strength: this.reasoningStrength
+			}
 		};
 		// 如果禁用工具调用或没有工具调用，删除 tool_choice 和 tools 字段
 		if (!this.enableTools || toolCall.length === 0) {

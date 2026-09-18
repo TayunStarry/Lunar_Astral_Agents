@@ -122,6 +122,8 @@ async function handleSend() {
             attachments: attachments.length ? attachments : undefined,
             timestamp: Date.now()
         });
+        // 用户发送消息时触发持久化（AI 消息不再自动写盘）
+        schedulePersist();
 
         // 推送到后端
         if (backendConnected) {

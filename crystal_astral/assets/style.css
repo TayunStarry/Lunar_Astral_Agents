@@ -575,6 +575,22 @@ body {
     filter: drop-shadow(0 0 10px rgba(190, 150, 255, 0.85));
 }
 
+.sidebar-btn-planning {
+    color: #8ff5e2;
+}
+
+.sidebar-btn-planning:hover {
+    filter: drop-shadow(0 0 10px rgba(120, 235, 210, 0.85));
+}
+
+.sidebar-btn-logs {
+    color: #b3c7ff;
+}
+
+.sidebar-btn-logs:hover {
+    filter: drop-shadow(0 0 10px rgba(150, 180, 255, 0.85));
+}
+
 .sidebar-btn.loading {
     pointer-events: none;
 }
@@ -1766,4 +1782,172 @@ body {
 
 .ltpx-island:hover .ltpx-island-icon {
     color: #fff;
+}
+
+/* ===== 日志查看浮动窗（可拖动，层级高于沙箱） ===== */
+.log-viewer {
+    position: fixed;
+    top: 12vh;
+    left: calc(50% - 340px);
+    width: min(680px, 92vw);
+    height: min(62vh, 560px);
+    z-index: 3000;
+    background: rgba(18, 22, 34, 0.88);
+    backdrop-filter: blur(18px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.5);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.log-viewer.active {
+    display: flex;
+}
+
+.log-viewer-header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.log-viewer-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 日志筛选栏：类型（级别）chips 多选 + 模块下拉 */
+.log-viewer-filters {
+    padding: 8px 14px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.log-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.log-filter-label {
+    font-size: 12px;
+    opacity: 0.7;
+    flex-shrink: 0;
+    min-width: 32px;
+}
+
+.log-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.log-filter-chip {
+    padding: 2px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.log-filter-chip:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.log-filter-chip.active {
+    background: rgba(108, 155, 207, 0.45);
+    border-color: rgba(108, 155, 207, 0.7);
+    color: #fff;
+}
+
+.log-filter-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 280px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+}
+
+.log-filter-select option {
+    background: #141622;
+    color: #fff;
+}
+
+.log-viewer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.log-viewer-footer {
+    padding: 10px 16px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.log-viewer-count {
+    font-size: 12px;
+    opacity: 0.65;
+}
+
+.log-viewer-empty {
+    margin: auto;
+    opacity: 0.55;
+    font-size: 13px;
+}
+
+/* 日志条目：按级别着色左边条 + 背景微染 */
+.log-line {
+    border-left: 3px solid rgba(255, 255, 255, 0.25);
+    padding: 2px 8px;
+    border-radius: 0 6px 6px 0;
+    background: rgba(255, 255, 255, 0.05);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-line-info {
+    border-left-color: #56b6c2;
+}
+
+.log-line-warn {
+    border-left-color: #d19a66;
+    background: rgba(209, 154, 102, 0.08);
+}
+
+.log-line-error,
+.log-line-fatal {
+    border-left-color: #e06c75;
+    background: rgba(224, 108, 117, 0.1);
 }

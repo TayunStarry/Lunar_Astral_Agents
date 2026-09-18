@@ -409,7 +409,7 @@ func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, c
 
 	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -468,7 +468,7 @@ func (d *MemoryDB) MemoryAddMessageWithTags(ctx context.Context, collectionName,
 
 	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -501,7 +501,7 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 
 	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	if err := c.saveDocumentsToFile(); err != nil {
@@ -516,7 +516,8 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 // v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
 // v4: 写入前先去重，图片已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
 // v5: 入库前先做感知者式标准化（静态图 640px 缩放/统一转码；动态图保留动画存储，
-//     理解走 AnimatedImageToMedia 慢放视频 + file:// 引用的 llama-server 视频链路）
+//
+//	理解走 AnimatedImageToMedia 慢放视频 + file:// 引用的 llama-server 视频链路）
 func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -573,7 +574,7 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 
 	// 5. 添加文档（含 TagUUIDs 与内容嵌入；存储标准化后的 data URI）
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: storeURI, TAGS: tagUUIDs, Embedding: contentVec})
+	c.Documents = append(c.Documents, Document{ID: id, Image: storeURI, TAGS: tagUUIDs, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	// 6. 持久化
@@ -638,8 +639,9 @@ func (d *MemoryDB) MemoryQueryMessages(ctx context.Context, collectionName, quer
 	jsonMessages := make([]string, 0, len(results))
 	for _, r := range results {
 		msg := memoryMessage{
-			Role:    r.Role,
-			Content: r.Content,
+			Role:      r.Role,
+			Content:   r.Content,
+			Timestamp: r.Timestamp,
 		}
 		if r.Image != "" {
 			msg.Role = "image"
@@ -803,6 +805,7 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 			Content:    doc.Content,
 			Image:      doc.Image,
 			Similarity: rankedList[i].fused,
+			Timestamp:  doc.Timestamp,
 		}
 	}
 	return results
@@ -882,10 +885,11 @@ func (d *MemoryDB) MemoryGetDocuments(collectionName string, offset, limit int) 
 			role = "image"
 		}
 		entries[i-offset] = DocumentEntry{
-			ID:      doc.ID,
-			Role:    role,
-			Content: doc.Content,
-			Image:   doc.Image,
+			ID:        doc.ID,
+			Role:      role,
+			Content:   doc.Content,
+			Image:     doc.Image,
+			Timestamp: doc.Timestamp,
 		}
 	}
 	return entries, total

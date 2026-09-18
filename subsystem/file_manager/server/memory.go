@@ -364,6 +364,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 			Content:    msg.Content,
 			Image:      msg.Image,
 			Similarity: msg.Similarity,
+			Timestamp:  msg.Timestamp,
 		})
 	}
 
@@ -436,10 +437,11 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 	docList := make([]memoryMessageData, 0, len(entries))
 	for _, entry := range entries {
 		docList = append(docList, memoryMessageData{
-			ID:      entry.ID,
-			Role:    entry.Role,
-			Content: entry.Content,
-			Image:   entry.Image,
+			ID:        entry.ID,
+			Role:      entry.Role,
+			Content:   entry.Content,
+			Image:     entry.Image,
+			Timestamp: entry.Timestamp,
 		})
 	}
 

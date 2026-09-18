@@ -631,6 +631,171 @@ document.getElementById('addEmptyRowBtn').addEventListener('click', addEmptyRow)
 document.getElementById('removeEmptyRowBtn').addEventListener('click', removeEmptyRow);
 document.getElementById('quickSortBtn').addEventListener('click', quickSortLayout);
 
+// 蓝图系统：内置模块（琉璃 assets/planning），点击后经覆盖层 iframe 嵌入打开
+document.getElementById('planningBtn').addEventListener('click', () => {
+    addMessage('system', '已为您打开【蓝图系统】');
+    openPageInFrame('/planning/index.html', '蓝图系统');
+});
+
+// ===== 后端日志浮动窗（可拖动，层级高于沙箱；点击按钮拉取后端最新日志并渲染） =====
+const logViewer = document.getElementById('logViewer');
+const logViewerBody = document.getElementById('logViewerBody');
+const logViewerCount = document.getElementById('logViewerCount');
+const logsBtn = document.getElementById('logsBtn');
+const logLevelChips = document.getElementById('logLevelChips');
+const logModuleSelect = document.getElementById('logModuleSelect');
+
+const LOG_LEVELS = ['INFO', 'WARN', 'ERROR', 'FATAL'];
+let cachedLogs = [];        // 最近一次拉取的全部日志（未过滤）
+let selectedLevels = null;  // null=全部级别；否则为已选级别 Set
+let selectedModule = '';    // ''=全部模块
+
+// 拉取后端日志（默认最新 500 条），缓存后按当前筛选条件渲染
+async function loadBackendLogs(limit = 500) {
+    try {
+        const resp = await fetch('/logs?limit=' + limit);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        cachedLogs = Array.isArray(data) ? data : [];
+        refreshLogModuleOptions();
+        applyLogFilters();
+    } catch (e) {
+        console.error('拉取后端日志失败:', e);
+        logViewerBody.innerHTML = '<div class="log-viewer-empty">日志拉取失败：' + escapeHtml(e.message || '网络错误') + '</div>';
+        logViewerCount.textContent = '';
+    }
+}
+
+// 构建类型（级别）筛选 chips：全部 + INFO/WARN/ERROR/FATAL，多选
+function initLogLevelChips() {
+    const chips = [{ label: '全部', value: '__all__' }]
+        .concat(LOG_LEVELS.map(l => ({ label: l, value: l })));
+    chips.forEach(c => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'log-filter-chip' + (c.value === '__all__' ? ' active' : '');
+        chip.textContent = c.label;
+        chip.dataset.level = c.value;
+        chip.addEventListener('click', () => toggleLogLevelChip(chip));
+        logLevelChips.appendChild(chip);
+    });
+}
+
+function toggleLogLevelChip(chip) {
+    const level = chip.dataset.level;
+    if (level === '__all__') {
+        selectedLevels = null;
+    } else {
+        if (!selectedLevels) selectedLevels = new Set();
+        if (selectedLevels.has(level)) {
+            selectedLevels.delete(level);
+            if (selectedLevels.size === 0) selectedLevels = null;
+        } else {
+            selectedLevels.add(level);
+        }
+    }
+    syncLogLevelChips();
+    applyLogFilters();
+}
+
+function syncLogLevelChips() {
+    logLevelChips.querySelectorAll('.log-filter-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.level === '__all__'
+            ? !selectedLevels
+            : !!selectedLevels && selectedLevels.has(c.dataset.level));
+    });
+}
+
+// 按最近日志中的来源模块刷新模块下拉（保留当前选择）
+function refreshLogModuleOptions() {
+    const modules = [...new Set(cachedLogs.map(r => r.module).filter(Boolean))].sort();
+    const current = logModuleSelect.value;
+    logModuleSelect.innerHTML = '<option value="">全部模块</option>'
+        + modules.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    if (current && modules.includes(current)) {
+        logModuleSelect.value = current;
+    } else {
+        selectedModule = '';
+    }
+}
+
+logModuleSelect.addEventListener('change', () => {
+    selectedModule = logModuleSelect.value;
+    applyLogFilters();
+});
+
+// 按「类型（级别）」与「模块」筛选后渲染
+function applyLogFilters() {
+    const filtered = cachedLogs.filter(r => {
+        const level = String(r.level || 'INFO');
+        if (selectedLevels && !selectedLevels.has(level)) return false;
+        if (selectedModule && r.module !== selectedModule) return false;
+        return true;
+    });
+    renderBackendLogs(filtered);
+}
+
+// 渲染日志：按级别着色样式 + 渲染 MD 风格文本（后端已完成 HTML 转义与色彩标注）
+function renderBackendLogs(logs) {
+    if (!logs.length) {
+        logViewerBody.innerHTML = '<div class="log-viewer-empty">'
+            + (cachedLogs.length ? '无匹配筛选条件的日志' : '暂无日志')
+            + '</div>';
+        logViewerCount.textContent = cachedLogs.length ? '共 ' + cachedLogs.length + ' 条，显示 0 条' : '0 条';
+        return;
+    }
+    const frag = document.createDocumentFragment();
+    logs.forEach(rec => {
+        const line = document.createElement('div');
+        const level = String(rec.level || 'INFO').toLowerCase();
+        line.className = 'log-line log-line-' + (['warn', 'error', 'fatal'].includes(level) ? level : 'info');
+        line.innerHTML = rec.text || '';
+        frag.appendChild(line);
+    });
+    logViewerBody.innerHTML = '';
+    logViewerBody.appendChild(frag);
+    logViewerBody.scrollTop = logViewerBody.scrollHeight; // 滚动到最新一条
+    logViewerCount.textContent = '共 ' + cachedLogs.length + ' 条，显示 ' + logs.length + ' 条';
+}
+
+// 拖动浮动窗（标题栏按下拖动，关闭按钮除外）
+let logDragState = null;
+function onLogViewerDragMove(e) {
+    if (!logDragState) return;
+    logViewer.style.left = (logDragState.left + e.clientX - logDragState.startX) + 'px';
+    logViewer.style.top = (logDragState.top + e.clientY - logDragState.startY) + 'px';
+}
+function onLogViewerDragEnd() {
+    logDragState = null;
+    document.removeEventListener('mousemove', onLogViewerDragMove);
+    document.removeEventListener('mouseup', onLogViewerDragEnd);
+}
+document.getElementById('logViewerHeader').addEventListener('mousedown', (e) => {
+    if (e.target.closest('.modal-close')) return;
+    logDragState = {
+        startX: e.clientX,
+        startY: e.clientY,
+        left: logViewer.offsetLeft,
+        top: logViewer.offsetTop
+    };
+    document.addEventListener('mousemove', onLogViewerDragMove);
+    document.addEventListener('mouseup', onLogViewerDragEnd);
+    e.preventDefault();
+});
+
+// 打开日志窗：首次打开即拉取一次日志
+logsBtn.addEventListener('click', () => {
+    logViewer.classList.add('active');
+    loadBackendLogs(500);
+});
+document.getElementById('logViewerClose').addEventListener('click', () => {
+    logViewer.classList.remove('active');
+});
+document.getElementById('logViewerRefresh').addEventListener('click', () => {
+    loadBackendLogs(500);
+});
+initLogLevelChips();
+
 // 构建结构化操作指令（附加到系统提示词）：不再依赖范式函数调用（避免多模态模型后端卡死），
 // 改由琉璃在需要执行操作时输出一个 JSON 动作对象，前端解析后执行。
 function buildActionInstruction() {

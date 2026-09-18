@@ -18,15 +18,17 @@ import (
 
 // fetch 标准 Fetch API 网络请求函数（Promise 异步，遵循浏览器 fetch 调用形态）
 // 用法:
-//   const resp = await fetch(url, {
-//     method: 'GET',              // 默认 GET
-//     headers: { ... },           // 值可为字符串或字符串数组
-//     body: {...} | 'string',     // 对象自动 JSON 序列化
-//     timeout: 30,                // 秒，默认取 DefaultFetchTimeout
-//     crossDomain: false,         // 跨域请求头
-//     redirect: 'follow',         // 或 'manual' 不跟随重定向
-//     rejectUnauthorized: false   // 默认跳过 TLS 校验（兼容本地自签名服务）
-//   });
+//
+//	const resp = await fetch(url, {
+//	  method: 'GET',              // 默认 GET
+//	  headers: { ... },           // 值可为字符串或字符串数组
+//	  body: {...} | 'string',     // 对象自动 JSON 序列化
+//	  timeout: 30,                // 秒，默认取 DefaultFetchTimeout
+//	  crossDomain: false,         // 跨域请求头
+//	  redirect: 'follow',         // 或 'manual' 不跟随重定向
+//	  rejectUnauthorized: false   // 默认跳过 TLS 校验（兼容本地自签名服务）
+//	});
+//
 // Response 属性: status / statusText / ok / url(重定向后) / redirected / headers
 // Response 方法: await resp.text() / await resp.json() / await resp.arrayBuffer()
 // 网络错误时 reject(Error)；HTTP 非 2xx 不 reject（与标准一致，由调用方检查 resp.ok）

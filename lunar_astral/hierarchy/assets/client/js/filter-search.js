@@ -106,6 +106,11 @@ function goToMatch(delta) {
 }
 
 function setupSearchEvents() {
+    // 纵版侧栏中的收起态搜索框：点击即聚焦输入框触发展开
+    searchInput.closest('.search-box').addEventListener('click', (e) => {
+        if (e.target.closest('.search-nav-btn, .search-clear')) return;
+        searchInput.focus();
+    });
     searchInput.addEventListener('input', () => {
         searchQuery = searchInput.value.trim().toLowerCase();
         currentMatchIndex = -1;

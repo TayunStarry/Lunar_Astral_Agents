@@ -255,9 +255,9 @@ declare global {
      *
      * @param {number} topK 返回的最相关结果数量
      *
-     * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image）
+     * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
      */
-    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number }>, Error | null];
+    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number }>, Error | null];
     /**
      * 从指定集合删除消息
      *

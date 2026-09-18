@@ -26,6 +26,8 @@ interface RagRecord {
 	image?: string;
 	/** 记忆记录相似度 */
 	similarity: number;
+	/** 入库时间 Unix 秒级时间戳（旧数据无此字段） */
+	timestamp?: number;
 }
 
 /**
@@ -131,9 +133,15 @@ export class MemorizerRole extends ModelBuilder {
 
 	/** 交给 LLM 对命中的内容碎片做总结与摘要，输出硬切断 4096 的连贯摘要 */
 	private summarizeRecords(records: RagRecord[]): string {
-		/** 摘要输入：标注角色 + 内容片段 */
+		/** 摘要输入：标注角色 + 入库时间 + 内容片段（时间供整理记忆时参考，旧数据无时间戳则省略） */
 		const fragments = records
-			.map((r, i) => `--- 片段 ${i + 1}（${r.role}）---\n${r.content || '(空)'}`)
+			.map((r, i) => {
+				/** 记录头部标注 */
+				let header = `--- 片段 ${i + 1}（${r.role}`;
+				if (r.timestamp) header += `，${new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })}`;
+				header += `）---`;
+				return `${header}\n${r.content || '(空)'}`;
+			})
 			.join('\n\n');
 
 		// 覆写为本次独立摘要任务（逐次覆盖，不累积历史）

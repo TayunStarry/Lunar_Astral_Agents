@@ -141,6 +141,9 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 			"role":       r.Role,
 			"similarity": r.Similarity,
 		}
+		if r.Timestamp != 0 {
+			obj["timestamp"] = r.Timestamp
+		}
 		if r.Image != "" {
 			obj["image"] = r.Image
 		} else {

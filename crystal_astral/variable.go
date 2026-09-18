@@ -3,8 +3,8 @@ package main
 import (
 	kokoro "CrystalAstral/kokoro_tts"
 	file "LunarSubsystem/FileManager/server"
-	image "LunarSubsystem/MultimodalAnalysis/server"
 	media "LunarSubsystem/MediaTools/server"
+	image "LunarSubsystem/MultimodalAnalysis/server"
 	"embed"
 	"sync"
 	"syscall"
@@ -145,6 +145,9 @@ var SystemEndpoints = []SystemEndpoint{
 
 	// ==== 自述文档 ====
 	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）"},
+
+	// ==== 系统日志 ====
+	{Path: "/logs", Handler: logsHandler, Method: "GET", Description: "后端最近日志（limit 可限制条数，最多 1000 条，MD 风格加粗/色彩标注文本）"},
 }
 
 // proxyPrefixes 要代理的路径前缀

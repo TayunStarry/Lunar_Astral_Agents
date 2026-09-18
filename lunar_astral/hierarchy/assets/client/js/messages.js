@@ -90,7 +90,8 @@ function addMessage(msg) {
     updateEmptyState();
     scrollToBottom(true);
     applyFilters();
-    schedulePersist();
+    // 持久化只在用户发送消息时触发（send.js / drawboard-send.js 调用 schedulePersist），
+    // AI 消息不再自动写盘，避免流式回复期间的高频磁盘写入
 }
 
 async function persistMessages() {

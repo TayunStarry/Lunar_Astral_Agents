@@ -46,37 +46,42 @@ type BatchResult struct {
 
 // memoryMessage 记忆库查询返回的兼容消息结构（仅用于 MemoryQueryMessages 的 JSON 编码）
 type memoryMessage struct {
-	Role    string `json:"role"`    // 消息角色，例如 "user" 或 "assistant"
-	Content string `json:"content"` // 消息内容
+	Role      string `json:"role"`                // 消息角色，例如 "user" 或 "assistant"
+	Content   string `json:"content"`             // 消息内容
+	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
 }
 
 // MemoryQueryResult 记忆库查询结果（含相似度分数）
 // v3: Similarity 字段表示匹配标签的余弦相似度平均值
 type MemoryQueryResult struct {
-	ID         string  `json:"id"`              // 文档 ID
-	Role       string  `json:"role"`            // 消息角色，image 文档为 "image"
-	Content    string  `json:"content"`         // 消息内容，image 文档为空
-	Image      string  `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
-	Similarity float32 `json:"similarity"`      // 匹配标签余弦相似度平均值
+	ID         string  `json:"id"`                  // 文档 ID
+	Role       string  `json:"role"`                // 消息角色，image 文档为 "image"
+	Content    string  `json:"content"`             // 消息内容，image 文档为空
+	Image      string  `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
+	Similarity float32 `json:"similarity"`          // 匹配标签余弦相似度平均值
+	Timestamp  int64   `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
 type DocumentEntry struct {
-	ID      string `json:"id"`              // 文档条目 ID
-	Role    string `json:"role"`            // 文档条目角色，"image" 表示图片文档
-	Content string `json:"content"`         // 文档条目内容，image 文档为空
-	Image   string `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
+	ID        string `json:"id"`                  // 文档条目 ID
+	Role      string `json:"role"`                // 文档条目角色，"image" 表示图片文档
+	Content   string `json:"content"`             // 文档条目内容，image 文档为空
+	Image     string `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
+	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
 // Document 统一文档结构（text 和 image 共用）
 // v4: 新增 Embedding 字段，存储文档内容嵌入向量，用于二阶段检索的内容级重排
+// v5: 新增 Timestamp 字段，记录入库时间（Unix 秒），供记忆整理时参考；旧数据无此字段（零值省略）
 type Document struct {
-	ID        string    `json:"id"`                // 文档 UUID v4
-	Role      string    `json:"role,omitempty"`    // 消息角色，text 文档使用
-	Content   string    `json:"content,omitempty"` // 文本内容，text 文档使用
-	Image     string    `json:"image,omitempty"`   // 图片 base64 数据，image 文档使用
-	TAGS      []string  `json:"tags,omitempty"`    // v3: 引用的标签向量 UUID 列表
+	ID        string    `json:"id"`                  // 文档 UUID v4
+	Role      string    `json:"role,omitempty"`      // 消息角色，text 文档使用
+	Content   string    `json:"content,omitempty"`   // 文本内容，text 文档使用
+	Image     string    `json:"image,omitempty"`     // 图片 base64 数据，image 文档使用
+	TAGS      []string  `json:"tags,omitempty"`      // v3: 引用的标签向量 UUID 列表
 	Embedding []float32 `json:"embedding,omitempty"` // v4: 文档内容嵌入向量（text 为正文，image 为标签拼接）
+	Timestamp int64     `json:"timestamp,omitempty"` // v5: 入库时间 Unix 秒级时间戳
 }
 
 // TagVector 标签向量条目 — 标签文本的嵌入向量，拥有独立 UUID
@@ -134,9 +139,9 @@ type PreviewEntry struct {
 // 职责：SQL 连接管理、批量操作、表结构管理、信息查询
 // 另持有网络搜索摘要缓存（web_search_cache.db）的第二连接，作为 /knowledge/ 端点的可选数据源
 type KnowledgeDB struct {
-	knowledgeDB          *sql.DB // 知识库 SQL 连接
-	knowledgeInitialized bool    // 知识库是否初始化完成
-	webSearchCacheDB     *sql.DB // 网络搜索摘要缓存 SQL 连接（懒加载，非 nil 即已就绪）
+	knowledgeDB          *sql.DB            // 知识库 SQL 连接
+	knowledgeInitialized bool               // 知识库是否初始化完成
+	webSearchCacheDB     *sql.DB            // 网络搜索摘要缓存 SQL 连接（懒加载，非 nil 即已就绪）
 	fileDBs              map[string]*sql.DB // 任意 *.db 懒打开连接缓存（键为数据库文件名去 .db）
 	fileDBsMu            sync.Mutex         // fileDBs 并发打开互斥锁
 }

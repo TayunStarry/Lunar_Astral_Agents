@@ -44,11 +44,12 @@ type memoryCollectionRequest struct {
 
 // memoryMessageData v2 查询结果单条消息（text 和 image 统一）
 type memoryMessageData struct {
-	ID         string  `json:"id"`              // 消息 ID
-	Role       string  `json:"role"`            // 消息角色，image 文档为 "image"
-	Content    string  `json:"content"`         // 消息内容，image 文档为空
-	Image      string  `json:"image,omitempty"` // 图片 base64 数据，仅 image 文档
-	Similarity float32 `json:"similarity"`      // 标签匹配频次得分 [0, 1]
+	ID         string  `json:"id"`                  // 消息 ID
+	Role       string  `json:"role"`                // 消息角色，image 文档为 "image"
+	Content    string  `json:"content"`             // 消息内容，image 文档为空
+	Image      string  `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
+	Similarity float32 `json:"similarity"`          // 标签匹配频次得分 [0, 1]
+	Timestamp  int64   `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
 type memoryStatsData struct {

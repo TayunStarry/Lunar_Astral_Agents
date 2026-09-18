@@ -571,6 +571,19 @@
         }
       }
     },
+    "/logs": {
+      "get": {
+        "summary": "后端最近日志（limit 可限制条数，最多 1000 条，MD 风格加粗/色彩标注文本）",
+        "description": "后端最近日志（limit 可限制条数，最多 1000 条，MD 风格加粗/色彩标注文本）",
+        "operationId": "logsHandler",
+        "x-handler": "logsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/ltpx/call": {
       "post": {
         "summary": "月华调用琉璃工具（转发到前端对应包执行）",

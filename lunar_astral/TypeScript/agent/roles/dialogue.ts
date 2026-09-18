@@ -212,7 +212,7 @@ export class DialogueRole extends ModelBuilder {
         // 检查推理内容是否为空
         if (state.thinkingContent.trim() !== "") {
             /** 新的思考标签内容 */
-            const newThinkTag = '<think>\n' + state.thinkingContent + '\n</think>\n';
+            const newThinkTag = '\n<think>\n' + state.thinkingContent + '\n</think>\n';
             // 将最终消息设定为模型应答
             GlobalConfig.finalResponse = state.descriptionContent;
             // 打印思考标签内容
