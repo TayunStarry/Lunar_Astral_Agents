@@ -32,14 +32,20 @@ function findLastImageUrl(messages: PostMessage[]): string {
     return '';
 }
 
-/** 将参考图下载为本地文件（返回相对 LocalDir 的路径），失败时返回空字符串 */
+/** 将参考图下载为本地文件（按内容哈希命名，返回相对 LocalDir 的路径），失败时返回空字符串 */
 function saveReferenceImage(imageUrl: string): string {
     try {
         const [resized, err] = resizeImage(imageUrl);
         if (err || !resized || resized.length === 0) return '';
         const ref = resized[0];
         const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
-        const relPath = `images/reference/ref_${Date.now()}.${ext}`;
+        // 按内容哈希（SHA-256 前16位）命名，与前端文件哈希命名约定一致
+        const [hash, hashErr] = hashBytes(ref.image);
+        if (hashErr || !hash) {
+            console.error('[律令] 参考图哈希计算失败:', hashErr);
+            return '';
+        }
+        const relPath = `images/reference/${hash}.${ext}`;
         const [, , saveErr] = saveFile(relPath, true, ref.image);
         if (saveErr) {
             console.error('[律令] 参考图保存失败:', saveErr);

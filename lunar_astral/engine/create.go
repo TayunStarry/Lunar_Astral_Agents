@@ -41,6 +41,8 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
+	// 注册内容哈希适配器（SHA-256 前16位十六进制，与前端文件哈希命名一致）
+	vm.Set("hashBytes", adapters.hashBytes)
 
 	// 注册消息操作适配器
 	vm.Set("pullVideoUrl", adapters.pullVideoUrl)

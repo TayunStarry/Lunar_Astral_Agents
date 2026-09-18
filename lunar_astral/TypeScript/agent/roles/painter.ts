@@ -1,5 +1,5 @@
 import { ToolCall } from '../../config/tool';
-import { RandomFloor } from '../../math/basis';
+import { RandomFloat, RandomFloor } from '../../math/basis';
 import { GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams } from '../../config/image';
 import { ToolCallItem } from '../../config/model';
 import { CreativeRoleBase } from '../base/creative';
@@ -188,9 +188,8 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 				if (p.expression) desc += `，展现了${p.expression}`;
 				if (p.environment) desc += `，背景是${p.environment}`;
 				parts.push(desc + '。');
-			} else {
-				parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
 			}
+			else parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
 		}
 		parts.push('图像已通过前端推送给用户。');
 		return parts.join('\n');
@@ -216,8 +215,8 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			// 参考图（律令 <参考图> 设置）：非空时切换为图生图流程
 			if (this.referenceImage) {
 				imageParams.initImg = this.referenceImage;
-				imageParams.strength = 0.5;
-				console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}`);
+				imageParams.strength = RandomFloat(0.35, 0.75);
+				console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
 			}
 			const [result, error] = generateImage(imageParams);
 			if (error) {

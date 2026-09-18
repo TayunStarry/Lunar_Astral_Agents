@@ -430,6 +430,9 @@ var agentSystem = (function (exports) {
     function RandomFloor(min, max) {
         return Math.floor(Math.random() * (max - min + 1) + min);
     }
+    function RandomFloat(min, max, length = 2) {
+        return Number((Math.random() * (max - min) + min).toFixed(length));
+    }
 
     class CreativeRoleBase extends ModelBuilder {
         OWN_HISTORY_LIMIT = 5;
@@ -651,9 +654,8 @@ var agentSystem = (function (exports) {
                         desc += `，背景是${p.environment}`;
                     parts.push(desc + '。');
                 }
-                else {
+                else
                     parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
-                }
             }
             parts.push('图像已通过前端推送给用户。');
             return parts.join('\n');
@@ -677,8 +679,8 @@ var agentSystem = (function (exports) {
                 };
                 if (this.referenceImage) {
                     imageParams.initImg = this.referenceImage;
-                    imageParams.strength = 0.5;
-                    console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}`);
+                    imageParams.strength = RandomFloat(0.35, 0.75);
+                    console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
                 }
                 const [result, error] = generateImage(imageParams);
                 if (error) {
@@ -3120,7 +3122,12 @@ var agentSystem = (function (exports) {
                 return '';
             const ref = resized[0];
             const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
-            const relPath = `images/reference/ref_${Date.now()}.${ext}`;
+            const [hash, hashErr] = hashBytes(ref.image);
+            if (hashErr || !hash) {
+                console.error('[律令] 参考图哈希计算失败:', hashErr);
+                return '';
+            }
+            const relPath = `images/reference/${hash}.${ext}`;
             const [, , saveErr] = saveFile(relPath, true, ref.image);
             if (saveErr) {
                 console.error('[律令] 参考图保存失败:', saveErr);

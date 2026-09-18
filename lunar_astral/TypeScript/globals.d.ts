@@ -18,6 +18,17 @@ declare global {
      */
     function saveFile(fileName: string, overwrite: boolean, fileData: Blob | File | FormData | string | Uint8Array): [string, string, Error | null];
     /**
+     * 计算数据的 SHA-256 哈希，截取前 16 位十六进制（与前端文件哈希命名约定一致）
+     *
+     * 入参与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，
+     * 地址类（HTTP(S) URL、data URI、本地路径）由 Go 侧下载/解码后计算
+     *
+     * @param {Uint8Array | string} data 数据内容或来源地址
+     *
+     * @returns {[string, Error | null]} 包含哈希结果的元组，[16位十六进制哈希, 错误信息]
+     */
+    function hashBytes(data: Uint8Array | string): [string, Error | null];
+    /**
      * 从磁盘中读取文件
      * 
      * @param {string} filePath 文件路径

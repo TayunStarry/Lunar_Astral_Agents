@@ -2,7 +2,9 @@ package engine
 
 import (
 	"LunarSubsystem/MultimodalAnalysis/module"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -245,4 +247,21 @@ func (class *Runtime) atob(call goja.FunctionCall) goja.Value {
 		panic(class.runtime.NewGoError(err))
 	}
 	return class.runtime.ToValue(string(decoded))
+}
+
+// hashBytes 适配TypeScript调用的内容哈希计算：对字节数据计算 SHA-256，截取前 16 位十六进制
+// 与前端文件哈希命名约定一致（calculateFileHash：SHA-256 取前 16 位），供参考图等按内容哈希命名
+// 入参解析与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，地址类由 Go 侧下载/解码
+// 返回值: [string, error] 哈希结果和错误信息
+func (class *Runtime) hashBytes(call goja.FunctionCall) goja.Value {
+	arg := call.Argument(0)
+	if goja.IsUndefined(arg) || goja.IsNull(arg) {
+		return class.runtime.ToValue([]any{"", fmt.Errorf("数据为空")})
+	}
+	bytesData, err := resolveImageBytes(arg)
+	if err != nil {
+		return class.runtime.ToValue([]any{"", err})
+	}
+	sum := sha256.Sum256(bytesData)
+	return class.runtime.ToValue([]any{hex.EncodeToString(sum[:])[:16], nil})
 }
