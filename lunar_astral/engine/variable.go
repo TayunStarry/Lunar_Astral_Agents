@@ -18,8 +18,8 @@ var (
 	ltpRemoteMutex sync.RWMutex
 	// ltpRemoteURL 琉璃的唯一联络 URL（兼容多开：以最新注册的琉璃进程为准，只记录一个）
 	ltpRemoteURL string
-	// ltpRemoteTools 最近一次从琉璃拉取的工具链（琉璃可能动态增删 LTPX 插件）
-	ltpRemoteTools []LTPXRemoteToolDef
+	// ltpRemoteTool 最近一次从琉璃拉取的聚合工具（v5 起恒为单一 use_program，琉璃动态增删 LTPX 插件时随心跳更新）
+	ltpRemoteTool *LTPXRemoteToolDef
 )
 
 // ==== 消息推送全局变量 ====
@@ -40,14 +40,12 @@ func init() {
 	}
 }
 
-// UnreadContext 未处理的上下文消息
+// UnreadContext 统一未读消息队列：文本消息与视频/音频URL内容项（MediaUrlContent）按到达时序混排
+// 唯一数据源，从入队层面保证文本与媒体的相对顺序不会错乱；并发写入由 unreadMutex 保护
 var UnreadContext = make([]PostMessage, 0)
 
-// UnreadVideoUrl 未处理的视频URL
-var UnreadVideoUrl = make([]string, 0)
-
-// UnreadAudioUrl 未处理的语音/音频URL
-var UnreadAudioUrl = make([]string, 0)
+// unreadMutex 保护统一未读队列的并发读写（napcat 回调与 HTTP handler 跨 goroutine 入队）
+var unreadMutex sync.Mutex
 
 // ==== 智能体 3D 位置全局变量 ====
 

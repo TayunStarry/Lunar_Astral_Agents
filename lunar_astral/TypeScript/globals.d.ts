@@ -114,12 +114,6 @@ declare global {
      */
     function audioWav(inputFile: string): [string, Error | null];
     /**
-     * 拉取语音/音频URL
-     *
-     * @returns {string[]} 语音/音频URL列表
-     */
-    function pullAudioUrl(): string[];
-    /**
      * 标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → 输出 base64
      *
      * 入参与 isAnimatedImage / animatedImageToVideo 一致，可传字节数据或来源地址
@@ -169,12 +163,6 @@ declare global {
      */
     function pullContext(): MultimodalMessage[];
     /**
-     * 拉取视频URL
-     * 
-     * @returns {string[]} 视频URL列表
-     */
-    function pullVideoUrl(): string[];
-    /**
      * 推送上下文
      * 
      * @param {string} msgType 消息类型（text=文本 / music=乐谱 / action=动作）
@@ -195,14 +183,6 @@ declare global {
      * @returns {{ x: number, y: number, z: number }} 智能体当前位置
      */
     function getAgentPosition(): { x: number; y: number; z: number };
-    /**
-     * 将3D引擎事件推送到AI上下文
-     *
-     * @param {string} eventType 事件类型
-     * @param {string} data 事件数据JSON字符串
-     * @returns {boolean} 是否成功
-     */
-    function pushAgentEvent(eventType: string, data: string): boolean;
     /**
      * 向引擎直接发送命令（绕过前端转发，Agent → StudioHub → 引擎）
      *
@@ -324,10 +304,10 @@ declare global {
      */
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
     /**
-     * 获取琉璃（远程 LTPX）在线状态与最新工具链
-     * 思考链起点调用：主动向琉璃心跳，若在线则拉取最新工具链写入内部缓存并返回
+     * 获取琉璃（远程 LTPX）在线状态与最新聚合工具
+     * 思考链起点调用：主动向琉璃心跳，若在线则拉取最新聚合工具写入内部缓存并返回
      *
-     * @returns {string} JSON 字符串：{ online: boolean, url: string, tools: [{name,description,app_id,parameters}] }
+     * @returns {string} JSON 字符串：{ online: boolean, url: string, tool?: {name,description,parameters} }
      */
     function getLTPXRemoteStatus(): string;
     /**

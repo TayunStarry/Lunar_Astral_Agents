@@ -419,32 +419,6 @@
         }
       }
     },
-    "/write/agent_event": {
-      "post": {
-        "summary": "推送引擎事件到AI上下文",
-        "description": "推送引擎事件到AI上下文",
-        "operationId": "handlers.AgentEventHandler",
-        "x-handler": "handlers.AgentEventHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/write/agent_position": {
-      "post": {
-        "summary": "更新智能体3D位置",
-        "description": "更新智能体3D位置",
-        "operationId": "handlers.AgentPositionHandler",
-        "x-handler": "handlers.AgentPositionHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
     "/write/engine": {
       "post": {
         "summary": "引擎系统消息（动画列表/遥测等）",
@@ -460,23 +434,10 @@
     },
     "/write/message": {
       "post": {
-        "summary": "消息写入队列",
-        "description": "消息写入队列",
+        "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
+        "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
         "operationId": "handlers.MessageBatchHandler",
         "x-handler": "handlers.MessageBatchHandler",
-        "responses": {
-          "200": {
-            "description": "成功"
-          }
-        }
-      }
-    },
-    "/write/videourl": {
-      "post": {
-        "summary": "视频URL写入",
-        "description": "视频URL写入",
-        "operationId": "handlers.VideoUrlBatchHandler",
-        "x-handler": "handlers.VideoUrlBatchHandler",
         "responses": {
           "200": {
             "description": "成功"

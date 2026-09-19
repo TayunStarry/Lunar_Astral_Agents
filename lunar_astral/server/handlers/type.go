@@ -28,33 +28,16 @@ type ProxyResponse struct {
 	Body       json.RawMessage   `json:"body"`       // 响应体
 }
 
-// MessageBatchRequest 消息批量写入请求
+// MessageBatchRequest 消息批量写入请求（统一时序队列唯一写入口：
+// content 为文本/多模态内容数组，视频/音频URL以 MediaUrlContent 内容项直接放入 messages）
 type MessageBatchRequest struct {
 	Messages []engine.PostMessage `json:"messages"`
-}
-
-// VideoUrlBatchRequest 视频URL批量写入请求
-type VideoUrlBatchRequest struct {
-	Urls []string `json:"urls"`
 }
 
 // BatchResponse 批量操作响应
 type BatchResponse struct {
 	Success bool `json:"success"`
 	Length  int  `json:"length"`
-}
-
-// AgentPositionRequest 智能体位置更新请求
-type AgentPositionRequest struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-	Z float64 `json:"z"`
-}
-
-// AgentEventRequest 智能体引擎事件请求
-type AgentEventRequest struct {
-	Event string `json:"event"` // 事件类型: movement_complete, action_started
-	Data  string `json:"data"`  // 事件数据 JSON 字符串
 }
 
 // EngineMessage 引擎系统消息（经 /write/engine 提交）

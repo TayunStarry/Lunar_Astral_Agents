@@ -110,23 +110,27 @@ func initBridgeAdapter() {
 
 	// 注册桥接器消息回调
 	napcat.SendMessageToAgent = func(messages []map[string]any) {
-		// 将QQ消息（OpenAI格式）推送到智能体上下文
+		// 将QQ消息（OpenAI格式）按到达顺序推送到智能体统一未读队列
 		for _, msg := range messages {
-			engine.UnreadContext = append(engine.UnreadContext, engine.PostMessage{
+			engine.EnqueueMessage(engine.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 			})
 		}
 	}
 
-	// 注册桥接器视频地址回调：写入智能体未读视频队列
+	// 注册桥接器视频地址回调：包装为视频URL内容项，按到达顺序写入统一未读队列
 	napcat.SendVideoToAgent = func(urls []string) {
-		engine.UnreadVideoUrl = append(engine.UnreadVideoUrl, urls...)
+		for _, url := range urls {
+			engine.EnqueueMediaURL("video_url", url)
+		}
 	}
 
-	// 注册桥接器语音/音频地址回调：写入智能体未读音频队列
+	// 注册桥接器语音/音频地址回调：包装为音频URL内容项，按到达顺序写入统一未读队列
 	napcat.SendAudioToAgent = func(urls []string) {
-		engine.UnreadAudioUrl = append(engine.UnreadAudioUrl, urls...)
+		for _, url := range urls {
+			engine.EnqueueMediaURL("audio_url", url)
+		}
 	}
 
 	// 启动桥接器连接（异步执行，避免阻塞 HTTP 服务器启动）

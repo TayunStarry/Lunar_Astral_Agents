@@ -209,8 +209,8 @@ type BridgeTarget struct {
 type BridgeRequest struct {
 	Target    BridgeTarget
 	Messages  []map[string]any // OpenAI 格式消息列表
-	VideoURLs []string         // 视频地址列表，写入智能体 unreadVideoUrl
-	AudioURLs []string         // 语音/音频地址列表，写入智能体 unreadAudioUrl
+	VideoURLs []string         // 视频地址列表，包装为媒体内容项写入智能体统一未读队列
+	AudioURLs []string         // 语音/音频地址列表，包装为媒体内容项写入智能体统一未读队列
 }
 
 // GroupPoolEntry 群聊缓存池中的单条消息

@@ -99,8 +99,8 @@ export class MemorizerRole extends ModelBuilder {
 		}
 		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再整理
 		const feedback: RagRecord[] = interactEvent('build_memory_before', { userMessages, records }).return;
-		// 如果插件返回了新的检索记录则直接使用
-		if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
+		// 如果插件返回了非空的检索记录则直接使用（空数组 every 恒真，需显式排除，避免用空记录做无意义的整理）
+		if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
 			records = feedback;
 		}
 		// 深度回忆意图命中时由 LLM 总结与摘要，否则默认按时间顺序拼接时间线

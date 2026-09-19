@@ -15,12 +15,8 @@ export class GlobalConfig {
 	public static LTPdefinition: ToolCall[] = [];
 	/** 消息缓冲池（对话者淘汰的历史消息，待信息记忆流程写入记忆库） */
 	public static unreadRecords: PostMessage[] = [];
-	/** 未读上下文 */
+	/** 未读上下文（宿主统一时序队列：文本与视频/音频URL内容项按到达顺序混排） */
 	public static unreadContext: PostMessage[] = [];
-	/** 未读视频URL */
-	public static unreadVideoUrl: string[] = [];
-	/** 未读语音/音频URL */
-	public static unreadAudioUrl: string[] = [];
 	/** 是否正在思考中 */
 	public static reasoningInProgress: boolean = false;
 	/** 最终响应 */

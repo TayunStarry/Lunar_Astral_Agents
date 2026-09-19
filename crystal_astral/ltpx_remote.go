@@ -96,7 +96,6 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 			defs = append(defs, LTPXRemoteToolDef{
 				Name:        t.Name,
 				Description: t.Description,
-				AppID:       meta.ID,
 			})
 			pkgMap[t.Name] = meta.ID
 		}
@@ -141,7 +140,6 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 	return LTPXRemoteToolDef{
 		Name:        integratedToolsName,
 		Description: b.String(),
-		AppID:       "",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -197,8 +195,7 @@ func ltpRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 	aggTool := buildUseTheProgram(defs)
 	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
 	jsonOK(w, http.StatusOK, map[string]any{
-		"app_id": "crystal_astral",
-		"tools":  []LTPXRemoteToolDef{aggTool},
+		"tool": aggTool,
 	})
 }
 

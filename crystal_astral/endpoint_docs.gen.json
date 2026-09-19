@@ -472,8 +472,8 @@
       "delete": {
         "summary": "Kokoro 读音词典管理",
         "description": "Kokoro 读音词典管理",
-        "operationId": "kokoroHandler(kokoro.DictHandler)_delete",
-        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.DictHandler)_delete",
+        "x-handler": "kokoroHandler(KokoroTTS.DictHandler)",
         "x-method": "GET/POST/DELETE",
         "responses": {
           "200": {
@@ -484,8 +484,8 @@
       "get": {
         "summary": "Kokoro 读音词典管理",
         "description": "Kokoro 读音词典管理",
-        "operationId": "kokoroHandler(kokoro.DictHandler)_get",
-        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.DictHandler)_get",
+        "x-handler": "kokoroHandler(KokoroTTS.DictHandler)",
         "x-method": "GET/POST/DELETE",
         "responses": {
           "200": {
@@ -496,8 +496,8 @@
       "post": {
         "summary": "Kokoro 读音词典管理",
         "description": "Kokoro 读音词典管理",
-        "operationId": "kokoroHandler(kokoro.DictHandler)_post",
-        "x-handler": "kokoroHandler(kokoro.DictHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.DictHandler)_post",
+        "x-handler": "kokoroHandler(KokoroTTS.DictHandler)",
         "x-method": "GET/POST/DELETE",
         "responses": {
           "200": {
@@ -510,8 +510,8 @@
       "get": {
         "summary": "Kokoro 读音查询",
         "description": "Kokoro 读音查询",
-        "operationId": "kokoroHandler(kokoro.GuessDictHandler)",
-        "x-handler": "kokoroHandler(kokoro.GuessDictHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.GuessDictHandler)",
+        "x-handler": "kokoroHandler(KokoroTTS.GuessDictHandler)",
         "responses": {
           "200": {
             "description": "成功"
@@ -523,8 +523,8 @@
       "get": {
         "summary": "Kokoro 引擎健康检查",
         "description": "Kokoro 引擎健康检查",
-        "operationId": "kokoroHandler(kokoro.HealthHandler)",
-        "x-handler": "kokoroHandler(kokoro.HealthHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.HealthHandler)",
+        "x-handler": "kokoroHandler(KokoroTTS.HealthHandler)",
         "responses": {
           "200": {
             "description": "成功"
@@ -536,8 +536,8 @@
       "post": {
         "summary": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
         "description": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
-        "operationId": "kokoroHandler(kokoro.TTSHandler)",
-        "x-handler": "kokoroHandler(kokoro.TTSHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.TTSHandler)",
+        "x-handler": "kokoroHandler(KokoroTTS.TTSHandler)",
         "responses": {
           "200": {
             "description": "成功"
@@ -549,8 +549,8 @@
       "get": {
         "summary": "Kokoro 音色列表",
         "description": "Kokoro 音色列表",
-        "operationId": "kokoroHandler(kokoro.VoicesHandler)",
-        "x-handler": "kokoroHandler(kokoro.VoicesHandler)",
+        "operationId": "kokoroHandler(KokoroTTS.VoicesHandler)",
+        "x-handler": "kokoroHandler(KokoroTTS.VoicesHandler)",
         "responses": {
           "200": {
             "description": "成功"

@@ -139,7 +139,6 @@ type ModelProxyResponse struct {
 type LTPXRemoteToolDef struct {
 	Name        string `json:"name"`        // 工具名
 	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
-	AppID       string `json:"app_id"`      // 关联的应用标识（如 file.manager）
 	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
 }
 

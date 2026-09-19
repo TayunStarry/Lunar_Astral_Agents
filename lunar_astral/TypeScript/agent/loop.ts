@@ -6,7 +6,6 @@ import { checkDueItems } from '../tool/schedule';
 import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
 import { parseContent } from '../file/parse/interface';
 import { descriptionRole, painterRole, musicianRole, dialogueRole, perceiverRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
-import { batchProcessVideoFiles, batchProcessAudioFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
 import { queryEmotionSticker, extractTextFromMessage } from './capabilities/memory';
@@ -96,9 +95,9 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 标记为思考中
         GlobalConfig.reasoningInProgress = true;
         // 拉取外部消息
-        await pullExternalMessages();
-        /** 消息长度 */
-        const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length + GlobalConfig.unreadAudioUrl.length;
+        pullContext().forEach(message => writeMessage(message.role, message.content))
+        /** 消息长度（统一时序队列：文本与媒体URL混排，一个队列即为全部未读） */
+        const messageLength = GlobalConfig.unreadContext.length;
         // 如果消息长度为0，跳过当前循环
         if (messageLength === 0) {
             // 检查计划表到期项，将到期计划内容写入上下文
@@ -119,18 +118,10 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         updatePreviousMemories();
         // 拉取琉璃工具链
         syncLTPXRemoteStatus();
-        // 事件 -> 收到消息前：把待处理的消息上下文推送到琉璃，插件可经 return 改写后再消费
-        const feedback: { messages?: PostMessage[]; videos?: string[]; audios?: string[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, audios: GlobalConfig.unreadAudioUrl }).return;
+        // 事件 -> 收到消息前：把待处理的消息上下文（含内嵌的视频/音频URL内容项）推送到琉璃，插件可经 return.messages 改写后再消费
+        const feedback: { messages?: PostMessage[] } = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
         // 如果插件返回了新的消息上下文，更新全局上下文
-        if (feedback) {
-            if (Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
-            if (Array.isArray(feedback.videos)) GlobalConfig.unreadVideoUrl = feedback.videos;
-            if (Array.isArray(feedback.audios)) GlobalConfig.unreadAudioUrl = feedback.audios;
-        }
-        // 批量处理视频文件
-        await batchProcessVideoFiles();
-        // 批量处理音频文件
-        await batchProcessAudioFiles();
+        if (feedback && Array.isArray(feedback.messages)) GlobalConfig.unreadContext = feedback.messages;
         // 阅读者智能体：处理文件导入块与引用，将结果置换到未读消息
         await processUnreadFiles();
         // 律令指令处理：命中已定义的 <指令> 时输出默认应答（含 TTS），剔除携带律令的消息，
@@ -204,44 +195,22 @@ export async function thoughtLoopTickEvent(): Promise<void> {
     GlobalConfig.reasoningInProgress = false;
 }
 
-/** 拉取外部消息 */
-async function pullExternalMessages() {
-    // 合并消息
-    pullContext().forEach(message => writeMessage(message.role, message.content))
-    // 合并视频URL
-    pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); })
-    // 合并音频URL
-    pullAudioUrl().forEach(audioUrl => { writeAudioUrl(audioUrl); })
-    // 等待1秒
-    await new Promise(resolve => setTimeout(resolve, 1000));
-}
-
-/** 写入消息 */
-function writeMessage(role: PostMessageRole, messages: Array<MessageContent>) {
-    // 从外部写入消息
-    GlobalConfig.unreadContext.push({ role, content: messages });
-    // 如果消息是字符串，将其转换为文本消息
-    if (typeof messages === 'string') messages = [{ type: 'text', text: messages }];
-    // 打印文本消息
-    for (const message of messages) {
+/** 写入消息（content 为文本、多模态内容数组或宿主下发的媒体URL内容项） */
+function writeMessage(role: PostMessageRole, content: any) {
+    // 宿主统一队列下发的媒体URL内容项为裸对象形态（{"type":"video_url"/"audio_url", ...}）：
+    // 包装为单内容项数组，与多模态消息同构（LiteImageFile 可迭代原位置换）
+    if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url')) content = [content];
+    // 写入统一未读队列
+    GlobalConfig.unreadContext.push({ role, content });
+    // 字符串消息转换为文本内容项后统一打印
+    const items: MessageContent[] = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+    for (const message of items) {
         if (message.type === 'text') console.log('收到文本: ' + message.text);
         else if (message.type === 'image_url') console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
         else if (message.type === 'input_audio') console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
+        else if (message.type === 'video_url') console.log('收到视频: ' + message.video_url?.url);
+        else if (message.type === 'audio_url') console.log('收到音频: ' + message.audio_url?.url);
     }
-}
-
-/** 写入视频文件 */
-function writeVideoUrl(videoUrl: string) {
-    console.log('收到视频: ' + videoUrl);
-    // 从外部写入视频文件
-    GlobalConfig.unreadVideoUrl.push(videoUrl);
-}
-
-/** 写入音频文件 */
-function writeAudioUrl(audioUrl: string) {
-    console.log('收到音频: ' + audioUrl.substring(0, 80));
-    // 从外部写入音频文件
-    GlobalConfig.unreadAudioUrl.push(audioUrl);
 }
 
 /** 错误累积达阈值后重置智能体状态 */
@@ -254,8 +223,6 @@ function resetAgentState(): void {
     perceiverRole.coverContext([]);
     actorRole.coverContext([]);
     memorizerRole.coverContext([]);
-    // 清除主智能体的unreadContext、unreadVideoUrl和unreadAudioUrl
+    // 清空主智能体的统一未读队列
     GlobalConfig.unreadContext = [];
-    GlobalConfig.unreadVideoUrl = [];
-    GlobalConfig.unreadAudioUrl = [];
 }

@@ -159,13 +159,10 @@ interface EventContract {
         payload: {
             /** 未读消息上下文 */
             messages: PostMessage[]
-            /** 待处理视频地址 */
-            videos: string[]
         }
         /** 给出的字段替换月华对应队列 */
         return: {
             messages?: PostMessage[]
-            videos?: string[]
         }
     }
     /** 执行计划前：改写到期计划正文 */
@@ -320,6 +317,28 @@ interface DatabaseScope {
  * 跨包调用结果（判别联合：成功携带 result，失败携带 error）
  */
 type CallResult<R> = { success: true; result: R } | { success: false; error: string }
+
+/** 裸套接字（network.tcpConnect / udpConnect / udpListen 返回；方法均为同步阻塞调用） */
+interface NetSocket {
+    /**
+     * 发送文本数据
+     *
+     * TCP 直写；已连接 UDP（udpConnect）发往固定对端；udpListen 监听套接字需用 sendTo
+     */
+    send(data: string): { success: boolean; error?: string }
+    /**
+     * 阻塞读取一段文本（带超时，秒；<=0 时用默认 5 秒）
+     *
+     * @returns { success, data }；udpListen 监听套接字额外携带对端 host / port
+     */
+    receive(timeoutSec?: number): { success: boolean; data?: string; host?: string; port?: number; error?: string }
+    /**
+     * 向指定目标发送 UDP 数据（仅 udpListen 监听套接字；已连接 UDP 请用 send）
+     */
+    sendTo(host: string, port: number, data: string): { success: boolean; error?: string }
+    /** 关闭套接字 */
+    close(): { success: boolean; error?: string }
+}
 // ═══════════════════════════════════════════════════════════
 // 引擎能力
 // ═══════════════════════════════════════════════════════════
@@ -810,11 +829,11 @@ export const network: {
     /** 解析 SRV 记录 */
     resolveSRV(service: string, proto: string, hostname: string, timeoutSec?: number): { success: boolean; targets?: Array<{ target: string; port: number }>; error?: string }
     /** 建立 TCP 连接，返回套接字 */
-    tcpConnect(host: string, port: number, timeoutSec?: number): StarNetSocket
+    tcpConnect(host: string, port: number, timeoutSec?: number): NetSocket
     /** 建立已「连接」的 UDP 套接字 */
-    udpConnect(host: string, port: number, timeoutSec?: number): StarNetSocket
+    udpConnect(host: string, port: number, timeoutSec?: number): NetSocket
     /** 在指定端口监听 UDP */
-    udpListen(host?: string, port?: number): StarNetSocket
+    udpListen(host?: string, port?: number): NetSocket
 }
 /** 指令系统（常驻基础能力，宿主经 Go 侧 Command/CommandAll 触发） */
 export const command: {

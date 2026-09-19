@@ -75,7 +75,8 @@ function deleteMessage(id) {
     if (el) el.remove();
     messages = messages.filter(m => m.id !== id);
     updateEmptyState();
-    schedulePersist();
+    // 删除消息：立即保存到本地，并刷新 1 分钟持久化判定计时
+    schedulePersist(true);
     showToast('消息已删除', 'info');
 }
 
@@ -90,12 +91,12 @@ function addMessage(msg) {
     updateEmptyState();
     scrollToBottom(true);
     applyFilters();
-    // 持久化只在用户发送消息时触发（send.js / drawboard-send.js 调用 schedulePersist），
-    // AI 消息不再自动写盘，避免流式回复期间的高频磁盘写入
+    // 不再在每条消息到达时立即写盘：由 1 分钟周期判定器在内容变化时统一落盘，
+    // 避免流式回复期间的高频磁盘写入；删除消息则立即保存（见 deleteMessage）
 }
 
 async function persistMessages() {
-    const data = JSON.stringify(messages, null, 2);
+    const data = JSON.stringify(messages);
     try {
         await fetch('/file/write', {
             method: 'POST',
@@ -105,23 +106,45 @@ async function persistMessages() {
             },
             body: data
         });
+        // 记录本次实际落盘的快照，供 1 分钟周期比对
+        lastPersistSnapshot = data;
     } catch (e) {
         console.warn('消息持久化失败', e);
     }
 }
 
-function schedulePersist() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(persistMessages, 800);
+// 启动 1 分钟周期的持久化判定：循环检查消息内容相对上次保存是否有变化
+function startPersistWatcher() {
+    if (saveTimer) clearInterval(saveTimer);
+    saveTimer = setInterval(checkMessagesAndPersist, PERSIST_INTERVAL_MS);
+}
+
+// 每 1 分钟判定一次：消息内容与上次保存不同则触发保存到磁盘
+function checkMessagesAndPersist() {
+    const data = JSON.stringify(messages);
+    if (data === lastPersistSnapshot) return;
+    persistMessages();
+}
+
+// 改动后的统一入口：刷新 1 分钟判定计时；immediate 为 true 时立即保存到本地（删除消息场景）
+function schedulePersist(immediate) {
+    startPersistWatcher();
+    if (immediate) persistMessages();
 }
 
 async function loadPersistedMessages() {
+    // 以当前 messages（含无文件时的空态）作为上一次落盘基线
+    lastPersistSnapshot = JSON.stringify(messages);
+    // 启动 1 分钟周期的持久化判定
+    startPersistWatcher();
     try {
         const res = await fetch('/file/read/database/messages.json');
         if (!res.ok) return;
         const list = await res.json();
         if (!Array.isArray(list)) return;
         messages = list;
+        // 加载后刷新基线，避免首轮周期把旧内容误判为变更而重复写盘
+        lastPersistSnapshot = JSON.stringify(messages);
         const renders = list.map(msg => renderMessageElement(msg));
         updateEmptyState();
         // 等待所有消息的 markdown/mermaid 异步渲染完成后再滚动到底部

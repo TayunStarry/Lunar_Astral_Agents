@@ -13,8 +13,8 @@ type LTPXRemoteStatus = {
     online: boolean;
     /** 琉璃当前 URL */
     url: string;
-    /** 琉璃当前工具列表 */
-    tools: Array<LTPXRemoteTool>;
+    /** 琉璃聚合工具（v5 起恒为单一 use_program；离线/拉取失败时缺省） */
+    tool?: LTPXRemoteTool;
 };
 
 /** 琉璃（远程 LTPX）工具对象 */
@@ -23,8 +23,6 @@ type LTPXRemoteTool = {
     name: string;
     /** 琉璃当前工具描述 */
     description?: string;
-    /** 琉璃当前工具应用 ID */
-    app_id?: string;
     /** 琉璃当前工具参数 */
     parameters?: any
 };
@@ -43,16 +41,13 @@ export function syncLTPXRemoteStatus(): void {
         }
         /** 琉璃当前状态对象 */
         const status = JSON.parse(statusJSON) as LTPXRemoteStatus;
-        /** 琉璃当前工具名集合 */
-        const names = new Set<string>();
-        /** 琉璃当前工具名→定义映射 */
-        const known = new Map<string, { name: string; description?: string; parameters?: any }>();
-        // 琉璃当前工具列表：提取工具名、描述、参数、应用 ID
-        (status.tools || []).forEach(t => { if (t && t.name) { names.add(t.name); known.set(t.name, t); } });
-        // 移除已不存在的琉璃工具（琉璃可能动态卸载插件）
-        injectedLTPXRemoteTools.forEach(name => { if (!names.has(name)) removeLTPXRemoteTool(name); });
-        // 注入新增的琉璃工具
-        names.forEach(name => { if (!injectedLTPXRemoteTools.has(name)) injectLTPXRemoteTool(known.get(name)!); });
+        /** 琉璃聚合工具（单工具协议） */
+        const tool = status.tool;
+        /** 当前已注入的聚合工具名（至多一个） */
+        const injected = [...injectedLTPXRemoteTools][0];
+        // 聚合工具变化（琉璃动态增删 LTPX 插件后随心跳更新）：先移除旧工具再注入新工具
+        if (injected && injected !== tool?.name) removeLTPXRemoteTool(injected);
+        if (tool && tool.name && !injectedLTPXRemoteTools.has(tool.name)) injectLTPXRemoteTool(tool);
         // 加载动态提示词段落
         dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
     }

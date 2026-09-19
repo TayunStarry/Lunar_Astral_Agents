@@ -44,9 +44,7 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册内容哈希适配器（SHA-256 前16位十六进制，与前端文件哈希命名一致）
 	vm.Set("hashBytes", adapters.hashBytes)
 
-	// 注册消息操作适配器
-	vm.Set("pullVideoUrl", adapters.pullVideoUrl)
-	vm.Set("pullAudioUrl", adapters.pullAudioUrl)
+	// 注册消息操作适配器（pullContext 为统一时序队列：文本与视频/音频URL混排）
 	vm.Set("pullContext", adapters.pullContext)
 	vm.Set("pushContext", adapters.pushContext)
 	vm.Set("pushImage", adapters.pushImage)
@@ -75,7 +73,6 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册智能体控制适配器
 	vm.Set("getAgentPosition", adapters.getAgentPosition)
-	vm.Set("pushAgentEvent", adapters.pushAgentEvent)
 
 	// 注册引擎桥接适配器
 	vm.Set("sendToEngine", adapters.sendToEngine)

@@ -42,7 +42,21 @@ const (
 // PostMessage 消息结构体
 type PostMessage struct {
 	Role    string `json:"role"`
-	Content any    `json:"content"` // 可以是string或[]MessageContent
+	Content any    `json:"content"` // 可以是string、[]MessageContent或MediaUrlContent
+}
+
+// MediaUrlPayload 媒体URL载荷（与 TS 侧多模态内容项的 URL 包装结构对齐）
+type MediaUrlPayload struct {
+	URL string `json:"url"`
+}
+
+// MediaUrlContent 统一消息队列中的媒体URL内容项
+// 视频/音频URL不再走独立队列，而是包装为本结构按到达时序与文本消息混排入 UnreadContext，
+// 由智能体理解后原位置换为文本（理解失败时置换为兜底提示文本）
+type MediaUrlContent struct {
+	Type     string           `json:"type"`                // 内容类型："video_url"（视频）或 "audio_url"（音频）
+	VideoUrl *MediaUrlPayload `json:"video_url,omitempty"` // 视频URL载荷（Type 为 video_url 时存在）
+	AudioUrl *MediaUrlPayload `json:"audio_url,omitempty"` // 音频URL载荷（Type 为 audio_url 时存在）
 }
 
 // LTPXPackageInfo LTPX 工具包配置结构
@@ -58,17 +72,16 @@ type LTPXPackageInfo struct {
 // LTPXRemoteToolDef 琉璃工具链中的单个工具定义
 // 琉璃对外统一暴露「智能体式」工具：接受字符串指令，返回文本结果（含操作结果与推荐后续操作）
 type LTPXRemoteToolDef struct {
-	Name        string `json:"name"`        // 工具名（注入月华 LTPdefinition）
+	Name        string `json:"name"`        // 工具名
 	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
-	AppID       string `json:"app_id"`      // 关联的琉璃应用标识（如 lunar.means.file.explorer）
 	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
 }
 
 // LTPXRemoteStatusResult 月华同步琉璃工具链的返回结果
 type LTPXRemoteStatusResult struct {
-	Online bool                `json:"online"` // 琉璃是否在线
-	URL    string              `json:"url"`    // 当前记录的琉璃 URL（空表示未注册）
-	Tools  []LTPXRemoteToolDef `json:"tools"`  // 最新工具链
+	Online bool               `json:"online"` // 琉璃是否在线
+	URL    string             `json:"url"`    // 当前记录的琉璃 URL（空表示未注册）
+	Tool   *LTPXRemoteToolDef `json:"tool"`   // 琉璃聚合工具（v5 起恒为单一 use_program；离线/拉取失败时为 nil）
 }
 
 // LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）

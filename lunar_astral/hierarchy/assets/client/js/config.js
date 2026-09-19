@@ -11,6 +11,8 @@ const USER_NAME = '你';
 const ASSISTANT_NAME = '月华';
 const MESSAGES_FILE_PATH = 'database/messages.json';
 const MAX_PERSISTED_MESSAGES = 200;
+// 聊天消息持久化判定周期（毫秒）：每 1 分钟比较一次，消息内容相对上次保存有变化才写盘
+const PERSIST_INTERVAL_MS = 60000;
 
 // ---------- DOM 引用 ----------
 const messageArea = document.getElementById('messageArea');
@@ -80,6 +82,7 @@ let searchQuery = '';
 let searchMatches = [];
 let currentMatchIndex = -1;
 let saveTimer = null;
+let lastPersistSnapshot = null; // 上次已成功写入磁盘的消息序列化快照，用于 1 分钟周期比对
 let mermaidInitialized = false;
 let pendingFiles = [];        // 待发送附件（悬浮气泡）
 let referencedFiles = [];     // 已加载到输入框的文件引用（[#文件名.ext]:）

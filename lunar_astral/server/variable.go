@@ -73,16 +73,12 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/vram/guard", Handler: llama.VRAMGuardHandler, Method: "POST", Description: "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存；请求体可选 threshold_mib）"},
 	// ==== 代理请求接口 ====
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
-	// ==== 消息队列相关接口 ====
-	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列"},
-	{Path: "/write/videourl", Handler: handlers.VideoUrlBatchHandler, Method: "POST", Description: "视频URL写入"},
+	// ==== 消息队列相关接口（统一时序队列唯一写入口：视频/音频URL以 MediaUrlContent 内容项放入 messages） ====
+	{Path: "/write/message", Handler: handlers.MessageBatchHandler, Method: "POST", Description: "消息写入队列（文本/多模态内容数组/视频音频URL内容项）"},
 	// ==== 引擎消息总线（格式与 /write/message 同构，供引擎/工作室系统消息分发） ====
 	{Path: "/write/engine", Handler: handlers.EngineMessageHandler, Method: "POST", Description: "引擎系统消息（动画列表/遥测等）"},
 	// ==== TTS语音服务相关接口 ====
 	{Path: "/tts", Handler: tts.TTSHandler, Method: "POST", Description: "TTS语音合成服务"},
-	// ==== 智能体控制接口 ====
-	{Path: "/write/agent_position", Handler: handlers.AgentPositionHandler, Method: "POST", Description: "更新智能体3D位置"},
-	{Path: "/write/agent_event", Handler: handlers.AgentEventHandler, Method: "POST", Description: "推送引擎事件到AI上下文"},
 
 	// ==== 自述文档 ====
 	{Path: "/api-docs", Handler: docsHandler, Method: "GET", Description: "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成的 OpenAPI 结构；?format=html 查看可视化页面）"},

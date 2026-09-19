@@ -9,8 +9,6 @@ var agentSystem = (function (exports) {
         static LTPdefinition = [];
         static unreadRecords = [];
         static unreadContext = [];
-        static unreadVideoUrl = [];
-        static unreadAudioUrl = [];
         static reasoningInProgress = false;
         static finalResponse = "";
         static memoryReady = false;
@@ -209,32 +207,17 @@ var agentSystem = (function (exports) {
         }
     }
 
-    function interactEvent(topic, payload) {
-        try {
-            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
-            if (!resultJSON)
-                return {};
-            const res = JSON.parse(resultJSON);
-            if (res && res.online && res.returned && res.return !== null && res.return !== undefined) {
-                return { return: res.return };
-            }
-        }
-        catch (e) {
-            console.error('LTPX 事件交互失败:', e);
-        }
-        return {};
-    }
-
     let mediaRoles = null;
     function registerMediaRoles(roles) {
         mediaRoles = roles;
     }
-    async function analysisVideoFile(videoUrl, userNeeds) {
+    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
+    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
+    async function understandVideo(videoUrl) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
             console.log('[感知者] 命中视频缓存，直接返回');
-            return;
+            return cachedPrompt;
         }
         console.log('[感知者] 开始将视频写入媒体目录...');
         const [segments, mediaError] = videoMedia(videoUrl);
@@ -244,31 +227,23 @@ var agentSystem = (function (exports) {
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
         console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
-        await analysisMediaSegments(mediaUrls, videoUrl, userNeeds);
+        return understandMediaSegments(mediaUrls, videoUrl);
     }
-    async function analysisMediaSegments(mediaUrls, cacheKey, userNeeds) {
+    async function understandMediaSegments(mediaUrls, cacheKey) {
         console.log('[感知者] 开始观看...');
         const videoSummary = await mediaRoles.perceiverRole.watchVideo(mediaUrls);
         console.log('[感知者] 观看完成');
-        if (videoSummary && videoSummary.trim().length > 0) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: videoSummary });
-        }
-        else
-            GlobalConfig.unreadContext.push({ role: 'user', content: mediaRoles.randomDefaultMessage() });
-        if (userNeeds.trim().length > 0) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
-        }
-        if (videoSummary && cacheKey) {
+        if (videoSummary && videoSummary.trim().length > 0 && cacheKey) {
             savePromptToKnowledge(cacheKey, videoSummary);
             console.log('[感知者] 理解文本已缓存');
         }
+        return videoSummary;
     }
-    async function analysisAnimatedImage(imageSource, cacheKey) {
+    async function understandAnimatedImage(imageSource, cacheKey) {
         const cachedPrompt = cacheKey ? getPromptFromKnowledge(cacheKey) : '';
         if (cachedPrompt) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
             console.log('[感知者] 命中动态图缓存，直接返回');
-            return;
+            return cachedPrompt;
         }
         console.log('[感知者] 检测到动态图，开始编码为视频...');
         const [segments, mediaError] = animatedImageToVideo(imageSource);
@@ -278,7 +253,7 @@ var agentSystem = (function (exports) {
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
         console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
-        await analysisMediaSegments(mediaUrls, cacheKey, '');
+        return understandMediaSegments(mediaUrls, cacheKey);
     }
     async function LiteImageFile() {
         for (let message of GlobalConfig.unreadContext) {
@@ -288,22 +263,18 @@ var agentSystem = (function (exports) {
             for (let item of message.content) {
                 if (item.type == 'text')
                     newContent.push(item);
+                else if (item.type === 'video_url') {
+                    newContent.push({ type: 'text', text: await understandVideoOrFallback(item.video_url.url) });
+                }
+                else if (item.type === 'audio_url') {
+                    newContent.push({ type: 'text', text: await understandAudioOrFallback(item.audio_url.url) });
+                }
                 else if ('input_audio' in item) {
                     const format = item.input_audio.format || 'wav';
-                    try {
-                        await analysisAudioFile(`data:audio/${format};base64,${item.input_audio.data}`, '');
-                    }
-                    catch (error) {
-                        console.error('[感知者] 音频理解失败，跳过该音频:', error);
-                    }
+                    newContent.push({ type: 'text', text: await understandAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
                 }
                 else if (item.image_url && (item.image_url.url.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format)))) {
-                    try {
-                        await analysisVideoFile(item.image_url.url, '');
-                    }
-                    catch (error) {
-                        console.error('[感知者] 视频理解失败，跳过该视频:', error);
-                    }
+                    newContent.push({ type: 'text', text: await understandVideoOrFallback(item.image_url.url) });
                 }
                 else if (item.image_url) {
                     const imageSource = item.image_url.url;
@@ -312,12 +283,14 @@ var agentSystem = (function (exports) {
                         console.error('[动态图判定失败]:', animatedError.message);
                     else if (isAnimated) {
                         const cacheKey = imageSource.startsWith('data:') ? '' : imageSource;
+                        let summary = '';
                         try {
-                            await analysisAnimatedImage(imageSource, cacheKey);
+                            summary = await understandAnimatedImage(imageSource, cacheKey);
                         }
                         catch (error) {
-                            console.error('[感知者] 动态图理解失败，跳过该图片:', error);
+                            console.error('[感知者] 动态图理解失败，以兜底文本置换:', error);
                         }
+                        newContent.push({ type: 'text', text: summary.trim().length > 0 ? summary : mediaRoles.randomDefaultMessage() });
                         continue;
                     }
                     if (imageSource.toLowerCase().startsWith('data:image/')) {
@@ -335,32 +308,33 @@ var agentSystem = (function (exports) {
             message.content = newContent;
         }
     }
-    async function batchProcessVideoFiles(userNeeds) {
-        if (GlobalConfig.unreadVideoUrl.length === 0)
-            return;
-        const feedback = interactEvent('watch_video_before', { userNeeds, videoUrls: GlobalConfig.unreadVideoUrl }).return;
-        if (feedback && Array.isArray(feedback) && feedback.every(r => r.content && r.role !== undefined)) {
-            GlobalConfig.unreadContext.push(...feedback);
+    async function understandVideoOrFallback(videoUrl) {
+        try {
+            const summary = await understandVideo(videoUrl);
+            if (summary.trim().length > 0)
+                return summary;
+            return mediaRoles.randomDefaultMessage();
         }
-        else
-            for (const videoUrl of GlobalConfig.unreadVideoUrl) {
-                try {
-                    await analysisVideoFile(videoUrl, userNeeds || '');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-                catch (error) {
-                    continue;
-                }
-            }
-        GlobalConfig.unreadVideoUrl = [];
+        catch (error) {
+            console.error('[感知者] 视频理解失败，以兜底文本置换:', error);
+            return VIDEO_FALLBACK_TEXT;
+        }
     }
-    async function analysisAudioFile(audioSource, userNeeds) {
+    async function understandAudioOrFallback(audioSource) {
+        try {
+            return await understandAudio(audioSource);
+        }
+        catch (error) {
+            console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
+            return AUDIO_FALLBACK_TEXT;
+        }
+    }
+    async function understandAudio(audioSource) {
         const cacheable = !audioSource.startsWith('data:');
         const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
         if (cachedPrompt) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: cachedPrompt });
             console.log('[感知者] 命中音频缓存，直接返回');
-            return;
+            return cachedPrompt;
         }
         console.log('[感知者] 开始转换音频...');
         const [wavBase64, audioError] = audioWav(audioSource);
@@ -375,14 +349,12 @@ var agentSystem = (function (exports) {
             throw new Error('语音转写为空');
         }
         console.log(`[感知者] 语音转写完成: ${transcript.substring(0, 50)}`);
-        GlobalConfig.unreadContext.push({ role: 'user', content: `【语音转写】${transcript}` });
-        if (userNeeds.trim().length > 0) {
-            GlobalConfig.unreadContext.push({ role: 'user', content: userNeeds });
-        }
+        const text = `【语音转写】${transcript}`;
         if (cacheable) {
-            savePromptToKnowledge(audioSource, `【语音转写】${transcript}`);
+            savePromptToKnowledge(audioSource, text);
             console.log('[感知者] 语音转写文本已缓存');
         }
+        return text;
     }
     async function transcribeAudio(wavBase64) {
         const [result, error] = syncFetch({
@@ -411,20 +383,6 @@ var agentSystem = (function (exports) {
         const raw = result?.body?.choices?.[0]?.message?.content || '';
         const marker = '<asr_text>';
         return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
-    }
-    async function batchProcessAudioFiles(userNeeds) {
-        if (GlobalConfig.unreadAudioUrl.length === 0)
-            return;
-        for (const audioSource of GlobalConfig.unreadAudioUrl) {
-            try {
-                await analysisAudioFile(audioSource, userNeeds || '');
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            catch (error) {
-                continue;
-            }
-        }
-        GlobalConfig.unreadAudioUrl = [];
     }
 
     function RandomFloor(min, max) {
@@ -498,6 +456,22 @@ var agentSystem = (function (exports) {
             console.log(`[${this.roleName}] 已完成 ${details.length} 件作品创作`);
             return summary;
         }
+    }
+
+    function interactEvent(topic, payload) {
+        try {
+            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
+            if (!resultJSON)
+                return {};
+            const res = JSON.parse(resultJSON);
+            if (res && res.online && res.returned && res.return !== null && res.return !== undefined) {
+                return { return: res.return };
+            }
+        }
+        catch (e) {
+            console.error('LTPX 事件交互失败:', e);
+        }
+        return {};
     }
 
     class PainterRole extends CreativeRoleBase {
@@ -1542,7 +1516,7 @@ var agentSystem = (function (exports) {
                 return '';
             }
             const feedback = interactEvent('build_memory_before', { userMessages, records }).return;
-            if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
+            if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
                 records = feedback;
             }
             return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
@@ -3045,16 +3019,12 @@ var agentSystem = (function (exports) {
                 return;
             }
             const status = JSON.parse(statusJSON);
-            const names = new Set();
-            const known = new Map();
-            (status.tools || []).forEach(t => { if (t && t.name) {
-                names.add(t.name);
-                known.set(t.name, t);
-            } });
-            injectedLTPXRemoteTools.forEach(name => { if (!names.has(name))
-                removeLTPXRemoteTool(name); });
-            names.forEach(name => { if (!injectedLTPXRemoteTools.has(name))
-                injectLTPXRemoteTool(known.get(name)); });
+            const tool = status.tool;
+            const injected = [...injectedLTPXRemoteTools][0];
+            if (injected && injected !== tool?.name)
+                removeLTPXRemoteTool(injected);
+            if (tool && tool.name && !injectedLTPXRemoteTools.has(tool.name))
+                injectLTPXRemoteTool(tool);
             dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
         }
         catch (e) {
@@ -3075,16 +3045,6 @@ var agentSystem = (function (exports) {
             function: { name, description: tool.description || '', parameters: tool.parameters },
         });
         injectedLTPXRemoteTools.add(name);
-        const subCount = ltpxSubToolCount(tool.description || '');
-        console.log(`LTPX 已注入琉璃远程工具: ${name}${subCount > 0 ? `（内含 ${subCount} 个子工具）` : ''}`);
-    }
-    function ltpxSubToolCount(description) {
-        let count = 0;
-        for (const line of description.split('\n')) {
-            if (line.trim().startsWith('- '))
-                count++;
-        }
-        return count;
     }
     function removeLTPXRemoteTool(name) {
         for (let i = GlobalConfig.LTPdefinition.length - 1; i >= 0; i--) {
@@ -3231,8 +3191,8 @@ var agentSystem = (function (exports) {
             return;
         try {
             GlobalConfig.reasoningInProgress = true;
-            await pullExternalMessages();
-            const messageLength = GlobalConfig.unreadContext.length + GlobalConfig.unreadVideoUrl.length + GlobalConfig.unreadAudioUrl.length;
+            pullContext().forEach(message => writeMessage(message.role, message.content));
+            const messageLength = GlobalConfig.unreadContext.length;
             if (messageLength === 0) {
                 checkDueItems().forEach(item => {
                     const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
@@ -3244,17 +3204,9 @@ var agentSystem = (function (exports) {
             }
             updatePreviousMemories();
             syncLTPXRemoteStatus();
-            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, audios: GlobalConfig.unreadAudioUrl }).return;
-            if (feedback) {
-                if (Array.isArray(feedback.messages))
-                    GlobalConfig.unreadContext = feedback.messages;
-                if (Array.isArray(feedback.videos))
-                    GlobalConfig.unreadVideoUrl = feedback.videos;
-                if (Array.isArray(feedback.audios))
-                    GlobalConfig.unreadAudioUrl = feedback.audios;
-            }
-            await batchProcessVideoFiles();
-            await batchProcessAudioFiles();
+            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
+            if (feedback && Array.isArray(feedback.messages))
+                GlobalConfig.unreadContext = feedback.messages;
             await processUnreadFiles();
             if (processDecrees()) {
                 GlobalConfig.reasoningInProgress = false;
@@ -3301,32 +3253,23 @@ var agentSystem = (function (exports) {
         }
         GlobalConfig.reasoningInProgress = false;
     }
-    async function pullExternalMessages() {
-        pullContext().forEach(message => writeMessage(message.role, message.content));
-        pullVideoUrl().forEach(videoUrl => { writeVideoUrl(videoUrl); });
-        pullAudioUrl().forEach(audioUrl => { writeAudioUrl(audioUrl); });
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    function writeMessage(role, messages) {
-        GlobalConfig.unreadContext.push({ role, content: messages });
-        if (typeof messages === 'string')
-            messages = [{ type: 'text', text: messages }];
-        for (const message of messages) {
+    function writeMessage(role, content) {
+        if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url'))
+            content = [content];
+        GlobalConfig.unreadContext.push({ role, content });
+        const items = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+        for (const message of items) {
             if (message.type === 'text')
                 console.log('收到文本: ' + message.text);
             else if (message.type === 'image_url')
                 console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
             else if (message.type === 'input_audio')
                 console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
+            else if (message.type === 'video_url')
+                console.log('收到视频: ' + message.video_url?.url);
+            else if (message.type === 'audio_url')
+                console.log('收到音频: ' + message.audio_url?.url);
         }
-    }
-    function writeVideoUrl(videoUrl) {
-        console.log('收到视频: ' + videoUrl);
-        GlobalConfig.unreadVideoUrl.push(videoUrl);
-    }
-    function writeAudioUrl(audioUrl) {
-        console.log('收到音频: ' + audioUrl.substring(0, 80));
-        GlobalConfig.unreadAudioUrl.push(audioUrl);
     }
     function resetAgentState() {
         descriptionRole.coverContext([]);
@@ -3337,8 +3280,6 @@ var agentSystem = (function (exports) {
         actorRole.coverContext([]);
         memorizerRole.coverContext([]);
         GlobalConfig.unreadContext = [];
-        GlobalConfig.unreadVideoUrl = [];
-        GlobalConfig.unreadAudioUrl = [];
     }
 
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);

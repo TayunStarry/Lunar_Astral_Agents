@@ -57,18 +57,17 @@ func GetLTPXRemoteURL() string {
 func clearLTPXRemoteState(reason string) {
 	ltpRemoteMutex.Lock()
 	ltpRemoteURL = ""
-	ltpRemoteTools = nil
+	ltpRemoteTool = nil
 	ltpRemoteMutex.Unlock()
-	LoggerGeneral.Warn("LunarCore", "LTPX 琉璃联络失效（%s），已清空联络 URL 与工具链", reason)
+	LoggerGeneral.Warn("LunarCore", "琉璃联络失效（ %s ），已清空联络 URL 与工具链", reason)
 }
 
-// syncLTPXRemoteTools 向琉璃心跳并拉取最新工具链
-// 返回在线状态、琉璃 URL 与最新工具链；播结束后写入内部缓存
+// syncLTPXRemoteTools 向琉璃心跳并拉取最新聚合工具
+// 返回在线状态、琉璃 URL 与最新聚合工具；拉取结束后写入内部缓存
 func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	result := &LTPXRemoteStatusResult{
 		Online: false,
 		URL:    GetLTPXRemoteURL(),
-		Tools:  []LTPXRemoteToolDef{},
 	}
 
 	target := GetLTPXRemoteURL()
@@ -87,45 +86,38 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 		return result
 	}
 
-	// 在线：拉取最新工具链
+	// 在线：拉取最新聚合工具
 	body, status, err := remoteGet(target + "/ltpx/tools")
 	if err != nil || status != http.StatusOK {
-		LoggerGeneral.Warn("LunarCore", "LTPX 拉取琉璃工具链失败: %v (status=%d)", err, status)
+		LoggerGeneral.Warn("LunarCore", "拉取[琉璃 LTPX 工具链]失败: %v ( status= %d )", err, status)
 		// 工具链拉取失败：清空工具链缓存，保留联络 URL，下轮思考链自动重试
 		ltpRemoteMutex.Lock()
-		ltpRemoteTools = nil
+		ltpRemoteTool = nil
 		ltpRemoteMutex.Unlock()
 		return result
 	}
 
 	var toolResp struct {
-		AppID string              `json:"app_id"`
-		Tools []LTPXRemoteToolDef `json:"tools"`
+		Tool *LTPXRemoteToolDef `json:"tool"`
 	}
 	if err := json.Unmarshal(body, &toolResp); err != nil {
-		LoggerGeneral.Warn("LunarCore", "LTPX 解析琉璃工具链失败: %v", err)
+		LoggerGeneral.Warn("LunarCore", "解析[琉璃 LTPX 工具链]失败: %v", err)
+		return result
+	}
+	if toolResp.Tool == nil || toolResp.Tool.Name == "" {
+		LoggerGeneral.Warn("LunarCore", "当前[琉璃 LTPX 工具链]响应中, 缺少聚合工具")
 		return result
 	}
 
-	tools := toolResp.Tools
-	if tools == nil {
-		tools = []LTPXRemoteToolDef{}
-	}
-
 	ltpRemoteMutex.Lock()
-	ltpRemoteTools = tools
+	ltpRemoteTool = toolResp.Tool
 	ltpRemoteMutex.Unlock()
-	result.Tools = tools
+	result.Tool = toolResp.Tool
 	result.Online = true
 	// v5: 琉璃把 AtoA 包/内置智能体收敛为单一 use_program 聚合工具，其 description 内嵌子工具清单。
 	// 同步日志里把聚合体内部的子工具名与数量一并披露，便于直观了解琉璃工具链规模。
-	if len(tools) == 1 {
-		names := ltpxSubToolNames(tools[0])
-		LoggerGeneral.Info("LunarCore", "LTPX 已同步琉璃工具链: 1 个聚合工具(%s)，内含 %d 个子工具: %s",
-			tools[0].Name, len(names), strings.Join(names, "、"))
-	} else {
-		LoggerGeneral.Info("LunarCore", "LTPX 已同步琉璃工具链: %d 个工具", len(tools))
-	}
+	names := ltpxSubToolNames(*toolResp.Tool)
+	LoggerGeneral.Info("LunarCore", "已同步 LTPX 工具: \n%s", strings.Join(names, "\n"))
 	return result
 }
 
@@ -147,16 +139,6 @@ func ltpxSubToolNames(tool LTPXRemoteToolDef) []string {
 		}
 	}
 	return names
-}
-
-// getLTPXRemoteTools 返回当前缓存的琉璃工具链
-func getLTPXRemoteTools() []LTPXRemoteToolDef {
-	ltpRemoteMutex.RLock()
-	defer ltpRemoteMutex.RUnlock()
-	if ltpRemoteTools == nil {
-		return []LTPXRemoteToolDef{}
-	}
-	return ltpRemoteTools
 }
 
 // callLTPXRemoteTool 转发工具调用到琉璃并返回文本结果
@@ -241,10 +223,10 @@ func (class *Runtime) callLTPXRemoteToolForJS(toolName string, argumentsJSON str
 	return class.runtime.ToValue(promise)
 }
 
-// clearLTPXRemoteToolsForJS 供 JS 端在判断琉璃离线时清空缓存工具链
+// clearLTPXRemoteToolsForJS 供 JS 端在判断琉璃离线时清空缓存的聚合工具
 func (class *Runtime) clearLTPXRemoteToolsForJS() goja.Value {
 	ltpRemoteMutex.Lock()
-	ltpRemoteTools = nil
+	ltpRemoteTool = nil
 	ltpRemoteMutex.Unlock()
 	return class.runtime.ToValue(true)
 }
