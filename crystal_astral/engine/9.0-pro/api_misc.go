@@ -37,7 +37,7 @@ func ensureYaraStickers() {
 		if file.MemoryGetCollectionInfo(yaraStickerCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30_000_000_000)
 			defer cancel()
-			yaraStickerErr = file.CollectionInit(ctx, yaraStickerCollection, *GeneralConfig.SearchEmbeddingModel)
+			yaraStickerErr = file.CollectionInit(ctx, yaraStickerCollection, *GeneralConfig.AgentEmbeddingModel)
 		}
 	})
 }

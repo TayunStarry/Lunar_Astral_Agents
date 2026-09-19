@@ -107,7 +107,7 @@ func ensureStickerCollection() error {
 		if module.MemoryGetCollectionInfo(StickerCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.SearchEmbeddingModel)
+			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.AgentEmbeddingModel)
 		}
 	})
 	return stickerColErr
@@ -270,7 +270,7 @@ func ensureMemory() error {
 		if module.MemoryGetCollectionInfo(ltp9MemoryCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.SearchEmbeddingModel); err != nil {
+			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.AgentEmbeddingModel); err != nil {
 				memoryErr = err
 			}
 		}

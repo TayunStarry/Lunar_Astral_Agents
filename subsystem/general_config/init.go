@@ -44,7 +44,7 @@ type ModelConfig struct {
 		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
 		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
 	} `json:"agent"`
-	// 记忆库独立模型配置（优先于旧版 server/models 全局配置）
+	// 记忆库独立模型配置
 	Memory struct {
 		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
 		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
@@ -53,15 +53,6 @@ type ModelConfig struct {
 		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
 		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
 	} `json:"memory"`
-	// 智能搜索独立模型配置（优先于旧版 server/models 全局配置）
-	Search struct {
-		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
-		EmbeddingURL    string `json:"embedding_url"`    // 嵌入服务 API 地址
-		EmbeddingKey    string `json:"embedding_key"`    // 嵌入服务 API 密钥
-		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
-		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
-		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
-	} `json:"search"`
 }
 
 // init 加载配置文件
@@ -145,26 +136,6 @@ func init() {
 	}
 	if parameter.Memory.MultimodalKey != "" {
 		*MemoryMultimodalKey = parameter.Memory.MultimodalKey
-	}
-
-	// ==== 智能搜索独立配置（search，优先于旧版 server/models 全局配置） ====
-	if parameter.Search.EmbeddingModel != "" {
-		*SearchEmbeddingModel = parameter.Search.EmbeddingModel
-	}
-	if parameter.Search.EmbeddingURL != "" {
-		*SearchEmbeddingURL = parameter.Search.EmbeddingURL
-	}
-	if parameter.Search.EmbeddingKey != "" {
-		*SearchEmbeddingKey = parameter.Search.EmbeddingKey
-	}
-	if parameter.Search.MultimodalModel != "" {
-		*SearchMultimodalModel = parameter.Search.MultimodalModel
-	}
-	if parameter.Search.MultimodalURL != "" {
-		*SearchMultimodalURL = parameter.Search.MultimodalURL
-	}
-	if parameter.Search.MultimodalKey != "" {
-		*SearchMultimodalKey = parameter.Search.MultimodalKey
 	}
 	// ==== 核心智能体配置（agent） ====
 	if parameter.Agent.EmbeddingModel != "" {

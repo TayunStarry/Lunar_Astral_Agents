@@ -3,9 +3,6 @@ package GeneralConfig
 import "flag"
 
 var (
-	// ==== 核心智能体模型配置（agent，月华） ====
-	// 用于主智能体的对话推理、文本向量化、图文理解等
-
 	// AgentEmbeddingModel 核心智能体嵌入模型名称
 	AgentEmbeddingModel = flag.String("agent-embedding-model", "system-embedding", "核心智能体嵌入模型名称")
 	// AgentEmbeddingURL 核心智能体嵌入服务 API 地址
@@ -21,9 +18,6 @@ var (
 	// AgentASRModel 核心智能体语音识别模型名称（月华 models.ini 中的预设名）
 	AgentASRModel = flag.String("agent-asr-model", "system-asr", "核心智能体语音识别模型名称")
 
-	// ==== 记忆库模型配置（memory） ====
-	// 用于记忆库的文本向量化、标签生成等
-
 	// MemoryEmbeddingModel 记忆库嵌入模型名称
 	MemoryEmbeddingModel = flag.String("memory-embedding-model", "system-embedding", "记忆库嵌入模型名称, 用于文本向量化")
 	// MemoryEmbeddingURL 记忆库嵌入服务 API 地址
@@ -36,22 +30,6 @@ var (
 	MemoryMultimodalURL = flag.String("memory-multimodal-url", "http://127.0.0.1:36789/v1", "记忆库多模态服务 API 地址")
 	// MemoryMultimodalKey 记忆库多模态服务 API 密钥
 	MemoryMultimodalKey = flag.String("memory-multimodal-key", "", "记忆库多模态服务 API 密钥")
-
-	// ==== 智能搜索模型配置（search） ====
-	// 用于搜索智能体的文本向量化、图文推理等
-
-	// SearchEmbeddingModel 搜索嵌入模型名称
-	SearchEmbeddingModel = flag.String("search-embedding-model", "system-embedding", "搜索嵌入模型名称, 用于文本向量化")
-	// SearchEmbeddingURL 搜索嵌入服务 API 地址
-	SearchEmbeddingURL = flag.String("search-embedding-url", "http://127.0.0.1:36789/v1", "搜索嵌入服务 API 地址")
-	// SearchEmbeddingKey 搜索嵌入服务 API 密钥
-	SearchEmbeddingKey = flag.String("search-embedding-key", "", "搜索嵌入服务 API 密钥")
-	// SearchMultimodalModel 搜索多模态模型名称，用于图文推理
-	SearchMultimodalModel = flag.String("search-multimodal-model", "system-multimodal", "搜索多模态模型名称, 用于图文推理")
-	// SearchMultimodalURL 搜索多模态服务 API 地址
-	SearchMultimodalURL = flag.String("search-multimodal-url", "http://127.0.0.1:36789/v1", "搜索多模态服务 API 地址")
-	// SearchMultimodalKey 搜索多模态服务 API 密钥
-	SearchMultimodalKey = flag.String("search-multimodal-key", "", "搜索多模态服务 API 密钥")
 
 	// MmprojModel 多模态投影模型路径，用于图像与文本的联合编码
 	MmprojModel = flag.String("mmproj-model", *LocalDir+"/models/mmproj-Qwen3.GGUF", "多模态投影模型路径, 用于图像与文本的联合编码")
