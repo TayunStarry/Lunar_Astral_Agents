@@ -37,7 +37,7 @@ func ensureYaraStickers() {
 		if file.MemoryGetCollectionInfo(yaraStickerCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30_000_000_000)
 			defer cancel()
-			yaraStickerErr = file.CollectionInit(ctx, yaraStickerCollection, *GeneralConfig.SearchEmbeddingModel, file.CollectionTypeImage)
+			yaraStickerErr = file.CollectionInit(ctx, yaraStickerCollection, *GeneralConfig.SearchEmbeddingModel)
 		}
 	})
 }
@@ -177,11 +177,11 @@ func yaraEmojiQuery(vm *goja.Runtime, query string, limit int, random bool) goja
 	}
 	if random {
 		pick := results[rand.Intn(len(results))]
-		return vm.ToValue(map[string]any{"image": pick.Image})
+		return vm.ToValue(map[string]any{"base64": pick.Base64})
 	}
 	out := make([]any, 0, len(results))
 	for _, r := range results {
-		out = append(out, map[string]any{"image": r.Image, "similarity": r.Similarity})
+		out = append(out, map[string]any{"base64": r.Base64, "similarity": r.Similarity})
 	}
 	return vm.ToValue(out)
 }
@@ -195,7 +195,7 @@ func yaraEmojiAll(limit int) ([]any, int, error) {
 	entries, total := file.MemoryGetDocuments(yaraStickerCollection, 0, limit)
 	out := make([]any, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, map[string]any{"id": e.ID, "image": e.Image})
+		out = append(out, map[string]any{"id": e.ID, "base64": e.Base64})
 	}
 	return out, total, nil
 }

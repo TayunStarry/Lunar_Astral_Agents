@@ -3,7 +3,7 @@ package main
 import (
 	"CrystalAstral/agent/AutoLTP"
 	"CrystalAstral/agent/WebLTP"
-	star "CrystalAstral/engine/9.1-Flash"
+	"CrystalAstral/engine/9.1-Flash"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/json"
@@ -104,21 +104,20 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 	return defs, pkgMap
 }
 
-// use_the_program 聚合工具常量名：月华只需记住这一个工具名，具体目标工具经参数 tool 指定，
-// 从而避免在多工具链中精确背诵/生成工具名导致的「工具迷航」。
-const useTheProgramToolName = "use_the_program"
+// Node-LTP 聚合体的工具名
+const integratedToolsName = "use_program"
 
-// windowAgentToolName Auto-LTP 内置桌面智能体的工具名（多角色编排式桌面智能体，当前主用）
-const windowAgentToolName = "window_agent"
+// Auto-LTP 智能体的工具名
+const operateToolName = "window_operate"
 
-// windowAgentToolDescription Auto-LTP 内置桌面智能体的默认固有描述
-const windowAgentToolDescription = "面向 Windows 桌面的编排式桌面智能体：先拆解任务为结构化计划，视觉+UIA 双重理解界面，再由独立角色逐步执行操作"
+// Auto-LTP 智能体的工具描述
+const operateToolDescription = "操作 Windows 系统来执行任务"
 
-// webSearchToolName Web-LTP 内置网络搜索智能体的工具名
-const webSearchToolName = "web_search"
+// Web-LTP 智能体的工具名
+const searchToolName = "web_search"
 
-// webSearchToolDescription Web-LTP 内置网络搜索智能体的固有描述
-const webSearchToolDescription = "调用(网页浏览器)去联网查询, 获取所需情报"
+// Web-LTP 智能体的工具描述
+const searchToolDescription = "调用(网页浏览器)去获取所需情报"
 
 // buildUseTheProgram 将扫描到的全部 AtoA 工具收敛为单一 use_the_program 聚合工具。
 // 其 description 内嵌「工具名：功能简述」清单，供模型在调用时从清单中挑取正确的 tool 参数；
@@ -140,7 +139,7 @@ func buildUseTheProgram(defs []LTPXRemoteToolDef) LTPXRemoteToolDef {
 		b.WriteString("\n\n请根据用户需求从上述清单中选择合适的 tool，并填入对应的自然语言 instruction。")
 	}
 	return LTPXRemoteToolDef{
-		Name:        useTheProgramToolName,
+		Name:        integratedToolsName,
 		Description: b.String(),
 		AppID:       "",
 		Parameters: map[string]any{
@@ -190,10 +189,10 @@ func ltpRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defs, _ := scanAtoaToolchain()
-	// 内置 Auto-LTP 桌面智能体作为固有工具选项（face_ltp 已弃用并移除）
-	defs = append(defs, LTPXRemoteToolDef{Name: windowAgentToolName, Description: windowAgentToolDescription})
-	// 内置 Web-LTP 网络搜索智能体作为固有工具选项（真浏览器独立检索流水线）
-	defs = append(defs, LTPXRemoteToolDef{Name: webSearchToolName, Description: webSearchToolDescription})
+	// 声明 Auto-LTP <window 操作>智能体
+	defs = append(defs, LTPXRemoteToolDef{Name: operateToolName, Description: operateToolDescription})
+	// 声明 Web-LTP <网络搜索>智能体
+	defs = append(defs, LTPXRemoteToolDef{Name: searchToolName, Description: searchToolDescription})
 	// 收敛为单一 use_the_program 聚合工具，避免月华在多工具名间「迷航」
 	aggTool := buildUseTheProgram(defs)
 	LoggerGeneral.Info("CrystalAstral", "月华拉取 LTPX 工具链 (GET /ltpx/tools)，聚合为 %s（内含 %d 个目标工具）", aggTool.Name, len(defs))
@@ -224,7 +223,7 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 解析目标工具名：月华统一调用 use_the_program，实际目标工具在 arguments.tool 中
 	targetTool := req.Tool
-	if req.Tool == useTheProgramToolName {
+	if req.Tool == integratedToolsName {
 		if raw, ok := req.Arguments["tool"]; ok {
 			if s, sok := raw.(string); sok && s != "" {
 				targetTool = s
@@ -236,8 +235,8 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 内置 Auto-LTP 桌面智能体（window_agent）：进程内调用多角色编排智能体
-	if targetTool == windowAgentToolName {
+	// 声明 Auto-LTP <window 操作>智能体：进程内调用多角色编排智能体
+	if targetTool == operateToolName {
 		instruction := ""
 		if raw, exists := req.Arguments["instruction"]; exists {
 			if s, sok := raw.(string); sok {
@@ -258,8 +257,8 @@ func ltpRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 内置 Web-LTP 网络搜索智能体（web_search）：进程内独立执行搜索流水线并返回报告
-	if targetTool == webSearchToolName {
+	// 声明 Web-LTP <网络搜索>智能体：进程内独立执行搜索流水线并返回报告
+	if targetTool == searchToolName {
 		instruction := ""
 		if raw, exists := req.Arguments["instruction"]; exists {
 			if s, sok := raw.(string); sok {
@@ -382,7 +381,7 @@ func ltpRemoteEventHandler(w http.ResponseWriter, r *http.Request) {
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	result := star.Emit(topic, payload, fmt.Sprintf("ltp9-ev-%d", time.Now().UnixNano()))
+	result := StarLTP.Emit(topic, payload, fmt.Sprintf("ltp9-ev-%d", time.Now().UnixNano()))
 	data := result.Data
 	if data == nil {
 		data = payload

@@ -1,7 +1,7 @@
 package main
 
 import (
-	star "CrystalAstral/engine/9.1-Flash"
+	"CrystalAstral/engine/9.1-Flash"
 	"LunarSubsystem/BrowserClient"
 	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
@@ -80,7 +80,7 @@ func initMemoryDatabase() {
 	// 第二步：创建/打开默认集合（探针文本嵌入定维度，含网络请求，加超时保护）
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if err := file.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName, file.CollectionTypeText); err != nil {
+	if err := file.CollectionInit(ctx, defaultMemoryCollection, defaultMemoryModelName); err != nil {
 		LoggerGeneral.Warn("CrystalAstral", "集合 [%s] 创建失败: %v (可手动通过记忆库面板初始化)", defaultMemoryCollection, err)
 		return
 	}
@@ -133,7 +133,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	// /ws 入站消费：ltp9/* 调试信封由引擎消费，其余入站消息暂无其他消费者
 	go func() {
 		for data := range StudioHubInstance.Inbound {
-			star.HandleInbound(data)
+			StarLTP.HandleInbound(data)
 		}
 	}()
 
@@ -185,7 +185,7 @@ func StartServer(port int, root http.FileSystem, name string) error {
 	}
 
 	BrowserClient.CloseWebView()
-	star.Close()
+	StarLTP.Close()
 	LoggerGeneral.Info("CrystalAstral", "%s 已成功关闭", name)
 
 	return nil

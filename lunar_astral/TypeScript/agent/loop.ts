@@ -9,7 +9,7 @@ import { descriptionRole, painterRole, musicianRole, dialogueRole, perceiverRole
 import { batchProcessVideoFiles, batchProcessAudioFiles } from './capabilities/media';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
-import { queryEmotionSticker } from './capabilities/memory';
+import { queryEmotionSticker, extractTextFromMessage } from './capabilities/memory';
 import { processDecrees } from './decrees';
 
 /** 创建聊天消息 */
@@ -61,21 +61,29 @@ function guardChatVRAM(): void {
     }
 }
 
+/** 深度回忆意图匹配正则：未读用户消息中明确表达需要回忆、整理记忆时才触发 AI 摘要 */
+const DEEP_RECALL_PATTERN = /(回忆|记忆|记得|回想|想起来)/;
+
 /** 更新远期记忆摘要 */
 function updatePreviousMemories(): void {
     // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
     if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
-    /** 获取最新的5条用户消息作为查询条件 */
-    const userMessages = dialogueRole.getLatestUserMessages();
+    /** 提取未读消息中的用户消息文本（作为记忆库查询条件） */
+    const userMessages = GlobalConfig.unreadContext
+        .filter(message => message.role === 'user')
+        .map(message => extractTextFromMessage(message).trim())
+        .filter(text => text.length > 0);
     /** 清理RAG消息并返回 */
     const clear = () => { dialogueRole.ragMessages = []; };
     // 如果没有用户消息，清理RAG消息并返回
     if (userMessages.length === 0) return clear();
-    /** 由记忆者智能体检索长期记忆并生成摘要 */
-    const digest = memorizerRole.queryRagSummary(userMessages);
-    // 检索无命中或摘要失败时，清理RAG消息并返回
+    /** 深度回忆意图判定：命中时由 AI 整理摘要，否则默认按时间顺序拼接时间线 */
+    const deepRecall = userMessages.some(text => DEEP_RECALL_PATTERN.test(text));
+    /** 记忆库返回的记忆文本（AI 摘要或时间线拼接） */
+    const digest = memorizerRole.queryRagDigest(userMessages, deepRecall);
+    // 记忆库返回为空时，清理RAG消息并返回（跳过拼接与可能的回忆者智能体调用）
     if (!digest) return clear();
-    // 将连贯摘要作为一条用户消息注入 ragMessages（替换碎片式上下文；
+    // 将记忆文本作为一条用户消息注入 ragMessages（替换碎片式上下文）
     dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
 }
 
@@ -107,6 +115,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 进入下一次循环
             return;
         }
+        // 更新远期记忆摘要
+        updatePreviousMemories();
         // 拉取琉璃工具链
         syncLTPXRemoteStatus();
         // 事件 -> 收到消息前：把待处理的消息上下文推送到琉璃，插件可经 return 改写后再消费
@@ -175,10 +185,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
             // 推送消息（包含显示内容和语音数据）
             pushContext('text', chunk.display, audio);
         }
-        // 更新远期记忆摘要
-        updatePreviousMemories();
         // 思考链业务结束：执行周期性显存守卫（应答计数达到间隔时检查显存并按需卸载模型）
-        guardChatVRAM();
+        // guardChatVRAM();
     }
     catch (error) {
         /** 获取提示音数据 */

@@ -9,12 +9,14 @@ import { interactEvent } from '../capabilities/ltp-event';
 const MEMORY_COLLECTION = 'lunar_messages';
 /** RAG 摘要硬切断长度上限 */
 const RAG_SUMMARY_HARD_LIMIT = 4096;
+/** 记忆时间线硬切断长度上限（按行移除超限行） */
+const RAG_TIMELINE_HARD_LIMIT = 2048;
 /** 每条用户消息查询记忆库时返回的相关度最高的记录数 */
 const RAG_PER_QUERY_TOP_K = 10;
 /** 去重后送入摘要的检索记录条数上限 */
 const RAG_MAX_RECORDS = 24;
 
-/** 记忆检索记录（与 memoryQuery 返回结构对齐） */
+/** 记忆检索记录（与 memoryQuery 返回结构对齐；图片记忆取 base64，文本记忆取 content） */
 interface RagRecord {
 	/** 记忆记录唯一标识 */
 	id: string;
@@ -22,8 +24,8 @@ interface RagRecord {
 	role: string;
 	/** 记忆记录内容 */
 	content?: string;
-	/** 记忆记录图片 */
-	image?: string;
+	/** 记忆记录图片（base64） */
+	base64?: string;
 	/** 记忆记录相似度 */
 	similarity: number;
 	/** 入库时间 Unix 秒级时间戳（旧数据无此字段） */
@@ -74,15 +76,18 @@ export class MemorizerRole extends ModelBuilder {
 	}
 
 	/**
-	 * 检索长期记忆并生成摘要
+	 * 检索长期记忆并生成记忆上下文
 	 *
-	 * 继承原有搜索机制，对命中的碎片做一次总结与摘要，返回硬切断 4096 的连贯摘要；
-	 * 无结果、记忆库未就绪或摘要失败时返回空字符串。
+	 * 继承原有搜索机制检索长期记忆，随后按模式分派：
+	 *  - summarize 为 true：对命中的碎片做一次总结与摘要，输出硬切断 4096 的连贯摘要；
+	 *  - summarize 为 false：按时间顺序将命中记录拼接为时间线文本，硬切断 2048（按行移除超限行）。
+	 * 检索结果为空、记忆库未就绪或整理失败时返回空字符串。
 	 *
-	 * @param userMessages 最新的用户消息（作为检索查询条件）
-	 * @returns 连贯摘要文本（≤4096 字），失败时为空字符串
+	 * @param userMessages 未读用户消息（作为检索查询条件）
+	 * @param summarize 是否调用 LLM 整理摘要（深度回忆意图命中时为 true）
+	 * @returns 记忆文本，检索为空或失败时为空字符串
 	 */
-	public queryRagSummary(userMessages: string[]): string {
+	public queryRagDigest(userMessages: string[], summarize: boolean): string {
 		// 条件不满足时跳过
 		if (!userMessages || userMessages.length === 0 || !ensureMemoryReady()) return '';
 		// 搜索结果
@@ -92,14 +97,33 @@ export class MemorizerRole extends ModelBuilder {
 			console.log('[记忆] 检索未命中任何相关记录');
 			return '';
 		}
-		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再总结
+		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再整理
 		const feedback: RagRecord[] = interactEvent('build_memory_before', { userMessages, records }).return;
 		// 如果插件返回了新的检索记录则直接使用
 		if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
 			records = feedback;
 		}
-		// 总结与摘要
-		return this.summarizeRecords(records);
+		// 深度回忆意图命中时由 LLM 总结与摘要，否则默认按时间顺序拼接时间线
+		return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
+	}
+
+	/** 按入库时间升序将检索记录拼接为时间线文本，硬切断 2048（到达字数上限即移除多余的行） */
+	private buildTimeline(records: RagRecord[]): string {
+		// 按入库时间升序排列（无时间戳的旧数据排最前）
+		const sorted = [...records].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+		/** 时间线文本 */
+		let timeline = '';
+		for (const r of sorted) {
+			/** 记录时间标注（旧数据无时间戳则标注未知） */
+			const time = r.timestamp ? new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '未知';
+			/** 单行记录 */
+			const line = `[ 时间: ${time} ] [ 内容: ${r.content || '(空)'} ]`;
+			// 到达字数上限即停止拼接，移除多余的行
+			if (timeline.length + line.length + 1 > RAG_TIMELINE_HARD_LIMIT) break;
+			timeline += (timeline ? '\n' : '') + line;
+		}
+		console.log(`[记忆] 已生成时间线（${timeline.length}/${RAG_TIMELINE_HARD_LIMIT} 字，${timeline.split('\n').length} 行）`);
+		return timeline;
 	}
 
 	/** 检索长期记忆（沿用对话者原检索逻辑：多查询合并→按内容去重→按相似度降序→取前32条） */

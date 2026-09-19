@@ -253,14 +253,7 @@
                     <label class="form-label" for="create-col-name"><i class="fas fa-tag"></i> 集合名称</label>
                     <input type="text" id="create-col-name" class="glass-input" placeholder="仅允许字母、数字、下划线、连字符" maxlength="64">
                 </div>
-                <div class="form-group">
-                    <label class="form-label" for="create-col-type"><i class="fas fa-cubes"></i> 集合类型</label>
-                    <select id="create-col-type" class="glass-select">
-                        <option value="text">文本文档 (text)</option>
-                        <option value="image">图片记忆 (image)</option>
-                    </select>
-                </div>
-                <p class="modal-hint"><i class="fas fa-circle-info"></i> 集合名称不可与已有集合重复，且不可使用保留字（init/stats/collections）。</p>
+                <p class="modal-hint"><i class="fas fa-circle-info"></i> v5 集合为文本与图片记忆混合存储，无需指定集合类型；名称不可与已有集合重复，且不可使用保留字（init/stats/collections）。</p>
             </div>
             <div class="modal-footer">
                 <button class="btn-glass btn-clear modal-close-btn" data-close="modal-create-collection">取消</button>

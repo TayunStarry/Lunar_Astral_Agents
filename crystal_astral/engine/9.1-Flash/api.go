@@ -107,7 +107,7 @@ func ensureStickerCollection() error {
 		if module.MemoryGetCollectionInfo(StickerCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.SearchEmbeddingModel, module.CollectionTypeImage)
+			stickerColErr = module.CollectionInit(ctx, StickerCollection, *GeneralConfig.SearchEmbeddingModel)
 		}
 	})
 	return stickerColErr
@@ -127,12 +127,12 @@ func memorySearchImage(query string, limit int) (any, error) {
 	}
 	out := make([]map[string]any, 0, len(results))
 	for _, r := range results {
-		out = append(out, map[string]any{"image": r.Image, "similarity": r.Similarity})
+		out = append(out, map[string]any{"base64": r.Base64, "similarity": r.Similarity})
 	}
 	return map[string]any{"success": true, "results": out}, nil
 }
 
-// memoryStoreImage 往 stickers 集合添加一张图片（base64）。标签由记忆库 LLM 自动生成。
+// memoryStoreImage 往 stickers 集合添加一张图片（base64）。标签由记忆库多模态模型生成。
 func memoryStoreImage(image string) (any, error) {
 	if err := ensureStickerCollection(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
@@ -164,7 +164,7 @@ func memoryRandomImage(query string) (any, error) {
 		return rwResult{Success: false, Error: "无匹配的表情包"}, nil
 	}
 	pick := results[rand.Intn(len(results))]
-	return map[string]any{"success": true, "image": pick.Image}, nil
+	return map[string]any{"success": true, "base64": pick.Base64}, nil
 }
 
 // ==== 跨包调用 callFunction ====
@@ -270,7 +270,7 @@ func ensureMemory() error {
 		if module.MemoryGetCollectionInfo(ltp9MemoryCollection) == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.SearchEmbeddingModel, module.CollectionTypeText); err != nil {
+			if err := module.CollectionInit(ctx, ltp9MemoryCollection, *GeneralConfig.SearchEmbeddingModel); err != nil {
 				memoryErr = err
 			}
 		}
@@ -282,9 +282,17 @@ func memoryStore(v map[string]any) (any, error) {
 	if err := ensureMemory(); err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil
 	}
+	// v5: 图片记忆 —— base64 字段走多模态标签理解嵌入
+	if b64, hasB64 := v["base64"].(string); hasB64 && strings.TrimSpace(b64) != "" {
+		id, err := module.MemoryAddImage(context.Background(), ltp9MemoryCollection, b64, "auto", "")
+		if err != nil {
+			return rwResult{Success: false, Error: err.Error()}, nil
+		}
+		return map[string]any{"success": true, "id": id}, nil
+	}
 	content, _ := v["content"].(string)
 	if content == "" {
-		return rwResult{Success: false, Error: "content 必填"}, nil
+		return rwResult{Success: false, Error: "content/base64 必填"}, nil
 	}
 	var tags []string
 	if raw, ok := v["tags"].([]any); ok {
@@ -294,6 +302,7 @@ func memoryStore(v map[string]any) (any, error) {
 			}
 		}
 	}
+	// 文本记忆：有预设标签则以标签文本嵌入，无标签回退为正文全文嵌入
 	id, err := module.MemoryAddMessageWithTags(context.Background(), ltp9MemoryCollection, "ltp9", content, tags)
 	if err != nil {
 		return rwResult{Success: false, Error: err.Error()}, nil

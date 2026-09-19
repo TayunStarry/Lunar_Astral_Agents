@@ -1,7 +1,6 @@
 package module
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"context"
 	"crypto/rand"
@@ -49,9 +48,9 @@ func initMemoryDBInstance(baseDir string) *MemoryDB {
 	}
 }
 
-// MemoryInitInstance 初始化记忆库实例的嵌入服务与 LLM 标签生成服务连接
+// MemoryInitInstance 初始化记忆库实例的嵌入服务连接
 // 模型配置从 config 模块（lunar_config.json）读取，不再通过参数传入
-// 嵌入服务 URL 和 API Key 首次设置后不可变更；LLM 配置可后续通过 config 更新
+// 嵌入服务 URL 和 API Key 首次设置后不可变更
 func (d *MemoryDB) MemoryInitInstance() error {
 	if d.baseDir == "" {
 		return fmt.Errorf("记忆库 baseDir 为空，请先调用 InitMemoryDB")
@@ -92,9 +91,9 @@ func (d *MemoryDB) isCollectionValid(name string) error {
 	return nil
 }
 
-// CollectionInit 初始化或打开一个集合，验证版本与配置一致性
-// collectionType: "text" 或 "image"
-func (d *MemoryDB) CollectionInit(ctx context.Context, name, modelName, collectionType string) error {
+// CollectionInit 初始化或打开一个集合。
+// v5: 文本与图片记忆混合存储在同一个集合，不再区分集合类型。
+func (d *MemoryDB) CollectionInit(ctx context.Context, name, modelName string) error {
 	if err := d.isCollectionValid(name); err != nil {
 		return err
 	}
@@ -117,100 +116,59 @@ func (d *MemoryDB) CollectionInit(ctx context.Context, name, modelName, collecti
 
 	metaPath := filepath.Join(collDir, "metadata.json")
 
+	// 已存在元数据 → 校验版本与嵌入模型；不满足新格式则清空重建（不做旧版迁移）
+	recreate := false
 	if _, err := os.Stat(metaPath); err == nil {
-		// 元数据存在 → 验证
 		var meta collectionMeta
 		if err := readJSONFile(metaPath, &meta); err != nil {
 			return fmt.Errorf("读取元数据失败: %w", err)
 		}
-		return d.collectionInitFromMeta(ctx, name, modelName, collectionType, &meta, collDir, metaPath)
+		if meta.Version < CurrentVersion || meta.EmbeddingModel != modelName || meta.EmbeddingDimension == 0 {
+			LoggerGeneral.Warn("FileManager", "集合 %s 元数据不满足新格式 (version=%d, model=%s)，清空重建", name, meta.Version, modelName)
+			clearCollectionDir(collDir)
+			recreate = true
+		}
+	}
+
+	if !recreate {
+		if _, err := os.Stat(metaPath); err == nil {
+			// 加载已有集合
+			var meta collectionMeta
+			if err := readJSONFile(metaPath, &meta); err != nil {
+				return fmt.Errorf("读取元数据失败: %w", err)
+			}
+			c := &Collection{
+				Name:      name,
+				Model:     modelName,
+				Dimension: meta.EmbeddingDimension,
+				collDir:   collDir,
+				metaPath:  metaPath,
+			}
+			if err := c.loadDocumentsFromFile(); err != nil {
+				return fmt.Errorf("加载文档失败: %w", err)
+			}
+			c.updateLastModTime()
+
+			d.collectionsMu.Lock()
+			d.collections[name] = c
+			d.collectionsMu.Unlock()
+			return nil
+		}
 	}
 
 	// 全新创建
-	return d.collectionInitNew(ctx, name, modelName, collectionType, collDir, metaPath)
-}
-
-// collectionInitFromMeta 从已有 metadata.json 验证并初始化集合
-func (d *MemoryDB) collectionInitFromMeta(ctx context.Context, name, modelName, collectionType string, meta *collectionMeta, collDir, metaPath string) error {
-	needRebuild := false
-
-	// 版本缺失或过低
-	if meta.Version < CurrentVersion {
-		LoggerGeneral.Warn("FileManager", "集合 %s 版本 %d < %d，触发重建", name, meta.Version, CurrentVersion)
-		needRebuild = true
-	}
-
-	// 嵌入模型缺失或不匹配
-	if meta.EmbeddingModel == "" || meta.EmbeddingModel != modelName {
-		LoggerGeneral.Warn("FileManager", "集合 %s 嵌入模型不匹配 [%s] vs [%s]，触发重建", name, meta.EmbeddingModel, modelName)
-		needRebuild = true
-	}
-
-	// 嵌入维度缺失
-	if meta.EmbeddingDimension == 0 {
-		probeDim, err := d.collectionInitProbe(ctx, modelName)
-		if err != nil {
-			return fmt.Errorf("探针嵌入失败: %w", err)
-		}
-		if meta.EmbeddingDimension != 0 && meta.EmbeddingDimension != probeDim {
-			LoggerGeneral.Warn("FileManager", "集合 %s 嵌入维度不匹配 [%d] vs [%d]，触发重建", name, meta.EmbeddingDimension, probeDim)
-			needRebuild = true
-		}
-		meta.EmbeddingDimension = probeDim
-	}
-
-	// 类型不匹配
-	if meta.Type != "" && meta.Type != collectionType {
-		return fmt.Errorf("集合类型不匹配: 请求 %s, 已有 %s", collectionType, meta.Type)
-	}
-
-	if needRebuild {
-		return d.collectionInitRebuild(ctx, name, modelName, collectionType, collDir, metaPath)
-	}
-
-	// 全部通过 → 加载数据
-	c := &Collection{
-		Name:            name,
-		Model:           modelName,
-		Dimension:       meta.EmbeddingDimension,
-		CollectionType:  collectionType,
-		MultimodalModel: *GeneralConfig.MemoryMultimodalModel,
-		collDir:         collDir,
-		metaPath:        metaPath,
-	}
-
-	if err := c.loadDocumentsFromFile(); err != nil {
-		return fmt.Errorf("加载文档失败: %w", err)
-	}
-	if err := c.loadTagsFromFile(); err != nil {
-		return fmt.Errorf("加载标签向量失败: %w", err)
-	}
-	c.updateLastModTime()
-
-	d.collectionsMu.Lock()
-	d.collections[name] = c
-	d.collectionsMu.Unlock()
-
-	return nil
-}
-
-// collectionInitNew 全新创建集合
-func (d *MemoryDB) collectionInitNew(ctx context.Context, name, modelName, collectionType, collDir, metaPath string) error {
 	probeDim, err := d.collectionInitProbe(ctx, modelName)
 	if err != nil {
 		return fmt.Errorf("探针嵌入失败: %w", err)
 	}
 
 	c := &Collection{
-		Name:            name,
-		Model:           modelName,
-		Dimension:       probeDim,
-		CollectionType:  collectionType,
-		MultimodalModel: *GeneralConfig.MemoryMultimodalModel,
-		Documents:       make([]Document, 0),
-		TagVectors:      make([]TagVector, 0),
-		collDir:         collDir,
-		metaPath:        metaPath,
+		Name:      name,
+		Model:     modelName,
+		Dimension: probeDim,
+		Documents: make([]Document, 0),
+		collDir:   collDir,
+		metaPath:  metaPath,
 	}
 
 	if err := c.saveCollectionMeta(); err != nil {
@@ -225,21 +183,15 @@ func (d *MemoryDB) collectionInitNew(ctx context.Context, name, modelName, colle
 	return nil
 }
 
-// collectionInitRebuild 清空旧数据并重建集合
-func (d *MemoryDB) collectionInitRebuild(ctx context.Context, name, modelName, collectionType, collDir, metaPath string) error {
-	LoggerGeneral.Warn("FileManager", "集合 %s 触发重建，清空所有旧数据", name)
-
-	// 删除所有旧数据文件
-	patterns := []string{"documents_*.json", "images_*.json", "tags_*.json", "contents_*.json", "embeddings_*.json", "base64_*.json", "documents.json"}
+// clearCollectionDir 清空集合目录内旧数据文件（不做旧版数据迁移，直接废弃）
+func clearCollectionDir(collDir string) {
+	patterns := []string{"documents_*.json", "images_*.json", "tags_*.json", "contents_*.json", "embeddings_*.json", "base64_*.json", "documents.json", "metadata.json"}
 	for _, pattern := range patterns {
 		files, _ := filepath.Glob(filepath.Join(collDir, pattern))
 		for _, f := range files {
 			os.Remove(f)
 		}
 	}
-
-	// 重新创建
-	return d.collectionInitNew(ctx, name, modelName, collectionType, collDir, metaPath)
 }
 
 // collectionInitProbe 探针嵌入获取向量维度
@@ -282,7 +234,7 @@ func (d *MemoryDB) loadAllCollections() {
 			continue
 		}
 
-		// v2 版本检查
+		// v5 版本检查
 		if meta.Version < CurrentVersion {
 			LoggerGeneral.Warn("FileManager", "集合 %s 版本过低 (%d < %d)，跳过加载", name, meta.Version, CurrentVersion)
 			continue
@@ -292,28 +244,16 @@ func (d *MemoryDB) loadAllCollections() {
 			continue
 		}
 
-		collType := meta.Type
-		if collType == "" {
-			collType = CollectionTypeText
-		}
-
-		collDir := filepath.Join(d.baseDir, name)
 		c := &Collection{
-			Name:            name,
-			Model:           meta.EmbeddingModel,
-			Dimension:       meta.EmbeddingDimension,
-			CollectionType:  collType,
-			MultimodalModel: meta.MultimodalModel,
-			collDir:         collDir,
-			metaPath:        metaPath,
+			Name:      name,
+			Model:     meta.EmbeddingModel,
+			Dimension: meta.EmbeddingDimension,
+			collDir:   filepath.Join(d.baseDir, name),
+			metaPath:  metaPath,
 		}
 
 		if err := c.loadDocumentsFromFile(); err != nil {
 			LoggerGeneral.Error("FileManager", "加载集合 %s 文档失败: %v", name, err)
-			continue
-		}
-		if err := c.loadTagsFromFile(); err != nil {
-			LoggerGeneral.Error("FileManager", "加载集合 %s 标签向量失败: %v", name, err)
 			continue
 		}
 		c.updateLastModTime()
@@ -322,7 +262,7 @@ func (d *MemoryDB) loadAllCollections() {
 		d.collections[name] = c
 		d.collectionsMu.Unlock()
 
-		LoggerGeneral.Info("FileManager", "已加载集合 %s (%s, %d 文档, %d 标签)", name, collType, len(c.Documents), len(c.TagVectors))
+		LoggerGeneral.Info("FileManager", "已加载集合 %s (%d 文档)", name, len(c.Documents))
 	}
 }
 
@@ -342,166 +282,124 @@ func (c *Collection) docCount() int {
 	return len(c.Documents)
 }
 
-// findExistingDocument 在集合中查找相同内容的文档（精确匹配）
-// content 非空时匹配文本文档的 Content，image 非空时匹配图片文档的 Image
-// 返回已存在文档的 ID，不存在返回空字符串
-func (c *Collection) findExistingDocument(content, image string) string {
-	if content == "" && image == "" {
+// formatTagsText 将一组标签按 "[标签1],[标签2]" 格式拼接为用于嵌入的文本
+func formatTagsText(tags []string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(tags, "],[") + "]"
+}
+
+// findDuplicateByEmbedding 基于内容嵌入向量判定是否与既有记忆重复
+// 余弦相似度 > MemoryDedupThreshold 视为重复，返回已存在文档 ID；否则返回空字符串
+func (c *Collection) findDuplicateByEmbedding(vec []float32) string {
+	if len(vec) == 0 {
 		return ""
 	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for _, doc := range c.Documents {
-		if content != "" && doc.Content == content {
-			return doc.ID
+		if len(doc.Embedding) == 0 {
+			continue
 		}
-		if image != "" && doc.Image == image {
+		if cosineSimilarity(vec, doc.Embedding) >= MemoryDedupThreshold {
 			return doc.ID
 		}
 	}
 	return ""
 }
 
-// MemoryAddMessage 添加文本消息到记忆库，同步阻塞等待 LLM 标签生成完成
-// 返回生成的文档 UUID，LLM 标签生成失败则不存储文档
-// v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
-// v4: 写入前先去重，内容已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
+// MemoryAddMessage 添加文本消息到记忆库。
+// 无预设标签时，直接以文本全文计算内容嵌入向量；判定重复仅使用该内容嵌入向量，
+// 记忆库中不存储任何标签向量。文本内容存入 content 字段。
 func (d *MemoryDB) MemoryAddMessage(ctx context.Context, collectionName, role, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
 	}
-	if c.CollectionType != CollectionTypeText {
-		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
-	}
 
-	// 0. 去重检查：相同文本内容已存在则视为已完成
-	if existingID := c.findExistingDocument(content, ""); existingID != "" {
-		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
-		return existingID, nil
-	}
-
-	// 1. 生成 UUID
-	id := generateUUID()
-
-	// 2. LLM 生成标签（单线程 + 同步阻塞）
-	d.llmMu.Lock()
-	tags, err := d.generateTags(ctx, content, false, RecognitionAuto, "")
-	d.llmMu.Unlock()
-	if err != nil {
-		return "", fmt.Errorf("标签生成失败: %w", err)
-	}
-
-	// 3. 嵌入标签
-	tagVecs, err := d.embedTexts(ctx, c.Model, tags)
-	if err != nil {
-		return "", fmt.Errorf("标签嵌入失败: %w", err)
-	}
-
-	// 4. v3: 去重匹配，获取标签 UUID
-	UUIDtag := c.processTagVectors(tags, tagVecs)
-
-	// 4.5 v4: 嵌入正文内容，用于二阶段检索的内容级重排
+	// 1. 嵌入正文全文（文档语义：裸文本，不加前缀）
 	contentVec, err := d.embedText(ctx, c.Model, content)
 	if err != nil {
 		return "", fmt.Errorf("内容嵌入失败: %w", err)
 	}
 
-	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
+	// 2. 仅使用内容嵌入向量判定是否重复
+	if existingID := c.findDuplicateByEmbedding(contentVec); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在内容相近的文本记忆 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
+	}
+
+	// 3. 生成 UUID 并写入
+	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec, Timestamp: time.Now().Unix()})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
-	// 6. 持久化
+	// 4. 持久化
 	if err := c.saveDocumentsToFile(); err != nil {
 		return "", fmt.Errorf("保存文档失败: %w", err)
-	}
-	if err := c.saveTagsToFile(); err != nil {
-		return "", fmt.Errorf("保存标签向量失败: %w", err)
 	}
 
 	return id, nil
 }
 
-// MemoryAddMessageWithTags 添加文本消息并携带显式标签（跳过 LLM 标签生成）
-// 与 MemoryAddMessage 的不同点：标签直接由调用方提供（如阅读者智能体的启发式标签），
-// 后端仅负责嵌入标签、去重匹配标签向量、嵌入正文内容并持久化。
-// 适用于代码文件等可启发式提取标签的场景，避免逐片 LLM 标签的开销。
-// 返回生成的文档 UUID；tags 为空时返回错误（携带标签的入库路径必须提供标签）。
+// MemoryAddMessageWithTags 添加文本消息并携带预设标签。
+// 若存在预设标签，将标签按"[标签1],[标签2]"格式拼接后以该文本计算内容嵌入向量；
+// 若标签为空，回退为以正文全文计算嵌入向量。文本内容仍存入 content 字段。
+// 判定重复仅使用内容嵌入向量。
 func (d *MemoryDB) MemoryAddMessageWithTags(ctx context.Context, collectionName, role, content string, tags []string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
 	}
-	if c.CollectionType != CollectionTypeText {
-		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
+
+	// 1. 确定用于嵌入的文本：有预设标签用标签拼接文本，否则用正文全文
+	embedTextContent := content
+	if len(tags) > 0 {
+		embedTextContent = formatTagsText(tags)
 	}
 
-	// 0. 校验显式标签非空
-	if len(tags) == 0 {
-		return "", fmt.Errorf("MemoryAddMessageWithTags 需提供至少一个显式标签")
-	}
-
-	// 1. 去重检查：相同文本内容已存在则视为已完成
-	if existingID := c.findExistingDocument(content, ""); existingID != "" {
-		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
-		return existingID, nil
-	}
-
-	// 2. 生成 UUID
-	id := generateUUID()
-
-	// 3. 嵌入显式标签
-	tagVecs, err := d.embedTexts(ctx, c.Model, tags)
-	if err != nil {
-		return "", fmt.Errorf("标签嵌入失败: %w", err)
-	}
-
-	// 4. 去重匹配，获取标签 UUID
-	UUIDtag := c.processTagVectors(tags, tagVecs)
-
-	// 4.5 嵌入正文内容，用于二阶段检索的内容级重排
-	contentVec, err := d.embedText(ctx, c.Model, content)
+	contentVec, err := d.embedText(ctx, c.Model, embedTextContent)
 	if err != nil {
 		return "", fmt.Errorf("内容嵌入失败: %w", err)
 	}
 
-	// 5. 添加文档（含 TagUUIDs 与内容嵌入）
+	// 2. 仅使用内容嵌入向量判定是否重复
+	if existingID := c.findDuplicateByEmbedding(contentVec); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在内容相近的文本记忆 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
+	}
+
+	// 3. 生成 UUID 并写入（content 保存实际文本内容，标签文本仅用于嵌入）
+	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, TAGS: UUIDtag, Embedding: contentVec, Timestamp: time.Now().Unix()})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
-	// 6. 持久化
+	// 4. 持久化
 	if err := c.saveDocumentsToFile(); err != nil {
 		return "", fmt.Errorf("保存文档失败: %w", err)
-	}
-	if err := c.saveTagsToFile(); err != nil {
-		return "", fmt.Errorf("保存标签向量失败: %w", err)
 	}
 
 	return id, nil
 }
 
-// MemoryAddMessageSilent 添加消息但不生成标签（用于内部导入，无 LLM 开销）
-// 写入前先去重，内容已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
+// MemoryAddMessageSilent 添加消息但不做重复判定（用于内部导入，纯嵌入入库）
 func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, role, content string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
 	}
-	if c.CollectionType != CollectionTypeText {
-		return "", fmt.Errorf("集合 %s 类型为 %s，不支持文本消息添加", collectionName, c.CollectionType)
-	}
 
-	// 去重检查：相同文本内容已存在则视为已完成
-	if existingID := c.findExistingDocument(content, ""); existingID != "" {
-		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同文本内容 (ID=%s)，跳过重复写入", collectionName, existingID)
-		return existingID, nil
+	contentVec, err := d.embedText(ctx, c.Model, content)
+	if err != nil {
+		return "", fmt.Errorf("内容嵌入失败: %w", err)
 	}
 
 	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, Timestamp: time.Now().Unix()})
+	c.Documents = append(c.Documents, Document{ID: id, Role: role, Content: content, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	if err := c.saveDocumentsToFile(); err != nil {
@@ -510,36 +408,21 @@ func (d *MemoryDB) MemoryAddMessageSilent(ctx context.Context, collectionName, r
 	return id, nil
 }
 
-// MemoryAddImage 添加图片到记忆库，同步阻塞等待 LLM 标签生成完成
-// base64Image 为完整的 data:image/...;base64,... 格式
-// orientation/custom 指定图片识别取向，为空时默认自动处理
-// v3: 文档存储 TagUUIDs，标签向量不再存储文档引用
-// v4: 写入前先去重，图片已存在于当前集合则视为已完成，返回已有文档 ID，不重复写入
-// v5: 入库前先做感知者式标准化（静态图 640px 缩放/统一转码；动态图保留动画存储，
-//
-//	理解走 AnimatedImageToMedia 慢放视频 + file:// 引用的 llama-server 视频链路）
+// MemoryAddImage 添加图片到记忆库。
+// 调用多模态模型对图片进行标签化理解（仅图片入库时允许生成标签），在单次调用中以一组
+// 简短标签的文本形式描述画面内容，将生成的标签按"[标签1],[标签2]"格式拼接后以该文本
+// 计算内容嵌入向量（仅存储内容嵌入向量，不存储标签向量）。图片数据存入 base64 字段。
+// orientation/custom 指定图片识别取向，为空时默认自动处理。
 func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Image string, orientation string, custom string) (string, error) {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
 		return "", err
 	}
-	if c.CollectionType != CollectionTypeImage {
-		return "", fmt.Errorf("集合 %s 类型为 %s，不支持图片添加", collectionName, c.CollectionType)
-	}
 
-	// 0. 感知者式标准化：得到入库 URI（静态图缩放/转码；动态图保留动画）与视频理解引用
+	// 1. 感知者式标准化：得到入库 URI（静态图缩放/转码；动态图保留动画）与视频理解引用
 	storeURI, mediaRefs, animated := standardizeMemoryImage(base64Image)
 
-	// 0.5 去重检查：标准化后的相同图片已存在则视为已完成
-	if existingID := c.findExistingDocument("", storeURI); existingID != "" {
-		LoggerGeneral.Info("FileManager", "集合 %s 已存在相同图片 (ID=%s)，跳过重复写入", collectionName, existingID)
-		return existingID, nil
-	}
-
-	// 1. 生成 UUID
-	id := generateUUID()
-
-	// 2. LLM 生成标签（单线程 + 同步阻塞）：动态图走 file:// 视频链路，静态图走单图
+	// 2. 多模态标签化理解（单线程 + 同步阻塞）：动态图走 file:// 视频链路，静态图走单图
 	d.llmMu.Lock()
 	var tags []string
 	if animated && len(mediaRefs) > 0 {
@@ -557,76 +440,30 @@ func (d *MemoryDB) MemoryAddImage(ctx context.Context, collectionName, base64Ima
 		return "", fmt.Errorf("标签生成失败: %w", err)
 	}
 
-	// 3. 嵌入标签
-	tagVecs, err := d.embedTexts(ctx, c.Model, tags)
-	if err != nil {
-		return "", fmt.Errorf("标签嵌入失败: %w", err)
-	}
-
-	// 4. v3: 去重匹配，获取标签 UUID
-	tagUUIDs := c.processTagVectors(tags, tagVecs)
-
-	// 4.5 v4: 嵌入标签拼接文本作为图片内容向量（image 无法直接用文本嵌入模型）
-	contentVec, err := d.embedText(ctx, c.Model, strings.Join(tags, " "))
+	// 3. 将标签按[标签1],[标签2]格式拼接，以该文本计算内容嵌入向量
+	contentVec, err := d.embedText(ctx, c.Model, formatTagsText(tags))
 	if err != nil {
 		return "", fmt.Errorf("图片内容嵌入失败: %w", err)
 	}
 
-	// 5. 添加文档（含 TagUUIDs 与内容嵌入；存储标准化后的 data URI）
+	// 4. 仅使用内容嵌入向量判定是否重复
+	if existingID := c.findDuplicateByEmbedding(contentVec); existingID != "" {
+		LoggerGeneral.Info("FileManager", "集合 %s 已存在内容相近的图片记忆 (ID=%s)，跳过重复写入", collectionName, existingID)
+		return existingID, nil
+	}
+
+	// 5. 添加文档（base64 存储图片，内容字段为空，仅存储内容嵌入向量）
+	id := generateUUID()
 	c.mu.Lock()
-	c.Documents = append(c.Documents, Document{ID: id, Image: storeURI, TAGS: tagUUIDs, Embedding: contentVec, Timestamp: time.Now().Unix()})
+	c.Documents = append(c.Documents, Document{ID: id, Base64: storeURI, Embedding: contentVec, Timestamp: time.Now().Unix()})
 	c.mu.Unlock()
 
 	// 6. 持久化
 	if err := c.saveDocumentsToFile(); err != nil {
 		return "", fmt.Errorf("保存文档失败: %w", err)
 	}
-	if err := c.saveTagsToFile(); err != nil {
-		return "", fmt.Errorf("保存标签向量失败: %w", err)
-	}
 
 	return id, nil
-}
-
-// processTagVectors 对标签向量进行去重匹配，返回每个标签对应的 UUID
-// v3: 标签向量拥有独立 UUID，不再存储文档引用
-// 余弦相似度 > TagDedupThreshold 时复用已有标签向量 UUID
-func (c *Collection) processTagVectors(tags []string, newVecs [][]float32) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	tagUUIDs := make([]string, len(newVecs))
-	for i, vec := range newVecs {
-		bestIdx := -1
-		bestSim := float32(-1)
-
-		for j, tv := range c.TagVectors {
-			sim := cosineSimilarity(vec, tv.Embedding)
-			if sim > bestSim {
-				bestSim = sim
-				bestIdx = j
-			}
-		}
-
-		if bestSim >= TagDedupThreshold {
-			// 复用已有标签向量
-			tagUUIDs[i] = c.TagVectors[bestIdx].UUID
-		} else {
-			// 新增标签向量
-			tagText := ""
-			if i < len(tags) {
-				tagText = tags[i]
-			}
-			newUUID := generateUUID()
-			c.TagVectors = append(c.TagVectors, TagVector{
-				UUID:      newUUID,
-				Tag:       tagText,
-				Embedding: vec,
-			})
-			tagUUIDs[i] = newUUID
-		}
-	}
-	return tagUUIDs
 }
 
 // MemoryQueryMessages 查询记忆库，返回 topK 条最匹配的 JSON 消息字符串
@@ -641,9 +478,10 @@ func (d *MemoryDB) MemoryQueryMessages(ctx context.Context, collectionName, quer
 		msg := memoryMessage{
 			Role:      r.Role,
 			Content:   r.Content,
+			Base64:    r.Base64,
 			Timestamp: r.Timestamp,
 		}
-		if r.Image != "" {
+		if r.Base64 != "" {
 			msg.Role = "image"
 		}
 		jsonBytes, err := json.Marshal(msg)
@@ -655,12 +493,9 @@ func (d *MemoryDB) MemoryQueryMessages(ctx context.Context, collectionName, quer
 	return jsonMessages, nil
 }
 
-// MemoryQueryMessagesWithContent 查询记忆库，返回 topK 条带内容的查询结果
-// 使用二阶段检索算法（v4）：
-//  1. 嵌入查询文本
-//  2. 阶段一（标签召回）：与标签向量算余弦，按放宽池取候选文档
-//  3. 阶段二（内容重排）：候选文档内容余弦与标签得分融合排序
-//  4. 低于 DocRankThreshold 过滤，按融合得分降序 + 原始插入顺序返回
+// MemoryQueryMessagesWithContent 查询记忆库，返回 topK 条带内容的查询结果。
+// v5: 内容向量检索——嵌入查询文本，与全量文档内容向量算余弦，过滤后降序返回。
+// 客户端依据返回结果的 content 与 base64 字段自行判定和选取记忆类型。
 func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectionName, queryText string, topK int) ([]MemoryQueryResult, error) {
 	if topK <= 0 {
 		return nil, nil
@@ -679,101 +514,36 @@ func (d *MemoryDB) MemoryQueryMessagesWithContent(ctx context.Context, collectio
 		return nil, fmt.Errorf("查询嵌入失败: %w", err)
 	}
 
-	// 2-4. 二阶段检索
+	// 2. 内容向量检索
 	return c.queryTopK(queryVec, topK), nil
 }
 
-// queryTopK 标签向量中介检索核心算法 (v4: 二阶段检索)
-// 阶段一（标签召回）: 嵌入查询 → 与全量标签算余弦 → 取放宽后的标签候选池 → 命中候选文档
-// 阶段二（内容重排）: 对候选文档计算内容余弦，与标签命中得分融合后排序
-// 融合得分 = TagScoreWeight*标签均分 + ContentScoreWeight*内容余弦，低于 DocRankThreshold 过滤
+// queryTopK 内容向量检索核心算法 (v5)
+// 嵌入查询 → 与全量文档内容向量算余弦相似度 → 过滤低于 DocRankThreshold 的 →
+// 按相似度降序（同分按插入顺序）返回 topK 条
 func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if len(c.TagVectors) == 0 || len(c.Documents) == 0 || topK <= 0 {
+	if len(c.Documents) == 0 || topK <= 0 {
 		return nil
 	}
 
-	// ---- 阶段一：标签候选召回（放宽池，保证召回） ----
-	type tagScored struct {
-		idx   int
-		score float32
-	}
-	tagScores := make([]tagScored, len(c.TagVectors))
-	for i, tv := range c.TagVectors {
-		tagScores[i] = tagScored{idx: i, score: cosineSimilarity(queryVec, tv.Embedding)}
-	}
-
-	sort.SliceStable(tagScores, func(i, j int) bool {
-		return tagScores[i].score > tagScores[j].score
-	})
-
-	tagPoolSize := topK * TagPoolMultiplier
-	if tagPoolSize < MinTagPool {
-		tagPoolSize = MinTagPool
-	}
-	if tagPoolSize > len(tagScores) {
-		tagPoolSize = len(tagScores)
-	}
-
-	// 标签UUID → 最高相似度（放宽后的候选池）
-	tagScoreMap := make(map[string]float32, tagPoolSize)
-	for i := 0; i < tagPoolSize; i++ {
-		uuid := c.TagVectors[tagScores[i].idx].UUID
-		if existing, ok := tagScoreMap[uuid]; !ok || tagScores[i].score > existing {
-			tagScoreMap[uuid] = tagScores[i].score
-		}
-	}
-
-	// 候选文档 + 标签命中均分
-	type docCandidate struct {
-		doc      Document
-		tagScore float32
-		order    int
-	}
-
-	docOrder := make(map[string]int, len(c.Documents))
-	for i, doc := range c.Documents {
-		docOrder[doc.ID] = i
-	}
-
-	candidates := make([]docCandidate, 0)
-	for _, doc := range c.Documents {
-		var sum float32
-		var matchCount int
-		for _, tagUUID := range doc.TAGS {
-			if score, ok := tagScoreMap[tagUUID]; ok {
-				sum += score
-				matchCount++
-			}
-		}
-		if matchCount > 0 {
-			candidates = append(candidates, docCandidate{
-				doc:      doc,
-				tagScore: sum / float32(matchCount),
-				order:    docOrder[doc.ID],
-			})
-		}
-	}
-
-	if len(candidates) == 0 {
-		return nil
-	}
-
-	// ---- 阶段二：内容级重排 ----
 	type ranked struct {
 		idx   int
-		fused float32
+		sim   float32
+		order int
 	}
-	rankedList := make([]ranked, 0, len(candidates))
-	for i, cand := range candidates {
-		contentScore := cosineSimilarity(queryVec, cand.doc.Embedding)
-		fused := TagScoreWeight*cand.tagScore + ContentScoreWeight*contentScore
-		if fused < DocRankThreshold {
+	rankedList := make([]ranked, 0, len(c.Documents))
+	for i, doc := range c.Documents {
+		if len(doc.Embedding) == 0 {
 			continue
 		}
-		rankedList = append(rankedList, ranked{idx: i, fused: fused})
+		sim := cosineSimilarity(queryVec, doc.Embedding)
+		if sim < DocRankThreshold {
+			continue
+		}
+		rankedList = append(rankedList, ranked{idx: i, sim: sim, order: i})
 	}
 
 	if len(rankedList) == 0 {
@@ -781,10 +551,10 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 	}
 
 	sort.SliceStable(rankedList, func(i, j int) bool {
-		if rankedList[i].fused != rankedList[j].fused {
-			return rankedList[i].fused > rankedList[j].fused
+		if rankedList[i].sim != rankedList[j].sim {
+			return rankedList[i].sim > rankedList[j].sim
 		}
-		return candidates[rankedList[i].idx].order < candidates[rankedList[j].idx].order
+		return rankedList[i].order < rankedList[j].order
 	})
 
 	if topK > len(rankedList) {
@@ -793,18 +563,17 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 
 	results := make([]MemoryQueryResult, topK)
 	for i := 0; i < topK; i++ {
-		cand := &candidates[rankedList[i].idx]
-		doc := &cand.doc
+		doc := &c.Documents[rankedList[i].idx]
 		role := doc.Role
-		if doc.Image != "" {
+		if doc.Base64 != "" {
 			role = "image"
 		}
 		results[i] = MemoryQueryResult{
 			ID:         doc.ID,
 			Role:       role,
 			Content:    doc.Content,
-			Image:      doc.Image,
-			Similarity: rankedList[i].fused,
+			Base64:     doc.Base64,
+			Similarity: rankedList[i].sim,
 			Timestamp:  doc.Timestamp,
 		}
 	}
@@ -812,8 +581,6 @@ func (c *Collection) queryTopK(queryVec []float32, topK int) []MemoryQueryResult
 }
 
 // MemoryDeleteMessage 删除指定 UUID 的文档
-// v3: 仅删除文档本身 (O(1))，不再遍历标签向量清理引用
-// 悬空标签留待 MemoryRebuildEntries 或 MemoryClearCollection 时统一清理
 func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName, id string) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -836,7 +603,7 @@ func (d *MemoryDB) MemoryDeleteMessage(ctx context.Context, collectionName, id s
 		return nil
 	}
 
-	// 2. v3: 仅持久化文档，不清理标签向量（悬空标签留待重建时处理）
+	// 2. 持久化
 	if err := c.saveDocumentsToFile(); err != nil {
 		return fmt.Errorf("保存文档失败: %w", err)
 	}
@@ -881,14 +648,14 @@ func (d *MemoryDB) MemoryGetDocuments(collectionName string, offset, limit int) 
 	for i := offset; i < end; i++ {
 		doc := c.Documents[i]
 		role := doc.Role
-		if doc.Image != "" {
+		if doc.Base64 != "" {
 			role = "image"
 		}
 		entries[i-offset] = DocumentEntry{
 			ID:        doc.ID,
 			Role:      role,
 			Content:   doc.Content,
-			Image:     doc.Image,
+			Base64:    doc.Base64,
 			Timestamp: doc.Timestamp,
 		}
 	}
@@ -904,8 +671,7 @@ func (d *MemoryDB) MemoryGetEntryCount(collectionName string) int {
 	return c.docCount()
 }
 
-// MemoryHasSyncMismatch 检查集合中文档引用的标签 UUID 是否都存在
-// v3: 检查文档的 TagUUIDs 是否都指向存在的标签向量
+// MemoryHasSyncMismatch 检查集合中是否存在缺失内容向量的文档
 func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -917,29 +683,11 @@ func (d *MemoryDB) MemoryHasSyncMismatch(collectionName string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	docCount := len(c.Documents)
-	if docCount == 0 {
-		return false
-	}
-
-	tagCount := len(c.TagVectors)
-	if tagCount == 0 && docCount > 0 {
-		return true // 有文档但没有标签向量
-	}
-
-	// v3: 检查是否有文档引用了不存在的标签 UUID
-	tagUUIDSet := make(map[string]struct{}, tagCount)
-	for _, tv := range c.TagVectors {
-		tagUUIDSet[tv.UUID] = struct{}{}
-	}
 	for _, doc := range c.Documents {
-		for _, tagUUID := range doc.TAGS {
-			if _, ok := tagUUIDSet[tagUUID]; !ok {
-				return true // 文档引用了不存在的标签（悬空引用）
-			}
+		if len(doc.Embedding) == 0 {
+			return true // 存在缺失内容向量的文档
 		}
 	}
-
 	return false
 }
 
@@ -969,28 +717,27 @@ func (d *MemoryDB) MemoryClearCollection(collectionName string) error {
 
 	c.mu.Lock()
 	c.Documents = make([]Document, 0)
-	c.TagVectors = make([]TagVector, 0)
 	c.mu.Unlock()
 
-	// 删除所有分块文件
-	patterns := []string{"documents_*.json", "images_*.json", "tags_*.json"}
-	for _, pattern := range patterns {
-		files, _ := filepath.Glob(filepath.Join(c.collDir, pattern))
-		for _, f := range files {
-			os.Remove(f)
-		}
+	// 删除所有分块文件（文档 + 嵌入向量）
+	files, _ := filepath.Glob(filepath.Join(c.collDir, "documents_*.json"))
+	for _, f := range files {
+		os.Remove(f)
+	}
+	embFiles, _ := filepath.Glob(filepath.Join(c.collDir, "embeddings_*.json"))
+	for _, f := range embFiles {
+		os.Remove(f)
 	}
 
 	c.documentsChunkCount = 0
-	c.imagesChunkCount = 0
-	c.tagsChunkCount = 0
+	c.embeddingsChunkCount = 0
 
 	return c.saveCollectionMeta()
 }
 
-// MemoryRebuildEntries 重建集合的标签向量（重新生成标签 + 嵌入）
-// v3: 逐文档重新生成标签，仅保留被文档引用的标签向量（自动丢弃悬空标签）
-// 当嵌入模型变更时调用
+// MemoryRebuildEntries 重建集合格文档的内容嵌入向量：
+// 文本记忆以正文重新嵌入；图片记忆重新调用多模态生成标签并以标签文本重新嵌入。
+// 当嵌入模型变更时调用。
 func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, modelName string, progress func(int, int)) error {
 	c, err := d.getCollection(collectionName)
 	if err != nil {
@@ -1002,63 +749,41 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 	copy(docs, c.Documents)
 	c.mu.RUnlock()
 
-	// v3: 清空旧标签向量，重建后仅保留被引用的标签
-	c.mu.Lock()
-	c.TagVectors = make([]TagVector, 0)
-	c.mu.Unlock()
-
-	// 更新模型
-	c.Model = modelName
+	// 更新模型（modelName 为空时沿用当前模型）
+	effectiveModel := c.Model
+	if modelName != "" {
+		effectiveModel = modelName
+		c.Model = modelName
+	}
 
 	for i, doc := range docs {
 		if progress != nil {
 			progress(i+1, len(docs))
 		}
 
-		var content string
-		var isImage bool
-		if doc.Image != "" {
-			content = doc.Image
-			isImage = true
+		var contentVec []float32
+		if doc.Base64 != "" {
+			// 图片记忆：重新多模态生成标签并以标签文本嵌入
+			d.llmMu.Lock()
+			tags, terr := d.generateTags(ctx, doc.Base64, true, RecognitionAuto, "")
+			d.llmMu.Unlock()
+			if terr != nil {
+				LoggerGeneral.Warn("FileManager", "重建图片标签失败 [%s]: %v", doc.ID, terr)
+				continue
+			}
+			contentVec, err = d.embedText(ctx, effectiveModel, formatTagsText(tags))
 		} else {
-			content = doc.Content
+			// 文本记忆：以正文全文重新嵌入
+			contentVec, err = d.embedText(ctx, effectiveModel, doc.Content)
 		}
-
-		// LLM 生成标签
-		d.llmMu.Lock()
-		tags, err := d.generateTags(ctx, content, isImage, RecognitionAuto, "")
-		d.llmMu.Unlock()
-		if err != nil {
-			LoggerGeneral.Warn("FileManager", "重建标签失败 [%s]: %v", doc.ID, err)
-			continue
-		}
-
-		// 嵌入标签
-		tagVecs, err := d.embedTexts(ctx, modelName, tags)
-		if err != nil {
-			LoggerGeneral.Warn("FileManager", "嵌入标签失败 [%s]: %v", doc.ID, err)
-			continue
-		}
-
-		// v3: 去重匹配，获取标签 UUID
-		tagUUIDs := c.processTagVectors(tags, tagVecs)
-
-		// v4: 嵌入内容向量（text 为正文，image 为标签拼接）
-		repText := doc.Content
-		if isImage {
-			repText = strings.Join(tags, " ")
-		}
-		contentVec, err := d.embedText(ctx, modelName, repText)
 		if err != nil {
 			LoggerGeneral.Warn("FileManager", "嵌入内容失败 [%s]: %v", doc.ID, err)
 			continue
 		}
 
-		// v3/v4: 更新文档的 TagUUIDs 与内容嵌入
 		c.mu.Lock()
 		for j := range c.Documents {
 			if c.Documents[j].ID == doc.ID {
-				c.Documents[j].TAGS = tagUUIDs
 				c.Documents[j].Embedding = contentVec
 				break
 			}
@@ -1066,12 +791,8 @@ func (d *MemoryDB) MemoryRebuildEntries(ctx context.Context, collectionName, mod
 		c.mu.Unlock()
 	}
 
-	// v3: 重建完成，TagVectors 仅包含被文档引用的标签（悬空标签已自动丢弃）
 	if err := c.saveDocumentsToFile(); err != nil {
 		return fmt.Errorf("保存文档失败: %w", err)
-	}
-	if err := c.saveTagsToFile(); err != nil {
-		return fmt.Errorf("保存标签向量失败: %w", err)
 	}
 	if err := c.saveCollectionMeta(); err != nil {
 		return fmt.Errorf("保存元数据失败: %w", err)
@@ -1107,18 +828,13 @@ func (d *MemoryDB) MemoryGetCollectionInfo(collectionName string) map[string]int
 		"name":                  c.Name,
 		"embedding_model":       c.Model,
 		"embedding_dimension":   c.Dimension,
-		"multimodal_model":      c.MultimodalModel,
-		"type":                  c.CollectionType,
 		"version":               CurrentVersion,
 		"document_count":        len(c.Documents),
-		"tag_count":             len(c.TagVectors),
 		"documents_chunk_count": c.documentsChunkCount,
-		"images_chunk_count":    c.imagesChunkCount,
-		"tags_chunk_count":      c.tagsChunkCount,
 	}
 }
 
-// MemoryGetCollectionInfoWithType 返回指定集合的详细元数据信息（含类型）
+// MemoryGetCollectionInfoWithType 返回指定集合的详细元数据信息（含类型，兼容历史调用方）
 func (d *MemoryDB) MemoryGetCollectionInfoWithType(collectionName string) map[string]interface{} {
 	return d.MemoryGetCollectionInfo(collectionName)
 }
@@ -1127,19 +843,14 @@ func (d *MemoryDB) MemoryGetCollectionInfoWithType(collectionName string) map[st
 // 文件路径辅助函数
 // =============================================================================
 
-// documentsFilePath 返回 text 文档分块文件路径
+// documentsFilePath 返回文档分块文件路径
 func (c *Collection) documentsFilePath(chunkNum int) string {
 	return filepath.Join(c.collDir, fmt.Sprintf("documents_%04d.json", chunkNum))
 }
 
-// imagesFilePath 返回 image 文档分块文件路径
-func (c *Collection) imagesFilePath(chunkNum int) string {
-	return filepath.Join(c.collDir, fmt.Sprintf("images_%04d.json", chunkNum))
-}
-
-// tagsFilePath 返回标签向量分块文件路径
-func (c *Collection) tagsFilePath(chunkNum int) string {
-	return filepath.Join(c.collDir, fmt.Sprintf("tags_%04d.json", chunkNum))
+// embeddingsFilePath 返回嵌入向量分块文件路径
+func (c *Collection) embeddingsFilePath(chunkNum int) string {
+	return filepath.Join(c.collDir, fmt.Sprintf("embeddings_%04d.json", chunkNum))
 }
 
 // =============================================================================
@@ -1155,9 +866,9 @@ func readJSONFile(path string, target interface{}) error {
 	return json.Unmarshal(data, target)
 }
 
-// atomicWriteJSON 原子写入 JSON 文件（先写临时文件，再重命名）
+// atomicWriteJSON 原子写入 JSON 文件（先写临时文件，再重命名；单行紧凑存储，不格式化）
 func atomicWriteJSON(path string, data interface{}) error {
-	jsonBytes, err := json.MarshalIndent(data, "", "    ")
+	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("JSON 序列化失败: %w", err)
 	}
@@ -1201,20 +912,17 @@ func substituteRename(tmpPath, path string) error {
 }
 
 // =============================================================================
-// 持久化 — 元数据、文档、标签向量
+// 持久化 — 元数据、文档
 // =============================================================================
 
 // saveCollectionMeta 保存集合元数据到 metadata.json
 func (c *Collection) saveCollectionMeta() error {
 	meta := collectionMeta{
-		EmbeddingModel:      c.Model,
-		EmbeddingDimension:  c.Dimension,
-		MultimodalModel:     c.MultimodalModel,
-		Type:                c.CollectionType,
-		Version:             CurrentVersion,
-		DocumentsChunkCount: c.documentsChunkCount,
-		ImagesChunkCount:    c.imagesChunkCount,
-		TagsChunkCount:      c.tagsChunkCount,
+		EmbeddingModel:       c.Model,
+		EmbeddingDimension:   c.Dimension,
+		Version:              CurrentVersion,
+		DocumentsChunkCount:  c.documentsChunkCount,
+		EmbeddingsChunkCount: c.embeddingsChunkCount,
 	}
 	return atomicWriteJSON(c.metaPath, meta)
 }
@@ -1226,37 +934,44 @@ func (c *Collection) updateLastModTime() {
 	}
 }
 
-// loadDocumentsFromFile 从分块文件加载文档到内存
+// loadDocumentsFromFile 从分块文件加载文档与嵌入向量到内存
+// documents_NNNN.json 存文档本体（不含向量），embeddings_NNNN.json 存向量并按 ID 关联
 func (c *Collection) loadDocumentsFromFile() error {
 	var allDocs []Document
 
-	if c.CollectionType == CollectionTypeImage {
-		// 加载 images_*.json
-		for i := 1; ; i++ {
-			path := c.imagesFilePath(i)
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				break
-			}
-			var docs []Document
-			if err := readJSONFile(path, &docs); err != nil {
-				return fmt.Errorf("读取 %s 失败: %w", path, err)
-			}
-			allDocs = append(allDocs, docs...)
-			c.imagesChunkCount = i
+	for i := 1; ; i++ {
+		path := c.documentsFilePath(i)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
 		}
-	} else {
-		// 加载 documents_*.json
-		for i := 1; ; i++ {
-			path := c.documentsFilePath(i)
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				break
-			}
-			var docs []Document
-			if err := readJSONFile(path, &docs); err != nil {
-				return fmt.Errorf("读取 %s 失败: %w", path, err)
-			}
-			allDocs = append(allDocs, docs...)
-			c.documentsChunkCount = i
+		var docs []Document
+		if err := readJSONFile(path, &docs); err != nil {
+			return fmt.Errorf("读取 %s 失败: %w", path, err)
+		}
+		allDocs = append(allDocs, docs...)
+		c.documentsChunkCount = i
+	}
+
+	// 加载嵌入向量切片并按 ID 挂回文档
+	embMap := make(map[string][]float32, len(allDocs))
+	for i := 1; ; i++ {
+		path := c.embeddingsFilePath(i)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		var records []embeddingRecord
+		if err := readJSONFile(path, &records); err != nil {
+			return fmt.Errorf("读取 %s 失败: %w", path, err)
+		}
+		for _, rec := range records {
+			embMap[rec.ID] = rec.Embedding
+		}
+		c.embeddingsChunkCount = i
+	}
+
+	for j := range allDocs {
+		if vec, ok := embMap[allDocs[j].ID]; ok {
+			allDocs[j].Embedding = vec
 		}
 	}
 
@@ -1267,7 +982,9 @@ func (c *Collection) loadDocumentsFromFile() error {
 	return nil
 }
 
-// saveDocumentsToFile 将文档保存到分块文件
+// saveDocumentsToFile 将文档与嵌入向量保存到分块文件（100 条/块）
+// 文档写入 documents_NNNN.json（Embedding 为 json:"-" 不落盘），
+// 嵌入向量写入 embeddings_NNNN.json，两份切片按相同索引一一对应
 func (c *Collection) saveDocumentsToFile() error {
 	c.mu.RLock()
 	docs := make([]Document, len(c.Documents))
@@ -1275,13 +992,8 @@ func (c *Collection) saveDocumentsToFile() error {
 	c.mu.RUnlock()
 
 	chunkSize := DocumentsChunkSize
-	oldChunkCount := c.documentsChunkCount
-	isImage := c.CollectionType == CollectionTypeImage
-
-	if isImage {
-		chunkSize = ImagesChunkSize
-		oldChunkCount = c.imagesChunkCount
-	}
+	oldDocCount := c.documentsChunkCount
+	oldEmbCount := c.embeddingsChunkCount
 
 	total := len(docs)
 	newChunkCount := (total + chunkSize - 1) / chunkSize
@@ -1289,7 +1001,7 @@ func (c *Collection) saveDocumentsToFile() error {
 		newChunkCount = 0
 	}
 
-	// 写入各分块
+	// 写入各分块（文档 + 嵌入向量）
 	for i := 0; i < newChunkCount; i++ {
 		chunkNum := i + 1
 		start := i * chunkSize
@@ -1297,109 +1009,32 @@ func (c *Collection) saveDocumentsToFile() error {
 		if end > total {
 			end = total
 		}
-		chunk := docs[start:end]
 
-		var path string
-		if isImage {
-			path = c.imagesFilePath(chunkNum)
-		} else {
-			path = c.documentsFilePath(chunkNum)
+		docChunk := docs[start:end]
+		if err := atomicWriteJSON(c.documentsFilePath(chunkNum), docChunk); err != nil {
+			return err
 		}
 
-		if err := atomicWriteJSON(path, chunk); err != nil {
+		embChunk := make([]embeddingRecord, end-start)
+		for j := range embChunk {
+			d := docChunk[j]
+			embChunk[j] = embeddingRecord{ID: d.ID, Embedding: d.Embedding}
+		}
+		if err := atomicWriteJSON(c.embeddingsFilePath(chunkNum), embChunk); err != nil {
 			return err
 		}
 	}
 
 	// 清理多余的分块文件
-	for i := newChunkCount + 1; i <= oldChunkCount; i++ {
-		var path string
-		if isImage {
-			path = c.imagesFilePath(i)
-		} else {
-			path = c.documentsFilePath(i)
-		}
-		os.Remove(path)
+	for i := newChunkCount + 1; i <= oldDocCount; i++ {
+		os.Remove(c.documentsFilePath(i))
+	}
+	for i := newChunkCount + 1; i <= oldEmbCount; i++ {
+		os.Remove(c.embeddingsFilePath(i))
 	}
 
-	if isImage {
-		c.imagesChunkCount = newChunkCount
-	} else {
-		c.documentsChunkCount = newChunkCount
-	}
-
-	return c.saveCollectionMeta()
-}
-
-// loadTagsFromFile 从分块文件加载标签向量到内存
-func (c *Collection) loadTagsFromFile() error {
-	var meta collectionMeta
-	if err := readJSONFile(c.metaPath, &meta); err != nil {
-		return err
-	}
-
-	if meta.TagsChunkCount == 0 {
-		c.mu.Lock()
-		c.TagVectors = make([]TagVector, 0)
-		c.mu.Unlock()
-		c.tagsChunkCount = 0
-		return nil
-	}
-
-	var allTags []TagVector
-	for i := 1; i <= meta.TagsChunkCount; i++ {
-		path := c.tagsFilePath(i)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			break
-		}
-		var tags []TagVector
-		if err := readJSONFile(path, &tags); err != nil {
-			return fmt.Errorf("读取 %s 失败: %w", path, err)
-		}
-		allTags = append(allTags, tags...)
-	}
-
-	c.mu.Lock()
-	c.TagVectors = allTags
-	c.mu.Unlock()
-	c.tagsChunkCount = meta.TagsChunkCount
-
-	return nil
-}
-
-// saveTagsToFile 将标签向量保存到分块文件
-func (c *Collection) saveTagsToFile() error {
-	c.mu.RLock()
-	tags := make([]TagVector, len(c.TagVectors))
-	copy(tags, c.TagVectors)
-	c.mu.RUnlock()
-
-	total := len(tags)
-	newChunkCount := (total + TagsChunkSize - 1) / TagsChunkSize
-	if total == 0 {
-		newChunkCount = 0
-	}
-
-	// 写入各分块
-	for i := 0; i < newChunkCount; i++ {
-		chunkNum := i + 1
-		start := i * TagsChunkSize
-		end := start + TagsChunkSize
-		if end > total {
-			end = total
-		}
-
-		if err := atomicWriteJSON(c.tagsFilePath(chunkNum), tags[start:end]); err != nil {
-			return err
-		}
-	}
-
-	// 清理多余的分块文件
-	for i := newChunkCount + 1; i <= c.tagsChunkCount; i++ {
-		os.Remove(c.tagsFilePath(i))
-	}
-
-	c.tagsChunkCount = newChunkCount
+	c.documentsChunkCount = newChunkCount
+	c.embeddingsChunkCount = newChunkCount
 
 	return c.saveCollectionMeta()
 }
@@ -1410,7 +1045,6 @@ func (c *Collection) reloadIfChanged() {
 		return
 	} else if !info.ModTime().Equal(c.lastFileModTime) {
 		c.loadDocumentsFromFile()
-		c.loadTagsFromFile()
 		c.updateLastModTime()
 	}
 }
@@ -1472,11 +1106,11 @@ func MemoryInitInstance() error {
 }
 
 // CollectionInit 全局初始化集合
-func CollectionInit(ctx context.Context, name, modelName, collectionType string) error {
+func CollectionInit(ctx context.Context, name, modelName string) error {
 	if globalMemoryDB == nil {
 		return fmt.Errorf("全局 MemoryDB 未初始化")
 	}
-	return globalMemoryDB.CollectionInit(ctx, name, modelName, collectionType)
+	return globalMemoryDB.CollectionInit(ctx, name, modelName)
 }
 
 // MemoryAddMessage 全局添加消息
@@ -1487,7 +1121,7 @@ func MemoryAddMessage(ctx context.Context, collectionName, role, content string)
 	return globalMemoryDB.MemoryAddMessage(ctx, collectionName, role, content)
 }
 
-// MemoryAddMessageSilent 全局添加消息（无标签生成）
+// MemoryAddMessageSilent 全局添加消息（无重复判定）
 func MemoryAddMessageSilent(ctx context.Context, collectionName, role, content string) (string, error) {
 	if globalMemoryDB == nil {
 		return "", fmt.Errorf("全局 MemoryDB 未初始化")
@@ -1495,7 +1129,7 @@ func MemoryAddMessageSilent(ctx context.Context, collectionName, role, content s
 	return globalMemoryDB.MemoryAddMessageSilent(ctx, collectionName, role, content)
 }
 
-// MemoryAddMessageWithTags 全局添加消息（携带显式标签，跳过 LLM 标签生成）
+// MemoryAddMessageWithTags 全局添加消息（携带预设标签，以标签文本嵌入）
 func MemoryAddMessageWithTags(ctx context.Context, collectionName, role, content string, tags []string) (string, error) {
 	if globalMemoryDB == nil {
 		return "", fmt.Errorf("全局 MemoryDB 未初始化")
@@ -1621,22 +1255,4 @@ func IsMemoryInitialized() bool {
 		return false
 	}
 	return globalMemoryDB.IsMemoryInitialized()
-}
-
-// =============================================================================
-// 调试接口 — 供测试模块使用
-// =============================================================================
-
-// MemoryDebugGetRawTags 获取指定集合的原始标签向量数据（调试用）
-func MemoryDebugGetRawTags(collectionName string) interface{} {
-	if globalMemoryDB == nil {
-		return nil
-	}
-	c, err := globalMemoryDB.getCollection(collectionName)
-	if err != nil {
-		return nil
-	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.TagVectors
 }

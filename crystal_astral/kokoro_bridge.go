@@ -1,7 +1,7 @@
 package main
 
 import (
-	"CrystalAstral/kokoro_tts"
+	"CrystalAstral/engine/KokoroTTS"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"fmt"
@@ -41,17 +41,17 @@ func ensureKokoro() error {
 		// 指定 onnxruntime.dll（随模型目录放置）
 		dllPath := filepath.Join(modelDir, "onnxruntime.dll")
 		if _, err := os.Stat(dllPath); err == nil {
-			kokoro_tts.SetOnnxLibraryPath(dllPath)
+			KokoroTTS.SetOnnxLibraryPath(dllPath)
 			LoggerGeneral.Info("CrystalAstral", "Kokoro 使用 onnxruntime.dll: %s", dllPath)
 		}
 
-		kokoroInitErr = kokoro_tts.InitEngine(
+		kokoroInitErr = KokoroTTS.InitEngine(
 			modelDir,
 			filepath.Join(modelDir, "voices"),
 			filepath.Join(modelDir, "espeak"),
 		)
 		if kokoroInitErr == nil {
-			engine := kokoro_tts.GetEngine()
+			engine := KokoroTTS.GetEngine()
 			if engine != nil {
 				engine.LogAvailable()
 			}

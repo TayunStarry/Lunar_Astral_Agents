@@ -9,29 +9,13 @@ const (
 	CategoryText  = "text"
 )
 
-// 记忆库集合类型常量
+// v5 记忆库配置常量 — 文本/图片混合存储，仅内容嵌入向量
 const (
-	CollectionTypeText  = "text"  // 文本集合类型（documents_*.json + tags_*.json 分块存储）
-	CollectionTypeImage = "image" // 图片集合类型（images_*.json + tags_*.json 分块存储）
-)
-
-// v2 记忆库分块大小常量
-const (
-	DocumentsChunkSize = 500 // text 文档分块大小（条/块）
-	ImagesChunkSize    = 20  // image 文档分块大小（条/块）
-	TagsChunkSize      = 100 // 标签向量分块大小（条/块）
-)
-
-// v4 记忆库配置常量
-const (
-	CurrentVersion     = 4    // 当前数据格式版本号（v4: 文档内容嵌入 + 二阶段检索）
-	TagDedupThreshold  = 0.85 // 标签向量去重阈值（余弦相似度）
-	MaxTagRetries      = 3    // LLM 标签生成最大重试次数
-	TagPoolMultiplier  = 4    // 标签候选池放大倍数（相对 topK，用于放宽召回）
-	MinTagPool         = 10   // 标签候选池最小规模
-	DocRankThreshold   = 0.30 // 文档融合得分门槛（低于此值不返回）
-	TagScoreWeight     = 0.3  // 融合评分：标签命中权重（内容主导）
-	ContentScoreWeight = 0.7  // 融合评分：内容余弦权重（Qwen3 实测相关 0.6-0.75 / 不相关 <0.09，信号更强）
+	CurrentVersion       = 5    // 当前数据格式版本号（v5: 混合存储 + 仅内容嵌入）
+	DocumentsChunkSize   = 100  // 文档分块大小（条/块，文本与图片统一；100 条一块）
+	MemoryDedupThreshold = 0.98 // 内容嵌入向量去重阈值（余弦相似度，判定重复记忆）
+	DocRankThreshold     = 0.30 // 文档内容余弦得分门槛（低于此值不返回）
+	MaxTagRetries        = 3    // 图片多模态标签生成最大重试次数
 )
 
 // 图片识别取向常量 — 决定图片标签生成的描述角度与方式

@@ -117,8 +117,36 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	ltpRemoteMutex.Unlock()
 	result.Tools = tools
 	result.Online = true
-	LoggerGeneral.Info("LunarCore", "LTPX 已同步琉璃工具链: %d 个工具", len(tools))
+	// v5: 琉璃把 AtoA 包/内置智能体收敛为单一 use_program 聚合工具，其 description 内嵌子工具清单。
+	// 同步日志里把聚合体内部的子工具名与数量一并披露，便于直观了解琉璃工具链规模。
+	if len(tools) == 1 {
+		names := ltpxSubToolNames(tools[0])
+		LoggerGeneral.Info("LunarCore", "LTPX 已同步琉璃工具链: 1 个聚合工具(%s)，内含 %d 个子工具: %s",
+			tools[0].Name, len(names), strings.Join(names, "、"))
+	} else {
+		LoggerGeneral.Info("LunarCore", "LTPX 已同步琉璃工具链: %d 个工具", len(tools))
+	}
 	return result
+}
+
+// ltpxSubToolNames 从聚合工具的 description 中提取子工具名清单。
+// buildUseTheProgram 以「- 工具名：功能简述」逐行罗列，此处按行取首个「：」前的名称。
+func ltpxSubToolNames(tool LTPXRemoteToolDef) []string {
+	var names []string
+	for _, line := range strings.Split(tool.Description, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "- ") {
+			continue
+		}
+		entry := strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))
+		if idx := strings.Index(entry, "："); idx > 0 {
+			entry = strings.TrimSpace(entry[:idx])
+		}
+		if entry != "" {
+			names = append(names, entry)
+		}
+	}
+	return names
 }
 
 // getLTPXRemoteTools 返回当前缓存的琉璃工具链

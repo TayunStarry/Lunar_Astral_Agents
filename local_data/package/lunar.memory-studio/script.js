@@ -35,7 +35,6 @@ var App = {
     documents: [],
     searchResults: [],
     imageBase64: null,       // 当前上传的图片 base64
-    isImageCollection: false, // 当前集合是否为 image 类型
     batchFiles: [],           // 批量导入的图片文件列表
     batchRunning: false       // 批量导入是否正在运行
 };
@@ -108,7 +107,6 @@ var D = {
     // Create collection modal
     modalCreateCol: $('modal-create-collection'),
     createColName: $('create-col-name'),
-    createColType: $('create-col-type'),
     btnCreateSubmit: $('btn-create-submit'),
 
     // Add image modal
@@ -195,11 +193,8 @@ function bindGlobalEvents() {
 
     // Add doc
     D.btnAddDoc.addEventListener('click', function () {
-        if (App.isImageCollection) {
-            showAddImageModal();
-        } else {
-            showAddDocModal();
-        }
+        // v5: 集合为混合存储，主按钮始终打开文本添加入口；图片导入走批量导入
+        showAddDocModal();
     });
     D.btnAddSubmit.addEventListener('click', handleAddDocument);
     D.addContent.addEventListener('keydown', function (e) {
@@ -513,9 +508,8 @@ function updateCollectionStats(col) {
         D.statName.textContent = col.name;
         D.statModel.textContent = col.embedding_model || col.model;
         D.statDim.textContent = col.dimension;
-        D.statType.textContent = col.type === 'image' ? '图片记忆' : '文本文档';
+        D.statType.textContent = '混合记忆';
         D.statCount.textContent = col.count;
-        App.isImageCollection = col.type === 'image';
         updateAddButton();
     } else {
         D.statName.textContent = '--';
@@ -523,21 +517,16 @@ function updateCollectionStats(col) {
         D.statDim.textContent = '--';
         D.statType.textContent = '--';
         D.statCount.textContent = '--';
-        App.isImageCollection = false;
         updateAddButton();
     }
 }
 
 function updateAddButton() {
-    if (App.isImageCollection) {
-        D.btnAddDoc.innerHTML = '<i class="fas fa-image"></i> 新增';
-        D.btnAddDoc.title = '向当前图片集合添加图片';
-        D.btnBatchImport.style.display = 'inline-flex';
-    } else {
-        D.btnAddDoc.innerHTML = '<i class="fas fa-plus"></i> 添加文档';
-        D.btnAddDoc.title = '向当前集合添加文档';
-        D.btnBatchImport.style.display = 'none';
-    }
+    // v5: 文本与图片记忆混合存储，所有集合同时支持添加文本与批量导入图片
+    D.btnAddDoc.innerHTML = '<i class="fas fa-plus"></i> 添加文档';
+    D.btnAddDoc.title = '向当前集合添加文本记忆';
+    D.btnBatchImport.style.display = 'inline-flex';
+    D.btnBatchImport.title = '向当前集合批量导入图片记忆';
 }
 
 function updateSyncWarning(col) {
@@ -609,7 +598,6 @@ function showCreateCollectionModal() {
 
 async function handleCreateCollection() {
     var name = D.createColName.value.trim();
-    var type = D.createColType.value;
 
     if (!name) { showToast('集合名称不能为空', 'error'); return; }
 
@@ -629,15 +617,16 @@ async function handleCreateCollection() {
     showBtnLoading(D.btnCreateSubmit, true, '创建中...');
 
     try {
+        // v5: 文本与图片记忆混合存储，创建集合不再需要集合类型
         var resp = await fetch(API.collection(name).BASE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ collection_type: type })
+            body: JSON.stringify({})
         });
         var result = await resp.json();
 
         if (result.success) {
-            showToast('集合 ' + name + ' (' + type + ') 创建成功', 'success');
+            showToast('集合 ' + name + ' 创建成功', 'success');
             closeModalById('modal-create-collection');
             App.currentCollection = name;
             loadCollections();
@@ -799,17 +788,11 @@ async function executeRebuild() {
 
 // ========== 文档列表 ==========
 
-// 加载态：
-// - 文本集合：显示横向骨架条；
-// - 图片集合：自身已逐张渐进加载（每张图的 shimmer 占位 + 淡入），无需再叠加加载占位网格。
+// 加载态：v5 混合集合统一显示横向骨架条（图片逐张渐进加载）
 function setLoading(loading) {
     if (loading) {
-        if (App.isImageCollection) {
-            D.loadingState.style.display = 'none';
-        } else {
-            D.loadingState.innerHTML = '<div class="skeleton-card"></div>'.repeat(4);
-            D.loadingState.style.display = 'flex';
-        }
+        D.loadingState.innerHTML = '<div class="skeleton-card"></div>'.repeat(4);
+        D.loadingState.style.display = 'flex';
         D.emptyState.style.display = 'none';
         D.emptyColState.style.display = 'none';
         D.errorState.style.display = 'none';
@@ -988,9 +971,9 @@ function renderCard(doc, isSearch) {
         simBadge = '<span class="sim-badge ' + simCls + '" title="余弦相似度">' + simPercent + '%</span>';
     }
 
-    // Handle image document cards
-	    if (App.isImageCollection || doc.role === 'image' || doc.image) {
-	        var imageSrc = doc.image || '';
+    // Handle image document cards（混合集合：依据 base64 字段区分图片记忆）
+	    if (doc.base64) {
+	        var imageSrc = doc.base64 || '';
 	        var imgSimBadge = '';
 	        if (isSearch && typeof doc.similarity === 'number') {
 	            var simPercent = (doc.similarity * 100).toFixed(1);
@@ -1465,12 +1448,12 @@ async function handleAddImage() {
     var orientation = getImageOrientation(D.imageOrientation, D.imageOrientationCustom);
 
     try {
-        // v2: 统一使用 /messages 端点，LLM 自动生成标签
+        // v5: 统一使用 /messages 端点，图片多模态模型生成标签后嵌入
         var resp = await fetch(API.collection(App.currentCollection).MESSAGES, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                image: App.imageBase64,
+                base64: App.imageBase64,
                 recognition_orientation: orientation.orientation,
                 recognition_custom: orientation.custom
             })
@@ -1509,11 +1492,6 @@ function showBatchImportModal() {
         showToast('请先选择一个集合', 'error');
         return;
     }
-    if (!App.isImageCollection) {
-        showToast('批量导入仅支持图片类型集合，请先选择图片集合', 'warn');
-        return;
-    }
-
     D.batchPath.value = '';
     D.batchOrientation.value = 'auto';
     D.batchOrientationCustom.value = '';
@@ -1627,13 +1605,13 @@ async function handleStartBatch() {
                 continue;
             }
 
-            // 2. 直接添加到记忆库（v2: LLM 自动生成标签）
+            // 2. 直接添加到记忆库（v5: 多模态生成标签后嵌入）
             updateFileStatus(i, '上传中...');
             var addResp = await fetch(API.collection(App.currentCollection).MESSAGES, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image: base64,
+                    base64: base64,
                     recognition_orientation: orientation.orientation,
                     recognition_custom: orientation.custom
                 })

@@ -182,7 +182,7 @@ func handleMemoryListCollections(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleMemoryCollectionCreate POST /memory/{name} — v2 创建/打开集合
+// handleMemoryCollectionCreate POST /memory/{name} — v5 创建/打开集合
 func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collectionName string) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "记忆库请求[ERROR] -> 不允许的请求方法，仅支持 POST")
@@ -203,31 +203,21 @@ func handleMemoryCollectionCreate(w http.ResponseWriter, r *http.Request, collec
 	// 模型名从 config 模块（lunar_config.json memory.embedding_model）读取
 	modelName := *GeneralConfig.MemoryEmbeddingModel
 
-	collType := req.CollectionType
-	if collType == "" {
-		collType = module.CollectionTypeText
-	}
-	if collType != module.CollectionTypeText && collType != module.CollectionTypeImage {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("记忆库请求[ERROR] -> 无效的集合类型: %s，仅支持 text/image", collType))
-		return
-	}
-
 	ctx := context.Background()
-	if err := module.CollectionInit(ctx, collectionName, modelName, collType); err != nil {
+	if err := module.CollectionInit(ctx, collectionName, modelName); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 集合创建失败: %v", err))
 		return
 	}
 
 	info := module.MemoryGetCollectionInfoWithType(collectionName)
-	LoggerGeneral.Info("FileManager", "集合 [%s] 创建成功, 类型: %s, 模型: %s, 维度: %d",
-		collectionName, collType, modelName, getIntField(info, "embedding_dimension"))
+	LoggerGeneral.Info("FileManager", "集合 [%s] 创建成功, 模型: %s, 维度: %d",
+		collectionName, modelName, getIntField(info, "embedding_dimension"))
 
 	writeSuccess(w, memoryCollectionInfo{
 		Name:           collectionName,
 		EmbeddingModel: modelName,
 		Dimension:      getIntField(info, "embedding_dimension"),
 		Count:          getIntField(info, "document_count"),
-		Type:           collType,
 		TagCount:       getIntField(info, "tag_count"),
 	})
 }
@@ -289,14 +279,14 @@ func handleMemoryAddMessage(w http.ResponseWriter, r *http.Request, collectionNa
 
 	ctx := context.Background()
 
-	if req.Image != "" {
-		// 图片文档添加
-		id, err := module.MemoryAddImage(ctx, collectionName, req.Image, req.RecognitionOrientation, req.RecognitionCustom)
+	if req.Base64 != "" {
+		// 图片记忆添加
+		id, err := module.MemoryAddImage(ctx, collectionName, req.Base64, req.RecognitionOrientation, req.RecognitionCustom)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("记忆库请求[ERROR] -> 添加图片失败: %v", err))
 			return
 		}
-		LoggerGeneral.Info("FileManager", "集合 [%s] 添加图片成功, ID: %s, 识别取向: %s", collectionName, id, req.RecognitionOrientation)
+		LoggerGeneral.Info("FileManager", "集合 [%s] 添加图片记忆成功, ID: %s, 识别取向: %s", collectionName, id, req.RecognitionOrientation)
 		writeSuccess(w, map[string]string{"id": id, "type": "image"})
 	} else {
 		// 文本文档添加
@@ -362,7 +352,7 @@ func handleMemoryQueryMessages(w http.ResponseWriter, r *http.Request, collectio
 			ID:         msg.ID,
 			Role:       msg.Role,
 			Content:    msg.Content,
-			Image:      msg.Image,
+			Base64:     msg.Base64,
 			Similarity: msg.Similarity,
 			Timestamp:  msg.Timestamp,
 		})
@@ -440,7 +430,7 @@ func handleMemoryDocuments(w http.ResponseWriter, r *http.Request, collectionNam
 			ID:        entry.ID,
 			Role:      entry.Role,
 			Content:   entry.Content,
-			Image:     entry.Image,
+			Base64:    entry.Base64,
 			Timestamp: entry.Timestamp,
 		})
 	}

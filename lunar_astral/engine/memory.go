@@ -16,25 +16,19 @@ import (
 // JS 侧通过 memoryInit/memoryAdd/memoryQuery/memoryDelete/memoryAddImage 调用，
 // 由 create.go 中的 vm.Set 注册到全局作用域。
 //
-// v2 变更：
-//   - memoryInit 新增 LLM 配置参数和 collectionType
-//   - memoryInitImage 已移除（统一到 memoryInit）
+// v5 变更：
+//   - memoryInit 仅需 collectionName 一个参数；文本/图片记忆混合存储，不再区分集合类型
 //   - memoryQueryImage 已移除（统一到 memoryQuery）
 //   - memoryAddImage 简化为 2 必选参数 + 2 可选识别取向参数（LLM 自动生成标签）
 
-// memoryInit 初始化记忆库实例并创建指定集合
+// memoryInit 初始化记忆库实例并创建/打开指定集合（文本与图片混合存储）
 // 模型配置全部从 lunar_config.json 的 memory 配置组读取
 func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 2 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 2 个: collectionName, collectionType")})
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("memoryInit 参数不足, 需 1 个: collectionName")})
 	}
 
 	collectionName, _ := call.Argument(0).Export().(string)
-	collectionType, _ := call.Argument(1).Export().(string)
-
-	if collectionType == "" {
-		collectionType = module.CollectionTypeText
-	}
 
 	// 确保全局 MemoryDB 实例已初始化（幂等，若 crystal_astral 已初始化则复用）
 	module.InitMemoryDB("local_data/database/memory")
@@ -48,7 +42,7 @@ func (class *Runtime) memoryInit(call goja.FunctionCall) goja.Value {
 	// 第二步：创建/打开集合（嵌入模型名从 memory.embedding_model 配置读取）
 	ctx := context.Background()
 	modelName := *GeneralConfig.MemoryEmbeddingModel
-	if err := module.CollectionInit(ctx, collectionName, modelName, collectionType); err != nil {
+	if err := module.CollectionInit(ctx, collectionName, modelName); err != nil {
 		LoggerGeneral.Error("LunarCore", "集合 [%s] 创建失败: %v", collectionName, err)
 		return class.runtime.ToValue([]any{false, err})
 	}
@@ -144,8 +138,8 @@ func (class *Runtime) memoryQuery(call goja.FunctionCall) goja.Value {
 		if r.Timestamp != 0 {
 			obj["timestamp"] = r.Timestamp
 		}
-		if r.Image != "" {
-			obj["image"] = r.Image
+		if r.Base64 != "" {
+			obj["base64"] = r.Base64
 		} else {
 			obj["content"] = r.Content
 		}

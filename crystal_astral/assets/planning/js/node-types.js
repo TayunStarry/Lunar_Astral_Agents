@@ -99,7 +99,7 @@ const NODES = {
     },
     memory: {
         label: '记忆库', icon: 'fa-brain', color: '#7c3aed',
-        desc: 'memory.store/search（向量记忆库）；<参数对象> 可来自上游',
+        desc: 'memory.store/search（混合向量记忆库）；store 文本用{content[,tags]}、图片用{base64}，search 按语义检索',
         ins: [{ k: 'params', label: '参数对象' }], out: { k: 'result', label: '结果' },
         fields: [
             { key: 'op', label: '操作', type: 'select', options: ['store', 'search'], def: 'store' },

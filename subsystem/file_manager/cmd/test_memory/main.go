@@ -11,7 +11,6 @@ package main
 import (
 	"LunarSubsystem/FileManager/module"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -130,7 +129,7 @@ func main() {
 	separator("第二部分：文本集合 CRUD 测试")
 
 	subTest("创建文本集合")
-	err = module.CollectionInit(ctx, testTextCollection, testEmbeddingModel, module.CollectionTypeText)
+	err = module.CollectionInit(ctx, testTextCollection, testEmbeddingModel)
 	if !check(err, "创建文本集合") {
 		failed++
 	} else {
@@ -171,40 +170,14 @@ func main() {
 		failed++
 	}
 
-	// 标签文本验证
-	separator("  标签文本存储验证")
-	// 通过 JSON 序列化获取标签文本（绕过 Go 类型断言限制）
-	jsonBytes, err := json.Marshal(module.MemoryDebugGetRawTags(testTextCollection))
-	if err == nil && len(jsonBytes) > 2 {
-		var tagList []map[string]interface{}
-		if json.Unmarshal(jsonBytes, &tagList) == nil && len(tagList) > 0 {
-			ok("标签向量已存储，共 %d 条，均包含 tag 文本", len(tagList))
-			passed++
-			info("标签示例:")
-			showCount := 5
-			if len(tagList) < showCount {
-				showCount = len(tagList)
-			}
-			for i := 0; i < showCount; i++ {
-				tv := tagList[i]
-				tag := ""
-				if t, ok := tv["tag"].(string); ok {
-					tag = t
-				}
-				uuidCount := 0
-				if uuids, ok := tv["uuid"].([]interface{}); ok {
-					uuidCount = len(uuids)
-				}
-				info("  [%s] → %d 个文档", tag, uuidCount)
-			}
-		} else {
-			fail("标签向量为空或格式异常")
-			failed++
-		}
-	} else {
-		fail("无法获取标签向量数据")
-		failed++
-	}
+	// =========================================================================
+	// 文本标签存储验证
+	// v5: 移除标签向量（TagVector）架构，文本嵌入直接基于正文，不再单独生成/存储标签向量
+	// =========================================================================
+	separator("  内容向量存储验证")
+	infoVec := module.MemoryGetCollectionInfo(testTextCollection)
+	docCount := getInt(infoVec, "document_count")
+	info("当前集合文档数: %d（v5 不再存储独立标签向量，内容向量随文档持久化）", docCount)
 
 	// 语义查询测试
 	separator("  语义查询测试")
@@ -269,7 +242,7 @@ func main() {
 	separator("第三部分：图片集合测试")
 
 	subTest("创建图片集合")
-	err = module.CollectionInit(ctx, testImageCollection, testEmbeddingModel, module.CollectionTypeImage)
+	err = module.CollectionInit(ctx, testImageCollection, testEmbeddingModel)
 	if !check(err, "创建图片集合") {
 		failed++
 	} else {
@@ -293,7 +266,7 @@ func main() {
 	if check(err, fmt.Sprintf("图片查询 (返回 %d 条)", len(imgResults))) {
 		passed++
 		for j, r := range imgResults {
-			hasImage := r.Image != ""
+			hasImage := r.Base64 != ""
 			info("  #%d 得分=%.3f 含图片数据=%v", j+1, r.Similarity, hasImage)
 		}
 	} else {

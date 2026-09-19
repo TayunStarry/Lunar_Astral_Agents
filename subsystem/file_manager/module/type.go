@@ -40,93 +40,92 @@ type BatchResult struct {
 }
 
 // =============================================================================
-// v3 记忆库类型定义 — 文档引用标签 UUID 架构
-// 核心变更：引用方向反转，TagVector 不再存储文档 UUID
+// v5 记忆库类型定义 — 文本/图片混合存储，仅内容嵌入向量
+// 核心变更：
+//   - 移除标签向量（TagVector）与 LLM 文本标签生成机制，仅图片入库时用多模态生成标签用于嵌入
+//   - 文本与图片记忆混合存储在同一个集合，不再区分"文本集合"/"图片集合"
+//   - Document 统一以 content（文本）与 base64（图片）字段区分记忆类型，
+//     客户端根据两个字段的存在情况自行判定取用哪种内容
 // =============================================================================
 
 // memoryMessage 记忆库查询返回的兼容消息结构（仅用于 MemoryQueryMessages 的 JSON 编码）
 type memoryMessage struct {
 	Role      string `json:"role"`                // 消息角色，例如 "user" 或 "assistant"
-	Content   string `json:"content"`             // 消息内容
+	Content   string `json:"content"`             // 文本内容，文本记忆使用；图片记忆为空
+	Base64    string `json:"base64,omitempty"`    // 图片 base64 数据，图片记忆使用；文本记忆为空
 	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
 }
 
 // MemoryQueryResult 记忆库查询结果（含相似度分数）
-// v3: Similarity 字段表示匹配标签的余弦相似度平均值
+// Similarity 为内容向量的余弦相似度。
+// 客户端依据 content 与 base64 字段的存在区分记忆类型。
 type MemoryQueryResult struct {
 	ID         string  `json:"id"`                  // 文档 ID
-	Role       string  `json:"role"`                // 消息角色，image 文档为 "image"
-	Content    string  `json:"content"`             // 消息内容，image 文档为空
-	Image      string  `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
-	Similarity float32 `json:"similarity"`          // 匹配标签余弦相似度平均值
+	Role       string  `json:"role"`                // 消息角色，图片记忆为 "image"
+	Content    string  `json:"content"`             // 文本内容，文本记忆使用；图片记忆为空
+	Base64     string  `json:"base64,omitempty"`    // 图片 base64 数据，图片记忆使用；文本记忆为空
+	Similarity float32 `json:"similarity"`          // 内容向量余弦相似度
 	Timestamp  int64   `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
 // DocumentEntry 文档条目 — 用于前端分页列表（不含嵌入向量，避免传输开销）
 type DocumentEntry struct {
 	ID        string `json:"id"`                  // 文档条目 ID
-	Role      string `json:"role"`                // 文档条目角色，"image" 表示图片文档
-	Content   string `json:"content"`             // 文档条目内容，image 文档为空
-	Image     string `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
+	Role      string `json:"role"`                // 文档条目角色，"image" 表示图片记忆
+	Content   string `json:"content"`             // 文本内容，文本记忆使用；图片记忆为空
+	Base64    string `json:"base64,omitempty"`    // 图片 base64 数据，图片记忆使用；文本记忆为空
 	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 
-// Document 统一文档结构（text 和 image 共用）
-// v4: 新增 Embedding 字段，存储文档内容嵌入向量，用于二阶段检索的内容级重排
-// v5: 新增 Timestamp 字段，记录入库时间（Unix 秒），供记忆整理时参考；旧数据无此字段（零值省略）
+// Document 统一文档结构（文本与图片记忆共用，混合存储在同一个集合）
+// content 与 base64 二选一：文本记忆 content 存储文本内容、base64 为空；
+// 图片记忆 base64 存储图片数据、content 为空。Embedding 为内容嵌入向量：
+// 文本记忆为正文（或预设标签拼接文本）的向量，图片记忆为多模态标签拼接文本的向量。
 type Document struct {
-	ID        string    `json:"id"`                  // 文档 UUID v4
-	Role      string    `json:"role,omitempty"`      // 消息角色，text 文档使用
-	Content   string    `json:"content,omitempty"`   // 文本内容，text 文档使用
-	Image     string    `json:"image,omitempty"`     // 图片 base64 数据，image 文档使用
-	TAGS      []string  `json:"tags,omitempty"`      // v3: 引用的标签向量 UUID 列表
-	Embedding []float32 `json:"embedding,omitempty"` // v4: 文档内容嵌入向量（text 为正文，image 为标签拼接）
-	Timestamp int64     `json:"timestamp,omitempty"` // v5: 入库时间 Unix 秒级时间戳
+	ID        string `json:"id"`                  // 文档 UUID v4
+	Role      string `json:"role,omitempty"`      // 消息角色，文本记忆使用
+	Content   string `json:"content,omitempty"`   // 文本内容，文本记忆使用
+	Base64    string `json:"base64,omitempty"`    // 图片 base64 数据，图片记忆使用
+	Timestamp int64  `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳
+	// Embedding 文档内容嵌入向量，json:"-" 使其不随文档持久化，
+	// 单独存储于 embeddings_NNNN.json 切片文件（见 embeddingRecord）
+	Embedding []float32 `json:"-"`
 }
 
-// TagVector 标签向量条目 — 标签文本的嵌入向量，拥有独立 UUID
-// v3: 不再存储关联文档 UUID，引用关系由 Document.TagUUIDs 维护
-type TagVector struct {
-	UUID      string    `json:"uuid"`      // v3: 标签向量唯一标识
-	Tag       string    `json:"tag"`       // 标签文本（保留，便于调试和可解释性）
-	Embedding []float32 `json:"embedding"` // 标签文本的嵌入向量
+// embeddingRecord 嵌入向量切片条目 — 与文档切片一一对应（按相同索引对齐）
+// 由于 Document.Embedding 为 json:"-"，向量单独以 ID 关联持久化，
+// 避免文档切片文件体积过大。
+type embeddingRecord struct {
+	ID        string    `json:"id"`        // 对应文档的 UUID
+	Embedding []float32 `json:"embedding"` // 文档内容嵌入向量
 }
 
-// collectionMeta v3 集合元数据，持久化到 metadata.json
+// collectionMeta 集合元数据，持久化到 metadata.json
 type collectionMeta struct {
-	EmbeddingModel      string `json:"embedding_model"`       // 锁定的嵌入模型名
-	EmbeddingDimension  int    `json:"embedding_dimension"`   // 锁定的向量维度
-	MultimodalModel     string `json:"multimodal_model"`      // 标签生成多模态模型名
-	Type                string `json:"type"`                  // 集合类型："text" 或 "image"
-	Version             int    `json:"version"`               // 数据格式版本号（v3 = 3）
-	DocumentsChunkCount int    `json:"documents_chunk_count"` // text 文档分块数
-	ImagesChunkCount    int    `json:"images_chunk_count"`    // image 文档分块数
-	TagsChunkCount      int    `json:"tags_chunk_count"`      // 标签向量分块数
+	EmbeddingModel       string `json:"embedding_model"`        // 锁定的嵌入模型名
+	EmbeddingDimension   int    `json:"embedding_dimension"`    // 锁定的向量维度
+	Version              int    `json:"version"`                // 数据格式版本号（v5 = 5）
+	DocumentsChunkCount  int    `json:"documents_chunk_count"`  // 文档分块数
+	EmbeddingsChunkCount int    `json:"embeddings_chunk_count"` // 嵌入向量分块数
 }
 
-// Collection 单个记忆集合 — v3 文档引用标签 UUID 架构
-// 文本与图片文档统一为 Document 列表，标签向量独立存储
+// Collection 单个记忆集合 — v5 文本/图片混合存储，仅内容嵌入向量
 // 存储布局：
 //
 //	<collDir>/metadata.json
-//	<collDir>/documents_NNNN.json  (text 文档，500 条/块)
-//	<collDir>/images_NNNN.json     (image 文档，20 条/块)
-//	<collDir>/tags_NNNN.json       (标签向量，100 条/块)
+//	<collDir>/documents_NNNN.json   (文本与图片统一分块存储，不含向量，100 条/块)
+//	<collDir>/embeddings_NNNN.json  (内容嵌入向量分块存储，100 条/块)
 type Collection struct {
-	Name                string       // 集合名
-	Model               string       // 锁定的嵌入模型名
-	Dimension           int          // 锁定的向量维度
-	CollectionType      string       // 集合类型："text" 或 "image"
-	MultimodalModel     string       // 标签生成多模态模型名（来自全局配置）
-	Documents           []Document   // 统一文档列表（text 或 image）
-	TagVectors          []TagVector  // 标签向量列表（常驻内存）
-	mu                  sync.RWMutex // 数据读写锁
-	collDir             string       // 集合目录绝对路径
-	metaPath            string       // metadata.json 路径
-	documentsChunkCount int          // text 文档分块数
-	imagesChunkCount    int          // image 文档分块数
-	tagsChunkCount      int          // 标签向量分块数
-	lastFileModTime     time.Time    // metadata.json 最近加载时间，用于跨进程一致性检测
+	Name                 string       // 集合名
+	Model                string       // 锁定的嵌入模型名
+	Dimension            int          // 锁定的向量维度
+	Documents            []Document   // 统一文档列表（文本与图片混合，含内存嵌入向量）
+	mu                   sync.RWMutex // 数据读写锁
+	collDir              string       // 集合目录绝对路径
+	metaPath             string       // metadata.json 路径
+	documentsChunkCount  int          // 文档分块数
+	embeddingsChunkCount int          // 嵌入向量分块数
+	lastFileModTime      time.Time    // metadata.json 最近加载时间，用于跨进程一致性检测
 }
 
 // PreviewEntry 文件预览条目，包含 MIME 类型和文件类别

@@ -46,7 +46,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	/** 自我外观提示 */
 	private readonly selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0]
 	/** 默认服装提示词 */
-	private readonly defaultOutfitPrompt = '穿着深蓝色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层深蓝色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋'
+	private readonly defaultOutfitPrompt = '穿着纯白色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层奶白色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋'
 	/** 参考图（律令 <参考图> 设置）：本地图片路径（相对 LocalDir），非空时扩散生成切换为图生图流程 */
 	public referenceImage: string = ''
 	/** 绘画角色工具 */

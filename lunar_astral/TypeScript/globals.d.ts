@@ -222,15 +222,14 @@ declare global {
      */
     function getAvailableActions(): string;
     /**
-     * 初始化记忆库实例并创建指定集合
+     * 初始化记忆库实例并创建/打开指定集合（v5 文本/图片混合存储，仅需集合名）
      * 模型配置从 lunar_config.json 的 memory 配置组读取
      *
      * @param {string} collectionName 集合名称
-     * @param {string} collectionType 集合类型 ('text' | 'image')
      *
      * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
      */
-    function memoryInit(collectionName: string, collectionType: string): [boolean, Error | null];
+    function memoryInit(collectionName: string): [boolean, Error | null];
     /**
      * 向指定集合添加消息
      *

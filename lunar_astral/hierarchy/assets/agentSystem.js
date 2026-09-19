@@ -522,7 +522,7 @@ var agentSystem = (function (exports) {
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
         ];
         selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
-        defaultOutfitPrompt = '穿着深蓝色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层深蓝色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋';
+        defaultOutfitPrompt = '穿着纯白色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层奶白色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋';
         referenceImage = '';
         roleTool = [
             {
@@ -1253,22 +1253,6 @@ var agentSystem = (function (exports) {
                 GlobalConfig.finalResponse = state.descriptionContent;
             return GlobalConfig.finalResponse;
         }
-        getLatestUserMessages() {
-            const userTexts = [];
-            for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
-                const message = this.messages[i];
-                if (message.role !== 'user')
-                    continue;
-                if (typeof message.content === 'string')
-                    userTexts.unshift(message.content);
-                else if (Array.isArray(message.content)) {
-                    const textContent = message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
-                    if (textContent.trim())
-                        userTexts.unshift(textContent);
-                }
-            }
-            return userTexts;
-        }
         constructor(descriptionRole) {
             super(fileView('prompts/dialogueRole.md')[0]);
             this.descriptionRole = descriptionRole;
@@ -1476,7 +1460,7 @@ var agentSystem = (function (exports) {
             return null;
         try {
             if (!stickerCollectionReady) {
-                const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+                const [ready] = memoryInit(STICKER_COLLECTION);
                 if (!ready)
                     return null;
                 stickerCollectionReady = true;
@@ -1484,7 +1468,7 @@ var agentSystem = (function (exports) {
             const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
             if (error || !results || results.length === 0)
                 return null;
-            const image = results[RandomFloor(0, results.length - 1)].image;
+            const image = results[RandomFloor(0, results.length - 1)].base64;
             return image || null;
         }
         catch (error) {
@@ -1496,17 +1480,14 @@ var agentSystem = (function (exports) {
         if (typeof message.content === 'string')
             return message.content;
         if (Array.isArray(message.content)) {
-            return message.content
-                .filter(item => item.type === 'text')
-                .map(item => item.text)
-                .join(' ');
+            return message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
         }
         return '';
     }
     function initMemory() {
         if (GlobalConfig.memoryReady)
             return;
-        const [_, err] = memoryInit('lunar_messages', 'text');
+        const [_, err] = memoryInit('lunar_messages');
         if (err)
             console.error('记忆库初始化失败:', err);
         else
@@ -1520,6 +1501,7 @@ var agentSystem = (function (exports) {
 
     const MEMORY_COLLECTION = 'lunar_messages';
     const RAG_SUMMARY_HARD_LIMIT = 4096;
+    const RAG_TIMELINE_HARD_LIMIT = 2048;
     const RAG_PER_QUERY_TOP_K = 10;
     const RAG_MAX_RECORDS = 24;
     class MemorizerRole extends ModelBuilder {
@@ -1551,7 +1533,7 @@ var agentSystem = (function (exports) {
             console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
             GlobalConfig.unreadRecords = [];
         }
-        queryRagSummary(userMessages) {
+        queryRagDigest(userMessages, summarize) {
             if (!userMessages || userMessages.length === 0 || !ensureMemoryReady())
                 return '';
             let records = this.retrieveRagRecords(userMessages);
@@ -1563,7 +1545,20 @@ var agentSystem = (function (exports) {
             if (feedback && Array.isArray(feedback) && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
                 records = feedback;
             }
-            return this.summarizeRecords(records);
+            return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
+        }
+        buildTimeline(records) {
+            const sorted = [...records].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+            let timeline = '';
+            for (const r of sorted) {
+                const time = r.timestamp ? new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '未知';
+                const line = `[ 时间: ${time} ] [ 内容: ${r.content || '(空)'} ]`;
+                if (timeline.length + line.length + 1 > RAG_TIMELINE_HARD_LIMIT)
+                    break;
+                timeline += (timeline ? '\n' : '') + line;
+            }
+            console.log(`[记忆] 已生成时间线（${timeline.length}/${RAG_TIMELINE_HARD_LIMIT} 字，${timeline.split('\n').length} 行）`);
+            return timeline;
         }
         retrieveRagRecords(userMessages) {
             const allResults = [];
@@ -2669,7 +2664,7 @@ var agentSystem = (function (exports) {
         const codeLang = resolveCodeLang(ext);
         const key = `#${fileName}`;
         const collection = 'file_' + contentHash(content);
-        const [initOk, initErr] = memoryInit(collection, 'text');
+        const [initOk, initErr] = memoryInit(collection);
         if (!initOk) {
             console.error(`[阅读者] 集合初始化失败 ${collection}:`, initErr);
             return { id: '', skipped: true };
@@ -2792,7 +2787,7 @@ var agentSystem = (function (exports) {
                 parts.push(raw.slice(ref.start, gapEnd));
                 continue;
             }
-            const [ok2] = memoryInit(index.collection, 'text');
+            const [ok2] = memoryInit(index.collection);
             if (!ok2) {
                 parts.push(raw.slice(ref.start, gapEnd));
                 continue;
@@ -3080,7 +3075,16 @@ var agentSystem = (function (exports) {
             function: { name, description: tool.description || '', parameters: tool.parameters },
         });
         injectedLTPXRemoteTools.add(name);
-        console.log(`LTPX 已注入琉璃远程工具: ${name}`);
+        const subCount = ltpxSubToolCount(tool.description || '');
+        console.log(`LTPX 已注入琉璃远程工具: ${name}${subCount > 0 ? `（内含 ${subCount} 个子工具）` : ''}`);
+    }
+    function ltpxSubToolCount(description) {
+        let count = 0;
+        for (const line of description.split('\n')) {
+            if (line.trim().startsWith('- '))
+                count++;
+        }
+        return count;
     }
     function removeLTPXRemoteTool(name) {
         for (let i = GlobalConfig.LTPdefinition.length - 1; i >= 0; i--) {
@@ -3205,46 +3209,19 @@ var agentSystem = (function (exports) {
         await dialogueRole.generateDialogue(cache);
         return GlobalConfig.finalResponse;
     }
-    let completedResponseCount = 0;
-    function guardChatVRAM() {
-        const enabled = GlobalConfig.customConfig?.server?.chat_vram_guard ?? true;
-        if (!enabled)
-            return;
-        const interval = GlobalConfig.customConfig?.server?.chat_vram_guard_interval ?? 16;
-        if (!Number.isFinite(interval) || interval <= 0)
-            return;
-        const thresholdMiB = GlobalConfig.customConfig?.server?.chat_vram_guard_mib ?? 1024;
-        completedResponseCount++;
-        if (completedResponseCount % interval !== 0)
-            return;
-        const [result, error] = syncFetch({
-            url: url()[0] + '/vram/guard',
-            execute: {
-                method: 'POST',
-                crossDomain: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ threshold_mib: thresholdMiB }),
-            },
-        });
-        if (error) {
-            console.error('显存守卫执行失败:', error.message);
-            return;
-        }
-        if (result?.body?.triggered) {
-            console.log(`显存守卫: 可用显存 ${result.body.free_mib} MiB 低于阈值 ${result.body.threshold_mib} MiB, 已卸载模型: ${(result.body.unloaded || []).join(', ')}`);
-        }
-        else if (GlobalConfig.debugMode) {
-            console.log(`显存守卫: 可用显存 ${result?.body?.free_mib} MiB, 无需卸载`);
-        }
-    }
+    const DEEP_RECALL_PATTERN = /(回忆|记忆|记得|回想|想起来)/;
     function updatePreviousMemories() {
         if (GlobalConfig.unreadRecords.length >= 1)
             memorizerRole.persistUnreadRecords();
-        const userMessages = dialogueRole.getLatestUserMessages();
+        const userMessages = GlobalConfig.unreadContext
+            .filter(message => message.role === 'user')
+            .map(message => extractTextFromMessage(message).trim())
+            .filter(text => text.length > 0);
         const clear = () => { dialogueRole.ragMessages = []; };
         if (userMessages.length === 0)
             return clear();
-        const digest = memorizerRole.queryRagSummary(userMessages);
+        const deepRecall = userMessages.some(text => DEEP_RECALL_PATTERN.test(text));
+        const digest = memorizerRole.queryRagDigest(userMessages, deepRecall);
         if (!digest)
             return clear();
         dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
@@ -3265,6 +3242,7 @@ var agentSystem = (function (exports) {
                 GlobalConfig.reasoningInProgress = false;
                 return;
             }
+            updatePreviousMemories();
             syncLTPXRemoteStatus();
             const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext, videos: GlobalConfig.unreadVideoUrl, audios: GlobalConfig.unreadAudioUrl }).return;
             if (feedback) {
@@ -3312,8 +3290,6 @@ var agentSystem = (function (exports) {
                     audio = audioData;
                 pushContext('text', chunk.display, audio);
             }
-            updatePreviousMemories();
-            guardChatVRAM();
         }
         catch (error) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');

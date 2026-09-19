@@ -82,7 +82,6 @@ function injectLTPXRemoteTool(tool: { name: string; description?: string; parame
         function: { name, description: tool.description || '', parameters: tool.parameters },
     });
     injectedLTPXRemoteTools.add(name);
-    console.log(`LTPX 已注入琉璃远程工具: ${name}`);
 }
 
 /** 移除单个琉璃远程工具 */

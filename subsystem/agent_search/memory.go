@@ -67,7 +67,7 @@ func initMemoryCollection() error {
 func createCollection() error {
 	modelName := *GeneralConfig.SearchEmbeddingModel
 	ctx := context.Background()
-	if err := module.CollectionInit(ctx, searchMemoryCollection, modelName, module.CollectionTypeText); err != nil {
+	if err := module.CollectionInit(ctx, searchMemoryCollection, modelName); err != nil {
 		return fmt.Errorf("创建记忆集合 '%s' 失败: %w", searchMemoryCollection, err)
 	}
 

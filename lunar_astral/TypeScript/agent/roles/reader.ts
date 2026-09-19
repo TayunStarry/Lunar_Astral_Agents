@@ -108,7 +108,7 @@ async function importFileBlock(fileName: string, content: string): Promise<{ id:
 	const collection = 'file_' + contentHash(content);
 
 	// 幂等初始化集合（已存在则直接打开，不清空数据）
-	const [initOk, initErr] = memoryInit(collection, 'text');
+	const [initOk, initErr] = memoryInit(collection);
 	if (!initOk) {
 		console.error(`[阅读者] 集合初始化失败 ${collection}:`, initErr);
 		return { id: '', skipped: true };
@@ -239,7 +239,7 @@ function processReferencesInText(raw: string): { text: string; changed: boolean 
 		}
 
 		// 查询该文件集合，整理相关片段
-		const [ok2] = memoryInit(index.collection, 'text');
+		const [ok2] = memoryInit(index.collection);
 		if (!ok2) { parts.push(raw.slice(ref.start, gapEnd)); continue; }
 		const [results, qErr] = memoryQuery(index.collection, query || '文件总体内容概括', QUERY_TOP_K);
 		const snippets = qErr ? [] : ((results || []) as Array<{ content?: string }>)

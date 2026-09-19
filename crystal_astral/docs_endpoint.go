@@ -1,7 +1,7 @@
 package main
 
 import (
-	EndpointDocs "LunarSubsystem/EndpointDocs"
+	"LunarSubsystem/EndpointDocs"
 	_ "embed"
 )
 

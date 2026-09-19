@@ -1,4 +1,4 @@
-package kokoro_tts
+package KokoroTTS
 
 // mustNeuralWords 必须读轻声的词语表（移植自 misaki ToneSandhi）
 func mustNeuralWords() map[string]struct{} {

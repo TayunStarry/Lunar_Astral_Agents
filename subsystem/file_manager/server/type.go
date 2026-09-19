@@ -16,12 +16,12 @@ type ExportPackageRequest struct {
 	SavePath    string `json:"save_path,omitempty"`
 }
 
-// memoryAddRequest v2 统一添加请求（text 和 image 共用）
-// 若 Image 字段非空，则视为图片文档；否则为文本文档
+// memoryAddRequest v5 统一添加请求（文本和图片共用）
+// 若 Base64 字段非空，则视为图片记忆；否则为文本记忆
 type memoryAddRequest struct {
-	Role                   string `json:"role,omitempty"`                    // 消息角色，text 文档使用
-	Content                string `json:"content,omitempty"`                 // 文本内容，text 文档使用
-	Image                  string `json:"image,omitempty"`                   // 图片 base64 数据，image 文档使用
+	Role                   string `json:"role,omitempty"`                    // 消息角色，文本记忆使用
+	Content                string `json:"content,omitempty"`                 // 文本内容，文本记忆使用
+	Base64                 string `json:"base64,omitempty"`                  // 图片 base64 数据，图片记忆使用
 	RecognitionOrientation string `json:"recognition_orientation,omitempty"` // 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom）
 	RecognitionCustom      string `json:"recognition_custom,omitempty"`      // 自定义识别取向参考文本（仅 custom 使用）
 }
@@ -37,18 +37,17 @@ type memoryInitRequest struct {
 }
 
 // memoryCollectionRequest 创建/打开集合请求
-// 模型名从 config 模块（lunar_config.json memory.embedding_model）读取，不再通过请求体传入
+// v5: 文本与图片记忆混合存储，不再需要集合类型；模型名从 config 模块读取
 type memoryCollectionRequest struct {
-	CollectionType string `json:"collection_type,omitempty"` // 集合类型："text" 或 "image"
 }
 
-// memoryMessageData v2 查询结果单条消息（text 和 image 统一）
+// memoryMessageData v5 查询结果单条记忆（文本和图片统一，客户端依据 content/base64 区分）
 type memoryMessageData struct {
 	ID         string  `json:"id"`                  // 消息 ID
-	Role       string  `json:"role"`                // 消息角色，image 文档为 "image"
-	Content    string  `json:"content"`             // 消息内容，image 文档为空
-	Image      string  `json:"image,omitempty"`     // 图片 base64 数据，仅 image 文档
-	Similarity float32 `json:"similarity"`          // 标签匹配频次得分 [0, 1]
+	Role       string  `json:"role"`                // 消息角色，图片记忆为 "image"
+	Content    string  `json:"content"`             // 文本内容，文本记忆使用；图片记忆为空
+	Base64     string  `json:"base64,omitempty"`    // 图片 base64 数据，图片记忆使用；文本记忆为空
+	Similarity float32 `json:"similarity"`          // 内容向量余弦相似度 [0, 1]
 	Timestamp  int64   `json:"timestamp,omitempty"` // 入库时间 Unix 秒级时间戳，旧数据无此字段
 }
 

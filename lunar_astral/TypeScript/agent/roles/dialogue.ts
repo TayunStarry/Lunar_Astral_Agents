@@ -223,27 +223,6 @@ export class DialogueRole extends ModelBuilder {
         // 返回修正后的消息内容
         return GlobalConfig.finalResponse;
     }
-    /** 获取最新的5条用户消息内容 */
-    public getLatestUserMessages(): string[] {
-        /** 收集到的用户消息文本 */
-        const userTexts: string[] = [];
-        // 从消息列表的末尾开始遍历，收集最新的5条用户消息
-        for (let i = this.messages.length - 1; i >= 0 && userTexts.length < 5; i--) {
-            /** 检查当前消息是否为用户消息 */
-            const message = this.messages[i];
-            // 跳过非用户消息
-            if (message.role !== 'user') continue;
-            // 提取文本内容
-            if (typeof message.content === 'string') userTexts.unshift(message.content);
-            else if (Array.isArray(message.content)) {
-                /** 提取文本内容 */
-                const textContent = message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
-                // 过滤空文本
-                if (textContent.trim()) userTexts.unshift(textContent);
-            }
-        }
-        return userTexts;
-    }
     /** 构造函数 */
     public constructor(private descriptionRole: ModelBuilder) {
         super(fileView('prompts/dialogueRole.md')[0]);

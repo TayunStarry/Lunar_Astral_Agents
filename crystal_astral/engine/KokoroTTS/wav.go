@@ -1,4 +1,4 @@
-package kokoro_tts
+package KokoroTTS
 
 // EncodePCMToWAV 将 float32 PCM 采样编码为 16bit 单声道 WAV
 func EncodePCMToWAV(samples []float32, sampleRate int) []byte {

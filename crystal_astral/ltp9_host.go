@@ -18,21 +18,21 @@ import (
 	"strings"
 	"time"
 
-	star "CrystalAstral/engine/9.1-Flash"
-	kokoro "CrystalAstral/kokoro_tts"
+	"CrystalAstral/engine/9.1-Flash"
+	"CrystalAstral/engine/KokoroTTS"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	ipmodule "LunarSubsystem/MultimodalAnalysis/module"
+	Multimodal "LunarSubsystem/MultimodalAnalysis/module"
 )
 
 // BridgeLTP9 初始化 LTP9-Flash 引擎并注入宿主通道（幂等）。
 func BridgeLTP9() error {
 	// 引擎初始化 + 前端智能体真实通道 + 单向通报日志
-	err := star.Bridge(ltpInvokeFrontAgent, func(topic string, payload any) {
+	err := StarLTP.Bridge(ltpInvokeFrontAgent, func(topic string, payload any) {
 		LoggerGeneral.Info("StarLTP", "插件单向通报 %s: %v", topic, payload)
 	})
 	// 调试回执推送：经 /ws 集线器广播给引擎管理器页
-	star.SetDebugPush(func(data []byte) {
+	StarLTP.SetDebugPush(func(data []byte) {
 		if StudioHubInstance == nil {
 			return
 		}
@@ -42,7 +42,7 @@ func BridgeLTP9() error {
 		}
 	})
 	// 宿主服务测试动作：Kokoro TTS / 月华 TTS·ASR 代理
-	star.SetTestActionHook(ltp9HostTestAction)
+	StarLTP.SetTestActionHook(ltp9HostTestAction)
 	return err
 }
 
@@ -119,12 +119,12 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 			ack(nil, err)
 			return
 		}
-		keng := kokoro.GetEngine()
+		keng := KokoroTTS.GetEngine()
 		if keng == nil {
 			ack(nil, fmt.Errorf("Kokoro 引擎未就绪"))
 			return
 		}
-		var mix []kokoro.MixVoice
+		var mix []KokoroTTS.MixVoice
 		if raw, ok := m["mix"].([]any); ok {
 			for _, item := range raw {
 				if im, ok := item.(map[string]any); ok {
@@ -134,7 +134,7 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 						w = f
 					}
 					if mv != "" {
-						mix = append(mix, kokoro.MixVoice{Voice: mv, Weight: w})
+						mix = append(mix, KokoroTTS.MixVoice{Voice: mv, Weight: w})
 					}
 				}
 			}
@@ -146,10 +146,10 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 		}
 		ack(map[string]any{
 			"success":     true,
-			"audio":       base64.StdEncoding.EncodeToString(kokoro.EncodePCMToWAV(samples, kokoro.SampleRate)),
+			"audio":       base64.StdEncoding.EncodeToString(KokoroTTS.EncodePCMToWAV(samples, KokoroTTS.SampleRate)),
 			"phonemes":    phonemes,
 			"voice":       asString("voice"),
-			"sample_rate": kokoro.SampleRate,
+			"sample_rate": KokoroTTS.SampleRate,
 		}, nil)
 	case "qwen_tts":
 		// Qwen 语音合成：text → 经月华 /tts 代理合成 base64 音频（需月华服务在线）
@@ -218,7 +218,7 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 				return
 			}
 			tempFile.Close()
-			converted, cerr := ipmodule.AudioToWavBase64(tempFile.Name())
+			converted, cerr := Multimodal.AudioToWavBase64(tempFile.Name())
 			os.Remove(tempFile.Name())
 			if cerr != nil {
 				ack(nil, fmt.Errorf("音频转码失败: %w", cerr))

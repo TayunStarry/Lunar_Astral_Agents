@@ -1,4 +1,4 @@
-package kokoro_tts
+package KokoroTTS
 
 import "sync"
 

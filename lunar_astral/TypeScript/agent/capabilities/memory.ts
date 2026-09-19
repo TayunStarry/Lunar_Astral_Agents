@@ -13,7 +13,7 @@ export async function queryEmotionSticker(query: string): Promise<string | null>
     try {
         // 首次使用时确保表情包集合存在（幂等：已存在则直接打开，不清空数据）
         if (!stickerCollectionReady) {
-            const [ready] = memoryInit(STICKER_COLLECTION, 'image');
+            const [ready] = memoryInit(STICKER_COLLECTION);
             if (!ready) return null;
             stickerCollectionReady = true;
         }
@@ -21,8 +21,8 @@ export async function queryEmotionSticker(query: string): Promise<string | null>
         const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
         // 查询失败或无结果时返回 null
         if (error || !results || results.length === 0) return null;
-        /** 在查询结果中随机选择一个结果 */
-        const image = (results[RandomFloor(0, results.length - 1)] as { image?: string }).image;
+        /** 在查询结果中随机选择一个结果（图片记忆 base64 字段） */
+        const image = (results[RandomFloor(0, results.length - 1)] as { base64?: string }).base64;
         // 返回随机选择的图片或 null
         return image || null;
     }
@@ -38,10 +38,7 @@ export function extractTextFromMessage(message: PostMessage): string {
     if (typeof message.content === 'string') return message.content;
     // 多模态消息：提取所有文本内容并拼接，剔除图片等非文本项
     if (Array.isArray(message.content)) {
-        return message.content
-            .filter(item => item.type === 'text')
-            .map(item => item.text)
-            .join(' ');
+        return message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
     }
     return '';
 }
@@ -49,7 +46,7 @@ export function extractTextFromMessage(message: PostMessage): string {
 /** 初始化记忆库 */
 function initMemory(): void {
     if (GlobalConfig.memoryReady) return;
-    const [_, err] = memoryInit('lunar_messages', 'text');
+    const [_, err] = memoryInit('lunar_messages');
     if (err) console.error('记忆库初始化失败:', err);
     else GlobalConfig.memoryReady = true;
 }

@@ -1,7 +1,7 @@
 package main
 
 import (
-	kokoro "CrystalAstral/kokoro_tts"
+	"CrystalAstral/engine/KokoroTTS"
 	file "LunarSubsystem/FileManager/server"
 	media "LunarSubsystem/MediaTools/server"
 	image "LunarSubsystem/MultimodalAnalysis/server"
@@ -128,11 +128,11 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== 语音识别：已移除内嵌 Qwen3-ASR 引擎，LTP9 qwen_asr 节点经 ltp9_debug 转发月华 system-asr HTTP 接口 ====
 
 	// ==== Kokoro 语音合成（内嵌引擎，同源 /kokoro/* 端点） ====
-	{Path: "/kokoro/tts", Handler: kokoroHandler(kokoro.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},
-	{Path: "/kokoro/voices", Handler: kokoroHandler(kokoro.VoicesHandler), Method: "GET", Description: "Kokoro 音色列表"},
-	{Path: "/kokoro/dict", Handler: kokoroHandler(kokoro.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
-	{Path: "/kokoro/dict/guess", Handler: kokoroHandler(kokoro.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
-	{Path: "/kokoro/health", Handler: kokoroHandler(kokoro.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
+	{Path: "/kokoro/tts", Handler: kokoroHandler(KokoroTTS.TTSHandler), Method: "POST", Description: "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）"},
+	{Path: "/kokoro/voices", Handler: kokoroHandler(KokoroTTS.VoicesHandler), Method: "GET", Description: "Kokoro 音色列表"},
+	{Path: "/kokoro/dict", Handler: kokoroHandler(KokoroTTS.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
+	{Path: "/kokoro/dict/guess", Handler: kokoroHandler(KokoroTTS.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
+	{Path: "/kokoro/health", Handler: kokoroHandler(KokoroTTS.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
 
 	// ==== WebView 深读代理（后端驱动的顶层 WebView 会话：导航/元素识别/滚动/截图/摘要） ====
 	{Path: "/webview/open", Handler: webviewOpenHandler, Method: "POST", Description: "创建 WebView 深读会话窗口（顶层窗口，不受嵌入限制）"},
