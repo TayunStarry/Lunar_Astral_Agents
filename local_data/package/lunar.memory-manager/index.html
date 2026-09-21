@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』记忆库管理</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<!-- 标准脚本库 -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<!-- 主布局：左侧 45% 管理操作 + 右侧记忆列表 -->
+	<main class="main-layout">
+		<!-- 左侧：集合管理 → 记忆导入 -->
+		<section class="panel input-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-brain"></i> 记忆库管理</span>
+				<div class="panel-header-right">
+					<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+						<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+					</button>
+				</div>
+			</header>
+			<div class="panel-body input-body">
+				<!-- 集合管理 -->
+				<div class="input-section collection-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-database"></i> 集合管理</span>
+						<button class="btn-glass btn-sm btn-clear" id="refreshCollectionsBtn" title="刷新集合"><i class="fas fa-rotate"></i> 刷新</button>
+					</div>
+					<div class="collection-add-row">
+						<input type="text" id="newCollectionInput" placeholder="新集合名称，如 my_memory" autocomplete="off" spellcheck="false">
+						<button class="btn-glass btn-glass-primary btn-sm" id="addCollectionBtn"><i class="fas fa-plus"></i> 新增</button>
+					</div>
+					<div class="list-scroll collection-list" id="collectionList">
+						<div class="list-empty">暂无集合。</div>
+					</div>
+				</div>
+
+				<div class="panel-separator"></div>
+
+				<!-- 记忆导入 -->
+				<div class="input-section import-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-file-import"></i> 记忆导入</span>
+						<span class="char-count" id="importTarget"></span>
+					</div>
+					<!-- 导入类型切换 -->
+					<div class="mode-toggle-group" id="importToggleGroup">
+						<button class="mode-btn active" data-mode="text"><i class="fas fa-font"></i> 文本</button>
+						<button class="mode-btn" data-mode="image"><i class="fas fa-image"></i> 图片</button>
+					</div>
+
+					<!-- 文本导入 -->
+					<div class="import-form" id="textImportForm">
+						<div class="form-row">
+							<label class="form-label">角色</label>
+							<select id="roleSelect" class="form-select">
+								<option value="user">user</option>
+								<option value="assistant">assistant</option>
+								<option value="system">system</option>
+							</select>
+						</div>
+						<div class="form-row">
+							<label class="form-label">标签</label>
+							<input type="text" id="tagInput" placeholder="可选，多个用逗号分隔，如 高兴, 旅行" autocomplete="off">
+						</div>
+						<textarea id="textContentInput" class="import-textarea" rows="4" placeholder="输入记忆文本内容…" spellcheck="false"></textarea>
+						<button class="btn-glass btn-glass-primary btn-full" id="importTextBtn"><i class="fas fa-cloud-arrow-up"></i> 导入文本记忆</button>
+					</div>
+
+					<!-- 图片导入 -->
+					<div class="import-form hidden" id="imageImportForm">
+						<div class="form-row">
+							<label class="form-label">摘要倾向</label>
+							<select id="orientationSelect" class="form-select">
+								<option value="auto">自动（综合描述）</option>
+								<option value="emotion">情绪主导</option>
+								<option value="text">文字内容（OCR）</option>
+								<option value="color">色彩风格</option>
+								<option value="appearance">衣着发型</option>
+								<option value="species">物种识别</option>
+								<option value="posture">姿态动作</option>
+								<option value="custom">自定义取向</option>
+							</select>
+						</div>
+						<div class="form-row hidden" id="customOrientationRow">
+							<label class="form-label">自定义</label>
+							<input type="text" id="customOrientationInput" placeholder="输入自定义识别取向参考文本" autocomplete="off">
+						</div>
+						<div class="image-btns">
+							<button class="btn-glass btn-glass-primary" id="importImageBtn"><i class="fas fa-image"></i> 导入单张图片</button>
+							<button class="btn-glass" id="importImagesBtn"><i class="fas fa-images"></i> 批量导入图片</button>
+						</div>
+						<div class="import-progress hidden" id="importProgress">
+							<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+							<span class="progress-text" id="progressText"></span>
+						</div>
+					</div>
+
+					<div class="input-hint">
+						<i class="fas fa-circle-info"></i>
+						文本记忆：带标签导入时标签会并入记忆内容参与向量化；图片记忆：摘要由多模态模型按所选倾向自动生成并作为标签参与向量化；条目改写仅修改内容数据，不改变已有嵌入向量。
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- 右侧：记忆条目列表 -->
+		<section class="panel output-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-layer-group"></i> 记忆条目</span>
+				<div class="panel-header-right">
+					<span class="char-count" id="listStats"></span>
+					<button class="btn-glass btn-sm btn-clear" id="clearListBtn" title="清空列表显示"><i class="fas fa-broom"></i> 清空显示</button>
+				</div>
+			</header>
+			<div class="panel-body output-body">
+				<!-- 查询栏 -->
+				<div class="query-row">
+					<input type="text" id="queryInput" placeholder="输入查询文本，按嵌入向量检索当前集合…" autocomplete="off" spellcheck="false">
+					<label class="query-topk" title="返回最相似的结果数量">TopK
+						<input type="number" id="topKInput" min="1" max="100" value="10">
+					</label>
+					<button class="btn-glass btn-glass-primary btn-sm" id="queryBtn"><i class="fas fa-magnifying-glass"></i> 查询</button>
+					<button class="btn-glass btn-sm hidden" id="backBrowseBtn"><i class="fas fa-list"></i> 返回浏览</button>
+				</div>
+
+				<div class="card-grid" id="cardGrid">
+					<div class="list-empty" id="cardEmpty">请先在左侧选择一个集合。</div>
+				</div>
+				<div class="list-actions">
+					<button class="btn-glass btn-sm hidden" id="loadMoreBtn"><i class="fas fa-circle-down"></i> 加载更多</button>
+					<span class="list-empty" id="listEndHint"></span>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- 改写弹窗 -->
+	<div class="modal-mask hidden" id="editModal">
+		<div class="modal-box">
+			<div class="modal-title"><i class="fas fa-pen"></i> 改写记忆条目</div>
+			<div class="modal-meta" id="editMeta"></div>
+			<!-- 文本改写 -->
+			<div id="editTextWrap">
+				<textarea id="editTextContent" class="import-textarea" rows="6" spellcheck="false"></textarea>
+			</div>
+			<!-- 图片改写 -->
+			<div id="editImageWrap" class="hidden">
+				<div class="edit-image-preview"><img id="editImagePreview" alt="当前图片"></div>
+				<button class="btn-glass btn-full" id="editImagePickBtn"><i class="fas fa-image"></i> 选择新图片替换（不改向量与标签）</button>
+			</div>
+			<div class="modal-btns">
+				<button class="btn-glass" id="editCancelBtn"><i class="fas fa-xmark"></i> 取消</button>
+				<button class="btn-glass btn-glass-primary" id="editSaveBtn"><i class="fas fa-floppy-disk"></i> 保存改写</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- 确认弹窗 -->
+	<div class="modal-mask hidden" id="confirmModal">
+		<div class="modal-box modal-box-sm">
+			<div class="modal-title"><i class="fas fa-triangle-exclamation"></i> <span id="confirmTitle">确认操作</span></div>
+			<div class="modal-meta" id="confirmMessage"></div>
+			<div class="modal-btns">
+				<button class="btn-glass" id="confirmCancelBtn"><i class="fas fa-xmark"></i> 取消</button>
+				<button class="btn-glass btn-danger" id="confirmOkBtn"><i class="fas fa-check"></i> 确认</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<!-- 隐藏文件选择器 -->
+	<input type="file" id="imageFileInput" accept="image/*" class="hidden-input">
+	<input type="file" id="imageFilesInput" accept="image/*" multiple class="hidden-input">
+
+	<script src="script.js"></script>
+</body>
+
+</html>

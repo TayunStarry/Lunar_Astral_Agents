@@ -56,7 +56,7 @@ function encapsulateSelected() {
     });
     const innerLinks = state.links.filter(l => set.has(l.from.node) && set.has(l.to.node))
         .map(l => ({ id: l.id, from: { node: l.from.node, port: l.from.port }, to: { node: l.to.node, port: l.to.port } }));
-    // 2. 边界输入：外部 → 选内；gate 口入线映射为复合节点的时钟线，其余每个内部目标端口映射一个输入端口
+    // 2. 边界输入：外部 → 选内；顺序口入线映射为复合节点的顺序线，其余每个内部目标端口映射一个输入端口
     const inMap = []; const seenIn = new Set();
     state.links.filter(l => !set.has(l.from.node) && set.has(l.to.node)).forEach(l => {
         if (l.to.port === 'gate') return;

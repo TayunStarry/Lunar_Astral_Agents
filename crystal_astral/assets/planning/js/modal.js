@@ -17,7 +17,7 @@ function openNodeModal(node) {
     const wrap = document.createElement('div'); wrap.className = 'form';
     if (meta.desc) { const d = document.createElement('div'); d.className = 'field-hint'; d.textContent = meta.desc; wrap.appendChild(d); }
     const hint = document.createElement('div'); hint.className = 'field-hint';
-    hint.innerHTML = '端口：上方=输入、下方=输出；<时钟线>决定执行链，其余为数据信号线。拖动标题栏可移动本面板。';
+    hint.innerHTML = '端口：上方=输入、下方=输出；所有连线均为先后顺序连线，完成即激活后续节点（执行池并行）。拖动标题栏可移动本面板。';
     wrap.appendChild(hint);
     (meta.fields || []).forEach(f => wrap.appendChild(buildField(f, node.params)));
     if (node.type === 'composite') { // 复合节点：展示内部概要 + 展开入口

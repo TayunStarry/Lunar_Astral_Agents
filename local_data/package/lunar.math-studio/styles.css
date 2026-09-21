@@ -1,0 +1,560 @@
+/* ===== 全局滚动条隐藏 ===== */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+/* ===== CSS 变量（玻璃拟态设计体系令牌） ===== */
+:root {
+    --body-bg: #d5dbe3;
+    --bg-gradient: linear-gradient(160deg, #c4cdd6 0%, #d5dbe3 25%, #e0e5ea 55%, #ccd4dc 100%);
+    --bg-glass-layer: rgba(255, 255, 255, 0.12);
+    --glass-bg: rgba(255, 255, 255, 0.35);
+    --glass-blur: 20px;
+    --panel-border: rgba(0, 0, 0, 0.10);
+    --panel-separator: rgba(0, 0, 0, 0.08);
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --shadow-glass: 0 2px 16px rgba(0, 0, 0, 0.07);
+    --transition: all 0.35s ease;
+    --accent: #6c9bcf;
+    --accent-hover: #5a8bc0;
+    --accent-warm: #e8a13c;
+    --success: #20c997;
+    --danger: #dc3545;
+    --text-primary: rgba(20, 28, 20, 1);
+    --text-secondary: rgba(90, 90, 90, 1);
+    --input-bg: rgba(255, 255, 255, 0.55);
+    --panel-header-bg: rgba(0, 0, 0, 0.03);
+    --panel-header-h: 44px;
+}
+
+.dark-mode {
+    --body-bg: #16161a;
+    --bg-gradient: linear-gradient(160deg, #111114 0%, #16161a 25%, #1c1c21 55%, #131317 100%);
+    --bg-glass-layer: rgba(0, 0, 0, 0.30);
+    --glass-bg: rgba(38, 38, 44, 0.85);
+    --panel-border: rgba(255, 255, 255, 0.08);
+    --panel-separator: rgba(255, 255, 255, 0.06);
+    --text-primary: rgba(240, 240, 244, 1);
+    --text-secondary: rgba(170, 170, 180, 1);
+    --shadow-glass: 0 2px 16px rgba(0, 0, 0, 0.25);
+    --input-bg: rgba(0, 0, 0, 0.20);
+    --panel-header-bg: rgba(255, 255, 255, 0.02);
+}
+
+/* ===== 基础 ===== */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--body-bg);
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    color: var(--text-primary);
+    transition: background 0.45s ease;
+}
+
+.background {
+    position: fixed; inset: 0;
+    background: var(--bg-gradient);
+    z-index: 0;
+    transition: background 0.45s ease;
+}
+
+.glass-effect {
+    position: fixed; inset: 0;
+    background: var(--bg-glass-layer);
+    backdrop-filter: blur(5px) saturate(180%);
+    -webkit-backdrop-filter: blur(5px) saturate(180%);
+    z-index: 0;
+}
+
+/* ===== 主布局：左 45% + 右自适应 ===== */
+.main-layout {
+    display: flex;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+}
+
+/* ===== 面板 ===== */
+.panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-width: 0;
+    background: var(--glass-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--shadow-glass);
+}
+
+.input-panel { flex: 0 0 45%; border-right: 1px solid var(--panel-separator); }
+.output-panel { flex: 1; border-left: 1px solid var(--panel-separator); }
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--panel-header-h);
+    padding: 0 16px;
+    border-bottom: 1px solid var(--panel-separator);
+    background: var(--panel-header-bg);
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.panel-title i { color: var(--accent); margin-right: 6px; }
+
+.panel-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.char-count {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ===== 面板主体 ===== */
+.panel-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 18px;
+    overflow: hidden;
+}
+
+.panel-separator {
+    height: 1px;
+    background: var(--panel-separator);
+    flex-shrink: 0;
+}
+
+.subsection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+/* 可滚动列表区域 */
+.list-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* ===== 按钮（btn-glass 系列） ===== */
+.btn-glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+}
+
+.btn-glass:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-glass);
+}
+
+.btn-glass-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.btn-glass-primary:hover { background: var(--accent-hover); }
+
+.btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+.btn-full { width: 100%; }
+
+.btn-clear {
+    color: var(--text-secondary);
+    border-color: var(--panel-separator);
+}
+
+.btn-clear:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+}
+
+.btn-glass:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ===== 左侧：公式输入 / 解析计算 / 历史记录 三段 ===== */
+.input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+
+/* 公式输入段占据主要高度 */
+.formula-section { flex: 1 1 auto; }
+/* 解析计算按钮段固定高度 */
+.exec-section { flex: 0 0 auto; }
+/* 历史记录段弹性填充 */
+.history-section { flex: 1 1 140px; }
+
+.formula-textarea {
+    flex: 1;
+    min-height: 110px;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    outline: none;
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    font-family: 'Cascadia Code', 'Consolas', 'Segoe UI', monospace;
+    resize: none;
+    transition: var(--transition);
+}
+
+.formula-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(108, 155, 207, 0.15);
+}
+
+.formula-textarea::placeholder { color: var(--text-secondary); opacity: 0.5; }
+
+.input-hint {
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.input-hint i { margin-right: 6px; color: var(--accent); }
+
+/* ===== 右侧：计算结果 / 函数图像 / 操作记录 固定高度三段 ===== */
+.output-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+}
+
+/* 固定高度分割：结果按内容自适应（保底高度） / 图像 38% / 操作记录占据剩余全部空间 */
+.result-section { flex: 0 1 auto; min-height: 120px; }
+.chart-section { flex: 0 0 38%; }
+.step-section { flex: 1 1 auto; min-height: 120px; }
+
+.result-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#chartCanvas {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    background: var(--input-bg);
+    overflow: hidden;
+}
+
+/* ===== 历史记录 ===== */
+.list-empty,
+.history-empty,
+.step-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.history-item:hover {
+    background: var(--input-bg);
+    border-color: var(--panel-border);
+}
+
+.history-icon {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+    color: #fff;
+}
+
+.history-icon.h-calc { background: var(--accent); }
+.history-icon.h-solve { background: var(--accent-warm); }
+.history-icon.h-plot { background: #9d6bff; }
+.history-icon.h-agent { background: #9d6bff; }
+.history-icon.h-error { background: var(--danger); }
+
+.history-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-title {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Cascadia Code', 'Consolas', 'Segoe UI', monospace;
+}
+
+.history-time {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+/* ===== 计算结果区 ===== */
+.result-empty,
+.result-error,
+.result-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px 12px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    text-align: center;
+}
+
+.result-error { color: var(--danger); }
+
+.result-empty i, .result-error i { font-size: 1.5rem; opacity: 0.5; }
+
+.spinner {
+    width: 26px; height: 26px;
+    border: 3px solid var(--panel-border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ms-spin 0.8s linear infinite;
+}
+
+@keyframes ms-spin { to { transform: rotate(360deg); } }
+
+/* 计算结果条目 */
+.math-block { animation: ms-fade 0.3s ease; }
+
+.math-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--panel-separator);
+}
+
+.math-item:last-child { border-bottom: none; }
+
+.math-expression {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    word-break: break-all;
+    font-family: 'Cascadia Code', 'Consolas', 'Segoe UI', monospace;
+}
+
+.math-expression i { color: var(--accent); margin-top: 3px; flex-shrink: 0; }
+
+.math-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.3;
+    word-break: break-all;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* 方程解列表 */
+.solve-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.solve-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    font-weight: 600;
+    font-family: 'Cascadia Code', 'Consolas', 'Segoe UI', monospace;
+    animation: ms-fade 0.3s ease;
+}
+
+.solve-item .solve-index {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    color: #fff;
+    background: var(--accent-warm);
+    border-radius: 50%;
+}
+
+.math-note {
+    margin-top: 8px;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+}
+
+.math-note i { margin-right: 6px; color: var(--accent); }
+
+/* KaTeX 公式渲染容器 */
+.katex-display-block {
+    margin: 4px 0;
+    overflow-x: auto;
+    text-align: center;
+}
+
+/* ===== 操作记录 ===== */
+.step-scroll { flex: 1; min-height: 0; }
+
+.step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+
+.step-item:hover { background: var(--input-bg); }
+
+.step-icon {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.68rem;
+    color: #fff;
+    margin-top: 1px;
+}
+
+.step-info .step-icon { background: var(--accent); }
+.step-thinking .step-icon { background: #9d6bff; }
+.step-tool .step-icon { background: var(--accent-warm); }
+.step-tool-result .step-icon { background: var(--success); }
+.step-done .step-icon { background: #45c98a; }
+.step-error .step-icon { background: var(--danger); }
+.step-warn .step-icon { background: #ffc860; }
+
+.step-text {
+    flex: 1;
+    word-break: break-word;
+    color: var(--text-primary);
+}
+
+.step-error .step-text { color: var(--danger); }
+
+.step-time {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    padding-top: 2px;
+}
+
+/* ===== Toast ===== */
+.toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: var(--radius-md);
+    background: var(--glass-bg);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(var(--glass-blur));
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.toast.visible { opacity: 1; }
+.toast.success { border-color: rgba(32, 201, 151, 0.4); color: var(--success); }
+.toast.error { border-color: rgba(220, 53, 69, 0.4); color: var(--danger); }
+
+/* ===== 动画 ===== */
+@keyframes ms-fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 响应式：窄屏改为上下单栏 ===== */
+@media (max-width: 768px) {
+    .main-layout { flex-direction: column; }
+
+    .input-panel, .output-panel {
+        flex: none;
+        height: 50vh;
+        border: none;
+    }
+
+    .input-panel { border-bottom: 1px solid var(--panel-separator); }
+}

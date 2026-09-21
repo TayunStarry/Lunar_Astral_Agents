@@ -35,32 +35,30 @@ function parseMaybeJson(v) {
     if (!t || (t[0] !== '{' && t[0] !== '[')) return v;
     try { return JSON.parse(t); } catch (e) { return v; }
 }
-function gateFunc(type, oks) {
-    switch (type) {
-        case 'and': return oks.every(Boolean);
-        case 'nand': return !oks.every(Boolean);
-        case 'or': return oks.some(Boolean);
-        case 'nor': return !oks.some(Boolean);
-        case 'not': return !(oks[0] === true);
-        default: return oks.every(Boolean);
-    }
-}
-// 节点端口集合：输入 = [时钟线] + 数据ins；输出 = [时钟线] + (out?)
-// 复合节点的输入/输出端口按封装时的映射（params.inMap / outMap）动态生成
+// 节点端口集合：有数据输入/输出时仅提供数据端口；仅在某侧缺失端口时自动补全「顺序」端口
+// （顺序端口是数据空白节点的通用连接点，保证任何节点都能被接入/引出执行链）
 function inPortsOf(type, node) {
     if (type === 'composite' && node) {
         const map = (node.params && node.params.inMap) || [];
-        return [{ k: 'gate', label: '时钟线' }].concat(map.map(m => ({ k: m.k, label: m.label || m.k })));
+        if (map.length) return map.map(m => ({ k: m.k, label: m.label || m.k }));
+        return [{ k: 'gate', label: '顺序' }];
     }
-    const d = metaOf(type); return [{ k: 'gate', label: '时钟线' }].concat(d.ins || []);
+    const d = metaOf(type);
+    if ((d.ins || []).length) return d.ins;
+    return [{ k: 'gate', label: '顺序' }];
 }
 function outPortsOf(type, node) {
     if (type === 'composite' && node) {
         const has = !!(node.params && node.params.outMap);
-        return [{ k: 'gate', label: '时钟线' }].concat(has ? [{ k: 'out', label: '输出' }] : []);
+        return has ? [{ k: 'out', label: '输出' }] : [{ k: 'gate', label: '顺序' }];
     }
     const d = metaOf(type); const outs = d.outs || (d.out ? [d.out] : []); // outs 支持多输出端口（提取拆分）
-    return [{ k: 'gate', label: '时钟线' }].concat(outs);
+    if (outs.length) return outs;
+    return [{ k: 'gate', label: '顺序' }];
+}
+// 端口有效性判定：连线端点必须落在节点当前实际提供的端口上（历史画布的冗余顺序线在清洗时自动剔除）
+function portExists(type, node, side, port) {
+    return (side === 'in' ? inPortsOf(type, node) : outPortsOf(type, node)).some(p => p.k === port);
 }
 // 取上游连线输出值：多输出节点（outValues 含该源端口）按连线源端口取，其余节点统一取 outValue。
 // 注意必须传连线的 from.port（上游输出端口名），而非下游自己的输入端口名

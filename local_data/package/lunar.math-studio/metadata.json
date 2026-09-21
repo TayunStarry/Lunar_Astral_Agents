@@ -1,0 +1,16 @@
+{
+	"id": "lunar.math-studio",
+	"icon": "icon.webp",
+	"title": "数学工坊",
+	"description": "数学计算模块：四则运算、复杂表达式求值、多元多次方程求解、函数图表绘制",
+	"tags": [
+		"Node-LTP"
+	],
+	"tools": [
+		{
+			"name": "math_compute",
+			"description": "数学计算：四则运算、表达式求值、方程求解、函数绘图"
+		}
+	],
+	"background_retention": true
+}

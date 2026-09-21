@@ -1,9 +1,8 @@
-package YaraLTP
+package ltp9
 
-// ==== 极简 YAML 子集解析器 ====
-// LTP3 仅支持 config.yaml（要求5），且无需重活第三方 YAML 库：
-// 支持注释、键值映射、缩进嵌套、序列（- item）、内联数组/对象、引号字符串，
-// 纯 stdlib 实现，仅做自动类型推断（null/bool/int/float/string）。
+// ==== 极简 YAML 子集解析器 / 序列化器 ====
+// 供 config.yaml 的注入与回写：纯 stdlib 实现，支持注释、键值映射、缩进嵌套、
+// 序列（- item）、内联数组/对象、引号字符串，并做自动类型推断（null/bool/int/float/string）。
 
 import (
 	"fmt"
@@ -11,7 +10,7 @@ import (
 	"strings"
 )
 
-// yamlLine 单行 YAML（已去除注释与空白信息保留缩进）。
+// yamlLine 单行 YAML（已去除注释与空白信息，保留缩进）。
 type yamlLine struct {
 	indent int
 	text   string
@@ -57,11 +56,9 @@ func yamlParseBlock(lines []yamlLine, pos, indent int) (any, int, error) {
 	if pos >= len(lines) {
 		return nil, 0, nil
 	}
-	// 序列块：当前行以 "- " 开头且属于本块缩进
 	if isSeqItem(lines[pos].text) && (pos == 0 || lines[pos].indent == indent) {
 		return yamlParseSeq(lines, pos, indent)
 	}
-	// 映射块
 	m := map[string]any{}
 	i := pos
 	for i < len(lines) {
@@ -70,7 +67,6 @@ func yamlParseBlock(lines []yamlLine, pos, indent int) (any, int, error) {
 			break
 		}
 		if ln.indent > indent {
-			// 缩进更深：属于某键的嵌套值，由上层解析处理；这里不应进入
 			break
 		}
 		key, rest, ok := splitYAMLKey(ln.text)
@@ -78,7 +74,6 @@ func yamlParseBlock(lines []yamlLine, pos, indent int) (any, int, error) {
 			return nil, 0, fmt.Errorf("YAML 语法错误（第 %d 行）: %s", i+1, ln.text)
 		}
 		key = unquoteYAML(key)
-		// 有内联值
 		if strings.TrimSpace(rest) != "" {
 			val, err := yamlScalar(strings.TrimSpace(rest))
 			if err != nil {
@@ -88,7 +83,6 @@ func yamlParseBlock(lines []yamlLine, pos, indent int) (any, int, error) {
 			i++
 			continue
 		}
-		// 无内联值 → 看下一行是否缩进子块
 		if i+1 < len(lines) && lines[i+1].indent > indent {
 			child, consumed, err := yamlParseBlock(lines, i+1, lines[i+1].indent)
 			if err != nil {
@@ -98,7 +92,6 @@ func yamlParseBlock(lines []yamlLine, pos, indent int) (any, int, error) {
 			i += 1 + consumed
 			continue
 		}
-		// 空值
 		m[key] = nil
 		i++
 	}
@@ -116,16 +109,6 @@ func yamlParseSeq(lines []yamlLine, pos, indent int) (any, int, error) {
 		}
 		rest := strings.TrimSpace(strings.TrimLeft(ln.text, "- "))
 		if rest != "" {
-			// 内联序列项
-			if strings.HasPrefix(rest, "{") || strings.HasPrefix(rest, "[") {
-				val, err := yamlScalar(rest)
-				if err != nil {
-					return nil, 0, err
-				}
-				s = append(s, val)
-				i++
-				continue
-			}
 			val, err := yamlScalar(rest)
 			if err != nil {
 				return nil, 0, err
@@ -134,7 +117,6 @@ func yamlParseSeq(lines []yamlLine, pos, indent int) (any, int, error) {
 			i++
 			continue
 		}
-		// "- " 后为空 → 子块（- key: value）
 		if i+1 < len(lines) && lines[i+1].indent > indent {
 			child, consumed, err := yamlParseBlock(lines, i+1, lines[i+1].indent)
 			if err != nil {
@@ -165,7 +147,13 @@ func splitYAMLKey(text string) (key, rest string, ok bool) {
 			}
 		case ':':
 			if !inS && !inD {
-				return text[:i], text[i+1:], true
+				if i+1 >= len(text) {
+					return text[:i], text[i+1:], true
+				}
+				next := text[i+1]
+				if next == ' ' || next == '\t' || next == '#' {
+					return text[:i], text[i+1:], true
+				}
 			}
 		}
 	}
@@ -235,7 +223,6 @@ func yamlParseInlineArray(body string) ([]any, error) {
 
 func yamlParseInlineObject(body string) (map[string]any, error) {
 	m := map[string]any{}
-	// 按逗号分割键值对（不做深度嵌套，纯 Go 内联对象为宽松子集）
 	for _, pair := range strings.Split(body, ",") {
 		if strings.TrimSpace(pair) == "" {
 			continue
@@ -264,7 +251,7 @@ func unquoteYAML(s string) string {
 	return s
 }
 
-// marshalYAML 把 map 序列化回 YAML 文本（config.setFile 用）。
+// marshalYAML 把 map 序列化回 YAML 文本（engine.config.setFile 回写用）。
 func marshalYAML(root map[string]any) string {
 	var b strings.Builder
 	writeYAMLMap(&b, root, 0)
@@ -314,7 +301,6 @@ func writeYAMLSeq(b *strings.Builder, s []any, indent int) {
 				b.WriteString("- {}\n")
 				continue
 			}
-			// 序列内映射：首层键与 "- " 同行
 			first := true
 			for k, sv := range tv {
 				if svMap, ok := sv.(map[string]any); ok {
@@ -375,7 +361,6 @@ func yamlJSValue(v any) string {
 		}
 		return "false"
 	case string:
-		// 需要引号：含特殊字符或空
 		if tv == "" || strings.ContainsAny(tv, ":#[]{}'\",") || strings.HasPrefix(tv, " ") {
 			return `"` + strings.ReplaceAll(tv, `"`, `\"`) + `"`
 		}

@@ -218,17 +218,27 @@ async function saveComposites() {
 }
 
 // ==== 载入 / 清空 / 示例 ====
+// 逻辑门节点已随层级执行架构一并移除：载入时自动剔除历史画布中的门节点及其连线
+const LEGACY_GATES = { and: 1, or: 1, not: 1, nand: 1, nor: 1 };
 function applyGraph(g) {
-    state.nodes = (g.nodes || []).map(n => Object.assign({ enabled: true, running: false, _s: 'pending', outValue: null }, n));
-    state.links = g.links || [];
-    sanitizeGraph();
+    const nodes = (g.nodes || []).filter(n => !LEGACY_GATES[n.type]);
+    const ids = new Set(nodes.map(n => n.id));
+    state.nodes = nodes.map(n => Object.assign({ enabled: true, running: false, _s: 'pending', outValue: null }, n));
+    state.links = (g.links || []).filter(l => l && l.from && ids.has(l.from.node) && l.to && ids.has(l.to.node));
+    sanitizeGraph(); // 按当前端口规则再清洗一遍（剔除指向已取消顺序口等失效端点的连线）
     renderGraph();
 }
-// 清洗无效连线：端点节点已不存在（历史编辑残留的 undefined 指针）会让激活链抛异常，加载/封装/运行前统一剔除
+// 清洗无效连线：端点节点已不存在（历史编辑残留的 undefined 指针），或端点端口已不在节点当前
+// 提供的端口集合中（如新端口规则下被取消的冗余顺序口），都会让激活/渲染异常，加载/封装/运行前统一剔除
 function sanitizeGraph() {
-    const ids = new Set(state.nodes.map(n => n.id));
+    const byId = new Map(state.nodes.map(n => [n.id, n]));
     const before = state.links.length;
-    state.links = state.links.filter(l => l && l.from && ids.has(l.from.node) && l.to && ids.has(l.to.node));
+    state.links = state.links.filter(l => {
+        if (!l || !l.from || !l.to) return false;
+        const f = byId.get(l.from.node), t = byId.get(l.to.node);
+        if (!f || !t) return false;
+        return portExists(f.type, f, 'out', l.from.port) && portExists(t.type, t, 'in', l.to.port);
+    });
     if (state.links.length !== before) { toast('已清理 ' + (before - state.links.length) + ' 条无效连线', 'error'); renderLinks(); }
 }
 // 「选择画布」与「加载画布」为同一功能：均打开画布管理浮窗（由顶栏画布按钮触发，见 openCanvasManager）
@@ -243,19 +253,21 @@ function demoGraph() {
         { type: 'crypto', x: cx + gapX, y: cy + gapY },
         { type: 'llm', x: cx + gapX * 2, y: cy },
         { type: 'broadcast_all', x: cx + gapX * 2, y: cy + gapY },
-        { type: 'transform', x: cx + gapX * 3, y: cy }
+        { type: 'transform', x: cx + gapX * 3, y: cy },
+        { type: 'display', x: cx + gapX * 4, y: cy }
     ];
     defs.forEach(d => state.nodes.push({ id: newId(), type: d.type, x: d.x, y: d.y, params: defaultParams(d.type), running: false, _s: 'pending', outValue: null }));
     const lk = (a, b, ap, bp) => state.links.push({ id: 'l' + seg(), from: { node: state.nodes[a].id, port: ap }, to: { node: state.nodes[b].id, port: bp } });
-    // 时钟链：start → stats → wait → crypto → llm → broadcast
-    lk(0, 1, 'gate', 'gate');
-    lk(1, 2, 'rows', 'gate');
-    lk(2, 3, 'gate', 'gate');
-    lk(3, 4, 'text', 'gate');
-    lk(4, 5, 'answer', 'gate');
-    // 时钟：start → 格式转换；同时 stats 结果经信号线（rows→in1）喂入 格式转换
-    lk(0, 6, 'gate', 'gate');
-    lk(1, 6, 'rows', 'in1');
+    // 主链：start → stats → wait → crypto → llm → broadcast
+    lk(0, 1, 'gate', 'gate');   // start 顺序口 → stats 顺序口（stats 无数据输入，仅补全顺序口）
+    lk(1, 2, 'rows', 'gate');   // stats 结果触发 wait（wait 无数据输入）
+    lk(2, 3, 'gate', 'content'); // wait 顺序口触发 crypto（纯顺序线，不注入数据）
+    lk(3, 4, 'text', 'content'); // crypto 密文喂入 llm
+    lk(4, 5, 'answer', 'payload'); // llm 应答喂入广播
+    // 分支：llm 与 stats 两路汇入格式转换，结果交给文本显示
+    lk(4, 6, 'answer', 'in1');
+    lk(1, 6, 'rows', 'in2');
+    lk(6, 7, 'text', 'text');
     renderGraph();
 }
 function ensureLinkByIdx(a, b, ap, bp) { /* 兼容预留 */ }

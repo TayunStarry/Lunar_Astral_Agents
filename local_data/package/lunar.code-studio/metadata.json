@@ -1,0 +1,16 @@
+{
+	"id": "lunar.code-studio",
+	"icon": "icon.webp",
+	"title": "代码工坊",
+	"description": "代码编写与运行模块：为月华提供单文件 JavaScript（ES2023+ 浏览器 WebAPI）与 HTML 文件的编写、保存与运行，人机协同完成创建、编辑与执行",
+	"tags": [
+		"Node-LTP"
+	],
+	"tools": [
+		{
+			"name": "code_write_run",
+			"description": "编写并运行 JavaScript 脚本（单文件，ES2023+ 与浏览器 WebAPI）或 HTML 页面：生成代码、保存文件、运行并回读控制台输出"
+		}
+	],
+	"background_retention": true
+}

@@ -93,10 +93,7 @@ export class MemorizerRole extends ModelBuilder {
 		// 搜索结果
 		let records = this.retrieveRagRecords(userMessages);
 		// 检索结果为空时跳过
-		if (records.length === 0) {
-			console.log('[记忆] 检索未命中任何相关记录');
-			return '';
-		}
+		if (records.length === 0) return '';
 		// 事件 -> 构建记忆前：推送检索记录与用户消息，插件可改写后再整理
 		const feedback: RagRecord[] = interactEvent('build_memory_before', { userMessages, records }).return;
 		// 如果插件返回了非空的检索记录则直接使用（空数组 every 恒真，需显式排除，避免用空记录做无意义的整理）

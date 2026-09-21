@@ -1,8 +1,8 @@
-package YaraLTP
+package ltp9
+
+// ==== 常量与变量集中区 ====
 
 import (
-	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -10,173 +10,152 @@ import (
 	"LunarSubsystem/GeneralConfig"
 )
 
-// ==== 常量 ====
+// ServiceName 模块标识（琉璃命名）。
+const ServiceName = "CrystalLTP9"
 
-// ServiceName 模块标识。
-const ServiceName = "LTP3"
+// EngineBuild 引擎构建标记：每次改动 callFn/导出回传逻辑时递增，供运行实例自证版本。
+const EngineBuild = "2026-09-19"
 
-// defaultHookTopic 默认承接钩子点（yara_ltp 工具路由目标）。
-const defaultHookTopic = "chat.receive.after_process"
+// LTP9Tag metadata.json 标识 LTP9 包的标签（识别插件的唯一依据）。
+const LTP9Tag = "LTP9"
 
-// LTP3Tag metadata.json 中标识 LTP3 包的标签（识别插件的唯一依据）。
-const LTP3Tag = "LTP3"
+// DefaultMain 插件主脚本（打包后的单一 JS）。
+const DefaultMain = "execute.js"
 
-// DefaultMain 插件主逻辑文件名（忽略其它版本的 plugin.json 与其它配置格式）。
-const DefaultMain = "index.js"
-
-// DefaultConfigFile 插件唯一配置文件（LTP3 仅支持 config.yaml）。
+// DefaultConfigFile 插件配置文件。
 const DefaultConfigFile = "config.yaml"
 
-// DataDirName 插件运行时数据目录（热重载/清理不涉及；本实现为局部目录）。
+// DataDirName 插件运行时数据目录（写入隔离，哈希校验时跳过）。
 const DataDirName = "data"
 
-// KeyFileName 插件权限密钥文件名：每权限一条 32 字符密钥字符串以 '+' 连接成明文报文后，
-// 用脚本哈希整体加密成一段密文写入该文件（分隔符与密钥边界在密文中不可见）。
+// KeyFileName 权限密钥文件（被代码文件哈希加密的 allow-* 清单）。
 const KeyFileName = "permissions.key"
 
-// AllPermissionNames 引擎支持的权限名全集（密钥生成器下拉与引擎校验共用）。
-var AllPermissionNames = []string{
-	"event.subscribe", "event.publish",
-	"hook.register",
-	"command.register",
-	"tool.register",
-	"event_handler.register",
-	"llm_provider.register",
-	"api.register", "api.call",
-	"send.text", "send.image", "send.emoji", "send.hybrid",
-	"http.request",
-	"network.tcp", "network.udp",
-	"platform.command",
-	"encoding.use", "time.use", "crypto.use",
-	"model.access",
-	"plugin.config.read", "plugin.config.write",
-	"plugin.file.read", "plugin.file.write",
-	"data.directory.read", "data.directory.write",
-	"database.read",
-	"knowledge.search",
-	"async_task.execute",
-	"emoji.access",
-}
-
-// routeHookPriority 权重默认值（eventHandler.weight）。
-const defaultEventHandlerWeight = 100
-
-// reconcileInterval 包目录对账轮询间隔（运行时增删包 → 加载/卸载虚拟机）。
+// reconcileInterval 包目录对账轮询间隔。
 const reconcileInterval = 3 * time.Second
 
-// httpDefaultTimeout 插件 HTTP 请求默认超时（秒），与协议文档一致。
-const httpDefaultTimeout = 120
+// priorityUnset 事件订阅器未设置优先级时的标记（排序时视作最大的优先级，排在所有设置者之后，按时间顺序）。
+const priorityUnset = -1
 
-// watchdogTimeout 看门狗：单次插件 JS 回调执行的最长等待。超过则视为该插件挂起，
-// 跳过其后续分发并继续处理其它插件，避免单个死循环插件卡住整条分发线程。
-const watchdogTimeout = 30 * time.Second
+// ProbeDataDirName 前端可视化测试探针的文件区目录名（local_data/data 下）。
+const ProbeDataDirName = "ltp9_probe"
 
-// inboundWorkerCount 入站分发 worker 协程数量：不同插件/不同群聊的调用并发执行，
-// 单个慢工具/慢钩子不再阻塞其它调用。
-const inboundWorkerCount = 16
+// ProbePluginID 虚拟探针插件标识（文件区隔离用，非真实加载插件）。
+const ProbePluginID = "__probe__"
 
-// inboundQueueCap 入站分发排队缓冲长度；队列满时回退为直接后台执行。
-const inboundQueueCap = 512
+// ==== LTP9 权限全集（allow-*） ====
 
-// inboundJobs 入站分发 job 通道；inboundStop 停止信号（startInboundWorkers 创建）。
-var (
-	inboundJobs chan *InMessage
-	inboundStop chan struct{}
-)
+// AllowPermissionNames LTP9 支持的全部权限。
+var AllowPermissionNames = []string{
+	"allow-file",
+	"allow-database",
+	"allow-memory",
+	"allow-network",
+	"allow-call",
+	"allow-agent",
+	"allow-signal",
+	"allow-certificate",
+	"allow-send",
+	"allow-socket",
+}
 
-// scriptExecBudget 单插件串行队列排队上限（防御性）。
-const execQueueCap = 256
+// allowedSet 权限名 → bool 查询集。
+var allowedSet = func() map[string]bool {
+	set := map[string]bool{}
+	for _, p := range AllowPermissionNames {
+		set[p] = true
+	}
+	return set
+}()
 
-// ==== 全局实例 ====
+// ==== 配置与全局（宿主可改动的可移植配置） ====
+
+// LocalDir LTP9 运行时数据根目录（宿主可在 Init 前覆盖）。
+// default 为空时回退到琉璃 GeneralConfig.LocalDir（与琉璃基板保持一致）。
+var LocalDir string
+
+// DeveloperMode 开发模式：默认 false 启用 permissions.key 代码哈希校验；
+// 宿主可 SetDeveloperMode(true) 跳过校验并授予全部 allow-* 权限。
+var DeveloperMode = false
+
+// InsecureTLS 是否跳过服务端 TLS 证书校验（engine 网络 fetch / http 用）。
+var InsecureTLS = false
 
 // Engine 引擎管理器全局实例（Init 时创建）。
 var Engine *engine
 
-// sender 出站总线发送函数（由 crystal_astral 注入，真正广播到 /ws 客户端）。
-var sendOut func([]byte)
+// outboundMu 保护 Engine.outbound 与 agentInvoker 的并发读写。
+var outboundMu sync.RWMutex
 
-// sendMu 保护 sendOut 的并发设置/读取。
+// agentInvoker 前端智能体调用实现（engine.agent 真实通道，由主机注入）。
+var agentInvoker func(appID, instruction string) (string, error)
+
+// sendMu 保护 sendInvoker 的并发读写。
 var sendMu sync.RWMutex
 
-// platformCmdMu 保护 platformCmdInvoker 的并发设置/读取。
-var platformCmdMu sync.RWMutex
+// sendInvoker 发送通道（engine.send 真实实现，由主机注入）。
+var sendInvoker func(pluginID, kind, target string, payload any) error
 
-// platformCmdInvoker 平台命令执行器（yara.platform.sendCommand 的真实后端，由宿主 crystal_astral 注入）。
-// 未注入时 sendCommand 返回明确错误提示（真实命令能力在客户端侧）。
-var platformCmdInvoker func(cmd string, args map[string]any) (any, error)
+// wsMu 保护 wsServicer 的并发读写。
+var wsMu sync.RWMutex
 
-// reconcileStop 停止对账循环的信号通道（Close 时关闭）。
-var reconcileStop chan struct{}
+// wsServicer WebSocket 服务端传输（engine.ws 真实实现，由主机注入）。
+var wsServicer *WsBridge
 
-// reconcileWG 对账循环退出同步。
-var reconcileWG sync.WaitGroup
+// platformMu 保护 platformResolver 的并发读写。
+var platformMu sync.RWMutex
 
-// ==== 模型配置缓存（从 lunar_config.json 读取，不硬编码模型名） ====
+// platformResolver 平台能力解析器（engine.platform 真实实现，由主机注入）。
+var platformResolver func(method string, args map[string]any) (any, error)
 
-var (
-	modelCfgOnce sync.Once
-	chatModel    string
-	chatURL      string
-	chatKey      string
-	embedModel   string
-	embedURL     string
-	embedKey     string
-)
+// StickerCollection LTP9 表情包记忆库集合名（image 型集合，与记忆库约定一致）。
+const StickerCollection = "stickers"
 
-// httpClient 插件网络/模型请求共享客户端。
-var httpClient = &http.Client{Timeout: 120 * time.Second}
+// ==== 模型垄断：engine.llm 单一虚拟模型池 ====
+// 模型垄断：无论插件传什么参数（baseUrl/apiKey/model/taskType/selectionStrategy/model_list/
+// ltp9_models.json 等），实际请求与返回配置一律以琉璃 agent 字段模型为准。
+// 对话/多模态 → GeneralConfig.AgentMultimodal{Model,URL,Key}；
+// 嵌入 → GeneralConfig.AgentEmbedding{Model,URL,Key}。
 
-// ==== YaraEvents 全局事件常量（注入每个插件沙箱，权威源：LTP3协议文档/yara.d.ts） ====
+// modelInvokerMu / embedInvokerMu 保护对应注入函数（延迟注入：运行期后任意时刻可设）。
+var modelInvokerMu sync.RWMutex
+var modelInvoker func(messages []any, opts map[string]any) (any, error)
 
-var YaraEvents = map[string]string{
-	"ON_START":               "ON_START",
-	"ON_STOP":                "ON_STOP",
-	"ON_MESSAGE_PRE_PROCESS": "ON_MESSAGE_PRE_PROCESS",
-	"ON_MESSAGE":             "ON_MESSAGE",
-	"ON_PLAN":                "ON_PLAN",
-	"POST_LLM":               "POST_LLM",
-	"AFTER_LLM":              "AFTER_LLM",
-	"POST_SEND_PRE_PROCESS":  "POST_SEND_PRE_PROCESS",
-	"POST_SEND":              "POST_SEND",
-	"AFTER_SEND":             "AFTER_SEND",
-}
+var embedInvokerMu sync.RWMutex
+var embedInvoker func(input any, opts map[string]any) (any, error)
 
-// ==== YaraHooks 全局钩子常量（注入每个插件沙箱，权威源：LTP3协议文档/yara.d.ts） ====
+// creatorProviderName 模型垄断池的唯一 provider 标识（记账/熔断/查询用）。
+const creatorProviderName = "crystal-agent"
 
-var YaraHooks = map[string]string{
-	"CHAT_RECEIVE_BEFORE_PROCESS":            "chat.receive.before_process",
-	"CHAT_RECEIVE_AFTER_PROCESS":             "chat.receive.after_process",
-	"CHAT_COMMAND_BEFORE_EXECUTE":            "chat.command.before_execute",
-	"CHAT_COMMAND_AFTER_EXECUTE":             "chat.command.after_execute",
-	"EMOJI_CHAT_BEFORE_SELECT":               "emoji.chat.before_select",
-	"EMOJI_CHAT_AFTER_SELECT":                "emoji.chat.after_select",
-	"EMOJI_REGISTER_AFTER_BUILD_DESCRIPTION": "emoji.register.after_build_description",
-	"EMOJI_REGISTER_AFTER_BUILD_EMOTION":     "emoji.register.after_build_emotion",
-	"SEND_SERVICE_AFTER_BUILD_MESSAGE":       "send_service.after_build_message",
-	"SEND_SERVICE_BEFORE_SEND":               "send_service.before_send",
-	"SEND_SERVICE_AFTER_SEND":                "send_service.after_send",
-	"CHAT_PLANNER_BEFORE_REQUEST":            "chat.planner.before_request",
-	"CHAT_PLANNER_AFTER_RESPONSE":            "chat.planner.after_response",
-	"CHAT_REPLYER_BEFORE_REQUEST":            "chat.replyer.before_request",
-	"CHAT_REPLYER_BEFORE_MODEL_REQUEST":      "chat.replyer.before_model_request",
-	"CHAT_REPLYER_AFTER_RESPONSE":            "chat.replyer.after_response",
-	"JARGON_QUERY_BEFORE_SEARCH":             "jargon.query.before_search",
-	"JARGON_QUERY_AFTER_SEARCH":              "jargon.query.after_search",
-	"JARGON_EXTRACT_BEFORE_PERSIST":          "jargon.extract.before_persist",
-	"JARGON_INFERENCE_BEFORE_FINALIZE":       "jargon.inference.before_finalize",
-	"EXPRESSION_SELECT_BEFORE_SELECT":        "expression.select.before_select",
-	"EXPRESSION_SELECT_AFTER_SELECTION":      "expression.select.after_selection",
-	"EXPRESSION_LEARN_AFTER_EXTRACT":         "expression.learn.after_extract",
-	"EXPRESSION_LEARN_BEFORE_UPSERT":         "expression.learn.before_upsert",
-}
+// monoTasks LTP9 支持的任务类型（模型垄断下全部共享同一 agent 对话模型）。
+var monoTasks = []string{"replyer", "planner", "tool_use", "vlm", "voice", "embedding"}
 
-// baseDir 计算 LTP3 包根目录（可执行目录/local_data/package）。
-// 与 crystal_astral 的 packageBaseDir 保持一致（独立实现避免跨包依赖）。
-func packageRoot() string {
-	execPath, err := os.Executable()
-	if err != nil {
-		return filepath.Join("local_data", "package")
+// modelUsageMu 保护模型调用次数（占位保留，模型垄断下恒为单候选）。
+var modelUsageMu sync.Mutex
+var modelUsageCounts = map[string]int{}
+
+// globalModelStats 全局 LLM 调用记录收集器（engine.llm 调用记录）。
+var globalModelStats = &ltmStatsCollector{records: make([]ltmCallRecord, 0, 256), maxSize: 10000}
+
+// ==== 包根目录 ====
+
+// rootOverride 宿主显式指定的 LTP9 包根目录；非空时优先于 LocalDir/package。
+var rootOverride string
+
+// localBase 返回 LTP9 运行时数据根目录（宿主 LocalDir 优先，否则回退琉璃 GeneralConfig.LocalDir）。
+func localBase() string {
+	if LocalDir != "" {
+		return LocalDir
 	}
-	execDir := filepath.Dir(execPath)
-	return filepath.Join(execDir, *GeneralConfig.LocalDir, "package")
+	return *GeneralConfig.LocalDir
+}
+
+// packageRoot 计算 LTP9 包根目录。
+// 默认扫描 可执行目录/{LocalDir|GeneralConfig.LocalDir}/package/，按 metadata.json 的 LTP9 标签筛选插件；
+// 宿主可用 SetRootOverride 指定显式根目录。
+func packageRoot() string {
+	if rootOverride != "" {
+		return rootOverride
+	}
+	return filepath.Join(localBase(), "package")
 }

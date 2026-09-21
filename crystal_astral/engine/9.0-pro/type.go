@@ -1,277 +1,279 @@
-package YaraLTP
+package ltp9
+
+// ==== 类型定义集中区 ====
 
 import (
 	"encoding/json"
+	"regexp"
 	"sync"
+	"time"
 
 	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/eventloop"
 )
 
-// ==== 消息体 ====
-
-// YaraMessage 聊天消息对象（事件 / Hook 回调参数，对齐 yara.d.ts）。
-type YaraMessage struct {
-	ID         string   `json:"id"`
-	SenderID   string   `json:"senderId"`
-	SenderName string   `json:"senderName"`
-	GroupID    string   `json:"groupId"`
-	Content    string   `json:"content"`
-	IsAtMe     bool     `json:"isAtMe,omitempty"`
-	HasImage   bool     `json:"hasImage,omitempty"`
-	ImageURLs  []string `json:"image_urls,omitempty"`
-	Timestamp  int64    `json:"timestamp"`
-	Platform   string   `json:"platform"`
-}
-
-// ==== 订阅与注册条目 ====
-
-// jsFunc goja 回调引用（在插件 VM 内调用）。
+// jsFunc goja 回调引用（在对应插件事件循环内调用）。
 type jsFunc = goja.Value
 
-// hookSub 一个插件内注册的 Hook 订阅项。
-type hookSub struct {
-	hookType    string
-	mode        string // blocking / observe
-	order       string // early / normal / late
-	errorPolicy string // abort / skip / log
-	timeoutMs   int64
-	handler     jsFunc
+// ==== 插件（每插件独立 goja 沙箱） ====
+
+// plugin 一个 LTP9 包对应的运行实例。持有独立事件循环（自带定时器）与 engine.* 绑定。
+type plugin struct {
+	ID         string // 插件 ID
+	DirName    string // 包目录名
+	Title      string
+	Root       string
+	MainPath   string // execute.js
+	ConfigPath string // config.yaml
+	DataDir    string // data/
+	KeyPath    string // permissions.key
+
+	config  map[string]any
+	granted map[string]bool // 经 permissions.key 代码哈希解密校验通过的 allow-* 清单
+
+	loop *eventloop.EventLoop // 每插件独立事件循环（goja.New + 自带定时器）
+	mu   sync.Mutex           // 串行化同一插件全部 JS 执行
+
+	loaded   bool
+	loadErr  string
+	onLoad   jsFunc
+	onUnload jsFunc
+	onConfigUpdate jsFunc // config 回写后触发的生命周期回调（onConfigUpdate）
+
+	// 订阅 id 单调计数器（事件订阅器 + 前端信号订阅共用）
+	subSeq int
+	// 事件订阅器：topic → 订阅器组（可重复订阅）
+	events map[string][]*eventSub
+	// 导出函数：fnName → 处理器（供 engine.call）
+	exports map[string]jsFunc
+	// 前端事件订阅器（engine.frontEvent.signal）
+	frontSignal []*eventSub
+
+	// 指令注册：指令名（含别名）→ 指令项（engine.command）
+	commands map[string]*commandEntry
+	// 工具注册：工具名 → 工具项（engine.tool，LLM/AutoA 可调用的函数工具）
+	tools map[string]*toolEntry
+	// 配置 schema 声明（engine.config.registerSchema）
+	configSchema []ConfigSectionDef
+	// 异步子任务：taskId → 任务状态（engine.async）
+	asyncMu    sync.Mutex
+	asyncSeq   int
+	asyncTasks map[int]*asyncTask
 }
 
-// eventSub 事件订阅项（event.subscribe 与 eventHandler.register 共用）。
-type eventSub struct {
-	name             string
-	weight           int
-	interceptMessage bool
-	handler          jsFunc
+// ConfigFieldDef 单个配置字段声明（engine.config.registerSchema）。
+type ConfigFieldDef struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`       // 中文名（插件自声明）
+	Type        string `json:"type"`        // boolean / integer / number / string / array / object
+	Description string `json:"description"` // 中文说明
+	Default     any    `json:"default,omitempty"`
 }
 
-// commandDef 指令定义。
-type commandDef struct {
+// ConfigSectionDef 单个配置节声明（engine.config.registerSchema）。
+type ConfigSectionDef struct {
+	Name        string           `json:"name"`
+	Label       string           `json:"label"`       // 中文节名（插件自声明）
+	Description string           `json:"description"` // 中文说明
+	Order       int              `json:"order"`       // WebUI 展示顺序（小者在前）
+	Fields      []ConfigFieldDef `json:"fields"`
+}
+
+// commandEntry 单个指令项（engine.command.register 注册，engine 侧经 Command 触发）。
+type commandEntry struct {
 	name    string
-	pattern string
+	re      *regexp.Regexp
 	handler jsFunc
 	aliases []string
 }
 
-// toolDef 工具定义。
-type toolDef struct {
-	name                string
-	description         string
-	briefDescription    string
-	detailedDescription string
-	visibility          string // visible / hidden / deferred
-	toolType            string // agent / autonomous / core
-	timeoutSeconds      int64
-	async               bool
-	hookType            string
-	pattern             string
-	parameters          []toolParam
-	handler             jsFunc
+// asyncTask 单个异步子任务状态（engine.async.run 创建）。
+type asyncTask struct {
+	id        int
+	status    string // running / done / timeout / error
+	progress  any
+	data      any
+	fn        jsFunc
+	createdAt time.Time // 创建时刻（清理已终结的过期任务记录用）
 }
 
-// toolParam 工具参数。
-type toolParam struct {
-	Name        string   `json:"name"`
-	Type        string   `json:"type"`
-	Description string   `json:"description"`
-	Required    bool     `json:"required,omitempty"`
-	Default     any      `json:"default,omitempty"`
-	EnumValues  []string `json:"enumValues,omitempty"`
+// toolEntry 单个工具项（engine.tool.register 注册，引擎侧经 CallTool 触发，LLM/AtoA 可调用）。
+type toolEntry struct {
+	name        string // 工具名（唯一标识，供 LLM tool_calls 与 CallTool 精确匹配）
+	description string // 工具描述（供 LLM 理解何时调用）
+	parameters  []any  // 参数定义数组（name/type/description/required 等，原样透传）
+	handler     jsFunc // (params) 处理器，params 为调用参数对象
 }
 
-// apiDef 插件暴露的跨插件 API（yara.api.register）。
-type apiDef struct {
-	name        string
-	description string
-	version     string
-	public      bool
-	handler     jsFunc
-}
-
-// llmProvider 插件自定义 LLM 提供商。
-type llmProvider struct {
-	name       string
-	clientType string
-	handler    jsFunc
-}
-
-// ==== 插件（每插件独立 goja 沙箱） ====
-
-// plugin 一个 LTP3 包对应的运行实例。
-type plugin struct {
-	ID         string // metadata.id
-	DirName    string // 包目录名
-	Title      string // metadata.title
-	Root       string // 包目录绝对路径
-	MainPath   string // index.js 绝对路径
-	ConfigPath string // config.yaml 绝对路径
-	DataDir    string // data/ 绝对路径
-	KeyPath    string // permissions.key 绝对路径
-
-	config  map[string]any  // 解析后的 config.yaml 内容
-	granted map[string]bool // 本次加载经脚本哈希校验通过的权限集合
-
-	vm *goja.Runtime
-	mu sync.Mutex // 串行化同一插件所有 JS 执行（goja 非线程安全）
-
-	loaded           bool
-	loadErr          string
-	onLoadFn         jsFunc
-	onUnloadFn       jsFunc
-	onConfigUpdateFn jsFunc
-
-	hooks        map[string][]*hookSub
-	events       map[string][]*eventSub
-	commands     map[string]*commandDef
-	tools        map[string]*toolDef
-	toolRegOrder []string // 记录工具注册顺序
-	apis         map[string]*apiDef
-	llmProviders map[string]*llmProvider
-
-	// 执行上下文：当前是否为一次 hook/event 分发触发的（用于 send 单播回执）
-	currentRequestID string
+// eventSub 单个事件订阅项。
+type eventSub struct {
+	topic    string
+	orderID  int    // 订阅 id（插件内单调递增，同时作为时间顺序依据）
+	handler  jsFunc
+	priority int    // 优先级（0 最高；priorityUnset 表示未设置，按时间顺序排列在设置者之后）
 }
 
 // ==== 引擎管理器 ====
 
-// engine LTP3 引擎管理器：负责包扫描、虚拟机加载/卸载、事件与钩子分发。
+// engine LTP9 引擎管理器。
 type engine struct {
-	mu             sync.RWMutex
-	plugins        map[string]*plugin // ID → 插件
-	byDir          map[string]string  // 包目录名 → ID
-	root           string             // 包根目录
-	running        bool
-	busFingerprint string // 上次对账快照（目录名:校验，用于探测增删）
+	mu      sync.RWMutex
+	plugins map[string]*plugin // 插件 ID → 插件
+	root    string             // LTP9 包根目录
+	running bool
+
+	// reconcileStop 关闭对账循环（shutdown 时关闭；nil 表示循环未启动/已停止）
+	reconcileStop chan struct{}
+
+	// outboundSender 由外部 Go 程序注入：插件产生的单向通报/消息（engine.signal → Go 侧）。
+	outbound func(topic string, payload any)
 }
 
-// ==== Hook / 事件分发结果 ====
+// ==== 熔断器（self-contained 移植 YaraFlow circuit_breaker，收敛到单一 agent 模型） ====
 
-// hookOutcome 单个插件的钩子执行结果。
-type hookOutcome struct {
+// ltmCircuitState 熔断器状态。
+type ltmCircuitState int32
+
+const (
+	ltmCircuitClosed   ltmCircuitState = iota // 正常通行
+	ltmCircuitOpen                            // 熔断拒绝
+	ltmCircuitHalfOpen                        // 半开试探
+)
+
+func (s ltmCircuitState) String() string {
+	switch s {
+	case ltmCircuitClosed:
+		return "closed"
+	case ltmCircuitOpen:
+		return "open"
+	case ltmCircuitHalfOpen:
+		return "half-open"
+	default:
+		return "unknown"
+	}
+}
+
+// ltmCircuitConfig 熔断器配置。
+type ltmCircuitConfig struct {
+	FailureThreshold int           // 失败次数阈值（滑动窗口内）
+	SuccessThreshold int           // 半开状态下连续成功次数阈值
+	WindowDuration   time.Duration // 滑动窗口时长
+	OpenDuration     time.Duration // 熔断打开后等待时间
+	HalfOpenMaxReqs  int           // 半开状态最大允许请求数
+}
+
+// ltmCircuitBreaker 单个平台的 LLM 调用熔断器（模型垄断下收敛到 agent 对话模型一个实例）。
+type ltmCircuitBreaker struct {
+	name   string
+	config ltmCircuitConfig
+
+	mu       sync.Mutex
+	state    ltmCircuitState
+	failures []time.Time // 失败时间戳滑动窗口
+
+	halfOpenReqs    int32
+	halfOpenPassed  int32
+	lastFailTime    time.Time
+	stateChangedAt  time.Time
+}
+
+// ==== 调用记录（内存环形 + 落盘 {LocalDir}/log/ltp9_model_stats.json） ====
+
+// ltmCallRecord 单次 LLM 调用记录。
+type ltmCallRecord struct {
+	Time            time.Time `json:"time"`
+	Model           string    `json:"model"`
+	Provider        string    `json:"provider"`
+	TaskType        string    `json:"task_type"`
+	PromptTokens    int       `json:"prompt_tokens"`
+	CompTokens      int       `json:"completion_tokens"`
+	LatencyMs       int64     `json:"latency_ms"`
+	TokensPerSecond float64   `json:"tokens_per_second"`
+	Success         bool      `json:"success"`
+}
+
+// ltmStatsCollector LLM 调用统计收集器。
+type ltmStatsCollector struct {
+	mu        sync.RWMutex
+	records   []ltmCallRecord
+	maxSize   int
+	statsPath string
+	dirty     bool
+	started   bool // 自动保存 goroutine 是否已启动
+}
+
+// ==== 公开接口结果类型 ====
+
+// Outcome 单个插件对一次事件/调用的处理结果。
+type Outcome struct {
 	PluginID string `json:"plugin_id"`
 	Error    string `json:"error,omitempty"`
 	Handled  bool   `json:"handled"`
-	Result   any    `json:"result,omitempty"` // JS 返回对象（allowContinue/action/modifiedData...）
+	Result   any    `json:"result,omitempty"` // 订阅回调返回对象（intercept/modifiedData/cancel/return…）
 }
 
-// dispatchSummary 聚合后的分发汇总。
-type dispatchSummary struct {
-	Subscribed    int  `json:"subscribed"`
-	Errored       int  `json:"errored"`
-	AllowContinue bool `json:"allow_continue"`
-	Aborted       bool `json:"aborted"`
+// EmitSummary 一次事件分发的汇总。
+type EmitSummary struct {
+	Subscribed  int  `json:"subscribed"`
+	Errored     int  `json:"errored"`
+	Intercepted bool `json:"intercepted"` // 任一订阅器拦截，短路后续调用
+	Canceled    bool `json:"canceled"`    // 任一订阅器撤回事件，不再派发
 }
 
-// ==== WS 总线信封（engine ↔ 真实客户端） ====
-
-// InMessage 客户端 → 引擎 的请求信封。
-type InMessage struct {
-	Type      string          `json:"type"` // ltp3/hook | ltp3/event | ltp3/command | ltp3/tool | ltp3/manage | ltp3/ping
-	RequestID string          `json:"request_id,omitempty"`
-	Hook      string          `json:"hook,omitempty"`
-	Event     string          `json:"event,omitempty"`
-	Command   string          `json:"command,omitempty"`
-	Tool      string          `json:"tool,omitempty"`
-	Action    string          `json:"action,omitempty"` // manage: list|scan|reload|reload_one|unload_one
-	ID        string          `json:"id,omitempty"`     // manage 目标插件 ID
-	Match     []string        `json:"match,omitempty"`  // command 正则匹配组
-	Context   map[string]any  `json:"context,omitempty"`
-	Payload   json.RawMessage `json:"payload,omitempty"`
+// EmitResult 事件分发的返回（客户端直接调用引擎功能的结果）。
+type EmitResult struct {
+	Topic   string       `json:"topic"`
+	Outcomes []Outcome   `json:"outcomes"`
+	Summary EmitSummary  `json:"summary"`
+	// Data 沿订阅器 modifiedData 链更新后的最终负载；无插件改写时等于原始 payload。
+	Data any `json:"data,omitempty"`
+	// Modified 是否有任一订阅器通过 modifiedData 改写了负载。
+	Modified bool `json:"modified"`
+	// Returned 是否有任一订阅器通过 return 回传了业务结果。
+	Returned bool `json:"returned"`
+	// Return 订阅器经 return 回传的业务结果；同主题多订阅器时以最后回传者为准，无回传时为 nil。
+	Return any `json:"return,omitempty"`
 }
 
-// hookResultMessage 引擎 → 客户端：钩子分发结果。
-type hookResultMessage struct {
-	Type      string          `json:"type"`
-	RequestID string          `json:"request_id,omitempty"`
-	Hook      string          `json:"hook"`
-	Results   []hookOutcome   `json:"results"`
-	Summary   dispatchSummary `json:"summary"`
-}
-
-// eventAckMessage 引擎 → 客户端：事件发布确认。
-type eventAckMessage struct {
-	Type       string `json:"type"`
-	RequestID  string `json:"request_id,omitempty"`
-	Event      string `json:"event"`
-	Subscribed int    `json:"subscribed"`
-}
-
-// commandResultMessage 引擎 → 客户端：指令调用结果。
-type commandResultMessage struct {
-	Type      string          `json:"type"`
-	RequestID string          `json:"request_id,omitempty"`
-	Command   string          `json:"command"`
-	Results   []hookOutcome   `json:"results"`
-	Summary   dispatchSummary `json:"summary"`
-}
-
-// toolResultMessage 引擎 → 客户端：工具调用结果。
-type toolResultMessage struct {
-	Type      string          `json:"type"`
-	RequestID string          `json:"request_id,omitempty"`
-	Tool      string          `json:"tool"`
-	Results   []hookOutcome   `json:"results"`
-	Summary   dispatchSummary `json:"summary"`
-}
-
-// managePayload 管理动作返回的插件状态列表。
-type manageState struct {
+// PluginState 插件状态（供外部 Go 程序枚举 / 前端引擎管理器填充动态选项）。
+type PluginState struct {
 	ID      string `json:"id"`
-	DirName string `json:"dir_name"`
 	Title   string `json:"title"`
 	Loaded  bool   `json:"loaded"`
 	Error   string `json:"error,omitempty"`
+	Granted []string `json:"granted,omitempty"`
+	// Events 已订阅的事件主题（引擎侧注册的真实信息，供前端下拉填充）
+	Events []string `json:"events,omitempty"`
+	// Exports 导出的函数名（engine.export 注册的真实信息，供前端下拉填充）
+	Exports []string `json:"exports,omitempty"`
+	// Tools 已注册的工具名（engine.tool 注册的真实信息，供前端下拉填充）
+	Tools []string `json:"tools,omitempty"`
 }
 
-// manageAckMessage 引擎 → 客户端：管理动作确认。
-type manageAckMessage struct {
-	Type      string        `json:"type"`
-	RequestID string        `json:"request_id,omitempty"`
-	Action    string        `json:"action"`
-	OK        bool          `json:"ok"`
-	Message   string        `json:"message,omitempty"`
-	Plugins   []manageState `json:"plugins,omitempty"`
+// ==== 扩展类型 ====
+
+// WsBridge 宿主注入的 WebSocket 服务端传输：Serve 挂载一个路径并返回访问地址，Publish 向该路径广播。
+type WsBridge struct {
+	Serve   func(pluginID, path string, onMessage func(msg string) string) (string, error)
+	Publish func(pluginID, path, data string) error
 }
 
-// pongMessage 引擎 → 客户端：存活确认。
-type pongMessage struct {
-	Type      string `json:"type"`
-	RequestID string `json:"request_id,omitempty"`
-	Engine    string `json:"engine"`
-	Plugins   int    `json:"plugins"`
+func ok(text string) rwResult { return rwResult{Success: true, Text: text} }
+func fail(err string) rwResult { return rwResult{Success: false, Error: err} }
+
+// rwResult engine.* API 的统一返回（Go → JS）。
+type rwResult struct {
+	Success bool   `json:"success"`
+	Text    string `json:"text,omitempty"`
+	Error   string `json:"error,omitempty"`
+	// ToolCalls LLM 响应中的工具调用（engine.llm.chat 返回；OpenAI 兼容 tool_calls 原样透传，供 AtoA 接头）
+	ToolCalls []any `json:"tool_calls,omitempty"`
 }
 
-// outMessage 引擎 → 客户端：通用结果/错误。
-type outMessage struct {
-	Type      string `json:"type"`
-	RequestID string `json:"request_id,omitempty"`
-	Error     string `json:"error,omitempty"`
+func parseJSONArgs(s string) map[string]any {
+	m := map[string]any{}
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return map[string]any{}
+	}
+	return m
 }
-
-// sendMessage 引擎 → 客户端：插件产生的消息发送请求。
-type sendMessage struct {
-	Type      string `json:"type"`
-	RequestID string `json:"request_id,omitempty"` // 有值 → 单播回触发客户端；无值 → 默认广播
-	PluginID  string `json:"plugin_id,omitempty"`
-	Kind      string `json:"kind"` // text | image | emoji | hybrid
-	GroupID   string `json:"group_id,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Image     string `json:"image,omitempty"`
-	Emoji     string `json:"emoji,omitempty"`
-	Segments  []any  `json:"segments,omitempty"`
-	Success   bool   `json:"success"`
-}
-
-// lifecycleMessage 引擎 → 客户端：插件加载 / 卸载生命周期广播。
-type lifecycleMessage struct {
-	Type   string `json:"type"`
-	Event  string `json:"event"` // ON_START / ON_STOP
-	Plugin string `json:"plugin,omitempty"`
-	Title  string `json:"title,omitempty"`
-}
-
-// ==== 工具/模型调用载荷（yara.model / yara.tool 用） ====
-
-// toolCallArg 工具调用入参结构（api.tool 用 map）。
-// chatMessage 等模型载荷类型见 model.go。

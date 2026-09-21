@@ -2,20 +2,18 @@
 // 每类节点：
 //   ins     数据输入端口 [{k,label}]；k 对应可被连线填写的参数字段
 //   out     数据输出 {k,label}（null 表示无数据输出，仅提供"顺序"空输出）
-//   gate    是否为逻辑门
 //   fields  参数 schema（表单自动生成）
-// 每节点始终额外提供"顺序"输入端口与"顺序"输出端口（仅传放行，不传数据）。
-const GATE_TYPES = { and: 1, or: 1, not: 1, nand: 1, nor: 1 };
-
+// 每节点始终额外提供"顺序"输入端口与"顺序"输出端口。
+// 所有节点严格同一层级：连线仅定义先后顺序并传递数据，无任何层级特征。
 const NODES = {
     start: {
         label: '启动节点', icon: 'fa-play-circle', color: '#22c55e',
-        desc: '运行全部时与其它启动节点同时开始，沿时钟线并行向下传播激活；无数据输入输出',
+        desc: '运行全部时与其它启动节点同时触发，立即把直接相连的所有节点加入执行池并行执行；无数据输入输出',
         ins: [], out: null, fields: []
     },
     event_start: {
         label: '事件启动', icon: 'fa-bolt', color: '#f97316',
-        desc: '等待目标事件触发后启动逻辑链，并把事件载荷作为输出（事件由页面上「事件触发」或「时钟启动」投递）',
+        desc: '运行状态下监测到目标事件时，与手动触发同流程：把直接相连的所有节点加入执行池，并把事件载荷作为输出（事件由页面上「事件触发」或「时钟启动」投递）',
         ins: [], out: { k: 'payload', label: '事件载荷' },
         fields: [
             { key: 'topic', label: '监听事件(topic，留空=任意；下拉=引擎真实已订阅)', type: 'text', def: 'weather.query', dynamic: 'events' },
@@ -24,13 +22,13 @@ const NODES = {
     },
     clock_start: {
         label: '时钟启动', icon: 'fa-clock', color: '#f59e0b',
-        desc: '每隔设定时间沿时钟线激活一次下游节点（各分支并行独立传播，直至点击「停止运行」）',
+        desc: '时间触发型启动节点：运行状态下每隔设定时间，与手动触发同流程把直接相连的下游节点加入执行池（各分支并行独立，直至手动停止）',
         ins: [], out: { k: 'tick', label: 'tick' },
         fields: [{ key: 'interval', label: '启动间隔(毫秒)', type: 'number', def: 2000 }]
     },
     limit: {
         label: '调用上限', icon: 'fa-gauge-high', color: '#06b6d4',
-        desc: '动态调整本次运行的最大节点调用次数（默认 300，防无限递归）；被时钟激活时立即全局生效，需接入时钟链',
+        desc: '动态调整本次运行的最大节点执行数量（默认 300，防无限循环耗尽上限后运行终止）；需接入执行链才能生效',
         ins: [], out: null,
         fields: [{ key: 'max', label: '最大调用次数', type: 'number', def: 300 }]
     },
@@ -199,7 +197,7 @@ const NODES = {
     },
     transform: {
         label: '提取合并', icon: 'fa-code-merge', color: '#38bdf8',
-        desc: '多路合并：接收多路输入，逐路设置提取字段（留空取全部），按 {{inN.字段}} 占位符模板组合为单路输出；路径支持数组下标（如 result.outcomes[0].result.data.city）；激活需时钟线接入（信号线仅传数据）；模板必填',
+        desc: '多路合并：接收多路输入，逐路设置提取字段（留空取全部），按 {{inN.字段}} 占位符模板组合为单路输出；路径支持数组下标（如 result.outcomes[0].result.data.city）；任一上游连线完成即激活（不等其他上游）；模板必填',
         ins: [{ k: 'in1', label: '输入1' }, { k: 'in2', label: '输入2' }, { k: 'in3', label: '输入3' }, { k: 'in4', label: '输入4' }],
         out: { k: 'text', label: '结果' },
         fields: [
@@ -212,7 +210,7 @@ const NODES = {
     },
     extract: {
         label: '提取拆分', icon: 'fa-scissors', color: '#fbbf24',
-        desc: '单路拆分：从一个输入按多条提取路径拆分为多路输出；每个输出端口对应一条提取路径（留空=原样透传整值），路径支持数组下标 a.b[0].c；激活需时钟线接入（信号线仅传数据）；输出1 亦作为节点默认输出（兼容单值消费）',
+        desc: '单路拆分：从一个输入按多条提取路径拆分为多路输出；每个输出端口对应一条提取路径（留空=原样透传整值），路径支持数组下标 a.b[0].c；输出1 亦作为节点默认输出（兼容单值消费）',
         ins: [{ k: 'input', label: '输入数据' }],
         outs: [
             { k: 'out1', label: '输出1' }, { k: 'out2', label: '输出2' },
@@ -227,7 +225,7 @@ const NODES = {
     },
     display: {
         label: '文本显示', icon: 'fa-eye', color: '#f472b6',
-        desc: '接收并显示上游文本内容；卡片仅展示描述标签（说明本节点用途），真实文本可点节点头部「气泡」图标查看；激活时若有内容自动弹出消息气泡；激活需时钟线接入（信号线仅传数据），未连线时显示并输出本节点填写的文本',
+        desc: '接收并显示上游文本内容；卡片仅展示描述标签（说明本节点用途），真实文本可点节点头部「气泡」图标查看；激活时若有内容自动弹出消息气泡；未连线时显示并输出本节点填写的文本',
         ins: [{ k: 'text', label: '文本' }], out: { k: 'text', label: '文本' },
         fields: [
             { key: 'text', label: '文本内容（未连线时使用）', type: 'textarea', rows: 2, def: '你好，星月智能！' },
@@ -236,7 +234,7 @@ const NODES = {
     },
     image_display: {
         label: '图像显示', icon: 'fa-image', color: '#fb7185',
-        desc: '接收上游 base64/data URI 图像并弹出展示（激活时若有图像自动弹出；也可点头部「图片」图标查看）；卡片仅展示描述标签；激活需时钟线接入，未连线时展示本节点填写的图像；输出透传图像数据',
+        desc: '接收上游 base64/data URI 图像并弹出展示（激活时若有图像自动弹出；也可点头部「图片」图标查看）；卡片仅展示描述标签；未连线时展示本节点填写的图像；输出透传图像数据',
         ins: [{ k: 'image', label: '图像(base64)' }], out: { k: 'image', label: '图像(base64)', kind: 'image' },
         fields: [
             { key: 'image', label: '图像 base64 / data URI（未连线时使用）', type: 'textarea', rows: 2, def: '' },
@@ -267,18 +265,13 @@ const NODES = {
     },
     wait: {
         label: '同步等待', icon: 'fa-hourglass-half', color: '#94a3b8',
-        desc: 'sleep 语义：阻塞等待指定毫秒；无数据输入输出',
+        desc: '仅延时自身后续节点的激活时机：等待预设毫秒后再把后续节点加入执行池，不阻塞执行池中其他节点，也不影响未与之相连的节点；无数据输入输出',
         ins: [], out: null, fields: [{ key: 'ms', label: '等待毫秒', type: 'number', def: 800 }]
     },
     stats: {
         label: '插件状态', icon: 'fa-cubes', color: '#f43f5e',
         desc: '查询引擎在线 + 已加载插件（含事件/导出/智能体包）；输出原始回执（含 ok/plugins 等完整字段），不做简化提取', ins: [], out: { k: 'rows', label: '插件列表' }, fields: []
     },
-    and: { label: '与 AND', icon: 'fa-diagram-project', color: '#22c55e', gate: true, desc: '所有输入成功才放行', ins: port_ins4(), out: null, fields: [] },
-    or: { label: '或 OR', icon: 'fa-share-nodes', color: '#a3e635', gate: true, desc: '任一路径成功即放行', ins: port_ins4(), out: null, fields: [] },
-    not: { label: '非 NOT', icon: 'fa-right-left', color: '#facc15', gate: true, desc: '输入取反（单输入）', ins: port_ins4(), out: null, fields: [] },
-    nand: { label: '与非 NAND', icon: 'fa-code-branch', color: '#eab308', gate: true, desc: '非(全部成功)', ins: port_ins4(), out: null, fields: [] },
-    nor: { label: '或非 NOR', icon: 'fa-toggle-off', color: '#ca8a04', gate: true, desc: '非(任一成功)', ins: port_ins4(), out: null, fields: [] },
     emoji: {
         label: '表情包', icon: 'fa-face-grin-hearts', color: '#ec4899',
         desc: 'memory.searchImage / storeImage / randomImage（图片记忆，复用记忆库 stickers 集合）；search 按语义检索、random 随机返回一张',
@@ -333,7 +326,7 @@ const NODES = {
     },
     speaker: {
         label: '扬声器播放', icon: 'fa-volume-high', color: '#f472b6',
-        desc: '本地播放：取上游音频（或本节点填写的 base64）通过扬声器播放；激活需时钟线接入，信号线仅传音频',
+        desc: '本地播放：取上游音频（或本节点填写的 base64）通过扬声器播放',
         ins: [{ k: 'audio', label: '音频(base64)' }], out: null,
         fields: [{ key: 'audio', label: '音频 base64（未连线时使用）', type: 'textarea', rows: 2, def: '' }]
     },
@@ -363,16 +356,5 @@ const NODES = {
         ]
     },
 };
-function port_ins4() { return [{ k: 'in1', label: '输入1' }, { k: 'in2', label: '输入2' }, { k: 'in3', label: '输入3' }, { k: 'in4', label: '输入4' }]; }
-
-// ==== 节点元信息 / 连线判定 ====
+// ==== 节点元信息 ====
 function metaOf(type) { return NODES[type] || { label: type, icon: 'fa-cube', color: '#6d5ce7', ins: [], out: null, fields: [] }; }
-function isGate(type) { return !!GATE_TYPES[type]; }
-// 时钟线：连接目标「顺序」输入口，或目标为逻辑门（门的任意输入都参与执行）；决定执行链/门控
-// 信号线：连接目标数据输入口，仅用于传入参数，不参与执行顺序判断
-function isClockLink(l) {
-    if (l.to.port === 'gate') return true;
-    const to = nodeById(l.to.node);
-    return !!to && isGate(to.type);
-}
-function clockLinksOf(id) { return viewOf(id).links.filter(l => l.to.node === id && isClockLink(l)); }

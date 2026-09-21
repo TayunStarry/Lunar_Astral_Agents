@@ -2,7 +2,135 @@
 
 > [🏠 文档地图](README.md) | [◀ 上一章](10-llama.cpp-参数参考.md)
 
-本文为 stable-diffusion.cpp `sd-cli` 命令行参数的中文速查表（commit 3633072），由上游 `--help` 输出整理翻译。与项目相关的图像生成管线见 [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) 与 [04-公共子系统](04-公共子系统.md) §4.4。
+本文为 stable-diffusion.cpp `sd-cli` 与 `sd-server` 命令行参数的中文速查表。`sd-cli`（commit 3633072）与 `sd-server`（commit de298c2）均整理翻译自上游 `--help` 输出。与项目相关的图像生成管线见 [02-核心系统-钛宇-月华](02-核心系统-钛宇-月华.md) 与 [04-公共子系统](04-公共子系统.md) §4.4。
+
+## sd-server 服务端 (sd-server)
+
+`sd-server.exe` 是 stable-diffusion.cpp 的 HTTP 服务端：将模型加载常驻内存，通过 HTTP 接口接收提示词等生成参数返回图像，适合需要多次调用、避免反复加载模型的场景。
+
+### 启动示例
+
+```bash
+./sd-server.exe --model sd_xl_base.safetensors --listen-port 1234 --listen-ip 0.0.0.0
+```
+
+模型的加载（Context Options）与生成（Generation Options）参数大部分与 `sd-cli` 一致，见下文对应章节；下表仅列出服务端专属（Svr Options）以及相比 `sd-cli` 在 commit de298c2 中新增/有差异的参数。
+
+### 服务端选项 (Svr Options)
+
+| 参数 | 说明 |
+|------|------|
+| `-l`, `--listen-ip <string>` | 服务端监听 IP（默认：127.0.0.1） |
+| `--serve-html-path <string>` | 在根路径提供的 HTML 文件路径（可选） |
+| `--listen-port <int>` | 服务端监听端口（默认：1234） |
+| `-v`, `--verbose` | 打印额外信息 |
+| `--color` | 根据级别为日志标签着色 |
+| `-h`, `--help` | 显示帮助并退出 |
+
+### Context Options 差异（服务端/新版本新增）
+
+| 参数 | 说明 |
+|------|------|
+| `--uncond-diffusion-model <string>` | 独立无条件扩散模型路径，当前用于 Ideogram4 CFG |
+| `--embeddings-connectors <string>` | LTXAV embeddings 连接器路径 |
+| `--vae-format <string>` | VAE 潜在空间格式覆盖：auto, flux, sd3, flux2 或 wan（默认：auto） |
+| `--audio-vae <string>` | 独立 LTX audio vae 模型路径 |
+| `--ip-adapter <string>` | IP-Adapter 模型路径（需要 `--clip_vision`） |
+| `--motion-module <string>` | AnimateDiff motion 模块路径（SD 1.5）；`--video-frames > 1` 时启用视频生成 |
+| `--model-args <string>` | 额外模型参数，key=value 列表。支持 chroma_use_dit_mask, chroma_use_t5_mask, chroma_t5_mask_pad, qwen_image_zero_cond_t |
+| `--pulid-weights <string>` | PuLID Flux 权重路径 |
+| `--split-mode <string>` | 分配到多设备模块的权重分布（`--backend "diffusion=cuda0&cuda1"`）：layer（每设备整块 transformer，默认）或 row（跨设备拆分 matmul 行，仅 CUDA）。接受单一模式或按模块指定，如 row 或 diffusion=row,te=layer |
+| `--rpc-servers <string>` | 用于卸载的 RPC 服务器列表，逗号分隔，格式 host:port，如 localhost:50052,192.168.1.3:50052 |
+| `--max-vram <string>` | 图切割分段执行的最大 VRAM 预算（GiB）。接受单一值或按后端/设备指定，如 6 或 cuda0=6,vulkan0=4。0 禁用图分割；负值自动检测空闲 VRAM，保留指定值 |
+| `--stream-layers` | 在 `--max-vram` 之上启用驻留+预取流式（无 `--max-vram` 时无效；默认 false） |
+| `--eager-load` | 在模型加载时将所有参数加载进 params 后端，而非首次使用时惰性加载（默认 false） |
+| `--auto-fit` | 根据模型大小和各设备内存预算（`--max-vram`）自动挑选 diffusion/te/vae 的设备放置（默认：空闲内存减去少量余量）。覆盖 `--backend` 与 `--params-backend`；可能跨 GPU 拆分模块（`--split-mode` 仍选择 layer 或 row） |
+| `--list-devices` | 列出可用 ggml 后端设备（每行 name`<TAB>`description）并退出；名称即 `--backend` 与 `--params-backend` 接受的设备名 |
+| `--control-net-cpu` | 已弃用；改用 `--backend controlnet=cpu` |
+| `--clip-on-cpu` | 已弃用；改用 `--backend te=cpu` |
+| `--vae-on-cpu` | 已弃用；改用 `--backend vae=cpu` |
+
+### Generation Options 差异（服务端/新版本新增）
+
+| 参数 | 说明 |
+|------|------|
+| `--ad-model <string>` | ADetailer 用 YOLOv8 检测模型（转换后）路径 |
+| `--ad-prompt <string>` | ADetailer 提示词；空则继承主提示词，支持 `[PROMPT]`, `[SEP]`, `[SKIP]` |
+| `--ad-negative-prompt <string>` | ADetailer 负面提示词；空则继承主负面提示词，支持 `[PROMPT]`, `[SEP]` |
+| `--extra-ad-args <string>` | ADetailer 额外参数，key=value 列表。支持 input_size, confidence, nms, max_detections, mask_k_largest, mask_min_ratio, mask_max_ratio, dilate_erode, x_offset, y_offset, mask_mode, merge_masks, invert_mask, mask_blur, inpaint_padding, inpaint_width, inpaint_height, denoising_strength, steps, cfg_scale, sample_method, scheduler, sort_by |
+| `--ip-adapter-image <string>` | IP-Adapter 参考图像路径 |
+| `--pulid-id-embedding <string>` | PuLID id embedding 路径 |
+| `--pulid-id-weight <float>` | PuLID 身份注入强度 |
+| `--ip-adapter-strength <float>` | 应用 IP-Adapter 的强度（默认：1.0） |
+| `--extra-tiling-args <string>` | VAE 分块额外参数，key=value 列表。LTX 视频 VAE 支持 temporal_tile_frames（默认：4）, temporal_tile_overlap（默认：1） |
+| `--ref-image-args <string>` | 设置参考图像处理方式的 key=value 列表（空 = 从模型权重自动检测） |
+| `--qwen-image-layers <int>` | Qwen Image Layered 层数；latent/output 数量为层数 + 1（默认：3） |
+| `--temporal-tiling` | 为 LTX 视频 VAE 解码启用时间分块 |
+| `--ref-video <string>` | MiniMax-H3 Ref2VA 参考视频帧目录（24 fps）（可多次使用） |
+| `--ref-video-audio <string>` | 与 `--ref-video` 按索引配对的 WAV 音轨（可多次使用） |
+| `--ref-audio <string>` | MiniMax-H3 Ref2VA 的独立 WAV 参考（可多次使用） |
+| `--prompt-file <string>` | 包含要渲染提示词的文件路径 |
+| `--negative-prompt-file <string>` | 包含负面提示词的文件路径 |
+| `--hires-sigmas <string>` | highres fix 第二遍的自定义 sigma 值，逗号分隔（如 `"0.85,0.725,0.421875,0.0"`） |
+
+> 注：相比 `sd-cli` 文档，`--sampling-method`/`--high-noise-sampling-method` 新增 `dpm++2m_sde`、`dpm++2m_sde_bt`、`lms`；`--scheduler` 新增 `ltx2`, `logit_normal`, `flux2`, `flux`, `beta`（别名 `normal=discrete`，默认视模型而定）；`--prediction` 新增 `sefi_flow`；`--eta` 默认列表新增 `dpm++2m_sde`、`dpm++2m_sde_bt`。`--extra-sample-args` 支持范围也在新版本中扩大（见上方 ADetailer/tiling 等表）。
+
+### HTTP API（OpenAI 兼容）
+
+`sd-server`（commit de298c2 起）对外暴露三套 API 族：
+
+| API 族 | 前缀 | 形态 | 用途 |
+|--------|------|------|------|
+| OpenAI 兼容 | `/v1/...` | 同步 JSON | 兼容 OpenAI 图片接口，最通用 |
+| WebUI 兼容 | `/sdapi/v1/...` | 同步 JSON | 兼容 A1111/WebUI 客户端工具 |
+| 原生 sdcpp | `/sdcpp/v1/...` | 异步任务（job） | 完整原生参数控制、能力发现 |
+
+新版本 server 默认内嵌 Web UI，启动后浏览器访问 `http://127.0.0.1:1234/`（`--listen-ip`/`--listen-port` 可改）；`--serve-html-path` 可指定自定义 `index.html` 覆盖内嵌前端。
+
+> 通用约束：三种兼容 API 均**不解析 prompt 内嵌的 `<lora:...>` 标签**，LoRA 必须通过结构化字段（如 `/sdapi/v1/txt2img` 的 `lora` 数组）传递。
+
+#### POST `/v1/images/generations`
+
+文生图接口，自客户端视角为同步请求。
+
+请求体字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `prompt` | `string` | 推理提示词（必填） |
+| `n` | `integer` | 生成图片数量 |
+| `size` | `string` | 尺寸，格式 `宽x高`，如 `"1024x1024"` |
+| `output_format` | `string` | 输出格式，`png`、`jpeg` 或 `webp` |
+| `output_compression` | `integer` | 输出压缩率，取值会被截断到 `0..100` |
+
+> 兼容性说明：部分客户端会额外传 `response_format: "b64_json"` 以显式要求 base64 返回；该接口响应固定以 base64 JSON 返回，此字段行为一致，可安全省略。
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `created` | `integer` | Unix 时间戳 |
+| `output_format` | `string` | 最终编码图像格式 |
+| `data` | `array<object>` | 生成图像列表 |
+| `data[].b64_json` | `string` | base64 编码的图像字节 |
+
+curl 示例：
+
+```bash
+curl -X POST http://127.0.0.1:1234/v1/images/generations \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"a cat in space, digital art","n":1,"size":"1024x1024","output_format":"png"}'
+```
+
+#### 原生参数扩展 `sd_cpp_extra_args`
+
+OpenAI / WebUI 兼容 API 只暴露有限字段，若需使用原生 `stable-diffusion.cpp` 控制（步数、CFG、采样器、调度器、seed、VAE 分块、guidance 等），可在 `prompt` 内嵌一个 JSON 块扩展，其 schema 与 `/sdcpp/v1` 原生请求一致：
+
+```text
+画一只猫 <sd_cpp_extra_args>{"sample_params":{"sample_steps":28}}</sd_cpp_extra_args>
+```
+
+服务端会抽取该 JSON 块解析后，把它从最终 prompt 中去掉再参与生成。该机制不适用于 `/sdcpp/v1/*`（原生接口请求体已直接用原生 schema）。
 
 ## CLI 选项 (CLI Options)
 

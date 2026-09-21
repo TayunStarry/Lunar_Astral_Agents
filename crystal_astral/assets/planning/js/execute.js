@@ -1,4 +1,7 @@
 // ==== 执行 ====
+// 扁平执行池架构：所有节点严格同一层级，连线仅定义先后顺序，无任何拓扑层级。
+// 节点在池中并行独立执行：任一节点完成即出池并使其后续节点立即入池，失败仅自身出池，
+// 单个节点的完成/失败/等待均不影响池中其他节点。
 function markRunning(node, on) {
     node.running = on;
     outgoingLinks(node.id).forEach(l => l.running = on);
@@ -7,122 +10,131 @@ function markRunning(node, on) {
 async function runSingle(id) {
     const n = nodeById(id); if (!n) return;
     if (!state.connected) { toast('尚未连接引擎', 'error'); return; }
-    if (isGate(n.type)) { toast('逻辑门需随主流程运行', 'error'); return; }
     n._s = 'pending'; n.outValue = null; n.outValues = null; n._pop = null;
-    await runNode(n);
+    state.callCount = 0; state.maxCalls = 300; state.limitedNotified = false;
+    state.singleRun = true; // 单节点执行：仅运行该节点本身，不向主图后续传播
+    try { await runNode(n); } finally { state.singleRun = false; }
     replayDisplayPops(); // 显示类节点激活有消息 → 弹出气泡
 }
-// 拓扑排序已移除：执行改为事件驱动并行传播（沿时钟线激活），无限递归由调用次数上限兜底
+// ==== 启动运行 ====
+// 触发型启动节点（手动/事件/时间）触发时，与其直接相连的所有节点立即加入执行池并行执行
 async function runAll() {
     if (state.running) return;
     if (!state.connected) { toast('尚未连接引擎', 'error'); return; }
     if (!state.nodes.length) { toast('画布为空', 'error'); return; }
     state.running = true; state.abort = false; setRunBtn(true);
     state.active = 0; state.callCount = 0; state.maxCalls = 300; state.limitedNotified = false;
-    state.doneWaiters = []; state.pending.clear();
+    state.pool.clear(); state.compRuns = []; // 清空执行池与残留的复合运行时实例
     sanitizeGraph(); // 运行前剔除无效连线（undefined 端点会让激活链抛异常）
     state.nodes.forEach(n => { n._s = 'pending'; n.outValue = null; n.outValues = null; n.running = false; n._pop = null; n._queue = null; });
     state.links.forEach(l => l.running = false);
     renderGraph();
-    // 所有启动节点同时开始；各分支沿时钟线并行独立传播，互不等待
+    // 所有启动节点同时触发；各自把直接相连节点加入执行池，各分支并行独立，互不等待
     const TRIGGER = { start: 1, event_start: 1, clock_start: 1 };
     let seeds = state.nodes.filter(n => TRIGGER[n.type] && n.enabled !== false);
-    if (!seeds.length) seeds = state.nodes.filter(n => clockLinksOf(n.id).length === 0 && !isGate(n.type) && n.enabled !== false); // 无启动节点时退化为源头节点
-    seeds.forEach(n => activateNode(n));
-    finishCheck(); // 全部同步结束（无种子/瞬时完成）时收尾
+    if (!seeds.length) seeds = state.nodes.filter(n => incomingLinks(n.id).length === 0 && n.enabled !== false); // 无启动节点时以无入线节点为入口
+    seeds.forEach(n => triggerSeed(n));
+    finishCheck(); // 无触发/瞬时结束时收尾
 }
-// ==== 事件驱动激活 ====
-// 节点成功后沿时钟线激活所有下级（数据信号线只传参不触发）；门节点即时评估；同节点多次激活经 promise 队列串行
-function activateSuccessors(node) {
-    outgoingLinks(node.id).forEach(l => {
-        if (!isClockLink(l)) return;
-        const t = nodeById(l.to.node);
-        if (t && t.enabled !== false) activateNode(t);
+// 触发启动节点：不占执行池（等待事件/周期投递不算节点执行），命中后与手动触发同流程——把直接相连节点加入执行池
+// 触发器先同步占位 active 计数：防止 runAll 末尾的 finishCheck 在微任务尚未启动时误判「池空无源」提前收尾
+function triggerSeed(node) {
+    state.active++;
+    node._queue = (node._queue || Promise.resolve()).then(async () => {
+        try { await runNode(node); } catch (e) { node._s = 'err'; node.outValue = { error: String(e) }; }
+        if (node._s === 'ok') dispatchSuccessors(node); // 先把后续节点入池再释放占位，保证计数不归零误判
+        if (state.active > 0) state.active--;
+        renderNodes(); finishCheck();
     });
 }
-function activateNode(node) {
-    if (!state.running || state.abort || !node || node.enabled === false) return;
-    if (isGate(node.type)) { evaluateGate(node); return; } // 门不执行任务，即时评估
-    const v = viewOf(node.id); // 挂起任务按所属视图计数：主图任务记 state，子图任务记该复合节点的执行视图
-    v.active++; state.active++; // 视图计数供子图完成判定，全局计数供整轮运行收尾
-    node._queue = (node._queue || Promise.resolve()).then(() => runActivated(node, v)); // 同节点多次激活排队串行
+// ==== 执行池 ====
+// 连线即先后顺序：节点成功出池后，其所有连线指向的后续节点立即加入执行池
+// （池内多节点时，任一节点完成即刻处理其后续，绝不等待其他节点）
+function dispatchSuccessors(node) {
+    const seen = new Set();
+    outgoingLinks(node.id).forEach(l => {
+        if (seen.has(l.to.node)) return; // 同一后续节点只入池一次（多条连线仅传递不同端口的数据）
+        seen.add(l.to.node);
+        const t = nodeById(l.to.node);
+        if (t && t.enabled !== false) enterPool(t);
+    });
 }
-function evaluateGate(node) {
-    if (!state.running || state.abort) return;
-    const oks = incomingLinks(node.id).map(l => { const s = nodeById(l.from.node); return !!s && s._s === 'ok'; });
-    const pass = gateFunc(node.type, oks);
-    node._s = pass ? 'ok' : 'skip';
-    renderNodes();
-    if (pass) activateSuccessors(node); // 放行才继续向下游传播激活
+// 节点加入执行池：同节点多次激活经 promise 队列串行，池内不同节点完全并行、状态互不干扰
+function enterPool(node) {
+    if ((!state.running && !state.singleRun) || state.abort || !node || node.enabled === false) return;
+    if (!acquireCall()) return; // 单次运行最大节点执行数量耗尽 → 不再入池
+    state.pool.set(node.id, (state.pool.get(node.id) || 0) + 1);
+    state.active++;
+    if (node._comp) node._comp.active++; // 复合节点实例的派生激活计数（供复合节点完成判定）
+    node._queue = (node._queue || Promise.resolve()).then(() => runPooled(node));
 }
 function acquireCall() {
     if (state.callCount >= state.maxCalls) {
-        if (!state.limitedNotified) { state.limitedNotified = true; toast('已达最大调用次数 ' + state.maxCalls + '，停止激活（可用「调用上限」节点调整）', 'error'); }
+        if (!state.limitedNotified) {
+            state.limitedNotified = true;
+            toast('已达最大节点执行数量 ' + state.maxCalls + '，执行终止（可用「调用上限」节点调整）', 'error');
+            finishCheck();
+        }
         return false;
     }
     state.callCount++;
     return true;
 }
-async function runActivated(node, owner) {
-    const v = owner || viewOf(node.id); // 激活时记录的所属视图（停止/复位可能已改计数，故用入口捕获值回减）
+async function runPooled(node) {
     try {
-        if (!state.running || state.abort) return;
-        if (!acquireCall()) { node._s = 'err'; renderNodes(); return; }
+        if ((!state.running && !state.singleRun) || state.abort) return;
         node._s = 'pending'; // 多次激活时复位状态
         await runNode(node);
-        if (node._s === 'ok') activateSuccessors(node); // 成功才点亮下游时钟链
+        if (node._s === 'ok') dispatchSuccessors(node); // 成功 → 后续立即入池；失败 → 仅自身出池，不激活后续，不影响其他节点
     } catch (e) {
-        node._s = 'err'; node.outValue = { error: '节点执行异常: ' + String(e) }; // 异常不炸传播链
+        node._s = 'err'; node.outValue = { error: '节点执行异常: ' + String(e) }; // 单节点异常不阻断执行池
     } finally {
-        if (v.active > 0) v.active--;         // 停止运行已强制清零时不再回减，避免出现负计数
+        const c = (state.pool.get(node.id) || 1) - 1;
+        if (c <= 0) state.pool.delete(node.id); else state.pool.set(node.id, c);
         if (state.active > 0) state.active--;
+        if (node._comp) { // 复合实例派生激活出池：归零时唤醒等待中的复合节点
+            const inst = node._comp;
+            if (inst.active > 0) inst.active--;
+            if (inst.active === 0 && inst.done) { const d = inst.done; inst.done = null; d(); }
+        }
         renderNodes();
         finishCheck();
     }
 }
+// 终止条件（三选一即终）：a) 执行池清空且无时钟/事件触发源可再加入新节点；b) 最大节点执行数量耗尽；c) 用户手动停止
 function finishCheck() {
-    // 子图完成判定：只看等待者自己那个视图的挂起任务数是否归零，与其它并行分支/复合节点的完成时刻完全无关
-    // （旧实现比较全局 state.active 是否回到进入基线，会被并行分支的完成事件撞上数值而提前判定完成）
-    for (let i = state.doneWaiters.length - 1; i >= 0; i--) {
-        const w = state.doneWaiters[i];
-        if (w.view.active === 0) { state.doneWaiters.splice(i, 1)[0].resolve(); return; } // 逆序=最内层子图优先
-    }
+    if (!state.running || state.abort) return;
     if (state.active > 0) return;
-    if (state.doneWaiters.length) { state.doneWaiters.pop().resolve(); return; } // 兜底：无活动但仍有等待者
-    if (!state.clocks.length) finishRun(); // 无周期时钟时结束运行周期（时钟启动保持运行直至手动停止）
+    if (state.callCount >= state.maxCalls) { clearClocks(); resolveEvWaiters(); finishRun(); return; } // b) 上限耗尽
+    if (state.clocks.length) return;    // 时钟启动持续投递新节点，运行保持直至手动停止
+    if (state.evWaiters.length) return; // 事件启动仍在监听，运行保持
+    finishRun(); // a) 池空且无新节点来源
 }
 function finishRun() {
+    if (!state.running) return;
     state.nodes.forEach(n => { n._s = 'idle'; n.outValue = null; n.outValues = null; n.running = false; });
     state.links.forEach(l => l.running = false);
     renderGraph();
     replayDisplayPops(); // 显示类节点激活有消息 → 运行收尾弹出气泡（渲染重建后补挂）
     setRunBtn(false); state.running = false;
 }
-// 子图事件驱动执行：激活视图内所有无时钟输入的源头节点，该视图挂起任务数归零时 resolve
-// （视图自带计数，故子图完成只取决于自身内部任务，不受主图其它分支/其它复合节点影响）
-function runSubgraph(view) {
-    return new Promise(resolve => {
-        state.doneWaiters.push({ view, resolve }); // 完成条件：view.active === 0
-        const ids = new Set(view.nodes.map(n => n.id)); // 子图快照可能携带无效连线，按视图节点清洗
-        view.links = view.links.filter(l => l && l.from && ids.has(l.from.node) && l.to && ids.has(l.to.node));
-        view.nodes.filter(n => clockLinksOf(n.id).length === 0 && !isGate(n.type) && n.enabled !== false)
-            .forEach(n => activateNode(n));
-        finishCheck();
-    });
+function resolveEvWaiters() {
+    state.evWaiters.forEach(h => { clearTimeout(h._t); h.res({ __abort: true }); });
+    state.evWaiters = [];
 }
 function setRunBtn(on) {
     const b = $('runBtn');
     b.innerHTML = on ? '<i class="fas fa-stop"></i> 停止运行' : '<i class="fas fa-play"></i> 运行全部';
 }
+// 用户手动结束运行状态：清空执行池与所有触发源
 function stopRun() {
     state.abort = true;
     clearClocks();
-    state.evWaiters.forEach(h => { clearTimeout(h._t); h.res({ __abort: true }); });
-    state.evWaiters = [];
-    while (state.doneWaiters.length) state.doneWaiters.pop().resolve(); // 唤醒挂起的子图等待
+    resolveEvWaiters();
+    state.compRuns.forEach(i => { if (i.done) { const d = i.done; i.done = null; d(); } }); // 唤醒等待派生排空的复合节点
+    state.compRuns = [];
+    state.pool.clear();
     state.active = 0;
-    state.execViews.forEach(v => { v.active = 0; v.nodes.forEach(n => { n.running = false; n._s = 'idle'; n.outValue = null; n.outValues = null; n._pop = null; }); });
-    state.execViews = [];
     state.nodes.forEach(n => { n.running = false; n._s = 'idle'; n.outValue = null; n.outValues = null; n._pop = null; });
     state.links.forEach(l => l.running = false);
     renderGraph(); setRunBtn(false); state.running = false;
@@ -133,7 +145,7 @@ async function runNode(node) {
     addLog({ dir: 'send', type: 'node:' + node.type, label: meta.label, req: '', env: { node: node.id }, isError: false, summary: '执行节点: ' + meta.label });
     try {
         if (node.type === 'start') { node.outValue = { started: true }; node._s = 'ok'; }
-        else if (node.type === 'wait') { const ms = Number(node.params.ms) || 500; await sleep(ms); node.outValue = { slept_ms: ms }; node._s = 'ok'; }
+        else if (node.type === 'wait') { const ms = Number(node.params.ms) || 500; await sleep(ms); node.outValue = { slept_ms: ms }; node._s = 'ok'; } // 仅延时自身后续节点，不阻塞执行池其他节点
         else if (node.type === 'transform') {
             const p = node.params || {};
             const template = String(p.template != null ? p.template : '').trim();
@@ -196,20 +208,20 @@ async function runNode(node) {
                 node.outValue = { error: '无图像输入（请连线或在参数中填入 base64）' }; node._s = 'err';
             }
         }
-        else if (node.type === 'event_start') { // 等待目标事件触发后启动
+        else if (node.type === 'event_start') { // 事件触发型启动节点：监测到目标事件 → 与手动触发同流程（激活后续节点）
             const topic = String(node.params.topic || '').trim() || null;
             const r = await awaitEvent(topic, Number(node.params.timeout) || 8000);
             if (r && r.__abort) { node._s = 'skip'; }
             else if (r && r.__timeout) { node.outValue = { error: '等待事件超时' }; node._s = 'err'; }
             else { node.outValue = (r && r.payload !== undefined) ? r.payload : (r || {}); node._s = 'ok'; }
         }
-        else if (node.type === 'clock_start') { // 每隔 interval 沿时钟线激活一次下游节点（并行传播）
+        else if (node.type === 'clock_start') { // 时间触发型启动节点：到达周期 → 与手动触发同流程（激活后续节点），直至手动停止
             const ms = Math.max(50, Number(node.params.interval) || 2000);
-            const fire = () => { if (state.abort) { clearClocks(); return; } activateSuccessors(node); };
+            const fire = () => { if (state.abort) { clearClocks(); return; } dispatchSuccessors(node); };
             state.clocks.push(setInterval(fire, ms));
             node.outValue = { tick: true }; node._s = 'ok';
         }
-        else if (node.type === 'limit') { // 调用上限：动态调整本次运行的最大节点调用次数（全局生效）
+        else if (node.type === 'limit') { // 调用上限：动态调整本次运行的最大节点执行数量（全局生效）
             state.maxCalls = Math.max(1, Number(node.params.max) || 300);
             node.outValue = { maxCalls: state.maxCalls }; node._s = 'ok';
         }
@@ -238,73 +250,82 @@ async function runNode(node) {
         else if (node.type === 'audio_eq') { await runAudioEqualizer(node); } // 音频均衡器：低频/中频/高频 增益衰减，输出 wav
         else if (node.type === 'image_confuse') { await runImageConfusion(node); } // 图像混淆：混淆 / 解混淆 / 还原
         else if (node.type === 'video_keyframe') { await runVideoKeyframe(node); } // 视频抽帧：URL→/keyframe 关键帧→GIF base64
-        else if (node.type === 'composite') { // 复合节点：换入内部子图复用同一执行器，完成后换出
+        else if (node.type === 'composite') { // 复合节点：子图节点扁平并入全局执行池，与主图节点同层并行
             await runCompositeNode(node);
         }
         else {
-            // 注入上游数据：对每条数据输入连线，按连线源端口取上游输出写入本节点参数（多输出节点各路独立）
+            // 注入上游数据：对每条输入连线，按连线源端口取上游输出写入本节点参数（多输出节点各路独立）
             incomingLinks(node.id).forEach(l => {
-                if (l.to.port === 'gate') return;
+                if (l.to.port === 'gate' || l.from.port === 'gate') return; // 顺序端口连线仅传放行，不注入数据
                 const sv = srcOut(nodeById(l.from.node), l.from.port);
                 if (sv !== undefined && sv !== null) node.params[l.to.port] = sv;
             });
-            if (isGate(node.type)) { node._s = gateFunc(node.type, incomingLinks(node.id).map(l => nodeById(l.from.node)._s === 'ok')) ? 'ok' : 'skip'; }
+            const env = buildEnvelope(node);
+            if (!env) { node.outValue = { error: '参数未完整配置' }; node._s = 'err'; }
             else {
-                const env = buildEnvelope(node);
-                if (!env) { node.outValue = { error: '参数未完整配置' }; node._s = 'err'; }
-                else {
-                    if (env.type === 'ltp9/event') emitEventLocal(env.topic, env.payload); // 事件触发时点亮事件启动链
-                    const ack = await sendWait(env, meta.label);
-                    node.outValue = coreOut(ack, node); // 提取核心数据（剥信封/单值直传），下游直接可用
-                    // 失败判定：引擎层错误（result.error）、调用层 ok:false（result.value.ok）、或未收到回执
-                    const rv = ack && ack.result;
-                    const err = ack && (ack.ok === false || (rv && rv.error) || (rv && rv.value && rv.value.ok === false));
-                    node._s = (err || !ack) ? 'err' : 'ok';
-                }
+                if (env.type === 'ltp9/event') emitEventLocal(env.topic, env.payload); // 事件触发时点亮事件启动链
+                const ack = await sendWait(env, meta.label);
+                node.outValue = coreOut(ack, node); // 提取核心数据（剥信封/单值直传），下游直接可用
+                // 失败判定：引擎层错误（result.error）、调用层 ok:false（result.value.ok）、或未收到回执
+                const rv = ack && ack.result;
+                const err = ack && (ack.ok === false || (rv && rv.error) || (rv && rv.value && rv.value.ok === false));
+                node._s = (err || !ack) ? 'err' : 'ok';
             }
         }
     } catch (e) { node._s = 'err'; node.outValue = { error: String(e) }; }
     markRunning(node, false);
 }
 
-// ==== 复合节点执行 ====
-// 子图以独立执行视图（execViews 压栈）运行，不替换全局 state——复合节点可与主图其他分支真正并行。
-// 出口节点的输出即复合节点输出；子图节点不在主图画布渲染，仅状态经复合节点体现。
-async function runCompositeNode(node) {
+// ==== 复合节点扁平执行 ====
+// 复合节点仅是编辑层的封装：执行时子图节点经 ID 重映射后直接加入全局执行池，
+// 与主图节点严格同层并行（无视图栈、无嵌套执行），可多实例/循环激活且互不串扰。
+// 复合节点自身留在池中等待其派生激活全部出池，再以出口节点输出作为自身输出并激活后续节点。
+function runCompositeNode(node) {
     const sg = node.params.subgraph || {};
     const inMap = node.params.inMap || [], outMap = node.params.outMap || null;
-    if (!sg.nodes || !sg.nodes.length) { node.outValue = { error: '复合节点为空' }; node._s = 'err'; return; }
-    const extIn = {}; // 外部数据输入（主图视图采集；多输出上游按连线源端口取值）
+    if (!sg.nodes || !sg.nodes.length) { node.outValue = { error: '复合节点为空' }; node._s = 'err'; return Promise.resolve(); }
+    const extIn = {}; // 外部输入（按连线源端口取上游输出）
     incomingLinks(node.id).forEach(l => {
-        if (l.to.port === 'gate') return;
+        if (l.to.port === 'gate' || l.from.port === 'gate') return; // 顺序端口连线仅传放行，不作为数据输入
         const sv = srcOut(nodeById(l.from.node), l.from.port);
         if (sv !== undefined && sv !== null) extIn[l.to.port] = sv;
     });
-    const view = {
-        nodes: sg.nodes.map(n => Object.assign(JSON.parse(JSON.stringify(n)), { running: false, _s: 'pending', outValue: null, outValues: null, _pop: null })),
-        links: (sg.links || []).map(l => ({ id: l.id, from: { node: l.from.node, port: l.from.port }, to: { node: l.to.node, port: l.to.port } })),
-        active: 0 // 子图自己的挂起任务计数（完成判定只看它，不看全局 state.active）
-    };
-    state.execViews.push(view);
-    try {
-        // 外部输入注入到映射的内部节点参数（数据信号线语义，不参与内部时钟链判定）
-        inMap.forEach(m => { const t = nodeById(m.node); if (t && extIn[m.k] !== undefined) t.params[m.port] = extIn[m.k]; });
-        // 内部子图同样走事件驱动并行执行（源头节点同时启动，沿内部时钟线传播；受全局调用上限约束）
-        await runSubgraph(view);
+    const inst = { index: new Map(), links: [], active: 0, done: null }; // 扁平运行时实例（非层级视图，仅登记派生节点）
+    const idMap = {};
+    sg.nodes.forEach(n => {
+        const clone = Object.assign(JSON.parse(JSON.stringify(n)), { running: false, _s: 'pending', outValue: null, outValues: null, _pop: null, _queue: null, _comp: inst });
+        clone.id = n.id + '~c' + (++state.compSeq); // ID 重映射，避免与主图/其他实例冲突
+        idMap[n.id] = clone.id;
+        inst.index.set(clone.id, clone);
+    });
+    // 子图快照连线清洗：端点端口不在节点当前端口集合中的历史连线（如冗余顺序线）直接剔除
+    (sg.links || []).forEach(l => {
+        const f = inst.index.get(idMap[l.from.node]), t = inst.index.get(idMap[l.to.node]);
+        if (!f || !t) return;
+        if (!portExists(f.type, f, 'out', l.from.port) || !portExists(t.type, t, 'in', l.to.port)) return;
+        inst.links.push({ id: 'l' + seg(), from: { node: idMap[l.from.node], port: l.from.port }, to: { node: idMap[l.to.node], port: l.to.port } });
+    });
+    state.compRuns.push(inst);
+    // 外部输入注入到映射的内部节点参数
+    inMap.forEach(m => { const t = inst.index.get(idMap[m.node]); if (t && extIn[m.k] !== undefined) t.params[m.port] = extIn[m.k]; });
+    const drained = new Promise(res => { inst.done = res; }); // 完成条件：本实例派生激活全部出池
+    // 入口：无内部入线的节点立即加入执行池（与主图节点同层并行，受全局执行数量上限约束）
+    sg.nodes.filter(n => !inst.links.some(l => l.to.node === idMap[n.id]))
+        .forEach(n => enterPool(inst.index.get(idMap[n.id])));
+    if (inst.active === 0) { const d = inst.done; inst.done = null; if (d) d(); } // 无可入池节点（如内部成环）时直接排空
+    return drained.then(() => {
+        state.compRuns = state.compRuns.filter(x => x !== inst);
         // 内部显示类节点的弹出消息转挂到复合节点（统一回放）
-        const innerPops = view.nodes.map(n => n._pop).filter(Boolean);
+        const innerPops = [...inst.index.values()].map(n => n._pop).filter(Boolean);
         if (innerPops.length) node._pop = { kind: 'multi', pops: innerPops };
         // 出口取值：声明的出口节点输出即复合输出；无出口时内部无错误即成功
         if (outMap) {
-            const exit = nodeById(outMap.node);
+            const exit = inst.index.get(idMap[outMap.node]);
             node._s = exit ? exit._s : 'ok';
             node.outValue = exit ? exit.outValue : null;
         } else {
-            node._s = view.nodes.some(n => n._s === 'err') ? 'err' : 'ok';
+            node._s = [...inst.index.values()].some(n => n._s === 'err') ? 'err' : 'ok';
             node.outValue = null;
         }
-    } finally {
-        state.execViews.pop();
-        renderGraph();
-    }
+    });
 }

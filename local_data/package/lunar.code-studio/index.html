@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』代码工坊</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<!-- 标准脚本库 -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<!-- 主布局：左侧 45% 编辑区 + 右侧预览/输出区 -->
+	<main class="main-layout">
+		<!-- 左侧：代码编辑 → 运行控制 → 文件列表 -->
+		<section class="panel input-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-code"></i> 代码工坊</span>
+				<div class="panel-header-right">
+					<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+						<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+					</button>
+				</div>
+			</header>
+			<div class="panel-body input-body">
+				<!-- 代码编辑（多行，单文件 JS / HTML） -->
+				<div class="input-section editor-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-pen-to-square"></i> 代码编辑</span>
+						<span class="char-count" id="codeStats"></span>
+					</div>
+					<div class="file-row">
+						<i class="fas fa-file-code"></i>
+						<input type="text" id="fileNameInput" placeholder="文件名，如 hello.js / index.html" autocomplete="off" spellcheck="false">
+					</div>
+					<textarea id="codeEditor" class="code-textarea" spellcheck="false"
+						placeholder="// 编写 JavaScript（单文件，ES2023+，支持浏览器 WebAPI）&#10;// 或编写完整 HTML 文档&#10;&#10;console.log('Hello, 月华!');"></textarea>
+				</div>
+
+				<!-- 运行控制 -->
+				<div class="input-section exec-section">
+					<div class="query-btns">
+						<button class="btn-glass btn-glass-primary" id="runBtn"><i class="fas fa-play"></i> 运行</button>
+						<button class="btn-glass" id="stopBtn"><i class="fas fa-stop"></i> 停止</button>
+						<button class="btn-glass" id="saveBtn"><i class="fas fa-floppy-disk"></i> 保存</button>
+						<button class="btn-glass" id="newBtn"><i class="fas fa-file-circle-plus"></i> 新建</button>
+					</div>
+					<div class="input-hint">
+						<i class="fas fa-circle-info"></i>
+						按扩展名自动识别：.js 单文件脚本在沙箱页面运行（支持 DOM/Canvas/Fetch 等 WebAPI），.html/.htm 直接渲染完整文档；控制台输出实时显示在右侧。月华生成的代码会同步到这里，可修改后再运行。
+					</div>
+				</div>
+
+				<div class="panel-separator"></div>
+
+				<!-- 文件列表（工作区持久化） -->
+				<div class="input-section files-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-folder-open"></i> 文件列表</span>
+						<button class="btn-glass btn-sm btn-clear" id="refreshFilesBtn" title="刷新列表"><i class="fas fa-rotate"></i> 刷新</button>
+					</div>
+					<div class="list-scroll" id="fileList">
+						<div class="list-empty">暂无文件。</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- 右侧：实时预览 / 运行输出 / 操作记录（固定高度三段） -->
+		<section class="panel output-panel">
+			<div class="panel-body output-body">
+				<!-- 实时预览 -->
+				<div class="output-section preview-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-display"></i> 实时预览</span>
+						<span class="char-count" id="previewStatus"></span>
+					</div>
+					<iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups allow-downloads"></iframe>
+				</div>
+
+				<!-- 运行输出 -->
+				<div class="output-section console-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-terminal"></i> 运行输出</span>
+						<button class="btn-glass btn-sm btn-clear" id="clearConsoleBtn" title="清空输出"><i class="fas fa-broom"></i> 清空</button>
+					</div>
+					<div class="list-scroll console-scroll" id="consoleList">
+						<div class="list-empty">暂无输出。</div>
+					</div>
+				</div>
+
+				<!-- 操作记录 -->
+				<div class="output-section step-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-list-ul"></i> 操作记录</span>
+						<button class="btn-glass btn-sm btn-clear" id="clearStepBtn" title="清空记录"><i class="fas fa-broom"></i> 清空</button>
+					</div>
+					<div class="list-scroll step-scroll" id="stepList">
+						<div class="list-empty">暂无操作记录。</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<script src="ltpx-agent.js"></script>
+	<script src="script.js"></script>
+</body>
+
+</html>

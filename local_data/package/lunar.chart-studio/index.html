@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』图表工坊</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<!-- 标准脚本库（异步注入 marked / echarts / highlight / katex 等） -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- Mermaid 图表库（渲染器配置沿用月华消息终端） -->
+	<script src="/file/read/package/mermaid.min.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<!-- 主布局：左右全高面板 -->
+	<main class="main-layout">
+		<!-- 左侧：图表源码编辑器 + 历史记录 -->
+		<section class="panel input-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-chart-column"></i> 图表源码</span>
+				<div class="panel-header-right">
+					<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+						<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+					</button>
+				</div>
+			</header>
+			<div class="panel-body input-body">
+				<div class="editor-zone">
+					<div class="editor-toolbar">
+						<button class="btn-glass btn-glass-primary btn-sm" id="renderBtn"><i class="fas fa-play"></i> 渲染图表</button>
+						<button class="btn-glass btn-sm" id="sampleBtn"><i class="fas fa-wand-magic-sparkles"></i> 示例</button>
+						<button class="btn-glass btn-sm btn-clear" id="clearEditorBtn" title="清空编辑器"><i class="fas fa-broom"></i> 清空</button>
+						<span class="char-count" id="editorStats"></span>
+					</div>
+					<textarea id="chartSource" class="chart-editor" spellcheck="false"
+						placeholder="在此编写 Markdown，用 ```echarts 代码块放 ECharts JSON 配置，用 ```mermaid 代码块放 Mermaid 图表代码，编辑器将实时渲染预览。"></textarea>
+					<div class="query-hint">
+						<i class="fas fa-circle-info"></i>
+						ECharts 用 ```echarts + JSON 配置；Mermaid 用 ```mermaid + 图表代码。也可通过月华呼叫琉璃，用自然语言直接构建图表。
+					</div>
+				</div>
+
+				<div class="panel-separator"></div>
+
+				<div class="subsection-header">
+					<span class="panel-title"><i class="fas fa-clock-rotate-left"></i> 历史记录</span>
+					<button class="btn-glass btn-sm btn-clear" id="clearHistoryBtn" title="清空历史"><i class="fas fa-broom"></i> 清空</button>
+				</div>
+				<div class="list-scroll" id="historyList">
+					<div class="list-empty">暂无图表记录。</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- 右侧：图表预览 + 月华操作步骤 -->
+		<section class="panel output-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-display"></i> 图表预览</span>
+				<div class="panel-header-right">
+					<span class="char-count" id="previewStats"></span>
+				</div>
+			</header>
+			<div class="panel-body output-body">
+				<div class="result-body" id="chartPreview">
+					<div class="markdown-content chart-doc">
+						<div class="result-empty"><i class="fas fa-chart-line"></i> 编辑左侧源码或等待月华指令，图表将实时渲染在此处。</div>
+					</div>
+				</div>
+
+				<div class="panel-separator"></div>
+
+				<div class="step-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-list-ul"></i> 月华操作步骤</span>
+						<button class="btn-glass btn-sm btn-clear" id="clearStepBtn" title="清空步骤"><i class="fas fa-broom"></i> 清空</button>
+					</div>
+					<div class="list-scroll step-scroll" id="stepList">
+						<div class="step-empty">暂无月华操作记录。</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<script src="chart-renderer.js"></script>
+	<script src="chart-style-library.js"></script>
+	<script src="ltpx-agent.js"></script>
+	<script src="script.js"></script>
+</body>
+
+</html>

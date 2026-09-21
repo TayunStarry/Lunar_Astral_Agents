@@ -1,16 +1,35 @@
-package YaraLTP
+package ltp9
 
-// ==== 模型客户端（OpenAI v1，供 yara.model 使用） ====
+// ==== 模型客户端（OpenAI v1，engine.llm 单一虚拟模型池的底层传输） ====
+// 模型垄断：对话/多模态强制使用 琉璃 GeneralConfig.AgentMultimodal{Model,URL,Key}，
+// 嵌入强制使用 GeneralConfig.AgentEmbedding{Model,URL,Key}。任何插件的模型参数在此都被忽略。
 
 import (
-	"LunarSubsystem/GeneralConfig"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
+
+	"LunarSubsystem/GeneralConfig"
 )
+
+// 模型配置缓存（从 lunar_config.json 读取，不硬编码模型名）。
+var (
+	modelCfgOnce sync.Once
+	chatModel    string
+	chatURL      string
+	chatKey      string
+	embedModel   string
+	embedURL     string
+	embedKey     string
+)
+
+// httpClient 插件网络/模型请求共享客户端。
+var httpClient = &http.Client{Timeout: 120 * time.Second}
 
 // chatCfg 惰性加载模型配置（chat / embedding，从 lunar_config.json 读取）。
 func chatCfg() {
@@ -47,7 +66,36 @@ func normV1(raw string) string {
 	return u + "/v1"
 }
 
+// truncateStr 按 rune 截断字符串。
+func truncateStr(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// modelContentText 把 content（string 或片段数组）转为纯文本。
+func modelContentText(c any) string {
+	switch v := c.(type) {
+	case string:
+		return v
+	case []any:
+		var parts []string
+		for _, p := range v {
+			if m, ok := p.(map[string]any); ok {
+				if t, ok := m["text"].(string); ok {
+					parts = append(parts, t)
+				}
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return ""
+}
+
 // chatComplete 发起一次对话补全，返回助手文本内容。
+// baseURL/apiKey/model 传空时回退到 agent 对话模型（模型垄断的基础能力）。
 func chatComplete(messages, tools []map[string]any, baseURL, apiKey, model string) (string, error) {
 	chatCfg()
 	url := chatURL
@@ -114,38 +162,6 @@ func chatComplete(messages, tools []map[string]any, baseURL, apiKey, model strin
 	return modelContentText(cr.Choices[0].Message.Content), nil
 }
 
-// modelContentText 把 content（string 或片段数组）转为纯文本。
-func modelContentText(c any) string {
-	switch v := c.(type) {
-	case string:
-		return v
-	case []any:
-		var parts []string
-		for _, p := range v {
-			if m, ok := p.(map[string]any); ok {
-				if t, ok := m["text"].(string); ok {
-					parts = append(parts, t)
-				}
-			}
-		}
-		return strings.Join(parts, "\n")
-	}
-	return ""
-}
-
-// modelChatFromParams 从 yara.model.chat 的 params 提取并调用。
-func modelChatFromParams(p map[string]any) (string, error) {
-	messages := mapGetAnyList(p, "messages")
-	tools := mapGetAnyList(p, "tools")
-	base := mapGetStr(p, "baseUrl")
-	key := mapGetStr(p, "apiKey")
-	model := mapGetStr(p, "model")
-	if len(messages) == 0 {
-		return "", fmt.Errorf("缺少 messages 参数")
-	}
-	return chatComplete(messages, tools, base, key, model)
-}
-
 // embedText 单文本取嵌入向量。
 func embedText(text string) ([]float64, error) {
 	vecs, err := embedTexts([]string{text})
@@ -155,7 +171,7 @@ func embedText(text string) ([]float64, error) {
 	return vecs[0], nil
 }
 
-// embedTexts 批量文本取嵌入向量。
+// embedTexts 批量文本取嵌入向量（模型垄断：强制使用 agent 嵌入模型）。
 func embedTexts(texts []string) ([][]float64, error) {
 	chatCfg()
 	body := map[string]any{"model": embedModel, "input": texts}
@@ -193,13 +209,4 @@ func embedTexts(texts []string) ([][]float64, error) {
 		out = append(out, d.Embedding)
 	}
 	return out, nil
-}
-
-// truncateStr 按 rune 截断字符串。
-func truncateStr(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
 }

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公转动画</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        .solar-system {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 大圆 */
+        .sun {
+            width: 100px;
+            height: 100px;
+            background: radial-gradient(circle, #ffcc00, #ff8800);
+            border-radius: 50%;
+            box-shadow: 0 0 50px #ff8800;
+            z-index: 10;
+        }
+
+        /* 公转轨道（视觉辅助） */
+        .orbit {
+            position: absolute;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        /* 小圆基础样式 */
+        .planet {
+            position: absolute;
+            border-radius: 50%;
+            z-index: 20;
+        }
+
+        /* 这里的样式将配合 JS 的 transform 变换 */
+    </style>
+</head>
+<body>
+    <div class="solar-system" id="system">
+        <div class="sun"></div>
+        <!-- 小圆容器，通过 JS 添加 -->
+    </div>
+
+    <script>
+        const system = document.getElementById('system');
+        const planets = [];
+        const planetCount = 3;
+
+        // 创建三个小圆
+        for (let i = 0; i < planetCount; i++) {
+            const planet = document.createElement('div');
+            planet.className = 'planet';
+            
+            // 不同尺寸和颜色
+            const size = 20 + (i * 10);
+            planet.style.width = `${size}px`;
+            planet.style.height = `${size}px`;
+            planet.style.backgroundColor = `hsl(${i * 120}, 70%, 60%)`;
+            planet.style.boxShadow = `0 0 15px hsl(${i * 120}, 70%, 60%)`;
+            
+            system.appendChild(planet);
+            planets.push({
+                element: planet,
+                radius: 100 + (i * 40), // 不同的公转轨道半径
+                speed: 0.02 - (i * 0.005), // 不同的公转速度
+                angle: Math.random() * Math.PI * 2 // 初始随机相位
+            });
+        }
+
+        function animate() {
+            planets.forEach(p => {
+                p.angle += p.speed;
+                const x = Math.cos(p.angle) * p.radius;
+                const y = Math.sin(p.angle) * p.radius;
+                
+                // 将坐标转换为中心偏移
+                p.element.style.transform = `translate(${x}px, ${y}px)`;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

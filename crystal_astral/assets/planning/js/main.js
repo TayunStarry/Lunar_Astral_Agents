@@ -8,7 +8,6 @@ const NODE_CATS = [
     { key: 'media', label: '语音系统', types: ['kokoro_tts', 'qwen_tts', 'qwen_asr', 'microphone', 'speaker', 'audio_eq'] },
     { key: 'video', label: '视频处理', types: ['video_keyframe'] },
     { key: 'flow', label: '流程处理', types: ['wait', 'transform', 'extract', 'display', 'image_display', 'image_confuse', 'stats', 'limit'] },
-    { key: 'gates', label: '逻辑控制', types: ['and', 'or', 'not', 'nand', 'nor'] },
     { key: 'composites', label: '我的复合', types: [] } // 用户保存的复合节点（非节点类型，单独渲染）
 ];
 let nodeCatActive = 'start';

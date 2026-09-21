@@ -1511,10 +1511,8 @@ var agentSystem = (function (exports) {
             if (!userMessages || userMessages.length === 0 || !ensureMemoryReady())
                 return '';
             let records = this.retrieveRagRecords(userMessages);
-            if (records.length === 0) {
-                console.log('[记忆] 检索未命中任何相关记录');
+            if (records.length === 0)
                 return '';
-            }
             const feedback = interactEvent('build_memory_before', { userMessages, records }).return;
             if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
                 records = feedback;

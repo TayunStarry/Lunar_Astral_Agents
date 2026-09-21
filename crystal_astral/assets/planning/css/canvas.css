@@ -317,26 +317,6 @@
     stroke-dasharray: 6 4;
 }
 
-/* 时钟线（执行激活）金色实线；信号线（仅参数）灰虚线与时钟线区分 */
-.link.clock {
-    stroke: #eab308;
-    stroke-width: 3.4;
-}
-
-.link.signal {
-    stroke: var(--muted);
-    stroke-width: 2.2;
-    stroke-dasharray: 7 5;
-}
-
-.link.clock.running {
-    stroke: var(--ok);
-}
-
-.link.signal.running {
-    stroke: var(--ok);
-}
-
 /* ==== 拖拽节点到画布时的高亮 ==== */
 .canvas.drag-over {
     box-shadow: inset 0 0 0 2px var(--accent);

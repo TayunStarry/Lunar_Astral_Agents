@@ -1,648 +1,243 @@
-package YaraLTP
+package ltp9
 
-// ==== 网络类 API：http / network / platform ====
+// ==== 沙箱网络：全局 fetch / WebSocket 客户端与同步 engine.http ====
+// 全部网络能力由 allow-network 门控。
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/url"
 	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
+	"path"
 	"strings"
-	"sync"
 	"time"
 
+	"LunarSubsystem/LoggerGeneral"
 	"github.com/dop251/goja"
 )
 
-// bindHTTP 注入 yara.http（get/post/download）。download 需插件上下文，
-// 以便图片保存到插件自身 data 目录（与 readData/loadValid 的路径语义一致）。
-func bindHTTP(p *plugin, parent *goja.Object) {
-	vm := p.vm
-	o := newObj(vm)
+// fetchTimeout 一次 fetch 的默认超时。
+const fetchTimeout = 150 * time.Second
 
-	objSetFn(o, "get", func(call goja.FunctionCall) goja.Value {
-		url, headers, timeout := httpArgs(call, []int{1, 2})
-		return vm.ToValue(doHTTPGet(url, headers, timeout))
-	})
-	objSetFn(o, "post", func(call goja.FunctionCall) goja.Value {
-		url := argString(call, 0)
-		body := argExport(call, 1)
-		headers, timeout := httpHeadersTimeout(call, []int{2, 3})
-		_ = body
-		return vm.ToValue(doHTTPPost(url, argExport(call, 1), headers, timeout))
-	})
-	objSetFn(o, "download", func(call goja.FunctionCall) goja.Value {
-		url := argString(call, 0)
-		savePath := argString(call, 1)
-		timeout := httpTimeoutArg(call, 2)
-		return vm.ToValue(doHTTPDownload(url, savePath, timeout, p.DataDir))
-	})
-
-	parent.Set("http", o)
-}
-
-// httpArgs 解析 get 的 (url, [headers], [timeout])。
-func httpArgs(call goja.FunctionCall, numIdx []int) (url string, headers map[string]string, timeout int) {
-	url = argString(call, 0)
-	headers = map[string]string{}
-	timeout = httpDefaultTimeout
-	for _, i := range numIdx {
-		if i >= len(call.Arguments) {
-			continue
+// bindNetwork 把 fetch 与 WebSocket 客户端全局注册进插件沙箱（allow-network 门控）。
+func bindNetwork(vm *goja.Runtime, p *plugin) {
+	vm.Set("fetch", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 1 {
+			panic(vm.NewTypeError("fetch: url 参数缺失"))
 		}
-		v := call.Argument(i)
-		if v.ExportType() != nil {
-			ex := v.Export()
-			if n, ok := toNum(ex); ok {
-				timeout = int(n)
-				continue
-			}
-			if m, ok := ex.(map[string]any); ok {
-				headers = strMap(m)
+		urlStr := call.Argument(0).String()
+		opts := map[string]any{}
+		if len(call.Arguments) > 1 {
+			if m, ok := call.Argument(1).Export().(map[string]any); ok {
+				opts = m
 			}
 		}
-	}
-	return
+		promise, resolve, reject := vm.NewPromise()
+		go func() {
+			status, statusText, headerMap, body, finalURL, redirected, err := doLTP9Fetch(urlStr, opts)
+			p.loop.RunOnLoop(func(rvm *goja.Runtime) {
+				if err != nil {
+					LoggerGeneral.Error(ServiceName, "插件 fetch 失败 plugin=%s url=%s err=%v", p.ID, urlStr, err)
+					reject(rvm.NewGoError(err))
+					return
+				}
+				resolve(buildLTP9FetchResponse(rvm, status, statusText, headerMap, body, finalURL, redirected))
+			})
+		}()
+		return vm.ToValue(promise)
+	})
+	// WebSocket 客户端全局。
+	bindWebSocket(vm, p)
 }
 
-// httpHeadersTimeout 解析 post 的 headers/timeout（在 body 之后）。
-func httpHeadersTimeout(call goja.FunctionCall, idxs []int) (map[string]string, int) {
-	headers := map[string]string{}
-	timeout := httpDefaultTimeout
-	for _, i := range idxs {
-		if i >= len(call.Arguments) {
-			continue
+// httpGetSync 同步 GET。
+func httpGetSync(url string, headers map[string]any) map[string]any {
+	opts := map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)}
+	if len(headers) > 0 {
+		opts["headers"] = headers
+	}
+	status, _, _, body, _, _, err := doLTP9Fetch(url, opts)
+	if err != nil {
+		return map[string]any{"status": 0, "body": "", "error": err.Error()}
+	}
+	return map[string]any{"status": status, "body": string(body)}
+}
+
+// httpDownloadSync 同步下载到插件数据目录。
+func httpDownloadSync(p *plugin, rawURL, savePath string) map[string]any {
+	if p == nil {
+		return map[string]any{"success": false, "error": "插件无效"}
+	}
+	if savePath == "" {
+		if u, uerr := url.Parse(rawURL); uerr == nil {
+			name := path.Base(u.Path)
+			if name == "." || name == "/" || name == "" {
+				name = "download.bin"
+			}
+			savePath = name
+		} else {
+			savePath = "download.bin"
 		}
-		v := call.Argument(i)
-		ex := v.Export()
-		if n, ok := toNum(ex); ok {
-			timeout = int(n)
-			continue
-		}
-		if m, ok := ex.(map[string]any); ok {
-			headers = strMap(m)
-		}
 	}
-	return headers, timeout
+	real, serr := scopedPath(p, savePath)
+	if serr != nil {
+		return map[string]any{"success": false, "error": serr.Error()}
+	}
+	status, _, _, body, _, _, err := doLTP9Fetch(rawURL, map[string]any{"method": "GET", "timeout": float64(fetchTimeout / time.Second)})
+	if err != nil {
+		return map[string]any{"success": false, "error": "下载失败: " + err.Error()}
+	}
+	if status < 200 || status >= 300 {
+		return map[string]any{"success": false, "error": fmt.Sprintf("下载状态: %d", status)}
+	}
+	if werr := os.WriteFile(real, body, 0644); werr != nil {
+		return map[string]any{"success": false, "error": werr.Error()}
+	}
+	return map[string]any{"success": true, "path": savePath, "size": len(body)}
 }
 
-// httpTimeoutArg 取最后一个数字参数作为超时。
-func httpTimeoutArg(call goja.FunctionCall, idx int) int {
-	t := httpDefaultTimeout
-	if n := argInt(call, idx); n > 0 {
-		return int(n)
+// httpPostSync 同步 POST。
+func httpPostSync(url, body string, headers map[string]any) map[string]any {
+	opts := map[string]any{"method": "POST", "body": body, "timeout": float64(fetchTimeout / time.Second)}
+	if len(headers) > 0 {
+		opts["headers"] = headers
 	}
-	return t
+	status, _, _, b, _, _, err := doLTP9Fetch(url, opts)
+	if err != nil {
+		return map[string]any{"status": 0, "body": "", "error": err.Error()}
+	}
+	return map[string]any{"status": status, "body": string(b)}
 }
 
-// toNum 判断导出值是否为数值。
-func toNum(v any) (float64, bool) {
-	switch t := v.(type) {
-	case float64:
-		return t, true
-	case int64:
-		return float64(t), true
-	case int:
-		return float64(t), true
+// doLTP9Fetch 在独立 goroutine 里执行 HTTP 请求。
+func doLTP9Fetch(urlStr string, opts map[string]any) (int, string, http.Header, []byte, string, bool, error) {
+	method := "GET"
+	if v, ok := opts["method"].(string); ok && v != "" {
+		method = strings.ToUpper(v)
 	}
-	return 0, false
-}
-
-// strMap 把 map[string]any 转为 map[string]string。
-func strMap(m map[string]any) map[string]string {
-	out := map[string]string{}
-	for k, v := range m {
-		switch t := v.(type) {
+	var body io.Reader
+	if bodyVal, ok := opts["body"]; ok && bodyVal != nil {
+		switch v := bodyVal.(type) {
 		case string:
-			out[k] = t
+			body = bytes.NewBufferString(v)
+		case []byte:
+			body = bytes.NewBuffer(v)
 		default:
-			out[k] = fmt.Sprintf("%v", v)
+			js, err := json.Marshal(v)
+			if err != nil {
+				return 0, "", nil, nil, "", false, fmt.Errorf("请求体序列化失败: %v", err)
+			}
+			body = bytes.NewBuffer(js)
 		}
 	}
-	return out
-}
-
-// blockSSRF 判断目标主机是否命中需防护的本地/内网地址，命中返回 true。
-func blockSSRF(host string) bool {
-	host = strings.TrimSpace(host)
-	lower := strings.ToLower(host)
-	if strings.HasPrefix(lower, "localhost") || strings.HasPrefix(lower, "127.") ||
-		lower == "::1" || strings.HasPrefix(lower, "0.0.0.0") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
-		return true
-	}
-	return false
-}
-
-func doHTTPGet(url string, headers map[string]string, timeoutSec int) any {
-	if blockSSRF(hostOf(url)) {
-		return map[string]any{"error": "禁止访问本地/内网地址"}
-	}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(method, urlStr, body)
 	if err != nil {
-		return map[string]any{"error": err.Error()}
+		return 0, "", nil, nil, "", false, err
 	}
-	return doHTTP(req, headers, timeoutSec)
-}
-
-func doHTTPPost(url string, body any, headers map[string]string, timeoutSec int) any {
-	if blockSSRF(hostOf(url)) {
-		return map[string]any{"error": "禁止访问本地/内网地址"}
-	}
-	var rd io.Reader
-	switch b := body.(type) {
-	case nil:
-		rd = nil
-	case []byte:
-		rd = bytes.NewReader(b)
-	case string:
-		rd = strings.NewReader(b)
-	default:
-		if data, err := jsonEncode(b); err == nil {
-			rd = bytes.NewReader(data)
+	if headers, ok := opts["headers"].(map[string]any); ok {
+		for key, value := range headers {
+			switch v := value.(type) {
+			case string:
+				req.Header.Set(key, v)
+			case []any:
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						req.Header.Add(key, s)
+					}
+				}
+			}
 		}
 	}
-	req, err := http.NewRequest(http.MethodPost, url, rd)
-	if err != nil {
-		return map[string]any{"error": err.Error()}
+	timeout := fetchTimeout
+	if t, ok := opts["timeout"].(float64); ok && t > 0 {
+		timeout = time.Duration(t * float64(time.Second))
 	}
-	return doHTTP(req, headers, timeoutSec)
-}
-
-func doHTTP(req *http.Request, headers map[string]string, timeoutSec int) any {
-	if timeoutSec <= 0 {
-		timeoutSec = httpDefaultTimeout
-	}
-	client := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second}
-	for k, v := range headers {
-		req.Header.Set(k, v)
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: InsecureTLS}}
+	client := &http.Client{Timeout: timeout, Transport: transport}
+	if redirect, ok := opts["redirect"].(string); ok && redirect == "manual" {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return map[string]any{"error": err.Error()}
+		return 0, "", nil, nil, "", false, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
-	if err != nil {
-		return map[string]any{"error": err.Error()}
+	responseBody, rerr := io.ReadAll(resp.Body)
+	if rerr != nil {
+		return 0, "", nil, nil, "", false, rerr
 	}
-	h := map[string]string{}
-	for k := range resp.Header {
-		h[k] = resp.Header.Get(k)
-	}
-	return map[string]any{
-		"status":     resp.StatusCode,
-		"statusText": resp.Status,
-		"body":       string(body),
-		"headers":    h,
-	}
+	finalURL := resp.Request.URL.String()
+	return resp.StatusCode, resp.Status, resp.Header, responseBody, finalURL, finalURL != urlStr, nil
 }
 
-func doHTTPDownload(url, savePath string, timeoutSec int, dataDir string) any {
-	if blockSSRF(hostOf(url)) {
-		return map[string]any{"error": "禁止访问本地/内网地址"}
-	}
-	if timeoutSec <= 0 {
-		timeoutSec = httpDefaultTimeout
-	}
-	client := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
-	if err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	// 默认文件名取 URL 末段；空 savePath 时退化。
-	if savePath == "" {
-		savePath = filepath.Base(strings.TrimRight(url, "/"))
-	}
-	// 保存到插件自身 data 目录（与 readData/loadValid 的路径语义一致），
-	// 避免图片落盘到全局 downloads 目录导致插件读不到新文件。
-	full, err := safeResolve(dataDir, "data", savePath)
-	if err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	if err := os.WriteFile(full, data, 0644); err != nil {
-		return map[string]any{"error": err.Error()}
-	}
-	return map[string]any{"success": true, "path": full, "size": len(data), "fileSize": len(data)}
+// buildLTP9FetchResponse 构建 Response 对象。
+func buildLTP9FetchResponse(vm *goja.Runtime, status int, statusText string, headerMap http.Header, body []byte, finalURL string, redirected bool) *goja.Object {
+	resp := vm.NewObject()
+	resp.Set("status", status)
+	resp.Set("statusText", statusText)
+	resp.Set("ok", status >= 200 && status < 300)
+	resp.Set("url", finalURL)
+	resp.Set("redirected", redirected)
+	resp.Set("headers", buildLTP9Headers(vm, headerMap))
+
+	resp.Set("text", func(goja.FunctionCall) goja.Value {
+		p, res, _ := vm.NewPromise()
+		res(vm.ToValue(string(body)))
+		return vm.ToValue(p)
+	})
+	resp.Set("json", func(goja.FunctionCall) goja.Value {
+		p, res, rej := vm.NewPromise()
+		var data any
+		if err := json.Unmarshal(body, &data); err != nil {
+			rej(vm.NewGoError(fmt.Errorf("JSON 解析失败: %v", err)))
+			return vm.ToValue(p)
+		}
+		res(vm.ToValue(data))
+		return vm.ToValue(p)
+	})
+	resp.Set("arrayBuffer", func(goja.FunctionCall) goja.Value {
+		p, res, _ := vm.NewPromise()
+		res(vm.NewArrayBuffer(body))
+		return vm.ToValue(p)
+	})
+	return resp
 }
 
-// hostOf 从 URL 提取 host（含端口）。
-func hostOf(url string) string {
-	if i := strings.Index(url, "://"); i >= 0 {
-		rest := url[i+3:]
-		if j := strings.IndexAny(rest, "/?#"); j >= 0 {
-			rest = rest[:j]
-		}
-		if k := strings.LastIndex(rest, "@"); k >= 0 {
-			rest = rest[k+1:]
-		}
-		return rest
+// buildLTP9Headers 构建 Headers 对象（get/has/entries/raw，小写键）。
+func buildLTP9Headers(vm *goja.Runtime, headerMap http.Header) *goja.Object {
+	lower := map[string][]string{}
+	for key, values := range headerMap {
+		lower[strings.ToLower(key)] = values
 	}
-	return url
-}
-
-// bindNetwork 注入 yara.network（TCP/UDP/DNS）。
-func bindNetwork(vm *goja.Runtime, parent *goja.Object) {
-	o := newObj(vm)
-
-	objSetFn(o, "resolveDNS", func(call goja.FunctionCall) goja.Value {
-		host := argString(call, 0)
-		names, err := net.LookupHost(strings.TrimSpace(host))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(names)
-	})
-	objSetFn(o, "resolveSRV", func(call goja.FunctionCall) goja.Value {
-		service := argString(call, 0)
-		proto := argString(call, 1)
-		name := argString(call, 2)
-		_, addrs, err := net.LookupSRV(service, proto, name)
-		if err != nil || len(addrs) == 0 {
-			return vm.ToValue(map[string]any{"error": "SRV 记录未找到"})
-		}
-		sort.Slice(addrs, func(i, j int) bool { return addrs[i].Priority < addrs[j].Priority })
-		return vm.ToValue(map[string]any{"target": addrs[0].Target, "port": int(addrs[0].Port)})
-	})
-	objSetFn(o, "tcpConnect", func(call goja.FunctionCall) goja.Value {
-		host := argString(call, 0)
-		port := int(argInt(call, 1))
-		timeout := argInt(call, 2)
-		if timeout <= 0 {
-			timeout = 10
-		}
-		if blockSSRF(host) {
-			return vm.ToValue(map[string]any{"error": "禁止连接本地/内网地址"})
-		}
-		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), time.Duration(timeout)*time.Second)
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(buildTCPSocket(vm, conn))
-	})
-	objSetFn(o, "udpConnect", func(call goja.FunctionCall) goja.Value {
-		host := argString(call, 0)
-		port := int(argInt(call, 1))
-		timeout := argInt(call, 2)
-		if timeout <= 0 {
-			timeout = 10
-		}
-		if blockSSRF(host) {
-			return vm.ToValue(map[string]any{"error": "禁止连接本地/内网地址"})
-		}
-		conn, err := net.DialTimeout("udp", net.JoinHostPort(host, strconv.Itoa(port)), time.Duration(timeout)*time.Second)
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(buildUDPSocket(vm, conn, true))
-	})
-	objSetFn(o, "udpListen", func(call goja.FunctionCall) goja.Value {
-		host := argString(call, 0)
-		if host == "" {
-			host = "0.0.0.0"
-		}
-		port := int(argInt(call, 1))
-		conn, err := net.ListenPacket("udp", net.JoinHostPort(host, strconv.Itoa(port)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		uc, ok := conn.(*net.UDPConn)
+	h := vm.NewObject()
+	h.Set("get", func(call goja.FunctionCall) goja.Value {
+		vals, ok := lower[strings.ToLower(call.Argument(0).String())]
 		if !ok {
-			return vm.ToValue(map[string]any{"error": "仅支持 UDP"})
+			return goja.Null()
 		}
-		return vm.ToValue(buildUDPListen(vm, uc))
+		return vm.ToValue(strings.Join(vals, ", "))
 	})
-
-	parent.Set("network", o)
-}
-
-// jsSocket 网络 socket 包装（共享状态）。
-type jsSocket struct {
-	mu   sync.Mutex
-	conn net.Conn
-}
-
-// buildTCPSocket 构建 TCP socket 对象。
-func buildTCPSocket(vm *goja.Runtime, conn net.Conn) *goja.Object {
-	s := &jsSocket{conn: conn}
-	o := newObj(vm)
-	objSetFn(o, "send", func(call goja.FunctionCall) goja.Value {
-		data, ok := toBytes(argExport(call, 0))
-		if !ok {
-			return vm.ToValue(map[string]any{"error": "无法解析二进制数据"})
-		}
-		s.mu.Lock()
-		_, err := s.conn.Write(data)
-		s.mu.Unlock()
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
+	h.Set("has", func(call goja.FunctionCall) goja.Value {
+		_, ok := lower[strings.ToLower(call.Argument(0).String())]
+		return vm.ToValue(ok)
 	})
-	objSetFn(o, "sendString", func(call goja.FunctionCall) goja.Value {
-		s.mu.Lock()
-		_, err := s.conn.Write([]byte(argString(call, 0)))
-		s.mu.Unlock()
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
+	h.Set("entries", func(goja.FunctionCall) goja.Value {
+		pairs := make([]any, 0, len(lower))
+		for key, values := range lower {
+			pairs = append(pairs, []any{key, strings.Join(values, ", ")})
 		}
-		return vm.ToValue(map[string]any{"success": true})
+		return vm.ToValue(pairs)
 	})
-	objSetFn(o, "receive", func(call goja.FunctionCall) goja.Value {
-		b, err := s.readUntil(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
+	h.Set("raw", func(goja.FunctionCall) goja.Value {
+		raw := map[string]any{}
+		for key, values := range lower {
+			raw[key] = values
 		}
-		return vm.ToValue(intSlice(b))
+		return vm.ToValue(raw)
 	})
-	objSetFn(o, "receiveString", func(call goja.FunctionCall) goja.Value {
-		b, err := s.readUntil(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(string(b))
-	})
-	objSetFn(o, "close", func(call goja.FunctionCall) goja.Value {
-		s.mu.Lock()
-		err := s.conn.Close()
-		s.mu.Unlock()
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	return o
-}
-
-// buildUDPSocket 构建已连接 UDP socket（send/receive/close）。
-func buildUDPSocket(vm *goja.Runtime, conn net.Conn, connected bool) *goja.Object {
-	o := buildTCPSocket(vm, conn)
-	if uc, ok := conn.(*net.UDPConn); ok {
-		objSetFn(o, "sendTo", func(call goja.FunctionCall) goja.Value {
-			data, ok := toBytes(argExport(call, 0))
-			if !ok {
-				return vm.ToValue(map[string]any{"error": "无法解析二进制数据"})
-			}
-			host := argString(call, 1)
-			port := int(argInt(call, 2))
-			_, err := uc.WriteTo(data, &net.UDPAddr{IP: net.ParseIP(host), Port: port})
-			if err != nil {
-				return vm.ToValue(map[string]any{"error": err.Error()})
-			}
-			return vm.ToValue(map[string]any{"success": true})
-		})
-		objSetFn(o, "sendToString", func(call goja.FunctionCall) goja.Value {
-			host := argString(call, 1)
-			port := int(argInt(call, 2))
-			_, err := uc.WriteTo([]byte(argString(call, 0)), &net.UDPAddr{IP: net.ParseIP(host), Port: port})
-			if err != nil {
-				return vm.ToValue(map[string]any{"error": err.Error()})
-			}
-			return vm.ToValue(map[string]any{"success": true})
-		})
-	}
-	_ = connected
-	return o
-}
-
-// buildUDPListen 构建监听型 UDP socket（含 receiveFrom）。
-func buildUDPListen(vm *goja.Runtime, conn *net.UDPConn) *goja.Object {
-	s := &udpListener{conn: conn}
-	o := newObj(vm)
-	objSetFn(o, "send", func(call goja.FunctionCall) goja.Value {
-		data, ok := toBytes(argExport(call, 0))
-		if !ok {
-			return vm.ToValue(map[string]any{"error": "无法解析二进制数据"})
-		}
-		_, err := s.lastTargetWrite(data)
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	objSetFn(o, "sendString", func(call goja.FunctionCall) goja.Value {
-		_, err := s.lastTargetWrite([]byte(argString(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	objSetFn(o, "sendTo", func(call goja.FunctionCall) goja.Value {
-		data, ok := toBytes(argExport(call, 0))
-		if !ok {
-			return vm.ToValue(map[string]any{"error": "无法解析二进制数据"})
-		}
-		host := argString(call, 1)
-		port := int(argInt(call, 2))
-		_, err := conn.WriteTo(data, &net.UDPAddr{IP: net.ParseIP(host), Port: port})
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	objSetFn(o, "sendToString", func(call goja.FunctionCall) goja.Value {
-		host := argString(call, 1)
-		port := int(argInt(call, 2))
-		_, err := conn.WriteTo([]byte(argString(call, 0)), &net.UDPAddr{IP: net.ParseIP(host), Port: port})
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	objSetFn(o, "receive", func(call goja.FunctionCall) goja.Value {
-		buf, addr, err := s.read(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		s.mu.Lock()
-		s.lastTarget = addr
-		s.mu.Unlock()
-		return vm.ToValue(intSlice(buf))
-	})
-	objSetFn(o, "receiveString", func(call goja.FunctionCall) goja.Value {
-		buf, addr, err := s.read(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		s.mu.Lock()
-		s.lastTarget = addr
-		s.mu.Unlock()
-		return vm.ToValue(string(buf))
-	})
-	objSetFn(o, "receiveFrom", func(call goja.FunctionCall) goja.Value {
-		buf, addr, err := s.read(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"data": intSlice(buf), "host": ipStr(addr), "port": addr.(*net.UDPAddr).Port})
-	})
-	objSetFn(o, "receiveFromString", func(call goja.FunctionCall) goja.Value {
-		buf, addr, err := s.read(int(argInt(call, 0)))
-		if err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"data": string(buf), "host": ipStr(addr), "port": addr.(*net.UDPAddr).Port})
-	})
-	objSetFn(o, "close", func(call goja.FunctionCall) goja.Value {
-		if err := conn.Close(); err != nil {
-			return vm.ToValue(map[string]any{"error": err.Error()})
-		}
-		return vm.ToValue(map[string]any{"success": true})
-	})
-	objSetFn(o, "localAddr", func(call goja.FunctionCall) goja.Value {
-		return vm.ToValue(conn.LocalAddr().String())
-	})
-	return o
-}
-
-// udpListener 监听型 UDP socket 状态。
-type udpListener struct {
-	mu         sync.Mutex
-	conn       *net.UDPConn
-	lastTarget net.Addr
-}
-
-func (u *udpListener) lastTargetWrite(data []byte) (int, error) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	if u.lastTarget == nil {
-		return 0, fmt.Errorf("尚无来源地址")
-	}
-	return u.conn.WriteTo(data, u.lastTarget)
-}
-
-func (u *udpListener) read(timeoutSec int) ([]byte, net.Addr, error) {
-	_ = u.conn.SetReadDeadline(time.Now().Add(time.Duration(timeoutSec) * time.Second))
-	buf := make([]byte, 65535)
-	n, addr, err := u.conn.ReadFrom(buf)
-	if err != nil {
-		return nil, nil, err
-	}
-	return buf[:n], addr, nil
-}
-
-// readUntil 从 TCP 连接读缓冲直到遇到换行或超时。
-func (s *jsSocket) readUntil(timeoutSec int) ([]byte, error) {
-	if timeoutSec <= 0 {
-		timeoutSec = 10
-	}
-	_ = s.conn.SetReadDeadline(time.Now().Add(time.Duration(timeoutSec) * time.Second))
-	buf := make([]byte, 0, 4096)
-	tmp := make([]byte, 1024)
-	for {
-		n, err := s.conn.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-			if bytes.ContainsRune(tmp[:n], '\n') {
-				break
-			}
-			if len(buf) >= 1<<20 {
-				break
-			}
-		}
-		if err != nil {
-			if len(buf) > 0 {
-				break
-			}
-			return nil, err
-		}
-	}
-	return buf, nil
-}
-
-// toBytes 把 JS 传入的字符串/整数数组/[]byte 转为字节。
-func toBytes(v any) ([]byte, bool) {
-	switch t := v.(type) {
-	case string:
-		return []byte(t), true
-	case []byte:
-		return t, true
-	case []any:
-		out := make([]byte, 0, len(t))
-		for _, e := range t {
-			if n, ok := toNum(e); ok {
-				out = append(out, byte(int(n)))
-			} else {
-				return nil, false
-			}
-		}
-		return out, true
-	case []int:
-		out := make([]byte, 0, len(t))
-		for _, n := range t {
-			out = append(out, byte(n))
-		}
-		return out, true
-	}
-	return nil, false
-}
-
-// intSlice 把 []byte 转为 []int（align d.ts 的 number[]）。
-func intSlice(b []byte) []any {
-	out := make([]any, 0, len(b))
-	for _, c := range b {
-		out = append(out, int(c))
-	}
-	return out
-}
-
-// ipStr 把 net.Addr 转可读 host。
-func ipStr(addr net.Addr) string {
-	if a, ok := addr.(*net.UDPAddr); ok {
-		return a.IP.String()
-	}
-	return addr.String()
-}
-
-// bindPlatform 注入 yara.platform。
-func bindPlatform(vm *goja.Runtime, parent *goja.Object) {
-	o := newObj(vm)
-	objSetFn(o, "sendCommand", func(call goja.FunctionCall) goja.Value {
-		// 平台命令由宿主注入的解析器执行；未注入时返回明确错误提示（真实命令能力在客户端侧）。
-		platformCmdMu.RLock()
-		inv := platformCmdInvoker
-		platformCmdMu.RUnlock()
-		if inv == nil {
-			return vm.ToValue(map[string]any{"success": false, "error": "平台命令通道未注入（需由宿主 crystal_astral SetPlatformCommand 提供）"})
-		}
-		cmd := argString(call, 0)
-		args := argMap(call, 1)
-		res, err := inv(cmd, args)
-		if err != nil {
-			return vm.ToValue(map[string]any{"success": false, "error": err.Error()})
-		}
-		return vm.ToValue(res)
-	})
-	objSetFn(o, "getName", func(call goja.FunctionCall) goja.Value {
-		return vm.ToValue("crystal_astral")
-	})
-	objSetFn(o, "getGroupId", func(call goja.FunctionCall) goja.Value {
-		return vm.ToValue("")
-	})
-	objSetFn(o, "lookupUser", func(call goja.FunctionCall) goja.Value {
-		return vm.ToValue(nil)
-	})
-	parent.Set("platform", o)
-}
-
-// jsonEncode 安全 JSON 编码。
-func jsonEncode(v any) ([]byte, error) {
-	return json.Marshal(v)
+	return h
 }

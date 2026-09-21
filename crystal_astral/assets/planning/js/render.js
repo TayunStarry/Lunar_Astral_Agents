@@ -243,7 +243,7 @@ function renderLinks() {
         const a = portPosOf(aEl), b = portPosOf(bEl);
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', linkPath(a, b));
-        path.setAttribute('class', 'link ' + (isClockLink(link) ? 'clock' : 'signal') + (link.running ? ' running' : ''));
+        path.setAttribute('class', 'link' + (link.running ? ' running' : '')); // 所有连线统一为顺序连线，无时钟/信号之分
         path.dataset.id = link.id;
         path.addEventListener('dblclick', e => { e.stopPropagation(); removeLink(link.id); });
         linksSvg.appendChild(path);

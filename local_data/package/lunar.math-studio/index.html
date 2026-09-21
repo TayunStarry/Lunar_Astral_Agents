@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』数学工坊</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<!-- 标准脚本库 -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
+
+	<!-- 主布局：左侧 45% 输入区 + 右侧固定三段结果区 -->
+	<main class="main-layout">
+		<!-- 左侧：公式输入 → 解析计算 → 历史记录 -->
+		<section class="panel input-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-square-root-variable"></i> 数学工坊</span>
+				<div class="panel-header-right">
+					<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+						<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+					</button>
+				</div>
+			</header>
+			<div class="panel-body input-body">
+				<!-- 公式输入（多行） -->
+				<div class="input-section formula-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-pen-to-square"></i> 公式输入</span>
+					</div>
+					<textarea id="formulaInput" class="formula-textarea" rows="5"
+						placeholder="每行一条，自动识别类型：&#10;(1+2)*3            ← 表达式求值&#10;y=(x+3)^2          ← 函数绘图&#10;sin(x), cos(x)   ← 多函数绘图&#10;x^2+2*x=3          ← 方程求解&#10;x+y=5              ← 方程组（每行一条）" spellcheck="false"></textarea>
+					<div class="input-hint">
+						<i class="fas fa-circle-info"></i>
+						每行一条自动识别：数值表达式求值；y=... / f(x)=... 或含 x 的表达式按函数绘图；含 = 的行按方程求解。每次计算自动绘制函数图像。
+					</div>
+				</div>
+
+				<!-- 解析计算按钮 -->
+				<div class="input-section exec-section">
+					<button class="btn-glass btn-glass-primary btn-full" id="execBtn"><i class="fas fa-wand-magic-sparkles"></i> 解析计算</button>
+				</div>
+
+				<div class="panel-separator"></div>
+
+				<!-- 历史记录 -->
+				<div class="input-section history-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-clock-rotate-left"></i> 历史记录</span>
+						<button class="btn-glass btn-sm btn-clear" id="clearHistoryBtn" title="清空历史"><i class="fas fa-broom"></i> 清空</button>
+					</div>
+					<div class="list-scroll" id="historyList">
+						<div class="list-empty">暂无计算记录。</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- 右侧：计算结果 / 函数图像 / 操作记录（固定高度三段） -->
+		<section class="panel output-panel">
+			<div class="panel-body output-body">
+				<!-- 计算结果 -->
+				<div class="output-section result-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-calculator"></i> 计算结果</span>
+						<span class="char-count" id="resultCount"></span>
+					</div>
+					<div class="result-body" id="resultBody">
+						<div class="result-empty"><i class="fas fa-circle-info"></i> 暂无结果，请输入公式后点击「解析计算」。</div>
+					</div>
+				</div>
+
+				<!-- 函数图像 -->
+				<div class="output-section chart-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-chart-line"></i> 函数图像</span>
+					</div>
+					<div id="chartCanvas"></div>
+				</div>
+
+				<!-- 操作记录 -->
+				<div class="output-section step-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-list-ul"></i> 操作记录</span>
+						<button class="btn-glass btn-sm btn-clear" id="clearStepBtn" title="清空记录"><i class="fas fa-broom"></i> 清空</button>
+					</div>
+					<div class="list-scroll step-scroll" id="stepList">
+						<div class="list-empty">暂无操作记录。</div>
+					</div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
+
+	<!-- 本地数学库：math.js 表达式求值 + Nerdamer 方程符号求解（Solve 依赖 Algebra 与 Calculus） -->
+	<script src="vendor/math.min.js"></script>
+	<script src="vendor/nerdamer.core.js"></script>
+	<script src="vendor/Algebra.js"></script>
+	<script src="vendor/Calculus.js"></script>
+	<script src="vendor/Solve.js"></script>
+
+	<script src="ltpx-agent.js"></script>
+	<script src="script.js"></script>
+</body>
+
+</html>

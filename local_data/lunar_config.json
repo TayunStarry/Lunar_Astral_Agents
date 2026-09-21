@@ -48,14 +48,6 @@
 		"multimodal_url": "http://127.0.0.1:36789/v1",
 		"multimodal_key": null
 	},
-	"search": {
-		"embedding_model": "system-embedding",
-		"embedding_url": "http://127.0.0.1:36789/v1",
-		"embedding_key": null,
-		"multimodal_model": "system-multimodal",
-		"multimodal_url": "http://127.0.0.1:36789/v1",
-		"multimodal_key": null
-	},
 	"web_search": {
 		"save_screenshots": false,
 		"screenshot_dir": "images/captures",

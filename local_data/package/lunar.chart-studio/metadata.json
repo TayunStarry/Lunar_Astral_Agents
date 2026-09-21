@@ -1,0 +1,16 @@
+{
+	"id": "lunar.chart-studio",
+	"icon": "icon.webp",
+	"title": "图表工坊",
+	"description": "图表渲染工坊：编写并实时渲染 ECharts 图表与 Mermaid 图表，支持月华以自然语言指令构建图表",
+	"tags": [
+		"Node-LTP"
+	],
+	"tools": [
+		{
+			"name": "chart_render",
+			"description": "根据自然语言指令生成并实时渲染 ECharts 数据图表或 Mermaid 流程/时序/甘特等结构图表"
+		}
+	],
+	"background_retention": true
+}

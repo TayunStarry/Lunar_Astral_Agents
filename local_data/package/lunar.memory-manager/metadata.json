@@ -1,0 +1,10 @@
+{
+	"id": "lunar.memory-manager",
+	"icon": "icon.webp",
+	"title": "记忆库",
+	"description": "记忆库前端管理工具：集合的新增/删除/清空、带标签与纯文本记忆导入、单张与批量图片导入（支持识别取向设置）、条目删除与内容改写（仅改数据不改向量）",
+	"tags": [
+		"Zero-LTP"
+	],
+	"background_retention": true
+}
