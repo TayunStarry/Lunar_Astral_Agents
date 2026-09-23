@@ -136,11 +136,10 @@ type PreviewEntry struct {
 
 // KnowledgeDB 知识库结构体（SQLite）
 // 职责：SQL 连接管理、批量操作、表结构管理、信息查询
-// 另持有网络搜索摘要缓存（web_search_cache.db）的第二连接，作为 /knowledge/ 端点的可选数据源
+// 另支持懒打开 database 目录内任意 *.db（含子目录），作为 /knowledge/ 端点的可选数据源
 type KnowledgeDB struct {
 	knowledgeDB          *sql.DB            // 知识库 SQL 连接
 	knowledgeInitialized bool               // 知识库是否初始化完成
-	webSearchCacheDB     *sql.DB            // 网络搜索摘要缓存 SQL 连接（懒加载，非 nil 即已就绪）
 	fileDBs              map[string]*sql.DB // 任意 *.db 懒打开连接缓存（键为数据库文件名去 .db）
 	fileDBsMu            sync.Mutex         // fileDBs 并发打开互斥锁
 }

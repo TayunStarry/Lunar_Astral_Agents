@@ -277,7 +277,6 @@ window.addEventListener('message', async (event) => {
     applyTheme(localStorage.getItem(THEME_KEY) === 'dark');
     chartSource.value = SAMPLE_SOURCE;
     updateEditorStats();
-    // standard_dependency 异步注入 marked/echarts/hljs，mermaid 由页面同步加载；
     // 等全部就绪后再初始化渲染器并做首次渲染，避免竞态
     try { if (window.scriptDependenciesReady) await window.scriptDependenciesReady; } catch (e) { }
     await ensureMarked();

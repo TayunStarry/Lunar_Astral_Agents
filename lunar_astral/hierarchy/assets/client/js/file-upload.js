@@ -75,6 +75,19 @@ function getAudioFormat(file) {
     return null;
 }
 
+// 将字节数格式化为可读的文件大小文本（B/KB/MB/GB）
+function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '未知';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit++;
+    }
+    return `${value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
+}
+
 function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();

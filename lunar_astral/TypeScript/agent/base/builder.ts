@@ -34,8 +34,6 @@ export class ModelBuilder {
 		else addressText = GlobalConfig.currentAddress.join(' ');
 		// 返回替换后的系统提示词
 		return prompt
-			// 转换用户名称
-			.replace(/{name}/g, GlobalConfig.userName)
 			// 转换当前地址
 			.replace(/{current-address}/g, addressText);
 	}

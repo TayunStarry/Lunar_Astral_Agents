@@ -55,7 +55,8 @@ function guardChatVRAM(): void {
     }
     if (result?.body?.triggered) {
         console.log(`显存守卫: 可用显存 ${result.body.free_mib} MiB 低于阈值 ${result.body.threshold_mib} MiB, 已卸载模型: ${(result.body.unloaded || []).join(', ')}`);
-    } else if (GlobalConfig.debugMode) {
+    }
+    else if (GlobalConfig.debugMode) {
         console.log(`显存守卫: 可用显存 ${result?.body?.free_mib} MiB, 无需卸载`);
     }
 }

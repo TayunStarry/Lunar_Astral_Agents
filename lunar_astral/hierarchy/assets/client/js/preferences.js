@@ -48,3 +48,24 @@ function updateVoiceToggleUI() {
 function setupVoiceToggle() {
     voiceToggleBtn.addEventListener('click', toggleVoiceAutoPlay);
 }
+
+// ---------- 后端用户名（QQ 适配器同款标注，仅用于发送给月华，前端展示不使用） ----------
+// 从 lunar_config.json 的 server.user_name 读取；未定义或为空时默认「子幽」
+async function loadBackendUserName() {
+    try {
+        const res = await fetch('/file/read/lunar_config.json');
+        if (!res.ok) return;
+        const config = await res.json();
+        const name = config && config.server ? config.server.user_name : null;
+        if (typeof name === 'string' && name.trim()) {
+            backendUserName = name.trim();
+        }
+    } catch (e) {
+        // 配置读取失败：保持默认用户名
+    }
+}
+
+// 构造发送给月华的用户名前缀，与 QQ 适配器的入站格式一致
+function buildUserNamePrefix() {
+    return `[用户: ${backendUserName}]: `;
+}

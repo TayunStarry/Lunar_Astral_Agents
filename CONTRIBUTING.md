@@ -100,7 +100,7 @@ import (
 |------|------|
 | 技术栈 | HTML5 + CSS3 + Vanilla JS (ES6+)，**禁止使用 Python** |
 | 模块 | ES Modules (`type="module"`) |
-| 依赖管控 | **仅限** `standard_dependency/` 中的 `script.js` 和 `styles.css`，禁止从 CDN 引入外部资源 |
+| 依赖管控 | 仅限引用 `local_data/package/` 下的正式包（经 `/file/read/package/` 加载），**按需引用**标准依赖扁平化清单中的库，禁止从 CDN 引入外部资源；清单见 [Code Wiki 06 §6.1](docs/code-wiki/06-前端资源库.md) |
 | 设计风格 | 玻璃拟态 (Glassmorphism)，CSS 变量驱动主题 |
 | 图标 | Font Awesome 6.4.0 |
 | 样式命名 | kebab-case，状态类用 `.active` / `.visible` / `.hidden` |

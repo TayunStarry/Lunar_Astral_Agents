@@ -30,7 +30,7 @@ const CONTENT_OFFSET_LIMIT = 0.5;
 
 // ---------- Markdown / Mermaid / ECharts 渲染（复制自月华消息终端 markdown.js） ----------
 
-/** 等待 marked 就绪（standard_dependency 异步注入，最多等 5 秒） */
+/** 等待 marked 就绪 */
 async function ensureMarked() {
     if (window.marked) return true;
     for (let i = 0; i < 50; i++) {

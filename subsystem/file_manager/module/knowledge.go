@@ -90,11 +90,6 @@ func (d *KnowledgeDB) Close() error {
 			return err
 		}
 	}
-	if d.webSearchCacheDB != nil {
-		if err := d.webSearchCacheDB.Close(); err != nil {
-			return err
-		}
-	}
 	d.fileDBsMu.Lock()
 	for name, db := range d.fileDBs {
 		if err := db.Close(); err != nil {
@@ -123,7 +118,7 @@ func (d *KnowledgeDB) Ping() error {
 
 // executeRawSQL 执行原生 SQL
 // 支持带参数的占位符（params 为 []any），自动区分查询类与写操作类语句
-// dbHandle 为执行目标连接（knowledgeDB 或 webSearchCacheDB）
+// dbHandle 为执行目标连接（knowledgeDB 或 fileDBs 懒打开连接）
 func (d *KnowledgeDB) executeRawSQL(dbHandle *sql.DB, op map[string]interface{}, tx *sql.Tx) OperationResult {
 	stmt, _ := op["sql"].(string)
 	stmt = strings.TrimSpace(stmt)
@@ -261,7 +256,6 @@ func ExecuteSQL(stmt string, params []any) *BatchResult {
 
 // ExecuteSQLOn 指定数据源执行原生 SQL
 // db 为空或 "knowledge" 时使用知识库（knowledge.db）；
-// "web_search_cache" 时使用网络搜索页面摘要缓存（web_search_cache.db，Web-LTP 的派生缓存，遗留只读）；
 // 其他取值视为 database 目录内的 *.db 文件路径（去 .db，支持子目录如 "sub/foo"）：文件必须已存在
 // 且为有效 SQLite 库，连接懒打开并缓存复用，不创建新文件。执行语义与 ExecuteSQL 一致。
 func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
@@ -283,14 +277,6 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 			return result
 		}
 		target = KnowledgeDatabase.knowledgeDB
-	case "web_search_cache":
-		if err := EnsureWebSearchCacheInitialized(); err != nil {
-			result.Success = false
-			result.Error = err.Error()
-			result.Results[0].Error = err.Error()
-			return result
-		}
-		target = KnowledgeDatabase.webSearchCacheDB
 	default:
 		fileDB, ferr := KnowledgeDatabase.ensureFileDB(db)
 		if ferr != nil {
@@ -313,47 +299,6 @@ func ExecuteSQLOn(db string, stmt string, params []any) *BatchResult {
 	result.Results[0] = opResult
 	result.TotalTime = time.Since(startTime).Milliseconds()
 	return result
-}
-
-// EnsureWebSearchCacheInitialized 确保网络搜索摘要缓存连接可用（懒加载）。
-// 缓存文件由 Web-LTP 在首次网络搜索时创建；文件不存在时返回可读错误而不创建空库。
-func EnsureWebSearchCacheInitialized() error {
-	if KnowledgeDatabase == nil {
-		KnowledgeDatabase = &KnowledgeDB{}
-	}
-	if KnowledgeDatabase.webSearchCacheDB != nil {
-		if err := KnowledgeDatabase.webSearchCacheDB.Ping(); err == nil {
-			return nil
-		}
-		// 连接失效（如文件被删除后重建），关闭旧连接重新打开
-		KnowledgeDatabase.webSearchCacheDB.Close()
-		KnowledgeDatabase.webSearchCacheDB = nil
-	}
-	return KnowledgeDatabase.initWebSearchCacheDB()
-}
-
-// initWebSearchCacheDB 打开网络搜索摘要缓存连接（WAL 模式，小连接池）
-func (d *KnowledgeDB) initWebSearchCacheDB() error {
-	dbPath := *GeneralConfig.WebSearchCacheDBPath
-	if _, err := os.Stat(dbPath); err != nil {
-		return fmt.Errorf("网络搜索缓存数据库不存在（完成一次网络搜索后自动创建）: %s", dbPath)
-	}
-
-	db, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=10000&_journal_mode=WAL")
-	if err != nil {
-		return fmt.Errorf("连接搜索缓存SQLite失败: %v", err)
-	}
-	db.SetMaxOpenConns(2)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return fmt.Errorf("测试搜索缓存SQLite连接失败: %v", err)
-	}
-
-	d.webSearchCacheDB = db
-	LoggerGeneral.Info("FileManager", "网络搜索摘要缓存连接完成: %s", dbPath)
-	return nil
 }
 
 // =============================================================================
@@ -436,7 +381,7 @@ func KnowledgeReplaceEntries(table string, entries [][]string) error {
 }
 
 // ensureFileDB 打开（或复用）database 目录内指定 *.db 的连接（懒加载，不创建文件）。
-// name 为相对 database 目录的文件路径去 .db（顶层如 "web_search_cache"，子目录如 "sub/foo"）；
+// name 为相对 database 目录的文件路径去 .db（顶层如 "notes"，子目录如 "sub/foo"）；
 // 逐段校验名称白名单、文件存在性与 SQLite 魔数，全部通过才打开。
 func (d *KnowledgeDB) ensureFileDB(name string) (*sql.DB, error) {
 	if d == nil {

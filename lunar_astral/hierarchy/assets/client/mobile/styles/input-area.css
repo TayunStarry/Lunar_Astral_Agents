@@ -1,0 +1,96 @@
+/* ========== 输入区域组件 ========== */
+
+.input-wrapper {
+	display: flex;
+	gap: 8px;
+	align-items: stretch;
+}
+
+/* 统一按钮设计规范（毛玻璃 + 深色半透明 + 边框） */
+.btn-glass {
+	background: var(--btn-glass-bg);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 2px solid var(--btn-glass-border);
+	border-radius: var(--btn-glass-radius);
+	color: #ffffff;
+	cursor: pointer;
+	font-size: 16px;
+	padding: 10px 14px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.3s ease;
+	box-shadow: var(--btn-glass-shadow);
+	outline: none;
+	/* 移动端触控目标：不小于 44px */
+	min-width: 48px;
+	min-height: 48px;
+	-webkit-tap-highlight-color: transparent;
+	touch-action: manipulation;
+}
+
+.btn-glass:hover {
+	background: var(--btn-glass-hover-bg);
+	border-color: rgba(255, 255, 255, 0.45);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.btn-glass:active {
+	transform: scale(0.94);
+	background: rgba(0, 0, 0, 0.7);
+}
+
+.btn-glass:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* 语音按钮状态：持续监听（绿色脉冲） */
+.btn-voice.listening {
+	border-color: rgba(32, 201, 151, 0.6);
+	background: rgba(32, 201, 151, 0.2);
+	animation: voice-btn-pulse 1.6s ease-in-out infinite;
+}
+
+/* 语音按钮状态：正在采集用户语音（红色脉冲） */
+.btn-voice.capturing {
+	border-color: rgba(220, 53, 69, 0.65);
+	background: rgba(220, 53, 69, 0.25);
+	animation: voice-btn-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes voice-btn-pulse {
+	0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.25), var(--btn-glass-shadow); }
+	50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.05), var(--btn-glass-shadow); }
+}
+
+/* 输入框（16px 字号避免 iOS 聚焦自动放大） */
+.message-input {
+	flex: 1;
+	min-width: 0;
+	padding: 12px 16px;
+	background: rgba(255, 255, 255, 0.85);
+	border: 2px solid rgba(255, 255, 255, 0.5);
+	border-radius: 16px;
+	color: #1a1a2e;
+	font-size: 16px;
+	line-height: 1.4;
+	resize: none;
+	max-height: 120px;
+	outline: none;
+	transition: var(--transition);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.message-input:focus {
+	border-color: var(--accent-color);
+	box-shadow: 0 0 0 3px rgba(157, 107, 255, 0.3);
+	background: rgba(255, 255, 255, 0.95);
+}
+
+.message-input::placeholder {
+	color: #6c6c8a;
+}

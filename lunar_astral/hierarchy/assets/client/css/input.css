@@ -239,6 +239,19 @@
     50% { box-shadow: 0 0 0 6px rgba(255, 82, 82, 0); }
 }
 
+/* 连续语音监听中状态：主题色呼吸提示 */
+.attach-btn.listening {
+    background: rgba(157, 107, 255, 0.15);
+    color: var(--accent-color);
+    border-color: rgba(157, 107, 255, 0.4);
+    animation: listening-pulse 2s ease-in-out infinite;
+}
+
+@keyframes listening-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(157, 107, 255, 0.35); }
+    50% { box-shadow: 0 0 0 6px rgba(157, 107, 255, 0); }
+}
+
 .message-input {
     flex: 1;
     background: transparent;

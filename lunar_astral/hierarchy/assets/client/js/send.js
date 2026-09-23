@@ -37,54 +37,71 @@ async function handleSend() {
 
         for (const pf of pendingFiles) {
             const category = pf.category;
-            if (category === 'image' || category === 'video') {
-                try {
-                    const fileUrl = await saveFile(pf.file);
-                    contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
-                    // 参考图（律令 <参考图>）：图片附件的标签置为「参考图」，便于在消息记录中识别
-                    const label = (category === 'image' && text.includes('<参考图>')) ? '参考图' : pf.name;
-                    attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label });
-                    categories.add('image');
-                } catch (err) {
-                    showToast(`无法上传 ${pf.name}`, 'error');
-                }
-            } else if (category === 'audio') {
-                // 音频：wav/mp3 以 input_audio 形式推送，其余仅本地展示
-                try {
-                    const base64Data = await fileToRawBase64(pf.file);
-                    const format = getAudioFormat(pf.file);
-                    if (format) {
-                        contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
-                    } else {
-                        showToast(`音频 ${pf.name} 仅支持 wav/mp3/flac/ogg，已跳过发送`, 'error');
+            switch (category) {
+                // 多模态消息 -> 图片
+                case 'image':
+                    try {
+                        const fileUrl = await saveFile(pf.file);
+                        contentBlocks.push({ type: 'image_url', image_url: { url: fileUrl } });
+                        // 参考图（律令 <参考图>）：图片附件的标签置为「参考图」，便于在消息记录中识别
+                        const label = (category === 'image' && text.includes('<参考图>')) ? '参考图' : pf.name;
+                        attachments.push({ type: category, src: fileUrl.replace(window.location.origin, ''), label });
+                        categories.add('image');
                     }
-                } catch (err) {
-                    showToast(`无法读取音频 ${pf.name}`, 'error');
-                }
-                // 历史记录使用独立 blob URL，避免被清理撤销
-                attachments.push({ type: 'audio', src: URL.createObjectURL(pf.file), label: pf.name });
-                categories.add('voice');
-            } else if (category === 'text') {
-                try {
-                    // 文本文件 → 构造阅读者可解析的围栏块 ```fileName\n全文\n```（发送全文入库）
-                    const rawText = await readFileAsText(pf.file);
-                    if (rawText.trim()) {
-                        textFiles.push({ name: pf.name, block: `\`\`\`${pf.name}\n${rawText}\n\`\`\`` });
+                    catch (err) { showToast(`无法上传 ${pf.name}`, 'error'); }
+                    break;
+                // 多模态消息 -> 视频
+                case 'video':
+                    try {
+                        const fileUrl = await saveFile(pf.file);
+                        contentBlocks.push({ type: 'text', text: '[视频] ' });
+                        contentBlocks.push({ type: 'video_url', video_url: { url: fileUrl } });
+                        attachments.push({ type: 'video', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
+                        categories.add('image');
+                    }
+                    catch (err) { showToast(`无法上传 ${pf.name}`, 'error'); }
+                    break;
+                // 多模态消息 -> 语音/音频
+                case 'audio':
+                    try {
+                        const base64Data = await fileToRawBase64(pf.file);
+                        const format = getAudioFormat(pf.file);
+                        contentBlocks.push({ type: 'text', text: '[语音] ' });
+                        if (format) {
+                            contentBlocks.push({ type: 'input_audio', input_audio: { data: base64Data, format } });
+                        }
+                        else {
+                            const fileUrl = await saveFile(pf.file);
+                            contentBlocks.push({ type: 'audio_url', audio_url: { url: fileUrl } });
+                        }
+                    }
+                    catch (err) { showToast(`无法读取音频 ${pf.name}`, 'error'); }
+                    // 历史记录使用独立 blob URL，避免被清理撤销
+                    attachments.push({ type: 'audio', src: URL.createObjectURL(pf.file), label: pf.name });
+                    categories.add('voice');
+                    break;
+                // 多模态消息 -> 文本文件
+                case 'text':
+                    try {
+                        const rawText = await readFileAsText(pf.file);
+                        if (rawText.trim()) {
+                            textFiles.push({ name: pf.name, block: `\`\`\`${pf.name}\n${rawText}\n\`\`\`` });
+                            categories.add('text');
+                        }
+                    }
+                    catch (err) { showToast(`无法读取文件 ${pf.name}`, 'error'); }
+                    break;
+                // 多模态消息 -> 其他文件
+                default:
+                    try {
+                        const fileUrl = await saveFile(pf.file);
+                        const block = `[文件] 名称: ${pf.name} 大小: ${formatFileSize(pf.file.size)} 访问链接: ${fileUrl}`;
+                        contentBlocks.push({ type: 'text', text: block });
+                        attachments.push({ type: 'other', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
                         categories.add('text');
                     }
-                } catch (err) {
-                    showToast(`无法读取文件 ${pf.name}`, 'error');
-                }
-            } else {
-                try {
-                    const fileUrl = await saveFile(pf.file);
-                    const block = `【文件 ${pf.name}】访问链接：${fileUrl}`;
-                    contentBlocks.push({ type: 'text', text: block });
-                    attachments.push({ type: 'other', src: fileUrl.replace(window.location.origin, ''), label: pf.name });
-                    categories.add('text');
-                } catch (err) {
-                    showToast(`无法上传文件 ${pf.name}`, 'error');
-                }
+                    catch (err) { showToast(`无法上传文件 ${pf.name}`, 'error'); }
+                    break;
             }
         }
         // ---- 组装引用与主用户文本（一次导入/引用只显示一个气泡）----
@@ -106,12 +123,14 @@ async function handleSend() {
 
         // ---- 组装发送给后端的消息数组（顺序：围栏块 → 主用户消息）----
         // 前端在发送前即已知文件ID，直接自构造引用，无需等待后端推送
+        // 发送给月华的主文本带 QQ 适配器同款用户名前缀；本地展示（addMessage）仍用不带前缀的 userText
+        const payloadText = userText ? buildUserNamePrefix() + userText : userText;
         const sendPayload = [];
         for (const tf of textFiles) sendPayload.push({ role: 'user', content: tf.block });
         if (userText || contentBlocks.length) {
             const mainContent = contentBlocks.length
-                ? [...(userText ? [{ type: 'text', text: userText }] : []), ...contentBlocks]
-                : userText;
+                ? [...(payloadText ? [{ type: 'text', text: payloadText }] : []), ...contentBlocks]
+                : payloadText;
             sendPayload.push({ role: 'user', content: mainContent });
         }
 
@@ -172,7 +191,8 @@ function setupInputEvents() {
         messageArea.querySelectorAll('.message').forEach(el => el.remove());
         messages = [];
         updateEmptyState();
-        schedulePersist();
+        // 立即落盘：清空必须当场清空全部切片，不能等 1 分钟周期判定
+        schedulePersist(true);
         showToast('已清空消息', 'info');
     });
 }

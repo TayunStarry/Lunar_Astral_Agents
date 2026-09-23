@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+	<title>『 星月智能 - 月华 』</title>
+	<script>
+		// 响应式布局：页面尺寸恢复大屏时，自动切回电脑端 UI
+		(function () {
+			var MOBILE_BREAKPOINT = 768;
+			function checkViewport() {
+				if (window.innerWidth > MOBILE_BREAKPOINT) {
+					window.removeEventListener('resize', checkViewport);
+					window.location.replace('../');
+				}
+			}
+			checkViewport();
+			window.addEventListener('resize', checkViewport);
+		})();
+	</script>
+    <!-- 标准样式库 -->
+    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="/file/read/package/multimedia_preview/styles.css">
+    <!-- 标准脚本库 -->
+    <script src="/file/read/package/multimedia_preview/script.js"></script>
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="styles/variables.css">
+    <link rel="stylesheet" href="styles/base.css">
+    <link rel="stylesheet" href="styles/layout.css">
+    <link rel="stylesheet" href="styles/input-area.css">
+    <link rel="stylesheet" href="styles/toast.css">
+    <!-- 项目私有脚本 -->
+	<script src="./scripts/app.js" type="module"></script>
+</head>
+
+<body>
+	<!-- 毛玻璃叠加层（保留背景模糊） -->
+	<div class="glass-effect"></div>
+	<!-- 主容器 -->
+	<div class="container">
+		<div class="main-container-panel" id="mainContainerPanel">
+			<!-- 3D渲染器展示区 -->
+			<div class="renderer-wrapper" id="rendererWrapper">
+				<div class="renderer-container" id="rendererContainer">
+					<iframe id="rendererFrame"
+						data-src="/file/read/package/lunar.rendering_engine/index.html?channel=lunar-astral-renderer"
+						allow="autoplay" title="月岩引擎"></iframe>
+				</div>
+			</div>
+			<!-- 底部输入区 -->
+			<div class="input-container" id="inputContainer">
+				<div class="input-wrapper">
+					<button class="btn-glass btn-voice" id="voiceBtn" title="开启连续语音对话">
+						<i class="fas fa-microphone"></i>
+					</button>
+					<textarea class="message-input" id="messageInput" placeholder="想要聊些什么吗？" rows="1"
+						enterkeyhint="send" autocomplete="off"></textarea>
+					<button class="btn-glass btn-send" id="sendButton" title="消息发送">
+						<i class="fas fa-paper-plane"></i>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<!-- 通用悬浮消息组件 -->
+	<div class="toast-container" id="toastContainer"></div>
+	<!-- 错误提示条 -->
+	<div class="error-toast" id="errorToast"></div>
+</body>
+
+</html>

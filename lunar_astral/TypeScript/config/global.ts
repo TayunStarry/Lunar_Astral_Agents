@@ -45,10 +45,6 @@ export class GlobalConfig {
 	public static get AsrName(): string {
 		return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
 	};
-	/** 获取 用户名 */
-	public static get userName(): string {
-		return GlobalConfig.customConfig?.server?.user_name || "阁下";
-	};
 	/** 获取 调试模式开关 */
 	public static get debugMode(): boolean {
 		return GlobalConfig.customConfig?.server?.developer ?? false;

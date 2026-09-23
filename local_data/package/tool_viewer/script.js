@@ -47,15 +47,9 @@ function waitForGlobal(name, timeoutMs) {
 
 /**
  * 确保 marked 就绪后再渲染。
- * standard_dependency 对依赖脚本是「发射后不管」的异步注入，直接读全局 marked 会与它竞态：
- * 文本文档抓取往往先于 39KB 的 marked.min.js 下载+编译完成，此时 typeof marked === 'undefined'，
- * 整篇文档就会被塞进一个 <pre>，看起来就是一整块代码。
- * 这里只等 marked 本身（它是依赖列表第一项），不等 echarts/katex 等无关的大库。
  */
 async function ensureMarked() {
     if (await waitForGlobal('marked', 2000)) return true;
-
-    // 兜底：不依赖 standard_dependency，自行加载
     try {
         await injectScript(MARKED_SRC);
     } catch (e) {
@@ -71,6 +65,65 @@ function highlightCodeBlocks() {
         hljs.highlightElement(block);
     });
     return true;
+}
+
+/** KaTeX 公式渲染属于渐进增强：auto-render 就绪后对全文执行一次 */
+function renderMathInDoc() {
+    if (typeof renderMathInElement !== 'function') return false;
+    try {
+        renderMathInElement(markdownBody, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false },
+                { left: '\\[', right: '\\]', display: true },
+                { left: '\\(', right: '\\)', display: false }
+            ],
+            throwOnError: false
+        });
+        return true;
+    } catch (e) {
+        console.warn('公式渲染失败:', e);
+        return false;
+    }
+}
+
+/** 将 language-echarts 代码块替换为图表容器并初始化图表 */
+function renderEChartsInDoc() {
+    if (typeof echarts === 'undefined') return false;
+    markdownBody.querySelectorAll('pre code.language-echarts').forEach(block => {
+        const text = block.textContent || '';
+        let config;
+        try {
+            config = JSON.parse(text);
+        } catch (e) {
+            console.warn('ECharts 配置解析失败:', e);
+            return;
+        }
+        const placeholder = document.createElement('div');
+        placeholder.className = 'echarts-container';
+        const pre = block.closest('pre');
+        if (pre) pre.replaceWith(placeholder);
+        else block.replaceWith(placeholder);
+        const chart = echarts.init(placeholder);
+        chart.setOption(config);
+        // 延迟 resize 确保 DOM 布局完成后尺寸正确
+        setTimeout(() => chart.resize(), 100);
+    });
+    return true;
+}
+
+/** 窗口尺寸变化时重置所有已初始化的图表（仅注册一次） */
+let echartsResizeBound = false;
+function bindEChartsResize() {
+    if (echartsResizeBound) return;
+    echartsResizeBound = true;
+    window.addEventListener('resize', () => {
+        if (typeof echarts === 'undefined') return;
+        markdownBody.querySelectorAll('.echarts-container').forEach(el => {
+            const instance = echarts.getInstanceByDom(el);
+            if (instance) instance.resize();
+        });
+    });
 }
 
 // ==== 加载文档 ====
@@ -108,7 +161,6 @@ async function loadDocument() {
 
         const markdownText = await response.text();
 
-        // 使用 marked.js 渲染（由 standard_dependency 注入，必要时在此等待/兜底加载）
         if (await ensureMarked()) {
             window.marked.setOptions({
                 breaks: true,
@@ -125,10 +177,19 @@ async function loadDocument() {
                 `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(markdownText)}</pre>`;
         }
 
-        // 高亮晚到就补做一次，而不是永久放弃
+        // 高亮 / 公式 / 图表均为渐进增强：晚到就补做一次，而不是永久放弃
         if (!highlightCodeBlocks()) {
             waitForGlobal('hljs', 20000).then(highlightCodeBlocks);
         }
+        if (!renderMathInDoc()) {
+            waitForGlobal('renderMathInElement', 20000).then(renderMathInDoc);
+        }
+        if (!renderEChartsInDoc()) {
+            waitForGlobal('echarts', 20000).then(() => {
+                if (renderEChartsInDoc()) bindEChartsResize();
+            });
+        }
+        bindEChartsResize();
 
     } catch (error) {
         console.error('加载文档失败:', error);

@@ -38,7 +38,7 @@ func writeSuccess(w http.ResponseWriter, data interface{}) {
 // KnowledgeHandler 处理知识库请求
 // 路由：POST /knowledge/
 // 载荷统一为原生 SQL：{"sql": "...", "params": [], "db": "knowledge"}
-// db 可选：空或 "knowledge" → 知识库 knowledge.db；"web_search_cache" → 网络搜索页面摘要缓存
+// db 可选：空或 "knowledge" → 知识库 knowledge.db；其他取值 → database 目录内的 *.db 文件（去 .db）
 // 数据操作不再使用结构化 JSON 操作封装，全部回归原生 SQL 语句
 func KnowledgeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

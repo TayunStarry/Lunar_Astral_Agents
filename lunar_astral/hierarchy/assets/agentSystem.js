@@ -33,10 +33,6 @@ var agentSystem = (function (exports) {
             return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
         }
         ;
-        static get userName() {
-            return GlobalConfig.customConfig?.server?.user_name || "阁下";
-        }
-        ;
         static get debugMode() {
             return GlobalConfig.customConfig?.server?.developer ?? false;
         }
@@ -61,7 +57,6 @@ var agentSystem = (function (exports) {
             else
                 addressText = GlobalConfig.currentAddress.join(' ');
             return prompt
-                .replace(/{name}/g, GlobalConfig.userName)
                 .replace(/{current-address}/g, addressText);
         }
         writeContext(context) {

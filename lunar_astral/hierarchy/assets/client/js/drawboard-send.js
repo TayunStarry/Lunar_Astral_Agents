@@ -53,8 +53,9 @@ async function sendDrawboardMessage() {
         schedulePersist();
 
         if (backendConnected) {
+            // 发送给月华的文本带用户名前缀（与 QQ 适配器一致），本地展示不带
             const content = [
-                { type: 'text', text },
+                { type: 'text', text: buildUserNamePrefix() + text },
                 { type: 'image_url', image_url: { url: fileUrl } }
             ];
             await sendMessages([{ role: 'user', content }]);

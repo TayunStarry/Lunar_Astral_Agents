@@ -16,6 +16,7 @@ function setupMessageAreaDelegation() {
 function cleanup() {
     manualClose = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
+    stopVoiceListening(false);
     AudioQueue.stop();
     if (ws) {
         ws.onclose = null;
@@ -44,6 +45,7 @@ async function init() {
     loadTheme();
     setupThemeToggle();
     loadVoiceAutoPlay();
+    await loadBackendUserName();
     setupVoiceToggle();
     setupTabEvents();
     setupSearchEvents();

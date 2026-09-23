@@ -15,6 +15,11 @@ function handleWebSocketMessage(msg) {
     const type = msg.type || '';
     const data = msg.data || {};
 
+    // 月华回应感知：助手侧消息到达即解除连续语音的发送限制
+    if (type === 'context' || type === 'image') {
+        notifyVoiceAssistantReply();
+    }
+
     if (type === 'context') {
         const subType = data.type || 'text';
         const content = data.content || '';

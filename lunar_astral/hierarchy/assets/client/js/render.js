@@ -56,7 +56,8 @@ function renderMessageElement(msg) {
     el.dataset.searchText = computeSearchText(msg);
     if (msg.categories && msg.categories.includes('action')) el.classList.add('action-message');
 
-    const displayName = msg.role === 'user' ? USER_NAME : ASSISTANT_NAME;
+    // 用户气泡名显示配置的用户名（默认「子幽」）；文本内容仍不带用户名前缀
+    const displayName = msg.role === 'user' ? backendUserName : ASSISTANT_NAME;
     const header = document.createElement('div');
     header.className = 'message-header';
     header.innerHTML = `

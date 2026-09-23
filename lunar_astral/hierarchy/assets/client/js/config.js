@@ -7,9 +7,12 @@ const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const WS_URL = `${WS_PROTOCOL}//${window.location.hostname}:36789/ws`;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
-const USER_NAME = '你';
 const ASSISTANT_NAME = '月华';
-const MESSAGES_FILE_PATH = 'database/messages.json';
+const DEFAULT_USER_NAME = '子幽';   // 配置未定义用户名时的默认用户名（气泡名与发送前缀共用）
+const MESSAGE_DIR_PATH = 'database/message'; // 聊天记录切片存储目录
+const MESSAGE_FRAGMENT_LIMIT = 50;           // 每个切片至多存储的消息条数
+const MESSAGE_LOAD_MAX_MISSES = 3;           // 加载时允许连续缺失的切片数上限（缺失切片跳过）
+const MESSAGE_LOAD_MAX_SCANS = 500;          // 加载时扫描切片的最大数量上限（兜底防死循环）
 const MAX_PERSISTED_MESSAGES = 200;
 // 聊天消息持久化判定周期（毫秒）：每 1 分钟比较一次，消息内容相对上次保存有变化才写盘
 const PERSIST_INTERVAL_MS = 60000;
@@ -88,5 +91,7 @@ let pendingFiles = [];        // 待发送附件（悬浮气泡）
 let referencedFiles = [];     // 已加载到输入框的文件引用（[#文件名.ext]:）
 let isSending = false;        // 是否正在发送
 let autoPlayVoice = true;     // 收到语音消息时是否自动播放
+let backendUserName = DEFAULT_USER_NAME; // 用户气泡名与发送给月华的前缀共用的用户名（来自配置）
+let persistedFragmentCount = 0; // 上次持久化时已写出的切片数量（用于清理消息减少后的残留切片）
 let captureFile = null;       // 当前截图的 File 对象
 let capturePreviewUrl = null; // 当前截图预览 blob URL

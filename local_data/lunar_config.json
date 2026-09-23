@@ -7,7 +7,7 @@
 		"real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth"
 	},
 	"server": {
-		"user_name": null,
+		"user_name": "钛宇星光阁",
 		"developer": true,
 		"allow_diffusion": true,
 		"image_vram_guard": true,
@@ -25,7 +25,8 @@
 			1628993759,
 			3970426755,
 			262221051,
-			906314036
+			906314036,
+			710834920
 		],
 		"bridging_group_trigger_probability": 0.2,
 		"bridging_group_keywords": [

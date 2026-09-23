@@ -5,8 +5,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>『 星月智能 』消息终端</title>
+    <script>
+        // 响应式布局：页面尺寸达到小屏阈值时，自动切换至手机端适配 UI
+        (function () {
+            var MOBILE_BREAKPOINT = 768;
+            function checkViewport() {
+                if (window.innerWidth <= MOBILE_BREAKPOINT) {
+                    window.removeEventListener('resize', checkViewport);
+                    window.location.replace('mobile/');
+                }
+            }
+            checkViewport();
+            window.addEventListener('resize', checkViewport);
+        })();
+    </script>
     <!-- 标准样式库 -->
-    <link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+    <link rel="stylesheet" href="/file/read/package/multimedia_preview/styles.css">
+    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <link rel="stylesheet" href="/file/read/package/highlight/styles/github.css">
     <!-- 项目私有样式 -->
     <link rel="stylesheet" href="css/themes.css">
     <link rel="stylesheet" href="css/layout.css">
@@ -240,7 +256,10 @@
     </div>
 
     <!-- 标准脚本库 -->
-    <script src="/file/read/package/standard_dependency/script.js"></script>
+    <script src="/file/read/package/marked.min.js"></script>
+    <script src="/file/read/package/echarts.min.js"></script>
+    <script src="/file/read/package/highlight/highlight.min.js"></script>
+    <script src="/file/read/package/multimedia_preview/script.js"></script>
     <!-- Mermaid 流程图库 -->
     <script src="/file/read/package/mermaid.min.js"></script>
     <!-- 项目私有脚本 -->
