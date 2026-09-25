@@ -156,7 +156,7 @@ async function handleImageSelect(e) {
 
 async function uploadImage(file) {
     try {
-        const fixedFileName = 'images/uploaded_image.' + (file.name.split('.').pop() || 'png');
+        const fixedFileName = 'multimedia/uploaded_image.' + (file.name.split('.').pop() || 'png');
         const base64FileName = btoa(fixedFileName);
         const arrayBuffer = await file.arrayBuffer();
 
@@ -335,7 +335,7 @@ function waitForTaskCompletion() {
 async function loadFileList() {
     try {
         elements.fileGrid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-        let allFiles = await getAllFilesRecursive('images/generated');
+        let allFiles = await getAllFilesRecursive('multimedia/generated');
 
         // 真实文件数量（排除占位符后用于计数展示）
         const realCount = allFiles.length;
@@ -356,7 +356,7 @@ async function loadFileList() {
         if (allFiles.length < 8) {
             const missingCount = 8 - allFiles.length;
             for (let i = 0; i < missingCount; i++) {
-                const imageUrl = 'images/placeholder/unknown_file_icon-0' + Math.floor(Math.random() * 4) + '.webp';
+                const imageUrl = 'multimedia/placeholder/unknown_file_icon-0' + Math.floor(Math.random() * 4) + '.webp';
                 allFiles.push({ name: '*.png', path: imageUrl, size: 0, lastModified: new Date().toISOString(), isDir: false });
             }
         }
@@ -369,11 +369,11 @@ async function loadFileList() {
             const sizeFormatted = formatFileSize(file.size);
             const dateFormatted = formatDate(file.lastModified);
             const path = file.path.replace(/\\/g, '/');
-            const relativePath = file.path.replace(/^images\/generated[\\/]/, '');
+            const relativePath = file.path.replace(/^multimedia\/generated[\\/]/, '');
             const displayPath = relativePath || file.name;
             const pathParts = displayPath.split(/[\\/]/);
             const previewContent = isImage
-                ? `<img src="/file/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/file/read/images/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/file/read/${path}', '${file.name}')">`
+                ? `<img src="/file/read/${path}" alt="${file.name}" onerror="this.onerror=null; this.src='/file/read/multimedia/placeholder/video_file_icon-0${Math.floor(Math.random() * 5)}.png'" onclick="previewImage('/file/read/${path}', '${file.name}')">`
                 : `<div style="font-size: 48px; color: var(--accent); opacity: 0.3;">${iconHTML}</div>`;
 
             return `
@@ -392,7 +392,7 @@ async function loadFileList() {
                     </div>
                     <div class="file-actions">
                         <button class="file-btn file-btn-primary" onclick="downloadFile('${path}', '${file.name}')">下载</button>
-                        <button class="file-btn file-btn-danger" onclick="deleteFile('${path}')" ${path.startsWith('images/placeholder') ? 'disabled' : ''}>删除</button>
+                        <button class="file-btn file-btn-danger" onclick="deleteFile('${path}')" ${path.startsWith('multimedia/placeholder') ? 'disabled' : ''}>删除</button>
                     </div>
                 </div>`;
         }).join('');
@@ -500,7 +500,7 @@ async function downloadFile(path, filename) {
 }
 
 async function deleteFile(path) {
-    if (!confirm('确定要删除文件吗？\n' + path.replace(/^images\/generated[\\/]/, ''))) return;
+    if (!confirm('确定要删除文件吗？\n' + path.replace(/^multimedia\/generated[\\/]/, ''))) return;
     try {
         const response = await fetch('/file/delete/' + path, { method: 'DELETE' });
         if (response.ok) {
@@ -520,7 +520,7 @@ async function clearAllFiles() {
     if (!confirm('确定要删除所有生成的文件吗？\n此操作不可恢复！')) return;
     try {
         showToast('清空所有文件中...', 'info');
-        const response = await fetch('/file/delete/images/generated', { method: 'DELETE' });
+        const response = await fetch('/file/delete/multimedia/generated', { method: 'DELETE' });
         if (response.ok) {
             showToast('所有文件已清空', 'success');
             loadFileList();

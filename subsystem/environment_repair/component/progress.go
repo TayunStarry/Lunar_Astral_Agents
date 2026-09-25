@@ -3,92 +3,39 @@ package component
 import (
 	"fmt"
 	"regexp"
-	"strings"
-	"time"
 )
 
-// ProgressTracker 进度追踪器，解析 7z 输出并渲染彩色进度条
+// ProgressTracker 进度追踪器，解析 7z 输出并通过 progressHook 上报进度
 type ProgressTracker struct {
-	LastPercent  int
-	StartTime    time.Time
-	IsStarted    bool
-	HasProgress  bool
-	SpinnerIndex int
+	LastPercent int
+	HasProgress bool // 是否已解析到真实进度（false 表示仍处于准备阶段）
 }
 
 // NewProgressTracker 创建新的进度追踪器
 func NewProgressTracker() *ProgressTracker {
-	return &ProgressTracker{
-		LastPercent:  0,
-		StartTime:    time.Now(),
-		IsStarted:    true,
-		HasProgress:  false,
-		SpinnerIndex: 0,
-	}
+	return &ProgressTracker{LastPercent: 0, HasProgress: false}
 }
 
-// UpdateProgress 从 7z 输出行解析进度百分比
+// UpdateProgress 从 7z 输出行解析进度百分比并上报
 func (pt *ProgressTracker) UpdateProgress(output string) {
 	re := regexp.MustCompile(`(\d+)%`)
 	matches := re.FindStringSubmatch(output)
 
 	if len(matches) > 1 {
 		var percent int
-		fmt.Sscanf(matches[1], "%d", &percent)
+		_, _ = fmt.Sscanf(matches[1], "%d", &percent)
 
 		if percent >= 0 && percent <= 100 {
 			pt.HasProgress = true
 			if percent != pt.LastPercent {
 				pt.LastPercent = percent
-				pt.displayProgress(percent)
+				reportProgress(percent)
 			}
 		}
 	}
 }
 
-// displayPreparing 渲染准备阶段的 Spinner 动画
-func (pt *ProgressTracker) displayPreparing() {
-	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	elapsed := time.Since(pt.StartTime).Seconds()
-
-	pt.SpinnerIndex = (pt.SpinnerIndex + 1) % len(spinners)
-	spinner := spinners[pt.SpinnerIndex]
-
-	fmt.Printf("\r\033[36m[%s]\033[0m \033[33m正在准备压缩...\033[0m 耗时: %.1fs", spinner, elapsed)
-}
-
-// displayProgress 渲染彩色进度条
-func (pt *ProgressTracker) displayProgress(percent int) {
-	barLength := 50
-	filled := int(float64(percent) / 100.0 * float64(barLength))
-
-	if filled > barLength {
-		filled = barLength
-	}
-
-	var bar string
-	if percent < 100 {
-		if filled > 0 {
-			bar = strings.Repeat("█", filled)
-		}
-		if filled < barLength {
-			bar += strings.Repeat("░", barLength-filled)
-		}
-
-		percentColor := "\033[36m"
-		if percent >= 75 {
-			percentColor = "\033[32m"
-		} else if percent >= 50 {
-			percentColor = "\033[33m"
-		} else if percent >= 25 {
-			percentColor = "\033[93m"
-		}
-
-		elapsed := time.Since(pt.StartTime).Seconds()
-		fmt.Printf("\r\033[36m[\033[0m%s\033[36m]\033[0m %s%4d%%\033[0m 耗时: %.1fs", bar, percentColor, percent, elapsed)
-	} else {
-		bar = strings.Repeat("█", barLength)
-		elapsed := time.Since(pt.StartTime).Seconds()
-		fmt.Printf("\r\033[32m[\033[0m%s\033[32m]\033[0m \033[32m 100%%\033[0m \033[32m✓ 完成! 总耗时: %.1fs\033[0m\n", bar, elapsed)
-	}
+// reportPreparing 上报准备阶段（未知进度，-1）
+func (pt *ProgressTracker) reportPreparing() {
+	reportProgress(-1)
 }

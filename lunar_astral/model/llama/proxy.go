@@ -3,7 +3,6 @@ package llama
 import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/MultimodalAnalysis/module"
 	"bufio"
 	"context"
 	"fmt"
@@ -48,18 +47,10 @@ func Init() {
 		"--ubatch-size", "1024",
 		// 使用的CPU线程数
 		"--threads", strconv.Itoa(runtime.NumCPU() / 2),
-		// K缓存量化类型：8位量化
-		"--cache-type-k", "q8_0",
-		// V缓存量化类型：8位量化
-		"--cache-type-v", "q8_0",
 		// 不启动UI界面
 		"--no-ui",
 		// 空闲等待900秒后休眠服务器
 		"--sleep-idle-seconds", "900",
-		// 本地媒体目录：视频文件复制到此目录后通过 file:// 引用传给多模态模型
-		"--media-path", module.MediaDir(),
-		// 视频抽帧频率：0.5fps 控制视觉 token 消耗（60秒片段 = 30帧，适配 20480 上下文）
-		"--video-fps", "0.5",
 	}
 
 	// 若配置了 ffmpeg 路径，同步告知 llama-server 视频解码所需的 ffmpeg/ffprobe 所在目录

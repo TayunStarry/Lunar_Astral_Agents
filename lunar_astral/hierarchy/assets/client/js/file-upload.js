@@ -35,7 +35,7 @@ async function calculateFileHash(file) {
 // 保存文件到服务器，返回可访问的 fileUrl
 async function saveFile(file) {
     const category = getFileCategory(file);
-    const prefix = (category === 'image' || category === 'video' || category === 'audio') ? 'images/' : 'documents/';
+    const prefix = (category === 'image' || category === 'video' || category === 'audio') ? 'multimedia/' : 'documents/';
     const fileHash = await calculateFileHash(file);
     const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase() || '.bin';
     const newFileName = `${fileHash}${ext}`;

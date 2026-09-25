@@ -370,13 +370,10 @@ func getFileContent(fileID, file string) ([]byte, error) {
 		return base64.StdEncoding.DecodeString(data.Base64)
 	}
 	if data.URL != "" {
-		return downloadBytes(data.URL)
+		return fetchFileBytes(data.URL)
 	}
 	if data.File != "" {
-		if strings.HasPrefix(data.File, "http://") || strings.HasPrefix(data.File, "https://") {
-			return downloadBytes(data.File)
-		}
-		return os.ReadFile(data.File)
+		return fetchFileBytes(data.File)
 	}
 	return nil, fmt.Errorf("get_file 未返回可用的文件内容")
 }
@@ -394,13 +391,10 @@ func getImageContent(file string) ([]byte, error) {
 				return base64.StdEncoding.DecodeString(data.Base64)
 			}
 			if data.URL != "" {
-				return downloadBytes(data.URL)
+				return fetchFileBytes(data.URL)
 			}
 			if data.File != "" {
-				if strings.HasPrefix(data.File, "http://") || strings.HasPrefix(data.File, "https://") {
-					return downloadBytes(data.File)
-				}
-				return os.ReadFile(data.File)
+				return fetchFileBytes(data.File)
 			}
 		}
 	}
@@ -506,6 +500,19 @@ func getVideoSource(file string) (string, error) {
 		return data.File, nil
 	}
 	return "", fmt.Errorf("get_file 未返回可用的视频地址")
+}
+
+// fetchFileBytes 获取 napcat 返回的资源字节：http(s) 地址走网络下载，
+// 其余视为本地文件路径（napcat 对截图等本地缓存会在 URL/File 字段直接返回路径，
+// 支持裸路径与 file:// 前缀），读盘失败时返回错误
+func fetchFileBytes(raw string) ([]byte, error) {
+	if raw == "" {
+		return nil, fmt.Errorf("资源地址为空")
+	}
+	if strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://") {
+		return downloadBytes(raw)
+	}
+	return os.ReadFile(strings.TrimPrefix(raw, "file://"))
 }
 
 // downloadBytes 下载 http(s) 资源并返回字节

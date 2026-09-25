@@ -1,9 +1,112 @@
 /* ========== 输入区域组件 ========== */
 
+/* ===== 待发送附件悬浮气泡 ===== */
+.file-preview-area {
+	position: absolute;
+	bottom: calc(100% + 10px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: center;
+	width: max-content;
+	max-width: calc(100% - 24px);
+	z-index: 10;
+}
+
+.file-preview-area:empty {
+	display: none;
+}
+
+.file-preview-item {
+	position: relative;
+	width: 62px;
+	height: 62px;
+	border-radius: 14px;
+	overflow: hidden;
+	background: rgba(0, 0, 0, 0.35);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	animation: bubble-float 2.5s ease-in-out infinite;
+	will-change: transform;
+}
+
+@keyframes bubble-float {
+	0%, 100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-5px);
+	}
+}
+
+.file-preview-item img,
+.file-preview-item video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.file-preview-icon {
+	font-size: 24px;
+	color: rgba(255, 255, 255, 0.9);
+}
+
+.file-preview-item .file-label {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	padding: 2px 4px;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	font-size: 8px;
+	line-height: 1.3;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.file-preview-item .remove-btn {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: var(--error-color);
+	color: #fff;
+	cursor: pointer;
+	font-size: 10px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.file-preview-item .remove-btn:active {
+	transform: scale(0.9);
+}
+
+/* ===== 输入栏 ===== */
 .input-wrapper {
 	display: flex;
 	gap: 8px;
 	align-items: stretch;
+}
+
+/* 按钮显隐：空状态显示文件导入，有内容显示发送 */
+.input-wrapper [hidden] {
+	display: none !important;
 }
 
 /* 统一按钮设计规范（毛玻璃 + 深色半透明 + 边框） */
@@ -44,6 +147,17 @@
 .btn-glass:disabled {
 	opacity: 0.6;
 	cursor: not-allowed;
+}
+
+/* 文件导入按钮：与发送按钮同规格，主题色描边区分 */
+.btn-file {
+	border-color: rgba(157, 107, 255, 0.55);
+	background: rgba(157, 107, 255, 0.18);
+}
+
+.btn-file:hover {
+	border-color: rgba(157, 107, 255, 0.8);
+	background: rgba(157, 107, 255, 0.3);
 }
 
 /* 语音按钮状态：持续监听（绿色脉冲） */

@@ -34,11 +34,11 @@ function cleanup() {
 }
 
 // ---------- 初始化 ----------
-/** 渲染引擎 iframe：指向智能体所在后端（36789），与主 WebSocket 连接保持一致 */
+/** 渲染引擎 iframe：WsBridge 未传 ws 参数时默认连接同源 /ws，代理场景下自动走代理隧道 */
 function setupRendererFrame() {
     const frame = document.getElementById('rendererFrame');
     if (!frame || !frame.dataset.src) return;
-    frame.src = `${frame.dataset.src}&ws=${window.location.hostname}:36789`;
+    frame.src = `${frame.dataset.src}&ws=${window.location.host}`;
 }
 
 async function init() {

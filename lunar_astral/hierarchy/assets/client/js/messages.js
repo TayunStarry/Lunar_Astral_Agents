@@ -95,14 +95,10 @@ function addMessage(msg) {
     // 避免流式回复期间的高频磁盘写入；删除消息则立即保存（见 deleteMessage）
 }
 
-// ---------- 消息切片存储（database/message/fragment_xxxx.json，每片至多 50 条） ----------
-// 计算第 index 个切片的存储路径（fragment_0001.json 起）
-function fragmentPath(index) {
-    return `${MESSAGE_DIR_PATH}/fragment_${String(index).padStart(4, '0')}.json`;
-}
+// ---------- 消息持久化（database/message/messages.json，单文件仅保留最新 MAX_PERSISTED_MESSAGES 条） ----------
 
-// 写入单个切片文件，失败仅记录不抛出，保证其余切片的写入/清空不被中断
-async function writeFragmentFile(path, data) {
+// 写入指定存储文件，失败仅记录不抛出，保证持久化流程不被中断
+async function writeMessageFile(path, data) {
     try {
         const res = await fetch('/file/write', {
             method: 'POST',
@@ -115,27 +111,16 @@ async function writeFragmentFile(path, data) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return true;
     } catch (e) {
-        console.warn(`切片写入失败: ${path}`, e);
+        console.warn(`消息记录写入失败: ${path}`, e);
         return false;
     }
 }
 
-// 将消息按 50 条一片切分写入数据库切片目录；
-// 消息减少（删除/清空）后，超出当前片数的旧切片逐个覆写为空数组，避免下次加载读到残留消息
+// 将全部消息写入单个存储文件（超出上限的旧消息已在 addMessage / 加载时裁剪）
 async function persistMessages() {
-    const fragmentCount = Math.max(1, Math.ceil(messages.length / MESSAGE_FRAGMENT_LIMIT));
-    let allWritten = true;
-    for (let i = 1; i <= fragmentCount; i++) {
-        const slice = messages.slice((i - 1) * MESSAGE_FRAGMENT_LIMIT, i * MESSAGE_FRAGMENT_LIMIT);
-        if (!await writeFragmentFile(fragmentPath(i), JSON.stringify(slice))) allWritten = false;
-    }
-    // 清空全部残留切片：逐个覆写为空数组，某片失败不影响其余切片
-    for (let i = fragmentCount + 1; i <= persistedFragmentCount; i++) {
-        if (!await writeFragmentFile(fragmentPath(i), '[]')) allWritten = false;
-    }
-    if (fragmentCount > persistedFragmentCount) persistedFragmentCount = fragmentCount;
-    // 仅在全部写入成功时刷新快照，否则保留旧快照让周期判定器重试
-    if (allWritten) lastPersistSnapshot = JSON.stringify(messages);
+    const written = await writeMessageFile(MESSAGE_FILE_PATH, JSON.stringify(messages));
+    // 仅在写入成功时刷新快照，否则保留旧快照让周期判定器重试
+    if (written) lastPersistSnapshot = JSON.stringify(messages);
 }
 
 // 启动 1 分钟周期的持久化判定：循环检查消息内容相对上次保存是否有变化
@@ -157,36 +142,28 @@ function schedulePersist(immediate) {
     if (immediate) persistMessages();
 }
 
-// 按顺序逐一加载聊天记录切片；缺失或无法读取/解析的切片跳过，
-// 连续缺失达到上限或扫描数量达到兜底上限即认为加载完毕
+// 读取消息文件并解析为消息数组；缺失或无法读取/解析时返回 null
+async function readMessageFile(path) {
+    try {
+        const res = await fetch('/file/read/' + path);
+        if (!res.ok) return null;
+        const parsed = await res.json();
+        return Array.isArray(parsed) ? parsed.filter(m => m && typeof m === 'object') : null;
+    } catch (e) {
+        // 读取或解析失败：按缺失处理
+        return null;
+    }
+}
+
+// 加载聊天记录：读取单文件存储，超出上限的旧消息不保留
 async function loadPersistedMessages() {
     // 以当前 messages（含无文件时的空态）作为上一次落盘基线
     lastPersistSnapshot = JSON.stringify(messages);
     // 启动 1 分钟周期的持久化判定
     startPersistWatcher();
-    const loaded = [];
-    let misses = 0;
-    for (let index = 1; index <= MESSAGE_LOAD_MAX_SCANS && misses < MESSAGE_LOAD_MAX_MISSES; index++) {
-        let list = null;
-        try {
-            const res = await fetch('/file/read/' + fragmentPath(index));
-            if (res.ok) {
-                const parsed = await res.json();
-                if (Array.isArray(parsed)) list = parsed;
-            }
-        } catch (e) {
-            // 读取或解析失败：按缺失处理，跳过该切片
-        }
-        if (list) {
-            misses = 0;
-            if (index > persistedFragmentCount) persistedFragmentCount = index;
-            loaded.push(...list.filter(m => m && typeof m === 'object'));
-        } else {
-            misses++;
-        }
-    }
-    if (!loaded.length) return;
-    // 超出保留上限的历史直接丢弃（不做旧格式迁移）
+    const loaded = await readMessageFile(MESSAGE_FILE_PATH);
+    if (!loaded || !loaded.length) return;
+    // 超出保留上限的历史直接丢弃（仅保留最新消息）
     messages = loaded.length > MAX_PERSISTED_MESSAGES ? loaded.slice(-MAX_PERSISTED_MESSAGES) : loaded;
     // 加载后刷新基线，避免首轮周期把旧内容误判为变更而重复写盘
     lastPersistSnapshot = JSON.stringify(messages);

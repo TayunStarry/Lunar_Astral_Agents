@@ -1,4 +1,4 @@
-﻿# Environment Repair - 编译脚本
+# Environment Repair - 编译脚本
 
 # 将资源修复和端口释放功能编译为独立可执行文件，输出到项目根目录
 
@@ -43,7 +43,7 @@ $Go = Resolve-Go -Purpose "构建 Environment_Repair"
 
 #   1. audios/ 整个目录
 
-#   2. images/background/ 与 images/placeholder/
+#   2. multimedia/background/ 与 multimedia/placeholder/ 与 multimedia/icon/
 
 #   3. package/ 下所有没有 metadata.json 的子目录（库/资源目录）
 
@@ -99,17 +99,17 @@ function Sync-EmbeddedData {
 
 
 
-    # 2. 同步 images/background 与 images/placeholder
+    # 2. 同步 multimedia/background 与 multimedia/placeholder 与 multimedia/icon
 
     $imgDirs = @("background", "placeholder","icon")
 
     foreach ($imgDir in $imgDirs) {
 
-        $srcImg = Join-Path $sourceBase "images\$imgDir"
+        $srcImg = Join-Path $sourceBase "multimedia\$imgDir"
 
         if (Test-Path $srcImg) {
 
-            $dstParent = Join-Path $targetBase "images"
+            $dstParent = Join-Path $targetBase "multimedia"
 
             if (-not (Test-Path $dstParent)) {
 
@@ -121,7 +121,7 @@ function Sync-EmbeddedData {
 
             $syncCount++
 
-            Write-Host "    同步 images/$imgDir/" -ForegroundColor Gray
+            Write-Host "    同步 multimedia/$imgDir/" -ForegroundColor Gray
 
         }
 

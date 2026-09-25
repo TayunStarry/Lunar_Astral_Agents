@@ -5,6 +5,7 @@ import { Toast } from './toast.js';
 import { sendMessages } from './fetch.js';
 import { initMusicRenderer, renderMusicScore, playRenderedAudio } from './music_renderer.js';
 import { initUserName, getUserNamePrefix } from './username.js';
+import { FilePreviewManager } from './file-manager.js';
 
 class LunarCoreApp {
 	wsClient = null;
@@ -13,6 +14,9 @@ class LunarCoreApp {
 	sendButton = null;
 	errorToast = null;
 	voiceBtn = null;
+	fileImportBtn = null;
+	fileInput = null;
+	fileManager = null;
 
 	constructor() {
 		// 加载后端用户名（lunar_config.json 的 server.user_name）
@@ -30,6 +34,15 @@ class LunarCoreApp {
 		this.sendButton = document.getElementById('sendButton');
 		this.errorToast = document.getElementById('errorToast');
 		this.voiceBtn = document.getElementById('voiceBtn');
+		this.fileImportBtn = document.getElementById('fileImportBtn');
+		this.fileInput = document.getElementById('fileInput');
+
+		// 附件管理器：气泡预览区 + 错误提示 + 按钮状态联动
+		this.fileManager = new FilePreviewManager(
+			document.getElementById('filePreviewArea'),
+			(msg) => this.showError(msg),
+			() => this.updateActionButton()
+		);
 	}
 
 	// ==== 连续语音对话（AEC + VAD 自动录音发送） ====
@@ -90,7 +103,33 @@ class LunarCoreApp {
 				this.handleSend();
 			}
 		});
-		this.messageInput?.addEventListener('input', () => { this.autoResizeTextarea(); });
+		// 输入内容变化：实时切换「文件导入 / 发送」按钮
+		this.messageInput?.addEventListener('input', () => {
+			this.autoResizeTextarea();
+			this.updateActionButton();
+		});
+
+		// 文件导入按钮 → 触发系统文件选择器
+		this.fileImportBtn?.addEventListener('click', () => this.fileInput?.click());
+		this.fileInput?.addEventListener('change', (e) => {
+			const files = e.target.files;
+			if (files && files.length) this.fileManager.handleFileSelect(Array.from(files));
+			e.target.value = '';
+		});
+
+		// 初始为「空状态」：显示文件导入按钮
+		this.updateActionButton();
+	}
+
+	/**
+	 * 输入框空状态时显示文件导入按钮，有内容（文字或待发送附件）时显示发送按钮
+	 */
+	updateActionButton() {
+		const hasText = !!this.messageInput?.value.trim();
+		const hasFiles = !!this.fileManager && this.fileManager.previews.length > 0;
+		const showSend = hasText || hasFiles || this.isLoading;
+		this.sendButton?.toggleAttribute('hidden', !showSend);
+		this.fileImportBtn?.toggleAttribute('hidden', showSend);
 	}
 
 	autoResizeTextarea() {
@@ -101,20 +140,20 @@ class LunarCoreApp {
 	}
 
 	initWebSocket() {
-		// 与电脑端保持一致：WebSocket 连接后端服务端口
+		// 与电脑端保持一致：WebSocket 连接同源 /ws（HTTP 直连时为后端端口，HTTPS 代理时走代理隧道）
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.hostname}:36789/ws`;
+		const wsUrl = `${protocol}//${window.location.host}/ws`;
 		this.wsClient = new WebSocketClient(wsUrl);
 		this.wsClient.onMessage((message) => this.handleWebSocketMessage(message));
 		this.wsClient.onError((error) => { console.error('WebSocket error:', error); this.showError('连接错误，请刷新页面'); });
 		this.wsClient.connect();
 	}
 
-	/** 渲染引擎 iframe：指向智能体所在后端（36789），与主 WebSocket 连接保持一致（与电脑端 main.js 一致） */
+	/** 渲染引擎 iframe：WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致） */
 	setupRendererFrame() {
 		const frame = document.getElementById('rendererFrame');
 		if (!frame || !frame.dataset.src) return;
-		frame.src = `${frame.dataset.src}&ws=${window.location.hostname}:36789`;
+		frame.src = `${frame.dataset.src}&ws=${window.location.host}`;
 	}
 
 	async handleWebSocketMessage(message) {
@@ -192,19 +231,43 @@ class LunarCoreApp {
 
 	async handleSend() {
 		const text = this.messageInput?.value.trim();
-		if (!text) return;
+		const hasFiles = !!this.fileManager && this.fileManager.previews.length > 0;
+		if (!text && !hasFiles) return;
 		if (this.isLoading) return;
 
 		this.setLoadingState(true);
 
 		try {
-			// QQ 适配器标准格式：发送给月华的文本带用户名前缀（与电脑端一致）
-			await sendMessages([{ role: 'user', content: getUserNamePrefix() + text }]);
+			// 附件上传并构建内容块（图片/视频/音频/文本文件）
+			let contentBlocks = [];
+			if (hasFiles) {
+				const results = await Promise.all(
+					this.fileManager.previews.map(p => this.fileManager.processFileUpload(p))
+				);
+				contentBlocks = await this.fileManager.buildFileContentBlocks(results);
+			}
+
+			// QQ 适配器标准格式：主文本带用户名前缀（与电脑端一致）
+			let content;
+			if (contentBlocks.length) {
+				content = [
+					...(text ? [{ type: 'text', text: getUserNamePrefix() + text }] : []),
+					...contentBlocks,
+				];
+			} else {
+				content = getUserNamePrefix() + text;
+			}
+
+			await sendMessages([{ role: 'user', content }]);
+
+			// 发送成功后清空输入与待发送附件
 			this.messageInput.value = '';
 			this.autoResizeTextarea();
+			this.fileManager.clearFilePreviews();
 		} catch (error) {
 			console.error('Send error:', error);
 			this.showError(error instanceof Error ? error.message : '发送失败');
+		} finally {
 			this.setLoadingState(false);
 		}
 	}
@@ -217,6 +280,7 @@ class LunarCoreApp {
 				? '<span class="loading-indicator"></span>'
 				: '<i class="fas fa-paper-plane"></i>';
 		}
+		this.updateActionButton();
 	}
 
 	showError(message) {

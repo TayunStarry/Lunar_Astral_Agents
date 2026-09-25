@@ -14,7 +14,7 @@ import (
 
 // Auto-LTP 可观测性：逐角色 trace 日志 + 配图归档。
 // 记录每个角色（编纂者/启动者/视觉/UIA/规划/操作/书记）「读到什么、想了什么、决定做什么、做了什么」，
-// 配合截图归档到 images/moment，便于复盘。
+// 配合截图归档到 multimedia/moment，便于复盘。
 
 var (
 	autoTraceOnce sync.Once
@@ -33,13 +33,13 @@ func autoTraceInitPath() {
 	_ = os.MkdirAll(autoTraceDir, 0755)
 }
 
-// autoShotDirPath 惰性解析截图目录（images/moment）
+// autoShotDirPath 惰性解析截图目录（multimedia/moment）
 func autoShotDirPath() string {
 	execPath, err := os.Executable()
 	if err != nil {
 		return "."
 	}
-	dir := filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "images", "moment")
+	dir := filepath.Join(filepath.Dir(execPath), *GeneralConfig.LocalDir, "multimedia", "moment")
 	_ = os.MkdirAll(dir, 0755)
 	return dir
 }
@@ -58,7 +58,7 @@ func traceAuto(format string, args ...any) {
 	f.WriteString(line + "\n")
 }
 
-// saveAutoShot 把当前截图归档到 images/moment 并返回路径（供 trace 关联）
+// saveAutoShot 把当前截图归档到 multimedia/moment 并返回路径（供 trace 关联）
 func saveAutoShot(data []byte) string {
 	if len(data) == 0 {
 		return ""

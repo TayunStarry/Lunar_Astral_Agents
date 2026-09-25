@@ -1,5 +1,5 @@
 import { ToolCall } from '../../config/tool';
-import { RandomFloat, RandomFloor } from '../../math/basis';
+import { RandomFloat, RandomFloor } from '../../tool/math';
 import { GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams } from '../../config/image';
 import { ToolCallItem } from '../../config/model';
 import { CreativeRoleBase } from '../base/creative';

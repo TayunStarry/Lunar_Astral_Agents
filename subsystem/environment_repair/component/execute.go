@@ -13,19 +13,19 @@ func Execute(params *ExecuteParams) error {
 		return fmt.Errorf("参数验证失败: %v", err)
 	}
 
-	fmt.Println("========================================")
-	fmt.Println("  项目打包工具启动")
-	fmt.Printf("  启动时间: %s\n", params.StartTime.Format("2006-01-02 15:04:05"))
-	fmt.Println("========================================")
+	uiLogf("========================================")
+	uiLogf("  项目打包工具启动")
+	uiLogf("  启动时间: %s", params.StartTime.Format("2006-01-02 15:04:05"))
+	uiLogf("========================================")
 
 	sources, err := GetSources(params.Config.Import)
 	if err != nil {
 		return fmt.Errorf("获取源文件失败: %v", err)
 	}
 
-	fmt.Printf("  输出路径: %s\n", params.Config.Output)
-	fmt.Printf("  分卷大小: %d MB\n", params.Config.Size)
-	fmt.Printf("  压缩级别: %d\n", params.Config.Level)
+	uiLogf("  输出路径: %s", params.Config.Output)
+	uiLogf("  分卷大小: %d MB", params.Config.Size)
+	uiLogf("  压缩级别: %d", params.Config.Level)
 
 	cleanOldParts(params.Config.Output)
 
@@ -34,10 +34,10 @@ func Execute(params *ExecuteParams) error {
 	}
 
 	elapsed := time.Since(params.StartTime)
-	fmt.Println("========================================")
-	fmt.Println("  打包完成！")
-	fmt.Printf("  总耗时: %s\n", elapsed)
-	fmt.Println("========================================")
+	uiLogf("========================================")
+	uiLogf("  打包完成！")
+	uiLogf("  总耗时: %s", elapsed)
+	uiLogf("========================================")
 
 	return nil
 }

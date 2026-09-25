@@ -1,7 +1,7 @@
 /**
  * 数学工具类导入
  */
-import { Clamp, RandomFloat } from "./basis";
+import { Clamp, RandomFloat } from "../tool/math";
 
 /**
  * 三维向量接口

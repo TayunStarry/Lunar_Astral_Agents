@@ -211,8 +211,8 @@ async function loadPages() {
 }
 
 // ===== 网格渲染：预设网格布局页（应用图标分配到空格位置，可拖动摆放，位置 JSON 持久化） =====
-// 兜底应用图标：从 local_data/images/icon 真实文件池随机选取（/file/list 获取真实数量，/file/read 读图）
-const DEFAULT_ICON_DIR = 'images/icon';
+// 兜底应用图标：从 local_data/multimedia/icon 真实文件池随机选取（/file/list 获取真实数量，/file/read 读图）
+const DEFAULT_ICON_DIR = 'multimedia/icon';
 let defaultIconPool = [];
 
 async function loadDefaultIconPool() {

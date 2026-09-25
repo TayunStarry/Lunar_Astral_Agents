@@ -15,12 +15,12 @@ func GetSources(paths []string) ([]string, error) {
 	for _, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			fmt.Printf("  [WARN] 无法解析路径 %s: %v\n", path, err)
+			uiLogf("  [WARN] 无法解析路径 %s: %v", path, err)
 			continue
 		}
 
 		if !fileExists(absPath) {
-			fmt.Printf("  [WARN] 路径不存在: %s\n", absPath)
+			uiLogf("  [WARN] 路径不存在: %s", absPath)
 			continue
 		}
 

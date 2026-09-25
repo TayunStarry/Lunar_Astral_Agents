@@ -39,20 +39,12 @@ type MediaSegment struct {
 	End float64 `json:"end"`
 }
 
-// MediaDir llama-server 媒体目录（--media-path 指向的目录，确保以路径分隔符结尾）
-func MediaDir() string {
-	dir := filepath.Join(*GeneralConfig.LocalDir, "cache", "media") + string(filepath.Separator)
-	// 确保目录存在（llama-server 不会自动创建）
-	os.MkdirAll(filepath.Dir(dir), 0755)
-	return dir
-}
-
-// VideoToMedia 将视频本地化并复制/分段到 llama-server 媒体目录
+// VideoToMedia 将视频本地化并复制/分段到 llama-server 媒体目录（multimedia/footage）
 //
 // 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
 // 时长不超过 MediaChunkSeconds 的视频直接复制为单个媒体文件；
 // 更长的视频使用 FFmpeg -c copy 快速切分为多个片段。
-// 返回媒体目录内的片段列表（文件名 + 起止时间），由 TypeScript 拼接 file:// 引用。
+// 返回媒体目录内的片段列表（footage/ 子路径 + 起止时间），由 TypeScript 拼接 file:// 引用。
 func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 	// 本地化输入：非本地路径先落到临时文件
 	localPath := inputFile
@@ -101,25 +93,27 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 	}
 
 	// 计算分段数
-	segments := int((duration-0.001)/MediaChunkSeconds) + 1
-	if segments < 1 {
-		segments = 1
-	}
+	segments := max(int((duration-0.001)/MediaChunkSeconds)+1, 1)
 
-	mediaDir := MediaDir()
+	// 片段归档至 multimedia/footage 子目录；llama-server 的 media-path 指向 multimedia 根，
+	// 返回的文件名需携带 footage/ 前缀才能被 file:// 引用正确解析
+	mediaDir := *GeneralConfig.LocalDir + "/multimedia/footage"
+	if err := os.MkdirAll(mediaDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建媒体片段目录失败: %w", err)
+	}
 	result := make([]MediaSegment, 0, segments)
-	for i := 0; i < segments; i++ {
+	for i := range segments {
 		start := float64(i) * MediaChunkSeconds
 		end := start + MediaChunkSeconds
 		if end > duration {
 			end = duration
 		}
 		// 单片段视频直接复制原始文件，多片段才需要 FFmpeg 切分
-		fileName := fmt.Sprintf("%s%s", hash, ext)
+		fileName := fmt.Sprintf("footage/%s%s", hash, ext)
 		if segments > 1 {
-			fileName = fmt.Sprintf("%s_seg%d%s", hash, i, ext)
+			fileName = fmt.Sprintf("footage/%s_seg%d%s", hash, i, ext)
 		}
-		outPath := filepath.Join(mediaDir, fileName)
+		outPath := filepath.Join(*GeneralConfig.LocalDir, "multimedia", filepath.FromSlash(fileName))
 		var err error
 		if needNormalize {
 			// 归一化重编码：输入侧定位片段起点，重编码后边界逐帧精确
@@ -138,18 +132,26 @@ func VideoToMedia(inputFile string) ([]MediaSegment, error) {
 }
 
 // cutVideoSegment 使用 FFmpeg 流复制切分视频片段（不重编码，速度快，仅用于已达安全分辨率的源）
+//
+// -ss 必须放在输入侧（-i 之前）：流复制不重编码，输出侧 -ss 只按时间戳截包，
+// 视频要等到切点后的下一个关键帧才有画面，音频却立即开始，导致片段开头
+// 一大段黑屏且音画错位；输入侧定位直接跳到切点前最近的关键帧，片段以关键帧开头，
+// 播放器可立即解码（实际起点可能比请求值提前最多一个 GOP，属可接受误差）。
 func cutVideoSegment(inputFile string, outFile string, start float64, duration float64) error {
 	// FFmpeg 覆盖输出需要 -y 标志，ffmpeg-go 无法正确传递布尔参数，改为提前删除旧文件
 	os.Remove(outFile)
-	stream := ffmpeg.Input(inputFile).
-		Output(outFile, ffmpeg.KwArgs{
-			"ss":       fmt.Sprintf("%.3f", start),
-			"t":        fmt.Sprintf("%.3f", duration),
-			"c":        "copy",
-			"map":      "0",
-			"movflags": "+faststart",
-			"loglevel": "error",
-		})
+	input := ffmpeg.Input(inputFile)
+	if start > 0 {
+		input = ffmpeg.Input(inputFile, ffmpeg.KwArgs{"ss": fmt.Sprintf("%.3f", start)})
+	}
+	stream := input.Output(outFile, ffmpeg.KwArgs{
+		"t":                 fmt.Sprintf("%.3f", duration),
+		"c":                 "copy",
+		"map":               "0",
+		"avoid_negative_ts": "make_zero",
+		"movflags":          "+faststart",
+		"loglevel":          "error",
+	})
 	if *GeneralConfig.FfmpegPath != "" {
 		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
 	}

@@ -1,6 +1,6 @@
 import { GlobalConfig } from '../../config/global';
 import { PostMessage } from '../../config/model';
-import { RandomFloor } from '../../math/basis';
+import { RandomFloor } from '../../tool/math';
 
 /** 表情包记忆库集合名（image 类型集合，由 memory.store 前端管理） */
 const STICKER_COLLECTION = 'stickers';

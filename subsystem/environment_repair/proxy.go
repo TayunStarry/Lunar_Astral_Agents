@@ -2,7 +2,6 @@ package main
 
 import (
 	"LunarSubsystem/GeneralConfig"
-	"bufio"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -11,155 +10,98 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
+	"sync"
 	"time"
 )
 
 // ==== HTTPS 代理服务器 ====
 
-// RunHTTPSProxy 启动 HTTPS 代理服务器，在终端中显示访问链接
-// 将外部 HTTPS 请求解密后转发给内部 HTTP 后端服务
-func RunHTTPSProxy() {
-	scanner := bufio.NewScanner(os.Stdin)
-
-	// 1. 获取后端端口
-	fmt.Printf("请输入后端 HTTP 服务端口 [默认 %d]: ", *GeneralConfig.BasicPort)
-	backendPort := *GeneralConfig.BasicPort
-	if scanner.Scan() {
-		input := strings.TrimSpace(scanner.Text())
-		if input != "" {
-			if v, err := strconv.Atoi(input); err == nil && v > 0 && v < 65536 {
-				backendPort = v
-			} else {
-				fmt.Printf("  输入无效，使用默认端口: %d\n", *GeneralConfig.BasicPort)
-			}
-		}
-	}
-
-	// 2. 获取代理端口
-	fmt.Printf("请输入代理 HTTPS 监听端口 [默认 %d]: ", *GeneralConfig.ProxyPort)
-	proxyPort := *GeneralConfig.ProxyPort
-	if scanner.Scan() {
-		input := strings.TrimSpace(scanner.Text())
-		if input != "" {
-			if v, err := strconv.Atoi(input); err == nil && v > 0 && v < 65536 {
-				proxyPort = v
-			} else {
-				fmt.Printf("  输入无效，使用默认端口: %d\n", *GeneralConfig.ProxyPort)
-			}
-		}
-	}
-	_ = scanner.Err()
-
-	fmt.Println()
-	fmt.Println(strings.Repeat("─", 48))
-
-	// 3. 获取本地 IP
-	localIP := getLocalIP()
-	fmt.Printf("  本地 IP 地址: %s\n", localIP)
-
-	// 4. 生成/加载 TLS 证书
-	cert, err := loadOrGenerateCert()
+// startProxyServer 构建 HTTPS 代理服务器（TLS 证书 + 路由），由 TUI 代理屏调用
+// 返回已配置但未启动的 server，调用方自行在 goroutine 中执行 ListenAndServeTLS
+func startProxyServer(backendPort, proxyPort int, localIP string) (*http.Server, proxyInfo, error) {
+	// 生成/加载 TLS 证书（确保 SAN 覆盖所选 IP）
+	cert, err := loadOrGenerateCert(localIP)
 	if err != nil {
-		fmt.Printf("  [ERROR] 证书生成失败: %v\n", err)
-		return
+		return nil, proxyInfo{}, fmt.Errorf("证书生成失败: %w", err)
 	}
 
 	// 构建后端目标 URL
 	targetURL := fmt.Sprintf("http://localhost:%d", backendPort)
 	target, err := url.Parse(targetURL)
 	if err != nil {
-		fmt.Printf("  [ERROR] 目标 URL 解析失败: %v\n", err)
-		return
+		return nil, proxyInfo{}, fmt.Errorf("目标 URL 解析失败: %w", err)
 	}
 
-	// 5. 构建路由（健康检查 + 代理转发 + WebSocket 代理）
+	// 构建路由（健康检查 + 代理转发 + WebSocket 代理）
 	mux := http.NewServeMux()
-
-	// /health 健康检查端点
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		healthCheckHandler(w, r, targetURL)
 	})
-
-	// 代理转发（含 WebSocket 升级检测）
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handleProxyRequest(w, r, target, targetURL)
 	})
 
-	// 包裹 CORS 中间件
-	handler := corsMiddleware(mux)
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
-
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", proxyPort),
-		Handler:   handler,
-		TLSConfig: tlsConfig,
+		Handler:   corsMiddleware(mux),
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+		// 错误日志接入 TUI 统一通道，避免默认 log 带时间戳直接刷控制台
+		ErrorLog: log.New(&serverErrorWriter{}, "", 0),
 	}
 
-	// 6. 在 goroutine 中启动服务器
-	go func() {
-		fmt.Printf("  HTTPS 代理服务器已启动\n")
-		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-			fmt.Printf("  [ERROR] 代理服务器异常: %v\n", err)
+	lanURL := ""
+	if localIP != "localhost" {
+		lanURL = fmt.Sprintf("https://%s:%d", localIP, proxyPort)
+	}
+	info := proxyInfo{
+		LocalURL: fmt.Sprintf("https://localhost:%d", proxyPort),
+		LANURL:   lanURL,
+		Target:   targetURL,
+		CertInfo: fmt.Sprintf("证书: %s", *GeneralConfig.CertFile),
+	}
+	return server, info, nil
+}
+
+// ==== 服务器错误日志分流 ====
+
+// serverErrorWriter 将 http.Server 的错误日志接入 TUI 统一日志通道，
+// 并对客户端未信任自签证书导致的握手拒绝做限频降噪（这是自签证书下的预期行为，
+// 不应作为系统错误高频刷屏）
+type serverErrorWriter struct {
+	certErrMu      sync.Mutex
+	certErrLastLog time.Time
+}
+
+func (w *serverErrorWriter) Write(p []byte) (int, error) {
+	msg := strings.TrimSpace(string(p))
+
+	// 客户端不信任自签证书 → 预期现象，限频为每 30 秒至多一条并附带处理指引
+	if strings.Contains(msg, "unknown certificate") || strings.Contains(msg, "bad certificate") {
+		w.certErrMu.Lock()
+		shouldLog := time.Since(w.certErrLastLog) > 30*time.Second
+		if shouldLog {
+			w.certErrLastLog = time.Now()
 		}
-	}()
+		w.certErrMu.Unlock()
 
-	// 7. 显示访问链接
-	fmt.Println(strings.Repeat("─", 48))
-	fmt.Println()
-	fmt.Println("  HTTPS 代理服务已就绪，可通过以下链接访问：")
-	fmt.Println()
-	fmt.Printf("  本地访问:   https://localhost:%d\n", proxyPort)
-	fmt.Printf("  局域网访问: https://%s:%d\n", localIP, proxyPort)
-	fmt.Println()
-	fmt.Printf("  后端转发目标: %s\n", targetURL)
-	fmt.Println()
-	fmt.Println("  输入 q 或按 Ctrl+C 退出代理服务")
-	fmt.Println(strings.Repeat("─", 48))
-
-	// 8. 等待退出信号
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	// 另起 goroutine 监听键盘输入 'q'
-	quitCh := make(chan struct{})
-	go func() {
-		inputScanner := bufio.NewScanner(os.Stdin)
-		for inputScanner.Scan() {
-			if strings.TrimSpace(inputScanner.Text()) == "q" {
-				close(quitCh)
-				return
-			}
+		if shouldLog {
+			uiLogRaw("  [WARN] TLS 握手被拒绝：客户端尚未信任自签名证书" +
+				"（手机端需安装并信任 " + *GeneralConfig.CertFile + " 后访问）")
 		}
-		// 忽略 stdin 扫描错误（正常情况下由 EOF 触发）
-		_ = inputScanner.Err()
-	}()
-
-	select {
-	case <-sigCh:
-		fmt.Println("\n  接收到中断信号，正在关闭代理服务...")
-	case <-quitCh:
-		fmt.Println("\n  正在关闭代理服务...")
+		return len(p), nil
 	}
 
-	// 关闭服务器
-	if err := server.Close(); err != nil {
-		fmt.Printf("  [WARN] 关闭代理服务器时出错: %v\n", err)
-	}
-	fmt.Println("  代理服务已关闭")
+	uiLogRaw("  [ERROR] " + msg)
+	return len(p), nil
 }
 
 // handleProxyRequest 处理代理请求，检测 WebSocket 升级并分流
@@ -186,11 +128,11 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request, target *url.URL,
 		}
 		req.Header.Set("X-Forwarded-Port", port)
 
-		fmt.Printf("  [PROXY] %s %s -> %s%s\n", req.Method, originalPath, targetURL, req.URL.Path)
+		uiLogf("  [PROXY] %s %s -> %s%s", req.Method, originalPath, targetURL, req.URL.Path)
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		fmt.Printf("  [ERROR] 代理转发失败: %v\n", err)
+		uiLogf("  [ERROR] 代理转发失败: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
 		fmt.Fprintf(w, `{"error":"无法连接到后端服务器","message":"%s"}`, err.Error())
@@ -201,22 +143,22 @@ func handleProxyRequest(w http.ResponseWriter, r *http.Request, target *url.URL,
 
 // ==== TLS 证书管理 ====
 
-// loadOrGenerateCert 尝试从磁盘加载证书，不存在或过期则重新生成
-func loadOrGenerateCert() (tls.Certificate, error) {
+// loadOrGenerateCert 尝试从磁盘加载证书，不存在、过期或 SAN 未覆盖所需 IP 时重新生成
+func loadOrGenerateCert(requiredIP string) (tls.Certificate, error) {
 	// 优先尝试从磁盘加载
-	cert, err := loadCertFromDisk()
+	cert, err := loadCertFromDisk(requiredIP)
 	if err == nil {
-		fmt.Printf("  从磁盘加载证书成功: %s\n", *GeneralConfig.CertFile)
+		uiLogf("  从磁盘加载证书成功: %s", *GeneralConfig.CertFile)
 		return cert, nil
 	}
-	fmt.Printf("  磁盘证书不可用 (%v)，将重新生成\n", err)
+	uiLogf("  磁盘证书不可用 (%v)，将重新生成", err)
 
 	// 生成新证书
-	return generateAndSaveCert()
+	return generateAndSaveCert(requiredIP)
 }
 
-// loadCertFromDisk 从磁盘加载证书并验证有效性
-func loadCertFromDisk() (tls.Certificate, error) {
+// loadCertFromDisk 从磁盘加载证书并验证有效性与 IP 覆盖
+func loadCertFromDisk(requiredIP string) (tls.Certificate, error) {
 	certPEM, err := os.ReadFile(*GeneralConfig.CertFile)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("读取证书文件失败: %w", err)
@@ -241,25 +183,58 @@ func loadCertFromDisk() (tls.Certificate, error) {
 		return tls.Certificate{}, fmt.Errorf("证书即将过期或已过期")
 	}
 
+	// 检查证书 SAN 是否覆盖所需 IP（回环与 localhost 除外）
+	if !certCoversIP(parsedCert, requiredIP) {
+		return tls.Certificate{}, fmt.Errorf("证书 SAN 未覆盖 IP %s", requiredIP)
+	}
+
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
-// generateAndSaveCert 生成新的自签名证书并保存到磁盘
-func generateAndSaveCert() (tls.Certificate, error) {
+// certCoversIP 检查证书 SAN 是否包含指定 IP（localhost/回环地址仅检查 DNS/回环覆盖）
+func certCoversIP(cert *x509.Certificate, ipStr string) bool {
+	if ipStr == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	for _, certIP := range cert.IPAddresses {
+		if certIP.Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// generateAndSaveCert 生成新的自签名证书并保存到磁盘，SAN 覆盖本机全部 IPv4 地址与所需 IP
+func generateAndSaveCert(requiredIP string) (tls.Certificate, error) {
 	// 生成 RSA 私钥
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("生成 RSA 密钥失败: %w", err)
 	}
 
-	// 收集 IP 地址用于证书 SAN
-	var ipAddresses []net.IP
-	ipAddresses = append(ipAddresses, net.ParseIP("127.0.0.1"))
-	ipAddresses = append(ipAddresses, net.ParseIP("::1"))
+	// 收集 IP 地址用于证书 SAN：回环 + 所有所选 IP + 本机全部可用 IPv4
+	ipSet := make(map[string]net.IP)
+	ipSet["127.0.0.1"] = net.ParseIP("127.0.0.1")
+	ipSet["::1"] = net.ParseIP("::1")
+	if parsed := net.ParseIP(requiredIP); parsed != nil {
+		ipSet[requiredIP] = parsed
+	}
+	for _, candidate := range listLocalIPs() {
+		if parsed := net.ParseIP(candidate.IP); parsed != nil {
+			ipSet[candidate.IP] = parsed
+		}
+	}
 
-	localIP := getLocalIP()
-	if parsedIP := net.ParseIP(localIP); parsedIP != nil {
-		ipAddresses = append(ipAddresses, parsedIP)
+	var ipAddresses []net.IP
+	for _, ip := range ipSet {
+		ipAddresses = append(ipAddresses, ip)
 	}
 
 	// 生成证书序列号
@@ -295,9 +270,9 @@ func generateAndSaveCert() (tls.Certificate, error) {
 
 	// 保存到磁盘
 	if err := saveCertToDisk(certPEM, keyPEM); err != nil {
-		fmt.Printf("  [WARN] 证书持久化失败: %v（证书仅在内存中可用）\n", err)
+		uiLogf("  [WARN] 证书持久化失败: %v（证书仅在内存中可用）", err)
 	} else {
-		fmt.Printf("  证书已持久化: %s\n", *GeneralConfig.CertFile)
+		uiLogf("  证书已持久化: %s", *GeneralConfig.CertFile)
 	}
 
 	return tls.X509KeyPair(certPEM, keyPEM)
@@ -379,15 +354,25 @@ func checkBackendHealth(targetURL string) bool {
 // ==== WebSocket 代理 (WSS→WS) ====
 
 // isWebSocketUpgrade 检测请求是否为 WebSocket 升级请求
+// Connection 头可能是 "Upgrade" 或 "keep-alive, Upgrade" 等多 token 形式，需按 token 列表解析
 func isWebSocketUpgrade(r *http.Request) bool {
-	return strings.EqualFold(r.Header.Get("Connection"), "upgrade") &&
-		strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for _, value := range r.Header.Values("Connection") {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), "upgrade") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // handleWebSocketProxy 处理 WebSocket 代理：劫持客户端连接，建立到后端的 TCP 隧道，双向转发数据
 func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL string) {
-	// 解析后端地址
-	backendHost := strings.TrimPrefix(targetURL, "http://")
+	// 解析后端地址（targetURL 形如 http://host:port）
+	backendHost := strings.TrimPrefix(strings.TrimPrefix(targetURL, "https://"), "http://")
 	backendAddr := backendHost
 	if !strings.Contains(backendHost, ":") {
 		backendAddr = backendHost + ":80"
@@ -396,7 +381,7 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL stri
 	// 建立到后端的 TCP 连接
 	backendConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
 	if err != nil {
-		fmt.Printf("  [ERROR] WebSocket 后端连接失败 (%s): %v\n", backendAddr, err)
+		uiLogf("  [ERROR] WebSocket 后端连接失败 (%s): %v", backendAddr, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
 		fmt.Fprintf(w, `{"error":"WebSocket后端连接失败","message":"%s"}`, err.Error())
@@ -407,34 +392,33 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL stri
 	// 劫持客户端连接
 	hj, ok := w.(http.Hijacker)
 	if !ok {
-		fmt.Printf("  [ERROR] 服务器不支持连接劫持\n")
+		uiLogf("  [ERROR] 服务器不支持连接劫持")
 		http.Error(w, "WebSocket proxy not supported", http.StatusInternalServerError)
 		return
 	}
 
 	clientConn, bufrw, err := hj.Hijack()
 	if err != nil {
-		fmt.Printf("  [ERROR] 劫持客户端连接失败: %v\n", err)
+		uiLogf("  [ERROR] 劫持客户端连接失败: %v", err)
 		return
 	}
 	defer clientConn.Close()
 
-	// 将原始 HTTP 升级请求转发到后端
+	// 改写 Host 头为后端地址后再转发升级请求，避免后端对陌生 Host 校验失败
+	r.Host = backendHost
 	if err := r.Write(backendConn); err != nil {
-		fmt.Printf("  [ERROR] 转发 WebSocket 升级请求失败: %v\n", err)
+		uiLogf("  [ERROR] 转发 WebSocket 升级请求失败: %v", err)
 		return
 	}
 
-	// 刷新客户端缓冲区
-	bufrw.Flush()
-
-	fmt.Printf("  [PROXY] WSS→WS 隧道已建立: %s -> %s\n", r.URL.Path, backendAddr)
+	uiLogf("  [PROXY] WSS→WS 隧道已建立: %s -> %s", r.URL.Path, backendAddr)
 
 	// 双向数据转发
+	// 客户端方向以 bufrw 为源：先排空 Hijack 时 bufio.Reader 中已缓冲的帧数据（通常为紧随升级请求的早期 WS 帧），再回落到底层连接
 	done := make(chan struct{}, 2)
 
 	go func() {
-		io.Copy(backendConn, clientConn)
+		io.Copy(backendConn, bufrw)
 		done <- struct{}{}
 	}()
 
@@ -450,34 +434,77 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL stri
 	backendConn.Close()
 	clientConn.Close()
 
-	fmt.Printf("  [PROXY] WSS→WS 隧道已关闭: %s\n", r.URL.Path)
+	uiLogf("  [PROXY] WSS→WS 隧道已关闭: %s", r.URL.Path)
 }
 
 // ==== 网络工具 ====
 
-// getLocalIP 获取本机首选局域网 IP 地址
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
+// listLocalIPs 枚举本机所有可用 IPv4 地址（附带网卡名，仅列出已启用的网卡）
+func listLocalIPs() []ipCandidate {
+	var candidates []ipCandidate
+	seen := make(map[string]bool)
+
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "localhost"
+		return candidates
 	}
 
-	for _, addr := range addrs {
-		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				return ipNet.IP.String()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if ip := ipNet.IP.To4(); ip != nil && !seen[ip.String()] {
+					seen[ip.String()] = true
+					candidates = append(candidates, ipCandidate{
+						IP:        ip.String(),
+						Interface: iface.Name,
+					})
+				}
 			}
 		}
 	}
+	return candidates
+}
 
-	// 回退：尝试获取 IPv4 回环地址
-	for _, addr := range addrs {
-		if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				return ipNet.IP.String()
-			}
-		}
+// ipScore 为 IP 地址打分用于自动选择：私网地址优先，链路本地 (169.254.*) 与回环最后
+// 返回值越小越优先；-1 表示应跳过
+func ipScore(ipStr string) int {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return -1
 	}
+	switch {
+	case ip.IsLoopback():
+		return 90
+	case ip.IsLinkLocalUnicast(): // 169.254.0.0/16，通常是网卡未获得 DHCP 分配时的自动地址
+		return 80
+	case ip.IsPrivate(): // 192.168.0.0/16、10.0.0.0/8、172.16.0.0/12
+		return 0
+	default:
+		return 50
+	}
+}
 
-	return "localhost"
+// ipCategory 描述 IP 地址类别，用于列表展示
+func ipCategory(ipStr string) string {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return "未知"
+	}
+	switch {
+	case ip.IsLoopback():
+		return "回环"
+	case ip.IsLinkLocalUnicast():
+		return "链路本地 (不可用于局域网访问)"
+	case ip.IsPrivate():
+		return "局域网"
+	default:
+		return "公网/其他"
+	}
 }

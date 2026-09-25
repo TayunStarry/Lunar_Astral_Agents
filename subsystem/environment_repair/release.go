@@ -11,43 +11,43 @@ import (
 
 // ExecutePortRelease 执行端口释放操作：扫描指定范围内的端口，终止占用端口的进程，并验证端口释放情况
 func ExecutePortRelease(portRange PortRange) error {
-	fmt.Printf("正在扫描端口 %d 到 %d 的占用情况...\n", portRange.Start, portRange.End)
+	uiLogf("正在扫描端口 %d 到 %d 的占用情况...", portRange.Start, portRange.End)
 
 	// 获取端口范围内占用端口的进程列表
 	processes := getPortProcesses(portRange)
 	if len(processes) == 0 {
-		fmt.Printf("端口 %d 到 %d 上未发现任何进程占用\n", portRange.Start, portRange.End)
+		uiLogf("端口 %d 到 %d 上未发现任何进程占用", portRange.Start, portRange.End)
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}
 
-	fmt.Printf("发现 %d 个占用端口的进程:\n", len(processes))
+	uiLogf("发现 %d 个占用端口的进程:", len(processes))
 	for _, proc := range processes {
-		fmt.Printf("  - PID: %d, 端口: %d, 进程: %s\n", proc.PID, proc.Port, proc.Name)
+		uiLogf("  - PID: %d, 端口: %d, 进程: %s", proc.PID, proc.Port, proc.Name)
 		if proc.CmdLine != "" {
-			fmt.Printf("    命令行: %s\n", proc.CmdLine)
+			uiLogf("    命令行: %s", proc.CmdLine)
 		}
 	}
 
-	fmt.Println("开始终止进程...")
+	uiLogf("开始终止进程...")
 	killed, err := killProcesses(processes)
 	if err != nil {
-		fmt.Printf("  [ERROR] 终止进程时发生错误: %v\n", err)
+		uiLogf("  [ERROR] 终止进程时发生错误: %v", err)
 	}
 
 	time.Sleep(500 * time.Millisecond)
 
-	fmt.Println("验证端口释放情况:")
+	uiLogf("验证端口释放情况:")
 	remainingPorts := verifyPorts(portRange)
 
 	if killed > 0 {
 		if remainingPorts == 0 {
-			fmt.Printf("成功终止了 %d 个进程，所有端口已释放\n", killed)
+			uiLogf("成功终止了 %d 个进程，所有端口已释放", killed)
 		} else {
-			fmt.Printf("成功终止了 %d 个进程，但仍有 %d 个端口被占用\n", killed, remainingPorts)
+			uiLogf("成功终止了 %d 个进程，但仍有 %d 个端口被占用", killed, remainingPorts)
 		}
 	} else {
-		fmt.Println("没有成功终止任何进程")
+		uiLogf("没有成功终止任何进程")
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -64,14 +64,14 @@ func getPortProcesses(portRange PortRange) []ProcessInfo {
 	cmd := exec.Command("powershell", "-Command", psCmd)
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("  [WARN] PowerShell 命令执行失败，回退到 netstat: %v\n", err)
+		uiLogf("  [WARN] PowerShell 命令执行失败，回退到 netstat: %v", err)
 		return getPortProcessesNetstat(portRange)
 	}
 
 	reader := csv.NewReader(strings.NewReader(string(output)))
 	records, err := reader.ReadAll()
 	if err != nil {
-		fmt.Printf("  [WARN] 解析 PowerShell 输出失败，回退到 netstat: %v\n", err)
+		uiLogf("  [WARN] 解析 PowerShell 输出失败，回退到 netstat: %v", err)
 		return getPortProcessesNetstat(portRange)
 	}
 
@@ -104,7 +104,7 @@ func getPortProcessesNetstat(portRange PortRange) []ProcessInfo {
 	cmd := exec.Command("netstat", "-ano", "-p", "tcp")
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("  [ERROR] netstat 命令执行失败: %v\n", err)
+		uiLogf("  [ERROR] netstat 命令执行失败: %v", err)
 		return processes
 	}
 
@@ -181,15 +181,15 @@ func getProcessInfo(pid int) (string, string) {
 func killProcesses(processes []ProcessInfo) (int, error) {
 	killed := 0
 	for _, proc := range processes {
-		fmt.Printf("正在终止进程: PID %d (%s) - 占用端口 %d\n", proc.PID, proc.Name, proc.Port)
+		uiLogf("正在终止进程: PID %d (%s) - 占用端口 %d", proc.PID, proc.Name, proc.Port)
 		cmd := exec.Command("taskkill", "/f", "/pid", strconv.Itoa(proc.PID))
 		err := cmd.Run()
 		if err != nil {
-			fmt.Printf("  [ERROR] 无法终止进程 %d: %v\n", proc.PID, err)
+			uiLogf("  [ERROR] 无法终止进程 %d: %v", proc.PID, err)
 			return killed, fmt.Errorf("终止进程 %d 失败: %w", proc.PID, err)
 		}
 		killed++
-		fmt.Printf("  ✓ 成功终止进程 %d\n", proc.PID)
+		uiLogf("  ✓ 成功终止进程 %d", proc.PID)
 		time.Sleep(100 * time.Millisecond)
 	}
 	return killed, nil
@@ -200,10 +200,10 @@ func verifyPorts(portRange PortRange) int {
 	remaining := 0
 	for port := portRange.Start; port <= portRange.End; port++ {
 		if isPortInUse(port) {
-			fmt.Printf("  端口 %d 仍被占用\n", port)
+			uiLogf("  端口 %d 仍被占用", port)
 			remaining++
 		} else {
-			fmt.Printf("  端口 %d 已释放\n", port)
+			uiLogf("  端口 %d 已释放", port)
 		}
 	}
 	return remaining

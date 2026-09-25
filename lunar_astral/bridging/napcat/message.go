@@ -663,7 +663,7 @@ func processFileSegment(fileData FileData) (string, bool, string) {
 	if fileData.FileID != "" || fileData.File != "" {
 		data, err = getFileContent(fileData.FileID, fileData.File)
 	} else {
-		data, err = downloadBytes(fileData.URL)
+		data, err = fetchFileBytes(fileData.URL)
 	}
 	if err != nil || len(data) == 0 {
 		LoggerGeneral.SubError("LunarCore", "Napcat", "下载文件失败: %v", err)

@@ -191,7 +191,7 @@ function setupInputEvents() {
         messageArea.querySelectorAll('.message').forEach(el => el.remove());
         messages = [];
         updateEmptyState();
-        // 立即落盘：清空必须当场清空全部切片，不能等 1 分钟周期判定
+        // 立即落盘：清空必须当场写入存储文件，不能等 1 分钟周期判定
         schedulePersist(true);
         showToast('已清空消息', 'info');
     });

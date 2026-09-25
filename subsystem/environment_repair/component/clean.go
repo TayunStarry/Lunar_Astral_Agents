@@ -1,7 +1,6 @@
 package component
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,14 +8,14 @@ import (
 
 // cleanOldParts 清理输出目录下与输出路径同名的旧分卷文件和完整压缩包
 func cleanOldParts(outBase string) {
-	fmt.Println("清理旧分卷文件...")
+	uiLogf("清理旧分卷文件...")
 
 	dirName := filepath.Dir(outBase)
 	baseName := filepath.Base(outBase)
 
 	entries, err := os.ReadDir(dirName)
 	if err != nil {
-		fmt.Printf("  [WARN] 无法读取目录 %s: %v\n", dirName, err)
+		uiLogf("  [WARN] 无法读取目录 %s: %v", dirName, err)
 		return
 	}
 
@@ -32,9 +31,9 @@ func cleanOldParts(outBase string) {
 		// 匹配分卷文件：{baseName}.7z.001, {baseName}.7z.002, ...
 		if strings.HasPrefix(fname, baseName) && strings.Contains(fname, ".7z.") {
 			if err := os.Remove(fullPath); err != nil {
-				fmt.Printf("  [WARN] 无法删除旧分卷 %s: %v\n", fullPath, err)
+				uiLogf("  [WARN] 无法删除旧分卷 %s: %v", fullPath, err)
 			} else {
-				fmt.Printf("  已删除: %s\n", fname)
+				uiLogf("  已删除: %s", fname)
 				cleaned++
 			}
 		}
@@ -44,16 +43,16 @@ func cleanOldParts(outBase string) {
 	full7z := filepath.Join(dirName, baseName+".7z")
 	if fileExists(full7z) {
 		if err := os.Remove(full7z); err != nil {
-			fmt.Printf("  [WARN] 无法删除完整压缩包 %s: %v\n", full7z, err)
+			uiLogf("  [WARN] 无法删除完整压缩包 %s: %v", full7z, err)
 		} else {
-			fmt.Printf("  已删除: %s.7z\n", baseName)
+			uiLogf("  已删除: %s.7z", baseName)
 			cleaned++
 		}
 	}
 
 	if cleaned > 0 {
-		fmt.Printf("  共清理 %d 个旧文件\n", cleaned)
+		uiLogf("  共清理 %d 个旧文件", cleaned)
 	} else {
-		fmt.Println("  没有需要清理的旧文件")
+		uiLogf("  没有需要清理的旧文件")
 	}
 }

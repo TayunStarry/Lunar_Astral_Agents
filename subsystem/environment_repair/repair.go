@@ -16,8 +16,8 @@ import (
 //
 // 涵盖的资源（由 build.ps1 的 Sync-EmbeddedData 同步到 embedded_data/）：
 //   - audios/                       音频数据
-//   - images/background/            背景图片
-//   - images/placeholder/           未知文件占位图
+//   - multimedia/background/        背景图片
+//   - multimedia/placeholder/       未知文件占位图
 //   - package/ 下无 metadata.json 的子目录与裸露的 js 文件（库/资源）
 func EnsureLocalData() error {
 	execPath, err := os.Executable()
@@ -58,7 +58,7 @@ func EnsureLocalData() error {
 		if d.IsDir() {
 			// 目录：创建（已存在不报错）
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
-				fmt.Printf("  [WARN] 创建目录失败 %s: %v\n", targetPath, err)
+				uiLogf("  [WARN] 创建目录失败 %s: %v", targetPath, err)
 			}
 			return nil
 		}
@@ -73,18 +73,18 @@ func EnsureLocalData() error {
 		// 文件不存在，从嵌入资源释放
 		data, readErr := EmbeddedLocalData.ReadFile(path)
 		if readErr != nil {
-			fmt.Printf("  [WARN] 读取嵌入资源失败 %s: %v\n", path, readErr)
+			uiLogf("  [WARN] 读取嵌入资源失败 %s: %v", path, readErr)
 			return nil
 		}
 
 		// 确保父目录存在
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			fmt.Printf("  [WARN] 创建父目录失败 %s: %v\n", filepath.Dir(targetPath), err)
+			uiLogf("  [WARN] 创建父目录失败 %s: %v", filepath.Dir(targetPath), err)
 			return nil
 		}
 
 		if err := os.WriteFile(targetPath, data, 0644); err != nil {
-			fmt.Printf("  [WARN] 释放文件失败 %s: %v\n", targetPath, err)
+			uiLogf("  [WARN] 释放文件失败 %s: %v", targetPath, err)
 			return nil
 		}
 		releasedCount++
@@ -96,9 +96,9 @@ func EnsureLocalData() error {
 	}
 
 	if releasedCount > 0 {
-		fmt.Printf("\n✓ local_data 补全完成: 释放 %d 个文件, 跳过 %d 个已存在文件\n", releasedCount, skippedCount)
+		uiLogf("✓ local_data 补全完成: 释放 %d 个文件, 跳过 %d 个已存在文件", releasedCount, skippedCount)
 	} else {
-		fmt.Println("\n✓ local_data 资源完整，无需补全")
+		uiLogf("✓ local_data 资源完整，无需补全")
 	}
 	return nil
 }

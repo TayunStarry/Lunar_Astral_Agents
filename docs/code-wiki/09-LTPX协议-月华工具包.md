@@ -161,7 +161,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 **能力**：视觉 + UIA 双路理解界面、按名称/控件类型定位元素、`Invoke/Value/SelectionItem` 直接操作、坐标/键鼠兜底；`type_and_send` 原子输入发送。
 
-**可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`，截图归档 `local_data/images/moment`。
+**可观测性**：逐角色 trace 落盘 `local_data/logs/auto_ltp_trace.log`，截图归档 `local_data/multimedia/moment`。
 
 **模型**：从 `lunar_config.json` 的 `agent` 字段读取。
 

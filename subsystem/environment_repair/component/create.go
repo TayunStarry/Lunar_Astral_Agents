@@ -24,21 +24,21 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 		isDir := entry.IsDir()
 
 		if IsExcluded(entry.Name(), isDir) {
-			fmt.Printf("  跳过排除项: %s\n", fullPath)
+			uiLogf("  跳过排除项: %s", fullPath)
 			continue
 		}
 
 		if isDir {
 			subFiles, err := scanDirectory(fullPath, baseDir)
 			if err != nil {
-				fmt.Printf("  [WARN] 无法扫描目录 %s: %v\n", fullPath, err)
+				uiLogf("  [WARN] 无法扫描目录 %s: %v", fullPath, err)
 				continue
 			}
 			files = append(files, subFiles...)
 		} else {
 			relPath, err := filepath.Rel(baseDir, fullPath)
 			if err != nil {
-				fmt.Printf("  [WARN] 无法计算相对路径 %s: %v\n", fullPath, err)
+				uiLogf("  [WARN] 无法计算相对路径 %s: %v", fullPath, err)
 				continue
 			}
 			files = append(files, relPath)
@@ -50,8 +50,8 @@ func scanDirectory(dir string, baseDir string) ([]string, error) {
 
 // createVolume 创建分卷压缩包：扫描源文件 → 生成文件列表 → 调用 7z 压缩
 func createVolume(sources []string, outputPath string, partSizeMB int, compressionLevel int) error {
-	fmt.Println("开始创建分卷压缩包...")
-	fmt.Printf("  源文件/目录数量: %d\n", len(sources))
+	uiLogf("开始创建分卷压缩包...")
+	uiLogf("  源文件/目录数量: %d", len(sources))
 
 	var absSources []string
 	for _, src := range sources {
@@ -70,7 +70,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		return fmt.Errorf("无法确定基准目录: %v", err)
 	}
 
-	fmt.Printf("  基准目录: %s\n", baseDir)
+	uiLogf("  基准目录: %s", baseDir)
 
 	var relSources []string
 	for _, absPath := range absSources {
@@ -82,7 +82,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		if info.IsDir() {
 			dirFiles, err := scanDirectory(absPath, baseDir)
 			if err != nil {
-				fmt.Printf("  [WARN] 扫描目录失败 %s: %v\n", absPath, err)
+				uiLogf("  [WARN] 扫描目录失败 %s: %v", absPath, err)
 				continue
 			}
 			relSources = append(relSources, dirFiles...)
@@ -99,7 +99,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		return fmt.Errorf("没有找到有效的文件")
 	}
 
-	fmt.Printf("  有效文件数量: %d\n", len(relSources))
+	uiLogf("  有效文件数量: %d", len(relSources))
 
 	// 写入临时文件列表（避免命令行参数长度限制）
 	listFile := filepath.Join(os.TempDir(), "7z_file_list.txt")
@@ -114,7 +114,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 	if err != nil {
 		return fmt.Errorf("查找7z工具失败: %v", err)
 	}
-	fmt.Printf("  使用7z工具: %s\n", sevenZPath)
+	uiLogf("  使用7z工具: %s", sevenZPath)
 
 	out7z := outputPath + ".7z"
 	cmdArgs := []string{
@@ -129,7 +129,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 		"@" + listFile,
 	}
 
-	fmt.Println("开始压缩...")
+	uiLogf("开始压缩...")
 	cmd := exec.Command(sevenZPath, cmdArgs...)
 	cmd.Dir = baseDir
 
@@ -160,7 +160,7 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 				return
 			case <-ticker.C:
 				if !tracker.HasProgress {
-					tracker.displayPreparing()
+					tracker.reportPreparing()
 				}
 			}
 		}
@@ -192,6 +192,6 @@ func createVolume(sources []string, outputPath string, partSizeMB int, compressi
 
 	close(done)
 
-	fmt.Printf("\n  压缩完成！输出文件: %s\n", out7z)
+	uiLogf("  压缩完成！输出文件: %s", out7z)
 	return nil
 }

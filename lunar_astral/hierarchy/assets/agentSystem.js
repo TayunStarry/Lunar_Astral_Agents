@@ -3084,7 +3084,7 @@ var agentSystem = (function (exports) {
                 console.error('[律令] 参考图哈希计算失败:', hashErr);
                 return '';
             }
-            const relPath = `images/reference/${hash}.${ext}`;
+            const relPath = `multimedia/reference/${hash}.${ext}`;
             const [, , saveErr] = saveFile(relPath, true, ref.image);
             if (saveErr) {
                 console.error('[律令] 参考图保存失败:', saveErr);

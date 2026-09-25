@@ -101,7 +101,7 @@ func AnimatedImageToMedia(imgData []byte) ([]MediaSegment, error) {
 	target := animatedTargetSeconds(duration)
 
 	fileName := fmt.Sprintf("%x.mp4", sha1.Sum(imgData))
-	outPath := filepath.Join(MediaDir(), fileName)
+	outPath := filepath.Join(*GeneralConfig.LocalDir+"/multimedia", fileName)
 	if err := encodeAnimatedVideo(tempFile, outPath, duration, target); err != nil {
 		return nil, err
 	}

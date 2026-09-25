@@ -6,7 +6,7 @@ import { ActorRole } from './actor';
 import { DialogueRole } from './dialogue';
 import { PerceiverRole } from './perceiver';
 import { MemorizerRole } from './memorizer';
-import { RandomFloor } from '../../math/basis';
+import { RandomFloor } from '../../tool/math';
 
 /** 描述者角色(视觉内容描述) */
 export const descriptionRole: ModelBuilder = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);

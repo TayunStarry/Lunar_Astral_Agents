@@ -50,13 +50,19 @@
 			</div>
 			<!-- 底部输入区 -->
 			<div class="input-container" id="inputContainer">
+				<!-- 待发送附件悬浮气泡 -->
+				<div class="file-preview-area" id="filePreviewArea"></div>
 				<div class="input-wrapper">
 					<button class="btn-glass btn-voice" id="voiceBtn" title="开启连续语音对话">
 						<i class="fas fa-microphone"></i>
 					</button>
 					<textarea class="message-input" id="messageInput" placeholder="想要聊些什么吗？" rows="1"
 						enterkeyhint="send" autocomplete="off"></textarea>
-					<button class="btn-glass btn-send" id="sendButton" title="消息发送">
+					<input type="file" id="fileInput" multiple accept="*/*" hidden>
+					<button class="btn-glass btn-file" id="fileImportBtn" title="导入文件">
+						<i class="fas fa-paperclip"></i>
+					</button>
+					<button class="btn-glass btn-send" id="sendButton" title="消息发送" hidden>
 						<i class="fas fa-paper-plane"></i>
 					</button>
 				</div>
