@@ -1,7 +1,7 @@
 /**
  * 后端用户名模块
  *
- * 从 lunar_config.json 的 server.user_name 读取用户名（QQ 适配器同款标注，
+ * 从 lunar_config.json 的 agent.user_name 读取用户名（QQ 适配器同款标注，
  * 仅用于发送给月华，本地展示不使用）；未定义或读取失败时默认「子幽」。
  * 与电脑端 preferences.js 的 loadBackendUserName 逻辑一致。
  */
@@ -14,7 +14,7 @@ export async function initUserName() {
         const res = await fetch('/file/read/lunar_config.json');
         if (!res.ok) return;
         const config = await res.json();
-        const name = config && config.server ? config.server.user_name : null;
+        const name = config && config.agent ? config.agent.user_name : null;
         if (typeof name === 'string' && name.trim()) {
             userName = name.trim();
         }

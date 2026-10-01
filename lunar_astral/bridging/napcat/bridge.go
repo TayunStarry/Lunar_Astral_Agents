@@ -16,14 +16,15 @@ func LoadBridgingConfig(configPath string) error {
 		return err
 	}
 
+	// 桥接配置位于 lunar_config.json 的 bridging 组（与服务器运行配置分离）
 	var raw struct {
-		Server BridgingConfig `json:"server"`
+		Bridging BridgingConfig `json:"bridging"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	bridgeConfig = raw.Server
+	bridgeConfig = raw.Bridging
 	return nil
 }
 

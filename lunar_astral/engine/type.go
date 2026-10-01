@@ -100,10 +100,13 @@ type LTPXRemoteCallRequest struct {
 }
 
 // LTPXRemoteCallResponse 琉璃执行工具后的返回体
+// 新协议下琉璃异步受理：立即返回 pending=true + request_id，结果由月华经 /ltpx/poll 心跳轮询取回
 type LTPXRemoteCallResponse struct {
-	Success bool   `json:"success"`
-	Text    string `json:"text"` // 操作结果文本（含推荐后续操作）
-	Error   string `json:"error,omitempty"`
+	Success   bool   `json:"success"`
+	Text      string `json:"text"` // 操作结果文本（含推荐后续操作）
+	Error     string `json:"error,omitempty"`
+	Pending   bool   `json:"pending,omitempty"`   // 异步受理标记（true 时仅代表已受理，尚未执行完成）
+	RequestID string `json:"request_id,omitempty"` // 受理凭证（轮询 /ltpx/poll 时携带）
 }
 
 // PushContextData 推送上下文数据

@@ -95,6 +95,53 @@ function showToast(text, kind) {
     showToast._timer = setTimeout(() => { toast.className = 'toast'; }, 2600);
 }
 
+// ===== 多媒体预览浮层（multimedia_preview 组件） =====
+
+/**
+ * 打开多媒体预览浮层（全局 previewImage，由 multimedia_preview/script.js 提供）
+ * 组件不可用或调用异常时回退为新窗口打开，保证图片始终可查看
+ * @param {string} url - 图片地址（/file/read/... 或 blob: 数据地址）
+ * @param {string} name - 展示的文件名
+ */
+function openPreview(url, name) {
+    const fallback = () => { try { window.open(url, '_blank'); } catch (e) { /* 忽略 */ } };
+    try {
+        if (typeof previewImage === 'function') {
+            Promise.resolve(previewImage(url, name)).catch((e) => {
+                console.warn('预览浮层打开失败，回退新窗口:', e);
+                fallback();
+            });
+        } else {
+            console.warn('预览组件未加载（previewImage 未定义），回退新窗口');
+            fallback();
+        }
+    } catch (e) {
+        console.warn('预览浮层调用异常，回退新窗口:', e);
+        fallback();
+    }
+}
+
+/**
+ * 图片记忆以 base64（data URL）存储，直接作为预览路径会让浮层信息栏承载超长文本，
+ * 故先转成 Blob URL 再交给预览组件
+ * @param {string} dataUrl - data:image/...;base64,xxx
+ * @returns {string} Blob URL（转换失败返回空串，由调用方回退原始数据）
+ */
+function base64ToBlobUrl(dataUrl) {
+    try {
+        const comma = String(dataUrl).indexOf(',');
+        if (comma < 0) return '';
+        const mime = (dataUrl.slice(0, comma).match(/data:([^;]+)/) || [])[1] || 'image/png';
+        const binary = atob(dataUrl.slice(comma + 1));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return URL.createObjectURL(new Blob([bytes], { type: mime }));
+    } catch (e) {
+        console.warn('图片数据转换 Blob 失败，回退原始数据:', e);
+        return '';
+    }
+}
+
 // ===== 确认弹窗 =====
 
 let confirmResolver = null;
@@ -522,6 +569,14 @@ function createCard(entry) {
         img.loading = 'lazy';
         img.src = entry.base64;
         body.appendChild(img);
+        // 点击图片区经多媒体预览浮层缩放查看（头部改写/删除按钮不受影响）
+        body.classList.add('card-body-zoomable');
+        body.addEventListener('click', () => {
+            const blobUrl = base64ToBlobUrl(entry.base64);
+            openPreview(blobUrl || entry.base64, '记忆图片 ' + String(entry.id || '').slice(0, 8));
+            // 延迟回收 Blob（浮层已取到数据后释放，避免内存驻留）
+            if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+        });
     } else {
         const text = document.createElement('div');
         text.className = 'card-text';

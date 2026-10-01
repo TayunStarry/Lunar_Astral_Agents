@@ -20,7 +20,6 @@ require (
 	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/mozillazg/go-pinyin v0.21.0
-	github.com/u2takey/ffmpeg-go v0.5.0
 	github.com/yalue/onnxruntime_go v1.36.0
 	github.com/yanyiwu/gojieba v1.4.7
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8
@@ -36,6 +35,7 @@ require (
 	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
+	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 	golang.org/x/sys v0.41.0 // indirect

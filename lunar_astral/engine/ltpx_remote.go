@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,14 +20,23 @@ import (
 //   1. 琉璃不主动向月华推送；月华按固定引擎端口（36792=BasicPort+3）在每条思考链起点主动心跳并拉取工具链
 //   2. 月华在每个「xx事件发生前」触发点把原始负载同步推送到琉璃（/ltpx/event），
 //      经 LTP9 插件处理；琉璃离线 / 无插件订阅 / 插件未改写时回退使用原始数据
-//   3. 工具调用由月华转发到琉璃，琉璃执行并驱动其页面，返回文本结果
+//   3. 工具调用由月华转发到琉璃，琉璃异步受理（立即返回 pending + request_id），
+//      月华经 /ltpx/poll 心跳轮询取回结果（每次成功轮询即一次心跳，长任务不误判下线）
 //   4. 琉璃下线时，月华需将琉璃提供的工具从对话者可调用工具列表移除
 
 // 远程 HTTP 调用统一超时（琉璃进程心跳/工具链拉取）
 const ltpRemoteHTTPTimeout = 8 * time.Second
 
-// 工具调用超时：需覆盖琉璃端 pending call 等待（120s）及浏览器 iframe 中转执行耗时
-const ltpRemoteCallTimeout = 150 * time.Second
+// 工具调用提交超时：新协议下琉璃异步受理（立即返回 pending + request_id），提交即响应
+const ltpRemoteCallSubmitTimeout = 30 * time.Second
+
+// 工具执行结果心跳轮询参数：
+//   - 轮询间隔：每次成功响应即一次心跳，证明琉璃仍在服务
+//   - 连续失败上限：偶发失败不判死，连续无响应才判定联络失效
+//   - 最长等待：单次工具调用的兜底上限（覆盖长时间运行的联网搜索等任务）
+const ltpPollInterval = 3 * time.Second
+const ltpPollFailLimit = 3
+const ltpRemoteCallMaxWait = 30 * time.Minute
 
 // RegisterLTPXRemoteURL 记录琉璃联络 URL（兼容旧注册；多开时以最新注册为准）
 func RegisterLTPXRemoteURL(url string) {
@@ -141,7 +151,10 @@ func ltpxSubToolNames(tool LTPXRemoteToolDef) []string {
 	return names
 }
 
-// callLTPXRemoteTool 转发工具调用到琉璃并返回文本结果
+// callLTPXRemoteTool 转发工具调用到琉璃并返回文本结果。
+// 心跳轮询协议：提交调用后琉璃异步受理（立即返回 pending + request_id），
+// 月华以固定间隔轮询 /ltpx/poll，每次成功轮询即一次心跳——琉璃仍在执行（如长时间联网搜索）
+// 时联络保持有效；只有连续多次轮询无响应才判定联络失效并清空工具链。
 func callLTPXRemoteTool(toolName, argumentsJSON string) (string, error) {
 	target := GetLTPXRemoteURL()
 	if target == "" {
@@ -163,7 +176,7 @@ func callLTPXRemoteTool(toolName, argumentsJSON string) (string, error) {
 	reqBody := LTPXRemoteCallRequest{Tool: toolName, Arguments: args}
 	reqData, _ := json.Marshal(reqBody)
 
-	body, status, err := remotePost(target+"/ltpx/call", reqData)
+	body, status, err := remotePost(target+"/ltpx/call", reqData, ltpRemoteCallSubmitTimeout)
 	if err != nil {
 		// 琉璃无响应（掉线/连接拒绝/超时）：清空联络 URL 与工具链，判定琉璃下线
 		clearLTPXRemoteState("工具调用无响应")
@@ -181,6 +194,13 @@ func callLTPXRemoteTool(toolName, argumentsJSON string) (string, error) {
 		clearLTPXRemoteState("工具调用响应解析失败")
 		return "", fmt.Errorf("解析琉璃工具 %s 响应失败: %v", toolName, err)
 	}
+
+	// 新协议：琉璃异步受理，进入心跳轮询等待执行结果
+	if callResp.Pending && callResp.RequestID != "" {
+		return pollLTPXRemoteCallResult(target, toolName, callResp.RequestID)
+	}
+
+	// 兼容旧协议：琉璃同步返回执行结果
 	if !callResp.Success {
 		// 业务执行失败（琉璃在线，仅工具执行报错）：保留联络 URL，仅返回错误
 		if callResp.Error != "" {
@@ -189,6 +209,53 @@ func callLTPXRemoteTool(toolName, argumentsJSON string) (string, error) {
 		return "", fmt.Errorf("琉璃工具 %s 执行失败", toolName)
 	}
 	return callResp.Text, nil
+}
+
+// pollLTPXRemoteCallResult 心跳轮询琉璃工具执行状态直至完成。
+// 心跳语义：每次成功轮询响应即证明琉璃在线，重置无响应计数；
+// 连续 ltpPollFailLimit 次轮询失败才判定联络失效（clearLTPXRemoteState），
+// 总等待超过 ltpRemoteCallMaxWait 时兜底放弃（不清空联络，避免误伤仍在线的琉璃）。
+func pollLTPXRemoteCallResult(target, toolName, requestID string) (string, error) {
+	deadline := time.Now().Add(ltpRemoteCallMaxWait)
+	failCount := 0
+	for {
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("等待琉璃工具 %s 执行完成超时（%v）", toolName, ltpRemoteCallMaxWait)
+		}
+		time.Sleep(ltpPollInterval)
+		body, status, err := remoteGet(target + "/ltpx/poll?request_id=" + url.QueryEscape(requestID))
+		if err != nil || status != http.StatusOK {
+			failCount++
+			// 偶发一次失败不判死：琉璃可能正忙；连续失败达到上限才判定联络失效
+			if failCount >= ltpPollFailLimit {
+				clearLTPXRemoteState("工具执行轮询无响应")
+				return "", fmt.Errorf("轮询琉璃工具 %s 执行状态失败（连续 %d 次）: %v", toolName, failCount, err)
+			}
+			continue
+		}
+		// 本次轮询成功：视为一次心跳，重置失败计数
+		failCount = 0
+		var pollResp struct {
+			Done    bool   `json:"done"`
+			Success bool   `json:"success"`
+			Text    string `json:"text"`
+			Error   string `json:"error"`
+		}
+		if err := json.Unmarshal(body, &pollResp); err != nil {
+			return "", fmt.Errorf("解析琉璃工具 %s 轮询响应失败: %v", toolName, err)
+		}
+		// 仍在执行：继续心跳轮询，保持联络不判失效
+		if !pollResp.Done {
+			continue
+		}
+		if !pollResp.Success {
+			if pollResp.Error != "" {
+				return "", fmt.Errorf("琉璃工具 %s 执行失败: %s", toolName, pollResp.Error)
+			}
+			return "", fmt.Errorf("琉璃工具 %s 执行失败", toolName)
+		}
+		return pollResp.Text, nil
+	}
 }
 
 // getLTPXRemoteStatusForJS 供 JS 端在思考链起点调用的 Go 函数
@@ -308,8 +375,8 @@ func remoteGet(url string) ([]byte, int, error) {
 	return body, resp.StatusCode, nil
 }
 
-func remotePost(url string, payload []byte) ([]byte, int, error) {
-	client := &http.Client{Timeout: ltpRemoteCallTimeout}
+func remotePost(url string, payload []byte, timeout time.Duration) ([]byte, int, error) {
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Post(url, "application/json", bytes.NewReader(payload))
 	if err != nil {
 		return nil, 0, err

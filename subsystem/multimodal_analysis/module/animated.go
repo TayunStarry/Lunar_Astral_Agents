@@ -4,6 +4,7 @@ package module
 //
 // 动态图编码为视频写入 llama-server 媒体目录，复用视频理解链路
 // （llama-server 端 ffmpeg 抽帧 + 感知者角色），时序由视频采样点承载。
+// 不依赖服务端解码视频的「图片序列帧」模式见 video_frame.go 的 AnimatedImageToFrames。
 // 抽帧频率是 --video-fps（当前配置 0.5fps），数秒长的动态图直接转视频
 // 只能抽到 1~2 帧，因此转码时按目标采样点数做等比例慢放（setpts）。
 // 刻意不采用「循环拼接补时长」：当循环周期与抽帧周期接近时各采样点会落在

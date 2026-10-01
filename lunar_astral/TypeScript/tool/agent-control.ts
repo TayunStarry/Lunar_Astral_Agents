@@ -1,28 +1,11 @@
 import { ToolCall } from '../config/tool';
 import { GlobalConfig } from '../config/global';
-import { actorRole, painterRole, musicianRole } from '../agent/roles/roles';
+import { painterRole, musicianRole } from '../agent/roles/roles';
 
 // ==== 工具定义 ====
 
 /** 智能体控制工具定义 */
 export const agentControlTools: ToolCall[] = [
-	{
-		type: "function",
-		function: {
-			name: "dispatch_actor",
-			description: "向行动者子智能体发布行动任务。行动者负责控制月华在3D场景中的动画、位移和空间感知。只需用一句话描述你想让月华做什么，行动者会自行规划并执行具体操作。",
-			parameters: {
-				type: "object",
-				properties: {
-					description: {
-						type: "string",
-						description: "行动需求描述，如'让月华去荡秋千'、'移动到坐标(1, 2, 3)'、'开始翻花绳'。描述越清晰，行动者执行越准确。"
-					}
-				},
-				required: ["description"]
-			}
-		}
-	},
 	{
 		type: "function",
 		function: {
@@ -66,24 +49,6 @@ function parseArgs(args?: Record<string, any> | string): Record<string, any> {
 	return typeof args === 'string' ? JSON.parse(args) : (args || {});
 }
 
-/** 处理行动者调度工具 */
-async function handleDispatchActor(args?: Record<string, any> | string): Promise<string[]> {
-	const { description } = parseArgs(args);
-
-	if (!description || typeof description !== 'string' || description.trim().length === 0) {
-		return ['行动任务调度失败：任务描述不能为空，请提供具体的行动需求', ''];
-	}
-
-	if (!actorRole) {
-		return ['行动任务调度失败：行动者子智能体未就绪，请稍后重试', ''];
-	}
-
-	console.log(`[智能体控制] 调度行动者: ${description}`);
-	const result = await actorRole.createCreativeWork(description.trim());
-	console.log(`[智能体控制] 行动者完成: ${result}`);
-	return [result, ''];
-}
-
 /** 处理绘制者调度工具 */
 async function handleDispatchPainter(args?: Record<string, any> | string): Promise<string[]> {
 	const { description } = parseArgs(args);
@@ -123,7 +88,6 @@ async function handleDispatchMusician(args?: Record<string, any> | string): Prom
 // ==== 模块级注册 ====
 
 // 注册智能体控制工具到 LTPfunction 映射表
-GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
 GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
 GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
 // 注册智能体控制工具到 LTPdefinition 列表

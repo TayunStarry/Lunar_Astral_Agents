@@ -19,7 +19,7 @@ class LunarCoreApp {
 	fileManager = null;
 
 	constructor() {
-		// 加载后端用户名（lunar_config.json 的 server.user_name）
+		// 加载后端用户名（lunar_config.json 的 agent.user_name）
 		initUserName();
 		this.initElements();
 		this.initVoiceChat();

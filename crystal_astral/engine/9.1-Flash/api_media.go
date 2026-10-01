@@ -14,24 +14,19 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
-	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	multimodal "LunarSubsystem/MultimodalAnalysis/module"
 	webltp "CrystalAstral/agent/WebLTP"
 
 	"github.com/chai2010/webp"
 	"github.com/disintegration/imaging"
-	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
 // ==== 视频抽帧 video.frames（allow-file；URL 源运行时另需 allow-network） ====
-
-// maxVideoFrames 单次抽帧最大输出帧数：均衡脚本便利与内存/耗时，超限时等距抽样。
-const maxVideoFrames = 60
+// 抽帧基础组元（ExtractVideoFrameAt / EquidistantTimes / MaxVideoFrames / FormatSeconds）
+// 已上提到 MultimodalAnalysis/module，与月华感知者的序列帧解读链路共用同一实现。
 
 // frameDedupThreshold 相邻帧相似度阈值：差异 <= 该值视为冗余跳过（默认开启去重）。
 const frameDedupThreshold = 0.45
@@ -76,9 +71,9 @@ func engineVideoFrames(p *plugin, source string, opts map[string]any) map[string
 	var prev image.Image
 	skipped := 0
 	for i, t := range sampling {
-		img, ferr := extractVideoFrameAt(localPath, t, maxDim)
+		img, ferr := multimodal.ExtractVideoFrameAt(localPath, t, maxDim)
 		if ferr != nil {
-			LoggerGeneral.Warn(ServiceName, "[video.frames] 第%d帧(%ss)抽取失败，跳过: %v", i, formatSeconds(t), ferr)
+			LoggerGeneral.Warn(ServiceName, "[video.frames] 第%d帧(%ss)抽取失败，跳过: %v", i, multimodal.FormatSeconds(t), ferr)
 			skipped++
 			continue
 		}
@@ -95,7 +90,7 @@ func engineVideoFrames(p *plugin, source string, opts map[string]any) map[string
 		}
 		frames = append(frames, map[string]any{
 			"data":      "data:" + ct + ";base64," + base64.StdEncoding.EncodeToString(enc),
-			"timestamp": formatSeconds(t),
+			"timestamp": multimodal.FormatSeconds(t),
 			"width":     img.Bounds().Dx(),
 			"height":    img.Bounds().Dy(),
 			"format":    strings.TrimPrefix(ct, "image/"),
@@ -157,69 +152,21 @@ func videoSamplingPlan(duration float64, opts map[string]any) []float64 {
 		}
 	}
 	if c := optsInt(opts, "count", 0); c > 0 {
-		return equidistantTimes(c, duration)
+		return multimodal.EquidistantTimes(c, duration)
 	}
 	fps := optsFloat(opts, "fps", 5.0)
 	if fps <= 0 {
 		fps = 5.0
 	}
 	n := int(duration*fps) + 1
-	if n > maxVideoFrames {
-		return equidistantTimes(maxVideoFrames, duration)
+	if n > multimodal.MaxVideoFrames {
+		return multimodal.EquidistantTimes(multimodal.MaxVideoFrames, duration)
 	}
 	ts := make([]float64, 0, n)
 	for i := 0; i < n; i++ {
 		ts = append(ts, float64(i)/fps)
 	}
 	return ts
-}
-
-// equidistantTimes 生成 n 个等距时间点（恒含时间 0；n=1 时仅返回 0）。
-func equidistantTimes(n int, duration float64) []float64 {
-	if n < 1 {
-		n = 1
-	}
-	if n > maxVideoFrames {
-		n = maxVideoFrames
-	}
-	if duration <= 0 || n == 1 {
-		return []float64{0}
-	}
-	ts := make([]float64, 0, n)
-	for i := 0; i < n; i++ {
-		ts = append(ts, duration*float64(i)/float64(n-1))
-	}
-	return ts
-}
-
-// extractVideoFrameAt 用 FFmpeg 抽取 t 秒处单帧并缩放至 maxDim（0 表示不缩放），返回 image。
-func extractVideoFrameAt(localPath string, t float64, maxDim int) (image.Image, error) {
-	buf := &bytes.Buffer{}
-	stream := ffmpeg.Input(localPath, ffmpeg.KwArgs{"ss": strconv.FormatFloat(t, 'f', 3, 64)}).
-		Output("pipe:1", ffmpeg.KwArgs{
-			"frames:v": "1",
-			"f":        "image2pipe",
-			"vcodec":   "mjpeg",
-			"qscale:v": "2",
-		})
-	if *GeneralConfig.FfmpegPath != "" {
-		stream = stream.SetFfmpegPath(*GeneralConfig.FfmpegPath)
-	}
-	if err := stream.WithOutput(buf, os.Stderr).Run(); err != nil {
-		return nil, fmt.Errorf("FFmpeg 抽取 %s 处画面失败: %v", formatSeconds(t), err)
-	}
-	if buf.Len() == 0 {
-		return nil, fmt.Errorf("FFmpeg 在 %s 处无画面输出", formatSeconds(t))
-	}
-	img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
-	if err != nil {
-		return nil, fmt.Errorf("解码 %s 处帧失败: %v", formatSeconds(t), err)
-	}
-	rgba := multimodal.ToRGBA(img)
-	if maxDim > 0 {
-		rgba = multimodal.ResizeToFit(rgba, maxDim, maxDim)
-	}
-	return rgba, nil
 }
 
 // downloadVideoToTemp 下载 HTTP 视频到临时文件。
@@ -506,10 +453,4 @@ func clampf(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
-}
-
-// formatSeconds 秒 → "HH:MM:SS" 时间刻度字符串。
-func formatSeconds(t float64) string {
-	d := time.Duration(t * float64(time.Second))
-	return fmt.Sprintf("%02d:%02d:%02d", int(d.Hours()), int(d.Minutes())%60, int(d.Seconds())%60)
 }

@@ -20,6 +20,9 @@ export interface ScheduleItem {
  */
 export const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
 
+/** 计划到期后的最大容忍时长（毫秒）：超时超过该时长的计划直接放弃，视为已完成（once 删除 / daily 标记今日已完成） */
+export const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
+
 /** 预设每日任务：每天按「早/中/晚」节奏安排的定时关怀 */
 export const PRESET_DAILY_TASKS: ScheduleItem[] = [
 	{ id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },

@@ -5,10 +5,11 @@ import { processUnreadFiles } from './roles/reader';
 import { checkDueItems } from '../tool/schedule';
 import { SCHEDULE_TRIGGER_PREFIX } from '../tool/schedule-defs';
 import { parseContent } from '../file/parse/interface';
-import { descriptionRole, painterRole, musicianRole, dialogueRole, perceiverRole, actorRole, memorizerRole, randomDefaultMessage } from './roles/roles';
+import { descriptionRole, painterRole, musicianRole, dialogueRole, perceiverRole, memorizerRole, randomDefaultMessage } from './roles/roles';
 import { syncLTPXRemoteStatus } from './capabilities/ltpx';
 import { interactEvent } from './capabilities/ltp-event';
-import { queryEmotionSticker, extractTextFromMessage } from './capabilities/memory';
+import { queryEmotionSticker, extractTextFromMessage, syncActionsToMemory, queryBestAction } from './capabilities/memory';
+import { RandomFloat } from '../tool/math';
 import { processDecrees } from './decrees';
 
 /** 创建聊天消息 */
@@ -24,17 +25,47 @@ async function createChatMessage(): Promise<string> {
 /** 已完成应答计数（用于周期性显存守卫） */
 let completedResponseCount = 0;
 
+/** ASR 卸载标记：本轮消息含语音时重置，无语音的轮次发起卸载后置位，避免重复请求路由服务器 */
+let asrUnloaded = false;
+
+/** ASR 卸载守卫：检查本轮是否有语音消息（包含音频文件或 URL），无语音的轮次发起卸载后置位，避免重复请求路由服务器 */
+function guardASRUnload(): void {
+    // 检查本轮是否有语音消息（包含音频文件或 URL）
+    asrUnloaded = GlobalConfig.unreadContext.some(
+        message => {
+            const items = Array.isArray(message.content) ? message.content : [];
+            return items.some(item => item.type === 'input_audio' || item.type === 'audio_url');
+        }
+    );
+    // 如果有语音消息，或当前轮次无消息，不卸载模型
+    if (asrUnloaded || GlobalConfig.unreadContext.length === 0) return;
+    /** 发起卸载请求，由 Go 层处理模型卸载（如模型未加载则静默跳过） */
+    const [_, error] = syncFetch(
+        {
+            url: url()[0] + '/vram/unload',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: GlobalConfig.AsrName }),
+            },
+        }
+    );
+    // 卸载失败静默跳过，不影响思考链流程
+    if (error) console.error('ASR 卸载执行失败:', error.message);
+}
+
 /** 周期性显存守卫：每完成 N 次应答检查一次可用显存，不足时卸载本地模型，释放随上下文增长的 KV 缓存占用（下次应答会自动重载模型） */
 function guardChatVRAM(): void {
     /** 守卫开关（默认开启） */
-    const enabled = GlobalConfig.customConfig?.server?.chat_vram_guard ?? true;
+    const enabled = GlobalConfig.customConfig?.chat?.chat_vram_guard ?? true;
     if (!enabled) return;
     /** 检查间隔：每完成 N 次应答触发一次（默认 16） */
-    const interval = GlobalConfig.customConfig?.server?.chat_vram_guard_interval ?? 16;
+    const interval = GlobalConfig.customConfig?.chat?.chat_vram_guard_interval ?? 16;
     // 非法间隔视为关闭守卫
     if (!Number.isFinite(interval) || interval <= 0) return;
     /** 可用显存阈值（MiB，默认 1024） */
-    const thresholdMiB = GlobalConfig.customConfig?.server?.chat_vram_guard_mib ?? 1024;
+    const thresholdMiB = GlobalConfig.customConfig?.chat?.chat_vram_guard_mib ?? 1024;
     // 应答计数，未达到间隔时跳过
     completedResponseCount++;
     if (completedResponseCount % interval !== 0) return;
@@ -69,10 +100,7 @@ function updatePreviousMemories(): void {
     // 消息缓冲池非空时，触发记忆者智能体：将缓冲消息逐个写入记忆库后清空
     if (GlobalConfig.unreadRecords.length >= 1) memorizerRole.persistUnreadRecords();
     /** 提取未读消息中的用户消息文本（作为记忆库查询条件） */
-    const userMessages = GlobalConfig.unreadContext
-        .filter(message => message.role === 'user')
-        .map(message => extractTextFromMessage(message).trim())
-        .filter(text => text.length > 0);
+    const userMessages = GlobalConfig.unreadContext.filter(message => message.role === 'user').map(message => extractTextFromMessage(message).trim()).filter(text => text.length > 0);
     /** 清理RAG消息并返回 */
     const clear = () => { dialogueRole.ragMessages = []; };
     // 如果没有用户消息，清理RAG消息并返回
@@ -87,6 +115,45 @@ function updatePreviousMemories(): void {
     dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
 }
 
+/** 默认后备动作列表（引擎未就绪时使用） */
+const FALLBACK_ACTIONS: string[] = ['荡秋千', '翻花绳'];
+
+/** 从前端渲染引擎获取当前可用动作名称列表 */
+function getAvailableActionNames(): string[] {
+    try {
+        const raw = getAvailableActions();
+        if (!raw || raw === '{}') return FALLBACK_ACTIONS;
+        const parsed: { actions?: Array<{ name: string }> } = JSON.parse(raw);
+        if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+            return parsed.actions.map(item => item.name);
+        }
+    }
+    catch {
+        // 解析失败，使用后备列表
+    }
+    return FALLBACK_ACTIONS;
+}
+
+/** 执行匹配到的动作 */
+async function performMatchedAction(query: string): Promise<void> {
+    /** 获取当前可用动作名称列表 */
+    const actionNames = getAvailableActionNames();
+    // 判定动作组是否存入记忆库
+    if (!syncActionsToMemory(actionNames)) return;
+    /** 文本与动作库执行一次匹配，取最高匹配度结果 */
+    const bestAction = queryBestAction(query);
+    // 如果没有匹配到动作，直接返回
+    if (!bestAction) return;
+    /** 获取当前代理位置 */
+    const pos = getAgentPosition();
+    // 随机移动代理位置，避免重复执行相同动作
+    sendToEngine('movement', JSON.stringify({ position: { x: pos.x + RandomFloat(-0.5, 0.5), y: pos.y, z: pos.z + RandomFloat(-0.5, 0.5), }, resumeTracking: true, }));
+    // 执行匹配到的动作
+    sendToEngine('action', JSON.stringify({ action: bestAction }));
+    // 行动摘要推送到前端「行动」标签
+    pushContext('action', `月华${bestAction}了`, '');
+}
+
 /** 思考循环事件 */
 export async function thoughtLoopTickEvent(): Promise<void> {
     // 如果正在思考中，直接返回
@@ -97,6 +164,8 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         GlobalConfig.reasoningInProgress = true;
         // 拉取外部消息
         pullContext().forEach(message => writeMessage(message.role, message.content))
+        // ASR 资源守卫：本轮待处理消息不含语音时卸载 ASR 模型（拉取后判定，保证刚到达的语音不被误卸）
+        guardASRUnload();
         /** 消息长度（统一时序队列：文本与媒体URL混排，一个队列即为全部未读） */
         const messageLength = GlobalConfig.unreadContext.length;
         // 如果消息长度为0，跳过当前循环
@@ -144,13 +213,13 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         const validMessage = textChunks.map(chunk => chunk.display).join('\n').trim();
         // 如果正文切片为空，抛出异常
         if (!validMessage.length) throw new Error('清洗后的文本为空');
-        // 如果解析出行动区内容，分别交给行动者推理动作、记忆库匹配表情包
+        // 如果解析出行动区内容：动作组入库 → 文本与动作库匹配 → 执行最高匹配度动作（附带小幅随机位移）
         if (actionBlocks.length) {
-            // 事件 -> 做出行动前：推送行动块，插件可经 return.actions 改写后再交给行动者
+            // 事件 -> 做出行动前：推送行动块，插件可经 return.actions 改写匹配参考文本
             const feedback: { actions?: string[] } = interactEvent('take_action_before', { actions: actionBlocks }).return;
             const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
-            // 调用行动者推理动作
-            await actorRole.createCreativeWork(actBlocks.join('|'));
+            // 以行动区内容为匹配参考文本（为空时回退正文），与动作库匹配后执行最高匹配度动作
+            await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
             // 从记忆库匹配表情包并推送图片数据
             pushImage([await queryEmotionSticker(validMessage)], true);
         }
@@ -222,7 +291,6 @@ function resetAgentState(): void {
     painterRole.coverContext([]);
     musicianRole.coverContext([]);
     perceiverRole.coverContext([]);
-    actorRole.coverContext([]);
     memorizerRole.coverContext([]);
     // 清空主智能体的统一未读队列
     GlobalConfig.unreadContext = [];

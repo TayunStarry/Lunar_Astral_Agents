@@ -8,6 +8,24 @@ export interface MediaSegment {
 	end: number;
 }
 
+/** 序列帧模式的单帧（图片序列帧解读模式，无需服务端解码视频） */
+export interface MediaFrame {
+	/** 帧图片的完整 data URI（data:image/jpeg;base64,...），可直接作为 image_url 提交 */
+	image: string;
+	/** 帧在源视频中的时间点（秒） */
+	time: number;
+}
+
+/** 序列帧模式的时间分组，与 MediaSegment 同构 */
+export interface MediaFrameGroup {
+	/** 分组起始时间（秒） */
+	start: number;
+	/** 分组结束时间（秒） */
+	end: number;
+	/** 该时间分组内的采样帧（按时间顺序） */
+	frames: MediaFrame[];
+}
+
 /** 缩放图片结果接口（单帧） */
 export interface ResizeImageResult {
 	/** 缩放后的图片数据 */

@@ -61,3 +61,32 @@ func VRAMGuardHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
+// VRAMUnloadHandler 定向卸载端点：卸载路由服务器上指定 ID 的已加载模型，释放其显存/资源占用。
+// 典型场景：思维链运行时未读消息中不含语音消息，卸载 ASR 模型（下次语音到达时按需自动重载）。
+//
+// 请求体：{"model": "system-asr"}
+// 响应：{"model": "system-asr", "unloaded": true}（unloaded=false 表示模型本就未加载或不存在）
+func VRAMUnloadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "VRAM卸载 → 不允许的请求方法", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Model == "" {
+		http.Error(w, "VRAM卸载 → 请求体需提供 model 字段", http.StatusBadRequest)
+		return
+	}
+
+	unloaded, err := UnloadModelByID(req.Model)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("VRAM卸载 → 卸载模型失败: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"model": req.Model, "unloaded": unloaded})
+}

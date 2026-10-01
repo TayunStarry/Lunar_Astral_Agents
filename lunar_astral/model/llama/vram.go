@@ -76,6 +76,28 @@ func EnsureDiffusionVRAM() (int, error) {
 	return freeMiB, nil
 }
 
+// UnloadModelByID 卸载路由服务器上指定 ID 的已加载模型，返回是否实际执行了卸载。
+// 模型未加载 / 正在加载 / 不存在时不做任何操作；卸载后的模型在下次被使用时按需自动重新加载。
+// 与 unloadLoadedGPUModels 的全量卸载不同，本函数为定向卸载：不跳过纯 CPU 模型
+// （如 ASR 的音频编码器 mmproj 不受 n-gpu-layers 控制仍可能占用显存）。
+func UnloadModelByID(modelID string) (bool, error) {
+	models, err := fetchRouterModels(*GeneralConfig.ModelPort)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range models {
+		if m.ID != modelID || m.Status.Value != "loaded" {
+			continue
+		}
+		if err := unloadRouterModel(*GeneralConfig.ModelPort, modelID); err != nil {
+			return false, err
+		}
+		LoggerGeneral.Info("LlamaProxy", "已定向卸载模型[%s]释放资源", modelID)
+		return true, nil
+	}
+	return false, nil
+}
+
 // unloadLoadedGPUModels 卸载路由服务器上已加载且占用显存的模型，返回成功卸载的模型 ID 列表
 func unloadLoadedGPUModels(port int) ([]string, error) {
 	models, err := fetchRouterModels(port)

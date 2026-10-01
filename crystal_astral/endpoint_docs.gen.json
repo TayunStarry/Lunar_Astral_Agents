@@ -586,8 +586,8 @@
     },
     "/ltpx/call": {
       "post": {
-        "summary": "月华调用琉璃工具（转发到前端对应包执行）",
-        "description": "月华调用琉璃工具（转发到前端对应包执行）",
+        "summary": "月华调用琉璃工具（异步受理，立即返回 request_id）",
+        "description": "月华调用琉璃工具（异步受理，立即返回 request_id）",
         "operationId": "ltpRemoteCallHandler",
         "x-handler": "ltpRemoteCallHandler",
         "responses": {
@@ -616,6 +616,19 @@
         "description": "月华探测琉璃是否在线",
         "operationId": "ltpRemotePingHandler",
         "x-handler": "ltpRemotePingHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/poll": {
+      "get": {
+        "summary": "月华心跳轮询工具执行状态（每次成功轮询即一次心跳）",
+        "description": "月华心跳轮询工具执行状态（每次成功轮询即一次心跳）",
+        "operationId": "ltpRemotePollHandler",
+        "x-handler": "ltpRemotePollHandler",
         "responses": {
           "200": {
             "description": "成功"

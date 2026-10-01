@@ -1,39 +1,24 @@
 {
 	"models": {
-		"asr_model": "./local_data/models/Qwen3-ASR-0.6B",
-		"diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
-		"variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
-		"prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+		"-diffusion_model": "./local_data/models/z_image_turbo/z-image-turbo-Q4_K_M-UD.gguf",
+		"-variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
+		"-prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+		"-real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth",
+		"-prompt_mmproj_model": "",
+
+		"diffusion_model": "./local_data/models/Qwen-image-2.1/qwen-image-2.1-Q4_K_M.gguf",
+		"variational_model": "./local_data/models/Qwen-image-2.1/qwen_image_2.1_vae_bf16.safetensors",
+		"prompt_analysis_model": "./local_data/models/Qwen-image-2.1/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
+		"prompt_mmproj_model": "./local_data/models/Qwen-image-2.1/mmproj-Qwen3-VL-8B-Instruct-F16.gguf",
 		"real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth"
 	},
 	"server": {
-		"user_name": "钛宇星光阁",
 		"developer": true,
-		"allow_diffusion": true,
-		"image_vram_guard": true,
-		"image_vram_guard_mib": 8192,
-		"sd_offload_to_cpu": "always",
-		"sd_te_on_cpu": true,
-		"chat_vram_guard": true,
-		"chat_vram_guard_mib": 1024,
-		"chat_vram_guard_interval": 16,
-		"bridging_type": "napcat",
-		"bridging_path": "ws://localhost:4567",
-		"bridging_token": "ItlC2Nc1DfICVYq5",
-		"bridging_users": [
-			1965304849,
-			1628993759,
-			3970426755,
-			262221051,
-			906314036,
-			710834920
-		],
-		"bridging_group_trigger_probability": 0.2,
-		"bridging_group_keywords": [
-			"月华"
-		]
+		"allow_lan": false,
+		"insecure_tls": false
 	},
 	"agent": {
+		"user_name": "钛宇星光阁",
 		"embedding_model": "system-embedding",
 		"embedding_url": "http://127.0.0.1:36789/v1",
 		"embedding_key": null,
@@ -48,6 +33,48 @@
 		"multimodal_model": "system-multimodal",
 		"multimodal_url": "http://127.0.0.1:36789/v1",
 		"multimodal_key": null
+	},
+	"chat": {
+		"chat_vram_guard": true,
+		"chat_vram_guard_mib": 1024,
+		"chat_vram_guard_interval": 16
+	},
+	"diffusion": {
+		"allow_diffusion": true,
+		"image_vram_guard": true,
+		"image_vram_guard_mib": 8192,
+		"sd_offload_to_cpu": "always",
+		"sd_te_on_cpu": true,
+		"sd_vae_tiling": "off",
+		"sd_vae_tile_size": "",
+		"sd_vae_tile_overlap": 0,
+		"sd_max_vram": "",
+		"sd_sampler": "auto",
+		"sd_scheduler": "auto",
+		"sd_flow_shift": 0,
+		"sd_diffusion_fa": true,
+		"sd_steps": 40,
+		"sd_image_size": 1024
+	},
+	"bridging": {
+		"bridging_type": "napcat",
+		"bridging_path": "ws://localhost:4567",
+		"bridging_token": "ItlC2Nc1DfICVYq5",
+		"bridging_users": [
+			1965304849,
+			1628993759,
+			3970426755,
+			262221051,
+			906314036,
+			710834920
+		],
+		"bridging_group_keywords": [
+			"月华"
+		],
+		"bridging_group_trigger_probability": 0.2
+	},
+	"multimodal": {
+		"video_input": "file"
 	},
 	"web_search": {
 		"save_screenshots": false,

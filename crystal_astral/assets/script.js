@@ -2040,6 +2040,7 @@ const moduleZipInput = document.getElementById('moduleZipInput');
 const moduleIdInput = document.getElementById('moduleIdInput');
 const moduleTitleInput = document.getElementById('moduleTitleInput');
 const moduleDescInput = document.getElementById('moduleDescInput');
+const moduleToolNameInput = document.getElementById('moduleToolNameInput');
 const moduleMiniLtp = document.getElementById('moduleMiniLtp');
 const moduleAiGenBtn = document.getElementById('moduleAiGenBtn');
 const iconStickerQuery = document.getElementById('iconStickerQuery');
@@ -2149,11 +2150,18 @@ async function aiGenerateModuleInfo() {
         const project = await inspectModuleProject();
         const projectText = buildInspectPrompt(project);
         const modelName = configData?.cloud?.multimodal_model_name || 'system-multimodal';
-        const prompt = '请根据以下 HTML 项目信息，生成合理的模块元信息。只返回 JSON，不要任何额外文字、解释或 markdown 代码块标记。\n'
-            + '【项目信息】\n' + (projectText || (url || zipName))
-            + '\n\n【要求】JSON 格式：{"id": "deepseek.xxx", "title": "简洁中文标题", "description": "一句话准确描述项目核心功能（依据 README 与页面标题）", "tool_name": "英文小写下划线单词，描述这个工具是什么（不是应用名称）"}。'
-            + '\nid 只允许小写字母、数字、点和短横线，以 deepseek. 开头；title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造；'
-            + '\ntool_name 必须用最准确的词语形容这个工具的类型与用途（如飞行模拟器→fpv_flight_simulator、音乐编辑器→lofi_music_editor、文件管理器→file_manager、天气查询→weather_news_query），只允许小写字母、数字和下划线，禁止使用应用的中文名或品牌名。';
+        // 元信息提示词：id 前缀不硬编码任何厂商（后端在 id 为空时自动生成 module.<包名>），
+        // 命名空间按项目自身来源推导，避免所有导入项目都套用同一家的前缀
+        const prompt = [
+            '请根据以下 HTML 项目信息，生成合理的模块元信息。只返回 JSON，不要任何额外文字、解释或 markdown 代码块标记。',
+            '【项目信息】',
+            projectText || (url || zipName),
+            '',
+            '【要求】JSON 格式：{"id": "lunar.lofi-studio", "title": "简洁中文标题", "description": "一句话准确描述项目核心功能（依据 README 与页面标题）", "tool_name": "英文小写下划线单词，描述这个工具是什么（不是应用名称）"}。',
+            'id 只允许小写字母、数字、点和短横线，命名空间取自项目自身名称或来源域名（如 Lofi Studio → lunar.lofi-studio），不要固定套用某个厂商前缀；无法判断时可省略 id 字段，交由系统自动生成；',
+            'title 要精炼准确（可用原英文名做副标题，如「中文名 · English Name」）；description 必须基于给出的项目内容概括，不要臆造；',
+            'tool_name 必须用最准确的词语形容这个工具的类型与用途（如飞行模拟器→fpv_flight_simulator、音乐编辑器→lofi_music_editor、文件管理器→file_manager、天气查询→weather_news_query），只允许小写字母、数字和下划线，禁止使用应用的中文名或品牌名。'
+        ].join('\n');
         const response = await fetch('/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

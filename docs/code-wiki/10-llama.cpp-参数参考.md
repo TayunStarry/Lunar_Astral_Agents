@@ -241,7 +241,7 @@
 | `--props` | 启用通过 POST /props 更改全局属性（默认：禁用）<br>环境变量：`LLAMA_ARG_ENDPOINT_PROPS` |
 | `--slots`, `--no-slots` | 暴露插槽监控端点（默认：启用）<br>环境变量：`LLAMA_ARG_ENDPOINT_SLOTS` |
 | `--slot-save-path PATH` | 保存插槽 KV 缓存的路径（默认：禁用） |
-| `--media-path PATH` | 用于加载本地媒体文件的目录；文件可以使用 file:// URL 通过相对路径访问（默认：禁用） |
+| `--media-path PATH` | 用于加载本地媒体文件的目录；文件可以使用 file:// URL 通过相对路径访问（默认：禁用）。<br>注：`lunar_config.json` 的 `multimodal.video_input` 设为 `frames` 时，视频/动态图改在本地抽帧后以 base64 图片提交，本项不参与该链路 |
 | `--video-fps N` | 视频抽帧的目标帧率（默认：4.0）<br>环境变量：`LLAMA_ARG_VIDEO_FPS` |
 | `--video-timestamp-interval N` | 视频文本时间戳的间隔，单位毫秒（默认：5000）<br>环境变量：`LLAMA_ARG_VIDEO_TIMESTAMP_INTERVAL` |
 | `--video-ffmpeg-dir DIR` | ffmpeg 与 ffprobe 可执行文件所在目录（默认：搜索 PATH）<br>环境变量：`LLAMA_ARG_VIDEO_FFMPEG_DIR` |

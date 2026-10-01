@@ -50,13 +50,13 @@ function setupVoiceToggle() {
 }
 
 // ---------- 后端用户名（QQ 适配器同款标注，仅用于发送给月华，前端展示不使用） ----------
-// 从 lunar_config.json 的 server.user_name 读取；未定义或为空时默认「子幽」
+// 从 lunar_config.json 的 agent.user_name 读取；未定义或为空时默认「子幽」
 async function loadBackendUserName() {
     try {
         const res = await fetch('/file/read/lunar_config.json');
         if (!res.ok) return;
         const config = await res.json();
-        const name = config && config.server ? config.server.user_name : null;
+        const name = config && config.agent ? config.agent.user_name : null;
         if (typeof name === 'string' && name.trim()) {
             backendUserName = name.trim();
         }

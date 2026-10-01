@@ -71,6 +71,7 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/v1/", Handler: llama.ProxyHandler, Method: "ANY", Description: "llama.cpp 代理接口"},
 	// ==== 显存守卫 ====
 	{Path: "/vram/guard", Handler: llama.VRAMGuardHandler, Method: "POST", Description: "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存；请求体可选 threshold_mib）"},
+	{Path: "/vram/unload", Handler: llama.VRAMUnloadHandler, Method: "POST", Description: "定向卸载（卸载指定 ID 的已加载模型，请求体 {model: \"system-asr\"}；模型未加载时静默成功）"},
 	// ==== 代理请求接口 ====
 	{Path: "/proxy", Handler: handlers.ProxyHandler, Method: "POST", Description: "代理访问服务"},
 	// ==== 消息队列相关接口（统一时序队列唯一写入口：视频/音频URL以 MediaUrlContent 内容项放入 messages） ====

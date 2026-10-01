@@ -53,11 +53,16 @@ var ltpToolPackageMap = map[string]string{}
 // ltpPendingMutex 保护待定调用注册表的并发读写
 var ltpPendingMutex sync.Mutex
 
-// ltpPendingCalls 待定调用注册表：request_id → 结果通道（前端包执行完毕回执后解除阻塞）
-var ltpPendingCalls = map[string]chan LTPXRemoteCallResponse{}
+// ltpPendingCalls 待定调用注册表：request_id → 待定调用条目
+// 月华经 /ltpx/poll 心跳轮询执行状态，回执/内置智能体完成后写入结果通道
+var ltpPendingCalls = map[string]*ltpPendingCall{}
 
 // ltpCallTimeout 等待前端包执行工具结果的最大时长
 const ltpCallTimeout = 120 * time.Second
+
+// ltpPendingMaxAge 待定调用最长保留时长：超时后由轮询端点判定失败并清理，
+// 防止月华从不轮询或前端永不回执时注册表泄漏
+const ltpPendingMaxAge = 30 * time.Minute
 
 //==== 音频辅助 ====
 
@@ -115,7 +120,8 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==== LTPX 远程（月华调用琉璃）接口 ====
 	{Path: "/ltpx/ping", Handler: ltpRemotePingHandler, Method: "GET", Description: "月华探测琉璃是否在线"},
 	{Path: "/ltpx/tools", Handler: ltpRemoteToolsHandler, Method: "GET", Description: "月华拉取琉璃工具链（动态扫描包 AtoA 能力）"},
-	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（转发到前端对应包执行）"},
+	{Path: "/ltpx/call", Handler: ltpRemoteCallHandler, Method: "POST", Description: "月华调用琉璃工具（异步受理，立即返回 request_id）"},
+	{Path: "/ltpx/poll", Handler: ltpRemotePollHandler, Method: "GET", Description: "月华心跳轮询工具执行状态（每次成功轮询即一次心跳）"},
 	{Path: "/ltpx/result", Handler: ltpRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
 	{Path: "/ltpx/event", Handler: ltpRemoteEventHandler, Method: "POST", Description: "月华事件推送（xx事件发生前负载经 LTP9 插件处理，返回处理/原始数据）"},
 	{Path: "/mini-ltp-agent.js", Handler: miniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（前端动态注入 Mini-LTP 包）"},

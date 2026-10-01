@@ -49,4 +49,8 @@ export class GlobalConfig {
 	public static get debugMode(): boolean {
 		return GlobalConfig.customConfig?.server?.developer ?? false;
 	};
+	/** 获取 视频解读输入模式（multimodal.video_input，默认 file） */
+	public static get VideoInputMode(): string {
+		return GlobalConfig.customConfig?.multimodal?.video_input === 'frames' ? 'frames' : 'file';
+	};
 };

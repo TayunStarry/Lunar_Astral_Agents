@@ -419,6 +419,19 @@
         }
       }
     },
+    "/vram/unload": {
+      "post": {
+        "summary": "定向卸载（卸载指定 ID 的已加载模型，请求体 {model: \"system-asr\"}；模型未加载时静默成功）",
+        "description": "定向卸载（卸载指定 ID 的已加载模型，请求体 {model: \"system-asr\"}；模型未加载时静默成功）",
+        "operationId": "llama.VRAMUnloadHandler",
+        "x-handler": "llama.VRAMUnloadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/write/engine": {
       "post": {
         "summary": "引擎系统消息（动画列表/遥测等）",

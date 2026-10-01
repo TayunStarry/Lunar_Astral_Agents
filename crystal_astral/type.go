@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httputil"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -153,6 +154,17 @@ type LTPXRemoteCallResponse struct {
 	Success bool   `json:"success"`
 	Text    string `json:"text"` // 操作结果文本（含推荐后续操作）
 	Error   string `json:"error,omitempty"`
+	// Pending 异步受理标记：琉璃接受调用后立即返回 pending=true + request_id，
+	// 结果由月华经 /ltpx/poll 心跳轮询取回（覆盖长时间运行的联网搜索等任务）
+	Pending   bool   `json:"pending,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+}
+
+// ltpPendingCall 待定调用条目：结果通道 + 元信息（供 /ltpx/poll 判定执行状态与超时清理）
+type ltpPendingCall struct {
+	done      chan LTPXRemoteCallResponse // 结果通道（容量 1，回执/内置智能体完成后写入）
+	toolName  string                      // 目标工具名（日志用）
+	startedAt time.Time                   // 受理时间（超过最长执行时限时由轮询端点清理）
 }
 
 // LTPXResultRequest 前端包执行完毕后向琉璃回执结果的请求体

@@ -37,6 +37,10 @@ var agentSystem = (function (exports) {
             return GlobalConfig.customConfig?.server?.developer ?? false;
         }
         ;
+        static get VideoInputMode() {
+            return GlobalConfig.customConfig?.multimodal?.video_input === 'frames' ? 'frames' : 'file';
+        }
+        ;
     }
 
     class ModelBuilder {
@@ -208,11 +212,25 @@ var agentSystem = (function (exports) {
     }
     const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
     const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
+    function useFrameSequence() {
+        return GlobalConfig.VideoInputMode === 'frames';
+    }
     async function understandVideo(videoUrl) {
         const cachedPrompt = getPromptFromKnowledge(videoUrl);
         if (cachedPrompt) {
             console.log('[感知者] 命中视频缓存，直接返回');
             return cachedPrompt;
+        }
+        if (useFrameSequence()) {
+            console.log('[感知者] 开始将视频抽取为图片序列帧...');
+            const [groups, framesError] = videoFrames(videoUrl);
+            if (!groups || groups.length === 0 || framesError) {
+                console.error('[感知者] 视频抽帧失败:', framesError);
+                throw new Error('视频抽帧失败');
+            }
+            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+            console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), videoUrl);
         }
         console.log('[感知者] 开始将视频写入媒体目录...');
         const [segments, mediaError] = videoMedia(videoUrl);
@@ -222,11 +240,11 @@ var agentSystem = (function (exports) {
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
         console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(mediaUrls, videoUrl);
+        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), videoUrl);
     }
-    async function understandMediaSegments(mediaUrls, cacheKey) {
+    async function understandMediaSegments(watch, cacheKey) {
         console.log('[感知者] 开始观看...');
-        const videoSummary = await mediaRoles.perceiverRole.watchVideo(mediaUrls);
+        const videoSummary = await watch();
         console.log('[感知者] 观看完成');
         if (videoSummary && videoSummary.trim().length > 0 && cacheKey) {
             savePromptToKnowledge(cacheKey, videoSummary);
@@ -241,6 +259,16 @@ var agentSystem = (function (exports) {
             return cachedPrompt;
         }
         console.log('[感知者] 检测到动态图，开始编码为视频...');
+        if (useFrameSequence()) {
+            const [groups, framesError] = animatedImageToFrames(imageSource);
+            if (!groups || groups.length === 0 || framesError) {
+                console.error('[感知者] 动态图抽帧失败:', framesError);
+                throw new Error('动态图抽帧失败');
+            }
+            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+            console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), cacheKey);
+        }
         const [segments, mediaError] = animatedImageToVideo(imageSource);
         if (!segments || segments.length === 0 || mediaError) {
             console.error('[感知者] 动态图转视频失败:', mediaError);
@@ -248,7 +276,7 @@ var agentSystem = (function (exports) {
         }
         const mediaUrls = segments.map(segment => `file://${segment.file}`);
         console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
-        return understandMediaSegments(mediaUrls, cacheKey);
+        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), cacheKey);
     }
     async function LiteImageFile() {
         for (let message of GlobalConfig.unreadContext) {
@@ -896,173 +924,6 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
-    class ActorRole extends CreativeRoleBase {
-        MAX_ITERATIONS = 5;
-        constructor() {
-            super(fileView('prompts/actorRole.md')[0]);
-        }
-        get roleName() { return '行动者'; }
-        getAvailableActionNames() {
-            try {
-                const raw = getAvailableActions();
-                if (!raw || raw === '{}')
-                    return FALLBACK_ACTIONS;
-                const parsed = JSON.parse(raw);
-                if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
-                    return parsed.actions.map(a => a.name);
-                }
-            }
-            catch {
-            }
-            return FALLBACK_ACTIONS;
-        }
-        getToolDefinitions() {
-            const actionNames = this.getAvailableActionNames();
-            return [
-                {
-                    type: "function",
-                    function: {
-                        name: "play_action",
-                        description: "让月华执行预设动作。可用动作：" + actionNames.join('、') + "。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                action_name: {
-                                    type: "string",
-                                    description: "动作名称",
-                                    enum: actionNames
-                                }
-                            },
-                            required: ["action_name"]
-                        }
-                    }
-                },
-                {
-                    type: "function",
-                    function: {
-                        name: "agent_movement",
-                        description: "控制月华移动到指定3D坐标位置。移动期间会自动关闭鼠标追踪。",
-                        parameters: {
-                            type: "object",
-                            properties: {
-                                x: { type: "number", description: "目标X坐标" },
-                                y: { type: "number", description: "目标Y坐标（地面为0）" },
-                                z: { type: "number", description: "目标Z坐标" },
-                                resume_tracking: {
-                                    type: "boolean",
-                                    description: "移动结束后是否恢复鼠标追踪，默认为 true"
-                                }
-                            },
-                            required: ["x", "y", "z"]
-                        }
-                    }
-                },
-                {
-                    type: "function",
-                    function: {
-                        name: "query_agent_position",
-                        description: "查询月华当前在3D场景中的位置坐标。返回{x, y, z}格式坐标。",
-                        parameters: {
-                            type: "object",
-                            properties: {},
-                            required: []
-                        }
-                    }
-                }
-            ];
-        }
-        executeTool(toolCall) {
-            const funcName = toolCall.function.name;
-            let args = {};
-            try {
-                args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-            }
-            catch (parseError) {
-                console.error(`[行动者] 工具调用参数解析失败:`, toolCall.function.arguments);
-                return `工具调用参数解析失败: ${parseError}`;
-            }
-            switch (funcName) {
-                case 'play_action': return this.handlePlayAction(args);
-                case 'agent_movement': return this.handleAgentMovement(args);
-                case 'query_agent_position': return this.handleQueryAgentPosition();
-                default: return `未知工具: ${funcName}`;
-            }
-        }
-        collectDetail(toolCall, details) {
-            try {
-                const args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-                const detail = { toolName: toolCall.function.name };
-                if (toolCall.function.name === 'play_action') {
-                    detail.actionName = args.action_name || '';
-                }
-                else if (toolCall.function.name === 'agent_movement') {
-                    detail.targetPos = `(${args.x}, ${args.y}, ${args.z})`;
-                }
-                details.push(detail);
-            }
-            catch {
-            }
-        }
-        buildSummary(details) {
-            if (details.length === 0)
-                return '月华没有执行任何行动';
-            const parts = [];
-            for (const d of details) {
-                if (d.toolName === 'query_agent_position')
-                    continue;
-                if (d.toolName === 'play_action' && d.actionName) {
-                    parts.push(`月华${d.actionName}了`);
-                }
-                else if (d.toolName === 'agent_movement' && d.targetPos) {
-                    parts.push(`月华移动到了${d.targetPos}`);
-                }
-            }
-            if (parts.length === 0)
-                return '月华完成了行动任务';
-            const summary = parts.join('，') + '。';
-            pushContext('action', summary, '');
-            return summary;
-        }
-        handlePlayAction(args) {
-            const actionName = args.action_name || '';
-            if (!actionName)
-                return '执行动作失败：动作名称不能为空';
-            const allowed = this.getAvailableActionNames();
-            if (!allowed.includes(actionName)) {
-                return `执行动作失败：不支持的动作 "${actionName}"，可用动作为：${allowed.join('、')}`;
-            }
-            sendToEngine('action', JSON.stringify({ action: actionName }));
-            console.log(`[行动者] 执行动作: ${actionName}`);
-            return `已执行动作：${actionName}`;
-        }
-        handleAgentMovement(args) {
-            const x = Number(args.x);
-            const y = Number(args.y);
-            const z = Number(args.z);
-            const resumeTracking = args.resume_tracking !== false;
-            if (isNaN(x) || isNaN(y) || isNaN(z)) {
-                return '移动失败：坐标参数 x、y、z 必须为有效数字';
-            }
-            sendToEngine('movement', JSON.stringify({
-                position: { x, y, z },
-                resumeTracking
-            }));
-            console.log(`[行动者] 移动到 (${x}, ${y}, ${z})，恢复追踪: ${resumeTracking}`);
-            return `已移动到 (${x}, ${y}, ${z})`;
-        }
-        handleQueryAgentPosition() {
-            const pos = getAgentPosition();
-            const result = `当前位置: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`;
-            console.log(`[行动者] ${result}`);
-            return result;
-        }
-    }
-
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         async generateDialogue(cache) {
@@ -1256,6 +1117,39 @@ var agentSystem = (function (exports) {
                     console.log(`[感知者] 第 ${index + 1} 段理解完成`);
                 }
             }
+            return this.finalizeUnderstandings(understandings);
+        }
+        async watchFrames(groups) {
+            if (groups.length === 0) {
+                console.warn('[感知者] 未收到任何采样帧分组');
+                return '';
+            }
+            const watched = this.sampleSegments(groups);
+            if (watched.length < groups.length) {
+                console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
+            }
+            console.log(`[感知者] 开始观看视频采样帧，共 ${watched.length} 个分组`);
+            const understandings = [];
+            for (let index = 0; index < watched.length; index++) {
+                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
+                const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length);
+                if (understanding.trim().length > 0) {
+                    understandings.push(understanding);
+                    console.log(`[感知者] 第 ${index + 1} 组理解完成`);
+                }
+            }
+            return this.finalizeUnderstandings(understandings);
+        }
+        sampleSegments(items) {
+            if (items.length <= this.MAX_SEGMENTS)
+                return items;
+            const picked = [];
+            for (let i = 0; i < this.MAX_SEGMENTS; i++) {
+                picked.push(items[Math.round(i * (items.length - 1) / (this.MAX_SEGMENTS - 1))]);
+            }
+            return [...new Set(picked)];
+        }
+        async finalizeUnderstandings(understandings) {
             if (understandings.length === 0) {
                 console.warn('[感知者] 未产生任何片段理解');
                 return '';
@@ -1273,15 +1167,6 @@ var agentSystem = (function (exports) {
             }
             console.warn(`[感知者] 客观摘要失败，退回拼接理解文本（硬切断至 ${this.SUMMARY_THRESHOLD} 字符）`);
             return concatenated.slice(0, this.SUMMARY_THRESHOLD);
-        }
-        sampleSegments(mediaUrls) {
-            if (mediaUrls.length <= this.MAX_SEGMENTS)
-                return mediaUrls;
-            const picked = [];
-            for (let i = 0; i < this.MAX_SEGMENTS; i++) {
-                picked.push(mediaUrls[Math.round(i * (mediaUrls.length - 1) / (this.MAX_SEGMENTS - 1))]);
-            }
-            return [...new Set(picked)];
         }
         async evaluateSegment(mediaUrl, index, total) {
             const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
@@ -1313,6 +1198,36 @@ var agentSystem = (function (exports) {
             }
             return '';
         }
+        async evaluateFrameGroup(group, index, total) {
+            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+            const prompt = `以下是同一段视频${position}按时间顺序抽取的采样帧序列，请按「片段理解任务」的格式输出这段视频的客观内容理解。`;
+            this.coverContext({
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    ...group.frames.map((frame) => ({ type: 'image_url', image_url: { url: frame.image } }))
+                ]
+            });
+            this.runtimeMessages = [];
+            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+                try {
+                    const response = this.run([], []);
+                    const content = response.body?.choices?.[0]?.message?.content || '';
+                    if (!content.trim()) {
+                        console.warn(`[感知者] 第 ${index} 组返回空内容`);
+                    }
+                    return content;
+                }
+                catch (error) {
+                    console.error(`[感知者] 第 ${index} 组第 ${attempt} 次推理失败:`, error);
+                    if (attempt < this.MAX_ATTEMPTS) {
+                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 组`);
+                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
+                    }
+                }
+            }
+            return '';
+        }
         async generateObjectiveSummary(concatenated) {
             const prompt = this.summaryTaskTemplate.replace('{content}', concatenated);
             this.coverContext({ role: 'user', content: prompt });
@@ -1329,6 +1244,7 @@ var agentSystem = (function (exports) {
     }
 
     const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
+    const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
     const PRESET_DAILY_TASKS = [
         { id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
         { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
@@ -1424,6 +1340,45 @@ var agentSystem = (function (exports) {
 
     const STICKER_COLLECTION = 'stickers';
     let stickerCollectionReady = false;
+    const ACTION_COLLECTION = 'actions';
+    let actionCollectionReady = false;
+    function syncActionsToMemory(actionNames) {
+        if (!actionNames || actionNames.length === 0)
+            return false;
+        try {
+            if (!actionCollectionReady) {
+                const [ready] = memoryInit(ACTION_COLLECTION);
+                if (!ready)
+                    return false;
+                actionCollectionReady = true;
+            }
+            for (const name of actionNames) {
+                const trimmed = (name || '').trim();
+                if (!trimmed)
+                    continue;
+                memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+            }
+            return true;
+        }
+        catch (error) {
+            console.error('[动作库] 动作组入库失败:', error);
+            return false;
+        }
+    }
+    function queryBestAction(text) {
+        if (!text || !text.trim())
+            return null;
+        try {
+            const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
+            if (error || !results || results.length === 0)
+                return null;
+            return results[0].content || null;
+        }
+        catch (error) {
+            console.error('[动作库] 匹配失败:', error);
+            return null;
+        }
+    }
     async function queryEmotionSticker(query) {
         if (!query || !query.trim())
             return null;
@@ -1582,7 +1537,6 @@ var agentSystem = (function (exports) {
     const memorizerRole = new MemorizerRole();
     const painterRole = new PainterRole();
     const musicianRole = new MusicianRole();
-    const actorRole = new ActorRole();
     const dialogueRole = new DialogueRole(descriptionRole);
     const perceiverRole = new PerceiverRole();
     registerMediaRoles({ perceiverRole, randomDefaultMessage });
@@ -1591,23 +1545,6 @@ var agentSystem = (function (exports) {
     }
 
     const agentControlTools = [
-        {
-            type: "function",
-            function: {
-                name: "dispatch_actor",
-                description: "向行动者子智能体发布行动任务。行动者负责控制月华在3D场景中的动画、位移和空间感知。只需用一句话描述你想让月华做什么，行动者会自行规划并执行具体操作。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        description: {
-                            type: "string",
-                            description: "行动需求描述，如'让月华去荡秋千'、'移动到坐标(1, 2, 3)'、'开始翻花绳'。描述越清晰，行动者执行越准确。"
-                        }
-                    },
-                    required: ["description"]
-                }
-            }
-        },
         {
             type: "function",
             function: {
@@ -1646,19 +1583,6 @@ var agentSystem = (function (exports) {
     function parseArgs$1(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
     }
-    async function handleDispatchActor(args) {
-        const { description } = parseArgs$1(args);
-        if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            return ['行动任务调度失败：任务描述不能为空，请提供具体的行动需求', ''];
-        }
-        if (!actorRole) {
-            return ['行动任务调度失败：行动者子智能体未就绪，请稍后重试', ''];
-        }
-        console.log(`[智能体控制] 调度行动者: ${description}`);
-        const result = await actorRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 行动者完成: ${result}`);
-        return [result, ''];
-    }
     async function handleDispatchPainter(args) {
         const { description } = parseArgs$1(args);
         if (!description || typeof description !== 'string' || description.trim().length === 0) {
@@ -1685,7 +1609,6 @@ var agentSystem = (function (exports) {
         console.log(`[智能体控制] 演奏者完成: ${result}`);
         return [result, ''];
     }
-    GlobalConfig.LTPfunction.set('dispatch_actor', handleDispatchActor);
     GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
     GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
     GlobalConfig.LTPdefinition.push(...agentControlTools);
@@ -1766,10 +1689,10 @@ var agentSystem = (function (exports) {
         const existingIds = new Set(raw.map(item => item.id));
         let added = 0;
         for (const preset of PRESET_DAILY_TASKS) {
-            if (!existingIds.has(preset.id)) {
-                raw.push({ ...preset });
-                added++;
-            }
+            if (existingIds.has(preset.id))
+                continue;
+            raw.push({ ...preset });
+            added++;
         }
         if (raw.length === 0) {
             saveSchedulesToDisk([]);
@@ -1797,7 +1720,12 @@ var agentSystem = (function (exports) {
         console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
     }
     function generateId() {
-        return `schedule_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        function execute(character) {
+            const randomValue = (Math.random() * 16) | 0;
+            const maskedRandomValue = character === 'x' ? randomValue : (randomValue & 0x3 | 0x8);
+            return maskedRandomValue.toString(16);
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, execute);
     }
     function parseArgs(args) {
         return typeof args === 'string' ? JSON.parse(args) : (args || {});
@@ -1895,51 +1823,56 @@ var agentSystem = (function (exports) {
             return [];
         const now = new Date();
         const todayStr = formatDate(now);
-        const dueOnce = [];
-        const dueDaily = [];
-        const remaining = [];
+        const kept = [];
+        const removed = [];
+        const candidates = [];
         for (const item of scheduleCache) {
             if (item.type === 'daily') {
                 const todayTime = dailyTaskTime(item, now);
                 if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
-                    dueDaily.push(item);
+                    if (now.getTime() - todayTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                        item.completedDate = todayStr;
+                        console.log(`[计划表] 每日任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                    }
+                    else
+                        candidates.push({ item, dueTime: todayTime });
                 }
-                remaining.push(item);
+                kept.push(item);
                 continue;
             }
             const itemTime = new Date(item.time);
             if (isNaN(itemTime.getTime())) {
                 console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
-                remaining.push(item);
+                kept.push(item);
                 continue;
             }
-            if (now >= itemTime) {
-                dueOnce.push(item);
-                console.log(`[计划表] 触发到期计划项: [${item.id}] ${item.time} - ${item.content}`);
+            if (now < itemTime) {
+                kept.push(item);
+                continue;
+            }
+            if (now.getTime() - itemTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                removed.push(item);
+                console.log(`[计划表] 一次性任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                continue;
+            }
+            candidates.push({ item, dueTime: itemTime });
+        }
+        const executed = [];
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => Math.abs(now.getTime() - a.dueTime.getTime()) - Math.abs(now.getTime() - b.dueTime.getTime()));
+            const chosen = candidates[0].item;
+            if (chosen.type === 'daily') {
+                chosen.completedDate = todayStr;
+                console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
             }
             else {
-                remaining.push(item);
+                removed.push(chosen);
+                console.log(`[计划表] 触发到期计划项: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
             }
-        }
-        const executed = [...dueOnce];
-        if (dueDaily.length > 0) {
-            dueDaily.sort((a, b) => {
-                const ta = dailyTaskTime(a, now).getTime();
-                const tb = dailyTaskTime(b, now).getTime();
-                return Math.abs(now.getTime() - ta) - Math.abs(now.getTime() - tb);
-            });
-            const chosen = dueDaily.shift();
-            console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
             executed.push(chosen);
-            for (const d of dueDaily) {
-                console.log(`[计划表] 每日任务冲突，标记今日已执行(不执行): [${d.id}] ${d.time} - ${d.content}`);
-            }
-            for (const d of [chosen, ...dueDaily]) {
-                d.completedDate = todayStr;
-            }
         }
-        if (executed.length > 0) {
-            scheduleCache = remaining;
+        if (executed.length > 0 || removed.length > 0) {
+            scheduleCache = kept;
             saveSchedulesToDisk(scheduleCache);
         }
         return executed;
@@ -3162,14 +3095,31 @@ var agentSystem = (function (exports) {
         await dialogueRole.generateDialogue(cache);
         return GlobalConfig.finalResponse;
     }
+    let asrUnloaded = false;
+    function guardASRUnload() {
+        asrUnloaded = GlobalConfig.unreadContext.some(message => {
+            const items = Array.isArray(message.content) ? message.content : [];
+            return items.some(item => item.type === 'input_audio' || item.type === 'audio_url');
+        });
+        if (asrUnloaded || GlobalConfig.unreadContext.length === 0)
+            return;
+        const [_, error] = syncFetch({
+            url: url()[0] + '/vram/unload',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: GlobalConfig.AsrName }),
+            },
+        });
+        if (error)
+            console.error('ASR 卸载执行失败:', error.message);
+    }
     const DEEP_RECALL_PATTERN = /(回忆|记忆|记得|回想|想起来)/;
     function updatePreviousMemories() {
         if (GlobalConfig.unreadRecords.length >= 1)
             memorizerRole.persistUnreadRecords();
-        const userMessages = GlobalConfig.unreadContext
-            .filter(message => message.role === 'user')
-            .map(message => extractTextFromMessage(message).trim())
-            .filter(text => text.length > 0);
+        const userMessages = GlobalConfig.unreadContext.filter(message => message.role === 'user').map(message => extractTextFromMessage(message).trim()).filter(text => text.length > 0);
         const clear = () => { dialogueRole.ragMessages = []; };
         if (userMessages.length === 0)
             return clear();
@@ -3179,12 +3129,40 @@ var agentSystem = (function (exports) {
             return clear();
         dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
     }
+    const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
+    function getAvailableActionNames() {
+        try {
+            const raw = getAvailableActions();
+            if (!raw || raw === '{}')
+                return FALLBACK_ACTIONS;
+            const parsed = JSON.parse(raw);
+            if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+                return parsed.actions.map(item => item.name);
+            }
+        }
+        catch {
+        }
+        return FALLBACK_ACTIONS;
+    }
+    async function performMatchedAction(query) {
+        const actionNames = getAvailableActionNames();
+        if (!syncActionsToMemory(actionNames))
+            return;
+        const bestAction = queryBestAction(query);
+        if (!bestAction)
+            return;
+        const pos = getAgentPosition();
+        sendToEngine('movement', JSON.stringify({ position: { x: pos.x + RandomFloat(-0.5, 0.5), y: pos.y, z: pos.z + RandomFloat(-0.5, 0.5), }, resumeTracking: true, }));
+        sendToEngine('action', JSON.stringify({ action: bestAction }));
+        pushContext('action', `月华${bestAction}了`, '');
+    }
     async function thoughtLoopTickEvent() {
         if (GlobalConfig.reasoningInProgress)
             return;
         try {
             GlobalConfig.reasoningInProgress = true;
             pullContext().forEach(message => writeMessage(message.role, message.content));
+            guardASRUnload();
             const messageLength = GlobalConfig.unreadContext.length;
             if (messageLength === 0) {
                 checkDueItems().forEach(item => {
@@ -3218,7 +3196,7 @@ var agentSystem = (function (exports) {
             if (actionBlocks.length) {
                 const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
                 const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
-                await actorRole.createCreativeWork(actBlocks.join('|'));
+                await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
                 pushImage([await queryEmotionSticker(validMessage)], true);
             }
             else if (validMessage.length <= 36 && Math.random() < 0.15) {
@@ -3270,7 +3248,6 @@ var agentSystem = (function (exports) {
         painterRole.coverContext([]);
         musicianRole.coverContext([]);
         perceiverRole.coverContext([]);
-        actorRole.coverContext([]);
         memorizerRole.coverContext([]);
         GlobalConfig.unreadContext = [];
     }
@@ -3279,7 +3256,6 @@ var agentSystem = (function (exports) {
     setInterval(() => thoughtLoopTickEvent(), 1000);
 
     exports.LiteImageFile = LiteImageFile;
-    exports.actorRole = actorRole;
     exports.descriptionRole = descriptionRole;
     exports.ensureMemoryReady = ensureMemoryReady;
     exports.extractTextFromMessage = extractTextFromMessage;

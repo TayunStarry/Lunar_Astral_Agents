@@ -238,8 +238,8 @@ func (d *MemoryDB) generateTagsOnce(ctx context.Context, content string, isImage
 	return d.postTagRequest(ctx, messages)
 }
 
-// generateTagsFromMedia 动态图标签生成：mediaRefs 为感知者式视频 file:// 引用
-//（AnimatedImageToMedia 慢放转码产物，llama-server 端 ffmpeg 抽帧），最多重试 MaxTagRetries 次
+// generateTagsFromMedia 动态图标签生成：mediaRefs 为感知者式采样帧引用
+//（file 模式为慢放视频的 file:// 引用、frames 模式为图片序列帧 data URI），最多重试 MaxTagRetries 次
 func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
 	if *GeneralConfig.MemoryMultimodalURL == "" {
 		return nil, fmt.Errorf("LLM 服务 base_url 未配置")
@@ -264,15 +264,15 @@ func (d *MemoryDB) generateTagsFromMedia(ctx context.Context, mediaRefs []string
 }
 
 // generateTagsFromMediaOnce 单次动态图标签生成：
-// user 消息含 N 个 file:// 引用（image_url 形式，llama-server 端视频链路自动抽帧）
-// 与文本说明，综合动作过程与画面内容生成标签
+// user 消息含 N 条采样帧引用（image_url 形式：file 模式为 file:// 视频引用，由服务端自动抽帧；
+// frames 模式为图片序列帧 data URI）与文本说明，综合动作过程与画面内容生成标签
 func (d *MemoryDB) generateTagsFromMediaOnce(ctx context.Context, mediaRefs []string, orientation string, custom string) ([]string, error) {
 	// 动态图按识别取向定制系统提示词，并追加帧序列说明
 	orientation = normalizeImageOrientation(orientation, custom)
 	systemMsg := chatMessage{
 		Role: "system",
 		Content: imageTagSystemPrompt(orientation, custom) +
-			"\n\n本次输入不是单张静态图片，而是同一段动画（GIF/动图）经慢放视频链路按时间顺序抽取的采样帧序列。" +
+			"\n\n本次输入不是单张静态图片，而是同一段动画（GIF/动图）按时间顺序抽取的采样帧序列。" +
 			"请综合各帧的画面内容与帧间的动作/变化过程生成标签，标签需覆盖动作与过程维度。",
 	}
 

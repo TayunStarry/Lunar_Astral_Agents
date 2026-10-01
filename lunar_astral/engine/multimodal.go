@@ -43,6 +43,41 @@ func (class *Runtime) videoMedia(call goja.FunctionCall) goja.Value {
 	return class.runtime.ToValue([]any{result, nil})
 }
 
+// videoFrames 将视频抽帧为图片序列（序列帧解读模式），供不支持 file:// 的架构使用
+// 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径
+// 分组与 file 模式一致（每 60 秒一组），组内按 0.5fps 采样并编码为 JPEG data URI
+// 返回值: [Array<{start, end, frames: Array<{image, time}>}>, error] 分组采样帧列表和错误信息
+func (class *Runtime) videoFrames(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
+	}
+
+	inputFile, ok := call.Argument(0).Export().(string)
+	if !ok {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("inputFile必须是字符串")})
+	}
+
+	groups, err := module.VideoToFrames(inputFile)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	return class.runtime.ToValue([]any{frameGroupsToValue(groups), nil})
+}
+
+// frameGroupsToValue 把抽帧分组转换为 TypeScript 可处理的对象数组
+func frameGroupsToValue(groups []module.MediaFrameGroup) []map[string]any {
+	result := make([]map[string]any, len(groups))
+	for i, g := range groups {
+		frames := make([]map[string]any, len(g.Frames))
+		for j, f := range g.Frames {
+			frames[j] = map[string]any{"image": f.Image, "time": f.Time}
+		}
+		result[i] = map[string]any{"start": g.Start, "end": g.End, "frames": frames}
+	}
+	return result
+}
+
 // audioWav 将音频本地化并转换为 16kHz 单声道 WAV，返回 base64 编码
 // 输入支持 HTTP(S) URL、data:audio/xxx;base64 URI 与本地文件路径
 // 返回值: [string, error] WAV 音频的 base64 编码和错误信息
@@ -106,6 +141,28 @@ func (class *Runtime) animatedImageToVideo(call goja.FunctionCall) goja.Value {
 		}
 	}
 	return class.runtime.ToValue([]any{result, nil})
+}
+
+// animatedImageToFrames 将动态图编码为慢放视频后抽帧为图片序列（序列帧解读模式）
+// 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径）
+// 与 file 模式同样先做等比例慢放转码，但转码产物写临时文件，不产出媒体目录文件
+// 返回值: [Array<{start, end, frames: Array<{image, time}>}>, error] 分组采样帧列表和错误信息
+func (class *Runtime) animatedImageToFrames(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
+	}
+
+	bytesData, err := resolveImageBytes(call.Argument(0))
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	groups, err := module.AnimatedImageToFrames(bytesData)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	return class.runtime.ToValue([]any{frameGroupsToValue(groups), nil})
 }
 
 // resolveImageBytes 将 goja 入参解析为图片字节数据
@@ -193,17 +250,19 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		batchSize = int(bs)
 	}
 
-	width := 768
+	// 尺寸与步数缺省交给扩散模块按配置默认值（sd_image_size / sd_steps）归一化：
+	// 传 0 表示"未指定"，避免在此处写死一套与配置不一致的默认值。
+	width := 0
 	if w, ok := params["width"].(float64); ok {
 		width = int(w)
 	}
 
-	height := 768
+	height := 0
 	if h, ok := params["height"].(float64); ok {
 		height = int(h)
 	}
 
-	steps := 24
+	steps := 0
 	if s, ok := params["steps"].(float64); ok {
 		steps = int(s)
 	}

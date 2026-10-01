@@ -74,19 +74,61 @@ func ProcessTask(task GenerateTask) {
 	// 确保输出目录存在
 	os.MkdirAll(filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated"), 0755)
 
+	// 归一化请求参数：尺寸对齐到 32 的倍数（Qwen-Image 系列为 16× VAE 压缩 + 2×2 patch，官方要求
+	// 宽高可被 32 整除；官方 2K 比例如 2528×1696 也是 32 的倍数而非 64），步数收进合理区间；
+	// 调用方未指定时使用配置默认值（sd_steps / sd_image_size）。
+	width, height := normalizeImageSide(task.Width), normalizeImageSide(task.Height)
+	steps := task.Steps
+	if steps <= 0 {
+		steps = *GeneralConfig.SDSteps
+	}
+	if steps < 1 {
+		steps = 1
+	}
+	if steps > 150 {
+		steps = 150
+	}
+	if width != task.Width || height != task.Height {
+		LoggerGeneral.Info("MultimodalAnalysis", "尺寸归一化: %dx%d -> %dx%d (32 的倍数)", task.Width, task.Height, width, height)
+	}
+	task.Width, task.Height, task.Steps = width, height, steps
+
+	// 随机种子：请求未指定（<=0）时生成一个并回写任务。
+	// 引擎默认种子固定为 42，不显式传参会导致每次构图完全一致，这里统一改成"随机且可复现"。
+	if task.Seed <= 0 {
+		task.Seed = time.Now().UnixNano() & 0x7FFFFFFF
+		if task.Seed == 0 {
+			task.Seed = 1
+		}
+	}
+
 	// 构建命令参数
 	args := []string{
 		"--diffusion-model", *GeneralConfig.DiffusionModel,
 		"--vae", *GeneralConfig.VariationalModel,
 		"--llm", *GeneralConfig.PromptAnalysisModel,
-		"--diffusion-fa",
-		"--vae-tiling",
 		"--cfg-scale", fmt.Sprintf("%.2f", task.CfgScale),
-		"--steps", fmt.Sprintf("%d", task.Steps),
-		"-H", fmt.Sprintf("%d", task.Height),
-		"-W", fmt.Sprintf("%d", task.Width),
+		"--steps", fmt.Sprintf("%d", steps),
+		"-H", fmt.Sprintf("%d", height),
+		"-W", fmt.Sprintf("%d", width),
+		"--seed", fmt.Sprintf("%d", task.Seed),
 		"-o", outputPath,
 		"-p", task.Prompt,
+	}
+
+	// 采样策略：auto 表示不传参，由 sd.cpp 按模型自动选择（本模型为 euler + flux 调度）
+	if v := strings.TrimSpace(*GeneralConfig.SDSampler); v != "" && !strings.EqualFold(v, "auto") {
+		args = append(args, "--sampling-method", v)
+	}
+	if v := strings.TrimSpace(*GeneralConfig.SDScheduler); v != "" && !strings.EqualFold(v, "auto") {
+		args = append(args, "--scheduler", v)
+	}
+	if *GeneralConfig.SDFlowShift > 0 {
+		args = append(args, "--flow-shift", fmt.Sprintf("%.3f", *GeneralConfig.SDFlowShift))
+	}
+	// 扩散模型 flash attention：速度换数值精度，排查方块伪影时可关闭后对比
+	if *GeneralConfig.SDFlashAttention {
+		args = append(args, "--diffusion-fa")
 	}
 
 	// 添加负面提示词
@@ -101,12 +143,12 @@ func ProcessTask(task GenerateTask) {
 			args = append(args, "--init-img", initImgPath)
 			args = append(args, "--strength", fmt.Sprintf("%.2f", task.Strength))
 		}
+		// 多模态提示词模型
+		if *GeneralConfig.PromptMmprojModel != "" {
+			args = append(args, "--llm_vision", *GeneralConfig.PromptMmprojModel)
+		}
 	}
 
-	// 随机数种子
-	if task.Seed != 0 {
-		args = append(args, "--seed", fmt.Sprintf("%d", task.Seed))
-	}
 	// 批处理数量
 	if task.BatchSize > 1 {
 		args = append(args, "-b", fmt.Sprintf("%d", task.BatchSize))
@@ -115,10 +157,6 @@ func ProcessTask(task GenerateTask) {
 	if task.AllowSuperResolution {
 		args = append(args, "--upscale-model", *GeneralConfig.RealESRGANModel)
 		args = append(args, "--hires-denoising-strength", "0.55")
-	}
-	// 多模态提示词模型
-	if *GeneralConfig.PromptMmprojModel != "" {
-		args = append(args, "--llm_vision", *GeneralConfig.PromptMmprojModel)
 	}
 
 	// 执行显存守卫：可用显存不足时先卸载月华模型, 并记录守卫后的可用显存
@@ -143,6 +181,36 @@ func ProcessTask(task GenerateTask) {
 			args = append(args, "--offload-to-cpu")
 			LoggerGeneral.Info("MultimodalAnalysis", "可用显存 %d MiB 不足, sd.cpp 启用权重内存卸载", freeMiB)
 		}
+	}
+
+	// 显存预算：交给 sd.cpp 做图切割执行（GiB，支持 cuda0=9 形式）；未配置时由 --auto-fit 自动管理
+	if v := strings.TrimSpace(*GeneralConfig.SDMaxVRAM); v != "" {
+		args = append(args, "--max-vram", v)
+		LoggerGeneral.Info("MultimodalAnalysis", "sd.cpp 显存预算: %s GiB", v)
+	}
+
+	// VAE 分片解码：默认关闭。sd.cpp 的分片默认几何为 tile 32 latent（VAE 16× 压缩 → 512px）、
+	// overlap 0.5（步长 256px），会在分片角注入硬边纯白方块；仅在大图或显存吃紧时按需启用。
+	needVAETiling := false
+	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDVaeTiling)) {
+	case "always", "true", "on":
+		needVAETiling = true
+	case "off", "false", "no":
+		needVAETiling = false
+	default: // auto
+		// 阈值取 2 MP（约 1536² 以上）：1024² 及以下的单次解码在 12GB 卡上无需分片，
+		// 而分片会引入方块伪影，所以只有确实吃紧时才退让。
+		needVAETiling = width*height > 2*1024*1024 || (freeMiB > 0 && freeMiB < *GeneralConfig.ImageVRAMGuardMiB)
+	}
+	if needVAETiling {
+		args = append(args, "--vae-tiling")
+		if v := strings.TrimSpace(*GeneralConfig.SDVaeTileSize); v != "" {
+			args = append(args, "--vae-tile-size", v)
+		}
+		if *GeneralConfig.SDVaeTileOverlap > 0 {
+			args = append(args, "--vae-tile-overlap", fmt.Sprintf("%.2f", *GeneralConfig.SDVaeTileOverlap))
+		}
+		LoggerGeneral.Info("MultimodalAnalysis", "sd.cpp 启用 VAE 分片解码 (%dx%d, 守卫后可用显存 %d MiB)", width, height, freeMiB)
 	}
 
 	// 提示词编码器（--llm）强制在 CPU 运行, 全程不占显存
@@ -328,14 +396,40 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 	// 生成base64编码
 	base64Data := base64.StdEncoding.EncodeToString(imageData)
 
-	// 构造返回结果
+	// 构造返回结果：尺寸与种子回传任务归一化后的实际值（尺寸对齐后的边长、随机种子），
+	// 便于调用方复现同一张图（原先回传的是请求原值，未指定时为 0）。
 	result := map[string]any{
 		"path":   completedTask.ResultPath,
 		"base64": base64Data,
-		"width":  width,
-		"height": height,
-		"seed":   seed,
+		"width":  completedTask.Width,
+		"height": completedTask.Height,
+		"seed":   completedTask.Seed,
 	}
 
 	return result, nil
+}
+
+// normalizeImageSide 把请求边长归一化为 32 的倍数。
+// 依据：Qwen-Image 2.1 为 16× VAE 压缩 + 2×2 patch 的 DiT，官方要求宽高可被 32 整除；
+// 官方 2K 比例（如 3:2 的 2528×1696）也是 32 的倍数而非 64，因此这里按 32 对齐而不是 64。
+// 调用方未指定（<=0）时使用配置默认边长 sd_image_size。
+func normalizeImageSide(side int) int {
+	const minSide, maxSide, align = 256, 2816, 32
+	if side <= 0 {
+		side = *GeneralConfig.SDImageSize
+	}
+	if side <= 0 {
+		side = 1024
+	}
+	if side < minSide {
+		side = minSide
+	}
+	if side > maxSide {
+		side = maxSide
+	}
+	side = (side + align/2) / align * align
+	if side > maxSide {
+		side = maxSide
+	}
+	return side
 }

@@ -30,6 +30,7 @@
 | [09-LTPX协议-月华工具包](09-LTPX协议-月华工具包.md) | LTPX 生态 | 工具包协议、分支体系、包注册元数据、AtoA 调用链路、LTP3/LTP9 插件引擎 |
 | [10-llama.cpp 参数参考](10-llama.cpp-参数参考.md) | 外部引擎 | llama-server 全部 CLI 参数速查 |
 | [11-stable-diffusion.cpp 参数参考](11-stable-diffusion.cpp-参数参考.md) | 外部引擎 | sd-cli 全部 CLI 参数速查 |
+| [12-图像生成参数策略](12-图像生成参数策略.md) | 月华绘图管线 | 尺寸/步数/采样器/VAE 分片/显存预算/随机种子的默认值、调优方向与排障矩阵 |
 
 ---
 

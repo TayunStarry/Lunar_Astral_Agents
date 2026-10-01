@@ -17,6 +17,11 @@ const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
 /** 音频转写失败时的兜底置换文本 */
 const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
 
+/** 是否采用图片序列帧模式解读视频/动态图（lunar_config.json 的 multimodal.video_input === 'frames'） */
+function useFrameSequence(): boolean {
+	return GlobalConfig.VideoInputMode === 'frames';
+}
+
 /**
  * 理解视频并返回理解文本（含缓存读写）
  *
@@ -30,6 +35,20 @@ async function understandVideo(videoUrl: string): Promise<string> {
         console.log('[感知者] 命中视频缓存，直接返回');
         return cachedPrompt;
     }
+    // 序列帧模式：本地抽帧为图片序列（base64），不依赖服务端读取 file:// 视频文件
+    if (useFrameSequence()) {
+        console.log('[感知者] 开始将视频抽取为图片序列帧...');
+        const [groups, framesError] = videoFrames(videoUrl);
+        if (!groups || groups.length === 0 || framesError) {
+            console.error('[感知者] 视频抽帧失败:', framesError);
+            throw new Error('视频抽帧失败');
+        }
+        /** 采样帧总数（仅用于日志） */
+        const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+        console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+        // 第二步：交给感知者理解并返回理解文本
+        return understandMediaSegments(() => mediaRoles!.perceiverRole.watchFrames(groups), videoUrl);
+    }
     // 第一步：视频本地化到 llama-server 媒体目录（长视频自动分段），获取 file:// 引用
     console.log('[感知者] 开始将视频写入媒体目录...');
     const [segments, mediaError] = videoMedia(videoUrl);
@@ -41,21 +60,21 @@ async function understandVideo(videoUrl: string): Promise<string> {
     const mediaUrls = segments.map(segment => `file://${segment.file}`);
     console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
     // 第二步：交给感知者理解并返回理解文本
-    return understandMediaSegments(mediaUrls, videoUrl);
+    return understandMediaSegments(() => mediaRoles!.perceiverRole.watchVideo(mediaUrls), videoUrl);
 }
 
 /**
- * 观看媒体片段并返回理解文本（视频与动态图共用）
+ * 观看并返回理解文本（视频与动态图共用，兼容 file:// 引用与图片序列帧两种输入）
  *
  * 理解文本非空且存在缓存键时写入知识库缓存；理解为空时返回空字符串。
  *
- * @param mediaUrls 媒体目录内的 file:// 引用列表
+ * @param watch 感知者观看回调（file 模式观看 file:// 片段引用，序列帧模式观看采样帧分组）
  * @param cacheKey 知识库缓存键（原始来源地址；传空字符串表示不缓存）
  */
-async function understandMediaSegments(mediaUrls: string[], cacheKey: string): Promise<string> {
+async function understandMediaSegments(watch: () => Promise<string>, cacheKey: string): Promise<string> {
     // 调用感知者智能体观看
     console.log('[感知者] 开始观看...');
-    const videoSummary = await mediaRoles!.perceiverRole.watchVideo(mediaUrls);
+    const videoSummary = await watch();
     console.log('[感知者] 观看完成');
     // 理解文本非空时写入缓存
     if (videoSummary && videoSummary.trim().length > 0 && cacheKey) {
@@ -68,8 +87,8 @@ async function understandMediaSegments(mediaUrls: string[], cacheKey: string): P
 /**
  * 理解动态图（感知者智能体）
  *
- * 动态图先编码为慢放视频写入媒体目录，再走与视频相同的理解链路：
- * llama-server 端按固定频率抽帧 + 感知者分段理解，时序与动作过程由视频采样点承载。
+ * 动态图先编码为慢放视频再走与视频相同的理解链路（file 模式下写媒体目录并由服务端抽帧，
+ * 序列帧模式下本地抽帧为 base64 图片序列），时序与动作过程由视频采样点承载。
  * 返回理解文本；转码失败时抛出异常，缓存命中时直接返回缓存文本。
  *
  * @param imageSource 动态图数据或地址（字节 / HTTP(S) URL / data:image URI）
@@ -84,6 +103,19 @@ async function understandAnimatedImage(imageSource: any, cacheKey: string): Prom
     }
     // 第一步：动态图编码为慢放视频（补足抽帧采样点数）
     console.log('[感知者] 检测到动态图，开始编码为视频...');
+    // 序列帧模式：慢放转码后抽帧为图片序列（base64），不依赖服务端读取 file:// 视频文件
+    if (useFrameSequence()) {
+        const [groups, framesError] = animatedImageToFrames(imageSource);
+        if (!groups || groups.length === 0 || framesError) {
+            console.error('[感知者] 动态图抽帧失败:', framesError);
+            throw new Error('动态图抽帧失败');
+        }
+        /** 采样帧总数（仅用于日志） */
+        const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+        console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+        // 第二步：交给感知者理解并返回理解文本
+        return understandMediaSegments(() => mediaRoles!.perceiverRole.watchFrames(groups), cacheKey);
+    }
     const [segments, mediaError] = animatedImageToVideo(imageSource);
     if (!segments || segments.length === 0 || mediaError) {
         console.error('[感知者] 动态图转视频失败:', mediaError);
@@ -93,7 +125,7 @@ async function understandAnimatedImage(imageSource: any, cacheKey: string): Prom
     const mediaUrls = segments.map(segment => `file://${segment.file}`);
     console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
     // 第二步：交给感知者理解并返回理解文本
-    return understandMediaSegments(mediaUrls, cacheKey);
+    return understandMediaSegments(() => mediaRoles!.perceiverRole.watchVideo(mediaUrls), cacheKey);
 }
 
 /**

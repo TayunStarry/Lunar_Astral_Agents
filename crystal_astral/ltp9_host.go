@@ -58,7 +58,7 @@ func ltpInvokeFrontAgent(appID, instruction string) (string, error) {
 	requestID := fmt.Sprintf("ltp9-ag-%d", time.Now().UnixNano())
 	done := make(chan LTPXRemoteCallResponse, 1)
 	ltpPendingMutex.Lock()
-	ltpPendingCalls[requestID] = done
+	ltpPendingCalls[requestID] = &ltpPendingCall{done: done, toolName: appID, startedAt: time.Now()}
 	ltpPendingMutex.Unlock()
 
 	msg, _ := json.Marshal(map[string]any{

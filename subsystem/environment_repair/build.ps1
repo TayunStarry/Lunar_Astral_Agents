@@ -1,4 +1,4 @@
-# Environment Repair - 编译脚本
+﻿# Environment Repair - 编译脚本
 
 # 将资源修复和端口释放功能编译为独立可执行文件，输出到项目根目录
 

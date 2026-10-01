@@ -7,6 +7,51 @@ const STICKER_COLLECTION = 'stickers';
 /** 表情包集合是否已确认就绪（避免重复初始化） */
 let stickerCollectionReady = false;
 
+/** 动作组记忆集合名（text 类型集合，动作名逐条入库） */
+const ACTION_COLLECTION = 'actions';
+/** 动作集合是否已确认就绪（避免重复初始化） */
+let actionCollectionReady = false;
+
+/** 将动作组逐个写入动作记忆库（幂等：相同/相近文本内容被记忆库去重机制自动忽略），返回是否就绪 */
+export function syncActionsToMemory(actionNames: string[]): boolean {
+    if (!actionNames || actionNames.length === 0) return false;
+    try {
+        // 首次使用时确保动作集合存在（幂等：已存在则直接打开，不清空数据）
+        if (!actionCollectionReady) {
+            const [ready] = memoryInit(ACTION_COLLECTION);
+            if (!ready) return false;
+            actionCollectionReady = true;
+        }
+        // 逐个动作名入库：以动作名作为显式标签（跳过 LLM 标签生成），重复写入被去重机制忽略
+        for (const name of actionNames) {
+            const trimmed = (name || '').trim();
+            if (!trimmed) continue;
+            memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+        }
+        return true;
+    }
+    catch (error) {
+        console.error('[动作库] 动作组入库失败:', error);
+        return false;
+    }
+}
+
+/** 将文本与动作记忆库执行一次匹配，返回最高匹配度的动作名（无结果或失败时返回 null） */
+export function queryBestAction(text: string): string | null {
+    if (!text || !text.trim()) return null;
+    try {
+        /** 查询动作记忆库，取相似度最高的首条结果 */
+        const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
+        // 查询失败或无结果时返回 null
+        if (error || !results || results.length === 0) return null;
+        return (results[0] as { content?: string }).content || null;
+    }
+    catch (error) {
+        console.error('[动作库] 匹配失败:', error);
+        return null;
+    }
+}
+
 /** 基于查询文本从表情包记忆库检索表情包图片，返回 base64；无结果或失败时返回 null */
 export async function queryEmotionSticker(query: string): Promise<string | null> {
     if (!query || !query.trim()) return null;

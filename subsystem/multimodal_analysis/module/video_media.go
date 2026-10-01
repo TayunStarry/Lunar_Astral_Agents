@@ -39,37 +39,47 @@ type MediaSegment struct {
 	End float64 `json:"end"`
 }
 
+// localizeVideoSource 将视频来源本地化为可读路径：
+// HTTP(S) URL 下载到临时文件、data:video URI 解码到临时文件、其余按本地路径直接使用。
+// 返回的 cleanup 供调用方 defer 调用（本地路径时为空操作）；文件不存在或本地化失败时返回错误。
+func localizeVideoSource(inputFile string) (string, func(), error) {
+	localPath := inputFile
+	cleanup := func() {}
+	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
+		tempFile, err := downloadToTempFile(inputFile)
+		if err != nil {
+			return "", cleanup, fmt.Errorf("下载视频文件失败: %w", err)
+		}
+		localPath, cleanup = tempFile, func() { os.Remove(tempFile) }
+	} else if strings.HasPrefix(inputFile, "data:video/") {
+		tempFile, err := dataURIToTempFile(inputFile)
+		if err != nil {
+			return "", cleanup, fmt.Errorf("解码视频数据失败: %w", err)
+		}
+		localPath, cleanup = tempFile, func() { os.Remove(tempFile) }
+	}
+	// 校验本地文件存在（临时文件此时已产生，失败时一并清理）
+	if _, err := os.Stat(localPath); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("视频文件不存在: %s", localPath)
+	}
+	return localPath, cleanup, nil
+}
+
 // VideoToMedia 将视频本地化并复制/分段到 llama-server 媒体目录（multimedia/footage）
 //
 // 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
 // 时长不超过 MediaChunkSeconds 的视频直接复制为单个媒体文件；
 // 更长的视频使用 FFmpeg -c copy 快速切分为多个片段。
 // 返回媒体目录内的片段列表（footage/ 子路径 + 起止时间），由 TypeScript 拼接 file:// 引用。
+// 不依赖服务端解码视频的「图片序列帧」模式见 video_frame.go 的 VideoToFrames。
 func VideoToMedia(inputFile string) ([]MediaSegment, error) {
-	// 本地化输入：非本地路径先落到临时文件
-	localPath := inputFile
-	isTemp := false
-	if strings.HasPrefix(inputFile, "http://") || strings.HasPrefix(inputFile, "https://") {
-		tempFile, err := downloadToTempFile(inputFile)
-		if err != nil {
-			return nil, fmt.Errorf("下载视频文件失败: %w", err)
-		}
-		localPath, isTemp = tempFile, true
-	} else if strings.HasPrefix(inputFile, "data:video/") {
-		tempFile, err := dataURIToTempFile(inputFile)
-		if err != nil {
-			return nil, fmt.Errorf("解码视频数据失败: %w", err)
-		}
-		localPath, isTemp = tempFile, true
+	// 本地化输入：URL / data URI 落到临时文件，本地路径直接使用
+	localPath, cleanup, err := localizeVideoSource(inputFile)
+	if err != nil {
+		return nil, err
 	}
-	if isTemp {
-		defer os.Remove(localPath)
-	}
-
-	// 校验本地文件存在
-	if _, err := os.Stat(localPath); err != nil {
-		return nil, fmt.Errorf("视频文件不存在: %s", localPath)
-	}
+	defer cleanup()
 
 	// 探测视频时长
 	duration, err := GetVideoDuration(localPath)

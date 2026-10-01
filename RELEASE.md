@@ -99,6 +99,11 @@
 
 运行参数（如 `-developer` 调试模式、`-basic-port` 指定端口）与 `lunar_config.json` 的分组结构、各项默认值，详见代码文档 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)。
 
+> **升级提示（配置分组已重排）**：`lunar_config.json` 现按 `models` / `server` / `agent` / `memory` / `chat` / `diffusion` / `bridging` / `multimodal` / `web_search`
+> 九组组织，每组职责单一。旧版本中填写在 `server` 组下的 `bridging_*`（QQ 桥接）、`allow_diffusion` 与 `image_vram_guard*` / `sd_*`（图像生成）、
+> `chat_vram_guard*`（聊天显存守卫）以及 `user_name` 已分别迁入 `bridging` / `diffusion` / `chat` / `agent` 组，
+> 且 `models.asr_model` 已移除。升级后请对照上述文档重新填写，否则这些项会回退默认值。
+
 ---
 
 ## 下载

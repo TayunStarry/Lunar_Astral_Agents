@@ -33,10 +33,12 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 
 	// 注册图像处理适配器
 	vm.Set("videoMedia", adapters.videoMedia)
+	vm.Set("videoFrames", adapters.videoFrames)
 	vm.Set("audioWav", adapters.audioWav)
 	vm.Set("resizeImage", adapters.resizeImage)
 	vm.Set("isAnimatedImage", adapters.isAnimatedImage)
 	vm.Set("animatedImageToVideo", adapters.animatedImageToVideo)
+	vm.Set("animatedImageToFrames", adapters.animatedImageToFrames)
 	vm.Set("generateImage", adapters.generateImage)
 
 	// 注册base64编码解码适配器

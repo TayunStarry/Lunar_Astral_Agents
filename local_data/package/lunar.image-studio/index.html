@@ -1,187 +1,142 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>『 星月智能 』图像生成</title>
-    <!-- 标准样式库 -->
-    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
-    <link rel="stylesheet" href="/file/read/package/multimedia_preview/styles.css">
-    <!-- 标准脚本库 -->
-    <script src="/file/read/package/multimedia_preview/script.js"></script>
-    <!-- 项目私有样式 -->
-    <link rel="stylesheet" href="styles.css">
-    <!-- 项目私有脚本 -->
-    <script defer src="script.js"></script>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』图像工坊</title>
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/standard_dependency/styles.css">
+	<link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+	<!-- 标准脚本库 -->
+	<script src="/file/read/package/standard_dependency/script.js"></script>
+	<!-- 多媒体预览组件（previewImage 全局预览浮层；样式与脚本需成对加载，缺样式浮层不可见） -->
+	<link rel="stylesheet" href="/file/read/package/multimedia_preview/styles.css">
+	<script src="/file/read/package/multimedia_preview/script.js"></script>
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-    <!-- 背景层 + 玻璃蒙层 -->
-    <div class="background"></div>
-    <div class="glass-effect"></div>
+	<div class="background"></div>
+	<div class="glass-effect"></div>
 
-    <!-- 主布局：三栏面板 -->
-    <main class="main-layout">
-        <!-- 左侧：生成参数 -->
-        <section class="panel panel-params">
-            <header class="panel-header">
-                <span class="panel-title"><i class="fas fa-sliders"></i> 生成参数</span>
-                <div class="panel-header-right">
-                    <button class="btn-glass btn-sm" id="themeToggle" title="切换深色/浅色模式">
-                        <i class="fas fa-moon" id="themeIcon"></i>
-                    </button>
-                </div>
-            </header>
-            <div class="panel-body">
-                <!-- 噪声强度 -->
-                <div class="form-group">
-                    <label class="form-label" for="strength">
-                        噪声强度
-                        <span class="range-value" id="strength-value">0.15</span>
-                    </label>
-                    <div class="range-group">
-                        <input type="range" id="strength" min="0.1" max="1.0" step="0.01" value="0.85">
-                    </div>
-                </div>
-                <!-- 宽度 -->
-                <div class="form-group">
-                    <label class="form-label" for="width">
-                        宽度
-                        <span class="range-value" id="width-value">512</span>
-                    </label>
-                    <div class="range-group">
-                        <input type="range" id="width" min="256" max="2048" step="64" value="512">
-                    </div>
-                </div>
-                <!-- 高度 -->
-                <div class="form-group">
-                    <label class="form-label" for="height">
-                        高度
-                        <span class="range-value" id="height-value">512</span>
-                    </label>
-                    <div class="range-group">
-                        <input type="range" id="height" min="256" max="2048" step="64" value="512">
-                    </div>
-                </div>
-                <!-- 迭代步数 -->
-                <div class="form-group">
-                    <label class="form-label" for="steps">迭代步数</label>
-                    <input type="number" id="steps" class="glass-input" min="1" max="100" value="20">
-                </div>
-                <!-- 生成数量 -->
-                <div class="form-group">
-                    <label class="form-label" for="batch-size">生成数量</label>
-                    <input type="number" id="batch-size" class="glass-input" min="1" max="8" value="1">
-                </div>
-                <!-- 提示词权重 -->
-                <div class="form-group">
-                    <label class="form-label" for="cfg-scale">提示词权重</label>
-                    <input type="number" id="cfg-scale" class="glass-input" min="0.1" max="3.0" step="0.1" value="1.0">
-                </div>
-                <!-- 随机种子 -->
-                <div class="form-group">
-                    <label class="form-label" for="seed">随机种子</label>
-                    <input type="number" id="seed" class="glass-input" min="0" max="999999999" value="0" placeholder="0表示随机">
-                </div>
-                <!-- 允许超分 -->
-                <div class="form-group">
-                    <span class="form-label">
-                        <span><i class="fas fa-expand-arrows-alt"></i> 允许超分</span>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="allow-super-resolution">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </span>
-                    <span class="hint-text">启用后使用 RealESRGAN 进行高分辨率超分</span>
-                </div>
-            </div>
-            <!-- 任务状态 -->
-            <div id="task-status" class="task-status-bar" style="display: none;">
-                <div class="spinner spinner-sm"></div>
-                <span id="task-message">任务处理中...</span>
-            </div>
-        </section>
+	<!-- 主布局：左侧 45% 生成参数 + 右侧生成结果画廊 -->
+	<main class="main-layout">
+		<!-- 左侧：生成参数 → 生成控制 -->
+		<section class="panel input-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-palette"></i> 图像生成</span>
+				<div class="panel-header-right">
+					<button class="btn-glass btn-sm btn-clear" id="themeToggle" title="切换深色/浅色模式">
+						<i class="fas fa-moon" id="themeIcon"></i><span id="themeLabel">深色</span>
+					</button>
+				</div>
+			</header>
+			<div class="panel-body input-body">
+				<!-- 提示词区 -->
+				<div class="input-section prompt-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-pen-nib"></i> 提示词</span>
+					</div>
+					<label class="form-label" title="描述期望生成的图像内容">正面提示词</label>
+					<textarea id="promptInput" class="param-textarea" rows="4" placeholder="描述期望生成的图像内容，如：a cute cat, studio ghibli style, best quality" spellcheck="false"></textarea>
+					<label class="form-label" title="需要排除的内容特征">负面提示词</label>
+					<textarea id="negativeInput" class="param-textarea" rows="2" placeholder="需要排除的内容，可选，如：lowres, blurry, bad anatomy" spellcheck="false"></textarea>
 
-        <!-- 中间：生成结果 -->
-        <section class="panel panel-result">
-            <header class="panel-header">
-                <span class="panel-title"><i class="fas fa-images"></i> 生成结果</span>
-                <div class="panel-header-right">
-                    <span class="char-count" id="resultCount"></span>
-                </div>
-            </header>
-            <div class="panel-body">
-                <div id="file-grid" class="file-grid">
-                    <!-- 文件卡片通过JS动态插入 -->
-                </div>
-            </div>
-        </section>
+					<!-- 参考图像（图生图） -->
+					<div class="form-row">
+						<label class="form-label">参考图像</label>
+						<button class="btn-glass btn-sm" id="pickRefBtn"><i class="fas fa-image"></i> 选择图片</button>
+						<button class="btn-glass btn-sm btn-clear hidden" id="clearRefBtn"><i class="fas fa-xmark"></i> 清除</button>
+					</div>
+					<div class="ref-preview hidden" id="refPreviewWrap">
+						<img id="refPreviewImg" class="ref-preview-img" alt="参考图像预览">
+					</div>
+					<div class="input-hint" id="refHint">未选择参考图像（文生图模式）。选择后自动切换为图生图并启用噪声强度。</div>
+				</div>
 
-        <!-- 右侧：提示词 & 参考图 -->
-        <section class="panel panel-prompt">
-            <header class="panel-header">
-                <span class="panel-title"><i class="fas fa-pen-to-square"></i> 提示词与参考图</span>
-            </header>
-            <div class="panel-body">
-                <!-- 正面提示词 -->
-                <div class="prompt-group">
-                    <label class="form-label" for="prompt"><i class="fas fa-file-alt"></i> 正面提示词</label>
-                    <textarea id="prompt" class="glass-textarea" placeholder="描述你想要生成的图像内容"></textarea>
-                </div>
+				<div class="panel-separator"></div>
 
-                <div class="panel-separator"></div>
+				<!-- 生成参数区 -->
+				<div class="input-section params-section">
+					<div class="subsection-header">
+						<span class="panel-title"><i class="fas fa-sliders"></i> 生成参数</span>
+					</div>
+					<div class="params-grid">
+						<div class="param-item">
+							<label class="param-label" title="图生图去噪强度：越高越偏离参考图像（仅选择参考图像时生效）">噪声强度</label>
+							<input type="number" id="strengthInput" min="0.05" max="1" step="0.05" value="0.75">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="迭代采样步数：官方默认 40；20 步细节明显不足，超过 50 收益递减">迭代步数</label>
+							<input type="number" id="stepsInput" min="1" max="100" value="40">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="画面宽度（像素，32 的倍数；低于 1024 会明显糊，2048 为模型原生 2K）">画面宽度</label>
+							<input type="number" id="widthInput" min="256" max="2816" step="32" value="1024">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="画面高度（像素，32 的倍数；低于 1024 会明显糊，2048 为模型原生 2K）">画面高度</label>
+							<input type="number" id="heightInput" min="256" max="2816" step="32" value="1024">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="一次生成的图片数量">生成数量</label>
+							<input type="number" id="batchInput" min="1" max="8" value="1">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="提示词权重（CFG 引导系数）：越高越遵循提示词">提示词权重</label>
+							<input type="number" id="cfgInput" min="1" max="30" step="0.5" value="1">
+						</div>
+						<div class="param-item">
+							<label class="param-label" title="随机种子：0 或留空表示随机">随机种子</label>
+							<input type="number" id="seedInput" min="0" placeholder="随机">
+						</div>
+						<div class="param-item param-check">
+							<label class="param-label" title="生成后启用超分辨率重建（耗时增加）">图像超分</label>
+							<input type="checkbox" id="superResInput">
+						</div>
+					</div>
+				</div>
 
-                <!-- 参考图片上传 -->
-                <div class="form-group upload-group">
-                    <span class="form-label">
-                        <span><i class="fas fa-image"></i> 参考图片</span>
-                        <button type="button" id="clear-image-btn" class="btn-glass btn-sm btn-clear" style="display: none;">
-                            <i class="fas fa-trash-alt"></i> 清除
-                        </button>
-                    </span>
-                    <div class="upload-area" id="upload-area">
-                        <div class="upload-preview-wrap">
-                            <img id="image-preview" class="upload-preview" alt="图片预览" style="display: none;">
-                        </div>
-                        <div class="upload-placeholder" id="upload-placeholder">
-                            <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                            <span class="upload-text">点击或拖拽上传参考图</span>
-                            <span class="upload-hint">JPG / PNG / WebP，最大 10MB</span>
-                        </div>
-                        <input type="file" id="init-image" accept="image/*" style="display: none;">
-                    </div>
-                </div>
+				<div class="panel-separator"></div>
 
-                <div class="panel-separator"></div>
+				<!-- 生成控制 -->
+				<div class="input-section exec-section">
+					<button class="btn-glass btn-glass-primary btn-full" id="generateBtn"><i class="fas fa-wand-magic-sparkles"></i> 生成图像</button>
+					<div class="gen-status" id="genStatus"><i class="fas fa-circle-info"></i> 等待生成指令</div>
+					<div class="input-hint">
+						<i class="fas fa-circle-info"></i>
+						宽高自动取整到 64 的倍数；随机种子留空或 0 表示随机；噪声强度仅在选择参考图像（图生图）时生效；图像超分会增加生成耗时。生成结果保存于多媒体生成目录并在右侧实时展示。
+					</div>
+				</div>
+			</div>
+		</section>
 
-                <!-- 负面提示词 -->
-                <div class="prompt-group">
-                    <label class="form-label" for="negative-prompt"><i class="fas fa-ban"></i> 负面提示词</label>
-                    <textarea id="negative-prompt" class="glass-textarea" placeholder="描述你不希望在图像中出现的内容"></textarea>
-                </div>
-            </div>
-        </section>
-    </main>
+		<!-- 右侧：生成结果画廊 -->
+		<section class="panel output-panel">
+			<header class="panel-header">
+				<span class="panel-title"><i class="fas fa-images"></i> 生成结果</span>
+				<div class="panel-header-right">
+					<span class="char-count" id="galleryStats"></span>
+					<button class="btn-glass btn-sm btn-clear" id="refreshGalleryBtn" title="刷新画廊"><i class="fas fa-rotate"></i> 刷新</button>
+				</div>
+			</header>
+			<div class="panel-body output-body">
+				<div class="card-grid" id="galleryGrid">
+					<div class="list-empty" id="galleryEmpty">暂无生成结果。</div>
+				</div>
+			</div>
+		</section>
+	</main>
 
-    <!-- 底部操作按钮栏 -->
-    <footer class="bottom-action-bar">
-        <button id="generate-btn" class="btn-glass btn-glass-primary btn-cta">
-            <i class="fas fa-magic"></i> 开始生成
-        </button>
-        <button id="optimize-btn" class="btn-glass btn-glass-purple">
-            <i class="fas fa-wand-magic-sparkles"></i> 智能优化
-        </button>
-        <button id="clear-all-btn" class="btn-glass btn-clear">
-            <i class="fas fa-trash-alt"></i> 清空库存
-        </button>
-        <button id="refresh-btn" class="btn-glass">
-            <i class="fas fa-sync-alt"></i> 刷新页面
-        </button>
-        <button id="reset-btn" class="btn-glass">
-            <i class="fas fa-undo"></i> 重置配置
-        </button>
-    </footer>
+	<!-- Toast -->
+	<div id="toast" class="toast"></div>
 
-    <!-- Toast 提示 -->
-    <div id="toast" class="toast"></div>
+	<!-- 隐藏文件选择器（参考图像） -->
+	<input type="file" id="refFileInput" accept="image/*" class="hidden-input">
+
+	<script src="script.js"></script>
 </body>
+
 </html>

@@ -3,8 +3,10 @@ package module
 // 图片入库标准化（感知者式预处理）：
 // 静态图 → 缩放（宽或高 >640 等比缩放）+ 统一转码（JPEG/PNG data URI）；
 // 动态图（GIF / APNG / 动态 WebP）→ 存储保留原动画 data URI（供前端 <img> 动画渲染），
-// 理解走 AnimatedImageToMedia 慢放视频 + file:// 引用（llama-server 端 ffmpeg 抽帧），
-// 与月华感知者的动态图链路同构；片段 >8 等距抽样（首末必含）。
+// 理解引用按 lunar_config.json 的 multimodal.video_input 配置生成：
+// file=慢放视频的 file:// 引用（llama-server 端 ffmpeg 抽帧，默认），
+// frames=本地抽帧的图片序列帧 data URI（供不支持 file:// 的架构使用），
+// 与月华感知者的动态图链路同构；引用超过 8 条时等距抽样（首末必含）。
 // 任何一步失败均回退原始输入，不阻塞入库。
 
 import (
@@ -13,6 +15,7 @@ import (
 	"math"
 	"strings"
 
+	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	multimodal "LunarSubsystem/MultimodalAnalysis/module"
 )
@@ -101,8 +104,37 @@ func sampleMediaRefs(refs []string, max int) []string {
 	return out
 }
 
+// animatedPerceptionRefs 生成动态图的感知者式采样帧引用列表（最多 maxMemoryMediaSegments 条）：
+// file 模式为慢放视频的 file:// 引用（llama-server 端 ffmpeg 抽帧）；
+// frames 模式为本地抽帧的图片序列帧 data URI（供不支持 file:// 的架构使用）。
+func animatedPerceptionRefs(raw []byte) ([]string, error) {
+	if *GeneralConfig.VideoInputMode == "frames" {
+		groups, err := multimodal.AnimatedImageToFrames(raw)
+		if err != nil {
+			return nil, err
+		}
+		refs := make([]string, 0)
+		for _, group := range groups {
+			for _, frame := range group.Frames {
+				refs = append(refs, frame.Image)
+			}
+		}
+		return sampleMediaRefs(refs, maxMemoryMediaSegments), nil
+	}
+
+	segments, err := multimodal.AnimatedImageToMedia(raw)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		refs = append(refs, "file://"+seg.File)
+	}
+	return sampleMediaRefs(refs, maxMemoryMediaSegments), nil
+}
+
 // standardizeMemoryImage 记忆库图片入库前的标准化：
-// 返回 storeURI（入库与去重用的完整 data URI）、mediaRefs（动态图视频理解的 file:// 引用，
+// 返回 storeURI（入库与去重用的完整 data URI）、mediaRefs（动态图的感知者式采样帧引用，
 // 静态图为 nil）、animated（是否动态图）。任一步失败回退原始输入（记 Warning，不返回错误）。
 func standardizeMemoryImage(base64Image string) (storeURI string, mediaRefs []string, animated bool) {
 	mimeType, raw, err := stripDataURI(base64Image)
@@ -111,20 +143,15 @@ func standardizeMemoryImage(base64Image string) (storeURI string, mediaRefs []st
 		return strings.TrimSpace(base64Image), nil, false
 	}
 
-	// 动态图：存储保留原动画 data URI；理解转慢放视频走 file:// 引用
+	// 动态图：存储保留原动画 data URI；理解引用按配置的输入模式生成
 	if multimodal.IsAnimatedImage(raw) {
 		storeURI = rebuildDataURI(mimeType, raw, base64Image)
-		segments, serr := multimodal.AnimatedImageToMedia(raw)
-		if serr != nil {
-			LoggerGeneral.Warn("FileManager", "动态图转视频失败（%v），回退单图理解", serr)
+		refs, rerr := animatedPerceptionRefs(raw)
+		if rerr != nil {
+			LoggerGeneral.Warn("FileManager", "动态图感知预处理失败（%v），回退单图理解", rerr)
 			return storeURI, nil, true
 		}
-		refs := make([]string, 0, len(segments))
-		for _, seg := range segments {
-			refs = append(refs, "file://"+seg.File)
-		}
-		refs = sampleMediaRefs(refs, maxMemoryMediaSegments)
-		LoggerGeneral.Info("FileManager", "动态图标准化完成: 存储=%d bytes, 视频片段=%d 段", len(raw), len(refs))
+		LoggerGeneral.Info("FileManager", "动态图标准化完成: 存储=%d bytes, 采样帧引用=%d 条", len(raw), len(refs))
 		return storeURI, refs, true
 	}
 

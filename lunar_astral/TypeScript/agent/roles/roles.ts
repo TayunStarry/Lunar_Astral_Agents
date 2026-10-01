@@ -2,7 +2,6 @@ import { ModelBuilder } from '../base/builder';
 import { registerMediaRoles } from '../capabilities/media';
 import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
-import { ActorRole } from './actor';
 import { DialogueRole } from './dialogue';
 import { PerceiverRole } from './perceiver';
 import { MemorizerRole } from './memorizer';
@@ -16,8 +15,6 @@ export const memorizerRole: MemorizerRole = new MemorizerRole();
 export const painterRole: PainterRole = new PainterRole();
 /** 演奏者角色(演奏音乐) */
 export const musicianRole: MusicianRole = new MusicianRole();
-/** 行动者角色(3D动画/位移/空间感知) */
-export const actorRole: ActorRole = new ActorRole();
 /** 对话者角色(与用户交互) */
 export const dialogueRole: DialogueRole = new DialogueRole(descriptionRole);
 /** 感知者角色(视频/动态图理解) */

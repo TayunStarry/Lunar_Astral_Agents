@@ -1,5 +1,6 @@
 import { ModelBuilder } from '../base/builder';
-import { modelResponse } from '../../config/model';
+import { ImageContent } from '../../config/model';
+import type { MediaFrameGroup } from '../../config/image';
 
 /** 感知者角色 */
 export class PerceiverRole extends ModelBuilder {
@@ -57,6 +58,73 @@ export class PerceiverRole extends ModelBuilder {
 			}
 		}
 
+		return this.finalizeUnderstandings(understandings);
+	}
+
+	/**
+	 * 观看序列帧（图片序列帧解读模式，主入口）
+	 *
+	 * 与 watchVideo 同构，区别仅在每组内容以「N 张 base64 采样帧」提交而非单个 file:// 视频引用，
+	 * 因此不依赖服务端解码视频文件（供不支持 file:// 的架构使用）。
+	 * 分组数超过 MAX_SEGMENTS 时等距抽样；汇总规则与 watchVideo 完全一致。
+	 *
+	 * @param groups 采样帧分组列表（每组含同一时间窗内按时间顺序的帧）
+	 * @returns 视频内容理解文本（拼接或摘要），全部失败时为空字符串
+	 */
+	public async watchFrames(groups: MediaFrameGroup[]): Promise<string> {
+		if (groups.length === 0) {
+			console.warn('[感知者] 未收到任何采样帧分组');
+			return '';
+		}
+
+		/** 本次实际评估的分组列表 */
+		const watched = this.sampleSegments(groups);
+		if (watched.length < groups.length) {
+			console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
+		}
+		console.log(`[感知者] 开始观看视频采样帧，共 ${watched.length} 个分组`);
+
+		/** 所有分组的内容理解 */
+		const understandings: string[] = [];
+
+		for (let index = 0; index < watched.length; index++) {
+			console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
+			const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length);
+			if (understanding.trim().length > 0) {
+				understandings.push(understanding);
+				console.log(`[感知者] 第 ${index + 1} 组理解完成`);
+			}
+		}
+
+		return this.finalizeUnderstandings(understandings);
+	}
+
+	/**
+	 * 等距抽样：最多 MAX_SEGMENTS 项，恒包含首项与末项
+	 *
+	 * @param items 待抽样列表（视频片段引用或采样帧分组）
+	 * @returns 抽样后的列表（不超过 MAX_SEGMENTS）
+	 */
+	private sampleSegments<T>(items: T[]): T[] {
+		if (items.length <= this.MAX_SEGMENTS) return items;
+		const picked: T[] = [];
+		for (let i = 0; i < this.MAX_SEGMENTS; i++) {
+			picked.push(items[Math.round(i * (items.length - 1) / (this.MAX_SEGMENTS - 1))]);
+		}
+		// 取整可能产生重复索引，去重后保持顺序
+		return [...new Set(picked)];
+	}
+
+	/**
+	 * 汇总各段/组的理解文本：拼接后未超阈值直接返回，超阈值时触发无人格化的客观摘要
+	 *
+	 * 全部理解为空时返回空字符串（由调用方决定兜底提示，且不写入缓存），
+	 * 摘要失败时退回拼接文本并硬切断，避免超长文本撑爆对话上下文。
+	 *
+	 * @param understandings 各段/组的内容理解（按时间顺序）
+	 * @returns 最终理解文本，全部为空时为空字符串
+	 */
+	private async finalizeUnderstandings(understandings: string[]): Promise<string> {
 		if (understandings.length === 0) {
 			console.warn('[感知者] 未产生任何片段理解');
 			return '';
@@ -81,22 +149,6 @@ export class PerceiverRole extends ModelBuilder {
 		// 摘要失败时退回拼接文本并硬切断，避免超长文本撑爆对话上下文
 		console.warn(`[感知者] 客观摘要失败，退回拼接理解文本（硬切断至 ${this.SUMMARY_THRESHOLD} 字符）`);
 		return concatenated.slice(0, this.SUMMARY_THRESHOLD);
-	}
-
-	/**
-	 * 等距抽样片段引用：最多 MAX_SEGMENTS 段，恒包含首段与末段
-	 *
-	 * @param mediaUrls 视频片段引用列表
-	 * @returns 抽样后的片段引用列表（不超过 MAX_SEGMENTS）
-	 */
-	private sampleSegments(mediaUrls: string[]): string[] {
-		if (mediaUrls.length <= this.MAX_SEGMENTS) return mediaUrls;
-		const picked: string[] = [];
-		for (let i = 0; i < this.MAX_SEGMENTS; i++) {
-			picked.push(mediaUrls[Math.round(i * (mediaUrls.length - 1) / (this.MAX_SEGMENTS - 1))]);
-		}
-		// 取整可能产生重复索引，去重后保持顺序
-		return [...new Set(picked)];
 	}
 
 	/**
@@ -137,6 +189,51 @@ export class PerceiverRole extends ModelBuilder {
 				// 推理失败常伴随多模态实例被压崩：等待路由器重启实例后再重试
 				if (attempt < this.MAX_ATTEMPTS) {
 					console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 段`);
+					await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
+				}
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * 观看一组采样帧并生成内容理解（失败自动重试一次）
+	 *
+	 * @param group 采样帧分组（同一时间窗内按时间顺序的帧）
+	 * @param index 分组序号（从1开始）
+	 * @param total 分组总数
+	 * @returns 该分组的内容理解文本，失败时为空字符串
+	 */
+	private async evaluateFrameGroup(group: MediaFrameGroup, index: number, total: number): Promise<string> {
+		/** 构建提示词：任务格式与行为准则由系统提示（perceiverRole.md）定义 */
+		const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+		const prompt = `以下是同一段视频${position}按时间顺序抽取的采样帧序列，请按「片段理解任务」的格式输出这段视频的客观内容理解。`;
+
+		// 覆写上下文：文本提示词 + 各采样帧（base64 data URI，无需服务端解码视频）
+		this.coverContext({
+			role: 'user',
+			content: [
+				{ type: 'text', text: prompt },
+				...group.frames.map((frame): ImageContent => ({ type: 'image_url', image_url: { url: frame.image } }))
+			]
+		});
+		this.runtimeMessages = [];
+
+		for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+			try {
+				/** 调用模型 */
+				const response = this.run([], []);
+				const content = response.body?.choices?.[0]?.message?.content || '';
+				if (!content.trim()) {
+					console.warn(`[感知者] 第 ${index} 组返回空内容`);
+				}
+				return content;
+			}
+			catch (error) {
+				console.error(`[感知者] 第 ${index} 组第 ${attempt} 次推理失败:`, error);
+				// 推理失败常伴随多模态实例被压崩：等待路由器重启实例后再重试
+				if (attempt < this.MAX_ATTEMPTS) {
+					console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 组`);
 					await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
 				}
 			}

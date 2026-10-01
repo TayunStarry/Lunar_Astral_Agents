@@ -1,5 +1,5 @@
 import type { FileListItem, ProxyFetchConfig } from './config/config';
-import type { MediaSegment, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
+import type { MediaSegment, MediaFrameGroup, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
 import type { MultimodalMessage } from './config/model';
 import type { TTSParams } from './config/tool';
 import type { ScreenshotParams } from './config/screenshot';
@@ -104,6 +104,18 @@ declare global {
      */
     function videoMedia(inputFile: string): [MediaSegment[], Error | null];
     /**
+     * 将视频抽帧为图片序列帧（序列帧解读模式）
+     *
+     * 供不支持 llama-server「媒体目录 + file:// 引用」机制的架构（如云端 OpenAI 兼容 API）使用：
+     * 在本地用 FFmpeg 抽帧并编码为 JPEG data URI，直接以多个 image_url 提交，无需服务端解码视频。
+     * 分组与 file 模式一致（每 60 秒一组），组内按 0.5fps 采样，视觉 token 量级与 file 模式相当。
+     *
+     * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[MediaFrameGroup[], Error | null]} 包含分组采样帧列表的元组，[{start, end, frames:[{image, time}]}]
+     */
+    function videoFrames(inputFile: string): [MediaFrameGroup[], Error | null];
+    /**
      * 将音频本地化并转换为 16kHz 单声道 WAV
      *
      * 输入支持 HTTP(S) URL、data:audio/xxx;base64 URI 与本地文件路径
@@ -148,6 +160,17 @@ declare global {
      * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
      */
     function animatedImageToVideo(imgData: Blob | File | string | Uint8Array): [MediaSegment[], Error | null];
+    /**
+     * 将动态图编码为慢放视频后抽帧为图片序列帧（序列帧解读模式）
+     *
+     * 与 animatedImageToVideo 同样先做等比例慢放转码以补足采样相位，
+     * 但转码产物写临时文件（不产出媒体目录文件），随后按 0.5fps 抽帧为 JPEG data URI。
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
+     *
+     * @returns {[MediaFrameGroup[], Error | null]} 包含分组采样帧列表的元组，[{start, end, frames:[{image, time}]}]
+     */
+    function animatedImageToFrames(imgData: Blob | File | string | Uint8Array): [MediaFrameGroup[], Error | null];
     /**
      * 生成图片
      * 
