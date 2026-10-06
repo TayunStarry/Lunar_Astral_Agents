@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>节点图工坊 · DOM 自检</title>
+	<style>
+		html,
+		body {
+			margin: 0;
+			height: 100%;
+			background: #0d1120;
+			color: #e8eeff;
+			font: 13px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+		}
+
+		#stage {
+			display: grid;
+			/* 顶栏 / 画布(占满剩余空间) / 结果面板 —— iframe 必须在 1fr 那一行，
+			   否则只剩默认 150px 高，落点会打到 iframe 自己的状态栏上 */
+			grid-template-rows: auto minmax(0, 1fr) auto;
+			height: 100%;
+		}
+
+		#bar {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 8px 14px;
+			background: #151a2e;
+			border-bottom: 1px solid #2b3453;
+			flex-wrap: wrap;
+		}
+
+		#summary {
+			padding: 4px 12px;
+			border-radius: 8px;
+			font-weight: 700;
+			background: rgba(91, 141, 255, 0.18);
+		}
+
+		#summary.ok {
+			background: rgba(47, 181, 154, 0.2);
+		}
+
+		#summary.bad {
+			background: rgba(229, 101, 127, 0.22);
+		}
+
+		#frame {
+			width: 100%;
+			height: 100%;
+			border: none;
+			background: #12172a;
+		}
+
+		#details {
+			max-height: 26vh;
+			overflow: auto;
+			margin: 0;
+			padding: 8px 14px 16px;
+			border-top: 1px solid #2b3453;
+			font: 12px/1.65 Consolas, "Cascadia Mono", monospace;
+			white-space: pre-wrap;
+		}
+
+		.case-ok {
+			color: #6ee7d0;
+		}
+
+		.case-bad {
+			color: #ffc3ce;
+		}
+
+		code {
+			color: #9fb6de;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="stage">
+		<div id="bar">
+			<strong>DOM 端到端自检</strong>
+			<div id="summary">运行中…</div>
+			<span><code>拖放 / 四向连线 / 箭头方向 / 文字编辑 / 导出 / 持久化</code></span>
+		</div>
+		<iframe id="frame" src="../index.html"></iframe>
+		<pre id="details">等待 iframe 应用启动…</pre>
+	</div>
+
+	<script type="module">
+		import { runDomSuite, REPORT } from "./dom.js";
+
+		const iframe = document.getElementById("frame");
+		const summary = document.getElementById("summary");
+		const details = document.getElementById("details");
+
+		// 采集 iframe 内的脚本错误（跨域同源可直接挂）
+		iframe.addEventListener("load", () => {
+			const win = iframe.contentWindow;
+			win.addEventListener("error", (event) => {
+				REPORT.consoleErrors.push(`error: ${event.message} @ ${event.filename}:${event.lineno}`);
+			});
+			win.addEventListener("unhandledrejection", (event) => {
+				REPORT.consoleErrors.push(`unhandledrejection: ${event.reason}`);
+			});
+		});
+
+		function paint(lines) {
+			details.textContent = lines.join("\n");
+		}
+
+		const timeout = setTimeout(() => {
+			summary.textContent = "超时：用例未在 60 秒内跑完";
+			summary.className = "bad";
+			document.title = "DOMFAIL timeout";
+		}, 60000);
+
+		try {
+			const results = await runDomSuite(iframe);
+			clearTimeout(timeout);
+			const failed = results.filter((r) => !r.ok);
+			const lines = results.map((r) => {
+				const mark = r.ok ? "✓" : "✗";
+				const tail = r.ok ? "" : `\n    ${r.error && (r.error.stack || r.error.message)}`;
+				return `${mark} ${r.name}  (${r.ms.toFixed(1)}ms)${tail}`;
+			});
+			if (REPORT.consoleErrors.length) {
+				lines.push("", "脚本错误：", ...REPORT.consoleErrors.map((e) => `  ${e}`));
+			}
+			lines.push("", `合计 ${results.length} 项：通过 ${results.length - failed.length}，失败 ${failed.length}`);
+			paint(lines);
+			summary.textContent = `通过 ${results.length - failed.length} / ${results.length}`;
+			summary.className = failed.length ? "bad" : "ok";
+			document.title = failed.length ? `DOMFAIL ${failed.length}` : `DOMOK ${results.length}`;
+			window.__DOM_RESULTS__ = { results, consoleErrors: REPORT.consoleErrors };
+		} catch (err) {
+			clearTimeout(timeout);
+			summary.textContent = "运行器异常";
+			summary.className = "bad";
+			paint([`运行器异常：${err && (err.stack || err.message)}`]);
+			document.title = "DOMFAIL runner";
+		}
+	</script>
+</body>
+
+</html>

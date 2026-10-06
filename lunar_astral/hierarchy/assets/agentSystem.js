@@ -518,15 +518,20 @@ var agentSystem = (function (exports) {
             '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
         ];
-        selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0];
-        defaultOutfitPrompt = '穿着纯白色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层奶白色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋';
+        appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0];
+        chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0];
+        fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0];
+        groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0];
+        defaultOutfitChibiPrompt = '穿着纯白色洛丽塔风连衣裙，裙身镶有金色滚边与白色蕾丝花边，短款泡泡袖，胸前系着酒红色蝴蝶结，蝴蝶结中央镶嵌金框红宝石胸针并垂着金色链条吊坠，裙摆点缀两枚金色蝴蝶结，白色蕾丝花边短袜点缀白色蝴蝶结，黑色亮面皮鞋';
+        defaultOutfitFullPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，腰侧缀有深蓝与白色相间的缎带蝴蝶结且蝴蝶结中心镶嵌一颗圆珍珠，白色短袜，黑色系带低帮帆布鞋';
+        defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
         referenceImage = '';
         roleTool = [
             {
                 type: "function",
                 function: {
                     name: "diffusion_generation",
-                    description: "根据文本描述生成与月华本人无关的图像。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象,绘制月华形象必须调用 self_portrait",
+                    description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若需要参照已设置的参考图创作,请改用 image_to_image",
                     parameters: {
                         type: "object",
                         properties: {
@@ -552,8 +557,39 @@ var agentSystem = (function (exports) {
             {
                 type: "function",
                 function: {
+                    name: "image_to_image",
+                    description: "基于已设置的参考图（律令 <参考图> 保存）进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。仅在已设置参考图时可用;未设置参考图时请改用 diffusion_generation 进行文生图",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "prompt": {
+                                type: "string",
+                                description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "strength": {
+                                type: "number",
+                                description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。保留主体时建议 0.3~0.5,较大改变时 0.6~0.8。默认随机取值"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "prompt"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
                     name: "self_portrait",
-                    description: "生成月华的自画像。凡是要求绘制月华、你自己、\"我\"的形象,无论用户如何描述服装、场景或风格,都必须且只能调用此函数,禁止调用 diffusion_generation",
+                    description: "生成月华的全尺寸自画像（全身立绘,标准少女头身比）。凡是要求绘制月华、你自己、\"我\"的形象,且未特别要求Q版时,都必须且只能调用此函数,禁止调用 diffusion_generation",
                     parameters: {
                         type: "object",
                         properties: {
@@ -564,6 +600,10 @@ var agentSystem = (function (exports) {
                             "posture": {
                                 type: "string",
                                 description: "动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
                             },
                             "environment": {
                                 type: "string",
@@ -579,6 +619,93 @@ var agentSystem = (function (exports) {
                             }
                         },
                         required: [
+                            "expression",
+                            "posture",
+                            "environment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "chibi_self_portrait",
+                    description: "生成月华的Q版自画像（二头身可爱比例）。当要求绘制Q版、二头身、萌系或大头娃娃风格的月华形象时调用此函数,禁止调用 diffusion_generation",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "expression": {
+                                type: "string",
+                                description: "表情提示词,描述想要展现的表情"
+                            },
+                            "posture": {
+                                type: "string",
+                                description: "动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                            },
+                            "environment": {
+                                type: "string",
+                                description: "环境提示词,描述背景环境或场景"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "expression",
+                            "posture",
+                            "environment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "group_photo",
+                    description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。若已设置参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未设置则按文本描述绘制",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "companion": {
+                                type: "string",
+                                description: "合照对象描述,描述对方的性别、外貌、发型、服装、身份等特征"
+                            },
+                            "expression": {
+                                type: "string",
+                                description: "月华的表情提示词,描述想要展现的表情"
+                            },
+                            "posture": {
+                                type: "string",
+                                description: "月华的动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "月华的服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                            },
+                            "environment": {
+                                type: "string",
+                                description: "环境提示词,描述背景环境或场景"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "companion",
                             "expression",
                             "posture",
                             "environment"
@@ -604,8 +731,11 @@ var agentSystem = (function (exports) {
             }
             switch (funcName) {
                 case 'diffusion_generation': return this.handleDiffusionGeneration(args);
+                case 'image_to_image': return this.handleImageToImage(args);
                 case 'self_portrait': return this.handleSelfPortrait(args);
-                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
+                case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args);
+                case 'group_photo': return this.handleGroupPhoto(args);
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo`;
             }
         }
         collectDetail(toolCall, paintings) {
@@ -613,19 +743,30 @@ var agentSystem = (function (exports) {
                 const args = typeof toolCall.function.arguments === 'string'
                     ? JSON.parse(toolCall.function.arguments)
                     : toolCall.function.arguments;
-                if (toolCall.function.name === 'self_portrait') {
+                const name = toolCall.function.name;
+                if (name === 'self_portrait' || name === 'chibi_self_portrait') {
                     paintings.push({
-                        toolName: 'self_portrait',
-                        promptSummary: '自画像',
+                        toolName: name,
+                        promptSummary: name === 'self_portrait' ? '全尺寸自画像' : 'Q版自画像',
                         expression: args.expression || '',
                         posture: args.posture || '',
                         environment: args.environment || '',
                     });
                 }
-                else if (toolCall.function.name === 'diffusion_generation') {
+                else if (name === 'group_photo') {
+                    paintings.push({
+                        toolName: name,
+                        promptSummary: `与${args.companion || '他人'}的合照`,
+                        expression: args.expression || '',
+                        posture: args.posture || '',
+                        environment: args.environment || '',
+                        companion: args.companion || '',
+                    });
+                }
+                else if (name === 'diffusion_generation' || name === 'image_to_image') {
                     const prompt = args.prompt || '';
                     paintings.push({
-                        toolName: 'diffusion_generation',
+                        toolName: name,
                         promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
                     });
                 }
@@ -643,25 +784,54 @@ var agentSystem = (function (exports) {
             const parts = [];
             for (let i = 0; i < paintings.length; i++) {
                 const p = paintings[i];
-                if (p.toolName === 'self_portrait') {
-                    let desc = '月华绘制了一幅自画像';
+                if (p.toolName === 'self_portrait' || p.toolName === 'chibi_self_portrait') {
+                    let desc = p.toolName === 'self_portrait' ? '月华绘制了一幅全尺寸自画像' : '月华绘制了一幅Q版自画像';
                     if (p.expression)
                         desc += `，展现了${p.expression}`;
                     if (p.environment)
                         desc += `，背景是${p.environment}`;
                     parts.push(desc + '。');
                 }
+                else if (p.toolName === 'group_photo') {
+                    let desc = `月华绘制了一幅与${p.companion || '他人'}的合照`;
+                    if (p.expression)
+                        desc += `，展现了${p.expression}`;
+                    if (p.environment)
+                        desc += `，背景是${p.environment}`;
+                    parts.push(desc + '。');
+                }
+                else if (p.toolName === 'image_to_image')
+                    parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
                 else
                     parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
             }
             parts.push('图像已通过前端推送给用户。');
             return parts.join('\n');
         }
-        writeAppearancePrompt(expression, posture, outfit, environment) {
-            const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-            const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-            const currentOutfit = outfit || this.defaultOutfitPrompt;
-            return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
+        renderAppearance(template, parts, defaultOutfit) {
+            const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+            const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+            const outfit = parts.outfit || defaultOutfit;
+            return template
+                .replace('{base}', this.appearanceBasePrompt)
+                .replace('{expression}', expression)
+                .replace('{outfit}', outfit)
+                .replace('{posture}', posture)
+                .replace('{companion}', parts.companion || '')
+                .replace('{environment}', parts.environment || '');
+        }
+        paint(imageParams, label) {
+            const [result, error] = generateImage(imageParams);
+            if (error) {
+                console.error(`[绘制者] ${label}失败:`, error);
+                return `${label}失败: ${error}`;
+            }
+            if (!result || !result.base64)
+                return `${label}失败：引擎返回空结果`;
+            console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}`);
+            if (!pushImage([result.base64]))
+                console.warn(`[绘制者] 推送${label}结果到前端失败`);
+            return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
         }
         handleDiffusionGeneration(args) {
             try {
@@ -669,101 +839,121 @@ var agentSystem = (function (exports) {
                 if (!prompt.trim())
                     return '扩散生成失败：正向提示词不能为空';
                 console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
-                const imageParams = {
+                return this.paint({
                     prompt: prompt,
                     negativePrompt: args.negative_prompt || '',
                     cfgScale: args.cfg_scale ?? 1.0,
-                };
-                if (this.referenceImage) {
-                    imageParams.initImg = this.referenceImage;
-                    imageParams.strength = RandomFloat(0.35, 0.75);
-                    console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
-                }
-                const [result, error] = generateImage(imageParams);
-                if (error) {
-                    console.error('[绘制者] 图像生成失败:', error);
-                    return `扩散图像生成失败: ${error}`;
-                }
-                if (!result || !result.base64) {
-                    return '扩散图像生成失败：引擎返回空结果';
-                }
-                console.log(`[绘制者] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
-                const pushSuccess = pushImage([result.base64]);
-                if (!pushSuccess) {
-                    console.warn('[绘制者] 推送图片到前端失败');
-                }
-                return `扩散图像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+                }, '扩散图像生成');
             }
             catch (error) {
                 console.error('[绘制者] 扩散生成处理异常:', error);
                 return `扩散图像生成异常: ${error}`;
             }
         }
-        handleSelfPortrait(args) {
+        handleImageToImage(args) {
             try {
-                console.log(`[绘制者] -> 自画像生成`);
+                const prompt = args.prompt || '';
+                if (!prompt.trim())
+                    return '图生图失败：正向提示词不能为空';
+                if (!this.referenceImage) {
+                    return '图生图失败：尚未设置参考图，请先发送图片并下达 <参考图> 指令，或改用 diffusion_generation 进行文生图';
+                }
+                const strength = args.strength ?? RandomFloat(0.35, 0.75);
+                console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}`);
+                return this.paint({
+                    prompt: prompt,
+                    negativePrompt: args.negative_prompt || '',
+                    cfgScale: args.cfg_scale ?? 1.0,
+                    initImg: this.referenceImage,
+                    strength: strength,
+                }, '图生图生成');
+            }
+            catch (error) {
+                console.error('[绘制者] 图生图处理异常:', error);
+                return `图生图生成异常: ${error}`;
+            }
+        }
+        handleSelfPortrait(args) {
+            return this.handlePortrait(args, this.fullAppearancePrompt, this.defaultOutfitFullPrompt, '自画像');
+        }
+        handleChibiSelfPortrait(args) {
+            return this.handlePortrait(args, this.chibiAppearancePrompt, this.defaultOutfitChibiPrompt, 'Q版自画像');
+        }
+        handlePortrait(args, template, defaultOutfit, label) {
+            try {
+                console.log(`[绘制者] -> ${label}生成`);
                 console.log(`表情: "${args.expression}"`);
                 console.log(`姿势: "${args.posture}"`);
                 console.log(`服装: "${args.outfit}"`);
                 console.log(`环境: "${args.environment}"`);
                 console.log(`负面提示词: "${args.negative_prompt}"`);
                 console.log(`提示词引导系数: "${args.cfg_scale}"`);
-                const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.outfit, args.environment);
-                const defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
-                const imageParams = {
+                const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
+                return this.paint({
                     prompt: fullPrompt,
-                    negativePrompt: args.negative_prompt || defaultNegativePrompt,
+                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
                     cfgScale: args.cfg_scale ?? 1.0,
-                };
-                const [result, error] = generateImage(imageParams);
-                if (error) {
-                    console.error('[绘制者] 自画像生成失败:', error);
-                    return `自画像生成失败: ${error}`;
-                }
-                if (!result || !result.base64) {
-                    return '自画像生成失败：引擎返回空结果';
-                }
-                console.log(`[绘制者] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
-                const pushSuccess = pushImage([result.base64]);
-                if (!pushSuccess) {
-                    console.warn('[绘制者] 推送自画像到前端失败');
-                }
-                return `自画像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+                }, `${label}生成`);
             }
             catch (error) {
-                console.error('[绘制者] 自画像生成处理异常:', error);
-                return `自画像生成异常: ${error}`;
+                console.error(`[绘制者] ${label}处理异常:`, error);
+                return `${label}生成异常: ${error}`;
+            }
+        }
+        handleGroupPhoto(args) {
+            try {
+                console.log(`[绘制者] -> 合照生成`);
+                console.log(`合照对象: "${args.companion}"`);
+                console.log(`表情: "${args.expression}"`);
+                console.log(`姿势: "${args.posture}"`);
+                console.log(`服装: "${args.outfit}"`);
+                console.log(`环境: "${args.environment}"`);
+                const fullPrompt = this.renderAppearance(this.groupAppearancePrompt, args, this.defaultOutfitFullPrompt);
+                const imageParams = {
+                    prompt: fullPrompt,
+                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+                    cfgScale: args.cfg_scale ?? 1.0,
+                };
+                if (this.referenceImage) {
+                    imageParams.initImg = this.referenceImage;
+                    imageParams.strength = RandomFloat(0.35, 0.6);
+                    console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
+                }
+                return this.paint(imageParams, '合照生成');
+            }
+            catch (error) {
+                console.error('[绘制者] 合照生成处理异常:', error);
+                return `合照生成异常: ${error}`;
             }
         }
     }
 
     class MusicianRole extends CreativeRoleBase {
-        MAX_ITERATIONS = 5;
-        abcSpecPrompt = fileView('prompts/musicianAbcSpec.md')[0];
+        MAX_ITERATIONS = 4;
+        MIN_MELODY_BARS = 12;
+        DEFAULT_TEMPO = 100;
+        draft = null;
+        assembledDetail = null;
         musicTool = [
             {
                 type: "function",
                 function: {
-                    name: "compose_music",
-                    description: "创作音乐作品并生成ABC记谱法格式的乐谱，前端音乐播放器使用采样级音色库（真实乐器合成+LOFI效果链）播放。必须生成完整、可直接播放的ABC乐谱，包含和弦伴奏与多声部编配。",
+                    name: "submit_melody",
+                    description: "创作流程第一步：提交完整的主旋律声部。先规划风格、调式、节拍与段落结构，再写出贯穿全曲的主旋律。主旋律是全曲的根基，伴奏与和弦将在其基础上依次生成",
                     parameters: {
                         type: "object",
                         properties: {
                             "title": {
                                 type: "string",
-                                description: "音乐作品标题"
+                                description: "音乐作品标题，应具有诗意与美感，与音乐风格匹配"
                             },
-                            "instruments": {
+                            "instrument": {
                                 type: "string",
-                                description: "使用的乐器列表，多个乐器用逗号分隔。优先使用琴类乐器：钢琴(piano)、复古电钢琴、竖琴(harp)、吉他(guitar)、大提琴(cello)、小提琴(violin)。也可以使用长笛(flute)、单簧管(clarinet)、双簧管(oboe)、小号(trumpet)、萨克斯(sax)、贝斯(bass/低音提琴)、合成器(8bit/电子)、鼓组(打击乐)、氛围铺底(弦乐群)。推荐组合：'钢琴'独奏、'钢琴,大提琴'二重奏、'竖琴,小提琴'、'钢琴,贝斯,鼓组'三重奏等。"
+                                description: "主旋律乐器，单个乐器名，如：钢琴(piano)、小提琴(violin)、长笛(flute)、萨克斯(sax)、竖琴(harp)、大提琴(cello)、8bit"
                             },
                             "tempo": {
                                 type: "number",
                                 description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
-                            },
-                            "structure": {
-                                type: "string",
-                                description: "音乐段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
                             },
                             "key": {
                                 type: "string",
@@ -771,16 +961,66 @@ var agentSystem = (function (exports) {
                             },
                             "meter": {
                                 type: "string",
-                                description: "拍号，如 4/4、3/4、6/8"
+                                description: "拍号，如 4/4、3/4、6/8。默认 4/4"
                             },
-                            "abc_notation": {
+                            "structure": {
                                 type: "string",
-                                description: this.abcSpecPrompt
+                                description: "段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
                             },
+                            "melody": {
+                                type: "string",
+                                description: "主旋律ABC片段：仅一行音符，用 | 分隔小节，以 |] 结尾。禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记。应有起伏与乐句呼吸感（每4-8小节一个乐句）"
+                            }
                         },
                         required: [
                             "title",
-                            "abc_notation"
+                            "melody"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "submit_accompaniment",
+                    description: "创作流程第二步：在已提交的主旋律基础上生成伴奏声部。使用柱式和弦、分解和弦或阿尔贝蒂低音为旋律提供和声织体，小节数必须与主旋律完全一致",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "instrument": {
+                                type: "string",
+                                description: "伴奏乐器，单个乐器名，如：钢琴(piano)、竖琴(harp)、吉他(guitar)、贝斯(bass)、氛围铺底(弦乐群)"
+                            },
+                            "accompaniment": {
+                                type: "string",
+                                description: "伴奏ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2"
+                            }
+                        },
+                        required: [
+                            "accompaniment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "submit_chords",
+                    description: "创作流程第三步（最后一步）：在主旋律与伴奏基础上生成和弦进行声部，提供低音支撑与和声骨架，完成整部作品。小节数必须与主旋律完全一致",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "instrument": {
+                                type: "string",
+                                description: "和弦声部乐器，单个乐器名，如：贝斯(bass)、大提琴(cello)、钢琴(piano)、鼓组(打击乐)"
+                            },
+                            "chords": {
+                                type: "string",
+                                description: "和弦进行ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）"
+                            }
+                        },
+                        required: [
+                            "chords"
                         ]
                     }
                 }
@@ -803,30 +1043,20 @@ var agentSystem = (function (exports) {
                 console.error(`[演奏者] 工具调用参数解析失败:`, toolCall.function.arguments);
                 return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
             }
+            if (this.draft?.chords)
+                return '作品已创作完成，无需重复提交任何声部';
             switch (funcName) {
-                case 'compose_music': return this.handleComposeMusic(args);
-                default: return `未知工具: ${funcName}，可用工具为 compose_music`;
+                case 'submit_melody': return this.handleSubmitMelody(args);
+                case 'submit_accompaniment': return this.handleSubmitAccompaniment(args);
+                case 'submit_chords': return this.handleSubmitChords(args);
+                default: return `未知工具: ${funcName}，请按流程依次调用 submit_melody → submit_accompaniment → submit_chords`;
             }
         }
         collectDetail(toolCall, pieces) {
-            try {
-                const args = typeof toolCall.function.arguments === 'string'
-                    ? JSON.parse(toolCall.function.arguments)
-                    : toolCall.function.arguments;
-                if (args.title) {
-                    pieces.push({
-                        title: args.title,
-                        instruments: args.instruments || '',
-                        tempo: args.tempo || 0,
-                        structure: args.structure || '',
-                        key: args.key || '',
-                        meter: args.meter || '',
-                        abcLength: (args.abc_notation || '').length,
-                    });
-                }
-            }
-            catch {
-            }
+            if (toolCall.function.name !== 'submit_chords' || !this.assembledDetail)
+                return;
+            pieces.push(this.assembledDetail);
+            this.assembledDetail = null;
         }
         buildSummary(pieces) {
             if (pieces.length === 0)
@@ -855,45 +1085,134 @@ var agentSystem = (function (exports) {
             parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
             return parts.join('\n');
         }
-        handleComposeMusic(args) {
+        sanitizeFragment(fragment) {
+            return fragment
+                .replace(/^[A-Za-z]:.*$/gm, '')
+                .replace(/\[[Vv]:\d+\]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        countBars(fragment) {
+            const body = fragment
+                .replace(/^[A-Za-z]:.*$/gm, '')
+                .replace(/\[[Vv]:\d+\]/g, '')
+                .replace(/![^!|]*!/g, '')
+                .replace(/\|\]|:\||\|\|/g, '|');
+            return body.split('|').filter(segment => /[A-Ga-gz]/.test(segment)).length;
+        }
+        handleSubmitMelody(args) {
             try {
-                const title = args.title || '未命名作品';
-                const abcNotation = args.abc_notation || '';
-                const instruments = (args.instruments || '').trim();
-                console.log(`[演奏者] 创作音乐: "${title}"`);
-                if (instruments)
-                    console.log(`  乐器: ${instruments}`);
-                if (args.tempo)
-                    console.log(`  速度: ${args.tempo} BPM`);
-                if (args.structure)
-                    console.log(`  结构: ${args.structure}`);
-                if (!abcNotation.trim()) {
-                    return '音乐创作失败：ABC记谱法乐谱为空';
+                const title = (args.title || '').trim();
+                const melody = this.sanitizeFragment(args.melody || '');
+                if (!title)
+                    return '主旋律提交失败：作品标题不能为空';
+                if (!melody)
+                    return '主旋律提交失败：旋律内容不能为空';
+                const bars = this.countBars(melody);
+                if (bars < this.MIN_MELODY_BARS) {
+                    return `主旋律提交失败：当前仅 ${bars} 小节，音乐展开不足。请扩展至至少 ${this.MIN_MELODY_BARS} 小节（建议 16 小节以上），保持完整的段落结构后重新提交`;
                 }
-                let enrichedAbc = this.injectInstrumentDirective(abcNotation, instruments);
-                const hasX = /^X:\s*\d+/m.test(enrichedAbc);
-                const hasT = /^T:\s*.+/m.test(enrichedAbc);
-                const hasK = /^K:\s*.+/m.test(enrichedAbc);
-                if (!hasX || !hasK) {
-                    console.warn('[演奏者] ABC乐谱缺少必要字段 (X:/K:)，尝试自动补充');
-                    if (!hasX)
-                        enrichedAbc = 'X:1\n' + enrichedAbc;
-                    if (!hasT)
-                        enrichedAbc = enrichedAbc.replace(/^(X:\s*\d+\n)/m, `$1T:${title}\n`);
-                    if (!hasK)
-                        enrichedAbc = enrichedAbc.replace(/^(T:.*\n)/m, `$1K:C\n`);
-                }
-                const pushSuccess = pushContext('music', enrichedAbc, '');
-                if (!pushSuccess) {
-                    console.warn('[演奏者] 推送乐谱到前端失败');
-                }
-                console.log(`[演奏者] 乐谱推送成功，长度: ${enrichedAbc.length} 字符，乐器: ${instruments || '默认'}`);
-                return `音乐作品"${title}"创作成功。乐谱已推送到前端展示，可通过音乐播放器查看和播放。`;
+                this.draft = {
+                    title: title,
+                    structure: args.structure || '',
+                    key: args.key || 'C',
+                    meter: args.meter || '4/4',
+                    tempo: args.tempo || this.DEFAULT_TEMPO,
+                    melody: melody,
+                    melodyInstrument: args.instrument || '钢琴',
+                    melodyBars: bars,
+                    accompaniment: '',
+                    accompanimentInstrument: '',
+                    chords: '',
+                    chordInstrument: '',
+                };
+                console.log(`[演奏者] 主旋律已提交: "${title}"，${bars} 小节，${this.draft.key} 调，${this.draft.tempo}BPM`);
+                return `主旋律提交成功：共 ${bars} 小节。下一步请在此旋律基础上调用 submit_accompaniment 生成伴奏声部，小节数必须恰好为 ${bars} 小节并逐小节对齐`;
             }
             catch (error) {
-                console.error('[演奏者] 音乐创作处理异常:', error);
-                return `音乐创作异常: ${error}`;
+                console.error('[演奏者] 主旋律提交处理异常:', error);
+                return `主旋律提交异常: ${error}`;
             }
+        }
+        handleSubmitAccompaniment(args) {
+            try {
+                if (!this.draft)
+                    return '伴奏提交失败：尚未提交主旋律，请先调用 submit_melody';
+                const accompaniment = this.sanitizeFragment(args.accompaniment || '');
+                if (!accompaniment)
+                    return '伴奏提交失败：伴奏内容不能为空';
+                const bars = this.countBars(accompaniment);
+                if (bars !== this.draft.melodyBars) {
+                    return `伴奏提交失败：伴奏为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐主旋律后重新提交完整的伴奏声部`;
+                }
+                this.draft.accompaniment = accompaniment;
+                this.draft.accompanimentInstrument = args.instrument || this.draft.melodyInstrument;
+                console.log(`[演奏者] 伴奏已提交: ${bars} 小节，乐器: ${this.draft.accompanimentInstrument}`);
+                return `伴奏提交成功：${bars} 小节，与主旋律对齐。最后一步请调用 submit_chords 生成和弦进行声部，小节数必须恰好为 ${bars} 小节`;
+            }
+            catch (error) {
+                console.error('[演奏者] 伴奏提交处理异常:', error);
+                return `伴奏提交异常: ${error}`;
+            }
+        }
+        handleSubmitChords(args) {
+            try {
+                if (!this.draft)
+                    return '和弦提交失败：尚未提交主旋律，请先调用 submit_melody';
+                if (!this.draft.accompaniment)
+                    return '和弦提交失败：尚未提交伴奏声部，请先调用 submit_accompaniment';
+                const chords = this.sanitizeFragment(args.chords || '');
+                if (!chords)
+                    return '和弦提交失败：和弦进行内容不能为空';
+                const bars = this.countBars(chords);
+                if (bars !== this.draft.melodyBars) {
+                    return `和弦提交失败：和弦进行为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐后重新提交完整的和弦声部`;
+                }
+                this.draft.chords = chords;
+                this.draft.chordInstrument = args.instrument || '贝斯';
+                const detail = this.assembleAndPush();
+                console.log(`[演奏者] 和弦已提交: ${bars} 小节，乐器: ${this.draft.chordInstrument}，作品《${detail.title}》拼装完成`);
+                this.assembledDetail = detail;
+                this.draft = null;
+                return `和弦进行提交成功，作品《${detail.title}》创作完成：主旋律、伴奏与和弦进行三声部已对齐拼装（共 ${detail.abcLength} 小节）。乐谱已推送到前端，可通过音乐播放器查看和播放。`;
+            }
+            catch (error) {
+                console.error('[演奏者] 和弦提交处理异常:', error);
+                return `和弦提交异常: ${error}`;
+            }
+        }
+        assembleAndPush() {
+            const d = this.draft;
+            const instruments = [d.melodyInstrument, d.accompanimentInstrument, d.chordInstrument]
+                .map(inst => inst.trim())
+                .filter(Boolean)
+                .join(',');
+            let enrichedAbc = [
+                `X:1`,
+                `T:${d.title}`,
+                `M:${d.meter}`,
+                `L:1/8`,
+                `Q:1/4=${d.tempo}`,
+                `K:${d.key}`,
+                `[V:1] ${d.melody}`,
+                `[V:2] ${d.accompaniment}`,
+                `[V:3] ${d.chords}`,
+                ''
+            ].join('\n');
+            enrichedAbc = this.injectInstrumentDirective(enrichedAbc, instruments);
+            const pushSuccess = pushContext('music', enrichedAbc, '');
+            if (!pushSuccess) {
+                console.warn('[演奏者] 推送乐谱到前端失败');
+            }
+            return {
+                title: d.title,
+                instruments: instruments,
+                tempo: d.tempo,
+                structure: d.structure,
+                key: d.key,
+                meter: d.meter,
+                abcLength: d.melodyBars,
+            };
         }
         injectInstrumentDirective(abcNotation, instruments) {
             if (!instruments)

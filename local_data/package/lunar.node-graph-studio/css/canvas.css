@@ -1,0 +1,550 @@
+/* ============================================================================
+   canvas.css —— 画布、栅格、节点、端口、连线、叠加层、就地编辑器、缩略图
+   ========================================================================= */
+
+.canvas {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	outline: none;
+	background-color: var(--bg-1);
+	/* 4 层栅格：细线横竖 + 粗线横竖；尺寸与位置由 viewport.apply() 跟随视图 */
+	background-image:
+		linear-gradient(to right, var(--grid-fine) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid-fine) 1px, transparent 1px),
+		linear-gradient(to right, var(--grid-coarse) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid-coarse) 1px, transparent 1px);
+	background-repeat: repeat;
+	cursor: default;
+	touch-action: none;
+}
+
+.canvas.grid-off {
+	background-image: none;
+}
+
+.canvas.is-pan-ready {
+	cursor: grab;
+}
+
+.canvas.is-panning {
+	cursor: grabbing;
+}
+
+.canvas.is-node-dragging {
+	cursor: grabbing;
+}
+
+.world {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+	transform-origin: 0 0;
+	will-change: transform;
+}
+
+/* 连线层：40k×40k 画布 + 原点平移，世界坐标可直接写进路径 */
+.edge-layer {
+	position: absolute;
+	left: -20000px;
+	top: -20000px;
+	overflow: visible;
+	pointer-events: none;
+}
+
+.edge-hit {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 14;
+	stroke-linecap: round;
+	pointer-events: stroke;
+	cursor: pointer;
+}
+
+.edge-line {
+	fill: none;
+	stroke: var(--edge-color, #7f96c7);
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.edge.is-dashed .edge-line {
+	stroke-dasharray: 8 6;
+}
+
+.edge.is-selected .edge-line {
+	stroke: var(--accent);
+	stroke-width: 2.6;
+	filter: drop-shadow(0 0 4px rgba(91, 141, 255, 0.65));
+}
+
+.edge-arrow {
+	fill: var(--edge-color, #7f96c7);
+}
+
+.edge.is-selected .edge-arrow {
+	fill: var(--accent);
+}
+
+.temp-line {
+	fill: none;
+	stroke: var(--accent-2);
+	stroke-width: 2;
+	stroke-dasharray: 6 5;
+	stroke-linecap: round;
+}
+
+.temp-arrow {
+	fill: var(--accent-2);
+}
+
+/* 连线标签层 */
+.edge-labels {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+}
+
+.edge-label {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	max-width: 220px;
+	padding: 1px 7px;
+	background: rgba(14, 19, 36, 0.92);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	color: #c9d6f2;
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: auto;
+	cursor: text;
+}
+
+.edge-label.is-empty {
+	display: none;
+}
+
+.edge-label.is-selected {
+	border-color: var(--accent);
+	color: #fff;
+	background: rgba(28, 40, 74, 0.95);
+}
+
+.edge-label-editor {
+	position: absolute;
+	transform: translate(-50%, -50%);
+	width: 132px;
+	padding: 2px 6px;
+	background: rgba(20, 26, 46, 0.98);
+	border: 1px solid var(--accent);
+	border-radius: 6px;
+	color: #fff;
+	font-size: 11px;
+	text-align: center;
+	outline: none;
+	z-index: 20;
+}
+
+/* ---------------------------------------------------------------- 节点 */
+
+.node-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 0;
+	height: 0;
+}
+
+.node {
+	position: absolute;
+	display: flex;
+	flex-direction: column;
+	background: linear-gradient(180deg, #212a4a 0%, #18203a 100%);
+	border: 1px solid #333d63;
+	border-radius: 12px;
+	box-shadow: var(--shadow-1);
+	color: var(--text);
+	cursor: grab;
+	user-select: none;
+	transition: box-shadow 0.14s, border-color 0.14s;
+}
+
+.node:hover {
+	border-color: #44507f;
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+
+.node.is-selected {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px rgba(91, 141, 255, 0.4), 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+/* 拖动中：抬起 + 置顶，给出「正在搬运」的即时反馈 */
+.node.is-dragging {
+	cursor: grabbing;
+	z-index: 6;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px rgba(91, 141, 255, 0.55), 0 18px 38px rgba(0, 0, 0, 0.62);
+	transition: none;
+}
+
+.node.is-locked {
+	cursor: default;
+}
+
+/* 顶部色条：**纯装饰**（用节点自身颜色标出类型，方便一眼区分），没有任何交互功能。
+   做成「卡片顶边本身带色」的观感：满宽 + 跟随卡片圆角，而不是一条浮在边框上的亮线。 */
+.node-accent {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 3px;
+	border-radius: 11px 11px 0 0;
+	background: var(--node-color);
+	opacity: 0.9;
+	pointer-events: none;
+}
+
+/* 胶囊形卡片顶边是弧线，色条会显得突兀；这类卡片的类型色由头部图标承担 */
+.node[data-shape="pill"] .node-accent {
+	display: none;
+}
+
+.node-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 0 0 auto;
+	height: 34px;
+	padding: 0 9px 0 11px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.node-icon {
+	flex: 0 0 auto;
+	color: var(--node-color);
+	font-size: 12px;
+}
+
+.node-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	font-size: calc(var(--node-font) + 1px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: text;
+}
+
+.node-tool {
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	display: grid;
+	place-items: center;
+	background: transparent;
+	border: none;
+	border-radius: 5px;
+	color: var(--text-mute);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.14s, background 0.14s;
+}
+
+.node:hover .node-tool {
+	opacity: 1;
+}
+
+.node-tool:hover {
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--text);
+}
+
+.node-body {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	/* 左右留白较窄，是为了让 .node-text 与就地编辑器（textarea）拥有完全相同的
+	   内容宽度 —— 高度测量必须与渲染同宽，否则换行结果对不上。 */
+	padding: 7px 5px 9px;
+	overflow: hidden;
+}
+
+.node-text {
+	flex: 1 1 auto;
+	min-height: 0;
+	/* 与 .node-editor-text 保持完全一致的盒模型：同内边距、同换行规则 */
+	padding: 3px 6px;
+	font-size: var(--node-font);
+	line-height: 1.55;
+	color: #c6d1e9;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	overflow: hidden;
+	cursor: text;
+}
+
+.node.is-collapsed .node-body {
+	display: none;
+}
+
+.node-lock {
+	position: absolute;
+	right: -7px;
+	top: -7px;
+	width: 18px;
+	height: 18px;
+	display: none;
+	place-items: center;
+	background: #2a3357;
+	border: 1px solid #46527f;
+	border-radius: 50%;
+	color: var(--warn);
+	font-size: 8px;
+}
+
+.node.is-locked .node-lock {
+	display: grid;
+}
+
+.node-resize {
+	position: absolute;
+	right: -3px;
+	bottom: -3px;
+	width: 15px;
+	height: 15px;
+	cursor: nwse-resize;
+	opacity: 0;
+	transition: opacity 0.14s;
+	background: linear-gradient(135deg, transparent 46%, var(--node-color) 46%, var(--node-color) 58%, transparent 58%);
+	border-radius: 0 0 10px 0;
+}
+
+.node:hover .node-resize,
+.node.is-selected .node-resize {
+	opacity: 0.85;
+}
+
+/* 形状变体 */
+.node[data-shape="rect"] {
+	border-radius: 4px;
+}
+
+.node[data-shape="rect"] .node-accent {
+	border-radius: 3px 3px 0 0;
+}
+
+.node[data-shape="pill"] {
+	border-radius: 999px;
+}
+
+.node[data-shape="pill"] .node-head {
+	justify-content: center;
+	border-bottom: none;
+	padding: 0 16px;
+}
+
+.node[data-shape="pill"] .node-body {
+	padding-top: 0;
+	text-align: center;
+}
+
+.node[data-shape="pill"] .node-tool {
+	display: none;
+}
+
+.node[data-shape="note"] {
+	background: linear-gradient(180deg, #33301c 0%, #292713 100%);
+	border-color: #6b5a2a;
+}
+
+.node[data-shape="note"] .node-title,
+.node[data-shape="note"] .node-text {
+	color: #ffeec2;
+}
+
+/* 就地编辑：隐藏被替换的原元素，让编辑器占位 */
+.node.is-editing-text .node-text,
+.node.is-editing-title .node-title {
+	display: none;
+}
+
+.node-editor {
+	width: 100%;
+	background: rgba(9, 13, 26, 0.55);
+	/* 用内阴影当焦点框，而不是 border：边框会占掉 2px 宽度，
+	   使编辑器与 .node-text 的内容宽度不一致，测量高度就会偏差 */
+	border: none;
+	border-radius: 6px;
+	box-shadow: inset 0 0 0 1px rgba(91, 141, 255, 0.65);
+	color: #eaf0ff;
+	font-family: inherit;
+	outline: none;
+}
+
+.node-editor-text {
+	flex: 1 1 auto;
+	min-height: 22px;
+	padding: 3px 6px;
+	font-size: var(--node-font);
+	line-height: 1.55;
+	resize: none;
+	overflow: hidden;
+}
+
+.node-editor-title {
+	flex: 1 1 auto;
+	min-width: 40px;
+	height: 22px;
+	padding: 0 6px;
+	font-size: calc(var(--node-font) + 1px);
+	font-weight: 600;
+}
+
+/* 离屏测量探针：排版规则必须与 .node-text 完全一致，用来量「文字真实需要多高」。
+   绝不能改读 .node-text 的 scrollHeight —— 它被 flex 拉伸成当前高度，读回来天然
+   ≥ 当前高度，会让「适应文字」每点一次就把卡片撑高一点（越点越大）。 */
+.measure-probe {
+	position: absolute;
+	left: -99999px;
+	top: 0;
+	visibility: hidden;
+	pointer-events: none;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	line-height: 1.55;
+	font-family: inherit;
+}
+
+/* ---------------------------------------------------------------- 端口 */
+
+.node-ports {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.port {
+	position: absolute;
+	width: 18px;
+	height: 18px;
+	transform: translate(-50%, -50%);
+	display: grid;
+	place-items: center;
+	pointer-events: auto;
+	cursor: crosshair;
+	z-index: 2;
+}
+
+.port-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: #131a30;
+	border: 2px solid var(--node-color);
+	opacity: 0.6;
+	transition: transform 0.12s, opacity 0.12s, background 0.12s, box-shadow 0.12s;
+}
+
+/* 输出口实心、输入口空心 —— 一眼分清方向 */
+.port[data-dir="out"] .port-dot {
+	background: var(--node-color);
+}
+
+.node:hover .port-dot,
+.node.is-selected .port-dot {
+	opacity: 1;
+}
+
+.port:hover .port-dot {
+	opacity: 1;
+	transform: scale(1.5);
+	box-shadow: 0 0 0 4px rgba(91, 141, 255, 0.18);
+}
+
+.port.is-drop-ok .port-dot {
+	opacity: 1;
+	transform: scale(1.7);
+	background: var(--accent-2);
+	border-color: var(--accent-2);
+	box-shadow: 0 0 0 5px rgba(110, 231, 208, 0.24);
+}
+
+.port.is-drop-bad .port-dot {
+	opacity: 1;
+	transform: scale(1.35);
+	background: var(--danger);
+	border-color: var(--danger);
+	box-shadow: 0 0 0 4px rgba(229, 101, 127, 0.2);
+}
+
+/* ---------------------------------------------------------------- 叠加层 */
+
+.overlay-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	pointer-events: none;
+}
+
+.guide {
+	position: absolute;
+	background: var(--accent-2);
+	box-shadow: 0 0 6px rgba(110, 231, 208, 0.7);
+	pointer-events: none;
+}
+
+.marquee {
+	position: absolute;
+	display: none;
+	border: 1px dashed var(--accent);
+	background: rgba(91, 141, 255, 0.12);
+	border-radius: 2px;
+	pointer-events: none;
+	z-index: 30;
+}
+
+.marquee.is-on {
+	display: block;
+}
+
+/* ---------------------------------------------------------------- 缩略图 */
+
+.minimap {
+	position: absolute;
+	right: 14px;
+	bottom: 14px;
+	width: 224px;
+	height: 152px;
+	padding: 0;
+	background: rgba(13, 17, 32, 0.9);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-1);
+	overflow: hidden;
+	cursor: crosshair;
+	backdrop-filter: blur(4px);
+}
+
+.minimap.is-hidden {
+	display: none;
+}
+
+.minimap canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+}

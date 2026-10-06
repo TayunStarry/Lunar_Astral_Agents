@@ -1,0 +1,10 @@
+{
+	"id": "lunar.node-graph-studio",
+	"icon": "icon.svg",
+	"title": "节点图工坊",
+	"description": "节点图设计与制作工具：自由拖放节点、四向端口连线（上下左右任意连接）、节点文字就地编辑、连线方向箭头与路径样式（曲线/直角/直线）、撤销重做、对齐分布与自动布局、画布缩放平移与缩略图、节点图 JSON 保存与导出。",
+	"tags": [
+		"Zero-LTP"
+	],
+	"background_retention": true
+}

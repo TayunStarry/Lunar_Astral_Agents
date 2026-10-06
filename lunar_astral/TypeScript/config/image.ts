@@ -91,13 +91,43 @@ export interface DiffusionGenerationParams {
 	cfg_scale?: number;
 }
 
-/** 自拍工具 - 参数接口 */
+/** 自画像工具 - 参数接口（全尺寸 / Q版共用） */
 export interface SelfPortraitParams {
 	/** 表情描述 */
 	expression: string;
 	/** 姿势描述 */
 	posture: string;
 	/** 服装描述，默认为角色默认服装 */
+	outfit?: string;
+	/** 环境描述 */
+	environment: string;
+	/** 负面提示词 */
+	negative_prompt?: string;
+	/** 提示词引导系数 */
+	cfg_scale?: number;
+}
+
+/** 图生图工具 - 参数接口 */
+export interface ImageToImageParams {
+	/** 提示词 */
+	prompt: string;
+	/** 负面提示词 */
+	negative_prompt?: string;
+	/** 图生图强度（0~1，越大越偏离参考图），默认随机取值 */
+	strength?: number;
+	/** 提示词引导系数 */
+	cfg_scale?: number;
+}
+
+/** 合照工具 - 参数接口 */
+export interface GroupPhotoParams {
+	/** 合照对象描述（外貌、服装、身份等） */
+	companion: string;
+	/** 月华的表情描述 */
+	expression: string;
+	/** 月华的姿势描述 */
+	posture: string;
+	/** 月华的服装描述，默认为角色默认服装 */
 	outfit?: string;
 	/** 环境描述 */
 	environment: string;

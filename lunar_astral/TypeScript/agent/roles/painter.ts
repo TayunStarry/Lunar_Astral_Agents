@@ -1,6 +1,6 @@
 import { ToolCall } from '../../config/tool';
 import { RandomFloat, RandomFloor } from '../../tool/math';
-import { GenerateImageParams, DiffusionGenerationParams, SelfPortraitParams } from '../../config/image';
+import { GenerateImageParams, DiffusionGenerationParams, ImageToImageParams, SelfPortraitParams, GroupPhotoParams } from '../../config/image';
 import { ToolCallItem } from '../../config/model';
 import { CreativeRoleBase } from '../base/creative';
 import { interactEvent } from '../capabilities/ltp-event';
@@ -11,12 +11,28 @@ interface PaintingDetail {
 	toolName: string;
 	/** 正向提示词摘要 */
 	promptSummary: string;
-	/** 表情（自画像专用） */
+	/** 表情（人物像专用） */
 	expression?: string;
-	/** 姿势（自画像专用） */
+	/** 姿势（人物像专用） */
 	posture?: string;
-	/** 环境（自画像专用） */
+	/** 环境（人物像专用） */
 	environment?: string;
+	/** 合照对象（合照专用） */
+	companion?: string;
+}
+
+/** 外观模板占位符填充参数 */
+interface AppearanceParts {
+	/** 表情提示词 */
+	expression?: string;
+	/** 姿势提示词 */
+	posture?: string;
+	/** 服装提示词 */
+	outfit?: string;
+	/** 环境提示词 */
+	environment?: string;
+	/** 合照对象描述（仅合照模板使用） */
+	companion?: string;
 }
 
 /** 绘制者角色 */
@@ -43,11 +59,21 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		'双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
 		'双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
 	]
-	/** 自我外观提示 */
-	private readonly selfAppearancePrompt = fileView('prompts/selfAppearance.md')[0]
-	/** 默认服装提示词 */
-	private readonly defaultOutfitPrompt = '穿着纯白色哥特萝莉塔风连衣裙，裙身镶有金色烫边滚边，短款泡泡袖且袖口缀有白色蕾丝花边，胸前系着大红色蝴蝶结并坠有红色宝石吊饰，多层奶白色荷叶边裙摆点缀金色缎带蝴蝶结与金色蕾丝花边，白色蕾丝花边短袜点缀深蓝色蝴蝶结，黑色亮面玛丽珍厚底鞋'
-	/** 参考图（律令 <参考图> 设置）：本地图片路径（相对 LocalDir），非空时扩散生成切换为图生图流程 */
+	/** 月华基础外观（发型/瞳色/发饰等比例无关特征，三套人设模板共用） */
+	private readonly appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0]
+	/** Q版（二头身）自我外观模板 */
+	private readonly chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0]
+	/** 全尺寸（全身立绘）自我外观模板 */
+	private readonly fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0]
+	/** 与他人合照外观模板 */
+	private readonly groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0]
+	/** Q版默认服装提示词（白色洛丽塔连衣裙，胸前酒红蝴蝶结配红宝石胸针） */
+	private readonly defaultOutfitChibiPrompt = '穿着纯白色洛丽塔风连衣裙，裙身镶有金色滚边与白色蕾丝花边，短款泡泡袖，胸前系着酒红色蝴蝶结，蝴蝶结中央镶嵌金框红宝石胸针并垂着金色链条吊坠，裙摆点缀两枚金色蝴蝶结，白色蕾丝花边短袜点缀白色蝴蝶结，黑色亮面皮鞋'
+	/** 全尺寸默认服装提示词（针织外套搭配格纹百褶裙，腰侧蓝白蝴蝶结配珍珠） */
+	private readonly defaultOutfitFullPrompt = '穿着宽松的奶油白色针织连帽拉链外套，敞开拉链，里面是纯白色圆领T恤，高腰深蓝和白色格纹百褶迷你裙，腰侧缀有深蓝与白色相间的缎带蝴蝶结且蝴蝶结中心镶嵌一颗圆珍珠，白色短袜，黑色系带低帮帆布鞋'
+	/** 默认负面提示词（人物像与图生图共用） */
+	private readonly defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理'
+	/** 参考图（律令 <参考图> 设置）：本地图片路径（相对 LocalDir），非空时图生图与合照切换为图生图流程 */
 	public referenceImage: string = ''
 	/** 绘画角色工具 */
 	private readonly roleTool: ToolCall[] = [
@@ -55,7 +81,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			type: "function",
 			function: {
 				name: "diffusion_generation",
-				description: "根据文本描述生成与月华本人无关的图像。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象,绘制月华形象必须调用 self_portrait",
+				description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若需要参照已设置的参考图创作,请改用 image_to_image",
 				parameters: {
 					type: "object",
 					properties: {
@@ -81,8 +107,39 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		{
 			type: "function",
 			function: {
+				name: "image_to_image",
+				description: "基于已设置的参考图（律令 <参考图> 保存）进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。仅在已设置参考图时可用;未设置参考图时请改用 diffusion_generation 进行文生图",
+				parameters: {
+					type: "object",
+					properties: {
+						"prompt": {
+							type: "string",
+							description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
+						},
+						"negative_prompt": {
+							type: "string",
+							description: "负面提示文本,用于排除图像中不希望出现的元素"
+						},
+						"strength": {
+							type: "number",
+							description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。保留主体时建议 0.3~0.5,较大改变时 0.6~0.8。默认随机取值"
+						},
+						"cfg_scale": {
+							type: "number",
+							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+						}
+					},
+					required: [
+						"prompt"
+					]
+				}
+			}
+		},
+		{
+			type: "function",
+			function: {
 				name: "self_portrait",
-				description: "生成月华的自画像。凡是要求绘制月华、你自己、\"我\"的形象,无论用户如何描述服装、场景或风格,都必须且只能调用此函数,禁止调用 diffusion_generation",
+				description: "生成月华的全尺寸自画像（全身立绘,标准少女头身比）。凡是要求绘制月华、你自己、\"我\"的形象,且未特别要求Q版时,都必须且只能调用此函数,禁止调用 diffusion_generation",
 				parameters: {
 					type: "object",
 					properties: {
@@ -94,10 +151,10 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 							type: "string",
 							description: "动作提示词,描述想要展现的姿势或动作"
 						},
-						// "outfit": {
-						// 	type: "string",
-						// 	description: "服装提示词,描述想要穿着的服装样式。如果不提供则使用默认服装"
-						// },
+						"outfit": {
+							type: "string",
+							description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+						},
 						"environment": {
 							type: "string",
 							description: "环境提示词,描述背景环境或场景"
@@ -112,6 +169,93 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						}
 					},
 					required: [
+						"expression",
+						"posture",
+						"environment"
+					]
+				}
+			}
+		},
+		{
+			type: "function",
+			function: {
+				name: "chibi_self_portrait",
+				description: "生成月华的Q版自画像（二头身可爱比例）。当要求绘制Q版、二头身、萌系或大头娃娃风格的月华形象时调用此函数,禁止调用 diffusion_generation",
+				parameters: {
+					type: "object",
+					properties: {
+						"expression": {
+							type: "string",
+							description: "表情提示词,描述想要展现的表情"
+						},
+						"posture": {
+							type: "string",
+							description: "动作提示词,描述想要展现的姿势或动作"
+						},
+						"outfit": {
+							type: "string",
+							description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+						},
+						"environment": {
+							type: "string",
+							description: "环境提示词,描述背景环境或场景"
+						},
+						"negative_prompt": {
+							type: "string",
+							description: "负面提示文本,用于排除图像中不希望出现的元素"
+						},
+						"cfg_scale": {
+							type: "number",
+							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+						}
+					},
+					required: [
+						"expression",
+						"posture",
+						"environment"
+					]
+				}
+			}
+		},
+		{
+			type: "function",
+			function: {
+				name: "group_photo",
+				description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。若已设置参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未设置则按文本描述绘制",
+				parameters: {
+					type: "object",
+					properties: {
+						"companion": {
+							type: "string",
+							description: "合照对象描述,描述对方的性别、外貌、发型、服装、身份等特征"
+						},
+						"expression": {
+							type: "string",
+							description: "月华的表情提示词,描述想要展现的表情"
+						},
+						"posture": {
+							type: "string",
+							description: "月华的动作提示词,描述想要展现的姿势或动作"
+						},
+						"outfit": {
+							type: "string",
+							description: "月华的服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+						},
+						"environment": {
+							type: "string",
+							description: "环境提示词,描述背景环境或场景"
+						},
+						"negative_prompt": {
+							type: "string",
+							description: "负面提示文本,用于排除图像中不希望出现的元素"
+						},
+						"cfg_scale": {
+							type: "number",
+							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+						}
+					},
+					required: [
+						"companion",
 						"expression",
 						"posture",
 						"environment"
@@ -141,8 +285,11 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		}
 		switch (funcName) {
 			case 'diffusion_generation': return this.handleDiffusionGeneration(args as DiffusionGenerationParams);
+			case 'image_to_image': return this.handleImageToImage(args as ImageToImageParams);
 			case 'self_portrait': return this.handleSelfPortrait(args as SelfPortraitParams);
-			default: return `未知工具: ${funcName}，可用工具为 diffusion_generation 和 self_portrait`;
+			case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args as SelfPortraitParams);
+			case 'group_photo': return this.handleGroupPhoto(args as GroupPhotoParams);
+			default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo`;
 		}
 	}
 	/** 从工具调用中提取绘画作品详情 */
@@ -151,18 +298,30 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			const args = typeof toolCall.function.arguments === 'string'
 				? JSON.parse(toolCall.function.arguments)
 				: toolCall.function.arguments;
-			if (toolCall.function.name === 'self_portrait') {
+			const name = toolCall.function.name;
+			if (name === 'self_portrait' || name === 'chibi_self_portrait') {
 				paintings.push({
-					toolName: 'self_portrait',
-					promptSummary: '自画像',
+					toolName: name,
+					promptSummary: name === 'self_portrait' ? '全尺寸自画像' : 'Q版自画像',
 					expression: args.expression || '',
 					posture: args.posture || '',
 					environment: args.environment || '',
 				});
-			} else if (toolCall.function.name === 'diffusion_generation') {
+			}
+			else if (name === 'group_photo') {
+				paintings.push({
+					toolName: name,
+					promptSummary: `与${args.companion || '他人'}的合照`,
+					expression: args.expression || '',
+					posture: args.posture || '',
+					environment: args.environment || '',
+					companion: args.companion || '',
+				});
+			}
+			else if (name === 'diffusion_generation' || name === 'image_to_image') {
 				const prompt = args.prompt || '';
 				paintings.push({
-					toolName: 'diffusion_generation',
+					toolName: name,
 					promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
 				});
 			}
@@ -183,96 +342,151 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		const parts: string[] = [];
 		for (let i = 0; i < paintings.length; i++) {
 			const p = paintings[i];
-			if (p.toolName === 'self_portrait') {
-				let desc = '月华绘制了一幅自画像';
+			if (p.toolName === 'self_portrait' || p.toolName === 'chibi_self_portrait') {
+				let desc = p.toolName === 'self_portrait' ? '月华绘制了一幅全尺寸自画像' : '月华绘制了一幅Q版自画像';
 				if (p.expression) desc += `，展现了${p.expression}`;
 				if (p.environment) desc += `，背景是${p.environment}`;
 				parts.push(desc + '。');
 			}
+			else if (p.toolName === 'group_photo') {
+				let desc = `月华绘制了一幅与${p.companion || '他人'}的合照`;
+				if (p.expression) desc += `，展现了${p.expression}`;
+				if (p.environment) desc += `，背景是${p.environment}`;
+				parts.push(desc + '。');
+			}
+			else if (p.toolName === 'image_to_image') parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
 			else parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
 		}
 		parts.push('图像已通过前端推送给用户。');
 		return parts.join('\n');
 	}
-	/** 获得写入了动作、表情与服装的自我外观提示词 */
-	private writeAppearancePrompt(expression?: string, posture?: string, outfit?: string, environment?: string): string {
-		const currentExpression = expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
-		const currentPosture = posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
-		const currentOutfit = outfit || this.defaultOutfitPrompt;
-		return this.selfAppearancePrompt.replace('{expression}', currentExpression).replace('{posture}', currentPosture).replace('{outfit}', currentOutfit).replace('{environment}', environment || '');
+	/**
+	 * 将基础外观、表情、服装、姿势、环境写入外观模板，得到完整提示词
+	 *
+	 * @param template 场景外观模板（Q版/全尺寸/合照）
+	 * @param parts 占位符填充参数，缺省时使用随机表情、随机姿势与默认服装
+	 * @param defaultOutfit 该场景的默认服装提示词
+	 */
+	private renderAppearance(template: string, parts: AppearanceParts, defaultOutfit: string): string {
+		const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+		const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+		const outfit = parts.outfit || defaultOutfit;
+		return template
+			.replace('{base}', this.appearanceBasePrompt)
+			.replace('{expression}', expression)
+			.replace('{outfit}', outfit)
+			.replace('{posture}', posture)
+			.replace('{companion}', parts.companion || '')
+			.replace('{environment}', parts.environment || '');
 	}
-	/** 处理扩散图像生成 */
+	/** 执行图像生成并推送至前端，返回本次生成的结果描述 */
+	private paint(imageParams: GenerateImageParams, label: string): string {
+		const [result, error] = generateImage(imageParams);
+		if (error) {
+			console.error(`[绘制者] ${label}失败:`, error);
+			return `${label}失败: ${error}`;
+		}
+		if (!result || !result.base64) return `${label}失败：引擎返回空结果`;
+		console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}`);
+		if (!pushImage([result.base64])) console.warn(`[绘制者] 推送${label}结果到前端失败`);
+		return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+	}
+	/** 处理通用扩散图像生成（文生图） */
 	private handleDiffusionGeneration(args: DiffusionGenerationParams): string {
 		try {
 			const prompt = args.prompt || '';
 			if (!prompt.trim()) return '扩散生成失败：正向提示词不能为空';
 			console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
-			const imageParams: GenerateImageParams = {
+			return this.paint({
 				prompt: prompt,
 				negativePrompt: args.negative_prompt || '',
 				cfgScale: args.cfg_scale ?? 1.0,
-			};
-			// 参考图（律令 <参考图> 设置）：非空时切换为图生图流程
-			if (this.referenceImage) {
-				imageParams.initImg = this.referenceImage;
-				imageParams.strength = RandomFloat(0.35, 0.75);
-				console.log(`[绘制者] 图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
-			}
-			const [result, error] = generateImage(imageParams);
-			if (error) {
-				console.error('[绘制者] 图像生成失败:', error);
-				return `扩散图像生成失败: ${error}`;
-			}
-			if (!result || !result.base64) {
-				return '扩散图像生成失败：引擎返回空结果';
-			}
-			console.log(`[绘制者] 扩散图像生成成功，尺寸: ${result.width}x${result.height}`);
-			const pushSuccess = pushImage([result.base64]);
-			if (!pushSuccess) {
-				console.warn('[绘制者] 推送图片到前端失败');
-			}
-			return `扩散图像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+			}, '扩散图像生成');
 		}
 		catch (error) {
 			console.error('[绘制者] 扩散生成处理异常:', error);
 			return `扩散图像生成异常: ${error}`;
 		}
 	}
-	/** 处理自画像生成 */
-	private handleSelfPortrait(args: SelfPortraitParams): string {
+	/** 处理图生图生成（基于已设置的参考图） */
+	private handleImageToImage(args: ImageToImageParams): string {
 		try {
-			console.log(`[绘制者] -> 自画像生成`);
+			const prompt = args.prompt || '';
+			if (!prompt.trim()) return '图生图失败：正向提示词不能为空';
+			if (!this.referenceImage) {
+				return '图生图失败：尚未设置参考图，请先发送图片并下达 <参考图> 指令，或改用 diffusion_generation 进行文生图';
+			}
+			const strength = args.strength ?? RandomFloat(0.35, 0.75);
+			console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}`);
+			return this.paint({
+				prompt: prompt,
+				negativePrompt: args.negative_prompt || '',
+				cfgScale: args.cfg_scale ?? 1.0,
+				initImg: this.referenceImage,
+				strength: strength,
+			}, '图生图生成');
+		}
+		catch (error) {
+			console.error('[绘制者] 图生图处理异常:', error);
+			return `图生图生成异常: ${error}`;
+		}
+	}
+	/** 处理全尺寸自画像生成 */
+	private handleSelfPortrait(args: SelfPortraitParams): string {
+		return this.handlePortrait(args, this.fullAppearancePrompt, this.defaultOutfitFullPrompt, '自画像');
+	}
+	/** 处理Q版自画像生成 */
+	private handleChibiSelfPortrait(args: SelfPortraitParams): string {
+		return this.handlePortrait(args, this.chibiAppearancePrompt, this.defaultOutfitChibiPrompt, 'Q版自画像');
+	}
+	/** 处理人物像生成（全尺寸自画像 / Q版自画像共用） */
+	private handlePortrait(args: SelfPortraitParams, template: string, defaultOutfit: string, label: string): string {
+		try {
+			console.log(`[绘制者] -> ${label}生成`);
 			console.log(`表情: "${args.expression}"`)
 			console.log(`姿势: "${args.posture}"`)
 			console.log(`服装: "${args.outfit}"`)
 			console.log(`环境: "${args.environment}"`)
 			console.log(`负面提示词: "${args.negative_prompt}"`)
 			console.log(`提示词引导系数: "${args.cfg_scale}"`)
-			const fullPrompt = this.writeAppearancePrompt(args.expression, args.posture, args.outfit, args.environment);
-			const defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
-			const imageParams: GenerateImageParams = {
+			const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
+			return this.paint({
 				prompt: fullPrompt,
-				negativePrompt: args.negative_prompt || defaultNegativePrompt,
+				negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
 				cfgScale: args.cfg_scale ?? 1.0,
-			};
-			const [result, error] = generateImage(imageParams);
-			if (error) {
-				console.error('[绘制者] 自画像生成失败:', error);
-				return `自画像生成失败: ${error}`;
-			}
-			if (!result || !result.base64) {
-				return '自画像生成失败：引擎返回空结果';
-			}
-			console.log(`[绘制者] 自画像生成成功，尺寸: ${result.width}x${result.height}`);
-			const pushSuccess = pushImage([result.base64]);
-			if (!pushSuccess) {
-				console.warn('[绘制者] 推送自画像到前端失败');
-			}
-			return `自画像生成成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+			}, `${label}生成`);
 		}
 		catch (error) {
-			console.error('[绘制者] 自画像生成处理异常:', error);
-			return `自画像生成异常: ${error}`;
+			console.error(`[绘制者] ${label}处理异常:`, error);
+			return `${label}生成异常: ${error}`;
+		}
+	}
+	/** 处理合照生成（已设置参考图时以合照对象照片为底图进行图生图） */
+	private handleGroupPhoto(args: GroupPhotoParams): string {
+		try {
+			console.log(`[绘制者] -> 合照生成`);
+			console.log(`合照对象: "${args.companion}"`)
+			console.log(`表情: "${args.expression}"`)
+			console.log(`姿势: "${args.posture}"`)
+			console.log(`服装: "${args.outfit}"`)
+			console.log(`环境: "${args.environment}"`)
+			const fullPrompt = this.renderAppearance(this.groupAppearancePrompt, args, this.defaultOutfitFullPrompt);
+			const imageParams: GenerateImageParams = {
+				prompt: fullPrompt,
+				negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+				cfgScale: args.cfg_scale ?? 1.0,
+			};
+			// 参考图（律令 <参考图> 设置）：以合照对象照片为底图，尽量保留其容貌
+			if (this.referenceImage) {
+				imageParams.initImg = this.referenceImage;
+				imageParams.strength = RandomFloat(0.35, 0.6);
+				console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
+			}
+			return this.paint(imageParams, '合照生成');
+		}
+		catch (error) {
+			console.error('[绘制者] 合照生成处理异常:', error);
+			return `合照生成异常: ${error}`;
 		}
 	}
 }

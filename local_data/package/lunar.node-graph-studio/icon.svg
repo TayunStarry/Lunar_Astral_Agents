@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="节点图工坊">
+	<defs>
+		<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+			<stop offset="0" stop-color="#1d2440" />
+			<stop offset="1" stop-color="#0f1322" />
+		</linearGradient>
+		<linearGradient id="wire" x1="0" y1="0" x2="1" y2="0">
+			<stop offset="0" stop-color="#7fb2ff" />
+			<stop offset="1" stop-color="#6ee7d0" />
+		</linearGradient>
+	</defs>
+	<rect x="2" y="2" width="124" height="124" rx="26" fill="url(#bg)" />
+	<path d="M38 46 C 62 46, 62 88, 88 88" fill="none" stroke="url(#wire)" stroke-width="5" stroke-linecap="round" />
+	<path d="M38 82 C 58 82, 60 42, 88 40" fill="none" stroke="#8f7dff" stroke-width="4" stroke-linecap="round" stroke-dasharray="9 7" />
+	<path d="M88 88 L 74 81 L 75 95 Z" fill="#6ee7d0" />
+	<path d="M88 40 L 74 33 L 75 47 Z" fill="#8f7dff" />
+	<rect x="14" y="32" width="30" height="24" rx="7" fill="#5b8dff" />
+	<rect x="14" y="70" width="30" height="24" rx="7" fill="#3f4a6d" stroke="#8f7dff" stroke-width="2" />
+	<rect x="82" y="28" width="32" height="24" rx="7" fill="#3f4a6d" stroke="#8f7dff" stroke-width="2" />
+	<rect x="82" y="76" width="32" height="24" rx="7" fill="#2fb59a" />
+	<circle cx="29" cy="44" r="3.4" fill="#ffffff" fill-opacity="0.85" />
+	<circle cx="98" cy="88" r="3.4" fill="#ffffff" fill-opacity="0.85" />
+</svg>

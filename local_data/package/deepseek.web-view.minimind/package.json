@@ -1,0 +1,1 @@
+{"name":"transformer-inference-analyzer","version":"1.0.0","description":"Interactive Transformer LLM inference visualizer running minimind-3 (Qwen3) fully in-browser.","type":"module","private":true,"scripts":{"parity":"node tools/parity.mjs","serve":"python3 -m http.server 8000 --bind 0.0.0.0"},"devDependencies":{"esbuild":"^0.28.2"}}

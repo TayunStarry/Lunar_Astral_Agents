@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>『 星月智能 』节点图工坊</title>
+	<link rel="icon" href="icon.svg" type="image/svg+xml">
+	<!-- 标准样式库 -->
+	<link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+	<!-- 项目私有样式 -->
+	<link rel="stylesheet" href="css/tokens.css">
+	<link rel="stylesheet" href="css/canvas.css">
+	<link rel="stylesheet" href="css/panels.css">
+</head>
+
+<body>
+	<div class="app" id="app">
+		<!-- 顶栏：由 js/ui/toolbar.js 按命令表构建（HTML 只提供容器） -->
+		<header class="app-bar" id="appBar"></header>
+
+		<div class="app-main">
+			<!-- 左栏：节点类型面板 + 文档列表 -->
+			<aside class="side side-left" id="paletteHost"></aside>
+
+			<!-- 中栏：画布 -->
+			<section class="canvas-wrap" id="canvasWrap">
+				<div class="canvas" id="canvas" tabindex="0">
+					<div class="world" id="world">
+						<!-- 连线层：40k×40k 画布 + 原点偏移，节点世界坐标可直接使用 -->
+						<svg class="edge-layer" id="edgeLayer" width="40000" height="40000" viewBox="0 0 40000 40000" aria-hidden="true">
+							<g class="edge-root" id="edgeRoot" transform="translate(20000,20000)"></g>
+							<g class="temp-root" id="tempRoot" transform="translate(20000,20000)"></g>
+						</svg>
+						<!-- 连线标签层（HTML，便于排版） -->
+						<div class="edge-labels" id="edgeLabels"></div>
+						<!-- 节点层 -->
+						<div class="node-layer" id="nodeLayer"></div>
+						<!-- 叠加层：对齐参考线、吸附提示 -->
+						<div class="overlay-layer" id="overlayLayer"></div>
+					</div>
+					<!-- 框选矩形（屏幕坐标） -->
+					<div class="marquee" id="marquee"></div>
+				</div>
+
+				<!-- 缩略图 -->
+				<div class="minimap" id="minimap" title="缩略图：点击或拖动定位视口">
+					<canvas id="minimapCanvas" width="224" height="152"></canvas>
+				</div>
+
+				<div class="toast-host" id="toastHost"></div>
+			</section>
+
+			<!-- 右栏：属性检查器 -->
+			<aside class="side side-right" id="inspectorHost"></aside>
+		</div>
+
+		<!-- 底栏：状态与提示 -->
+		<footer class="status-bar" id="statusBar"></footer>
+	</div>
+
+	<script type="module" src="js/main.js"></script>
+</body>
+
+</html>

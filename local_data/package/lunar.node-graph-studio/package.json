@@ -1,0 +1,13 @@
+{
+	"name": "lunar-node-graph-studio",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "节点图工坊（Zero-LTP）——纯前端节点图设计与制作工具；type=module 使 Node 侧测试脚本可直接 import 浏览器同源的 ES 模块。",
+	"license": "UNLICENSED",
+	"scripts": {
+		"test": "node test/run.js",
+		"test:dom": "node test/browser-check.js",
+		"serve": "node test/serve.js"
+	}
+}

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>节点图工坊 · 自检</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 18px 20px 40px;
+			background: #0d1120;
+			color: #e8eeff;
+			font: 13px/1.6 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+		}
+
+		h1 {
+			font-size: 17px;
+			margin: 0 0 4px;
+		}
+
+		.sub {
+			color: #7d8aab;
+			margin-bottom: 14px;
+		}
+
+		.bar {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			margin-bottom: 14px;
+			flex-wrap: wrap;
+		}
+
+		.summary {
+			padding: 6px 12px;
+			border-radius: 8px;
+			font-weight: 700;
+			background: rgba(47, 181, 154, 0.16);
+			border: 1px solid rgba(47, 181, 154, 0.5);
+		}
+
+		.summary.bad {
+			background: rgba(229, 101, 127, 0.16);
+			border-color: rgba(229, 101, 127, 0.55);
+		}
+
+		button {
+			padding: 6px 12px;
+			background: #232b47;
+			border: 1px solid #2b3453;
+			border-radius: 7px;
+			color: #e8eeff;
+			cursor: pointer;
+		}
+
+		label {
+			color: #a9b6d6;
+			cursor: pointer;
+		}
+
+		.suite {
+			margin: 16px 0 6px;
+			color: #8fb0ff;
+			font-weight: 700;
+		}
+
+		.case {
+			display: flex;
+			align-items: baseline;
+			gap: 10px;
+			padding: 3px 8px;
+			border-radius: 6px;
+		}
+
+		.case.ok .mark {
+			color: #2fb59a;
+		}
+
+		.case.bad {
+			background: rgba(229, 101, 127, 0.12);
+		}
+
+		.case.bad .mark {
+			color: #e5657f;
+		}
+
+		.name {
+			flex: 1 1 auto;
+		}
+
+		.ms {
+			color: #6b7899;
+			font-size: 11px;
+		}
+
+		.err {
+			margin: 2px 0 10px 26px;
+			padding: 8px 10px;
+			background: rgba(9, 13, 26, 0.8);
+			border-left: 3px solid #e5657f;
+			border-radius: 6px;
+			color: #ffc3ce;
+			font-size: 12px;
+			overflow-x: auto;
+		}
+
+		a {
+			color: #7fb2ff;
+		}
+	</style>
+</head>
+
+<body>
+	<h1>节点图工坊 · 逻辑自检</h1>
+	<div class="sub">
+		与 <code>node test/run.js</code> 完全相同的用例（几何 / 端口规则 / 连线方向 / 图模型 / 文档清洗 / 历史 / 布局 /
+		文字 / 命令层）。返回 <a href="../index.html">节点图工坊</a>。
+	</div>
+	<div class="bar">
+		<div class="summary" id="summary">运行中…</div>
+		<button id="rerun">重新运行</button>
+		<label><input type="checkbox" id="failedOnly"> 只看失败</label>
+	</div>
+	<div id="list"></div>
+	<script type="module" src="browser.js"></script>
+</body>
+
+</html>

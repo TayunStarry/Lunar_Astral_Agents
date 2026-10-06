@@ -65,7 +65,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 | 标签 | 含义 | 接入 AtoA | 当前使用示例 |
 |------|------|-----------|--------------|
-| `Zero-LTP` | 协议基座：本地包页面，经 web UI 加载/运行，不内嵌专用智能体 | — | `lunar.image-studio`、`lunar.novel-studio`、`lunar.engine_manager` 等 |
+| `Zero-LTP` | 协议基座：本地包页面，经 web UI 加载/运行，不内嵌专用智能体 | — | `lunar.image-studio`、`lunar.novel-studio`、`lunar.node-graph-studio`、`lunar.engine_manager` 等 |
 | `Node-LTP` | 专用 WebApp 智能体：为特定 web 应用定制指令理解与操作序列 | ✅ | `lunar.file-explorer`、`lunar.search-weather` |
 | `Mini-LTP` | 通用页面操作智能体：iframe 最小化嵌入 + DOM 感知 + 键鼠/滚动/组合键 | ✅ | `lunar.click-monitor`、`deepdemos.anime-rubik-solver` 等 |
 | `Self-LTP` | 自主页面操作智能体：页面（开始/停止）按钮触发，多轮自循环 | — | `deepdemos.voxel-disaster` |
