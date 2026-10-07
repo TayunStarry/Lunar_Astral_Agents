@@ -1,10 +1,11 @@
 package engine
 
 import (
-	"LunarSubsystem/LoggerGeneral"
-	"LunarSubsystem/Qwen3-TTS/module"
+	logger "LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
+
+	qwentts "LunarAstral/engine/QwenTTS"
 
 	"github.com/dop251/goja"
 )
@@ -23,7 +24,7 @@ func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 	}
 
 	// 解析可选参数
-	req := module.TTSRequest{
+	req := qwentts.TTSRequest{
 		Text:              text,
 		Temperature:       0.8,
 		TopK:              50,
@@ -66,17 +67,17 @@ func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 	// 执行TTS合成
 	audioData, err := doTTSSynthesize(req)
 	if err != nil {
-		LoggerGeneral.Error("LunarCore", "TTS合成失败: %v", err)
+		logger.Error("LunarCore", "TTS合成失败: %v", err)
 		return class.runtime.ToValue([]any{"", err})
 	}
 
-	LoggerGeneral.SubInfo("LunarCore", "TTS", "合成完成: [%s] 长度=%d", text, len(audioData))
+	logger.SubInfo("LunarCore", "TTS", "合成完成: [%s] 长度=%d", text, len(audioData))
 	return class.runtime.ToValue([]any{audioData, nil})
 }
 
 // doTTSSynthesize 执行TTS合成，返回base64编码的WAV音频数据
-func doTTSSynthesize(req module.TTSRequest) (string, error) {
-	samples, err := module.SynthesizeText(
+func doTTSSynthesize(req qwentts.TTSRequest) (string, error) {
+	samples, err := qwentts.SynthesizeText(
 		req.Text, req.RefAudio, req.LanguageID,
 		req.Temperature, req.TopK, req.TopP,
 		req.MaxTokens, req.RepetitionPenalty, req.Threads,
@@ -85,7 +86,7 @@ func doTTSSynthesize(req module.TTSRequest) (string, error) {
 		return "", err
 	}
 
-	wavData := module.EncodePCMToWAV(samples, 24000)
+	wavData := qwentts.EncodePCMToWAV(samples, 24000)
 	audioBase64 := base64.StdEncoding.EncodeToString(wavData)
 	return audioBase64, nil
 }

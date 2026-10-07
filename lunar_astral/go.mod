@@ -9,10 +9,10 @@ require (
 	LunarSubsystem/GeneralConfig v0.0.0
 	LunarSubsystem/LoggerGeneral v0.0.0
 	LunarSubsystem/MultimodalAnalysis v0.0.0
-	LunarSubsystem/Qwen3-TTS v0.0.0
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
 	github.com/gorilla/websocket v1.5.3
+	golang.org/x/sys v0.47.0
 )
 
 require (
@@ -34,7 +34,6 @@ require (
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
 	golang.org/x/net v0.40.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
 )
 
@@ -45,8 +44,6 @@ replace LunarSubsystem/FileManager => ../subsystem/file_manager
 replace LunarSubsystem/MediaTools => ../subsystem/media_tools
 
 replace LunarSubsystem/BrowserClient => ../subsystem/browser_client
-
-replace LunarSubsystem/Qwen3-TTS => ../subsystem/qwen3_tts
 
 replace LunarSubsystem/LoggerGeneral => ../subsystem/logger_general
 

@@ -1,18 +1,16 @@
-﻿# Lunar Astral Agents - 统一构建脚本
+# Lunar Astral Agents - 统一构建脚本
 #
-# 注意：Qwen3 TTS 默认只编译 CPP 库（GGML + qwen3tts.dll），不编译它的 Go EXE；
-# 需要一并产出 Qwen3_TTS_Lunar.exe 时加 -WithGo。
+# 注意：Qwen3 TTS 已并入 lunar_astral（lunar_astral\engine\QwenTTS），
+# 不再是独立子系统；其 C++ 库（qwen3tts.dll）由 QwenTTS\build.ps1 单独构建，
+# 输出到 local_data\models\Qwen3-TTS。
 # 其余子系统（environment_repair / lunar_astral / crystal_astral / ltp9_keygen）
-# 没有 CPP 库，仍照常构建各自的 Go EXE。
+# 照常构建各自的 Go EXE。
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
 
     [ValidateSet("amd64", "arm64")]
-    [string]$TargetArch = "amd64",
-
-    # 透传给 qwen3_tts：额外构建 Qwen3_TTS_Lunar.exe（默认关闭）
-    [switch]$WithGo
+    [string]$TargetArch = "amd64"
 )
 
 $ErrorActionPreference = "Stop"
@@ -145,10 +143,6 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    # Qwen3 TTS 默认只出 CPP 库（GGML + qwen3tts.dll）；-WithGo 时才连 Go EXE 一起构建
-    $ttsArgs = @{}
-    if ($WithGo) { $ttsArgs['WithGo'] = $true }
-    Invoke-Build -Path "$ScriptRoot\qwen3_tts" -Name "Qwen3 TTS (CPP library)" -ExtraArgs $ttsArgs
     Invoke-Build -Path "$ScriptRoot\environment_repair" -Name "Environment Repair"
     Invoke-Build -Path "$ScriptRoot\..\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\..\crystal_astral" -Name "Crystal Astral"

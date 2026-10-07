@@ -7,7 +7,7 @@ import (
 	file "LunarSubsystem/FileManager/server"
 	"LunarSubsystem/GeneralConfig"
 	image "LunarSubsystem/MultimodalAnalysis/server"
-	tts "LunarSubsystem/Qwen3-TTS/module"
+	tts "LunarAstral/engine/QwenTTS"
 	"fmt"
 	"net/http"
 	"sync"

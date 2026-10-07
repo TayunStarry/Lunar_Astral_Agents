@@ -11,7 +11,7 @@ import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	image "LunarSubsystem/MultimodalAnalysis/server"
-	"LunarSubsystem/Qwen3-TTS/module"
+	qwentts "LunarAstral/engine/QwenTTS"
 	"context"
 	"mime"
 	"net/http"
@@ -88,7 +88,7 @@ func WaitForShutdown(quit chan os.Signal, server *http.Server) {
 func initTTSEngine() {
 	modelDir := *GeneralConfig.LocalDir + "/models/Qwen3-TTS"
 	refAudio := *GeneralConfig.LocalDir + "/audios/lunar-template.wav"
-	module.InitTTSEngine(modelDir, refAudio)
+	qwentts.InitTTSEngine(modelDir, refAudio)
 }
 
 // initBridgeAdapter 初始化桥接适配器
