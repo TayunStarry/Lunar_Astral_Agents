@@ -190,6 +190,22 @@ function Build-GGML {
 
     $gen = Get-BestGenerator
 
+    # 失效缓存检测：CMakeCache.txt 记录创建时的绝对路径，目录迁移（如仓库内移动、
+    # 拷贝项目）后 CMake 会拒绝增量构建。检测到不一致时自动清理并全新配置。
+    $cacheFile = Join-Path $GGML_BUILD_DIR "CMakeCache.txt"
+    if (Test-Path $cacheFile) {
+        foreach ($line in (Get-Content $cacheFile -TotalCount 20)) {
+            if ($line -match "^#+ For build in directory: (.+)$") {
+                $recorded = $Matches[1].Trim().Replace('/', '\')
+                if ($recorded -ne $GGML_BUILD_DIR) {
+                    Write-BuildLog "检测到失效的 CMake 缓存（创建于 $recorded），自动清理后重新配置..." "Yellow"
+                    Remove-Item -Recurse -Force $GGML_BUILD_DIR
+                }
+                break
+            }
+        }
+    }
+
     if ($Clean -and (Test-Path $GGML_BUILD_DIR)) {
         Write-BuildLog "Cleaning old build directory..." "Yellow"
         Remove-Item -Recurse -Force $GGML_BUILD_DIR

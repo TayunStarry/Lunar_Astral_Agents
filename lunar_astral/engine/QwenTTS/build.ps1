@@ -1,4 +1,4 @@
-# build.ps1 - QwenTTS Engine Build Script (lunar_astral 内置引擎)
+﻿# build.ps1 - QwenTTS Engine Build Script (lunar_astral 内置引擎)
 # 2-stage build: GGML -> C++
 # 产出 qwen3tts.dll（含 GGML 静态库），默认输出到仓库根的
 # local_data\models\Qwen3-TTS（与 GGUF 模型同目录），由 Lunar_Astral.exe
@@ -204,6 +204,39 @@ if (Test-Path $targetDll) {
     Write-BuildLog "  [OK] qwen3tts.dll -> $targetDll ($dllSize MB)" "Green"
 } else {
     Write-BuildLog "  [WARN] qwen3tts.dll not found at $targetDll" "Yellow"
+}
+
+# ---------- 依赖 DLL 就位 ----------
+# qwen3tts.dll 的运行时依赖经 LOAD_WITH_ALTERED_SEARCH_PATH 从其同目录解析：
+#   - vulkan-1.dll        Vulkan 加载器（优先 Vulkan SDK，其次系统副本）
+#   - libgomp-1.dll       OpenMP 运行时（MinGW，libgomp 无法静态链接）
+#   - libwinpthread-1.dll MinGW pthread
+# 全新环境首次构建时 CMake 只产出 qwen3tts.dll，这里把依赖一并复制到位。
+Write-BuildLog "" "White"
+Write-BuildLog "--- dependency DLLs ---" "Cyan"
+$gccCmd = Get-Command gcc -ErrorAction SilentlyContinue
+$gccBinDir = if ($gccCmd) { Split-Path -Parent $gccCmd.Source } else { "" }
+$vulkanCandidates = @()
+if ($env:VULKAN_SDK) { $vulkanCandidates += (Join-Path $env:VULKAN_SDK "Bin\vulkan-1.dll") }
+$vulkanCandidates += (Join-Path $env:SystemRoot "System32\vulkan-1.dll")
+$depSources = @{
+    "libgomp-1.dll"       = @((Join-Path $gccBinDir "libgomp-1.dll"))
+    "libwinpthread-1.dll" = @((Join-Path $gccBinDir "libwinpthread-1.dll"))
+    "vulkan-1.dll"        = $vulkanCandidates
+}
+foreach ($depName in @("vulkan-1.dll", "libgomp-1.dll", "libwinpthread-1.dll")) {
+    $depDest = Join-Path $DllOutputDir $depName
+    if (Test-Path $depDest) {
+        Write-BuildLog "  [SKIP] $depName (已存在)" "DarkGray"
+        continue
+    }
+    $depSrc = $depSources[$depName] | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $depSrc) {
+        Write-BuildLog "  [WARN] 未找到 $depName 的来源副本，运行时 GPU/多线程可能降级" "Yellow"
+        continue
+    }
+    Copy-Item $depSrc $depDest -Force
+    Write-BuildLog "  [OK] $depName <- $depSrc" "Green"
 }
 
 Write-BuildLog "" "White"

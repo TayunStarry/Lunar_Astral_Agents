@@ -1,11 +1,17 @@
 ﻿# Luna Astral - 编译脚本
-# 由根目录脚本统一调用，仅处理图标编译和项目编译
+# 由根目录脚本统一调用，处理图标编译、QwenTTS 引擎库按需构建和项目编译
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
     [ValidateSet("amd64", "arm64")]
-    [string]$TargetArch = "amd64"
+    [string]$TargetArch = "amd64",
+
+    # 强制重建 QwenTTS 引擎库（即使 qwen3tts.dll 已存在）
+    [switch]$WithTTS,
+
+    # 跳过 QwenTTS 引擎库构建（即使 qwen3tts.dll 不存在）
+    [switch]$SkipTTS
 )
 
 $ErrorActionPreference = "Stop"
@@ -82,6 +88,32 @@ function Stop-RunningLunar {
     Start-Sleep -Milliseconds 500
 }
 
+# ---------- QwenTTS 引擎库按需构建 ----------
+function Invoke-TtsBuildIfNeeded {
+    if ($SkipTTS) {
+        Write-Host "已跳过 QwenTTS 引擎库构建 (-SkipTTS)" -ForegroundColor DarkGray
+        return
+    }
+
+    $ttsDll = Join-Path $repoRoot "local_data\models\Qwen3-TTS\qwen3tts.dll"
+    if ((Test-Path $ttsDll) -and -not $WithTTS) {
+        Write-Host "qwen3tts.dll 已存在，跳过引擎库构建（-WithTTS 可强制重建）" -ForegroundColor DarkGray
+        return
+    }
+
+    $ttsBuildScript = Join-Path $PSScriptRoot "engine\QwenTTS\build.ps1"
+    if (-not (Test-Path $ttsBuildScript)) {
+        throw "未找到 QwenTTS 构建脚本: $ttsBuildScript"
+    }
+
+    Write-Host "开始构建 QwenTTS 引擎库（GGML → C++）..." -ForegroundColor Cyan
+    # 用独立 powershell 进程执行：子脚本以 exit 返回退出码，避免污染当前脚本作用域
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ttsBuildScript -TargetOS $TargetOS -TargetArch $TargetArch
+    if ($LASTEXITCODE -ne 0) {
+        throw "QwenTTS 引擎库构建失败 (exit code: $LASTEXITCODE)"
+    }
+}
+
 # ---------- 清除目录内残留的可执行文件 ----------
 # 历史构建/手工复制可能在项目目录内留下 Lunar_Astral.exe，编译前统一清除
 function Remove-StaleExe {
@@ -102,6 +134,9 @@ try {
 
     # 清除目录内可能残留的 Lunar_Astral.exe
     Remove-StaleExe
+
+    # 按需构建 QwenTTS 引擎库（须在关闭月华服务之后：运行中的进程会锁住 qwen3tts.dll）
+    Invoke-TtsBuildIfNeeded
 
     # ---------- 编译时生成端点自述文档 ----------
     # 调用共享生成器解析 server/variable.go 中的 SystemEndpoints 注册表，生成 server/endpoint_docs.gen.json
@@ -133,24 +168,31 @@ try {
     $env:CGO_CFLAGS = "-w"
     $env:CGO_LDFLAGS = "-static-libgcc -static-libstdc++ -Wl,-Bstatic,-lwinpthread,-Bdynamic"
 
-    # 编译服务端脚本 
-    $exitCode = Invoke-NativeCommand { npm run server.side }
-    if ($exitCode -ne 0) { throw "npm server.side 执行失败" }
+    # npm/Go 构建均以脚本所在目录为基准（不依赖调用方的当前目录）
+    Push-Location $PSScriptRoot
+    try {
+        # 编译服务端脚本
+        $exitCode = Invoke-NativeCommand { npm run server.side }
+        if ($exitCode -ne 0) { throw "npm server.side 执行失败" }
 
-    # 构建可执行文件
-    $binaryName = "Lunar_Astral.exe"
-    if ($TargetOS -ne "windows") { $binaryName = "Lunar_Astral" }
-    $outputPath = "..\$binaryName"
+        # 构建可执行文件
+        $binaryName = "Lunar_Astral.exe"
+        if ($TargetOS -ne "windows") { $binaryName = "Lunar_Astral" }
+        $outputPath = "..\$binaryName"
 
-    $ldflags = "-s -w -extldflags=-Wl,-Bstatic,-lstdc++,-lgcc,-lgcc_eh,-lwinpthread,-Bdynamic"
-    $buildArgs = @(
-        "build",
-        "-tags", "webview",
-        "-ldflags", $ldflags,
-        "-o", $outputPath
-    )
-    $exitCode = Invoke-NativeCommand { & $Go $buildArgs }
-    if ($exitCode -ne 0) { throw "Go build 失败" }
+        $ldflags = "-s -w -extldflags=-Wl,-Bstatic,-lstdc++,-lgcc,-lgcc_eh,-lwinpthread,-Bdynamic"
+        $buildArgs = @(
+            "build",
+            "-tags", "webview",
+            "-ldflags", $ldflags,
+            "-o", $outputPath
+        )
+        $exitCode = Invoke-NativeCommand { & $Go $buildArgs }
+        if ($exitCode -ne 0) { throw "Go build 失败" }
+    }
+    finally {
+        Pop-Location
+    }
 
     Write-Host "✓ Luna Astral 构建成功: $outputPath" -ForegroundColor Green
 }

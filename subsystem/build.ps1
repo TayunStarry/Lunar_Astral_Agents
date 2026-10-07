@@ -1,10 +1,5 @@
-# Lunar Astral Agents - 统一构建脚本
-#
-# 注意：Qwen3 TTS 已并入 lunar_astral（lunar_astral\engine\QwenTTS），
-# 不再是独立子系统；其 C++ 库（qwen3tts.dll）由 QwenTTS\build.ps1 单独构建，
-# 输出到 local_data\models\Qwen3-TTS。
-# 其余子系统（environment_repair / lunar_astral / crystal_astral / ltp9_keygen）
-# 照常构建各自的 Go EXE。
+﻿# Lunar Astral Agents - 统一构建脚本
+
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
