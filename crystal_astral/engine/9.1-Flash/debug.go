@@ -137,7 +137,7 @@ func handleDebugProbe(m map[string]any) {
 // handleDebugTest 处理 ltp9/test 信封：按 action 分发到探针接口，并回执 ltp9/test_ack。
 // action 集合：agent / broadcast_target / file / db / memory / crypto(encode|decode) / base64 /
 // jwt / llm / embed / emoji(图片记忆) / command / network / async / http / sleep；
-// kokoro_tts / qwen_tts / qwen_asr 委托宿主注入的 testActionHook。
+// kokoro_tts / qwen_tts / qwen_asr / omnivoice_tts 委托宿主注入的 testActionHook。
 func handleDebugTest(m map[string]any) {
 	reqID, _ := m["request_id"].(string)
 	action, _ := m["action"].(string)
@@ -356,7 +356,7 @@ func handleDebugTest(m map[string]any) {
 		ack(ProbeHTTP(method, asString("url"), asString("body"), headers), nil)
 	case "sleep":
 		ack(ProbeSleep(asFloat("ms")), nil)
-	case "kokoro_tts", "qwen_tts", "qwen_asr":
+	case "kokoro_tts", "qwen_tts", "qwen_asr", "omnivoice_tts":
 		// 依赖宿主服务（Kokoro 引擎 / 月华 TTS·ASR 代理），委托宿主注入的处理器
 		debugPushMu.RLock()
 		hook := testActionHook

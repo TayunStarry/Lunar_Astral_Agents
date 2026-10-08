@@ -99,6 +99,16 @@ function buildEnvelope(node) {
             if ((p.ref_audio || '').trim()) env.ref_audio = p.ref_audio.trim();
             return env;
         }
+        case 'omnivoice_tts': {
+            if (!(p.text || '').trim()) { toast('请填写合成文本', 'error'); return null; }
+            const env = { type: 'ltp9/test', action: 'omnivoice_tts', text: s('text') };
+            if ((p.lang || '').trim()) env.lang = p.lang.trim();
+            if ((p.instruct || '').trim()) env.instruct = p.instruct.trim();
+            if ((p.ref_audio || '').trim()) env.ref_audio = p.ref_audio.trim();
+            if ((p.ref_text || '').trim()) env.ref_text = p.ref_text.trim();
+            if (Number(p.seed) > 0) env.seed = Number(p.seed);
+            return env;
+        }
         case 'qwen_asr': {
             if (!(p.audio || '').trim()) { toast('请填写音频 base64', 'error'); return null; }
             return { type: 'ltp9/test', action: 'qwen_asr', audio: s('audio'), format: p.format || 'wav' };

@@ -309,6 +309,19 @@ const NODES = {
             { key: 'ref_audio', label: '参考音频路径（相对 local_data）', type: 'text', def: 'local_data/audios/crystal-template.wav' }
         ]
     },
+    omnivoice_tts: {
+        label: 'OmniVoice 语音合成', icon: 'fa-fingerprint', color: '#a78bfa',
+        desc: 'engine：OmniVoice 引擎（内嵌，24kHz）合成语音，支持 instruct 属性设计音色（如 female, young adult, high pitch；条目以逗号分隔，口音仅英文/方言仅中文）与 ref_audio+ref_text 声音克隆（与 instruct 互斥，克隆优先）；seed 固定可复现；<文本>可来自上游',
+        ins: [{ k: 'text', label: '文本' }], out: { k: 'audio', label: '音频(base64)', kind: 'audio' },
+        fields: [
+            { key: 'text', label: '合成文本', type: 'textarea', rows: 2, def: '你好，我是琉璃。' },
+            { key: 'lang', label: '语言提示（chinese/english/…，留空=自动）', type: 'text', def: '' },
+            { key: 'instruct', label: '音色属性（逗号分隔，如 female, young adult；留空=自动音色）', type: 'text', def: '' },
+            { key: 'ref_audio', label: '参考音频路径（声音克隆用，相对 local_data，留空=不用克隆）', type: 'text', def: '' },
+            { key: 'ref_text', label: '参考音频转写文本（克隆时必填）', type: 'textarea', rows: 2, def: '' },
+            { key: 'seed', label: '随机种子（>0 固定，可复现输出）', type: 'number', def: 0 }
+        ]
+    },
     qwen_asr: {
         label: 'Qwen 语音识别', icon: 'fa-microphone', color: '#22d3ee',
         desc: 'engine：经月华 system-asr（Qwen3-ASR）HTTP 接口识别 base64 音频为文本，需月华服务在线；wav/mp3/flac/ogg 直接识别，其他格式由琉璃端 ffmpeg 转 16k 单声道；<音频>可来自上游',

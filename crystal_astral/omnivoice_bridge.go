@@ -40,6 +40,9 @@ func ensureOmniVoice() error {
 		localData := filepath.Join(execDir, *GeneralConfig.LocalDir)
 		modelDir := filepath.Join(localData, "models", "OmniVoice")
 
+		// 注入参考音频相对路径的解析基目录（兼容 "./audios/x.wav"、"audios/x.wav" 等写法）
+		OmniVoiceTTS.SetRefAudioBaseDirs([]string{localData})
+
 		omniInitErr = OmniVoiceTTS.InitEngine(modelDir)
 		if omniInitErr == nil {
 			LoggerGeneral.Info("CrystalAstral", "OmniVoice 引擎初始化成功（模型目录: %s）", modelDir)

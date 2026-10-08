@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -196,6 +197,41 @@ func ovLastError() string {
 
 // ==== 引擎 ====
 
+// refAudioBaseDirs 参考音频相对路径的附加解析基目录（由宿主注入，如 exe 目录下的 local_data）
+var refAudioBaseDirs []string
+
+// SetRefAudioBaseDirs 设置参考音频相对路径的附加解析基目录（须在 InitEngine 前调用）
+func SetRefAudioBaseDirs(dirs []string) {
+	refAudioBaseDirs = dirs
+}
+
+// resolveRefAudioPath 解析参考音频路径：
+// 绝对路径原样返回；相对路径依次尝试「进程 cwd → 可执行文件目录 → 注入的基目录」，
+// 兼容 "local_data/audios/x.wav"、"./audios/x.wav"、"audios/x.wav" 等写法
+func resolveRefAudioPath(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	rel := p
+	for _, prefix := range []string{"./", ".\\", "/"} {
+		rel = strings.TrimPrefix(rel, prefix)
+	}
+	candidates := []string{p}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), rel))
+	}
+	for _, base := range refAudioBaseDirs {
+		candidates = append(candidates, filepath.Join(base, rel))
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	// 全部未命中则返回原路径，交给读取方给出明确错误
+	return p
+}
+
 // Engine OmniVoice TTS 引擎实例
 type Engine struct {
 	// handle ov_context 句柄
@@ -293,7 +329,7 @@ func (e *Engine) Synthesize(req TTSRequest) ([]float32, error) {
 	var refSamples []float32
 	if req.RefAudio != "" {
 		var err error
-		refSamples, err = loadWAVMono24k(req.RefAudio)
+		refSamples, err = loadWAVMono24k(resolveRefAudioPath(req.RefAudio))
 		if err != nil {
 			return nil, fmt.Errorf("参考音频读取失败: %w", err)
 		}

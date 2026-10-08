@@ -5,7 +5,7 @@ const NODE_CATS = [
     { key: 'engine', label: '引擎交互', types: ['event', 'broadcast_all', 'broadcast_target', 'call', 'command', 'agent', 'async'] },
     { key: 'data', label: '数据安全', types: ['db', 'memory', 'file', 'crypto', 'base64', 'jwt', 'emoji'] },
     { key: 'ai', label: '网络通讯', types: ['llm', 'embed', 'http', 'network'] },
-    { key: 'media', label: '语音系统', types: ['kokoro_tts', 'qwen_tts', 'qwen_asr', 'microphone', 'speaker', 'audio_eq'] },
+    { key: 'media', label: '语音系统', types: ['kokoro_tts', 'qwen_tts', 'omnivoice_tts', 'qwen_asr', 'microphone', 'speaker', 'audio_eq'] },
     { key: 'video', label: '视频处理', types: ['video_keyframe'] },
     { key: 'flow', label: '流程处理', types: ['wait', 'transform', 'extract', 'display', 'image_display', 'image_confuse', 'stats', 'limit'] },
     { key: 'composites', label: '我的复合', types: [] } // 用户保存的复合节点（非节点类型，单独渲染）

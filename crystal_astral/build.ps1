@@ -1,11 +1,17 @@
 ﻿# Crystal Astral - 编译脚本
-# 由根目录脚本统一调用，仅处理图标编译和项目编译
+# 由根目录脚本统一调用，处理图标编译、OmniVoice 引擎库按需构建和项目编译
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
     [string]$TargetOS = "windows",
     [ValidateSet("amd64", "arm64")]
-    [string]$TargetArch = "amd64"
+    [string]$TargetArch = "amd64",
+
+    # 强制重建 OmniVoice 引擎库（即使 omnivoice.dll 已存在）
+    [switch]$WithTTS,
+
+    # 跳过 OmniVoice 引擎库构建（即使 omnivoice.dll 不存在）
+    [switch]$SkipTTS
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,6 +73,36 @@ function Remove-StaleExe {
     }
 }
 
+# ---------- OmniVoice 引擎库按需构建 ----------
+# 策略：omnivoice.dll（local_data\models\OmniVoice）不存在 → 默认构建；
+# 已存在 → 默认跳过。-WithTTS 强制重建，-SkipTTS 强制跳过。
+# engine\OmniVoiceTTS\build.ps1 会产出 omnivoice.dll 并连同依赖 DLL
+# （vulkan-1/libgomp-1/libwinpthread-1）一起输出到模型目录。
+function Invoke-TtsBuildIfNeeded {
+    if ($SkipTTS) {
+        Write-Host "已跳过 OmniVoice 引擎库构建 (-SkipTTS)" -ForegroundColor DarkGray
+        return
+    }
+
+    $ttsDll = Join-Path $repoRoot "local_data\models\OmniVoice\omnivoice.dll"
+    if ((Test-Path $ttsDll) -and -not $WithTTS) {
+        Write-Host "omnivoice.dll 已存在，跳过引擎库构建（-WithTTS 可强制重建）" -ForegroundColor DarkGray
+        return
+    }
+
+    $ttsBuildScript = Join-Path $PSScriptRoot "engine\OmniVoiceTTS\build.ps1"
+    if (-not (Test-Path $ttsBuildScript)) {
+        throw "未找到 OmniVoice 构建脚本: $ttsBuildScript"
+    }
+
+    Write-Host "开始构建 OmniVoice 引擎库（GGML → C++）..." -ForegroundColor Cyan
+    # 用独立 powershell 进程执行：子脚本以 exit 返回退出码，避免污染当前脚本作用域
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ttsBuildScript -TargetOS $TargetOS -TargetArch $TargetArch
+    if ($LASTEXITCODE -ne 0) {
+        throw "OmniVoice 引擎库构建失败 (exit code: $LASTEXITCODE)"
+    }
+}
+
 # ---------- 编译主流程 ----------
 try {
     # 编译图标
@@ -77,6 +113,9 @@ try {
 
     # 清除目录内可能残留的 Crystal_Astral.exe
     Remove-StaleExe
+
+    # 按需构建 OmniVoice 引擎库（须在关闭琉璃服务之后：运行中的进程会锁住 omnivoice.dll）
+    Invoke-TtsBuildIfNeeded
 
     # ---------- 编译时生成端点自述文档 ----------
     # 调用共享生成器解析 variable.go 中的 SystemEndpoints 注册表，生成 endpoint_docs.gen.json
@@ -111,24 +150,30 @@ try {
         throw "未找到 GCC，ASR 能力需要 CGO 编译器（请安装 MinGW-w64 或 TDM-GCC）"
     }
 
-    # 构建可执行文件
-    $binaryName = "Crystal_Astral.exe"
-    if ($TargetOS -ne "windows") { $binaryName = "Crystal_Astral" }
-    $outputPath = "..\$binaryName"
+    # 构建可执行文件（以脚本所在目录为基准，不依赖调用方 cwd）
+    Push-Location $PSScriptRoot
+    try {
+        $binaryName = "Crystal_Astral.exe"
+        if ($TargetOS -ne "windows") { $binaryName = "Crystal_Astral" }
+        $outputPath = "..\$binaryName"
 
-    # 仅 Windows 平台使用 windowsgui 头部（隐藏控制台窗口）
-    $ldflags = "-s -w"
-    if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
-    
-    $buildArgs = @(
-        "build",
-        "-tags", "webview",
-        "-ldflags=$ldflags",
-        "-trimpath",
-        "-o", $outputPath
-    )
-    & $Go $buildArgs 2>&1 | Out-Host
-    if ($LASTEXITCODE -ne 0) { throw "Go build 失败" }
+        # 仅 Windows 平台使用 windowsgui 头部（隐藏控制台窗口）
+        $ldflags = "-s -w"
+        if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
+
+        $buildArgs = @(
+            "build",
+            "-tags", "webview",
+            "-ldflags=$ldflags",
+            "-trimpath",
+            "-o", $outputPath
+        )
+        & $Go $buildArgs 2>&1 | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "Go build 失败" }
+    }
+    finally {
+        Pop-Location
+    }
 
     Write-Host "✓ Crystal Astral 构建成功: $outputPath" -ForegroundColor Green
 }

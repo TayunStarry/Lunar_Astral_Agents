@@ -281,6 +281,7 @@ interface FetchResult {
     headers?: Record<string, string>
     /** 响应体（JSON 自动解析为对象，否则原始文本） */
     body?: unknown
+    /** 错误信息（传输层） */
     error?: string
 }
 
