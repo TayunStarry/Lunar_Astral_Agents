@@ -2,6 +2,7 @@ package main
 
 import (
 	"CrystalAstral/engine/KokoroTTS"
+	"CrystalAstral/engine/OmniVoiceTTS"
 	file "LunarSubsystem/FileManager/server"
 	media "LunarSubsystem/MediaTools/server"
 	image "LunarSubsystem/MultimodalAnalysis/server"
@@ -139,6 +140,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/kokoro/dict", Handler: kokoroHandler(KokoroTTS.DictHandler), Method: "GET/POST/DELETE", Description: "Kokoro 读音词典管理"},
 	{Path: "/kokoro/dict/guess", Handler: kokoroHandler(KokoroTTS.GuessDictHandler), Method: "GET", Description: "Kokoro 读音查询"},
 	{Path: "/kokoro/health", Handler: kokoroHandler(KokoroTTS.HealthHandler), Method: "GET", Description: "Kokoro 引擎健康检查"},
+
+	// ==== OmniVoice 语音合成（内嵌引擎，同源 /omnivoice/* 端点，支持声音克隆与属性设计音色） ====
+	{Path: "/omnivoice/tts", Handler: omniVoiceHandler(OmniVoiceTTS.TTSHandler), Method: "POST", Description: "OmniVoice 语音合成（支持 ref_audio+ref_text 声音克隆与 instruct 属性设计音色）"},
+	{Path: "/omnivoice/langs", Handler: omniVoiceHandler(OmniVoiceTTS.LanguagesHandler), Method: "GET", Description: "OmniVoice 支持的语言列表"},
+	{Path: "/omnivoice/health", Handler: omniVoiceHandler(OmniVoiceTTS.HealthHandler), Method: "GET", Description: "OmniVoice 引擎健康检查"},
 
 	// ==== WebView 深读代理（后端驱动的顶层 WebView 会话：导航/元素识别/滚动/截图/摘要） ====
 	{Path: "/webview/open", Handler: webviewOpenHandler, Method: "POST", Description: "创建 WebView 深读会话窗口（顶层窗口，不受嵌入限制）"},

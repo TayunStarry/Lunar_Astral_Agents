@@ -20,6 +20,7 @@ import (
 
 	"CrystalAstral/engine/9.1-Flash"
 	"CrystalAstral/engine/KokoroTTS"
+	"CrystalAstral/engine/OmniVoiceTTS"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	Multimodal "LunarSubsystem/MultimodalAnalysis/module"
@@ -150,6 +151,44 @@ func ltp9HostTestAction(action string, m map[string]any, ack func(any, error)) {
 			"phonemes":    phonemes,
 			"voice":       asString("voice"),
 			"sample_rate": KokoroTTS.SampleRate,
+		}, nil)
+	case "omnivoice_tts":
+		// OmniVoice 语音合成：text → base64 WAV 音频（lang/instruct 可选；
+		// ref_audio+ref_text 声音克隆；seed 固定可复现）
+		text := asString("text")
+		if text == "" {
+			ack(nil, fmt.Errorf("omnivoice_tts 需提供 text"))
+			return
+		}
+		if err := ensureOmniVoice(); err != nil {
+			ack(nil, err)
+			return
+		}
+		oeng := OmniVoiceTTS.GetEngine()
+		if oeng == nil {
+			ack(nil, fmt.Errorf("OmniVoice 引擎未就绪"))
+			return
+		}
+		var seed uint64
+		if f, ok := m["seed"].(float64); ok && f > 0 {
+			seed = uint64(f)
+		}
+		samples, serr := oeng.Synthesize(OmniVoiceTTS.TTSRequest{
+			Text:      text,
+			Lang:      asString("lang"),
+			Instruct:  asString("instruct"),
+			RefAudio:  asString("ref_audio"),
+			RefText:   asString("ref_text"),
+			Seed:      seed,
+		})
+		if serr != nil {
+			ack(nil, serr)
+			return
+		}
+		ack(map[string]any{
+			"success":     true,
+			"audio":       base64.StdEncoding.EncodeToString(OmniVoiceTTS.EncodePCMToWAV(samples, OmniVoiceTTS.SampleRate)),
+			"sample_rate": OmniVoiceTTS.SampleRate,
 		}, nil)
 	case "qwen_tts":
 		// Qwen 语音合成：text → 经月华 /tts 代理合成 base64 音频（需月华服务在线）

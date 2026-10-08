@@ -1,0 +1,9 @@
+{
+	"id": "lunar.omnivoice_tts-studio",
+	"icon": "icon.webp",
+	"title": "语音合成 · OmniVoice",
+	"description": "基于 OmniVoice（612M GGML）的语音合成引擎前端，支持属性设计音色与参考音频声音克隆",
+	"tags": [
+		"Zero-LTP"
+	]
+}

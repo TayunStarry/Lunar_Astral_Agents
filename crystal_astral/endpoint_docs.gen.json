@@ -787,6 +787,45 @@
         }
       }
     },
+    "/omnivoice/health": {
+      "get": {
+        "summary": "OmniVoice 引擎健康检查",
+        "description": "OmniVoice 引擎健康检查",
+        "operationId": "omniVoiceHandler(OmniVoiceTTS.HealthHandler)",
+        "x-handler": "omniVoiceHandler(OmniVoiceTTS.HealthHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/omnivoice/langs": {
+      "get": {
+        "summary": "OmniVoice 支持的语言列表",
+        "description": "OmniVoice 支持的语言列表",
+        "operationId": "omniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
+        "x-handler": "omniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/omnivoice/tts": {
+      "post": {
+        "summary": "OmniVoice 语音合成（支持 ref_audio+ref_text 声音克隆与 instruct 属性设计音色）",
+        "description": "OmniVoice 语音合成（支持 ref_audio+ref_text 声音克隆与 instruct 属性设计音色）",
+        "operationId": "omniVoiceHandler(OmniVoiceTTS.TTSHandler)",
+        "x-handler": "omniVoiceHandler(OmniVoiceTTS.TTSHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/proxy/chat": {
       "post": {
         "summary": "对话代理",

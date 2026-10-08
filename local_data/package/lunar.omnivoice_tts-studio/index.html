@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>『 星月智能 』语音合成 · OmniVoice</title>
+    <!-- 标准依赖：Font Awesome 图标 -->
+    <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
+    <!-- 项目私有样式 -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- 背景层 + 玻璃蒙层 -->
+    <div class="background-layer"></div>
+    <div class="glass-effect"></div>
+
+    <div class="workspace">
+
+        <!-- ==================== 左栏：输入 + 参数 + 播放器 ==================== -->
+        <aside class="col-left">
+
+            <!-- 左上：文本输入 + 预设 -->
+            <section class="glass-panel block-text">
+                <div class="preset-chips" id="preset-chips">
+                    <button class="chip active" data-text="你好，我是琉璃。很高兴认识你，希望今天的你也有好心情。">中文短句</button>
+                    <button class="chip" data-text="大家好，欢迎来到星月智能语音工作台。OmniVoice 支持 646 种语言与方言，可以设计音色，也可以克隆你自己的声音。">中文长句</button>
+                    <button class="chip" data-text="Hello! I am OmniVoice, a multilingual text to speech engine powered by GGML. Nice to meet you!">英文</button>
+                    <button class="chip" data-text="こんにちは、はじめまして。どうぞよろしくお願いします。">日文</button>
+                </div>
+                <div class="textarea-wrapper">
+                    <textarea id="text-input" placeholder="输入要合成的文本……" spellcheck="false"></textarea>
+                    <span id="char-count" class="char-count">0</span>
+                </div>
+            </section>
+
+            <!-- 左下：参数 + 播放器 -->
+            <section class="glass-panel block-player">
+                <div class="params-row">
+                    <div class="param-item">
+                        <label>语言提示</label>
+                        <select id="lang-select" class="glass-input">
+                            <option value="">自动识别</option>
+                        </select>
+                    </div>
+                    <div class="param-item param-seed">
+                        <label>随机种子</label>
+                        <input type="number" id="seed-input" class="glass-input" min="1" step="1"
+                               placeholder="42（默认）">
+                    </div>
+                    <div class="param-item param-toggle">
+                        <label>输出后处理</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="postproc-toggle" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 引擎状态条 -->
+                <div class="engine-bar" id="engine-bar">
+                    <i class="fas fa-circle" id="engine-dot"></i>
+                    <span id="engine-text">正在检测引擎状态…</span>
+                </div>
+
+                <!-- 播放器 -->
+                <div class="player-card">
+                    <div class="waveform-stage" id="waveform">
+                        <div class="wave-hint" id="wave-hint">合成结果将显示在这里</div>
+                    </div>
+                    <audio id="audio-player" preload="auto"></audio>
+                    <div class="player-controls">
+                        <button id="synth-btn" class="btn-glass btn-glass-primary btn-cta" disabled>
+                            <i class="fas fa-wand-magic-sparkles"></i><span>开始合成</span>
+                        </button>
+                        <button id="play-pause-btn" class="ctrl-btn" title="播放/暂停" disabled>
+                            <i class="fas fa-play icon-play"></i>
+                            <i class="fas fa-pause icon-pause hidden"></i>
+                        </button>
+                        <div class="progress-area">
+                            <input type="range" id="progress-bar" class="glass-slider progress-slider" min="0" max="100" value="0" disabled>
+                            <span id="time-display" class="time-label">0:00 / 0:00</span>
+                        </div>
+                        <button id="download-btn" class="btn-glass btn-download" title="下载 WAV" disabled>
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </aside>
+
+        <!-- ==================== 右栏：音色模式 ==================== -->
+        <main class="col-right">
+            <section class="glass-panel panel-tabs">
+                <div class="tab-bar" id="tab-bar">
+                    <button class="tab active" data-tab="design"><i class="fas fa-sliders"></i><span>属性设计</span></button>
+                    <button class="tab" data-tab="clone"><i class="fas fa-fingerprint"></i><span>声音克隆</span></button>
+                    <button class="tab" data-tab="about"><i class="fas fa-circle-info"></i><span>引擎信息</span></button>
+                </div>
+
+                <div class="tab-panels">
+
+                    <!-- 属性设计 -->
+                    <div class="tab-panel active" id="panel-design">
+                        <p class="panel-hint">六个类别每类至多选一项；口音仅英文语音可用，方言仅中文语音可用，两类不可混用。全部留空 = 自动音色</p>
+
+                        <div class="attr-group" data-key="gender">
+                            <div class="attr-title"><i class="fas fa-venus-mars"></i><span>性别</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="female">女声</button>
+                                <button class="chip" data-value="male">男声</button>
+                            </div>
+                        </div>
+
+                        <div class="attr-group" data-key="age">
+                            <div class="attr-title"><i class="fas fa-hourglass-half"></i><span>年龄</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="child">儿童</button>
+                                <button class="chip" data-value="teenager">少年</button>
+                                <button class="chip" data-value="young adult">青年</button>
+                                <button class="chip" data-value="middle-aged">中年</button>
+                                <button class="chip" data-value="elderly">老年</button>
+                            </div>
+                        </div>
+
+                        <div class="attr-group" data-key="pitch">
+                            <div class="attr-title"><i class="fas fa-music"></i><span>音高</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="very low pitch">极低</button>
+                                <button class="chip" data-value="low pitch">低音调</button>
+                                <button class="chip" data-value="moderate pitch">中音调</button>
+                                <button class="chip" data-value="high pitch">高音调</button>
+                                <button class="chip" data-value="very high pitch">极高</button>
+                            </div>
+                        </div>
+
+                        <div class="attr-group" data-key="style">
+                            <div class="attr-title"><i class="fas fa-microphone-lines"></i><span>风格</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="whisper">耳语</button>
+                            </div>
+                        </div>
+
+                        <div class="attr-group" data-key="accent">
+                            <div class="attr-title"><i class="fas fa-earth-americas"></i><span>英文口音（仅英文语音）</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="american accent">美式</button>
+                                <button class="chip" data-value="british accent">英式</button>
+                                <button class="chip" data-value="australian accent">澳式</button>
+                                <button class="chip" data-value="canadian accent">加拿大</button>
+                                <button class="chip" data-value="indian accent">印度</button>
+                                <button class="chip" data-value="japanese accent">日本</button>
+                            </div>
+                        </div>
+
+                        <div class="attr-group" data-key="dialect">
+                            <div class="attr-title"><i class="fas fa-map-location-dot"></i><span>中文方言（仅中文语音）</span></div>
+                            <div class="attr-chips">
+                                <button class="chip" data-value="东北话">东北话</button>
+                                <button class="chip" data-value="四川话">四川话</button>
+                                <button class="chip" data-value="河南话">河南话</button>
+                                <button class="chip" data-value="陕西话">陕西话</button>
+                                <button class="chip" data-value="济南话">济南话</button>
+                                <button class="chip" data-value="青岛话">青岛话</button>
+                                <button class="chip" data-value="云南话">云南话</button>
+                                <button class="chip" data-value="贵州话">贵州话</button>
+                                <button class="chip" data-value="桂林话">桂林话</button>
+                                <button class="chip" data-value="石家庄话">石家庄话</button>
+                                <button class="chip" data-value="甘肃话">甘肃话</button>
+                                <button class="chip" data-value="宁夏话">宁夏话</button>
+                            </div>
+                        </div>
+
+                        <div class="instruct-preview">
+                            <span class="instruct-label">instruct</span>
+                            <code id="instruct-preview-text">（空 = 自动音色）</code>
+                            <button id="instruct-clear-btn" class="btn-glass btn-sm btn-clear">
+                                <i class="fas fa-eraser"></i><span>清空</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 声音克隆 -->
+                    <div class="tab-panel" id="panel-clone">
+                        <p class="panel-hint">上传 5~15 秒清晰人声参考，填写其转写文本，即可克隆该音色（与属性设计互斥，克隆优先生效）</p>
+
+                        <div class="upload-area" id="upload-area">
+                            <input type="file" id="audio-upload" accept=".wav" hidden>
+                            <div class="upload-content" id="upload-content">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                                <span>点击或拖拽 WAV 参考音频到此处</span>
+                                <span class="upload-hint">16bit PCM 推荐 · 过短或带背景噪声会明显影响克隆质量</span>
+                            </div>
+                            <div class="file-info hidden" id="file-info">
+                                <i class="fas fa-file-audio"></i>
+                                <span id="file-name"></span>
+                                <button id="file-remove-btn" class="btn-glass btn-sm btn-clear" title="移除">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="reftext-row">
+                            <label for="ref-text-input"><i class="fas fa-quote-left"></i> 参考音频转写文本</label>
+                            <textarea id="ref-text-input" class="glass-input" rows="3"
+                                      placeholder="逐字填写参考音频里说的话（准确率直接影响克隆效果）" spellcheck="false"></textarea>
+                        </div>
+
+                        <button id="clone-synth-btn" class="btn-glass btn-glass-primary btn-cta" disabled>
+                            <i class="fas fa-fingerprint"></i><span>以克隆音色合成</span>
+                        </button>
+                    </div>
+
+                    <!-- 引擎信息 -->
+                    <div class="tab-panel" id="panel-about">
+                        <div class="about-card">
+                            <div class="about-row"><span class="about-key">引擎</span><span class="about-val">OmniVoice（omnivoice.cpp · GGML）</span></div>
+                            <div class="about-row"><span class="about-key">构建版本</span><span class="about-val" id="about-version">—</span></div>
+                            <div class="about-row"><span class="about-key">输出格式</span><span class="about-val">24kHz / 单声道 / 16bit WAV</span></div>
+                            <div class="about-row"><span class="about-key">语言数</span><span class="about-val" id="about-lang-count">—</span></div>
+                            <div class="about-row"><span class="about-key">采样模式</span><span class="about-val">MaskGIT 32 步 · 种子可复现</span></div>
+                        </div>
+                        <div class="about-langs">
+                            <div class="subsection-header"><span><i class="fas fa-language"></i> 支持语言</span></div>
+                            <div class="lang-cloud" id="lang-cloud"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="status-message" class="status-toast"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
