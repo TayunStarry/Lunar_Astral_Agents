@@ -1,11 +1,15 @@
 // ==== ws_bridge.js — 引擎/工作室统一通信客户端 ====
 // 用途：替代 BroadcastChannel，采用与常规前端一致的联络策略：
-//   - 接收：WebSocket 连接 /ws，后端无差别广播 {type,data} 格式消息，客户端自行过滤
-//   - 发送：HTTP POST /write/engine（格式与 /write/message 同构），后端本地广播 + 转发智能体侧
+//   - 接收：WebSocket 连接 /ws?bus=1（引擎总线订阅者连接），后端把总线原始帧投递给订阅者，客户端自行过滤
+//   - 发送：HTTP POST /write/engine（格式与 /write/message 同构），后端反射观测并投递给总线订阅者
 // 用法：const channel = new WsBridge('lunar-engine-bus');
 //       channel.postMessage(msg);  // 发送消息（POST /write/engine）
 //       channel.onmessage = (event) => { ... };  // 接收消息（ws /ws 下行）
 // 兼容性：API 与 BroadcastChannel 完全一致，迁移时无需修改业务逻辑
+//
+// 总线订阅：本客户端即引擎总线参与者，连接默认声明 /ws?bus=1 以接收原始总线帧。
+// 宿主页面可用 ?bus=0 显式退出订阅（例如消息终端内嵌的渲染引擎：它只消费结构化
+// engine 指令，不需要总线原始帧，退出可避免与总线噪声互相干扰）。
 //
 // 特性：
 //   - 自动重连（指数退避，最大延迟 30 秒）
@@ -46,11 +50,18 @@ class WsBridge {
         // WebSocket 连接地址：默认同源 /ws（与常规前端一致的标准通道）
         // 支持 URL 参数 ?ws=host[:port] 覆盖目标后端（如消息终端嵌入引擎时指向智能体所在端口 36789）
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsParam = new URLSearchParams(window.location.search).get('ws');
+        const params = new URLSearchParams(window.location.search);
+        // 总线订阅声明：默认订阅（本客户端即总线参与者）；宿主页面 ?bus=0 显式退出
+        const busOptOut = ['0', 'false', 'no', 'off'].includes(String(params.get('bus') || '').toLowerCase());
+        // 频道声明：本实例的总线频道（隔离彼此独立的引擎实例，如月华内嵌渲染引擎与琉璃 studio 编辑器引擎）
+        const busQueryParts = ['bus=1', `channel=${encodeURIComponent(this.#name)}`];
+        const busQuery = busOptOut ? '' : `?${busQueryParts.join('&')}`;
+        const wsParam = params.get('ws');
         if (wsParam) {
-            this.#url = /^wss?:\/\//i.test(wsParam) ? wsParam : `${protocol}//${wsParam}/ws`;
+            const base = /^wss?:\/\//i.test(wsParam) ? wsParam : `${protocol}//${wsParam}/ws`;
+            this.#url = base + busQuery;
         } else {
-            this.#url = `${protocol}//${window.location.host}/ws`;
+            this.#url = `${protocol}//${window.location.host}/ws${busQuery}`;
         }
         this.#connect();
     }
@@ -93,12 +104,12 @@ class WsBridge {
 
     /**
      * 发送消息（兼容 BroadcastChannel API）
-     * 通过 HTTP POST /write/engine 提交：后端广播给所有 /ws 客户端（模块间互通）并转发智能体侧
+     * 通过 HTTP POST /write/engine 提交：后端广播给**同频道**的总线订阅者并转发智能体侧
      * @param {*} message - 任意可序列化的消息对象
      */
     postMessage(message) {
         const payload = JSON.stringify(message);
-        fetch('/write/engine', {
+        fetch(`/write/engine?channel=${encodeURIComponent(this.#name)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: payload,

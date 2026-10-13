@@ -1,0 +1,8 @@
+build/
+*.wav
+
+tests/*/
+
+checkpoints/
+models/*.gguf
+__pycache__/

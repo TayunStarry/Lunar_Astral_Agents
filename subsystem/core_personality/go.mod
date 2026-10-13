@@ -1,0 +1,59 @@
+module CorePersonality
+
+go 1.26.0
+
+require (
+	LunarSubsystem/BrowserClient v0.0.0-00010101000000-000000000000
+	LunarSubsystem/EndpointDocs v0.0.0-00010101000000-000000000000
+	LunarSubsystem/FileManager v0.0.0-00010101000000-000000000000
+	LunarSubsystem/GeneralConfig v0.0.0
+	LunarSubsystem/LoggerGeneral v0.0.0
+	LunarSubsystem/LunarDecoder v0.0.0-00010101000000-000000000000
+	LunarSubsystem/MediaTools v0.0.0-00010101000000-000000000000
+	LunarSubsystem/MultimodalAnalysis v0.0.0
+	github.com/auuunya/go-element v1.0.1
+	github.com/chai2010/webp v1.4.0
+	github.com/disintegration/imaging v1.6.2
+	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
+	github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14
+	github.com/gorilla/websocket v1.5.3
+	github.com/lxn/win v0.0.0-20210218163916-a377121e959e
+	github.com/mattn/go-sqlite3 v1.14.44
+	github.com/mozillazg/go-pinyin v0.21.0
+	github.com/yalue/onnxruntime_go v1.36.0
+	github.com/yanyiwu/gojieba v1.4.7
+	golang.org/x/image v0.0.0-20211028202545-6944b10bf410
+	golang.org/x/sys v0.47.0
+)
+
+require (
+	github.com/aws/aws-sdk-go v1.38.20 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
+	github.com/gen2brain/shm v0.1.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
+	github.com/jezek/xgb v1.1.1 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/kbinani/screenshot v0.0.0-20250624051815-089614a94018 // indirect
+	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
+	github.com/u2takey/go-utils v0.3.1 // indirect
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6 // indirect
+	golang.org/x/text v0.25.0 // indirect
+)
+
+replace LunarSubsystem/GeneralConfig => ../general_config
+
+replace LunarSubsystem/FileManager => ../file_manager
+
+replace LunarSubsystem/MediaTools => ../media_tools
+
+replace LunarSubsystem/BrowserClient => ../browser_client
+
+replace LunarSubsystem/LoggerGeneral => ../logger_general
+
+replace LunarSubsystem/MultimodalAnalysis => ../multimodal_analysis
+
+replace LunarSubsystem/LunarDecoder => ../lunar_decoder
+
+replace LunarSubsystem/EndpointDocs => ../endpoint_docs

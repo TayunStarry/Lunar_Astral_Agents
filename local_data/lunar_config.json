@@ -76,6 +76,18 @@
 	"multimodal": {
 		"video_input": "file"
 	},
+	"tts": {
+		"engine": "Qwen",
+		"ref_audio": "./local_data/audios/lunar-template.wav",
+		"ref_text": "",
+		"voice": "",
+		"mix": null,
+		"speed": 1.0,
+		"lang": "",
+		"instruct": "",
+		"seed": 0,
+		"disable_postproc": false
+	},
 	"web_search": {
 		"save_screenshots": false,
 		"screenshot_dir": "multimedia/captures",

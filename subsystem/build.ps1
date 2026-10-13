@@ -139,8 +139,15 @@ try {
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
     Invoke-Build -Path "$ScriptRoot\environment_repair" -Name "Environment Repair"
+
+    # 核心人格（月华 + 琉璃 合并工程）：单服务端 + 双桌面前端
+    Invoke-Build -Path "$ScriptRoot\core_personality" -Name "Core Personality"
+
+    # 过渡期保留：旧月华 / 旧琉璃仍可独立构建作为回退，
+    # 待 subsystem/core_personality 验收通过后（决策 D2）收缩为单一构建目标。
     Invoke-Build -Path "$ScriptRoot\..\lunar_astral" -Name "Luna Astral"
     Invoke-Build -Path "$ScriptRoot\..\crystal_astral" -Name "Crystal Astral"
+
     Invoke-Build -Path "$ScriptRoot\ltp9_keygen" -Name "LTP9 Keygen"
 
     Write-Host ""

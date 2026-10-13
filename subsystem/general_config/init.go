@@ -95,6 +95,21 @@ type ModelConfig struct {
 		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
 		VideoInput string `json:"video_input"`
 	} `json:"multimodal"`
+	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
+	// 参数层面统一：各引擎共用同一套字段；执行层面由 tts_router 按引擎自身格式适配，
+	// 引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
+	TTS struct {
+		Engine          string        `json:"engine"`            // 引擎枚举：Qwen / Kokoro / OmniVoice（默认 Qwen）
+		RefAudio        string        `json:"ref_audio"`         // 参考音频路径（Qwen/OmniVoice 声音克隆；Kokoro 忽略）
+		RefText         string        `json:"ref_text"`          // 参考音频转写文本（OmniVoice 声音克隆必填；其余忽略）
+		Voice           string        `json:"voice"`             // 音色名称（Kokoro；其余忽略）
+		Mix             []TTSMixEntry `json:"mix"`               // 音色混合列表（Kokoro；其余忽略）
+		Speed           *float64      `json:"speed,omitempty"`   // 语速倍率（Kokoro 0.5~2.0；其余忽略）
+		Lang            string        `json:"lang"`              // 语言提示（Kokoro zh/en/auto；OmniVoice 语言提示；Qwen 忽略）
+		Instruct        string        `json:"instruct"`          // 音色属性关键词（OmniVoice；其余忽略）
+		Seed            *uint64       `json:"seed,omitempty"`    // 随机种子（OmniVoice；其余忽略）
+		DisablePostproc *bool         `json:"disable_postproc,omitempty"` // 关闭输出后处理（OmniVoice；其余忽略）
+	} `json:"tts"`
 }
 
 // init 加载配置文件
@@ -206,6 +221,44 @@ func init() {
 		*VideoInputMode = "frames"
 	case "file":
 		*VideoInputMode = "file"
+	}
+	// ==== 月华语音合成（tts） ====
+	// 引擎枚举：仅接受 Qwen / Kokoro / OmniVoice，未配置保持默认 Qwen，非法取值告警并保留默认
+	switch parameter.TTS.Engine {
+	case "Qwen", "Kokoro", "OmniVoice":
+		*TTSEngine = parameter.TTS.Engine
+	case "":
+		// 未配置时保持默认引擎
+	default:
+		log.Printf("[Config][WARN] -> tts.engine 取值非法: %q（允许 Qwen/Kokoro/OmniVoice），保持默认 %s", parameter.TTS.Engine, *TTSEngine)
+	}
+	if parameter.TTS.RefAudio != "" {
+		*TTSRefAudio = parameter.TTS.RefAudio
+	}
+	if parameter.TTS.RefText != "" {
+		*TTSRefText = parameter.TTS.RefText
+	}
+	if parameter.TTS.Voice != "" {
+		*TTSVoice = parameter.TTS.Voice
+	}
+	// 音色混合列表：数组无法经命令行覆盖，仅由配置文件填充
+	if parameter.TTS.Mix != nil {
+		TTSMix = parameter.TTS.Mix
+	}
+	if parameter.TTS.Speed != nil {
+		*TTSSpeed = *parameter.TTS.Speed
+	}
+	if parameter.TTS.Lang != "" {
+		*TTSLang = parameter.TTS.Lang
+	}
+	if parameter.TTS.Instruct != "" {
+		*TTSInstruct = parameter.TTS.Instruct
+	}
+	if parameter.TTS.Seed != nil {
+		*TTSSeed = *parameter.TTS.Seed
+	}
+	if parameter.TTS.DisablePostproc != nil {
+		*TTSDisablePostproc = *parameter.TTS.DisablePostproc
 	}
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置

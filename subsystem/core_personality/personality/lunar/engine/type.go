@@ -1,0 +1,137 @@
+package engine
+
+import "github.com/dop251/goja"
+
+// IPInfo 存储IP地址信息（对应 ip-api.com 响应结构）
+type IPInfo struct {
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+	RegionName string `json:"regionName"`
+	City       string `json:"city"`
+}
+
+// Runtime 存储JavaScript运行时实例，用于调用适配器函数
+type Runtime struct {
+	runtime *goja.Runtime
+}
+
+// TextContent 文本内容
+type TextContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// ImageContent 图片内容
+type ImageContent struct {
+	Type     string `json:"type"`
+	ImageURL struct {
+		URL string `json:"url"`
+	} `json:"image_url"`
+}
+
+// PostMessageRole 消息角色类型
+type PostMessageRole string
+
+const (
+	RoleUser      PostMessageRole = "user"
+	RoleAssistant PostMessageRole = "assistant"
+	RoleSystem    PostMessageRole = "system"
+	RoleTool      PostMessageRole = "tool"
+)
+
+// PostMessage 消息结构体
+type PostMessage struct {
+	Role    string `json:"role"`
+	Content any    `json:"content"` // 可以是string、[]MessageContent或MediaUrlContent
+}
+
+// MediaUrlPayload 媒体URL载荷（与 TS 侧多模态内容项的 URL 包装结构对齐）
+type MediaUrlPayload struct {
+	URL string `json:"url"`
+}
+
+// MediaUrlContent 统一消息队列中的媒体URL内容项
+// 视频/音频URL不再走独立队列，而是包装为本结构按到达时序与文本消息混排入 UnreadContext，
+// 由智能体理解后原位置换为文本（理解失败时置换为兜底提示文本）
+type MediaUrlContent struct {
+	Type     string           `json:"type"`                // 内容类型："video_url"（视频）或 "audio_url"（音频）
+	VideoUrl *MediaUrlPayload `json:"video_url,omitempty"` // 视频URL载荷（Type 为 video_url 时存在）
+	AudioUrl *MediaUrlPayload `json:"audio_url,omitempty"` // 音频URL载荷（Type 为 audio_url 时存在）
+}
+
+// LTPXPackageInfo LTPX 工具包配置结构
+type LTPXPackageInfo struct {
+	ID          string           `json:"id"`
+	Title       string           `json:"title"`
+	Description string           `json:"description"`
+	Tags        []string         `json:"tags"`
+	URL         string           `json:"url"`
+	Tools       []map[string]any `json:"tools"`
+}
+
+// LTPXRemoteToolDef 琉璃工具链中的单个工具定义
+// 琉璃对外统一暴露「智能体式」工具：接受字符串指令，返回文本结果（含操作结果与推荐后续操作）
+type LTPXRemoteToolDef struct {
+	Name        string `json:"name"`        // 工具名
+	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
+	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
+}
+
+// LTPXRemoteStatusResult 月华同步 LTPX 工具链的返回结果。
+// 合并为单进程后不含在线状态：工具链为空（无 AtoA 能力包）时 Tool 为 nil。
+type LTPXRemoteStatusResult struct {
+	Tool *LTPXRemoteToolDef `json:"tool,omitempty"` // 聚合工具（v5 起恒为单一 use_program；工具链为空时为 nil）
+}
+
+// LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）
+type LTPXRemoteEventResult struct {
+	Modified bool `json:"modified"` // 是否有插件通过 modifiedData 改写了负载
+	Data     any  `json:"data"`     // 插件处理后的负载；未改写时为 null（调用方用原始数据）
+	Returned bool `json:"returned"` // 是否有插件通过 return 回传了本次事件的业务结果
+	Return   any  `json:"return"`   // 插件经 return 回传的业务结果；无回传时为 null（调用方走本地默认处理）
+}
+
+// LTPXRemoteCallRequest 月华请求调用琉璃工具的请求体
+type LTPXRemoteCallRequest struct {
+	Tool      string         `json:"tool"`      // 工具名
+	Arguments map[string]any `json:"arguments"` // 工具参数
+}
+
+// LTPXRemoteCallResponse 琉璃执行工具后的返回体
+// 新协议下琉璃异步受理：立即返回 pending=true + request_id，结果由月华经 /ltpx/poll 心跳轮询取回
+type LTPXRemoteCallResponse struct {
+	Success   bool   `json:"success"`
+	Text      string `json:"text"` // 操作结果文本（含推荐后续操作）
+	Error     string `json:"error,omitempty"`
+	Pending   bool   `json:"pending,omitempty"`    // 异步受理标记（true 时仅代表已受理，尚未执行完成）
+	RequestID string `json:"request_id,omitempty"` // 受理凭证（轮询 /ltpx/poll 时携带）
+}
+
+// PushContextData 推送上下文数据
+type PushContextData struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+	Audio   string `json:"audio,omitempty"`
+}
+
+// PushImageData 推送图片数据
+type PushImageData struct {
+	Type    string   `json:"type"`              // 图片类型
+	Sticker bool     `json:"sticker,omitempty"` // 是否作为表情包发送
+	Images  []string `json:"images"`            // 图片URL列表
+}
+
+// AgentPositionData 智能体3D位置数据
+type AgentPositionData struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"`
+}
+
+// 引擎命令消息格式（与 engine.js 的 handleChannelMessage 对齐）
+type EngineCommand struct {
+	Type      string `json:"type"`
+	Source    string `json:"source"`
+	Payload   any    `json:"payload"`
+	Timestamp int64  `json:"timestamp"`
+}

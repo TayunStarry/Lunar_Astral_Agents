@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -175,20 +176,33 @@ func OpenBrowserWithReturnButton(url string, mainURL string) {
 	go StartWebViewBrowser(url, buildReturnButtonJS(mainURL))
 }
 
+// pathOf 提取 URL 的路径部分（解析失败或空路径时回退为 '/'）。
+// 用于让「返回主页面」按钮按主页面**实际路径**判断自己是否已在主页面，
+// 而不是假定主页面位于根路径。
+func pathOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Path == "" {
+		return "/"
+	}
+	return u.Path
+}
+
 // buildReturnButtonJS 生成「返回主页面」悬浮按钮注入脚本。
 // 通过 webview.Init 注入，在 WebView2 每个新文档创建时执行：
 //   - 仅顶层页面显示（iframe 内不注入，避免干扰 LTPX 覆盖层中的包页面）
-//   - 主页面自身不显示（按根路径 pathname == '/' 判断）
+//   - 主页面自身不显示（按 mainURL 的**实际路径**判断，见 pathOf）
 //   - 点击后导航回 mainURL
 func buildReturnButtonJS(mainURL string) string {
 	homeJSON, _ := json.Marshal(mainURL)
+	mainPathJSON, _ := json.Marshal(pathOf(mainURL))
 	return `(function () {
     if (window.top !== window.self) return; // iframe 内不注入
-    var p = window.location.pathname;
-    if (p === '/' || p === '') return;      // 主页面自身不注入
-    if (document.getElementById('crystal-return-home')) return; // 避免重复注入
-
     var home = ` + string(homeJSON) + `;
+    var mainPath = ` + string(mainPathJSON) + `;
+    // 主页面自身不注入：按主页面实际路径判断（不能硬编码 '/'——主页面未必在根路径）
+    function norm(p) { return (p || '/').replace(/\/+$/, '') || '/'; }
+    if (norm(window.location.pathname) === norm(mainPath)) return;
+    if (document.getElementById('crystal-return-home')) return; // 避免重复注入
     var btn = document.createElement('div');
     btn.id = 'crystal-return-home';
     btn.title = '返回琉璃主页面';

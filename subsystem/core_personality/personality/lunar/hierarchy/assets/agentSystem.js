@@ -1,0 +1,3590 @@
+var agentSystem = (function (exports) {
+    'use strict';
+
+    class GlobalConfig {
+        static customConfig = { agent: {}, server: {} };
+        static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+        static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
+        static LTPfunction = new Map();
+        static LTPdefinition = [];
+        static unreadRecords = [];
+        static unreadContext = [];
+        static reasoningInProgress = false;
+        static finalResponse = "";
+        static memoryReady = false;
+        static currentAddress = [];
+        static get MultimodalUrl() {
+            return GlobalConfig.customConfig?.agent?.multimodal_url || url()[0] + '/v1';
+        }
+        ;
+        static get MultimodalKey() {
+            return GlobalConfig.customConfig?.agent?.multimodal_key || 'key-520-1314-2000-02-18';
+        }
+        ;
+        static get MultimodalName() {
+            return GlobalConfig.customConfig?.agent?.multimodal_model || "system-multimodal";
+        }
+        ;
+        static get EmbeddingName() {
+            return GlobalConfig.customConfig?.agent?.embedding_model || "system-embedding";
+        }
+        ;
+        static get AsrName() {
+            return GlobalConfig.customConfig?.agent?.asr_model || "system-asr";
+        }
+        ;
+        static get debugMode() {
+            return GlobalConfig.customConfig?.server?.developer ?? false;
+        }
+        ;
+        static get VideoInputMode() {
+            return GlobalConfig.customConfig?.multimodal?.video_input === 'frames' ? 'frames' : 'file';
+        }
+        ;
+    }
+
+    class ModelBuilder {
+        stream = false;
+        enableTools = true;
+        reasoningStrength = "low";
+        messages = [];
+        ragMessages = [];
+        runtimeMessages = [];
+        systemPrompt = "你的名字叫做月华, 是一个女孩子";
+        promptCompletion(prompt) {
+            let addressText = "";
+            if (GlobalConfig.currentAddress.length === 0) {
+                const addressResult = address();
+                GlobalConfig.currentAddress = addressResult[0];
+                addressText = GlobalConfig.currentAddress.join(' ');
+            }
+            else
+                addressText = GlobalConfig.currentAddress.join(' ');
+            return prompt
+                .replace(/{current-address}/g, addressText);
+        }
+        writeContext(context) {
+            const cleaned = this.stripReasoningContent(context);
+            if (this.messages.length >= 48) {
+                const discarded = this.messages.slice(0, this.messages.length - 47);
+                this.messages = this.messages.slice(-47).concat(cleaned);
+                GlobalConfig.unreadRecords.push(...discarded);
+            }
+            else
+                this.messages.push(cleaned);
+            return this;
+        }
+        stripReasoningContent(message) {
+            if ('reasoning_content' in message) {
+                const { reasoning_content, ...rest } = message;
+                return rest;
+            }
+            return message;
+        }
+        coverContext(context) {
+            this.messages = Array.isArray(context) ? context : [context];
+            return this;
+        }
+        appendPrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            if (this.systemPrompt.includes(block))
+                return this;
+            this.systemPrompt = this.systemPrompt.replace(/\s*$/, '') + block;
+            return this;
+        }
+        removePrompt(content) {
+            const block = '\n' + content.replace(/^\n+|\n+$/g, '');
+            this.systemPrompt = this.systemPrompt.replace(block, '');
+            return this;
+        }
+        run(appendContext, toolCall) {
+            const rawMessages = [
+                { role: 'system', content: this.systemPrompt },
+                ...this.runtimeMessages,
+                ...appendContext,
+                ...this.messages
+            ];
+            const requestBody = {
+                model: GlobalConfig.MultimodalName,
+                messages: rawMessages,
+                stream: this.stream,
+                tools: toolCall,
+                tool_choice: 'auto',
+                chat_template_kwargs: {
+                    reasoning_strength: this.reasoningStrength
+                }
+            };
+            if (!this.enableTools || toolCall.length === 0) {
+                delete requestBody.tool_choice;
+                delete requestBody.tools;
+            }
+            const headers = {
+                Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                "Content-Type": "application/json",
+            };
+            const modelRequest = {
+                method: "POST",
+                crossDomain: true,
+                headers,
+                body: JSON.stringify(requestBody)
+            };
+            const endpoint = "/chat/completions";
+            const [result, error] = syncFetch({ url: GlobalConfig.MultimodalUrl + endpoint, execute: modelRequest });
+            if (error)
+                throw error;
+            if (result?.body?.error) {
+                const errMsg = typeof result.body.error === 'string'
+                    ? result.body.error
+                    : result.body.error.message || JSON.stringify(result.body.error);
+                throw new Error(`模型服务错误 [${result.status}]: ${errMsg}`);
+            }
+            if (!result?.body?.choices) {
+                throw new Error(`模型响应异常: status=${result?.status}, body=${JSON.stringify(result?.body)?.substring(0, 200)}`);
+            }
+            return result;
+        }
+        constructor(prompt) {
+            this.systemPrompt = this.promptCompletion(prompt);
+        }
+    }
+
+    function loadKnowledge(table) {
+        const [entries, error] = knowledgeLoad(table);
+        const map = new Map();
+        if (error || !Array.isArray(entries)) {
+            if (error)
+                console.error(`[知识库] 读取表 ${table} 失败:`, error);
+            return map;
+        }
+        for (const pair of entries) {
+            if (Array.isArray(pair) && pair.length >= 1 && typeof pair[0] === 'string') {
+                map.set(pair[0], typeof pair[1] === 'string' ? pair[1] : String(pair[1] ?? ''));
+            }
+        }
+        return map;
+    }
+    function saveKnowledge(table, map) {
+        const [ok, error] = knowledgeSave(table, [...map.entries()]);
+        if (error)
+            console.error(`[知识库] 写入表 ${table} 失败:`, error);
+        return !error && !!ok;
+    }
+    function getPromptFromKnowledge(key) {
+        try {
+            return loadKnowledge('video_summary').get(key) ?? null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取视频摘要失败:', error);
+            return null;
+        }
+    }
+    function savePromptToKnowledge(key, prompt) {
+        try {
+            return saveKnowledge('video_summary', loadKnowledge('video_summary').set(key, prompt));
+        }
+        catch (error) {
+            console.error('[知识库] 存储视频摘要失败:', error);
+            return false;
+        }
+    }
+    function getFileIndexFromKnowledge(key) {
+        try {
+            return loadKnowledge('file_mapping').get(key) ?? null;
+        }
+        catch (error) {
+            console.error('[知识库] 读取文件映射失败:', error);
+            return null;
+        }
+    }
+    function saveFileIndexToKnowledge(key, value) {
+        try {
+            return saveKnowledge('file_mapping', loadKnowledge('file_mapping').set(key, value));
+        }
+        catch (error) {
+            console.error('[知识库] 写入文件映射失败:', error);
+            return false;
+        }
+    }
+
+    let mediaRoles = null;
+    function registerMediaRoles(roles) {
+        mediaRoles = roles;
+    }
+    const VIDEO_FALLBACK_TEXT = '月华看不了这个视频呢';
+    const AUDIO_FALLBACK_TEXT = '月华听不懂这段语音呢';
+    function useFrameSequence() {
+        return GlobalConfig.VideoInputMode === 'frames';
+    }
+    async function understandVideo(videoUrl) {
+        const cachedPrompt = getPromptFromKnowledge(videoUrl);
+        if (cachedPrompt) {
+            console.log('[感知者] 命中视频缓存，直接返回');
+            return cachedPrompt;
+        }
+        if (useFrameSequence()) {
+            console.log('[感知者] 开始将视频抽取为图片序列帧...');
+            const [groups, framesError] = videoFrames(videoUrl);
+            if (!groups || groups.length === 0 || framesError) {
+                console.error('[感知者] 视频抽帧失败:', framesError);
+                throw new Error('视频抽帧失败');
+            }
+            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+            console.log(`[感知者] 视频抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), videoUrl);
+        }
+        console.log('[感知者] 开始将视频写入媒体目录...');
+        const [segments, mediaError] = videoMedia(videoUrl);
+        if (!segments || segments.length === 0 || mediaError) {
+            console.error('[感知者] 视频媒体化失败:', mediaError);
+            throw new Error('视频媒体化失败');
+        }
+        const mediaUrls = segments.map(segment => `file://${segment.file}`);
+        console.log(`[感知者] 视频媒体化完成，共 ${mediaUrls.length} 个片段`);
+        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), videoUrl);
+    }
+    async function understandMediaSegments(watch, cacheKey) {
+        console.log('[感知者] 开始观看...');
+        const videoSummary = await watch();
+        console.log('[感知者] 观看完成');
+        if (videoSummary && videoSummary.trim().length > 0 && cacheKey) {
+            savePromptToKnowledge(cacheKey, videoSummary);
+            console.log('[感知者] 理解文本已缓存');
+        }
+        return videoSummary;
+    }
+    async function understandAnimatedImage(imageSource, cacheKey) {
+        const cachedPrompt = cacheKey ? getPromptFromKnowledge(cacheKey) : '';
+        if (cachedPrompt) {
+            console.log('[感知者] 命中动态图缓存，直接返回');
+            return cachedPrompt;
+        }
+        console.log('[感知者] 检测到动态图，开始编码为视频...');
+        if (useFrameSequence()) {
+            const [groups, framesError] = animatedImageToFrames(imageSource);
+            if (!groups || groups.length === 0 || framesError) {
+                console.error('[感知者] 动态图抽帧失败:', framesError);
+                throw new Error('动态图抽帧失败');
+            }
+            const frameCount = groups.reduce((sum, group) => sum + group.frames.length, 0);
+            console.log(`[感知者] 动态图抽帧完成，共 ${groups.length} 组 / ${frameCount} 帧`);
+            return understandMediaSegments(() => mediaRoles.perceiverRole.watchFrames(groups), cacheKey);
+        }
+        const [segments, mediaError] = animatedImageToVideo(imageSource);
+        if (!segments || segments.length === 0 || mediaError) {
+            console.error('[感知者] 动态图转视频失败:', mediaError);
+            throw new Error('动态图转视频失败');
+        }
+        const mediaUrls = segments.map(segment => `file://${segment.file}`);
+        console.log(`[感知者] 动态图转视频完成，共 ${mediaUrls.length} 个片段`);
+        return understandMediaSegments(() => mediaRoles.perceiverRole.watchVideo(mediaUrls), cacheKey);
+    }
+    async function LiteImageFile() {
+        for (let message of GlobalConfig.unreadContext) {
+            if (typeof message.content === 'string')
+                continue;
+            const newContent = [];
+            for (let item of message.content) {
+                if (item.type == 'text')
+                    newContent.push(item);
+                else if (item.type === 'video_url') {
+                    newContent.push({ type: 'text', text: await understandVideoOrFallback(item.video_url.url) });
+                }
+                else if (item.type === 'audio_url') {
+                    newContent.push({ type: 'text', text: await understandAudioOrFallback(item.audio_url.url) });
+                }
+                else if ('input_audio' in item) {
+                    const format = item.input_audio.format || 'wav';
+                    newContent.push({ type: 'text', text: await understandAudioOrFallback(`data:audio/${format};base64,${item.input_audio.data}`) });
+                }
+                else if (item.image_url && (item.image_url.url.toLowerCase().startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(format => item.image_url.url.toLowerCase().endsWith(format)))) {
+                    newContent.push({ type: 'text', text: await understandVideoOrFallback(item.image_url.url) });
+                }
+                else if (item.image_url) {
+                    const imageSource = item.image_url.url;
+                    const [isAnimated, animatedError] = isAnimatedImage(imageSource);
+                    if (animatedError)
+                        console.error('[动态图判定失败]:', animatedError.message);
+                    else if (isAnimated) {
+                        const cacheKey = imageSource.startsWith('data:') ? '' : imageSource;
+                        let summary = '';
+                        try {
+                            summary = await understandAnimatedImage(imageSource, cacheKey);
+                        }
+                        catch (error) {
+                            console.error('[感知者] 动态图理解失败，以兜底文本置换:', error);
+                        }
+                        newContent.push({ type: 'text', text: summary.trim().length > 0 ? summary : mediaRoles.randomDefaultMessage() });
+                        continue;
+                    }
+                    if (imageSource.toLowerCase().startsWith('data:image/')) {
+                        newContent.push(item);
+                        continue;
+                    }
+                    const [resizedImages, resizeError] = resizeImage(imageSource);
+                    if (resizeError) {
+                        console.error('[图片处理失败]:', resizeError.message, resizeError.stack);
+                        continue;
+                    }
+                    resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
+                }
+            }
+            message.content = newContent;
+        }
+    }
+    async function understandVideoOrFallback(videoUrl) {
+        try {
+            const summary = await understandVideo(videoUrl);
+            if (summary.trim().length > 0)
+                return summary;
+            return mediaRoles.randomDefaultMessage();
+        }
+        catch (error) {
+            console.error('[感知者] 视频理解失败，以兜底文本置换:', error);
+            return VIDEO_FALLBACK_TEXT;
+        }
+    }
+    async function understandAudioOrFallback(audioSource) {
+        try {
+            return await understandAudio(audioSource);
+        }
+        catch (error) {
+            console.error('[感知者] 音频理解失败，以兜底文本置换:', error);
+            return AUDIO_FALLBACK_TEXT;
+        }
+    }
+    async function understandAudio(audioSource) {
+        const cacheable = !audioSource.startsWith('data:');
+        const cachedPrompt = cacheable ? getPromptFromKnowledge(audioSource) : '';
+        if (cachedPrompt) {
+            console.log('[感知者] 命中音频缓存，直接返回');
+            return cachedPrompt;
+        }
+        console.log('[感知者] 开始转换音频...');
+        const [wavBase64, audioError] = audioWav(audioSource);
+        if (!wavBase64 || audioError) {
+            console.error('[感知者] 音频转换失败:', audioError);
+            throw new Error('音频转换失败');
+        }
+        console.log('[感知者] 开始语音转写...');
+        const transcript = await transcribeAudio(wavBase64);
+        if (!transcript.trim()) {
+            console.error('[感知者] 语音转写为空');
+            throw new Error('语音转写为空');
+        }
+        console.log(`[感知者] 语音转写完成: ${transcript.substring(0, 50)}`);
+        const text = `【语音转写】${transcript}`;
+        if (cacheable) {
+            savePromptToKnowledge(audioSource, text);
+            console.log('[感知者] 语音转写文本已缓存');
+        }
+        return text;
+    }
+    async function transcribeAudio(wavBase64) {
+        const [result, error] = syncFetch({
+            url: GlobalConfig.MultimodalUrl + '/chat/completions',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: {
+                    Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: GlobalConfig.AsrName,
+                    messages: [{
+                            role: 'user',
+                            content: [{ type: 'input_audio', input_audio: { data: wavBase64, format: 'wav' } }]
+                        }],
+                    temperature: 0,
+                }),
+            },
+        });
+        if (error) {
+            console.error('[感知者] 语音转写请求失败:', error.message);
+            return '';
+        }
+        const raw = result?.body?.choices?.[0]?.message?.content || '';
+        const marker = '<asr_text>';
+        return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
+    }
+
+    function RandomFloor(min, max) {
+        return Math.floor(Math.random() * (max - min + 1) + min);
+    }
+    function RandomFloat(min, max, length = 2) {
+        return Number((Math.random() * (max - min) + min).toFixed(length));
+    }
+
+    class CreativeRoleBase extends ModelBuilder {
+        OWN_HISTORY_LIMIT = 5;
+        MAX_ITERATIONS = 3;
+        constructor(prompt) {
+            super(prompt);
+        }
+        consumeHistory() {
+            const result = [...this.messages];
+            this.messages = [];
+            return result;
+        }
+        writeContext(context) {
+            const cleaned = this.stripReasoningContent(context);
+            if (this.messages.length >= 40) {
+                this.messages = this.messages.slice(-39).concat(cleaned);
+            }
+            else
+                this.messages.push(cleaned);
+            return this;
+        }
+        async createCreativeWork(taskDescription) {
+            this.writeContext({ role: 'user', content: taskDescription });
+            const details = [];
+            let rejectionReason = '';
+            for (let i = 0; i < this.MAX_ITERATIONS; i++) {
+                console.log(`[${this.roleName}] 第 ${i + 1} 轮推理`);
+                let response;
+                try {
+                    response = this.run([], this.getToolDefinitions());
+                }
+                catch (error) {
+                    console.error(`[${this.roleName}] 第 ${i + 1} 轮推理失败:`, error);
+                    break;
+                }
+                const choice = response.body?.choices?.[0];
+                if (!choice) {
+                    console.log(`[${this.roleName}] 模型返回空结果，结束循环`);
+                    break;
+                }
+                const toolCalls = choice.message?.tool_calls;
+                if (!toolCalls || toolCalls.length === 0) {
+                    if (choice.message?.content && choice.message.content.trim()) {
+                        rejectionReason = choice.message.content;
+                    }
+                    this.writeContext(choice.message);
+                    break;
+                }
+                this.writeContext(choice.message);
+                for (const toolCall of toolCalls) {
+                    console.log(`[${this.roleName}] 执行工具: ${toolCall.function.name}`);
+                    const result = this.executeTool(toolCall);
+                    this.writeContext({ role: 'tool', content: result, tool_call_id: toolCall.id });
+                    this.collectDetail(toolCall, details);
+                }
+            }
+            if (details.length === 0) {
+                const reason = rejectionReason || '月华认为此次无需进行创作';
+                console.log(`[${this.roleName}] 未产出作品，原因: ${reason}`);
+                return reason;
+            }
+            const summary = this.buildSummary(details);
+            console.log(`[${this.roleName}] 已完成 ${details.length} 件作品创作`);
+            return summary;
+        }
+    }
+
+    function interactEvent(topic, payload) {
+        try {
+            const resultJSON = ltpInteractEvent(topic, JSON.stringify(payload ?? {}));
+            if (!resultJSON)
+                return {};
+            const res = JSON.parse(resultJSON);
+            if (res && res.returned && res.return !== null && res.return !== undefined) {
+                return { return: res.return };
+            }
+        }
+        catch (e) {
+            console.error('LTPX 事件交互失败:', e);
+        }
+        return {};
+    }
+
+    class PainterRole extends CreativeRoleBase {
+        defaultExpressionPrompt = [
+            '温柔的表情,开心的笑容,脸颊泛红',
+            '害羞的表情,抿嘴微笑,眼神躲闪',
+            '俏皮的表情,单眼眨眼,嘴角微微上扬,略带调皮的笑容',
+            '平静的表情,眼神略微向下看向一侧,嘴唇轻抿,无笑容,若有所思',
+            '惊讶的表情,双眼睁大,眉毛抬高,嘴巴微张成O形,脸颊泛红',
+            '非常开心的表情,双眼弯成月牙形,张大嘴巴欢笑,脸颊泛红明显',
+            '害羞的表情,眼神向下看,眉毛呈八字形,抿嘴微笑,脸颊大面积泛红',
+            '自信的表情,眼神直视前方,眉毛微微上扬,嘴角带有一抹浅笑,眼神明亮'
+        ];
+        defaultPosturePrompt = [
+            '一条腿轻轻抬起,俏皮姿势',
+            '双手背在身后,身体微微前倾,双脚并拢',
+            '一手插在外套口袋里,另一只手轻抬至脸颊旁比"V"字手势,身体略侧,双脚前后交叉站立',
+            '双手自然垂放于身前,手指轻轻交握,双肩微微内收,双脚并拢,站姿端正',
+            '手抬起至嘴前,十指轻轻触碰"做捂嘴状",身体微微后仰,一条腿向后小半步,重心落在后脚',
+            '双手举过头顶比心或张开五指,一条腿向后踢起,身体微微前倾,脚尖离地呈跳跃瞬间',
+            '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
+            '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
+        ];
+        appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0];
+        chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0];
+        fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0];
+        groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0];
+        crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0];
+        defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边';
+        defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，立领缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收白色蕾丝袖口，多层黑色蕾丝裙摆';
+        defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
+        referenceImage = '';
+        roleTool = [
+            {
+                type: "function",
+                function: {
+                    name: "diffusion_generation",
+                    description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若需要参照已设置的参考图创作,请改用 image_to_image",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "prompt": {
+                                type: "string",
+                                description: "图像生成的正向描述文本"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "prompt"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "image_to_image",
+                    description: "基于已设置的参考图（律令 <参考图> 保存）进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。仅在已设置参考图时可用;未设置参考图时请改用 diffusion_generation 进行文生图",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "prompt": {
+                                type: "string",
+                                description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "strength": {
+                                type: "number",
+                                description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。保留主体时建议 0.3~0.5,较大改变时 0.6~0.8。默认随机取值"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "prompt"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "self_portrait",
+                    description: "生成月华的全尺寸自画像（全身立绘,标准少女头身比）。凡是要求绘制月华、你自己、\"我\"的形象,且未特别要求Q版时,都必须且只能调用此函数,禁止调用 diffusion_generation",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "expression": {
+                                type: "string",
+                                description: "表情提示词,描述想要展现的表情"
+                            },
+                            "posture": {
+                                type: "string",
+                                description: "动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                            },
+                            "environment": {
+                                type: "string",
+                                description: "环境提示词,描述背景环境或场景"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "expression",
+                            "posture",
+                            "environment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "chibi_self_portrait",
+                    description: "生成月华的Q版自画像（二头身可爱比例）。当要求绘制Q版、二头身、萌系或大头娃娃风格的月华形象时调用此函数,禁止调用 diffusion_generation",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "expression": {
+                                type: "string",
+                                description: "表情提示词,描述想要展现的表情"
+                            },
+                            "posture": {
+                                type: "string",
+                                description: "动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                            },
+                            "environment": {
+                                type: "string",
+                                description: "环境提示词,描述背景环境或场景"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "expression",
+                            "posture",
+                            "environment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "group_photo",
+                    description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。合照对象为琉璃时,companion 直接填写\"琉璃\"即可,系统会自动注入琉璃的固定形象。若已设置参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未设置则按文本描述绘制",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "companion": {
+                                type: "string",
+                                description: "合照对象描述,描述对方的性别、外貌、发型、服装、身份等特征。合照对象为琉璃时直接填写\"琉璃\""
+                            },
+                            "expression": {
+                                type: "string",
+                                description: "月华的表情提示词,描述想要展现的表情"
+                            },
+                            "posture": {
+                                type: "string",
+                                description: "月华的动作提示词,描述想要展现的姿势或动作"
+                            },
+                            "outfit": {
+                                type: "string",
+                                description: "月华的服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                            },
+                            "environment": {
+                                type: "string",
+                                description: "环境提示词,描述背景环境或场景"
+                            },
+                            "negative_prompt": {
+                                type: "string",
+                                description: "负面提示文本,用于排除图像中不希望出现的元素"
+                            },
+                            "cfg_scale": {
+                                type: "number",
+                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            }
+                        },
+                        required: [
+                            "companion",
+                            "expression",
+                            "posture",
+                            "environment"
+                        ]
+                    }
+                }
+            }
+        ];
+        constructor() {
+            super(fileView('prompts/painterRole.md')[0]);
+        }
+        get roleName() { return '绘制者'; }
+        getToolDefinitions() { return this.roleTool; }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string' ? JSON.parse(toolCall.function.arguments) : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[绘制者] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            switch (funcName) {
+                case 'diffusion_generation': return this.handleDiffusionGeneration(args);
+                case 'image_to_image': return this.handleImageToImage(args);
+                case 'self_portrait': return this.handleSelfPortrait(args);
+                case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args);
+                case 'group_photo': return this.handleGroupPhoto(args);
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo`;
+            }
+        }
+        collectDetail(toolCall, paintings) {
+            try {
+                const args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+                const name = toolCall.function.name;
+                if (name === 'self_portrait' || name === 'chibi_self_portrait') {
+                    paintings.push({
+                        toolName: name,
+                        promptSummary: name === 'self_portrait' ? '全尺寸自画像' : 'Q版自画像',
+                        expression: args.expression || '',
+                        posture: args.posture || '',
+                        environment: args.environment || '',
+                    });
+                }
+                else if (name === 'group_photo') {
+                    paintings.push({
+                        toolName: name,
+                        promptSummary: `与${args.companion || '他人'}的合照`,
+                        expression: args.expression || '',
+                        posture: args.posture || '',
+                        environment: args.environment || '',
+                        companion: args.companion || '',
+                    });
+                }
+                else if (name === 'diffusion_generation' || name === 'image_to_image') {
+                    const prompt = args.prompt || '';
+                    paintings.push({
+                        toolName: name,
+                        promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
+                    });
+                }
+            }
+            catch {
+            }
+        }
+        buildSummary(paintings) {
+            if (paintings.length === 0)
+                return '月华没有绘制任何作品';
+            const feedback = interactEvent('draw_painting_before', { paintings }).return;
+            if (feedback && Array.isArray(feedback) && feedback.every(p => p.toolName && p.promptSummary)) {
+                paintings = feedback;
+            }
+            const parts = [];
+            for (let i = 0; i < paintings.length; i++) {
+                const p = paintings[i];
+                if (p.toolName === 'self_portrait' || p.toolName === 'chibi_self_portrait') {
+                    let desc = p.toolName === 'self_portrait' ? '月华绘制了一幅全尺寸自画像' : '月华绘制了一幅Q版自画像';
+                    if (p.expression)
+                        desc += `，展现了${p.expression}`;
+                    if (p.environment)
+                        desc += `，背景是${p.environment}`;
+                    parts.push(desc + '。');
+                }
+                else if (p.toolName === 'group_photo') {
+                    let desc = `月华绘制了一幅与${p.companion || '他人'}的合照`;
+                    if (p.expression)
+                        desc += `，展现了${p.expression}`;
+                    if (p.environment)
+                        desc += `，背景是${p.environment}`;
+                    parts.push(desc + '。');
+                }
+                else if (p.toolName === 'image_to_image')
+                    parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
+                else
+                    parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
+            }
+            parts.push('图像已通过前端推送给用户。');
+            return parts.join('\n');
+        }
+        renderAppearance(template, parts, defaultOutfit) {
+            const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
+            const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
+            const outfit = parts.outfit || defaultOutfit;
+            return template
+                .replace('{base}', this.appearanceBasePrompt)
+                .replace('{expression}', expression)
+                .replace('{outfit}', outfit)
+                .replace('{posture}', posture)
+                .replace('{companion}', parts.companion || '')
+                .replace('{environment}', parts.environment || '');
+        }
+        paint(imageParams, label) {
+            const [result, error] = generateImage(imageParams);
+            if (error) {
+                console.error(`[绘制者] ${label}失败:`, error);
+                return `${label}失败: ${error}`;
+            }
+            if (!result || !result.base64)
+                return `${label}失败：引擎返回空结果`;
+            console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}`);
+            if (!pushImage([result.base64]))
+                console.warn(`[绘制者] 推送${label}结果到前端失败`);
+            return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+        }
+        handleDiffusionGeneration(args) {
+            try {
+                const prompt = args.prompt || '';
+                if (!prompt.trim())
+                    return '扩散生成失败：正向提示词不能为空';
+                console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
+                return this.paint({
+                    prompt: prompt,
+                    negativePrompt: args.negative_prompt || '',
+                    cfgScale: args.cfg_scale ?? 1.0,
+                }, '扩散图像生成');
+            }
+            catch (error) {
+                console.error('[绘制者] 扩散生成处理异常:', error);
+                return `扩散图像生成异常: ${error}`;
+            }
+        }
+        handleImageToImage(args) {
+            try {
+                const prompt = args.prompt || '';
+                if (!prompt.trim())
+                    return '图生图失败：正向提示词不能为空';
+                if (!this.referenceImage) {
+                    return '图生图失败：尚未设置参考图，请先发送图片并下达 <参考图> 指令，或改用 diffusion_generation 进行文生图';
+                }
+                const strength = args.strength ?? RandomFloat(0.35, 0.75);
+                console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}`);
+                return this.paint({
+                    prompt: prompt,
+                    negativePrompt: args.negative_prompt || '',
+                    cfgScale: args.cfg_scale ?? 1.0,
+                    initImg: this.referenceImage,
+                    strength: strength,
+                }, '图生图生成');
+            }
+            catch (error) {
+                console.error('[绘制者] 图生图处理异常:', error);
+                return `图生图生成异常: ${error}`;
+            }
+        }
+        handleSelfPortrait(args) {
+            return this.handlePortrait(args, this.fullAppearancePrompt, this.defaultOutfitFullPrompt, '自画像');
+        }
+        handleChibiSelfPortrait(args) {
+            return this.handlePortrait(args, this.chibiAppearancePrompt, this.defaultOutfitChibiPrompt, 'Q版自画像');
+        }
+        handlePortrait(args, template, defaultOutfit, label) {
+            try {
+                console.log(`[绘制者] -> ${label}生成`);
+                console.log(`表情: "${args.expression}"`);
+                console.log(`姿势: "${args.posture}"`);
+                console.log(`服装: "${args.outfit}"`);
+                console.log(`环境: "${args.environment}"`);
+                console.log(`负面提示词: "${args.negative_prompt}"`);
+                console.log(`提示词引导系数: "${args.cfg_scale}"`);
+                const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
+                return this.paint({
+                    prompt: fullPrompt,
+                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+                    cfgScale: args.cfg_scale ?? 1.0,
+                }, `${label}生成`);
+            }
+            catch (error) {
+                console.error(`[绘制者] ${label}处理异常:`, error);
+                return `${label}生成异常: ${error}`;
+            }
+        }
+        handleGroupPhoto(args) {
+            try {
+                console.log(`[绘制者] -> 合照生成`);
+                console.log(`合照对象: "${args.companion}"`);
+                console.log(`表情: "${args.expression}"`);
+                console.log(`姿势: "${args.posture}"`);
+                console.log(`服装: "${args.outfit}"`);
+                console.log(`环境: "${args.environment}"`);
+                let companion = args.companion || '';
+                if (companion.includes('琉璃'))
+                    companion = this.crystalAppearancePrompt;
+                const fullPrompt = this.renderAppearance(this.groupAppearancePrompt, { ...args, companion }, this.defaultOutfitFullPrompt);
+                const imageParams = {
+                    prompt: fullPrompt,
+                    negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+                    cfgScale: args.cfg_scale ?? 1.0,
+                };
+                if (this.referenceImage) {
+                    imageParams.initImg = this.referenceImage;
+                    imageParams.strength = RandomFloat(0.35, 0.6);
+                    console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
+                }
+                return this.paint(imageParams, '合照生成');
+            }
+            catch (error) {
+                console.error('[绘制者] 合照生成处理异常:', error);
+                return `合照生成异常: ${error}`;
+            }
+        }
+    }
+
+    class MusicianRole extends CreativeRoleBase {
+        MAX_ITERATIONS = 4;
+        MIN_MELODY_BARS = 12;
+        DEFAULT_TEMPO = 100;
+        draft = null;
+        assembledDetail = null;
+        musicTool = [
+            {
+                type: "function",
+                function: {
+                    name: "submit_melody",
+                    description: "创作流程第一步：提交完整的主旋律声部。先规划风格、调式、节拍与段落结构，再写出贯穿全曲的主旋律。主旋律是全曲的根基，伴奏与和弦将在其基础上依次生成",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "title": {
+                                type: "string",
+                                description: "音乐作品标题，应具有诗意与美感，与音乐风格匹配"
+                            },
+                            "instrument": {
+                                type: "string",
+                                description: "主旋律乐器，单个乐器名，如：钢琴(piano)、小提琴(violin)、长笛(flute)、萨克斯(sax)、竖琴(harp)、大提琴(cello)、8bit"
+                            },
+                            "tempo": {
+                                type: "number",
+                                description: "演奏速度（BPM）。抒情曲建议60-80，轻快曲建议90-120，激昂曲建议130-150。默认100"
+                            },
+                            "key": {
+                                type: "string",
+                                description: "调式，如 C、G、D、F、a、e、d"
+                            },
+                            "meter": {
+                                type: "string",
+                                description: "拍号，如 4/4、3/4、6/8。默认 4/4"
+                            },
+                            "structure": {
+                                type: "string",
+                                description: "段落结构，如：'前奏(4小节)-A段主旋律(8小节)-B段展开(8小节)-A'再现(8小节)-尾声(4小节)'"
+                            },
+                            "melody": {
+                                type: "string",
+                                description: "主旋律ABC片段：仅一行音符，用 | 分隔小节，以 |] 结尾。禁止包含 X:/T:/M:/L:/Q:/K: 等头部字段与 [V:N] 声部标记。应有起伏与乐句呼吸感（每4-8小节一个乐句）"
+                            }
+                        },
+                        required: [
+                            "title",
+                            "melody"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "submit_accompaniment",
+                    description: "创作流程第二步：在已提交的主旋律基础上生成伴奏声部。使用柱式和弦、分解和弦或阿尔贝蒂低音为旋律提供和声织体，小节数必须与主旋律完全一致",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "instrument": {
+                                type: "string",
+                                description: "伴奏乐器，单个乐器名，如：钢琴(piano)、竖琴(harp)、吉他(guitar)、贝斯(bass)、氛围铺底(弦乐群)"
+                            },
+                            "accompaniment": {
+                                type: "string",
+                                description: "伴奏ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。和弦用方括号包裹同时发音的音符，如 [C,,E,,G,,]4 或分解和弦 C,,2 E,2 G,2 c2"
+                            }
+                        },
+                        required: [
+                            "accompaniment"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "submit_chords",
+                    description: "创作流程第三步（最后一步）：在主旋律与伴奏基础上生成和弦进行声部，提供低音支撑与和声骨架，完成整部作品。小节数必须与主旋律完全一致",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "instrument": {
+                                type: "string",
+                                description: "和弦声部乐器，单个乐器名，如：贝斯(bass)、大提琴(cello)、钢琴(piano)、鼓组(打击乐)"
+                            },
+                            "chords": {
+                                type: "string",
+                                description: "和弦进行ABC片段：仅一行音符，用 | 分隔小节，小节数必须与主旋律完全一致，以 |] 结尾。禁止包含头部字段与 [V:N] 声部标记。使用根音、柱式和弦或分解和弦，明确体现和声进行（如 C-F-G-C）"
+                            }
+                        },
+                        required: [
+                            "chords"
+                        ]
+                    }
+                }
+            }
+        ];
+        constructor() {
+            super(fileView('prompts/musicianRole.md')[0]);
+        }
+        get roleName() { return '演奏者'; }
+        getToolDefinitions() { return this.musicTool; }
+        executeTool(toolCall) {
+            const funcName = toolCall.function.name;
+            let args = {};
+            try {
+                args = typeof toolCall.function.arguments === 'string'
+                    ? JSON.parse(toolCall.function.arguments)
+                    : toolCall.function.arguments;
+            }
+            catch (parseError) {
+                console.error(`[演奏者] 工具调用参数解析失败:`, toolCall.function.arguments);
+                return `工具调用参数解析失败，请确保传入合法的 JSON 字符串。错误: ${parseError}`;
+            }
+            if (this.draft?.chords)
+                return '作品已创作完成，无需重复提交任何声部';
+            switch (funcName) {
+                case 'submit_melody': return this.handleSubmitMelody(args);
+                case 'submit_accompaniment': return this.handleSubmitAccompaniment(args);
+                case 'submit_chords': return this.handleSubmitChords(args);
+                default: return `未知工具: ${funcName}，请按流程依次调用 submit_melody → submit_accompaniment → submit_chords`;
+            }
+        }
+        collectDetail(toolCall, pieces) {
+            if (toolCall.function.name !== 'submit_chords' || !this.assembledDetail)
+                return;
+            pieces.push(this.assembledDetail);
+            this.assembledDetail = null;
+        }
+        buildSummary(pieces) {
+            if (pieces.length === 0)
+                return '月华没有演奏任何作品';
+            const feedback = interactEvent('play_music_before', { pieces }).return;
+            if (feedback && Array.isArray(feedback) && feedback.every(p => p.title && p.instruments && p.tempo && p.structure && p.key && p.meter && p.abcLength !== undefined)) {
+                pieces = feedback;
+            }
+            const parts = [];
+            for (let i = 0; i < pieces.length; i++) {
+                const p = pieces[i];
+                let desc = `月华演奏了《${p.title}》`;
+                const details = [];
+                if (p.instruments)
+                    details.push(`使用${p.instruments}`);
+                if (p.key)
+                    details.push(`${p.key}${p.key === p.key.toLowerCase() ? '小调' : '大调'}`);
+                if (p.tempo > 0)
+                    details.push(`${p.tempo}BPM`);
+                if (p.structure)
+                    details.push(`结构为${p.structure}`);
+                if (details.length > 0)
+                    desc += `（${details.join('，')}）`;
+                parts.push(desc + '。');
+            }
+            parts.push('乐谱已通过音乐播放器推送给用户，可以查看和播放。');
+            return parts.join('\n');
+        }
+        sanitizeFragment(fragment) {
+            return fragment
+                .replace(/^[A-Za-z]:.*$/gm, '')
+                .replace(/\[[Vv]:\d+\]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+        countBars(fragment) {
+            const body = fragment
+                .replace(/^[A-Za-z]:.*$/gm, '')
+                .replace(/\[[Vv]:\d+\]/g, '')
+                .replace(/![^!|]*!/g, '')
+                .replace(/\|\]|:\||\|\|/g, '|');
+            return body.split('|').filter(segment => /[A-Ga-gz]/.test(segment)).length;
+        }
+        handleSubmitMelody(args) {
+            try {
+                const title = (args.title || '').trim();
+                const melody = this.sanitizeFragment(args.melody || '');
+                if (!title)
+                    return '主旋律提交失败：作品标题不能为空';
+                if (!melody)
+                    return '主旋律提交失败：旋律内容不能为空';
+                const bars = this.countBars(melody);
+                if (bars < this.MIN_MELODY_BARS) {
+                    return `主旋律提交失败：当前仅 ${bars} 小节，音乐展开不足。请扩展至至少 ${this.MIN_MELODY_BARS} 小节（建议 16 小节以上），保持完整的段落结构后重新提交`;
+                }
+                this.draft = {
+                    title: title,
+                    structure: args.structure || '',
+                    key: args.key || 'C',
+                    meter: args.meter || '4/4',
+                    tempo: args.tempo || this.DEFAULT_TEMPO,
+                    melody: melody,
+                    melodyInstrument: args.instrument || '钢琴',
+                    melodyBars: bars,
+                    accompaniment: '',
+                    accompanimentInstrument: '',
+                    chords: '',
+                    chordInstrument: '',
+                };
+                console.log(`[演奏者] 主旋律已提交: "${title}"，${bars} 小节，${this.draft.key} 调，${this.draft.tempo}BPM`);
+                return `主旋律提交成功：共 ${bars} 小节。下一步请在此旋律基础上调用 submit_accompaniment 生成伴奏声部，小节数必须恰好为 ${bars} 小节并逐小节对齐`;
+            }
+            catch (error) {
+                console.error('[演奏者] 主旋律提交处理异常:', error);
+                return `主旋律提交异常: ${error}`;
+            }
+        }
+        handleSubmitAccompaniment(args) {
+            try {
+                if (!this.draft)
+                    return '伴奏提交失败：尚未提交主旋律，请先调用 submit_melody';
+                const accompaniment = this.sanitizeFragment(args.accompaniment || '');
+                if (!accompaniment)
+                    return '伴奏提交失败：伴奏内容不能为空';
+                const bars = this.countBars(accompaniment);
+                if (bars !== this.draft.melodyBars) {
+                    return `伴奏提交失败：伴奏为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐主旋律后重新提交完整的伴奏声部`;
+                }
+                this.draft.accompaniment = accompaniment;
+                this.draft.accompanimentInstrument = args.instrument || this.draft.melodyInstrument;
+                console.log(`[演奏者] 伴奏已提交: ${bars} 小节，乐器: ${this.draft.accompanimentInstrument}`);
+                return `伴奏提交成功：${bars} 小节，与主旋律对齐。最后一步请调用 submit_chords 生成和弦进行声部，小节数必须恰好为 ${bars} 小节`;
+            }
+            catch (error) {
+                console.error('[演奏者] 伴奏提交处理异常:', error);
+                return `伴奏提交异常: ${error}`;
+            }
+        }
+        handleSubmitChords(args) {
+            try {
+                if (!this.draft)
+                    return '和弦提交失败：尚未提交主旋律，请先调用 submit_melody';
+                if (!this.draft.accompaniment)
+                    return '和弦提交失败：尚未提交伴奏声部，请先调用 submit_accompaniment';
+                const chords = this.sanitizeFragment(args.chords || '');
+                if (!chords)
+                    return '和弦提交失败：和弦进行内容不能为空';
+                const bars = this.countBars(chords);
+                if (bars !== this.draft.melodyBars) {
+                    return `和弦提交失败：和弦进行为 ${bars} 小节，与主旋律 ${this.draft.melodyBars} 小节不一致。请逐小节对齐后重新提交完整的和弦声部`;
+                }
+                this.draft.chords = chords;
+                this.draft.chordInstrument = args.instrument || '贝斯';
+                const detail = this.assembleAndPush();
+                console.log(`[演奏者] 和弦已提交: ${bars} 小节，乐器: ${this.draft.chordInstrument}，作品《${detail.title}》拼装完成`);
+                this.assembledDetail = detail;
+                this.draft = null;
+                return `和弦进行提交成功，作品《${detail.title}》创作完成：主旋律、伴奏与和弦进行三声部已对齐拼装（共 ${detail.abcLength} 小节）。乐谱已推送到前端，可通过音乐播放器查看和播放。`;
+            }
+            catch (error) {
+                console.error('[演奏者] 和弦提交处理异常:', error);
+                return `和弦提交异常: ${error}`;
+            }
+        }
+        assembleAndPush() {
+            const d = this.draft;
+            const instruments = [d.melodyInstrument, d.accompanimentInstrument, d.chordInstrument]
+                .map(inst => inst.trim())
+                .filter(Boolean)
+                .join(',');
+            let enrichedAbc = [
+                `X:1`,
+                `T:${d.title}`,
+                `M:${d.meter}`,
+                `L:1/8`,
+                `Q:1/4=${d.tempo}`,
+                `K:${d.key}`,
+                `[V:1] ${d.melody}`,
+                `[V:2] ${d.accompaniment}`,
+                `[V:3] ${d.chords}`,
+                ''
+            ].join('\n');
+            enrichedAbc = this.injectInstrumentDirective(enrichedAbc, instruments);
+            const pushSuccess = pushContext('music', enrichedAbc, '');
+            if (!pushSuccess) {
+                console.warn('[演奏者] 推送乐谱到前端失败');
+            }
+            return {
+                title: d.title,
+                instruments: instruments,
+                tempo: d.tempo,
+                structure: d.structure,
+                key: d.key,
+                meter: d.meter,
+                abcLength: d.melodyBars,
+            };
+        }
+        injectInstrumentDirective(abcNotation, instruments) {
+            if (!instruments)
+                return abcNotation;
+            const list = instruments
+                .replace(/，/g, ',')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+            if (list.length === 0)
+                return abcNotation;
+            if (/^%%voice\s+/m.test(abcNotation))
+                return abcNotation;
+            const directives = [];
+            for (let i = 0; i < list.length; i++) {
+                const inst = list[i];
+                const voiceNum = i + 1;
+                directives.push(`%%voice ${voiceNum} ${inst}`);
+            }
+            const directive = directives.join('\n') + '\n';
+            const xMatch = abcNotation.match(/^X:\s*\d+/m);
+            if (xMatch && xMatch.index !== undefined) {
+                const before = abcNotation.substring(0, xMatch.index);
+                const after = abcNotation.substring(xMatch.index);
+                return before + directive + after;
+            }
+            return directive + abcNotation;
+        }
+    }
+
+    class DialogueRole extends ModelBuilder {
+        descriptionRole;
+        async generateDialogue(cache) {
+            try {
+                await LiteImageFile();
+                GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
+                GlobalConfig.unreadContext = [];
+                this.formatHistoricalMessages();
+                this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
+                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
+                this.analyzeMessageResponse(response.body, cache);
+                if (cache.toolCalls.length > 0) {
+                    this.writeContext(response.body.choices?.[0]?.message);
+                    const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
+                    if (hasProcessedToolCalls)
+                        return await this.generateDialogue(cache);
+                }
+                this.writeContext(response.body.choices?.[0]?.message);
+            }
+            catch (error) {
+                console.error('请求处理错误:', error);
+            }
+            this.updateMessageContent(cache);
+        }
+        formatHistoricalMessages() {
+            if (this.messages.length === 0)
+                return;
+            const totalImages = this.countTotalImages(this.messages);
+            if (totalImages >= 20) {
+                const processedMessages = [];
+                for (const message of this.messages) {
+                    if (typeof message.content === 'string') {
+                        processedMessages.push(message);
+                        continue;
+                    }
+                    const textResult = this.summarizeMessageImages(message);
+                    if (!textResult || textResult.trim() === '')
+                        continue;
+                    processedMessages.push({ role: message.role, content: textResult });
+                }
+                this.messages = processedMessages;
+            }
+            if (this.messages.length === 0)
+                return;
+            if (this.messages.slice(-1)[0].role === 'user')
+                return;
+            this.writeContext({ role: 'user', content: "继续" });
+        }
+        summarizeMessageImages(message) {
+            if (typeof message.content === 'string')
+                return message.content;
+            const imageItems = message.content.filter((c) => c.type === 'image_url');
+            const textItems = message.content.filter((c) => c.type === 'text');
+            const textPart = textItems.map((c) => c.text).join('\n');
+            if (imageItems.length === 0)
+                return textPart || null;
+            try {
+                this.descriptionRole.coverContext({ role: 'user', content: imageItems });
+                const summaryRequest = this.descriptionRole.run([], []);
+                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
+                if (summary && summary.trim().length > 0) {
+                    return textPart ? `${textPart}\n[图片描述：${summary}]` : `[图片描述：${summary}]`;
+                }
+                return textPart || null;
+            }
+            catch (error) {
+                console.error('[对话者] 图片摘要异常:', error);
+                return textPart || null;
+            }
+        }
+        countImagesInMessage(message) {
+            if (typeof message.content === 'string')
+                return 0;
+            return message.content.filter((c) => c.type === 'image_url').length;
+        }
+        countTotalImages(messages) {
+            return messages.reduce((sum, m) => sum + this.countImagesInMessage(m), 0);
+        }
+        analyzeMessageResponse(message, cache) {
+            try {
+                if (message.choices?.[0]?.message?.reasoning_content) {
+                    cache.thinkingContent = message.choices[0].message.reasoning_content;
+                }
+                if (message.timings?.predicted_per_second) {
+                    console.log(`词元生成速度: ${message.timings.predicted_per_second}`);
+                }
+                if (message.timings?.cache_n !== undefined) {
+                    console.log(`缓存命中数量: ${message.timings.cache_n}`);
+                }
+                if (message.choices?.[0]?.message?.tool_calls) {
+                    for (const toolCall of message.choices[0].message.tool_calls) {
+                        try {
+                            toolCall.function.arguments = JSON.parse(toolCall.function.arguments);
+                            cache.toolCalls.push(toolCall);
+                        }
+                        catch (parseError) {
+                            console.error('工具调用参数解析错误:', parseError);
+                        }
+                    }
+                }
+                if (message.choices?.[0]?.message?.content) {
+                    cache.descriptionContent = message.choices[0].message.content;
+                }
+            }
+            catch (error) {
+                console.error('聊天消息响应处理错误:', error);
+            }
+        }
+        async batchExecutionToolCall(state) {
+            let hasToolCalls = false;
+            for (const toolCall of state.toolCalls) {
+                const functionName = toolCall.function.name;
+                const functionArgs = toolCall.function.arguments;
+                const lunarToolPackage = GlobalConfig.LTPfunction.get(functionName);
+                if (!lunarToolPackage) {
+                    this.messages.push({ role: "tool", content: `未找到工具包: ${functionName}`, tool_call_id: toolCall.id });
+                    continue;
+                }
+                try {
+                    const toolResult = await lunarToolPackage(functionArgs);
+                    const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
+                    const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
+                    if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
+                        const message = {
+                            role: "user",
+                            content: [
+                                { type: "text", text: textContent },
+                                { type: "image_url", image_url: { url: base64Image } }
+                            ]
+                        };
+                        this.messages.push(message);
+                        console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
+                    }
+                    else
+                        this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
+                    hasToolCalls = true;
+                }
+                catch (error) {
+                    this.messages.push({ role: "tool", content: `调用${functionName}失败: ${error}`, tool_call_id: toolCall.id });
+                }
+            }
+            state.currentToolCallIndex = -1;
+            state.currentFunctionArgs = "";
+            state.currentFunctionName = "";
+            state.currentToolCall = null;
+            state.toolCalls = [];
+            return hasToolCalls;
+        }
+        ;
+        updateMessageContent(state) {
+            if (state.thinkingContent.trim() !== "") {
+                const newThinkTag = '\n<think>\n' + state.thinkingContent + '\n</think>\n';
+                GlobalConfig.finalResponse = state.descriptionContent;
+                console.log(newThinkTag);
+            }
+            else
+                GlobalConfig.finalResponse = state.descriptionContent;
+            return GlobalConfig.finalResponse;
+        }
+        constructor(descriptionRole) {
+            super(fileView('prompts/dialogueRole.md')[0]);
+            this.descriptionRole = descriptionRole;
+        }
+    }
+
+    class PerceiverRole extends ModelBuilder {
+        SUMMARY_THRESHOLD = 4096;
+        summaryTaskTemplate = fileView('prompts/perceiverSummaryTask.md')[0];
+        MAX_SEGMENTS = 8;
+        RETRY_WAIT_MS = 25000;
+        MAX_ATTEMPTS = 2;
+        constructor() {
+            super(fileView('prompts/perceiverRole.md')[0]);
+        }
+        async watchVideo(mediaUrls) {
+            if (mediaUrls.length === 0) {
+                console.warn('[感知者] 未收到任何视频片段');
+                return '';
+            }
+            const watched = this.sampleSegments(mediaUrls);
+            if (watched.length < mediaUrls.length) {
+                console.log(`[感知者] 片段数 ${mediaUrls.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 段`);
+            }
+            console.log(`[感知者] 开始观看视频，共 ${watched.length} 个片段`);
+            const understandings = [];
+            for (let index = 0; index < watched.length; index++) {
+                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 段`);
+                const understanding = await this.evaluateSegment(watched[index], index + 1, watched.length);
+                if (understanding.trim().length > 0) {
+                    understandings.push(understanding);
+                    console.log(`[感知者] 第 ${index + 1} 段理解完成`);
+                }
+            }
+            return this.finalizeUnderstandings(understandings);
+        }
+        async watchFrames(groups) {
+            if (groups.length === 0) {
+                console.warn('[感知者] 未收到任何采样帧分组');
+                return '';
+            }
+            const watched = this.sampleSegments(groups);
+            if (watched.length < groups.length) {
+                console.log(`[感知者] 分组数 ${groups.length} 超过单次上限 ${this.MAX_SEGMENTS}，等距抽样观看 ${watched.length} 组`);
+            }
+            console.log(`[感知者] 开始观看视频采样帧，共 ${watched.length} 个分组`);
+            const understandings = [];
+            for (let index = 0; index < watched.length; index++) {
+                console.log(`[感知者] 观看第 ${index + 1}/${watched.length} 组（${watched[index].frames.length} 帧）`);
+                const understanding = await this.evaluateFrameGroup(watched[index], index + 1, watched.length);
+                if (understanding.trim().length > 0) {
+                    understandings.push(understanding);
+                    console.log(`[感知者] 第 ${index + 1} 组理解完成`);
+                }
+            }
+            return this.finalizeUnderstandings(understandings);
+        }
+        sampleSegments(items) {
+            if (items.length <= this.MAX_SEGMENTS)
+                return items;
+            const picked = [];
+            for (let i = 0; i < this.MAX_SEGMENTS; i++) {
+                picked.push(items[Math.round(i * (items.length - 1) / (this.MAX_SEGMENTS - 1))]);
+            }
+            return [...new Set(picked)];
+        }
+        async finalizeUnderstandings(understandings) {
+            if (understandings.length === 0) {
+                console.warn('[感知者] 未产生任何片段理解');
+                return '';
+            }
+            const concatenated = understandings.join('\n\n');
+            if (concatenated.length <= this.SUMMARY_THRESHOLD) {
+                console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，未超 ${this.SUMMARY_THRESHOLD}，直接返回`);
+                return concatenated;
+            }
+            console.log(`[感知者] 拼接理解文本 ${concatenated.length} 字符，超过 ${this.SUMMARY_THRESHOLD}，触发客观摘要`);
+            const summary = await this.generateObjectiveSummary(concatenated);
+            if (summary.trim().length > 0) {
+                console.log(`[感知者] 客观摘要完成（${summary.length} 字符）`);
+                return summary;
+            }
+            console.warn(`[感知者] 客观摘要失败，退回拼接理解文本（硬切断至 ${this.SUMMARY_THRESHOLD} 字符）`);
+            return concatenated.slice(0, this.SUMMARY_THRESHOLD);
+        }
+        async evaluateSegment(mediaUrl, index, total) {
+            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+            const prompt = `请观看这段视频${position}，按「片段理解任务」的格式输出该片段的客观内容理解。`;
+            this.coverContext({
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    { type: 'image_url', image_url: { url: mediaUrl } }
+                ]
+            });
+            this.runtimeMessages = [];
+            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+                try {
+                    const response = this.run([], []);
+                    const content = response.body?.choices?.[0]?.message?.content || '';
+                    if (!content.trim()) {
+                        console.warn(`[感知者] 第 ${index} 段返回空内容`);
+                    }
+                    return content;
+                }
+                catch (error) {
+                    console.error(`[感知者] 第 ${index} 段第 ${attempt} 次推理失败:`, error);
+                    if (attempt < this.MAX_ATTEMPTS) {
+                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 段`);
+                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
+                    }
+                }
+            }
+            return '';
+        }
+        async evaluateFrameGroup(group, index, total) {
+            const position = total === 1 ? '' : `（第 ${index}/${total} 段）`;
+            const prompt = `以下是同一段视频${position}按时间顺序抽取的采样帧序列，请按「片段理解任务」的格式输出这段视频的客观内容理解。`;
+            this.coverContext({
+                role: 'user',
+                content: [
+                    { type: 'text', text: prompt },
+                    ...group.frames.map((frame) => ({ type: 'image_url', image_url: { url: frame.image } }))
+                ]
+            });
+            this.runtimeMessages = [];
+            for (let attempt = 1; attempt <= this.MAX_ATTEMPTS; attempt++) {
+                try {
+                    const response = this.run([], []);
+                    const content = response.body?.choices?.[0]?.message?.content || '';
+                    if (!content.trim()) {
+                        console.warn(`[感知者] 第 ${index} 组返回空内容`);
+                    }
+                    return content;
+                }
+                catch (error) {
+                    console.error(`[感知者] 第 ${index} 组第 ${attempt} 次推理失败:`, error);
+                    if (attempt < this.MAX_ATTEMPTS) {
+                        console.warn(`[感知者] 等待 ${this.RETRY_WAIT_MS / 1000} 秒后重试第 ${index} 组`);
+                        await new Promise(resolve => setTimeout(resolve, this.RETRY_WAIT_MS));
+                    }
+                }
+            }
+            return '';
+        }
+        async generateObjectiveSummary(concatenated) {
+            const prompt = this.summaryTaskTemplate.replace('{content}', concatenated);
+            this.coverContext({ role: 'user', content: prompt });
+            this.runtimeMessages = [];
+            try {
+                const response = this.run([], []);
+                return response.body?.choices?.[0]?.message?.content || '';
+            }
+            catch (error) {
+                console.error('[感知者] 客观摘要推理失败:', error);
+                return '';
+            }
+        }
+    }
+
+    const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
+    const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
+    const PRESET_DAILY_TASKS = [
+        { id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
+        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
+        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候，关心其午餐情况' },
+        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送傍晚问候，关心一天收尾与晚间安排' },
+        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候，祝其好眠' },
+    ];
+    const SCHEDULE_FILE_PATH = 'database/schedule.json';
+    const scheduleTools = [
+        {
+            type: "function",
+            function: {
+                name: "create_schedule",
+                description: "在计划表中创建新的计划项，指定执行时间点和对应的工作内容。时间格式为 ISO 8601 (如 '2026-06-14T15:30:00') 或中文日期时间格式 (如 '2026年6月14日 15:30')。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        time: {
+                            type: "string",
+                            description: "计划执行的时间点，支持 ISO 8601 格式或中文日期时间格式，例如 '2026-06-14T15:30:00' 或 '2026年6月14日 15:30'"
+                        },
+                        content: {
+                            type: "string",
+                            description: "计划执行的工作内容描述，应清晰说明需要完成的事项"
+                        }
+                    },
+                    required: ["time", "content"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "edit_schedule",
+                description: "编辑计划表中已存在的计划项，可修改其执行时间和/或工作内容。需要提供计划项的ID，至少提供 time 或 content 中的一个进行修改。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要编辑的计划项ID，从 query_schedule 返回结果中获得"
+                        },
+                        time: {
+                            type: "string",
+                            description: "修改后的执行时间点，不修改则留空"
+                        },
+                        content: {
+                            type: "string",
+                            description: "修改后的工作内容描述，不修改则留空"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "delete_schedule",
+                description: "从计划表中删除指定的计划项。需要提供计划项的ID。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要删除的计划项ID，从 query_schedule 返回结果中获得"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "query_schedule",
+                description: "查询计划表中已有的计划项列表，可按关键词筛选。返回所有匹配的计划项及其ID、时间和内容。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        keyword: {
+                            type: "string",
+                            description: "用于筛选计划项的关键词，留空则返回全部计划项"
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+
+    const STICKER_COLLECTION = 'stickers';
+    let stickerCollectionReady = false;
+    const ACTION_COLLECTION = 'actions';
+    let actionCollectionReady = false;
+    function syncActionsToMemory(actionNames) {
+        if (!actionNames || actionNames.length === 0)
+            return false;
+        try {
+            if (!actionCollectionReady) {
+                const [ready] = memoryInit(ACTION_COLLECTION);
+                if (!ready)
+                    return false;
+                actionCollectionReady = true;
+            }
+            for (const name of actionNames) {
+                const trimmed = (name || '').trim();
+                if (!trimmed)
+                    continue;
+                memoryAddWithTags(ACTION_COLLECTION, 'assistant', trimmed, [trimmed]);
+            }
+            return true;
+        }
+        catch (error) {
+            console.error('[动作库] 动作组入库失败:', error);
+            return false;
+        }
+    }
+    function queryBestAction(text) {
+        if (!text || !text.trim())
+            return null;
+        try {
+            const [results, error] = memoryQuery(ACTION_COLLECTION, text.trim(), 1);
+            if (error || !results || results.length === 0)
+                return null;
+            return results[0].content || null;
+        }
+        catch (error) {
+            console.error('[动作库] 匹配失败:', error);
+            return null;
+        }
+    }
+    async function queryEmotionSticker(query) {
+        if (!query || !query.trim())
+            return null;
+        try {
+            if (!stickerCollectionReady) {
+                const [ready] = memoryInit(STICKER_COLLECTION);
+                if (!ready)
+                    return null;
+                stickerCollectionReady = true;
+            }
+            const [results, error] = memoryQuery(STICKER_COLLECTION, query.trim(), 3);
+            if (error || !results || results.length === 0)
+                return null;
+            const image = results[RandomFloor(0, results.length - 1)].base64;
+            return image || null;
+        }
+        catch (error) {
+            console.error('[表情包] 检索失败:', error);
+            return null;
+        }
+    }
+    function extractTextFromMessage(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        if (Array.isArray(message.content)) {
+            return message.content.filter(item => item.type === 'text').map(item => item.text).join(' ');
+        }
+        return '';
+    }
+    function initMemory() {
+        if (GlobalConfig.memoryReady)
+            return;
+        const [_, err] = memoryInit('lunar_messages');
+        if (err)
+            console.error('记忆库初始化失败:', err);
+        else
+            GlobalConfig.memoryReady = true;
+    }
+    function ensureMemoryReady() {
+        if (!GlobalConfig.memoryReady)
+            initMemory();
+        return GlobalConfig.memoryReady;
+    }
+
+    const MEMORY_COLLECTION = 'lunar_messages';
+    const RAG_SUMMARY_HARD_LIMIT = 4096;
+    const RAG_TIMELINE_HARD_LIMIT = 2048;
+    const RAG_PER_QUERY_TOP_K = 10;
+    const RAG_MAX_RECORDS = 24;
+    class MemorizerRole extends ModelBuilder {
+        constructor() {
+            super(fileView('prompts/memorizerRole.md')[0]);
+        }
+        persistUnreadRecords() {
+            if (GlobalConfig.unreadRecords.length === 0)
+                return;
+            if (!ensureMemoryReady()) {
+                console.warn('[记忆] 记忆库未就绪，保留缓冲消息待下次触发');
+                return;
+            }
+            let written = 0;
+            for (const message of GlobalConfig.unreadRecords) {
+                if (message.role === 'tool')
+                    continue;
+                const content = extractTextFromMessage(message).trim();
+                if (!content || content.length <= 5)
+                    continue;
+                if (content.includes(SCHEDULE_TRIGGER_PREFIX))
+                    continue;
+                const [, error] = memoryAdd(MEMORY_COLLECTION, message.role, content);
+                if (error)
+                    console.error('[记忆] 写入记忆库失败:', error);
+                else
+                    written++;
+            }
+            console.log(`[记忆] 已写入 ${written} 条消息到记忆库`);
+            GlobalConfig.unreadRecords = [];
+        }
+        queryRagDigest(userMessages, summarize) {
+            if (!userMessages || userMessages.length === 0 || !ensureMemoryReady())
+                return '';
+            let records = this.retrieveRagRecords(userMessages);
+            if (records.length === 0)
+                return '';
+            const feedback = interactEvent('build_memory_before', { userMessages, records }).return;
+            if (feedback && Array.isArray(feedback) && feedback.length > 0 && feedback.every(r => r.id && r.role && r.content && r.similarity !== undefined)) {
+                records = feedback;
+            }
+            return summarize ? this.summarizeRecords(records) : this.buildTimeline(records);
+        }
+        buildTimeline(records) {
+            const sorted = [...records].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+            let timeline = '';
+            for (const r of sorted) {
+                const time = r.timestamp ? new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false }) : '未知';
+                const line = `[ 时间: ${time} ] [ 内容: ${r.content || '(空)'} ]`;
+                if (timeline.length + line.length + 1 > RAG_TIMELINE_HARD_LIMIT)
+                    break;
+                timeline += (timeline ? '\n' : '') + line;
+            }
+            console.log(`[记忆] 已生成时间线（${timeline.length}/${RAG_TIMELINE_HARD_LIMIT} 字，${timeline.split('\n').length} 行）`);
+            return timeline;
+        }
+        retrieveRagRecords(userMessages) {
+            const allResults = [];
+            for (const userMessage of userMessages) {
+                const [results, error] = memoryQuery(MEMORY_COLLECTION, userMessage, RAG_PER_QUERY_TOP_K);
+                if (error) {
+                    console.error('记忆库查询失败:', error);
+                    continue;
+                }
+                if (results && results.length > 0)
+                    allResults.push(...results);
+            }
+            const seen = new Map();
+            for (const r of allResults) {
+                const content = r.content || '';
+                const existing = seen.get(content);
+                if (!existing || r.similarity > existing.similarity)
+                    seen.set(content, r);
+            }
+            const uniqueResults = Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity);
+            console.log(`[记忆] 检索到 ${uniqueResults.length} 条相关记录，相似度范围: ${uniqueResults[0]?.similarity?.toFixed(4) ?? 'N/A'} ~ ${uniqueResults[uniqueResults.length - 1]?.similarity?.toFixed(4) ?? 'N/A'}`);
+            return uniqueResults.slice(0, RAG_MAX_RECORDS);
+        }
+        summaryTaskTemplate = fileView('prompts/memorizerSummaryTask.md')[0];
+        summarizeRecords(records) {
+            const fragments = records
+                .map((r, i) => {
+                let header = `--- 片段 ${i + 1}（${r.role}`;
+                if (r.timestamp)
+                    header += `，${new Date(r.timestamp * 1000).toLocaleString('zh-CN', { hour12: false })}`;
+                header += `）---`;
+                return `${header}\n${r.content || '(空)'}`;
+            })
+                .join('\n\n');
+            this.coverContext({ role: 'user', content: this.summaryTaskTemplate.replace('{fragments}', fragments) });
+            this.runtimeMessages = [];
+            let response;
+            try {
+                response = this.run([], []);
+            }
+            catch (error) {
+                console.error('[记忆] 摘要推理失败:', error);
+                return '';
+            }
+            let digest = (response.body?.choices?.[0]?.message?.content || '').trim();
+            if (digest.length > RAG_SUMMARY_HARD_LIMIT)
+                digest = digest.slice(0, RAG_SUMMARY_HARD_LIMIT);
+            console.log(`[记忆] 已生成摘要（${digest.length}/${RAG_SUMMARY_HARD_LIMIT} 字）`);
+            return digest;
+        }
+    }
+
+    const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
+    const memorizerRole = new MemorizerRole();
+    const painterRole = new PainterRole();
+    const musicianRole = new MusicianRole();
+    const dialogueRole = new DialogueRole(descriptionRole);
+    const perceiverRole = new PerceiverRole();
+    registerMediaRoles({ perceiverRole, randomDefaultMessage });
+    function randomDefaultMessage() {
+        return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
+    }
+
+    const agentControlTools = [
+        {
+            type: "function",
+            function: {
+                name: "dispatch_painter",
+                description: "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'画一幅星空下的少女'。描述越详细，绘画效果越好。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_musician",
+                description: "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "音乐需求描述，如'创作一首轻快的钢琴曲'、'写一首抒情的钢琴与大提琴二重奏'。描述越详细，音乐创作效果越好。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
+        }
+    ];
+    function parseArgs$1(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    async function handleDispatchPainter(args) {
+        const { description } = parseArgs$1(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
+        }
+        if (!painterRole) {
+            return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度绘制者: ${description}`);
+        const result = await painterRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 绘制者完成: ${result}`);
+        return [result, ''];
+    }
+    async function handleDispatchMusician(args) {
+        const { description } = parseArgs$1(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
+        }
+        if (!musicianRole) {
+            return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度演奏者: ${description}`);
+        const result = await musicianRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 演奏者完成: ${result}`);
+        return [result, ''];
+    }
+    GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
+    GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+    GlobalConfig.LTPdefinition.push(...agentControlTools);
+
+    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+    function formatISO(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const mi = String(date.getMinutes()).padStart(2, '0');
+        const s = String(date.getSeconds()).padStart(2, '0');
+        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+    }
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${d}`;
+    }
+    function normalizeTime(raw) {
+        if (!raw || raw.trim().length === 0) {
+            return null;
+        }
+        const trimmed = raw.trim();
+        const stdDate = new Date(trimmed);
+        if (!isNaN(stdDate.getTime())) {
+            return formatISO(stdDate);
+        }
+        const cnMatch = trimmed.match(CN_DATE_REGEX);
+        if (cnMatch) {
+            const [, year, month, day, hour, minute, second] = cnMatch;
+            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
+        }
+        return null;
+    }
+    function dailyTaskTime(item, now) {
+        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!match)
+            return null;
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+    }
+
+    function loadSchedulesFromDisk() {
+        const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
+        if (readErr) {
+            return [];
+        }
+        try {
+            const jsonStr = atob(fileData);
+            const data = JSON.parse(jsonStr);
+            return Array.isArray(data) ? data : [];
+        }
+        catch (e) {
+            console.error('[计划表] 计划表数据解析失败:', e);
+            return [];
+        }
+    }
+    function saveSchedulesToDisk(schedules) {
+        try {
+            const jsonStr = JSON.stringify(schedules, null, 2);
+            const [, , saveErr] = saveFile(SCHEDULE_FILE_PATH, true, jsonStr);
+            if (saveErr) {
+                console.error('[计划表] 保存计划表失败:', saveErr);
+                return false;
+            }
+            return true;
+        }
+        catch (e) {
+            console.error('[计划表] 序列化计划表失败:', e);
+            return false;
+        }
+    }
+
+    let scheduleCache = [];
+    function initSchedules() {
+        const raw = loadSchedulesFromDisk();
+        const existingIds = new Set(raw.map(item => item.id));
+        let added = 0;
+        for (const preset of PRESET_DAILY_TASKS) {
+            if (existingIds.has(preset.id))
+                continue;
+            raw.push({ ...preset });
+            added++;
+        }
+        if (raw.length === 0) {
+            saveSchedulesToDisk([]);
+            scheduleCache = [];
+            console.log('[计划表] 初始化完成，计划表为空');
+            return;
+        }
+        let needsRewrite = added > 0;
+        for (const item of raw) {
+            if (item.type === 'daily')
+                continue;
+            const normalized = normalizeTime(item.time);
+            if (normalized && normalized !== item.time) {
+                item.time = normalized;
+                needsRewrite = true;
+            }
+        }
+        scheduleCache = raw;
+        if (needsRewrite) {
+            saveSchedulesToDisk(scheduleCache);
+            if (added > 0)
+                console.log(`[计划表] 已补充 ${added} 个预设每日任务`);
+            console.log('[计划表] 已修正历史数据中的非标准时间格式');
+        }
+        console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
+    }
+    function generateId() {
+        function execute(character) {
+            const randomValue = (Math.random() * 16) | 0;
+            const maskedRandomValue = character === 'x' ? randomValue : (randomValue & 0x3 | 0x8);
+            return maskedRandomValue.toString(16);
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, execute);
+    }
+    function parseArgs(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    async function handleCreateSchedule(args) {
+        const { time, content } = parseArgs(args);
+        if (!time || time.trim().length === 0) {
+            return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
+        }
+        if (!content || content.trim().length === 0) {
+            return ['创建计划项失败：工作内容不能为空，请提供具体的计划内容', ''];
+        }
+        const normalizedTime = normalizeTime(time);
+        if (!normalizedTime) {
+            return [`创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`, ''];
+        }
+        const newItem = {
+            id: generateId(),
+            time: normalizedTime,
+            content: content.trim()
+        };
+        scheduleCache.push(newItem);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.pop();
+            return ['创建计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
+        return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
+    }
+    async function handleEditSchedule(args) {
+        const { id, time, content } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
+        }
+        if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
+            return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
+        }
+        const snapshot = { ...scheduleCache[index] };
+        if (time && time.trim().length > 0) {
+            const normalizedTime = normalizeTime(time);
+            if (!normalizedTime) {
+                return [`编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`, ''];
+            }
+            scheduleCache[index].time = normalizedTime;
+        }
+        if (content && content.trim().length > 0) {
+            scheduleCache[index].content = content.trim();
+        }
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache[index] = snapshot;
+            return ['编辑计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
+        return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
+    }
+    async function handleDeleteSchedule(args) {
+        const { id } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return ['删除计划项失败：计划项ID不能为空', ''];
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return [`删除计划项失败：未找到ID为 ${id} 的计划项`, ''];
+        }
+        const deletedItem = scheduleCache[index];
+        scheduleCache.splice(index, 1);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.splice(index, 0, deletedItem);
+            return ['删除计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
+        return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
+    }
+    async function handleQuerySchedule(args) {
+        const { keyword } = parseArgs(args);
+        if (scheduleCache.length === 0) {
+            return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
+        }
+        const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const filtered = keyword && keyword.trim().length > 0
+            ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
+            : sorted;
+        if (filtered.length === 0) {
+            return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
+        }
+        return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
+                filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
+    }
+    function checkDueItems() {
+        if (scheduleCache.length === 0)
+            return [];
+        const now = new Date();
+        const todayStr = formatDate(now);
+        const kept = [];
+        const removed = [];
+        const candidates = [];
+        for (const item of scheduleCache) {
+            if (item.type === 'daily') {
+                const todayTime = dailyTaskTime(item, now);
+                if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
+                    if (now.getTime() - todayTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                        item.completedDate = todayStr;
+                        console.log(`[计划表] 每日任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                    }
+                    else
+                        candidates.push({ item, dueTime: todayTime });
+                }
+                kept.push(item);
+                continue;
+            }
+            const itemTime = new Date(item.time);
+            if (isNaN(itemTime.getTime())) {
+                console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
+                kept.push(item);
+                continue;
+            }
+            if (now < itemTime) {
+                kept.push(item);
+                continue;
+            }
+            if (now.getTime() - itemTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                removed.push(item);
+                console.log(`[计划表] 一次性任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                continue;
+            }
+            candidates.push({ item, dueTime: itemTime });
+        }
+        const executed = [];
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => Math.abs(now.getTime() - a.dueTime.getTime()) - Math.abs(now.getTime() - b.dueTime.getTime()));
+            const chosen = candidates[0].item;
+            if (chosen.type === 'daily') {
+                chosen.completedDate = todayStr;
+                console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+            }
+            else {
+                removed.push(chosen);
+                console.log(`[计划表] 触发到期计划项: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+            }
+            executed.push(chosen);
+        }
+        if (executed.length > 0 || removed.length > 0) {
+            scheduleCache = kept;
+            saveSchedulesToDisk(scheduleCache);
+        }
+        return executed;
+    }
+    initSchedules();
+    GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
+    GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
+    GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+    GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
+    GlobalConfig.LTPdefinition.push(...scheduleTools);
+
+    const screenshotTools = [
+        {
+            type: "function",
+            function: {
+                name: "screenshot",
+                description: "截取当前屏幕画面。默认优先截取当前焦点应用窗口，无法识别焦点窗口时自动降级为全屏截图。支持指定显示器、全屏、绝对坐标区域，以及窗口内精准子区域（偏移量+区域大小）。截取的图片会自动缩放处理并展示给用户。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        mode: {
+                            type: "string",
+                            enum: ["auto", "window", "fullscreen", "display", "region"],
+                            description: "截图模式：auto=焦点窗口优先（默认，失败降级全屏）；window=强制焦点窗口；fullscreen=全屏；display=指定显示器；region=绝对坐标区域"
+                        },
+                        display_index: {
+                            type: "number",
+                            description: "显示器索引（mode=display 时生效，-1 表示全部）"
+                        },
+                        offset_x: {
+                            type: "number",
+                            description: "窗口相对 X 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
+                        },
+                        offset_y: {
+                            type: "number",
+                            description: "窗口相对 Y 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
+                        },
+                        width: {
+                            type: "number",
+                            description: "窗口相对区域宽度（>0 且 height>0 时启用精准区域覆盖）"
+                        },
+                        height: {
+                            type: "number",
+                            description: "窗口相对区域高度"
+                        },
+                        region_x: {
+                            type: "number",
+                            description: "绝对屏幕区域 X 坐标（mode=region）"
+                        },
+                        region_y: {
+                            type: "number",
+                            description: "绝对屏幕区域 Y 坐标（mode=region）"
+                        },
+                        region_w: {
+                            type: "number",
+                            description: "绝对屏幕区域宽度（mode=region）"
+                        },
+                        region_h: {
+                            type: "number",
+                            description: "绝对屏幕区域高度（mode=region）"
+                        },
+                        format: {
+                            type: "string",
+                            description: "输出图片格式：'png' 或 'jpg'，默认为 'png'",
+                            enum: ["png", "jpg"]
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+    async function handleScreenshot(args) {
+        console.log(`========== 开始处理截图工具调用 ==========`);
+        console.log(`原始参数: ${JSON.stringify(args)}`);
+        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
+        console.log(`参数解析完成: ${JSON.stringify(parsed)}`);
+        console.log(`准备执行截图操作...`);
+        const [results, captureErr] = screenshotCapture(parsed);
+        if (captureErr) {
+            console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
+            return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
+        }
+        if (!results || results.length === 0) {
+            console.error(`截图失败: 未获取到截图数据`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
+            return ['截图失败：未获取到截图数据', ''];
+        }
+        const firstFrame = results[0];
+        console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const base64List = results.map((r) => r.base64);
+        pushImage(base64List);
+        console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
+        const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
+        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
+        console.log(`返回响应: ${sizeInfo}`);
+        console.log(`========== 截图工具调用结束(成功) ==========`);
+        return [textResponse, firstFrame.base64];
+    }
+    GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
+    GlobalConfig.LTPdefinition.push(...screenshotTools);
+
+    async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
+        const defaultCallback = (content) => JSON.parse(content);
+        const applyCallback = defaultCallback;
+        const fallback = async () => {
+            saveFile(url.toString(), true, initializeContent);
+            return applyCallback(initializeContent);
+        };
+        try {
+            const filePath = url.toString().split(/[\/\\]/);
+            const [list, err1] = fileList(filePath.slice(0, -1).join('/'));
+            if (err1)
+                return await fallback();
+            const exists = list.some(item => item.name === filePath.slice(-filePath.length)[0] && !item.isDir);
+            if (!exists)
+                return await fallback();
+            const [content, size, mimeType, err2] = readFile(url.toString());
+            if (err2)
+                return await fallback();
+            const text = atob(String(content));
+            if (!text)
+                return await fallback();
+            return applyCallback(text);
+        }
+        catch (error) {
+            if (error instanceof Error)
+                return await fallback();
+        }
+    }
+
+    const CODE_PATH_PREFIX = '*标题> ';
+    function codeHeader(path) {
+        return `${CODE_PATH_PREFIX}${path}*\n`;
+    }
+    const BRACE_LANGS = {
+        ts: true, js: true, tsx: true, jsx: true, go: true,
+        java: true, c: true, h: true, cpp: true, cxx: true, hpp: true, cs: true,
+    };
+    function resolveCodeLang(fileType) {
+        const t = (fileType || "").toLowerCase().replace(/^\./, "");
+        if (BRACE_LANGS[t])
+            return t;
+        if (t === "python")
+            return "py";
+        return null;
+    }
+
+    function stripStringsAndComments(line, lang) {
+        let out = "";
+        let i = 0;
+        let blockComment = false;
+        const n = line.length;
+        const pyHash = lang === "py";
+        while (i < n) {
+            const c = line[i];
+            const next = line[i + 1];
+            if (blockComment) {
+                if (c === "*" && next === "/") {
+                    blockComment = false;
+                    i += 2;
+                }
+                else
+                    i++;
+                continue;
+            }
+            if ((c === "/" && next === "/") || (pyHash && c === "#"))
+                break;
+            if (c === "/" && next === "*") {
+                blockComment = true;
+                i += 2;
+                continue;
+            }
+            if (c === '"' || c === "'" || c === "`") {
+                const quote = c;
+                i++;
+                while (i < n && line[i] !== quote) {
+                    if (line[i] === "\\")
+                        i++;
+                    i++;
+                }
+                i++;
+                continue;
+            }
+            if (c === "{" || c === "}")
+                out += c;
+            i++;
+        }
+        return out;
+    }
+    function braceDelta(line, lang) {
+        const clean = stripStringsAndComments(line, lang);
+        let d = 0;
+        for (const ch of clean) {
+            if (ch === "{")
+                d++;
+            else if (ch === "}")
+                d--;
+        }
+        return d;
+    }
+    function indentLevel(line) {
+        const m = /^[ \t]*/.exec(line);
+        if (!m)
+            return 0;
+        return (m[0].match(/\t/g)?.length ?? 0) * 4 + m[0].length;
+    }
+    function isInsignificant(line, lang) {
+        if (!line.trim())
+            return true;
+        if (/^\s*#/.test(line))
+            return true;
+        if (/^\s*(?:\/\/|\/\*|\*\/)/.test(line))
+            return true;
+        return false;
+    }
+
+    function detectTsJs(line) {
+        const t = line.trim();
+        let m = /^(?:export\s+)?(?:abstract\s+|default\s+)?(?:class|interface|type|enum|namespace)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^(?:export\s+)?(?:async\s+)?function\s*(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)\s*=>/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^(?:(?:public|private|protected|static|async|readonly|abstract)\s+)*(\w+)\s*\([^)]*\)\s*[:{]/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|function|return|new|typeof|instanceof|delete|void)\b/.test(t)) {
+            return { kind: "method", name: m[1] };
+        }
+        return null;
+    }
+    function detectGo(line) {
+        const t = line.trim();
+        let m = /^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^type\s+(\w+)\s+(?:struct|interface)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        return null;
+    }
+    function detectPython(line) {
+        const t = line.trim();
+        if (t.startsWith("#"))
+            return null;
+        let m = /^def\s+(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "func", name: m[1] };
+        m = /^class\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        return null;
+    }
+    function detectBraceClassLang(line) {
+        const t = line.trim();
+        let m = /^(?:(?:public|private|protected|static|final|abstract|sealed|internal|readonly)\s+)*(?:class|interface|enum|@\w+\s+)?(?:class|interface|enum|struct|record)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^(?:(?:public|private|protected|static|final|synchronized|native|abstract|virtual|override|async|internal)\s+)*[\w<>\[\],?.\s]+\s+(\w+)\s*\([^)]*\)\s*\{/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|return|new|else|do|try|synchronized)\b/.test(t)) {
+            return { kind: "method", name: m[1] };
+        }
+        return null;
+    }
+    function detectCpp(line) {
+        const t = line.trim();
+        let m = /^(?:template\s*<[^>]*>\s*)?(?:class|struct|union|namespace)\s+(\w+)/.exec(t);
+        if (m)
+            return { kind: "class", name: m[1] };
+        m = /^[\w:*&<>{},\s]+\s+(\w+)::(\w+)\s*\(/.exec(t);
+        if (m)
+            return { kind: "method", name: `${m[1]}::${m[2]}` };
+        m = /^(?:static\s+|inline\s+|extern\s+|virtual\s+|const\s+|unsigned\s+|signed\s+)*[\w:*&<>{},\s]+\s+(\w+)\s*\([^)]*\)\s*(?:const\s*)?\{/.exec(t);
+        if (m && !/^(if|for|while|switch|catch|return|new|sizeof|else|do|try)\b/.test(t)) {
+            return { kind: "func", name: m[1] };
+        }
+        return null;
+    }
+    function detectDeclaration(line, lang) {
+        switch (lang) {
+            case "ts":
+            case "js":
+            case "tsx":
+            case "jsx": return detectTsJs(line);
+            case "go": return detectGo(line);
+            case "py": return detectPython(line);
+            case "java":
+            case "cs": return detectBraceClassLang(line);
+            case "c":
+            case "h":
+            case "cpp":
+            case "cxx":
+            case "hpp": return detectCpp(line);
+            default: return null;
+        }
+    }
+
+    function splitCodeFile(content, lang, idealLen) {
+        const text = (content ?? "").replace(/\r\n/g, "\n");
+        if (!text.trim())
+            return [];
+        const lines = text.split("\n");
+        const brace = !!(BRACE_LANGS[lang]);
+        const meta = [];
+        let running = 0;
+        for (const line of lines) {
+            const startLvl = brace ? running : 0;
+            const d = brace ? braceDelta(line, lang) : 0;
+            if (brace) {
+                meta.push({ lvl: startLvl, braceDelta: d, decl: detectDeclaration(line, lang), text: line });
+                running += d;
+            }
+            else {
+                const lvl = indentLevel(line);
+                meta.push({ lvl, braceDelta: 0, decl: detectPython(line), text: line });
+            }
+        }
+        const sections = [];
+        const preamble = [];
+        const stack = [];
+        const closeScope = (top) => {
+            const content = top.lines.length > 0 ? top.lines.join("\n") : top.headerLine;
+            sections.push({ level: stack.length, title: top.name, content: content.trimEnd() + "\n", path: top.path });
+        };
+        for (let i = 0; i < meta.length; i++) {
+            const m = meta[i];
+            if (brace) {
+                while (stack.length && m.lvl <= stack[stack.length - 1].openLevel) {
+                    const top = stack.pop();
+                    closeScope(top);
+                }
+            }
+            else {
+                if (!isInsignificant(m.text)) {
+                    while (stack.length && m.lvl <= stack[stack.length - 1].openLevel) {
+                        const top = stack.pop();
+                        closeScope(top);
+                    }
+                }
+            }
+            if (m.decl) {
+                const parentPath = stack.length ? stack[stack.length - 1].path : "";
+                const path = parentPath ? `${parentPath} / ${m.decl.name}` : m.decl.name;
+                stack.push({
+                    kind: m.decl.kind, name: m.decl.name,
+                    openLevel: m.lvl, headerLine: m.text, lines: [], path,
+                });
+                continue;
+            }
+            if (stack.length)
+                stack[stack.length - 1].lines.push(m.text);
+            else
+                preamble.push(m.text);
+        }
+        while (stack.length)
+            closeScope(stack.pop());
+        const output = [];
+        const pre = preamble.join("\n").trimEnd();
+        if (pre)
+            output.push((CODE_PATH_PREFIX + "*文件头\n" + pre).trimEnd() + "\n");
+        const pushSection = (path, body) => {
+            const header = codeHeader(path);
+            if (body.length <= idealLen) {
+                const piece = (header + body).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+                return;
+            }
+            const chunks = splitLines(body, idealLen);
+            for (const c of chunks) {
+                const piece = (header + c).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+            }
+        };
+        for (const s of sections) {
+            pushSection(s.path, s.content);
+        }
+        return output;
+    }
+    function splitLines(text, idealLen) {
+        const result = [];
+        let buffer = "";
+        const flush = () => { if (buffer.trim())
+            result.push(buffer.trimEnd() + "\n"); buffer = ""; };
+        const ls = text.replace(/\r\n/g, "\n").split("\n");
+        for (const line of ls) {
+            const append = (buffer === "" ? "" : "\n") + line;
+            if ((buffer + append).length <= idealLen) {
+                buffer += append;
+                continue;
+            }
+            if (buffer.trim())
+                flush();
+            if (line.length > idealLen) {
+                for (let o = 0; o < line.length; o += idealLen) {
+                    result.push(line.slice(o, o + idealLen).trimEnd() + "\n");
+                }
+            }
+            else
+                buffer = line;
+        }
+        if (buffer.trim())
+            flush();
+        return result;
+    }
+    const STOP_WORDS = new Set([
+        "the", "a", "an", "this", "that", "with", "from", "for", "and", "or", "of", "to", "in", "on", "is", "are", "at", "by", "as", "be",
+        "if", "then", "else", "when", "while", "return", "new", "const", "let", "var", "func", "func ", "function", "class", "struct",
+        "type", "package", "import", "export", "default", "interface", "impl", "for_import", "base", "main",
+    ]);
+    function extractCodeTags(path, lang) {
+        const tags = [lang];
+        for (const seg of path.split("/")) {
+            const token = seg.trim();
+            if (!token)
+                continue;
+            const name = token.split("(")[0].trim();
+            const idMatch = name.match(/[A-Za-z_][A-Za-z0-9_$]*((?:<[^>]*>)?|(?:::[\w]+)*)/);
+            if (idMatch && !STOP_WORDS.has(idMatch[0].toLowerCase())) {
+                tags.push(idMatch[0]);
+                tags.push(idMatch[0].toLowerCase());
+            }
+            else if (name && !STOP_WORDS.has(name.toLowerCase())) {
+                tags.push(name);
+                tags.push(name.toLowerCase());
+            }
+        }
+        return tags;
+    }
+
+    function splitPlainText(text, idealLen) {
+        const results = [];
+        let currentIndex = 0;
+        const isPreferredBreak = (char) => char === "\n" ||
+            char === "。" ||
+            char === "；" ||
+            char === ";" ||
+            char === "." ||
+            char === "!" ||
+            char === "?" ||
+            char === "？" ||
+            char === "！" ||
+            char === "…" ||
+            char === "、" ||
+            char === ":" ||
+            char === "：";
+        while (currentIndex < text.length) {
+            const remainingLength = text.length - currentIndex;
+            if (remainingLength <= idealLen) {
+                const tailText = text.slice(currentIndex).trim();
+                if (tailText)
+                    results.push(tailText);
+                break;
+            }
+            const endPosition = currentIndex + idealLen;
+            const backwardWindow = Math.min(idealLen, 256);
+            let cutPosition = -1;
+            for (let position = endPosition; position >= Math.max(currentIndex + 1, endPosition - backwardWindow); position--) {
+                const char = text[position - 1];
+                if (isPreferredBreak(char)) {
+                    cutPosition = position;
+                    break;
+                }
+            }
+            if (cutPosition === -1) {
+                for (let position = endPosition; position > currentIndex; position--) {
+                    const char = text[position - 1];
+                    if (isPreferredBreak(char)) {
+                        cutPosition = position;
+                        break;
+                    }
+                }
+            }
+            if (cutPosition === -1 || cutPosition <= currentIndex)
+                cutPosition = endPosition;
+            const chunkText = text.slice(currentIndex, cutPosition).trim();
+            if (chunkText)
+                results.push(chunkText);
+            currentIndex = cutPosition;
+        }
+        return results;
+    }
+
+    function splitMarkdown(text, option) {
+        const sections = parseMarkdownSections(text);
+        if (sections.length === 0) {
+            return splitPlainText(text, option.idealLen);
+        }
+        const output = [];
+        for (const sec of sections) {
+            if (option.skipTitleOnly && sec.content.trim() === '') {
+                continue;
+            }
+            const header = formatPath(sec.path, option);
+            const body = option.includeOriginalTitle
+                ? (sec.title ? `#`.repeat(sec.level) + " " + sec.title + "\n" : "") + sec.content
+                : sec.content;
+            if (body.length <= option.idealLen) {
+                const piece = (header + body).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+                continue;
+            }
+            const pieces = splitByNewlinePrefer(body, option.idealLen);
+            for (const current of pieces) {
+                const piece = (header + current).trimEnd();
+                if (piece.trim())
+                    output.push(piece);
+            }
+        }
+        return output;
+    }
+    function parseMarkdownSections(text) {
+        const normalizedText = text.replace(/\r\n/g, "\n");
+        const lines = normalizedText.split("\n");
+        const headingRe = /^(#{1,6})\s+(.*)\s*$/;
+        const sections = [];
+        const stack = [];
+        const headingIdx = [];
+        for (let index = 0; index < lines.length; index++) {
+            const line = lines[index];
+            const match = line.match(headingRe);
+            const isHeading = Boolean(match);
+            if (isHeading && match) {
+                headingIdx.push({ i: index, level: match[1].length, title: match[2].trim() });
+            }
+        }
+        if (headingIdx.length === 0)
+            return [];
+        for (let k = 0; k < headingIdx.length; k++) {
+            const cur = headingIdx[k];
+            const next = headingIdx[k + 1];
+            const startLine = cur.i;
+            const endLine = next ? next.i : lines.length;
+            while (stack.length && stack[stack.length - 1].level >= cur.level) {
+                stack.pop();
+            }
+            stack.push({ level: cur.level, title: cur.title });
+            const path = stack.map(s => s.title).join(" / ");
+            const contentLines = lines.slice(startLine + 1, endLine);
+            const content = contentLines.join("\n").trimEnd() + "\n";
+            sections.push({ level: cur.level, title: cur.title, content, path, });
+        }
+        return sections;
+    }
+    function splitByNewlinePrefer(text, idealLen) {
+        const result = [];
+        let buffer = "";
+        const flushBuffer = () => {
+            const trimmed = buffer.trimEnd();
+            if (trimmed.trim())
+                result.push(trimmed + "\n");
+            buffer = "";
+        };
+        const lines = text.replace(/\r\n/g, "\n").split("\n");
+        for (let index = 0; index < lines.length; index++) {
+            const currentLine = lines[index];
+            const appendStr = (buffer === "" ? "" : "\n") + currentLine;
+            if ((buffer + appendStr).length <= idealLen) {
+                buffer += appendStr;
+                continue;
+            }
+            if (buffer.trim().length > 0)
+                flushBuffer();
+            if (currentLine.length > idealLen) {
+                let offset = 0;
+                while (offset < currentLine.length) {
+                    const segment = currentLine.slice(offset, offset + idealLen);
+                    result.push(segment.trimEnd() + "\n");
+                    offset += idealLen;
+                }
+            }
+            else {
+                buffer = currentLine;
+            }
+        }
+        if (buffer.trim().length > 0)
+            flushBuffer();
+        return result;
+    }
+    function formatPath(path, option) {
+        const wholePath = `${option.pathPrefix}${path}*\n`;
+        return option.pathOnNewLine ? wholePath : `${option.pathPrefix}${path}* `;
+    }
+
+    function splitTextToStrings(input, options = {}) {
+        const option = {
+            idealLen: options.idealLen ?? 1024,
+            pathPrefix: options.pathPrefix ?? "*标题> ",
+            pathOnNewLine: options.pathOnNewLine ?? true,
+            skipTitleOnly: options.skipTitleOnly ?? true,
+            includeOriginalTitle: options.includeOriginalTitle ?? false,
+            lang: options.lang ?? "",
+        };
+        const text = (input ?? "").replace(/\r\n/g, "\n");
+        if (!text.trim())
+            return [];
+        if (option.lang) {
+            const codeLang = resolveCodeLang(option.lang);
+            if (codeLang)
+                return splitCodeFile(text, codeLang, option.idealLen);
+        }
+        const isMarkdown = looksLikeMarkdown(text);
+        if (!isMarkdown) {
+            return splitPlainText(text, option.idealLen);
+        }
+        return splitMarkdown(text, option);
+    }
+    function looksLikeMarkdown(text) {
+        const hasHeading = /(^|\n)#{1,6}\s+\S/.test(text);
+        const hasFence = /(^|\n)```/.test(text);
+        const hasList = /(^|\n)\s*([-*+]|\d+\.)\s+\S/.test(text);
+        const hasQuote = /(^|\n)>\s+\S/.test(text);
+        const hasTable = /(^|\n)\s*\|.*\|/.test(text);
+        return hasHeading || hasFence || hasList || hasQuote || hasTable;
+    }
+
+    const FILE_WHITELIST = ['ts', 'js', 'tsx', 'jsx', 'go', 'py', 'java', 'c', 'h', 'cpp', 'cxx', 'hpp', 'cs', 'md', 'txt', 'json'];
+    const SLICE_LEN = 1024;
+    const QUERY_TOP_K = 10;
+    const FENCE = '```';
+    function contentHash(input) {
+        const s = input.replace(/^\uFEFF/, '');
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            h1 = Math.imul(h1 ^ c, 2654435761);
+            h2 = Math.imul(h2 ^ c, 1597334677);
+            h1 = (h1 << 13) | (h1 >>> 19);
+            h2 = (h2 << 7) | (h2 >>> 25);
+        }
+        return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+    }
+    function extOf(fileName) {
+        const t = (fileName || '').split('.').pop() || '';
+        return t.toLowerCase();
+    }
+    function looksLikeFileHeader(firstLine) {
+        return /^[A-Za-z0-9_\-.]+\.\w+$/.test(firstLine.trim());
+    }
+    function pathFromChunk(chunk) {
+        const m = /^\*[^*]*>\s*([\s\S]*?)\*(?:\n|$)/.exec(chunk);
+        return m ? m[1].trim() : '';
+    }
+    function tagsForCodeChunk(chunk, codeLang, fileName) {
+        const path = pathFromChunk(chunk);
+        const name = (fileName || '').replace(/\.[^.]+$/, '') || fileName;
+        const tags = extractCodeTags(path, codeLang);
+        if (name && !tags.includes(name))
+            tags.push(name);
+        if (name && !tags.includes(name.toLowerCase()))
+            tags.push(name.toLowerCase());
+        return tags;
+    }
+    function tagsForTextChunk(chunk, fileName, fileExt) {
+        const tags = [(fileExt || 'text').toLowerCase()];
+        const base = (fileName || '').replace(/\.[^.]+$/, '') || fileName;
+        if (base)
+            tags.push(base);
+        const path = pathFromChunk(chunk);
+        if (path) {
+            for (const seg of path.split('/')) {
+                const name = seg.split('(')[0].trim();
+                if (name && name.length <= 64)
+                    tags.push(name);
+            }
+        }
+        return [...new Set(tags)];
+    }
+    function collectionHasData(collection) {
+        try {
+            const [results, err] = memoryQuery(collection, '文件内容 结构 概览 摘要', 1);
+            return !err && Array.isArray(results) && results.length > 0;
+        }
+        catch {
+            return false;
+        }
+    }
+    async function importFileBlock(fileName, content) {
+        const ext = extOf(fileName);
+        if (!FILE_WHITELIST.includes(ext))
+            return { id: '', skipped: true };
+        const codeLang = resolveCodeLang(ext);
+        const key = `#${fileName}`;
+        const collection = 'file_' + contentHash(content);
+        const [initOk, initErr] = memoryInit(collection);
+        if (!initOk) {
+            console.error(`[阅读者] 集合初始化失败 ${collection}:`, initErr);
+            return { id: '', skipped: true };
+        }
+        if (getFileIndexFromKnowledge(key) && collectionHasData(collection))
+            return { id: key, skipped: false };
+        saveFileIndexToKnowledge(key, '');
+        const chunks = splitTextToStrings(content, { idealLen: SLICE_LEN, lang: codeLang || undefined });
+        let written = 0;
+        for (const chunk of chunks) {
+            try {
+                if (codeLang) {
+                    const tags = tagsForCodeChunk(chunk, codeLang, fileName);
+                    const [, err] = memoryAddWithTags(collection, 'user', chunk, tags);
+                    if (err) {
+                        console.error(`[阅读者] 写入代码切片失败:`, err);
+                        continue;
+                    }
+                }
+                else {
+                    const tags = tagsForTextChunk(chunk, fileName, ext);
+                    const [, err] = memoryAddWithTags(collection, 'user', chunk, tags);
+                    if (err) {
+                        console.error(`[阅读者] 写入文本切片失败:`, err);
+                        continue;
+                    }
+                }
+                written++;
+            }
+            catch (error) {
+                console.error(`[阅读者] 切片写入抛异常（已跳过该片，继续后续入库）:`, error);
+            }
+        }
+        const index = { collection, name: fileName, ext, lang: codeLang, chunkCount: written, processedAt: Date.now() };
+        saveFileIndexToKnowledge(key, JSON.stringify(index));
+        console.log(`[阅读者] 已导入 ${key} → 集合 ${collection}，切片 ${written} 片`);
+        return { id: key, skipped: false };
+    }
+    async function processImportBlocksInText(raw) {
+        if (!raw.includes(FENCE))
+            return { text: raw, imported: [] };
+        let out = '';
+        let i = 0;
+        const imported = [];
+        while (true) {
+            const start = raw.indexOf(FENCE, i);
+            if (start < 0) {
+                out += raw.slice(i);
+                break;
+            }
+            out += raw.slice(i, start);
+            const rest = raw.slice(start + FENCE.length);
+            const nl = rest.indexOf('\n');
+            const eol = nl < 0 ? rest.length : nl;
+            const firstLine = rest.slice(0, eol).trim();
+            if (!looksLikeFileHeader(firstLine)) {
+                out += FENCE;
+                i = start + FENCE.length;
+                continue;
+            }
+            const closeIdx = rest.lastIndexOf(FENCE);
+            if (closeIdx <= eol) {
+                out += raw.slice(start, start + FENCE.length);
+                i = start + FENCE.length;
+                continue;
+            }
+            const content = rest.slice(eol + 1, closeIdx);
+            const res = await importFileBlock(firstLine, content);
+            if (res.skipped) {
+                out += raw.slice(start, start + FENCE.length + closeIdx + FENCE.length);
+            }
+            else {
+                out += `月华收到了${firstLine}文件`;
+                if (res.id && !imported.includes(res.id))
+                    imported.push(res.id);
+            }
+            i = start + FENCE.length + closeIdx + FENCE.length;
+        }
+        return { text: out, imported };
+    }
+    function processReferencesInText(raw) {
+        if (!raw.includes('(#'))
+            return { text: raw, changed: false };
+        const feedback = interactEvent('read_file_before', { text: raw }).return;
+        if (feedback && typeof feedback.text === 'string' && feedback.text !== raw) {
+            raw = feedback.text;
+            if (!raw.includes('(#'))
+                return { text: raw, changed: false };
+        }
+        const refs = [];
+        const re = /\(#([\w.-]+)\)/g;
+        let m;
+        while ((m = re.exec(raw)))
+            refs.push({ id: m[1], start: m.index, end: m.index + m[0].length });
+        if (refs.length === 0)
+            return { text: raw, changed: false };
+        let changed = false;
+        const parts = [];
+        const lead = raw.slice(0, refs[0].start).trim();
+        if (lead)
+            parts.push(lead + "\n");
+        for (let i = 0; i < refs.length; i++) {
+            const ref = refs[i];
+            const gapStart = ref.end;
+            const gapEnd = i + 1 < refs.length ? refs[i + 1].start : raw.length;
+            let query = raw.slice(gapStart, gapEnd).trim();
+            query = query.replace(/^[：:]/, '').trim();
+            const key = `#${ref.id}`;
+            let index = null;
+            const cached = getFileIndexFromKnowledge(key);
+            if (cached) {
+                try {
+                    index = JSON.parse(cached);
+                }
+                catch {
+                    index = null;
+                }
+            }
+            if (!index) {
+                parts.push(raw.slice(ref.start, gapEnd));
+                continue;
+            }
+            const [ok2] = memoryInit(index.collection);
+            if (!ok2) {
+                parts.push(raw.slice(ref.start, gapEnd));
+                continue;
+            }
+            const [results, qErr] = memoryQuery(index.collection, query || '文件总体内容概括', QUERY_TOP_K);
+            const snippets = qErr ? [] : (results || [])
+                .map(r => (r.content || '').trim()).filter(Boolean);
+            const joined = snippets.length > 0 ? snippets.join('\n---\n') : '（无相关片段）';
+            let block = `【文件 ${key}】\n${joined}\n`;
+            if (query)
+                block += `\n用户问题：${query}\n`;
+            parts.push(block);
+            changed = true;
+        }
+        return { text: parts.join('').trimEnd(), changed };
+    }
+    async function processMessage(message) {
+        if (typeof message.content === 'string') {
+            const res = await processImportBlocksInText(message.content);
+            const ref = processReferencesInText(res.text);
+            if (res.text !== ref.text)
+                message.content = ref.text;
+            return { changed: res.text !== message.content || ref.changed, imported: res.imported };
+        }
+        if (Array.isArray(message.content)) {
+            const textParts = message.content.filter(it => it.type === 'text').map(it => it.text);
+            const others = message.content.filter(it => it.type !== 'text');
+            if (textParts.length === 0)
+                return { changed: false, imported: [] };
+            const raw = textParts.join('\n');
+            const imp = await processImportBlocksInText(raw);
+            const ref = processReferencesInText(imp.text);
+            const newText = ref.text;
+            if (newText !== raw || imp.imported.length > 0) {
+                message.content = [...others, { type: 'text', text: newText }];
+            }
+            return { changed: true, imported: imp.imported };
+        }
+        return { changed: false, imported: [] };
+    }
+    async function processUnreadFiles() {
+        for (const message of GlobalConfig.unreadContext) {
+            try {
+                await processMessage(message);
+            }
+            catch (error) {
+                console.error('[阅读者] 处理消息失败:', error);
+            }
+        }
+    }
+
+    function cleanTextForTTS(text) {
+        if (!text)
+            return '';
+        let processed = text;
+        processed = processed.replace(/`[^`]*`/g, '');
+        processed = processed.replace(/!\[.*?\]\(.*?\)/g, '');
+        processed = processed.replace(/\[([^\]]*)\]\(.*?\)/g, '$1');
+        processed = processed.replace(/<[^>]*>/g, '');
+        processed = processed.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+        processed = processed.replace(/\*/g, '');
+        processed = processed.replace(/\r?\n/g, ' ');
+        processed = processed.replace(/\（[^）]*\）/g, '');
+        processed = processed.replace(/\([^)]*\)/g, '');
+        const allowed = '\\u4e00-\\u9fff' + 'a-zA-Z0-9' + '\\s_~\\-' + '\uFF0C\u3002\uFF1F\uFF1A\uFF01\uFF1B\u3001\u2014\u2026\u300A\u300B\u3008\u3009\u201C\u201D\u2018\u2019\uFF08\uFF09\u3010\u3011' + ',.\'\"?:!;()\\[\\]';
+        const whitelist = new RegExp(`[^${allowed}]`, 'g');
+        processed = processed.replace(whitelist, ',');
+        processed = processed.replace(/,{2,}/g, ',');
+        processed = processed.replace(/\s+/g, ' ');
+        return processed.trim();
+    }
+    function removeEmojiSymbols(text) {
+        return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu, '');
+    }
+    function formatChunk(chunk) {
+        const LEADING_PUNCT = /^[。，、：；:;,?!？！—～"'""''()（）\[\]【】{}<>…\s]+/;
+        const TRAILING_COMMA = /[，,]+$/;
+        const result = chunk.replace(LEADING_PUNCT, '').replace(TRAILING_COMMA, '');
+        return result.trim();
+    }
+    function splitByPunct(source, punctRegex) {
+        const result = [];
+        let start = 0;
+        for (let i = 0; i < source.length; i++) {
+            if (!punctRegex.test(source[i]))
+                continue;
+            let end = i + 1;
+            while (end < source.length && punctRegex.test(source[end]))
+                end++;
+            const fragment = source.slice(start, end).trim();
+            if (fragment.length > 0)
+                result.push(fragment);
+            start = end;
+            i = end - 1;
+        }
+        if (start < source.length) {
+            const fragment = source.slice(start).trim();
+            if (fragment.length > 0)
+                result.push(fragment);
+        }
+        return result;
+    }
+    function isInsideBracket(source, pos) {
+        let depth = 0;
+        for (let i = 0; i < pos; i++) {
+            if (source[i] === '\uFF08' || source[i] === '(')
+                depth++;
+            else if (source[i] === '\uFF09' || source[i] === ')')
+                depth--;
+        }
+        return depth > 0;
+    }
+    function splitSentences(text) {
+        if (!text)
+            return [];
+        const LEVEL1_PUNCT = /[。？！—～?!]/;
+        const LEVEL2_PUNCT = /[，,、：；:;]/;
+        const IDEAL_MAXIMUM_LENGTH = 35;
+        const level1 = splitByPunct(text, LEVEL1_PUNCT);
+        const result = [];
+        for (let content of level1) {
+            if (content.length <= IDEAL_MAXIMUM_LENGTH) {
+                const formatted = formatChunk(content);
+                if (formatted.length > 0)
+                    result.push(formatted);
+                continue;
+            }
+            while (content.length > IDEAL_MAXIMUM_LENGTH) {
+                let splitPos = -1;
+                for (let i = Math.min(content.length - 1, IDEAL_MAXIMUM_LENGTH - 1); i >= 0; i--) {
+                    if (!LEVEL2_PUNCT.test(content[i]) || isInsideBracket(content, i))
+                        continue;
+                    let end = i + 1;
+                    while (end < content.length && LEVEL2_PUNCT.test(content[end]))
+                        end++;
+                    splitPos = end;
+                    break;
+                }
+                if (splitPos === -1)
+                    break;
+                const slice = formatChunk(content.slice(0, splitPos));
+                if (slice.length > 0)
+                    result.push(slice);
+                content = content.slice(splitPos);
+            }
+            const tail = formatChunk(content);
+            if (tail.length > 0)
+                result.push(tail);
+        }
+        return result;
+    }
+
+    const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E0}-\u{1F1FF}\u{200D}\u{20E3}\u{FE0F}]/gu;
+    const KAOMOJI_MARKS = '_^･・。.、；;～~ノﾉゞヾω￣▽△□○●☆★°´｀♪♫＞＜><｡一≧≦∇∀ﾟ⌒⌣◕';
+    const KAOMOJI_REGEX = new RegExp(`[<＜＼]?[（(](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[${KAOMOJI_MARKS}](?:[^\\s（()）\u4e00-\u9fff]|\u4e00){0,5}[）)](?:[<＜>＞／\u30ce\u309e\u266a\u266b]*)?` +
+        `|[>＜^TtOo0vV][_\\-=^><。.・oO][<＞^TtOo0vV]`, 'gu');
+    const EMOTION_REGEX = new RegExp(`${EMOJI_REGEX.source}|${KAOMOJI_REGEX.source}`, 'gu');
+    function extractThinkingBlocks(text) {
+        const blocks = [];
+        const regex = /<think>([\s\S]*?)<\/think>/gi;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const content = match[1].trim();
+            if (content.length > 0)
+                blocks.push(content);
+        }
+        const remaining = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        return [blocks, remaining];
+    }
+    function extractCodeBlocks(text) {
+        const blocks = [];
+        const codeBlockRegex = /```[a-zA-Z0-9+#-]*[\s\S]*?```/g;
+        let match;
+        while ((match = codeBlockRegex.exec(text)) !== null) {
+            blocks.push(match[0]);
+        }
+        const remaining = text.replace(/```[a-zA-Z0-9+#-]*[\s\S]*?```/g, '');
+        return [blocks, remaining];
+    }
+    function extractActionBlocks(text) {
+        const blocks = [];
+        const stack = [];
+        const ranges = [];
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (ch === '(' || ch === '\uFF08')
+                stack.push(i);
+            else if (ch === ')' || ch === '\uFF09') {
+                if (stack.length === 0)
+                    continue;
+                const start = stack.pop();
+                if (stack.length !== 0)
+                    continue;
+                const content = text.slice(start + 1, i).trim();
+                if (content.length > 0)
+                    blocks.push(content);
+                ranges.push([start, i + 1]);
+            }
+        }
+        let remaining = '';
+        let lastEnd = 0;
+        for (const [start, end] of ranges) {
+            remaining += text.slice(lastEnd, start);
+            lastEnd = end;
+        }
+        remaining += text.slice(lastEnd);
+        return [blocks, remaining];
+    }
+    function extractEmotionBlocks(text) {
+        const blocks = [];
+        const regex = new RegExp(EMOTION_REGEX.source, 'gu');
+        let match;
+        let lastEnd = -1;
+        let current = '';
+        while ((match = regex.exec(text)) !== null) {
+            if (current.length > 0 && match.index === lastEnd) {
+                current += match[0];
+            }
+            else {
+                if (current.length > 0)
+                    blocks.push(current);
+                current = match[0];
+            }
+            lastEnd = match.index + match[0].length;
+        }
+        if (current.length > 0)
+            blocks.push(current);
+        const remaining = text.replace(regex, '');
+        return [blocks, remaining];
+    }
+
+    function parseContent(rawText) {
+        if (!rawText)
+            return { thinkingBlocks: [], codeBlocks: [], actionBlocks: [], textChunks: [] };
+        const [thinkingBlocks, textAfterThinking] = extractThinkingBlocks(rawText);
+        const [codeBlocks, textAfterCode] = extractCodeBlocks(textAfterThinking);
+        const [emotionBlocks, textAfterEmotion] = extractEmotionBlocks(textAfterCode);
+        const [actionZoneBlocks, textAfterAction] = extractActionBlocks(textAfterEmotion);
+        const actionBlocks = [...actionZoneBlocks, ...emotionBlocks];
+        const displayText = removeEmojiSymbols(textAfterAction);
+        const displayChunks = splitSentences(displayText);
+        const textChunks = displayChunks.map(chunk => ({ display: chunk, tts: cleanTextForTTS(chunk), }));
+        return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
+    }
+
+    const injectedLTPXRemoteTools = new Set();
+    const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"，不得凭空编造操作结果，必须等待工具真实返回。';
+    function syncLTPXRemoteStatus() {
+        try {
+            const statusJSON = getLTPXRemoteStatus();
+            const tool = statusJSON ? JSON.parse(statusJSON).tool : undefined;
+            if (!tool || !tool.name) {
+                dialogueRole.removePrompt(USE_THE_PROGRAM_PROMPT);
+                removeAllLTPXRemoteTools();
+                clearLTPXRemoteTools();
+                return;
+            }
+            const injected = [...injectedLTPXRemoteTools][0];
+            if (injected && injected !== tool.name)
+                removeLTPXRemoteTool(injected);
+            if (!injectedLTPXRemoteTools.has(tool.name))
+                injectLTPXRemoteTool(tool);
+            dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
+        }
+        catch (e) {
+            console.error('LTPX 工具链同步失败:', e);
+        }
+    }
+    function injectLTPXRemoteTool(tool) {
+        const name = tool.name;
+        GlobalConfig.LTPfunction.set(name, async (args) => {
+            const argsJSON = typeof args === 'string' ? args : JSON.stringify(args || {});
+            const text = await callLTPXRemoteTool(name, argsJSON);
+            return [text, ''];
+        });
+        GlobalConfig.LTPdefinition.push({
+            type: 'function',
+            function: { name, description: tool.description || '', parameters: tool.parameters },
+        });
+        injectedLTPXRemoteTools.add(name);
+    }
+    function removeLTPXRemoteTool(name) {
+        for (let i = GlobalConfig.LTPdefinition.length - 1; i >= 0; i--) {
+            const def = GlobalConfig.LTPdefinition[i];
+            if (def.type === 'function' && def.function?.name === name)
+                GlobalConfig.LTPdefinition.splice(i, 1);
+        }
+        GlobalConfig.LTPfunction.delete(name);
+        injectedLTPXRemoteTools.delete(name);
+        console.log(`LTPX 已移除工具: ${name}`);
+    }
+    function removeAllLTPXRemoteTools() {
+        [...injectedLTPXRemoteTools].forEach(removeLTPXRemoteTool);
+    }
+
+    function pushDecreeResponse(text) {
+        const [audio, err] = tts(text);
+        pushContext('text', text, (err || !audio) ? '' : audio);
+        console.log(`[律令] 默认应答: ${text}`);
+    }
+    function findLastImageUrl(messages) {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const message = messages[i];
+            if (typeof message.content === 'string')
+                continue;
+            for (let j = message.content.length - 1; j >= 0; j--) {
+                const item = message.content[j];
+                if (item.type === 'image_url' && item.image_url && item.image_url.url) {
+                    return item.image_url.url;
+                }
+            }
+        }
+        return '';
+    }
+    function saveReferenceImage(imageUrl) {
+        try {
+            const [resized, err] = resizeImage(imageUrl);
+            if (err || !resized || resized.length === 0)
+                return '';
+            const ref = resized[0];
+            const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
+            const [hash, hashErr] = hashBytes(ref.image);
+            if (hashErr || !hash) {
+                console.error('[律令] 参考图哈希计算失败:', hashErr);
+                return '';
+            }
+            const relPath = `multimedia/reference/${hash}.${ext}`;
+            const [, , saveErr] = saveFile(relPath, true, ref.image);
+            if (saveErr) {
+                console.error('[律令] 参考图保存失败:', saveErr);
+                return '';
+            }
+            console.log(`[律令] 参考图已保存: ${relPath}`);
+            return relPath;
+        }
+        catch (error) {
+            console.error('[律令] 参考图处理异常:', error);
+            return '';
+        }
+    }
+    const decreeRegistry = {
+        '全记住': () => {
+            GlobalConfig.unreadRecords.push(...dialogueRole.messages);
+            memorizerRole.persistUnreadRecords();
+            pushDecreeResponse('全部记住啦~');
+        },
+        '参考图': () => {
+            const imageUrl = findLastImageUrl(GlobalConfig.unreadContext);
+            if (imageUrl) {
+                const localPath = saveReferenceImage(imageUrl);
+                if (localPath) {
+                    painterRole.referenceImage = localPath;
+                    pushDecreeResponse('看到你的参考图啦, 下次我就依据这张图片来绘制啦~');
+                    return;
+                }
+            }
+            painterRole.referenceImage = '';
+            pushDecreeResponse('没看到参考图呢, 那我就自由发挥啦~');
+        },
+    };
+    function extractDecreeText(message) {
+        if (typeof message.content === 'string')
+            return message.content;
+        return message.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text)
+            .join('\n');
+    }
+    function matchKnownDecrees(text) {
+        const found = [];
+        for (const tag of Object.keys(decreeRegistry)) {
+            if (text.includes(`<${tag}>`))
+                found.push(tag);
+        }
+        return found;
+    }
+    function processDecrees() {
+        let hit = false;
+        const remaining = [];
+        for (const message of GlobalConfig.unreadContext) {
+            const decrees = matchKnownDecrees(extractDecreeText(message));
+            if (decrees.length === 0) {
+                remaining.push(message);
+                continue;
+            }
+            hit = true;
+            for (const tag of decrees) {
+                try {
+                    decreeRegistry[tag](message);
+                }
+                catch (error) {
+                    console.error(`[律令] 指令 <${tag}> 执行失败:`, error);
+                }
+            }
+        }
+        GlobalConfig.unreadContext = remaining;
+        return hit;
+    }
+
+    async function createChatMessage() {
+        const cache = { currentToolCallIndex: -1, currentFunctionArgs: '', currentFunctionName: '', descriptionContent: '', thinkingContent: '', currentToolCall: null, toolCalls: [], };
+        await dialogueRole.generateDialogue(cache);
+        return GlobalConfig.finalResponse;
+    }
+    let asrUnloaded = false;
+    function guardASRUnload() {
+        asrUnloaded = GlobalConfig.unreadContext.some(message => {
+            const items = Array.isArray(message.content) ? message.content : [];
+            return items.some(item => item.type === 'input_audio' || item.type === 'audio_url');
+        });
+        if (asrUnloaded || GlobalConfig.unreadContext.length === 0)
+            return;
+        const [_, error] = syncFetch({
+            url: url()[0] + '/vram/unload',
+            execute: {
+                method: 'POST',
+                crossDomain: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: GlobalConfig.AsrName }),
+            },
+        });
+        if (error)
+            console.error('ASR 卸载执行失败:', error.message ?? String(error));
+    }
+    const DEEP_RECALL_PATTERN = /(回忆|记忆|记得|回想|想起来)/;
+    function updatePreviousMemories() {
+        if (GlobalConfig.unreadRecords.length >= 1)
+            memorizerRole.persistUnreadRecords();
+        const userMessages = GlobalConfig.unreadContext.filter(message => message.role === 'user').map(message => extractTextFromMessage(message).trim()).filter(text => text.length > 0);
+        const clear = () => { dialogueRole.ragMessages = []; };
+        if (userMessages.length === 0)
+            return clear();
+        const deepRecall = userMessages.some(text => DEEP_RECALL_PATTERN.test(text));
+        const digest = memorizerRole.queryRagDigest(userMessages, deepRecall);
+        if (!digest)
+            return clear();
+        dialogueRole.ragMessages = [{ role: 'user', content: `【长期记忆摘要】\n${digest}` }];
+    }
+    const FALLBACK_ACTIONS = ['荡秋千', '翻花绳'];
+    function getAvailableActionNames() {
+        try {
+            const raw = getAvailableActions();
+            if (!raw || raw === '{}')
+                return FALLBACK_ACTIONS;
+            const parsed = JSON.parse(raw);
+            if (parsed.actions && Array.isArray(parsed.actions) && parsed.actions.length > 0) {
+                return parsed.actions.map(item => item.name);
+            }
+        }
+        catch {
+        }
+        return FALLBACK_ACTIONS;
+    }
+    async function performMatchedAction(query) {
+        const actionNames = getAvailableActionNames();
+        if (!syncActionsToMemory(actionNames))
+            return;
+        const bestAction = queryBestAction(query);
+        if (!bestAction)
+            return;
+        const pos = getAgentPosition();
+        sendToEngine('movement', JSON.stringify({ position: { x: pos.x + RandomFloat(-0.5, 0.5), y: pos.y, z: pos.z + RandomFloat(-0.5, 0.5), }, resumeTracking: true, }));
+        sendToEngine('action', JSON.stringify({ action: bestAction }));
+        pushContext('action', `月华${bestAction}了`, '');
+    }
+    async function thoughtLoopTickEvent() {
+        if (GlobalConfig.reasoningInProgress)
+            return;
+        try {
+            GlobalConfig.reasoningInProgress = true;
+            pullContext().forEach(message => writeMessage(message.role, message.content));
+            guardASRUnload();
+            const messageLength = GlobalConfig.unreadContext.length;
+            if (messageLength === 0) {
+                checkDueItems().forEach(item => {
+                    const feedback = interactEvent('execution_schedule_before', { plan: item.content }).return;
+                    const content = (feedback && typeof feedback.plan === 'string') ? feedback.plan : item.content;
+                    GlobalConfig.unreadContext.push({ role: 'user', content: `${SCHEDULE_TRIGGER_PREFIX} 预约时间已到，请执行以下计划：${content}` });
+                });
+                GlobalConfig.reasoningInProgress = false;
+                return;
+            }
+            updatePreviousMemories();
+            syncLTPXRemoteStatus();
+            const feedback = interactEvent('message_received_before', { messages: GlobalConfig.unreadContext }).return;
+            if (feedback && Array.isArray(feedback.messages))
+                GlobalConfig.unreadContext = feedback.messages;
+            await processUnreadFiles();
+            if (processDecrees()) {
+                GlobalConfig.reasoningInProgress = false;
+                return;
+            }
+            await createChatMessage();
+            if (!GlobalConfig.finalResponse.trim().length) {
+                pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                return;
+            }
+            ;
+            const { thinkingBlocks, codeBlocks, actionBlocks, textChunks } = parseContent(GlobalConfig.finalResponse);
+            const validMessage = textChunks.map(chunk => chunk.display).join('\n').trim();
+            if (!validMessage.length)
+                throw new Error('清洗后的文本为空');
+            if (actionBlocks.length) {
+                const feedback = interactEvent('take_action_before', { actions: actionBlocks }).return;
+                const actBlocks = (feedback && Array.isArray(feedback.actions)) ? feedback.actions : actionBlocks;
+                await performMatchedAction(actBlocks.join(' ').trim() || validMessage);
+                pushImage([await queryEmotionSticker(validMessage)], true);
+            }
+            else if (validMessage.length <= 36 && Math.random() < 0.15) {
+                const feedback = interactEvent('express_emotions_before', { text: validMessage }).return;
+                const emoText = (feedback && typeof feedback.text === 'string') ? feedback.text : validMessage;
+                pushImage([await queryEmotionSticker(emoText)], true);
+            }
+            thinkingBlocks.forEach(thinking => pushContext('text', thinking, ''));
+            codeBlocks.forEach(code => pushContext('text', code, ''));
+            for (const chunk of textChunks) {
+                let audio = '';
+                const [audioData, err] = tts(chunk.tts);
+                if (!err && audioData)
+                    audio = audioData;
+                pushContext('text', chunk.display, audio);
+            }
+        }
+        catch (error) {
+            const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
+            if (readErr)
+                console.error('读取提示音失败:', readErr);
+            console.error(error.message, ' || ', error.stack);
+            pushContext('text', randomDefaultMessage(), promptSound);
+            resetAgentState();
+        }
+        GlobalConfig.reasoningInProgress = false;
+    }
+    function writeMessage(role, content) {
+        if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url'))
+            content = [content];
+        GlobalConfig.unreadContext.push({ role, content });
+        const items = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+        for (const message of items) {
+            if (message.type === 'text')
+                console.log('收到文本: ' + message.text);
+            else if (message.type === 'image_url')
+                console.log('收到图片: ' + message.image_url?.url?.substring(0, 50));
+            else if (message.type === 'input_audio')
+                console.log('收到音频: ' + message.input_audio?.data?.substring(0, 30));
+            else if (message.type === 'video_url')
+                console.log('收到视频: ' + message.video_url?.url);
+            else if (message.type === 'audio_url')
+                console.log('收到音频: ' + message.audio_url?.url);
+        }
+    }
+    function resetAgentState() {
+        descriptionRole.coverContext([]);
+        dialogueRole.coverContext([]);
+        painterRole.coverContext([]);
+        musicianRole.coverContext([]);
+        perceiverRole.coverContext([]);
+        memorizerRole.coverContext([]);
+        GlobalConfig.unreadContext = [];
+    }
+
+    fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+    setInterval(() => thoughtLoopTickEvent(), 1000);
+
+    exports.LiteImageFile = LiteImageFile;
+    exports.descriptionRole = descriptionRole;
+    exports.ensureMemoryReady = ensureMemoryReady;
+    exports.extractTextFromMessage = extractTextFromMessage;
+    exports.memorizerRole = memorizerRole;
+    exports.musicianRole = musicianRole;
+    exports.painterRole = painterRole;
+    exports.perceiverRole = perceiverRole;
+    exports.randomDefaultMessage = randomDefaultMessage;
+
+    return exports;
+
+})({});

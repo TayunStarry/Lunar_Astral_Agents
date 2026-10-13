@@ -312,7 +312,7 @@ async function synthesizeSpeech() {
 
         requestBody.disable_cache = DISABLE_CACHE_TOGGLE.checked;
 
-        const response = await fetch(`${API_BASE}/tts`, {
+        const response = await fetch(`${API_BASE}/qwen/tts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
@@ -1057,7 +1057,7 @@ async function startBatchSynthesis() {
 
 /**
  * 发送单条文本到后端合成，返回 base64 音频数据（不播放）
- * 与常规合成使用同一 /tts 端点
+ * 与常规合成使用同一 /qwen/tts 专用端点（锁定 Qwen 引擎）
  */
 async function fetchSingleChunk(text) {
     const requestBody = { text: text };

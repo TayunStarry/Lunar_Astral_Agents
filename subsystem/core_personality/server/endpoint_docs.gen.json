@@ -1,0 +1,1209 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "核心人格 (Core Personality)",
+    "version": "1.0.0",
+    "x-service": "CorePersonality"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "externalDocs": {
+    "description": "可视化文档页面",
+    "url": "/api-docs?format=html"
+  },
+  "x-generated-from": [
+    "variable.go"
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "月华消息终端静态前端（内嵌 hierarchy 资源）",
+        "description": "月华消息终端静态前端（内嵌 hierarchy 资源）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api-docs": {
+      "get": {
+        "summary": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成；?format=html 查看可视化页面）",
+        "description": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成；?format=html 查看可视化页面）",
+        "operationId": "docsHandler",
+        "x-handler": "docsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/module/create": {
+      "post": {
+        "summary": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
+        "description": "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）",
+        "operationId": "crystal.ModuleCreateHandler",
+        "x-handler": "crystal.ModuleCreateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/module/inspect": {
+      "post": {
+        "summary": "检查 HTML 项目内容（供 AI 生成模块元信息）",
+        "description": "检查 HTML 项目内容（供 AI 生成模块元信息）",
+        "operationId": "crystal.ModuleInspectHandler",
+        "x-handler": "crystal.ModuleInspectHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/api/packages": {
+      "get": {
+        "summary": "扫描包目录",
+        "description": "扫描包目录",
+        "operationId": "crystal.ScanPackagesHandler",
+        "x-handler": "crystal.ScanPackagesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/background": {
+      "get": {
+        "summary": "随机背景图片",
+        "description": "随机背景图片",
+        "operationId": "file.RandomBackgroundHandler",
+        "x-handler": "file.RandomBackgroundHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture": {
+      "delete": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_delete",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_get",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_head",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_options",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_patch",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_post",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "统一截图（auto/window/fullscreen/display/region）",
+        "description": "统一截图（auto/window/fullscreen/display/region）",
+        "operationId": "image.HandleCapture_put",
+        "x-handler": "image.HandleCapture",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/capture/displays": {
+      "get": {
+        "summary": "屏幕列表",
+        "description": "屏幕列表",
+        "operationId": "image.HandleGetDisplays",
+        "x-handler": "image.HandleGetDisplays",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/batch": {
+      "post": {
+        "summary": "批量图片格式转换",
+        "description": "批量图片格式转换",
+        "operationId": "media.BatchConvertHandler",
+        "x-handler": "media.BatchConvertHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/image": {
+      "post": {
+        "summary": "单张图片格式转换",
+        "description": "单张图片格式转换",
+        "operationId": "media.ConvertImageHandler",
+        "x-handler": "media.ConvertImageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/convert/list": {
+      "post": {
+        "summary": "列出文件夹中的图片文件",
+        "description": "列出文件夹中的图片文件",
+        "operationId": "media.ListImagesHandler",
+        "x-handler": "media.ListImagesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/desktop/": {
+      "get": {
+        "summary": "琉璃桌面静态前端（内嵌 web 资源）",
+        "description": "琉璃桌面静态前端（内嵌 web 资源）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive": {
+      "post": {
+        "summary": "文件归档",
+        "description": "文件归档",
+        "operationId": "file.ArchiveHandler",
+        "x-handler": "file.ArchiveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/create": {
+      "post": {
+        "summary": "服务端压缩（支持文件夹）",
+        "description": "服务端压缩（支持文件夹）",
+        "operationId": "file.CreateZipHandler",
+        "x-handler": "file.CreateZipHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/extract": {
+      "post": {
+        "summary": "ZIP解压到服务器目录",
+        "description": "ZIP解压到服务器目录",
+        "operationId": "file.ExtractZipHandler",
+        "x-handler": "file.ExtractZipHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/archive/metadata": {
+      "post": {
+        "summary": "ZIP压缩包元数据查询",
+        "description": "ZIP压缩包元数据查询",
+        "operationId": "file.ZipMetadataHandler",
+        "x-handler": "file.ZipMetadataHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/delete/": {
+      "delete": {
+        "summary": "文件删除",
+        "description": "文件删除",
+        "operationId": "file.DeleteHandler",
+        "x-handler": "file.DeleteHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/download/": {
+      "get": {
+        "summary": "文件下载",
+        "description": "文件下载",
+        "operationId": "file.DownloadHandler",
+        "x-handler": "file.DownloadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/hash-rename": {
+      "post": {
+        "summary": "哈希命名（MD5前16位）",
+        "description": "哈希命名（MD5前16位）",
+        "operationId": "file.HashRenameHandler",
+        "x-handler": "file.HashRenameHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/list/": {
+      "post": {
+        "summary": "文件列表",
+        "description": "文件列表",
+        "operationId": "file.FileListHandler",
+        "x-handler": "file.FileListHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/move": {
+      "post": {
+        "summary": "文件移动操作（含冲突处理）",
+        "description": "文件移动操作（含冲突处理）",
+        "operationId": "file.MoveHandler",
+        "x-handler": "file.MoveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/organize": {
+      "post": {
+        "summary": "批量文件整理操作",
+        "description": "批量文件整理操作",
+        "operationId": "file.OrganizeHandler",
+        "x-handler": "file.OrganizeHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/delete": {
+      "post": {
+        "summary": "删除扩展包",
+        "description": "删除扩展包",
+        "operationId": "file.DeletePackageHandler",
+        "x-handler": "file.DeletePackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/export": {
+      "post": {
+        "summary": "导出扩展包",
+        "description": "导出扩展包",
+        "operationId": "file.ExportPackageHandler",
+        "x-handler": "file.ExportPackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/package/install": {
+      "post": {
+        "summary": "安装扩展包",
+        "description": "安装扩展包",
+        "operationId": "file.InstallPackageHandler",
+        "x-handler": "file.InstallPackageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/preview": {
+      "get": {
+        "summary": "全局文件预览（图片/视频/文本）",
+        "description": "全局文件预览（图片/视频/文本）",
+        "operationId": "file.PreviewHandler",
+        "x-handler": "file.PreviewHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/read/": {
+      "get": {
+        "summary": "文件读取操作",
+        "description": "文件读取操作",
+        "operationId": "file.ReadHandler",
+        "x-handler": "file.ReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/write": {
+      "post": {
+        "summary": "文件保存操作",
+        "description": "文件保存操作",
+        "operationId": "file.SaveHandler",
+        "x-handler": "file.SaveHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/generate": {
+      "post": {
+        "summary": "图片生成服务",
+        "description": "图片生成服务",
+        "operationId": "image.GenerateHandler",
+        "x-handler": "image.GenerateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/generate/wait": {
+      "get": {
+        "summary": "等待生成结果",
+        "description": "等待生成结果",
+        "operationId": "image.GenerateWaitHandler",
+        "x-handler": "image.GenerateWaitHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/gguf/metadata": {
+      "post": {
+        "summary": "GGUF模型元数据解析",
+        "description": "GGUF模型元数据解析",
+        "operationId": "media.GGUFMetadataHandler",
+        "x-handler": "media.GGUFMetadataHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/keyframe": {
+      "post": {
+        "summary": "视频关键帧提取",
+        "description": "视频关键帧提取",
+        "operationId": "image.ExtractKeyFramesHandler",
+        "x-handler": "image.ExtractKeyFramesHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/knowledge/": {
+      "post": {
+        "summary": "知识库管理",
+        "description": "知识库管理",
+        "operationId": "file.KnowledgeHandler",
+        "x-handler": "file.KnowledgeHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/dict": {
+      "delete": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_delete",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_get",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "Kokoro 读音词典管理",
+        "description": "Kokoro 读音词典管理",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.DictHandler)_post",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.DictHandler)",
+        "x-method": "GET/POST/DELETE",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/dict/guess": {
+      "get": {
+        "summary": "Kokoro 读音查询",
+        "description": "Kokoro 读音查询",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.GuessDictHandler)",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.GuessDictHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/health": {
+      "get": {
+        "summary": "Kokoro 引擎健康检查",
+        "description": "Kokoro 引擎健康检查",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.HealthHandler)",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.HealthHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/tts": {
+      "post": {
+        "summary": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
+        "description": "Kokoro 语音合成（支持 voice 单音色与 mix 多音色混合）",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.TTSHandler)",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.TTSHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/kokoro/voices": {
+      "get": {
+        "summary": "Kokoro 音色列表",
+        "description": "Kokoro 音色列表",
+        "operationId": "crystal.KokoroHandler(KokoroTTS.VoicesHandler)",
+        "x-handler": "crystal.KokoroHandler(KokoroTTS.VoicesHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/load/application": {
+      "post": {
+        "summary": "加载应用",
+        "description": "加载应用",
+        "operationId": "crystal.LoadApplicationHandler",
+        "x-handler": "crystal.LoadApplicationHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/logs": {
+      "get": {
+        "summary": "后端最近日志（limit 可限制条数，最多 1000 条）",
+        "description": "后端最近日志（limit 可限制条数，最多 1000 条）",
+        "operationId": "crystal.LogsHandler",
+        "x-handler": "crystal.LogsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/call": {
+      "post": {
+        "summary": "调用工具（异步受理，立即返回 request_id）",
+        "description": "调用工具（异步受理，立即返回 request_id）",
+        "operationId": "crystal.LTPRemoteCallHandler",
+        "x-handler": "crystal.LTPRemoteCallHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/event": {
+      "post": {
+        "summary": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
+        "description": "事件推送（xx事件发生前负载经 LTP9 插件处理）",
+        "operationId": "crystal.LTPRemoteEventHandler",
+        "x-handler": "crystal.LTPRemoteEventHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/poll": {
+      "get": {
+        "summary": "轮询工具执行状态",
+        "description": "轮询工具执行状态",
+        "operationId": "crystal.LTPRemotePollHandler",
+        "x-handler": "crystal.LTPRemotePollHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/result": {
+      "post": {
+        "summary": "前端包执行完毕后回执结果",
+        "description": "前端包执行完毕后回执结果",
+        "operationId": "crystal.LTPRemoteResultHandler",
+        "x-handler": "crystal.LTPRemoteResultHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ltpx/tools": {
+      "get": {
+        "summary": "拉取工具链（动态扫描包 AtoA 能力）",
+        "description": "拉取工具链（动态扫描包 AtoA 能力）",
+        "operationId": "crystal.LTPRemoteToolsHandler",
+        "x-handler": "crystal.LTPRemoteToolsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/memory/": {
+      "delete": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_delete",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_get",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_head",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_options",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_patch",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_post",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "description": "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）",
+        "operationId": "file.MemoryHandler_put",
+        "x-handler": "file.MemoryHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/mini-ltp-agent.js": {
+      "get": {
+        "summary": "通用页面操作智能体脚本（Mini-LTP）",
+        "description": "通用页面操作智能体脚本（Mini-LTP）",
+        "operationId": "crystal.MiniLTPAgentHandler",
+        "x-handler": "crystal.MiniLTPAgentHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/omnivoice/health": {
+      "get": {
+        "summary": "OmniVoice 引擎健康检查",
+        "description": "OmniVoice 引擎健康检查",
+        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.HealthHandler)",
+        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.HealthHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/omnivoice/langs": {
+      "get": {
+        "summary": "OmniVoice 支持的语言列表",
+        "description": "OmniVoice 支持的语言列表",
+        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
+        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.LanguagesHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/omnivoice/tts": {
+      "post": {
+        "summary": "OmniVoice 语音合成（ref_audio+ref_text 声音克隆 / instruct 属性设计）",
+        "description": "OmniVoice 语音合成（ref_audio+ref_text 声音克隆 / instruct 属性设计）",
+        "operationId": "crystal.OmniVoiceHandler(OmniVoiceTTS.TTSHandler)",
+        "x-handler": "crystal.OmniVoiceHandler(OmniVoiceTTS.TTSHandler)",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy": {
+      "post": {
+        "summary": "代理访问服务",
+        "description": "代理访问服务",
+        "operationId": "lunar.ProxyHandler",
+        "x-handler": "lunar.ProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy/chat": {
+      "post": {
+        "summary": "对话代理",
+        "description": "对话代理",
+        "operationId": "crystal.ChatProxyHandler",
+        "x-handler": "crystal.ChatProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/proxy/models": {
+      "post": {
+        "summary": "模型查询代理",
+        "description": "模型查询代理",
+        "operationId": "crystal.ModelsProxyHandler",
+        "x-handler": "crystal.ModelsProxyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/qwen/health": {
+      "get": {
+        "summary": "Qwen 引擎健康检查（加载状态与最近合成时间）",
+        "description": "Qwen 引擎健康检查（加载状态与最近合成时间）",
+        "operationId": "ttsrouter.QwenHealthHandler",
+        "x-handler": "ttsrouter.QwenHealthHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/qwen/tts": {
+      "post": {
+        "summary": "Qwen 语音合成（参考音频声音克隆；强制 Qwen 引擎，不随 tts.engine 配置漂移）",
+        "description": "Qwen 语音合成（参考音频声音克隆；强制 Qwen 引擎，不随 tts.engine 配置漂移）",
+        "operationId": "ttsrouter.QwenTTSHandler",
+        "x-handler": "ttsrouter.QwenTTSHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/resize": {
+      "post": {
+        "summary": "图片缩放",
+        "description": "图片缩放",
+        "operationId": "image.HandleResizeImage",
+        "x-handler": "image.HandleResizeImage",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/self-ltp-agent.js": {
+      "get": {
+        "summary": "自主页面操作智能体脚本（Self-LTP）",
+        "description": "自主页面操作智能体脚本（Self-LTP）",
+        "operationId": "crystal.SelfLTPAgentHandler",
+        "x-handler": "crystal.SelfLTPAgentHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/shared-input.js": {
+      "get": {
+        "summary": "统一键鼠操作共享模块",
+        "description": "统一键鼠操作共享模块",
+        "operationId": "crystal.SharedInputHandler",
+        "x-handler": "crystal.SharedInputHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/tts": {
+      "post": {
+        "summary": "TTS语音合成（统一参数样式，按配置引擎分发：Qwen/Kokoro/OmniVoice）",
+        "description": "TTS语音合成（统一参数样式，按配置引擎分发：Qwen/Kokoro/OmniVoice）",
+        "operationId": "ttsrouter.TTSDispatchHandler",
+        "x-handler": "ttsrouter.TTSDispatchHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/v1/": {
+      "delete": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_delete",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "get": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_get",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "head": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_head",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "options": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_options",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "patch": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_patch",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "post": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_post",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      },
+      "put": {
+        "summary": "llama.cpp 代理接口",
+        "description": "llama.cpp 代理接口",
+        "operationId": "llama.ProxyHandler_put",
+        "x-handler": "llama.ProxyHandler",
+        "x-method": "ANY",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/vram/guard": {
+      "post": {
+        "summary": "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存）",
+        "description": "显存守卫（可用显存低于阈值时卸载已加载模型，一并释放 KV 缓存）",
+        "operationId": "llama.VRAMGuardHandler",
+        "x-handler": "llama.VRAMGuardHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/vram/unload": {
+      "post": {
+        "summary": "定向卸载（卸载指定 ID 的已加载模型）",
+        "description": "定向卸载（卸载指定 ID 的已加载模型）",
+        "operationId": "llama.VRAMUnloadHandler",
+        "x-handler": "llama.VRAMUnloadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/close": {
+      "post": {
+        "summary": "关闭深读会话窗口",
+        "description": "关闭深读会话窗口",
+        "operationId": "crystal.WebViewCloseHandler",
+        "x-handler": "crystal.WebViewCloseHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/deepread": {
+      "post": {
+        "summary": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "description": "深读编排：导航→就绪→元素提取（可滚动）→截图→模型摘要",
+        "operationId": "crystal.WebViewDeepReadHandler",
+        "x-handler": "crystal.WebViewDeepReadHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/eval": {
+      "post": {
+        "summary": "深读会话页面上下文执行脚本并取回 JSON 结果",
+        "description": "深读会话页面上下文执行脚本并取回 JSON 结果",
+        "operationId": "crystal.WebViewEvalHandler",
+        "x-handler": "crystal.WebViewEvalHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/navigate": {
+      "post": {
+        "summary": "深读会话导航到指定 URL 并等待就绪",
+        "description": "深读会话导航到指定 URL 并等待就绪",
+        "operationId": "crystal.WebViewNavigateHandler",
+        "x-handler": "crystal.WebViewNavigateHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/open": {
+      "post": {
+        "summary": "创建 WebView 深读会话窗口",
+        "description": "创建 WebView 深读会话窗口",
+        "operationId": "crystal.WebViewOpenHandler",
+        "x-handler": "crystal.WebViewOpenHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/ready": {
+      "post": {
+        "summary": "等待深读会话页面就绪并返回状态",
+        "description": "等待深读会话页面就绪并返回状态",
+        "operationId": "crystal.WebViewReadyHandler",
+        "x-handler": "crystal.WebViewReadyHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/webview/screenshot": {
+      "post": {
+        "summary": "深读会话窗口区域截图（dataURL 返回）",
+        "description": "深读会话窗口区域截图（dataURL 返回）",
+        "operationId": "crystal.WebViewScreenshotHandler",
+        "x-handler": "crystal.WebViewScreenshotHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/window/focus": {
+      "post": {
+        "summary": "置前指定桌面窗口（id: lunar/crystal）",
+        "description": "置前指定桌面窗口（id: lunar/crystal）",
+        "operationId": "WindowFocusHandler",
+        "x-handler": "WindowFocusHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/engine": {
+      "post": {
+        "summary": "引擎/前端系统总线（反射观测 + 原样透传广播）",
+        "description": "引擎/前端系统总线（反射观测 + 原样透传广播）",
+        "operationId": "EngineMessageHandler",
+        "x-handler": "EngineMessageHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/write/message": {
+      "post": {
+        "summary": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
+        "description": "消息写入队列（文本/多模态内容数组/视频音频URL内容项）",
+        "operationId": "lunar.MessageBatchHandler",
+        "x-handler": "lunar.MessageBatchHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "summary": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）",
+        "description": "WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    }
+  }
+}

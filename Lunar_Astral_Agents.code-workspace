@@ -16,10 +16,16 @@
 		},
 		{
 			"path": "C:/Users/196530/Downloads/DeepSeeek项目"
+		},
+		{
+			"path": "../SR_Compare"
 		}
 	],
 	"settings": {
 		"powershell.cwd": "Lunar_Astral_Agents",
 		"npm-scripts.showStartNotification": false
+	},
+	"trae": {
+		"workspaceId": "b4fd306142787a2bbdf49df57b0544c0"
 	}
 }
