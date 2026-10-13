@@ -110,6 +110,13 @@ type ModelConfig struct {
 		Seed            *uint64       `json:"seed,omitempty"`    // 随机种子（OmniVoice；其余忽略）
 		DisablePostproc *bool         `json:"disable_postproc,omitempty"` // 关闭输出后处理（OmniVoice；其余忽略）
 	} `json:"tts"`
+	// 月华客户端显示配置：控制桌面端/移动端角色的渲染方式
+	// （bedrock=基岩版模型引擎，默认；live2d=Live2D 引擎层）。
+	// 仅由前端读取（fetch /file/read/lunar_config.json），此处声明结构以集中呈现配置契约。
+	Client struct {
+		CharacterRenderer string `json:"character_renderer"`    // 角色渲染器：bedrock（默认）/ live2d
+		Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
+	} `json:"client"`
 }
 
 // init 加载配置文件
@@ -259,6 +266,19 @@ func init() {
 	}
 	if parameter.TTS.DisablePostproc != nil {
 		*TTSDisablePostproc = *parameter.TTS.DisablePostproc
+	}
+	// ==== 月华客户端显示配置（client） ====
+	// 渲染器枚举：仅接受 bedrock / live2d，未配置保持默认 bedrock，非法取值告警并保留默认
+	switch parameter.Client.CharacterRenderer {
+	case "bedrock", "live2d":
+		*CharacterRenderer = parameter.Client.CharacterRenderer
+	case "":
+		// 未配置时保持默认渲染器
+	default:
+		log.Printf("[Config][WARN] -> client.character_renderer 取值非法: %q（允许 bedrock/live2d），保持默认 %s", parameter.Client.CharacterRenderer, *CharacterRenderer)
+	}
+	if parameter.Client.Live2DModel != "" {
+		*Live2DModel = parameter.Client.Live2DModel
 	}
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置

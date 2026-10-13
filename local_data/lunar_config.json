@@ -5,7 +5,6 @@
 		"-prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
 		"-real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth",
 		"-prompt_mmproj_model": "",
-
 		"diffusion_model": "./local_data/models/Qwen-image-2.1/qwen-image-2.1-Q4_K_M.gguf",
 		"variational_model": "./local_data/models/Qwen-image-2.1/qwen_image_2.1_vae_bf16.safetensors",
 		"prompt_analysis_model": "./local_data/models/Qwen-image-2.1/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
@@ -78,6 +77,11 @@
 	},
 	"tts": {
 		"engine": "Qwen",
+		"-enumerate": [
+			"Qwen",
+			"Kokoro",
+			"OmniVoice"
+		],
 		"ref_audio": "./local_data/audios/lunar-template.wav",
 		"ref_text": "",
 		"voice": "",
@@ -97,5 +101,12 @@
 		"page_scroll_captures": 10,
 		"summary_max_chars": 4096,
 		"max_run_seconds": 360
+	},
+	"client": {
+		"character_renderer": "live2d",
+		"-enumerate": [
+			"bedrock",
+			"live2d"
+		]
 	}
 }

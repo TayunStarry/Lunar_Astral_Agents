@@ -49,14 +49,22 @@ const MODEL_FILE_PATH = MODEL_BASE_URL.startsWith('/file/read/')
 /** 遥测与 molang 广播频率（Hz） */
 const TELEMETRY_HZ = 10;
 const MOLANG_HZ = 10;
+/** 后端上报频率（Hz）：本地经 BroadcastChannel 仍按全频直连，仅后台上报限频以降负载 */
+const BACKEND_REPORT_HZ = 1;
 
 // 应用 body 类
 if (currentMode === 'editor') {
     document.body.classList.add('mode-editor');
 }
 
-// ==== 广播频道（统一通信客户端：ws /ws 接收 + POST /write/engine 发送） ====
+// ==== 通信通道（本地直连 + 跨宿主） ====
+// 本地直连：同源跨 iframe 的 BroadcastChannel，工作室基座/面板与引擎直接互通，不经后端往返
+const localChannel = new BroadcastChannel(CHANNEL_NAME);
+// 跨宿主：WsBridge（接收 /ws 下行的结构化 engine 命令；向 /write/engine 上报观测帧）
 const channel = new WsBridge(CHANNEL_NAME);
+
+/** 遥测后端上报计时（限频用；animation_list 为变化驱动，不受限） */
+let _lastTelemetryReportAt = 0;
 
 // ==== 核心模块 ====
 let renderer = null;
@@ -271,19 +279,9 @@ async function init() {
     bindKeyboard();
     bindBlur();
 
-    // 18. 监听广播频道（ws 下行：模块间消息 + 智能体引擎命令）
-    channel.onmessage = (event) => {
-        const raw = event.data;
-        if (!raw || raw.source === SOURCE_ENGINE) return; // 忽略自己发的
-        // 智能体引擎命令包装：{type:"engine", data:{type, payload, source}} → 解包为 {type, payload, source}
-        let msg = raw;
-        if (raw.type === 'engine' && raw.data && raw.data.type) {
-            msg = { type: raw.data.type, source: raw.data.source, payload: raw.data.payload };
-        } else if (raw.type === 'context') {
-            return; // pushContext 为展示类消息（对话/动作摘要），引擎不执行
-        }
-        handleChannelMessage(msg);
-    };
+    // 18. 监听通道：本地 BroadcastChannel（工作室面板/基座直连）+ WsBridge（/ws 下行的智能体引擎命令）
+    channel.onmessage = (event) => handleIncoming(event.data);
+    localChannel.onmessage = (event) => handleIncoming(event.data);
 
     // 19. 通知基座层引擎已就绪
     broadcast('engine_ready', { mode: currentMode });
@@ -771,7 +769,20 @@ function updateDebugOverlay() {
         `平均FPS: ${avgFps}  物理帧率: ${physStepRate}Hz`;
 }
 
-// ==== BroadcastChannel 消息处理 ====
+// ==== 通道消息处理 ====
+// 统一入口：本地 BroadcastChannel 与 WsBridge 收到的帧都经此解包后交给 handleChannelMessage
+function handleIncoming(raw) {
+    if (!raw || raw.source === SOURCE_ENGINE) return; // 忽略自己发的
+    // 智能体引擎命令包装：{type:"engine", data:{type, payload, source}} → 解包为 {type, payload, source}
+    let msg = raw;
+    if (raw.type === 'engine' && raw.data && raw.data.type) {
+        msg = { type: raw.data.type, source: raw.data.source, payload: raw.data.payload };
+    } else if (raw.type === 'context') {
+        return; // pushContext 为展示类消息（对话/动作摘要），引擎不执行
+    }
+    handleChannelMessage(msg);
+}
+
 async function handleChannelMessage(msg) {
     const { type, payload, source } = msg;
 
@@ -2094,13 +2105,38 @@ function broadcastMolangValue() {
 }
 
 // ==== 广播工具 ====
+// 双投递：本地 BroadcastChannel 直连（工作室面板/基座），并按类型向 /write/engine 上报（供月华观测）
 function broadcast(type, payload) {
-    channel.postMessage({
+    const msg = {
         type,
         source: SOURCE_ENGINE,
         payload,
         timestamp: Date.now(),
-    });
+    };
+    // 本地直连：同源跨 iframe，零网络往返
+    try {
+        localChannel.postMessage(msg);
+    } catch (e) {
+        console.warn('[Engine] 本地频道广播失败:', e);
+    }
+    // 后端上报（仅月华观察者索引的类型）
+    reportToBackend(type, msg);
+}
+
+// 上报类型白名单：与 enginebus 观察者索引的 type 一致（animation_list / telemetry）。
+// animation_list 为变化驱动，天然低频；telemetry 限频至 BACKEND_REPORT_HZ。
+function reportToBackend(type, msg) {
+    if (type === 'animation_list') {
+        channel.postMessage(msg);
+        return;
+    }
+    if (type === 'telemetry') {
+        const now = Date.now();
+        if (now - _lastTelemetryReportAt < 1000 / BACKEND_REPORT_HZ) return;
+        _lastTelemetryReportAt = now;
+        channel.postMessage(msg);
+    }
+    // 其余类型不上报：月华观察者未索引，且工作室侧已改为本地直连
 }
 
 // ==== 隐藏加载遮罩 ====

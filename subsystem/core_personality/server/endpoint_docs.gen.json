@@ -941,8 +941,8 @@
     },
     "/tts": {
       "post": {
-        "summary": "TTS语音合成（统一参数样式，按配置引擎分发：Qwen/Kokoro/OmniVoice）",
-        "description": "TTS语音合成（统一参数样式，按配置引擎分发：Qwen/Kokoro/OmniVoice）",
+        "summary": "TTS语音合成（统一参数样式，按请求 engine 覆写或 tts.engine 配置分发：Qwen/Kokoro/OmniVoice）",
+        "description": "TTS语音合成（统一参数样式，按请求 engine 覆写或 tts.engine 配置分发：Qwen/Kokoro/OmniVoice）",
         "operationId": "ttsrouter.TTSDispatchHandler",
         "x-handler": "ttsrouter.TTSDispatchHandler",
         "responses": {

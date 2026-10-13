@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>『 星月智能 』资产管理</title>
     <link rel="stylesheet" href="/file/read/package/fontAwesome/css/all.min.css">
-    <script src="/file/read/package/ws_bridge.js"></script>
     <style>
         :root {
             --glass-bg: rgba(255,255,255,0.28);
@@ -310,7 +309,7 @@
         // ==== 资产管理面板 ====
         const CHANNEL_NAME = 'lunar-engine-bus';
         const SOURCE = 'assets-panel';
-        const channel = new WsBridge(CHANNEL_NAME);
+        const channel = new BroadcastChannel(CHANNEL_NAME);
 
         const elements = {
             // 场景资产

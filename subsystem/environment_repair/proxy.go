@@ -404,8 +404,18 @@ func handleWebSocketProxy(w http.ResponseWriter, r *http.Request, targetURL stri
 	}
 	defer clientConn.Close()
 
-	// 改写 Host 头为后端地址后再转发升级请求，避免后端对陌生 Host 校验失败
+	// 改写 Host 头为后端地址后再转发升级请求，避免后端对陌生 Host 校验失败。
+	// 同步改写 Origin 为改写后的后端主机：后端 Upgrader.CheckOrigin 要求
+	// 「Origin 的主机 == 请求 Host」（同源校验）。代理已把 Host 换成后端地址，
+	// 若不同步对齐 Origin，校验必然失败（403）→ 手机端 WSS 升级被拒。
 	r.Host = backendHost
+	if origin := r.Header.Get("Origin"); origin != "" {
+		if u, err := url.Parse(origin); err == nil && u.Scheme != "" {
+			r.Header.Set("Origin", u.Scheme+"://"+backendHost)
+		} else {
+			r.Header.Set("Origin", "http://"+backendHost)
+		}
+	}
 	if err := r.Write(backendConn); err != nil {
 		uiLogf("  [ERROR] 转发 WebSocket 升级请求失败: %v", err)
 		return

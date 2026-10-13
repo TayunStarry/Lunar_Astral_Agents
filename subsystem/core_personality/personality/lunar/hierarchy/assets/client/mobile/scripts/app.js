@@ -149,11 +149,29 @@ class LunarCoreApp {
 		this.wsClient.connect();
 	}
 
-	/** 渲染引擎 iframe：WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致） */
-	setupRendererFrame() {
+	/**
+	 * 渲染引擎 iframe：按 lunar_config.json 的 client.character_renderer 选择
+	 * 基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）。
+	 * WsBridge 连接同源 /ws，与主 WebSocket 连接保持一致（与电脑端 main.js 一致）；
+	 * 配置读取失败或取值非法时回退 bedrock。
+	 */
+	async setupRendererFrame() {
 		const frame = document.getElementById('rendererFrame');
-		if (!frame || !frame.dataset.src) return;
-		frame.src = `${frame.dataset.src}&ws=${window.location.host}`;
+		if (!frame) return;
+		let renderer = 'bedrock';
+		try {
+			const res = await fetch('/file/read/lunar_config.json');
+			if (res.ok) {
+				const config = await res.json();
+				const value = config && config.client ? config.client.character_renderer : null;
+				if (value === 'live2d' || value === 'bedrock') renderer = value;
+			}
+		} catch (e) {
+			// 配置读取失败：回退 bedrock
+		}
+		const src = renderer === 'live2d' ? frame.dataset.srcLive2d : frame.dataset.src;
+		if (!src) return;
+		frame.src = `${src}&ws=${window.location.host}`;
 	}
 
 	async handleWebSocketMessage(message) {

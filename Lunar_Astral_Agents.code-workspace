@@ -9,9 +9,6 @@
 			"path": "../Chat_AI_Case/lmstudio/models"
 		},
 		{
-			"path": "C:/Users/196530/Downloads/QRBrowser"
-		},
-		{
 			"path": "C:/Users/196530/Downloads/blockbench-master"
 		},
 		{
@@ -19,6 +16,9 @@
 		},
 		{
 			"path": "../SR_Compare"
+		},
+		{
+			"path": "C:/Users/196530/Downloads/仓库"
 		}
 	],
 	"settings": {

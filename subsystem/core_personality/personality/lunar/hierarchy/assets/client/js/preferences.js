@@ -69,3 +69,19 @@ async function loadBackendUserName() {
 function buildUserNamePrefix() {
     return `[用户: ${backendUserName}]: `;
 }
+
+// ---------- 角色渲染器 ----------
+// 从 lunar_config.json 的 client.character_renderer 读取；非法或未定义时默认 bedrock（保持既有行为）
+async function loadCharacterRenderer() {
+    try {
+        const res = await fetch('/file/read/lunar_config.json');
+        if (!res.ok) return;
+        const config = await res.json();
+        const renderer = config && config.client ? config.client.character_renderer : null;
+        if (renderer === 'live2d' || renderer === 'bedrock') {
+            characterRenderer = renderer;
+        }
+    } catch (e) {
+        // 配置读取失败：保持默认 bedrock
+    }
+}

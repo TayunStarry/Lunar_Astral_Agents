@@ -34,11 +34,14 @@ function cleanup() {
 }
 
 // ---------- 初始化 ----------
-/** 渲染引擎 iframe：WsBridge 未传 ws 参数时默认连接同源 /ws，代理场景下自动走代理隧道 */
+/** 渲染引擎 iframe：按配置选择基岩版模型引擎（lunar.rendering_engine）或 Live2D 引擎层（lunar.live2d_engine）；
+ *  WsBridge 未传 ws 参数时默认连接同源 /ws，代理场景下自动走代理隧道 */
 function setupRendererFrame() {
     const frame = document.getElementById('rendererFrame');
-    if (!frame || !frame.dataset.src) return;
-    frame.src = `${frame.dataset.src}&ws=${window.location.host}`;
+    if (!frame) return;
+    const src = characterRenderer === 'live2d' ? frame.dataset.srcLive2d : frame.dataset.src;
+    if (!src) return;
+    frame.src = `${src}&ws=${window.location.host}`;
 }
 
 async function init() {
@@ -46,6 +49,7 @@ async function init() {
     setupThemeToggle();
     loadVoiceAutoPlay();
     await loadBackendUserName();
+    await loadCharacterRenderer();
     setupVoiceToggle();
     setupTabEvents();
     setupSearchEvents();

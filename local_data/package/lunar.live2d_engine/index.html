@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live2D Renderer</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+
+        #live2d-container {
+            position: absolute;
+            inset: 0;
+        }
+
+        #live2d-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* 加载遮罩 */
+        #loading-mask {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(244, 244, 245, 0.85);
+            font-size: 14px;
+            text-align: center;
+            padding: 12px;
+            background: rgba(15, 17, 24, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 5;
+            transition: opacity 0.4s ease;
+        }
+
+        #loading-mask.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #loading-mask .spinner {
+            margin-right: 10px;
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #9d6bff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Live2D 画布容器 -->
+    <div id="live2d-container">
+        <canvas id="live2d-canvas" tabindex="0"></canvas>
+    </div>
+
+    <!-- 加载遮罩 -->
+    <div id="loading-mask">
+        <span class="spinner"></span>
+        <span>正在加载模型资源…</span>
+    </div>
+
+    <!-- 经典脚本：Cubism Core → PIXI → pixi-live2d-display（顺序不可调换，均为全局脚本） -->
+    <script src="./vendor/live2dcubismcore.min.js"></script>
+    <script src="./vendor/pixi.5.3.12.min.js"></script>
+    <script src="./vendor/pixi-live2d-display-cubism4.min.js"></script>
+    <!-- 统一通信客户端（与基岩引擎同款） -->
+    <script src="/file/read/package/ws_bridge.js"></script>
+    <!-- 引擎入口（ES Module：禁止 import pixi，须使用上面的全局 window.PIXI） -->
+    <script type="module" src="./engine.js"></script>
+</body>
+</html>
