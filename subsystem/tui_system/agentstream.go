@@ -28,6 +28,8 @@ func StreamDelta(role string, kind StreamKind, text string) {
 		return
 	}
 	streamMu.Lock()
+	defer streamMu.Unlock()
+
 	turn := currentTurn
 	if turn == nil {
 		turn = &AgentTurn{Role: role, Active: true, StartedAt: time.Now()}
@@ -45,6 +47,8 @@ func StreamDelta(role string, kind StreamKind, text string) {
 // StreamTool 记录一次工具调用（聚合完成事件：名称 + 参数摘要）
 func StreamTool(role, name, args string) {
 	streamMu.Lock()
+	defer streamMu.Unlock()
+
 	turn := currentTurn
 	if turn == nil {
 		turn = &AgentTurn{Role: role, Active: true, StartedAt: time.Now()}

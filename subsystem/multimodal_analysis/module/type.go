@@ -2,8 +2,24 @@ package module
 
 import (
 	"image"
+	"os"
+	"sync"
 	"time"
 )
+
+// engineLogWriter 绘图引擎（sd.cpp）输出流的分行写入器：
+// 引擎按 1KB 块输出、进度用 \r 原地刷新，不切行会让宿主收到半截行而无法排版；
+// 未注入日志钩子时（桌面构建）保持原始直写，进度条行为与之前一致。
+type engineLogWriter struct {
+	// stream 输出流标识（stdout / stderr）
+	stream string
+	// fallback 未注入钩子时的直写目标（原始终端流）
+	fallback *os.File
+	// buf 未成行的残余字节
+	buf []byte
+	// mu 保护 buf（读取侧为单协程，此处为防御性加锁）
+	mu sync.Mutex
+}
 
 // KeyFrame 关键帧结构
 type KeyFrame struct {

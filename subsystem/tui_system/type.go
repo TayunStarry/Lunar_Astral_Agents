@@ -26,6 +26,8 @@ const (
 	SourceLunarJS
 	// SourceLTP9JS ltp9 沙箱 JS 层日志（StarLTP console）
 	SourceLTP9JS
+	// SourceDraw sd.cpp 绘图引擎日志（引擎 stdout/stderr 按行接入 + 绘图模块编排日志）
+	SourceDraw
 	// SourceGoWarn Go 模块警告与错误
 	SourceGoWarn
 	// SourceTask 功能任务回显（代理/打包/端口释放/更新包）

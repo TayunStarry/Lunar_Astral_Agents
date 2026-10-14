@@ -92,7 +92,9 @@ func (h *Handle) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := h.srv.Shutdown(ctx); err != nil {
-		return err
+		// 收尾超时（多为仍有未结束的普通 HTTP 连接，WSS 隧道不参与等待）：
+		// 监听器已在 Shutdown 中关闭，端口必然释放，此处仅记录并继续等待协程退出
+		logf("  [WARN] 代理服务停止超时（%v），监听已关闭，端口已释放", err)
 	}
 	<-h.done
 	logf("  [PROXY] 服务已停止")

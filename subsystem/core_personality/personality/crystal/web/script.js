@@ -173,7 +173,9 @@ async function loadConfig() {
 
 async function loadSystemPrompt() {
     try {
-        const response = await fetch('/system_prompt.md');
+        // 琉璃桌面挂载于 /desktop/（月华消息终端占用根路径 /），此处须用相对引用；
+        // 根绝对路径 /system_prompt.md 会被根路径的月华静态资源吞掉而 404
+        const response = await fetch('system_prompt.md');
         if (!response.ok) throw new Error('加载系统提示词失败');
         const raw = await response.text();
         SYSTEM_PROMPT = processSystemPrompt(raw);

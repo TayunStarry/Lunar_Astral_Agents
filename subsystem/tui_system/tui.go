@@ -56,6 +56,9 @@ type proxyReadyMsg struct {
 // proxyFailMsg 代理服务启动失败
 type proxyFailMsg struct{ err error }
 
+// proxyStoppedMsg 代理服务已停止（后台收尾完成；离开代理屏后仍需生效，故在顶层处理）
+type proxyStoppedMsg struct{}
+
 // ==== 屏幕编号 ====
 
 type screenID int
@@ -67,6 +70,7 @@ const (
 	screenRaw
 	screenLunarJS
 	screenLTP9
+	screenDraw
 	screenGoWarn
 	screenFrontend
 	screenProxy
@@ -75,8 +79,45 @@ const (
 	screenPorts
 )
 
-// menuItemCount 主菜单条目数（11 个功能 + 退出）
-const menuItemCount = 12
+// menuItem 主菜单条目：快捷键与目标屏幕均显式声明，避免索引推算错位
+type menuItem struct {
+	// key 快捷键（单字符，空串=仅回车进入）
+	key string
+	// title 条目名称
+	title string
+	// desc 条目说明
+	desc string
+	// screen 目标屏幕；值为 screenMenu 时表示退出程序（哨兵）
+	screen screenID
+}
+
+// menuItems 主菜单条目表（顺序即显示顺序，可自由调整排版；
+// 进入哪个屏由 screen 字段决定，与显示顺序解耦——调整排版不会影响功能对应）
+var menuItems = []menuItem{
+	{"0", "资源更新 管理", "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希）", screenUpdate},
+	{"1", "核心智能 实况", "月华思考/输出/工具调用流式显示（对话者/绘制者/演奏者/记忆者…）", screenAgent},
+	{"2", "运行状态 显示", "运行时间 / 资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文", screenStats},
+	{"3", "原始日志 显示", "终端全量原始行（stdout 拦截 + 结构化日志合流）", screenRaw},
+	{"4", "月华引擎 日志", "月华智能体 JavaScript 层日志", screenLunarJS},
+	{"5", "插件引擎 日志", "LTP9 沙箱 JavaScript 层日志", screenLTP9},
+	{"6", "星月系统 警告", "Go 模块 WARN / ERROR / FATAL 日志", screenGoWarn},
+	{"7", "绘图引擎 日志", "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计，按行排版）", screenDraw},
+	{"8", "前端页面 管理", "月华/琉璃桌面窗口状态探测与意外关闭重启", screenFrontend},
+	{"9", "局域共享 管理", "WSS → WS 反向代理，支持 IP 选择与手机扫码接入", screenProxy},
+	{"a", "打包归档 管理", "项目文件 7z 分卷打包，支持进度显示", screenArchive},
+	{"b", "端口释放 管理", "扫描指定端口范围，终止占用进程并验证释放", screenPorts},
+	{"z", "退出程序", "感谢使用「星月智能 · 控制台」", screenMenu},
+}
+
+// menuHotkeyIndex 快捷键 → 菜单索引（未命中返回 -1）
+func menuHotkeyIndex(k string) int {
+	for i, it := range menuItems {
+		if it.key != "" && it.key == k {
+			return i
+		}
+	}
+	return -1
+}
 
 // ==== 样式 ====
 
@@ -153,6 +194,7 @@ type appModel struct {
 	rawView     logsState // [3] 原始日志
 	lunarView   logsState // [4] 月华 JS 日志
 	ltp9View    logsState // [5] ltp9 JS 日志
+	drawView    logsState // [7] sd.cpp 绘图引擎日志
 	warnView    logsState // [6] Go 警告错误
 	agent       agentState
 	stats       statsState
@@ -166,12 +208,15 @@ type appModel struct {
 
 // newAppModel 构建初始模型
 func newAppModel() appModel {
+	drawView := newLogsState(SourceDraw)
+	drawView.renderLine = renderDrawLogLine // 绘图引擎日志按专用规则排版
 	return appModel{
 		screen:    screenMenu,
 		spinner:   newSpinner(),
 		rawView:   newLogsState(SourceRaw),
 		lunarView: newLogsState(SourceLunarJS),
 		ltp9View:  newLogsState(SourceLTP9JS),
+		drawView:  drawView,
 		warnView:  newLogsState(SourceGoWarn),
 		proxy:     newProxyState(),
 		archive:   newArchiveState(),
@@ -255,6 +300,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.proxy.errText = ""
 	case proxyFailMsg:
 		m.proxy.errText = msg.err.Error()
+	case proxyStoppedMsg:
+		m.proxy.stopping = false
+		return m, nil
 	}
 
 	switch m.screen {
@@ -265,13 +313,15 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screenStats:
 		return m.updateStats(msg)
 	case screenRaw:
-		return m.updateLogs(&m.rawView, msg)
+		return m.updateLogs(SourceRaw, msg)
 	case screenLunarJS:
-		return m.updateLogs(&m.lunarView, msg)
+		return m.updateLogs(SourceLunarJS, msg)
 	case screenLTP9:
-		return m.updateLogs(&m.ltp9View, msg)
+		return m.updateLogs(SourceLTP9JS, msg)
+	case screenDraw:
+		return m.updateLogs(SourceDraw, msg)
 	case screenGoWarn:
-		return m.updateLogs(&m.warnView, msg)
+		return m.updateLogs(SourceGoWarn, msg)
 	case screenFrontend:
 		return m.updateFrontend(msg)
 	case screenProxy:
@@ -294,82 +344,62 @@ func (m appModel) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "e":
+	case "ctrl+c", "e":
 		return m, tea.Quit
 	case "up", "k":
-		m.menu = (m.menu + menuItemCount - 1) % menuItemCount
+		m.menu = (m.menu + len(menuItems) - 1) % len(menuItems)
 	case "down", "j":
-		m.menu = (m.menu + 1) % menuItemCount
-	case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "q":
-		m.menu = menuIndexFromKey(key.String())
-		return m, m.menuAction()
+		m.menu = (m.menu + 1) % len(menuItems)
 	case "enter":
 		return m, m.menuAction()
+	default:
+		// 快捷键直达对应条目（条目表内显式声明，避免索引推算错位）
+		if idx := menuHotkeyIndex(key.String()); idx >= 0 {
+			m.menu = idx
+			return m, m.menuAction()
+		}
 	}
 	return m, nil
 }
 
-// menuIndexFromKey 按键 → 菜单索引（1-9 直映，0=第10项 更新包，q=第11项 端口释放）
-func menuIndexFromKey(k string) int {
-	switch k {
-	case "0":
-		return 9
-	case "q":
-		return 10
-	default:
-		return int(k[0] - '1')
-	}
-}
-
-// menuAction 执行当前选中菜单项（最后一项为退出；指针接收器保证 screen 切换生效）
+// menuAction 进入当前选中条目对应的屏幕。
+// 分发依据是条目自身的 screen 字段（而非下标），故调整菜单排版或条目顺序
+// 不会造成「显示与实际功能对应不上」。
 func (m *appModel) menuAction() tea.Cmd {
-	switch m.menu {
-	case 0:
-		m.screen = screenAgent
-		return nil
-	case 1:
-		m.screen = screenStats
+	item := menuItems[m.menu]
+	if item.screen == screenMenu {
+		return tea.Quit // 末项「退出程序」以 screenMenu 作哨兵
+	}
+	m.screen = item.screen
+
+	switch item.screen {
+	case screenStats:
 		m.stats.snap = GetSnapshot()
 		return tickStats()
-	case 2:
-		m.screen = screenRaw
+	case screenRaw:
 		m.rawView.refresh(m.width, m.height)
-		return nil
-	case 3:
-		m.screen = screenLunarJS
+	case screenLunarJS:
 		m.lunarView.refresh(m.width, m.height)
-		return nil
-	case 4:
-		m.screen = screenLTP9
+	case screenLTP9:
 		m.ltp9View.refresh(m.width, m.height)
-		return nil
-	case 5:
-		m.screen = screenGoWarn
+	case screenGoWarn:
 		m.warnView.refresh(m.width, m.height)
-		return nil
-	case 6:
-		m.screen = screenFrontend
+	case screenDraw:
+		m.drawView.refresh(m.width, m.height)
+	case screenFrontend:
 		m.frontend.msg = ""
-		return nil
-	case 7:
-		m.screen = screenProxy
+	case screenProxy:
 		return m.proxyEnter()
-	case 8:
-		m.screen = screenArchive
+	case screenArchive:
 		return m.archiveEnter()
-	case 9:
-		m.screen = screenUpdate
+	case screenUpdate:
 		return m.updateEnter()
-	case 10:
-		m.screen = screenPorts
+	case screenPorts:
 		m.ports.activated = true
 		m.applyPortsFocus(0)
 		return textinput.Blink
-	default:
-		return tea.Quit
 	}
+	return nil
 }
 
 // quitRequested TUI 退出后的统一清理
@@ -460,6 +490,8 @@ func (m appModel) View() string {
 		return m.viewLogs(&m.lunarView, "月华智能体 JS 日志")
 	case screenLTP9:
 		return m.viewLogs(&m.ltp9View, "ltp9 JS 日志")
+	case screenDraw:
+		return m.viewDraw()
 	case screenGoWarn:
 		return m.viewLogs(&m.warnView, "Go 警告与错误")
 	case screenFrontend:
@@ -478,42 +510,25 @@ func (m appModel) View() string {
 
 // viewMenu 菜单屏
 func (m appModel) viewMenu() string {
-	items := []struct{ title, desc string }{
-		{"智能体实况", "月华思考/输出/工具调用流式显示（对话者/绘制者/演奏者/记忆者…）"},
-		{"运行状态", "运行时间 / 资源占用 / token 消耗总量 / 均次消耗 / 输出速度 / 平均上下文"},
-		{"原始日志", "终端全量原始行（stdout 拦截 + 结构化日志合流）"},
-		{"月华 JS 日志", "月华智能体 JavaScript 层日志"},
-		{"ltp9 JS 日志", "LTP9 沙箱 JavaScript 层日志"},
-		{"Go 警告错误", "Go 模块 WARN / ERROR / FATAL 日志"},
-		{"前端管理", "月华/琉璃桌面窗口状态探测与意外关闭重启"},
-		{"HTTPS 代理", "WSS→WS 反向代理，支持 IP 选择与手机扫码接入"},
-		{"打包归档", "项目文件 7z 分卷打包，支持进度显示"},
-		{"更新包", "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希）"},
-		{"端口释放", "扫描指定端口范围，终止占用进程并验证释放"},
-		{"退出程序", "感谢使用「星月智能 · 控制台」"},
-	}
-
 	var rows []string
-	for i, item := range items {
-		hotkey := fmt.Sprintf("%d", i+1)
-		switch i {
-		case 9:
-			hotkey = "0"
-		case 10:
-			hotkey = "q"
+	for i, item := range menuItems {
+		// 快捷键槽位固定 4 列宽（"[x] "），无快捷键的条目留空以保持对齐
+		slot := "    "
+		if item.key != "" {
+			slot = "[" + item.key + "] "
 		}
 		cursor := "  "
-		title := labelStyle.Render("[" + hotkey + "] " + item.title)
+		title := labelStyle.Render(slot + item.title)
 		if i == m.menu {
 			cursor = selectStyle.Render("▸ ")
-			title = selectStyle.Render("[" + hotkey + "] " + item.title)
+			title = selectStyle.Render(slot + item.title)
 		}
 		rows = append(rows, cursor+title+"  "+dimStyle.Render(item.desc))
 	}
 
 	menuPanel := panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	title := titleStyle.Render("✦ 星月智能 · 控制台 ✦")
-	footer := footerStyle.Render("[↑/↓] 选择   [Enter] 进入   [1-9/0/q] 快捷键   [e] 退出")
+	footer := footerStyle.Render("[↑/↓] 选择   [Enter] 进入   [0-9/a/b/z] 快捷键   [e] 退出")
 
 	return title + "\n" + menuPanel + "\n" + footer
 }

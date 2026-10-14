@@ -38,7 +38,9 @@ func InitEngine(modelDir, voicesDir, espeakDir string) error {
 		return nil
 	}
 
-	if err := onnxruntime_go.InitializeEnvironment(); err != nil {
+	// ONNX Runtime 默认把后端探测与图分区提示直写 stderr，而宿主 TUI 独占终端屏幕，
+	// 故将环境日志级别提高到 ERROR：常规提示不再输出，真实错误仍经返回错误进日志管线
+	if err := onnxruntime_go.InitializeEnvironment(onnxruntime_go.WithLogLevelError()); err != nil {
 		return fmt.Errorf("初始化 onnxruntime 失败: %w", err)
 	}
 
@@ -51,12 +53,23 @@ func InitEngine(modelDir, voicesDir, espeakDir string) error {
 		return fmt.Errorf("模型加载校验失败: %w", err)
 	}
 
+	// 会话级日志同样收敛到 ERROR（环境级别不覆盖会话自身的输出）
+	sessionOpts, err := onnxruntime_go.NewSessionOptions()
+	if err != nil {
+		return fmt.Errorf("创建会话选项失败: %w", err)
+	}
+	if err := sessionOpts.SetLogSeverityLevel(onnxruntime_go.LoggingLevelError); err != nil {
+		_ = sessionOpts.Destroy()
+		return fmt.Errorf("设置会话日志级别失败: %w", err)
+	}
 	session, err := onnxruntime_go.NewDynamicAdvancedSession(
 		modelPath,
 		[]string{"input_ids", "style", "speed"},
 		[]string{"waveform", "duration"},
-		nil,
+		sessionOpts,
 	)
+	// 会话创建后选项即不再需要（ORT 在 CreateSession 时已复制所需配置）
+	_ = sessionOpts.Destroy()
 	if err != nil {
 		return fmt.Errorf("创建推理会话失败: %w", err)
 	}

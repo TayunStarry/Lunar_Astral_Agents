@@ -214,3 +214,32 @@ func TestChannelBusCount(t *testing.T) {
 	_ = named
 	_ = plainSameChannel
 }
+
+// TestChannelClientCount 频道连接计数：不区分是否订阅总线。
+// 月华消息终端以 /ws?channel=message-terminal 接入且未订阅总线，
+// 控制台在线探针须以「频道连接数」而非「总线订阅数」判定其存活。
+func TestChannelClientCount(t *testing.T) {
+	hub, srv := newTestHub(t)
+
+	busClient := dial(t, srv, "?"+BusParam+"=1") // 琉璃桌面式连接（缺省频道 + 总线订阅）
+	lunarTerminal := dial(t, srv, "?"+ChannelParam+"=message-terminal")
+	lunarMobile := dial(t, srv, "?"+ChannelParam+"=message-terminal")
+	waitClients(t, hub, 3)
+
+	if n := hub.ChannelClientCount("message-terminal"); n != 2 {
+		t.Fatalf("月华终端频道连接数应为 2，实际 %d", n)
+	}
+	if n := hub.ChannelClientCount(DefaultBusChannel); n != 1 {
+		t.Fatalf("缺省频道连接数应为 1，实际 %d", n)
+	}
+	if n := hub.ChannelBusCount("message-terminal"); n != 0 {
+		t.Fatalf("未订阅总线的终端不应计入总线订阅数，实际 %d", n)
+	}
+	if n := hub.ChannelClientCount(""); n != 1 {
+		t.Fatalf("空频道应按缺省频道统计，实际 %d", n)
+	}
+
+	_ = busClient
+	_ = lunarTerminal
+	_ = lunarMobile
+}

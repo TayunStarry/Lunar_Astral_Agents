@@ -1,5 +1,6 @@
 #include "gguf_loader.h"
 #include "ggml-cpu.h"
+#include "qwen3_tts_log.h"
 
 #include <cstdio>
 #include <cstring>
@@ -33,7 +34,7 @@ ggml_backend_t init_preferred_backend(const char * component_name, std::string *
         shared.ref_count++;
         ggml_backend_dev_t dev = ggml_backend_get_device(shared.backend);
         const char * dev_name = dev ? ggml_backend_dev_name(dev) : "unknown";
-        fprintf(stderr, "[Backend] Reusing existing backend: %s\n", dev_name);
+        TTS_LOG( "[Backend] Reusing existing backend: %s\n", dev_name);
         return shared.backend;
     }
 
@@ -41,7 +42,7 @@ ggml_backend_t init_preferred_backend(const char * component_name, std::string *
     if (backend) {
         ggml_backend_dev_t dev = ggml_backend_get_device(backend);
         const char * dev_name = dev ? ggml_backend_dev_name(dev) : "unknown";
-        fprintf(stderr, "[Backend] Initialized GPU backend: %s\n", dev_name);
+        TTS_LOG( "[Backend] Initialized GPU backend: %s\n", dev_name);
     }
 
     if (!backend) {
@@ -49,14 +50,14 @@ ggml_backend_t init_preferred_backend(const char * component_name, std::string *
         if (backend) {
             ggml_backend_dev_t dev = ggml_backend_get_device(backend);
             const char * dev_name = dev ? ggml_backend_dev_name(dev) : "unknown";
-            fprintf(stderr, "[Backend] Initialized ACCEL backend: %s\n", dev_name);
+            TTS_LOG( "[Backend] Initialized ACCEL backend: %s\n", dev_name);
         }
     }
 
     if (!backend) {
         backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
         if (backend) {
-            fprintf(stderr, "[Backend] Initialized CPU backend (GPU/ACCEL not available)\n");
+            TTS_LOG( "[Backend] Initialized CPU backend (GPU/ACCEL not available)\n");
         }
     }
 
@@ -79,7 +80,7 @@ void set_ggml_cpu_threads(int32_t n_threads) {
         ggml_backend_dev_t dev = ggml_backend_get_device(shared.backend);
         if (dev && ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU) {
             ggml_backend_cpu_set_n_threads(shared.backend, (int)n_threads);
-            fprintf(stderr, "  [Backend] CPU threads configured: %d\n", (int)n_threads);
+            TTS_LOG( "  [Backend] CPU threads configured: %d\n", (int)n_threads);
         }
     }
 }

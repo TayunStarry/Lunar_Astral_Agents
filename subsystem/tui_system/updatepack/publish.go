@@ -1,7 +1,6 @@
 package updatepack
 
 import (
-	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -19,7 +18,7 @@ import (
 // Publish 发布更新包：收集资源 → 打包 → 创建 Release → 上传附件。
 // version 为版本标签（如 v2026.10.14-1530）；为空时自动按时间生成。
 func Publish(cfg Config, version string) error {
-	if err := validateConfig(cfg); err != nil {
+	if err := validateConfig(cfg, true); err != nil {
 		return err
 	}
 	if version == "" {
@@ -43,16 +42,9 @@ func Publish(cfg Config, version string) error {
 		return fmt.Errorf("没有可打包的资源目录（include 清单为空或全部缺失，target_dir=%s）", targetDir)
 	}
 
-	// ==== 2. 打包到临时目录（小包 zip；超过 90MB 走 7z 分卷） ====
+	// ==== 2. 打包到临时目录（统一 7z 分卷：小资源产出单个 .7z.001，大资源自动分卷） ====
 	outBase := filepath.Join(os.TempDir(), "lunar_updatepack_"+version)
-	totalSize := dirTotalSize(include)
-	var packFiles []string
-	var err error
-	if totalSize > splitThreshold {
-		packFiles, err = packSevenZ(cfg, version, outBase, include)
-	} else {
-		packFiles, err = packZip(version, outBase+".zip", include, targetDir)
-	}
+	packFiles, err := packSevenZ(version, outBase, include, resolveExclude(cfg), resolveExcludeDirs(cfg))
 	if err != nil {
 		return err
 	}
@@ -64,14 +56,18 @@ func Publish(cfg Config, version string) error {
 
 	// ==== 3. 计算各包 SHA-256 并生成 Release 描述 ====
 	var body strings.Builder
-	body.WriteString("星月智能更新包 " + version + "\n\n资源目录: " + strings.Join(cfg.Include, ", ") + "\n")
+	body.WriteString("星月智能更新包 ")
+	body.WriteString(version)
+	body.WriteString("\n\n资源目录: ")
+	body.WriteString(strings.Join(cfg.Include, ", "))
+	body.WriteString("\n")
 	for _, f := range packFiles {
 		sum, sErr := fileSHA256(f)
 		if sErr != nil {
 			logf("  [WARN] 计算 SHA-256 失败 %s: %v", f, sErr)
 			continue
 		}
-		body.WriteString(fmt.Sprintf("\n%s (SHA-256: %s)", filepath.Base(f), sum))
+		fmt.Fprintf(&body, "\n%s (SHA-256: %s)", filepath.Base(f), sum)
 	}
 
 	// ==== 4. 创建 Release ====
@@ -107,11 +103,13 @@ func createRelease(cfg Config, version, body string) (int64, error) {
 	}
 
 	payload, _ := json.Marshal(map[string]string{
-		"access_token":     cfg.GiteeToken,
-		"tag_name":         version,
-		"name":             "更新包 " + version,
-		"body":             body,
-		"target_commitish": "master",
+		"access_token": cfg.GiteeToken,
+		"tag_name":     version,
+		"name":         "更新包 " + version,
+		"body":         body,
+		// Gitee 要求 target_commitish 必填：动态解析默认分支
+		// （此前硬编码 master，在默认分支为 main 的仓库上创建标签失败）
+		"target_commitish": defaultBranch(cfg),
 	})
 	resp, err := postJSON(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), payload)
 	if err != nil {
@@ -212,13 +210,14 @@ func (m *multipartBody) Read(p []byte) (int, error) {
 
 // ==== 辅助 ====
 
-// validateConfig 校验配置完备性
-func validateConfig(cfg Config) error {
+// validateConfig 校验配置完备性。needToken 为 true 时（发布/写操作）要求令牌非空；
+// 拉取公开仓库属只读操作，可不带令牌（Gitee 读取 API 支持匿名访问）。
+func validateConfig(cfg Config, needToken bool) error {
 	if cfg.GiteeOwner == "" || cfg.GiteeRepo == "" {
 		return fmt.Errorf("未配置 Gitee 仓库（update_pack.gitee_owner / gitee_repo）")
 	}
-	if cfg.GiteeToken == "" {
-		return fmt.Errorf("未配置 Gitee 令牌（update_pack.gitee_token，需 Release 写权限）")
+	if needToken && cfg.GiteeToken == "" {
+		return fmt.Errorf("未提供 Gitee 令牌（发布需 Release 读写权限的私人令牌）")
 	}
 	return nil
 }
@@ -274,81 +273,46 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// packZip 打包为 zip（记录相对 targetDir 的路径，解压时直接映射）
-func packZip(version, outPath string, include []string, targetDir string) ([]string, error) {
-	logf("打包为 zip: %s（源 %.1f MB）", outPath, float64(dirTotalSize(include))/(1024*1024))
-	out, err := os.Create(outPath)
-	if err != nil {
-		return nil, fmt.Errorf("创建输出文件失败: %w", err)
-	}
-	defer out.Close()
-
-	w := zip.NewWriter(out)
-	for _, src := range include {
-		relRoot, relErr := filepath.Rel(targetDir, src)
-		if relErr != nil {
-			relRoot = filepath.Base(src)
-		}
-		if wErr := walkInto(w, src, relRoot); wErr != nil {
-			return nil, wErr
-		}
-	}
-	if err := w.Close(); err != nil {
-		return nil, fmt.Errorf("收尾 zip 失败: %w", err)
-	}
-	logf("  zip 打包完成: %.1f MB", float64(fileSize(outPath))/(1024*1024))
-	return []string{outPath}, nil
+// defaultExcludePatterns 更新包默认排除清单（同步 environment_repair/archive 的
+// 判定流程：日志、临时文件、版本库与构建产物不进更新包）。可用 update_pack.exclude 覆盖。
+var defaultExcludePatterns = []string{
+	"*.log", "*.tmp", "*.bak",
+	".git/", "node_modules/", "__pycache__/", "*.pyc", "*.pyo", "*.egg-info/",
+	"dist/", "build/",
+	".DS_Store", "*.ts", "*.go",
 }
 
-// walkInto 递归写入目录/文件到 zip
-func walkInto(w *zip.Writer, src, relRoot string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
+// resolveExclude 解析打包排除规则（未配置时用默认清单）
+func resolveExclude(cfg Config) []string {
+	if len(cfg.Exclude) > 0 {
+		return cfg.Exclude
 	}
-	if !info.IsDir() {
-		return writeFileToZip(w, src, relRoot)
-	}
-	return filepath.Walk(src, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return err
-		}
-		rel, rErr := filepath.Rel(src, path)
-		if rErr != nil {
-			return rErr
-		}
-		return writeFileToZip(w, path, filepath.Join(relRoot, rel))
-	})
+	return defaultExcludePatterns
 }
 
-// writeFileToZip 写入单个文件
-func writeFileToZip(w *zip.Writer, path, name string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		logf("  [WARN] 读取失败跳过 %s: %v", path, err)
-		return nil
+// resolveExcludeDirs 解析「目录级排除」标记（未配置时默认 metadata.json）
+func resolveExcludeDirs(cfg Config) []string {
+	if len(cfg.ExcludeDirsWith) > 0 {
+		return cfg.ExcludeDirsWith
 	}
-	entry, err := w.Create(strings.ReplaceAll(name, "\\", "/"))
-	if err != nil {
-		return err
-	}
-	_, err = entry.Write(data)
-	return err
+	return []string{"metadata.json"}
 }
 
-// splitThreshold 超过该大小改用 7z 分卷（对齐 Gitee 单附件 100MB 限制）
-const splitThreshold = 90 * 1024 * 1024
-
-// packSevenZ 大资源包走 7z 分卷（复用 archive 包的分卷压缩能力，单卷 95MB 对齐附件限制）
-func packSevenZ(cfg Config, version, outBase string, include []string) ([]string, error) {
-	logf("资源总量 %.1f MB 超过单附件阈值，改用 7z 分卷打包", float64(dirTotalSize(include))/(1024*1024))
+// packSevenZ 以 7z 分卷打包（统一格式：小资源产出单个 .7z.001，大资源自动分卷，
+// 单卷 95MB 对齐 Gitee 单附件 100MB 限制）。复用 archive 包的扫描/排除/分卷能力。
+func packSevenZ(_, outBase string, include, exclude, excludeDirsWith []string) ([]string, error) {
+	logf("资源总量 %.1f MB，7z 分卷打包", float64(dirTotalSize(include))/(1024*1024))
 
 	acfg := archive.Config{
-		Import: include,
-		Output: outBase,
-		Size:   95,
-		Level:  5,
+		Import:          include,
+		Exclude:         exclude,
+		ExcludeDirsWith: excludeDirsWith,
+		Output:          outBase,
+		Size:            95,
+		Level:           5,
 		Archive: []string{
+			// 发行版自带的 7z 优先（宿主工作目录），再退回系统安装路径
+			filepath.Join("local_data", "package", "archive", "7z.exe"),
 			`C:\Program Files\7-Zip\7z.exe`,
 			`C:\Program Files (x86)\7-Zip\7z.exe`,
 		},
@@ -364,7 +328,7 @@ func packSevenZ(cfg Config, version, outBase string, include []string) ([]string
 		return nil, fmt.Errorf("7z 分卷打包失败: %w", err)
 	}
 
-	// 收集产物：单卷 outBase.7z 或分卷 outBase.7z.001..N
+	// 收集产物：单卷 outBase.7z.001 或分卷 outBase.7z.001..N
 	matches, err := filepath.Glob(outBase + ".7z*")
 	if err != nil || len(matches) == 0 {
 		return nil, fmt.Errorf("未找到打包产物")

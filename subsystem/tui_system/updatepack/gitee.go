@@ -12,12 +12,12 @@ import (
 
 // giteeRelease Gitee Release API 响应（仅解析用到的字段）
 type giteeRelease struct {
-	ID      int64          `json:"id"`
-	TagName string         `json:"tag_name"`
-	Name    string         `json:"name"`
-	Body    string         `json:"body"`
-	Assets  []giteeAsset   `json:"assets"`
-	Target  string         `json:"target_commitish"`
+	ID      int64        `json:"id"`
+	TagName string       `json:"tag_name"`
+	Name    string       `json:"name"`
+	Body    string       `json:"body"`
+	Assets  []giteeAsset `json:"assets"`
+	Target  string       `json:"target_commitish"`
 }
 
 // giteeAsset Release 附件
@@ -34,6 +34,19 @@ type giteeTag struct {
 	Commit struct {
 		SHA string `json:"sha"`
 	} `json:"commit"`
+}
+
+// tokenQuery 构造带令牌的查询参数：令牌为空时不带 access_token
+// （Gitee 读取 API 支持匿名访问，公开仓库拉取无需令牌；写操作仍必须带）
+func tokenQuery(cfg Config, extra map[string]string) url.Values {
+	q := url.Values{}
+	if cfg.GiteeToken != "" {
+		q.Set("access_token", cfg.GiteeToken)
+	}
+	for k, v := range extra {
+		q.Set(k, v)
+	}
+	return q
 }
 
 // apiRequest 执行 Gitee API GET 请求并解析 JSON
@@ -62,12 +75,31 @@ func apiRequest(path string, query url.Values, out any) error {
 	return nil
 }
 
+// defaultBranch 解析仓库默认分支（创建 Release 的 target_commitish 必填）。
+// 优先读仓库信息；个别仓库信息端点不可达时回退到分支列表首项。
+func defaultBranch(cfg Config) string {
+	query := tokenQuery(cfg, nil)
+	var info struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := apiRequest(fmt.Sprintf("/repos/%s/%s", cfg.GiteeOwner, cfg.GiteeRepo), query, &info); err == nil && info.DefaultBranch != "" {
+		return info.DefaultBranch
+	}
+	var branches []struct {
+		Name string `json:"name"`
+	}
+	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/branches", cfg.GiteeOwner, cfg.GiteeRepo), query, &branches); err == nil && len(branches) > 0 {
+		return branches[0].Name
+	}
+	return "master"
+}
+
 // ListVersions 获取仓库的发布版本列表（按 API 默认顺序，通常最新在前）
 func ListVersions(cfg Config) ([]Version, error) {
-	if err := validateConfig(cfg); err != nil {
+	if err := validateConfig(cfg, false); err != nil {
 		return nil, err
 	}
-	query := url.Values{"access_token": []string{cfg.GiteeToken}, "per_page": []string{"20"}}
+	query := tokenQuery(cfg, map[string]string{"per_page": "20"})
 	var releases []giteeRelease
 	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), query, &releases); err != nil {
 		return nil, err
@@ -89,7 +121,7 @@ func ListVersions(cfg Config) ([]Version, error) {
 func fetchRelease(cfg Config, spec PullSpec) (*giteeRelease, error) {
 	switch spec.Kind {
 	case PullLatest:
-		query := url.Values{"access_token": []string{cfg.GiteeToken}, "per_page": []string{"1"}}
+		query := tokenQuery(cfg, map[string]string{"per_page": "1"})
 		var releases []giteeRelease
 		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), query, &releases); err != nil {
 			return nil, err
@@ -99,7 +131,7 @@ func fetchRelease(cfg Config, spec PullSpec) (*giteeRelease, error) {
 		}
 		return &releases[0], nil
 	case PullTag:
-		query := url.Values{"access_token": []string{cfg.GiteeToken}}
+		query := tokenQuery(cfg, nil)
 		var release giteeRelease
 		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases/tags/%s", cfg.GiteeOwner, cfg.GiteeRepo, url.PathEscape(spec.Value)), query, &release); err != nil {
 			return nil, fmt.Errorf("未找到 tag %s 对应的发布: %w", spec.Value, err)
@@ -112,7 +144,7 @@ func fetchRelease(cfg Config, spec PullSpec) (*giteeRelease, error) {
 
 // matchTagByHash 在仓库 tags 中查找 commit 哈希前缀匹配的 tag 名（未命中返回空串）
 func matchTagByHash(cfg Config, hash string) (string, error) {
-	query := url.Values{"access_token": []string{cfg.GiteeToken}, "per_page": []string{"100"}}
+	query := tokenQuery(cfg, map[string]string{"per_page": "100"})
 	var tags []giteeTag
 	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/tags", cfg.GiteeOwner, cfg.GiteeRepo), query, &tags); err != nil {
 		return "", err

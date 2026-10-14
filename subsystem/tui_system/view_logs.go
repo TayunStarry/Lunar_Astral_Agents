@@ -2,12 +2,20 @@ package TuiSystem
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+// 采样进度解析（引擎输出形如 "10/20"、"25%"、"1.02s/it"、"3.2it/s"）
+var (
+	drawStepTotalRe = regexp.MustCompile(`(\d+)\s*/\s*(\d+)`)
+	drawPercentRe   = regexp.MustCompile(`(\d+)\s*%`)
+	drawSpeedRe     = regexp.MustCompile(`([\d.]+)\s*(s/it|it/s|ms/it)`)
 )
 
 // logsState 日志视图状态（四个日志屏共用同一结构）
@@ -17,6 +25,8 @@ type logsState struct {
 	ready    bool
 	lastSeq  int  // 上次渲染条数（增量刷新用）
 	atBottom bool // 跟随底部开关（用户上滚时暂停跟随）
+	// renderLine 单行渲染器（nil=按级别/来源着色；绘图引擎屏注入专用排版）
+	renderLine func(LogLine) string
 }
 
 // newLogsState 构建指定来源的日志视图
@@ -24,12 +34,20 @@ func newLogsState(source LogSource) logsState {
 	return logsState{source: source}
 }
 
+// render 单行渲染：优先使用注入的专用渲染器
+func (s *logsState) render(line LogLine) string {
+	if s.renderLine != nil {
+		return s.renderLine(line)
+	}
+	return renderLogLine(line)
+}
+
 // refresh 重建视口内容（尺寸变化或首次进入时）
 func (s *logsState) refresh(width, height int) {
 	logs := GetLogs(s.source)
 	lines := make([]string, 0, len(logs))
 	for _, line := range logs {
-		lines = append(lines, renderLogLine(line))
+		lines = append(lines, s.render(line))
 	}
 	if len(lines) == 0 {
 		lines = append(lines, dimStyle.Render("（暂无日志）"))
@@ -53,8 +71,23 @@ func (s *logsState) refresh(width, height int) {
 	s.vp.GotoBottom()
 }
 
-// updateLogs 日志屏事件处理
-func (m appModel) updateLogs(s *logsState, msg tea.Msg) (tea.Model, tea.Cmd) {
+// updateLogs 日志屏事件（source 指定四类日志屏之一）。
+// 注意：状态必须从接收者副本内取（s 指向 m 自己的字段）——若由调用方传入
+// 指向其副本的指针，视口滚动等变更会落在中间副本上，随返回值一并丢失
+// （表现为 ↑/↓/PgUp/PgDn 按了没反应）。
+func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var s *logsState
+	switch source {
+	case SourceLunarJS:
+		s = &m.lunarView
+	case SourceLTP9JS:
+		s = &m.ltp9View
+	case SourceGoWarn:
+		s = &m.warnView
+	default:
+		s = &m.rawView
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -114,7 +147,7 @@ func (s *logsState) syncContent() {
 	s.lastSeq = len(logs)
 	lines := make([]string, 0, len(logs))
 	for _, line := range logs {
-		lines = append(lines, renderLogLine(line))
+		lines = append(lines, s.render(line))
 	}
 	if len(lines) == 0 {
 		lines = append(lines, dimStyle.Render("（暂无日志）"))
@@ -228,6 +261,141 @@ func wrapTail(text string, width, maxLines int, prefix string) []string {
 		lines[0] = prefix + lines[0]
 	}
 	return lines
+}
+
+// ==== 绘图引擎（sd.cpp）日志屏 ====
+
+// drawProgressStyle 采样进度行（亮青，突出「进行到哪一步」）
+var drawProgressStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
+
+// renderDrawLogLine 绘图引擎单行排版：
+//   - 错误/警告沿用红/橙并加标记；
+//   - 进度/速度行以亮青特别标注（引擎主要输出就是这类采样节奏信息）；
+//   - 其余引擎原始输出弱化为灰色，模块编排日志（Source=log）正常青色。
+func renderDrawLogLine(line LogLine) string {
+	switch {
+	case line.Level == "ERROR":
+		return logErrStyle.Render("✗ " + line.Text)
+	case line.Level == "WARN":
+		return logWarnStyle.Render("! " + line.Text)
+	case isDrawProgressLine(line.Text):
+		return drawProgressStyle.Render("▸ " + line.Text)
+	case line.Source == "engine":
+		return logDimStyle.Render("  " + line.Text)
+	default:
+		return logInfoStyle.Render("→ " + line.Text)
+	}
+}
+
+// drawProgressLine 正则友好的进度判定：形如 "10/20" / "25%" / "1.02s/it" / "3.20it/s"
+func isDrawProgressLine(text string) bool {
+	for _, pat := range drawProgressMarks {
+		if strings.Contains(text, pat) {
+			return true
+		}
+	}
+	return false
+}
+
+// drawProgressMarks 进度/速度行的特征子串
+var drawProgressMarks = []string{"s/it", "it/s", "ms/it", "%|", "==", "=>"}
+
+// drawProgress 绘图引擎采样进度（从日志尾部解析最近一次报告）
+type drawProgress struct {
+	// Found 是否解析到进度信息
+	Found bool
+	// Step/Total 当前步 / 总步数（Total 未知时为 0）
+	Step, Total int
+	// Percent 采样百分比（无人为放大，0-100）
+	Percent int
+	// Speed 采样速度文本（如 "1.02s/it"）
+	Speed string
+}
+
+// parseDrawProgress 从日志尾部解析最近的采样进度：
+// 依次尝试「步/总步」与「百分比」两种写法，取最后一条命中记录。
+func parseDrawProgress(logs []LogLine) drawProgress {
+	var p drawProgress
+	for _, l := range logs {
+		text := l.Text
+		if m := drawStepTotalRe.FindStringSubmatch(text); m != nil {
+			step, total := atoiSafe(m[1]), atoiSafe(m[2])
+			if total > 0 && step >= 0 {
+				p = drawProgress{
+					Found:   true,
+					Step:    step,
+					Total:   total,
+					Percent: clampPercent(step * 100 / total),
+					Speed:   p.Speed,
+				}
+			}
+		} else if m := drawPercentRe.FindStringSubmatch(text); m != nil {
+			percent := clampPercent(atoiSafe(m[1]))
+			if p.Total > 0 {
+				p.Percent = percent // 有总步数时以步数换算，百分比仅兜底
+				p.Found = true
+			} else if percent > 0 {
+				p = drawProgress{Found: true, Percent: percent, Speed: p.Speed}
+			}
+		}
+		if m := drawSpeedRe.FindStringSubmatch(text); m != nil {
+			p.Speed = m[1] + m[2]
+			p.Found = true
+		}
+	}
+	return p
+}
+
+// clampPercent 百分比收敛到 0-100
+func clampPercent(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
+}
+
+// atoiSafe 宽松数字解析（解析失败返回 0）
+func atoiSafe(s string) int {
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return n
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
+}
+
+// viewDraw 绘图引擎日志屏渲染：顶部状态/进度行 + 日志视口
+func (m appModel) viewDraw() string {
+	if !m.drawView.ready {
+		m.drawView.refresh(m.width, m.height)
+	} else {
+		m.drawView.syncContent()
+	}
+
+	header := titleStyle.Render("「 绘图引擎日志 」")
+
+	// 顶部：引擎名 + 最近一次采样进度（无进度时提示等待）
+	logs := GetLogs(SourceDraw)
+	status := labelStyle.Render("引擎: ") + valueStyle.Render("sd.cpp") + dimStyle.Render("  输出按行排版；进度/速度行亮青标注")
+	if p := parseDrawProgress(logs); p.Found {
+		status += "\n" + progressBar(p.Percent, 30)
+		if p.Total > 0 {
+			status += "  " + valueStyle.Render(fmt.Sprintf("步 %d/%d", p.Step, p.Total))
+		}
+		if p.Speed != "" {
+			status += "  " + drawProgressStyle.Render(p.Speed)
+		}
+	} else {
+		status += "\n" + dimStyle.Render("（尚无采样进度：发起图像生成后此处实时显示）")
+	}
+
+	footer := footerStyle.Render("[↑/↓/PgUp/PgDn] 滚动   [Home/End] 顶部/底部   [c] 清空   [Esc] 返回菜单")
+	return header + "\n" + status + "\n" + m.drawView.vp.View() + "\n" + footer
 }
 
 // ==== 运行状态屏 ====

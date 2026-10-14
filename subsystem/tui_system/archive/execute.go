@@ -8,13 +8,18 @@ import (
 	"strings"
 )
 
-// ListConfigs 扫描工作目录 data/ 下的打包配置（*.json），按文件名排序返回
+// ListConfigs 返回候选打包配置：默认配置（local_data/archive_config.json，存在时）置于最前，
+// 其后为工作目录 data/ 下的额外 *.json 配置（便于用户自定义多套打包方案）。
 func ListConfigs() []string {
+	configs := make([]string, 0, 4)
+	if fileExists(DefaultConfigPath) {
+		configs = append(configs, DefaultConfigPath)
+	}
+
 	entries, err := os.ReadDir("data")
 	if err != nil {
-		return nil
+		return configs
 	}
-	var configs []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -100,12 +105,17 @@ func GetSources(paths []string) ([]string, error) {
 	return sources, nil
 }
 
-// find7zPath 按配置路径 → PATH 环境变量的顺序查找 7z 可执行文件
+// find7zPath 按配置路径 → PATH 环境变量的顺序查找 7z 可执行文件。
+// 返回绝对路径：createVolume 以 cmd.Dir=源基准目录 启动 7z 进程，
+// 相对路径会在子进程的 cwd 下失效。
 func find7zPath() (string, error) {
 	// 1. 按配置文件中指定的路径搜索
 	paths := GetSevenZipPaths()
 	for _, path := range paths {
 		if fileExists(path) {
+			if abs, err := filepath.Abs(path); err == nil {
+				return abs, nil
+			}
 			return path, nil
 		}
 	}

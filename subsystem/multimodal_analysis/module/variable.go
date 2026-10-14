@@ -28,3 +28,13 @@ var (
 	LastCapture     int64                    // 最后截图时间（UnixNano）
 	CaptureCooldown int64 = 50 * 1000 * 1000 // 50ms 最小截图间隔（纳秒）
 )
+
+// ==== 绘图引擎日志钩子 ====
+
+var (
+	// engineLogMu 保护引擎日志钩子的并发读写
+	engineLogMu sync.RWMutex
+	// engineLogHook 绘图引擎（sd.cpp）日志钩子：按行回调，stream 为 stdout/stderr。
+	// 宿主（TUI 控制台）注入后由其统一排版显示；未注入时维持直写终端。
+	engineLogHook func(stream, line string)
+)

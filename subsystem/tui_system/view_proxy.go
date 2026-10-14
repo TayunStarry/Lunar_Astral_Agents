@@ -19,6 +19,7 @@ type proxyState struct {
 	ipIdx     int
 
 	running  bool
+	stopping bool // 已发出停止指令、等待服务收尾（期间禁止再次启动）
 	handle   *proxy.Handle
 	info     proxy.Info
 	errText  string
@@ -76,6 +77,9 @@ func (m appModel) updateProxy(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case proxyFailMsg:
 		m.proxy.errText = msg.err.Error()
 		return m, nil
+	case proxyStoppedMsg:
+		m.proxy.stopping = false
+		return m, nil
 	case tea.KeyMsg:
 		key := msg.String()
 		switch key {
@@ -83,14 +87,17 @@ func (m appModel) updateProxy(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "esc":
 			if m.proxy.running {
-				// 运行中 Esc → 停止服务回到配置态
-				if m.proxy.handle != nil {
-					_ = m.proxy.handle.Stop()
-				}
+				// 运行中 Esc → 后台停止服务并返回菜单。
+				// Stop 会等待连接收尾（最长 3 秒），不能在事件循环内同步执行，
+				// 否则界面假死、按键无响应——这正是「停止后回不了菜单」的成因。
+				handle := m.proxy.handle
 				m.proxy.running = false
+				m.proxy.stopping = true
 				m.proxy.handle = nil
 				m.proxy.qrText = ""
-				return m, nil
+				m.proxy.progress = 0
+				m.screen = screenMenu
+				return m, stopProxyCmd(handle)
 			}
 			m.screen = screenMenu
 			return m, nil
@@ -121,6 +128,10 @@ func (m appModel) updateProxy(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			}
 		case "enter":
+			if m.proxy.stopping {
+				// 上一次服务尚未完全停止，避免端口冲突，等待停止完成后重试
+				return m, nil
+			}
 			m.proxy.errText = ""
 			return m, startProxyCmd(m.proxy)
 		}
@@ -155,6 +166,16 @@ func startProxyCmd(s proxyState) tea.Cmd {
 	}
 }
 
+// stopProxyCmd 后台停止代理服务（异步执行，避免阻塞 TUI 事件循环）
+func stopProxyCmd(handle *proxy.Handle) tea.Cmd {
+	return func() tea.Msg {
+		if handle != nil {
+			_ = handle.Stop()
+		}
+		return proxyStoppedMsg{}
+	}
+}
+
 // errInvalidPort 端口输入无效
 var errInvalidPort = errPortInvalid{}
 
@@ -177,10 +198,13 @@ func (m appModel) viewProxy() string {
 		if m.proxy.qrText != "" {
 			body += "\n\n" + m.proxy.qrText
 		}
-		body += "\n\n" + okStyle.Render("✓ 代理服务运行中") + "  " + dimStyle.Render("[Esc] 停止并返回配置")
+		body += "\n\n" + okStyle.Render("✓ 代理服务运行中") + "  " + dimStyle.Render("[Esc] 停止服务并返回菜单")
 		if m.proxy.progress > 0 {
 			body += "\n" + progressBar(m.proxy.progress, 30)
 		}
+	} else if m.proxy.stopping {
+		body = m.spinner.View() + " " + valueStyle.Render("正在停止代理服务…") +
+			"\n\n" + dimStyle.Render("停止完成后可重新启动（[Esc] 返回菜单）")
 	} else {
 		ipText := dimStyle.Render("（未检测到可用 IP）")
 		if len(m.proxy.ips) > 0 {

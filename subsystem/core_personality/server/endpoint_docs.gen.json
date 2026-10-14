@@ -31,8 +31,8 @@
     },
     "/api-docs": {
       "get": {
-        "summary": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成；?format=html 查看可视化页面）",
-        "description": "服务自述文档（编译时基于 SystemEndpoints 注册表自动生成；?format=html 查看可视化页面）",
+        "summary": "服务自述文档",
+        "description": "服务自述文档",
         "operationId": "docsHandler",
         "x-handler": "docsHandler",
         "responses": {

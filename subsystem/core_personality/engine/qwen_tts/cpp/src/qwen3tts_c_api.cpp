@@ -7,6 +7,8 @@
 #include "qwen3_tts.h"
 #include "qwen3tts_c_api.h"
 #include "gguf_loader.h"
+#include "ggml.h"
+#include "qwen3_tts_log.h"
 
 #ifdef __APPLE__
 #include <objc/objc.h>
@@ -67,6 +69,12 @@ static Qwen3TtsAudio * to_c_audio(const qwen3_tts::tts_result & result) {
     return out;
 }
 
+// ggml 自身的日志（后端初始化、设备探测等）默认直写 stderr，
+// 会在宿主 TUI 屏幕上刷出非预期内容，故非诊断模式下以空回调吸收；
+// 需要诊断时置 QWEN3_TTS_VERBOSE=1 即可保留 ggml 默认输出。
+static void quiet_ggml_log(enum ggml_log_level /*level*/, const char * /*text*/, void * /*user_data*/) {
+}
+
 // ============================================================
 // C API implementation
 // ============================================================
@@ -86,6 +94,9 @@ void qwen3_tts_default_params(Qwen3TtsParams * params) {
 
 Qwen3Tts * qwen3_tts_create(const char * model_dir, int32_t n_threads) {
     if (!model_dir) return nullptr;
+    if (!qwen3_tts::verbose_log()) {
+        ggml_log_set(quiet_ggml_log, nullptr);
+    }
     auto * tts = new Qwen3Tts;
     (void)n_threads; // thread count is set per-call via params
     if (!tts->engine.load_models(model_dir)) {

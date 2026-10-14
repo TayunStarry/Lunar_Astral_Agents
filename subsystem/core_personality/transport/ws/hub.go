@@ -332,6 +332,24 @@ func (h *Hub) ChannelBusCount(channel string) int {
 	return count
 }
 
+// ChannelClientCount 指定频道上的连接数（不区分是否订阅引擎总线）。
+// 月华消息终端以 /ws?channel=message-terminal 接入且不订阅总线，
+// 故其在线判定须按频道连接数统计（ChannelBusCount 会把这类连接计为 0）。
+func (h *Hub) ChannelClientCount(channel string) int {
+	if channel == "" {
+		channel = DefaultBusChannel
+	}
+	h.clientsMu.RLock()
+	defer h.clientsMu.RUnlock()
+	count := 0
+	for client := range h.Clients {
+		if client.channel == channel {
+			count++
+		}
+	}
+	return count
+}
+
 // CloseAll 关闭所有在线连接（进程退出前调用）
 func (h *Hub) CloseAll() {
 	h.clientsMu.Lock()

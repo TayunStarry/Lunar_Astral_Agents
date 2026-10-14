@@ -9,14 +9,21 @@ import (
 	"time"
 )
 
+// DefaultConfigPath 默认打包配置路径（随发行版分发，位于工作目录的 local_data 下）
+const DefaultConfigPath = "local_data/archive_config.json"
+
 // Config 扁平化的打包配置结构（JSON Schema）
 type Config struct {
 	Import  []string `json:"import"`  // 需包含在打包范围内的文件/文件夹路径
 	Exclude []string `json:"exclude"` // 从打包范围中排除的文件/目录模式
-	Archive []string `json:"archive"` // 7z.exe 可执行文件的搜索路径列表
-	Output  string   `json:"output"`  // 压缩包输出目录路径及基础文件名
-	Size    int      `json:"size"`    // 分卷压缩单包大小（MB）
-	Level   int      `json:"level"`   // 压缩等级（1-9）
+	// ExcludeDirsWith 含这些文件的目录整体排除（按文件名匹配目录内直接子项）。
+	// 典型用途：local_data/package 下含 metadata.json 的是 LTPX 工具包，
+	// 由包管理分发，不随资源包携带（对齐 environment_repair 的同步规则）。
+	ExcludeDirsWith []string `json:"exclude_dirs_with"`
+	Archive         []string `json:"archive"` // 7z.exe 可执行文件的搜索路径列表
+	Output          string   `json:"output"`  // 压缩包输出目录路径及基础文件名
+	Size            int      `json:"size"`    // 分卷压缩单包大小（MB）
+	Level           int      `json:"level"`   // 压缩等级（1-9）
 }
 
 // ExecuteParams 运行时参数
@@ -79,6 +86,14 @@ func GetExcludePatterns() []string {
 		return []string{}
 	}
 	return globalConfig.Exclude
+}
+
+// GetExcludeDirMarkers 获取「目录级排除」标记文件名列表
+func GetExcludeDirMarkers() []string {
+	if globalConfig == nil {
+		return []string{}
+	}
+	return globalConfig.ExcludeDirsWith
 }
 
 // GetSevenZipPaths 获取 7z 工具搜索路径列表

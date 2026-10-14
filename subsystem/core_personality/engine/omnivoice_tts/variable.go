@@ -29,6 +29,26 @@ const loadWithAlteredSearchPath = 0x0008
 // abiVersion 当前绑定的公共 ABI 版本（见 omnivoice.h 的 OV_ABI_VERSION）
 const abiVersion = 3
 
+// ==== 引擎日志 ====
+
+// logModule 引擎日志模块名（统一日志管线的模块标签）
+const logModule = "OmniVoiceTTS"
+
+// logSub 引擎日志子标签（原生库回调与 Go 侧日志共用）
+const logSub = "Engine"
+
+// 原生日志级别（对应 omnivoice.h 的 enum ov_log_level）
+const (
+	// ovLogLevelDebug 张量级诊断
+	ovLogLevelDebug = 0
+	// ovLogLevelInfo 常规加载/合成节奏
+	ovLogLevelInfo = 1
+	// ovLogLevelWarn 可恢复的异常
+	ovLogLevelWarn = 2
+	// ovLogLevelError 失败上报（同时会经 ov_last_error 暴露）
+	ovLogLevelError = 3
+)
+
 // ==== 全局状态 ====
 
 // globalEngine 全局引擎实例
@@ -80,4 +100,9 @@ var ttsProcs struct {
 	languageID uintptr
 	// languageName 对应 ov_language_name
 	languageName uintptr
+	// logSet 对应 ov_log_set（可选导出：缺失时维持原生 stderr 行为）
+	logSet uintptr
 }
+
+// ovLogCallbackPtr 引擎日志回调的函数指针（须与进程同生命周期，不可回收）
+var ovLogCallbackPtr uintptr

@@ -6,8 +6,8 @@ import { LiteImageFile } from '../capabilities/media';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
-	/** 智能体角色标签（TUI 实况屏显示） */
-	protected roleTag: string = "对话者";
+    /** 智能体角色标签（TUI 实况屏显示） */
+    protected roleTag: string = "对话者";
 
     /** 生成聊天对话 */
     public async generateDialogue(cache: ChatCache): Promise<void> {
@@ -42,7 +42,7 @@ export class DialogueRole extends ModelBuilder {
             console.error('请求处理错误:', error);
         }
         // 更新消息内容
-        this.updateMessageContent(cache);
+        GlobalConfig.finalResponse = cache.descriptionContent;
     }
     /** 格式化历史消息：图片总数≥20时先摘要再扁平化为纯文本 */
     public formatHistoricalMessages() {
@@ -210,22 +210,6 @@ export class DialogueRole extends ModelBuilder {
         // 标记有工具调用
         return hasToolCalls;
     };
-    /** 更新消息内容 */
-    protected updateMessageContent(state: ChatCache): string {
-        // 检查推理内容是否为空
-        if (state.thinkingContent.trim() !== "") {
-            /** 新的思考标签内容 */
-            const newThinkTag = '\n<think>\n' + state.thinkingContent + '\n</think>\n';
-            // 将最终消息设定为模型应答
-            GlobalConfig.finalResponse = state.descriptionContent;
-            // 打印思考标签内容
-            console.log(newThinkTag);
-        }
-        // 直接使用描述内容
-        else GlobalConfig.finalResponse = state.descriptionContent;
-        // 返回修正后的消息内容
-        return GlobalConfig.finalResponse;
-    }
     /** 构造函数 */
     public constructor(private descriptionRole: ModelBuilder) {
         super(fileView('prompts/dialogueRole.md')[0]);

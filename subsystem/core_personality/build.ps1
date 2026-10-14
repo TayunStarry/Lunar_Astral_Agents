@@ -1,11 +1,13 @@
-﻿# Core Personality - 编译脚本
+﻿# Lunar_Astral_Agents - 编译脚本
 # 统一构建「核心人格」（月华 + 琉璃 合并工程，subsystem/core_personality）：
 #   1. 图标编译（rsrc）
-#   2. 关闭运行中的 Core_Personality.exe
+#   2. 关闭运行中的 Lunar_Astral_Agents.exe
 #   3. QwenTTS / OmniVoiceTTS 引擎库按需构建（GGML → C++，产出运行时动态加载的 DLL）
 #   4. 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
 #   5. 端点自述文档生成（解析 server/variable.go 的统一路由注册表）
-#   6. CGO 编译输出 ../Core_Personality.exe
+#   6. CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe（默认 TUI 控制台版，
+#      -tags "webview tui"）；-Desktop 时输出 Lunar_Astral_Agents_Desktop.exe
+#      （走桌面版 main.go），两个产物可共存
 #
 # 注：C++ 引擎库与 TypeScript 打包均以「脚本所在目录」为基准、自身向上查找仓库根，
 #     因此可安全地被 subsystem/build.ps1 或手工从任意目录调用。
@@ -21,7 +23,11 @@ param(
     [switch]$WithTTS,
 
     # 跳过 TTS 引擎库构建（即使对应 DLL 不存在）
-    [switch]$SkipTTS
+    [switch]$SkipTTS,
+
+    # 编译桌面版（不带 tui 标签）：默认构建为 TUI 控制台版；
+    # 桌面版产物为 Lunar_Astral_Agents_Desktop.exe，可与默认产物共存
+    [switch]$Desktop
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,7 +94,11 @@ function Invoke-NativeCommand {
 # ---------- 关闭已启动的核心人格服务 ----------
 # 运行中的进程会占用输出可执行文件，且会锁住 TTS 引擎 DLL，必须先关闭
 function Stop-RunningCore {
-    $processes = Get-Process -Name "Core_Personality" -ErrorAction SilentlyContinue
+    # 默认 TUI 版与 -Desktop 版可能同时存在，两者都会占用输出文件并锁定 TTS 引擎 DLL
+    $processes = @()
+    foreach ($name in @("Lunar_Astral_Agents", "Lunar_Astral_Agents_Desktop")) {
+        $processes += Get-Process -Name $name -ErrorAction SilentlyContinue
+    }
     if (-not $processes) {
         Write-Host "未检测到运行中的核心人格服务" -ForegroundColor DarkGray
         return
@@ -107,17 +117,6 @@ function Stop-RunningCore {
 
     # 等待进程退出并释放文件句柄
     Start-Sleep -Milliseconds 500
-}
-
-# ---------- 清除目录内残留的可执行文件 ----------
-function Remove-StaleExe {
-    foreach ($name in @("Core_Personality.exe", "Core_Personality")) {
-        $staleExe = Join-Path $ScriptDir $name
-        if (Test-Path $staleExe) {
-            Remove-Item $staleExe -Force
-            Write-Host "已清除目录内残留的 $name" -ForegroundColor Green
-        }
-    }
 }
 
 # ---------- TTS 引擎库按需构建 ----------
@@ -215,7 +214,7 @@ function Invoke-EndpointDocsGenerate {
 # ---------- 编译主流程 ----------
 try {
     Write-Host ""
-    Write-Host "  Core Personality 构建 (目标: $TargetOS / $TargetArch)" -ForegroundColor Cyan
+    Write-Host "  Lunar_Astral_Agents 构建 (目标: $TargetOS / $TargetArch)" -ForegroundColor Cyan
     Write-Host ""
 
     # 编译图标
@@ -224,8 +223,15 @@ try {
     # 关闭已启动的核心人格服务
     Stop-RunningCore
 
-    # 清除目录内可能残留的可执行文件
-    Remove-StaleExe
+    # 确定本次构建目标（默认 TUI 控制台版 -tags "webview tui" → main_tui.go；
+    # -Desktop 走桌面版 main.go，使用独立产物名，与 Stop-RunningCore 的进程名一致）
+    $buildTags = "webview tui"
+    $binaryName = "Lunar_Astral_Agents.exe"
+    if ($Desktop) {
+        $buildTags = "webview"
+        $binaryName = "Lunar_Astral_Agents_Desktop.exe"
+    }
+    if ($TargetOS -ne "windows") { $binaryName = $binaryName -replace '\.exe$', '' }
 
     # 按需构建两个 TTS 引擎库（须在关闭服务之后：运行中的进程会锁住 DLL）
     Invoke-TtsLibBuildIfNeeded -Name "QwenTTS" `
@@ -252,19 +258,14 @@ try {
 
     Push-Location $ScriptDir
     try {
-        $binaryName = "Core_Personality.exe"
-        if ($TargetOS -ne "windows") { $binaryName = "Core_Personality" }
-        # 输出到仓库根目录：可执行文件按自身所在目录解析 local_data / 图标 / 模型目录，
-        # 本工程位于 subsystem/core_personality，故需上溯两级。
+        # 输出到仓库根目录：可执行文件按自身所在目录解析 local_data / 图标 / 模型目录
         $outputPath = "..\..\$binaryName"
 
-        # Windows 桌面应用：隐藏控制台窗口（启动失败经失败音效与日志提示）
         $ldflags = "-s -w"
-        # if ($TargetOS -eq "windows") { $ldflags += " -H windowsgui" }
 
         $buildArgs = @(
             "build",
-            "-tags", "webview",
+            "-tags", $buildTags,
             "-ldflags=$ldflags",
             "-trimpath",
             "-o", $outputPath
@@ -277,9 +278,9 @@ try {
     }
 
     Write-Host ""
-    Write-Host "✓ Core Personality 构建成功: $outputPath" -ForegroundColor Green
+    Write-Host "✓ Lunar_Astral_Agents 构建成功: $outputPath" -ForegroundColor Green
 }
 catch {
-    Write-Host "`n[ERROR] Core Personality 构建失败: $_" -ForegroundColor Red
+    Write-Host "`n[ERROR] Lunar_Astral_Agents 构建失败: $_" -ForegroundColor Red
     exit 1
 }

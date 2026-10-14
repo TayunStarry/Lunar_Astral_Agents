@@ -5,6 +5,7 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -264,35 +265,19 @@ func ProcessTask(task GenerateTask) {
 		return
 	}
 
-	// 创建一个更简单的输出处理器
+	// 引擎输出接入统一日志：已注入钩子（TUI）时按行切分后由 TUI 排版显示，
+	// 未注入时（桌面构建）直写终端，行为与之前一致
+	stdoutWriter := newEngineLogWriter("stdout", os.Stdout)
+	stderrWriter := newEngineLogWriter("stderr", os.Stderr)
+
 	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				output := string(buf[:n])
-				// 直接输出，让终端处理格式化
-				fmt.Print(output)
-			}
-			if err != nil {
-				break
-			}
-		}
+		_, _ = io.Copy(stdoutWriter, stdout)
+		stdoutWriter.Close()
 	}()
 
 	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := stderr.Read(buf)
-			if n > 0 {
-				output := string(buf[:n])
-				// 直接输出，让终端处理格式化
-				fmt.Fprint(os.Stderr, output)
-			}
-			if err != nil {
-				break
-			}
-		}
+		_, _ = io.Copy(stderrWriter, stderr)
+		stderrWriter.Close()
 	}()
 
 	// 等待命令完成

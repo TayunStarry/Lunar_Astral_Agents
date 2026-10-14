@@ -141,8 +141,9 @@ class LunarCoreApp {
 
 	initWebSocket() {
 		// 与电脑端保持一致：WebSocket 连接同源 /ws（HTTP 直连时为后端端口，HTTPS 代理时走代理隧道）
+		// channel=message-terminal 为该终端声明的接入频道（供控制台在线探针识别）
 		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const wsUrl = `${protocol}//${window.location.host}/ws`;
+		const wsUrl = `${protocol}//${window.location.host}/ws?channel=message-terminal`;
 		this.wsClient = new WebSocketClient(wsUrl);
 		this.wsClient.onMessage((message) => this.handleWebSocketMessage(message));
 		this.wsClient.onError((error) => { console.error('WebSocket error:', error); this.showError('连接错误，请刷新页面'); });

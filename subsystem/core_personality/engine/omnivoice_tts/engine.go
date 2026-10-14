@@ -142,7 +142,45 @@ func resolveProcs(dll windows.Handle) error {
 		}
 		*e.dst = proc
 	}
+
+	// 日志接管为可选能力：旧版引擎库未必导出 ov_log_set，
+	// 缺失时维持原生 stderr 行为，不影响引擎可用性
+	if proc, err := windows.GetProcAddress(dll, "ov_log_set"); err == nil {
+		ttsProcs.logSet = proc
+	}
 	return nil
+}
+
+// installLogCallback 接管引擎原生日志。
+// ov_log 在未注册回调时默认直写 stderr，而宿主 TUI 独占终端屏幕，
+// 这些输出会撕裂界面；注册回调后统一汇入日志管线（可在「月华 JS 日志」
+// 之外的原始日志视图查阅），既不丢诊断信息也不再污染屏幕。
+func installLogCallback() {
+	if ttsProcs.logSet == 0 {
+		return
+	}
+	if ovLogCallbackPtr == 0 {
+		ovLogCallbackPtr = syscall.NewCallback(ovLogRoute)
+	}
+	syscall.SyscallN(ttsProcs.logSet, ovLogCallbackPtr, 0)
+}
+
+// ovLogRoute 引擎日志回调：按级别路由到统一日志管线。
+// 原生库可能从任意线程调用，本函数由互斥保护且不持有引擎锁，可重入安全。
+func ovLogRoute(level uintptr, msg *byte, _ uintptr) uintptr {
+	text := cStringToGo(msg)
+	if text == "" {
+		return 0
+	}
+	switch int32(level) {
+	case ovLogLevelError:
+		logger.SubError(logModule, logSub, "%s", text)
+	case ovLogLevelWarn:
+		logger.SubWarn(logModule, logSub, "%s", text)
+	default:
+		logger.SubInfo(logModule, logSub, "%s", text)
+	}
+	return 0
 }
 
 // loadLibrary 从 modelDir 加载 omnivoice.dll 及其依赖
@@ -308,6 +346,7 @@ func freeLibrary() {
 	ttsProcs.nLanguages = 0
 	ttsProcs.languageID = 0
 	ttsProcs.languageName = 0
+	ttsProcs.logSet = 0
 }
 
 // initEngine 实际初始化流程（engineMu 写锁内调用）
@@ -315,6 +354,8 @@ func initEngine(modelDir string) error {
 	if err := loadLibrary(modelDir); err != nil {
 		return err
 	}
+	// 必须在 ov_init 之前接管日志：模型加载期的诊断输出同样不应直写终端
+	installLogCallback()
 	// 后续任一步骤失败都释放已加载的 DLL，避免失败重试累积模块引用计数
 	defer func() {
 		if globalEngine == nil {

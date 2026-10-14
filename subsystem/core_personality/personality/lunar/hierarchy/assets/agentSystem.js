@@ -1274,7 +1274,7 @@ var agentSystem = (function (exports) {
             catch (error) {
                 console.error('请求处理错误:', error);
             }
-            this.updateMessageContent(cache);
+            GlobalConfig.finalResponse = cache.descriptionContent;
         }
         formatHistoricalMessages() {
             if (this.messages.length === 0)
@@ -1401,16 +1401,6 @@ var agentSystem = (function (exports) {
             return hasToolCalls;
         }
         ;
-        updateMessageContent(state) {
-            if (state.thinkingContent.trim() !== "") {
-                const newThinkTag = '\n<think>\n' + state.thinkingContent + '\n</think>\n';
-                GlobalConfig.finalResponse = state.descriptionContent;
-                console.log(newThinkTag);
-            }
-            else
-                GlobalConfig.finalResponse = state.descriptionContent;
-            return GlobalConfig.finalResponse;
-        }
         constructor(descriptionRole) {
             super(fileView('prompts/dialogueRole.md')[0]);
             this.descriptionRole = descriptionRole;

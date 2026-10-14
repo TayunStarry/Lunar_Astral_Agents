@@ -4,8 +4,9 @@
 
 // ---------- 常量配置 ----------
 // WebSocket 连接同源地址：HTTP 直连时为后端 36789，HTTPS 代理时为代理端口（由代理隧道转发至后端）
+// channel=message-terminal 为该终端声明的接入频道（供控制台在线探针识别，且该终端不订阅引擎总线）
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws`;
+const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws?channel=message-terminal`;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_BASE_DELAY = 1500;
 const ASSISTANT_NAME = '月华';

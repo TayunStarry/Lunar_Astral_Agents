@@ -1,0 +1,6 @@
+# clangd 配置：指向 CMake 生成的编译数据库，确保标准库与 ggml 头文件正确解析
+CompileFlags:
+  CompilationDatabase: build
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None

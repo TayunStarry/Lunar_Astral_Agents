@@ -10,9 +10,16 @@ package updatepack
 type Config struct {
 	GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
 	GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名
-	GiteeToken string   `json:"gitee_token"` // Gitee 私人令牌（需 Release 写权限）
+	GiteeToken string   `json:"gitee_token"` // Gitee 私人令牌（发布必填；拉公开仓库可留空，TUI 发布时手动输入）
 	Include    []string `json:"include"`     // 打包包含的资源目录（相对 target_dir）
-	TargetDir  string   `json:"target_dir"`  // 资源根目录（发布打包源 / 拉取解压目标，默认 local_data）
+	Exclude    []string `json:"exclude"`     // 打包排除规则（空时用默认排除清单）
+	// ExcludeDirsWith 含这些文件的目录整体排除（空时默认排除含 metadata.json 的目录，
+	// 即 LTPX 工具包：与 environment_repair 的资源同步规则一致）
+	ExcludeDirsWith []string `json:"exclude_dirs_with"`
+	// BackupKeep 覆盖前备份的保留次数（拉取时每个文件覆盖前先在
+	// {target_dir}/.backup/<时间戳>/ 留存旧版本）。nil=默认 3；0 或负数=不备份
+	BackupKeep *int   `json:"backup_keep"`
+	TargetDir  string `json:"target_dir"` // 资源根目录（发布打包源 / 拉取解压目标，默认 local_data）
 }
 
 // Version 更新包版本信息（Release 列表项）

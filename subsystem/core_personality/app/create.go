@@ -82,7 +82,8 @@ func Assemble() {
 	// （ltpx_call 派发与 LTP9 插件沙箱都在琉璃桌面页面执行）。LTPX 调用发生而琉璃前端
 	// 已被关闭时，守护经唤起器重建桌面窗口，并等待其重新接入总线后再广播。
 	crystal.SetFrontendRelauncher(func() error {
-		return BrowserClient.OpenDesktopWindow(crystalWindowSpec())
+		// 重启语义：窗口可能残留死条目（Run 未返回）或页面已断连，需重载/重建
+		return BrowserClient.RestartDesktopWindow(crystalWindowSpec())
 	})
 	crystal.SetFrontendReadyProbe(func() bool {
 		return ws.Instance != nil && ws.Instance.ChannelBusCount(ws.DefaultBusChannel) > 0

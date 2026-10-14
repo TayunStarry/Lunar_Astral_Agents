@@ -4,7 +4,7 @@
 		"-variational_model": "./local_data/models/z_image_turbo/diffusion_pytorch_model.safetensors",
 		"-prompt_analysis_model": "./local_data/models/z_image_turbo/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
 		"-real_esrgan_model": "./local_data/models/z_image_turbo/4x-AnimeSharp.pth",
-		"-prompt_mmproj_model": "",
+		"-prompt_mmproj_model": null,
 		"diffusion_model": "./local_data/models/Qwen-image-2.1/qwen-image-2.1-Q4_K_M.gguf",
 		"variational_model": "./local_data/models/Qwen-image-2.1/qwen_image_2.1_vae_bf16.safetensors",
 		"prompt_analysis_model": "./local_data/models/Qwen-image-2.1/Qwen3-VL-8B-Instruct-Q4_K_M.gguf",
@@ -86,7 +86,7 @@
 		"ref_text": "",
 		"voice": "",
 		"mix": null,
-		"speed": 1.0,
+		"speed": 1,
 		"lang": "",
 		"instruct": "",
 		"seed": 0,
@@ -108,5 +108,22 @@
 			"bedrock",
 			"live2d"
 		]
+	},
+	"update_pack": {
+		"gitee_owner": "TayunStarry",
+		"gitee_repo": "lunar_astral_agents-update_package",
+		"include": [
+			"audios",
+			"multimedia/background",
+			"multimedia/icon",
+			"multimedia/placeholder",
+			"package",
+			"lunar_config.json"
+		],
+		"exclude_dirs_with": [
+			"metadata.json"
+		],
+		"backup_keep": 3,
+		"target_dir": "local_data"
 	}
 }

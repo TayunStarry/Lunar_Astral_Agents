@@ -85,7 +85,15 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 	desktopMu.Lock()
 	if _, exists := desktopWindows[spec.ID]; exists {
 		desktopMu.Unlock()
-		return FocusDesktopWindow(spec.ID)
+		if err := FocusDesktopWindow(spec.ID); err == nil {
+			return nil
+		}
+		// 已登记但句柄失效：webview 的 Run() 在窗口被关闭后可能不返回
+		// （见文件头说明），残留条目会使唤起永远聚焦到死窗口而无任何可见效果。
+		// 清除残留后走下方重建流程。
+		desktopMu.Lock()
+		delete(desktopWindows, spec.ID)
+		desktopMu.Unlock()
 	}
 	win := &desktopWindow{spec: spec}
 	desktopWindows[spec.ID] = win
@@ -160,7 +168,7 @@ func OpenDesktopWindow(spec DesktopWindowSpec) error {
 	return nil
 }
 
-// FocusDesktopWindow 将指定桌面窗口恢复并置前
+// FocusDesktopWindow 将指定桌面窗口恢复并置前；句柄已失效时返回错误
 func FocusDesktopWindow(id string) error {
 	desktopMu.Lock()
 	win, exists := desktopWindows[id]
@@ -173,8 +181,44 @@ func FocusDesktopWindow(id string) error {
 	if !exists || wv == nil {
 		return fmt.Errorf("桌面窗口 [%s] 不存在", id)
 	}
-	focusDesktopWindow(wv)
+	if !focusDesktopWindow(wv) {
+		return fmt.Errorf("桌面窗口 [%s] 句柄已失效", id)
+	}
 	return nil
+}
+
+// RestartDesktopWindow 重启桌面窗口（「重启前端」与前端守护唤起专用）：
+//   - 窗口存活：经 Dispatch 在窗口 UI 线程重载页面（重启语义要求页面重新加载，
+//     而非仅聚焦），随后还原置前；
+//   - 窗口已死（Run 未返回的残留条目）：清理登记后重建；
+//   - 未打开：直接创建。
+func RestartDesktopWindow(spec DesktopWindowSpec) error {
+	if spec.ID == "" {
+		return errors.New("桌面窗口缺少 ID")
+	}
+
+	desktopMu.Lock()
+	win, exists := desktopWindows[spec.ID]
+	var wv webview.WebView
+	if exists {
+		wv = win.wv
+	}
+	desktopMu.Unlock()
+
+	if exists && wv != nil && desktopWindowAlive(wv) {
+		if spec.URL != "" {
+			wv.Dispatch(func() { wv.Navigate(spec.URL) })
+		}
+		focusDesktopWindow(wv)
+		return nil
+	}
+	if exists {
+		// 句柄已失效：清理残留后走重建
+		desktopMu.Lock()
+		delete(desktopWindows, spec.ID)
+		desktopMu.Unlock()
+	}
+	return OpenDesktopWindow(spec)
 }
 
 // CloseDesktopWindow 关闭指定桌面窗口

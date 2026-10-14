@@ -17,6 +17,8 @@ const (
 	ltp9Module = "StarLTP"
 	// ltp9 沙箱 console 输出携带的标记（binder.go consolePrint）
 	ltp9ConsoleMark = "[console."
+	// 绘图模块的日志模块标签（multimodal_analysis/module）
+	drawModule = "MultimodalAnalysis"
 )
 
 // Install 装配统一日志处理管线（幂等）：
@@ -35,7 +37,7 @@ func Install() {
 			os.Stderr = stdoutW
 			LoggerGeneral.SetOutput(stdoutW)
 			intercepted = true
-			go scanPipeLines(stdoutR, SourceRaw)
+			go scanPipeLines(stdoutR)
 		}
 
 		// ==== LoggerGeneral 结构化日志钩子 ====
@@ -56,7 +58,7 @@ func GetRealStdout() interface{ Write([]byte) (int, error) } {
 }
 
 // scanPipeLines 逐行扫描管道内容并送入原始日志缓冲
-func scanPipeLines(r *os.File, source LogSource) {
+func scanPipeLines(r *os.File) {
 	defer r.Close()
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -70,6 +72,14 @@ func scanPipeLines(r *os.File, source LogSource) {
 			Source: "stdout",
 			Level:  "RAW",
 			Text:   line,
+		}, SourceRaw)
+	}
+	if err := scanner.Err(); err != nil {
+		pushLog(LogLine{
+			Time:   time.Now(),
+			Source: "stdout",
+			Level:  "ERROR",
+			Text:   "stdout 管道扫描异常: " + err.Error(),
 		}, SourceRaw)
 	}
 }
@@ -94,6 +104,9 @@ func routeLogRecord(level, module, sub, msg string) {
 	// ltp9 沙箱 JS 层日志（console 输出带 [console.*] 标记）
 	case module == ltp9Module && strings.Contains(msg, ltp9ConsoleMark):
 		pushLog(line, SourceLTP9JS)
+	// 绘图（sd.cpp）模块编排日志：与引擎输出合并展示于绘图引擎视图
+	case module == drawModule:
+		pushLog(line, SourceDraw)
 	}
 
 	// Go 警告与错误（独立于上面分支，原始日志不受影响）
@@ -112,6 +125,38 @@ func pushLog(line LogLine, source LogSource) {
 	}
 	storeMu.Unlock()
 	wakeTUI()
+}
+
+// PushEngineLog 绘图引擎（sd.cpp）单行日志出口：由 multimodal 模块的引擎日志钩子调用。
+// 同时并入原始日志与绘图引擎视图（与 PushTaskLog 同构）。
+func PushEngineLog(stream, line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	l := LogLine{
+		Time:   time.Now(),
+		Source: "engine",
+		Level:  classifyEngineLevel(line),
+		Module: "sd.cpp",
+		Sub:    stream,
+		Text:   line,
+	}
+	pushLog(l, SourceRaw)
+	pushLog(l, SourceDraw)
+}
+
+// classifyEngineLevel 依文本推断引擎日志级别（引擎输出无级别字段）
+func classifyEngineLevel(line string) string {
+	lower := strings.ToLower(line)
+	switch {
+	case strings.Contains(line, "ERROR"), strings.Contains(lower, "error"), strings.Contains(lower, "fail"):
+		return "ERROR"
+	case strings.Contains(line, "WARN"), strings.Contains(lower, "warn"):
+		return "WARN"
+	default:
+		return "INFO"
+	}
 }
 
 // PushTaskLog 功能子包（代理/打包/端口释放/更新包）日志统一出口：
