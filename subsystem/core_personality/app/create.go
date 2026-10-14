@@ -132,8 +132,11 @@ func OpenDesktopWindows() {
 		}
 	}
 
-	// 打开窗口后开始监视前端会话（退出判定，见函数注释）
-	go watchFrontendSessions()
+	// 打开窗口后开始监视前端会话（退出判定；tui.exit_when_frontends_closed 显式关闭时停用，
+	// 未配置时桌面构建保持「前端全关即退出」的历史行为）
+	if GeneralConfig.ExitWhenFrontendsClosed == nil || *GeneralConfig.ExitWhenFrontendsClosed {
+		go watchFrontendSessions()
+	}
 }
 
 // watchFrontendSessions 监视前端 WebSocket 会话，作为「桌面页面是否已关闭」的可靠判据。
@@ -177,20 +180,24 @@ func WaitForShutdown() {
 
 	select {
 	case <-quit:
-		LoggerGeneral.Info("CorePersonality", "接收到中断信号，正在关闭...")
+		GracefulShutdown("接收到中断信号")
 	case <-BrowserClient.DesktopWindowsClosed():
-		LoggerGeneral.Info("CorePersonality", "检测到全部桌面窗口关闭，正在关闭...")
+		GracefulShutdown("检测到全部桌面窗口关闭")
 	case <-shutdownCh:
-		LoggerGeneral.Info("CorePersonality", "检测到前端页面全部关闭，正在关闭...")
+		GracefulShutdown("检测到前端页面全部关闭")
 	}
+}
 
-	// 优雅关闭放在独立 goroutine 并设兜底超时：
-	// 卡在 webview Run() 中的窗口（见 browser_client/desktop.go 文件头）可能使
-	// Terminate / HTTP 关闭无法及时返回，超时后不再等待，交由 main 的 os.Exit(0) 收尾。
+// GracefulShutdown 优雅关闭全部子系统（TUI 构建在控制台退出后调用）：
+// 关闭顺序：桌面窗口 → HTTP 服务 → 人格层资源 → WebSocket 集线器。
+// 优雅关闭放在独立 goroutine 并设兜底超时：卡在 webview Run() 中的窗口
+// （见 browser_client/desktop.go 文件头）可能使关闭无法及时返回，超时后交由 main 的 os.Exit(0) 收尾。
+func GracefulShutdown(reason string) {
+	LoggerGeneral.Info("CorePersonality", "%s，正在关闭...", reason)
+
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		// 关闭顺序：桌面窗口 → HTTP 服务 → 人格层资源 → WebSocket 集线器
 		BrowserClient.CloseAllDesktopWindows()
 		server.Shutdown(httpServer)
 		crystal.Close()

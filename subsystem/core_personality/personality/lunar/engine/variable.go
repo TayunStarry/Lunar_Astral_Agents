@@ -11,6 +11,12 @@ import (
 // （运行时实例本身由通用模块 lunar_goja 持有）
 var runtimeMutex sync.Mutex
 
+// 月华 JS 层日志路由标签（与 TuiSystem 管线路由及 container 包 console 绑定的约定一致）
+const (
+	lunarCoreModule    = "LunarCore"
+	lunarJavaScriptSub = "JavaScript"
+)
+
 // ==== LTPX 工具链全局变量（进程内协调，无联络 URL） ====
 
 var (

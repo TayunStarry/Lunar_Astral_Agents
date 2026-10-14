@@ -31,6 +31,12 @@ const (
 	WindowCrystal = "crystal"
 )
 
+// ==== WebSocket 总线频道（与前端页面声明的 channel 参数对齐） ====
+const (
+	// lunarRendererChannel 月华消息终端渲染引擎频道
+	lunarRendererChannel = "message-terminal-renderer"
+)
+
 // ==== 桌面窗口图标（相对可执行文件目录；exe 输出在仓库根目录） ====
 const (
 	lunarIconPath   = "subsystem/core_personality/icon_lunar.ico"

@@ -20,3 +20,9 @@ var (
 // DefaultFetchTimeout fetch 未显式指定 timeout 时的默认请求超时
 // 默认 300 秒，与 lunar_astral 的 sync-fetch-timeout 默认值保持一致，可按需调整
 var DefaultFetchTimeout = 300 * time.Second
+
+// 月华 JS 层日志路由标签（与 TuiSystem 管线路由的模块/子标签约定保持一致）
+const (
+	lunarCoreModule    = "LunarCore"
+	lunarJavaScriptSub = "JavaScript"
+)

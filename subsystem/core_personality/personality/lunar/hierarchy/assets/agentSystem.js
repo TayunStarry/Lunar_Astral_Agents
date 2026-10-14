@@ -44,7 +44,8 @@ var agentSystem = (function (exports) {
     }
 
     class ModelBuilder {
-        stream = false;
+        stream = true;
+        roleTag = "月华";
         enableTools = true;
         reasoningStrength = "low";
         messages = [];
@@ -121,6 +122,7 @@ var agentSystem = (function (exports) {
             const headers = {
                 Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
                 "Content-Type": "application/json",
+                "X-Lunar-Role": this.roleTag,
             };
             const modelRequest = {
                 method: "POST",
@@ -498,6 +500,7 @@ var agentSystem = (function (exports) {
     }
 
     class PainterRole extends CreativeRoleBase {
+        roleTag = "绘制者";
         defaultExpressionPrompt = [
             '温柔的表情,开心的笑容,脸颊泛红',
             '害羞的表情,抿嘴微笑,眼神躲闪',
@@ -933,6 +936,7 @@ var agentSystem = (function (exports) {
     }
 
     class MusicianRole extends CreativeRoleBase {
+        roleTag = "演奏者";
         MAX_ITERATIONS = 4;
         MIN_MELODY_BARS = 12;
         DEFAULT_TEMPO = 100;
@@ -1249,6 +1253,7 @@ var agentSystem = (function (exports) {
 
     class DialogueRole extends ModelBuilder {
         descriptionRole;
+        roleTag = "对话者";
         async generateDialogue(cache) {
             try {
                 await LiteImageFile();
@@ -1413,6 +1418,7 @@ var agentSystem = (function (exports) {
     }
 
     class PerceiverRole extends ModelBuilder {
+        roleTag = "感知者";
         SUMMARY_THRESHOLD = 4096;
         summaryTaskTemplate = fileView('prompts/perceiverSummaryTask.md')[0];
         MAX_SEGMENTS = 8;
@@ -1752,6 +1758,7 @@ var agentSystem = (function (exports) {
     const RAG_PER_QUERY_TOP_K = 10;
     const RAG_MAX_RECORDS = 24;
     class MemorizerRole extends ModelBuilder {
+        roleTag = "记忆者";
         constructor() {
             super(fileView('prompts/memorizerRole.md')[0]);
         }

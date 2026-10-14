@@ -21,6 +21,15 @@ func SetOutput(w *os.File) {
 	stdLog = log.New(w, "", 0)
 }
 
+// SetLogHook 注册外部流式日志钩子（TUI 统一日志管线使用）。
+// 钩子在每条日志完成控制台打印与环形缓冲记录后同步回调，参数为纯文本消息
+// （未经 ANSI 色彩与 Markdown 转义）。传 nil 注销钩子。
+func SetLogHook(hook func(level, module, sub, msg string)) {
+	hookMu.Lock()
+	defer hookMu.Unlock()
+	logHookFunc = hook
+}
+
 // shouldPrint 判断是否允许输出并记录。
 // 开发者模式下打印全部日志；非开发者模式下仅打印（记录）警告、错误、致命级别日志。
 func shouldPrint(level string) bool {
@@ -36,12 +45,21 @@ func shouldPrint(level string) bool {
 	return false
 }
 
-// emit 统一输出：级别过滤 → 控制台打印（ANSI 色彩）→ 环形缓冲记录（MD 风格文本）
+// emit 统一输出：消息格式化 → 外部流式钩子（全量） → 级别过滤 → 控制台打印（ANSI 色彩）→ 环形缓冲记录（MD 风格文本）
 func emit(level, module, sub, format string, v ...any) {
+	msg := fmt.Sprintf(format, v ...)
+
+	// 外部流式钩子在级别过滤前调用：无论 devMode 与级别，TUI 管线都接收全量日志
+	hookMu.Lock()
+	hook := logHookFunc
+	hookMu.Unlock()
+	if hook != nil {
+		hook(level, module, sub, msg)
+	}
+
 	if !shouldPrint(level) {
 		return
 	}
-	msg := fmt.Sprintf(format, v...)
 	tag := module
 	if sub != "" && sub != notSub {
 		tag = module + "-" + sub

@@ -23,6 +23,8 @@ export interface AuthHeaders {
 	Authorization: `Bearer ${string}`;
 	/** 内容类型，固定为 JSON */
 	'Content-Type': 'application/json';
+	/** 智能体角色标签（TUI 实况屏显示，Go 流式桥读取） */
+	'X-Lunar-Role'?: string;
 }
 
 /** 模型消息角色类型 */

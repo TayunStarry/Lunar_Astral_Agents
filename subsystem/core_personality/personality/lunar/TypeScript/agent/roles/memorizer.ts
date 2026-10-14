@@ -41,6 +41,9 @@ interface RagRecord {
  *     总结与摘要，输出一篇硬切断 4096 的连贯摘要；该摘要不再回写记忆库。
  */
 export class MemorizerRole extends ModelBuilder {
+	/** 智能体角色标签（TUI 实况屏显示） */
+	protected roleTag: string = "记忆者";
+
 	constructor() {
 		super(fileView('prompts/memorizerRole.md')[0]);
 	}

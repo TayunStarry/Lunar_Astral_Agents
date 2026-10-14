@@ -44,4 +44,7 @@ var (
 	logMu    sync.Mutex // 保护日志环形缓冲
 	logRing  [logRingSize]LogRecord
 	logCount int // 已写入日志总数（同时作为环形缓冲写指针）
+
+	hookMu      sync.Mutex     // 保护 logHook 的并发读写
+	logHookFunc func(level, module, sub, msg string) // 外部流式日志钩子（TUI 管线注册；nil 表示未启用）
 )

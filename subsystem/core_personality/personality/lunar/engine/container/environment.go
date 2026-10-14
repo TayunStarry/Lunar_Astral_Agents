@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/eventloop"
 	"github.com/dop251/goja_nodejs/process"
 	"github.com/dop251/goja_nodejs/require"
@@ -36,8 +35,8 @@ func Init(extra func(vm *goja.Runtime)) error {
 	// 在事件循环中注册标准环境与调用方自定义函数
 	done := make(chan error, 1)
 	if !newLoop.RunOnLoop(func(vm *goja.Runtime) {
-		// 加载 console / process 模块
-		console.Enable(vm)
+		// 注入自定义 console：JS 层日志接入 LoggerGeneral 管线而非直写 stdout
+		vm.Set("console", bindLunarConsole(vm))
 		process.Enable(vm)
 
 		// 注册标准环境（fetch / getNetworkInterfaces / WebSocket）

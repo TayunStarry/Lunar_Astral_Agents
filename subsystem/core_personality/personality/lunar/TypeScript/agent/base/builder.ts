@@ -4,8 +4,10 @@ import { ToolCall } from '../../config/tool';
 
 /** 模型构建器 */
 export class ModelBuilder {
-	/** 是否启用流式响应 */
-	protected stream: boolean = false;
+	/** 是否启用流式响应（Go 侧流式桥接管 SSE，run() 仍返回完整非流式结构） */
+	protected stream: boolean = true;
+	/** 智能体角色标签（随请求头 X-Lunar-Role 提交，TUI 智能体实况屏显示） */
+	protected roleTag: string = "月华";
 	/** 是否启用工具调用 */
 	protected enableTools: boolean = true;
 	/** 推理强度 */
@@ -107,6 +109,7 @@ export class ModelBuilder {
 		const headers: AuthHeaders = {
 			Authorization: `Bearer ${encodeURIComponent(GlobalConfig.MultimodalKey)}`,
 			"Content-Type": "application/json",
+			"X-Lunar-Role": this.roleTag,
 		};
 		/** 构建模型请求 */
 		const modelRequest: ModelProtocol = {

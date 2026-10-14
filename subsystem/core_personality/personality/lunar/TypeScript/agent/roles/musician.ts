@@ -60,6 +60,8 @@ interface MusicDraft {
  * 三个声部由服务端校验小节数后自动拼装为多声部乐谱并推送前端。
  */
 export class MusicianRole extends CreativeRoleBase<MusicPieceDetail> {
+	/** 智能体角色标签（TUI 实况屏显示） */
+	protected roleTag: string = "演奏者";
 	/** 分阶段创作每阶段一次成功提交即可完成，预留一轮修正机会 */
 	protected MAX_ITERATIONS = 4;
 	/** 主旋律允许的最少小节数（保障音乐展开充分） */

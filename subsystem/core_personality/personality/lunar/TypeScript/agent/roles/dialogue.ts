@@ -6,6 +6,9 @@ import { LiteImageFile } from '../capabilities/media';
 
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
+	/** 智能体角色标签（TUI 实况屏显示） */
+	protected roleTag: string = "对话者";
+
     /** 生成聊天对话 */
     public async generateDialogue(cache: ChatCache): Promise<void> {
         try {

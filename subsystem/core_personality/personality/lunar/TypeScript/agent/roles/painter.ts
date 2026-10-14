@@ -37,6 +37,8 @@ interface AppearanceParts {
 
 /** 绘制者角色 */
 export class PainterRole extends CreativeRoleBase<PaintingDetail> {
+	/** 智能体角色标签（TUI 实况屏显示） */
+	protected roleTag: string = "绘制者";
 	/** 默认表情提示 */
 	private readonly defaultExpressionPrompt = [
 		'温柔的表情,开心的笑容,脸颊泛红',

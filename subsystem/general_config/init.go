@@ -117,6 +117,19 @@ type ModelConfig struct {
 		CharacterRenderer string `json:"character_renderer"`    // 角色渲染器：bedrock（默认）/ live2d
 		Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
 	} `json:"client"`
+	// TUI 控制台行为（tui）：仅 TUI/桌面构建读取，控制进程退出策略
+	TUI struct {
+		// 前端页面全部关闭后是否自动退出进程；未配置时桌面构建退出、TUI 构建常驻
+		ExitWhenFrontendsClosed *bool `json:"exit_when_frontends_closed,omitempty"`
+	} `json:"tui"`
+	// 更新包发布/拉取（update_pack）：仅 TUI 构建读取（Gitee Release 通道）
+	UpdatePack struct {
+		GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
+		GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名
+		GiteeToken string   `json:"gitee_token"` // Gitee 私人令牌（需 Release 读写权限）
+		Include    []string `json:"include"`     // 打包包含的资源目录（相对 target_dir）
+		TargetDir  string   `json:"target_dir"`  // 资源根目录（空时默认 local_data）
+	} `json:"update_pack"`
 }
 
 // init 加载配置文件
@@ -280,6 +293,19 @@ func init() {
 	if parameter.Client.Live2DModel != "" {
 		*Live2DModel = parameter.Client.Live2DModel
 	}
+	// ==== TUI 控制台行为（tui） ====
+	// 仅在配置文件显式给出时覆盖（nil=未配置，由构建形态决定默认值）
+	if parameter.TUI.ExitWhenFrontendsClosed != nil {
+		ExitWhenFrontendsClosed = parameter.TUI.ExitWhenFrontendsClosed
+	}
+	// ==== 更新包发布/拉取（update_pack） ====
+	UpdatePackGiteeOwner = parameter.UpdatePack.GiteeOwner
+	UpdatePackGiteeRepo = parameter.UpdatePack.GiteeRepo
+	UpdatePackGiteeToken = parameter.UpdatePack.GiteeToken
+	if parameter.UpdatePack.Include != nil {
+		UpdatePackInclude = parameter.UpdatePack.Include
+	}
+	UpdatePackTargetDir = parameter.UpdatePack.TargetDir
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
 	if parameter.Diffusion.AllowDiffusion == true {

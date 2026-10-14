@@ -4,6 +4,8 @@ import type { MediaFrameGroup } from '../../config/image';
 
 /** 感知者角色 */
 export class PerceiverRole extends ModelBuilder {
+	/** 智能体角色标签（TUI 实况屏显示） */
+	protected roleTag: string = "感知者";
 	/** 拼接理解文本超过该长度时触发客观摘要（字符数） */
 	private readonly SUMMARY_THRESHOLD = 4096;
 	/** 客观摘要任务模板（占位符 {content} 由拼接的理解文本填充） */

@@ -1,6 +1,10 @@
 package engine
 
-import "github.com/dop251/goja"
+import (
+	"strings"
+
+	"github.com/dop251/goja"
+)
 
 // IPInfo 存储IP地址信息（对应 ip-api.com 响应结构）
 type IPInfo struct {
@@ -134,4 +138,50 @@ type EngineCommand struct {
 	Source    string `json:"source"`
 	Payload   any    `json:"payload"`
 	Timestamp int64  `json:"timestamp"`
+}
+
+// ==== syncFetch 流式桥协议类型（OpenAI 兼容流式协议） ====
+
+// sseToolCall 流式 tool_calls 单个分片（按 index 聚合还原完整调用）
+type sseToolCall struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+// sseChunk SSE data 帧结构（仅取流式桥所需字段；reasoning/reasoning_content 兼容不同后端）
+type sseChunk struct {
+	Choices []struct {
+		Delta struct {
+			Role             string        `json:"role"`
+			Content          string        `json:"content"`
+			ReasoningContent string        `json:"reasoning_content"`
+			Reasoning        string        `json:"reasoning"`
+			ToolCalls        []sseToolCall `json:"tool_calls"`
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage *tokenUsage `json:"usage"`
+}
+
+// tokenUsage 模型调用的 token 用量（流式 usage 帧原文；缺失时由流式桥按文本长度估算）
+type tokenUsage struct {
+	Prompt     int64 `json:"prompt_tokens"`
+	Completion int64 `json:"completion_tokens"`
+}
+
+// toolAccum 单个流式工具调用的聚合缓冲
+type toolAccum struct {
+	id   string
+	name string
+	args strings.Builder
+}
+
+// toolCallAccumulator 按 index 聚合流式 tool_calls 分片（保持到达顺序）
+type toolCallAccumulator struct {
+	order []int
+	items map[int]*toolAccum
 }
