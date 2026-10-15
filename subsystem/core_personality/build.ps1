@@ -1,16 +1,11 @@
 ﻿# Lunar_Astral_Agents - 编译脚本
-# 统一构建「核心人格」（月华 + 琉璃 合并工程，subsystem/core_personality）：
+# 统一构建「核心人格」（月华 + 琉璃）：
 #   1. 图标编译（rsrc）
 #   2. 关闭运行中的 Lunar_Astral_Agents.exe
 #   3. QwenTTS / OmniVoiceTTS 引擎库按需构建（GGML → C++，产出运行时动态加载的 DLL）
 #   4. 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
 #   5. 端点自述文档生成（解析 server/variable.go 的统一路由注册表）
-#   6. CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe（默认 TUI 控制台版，
-#      -tags "webview tui"）；-Desktop 时输出 Lunar_Astral_Agents_Desktop.exe
-#      （走桌面版 main.go），两个产物可共存
-#
-# 注：C++ 引擎库与 TypeScript 打包均以「脚本所在目录」为基准、自身向上查找仓库根，
-#     因此可安全地被 subsystem/build.ps1 或手工从任意目录调用。
+#   6. CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
@@ -23,11 +18,7 @@ param(
     [switch]$WithTTS,
 
     # 跳过 TTS 引擎库构建（即使对应 DLL 不存在）
-    [switch]$SkipTTS,
-
-    # 编译桌面版（不带 tui 标签）：默认构建为 TUI 控制台版；
-    # 桌面版产物为 Lunar_Astral_Agents_Desktop.exe，可与默认产物共存
-    [switch]$Desktop
+    [switch]$SkipTTS
 )
 
 $ErrorActionPreference = "Stop"
@@ -92,9 +83,8 @@ function Invoke-NativeCommand {
 }
 
 # ---------- 关闭已启动的核心人格服务 ----------
-# 运行中的进程会占用输出可执行文件，且会锁住 TTS 引擎 DLL，必须先关闭
+# 运行中的进程会占用输出可执行文件，且会锁住 TTS 引擎 DLL，必须先关闭。
 function Stop-RunningCore {
-    # 默认 TUI 版与 -Desktop 版可能同时存在，两者都会占用输出文件并锁定 TTS 引擎 DLL
     $processes = @()
     foreach ($name in @("Lunar_Astral_Agents", "Lunar_Astral_Agents_Desktop")) {
         $processes += Get-Process -Name $name -ErrorAction SilentlyContinue
@@ -223,14 +213,7 @@ try {
     # 关闭已启动的核心人格服务
     Stop-RunningCore
 
-    # 确定本次构建目标（默认 TUI 控制台版 -tags "webview tui" → main_tui.go；
-    # -Desktop 走桌面版 main.go，使用独立产物名，与 Stop-RunningCore 的进程名一致）
-    $buildTags = "webview tui"
     $binaryName = "Lunar_Astral_Agents.exe"
-    if ($Desktop) {
-        $buildTags = "webview"
-        $binaryName = "Lunar_Astral_Agents_Desktop.exe"
-    }
     if ($TargetOS -ne "windows") { $binaryName = $binaryName -replace '\.exe$', '' }
 
     # 按需构建两个 TTS 引擎库（须在关闭服务之后：运行中的进程会锁住 DLL）
@@ -265,7 +248,6 @@ try {
 
         $buildArgs = @(
             "build",
-            "-tags", $buildTags,
             "-ldflags=$ldflags",
             "-trimpath",
             "-o", $outputPath

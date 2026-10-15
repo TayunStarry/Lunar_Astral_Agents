@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"LunarSubsystem/LoggerGeneral"
 )
 
@@ -31,7 +33,9 @@ func Install() {
 		// ==== stdout/stderr 管道接管 ====
 		stdoutR, stdoutW, err := os.Pipe()
 		if err == nil {
-			realStdout = os.Stdout
+			// 渲染目标：继承来的 stdout 未必可用（被重定向 / NUL / 只写句柄），
+			// 需要时改由控制台设备句柄承担（见 console.go）
+			realStdout = resolveRenderTarget()
 			realStderr = os.Stderr
 			os.Stdout = stdoutW
 			os.Stderr = stdoutW
@@ -57,9 +61,14 @@ func GetRealStdout() interface{ Write([]byte) (int, error) } {
 	return os.Stdout
 }
 
-// scanPipeLines 逐行扫描管道内容并送入原始日志缓冲
+// scanPipeLines 逐行扫描管道内容并送入原始日志缓冲。
+// 同时把每一行镜像到 {程序根}/local_data/logs/console.log：进程退出后仍有据可查
+// （含 Go 运行时的 panic 栈——它们同样经 stderr 进入本管道）。
 func scanPipeLines(r *os.File) {
 	defer r.Close()
+	consoleLog := openConsoleLog()
+	defer consoleLog.Close()
+
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -67,6 +76,8 @@ func scanPipeLines(r *os.File) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
+		// 落盘时剥掉 ANSI 着色序列：文件是给人读的，转义码只会干扰排查
+		consoleLog.WriteLine(ansi.Strip(line))
 		pushLog(LogLine{
 			Time:   time.Now(),
 			Source: "stdout",
@@ -75,6 +86,7 @@ func scanPipeLines(r *os.File) {
 		}, SourceRaw)
 	}
 	if err := scanner.Err(); err != nil {
+		consoleLog.WriteLine("stdout 管道扫描异常: " + err.Error())
 		pushLog(LogLine{
 			Time:   time.Now(),
 			Source: "stdout",

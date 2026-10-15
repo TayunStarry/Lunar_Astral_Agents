@@ -2,10 +2,10 @@ package TuiSystem
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"LunarSubsystem/TuiSystem/proxy"
 )
@@ -61,6 +61,35 @@ func (m *appModel) applyProxyFocus(idx int) {
 		} else {
 			m.proxy.inputs[i].Blur()
 		}
+	}
+}
+
+// proxyContext 标题栏上下文：绑定地址或运行状态
+func proxyContext(s proxyState) string {
+	switch {
+	case s.running:
+		return "运行中 · " + s.info.IP + ":" + strconv.Itoa(s.info.ProxyPort)
+	case s.stopping:
+		return "正在停止"
+	}
+	if len(s.ips) > 0 {
+		return "待配置 · " + s.ips[clampInt(s.ipIdx, 0, len(s.ips)-1)]
+	}
+	return "待配置 · 未检测到可用 IP"
+}
+
+// proxyKeys 代理屏键位
+func proxyKeys(s proxyState) []keyHint {
+	switch {
+	case s.running:
+		return []keyHint{kh("Esc", "停止服务并返回菜单")}
+	case s.stopping:
+		return []keyHint{kh("Esc", "返回菜单（停止完成后可重启）")}
+	}
+	return []keyHint{
+		kh("↑/↓ Tab", "切换输入框 / 绑定 IP"),
+		kh("Enter", "启动服务"),
+		kh("Esc", "返回菜单"),
 	}
 }
 
@@ -133,6 +162,7 @@ func (m appModel) updateProxy(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.proxy.errText = ""
+			m.setBusy("启动 HTTPS 代理")
 			return m, startProxyCmd(m.proxy)
 		}
 
@@ -181,48 +211,97 @@ var errInvalidPort = errPortInvalid{}
 
 type errPortInvalid struct{}
 
-func (errPortInvalid) Error() string { return "端口无效（1-65535，且前后端口不能相同）" }
+func (errPortInvalid) Error() string {
+	return "端口无效（1-65535，且前后端口不能相同）"
+}
 
 // viewProxy 代理屏渲染
 func (m appModel) viewProxy() string {
-	var body string
+	f := m.frameFor("HTTPS 代理", proxyContext(m.proxy), proxyKeys(m.proxy))
+	w, h := f.bodySize()
 
-	if m.proxy.running {
-		info := m.proxy.info
-		body = lipgloss.JoinVertical(lipgloss.Left,
-			m.statRow("后端端口", strconv.Itoa(info.BackendPort)),
-			m.statRow("代理端口", strconv.Itoa(info.ProxyPort)),
-			m.statRow("绑定 IP", info.IP),
-			m.statRow("接入地址", "https://"+info.IP+":"+strconv.Itoa(info.ProxyPort)),
-		)
-		if m.proxy.qrText != "" {
-			body += "\n\n" + m.proxy.qrText
+	var body []string
+	switch {
+	case m.proxy.running:
+		body = m.proxyRunningBody(w, h)
+	case m.proxy.stopping:
+		body = []string{
+			"",
+			"  " + selectStyle.Render(m.spinner.View()) + " " + valueStyle.Render("正在停止代理服务…"),
+			"",
+			"  " + dimStyle.Render("停止完成后可重新启动；已返回主菜单，可继续其它操作"),
 		}
-		body += "\n\n" + okStyle.Render("✓ 代理服务运行中") + "  " + dimStyle.Render("[Esc] 停止服务并返回菜单")
-		if m.proxy.progress > 0 {
-			body += "\n" + progressBar(m.proxy.progress, 30)
-		}
-	} else if m.proxy.stopping {
-		body = m.spinner.View() + " " + valueStyle.Render("正在停止代理服务…") +
-			"\n\n" + dimStyle.Render("停止完成后可重新启动（[Esc] 返回菜单）")
-	} else {
-		ipText := dimStyle.Render("（未检测到可用 IP）")
-		if len(m.proxy.ips) > 0 {
-			ipText = valueStyle.Render(m.proxy.ips[m.proxy.ipIdx]) + "  " + dimStyle.Render("[↑/↓ 在最上/最下时切换]")
-		}
-		body = labelStyle.Render("配置 WSS→WS 反向代理（手机等外部设备经 HTTPS/WSS 接入本地服务）：") + "\n\n" +
-			renderFocusField("后端端口 ", m.proxy.inputs[0], m.proxy.focus == 0) + "\n" +
-			renderFocusField("代理端口 ", m.proxy.inputs[1], m.proxy.focus == 1) + "\n" +
-			"  " + labelStyle.Render("绑定 IP   ") + ipText
-		if m.proxy.errText != "" {
-			body += "\n\n" + errStyle.Render("✗ "+m.proxy.errText)
-		} else {
-			body += "\n\n" + dimStyle.Render("[Enter] 启动服务   [↑/↓] 切换输入框/切换 IP")
-		}
+	default:
+		body = m.proxyConfigBody(w)
+	}
+	if m.proxy.errText != "" && !m.proxy.running {
+		body = withErrStrip(body, errString(m.proxy.errText), w)
+	}
+	return f.render(fitLines(body, h))
+}
+
+// errString 把已有文本包装成 error（复用错误提示条）
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+// proxyConfigBody 配置态：表单 + IP 选择
+func (m appModel) proxyConfigBody(w int) []string {
+	keyW := 10
+	boxW := minInt(w, 64)
+
+	ipText := dimStyle.Render("（未检测到可用 IP）")
+	if len(m.proxy.ips) > 0 {
+		ipIdx := clampInt(m.proxy.ipIdx, 0, len(m.proxy.ips)-1)
+		ipText = valueStyle.Render(m.proxy.ips[ipIdx]) +
+			dimStyle.Render("   ←/→ 在最上/最下时切换（共 "+strconv.Itoa(len(m.proxy.ips))+" 个）")
 	}
 
-	panel := panelStyle.Render(body)
-	header := titleStyle.Render("「 HTTPS 代理 」")
-	footer := footerStyle.Render("[Esc] " + map[bool]string{true: "停止服务", false: "返回菜单"}[m.proxy.running])
-	return header + "\n" + panel + "\n" + footer
+	form := []string{
+		fieldRow("后端端口", m.proxy.inputs[0], m.proxy.focus == 0, keyW),
+		fieldRow("代理端口", m.proxy.inputs[1], m.proxy.focus == 1, keyW),
+		"  " + dimStyle.Render(fitWidth("绑定 IP", keyW)) + ipText,
+	}
+
+	body := []string{
+		dimStyle.Render("  配置 WSS→WS 反向代理：手机等外部设备经 HTTPS/WSS 接入本地服务"),
+		"",
+	}
+	body = append(body, formBox(form, boxW)...)
+	body = append(body,
+		"",
+		"  "+dimStyle.Render("后端端口为本地服务端口，代理端口为对外端口；两者不能相同"),
+		"  "+dimStyle.Render("按 Enter 启动；启动后可扫码接入"),
+	)
+	return body
+}
+
+// proxyRunningBody 运行态：接入信息 + 二维码
+func (m appModel) proxyRunningBody(w, h int) []string {
+	info := m.proxy.info
+	keyW := 10
+	access := "https://" + info.IP + ":" + strconv.Itoa(info.ProxyPort)
+
+	left := []string{
+		sectionRule("接入信息", minInt(w, 56)),
+		"",
+		kvRow("绑定 IP", info.IP, keyW),
+		kvRow("后端端口", strconv.Itoa(info.BackendPort), keyW),
+		kvRow("代理端口", strconv.Itoa(info.ProxyPort), keyW),
+		kvRow("接入地址", access, keyW),
+		"",
+		okStyle.Render("  ✓ 代理服务运行中"),
+		dimStyle.Render("  Esc 停止服务并返回菜单"),
+	}
+
+	body := append([]string{}, left...)
+	if m.proxy.qrText != "" {
+		qr := strings.Split(strings.TrimRight(m.proxy.qrText, "\n"), "\n")
+		body = append(body, "", sectionRule("扫码接入", minInt(w, 56)), "")
+		body = append(body, centerBlock(qr, w)...)
+	}
+	if m.proxy.progress > 0 {
+		body = append(body, "", "  "+progressBar(m.proxy.progress, minInt(w-8, 40)))
+	}
+	return body
 }

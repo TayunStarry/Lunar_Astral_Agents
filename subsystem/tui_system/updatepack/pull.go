@@ -16,10 +16,12 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-// Pull 拉取更新包并解压到本地（最新 / 指定 tag / 指定 commit 哈希）
-func Pull(cfg Config, spec PullSpec) error {
+// Pull 拉取更新包并应用到本地（最新 / 指定 tag / 指定 commit 哈希）。
+// 更新包含主程序文件时不直接合并，而是返回 NeedsRestart 结果，由宿主拉起更新应用器，
+// 在进程退出、文件占用释放后完成覆盖与重启。
+func Pull(cfg Config, spec PullSpec) (PullResult, error) {
 	if err := validateConfig(cfg, false); err != nil {
-		return err
+		return PullResult{}, err
 	}
 	targetDir := resolveTargetDir(cfg)
 	reportProgress(-1)
@@ -33,19 +35,15 @@ func Pull(cfg Config, spec PullSpec) error {
 		logf("开始拉取更新包（%s，仓库 %s/%s）", label, cfg.GiteeOwner, cfg.GiteeRepo)
 		release, err := fetchRelease(cfg, spec)
 		if err != nil {
-			return err
+			return PullResult{}, err
 		}
 		// 仅识别更新包附件（发布端统一命名前缀 lunar_updatepack_）。
 		// Gitee 会为 Release 自动附加源码归档（<tag>.zip / <tag>.tar.gz），
-		// 不属于更新包，必须跳过——否则会被当作损坏的 zip 报"not a valid zip file"。
-		var assets []giteeAsset
-		for _, asset := range release.Assets {
-			if strings.HasPrefix(asset.Name, "lunar_updatepack_") {
-				assets = append(assets, asset)
-			}
-		}
+		// 共用仓库时还可能混入 LTPX 市场附件，都必须跳过——否则会被当作损坏的 zip 报
+		// "not a valid zip file"。
+		assets := updateAssets(*release)
 		if len(assets) == 0 {
-			return fmt.Errorf("Release %s 没有更新包附件（仅源码归档）", release.TagName)
+			return PullResult{}, fmt.Errorf("Release %s 没有更新包附件（仅源码归档或市场附件）", release.TagName)
 		}
 		logf("  目标版本: %s（%d 个附件）", release.TagName, len(assets))
 
@@ -53,9 +51,15 @@ func Pull(cfg Config, spec PullSpec) error {
 		// 共享 %TEMP% 平铺路径会互相覆盖/清理对方正在使用的分卷
 		tmpDir, err := os.MkdirTemp("", "lunar_updatepack_pull_")
 		if err != nil {
-			return fmt.Errorf("创建临时目录失败: %w", err)
+			return PullResult{}, fmt.Errorf("创建临时目录失败: %w", err)
 		}
-		defer func() { os.RemoveAll(tmpDir) }()
+		// 含主程序文件时临时目录移交更新器（解压覆盖后由其清理），此时不再就地删除
+		keepTmpDir := false
+		defer func() {
+			if !keepTmpDir {
+				os.RemoveAll(tmpDir)
+			}
+		}()
 
 		// 先下载全部附件再解压：7z 分卷须齐备后从起始卷一次性解压
 		var locals []string
@@ -63,7 +67,7 @@ func Pull(cfg Config, spec PullSpec) error {
 			local := filepath.Join(tmpDir, asset.Name)
 			logf("下载附件 (%d/%d): %s", i+1, len(assets), asset.Name)
 			if err := downloadFile(asset.BrowserDownloadURL, cfg.GiteeToken, local, asset.Size); err != nil {
-				return fmt.Errorf("下载附件失败: %w", err)
+				return PullResult{}, fmt.Errorf("下载附件失败: %w", err)
 			}
 			reportProgress(20 + 60*(i+1)/len(assets))
 			locals = append(locals, local)
@@ -84,27 +88,49 @@ func Pull(cfg Config, spec PullSpec) error {
 
 		if sevenZStart == "" {
 			cleanupLocals(locals)
-			return fmt.Errorf("附件中没有 7z 分卷（.7z.001）")
-		}
-
-		// 解压到暂存目录而非直接写入目标：更新包内含解压工具自身
-		// （package/archive/7z.exe 与 7z.dll），直接解压到 local_data 时
-		// 7z 需覆盖正在运行的自己 → 拒绝访问 → 致命失败（exit status 2）。
-		// 暂存目录建在目标同卷（local_data 下）：合并时用改名落位（零拷贝），
-		// 跨卷则需逐文件复制+删除（Windows 下句柄释放稍有差池即失败）。
-		staging := filepath.Join(targetDir, ".update_staging_"+time.Now().Format("20060102-150405"))
-		defer os.RemoveAll(staging)
-		logf("解压 %s（7z 分卷）", filepath.Base(sevenZStart))
-		if err := extractSevenZ(sevenZStart, staging); err != nil {
-			cleanupLocals(locals)
-			return fmt.Errorf("解压失败: %w", err)
+			return PullResult{}, fmt.Errorf("附件中没有 7z 分卷（.7z.001）")
 		}
 
 		keep := resolveBackupKeep(cfg)
+
+		// 程序文件命中检测：不解压，直接用 7z l 列出包内条目比对（命中即需走重启流程）。
+		// 命中时不在此解压合并（运行中无法覆盖自身），而是把已下载的分卷整体移交更新器：
+		// 主程序以 .7z.001 路径为参数拉起更新器后退出，更新器等文件占用释放后自行解压、
+		// 备份覆盖并重启。
+		progs, err := detectProgramFiles(sevenZStart, cfg)
+		if err != nil {
+			return PullResult{}, fmt.Errorf("检查更新包内容失败: %w", err)
+		}
+		if len(progs) > 0 {
+			keepTmpDir = true
+			logf("  更新包含主程序文件（%s），需关闭主程序后由更新器覆盖并重启", strings.Join(progs, ", "))
+			reportProgress(100)
+			return PullResult{
+				NeedsRestart: true,
+				PackPath:     sevenZStart,
+				ProgramFiles: progs,
+				BackupKeep:   keep,
+			}, nil
+		}
+
+		// 纯资源模式：解压到暂存目录而非直接写入目标——更新包内含解压工具自身
+		// （package/archive/7z.exe 与 7z.dll），直接解压到程序根目录时
+		// 7z 需覆盖正在运行的自己 → 拒绝访问 → 致命失败。暂存目录建在目标
+		// 同卷（程序根目录下）：合并时用改名落位（零拷贝），跨卷则逐文件复制+删除。
+		staging := filepath.Join(targetDir, ".update_staging_"+time.Now().Format("20060102-150405"))
+		logf("解压 %s（7z 分卷）", filepath.Base(sevenZStart))
+		if err := extractSevenZ(sevenZStart, staging); err != nil {
+			cleanupLocals(locals)
+			os.RemoveAll(staging)
+			return PullResult{}, fmt.Errorf("解压失败: %w", err)
+		}
+		cleanupLocals(locals)
+
+		// 就地合并（暂存目录随后删除）
+		defer os.RemoveAll(staging)
 		updated, skipped, err := mergeTree(staging, targetDir, keep > 0)
 		if err != nil {
-			cleanupLocals(locals)
-			return fmt.Errorf("合并更新文件失败: %w", err)
+			return PullResult{}, fmt.Errorf("合并更新文件失败: %w", err)
 		}
 		pruneBackups(targetDir, keep) // 只保留最近 keep 次备份
 		logf("  已更新 %d 个文件 → %s", updated, targetDir)
@@ -114,17 +140,19 @@ func Pull(cfg Config, spec PullSpec) error {
 			logf("  [WARN] %d 个文件未能更新（保留原文件；被占用的可关闭程序后重新拉取）: %s",
 				len(skipped), strings.Join(truncateList(skipped, 5), ", "))
 		}
-		cleanupLocals(locals)
+		logf("✓ 更新包拉取完成 → %s", targetDir)
+		reportProgress(100)
+		return PullResult{Updated: updated, Skipped: skipped, BackupKeep: keep}, nil
 
 	case PullHash:
 		hash := strings.TrimSpace(spec.Value)
 		if hash == "" {
-			return fmt.Errorf("commit 哈希为空")
+			return PullResult{}, fmt.Errorf("commit 哈希为空")
 		}
 		logf("开始拉取更新包（commit 哈希 %s，仓库 %s/%s）", hash, cfg.GiteeOwner, cfg.GiteeRepo)
 
 		// 优先：哈希 → tag → Release 附件（带 SHA 校验信息）
-		tagName, err := matchTagByHash(cfg, hash)
+		tagName, err := matchUpdateTagByHash(cfg, hash)
 		if err != nil {
 			logf("  [WARN] 标签匹配失败，改走 zipball 通道: %v", err)
 		}
@@ -142,19 +170,74 @@ func Pull(cfg Config, spec PullSpec) error {
 			query += "&access_token=" + url.QueryEscape(cfg.GiteeToken)
 		}
 		if err := downloadFile(zipballURL+query, "", local, 0); err != nil {
-			return fmt.Errorf("zipball 下载失败: %w", err)
+			return PullResult{}, fmt.Errorf("zipball 下载失败: %w", err)
 		}
 		reportProgress(70)
 		logf("解压 zipball → %s", targetDir)
 		if err := extractPack(local, targetDir); err != nil {
-			return fmt.Errorf("zipball 解压失败: %w", err)
+			return PullResult{}, fmt.Errorf("zipball 解压失败: %w", err)
 		}
 		os.Remove(local)
 	}
 
 	logf("✓ 更新包拉取完成 → %s", targetDir)
 	reportProgress(100)
-	return nil
+	return PullResult{}, nil
+}
+
+// detectProgramFiles 检测更新包内是否存在主程序文件（相对程序根目录的路径命中），
+// 返回命中的相对路径清单；非空即表示本次更新需走「关程序 → 更新器覆盖 → 重启」流程。
+// 基于 7z l 列出的包内条目比对，不落盘解压。
+func detectProgramFiles(volPath string, cfg Config) ([]string, error) {
+	entries, err := listSevenZEntries(volPath)
+	if err != nil {
+		return nil, err
+	}
+	index := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		index[e] = true
+	}
+	var hit []string
+	for _, rel := range cfg.ProgramFiles {
+		norm := filepath.ToSlash(strings.TrimSpace(rel))
+		if norm == "" {
+			continue
+		}
+		if index[norm] {
+			hit = append(hit, rel)
+		}
+	}
+	return hit, nil
+}
+
+// listSevenZEntries 用 7z l -ba -slt 列出更新包内全部条目路径（不解压）。
+// -slt 输出为结构化的 "Path = ..." 行，可完整保留含空格路径；分卷指定起始卷即可。
+// 7z 在中文 Windows 上输出为 GBK 编码，先转 UTF-8 再解析。
+func listSevenZEntries(volPath string) ([]string, error) {
+	sevenZip, err := findSevenZip()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(sevenZip, "l", "-ba", "-slt", volPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("7z 列表失败: %w（7z: %s）", err, sevenZErrorDetail(out))
+	}
+	if decoded, decErr := simplifiedchinese.GBK.NewDecoder().Bytes(out); decErr == nil {
+		out = decoded
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if s, ok := strings.CutPrefix(strings.TrimRight(line, "\r"), "Path = "); ok {
+			if s = strings.TrimSpace(s); s != "" {
+				paths = append(paths, s)
+			}
+		}
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("7z 未能列出包内条目（空包或格式异常）")
+	}
+	return paths, nil
 }
 
 // downloadFile 下载远程文件（token 可空；total>0 时上报进度）

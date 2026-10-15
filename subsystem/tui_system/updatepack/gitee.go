@@ -6,18 +6,22 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
+
+	"LunarSubsystem/TuiSystem/channel"
 )
 
 // giteeRelease Gitee Release API 响应（仅解析用到的字段）
 type giteeRelease struct {
-	ID      int64        `json:"id"`
-	TagName string       `json:"tag_name"`
-	Name    string       `json:"name"`
-	Body    string       `json:"body"`
-	Assets  []giteeAsset `json:"assets"`
-	Target  string       `json:"target_commitish"`
+	ID        int64        `json:"id"`
+	TagName   string       `json:"tag_name"`
+	Name      string       `json:"name"`
+	Body      string       `json:"body"`
+	CreatedAt string       `json:"created_at"`
+	Assets    []giteeAsset `json:"assets"`
+	Target    string       `json:"target_commitish"`
 }
 
 // giteeAsset Release 附件
@@ -94,47 +98,98 @@ func defaultBranch(cfg Config) string {
 	return "master"
 }
 
-// ListVersions 获取仓库的发布版本列表（按 API 默认顺序，通常最新在前）
+// releasesQuery 发布列表查询参数。
+//
+// 必须显式带 direction=desc：Gitee 的列表接口**默认 asc（最旧在前）**，而下面两处
+// 「取最新」都依赖「响应最新在前」。只靠参数还不够（万一对端忽略），因此拿到的列表
+// 一律再用 sortReleasesNewestFirst 自己排一遍。
+func releasesQuery(cfg Config) url.Values {
+	return tokenQuery(cfg, map[string]string{"per_page": "100", "direction": "desc"})
+}
+
+// sortReleasesNewestFirst 把发布列表排成「最新在前」。
+//
+// 这是「拉取最新却拉到旧包」的修复点：不能依赖接口返回顺序。
+func sortReleasesNewestFirst(releases []giteeRelease) {
+	sort.SliceStable(releases, func(i, j int) bool {
+		return channel.Newer(releases[i].CreatedAt, releases[i].TagName,
+			releases[j].CreatedAt, releases[j].TagName)
+	})
+}
+
+// ListVersions 获取仓库中「更新包通道」的发布版本列表（最新在前）。
+//
+// 必须过滤通道：更新包与 LTPX 应用市场共用同一仓库，未过滤会把市场包
+// 混进版本列表，选中后按 tag 拉取还会下载到工具包。
 func ListVersions(cfg Config) ([]Version, error) {
 	if err := validateConfig(cfg, false); err != nil {
 		return nil, err
 	}
-	query := tokenQuery(cfg, map[string]string{"per_page": "20"})
 	var releases []giteeRelease
-	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), query, &releases); err != nil {
+	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), releasesQuery(cfg), &releases); err != nil {
 		return nil, err
 	}
+	sortReleasesNewestFirst(releases)
 
 	versions := make([]Version, 0, len(releases))
+	skipped := 0
 	for _, r := range releases {
+		if !isUpdateRelease(r) {
+			skipped++
+			continue
+		}
 		v := Version{TagName: r.TagName, Name: r.Name, Body: r.Body}
-		if len(r.Assets) > 0 {
-			v.AssetURL = r.Assets[0].BrowserDownloadURL
+		if assets := updateAssets(r); len(assets) > 0 {
+			v.AssetURL = assets[0].BrowserDownloadURL
 			v.AssetSHA = extractSHA(r.Body)
 		}
 		versions = append(versions, v)
 	}
+	if skipped > 0 {
+		logf("  已跳过 %d 个非更新包发布（LTPX 应用市场等）", skipped)
+	}
 	return versions, nil
 }
 
-// fetchRelease 按拉取方式获取目标 Release（PullHash 走 zipball，不返回 Release）
+// fetchRelease 按拉取方式获取目标 Release（PullHash 走 zipball，不返回 Release）。
+// 取到的发布必须是更新包通道，否则报通道不符——这是「拉更新包拉到 LTPX」的拦截点。
 func fetchRelease(cfg Config, spec PullSpec) (*giteeRelease, error) {
 	switch spec.Kind {
 	case PullLatest:
-		query := tokenQuery(cfg, map[string]string{"per_page": "1"})
 		var releases []giteeRelease
-		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), query, &releases); err != nil {
+		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), releasesQuery(cfg), &releases); err != nil {
 			return nil, err
 		}
 		if len(releases) == 0 {
 			return nil, fmt.Errorf("仓库暂无发布版本")
 		}
-		return &releases[0], nil
+		// 自己排序后再取「最新且确有更新包附件」的一条：接口顺序不可信
+		//（Gitee 默认 asc，实测会把更旧的包当成最新），其间还可能夹着更新的
+		// 市场发布，或只有源码归档的空发布
+		sortReleasesNewestFirst(releases)
+		market, empty := 0, 0
+		for i := range releases {
+			r := releases[i]
+			switch {
+			case !isUpdateRelease(r):
+				market++
+			case len(updateAssets(r)) == 0:
+				empty++
+			default:
+				return &r, nil
+			}
+		}
+		return nil, fmt.Errorf("仓库中共 %d 个发布，其中 %d 个属于 LTPX 应用市场、%d 个更新包缺少附件，"+
+			"没有可用的更新包发布", len(releases), market, empty)
+
 	case PullTag:
 		query := tokenQuery(cfg, nil)
 		var release giteeRelease
 		if err := apiRequest(fmt.Sprintf("/repos/%s/%s/releases/tags/%s", cfg.GiteeOwner, cfg.GiteeRepo, url.PathEscape(spec.Value)), query, &release); err != nil {
 			return nil, fmt.Errorf("未找到 tag %s 对应的发布: %w", spec.Value, err)
+		}
+		if kind := releaseKind(release); kind != channel.Update {
+			return nil, channelMismatchError(spec.Value, kind)
 		}
 		return &release, nil
 	default:
@@ -142,8 +197,11 @@ func fetchRelease(cfg Config, spec PullSpec) (*giteeRelease, error) {
 	}
 }
 
-// matchTagByHash 在仓库 tags 中查找 commit 哈希前缀匹配的 tag 名（未命中返回空串）
-func matchTagByHash(cfg Config, hash string) (string, error) {
+// matchUpdateTagByHash 在仓库 tags 中查找「更新包通道」且 commit 哈希前缀匹配的 tag 名。
+//
+// tags 列表不带描述与附件，必须逐条回查 Release 才能判定通道；
+// 未命中更新包通道的 tag（如市场包 tag）一律跳过，返回空串表示需走 zipball 兜底。
+func matchUpdateTagByHash(cfg Config, hash string) (string, error) {
 	query := tokenQuery(cfg, map[string]string{"per_page": "100"})
 	var tags []giteeTag
 	if err := apiRequest(fmt.Sprintf("/repos/%s/%s/tags", cfg.GiteeOwner, cfg.GiteeRepo), query, &tags); err != nil {
@@ -151,9 +209,17 @@ func matchTagByHash(cfg Config, hash string) (string, error) {
 	}
 	lower := strings.ToLower(hash)
 	for _, tag := range tags {
-		if strings.HasPrefix(strings.ToLower(tag.Commit.SHA), lower) {
+		if !strings.HasPrefix(strings.ToLower(tag.Commit.SHA), lower) {
+			continue
+		}
+		release, err := fetchRelease(cfg, PullSpec{Kind: PullTag, Value: tag.Name})
+		if err != nil {
+			continue // 该 tag 无 Release 或属于其它通道
+		}
+		if isUpdateRelease(*release) {
 			return tag.Name, nil
 		}
+		logf("  跳过 tag %s（属于 LTPX 应用市场通道）", tag.Name)
 	}
 	return "", nil
 }

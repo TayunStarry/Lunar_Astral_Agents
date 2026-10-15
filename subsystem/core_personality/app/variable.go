@@ -2,10 +2,10 @@ package app
 
 import (
 	"net/http"
-	"sync"
 	"time"
 
 	"CorePersonality/server"
+	"CorePersonality/transport/ws"
 )
 
 // shutdownTimeout 优雅关闭的兜底超时。
@@ -13,17 +13,7 @@ import (
 // 超时后不再等待，由 main 的 os.Exit(0) 强制结束进程。
 const shutdownTimeout = 3 * time.Second
 
-// ==== 前端会话监视参数 ====
-
-const (
-	// sessionSampleInterval 会话数采样间隔
-	sessionSampleInterval = time.Second
-	// sessionQuietSamples 判定「页面已全部关闭」所需的连续空会话采样次数
-	// （避开刷新/导航时的瞬时断连）
-	sessionQuietSamples = 3
-)
-
-// ==== 桌面窗口标识 ====
+// ==== 桌面前端窗口标识 ====
 const (
 	// WindowLunar 月华消息终端窗口
 	WindowLunar = "lunar"
@@ -35,7 +25,7 @@ const (
 const (
 	// lunarTerminalChannel 月华消息终端（含手机端）声明的接入频道。
 	// 该终端不订阅引擎总线（bus=0），故在线判定按「频道连接数」而非「总线订阅数」统计。
-	lunarTerminalChannel = "message-terminal"
+	lunarTerminalChannel = ws.ChannelLunarTerminal
 )
 
 // ==== 桌面窗口图标（相对可执行文件目录；exe 输出在仓库根目录） ====
@@ -59,16 +49,3 @@ var httpServer *http.Server
 
 // StaticRootsProvider 两个桌面前端静态资源提供者（由人格层在装配时注入）
 var StaticRootsProvider func() server.StaticRoots
-
-// ==== 退出信号 ====
-
-// shutdownCh 进程内退出信号（前端会话全部断开等应用级触发）
-var shutdownCh = make(chan struct{})
-
-// shutdownOnce 保证退出信号只发一次
-var shutdownOnce sync.Once
-
-// notifyShutdown 请求进程退出（幂等）
-func notifyShutdown() {
-	shutdownOnce.Do(func() { close(shutdownCh) })
-}

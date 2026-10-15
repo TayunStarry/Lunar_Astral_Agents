@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"LunarSubsystem/TuiSystem/archive"
+	"LunarSubsystem/TuiSystem/channel"
 )
 
 // Publish 发布更新包：收集资源 → 打包 → 创建 Release → 上传附件。
@@ -27,19 +28,27 @@ func Publish(cfg Config, version string) error {
 	reportProgress(-1)
 	logf("开始发布更新包 %s（仓库 %s/%s）", version, cfg.GiteeOwner, cfg.GiteeRepo)
 
-	// ==== 1. 校验资源目录存在 ====
+	// ==== 1. 校验资源目录/程序文件存在 ====
+	// 打包范围 = include（资源，相对 target_dir）+ program_files（主程序，相对 target_dir）
 	targetDir := resolveTargetDir(cfg)
+	candidates := make([]string, 0, len(cfg.Include)+len(cfg.ProgramFiles))
+	candidates = append(candidates, cfg.Include...)
+	candidates = append(candidates, cfg.ProgramFiles...)
+
 	var include []string
-	for _, dir := range cfg.Include {
-		full := filepath.Join(targetDir, dir)
+	for _, rel := range candidates {
+		if strings.TrimSpace(rel) == "" {
+			continue
+		}
+		full := filepath.Join(targetDir, rel)
 		if !fileExists(full) {
-			logf("  [WARN] 资源目录不存在，跳过: %s", full)
+			logf("  [WARN] 资源/文件不存在，跳过: %s", full)
 			continue
 		}
 		include = append(include, full)
 	}
 	if len(include) == 0 {
-		return fmt.Errorf("没有可打包的资源目录（include 清单为空或全部缺失，target_dir=%s）", targetDir)
+		return fmt.Errorf("没有可打包的资源目录（include/program_files 清单为空或全部缺失，target_dir=%s）", targetDir)
 	}
 
 	// ==== 2. 打包到临时目录（统一 7z 分卷：小资源产出单个 .7z.001，大资源自动分卷） ====
@@ -55,24 +64,22 @@ func Publish(cfg Config, version string) error {
 	}()
 
 	// ==== 3. 计算各包 SHA-256 并生成 Release 描述 ====
-	var body strings.Builder
-	body.WriteString("星月智能更新包 ")
-	body.WriteString(version)
-	body.WriteString("\n\n资源目录: ")
-	body.WriteString(strings.Join(cfg.Include, ", "))
-	body.WriteString("\n")
+	// 描述采用 RELEASE.md 的精简发行说明（是什么 / 本次内容 / 怎么装 / 校验），
+	// 首行带 [UPDATE] 通道标记——与 LTPX 应用市场共用仓库时靠它判别归属。
+	shas := make(map[string]string, len(packFiles))
 	for _, f := range packFiles {
 		sum, sErr := fileSHA256(f)
 		if sErr != nil {
 			logf("  [WARN] 计算 SHA-256 失败 %s: %v", f, sErr)
 			continue
 		}
-		fmt.Fprintf(&body, "\n%s (SHA-256: %s)", filepath.Base(f), sum)
+		shas[filepath.Base(f)] = sum
 	}
+	body := buildReleaseBody(cfg, version, packFiles, shas)
 
 	// ==== 4. 创建 Release ====
 	reportProgress(10)
-	releaseID, err := createRelease(cfg, version, body.String())
+	releaseID, err := createRelease(cfg, version, body)
 	if err != nil {
 		return fmt.Errorf("创建 Release 失败: %w", err)
 	}
@@ -91,24 +98,29 @@ func Publish(cfg Config, version string) error {
 	return nil
 }
 
-// createRelease 创建 Release（幂等：已存在同名 tag 时复用）
+// createRelease 创建 Release（幂等：已存在同名 tag 且属于更新包通道时复用）。
+//
+// 复用前必须校验通道：更新包与 LTPX 应用市场共用同一仓库，若某市场包的 id
+// 恰好等于本次版本号，直接复用会把更新包附件传到市场发布上（两侧同时损坏）。
 func createRelease(cfg Config, version, body string) (int64, error) {
 	// 先探测是否已存在
 	query := urlValues("access_token", cfg.GiteeToken)
 	var existing giteeRelease
 	existPath := fmt.Sprintf("/repos/%s/%s/releases/tags/%s", cfg.GiteeOwner, cfg.GiteeRepo, version)
 	if err := apiRequest(existPath, query, &existing); err == nil && existing.ID > 0 {
-		logf("  Release %s 已存在，复用（ID=%d）", version, existing.ID)
+		if kind := releaseKind(existing); kind != channel.Update {
+			return 0, fmt.Errorf("tag %s 已被「%s」占用（Release ID=%d）：两条通道共用同一仓库，"+
+				"请改用其它版本号，或先处理该发布", version, kind, existing.ID)
+		}
+		logf("  Release %s 已存在（更新包通道），复用（ID=%d）", version, existing.ID)
 		return existing.ID, nil
 	}
 
 	payload, _ := json.Marshal(map[string]string{
-		"access_token": cfg.GiteeToken,
-		"tag_name":     version,
-		"name":         "更新包 " + version,
-		"body":         body,
-		// Gitee 要求 target_commitish 必填：动态解析默认分支
-		// （此前硬编码 master，在默认分支为 main 的仓库上创建标签失败）
+		"access_token":     cfg.GiteeToken,
+		"tag_name":         version,
+		"name":             "更新包 " + version,
+		"body":             body,
 		"target_commitish": defaultBranch(cfg),
 	})
 	resp, err := postJSON(fmt.Sprintf("/repos/%s/%s/releases", cfg.GiteeOwner, cfg.GiteeRepo), payload)
@@ -222,12 +234,27 @@ func validateConfig(cfg Config, needToken bool) error {
 	return nil
 }
 
-// resolveTargetDir 解析资源根目录（空时默认 local_data）
+// resolveTargetDir 解析资源/程序根目录（空时默认 local_data）。
+// 相对路径一律以可执行文件目录（程序根）为基准：程序可能自任意工作目录启动，
+// 若按工作目录解析，相对路径会落到用户当前目录——在「程序根目录」语义下后果严重
+// （更新会写错位置，甚至把主程序覆盖到别处）。
 func resolveTargetDir(cfg Config) string {
-	if cfg.TargetDir == "" {
-		return "local_data"
+	root := cfg.TargetDir
+	if root == "" {
+		root = "local_data"
 	}
-	return cfg.TargetDir
+	if filepath.IsAbs(root) {
+		return root
+	}
+	if exe, err := os.Executable(); err == nil {
+		if joined, err := filepath.Abs(filepath.Join(filepath.Dir(exe), root)); err == nil {
+			return joined
+		}
+	}
+	if abs, err := filepath.Abs(root); err == nil {
+		return abs
+	}
+	return root
 }
 
 // fileExists 检查文件/目录存在

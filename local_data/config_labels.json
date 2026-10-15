@@ -6,8 +6,10 @@
 	"chat": "聊天显存配置",
 	"diffusion": "图像生成配置",
 	"bridging": "QQ 桥接配置",
-	"multimodal": "多模态配置",
+	"tts": "语音合成配置",
 	"web_search": "网络搜索配置",
+	"client": "前端显示配置",
+	"release": "Gitee 发布配置",
 
 	"diffusion_model": "扩散模型",
 	"variational_model": "变分模型",
@@ -25,6 +27,7 @@
 	"multimodal_model": "多模态模型名称",
 	"multimodal_url": "多模态模型地址",
 	"multimodal_key": "多模态模型密钥",
+	"video_input": "视频解读输入模式(file/frames)",
 
 	"chat_vram_guard": "聊天显存守卫",
 	"chat_vram_guard_mib": "聊天显存守卫阈值(MiB)",
@@ -53,7 +56,17 @@
 	"bridging_group_keywords": "群聊关键词",
 	"bridging_group_trigger_probability": "无关键词时群聊的触发概率",
 
-	"video_input": "视频解读输入模式(file/frames)",
+	"engine": "语音引擎(Qwen/Kokoro/OmniVoice)",
+	"ref_audio": "参考音频路径",
+	"ref_text": "参考音频转写文本",
+	"voice": "音色名称",
+	"mix": "音色混合列表",
+	"speed": "语速倍率",
+	"lang": "语言提示",
+	"instruct": "音色属性关键词",
+	"seed": "随机种子",
+	"disable_postproc": "关闭输出后处理",
+	"idle_unload_minutes": "引擎闲置卸载阈值(分钟)",
 
 	"save_screenshots": "保存搜索截图",
 	"screenshot_dir": "截图目录",
@@ -62,5 +75,20 @@
 	"results_scroll_captures": "结果页滚动截图张数",
 	"page_scroll_captures": "单页滚动截图张数",
 	"summary_max_chars": "单页摘要字符上限",
-	"max_run_seconds": "单次运行时长上限(秒)"
+	"max_run_seconds": "单次运行时长上限(秒)",
+
+	"character_renderer": "角色渲染器(bedrock/live2d)",
+	"live2d_model": "Live2D 模型基址",
+
+	"gitee_owner": "Gitee 仓库属主",
+	"gitee_repo": "Gitee 仓库名",
+	"gitee_token": "Gitee 私人令牌(留空则发布时输入)",
+	"include": "更新包资源目录",
+	"exclude": "更新包排除规则",
+	"exclude_dirs_with": "含此文件的目录整体排除",
+	"backup_keep": "覆盖前备份保留次数",
+	"program_files": "主程序文件清单",
+	"restart_args": "重启主程序参数",
+	"target_dir": "资源/程序根目录",
+	"package_dir": "LTPX 包根目录"
 }

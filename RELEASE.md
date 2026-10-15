@@ -9,39 +9,39 @@
 
 星月智能是一个**纯本地化**的桌面 AI 智能体平台，整合多模态对话、图像生成、语音识别与语音合成等 AI 能力。无需 Python 环境或云端依赖，所有推理均在本地完成。
 
-平台由两个主程序组成：**月华**（`Lunar_Astral.exe`，AI 对话核心）与**琉璃**（`Crystal_Astral.exe`，工具集扩展系统）。
+平台以**单一主程序** `Lunar_Astral_Agents.exe` 交付：启动后进入全屏终端控制台（TUI），
+并由控制台代为打开**月华消息终端**（`/`）与**琉璃桌面**（`/desktop/`）两个前端窗口。
+控制台同时承载日志、运行状态、模型调用计量与全部运维功能（更新包 / LTPX 应用市场 / 打包归档 / 端口释放 / HTTPS 代理 / 前端管理）。
 
 ---
 
 ## 项目组成
 
-### 1. 钛宇-月华（lunar_astral）— AI 桌面智能体核心
+### 1. 钛宇-月华 — AI 桌面智能体核心
 
 **功能**：多模态 AI 角色对话（文本/图片/视频输入）、TTS 语音合成（Qwen3-TTS）、文生图（stable-diffusion.cpp）、富文本渲染（Markdown/Mermaid/ECharts/KaTeX）、智能网络搜索（agent_search）、QQ 群聊适配器（NapCat）。
 
-**运行**：`.\Lunar_Astral.exe`（默认端口 36789）。
+**运行**：随主程序启动，前端页面为 `http://127.0.0.1:36789/`（默认端口 36789）。
 
 **依赖**：WebView2 Runtime（Win11 已预装），GGUF 格式语言模型。
 
 ---
 
-### 2. 钛宇-琉璃（crystal_astral）— 工具集扩展系统
+### 2. 钛宇-琉璃 — 工具集扩展系统
 
 **功能**：文件管理、扩展包管理、SQLite 知识库、向量记忆库、多显示器截图标注、AI 代理转发（OpenAI 兼容 API）、内置 Qwen3-ASR 语音识别与 Kokoro 语音合成、LTPX 扩展包运行时（Mini/Self-LTP 页面智能体、Auto-LTP 桌面智能体、LTP3/LTP9 插件引擎）。
 
-**运行**：`.\Crystal_Astral.exe`（默认端口 36792，自动打开 WebView 窗口），AI 请求自动代理到月华后端。
+**运行**：随主程序启动，前端页面为 `http://127.0.0.1:36789/desktop/`（自动打开 WebView 窗口），AI 请求自动代理到月华后端。
 
 **依赖**：WebView2 Runtime。
 
 ---
 
-### 3. 环境修复工具（environment_repair）— 运维工具箱
+### 3. 运维功能 — 控制台内置
 
-**功能**：资源补全修复、端口占用释放、HTTPS 反向代理（自动 TLS 证书）、分卷打包归档。
+**功能**：资源更新包发布/拉取（Gitee Release）、LTPX 应用市场、分卷打包归档、端口占用释放、HTTPS 反向代理（自动 TLS 证书）、桌面前端窗口管理。
 
-**运行**：`.\Environment_Repair.exe`，交互式终端菜单。
-
-**依赖**：7z（仅打包功能需要）。
+**运行**：主程序启动后的全屏终端控制台，菜单直达（不再有独立的运维 CLI）。
 
 ---
 
@@ -90,8 +90,8 @@
 ## 快速开始
 
 1. 将 GGUF 模型放入 `local_data\models\`，语言模型编辑 `local_data\models\models.ini`，辅助模型/API 配置编辑 `local_data\lunar_config.json`。
-2. 启动核心智能体：`.\Lunar_Astral.exe`
-3. 启动扩展系统：`.\Crystal_Astral.exe`
+2. 启动主程序：`.\Lunar_Astral_Agents.exe` —— 进入全屏终端控制台，并自动打开月华与琉璃两个前端窗口。
+3. 控制台内用方向键选择功能（`z` 或 `Ctrl+C` 退出）；资源更新、LTPX 应用市场、打包归档、端口释放等均在其中。
 
 ---
 
@@ -99,10 +99,16 @@
 
 运行参数（如 `-developer` 调试模式、`-basic-port` 指定端口）与 `lunar_config.json` 的分组结构、各项默认值，详见代码文档 [Code Wiki 08 构建运行与配置](docs/code-wiki/08-构建运行与配置.md)。
 
-> **升级提示（配置分组已重排）**：`lunar_config.json` 现按 `models` / `server` / `agent` / `memory` / `chat` / `diffusion` / `bridging` / `multimodal` / `web_search`
-> 九组组织，每组职责单一。旧版本中填写在 `server` 组下的 `bridging_*`（QQ 桥接）、`allow_diffusion` 与 `image_vram_guard*` / `sd_*`（图像生成）、
+> **升级提示（配置分组已重排）**：`lunar_config.json` 现按 `models` / `server` / `agent` / `memory` / `chat` / `diffusion` / `bridging` / `tts` / `web_search` / `client` / `release` 十一组组织，每组职责单一。
+> 旧版本中填写在 `server` 组下的 `bridging_*`（QQ 桥接）、`allow_diffusion` 与 `image_vram_guard*` / `sd_*`（图像生成）、
 > `chat_vram_guard*`（聊天显存守卫）以及 `user_name` 已分别迁入 `bridging` / `diffusion` / `chat` / `agent` 组，
-> 且 `models.asr_model` 已移除。升级后请对照上述文档重新填写，否则这些项会回退默认值。
+> 且 `models.asr_model` 已移除。
+> 更新包与 LTPX 应用市场的配置已合并为统一的 `release` 分组（两者共用同一仓库）；视频解读模式由 `multimodal` 组移入 `agent.video_input`。
+> 旧节名仍可被读取并在启动时提示迁移，但建议尽快对照上述文档改用新结构。
+
+> **升级提示（只有控制台一种形态）**：程序不再提供独立的桌面版/无控制台版本，`Lunar_Astral_Agents.exe` 即
+> 全屏终端控制台，启动后由它代为打开月华与琉璃两个前端窗口（窗口全部关闭不会退出程序，可在控制台
+> 「前端页面 管理」中重新唤起）。控制台内以 `z` 或 `Ctrl+C` 退出。
 
 ---
 

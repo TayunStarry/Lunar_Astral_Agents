@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -18,20 +16,35 @@ var (
 	drawSpeedRe     = regexp.MustCompile(`([\d.]+)\s*(s/it|it/s|ms/it)`)
 )
 
-// logsState 日志视图状态（四个日志屏共用同一结构）
+// logsState 日志视图状态（多个日志屏共用同一结构）
+//
+// 不走 bubbles/viewport：日志需要「按显示宽度软折行 + 跟随/暂停 + 位置指示」
+// 三件套，自建定高行窗口反而更少意外，且与列表窗口共用同一套滚动语义。
 type logsState struct {
-	vp       viewport.Model
-	source   LogSource
-	ready    bool
-	lastSeq  int  // 上次渲染条数（增量刷新用）
-	atBottom bool // 跟随底部开关（用户上滚时暂停跟随）
+	source  LogSource
+	offset  int
+	follow  bool
+	lines   int // 当前内容行数（位置指示与滚动步长用）
+	lastSeq int // 上次构建时的日志条数
+	lastW   int // 上次构建时的折行宽度
+	cache   []string
 	// renderLine 单行渲染器（nil=按级别/来源着色；绘图引擎屏注入专用排版）
 	renderLine func(LogLine) string
 }
 
 // newLogsState 构建指定来源的日志视图
 func newLogsState(source LogSource) logsState {
-	return logsState{source: source}
+	return logsState{source: source, follow: true, lastSeq: -1}
+}
+
+// reset 丢弃缓存并要求重新构建（清空日志或重新进入日志屏时调用）
+func (s *logsState) reset() {
+	s.offset = 0
+	s.follow = true
+	s.cache = nil
+	s.lastSeq = -1
+	s.lastW = 0
+	s.lines = 0
 }
 
 // render 单行渲染：优先使用注入的专用渲染器
@@ -42,55 +55,71 @@ func (s *logsState) render(line LogLine) string {
 	return renderLogLine(line)
 }
 
-// refresh 重建视口内容（尺寸变化或首次进入时）
-func (s *logsState) refresh(width, height int) {
+// content 构建（或复用缓存的）折行后的内容行。
+// 必须同时被 Update（刷新行数供滚动计算）与 View（实际取内容）调用：
+// 只在 View 里更新的派生状态不会写回模型，按键时便看不到真实行数。
+func (s *logsState) content(width int) []string {
 	logs := GetLogs(s.source)
-	lines := make([]string, 0, len(logs))
+	if s.cache != nil && len(logs) == s.lastSeq && width == s.lastW {
+		return s.cache
+	}
+	if width < 8 {
+		width = 8
+	}
+	lines := make([]string, 0, len(logs)+1)
 	for _, line := range logs {
-		lines = append(lines, s.render(line))
+		lines = append(lines, wrapPlain(s.render(line), width)...)
 	}
 	if len(lines) == 0 {
-		lines = append(lines, dimStyle.Render("（暂无日志）"))
+		lines = append(lines, dimStyle.Render("（暂无日志：本通道还没有输出）"))
 	}
-
-	vpHeight := height - 4
-	if vpHeight < 3 {
-		vpHeight = 3
-	}
-	if !s.ready {
-		s.vp = viewport.New(width-2, vpHeight)
-		s.ready = true
-	} else {
-		s.vp.Width = width - 2
-		s.vp.Height = vpHeight
-	}
-	s.vp.SetContent(strings.Join(lines, "\n"))
-
-	// 用户滚动到底部附近时自动跟随；否则保持位置（暂停跟随便于回看）
-	s.atBottom = true
-	s.vp.GotoBottom()
+	s.cache = lines
+	s.lastSeq = len(logs)
+	s.lastW = width
+	s.lines = len(lines)
+	return s.cache
 }
 
-// updateLogs 日志屏事件（source 指定四类日志屏之一）。
+// syncViewMetrics 刷新「滚动窗口」相关的派生度量（行数）。
+// Update 与 View 共用：日志/实况这类内容的行数决定滚动上限，
+// 若只在 View 中计算，按方向键时拿到的行数会一直是 0，滚动便不会生效。
+func (m *appModel) syncViewMetrics() {
+	switch m.screen {
+	case screenRaw, screenLunarJS, screenLTP9, screenGoWarn, screenDraw:
+		w, _ := m.frameFor("", "", nil).bodySize()
+		m.logsStateOf(m.screenSource()).content(w)
+	case screenAgent:
+		w, _ := m.frameFor("", "", nil).bodySize()
+		m.agent.total = len(m.agentLines(maxInt(20, w-4)))
+	}
+}
+
+// screenSource 当前屏对应的日志来源（非日志屏返回 SourceRaw）
+func (m appModel) screenSource() LogSource {
+	switch m.screen {
+	case screenLunarJS:
+		return SourceLunarJS
+	case screenLTP9:
+		return SourceLTP9JS
+	case screenDraw:
+		return SourceDraw
+	case screenGoWarn:
+		return SourceGoWarn
+	}
+	return SourceRaw
+}
+
+// updateLogs 日志屏事件（source 指定日志屏之一）。
 // 注意：状态必须从接收者副本内取（s 指向 m 自己的字段）——若由调用方传入
-// 指向其副本的指针，视口滚动等变更会落在中间副本上，随返回值一并丢失
+// 指向其副本的指针，滚动等变更会落在中间副本上，随返回值一并丢失
 // （表现为 ↑/↓/PgUp/PgDn 按了没反应）。
 func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd) {
-	var s *logsState
-	switch source {
-	case SourceLunarJS:
-		s = &m.lunarView
-	case SourceLTP9JS:
-		s = &m.ltp9View
-	case SourceGoWarn:
-		s = &m.warnView
-	default:
-		s = &m.rawView
-	}
+	s := m.logsStateOf(source)
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+		switch key {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "esc":
@@ -98,82 +127,109 @@ func (m appModel) updateLogs(source LogSource, msg tea.Msg) (tea.Model, tea.Cmd)
 			return m, nil
 		case "c":
 			ClearLogs(s.source)
-			s.refresh(m.width, m.height)
+			s.reset()
+			m.setNotice("已清空日志缓冲", false)
 			return m, nil
-		case "home":
-			s.vp.GotoTop()
-			s.atBottom = false
-			return m, nil
-		case "end":
-			s.vp.GotoBottom()
-			s.atBottom = true
+		}
+		if next, follow, ok := scrollKey(s.offset, key, s.lines, m.bodyPage(), s.follow); ok {
+			s.offset, s.follow = next, follow
 			return m, nil
 		}
 	}
-
-	// 其余按键交给视口（up/down/pgup/pgdn）
-	prevY := s.vp.YOffset
-	var cmd tea.Cmd
-	s.vp, cmd = s.vp.Update(msg)
-	if s.vp.YOffset != prevY {
-		s.atBottom = s.vp.AtBottom()
-	}
-	// 新日志到达或视口尺寸未初始化时重建
-	if !s.ready {
-		s.refresh(m.width, m.height)
-	}
-	return m, cmd
+	return m, nil
 }
 
-// viewLogs 日志屏渲染
-func (m appModel) viewLogs(s *logsState, title string) string {
-	if !s.ready {
-		s.refresh(m.width, m.height)
-	} else {
-		// 每帧同步一次新日志（渲染期间增量追加）
-		s.syncContent()
+// logsStateOf 取指定日志屏的状态指针（指向接收者自身的字段）
+func (m *appModel) logsStateOf(source LogSource) *logsState {
+	switch source {
+	case SourceLunarJS:
+		return &m.lunarView
+	case SourceLTP9JS:
+		return &m.ltp9View
+	case SourceDraw:
+		return &m.drawView
+	case SourceGoWarn:
+		return &m.warnView
+	default:
+		return &m.rawView
 	}
-	header := titleStyle.Render("「 " + title + " 」")
-	footer := footerStyle.Render("[↑/↓/PgUp/PgDn] 滚动   [Home/End] 顶部/底部   [c] 清空   [Esc] 返回菜单")
-	return header + "\n" + s.vp.View() + "\n" + footer
 }
 
-// syncContent 将缓冲中的新日志追加进视口（全量重建代价可控：≤1000 行）
-func (s *logsState) syncContent() {
-	logs := GetLogs(s.source)
-	if len(logs) == s.lastSeq {
-		return
+// logsKeys 日志屏键位
+func logsKeys() []keyHint {
+	return []keyHint{
+		kh("↑/↓ PgUp/PgDn", "滚动"),
+		kh("Home/End", "顶部 / 底部"),
+		kh("f", "跟随开关（回看时暂停）"),
+		kh("c", "清空"),
+		kh("Esc", "返回菜单"),
 	}
-	s.lastSeq = len(logs)
-	lines := make([]string, 0, len(logs))
-	for _, line := range logs {
-		lines = append(lines, s.render(line))
+}
+
+// viewLogs 日志屏渲染：定高状态条 + 折行日志窗口
+func (m appModel) viewLogs(s *logsState, title, subtitle string) string {
+	f := m.frameFor(title, subtitle, logsKeys())
+	w, h := f.bodySize()
+
+	lines := s.content(w)
+	win, offset, info := windowLines(lines, s.offset, maxInt(1, h-1), s.follow)
+	s.offset = offset
+
+	body := append([]string{}, win...)
+	body = append(body, logStatusLine(w, info, s.follow))
+	f.status = dimStyle.Render(fmt.Sprintf("共 %d 行", info.Total))
+	return f.render(body)
+}
+
+// logStatusLine 日志窗底部状态条：位置百分比 + 跟随状态
+func logStatusLine(w int, info scrollInfo, follow bool) string {
+	pct := 100
+	if info.Total > 0 {
+		pct = clampPercent((info.Top + info.View) * 100 / info.Total)
 	}
-	if len(lines) == 0 {
-		lines = append(lines, dimStyle.Render("（暂无日志）"))
+	state := okStyle.Render("● 跟随中")
+	if !follow {
+		state = warnStyle.Render("⏸ 已暂停（f 恢复跟随）")
 	}
-	follow := s.vp.AtBottom()
-	s.vp.SetContent(strings.Join(lines, "\n"))
-	if follow {
-		s.vp.GotoBottom()
+	pos := ""
+	if info.Total > info.View {
+		pos = dimStyle.Render(fmt.Sprintf("%d-%d/%d 行 · %d%%",
+			info.Top+1, minInt(info.Top+info.View, info.Total), info.Total, pct))
 	}
+	return newRow(w, false).L("  ").R(pos, "  ", state).String()
 }
 
 // ==== 智能体实况屏 ====
 
-// agentState 智能体实况屏状态（渲染数据实时取自 GetTurns）
+// agentState 智能体实况屏状态（轮次内容实时取自 GetTurns）
 type agentState struct {
-	lastCount int
+	offset int
+	follow bool
+	total  int
+}
+
+// agentKeys 智能体实况屏键位
+func agentKeys() []keyHint {
+	return []keyHint{
+		kh("↑/↓ PgUp/PgDn", "滚动"),
+		kh("f", "跟随开关"),
+		kh("Esc", "返回菜单"),
+	}
 }
 
 // updateAgent 智能体实况屏事件
 func (m appModel) updateAgent(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
-		switch key.String() {
+		k := key.String()
+		switch k {
 		case "ctrl+c":
 			return m, tea.Quit
 		case "esc":
 			m.screen = screenMenu
+			return m, nil
+		}
+		if next, follow, ok := scrollKey(m.agent.offset, k, m.agent.total, m.bodyPage(), m.agent.follow); ok {
+			m.agent.offset, m.agent.follow = next, follow
 			return m, nil
 		}
 	}
@@ -182,83 +238,84 @@ func (m appModel) updateAgent(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // viewAgent 智能体实况屏渲染：轮次分段（思考暗色 / 输出常色 / 工具调用高亮）
 func (m appModel) viewAgent() string {
-	turns := GetTurns()
+	f := m.frameFor("核心智能 实况", "", agentKeys())
+	w, h := f.bodySize()
 
-	vpHeight := m.height - 5
-	if vpHeight < 5 {
-		vpHeight = 5
-	}
-	width := m.width - 4
-	if width < 20 {
-		width = 20
-	}
+	inner := maxInt(20, w-4)
+	lines := m.agentLines(inner)
+	m.agent.total = len(lines)
 
-	var blocks []string
-	for _, turn := range turns {
-		blocks = append(blocks, m.renderTurn(turn, width)...)
-	}
-	if len(blocks) == 0 {
-		blocks = append(blocks, dimStyle.Render("（等待月华智能体的模型调用…进行对话即可在此看到思考与输出的实时流）"))
-	}
+	win, offset, info := windowLines(lines, m.agent.offset, maxInt(1, h-1), m.agent.follow)
+	m.agent.offset = offset
 
-	vp := viewport.New(width+2, vpHeight)
-	vp.SetContent(strings.Join(blocks, "\n"))
-	vp.GotoBottom()
+	body := append([]string{}, win...)
+	state := okStyle.Render("● 跟随中")
+	if !m.agent.follow {
+		state = warnStyle.Render("⏸ 已暂停（f 恢复跟随）")
+	}
+	status := newRow(w, false).L("  ").R(dimStyle.Render(fmt.Sprintf("%d 行", info.Total)), "  ", state).String()
+	body = append(body, status)
 
-	header := titleStyle.Render("「 智能体实况 」")
-	footer := footerStyle.Render("[Esc] 返回菜单   思考流以暗色显示，输出为常色，工具调用高亮")
-	return header + "\n" + vp.View() + "\n" + footer
+	f.status = dimStyle.Render("思考暗色 · 输出常色 · 工具高亮")
+	return f.render(body)
 }
 
-// renderTurn 渲染单轮：头部 + 思考（尾部截断）+ 工具调用 + 输出（尾部截断）
-func (m appModel) renderTurn(turn *AgentTurn, width int) []string {
+// agentLines 构建实况内容行（历史轮次 + 进行中轮次）
+func (m appModel) agentLines(width int) []string {
+	turns := GetTurns()
+	var lines []string
+	for _, turn := range turns {
+		lines = append(lines, renderTurnLines(turn, width)...)
+	}
+	if len(lines) == 0 {
+		lines = append(lines,
+			"",
+			"  "+dimStyle.Render("（等待月华智能体的模型调用）"),
+			"  "+dimStyle.Render("在月华/琉璃前端发起一次对话，此处会实时显示思考、工具调用与输出。"),
+		)
+	}
+	return lines
+}
+
+// renderTurnLines 渲染单轮：头部 + 思考（尾部截断）+ 工具调用 + 输出（尾部截断）
+func renderTurnLines(turn *AgentTurn, width int) []string {
 	var lines []string
 
-	status := "…进行中"
+	status := warnStyle.Render("… 进行中")
 	if !turn.Active {
-		status = "✓完成 " + turn.FinishedAt.Format("15:04:05")
+		status = okStyle.Render("✓ 完成") + dimStyle.Render(" "+turn.FinishedAt.Format("15:04:05"))
 	}
-	lines = append(lines, roleStyle.Render("◆ "+turn.Role)+" "+dimStyle.Render(
-		turn.StartedAt.Format("15:04:05")+" · "+status))
+	head := newRow(width, false).
+		L(roleStyle.Render("◆ "+turn.Role), "  ", dimStyle.Render(turn.StartedAt.Format("15:04:05"))).
+		R(status).
+		String()
+	lines = append(lines, "", head)
 
-	// 思考区：显示尾部若干行，避免长思考刷屏（暗色渲染）
-	if turn.Thinking != "" {
-		for _, l := range wrapTail(turn.Thinking, width, 8, "💭 ") {
-			lines = append(lines, thinkStyle.Render(l))
+	// 思考区：保留尾部若干行，避免长思考刷屏（暗色渲染）
+	if s := strings.TrimRight(turn.Thinking, "\n"); s != "" {
+		for i, l := range wrapText(s, width-4, 8) {
+			prefix := "  💭 "
+			if i > 0 {
+				prefix = "     "
+			}
+			lines = append(lines, thinkStyle.Render(prefix+l))
 		}
 	}
 	// 工具调用
 	for _, tool := range turn.Tools {
-		lines = append(lines, valueStyle.Render("  ⚙ "+tool))
+		for i, l := range wrapPlain(tool, maxInt(8, width-6)) {
+			if i == 0 {
+				lines = append(lines, valueStyle.Render("  ⚙ "+l))
+			} else {
+				lines = append(lines, valueStyle.Render("     "+l))
+			}
+		}
 	}
 	// 输出区
-	if turn.Content != "" {
-		lines = append(lines, wrapTail(turn.Content, width, 12, "")...)
-	}
-	lines = append(lines, "")
-	return lines
-}
-
-// wrapTail 长文本按宽度折行并仅保留尾部 maxLines 行
-func wrapTail(text string, width, maxLines int, prefix string) []string {
-	// 归一化换行并按显示宽度粗略折行（CJK 按字符计）
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	parts := strings.Split(text, "\n")
-	var lines []string
-	for _, p := range parts {
-		runes := []rune(p)
-		for len(runes) > width-2 {
-			lines = append(lines, string(runes[:width-2]))
-			runes = runes[width-2:]
+	if s := strings.TrimRight(turn.Content, "\n"); s != "" {
+		for _, l := range wrapText(s, width-2, 14) {
+			lines = append(lines, "  "+labelStyle.Render(l))
 		}
-		lines = append(lines, string(runes))
-	}
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-		lines[0] = "…" + lines[0]
-	}
-	if prefix != "" {
-		lines[0] = prefix + lines[0]
 	}
 	return lines
 }
@@ -287,7 +344,7 @@ func renderDrawLogLine(line LogLine) string {
 	}
 }
 
-// drawProgressLine 正则友好的进度判定：形如 "10/20" / "25%" / "1.02s/it" / "3.20it/s"
+// isDrawProgressLine 进度/速度行判定
 func isDrawProgressLine(text string) bool {
 	for _, pat := range drawProgressMarks {
 		if strings.Contains(text, pat) {
@@ -369,33 +426,37 @@ func atoiSafe(s string) int {
 	return n
 }
 
-// viewDraw 绘图引擎日志屏渲染：顶部状态/进度行 + 日志视口
+// viewDraw 绘图引擎日志屏渲染：定高进度条 + 日志窗口
 func (m appModel) viewDraw() string {
-	if !m.drawView.ready {
-		m.drawView.refresh(m.width, m.height)
-	} else {
-		m.drawView.syncContent()
-	}
-
-	header := titleStyle.Render("「 绘图引擎日志 」")
+	f := m.frameFor("绘图引擎日志", "sd.cpp", logsKeys())
+	w, h := f.bodySize()
 
 	// 顶部：引擎名 + 最近一次采样进度（无进度时提示等待）
-	logs := GetLogs(SourceDraw)
-	status := labelStyle.Render("引擎: ") + valueStyle.Render("sd.cpp") + dimStyle.Render("  输出按行排版；进度/速度行亮青标注")
-	if p := parseDrawProgress(logs); p.Found {
-		status += "\n" + progressBar(p.Percent, 30)
+	strip := []string{}
+	if p := parseDrawProgress(GetLogs(SourceDraw)); p.Found {
+		line := progressBar(p.Percent, minInt(w-8, 40))
 		if p.Total > 0 {
-			status += "  " + valueStyle.Render(fmt.Sprintf("步 %d/%d", p.Step, p.Total))
+			line += "  " + valueStyle.Render(fmt.Sprintf("步 %d/%d", p.Step, p.Total))
 		}
 		if p.Speed != "" {
-			status += "  " + drawProgressStyle.Render(p.Speed)
+			line += "  " + drawProgressStyle.Render(p.Speed)
 		}
+		strip = append(strip, "  "+line)
 	} else {
-		status += "\n" + dimStyle.Render("（尚无采样进度：发起图像生成后此处实时显示）")
+		strip = append(strip, "  "+dimStyle.Render("（尚无采样进度：发起图像生成后此处实时显示）"))
 	}
 
-	footer := footerStyle.Render("[↑/↓/PgUp/PgDn] 滚动   [Home/End] 顶部/底部   [c] 清空   [Esc] 返回菜单")
-	return header + "\n" + status + "\n" + m.drawView.vp.View() + "\n" + footer
+	lines := m.drawView.content(w)
+	winH := maxInt(1, h-len(strip)-1)
+	win, offset, info := windowLines(lines, m.drawView.offset, winH, m.drawView.follow)
+	m.drawView.offset = offset
+
+	body := append([]string{}, strip...)
+	body = append(body, win...)
+	body = append(body, logStatusLine(w, info, m.drawView.follow))
+
+	f.status = dimStyle.Render(fmt.Sprintf("共 %d 行", info.Total))
+	return f.render(body)
 }
 
 // ==== 运行状态屏 ====
@@ -403,6 +464,11 @@ func (m appModel) viewDraw() string {
 // statsState 运行状态屏状态
 type statsState struct {
 	snap Snapshot
+}
+
+// statsKeys 运行状态屏键位
+func statsKeys() []keyHint {
+	return []keyHint{kh("Esc", "返回菜单")}
 }
 
 // updateStats 运行状态屏事件
@@ -416,48 +482,71 @@ func (m appModel) updateStats(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if tick, ok := msg.(statsTickMsg); ok {
-		_ = tick
+	if _, ok := msg.(statsTickMsg); ok {
 		m.stats.snap = GetSnapshot()
 		return m, tickStats()
 	}
 	return m, nil
 }
 
-// viewStats 运行状态屏渲染
+// viewStats 运行状态屏渲染：宽屏双栏（运行环境 / 模型计量）
 func (m appModel) viewStats() string {
+	f := m.frameFor("运行状态", "采样间隔 1s", statsKeys())
+	w, h := f.bodySize()
+
 	s := m.stats.snap
 	stats := s.Stats
+	keyW := 16
 
-	rows := []string{
-		m.statRow("运行时间", formatDuration(s.Uptime)),
-		m.statRow("进程 CPU", fmt.Sprintf("%.1f %%", s.CPUPercent)),
-		m.statRow("进程内存", fmt.Sprintf("%.1f MB", s.WorkingSetMB)),
-		m.statRow("Go 堆内存", fmt.Sprintf("%.1f MB", s.HeapMB)),
-		m.statRow("系统可用内存", fmt.Sprintf("%.0f MB", s.SysAvailMB)),
-		m.statRow("Goroutines", fmt.Sprintf("%d", s.Goroutines)),
+	// 宽屏双栏：左右两栏各自按栏宽生成区块线，避免分隔线被截成省略号
+	twoCol := w >= 88
+	colW, rightW := w, w
+	if twoCol {
+		colW = (w - 3) / 2
+		rightW = w - colW - 3
+	}
+
+	env := []string{
+		sectionRule("运行环境", colW),
 		"",
-		m.statRow("模型调用次数", fmt.Sprintf("%d 次", stats.Calls)),
-		m.statRow("token 消耗总量", fmt.Sprintf("%d", stats.Total())+estimateMark(stats)),
-		m.statRow("平均每次调用", fmt.Sprintf("%.0f token", stats.AvgPerCall())),
-		m.statRow("模型输出平均速度", fmt.Sprintf("%.1f token/s", stats.SpeedTokensPerSec())),
-		m.statRow("平均上下文 token", fmt.Sprintf("%.0f", stats.AvgContext())),
+		labelValue("运行时间", formatDuration(s.Uptime), keyW),
+		labelValue("进程 CPU", fmt.Sprintf("%.1f %%", s.CPUPercent), keyW),
+		labelValue("进程内存", fmt.Sprintf("%.1f MB", s.WorkingSetMB), keyW),
+		labelValue("Go 堆内存", fmt.Sprintf("%.1f MB", s.HeapMB), keyW),
+		labelValue("系统可用内存", fmt.Sprintf("%.0f MB", s.SysAvailMB), keyW),
+		labelValue("Goroutines", fmt.Sprintf("%d", s.Goroutines), keyW),
+	}
+
+	model := []string{
+		sectionRule("模型计量", rightW),
+		"",
+		labelValue("调用次数", fmt.Sprintf("%d 次", stats.Calls), keyW),
+		labelValue("token 消耗总量", fmt.Sprintf("%d", stats.Total())+estimateMark(stats), keyW),
+		labelValue("平均每次调用", fmt.Sprintf("%.0f token", stats.AvgPerCall()), keyW),
+		labelValue("输出平均速度", fmt.Sprintf("%.1f token/s", stats.SpeedTokensPerSec()), keyW),
+		labelValue("平均上下文", fmt.Sprintf("%.0f token", stats.AvgContext()), keyW),
 	}
 	if stats.LastCompletion > 0 {
-		rows = append(rows,
-			m.statRow("最近调用", fmt.Sprintf("%s · %d token · %s",
-				stats.LastCallAt.Format("15:04:05"), stats.LastCompletion, formatDuration(stats.LastDuration))))
+		model = append(model, "",
+			labelValue("最近调用", fmt.Sprintf("%s · %d token · %s",
+				stats.LastCallAt.Format("15:04:05"), stats.LastCompletion, formatDuration(stats.LastDuration)), keyW))
 	}
 
-	panel := panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
-	header := titleStyle.Render("「 运行状态 」")
-	footer := footerStyle.Render("[Esc] 返回菜单   采样间隔 1s")
-	return header + "\n" + panel + "\n" + footer
-}
-
-// statRow 状态行渲染
-func (m appModel) statRow(label, value string) string {
-	return labelStyle.Render(pad(label, 14)) + valueStyle.Render(value)
+	var body []string
+	if twoCol {
+		left := fitLines(env, h)
+		right := fitLines(model, h)
+		separator := ruleStyle.Render(" │ ")
+		body = make([]string, 0, h)
+		for i := 0; i < h; i++ {
+			body = append(body, fitWidth(left[i], colW)+separator+right[i])
+		}
+	} else {
+		body = append(body, env...)
+		body = append(body, "")
+		body = append(body, model...)
+	}
+	return f.render(body)
 }
 
 // estimateMark 存在估算调用时的标注
@@ -466,25 +555,4 @@ func estimateMark(stats ModelCallStats) string {
 		return dimStyle.Render(fmt.Sprintf("（含 %d 次估算）", stats.EstimatedCalls))
 	}
 	return ""
-}
-
-// pad 定宽填充（CJK 简单按 rune 数处理）
-func pad(s string, n int) string {
-	runes := []rune(s)
-	for len(runes) < n {
-		runes = append(runes, ' ')
-	}
-	return string(runes)
-}
-
-// formatDuration 时长格式化
-func formatDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	sec := int(d.Seconds()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm%02ds", h, m, sec)
-	}
-	return fmt.Sprintf("%dm%02ds", m, sec)
 }

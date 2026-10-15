@@ -1,5 +1,3 @@
-//go:build tui
-
 package app
 
 import (
@@ -9,7 +7,7 @@ import (
 	"LunarSubsystem/TuiSystem"
 )
 
-// WireTUIFrontendHooks 将前端在线探针与窗口唤起器注入 TUI 管理屏（仅 TUI 构建调用）：
+// WireTUIFrontendHooks 将前端在线探针与窗口唤起器注入控制台的前端管理屏：
 //   - 月华终端以 bus=0 接入并按 lunarTerminalChannel 声明频道 → 探针取该频道连接数；
 //   - 琉璃桌面以 bus=1 接入缺省频道 → 探针取该频道总线订阅数；
 //   - 唤起器复用装配层的窗口规格，重建桌面窗口（已存在时由 BrowserClient 聚焦）；

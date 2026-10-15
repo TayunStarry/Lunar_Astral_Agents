@@ -2,9 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"CorePersonality/engine/tts_router"
@@ -19,9 +16,11 @@ import (
 	"LunarSubsystem/LoggerGeneral"
 )
 
-// Assemble 装配各子系统：传输层 → 人格层 → 引擎层 → HTTP 服务。
+// Assemble 装配各子系统：传输层 → HTTP 服务 → 服务层（月华生产者 / 琉璃）→ 消费层（goja 运行时）。
 // 各层按依赖顺序初始化，跨层依赖（引擎总线发送函数、结构化消息桥接）在此注入，
 // 避免包间反向依赖，亦避免各人格包互相 import。
+// 消费层（月华智能体运行时与 LTP9 插件沙箱）的 goja 运行时排在末段启动，
+// 保证其思考循环/插件加载之时，HTTP、llama 代理、记忆库与 LTPX 协调层均已就绪。
 func Assemble() {
 	// ==== 传输层：统一 WebSocket 集线器 ====
 	ws.Instance = ws.NewHub()
@@ -95,6 +94,15 @@ func Assemble() {
 
 	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
 	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)
+
+	// ==== 消费层启动：月华智能体运行时（goja + agentSystem.js，每秒思考循环） ====
+	// 必须最后启动：思考循环一经运行即可能消费计划表等到期任务，若此时 llama 模型、
+	// 记忆库、LTP9/LTPX 协调层尚未就绪，到期任务会在依赖缺失下执行，导致 llama 代理
+	// 报错与月华智能体事件循环长时间阻塞。
+	if err := startLunarAgent(); err != nil {
+		LoggerGeneral.Fatal("CorePersonality", "月华智能体运行时启动失败: %v", err)
+	}
+	LoggerGeneral.Info("CorePersonality", "月华智能体运行时（goja）已启动")
 }
 
 // lunarWindowSpec 月华消息终端窗口规格
@@ -125,72 +133,20 @@ func crystalWindowSpec() BrowserClient.DesktopWindowSpec {
 	}
 }
 
-// OpenDesktopWindows 打开两个桌面前端窗口：月华消息终端（/）与琉璃桌面（/desktop）
-func OpenDesktopWindows() {
+// OpenFrontendWindows 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）。
+//
+// 控制台（TUI）是程序主界面，这两个窗口是它的可视化前端：窗口全部关闭不会退出程序，
+// 用户可在控制台「前端页面 管理」中重新唤起（见 tui_system 的前端管理屏）。
+func OpenFrontendWindows() {
 	for _, spec := range []BrowserClient.DesktopWindowSpec{lunarWindowSpec(), crystalWindowSpec()} {
 		if err := BrowserClient.OpenDesktopWindow(spec); err != nil {
-			LoggerGeneral.Error("CorePersonality", "桌面窗口 [%s] 打开失败: %v", spec.ID, err)
-		}
-	}
-
-	// 打开窗口后开始监视前端会话（退出判定；tui.exit_when_frontends_closed 显式关闭时停用，
-	// 未配置时桌面构建保持「前端全关即退出」的历史行为）
-	if GeneralConfig.ExitWhenFrontendsClosed == nil || *GeneralConfig.ExitWhenFrontendsClosed {
-		go watchFrontendSessions()
-	}
-}
-
-// watchFrontendSessions 监视前端 WebSocket 会话，作为「桌面页面是否已关闭」的可靠判据。
-//
-// 为何不能只依赖窗口关闭事件：实测 webview_go 在当前环境下，窗口被关闭后其
-// `Run()` 可能不返回（窗口与渲染进程确已销毁，事件循环却不退出），
-// 只按 Run() 计数将永远等不到「全部窗口关闭」，表现为「窗口全关而服务端不退」。
-//
-// 而前端页面与后端的 /ws 长连接是可靠可观测的：全部页面关闭后连接数必然归零。
-// 为避免刷新/导航造成瞬时归零误判，需「曾有过连接（armed）」且连续多次采样为空才判定关闭。
-func watchFrontendSessions() {
-	armed := false
-	quiet := 0
-	for {
-		time.Sleep(sessionSampleInterval)
-		if ws.Instance == nil {
-			continue
-		}
-		if count := ws.Instance.ClientCount(); count > 0 {
-			armed = true
-			quiet = 0
-			continue
-		}
-		// 从未有过前端连接（如无窗口的运行模式）时不作判定
-		if !armed {
-			continue
-		}
-		quiet++
-		if quiet >= sessionQuietSamples {
-			LoggerGeneral.Info("CorePersonality", "全部前端页面已关闭（WebSocket 会话归零并持续 %d 次采样），触发退出", quiet)
-			notifyShutdown()
-			return
+			LoggerGeneral.Error("CorePersonality", "前端窗口 [%s] 打开失败: %v", spec.ID, err)
 		}
 	}
 }
 
-// WaitForShutdown 阻塞等待退出信号（系统信号或任一桌面窗口关闭）并优雅关闭
-func WaitForShutdown() {
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case <-quit:
-		GracefulShutdown("接收到中断信号")
-	case <-BrowserClient.DesktopWindowsClosed():
-		GracefulShutdown("检测到全部桌面窗口关闭")
-	case <-shutdownCh:
-		GracefulShutdown("检测到前端页面全部关闭")
-	}
-}
-
-// GracefulShutdown 优雅关闭全部子系统（TUI 构建在控制台退出后调用）：
-// 关闭顺序：桌面窗口 → HTTP 服务 → 人格层资源 → WebSocket 集线器。
+// GracefulShutdown 优雅关闭全部子系统（控制台退出后由 main 调用）：
+// 关闭顺序：前端窗口 → HTTP 服务 → 人格层资源 → WebSocket 集线器。
 // 优雅关闭放在独立 goroutine 并设兜底超时：卡在 webview Run() 中的窗口
 // （见 browser_client/desktop.go 文件头）可能使关闭无法及时返回，超时后交由 main 的 os.Exit(0) 收尾。
 func GracefulShutdown(reason string) {

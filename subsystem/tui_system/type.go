@@ -78,14 +78,14 @@ type AgentTurn struct {
 
 // ModelCallStats 模型调用累计计量
 type ModelCallStats struct {
-	Calls            int64         `json:"calls"`              // 调用次数
-	PromptTokens     int64         `json:"prompt_tokens"`      // 上下文 token 累计
-	CompletionTokens int64         `json:"completion_tokens"`  // 输出 token 累计
-	GenerationNanos  int64         `json:"generation_nanos"`   // 生成耗时累计（纳秒）
-	EstimatedCalls   int64         `json:"estimated_calls"`    // 使用估算的调用次数
-	LastCallAt       time.Time     `json:"last_call_at"`       // 最近一次调用时刻
-	LastDuration     time.Duration `json:"last_duration"`      // 最近一次生成耗时
-	LastCompletion   int64         `json:"last_completion"`    // 最近一次输出 token
+	Calls            int64         `json:"calls"`             // 调用次数
+	PromptTokens     int64         `json:"prompt_tokens"`     // 上下文 token 累计
+	CompletionTokens int64         `json:"completion_tokens"` // 输出 token 累计
+	GenerationNanos  int64         `json:"generation_nanos"`  // 生成耗时累计（纳秒）
+	EstimatedCalls   int64         `json:"estimated_calls"`   // 使用估算的调用次数
+	LastCallAt       time.Time     `json:"last_call_at"`      // 最近一次调用时刻
+	LastDuration     time.Duration `json:"last_duration"`     // 最近一次生成耗时
+	LastCompletion   int64         `json:"last_completion"`   // 最近一次输出 token
 }
 
 // Total 消耗总量（prompt + completion）
@@ -119,11 +119,11 @@ func (s ModelCallStats) SpeedTokensPerSec() float64 {
 
 // Snapshot 运行状态快照（运行状态屏渲染数据源）
 type Snapshot struct {
-	Uptime       time.Duration  `json:"uptime"`        // 运行时间
-	CPUPercent   float64        `json:"cpu_percent"`   // 进程 CPU 占用（%）
-	WorkingSetMB float64        `json:"working_set_mb"`// 进程工作集内存（MB）
-	HeapMB       float64        `json:"heap_mb"`       // Go 堆占用（MB）
-	SysAvailMB   float64        `json:"sys_avail_mb"`  // 系统可用物理内存（MB）
-	Goroutines   int            `json:"goroutines"`    // goroutine 数量
-	Stats        ModelCallStats `json:"stats"`         // 模型调用计量
+	Uptime       time.Duration  `json:"uptime"`         // 运行时间
+	CPUPercent   float64        `json:"cpu_percent"`    // 进程 CPU 占用（%）
+	WorkingSetMB float64        `json:"working_set_mb"` // 进程工作集内存（MB）
+	HeapMB       float64        `json:"heap_mb"`        // Go 堆占用（MB）
+	SysAvailMB   float64        `json:"sys_avail_mb"`   // 系统可用物理内存（MB）
+	Goroutines   int            `json:"goroutines"`     // goroutine 数量
+	Stats        ModelCallStats `json:"stats"`          // 模型调用计量
 }

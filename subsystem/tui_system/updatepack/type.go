@@ -19,7 +19,25 @@ type Config struct {
 	// BackupKeep 覆盖前备份的保留次数（拉取时每个文件覆盖前先在
 	// {target_dir}/.backup/<时间戳>/ 留存旧版本）。nil=默认 3；0 或负数=不备份
 	BackupKeep *int   `json:"backup_keep"`
-	TargetDir  string `json:"target_dir"` // 资源根目录（发布打包源 / 拉取解压目标，默认 local_data）
+	TargetDir  string `json:"target_dir"` // 资源根目录 / 程序根目录（发布打包源 / 拉取解压目标，默认 local_data）
+	// ProgramFiles 主程序文件清单（相对 target_dir，如 Lunar_Astral_Agents.exe）：
+	// 发布时纳入更新包；拉取时命中即走「关闭主程序 → 应用器覆盖 → 重启」流程
+	ProgramFiles []string `json:"program_files"`
+	// RestartArgs 重启主程序时携带的命令行参数
+	RestartArgs []string `json:"restart_args"`
+}
+
+// PullResult 拉取结果。NeedsRestart 为真表示更新包含主程序文件：
+// 已下载的分卷（7z.001 起始卷）未解压、未被合并，宿主须以该路径为参数拉起更新器
+// 并退出本进程，由更新器等待文件占用释放后自行解压覆盖并重启（PackPath 所在临时
+// 目录交由更新器接管，含全部分卷，勿删）。
+type PullResult struct {
+	Updated      int      // 已直接合并（资源模式）的文件数
+	Skipped      []string // 未能更新的文件（被占用/失败）
+	NeedsRestart bool     // 是否需关闭主程序后由更新器覆盖并重启
+	PackPath     string   // 更新包 7z 分卷起始卷（.7z.001）路径（NeedsRestart 时非空）
+	ProgramFiles []string // 需等待解锁的主程序文件（相对程序根目录）
+	BackupKeep   int      // 备份保留次数（交由更新器使用）
 }
 
 // Version 更新包版本信息（Release 列表项）

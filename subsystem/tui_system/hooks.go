@@ -1,6 +1,7 @@
 package TuiSystem
 
 import (
+	"LunarSubsystem/TuiSystem/ltpxmarket"
 	"LunarSubsystem/TuiSystem/updatepack"
 )
 
@@ -31,4 +32,21 @@ func SetUpdatePackConfig(cfg *updatepack.Config) {
 // GetUpdatePackConfig 读取更新包配置
 func GetUpdatePackConfig() *updatepack.Config {
 	return updatePackCfg
+}
+
+// ==== 应用市场配置注入 ====
+
+var (
+	// marketCfg 应用市场配置（宿主从 lunar_config.json 读取注入）
+	marketCfg *ltpxmarket.Config
+)
+
+// SetMarketConfig 注入应用市场配置（nil 表示未配置，市场屏会提示）
+func SetMarketConfig(cfg *ltpxmarket.Config) {
+	marketCfg = cfg
+}
+
+// GetMarketConfig 读取应用市场配置
+func GetMarketConfig() *ltpxmarket.Config {
+	return marketCfg
 }

@@ -23,7 +23,8 @@
 		"embedding_key": null,
 		"multimodal_model": "system-multimodal",
 		"multimodal_url": "http://127.0.0.1:36789/v1",
-		"multimodal_key": null
+		"multimodal_key": null,
+		"video_input": "file"
 	},
 	"memory": {
 		"embedding_model": "system-embedding",
@@ -72,9 +73,6 @@
 		],
 		"bridging_group_trigger_probability": 0.2
 	},
-	"multimodal": {
-		"video_input": "file"
-	},
 	"tts": {
 		"engine": "Qwen",
 		"-enumerate": [
@@ -90,7 +88,8 @@
 		"lang": "",
 		"instruct": "",
 		"seed": 0,
-		"disable_postproc": false
+		"disable_postproc": false,
+		"idle_unload_minutes": 5
 	},
 	"web_search": {
 		"save_screenshots": false,
@@ -109,21 +108,28 @@
 			"live2d"
 		]
 	},
-	"update_pack": {
+	"release": {
 		"gitee_owner": "TayunStarry",
 		"gitee_repo": "lunar_astral_agents-update_package",
 		"include": [
-			"audios",
-			"multimedia/background",
-			"multimedia/icon",
-			"multimedia/placeholder",
-			"package",
-			"lunar_config.json"
+			"local_data/audios",
+			"local_data/multimedia/background",
+			"local_data/multimedia/icon",
+			"local_data/multimedia/placeholder",
+			"local_data/package",
+			"local_data/tools",
+			"local_data/lunar_config.json"
+		],
+		"program_files": [
+			"Lunar_Astral_Agents.exe",
+			"Lunar_Update_Applier.exe"
 		],
 		"exclude_dirs_with": [
 			"metadata.json"
 		],
 		"backup_keep": 3,
-		"target_dir": "local_data"
+		"restart_args": [],
+		"target_dir": ".",
+		"package_dir": "local_data/package"
 	}
 }

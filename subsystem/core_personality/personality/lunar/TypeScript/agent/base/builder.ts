@@ -4,8 +4,6 @@ import { ToolCall } from '../../config/tool';
 
 /** 模型构建器 */
 export class ModelBuilder {
-	/** 是否启用流式响应（Go 侧流式桥接管 SSE，run() 仍返回完整非流式结构） */
-	protected stream: boolean = true;
 	/** 智能体角色标签（随请求头 X-Lunar-Role 提交，TUI 智能体实况屏显示） */
 	protected roleTag: string = "月华";
 	/** 是否启用工具调用 */
@@ -93,7 +91,7 @@ export class ModelBuilder {
 		const requestBody = {
 			model: GlobalConfig.MultimodalName,
 			messages: rawMessages,
-			stream: this.stream,
+			stream: true,
 			tools: toolCall,
 			tool_choice: 'auto',
 			chat_template_kwargs: {

@@ -5,9 +5,17 @@ import (
 	"fmt"
 
 	ttsrouter "CorePersonality/engine/tts_router"
+	"CorePersonality/transport/ws"
+	proxy "LunarSubsystem/TuiSystem/proxy"
 
 	"github.com/dop251/goja"
 )
+
+// lunarFrontendOnline 月华前端在线探测：消息终端频道（桌面端/手机端共用）
+// 存在任一 WebSocket 连接即视为在线。
+func lunarFrontendOnline() bool {
+	return ws.Instance != nil && ws.Instance.ChannelClientCount(ws.ChannelLunarTerminal) > 0
+}
 
 // textToSpeech 适配TypeScript调用的文本转语音功能
 // 接收文本参数，经统一 TTS 路由（按 tts.engine 配置选择引擎）合成音频，
@@ -21,6 +29,14 @@ func (class *Runtime) textToSpeech(call goja.FunctionCall) goja.Value {
 	text, ok := call.Argument(0).Export().(string)
 	if !ok || text == "" {
 		return class.runtime.ToValue([]any{"", fmt.Errorf("文本内容不能为空")})
+	}
+
+	// 音频消费方探测：本地前端经 /ws 直连、远程前端经 HTTPS 代理接入，
+	// 两者皆不在线时音频无人消费，跳过合成流程仅推送文本
+	// （调用方对合成失败已有降级：语音为空时照常推送文本内容）
+	if !lunarFrontendOnline() && !proxy.IsRunning() {
+		logger.SubInfo("LunarCore", "TTS", "前端不在线且HTTPS代理未启用，跳过合成（仅推送文本）")
+		return class.runtime.ToValue([]any{"", fmt.Errorf("月华前端不在线且HTTPS代理未启用，跳过TTS合成")})
 	}
 
 	// 解析可选参数（采样控制仅 Qwen 引擎生效，其余引擎忽略）

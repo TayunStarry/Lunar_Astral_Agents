@@ -132,11 +132,11 @@ func TestBroadcastBusIsolatesChannels(t *testing.T) {
 // TestRequestChannelDefaulting 频道声明解析：未声明时归入默认频道
 func TestRequestChannelDefaulting(t *testing.T) {
 	cases := map[string]string{
-		"/ws":                                       DefaultBusChannel,
-		"/ws?bus=1":                                 DefaultBusChannel,
-		"/ws?channel=message-terminal-renderer":     "message-terminal-renderer",
-		"/write/engine?channel=lunar-engine-bus":    "lunar-engine-bus",
-		"/write/engine?channel=%20%20":              DefaultBusChannel,
+		"/ws":                                    DefaultBusChannel,
+		"/ws?bus=1":                              DefaultBusChannel,
+		"/ws?channel=message-terminal-renderer":  "message-terminal-renderer",
+		"/write/engine?channel=lunar-engine-bus": "lunar-engine-bus",
+		"/write/engine?channel=%20%20":           DefaultBusChannel,
 	}
 	for target, want := range cases {
 		req := httptest.NewRequest(http.MethodGet, target, nil)

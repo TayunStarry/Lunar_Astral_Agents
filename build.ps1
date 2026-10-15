@@ -1,4 +1,19 @@
-﻿# Lunar Astral Agents - 统一构建脚本
+﻿# Lunar Astral Agents - 统一构建脚本（仓库根目录）
+#
+# 构建目标：
+#   1. subsystem/core_personality  核心人格（月华 + 琉璃合并工程）
+#        ├─ 图标编译（rsrc）
+#        ├─ 关闭运行中的主程序（释放输出文件与 TTS 引擎 DLL 占用）
+#        ├─ TTS 引擎库按需构建（qwen_tts / omnivoice_tts → 运行时 DLL）
+#        ├─ 月华智能体 TypeScript 打包（tsc + rollup → agentSystem.js）
+#        ├─ 端点自述文档生成（server/variable.go 统一路由注册表）
+#        └─ CGO 编译输出到仓库根目录：Lunar_Astral_Agents.exe
+#   2. subsystem/ltp9_keygen      LTP9 权限密钥生成器 → subsystem/LTP9Keygen.exe
+#   3. subsystem/update_applier   更新器 → Lunar_Update_Applier.exe（仓库根目录，与主程序同层）
+#
+# 各子构建脚本自身向上查找仓库根，可被本脚本或手工从任意目录调用。
+#
+# 用法: .\build.ps1 [-TargetOS windows|linux|darwin] [-TargetArch amd64|arm64]
 
 param(
     [ValidateSet("windows", "linux", "darwin")]
@@ -9,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptRoot = $PSScriptRoot   # 本脚本位于仓库根目录
 
 # 载入共享构建辅助（Go 工具链定位）
 $repoRoot = $ScriptRoot
@@ -138,17 +153,14 @@ try {
     # 阶段 2: 编译项目
     Write-Host "--- 阶段 2: 项目编译 ---" -ForegroundColor Yellow
 
-    Invoke-Build -Path "$ScriptRoot\environment_repair" -Name "Environment Repair"
+    # 核心人格（月华 + 琉璃 + 运维工具箱合并工程）：单服务端 + 双桌面前端
+    Invoke-Build -Path "$ScriptRoot\subsystem\core_personality" -Name "Core Personality"
 
-    # 核心人格（月华 + 琉璃 合并工程）：单服务端 + 双桌面前端
-    Invoke-Build -Path "$ScriptRoot\core_personality" -Name "Core Personality"
+    # LTP9 权限密钥生成器（独立工具，随发行版提供）
+    Invoke-Build -Path "$ScriptRoot\subsystem\ltp9_keygen" -Name "LTP9 Keygen"
 
-    # 过渡期保留：旧月华 / 旧琉璃仍可独立构建作为回退，
-    # 待 subsystem/core_personality 验收通过后（决策 D2）收缩为单一构建目标。
-    Invoke-Build -Path "$ScriptRoot\..\lunar_astral" -Name "Luna Astral"
-    Invoke-Build -Path "$ScriptRoot\..\crystal_astral" -Name "Crystal Astral"
-
-    Invoke-Build -Path "$ScriptRoot\ltp9_keygen" -Name "LTP9 Keygen"
+    # 更新器（独立工具，编译到仓库根目录与主程序同层）
+    Invoke-Build -Path "$ScriptRoot\subsystem\update_applier" -Name "Update Applier"
 
     Write-Host ""
     Write-Host "  全部构建成功完成！" -ForegroundColor Green

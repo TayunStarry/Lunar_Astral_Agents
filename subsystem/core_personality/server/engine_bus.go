@@ -43,8 +43,8 @@ func EngineMessageHandler(w http.ResponseWriter, r *http.Request) {
 	broadcast := 0
 	if ws.Instance != nil {
 		// 频道由发送方声明（?channel=…，缺省默认频道）：总线帧只投递给同频道的订阅者，
-	// 从而隔离同一进程内彼此独立的引擎实例（月华内嵌渲染引擎 / 琉璃 studio 编辑器引擎）
-	ws.Instance.BroadcastBus(ws.RequestChannel(r), body)
+		// 从而隔离同一进程内彼此独立的引擎实例（月华内嵌渲染引擎 / 琉璃 studio 编辑器引擎）
+		ws.Instance.BroadcastBus(ws.RequestChannel(r), body)
 		broadcast = ws.Instance.BusCount()
 	} else {
 		LoggerGeneral.Warn("CorePersonality", "引擎消息到达但集线器未就绪，仅完成观测")

@@ -16,9 +16,10 @@ import (
 	image "LunarSubsystem/MultimodalAnalysis/server"
 )
 
-// assembleLunar 装配月华人格局：JavaScript 智能体运行时、模型代理、TTS 与 QQ 桥接。
+// assembleLunar 装配月华人格局的生产者部分：模型代理、绘图协处理器与 QQ 桥接。
 // TTS 引擎不再于装配期 eager 初始化：三引擎均由 engine/tts_router 惰性加载
 // （首次合成请求时加载，5 分钟无调用自动卸载）。
+// JavaScript 智能体运行时（思考循环）属消费层，由 startLunarAgent 在装配末段启动。
 func assembleLunar() error {
 	// ==== MIME 类型映射 ====
 	for ext, mimeType := range GeneralConfig.MimeMap {
@@ -36,15 +37,18 @@ func assembleLunar() error {
 	// ==== 扩散生成任务协处理器 ====
 	image.StartTaskProcessor()
 
-	// ==== 智能体上下文（goja 运行时 + agentSystem.js） ====
-	if err := engine.RunAgentContext(); err != nil {
-		return err
-	}
-
 	// ==== QQ 桥接适配器 ====
 	initNapcatBridge()
 
 	return nil
+}
+
+// startLunarAgent 启动月华的 JavaScript 智能体运行时（goja + agentSystem.js）。
+// 该运行时一经启动即进入每秒思考循环，可能立即消费计划表等到期任务，故必须排在
+// 全部服务层（HTTP / llama 代理 / 记忆库）与琉璃消费层（LTP9 / LTPX broker）之后启动；
+// 否则到期任务会在依赖尚未就绪时执行，导致应答链报错或事件循环长时间阻塞。
+func startLunarAgent() error {
+	return engine.RunAgentContext()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源

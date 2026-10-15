@@ -71,10 +71,10 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	private readonly groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0]
 	/** 琉璃固定形象（合照对象为琉璃时注入的内置外观描述，保证形象一致） */
 	private readonly crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0]
-	/** Q版默认服装提示词（黑色蕾丝洛丽塔连衣裙，胸前黑色蕾丝蝴蝶结配红宝石） */
-	private readonly defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边'
-	/** 全尺寸默认服装提示词（黑色哥特萝莉风长裙，胸前红宝石蝴蝶结饰扣） */
-	private readonly defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，立领缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收白色蕾丝袖口，多层黑色蕾丝裙摆'
+	/** Q版默认服装提示词（黑色蕾丝洛丽塔连衣裙，黑色蕾丝袖口，胸前黑色蕾丝蝴蝶结配红宝石，无白色装饰） */
+	private readonly defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀黑色蕾丝荷叶边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边，无任何白色蕾丝或白色装饰'
+	/** 全尺寸默认服装提示词（黑色哥特萝莉风长裙，黑色蕾丝立领与袖口，胸前红宝石蝴蝶结饰扣，无白色装饰） */
+	private readonly defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰'
 	/** 默认负面提示词（人物像与图生图共用） */
 	private readonly defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理'
 	/** 参考图（律令 <参考图> 设置）：本地图片路径（相对 LocalDir），非空时图生图与合照切换为图生图流程 */

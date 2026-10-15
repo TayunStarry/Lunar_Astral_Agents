@@ -31,7 +31,7 @@ type ModelConfig struct {
 		// 插件沙箱网络是否跳过 TLS 证书校验：未配置默认开启校验；置 true 恢复旧的跳过行为
 		InsecureTLS *bool `json:"insecure_tls,omitempty"`
 	} `json:"server"`
-	// 月华 Agent：用户显示名 + 模型路由
+	// 月华 Agent：用户显示名 + 模型路由 + 多模态输入方式
 	Agent struct {
 		UserName        string `json:"user_name"`        // 用户显示名（前端气泡名与发送前缀）
 		EmbeddingModel  string `json:"embedding_model"`  // 嵌入模型名称
@@ -40,6 +40,9 @@ type ModelConfig struct {
 		MultimodalModel string `json:"multimodal_model"` // 多模态模型名称
 		MultimodalURL   string `json:"multimodal_url"`   // 多模态服务 API 地址
 		MultimodalKey   string `json:"multimodal_key"`   // 多模态服务 API 密钥
+		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
+		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
+		VideoInput string `json:"video_input"`
 	} `json:"agent"`
 	// 记忆库模型路由（独立于 agent，可单独指向其它服务）
 	Memory struct {
@@ -71,10 +74,10 @@ type ModelConfig struct {
 		SDVaeTileSize    *string  `json:"sd_vae_tile_size,omitempty"`
 		SDVaeTileOverlap *float64 `json:"sd_vae_tile_overlap,omitempty"`
 		// 显存预算（GiB，空=自动）与采样策略（auto=交给 sd.cpp 按模型选择）
-		SDMaxVRAM       *string  `json:"sd_max_vram,omitempty"`
-		SDSampler       *string  `json:"sd_sampler,omitempty"`
-		SDScheduler     *string  `json:"sd_scheduler,omitempty"`
-		SDFlowShift     *float64 `json:"sd_flow_shift,omitempty"`
+		SDMaxVRAM        *string  `json:"sd_max_vram,omitempty"`
+		SDSampler        *string  `json:"sd_sampler,omitempty"`
+		SDScheduler      *string  `json:"sd_scheduler,omitempty"`
+		SDFlowShift      *float64 `json:"sd_flow_shift,omitempty"`
 		SDFlashAttention *bool    `json:"sd_diffusion_fa,omitempty"`
 		// 调用方未指定时的默认步数与边长
 		SDSteps     *int `json:"sd_steps,omitempty"`
@@ -82,54 +85,95 @@ type ModelConfig struct {
 	} `json:"diffusion"`
 	// NapCat QQ 桥接。仅由月华的 bridging/napcat 读取，此处声明结构以集中呈现配置契约。
 	Bridging struct {
-		BridgingType                    string   `json:"bridging_type"`                     // 桥接类型（napcat）
-		BridgingPath                    string   `json:"bridging_path"`                     // 桥接地址（NapCat WS 地址）
-		BridgingToken                   string   `json:"bridging_token"`                    // 桥接令牌
-		BridgingUsers                   []int64  `json:"bridging_users"`                    // 允许响应的用户/群号列表
-		BridgingGroupKeywords           []string `json:"bridging_group_keywords"`           // 群聊触发关键词
+		BridgingType                    string   `json:"bridging_type"`                      // 桥接类型（napcat）
+		BridgingPath                    string   `json:"bridging_path"`                      // 桥接地址（NapCat WS 地址）
+		BridgingToken                   string   `json:"bridging_token"`                     // 桥接令牌
+		BridgingUsers                   []int64  `json:"bridging_users"`                     // 允许响应的用户/群号列表
+		BridgingGroupKeywords           []string `json:"bridging_group_keywords"`            // 群聊触发关键词
 		BridgingGroupTriggerProbability *float64 `json:"bridging_group_trigger_probability"` // 群聊无关键词时的应答概率
 	} `json:"bridging"`
-	// 多模态解读配置（视频/动态图送入模型的方式）
-	Multimodal struct {
-		// 视频解读输入模式：file=写媒体目录后以 file:// 引用交 llama-server 抽帧（默认）；
-		// frames=本地抽帧为图片序列帧（base64）后以多个 image_url 提交，供不支持 file:// 的架构使用
+	// 多模态解读配置（视频/动态图送入模型的方式）：已并入 agent.video_input，
+	// 此处仅保留旧节结构用于迁移兼容读取
+	LegacyMultimodal struct {
 		VideoInput string `json:"video_input"`
 	} `json:"multimodal"`
 	// 月华语音合成（TTS）：引擎选择 + 统一效果参数。
 	// 参数层面统一：各引擎共用同一套字段；执行层面由 tts_router 按引擎自身格式适配，
 	// 引擎不支持的参数（如 Kokoro 不支持参考音频）自动忽略。
 	TTS struct {
-		Engine          string        `json:"engine"`            // 引擎枚举：Qwen / Kokoro / OmniVoice（默认 Qwen）
-		RefAudio        string        `json:"ref_audio"`         // 参考音频路径（Qwen/OmniVoice 声音克隆；Kokoro 忽略）
-		RefText         string        `json:"ref_text"`          // 参考音频转写文本（OmniVoice 声音克隆必填；其余忽略）
-		Voice           string        `json:"voice"`             // 音色名称（Kokoro；其余忽略）
-		Mix             []TTSMixEntry `json:"mix"`               // 音色混合列表（Kokoro；其余忽略）
-		Speed           *float64      `json:"speed,omitempty"`   // 语速倍率（Kokoro 0.5~2.0；其余忽略）
-		Lang            string        `json:"lang"`              // 语言提示（Kokoro zh/en/auto；OmniVoice 语言提示；Qwen 忽略）
-		Instruct        string        `json:"instruct"`          // 音色属性关键词（OmniVoice；其余忽略）
-		Seed            *uint64       `json:"seed,omitempty"`    // 随机种子（OmniVoice；其余忽略）
+		Engine          string        `json:"engine"`                     // 引擎枚举：Qwen / Kokoro / OmniVoice（默认 Qwen）
+		RefAudio        string        `json:"ref_audio"`                  // 参考音频路径（Qwen/OmniVoice 声音克隆；Kokoro 忽略）
+		RefText         string        `json:"ref_text"`                   // 参考音频转写文本（OmniVoice 声音克隆必填；其余忽略）
+		Voice           string        `json:"voice"`                      // 音色名称（Kokoro；其余忽略）
+		Mix             []TTSMixEntry `json:"mix"`                        // 音色混合列表（Kokoro；其余忽略）
+		Speed           *float64      `json:"speed,omitempty"`            // 语速倍率（Kokoro 0.5~2.0；其余忽略）
+		Lang            string        `json:"lang"`                       // 语言提示（Kokoro zh/en/auto；OmniVoice 语言提示；Qwen 忽略）
+		Instruct        string        `json:"instruct"`                   // 音色属性关键词（OmniVoice；其余忽略）
+		Seed            *uint64       `json:"seed,omitempty"`             // 随机种子（OmniVoice；其余忽略）
 		DisablePostproc *bool         `json:"disable_postproc,omitempty"` // 关闭输出后处理（OmniVoice；其余忽略）
+		// 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型释放占用
+		IdleUnloadMinutes *int `json:"idle_unload_minutes,omitempty"`
 	} `json:"tts"`
 	// 月华客户端显示配置：控制桌面端/移动端角色的渲染方式
 	// （bedrock=基岩版模型引擎，默认；live2d=Live2D 引擎层）。
 	// 仅由前端读取（fetch /file/read/lunar_config.json），此处声明结构以集中呈现配置契约。
 	Client struct {
-		CharacterRenderer string `json:"character_renderer"`    // 角色渲染器：bedrock（默认）/ live2d
+		CharacterRenderer string `json:"character_renderer"`     // 角色渲染器：bedrock（默认）/ live2d
 		Live2DModel       string `json:"live2d_model,omitempty"` // Live2D 模型基址（空则用引擎层默认）
 	} `json:"client"`
-	// TUI 控制台行为（tui）：仅 TUI/桌面构建读取，控制进程退出策略
-	TUI struct {
-		// 前端页面全部关闭后是否自动退出进程；未配置时桌面构建退出、TUI 构建常驻
-		ExitWhenFrontendsClosed *bool `json:"exit_when_frontends_closed,omitempty"`
-	} `json:"tui"`
-	// 更新包发布/拉取（update_pack）：仅 TUI 构建读取（Gitee Release 通道）
-	UpdatePack struct {
-		GiteeOwner string   `json:"gitee_owner"` // Gitee 仓库属主
-		GiteeRepo  string   `json:"gitee_repo"`  // Gitee 仓库名
-		GiteeToken string   `json:"gitee_token"` // Gitee 私人令牌（需 Release 读写权限）
-		Include    []string `json:"include"`     // 打包包含的资源目录（相对 target_dir）
-		TargetDir  string   `json:"target_dir"`  // 资源根目录（空时默认 local_data）
+	// Gitee Release 发布通道（release）：更新包与 LTPX 应用市场共用同一仓库，
+	// 仓库地址、令牌、打包清单、备份策略统一在此配置。
+	// 两条通道在仓库内以「描述标记 + 附件名前缀」严格区分：
+	// 更新包 body 含 [UPDATE] / 附件名 lunar_updatepack_*；市场包 body 含 [LTPX] / 附件名 ltpx_*.ltpx。
+	// 指针类型用于区分「未配置 release 节」与「配置了但字段为空」——前者回退读取旧节。
+	Release *struct {
+		GiteeOwner string `json:"gitee_owner"` // Gitee 仓库属主
+		GiteeRepo  string `json:"gitee_repo"`  // Gitee 仓库名
+		GiteeToken string `json:"gitee_token"` // Gitee 私人令牌（需 Release 读写权限；留空则发布时在 TUI 手动输入）
+		// ==== 更新包（资源 + 主程序） ====
+		Include []string `json:"include"` // 打包包含的资源目录（相对 target_dir）
+		// 打包排除规则（空时用默认清单）与「含这些文件的目录整体排除」（空时默认 metadata.json）
+		Exclude         []string `json:"exclude"`
+		ExcludeDirsWith []string `json:"exclude_dirs_with"`
+		// 覆盖前备份的保留次数（nil=默认 3；0 或负数=不备份）
+		BackupKeep *int `json:"backup_keep,omitempty"`
+		// 主程序文件清单（相对程序根目录）：发布时纳入包，拉取时判定是否走「关程序→应用器→重启」
+		ProgramFiles []string `json:"program_files"`
+		// 重启主程序时携带的命令行参数
+		RestartArgs []string `json:"restart_args"`
+		// 资源根目录/程序根目录（空时默认 local_data；程序合并后取「程序根目录」）
+		TargetDir string `json:"target_dir"`
+		// ==== LTPX 应用市场 ====
+		// 本地 LTPX 包根目录（空时默认 local_data/package）
+		PackageDir string `json:"package_dir"`
+	} `json:"release"`
+
+	// ==== 旧配置节（迁移兼容，仅用于读取并提示迁移） ====
+	// 保留读取能力：老版本 lunar_config.json 的 update_pack / ltpx_market / tui / multimodal
+	// 仍可被识别，避免升级后配置静默失效（详见 init 中的回退与告警）。
+	LegacyUpdatePack *struct {
+		GiteeOwner      string   `json:"gitee_owner"`
+		GiteeRepo       string   `json:"gitee_repo"`
+		GiteeToken      string   `json:"gitee_token"`
+		Include         []string `json:"include"`
+		Exclude         []string `json:"exclude"`
+		ExcludeDirsWith []string `json:"exclude_dirs_with"`
+		BackupKeep      *int     `json:"backup_keep"`
+		ProgramFiles    []string `json:"program_files"`
+		RestartArgs     []string `json:"restart_args"`
+		TargetDir       string   `json:"target_dir"`
 	} `json:"update_pack"`
+	LegacyLtpxMarket *struct {
+		GiteeOwner string `json:"gitee_owner"`
+		GiteeRepo  string `json:"gitee_repo"`
+		PackageDir string `json:"package_dir"`
+	} `json:"ltpx_market"`
+	// LegacyTUI 旧 tui 节（检测用）：其唯一字段 exit_when_frontends_closed 已随桌面版取消
+	// ——程序只有控制台一种形态，前端窗口全部关闭不再退出进程。
+	// 保留结构仅为在配置仍含该节时给出明确提示，不作任何生效处理。
+	LegacyTUI struct {
+		ExitWhenFrontendsClosed *bool `json:"exit_when_frontends_closed"`
+	} `json:"tui"`
 }
 
 // init 加载配置文件
@@ -174,6 +218,24 @@ func init() {
 		log.Printf("[Config][ERROR] -> 解析配置文件失败: %v", err)
 		return
 	}
+	// 解析结果 → 全局配置（映射与旧节回退规则集中在 applyConfig，便于单测覆盖）
+	legacyUsed := applyConfig(parameter)
+
+	// ==== 旧配置节迁移提示（合并为一条日志，避免刷屏） ====
+	if len(legacyUsed) > 0 {
+		log.Printf("[Config][WARN] -> lunar_config.json 使用了旧配置节，已按兼容方式读取；建议迁移：%s",
+			strings.Join(legacyUsed, "；"))
+	}
+}
+
+// applyConfig 把解析结果写入全局配置，返回本次用到的旧配置节说明（迁移提示用）。
+//
+// 独立成函数：配置文件读的是 exe 同级的 lunar_config.json，init 的文件路径无法在测试中
+// 复现，而「新节优先 / 旧节回退」这类规则必须被单测钉住——否则改动一处就会静默失效
+// （用户升级后配置回到默认值，且没有任何报错）。
+func applyConfig(parameter *ModelConfig) []string {
+	// legacyUsed 记录本次读取用到的旧配置节
+	var legacyUsed []string
 	// ==== 模型文件路径（models） ====
 	// 如果配置文件中 DiffusionModel 字段非空，则更新全局配置
 	if parameter.Models.DiffusionModel != "" {
@@ -234,9 +296,14 @@ func init() {
 	if parameter.Agent.MultimodalKey != "" {
 		*AgentMultimodalKey = parameter.Agent.MultimodalKey
 	}
-	// ==== 多模态解读配置（multimodal） ====
+	// ==== 多模态解读配置（agent.video_input；兼容旧 multimodal 节） ====
 	// 视频解读输入模式：仅接受 file / frames，未配置或取值非法时保持默认 file（历史行为）
-	switch parameter.Multimodal.VideoInput {
+	videoInput := parameter.Agent.VideoInput
+	if videoInput == "" && parameter.LegacyMultimodal.VideoInput != "" {
+		videoInput = parameter.LegacyMultimodal.VideoInput
+		legacyUsed = append(legacyUsed, "multimodal.video_input → agent.video_input")
+	}
+	switch videoInput {
 	case "frames":
 		*VideoInputMode = "frames"
 	case "file":
@@ -280,6 +347,10 @@ func init() {
 	if parameter.TTS.DisablePostproc != nil {
 		*TTSDisablePostproc = *parameter.TTS.DisablePostproc
 	}
+	// 闲置卸载阈值：仅接受正数分钟，非法取值（<=0）保留默认 5 分钟
+	if parameter.TTS.IdleUnloadMinutes != nil && *parameter.TTS.IdleUnloadMinutes > 0 {
+		*TTSIdleUnloadMinutes = *parameter.TTS.IdleUnloadMinutes
+	}
 	// ==== 月华客户端显示配置（client） ====
 	// 渲染器枚举：仅接受 bedrock / live2d，未配置保持默认 bedrock，非法取值告警并保留默认
 	switch parameter.Client.CharacterRenderer {
@@ -293,19 +364,65 @@ func init() {
 	if parameter.Client.Live2DModel != "" {
 		*Live2DModel = parameter.Client.Live2DModel
 	}
-	// ==== TUI 控制台行为（tui） ====
-	// 仅在配置文件显式给出时覆盖（nil=未配置，由构建形态决定默认值）
-	if parameter.TUI.ExitWhenFrontendsClosed != nil {
-		ExitWhenFrontendsClosed = parameter.TUI.ExitWhenFrontendsClosed
+	// ==== Gitee Release 发布通道（release） ====
+	// 更新包与 LTPX 应用市场共用同一仓库：两条通道在仓库内以「描述标记 + 附件名前缀」
+	// 区分（[UPDATE]/lunar_updatepack_* 与 [LTPX]/ltpx_*.ltpx），因此配置只需一套仓库信息。
+	// 未配置 release 节时回退读取旧的 update_pack / ltpx_market 两节并提示迁移。
+	switch {
+	case parameter.Release != nil:
+		r := parameter.Release
+		ReleaseGiteeOwner = r.GiteeOwner
+		ReleaseGiteeRepo = r.GiteeRepo
+		ReleaseGiteeToken = r.GiteeToken
+		if r.Include != nil {
+			ReleaseInclude = r.Include
+		}
+		if r.Exclude != nil {
+			ReleaseExclude = r.Exclude
+		}
+		if r.ExcludeDirsWith != nil {
+			ReleaseExcludeDirsWith = r.ExcludeDirsWith
+		}
+		if r.BackupKeep != nil {
+			ReleaseBackupKeep = r.BackupKeep
+		}
+		if r.ProgramFiles != nil {
+			ReleaseProgramFiles = r.ProgramFiles
+		}
+		if r.RestartArgs != nil {
+			ReleaseRestartArgs = r.RestartArgs
+		}
+		ReleaseTargetDir = r.TargetDir
+		ReleasePackageDir = r.PackageDir
+		if parameter.LegacyUpdatePack != nil || parameter.LegacyLtpxMarket != nil {
+			log.Printf("[Config][WARN] -> 检测到旧配置节 update_pack/ltpx_market，已被 release 节取代，旧节不再生效，请删除")
+		}
+
+	case parameter.LegacyUpdatePack != nil || parameter.LegacyLtpxMarket != nil:
+		legacyUsed = append(legacyUsed, "update_pack / ltpx_market → release")
+		if l := parameter.LegacyUpdatePack; l != nil {
+			ReleaseGiteeOwner = l.GiteeOwner
+			ReleaseGiteeRepo = l.GiteeRepo
+			ReleaseGiteeToken = l.GiteeToken
+			ReleaseInclude = l.Include
+			ReleaseExclude = l.Exclude
+			ReleaseExcludeDirsWith = l.ExcludeDirsWith
+			ReleaseBackupKeep = l.BackupKeep
+			ReleaseProgramFiles = l.ProgramFiles
+			ReleaseRestartArgs = l.RestartArgs
+			ReleaseTargetDir = l.TargetDir
+		}
+		if l := parameter.LegacyLtpxMarket; l != nil {
+			// 旧市场的仓库字段留空时回退更新包仓库（历史行为：默认同仓库）
+			if strings.TrimSpace(ReleaseGiteeOwner) == "" {
+				ReleaseGiteeOwner = l.GiteeOwner
+			}
+			if strings.TrimSpace(ReleaseGiteeRepo) == "" {
+				ReleaseGiteeRepo = l.GiteeRepo
+			}
+			ReleasePackageDir = l.PackageDir
+		}
 	}
-	// ==== 更新包发布/拉取（update_pack） ====
-	UpdatePackGiteeOwner = parameter.UpdatePack.GiteeOwner
-	UpdatePackGiteeRepo = parameter.UpdatePack.GiteeRepo
-	UpdatePackGiteeToken = parameter.UpdatePack.GiteeToken
-	if parameter.UpdatePack.Include != nil {
-		UpdatePackInclude = parameter.UpdatePack.Include
-	}
-	UpdatePackTargetDir = parameter.UpdatePack.TargetDir
 	// ==== 图像生成行为与资源策略（diffusion） ====
 	// 如果配置文件中 AllowDiffusion 字段非空，则更新全局配置
 	if parameter.Diffusion.AllowDiffusion == true {
@@ -374,6 +491,15 @@ func init() {
 	if parameter.Server.InsecureTLS != nil {
 		*InsecureTLS = *parameter.Server.InsecureTLS
 	}
+	// ==== 旧 tui 节（已取消） ====
+	// 程序只剩控制台一种形态：前端窗口全部关闭不再退出进程，故该节已无对应功能，
+	// 仅提示用户删除，避免「配置写了却没生效」的无解困惑
+	if parameter.LegacyTUI.ExitWhenFrontendsClosed != nil {
+		legacyUsed = append(legacyUsed, "tui.exit_when_frontends_closed 已取消（控制台常驻，前端窗口关闭不再退出程序）")
+	}
+
+	// ==== 旧配置节迁移提示由调用方（init）输出 ====
 	// chat（聊天显存守卫）与 bridging（QQ 桥接）不落 Go 全局：
 	// 前者仅由月华 TypeScript 读取，后者由 lunar_astral/bridging/napcat 自行解析
+	return legacyUsed
 }

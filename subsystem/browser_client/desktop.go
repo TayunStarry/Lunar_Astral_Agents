@@ -11,10 +11,10 @@ package BrowserClient
 // 残留的那个窗口会使计数永不归零，表现为「窗口全关而服务端不退」。
 //
 // 因此：本组仅在**确实全部窗口都从注册表移除**（即所有 Run() 都返回）时发出信号，
-// 作为快速路径；真正可靠的判据是宿主侧的前端会话监视（app/watchFrontendSessions，
-// 依据前端 /ws 连接数归零判定页面全部关闭）。
-// 发出信号后由 CloseAllDesktopWindows 对残留窗口 Terminate，
-// 再由 WaitForShutdown 的兜底超时保证进程一定退出。
+// 作为快速路径；窗口是否「全部关闭」不再作为进程退出依据——控制台（TUI）是程序主界面，
+// 窗口全关后仍可在控制台「前端页面 管理」中重新唤起（见 core_personality/app/OpenFrontendWindows）。
+// 发出信号后由 CloseAllDesktopWindows 对残留窗口 Terminate，交由控制台退出时的
+// GracefulShutdown 兜底超时保证进程一定退出。
 
 import (
 	"errors"

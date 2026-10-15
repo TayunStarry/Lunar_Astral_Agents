@@ -52,6 +52,11 @@ const ChannelParam = "channel"
 // 由琉璃桌面与蓝图页等订阅者接收。
 const DefaultBusChannel = "lunar-engine-bus"
 
+// ChannelLunarTerminal 月华消息终端（含手机端）声明的接入频道。
+// 该终端不订阅引擎总线（bus=0），在线判定按「频道连接数」（ChannelClientCount）
+// 而非「总线订阅数」统计；TTS 的音频消费方探测亦以此频道为准。
+const ChannelLunarTerminal = "message-terminal"
+
 // Upgrader WebSocket 升级器：
 //   - 无 Origin 头（非浏览器客户端，如本地直连进程）放行
 //   - 浏览器页面仅放行同源请求，避免任意网页跨站连上 /ws 驱动调试面

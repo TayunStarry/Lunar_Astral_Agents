@@ -27,6 +27,9 @@ var (
 	TTSSeed = flag.Uint64("tts-seed", 0, "TTS 随机种子（OmniVoice）")
 	// TTSDisablePostproc 关闭输出后处理（OmniVoice；其余忽略）
 	TTSDisablePostproc = flag.Bool("tts-disable-postproc", false, "关闭 TTS 输出后处理（OmniVoice）")
+	// TTSIdleUnloadMinutes 引擎闲置卸载阈值（分钟）：无合成调用超过该时长即卸载模型占用，
+	// 下次调用时重新加载。默认 5 分钟，由 lunar_config.json 的 tts.idle_unload_minutes 覆盖。
+	TTSIdleUnloadMinutes = flag.Int("tts-idle-unload-minutes", 5, "TTS 引擎闲置卸载阈值（分钟，超时释放模型占用）")
 )
 
 // TTSMixEntry 音色混合分量（Kokoro 专有；其余忽略）

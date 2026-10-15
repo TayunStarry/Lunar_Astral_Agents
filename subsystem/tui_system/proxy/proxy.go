@@ -20,8 +20,19 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// activeProxy 当前运行中的代理句柄（HTTPS 代理为进程级单例，IsRunning 的判据）
+var activeProxy atomic.Pointer[Handle]
+
+// IsRunning HTTPS 代理服务是否正在运行。
+// 远程前端（手机等）经该代理接入 WebSocket，TTS 等音频消费方以
+// 「代理运行中」作为远程前端在线的旁证。
+func IsRunning() bool {
+	return activeProxy.Load() != nil
+}
 
 // Start 启动 HTTPS 反向代理服务（TLS + 路由 + WebSocket 隧道），立即返回运行句柄。
 // backendPort 为后端 HTTP 端口；proxyPort 为对外 HTTPS 端口；localIP 为证书 SAN 与二维码使用的本机 IP。
@@ -71,6 +82,7 @@ func Start(backendPort, proxyPort int, localIP string) (*Handle, Info, error) {
 		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 			logf("  [ERROR] 代理服务异常退出: %v", err)
 		}
+		activeProxy.CompareAndSwap(handle, nil)
 	}()
 
 	// 短暂等待以暴露端口占用等启动期错误
@@ -81,6 +93,7 @@ func Start(backendPort, proxyPort int, localIP string) (*Handle, Info, error) {
 	default:
 	}
 	logf("  [PROXY] 服务已启动: %s → %s", info.QRText, targetURL)
+	activeProxy.Store(handle)
 	return handle, info, nil
 }
 
@@ -97,6 +110,7 @@ func (h *Handle) Stop() error {
 		logf("  [WARN] 代理服务停止超时（%v），监听已关闭，端口已释放", err)
 	}
 	<-h.done
+	activeProxy.CompareAndSwap(h, nil)
 	logf("  [PROXY] 服务已停止")
 	return nil
 }

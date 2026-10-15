@@ -15,6 +15,7 @@ deepdemos.*
 config.yaml
 status.json
 .scratch/
+.backup/
 
 ## Go 测试产物
 coverage

@@ -44,7 +44,6 @@ var agentSystem = (function (exports) {
     }
 
     class ModelBuilder {
-        stream = true;
         roleTag = "月华";
         enableTools = true;
         reasoningStrength = "low";
@@ -108,7 +107,7 @@ var agentSystem = (function (exports) {
             const requestBody = {
                 model: GlobalConfig.MultimodalName,
                 messages: rawMessages,
-                stream: this.stream,
+                stream: true,
                 tools: toolCall,
                 tool_choice: 'auto',
                 chat_template_kwargs: {
@@ -526,8 +525,8 @@ var agentSystem = (function (exports) {
         fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0];
         groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0];
         crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0];
-        defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边';
-        defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，立领缀白色蕾丝花边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收白色蕾丝袖口，多层黑色蕾丝裙摆';
+        defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀黑色蕾丝荷叶边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边，无任何白色蕾丝或白色装饰';
+        defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰';
         defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
         referenceImage = '';
         roleTool = [

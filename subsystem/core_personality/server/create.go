@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"time"
 
@@ -33,9 +32,15 @@ func Start(roots StaticRoots) (*http.Server, error) {
 		urlHost = "localhost"
 	}
 
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("监听端口 %s 失败(端口可能被占用): %w", addr, err)
+	// 优先复用 main 预检时已独占绑定的监听器：既省一次 bind，也消除「预检关闭 →
+	// 重新绑定」之间被另一个实例抢占的窗口。未预绑定时在此独占绑定。
+	ln := takePreboundListener()
+	if ln == nil {
+		var err error
+		ln, err = ListenInstance(*GeneralConfig.BasicPort, *GeneralConfig.AllowLAN)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	httpMux = http.NewServeMux()
