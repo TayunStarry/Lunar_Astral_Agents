@@ -119,13 +119,10 @@ func watchTerminalSize(send func(tea.Msg), size func() (int, int, bool), stop <-
 			prevW, prevH := lastW, lastH
 			lastW, lastH = w, h
 			// 记一条日志：既方便用户自救（缩放后应看到这条），也让「控制台自行滚动」
-			// 这类反馈能在 console.log 里对时间线（尺寸何时变、界面何时该重排）
-			pushLog(LogLine{
-				Time:   time.Now(),
-				Source: "stdout",
-				Level:  "RAW",
-				Text:   fmt.Sprintf("[TUI] 终端尺寸变化: %dx%d → %dx%d，界面按新尺寸重排", prevW, prevH, w, h),
-			}, SourceRaw)
+			// 这类反馈能在 console.log 里对时间线（尺寸何时变、界面何时该重排）。
+			// 经 pushScrubbedLog 入缓冲：入口统一，避免出现"某条路径没清洗"的两套标准。
+			pushScrubbedLog(SourceRaw, "RAW", "", "",
+				fmt.Sprintf("[TUI] 终端尺寸变化: %dx%d → %dx%d，界面按新尺寸重排", prevW, prevH, w, h))
 			// 程序退出后 Send 可能无人接收：先看停止信号，避免 goroutine 卡在发送上
 			select {
 			case <-stop:

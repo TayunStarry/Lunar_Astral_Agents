@@ -1,6 +1,14 @@
 package app
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+
+	"CorePersonality/server"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/BrowserClient"
 	"LunarSubsystem/MultimodalAnalysis/module"
@@ -35,4 +43,41 @@ func WireTUIFrontendHooks() {
 			return BrowserClient.RestartDesktopWindow(crystalWindowSpec())
 		},
 	)
+}
+
+// WireTUIDataDumpHooks 把「数据导出」能力注入控制台：控制台只负责触发与展示回执，
+// 取数与落盘的逻辑复用同一批 HTTP 端点处理器（server/data_dump.go）。
+//
+// 为什么复用端点处理器而不是在 app 层重写一遍：导出的**日志格式与上下文结构**必须
+// 与对外端点保持同一份定义，否则"控制台导出的文件"和"调用端点拿到的文件"会逐渐分叉。
+// 这里经 httptest 在进程内直调处理器（无 socket、无端口），只多一次 JSON 往返。
+func WireTUIDataDumpHooks() {
+	TuiSystem.SetDataDumpHooks(
+		func() (TuiSystem.DataDumpResult, error) {
+			return callDumpHandler(server.DataDumpLogsHandler, "/debug/dump/logs")
+		},
+		func(target string) (TuiSystem.DataDumpResult, error) {
+			return callDumpHandler(server.DataDumpContextHandler, "/debug/dump/context?agent="+target)
+		},
+	)
+}
+
+// callDumpHandler 进程内直调导出端点处理器并解析回执
+func callDumpHandler(handler http.HandlerFunc, target string) (TuiSystem.DataDumpResult, error) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, target, nil)
+	handler(rec, req)
+
+	var resp server.DataDumpResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		return TuiSystem.DataDumpResult{}, fmt.Errorf("解析导出回执失败: %w", err)
+	}
+	if !resp.OK {
+		reason := resp.Error
+		if reason == "" {
+			reason = "导出失败（HTTP " + strconv.Itoa(rec.Code) + "）"
+		}
+		return TuiSystem.DataDumpResult{}, errors.New(reason)
+	}
+	return TuiSystem.DataDumpResult{Path: resp.Path, Bytes: resp.Bytes, Records: resp.Records}, nil
 }

@@ -56,6 +56,11 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/api/module/create", Handler: crystal.ModuleCreateHandler, Method: "POST", Description: "创建模块（URL/路径/ZIP，支持 Mini-LTP 注入智能体）"},
 	{Path: "/api/module/inspect", Handler: crystal.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
 
+	// ==================== 控制台数据导出 ====================
+	// TUI「数据导出」调用：把原始日志 / 智能体上下文落盘为 .log / .json，便于离线排查
+	{Path: "/debug/dump/logs", Handler: DataDumpLogsHandler, Method: "POST", Description: "导出原始日志为 JSON Lines（.log）"},
+	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出月华主上下文或某个子智能体的上下文为 JSON（.json）"},
+
 	// ==================== 知识库与记忆库 ====================
 	{Path: "/knowledge/", Handler: file.KnowledgeHandler, Method: "POST", Description: "知识库管理"},
 	{Path: "/memory/", Handler: file.MemoryHandler, Method: "ANY", Description: "记忆库（实例初始化/集合管理/消息增删查/文档列表/重建）"},

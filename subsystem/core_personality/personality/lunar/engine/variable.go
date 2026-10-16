@@ -3,6 +3,7 @@ package engine
 import (
 	"LunarSubsystem/LoggerGeneral"
 	"sync"
+	"sync/atomic"
 )
 
 // ==== JavaScript 运行时上下文保护锁 ====
@@ -10,6 +11,9 @@ import (
 // runtimeMutex 保护 JavaScript 运行时上下文的创建与检查
 // （运行时实例本身由通用模块 lunar_goja 持有）
 var runtimeMutex sync.Mutex
+
+// agentReady 标记 agentSystem.js 是否已成功加载（数据导出等宿主侧入口据此判断可用性）
+var agentReady atomic.Bool
 
 // 月华 JS 层日志路由标签（与 TuiSystem 管线路由及 container 包 console 绑定的约定一致）
 const (

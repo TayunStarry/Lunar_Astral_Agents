@@ -16,6 +16,7 @@ config.yaml
 status.json
 .scratch/
 .backup/
+logs/
 
 ## Go 测试产物
 coverage

@@ -24,7 +24,29 @@ const (
 		"多模态对话、图像生成、语音识别与合成全部在本机推理，无需 Python 环境与云端依赖。"
 	// releasePlatform 适用平台
 	releasePlatform = "Windows 10/11（64 位）"
+
+	// baselineURL 全量基线（完整发行版）的下载地址。
+	//
+	// 更新包是**增量**包：只含资源目录与主程序文件，供已经装好基线的用户升级；
+	// 首次安装或基线被破坏的用户需要完整发行版，因此每份发行说明都必须带上这个地址，
+	// 否则用户拿到一个「覆盖到哪个目录」都无从下手的增量包。
+	// 与 RELEASE.md 的「下载」一节保持一致（改地址时两处一起改）。
+	baselineURL = "https://www.123865.com/s/soKjTd-Z8F7?pwd=klKs#"
+	// baselineCode 基线下载提取码
+	baselineCode = "klKs"
 )
+
+// releaseBaseline 全量基线下载指引（发行说明必备段落）
+func releaseBaseline() []string {
+	return []string{
+		"**全量基线下载（首次安装 / 需要完整发行版时）**",
+		"> 链接：" + baselineURL,
+		"> 提取码：**" + baselineCode + "**",
+		"",
+		"增量更新包要求先有可用的基线程序；若尚未安装、或程序目录已不完整，",
+		"请先下载全量基线解压到目标目录，再用本更新包增量升级。",
+	}
+}
 
 // releaseIntro 发行说明开篇（说明「这是什么包」）
 func releaseIntro() []string {
@@ -53,13 +75,16 @@ func releaseUsage() []string {
 
 // buildReleaseBody 组装更新包 Release 描述。
 //
-// 结构：标记行 → 发行说明 → 本次发布 → 包内文件与校验。
+// 结构：标记行 → 发行说明 → 全量基线下载 → 本次发布 → 安装方式 → 包内文件与校验。
 // 标记行必须保留（[UPDATE]），它是与 LTPX 应用市场共用仓库时的通道判别依据。
 func buildReleaseBody(cfg Config, version string, packFiles []string, shas map[string]string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "%s 星月智能 · 资源更新包 %s\n\n", channel.UpdateMarker, version)
 	b.WriteString(strings.Join(releaseIntro(), "\n"))
+	b.WriteString("\n\n")
+
+	b.WriteString(strings.Join(releaseBaseline(), "\n"))
 	b.WriteString("\n\n")
 
 	b.WriteString("**本次发布**\n")

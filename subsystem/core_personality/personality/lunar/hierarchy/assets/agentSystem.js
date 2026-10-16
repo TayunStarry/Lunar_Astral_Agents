@@ -1244,6 +1244,113 @@ var agentSystem = (function (exports) {
         return raw.includes(marker) ? raw.substring(raw.indexOf(marker) + marker.length).trim() : raw.trim();
     }
 
+    const IMAGE_KEEP_CHARS = 0;
+    const DUMP_MAX_CHARS = 32 * 1024 * 1024;
+    let roleRegistry = {};
+    function registerDumpRoles(entries) {
+        roleRegistry = entries;
+    }
+    function dumpTargets() {
+        return ['lunar', ...Object.keys(roleRegistry)];
+    }
+    function hasDumpTarget(agent) {
+        return agent === 'lunar' || !!roleRegistry[agent];
+    }
+    function shrinkContent(content, includeImages) {
+        if (typeof content === 'string')
+            return content;
+        if (!Array.isArray(content))
+            return content;
+        return content.map(item => {
+            if (!item || typeof item !== 'object')
+                return item;
+            const anyItem = item;
+            if (anyItem.type !== 'image_url' || !anyItem.image_url)
+                return item;
+            const url = anyItem.image_url.url || '';
+            if (includeImages || url.length <= IMAGE_KEEP_CHARS)
+                return item;
+            const head = url.slice(0, 64);
+            return {
+                type: 'image_url',
+                image_url: { url: `${head}…（base64 已省略 ${url.length} 字符；需要原图请用 includeImages）` },
+            };
+        });
+    }
+    function exportMessages(messages, includeImages) {
+        return messages.map(message => ({
+            role: message.role,
+            content: shrinkContent(message.content, includeImages),
+            tool_call_id: message.tool_call_id || undefined,
+            tool_calls: message.tool_calls || undefined,
+        }));
+    }
+    function snapshotAgent(agent, includeImages) {
+        if (agent === 'lunar') {
+            return {
+                target: 'lunar',
+                label: '月华主上下文（未读队列 + 长期记忆摘要）',
+                messages: exportMessages(GlobalConfig.unreadContext, includeImages),
+            };
+        }
+        const entry = roleRegistry[agent];
+        return {
+            target: agent,
+            label: entry.label,
+            messages: exportMessages(entry.role.messages, includeImages),
+            systemPrompt: entry.role.systemPrompt,
+        };
+    }
+    function buildContextDump(argsJSON) {
+        let args = {};
+        try {
+            args = argsJSON ? JSON.parse(argsJSON) : {};
+        }
+        catch (e) {
+            return JSON.stringify({ error: '导出参数解析失败: ' + String(e) });
+        }
+        const agent = String(args.agent || '').trim() || 'lunar';
+        const includeImages = args.includeImages === true;
+        if (!hasDumpTarget(agent)) {
+            return JSON.stringify({
+                error: `未知导出目标: ${agent}`,
+                available: dumpTargets(),
+            });
+        }
+        const snap = snapshotAgent(agent, includeImages);
+        const overview = { lunar: GlobalConfig.unreadContext.length };
+        for (const [name, entry] of Object.entries(roleRegistry)) {
+            overview[name] = entry.role.messages.length;
+        }
+        const payload = {
+            kind: 'lunar-agent-context',
+            generated_at: new Date().toISOString(),
+            target: snap.target,
+            label: snap.label,
+            include_images: includeImages,
+            message_count: snap.messages.length,
+            context_overview: overview,
+            system_prompt: snap.systemPrompt,
+            messages: snap.messages,
+        };
+        let text = JSON.stringify(payload, null, 2);
+        if (text.length > DUMP_MAX_CHARS) {
+            text = text.slice(0, DUMP_MAX_CHARS) + `\n…（导出超过 ${DUMP_MAX_CHARS} 字符，已截断）`;
+        }
+        return text;
+    }
+    function ensureDumpBridge() {
+        return typeof dumpForJS === 'function';
+    }
+    function bindDumpBridge() {
+        if (!ensureDumpBridge()) {
+            console.warn('[数据导出] 宿主未注册 dumpForJS，TUI 数据导出不可用');
+            return;
+        }
+        globalThis.buildContextDump = buildContextDump;
+        console.log('[数据导出] 上下文导出入口已注册（目标：' + dumpTargets().join('、') + '）');
+    }
+
     function RandomFloor(min, max) {
         return Math.floor(Math.random() * (max - min + 1) + min);
     }
@@ -3079,7 +3186,30 @@ var agentSystem = (function (exports) {
     registerMediaRoles({ perceiverRole, randomDefaultMessage });
     registerAgentTargets({ painterRole, musicianRole });
     registerImageDescribeRole(descriptionRole);
+    registerDumpRoles({
+        dialogue: { role: dialogueRole, label: '对话者' },
+        painter: { role: painterRole, label: '绘制者' },
+        musician: { role: musicianRole, label: '演奏者' },
+        perceiver: { role: perceiverRole, label: '感知者' },
+        memorizer: { role: memorizerRole, label: '记忆者' },
+        description: { role: descriptionRole, label: '描述者' },
+    });
     dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
+    const roleInstances = {
+        dialogue: dialogueRole,
+        painter: painterRole,
+        musician: musicianRole,
+        perceiver: perceiverRole,
+        memorizer: memorizerRole,
+        description: descriptionRole,
+    };
+    try {
+        const host = globalThis;
+        host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, { randomDefaultMessage });
+    }
+    catch (e) {
+        console.warn('[角色] 宿主全局挂载失败（不影响运行）:', e);
+    }
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
@@ -4255,6 +4385,7 @@ var agentSystem = (function (exports) {
     }
 
     fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+    bindDumpBridge();
     setInterval(() => thoughtLoopTickEvent(), 1000);
 
     exports.LiteImageFile = LiteImageFile;

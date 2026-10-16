@@ -19,8 +19,11 @@ export { extractTextFromMessage, ensureMemoryReady } from './capabilities/memory
 import { GlobalConfig } from '../config/global';
 import { fetchDocumentCallback } from '../file/io/read';
 import { thoughtLoopTickEvent } from './loop';
+import { bindDumpBridge } from './data-dump';
 
 // 初始化 自定义配置 信息
 fetchDocumentCallback('lunar_config.json').then(content => GlobalConfig.customConfig = content);
+// 向宿主暴露上下文导出入口（TUI「数据导出」经 dumpForJS 调用）
+bindDumpBridge();
 // 每秒执行一次思考循环
 setInterval(() => thoughtLoopTickEvent(), 1000);

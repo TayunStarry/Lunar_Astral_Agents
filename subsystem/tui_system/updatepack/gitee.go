@@ -234,16 +234,24 @@ func truncate(s string, n int) string {
 	return string(runes[:n]) + "…"
 }
 
-// extractSHA 从 Release 描述中提取 SHA-256 声明（格式约定：SHA-256: <hex>）
+// extractSHA 从 Release 描述中提取 SHA-256 声明（格式约定：整行形如 `SHA-256: <hex>`）。
+//
+// 判别用**行首前缀**而不是「任意位置包含」：发行说明里存在大段自由文本（定位、安装方式、
+// 全量基线下载地址等），只要某行恰好含 "sha-256:" 子串（例如一条带查询参数的下载链接），
+// 「包含」式判别就会把它误当成校验值，进而让拉取端以错误的期望值做校验而失败。
 func extractSHA(body string) string {
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
-		if idx := strings.Index(strings.ToLower(line), "sha-256:"); idx >= 0 {
-			parts := strings.Fields(line[idx:])
-			if len(parts) >= 2 {
-				return parts[1]
-			}
+		if len(line) < len(shaPrefix) || !strings.EqualFold(line[:len(shaPrefix)], shaPrefix) {
+			continue
+		}
+		// 只取前缀之后的第一个字段，避免同行的其它说明文字混入校验值
+		if parts := strings.Fields(line[len(shaPrefix):]); len(parts) > 0 {
+			return parts[0]
 		}
 	}
 	return ""
 }
+
+// shaPrefix Release 描述中校验值声明行的行首标记（大小写不敏感）
+const shaPrefix = "SHA-256:"

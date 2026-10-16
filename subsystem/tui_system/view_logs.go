@@ -272,7 +272,7 @@ func (m appModel) viewAgent() string {
 	status := newRow(w, false).L("  ").R(dimStyle.Render(fmt.Sprintf("%d 行", info.Total)), "  ", state).String()
 	body = append(body, status)
 
-		mode := "思考摘要"
+	mode := "思考摘要"
 	if m.agent.expand {
 		mode = "思考全文"
 	}

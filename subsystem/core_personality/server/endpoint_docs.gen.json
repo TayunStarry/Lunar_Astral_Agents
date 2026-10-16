@@ -232,6 +232,32 @@
         }
       }
     },
+    "/debug/dump/context": {
+      "post": {
+        "summary": "导出月华主上下文或某个子智能体的上下文为 JSON（.json）",
+        "description": "导出月华主上下文或某个子智能体的上下文为 JSON（.json）",
+        "operationId": "DataDumpContextHandler",
+        "x-handler": "DataDumpContextHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/debug/dump/logs": {
+      "post": {
+        "summary": "导出原始日志为 JSON Lines（.log）",
+        "description": "导出原始日志为 JSON Lines（.log）",
+        "operationId": "DataDumpLogsHandler",
+        "x-handler": "DataDumpLogsHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/desktop/": {
       "get": {
         "summary": "琉璃桌面静态前端（内嵌 web 资源）",

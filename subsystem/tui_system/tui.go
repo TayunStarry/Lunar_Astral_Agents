@@ -80,6 +80,7 @@ const (
 	screenUpdate
 	screenPorts
 	screenMarket
+	screenDump
 )
 
 // menuItem 主菜单条目：快捷键、分组与目标屏幕均显式声明。
@@ -115,6 +116,8 @@ var menuItems = []menuItem{
 		desc: "Go 模块 WARN / ERROR / FATAL 日志"},
 	{key: "7", title: "绘图引擎 日志", group: "运行观测", screen: screenDraw,
 		desc: "sd.cpp 绘图引擎输出（进度 / 采样速度 / 时间统计），顶部附采样进度"},
+	{key: "d", title: "数据导出 管理", group: "运行观测", screen: screenDump,
+		desc: "把原始日志导出为 .log（JSON Lines）、把月华主上下文或任一子智能体上下文导出为 .json"},
 
 	{key: "8", title: "前端页面 管理", group: "系统管理", screen: screenFrontend,
 		desc: "月华 / 琉璃桌面窗口状态探测与意外关闭重启"},
@@ -172,6 +175,7 @@ type appModel struct {
 	update    updateState
 	ports     portsState
 	market    marketState
+	dump      dumpState
 
 	streamUnsub func() // 流式事件订阅注销
 	sizeLogged  bool   // 首帧尺寸自检是否已落盘
@@ -334,6 +338,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updatePorts(msg)
 	case screenMarket:
 		return m.updateMarket(msg)
+	case screenDump:
+		return m.updateDump(msg)
 	}
 	return m, nil
 }
@@ -462,6 +468,8 @@ func (m *appModel) menuAction() tea.Cmd {
 		return textinput.Blink
 	case screenMarket:
 		return m.marketEnter()
+	case screenDump:
+		return m.dumpEnter()
 	}
 	return nil
 }
@@ -555,7 +563,7 @@ func Run() error {
 			}
 			msg := strings.Join(summary, "\n")
 			AppendConsoleLog(msg)
-			pushLog(LogLine{Time: time.Now(), Source: "stdout", Level: "RAW", Text: msg}, SourceRaw)
+			pushScrubbedLog(SourceRaw, "RAW", "", "", msg)
 		} else {
 			AppendConsoleLog("[TUI] 终端字形校准失败：未能取得控制台信息，已退回内置宽度表（中文控制台字体下可能错位）")
 		}
@@ -696,6 +704,8 @@ func (m appModel) View() string {
 		return m.viewPorts()
 	case screenMarket:
 		return m.viewMarket()
+	case screenDump:
+		return m.viewDump()
 	}
 	return ""
 }
@@ -731,6 +741,8 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "端口释放", "", portsKeys()
 	case screenMarket:
 		return "LTPX 应用市场", marketContext(m.market), marketKeys(m.market)
+	case screenDump:
+		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
 	}
 	return "未知", "", nil
 }
@@ -740,7 +752,7 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a b m z", "直达"),
+		kh("0-9 a b d m z", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}

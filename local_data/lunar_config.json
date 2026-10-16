@@ -110,14 +110,13 @@
 	},
 	"release": {
 		"gitee_owner": "TayunStarry",
-		"gitee_repo": "lunar_astral_agents-update_package",
+		"gitee_repo": "Lunar-Astral-Agents",
 		"include": [
 			"local_data/audios",
 			"local_data/multimedia/background",
 			"local_data/multimedia/icon",
 			"local_data/multimedia/placeholder",
 			"local_data/package",
-			"local_data/tools",
 			"local_data/lunar_config.json"
 		],
 		"program_files": [

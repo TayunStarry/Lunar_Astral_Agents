@@ -75,6 +75,9 @@ func main() {
 	// 前端管理钩子：在线探针与窗口唤起器注入 TUI 管理屏
 	app.WireTUIFrontendHooks()
 
+	// 数据导出钩子：控制台「数据导出」屏据此把原始日志 / 智能体上下文落盘
+	app.WireTUIDataDumpHooks()
+
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）
 	app.OpenFrontendWindows()
 

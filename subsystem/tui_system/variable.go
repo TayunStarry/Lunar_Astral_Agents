@@ -19,10 +19,6 @@ const (
 	turnHistoryCap = 30
 	// statsInterval 运行状态采样间隔
 	statsInterval = time.Second
-	// giteeAPIBase Gitee OpenAPI v5 基地址
-	giteeAPIBase = "https://gitee.com/api/v5"
-	// updatePackSplitBytes 更新包分卷阈值：超过 90MB 时改用 7z 分卷（对齐 Gitee 单附件 100MB 限制）
-	updatePackSplitBytes = 90 * 1024 * 1024
 )
 
 // ==== 日志管线状态 ====

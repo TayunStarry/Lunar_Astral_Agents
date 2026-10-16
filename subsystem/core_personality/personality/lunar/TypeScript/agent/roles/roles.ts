@@ -2,6 +2,7 @@ import { ModelBuilder } from '../base/builder';
 import { registerMediaRoles } from '../capabilities/media';
 import { registerAgentTargets } from '../../tool/agent-control';
 import { registerImageDescribeRole } from '../../tool/image-recall';
+import { registerDumpRoles } from '../data-dump';
 import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
 import { DialogueRole } from './dialogue';
@@ -33,8 +34,41 @@ registerMediaRoles({ perceiverRole, randomDefaultMessage });
 /** 注入子智能体实例与描述角色（tool 模块处理函数所需，避免 tool → roles 静态循环引用） */
 registerAgentTargets({ painterRole, musicianRole });
 registerImageDescribeRole(descriptionRole);
+/** 注入可导出角色注册表（TUI 数据导出按名单导出单个子智能体上下文） */
+registerDumpRoles({
+    dialogue: { role: dialogueRole, label: '对话者' },
+    painter: { role: painterRole, label: '绘制者' },
+    musician: { role: musicianRole, label: '演奏者' },
+    perceiver: { role: perceiverRole, label: '感知者' },
+    memorizer: { role: memorizerRole, label: '记忆者' },
+    description: { role: descriptionRole, label: '描述者' },
+});
 /** 追加 LTPX 聚合工具的使用要求（静态段落，工具名与琉璃侧一致） */
 dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
+
+/**
+ * 把角色实例集合挂到宿主可见的全局（UMD 工厂的 root）。
+ *
+ * 用途：宿主（Go 侧检修工具 / 离线验证脚本）需要按名取用角色实例读取上下文；
+ * 此前 UMD 工厂只返回 api 而从不写 root，宿主侧没有任何内省入口。
+ * 挂载本身无副作用（仅一次属性赋值），不影响智能体运行。
+ */
+export const roleInstances = {
+    dialogue: dialogueRole,
+    painter: painterRole,
+    musician: musicianRole,
+    perceiver: perceiverRole,
+    memorizer: memorizerRole,
+    description: descriptionRole,
+};
+try {
+    const host = (globalThis as unknown as { agentSystem?: Record<string, unknown> });
+    host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, { randomDefaultMessage });
+}
+catch (e) {
+    console.warn('[角色] 宿主全局挂载失败（不影响运行）:', e);
+}
+
 /** 随机回答 */
 export function randomDefaultMessage(): string {
     return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];

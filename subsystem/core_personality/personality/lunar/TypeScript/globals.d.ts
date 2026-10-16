@@ -409,6 +409,19 @@ declare global {
      */
     function ltpInteractEvent(topic: string, payloadJSON: string): string;
     /**
+     * 导出智能体上下文（TUI「数据导出」调用；由 Go 侧经运行时触发本函数）
+     *
+     * 双向桥：宿主请求 → 本函数序列化上下文为 JSON 文本 → 由宿主落盘为 .json 文件。
+     * 之所以由 JS 侧产出内容：智能体上下文（messages）只存在于本运行时内。
+     *
+     * @param {string} argsJSON 请求参数 JSON，形如 {"agent":"painter","includeImages":false}；
+     *                          agent 取 'lunar'（月华主上下文/未读队列）或子智能体名
+     *                          （dialogue/painter/musician/perceiver/memorizer/description）
+     *
+     * @returns {[string, Error | null]} 包含导出结果的元组，[上下文 JSON 文本, 错误信息]
+     */
+    function dumpForJS(argsJSON: string): [string, Error | null];
+    /**
      * 将调试内容写入本地文件（覆写模式）
      * 用于各子智能体导出上下文快照
      *

@@ -83,6 +83,10 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册智能体控制适配器
 	vm.Set("getAgentPosition", adapters.getAgentPosition)
 
+	// 注册数据导出入口：宿主经 dumpForJS 向运行时索要智能体上下文 JSON
+	// （与 agent/data-dump.ts 的 buildContextDump 配对）
+	vm.Set("dumpForJS", adapters.dumpForJS)
+
 	// 注册引擎桥接适配器
 	vm.Set("sendToEngine", adapters.sendToEngine)
 	vm.Set("getAvailableActions", adapters.getAvailableActions)
@@ -115,8 +119,15 @@ func RunAgentContext() error {
 			LoggerGeneral.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", err)
 			return
 		}
+		// 脚本执行成功：标记智能体就绪（数据导出等宿主侧入口据此判断可用性）
+		agentReady.Store(true)
 	})
 	return nil
+}
+
+// IsAgentReady 报告月华智能体脚本是否已成功加载（供宿主侧入口做可用性判断）
+func IsAgentReady() bool {
+	return agentReady.Load()
 }
 
 // RunOnAgentLoop 在 agent 事件循环中执行函数（供外部模块调用）
