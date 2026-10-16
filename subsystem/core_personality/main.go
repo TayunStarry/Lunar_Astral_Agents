@@ -60,6 +60,15 @@ func main() {
 		PackageDir: GeneralConfig.ReleasePackageDir,
 	})
 
+	// 端口基准注入 TUI：代理屏的提示值必须来自真实配置，并拦住会与自身服务撞车的端口。
+	// 实测教训：代理屏曾把「代理端口」提示写死为 36790——那正是模型服务端口（BasicPort+1）。
+	// 用户照提示填写后，HTTPS 代理（Windows 允许多端口绑定）接管了模型服务端口，程序自身
+	// 发往模型的请求打到 TLS 代理上，报 TLS 握手错误/连接重置/嵌入请求 EOF，连锁导致记忆库失败。
+	TuiSystem.SetProxyDefaults(*GeneralConfig.BasicPort, *GeneralConfig.ProxyPort, map[int]string{
+		*GeneralConfig.BasicPort: "Web 服务（前端与 API）",
+		*GeneralConfig.ModelPort: "模型服务（llama-server）",
+	})
+
 	// 装配各子系统（传输层 / 人格层 / 引擎层 / HTTP 服务；日志经管线进入 TUI 视图）
 	app.Assemble()
 

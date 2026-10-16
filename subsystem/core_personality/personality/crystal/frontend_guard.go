@@ -28,14 +28,17 @@ func SetFrontendReadyProbe(fn func() bool) {
 }
 
 // EnsureFrontendForDispatch 确保 LTPX 前端派发通道可用：琉璃前端离线时唤起其桌面
-// 窗口并等待重新就绪。单飞保护：并发派发共享同一次唤起；等待超时后放行（回退旧
-// 语义：广播无人接收，由轮询超时收尾），绝不无限阻塞派发 goroutine。
-func EnsureFrontendForDispatch() {
+// 窗口并等待重新就绪。单飞保护：并发派发共享同一次唤起。
+//
+// 返回 true 表示前端可用（原本在线或唤起成功），false 表示等待超时仍不可用——
+// 调用方据此立即回执失败，不再让月华空等结果通道的上限时长。
+func EnsureFrontendForDispatch() bool {
 	if frontendReadyProbe == nil {
-		return
+		// 未注入探针（无前端守护能力）：按可用处理，沿用"广播后等待回执"的旧语义
+		return true
 	}
 	if frontendReadyProbe() {
-		return
+		return true
 	}
 
 	frontendGuardMu.Lock()
@@ -43,24 +46,25 @@ func EnsureFrontendForDispatch() {
 
 	// 双检：等锁期间前一次唤起可能已把前端拉起
 	if frontendReadyProbe() {
-		return
+		return true
 	}
 
 	if frontendRelauncher == nil {
-		return
+		return false
 	}
 	LoggerGeneral.Info("CrystalAstral", "琉璃前端不在线（LTPX 功能依托前端），尝试重新唤起琉璃桌面窗口")
 	if err := frontendRelauncher(); err != nil {
-		LoggerGeneral.Warn("CrystalAstral", "琉璃桌面窗口唤起失败: %v（本次派发按旧机制继续）", err)
+		LoggerGeneral.Warn("CrystalAstral", "琉璃桌面窗口唤起失败: %v", err)
 	}
 
 	deadline := time.Now().Add(frontendReviveTimeout)
 	for time.Now().Before(deadline) {
 		if frontendReadyProbe() {
 			LoggerGeneral.Info("CrystalAstral", "琉璃前端已重新接入总线，LTPX 派发通道恢复")
-			return
+			return true
 		}
 		time.Sleep(frontendRevivePollInterval)
 	}
-	LoggerGeneral.Warn("CrystalAstral", "等待琉璃前端重新就绪超时（%v），本次 LTPX 派发可能无人接收", frontendReviveTimeout)
+	LoggerGeneral.Warn("CrystalAstral", "等待琉璃前端重新就绪超时（%v），本次 LTPX 派发未执行", frontendReviveTimeout)
+	return false
 }

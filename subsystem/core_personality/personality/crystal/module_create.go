@@ -351,18 +351,21 @@ func saveModuleIcon(packageDir, icon string) string {
 
 // MiniLTPAgentHandler GET /mini-ltp-agent.js
 // 供琉璃前端在 iframe 加载 Mini-LTP 包时动态注入通用页面操作智能体。
-// 智能体源码从内嵌资源读取（go:embed web/*），随二进制发布、版本一致；
+// 智能体源码从内嵌资源读取（go:embed web/*，见 variable.go），随二进制发布、版本一致；
 // 包 index.html 保持原样，不改动原本项目代码。
 func MiniLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := EmbeddedFiles.ReadFile("assets/mini_ltp_agent.js")
+	data, err := readWebAsset("mini_ltp_agent.js")
 	if err != nil {
-		http.Error(w, "读取智能体资源失败", http.StatusInternalServerError)
+		LoggerGeneral.Error("CrystalAstral", "读取 Mini-LTP 智能体资源失败: %v", err)
+		http.Error(w, "读取智能体资源失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// 服务端留痕：本请求出现即证明琉璃前端的注入链路已触发（排查"页面打开了但任务不执行"的关键锚点）
+	LoggerGeneral.Info("CrystalAstral", "LTPX 注入：Mini-LTP 智能体脚本已下发（%d 字节）", len(data))
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
@@ -372,17 +375,20 @@ func MiniLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
 // 统一键鼠操作共享模块（SharedInput）：承载 Self-LTP 与 Mini-LTP 两个网页操作智能体
 // 共享的全部页面操作原语（DOM 工具/元素捕获/模拟交互/视觉截图）。
 // 智能体由琉璃前端动态注入时，必须先注入本共享模块，再注入智能体脚本。
-// 源码从内嵌资源读取（go:embed web/*），随二进制发布、版本一致。
+// 源码从内嵌资源读取（go:embed web/*，见 variable.go），随二进制发布、版本一致。
 func SharedInputHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := EmbeddedFiles.ReadFile("assets/shared_input.js")
+	data, err := readWebAsset("shared_input.js")
 	if err != nil {
-		http.Error(w, "读取共享模块资源失败", http.StatusInternalServerError)
+		LoggerGeneral.Error("CrystalAstral", "读取 SharedInput 共享模块资源失败: %v", err)
+		http.Error(w, "读取共享模块资源失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// 服务端留痕：与 Mini-LTP / Self-LTP 智能体脚本的请求成对出现
+	LoggerGeneral.Info("CrystalAstral", "LTPX 注入：SharedInput 共享模块已下发（%d 字节）", len(data))
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
@@ -392,20 +398,36 @@ func SharedInputHandler(w http.ResponseWriter, r *http.Request) {
 // 供琉璃前端在 iframe 加载 Self-LTP 包时动态注入自主页面操作智能体。
 // 与 Mini-LTP 同源（复用页面操作原语），差异在于 Self-LTP 不接入 AtoA：
 // 智能体自动挂载「开始/停止 + 初始任务输入框」控制面板，由用户在页面上直接驱动。
-// 智能体源码从内嵌资源读取（go:embed web/*），包 index.html 保持原样。
+// 智能体源码从内嵌资源读取（go:embed web/*，见 variable.go），包 index.html 保持原样。
 func SelfLTPAgentHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := EmbeddedFiles.ReadFile("assets/self_ltp_agent.js")
+	data, err := readWebAsset("self_ltp_agent.js")
 	if err != nil {
-		http.Error(w, "读取自主智能体资源失败", http.StatusInternalServerError)
+		LoggerGeneral.Error("CrystalAstral", "读取 Self-LTP 智能体资源失败: %v", err)
+		http.Error(w, "读取自主智能体资源失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// 服务端留痕：与 SharedInput 成对出现
+	LoggerGeneral.Info("CrystalAstral", "LTPX 注入：Self-LTP 智能体脚本已下发（%d 字节）", len(data))
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
+}
+
+// readWebAsset 读取琉璃桌面内嵌前端资源。
+func readWebAsset(name string) ([]byte, error) {
+	if name == "" {
+		return nil, fmt.Errorf("资源名称为空")
+	}
+	full := "web/" + strings.TrimPrefix(name, "web/")
+	data, err := EmbeddedFiles.ReadFile(full)
+	if err != nil {
+		return nil, fmt.Errorf("读取内嵌资源 %s 失败: %w", full, err)
+	}
+	return data, nil
 }
 
 // reprTitle 从 HTML 中提取 <title> 内容

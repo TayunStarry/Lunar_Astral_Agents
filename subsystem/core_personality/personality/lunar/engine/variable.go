@@ -22,8 +22,10 @@ const (
 var (
 	// ltpRemoteMutex 保护聚合工具缓存的并发读写
 	ltpRemoteMutex sync.RWMutex
-	// ltpRemoteTool 最近一次同步到的聚合工具（恒为单一 use_program，随工具链变化更新）
+	// ltpRemoteTool 最近一次同步到的聚合工具（恒为单一 use_the_program，随工具链变化更新）
 	ltpRemoteTool *LTPXRemoteToolDef
+	// ltpLoggedSubTools 上次打日志的子工具清单（清单未变化时不重复刷屏）
+	ltpLoggedSubTools []string
 )
 
 // ==== 消息推送全局变量 ====

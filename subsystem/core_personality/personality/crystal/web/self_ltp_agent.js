@@ -87,29 +87,59 @@
 
     /* ---------------- 共享键鼠操作模块（SharedInput） ----------------
        页面操作原语统一来自 window.SharedInput（见 shared_input.js）；
-       宿主注入顺序：先注 /shared-input.js，再注本智能体脚本。 */
+       宿主注入顺序：先注 /shared-input.js，再注本智能体脚本。
+
+       注意：共享模块缺失时不在顶层抛错（顶层抛错会让整份脚本加载失败、页面按钮
+       失效且无法诊断），改为调用时才抛出明确错误。 */
 
     var SharedInput = (typeof window !== 'undefined' && window.SharedInput) || null;
-    if (!SharedInput) throw new Error('SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js）');
-    var isVisible = SharedInput.isVisible, escapeCss = SharedInput.escapeCss,
-        query = SharedInput.query, queryAll = SharedInput.queryAll,
-        textOf = SharedInput.textOf, describe = SharedInput.describe,
-        findByText = SharedInput.findByText, resolveTarget = SharedInput.resolveTarget,
-        uniqueSelector = SharedInput.uniqueSelector, captureElements = SharedInput.captureElements,
-        buildCompactElements = SharedInput.buildCompactElements,
-        buildPageInfoText = SharedInput.buildPageInfoText,
-        dispatchAt = SharedInput.dispatchAt, resolvePoint = SharedInput.resolvePoint,
-        fireMouse = SharedInput.fireMouse, focusEl = SharedInput.focusEl,
-        clickEl = SharedInput.clickEl, hoverEl = SharedInput.hoverEl,
-        setInputValue = SharedInput.setInputValue, typeEl = SharedInput.typeEl,
-        keyToCode = SharedInput.keyToCode, normalizeKeyToken = SharedInput.normalizeKeyToken,
-        pressKeyEl = SharedInput.pressKeyEl, parseHoldSpec = SharedInput.parseHoldSpec,
-        mouseButtonEl = SharedInput.mouseButtonEl, wheelEl = SharedInput.wheelEl,
-        sleep = SharedInput.sleep, scrollEl = SharedInput.scrollEl,
-        selectEl = SharedInput.selectEl, getState = SharedInput.getState,
-        tryDrawPagePixels = SharedInput.tryDrawPagePixels, drawGrid = SharedInput.drawGrid,
-        drawElementBoxes = SharedInput.drawElementBoxes, captureScreenshot = SharedInput.captureScreenshot,
-        SCREEN_GRID_STEP = SharedInput.SCREEN_GRID_STEP;
+    if (!SharedInput) {
+        console.error('[Self-LTP] SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js），页面操作能力不可用');
+    }
+    function sharedModuleError() {
+        throw new Error('SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js）');
+    }
+    function sharedFn(name) {
+        if (SharedInput && typeof SharedInput[name] === 'function') {
+            return SharedInput[name].bind(SharedInput);
+        }
+        return sharedModuleError;
+    }
+    var isVisible = sharedFn('isVisible'), escapeCss = sharedFn('escapeCss'),
+        query = sharedFn('query'), queryAll = sharedFn('queryAll'),
+        textOf = sharedFn('textOf'), describe = sharedFn('describe'),
+        findByText = sharedFn('findByText'), resolveTarget = sharedFn('resolveTarget'),
+        uniqueSelector = sharedFn('uniqueSelector'), captureElements = sharedFn('captureElements'),
+        buildCompactElements = sharedFn('buildCompactElements'),
+        buildPageInfoText = sharedFn('buildPageInfoText'),
+        dispatchAt = sharedFn('dispatchAt'), resolvePoint = sharedFn('resolvePoint'),
+        fireMouse = sharedFn('fireMouse'), focusEl = sharedFn('focusEl'),
+        clickEl = sharedFn('clickEl'), hoverEl = sharedFn('hoverEl'),
+        setInputValue = sharedFn('setInputValue'), typeEl = sharedFn('typeEl'),
+        keyToCode = sharedFn('keyToCode'), normalizeKeyToken = sharedFn('normalizeKeyToken'),
+        pressKeyEl = sharedFn('pressKeyEl'), parseHoldSpec = sharedFn('parseHoldSpec'),
+        mouseButtonEl = sharedFn('mouseButtonEl'), wheelEl = sharedFn('wheelEl'),
+        sleep = sharedFn('sleep'), scrollEl = sharedFn('scrollEl'),
+        selectEl = sharedFn('selectEl'), getState = sharedFn('getState'),
+        tryDrawPagePixels = sharedFn('tryDrawPagePixels'), drawGrid = sharedFn('drawGrid'),
+        drawElementBoxes = sharedFn('drawElementBoxes'), captureScreenshot = sharedFn('captureScreenshot'),
+        SCREEN_GRID_STEP = (SharedInput && typeof SharedInput.SCREEN_GRID_STEP === 'number') ? SharedInput.SCREEN_GRID_STEP : 50;
+
+    /** 带硬超时的截图：异常页面（canvas/three.js/超大内联内容）可能长时间不返回，超时即放弃并继续 */
+    var SCREENSHOT_TIMEOUT_MS = 5000;
+    async function captureScreenshotBounded(items) {
+        let timer = null;
+        try {
+            return await Promise.race([
+                Promise.resolve(captureScreenshot(items)),
+                new Promise(function (resolve) { timer = setTimeout(function () { resolve(null); }, SCREENSHOT_TIMEOUT_MS); })
+            ]);
+        } catch (e) {
+            return null;
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
 
 
     /* ---------------- 工具定义（OpenAI function calling 格式） ----------------
@@ -426,8 +456,8 @@
 
     async function execCaptureScreenshot() {
         const items = captureElements({ max: AGENT_MAX_LIST_ITEMS });
-        const shot = await captureScreenshot(items).catch(function () { return null; });
-        if (!shot || !shot.dataUrl) return { success: false, error: '截图失败' };
+        const shot = await captureScreenshotBounded(items);
+        if (!shot || !shot.dataUrl) return { success: false, error: '截图失败或超时（页面像素还原不可用，可改用元素列表定位）' };
         return {
             success: true,
             text: '已刷新视口截图（' + shot.width + '×' + shot.height + '，网格步长 ' + SCREEN_GRID_STEP + 'px），可见可交互元素 ' + shot.count + ' 个。'
@@ -584,8 +614,7 @@
             if (stopRequested || !running) break;
 
             const elems = captureElements({ max: AGENT_MAX_LIST_ITEMS });
-            let shot = null;
-            try { shot = await captureScreenshot(elems); } catch (e) { shot = null; }
+            const shot = await captureScreenshotBounded(elems);
 
             const stepParts = [{ type: 'text', text: buildContextText(step, elems, shot) }];
             if (shot && shot.dataUrl) stepParts.push({ type: 'image_url', image_url: { url: shot.dataUrl } });

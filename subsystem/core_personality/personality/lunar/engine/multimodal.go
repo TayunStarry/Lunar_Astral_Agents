@@ -287,8 +287,37 @@ func (class *Runtime) generateImage(call goja.FunctionCall) goja.Value {
 		initImg = ii
 	}
 
+	// 超分辨率重建：true 时生成完成后追加 RealESRGAN 放大（透传至扩散模块）
+	superResolution := false
+	if sr, ok := params["superResolution"].(bool); ok {
+		superResolution = sr
+	}
+
 	// 调用图片生成函数
-	result, err := module.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, false)
+	result, err := module.GenerateImage(prompt, negativePrompt, batchSize, width, height, steps, strength, cfgScale, seed, initImg, superResolution)
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+	return class.runtime.ToValue([]any{result, nil})
+}
+
+// upscaleImage 适配TypeScript调用的图像超分辨率重建：对已有图片执行 RealESRGAN 放大（4x）
+// 入参与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，
+// 地址类（HTTP(S) URL、data:image URI、本地路径）由 Go 侧下载/解码后走 sd-cli -M upscale 管线
+// 返回值: [Object, error] 超分结果（base64/尺寸）和错误信息
+func (class *Runtime) upscaleImage(call goja.FunctionCall) goja.Value {
+	if len(call.Arguments) < 1 {
+		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
+	}
+
+	// 统一入参解析：地址类入参由 Go 侧下载/解码，字节类入参直接使用
+	bytesData, err := resolveImageBytes(call.Argument(0))
+	if err != nil {
+		return class.runtime.ToValue([]any{nil, err})
+	}
+
+	// 调用超分函数
+	result, err := module.UpscaleImage(bytesData)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
 	}

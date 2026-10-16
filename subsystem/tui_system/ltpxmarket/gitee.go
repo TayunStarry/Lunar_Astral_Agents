@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"LunarSubsystem/TuiSystem/channel"
 )
 
 // giteeRelease Gitee Release API 响应（仅解析用到的字段）
@@ -47,7 +49,8 @@ func apiRequest(path string, query url.Values, out any) error {
 		return fmt.Errorf("读取响应失败: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 300))
+		// 返回可分类的接口错误（限流/鉴权/权限提示不同，见 channel/api.go）
+		return &channel.APIError{Status: resp.StatusCode, Path: path, Body: truncate(string(body), 300)}
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("解析响应失败: %w", err)

@@ -6,7 +6,6 @@ var agentSystem = (function (exports) {
         static imageFormatsExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
         static videoFormatsExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
         static LTPfunction = new Map();
-        static LTPdefinition = [];
         static unreadRecords = [];
         static unreadContext = [];
         static reasoningInProgress = false;
@@ -42,6 +41,833 @@ var agentSystem = (function (exports) {
         }
         ;
     }
+
+    const IMAGE_CACHE_CAPACITY = 80;
+    const IMAGE_WINDOW_SIZE = 20;
+    const TAG_ITEM_PATTERN = /^\[?(图片\.\d+)\]?$/;
+    function normalizeImageTag(raw) {
+        if (!raw)
+            return '';
+        const trimmed = String(raw).trim();
+        const tagged = trimmed.match(/图片\.(\d+)/);
+        if (tagged && !/[\p{L}\p{N}]/u.test(trimmed.slice((tagged.index || 0) + tagged[0].length))) {
+            return `图片.${tagged[1].padStart(3, '0')}`;
+        }
+        if (/^\d+$/.test(trimmed))
+            return `图片.${trimmed.padStart(3, '0')}`;
+        return '';
+    }
+    function isTagItem(text) {
+        return TAG_ITEM_PATTERN.test((text || '').trim());
+    }
+    function sanitizeImageDesc(raw, maxChars) {
+        if (typeof raw !== 'string')
+            return '';
+        let text = raw.replace(/\s+/g, ' ').trim();
+        if (!text)
+            return '';
+        text = text.replace(/^[「『"'“”‘’]+/, '').replace(/[」』"'“”‘’]+$/, '').trim();
+        text = text.replace(/[[\]【】〔〕（）()]/g, '').trim();
+        text = text.replace(/^[，。、；：,.!?！？~～…\-\s]+/, '').replace(/[，。、；：,.!?！？~～…\-\s]+$/, '').trim();
+        if (!text)
+            return '';
+        if (text.length > maxChars)
+            text = text.slice(0, maxChars).trim() + '…';
+        return text;
+    }
+    function composeImagePlaceholder(tag, desc) {
+        const clean = sanitizeImageDesc(desc, 40);
+        return clean ? `[${tag}]（${clean}）` : `[${tag}]`;
+    }
+    function putCacheEntry(source, pinned) {
+        try {
+            const [tag, error] = imageCachePut(source, pinned);
+            return (error || !tag) ? '' : tag;
+        }
+        catch (error) {
+            console.error('[图片缓存] 注册失败:', error);
+            return '';
+        }
+    }
+    function getCacheEntry(tag) {
+        try {
+            const [entry, error] = imageCacheGet(tag);
+            return (error || !entry) ? null : entry;
+        }
+        catch (error) {
+            console.error('[图片缓存] 查询失败:', error);
+            return null;
+        }
+    }
+    function listCacheEntries(topK) {
+        try {
+            const [entries, error] = imageCacheList(topK);
+            return (error || !entries) ? [] : entries;
+        }
+        catch (error) {
+            console.error('[图片缓存] 清单查询失败:', error);
+            return [];
+        }
+    }
+    function setCacheDesc(tag, desc) {
+        try {
+            imageCacheSetDesc(tag, desc);
+        }
+        catch (error) {
+            console.error('[图片缓存] 描述写入失败:', error);
+        }
+    }
+    function unpinCacheTag(tag) {
+        try {
+            imageCacheUnpin(tag);
+        }
+        catch (error) {
+            console.error('[图片缓存] 解钉失败:', error);
+        }
+    }
+    const pendingTags = new Map();
+    function stashPendingTag(message, source, tag) {
+        if (!message || !source || !tag)
+            return;
+        let bucket = pendingTags.get(message);
+        if (!bucket) {
+            bucket = new Map();
+            pendingTags.set(message, bucket);
+        }
+        bucket.set(source, tag);
+    }
+    function takePendingTag(message, source) {
+        const bucket = pendingTags.get(message);
+        if (!bucket)
+            return '';
+        const tag = bucket.get(source) || '';
+        if (tag)
+            bucket.delete(source);
+        if (bucket.size === 0)
+            pendingTags.delete(message);
+        return tag;
+    }
+    function clearPendingTags(message) {
+        pendingTags.delete(message);
+    }
+    function demoteContentImages(content, tagFor, descFor) {
+        const items = content || [];
+        const replacements = items.map(() => null);
+        const tagIndexes = [];
+        const imageIndexes = [];
+        items.forEach((item, index) => {
+            const itemType = item ? item.type : undefined;
+            if (itemType === 'text' && isTagItem(String(item.text ?? '')))
+                tagIndexes.push(index);
+            else if (itemType === 'image_url')
+                imageIndexes.push(index);
+        });
+        const usedTags = new Set();
+        const takeAnnotation = (imageIndex) => {
+            for (let k = tagIndexes.length - 1; k >= 0; k--) {
+                if (!usedTags.has(tagIndexes[k]) && tagIndexes[k] < imageIndex) {
+                    usedTags.add(tagIndexes[k]);
+                    return tagIndexes[k];
+                }
+            }
+            for (let k = 0; k < tagIndexes.length; k++) {
+                if (!usedTags.has(tagIndexes[k]) && tagIndexes[k] > imageIndex) {
+                    usedTags.add(tagIndexes[k]);
+                    return tagIndexes[k];
+                }
+            }
+            return -1;
+        };
+        for (const imageIndex of imageIndexes) {
+            const item = items[imageIndex];
+            const source = item.image_url?.url || '';
+            const tag = tagFor(source);
+            if (!tag) {
+                replacements[imageIndex] = '';
+                continue;
+            }
+            const annotationIndex = takeAnnotation(imageIndex);
+            if (annotationIndex >= 0) {
+                replacements[annotationIndex] = composeImagePlaceholder(tag, descFor(tag, source));
+                replacements[imageIndex] = '';
+            }
+            else
+                replacements[imageIndex] = composeImagePlaceholder(tag, descFor(tag, source));
+        }
+        const rebuilt = [];
+        items.forEach((item, index) => {
+            const replacement = replacements[index];
+            if (replacement === '')
+                return;
+            if (typeof replacement === 'string')
+                rebuilt.push({ type: 'text', text: replacement });
+            else
+                rebuilt.push(item);
+        });
+        return rebuilt;
+    }
+
+    let agentTargets = null;
+    function registerAgentTargets(targets) {
+        agentTargets = targets;
+    }
+    const agentControlTools = [
+        {
+            type: "function",
+            function: {
+                name: "dispatch_painter",
+                description: "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。若用户要求参照图片创作（改画风、换场景、改服饰、保留角色容貌等），通过 reference_tag 指定 [图片.00x] 标签，绘图者将以该图为图生图基座。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'把 [图片.003] 画成雪景'。描述越详细，绘画效果越好。"
+                        },
+                        reference_tag: {
+                            type: "string",
+                            description: "图生图基座图的图片标签（如 图片.003）。用户要求参照某张图片创作时，填该图片在消息中出现的 [图片.00x] 标签；纯文生图时省略。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "dispatch_musician",
+                description: "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        description: {
+                            type: "string",
+                            description: "音乐需求描述，如'创作一首轻快的钢琴曲'、'写一首抒情的钢琴与大提琴二重奏'。描述越详细，音乐创作效果越好。"
+                        }
+                    },
+                    required: ["description"]
+                }
+            }
+        }
+    ];
+    function parseArgs$1(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    async function handleDispatchPainter(args) {
+        const { description, reference_tag } = parseArgs$1(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
+        }
+        if (!agentTargets?.painterRole) {
+            return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
+        }
+        let taskDescription = description.trim();
+        if (reference_tag) {
+            const tag = normalizeImageTag(String(reference_tag));
+            const entry = tag ? getCacheEntry(tag) : null;
+            if (entry) {
+                const localPath = agentTargets.painterRole.prepareReference(entry.source);
+                taskDescription += localPath
+                    ? `（用户指定 [${tag}] 作为图生图基座，参考图已准备就绪：${localPath}，请直接调用 image_to_image 创作）`
+                    : `（用户指定 [${tag}] 作为基座，但该图源已无法读取（远端地址可能失效），请调用 list_images 后用 select_reference_image 换一个标签重试）`;
+            }
+            else {
+                taskDescription += `（用户提到 [${reference_tag}]，但该标签已过期或不存在，请调用 list_images 查看可用图片后按标签选定基座，取不到再回退文生图）`;
+            }
+        }
+        console.log(`[智能体控制] 调度绘制者${reference_tag ? '（图生图）' : ''}: ${taskDescription.split('\n')[0]}`);
+        const result = await agentTargets.painterRole.createCreativeWork(taskDescription);
+        console.log(`[智能体控制] 绘制者完成: ${result}`);
+        return [result, ''];
+    }
+    async function handleDispatchMusician(args) {
+        const { description } = parseArgs$1(args);
+        if (!description || typeof description !== 'string' || description.trim().length === 0) {
+            return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
+        }
+        if (!agentTargets?.musicianRole) {
+            return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
+        }
+        console.log(`[智能体控制] 调度演奏者: ${description}`);
+        const result = await agentTargets.musicianRole.createCreativeWork(description.trim());
+        console.log(`[智能体控制] 演奏者完成: ${result}`);
+        return [result, ''];
+    }
+    GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
+    GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
+
+    let describeRole = null;
+    function registerImageDescribeRole(role) {
+        describeRole = role;
+    }
+    const imageRecallTools = [
+        {
+            type: "function",
+            function: {
+                name: "list_images",
+                description: "列出当前缓存中可用的图片标签清单（标签 + 内容描述 + 是否仍在多模态窗口内），按注册时间倒序，只返回文字不含图片。当你不确定某张图片的标签是否还有效、或用户提到一张你已看不到的图片时，先用本工具查看清单，再用 describe_images 按标签取内容描述。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        limit: {
+                            type: "number",
+                            description: "返回条目数量上限，默认 30"
+                        }
+                    },
+                    required: []
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "describe_images",
+                description: "按图片标签获取图片的内容描述（视觉模型解读，不注入图片本体，上下文成本极低）。占位文本 [图片.00x]（…）括号内已是内容描述，无需再调用；需要了解描述之外的细节（如「图上写了什么字」、画面里第二个人的穿着）时可带 question 定向提问。标签可从消息中的旁注占位、list_images 清单或合并转发文本中获得；交给绘图者参照创作时无需调用，直接在 dispatch_painter 的 reference_tag 里写标签。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        tags: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "图片标签数组，如 [\"图片.003\", \"图片.007\"]（写作 [图片.003] 形式也可以）"
+                        },
+                        question: {
+                            type: "string",
+                            description: "可选：用户当前关心的具体问题（如'图上写了什么字'、'第二个人穿什么'），描述将围绕该问题定向生成"
+                        }
+                    },
+                    required: ["tags"]
+                }
+            }
+        }
+    ];
+    function describeEntry(tag, source, question) {
+        const entry = getCacheEntry(tag);
+        if (entry?.desc && !question)
+            return sanitizeImageDesc(entry.desc, 160);
+        if (!describeRole || !source)
+            return sanitizeImageDesc(entry?.desc || '', 160);
+        try {
+            const instruction = question
+                ? `用户想知道：${question}。请观察这张图片，用不超过100字的中文描述其中与该问题相关的关键信息，直接输出描述本身。`
+                : '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。';
+            describeRole.coverContext({
+                role: 'user',
+                content: [
+                    { type: 'text', text: instruction },
+                    { type: 'image_url', image_url: { url: source } }
+                ]
+            });
+            const response = describeRole.run([], []);
+            const desc = sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 160);
+            if (desc && !question)
+                setCacheDesc(tag, desc);
+            return desc || sanitizeImageDesc(entry?.desc || '', 160);
+        }
+        catch (error) {
+            console.error(`[图片描述] ${tag} 描述生成失败:`, error);
+            return sanitizeImageDesc(entry?.desc || '', 160);
+        }
+    }
+    async function handleListImages(args) {
+        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
+        const limit = Math.min(Math.max(Number(parsed.limit) || 30, 1), IMAGE_CACHE_CAPACITY);
+        const entries = listCacheEntries(limit);
+        if (entries.length === 0)
+            return ['当前图片缓存为空：没有任何可用的图片标签', ''];
+        const lines = entries.map(entry => `[${entry.tag}] ${entry.desc ? sanitizeImageDesc(entry.desc, 40) : '（暂无描述，可用 describe_images 获取）'}${entry.pinned ? ' [窗内]' : ''}`);
+        const text = `当前可用的图片标签（共 ${entries.length} 条，按注册时间倒序，越靠前越新；[窗内] 表示图片仍在你的多模态窗口中，能直接看到）：`
+            + `\n${lines.join('\n')}`
+            + `\n标签只在本次运行内有效（重启后编号会重新分配），且缓存仅保留最近的图片；标签取不到时说明该图已过期，可参考上表中仍然存在的其它标签。`;
+        return [text, ''];
+    }
+    async function handleDescribeImages(args) {
+        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
+        const rawTags = Array.isArray(parsed.tags) ? parsed.tags : (parsed.tag ? [parsed.tag] : []);
+        const tags = [...new Set(rawTags.map(item => normalizeImageTag(String(item || ''))).filter(Boolean))];
+        if (tags.length === 0)
+            return ['取图失败：请提供图片标签数组，如 ["图片.003"]；标签形如 图片.003，可用 list_images 查看当前可用标签', ''];
+        const question = String(parsed.question || '').trim().slice(0, 100);
+        const lines = [];
+        const missing = [];
+        for (const tag of tags) {
+            const entry = getCacheEntry(tag);
+            if (!entry) {
+                missing.push(tag);
+                continue;
+            }
+            const desc = describeEntry(tag, entry.source, question);
+            lines.push(`[${tag}] ${desc || '（描述生成失败，源图可能已失效）'}`);
+        }
+        if (lines.length === 0) {
+            return [`取图失败：${missing.join('、')} 均已过期或不存在（缓存仅保留最近 ${IMAGE_CACHE_CAPACITY} 张未钉住的图片，当前窗口上限 ${IMAGE_WINDOW_SIZE} 张）。请调用 list_images 查看当前可用标签`, ''];
+        }
+        let text = `共取回 ${lines.length} 张图片的内容描述：\n${lines.join('\n')}`;
+        if (missing.length > 0)
+            text += `\n以下标签已过期，无法取回：${missing.join('、')}（可调用 list_images 查看当前可用标签）`;
+        console.log(`[图片描述] 已取回 ${lines.length} 张图片描述${missing.length ? `，${missing.length} 个标签过期` : ''}`);
+        return [text, ''];
+    }
+    GlobalConfig.LTPfunction.set('list_images', handleListImages);
+    GlobalConfig.LTPfunction.set('describe_images', handleDescribeImages);
+
+    const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
+    const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
+    const PRESET_DAILY_TASKS = [
+        { id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
+        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
+        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候，关心其午餐情况' },
+        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水啦"的补水提醒' },
+        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送傍晚问候，关心一天收尾与晚间安排' },
+        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候，祝其好眠' },
+    ];
+    const SCHEDULE_FILE_PATH = 'database/schedule.json';
+    const scheduleTools = [
+        {
+            type: "function",
+            function: {
+                name: "create_schedule",
+                description: "在计划表中创建新的计划项，指定执行时间点和对应的工作内容。时间格式为 ISO 8601 (如 '2026-06-14T15:30:00') 或中文日期时间格式 (如 '2026年6月14日 15:30')。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        time: {
+                            type: "string",
+                            description: "计划执行的时间点，支持 ISO 8601 格式或中文日期时间格式，例如 '2026-06-14T15:30:00' 或 '2026年6月14日 15:30'"
+                        },
+                        content: {
+                            type: "string",
+                            description: "计划执行的工作内容描述，应清晰说明需要完成的事项"
+                        }
+                    },
+                    required: ["time", "content"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "edit_schedule",
+                description: "编辑计划表中已存在的计划项，可修改其执行时间和/或工作内容。需要提供计划项的ID，至少提供 time 或 content 中的一个进行修改。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要编辑的计划项ID，从 query_schedule 返回结果中获得"
+                        },
+                        time: {
+                            type: "string",
+                            description: "修改后的执行时间点，不修改则留空"
+                        },
+                        content: {
+                            type: "string",
+                            description: "修改后的工作内容描述，不修改则留空"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "delete_schedule",
+                description: "从计划表中删除指定的计划项。需要提供计划项的ID。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        id: {
+                            type: "string",
+                            description: "要删除的计划项ID，从 query_schedule 返回结果中获得"
+                        }
+                    },
+                    required: ["id"]
+                }
+            }
+        },
+        {
+            type: "function",
+            function: {
+                name: "query_schedule",
+                description: "查询计划表中已有的计划项列表，可按关键词筛选。返回所有匹配的计划项及其ID、时间和内容。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        keyword: {
+                            type: "string",
+                            description: "用于筛选计划项的关键词，留空则返回全部计划项"
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+
+    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+    function formatISO(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        const h = String(date.getHours()).padStart(2, '0');
+        const mi = String(date.getMinutes()).padStart(2, '0');
+        const s = String(date.getSeconds()).padStart(2, '0');
+        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
+    }
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const mo = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${mo}-${d}`;
+    }
+    function normalizeTime(raw) {
+        if (!raw || raw.trim().length === 0) {
+            return null;
+        }
+        const trimmed = raw.trim();
+        const stdDate = new Date(trimmed);
+        if (!isNaN(stdDate.getTime())) {
+            return formatISO(stdDate);
+        }
+        const cnMatch = trimmed.match(CN_DATE_REGEX);
+        if (cnMatch) {
+            const [, year, month, day, hour, minute, second] = cnMatch;
+            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
+        }
+        return null;
+    }
+    function dailyTaskTime(item, now) {
+        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
+        if (!match)
+            return null;
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
+    }
+
+    function loadSchedulesFromDisk() {
+        const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
+        if (readErr) {
+            return [];
+        }
+        try {
+            const jsonStr = atob(fileData);
+            const data = JSON.parse(jsonStr);
+            return Array.isArray(data) ? data : [];
+        }
+        catch (e) {
+            console.error('[计划表] 计划表数据解析失败:', e);
+            return [];
+        }
+    }
+    function saveSchedulesToDisk(schedules) {
+        try {
+            const jsonStr = JSON.stringify(schedules, null, 2);
+            const [, , saveErr] = saveFile(SCHEDULE_FILE_PATH, true, jsonStr);
+            if (saveErr) {
+                console.error('[计划表] 保存计划表失败:', saveErr);
+                return false;
+            }
+            return true;
+        }
+        catch (e) {
+            console.error('[计划表] 序列化计划表失败:', e);
+            return false;
+        }
+    }
+
+    let scheduleCache = [];
+    function initSchedules() {
+        const raw = loadSchedulesFromDisk();
+        const existingIds = new Set(raw.map(item => item.id));
+        let added = 0;
+        for (const preset of PRESET_DAILY_TASKS) {
+            if (existingIds.has(preset.id))
+                continue;
+            raw.push({ ...preset });
+            added++;
+        }
+        if (raw.length === 0) {
+            saveSchedulesToDisk([]);
+            scheduleCache = [];
+            console.log('[计划表] 初始化完成，计划表为空');
+            return;
+        }
+        let needsRewrite = added > 0;
+        for (const item of raw) {
+            if (item.type === 'daily')
+                continue;
+            const normalized = normalizeTime(item.time);
+            if (normalized && normalized !== item.time) {
+                item.time = normalized;
+                needsRewrite = true;
+            }
+        }
+        scheduleCache = raw;
+        if (needsRewrite) {
+            saveSchedulesToDisk(scheduleCache);
+            if (added > 0)
+                console.log(`[计划表] 已补充 ${added} 个预设每日任务`);
+            console.log('[计划表] 已修正历史数据中的非标准时间格式');
+        }
+        console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
+    }
+    function generateId() {
+        function execute(character) {
+            const randomValue = (Math.random() * 16) | 0;
+            const maskedRandomValue = character === 'x' ? randomValue : (randomValue & 0x3 | 0x8);
+            return maskedRandomValue.toString(16);
+        }
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, execute);
+    }
+    function parseArgs(args) {
+        return typeof args === 'string' ? JSON.parse(args) : (args || {});
+    }
+    async function handleCreateSchedule(args) {
+        const { time, content } = parseArgs(args);
+        if (!time || time.trim().length === 0) {
+            return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
+        }
+        if (!content || content.trim().length === 0) {
+            return ['创建计划项失败：工作内容不能为空，请提供具体的计划内容', ''];
+        }
+        const normalizedTime = normalizeTime(time);
+        if (!normalizedTime) {
+            return [`创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`, ''];
+        }
+        const newItem = {
+            id: generateId(),
+            time: normalizedTime,
+            content: content.trim()
+        };
+        scheduleCache.push(newItem);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.pop();
+            return ['创建计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
+        return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
+    }
+    async function handleEditSchedule(args) {
+        const { id, time, content } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
+        }
+        if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
+            return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
+        }
+        const snapshot = { ...scheduleCache[index] };
+        if (time && time.trim().length > 0) {
+            const normalizedTime = normalizeTime(time);
+            if (!normalizedTime) {
+                return [`编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`, ''];
+            }
+            scheduleCache[index].time = normalizedTime;
+        }
+        if (content && content.trim().length > 0) {
+            scheduleCache[index].content = content.trim();
+        }
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache[index] = snapshot;
+            return ['编辑计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
+        return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
+    }
+    async function handleDeleteSchedule(args) {
+        const { id } = parseArgs(args);
+        if (!id || id.trim().length === 0) {
+            return ['删除计划项失败：计划项ID不能为空', ''];
+        }
+        const index = scheduleCache.findIndex(item => item.id === id.trim());
+        if (index === -1) {
+            return [`删除计划项失败：未找到ID为 ${id} 的计划项`, ''];
+        }
+        const deletedItem = scheduleCache[index];
+        scheduleCache.splice(index, 1);
+        if (!saveSchedulesToDisk(scheduleCache)) {
+            scheduleCache.splice(index, 0, deletedItem);
+            return ['删除计划项失败：保存到磁盘时出错，请稍后重试', ''];
+        }
+        console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
+        return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
+    }
+    async function handleQuerySchedule(args) {
+        const { keyword } = parseArgs(args);
+        if (scheduleCache.length === 0) {
+            return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
+        }
+        const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const filtered = keyword && keyword.trim().length > 0
+            ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
+            : sorted;
+        if (filtered.length === 0) {
+            return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
+        }
+        return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
+                filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
+    }
+    function checkDueItems() {
+        if (scheduleCache.length === 0)
+            return [];
+        const now = new Date();
+        const todayStr = formatDate(now);
+        const kept = [];
+        const removed = [];
+        const candidates = [];
+        for (const item of scheduleCache) {
+            if (item.type === 'daily') {
+                const todayTime = dailyTaskTime(item, now);
+                if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
+                    if (now.getTime() - todayTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                        item.completedDate = todayStr;
+                        console.log(`[计划表] 每日任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                    }
+                    else
+                        candidates.push({ item, dueTime: todayTime });
+                }
+                kept.push(item);
+                continue;
+            }
+            const itemTime = new Date(item.time);
+            if (isNaN(itemTime.getTime())) {
+                console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
+                kept.push(item);
+                continue;
+            }
+            if (now < itemTime) {
+                kept.push(item);
+                continue;
+            }
+            if (now.getTime() - itemTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
+                removed.push(item);
+                console.log(`[计划表] 一次性任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
+                continue;
+            }
+            candidates.push({ item, dueTime: itemTime });
+        }
+        const executed = [];
+        if (candidates.length > 0) {
+            candidates.sort((a, b) => Math.abs(now.getTime() - a.dueTime.getTime()) - Math.abs(now.getTime() - b.dueTime.getTime()));
+            const chosen = candidates[0].item;
+            if (chosen.type === 'daily') {
+                chosen.completedDate = todayStr;
+                console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+            }
+            else {
+                removed.push(chosen);
+                console.log(`[计划表] 触发到期计划项: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
+            }
+            executed.push(chosen);
+        }
+        if (executed.length > 0 || removed.length > 0) {
+            scheduleCache = kept;
+            saveSchedulesToDisk(scheduleCache);
+        }
+        return executed;
+    }
+    initSchedules();
+    GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
+    GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
+    GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
+    GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
+
+    const screenshotTools = [
+        {
+            type: "function",
+            function: {
+                name: "screenshot",
+                description: "截取当前屏幕画面。默认优先截取当前焦点应用窗口，无法识别焦点窗口时自动降级为全屏截图。支持指定显示器、全屏、绝对坐标区域，以及窗口内精准子区域（偏移量+区域大小）。截取的图片会自动缩放处理并展示给用户。",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        mode: {
+                            type: "string",
+                            enum: ["auto", "window", "fullscreen", "display", "region"],
+                            description: "截图模式：auto=焦点窗口优先（默认，失败降级全屏）；window=强制焦点窗口；fullscreen=全屏；display=指定显示器；region=绝对坐标区域"
+                        },
+                        display_index: {
+                            type: "number",
+                            description: "显示器索引（mode=display 时生效，-1 表示全部）"
+                        },
+                        offset_x: {
+                            type: "number",
+                            description: "窗口相对 X 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
+                        },
+                        offset_y: {
+                            type: "number",
+                            description: "窗口相对 Y 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
+                        },
+                        width: {
+                            type: "number",
+                            description: "窗口相对区域宽度（>0 且 height>0 时启用精准区域覆盖）"
+                        },
+                        height: {
+                            type: "number",
+                            description: "窗口相对区域高度"
+                        },
+                        region_x: {
+                            type: "number",
+                            description: "绝对屏幕区域 X 坐标（mode=region）"
+                        },
+                        region_y: {
+                            type: "number",
+                            description: "绝对屏幕区域 Y 坐标（mode=region）"
+                        },
+                        region_w: {
+                            type: "number",
+                            description: "绝对屏幕区域宽度（mode=region）"
+                        },
+                        region_h: {
+                            type: "number",
+                            description: "绝对屏幕区域高度（mode=region）"
+                        },
+                        format: {
+                            type: "string",
+                            description: "输出图片格式：'png' 或 'jpg'，默认为 'png'",
+                            enum: ["png", "jpg"]
+                        }
+                    },
+                    required: []
+                }
+            }
+        }
+    ];
+    async function handleScreenshot(args) {
+        console.log(`========== 开始处理截图工具调用 ==========`);
+        console.log(`原始参数: ${JSON.stringify(args)}`);
+        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
+        console.log(`参数解析完成: ${JSON.stringify(parsed)}`);
+        console.log(`准备执行截图操作...`);
+        const [results, captureErr] = screenshotCapture(parsed);
+        if (captureErr) {
+            console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
+            return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
+        }
+        if (!results || results.length === 0) {
+            console.error(`截图失败: 未获取到截图数据`);
+            console.log(`========== 截图工具调用结束(失败) ==========`);
+            return ['截图失败：未获取到截图数据', ''];
+        }
+        const firstFrame = results[0];
+        console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const base64List = results.map((r) => r.base64);
+        pushImage(base64List);
+        console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
+        const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
+        const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
+        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
+        console.log(`返回响应: ${sizeInfo}`);
+        console.log(`========== 截图工具调用结束(成功) ==========`);
+        return [textResponse, firstFrame.base64];
+    }
+    GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
 
     class ModelBuilder {
         roleTag = "月华";
@@ -207,6 +1033,15 @@ var agentSystem = (function (exports) {
         }
     }
 
+    function registerAndPushImage(newContent, message, source, imageDataList) {
+        const tag = putCacheEntry(source, true);
+        for (const data of imageDataList)
+            newContent.push({ type: 'image_url', image_url: { url: data } });
+        if (tag) {
+            newContent.push({ type: 'text', text: `[${tag}]` });
+            stashPendingTag(message, source, tag);
+        }
+    }
     let mediaRoles = null;
     function registerMediaRoles(roles) {
         mediaRoles = roles;
@@ -318,7 +1153,7 @@ var agentSystem = (function (exports) {
                         continue;
                     }
                     if (imageSource.toLowerCase().startsWith('data:image/')) {
-                        newContent.push(item);
+                        registerAndPushImage(newContent, message, imageSource, [imageSource]);
                         continue;
                     }
                     const [resizedImages, resizeError] = resizeImage(imageSource);
@@ -326,7 +1161,7 @@ var agentSystem = (function (exports) {
                         console.error('[图片处理失败]:', resizeError.message, resizeError.stack);
                         continue;
                     }
-                    resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
+                    registerAndPushImage(newContent, message, imageSource, resizedImages.map(image => image.base64));
                 }
             }
             message.content = newContent;
@@ -498,6 +1333,112 @@ var agentSystem = (function (exports) {
         return {};
     }
 
+    const SIDE_BASE = 1024;
+    const SIDE_MAX = 2816;
+    const SIDE_ALIGN = 32;
+    const REF_SIDE_MIN = 512;
+    const DEFAULT_PIXEL_BUDGET_MP = 1.6;
+    const PIXEL_BUDGET_SLACK = 1.15;
+    function pixelBudget() {
+        const configured = Number(GlobalConfig.customConfig?.diffusion?.pixel_budget_mp);
+        const budgetMp = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_PIXEL_BUDGET_MP;
+        return budgetMp * 1_000_000;
+    }
+    function alignSide(value) {
+        const clamped = Math.min(Math.max(Math.round(value), 256), SIDE_MAX);
+        return Math.min(Math.round(clamped / SIDE_ALIGN) * SIDE_ALIGN, SIDE_MAX);
+    }
+    const RATIO_BASE = {
+        '1:1': { ratio: 1, horizontal: true },
+        '4:3': { ratio: 4 / 3, horizontal: true },
+        '3:4': { ratio: 4 / 3, horizontal: false },
+        '16:9': { ratio: 16 / 9, horizontal: true },
+        '9:16': { ratio: 16 / 9, horizontal: false },
+        '3:2': { ratio: 3 / 2, horizontal: true },
+        '2:3': { ratio: 3 / 2, horizontal: false },
+    };
+    const RATIO_PRESETS = Object.fromEntries(Object.entries(RATIO_BASE).map(([key, item]) => {
+        const long = alignSide(SIDE_BASE * item.ratio);
+        return [key, item.horizontal ? { w: long, h: SIDE_BASE } : { w: SIDE_BASE, h: long }];
+    }));
+    const DEFAULT_RATIO = '1:1';
+    const DEFAULT_STRENGTH = 0.5;
+    const STEPS_MIN = 30;
+    const STEPS_MAX = 60;
+    function planDimensions(reference) {
+        if (!reference || reference.width <= 0 || reference.height <= 0) {
+            const preset = RATIO_PRESETS[DEFAULT_RATIO];
+            return { width: preset.w, height: preset.h, origin: `${DEFAULT_RATIO} 预设` };
+        }
+        const longRef = Math.max(reference.width, reference.height);
+        const shortRef = Math.min(reference.width, reference.height);
+        const ratio = longRef / shortRef;
+        const desired = Math.min(SIDE_BASE, Math.sqrt((pixelBudget() * PIXEL_BUDGET_SLACK) / ratio), SIDE_MAX / ratio);
+        const lowerBound = Math.min(REF_SIDE_MIN, desired);
+        const upperBound = Math.max(lowerBound, desired);
+        const budgetLimit = pixelBudget() * PIXEL_BUDGET_SLACK * 1.02;
+        let best = null;
+        for (let s = alignSide(lowerBound); s <= upperBound + SIDE_ALIGN; s += SIDE_ALIGN) {
+            if (s > SIDE_BASE)
+                break;
+            const l = alignSide(s * ratio);
+            if (l > SIDE_MAX)
+                continue;
+            const overBudget = s * l > budgetLimit;
+            const err = Math.abs(l / s - ratio) / ratio;
+            let better = false;
+            if (!best)
+                better = true;
+            else if (best.overBudget !== overBudget)
+                better = !overBudget;
+            else if (!overBudget && Math.abs(err - best.err) <= Math.max(best.err, err) * 0.01 && s * l > best.short * best.long)
+                better = true;
+            else if (err < best.err - 1e-9)
+                better = true;
+            if (better)
+                best = { short: s, long: l, err, overBudget };
+        }
+        if (!best) {
+            const l = alignSide(Math.min(SIDE_MAX, Math.max(REF_SIDE_MIN, SIDE_BASE) * ratio));
+            best = { short: alignSide(Math.max(REF_SIDE_MIN, l / ratio)), long: l, err: 1, overBudget: false };
+        }
+        const vertical = reference.height >= reference.width;
+        const capped = best.err > 0.08;
+        return {
+            width: vertical ? best.short : best.long,
+            height: vertical ? best.long : best.short,
+            origin: `参照图 ${reference.width}x${reference.height} 比例${capped ? '（受长边/像素上限限制，比例已尽力贴近）' : ''}`,
+        };
+    }
+    function resolveDimensionPlan(ratio, reference) {
+        const key = String(ratio || '').trim().replace(/[×xX]/g, ':').replace(/\s/g, '');
+        const preset = RATIO_PRESETS[key];
+        if (preset)
+            return { width: preset.w, height: preset.h, origin: `${key} 预设` };
+        return planDimensions(reference);
+    }
+    function normalizeStrength(value, label) {
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+            const clamped = Math.min(Math.max(num, 0.05), 0.95);
+            if (Math.abs(clamped - num) > 1e-6)
+                console.log(`[绘制者] ${label}强度 ${num} 越界，已收进 ${clamped}`);
+            return clamped;
+        }
+        console.log(`[绘制者] ${label}未指定强度，按中性值 ${DEFAULT_STRENGTH} 处理`);
+        return DEFAULT_STRENGTH;
+    }
+    function normalizeSteps(value, label) {
+        const num = Number(value);
+        if (!Number.isFinite(num) || num <= 0) {
+            console.log(`[绘制者] ${label}未指定步数，按配置 sd_steps 处理`);
+            return 0;
+        }
+        const steps = Math.round(Math.min(Math.max(num, STEPS_MIN), STEPS_MAX));
+        if (steps !== Math.round(num))
+            console.log(`[绘制者] ${label}步数 ${num} 越界，已收进 ${steps}`);
+        return steps;
+    }
     class PainterRole extends CreativeRoleBase {
         roleTag = "绘制者";
         defaultExpressionPrompt = [
@@ -529,18 +1470,31 @@ var agentSystem = (function (exports) {
         defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰';
         defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
         referenceImage = '';
+        referencePrepared = false;
+        referenceSize = null;
+        lastResultPath = '';
+        static REFERENCE_READY_PATTERN = /（用户指定 \[(图片\.\d+)\] 作为图生图基座，参考图已准备就绪：([^，）]+)/;
         roleTool = [
             {
                 type: "function",
                 function: {
                     name: "diffusion_generation",
-                    description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若需要参照已设置的参考图创作,请改用 image_to_image",
+                    description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若需要参照某张已有图片创作,请先用 list_images 查看图片缓存并用 select_reference_image 按标签选定基座图,再改用 image_to_image",
                     parameters: {
                         type: "object",
                         properties: {
                             "prompt": {
                                 type: "string",
                                 description: "图像生成的正向描述文本"
+                            },
+                            "ratio": {
+                                type: "string",
+                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                                description: "画面比例预设,默认 1:1。按题材选择:人物/物品用 2:3 或 3:4,风景/横构图用 3:2 或 16:9,方形构图用 1:1。短边固定 1024px"
+                            },
+                            "steps": {
+                                type: "number",
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -549,6 +1503,10 @@ var agentSystem = (function (exports) {
                             "cfg_scale": {
                                 type: "number",
                                 description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            },
+                            "super_resolution": {
+                                type: "boolean",
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -561,7 +1519,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "image_to_image",
-                    description: "基于已设置的参考图（律令 <参考图> 保存）进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。仅在已设置参考图时可用;未设置参考图时请改用 diffusion_generation 进行文生图",
+                    description: "基于当前选定的参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。输出尺寸自动按参考图比例推导(短边不低于 1024px),无需也无法另行指定比例。尚未选定参考图时,请先调用 list_images 查看图片缓存并用 select_reference_image 按标签选定基座图;缓存中没有合适图片时改用 diffusion_generation 进行文生图",
                     parameters: {
                         type: "object",
                         properties: {
@@ -569,17 +1527,25 @@ var agentSystem = (function (exports) {
                                 type: "string",
                                 description: "图像生成的正向描述文本,描述希望参考图变成什么样子"
                             },
+                            "strength": {
+                                type: "number",
+                                description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。必须由你根据创作意图指定:只改画风/光照/清晰度用 0.2~0.4;换场景/服饰但保留主体用 0.4~0.55;大幅改动姿态/构图用 0.6~0.8。缺省按中性值 0.5"
+                            },
+                            "steps": {
+                                type: "number",
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                            },
                             "negative_prompt": {
                                 type: "string",
                                 description: "负面提示文本,用于排除图像中不希望出现的元素"
                             },
-                            "strength": {
-                                type: "number",
-                                description: "图生图强度,取值范围 0 到 1,越大越偏离参考图。保留主体时建议 0.3~0.5,较大改变时 0.6~0.8。默认随机取值"
-                            },
                             "cfg_scale": {
                                 type: "number",
                                 description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            },
+                            "super_resolution": {
+                                type: "boolean",
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -612,6 +1578,15 @@ var agentSystem = (function (exports) {
                                 type: "string",
                                 description: "环境提示词,描述背景环境或场景"
                             },
+                            "ratio": {
+                                type: "string",
+                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                                description: "画面比例预设,默认 1:1。全身立绘/坐姿建议 2:3,横构图场景建议 3:2 或 16:9。短边固定 1024px"
+                            },
+                            "steps": {
+                                type: "number",
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                            },
                             "negative_prompt": {
                                 type: "string",
                                 description: "负面提示文本,用于排除图像中不希望出现的元素"
@@ -619,6 +1594,10 @@ var agentSystem = (function (exports) {
                             "cfg_scale": {
                                 type: "number",
                                 description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            },
+                            "super_resolution": {
+                                type: "boolean",
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -653,6 +1632,15 @@ var agentSystem = (function (exports) {
                                 type: "string",
                                 description: "环境提示词,描述背景环境或场景"
                             },
+                            "ratio": {
+                                type: "string",
+                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                                description: "画面比例预设,默认 1:1（Q版二头身适合方形或略宽）。短边固定 1024px"
+                            },
+                            "steps": {
+                                type: "number",
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                            },
                             "negative_prompt": {
                                 type: "string",
                                 description: "负面提示文本,用于排除图像中不希望出现的元素"
@@ -660,6 +1648,10 @@ var agentSystem = (function (exports) {
                             "cfg_scale": {
                                 type: "number",
                                 description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            },
+                            "super_resolution": {
+                                type: "boolean",
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -674,7 +1666,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "group_photo",
-                    description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。合照对象为琉璃时,companion 直接填写\"琉璃\"即可,系统会自动注入琉璃的固定形象。若已设置参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未设置则按文本描述绘制",
+                    description: "生成月华与其他人的合照。当要求绘制月华和某人（朋友、家人、其他角色等）的合影时调用此函数。合照对象为琉璃时,companion 直接填写\"琉璃\"即可,系统会自动注入琉璃的固定形象。若已选定参考图,将以该参考图为底图进行图生图,尽量保留合照对象的容貌;未选定则按文本描述绘制",
                     parameters: {
                         type: "object",
                         properties: {
@@ -698,6 +1690,19 @@ var agentSystem = (function (exports) {
                                 type: "string",
                                 description: "环境提示词,描述背景环境或场景"
                             },
+                            "ratio": {
+                                type: "string",
+                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
+                                description: "画面比例预设,默认 1:1。仅在未选定参考图时生效;已选定参考图时输出尺寸自动随参考图比例"
+                            },
+                            "strength": {
+                                type: "number",
+                                description: "已选定参考图时的图生图强度,取值 0 到 1,越大越偏离参考图。保留对方容貌建议 0.3~0.5;缺省按中性值 0.5。未选定参考图时忽略"
+                            },
+                            "steps": {
+                                type: "number",
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                            },
                             "negative_prompt": {
                                 type: "string",
                                 description: "负面提示文本,用于排除图像中不希望出现的元素"
@@ -705,6 +1710,10 @@ var agentSystem = (function (exports) {
                             "cfg_scale": {
                                 type: "number",
                                 description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                            },
+                            "super_resolution": {
+                                type: "boolean",
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -715,10 +1724,115 @@ var agentSystem = (function (exports) {
                         ]
                     }
                 }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "list_images",
+                    description: "查看图片缓存中最近的图片清单（标签、内容描述、是否在多模态窗口内）。清单覆盖对话中出现过的所有静态图片与合并转发内的图片，按注册时间倒序。当用户要求参照某张已有图片创作、对某张图片加工或超分时，先调用此函数获取标签清单，结合需求分析后按标签选定目标。清单只含文字信息，不含图片内容",
+                    parameters: {
+                        type: "object",
+                        properties: {}
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "select_reference_image",
+                    description: "按图片标签从共享图片缓存中选定一张作为图生图基座图（参考图）。选定后 image_to_image 与合照将以该图保留主体特征。任务描述已注明\"参考图已准备就绪\"时无需再调用；标签可从 list_images 清单或任务描述中的 [图片.00x] 获取",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "image_tag": {
+                                type: "string",
+                                description: "图片标签，如 图片.003（写作 [图片.003] 也可以）"
+                            }
+                        },
+                        required: [
+                            "image_tag"
+                        ]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "upscale_image",
+                    description: "对已有图片执行 RealESRGAN 超分辨率放大（4x）,提升清晰度与细节。用户要求把某张图片变清晰、放大或提升画质时调用;不指定标签时对最近一次生成的作品超分。与生成工具的 super_resolution 参数不同,本工具不重新生成图像,只做纯超分",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            "image_tag": {
+                                type: "string",
+                                description: "图片标签（如 图片.003），对缓存中指定图片超分。不填时对最近一次生成的作品超分"
+                            }
+                        }
+                    }
+                }
             }
         ];
         constructor() {
             super(fileView('prompts/painterRole.md')[0]);
+        }
+        prepareReference(source) {
+            const saved = this.saveReferenceImage(source);
+            if (saved.path) {
+                this.referenceImage = saved.path;
+                this.referencePrepared = true;
+                this.referenceSize = saved.size;
+            }
+            return saved.path;
+        }
+        createCreativeWork(taskDescription) {
+            this.referenceImage = '';
+            this.referencePrepared = false;
+            this.referenceSize = null;
+            const ready = (taskDescription || '').match(PainterRole.REFERENCE_READY_PATTERN);
+            if (ready) {
+                const path = ready[2].trim();
+                const saved = this.loadReferenceSize(path);
+                if (saved) {
+                    this.referenceImage = path;
+                    this.referencePrepared = true;
+                    this.referenceSize = saved;
+                    console.log(`[绘制者] 本次任务参考图已就绪: [${ready[1]}] → ${path}（${saved.width}x${saved.height}）`);
+                }
+                else {
+                    console.log(`[绘制者] 任务描述注明参考图 ${path}，但该文件无法读取，请重新选图`);
+                }
+            }
+            return super.createCreativeWork(taskDescription);
+        }
+        loadReferenceSize(relPath) {
+            try {
+                const [resized, err] = resizeImage(relPath);
+                if (err || !resized || resized.length === 0)
+                    return null;
+                const size = { width: resized[0].width, height: resized[0].height };
+                return size.width > 0 && size.height > 0 ? size : null;
+            }
+            catch (error) {
+                console.error('[绘制者] 参考图尺寸读取失败:', error);
+                return null;
+            }
+        }
+        planFor(ratio) {
+            const reference = this.referencePrepared && this.referenceImage ? (this.referenceSize || undefined) : undefined;
+            return resolveDimensionPlan(ratio, reference);
+        }
+        referenceStatus() {
+            if (this.referencePrepared && this.referenceImage) {
+                const size = this.referenceSize ? `（${this.referenceSize.width}x${this.referenceSize.height}）` : '';
+                const plan = this.planFor();
+                return `本次任务参考图：${this.referenceImage}${size}，输出尺寸将按参考图比例取 ${plan.width}x${plan.height}`;
+            }
+            return '本次任务尚未选定参考图';
+        }
+        resetReference() {
+            this.referenceImage = '';
+            this.referencePrepared = false;
+            this.referenceSize = null;
         }
         get roleName() { return '绘制者'; }
         getToolDefinitions() { return this.roleTool; }
@@ -738,7 +1852,10 @@ var agentSystem = (function (exports) {
                 case 'self_portrait': return this.handleSelfPortrait(args);
                 case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args);
                 case 'group_photo': return this.handleGroupPhoto(args);
-                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo`;
+                case 'list_images': return this.handleListImages();
+                case 'select_reference_image': return this.handleSelectReferenceImage(args);
+                case 'upscale_image': return this.handleUpscaleImage(args);
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo、list_images、select_reference_image、upscale_image`;
             }
         }
         collectDetail(toolCall, paintings) {
@@ -768,9 +1885,19 @@ var agentSystem = (function (exports) {
                 }
                 else if (name === 'diffusion_generation' || name === 'image_to_image') {
                     const prompt = args.prompt || '';
+                    const strengthNote = name === 'image_to_image' && args.strength !== undefined
+                        ? `（强度 ${normalizeStrength(args.strength, '图生图')}）`
+                        : '';
                     paintings.push({
                         toolName: name,
-                        promptSummary: prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt,
+                        promptSummary: (prompt.length > 100 ? prompt.slice(0, 97) + '...' : prompt) + strengthNote,
+                    });
+                }
+                else if (name === 'upscale_image') {
+                    const tag = normalizeImageTag(String(args.image_tag || ''));
+                    paintings.push({
+                        toolName: name,
+                        promptSummary: tag ? `[${tag}] 超分重建` : '最近作品超分重建',
                     });
                 }
             }
@@ -805,6 +1932,8 @@ var agentSystem = (function (exports) {
                 }
                 else if (p.toolName === 'image_to_image')
                     parts.push(`月华参照参考图绘制了一幅图像：${p.promptSummary}。`);
+                else if (p.toolName === 'upscale_image')
+                    parts.push(`月华为${p.promptSummary}提升了清晰度，图像已变得更精细。`);
                 else
                     parts.push(`月华绘制了一幅图像：${p.promptSummary}。`);
             }
@@ -831,21 +1960,29 @@ var agentSystem = (function (exports) {
             }
             if (!result || !result.base64)
                 return `${label}失败：引擎返回空结果`;
-            console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}`);
+            this.lastResultPath = result.path;
+            const stepsNote = imageParams.steps ? `，${imageParams.steps} 步` : '';
+            console.log(`[绘制者] ${label}成功，尺寸: ${result.width}x${result.height}${stepsNote}${imageParams.superResolution ? '（含超分重建）' : ''}`);
             if (!pushImage([result.base64]))
                 console.warn(`[绘制者] 推送${label}结果到前端失败`);
-            return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}`;
+            return `${label}成功。图片尺寸: ${result.width}x${result.height}，seed: ${result.seed}${stepsNote}${imageParams.superResolution ? '，已附带超分辨率重建' : ''}`;
         }
         handleDiffusionGeneration(args) {
             try {
                 const prompt = args.prompt || '';
                 if (!prompt.trim())
                     return '扩散生成失败：正向提示词不能为空';
-                console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...`);
+                const plan = resolveDimensionPlan(args.ratio);
+                const steps = normalizeSteps(args.steps, '扩散生成');
+                console.log(`[绘制者] 扩散生成 - 正向提示词: ${prompt.slice(0, 100)}...，画面比例: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
                 return this.paint({
                     prompt: prompt,
                     negativePrompt: args.negative_prompt || '',
+                    width: plan.width,
+                    height: plan.height,
+                    steps: steps,
                     cfgScale: args.cfg_scale ?? 1.0,
+                    superResolution: args.super_resolution === true,
                 }, '扩散图像生成');
             }
             catch (error) {
@@ -858,17 +1995,23 @@ var agentSystem = (function (exports) {
                 const prompt = args.prompt || '';
                 if (!prompt.trim())
                     return '图生图失败：正向提示词不能为空';
-                if (!this.referenceImage) {
-                    return '图生图失败：尚未设置参考图，请先发送图片并下达 <参考图> 指令，或改用 diffusion_generation 进行文生图';
+                if (!this.referenceImage || !this.referencePrepared) {
+                    return `图生图失败：${this.referenceStatus()}。请先调用 list_images 查看图片缓存并用 select_reference_image 按标签选定基座图，或改用 diffusion_generation 进行文生图`;
                 }
-                const strength = args.strength ?? RandomFloat(0.35, 0.75);
-                console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}`);
+                const strength = normalizeStrength(args.strength, '图生图');
+                const steps = normalizeSteps(args.steps, '图生图');
+                const plan = this.planFor();
+                console.log(`[绘制者] 图生图 - 正向提示词: ${prompt.slice(0, 100)}...，参考图: ${this.referenceImage}，强度: ${strength}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
                 return this.paint({
                     prompt: prompt,
                     negativePrompt: args.negative_prompt || '',
+                    width: plan.width,
+                    height: plan.height,
+                    steps: steps,
                     cfgScale: args.cfg_scale ?? 1.0,
                     initImg: this.referenceImage,
                     strength: strength,
+                    superResolution: args.super_resolution === true,
                 }, '图生图生成');
             }
             catch (error) {
@@ -891,11 +2034,17 @@ var agentSystem = (function (exports) {
                 console.log(`环境: "${args.environment}"`);
                 console.log(`负面提示词: "${args.negative_prompt}"`);
                 console.log(`提示词引导系数: "${args.cfg_scale}"`);
+                const plan = resolveDimensionPlan(args.ratio);
+                const steps = normalizeSteps(args.steps, label);
                 const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
                 return this.paint({
                     prompt: fullPrompt,
                     negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+                    width: plan.width,
+                    height: plan.height,
+                    steps: steps,
                     cfgScale: args.cfg_scale ?? 1.0,
+                    superResolution: args.super_resolution === true,
                 }, `${label}生成`);
             }
             catch (error) {
@@ -915,21 +2064,110 @@ var agentSystem = (function (exports) {
                 if (companion.includes('琉璃'))
                     companion = this.crystalAppearancePrompt;
                 const fullPrompt = this.renderAppearance(this.groupAppearancePrompt, { ...args, companion }, this.defaultOutfitFullPrompt);
+                const useReference = !!(this.referenceImage && this.referencePrepared);
+                const plan = useReference ? this.planFor() : resolveDimensionPlan(args.ratio);
+                const steps = normalizeSteps(args.steps, '合照');
                 const imageParams = {
                     prompt: fullPrompt,
                     negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
+                    width: plan.width,
+                    height: plan.height,
+                    steps: steps,
                     cfgScale: args.cfg_scale ?? 1.0,
+                    superResolution: args.super_resolution === true,
                 };
-                if (this.referenceImage) {
+                if (useReference) {
                     imageParams.initImg = this.referenceImage;
-                    imageParams.strength = RandomFloat(0.35, 0.6);
-                    console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}`);
+                    imageParams.strength = normalizeStrength(args.strength, '合照');
+                    console.log(`[绘制者] 合照图生图模式，参考图: ${this.referenceImage}，强度: ${imageParams.strength}，尺寸: ${plan.origin} → ${plan.width}x${plan.height}，步数: ${steps || '默认'}`);
+                }
+                else if (this.referenceImage) {
+                    console.log('[绘制者] 存在历史参考图但非本次任务选定，按文生图绘制合照');
                 }
                 return this.paint(imageParams, '合照生成');
             }
             catch (error) {
                 console.error('[绘制者] 合照生成处理异常:', error);
                 return `合照生成异常: ${error}`;
+            }
+        }
+        handleListImages() {
+            const entries = listCacheEntries(IMAGE_CACHE_CAPACITY);
+            if (entries.length === 0)
+                return '图片缓存为空：当前没有可用的图片标签';
+            const lines = entries.map(entry => `[${entry.tag}] ${entry.desc ? sanitizeImageDesc(entry.desc, 40) : '（无描述）'}${entry.pinned ? ' [窗内]' : ''}`);
+            return `图片缓存中最近的 ${entries.length} 张图片（标签越新越靠前；[窗内] 表示图片仍在对话者的多模态窗口中）：\n${lines.join('\n')}\n请结合创作需求分析后，调用 select_reference_image 按标签选定图生图基座，或调用 upscale_image 对指定图片超分。${this.referenceStatus()}。`;
+        }
+        saveReferenceImage(imageUrl) {
+            try {
+                const [resized, err] = resizeImage(imageUrl);
+                if (err || !resized || resized.length === 0)
+                    return { path: '', size: null };
+                const ref = resized[0];
+                const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
+                const [hash, hashErr] = hashBytes(ref.image);
+                if (hashErr || !hash) {
+                    console.error('[绘制者] 参考图哈希计算失败:', hashErr);
+                    return { path: '', size: null };
+                }
+                const relPath = `multimedia/reference/${hash}.${ext}`;
+                const [, , saveErr] = saveFile(relPath, true, ref.image);
+                if (saveErr) {
+                    console.error('[绘制者] 参考图保存失败:', saveErr);
+                    return { path: '', size: null };
+                }
+                console.log(`[绘制者] 参考图已保存: ${relPath}（${ref.width}x${ref.height}）`);
+                const size = ref.width > 0 && ref.height > 0 ? { width: ref.width, height: ref.height } : null;
+                return { path: relPath, size };
+            }
+            catch (error) {
+                console.error('[绘制者] 参考图处理异常:', error);
+                return { path: '', size: null };
+            }
+        }
+        handleSelectReferenceImage(args) {
+            const tag = normalizeImageTag(String(args.image_tag || ''));
+            if (!tag)
+                return '选定参考图失败：请提供图片标签，如 图片.003（可用 list_images 查看当前可用标签）';
+            const entry = getCacheEntry(tag);
+            if (!entry)
+                return `选定参考图失败：${tag} 已过期或不存在，请先调用 list_images 查看可用图片`;
+            const localPath = this.prepareReference(entry.source);
+            if (!localPath)
+                return `选定参考图失败：[${tag}] 的源图已无法读取（远端地址可能失效），请改用 list_images 清单中的其它标签`;
+            console.log(`[绘制者] 参考图已选定: ${localPath}（${tag}）`);
+            return `参考图已选定：[${tag}]。本次任务的 image_to_image 与合照将以该图为基座（任务结束后需重新选定）。`;
+        }
+        handleUpscaleImage(args) {
+            try {
+                const tag = normalizeImageTag(String(args.image_tag || ''));
+                let source = '';
+                if (tag) {
+                    const entry = getCacheEntry(tag);
+                    if (!entry)
+                        return `超分失败：${tag} 已过期或不存在，请先调用 list_images 查看可用图片`;
+                    source = entry.source;
+                }
+                else {
+                    if (!this.lastResultPath)
+                        return '超分失败：还没有生成过作品，请通过 image_tag 指定缓存中的图片，或先完成一次图像生成';
+                    source = this.lastResultPath;
+                }
+                console.log(`[绘制者] 超分重建 - 来源: ${source.substring(0, 60)}...`);
+                const [result, error] = upscaleImage(source);
+                if (error) {
+                    console.error('[绘制者] 超分失败:', error);
+                    return `超分失败: ${error}`;
+                }
+                if (!result || !result.base64)
+                    return '超分失败：引擎返回空结果';
+                if (!pushImage([result.base64]))
+                    console.warn('[绘制者] 推送超分结果到前端失败');
+                return `超分成功。图片尺寸: ${result.width}x${result.height}，已推送给用户`;
+            }
+            catch (error) {
+                console.error('[绘制者] 超分处理异常:', error);
+                return `超分处理异常: ${error}`;
             }
         }
     }
@@ -1250,23 +2488,73 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const FALLBACK_TOOL_PARAMETERS = {
+        type: 'object',
+        properties: {
+            tool: { type: 'string', description: '要使用的目标工具名（从工具描述清单中选择）' },
+            instruction: { type: 'string', description: '要对目标工具发出的自然语言指令' }
+        },
+        required: ['tool', 'instruction']
+    };
+    let crystalToolDefinition = null;
+    function getCrystalRemoteTools() {
+        return crystalToolDefinition ? [crystalToolDefinition] : [];
+    }
+    function syncLTPXRemoteStatus() {
+        try {
+            const statusJSON = getLTPXRemoteStatus();
+            const tool = statusJSON ? JSON.parse(statusJSON).tool : undefined;
+            if (!tool || !tool.name)
+                return;
+            if (!GlobalConfig.LTPfunction.has(tool.name)) {
+                GlobalConfig.LTPfunction.set(tool.name, async (args) => {
+                    const argsJSON = typeof args === 'string' ? args : JSON.stringify(args || {});
+                    const text = await callLTPXRemoteTool(tool.name, argsJSON);
+                    return [text, ''];
+                });
+            }
+            crystalToolDefinition = {
+                type: 'function',
+                function: {
+                    name: tool.name,
+                    description: tool.description || '',
+                    parameters: tool.parameters || FALLBACK_TOOL_PARAMETERS
+                },
+            };
+        }
+        catch (e) {
+            console.error('LTPX 工具链同步失败:', e);
+        }
+    }
+
+    const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...scheduleTools, ...screenshotTools];
+    const MAX_TOOL_ROUNDS = 5;
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         roleTag = "对话者";
         async generateDialogue(cache) {
             try {
                 await LiteImageFile();
+                if (this.messages.length === 0)
+                    this.toolRounds = 0;
                 GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
                 this.runtimeMessages = [{ role: 'user', content: `当前时间: ${new Date().toLocaleString()}` }];
-                const response = this.run(this.ragMessages, GlobalConfig.LTPdefinition);
+                const response = this.run(this.ragMessages, [...dialogueBaseTools, ...getCrystalRemoteTools()]);
                 this.analyzeMessageResponse(response.body, cache);
                 if (cache.toolCalls.length > 0) {
                     this.writeContext(response.body.choices?.[0]?.message);
+                    if (this.toolRounds >= MAX_TOOL_ROUNDS) {
+                        console.warn(`[对话者] 工具调用轮次达到上限（${MAX_TOOL_ROUNDS}），停止继续调用`);
+                        GlobalConfig.finalResponse = cache.descriptionContent;
+                        return;
+                    }
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
-                    if (hasProcessedToolCalls)
+                    if (hasProcessedToolCalls) {
+                        this.toolRounds++;
                         return await this.generateDialogue(cache);
+                    }
                 }
                 this.writeContext(response.body.choices?.[0]?.message);
             }
@@ -1275,59 +2563,70 @@ var agentSystem = (function (exports) {
             }
             GlobalConfig.finalResponse = cache.descriptionContent;
         }
+        IMAGE_WINDOW = 20;
+        toolRounds = 0;
         formatHistoricalMessages() {
             if (this.messages.length === 0)
                 return;
-            const totalImages = this.countTotalImages(this.messages);
-            if (totalImages >= 20) {
-                const processedMessages = [];
-                for (const message of this.messages) {
-                    if (typeof message.content === 'string') {
-                        processedMessages.push(message);
-                        continue;
-                    }
-                    const textResult = this.summarizeMessageImages(message);
-                    if (!textResult || textResult.trim() === '')
-                        continue;
-                    processedMessages.push({ role: message.role, content: textResult });
-                }
-                this.messages = processedMessages;
-            }
+            this.demoteOverflowImages();
             if (this.messages.length === 0)
                 return;
             if (this.messages.slice(-1)[0].role === 'user')
                 return;
             this.writeContext({ role: 'user', content: "继续" });
         }
-        summarizeMessageImages(message) {
+        demoteOverflowImages() {
+            const countImages = () => this.messages.reduce((sum, message) => typeof message.content === 'string'
+                ? sum
+                : sum + message.content.filter((c) => c.type === 'image_url').length, 0);
+            for (let i = 0; i < this.messages.length && countImages() > this.IMAGE_WINDOW; i++) {
+                const message = this.messages[i];
+                if (typeof message.content === 'string')
+                    continue;
+                if (!message.content.some((c) => c.type === 'image_url'))
+                    continue;
+                this.demoteMessageImages(message);
+            }
+        }
+        demoteMessageImages(message) {
             if (typeof message.content === 'string')
-                return message.content;
-            const imageItems = message.content.filter((c) => c.type === 'image_url');
-            const textItems = message.content.filter((c) => c.type === 'text');
-            const textPart = textItems.map((c) => c.text).join('\n');
-            if (imageItems.length === 0)
-                return textPart || null;
+                return;
+            message.content = demoteContentImages(message.content, source => this.resolveImageTag(message, source), (tag, source) => this.describeImage(tag, source));
+            clearPendingTags(message);
+        }
+        resolveImageTag(message, source) {
+            const pending = takePendingTag(message, source);
+            if (pending)
+                return pending;
+            if (!source)
+                return '';
+            return putCacheEntry(source, true);
+        }
+        describeImage(tag, source) {
+            unpinCacheTag(tag);
+            const entry = getCacheEntry(tag);
+            if (entry?.desc)
+                return sanitizeImageDesc(entry.desc, 20);
+            if (!source)
+                return '';
             try {
-                this.descriptionRole.coverContext({ role: 'user', content: imageItems });
-                const summaryRequest = this.descriptionRole.run([], []);
-                const summary = summaryRequest.body?.choices?.[0]?.message?.content;
-                if (summary && summary.trim().length > 0) {
-                    return textPart ? `${textPart}\n[图片描述：${summary}]` : `[图片描述：${summary}]`;
-                }
-                return textPart || null;
+                this.descriptionRole.coverContext({
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: '用一句不超过20字的中文描述这张图片的主体与场景，只输出描述本身。' },
+                        { type: 'image_url', image_url: { url: source } }
+                    ]
+                });
+                const response = this.descriptionRole.run([], []);
+                const desc = sanitizeImageDesc(response.body?.choices?.[0]?.message?.content || '', 20);
+                if (desc)
+                    setCacheDesc(tag, desc);
+                return desc;
             }
             catch (error) {
-                console.error('[对话者] 图片摘要异常:', error);
-                return textPart || null;
+                console.error('[对话者] 图片描述生成失败:', error);
+                return '';
             }
-        }
-        countImagesInMessage(message) {
-            if (typeof message.content === 'string')
-                return 0;
-            return message.content.filter((c) => c.type === 'image_url').length;
-        }
-        countTotalImages(messages) {
-            return messages.reduce((sum, m) => sum + this.countImagesInMessage(m), 0);
         }
         analyzeMessageResponse(message, cache) {
             try {
@@ -1373,19 +2672,23 @@ var agentSystem = (function (exports) {
                     const toolResult = await lunarToolPackage(functionArgs);
                     const textContent = Array.isArray(toolResult) ? toolResult[0] : String(toolResult);
                     const base64Image = Array.isArray(toolResult) ? toolResult[1] : '';
+                    this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
                     if (base64Image && typeof base64Image === 'string' && base64Image.length > 0) {
                         const message = {
                             role: "user",
                             content: [
-                                { type: "text", text: textContent },
+                                { type: "text", text: `【工具返回的图片】${textContent}` },
                                 { type: "image_url", image_url: { url: base64Image } }
                             ]
                         };
+                        const tag = putCacheEntry(base64Image, true);
+                        if (tag) {
+                            message.content.push({ type: "text", text: `[${tag}]` });
+                            stashPendingTag(message, base64Image, tag);
+                        }
                         this.messages.push(message);
-                        console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节`);
+                        console.log(`[工具调用] ${functionName} 返回图片数据，长度=${base64Image.length} 字节，标签=${tag || '注册失败'}`);
                     }
-                    else
-                        this.messages.push({ role: "tool", content: textContent, tool_call_id: toolCall.id });
                     hasToolCalls = true;
                 }
                 catch (error) {
@@ -1561,101 +2864,6 @@ var agentSystem = (function (exports) {
         }
     }
 
-    const SCHEDULE_TRIGGER_PREFIX = '[计划提醒]';
-    const SCHEDULE_OVERDUE_ABANDON_MS = 30 * 60 * 1000;
-    const PRESET_DAILY_TASKS = [
-        { id: 'daily_greeting_0630', type: 'daily', time: '06:30', content: '向用户发送清晨早安问候，关心其今日安排' },
-        { id: 'daily_greeting_0800', type: 'daily', time: '08:00', content: '向用户发送早间问候，精神饱满开启一天' },
-        { id: 'daily_greeting_1000', type: 'daily', time: '10:00', content: '向用户发送"上午好，该喝水啦"的补水提醒' },
-        { id: 'daily_greeting_1200', type: 'daily', time: '12:00', content: '向用户发送午安问候，关心其午餐情况' },
-        { id: 'daily_greeting_1500', type: 'daily', time: '15:00', content: '向用户发送"下午好，该喝水啦"的补水提醒' },
-        { id: 'daily_greeting_1730', type: 'daily', time: '17:30', content: '向用户发送傍晚问候，关心一天收尾与晚间安排' },
-        { id: 'daily_greeting_2230', type: 'daily', time: '22:30', content: '向用户发送晚安问候，祝其好眠' },
-    ];
-    const SCHEDULE_FILE_PATH = 'database/schedule.json';
-    const scheduleTools = [
-        {
-            type: "function",
-            function: {
-                name: "create_schedule",
-                description: "在计划表中创建新的计划项，指定执行时间点和对应的工作内容。时间格式为 ISO 8601 (如 '2026-06-14T15:30:00') 或中文日期时间格式 (如 '2026年6月14日 15:30')。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        time: {
-                            type: "string",
-                            description: "计划执行的时间点，支持 ISO 8601 格式或中文日期时间格式，例如 '2026-06-14T15:30:00' 或 '2026年6月14日 15:30'"
-                        },
-                        content: {
-                            type: "string",
-                            description: "计划执行的工作内容描述，应清晰说明需要完成的事项"
-                        }
-                    },
-                    required: ["time", "content"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "edit_schedule",
-                description: "编辑计划表中已存在的计划项，可修改其执行时间和/或工作内容。需要提供计划项的ID，至少提供 time 或 content 中的一个进行修改。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        id: {
-                            type: "string",
-                            description: "要编辑的计划项ID，从 query_schedule 返回结果中获得"
-                        },
-                        time: {
-                            type: "string",
-                            description: "修改后的执行时间点，不修改则留空"
-                        },
-                        content: {
-                            type: "string",
-                            description: "修改后的工作内容描述，不修改则留空"
-                        }
-                    },
-                    required: ["id"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "delete_schedule",
-                description: "从计划表中删除指定的计划项。需要提供计划项的ID。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        id: {
-                            type: "string",
-                            description: "要删除的计划项ID，从 query_schedule 返回结果中获得"
-                        }
-                    },
-                    required: ["id"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "query_schedule",
-                description: "查询计划表中已有的计划项列表，可按关键词筛选。返回所有匹配的计划项及其ID、时间和内容。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        keyword: {
-                            type: "string",
-                            description: "用于筛选计划项的关键词，留空则返回全部计划项"
-                        }
-                    },
-                    required: []
-                }
-            }
-        }
-    ];
-
     const STICKER_COLLECTION = 'stickers';
     let stickerCollectionReady = false;
     const ACTION_COLLECTION = 'actions';
@@ -1726,6 +2934,15 @@ var agentSystem = (function (exports) {
         }
         return '';
     }
+    const STORED_TAG_PATTERN = /\[?图片\.(\d+)\]?/g;
+    function evadeImageTags(text) {
+        if (!text)
+            return '';
+        return text.replace(STORED_TAG_PATTERN, '（历史图片）');
+    }
+    function extractMemoryText(message) {
+        return evadeImageTags(extractTextFromMessage(message));
+    }
     function initMemory() {
         if (GlobalConfig.memoryReady)
             return;
@@ -1762,7 +2979,7 @@ var agentSystem = (function (exports) {
             for (const message of GlobalConfig.unreadRecords) {
                 if (message.role === 'tool')
                     continue;
-                const content = extractTextFromMessage(message).trim();
+                const content = extractMemoryText(message).trim();
                 if (!content || content.length <= 5)
                     continue;
                 if (content.includes(SCHEDULE_TRIGGER_PREFIX))
@@ -1852,6 +3069,7 @@ var agentSystem = (function (exports) {
         }
     }
 
+    const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"（tool 参数填目标工具名、instruction 参数填自然语言指令），不得凭空编造操作结果，必须等待工具真实返回。';
     const descriptionRole = new ModelBuilder(fileView('prompts/descriptionRole.md')[0]);
     const memorizerRole = new MemorizerRole();
     const painterRole = new PainterRole();
@@ -1859,442 +3077,12 @@ var agentSystem = (function (exports) {
     const dialogueRole = new DialogueRole(descriptionRole);
     const perceiverRole = new PerceiverRole();
     registerMediaRoles({ perceiverRole, randomDefaultMessage });
+    registerAgentTargets({ painterRole, musicianRole });
+    registerImageDescribeRole(descriptionRole);
+    dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
     function randomDefaultMessage() {
         return ['月华在哦', '怎么了吗?', '详细说说?'][RandomFloor(0, 2)];
     }
-
-    const agentControlTools = [
-        {
-            type: "function",
-            function: {
-                name: "dispatch_painter",
-                description: "向绘图者子智能体发布绘画创作任务。绘图者会完善需求并调用专业工具生成图像，完成后将作品直接推送至前端展示。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        description: {
-                            type: "string",
-                            description: "绘画需求描述，如'画一只在樱花树下的白猫'、'画一幅星空下的少女'。描述越详细，绘画效果越好。"
-                        }
-                    },
-                    required: ["description"]
-                }
-            }
-        },
-        {
-            type: "function",
-            function: {
-                name: "dispatch_musician",
-                description: "向演奏者子智能体发布音乐创作任务。演奏者会完善需求并调用专业工具创作音乐，完成后将乐谱和音频直接推送至前端展示。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        description: {
-                            type: "string",
-                            description: "音乐需求描述，如'创作一首轻快的钢琴曲'、'写一首抒情的钢琴与大提琴二重奏'。描述越详细，音乐创作效果越好。"
-                        }
-                    },
-                    required: ["description"]
-                }
-            }
-        }
-    ];
-    function parseArgs$1(args) {
-        return typeof args === 'string' ? JSON.parse(args) : (args || {});
-    }
-    async function handleDispatchPainter(args) {
-        const { description } = parseArgs$1(args);
-        if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            return ['绘画任务调度失败：创作描述不能为空，请提供具体的绘画需求', ''];
-        }
-        if (!painterRole) {
-            return ['绘画任务调度失败：绘制者子智能体未就绪，请稍后重试', ''];
-        }
-        console.log(`[智能体控制] 调度绘制者: ${description}`);
-        const result = await painterRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 绘制者完成: ${result}`);
-        return [result, ''];
-    }
-    async function handleDispatchMusician(args) {
-        const { description } = parseArgs$1(args);
-        if (!description || typeof description !== 'string' || description.trim().length === 0) {
-            return ['音乐任务调度失败：创作描述不能为空，请提供具体的音乐需求', ''];
-        }
-        if (!musicianRole) {
-            return ['音乐任务调度失败：演奏者子智能体未就绪，请稍后重试', ''];
-        }
-        console.log(`[智能体控制] 调度演奏者: ${description}`);
-        const result = await musicianRole.createCreativeWork(description.trim());
-        console.log(`[智能体控制] 演奏者完成: ${result}`);
-        return [result, ''];
-    }
-    GlobalConfig.LTPfunction.set('dispatch_painter', handleDispatchPainter);
-    GlobalConfig.LTPfunction.set('dispatch_musician', handleDispatchMusician);
-    GlobalConfig.LTPdefinition.push(...agentControlTools);
-
-    const CN_DATE_REGEX = /^(\d{4})年(\d{1,2})月(\d{1,2})日\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
-    function formatISO(date) {
-        const y = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const h = String(date.getHours()).padStart(2, '0');
-        const mi = String(date.getMinutes()).padStart(2, '0');
-        const s = String(date.getSeconds()).padStart(2, '0');
-        return `${y}-${mo}-${d}T${h}:${mi}:${s}`;
-    }
-    function formatDate(date) {
-        const y = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${mo}-${d}`;
-    }
-    function normalizeTime(raw) {
-        if (!raw || raw.trim().length === 0) {
-            return null;
-        }
-        const trimmed = raw.trim();
-        const stdDate = new Date(trimmed);
-        if (!isNaN(stdDate.getTime())) {
-            return formatISO(stdDate);
-        }
-        const cnMatch = trimmed.match(CN_DATE_REGEX);
-        if (cnMatch) {
-            const [, year, month, day, hour, minute, second] = cnMatch;
-            return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second || '00').padStart(2, '0')}`;
-        }
-        return null;
-    }
-    function dailyTaskTime(item, now) {
-        const match = item.time.trim().match(/^(\d{1,2}):(\d{2})$/);
-        if (!match)
-            return null;
-        return new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(match[1]), Number(match[2]));
-    }
-
-    function loadSchedulesFromDisk() {
-        const [fileData, , , readErr] = readFile(SCHEDULE_FILE_PATH);
-        if (readErr) {
-            return [];
-        }
-        try {
-            const jsonStr = atob(fileData);
-            const data = JSON.parse(jsonStr);
-            return Array.isArray(data) ? data : [];
-        }
-        catch (e) {
-            console.error('[计划表] 计划表数据解析失败:', e);
-            return [];
-        }
-    }
-    function saveSchedulesToDisk(schedules) {
-        try {
-            const jsonStr = JSON.stringify(schedules, null, 2);
-            const [, , saveErr] = saveFile(SCHEDULE_FILE_PATH, true, jsonStr);
-            if (saveErr) {
-                console.error('[计划表] 保存计划表失败:', saveErr);
-                return false;
-            }
-            return true;
-        }
-        catch (e) {
-            console.error('[计划表] 序列化计划表失败:', e);
-            return false;
-        }
-    }
-
-    let scheduleCache = [];
-    function initSchedules() {
-        const raw = loadSchedulesFromDisk();
-        const existingIds = new Set(raw.map(item => item.id));
-        let added = 0;
-        for (const preset of PRESET_DAILY_TASKS) {
-            if (existingIds.has(preset.id))
-                continue;
-            raw.push({ ...preset });
-            added++;
-        }
-        if (raw.length === 0) {
-            saveSchedulesToDisk([]);
-            scheduleCache = [];
-            console.log('[计划表] 初始化完成，计划表为空');
-            return;
-        }
-        let needsRewrite = added > 0;
-        for (const item of raw) {
-            if (item.type === 'daily')
-                continue;
-            const normalized = normalizeTime(item.time);
-            if (normalized && normalized !== item.time) {
-                item.time = normalized;
-                needsRewrite = true;
-            }
-        }
-        scheduleCache = raw;
-        if (needsRewrite) {
-            saveSchedulesToDisk(scheduleCache);
-            if (added > 0)
-                console.log(`[计划表] 已补充 ${added} 个预设每日任务`);
-            console.log('[计划表] 已修正历史数据中的非标准时间格式');
-        }
-        console.log(`[计划表] 初始化完成，共加载 ${scheduleCache.length} 个计划项`);
-    }
-    function generateId() {
-        function execute(character) {
-            const randomValue = (Math.random() * 16) | 0;
-            const maskedRandomValue = character === 'x' ? randomValue : (randomValue & 0x3 | 0x8);
-            return maskedRandomValue.toString(16);
-        }
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, execute);
-    }
-    function parseArgs(args) {
-        return typeof args === 'string' ? JSON.parse(args) : (args || {});
-    }
-    async function handleCreateSchedule(args) {
-        const { time, content } = parseArgs(args);
-        if (!time || time.trim().length === 0) {
-            return ['创建计划项失败：执行时间不能为空，请提供有效的时间点', ''];
-        }
-        if (!content || content.trim().length === 0) {
-            return ['创建计划项失败：工作内容不能为空，请提供具体的计划内容', ''];
-        }
-        const normalizedTime = normalizeTime(time);
-        if (!normalizedTime) {
-            return [`创建计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 格式 (如 "2026-06-14T15:30:00") 或中文格式 (如 "2026年6月14日 15:30")`, ''];
-        }
-        const newItem = {
-            id: generateId(),
-            time: normalizedTime,
-            content: content.trim()
-        };
-        scheduleCache.push(newItem);
-        if (!saveSchedulesToDisk(scheduleCache)) {
-            scheduleCache.pop();
-            return ['创建计划项失败：保存到磁盘时出错，请稍后重试', ''];
-        }
-        console.log(`[计划表] 创建成功: [${newItem.id}] ${newItem.time} - ${newItem.content}`);
-        return [`计划项创建成功：ID为 ${newItem.id}，执行时间: ${newItem.time}，内容: ${newItem.content}`, ''];
-    }
-    async function handleEditSchedule(args) {
-        const { id, time, content } = parseArgs(args);
-        if (!id || id.trim().length === 0) {
-            return ['编辑计划项失败：计划项ID不能为空，请从 query_schedule 获取有效ID', ''];
-        }
-        if ((!time || time.trim().length === 0) && (!content || content.trim().length === 0)) {
-            return ['编辑计划项失败：至少需要提供 time 或 content 中的一个进行修改', ''];
-        }
-        const index = scheduleCache.findIndex(item => item.id === id.trim());
-        if (index === -1) {
-            return [`编辑计划项失败：未找到ID为 ${id} 的计划项，请使用 query_schedule 确认正确的ID`, ''];
-        }
-        const snapshot = { ...scheduleCache[index] };
-        if (time && time.trim().length > 0) {
-            const normalizedTime = normalizeTime(time);
-            if (!normalizedTime) {
-                return [`编辑计划项失败：无法解析时间格式 "${time}"，请使用 ISO 8601 或中文日期时间格式`, ''];
-            }
-            scheduleCache[index].time = normalizedTime;
-        }
-        if (content && content.trim().length > 0) {
-            scheduleCache[index].content = content.trim();
-        }
-        if (!saveSchedulesToDisk(scheduleCache)) {
-            scheduleCache[index] = snapshot;
-            return ['编辑计划项失败：保存到磁盘时出错，请稍后重试', ''];
-        }
-        console.log(`[计划表] 编辑成功: [${id}] -> ${scheduleCache[index].time} - ${scheduleCache[index].content}`);
-        return [`计划项编辑成功：ID为 ${id}，已更新为 执行时间: ${scheduleCache[index].time}，内容: ${scheduleCache[index].content}`, ''];
-    }
-    async function handleDeleteSchedule(args) {
-        const { id } = parseArgs(args);
-        if (!id || id.trim().length === 0) {
-            return ['删除计划项失败：计划项ID不能为空', ''];
-        }
-        const index = scheduleCache.findIndex(item => item.id === id.trim());
-        if (index === -1) {
-            return [`删除计划项失败：未找到ID为 ${id} 的计划项`, ''];
-        }
-        const deletedItem = scheduleCache[index];
-        scheduleCache.splice(index, 1);
-        if (!saveSchedulesToDisk(scheduleCache)) {
-            scheduleCache.splice(index, 0, deletedItem);
-            return ['删除计划项失败：保存到磁盘时出错，请稍后重试', ''];
-        }
-        console.log(`[计划表] 删除成功: [${id}] ${deletedItem.time} - ${deletedItem.content}`);
-        return [`计划项删除成功：已移除 [${deletedItem.id}] ${deletedItem.time} - ${deletedItem.content}`, ''];
-    }
-    async function handleQuerySchedule(args) {
-        const { keyword } = parseArgs(args);
-        if (scheduleCache.length === 0) {
-            return ['当前计划表为空，没有任何计划项，可以放心创建新计划。', ''];
-        }
-        const sorted = [...scheduleCache].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-        const filtered = keyword && keyword.trim().length > 0
-            ? sorted.filter(item => item.content.includes(keyword.trim()) || item.time.includes(keyword.trim()))
-            : sorted;
-        if (filtered.length === 0) {
-            return [`未找到包含关键词 "${keyword}" 的计划项，当前共有 ${scheduleCache.length} 个计划项。`, ''];
-        }
-        return [`当前共有 ${scheduleCache.length} 个计划项` + (keyword ? `，匹配 "${keyword}" 的有 ${filtered.length} 条` : '') + ':\n' +
-                filtered.map((item, i) => `[计划项${i + 1}] ID:${item.id} | 时间:${item.time} | 内容:${item.content}`).join('\n'), ''];
-    }
-    function checkDueItems() {
-        if (scheduleCache.length === 0)
-            return [];
-        const now = new Date();
-        const todayStr = formatDate(now);
-        const kept = [];
-        const removed = [];
-        const candidates = [];
-        for (const item of scheduleCache) {
-            if (item.type === 'daily') {
-                const todayTime = dailyTaskTime(item, now);
-                if (todayTime && now >= todayTime && item.completedDate !== todayStr) {
-                    if (now.getTime() - todayTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
-                        item.completedDate = todayStr;
-                        console.log(`[计划表] 每日任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
-                    }
-                    else
-                        candidates.push({ item, dueTime: todayTime });
-                }
-                kept.push(item);
-                continue;
-            }
-            const itemTime = new Date(item.time);
-            if (isNaN(itemTime.getTime())) {
-                console.warn(`[计划表] 无效的时间格式，跳过: [${item.id}] ${item.time}`);
-                kept.push(item);
-                continue;
-            }
-            if (now < itemTime) {
-                kept.push(item);
-                continue;
-            }
-            if (now.getTime() - itemTime.getTime() > SCHEDULE_OVERDUE_ABANDON_MS) {
-                removed.push(item);
-                console.log(`[计划表] 一次性任务超时放弃: [${item.id}] ${item.time} - ${item.content}`);
-                continue;
-            }
-            candidates.push({ item, dueTime: itemTime });
-        }
-        const executed = [];
-        if (candidates.length > 0) {
-            candidates.sort((a, b) => Math.abs(now.getTime() - a.dueTime.getTime()) - Math.abs(now.getTime() - b.dueTime.getTime()));
-            const chosen = candidates[0].item;
-            if (chosen.type === 'daily') {
-                chosen.completedDate = todayStr;
-                console.log(`[计划表] 触发每日任务: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
-            }
-            else {
-                removed.push(chosen);
-                console.log(`[计划表] 触发到期计划项: [${chosen.id}] ${chosen.time} - ${chosen.content}`);
-            }
-            executed.push(chosen);
-        }
-        if (executed.length > 0 || removed.length > 0) {
-            scheduleCache = kept;
-            saveSchedulesToDisk(scheduleCache);
-        }
-        return executed;
-    }
-    initSchedules();
-    GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
-    GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
-    GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
-    GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
-    GlobalConfig.LTPdefinition.push(...scheduleTools);
-
-    const screenshotTools = [
-        {
-            type: "function",
-            function: {
-                name: "screenshot",
-                description: "截取当前屏幕画面。默认优先截取当前焦点应用窗口，无法识别焦点窗口时自动降级为全屏截图。支持指定显示器、全屏、绝对坐标区域，以及窗口内精准子区域（偏移量+区域大小）。截取的图片会自动缩放处理并展示给用户。",
-                parameters: {
-                    type: "object",
-                    properties: {
-                        mode: {
-                            type: "string",
-                            enum: ["auto", "window", "fullscreen", "display", "region"],
-                            description: "截图模式：auto=焦点窗口优先（默认，失败降级全屏）；window=强制焦点窗口；fullscreen=全屏；display=指定显示器；region=绝对坐标区域"
-                        },
-                        display_index: {
-                            type: "number",
-                            description: "显示器索引（mode=display 时生效，-1 表示全部）"
-                        },
-                        offset_x: {
-                            type: "number",
-                            description: "窗口相对 X 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
-                        },
-                        offset_y: {
-                            type: "number",
-                            description: "窗口相对 Y 偏移（mode=auto/window，配合 width/height 使用，缺省为 0）"
-                        },
-                        width: {
-                            type: "number",
-                            description: "窗口相对区域宽度（>0 且 height>0 时启用精准区域覆盖）"
-                        },
-                        height: {
-                            type: "number",
-                            description: "窗口相对区域高度"
-                        },
-                        region_x: {
-                            type: "number",
-                            description: "绝对屏幕区域 X 坐标（mode=region）"
-                        },
-                        region_y: {
-                            type: "number",
-                            description: "绝对屏幕区域 Y 坐标（mode=region）"
-                        },
-                        region_w: {
-                            type: "number",
-                            description: "绝对屏幕区域宽度（mode=region）"
-                        },
-                        region_h: {
-                            type: "number",
-                            description: "绝对屏幕区域高度（mode=region）"
-                        },
-                        format: {
-                            type: "string",
-                            description: "输出图片格式：'png' 或 'jpg'，默认为 'png'",
-                            enum: ["png", "jpg"]
-                        }
-                    },
-                    required: []
-                }
-            }
-        }
-    ];
-    async function handleScreenshot(args) {
-        console.log(`========== 开始处理截图工具调用 ==========`);
-        console.log(`原始参数: ${JSON.stringify(args)}`);
-        const parsed = typeof args === 'string' ? JSON.parse(args) : (args || {});
-        console.log(`参数解析完成: ${JSON.stringify(parsed)}`);
-        console.log(`准备执行截图操作...`);
-        const [results, captureErr] = screenshotCapture(parsed);
-        if (captureErr) {
-            console.error(`截图失败: ${captureErr.message || String(captureErr)}`);
-            console.log(`========== 截图工具调用结束(失败) ==========`);
-            return [`截图失败：${captureErr.message || String(captureErr)}`, ''];
-        }
-        if (!results || results.length === 0) {
-            console.error(`截图失败: 未获取到截图数据`);
-            console.log(`========== 截图工具调用结束(失败) ==========`);
-            return ['截图失败：未获取到截图数据', ''];
-        }
-        const firstFrame = results[0];
-        console.log(`截图处理成功: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
-        const base64List = results.map((r) => r.base64);
-        pushImage(base64List);
-        console.log(`图片已推送: ${firstFrame.width}x${firstFrame.height}, 格式=${firstFrame.format}, 帧数=${results.length}`);
-        const sizeInfo = `${firstFrame.width}x${firstFrame.height}`;
-        const frameInfo = results.length > 1 ? `（共${results.length}帧）` : '';
-        const textResponse = `截图完成，已获取当前屏幕画面（${sizeInfo}）${frameInfo}，图片已展示给用户。`;
-        console.log(`返回响应: ${sizeInfo}`);
-        console.log(`========== 截图工具调用结束(成功) ==========`);
-        return [textResponse, firstFrame.base64];
-    }
-    GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
-    GlobalConfig.LTPdefinition.push(...screenshotTools);
 
     async function fetchDocumentCallback(url, initializeContent = '{}', callback) {
         const defaultCallback = (content) => JSON.parse(content);
@@ -3252,119 +4040,16 @@ var agentSystem = (function (exports) {
         return { thinkingBlocks, codeBlocks, actionBlocks, textChunks };
     }
 
-    const injectedLTPXRemoteTools = new Set();
-    const USE_THE_PROGRAM_PROMPT = '- 当被要求或需要(打开/启动/运行/使用)某个程序或操作时，必须调用工具"use_the_program"，不得凭空编造操作结果，必须等待工具真实返回。';
-    function syncLTPXRemoteStatus() {
-        try {
-            const statusJSON = getLTPXRemoteStatus();
-            const tool = statusJSON ? JSON.parse(statusJSON).tool : undefined;
-            if (!tool || !tool.name) {
-                dialogueRole.removePrompt(USE_THE_PROGRAM_PROMPT);
-                removeAllLTPXRemoteTools();
-                clearLTPXRemoteTools();
-                return;
-            }
-            const injected = [...injectedLTPXRemoteTools][0];
-            if (injected && injected !== tool.name)
-                removeLTPXRemoteTool(injected);
-            if (!injectedLTPXRemoteTools.has(tool.name))
-                injectLTPXRemoteTool(tool);
-            dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
-        }
-        catch (e) {
-            console.error('LTPX 工具链同步失败:', e);
-        }
-    }
-    function injectLTPXRemoteTool(tool) {
-        const name = tool.name;
-        GlobalConfig.LTPfunction.set(name, async (args) => {
-            const argsJSON = typeof args === 'string' ? args : JSON.stringify(args || {});
-            const text = await callLTPXRemoteTool(name, argsJSON);
-            return [text, ''];
-        });
-        GlobalConfig.LTPdefinition.push({
-            type: 'function',
-            function: { name, description: tool.description || '', parameters: tool.parameters },
-        });
-        injectedLTPXRemoteTools.add(name);
-    }
-    function removeLTPXRemoteTool(name) {
-        for (let i = GlobalConfig.LTPdefinition.length - 1; i >= 0; i--) {
-            const def = GlobalConfig.LTPdefinition[i];
-            if (def.type === 'function' && def.function?.name === name)
-                GlobalConfig.LTPdefinition.splice(i, 1);
-        }
-        GlobalConfig.LTPfunction.delete(name);
-        injectedLTPXRemoteTools.delete(name);
-        console.log(`LTPX 已移除工具: ${name}`);
-    }
-    function removeAllLTPXRemoteTools() {
-        [...injectedLTPXRemoteTools].forEach(removeLTPXRemoteTool);
-    }
-
     function pushDecreeResponse(text) {
         const [audio, err] = tts(text);
         pushContext('text', text, (err || !audio) ? '' : audio);
         console.log(`[律令] 默认应答: ${text}`);
-    }
-    function findLastImageUrl(messages) {
-        for (let i = messages.length - 1; i >= 0; i--) {
-            const message = messages[i];
-            if (typeof message.content === 'string')
-                continue;
-            for (let j = message.content.length - 1; j >= 0; j--) {
-                const item = message.content[j];
-                if (item.type === 'image_url' && item.image_url && item.image_url.url) {
-                    return item.image_url.url;
-                }
-            }
-        }
-        return '';
-    }
-    function saveReferenceImage(imageUrl) {
-        try {
-            const [resized, err] = resizeImage(imageUrl);
-            if (err || !resized || resized.length === 0)
-                return '';
-            const ref = resized[0];
-            const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
-            const [hash, hashErr] = hashBytes(ref.image);
-            if (hashErr || !hash) {
-                console.error('[律令] 参考图哈希计算失败:', hashErr);
-                return '';
-            }
-            const relPath = `multimedia/reference/${hash}.${ext}`;
-            const [, , saveErr] = saveFile(relPath, true, ref.image);
-            if (saveErr) {
-                console.error('[律令] 参考图保存失败:', saveErr);
-                return '';
-            }
-            console.log(`[律令] 参考图已保存: ${relPath}`);
-            return relPath;
-        }
-        catch (error) {
-            console.error('[律令] 参考图处理异常:', error);
-            return '';
-        }
     }
     const decreeRegistry = {
         '全记住': () => {
             GlobalConfig.unreadRecords.push(...dialogueRole.messages);
             memorizerRole.persistUnreadRecords();
             pushDecreeResponse('全部记住啦~');
-        },
-        '参考图': () => {
-            const imageUrl = findLastImageUrl(GlobalConfig.unreadContext);
-            if (imageUrl) {
-                const localPath = saveReferenceImage(imageUrl);
-                if (localPath) {
-                    painterRole.referenceImage = localPath;
-                    pushDecreeResponse('看到你的参考图啦, 下次我就依据这张图片来绘制啦~');
-                    return;
-                }
-            }
-            painterRole.referenceImage = '';
-            pushDecreeResponse('没看到参考图呢, 那我就自由发挥啦~');
         },
     };
     function extractDecreeText(message) {
@@ -3565,6 +4250,7 @@ var agentSystem = (function (exports) {
         musicianRole.coverContext([]);
         perceiverRole.coverContext([]);
         memorizerRole.coverContext([]);
+        painterRole.resetReference();
         GlobalConfig.unreadContext = [];
     }
 

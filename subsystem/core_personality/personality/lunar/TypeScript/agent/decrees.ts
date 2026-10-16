@@ -1,6 +1,6 @@
 import { GlobalConfig } from '../config/global';
 import { PostMessage } from '../config/model';
-import { dialogueRole, memorizerRole, painterRole } from './roles/roles';
+import { dialogueRole, memorizerRole } from './roles/roles';
 
 // ===== 律令指令机制 =====
 // 未读消息中出现 <指令> 格式文本时，若命中已定义的律令，则跳过本轮 AI 应答：
@@ -17,49 +17,6 @@ function pushDecreeResponse(text: string): void {
     console.log(`[律令] 默认应答: ${text}`);
 }
 
-/** 查找未读消息中的最后一张图片 URL（按消息倒序扫描各内容项） */
-function findLastImageUrl(messages: PostMessage[]): string {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const message = messages[i];
-        if (typeof message.content === 'string') continue;
-        for (let j = message.content.length - 1; j >= 0; j--) {
-            const item = message.content[j];
-            if (item.type === 'image_url' && item.image_url && item.image_url.url) {
-                return item.image_url.url;
-            }
-        }
-    }
-    return '';
-}
-
-/** 将参考图下载为本地文件（按内容哈希命名，返回相对 LocalDir 的路径），失败时返回空字符串 */
-function saveReferenceImage(imageUrl: string): string {
-    try {
-        const [resized, err] = resizeImage(imageUrl);
-        if (err || !resized || resized.length === 0) return '';
-        const ref = resized[0];
-        const ext = ref.format === 'jpeg' ? 'jpg' : 'png';
-        // 按内容哈希（SHA-256 前16位）命名，与前端文件哈希命名约定一致
-        const [hash, hashErr] = hashBytes(ref.image);
-        if (hashErr || !hash) {
-            console.error('[律令] 参考图哈希计算失败:', hashErr);
-            return '';
-        }
-        const relPath = `multimedia/reference/${hash}.${ext}`;
-        const [, , saveErr] = saveFile(relPath, true, ref.image);
-        if (saveErr) {
-            console.error('[律令] 参考图保存失败:', saveErr);
-            return '';
-        }
-        console.log(`[律令] 参考图已保存: ${relPath}`);
-        return relPath;
-    }
-    catch (error) {
-        console.error('[律令] 参考图处理异常:', error);
-        return '';
-    }
-}
-
 /** 律令指令注册表：指令标签（不含尖括号）→ 处理函数 */
 const decreeRegistry: Record<string, DecreeHandler> = {
     /** <全记住>：立刻将对话者的全部上下文消息推入记忆缓冲并立即写入记忆库（省去排队） */
@@ -67,20 +24,6 @@ const decreeRegistry: Record<string, DecreeHandler> = {
         GlobalConfig.unreadRecords.push(...dialogueRole.messages);
         memorizerRole.persistUnreadRecords();
         pushDecreeResponse('全部记住啦~');
-    },
-    /** <参考图>：将未读消息中的最后一张图片下载为本地参考图；无图时清除参考图并自由发挥 */
-    '参考图': () => {
-        const imageUrl = findLastImageUrl(GlobalConfig.unreadContext);
-        if (imageUrl) {
-            const localPath = saveReferenceImage(imageUrl);
-            if (localPath) {
-                painterRole.referenceImage = localPath;
-                pushDecreeResponse('看到你的参考图啦, 下次我就依据这张图片来绘制啦~');
-                return;
-            }
-        }
-        painterRole.referenceImage = '';
-        pushDecreeResponse('没看到参考图呢, 那我就自由发挥啦~');
     },
 };
 

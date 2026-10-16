@@ -40,6 +40,14 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("animatedImageToVideo", adapters.animatedImageToVideo)
 	vm.Set("animatedImageToFrames", adapters.animatedImageToFrames)
 	vm.Set("generateImage", adapters.generateImage)
+	vm.Set("upscaleImage", adapters.upscaleImage)
+
+	// 注册共享图片缓存适配器（QQ 转发与对话者上下文共用同一标签命名空间）
+	vm.Set("imageCachePut", adapters.imageCachePut)
+	vm.Set("imageCacheGet", adapters.imageCacheGet)
+	vm.Set("imageCacheList", adapters.imageCacheList)
+	vm.Set("imageCacheSetDesc", adapters.imageCacheSetDesc)
+	vm.Set("imageCacheUnpin", adapters.imageCacheUnpin)
 
 	// 注册base64编码解码适配器
 	vm.Set("atob", adapters.atob)
@@ -69,7 +77,6 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// 注册 LTPX 远程（琉璃）工具链协调函数
 	vm.Set("getLTPXRemoteStatus", adapters.getLTPXRemoteStatusForJS)
 	vm.Set("callLTPXRemoteTool", adapters.callLTPXRemoteToolForJS)
-	vm.Set("clearLTPXRemoteTools", adapters.clearLTPXRemoteToolsForJS)
 	// 注册 LTPX 事件交互：月华在每个事件触发点同步推送负载到琉璃，接收插件处理结果
 	vm.Set("ltpInteractEvent", adapters.interactLTPXEventForJS)
 

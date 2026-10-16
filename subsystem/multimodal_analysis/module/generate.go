@@ -3,8 +3,10 @@ package module
 import (
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"os/exec"
@@ -392,6 +394,84 @@ func GenerateImage(prompt, negativePrompt string, batchSize, width, height, step
 	}
 
 	return result, nil
+}
+
+// UpscaleImage 对已有图片执行 RealESRGAN 超分辨率放大（4x，sd-cli -M upscale 纯超分管线）
+// 输入图片字节写入临时文件供引擎读取，放大结果写入多媒体生成目录并返回 base64 与尺寸
+func UpscaleImage(imageData []byte) (map[string]any, error) {
+	// 与扩散生成共用功能开关
+	if !*GeneralConfig.AllowDiffusion {
+		return nil, fmt.Errorf("未启用[扩散生成]功能")
+	}
+	if len(imageData) == 0 {
+		return nil, fmt.Errorf("图片数据为空")
+	}
+	if strings.TrimSpace(*GeneralConfig.RealESRGANModel) == "" {
+		return nil, fmt.Errorf("未配置超分模型（real_esrgan_model）")
+	}
+
+	// 输入写入临时文件（sd-cli 只接受文件路径），结束后清理
+	inputFile, err := os.CreateTemp("", "lunar_upscale_in_*.png")
+	if err != nil {
+		return nil, fmt.Errorf("创建超分输入临时文件失败: %v", err)
+	}
+	inputPath := inputFile.Name()
+	defer os.Remove(inputPath)
+	if _, err := inputFile.Write(imageData); err != nil {
+		inputFile.Close()
+		return nil, fmt.Errorf("写入超分输入临时文件失败: %v", err)
+	}
+	inputFile.Close()
+
+	// 输出写入多媒体生成目录
+	os.MkdirAll(filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated"), 0755)
+	outputPath := filepath.Join(*GeneralConfig.LocalDir, "multimedia/generated", fmt.Sprintf("upscale_%s.png", time.Now().Format("20060102_150405")))
+
+	// 纯超分管线：不加载扩散模型，仅 RealESRGAN 放大
+	args := []string{
+		"-M", "upscale",
+		"--upscale-model", *GeneralConfig.RealESRGANModel,
+		"-i", inputPath,
+		"-o", outputPath,
+	}
+	LoggerGeneral.Info("MultimodalAnalysis", "图像超分: %s %s", *GeneralConfig.VisualEngine, strings.Join(args, " "))
+
+	cmd := exec.Command(*GeneralConfig.VisualEngine, args...)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	stdoutWriter := newEngineLogWriter("stdout", os.Stdout)
+	stderrWriter := newEngineLogWriter("stderr", os.Stderr)
+	go func() { _, _ = io.Copy(stdoutWriter, stdout); stdoutWriter.Close() }()
+	go func() { _, _ = io.Copy(stderrWriter, stderr); stderrWriter.Close() }()
+
+	if err := cmd.Run(); err != nil {
+		LoggerGeneral.Error("MultimodalAnalysis", "图像超分执行失败: %v", err)
+		return nil, fmt.Errorf("超分执行失败: %v", err)
+	}
+
+	// 读取放大结果
+	imageResult, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取超分结果失败: %v", err)
+	}
+
+	// 解码尺寸（仅读取头部信息，不整图解码）
+	config, _, err := image.DecodeConfig(bytes.NewReader(imageResult))
+	width, height := 0, 0
+	if err != nil {
+		LoggerGeneral.Warn("MultimodalAnalysis", "超分结果尺寸解码失败: %v", err)
+	} else {
+		width, height = config.Width, config.Height
+	}
+
+	LoggerGeneral.Info("MultimodalAnalysis", "图像超分完成: %s (%dx%d)", outputPath, width, height)
+	return map[string]any{
+		"path":   outputPath,
+		"base64": base64.StdEncoding.EncodeToString(imageResult),
+		"width":  width,
+		"height": height,
+	}, nil
 }
 
 // normalizeImageSide 把请求边长归一化为 32 的倍数。

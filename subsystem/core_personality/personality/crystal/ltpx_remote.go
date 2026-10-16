@@ -98,8 +98,8 @@ func scanAtoaToolchain() ([]LTPXRemoteToolDef, map[string]string) {
 	return defs, pkgMap
 }
 
-// Node-LTP 聚合体的工具名
-const integratedToolsName = "use_program"
+// Node-LTP 聚合体的工具名（月华侧提示词 use_the_program 必须与此一致）
+const integratedToolsName = "use_the_program"
 
 // Auto-LTP 智能体的工具名
 const operateToolName = "window_operate"
@@ -158,18 +158,18 @@ func ltpxFirstSentence(desc string) string {
 	if desc == "" {
 		return ""
 	}
-	// 跳过开头的定式引导语（如「驱动/接受」等），直接取首句
-	var end = len(desc)
-	for i, r := range desc {
+	// 按 rune 遍历并以 rune 切片收尾：终止标点为 3 字节字符，按字节下标切会切出无效 UTF-8
+	runes := []rune(desc)
+	end := len(runes)
+	for i, r := range runes {
 		if r == '。' || r == '；' || r == ';' || r == '.' || r == '！' || r == '？' {
 			end = i + 1
 			break
 		}
 	}
-	s := strings.TrimSpace(desc[:end])
-	if len([]rune(s)) > 60 {
-		runes := []rune(s)
-		s = string(runes[:60]) + "…"
+	s := strings.TrimSpace(string(runes[:end]))
+	if sr := []rune(s); len(sr) > 60 {
+		s = string(sr[:60]) + "…"
 	}
 	return s
 }
@@ -199,7 +199,7 @@ func LTPRemoteToolsHandler(w http.ResponseWriter, r *http.Request) {
 //   - 内置智能体（Auto-LTP / Web-LTP）：在独立 goroutine 中执行，完成后写入结果通道
 //   - 前端包工具：登记后经 /ws 广播给前端，包执行完毕回执 /ltpx/result 写入结果通道
 //
-// 月华以 /ltpx/poll 心跳轮询取回结果，长任务（如联网搜索）不会再因同步等待超时被误判下线
+// 调用方经进程内结果通道等待结果（Broker.Await），等待上限由调用方上下文决定。
 func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -211,48 +211,68 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, http.StatusBadRequest, LTPXRemoteCallResponse{Success: false, Error: "无效的请求体: " + err.Error()})
 		return
 	}
-	if req.Tool == "" {
+
+	// 解析目标工具名：月华统一调用聚合工具，实际目标工具在 arguments.tool 中
+	targetTool := req.Tool
+	explicitTarget := false
+	if req.Tool == integratedToolsName {
+		raw, ok := req.Arguments["tool"]
+		s, sok := raw.(string)
+		if !ok || !sok || strings.TrimSpace(s) == "" {
+			// 聚合工具缺少 tool 参数：如实指出，避免落到"包可能已卸载"的误导性错误
+			jsonOK(w, http.StatusBadRequest, LTPXRemoteCallResponse{
+				Success: false,
+				Error:   integratedToolsName + " 需在 arguments 提供 tool 目标工具名（从工具描述清单中选择）",
+			})
+			return
+		}
+		targetTool = strings.TrimSpace(s)
+		explicitTarget = true
+	}
+	if strings.TrimSpace(targetTool) == "" {
 		jsonOK(w, http.StatusBadRequest, LTPXRemoteCallResponse{Success: false, Error: "tool 为必填项"})
 		return
 	}
 
-	// 解析目标工具名：月华统一调用 use_the_program，实际目标工具在 arguments.tool 中
-	targetTool := req.Tool
-	if req.Tool == integratedToolsName {
-		if raw, ok := req.Arguments["tool"]; ok {
-			if s, sok := raw.(string); sok && s != "" {
-				targetTool = s
-			}
-		}
-	}
-	if targetTool == "" {
-		jsonOK(w, http.StatusBadRequest, LTPXRemoteCallResponse{Success: false, Error: "use_the_program 需在 arguments 提供 tool 目标工具名"})
-		return
+	// 单次扫描同时取得工具链与路由表：避免"先无条件广播、再回头扫描才发现无此包"
+	pkgMap := map[string]string{}
+	{
+		_, mapping := scanAtoaToolchain()
+		pkgMap = mapping
 	}
 
-	// 登记待定调用（内置智能体与前端包工具共用同一张注册表与轮询端点）
+	// 登记待定调用（内置智能体与前端包工具共用同一张注册表与结果通道）；
+	// 随条目的定时器负责按龄清理与超时回执，保证调用方不会无限等待
 	requestID := fmt.Sprintf("%d-%04d", time.Now().UnixNano(), rand.Intn(10000))
 	done := make(chan LTPXRemoteCallResponse, 1)
 	ltpPendingMutex.Lock()
 	ltpPendingCalls[requestID] = &ltpPendingCall{done: done, toolName: targetTool, startedAt: time.Now()}
 	ltpPendingMutex.Unlock()
+	// 按龄清理与超时回执：不依赖任何取回路径，异常遗留条目也会在时限后自清并给出答复
+	schedulePendingCallCleanup(requestID)
 
-	// 声明 Auto-LTP <window 操作>智能体：进程内调用多角色编排智能体（goroutine 异步执行）
+	// 声明 Auto-LTP <窗口操作>智能体：进程内调用多角色编排智能体（goroutine 异步执行）
 	if targetTool == operateToolName {
-		instruction := ""
-		if raw, exists := req.Arguments["instruction"]; exists {
-			if s, sok := raw.(string); sok {
-				instruction = s
-			}
-		}
+		instruction, _ := req.Arguments["instruction"].(string)
 		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Auto-LTP 智能体（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
 		go func() {
+			// 处理器 panic 不得带崩宿主进程（进程内直调失去了 net/http 的 per-request recover）
+			defer func() {
+				if rec := recover(); rec != nil {
+					LoggerGeneral.Error("CrystalAstral", "Auto-LTP 智能体 (request_id=%s) panic: %v", requestID, rec)
+					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("内置智能体执行异常: %v", rec)})
+				}
+			}()
 			text, err := AutoLTP.Run(instruction)
 			resp := LTPXRemoteCallResponse{Text: text}
 			if err != nil {
 				resp.Success, resp.Error = false, err.Error()
 			} else {
 				resp.Success = !strings.HasPrefix(text, "已达到最大执行轮次")
+				// 失败但仍带进展文本时保留文本，供模型判断已完成的部分
+				if !resp.Success && strings.TrimSpace(text) == "" {
+					resp.Text = "已达到最大执行轮次"
+				}
 				if text == "" {
 					resp.Text = "任务已执行完成"
 				}
@@ -266,14 +286,15 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 声明 Web-LTP <网络搜索>智能体：进程内独立执行搜索流水线（goroutine 异步执行）
 	if targetTool == searchToolName {
-		instruction := ""
-		if raw, exists := req.Arguments["instruction"]; exists {
-			if s, sok := raw.(string); sok {
-				instruction = s
-			}
-		}
+		instruction, _ := req.Arguments["instruction"].(string)
 		LoggerGeneral.Info("CrystalAstral", "月华调用内置 Web-LTP 网络搜索（工具=%s, request_id=%s）：%s", targetTool, requestID, instruction)
 		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					LoggerGeneral.Error("CrystalAstral", "Web-LTP 网络搜索 (request_id=%s) panic: %v", requestID, rec)
+					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("网络搜索执行异常: %v", rec)})
+				}
+			}()
 			text, err := WebLTP.Run(instruction)
 			resp := LTPXRemoteCallResponse{Text: text}
 			if err != nil {
@@ -291,14 +312,23 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 路由：目标工具名 → 提供该工具的包 ID
-	_, toolPkgMap := scanAtoaToolchain()
-	appID := toolPkgMap[targetTool]
+	// 路由：目标工具名 → 提供该工具的包 ID（未命中给出可操作的错误与可用工具清单）
+	appID := pkgMap[targetTool]
 	if appID == "" {
 		ltpPendingMutex.Lock()
 		delete(ltpPendingCalls, requestID)
 		ltpPendingMutex.Unlock()
-		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: "未找到提供工具 " + targetTool + " 的包（该包可能已卸载）"})
+		tools, _ := scanAtoaToolchain()
+		available := make([]string, 0, len(tools))
+		for _, t := range tools {
+			available = append(available, t.Name)
+		}
+		available = append(available, operateToolName, searchToolName)
+		hint := "未找到提供工具 " + targetTool + " 的包（该包可能已卸载）"
+		if explicitTarget {
+			hint = "未找到目标工具 " + targetTool + "（该包可能已卸载）；当前可用工具：" + strings.Join(available, "、")
+		}
+		jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Success: false, Error: hint})
 		return
 	}
 
@@ -314,58 +344,76 @@ func LTPRemoteCallHandler(w http.ResponseWriter, r *http.Request) {
 	LoggerGeneral.Info("CrystalAstral", "月华调用 LTPX 工具 → %s (app=%s, request_id=%s)\n请求参数: %s", targetTool, appID, requestID, string(argsJSON))
 	// 异步受理：立即返回 request_id，实际派发在后台 goroutine 完成。
 	// 琉璃前端可能已被用户关闭（LTPX 功能依托前端执行），派发前经前端守护唤起并等待
-	// 重新就绪；该等待必须置于受理响应之后——月华等待的是轮询回执，受理路径多等一秒
-	// 都会放大成每次调用的延迟。
+	// 重新就绪，但等待有硬上限（frontendReviveTimeout）：就绪仍失败则立刻回执失败，
+	// 不让调用方空等结果通道的上限时长。
 	jsonOK(w, http.StatusOK, LTPXRemoteCallResponse{Pending: true, RequestID: requestID})
 	if ws.Instance != nil {
 		go func() {
-			EnsureFrontendForDispatch()
+			defer func() {
+				if rec := recover(); rec != nil {
+					LoggerGeneral.Error("CrystalAstral", "LTPX 派发 %s (request_id=%s) panic: %v", targetTool, requestID, rec)
+					writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: fmt.Sprintf("派发异常: %v", rec)})
+				}
+			}()
+			if !EnsureFrontendForDispatch() {
+				writePendingResult(requestID, LTPXRemoteCallResponse{
+					Success: false,
+					Error:   "琉璃前端未就绪，无法派发工具 " + targetTool + "（请确认琉璃桌面窗口已打开）",
+				})
+				return
+			}
 			ws.Instance.BroadcastBus(ws.DefaultBusChannel, msg)
 		}()
+	} else {
+		writePendingResult(requestID, LTPXRemoteCallResponse{Success: false, Error: "前端集线器未就绪，无法派发工具 " + targetTool})
 	}
 }
 
-// LTPRemotePollHandler 月华心跳轮询工具执行状态（GET /ltpx/poll?request_id=xxx）。
-// 心跳语义：每次成功轮询响应即证明琉璃在线，月华据此重置无响应计数；
-// 任务仍在执行时返回 done=false，完成时返回 done=true 并携带结果。
-// 未知 request_id（已取走/琉璃重启丢失状态）返回 done=true + 失败，避免月华无限轮询。
-func LTPRemotePollHandler(w http.ResponseWriter, r *http.Request) {
+// LTPRemotePendingHandler 调试端点：列出当前待定调用（GET /ltpx/pending）。
+// 进程内取回结果为 Broker.Await，不再有轮询语义；本端点仅用于人工排查挂起的调用，
+// 不消费结果、不删除条目（按龄清理由 schedulePendingCallCleanup 负责）。
+func LTPRemotePendingHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	requestID := r.URL.Query().Get("request_id")
-	if requestID == "" {
-		jsonOK(w, http.StatusBadRequest, map[string]any{"done": true, "success": false, "error": "request_id 为必填项"})
-		return
-	}
-
 	ltpPendingMutex.Lock()
-	call, ok := ltpPendingCalls[requestID]
-	if !ok {
-		ltpPendingMutex.Unlock()
-		jsonOK(w, http.StatusOK, map[string]any{"done": true, "success": false, "error": "任务不存在或已结束（琉璃可能已重启）"})
-		return
+	items := make([]map[string]any, 0, len(ltpPendingCalls))
+	for id, call := range ltpPendingCalls {
+		items = append(items, map[string]any{
+			"request_id": id,
+			"tool":       call.toolName,
+			"age_ms":     time.Since(call.startedAt).Milliseconds(),
+		})
 	}
-	// 超过最长保留时长：判定失败并清理，防止注册表泄漏
-	if time.Since(call.startedAt) > ltpPendingMaxAge {
+	ltpPendingMutex.Unlock()
+	jsonOK(w, http.StatusOK, map[string]any{"pending": items, "count": len(items)})
+}
+
+// ltpPendingCleanupInterval 待定调用超时巡检间隔（注册表可能被前端异常路径遗留条目）
+const ltpPendingCleanupInterval = 30 * time.Second
+
+// schedulePendingCallCleanup 为待定调用安排超时回执：超过最长保留时长仍未取走时，
+// 清掉条目并投递失败结果，保证调用方始终能拿到明确答复（不再依赖轮询端点的残留逻辑）。
+func schedulePendingCallCleanup(requestID string) {
+	time.AfterFunc(ltpPendingMaxAge, func() {
+		ltpPendingMutex.Lock()
+		call, ok := ltpPendingCalls[requestID]
+		if !ok {
+			ltpPendingMutex.Unlock()
+			return
+		}
 		delete(ltpPendingCalls, requestID)
 		ltpPendingMutex.Unlock()
 		LoggerGeneral.Warn("CrystalAstral", "LTPX 工具 %s (request_id=%s) 超过最长保留时长（%v），判定失败", call.toolName, requestID, ltpPendingMaxAge)
-		jsonOK(w, http.StatusOK, map[string]any{"done": true, "success": false, "error": fmt.Sprintf("等待工具 %s 执行回执超时（%v）", call.toolName, ltpPendingMaxAge)})
-		return
-	}
-	// 非阻塞读取结果：仍在执行时返回 done=false（本次轮询即一次心跳）
-	select {
-	case resp := <-call.done:
-		delete(ltpPendingCalls, requestID)
-		ltpPendingMutex.Unlock()
-		LoggerGeneral.Info("CrystalAstral", "LTPX 工具 %s (request_id=%s) 经轮询取回结果: success=%v", call.toolName, requestID, resp.Success)
-		jsonOK(w, http.StatusOK, map[string]any{"done": true, "success": resp.Success, "text": resp.Text, "error": resp.Error})
-	default:
-		ltpPendingMutex.Unlock()
-		jsonOK(w, http.StatusOK, map[string]any{"done": false})
-	}
+		select {
+		case call.done <- LTPXRemoteCallResponse{
+			Success: false,
+			Error:   fmt.Sprintf("等待工具 %s 执行回执超时（%v）", call.toolName, ltpPendingMaxAge),
+		}:
+		default:
+		}
+	})
 }
 
 // writePendingResult 将工具执行结果写入待定调用结果通道（容量 1，非阻塞写入，绝不卡死执行方）

@@ -44,6 +44,9 @@ func (b *Broker) Status() ltpx.Status {
 		Tool: &ltpx.ToolDef{
 			Name:        resp.Tool.Name,
 			Description: resp.Tool.Description,
+			// 参数 schema 必须随定义透传：缺失会让模型收到 parameters=null 的函数定义，
+			// 无从得知 {tool, instruction} 两个必填参数
+			Parameters: resp.Tool.Parameters,
 		},
 	}
 }

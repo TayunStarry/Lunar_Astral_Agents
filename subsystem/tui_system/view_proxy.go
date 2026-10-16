@@ -1,6 +1,7 @@
 package TuiSystem
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -27,16 +28,111 @@ type proxyState struct {
 	qrText   string
 }
 
-// newProxyState 构建代理屏状态
+// proxyPortDefaults 代理屏的端口提示与校验基准（宿主注入真实配置）。
+//
+// 教训（实测故障）：这里原先把**代理端口**的提示写成写死的 "36790"——那正是
+// ModelPort（BasicPort+1）即**模型服务端口**。用户照着提示填 36790，代理就把模型服务的
+// 端口接管了：程序自身发往模型服务的请求打到 TLS 代理上，于是出现
+// `client sent an HTTP request to an HTTPS server`、连接被重置、嵌入请求 unexpected EOF、
+// 记忆库查询失败。提示值必须来自真实配置，且必须拦住与自身服务撞车的端口。
+type proxyPortDefaults struct {
+	BackendHint string // 后端端口（Web 服务）
+	FrontHint   string // 代理端口
+	Reserved    map[int]string
+}
+
+var proxyDefaults = proxyPortDefaults{
+	BackendHint: "36789",
+	FrontHint:   "36794",
+	Reserved:    map[int]string{},
+}
+
+// SetProxyDefaults 注入代理屏端口默认值（预填充 + 留空即采用）与保留端口（宿主启动时调用）
+func SetProxyDefaults(backendPort, proxyPort int, reserved map[int]string) {
+	if backendPort > 0 {
+		proxyDefaults.BackendHint = strconv.Itoa(backendPort)
+	}
+	if proxyPort > 0 {
+		// 默认值本身不得落在自身服务端口上，否则"直接回车"也会撞车
+		if owner := reserved[proxyPort]; owner != "" {
+			proxyDefaults.FrontHint = strconv.Itoa(firstFreePort(proxyPort, reserved))
+		} else {
+			proxyDefaults.FrontHint = strconv.Itoa(proxyPort)
+		}
+	}
+	if reserved != nil {
+		proxyDefaults.Reserved = reserved
+		proxy.SetReservedPorts(reserved)
+	}
+}
+
+// firstFreePort 从 from 起找一个未被保留端口占用的端口（默认值兜底）
+func firstFreePort(from int, reserved map[int]string) int {
+	for p := from + 1; p < from+100 && p <= 65535; p++ {
+		if _, taken := reserved[p]; !taken {
+			return p
+		}
+	}
+	return from + 1
+}
+
+// defaultBackendPort / defaultFrontPort 取当前默认端口（数值，解析失败时回退内置值）
+func defaultBackendPort() int { return atoiOr(proxyDefaults.BackendHint, 36789) }
+func defaultFrontPort() int   { return atoiOr(proxyDefaults.FrontHint, 36794) }
+
+func atoiOr(s string, def int) int {
+	if v, err := strconv.Atoi(strings.TrimSpace(s)); err == nil && v > 0 && v <= 65535 {
+		return v
+	}
+	return def
+}
+
+// resolveProxyPort 解析端口输入：**留空即采用默认值**，否则按输入解析。
+// 抽成纯函数便于单测——这条"直接回车即可用"的路径必须稳定。
+func resolveProxyPort(input, def string) (int, error) {
+	v := strings.TrimSpace(input)
+	if v == "" {
+		v = strings.TrimSpace(def)
+	}
+	if v == "" {
+		return 0, errInvalidPort
+	}
+	p, err := strconv.Atoi(v)
+	if err != nil || p < 1 || p > 65535 {
+		return 0, errInvalidPort
+	}
+	return p, nil
+}
+
+// newProxyState 构建代理屏状态：端口**预填充**为默认值，用户可直接回车启动，
+// 也可以清空（留空同样采用默认值）或改成别的端口。
 func newProxyState() proxyState {
 	s := proxyState{}
 	s.inputs[0] = textinput.New()
-	s.inputs[0].Placeholder = "36789"
+	s.inputs[0].Placeholder = proxyDefaults.BackendHint
+	s.inputs[0].SetValue(proxyDefaults.BackendHint)
 	s.inputs[0].Width = 8
 	s.inputs[1] = textinput.New()
-	s.inputs[1].Placeholder = "36790"
+	s.inputs[1].Placeholder = proxyDefaults.FrontHint
+	s.inputs[1].SetValue(proxyDefaults.FrontHint)
 	s.inputs[1].Width = 8
 	return s
+}
+
+// validateProxyPorts 代理端口校验：范围、前后不同、且不得占用自身服务的端口。
+// 抽成纯函数便于单测——这类误配的代价是整机功能异常，必须被测试钉住。
+func validateProxyPorts(backend, front int) error {
+	if backend < 1 || backend > 65535 || front < 1 || front > 65535 {
+		return errInvalidPort
+	}
+	if front == backend {
+		return errInvalidPort
+	}
+	if owner := proxy.ReservedPortOwner(front); owner != "" {
+		return fmt.Errorf("代理端口 %d 是本程序「%s」的端口，会与它抢端口；请改用其它端口（如 %s）",
+			front, owner, proxyDefaults.FrontHint)
+	}
+	return nil
 }
 
 // proxyEnter 进入代理屏：枚举本机 IP 并聚焦第一个输入框
@@ -176,13 +272,16 @@ func (m appModel) updateProxy(msg tea.Msg) (tea.Model, tea.Cmd) {
 // startProxyCmd 后台启动代理服务
 func startProxyCmd(s proxyState) tea.Cmd {
 	return func() tea.Msg {
-		backend, perr := strconv.Atoi(s.inputs[0].Value())
-		if perr != nil || backend < 1 || backend > 65535 {
-			return proxyFailMsg{err: errInvalidPort}
+		backend, berr := resolveProxyPort(s.inputs[0].Value(), proxyDefaults.BackendHint)
+		if berr != nil {
+			return proxyFailMsg{err: berr}
 		}
-		front, perr := strconv.Atoi(s.inputs[1].Value())
-		if perr != nil || front < 1 || front > 65535 || front == backend {
-			return proxyFailMsg{err: errInvalidPort}
+		front, ferr := resolveProxyPort(s.inputs[1].Value(), proxyDefaults.FrontHint)
+		if ferr != nil {
+			return proxyFailMsg{err: ferr}
+		}
+		if verr := validateProxyPorts(backend, front); verr != nil {
+			return proxyFailMsg{err: verr}
 		}
 		ip := "127.0.0.1"
 		if len(s.ips) > 0 {
@@ -270,6 +369,8 @@ func (m appModel) proxyConfigBody(w int) []string {
 	body = append(body, formBox(form, boxW)...)
 	body = append(body,
 		"",
+		"  "+dimStyle.Render(fmt.Sprintf("已预填默认端口（%d / %d）；留空即用默认值，直接回车即可启动",
+			defaultBackendPort(), defaultFrontPort())),
 		"  "+dimStyle.Render("后端端口为本地服务端口，代理端口为对外端口；两者不能相同"),
 		"  "+dimStyle.Render("按 Enter 启动；启动后可扫码接入"),
 	)
@@ -277,7 +378,7 @@ func (m appModel) proxyConfigBody(w int) []string {
 }
 
 // proxyRunningBody 运行态：接入信息 + 二维码
-func (m appModel) proxyRunningBody(w, h int) []string {
+func (m appModel) proxyRunningBody(w, _ int) []string {
 	info := m.proxy.info
 	keyW := 10
 	access := "https://" + info.IP + ":" + strconv.Itoa(info.ProxyPort)

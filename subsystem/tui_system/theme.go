@@ -129,7 +129,13 @@ func fitWidth(s string, w int) string {
 	case d == w:
 		return s
 	case d > w:
-		return truncTo(s, w)
+		// 截断后必须再补齐：截断遇到宽字符边界会停在不足 w 列处（不会自己补空格）。
+		// 少了这步，该行右框线就比其它行左移一格——用户实测的「未对齐」正是这种形态。
+		cut := truncTo(s, w)
+		if cd := dispWidth(cut); cd < w {
+			cut += strings.Repeat(" ", w-cd)
+		}
+		return cut
 	default:
 		return s + strings.Repeat(" ", w-d)
 	}

@@ -3,6 +3,7 @@ package napcat
 // 消息解析与单线程收发流程
 
 import (
+	"CorePersonality/personality/lunar/imagecache"
 	"LunarSubsystem/LoggerGeneral"
 	"bytes"
 	"encoding/base64"
@@ -529,17 +530,9 @@ func parseMessageSegments(groupID int64, segments []MessageSegment) (any, bool, 
 		case "forward":
 			var forwardData ForwardData
 			if json.Unmarshal(segment.Data, &forwardData) == nil {
-				forwardText, forwardImages := processForwardSegment(groupID, rawIDString(forwardData.ID), 0)
+				// 转发内图片已注册进共享图片缓存，占位标签内嵌在文本中（不注入多模态项，避免大转发包撑爆上下文）
+				forwardText := processForwardSegment(groupID, rawIDString(forwardData.ID), 0)
 				appendContent(&contentArray, &contentStr, forwardText)
-				// 转发内解析出的图片作为多模态内容项注入
-				for _, imgURL := range forwardImages {
-					hasImages = true
-					markMultimedia(&contentArray, &contentStr)
-					contentArray = append(contentArray, map[string]any{
-						"type":      "image_url",
-						"image_url": map[string]string{"url": imgURL},
-					})
-				}
 			}
 		default:
 			// 忽略其余消息段类型
@@ -574,7 +567,7 @@ func renderReplyQuote(groupID int64, messageID string) string {
 	if len(segments) == 0 {
 		segments = detail.Content
 	}
-	summary, _ := extractSegmentText(groupID, 0, segments, false)
+	summary := extractSegmentText(groupID, 0, segments, false)
 	if summary == "" {
 		return "[回复] "
 	}
@@ -810,23 +803,22 @@ func extractJsonCardTitle(data string) string {
 }
 
 // processForwardSegment 展开合并转发消息（含嵌套转发递归），拼接为文本描述
-// 同时递归收集子消息中的图片地址，供上层注入多模态内容
-func processForwardSegment(groupID int64, id string, depth int) (string, []string) {
+// 子消息中的图片注册进共享图片缓存，正文内嵌 [图片.00x] 占位标签（按标签取回，不再注入多模态项）
+func processForwardSegment(groupID int64, id string, depth int) string {
 	if id == "" {
-		return "[转发消息] ", nil
+		return "[转发消息] "
 	}
 	if depth >= maxForwardDepth {
-		return "[嵌套转发消息（层级过深，省略）] ", nil
+		return "[嵌套转发消息（层级过深，省略）] "
 	}
 	messages, err := getForwardMessageContent(id)
 	if err != nil || len(messages) == 0 {
 		LoggerGeneral.SubError("LunarCore", "Napcat", "获取合并转发消息失败: %v", err)
-		return "[转发消息] ", nil
+		return "[转发消息] "
 	}
 
 	indent := strings.Repeat("    ", depth)
 	var sb strings.Builder
-	var images []string
 	if depth == 0 {
 		sb.WriteString("[转发消息]\n")
 	}
@@ -844,23 +836,19 @@ func processForwardSegment(groupID int64, id string, depth int) (string, []strin
 		}
 		// 纯转发节点：递归展开为嵌套块
 		if nestedID := findNestedForward(segments); nestedID != "" {
-			nestedText, nestedImages := processForwardSegment(groupID, nestedID, depth+1)
 			sb.WriteString(indent)
 			sb.WriteString(sender)
 			sb.WriteString(" 转发了以下内容：\n")
-			sb.WriteString(nestedText)
-			images = append(images, nestedImages...)
+			sb.WriteString(processForwardSegment(groupID, nestedID, depth+1))
 			continue
 		}
-		nodeText, nodeImages := extractSegmentText(groupID, depth, segments, true)
 		sb.WriteString(indent)
 		sb.WriteString(sender)
 		sb.WriteString(": ")
-		sb.WriteString(nodeText)
+		sb.WriteString(extractSegmentText(groupID, depth, segments, true))
 		sb.WriteString("\n")
-		images = append(images, nodeImages...)
 	}
-	return sb.String(), images
+	return sb.String()
 }
 
 // findNestedForward 若消息段为单个合并转发节点，返回其 ID，否则返回空
@@ -892,10 +880,10 @@ func rawIDString(raw json.RawMessage) string {
 }
 
 // extractSegmentText 从消息段列表中提取文本摘要（回复引用与合并转发子消息共用）
-// resolveImages 为 true 时同时解析图片地址（合并转发展开用）；返回 (文本, 图片地址列表)
-func extractSegmentText(groupID int64, depth int, segments []MessageSegment, resolveImages bool) (string, []string) {
+// resolveImages 为 true 时（合并转发展开）图片注册进共享图片缓存并内嵌 [图片.00x] 占位标签；
+// 为 false 时（回复引用摘要）图片仅显示为 [图片] 字样
+func extractSegmentText(groupID int64, depth int, segments []MessageSegment, resolveImages bool) string {
 	var sb strings.Builder
-	var images []string
 	for _, segment := range segments {
 		switch segment.Type {
 		case "text":
@@ -911,13 +899,20 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 				sb.WriteString(" 说] ")
 			}
 		case "image":
+			registered := false
 			var imageData ImageData
 			if resolveImages && json.Unmarshal(segment.Data, &imageData) == nil {
 				if imgURL := resolveImageURL(imageData); imgURL != "" {
-					images = append(images, imgURL)
+					// 图片注册进共享缓存（转发图不进多模态窗口，不钉住），正文内嵌占位标签
+					sb.WriteString("[")
+					sb.WriteString(imagecache.Put(imgURL, false))
+					sb.WriteString("]")
+					registered = true
 				}
 			}
-			sb.WriteString("[图片]")
+			if !registered {
+				sb.WriteString("[图片]")
+			}
 		case "video":
 			sb.WriteString("[视频]")
 		case "record":
@@ -953,9 +948,7 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 		case "forward":
 			var forwardData ForwardData
 			if json.Unmarshal(segment.Data, &forwardData) == nil {
-				forwardText, forwardImages := processForwardSegment(groupID, rawIDString(forwardData.ID), depth+1)
-				sb.WriteString(forwardText)
-				images = append(images, forwardImages...)
+				sb.WriteString(processForwardSegment(groupID, rawIDString(forwardData.ID), depth+1))
 			}
 		case "json":
 			sb.WriteString("[卡片]")
@@ -963,7 +956,7 @@ func extractSegmentText(groupID int64, depth int, segments []MessageSegment, res
 			sb.WriteString("[链接]")
 		}
 	}
-	return sb.String(), images
+	return sb.String()
 }
 
 // appendContent 根据当前内容格式追加文本

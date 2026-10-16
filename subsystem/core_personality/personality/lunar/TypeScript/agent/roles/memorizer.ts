@@ -2,7 +2,7 @@ import { GlobalConfig } from '../../config/global';
 import { ModelBuilder } from '../base/builder';
 import { modelResponse } from '../../config/model';
 import { SCHEDULE_TRIGGER_PREFIX } from '../../tool/schedule-defs';
-import { ensureMemoryReady, extractTextFromMessage } from '../capabilities/memory';
+import { ensureMemoryReady, extractMemoryText } from '../capabilities/memory';
 import { interactEvent } from '../capabilities/ltp-event';
 
 /** 长期记忆集合名 */
@@ -62,8 +62,8 @@ export class MemorizerRole extends ModelBuilder {
 		for (const message of GlobalConfig.unreadRecords) {
 			// 过滤工具调用消息
 			if (message.role === 'tool') continue;
-			/** 提取文本内容并过滤空字符串 */
-			const content = extractTextFromMessage(message).trim();
+			/** 提取文本内容并过滤空字符串（图片标签已消解，避免重启后错取图片） */
+			const content = extractMemoryText(message).trim();
 			// 过滤空字符串、长度小于等于5的消息
 			if (!content || content.length <= 5) continue;
 			// 过滤计划表触发的自动消息（统一前缀），避免写入长期记忆

@@ -408,6 +408,8 @@ func (m appModel) marketSubmit() (tea.Model, tea.Cmd) {
 			m.market.mode = marketSelectPkg
 			return m, nil
 		}
+		// 记入会话：后续列表/安装请求都会带上令牌，避免一直吃 Gitee 匿名额度（限流）
+		SetSessionToken(value)
 		// 按发布源分发：已打包文件通道 / 本地包目录通道
 		if m.market.archivePath != "" {
 			path := m.market.archivePath
@@ -435,15 +437,25 @@ func (m appModel) marketSubmit() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// listMarketCmd 后台获取市场列表（tag 为标签筛选，空串=全部）
+// listMarketCmd 后台获取市场列表（tag 为标签筛选，空串=全部）。
+//
+// 会话令牌一并带上（配置里有则以配置为准）；限流冷却期内不发请求，直接给出人话提示。
 func listMarketCmd(tag string) tea.Cmd {
 	return func() tea.Msg {
+		if wait := rateLimitRemaining(); wait > 0 {
+			return marketListMsg{err: fmt.Errorf("Gitee 接口限流冷却中，约 %s 后可重试", shortDuration(wait))}
+		}
 		cfg := GetMarketConfig()
 		if cfg == nil {
 			return marketListMsg{err: fmt.Errorf("未配置 ltpx_market（lunar_config.json 缺少配置节）")}
 		}
-		items, err := ltpxmarket.ListPackages(*cfg, tag, 0)
-		return marketListMsg{items: items, err: err}
+		items, err := ltpxmarket.ListPackages(*withSessionTokenMarket(cfg), tag, 0)
+		if err != nil {
+			noteAPIRateLimit(err)
+			return marketListMsg{err: err}
+		}
+		clearRateLimit()
+		return marketListMsg{items: items}
 	}
 }
 
@@ -595,7 +607,7 @@ func (m appModel) viewMarket() string {
 	default:
 		body = m.marketBrowseBody(w, h)
 	}
-	body = withErrStrip(body, m.market.err, w)
+	body = withErrStrip(body, friendlyErr(m.market.err), w)
 
 	// 底栏位置：列表态显示「第几项 / 共几项」，便于长时间滚动后仍知道身在何处
 	switch m.market.mode {

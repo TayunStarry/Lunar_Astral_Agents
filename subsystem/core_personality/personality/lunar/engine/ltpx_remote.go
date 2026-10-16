@@ -24,7 +24,9 @@ import (
 // ltpCallMaxWait 单次工具调用的兜底等待上限（覆盖长时间运行的联网搜索等任务）
 const ltpCallMaxWait = 30 * time.Minute
 
-// syncLTPXRemoteTools 读取进程内工具链并写入缓存，返回聚合工具
+// syncLTPXRemoteTools 读取进程内工具链并写入缓存，返回聚合工具。
+// 工具链未就绪（宿主未初始化、聚合工具缺失）时保留上次缓存定义——单进程下工具链
+// 只在真正不可用时为空，短暂缺失不应让月华丢掉工具定义。
 func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	broker := ltpx.GetBroker()
 	if broker == nil {
@@ -32,29 +34,42 @@ func syncLTPXRemoteTools() *LTPXRemoteStatusResult {
 	}
 
 	status := broker.Status()
-	result := &LTPXRemoteStatusResult{}
-	if status.Tool == nil {
-		ltpRemoteMutex.Lock()
-		ltpRemoteTool = nil
-		ltpRemoteMutex.Unlock()
-		return result
+	if status.Tool == nil || status.Tool.Name == "" {
+		// 保留缓存定义，仅返回空结果（JS 侧据 tool 缺省维持上次定义）
+		return &LTPXRemoteStatusResult{}
 	}
 
 	tool := &LTPXRemoteToolDef{
 		Name:        status.Tool.Name,
 		Description: status.Tool.Description,
+		// 参数 schema 透传至 JS 侧（缺失时 JS 按 {tool, instruction} 兜底），
+		// 保证发给模型的函数定义带有完整参数说明
+		Parameters: status.Tool.Parameters,
 	}
 	ltpRemoteMutex.Lock()
 	ltpRemoteTool = tool
 	ltpRemoteMutex.Unlock()
 
-	result.Tool = tool
-	// 聚合工具的 description 内嵌子工具清单，同步日志中一并披露，便于直观了解工具链规模
+	// 聚合工具的 description 内嵌子工具清单，仅在清单变化时打日志（避免每轮重复刷屏）
 	names := ltpxSubToolNames(*tool)
-	if len(names) > 0 {
+	if len(names) > 0 && !equalStrings(names, ltpLoggedSubTools) {
+		ltpLoggedSubTools = names
 		LoggerGeneral.Info("LunarCore", "已同步 LTPX 工具: \n%s", strings.Join(names, "\n"))
 	}
-	return result
+	return &LTPXRemoteStatusResult{Tool: tool}
+}
+
+// equalStrings 比较两个字符串切片是否完全相同（工具清单日志去重）
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ltpxSubToolNames 从聚合工具的 description 中提取子工具名清单。
@@ -105,10 +120,22 @@ func callLTPXRemoteTool(toolName, argumentsJSON string) (string, error) {
 		return "", err
 	}
 	if !res.Success {
-		if res.Error != "" {
+		// 失败但带部分进展/结果文本时一并回传：内置智能体达到轮次上限等情况正是
+		// "失败 + 已完成内容"，丢弃文本会让模型完全看不到已完成的进展
+		detail := strings.TrimSpace(res.Text)
+		switch {
+		case res.Error != "" && detail != "":
+			return "", fmt.Errorf("工具 %s 执行失败: %s；已完成部分：%s", toolName, res.Error, detail)
+		case res.Error != "":
 			return "", fmt.Errorf("工具 %s 执行失败: %s", toolName, res.Error)
+		case detail != "":
+			return "", fmt.Errorf("工具 %s 未成功完成；已完成部分：%s", toolName, detail)
+		default:
+			return "", fmt.Errorf("工具 %s 执行失败", toolName)
 		}
-		return "", fmt.Errorf("工具 %s 执行失败", toolName)
+	}
+	if strings.TrimSpace(res.Text) == "" {
+		return fmt.Sprintf("工具 %s 已执行完成（无文本结果）", toolName), nil
 	}
 	return res.Text, nil
 }
@@ -141,14 +168,6 @@ func (class *Runtime) callLTPXRemoteToolForJS(toolName string, argumentsJSON str
 	}()
 	// *goja.Promise 需经 ToValue 转换后才能作为 goja.Value 返回给 JS
 	return class.runtime.ToValue(promise)
-}
-
-// clearLTPXRemoteToolsForJS 供 JS 端在工具链不可用时清空缓存的聚合工具
-func (class *Runtime) clearLTPXRemoteToolsForJS() goja.Value {
-	ltpRemoteMutex.Lock()
-	ltpRemoteTool = nil
-	ltpRemoteMutex.Unlock()
-	return class.runtime.ToValue(true)
 }
 
 // syncLTPXRemoteEvent 进程内同步推送事件负载并接收插件处理结果（同步阻塞）。

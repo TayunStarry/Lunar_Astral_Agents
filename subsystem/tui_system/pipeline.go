@@ -2,6 +2,7 @@ package TuiSystem
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -40,6 +41,11 @@ func Install() {
 			os.Stdout = stdoutW
 			os.Stderr = stdoutW
 			LoggerGeneral.SetOutput(stdoutW)
+			// 标准库 log 也必须改道：它内部持有的是「init 时的 os.Stderr 文件对象」
+			// （即真实控制台），只替换 os.Stderr 变量对它无效。漏掉这一步时，
+			// httputil / net/http 等库用 log.Printf 打的错误会直接糊在 TUI 界面上
+			// （实测：`httputil: ReverseProxy read error during body copy` 就是这么漏出来的）。
+			log.SetOutput(stdoutW)
 			intercepted = true
 			go scanPipeLines(stdoutR)
 		}

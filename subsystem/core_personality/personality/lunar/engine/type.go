@@ -78,13 +78,13 @@ type LTPXPackageInfo struct {
 type LTPXRemoteToolDef struct {
 	Name        string `json:"name"`        // 工具名
 	Description string `json:"description"` // 工具能力描述（供 LLM 决策）
-	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义
+	Parameters  any    `json:"parameters"`  // JSON Schema 参数定义（聚合工具的 {tool, instruction}）
 }
 
 // LTPXRemoteStatusResult 月华同步 LTPX 工具链的返回结果。
-// 合并为单进程后不含在线状态：工具链为空（无 AtoA 能力包）时 Tool 为 nil。
+// 合并为单进程后不含在线状态：宿主未就绪时 Tool 为 nil（JS 侧保留上次定义）。
 type LTPXRemoteStatusResult struct {
-	Tool *LTPXRemoteToolDef `json:"tool,omitempty"` // 聚合工具（v5 起恒为单一 use_program；工具链为空时为 nil）
+	Tool *LTPXRemoteToolDef `json:"tool,omitempty"` // 聚合工具（v5 起恒为单一 use_the_program；未就绪时为 nil）
 }
 
 // LTPXRemoteEventResult 月华事件推送结果（同步返回给 JS 端）
@@ -93,22 +93,6 @@ type LTPXRemoteEventResult struct {
 	Data     any  `json:"data"`     // 插件处理后的负载；未改写时为 null（调用方用原始数据）
 	Returned bool `json:"returned"` // 是否有插件通过 return 回传了本次事件的业务结果
 	Return   any  `json:"return"`   // 插件经 return 回传的业务结果；无回传时为 null（调用方走本地默认处理）
-}
-
-// LTPXRemoteCallRequest 月华请求调用琉璃工具的请求体
-type LTPXRemoteCallRequest struct {
-	Tool      string         `json:"tool"`      // 工具名
-	Arguments map[string]any `json:"arguments"` // 工具参数
-}
-
-// LTPXRemoteCallResponse 琉璃执行工具后的返回体
-// 新协议下琉璃异步受理：立即返回 pending=true + request_id，结果由月华经 /ltpx/poll 心跳轮询取回
-type LTPXRemoteCallResponse struct {
-	Success   bool   `json:"success"`
-	Text      string `json:"text"` // 操作结果文本（含推荐后续操作）
-	Error     string `json:"error,omitempty"`
-	Pending   bool   `json:"pending,omitempty"`    // 异步受理标记（true 时仅代表已受理，尚未执行完成）
-	RequestID string `json:"request_id,omitempty"` // 受理凭证（轮询 /ltpx/poll 时携带）
 }
 
 // PushContextData 推送上下文数据

@@ -34,9 +34,71 @@ func IsRunning() bool {
 	return activeProxy.Load() != nil
 }
 
+// reservedPortOwner 本程序自身服务占用的端口 → 用途说明（由宿主注入）。
+//
+// 代理端口若落在这些端口上，会与自身服务抢端口：Windows 允许多次绑定，代理会把该端口
+// 悄悄接管，导致原有服务（尤其是模型服务）对外表现异常。启动前必须拦下并说清原因。
+var (
+	reservedPortsMu sync.RWMutex
+	reservedPorts   = map[int]string{}
+)
+
+// SetReservedPorts 注入本程序自身服务占用的端口（宿主启动时调用）
+func SetReservedPorts(ports map[int]string) {
+	reservedPortsMu.Lock()
+	defer reservedPortsMu.Unlock()
+	reservedPorts = make(map[int]string, len(ports))
+	for p, desc := range ports {
+		if p > 0 {
+			reservedPorts[p] = desc
+		}
+	}
+}
+
+// ReservedPortOwner 返回该端口被本程序哪个服务占用（未占用则返回空串）
+func ReservedPortOwner(port int) string {
+	reservedPortsMu.RLock()
+	defer reservedPortsMu.RUnlock()
+	return reservedPorts[port]
+}
+
+// portConflictWarning 端口与自身服务冲突时的警告文案（空串表示不冲突）
+func portConflictWarning(port int) string {
+	if owner := ReservedPortOwner(port); owner != "" {
+		return fmt.Sprintf("代理端口 %d 与本程序「%s」端口相同：会与它抢端口（Windows 允许多次绑定，"+
+			"代理会接管该端口，导致该服务对外异常）", port, owner)
+	}
+	return ""
+}
+
+// suggestProxyPort 为冲突端口给出一个候选（避开自身服务占用的端口）
+func suggestProxyPort(occupied int) int {
+	reservedPortsMu.RLock()
+	defer reservedPortsMu.RUnlock()
+	for p := occupied + 1; p < occupied+100 && p <= 65535; p++ {
+		if _, taken := reservedPorts[p]; !taken {
+			return p
+		}
+	}
+	return occupied + 1
+}
+
 // Start 启动 HTTPS 反向代理服务（TLS + 路由 + WebSocket 隧道），立即返回运行句柄。
 // backendPort 为后端 HTTP 端口；proxyPort 为对外 HTTPS 端口；localIP 为证书 SAN 与二维码使用的本机 IP。
 func Start(backendPort, proxyPort int, localIP string) (*Handle, Info, error) {
+	// 端口自检：拒绝与本程序自身服务撞车，拒绝前后端口相同
+	if proxyPort == backendPort {
+		return nil, Info{}, fmt.Errorf("代理端口与后端端口不能相同（都是 %d）", proxyPort)
+	}
+	if owner := ReservedPortOwner(proxyPort); owner != "" {
+		return nil, Info{}, fmt.Errorf("代理端口 %d 是本程序「%s」的端口，请改用其它端口（如 %d）",
+			proxyPort, owner, suggestProxyPort(proxyPort))
+	}
+	if owner := ReservedPortOwner(backendPort); owner == "" {
+		// 后端端口正常应指向 Web 服务；指到别的服务上属于误配，但不阻断（用户可能有意为之）
+		logf("  [WARN] 后端端口 %d 不是本程序 Web 服务端口，代理将把请求转发到该端口", backendPort)
+	}
+
 	// 生成/加载 TLS 证书（确保 SAN 覆盖所选 IP）
 	cert, err := loadOrGenerateCert(localIP)
 	if err != nil {
@@ -77,9 +139,23 @@ func Start(backendPort, proxyPort int, localIP string) (*Handle, Info, error) {
 	logf("  证书来源: %s", certPath)
 
 	handle := &Handle{srv: server, done: make(chan struct{})}
+
+	// 先独占绑定端口：抢占别人的端口（Windows 允许多次绑定）必须变成明确失败，
+	// 否则代理会悄悄接管该端口上原有的服务（实测：占用模型服务端口后，
+	// 程序自己的模型请求打到 TLS 代理上，报 TLS 握手错误与连接重置）。
+	ln, err := listenExclusive(proxyPort)
+	if err != nil {
+		return nil, Info{}, err
+	}
+	// 端口与本程序其它服务冲突时给出针对性提示：这类误配必然造成整机功能异常
+	if warn := portConflictWarning(proxyPort); warn != "" {
+		logf("  [WARN] %s", warn)
+	}
+
 	go func() {
 		defer close(handle.done)
-		if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+		// 监听器已独占；证书来自 TLSConfig，故文件参数留空
+		if err := server.ServeTLS(ln, "", ""); err != nil && err != http.ErrServerClosed {
 			logf("  [ERROR] 代理服务异常退出: %v", err)
 		}
 		activeProxy.CompareAndSwap(handle, nil)

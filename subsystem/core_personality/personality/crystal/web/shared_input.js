@@ -535,8 +535,28 @@
 
     var latestScreenshot = null;
 
-    function tryDrawPagePixels(ctx, vw, vh, cw, ch) {
+    function tryDrawPagePixels(ctx, vw, vh, cw, ch, opts) {
+        // 超时与体积上限：SVG foreignObject 需要浏览器解析整份页面 HTML 生成图像，
+        // 页面含 canvas / three.js 画布 / 大体积内联内容时可能**永不触发 onload/onerror**，
+        // 导致截图 Promise 悬挂、整个智能体任务卡死（表现为"页面打开了但一直执行中"）。
+        // 这里保证：无论图像是否就绪，都在 timeoutMs 内必定 settle。
+        var timeoutMs = (opts && opts.timeoutMs) || 1500;
+        var maxSvgChars = (opts && opts.maxSvgChars) || 512 * 1024;
         return new Promise(function (resolve) {
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                try { img.onload = null; img.onerror = null; } catch (e) { }
+                resolve(false);
+            }, timeoutMs);
+            var finish = function (value) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                resolve(value);
+            };
+            var img = new Image();
             try {
                 var root = document.documentElement;
                 var dw = Math.max(root.scrollWidth || vw, vw);
@@ -545,18 +565,22 @@
                     + '<foreignObject width="100%" height="100%">'
                     + '<xhtml:body xmlns:xhtml="http://www.w3.org/1999/xhtml" style="margin:0;padding:0">'
                     + (root.body ? root.body.innerHTML : '') + '</xhtml:body></foreignObject></svg>';
-                var img = new Image();
+                // 体积过大时直接放弃像素还原（编码与解码开销极高且极易卡住），改用网格示意图
+                if (svg.length > maxSvgChars) {
+                    finish(false);
+                    return;
+                }
                 img.onload = function () {
                     try {
                         var sx = window.scrollX || window.pageXOffset || 0;
                         var sy = window.scrollY || window.pageYOffset || 0;
                         ctx.drawImage(img, sx, sy, vw, vh, 0, 0, cw, ch);
-                        resolve(true);
-                    } catch (e) { resolve(false); }
+                        finish(true);
+                    } catch (e) { finish(false); }
                 };
-                img.onerror = function () { resolve(false); };
+                img.onerror = function () { finish(false); };
                 img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-            } catch (e) { resolve(false); }
+            } catch (e) { finish(false); }
         });
     }
 
@@ -611,7 +635,7 @@
         ctx.restore();
     }
 
-    async function captureScreenshot(itemsForBoxes) {
+    async function captureScreenshot(itemsForBoxes, opts) {
         var vw = window.innerWidth || document.documentElement.clientWidth || 800;
         var vh = window.innerHeight || document.documentElement.clientHeight || 600;
         var scale = Math.min(1, SCREEN_MAX_WIDTH / vw, SCREEN_MAX_HEIGHT / vh);
@@ -623,7 +647,8 @@
         var ctx = canvas.getContext('2d');
         ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cw, ch);
         if (!itemsForBoxes) itemsForBoxes = captureElements({ max: AGENT_MAX_LIST_ITEMS });
-        var ok = await tryDrawPagePixels(ctx, vw, vh, cw, ch);
+        // 像素还原带超时兜底（见 tryDrawPagePixels）：失败即退化为网格+编号示意图，绝不悬挂
+        var ok = await tryDrawPagePixels(ctx, vw, vh, cw, ch, opts);
         if (!ok) {
             ctx.fillStyle = '#f4f6fa'; ctx.fillRect(0, 0, cw, ch);
             ctx.fillStyle = '#8a93a1'; ctx.font = '12px sans-serif';

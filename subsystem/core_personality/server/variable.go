@@ -103,7 +103,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// 同时作为进程内 Broker 的 HTTP 调试入口
 	{Path: "/ltpx/tools", Handler: crystal.LTPRemoteToolsHandler, Method: "GET", Description: "拉取工具链（动态扫描包 AtoA 能力）"},
 	{Path: "/ltpx/call", Handler: crystal.LTPRemoteCallHandler, Method: "POST", Description: "调用工具（异步受理，立即返回 request_id）"},
-	{Path: "/ltpx/poll", Handler: crystal.LTPRemotePollHandler, Method: "GET", Description: "轮询工具执行状态"},
+	{Path: "/ltpx/poll", Handler: crystal.LTPRemotePendingHandler, Method: "GET", Description: "列出待定工具调用（调试端点，已不承担轮询取结果）"},
 	{Path: "/ltpx/result", Handler: crystal.LTPRemoteResultHandler, Method: "POST", Description: "前端包执行完毕后回执结果"},
 	{Path: "/ltpx/event", Handler: crystal.LTPRemoteEventHandler, Method: "POST", Description: "事件推送（xx事件发生前负载经 LTP9 插件处理）"},
 	{Path: "/mini-ltp-agent.js", Handler: crystal.MiniLTPAgentHandler, Method: "GET", Description: "通用页面操作智能体脚本（Mini-LTP）"},

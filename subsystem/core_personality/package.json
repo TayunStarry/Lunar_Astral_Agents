@@ -7,9 +7,7 @@
 	"scripts": {
 		"release.min": "tsc && rollup -c",
 		"compile.server": "tsc ./personality/lunar/TypeScript/agent/constructor.ts --removeComments --moduleResolution node --target es2022 --outDir ./node_modules/deliverable",
-		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/agent/constructor.js --file ./personality/lunar/hierarchy/assets/agentSystem.js --format iife --name agentSystem",
-		"test": "vitest run",
-		"test:watch": "vitest"
+		"server.side": "npm run compile.server && rollup ./node_modules/deliverable/agent/constructor.js --file ./personality/lunar/hierarchy/assets/agentSystem.js --format iife --name agentSystem"
 	},
 	"keywords": [
 		"ai",
@@ -23,7 +21,6 @@
 		"@rollup/plugin-terser": "^1.0.0",
 		"@types/node": "^20.19.39",
 		"rollup": "^4.55.1",
-		"typescript": "^5.0.0",
-		"vitest": "^4.1.10"
+		"typescript": "^5.0.0"
 	}
 }

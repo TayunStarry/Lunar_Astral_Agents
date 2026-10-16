@@ -293,6 +293,8 @@ function resetAgentState(): void {
     musicianRole.coverContext([]);
     perceiverRole.coverContext([]);
     memorizerRole.coverContext([]);
+    // 清空绘图者的参考图状态（每次创作任务开工时也会自清，这里兜住异常路径）
+    painterRole.resetReference();
     // 清空主智能体的统一未读队列
     GlobalConfig.unreadContext = [];
 }

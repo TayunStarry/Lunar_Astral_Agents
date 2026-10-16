@@ -1,6 +1,5 @@
 import { Config } from './config';
 import { PostMessage } from './model';
-import { ToolCall } from './tool';
 /** 全局配置 */
 export class GlobalConfig {
 	/** 自定义配置项 */
@@ -11,8 +10,6 @@ export class GlobalConfig {
 	public static readonly videoFormatsExtensions: string[] = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
 	/** LTP协议工具包-函数映射表，工具函数返回 string[]：下标0=文本内容结果，下标1=图片base64数据（无则为空字符串） */
 	public static LTPfunction = new Map<string, (args?: Record<string, any> | string) => Promise<string[]>>();
-	/** LTP协议工具包-函数定义 */
-	public static LTPdefinition: ToolCall[] = [];
 	/** 消息缓冲池（对话者淘汰的历史消息，待信息记忆流程写入记忆库） */
 	public static unreadRecords: PostMessage[] = [];
 	/** 未读上下文（宿主统一时序队列：文本与视频/音频URL内容项按到达顺序混排） */

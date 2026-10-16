@@ -113,7 +113,5 @@ async function handleScreenshot(args?: Record<string, any> | string): Promise<st
 
 // ==== 模块级注册 ====
 
-// 将截图工具注册到月华工具协议映射表
+// 将截图工具注册到月华工具协议映射表（工具定义由对话者聚合，不再入公共数组）
 GlobalConfig.LTPfunction.set('screenshot', handleScreenshot);
-// 注册截图工具到 LTPdefinition 列表
-GlobalConfig.LTPdefinition.push(...screenshotTools);

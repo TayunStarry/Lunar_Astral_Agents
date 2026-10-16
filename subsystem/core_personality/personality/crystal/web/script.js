@@ -1918,13 +1918,13 @@ function openPageInFrame(url, title, appId) {
     if (!url) return;
     if (isBackgroundRetained(appId) && ltpxFrameApp === appId && ltpxFrameReady) {
         updateLTPXIsland(title || '页面', 'fa-cube');
-        activeLTPXCall = null;       // 手动打开不等待任何回执
+        reportLTPXDrop('用户切换到其它页面，工具未执行或未完成');       // 手动切换不等待回执：先回执掉在途调用
         ltpxOverlay.classList.add('active');
         return;
     }
     updateLTPXIsland(title || '页面', 'fa-cube');
     ltpxFrameReady = false;
-    activeLTPXCall = null;       // 手动打开不等待任何回执
+    reportLTPXDrop('用户切换到其它页面，工具未执行或未完成');           // 手动打开不等待回执：先回执掉在途调用
     ltpxFrameApp = appId || '';  // 记录来源包 ID，便于月华同包调用复用已加载页面
     ltpxFrame.src = url;
     ltpxOverlay.classList.add('active');
@@ -1964,34 +1964,52 @@ function openLTPXPackage(msg) {
     // 同一包页面已就绪（已加载 + agent 已注入）时直接投递，不重新加载，保持页面状态
     // （Mini-LTP 与普通包一致；仅首次或换包时才加载/注入）
     if (ltpxFrameApp === msg.app_id && ltpxFrameReady) {
+        console.log('[LTPX] 复用已就绪页面，直接投递:', msg.tool);
         deliverLTPXRun();
         ltpxOverlay.classList.add('active');
         return;
     }
     // 首次加载该包 or 切换到其它包：加载页面
+    console.log('[LTPX] 收到调用，加载包页面:', msg.app_id, '/', msg.tool);
     ltpxFrameReady = false;
     ltpxFrameApp = msg.app_id;
+    // 新的派发目标：重置幂等标记并启动就绪轮询（onload 未触发时由轮询兜底完成派发）
+    ltpxDispatchTarget = msg.app_id;
+    ltpxInjectionDone = false;
     const base = '/file/read/package/' + encodeURIComponent(resolvePackageDir(msg.app_id)) + '/index.html';
-    ltpxFrame.src = isMiniLTPPage(msg.app_id) ? base + '?t=' + Date.now() : base;
+    // 带时间戳破缓存：避免浏览器复用上一版 index.html（连同其中引用到的旧脚本）
+    ltpxFrame.src = base + '?t=' + Date.now();
     ltpxOverlay.classList.add('active');
+    armLTPXReadinessPoll(msg.app_id);
 }
 
 // 向 iframe 注入一段 JS 源码（url 提供的脚本）；注入成功后才回调。
 // 供共享模块与智能体按序注入：先注 /shared-input.js，再注智能体脚本。
+// 注入失败必须留痕：注入是 AtoA 派发的前置条件，静默失败会让调用方一直等回执。
 function injectFrameJS(win, url, injectedKey, label, callback) {
     try {
-        fetch(url).then(r => (r.ok ? r.text() : '')).then(code => {
-            try {
-                if (code && win && win.document && !win.document[injectedKey]) {
-                    const s = win.document.createElement('script');
-                    s.textContent = code;
-                    win.document.head.appendChild(s); // 同步执行
-                    win.document[injectedKey] = true;
-                }
-            } catch (e) { console.warn((label || '') + ' 注入异常:', e); }
+        console.log('[LTPX] 注入脚本:', url, '(' + (label || '') + ')');
+        fetch(url).then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        }).then(code => {
+            if (!code) throw new Error('脚本内容为空');
+            if (win && win.document && !win.document[injectedKey]) {
+                const s = win.document.createElement('script');
+                s.textContent = code;
+                win.document.head.appendChild(s); // 同步执行
+                win.document[injectedKey] = true;
+                console.log('[LTPX] 注入完成:', label || url);
+            }
             callback();
-        }).catch(e => { console.warn((label || '') + ' 加载失败:', e); callback(); });
-    } catch (e) { console.warn((label || '') + ' 注入异常:', e); callback(); }
+        }).catch(e => {
+            console.warn('[LTPX] 注入失败:', label || url, e);
+            callback();
+        });
+    } catch (e) {
+        console.warn('[LTPX] 注入异常:', label || url, e);
+        callback();
+    }
 }
 
 // 向 iframe 注入通用页面操作智能体（仅 Mini-LTP 包）：先注共享键鼠模块，再注智能体
@@ -2006,36 +2024,208 @@ function injectSelfLTPAgent(win, callback) {
         () => injectFrameJS(win, '/self-ltp-agent.js', '__selfLTPAgentInjected', 'Self-LTP 智能体', callback));
 }
 
-// iframe 加载完成后统一处理：置就绪 →（Mini-LTP / Self-LTP）注入 agent → 投递待定指令
-function handleFrameLoad(appId) {
-    const win = ltpxFrame.contentWindow;
-    const finish = () => { ltpxFrameReady = true; deliverLTPXRun(); };
-    if (isMiniLTPPage(appId)) injectFrameAgent(win, finish);
-    else if (isSelfLTPPage(appId)) injectSelfLTPAgent(win, finish);
-    else finish();
-}
-ltpxFrame.onload = () => handleFrameLoad(ltpxFrameApp);
+// 已确认收到指令的 request_id（包内智能体回 ltpx_ack 后登记）：
+// 用于判断"要不要再投递一次"，避免重复执行
+const ltpxAckedCalls = new Set();
 
-// 向包页面投递执行指令（仅在 iframe 加载完成后执行一次）
+/** 当前正在派发的包 ID（防止同一包的加载流程被 onload 与轮询重复触发） */
+let ltpxDispatchTarget = '';
+/** 幂等标记：同一包的注入流程只走一次 */
+let ltpxInjectionDone = false;
+/** 就绪轮询定时器 */
+let ltpxReadinessTimer = null;
+
+/**
+ * 包页面就绪处理：注入智能体（按需）→ 投递待定指令。
+ *
+ * 不再只依赖 iframe onload：改为"onload 触发 + 轮询兜底"双通道。
+ * 理由：onload 可能因注入/缓存/时序问题不触发或早于监听器就绪，而派发链路一旦
+ * 不成立，月华就会一直停在"执行中"。轮询以**注入标记**（iframe 文档上的
+ * __miniLTPAgentInjected / __selfLTPAgentInjected）为准，能明确回答
+ * "智能体到底有没有加载"这个问题，失败时也会留下明确日志。
+ *
+ * @param reason 触发来源（onload / poll），仅用于日志
+ */
+function handleFrameLoad(reason) {
+    const appId = ltpxFrameApp;
+    const win = ltpxFrame.contentWindow;
+    const injected = isMiniLTPPage(appId) || isSelfLTPPage(appId);
+    /** 已注入标记是否已写入 iframe 文档（注入型包的就绪判据） */
+    const agentMarkerPresent = () => {
+        try {
+            const doc = win && win.document;
+            if (!doc) return false;
+            return isMiniLTPPage(appId) ? !!doc.__miniLTPAgentInjected : !!doc.__selfLTPAgentInjected;
+        } catch (e) { return false; }
+    };
+    const finish = () => {
+        // 幂等：onload 与就绪轮询可能各触发一次，注入成功路径必须只投递一次指令
+        // （注：此处不对此前"注入失败 + 阻塞式投递"的那次做去重，否则会抑制 1.5s 后的补投）
+        if (!injected) {
+            if (ltpxInjectionDone && ltpxDispatchTarget === appId) return;
+            ltpxInjectionDone = true;
+        }
+        ltpxFrameReady = true;
+        deliverLTPXRun();
+        // 自带 AtoA 实现的包不回 ack，且首次投递就已真实执行，因此不做任何补投；
+        // 仅对"注入型"包（Mini-LTP / Self-LTP）在 1.5s 内未收到 ack 时补投一次——
+        // 此时审计日志已确认未被识别（无 ack），补投只会"迟到送达"，不会重复执行。
+        if (!injected) return;
+        const dispatchToken = appId;
+        setTimeout(() => {
+            if (ltpxFrameApp !== dispatchToken) return; // 期间已切包
+            const call = activeLTPXCall;
+            if (!call || ltpxAckedCalls.has(call.request_id) || ltpxSettledCalls.has(call.request_id)) return;
+            console.warn('[LTPX] 注入型包未回 ack，补投一次（审计日志确认未被识别）:', call.tool, call.request_id);
+            deliverLTPXRun();
+        }, 1500);
+    };
+
+    console.log('[LTPX] 包页面就绪处理（' + (reason || 'onload') + '）:', appId,
+        '类型: ' + (isMiniLTPPage(appId) ? 'Mini-LTP' : (isSelfLTPPage(appId) ? 'Self-LTP' : '自带 AtoA')),
+        'agent 标记: ' + (agentMarkerPresent() ? '已存在' : '不存在'));
+
+    if (!injected) { finish(); return; }
+    // 注入型包：已经注入过就直接投递；否则执行注入。
+    // 注入尝试去重：onload 与轮询可能都在同一包上触发，重复注入会重复拉取脚本、
+    // 重复注入监听器（后者导致同一指令被执行多次）。
+    if (agentMarkerPresent()) { console.log('[LTPX] 智能体已在页面内，跳过重复注入:', appId); finish(); return; }
+    if (ltpxInjectionDone && ltpxDispatchTarget === appId) {
+        console.log('[LTPX] 本包注入流程已在进行中，跳过重复注入:', appId);
+        return;
+    }
+    ltpxInjectionDone = true;
+    if (isMiniLTPPage(appId)) injectFrameAgent(win, finish);
+    else injectSelfLTPAgent(win, finish);
+}
+
+/** 停止就绪轮询（切包/关闭时调用） */
+function stopLTPXReadinessPoll() {
+    if (ltpxReadinessTimer) { clearInterval(ltpxReadinessTimer); ltpxReadinessTimer = null; }
+}
+
+/**
+ * 启动就绪轮询：以 250ms 间隔探测包页面与注入标记，最长 FRAME_READY_TIMEOUT_MS。
+ * onload 正常时轮询会在第一次探测即收手；onload 未触发时由它兜底完成派发；
+ * 超时仍未就绪则打出明确诊断（而不是静默停滞）。
+ */
+const FRAME_READY_TIMEOUT_MS = 15000;
+function armLTPXReadinessPoll(appId) {
+    stopLTPXReadinessPoll();
+    const startedAt = Date.now();
+    ltpxReadinessTimer = setInterval(() => {
+        if (ltpxFrameApp !== appId) { stopLTPXReadinessPoll(); return; }   // 已切包
+        if (activeLTPXCall && ltpxSettledCalls.has(activeLTPXCall.request_id)) { stopLTPXReadinessPoll(); return; }
+        const doc = (() => { try { return ltpxFrame.contentWindow && ltpxFrame.contentWindow.document; } catch (e) { return null; } })();
+        const ready = doc && (doc.readyState === 'complete' || doc.readyState === 'interactive');
+        if (ready) { stopLTPXReadinessPoll(); handleFrameLoad('poll'); return; }
+        if (Date.now() - startedAt > FRAME_READY_TIMEOUT_MS) {
+            stopLTPXReadinessPoll();
+            console.error('[LTPX] 包页面在 ' + FRAME_READY_TIMEOUT_MS + 'ms 内未就绪:', appId,
+                '（iframe 未完成加载或不可访问；派发链路无法建立）');
+        }
+    }, 250);
+}
+ltpxFrame.onload = () => { console.log('[LTPX] iframe onload 触发:', ltpxFrameApp); handleFrameLoad('onload'); };
+
+
+
+// 已回执/已放弃的 request_id：避免"页面关闭 " 与"派发超时"重复上报同一请求
+const ltpxSettledCalls = new Set();
+
+function markLTPXSettled(requestId) {
+    if (!requestId) return false;
+    if (ltpxSettledCalls.has(requestId)) return false;
+    ltpxSettledCalls.add(requestId);
+    // 已收口：停掉该请求的派发心跳，避免重复回执
+    stopLTPXWatchdog(requestId);
+    // 防止集合无限增长（只保留最近 200 条）
+    if (ltpxSettledCalls.size > 200) {
+        const first = ltpxSettledCalls.values().next().value;
+        ltpxSettledCalls.delete(first);
+    }
+    return true;
+}
+
+// 向月华回传一次工具执行结果（包内智能体的 ltpx_result 与宿主兜底失败共用此入口）
+function submitLTPXResult(requestId, success, text, error) {
+    return fetch('/ltpx/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            request_id: requestId,
+            success: !!success,
+            text: text || '',
+            error: error || '',
+            keep_open: false
+        })
+    }).catch(e => console.warn('上报 LTPX 结果失败:', e));
+}
+
+// 待定调用的失败回执上报：用户在包执行期间关闭覆盖层/切换页面时调用，
+// 让月华立刻拿到明确失败结果，而不是空等结果通道的兜底上限。
+function reportLTPXDrop(reason) {
+    const call = activeLTPXCall;
+    if (!call || !call.request_id) return;
+    activeLTPXCall = null;
+    if (!markLTPXSettled(call.request_id)) return;
+    submitLTPXResult(call.request_id, false, '', reason || '用户中断了工具执行（页面已关闭或切换）');
+}
+
+// 派发心跳：拿到待定调用后启动，超时未收到包回执则回执失败并清理，
+// 避免"页面打开了但包内智能体没跑起来"时月华空等 30 分钟。
+const ltpxWatchdogs = new Map();
+
+function stopLTPXWatchdog(requestId) {
+    const timer = ltpxWatchdogs.get(requestId);
+    if (timer) { clearTimeout(timer); ltpxWatchdogs.delete(requestId); }
+}
+
+function armLTPXDispatchWatchdog(requestId, label) {
+    if (!requestId || ltpxWatchdogs.has(requestId)) return;
+    const timer = setTimeout(() => {
+        ltpxWatchdogs.delete(requestId);
+        if (ltpxSettledCalls.has(requestId)) return;
+        // 仍未被回执/关闭清理：说明包内智能体没有响应
+        if (activeLTPXCall && activeLTPXCall.request_id === requestId) activeLTPXCall = null;
+        if (!markLTPXSettled(requestId)) return;
+        console.warn('[LTPX] 派发超时未收到回执:', label, requestId);
+        submitLTPXResult(requestId, false, '',
+            (label || '工具') + ' 未在预期时间内响应（页面已打开但包内智能体没有回执，可能是该包未启用 Mini-LTP 智能体或页面脚本报错）');
+    }, LTPX_DISPATCH_TIMEOUT_MS);
+    ltpxWatchdogs.set(requestId, timer);
+}
+
+// 派发后等待包回执的上限（毫秒）：覆盖"打开页面 → 注入智能体 → 模型多轮执行"的首段耗时
+const LTPX_DISPATCH_TIMEOUT_MS = 90000;
+
+// 向包页面投递执行指令（在 iframe 加载完成、且注入完成后调用）。
+// 自带 AtoA 实现的包与注入型智能体都监听同一条 ltpx_run 消息；注入型智能体额外回
+// ltpx_ack 作为"已识别"凭证，宿主据此判断是否需要补投（见 handleFrameLoad）。
 function deliverLTPXRun() {
     if (!activeLTPXCall || !ltpxFrameReady) return;
+    const call = activeLTPXCall;
     const win = ltpxFrame.contentWindow;
     if (!win) return;
     win.postMessage({
         type: 'ltpx_run',
-        request_id: activeLTPXCall.request_id,
-        tool: activeLTPXCall.tool,
-        arguments: activeLTPXCall.arguments
+        request_id: call.request_id,
+        tool: call.tool,
+        arguments: call.arguments
     }, '*');
+    console.log('[LTPX] 投递执行指令:', call.tool, '(app=' + call.app_id + ', request_id=' + call.request_id + ')');
+    // 投递即启动心跳：包全程无回执时由此兜底回执失败，避免月华空等
+    armLTPXDispatchWatchdog(call.request_id, call.tool);
 }
 
-// 关闭覆盖层（若包尚未回执，琉璃端会因超时向月华返回错误）。
+// 关闭覆盖层（若包尚未回执，立即向月华回执失败）。
 // 后台保活策略：仅 background_retention 显式 true 的包保留 iframe 供下次复用；
 // 其余（未设定或显式 false）关闭时直接卸载 iframe 页面并回到欢迎页，
 // 避免 Mini-LTP / Self-LTP 等注入脚本的高负载页面意外驻留后台占用资源。
 function closeLTPXOverlay() {
     ltpxOverlay.classList.remove('active');
-    activeLTPXCall = null;
+    stopLTPXReadinessPoll();
+    reportLTPXDrop('用户关闭了工具页面，工具未执行或未完成');
     if (!isBackgroundRetained(ltpxFrameApp)) {
         ltpxFrameReady = false;
         ltpxFrameApp = '';
@@ -2048,8 +2238,19 @@ ltpxOverlay.addEventListener('click', (e) => { if (e.target === ltpxOverlay) clo
 // 包执行完毕通过 window.parent.postMessage 回传，主窗口代为上报 /ltpx/result
 window.addEventListener('message', (event) => {
     if (!event.data || typeof event.data !== 'object') return;
+    // 包内智能体的投递确认（ltpx_ack）：宿主据此判断"不需要补投"，避免重复执行
+    if (event.data.type === 'ltpx_ack') {
+        if (event.data.request_id) {
+            ltpxAckedCalls.add(event.data.request_id);
+            stopLTPXWatchdog(event.data.request_id);
+        }
+        return;
+    }
     if (event.data.type !== 'ltpx_result') return;
     const { request_id, success, text, error, keep_open } = event.data;
+    // 去重：同一 request_id 只回执一次（防止包重复回传或与关闭兜底重复上报）
+    if (!markLTPXSettled(request_id)) return;
+    console.log('[LTPX] 收到包回执:', request_id, 'success=' + !!success);
     fetch('/ltpx/result', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -88,6 +88,23 @@ export function extractTextFromMessage(message: PostMessage): string {
     return '';
 }
 
+/** 图片标签形态（覆盖 图片.003 与四位以上序号） */
+const STORED_TAG_PATTERN = /\[?图片\.(\d+)\]?/g;
+
+/**
+ * 长期记忆用的标签消解：图片标签只在本次运行内有效（重启后编号重新分配），
+ * 因此写入记忆库前抹掉可寻址形态，避免重启后同一字面标签被当成另一张图取用。
+ */
+export function evadeImageTags(text: string): string {
+    if (!text) return '';
+    return text.replace(STORED_TAG_PATTERN, '（历史图片）');
+}
+
+/** 从消息中提取用于长期记忆的文本（含图片标签消解，避免重启后错取图片） */
+export function extractMemoryText(message: PostMessage): string {
+    return evadeImageTags(extractTextFromMessage(message));
+}
+
 /** 初始化记忆库 */
 function initMemory(): void {
     if (GlobalConfig.memoryReady) return;

@@ -1,7 +1,7 @@
 # 09 LTPX 协议 —— 月华工具包（Lunar Tool Package）
 
 > [🏠 文档地图](README.md) | [◀ 上一章](08-构建运行与配置.md)
-> 相关源文档：[月华 LTPX 协调层](../../lunar_astral/adapters/ltpx_remote.go) · [琉璃 LTPX 远端](../../crystal_astral/ltpx_remote.go) · [琉璃包加载/中转](../../crystal_astral/assets/script.js) · [Mini-LTP 智能体](../../crystal_astral/assets/mini_ltp_agent.js) · [Self-LTP 智能体](../../crystal_astral/assets/self_ltp_agent.js)
+> 相关源文档：[月华 LTPX 协调层](../../subsystem/core_personality/personality/lunar/engine/ltpx_remote.go) · [琉璃 LTPX 远端](../../subsystem/core_personality/personality/crystal/ltpx_remote.go) · [琉璃包加载/中转](../../subsystem/core_personality/personality/crystal/web/script.js) · [Mini-LTP 智能体](../../subsystem/core_personality/personality/crystal/web/mini_ltp_agent.js) · [Self-LTP 智能体](../../subsystem/core_personality/personality/crystal/web/self_ltp_agent.js) · [共享页面操作原语](../../subsystem/core_personality/personality/crystal/web/shared_input.js)
 
 **LTPX（Lunar Tool Package）= 月华工具包协议**，控制系统内「如何把工具注册给月华、并让 AI 智能体调用」。核心机制是 **AtoA（Agent-to-Agent）**：月华把自然语言指令交给目标包的专用 LLM 智能体执行，由智能体自行理解意图并完成多步操作。
 
@@ -86,39 +86,65 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 ```
 月华（思考链起点）
-  ──GET /ltpx/ping──▶ 琉璃           心跳探测，失败则清空联络并缓存工具链
-  ──GET /ltpx/tools──▶ 琉璃          拉取最新工具链（含包页面工具 + 内置工具）
-  （工具链聚合为单一 use_the_program 工具注册给模型）
-月华 ──POST /ltpx/call(tool, arguments)──▶ 琉璃（按工具名路由）
-  ──/ws 广播 ltpx_call──▶ 琉璃前端 → 打开包 iframe（/file/read/package/<目录>/index.html）
-  ──postMessage ltpx_run──▶ 包内 LLM 智能体多轮执行（function calling 循环）
-  ──postMessage ltpx_result──▶ 琉璃前端 ──POST /ltpx/result──▶ 月华
-月华 ──响应──▶ 返回给调用方
+  ──进程内直读──▶ 琉璃 Broker.Status()      拉取最新工具链（动态扫描 local_data/package/*/metadata.json）
+  （工具链聚合为单一 use_the_program 工具注册给模型，description 内嵌子工具清单、parameters 为 {tool,instruction}）
+月华 ──Broker.Call(tool=use_the_program, arguments={tool,instruction})──▶ 琉璃（按 arguments.tool 路由）
+  ├─ 内置：window_operate → AutoLTP.Run / web_search → WebLTP.Run（goroutine 直跑）
+  └─ 前端包：──/ws 广播 ltpx_call──▶ 琉璃前端 → 打开包 iframe（/file/read/package/<目录>/index.html）
+       ──postMessage ltpx_run──▶ 包内 LLM 智能体多轮执行（function calling 循环）
+       ──postMessage ltpx_result──▶ 琉璃前端 ──POST /ltpx/result──▶ 结果写入待定调用通道
+月华 ──Broker.Await(request_id)──▶ 取得文本结果 → 回填为 tool 消息
 ```
 
-事件链路：月华在「事件发生前」触发点经 `POST /ltpx/event` 推送事件负载给琉璃（分发给订阅了该事件的包），并以 `{return: …}` 取回订阅方回执。
+事件链路：月华在「事件发生前」触发点经 `Broker.Event`（进程内同步调用，HTTP 薄封装为 `POST /ltpx/event`）推送事件负载，分发给订阅了该事件的 LTP9 插件，并以 `{return: …}` 取回订阅方回执。
 
-**端点与超时**（月华侧协调实现在 [adapters/ltpx_remote.go](../../lunar_astral/adapters/ltpx_remote.go)，琉璃侧在 [ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）：
+**端点与超时**（月华侧协调实现在 [engine/ltpx_remote.go](../../subsystem/core_personality/personality/lunar/engine/ltpx_remote.go)，琉璃侧在 [ltpx_remote.go](../../subsystem/core_personality/personality/crystal/ltpx_remote.go)）：
 
 | 端点 | 方向 | 说明 |
 |------|------|------|
-| `GET /ltpx/ping` | 月华→琉璃 | 心跳探测，失败则清空联络并缓存工具链 |
-| `GET /ltpx/tools` | 月华→琉璃 | 拉取最新工具链 |
-| `POST /ltpx/call` | 月华→琉璃 | 转发工具调用（tool + arguments） |
-| `POST /ltpx/result` | 琉璃→月华 | 回传智能体执行结果 |
-| `POST /ltpx/event` | 月华→琉璃 | 推送事件负载 |
-| `/ltpx/register` | 琉璃→月华 | 琉璃启动时注册联络 URL（多开以最新为准） |
+| `GET /ltpx/tools` | 月华→琉璃 | 拉取最新工具链（进程内由 `Broker.Status()` 直调） |
+| `POST /ltpx/call` | 月华→琉璃 | 转发工具调用（`tool=use_the_program` + `arguments.tool` / `arguments.instruction`） |
+| `POST /ltpx/result` | 琉璃前端→宿主 | 回传包内智能体执行结果（写入待定调用结果通道） |
+| `GET /ltpx/poll` | 调试 | 列出待定调用；**不再承担轮询取结果** |
+| `POST /ltpx/event` | 月华→琉璃 | 推送事件负载（进程内由 `Broker.Event` 直调） |
 
-- 工具链同步：月华在每次思考链起点向琉璃（固定引擎端口 `BasicPort+3` = 36792）心跳并拉取最新工具链。
-- 内置工具（无需包承载）：`window_agent`（→ Auto-LTP，见 §5.3）、`web_search`（→ Web-LTP，见 §5.4）、`yara_ltp`（→ YaraLTP hook 路由）。
-- 超时：月华端 HTTP 请求 8s、工具调用等待 150s；琉璃端挂起调用登记 120s 超时（内置工具 `window_agent`/`web_search` 为进程内直跑，不受 120s 限制）。
+- 工具链同步：月华在每次思考链起点同步一次（有未读消息时才同步），进程内直读，无心跳、无端口、无「离线判死」。
+- 内置工具（无需包承载）：`window_operate`（→ Auto-LTP，见 §5.3）、`web_search`（→ Web-LTP，见 §5.4）。
+- 超时：月华侧单次调用兜底等待 30 分钟（`ltpCallMaxWait`）；琉璃侧待定调用超过 30 分钟由注册时的定时器投递失败结果并清理，前端不可用（未就绪/被关闭）时立即回执失败，不再空等。
 - 回执协议：`ltpx_result` 含 `request_id / success / text / error / keep_open`；`keep_open` 时执行页面保持打开供用户观察。
 
 ---
 
-## 4. Mini-LTP —— 通用页面操作智能体
+## 4. 前端包派发契约与 Mini-LTP / Self-LTP
 
-入口 [mini_ltp_agent.js](../../crystal_astral/assets/mini_ltp_agent.js)，运行在目标页面 iframe 内的通用操作智能体，由琉璃在 iframe `load` 后动态注入，不改包源码。
+### 4.1 派发契约（所有前端包通用）
+
+琉璃前端收到 `/ws` 广播的 `ltpx_call` 后打开包页面，注入（或不注入）智能体，然后向 iframe 投递指令：
+
+| 消息 | 方向 | 载荷 | 说明 |
+|------|------|------|------|
+| `ltpx_run` | 宿主 → iframe | `{request_id, tool, arguments}` | 执行指令；`arguments.instruction` 为自然语言指令 |
+| `ltpx_ack` | iframe → 宿主 | `{request_id}` | **投递确认**（仅注入型智能体发送）：宿主据此判断无需补投 |
+| `ltpx_result` | iframe → 宿主 | `{request_id, success, text, error, keep_open}` | 执行结果；宿主转 `POST /ltpx/result` |
+
+**三类载体的执行者**：
+
+| 载体 | 执行者 | 是否回 `ltpx_ack` |
+|------|--------|------------------|
+| Node-LTP（`lunar.file-explorer` / `search-weather` / `math-studio` / `code-studio` / `chart-studio`） | 包自带 AtoA 实现（`script.js` 内监听 `ltpx_run`） | 否 |
+| Mini-LTP（`lunar.click-monitor`、`deepdemos.anime-rubik-solver` 等） | **宿主注入** `mini_ltp_agent.js`（先注 `/shared-input.js`） | 是 |
+| Self-LTP（`deepdemos.voxel-disaster`） | 页面按钮自主循环；派发链路与 Mini-LTP 同构（注入型） | 是 |
+
+**宿主的可靠性保障**（`script.js`）：
+
+1. **注入留痕**：`/shared-input.js` / 智能体脚本的注入成功与失败都打日志——注入是派发的前置条件，静默失败会让调用方一直等回执。
+2. **补投一次**：注入型包在投递后 1.5s 内未收到 `ltpx_ack` 时补投一次。由于 Node-LTP 包既不回 ack 也不做幂等，**补投仅对注入型包启用**（此时审计日志已确认指令未被识别，重投不会重复执行）。
+3. **派发心跳**：投递后 90s 内既无 ack 也无回执（或用户关闭/切换页面）即回执失败，月华侧不会空等 30 分钟。
+4. **回执去重**：同一 `request_id` 只上报一次（包重复回传与宿主兜底互不叠加）。
+
+### 4.2 Mini-LTP —— 通用页面操作智能体
+
+入口 [mini_ltp_agent.js](../../subsystem/core_personality/personality/crystal/web/mini_ltp_agent.js)，运行在目标页面 iframe 内的通用操作智能体，由琉璃在 iframe `load` 后动态注入，不改包源码。
 
 - **多轮 function calling**：系统提示词 + 独立上下文，LLM 经工具循环逐次执行 → `tool` 消息回填 → 直到无工具调用给出最终答复。
 - **模型配置**：经 `fetch('/file/read/lunar_config.json')` 读取 `agent.multimodal_model`，走同源 `/v1` 代理。
@@ -126,6 +152,28 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 - **工具集**：`capture_page / click / type / key / mouse / wheel / scroll / hover / select / wait`，支持组合键与三态按住（键入 / 短按 / 长按）。
 - **视觉定位**：每轮注入一张最新视口截图，覆盖 50px 坐标网格 + 与【页面元素】列表同序的编号框，结合文本元素列表双重定位。
 - **页面操作原语**：统一来自共享模块 `window.SharedInput`（`/shared-input.js`，与 Self-LTP 共享）。
+- **可用性约束（重要）**：
+  - 截图（整页像素还原）对 canvas / three.js / 超大内联内容的页面可能**永不返回**，因此共享原语 `tryDrawPagePixels` 带硬超时（默认 1500ms，可传 `{timeoutMs}`）与 SVG 体积上限（512KB），失败即退化为"网格 + 编号示意图"；
+  - 智能体两侧另有 5s 截图上限（`captureScreenshotBounded`）：截图拿不到就以「页面元素列表 + 页面信息」继续执行——**任务链路的可用性优先于单张截图**；
+  - `window.SharedInput` 缺失时不再顶层抛错（顶层抛错会让脚本整体加载失败、AtoA 监听器永不注册，调用方静默挂死），改为收到指令后立即回执一条明确错误。
+
+### 4.2.1 故障排查（"页面打开了但一直执行中"）
+
+按以下顺序看琉璃前端控制台与后端日志：
+
+| 现象 | 含义 | 定位 |
+|------|------|------|
+| 无 `[LTPX] 注入脚本` 日志 | 未进入注入流程（包未判定为 Mini-LTP/Self-LTP，或 iframe onload 未触发） | `isMiniLTPPage` 依赖 `/api/packages` 返回的 `tags`；确认 `metadata.json` 的 `tags` 含 `Mini-LTP` |
+| 有 `[LTPX] 注入失败: … HTTP 500` | **后端读不到内嵌脚本**（历史缺陷：`go:embed web/*` 而 handler 读 `assets/`） | 服务端日志会打印具体错误；`readWebAsset` 统一拼 `web/` 前缀，`agent_assets_test.go` 已把该约束钉住 |
+| 有 `[LTPX] 注入失败` 但状态非 500 | 智能体脚本未加载 → 无人监听 `ltpx_run` | 检查 `/shared-input.js`、`/mini-ltp-agent.js` 是否可取（服务端 `LTPX 注入：…已下发` 日志应出现） |
+| 有 `[LTPX] 投递执行指令` 但无 `[Mini-LTP] 收到指令` | 指令未到达智能体（脚本未执行） | 见上一条；宿主会在 1.5s 后补投一次并留日志 |
+| 有 `[Mini-LTP] 收到指令` 但长时间无 `[Mini-LTP] 任务完成` | 任务执行中卡住（历史缺陷：截图悬挂） | 已修（见 §4.2 可用性约束）；仍出现时看截图相关日志 |
+| 90s 后收到"未在预期时间内响应" | 宿主心跳兜底生效 | 说明包内始终无回执；按上表逐项排查，此错误会正常回给月华而不是空等 |
+| 改动后端后浏览器行为没变 | 浏览器仍在跑旧前端（内嵌资源 ModTime 为零、原无缓存头） | 已修：`/desktop/` 与 `/` 统一 `Cache-Control: no-store`；改动后刷新一次即可 |
+
+> **排查锚点**：`LTPX 注入：SharedInput 共享模块已下发` / `…Mini-LTP 智能体脚本已下发` 两条**服务端**日志
+> 是"注入链路已触发"的铁证。它们不出现 = 浏览器没走注入流程（旧前端或包未被判定为注入型）；
+> 出现后仍无回执 = 问题在包内智能体侧（看 §4.2 的截图/模型日志）。
 
 ---
 
@@ -133,7 +181,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 ### 5.1 Self-LTP —— 自主页面操作智能体
 
-入口 [self_ltp_agent.js](../../crystal_astral/assets/self_ltp_agent.js)。用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务，智能体在目标页面内**多轮自循环执行**，不经月华调度。
+入口 [self_ltp_agent.js](../../subsystem/core_personality/personality/crystal/web/self_ltp_agent.js)。用户通过页面上的（开始/停止）按钮 + 文本框指定初始任务，智能体在目标页面内**多轮自循环执行**，不经月华调度。
 
 **核心循环**：收到初始任务先 `set_plan` 拆解为计划项 → 每轮只执行一个原子操作 → 执行后重新观测页面（截图 + 元素）验证是否生效 → 未生效用同一操作重试或 `wait` 后再试 → 关键步骤用 `confirm_step(no, passed)` 标记 → 全部完成后 `finish` 总结。
 
@@ -149,7 +197,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 ### 5.3 Auto-LTP —— 桌面闭环自治智能体（window_agent）
 
-实现于 `crystal_astral/agent/AutoLTP`（CGO，Windows），工具名 **`window_agent`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=window_agent` + `instruction`）调用，路由 `AutoLTP.Run(instruction)`（[ltpx_remote.go](../../crystal_astral/ltpx_remote.go)）。
+实现于 `core_personality/personality/crystal/agent/AutoLTP`（CGO，Windows），工具名 **`window_operate`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `use_the_program`（`arguments.tool=window_operate` + `arguments.instruction`）调用，路由 `AutoLTP.Run(instruction)`（[ltpx_remote.go](../../subsystem/core_personality/personality/crystal/ltpx_remote.go)）。
 
 **多角色编排**（`host.go` `Run`）：
 
@@ -167,7 +215,7 @@ LTPX 包位于 `local_data/package/*/`，每个包用 `metadata.json` 自声明�
 
 ### 5.4 Web-LTP —— 网络搜索智能体（web_search）
 
-实现于 `crystal_astral/agent/WebLTP/`，工具名 **`web_search`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `/ltpx/call`（`tool=web_search` + `instruction`）调用，进程内直跑 `WebLTP.Run(instruction)`（不依赖任何前端包，不受 120s 挂起登记限制）。
+实现于 `core_personality/personality/crystal/agent/WebLTP/`，工具名 **`web_search`**，作为琉璃内置工具随 `/ltpx/tools` 暴露；月华经 `use_the_program`（`arguments.tool=web_search` + `arguments.instruction`）调用，进程内直跑 `WebLTP.Run(instruction)`（不依赖任何前端包）。
 
 **固定流水线**（`host.go`）：
 

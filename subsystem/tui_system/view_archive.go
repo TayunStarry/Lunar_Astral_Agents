@@ -407,10 +407,12 @@ type updateState struct {
 	progress  int
 	err       error
 	versions  []updatepack.Version
-	menuIdx   int      // 操作菜单选中项
-	menuPl    listPane // 菜单滚动窗口
-	versionPl listPane // 版本列表滚动窗口
-	versionIx int      // 版本列表选中项
+	// versionsAt 版本列表获取时刻：listCacheTTL 内重复进入直接复用，省下 Gitee 额度
+	versionsAt time.Time
+	menuIdx    int      // 操作菜单选中项
+	menuPl     listPane // 菜单滚动窗口
+	versionPl  listPane // 版本列表滚动窗口
+	versionIx  int      // 版本列表选中项
 	// handoverLeft 交接倒计时剩余秒数（updateHandover 模式）
 	handoverLeft int
 	activated    bool
@@ -481,11 +483,13 @@ func (m appModel) updateUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.update.mode = updateVersions
 			m.update.versions = msg.versions
+			m.update.versionsAt = time.Now()
 			m.update.versionIx = 0
 			m.update.versionPl = listPane{}
 			m.setNotice(fmt.Sprintf("读取到 %d 个已发布版本", len(msg.versions)), false)
 		} else {
-			m.setNotice("版本列表获取失败", true)
+			// 人话提示：限流要引导填令牌 / 稍后重试，而不是把 HTTP 原文糊上去
+			m.setNotice(apiFriendlyError(msg.err), true)
 		}
 		return m, nil
 
@@ -561,6 +565,13 @@ func (m appModel) updateUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "left", "backspace":
 				m.update.mode = updateMenuMode
 				return m, nil
+			case "r":
+				// 手动刷新：绕过 listCacheTTL 复用，重新请求
+				m.update.versionsAt = time.Time{}
+				m.update.running = true
+				m.update.runningOp = "刷新版本列表"
+				m.setBusy(m.update.runningOp)
+				return m, listVersionsCmd()
 			}
 			if idx, ok := listNavKey(m.update.versionIx, key, len(m.update.versions), m.bodyPage(), true); ok {
 				m.update.versionIx = idx
@@ -588,7 +599,9 @@ func (m appModel) submitUpdateInput() (tea.Model, tea.Cmd) {
 		m.setBusy(m.update.runningOp)
 		return m, runUpdateCmd("tag", value)
 	case updateInputToken:
-		// 令牌由发布时手动输入：配置文件不再保存密钥
+		// 令牌由发布时手动输入：配置文件不再保存密钥。
+		// 同时记入会话：后续列表/拉取请求都会带上它，避免一直吃匿名额度（限流）
+		SetSessionToken(value)
 		m.update.runningOp = "发布更新包"
 		m.setBusy(m.update.runningOp)
 		return m, runUpdateCmd("publish", value)
@@ -633,6 +646,15 @@ func (m appModel) updateMenuAction() (tea.Model, tea.Cmd) {
 		m.update.input.Focus()
 		return m, textinput.Blink
 	default:
+		// 列表缓存：短时间内重复进入直接复用，避免无谓消耗 Gitee 额度（匿名额度极低）
+		if !m.update.versionsAt.IsZero() && time.Since(m.update.versionsAt) < listCacheTTL {
+			m.update.mode = updateVersions
+			m.update.versionIx = 0
+			m.update.versionPl = listPane{}
+			m.setNotice(fmt.Sprintf("复用 %d 个已发布版本（%s 内缓存；刷新请按 r）",
+				len(m.update.versions), shortDuration(listCacheTTL)), false)
+			return m, nil
+		}
 		m.update.running = true
 		m.update.runningOp = "获取版本列表"
 		m.setBusy(m.update.runningOp)
@@ -657,11 +679,11 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 			cfgCopy.GiteeToken = value
 			err = updatepack.Publish(cfgCopy, "")
 		case "latest":
-			res, err = updatepack.Pull(*cfg, updatepack.PullSpec{Kind: updatepack.PullLatest})
+			res, err = updatepack.Pull(*withSessionTokenUpdate(cfg), updatepack.PullSpec{Kind: updatepack.PullLatest})
 		case "tag":
-			res, err = updatepack.Pull(*cfg, updatepack.PullSpec{Kind: updatepack.PullTag, Value: value})
+			res, err = updatepack.Pull(*withSessionTokenUpdate(cfg), updatepack.PullSpec{Kind: updatepack.PullTag, Value: value})
 		case "hash":
-			res, err = updatepack.Pull(*cfg, updatepack.PullSpec{Kind: updatepack.PullHash, Value: value})
+			res, err = updatepack.Pull(*withSessionTokenUpdate(cfg), updatepack.PullSpec{Kind: updatepack.PullHash, Value: value})
 		}
 		if err != nil {
 			return updateDoneMsg{err: err}
@@ -687,15 +709,26 @@ func runUpdateCmd(kind, value string) tea.Cmd {
 	}
 }
 
-// listVersionsCmd 后台获取版本列表
+// listVersionsCmd 后台获取版本列表。
+//
+// 会话令牌会一并带上（配置里有则以配置为准）；若正处于限流冷却期则不请求，
+// 直接返回人话提示，避免用户反复刷新把额度耗得更久。
 func listVersionsCmd() tea.Cmd {
 	return func() tea.Msg {
+		if wait := rateLimitRemaining(); wait > 0 {
+			return updateVersionsMsg{err: fmt.Errorf("Gitee 接口限流冷却中，约 %s 后可重试", shortDuration(wait))}
+		}
 		cfg := GetUpdatePackConfig()
 		if cfg == nil {
 			return updateVersionsMsg{err: fmt.Errorf("未配置 update_pack（lunar_config.json 缺少配置节）")}
 		}
-		versions, err := updatepack.ListVersions(*cfg)
-		return updateVersionsMsg{versions: versions, err: err}
+		versions, err := updatepack.ListVersions(*withSessionTokenUpdate(cfg))
+		if err != nil {
+			noteAPIRateLimit(err)
+			return updateVersionsMsg{err: err}
+		}
+		clearRateLimit()
+		return updateVersionsMsg{versions: versions}
 	}
 }
 
@@ -713,7 +746,7 @@ func updateContext(s updateState) string {
 	ctx += " · 应用目标 " + target
 	switch s.mode {
 	case updateVersions:
-		ctx += " · 版本列表"
+		ctx += " · 版本列表（r 刷新）"
 	case updateInputTag:
 		ctx += " · 按 tag 拉取"
 	case updateInputHash:
@@ -743,6 +776,7 @@ func updateKeys(s updateState) []keyHint {
 		return []keyHint{
 			kh("↑/↓ PgUp/PgDn", "选择版本"),
 			kh("Enter", "按该 tag 拉取"),
+			kh("r", "刷新列表"),
 			kh("Esc/←", "返回操作菜单"),
 		}
 	}
@@ -782,7 +816,7 @@ func (m appModel) viewUpdate() string {
 //
 // 用户视角的真相：点了「拉取最新」之后控制台会消失（主程序 exe 被锁，必须退出才能覆盖），
 // 若不给这段说明，屏幕上就只是「黑了」，无从判断是成功还是失败。
-func updateHandoverBody(m appModel, w int) []string {
+func updateHandoverBody(_ appModel, w int) []string {
 	note := pendingHandover
 	keyW := 12
 	body := []string{

@@ -299,10 +299,8 @@ export function checkDueItems(): ScheduleItem[] {
 // 初始化计划表缓存
 initSchedules();
 
-// 注册计划表工具到 LTPfunction 列表
+// 注册计划表工具到 LTPfunction 列表（工具定义由对话者聚合，不再入公共数组）
 GlobalConfig.LTPfunction.set('create_schedule', handleCreateSchedule);
 GlobalConfig.LTPfunction.set('edit_schedule', handleEditSchedule);
 GlobalConfig.LTPfunction.set('delete_schedule', handleDeleteSchedule);
 GlobalConfig.LTPfunction.set('query_schedule', handleQuerySchedule);
-// 注册计划表工具到 LTPdefinition 列表
-GlobalConfig.LTPdefinition.push(...scheduleTools);

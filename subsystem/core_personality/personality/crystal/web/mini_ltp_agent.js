@@ -83,29 +83,45 @@
 
     /* ---------------- 共享键鼠操作模块（SharedInput） ----------------
        页面操作原语统一来自 window.SharedInput（见 shared_input.js）；
-       宿主注入顺序：先注 /shared-input.js，再注本智能体脚本。 */
+       宿主注入顺序：先注 /shared-input.js，再注本智能体脚本。
 
+       注意：共享模块缺失时**不在顶层抛错**——顶层抛错会让整个脚本加载失败，
+       AtoA 监听器永远不会注册，月华的调用就此静默挂死（表现为"页面打开了但一直
+       执行中、无任何回执"）。这里改为：模块缺失时保留可诊断状态，收到指令立即
+       回执一条明确错误，保证链路一定闭合。 */
     var SharedInput = (typeof window !== 'undefined' && window.SharedInput) || null;
-    if (!SharedInput) throw new Error('SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js）');
-    var isVisible = SharedInput.isVisible, escapeCss = SharedInput.escapeCss,
-        query = SharedInput.query, queryAll = SharedInput.queryAll,
-        textOf = SharedInput.textOf, describe = SharedInput.describe,
-        findByText = SharedInput.findByText, resolveTarget = SharedInput.resolveTarget,
-        uniqueSelector = SharedInput.uniqueSelector, captureElements = SharedInput.captureElements,
-        buildCompactElements = SharedInput.buildCompactElements,
-        buildPageInfoText = SharedInput.buildPageInfoText,
-        dispatchAt = SharedInput.dispatchAt, resolvePoint = SharedInput.resolvePoint,
-        fireMouse = SharedInput.fireMouse, focusEl = SharedInput.focusEl,
-        clickEl = SharedInput.clickEl, hoverEl = SharedInput.hoverEl,
-        setInputValue = SharedInput.setInputValue, typeEl = SharedInput.typeEl,
-        keyToCode = SharedInput.keyToCode, normalizeKeyToken = SharedInput.normalizeKeyToken,
-        pressKeyEl = SharedInput.pressKeyEl, parseHoldSpec = SharedInput.parseHoldSpec,
-        mouseButtonEl = SharedInput.mouseButtonEl, wheelEl = SharedInput.wheelEl,
-        sleep = SharedInput.sleep, scrollEl = SharedInput.scrollEl,
-        selectEl = SharedInput.selectEl, getState = SharedInput.getState,
-        tryDrawPagePixels = SharedInput.tryDrawPagePixels, drawGrid = SharedInput.drawGrid,
-        drawElementBoxes = SharedInput.drawElementBoxes, captureScreenshot = SharedInput.captureScreenshot,
-        SCREEN_GRID_STEP = SharedInput.SCREEN_GRID_STEP;
+    if (!SharedInput) {
+        console.error('[Mini-LTP] SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js），页面操作能力不可用');
+    }
+    /** 共享原语代理：SharedInput 就绪时提供同名方法；缺失时调用抛出明确错误（被 AtoA 捕获后回执） */
+    function sharedModuleError() {
+        throw new Error('SharedInput 共享键鼠模块未加载（需先注入 /shared-input.js）');
+    }
+    function sharedFn(name) {
+        if (SharedInput && typeof SharedInput[name] === 'function') {
+            return SharedInput[name].bind(SharedInput);
+        }
+        return sharedModuleError;
+    }
+    var isVisible = sharedFn('isVisible'), escapeCss = sharedFn('escapeCss'),
+        query = sharedFn('query'), queryAll = sharedFn('queryAll'),
+        textOf = sharedFn('textOf'), describe = sharedFn('describe'),
+        findByText = sharedFn('findByText'), resolveTarget = sharedFn('resolveTarget'),
+        uniqueSelector = sharedFn('uniqueSelector'), captureElements = sharedFn('captureElements'),
+        buildCompactElements = sharedFn('buildCompactElements'),
+        buildPageInfoText = sharedFn('buildPageInfoText'),
+        dispatchAt = sharedFn('dispatchAt'), resolvePoint = sharedFn('resolvePoint'),
+        fireMouse = sharedFn('fireMouse'), focusEl = sharedFn('focusEl'),
+        clickEl = sharedFn('clickEl'), hoverEl = sharedFn('hoverEl'),
+        setInputValue = sharedFn('setInputValue'), typeEl = sharedFn('typeEl'),
+        keyToCode = sharedFn('keyToCode'), normalizeKeyToken = sharedFn('normalizeKeyToken'),
+        pressKeyEl = sharedFn('pressKeyEl'), parseHoldSpec = sharedFn('parseHoldSpec'),
+        mouseButtonEl = sharedFn('mouseButtonEl'), wheelEl = sharedFn('wheelEl'),
+        sleep = sharedFn('sleep'), scrollEl = sharedFn('scrollEl'),
+        selectEl = sharedFn('selectEl'), getState = sharedFn('getState'),
+        tryDrawPagePixels = sharedFn('tryDrawPagePixels'), drawGrid = sharedFn('drawGrid'),
+        drawElementBoxes = sharedFn('drawElementBoxes'), captureScreenshot = sharedFn('captureScreenshot'),
+        SCREEN_GRID_STEP = (SharedInput && typeof SharedInput.SCREEN_GRID_STEP === 'number') ? SharedInput.SCREEN_GRID_STEP : 50;
 
 
     /* ---------------- 工具定义（OpenAI function calling 格式） ---------------- */
@@ -263,8 +279,8 @@
     // capture_screenshot：刷新最新截图并回读当前视口规模与元素编号规模。
     async function execCaptureScreenshot() {
         const items = captureElements({ max: AGENT_MAX_LIST_ITEMS });
-        const shot = await captureScreenshot(items).catch(function () { return null; });
-        if (!shot || !shot.dataUrl) return { success: false, error: '截图失败' };
+        const shot = await captureScreenshotBounded(items);
+        if (!shot || !shot.dataUrl) return { success: false, error: '截图失败或超时（页面像素还原不可用，可改用元素列表定位）' };
         return {
             success: true,
             text: '已刷新当前视口截图（' + shot.width + '×' + shot.height + '，网格步长 ' + SCREEN_GRID_STEP + 'px，X0=最左/Y0=最顶），可见可交互元素 ' + shot.count + ' 个，橙色编号框与【页面元素】列表序号一一对应。'
@@ -352,6 +368,25 @@
 
     /* ---------------- 主流程：多轮工具调用循环 ---------------- */
 
+    /**
+     * 带硬超时的截图：截图涉及整页像素还原，异常页面（canvas/three.js/超大内联内容）
+     * 可能长时间不返回。任务链路的可用性优先于单张截图，超时即放弃截图继续执行。
+     */
+    const SCREENSHOT_TIMEOUT_MS = 5000;
+    async function captureScreenshotBounded(items) {
+        let timer = null;
+        try {
+            return await Promise.race([
+                Promise.resolve(captureScreenshot(items)),
+                new Promise(function (resolve) { timer = setTimeout(function () { resolve(null); }, SCREENSHOT_TIMEOUT_MS); })
+            ]);
+        } catch (e) {
+            return null;
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
+
     async function runLTPXAgent(instruction) {
         const text = String(instruction || '').trim();
         if (!text) throw new Error('空指令');
@@ -359,8 +394,8 @@
         // 每次运行只采集一次最新状态截图 + 元素列表，保证上下文中"有且只有一张"当前截图；
         // 编号框与【页面元素】列表同序，视觉模型据此读取元素网格坐标。
         const elems = captureElements({ max: AGENT_MAX_LIST_ITEMS });
-        let shot = null;
-        try { shot = await captureScreenshot(elems); } catch (e) { shot = null; }
+        const shot = await captureScreenshotBounded(elems);
+        if (!shot) console.log('[Mini-LTP] 截图超时或失败，本轮以元素列表 + 页面信息继续执行');
 
         // 组装本轮用户消息：页面信息(+<image> 标记，供多模态/Llama 视觉对齐) + 截图 + 元素列表 + 月华指令
         const userParts = [
@@ -444,10 +479,19 @@
             const requestId = data.request_id;
             const args = data.arguments || {};
             const instruction = args.instruction || '';
+            // 先回投递确认（ltpx_ack）：宿主据此确认"指令已到达智能体"，不必补投
+            try {
+                if (window.parent) window.parent.postMessage({ type: 'ltpx_ack', request_id: requestId }, '*');
+            } catch (e) { /* 父窗口不可达时忽略 */ }
+            // 可观测性：任务开始/结束都留痕，便于排查"页面打开了但一直执行中"
+            console.log('[Mini-LTP] 收到指令 request_id=' + requestId + '：' + String(instruction).slice(0, 120));
+            const started = Date.now();
             try {
                 const text = await run(instruction, opts || {});
+                console.log('[Mini-LTP] 任务完成 request_id=' + requestId + '，耗时 ' + (Date.now() - started) + 'ms');
                 postResult(requestId, true, text, '');
             } catch (e) {
+                console.error('[Mini-LTP] 任务失败 request_id=' + requestId + '：' + String(e && e.message || e));
                 postResult(requestId, false, '', String(e && e.message || e));
             }
         });

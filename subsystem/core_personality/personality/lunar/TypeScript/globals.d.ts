@@ -1,5 +1,5 @@
 import type { FileListItem, ProxyFetchConfig } from './config/config';
-import type { MediaSegment, MediaFrameGroup, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
+import type { MediaSegment, MediaFrameGroup, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult, ImageCacheEntry } from './config/image';
 import type { MultimodalMessage } from './config/model';
 import type { TTSParams } from './config/tool';
 import type { ScreenshotParams } from './config/screenshot';
@@ -180,6 +180,59 @@ declare global {
      */
     function generateImage(params: GenerateImageParams): [GenerateImageResult, Error | null];
     /**
+     * 对已有图片执行 RealESRGAN 超分辨率放大（4x）
+     *
+     * 输入支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地路径），
+     * 地址类入参由 Go 侧下载/解码后经 sd-cli -M upscale 管线放大
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
+     *
+     * @returns {[GenerateImageResult, Error | null]} 包含超分结果的元组，[结果(base64/尺寸), 错误信息]
+     */
+    function upscaleImage(imgData: Blob | File | string | Uint8Array): [GenerateImageResult, Error | null];
+    /**
+     * 注册图片到共享图片缓存并分配标签（QQ 转发与对话者上下文共用同一命名空间）
+     *
+     * @param {string} source 图片来源地址（http(s) URL / data URI / 本地路径）
+     * @param {boolean} pinned 是否钉住（多模态窗口内的图片防 FIFO 淘汰，降级后解除）
+     *
+     * @returns {[string, Error | null]} 包含注册结果的元组，[图片标签（形如 图片.003）, 错误信息]
+     */
+    function imageCachePut(source: string, pinned: boolean): [string, Error | null];
+    /**
+     * 按标签查询共享图片缓存条目
+     *
+     * @param {string} tag 图片标签（形如 图片.003）
+     *
+     * @returns {[ImageCacheEntry | null, Error | null]} 包含查询结果的元组，[缓存条目, 错误信息]（不存在时条目为 null）
+     */
+    function imageCacheGet(tag: string): [ImageCacheEntry | null, Error | null];
+    /**
+     * 按注册序号倒序返回共享图片缓存最近的条目
+     *
+     * @param {number} topK 返回条目数量上限（<=0 时返回全部）
+     *
+     * @returns {[ImageCacheEntry[], Error | null]} 包含条目列表的元组
+     */
+    function imageCacheList(topK: number): [ImageCacheEntry[], Error | null];
+    /**
+     * 写入缓存条目的内容描述（降级时由视觉模型生成一次）
+     *
+     * @param {string} tag 图片标签
+     * @param {string} desc 内容描述
+     *
+     * @returns {[boolean, Error | null]} 包含写入结果的元组，[是否成功, 错误信息]
+     */
+    function imageCacheSetDesc(tag: string, desc: string): [boolean, Error | null];
+    /**
+     * 解除缓存条目钉住（图片降级为占位标签后调用，恢复其可淘汰资格）
+     *
+     * @param {string} tag 图片标签
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
+     */
+    function imageCacheUnpin(tag: string): [boolean, Error | null];
+    /**
      * 拉取上下文
      * 
      * @returns {MultimodalMessage[]} 上下文消息列表
@@ -327,38 +380,32 @@ declare global {
      */
     function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
     /**
-     * 获取琉璃（远程 LTPX）在线状态与最新聚合工具
-     * 思考链起点调用：主动向琉璃心跳，若在线则拉取最新聚合工具写入内部缓存并返回
+     * 获取琉璃（远程 LTPX）聚合工具链
+     * 思考链起点调用：进程内直读工具链并写入内部缓存，返回最新聚合工具
      *
-     * @returns {string} JSON 字符串：{ online: boolean, url: string, tool?: {name,description,parameters} }
+     * @returns {string} JSON 字符串：{ tool?: {name, description, parameters} }（未就绪时无 tool）
      */
     function getLTPXRemoteStatus(): string;
     /**
-     * 转发工具调用到琉璃（远程 LTPX）
+     * 转发工具调用到琉璃（进程内 Broker）
      *
-     * @param {string} toolName 琉璃工具名
-     * @param {string} argumentsJSON 工具参数 JSON 字符串
+     * @param {string} toolName 聚合工具名（use_the_program）
+     * @param {string} argumentsJSON 工具参数 JSON 字符串（{tool, instruction}）
      *
-     * @returns {Promise<string>} 异步返回琉璃的文本结果；失败时 resolve 以「【琉璃工具调用失败】」开头的错误文本
+     * @returns {Promise<string>} 异步返回文本结果；失败时 resolve 以「【工具调用失败】」开头的错误文本
      */
     function callLTPXRemoteTool(toolName: string, argumentsJSON: string): Promise<string>;
     /**
-     * 清空内部缓存的琉璃工具链（琉璃离线时调用）
+     * 同步推送事件并接收 LTP9 插件处理结果（事件触发点调用）
      *
-     * @returns {boolean} 是否成功
-     */
-    function clearLTPXRemoteTools(): boolean;
-    /**
-     * 同步推送事件到琉璃并接收插件处理结果（事件触发点调用）
-     *
-     * 把「xx事件发生前」的原始负载推送到琉璃 /ltpx/event，同步阻塞等待琉璃 LTP9
-     * 插件处理完成。琉璃离线 / 无插件订阅 / 插件未回传业务结果时 returned=false
+     * 把「xx事件发生前」的原始负载推送到 LTP9 引擎派发面，同步阻塞等待插件处理完成。
+     * 无插件订阅 / 插件未改写 / 未回传业务结果时 returned=false
      * （调用方应回退本地默认处理）。
      *
      * @param {string} topic 事件主题（如 message_received_before）
      * @param {string} payloadJSON 事件负载 JSON 字符串（可为 "{}"）
      *
-     * @returns {string} JSON 字符串：{ online: boolean, modified: boolean, data: any, returned: boolean, return: any }
+     * @returns {string} JSON 字符串：{ modified: boolean, data: any, returned: boolean, return: any }
      */
     function ltpInteractEvent(topic: string, payloadJSON: string): string;
     /**

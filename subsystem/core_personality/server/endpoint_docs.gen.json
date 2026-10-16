@@ -660,10 +660,10 @@
     },
     "/ltpx/poll": {
       "get": {
-        "summary": "轮询工具执行状态",
-        "description": "轮询工具执行状态",
-        "operationId": "crystal.LTPRemotePollHandler",
-        "x-handler": "crystal.LTPRemotePollHandler",
+        "summary": "列出待定工具调用（调试端点，已不承担轮询取结果）",
+        "description": "列出待定工具调用（调试端点，已不承担轮询取结果）",
+        "operationId": "crystal.LTPRemotePendingHandler",
+        "x-handler": "crystal.LTPRemotePendingHandler",
         "responses": {
           "200": {
             "description": "成功"

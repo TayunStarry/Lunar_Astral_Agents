@@ -111,6 +111,10 @@
 | **控制台必须是 UTF-8 代码页** | TUI 输出的是 UTF-8 字节，而经典 conhost（双击 exe / `conhost cmd`）默认用系统 OEM 代码页——中文 Windows 上是 **936/GBK**。不切代码页时中文与 `╭ ─ │ ◆` 全被按 GBK 逐字节解释：屏幕乱码，且「一个 UTF-8 字形」被解成别的字符后实际占位与排版计算完全对不上，每行都超出终端宽度 → 折行 → 整屏翻倍 → 每帧上滚。**这就是用户实测的「一打开就滚动 + 显示混乱」**。做法：`ensureConsoleEncoding` 在渲染前把输入/输出代码页切到 65001（退出时恢复），并开启 VT 处理 |
 | **字形宽度必须实测，不能只用内置宽度表** | 中文控制台字体（新宋体等）把一批「东亚歧义宽度」字形渲染成 **2 列**（实测 `◆ ■ ▶ · → ↑ ↓ — × ① …` 共 35 个），而 x/ansi 的宽度表记 1 列。界面按「恰好铺满」排版，度量若按 1 列算，整行就比终端宽 → 折行（实测 140 列窗口渲染出 142 列的行）。做法：启动时 `calibrateGlyphWidths` 在真实控制台上逐个字形实测（写一个字形读光标位移，事后原样恢复屏幕），`dispWidth`/`truncTo` 按实测宽度计算；`TestAllUIGlyphsAreProbed` 保证界面上每个非 ASCII 装饰字形都已登记进探测表。**只做字形替换是不够的**——行宽在排版阶段就已算出，度量为1列时替换只能维持那个已经错误的宽度 |
 | **末列留空** | 经典 conhost 上「正好写满整行」的行在换行时会丢掉最后一个字符（实测两条框线的右角 `╮ ╯` 直接消失）。`frame.renderWidth()` 让出最后一列，框线恒为 `终端宽度 - 1` 列 |
+| **代理端口绝不可与自身服务撞车** | HTTPS 反向代理供远程前端（手机）接入，后端应指向 **Web 服务**（BasicPort），代理端口应另选（默认 `BasicPort+5`）。实测故障：代理屏把「代理端口」提示写死为 `36790`——那正是 **模型服务端口**（`BasicPort+1`）。用户照提示填写后，Windows 允许多端口绑定（Go 不设 `SO_EXCLUSIVEADDRUSE`）使代理**悄悄接管**了模型服务端口，程序自身发往模型的请求打到 TLS 代理上：`client sent an HTTP request to an HTTPS server`、连接被重置、`读取嵌入响应失败: unexpected EOF`、记忆库查询失败。做法：①提示与校验基准由宿主注入（`SetProxyDefaults`）；②`proxy.Start` 先 `listenExclusive` 独占绑定，端口被占即是明确错误；③与自身服务端口相同直接拒绝并给出可用替代端口。顺带修掉一个日志泄漏：标准库 `log` 持有 init 时的 `os.Stderr`（真实控制台），仅替换 `os.Stderr` 变量对它无效，`httputil`/`net/http` 的错误会直接糊在界面上——`Install` 现在同时 `log.SetOutput(管道)` |
+| **界面不用 emoji** | emoji 的宽度与外观随终端/字体剧烈变化（同一字形可能 1 列、2 列或带变体选择符），排版度量再准也难保证一致——用户实测的「含 💭 的行比其它行窄一格」正是这条路的开端。界面上一切语义改用**符号 + 颜色 + 加粗**表达：思考区用「思考 · 共 N 行」加粗暗色标题 + `│` 缩进 + 暗色正文，工具调用用 `»` + 亮青，暂停用 `‖`，成功/失败用 `✓`/`✗`（文本表现符号）。由 `TestNoEmojiInTUI`（渲染结果不得含 emoji 表现字符）与 `TestProbeTableHasNoEmoji`（探测表不得登记 emoji）把守 |
+| **实况屏必须能通读模型思考** | 思考与输出默认只保留末尾摘要（思考 8 行 / 输出 14 行），**标题行注明总行数**并提示按 `t` 展开；展开后输出完整内容（单轮上限 400 行保护帧率），配合屏幕滚动即可通读。用户反馈「无法看全模型的思考内容」即由此解决（`TestAgentExpandShowsFullThinking` 逐行断言 40 步思考全部可见） |
+| **仓库接口必须按额度使用** | Gitee 对**未认证**请求的额度极低（按 IP 计），配置里没填 `release.gitee_token` 时所有列表/拉取都走匿名额度，很快被打满并返回 `403 Forbidden (Rate Limit Exceeded)`——实测表现就是「应用市场与更新包列表都拉不到」。三条对策：①**令牌记忆**：发布/安装流程里输入过的令牌记入会话（`SetSessionToken`），其后所有请求都带上（配置里有则以配置为准）；②**限流冷却**：吃到期限流后 60 秒内不再打接口，直接给人话提示，避免反复刷新把额度耗更久；③**列表缓存**：版本列表 `listCacheTTL = 60s` 内复用（手动 `r` 刷新绕过）。错误一律经 `channel.FriendlyAPIError` 转成「填令牌 / 稍后重试 / 核对仓库」这类可照做的提示，不再把 `HTTP 403` 原文糊在界面上 |
 | **隐形实例必须变成显式失败** | 只有「连控制台设备都取不到」（服务/计划任务等无控制台环境）时才报错退出，绝不留下一个看不见、按不动的后台进程去占端口。诊断写 `CONOUT$`（不依赖已被接管的标准流） |
 | **实例端口必须独占绑定** | Windows 的 bind 默认允许同一地址:端口被多个套接字绑定（后绑定者接管新连接），而 Go 自 1.19 起在 Windows 上**不再**设置 `SO_EXCLUSIVEADDRUSE`。缺了这道闸门，重复启动的两个实例会同时「监听成功」、各自拉起一个模型服务并互抢端口——用户看到的是「前端 404 → 前后端一起崩溃退出」。做法：`server.ListenInstance` 在 `net.ListenConfig` 里显式设置 `SO_EXCLUSIVEADDRUSE`（Winsock 定义为 `~SO_REUSEADDR` = -5），main 在任何装配动作**之前**预检并复用它；失败时用 `exitVisible` 打印原因（此时日志管线尚未接管 stdout，且留 15 秒阅读时间，双击启动也读得到） |
 
@@ -173,6 +177,8 @@
 | `TestWatchTerminalSizePushesChanges` · `TestWatchTerminalSizeNoConsole` | 终端尺寸轮询：尺寸变化必须上报（否则 Windows 上窗口缩小后界面会一直向上滚）；无控制台时立即退出不留空转 goroutine |
 | `TestScreensFitCJKConsole` · `TestDispWidthFollowsCalibration` · `TestTruncToTerminalWidth` · `TestFitWidthTerminalWidth` · `TestRuneTermWidth` | 中文控制台字体（歧义字形占 2 列）下每屏都不折行、度量与截断/补齐都按终端宽度收敛 |
 | `TestAllUIGlyphsAreProbed` · `TestCalibrateGlyphWidthsWorks` · `TestCalibrateGlyphWidthsRestoresScreen` | 界面上每个非 ASCII 装饰字形都已登记进探测表；字形宽度校准真的产出结果且不破坏屏幕内容 |
+| `TestListenExclusiveRejectsSecondBind` · `TestStartRejectsReservedPort` · `TestStartRejectsSamePort` · `TestStartBindsExclusivelyAndServesTLS` · `TestReservedPortOwner` | HTTPS 代理端口：被占即失败不得接管、与自身服务端口冲突必须拒绝、前后端口不得相同、真实启动与重复启动行为 |
+| `TestProxyPortsRejectReservedPorts` · `TestProxyDefaultsComeFromConfig` | 代理屏端口校验与提示值取自真实配置（不得写死成模型服务端口） |
 | `TestListenInstanceExclusive` | 实例端口独占：同一端口第二次绑定必须失败（重复启动不得同时对外服务） |
 | `TestMenuMappingProbe` · `TestMarket*` · `TestTokenInputAcceptsRunes` | 菜单与功能映射、市场向导状态机、输入框焦点与按键投递 |
 

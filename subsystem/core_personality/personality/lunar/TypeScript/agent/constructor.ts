@@ -4,8 +4,9 @@
 // LunarGoja 直接执行打包产物、只依赖副作用（工具注册 / 思考循环），不读取导出成员；
 // 因此本文件除聚合导出外，必须显式引入所有带模块级副作用的工具模块。
 
-// ---------- 工具模块副作用：向 GlobalConfig 注册 LTPfunction / LTPdefinition ----------
+// ---------- 工具模块副作用：向 GlobalConfig 注册 LTPfunction（工具定义由对话者静态聚合） ----------
 import '../tool/agent-control';
+import '../tool/image-recall';
 import '../tool/schedule';
 import '../tool/screenshot';
 

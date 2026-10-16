@@ -602,9 +602,12 @@ func Run() error {
 		go watchTerminalSize(prog.Send, func() (int, int, bool) { return consoleSize(out) }, done)
 	}
 
-	// 功能子包钩子注入：日志并入统一管线，进度推送到 TUI
+	// 功能子包钩子注入：日志并入统一管线，进度推送到 TUI。
+	// 同时落盘到 console.log：这些是「发布/拉取/代理/端口释放」等操作的唯一过程记录，
+	// 用户报障时（例如 HTTPS 代理端口冲突）没有它就只能靠现场复现。
 	taskLog := func(msg string) {
 		PushTaskLog(msg)
+		AppendConsoleLog(msg)
 		prog.Send(taskLogMsg(msg))
 	}
 	archive.SetLogHook(taskLog)
@@ -703,7 +706,7 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 	case screenMenu:
 		return "主菜单", "", menuKeys()
 	case screenAgent:
-		return "核心智能 实况", "", agentKeys()
+		return "核心智能 实况", "", agentKeys(m.agent)
 	case screenStats:
 		return "运行状态", "采样间隔 1s", statsKeys()
 	case screenRaw:

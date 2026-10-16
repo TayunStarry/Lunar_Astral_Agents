@@ -1,7 +1,30 @@
 import { getPromptFromKnowledge, savePromptToKnowledge } from '../../file/io/knowledge';
 import { ImageContent, TextContent } from '../../config/model';
 import { GlobalConfig } from '../../config/global';
+import { putCacheEntry, stashPendingTag } from './image-cache';
 import type { PerceiverRole } from '../roles/perceiver';
+
+/**
+ * 注册图片到共享图片缓存（钉住防淘汰）并产出多模态内容项
+ *
+ * 图片项之后紧跟 [图片.00x] 标签旁注：窗内时模型看着真图学到标签，
+ * 降级时宿主摘图留签，标签成为图片在上下文中的永久可寻址句柄。
+ * 标签同时暂存于本轮暂存区，供「同轮内尚未写入上下文即被降级」的场景取用
+ * （降级优先取暂存标签、其次取消息内相邻旁注、最后现注册补签）。
+ *
+ * @param newContent 目标内容数组
+ * @param message 当前消息对象（暂存标签的键，供同轮降级取用）
+ * @param source 注册进缓存的图片来源（原图地址或内联 data URI，取图时经 Go 侧下载/解码）
+ * @param imageDataList 图片项数据列表（静态图恒为单元素）
+ */
+function registerAndPushImage(newContent: Array<ImageContent | TextContent>, message: object, source: string, imageDataList: string[]): void {
+    const tag = putCacheEntry(source, true);
+    for (const data of imageDataList) newContent.push({ type: 'image_url', image_url: { url: data } });
+    if (tag) {
+        newContent.push({ type: 'text', text: `[${tag}]` });
+        stashPendingTag(message, source, tag);
+    }
+}
 
 /** 角色单例注册表（由 roles.ts 在实例化后注入，解除 media → roles 的静态循环引用） */
 let mediaRoles: { perceiverRole: PerceiverRole; randomDefaultMessage: () => string } | null = null;
@@ -187,9 +210,9 @@ export async function LiteImageFile(): Promise<void> {
                     newContent.push({ type: 'text', text: summary.trim().length > 0 ? summary : mediaRoles!.randomDefaultMessage() });
                     continue;
                 }
-                // 内联 base64 静态图已是处理管线的最终形态（data:image URI），直接透传，不再重复缩放
+                // 内联 base64 静态图已是处理管线的最终形态（data:image URI）：注册缓存标签后透传
                 if (imageSource.toLowerCase().startsWith('data:image/')) {
-                    newContent.push(item);
+                    registerAndPushImage(newContent, message, imageSource, [imageSource]);
                     continue;
                 }
                 /** 标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → base64 */
@@ -198,8 +221,10 @@ export async function LiteImageFile(): Promise<void> {
                     console.error('[图片处理失败]:', resizeError.message, resizeError.stack);
                     continue;
                 }
-                // 静态图：将处理结果作为独立的 image_url 内容项添加
-                resizedImages.forEach(image => newContent.push({ type: 'image_url', image_url: { url: image.base64 } }));
+                // 静态图：注册共享缓存（新图即入缓存，保证图生图随时可按标签取用），图片项后紧跟标签旁注。
+                // 缓存登记的是原图地址（URL 形态可复用、避免 base64 常驻内存），取图/描述时由 Go 侧
+                // 重新下载解码；远端地址失效时按标签取图会失败，届时提示改用其它标签。
+                registerAndPushImage(newContent, message, imageSource, resizedImages.map(image => image.base64));
             }
         }
         // 替换消息内容

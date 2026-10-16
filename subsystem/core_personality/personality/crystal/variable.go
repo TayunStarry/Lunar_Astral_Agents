@@ -22,30 +22,20 @@ const (
 //go:embed web/*
 var EmbeddedFiles embed.FS
 
-// ==== LTPX 动态工具链（来自包的 AtoA 能力） ====
-
-// ltpToolchainMutex 保护工具链注册表与工具名→包名映射的并发读写
-var ltpToolchainMutex sync.RWMutex
-
-// ltpAtoaTools 从包元数据扫描收集的「智能体式」工具链（随包增删动态变化）
-var ltpAtoaTools []LTPXRemoteToolDef
-
-// ltpToolPackageMap 工具名 → 提供该工具的包目录名（用于路由到对应包）
-var ltpToolPackageMap = map[string]string{}
-
-// ==== LTPX 待定调用（转发前端包执行） ====
+// ==== LTPX 待定调用（前端包经 /ws 派发、回执经 /ltpx/result 回填） ====
 
 // ltpPendingMutex 保护待定调用注册表的并发读写
 var ltpPendingMutex sync.Mutex
 
 // ltpPendingCalls 待定调用注册表：request_id → 待定调用条目
-// 调用方经进程内结果通道或 /ltpx/poll 取回执行状态，回执/内置智能体完成后写入结果通道
+// 调用方经进程内结果通道取回结果（Broker.Await）；回执/内置智能体完成后写入结果通道，
+// 超时未取走时由 schedulePendingCallCleanup 投递失败结果并清理条目
 var ltpPendingCalls = map[string]*ltpPendingCall{}
 
-// ltpCallTimeout 等待前端包执行工具结果的最大时长
+// ltpCallTimeout 等待前端包执行工具结果的最大时长（LTP9 前端智能体调用路径使用）
 const ltpCallTimeout = 120 * time.Second
 
-// ltpPendingMaxAge 待定调用最长保留时长：超时后判定失败并清理，防止注册表泄漏
+// ltpPendingMaxAge 待定调用最长保留时长：超时后投递失败结果并清理，防止注册表泄漏
 const ltpPendingMaxAge = 30 * time.Minute
 
 // ==== LTPX 前端守护（唤起器/探针由装配层注入） ====

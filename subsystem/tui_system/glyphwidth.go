@@ -25,16 +25,19 @@ import (
 //
 // 新增界面装饰字符时必须登记在此，否则 TestAllUIGlyphsAreProbed 会失败——
 // 漏登记的字形在中文控制台上会把整屏顶到折行。
+//
+// **不得登记 emoji**（TestProbeTableHasNoEmoji 会把关）：界面语义一律用符号 + 颜色 + 加粗表达，
+// emoji 的宽度与外观随终端/字体剧烈变化，排版无法保证一致。
 var probeGlyphsList = []rune{
 	// 框线（Unicode 里属歧义宽度，部分 CJK 字体按 2 列渲染）
 	'─', '│', '╭', '╮', '╰', '╯', '├', '┤', '┬', '┴', '┼', '━', '┃',
 	// 进度/强调块与柱状图
 	'█', '▓', '▒', '░', '▀', '▄', '▌', '▐',
-	// 列表与状态图标
+	// 列表与状态图标（文本表现符号，非 emoji）
 	'◆', '◇', '●', '○', '■', '□', '▪', '▫', '▶', '▸', '►', '◀', '◂',
-	'✦', '✧', '★', '☆', '✓', '✔', '✗', '✘', '⚠', '⚙', '⏸', '💭',
-	// 分隔与箭头
-	'·', '•', '‥', '…', '—', '–', '×', '≠', '≥', '≤', '↕',
+	'✦', '✓', '✗',
+	// 分隔、引号与箭头
+	'·', '•', '‥', '…', '—', '–', '×', '≠', '≥', '≤', '↕', '‖', '»', '«',
 	'→', '←', '↑', '↓',
 	// 带圈数字（发布说明里用①②③标注步骤）
 	'①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩',
@@ -68,23 +71,26 @@ func isProbedGlyph(r rune) bool {
 
 var (
 	glyphWidthMu sync.RWMutex
-	// wideGlyphs 只记录「实测比宽度表更宽」的字形（通常只有几个），
-	// 排版度量每次渲染都要查它，因此保持精简。
+	// wideGlyphs 只记录「实测比内置宽度表**更宽**」的字形及其**额外列数**（通常只有几个），
+	// 排版度量每次渲染都要查它，因此保持精简。注意存的是差值而不是绝对宽度：
+	// 💭 这类 emoji 的表值已是 2 列，绝不能按「实测 2 列」再加 1（那会让该行窄一格）。
 	wideGlyphs = map[rune]int{}
 )
 
-// SetMeasuredGlyphWidth 记录某字形的实测占位宽度（只保留 >1 的字形）
+// SetMeasuredGlyphWidth 记录某字形的实测占位宽度（只记录比宽度表更宽的部分）
 func SetMeasuredGlyphWidth(r rune, w int) {
 	if w < 1 || w > 4 {
 		return
 	}
 	glyphWidthMu.Lock()
 	defer glyphWidthMu.Unlock()
-	if w == 1 {
+	// 只记差值：内置宽度表里 💭 这类 emoji 本来就是 2 列，实测也是 2 列 → 差值 0，不得再叠加
+	extra := w - ansi.StringWidth(string(r))
+	if extra <= 0 {
 		delete(wideGlyphs, r)
 		return
 	}
-	wideGlyphs[r] = w
+	wideGlyphs[r] = extra
 }
 
 // ResetMeasuredGlyphWidths 清空校准结果（测试用）
@@ -94,22 +100,19 @@ func ResetMeasuredGlyphWidths() {
 	wideGlyphs = map[rune]int{}
 }
 
-// measuredGlyphWidth 取实测宽度；未校准时返回 (0, false)
+// measuredGlyphWidth 取实测宽度（表值 + 额外列）；无额外宽度时返回 (表值, false)
 func measuredGlyphWidth(r rune) (int, bool) {
 	glyphWidthMu.RLock()
 	defer glyphWidthMu.RUnlock()
-	w, ok := wideGlyphs[r]
-	return w, ok
+	extra, ok := wideGlyphs[r]
+	return ansi.StringWidth(string(r)) + extra, ok
 }
 
 // wideGlyphExtra 该字形比宽度表多占的列数（0 表示一致）
 func wideGlyphExtra(r rune) int {
 	glyphWidthMu.RLock()
 	defer glyphWidthMu.RUnlock()
-	if w, ok := wideGlyphs[r]; ok {
-		return w - 1
-	}
-	return 0
+	return wideGlyphs[r]
 }
 
 // hasWideGlyphs 快速判断字符串里是否含需要按额外宽度计算的字形

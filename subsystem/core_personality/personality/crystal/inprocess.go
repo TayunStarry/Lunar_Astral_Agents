@@ -2,8 +2,11 @@ package crystal
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
+
+	"LunarSubsystem/LoggerGeneral"
 )
 
 // ==== 进程内端点调用适配器 ====
@@ -40,7 +43,10 @@ func (r *inProcessResponse) WriteHeader(code int) {
 
 // invokeEndpoint 进程内直调端点处理器，返回状态码与响应体。
 // body 为 nil 表示无请求体；query 以 "?k=v" 形式拼接在 path 之后。
-func invokeEndpoint(handler http.HandlerFunc, method, path string, body []byte) (int, []byte) {
+//
+// 进程内直调位于调用方 goroutine（不再是 net/http 的独立请求协程），因此这里自行
+// 兜住处理器 panic：转成 500 响应体返回，避免单个处理器异常带崩整个宿主进程。
+func invokeEndpoint(handler http.HandlerFunc, method, path string, body []byte) (code int, respBody []byte) {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
@@ -52,9 +58,16 @@ func invokeEndpoint(handler http.HandlerFunc, method, path string, body []byte) 
 	req.Header.Set("Content-Type", "application/json")
 
 	rec := &inProcessResponse{header: http.Header{}}
+	defer func() {
+		if r := recover(); r != nil {
+			LoggerGeneral.Error("CrystalAstral", "进程内端点 %s %s 处理 panic: %v", method, path, r)
+			code = http.StatusInternalServerError
+			respBody = []byte(fmt.Sprintf(`{"error":"endpoint panic: %v"}`, r))
+		}
+	}()
 	handler(rec, req)
 
-	code := rec.code
+	code = rec.code
 	if code == 0 {
 		code = http.StatusOK
 	}
