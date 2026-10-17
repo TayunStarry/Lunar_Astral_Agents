@@ -123,12 +123,20 @@ export interface ResourceReadResult {
 	title: string;
 	/** 文本内容（文档 / 表格；携带锚点时为其完整行区间） */
 	content?: string;
-	/** 二进制内容 base64（图片 / 视频 / 音频本体） */
+	/** 二进制内容 base64
+	 *
+	 * 图片**不是**原图：资源取回对图片一律返回视觉读取副本（≤ vision_max_side，
+	 * 见 docs/adr/0008）。视频 / 音频仍为本体。
+	 */
 	base64?: string;
 	/** 规范 MIME */
 	mime: string;
 	/** 内容仓库路径（相对 LocalDir） */
 	blob_path: string;
+	/** 图片副本的像素宽度（仅图片取回时填写） */
+	width?: number;
+	/** 图片副本的像素高度（仅图片取回时填写） */
+	height?: number;
 	/** blob 已丢失：句柄有效但本体不可取，应降级为描述 */
 	lost: boolean;
 	/** 内容按上限被截断 */

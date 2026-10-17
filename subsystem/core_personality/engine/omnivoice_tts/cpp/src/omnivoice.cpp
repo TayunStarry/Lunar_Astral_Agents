@@ -141,7 +141,11 @@ void ov_log(enum ov_log_level level, const char * fmt, ...) {
     if (cb) {
         cb(level, buf, g_log_cb_user);
     } else {
-        std::fprintf(stderr, "%s\n", buf);
+        // Default sink: the formatted buffer plus a newline to stderr, kept
+        // for CLI runs with no callback installed. fwrite/fputc avoid the
+        // fprintf machinery (and keep the raw byte output identical).
+        std::fwrite(buf, 1, std::strlen(buf), stderr);
+        std::fputc('\n', stderr);
     }
 }
 

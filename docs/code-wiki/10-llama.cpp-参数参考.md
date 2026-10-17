@@ -77,7 +77,7 @@ llama-server 是平台内置的大语言模型推理服务，负责承载对话�
 | `-c`, `--ctx-size N` | 提示上下文大小，0 表示从模型加载（环境变量 `LLAMA_ARG_CTX_SIZE`） | 0 | 长文场景按需调大，注意吃显存 |
 | `-n`, `--predict`, `--n-predict N` | 要预测的 token 数量，-1 表示无限（环境变量 `LLAMA_ARG_N_PREDICT`） | -1 | 需要限制回答长度时设上限 |
 | `-b`, `--batch-size N` | 逻辑最大批量大小（环境变量 `LLAMA_ARG_BATCH`） | 2048 | 一般保持默认 |
-| `-ub`, `--ubatch-size N` | 物理最大批量大小（环境变量 `LLAMA_ARG_UBATCH`） | 512 | 提示处理慢可适当调大 |
+| `-ub`, `--ubatch-size N` | 物理最大批量大小（环境变量 `LLAMA_ARG_UBATCH`） | 512 | 一般保持默认 |
 | `--keep N` | 从初始提示中保留的 token 数量，-1 表示全部 | 0 | 一般保持默认 |
 | `--swa-full` | 使用完整大小的 SWA 缓存（环境变量 `LLAMA_ARG_SWA_FULL`） | false | 短上下文模型无需开启 |
 | `-fa`, `--flash-attn [on\|off\|auto]` | 设置 Flash Attention 使用（环境变量 `LLAMA_ARG_FLASH_ATTN`） | auto | 显存紧张时建议开启 |

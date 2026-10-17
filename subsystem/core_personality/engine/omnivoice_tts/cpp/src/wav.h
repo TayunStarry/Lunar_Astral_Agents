@@ -10,6 +10,8 @@
 #include <cstring>
 #include <vector>
 
+#include "ov-error.h"
+
 static uint16_t wav_read_u16le(const uint8_t * p) {
     return (uint16_t) (p[0] | (p[1] << 8));
 }
@@ -42,7 +44,7 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
     *sr      = 0;
 
     if (size < 12 || memcmp(data, "RIFF", 4) != 0 || memcmp(data + 8, "WAVE", 4) != 0) {
-        fprintf(stderr, "[WAV] Not a valid WAV buffer\n");
+        ov_log(OV_LOG_ERROR, "[WAV] Not a valid WAV buffer");
         return NULL;
     }
 
@@ -90,7 +92,7 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
                 n_samples = (int) (data_bytes / ((size_t) n_channels * 2));
                 audio     = (float *) malloc((size_t) n_samples * 2 * sizeof(float));
                 if (!audio) {
-                    fprintf(stderr, "[WAV] OOM allocating PCM16 buffer for %d samples\n", n_samples);
+                    ov_log(OV_LOG_ERROR, "[WAV] OOM allocating PCM16 buffer for %d samples", n_samples);
                     return NULL;
                 }
                 const uint8_t * p = data + pos;
@@ -113,7 +115,7 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
                 n_samples = (int) (data_bytes / ((size_t) n_channels * 3));
                 audio     = (float *) malloc((size_t) n_samples * 2 * sizeof(float));
                 if (!audio) {
-                    fprintf(stderr, "[WAV] OOM allocating PCM24 buffer for %d samples\n", n_samples);
+                    ov_log(OV_LOG_ERROR, "[WAV] OOM allocating PCM24 buffer for %d samples", n_samples);
                     return NULL;
                 }
                 const uint8_t * p = data + pos;
@@ -136,7 +138,7 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
                 n_samples = (int) (data_bytes / ((size_t) n_channels * 4));
                 audio     = (float *) malloc((size_t) n_samples * 2 * sizeof(float));
                 if (!audio) {
-                    fprintf(stderr, "[WAV] OOM allocating F32 buffer for %d samples\n", n_samples);
+                    ov_log(OV_LOG_ERROR, "[WAV] OOM allocating F32 buffer for %d samples", n_samples);
                     return NULL;
                 }
                 const uint8_t * p = data + pos;
@@ -155,8 +157,8 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
                     }
                 }
             } else {
-                fprintf(stderr, "[WAV] Unsupported: format=%u bits=%d subformat=%u\n", (unsigned) audio_format,
-                        bits_per_sample, (unsigned) extensible_subformat);
+                ov_log(OV_LOG_ERROR, "[WAV] Unsupported: format=%u bits=%d subformat=%u", (unsigned) audio_format,
+                       bits_per_sample, (unsigned) extensible_subformat);
                 return NULL;
             }
 
@@ -171,13 +173,13 @@ static float * read_wav_buf(const uint8_t * data, size_t size, int * T_audio, in
     }
 
     if (!audio) {
-        fprintf(stderr, "[WAV] No audio data in buffer\n");
+        ov_log(OV_LOG_ERROR, "[WAV] No audio data in buffer");
         return NULL;
     }
 
     *T_audio = n_samples;
     *sr      = sample_rate;
-    fprintf(stderr, "[WAV] Read buffer: %d samples, %d Hz, %d ch, %d bit\n", n_samples, sample_rate, n_channels,
-            bits_per_sample);
+    ov_log(OV_LOG_INFO, "[WAV] Read buffer: %d samples, %d Hz, %d ch, %d bit", n_samples, sample_rate, n_channels,
+           bits_per_sample);
     return audio;
 }

@@ -170,6 +170,10 @@ func (class *Runtime) resourceAdmit(call goja.FunctionCall) goja.Value {
 
 // resourceRead 按句柄取回资源内容（带锚点时按锚点定位整段）
 // 返回值: [result, error]
+//
+// 图片资源永不回原图：命中 KindImage 时改走视觉读取管线（VisionCopy —— 与
+// /file/read-multimodal/ 同一套缩放 + 叠印实现），返回的是 ≤ vision_max_side 的副本。
+// 副本生成失败时直接报错，**不降级回原图字节**：宁可这条读取失败，也不让原图进入思维链。
 func (class *Runtime) resourceRead(call goja.FunctionCall) goja.Value {
 	handle := call.Argument(0).String()
 	maxBytes := int(call.Argument(1).ToInteger())
@@ -179,6 +183,20 @@ func (class *Runtime) resourceRead(call goja.FunctionCall) goja.Value {
 	result, err := module.ResourceRead(handle, maxBytes)
 	if err != nil {
 		return class.runtime.ToValue([]any{nil, err})
+	}
+	// 图片：用视觉副本替换原图字节（唯一的"图片出站"入口，见 docs/adr/0008）
+	if result.Kind == module.KindImage && !result.Lost && result.BlobPath != "" {
+		data, mime, width, height, visionErr := VisionCopy(result.BlobPath, result.Handle, 0)
+		if visionErr != nil {
+			return class.runtime.ToValue([]any{nil, fmt.Errorf("图片视觉副本生成失败（禁止回退原图）: %w", visionErr)})
+		}
+		// 副本已由管线按 vision_max_side 约束，体积天然有界：不再套用 maxBytes 截断，
+		// 半张 JPEG 既不可解码也无法理解，截断只会制造新的故障面
+		result.Base64 = base64.StdEncoding.EncodeToString(data)
+		result.MIME = mime
+		result.Truncated = false
+		result.Width = width
+		result.Height = height
 	}
 	return class.runtime.ToValue([]any{toJS(result), nil})
 }

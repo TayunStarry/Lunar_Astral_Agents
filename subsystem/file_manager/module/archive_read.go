@@ -29,9 +29,15 @@ type ReadResult struct {
 	// Content 文本内容（文档 / 文本类资源；携带锚点时为其行区间）
 	Content string `json:"content,omitempty"`
 	// Base64 二进制内容（图片 / 视频 / 音频本体）
+	//
+	// 图片走思维链时**不是**原图：lunarloop 的资源取回适配器会把 KindImage 换成
+	// 视觉读取副本（≤ vision_max_side）再填这里，原图字节不出 Go 侧（见 docs/adr/0008）
 	Base64 string `json:"base64,omitempty"`
 	// MIME 规范 MIME
 	MIME string `json:"mime"`
+	// Width / Height 图片副本的像素尺寸（仅图片取回时填写，供调用方取比例基准）
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
 	// BlobPath 内容仓库路径（相对 LocalDir，可交给图片处理管线取回）
 	BlobPath string `json:"blob_path"`
 	// Lost blob 已丢失：句柄有效但本体不可取，调用方应降级为描述

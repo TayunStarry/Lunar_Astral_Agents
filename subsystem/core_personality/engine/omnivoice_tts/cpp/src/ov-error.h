@@ -28,9 +28,20 @@
 
 #include <cstdarg>
 
+// Format attribute archetype: gnu_printf (not printf).
+//
+// Why: MinGW declares the stdio family with format(gnu_printf, ...), so call
+// sites inherited that checking while they used fprintf directly. Under the
+// ISO "printf" archetype GCC rejects the C99 `z` length modifier
+// ("unknown conversion type character 'z' in format"), which cascades into
+// bogus "too many arguments for format" / wrong-conversion warnings at every
+// site that prints a size_t (the migrate of the fprintf call sites onto
+// ov_log surfaced them all at once). Same archetype as the CRT => the checks
+// match what the runtime actually accepts.
+
 void ov_set_error(const char * fmt, ...)
 #if defined(__GNUC__) || defined(__clang__)
-    __attribute__((format(printf, 1, 2)))
+    __attribute__((format(gnu_printf, 1, 2)))
 #endif
     ;
 
@@ -43,7 +54,7 @@ void ov_set_error_v(const char * fmt, va_list ap);
 // sane recovery.
 [[noreturn]] void ov_throw(const char * fmt, ...)
 #if defined(__GNUC__) || defined(__clang__)
-    __attribute__((format(printf, 1, 2)))
+    __attribute__((format(gnu_printf, 1, 2)))
 #endif
     ;
 
@@ -54,6 +65,6 @@ void ov_set_error_v(const char * fmt, va_list ap);
 // semantics; messages longer than the internal buffer are truncated.
 void ov_log(enum ov_log_level level, const char * fmt, ...)
 #if defined(__GNUC__) || defined(__clang__)
-    __attribute__((format(printf, 2, 3)))
+    __attribute__((format(gnu_printf, 2, 3)))
 #endif
     ;

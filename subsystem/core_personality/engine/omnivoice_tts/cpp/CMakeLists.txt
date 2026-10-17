@@ -4,6 +4,24 @@ project(omnivoice-ggml LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Inline include flags instead of an @response file so every target shows up in
+# the generated compile_commands.json with its real -I paths.
+#
+# Why: Windows makefiles default to a response file for includes, and CMake does
+# not export commands that hide their flags that way. The engine's own sources
+# (src/omnivoice.cpp, src/pipeline-*.cpp) were therefore absent from the
+# compile database, so the editor toolchain (clangd) parsed src/ with no include
+# paths at all and reported hundreds of phantom "file not found" /
+# unknown-type diagnostics for a directory that compiles cleanly.
+set(CMAKE_C_USE_RESPONSE_FILE_FOR_INCLUDES 0)
+set(CMAKE_CXX_USE_RESPONSE_FILE_FOR_INCLUDES 0)
+
+# Keep the compile database fresh on every configure (editor toolchain reads
+# build/compile_commands.json to resolve includes and format attributes).
+# Without this the file only reflects whichever configure last enabled it, and
+# a stale database silently degrades into flag-less parsing again.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # version.h: embed git commit hash into all binaries.
 # runs on every build, only rewrites if the hash changed.
 set(VERSION_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/version.h")

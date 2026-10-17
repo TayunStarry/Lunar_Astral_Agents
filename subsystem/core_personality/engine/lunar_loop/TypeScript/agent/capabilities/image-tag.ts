@@ -63,11 +63,15 @@ export function handleFromVisionURL(url: unknown): string {
  * 同一变换管线直出 data URI（供无法回取本机 URL 的云端多模态服务）。
  * 入库按内容哈希去重：同一张图反复发送复用同一句柄。
  *
+ * 入库失败时该图片项被**替换为文本占位**，绝不原样放行：原图一旦进入多模态窗口，
+ * 视觉 token 会撑爆 llama-server 的非因果注意力批（进程断言退出），
+ * 而且那正是 docs/adr/0008 明令禁止的「原图流转」。
+ *
  * @param message 目标消息（内容为数组时原位修改；纯文本消息跳过）
  */
 export function attachImageTags(message: PostMessage): void {
     if (!message || typeof message.content === 'string' || !Array.isArray(message.content)) return;
-    const content = message.content as Array<{ type?: string; image_url?: { url?: string } }>;
+    const content = message.content as Array<{ type?: string; image_url?: { url?: string }; text?: string }>;
     for (const item of content) {
         if (item?.type !== 'image_url') continue;
         const source = item.image_url?.url || '';
@@ -76,12 +80,18 @@ export function attachImageTags(message: PostMessage): void {
         // 它们由 LiteImageFile 以「句柄 + 理解文本」原位置换，不进入多模态窗口
         const lower = source.toLowerCase();
         if (lower.startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(ext => lower.endsWith(ext))) continue;
+        // 已经是视觉读取端点形态：不要再入库一次（避免把副本当原图重复登记）
+        if (lower.includes(VISION_READ_PATH)) continue;
         // 入库（内容哈希去重在 Go 侧完成，JS 侧不触碰图片二进制）。
         // 建议名按来源推断真实扩展名：blob 落盘沿用 <内容哈希>.<扩展> 命名，
         // 硬编码 image.png 会让前端已按 <哈希>.jpg 落盘的同内容图片被再写一份 .png
         const admitted = admitImageDataURI(source, `image${guessImageExt(source)}`);
         if (!admitted?.handle || !admitted.blob_path) {
-            console.error('[图片标签] 入库失败，该图片以原始来源流转（无句柄）:', source.substring(0, 60));
+            // 阻断降级：宁可少一张图，也不让原图进入思维链
+            console.error('[图片标签] 入库失败，该图片已从思维链剔除（禁止原图流转）:', source.substring(0, 60));
+            item.type = 'text';
+            item.text = '[一张图片入库失败，已忽略]';
+            delete item.image_url;
             continue;
         }
         // 来源改写为视觉读取形态：约束尺寸 + 句柄叠印，模型看到的每张图都自带身份
@@ -90,21 +100,25 @@ export function attachImageTags(message: PostMessage): void {
 }
 
 /**
- * 生成图片的思维链消费引用（url / base64 双形态，由 agent.image_input 配置决定）
+ * 生成图片的思维链消费引用（两种形态，均由视觉读取管线产出）
+ *
+ * - url（默认）：`/file/read-multimodal/` 端点 URL，服务端按需缩放、叠印句柄并缓存；
+ * - base64：`visionRead` 走同一套 VisionCopy 管线直出 data URI，供无法回取本机 URL 的云端模型。
+ *
+ * 两种形态都是 ≤ vision_max_side 的副本，模型永远拿不到原图，也没有自己缩放的能力。
  *
  * @param handle 规范句柄（@I.00x）
  * @param blobPath 源图相对 LocalDir 路径（内容仓库位置）
- * @returns 视觉读取端点 URL 或 data URI；失败退化为空串
+ * @returns 视觉读取端点 URL / 视觉副本 data URI；无法构造时返回空串
  */
 export function visionReference(handle: string, blobPath: string): string {
     try {
         if (GlobalConfig.ImageInputMode === 'base64') {
-            // base64 形态：同一变换管线直出（缩放缓存命中时秒回）
+            // 云端模型：同一变换管线直出 data URI（缩放缓存命中时秒回）
             const [dataURI, error] = visionRead(blobPath, handle);
             if (!error && dataURI) return dataURI;
             console.error('[图片标签] 视觉读取失败，退化为端点 URL:', error?.message ?? String(error));
         }
-        // url 形态（默认）：端点按需缩放并叠印句柄，tag 参数同时作为降级时的句柄来源
         return `${url()[0]}${VISION_READ_PATH}${blobPath}?tag=${encodeURIComponent(handle)}`;
     }
     catch (error) {

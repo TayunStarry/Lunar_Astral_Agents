@@ -3,6 +3,7 @@ import { registerMediaRoles } from '../capabilities/media';
 import { registerDescribeRole, registerPerceiveRole } from '../capabilities/describe';
 import { registerAgentTargets } from '../../tool/agent-control';
 import { registerDumpRoles } from '../data-dump';
+import { registerRecoveryRoles, snapshotAgentContext, restoreAgentContext } from '../recovery';
 import { PainterRole } from './painter';
 import { MusicianRole } from './musician';
 import { DialogueRole } from './dialogue';
@@ -47,6 +48,8 @@ registerDumpRoles({
 });
 /** 追加 LTPX 聚合工具的使用要求（静态段落，工具名与琉璃侧一致） */
 dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
+/** 向引擎重载的上下文抢救模块登记"月华主上下文"归属（重载后据此恢复对话历史） */
+registerRecoveryRoles({ dialogue: dialogueRole });
 
 /**
  * 把角色实例集合挂到宿主可见的全局（UMD 工厂的 root）。
@@ -54,6 +57,9 @@ dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
  * 用途：宿主（Go 侧检修工具 / 离线验证脚本）需要按名取用角色实例读取上下文；
  * 此前 UMD 工厂只返回 api 而从不写 root，宿主侧没有任何内省入口。
  * 挂载本身无副作用（仅一次属性赋值），不影响智能体运行。
+ *
+ * 其中 snapshotContext / restoreContext 是**引擎重载**的上下文抢救入口：
+ * 宿主在关闭旧 goja 运行时之前取快照、启动新运行时之后回灌。
  */
 export const roleInstances = {
     dialogue: dialogueRole,
@@ -65,7 +71,11 @@ export const roleInstances = {
 };
 try {
     const host = (globalThis as unknown as { agentSystem?: Record<string, unknown> });
-    host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, { randomDefaultMessage });
+    host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, {
+        randomDefaultMessage,
+        snapshotContext: snapshotAgentContext,
+        restoreContext: restoreAgentContext,
+    });
 }
 catch (e) {
     console.warn('[角色] 宿主全局挂载失败（不影响运行）:', e);

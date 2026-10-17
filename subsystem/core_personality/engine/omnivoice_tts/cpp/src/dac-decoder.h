@@ -256,7 +256,7 @@ static bool dac_load(DACDecoder * d, const GGUFModel & gf, ggml_backend_t backen
     // Phase 2: allocate backend buffer for all tensors at once
     d->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!d->weight_buf) {
-        fprintf(stderr, "[DAC] FATAL: failed to allocate weight buffer\n");
+        ov_log(OV_LOG_ERROR, "[DAC] FATAL: failed to allocate weight buffer");
         return false;
     }
     ggml_backend_buffer_set_usage(d->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -288,8 +288,8 @@ static bool dac_load(DACDecoder * d, const GGUFModel & gf, ggml_backend_t backen
     gf_load_conv_f16(d->c2w, gf, "acoustic_decoder.conv2.weight");
     dac_load_bias_f32(d->c2b, gf, "acoustic_decoder.conv2.bias");
 
-    fprintf(stderr, "[DAC] Loaded: 5 blocks, upsample %dx (8*5*4*2*3), 24 kHz mono out, weights %.1f MB\n",
-            8 * 5 * 4 * 2 * 3, (float) ggml_backend_buffer_get_size(d->weight_buf) / (1024 * 1024));
+    ov_log(OV_LOG_INFO, "[DAC] Loaded: 5 blocks, upsample %dx (8*5*4*2*3), 24 kHz mono out, weights %.1f MB",
+           8 * 5 * 4 * 2 * 3, (float) ggml_backend_buffer_get_size(d->weight_buf) / (1024 * 1024));
     return true;
 }
 

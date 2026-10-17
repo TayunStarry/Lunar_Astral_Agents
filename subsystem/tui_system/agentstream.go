@@ -30,16 +30,14 @@ func StreamDelta(role string, kind StreamKind, text string) {
 	streamMu.Lock()
 	defer streamMu.Unlock()
 
-	turn := currentTurn
-	if turn == nil {
-		turn = &AgentTurn{Role: role, Active: true, StartedAt: time.Now()}
-		currentTurn = turn
-	}
-	switch kind {
-	case KindThink:
-		turn.Thinking = appendTurnText(turn.Thinking, text)
-	case KindContent:
-		turn.Content = appendTurnText(turn.Content, text)
+	turn := attachTurnLocked(role)
+	if turn != nil {
+		switch kind {
+		case KindThink:
+			turn.Thinking = appendTurnText(turn.Thinking, text)
+		case KindContent:
+			turn.Content = appendTurnText(turn.Content, text)
+		}
 	}
 	emitStream(StreamEvent{Role: role, Kind: kind, Text: text})
 }
@@ -49,17 +47,30 @@ func StreamTool(role, name, args string) {
 	streamMu.Lock()
 	defer streamMu.Unlock()
 
-	turn := currentTurn
-	if turn == nil {
-		turn = &AgentTurn{Role: role, Active: true, StartedAt: time.Now()}
-		currentTurn = turn
-	}
 	entry := name
 	if trimmed := summarizeArgs(args); trimmed != "" {
 		entry = name + " " + trimmed
 	}
-	turn.Tools = append(turn.Tools, entry)
+	if turn := attachTurnLocked(role); turn != nil {
+		turn.Tools = append(turn.Tools, entry)
+	}
 	emitStream(StreamEvent{Role: role, Kind: KindTool, Text: entry})
+}
+
+// attachTurnLocked 把增量/工具挂到合适的轮次上（需持有 streamMu）：
+// 有进行中的轮次就挂它；否则挂到最近归档的一轮；都没有时返回 nil（只发事件，不造轮）。
+//
+// 为什么不在 currentTurn 为空时新建轮次：历史上这样造出来的「幽灵轮次」没有结束事件，
+// 实况屏会把它当成永远进行中的一轮（界面上就是一条工具调用挂着"进行中"不下来），
+// 而当轮的思考/正文却留在了上一轮里，导出（transcript）也会多出若干只有工具的空轮次。
+func attachTurnLocked(role string) *AgentTurn {
+	if currentTurn != nil {
+		return currentTurn
+	}
+	if n := len(turnHistory); n > 0 {
+		return turnHistory[n-1]
+	}
+	return nil
 }
 
 // StreamToolResult 记录工具返回摘要

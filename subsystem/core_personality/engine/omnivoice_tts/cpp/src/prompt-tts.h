@@ -16,6 +16,7 @@
 #include "bpe.h"
 #include "lang-map.h"
 #include "omnivoice-llm.h"
+#include "ov-error.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -224,11 +225,11 @@ static bool prompt_tts_build(PromptTTS *          out,
                              const int32_t *      ref_audio_tokens,
                              int                  ref_T) {
     if (num_target_tokens <= 0) {
-        fprintf(stderr, "[Prompt] FATAL: num_target_tokens must be positive (got %d)\n", num_target_tokens);
+        ov_log(OV_LOG_ERROR, "[Prompt] FATAL: num_target_tokens must be positive (got %d)", num_target_tokens);
         return false;
     }
     if (ref_audio_tokens != NULL && ref_T <= 0) {
-        fprintf(stderr, "[Prompt] FATAL: ref_audio_tokens != NULL requires ref_T > 0 (got %d)\n", ref_T);
+        ov_log(OV_LOG_ERROR, "[Prompt] FATAL: ref_audio_tokens != NULL requires ref_T > 0 (got %d)", ref_T);
         return false;
     }
     *out         = {};
@@ -342,7 +343,7 @@ static bool prompt_tts_build(PromptTTS *          out,
         attn_at(1, sq, sq) = 1;
     }
 
-    fprintf(stderr, "[Prompt] Built: B'=%d K=%d S=%d N1=%d N2=%d Sref=%d Stgt=%d c_len=%d u_len=%d denoise=%d\n",
-            out->B_prime, K, out->S_max, N1, N2, Sref, Stgt, c_len, u_len, (int) (denoise && Sref > 0));
+    ov_log(OV_LOG_INFO, "[Prompt] Built: B'=%d K=%d S=%d N1=%d N2=%d Sref=%d Stgt=%d c_len=%d u_len=%d denoise=%d",
+           out->B_prime, K, out->S_max, N1, N2, Sref, Stgt, c_len, u_len, (int) (denoise && Sref > 0));
     return true;
 }

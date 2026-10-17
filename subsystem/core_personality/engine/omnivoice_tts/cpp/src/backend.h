@@ -66,10 +66,24 @@ static ggml_backend_t cpu_backend_new(int n_threads) {
 // Each call returns a fresh backend pair with its own memory pool.
 // Returns a BackendPair with .backend == NULL when initialisation fails;
 // the caller must check this before passing it to any pipeline_*_load.
+// Map a ggml log level onto the omnivoice vocabulary so bridged lines carry
+// the same severity as native ov_log call sites.
+static enum ov_log_level ov_ggml_log_level_map(enum ggml_log_level level) {
+    switch (level) {
+        case GGML_LOG_LEVEL_ERROR:
+            return OV_LOG_ERROR;
+        case GGML_LOG_LEVEL_WARN:
+            return OV_LOG_WARN;
+        case GGML_LOG_LEVEL_DEBUG:
+            return OV_LOG_DEBUG;
+        default:
+            return OV_LOG_INFO;
+    }
+}
+
 // Collapse exact consecutive duplicate ggml log lines and report the total
 // count when the run ends (tames the CUDA graph capture "reused" flood).
 static void ov_ggml_log(enum ggml_log_level level, const char * text, void * user_data) {
-    (void) level;
     (void) user_data;
     static char last[256] = { 0 };
     static int  count     = 0;
@@ -80,10 +94,17 @@ static void ov_ggml_log(enum ggml_log_level level, const char * text, void * use
     }
 
     if (count > 1) {
-        fprintf(stderr, "[Dedup] Previous line repeated %d times total\n", count);
+        ov_log(OV_LOG_INFO, "[Dedup] Previous line repeated %d times total", count);
     }
 
-    fputs(text, stderr);
+    // ggml lines carry their own trailing newline; strip it so the ov_log
+    // sink does not append a second one.
+    std::string line(text);
+    while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
+        line.pop_back();
+    }
+    ov_log(ov_ggml_log_level_map(level), "%s", line.c_str());
+
     strncpy(last, text, sizeof(last) - 1);
     last[sizeof(last) - 1] = 0;
     count                  = 1;

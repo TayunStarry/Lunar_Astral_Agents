@@ -1,8 +1,11 @@
 package lunarloop
 
 import (
+	"regexp"
 	"strings"
 	"testing"
+
+	"CorePersonality/prompts"
 )
 
 // agentSystem.js 必须被内嵌且非空。
@@ -18,6 +21,47 @@ func TestAgentSystemBundleIsEmbedded(t *testing.T) {
 	for _, marker := range []string{"fileView", "prompts/"} {
 		if !strings.Contains(string(agentSystemJS), marker) {
 			t.Fatalf("内嵌的 agentSystem.js 缺少关键标识 %q", marker)
+		}
+	}
+}
+
+// 脚本里引用的**每一个**提示词文件都必须能被 prompts 包取到。
+//
+// 为什么值得单独钉住：绘制者/对话者等角色在**字段初始化**时就读提示词
+// （`fileView('prompts/xxx.md')[0]`）。少一个文件不会编译失败，也不会在启动时报错，
+// 而是在构造该角色的那一刻抛异常——表现为「某个工具/某个角色整体消失」，
+// 排查要从 JS 堆栈一路倒回到内嵌资源，成本极高。
+// 这条用例把「TS 里写了哪个文件名」与「实际内嵌了哪些文件」直接对齐。
+func TestBundlePromptReferencesAreEmbedded(t *testing.T) {
+	re := regexp.MustCompile(`prompts/([A-Za-z0-9_\-]+\.md)`)
+	matches := re.FindAllStringSubmatch(string(agentSystemJS), -1)
+	if len(matches) == 0 {
+		t.Fatal("agentSystem.js 里没有引用任何 prompts/*.md：提示词很可能被改成硬编码，或打包产物异常")
+	}
+	seen := map[string]bool{}
+	for _, m := range matches {
+		name := m[1]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		data, err := prompts.Read(name)
+		if err != nil {
+			t.Fatalf("脚本引用了 prompts/%s，但内嵌资源里取不到: %v", name, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("脚本引用了 prompts/%s，但内嵌内容为空", name)
+		}
+	}
+	// 角色外观模板与两人份的人设都在其中：漏掉说明打包时引用了不存在的文件
+	for _, must := range []string{
+		"selfAppearanceFull.md", "selfAppearanceChibi.md",
+		"crystalAppearanceFull.md", "crystalAppearanceChibi.md",
+		"portraitBaseFemale.md", "portraitBaseMale.md",
+		"portraitAppearanceFull.md", "portraitAppearanceChibi.md",
+	} {
+		if !seen[must] {
+			t.Fatalf("脚本未引用 %s（立绘工具依赖它）", must)
 		}
 	}
 }

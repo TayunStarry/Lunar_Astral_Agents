@@ -1,12 +1,12 @@
 import { ToolCall } from '../../config/tool';
 import { GlobalConfig } from '../../config/global';
 import { RandomFloor } from '../../tool/math';
-import { GenerateImageParams, DiffusionGenerationParams, ImageToImageParams, SelfPortraitParams, GroupPhotoParams, ImageTagParams, DimensionPlan } from '../../config/image';
+import { GenerateImageParams, DiffusionGenerationParams, ImageToImageParams, PortraitParams, GroupPhotoParams, ImageTagParams, DimensionPlan } from '../../config/image';
 import { ToolCallItem } from '../../config/model';
 import { CreativeRoleBase } from '../base/creative';
 import { interactEvent } from '../capabilities/ltp-event';
-import { resolveImageRef, sanitizeImageDesc } from '../capabilities/image-tag';
-import { listResources, readResource } from '../capabilities/resource';
+import { attachImageTags, resolveImageRef, sanitizeImageDesc, visionReference } from '../capabilities/image-tag';
+import { listResources } from '../capabilities/resource';
 import type { PostMessage } from '../../config/model';
 
 // ==== 画面比例与尺寸策略 ====
@@ -173,6 +173,10 @@ interface PaintingDetail {
 	toolName: string;
 	/** 正向提示词摘要 */
 	promptSummary: string;
+	/** 立绘角色（portrait 专用：月华 / 琉璃 / 其他） */
+	character?: string;
+	/** 是否 Q 版（portrait 专用） */
+	chibi?: boolean;
 	/** 表情（人物像专用） */
 	expression?: string;
 	/** 姿势（人物像专用） */
@@ -224,32 +228,51 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		'双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
 	]
 	/** 月华基础外观（发型/瞳色/发饰等比例无关特征，三套人设模板共用） */
-	private readonly appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0]
+	private readonly appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0].trim()
 	/** Q版（二头身）自我外观模板 */
-	private readonly chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0]
+	private readonly chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0].trim()
 	/** 全尺寸（全身立绘）自我外观模板 */
-	private readonly fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0]
+	private readonly fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0].trim()
 	/** 与他人合照外观模板 */
-	private readonly groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0]
+	private readonly groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0].trim()
 	/** 琉璃固定形象（合照对象为琉璃时注入的内置外观描述，保证形象一致） */
-	private readonly crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0]
+	private readonly crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0].trim()
+	/** 琉璃基础外观（发型/瞳色/发饰等比例无关特征，全尺寸与Q版立绘共用） */
+	private readonly crystalBasePrompt = fileView('prompts/crystalAppearanceBase.md')[0].trim()
+	/** 琉璃全尺寸立绘外观模板 */
+	private readonly crystalFullAppearancePrompt = fileView('prompts/crystalAppearanceFull.md')[0].trim()
+	/** 琉璃Q版立绘外观模板 */
+	private readonly crystalChibiAppearancePrompt = fileView('prompts/crystalAppearanceChibi.md')[0].trim()
+	/** 通用角色底板（女 / 男）：绘制月华与琉璃之外的人物，画风与两位自家人保持一致 */
+	private readonly portraitBaseFemalePrompt = fileView('prompts/portraitBaseFemale.md')[0].trim()
+	private readonly portraitBaseMalePrompt = fileView('prompts/portraitBaseMale.md')[0].trim()
+	/** 通用立绘模板（男 / 女共用，{gender} 由底板决定），全尺寸与Q版各一套 */
+	private readonly genericFullAppearancePrompt = fileView('prompts/portraitAppearanceFull.md')[0].trim()
+	private readonly genericChibiAppearancePrompt = fileView('prompts/portraitAppearanceChibi.md')[0].trim()
 	/** Q版默认服装提示词（黑色蕾丝洛丽塔连衣裙，黑色蕾丝袖口，胸前黑色蕾丝蝴蝶结配红宝石，无白色装饰） */
 	private readonly defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀黑色蕾丝荷叶边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边，无任何白色蕾丝或白色装饰'
 	/** 全尺寸默认服装提示词（黑色哥特萝莉风长裙，黑色蕾丝立领与袖口，胸前红宝石蝴蝶结饰扣，无白色装饰） */
 	private readonly defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰'
-	/** 默认负面提示词（人物像与图生图共用） */
+	/** 琉璃全尺寸默认服装提示词（白+冰蓝星星主题：星纹吊带裙、外披宽松白外套、白袜白乐福鞋） */
+	private readonly crystalDefaultOutfitFullPrompt = '穿着纯白色吊带连衣裙，胸前与裙身点缀淡蓝色星星图案，领口系浅蓝色缎带蝴蝶结并别着星星饰针，外披一件宽松的白色棉服外套且外套自然滑落到手臂上露出肩膀，白色短袜与白色乐福鞋'
+	/** 琉璃Q版默认服装提示词（同一主题的Q版简化：保留星纹吊带裙与缎带蝴蝶结，外套更短） */
+	private readonly crystalDefaultOutfitChibiPrompt = '穿着纯白色吊带连衣裙，胸前点缀淡蓝色星星图案与星星饰针，领口系浅蓝色缎带蝴蝶结，外披宽松的白色短款外套，白色短袜与白色小皮鞋'
+	/** 默认负面提示词（立绘与图生图共用） */
 	private readonly defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理'
 	/**
 	 * 本次任务的参考图（对话者经 dispatch_painter 的 reference_tag 指定，宿主按标签取自资源目录数据库）
 	 *
 	 * 任务级状态：每次 createCreativeWork 开工时清空，任务内有效。
 	 * referenceImage 为参考图在内容仓库中的相对 LocalDir 路径（即归档 blob，直接用作图生图基座），
-	 * 参考图本体随任务消息以多模态形式进入自己的历史（见 buildTaskContent）。
+	 * 但**它只交给扩散引擎**：模型自己看到的参考图是 referenceVision（视觉读取副本，
+	 * ≤ vision_max_side），原图字节永不进入思维链（见 docs/adr/0008）。
 	 */
 	private referenceImage: string = '';
 	/** 参考图的句柄（@I.00x，与资源目录数据库中的记录对应；未附带参考图时为空） */
 	private referenceHandle: string = '';
-	/** 参考图的原始像素尺寸（图生图按此比例推导输出尺寸；未附带参考图时为 null） */
+	/** 参考图视觉副本（端点 URL 或 data URI，由 agent.image_input 决定）：唯一可以放进 image_url 的参考图形态 */
+	private referenceVision: string = '';
+	/** 参考图比例基准（取自视觉副本，与原图等比；图生图按此推导输出尺寸） */
 	private referenceSize: { width: number; height: number } | null = null;
 	/** 最近一次生成作品的本地路径（绝对路径，供超分工具对最新作品重建） */
 	private lastResultPath: string = '';
@@ -259,7 +282,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			type: "function",
 			function: {
 				name: "diffusion_generation",
-				description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若任务消息附带参考图（图生图任务），请改用 image_to_image",
+				description: "根据文本描述进行文生图。仅适用于风景、物品、场景、氛围图等与人物形象无关的创作；严禁用于绘制任何人物形象(月华、琉璃或其他人物都必须调用 portrait)。",
 				parameters: {
 					type: "object",
 					properties: {
@@ -274,7 +297,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						},
 						"steps": {
 							type: "number",
-							description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+							description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
 						},
 						"negative_prompt": {
 							type: "string",
@@ -282,11 +305,11 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						},
 						"cfg_scale": {
 							type: "number",
-							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+							description: "提示词权重调节参数(0~2),默认值为 1.0"
 						},
 						"super_resolution": {
 							type: "boolean",
-							description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+							description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
 						}
 					},
 					required: [
@@ -299,7 +322,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			type: "function",
 			function: {
 				name: "image_to_image",
-				description: "基于本次任务附带的参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。输出尺寸自动按参考图比例推导(短边不低于 1024px),无需也无法另行指定比例。任务消息未附带参考图时不可调用,请改用 diffusion_generation 进行文生图",
+				description: "基于参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。无参考图时不可调用:人物形象改用 portrait,非人物改用 diffusion_generation,或说明需要用户提供参考图片。",
 				parameters: {
 					type: "object",
 					properties: {
@@ -313,19 +336,19 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						},
 						"steps": {
 							type: "number",
-							description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+							description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
 						},
 						"negative_prompt": {
 							type: "string",
-							description: "负面提示文本,用于排除图像中不希望出现的元素（换场景时点名去掉旧场景元素,如 beach, ocean, water, sea）"
+							description: "负面提示文本,用于排除图像中不希望出现的元素(换场景时点名去掉旧场景元素,如 beach, ocean, water, sea)"
 						},
 						"cfg_scale": {
 							type: "number",
-							description: "提示词引导系数(0~2),默认 1.0。图生图建议 2.0~3.0:起点是参考图加噪后的潜变量、天然偏向原构图,cfg 太低时提示词拉不动画面。系统对图生图设有 1.5 下限与 2.0 缺省"
+							description: "提示词引导系数(0~2),默认 1.0。当前模型为引导蒸馏模型,图生图同样保持 1.0;调高会发灰、过曝、塑料感。需要改得更多时调 strength,不要调 cfg"
 						},
 						"super_resolution": {
 							type: "boolean",
-							description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+							description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
 						}
 					},
 					required: [
@@ -337,11 +360,24 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		{
 			type: "function",
 			function: {
-				name: "self_portrait",
-				description: "生成月华的全尺寸自画像（全身立绘,标准少女头身比）。凡是要求绘制月华、你自己、\"我\"的形象,且未特别要求Q版时,都必须且只能调用此函数,禁止调用 diffusion_generation",
+				name: "portrait",
+				description: "生成指定角色的立绘。凡是要求绘制月华、琉璃或其他人物的形象时,都必须且只能调用本函数,禁止用 diffusion_generation 或 image_to_image 代替",
 				parameters: {
 					type: "object",
 					properties: {
+						"character": {
+							type: "string",
+							enum: ["月华", "琉璃", "通用-女", "通用-男"],
+							description: "月华与琉璃有内置人设,只需给出表情/姿势/环境;通用-女 / 通用-男,必须用 appearance 描述其外观"
+						},
+						"chibi": {
+							type: "boolean",
+							description: "是否Q版:true=二头身萌系比例(贴纸/表情包/头像),false 或不填=标准头身比的全身立绘"
+						},
+						"appearance": {
+							type: "string",
+							description: "character=通用-女 / 通用-男 时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。"
+						},
 						"expression": {
 							type: "string",
 							description: "表情提示词,描述想要展现的表情"
@@ -352,20 +388,20 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						},
 						"outfit": {
 							type: "string",
-							description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+							description: "服装提示词。不提供则用该角色的默认服装（通用角色仅在 appearance 未写服装时兜底）"
 						},
 						"environment": {
 							type: "string",
-							description: "环境提示词,描述背景环境或场景"
+							description: "环境提示词,描述背景或场景。月华偏暗色与红,琉璃偏淡蓝天空与星光"
 						},
 						"ratio": {
 							type: "string",
 							enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-							description: "画面比例预设,默认 1:1。全身立绘/坐姿建议 2:3,横构图场景建议 3:2 或 16:9。短边固定 1024px"
+							description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。短边固定 1024px"
 						},
 						"steps": {
 							type: "number",
-							description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+							description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
 						},
 						"negative_prompt": {
 							type: "string",
@@ -373,68 +409,15 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 						},
 						"cfg_scale": {
 							type: "number",
-							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+							description: "提示词引导系数(0~2),本模型为引导蒸馏,默认 1.0,不要调高"
 						},
 						"super_resolution": {
 							type: "boolean",
-							description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+							description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
 						}
 					},
 					required: [
-						"expression",
-						"posture",
-						"environment"
-					]
-				}
-			}
-		},
-		{
-			type: "function",
-			function: {
-				name: "chibi_self_portrait",
-				description: "生成月华的Q版自画像（二头身可爱比例）。当要求绘制Q版、二头身、萌系或大头娃娃风格的月华形象时调用此函数,禁止调用 diffusion_generation",
-				parameters: {
-					type: "object",
-					properties: {
-						"expression": {
-							type: "string",
-							description: "表情提示词,描述想要展现的表情"
-						},
-						"posture": {
-							type: "string",
-							description: "动作提示词,描述想要展现的姿势或动作"
-						},
-						"outfit": {
-							type: "string",
-							description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
-						},
-						"environment": {
-							type: "string",
-							description: "环境提示词,描述背景环境或场景"
-						},
-						"ratio": {
-							type: "string",
-							enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-							description: "画面比例预设,默认 1:1（Q版二头身适合方形或略宽）。短边固定 1024px"
-						},
-						"steps": {
-							type: "number",
-							description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
-						},
-						"negative_prompt": {
-							type: "string",
-							description: "负面提示文本,用于排除图像中不希望出现的元素"
-						},
-						"cfg_scale": {
-							type: "number",
-							description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
-						},
-						"super_resolution": {
-							type: "boolean",
-							description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-						}
-					},
-					required: [
+						"character",
 						"expression",
 						"posture",
 						"environment"
@@ -535,7 +518,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	]
 	/** 构造函数 */
 	public constructor() {
-		super(fileView('prompts/painterRole.md')[0]);
+		super(fileView('prompts/painterRole.md')[0].trim());
 	}
 	/**
 	 * 创作任务入口（覆写基类，接收对话者指定的参考图）
@@ -551,73 +534,54 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	public async createCreativeWork(taskDescription: string, reference?: { handle: string; source: string; desc?: string }): Promise<string> {
 		this.referenceImage = '';
 		this.referenceHandle = '';
+		this.referenceVision = '';
 		this.referenceSize = null;
 		if (reference?.source) {
 			this.referenceHandle = reference.handle || '';
 			this.referenceImage = reference.source;
-			this.referenceSize = this.loadReferenceSize(reference.source);
-			console.log(`[绘制者] 本次任务参考图: ${this.referenceHandle || '(无句柄)'} → ${reference.source}${this.referenceSize ? `（${this.referenceSize.width}x${this.referenceSize.height}）` : ''}`);
+			// 模型侧的参考图只能是视觉读取管线产物：原图（3072×4096 那种）会撑爆多模态模型的
+			// 非因果注意力批、让整个 llama-server 实例断言退出，而且违反「思维链不流转原图」。
+			// 缩放由 Go 侧视觉管线完成，这里（以及任何 JS 代码）没有缩放入口。
+			// visionRead 只用于探测副本可生成并取得比例基准；真正进入 image_url 的是视觉读取管线产物
+			// （url 形态为端点 URL，base64 形态为同一管线的 data URI）。
+			const [, visionError, visionWidth, visionHeight] = visionRead(reference.source, this.referenceHandle);
+			const visionURL = visionReference(this.referenceHandle, reference.source);
+			if (visionError || !visionURL) {
+				console.error('[绘制者] 参考图视觉副本生成失败，本次任务模型将看不到参考图:', visionError?.message ?? String(visionError ?? '无法构造视觉副本'));
+			}
+			else {
+				this.referenceVision = visionURL;
+				if (visionWidth > 0 && visionHeight > 0) this.referenceSize = { width: visionWidth, height: visionHeight };
+			}
+			console.log(`[绘制者] 本次任务参考图: ${this.referenceHandle || '(无句柄)'} → ${reference.source}${this.referenceSize ? `（视觉副本 ${this.referenceSize.width}x${this.referenceSize.height}）` : '（视觉副本生成失败）'}`);
 		}
 		return super.createCreativeWork(taskDescription);
 	}
 
 	/**
-	 * 把任务要求与参考图本体合成一条多模态任务消息送进自己的上下文（覆写基类钩子）
+	 * 把任务要求与参考图**视觉副本**合成一条多模态任务消息送进自己的上下文（覆写基类钩子）
 	 *
-	 * 对话者的要求文本 + 标签对应的图片本体 —— 绘画者拿到的就是这两样东西，
+	 * 对话者的要求文本 + 视觉读取副本 —— 绘画者拿到的就是这两样东西，
 	 * 模型在写提示词前能亲眼看到参考图（绘图是分钟级任务，看图只是秒级开销）。
+	 *
+	 * 副本由 createCreativeWork 阶段一次性解析成视觉读取管线产物（端点 URL / data URI），
+	 * 这里只做拼装：不读原图、不缩放、不降级 —— 没有副本就退回纯文本。
 	 *
 	 * @param taskDescription 对话者传来的任务描述
 	 * @returns 含参考图的内容项数组；无参考图时退化为纯文本
 	 */
 	protected buildTaskContent(taskDescription: string): PostMessage['content'] {
-		if (!this.referenceImage) return taskDescription;
-		const imageURI = this.loadReferenceDataURI();
-		if (!imageURI) {
-			console.log('[绘制者] 参考图本体读取失败，退回纯文本任务描述');
+		if (!this.referenceVision) {
+			if (this.referenceImage) console.log('[绘制者] 参考图无可用视觉副本，退回纯文本任务描述');
 			return taskDescription;
 		}
-		console.log(`[绘制者] 参考图已附入任务上下文（${Math.round(imageURI.length / 1024)}KB）`);
+		console.log(`[绘制者] 参考图视觉副本已附入任务上下文（${Math.round(this.referenceVision.length / 1024)}KB）`);
 		return [
 			{ type: 'text', text: taskDescription },
-			{ type: 'image_url', image_url: { url: imageURI } }
+			{ type: 'image_url', image_url: { url: this.referenceVision } }
 		];
 	}
 
-	/**
-	 * 读取本次参考图本体并转成 data URI（交给多模态模型看图）
-	 *
-	 * 走 `readResource` 取 base64：二进制由 Go 侧编码，JS 侧只做字符串拼接，不碰字节。
-	 *
-	 * @returns data URI；读取失败或被截断时返回空串
-	 */
-	private loadReferenceDataURI(): string {
-		if (!this.referenceHandle) return '';
-		try {
-			const result = readResource(this.referenceHandle, 8 * 1024 * 1024);
-			// 截断过的二进制不能当图片用（半个文件解码必然失败）
-			if (!result || result.lost || result.truncated || !result.base64) return '';
-			return `data:${result.mime || 'image/png'};base64,${result.base64}`;
-		}
-		catch (error) {
-			console.error('[绘制者] 读取参考图失败:', error);
-			return '';
-		}
-	}
-
-	/** 读取参考图尺寸（相对 LocalDir 路径 → 解码取宽高，失败返回 null） */
-	private loadReferenceSize(relPath: string): { width: number; height: number } | null {
-		try {
-			const [resized, err] = resizeImage(relPath);
-			if (err || !resized || resized.length === 0) return null;
-			const size = { width: resized[0].width, height: resized[0].height };
-			return size.width > 0 && size.height > 0 ? size : null;
-		}
-		catch (error) {
-			console.error('[绘制者] 参考图尺寸读取失败:', error);
-			return null;
-		}
-	}
 	/** 当前任务的输出尺寸计划：有参考图时按参考图比例，否则用绘制者指定的比例预设 */
 	private planFor(ratio?: string): DimensionPlan {
 		const reference = this.referenceImage ? (this.referenceSize || undefined) : undefined;
@@ -636,6 +600,7 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	public resetReference(): void {
 		this.referenceImage = '';
 		this.referenceHandle = '';
+		this.referenceVision = '';
 		this.referenceSize = null;
 	}
 	/** 角色名称 */
@@ -656,12 +621,11 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		switch (funcName) {
 			case 'diffusion_generation': return this.handleDiffusionGeneration(args as DiffusionGenerationParams);
 			case 'image_to_image': return this.handleImageToImage(args as ImageToImageParams);
-			case 'self_portrait': return this.handleSelfPortrait(args as SelfPortraitParams);
-			case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args as SelfPortraitParams);
+			case 'portrait': return this.handlePortrait(args as PortraitParams);
 			case 'group_photo': return this.handleGroupPhoto(args as GroupPhotoParams);
 			case 'list_images': return this.handleListImages();
 			case 'upscale_image': return this.handleUpscaleImage(args as ImageTagParams);
-			default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo、list_images、upscale_image`;
+			default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、portrait、group_photo、list_images、upscale_image`;
 		}
 	}
 	/** 从工具调用中提取绘画作品详情 */
@@ -671,10 +635,13 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 				? JSON.parse(toolCall.function.arguments)
 				: toolCall.function.arguments;
 			const name = toolCall.function.name;
-			if (name === 'self_portrait' || name === 'chibi_self_portrait') {
+			if (name === 'portrait') {
+				const character = String(args.character || '通用-女');
 				paintings.push({
 					toolName: name,
-					promptSummary: name === 'self_portrait' ? '全尺寸自画像' : 'Q版自画像',
+					promptSummary: `${this.characterLabel(character)}${args.chibi === true ? 'Q版' : '全尺寸'}立绘`,
+					character: character,
+					chibi: args.chibi === true,
 					expression: args.expression || '',
 					posture: args.posture || '',
 					environment: args.environment || '',
@@ -725,8 +692,12 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		const parts: string[] = [];
 		for (let i = 0; i < paintings.length; i++) {
 			const p = paintings[i];
-			if (p.toolName === 'self_portrait' || p.toolName === 'chibi_self_portrait') {
-				let desc = p.toolName === 'self_portrait' ? '月华绘制了一幅全尺寸自画像' : '月华绘制了一幅Q版自画像';
+			if (p.toolName === 'portrait') {
+				/** 角色 → 话术：月华说「自画像」，琉璃与他人说「立绘」 */
+				let desc: string;
+				if (p.character === '月华') desc = p.chibi ? '月华绘制了一幅Q版自画像' : '月华绘制了一幅全尺寸自画像';
+				else if (p.character === '琉璃') desc = `月华为琉璃绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}立绘`;
+				else desc = `月华绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}${this.characterLabel(p.character)}立绘`;
 				if (p.expression) desc += `，展现了${p.expression}`;
 				if (p.environment) desc += `，背景是${p.environment}`;
 				parts.push(desc + '。');
@@ -747,21 +718,32 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	/**
 	 * 将基础外观、表情、服装、姿势、环境写入外观模板，得到完整提示词
 	 *
-	 * @param template 场景外观模板（Q版/全尺寸/合照）
+	 * @param template 场景外观模板（Q版/全尺寸/合照/琉璃立绘）
 	 * @param parts 占位符填充参数，缺省时使用随机表情、随机姿势与默认服装
 	 * @param defaultOutfit 该场景的默认服装提示词
+	 * @param base 该角色的基础外观（月华 / 琉璃各自一套），缺省为月华
 	 */
-	private renderAppearance(template: string, parts: AppearanceParts, defaultOutfit: string): string {
+	private renderAppearance(template: string, parts: AppearanceParts, defaultOutfit: string, base?: string, gender?: string): string {
 		const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
 		const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
 		const outfit = parts.outfit || defaultOutfit;
-		return template
-			.replace('{base}', this.appearanceBasePrompt)
+		const filled = template
+			.replace('{base}', base || this.appearanceBasePrompt)
+			.replace('{gender}', gender || '女孩')
 			.replace('{expression}', expression)
 			.replace('{outfit}', outfit)
 			.replace('{posture}', posture)
 			.replace('{companion}', parts.companion || '')
 			.replace('{environment}', parts.environment || '');
+		return this.tidyPrompt(filled);
+	}
+	/** 合并空槽位留下的连续标点（通用角色把服装写进 appearance 时，{outfit} 槽位会是空串） */
+	private tidyPrompt(text: string): string {
+		return text
+			.replace(/[，,]\s*[，,]+/g, '，')
+			.replace(/，\s*。/g, '。')
+			.replace(/\s{2,}/g, ' ')
+			.trim();
 	}
 	/** 执行图像生成并推送至前端，返回本次生成的结果描述 */
 	private paint(imageParams: GenerateImageParams, label: string): string {
@@ -786,6 +768,10 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 	 *
 	 * 绘画者能在自己的 40 条历史中看到自己画过的每一幅画（超出窗口的内容直接抛弃）。
 	 *
+	 * 作品同样必须经视觉管线入库再回取副本：扩散引擎吐出的原图（1024×1536 的 PNG，
+	 * 动辄数 MB）直接进 image_url 就是又一条"原图流转"，会撑爆多模态实例。
+	 * attachImageTags 负责入库 + 改写为视觉副本；入库失败时该项退化为文本占位。
+	 *
 	 * @param label 生成类目（如「图生图生成」「合照生成」）
 	 * @param base64 作品图片数据（data URI 或裸 base64）
 	 */
@@ -793,13 +779,15 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		if (!base64) return;
 		try {
 			const uri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-			this.writeContext({
+			const message: PostMessage = {
 				role: 'user',
 				content: [
 					{ type: 'text', text: `【${label}】这是你刚完成的作品` },
 					{ type: 'image_url', image_url: { url: uri } }
 				]
-			});
+			};
+			attachImageTags(message);
+			this.writeContext(message);
 		}
 		catch (error) {
 			console.error('[绘制者] 画作写入历史失败:', error);
@@ -831,22 +819,36 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 		}
 	}
 	/**
-	 * 图生图的提示词引导系数：绘制者未给出时用 2.0，且不低于 1.5
+	 * 图生图的提示词引导系数：缺省 1.0，可用 `lunar_config.json` 的 `diffusion.img2img_cfg` 覆盖
 	 *
-	 * 为什么图生图不能用低 cfg：`--cfg-scale` 决定提示词对去噪方向的牵引力。
-	 * 图生图的起点是参考图加噪后的潜变量，本身就强烈偏向原构图；若 cfg 过低（如 1.0），
-	 * 提示词几乎无法把画面从原构图里拉出来 —— 实测表现为「强度给到 0.7，仍然只是换个色调」。
-	 * 而文生图的起点是纯噪声，低一些也能出图，所以两边的默认值不能共用。
+	 * 为什么缺省是 1.0（此前是"1.5 下限 / 2.0 缺省"，这是错的）：
+	 * 当前基线模型 Qwen-Image 2.1 是**引导蒸馏**模型，官方与调参手册都要求 CFG=1.0
+	 * （`docs/code-wiki/12-图像生成参数策略.md`：「发灰、塑料感 → 把 CFG 压到 1.0」）。
+	 * 给 2.0~2.5 等于让它走训练时没见过的双条件残差：画面发灰、过曝、塑料感，
+	 * 这正是用户反馈「图生图质量远不如文生图」的主因之一（文生图一直是 1.0）。
 	 *
-	 * @param value 绘制者给出的值（可空）
-	 * @returns 实际使用的 cfg_scale
+	 * 图生图"改不动"的正确杠杆是 `strength` 而不是 cfg：strength 决定重绘多少步，
+	 * 0.8~0.9 时提示词本身就主导画面（见 painterRole.md 的实测表）。
+	 * 若换用非蒸馏模型（SDXL 等）才需要把 cfg 抬到 2~3，此时改配置而不是改代码。
 	 */
 	private resolveImg2ImgCfg(value: unknown): number {
-		const CFG_FLOOR = 1.5;
-		if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-			return Math.max(value, CFG_FLOOR);
+		/** cfg 的合法区间（低于 0.5 会失去提示词引导，高于 4 会烧掉画面） */
+		const CFG_MIN = 0.5;
+		const CFG_MAX = 4;
+		const clampCfg = (v: number) => Math.min(Math.max(v, CFG_MIN), CFG_MAX);
+		/** 部署级覆盖：模型是否蒸馏属于部署属性，不该由绘制者每次猜 */
+		const configured = Number(GlobalConfig.customConfig?.diffusion?.img2img_cfg);
+		if (Number.isFinite(configured) && configured > 0) {
+			const cfg = clampCfg(configured);
+			if (Math.abs(cfg - configured) > 1e-6) console.log(`[绘制者] 配置 img2img_cfg=${configured} 越界，已收进 ${cfg}`);
+			return cfg;
 		}
-		return 2.0;
+		if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+			const cfg = clampCfg(value);
+			if (cfg > 1.05) console.log(`[绘制者] 图生图 cfg=${value}：本模型为引导蒸馏，建议 1.0（过高会发灰/过曝/塑料感）`);
+			return cfg;
+		}
+		return 1.0;
 	}
 
 	/** 处理图生图生成（基于本次任务附带的参考图）：强度与步数由绘制者指定，比例随参考图 */
@@ -880,29 +882,85 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 			return `图生图生成异常: ${error}`;
 		}
 	}
-	/** 处理全尺寸自画像生成 */
-	private handleSelfPortrait(args: SelfPortraitParams): string {
-		return this.handlePortrait(args, this.fullAppearancePrompt, this.defaultOutfitFullPrompt, '自画像');
+	/** 角色枚举 → 人话（作品摘要与日志用；未识别的值一律按「角色」处理） */
+	private characterLabel(character: string | undefined): string {
+		switch (String(character ?? '').trim()) {
+			case '月华': return '月华';
+			case '琉璃': return '琉璃';
+			case '通用-男': return '男性角色';
+			case '通用-女': return '女性角色';
+			default: return '角色';
+		}
 	}
-	/** 处理Q版自画像生成 */
-	private handleChibiSelfPortrait(args: SelfPortraitParams): string {
-		return this.handlePortrait(args, this.chibiAppearancePrompt, this.defaultOutfitChibiPrompt, 'Q版自画像');
+	/**
+	 * 立绘预设：把「角色 + 是否Q版」解析成模板、底板、默认服装与缺省画幅
+	 *
+	 * 角色是**四个互斥取值**（月华 / 琉璃 / 通用-女 / 通用-男），而不是「角色 + 性别」两个参数：
+	 * 性别本身只影响通用底板的选择，做成独立参数就成了「仅当 character=其他 时才生效」的条件参数——
+	 * 函数调用 schema 无法表达条件依赖，模型只能靠描述记住它，漏填或乱填都无从校验。
+	 * 把性别折进角色枚举后：没有默认值可错、没有条件规则要记，代码也只是一张四路查表。
+	 *
+	 * 月华 / 琉璃 走内置人设（各自一套外观底板 + 全尺寸/Q版模板 + 默认服装）；
+	 * 通用-女 / 通用-男 走男女底板，并把绘制者给出的 appearance 拼进底板，
+	 * 使画风与两位自家人保持一致（同一套赛璐珞二次元模板）。
+	 */
+	private portraitPreset(args: PortraitParams): {
+		kind: string; chibi: boolean; label: string; template: string;
+		base: string; outfit: string; gender: string; defaultRatio: string;
+	} {
+		const raw = String(args.character ?? '').trim();
+		const chibi = args.chibi === true;
+		const defaultRatio = chibi ? DEFAULT_RATIO : '2:3';
+		if (raw === '月华') {
+			return {
+				kind: '月华', chibi, label: `月华${chibi ? 'Q版' : '全尺寸'}自画像`,
+				template: chibi ? this.chibiAppearancePrompt : this.fullAppearancePrompt,
+				base: this.appearanceBasePrompt,
+				outfit: chibi ? this.defaultOutfitChibiPrompt : this.defaultOutfitFullPrompt,
+				gender: '女孩', defaultRatio,
+			};
+		}
+		if (raw === '琉璃') {
+			return {
+				kind: '琉璃', chibi, label: `琉璃${chibi ? 'Q版' : '全尺寸'}立绘`,
+				template: chibi ? this.crystalChibiAppearancePrompt : this.crystalFullAppearancePrompt,
+				base: this.crystalBasePrompt,
+				outfit: chibi ? this.crystalDefaultOutfitChibiPrompt : this.crystalDefaultOutfitFullPrompt,
+				gender: '女孩', defaultRatio,
+			};
+		}
+		/** 通用角色：通用男女底板 + 绘制者给出的外观描述 */
+		const male = raw === '通用-男';
+		/** 模型若把人物名或「其他」直接填进 character（枚举未生效时），也当作外观描述保留下来 */
+		const named = raw && raw !== '通用-女' && raw !== '通用-男' && raw !== '其他' ? `名为「${raw}」的角色` : '';
+		const desc = [named, String(args.appearance ?? '').trim()].filter(t => t).join('，');
+		const base = (male ? this.portraitBaseMalePrompt : this.portraitBaseFemalePrompt) + (desc ? `，${desc}` : '');
+		if (!desc) console.log('[绘制者] 通用角色未提供 appearance：仅按通用底板绘制，人物特征会很泛');
+		return {
+			kind: male ? '通用-男' : '通用-女', chibi, label: `${chibi ? 'Q版' : '全尺寸'}${male ? '男性' : '女性'}角色立绘`,
+			template: chibi ? this.genericChibiAppearancePrompt : this.genericFullAppearancePrompt,
+			base,
+			outfit: desc ? '' : '穿着简洁得体的日常服装',
+			gender: male ? '男孩' : '女孩', defaultRatio,
+		};
 	}
-	/** 处理人物像生成（全尺寸自画像 / Q版自画像共用）：比例由绘制者选定，缺省 1:1 */
-	private handlePortrait(args: SelfPortraitParams, template: string, defaultOutfit: string, label: string): string {
+	/** 处理立绘生成（月华 / 琉璃 / 通用角色，全尺寸与Q版共用同一入口） */
+	private handlePortrait(args: PortraitParams): string {
 		try {
-			console.log(`[绘制者] -> ${label}生成`);
+			const preset = this.portraitPreset(args);
+			console.log(`[绘制者] -> ${preset.label}生成`);
+			console.log(`角色: "${args.character}" chibi=${preset.chibi}`)
 			console.log(`表情: "${args.expression}"`)
 			console.log(`姿势: "${args.posture}"`)
 			console.log(`服装: "${args.outfit}"`)
 			console.log(`环境: "${args.environment}"`)
 			console.log(`负面提示词: "${args.negative_prompt}"`)
 			console.log(`提示词引导系数: "${args.cfg_scale}"`)
-			/** 输出尺寸计划（自画像无参考图，取比例预设） */
-			const plan = resolveDimensionPlan(args.ratio);
+			/** 输出尺寸计划：立绘缺省竖版 2:3（Q版缺省 1:1），显式给 ratio 则以它为准 */
+			const plan = resolveDimensionPlan(args.ratio || preset.defaultRatio);
 			/** 迭代步数（0 表示交引擎按 sd_steps 处理） */
-			const steps = normalizeSteps(args.steps, label);
-			const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
+			const steps = normalizeSteps(args.steps, preset.label);
+			const fullPrompt = this.renderAppearance(preset.template, args, preset.outfit, preset.base, preset.gender);
 			return this.paint({
 				prompt: fullPrompt,
 				negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
@@ -911,11 +969,11 @@ export class PainterRole extends CreativeRoleBase<PaintingDetail> {
 				steps: steps,
 				cfgScale: args.cfg_scale ?? 1.0,
 				superResolution: args.super_resolution === true,
-			}, `${label}生成`);
+			}, `${preset.label}生成`);
 		}
 		catch (error) {
-			console.error(`[绘制者] ${label}处理异常:`, error);
-			return `${label}生成异常: ${error}`;
+			console.error('[绘制者] 立绘处理异常:', error);
+			return `立绘生成异常: ${error}`;
 		}
 	}
 	/** 处理合照生成（本次任务附带参考图时以合照对象照片为底图进行图生图，比例随参考图） */

@@ -54,13 +54,17 @@ func consoleIn() *os.File {
 	return nil
 }
 
-// resolveRenderTarget 决定 TUI 的渲染目标：
-// 继承的 stdout 可用就用它，否则改用新取的控制台句柄，两者都不行才回退原样
-// （此时界面不可见，由 Run 中的终端守卫给出明确提示后退出）。
+// resolveRenderTarget 决定 TUI 的渲染目标：自取的控制台句柄优先，取不到才退回继承的 stdout
+//
+// 为什么优先自取：Install 随后会把**进程级**标准流（STD_OUTPUT/STD_ERROR 句柄槽与 CRT 的
+// fd 1/2）也接到日志管道上，用于拦下进程内原生库（TTS 引擎 DLL）直写终端的诊断——那一步会
+// 关掉 CRT 表里原有的继承句柄；渲染目标若正是那个句柄，接管瞬间界面就再无输出。
+// 自取的 CONOUT$ 句柄由本进程独立持有，不参与标准流接管，因此不受影响（与上文
+// 「不要相信继承来的句柄」同一结论）。
+//
+// 两者都取不到时（服务/计划任务等无控制台环境）退回继承句柄，此时界面不可见，
+// 由 Run 中的终端守卫给出明确提示后退出。
 func resolveRenderTarget() interface{ Write([]byte) (int, error) } {
-	if isConsoleFile(os.Stdout) {
-		return os.Stdout
-	}
 	if f := consoleOut(); f != nil {
 		return f
 	}

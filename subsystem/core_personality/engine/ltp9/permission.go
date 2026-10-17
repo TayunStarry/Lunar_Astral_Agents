@@ -6,8 +6,6 @@ package StarLTP
 // 加载：引擎对当前 execute.js 重新哈希并解密，解出 allow-* 后注入对应能力；解码失败/名称非法即拒绝。
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +30,36 @@ func codeHash(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:16]), nil
+	return codeHashFromData(data), nil
+}
+
+// grantedFromKeyData 用代码哈希解开密钥密文，得到 allow-* 权限集合。
+//
+// 解码与签发的**唯一实现**：加载校验（verifyPermissions）与控制台签发（permission_sign.go
+// 的 InspectPackageAuth）共用它，避免两侧各自写一份「分割 + 去填充 + 校验权限名」的规则。
+// 返回值：
+//   - granted：解出的合法权限集合；
+//   - ok：整体解码是否成功（false = 密钥与代码不对应 / 被篡改，调用方应拒绝全部权限）；
+//   - illegal：其中非法权限名（按运行时既定语义丢弃，只作留痕）。
+func grantedFromKeyData(raw []byte, hashKey string) (map[string]bool, bool, []string) {
+	granted := map[string]bool{}
+	decoded, derr := lunardecoder.DecodeFilesWithKeyString([]lunardecoder.FileData{{Name: "perm", Data: raw}}, hashKey)
+	if derr != nil || len(decoded) != 1 {
+		return granted, false, nil
+	}
+	var illegal []string
+	for _, block := range strings.Split(string(decoded[0].Data), permSeparator) {
+		name := strings.TrimSpace(strings.TrimRight(block, permPadding))
+		if name == "" {
+			continue
+		}
+		if !permAllowed(name) {
+			illegal = append(illegal, name)
+			continue
+		}
+		granted[name] = true
+	}
+	return granted, true, illegal
 }
 
 // permAllowed 判断权限名是否为 LTP9 支持的合法权限。
@@ -60,22 +86,16 @@ func (p *plugin) verifyPermissions() map[string]bool {
 		return granted
 	}
 
-	decoded, derr := lunardecoder.DecodeFilesWithKeyString([]lunardecoder.FileData{{Name: "perm", Data: raw}}, keyStr)
-	if derr != nil || len(decoded) != 1 {
+	declared, ok, illegal := grantedFromKeyData(raw, keyStr)
+	for _, name := range illegal {
+		LoggerGeneral.Warn(ServiceName, "插件 %s 权限密钥解出非法权限名: %q", p.ID, name)
+	}
+	if !ok {
 		// 解码失败：代码与密钥不对应或密钥被篡改 → 拒绝全部权限（不退化到明文）
 		LoggerGeneral.Warn(ServiceName, "插件 %s 权限密钥解码失败，已拒绝全部权限", p.ID)
 		return granted
 	}
-	payload := string(decoded[0].Data)
-	for _, block := range strings.Split(payload, permSeparator) {
-		name := strings.TrimSpace(strings.TrimRight(block, permPadding))
-		if name == "" {
-			continue
-		}
-		if !permAllowed(name) {
-			LoggerGeneral.Warn(ServiceName, "插件 %s 权限密钥解出非法权限名: %q", p.ID, name)
-			continue
-		}
+	for name := range declared {
 		granted[name] = true
 	}
 	if len(granted) == 0 {

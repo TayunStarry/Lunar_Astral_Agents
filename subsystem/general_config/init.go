@@ -49,6 +49,10 @@ type ModelConfig struct {
 		VisionMaxSide int `json:"vision_max_side"`
 		// 视觉副本缓存池容量上限（MB），超限按最久未用淘汰，默认 512
 		VisionCacheCapMB int `json:"vision_cache_cap_mb"`
+		// 引擎自愈：应答连续失败达阈值时自动重载月华引擎（goja lunar_loop）
+		// 指针语义：未配置时保持默认（开启、阈值 2 次）
+		AutoReload         *bool `json:"auto_reload,omitempty"`
+		AutoReloadFailures *int  `json:"auto_reload_failures,omitempty"`
 	} `json:"agent"`
 	// 记忆库模型路由（独立于 agent，可单独指向其它服务）
 	Memory struct {
@@ -79,6 +83,9 @@ type ModelConfig struct {
 		SDVaeTiling      *string  `json:"sd_vae_tiling,omitempty"`
 		SDVaeTileSize    *string  `json:"sd_vae_tile_size,omitempty"`
 		SDVaeTileOverlap *float64 `json:"sd_vae_tile_overlap,omitempty"`
+		// VAE 解码后端（auto=放不进显存就整段改 CPU / gpu / cpu）与 GPU direct conv 开关
+		SDVaeBackend    *string `json:"sd_vae_backend,omitempty"`
+		SDVaeConvDirect *bool   `json:"sd_vae_conv_direct,omitempty"`
 		// 显存预算（GiB，空=自动）与采样策略（auto=交给 sd.cpp 按模型选择）
 		SDMaxVRAM        *string  `json:"sd_max_vram,omitempty"`
 		SDSampler        *string  `json:"sd_sampler,omitempty"`
@@ -316,7 +323,8 @@ func applyConfig(parameter *ModelConfig) []string {
 		*VideoInputMode = "file"
 	}
 	// ==== 静态图思维链形态（agent.image_input / agent.vision_max_side） ====
-	// 仅接受 url / base64，未配置或取值非法时保持默认 url（视觉读取端点）
+	// url=视觉读取端点（默认）；base64=视觉读取管线直出的副本（供无法回取本机 URL 的云端模型）。
+	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
 	switch parameter.Agent.ImageInput {
 	case "url":
 		*ImageInputMode = "url"
@@ -332,6 +340,14 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 	if parameter.Agent.VisionCacheCapMB > 0 {
 		*VisionCacheCapMB = parameter.Agent.VisionCacheCapMB
+	}
+	// ==== 引擎自愈（自动重载月华 goja 运行时）====
+	// 仅在配置显式给出时覆盖默认值（开启 / 连续失败 2 次）
+	if parameter.Agent.AutoReload != nil {
+		*EngineAutoReload = *parameter.Agent.AutoReload
+	}
+	if parameter.Agent.AutoReloadFailures != nil && *parameter.Agent.AutoReloadFailures > 0 {
+		*EngineAutoReloadFailures = *parameter.Agent.AutoReloadFailures
 	}
 	// ==== 月华语音合成（tts） ====
 	// 引擎枚举：仅接受 Qwen / Kokoro / OmniVoice，未配置保持默认 Qwen，非法取值告警并保留默认
@@ -477,6 +493,13 @@ func applyConfig(parameter *ModelConfig) []string {
 	}
 	if parameter.Diffusion.SDVaeTileOverlap != nil {
 		*SDVaeTileOverlap = *parameter.Diffusion.SDVaeTileOverlap
+	}
+	// VAE 解码后端与 direct conv：仅显式给出时覆盖（默认 auto / 关闭）
+	if parameter.Diffusion.SDVaeBackend != nil && *parameter.Diffusion.SDVaeBackend != "" {
+		*SDVaeBackend = *parameter.Diffusion.SDVaeBackend
+	}
+	if parameter.Diffusion.SDVaeConvDirect != nil {
+		*SDVaeConvDirect = *parameter.Diffusion.SDVaeConvDirect
 	}
 	// 显存预算与采样策略：空字符串表示"使用引擎自动决策"，因此只在非空时覆盖
 	if parameter.Diffusion.SDMaxVRAM != nil {

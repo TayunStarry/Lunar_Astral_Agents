@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"LunarSubsystem/LoggerGeneral"
 )
 
 // SetEngineLogHook 注入引擎日志钩子（TUI 构建调用；传 nil 注销）。
@@ -48,7 +50,7 @@ func (w *engineLogWriter) Write(p []byte) (int, error) {
 	w.mu.Unlock()
 
 	for _, line := range lines {
-		emitEngineLog(w.stream, line)
+		w.emit(line)
 	}
 	return len(p), nil
 }
@@ -60,21 +62,49 @@ func (w *engineLogWriter) Close() {
 	w.buf = nil
 	w.mu.Unlock()
 	if rest != "" {
-		emitEngineLog(w.stream, rest)
+		w.emit(rest)
 	}
 }
 
-// emitEngineLog 输出单行引擎日志：清理控制字符与 ANSI 转义后交钩子；未注入钩子时直写终端
-func emitEngineLog(stream, line string) {
+// vaeTilingFallbackMark sd.cpp 在 VAE 解码显存不足时自行改用空间分片解码的日志标记
+// （backend_fit.cpp:506）。这条降级**不受调用方控制**：没传 --vae-tiling 也会发生。
+const vaeTilingFallbackMark = "retrying with spatial tiling"
+
+// emit 输出单行引擎日志：清理控制字符与 ANSI 转义后交钩子；未注入钩子时直写终端。
+//
+// 顺带盯一件事：VAE 解码被引擎自行降级为空间分片时，wan_vae 的分片接缝会在画面上
+// 留下硬边纯色方块（实测 17×16 px 的白块，边界正落在 512px = 32 latent 的分片线上）。
+// 用户只看到白块、看不到原因，所以这里把它翻成一条显式警告（每次生成只报一次）。
+func (w *engineLogWriter) emit(line string) {
 	line = cleanEngineLine(line)
 	if line == "" {
 		return
 	}
+	if strings.Contains(line, vaeTilingFallbackMark) {
+		w.warnVAETilingFallback()
+	}
 	if hook := currentEngineLogHook(); hook != nil {
-		hook(stream, line)
+		hook(w.stream, line)
 		return
 	}
 	fmt.Fprintln(os.Stderr, line)
+}
+
+// warnVAETilingFallback 报告「VAE 解码被引擎自行降级为分片」（同一引擎进程只报一次）
+func (w *engineLogWriter) warnVAETilingFallback() {
+	if w.stream != "stdout" {
+		return // 该标记只出现在引擎 stdout
+	}
+	w.mu.Lock()
+	already := w.vaeFallbackWarned
+	w.vaeFallbackWarned = true
+	w.mu.Unlock()
+	if already {
+		return
+	}
+	LoggerGeneral.Warn("MultimodalAnalysis",
+		"VAE 解码显存不足，引擎已自行改用空间分片：画面接缝处可能出现硬边纯色方块。"+
+			"建议把 sd_vae_backend 设为 cpu（整段 CPU 解码）或降低出图分辨率")
 }
 
 // cleanEngineLine 清理单行文本：去除 ANSI 转义序列与其余控制字符，

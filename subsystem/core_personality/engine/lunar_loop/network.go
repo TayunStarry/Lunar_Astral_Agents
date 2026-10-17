@@ -112,6 +112,16 @@ func (class *Runtime) syncFetch(call goja.FunctionCall) goja.Value {
 		return class.runtime.ToValue([]any{nil, fmt.Errorf("无效的execute")})
 	}
 
+	// 图片闸门：模型请求出站前逐条校验 image_url，超尺寸 / 非视觉读取产物一律拦截
+	// （思维链只接受 /file/read-multimodal/ 端点或视觉副本，见 model_image_guard.go 与 docs/adr/0008）
+	blockedImages, guardErr := guardChatRequestImages(url, execute)
+	if guardErr != nil {
+		return class.runtime.ToValue([]any{nil, guardErr})
+	}
+	for _, item := range blockedImages {
+		LoggerGeneral.SubError(lunarCoreModule, lunarJavaScriptSub, "[图片闸门] 已拦截原图流转: %s", item)
+	}
+
 	// 流式桥检测：chat/completions + stream:true → 注入 include_usage 并转流式分支
 	streaming := prepareStreamingBody(url, execute)
 
@@ -332,8 +342,12 @@ func (class *Runtime) doStreamingChat(req *http.Request, role string, promptEsti
 		LoggerGeneral.SubWarn(lunarCoreModule, lunarJavaScriptSub, "流式响应中断: %v", err)
 	}
 
-	TuiSystem.StreamEnd(role)
+	// 顺序要紧：工具调用必须先归到「本次模型调用」这一轮里，再结束该轮。
+	// 反过来（先 StreamEnd 再 report）会让 StreamTool 在 currentTurn 为空时另起一轮，
+	// 事件与现实就对不上了——实况屏会出现「只有一条工具调用、永远进行中」的幽灵轮次，
+	// 而真正的思考/正文留在上一轮里，导出与界面都错位。
 	tools.report(role)
+	TuiSystem.StreamEnd(role)
 
 	// 计量入账：优先真实 usage，缺失时按文本长度估算（prompt 取请求体字符数 / 3）
 	if usage != nil {

@@ -29,6 +29,27 @@ var (
 	SDVaeTileSize = flag.String("sd-vae-tile-size", "", "VAE 分片尺寸(如 64x64), 空=引擎默认 32x32")
 	// SDVaeTileOverlap 启用分片时的分片重叠比例；0=sd.cpp 默认 0.5
 	SDVaeTileOverlap = flag.Float64("sd-vae-tile-overlap", 0, "VAE 分片重叠比例(0=引擎默认 0.5)")
+	// SDVaeBackend VAE 解码后端：auto=按分辨率估算（放不进显存就整段改 CPU）/gpu=始终 GPU/cpu=始终 CPU。
+	//
+	// 为什么要显式决策（实测，RTX 4070 12GB + Qwen-Image 2.1 的 wan_vae bf16）：
+	//   - 1024×1536 全帧解码需要 12475–15689 MiB 设备显存，画图前守卫后可用仅约
+	//     10850–10990 MiB，必然失败（日志：`wan_vae segment 1/1 (graph) failed during
+	//     weight preparation` + `vae decode compute failed`）；
+	//   - 失败后 sd.cpp **自行**改用空间分片解码（`backend_fit.cpp:506 retrying with
+	//     spatial tiling`），而 wan_vae 的分片接缝会在画面上留下硬边纯白方块——
+	//     实测白块为 17×16 px，右边界正落在 512px（=32 latent）的分片边界上。
+	// 结论：**没传 --vae-tiling 不等于不会分片**。OOM 后的自动降级不受本程序控制，
+	// 因此这里在启动引擎前就把路径定死：能放进显存就 GPU 全帧解码，放不进就整段 CPU。
+	SDVaeBackend = flag.String("sd-vae-backend", "auto", "VAE 解码后端: auto(放不进显存改 CPU)/gpu/cpu")
+	// SDVaeConvDirect 允许在「GPU 整帧解码放不下」时改用 direct conv 再试一次 GPU。
+	//
+	// 为什么默认开（实测，RTX 4070 12GB + Qwen-Image 2.1，1024×1536）：
+	//   - 整帧 im2col 卷积需 12475+ MiB → 失败 → 引擎自动分片 → 接缝留 17×16 纯白块；
+	//   - 换 direct conv 后同一张图直接成功，解码 3.81s；
+	//   - 与「整段 CPU 全帧解码」像素比对：最大差 1/255、98.9% 像素完全相同 → 视为等价；
+	//   - 而整段 CPU 解码要 197.93s。
+	// 关掉它意味着「放不下就直接整段 CPU」（更慢），或配合 sd_vae_backend=gpu 接受引擎分片。
+	SDVaeConvDirect = flag.Bool("sd-vae-conv-direct", true, "GPU 整帧放不下时改用直接卷积(省显存)")
 	// SDMaxVRAM 交给 sd.cpp 图切割执行的显存预算（GiB，支持 cuda0=9 形式）；空=不传，由自动管理决策
 	SDMaxVRAM = flag.String("sd-max-vram", "", "sd.cpp 显存预算(GiB, 如 9 或 cuda0=9); 空=自动")
 	// SDSampler 采样器：auto=不传参由 sd.cpp 按模型选择（本模型为 euler）
@@ -49,8 +70,9 @@ var (
 	VideoInputMode = flag.String("video-input", "file", "视频解读输入模式: file(file://) / frames(图片序列帧)")
 	// ImageInputMode 静态图进入思维链的统一形态：
 	// url=视觉读取端点 URL（/file/read-multimodal/，服务端按需缩放并叠印句柄标签，默认）；
-	// base64=经同一变换管线直出 data URI（供无法回取本机 URL 的云端多模态服务使用）
-	ImageInputMode = flag.String("image-input", "url", "静态图思维链形态: url(视觉读取端点) / base64(变换管线直出)")
+	// base64=经同一视觉读取管线直出 data URI（供无法回取本机 URL 的云端模型使用）。
+	// 两种形态都是 ≤ vision_max_side 的副本，原图永远不进入思维链（见 docs/adr/0008）。
+	ImageInputMode = flag.String("image-input", "url", "静态图思维链形态: url(视觉读取端点) / base64(视觉读取管线直出)")
 	// VisionMaxSide 视觉读取副本的最大边长（像素）：思维链中的静态图统一约束到该尺寸以内
 	VisionMaxSide = flag.Int("vision-max-side", 1080, "视觉读取副本最大边长(像素)")
 	// VisionCacheCapMB 视觉副本缓存池容量上限（MB）：超限按最久未用淘汰副本

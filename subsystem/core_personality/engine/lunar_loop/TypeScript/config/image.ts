@@ -99,8 +99,25 @@ export interface DiffusionGenerationParams {
 	super_resolution?: boolean;
 }
 
-/** 自画像工具 - 参数接口（全尺寸 / Q版共用） */
-export interface SelfPortraitParams {
+/**
+ * 立绘工具 - 参数接口（月华 / 琉璃 / 通用角色，全尺寸与Q版共用同一入口）
+ *
+ * 为什么把「谁 + 是否Q版」做成参数而不是四个并列工具：四份工具定义只有角色与比例
+ * 不同，schema 重复约 200 行，既占上下文又容易让模型挑错入口。合成一个工具后，
+ * 角色是四值枚举、Q版是布尔，新增角色只需加一份底板提示词。
+ *
+ * 为什么性别折进角色枚举（`通用-女` / `通用-男`）而不是单独的 `gender` 参数：
+ * 性别只对通用角色有意义，独立参数就成了「仅当 character=通用 时生效」的条件参数；
+ * 函数调用 schema 表达不了这种依赖，只能靠描述提醒，漏填/乱填都无从校验。
+ * 折叠后没有默认值可错、没有条件规则要记。
+ */
+export interface PortraitParams {
+	/** 角色：月华 / 琉璃 / 通用-女 / 通用-男（后两者需 appearance 描述外观） */
+	character: string;
+	/** 是否 Q 版（二头身）；false 或不填为全尺寸立绘 */
+	chibi?: boolean;
+	/** 通用角色的外观：性别、年龄感、发型发色、瞳色、服装、配饰、身份 */
+	appearance?: string;
 	/** 表情描述 */
 	expression: string;
 	/** 姿势描述 */
@@ -109,7 +126,7 @@ export interface SelfPortraitParams {
 	outfit?: string;
 	/** 环境描述 */
 	environment: string;
-	/** 画面比例预设（如 '1:1'、'2:3'、'9:16'），缺省为 1:1 */
+	/** 画面比例预设（如 '1:1'、'2:3'、'9:16'）；缺省：全尺寸 2:3、Q版 1:1 */
 	ratio?: string;
 	/** 迭代步数（30~60，省略则用配置 sd_steps） */
 	steps?: number;

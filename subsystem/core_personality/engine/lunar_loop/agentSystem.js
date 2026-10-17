@@ -10,6 +10,7 @@ var agentSystem = (function (exports) {
         static unreadContext = [];
         static reasoningInProgress = false;
         static finalResponse = "";
+        static lastFailure = "";
         static memoryReady = false;
         static currentAddress = [];
         static get MultimodalUrl() {
@@ -354,9 +355,14 @@ var agentSystem = (function (exports) {
             const lower = source.toLowerCase();
             if (lower.startsWith('data:video/') || GlobalConfig.videoFormatsExtensions.some(ext => lower.endsWith(ext)))
                 continue;
+            if (lower.includes(VISION_READ_PATH))
+                continue;
             const admitted = admitImageDataURI(source, `image${guessImageExt(source)}`);
             if (!admitted?.handle || !admitted.blob_path) {
-                console.error('[图片标签] 入库失败，该图片以原始来源流转（无句柄）:', source.substring(0, 60));
+                console.error('[图片标签] 入库失败，该图片已从思维链剔除（禁止原图流转）:', source.substring(0, 60));
+                item.type = 'text';
+                item.text = '[一张图片入库失败，已忽略]';
+                delete item.image_url;
                 continue;
             }
             item.image_url.url = visionReference(admitted.handle, admitted.blob_path);
@@ -546,13 +552,15 @@ var agentSystem = (function (exports) {
         return sanitizeImageDesc(cached, 200);
     }
     function resourceSource(handle) {
-        const result = readResource(handle, 8 * 1024 * 1024);
-        if (!result || result.lost || !result.base64)
+        const entry = getResourceEntry(handle);
+        if (!entry || entry.state !== 'active' || !entry.blob_path)
             return '';
-        if (result.truncated)
+        const [, error] = visionRead(entry.blob_path, handle);
+        if (error) {
+            console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));
             return '';
-        const mime = result.mime || 'image/png';
-        return `data:${mime};base64,${result.base64}`;
+        }
+        return visionReference(handle, entry.blob_path);
     }
 
     const LIST_LIMIT_MAX$1 = 100;
@@ -1587,7 +1595,7 @@ var agentSystem = (function (exports) {
     function hasDumpTarget(agent) {
         return agent === 'lunar' || !!roleRegistry[agent];
     }
-    function shrinkContent(content, includeImages) {
+    function shrinkContent$1(content, includeImages) {
         if (typeof content === 'string')
             return content;
         if (!Array.isArray(content))
@@ -1608,10 +1616,10 @@ var agentSystem = (function (exports) {
             };
         });
     }
-    function exportMessages(messages, includeImages) {
+    function exportMessages$1(messages, includeImages) {
         return messages.map(message => ({
             role: message.role,
-            content: shrinkContent(message.content, includeImages),
+            content: shrinkContent$1(message.content, includeImages),
             tool_call_id: message.tool_call_id || undefined,
             tool_calls: message.tool_calls || undefined,
         }));
@@ -1621,14 +1629,14 @@ var agentSystem = (function (exports) {
             return {
                 target: 'lunar',
                 label: '月华主上下文（未读队列 + 长期记忆摘要）',
-                messages: exportMessages(GlobalConfig.unreadContext, includeImages),
+                messages: exportMessages$1(GlobalConfig.unreadContext, includeImages),
             };
         }
         const entry = roleRegistry[agent];
         return {
             target: agent,
             label: entry.label,
-            messages: exportMessages(entry.role.messages, includeImages),
+            messages: exportMessages$1(entry.role.messages, includeImages),
             systemPrompt: entry.role.systemPrompt,
         };
     }
@@ -1680,6 +1688,95 @@ var agentSystem = (function (exports) {
         }
         globalThis.buildContextDump = buildContextDump;
         console.log('[数据导出] 上下文导出入口已注册（目标：' + dumpTargets().join('、') + '）');
+    }
+
+    const RECOVERY_VERSION = 1;
+    const IMAGE_PLACEHOLDER = '[图片：引擎重载时已省略]';
+    let recoveryRoles = null;
+    function registerRecoveryRoles(roles) {
+        recoveryRoles = roles;
+    }
+    function shrinkContent(content) {
+        if (typeof content === 'string')
+            return content;
+        if (!Array.isArray(content))
+            return content;
+        return content.map(item => {
+            if (!item || typeof item !== 'object')
+                return item;
+            const anyItem = item;
+            if (anyItem.type !== 'image_url' || !anyItem.image_url)
+                return item;
+            return { type: 'image_url', image_url: { url: IMAGE_PLACEHOLDER } };
+        });
+    }
+    function exportMessages(messages) {
+        return messages.map(message => ({
+            role: message.role,
+            content: shrinkContent(message.content),
+            tool_call_id: message.tool_call_id || undefined,
+            tool_calls: message.tool_calls || undefined,
+        }));
+    }
+    function importMessages(raw) {
+        if (!Array.isArray(raw))
+            return [];
+        const out = [];
+        for (const item of raw) {
+            if (!item || typeof item !== 'object')
+                continue;
+            const row = item;
+            if (!row.role)
+                continue;
+            const message = {
+                role: row.role,
+                content: row.content === undefined ? '' : row.content,
+                tool_call_id: row.tool_call_id,
+                tool_calls: row.tool_calls,
+            };
+            out.push(message);
+        }
+        return out;
+    }
+    function snapshotAgentContext() {
+        try {
+            const dialogue = recoveryRoles ? exportMessages(recoveryRoles.dialogue.messages) : [];
+            const payload = {
+                kind: 'lunar-agent-recovery',
+                version: RECOVERY_VERSION,
+                at: new Date().toISOString(),
+                unread: exportMessages(GlobalConfig.unreadContext),
+                dialogue: dialogue,
+            };
+            return JSON.stringify(payload);
+        }
+        catch (error) {
+            console.error('[引擎恢复] 生成上下文快照失败:', error?.message ?? error);
+            return '';
+        }
+    }
+    function restoreAgentContext(jsonText) {
+        GlobalConfig.reasoningInProgress = false;
+        GlobalConfig.lastFailure = '';
+        if (!jsonText || !jsonText.trim())
+            return '没有可恢复的上下文（快照为空）';
+        let payload;
+        try {
+            payload = JSON.parse(jsonText);
+        }
+        catch (error) {
+            return `快照解析失败，未恢复上下文: ${error?.message ?? error}`;
+        }
+        if (payload?.kind !== 'lunar-agent-recovery' || payload?.version !== RECOVERY_VERSION) {
+            return `快照版本不符（期望 v${RECOVERY_VERSION}），未恢复上下文`;
+        }
+        const unread = importMessages(payload.unread);
+        const dialogue = importMessages(payload.dialogue);
+        if (unread.length > 0)
+            GlobalConfig.unreadContext = [...unread, ...GlobalConfig.unreadContext];
+        if (dialogue.length > 0 && recoveryRoles)
+            recoveryRoles.dialogue.coverContext(dialogue);
+        return `已恢复 ${dialogue.length} 条对话上下文、${unread.length} 条未读消息`;
     }
 
     function RandomFloor(min, max) {
@@ -1907,16 +2004,26 @@ var agentSystem = (function (exports) {
             '双手食指在胸前互点,头部微微低下,双膝内扣,两脚脚尖向内呈内八站姿',
             '双手叉腰,挺胸收腹,一条腿向侧方伸出,脚尖点地,身体笔直有力',
         ];
-        appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0];
-        chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0];
-        fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0];
-        groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0];
-        crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0];
+        appearanceBasePrompt = fileView('prompts/appearanceBase.md')[0].trim();
+        chibiAppearancePrompt = fileView('prompts/selfAppearanceChibi.md')[0].trim();
+        fullAppearancePrompt = fileView('prompts/selfAppearanceFull.md')[0].trim();
+        groupAppearancePrompt = fileView('prompts/selfAppearanceGroup.md')[0].trim();
+        crystalAppearancePrompt = fileView('prompts/crystalAppearance.md')[0].trim();
+        crystalBasePrompt = fileView('prompts/crystalAppearanceBase.md')[0].trim();
+        crystalFullAppearancePrompt = fileView('prompts/crystalAppearanceFull.md')[0].trim();
+        crystalChibiAppearancePrompt = fileView('prompts/crystalAppearanceChibi.md')[0].trim();
+        portraitBaseFemalePrompt = fileView('prompts/portraitBaseFemale.md')[0].trim();
+        portraitBaseMalePrompt = fileView('prompts/portraitBaseMale.md')[0].trim();
+        genericFullAppearancePrompt = fileView('prompts/portraitAppearanceFull.md')[0].trim();
+        genericChibiAppearancePrompt = fileView('prompts/portraitAppearanceChibi.md')[0].trim();
         defaultOutfitChibiPrompt = '穿着纯黑色洛丽塔风连衣裙，长泡泡袖，袖口缀黑色蕾丝荷叶边，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石，裙摆层叠黑色蕾丝花边，无任何白色蕾丝或白色装饰';
         defaultOutfitFullPrompt = '穿着黑色哥特萝莉风长裙，黑色蕾丝立领，胸前系黑色蕾丝蝴蝶结且蝴蝶结中央镶嵌红色宝石饰扣，长泡泡袖收黑色蕾丝袖口，多层黑色蕾丝裙摆，无任何白色蕾丝或白色装饰';
+        crystalDefaultOutfitFullPrompt = '穿着纯白色吊带连衣裙，胸前与裙身点缀淡蓝色星星图案，领口系浅蓝色缎带蝴蝶结并别着星星饰针，外披一件宽松的白色棉服外套且外套自然滑落到手臂上露出肩膀，白色短袜与白色乐福鞋';
+        crystalDefaultOutfitChibiPrompt = '穿着纯白色吊带连衣裙，胸前点缀淡蓝色星星图案与星星饰针，领口系浅蓝色缎带蝴蝶结，外披宽松的白色短款外套，白色短袜与白色小皮鞋';
         defaultNegativePrompt = '低分辨率, 糙噪点, 超现实主义, 丑陋的面部特征, 失真表情, 模糊轮廓, 颜色失衡, 不均匀光影, 强烈对比度, 过曝或欠曝, 杂乱背景, 像素化, 彩虹效果, 畸形肢体, 错位比例, 低质感纹理';
         referenceImage = '';
         referenceHandle = '';
+        referenceVision = '';
         referenceSize = null;
         lastResultPath = '';
         roleTool = [
@@ -1924,7 +2031,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "diffusion_generation",
-                    description: "根据文本描述生成与月华本人无关的图像，纯文生图。仅适用于风景、物品、其他角色、场景等通用创作;严禁用于绘制月华自己的形象（绘制月华必须调用 self_portrait 或 chibi_self_portrait）。若任务消息附带参考图（图生图任务），请改用 image_to_image",
+                    description: "根据文本描述进行文生图。仅适用于风景、物品、场景、氛围图等与人物形象无关的创作；严禁用于绘制任何人物形象(月华、琉璃或其他人物都必须调用 portrait)。",
                     parameters: {
                         type: "object",
                         properties: {
@@ -1939,7 +2046,7 @@ var agentSystem = (function (exports) {
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -1947,11 +2054,11 @@ var agentSystem = (function (exports) {
                             },
                             "cfg_scale": {
                                 type: "number",
-                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                                description: "提示词权重调节参数(0~2),默认值为 1.0"
                             },
                             "super_resolution": {
                                 type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -1964,7 +2071,7 @@ var agentSystem = (function (exports) {
                 type: "function",
                 function: {
                     name: "image_to_image",
-                    description: "基于本次任务附带的参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。输出尺寸自动按参考图比例推导(短边不低于 1024px),无需也无法另行指定比例。任务消息未附带参考图时不可调用,请改用 diffusion_generation 进行文生图",
+                    description: "基于参考图进行图生图创作:以参考图为底图,按文本描述改变风格、场景、服饰或细节,同时保留参考图的主体特征。无参考图时不可调用:人物形象改用 portrait,非人物改用 diffusion_generation,或说明需要用户提供参考图片。",
                     parameters: {
                         type: "object",
                         properties: {
@@ -1978,19 +2085,19 @@ var agentSystem = (function (exports) {
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素（换场景时点名去掉旧场景元素,如 beach, ocean, water, sea）"
+                                description: "负面提示文本,用于排除图像中不希望出现的元素(换场景时点名去掉旧场景元素,如 beach, ocean, water, sea)"
                             },
                             "cfg_scale": {
                                 type: "number",
-                                description: "提示词引导系数(0~2),默认 1.0。图生图建议 2.0~3.0:起点是参考图加噪后的潜变量、天然偏向原构图,cfg 太低时提示词拉不动画面。系统对图生图设有 1.5 下限与 2.0 缺省"
+                                description: "提示词引导系数(0~2),默认 1.0。当前模型为引导蒸馏模型,图生图同样保持 1.0;调高会发灰、过曝、塑料感。需要改得更多时调 strength,不要调 cfg"
                             },
                             "super_resolution": {
                                 type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
@@ -2002,11 +2109,24 @@ var agentSystem = (function (exports) {
             {
                 type: "function",
                 function: {
-                    name: "self_portrait",
-                    description: "生成月华的全尺寸自画像（全身立绘,标准少女头身比）。凡是要求绘制月华、你自己、\"我\"的形象,且未特别要求Q版时,都必须且只能调用此函数,禁止调用 diffusion_generation",
+                    name: "portrait",
+                    description: "生成指定角色的立绘。凡是要求绘制月华、琉璃或其他人物的形象时,都必须且只能调用本函数,禁止用 diffusion_generation 或 image_to_image 代替",
                     parameters: {
                         type: "object",
                         properties: {
+                            "character": {
+                                type: "string",
+                                enum: ["月华", "琉璃", "通用-女", "通用-男"],
+                                description: "月华与琉璃有内置人设,只需给出表情/姿势/环境;通用-女 / 通用-男,必须用 appearance 描述其外观"
+                            },
+                            "chibi": {
+                                type: "boolean",
+                                description: "是否Q版:true=二头身萌系比例(贴纸/表情包/头像),false 或不填=标准头身比的全身立绘"
+                            },
+                            "appearance": {
+                                type: "string",
+                                description: "character=通用-女 / 通用-男 时填写该人物的外观:性别、年龄感、发型发色、瞳色、服装、配饰、身份。"
+                            },
                             "expression": {
                                 type: "string",
                                 description: "表情提示词,描述想要展现的表情"
@@ -2017,20 +2137,20 @@ var agentSystem = (function (exports) {
                             },
                             "outfit": {
                                 type: "string",
-                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
+                                description: "服装提示词。不提供则用该角色的默认服装（通用角色仅在 appearance 未写服装时兜底）"
                             },
                             "environment": {
                                 type: "string",
-                                description: "环境提示词,描述背景环境或场景"
+                                description: "环境提示词,描述背景或场景。月华偏暗色与红,琉璃偏淡蓝天空与星光"
                             },
                             "ratio": {
                                 type: "string",
                                 enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设,默认 1:1。全身立绘/坐姿建议 2:3,横构图场景建议 3:2 或 16:9。短边固定 1024px"
+                                description: "画面比例预设。缺省:全尺寸 2:3(竖版全身立绘),Q版 1:1。横版场景改 3:2 或 16:9。短边固定 1024px"
                             },
                             "steps": {
                                 type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
+                                description: "迭代步数,取值 30~60:快速草图 30,常规 40(省略时用系统默认),精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
                             },
                             "negative_prompt": {
                                 type: "string",
@@ -2038,68 +2158,15 @@ var agentSystem = (function (exports) {
                             },
                             "cfg_scale": {
                                 type: "number",
-                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
+                                description: "提示词引导系数(0~2),本模型为引导蒸馏,默认 1.0,不要调高"
                             },
                             "super_resolution": {
                                 type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
+                                description: "生成完成后追加 RealESRGAN 超分辨率重建(4x),提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
                             }
                         },
                         required: [
-                            "expression",
-                            "posture",
-                            "environment"
-                        ]
-                    }
-                }
-            },
-            {
-                type: "function",
-                function: {
-                    name: "chibi_self_portrait",
-                    description: "生成月华的Q版自画像（二头身可爱比例）。当要求绘制Q版、二头身、萌系或大头娃娃风格的月华形象时调用此函数,禁止调用 diffusion_generation",
-                    parameters: {
-                        type: "object",
-                        properties: {
-                            "expression": {
-                                type: "string",
-                                description: "表情提示词,描述想要展现的表情"
-                            },
-                            "posture": {
-                                type: "string",
-                                description: "动作提示词,描述想要展现的姿势或动作"
-                            },
-                            "outfit": {
-                                type: "string",
-                                description: "服装提示词,描述想要穿着的服装样式。不提供则使用默认服装"
-                            },
-                            "environment": {
-                                type: "string",
-                                description: "环境提示词,描述背景环境或场景"
-                            },
-                            "ratio": {
-                                type: "string",
-                                enum: ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"],
-                                description: "画面比例预设,默认 1:1（Q版二头身适合方形或略宽）。短边固定 1024px"
-                            },
-                            "steps": {
-                                type: "number",
-                                description: "迭代步数,取值 30~60:快速草图 30,常规 40（省略时用系统默认）,精细打磨 50~60。越高细节越好但耗时线性增加,不影响构图"
-                            },
-                            "negative_prompt": {
-                                type: "string",
-                                description: "负面提示文本,用于排除图像中不希望出现的元素"
-                            },
-                            "cfg_scale": {
-                                type: "number",
-                                description: "提示词权重调节参数,取值范围为 0 到 2,默认值为 1.0"
-                            },
-                            "super_resolution": {
-                                type: "boolean",
-                                description: "生成完成后追加 RealESRGAN 超分辨率重建（4x）,提升清晰度与细节。用户要求高清、精细画质时开启,耗时增加"
-                            }
-                        },
-                        required: [
+                            "character",
                             "expression",
                             "posture",
                             "environment"
@@ -2199,60 +2266,41 @@ var agentSystem = (function (exports) {
             }
         ];
         constructor() {
-            super(fileView('prompts/painterRole.md')[0]);
+            super(fileView('prompts/painterRole.md')[0].trim());
         }
         async createCreativeWork(taskDescription, reference) {
             this.referenceImage = '';
             this.referenceHandle = '';
+            this.referenceVision = '';
             this.referenceSize = null;
             if (reference?.source) {
                 this.referenceHandle = reference.handle || '';
                 this.referenceImage = reference.source;
-                this.referenceSize = this.loadReferenceSize(reference.source);
-                console.log(`[绘制者] 本次任务参考图: ${this.referenceHandle || '(无句柄)'} → ${reference.source}${this.referenceSize ? `（${this.referenceSize.width}x${this.referenceSize.height}）` : ''}`);
+                const [, visionError, visionWidth, visionHeight] = visionRead(reference.source, this.referenceHandle);
+                const visionURL = visionReference(this.referenceHandle, reference.source);
+                if (visionError || !visionURL) {
+                    console.error('[绘制者] 参考图视觉副本生成失败，本次任务模型将看不到参考图:', visionError?.message ?? String(visionError ?? '无法构造视觉副本'));
+                }
+                else {
+                    this.referenceVision = visionURL;
+                    if (visionWidth > 0 && visionHeight > 0)
+                        this.referenceSize = { width: visionWidth, height: visionHeight };
+                }
+                console.log(`[绘制者] 本次任务参考图: ${this.referenceHandle || '(无句柄)'} → ${reference.source}${this.referenceSize ? `（视觉副本 ${this.referenceSize.width}x${this.referenceSize.height}）` : '（视觉副本生成失败）'}`);
             }
             return super.createCreativeWork(taskDescription);
         }
         buildTaskContent(taskDescription) {
-            if (!this.referenceImage)
-                return taskDescription;
-            const imageURI = this.loadReferenceDataURI();
-            if (!imageURI) {
-                console.log('[绘制者] 参考图本体读取失败，退回纯文本任务描述');
+            if (!this.referenceVision) {
+                if (this.referenceImage)
+                    console.log('[绘制者] 参考图无可用视觉副本，退回纯文本任务描述');
                 return taskDescription;
             }
-            console.log(`[绘制者] 参考图已附入任务上下文（${Math.round(imageURI.length / 1024)}KB）`);
+            console.log(`[绘制者] 参考图视觉副本已附入任务上下文（${Math.round(this.referenceVision.length / 1024)}KB）`);
             return [
                 { type: 'text', text: taskDescription },
-                { type: 'image_url', image_url: { url: imageURI } }
+                { type: 'image_url', image_url: { url: this.referenceVision } }
             ];
-        }
-        loadReferenceDataURI() {
-            if (!this.referenceHandle)
-                return '';
-            try {
-                const result = readResource(this.referenceHandle, 8 * 1024 * 1024);
-                if (!result || result.lost || result.truncated || !result.base64)
-                    return '';
-                return `data:${result.mime || 'image/png'};base64,${result.base64}`;
-            }
-            catch (error) {
-                console.error('[绘制者] 读取参考图失败:', error);
-                return '';
-            }
-        }
-        loadReferenceSize(relPath) {
-            try {
-                const [resized, err] = resizeImage(relPath);
-                if (err || !resized || resized.length === 0)
-                    return null;
-                const size = { width: resized[0].width, height: resized[0].height };
-                return size.width > 0 && size.height > 0 ? size : null;
-            }
-            catch (error) {
-                console.error('[绘制者] 参考图尺寸读取失败:', error);
-                return null;
-            }
         }
         planFor(ratio) {
             const reference = this.referenceImage ? (this.referenceSize || undefined) : undefined;
@@ -2269,6 +2317,7 @@ var agentSystem = (function (exports) {
         resetReference() {
             this.referenceImage = '';
             this.referenceHandle = '';
+            this.referenceVision = '';
             this.referenceSize = null;
         }
         get roleName() { return '绘制者'; }
@@ -2286,12 +2335,11 @@ var agentSystem = (function (exports) {
             switch (funcName) {
                 case 'diffusion_generation': return this.handleDiffusionGeneration(args);
                 case 'image_to_image': return this.handleImageToImage(args);
-                case 'self_portrait': return this.handleSelfPortrait(args);
-                case 'chibi_self_portrait': return this.handleChibiSelfPortrait(args);
+                case 'portrait': return this.handlePortrait(args);
                 case 'group_photo': return this.handleGroupPhoto(args);
                 case 'list_images': return this.handleListImages();
                 case 'upscale_image': return this.handleUpscaleImage(args);
-                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、self_portrait、chibi_self_portrait、group_photo、list_images、upscale_image`;
+                default: return `未知工具: ${funcName}，可用工具为 diffusion_generation、image_to_image、portrait、group_photo、list_images、upscale_image`;
             }
         }
         collectDetail(toolCall, paintings) {
@@ -2300,10 +2348,13 @@ var agentSystem = (function (exports) {
                     ? JSON.parse(toolCall.function.arguments)
                     : toolCall.function.arguments;
                 const name = toolCall.function.name;
-                if (name === 'self_portrait' || name === 'chibi_self_portrait') {
+                if (name === 'portrait') {
+                    const character = String(args.character || '通用-女');
                     paintings.push({
                         toolName: name,
-                        promptSummary: name === 'self_portrait' ? '全尺寸自画像' : 'Q版自画像',
+                        promptSummary: `${this.characterLabel(character)}${args.chibi === true ? 'Q版' : '全尺寸'}立绘`,
+                        character: character,
+                        chibi: args.chibi === true,
                         expression: args.expression || '',
                         posture: args.posture || '',
                         environment: args.environment || '',
@@ -2350,8 +2401,14 @@ var agentSystem = (function (exports) {
             const parts = [];
             for (let i = 0; i < paintings.length; i++) {
                 const p = paintings[i];
-                if (p.toolName === 'self_portrait' || p.toolName === 'chibi_self_portrait') {
-                    let desc = p.toolName === 'self_portrait' ? '月华绘制了一幅全尺寸自画像' : '月华绘制了一幅Q版自画像';
+                if (p.toolName === 'portrait') {
+                    let desc;
+                    if (p.character === '月华')
+                        desc = p.chibi ? '月华绘制了一幅Q版自画像' : '月华绘制了一幅全尺寸自画像';
+                    else if (p.character === '琉璃')
+                        desc = `月华为琉璃绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}立绘`;
+                    else
+                        desc = `月华绘制了一幅${p.chibi ? 'Q版' : '全尺寸'}${this.characterLabel(p.character)}立绘`;
                     if (p.expression)
                         desc += `，展现了${p.expression}`;
                     if (p.environment)
@@ -2376,17 +2433,26 @@ var agentSystem = (function (exports) {
             parts.push('图像已通过前端推送给用户。');
             return parts.join('\n');
         }
-        renderAppearance(template, parts, defaultOutfit) {
+        renderAppearance(template, parts, defaultOutfit, base, gender) {
             const expression = parts.expression || this.defaultExpressionPrompt[RandomFloor(0, this.defaultExpressionPrompt.length - 1)];
             const posture = parts.posture || this.defaultPosturePrompt[RandomFloor(0, this.defaultPosturePrompt.length - 1)];
             const outfit = parts.outfit || defaultOutfit;
-            return template
-                .replace('{base}', this.appearanceBasePrompt)
+            const filled = template
+                .replace('{base}', base || this.appearanceBasePrompt)
+                .replace('{gender}', gender || '女孩')
                 .replace('{expression}', expression)
                 .replace('{outfit}', outfit)
                 .replace('{posture}', posture)
                 .replace('{companion}', parts.companion || '')
                 .replace('{environment}', parts.environment || '');
+            return this.tidyPrompt(filled);
+        }
+        tidyPrompt(text) {
+            return text
+                .replace(/[，,]\s*[，,]+/g, '，')
+                .replace(/，\s*。/g, '。')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
         }
         paint(imageParams, label) {
             const [result, error] = generateImage(imageParams);
@@ -2409,13 +2475,15 @@ var agentSystem = (function (exports) {
                 return;
             try {
                 const uri = base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-                this.writeContext({
+                const message = {
                     role: 'user',
                     content: [
                         { type: 'text', text: `【${label}】这是你刚完成的作品` },
                         { type: 'image_url', image_url: { url: uri } }
                     ]
-                });
+                };
+                attachImageTags(message);
+                this.writeContext(message);
             }
             catch (error) {
                 console.error('[绘制者] 画作写入历史失败:', error);
@@ -2445,11 +2513,23 @@ var agentSystem = (function (exports) {
             }
         }
         resolveImg2ImgCfg(value) {
-            const CFG_FLOOR = 1.5;
-            if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-                return Math.max(value, CFG_FLOOR);
+            const CFG_MIN = 0.5;
+            const CFG_MAX = 4;
+            const clampCfg = (v) => Math.min(Math.max(v, CFG_MIN), CFG_MAX);
+            const configured = Number(GlobalConfig.customConfig?.diffusion?.img2img_cfg);
+            if (Number.isFinite(configured) && configured > 0) {
+                const cfg = clampCfg(configured);
+                if (Math.abs(cfg - configured) > 1e-6)
+                    console.log(`[绘制者] 配置 img2img_cfg=${configured} 越界，已收进 ${cfg}`);
+                return cfg;
             }
-            return 2.0;
+            if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+                const cfg = clampCfg(value);
+                if (cfg > 1.05)
+                    console.log(`[绘制者] 图生图 cfg=${value}：本模型为引导蒸馏，建议 1.0（过高会发灰/过曝/塑料感）`);
+                return cfg;
+            }
+            return 1.0;
         }
         handleImageToImage(args) {
             try {
@@ -2481,24 +2561,65 @@ var agentSystem = (function (exports) {
                 return `图生图生成异常: ${error}`;
             }
         }
-        handleSelfPortrait(args) {
-            return this.handlePortrait(args, this.fullAppearancePrompt, this.defaultOutfitFullPrompt, '自画像');
+        characterLabel(character) {
+            switch (String(character ?? '').trim()) {
+                case '月华': return '月华';
+                case '琉璃': return '琉璃';
+                case '通用-男': return '男性角色';
+                case '通用-女': return '女性角色';
+                default: return '角色';
+            }
         }
-        handleChibiSelfPortrait(args) {
-            return this.handlePortrait(args, this.chibiAppearancePrompt, this.defaultOutfitChibiPrompt, 'Q版自画像');
+        portraitPreset(args) {
+            const raw = String(args.character ?? '').trim();
+            const chibi = args.chibi === true;
+            const defaultRatio = chibi ? DEFAULT_RATIO : '2:3';
+            if (raw === '月华') {
+                return {
+                    kind: '月华', chibi, label: `月华${chibi ? 'Q版' : '全尺寸'}自画像`,
+                    template: chibi ? this.chibiAppearancePrompt : this.fullAppearancePrompt,
+                    base: this.appearanceBasePrompt,
+                    outfit: chibi ? this.defaultOutfitChibiPrompt : this.defaultOutfitFullPrompt,
+                    gender: '女孩', defaultRatio,
+                };
+            }
+            if (raw === '琉璃') {
+                return {
+                    kind: '琉璃', chibi, label: `琉璃${chibi ? 'Q版' : '全尺寸'}立绘`,
+                    template: chibi ? this.crystalChibiAppearancePrompt : this.crystalFullAppearancePrompt,
+                    base: this.crystalBasePrompt,
+                    outfit: chibi ? this.crystalDefaultOutfitChibiPrompt : this.crystalDefaultOutfitFullPrompt,
+                    gender: '女孩', defaultRatio,
+                };
+            }
+            const male = raw === '通用-男';
+            const named = raw && raw !== '通用-女' && raw !== '通用-男' && raw !== '其他' ? `名为「${raw}」的角色` : '';
+            const desc = [named, String(args.appearance ?? '').trim()].filter(t => t).join('，');
+            const base = (male ? this.portraitBaseMalePrompt : this.portraitBaseFemalePrompt) + (desc ? `，${desc}` : '');
+            if (!desc)
+                console.log('[绘制者] 通用角色未提供 appearance：仅按通用底板绘制，人物特征会很泛');
+            return {
+                kind: male ? '通用-男' : '通用-女', chibi, label: `${chibi ? 'Q版' : '全尺寸'}${male ? '男性' : '女性'}角色立绘`,
+                template: chibi ? this.genericChibiAppearancePrompt : this.genericFullAppearancePrompt,
+                base,
+                outfit: desc ? '' : '穿着简洁得体的日常服装',
+                gender: male ? '男孩' : '女孩', defaultRatio,
+            };
         }
-        handlePortrait(args, template, defaultOutfit, label) {
+        handlePortrait(args) {
             try {
-                console.log(`[绘制者] -> ${label}生成`);
+                const preset = this.portraitPreset(args);
+                console.log(`[绘制者] -> ${preset.label}生成`);
+                console.log(`角色: "${args.character}" chibi=${preset.chibi}`);
                 console.log(`表情: "${args.expression}"`);
                 console.log(`姿势: "${args.posture}"`);
                 console.log(`服装: "${args.outfit}"`);
                 console.log(`环境: "${args.environment}"`);
                 console.log(`负面提示词: "${args.negative_prompt}"`);
                 console.log(`提示词引导系数: "${args.cfg_scale}"`);
-                const plan = resolveDimensionPlan(args.ratio);
-                const steps = normalizeSteps(args.steps, label);
-                const fullPrompt = this.renderAppearance(template, args, defaultOutfit);
+                const plan = resolveDimensionPlan(args.ratio || preset.defaultRatio);
+                const steps = normalizeSteps(args.steps, preset.label);
+                const fullPrompt = this.renderAppearance(preset.template, args, preset.outfit, preset.base, preset.gender);
                 return this.paint({
                     prompt: fullPrompt,
                     negativePrompt: args.negative_prompt || this.defaultNegativePrompt,
@@ -2507,11 +2628,11 @@ var agentSystem = (function (exports) {
                     steps: steps,
                     cfgScale: args.cfg_scale ?? 1.0,
                     superResolution: args.super_resolution === true,
-                }, `${label}生成`);
+                }, `${preset.label}生成`);
             }
             catch (error) {
-                console.error(`[绘制者] ${label}处理异常:`, error);
-                return `${label}生成异常: ${error}`;
+                console.error('[绘制者] 立绘处理异常:', error);
+                return `立绘生成异常: ${error}`;
             }
         }
         handleGroupPhoto(args) {
@@ -3219,14 +3340,44 @@ var agentSystem = (function (exports) {
 
     const dialogueBaseTools = [...agentControlTools, ...imageRecallTools, ...resourceTools, ...scheduleTools, ...screenshotTools];
     const MAX_TOOL_ROUNDS = 5;
+    function describeError(error) {
+        if (!error)
+            return '未知错误';
+        if (typeof error === 'string')
+            return error;
+        const anyError = error;
+        if (typeof anyError.message === 'string' && anyError.message)
+            return anyError.message;
+        const text = String(error);
+        return text && text !== '[object Object]' ? text : '模型调用失败（宿主未提供错误详情）';
+    }
+    function notifyAgentSuccess() {
+        try {
+            if (typeof notifyAgentIdle === 'function')
+                notifyAgentIdle();
+        }
+        catch {
+        }
+    }
+    function reportAgentFailure(reason) {
+        try {
+            if (typeof notifyAgentFailure === 'function')
+                notifyAgentFailure(reason);
+        }
+        catch {
+        }
+    }
     class DialogueRole extends ModelBuilder {
         descriptionRole;
         roleTag = "对话者";
         async generateDialogue(cache) {
+            this.toolRounds = 0;
+            GlobalConfig.lastFailure = '';
+            await this.continueDialogue(cache);
+        }
+        async continueDialogue(cache) {
             try {
                 await LiteImageFile();
-                if (this.messages.length === 0)
-                    this.toolRounds = 0;
                 GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
                 GlobalConfig.unreadContext = [];
                 this.formatHistoricalMessages();
@@ -3237,21 +3388,48 @@ var agentSystem = (function (exports) {
                     this.writeContext(response.body.choices?.[0]?.message);
                     if (this.toolRounds >= MAX_TOOL_ROUNDS) {
                         console.warn(`[对话者] 工具调用轮次达到上限（${MAX_TOOL_ROUNDS}），停止继续调用`);
-                        GlobalConfig.finalResponse = cache.descriptionContent;
+                        this.rejectPendingToolCalls(cache);
+                        this.finalizeWithoutTools();
                         return;
                     }
                     const hasProcessedToolCalls = await this.batchExecutionToolCall(cache);
                     if (hasProcessedToolCalls) {
                         this.toolRounds++;
-                        return await this.generateDialogue(cache);
+                        return await this.continueDialogue(cache);
                     }
                 }
                 this.writeContext(response.body.choices?.[0]?.message);
+                notifyAgentSuccess();
             }
             catch (error) {
-                console.error('请求处理错误:', error);
+                const reason = describeError(error);
+                console.error('请求处理错误:', reason);
+                GlobalConfig.lastFailure = reason;
+                reportAgentFailure(reason);
             }
             GlobalConfig.finalResponse = cache.descriptionContent;
+        }
+        rejectPendingToolCalls(cache) {
+            const reason = `本轮工具调用已达上限（${MAX_TOOL_ROUNDS} 次），该调用未执行`;
+            for (const toolCall of cache.toolCalls) {
+                this.messages.push({ role: 'tool', content: reason, tool_call_id: toolCall.id });
+            }
+            cache.toolCalls = [];
+        }
+        finalizeWithoutTools() {
+            try {
+                const finalResponse = this.run(this.ragMessages, []);
+                const content = finalResponse.body?.choices?.[0]?.message?.content;
+                if (content) {
+                    GlobalConfig.finalResponse = content;
+                    this.writeContext({ role: 'assistant', content });
+                    return;
+                }
+            }
+            catch (error) {
+                console.error('[对话者] 终稿生成失败:', error);
+            }
+            GlobalConfig.finalResponse = '这轮步骤有点多了，我先停在这里，你可以接着往下说。';
         }
         IMAGE_WINDOW = IMAGE_WINDOW_SIZE;
         toolRounds = 0;
@@ -3774,6 +3952,7 @@ var agentSystem = (function (exports) {
         description: { role: descriptionRole, label: '描述者' },
     });
     dialogueRole.appendPrompt(USE_THE_PROGRAM_PROMPT);
+    registerRecoveryRoles({ dialogue: dialogueRole });
     const roleInstances = {
         dialogue: dialogueRole,
         painter: painterRole,
@@ -3784,7 +3963,11 @@ var agentSystem = (function (exports) {
     };
     try {
         const host = globalThis;
-        host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, { randomDefaultMessage });
+        host.agentSystem = Object.assign(host.agentSystem || {}, roleInstances, {
+            randomDefaultMessage,
+            snapshotContext: snapshotAgentContext,
+            restoreContext: restoreAgentContext,
+        });
     }
     catch (e) {
         console.warn('[角色] 宿主全局挂载失败（不影响运行）:', e);
@@ -4741,6 +4924,7 @@ var agentSystem = (function (exports) {
         sendToEngine('action', JSON.stringify({ action: bestAction }));
         pushContext('action', `月华${bestAction}了`, '');
     }
+    const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
     async function thoughtLoopTickEvent() {
         if (GlobalConfig.reasoningInProgress)
             return;
@@ -4765,12 +4949,18 @@ var agentSystem = (function (exports) {
                 GlobalConfig.unreadContext = feedback.messages;
             await processUnreadFiles();
             if (processDecrees()) {
-                GlobalConfig.reasoningInProgress = false;
                 return;
             }
             await createChatMessage();
             if (!GlobalConfig.finalResponse.trim().length) {
-                pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                const failure = GlobalConfig.lastFailure;
+                if (failure) {
+                    console.warn('[思考链] 本轮应答失败:', failure);
+                    pushContext('text', FAILURE_REPLY, '');
+                }
+                else {
+                    pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0]);
+                }
                 return;
             }
             ;
@@ -4803,11 +4993,13 @@ var agentSystem = (function (exports) {
             const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
             if (readErr)
                 console.error('读取提示音失败:', readErr);
-            console.error(error.message, ' || ', error.stack);
+            console.error('思考链异常:', `${error?.message ?? error}`, ' || ', error?.stack ?? '');
             pushContext('text', randomDefaultMessage(), promptSound);
             resetAgentState();
         }
-        GlobalConfig.reasoningInProgress = false;
+        finally {
+            GlobalConfig.reasoningInProgress = false;
+        }
     }
     function writeMessage(role, content) {
         if (content && typeof content === 'object' && !Array.isArray(content) && (content.type === 'video_url' || content.type === 'audio_url'))

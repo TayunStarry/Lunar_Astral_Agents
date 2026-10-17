@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // 采样进度解析（引擎输出形如 "10/20"、"25%"、"1.02s/it"、"3.2it/s"）
@@ -69,9 +68,6 @@ func (s *logsState) content(width int) []string {
 	lines := make([]string, 0, len(logs)+1)
 	for _, line := range logs {
 		lines = append(lines, wrapPlain(s.render(line), width)...)
-	}
-	if len(lines) == 0 {
-		lines = append(lines, dimStyle.Render("（暂无日志：本通道还没有输出）"))
 	}
 	s.cache = lines
 	s.lastSeq = len(logs)
@@ -156,22 +152,33 @@ func (m *appModel) logsStateOf(source LogSource) *logsState {
 }
 
 // logsKeys 日志屏键位
+//
+// 措辞刻意压短：底栏宽度有限（窄终端还要与右侧状态争宽），说明一长就把末尾的
+// 全局键位（? 帮助）挤掉——键位栏被截断是历史缺陷，这里按「最小可读」取舍；
+// 翻页与首尾键属于全局键位，见 layout.go 的 globalKeys（帮助页里有）。
 func logsKeys() []keyHint {
 	return []keyHint{
-		kh("↑/↓ PgUp/PgDn", "滚动"),
-		kh("Home/End", "顶部 / 底部"),
-		kh("f", "跟随开关（回看时暂停）"),
+		kh("↑↓", "滚动"),
+		kh("f", "跟随"),
 		kh("c", "清空"),
-		kh("Esc", "返回菜单"),
+		kh("Esc", "返回"),
 	}
 }
 
-// viewLogs 日志屏渲染：定高状态条 + 折行日志窗口
+// viewLogs 日志屏渲染：定高状态条 + 折行日志窗口（空通道给空态而不是一行灰字）
 func (m appModel) viewLogs(s *logsState, title, subtitle string) string {
 	f := m.frameFor(title, subtitle, logsKeys())
 	w, h := f.bodySize()
 
 	lines := s.content(w)
+	if len(lines) == 0 {
+		body := emptyState("暂无日志", subtitle+" 通道还没有任何输出。",
+			"启动对应功能后此处实时刷新 · 按 [ / ] 切到其它日志屏", w, maxInt(1, h-1))
+		body = append(body, logStatusLine(w, scrollInfo{}, s.follow))
+		f.status = dimStyle.Render("共 0 行")
+		return f.render(body)
+	}
+
 	win, offset, info := windowLines(lines, s.offset, maxInt(1, h-1), s.follow)
 	s.offset = offset
 
@@ -216,10 +223,10 @@ func agentKeys(s agentState) []keyHint {
 		expand = "收起思考"
 	}
 	return []keyHint{
-		kh("↑/↓ PgUp/PgDn", "滚动"),
+		kh("↑↓", "滚动"),
 		kh("t", expand),
-		kh("f", "跟随开关"),
-		kh("Esc", "返回菜单"),
+		kh("f", "跟随"),
+		kh("Esc", "返回"),
 	}
 }
 
@@ -393,13 +400,7 @@ func outputLabel(hidden, total int, expand bool, width int) string {
 	return fitWidth(valueStyle.Render(truncTo(label, width)), width)
 }
 
-// thinkHeadStyle 思考/输出标题行（加粗暗色，用于分区而非依赖 emoji）
-var thinkHeadStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("245"))
-
 // ==== 绘图引擎（sd.cpp）日志屏 ====
-
-// drawProgressStyle 采样进度行（亮青，突出「进行到哪一步」）
-var drawProgressStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("51"))
 
 // renderDrawLogLine 绘图引擎单行排版：
 //   - 错误/警告沿用红/橙并加标记；
@@ -523,6 +524,15 @@ func (m appModel) viewDraw() string {
 	}
 
 	lines := m.drawView.content(w)
+	if len(lines) == 0 {
+		body := append([]string{}, strip...)
+		body = append(body, emptyState("暂无绘图日志", "sd.cpp 引擎与绘图编排还没有输出。",
+			"在前端发起一次图像生成后，采样进度与统计会实时显示", w, maxInt(1, h-len(strip)-1))...)
+		body = append(body, logStatusLine(w, scrollInfo{}, m.drawView.follow))
+		f.status = dimStyle.Render("共 0 行")
+		return f.render(body)
+	}
+
 	winH := maxInt(1, h-len(strip)-1)
 	win, offset, info := windowLines(lines, m.drawView.offset, winH, m.drawView.follow)
 	m.drawView.offset = offset

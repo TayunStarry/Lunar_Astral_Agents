@@ -21,7 +21,7 @@ export interface Config {
 		multimodal_key?: string;
 		/** 语音识别模型名称 */
 		asr_model?: string;
-		/** 静态图思维链形态：url=视觉读取端点（默认）/ base64=变换管线直出 */
+		/** 静态图思维链形态：url=视觉读取端点（默认）/ base64=视觉读取管线直出的副本（云端模型） */
 		image_input?: string;
 		/** 视觉读取副本最大边长（像素） */
 		vision_max_side?: number;
@@ -61,6 +61,12 @@ export interface Config {
 		 * 调高更清晰但更吃显存与耗时；调低更省资源。
 		 */
 		pixel_budget_mp?: number;
+		/**
+		 * 图生图的提示词引导系数（CFG），覆盖绘制者给出的值。
+		 * 缺省不设（按 1.0）：当前基线模型 Qwen-Image 2.1 是引导蒸馏模型，CFG 必须是 1.0；
+		 * 换用非蒸馏模型（如 SDXL）后才需要 2~3。
+		 */
+		img2img_cfg?: number;
 	};
 }
 

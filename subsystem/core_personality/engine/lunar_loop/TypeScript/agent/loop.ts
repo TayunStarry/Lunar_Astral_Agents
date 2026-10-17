@@ -156,6 +156,14 @@ async function performMatchedAction(query: string): Promise<void> {
     pushContext('action', `月华${bestAction}了`, '');
 }
 
+/**
+ * 应答失败时对用户说的话
+ *
+ * 刻意保留月华的口吻、不暴露机制（不出现"模型""服务""引擎"等字样），
+ * 但也不用 randomDefaultMessage 那种"月华在哦"——那会让失败看起来像正常答复。
+ */
+const FAILURE_REPLY = '刚才有点走神，你再说一遍好吗？';
+
 /** 思考循环事件 */
 export async function thoughtLoopTickEvent(): Promise<void> {
     // 如果正在思考中，直接返回
@@ -199,14 +207,22 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         // 律令指令处理：命中已定义的 <指令> 时输出默认应答（含 TTS），剔除携带律令的消息，
         // 跳过本轮 AI 应答；未读消息中的其他内容等待下个周期再解析
         if (processDecrees()) {
-            GlobalConfig.reasoningInProgress = false;
             return;
         }
         // 创建消息（对话者作为主智能体，消费上下文并生成最终应答）
         await createChatMessage();
-        // 如果消息响应为空，抛出异常
+        // 如果消息响应为空：先分清「模型说没话说」与「模型根本没接通」再决定怎么回应
         if (!GlobalConfig.finalResponse.trim().length) {
-            pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0])
+            /** 本轮失败原因（空串表示模型正常答复了空内容） */
+            const failure = GlobalConfig.lastFailure;
+            if (failure) {
+                // 连续失败由宿主计数，达阈值会自动重载引擎；这里只保证本轮不把标记锁死
+                console.warn('[思考链] 本轮应答失败:', failure);
+                pushContext('text', FAILURE_REPLY, '');
+            }
+            else {
+                pushContext('text', randomDefaultMessage(), tts(randomDefaultMessage())[0])
+            }
             return
         };
         /** 解析原始文本：拆分思考区、代码块、行动区、正文切片（含display和tts双版本） */
@@ -256,15 +272,24 @@ export async function thoughtLoopTickEvent(): Promise<void> {
         const [promptSound, , , readErr] = readFile('audios/cartoon-fail.mp3');
         // 如果读取提示音失败，打印错误信息
         if (readErr) console.error('读取提示音失败:', readErr);
-        // 打印错误信息
-        console.error((error as Error).message, ' || ', (error as Error).stack);
+        // 打印错误信息（Go 侧 error 需要先转成可读文本，否则只留一句 [object Object]）
+        console.error('思考链异常:', `${(error as Error)?.message ?? error}`, ' || ', (error as Error)?.stack ?? '');
         // 推送兜底消息
         pushContext('text', randomDefaultMessage(), promptSound);
         // 重置智能体状态
         resetAgentState();
     }
-    // 标记为思考完成
-    GlobalConfig.reasoningInProgress = false;
+    finally {
+        /**
+         * 思考中标记必须在**任何**退出路径上复位。
+         *
+         * 历史缺陷：这条赋值写在 try/catch 之后，而 try 里有若干 `return`（空应答、律令命中），
+         * 一旦从那里返回就永远跳过复位 —— 下一轮 tick 在入口处看到 reasoningInProgress 为 true
+         * 直接 return，整个思考链就此停摆（用户实测：模型服务崩一次之后月华再也不说话，
+         * 且界面上看不出一行错误）。finally 保证「只要进来过就一定退出去」。
+         */
+        GlobalConfig.reasoningInProgress = false;
+    }
 }
 
 /** 写入消息（content 为文本、多模态内容数组或宿主下发的媒体URL内容项） */

@@ -63,9 +63,9 @@ export interface ToolResponseMessage {
 export interface ImageContent {
 	/** 内容类型，固定为 'image_url' */
 	type: 'image_url';
-	/** 图片 URL 信息（data:image/... 为图像，http(s):// 为远程图片，file:// 为本地图片） */
+	/** 图片 URL 信息（视觉读取端点 URL，或视觉读取管线直出的 data URI） */
 	image_url: {
-		/** 图片的 URL 地址（data URL 或 http URL 格式） */
+		/** 图片的 URL 地址 */
 		url: string;
 	};
 }

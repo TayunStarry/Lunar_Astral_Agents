@@ -94,6 +94,31 @@ func RunScript(script string) error {
 	return execErr
 }
 
+// EvalString 在事件循环上执行脚本并返回其**字符串结果**（宿主向 JS 取状态用）
+//
+// 与 RunScript 的区别只在返回值：引擎自愈需要向 JS 要"有没有可恢复的上下文""恢复了多少"，
+// 这类信息只能从表达式结果里拿。脚本本身抛错时返回错误而不是空串——
+// 调用方（重载流程）据此判断"是新运行时里没有对应入口"还是"取到了空状态"。
+func EvalString(script string) (string, error) {
+	var (
+		out     string
+		execErr error
+	)
+	if !RunOnLoop(func(vm *goja.Runtime) {
+		value, err := vm.RunString(script)
+		if err != nil {
+			execErr = err
+			return
+		}
+		if value != nil {
+			out = value.String()
+		}
+	}) {
+		return "", fmt.Errorf("goja 运行时未初始化，无法执行脚本")
+	}
+	return out, execErr
+}
+
 // Close 停止并清理运行时环境（线程安全）
 func Close() {
 	runtimeMutex.Lock()

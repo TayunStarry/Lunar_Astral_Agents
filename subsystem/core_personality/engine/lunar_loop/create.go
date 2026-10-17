@@ -31,10 +31,14 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	vm.Set("syncFetch", adapters.syncFetch)
 
 	// 注册图像处理适配器
+	//
+	// 这里**没有** resizeImage：思维链不允许自己缩放图片。图片进入模型上下文的唯一
+	// 形态是视觉读取管线产物（/file/read-multimodal/ 端点或 visionRead），缩放与尺寸
+	// 约束在 Go 侧统一完成。任何"模型自己把原图缩一缩"的路径都会被这条缺失的导出
+	// 直接掐断（见 docs/adr/0008）。
 	vm.Set("videoMedia", adapters.videoMedia)
 	vm.Set("videoFrames", adapters.videoFrames)
 	vm.Set("audioWav", adapters.audioWav)
-	vm.Set("resizeImage", adapters.resizeImage)
 	vm.Set("isAnimatedImage", adapters.isAnimatedImage)
 	vm.Set("animatedImageToVideo", adapters.animatedImageToVideo)
 	vm.Set("animatedImageToFrames", adapters.animatedImageToFrames)
@@ -93,39 +97,63 @@ func registerAdaptersToRuntime(vm *goja.Runtime) {
 	// （与 agent/data-dump.ts 的 buildContextDump 配对）
 	vm.Set("dumpForJS", adapters.dumpForJS)
 
+	// 注册引擎自愈入口：JS 上报应答成败、取回重载前的上下文快照
+	// （与 agent/loop.ts、agent/recovery.ts 配对；见 reload.go）
+	vm.Set("notifyAgentIdle", adapters.notifyAgentIdle)
+	vm.Set("notifyAgentFailure", adapters.notifyAgentFailure)
+	vm.Set("takeEngineSnapshot", adapters.takeEngineSnapshot)
+
 	// 注册引擎桥接适配器
 	vm.Set("sendToEngine", adapters.sendToEngine)
 	vm.Set("getAvailableActions", adapters.getAvailableActions)
 }
 
-// RunAgentContext 加载并运行嵌入式文件系统中的JavaScript文件
-func RunAgentContext() error {
+// ensureRuntime 确保 goja 运行时存在（幂等；重载后重新创建）
+func ensureRuntime() error {
 	runtimeMutex.Lock()
-	// 如果运行时不存在，先创建并初始化
-	if !container.IsReady() {
-		runtimeMutex.Unlock()
-		if err := container.Init(registerAdaptersToRuntime); err != nil {
-			return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> 创建运行时环境失败: %v", err)
-		}
-	} else {
-		runtimeMutex.Unlock()
+	defer runtimeMutex.Unlock()
+	if container.IsReady() {
+		return nil
 	}
+	if err := container.Init(registerAdaptersToRuntime); err != nil {
+		return fmt.Errorf("创建运行时环境失败: %w", err)
+	}
+	return nil
+}
 
+// runAgentScript 在当前运行时里执行内嵌的 agentSystem.js，并标记智能体就绪
+//
+// 每次重载都会重新跑一遍：整块 JS 状态（角色实例、setInterval 思考循环）随之重建。
+func runAgentScript() error {
 	// 智能体脚本由本包内嵌（go:embed agentSystem.js，见 variable.go），随二进制发布、版本一致
 	if len(agentSystemJS) == 0 {
-		return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> 内嵌的 agentSystem.js 为空")
+		return fmt.Errorf("内嵌的 agentSystem.js 为空（检查 npm run server.side 产物）")
 	}
 	systemJSContent := string(agentSystemJS)
 
-	// 在事件循环中执行JavaScript代码
-	container.RunOnLoop(func(vm *goja.Runtime) {
-		if _, runErr := vm.RunString(systemJSContent); runErr != nil {
-			LoggerGeneral.SubError("LunarCore", "JavaScript", "执行 agentSystem.js 代码失败: %v", runErr)
-			return
-		}
-		// 脚本执行成功：标记智能体就绪（数据导出等宿主侧入口据此判断可用性）
-		agentReady.Store(true)
-	})
+	var runErr error
+	if !container.RunOnLoop(func(vm *goja.Runtime) {
+		_, runErr = vm.RunString(systemJSContent)
+	}) {
+		return fmt.Errorf("goja 运行时未初始化，无法执行 agentSystem.js")
+	}
+	if runErr != nil {
+		return fmt.Errorf("执行 agentSystem.js 代码失败: %w", runErr)
+	}
+	// 脚本执行成功：标记智能体就绪（数据导出等宿主侧入口据此判断可用性）
+	agentReady.Store(true)
+	return nil
+}
+
+// RunAgentContext 加载并运行嵌入式文件系统中的JavaScript文件
+func RunAgentContext() error {
+	if err := ensureRuntime(); err != nil {
+		return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> %w", err)
+	}
+	if err := runAgentScript(); err != nil {
+		LoggerGeneral.SubError("LunarCore", "JavaScript", "%v", err)
+		return fmt.Errorf("Lunar模块[JavaScript][ERROR] -> %w", err)
+	}
 	return nil
 }
 

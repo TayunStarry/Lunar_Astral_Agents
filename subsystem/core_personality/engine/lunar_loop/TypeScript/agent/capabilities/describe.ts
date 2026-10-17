@@ -1,7 +1,7 @@
 import { ModelBuilder } from '../base/builder';
-import { sanitizeImageDesc } from './image-tag';
+import { sanitizeImageDesc, visionReference } from './image-tag';
 import { formatHandle, parseHandle } from './handle';
-import { getResourceEntry, readResource, setResourceSummary } from './resource';
+import { getResourceEntry, setResourceSummary } from './resource';
 
 // ===== 资源描述能力（图片视觉描述 + 视频/音频理解结论） =====
 //
@@ -84,23 +84,27 @@ export function describeResource(handle: string, question = ''): string {
 }
 
 /**
- * 取资源本体的**给模型看的**来源：图片一律转成 data URI
+ * 取资源本体的**给模型看的**来源：图片一律取视觉读取副本（≤ vision_max_side）
  *
  * 为什么不能直接给相对路径：这个来源是要塞进 `image_url.url` 交给推理服务的，
- * 而服务端只认它自己能解析的形态（data URI / http URL / 相对 `--media-path` 的 file://），
- * 不认「相对 LocalDir 的裸路径」。此前这里直接返回 `blob_path`，导致 `describeResource`
- * 对归档图片一直取不到内容（库里所有图片摘要都是空的）。
+ * 而本系统的思维链只允许本机视觉读取端点 URL；裸路径与 data URI 都不再作为图片入口。
  *
- * 图片本体经 `readResource` 取回 base64（二进制资源走 base64 通道），此处拼成 data URI。
+ * 为什么不能读原图：图片进入思维链的唯一合法形态是视觉读取管线产物。原图（这里那张
+ * 3072×4096 的参考图就是典型）会撑爆 llama-server 的非因果注意力批，直接让多模态实例
+ * 断言退出；同时也违反「模型永远拿不到原图数据」（docs/adr/0008）。
+ * 因此这里只返回视觉读取管线产物（url 形态为端点 URL，base64 形态为同一管线的 data URI）；
+ * 先用 visionRead 探测副本可生成，取不到就返回空串让调用方降级为目录摘要，绝不回退原图。
  *
  * @param handle 资源句柄
- * @returns data URI；取不到返回空串
+ * @returns 视觉读取管线产物；取不到返回空串
  */
 function resourceSource(handle: string): string {
-	const result = readResource(handle, 8 * 1024 * 1024);
-	if (!result || result.lost || !result.base64) return '';
-	// 截断过的二进制不能当图片用（半个文件解码必然失败），宁可返回空让调用方降级
-	if (result.truncated) return '';
-	const mime = result.mime || 'image/png';
-	return `data:${mime};base64,${result.base64}`;
+	const entry = getResourceEntry(handle);
+	if (!entry || entry.state !== 'active' || !entry.blob_path) return '';
+	const [, error] = visionRead(entry.blob_path, handle);
+	if (error) {
+		console.error('[资源描述] 视觉副本生成失败，降级为目录摘要:', error?.message ?? String(error));
+		return '';
+	}
+	return visionReference(handle, entry.blob_path);
 }

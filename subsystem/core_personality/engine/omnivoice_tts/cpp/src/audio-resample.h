@@ -26,6 +26,8 @@
 #include <cstring>
 #include <vector>
 
+#include "ov-error.h"
+
 #ifndef M_PI
 #    define M_PI 3.14159265358979323846
 #endif
@@ -136,7 +138,7 @@ static float * audio_resample(const float * in, int n_in, int sr_in, int sr_out,
         size_t  sz  = (size_t) n_in * (size_t) nch * sizeof(float);
         float * out = (float *) malloc(sz);
         if (!out) {
-            fprintf(stderr, "[Audio-Resample] OOM passthrough buffer (%zu bytes)\n", sz);
+            ov_log(OV_LOG_ERROR, "[Audio-Resample] OOM passthrough buffer (%zu bytes)", sz);
             *n_out = 0;
             return NULL;
         }
@@ -162,7 +164,7 @@ static float * audio_resample(const float * in, int n_in, int sr_in, int sr_out,
 
     float * out = (float *) malloc((size_t) target * (size_t) nch * sizeof(float));
     if (!out) {
-        fprintf(stderr, "[Audio-Resample] OOM output buffer\n");
+        ov_log(OV_LOG_ERROR, "[Audio-Resample] OOM output buffer");
         *n_out = 0;
         return NULL;
     }

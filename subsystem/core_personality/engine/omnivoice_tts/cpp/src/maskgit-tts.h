@@ -9,6 +9,7 @@
 // on a seedable PRNG and stay reproducible per seed.
 
 #include "debug.h"
+#include "ov-error.h"
 #include "philox.h"
 #include "pipeline-tts.h"
 #include "prompt-tts.h"
@@ -147,7 +148,7 @@ static std::vector<int32_t> maskgit_generate(PipelineTTS *         pt,
         return {};
     }
     if (T > S) {
-        fprintf(stderr, "[MaskGIT] FATAL: T=%d exceeds S=%d\n", T, S);
+        ov_log(OV_LOG_ERROR, "[MaskGIT] FATAL: T=%d exceeds S=%d", T, S);
         return {};
     }
 
@@ -160,9 +161,9 @@ static std::vector<int32_t> maskgit_generate(PipelineTTS *         pt,
 
     uint32_t ctr_lo = (ctr_lo_inout != nullptr) ? *ctr_lo_inout : 0;
 
-    fprintf(
-        stderr,
-        "[MaskGIT] Start: T=%d K=%d S=%d num_step=%d guidance=%.2f t_shift=%.3f layer_pen=%.2f cls_t=%.2f pos_t=%.2f\n",
+    ov_log(
+        OV_LOG_INFO,
+        "[MaskGIT] Start: T=%d K=%d S=%d num_step=%d guidance=%.2f t_shift=%.3f layer_pen=%.2f cls_t=%.2f pos_t=%.2f",
         T, K, S, cfg.num_step, (double) cfg.guidance_scale, (double) cfg.t_shift, (double) cfg.layer_penalty_factor,
         (double) cfg.class_temperature, (double) cfg.position_temperature);
 
@@ -196,7 +197,8 @@ static std::vector<int32_t> maskgit_generate(PipelineTTS *         pt,
         const size_t per_full_item = (size_t) V * (size_t) K * (size_t) S;
         const size_t expected      = audio_only ? 2 * per_audio : (size_t) B_prime * per_full_item;
         if (logits_full.size() != expected) {
-            fprintf(stderr, "[MaskGIT] FATAL: forward returned %zu f32 (expected %zu)\n", logits_full.size(), expected);
+            ov_log(OV_LOG_ERROR, "[MaskGIT] FATAL: forward returned %zu f32 (expected %zu)", logits_full.size(),
+                   expected);
             pipeline_tts_llm_batched_ctx_free(pt, &batched_ctx);
             return {};
         }
@@ -352,12 +354,12 @@ static std::vector<int32_t> maskgit_generate(PipelineTTS *         pt,
             prompt->input_ids[((size_t) 1 * K + k) * S + (size_t) t]                      = v;
         }
 
-        fprintf(stderr, "[MaskGIT-Step] %d/%d demask=%d remaining=%d\n", step + 1, cfg.num_step, k_demask,
-                (int) std::count(tokens.begin(), tokens.end(), mask_id));
+        ov_log(OV_LOG_INFO, "[MaskGIT-Step] %d/%d demask=%d remaining=%d", step + 1, cfg.num_step, k_demask,
+               (int) std::count(tokens.begin(), tokens.end(), mask_id));
     }
 
-    fprintf(stderr, "[MaskGIT] Total LM forward: %.2f ms across %d steps (avg %.2f ms/step)\n", fwd_total_ms,
-            cfg.num_step, fwd_total_ms / (double) cfg.num_step);
+    ov_log(OV_LOG_INFO, "[MaskGIT] Total LM forward: %.2f ms across %d steps (avg %.2f ms/step)", fwd_total_ms,
+           cfg.num_step, fwd_total_ms / (double) cfg.num_step);
 
     if (ctr_lo_inout != nullptr) {
         *ctr_lo_inout = ctr_lo;

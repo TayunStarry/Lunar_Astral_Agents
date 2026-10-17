@@ -36,6 +36,7 @@ func Install() {
 		if err == nil {
 			// 渲染目标：继承来的 stdout 未必可用（被重定向 / NUL / 只写句柄），
 			// 需要时改由控制台设备句柄承担（见 console.go）
+			inheritedStdout := os.Stdout
 			realStdout = resolveRenderTarget()
 			realStderr = os.Stderr
 			os.Stdout = stdoutW
@@ -47,6 +48,21 @@ func Install() {
 			// （实测：`httputil: ReverseProxy read error during body copy` 就是这么漏出来的）。
 			log.SetOutput(stdoutW)
 			intercepted = true
+
+			// ==== 进程级标准流接管：拦住进程内原生库的直写 ====
+			// 上面换掉的只是 Go 层输出，**进程级标准句柄与 CRT 的 fd 1/2 仍指向真实控制台**。
+			// OmniVoice TTS 引擎以 DLL 形式在进程内加载（engine/omnivoice_tts），其
+			// maskgit-tts.h 的逐步骤 fprintf(stderr, "[MaskGIT-Step] 25/32 demask=12 …")
+			// 与 backend.h 的 ggml 日志桥 fputs(text, stderr) 就这样一帧帧打在 TUI 界面上
+			// （实测故障：合成语音时整屏被进度行刷乱）。把标准句柄槽与 CRT 的 fd 1/2 一并接到
+			// 本管道后，原生输出与 Go 输出同一口径：只进「原始日志」视图与 console.log。
+			// 仅在渲染目标已是自取句柄时执行——否则接管会把界面正在用的句柄关掉（见 console.go）。
+			if f, ok := realStdout.(*os.File); ok && f != inheritedStdout {
+				if note := captureNativeStdio(stdoutW); note != "" {
+					AppendConsoleLog("[TUI] 进程级标准流接管不完整（" + note + "），原生库诊断可能仍直写终端")
+				}
+			}
+
 			go scanPipeLines(stdoutR)
 		}
 

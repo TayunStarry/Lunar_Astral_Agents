@@ -21,6 +21,7 @@
 // MaskGIT decoding runs N stateless forwards, no KV cache.
 
 #include "gguf-weights.h"
+#include "ov-error.h"
 #include "qwen3-enc.h"
 
 #include <cstdio>
@@ -66,7 +67,7 @@ static bool omnivoice_lm_load(OmniVoiceLM * m, const GGUFModel & gf, WeightCtx *
     m->cfg.is_causal         = false;  // MaskGIT, full bidirectional attention
 
     if (block_count == 0 || block_count > (uint32_t) QWEN3_MAX_LAYERS) {
-        fprintf(stderr, "[LM-Load] FATAL: invalid block_count=%u (max %d)\n", block_count, QWEN3_MAX_LAYERS);
+        ov_log(OV_LOG_ERROR, "[LM-Load] FATAL: invalid block_count=%u (max %d)", block_count, QWEN3_MAX_LAYERS);
         return false;
     }
 
@@ -77,8 +78,8 @@ static bool omnivoice_lm_load(OmniVoiceLM * m, const GGUFModel & gf, WeightCtx *
     m->audio_mask_id      = (int) gf_get_u32(gf, "omnivoice.audio_mask_id");
 
     if (num_codebook == 0 || num_codebook > (uint32_t) OMNIVOICE_MAX_CODEBOOKS) {
-        fprintf(stderr, "[LM-Load] FATAL: invalid num_audio_codebook=%u (max %d)\n", num_codebook,
-                OMNIVOICE_MAX_CODEBOOKS);
+        ov_log(OV_LOG_ERROR, "[LM-Load] FATAL: invalid num_audio_codebook=%u (max %d)", num_codebook,
+               OMNIVOICE_MAX_CODEBOOKS);
         return false;
     }
 
@@ -95,10 +96,12 @@ static bool omnivoice_lm_load(OmniVoiceLM * m, const GGUFModel & gf, WeightCtx *
     m->audio_embeddings = gf_load_tensor(wctx, gf, "audio_embeddings.weight");
     m->audio_heads      = gf_load_tensor(wctx, gf, "audio_heads.weight");
 
-    fprintf(stderr, "[LM-Load] Loaded: %dL H=%d FFN=%d Nh=%d Nkv=%d D=%d theta=%.0f eps=%.0e", m->cfg.n_layers,
-            m->cfg.hidden_size, m->cfg.intermediate_size, m->cfg.n_heads, m->cfg.n_kv_heads, m->cfg.head_dim,
-            (double) m->cfg.rope_theta, (double) m->cfg.rms_norm_eps);
-    fprintf(stderr, " | audio: K=%d V=%d mask_id=%d\n", m->num_audio_codebook, m->audio_vocab_size, m->audio_mask_id);
+    ov_log(OV_LOG_INFO,
+           "[LM-Load] Loaded: %dL H=%d FFN=%d Nh=%d Nkv=%d D=%d theta=%.0f eps=%.0e"
+           " | audio: K=%d V=%d mask_id=%d",
+           m->cfg.n_layers, m->cfg.hidden_size, m->cfg.intermediate_size, m->cfg.n_heads, m->cfg.n_kv_heads,
+           m->cfg.head_dim, (double) m->cfg.rope_theta, (double) m->cfg.rms_norm_eps, m->num_audio_codebook,
+           m->audio_vocab_size, m->audio_mask_id);
 
     for (int i = 0; i < m->cfg.n_layers; i++) {
         char prefix[64];

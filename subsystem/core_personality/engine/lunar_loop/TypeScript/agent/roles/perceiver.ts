@@ -216,6 +216,7 @@ export class PerceiverRole extends ModelBuilder {
 			role: 'user',
 			content: [
 				{ type: 'text', text: prompt },
+				// 采样帧由 Go 侧抽取并缩放到 640 级，属于宿主自产图片
 				...group.frames.map((frame): ImageContent => ({ type: 'image_url', image_url: { url: frame.image } }))
 			]
 		});

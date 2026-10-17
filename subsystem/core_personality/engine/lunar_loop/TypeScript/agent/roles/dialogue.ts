@@ -25,18 +25,72 @@ const dialogueBaseTools: ToolCall[] = [...agentControlTools, ...imageRecallTools
 /** 单次应答允许的工具调用轮次上限（防御模型在工具调用间自循环） */
 const MAX_TOOL_ROUNDS = 5;
 
+/**
+ * 把任意错误值转成可读文本
+ *
+ * 为什么要专门处理：`syncFetch` 失败时抛出的是 **Go 侧 error**（goja 导出为只有内部字段的
+ * 对象），`console.error('...', error)` 打出来就是 `{}`，日志里只留下一句
+ * 「请求处理错误: {}」——真实原因（模型服务崩了 / 连接被拒）无从查起。
+ */
+function describeError(error: unknown): string {
+    if (!error) return '未知错误';
+    if (typeof error === 'string') return error;
+    const anyError = error as { message?: string; stack?: string };
+    if (typeof anyError.message === 'string' && anyError.message) return anyError.message;
+    const text = String(error);
+    return text && text !== '[object Object]' ? text : '模型调用失败（宿主未提供错误详情）';
+}
+
+/** 通知宿主「本轮模型调用成功」——用于清零宿主的连续失败计数（宿主未注册时静默跳过） */
+function notifyAgentSuccess(): void {
+    try {
+        if (typeof notifyAgentIdle === 'function') notifyAgentIdle();
+    }
+    catch {
+        // 上报失败不影响主流程
+    }
+}
+
+/** 通知宿主「本轮应答失败」：连续失败达到阈值时宿主会自动重载引擎 */
+function reportAgentFailure(reason: string): void {
+    try {
+        if (typeof notifyAgentFailure === 'function') notifyAgentFailure(reason);
+    }
+    catch {
+        // 上报失败不影响主流程
+    }
+}
+
 /** 聊天对话角色 */
 export class DialogueRole extends ModelBuilder {
     /** 智能体角色标签（TUI 实况屏显示） */
     protected roleTag: string = "对话者";
 
-    /** 生成聊天对话 */
+    /** 生成聊天对话（一次应答周期的入口） */
     public async generateDialogue(cache: ChatCache): Promise<void> {
+        /**
+         * 每次「新的应答周期」都重置工具轮次计数。
+         *
+         * 上限是防御模型在工具间自循环的护栏，不是对本会话的永久封禁。此前只在上下文为空时
+         * 重置（`messages.length === 0`），于是一旦触顶，计数器就永远停在 5：之后每一次工具调用
+         * 都会在真正执行前被判定"已达上限"并直接丢掉，表现为助手从此再也不会用工具、也不再推进任务。
+         */
+        this.toolRounds = 0;
+        // 每轮应答都从"没有失败"开始：这一格只描述本轮，不继承上一轮的失败
+        GlobalConfig.lastFailure = '';
+        await this.continueDialogue(cache);
+    }
+
+    /**
+     * 应答周期内部的一步：请求模型 → 若有工具调用则执行并递归下一步。
+     *
+     * 拆成独立方法是为了把「重置计数」与「同周期递归」分开：递归调用不能重置计数，
+     * 否则 MAX_TOOL_ROUNDS 形同虚设。
+     */
+    private async continueDialogue(cache: ChatCache): Promise<void> {
         try {
             // 对消息中的图片文件进行压缩与解析处理
             await LiteImageFile();
-            // 首轮调用（上下文为空即为新一轮应答）重置工具轮次计数；递归轮次保留计数
-            if (this.messages.length === 0) this.toolRounds = 0;
             // 将未读上下文数组中的消息添加到处理器模型的上下文
             GlobalConfig.unreadContext.forEach(context => this.writeContext(context));
             // 清空未读上下文数组
@@ -56,7 +110,11 @@ export class DialogueRole extends ModelBuilder {
                 // 达到工具调用轮次上限：停止递归，避免模型在工具间自循环
                 if (this.toolRounds >= MAX_TOOL_ROUNDS) {
                     console.warn(`[对话者] 工具调用轮次达到上限（${MAX_TOOL_ROUNDS}），停止继续调用`);
-                    GlobalConfig.finalResponse = cache.descriptionContent;
+                    // 这批调用没有执行，必须逐个回填 tool 结果：assistant 的 tool_calls 若没有配对的
+                    // tool 消息，上下文就是不配对的（模型会以为工具还在跑，或下一轮直接复读这次调用）
+                    this.rejectPendingToolCalls(cache);
+                    // 摘掉工具再要一次终稿：把已经画完/查完的结论整理成话说完整，而不是停在半句
+                    this.finalizeWithoutTools();
                     return;
                 }
                 /** 处理工具调用 */
@@ -64,17 +122,64 @@ export class DialogueRole extends ModelBuilder {
                 // 如果有处理过的工具调用,重新发送请求（包含工具调用结果）
                 if (hasProcessedToolCalls) {
                     this.toolRounds++;
-                    return await this.generateDialogue(cache);
+                    return await this.continueDialogue(cache);
                 }
             }
             // 在历史上下文中添加模型响应
             this.writeContext(response.body.choices?.[0]?.message);
+            // 本轮确实打通了模型：清零宿主的连续失败计数
+            notifyAgentSuccess();
         }
         catch (error) {
-            console.error('请求处理错误:', error);
+            // 记下可读原因：日志里长期只有一句「请求处理错误: {}」，无法判断是模型崩了还是连接被拒
+            const reason = describeError(error);
+            console.error('请求处理错误:', reason);
+            // 交给外层循环：它据此上报宿主（连续失败达阈值 → 自动重载引擎），
+            // 并保证 GlobalConfig.reasoningInProgress 在 finally 里复位
+            GlobalConfig.lastFailure = reason;
+            reportAgentFailure(reason);
         }
         // 更新消息内容
         GlobalConfig.finalResponse = cache.descriptionContent;
+    }
+
+    /**
+     * 回填「未执行」的工具结果，保证每个 tool_call_id 都有配对消息
+     *
+     * 为什么必须回填：OpenAI 风格的函数调用要求 assistant.tool_calls 与后续 role=tool
+     * 一一配对。缺了配对，下一次请求的上下文就是坏的——llama.cpp 的聊天模板会把整段
+     * 工具调用当成"尚无结果"，模型只能重复调用或凭空编造结果。
+     */
+    private rejectPendingToolCalls(cache: ChatCache): void {
+        const reason = `本轮工具调用已达上限（${MAX_TOOL_ROUNDS} 次），该调用未执行`;
+        for (const toolCall of cache.toolCalls) {
+            this.messages.push({ role: 'tool', content: reason, tool_call_id: toolCall.id });
+        }
+        cache.toolCalls = [];
+    }
+
+    /**
+     * 终稿：不带工具再要一次回答
+     *
+     * 触顶时模型往往只吐出了工具调用、没有正文；直接把空串当最终应答推给前端，用户看到的就是
+     * 「一边说进行中、一边什么都没发生」。摘掉工具再要一次，它能给出的就只剩文本。
+     */
+    private finalizeWithoutTools(): void {
+        try {
+            const finalResponse = this.run(this.ragMessages, []);
+            const content = finalResponse.body?.choices?.[0]?.message?.content;
+            if (content) {
+                GlobalConfig.finalResponse = content;
+                // 只回写纯文本：终稿不允许再挂未执行的 tool_calls
+                this.writeContext({ role: 'assistant', content });
+                return;
+            }
+        }
+        catch (error) {
+            console.error('[对话者] 终稿生成失败:', error);
+        }
+        // 终稿也没拿到文本：给一句自然的话收尾，不让前端留空（也不暴露工具机制）
+        GlobalConfig.finalResponse = '这轮步骤有点多了，我先停在这里，你可以接着往下说。';
     }
     /**
      * 多模态图片窗口上限：只保留最近这么多张真实图片，更早的降级为「句柄 + 描述」占位文本

@@ -17,8 +17,11 @@ type engineLogWriter struct {
 	fallback *os.File
 	// buf 未成行的残余字节
 	buf []byte
-	// mu 保护 buf（读取侧为单协程，此处为防御性加锁）
+	// mu 保护 buf 与 vaeFallbackWarned（读取侧为单协程，此处为防御性加锁）
 	mu sync.Mutex
+	// vaeFallbackWarned 本次引擎进程是否已报告过「VAE 解码被自行降级为分片」
+	// （一次生成里引擎会连打数行，只提示第一行即可）
+	vaeFallbackWarned bool
 }
 
 // KeyFrame 关键帧结构
@@ -81,12 +84,12 @@ type CaptureRequest struct {
 
 // CaptureResult 统一截图结果
 type CaptureResult struct {
-	Image        []byte      `json:"-"`                // 原始图像字节（HTTP 直出）
-	Format       string      `json:"format"`           // png / jpeg
-	ContentType  string      `json:"content_type"`     // image/png / image/jpeg
-	Width        int         `json:"width"`            // 最终宽度（缩放后）
-	Height       int         `json:"height"`           // 最终高度（缩放后）
-	Mode         CaptureMode `json:"mode"`             // 实际采用的模式（含降级后）
+	Image        []byte      `json:"-"`            // 原始图像字节（HTTP 直出）
+	Format       string      `json:"format"`       // png / jpeg
+	ContentType  string      `json:"content_type"` // image/png / image/jpeg
+	Width        int         `json:"width"`        // 最终宽度（缩放后）
+	Height       int         `json:"height"`       // 最终高度（缩放后）
+	Mode         CaptureMode `json:"mode"`         // 实际采用的模式（含降级后）
 	DisplayIndex int         `json:"display_index,omitempty"`
 	WindowTitle  string      `json:"window_title,omitempty"` // 焦点窗口标题（window 模式）
 }

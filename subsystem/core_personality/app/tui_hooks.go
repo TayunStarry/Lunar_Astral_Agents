@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 
+	"CorePersonality/engine/lunar_loop"
 	"CorePersonality/server"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/BrowserClient"
@@ -62,6 +63,39 @@ func WireTUIDataDumpHooks() {
 		},
 		func(target string) (TuiSystem.DataDumpResult, error) {
 			return callDumpHandler(server.DataDumpContextHandler, "/debug/dump/context?agent="+target)
+		},
+	)
+}
+
+// WireTUIEngineHooks 把「月华引擎自愈」能力注入控制台：
+//   - status：读取引擎状态（运行时/脚本就绪、重载次数、连续失败、自动重载策略）；
+//   - reload：手动重载 goja 运行时（宿主侧还会顺手把崩掉的 llama-server 拉起来）。
+//
+// 为什么要给控制台一个手动入口：goja 运行时是一整块进程内状态，一旦走进死路，
+// 除了重启整个程序没有别的办法；而重启会连带重启前端窗口与全部子系统。
+// 控制台的重载按钮是"最小代价的恢复手段"，自动重载则是它的兜底自动化。
+func WireTUIEngineHooks() {
+	TuiSystem.SetEngineHooks(
+		func() TuiSystem.EngineStatus {
+			state := lunarloop.EngineState()
+			return TuiSystem.EngineStatus{
+				RuntimeReady:        state.RuntimeReady,
+				AgentReady:          state.AgentReady,
+				BootedAt:            state.BootedAt,
+				ReloadCount:         state.ReloadCount,
+				LastReloadAt:        state.LastReloadAt,
+				LastReloadReason:    state.LastReloadReason,
+				LastReloadResult:    state.LastReloadResult,
+				ConsecutiveFailures: state.ConsecutiveFailures,
+				LastFailure:         state.LastFailure,
+				LastFailureAt:       state.LastFailureAt,
+				AutoReload:          state.AutoReload,
+				AutoReloadThreshold: state.AutoReloadThreshold,
+				Reloading:           lunarloop.ReloadRunning(),
+			}
+		},
+		func(reason string) error {
+			return lunarloop.ReloadMoonEngine(reason)
 		},
 	)
 }

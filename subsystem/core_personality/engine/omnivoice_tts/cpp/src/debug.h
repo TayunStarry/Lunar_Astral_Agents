@@ -6,9 +6,12 @@
 
 #include "utf8.h"
 
+#include "ov-error.h"
+
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <string>
 #include <vector>
 
 struct DebugDumper {
@@ -38,7 +41,7 @@ static void debug_dump(const DebugDumper * d, const char * name, const float * d
     }
     FILE * f = utf8_fopen(path, "wb");
     if (!f) {
-        fprintf(stderr, "[Debug] cannot write %s\n", path);
+        ov_log(OV_LOG_ERROR, "[Debug] cannot write %s", path);
         return;
     }
     fwrite(&ndims, sizeof(int32_t), 1, f);
@@ -46,16 +49,22 @@ static void debug_dump(const DebugDumper * d, const char * name, const float * d
     fwrite(data, sizeof(float), numel, f);
     fclose(f);
 
-    // First 4 values for quick sanity check on stderr.
-    fprintf(stderr, "[Debug] %s: [", name);
+    // First 4 values for quick sanity check, assembled into one line so the
+    // log sink emits it as a single entry.
+    char        tmp[64];
+    std::string line = "[Debug] ";
+    line += name;
+    line += ": [";
     for (int i = 0; i < ndims; i++) {
-        fprintf(stderr, "%s%d", i ? ", " : "", shape[i]);
+        snprintf(tmp, sizeof(tmp), "%s%d", i ? ", " : "", shape[i]);
+        line += tmp;
     }
-    fprintf(stderr, "] first4:");
+    line += "] first4:";
     for (int i = 0; i < 4 && i < numel; i++) {
-        fprintf(stderr, " %.6f", data[i]);
+        snprintf(tmp, sizeof(tmp), " %.6f", data[i]);
+        line += tmp;
     }
-    fprintf(stderr, "\n");
+    ov_log(OV_LOG_INFO, "%s", line.c_str());
 }
 
 // Convenience: dump 1D tensor [n].

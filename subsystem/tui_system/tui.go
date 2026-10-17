@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/skip2/go-qrcode"
 
 	"LunarSubsystem/LoggerGeneral"
@@ -80,7 +79,9 @@ const (
 	screenUpdate
 	screenPorts
 	screenMarket
+	screenLTP9Auth
 	screenDump
+	screenEngine
 )
 
 // menuItem 主菜单条目：快捷键、分组与目标屏幕均显式声明。
@@ -101,6 +102,8 @@ var menuItems = []menuItem{
 		desc: "发布更新包到 Gitee / 拉取更新包（最新 / tag / commit 哈希），更新含主程序时自动重启"},
 	{key: "m", title: "LTPX 应用市场", group: "更新与发布", screen: screenMarket,
 		desc: "浏览 / 标签筛选 / 安装 / 发布 LTPX 工具包（Gitee Release 通道）"},
+	{key: "l", title: "LTP9 授权签发", group: "更新与发布", screen: screenLTP9Auth,
+		desc: "扫描包目录中的 LTP9 包，按颜色区分「已签发 / 未签发 / 需重签」，回车依据脚本现有引用的权限签发 permissions.key"},
 
 	{key: "1", title: "核心智能 实况", group: "运行观测", screen: screenAgent,
 		desc: "月华思考 / 输出 / 工具调用的流式显示（对话者 · 绘制者 · 演奏者 · 记忆者…）"},
@@ -127,6 +130,8 @@ var menuItems = []menuItem{
 		desc: "项目文件 7z 分卷打包，支持进度显示"},
 	{key: "b", title: "端口释放 管理", group: "系统管理", screen: screenPorts,
 		desc: "扫描指定端口范围，终止占用进程并验证释放"},
+	{key: "r", title: "月华引擎 管理", group: "系统管理", screen: screenEngine,
+		desc: "查看 goja 运行时状态（就绪 / 重载次数 / 连续失败），按 R 手动重载；连续应答失败达阈值时宿主会自动重载"},
 
 	{key: "z", title: "退出程序", group: "会话", screen: screenMenu,
 		desc: "关闭控制台并优雅停止全部子系统（感谢使用「星月智能 · 控制台」）"},
@@ -175,7 +180,9 @@ type appModel struct {
 	update    updateState
 	ports     portsState
 	market    marketState
+	ltp9Auth  ltp9AuthState
 	dump      dumpState
+	engine    engineState
 
 	streamUnsub func() // 流式事件订阅注销
 	sizeLogged  bool   // 首帧尺寸自检是否已落盘
@@ -199,6 +206,7 @@ func newAppModel() appModel {
 		update:    newUpdateState(),
 		ports:     newPortsState(),
 		market:    newMarketState(),
+		ltp9Auth:  newLTP9AuthState(),
 	}
 }
 
@@ -338,13 +346,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updatePorts(msg)
 	case screenMarket:
 		return m.updateMarket(msg)
+	case screenLTP9Auth:
+		return m.updateLTP9Auth(msg)
 	case screenDump:
 		return m.updateDump(msg)
+	case screenEngine:
+		return m.updateEngine(msg)
 	}
 	return m, nil
 }
 
-// handleGlobalKey 全局键位：退出与帮助开关；返回是否已消费该键
+// handleGlobalKey 全局键位：退出、帮助开关与屏间切换；返回是否已消费该键
 func (m *appModel) handleGlobalKey(key tea.KeyMsg) (bool, tea.Cmd) {
 	k := key.String()
 	if k == "ctrl+c" {
@@ -361,6 +373,15 @@ func (m *appModel) handleGlobalKey(key tea.KeyMsg) (bool, tea.Cmd) {
 	if k == "?" && !m.inputFocused() {
 		m.help = true
 		return true, nil
+	}
+	// 屏间顺序切换：任何屏都可用，不依赖「先回主菜单再进」。
+	// 文本框聚焦时让位（[ ] 也是合法正文），其余屏一律接管。
+	if (k == "[" || k == "]") && !m.inputFocused() {
+		delta := 1
+		if k == "[" {
+			delta = -1
+		}
+		return true, m.switchScreen(delta)
 	}
 	return false, nil
 }
@@ -437,10 +458,25 @@ func (m *appModel) menuAction() tea.Cmd {
 	if item.screen == screenMenu {
 		return tea.Quit // 末项「退出程序」以 screenMenu 作哨兵
 	}
-	m.screen = item.screen
-	m.help = false
+	return m.enterScreen(item.screen)
+}
 
-	switch item.screen {
+// enterScreen 进入指定屏幕并完成该屏的进入动作。
+//
+// 三条入口（主菜单回车 / 侧栏 / [ ] 顺序切换）共用这一份实现：
+// 进入某屏要做的初始化（重置日志窗口、拉快照、聚焦输入框…）若分散在各入口，
+// 迟早出现「从菜单进正常、从别处进就古怪」的裂缝。
+func (m *appModel) enterScreen(id screenID) tea.Cmd {
+	m.screen = id
+	m.help = false
+	// 返回主菜单时高亮当前屏所在条目：位置感由这一处保底（侧栏收起时尤其重要）
+	if idx := menuIndexOf(id); idx >= 0 {
+		m.menu = idx
+	}
+
+	switch id {
+	case screenMenu:
+		return nil
 	case screenStats:
 		m.stats.snap = GetSnapshot()
 		return tickStats()
@@ -468,10 +504,36 @@ func (m *appModel) menuAction() tea.Cmd {
 		return textinput.Blink
 	case screenMarket:
 		return m.marketEnter()
+	case screenLTP9Auth:
+		return m.ltp9AuthEnter()
 	case screenDump:
 		return m.dumpEnter()
 	}
 	return nil
+}
+
+// switchScreen 按侧栏顺序（= 主菜单顺序）切换到上/下一屏。
+// 不在任何功能屏时（主菜单），向前即首屏、向后即末屏——与翻页的直觉一致。
+func (m *appModel) switchScreen(delta int) tea.Cmd {
+	ids := navigableScreens()
+	if len(ids) == 0 {
+		return nil
+	}
+	cur := -1
+	for i, id := range ids {
+		if id == m.screen {
+			cur = i
+			break
+		}
+	}
+	next := 0
+	switch {
+	case cur < 0 && delta < 0:
+		next = len(ids) - 1
+	case cur >= 0:
+		next = ((cur+delta)%len(ids) + len(ids)) % len(ids)
+	}
+	return m.enterScreen(ids[next])
 }
 
 // quitCleanup TUI 退出后的统一清理
@@ -518,11 +580,6 @@ func ensureTerminal() error {
 func Run() error {
 	model := newAppModel()
 
-	// 渲染目标必须是「真实终端」而非被接管的管道。
-	// Install 已把 os.Stdout 换成管道，若沿用 lipgloss 默认渲染器，
-	// 它会判定输出不是 TTY 而剥掉全部颜色与样式（界面退化为纯文本）。
-	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(GetRealStdout()))
-
 	// 进事件循环前先确认控制台可用：否则会留下「进程在跑、界面全无」的隐形实例
 	if err := ensureTerminal(); err != nil {
 		return err
@@ -532,8 +589,8 @@ func Run() error {
 	// 会把 ◆ ■ ▶ · → 这类「东亚歧义宽度」字形渲染成 2 列。两者都会让每一行超出终端宽度，
 	// 一折行整屏就翻倍高、备用屏幕放不下便每帧向上滚（用户实测：一打开就滚动 + 显示混乱）。
 	// 先切 UTF-8 再实测字形宽度——顺序不能反，否则测到的是乱码的宽度。
-	consoleOut := GetRealStdout()
-	if f, ok := consoleOut.(*os.File); ok {
+	renderTarget := GetRealStdout()
+	if f, ok := renderTarget.(*os.File); ok {
 		restoreEncoding, fingerprint := ensureConsoleEncoding(f)
 		defer restoreEncoding()
 		widths := calibrateGlyphWidths(f)
@@ -567,6 +624,14 @@ func Run() error {
 		} else {
 			AppendConsoleLog("[TUI] 终端字形校准失败：未能取得控制台信息，已退回内置宽度表（中文控制台字体下可能错位）")
 		}
+	}
+
+	// 配色档位与样式绑定：必须在 VT 处理开启之后、tea 启动之前。
+	// 这一步看着琐碎，却是「界面一片纯白」的根治点——见 renderer.go 的说明。
+	// 顺序也要紧：颜色档位取决于「控制台是否已启用 ANSI 处理」，反了就永远退化为无色。
+	if diag := activateTheme(renderTarget); diag != "" {
+		AppendConsoleLog("[TUI] 配色档位: " + diag)
+		pushScrubbedLog(SourceRaw, "RAW", "", "", "[TUI] 配色档位: "+diag)
 	}
 
 	// 更新器子进程的进度接回真实终端：主程序接管 stdout 后，子进程若继承 NUL 设备，
@@ -704,8 +769,12 @@ func (m appModel) View() string {
 		return m.viewPorts()
 	case screenMarket:
 		return m.viewMarket()
+	case screenLTP9Auth:
+		return m.viewLTP9Auth()
 	case screenDump:
 		return m.viewDump()
+	case screenEngine:
+		return m.viewEngine()
 	}
 	return ""
 }
@@ -741,8 +810,12 @@ func (m appModel) screenMeta() (name, context string, keys []keyHint) {
 		return "端口释放", "", portsKeys()
 	case screenMarket:
 		return "LTPX 应用市场", marketContext(m.market), marketKeys(m.market)
+	case screenLTP9Auth:
+		return "LTP9 授权签发", ltp9AuthContext(m.ltp9Auth), ltp9AuthKeys(m.ltp9Auth)
 	case screenDump:
 		return "数据导出", dumpContextLine(m.dump), dumpKeys(m.dump)
+	case screenEngine:
+		return "月华引擎 管理", "goja lunar_loop", engineKeys(m.engine)
 	}
 	return "未知", "", nil
 }
@@ -752,7 +825,7 @@ func menuKeys() []keyHint {
 	return []keyHint{
 		kh("↑/↓", "选择"),
 		kh("Enter/→", "进入"),
-		kh("0-9 a b d m z", "直达"),
+		kh("0-9 a b d l m z", "直达"),
 		kh("?", "帮助"),
 		kh("q", "退出"),
 	}

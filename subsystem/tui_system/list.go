@@ -140,7 +140,8 @@ func (p *listPane) layoutView(blocks [][]string, cursor, width, height int) ([]s
 			line = strings.Repeat(" ", contentW)
 		}
 		if bar {
-			glyph, style := "│", faintStyle
+			// 轨道用 ░ 而不是 │：贴着外框的竖线会被读成「多画了一条框线」
+			glyph, style := "░", faintStyle
 			if i >= thumbTop && i < thumbTop+thumbLen {
 				glyph, style = "█", valueStyle
 			}

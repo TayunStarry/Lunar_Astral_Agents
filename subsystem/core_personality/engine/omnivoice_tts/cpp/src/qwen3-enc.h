@@ -13,6 +13,7 @@
 
 #include "ggml.h"
 #include "gguf-weights.h"
+#include "ov-error.h"
 
 #include <cmath>
 #include <cstdio>
@@ -334,19 +335,19 @@ static void qwen3_load_layer(WeightCtx *         wctx,
         if (ly->qk) {
             ly->v_proj = gf_load_tensor(wctx, gf, prefix + ".self_attn.v_proj.weight");
             if (layer_idx == 0) {
-                fprintf(stderr, "[Qwen3] Attn: Q+K fused, V separate\n");
+                ov_log(OV_LOG_INFO, "[Qwen3] Attn: Q+K fused, V separate");
             }
         } else {
             ly->q_proj = gf_load_tensor(wctx, gf, prefix + ".self_attn.q_proj.weight");
             ly->k_proj = gf_load_tensor(wctx, gf, prefix + ".self_attn.k_proj.weight");
             ly->v_proj = gf_load_tensor(wctx, gf, prefix + ".self_attn.v_proj.weight");
             if (layer_idx == 0) {
-                fprintf(stderr, "[Qwen3] Attn: all separate\n");
+                ov_log(OV_LOG_INFO, "[Qwen3] Attn: all separate");
             }
         }
     } else {
         if (layer_idx == 0) {
-            fprintf(stderr, "[Qwen3] Attn: Q+K+V fused\n");
+            ov_log(OV_LOG_INFO, "[Qwen3] Attn: Q+K+V fused");
         }
     }
 
@@ -358,13 +359,13 @@ static void qwen3_load_layer(WeightCtx *         wctx,
     ly->gate_up = gf_load_pair_fused(wctx, gf, prefix + ".mlp.gate_proj.weight", prefix + ".mlp.up_proj.weight");
     if (ly->gate_up) {
         if (layer_idx == 0) {
-            fprintf(stderr, "[Qwen3] MLP: gate+up fused\n");
+            ov_log(OV_LOG_INFO, "[Qwen3] MLP: gate+up fused");
         }
     } else {
         ly->gate_proj = gf_load_tensor(wctx, gf, prefix + ".mlp.gate_proj.weight");
         ly->up_proj   = gf_load_tensor(wctx, gf, prefix + ".mlp.up_proj.weight");
         if (layer_idx == 0) {
-            fprintf(stderr, "[Qwen3] MLP: gate+up separate\n");
+            ov_log(OV_LOG_INFO, "[Qwen3] MLP: gate+up separate");
         }
     }
     ly->down_proj = gf_load_tensor(wctx, gf, prefix + ".mlp.down_proj.weight");

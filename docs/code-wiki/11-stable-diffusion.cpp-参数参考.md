@@ -253,7 +253,7 @@ sd-server 常驻模型并对外提供三套接口族，启动后可用浏览器�
 | `--increase-ref-index` | 根据参考图像列出的顺序自动增加其索引（从 1 开始） | — | 多参考图场景使用 |
 | `--disable-auto-resize-ref-image` | 禁用参考图像的自动调整大小 | — | 需要保持原始尺寸时开启 |
 | `--disable-image-metadata` | 不在图像文件中嵌入生成元数据 | — | 需要更小文件时开启 |
-| `--vae-tiling` | 以分块方式处理 vae 以减少内存使用 | — | 显存紧张时开启，注意接缝 |
+| `--vae-tiling` | 以分块方式处理 vae 以减少内存使用 | — | 显存紧张时开启，注意接缝；**不开也可能因显存不足被自动降级**（见排故） |
 | `--hires` | 启用 highres fix | — | 需要二次放大修复时开启 |
 | `-s`, `--seed` | RNG 种子，小于 0 表示随机 | 42 | 需要复现时设固定值 |
 | `--sampling-method` | 采样方法，可取 euler、euler_a、heun、dpm2、dpm++2s_a、dpm++2m、dpm++2mv2、dpm++2m_sde、dpm++2m_sde_bt、ipndm、ipndm_v、lcm、ddim_trailing、tcd、res_multistep、res_2s、er_sde、lms、euler_cfg_pp、euler_a_cfg_pp | euler（Flux/SD3/Wan），euler_a（其他） | 按模型与题材选择 |
@@ -278,6 +278,7 @@ sd-server 常驻模型并对外提供三套接口族，启动后可用浏览器�
 | 出图全黑 | 提示词或负面提示词失衡、CFG 或引导异常、VAE 不匹配 | 检查 `--cfg-scale`、`--guidance`，确认 VAE 与模型配套，必要时用 `--vae-format` 覆盖 |
 | 出图全是噪点或糊 | 步数过低、强度或噪声乘数异常、模型与预测类型不匹配 | 提高 `--steps`，检查 `--eta`、`--strength` 与 `--prediction` |
 | 画面出现规则接缝或网格 | VAE 分块几何与重叠不当 | 调整 `--vae-tile-size`、`--vae-relative-tile-size`、`--vae-tile-overlap`，或关闭 `--vae-tiling` |
+| 画面出现**单个硬边纯色方块**（如脸上小白方斑），日志有 `retrying with spatial tiling` | VAE 整帧解码显存不足，引擎**自动**降级为空间分块（未开 `--vae-tiling` 也会发生）；wan_vae 的分块接缝会留下硬边方块 | 先用 `--vae-conv-direct` 降低 GPU 解码占用（实测显存约减半、与 CPU 解码像素等价）；仍不够再用 `--backend vae=cpu` 整段放 CPU（慢但无接缝）；也可提高可用显存或降低分辨率 |
 | 生成过慢 | 未量化权重、未启用加速、缓存未开 | 使用量化 `--type`，开启 `--fa`，尝试 `--cache-mode`，降低 `--steps` 或分辨率 |
 | 模型或 VAE 不匹配报错 | 文本编码器、VAE 与主模型不配套 | 核对 `--clip_l`、`--clip_g`、`--t5xxl`、`--llm`、`--vae` 是否与模型对应，必要时指定 `--vae-format` |
 | 超分失败或结果异常 | 未指定超分模型、图块过大或倍率不当 | 设置 `--upscale-model`，将 `--mode` 设为 upscale，调小 `--upscale-tile-size`，合理设置 `--upscale-repeats` |

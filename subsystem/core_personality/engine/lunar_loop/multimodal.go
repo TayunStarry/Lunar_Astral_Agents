@@ -196,7 +196,7 @@ func resolveImageBytes(arg goja.Value) ([]byte, error) {
 		if abs, found := resolveLocalFilePath(data); found {
 			return module.ImageSourceToBytes(abs)
 		}
-		// 其余字符串按原始字节处理（与 resizeImage 的既有约定一致）
+		// 其余字符串按原始字节处理（仅供 Go 侧管线解码，不得回流到 image_url）
 		return []byte(data), nil
 	case map[string]any:
 		// goja 中的 Blob/File 会转换为携带 buffer / data 字段的对象
@@ -244,28 +244,9 @@ func fileExists(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// resizeImage 适配TypeScript调用的标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → 输出 base64
-// 入参与 isAnimatedImage / animatedImageToVideo 一致：字节数据、HTTP(S) URL、data:image URI、本地路径
-// 动态图在此按首帧静态降级；动态图理解请先用 isAnimatedImage 判定并走 animatedImageToVideo
-// 返回值: [Array<Object>, error] 处理结果数组（恒为单元素）和错误信息
-func (class *Runtime) resizeImage(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 1 {
-		return class.runtime.ToValue([]any{nil, fmt.Errorf("参数不足")})
-	}
-
-	// 统一入参解析：地址类入参由 Go 侧下载/解码，字节类入参直接使用
-	bytesData, err := resolveImageBytes(call.Argument(0))
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, err})
-	}
-
-	// 调用图片缩放函数，返回图片数据数组
-	results, err := module.ResizeImage(bytesData)
-	if err != nil {
-		return class.runtime.ToValue([]any{nil, err})
-	}
-	return class.runtime.ToValue([]any{results, nil})
-}
+// 注意：这里**不提供** resizeImage。图片缩放与尺寸约束只允许由视觉读取管线
+// （/file/read-multimodal/ 端点与 visionRead → VisionCopy）完成；思维链拿不到
+// 任何"自己把原图缩一下"的入口。历史实现见 docs/adr/0008「思维链图片来源唯一化」。
 
 // generateImage 适配TypeScript调用的图片生成功能，处理图片生成参数并返回结果
 // 返回值: [Object, error] 图片生成结果和错误信息
@@ -378,8 +359,8 @@ func asFloat(v any) float64 {
 }
 
 // upscaleImage 适配TypeScript调用的图像超分辨率重建：对已有图片执行 RealESRGAN 放大（4x）
-// 入参与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，
-// 地址类（HTTP(S) URL、data:image URI、本地路径）由 Go 侧下载/解码后走 sd-cli -M upscale 管线
+// 入参支持字节数据（Uint8Array 等）与地址类（HTTP(S) URL、data:image URI、本地路径），
+// 地址类由 Go 侧下载/解码后走 sd-cli -M upscale 管线；产物只回给 Go 侧管线，不回思维链。
 // 返回值: [Object, error] 超分结果（base64/尺寸）和错误信息
 func (class *Runtime) upscaleImage(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
@@ -415,7 +396,7 @@ func (class *Runtime) atob(call goja.FunctionCall) goja.Value {
 
 // hashBytes 适配TypeScript调用的内容哈希计算：对字节数据计算 SHA-256，截取前 16 位十六进制
 // 与前端文件哈希命名约定一致（calculateFileHash：SHA-256 取前 16 位），供参考图等按内容哈希命名
-// 入参解析与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，地址类由 Go 侧下载/解码
+// 入参解析与 upscaleImage 一致：字节数据（Uint8Array 等）直接使用，地址类由 Go 侧下载/解码
 // 返回值: [string, error] 哈希结果和错误信息
 func (class *Runtime) hashBytes(call goja.FunctionCall) goja.Value {
 	arg := call.Argument(0)

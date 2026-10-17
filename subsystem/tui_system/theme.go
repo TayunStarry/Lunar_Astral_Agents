@@ -1,19 +1,17 @@
 package TuiSystem
 
-import (
-	"fmt"
-	"strings"
-	"time"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
-)
-
-// ==== 调色板 ====
+// ==== 调色板与样式 ====
 //
 // 统一色阶：品牌紫承担标题与选中态，青绿承担数值与成功，橙/红承担警告与错误，
 // 灰阶承担结构线（边框、分隔）与次要信息。各屏共用同一色板，
 // 避免「每个屏各自取色」造成的观感漂移。
+//
+// 色值全部是 **256 色索引**：中文 Windows 的经典 conhost 对 24 位色的支持随版本波动，
+// 而索引色在 conhost / Windows Terminal / 远程 SSH 里表现一致。
+
+import (
+	"github.com/charmbracelet/lipgloss"
+)
 
 var (
 	colAccent     = lipgloss.Color("213") // 品牌紫：标题、选中光标
@@ -23,47 +21,120 @@ var (
 	colDim        = lipgloss.Color("245") // 次要信息
 	colFaint      = lipgloss.Color("240") // 更次要（占位、空态）
 	colRule       = lipgloss.Color("238") // 结构线
-	colOK         = lipgloss.Color("82")
-	colWarn       = lipgloss.Color("214")
-	colErr        = lipgloss.Color("204")
+	colOK         = lipgloss.Color("82")  // 成功
+	colWarn       = lipgloss.Color("214") // 警告
+	colErr        = lipgloss.Color("204") // 错误
 	colSelBg      = lipgloss.Color("237") // 选中行底色
 	colSelFg      = lipgloss.Color("231") // 选中行前景
+	colSelDim     = lipgloss.Color("250") // 选中行内的次级文字
+
+	colLogInfo  = lipgloss.Color("86")  // 日志：常规
+	colLogDim   = lipgloss.Color("245") // 日志：stdout 原始行
+	colLogProxy = lipgloss.Color("39")  // 日志：任务回显
+	colThink    = lipgloss.Color("243") // 思考流（暗色）
+	colRole     = lipgloss.Color("176") // 智能体角色名
+	colDraw     = lipgloss.Color("51")  // 绘图采样进度
 )
 
 // ==== 基础样式 ====
+//
+// 注意：这些变量**没有初值**，必须由 bindTheme 绑定（见下方说明）。
+// 零值 lipgloss.Style 仍可安全 Render（只输出纯文本），因此漏绑不会 panic，
+// 只会「没颜色」——这正是历史缺陷的表现形式。
 
 var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-	labelStyle   = lipgloss.NewStyle().Foreground(colText)
-	valueStyle   = lipgloss.NewStyle().Bold(true).Foreground(colValue)
-	dimStyle     = lipgloss.NewStyle().Foreground(colDim)
-	faintStyle   = lipgloss.NewStyle().Foreground(colFaint)
-	selectStyle  = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-	okStyle      = lipgloss.NewStyle().Bold(true).Foreground(colOK)
-	warnStyle    = lipgloss.NewStyle().Foreground(colWarn)
-	errStyle     = lipgloss.NewStyle().Bold(true).Foreground(colErr)
-	cursorStyle  = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-	ruleStyle    = lipgloss.NewStyle().Foreground(colRule)
-	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(colAccentSoft)
-	hintStyle    = lipgloss.NewStyle().Foreground(colDim)
-	sectionStyle = lipgloss.NewStyle().Bold(true).Foreground(colValue)
-	selRowStyle  = lipgloss.NewStyle().Background(colSelBg).Foreground(colSelFg)
+	titleStyle   lipgloss.Style // 标题栏品牌
+	crumbStyle   lipgloss.Style // 标题栏面包屑（上一级）
+	labelStyle   lipgloss.Style // 正文
+	valueStyle   lipgloss.Style // 数值/强调
+	dimStyle     lipgloss.Style // 次要信息
+	faintStyle   lipgloss.Style // 更次要
+	selectStyle  lipgloss.Style // 选中/当前
+	okStyle      lipgloss.Style // 成功
+	warnStyle    lipgloss.Style // 警告
+	errStyle     lipgloss.Style // 错误
+	cursorStyle  lipgloss.Style // 列表光标
+	ruleStyle    lipgloss.Style // 结构线
+	keyStyle     lipgloss.Style // 键位
+	hintStyle    lipgloss.Style // 键位说明
+	sectionStyle lipgloss.Style // 区块标题
+	selRowStyle  lipgloss.Style // 选中行（整行底色）
+	selDimStyle  lipgloss.Style // 选中行内的次级文字
 
-	// 选中行内的次级文字：底色之上仍保持可读的灰
-	selDimStyle = lipgloss.NewStyle().Background(colSelBg).Foreground(lipgloss.Color("250"))
+	navGroupStyle lipgloss.Style // 侧栏分组标题
+	navItemStyle  lipgloss.Style // 侧栏条目
+	navKeyStyle   lipgloss.Style // 侧栏条目的快捷键标记
 )
 
 // ==== 日志专用样式 ====
 
 var (
-	logInfoStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))  // 青色：常规
-	logDimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("245")) // 灰色：stdout 原始行
-	logProxyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))  // 蓝色：任务回显
-	logWarnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // 橙色：警告
-	logErrStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("204")) // 红色：错误
-	thinkStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("243")) // 思考流（暗色）
-	roleStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("176"))
+	logInfoStyle      lipgloss.Style // 青色：常规
+	logDimStyle       lipgloss.Style // 灰色：stdout 原始行
+	logProxyStyle     lipgloss.Style // 蓝色：任务回显
+	logWarnStyle      lipgloss.Style // 橙色：警告
+	logErrStyle       lipgloss.Style // 红色：错误
+	thinkStyle        lipgloss.Style // 思考流（暗色）
+	thinkHeadStyle    lipgloss.Style // 思考/输出分区标题
+	roleStyle         lipgloss.Style // 智能体角色名
+	drawProgressStyle lipgloss.Style // 绘图采样进度
 )
+
+// bindTheme 把全部样式（重新）绑定到渲染器 r。
+//
+// 为什么必须显式重绑：lipgloss 的 `Style` 是值类型，`NewStyle()` 当场把渲染器指针存进
+// `Style.r`；此后 `SetDefaultRenderer` 只替换包级变量，**已建样式仍指向旧渲染器**。
+// 而旧渲染器的输出正是被 Install() 接到日志管道上的 `os.Stdout`——它的 isatty 判定为假，
+// 颜色档位退化为 Ascii，整套配色被丢弃，界面于是「一片纯白」。详见 renderer.go 与
+// docs/adr/0002-控制台渲染器的颜色档位与样式绑定.md。
+//
+// 因此：**任何新增样式都必须写进本函数**，不要在包级做 `lipgloss.NewStyle()` 初始化；
+// 单测 `TestBindThemeRebindsAllStyles` 会拦住漏绑。
+func bindTheme(r *lipgloss.Renderer) {
+	if r == nil {
+		r = lipgloss.DefaultRenderer()
+	}
+	ns := func() lipgloss.Style { return lipgloss.NewStyle().Renderer(r) }
+
+	titleStyle = ns().Bold(true).Foreground(colAccent)
+	crumbStyle = ns().Foreground(colDim)
+	labelStyle = ns().Foreground(colText)
+	valueStyle = ns().Bold(true).Foreground(colValue)
+	dimStyle = ns().Foreground(colDim)
+	faintStyle = ns().Foreground(colFaint)
+	selectStyle = ns().Bold(true).Foreground(colAccent)
+	okStyle = ns().Bold(true).Foreground(colOK)
+	warnStyle = ns().Foreground(colWarn)
+	errStyle = ns().Bold(true).Foreground(colErr)
+	cursorStyle = ns().Bold(true).Foreground(colAccent)
+	ruleStyle = ns().Foreground(colRule)
+	keyStyle = ns().Bold(true).Foreground(colAccentSoft)
+	hintStyle = ns().Foreground(colDim)
+	sectionStyle = ns().Bold(true).Foreground(colValue)
+	selRowStyle = ns().Background(colSelBg).Foreground(colSelFg)
+	// 选中行内的次级文字：底色之上仍保持可读的灰
+	selDimStyle = ns().Background(colSelBg).Foreground(colSelDim)
+
+	navGroupStyle = ns().Bold(true).Foreground(colDim)
+	navItemStyle = ns().Foreground(colText)
+	navKeyStyle = ns().Foreground(colFaint)
+
+	logInfoStyle = ns().Foreground(colLogInfo)
+	logDimStyle = ns().Foreground(colLogDim)
+	logProxyStyle = ns().Foreground(colLogProxy)
+	logWarnStyle = ns().Foreground(colWarn)
+	logErrStyle = ns().Foreground(colErr)
+	thinkStyle = ns().Foreground(colThink)
+	thinkHeadStyle = ns().Bold(true).Foreground(colDim)
+	roleStyle = ns().Bold(true).Foreground(colRole)
+	drawProgressStyle = ns().Foreground(colDraw)
+}
+
+// init 让样式在「未调用 Run 的场合」（单测、宿主嵌入渲染）也可用：
+// 绑定到默认渲染器。Run 拿到真实控制台句柄后会再次 bindTheme 覆盖它。
+func init() {
+	bindTheme(lipgloss.DefaultRenderer())
+}
 
 // renderLogLine 单条日志渲染：按级别/来源着色
 func renderLogLine(line LogLine) string {
@@ -79,415 +150,4 @@ func renderLogLine(line LogLine) string {
 	default:
 		return logInfoStyle.Render(line.Text)
 	}
-}
-
-// ==== 显示宽度与拼装原语 ====
-//
-// 终端排版必须按「显示列宽」而非字节或 rune 数计算：中文与 emoji 占 2 列，
-// ANSI 转义序列占 0 列。以下原语统一走 x/ansi（grapheme 与宽字符感知），
-// 是「中文标签对不齐、长行把框线挤破」这类排版问题的根治手段。
-
-// dispWidth 字符串显示列宽（忽略 ANSI 转义序列）。
-//
-// 按**终端实测**宽度计算：中文控制台字体（新宋体等）会把 ◆ ■ ▶ · → 这类
-// 「东亚歧义宽度」字形渲染成 2 列，若仍按内置宽度表（1 列）排版，整行就会超出
-// 终端宽度而折行——用户实测的「一打开就滚动 + 显示混乱」正是这个成因。
-// 未校准时（非 Windows 或取不到控制台）退化为内置宽度表，行为与以前一致。
-func dispWidth(s string) int {
-	base := ansi.StringWidth(s)
-	if base == 0 || !hasWideGlyphs(s) {
-		return base
-	}
-	return base + extraWidthOf(s)
-}
-
-// truncTo 裁剪到 w 列（超出部分以 … 结尾）；w<=0 返回空串
-func truncTo(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	if dispWidth(s) <= w {
-		return s
-	}
-	if w == 1 {
-		return "…"
-	}
-	if hasWideGlyphs(s) {
-		// 含校准字形时不能交给 ansi.Truncate：它按内置宽度表算列数，会截多或截少
-		return consoleTruncate(s, w)
-	}
-	return ansi.Truncate(s, w, "…")
-}
-
-// fitWidth 把一行补齐或裁剪到恰好 w 列
-func fitWidth(s string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	d := dispWidth(s)
-	switch {
-	case d == w:
-		return s
-	case d > w:
-		// 截断后必须再补齐：截断遇到宽字符边界会停在不足 w 列处（不会自己补空格）。
-		// 少了这步，该行右框线就比其它行左移一格——用户实测的「未对齐」正是这种形态。
-		cut := truncTo(s, w)
-		if cd := dispWidth(cut); cd < w {
-			cut += strings.Repeat(" ", w-cd)
-		}
-		return cut
-	default:
-		return s + strings.Repeat(" ", w-d)
-	}
-}
-
-// paint 按选中态着色（未选中时原样返回，保留片段自身样式）
-func paint(s string, selected bool) string {
-	if selected {
-		return selRowStyle.Render(s)
-	}
-	return s
-}
-
-// rowBuilder 定宽行组装器：左侧片段靠左、右侧片段靠右，中间自动填充，
-// 结果恰好 width 列。selected 时底色分别包裹每个片段——若把整行一次性
-// 渲染底色，片段内层样式的复位序列会在中途清掉底色，是整行高亮「半截变色」
-// 的常见成因；逐片段包裹可彻底规避。
-type rowBuilder struct {
-	width    int
-	selected bool
-	left     []string
-	right    []string
-	sep      int // 左右之间的最小间隔列数
-}
-
-// newRow 创建定宽行组装器
-func newRow(width int, selected bool) *rowBuilder {
-	return &rowBuilder{width: width, selected: selected, sep: 2}
-}
-
-// L 追加左侧（靠左）片段
-func (r *rowBuilder) L(segs ...string) *rowBuilder {
-	r.left = append(r.left, segs...)
-	return r
-}
-
-// R 追加右侧（靠右）片段
-func (r *rowBuilder) R(segs ...string) *rowBuilder {
-	r.right = append(r.right, segs...)
-	return r
-}
-
-// String 组装为恰好 width 列的一行
-func (r *rowBuilder) String() string {
-	if r.width <= 0 {
-		return ""
-	}
-	var b strings.Builder
-	used := 0
-	write := func(s string) {
-		if s == "" {
-			return
-		}
-		b.WriteString(paint(s, r.selected))
-		used += dispWidth(s)
-	}
-
-	rightSum := 0
-	for _, s := range r.right {
-		rightSum += dispWidth(s)
-	}
-	leftBudget := r.width
-	if len(r.right) > 0 {
-		leftBudget = r.width - rightSum - r.sep
-		if leftBudget < 1 { // 右侧过长：整体让位给左侧主体
-			r.right, rightSum, leftBudget = nil, 0, r.width
-		}
-	}
-
-	// 左侧：末片段吃掉剩余预算
-	leftWrote := 0
-	for i, s := range r.left {
-		avail := leftBudget - leftWrote
-		if avail <= 0 {
-			break
-		}
-		if i == len(r.left)-1 {
-			s = fitWidth(s, avail)
-		} else {
-			s = truncTo(s, avail)
-		}
-		write(s)
-		leftWrote += dispWidth(s)
-	}
-	if leftWrote < leftBudget && rightSum == 0 {
-		write(strings.Repeat(" ", leftBudget-leftWrote))
-		leftWrote = leftBudget
-	}
-
-	// 右侧：中间填充后依次写入，越界即截断
-	if rightSum > 0 {
-		gap := r.width - leftWrote - rightSum
-		if gap < 1 {
-			gap = 1
-		}
-		write(strings.Repeat(" ", gap))
-		for _, s := range r.right {
-			remain := r.width - used
-			if remain <= 0 {
-				break
-			}
-			if dispWidth(s) > remain {
-				s = truncTo(s, remain)
-			}
-			write(s)
-		}
-	}
-
-	// 兜底补齐（正常路径下恒为 0）
-	if used < r.width {
-		write(strings.Repeat(" ", r.width-used))
-	}
-	return b.String()
-}
-
-// listRow 单行列表项：光标 + 主体 + 右侧点缀（空串则省略），铺满 width 列
-func listRow(width int, selected bool, cursor, primary, right string) string {
-	r := newRow(width, selected).L(cursor, primary)
-	if right != "" {
-		r.R(right)
-	}
-	return r.String()
-}
-
-// wrapPlain 按显示宽度硬折行（保留原有换行；返回至少一行）
-func wrapPlain(s string, w int) []string {
-	if w <= 1 {
-		w = 2
-	}
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\r", "")
-	var out []string
-	for _, para := range strings.Split(s, "\n") {
-		if para == "" {
-			out = append(out, "")
-			continue
-		}
-		wrapped := ansi.Hardwrap(para, w, false)
-		out = append(out, strings.Split(wrapped, "\n")...)
-	}
-	if len(out) == 0 {
-		out = []string{""}
-	}
-	return out
-}
-
-// wrapText 折行并可限定最多 maxLines 行（超出时保留尾部并加省略号前缀）
-func wrapText(s string, w, maxLines int) []string {
-	lines := wrapPlain(s, w)
-	if maxLines > 0 && len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-		lines[0] = "…" + lines[0]
-	}
-	return lines
-}
-
-// clipLines 只保留前 h 行
-func clipLines(lines []string, h int) []string {
-	if h <= 0 {
-		return nil
-	}
-	if len(lines) <= h {
-		return lines
-	}
-	return lines[:h]
-}
-
-// padLines 补齐到恰好 h 行（空行补位）
-func padLines(lines []string, h int) []string {
-	if h <= 0 {
-		return nil
-	}
-	out := make([]string, 0, h)
-	out = append(out, lines...)
-	for len(out) < h {
-		out = append(out, "")
-	}
-	return out[:h]
-}
-
-// fitLines 裁剪或补齐到恰好 h 行
-func fitLines(lines []string, h int) []string {
-	return padLines(clipLines(lines, h), h)
-}
-
-// ==== 组合组件 ====
-
-// sectionRule 区块分隔标题：── 标题 ────────────（宽度铺满 w 列）
-func sectionRule(title string, w int) string {
-	if w <= 0 {
-		return ""
-	}
-	head := "── " + title + " "
-	hw := dispWidth(head)
-	if hw >= w {
-		return sectionStyle.Render(truncTo(title, w))
-	}
-	return sectionStyle.Render(head) + ruleStyle.Render(strings.Repeat("─", w-hw))
-}
-
-// keyHints 渲染键位提示串：`↑/↓ 选择 · Enter 进入 · Esc 返回`
-func keyHints(hints []keyHint) string {
-	parts := make([]string, 0, len(hints))
-	for _, h := range hints {
-		if h.key == "" {
-			continue
-		}
-		parts = append(parts, keyStyle.Render(h.key)+" "+hintStyle.Render(h.label))
-	}
-	return strings.Join(parts, hintStyle.Render(" · "))
-}
-
-// labelValue 渲染「标签 + 数值」定宽行（标签按显示宽度补齐，中文不再错位）
-func labelValue(label, value string, labelW int) string {
-	return dimStyle.Render(fitWidth(label, labelW)) + valueStyle.Render(value)
-}
-
-// kvRow 定宽键值行（键按显示宽度对齐）
-func kvRow(key, value string, keyW int) string {
-	return dimStyle.Render(fitWidth(key, keyW)) + labelStyle.Render(value)
-}
-
-// progressBar 渲染进度条：宽度自适应，百分比右对齐
-func progressBar(percent int, width int) string {
-	if percent < 0 {
-		percent = 0
-	}
-	if percent > 100 {
-		percent = 100
-	}
-	barW := width - 8
-	if barW < 8 {
-		barW = 8
-	}
-	if barW > 60 {
-		barW = 60
-	}
-	filled := percent * barW / 100
-	filledStr := strings.Repeat("█", filled)
-	emptyStr := strings.Repeat("░", barW-filled)
-	bar := valueStyle.Render(filledStr) + faintStyle.Render(emptyStr)
-	return bar + " " + valueStyle.Render(fmt.Sprintf("%3d%%", percent))
-}
-
-// stepsBar 向导步骤条：当前步高亮、已完成步转绿、未达步灰显，
-// 让多步流程随时可见「我在哪一步、还剩几步」。
-func stepsBar(steps []string, active, w int) string {
-	marks := []string{"①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"}
-	r := newRow(w, false)
-	for i, s := range steps {
-		m := "○"
-		if i < len(marks) {
-			m = marks[i]
-		}
-		label := m + " " + s
-		if i > 0 {
-			r.L(dimStyle.Render("  ──  "))
-		}
-		switch {
-		case i == active:
-			r.L(selectStyle.Render(label))
-		case i < active:
-			r.L(okStyle.Render(label))
-		default:
-			r.L(faintStyle.Render(label))
-		}
-	}
-	return r.String()
-}
-
-// withErrStrip 在内容顶部插入错误提示条（错误永不被列表挤到屏幕之外）
-func withErrStrip(body []string, err error, w int) []string {
-	if err == nil {
-		return body
-	}
-	strip := errStyle.Render("✗ "+truncTo(err.Error(), maxInt(8, w-4))) + dimStyle.Render("   （详细过程见「原始日志」）")
-	return append([]string{strip, ""}, body...)
-}
-
-// humanSize 字节数人性化（B / KB / MB / GB，保留 1 位小数）
-func humanSize(n int64) string {
-	switch {
-	case n <= 0:
-		return "-"
-	case n < 1024:
-		return fmt.Sprintf("%d B", n)
-	case n < 1024*1024:
-		return fmt.Sprintf("%.1f KB", float64(n)/1024)
-	case n < 1024*1024*1024:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
-	default:
-		return fmt.Sprintf("%.2f GB", float64(n)/(1024*1024*1024))
-	}
-}
-
-// posText 列表位置文本：「3/17 个包」（总数 0 时返回空串）
-func posText(cur, n int, unit string) string {
-	if n <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d/%d %s", clampInt(cur, 0, n-1)+1, n, unit)
-}
-
-// ==== 杂项 ====
-
-// formatDuration 时长格式化（秒级）
-func formatDuration(d time.Duration) string {
-	d = d.Round(time.Second)
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	sec := int(d.Seconds()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh%02dm%02ds", h, m, sec)
-	}
-	return fmt.Sprintf("%dm%02ds", m, sec)
-}
-
-// firstLine 取文本首行
-func firstLine(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
-		return s[:idx]
-	}
-	return s
-}
-
-// clampInt 数值收敛到 [lo, hi]
-func clampInt(v, lo, hi int) int {
-	if lo > hi {
-		return lo
-	}
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
-// maxInt 取较大值
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// minInt 取较小值
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

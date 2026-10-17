@@ -378,10 +378,10 @@ export function getResourceEntry(handle: string): ResourceEntry | null {
  *     不是本进程内的路径格式。本进程内直接用路径即可，Go 侧按 LocalDir 解析。
  *   - 系统既有的文件读取端点就是 `GET /file/read/<相对 LocalDir 路径>`
  *     （file_manager 的 ReadHandler → module.ReadFile），同样以「相对 LocalDir 路径」为约定。
- *     裸路径因此与既有端点约定一致，比显式拼 `file://` 少一层无意义的转换。
  *
- * 传给图片/视频处理管线（resizeImage / upscaleImage / isAnimatedImage 等）时，
- * Go 侧会按「绝对路径 → 相对 LocalDir → 相对工作目录」三级解析。
+ * **只给 Go 侧管线用**（扩散引擎的 initImg、RealESRGAN 超分、动图判定等），
+ * 它返回的是**原图**路径。不要拿它拼 `image_url`：图片进思维链只能走
+ * `/file/read-multimodal/` 或 `visionRead`（见 docs/adr/0008）。
  *
  * @param handle 资源句柄
  * @returns 相对 LocalDir 的路径；blob 丢失或不存在返回空串

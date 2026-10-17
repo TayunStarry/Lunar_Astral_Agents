@@ -26,7 +26,7 @@
 		"multimodal_key": null,
 		"video_input": "file",
 		"image_input": "url",
-		"vision_max_side": 1080,
+		"vision_max_side": 1024,
 		"vision_cache_cap_mb": 512
 	},
 	"memory": {

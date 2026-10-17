@@ -11,6 +11,7 @@
 
 #include "ggml.h"
 #include "gguf-weights.h"
+#include "ov-error.h"
 #include "weight-ctx.h"
 
 #include <cstdio>
@@ -52,7 +53,7 @@ static bool rvq_load(RVQCodec * rvq, WeightCtx * wctx, const GGUFModel & gf) {
     rvq->codebook_size = (int) gf_get_u32(gf, "omnivoice.codebook_size");
     rvq->codebook_dim  = (int) gf_get_u32(gf, "omnivoice.codebook_dim");
     if (rvq->codebook_size == 0 || rvq->codebook_dim == 0) {
-        fprintf(stderr, "[RVQ] missing metadata: omnivoice.codebook_size or codebook_dim\n");
+        ov_log(OV_LOG_ERROR, "[RVQ] missing metadata: omnivoice.codebook_size or codebook_dim");
         return false;
     }
     // hidden dim is read from project_out shape after loading the first weight
@@ -63,7 +64,7 @@ static bool rvq_load(RVQCodec * rvq, WeightCtx * wctx, const GGUFModel & gf) {
         snprintf(name, sizeof(name), "quantizer.quantizers.%d.codebook.embed", k);
         rvq->cb[k].embed = gf_load_tensor(wctx, gf, name);
         if (!rvq->cb[k].embed) {
-            fprintf(stderr, "[RVQ] missing tensor: %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] missing tensor: %s", name);
             return false;
         }
 
@@ -77,7 +78,7 @@ static bool rvq_load(RVQCodec * rvq, WeightCtx * wctx, const GGUFModel & gf) {
         const enum ggml_type embed_type = rvq->cb[k].embed->type;
         const void *         raw_embed  = gf_get_data(gf, name);
         if (!raw_embed) {
-            fprintf(stderr, "[RVQ] cannot read raw bytes of %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] cannot read raw bytes of %s", name);
             return false;
         }
         auto e_sq_buf = std::make_unique<float[]>(rvq->codebook_size);
@@ -105,21 +106,21 @@ static bool rvq_load(RVQCodec * rvq, WeightCtx * wctx, const GGUFModel & gf) {
         snprintf(name, sizeof(name), "quantizer.quantizers.%d.project_in.weight", k);
         rvq->cb[k].project_in_w = gf_load_tensor(wctx, gf, name);
         if (!rvq->cb[k].project_in_w) {
-            fprintf(stderr, "[RVQ] missing tensor: %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] missing tensor: %s", name);
             return false;
         }
 
         snprintf(name, sizeof(name), "quantizer.quantizers.%d.project_in.bias", k);
         rvq->cb[k].project_in_b = gf_load_tensor_f32(wctx, gf, name);
         if (!rvq->cb[k].project_in_b) {
-            fprintf(stderr, "[RVQ] missing tensor: %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] missing tensor: %s", name);
             return false;
         }
 
         snprintf(name, sizeof(name), "quantizer.quantizers.%d.project_out.weight", k);
         rvq->cb[k].project_out_w = gf_load_tensor(wctx, gf, name);
         if (!rvq->cb[k].project_out_w) {
-            fprintf(stderr, "[RVQ] missing tensor: %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] missing tensor: %s", name);
             return false;
         }
 
@@ -128,7 +129,7 @@ static bool rvq_load(RVQCodec * rvq, WeightCtx * wctx, const GGUFModel & gf) {
         // Cost is 2 KB extra per codebook (8 of them), negligible.
         rvq->cb[k].project_out_b = gf_load_tensor_f32(wctx, gf, name);
         if (!rvq->cb[k].project_out_b) {
-            fprintf(stderr, "[RVQ] missing tensor: %s\n", name);
+            ov_log(OV_LOG_ERROR, "[RVQ] missing tensor: %s", name);
             return false;
         }
 

@@ -26,6 +26,7 @@
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "gguf-weights.h"
+#include "ov-error.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -93,7 +94,7 @@ static bool sem_enc_load(SemanticEncoder * d, const GGUFModel & gf, ggml_backend
     // Phase 2: alloc backend
     d->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!d->weight_buf) {
-        fprintf(stderr, "[Sem-Enc] FATAL: failed to allocate weight buffer\n");
+        ov_log(OV_LOG_ERROR, "[Sem-Enc] FATAL: failed to allocate weight buffer");
         return false;
     }
     ggml_backend_buffer_set_usage(d->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -114,8 +115,8 @@ static bool sem_enc_load(SemanticEncoder * d, const GGUFModel & gf, ggml_backend
         dac_load_bias_f32(b.cb, gf, pfx + ".conv.bias");
     }
 
-    fprintf(stderr, "[Sem-Enc] Loaded: %d blocks, hidden=%d, no temporal downsample, weights %.1f MB\n", SEM_NUM_BLOCKS,
-            SEM_HIDDEN, (float) ggml_backend_buffer_get_size(d->weight_buf) / (1024 * 1024));
+    ov_log(OV_LOG_INFO, "[Sem-Enc] Loaded: %d blocks, hidden=%d, no temporal downsample, weights %.1f MB",
+           SEM_NUM_BLOCKS, SEM_HIDDEN, (float) ggml_backend_buffer_get_size(d->weight_buf) / (1024 * 1024));
     return true;
 }
 

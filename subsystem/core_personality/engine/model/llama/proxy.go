@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -20,6 +21,17 @@ import (
 
 // Init 初始化并启动 llama.cpp 服务器
 func Init() {
+	processMu.Lock()
+	defer processMu.Unlock()
+	startLocked()
+}
+
+// startLocked 启动 llama-server 并等待就绪（调用方须持有 processMu）
+func startLocked() {
+	// 每次启动都用一套新的就绪信号：重启时旧信号早已消费完毕，复用它必然等空
+	resetReadySignal()
+	ready := currentReadySignal()
+
 	args := []string{
 		// 模型预设配置文件路径
 		"--models-preset", "local_data/models/models.ini",
@@ -87,7 +99,7 @@ func Init() {
 	defer cancel()
 
 	select {
-	case <-serverReady:
+	case <-ready:
 		LoggerGeneral.Info("LlamaProxy", "llama-server 已成功启动并准备就绪")
 	case <-ctx.Done():
 		LoggerGeneral.Error("LlamaProxy", "llama-server 启动超时")
@@ -100,8 +112,55 @@ func Init() {
 	go waitForProcessExit(cmd)
 }
 
+// Alive 探测模型服务是否仍在监听（用于"引擎重载"决策：服务崩了，重载 goja 也白搭）
+func Alive() bool {
+	return portOpen(*GeneralConfig.ModelPort)
+}
+
+// portOpen 探测本机端口是否可连接
+func portOpen(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 800*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// Restart 重启 llama-server（崩溃恢复）
+//
+// 触发场景（实测）：llama.cpp 内部断言失败导致进程直接退出，例如
+// `GGML_ASSERT((cparams.causal_attn || cparams.n_ubatch >= n_tokens_all))` ——
+// 此后所有模型请求都是 "Could not establish connection"，月华的思考链随之全灭。
+// 原实现的 waitForProcessExit 只记一行日志，没有任何重启路径；这里补上：
+//  1. 杀掉残留进程（可能已死，Kill 报错忽略）；
+//  2. 等端口真正释放（否则新进程抢不到端口）；
+//  3. 重建就绪信号后重新走一遍启动流程。
+func Restart() error {
+	processMu.Lock()
+	defer processMu.Unlock()
+
+	if serverProcess != nil && serverProcess.Process != nil {
+		LoggerGeneral.Warn("LlamaProxy", "重启 llama-server：终止残留进程")
+		_ = serverProcess.Process.Kill()
+		// 等端口释放（最多 5 秒）：不等待就重启会撞端口，新进程照样起不来
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) && portOpen(*GeneralConfig.ModelPort) {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	serverProcess = nil
+	startLocked()
+	if serverProcess != nil && portOpen(*GeneralConfig.ModelPort) {
+		return nil
+	}
+	return fmt.Errorf("llama-server 重启后仍不可用（端口 %d）", *GeneralConfig.ModelPort)
+}
+
 // Close 优雅关闭 llama.cpp 服务器
 func Close() {
+	processMu.Lock()
+	defer processMu.Unlock()
 	if serverProcess == nil {
 		return
 	}
@@ -154,9 +213,7 @@ func checkReadySignal(line string) {
 	}
 	for _, signal := range readySignals {
 		if strings.Contains(line, signal) {
-			readyOnce.Do(func() {
-				serverReady <- struct{}{}
-			})
+			signalReady()
 			return
 		}
 	}

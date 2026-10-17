@@ -196,8 +196,32 @@ func ProcessTask(task GenerateTask) {
 		LoggerGeneral.Info("MultimodalAnalysis", "sd.cpp 显存预算: %s GiB", v)
 	}
 
-	// VAE 分片解码：默认关闭。sd.cpp 的分片默认几何为 tile 32 latent（VAE 16× 压缩 → 512px）、
-	// overlap 0.5（步长 256px），会在分片角注入硬边纯白方块；仅在大图或显存吃紧时按需启用。
+	// ==== VAE 解码路径（必须在启动引擎前定死）====
+	//
+	// 实测（RTX 4070 12GB + Qwen-Image 2.1，wan_vae bf16，1024×1536）：
+	//   - 整帧解码（im2col 卷积）需要 12475–15689 MiB，守卫后可用约 10850–10990 MiB
+	//     → 必然失败；sd.cpp 失败后**自行**改用空间分片（`backend_fit.cpp:506`），
+	//     而 wan_vae 的分片接缝会留下硬边纯白方块（实测 17×16 px，右边界正落在
+	//     512px = 32 latent 的分片边界上）；
+	//   - 整帧解码改用 direct conv 后显存大降，实测可在 12GB 卡上直接成功，
+	//     解码 3.81s；与 CPU 全帧解码像素比对：最大差 1/255、98.9% 像素完全相同；
+	//   - 整段 CPU 解码同样无接缝，但 1024×1536 实测要 197.93s。
+	// 因此按「整帧 GPU → GPU + direct conv → CPU」三档退让，绝不落到空间分片。
+	plan := resolveVAEDecode(width, height, freeMiB, vaeBackendMode(), *GeneralConfig.SDVaeConvDirect)
+	switch {
+	case plan.onCPU:
+		LoggerGeneral.Info("MultimodalAnalysis", "VAE 解码在 CPU 上进行: %s", plan.why)
+	case plan.convDirect:
+		LoggerGeneral.Info("MultimodalAnalysis", "VAE 解码在 GPU 上进行（direct conv）: %s", plan.why)
+	default:
+		LoggerGeneral.Info("MultimodalAnalysis", "VAE 解码在 GPU 上进行: %s", plan.why)
+	}
+	if plan.convDirect {
+		args = append(args, "--vae-conv-direct")
+	}
+
+	// VAE 分片解码：默认 off。只有显式要求（always）或「显式要求 GPU 且显存放不下」时
+	// 才传入分片几何——分片一定会在接缝处留白块，能不用就不用。
 	needVAETiling := false
 	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDVaeTiling)) {
 	case "always", "true", "on":
@@ -205,9 +229,7 @@ func ProcessTask(task GenerateTask) {
 	case "off", "false", "no":
 		needVAETiling = false
 	default: // auto
-		// 阈值取 2 MP（约 1536² 以上）：1024² 及以下的单次解码在 12GB 卡上无需分片，
-		// 而分片会引入方块伪影，所以只有确实吃紧时才退让。
-		needVAETiling = width*height > 2*1024*1024 || (freeMiB > 0 && freeMiB < *GeneralConfig.ImageVRAMGuardMiB)
+		needVAETiling = !plan.onCPU && vaeBackendMode() == "gpu"
 	}
 	if needVAETiling {
 		args = append(args, "--vae-tiling")
@@ -217,12 +239,21 @@ func ProcessTask(task GenerateTask) {
 		if *GeneralConfig.SDVaeTileOverlap > 0 {
 			args = append(args, "--vae-tile-overlap", fmt.Sprintf("%.2f", *GeneralConfig.SDVaeTileOverlap))
 		}
-		LoggerGeneral.Info("MultimodalAnalysis", "sd.cpp 启用 VAE 分片解码 (%dx%d, 守卫后可用显存 %d MiB)", width, height, freeMiB)
+		LoggerGeneral.Warn("MultimodalAnalysis",
+			"sd.cpp 启用 VAE 分片解码 (%dx%d)：分片接缝可能出现硬边纯色方块，仅建议在无法整段解码时使用", width, height)
 	}
 
-	// 提示词编码器（--llm）强制在 CPU 运行, 全程不占显存
+	// 运行时后端分配：sd.cpp 的 --backend 接受**逗号列表**（如 clip=cpu,vae=cuda0）。
+	// 必须合并成一条：分多次传 --backend 由解析器互相覆盖，依赖它等于赌实现细节。
+	backendSpecs := make([]string, 0, 2)
 	if *GeneralConfig.SDTextEncoderOnCPU {
-		args = append(args, "--backend", "te=cpu")
+		backendSpecs = append(backendSpecs, "te=cpu") // 提示词编码器（--llm）不占显存
+	}
+	if plan.onCPU {
+		backendSpecs = append(backendSpecs, "vae=cpu")
+	}
+	if len(backendSpecs) > 0 {
+		args = append(args, "--backend", strings.Join(backendSpecs, ","))
 	}
 
 	// 显示命令参数，正确分组
@@ -501,4 +532,99 @@ func normalizeImageSide(side int) int {
 		side = maxSide
 	}
 	return side
+}
+
+// ==== VAE 解码路径决策 ====
+
+// vaeDecodeMiBPerMegapixel 整帧解码（im2col 卷积）的显存系数（MiB / 兆像素）。
+//
+// 标定依据（实测，Qwen-Image 2.1 的 wan_vae bf16，sd.cpp 的 model_manager 报告值）：
+// 1024×1536 = 1.5 MP 需要 12475 MiB / 15689 MiB 两次报告 → 约 8300–10400 MiB/MP。
+// 取 9216（9 GiB/MP）落在区间中部：
+//   - 不取低值，否则 12GB 卡上 1024×1536 会被判为「放得下」，然后 OOM 触发引擎自动分片；
+//   - 不取高值，否则 12GB 卡上 1024×1024（实测可全帧解码）会被白白赶去 CPU/direct conv。
+const vaeDecodeMiBPerMegapixel = 9216
+
+// vaeDecodeDirectMiBPerMegapixel direct conv 的显存系数：按普通卷积的一半估算。
+// 依据：direct conv 绕开了 im2col 的 K² 倍临时缓冲，实测 1024×1536（1.5MP）
+// 在可用 10.4 GB 的卡上直接成功（解码 3.81s），据此反推其需求远低于整帧 im2col。
+// 取一半既留出余量，又不至于把中尺寸图误判成放不下。
+const vaeDecodeDirectMiBPerMegapixel = vaeDecodeMiBPerMegapixel / 2
+
+// vaeDecodeFixedMiB 与分辨率无关的固定开销（VAE 权重约 644 MiB + 图切割调度缓冲）
+const vaeDecodeFixedMiB = 1024
+
+// estimateVAEDecodeMiB 估算 VAE 整帧解码（普通卷积）所需的设备显存（MiB）
+func estimateVAEDecodeMiB(width, height int) int {
+	return vaeDecodeFixedMiB + scaleByMegapixel(width, height, vaeDecodeMiBPerMegapixel)
+}
+
+// estimateVAEDecodeDirectMiB 估算 direct conv 整帧解码所需的设备显存（MiB）
+func estimateVAEDecodeDirectMiB(width, height int) int {
+	return vaeDecodeFixedMiB + scaleByMegapixel(width, height, vaeDecodeDirectMiBPerMegapixel)
+}
+
+// scaleByMegapixel 按面积（兆像素）缩放显存系数；尺寸缺失时返回 0（只剩固定开销）
+func scaleByMegapixel(width, height, perMP int) int {
+	if width <= 0 || height <= 0 {
+		return 0
+	}
+	mp := float64(width) * float64(height) / (1024 * 1024)
+	return int(mp * float64(perMP))
+}
+
+// vaeBackendMode 归一化 sd-vae-backend 配置（未知取值按 auto 处理）
+func vaeBackendMode() string {
+	switch strings.ToLower(strings.TrimSpace(*GeneralConfig.SDVaeBackend)) {
+	case "cpu":
+		return "cpu"
+	case "gpu":
+		return "gpu"
+	}
+	return "auto"
+}
+
+// vaeDecodePlan VAE 解码落点：三档里必选其一
+type vaeDecodePlan struct {
+	onCPU      bool   // 整段 CPU 解码
+	convDirect bool   // GPU 解码但改用 direct conv（省显存）
+	why        string // 判定依据（写进日志）
+}
+
+// resolveVAEDecode 决定 VAE 解码落点。
+//
+// 三档退让：整帧 GPU → GPU + direct conv → 整段 CPU。任何一档都**不**使用空间分片，
+// 因为 wan_vae 的分片接缝会在画面上留下硬边纯色方块（实测 17×16 px 纯白块）。
+// 实测代价（1024×1536 / RTX 4070）：GPU 整帧失败（需 12475+ MiB），
+// GPU + direct conv 解码 3.81s 且与 CPU 全帧像素等价（最大差 1/255），CPU 全帧 197.93s。
+func resolveVAEDecode(width, height, freeMiB int, mode string, allowConvDirect bool) vaeDecodePlan {
+	switch mode {
+	case "cpu":
+		return vaeDecodePlan{onCPU: true, why: "配置 sd-vae-backend=cpu"}
+	case "gpu":
+		return vaeDecodePlan{
+			convDirect: allowConvDirect,
+			why:        "配置 sd-vae-backend=gpu（显存不足时引擎会自动降级分片，接缝可能留白块）",
+		}
+	}
+
+	need := estimateVAEDecodeMiB(width, height)
+	if freeMiB <= 0 {
+		// 显存守卫没给出可用值（未启用或取不到）：不擅自改后端，但把估算写进日志，
+		// 万一引擎随后降级分片，这条记录就是唯一能对照的线索。
+		return vaeDecodePlan{why: fmt.Sprintf("可用显存未知（显存守卫未启用或取不到），交给引擎决策（整帧约需 %d MiB）", need)}
+	}
+	if need <= freeMiB {
+		return vaeDecodePlan{why: fmt.Sprintf("%dx%d 整帧解码约需 %d MiB，可用 %d MiB", width, height, need, freeMiB)}
+	}
+	if allowConvDirect {
+		needDirect := estimateVAEDecodeDirectMiB(width, height)
+		if needDirect <= freeMiB {
+			return vaeDecodePlan{convDirect: true, why: fmt.Sprintf(
+				"%dx%d 整帧约需 %d MiB > 可用 %d MiB，改用 direct conv（估算 %d MiB；实测与 CPU 全帧像素等价）",
+				width, height, need, freeMiB, needDirect)}
+		}
+	}
+	return vaeDecodePlan{onCPU: true, why: fmt.Sprintf(
+		"%dx%d 整帧解码约需 %d MiB，超过可用 %d MiB；改 CPU 解码以免引擎自动分片", width, height, need, freeMiB)}
 }

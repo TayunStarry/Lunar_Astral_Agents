@@ -78,6 +78,12 @@ func main() {
 	// 数据导出钩子：控制台「数据导出」屏据此把原始日志 / 智能体上下文落盘
 	app.WireTUIDataDumpHooks()
 
+	// LTP9 授权钩子：控制台「LTP9 授权签发」屏据此扫描包目录、读取授权现状并签发 permissions.key
+	app.WireTUILTP9AuthHooks()
+
+	// 引擎自愈钩子：控制台「月华引擎 管理」屏据此展示 goja 运行时状态并手动重载
+	app.WireTUIEngineHooks()
+
 	// 打开两个前端窗口：月华消息终端（/）与琉璃桌面（/desktop）
 	app.OpenFrontendWindows()
 

@@ -20,7 +20,7 @@ declare global {
     /**
      * 计算数据的 SHA-256 哈希，截取前 16 位十六进制（与前端文件哈希命名约定一致）
      *
-     * 入参与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，
+     * 入参与 upscaleImage 一致：字节数据（Uint8Array 等）直接使用，
      * 地址类（HTTP(S) URL、data URI、本地路径）由 Go 侧下载/解码后计算
      *
      * @param {Uint8Array | string} data 数据内容或来源地址
@@ -126,23 +126,14 @@ declare global {
      */
     function audioWav(inputFile: string): [string, Error | null];
     /**
-     * 标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → 输出 base64
-     *
-     * 入参与 isAnimatedImage / animatedImageToVideo 一致，可传字节数据或来源地址
-     * （HTTP(S) URL、data:image URI、本地路径），地址类入参由 Go 侧下载/解码。
-     * 返回恒为单元素数组：动态图在此按首帧静态降级，动态图理解请先经
-     * isAnimatedImage 判定并走 animatedImageToVideo 的视频链路
-     *
-     * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据或来源地址
-     *
-     * @returns {[ResizeImageResults, Error | null]} 包含处理结果数组的元组，[处理结果数组, 错误信息]
-     */
-    function resizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResults, Error | null];
-    /**
      * 判断图片是否为动态图（多帧 GIF / APNG / 动态 WebP）
      *
      * 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径），
      * 传入地址时由 Go 侧下载/解码后判定，无需 TypeScript 先取回字节
+     *
+     * 注意：宿主**不提供** resizeImage —— 思维链不允许自己缩放图片。
+     * 图片进入模型上下文的唯一形态是视觉读取管线产物（/file/read-multimodal/ 或 visionRead），
+     * 缩放与尺寸约束在 Go 侧统一完成（见 docs/adr/0008）。
      *
      * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
      *
@@ -155,13 +146,18 @@ declare global {
      * 与 /file/read-multimodal 端点共用同一变换实现（缩放到 vision_max_side、
      * 右上角叠印句柄标签、按内容哈希盘上缓存、动图原样直通）。原图不被修改。
      *
+     * 这是 base64 形态的视觉副本入口：把同一 VisionCopy 管线产出的副本交给无法回取
+     * 本机 URL 的云端模型；产物仍是 ≤ vision_max_side 的副本，不是原图。
+     * 不提供 resizeImage，也不要 readResource 再去拼 data URI
+     * （图片资源的 readResource 已改为回视觉副本，读不到原图）。
+     *
      * @param {string} relPath 源图相对 LocalDir 路径（multimedia/ 下）
      * @param {string} [tag] 叠印句柄（如 @I.003；缺省时按路径反查资源目录）
      * @param {number} [side] 副本最大边长（缺省取配置 vision_max_side）
      *
-     * @returns {[string, Error | null]} [data URI, 错误信息]
+     * @returns {[string, Error | null, number, number]} [data URI, 错误信息, 副本宽, 副本高]
      */
-    function visionRead(relPath: string, tag?: string, side?: number): [string, Error | null];
+    function visionRead(relPath: string, tag?: string, side?: number): [string, Error | null, number, number];
     /**
      * 将动态图编码为慢放视频并写入 llama-server 媒体目录
      *
@@ -402,6 +398,29 @@ declare global {
      * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
      */
     function saveDebugFile(filePath: string, content: string): [string, Error | null];
+    /**
+     * 通知宿主「本轮模型调用成功」（清零连续失败计数，取消待执行的重载）
+     *
+     * 宿主未注册该全局时（离线脚本 / 旧版本）调用会被忽略，不影响主流程。
+     */
+    function notifyAgentIdle(): void;
+    /**
+     * 通知宿主「本轮应答失败」
+     *
+     * 宿主按连续失败次数决定是否自动重载月华引擎（goja lunar_loop）；
+     * 单次失败只记日志，连续失败才动手，避免一次网络抖动就重置上下文。
+     *
+     * @param {string} reason 可读的失败原因（已由 JS 侧从 error 中提取）
+     */
+    function notifyAgentFailure(reason: string): void;
+    /**
+     * 取出宿主为「引擎重载」暂存的上下文快照（一次性：取走即清空）
+     *
+     * 只在重载后的恢复流程里调用；没有待恢复快照时返回空串。
+     *
+     * @returns {string} 快照 JSON 文本（见 agentSystem.snapshotContext 的产物）
+     */
+    function takeEngineSnapshot(): string;
 
     // =========================================================================
     // 统一资源归档层（句柄 / 资源目录 / 内容仓库，见 docs/adr/0001-统一资源寻址与三层存储.md）
@@ -470,7 +489,7 @@ declare global {
         base64?: string;
         /** 规范 MIME */
         mime: string;
-        /** 内容仓库路径（相对 LocalDir，可直接交给 resizeImage 等管线） */
+        /** 内容仓库路径（相对 LocalDir，仅供 Go 侧图片管线使用；不得拼 image_url） */
         blob_path: string;
         /** blob 已丢失：句柄有效但本体不可取，应降级为描述 */
         lost: boolean;

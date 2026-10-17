@@ -162,7 +162,9 @@ func TestResourceAdmitBridgeRejectsEmptyInput(t *testing.T) {
 // 现场缺陷：绘制者拿到 @I.001 后 call resizeImage("file://multimedia/<sha16>.jpg") 失败，
 // 表现为「该图源已失效，未能成功选定基座」——而实体其实好好地躺在 multimedia/ 下。
 // 根因是 file:// 去掉协议后是**相对路径**，而 Go 侧只按绝对路径读文件。
-// 本测试覆盖三种入参形态：file://相对路径、裸相对路径、不存在的引用。
+//
+// resizeImage 现已从 goja 卸载（思维链不允许自己缩放图片，见 docs/adr/0008）：
+// 同一个「按 blob_path 取到实体」的能力改由 visionRead 提供，本测试随之改测视觉管线。
 func TestImagePipelineResolvesResourceBlob(t *testing.T) {
 	vm := newBridgeTestRuntime(t)
 
@@ -190,16 +192,15 @@ func TestImagePipelineResolvesResourceBlob(t *testing.T) {
 		var res = admitted[0];
 		var out = { admitErr: admitted[1] ? String(admitted[1]) : null, handle: res ? res.handle : null, blob: res ? res.blob_path : null };
 		if (res) {
-			var a = resizeImage("file://" + res.blob_path);
-			out.fileRelErr = a[1] ? String(a[1]) : null;
-			out.fileRelOk = !a[1] && a[0] && a[0].length > 0;
-			var b = resizeImage(res.blob_path);
-			out.bareRelErr = b[1] ? String(b[1]) : null;
-			out.bareRelOk = !b[1] && b[0] && b[0].length > 0;
-			var c = resizeImage("file://multimedia/definitely-missing.png");
+			var a = visionRead(res.blob_path, res.handle);
+			out.blobErr = a[1] ? String(a[1]) : null;
+			out.blobOk = !a[1] && !!a[0] && a[0].indexOf("data:image/jpeg;base64,") === 0;
+			out.blobW = a[2]; out.blobH = a[3];
+			var c = visionRead("multimedia/definitely-missing.png", "@I.999");
 			out.missingRejected = c[0] === null && !!c[1];
 			out.missingErr = c[1] ? String(c[1]) : null;
 		}
+		out.resizeGone = (typeof resizeImage === "undefined");
 		JSON.stringify(out);
 	`
 	value, err := vm.RunString(script)
@@ -212,14 +213,17 @@ func TestImagePipelineResolvesResourceBlob(t *testing.T) {
 	if !contains(payload, `"admitErr":null`) {
 		t.Fatalf("资源入库失败: %s", payload)
 	}
-	if !contains(payload, `"fileRelOk":true`) {
-		t.Errorf("file:// + 相对路径应能取到资源实体: %s", payload)
+	if !contains(payload, `"blobOk":true`) {
+		t.Errorf("按 blob_path 应能取到视觉副本: %s", payload)
 	}
-	if !contains(payload, `"bareRelOk":true`) {
-		t.Errorf("裸相对路径应能取到资源实体: %s", payload)
+	if !contains(payload, `"blobW":4`) || !contains(payload, `"blobH":4`) {
+		t.Errorf("视觉副本应回传宽高（4x4）: %s", payload)
 	}
 	if !contains(payload, `"missingRejected":true`) {
-		t.Errorf("不存在的 file:// 引用应明确报错: %s", payload)
+		t.Errorf("不存在的 blob 引用应明确报错: %s", payload)
+	}
+	if !contains(payload, `"resizeGone":true`) {
+		t.Errorf("resizeImage 不应再暴露给智能体运行时: %s", payload)
 	}
 }
 

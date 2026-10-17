@@ -18,6 +18,14 @@ export class GlobalConfig {
 	public static reasoningInProgress: boolean = false;
 	/** 最终响应 */
 	public static finalResponse: string = "";
+	/**
+	 * 本轮应答的失败原因（空串表示这一轮没有失败）
+	 *
+	 * 为什么单独记在全局：`generateDialogue` 内部把异常收敛成"空应答"，调用方只看到
+	 * finalResponse 为空，分不清"模型说没话说"与"模型根本没接通"。有了这一格，
+	 * 外层循环才能把真正的失败上报给宿主（触发自动重载引擎），而不是当成空应答忽略。
+	 */
+	public static lastFailure: string = "";
 	/** 记忆库是否已初始化 */
 	public static memoryReady: boolean = false;
 	/** 当前的真实地址位置 */

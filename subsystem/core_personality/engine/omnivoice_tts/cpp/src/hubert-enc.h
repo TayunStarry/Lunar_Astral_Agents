@@ -28,6 +28,7 @@
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "gguf-weights.h"
+#include "ov-error.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -113,7 +114,7 @@ static bool hubert_feat_load(HubertFeatExtractor * h, const GGUFModel & gf, ggml
     // Phase 2: alloc backend
     h->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!h->weight_buf) {
-        fprintf(stderr, "[HuBERT-Feat] FATAL: failed to allocate weight buffer\n");
+        ov_log(OV_LOG_ERROR, "[HuBERT-Feat] FATAL: failed to allocate weight buffer");
         return false;
     }
     ggml_backend_buffer_set_usage(h->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -129,8 +130,8 @@ static bool hubert_feat_load(HubertFeatExtractor * h, const GGUFModel & gf, ggml
         }
     }
 
-    fprintf(stderr, "[HuBERT-Feat] Loaded: %d conv layers, cumul stride 320, weights %.1f MB\n", HUBERT_FEAT_NUM_LAYERS,
-            (float) ggml_backend_buffer_get_size(h->weight_buf) / (1024 * 1024));
+    ov_log(OV_LOG_INFO, "[HuBERT-Feat] Loaded: %d conv layers, cumul stride 320, weights %.1f MB",
+           HUBERT_FEAT_NUM_LAYERS, (float) ggml_backend_buffer_get_size(h->weight_buf) / (1024 * 1024));
     return true;
 }
 
@@ -210,7 +211,7 @@ static bool hubert_proj_load(HubertFeatProjection * p, const GGUFModel & gf, ggm
     // Phase 2: alloc backend
     p->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!p->weight_buf) {
-        fprintf(stderr, "[HuBERT-Proj] FATAL: failed to allocate weight buffer\n");
+        ov_log(OV_LOG_ERROR, "[HuBERT-Proj] FATAL: failed to allocate weight buffer");
         return false;
     }
     ggml_backend_buffer_set_usage(p->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -223,8 +224,8 @@ static bool hubert_proj_load(HubertFeatProjection * p, const GGUFModel & gf, ggm
     dac_load_passthrough(p->proj_w, gf, "semantic_model.feature_projection.projection.weight");
     dac_load_bias_f32(p->proj_b, gf, "semantic_model.feature_projection.projection.bias");
 
-    fprintf(stderr, "[HuBERT-Proj] Loaded: LN(%d) + Linear(%d -> %d), weights %.1f MB\n", HUBERT_PROJ_IN,
-            HUBERT_PROJ_IN, HUBERT_PROJ_OUT, (float) ggml_backend_buffer_get_size(p->weight_buf) / (1024 * 1024));
+    ov_log(OV_LOG_INFO, "[HuBERT-Proj] Loaded: LN(%d) + Linear(%d -> %d), weights %.1f MB", HUBERT_PROJ_IN,
+           HUBERT_PROJ_IN, HUBERT_PROJ_OUT, (float) ggml_backend_buffer_get_size(p->weight_buf) / (1024 * 1024));
     return true;
 }
 
@@ -351,7 +352,7 @@ static bool hubert_layer_load(HubertLayer * L, const GGUFModel & gf, ggml_backen
     // Phase 2: alloc backend
     L->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!L->weight_buf) {
-        fprintf(stderr, "[HuBERT-Layer%d] FATAL: failed to allocate weight buffer\n", idx);
+        ov_log(OV_LOG_ERROR, "[HuBERT-Layer%d] FATAL: failed to allocate weight buffer", idx);
         return false;
     }
     ggml_backend_buffer_set_usage(L->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -539,7 +540,7 @@ static bool hubert_pos_conv_load(HubertPosConv * h, const GGUFModel & gf, ggml_b
     // Phase 2: alloc backend
     h->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!h->weight_buf) {
-        fprintf(stderr, "[HuBERT-PosConv] FATAL: failed to allocate weight buffer\n");
+        ov_log(OV_LOG_ERROR, "[HuBERT-PosConv] FATAL: failed to allocate weight buffer");
         return false;
     }
     ggml_backend_buffer_set_usage(h->weight_buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -650,7 +651,7 @@ static bool hubert_enc_init_load(HubertEncInit * e, const GGUFModel & gf, ggml_b
 
     e->weight_buf = ggml_backend_alloc_ctx_tensors(ctx, backend);
     if (!e->weight_buf) {
-        fprintf(stderr, "[HuBERT-EncInit] FATAL: failed to allocate LN buffer\n");
+        ov_log(OV_LOG_ERROR, "[HuBERT-EncInit] FATAL: failed to allocate LN buffer");
         hubert_pos_conv_free(&e->pos);
         return false;
     }
@@ -662,8 +663,8 @@ static bool hubert_enc_init_load(HubertEncInit * e, const GGUFModel & gf, ggml_b
     const float total_mb =
         (float) (ggml_backend_buffer_get_size(e->pos.weight_buf) + ggml_backend_buffer_get_size(e->weight_buf)) /
         (1024 * 1024);
-    fprintf(stderr, "[HuBERT-EncInit] Loaded: pos_conv k=%d g=%d + LN(%d), weights %.1f MB\n", HUBERT_POS_K,
-            HUBERT_POS_GROUPS, HUBERT_HIDDEN, total_mb);
+    ov_log(OV_LOG_INFO, "[HuBERT-EncInit] Loaded: pos_conv k=%d g=%d + LN(%d), weights %.1f MB", HUBERT_POS_K,
+           HUBERT_POS_GROUPS, HUBERT_HIDDEN, total_mb);
     return true;
 }
 

@@ -34,6 +34,18 @@ func assembleLunar() error {
 	// ==== llama.cpp 本地模型代理 ====
 	llama.Init()
 
+	// 引擎自愈：重载月华 goja 运行时前先确认模型服务还活着。
+	// 实测事故：llama.cpp 内部断言（causal_attn / n_ubatch）失败会让进程直接退出，
+	// 此后所有请求都是 "Could not establish connection"；此时只重建 goja 运行时毫无意义，
+	// 必须把模型服务一并拉起来，思考链才真的恢复。
+	lunarloop.SetModelEnsureHook(func() error {
+		if llama.Alive() {
+			return nil
+		}
+		LoggerGeneral.Warn("CorePersonality", "模型服务不可达，重载引擎前先重启 llama-server")
+		return llama.Restart()
+	})
+
 	// ==== 扩散生成任务协处理器 ====
 	image.StartTaskProcessor()
 

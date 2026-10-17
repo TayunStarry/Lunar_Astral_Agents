@@ -23,6 +23,7 @@
 
 #include "../vendor/cpp-httplib/httplib.h"
 #include "audio-io.h"
+#include "ov-error.h"
 #include "yyjson.h"
 
 #include <cmath>
@@ -460,10 +461,10 @@ static int tts_server_run(const tts_backend & be, const server_config & cfg) {
     signal(SIGINT, tts_on_signal);
     signal(SIGTERM, tts_on_signal);
 
-    fprintf(stderr, "[Server] model %s\n", be.model_id.c_str());
-    fprintf(stderr, "[Server] listening on %s:%d\n", cfg.host.c_str(), cfg.port);
+    ov_log(OV_LOG_INFO, "[Server] model %s", be.model_id.c_str());
+    ov_log(OV_LOG_INFO, "[Server] listening on %s:%d", cfg.host.c_str(), cfg.port);
     if (!svr.listen(cfg.host.c_str(), cfg.port)) {
-        fprintf(stderr, "[Server] FATAL: cannot bind %s:%d\n", cfg.host.c_str(), cfg.port);
+        ov_log(OV_LOG_ERROR, "[Server] FATAL: cannot bind %s:%d", cfg.host.c_str(), cfg.port);
         return 1;
     }
     return 0;
