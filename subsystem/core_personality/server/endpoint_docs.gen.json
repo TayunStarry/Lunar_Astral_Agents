@@ -20,8 +20,8 @@
   "paths": {
     "/": {
       "get": {
-        "summary": "月华消息终端静态前端（内嵌 hierarchy 资源）",
-        "description": "月华消息终端静态前端（内嵌 hierarchy 资源）",
+        "summary": "月华消息终端静态前端（内嵌 clients/lunar 资源）",
+        "description": "月华消息终端静态前端（内嵌 clients/lunar 资源）",
         "responses": {
           "200": {
             "description": "成功"
@@ -258,10 +258,23 @@
         }
       }
     },
+    "/debug/dump/transcript": {
+      "post": {
+        "summary": "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）",
+        "description": "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）",
+        "operationId": "DataDumpTranscriptHandler",
+        "x-handler": "DataDumpTranscriptHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
     "/desktop/": {
       "get": {
-        "summary": "琉璃桌面静态前端（内嵌 web 资源）",
-        "description": "琉璃桌面静态前端（内嵌 web 资源）",
+        "summary": "琉璃桌面静态前端（内嵌 clients/crystal 资源）",
+        "description": "琉璃桌面静态前端（内嵌 clients/crystal 资源）",
         "responses": {
           "200": {
             "description": "成功"
@@ -444,6 +457,19 @@
         "description": "全局文件预览（图片/视频/文本）",
         "operationId": "file.PreviewHandler",
         "x-handler": "file.PreviewHandler",
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    },
+    "/file/read-multimodal/": {
+      "get": {
+        "summary": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
+        "description": "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）",
+        "operationId": "VisionReadHandler",
+        "x-handler": "VisionReadHandler",
         "responses": {
           "200": {
             "description": "成功"

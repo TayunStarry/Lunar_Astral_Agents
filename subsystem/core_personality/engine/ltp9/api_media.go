@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	webltp "CorePersonality/personality/crystal/agent/WebLTP"
+	webltp "CorePersonality/agents/WebLTP"
 	"LunarSubsystem/LoggerGeneral"
 	multimodal "LunarSubsystem/MultimodalAnalysis/module"
 

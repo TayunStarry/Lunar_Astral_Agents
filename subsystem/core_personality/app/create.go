@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"time"
 
+	"CorePersonality/crystal"
+	"CorePersonality/engine/LunarLoop"
 	"CorePersonality/engine/tts_router"
-	"CorePersonality/personality/crystal"
-	"CorePersonality/personality/lunar/bridging/napcat"
-	"CorePersonality/personality/lunar/engine"
 	"CorePersonality/server"
 	"CorePersonality/transport/enginebus"
+	"CorePersonality/transport/napcat"
 	"CorePersonality/transport/ws"
 	"LunarSubsystem/BrowserClient"
+	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 )
@@ -35,13 +36,13 @@ func Assemble() {
 		}
 	})
 	// 注册引擎消息观察者：方法名 OnXxx 反射映射到消息 type（OnAnimationList → animation_list）
-	enginebus.Instance.Subscribe(engine.AnimationObserver{})
-	enginebus.Instance.Subscribe(engine.TelemetryObserver{})
+	enginebus.Instance.Subscribe(lunarloop.AnimationObserver{})
+	enginebus.Instance.Subscribe(lunarloop.TelemetryObserver{})
 	LoggerGeneral.Info("CorePersonality", "引擎消息总线（反射 + 透传）已启动")
 
 	// ==== 跨层注入：结构化广播 & 下行桥接 ====
 	// 智能体下行走结构化广播（type/data），QQ 桥接挂在结构化旁路上（原始字节广播不触发）
-	engine.PushMessageFunc = ws.Instance.BroadcastMessage
+	lunarloop.PushMessageFunc = ws.Instance.BroadcastMessage
 	ws.OnStructuredMessage = napcat.BridgeStructuredMessage
 
 	// ==== 前端静态资源：月华消息终端（/）与琉璃桌面（/desktop/） ====
@@ -91,6 +92,9 @@ func Assemble() {
 	// ==== TTS 闲置卸载守护：三引擎 5 分钟无合成调用即卸载模型占用 ====
 	// 引擎本体在首次合成请求时惰性加载（engine/tts_router），本守护只负责闲置回收。
 	ttsrouter.StartIdleUnloader()
+
+	// ==== 统一资源仓库回收守护：按配额与保留等级回收 blob（句柄保留，降级为描述） ====
+	startArchiveCollector()
 
 	// ==== 入站消费：ltp9/* 调试信封交由 LTP9 引擎处理 ====
 	ws.Instance.SubscribeInbound("ltp9", crystal.HandleInbound)
@@ -159,6 +163,10 @@ func GracefulShutdown(reason string) {
 		server.Shutdown(httpServer)
 		crystal.Close()
 		shutdownLunar()
+		// 统一资源目录：关闭 SQLite 连接（内容仓库中的 blob 不动，句柄持久保留）
+		if err := file.CloseArchiveDB(); err != nil {
+			LoggerGeneral.Warn("CorePersonality", "关闭资源目录失败: %v", err)
+		}
 		if ws.Instance != nil {
 			ws.Instance.CloseAll()
 		}

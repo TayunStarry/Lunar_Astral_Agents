@@ -11,8 +11,8 @@ export default [
 		// 配置输出选项
 		output: [
 			{
-				// 指定输出文件路径（月华客户端内嵌的智能体脚本）
-				file: './personality/lunar/hierarchy/assets/agentSystem.js',
+				// 指定输出文件路径（LunarLoop 引擎内嵌的智能体脚本）
+				file: './engine/LunarLoop/agentSystem.js',
 				/*
 				 * 指定输出文件类型
 				 * rollup支持的格式有:

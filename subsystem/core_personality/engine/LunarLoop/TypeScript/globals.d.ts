@@ -1,0 +1,691 @@
+import type { FileListItem, ProxyFetchConfig } from './config/config';
+import type { MediaSegment, MediaFrameGroup, ResizeImageResult, ResizeImageResults, GenerateImageParams, GenerateImageResult } from './config/image';
+import type { MultimodalMessage } from './config/model';
+import type { TTSParams } from './config/tool';
+import type { ScreenshotParams } from './config/screenshot';
+
+declare global {
+    /**
+     * 在磁盘中保存文件
+     * 
+     * @param {string} fileName 文件名
+     * 
+     * @param {boolean} overwrite 是否覆盖已存在的文件
+     * 
+     * @param {*} fileData 文件数据
+     * 
+     * @returns {[string, string, Error | null]} 包含保存结果的元组，[保存的文件名, 保存的文件路径, 错误信息]
+     */
+    function saveFile(fileName: string, overwrite: boolean, fileData: Blob | File | FormData | string | Uint8Array): [string, string, Error | null];
+    /**
+     * 计算数据的 SHA-256 哈希，截取前 16 位十六进制（与前端文件哈希命名约定一致）
+     *
+     * 入参与 resizeImage 一致：字节数据（Uint8Array 等）直接使用，
+     * 地址类（HTTP(S) URL、data URI、本地路径）由 Go 侧下载/解码后计算
+     *
+     * @param {Uint8Array | string} data 数据内容或来源地址
+     *
+     * @returns {[string, Error | null]} 包含哈希结果的元组，[16位十六进制哈希, 错误信息]
+     */
+    function hashBytes(data: Uint8Array | string): [string, Error | null];
+    /**
+     * 从磁盘中读取文件
+     * 
+     * @param {string} filePath 文件路径
+     * 
+     * @returns {[string, number, string, Error | null]} 包含读取结果的元组，[文件内容(base64编码), 文件大小, MIME类型, 错误信息]
+     */
+    function readFile(filePath: string): [string, number, string, Error | null];
+    /**
+     * 获取指定目录下的所有文件列表
+     * 
+     * @param {string} path 目录路径
+     * 
+     * @returns {[FileListItem[], Error | null]} 包含文件列表的元组，[文件列表, 错误信息]
+     */
+    function fileList(path: string): [FileListItem[], Error | null];
+    /**
+     * 查看嵌入式文件系统中的文件内容
+     * 
+     * @param {string} filePath 文件路径
+     * 
+     * @returns {[string, Error | null]} 包含文件内容的元组，[文件内容, 错误信息]
+     */
+    function fileView(filePath: string): [string, Error | null];
+    /**
+     * 读取指定知识库表的全部条目（JSON 落盘格式 [key,text][]）
+     *
+     * 一个表对应 local_data/database/knowledge 下的一个 JSON 文件，数据按键去重。
+     *
+     * @param {string} table 表名（即 JSON 文件名，不含扩展名）
+     *
+     * @returns {[Array<[string, string]>, Error | null]} 包含条目数组的元组，[[key, text],...]
+     */
+    function knowledgeLoad(table: string): [Array<[string, string]>, Error | null];
+    /**
+     * 将指定知识库表的条目数组写回对应 JSON 文件（覆写，自动建目录）
+     *
+     * @param {string} table 表名（即 JSON 文件名，不含扩展名）
+     *
+     * @param {Array<[string, string]>} entries [key, text] 条目数组
+     *
+     * @returns {[boolean, Error | null]} 包含写入结果的元组，[是否成功, 错误信息]
+     */
+    function knowledgeSave(table: string, entries: Array<[string, string]>): [boolean, Error | null];
+    /**
+     * 获取系统访问URL
+     * 
+     * @returns {[string, Error | null]} 包含系统URL的元组，[系统URL, 错误信息]
+     */
+    function url(): [string, Error | null];
+    /**
+     * 获取当前地址信息
+     * 
+     * @returns {[string[], Error | null]} 包含地址信息的元组，[省份, 城市, 错误信息]
+     */
+    function address(): [string[], Error | null];
+    /**
+     * 网络请求代理函数
+     * 
+     * @param {ProxyFetchConfig} config 请求配置对象
+     * 
+     * @returns {[any, Error | null]} 包含响应结果的元组，[响应结果, 错误信息]
+     */
+    function syncFetch(config: ProxyFetchConfig): [any, Error | null];
+    /**
+     * 将视频本地化并写入 llama-server 媒体目录，供感知者以 file:// 引用观看
+     *
+     * 输入支持 HTTP(S) URL、data:video/xxx;base64 URI 与本地文件路径。
+     * 超过 60 秒的视频自动按 60 秒分段（FFmpeg 流复制切分）。
+     *
+     * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
+     */
+    function videoMedia(inputFile: string): [MediaSegment[], Error | null];
+    /**
+     * 将视频抽帧为图片序列帧（序列帧解读模式）
+     *
+     * 供不支持 llama-server「媒体目录 + file:// 引用」机制的架构（如云端 OpenAI 兼容 API）使用：
+     * 在本地用 FFmpeg 抽帧并编码为 JPEG data URI，直接以多个 image_url 提交，无需服务端解码视频。
+     * 分组与 file 模式一致（每 60 秒一组），组内按 0.5fps 采样，视觉 token 量级与 file 模式相当。
+     *
+     * @param {string} inputFile 视频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[MediaFrameGroup[], Error | null]} 包含分组采样帧列表的元组，[{start, end, frames:[{image, time}]}]
+     */
+    function videoFrames(inputFile: string): [MediaFrameGroup[], Error | null];
+    /**
+     * 将音频本地化并转换为 16kHz 单声道 WAV
+     *
+     * 输入支持 HTTP(S) URL、data:audio/xxx;base64 URI 与本地文件路径
+     *
+     * @param {string} inputFile 音频地址（URL / data URI / 本地路径）
+     *
+     * @returns {[string, Error | null]} 包含转换结果的元组，[WAV音频的base64编码, 错误信息]
+     */
+    function audioWav(inputFile: string): [string, Error | null];
+    /**
+     * 标准图片处理：解码 → 格式校验/转码 → 等比例缩放到 1024 → 输出 base64
+     *
+     * 入参与 isAnimatedImage / animatedImageToVideo 一致，可传字节数据或来源地址
+     * （HTTP(S) URL、data:image URI、本地路径），地址类入参由 Go 侧下载/解码。
+     * 返回恒为单元素数组：动态图在此按首帧静态降级，动态图理解请先经
+     * isAnimatedImage 判定并走 animatedImageToVideo 的视频链路
+     *
+     * @param {Blob | File | FormData | string | Uint8Array} imgData 图片数据或来源地址
+     *
+     * @returns {[ResizeImageResults, Error | null]} 包含处理结果数组的元组，[处理结果数组, 错误信息]
+     */
+    function resizeImage(imgData: Blob | File | FormData | string | Uint8Array): [ResizeImageResults, Error | null];
+    /**
+     * 判断图片是否为动态图（多帧 GIF / APNG / 动态 WebP）
+     *
+     * 入参支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地文件路径），
+     * 传入地址时由 Go 侧下载/解码后判定，无需 TypeScript 先取回字节
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
+     *
+     * @returns {[boolean, Error | null]} 是否动态图与错误信息
+     */
+    function isAnimatedImage(imgData: Blob | File | string | Uint8Array): [boolean, Error | null];
+    /**
+     * 视觉读取：按「约束尺寸 + 句柄叠印」管线生成思维链消费副本，直接返回 data URI
+     *
+     * 与 /file/read-multimodal 端点共用同一变换实现（缩放到 vision_max_side、
+     * 右上角叠印句柄标签、按内容哈希盘上缓存、动图原样直通）。原图不被修改。
+     *
+     * @param {string} relPath 源图相对 LocalDir 路径（multimedia/ 下）
+     * @param {string} [tag] 叠印句柄（如 @I.003；缺省时按路径反查资源目录）
+     * @param {number} [side] 副本最大边长（缺省取配置 vision_max_side）
+     *
+     * @returns {[string, Error | null]} [data URI, 错误信息]
+     */
+    function visionRead(relPath: string, tag?: string, side?: number): [string, Error | null];
+    /**
+     * 将动态图编码为慢放视频并写入 llama-server 媒体目录
+     *
+     * 动态图多为数秒，直接交给固定抽帧频率的 llama-server 只能采到一两帧，
+     * 因此转码时按目标采样点数做等比例慢放，再以 file:// 交给感知者理解
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
+     *
+     * @returns {[MediaSegment[], Error | null]} 包含媒体片段列表的元组，[{file, start, end}]
+     */
+    function animatedImageToVideo(imgData: Blob | File | string | Uint8Array): [MediaSegment[], Error | null];
+    /**
+     * 将动态图编码为慢放视频后抽帧为图片序列帧（序列帧解读模式）
+     *
+     * 与 animatedImageToVideo 同样先做等比例慢放转码以补足采样相位，
+     * 但转码产物写临时文件（不产出媒体目录文件），随后按 0.5fps 抽帧为 JPEG data URI。
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 动态图数据或地址
+     *
+     * @returns {[MediaFrameGroup[], Error | null]} 包含分组采样帧列表的元组，[{start, end, frames:[{image, time}]}]
+     */
+    function animatedImageToFrames(imgData: Blob | File | string | Uint8Array): [MediaFrameGroup[], Error | null];
+    /**
+     * 生成图片
+     * 
+     * @param {GenerateImageParams} params 图片生成参数
+     * 
+     * @returns {[GenerateImageResult, Error | null]} 包含生成图片结果的元组，[生成图片结果, 错误信息]
+     */
+    function generateImage(params: GenerateImageParams): [GenerateImageResult, Error | null];
+    /**
+     * 对已有图片执行 RealESRGAN 超分辨率放大（4x）
+     *
+     * 输入支持字节数据与来源地址（HTTP(S) URL、data:image URI、本地路径），
+     * 地址类入参由 Go 侧下载/解码后经 sd-cli -M upscale 管线放大
+     *
+     * @param {Blob | File | string | Uint8Array} imgData 图片数据或地址
+     *
+     * @returns {[GenerateImageResult, Error | null]} 包含超分结果的元组，[结果(base64/尺寸), 错误信息]
+     */
+    function upscaleImage(imgData: Blob | File | string | Uint8Array): [GenerateImageResult, Error | null];
+    /**
+     * 拉取上下文
+     * 
+     * @returns {MultimodalMessage[]} 上下文消息列表
+     */
+    function pullContext(): MultimodalMessage[];
+    /**
+     * 推送上下文
+     * 
+     * @param {string} msgType 消息类型（text=文本 / music=乐谱 / action=动作）
+     * 
+     * @param {string} data 消息内容
+     */
+    function pushContext(msgType: string, data: string, audio: string): boolean;
+    /**
+     * 推送图片
+     * 
+     * @param {string[]} imageData 图片数据列表（base64编码）
+     * @param {boolean} [isSticker=false] 是否为表情包（前端据此决定角标显示）
+     */
+    function pushImage(imageData: string[], isSticker?: boolean): boolean;
+    /**
+     * 获取缓存的智能体3D位置（由前端遥测数据更新）
+     *
+     * @returns {{ x: number, y: number, z: number }} 智能体当前位置
+     */
+    function getAgentPosition(): { x: number; y: number; z: number };
+    /**
+     * 向引擎直接发送命令（绕过前端转发，Agent → StudioHub → 引擎）
+     *
+     * @param {string} type 消息类型（如 'action', 'movement', 'mouse_tracking'）
+     * @param {string} payload JSON 字符串格式的 payload 数据
+     * @returns {boolean} 是否成功
+     */
+    function sendToEngine(type: string, payload: string): boolean;
+    /**
+     * 查询引擎当前可用的动作列表
+     * 
+     * 返回引擎 ACTION_DEFINITIONS 中已注册的动作定义，
+     * 数据来源于引擎广播的 animation_list 消息中携带的 actionDefinitions 字段
+     *
+     * @returns {string} JSON 字符串，格式为 {"actions":[{"name":"荡秋千","mouseTracking":true},...],"updated_at":...}
+     *                   引擎未就绪或缓存为空时返回 "{}"
+     */
+    function getAvailableActions(): string;
+    /**
+     * 初始化记忆库实例并创建/打开指定集合（v5 文本/图片混合存储，仅需集合名）
+     * 模型配置从 lunar_config.json 的 memory 配置组读取
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @returns {[boolean, Error | null]} 包含初始化结果的元组，[是否成功, 错误信息]
+     */
+    function memoryInit(collectionName: string): [boolean, Error | null];
+    /**
+     * 向指定集合添加消息
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} role 消息角色 (user/assistant/system/tool)
+     *
+     * @param {string} content 消息文本内容
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
+     */
+    function memoryAdd(collectionName: string, role: string, content: string): [boolean, Error | null];
+    /**
+     * 向指定集合添加消息，携带调用方提供的显式标签（跳过 LLM 标签生成）
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} role 消息角色 (user/assistant/system/tool)
+     *
+     * @param {string} content 消息文本内容
+     *
+     * @param {string[]} tags 显式标签数组（如启发式提取的 Function/Class 名）
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[文档ID, 错误信息]
+     */
+    function memoryAddWithTags(collectionName: string, role: string, content: string, tags: string[]): [string, Error | null];
+    /**
+     * 从指定集合查询相关消息
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} queryText 查询文本
+     *
+     * @param {number} topK 返回的最相关结果数量
+     *
+     * @returns {[Array<{id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number}>, Error | null]} 包含查询结果的元组，结果按相似度降序排列（text 集合返回 content，image 集合返回 image；timestamp 为入库 Unix 秒时间戳，旧数据无此字段）
+     */
+    function memoryQuery(collectionName: string, queryText: string, topK: number): [Array<{ id: string, role: string, content?: string, image?: string, similarity: number, timestamp?: number }>, Error | null];
+    /**
+     * 从指定集合删除消息
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} id 要删除的消息ID
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组，[是否成功, 错误信息]
+     */
+    function memoryDelete(collectionName: string, id: string): [boolean, Error | null];
+    /**
+     * 向 image 类型集合添加图片文档（LLM 自动生成标签）
+     *
+     * @param {string} collectionName 集合名称
+     *
+     * @param {string} base64Image 图片 base64 数据（data:image/...;base64,...）
+     *
+     * @param {string} [orientation] 图片识别取向标识（auto/emotion/text/color/appearance/species/posture/custom），默认 auto
+     *
+     * @param {string} [custom] 自定义识别取向参考文本（仅 orientation 为 custom 时使用）
+     *
+     * @returns {[string, Error | null]} 包含操作结果的元组，[图片文档ID, 错误信息]
+     */
+    function memoryAddImage(collectionName: string, base64Image: string, orientation?: string, custom?: string): [string, Error | null];
+    /**
+     * 文本转语音生成
+     * 
+     * 接收文本输入参数，调用TTS合成引擎生成音频数据，进行Base64编码后通过WebSocket广播至所有已连接的客户端
+     * 
+     * @param {string} text 要合成的文本内容
+     * 
+     * @param {TTSParams} [params] 可选的合成参数配置
+     * 
+     * @returns {[string, Error | null]} 包含合成结果的元组，[音频数据(Base64编码的WAV), 错误信息]
+     */
+    function tts(text: string, params?: TTSParams): [string, Error | null];
+    /**
+     * 执行屏幕截图（内部已集成图片压缩缩放处理）
+     * 
+     * Go 层统一完成截图捕获 + 图片压缩缩放 + base64 编码，
+     * 返回的 base64 字段格式为 "data:image/[format];base64,[data]"
+     *
+     * @param {ScreenshotParams} [params] 截图参数对象，字段对齐 CaptureRequest
+     *   mode / display_index / offset_x / offset_y / width / height /
+     *   region_x / region_y / region_w / region_h / format / quality / scale
+     *
+     * @returns {[ResizeImageResults, Error | null]} 包含处理结果的元组，[结果对象数组(base64/format/width/height), 错误信息]
+     */
+    function screenshotCapture(params?: ScreenshotParams): [ResizeImageResults, Error | null];
+    /**
+     * 获取所有显示器信息
+     *
+     * @returns {[Array<{index: number, x: number, y: number, width: number, height: number}>, Error | null]} 包含显示器信息的元组，[显示器列表, 错误信息]
+     */
+    function screenshotGetDisplays(): [Array<{ index: number; x: number; y: number; width: number; height: number }>, Error | null];
+    /**
+     * 获取琉璃（远程 LTPX）聚合工具链
+     * 思考链起点调用：进程内直读工具链并写入内部缓存，返回最新聚合工具
+     *
+     * @returns {string} JSON 字符串：{ tool?: {name, description, parameters} }（未就绪时无 tool）
+     */
+    function getLTPXRemoteStatus(): string;
+    /**
+     * 转发工具调用到琉璃（进程内 Broker）
+     *
+     * @param {string} toolName 聚合工具名（use_the_program）
+     * @param {string} argumentsJSON 工具参数 JSON 字符串（{tool, instruction}）
+     *
+     * @returns {Promise<string>} 异步返回文本结果；失败时 resolve 以「【工具调用失败】」开头的错误文本
+     */
+    function callLTPXRemoteTool(toolName: string, argumentsJSON: string): Promise<string>;
+    /**
+     * 同步推送事件并接收 LTP9 插件处理结果（事件触发点调用）
+     *
+     * 把「xx事件发生前」的原始负载推送到 LTP9 引擎派发面，同步阻塞等待插件处理完成。
+     * 无插件订阅 / 插件未改写 / 未回传业务结果时 returned=false
+     * （调用方应回退本地默认处理）。
+     *
+     * @param {string} topic 事件主题（如 message_received_before）
+     * @param {string} payloadJSON 事件负载 JSON 字符串（可为 "{}"）
+     *
+     * @returns {string} JSON 字符串：{ modified: boolean, data: any, returned: boolean, return: any }
+     */
+    function ltpInteractEvent(topic: string, payloadJSON: string): string;
+    /**
+     * 导出智能体上下文（TUI「数据导出」调用；由 Go 侧经运行时触发本函数）
+     *
+     * 双向桥：宿主请求 → 本函数序列化上下文为 JSON 文本 → 由宿主落盘为 .json 文件。
+     * 之所以由 JS 侧产出内容：智能体上下文（messages）只存在于本运行时内。
+     *
+     * @param {string} argsJSON 请求参数 JSON，形如 {"agent":"painter","includeImages":false}；
+     *                          agent 取 'lunar'（月华主上下文/未读队列）或子智能体名
+     *                          （dialogue/painter/musician/perceiver/memorizer/description）
+     *
+     * @returns {[string, Error | null]} 包含导出结果的元组，[上下文 JSON 文本, 错误信息]
+     */
+    function dumpForJS(argsJSON: string): [string, Error | null];
+    /**
+     * 将调试内容写入本地文件（覆写模式）
+     * 用于各子智能体导出上下文快照
+     *
+     * @param {string} filePath 输出文件的绝对路径
+     * @param {string} content 要写入的字符串内容
+     *
+     * @returns {[string, Error | null]} 包含导出结果的元组，[文件路径, 错误信息]
+     */
+    function saveDebugFile(filePath: string, content: string): [string, Error | null];
+
+    // =========================================================================
+    // 统一资源归档层（句柄 / 资源目录 / 内容仓库，见 docs/adr/0001-统一资源寻址与三层存储.md）
+    // =========================================================================
+
+    /** 资源类型码：D 文档 / I 图片 / V 视频 / A 音频 / T 表格 */
+    type ResourceKindCode = 'D' | 'I' | 'V' | 'A' | 'T';
+
+    /** 统一入库入参（五类来源归一：path / url / data / bytes / workspace） */
+    interface ResourceAdmitInput {
+        /** 来源类型：path（LocalDir 内文件 / 本机服务地址）/ url（远程）/ data（data URI）/ bytes（字节）/ workspace（工作区文件，只读收录） */
+        sourceKind: 'path' | 'url' | 'data' | 'bytes' | 'workspace';
+        /** 来源值（路径 / 地址 / data URI） */
+        source?: string;
+        /** 原始字节（sourceKind 为 bytes 时使用，或由 source 解析；data 为 base64 字符串时自动解码） */
+        data?: string | Uint8Array;
+        /** 建议文件名（可空：path 来源自动取基名） */
+        name?: string;
+        /** 类型码建议值（可空：按扩展名推断） */
+        kindHint?: ResourceKindCode;
+        /** 来源语义：client-upload / channel / tool-output / engine-temp */
+        origin?: 'client-upload' | 'channel' | 'tool-output' | 'engine-temp';
+        /** 保留等级建议值：normal（A 必存）/ soft（B 产出）/ ephemeral（C 参考） */
+        retain?: 'normal' | 'soft' | 'ephemeral';
+        /** 建议 MIME（可空：按扩展名推断） */
+        mime?: string;
+    }
+
+    /** 入库结果 */
+    interface ResourceAdmitResult {
+        /** 规范句柄（形如 @I.007） */
+        handle: string;
+        /** 类型码 */
+        kind: ResourceKindCode;
+        /** 资源序号 */
+        seq: number;
+        /** 资源目录自增主键（写摘要 / 段落表时使用） */
+        id: number;
+        /** 内容哈希（sha16） */
+        content_hash: string;
+        /** 相对 LocalDir 的物理路径（内容仓库位置，可交给图片处理管线取回） */
+        blob_path: string;
+        /** 规范 MIME */
+        mime: string;
+        /** 字节数 */
+        size_bytes: number;
+        /** 原始文件名 */
+        name: string;
+        /** 是否复用了既有 blob（内容去重命中） */
+        deduped: boolean;
+        /** blob 状态：active / lost */
+        state: 'active' | 'lost';
+    }
+
+    /** 资源取回结果 */
+    interface ResourceReadResult {
+        /** 请求的句柄（含锚点） */
+        handle: string;
+        /** 类型码 */
+        kind: ResourceKindCode;
+        /** 展示标题 */
+        title: string;
+        /** 文本内容（文档 / 表格；携带锚点时为其完整行区间） */
+        content?: string;
+        /** 二进制内容 base64（图片 / 视频 / 音频本体） */
+        base64?: string;
+        /** 规范 MIME */
+        mime: string;
+        /** 内容仓库路径（相对 LocalDir，可直接交给 resizeImage 等管线） */
+        blob_path: string;
+        /** blob 已丢失：句柄有效但本体不可取，应降级为描述 */
+        lost: boolean;
+        /** 内容按上限被截断 */
+        truncated: boolean;
+        /** 命中的章节标题（携带 § 锚点时） */
+        section_title?: string;
+        /** 实际返回的行区间（1 基，含端点） */
+        line_start?: number;
+        line_end?: number;
+        /** 资源总行数（文本文档） */
+        total_lines?: number;
+    }
+
+    /** 资源目录条目 */
+    interface ResourceEntry {
+        id: number;
+        kind: ResourceKindCode;
+        seq: number;
+        /** 规范句柄，形如 @D.003 */
+        handle: string;
+        name: string;
+        ext: string;
+        mime: string;
+        content_hash: string;
+        blob_path: string;
+        size_bytes: number;
+        width?: number;
+        height?: number;
+        duration_ms?: number;
+        title: string;
+        summary: string;
+        tags: string[];
+        origin: string;
+        retain: 'normal' | 'soft' | 'ephemeral';
+        state: 'active' | 'lost';
+        section_count: number;
+        created_at: number;
+        used_at: number;
+    }
+
+    /** 资源段落（索引单元，不进句柄文法） */
+    interface ResourceSection {
+        id: number;
+        resource_id: number;
+        /** 章节序号（句柄 |§n 使用） */
+        ordinal: number;
+        /** 标题层级 1..6（无标题文本为 0） */
+        level: number;
+        title: string;
+        /** 层级路径（如「一、功能 / 1.2 用法」） */
+        path: string;
+        /** 正文起始行（1 基） */
+        line_start: number;
+        /** 正文结束行（含） */
+        line_end: number;
+        /** 正文字数 */
+        chars: number;
+    }
+
+    /** 段落表写入草稿 */
+    interface ResourceSectionDraft {
+        ordinal: number;
+        level: number;
+        title: string;
+        path: string;
+        lineStart: number;
+        lineEnd: number;
+        chars: number;
+    }
+
+    /** 跨资源搜索命中 */
+    interface ResourceSearchHit {
+        handle: string;
+        kind: ResourceKindCode;
+        title: string;
+        summary: string;
+        /** 命中章节（文档） */
+        sections?: ResourceSection[];
+        /** 命中位置：card / section */
+        matched_in: string;
+    }
+
+    /**
+     * 统一入库：归一来源（本地文件 / 远程 URL / data URI / 字节）→ 落盘 → 登记资源目录 → 返回句柄
+     *
+     * 这是全模态资源进入系统的唯一通道：前端已落盘的图片只登记不复制（零拷贝），
+     * QQ 等渠道仅给 URL 的图片会下载后按内容哈希落盘。哈希为内容 SHA-256 前 16 位。
+     *
+     * @param {ResourceAdmitInput} input 入库入参
+     *
+     * @returns {[ResourceAdmitResult | null, Error | null]} 包含入库结果的元组
+     */
+    function resourceAdmit(input: ResourceAdmitInput): [ResourceAdmitResult | null, Error | null];
+
+    /**
+     * 按句柄取回资源内容（带锚点时按锚点整段展开）
+     *
+     * blob 已丢失时不报错，返回 lost=true，由调用方降级为描述或大纲。
+     *
+     * @param {string} handle 资源句柄，形如 @D.003 / @D.003|§2 / @I.007 / @D.003|L120-168
+     *
+     * @param {number} [maxBytes] 单次取回字节上限（缺省 256KB）
+     *
+     * @returns {[ResourceReadResult | null, Error | null]} 包含取回结果的元组
+     */
+    function resourceRead(handle: string, maxBytes?: number): [ResourceReadResult | null, Error | null];
+
+    /**
+     * 读取资源大纲（段落表）；段落表为空且 blob 在位时按标题现场补建
+     *
+     * @param {string} handle 资源句柄
+     *
+     * @returns {[ResourceSection[] | null, string, Error | null]} 元组 [段落数组, 规范句柄, 错误信息]
+     */
+    function resourceOutline(handle: string): [ResourceSection[] | null, string, Error | null];
+
+    /**
+     * 列出资源目录（越靠前越新）
+     *
+     * @param {string} [kind] 类型码过滤（空表示全部）
+     *
+     * @param {number} [limit] 条数上限（缺省 50）
+     *
+     * @returns {[ResourceEntry[] | null, Error | null]} 包含资源列表的元组
+     */
+    function resourceList(kind?: string, limit?: number): [ResourceEntry[] | null, Error | null];
+
+    /**
+     * 跨资源搜索（标题 / 摘要 / 标签 / 文件名 / 段落标题子串匹配）
+     *
+     * 定位到「哪份资源的哪一节」，取正文请随后调用 resourceRead。
+     *
+     * @param {string} query 搜索关键词
+     *
+     * @param {string} [kind] 类型码过滤
+     *
+     * @param {number} [limit] 条数上限（缺省 10）
+     *
+     * @returns {[ResourceSearchHit[] | null, Error | null]} 包含命中列表的元组
+     */
+    function resourceSearch(query: string, kind?: string, limit?: number): [ResourceSearchHit[] | null, Error | null];
+
+    /**
+     * 资源目录统计（条数 / 体积 / 按类型与状态分布）
+     *
+     * @returns {[object | null, Error | null]} 包含统计对象的元组
+     */
+    function resourceStats(): [{
+        total: number;
+        by_kind: Record<string, number>;
+        by_state: Record<string, number>;
+        by_retain: Record<string, number>;
+        bytes: number;
+    } | null, Error | null];
+
+    /**
+     * 写入资源摘要 / 描述（图片视觉描述、文档概要）；tags 传空数组表示保留原标签
+     *
+     * @param {number} id 资源目录主键
+     *
+     * @param {string} summary 摘要文本
+     *
+     * @param {string[]} [tags] 标签数组
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组
+     */
+    function resourceSetSummary(id: number, summary: string, tags?: string[]): [boolean, Error | null];
+
+    /**
+     * 全量替换资源段落表（入库与迁移重建使用）
+     *
+     * @param {number} id 资源目录主键
+     *
+     * @param {ResourceSectionDraft[]} sections 段落草稿数组
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组
+     */
+    function resourceSetSections(id: number, sections: ResourceSectionDraft[]): [boolean, Error | null];
+
+    /**
+     * 触发内容仓库回收（只删 blob、保留目录行；句柄仍可解析并降级为描述）
+     *
+     * @param {{force?: boolean}} [options] force 为 true 时忽略配额直接按等级回收
+     *
+     * @returns {[object | null, Error | null]} 包含回收统计的元组
+     */
+    function resourceCollect(options?: { force?: boolean }): [{
+        scanned: number;
+        collected: number;
+        freed_bytes: number;
+        remaining_bytes: number;
+        over_quota: boolean;
+    } | null, Error | null];
+
+    /**
+     * 显式删除资源（目录行 + 独占 blob；仍被其它目录行引用时保留实体）
+     *
+     * @param {string} handle 资源句柄
+     *
+     * @returns {[boolean, Error | null]} 包含操作结果的元组
+     */
+    function resourceDelete(handle: string): [boolean, Error | null];
+
+    /**
+     * 取回句柄文法（Go 侧为唯一权威定义，TypeScript 与前端不得各写一套）
+     *
+     * @returns {{pattern: string, handle: string, section: string, line: string, seqWidth: number, typeCodes: Record<string, string>}}
+     */
+    function resourceGrammar(): {
+        pattern: string;
+        handle: string;
+        section: string;
+        line: string;
+        seqWidth: number;
+        typeCodes: Record<string, string>;
+    };
+}

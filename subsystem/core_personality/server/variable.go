@@ -1,12 +1,12 @@
 package server
 
 import (
+	"CorePersonality/crystal"
 	"CorePersonality/engine/kokoro_tts"
+	"CorePersonality/engine/model/llama"
 	"CorePersonality/engine/omnivoice_tts"
 	"CorePersonality/engine/tts_router"
-	"CorePersonality/personality/crystal"
-	"CorePersonality/personality/lunar"
-	"CorePersonality/personality/lunar/model/llama"
+	"CorePersonality/lunar"
 	file "LunarSubsystem/FileManager/server"
 	media "LunarSubsystem/MediaTools/server"
 	image "LunarSubsystem/MultimodalAnalysis/server"
@@ -34,6 +34,7 @@ var SystemEndpoints = []SystemEndpoint{
 	// ==================== 文件操作 ====================
 	{Path: "/file/write", Handler: file.SaveHandler, Method: "POST", Description: "文件保存操作"},
 	{Path: "/file/read/", Handler: file.ReadHandler, Method: "GET", Description: "文件读取操作"},
+	{Path: "/file/read-multimodal/", Handler: VisionReadHandler, Method: "GET", Description: "视觉读取端点（仅图片：返回缩放到约束尺寸并叠印句柄标签的副本，动图原样直通）"},
 	{Path: "/file/delete/", Handler: file.DeleteHandler, Method: "DELETE", Description: "文件删除"},
 	{Path: "/file/list/", Handler: file.FileListHandler, Method: "POST", Description: "文件列表"},
 	{Path: "/file/download/", Handler: file.DownloadHandler, Method: "GET", Description: "文件下载"},
@@ -57,8 +58,9 @@ var SystemEndpoints = []SystemEndpoint{
 	{Path: "/api/module/inspect", Handler: crystal.ModuleInspectHandler, Method: "POST", Description: "检查 HTML 项目内容（供 AI 生成模块元信息）"},
 
 	// ==================== 控制台数据导出 ====================
-	// TUI「数据导出」调用：把原始日志 / 智能体上下文落盘为 .log / .json，便于离线排查
+	// TUI「数据导出」调用：把原始日志 / 实况轮次 / 智能体上下文落盘为 .log / .json，便于离线排查
 	{Path: "/debug/dump/logs", Handler: DataDumpLogsHandler, Method: "POST", Description: "导出原始日志为 JSON Lines（.log）"},
+	{Path: "/debug/dump/transcript", Handler: DataDumpTranscriptHandler, Method: "POST", Description: "导出核心智能实况的模型调用轮次（思考/输出/工具序列/时长）为 JSON（.json）"},
 	{Path: "/debug/dump/context", Handler: DataDumpContextHandler, Method: "POST", Description: "导出月华主上下文或某个子智能体的上下文为 JSON（.json）"},
 
 	// ==================== 知识库与记忆库 ====================

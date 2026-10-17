@@ -48,13 +48,17 @@ func WireTUIFrontendHooks() {
 // WireTUIDataDumpHooks 把「数据导出」能力注入控制台：控制台只负责触发与展示回执，
 // 取数与落盘的逻辑复用同一批 HTTP 端点处理器（server/data_dump.go）。
 //
-// 为什么复用端点处理器而不是在 app 层重写一遍：导出的**日志格式与上下文结构**必须
+// 为什么复用端点处理器而不是在 app 层重写一遍：导出的**日志/实况/上下文结构**必须
 // 与对外端点保持同一份定义，否则"控制台导出的文件"和"调用端点拿到的文件"会逐渐分叉。
 // 这里经 httptest 在进程内直调处理器（无 socket、无端口），只多一次 JSON 往返。
 func WireTUIDataDumpHooks() {
 	TuiSystem.SetDataDumpHooks(
 		func() (TuiSystem.DataDumpResult, error) {
 			return callDumpHandler(server.DataDumpLogsHandler, "/debug/dump/logs")
+		},
+		// 核心智能实况（模型调用轮次）——与另外两项并列，因为其数据来源互不重叠
+		func() (TuiSystem.DataDumpResult, error) {
+			return callDumpHandler(server.DataDumpTranscriptHandler, "/debug/dump/transcript")
 		},
 		func(target string) (TuiSystem.DataDumpResult, error) {
 			return callDumpHandler(server.DataDumpContextHandler, "/debug/dump/context?agent="+target)

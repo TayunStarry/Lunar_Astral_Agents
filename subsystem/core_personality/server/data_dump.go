@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"CorePersonality/personality/lunar/engine"
+	"CorePersonality/engine/LunarLoop"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	"LunarSubsystem/TuiSystem"
@@ -20,7 +20,7 @@ import (
 //
 // 控制台需要把运行期数据落到磁盘以便离线排查，而两类数据的**产出位置不同**：
 //   - 原始日志：已在 TUI 日志管线（同进程内存环形缓冲）里 → 本包直接序列化落盘；
-//   - 智能体上下文：只在月华 goja 运行时内 → 经 engine.DumpAgentContext 在 agent
+//   - 智能体上下文：只在月华 goja 运行时内 → 经 lunarloop.DumpAgentContext 在 agent
 //     事件循环上取回 JSON 文本，再落盘。
 //
 // 因此这里只做「取数 → 写文件 → 回执」三件事，导出内容的构造分别由上两处负责，
@@ -124,6 +124,47 @@ func DataDumpLogsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DataDumpTranscriptHandler 导出「核心智能实况」的模型调用轮次（POST /debug/dump/transcript）。
+//
+// 为什么单独一条：实况轮次（每轮的角色 / 思考全文 / 输出全文 / 工具调用序列 / 时长）
+// 是**独一份**的运行时资料，任何日志通道都不覆盖——
+//   - 原始日志只有一行行启动与工具文本，没有"轮次"结构；
+//   - 月华 JS 日志是 JS 层 console 输出，与模型调用轮次无对应关系；
+//   - `/debug/dump/context` 导出的是**给模型看的 messages（输入）**，
+//     不含模型思考流，也不含工具调用顺序与耗时。
+//
+// 数据来自 TUI 的轮次环形缓冲，因此带 created/dropped 与逐轮 truncated 标记，
+// 如实告知"这份导出是全部还是仅最近一段"。
+func DataDumpTranscriptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	content, err := TuiSystem.BuildTranscriptJSON()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, DataDumpResponse{OK: false, Error: err.Error()})
+		return
+	}
+	// 探测结果用结构体而非 map：类型明确，后续加字段不会静默漏读
+	var probe struct {
+		Meta struct {
+			TurnCount int `json:"turn_count"`
+		} `json:"meta"`
+	}
+	_ = json.Unmarshal([]byte(content), &probe)
+
+	path, size, err := writeDumpFile("transcript", "json", []byte(content))
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, DataDumpResponse{OK: false, Error: err.Error()})
+		return
+	}
+	LoggerGeneral.Info("CorePersonality", "实况轮次已导出: %s（%d 轮 / %d 字节）", path, probe.Meta.TurnCount, size)
+	writeJSON(w, http.StatusOK, DataDumpResponse{
+		OK: true, Path: path, Bytes: size, Records: probe.Meta.TurnCount,
+		Filename: filepath.Base(path), Target: "transcript",
+	})
+}
+
 // DataDumpContextHandler 导出智能体上下文为 JSON（POST /debug/dump/context?agent=xxx）。
 //
 // agent 取值：lunar（月华主上下文/未读队列）或子智能体名
@@ -140,7 +181,7 @@ func DataDumpContextHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	includeImages := r.URL.Query().Get("include_images") == "1"
 
-	content, err := engine.DumpAgentContext(agent, includeImages)
+	content, err := lunarloop.DumpAgentContext(agent, includeImages)
 	if err != nil {
 		writeJSON(w, http.StatusOK, DataDumpResponse{OK: false, Target: agent, Error: err.Error()})
 		return

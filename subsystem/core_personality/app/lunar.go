@@ -6,11 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"CorePersonality/personality/lunar/bridging/napcat"
-	"CorePersonality/personality/lunar/engine"
-	"CorePersonality/personality/lunar/engine/container"
-	"CorePersonality/personality/lunar/hierarchy"
-	"CorePersonality/personality/lunar/model/llama"
+	"CorePersonality/clients"
+	"CorePersonality/engine/LunarLoop"
+	"CorePersonality/engine/LunarLoop/container"
+	"CorePersonality/engine/model/llama"
+	"CorePersonality/transport/napcat"
 	"LunarSubsystem/GeneralConfig"
 	"LunarSubsystem/LoggerGeneral"
 	image "LunarSubsystem/MultimodalAnalysis/server"
@@ -48,7 +48,7 @@ func assembleLunar() error {
 // 全部服务层（HTTP / llama 代理 / 记忆库）与琉璃消费层（LTP9 / LTPX broker）之后启动；
 // 否则到期任务会在依赖尚未就绪时执行，导致应答链报错或事件循环长时间阻塞。
 func startLunarAgent() error {
-	return engine.RunAgentContext()
+	return lunarloop.RunAgentContext()
 }
 
 // shutdownLunar 关闭月华人格局持有的资源
@@ -58,9 +58,9 @@ func shutdownLunar() {
 	llama.Close()
 }
 
-// lunarStaticRoot 月华消息终端的静态资源根（assets/client 子树）
+// lunarStaticRoot 月华消息终端的静态资源根（clients/lunar 子树，mobile/ 即月华移动端）
 func lunarStaticRoot() http.FileSystem {
-	return hierarchy.Gethierarchy()
+	return clients.LunarFS()
 }
 
 // initNapcatBridge 初始化 QQ 桥接适配器并注册消息回调
@@ -81,7 +81,7 @@ func initNapcatBridge() {
 	// QQ 消息（OpenAI 格式）按到达顺序推送到智能体统一未读队列
 	napcat.SendMessageToAgent = func(messages []map[string]any) {
 		for _, msg := range messages {
-			engine.EnqueueMessage(engine.PostMessage{
+			lunarloop.EnqueueMessage(lunarloop.PostMessage{
 				Role:    "user",
 				Content: msg["content"],
 			})
@@ -91,12 +91,12 @@ func initNapcatBridge() {
 	// 视频/音频地址包装为媒体URL内容项，按到达顺序写入统一未读队列
 	napcat.SendVideoToAgent = func(urls []string) {
 		for _, url := range urls {
-			engine.EnqueueMediaURL("video_url", url)
+			lunarloop.EnqueueMediaURL("video_url", url)
 		}
 	}
 	napcat.SendAudioToAgent = func(urls []string) {
 		for _, url := range urls {
-			engine.EnqueueMediaURL("audio_url", url)
+			lunarloop.EnqueueMediaURL("audio_url", url)
 		}
 	}
 

@@ -143,8 +143,8 @@ function Invoke-TtsLibBuildIfNeeded {
 }
 
 # ---------- 月华智能体 TypeScript 打包 ----------
-# tsc 依据 tsconfig 编译 personality/lunar/TypeScript，rollup 打包为
-# personality/lunar/hierarchy/assets/agentSystem.js（由 Go 侧 go:embed 嵌入）。
+# tsc 依据 tsconfig 编译 engine/LunarLoop/TypeScript，rollup 打包为
+# engine/LunarLoop/agentSystem.js（由该包 go:embed 嵌入，与执行它的 goja 引擎同居）。
 function Invoke-AgentBundleBuild {
     if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
         throw "未找到 npm，无法打包智能体脚本（请安装 Node.js）"
@@ -166,7 +166,7 @@ function Invoke-AgentBundleBuild {
         Pop-Location
     }
 
-    $bundle = Join-Path $ScriptDir "personality\lunar\hierarchy\assets\agentSystem.js"
+    $bundle = Join-Path $ScriptDir "engine\LunarLoop\agentSystem.js"
     if (-not (Test-Path $bundle)) {
         throw "智能体脚本未产出: $bundle"
     }
@@ -187,8 +187,8 @@ function Invoke-EndpointDocsGenerate {
         "-src", (Join-Path $ScriptDir "server\variable.go"),
         "-out", (Join-Path $ScriptDir "server\endpoint_docs.gen.json"),
         "-docs-path", "/api-docs",
-        "-extra", "GET|/|月华消息终端静态前端（内嵌 hierarchy 资源）",
-        "-extra", "GET|/desktop/|琉璃桌面静态前端（内嵌 web 资源）",
+        "-extra", "GET|/|月华消息终端静态前端（内嵌 clients/lunar 资源）",
+        "-extra", "GET|/desktop/|琉璃桌面静态前端（内嵌 clients/crystal 资源）",
         "-extra", "GET|/ws|WebSocket 消息通道（结构化消息投递给全部连接；引擎总线原始帧仅投递给显式订阅 ?bus=1 的连接）"
     )
     Push-Location (Join-Path $repoRoot "subsystem\endpoint_docs")

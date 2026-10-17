@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"CorePersonality/personality/crystal"
+	"CorePersonality/clients"
+	"CorePersonality/crystal"
 	"CorePersonality/protocol/ltpx"
 	file "LunarSubsystem/FileManager/module"
 	"LunarSubsystem/GeneralConfig"
@@ -14,6 +15,12 @@ import (
 
 // assembleCrystal 装配琉璃人格格：知识库/记忆库、LTP9 插件引擎与前端总线消费。
 func assembleCrystal() error {
+	// ==== 统一资源目录（SQLite archive.db：句柄 / 元数据 / 段落结构） ====
+	// 必须先于月华智能体运行时启动：入库层在对话链路里即被调用。
+	if err := file.InitArchiveDB(*GeneralConfig.ArchiveDBPath); err != nil {
+		LoggerGeneral.Warn("CorePersonality", "统一资源目录初始化失败: %v (不影响服务启动)", err)
+	}
+
 	// ==== 知识库（SQLite） ====
 	if err := file.InitKnowledgeDB(*GeneralConfig.KnowledgeDBPath); err != nil {
 		LoggerGeneral.Warn("CorePersonality", "知识库初始化失败: %v (不影响服务启动)", err)
@@ -56,7 +63,7 @@ func initMemoryDatabase() {
 	LoggerGeneral.Info("CorePersonality", "集合 [%s] 创建成功, 模型: %s", crystal.DefaultMemoryCollection, crystal.DefaultMemoryModelName)
 }
 
-// crystalStaticRoot 琉璃桌面的静态资源根（内嵌 web 目录子树）
+// crystalStaticRoot 琉璃桌面的静态资源根（clients/crystal 子树，含 planning 蓝图子页）
 func crystalStaticRoot() http.FileSystem {
-	return crystal.Gethierarchy()
+	return clients.CrystalFS()
 }
